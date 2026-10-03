@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 import time
 import uuid
@@ -121,18 +122,31 @@ def pending(owner) -> list[dict]:
                       key=lambda i: i["due"])
 
 
+_ALL_WORDS = frozenset({"all", "every", "все", "всё"})
+_FILLER = frozenset({"про", "мне", "мои", "напоминание", "напоминания", "напоминалку",
+                     "напоминалки", "reminder", "reminders", "my", "the", "about", "me"})
+
+
 def cancel(owner, words: str) -> list[str]:
     """Drop the owner's reminders whose text contains any word of `words`
     ('all' or empty = every one). Returns the cancelled texts."""
-    ws = [w for w in words.lower().split() if len(w) > 2 and w not in ("про", "все", "всё", "мне", "напоминание", "напоминания")]
-    everything = not ws or words.strip().lower() in ("all", "все", "всё")
+    tokens = re.findall(r"\w+", (words or "").lower())
+    content = [w for w in tokens if w not in _ALL_WORDS and w not in _FILLER]
+    # Only an empty request or one made of "all"/filler words cancels every
+    # reminder. Short words used to be dropped first, so "cancel ТО" (the car
+    # service) or "в 9" left nothing and wiped the user's whole list.
+    everything = not content
+    ws = [w for w in content if len(w) > 2]
+    short = [w for w in content if len(w) <= 2]
     gone = []
     with _LOCK:
         for rid, item in list(_ITEMS.items()):
             if str(item["owner"]) != str(owner):
                 continue
             low = item["text"].lower()
-            if everything or any(w[:max(3, len(w) - 2)] in low for w in ws):
+            words_in = set(re.findall(r"\w+", low))
+            if (everything or any(w[:max(3, len(w) - 2)] in low for w in ws)
+                    or (not ws and any(w in words_in for w in short))):
                 _ITEMS.pop(rid)
                 t = _TIMERS.pop(rid, None)
                 if t:
