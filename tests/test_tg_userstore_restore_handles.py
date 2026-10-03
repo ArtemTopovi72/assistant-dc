@@ -54,3 +54,13 @@ def test_backup_and_restore_round_trip(tmp_path, monkeypatch):
     assert s.restore_from_backup(snap) is True
     assert all(_closed(c) for c in opened)
     assert s.get(5) is not None and s.get(5).name == "Kept"
+
+
+def test_a_high_scrypt_cost_still_hashes_and_verifies(monkeypatch):
+    """TG_SCRYPT_N_LOG2 is clamped to <= 20, but a fixed 256 MiB maxmem made
+    every hash at 18+ raise: nobody could register or log in."""
+    import config
+    monkeypatch.setattr(config, "TG_SCRYPT_N_LOG2", 18, raising=False)
+    h = U._hash_password("hunter2!", 1)
+    assert h.startswith("v3$18$")
+    assert U._verify_password("hunter2!", 1, h)[0]

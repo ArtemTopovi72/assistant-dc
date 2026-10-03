@@ -55,8 +55,10 @@ def _n_log2() -> int:
 
 
 def _scrypt(password: str, salt: bytes, n_log2: int) -> bytes:
+    # scrypt needs 128*r*N bytes; a fixed 256 MiB cap made every hash at
+    # TG_SCRYPT_N_LOG2 >= 18 (allowed: up to 20) raise "memory limit exceeded".
     return hashlib.scrypt(password.encode("utf-8"), salt=salt, n=2 ** n_log2, r=8, p=1,
-                          dklen=32, maxmem=256 * 1024 * 1024)
+                          dklen=32, maxmem=2 * 128 * 8 * 2 ** n_log2 + (32 << 20))
 
 
 def _hash_password(password: str, chat_id: int) -> str:
