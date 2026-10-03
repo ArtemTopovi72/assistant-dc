@@ -53,10 +53,6 @@ def _n_log2() -> int:
     return max(12, min(20, n_log2))
 
 
-def _scrypt_params() -> tuple:
-    return 2 ** _n_log2(), 8, 1
-
-
 def _scrypt(password: str, salt: bytes, n_log2: int) -> bytes:
     return hashlib.scrypt(password.encode("utf-8"), salt=salt, n=2 ** n_log2, r=8, p=1,
                           dklen=32, maxmem=256 * 1024 * 1024)
