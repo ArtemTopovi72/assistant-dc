@@ -23,6 +23,8 @@ def test_one_vision_call(monkeypatch):
     out = H._look_at_photos(ctx, {"name": "mug", "images": [f"https://x/{i}.jpg" for i in range(5)]})
     assert len(calls) == 1 and calls[0]["image_path"], calls
     assert "red mug" in out
+    # the downloaded photos and the sheet do not stay behind in %TEMP%
+    assert not os.path.exists(os.path.dirname(calls[0]["image_path"]))
 
 
 if __name__ == "__main__":

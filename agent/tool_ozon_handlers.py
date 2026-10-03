@@ -207,6 +207,8 @@ def _look_at_photos(ctx, d: dict, question=None) -> str:
                 system_prompt="You inspect product photos for a buyer.", max_tokens=600) or ""
         except Exception as exc:
             logger.warning("ozon photo sheet failed: %s", exc)
+    import shutil
+    shutil.rmtree(tmp, ignore_errors=True)      # every look left its photos in %TEMP%
     if not text.strip():
         return "photos: could not look at them (no images or vision failed) -- do not describe them."
     return ("what the photos show (seen by vision; seller photos, not proof):\n"
