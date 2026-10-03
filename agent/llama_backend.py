@@ -116,9 +116,9 @@ def start(model_id: str, timeout: float = 240.0) -> tuple:
     if spec.get("mmproj") and Path(spec["mmproj"]).exists():
         args += ["--mmproj", str(spec["mmproj"])]
     _LOG.parent.mkdir(parents=True, exist_ok=True)
-    log = open(_LOG, "ab")
-    proc = subprocess.Popen(args, env=env, stdout=log, stderr=log,
-                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    with open(_LOG, "ab") as log:     # the child keeps its own handle
+        proc = subprocess.Popen(args, env=env, stdout=log, stderr=log,
+                                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     t0 = time.time()
     while time.time() - t0 < timeout:
         try:
@@ -131,6 +131,13 @@ def start(model_id: str, timeout: float = 240.0) -> tuple:
         if proc.poll() is not None:
             return False, f"llama-server exited; see {_LOG}"
         time.sleep(1.0)
+    # Not left loading in the background: it would hold the card while the
+    # caller falls back, and the next start() could not tell it was ours.
+    proc.kill()
+    try:
+        proc.wait(timeout=30)
+    except subprocess.TimeoutExpired:
+        pass
     return False, f"llama-server did not come up in {timeout:.0f}s"
 
 
