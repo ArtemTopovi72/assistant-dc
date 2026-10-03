@@ -522,8 +522,9 @@ class TaskRunnerMixin:
         # then the next Russian line got a Russian answer. The model's read.
         if not is_internal and (task.user_text or "").strip():
             import intent
+            from graph_language import names_english as _names_en
             _mode = intent.read(None, task.user_text)["language_mode"]
-            if _mode == "en":
+            if _mode == "en" and _names_en(task.user_text):
                 sess.lang_pin = "en"
             elif _mode == "ru":
                 sess.lang_pin = ""

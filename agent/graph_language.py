@@ -154,9 +154,20 @@ def _read(text: str) -> dict:
     return intent.read(None, text or "")
 
 
+# The model's read alone is not enough to switch a Russian chat to English: a
+# false "en" on «Кибернетический Ленин … бьёт кулаком» answered the whole
+# conversation in English (live 10-03). A request for English names English.
+_NAMES_ENGLISH = re.compile(r"англ|english|\beng\b|инглиш", re.I)
+
+
+def names_english(text: str) -> bool:
+    return bool(_NAMES_ENGLISH.search(text or ""))
+
+
 def asks_for_english(text: str) -> bool:
     """Did the user explicitly ask for this turn's reply in English?"""
-    return bool((text or "").strip()) and _read(text)["reply_language"] == "en"
+    return (bool((text or "").strip()) and names_english(text)
+            and _read(text)["reply_language"] == "en")
 
 
 def _foreign_ratio(s: str) -> float:
@@ -226,7 +237,7 @@ def _match_reply_language(ctx, answer: str, original_input: str) -> str:
     # translate it back (live, 2026-09-12, journey 18) -- the model had
     # obeyed the user and the pipeline undid it.
     _r = _read(original_input)
-    if _r["reply_language"] == "en" or _r["translate"]:
+    if (_r["reply_language"] == "en" and names_english(original_input)) or _r["translate"]:
         return answer
     # «answer in English from now on», then a Russian line: the model follows
     # the question's script, not the directive (live 2026-09-28).
