@@ -255,6 +255,18 @@ class RedisBackend(_Backend):
     end
     return 1
     """
+    # Same as push, but to the HEAD of the chat's list (see _Backend.requeue).
+    # Inheriting the default push() put a deferred task at the TAIL, behind the
+    # messages the user sent after it, so with several consumers a busy chat's
+    # turns were answered out of order.
+    _REQUEUE_LUA = """
+    local key = KEYS[2] .. ARGV[1]
+    redis.call('LPUSH', key, ARGV[2])
+    if redis.call('LPOS', KEYS[1], ARGV[1]) == false then
+        redis.call('RPUSH', KEYS[1], ARGV[1])
+    end
+    return 1
+    """
     _POP_LUA = """
     local n = redis.call('LLEN', KEYS[1])
     for i = 1, n do
@@ -278,6 +290,7 @@ class RedisBackend(_Backend):
         self._r.ping()
         self._push_sha = self._r.register_script(self._PUSH_LUA)
         self._pop_sha  = self._r.register_script(self._POP_LUA)
+        self._requeue_sha = self._r.register_script(self._REQUEUE_LUA)
         logger.info("RedisBackend connected: %s", url)
 
     def _chats(self) -> list[str]:
@@ -291,6 +304,11 @@ class RedisBackend(_Backend):
         self._push_sha(keys=[self._RING, self._PFX],
                        args=[str(task.chat_id),
                              json.dumps(task.to_dict()).encode()])
+
+    def requeue(self, task: _Task) -> None:
+        self._requeue_sha(keys=[self._RING, self._PFX],
+                          args=[str(task.chat_id),
+                                json.dumps(task.to_dict()).encode()])
 
     def pop(self, timeout: float = 5.0) -> Optional[_Task]:
         # No blocking primitive covers "rotate then pop", so poll. The interval is
@@ -423,6 +441,9 @@ class KafkaBackend(_Backend):
             auto_offset_reset="earliest", enable_auto_commit=True,
             group_id="tgbot_workers", consumer_timeout_ms=1000)
         self._lag = 0; self._lag_lock = threading.Lock()
+        # KafkaConsumer is NOT thread-safe, and the bot runs TG_WORKERS (3)
+        # consumer threads that all call pop() on this one instance.
+        self._poll_lock = threading.Lock()
         logger.info("KafkaBackend connected: brokers=%s topic=%s", brokers, self._TOPIC)
 
     def push(self, task: _Task) -> None:
@@ -433,7 +454,9 @@ class KafkaBackend(_Backend):
     def pop(self, timeout: float = 5.0) -> Optional[_Task]:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            for _, msgs in self._consumer.poll(timeout_ms=500, max_records=1).items():
+            with self._poll_lock:
+                batch = self._consumer.poll(timeout_ms=500, max_records=1)
+            for _, msgs in batch.items():
                 for msg in msgs:
                     with self._lag_lock: self._lag = max(0, self._lag - 1)
                     try: return _Task.from_dict(msg.value)
@@ -452,7 +475,8 @@ class KafkaBackend(_Backend):
     def close(self) -> None:
         try: self._producer.close(timeout=5)
         except Exception: pass
-        try: self._consumer.close()
+        try:
+            with self._poll_lock: self._consumer.close()
         except Exception: pass
 
 
