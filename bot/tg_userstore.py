@@ -44,37 +44,62 @@ _USERS_BACKUP_KEEP  = 10   # keep last N backup snapshots
 _LEGACY_HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
-def _scrypt_params() -> tuple:
+def _n_log2() -> int:
     try:
         import config as _cfg_mod
         n_log2 = int(getattr(_cfg_mod, "TG_SCRYPT_N_LOG2", 14))
     except Exception:
         n_log2 = 14
-    n = 2 ** max(12, min(20, n_log2))
-    return n, 8, 1
+    return max(12, min(20, n_log2))
+
+
+def _scrypt_params() -> tuple:
+    return 2 ** _n_log2(), 8, 1
+
+
+def _scrypt(password: str, salt: bytes, n_log2: int) -> bytes:
+    return hashlib.scrypt(password.encode("utf-8"), salt=salt, n=2 ** n_log2, r=8, p=1,
+                          dklen=32, maxmem=256 * 1024 * 1024)
 
 
 def _hash_password(password: str, chat_id: int) -> str:
-    n, r, p = _scrypt_params()
+    # v3 records the cost: v2 did not, so raising TG_SCRYPT_N_LOG2 made every
+    # existing password fail to verify (it was checked at the NEW cost).
+    n_log2 = _n_log2()
     salt = os.urandom(16)
-    dk = hashlib.scrypt(password.encode("utf-8"), salt=salt, n=n, r=r, p=p,
-                        dklen=32, maxmem=256 * 1024 * 1024)
-    return f"v2${salt.hex()}${dk.hex()}"
+    return f"v3${n_log2}${salt.hex()}${_scrypt(password, salt, n_log2).hex()}"
 
 
 def _verify_password(password: str, chat_id: int, stored: str) -> tuple:
     """Return (ok, upgraded_hash). upgraded_hash is non-empty when the stored hash
-    used the old scheme and should be replaced with the returned scrypt hash."""
+    used an older scheme or another cost and should be replaced with the returned one."""
     stored = (stored or "").strip()
     if not stored:
         return False, ""
+    if stored.startswith("v3$"):
+        try:
+            _, n_txt, salt_hex, want_hex = stored.split("$", 3)
+            n_log2 = int(n_txt)
+            if not 10 <= n_log2 <= 22:
+                return False, ""
+            ok = hmac.compare_digest(_scrypt(password, bytes.fromhex(salt_hex), n_log2).hex(),
+                                     want_hex)
+        except Exception as exc:
+            logger.warning("password verify error: %s", exc)
+            return False, ""
+        if ok and n_log2 != _n_log2():
+            return True, _hash_password(password, chat_id)
+        return ok, ""
     if stored.startswith("v2$"):
+        # No cost on record: made at whatever TG_SCRYPT_N_LOG2 was then, which
+        # is the current value unless it was changed -- and 14 before that.
         try:
             _, salt_hex, want_hex = stored.split("$", 2)
-            n, r, p = _scrypt_params()
-            dk = hashlib.scrypt(password.encode("utf-8"), salt=bytes.fromhex(salt_hex),
-                                n=n, r=r, p=p, dklen=32, maxmem=256 * 1024 * 1024)
-            return hmac.compare_digest(dk.hex(), want_hex), ""
+            salt = bytes.fromhex(salt_hex)
+            for n_log2 in dict.fromkeys((_n_log2(), 14)):
+                if hmac.compare_digest(_scrypt(password, salt, n_log2).hex(), want_hex):
+                    return True, _hash_password(password, chat_id)
+            return False, ""
         except Exception as exc:
             logger.warning("password verify error: %s", exc)
             return False, ""

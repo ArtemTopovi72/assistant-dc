@@ -178,7 +178,7 @@ bot._user_store.put(T._User(chat_id=CID, name="Tester", status="approved", is_ad
 section("PASSWORDS — scrypt, upgrade, throttle")
 
 h = T._hash_password("correct horse", CID)
-check("stored hash is versioned scrypt", h.startswith("v2$"), h[:16])
+check("stored hash is versioned scrypt with its cost", h.startswith("v3$14$"), h[:16])
 check("correct password verifies", T._verify_password("correct horse", CID, h)[0])
 check("wrong password rejected", not T._verify_password("wrong", CID, h)[0])
 check("hash is salted (two hashes differ)",
@@ -187,7 +187,7 @@ check("hash is salted (two hashes differ)",
 legacy = hashlib.sha256(("old pass" + str(CID)).encode()).hexdigest()
 ok, upgraded = T._verify_password("old pass", CID, legacy)
 check("legacy sha256 password still logs in", ok)
-check("legacy login returns an upgraded hash", upgraded.startswith("v2$"))
+check("legacy login returns an upgraded hash", upgraded.startswith("v3$"))
 check("upgraded hash verifies the same password",
       T._verify_password("old pass", CID, upgraded)[0])
 check("legacy wrong password still rejected",
@@ -195,6 +195,33 @@ check("legacy wrong password still rejected",
 check("garbage stored hash fails closed",
       not T._verify_password("x", CID, "not-a-hash")[0])
 check("empty stored hash fails closed", not T._verify_password("x", CID, "")[0])
+
+# Raising TG_SCRYPT_N_LOG2 used to lock every user out: v2 hashes carry no
+# cost and were checked at the NEW one.
+import hashlib as _hl, config as _cfg
+_salt = b"0123456789abcdef"
+_v2 = "v2$" + _salt.hex() + "$" + _hl.scrypt(b"pw", salt=_salt, n=2 ** 14, r=8, p=1,
+                                             dklen=32, maxmem=256 * 1024 * 1024).hex()
+_saved_cost = getattr(_cfg, "TG_SCRYPT_N_LOG2", None)
+_cfg.TG_SCRYPT_N_LOG2 = 15
+try:
+    ok, up = T._verify_password("pw", CID, _v2)
+    check("a v2 hash still verifies after the cost is raised", ok)
+    check("...and is re-hashed at the new cost", up.startswith("v3$15$"), up[:10])
+    check("a wrong password on a v2 hash still fails", not T._verify_password("no", CID, _v2)[0])
+    h15 = T._hash_password("pw", CID)
+    _cfg.TG_SCRYPT_N_LOG2 = 14
+    ok, up = T._verify_password("pw", CID, h15)
+    check("a v3 hash verifies at its own recorded cost", ok and up.startswith("v3$14$"), up[:10])
+    check("a v3 hash at the current cost needs no upgrade",
+          T._verify_password("pw", CID, up) == (True, ""))
+    check("a v3 hash with an absurd cost fails closed",
+          not T._verify_password("pw", CID, "v3$40$00$00")[0])
+finally:
+    if _saved_cost is None:
+        del _cfg.TG_SCRYPT_N_LOG2
+    else:
+        _cfg.TG_SCRYPT_N_LOG2 = _saved_cost
 
 # throttle: repeated wrong passwords lock the chat, correct one is then refused
 bot = make_bot()
@@ -232,7 +259,7 @@ bot._store.put(s)
 bot._login_fails.pop(CID, None)
 bot._user_gate(CID, {"text": "legacy1", "from": {}})
 check("DB hash upgraded in place after legacy login",
-      bot._user_store.get(CID).password_hash.startswith("v2$"),
+      bot._user_store.get(CID).password_hash.startswith("v3$"),
       bot._user_store.get(CID).password_hash[:12])
 
 
