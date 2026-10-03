@@ -66,7 +66,7 @@ class CallbackMixin:
         # One line per button family, in the order they are tested. Each
         # handler owns its own reply; none of them fall through.
         if data == "wait:cancel": return self._cb_wait_cancel(chat_id)
-        if data == "nav:close": return self._delete(chat_id, msg.get("message_id"))
+        if data == "nav:close": return self._close_menu(chat_id, msg)
         if data.startswith("fwdv:"): return self._cb_forwarded_voice(chat_id, data)
         if data.startswith("pick:"): return self._cb_pick_image(chat_id, data)
         if data.startswith("sbx:"): return self._cb_sandbox(chat_id, msg, data)

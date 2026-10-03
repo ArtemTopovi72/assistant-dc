@@ -502,6 +502,14 @@ class TransportMixin:
     def _delete(self, chat_id, msg_id):
         self._api_post("deleteMessage", {"chat_id": chat_id, "message_id": msg_id})
 
+    def _close_menu(self, chat_id, msg: dict) -> None:
+        """↩ Назад under a message takes its buttons away and nothing else.
+        It deleted the message, and so the song text under «🎵 Спеть / ✨ Ещё»
+        went with it (live 10-03): what the user got is never deleted."""
+        self._api_post("editMessageReplyMarkup", {"chat_id": chat_id,
+                                                  "message_id": msg.get("message_id"),
+                                                  "reply_markup": json.dumps({"inline_keyboard": []})})
+
     def _scrub_secret(self, chat_id: int, msg: dict) -> None:
         """Delete a message the user sent that contained a plaintext password.
 

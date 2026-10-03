@@ -960,6 +960,8 @@ _MSG: dict[str, dict[str, str]] = {
                          "ru": "✍️ <b>Текст готов</b> — оценка {score}/10, проходов проверки: {rounds}. Сам текст — следующим сообщением."},
     "lyr_already_good": {"en": "Nothing to fix: rhymes, rhythm and sense hold up.",
                          "ru": "Править нечего: рифмы, ритм и смысл держатся."},
+    "lyr_not_better": {"en": "No rewrite came out better than this one, so it is unchanged.",
+                       "ru": "Ни одна переделка не вышла лучше — текст оставил как есть."},
     "lyr_left":   {"en": "Still not perfect:", "ru": "Что ещё можно доработать:"},
     "lyr_sing_btn":  {"en": "🎵 Sing it", "ru": "🎵 Спеть"},
     "lyr_again_btn": {"en": "✨ One more pass", "ru": "✨ Ещё улучшить"},

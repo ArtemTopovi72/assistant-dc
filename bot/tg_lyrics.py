@@ -61,10 +61,11 @@ class LyricsMixin:
         self._store.put(sess)
         head = tg_bot._t("lyr_head_" + mode, lang, score=f"{res['score']:.1f}", rounds=res["rounds"])
         body = []
-        if mode == "improve" and res["text"] == res["original"]:
-            body.append(tg_bot._t("lyr_already_good", lang))
-        body += [html.escape(n) for n in notes]
         left = [LC.describe(i, lang) for i in res.get("left_rules", [])] + list(res.get("left_sense", []))
+        if mode == "improve" and res["text"] == res["original"]:
+            # «Править нечего» above a list of what is left read as a lie (live 10-03)
+            body.append(tg_bot._t("lyr_not_better" if left else "lyr_already_good", lang))
+        body += [html.escape(n) for n in notes]
         if left:
             body.append(tg_bot._t("lyr_left", lang) + "\n" + "\n".join(
                 "• " + html.escape(p) for p in left[:5]))

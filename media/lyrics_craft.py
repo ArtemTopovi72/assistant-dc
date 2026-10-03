@@ -128,10 +128,15 @@ def _syllables(word: str) -> int:
 
 
 def _stress_index(plus_word: str) -> int:
-    """0-based syllable the «+» marks, -1 when there is none."""
+    """0-based syllable the «+» marks; with no mark, ё (always stressed --
+    RUAccent leaves it unmarked, and «огнём / куём» read as no rhyme, live
+    10-03) or the only vowel; -1 when it is unknown."""
     i = plus_word.find("+")
     if i < 0:
-        return -1
+        low = plus_word.lower()
+        if "ё" in low:
+            return sum(1 for ch in low[:low.index("ё")] if ch in _VOWELS)
+        return 0 if _syllables(low) == 1 else -1
     return sum(1 for ch in plus_word[:i].lower() if ch in _VOWELS)
 
 
@@ -205,8 +210,9 @@ def _row(ctx, n: int, line: str):
         pos += k
         syl += k
     last, plast = ws[-1], pw[-1]
-    if stressed:
-        idx = [_stress_index(plast)]
+    si = _stress_index(plast) if stressed else _stress_index(last)
+    if si >= 0:
+        idx = [si]
     else:                                  # unknown stress: the last or the one before
         k = _syllables(last)
         idx = [i for i in (k - 1, k - 2) if i >= 0]
@@ -347,6 +353,14 @@ def analyse(text: str, ctx=None) -> dict:
                     if r["beats"] and len(off) * 2 > len(r["beats"]):
                         issues.append({"kind": "rhythm", "lines": (r["n"],)})
                         penalty += 0.5
+    if _lang_name(text) == "Russian":
+        # «Harness держит её» in a Russian song (live 10-03): sung as nonsense
+        for rows in info:
+            for r in rows:
+                latin = re.findall(r"\b[A-Za-z]{2,}\b", r["text"])
+                if latin:
+                    issues.append({"kind": "foreign", "lines": (r["n"],), "words": (latin[0], "")})
+                    penalty += 1.0
     f_issues, f_pen = _form_issues(sections, info)
     issues += f_issues
     penalty += f_pen
@@ -418,6 +432,7 @@ _ISSUE_EN = {
     "chorus_drift": "the chorus from line {a} is worded differently from the first chorus",
     "hook_long": "the chorus (line {a}) has no short hook line: make its first or last line 10 words or fewer",
     "end_repeat": "lines {a} and {b} end on the same word «{x}»",
+    "foreign": "line {a} has a word in another language («{x}»): use a {lang_word} word",
     "long_line": "line {a} is too long to sing in one breath ({s1} syllables): one line, one phrase",
 }
 
@@ -434,6 +449,7 @@ _ISSUE_RU = {
     "chorus_drift": "припев со строки {a} написан иначе, чем первый припев",
     "hook_long": "в припеве (строка {a}) нет короткой строки-хука: первая или последняя строка — до 10 слов",
     "end_repeat": "строки {a} и {b} кончаются одним и тем же словом «{x}»",
+    "foreign": "в строке {a} нерусское слово «{x}»: замени русским",
     "long_line": "строка {a} слишком длинная, на одном дыхании не спеть ({s1} слогов): одна строка — одна фраза",
 }
 
@@ -443,7 +459,8 @@ def describe(issue: dict, lang: str = "en") -> str:
     w = issue.get("words") or ("", "")
     s = issue.get("syl") or (0, 0)
     table = _ISSUE_RU if lang == "ru" else _ISSUE_EN
-    return table[issue["kind"]].format(a=ln[0], b=ln[-1], x=w[0], y=w[1], s1=s[0], s2=s[1])
+    return table[issue["kind"]].format(a=ln[0], b=ln[-1], x=w[0], y=w[1], s1=s[0], s2=s[1],
+                                       lang_word="Russian")
 
 
 # ── the model ────────────────────────────────────────────────────────────────
@@ -480,7 +497,9 @@ _RULES = (
     "metre per section (the stresses fall on the same beats in every line), rhyming "
     "lines of about the same length; one line = one sung phrase of 6-12 "
     "syllables (a breath; no line runs on into the next); concrete images, a clear thought, no filler words "
-    "put in for the rhyme; natural word order; it must be easy to sing.")
+    "put in for the rhyme; natural word order; it must be easy to sing; every word in "
+    "the lyric's own language (a term from the theme in another language is translated "
+    "or replaced, not left in).")
 
 _CRITIC = (
     "You are a demanding song editor (the Pattison / Berklee school). Read the lyric "

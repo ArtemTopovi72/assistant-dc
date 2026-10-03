@@ -351,3 +351,42 @@ def test_a_two_syllable_rhyme_counts_more():
     a, b = L.analyse(one), L.analyse(two)
     assert L._deep(L._row(None, 1, "дорога"), L._row(None, 3, "порога"))
     assert a["rich"] >= b["rich"]
+
+
+def test_yo_words_rhyme_with_the_accentor_on(monkeypatch):
+    """RUAccent leaves ё unmarked: «огнём / куём» was read as no rhyme (live 10-03)."""
+    marks = {"Это сбруя — контроль над безумным огнём": "Это сбр+уя контр+оль над без+умным огнём",
+             "Мы структуру и рамки для мысли куём": "Мы стр+уктуру и р+амки для м+ысли куём"}
+    monkeypatch.setattr(L, "ACCENT_STUB", lambda line: marks[line])
+    res = L.analyse("\n".join(marks))
+    assert res["stressed"] and not [i for i in res["issues"] if i["kind"] == "no_rhyme"]
+
+
+def test_a_latin_word_in_a_russian_song_is_named():
+    t = "Чтобы хаос в агента послушного стал\nHarness держит её, чтоб поток не пропал"
+    issues = [i for i in L.analyse(t)["issues"] if i["kind"] == "foreign"]
+    assert issues and issues[0]["lines"] == (2,) and "Harness" in L.describe(issues[0], "ru")
+
+
+def test_an_unchanged_lyric_with_problems_left_is_not_called_good(monkeypatch):
+    bot = _bot()
+    res = {"text": LAZY.strip(), "original": LAZY.strip(), "score": 4.6, "rounds": 3,
+           "left_rules": L.analyse(LAZY)["issues"], "left_sense": []}
+    bot._lyrics_show(5, "ru", "improve", res, [])
+    head = bot.sent[0][0]
+    assert "Править нечего" not in head and "не вышла лучше" in head
+
+
+def test_back_under_a_result_keeps_it_and_removes_only_the_buttons():
+    """↩ Назад under «🎵 Спеть / ✨ Ещё» deleted the song text (live 10-03)."""
+    import tg_bot
+    tg_bot.redirect_data_dir(tempfile.mkdtemp(prefix="tgtest_close_"))
+    b = tg_bot.TelegramBot("123:TEST", lambda: None, lambda: None, lambda: {}, silent_mode=True)
+    calls = []
+    b._api_post = lambda method, p, *a, **k: calls.append((method, p)) or {}
+    b._close_menu(5, {"message_id": 7, "text": GOOD * 3})
+    assert calls[-1][0] == "editMessageReplyMarkup"
+    b._close_menu(5, {"message_id": 8, "photo": [{}], "caption": "x"})
+    assert calls[-1][0] == "editMessageReplyMarkup"
+    b._close_menu(5, {"message_id": 9, "text": "Короткий куплет"})
+    assert not [c for c in calls if c[0] == "deleteMessage"]
