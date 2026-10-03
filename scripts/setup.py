@@ -45,6 +45,15 @@ TORCH_CPU_INDEX = "https://download.pytorch.org/whl/cpu"
 VOCOS_REPO = "charactr/vocos-mel-24khz"
 VOCOS_FILES = ("config.yaml", "pytorch_model.bin")
 EMBED_MODEL_DEFAULT = "text-embedding-bge-m3"
+# What `lms get` fetches for a served model id, in order of preference. The id
+# LM Studio serves is derived from the repo name, so the house model's id comes
+# from the first repo; the QAT/MTP release is the same model if that one is gone.
+MODEL_SOURCES = {
+    "gemma4-26b-a4b-uncensored-hauhaucs-balanced": [
+        "https://huggingface.co/HauhauCS/Gemma4-26B-A4B-Uncensored-HauhauCS-Balanced",
+        "https://huggingface.co/HauhauCS/Gemma4-26B-A4B-QAT-Uncensored-HauhauCS-Balanced-MTP",
+    ],
+}
 # The oldest msvcp140 torch & co. are happy with. PyQt5 bundles 14.26.
 MIN_VCRUNTIME = (14, 40)
 
@@ -511,10 +520,16 @@ def s_lmstudio(args):
         return
     for m in missing:
         _p(f"  downloading {m} (the chat model is ~17 GB; this takes a while)")
-        try:
-            run([lms, "get", m, "--yes"], timeout=6 * 3600, retries=1)
-        except SetupError as exc:
-            record("lmstudio", "fail", f"could not download {m}: {str(exc).splitlines()[0]}. "
+        err = None
+        for src in MODEL_SOURCES.get(m, [m]):
+            try:
+                run([lms, "get", src, "--yes"], timeout=6 * 3600, retries=1)
+                err = None
+                break
+            except SetupError as exc:
+                err = exc
+        if err is not None:
+            record("lmstudio", "fail", f"could not download {m}: {str(err).splitlines()[0]}. "
                    f"Download it in LM Studio's search tab, or set MODEL_NAME in .env")
             return
     record("lmstudio", "ok", f"server at {base}; models: {', '.join(wanted)}")

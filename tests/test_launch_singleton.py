@@ -154,7 +154,7 @@ as unavailable even though everything was actually installed correctly.
 mod7 = _load_module_with_lock_path(os.path.join(_TMP, "d.lock"))
 
 _fx = tempfile.mkdtemp(prefix="launch_comfy_venv_test_")
-shared_venv = os.path.join(_fx, ".venv", "Scripts", "python.exe")
+shared_venv = os.path.join(_fx, ".venv", *mod7._VENV_PY)
 os.makedirs(os.path.dirname(shared_venv), exist_ok=True)
 open(shared_venv, "w").close()
 mod7.COMFY_BASE_DIR = _fx
@@ -166,7 +166,7 @@ check("a tree with no venv of its own falls back to the shared one",
       mod7._comfy_python(tree_no_own_venv))
 
 tree_own_venv = os.path.join(_fx, "ComfyUI-0.33.0")
-own_venv = os.path.join(tree_own_venv, ".venvmain", "Scripts", "python.exe")
+own_venv = os.path.join(tree_own_venv, ".venvmain", *mod7._VENV_PY)
 os.makedirs(os.path.dirname(own_venv), exist_ok=True)
 open(own_venv, "w").close()
 check("a tree WITH its own venv uses that, not the shared one",

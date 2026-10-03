@@ -71,7 +71,8 @@ def _acquire_singleton_lock() -> bool:
             _singleton_handle = None
         return False
 
-COMFY_EXE = os.getenv("COMFY_EXE", os.path.expanduser(r"~\AppData\Local\Programs\ComfyUI\ComfyUI.exe"))
+COMFY_EXE = os.getenv("COMFY_EXE", os.path.join(os.path.expanduser("~"), "AppData", "Local", "Programs",
+                                                "ComfyUI", "ComfyUI.exe"))
 # ComfyUI from SOURCE, preferred over the Desktop app.
 #
 # Ideogram 4 needs ComfyUI >= 0.24 (CLIPLoader type "ideogram4", DualModelGuider,
@@ -95,7 +96,7 @@ def _newest_comfy_src():
     pinned = os.getenv("COMFY_SRC")
     if pinned:
         return pinned
-    base = os.getenv("COMFY_BASE_DIR", os.path.expanduser(r"~\Documents\ComfyUI"))
+    base = os.getenv("COMFY_BASE_DIR", os.path.join(os.path.expanduser("~"), "Documents", "ComfyUI"))
     best, best_key = None, ()
     try:
         for name in os.listdir(base):
@@ -120,7 +121,12 @@ from config import OUTPUT_DIR_COMFY, INPUT_DIR_COMFY   # one place for every gen
 import config as _config  # noqa: E402
 
 COMFY_SRC = _newest_comfy_src()
-COMFY_BASE_DIR = os.getenv("COMFY_BASE_DIR", os.path.expanduser(r"~\Documents\ComfyUI"))
+COMFY_BASE_DIR = os.getenv("COMFY_BASE_DIR", os.path.join(os.path.expanduser("~"), "Documents", "ComfyUI"))
+
+
+# Where a venv keeps its interpreter: Scripts\\python.exe on Windows, bin/python
+# elsewhere (setup.sh installs ComfyUI on Linux too).
+_VENV_PY = ("Scripts", "python.exe") if os.name == "nt" else ("bin", "python")
 
 
 def _comfy_python(src):
@@ -137,19 +143,21 @@ def _comfy_python(src):
     """
     if os.path.isdir(src):
         for venv_name in os.listdir(src):
-            cand = os.path.join(src, venv_name, "Scripts", "python.exe")
+            cand = os.path.join(src, venv_name, *_VENV_PY)
             if venv_name.startswith(".venv") and os.path.exists(cand):
                 return cand
-    return os.path.join(COMFY_BASE_DIR, ".venv", "Scripts", "python.exe")
+    return os.path.join(COMFY_BASE_DIR, ".venv", *_VENV_PY)
 
 
 # python.exe, NOT pythonw.exe: ComfyUI logs heavily and dies early when its stdout
 # has nowhere to go, so it is started detached with the output redirected to a file.
 COMFY_PY = os.getenv("COMFY_PY", _comfy_python(COMFY_SRC))
 COMFY_PORT = os.getenv("COMFY_PORT", "8000")
-COMFY_LOG = os.getenv("COMFY_LOG", os.path.expanduser(r"~\Documents\ComfyUI\comfyui_launch.log"))
-LMSTUDIO_EXE = os.getenv("LMSTUDIO_EXE", os.path.expanduser(r"~\AppData\Local\Programs\LM Studio\LM Studio.exe"))
-LMS_CLI = os.getenv("LMS_CLI", os.path.expanduser(r"~\.lmstudio\bin\lms.exe"))
+COMFY_LOG = os.getenv("COMFY_LOG", os.path.join(COMFY_BASE_DIR, "comfyui_launch.log"))
+LMSTUDIO_EXE = os.getenv("LMSTUDIO_EXE", os.path.join(os.path.expanduser("~"), "AppData", "Local",
+                                                      "Programs", "LM Studio", "LM Studio.exe"))
+LMS_CLI = os.getenv("LMS_CLI", os.path.join(os.path.expanduser("~"), ".lmstudio", "bin",
+                                            "lms.exe" if os.name == "nt" else "lms"))
 
 # From config, so COMFY_URL / LM_STUDIO_BASE in .env move the health checks
 # with the servers. These were hardcoded -- and "localhost" for LM Studio,
@@ -164,6 +172,15 @@ _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
 _NEW_GROUP = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
 
 
+def _detach_kw(flags):
+    """Popen kwargs that detach a child. creationflags is Windows-only: POSIX
+    Popen raises ValueError on any non-zero value, which the callers swallowed,
+    so on Linux nothing was ever started. There a new session does the job."""
+    if os.name == "nt":
+        return {"creationflags": flags}
+    return {"start_new_session": True}
+
+
 def _up(url, timeout=1.5):
     try:
         urllib.request.urlopen(url, timeout=timeout)
@@ -176,7 +193,7 @@ def _spawn(path, *args):
     if not os.path.exists(path):
         return False
     try:
-        subprocess.Popen([path, *args], cwd=os.path.dirname(path) or None, creationflags=_DETACHED)
+        subprocess.Popen([path, *args], cwd=os.path.dirname(path) or None, **_detach_kw(_DETACHED))
         return True
     except Exception:
         return False
@@ -196,9 +213,12 @@ def _spawn_comfy_source():
         # DETACHED_PROCESS conflicts with CREATE_NO_WINDOW on Windows and can still
         # pop a visible console. Use STARTUPINFO(SW_HIDE) + CREATE_NO_WINDOW instead
         # — SW_HIDE is the most reliable way to suppress the window.
-        si = subprocess.STARTUPINFO()
-        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        si.wShowWindow = 0  # SW_HIDE
+        kw = _detach_kw(_NO_WINDOW | _NEW_GROUP)
+        if os.name == "nt":
+            si = subprocess.STARTUPINFO()
+            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            si.wShowWindow = 0  # SW_HIDE
+            kw["startupinfo"] = si
         # --reserve-vram 8: live, 2026-09-20 -- with nothing reserved, ComfyUI's
         # dynamic-VRAM manager (comfy-aimdo) sometimes decides an H3 render's model
         # fits fully in VRAM ("loaded completely") when just enough is free, and
@@ -212,9 +232,8 @@ def _spawn_comfy_source():
             [COMFY_PY, main_py, "--base-directory", COMFY_BASE_DIR, "--port", COMFY_PORT,
              "--use-ck-attention", "--reserve-vram", "1",
              "--output-directory", str(OUTPUT_DIR_COMFY), "--input-directory", str(INPUT_DIR_COMFY)],
-            cwd=COMFY_SRC, creationflags=_NO_WINDOW | _NEW_GROUP, env=env,
-            stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-            startupinfo=si)
+            cwd=COMFY_SRC, env=env,
+            stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, **kw)
         return True
     except Exception:
         return False
@@ -261,7 +280,11 @@ def main():
         _spawn(LMSTUDIO_EXE)
         if os.path.exists(LMS_CLI):
             try:
-                subprocess.Popen([LMS_CLI, "server", "start"], creationflags=_DETACHED)
+                if os.name != "nt":
+                    # headless Linux install: no app above, the daemon hosts the server
+                    subprocess.run([LMS_CLI, "daemon", "up"], timeout=60,
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen([LMS_CLI, "server", "start"], **_detach_kw(_DETACHED))
             except Exception:
                 pass
 

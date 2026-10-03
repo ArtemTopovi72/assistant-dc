@@ -92,7 +92,9 @@ LM_STUDIO_URL = os.getenv("LM_STUDIO_URL", f"{LM_STUDIO_BASE}/v1/chat/completion
 # came from: "google/gemma-4-26b-a4b-qat" is not served here and anything
 # comparing against it -- the bench's "am I talking to the house model?"
 # check included -- silently answered no.
-MODEL_NAME = os.getenv("MODEL_NAME", "google/gemma-4-26b-a4b-qat")
+# 2026-10-03: the house model is HauhauCS's uncensored Gemma 4 26B-A4B
+# "Balanced" (the owner's pick); setup.py downloads it from MODEL_SOURCES.
+MODEL_NAME = os.getenv("MODEL_NAME", "gemma4-26b-a4b-uncensored-hauhaucs-balanced")
 
 # The model to start on when NOBODY CHOOSES ONE: the startup settings dialog
 # timing out, or ASSISTANT_AUTOSTART skipping it entirely. Deliberately its own

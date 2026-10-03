@@ -167,8 +167,10 @@ copy .env.example .env
 
 ### 2. LM Studio: the brain
 
-1. Download a chat model in LM Studio. The default is `google/gemma-4-26b-a4b-qat`; for any other model
-   set `MODEL_NAME=<model id from LM Studio>` in `.env`.
+1. Download a chat model in LM Studio (setup does this for you). The default is
+   `gemma4-26b-a4b-uncensored-hauhaucs-balanced`
+   ([HauhauCS/Gemma4-26B-A4B-Uncensored-HauhauCS-Balanced](https://huggingface.co/HauhauCS/Gemma4-26B-A4B-QAT-Uncensored-HauhauCS-Balanced-MTP));
+   for any other model set `MODEL_NAME=<model id from LM Studio>` in `.env`.
 2. Context: the system prompt plus the tool schemas take about 10k tokens, so the app
    reloads the model with at least **40960** tokens itself (`LM_MIN_CONTEXT`). Leave
    room for it in VRAM.
