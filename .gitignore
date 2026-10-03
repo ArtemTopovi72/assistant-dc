@@ -97,6 +97,8 @@ tests/*.db
 # images. Inputs and experiments, not source.
 # ---------------------------------------------------------------------------
 /*.wav
+# ...except the assistant's own voice sample, which ships with the repo.
+!/Stepan_short.wav
 /*.ogg
 /*.mp3
 /*.mp4

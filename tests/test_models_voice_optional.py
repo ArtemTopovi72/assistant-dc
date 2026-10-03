@@ -77,3 +77,20 @@ def test_transcription_is_empty_when_whisper_is_off(monkeypatch, tmp_path):
     clip = tmp_path / "a.wav"; clip.write_bytes(b"RIFF")
     assert audio.transcribe_audio_file(ctx, str(clip)) == ""
     assert ctx.transcription_cache == {}, "an 'ASR off' result must not be cached as the text"
+
+
+def test_mismatched_checkpoint_turns_voice_off(monkeypatch, tmp_path):
+    import config
+    import models
+    w = tmp_path / "w.safetensors"; w.write_bytes(b"x")
+    voc = tmp_path / "voc"; voc.mkdir(); (voc / "config.yaml").write_text("x")
+    monkeypatch.setattr(config, "WEIGHTS_PATH", w)
+    monkeypatch.setattr(config, "VOCOS_DIR", voc)
+    import f5_tts.infer.utils_infer as ui
+    monkeypatch.setattr(ui, "load_vocoder", lambda **k: "VOC")
+
+    def mismatch(*a, **k):
+        raise RuntimeError("size mismatch for transformer.text_embed.text_embed.weight")
+    monkeypatch.setattr(ui, "load_model", mismatch)
+    m = models.Models.load(whisper=False)
+    assert m.tts_model is None and m.vocoder is None

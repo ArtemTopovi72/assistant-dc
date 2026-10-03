@@ -915,9 +915,11 @@ def generate_video(ctx, description: str, *,
         if ctx is not None and getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
             _VIDEO_FAILURE.update({"reason": "cancelled", "detail": "cancelled"})
             return {"path": None, "status": "cancelled", "reason": "cancelled"}
-        _VIDEO_FAILURE.update({"reason": "server_error",
-                               "detail": "the render produced no file"})
-        return {"path": None, "status": "fail", "reason": "the render produced no file"}
+        # The real cause, not a blank: with only "no file" the chat model made
+        # one up for the user (live 2026-10-03).
+        why = comfy_client.last_failure() or "the render produced no file"
+        _VIDEO_FAILURE.update({"reason": "server_error", "detail": why})
+        return {"path": None, "status": "fail", "reason": why}
 
     final = _adopt_output(out)
     if ctx is not None:

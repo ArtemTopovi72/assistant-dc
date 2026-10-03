@@ -81,6 +81,32 @@ def server_healthy(force: bool = False) -> bool:
     return ok
 
 
+# Why the last submit on THIS thread came back empty, in words a user can be
+# told. Callers used to say only "the render produced no file", and the chat
+# model then invented a cause ("a conflict in the animation algorithms",
+# live 2026-10-03) while the real one sat in the log.
+_FAILURE = threading.local()
+
+
+def _fail(reason: str) -> None:
+    _FAILURE.reason = str(reason)[:600]
+
+
+def last_failure() -> str:
+    """The reason the last ComfyUI job on this thread failed ("" if none)."""
+    return getattr(_FAILURE, "reason", "")
+
+
+def _execution_error_text(msg) -> str:
+    """One line from a history 'execution_error' payload (a dict, or text)."""
+    if isinstance(msg, dict):
+        node = msg.get("node_type") or msg.get("node_id") or "?"
+        kind = msg.get("exception_type") or "error"
+        text = (msg.get("exception_message") or "").strip().splitlines()
+        return f"{node}: {kind}: {text[0] if text else ''}".strip()
+    return str(msg)
+
+
 def _format_comfy_error(resp) -> str:
     """Turn a ComfyUI /prompt error response into a readable one-line reason.
 
@@ -700,6 +726,7 @@ def _submit_and_poll(ctx, workflow: dict, timeout: int = 1900, label: str = "",
     Returns the saved file path, or None on HTTP error / job error / timeout.
     """
     timeout = min(timeout, job_timeout if job_timeout is not None else COMFY_JOB_TIMEOUT)
+    _fail("")
     if ctx is not None and getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
         # Stop pressed while the prompt was being planned: claiming the card
         # would unload the chat model for a job nobody wants (live 2026-09-28).
@@ -708,6 +735,7 @@ def _submit_and_poll(ctx, workflow: dict, timeout: int = 1900, label: str = "",
     if not server_healthy():
         logger.error("ComfyUI is not answering — abandoning submit%s",
                      f" ({label})" if label else "")
+        _fail("ComfyUI is not running or not answering at " + COMFY_URL)
         return None
     busy = gpu_holder()
     if busy:
@@ -716,9 +744,53 @@ def _submit_and_poll(ctx, workflow: dict, timeout: int = 1900, label: str = "",
         logger.error("GPU held by %r — refusing this ComfyUI job%s", busy,
                      f" ({label})" if label else "")
         LAST_GPU_REFUSAL.update({"label": busy, "at": time.time()})
+        _fail(f"the GPU is busy with {busy}")
         return None
     with _gpu_slot(exclusive=exclusive, label=label, min_free_mb=min_free_mb):
         return _submit_and_poll_locked(ctx, workflow, timeout, label, on_progress, validate)
+
+
+# Files the graphs name that are not published anywhere (local quantizations),
+# with the public files the setup script downloads in their place. A graph
+# whose file is missing on the server is sent with the stand-in, so a fresh
+# install renders instead of failing "value not in list".
+MODEL_FALLBACKS = {
+    ("UNETLoader", "unet_name"): {
+        "ig4-int8mixedrow_simple.safetensors": "ideogram4_fp8_scaled.safetensors",
+        "ig4_uncond-int8mixedrow_simple.safetensors": "ideogram4_unconditional_fp8_scaled.safetensors",
+    },
+}
+_AVAILABLE: dict = {}          # (class, input) -> (time, set of names)
+
+
+def _available_models(node_class: str, field: str) -> Optional[set]:
+    hit = _AVAILABLE.get((node_class, field))
+    if hit and time.time() - hit[0] < 60:
+        return hit[1]
+    try:
+        r = requests.get(f"{COMFY_URL}/object_info/{node_class}", timeout=10)
+        spec = r.json()[node_class]["input"]["required"][field]
+        names = set(spec[0] if isinstance(spec[0], list) else spec[1].get("options", []))
+    except Exception:
+        return None
+    _AVAILABLE[(node_class, field)] = (time.time(), names)
+    return names
+
+
+def _apply_model_fallbacks(workflow: dict) -> dict:
+    """Swap a model file the server lacks for its published stand-in."""
+    for node in (workflow or {}).values():
+        if not isinstance(node, dict):
+            continue
+        for (cls, field), subs in MODEL_FALLBACKS.items():
+            want = (node.get("inputs") or {}).get(field)
+            if node.get("class_type") != cls or want not in subs:
+                continue
+            have = _available_models(cls, field)
+            if have is not None and want not in have and subs[want] in have:
+                logger.info("ComfyUI has no %s -- using %s", want, subs[want])
+                node["inputs"][field] = subs[want]
+    return workflow
 
 
 def _submit_and_poll_locked(ctx, workflow: dict, timeout: int, label: str,
@@ -735,11 +807,14 @@ def _submit_and_poll_locked(ctx, workflow: dict, timeout: int, label: str,
         progress = _ComfyProgress(client_id, on_progress, holder).start()
     try:
         throttle_external_calls(ctx)
+        _apply_model_fallbacks(workflow)
         resp = requests.post(f"{COMFY_URL}/prompt",
                              json={"prompt": workflow, "client_id": client_id},
                              timeout=_COMFY_SUBMIT_TIMEOUT)
         if resp.status_code != 200:
-            logger.error("ComfyUI HTTP %d: %s", resp.status_code, _format_comfy_error(resp))
+            _why = _format_comfy_error(resp)
+            logger.error("ComfyUI HTTP %d: %s", resp.status_code, _why)
+            _fail(f"ComfyUI rejected the job: {_why}")
             if progress is not None:
                 progress.stop()
             return None
@@ -798,6 +873,8 @@ def _poll_history(ctx, prompt_id, timeout, label, validate=None):
                             logger.error("ComfyUI job %s vanished (not in queue or history "
                                          "for 3 consecutive checks) — aborting poll%s",
                                          prompt_id, f" ({label})" if label else "")
+                            _fail("the job disappeared from ComfyUI (it restarted or crashed "
+                                  "mid-render, often out of memory)")
                             return None
                     elif known:
                         queue_absent = 0
@@ -834,6 +911,7 @@ def _poll_history(ctx, prompt_id, timeout, label, validate=None):
                             return last_path
                         logger.error("ComfyUI reported an output but the file is "
                                      "missing or corrupt: %s", last_path)
+                        _fail(f"ComfyUI wrote a missing or broken file: {last_path}")
                         return None
 
                     # Terminal with no usable output — exit immediately. ComfyUI marks
@@ -847,13 +925,15 @@ def _poll_history(ctx, prompt_id, timeout, label, validate=None):
                         for m in job_status.get("messages", []))
                     if job_status.get("completed") or errored:
                         err_parts = [
-                            str(m[1]) for m in job_status.get("messages", [])
+                            _execution_error_text(m[1]) for m in job_status.get("messages", [])
                             if isinstance(m, (list, tuple)) and len(m) >= 2
                             and m[0] in ("execution_error", "execution_interrupted")
                         ]
+                        _why = "; ".join(str(p) for p in err_parts) or "unknown error"
                         logger.error("ComfyUI job %s with no output: %s",
-                                     "errored" if errored else "completed",
-                                     "; ".join(str(p) for p in err_parts) or "unknown error")
+                                     "errored" if errored else "completed", _why)
+                        _fail(f"ComfyUI failed during the render: {_why}" if errored
+                              else "ComfyUI finished the job without saving a file")
                         return None
         except (requests.exceptions.ConnectionError,
                 requests.exceptions.Timeout) as exc:
@@ -867,6 +947,7 @@ def _poll_history(ctx, prompt_id, timeout, label, validate=None):
             elif now - conn_down_since > CONN_FAIL_GRACE:
                 logger.error("ComfyUI unreachable for >%.0fs (server down?) — aborting poll: %s",
                              CONN_FAIL_GRACE, exc)
+                _fail("ComfyUI stopped answering mid-render (crashed or restarted)")
                 return None
             logger.warning("ComfyUI connection error (down %.0fs): %s", now - conn_down_since, exc)
         except Exception as exc:
@@ -876,6 +957,7 @@ def _poll_history(ctx, prompt_id, timeout, label, validate=None):
         delay = min(delay * 1.5, 5.0)
 
     logger.error("ComfyUI timeout after %d seconds", timeout)
+    _fail(f"the render did not finish within {timeout} s")
     return None
 
 
@@ -899,6 +981,7 @@ def _submit_and_collect_locked(ctx, workflow: dict, timeout: int,
                                label: str) -> Optional[dict]:
     try:
         throttle_external_calls(ctx)
+        _apply_model_fallbacks(workflow)
         resp = requests.post(f"{COMFY_URL}/prompt", json={"prompt": workflow},
                              timeout=_COMFY_SUBMIT_TIMEOUT)
         if resp.status_code != 200:

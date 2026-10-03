@@ -1086,9 +1086,12 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         if gpu:
             return gpu
         detail = result.get("reason") or "the render produced no file"
-        return (f"[TOOL ERROR] Video generation failed — no clip was produced ({detail}). "
-                "You MUST tell the user clearly that the video could not be generated; "
-                "do NOT imply or claim that a video was created.")
+        return (f"[TOOL ERROR] Video generation failed — no clip was produced. "
+                f"Reason reported by the renderer: {detail}. "
+                "You MUST tell the user clearly that the video could not be generated and "
+                "give them THIS reason in plain words; do NOT invent another cause, do NOT "
+                "blame the prompt unless the reason says so, and do NOT imply or claim that "
+                "a video was created.")
 
     state["video_path"] = path
     state["video_status"] = "success"

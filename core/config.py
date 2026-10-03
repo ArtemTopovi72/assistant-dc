@@ -196,8 +196,28 @@ GIGAAM_MODEL = os.getenv("GIGAAM_MODEL", "gigaam-v3-e2e-rnnt")
 # Paths — resolved relative to this file so the project is relocatable
 # ---------------------------------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parents[1]
-WEIGHTS_PATH = BASE_DIR / "model_212000.safetensors"
-VOCAB_PATH = BASE_DIR / "vocab.txt"
+# F5-TTS: the setup script downloads the checkpoint (Misha24-10/F5-TTS_RUSSIAN,
+# F5TTS_v1_Base_v4_winter) and its vocab into models/f5/; that copy wins over
+# the older hand-placed model_212000.safetensors in the project root.
+F5_DIR = BASE_DIR / "models" / "f5"
+
+
+def _step_of(p: Path) -> int:
+    import re as _re
+    nums = _re.findall(r"\d+", p.stem)
+    return int(nums[-1]) if nums else -1
+
+
+def _f5_weights() -> Path:
+    if os.getenv("F5_WEIGHTS_PATH"):
+        return Path(os.environ["F5_WEIGHTS_PATH"])
+    found = sorted(F5_DIR.glob("*.safetensors"), key=_step_of) if F5_DIR.is_dir() else []
+    return found[-1] if found else BASE_DIR / "model_212000.safetensors"
+
+
+WEIGHTS_PATH = _f5_weights()
+VOCAB_PATH = (F5_DIR / "vocab.txt") if (F5_DIR / "vocab.txt").exists() and \
+    WEIGHTS_PATH.parent == F5_DIR else BASE_DIR / "vocab.txt"
 # The F5 vocoder (charactr/vocos-mel-24khz: config.yaml + pytorch_model.bin).
 # Absolute, not the relative "vocos" it used to be loaded from: that resolved
 # against whatever the CWD was, so a launch from another folder lost the voice.

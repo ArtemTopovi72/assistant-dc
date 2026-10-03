@@ -102,17 +102,26 @@ class Models:
             logger.warning("F5-TTS weights or vocoder missing (%s, %s) -- voice output is off",
                            WEIGHTS_PATH, VOCOS_DIR)
         else:
-            logger.info("Loading vocoder...")
-            vocoder = load_vocoder(
-                vocoder_name="vocos",
-                is_local=True,
-                local_path=str(VOCOS_DIR),
-                device=DEVICE,
-            )
+            # A checkpoint that does not match the vocab (a new download next to
+            # an old vocab.txt) raises a size mismatch; voice goes off, the app
+            # still opens.
+            try:
+                logger.info("Loading vocoder...")
+                vocoder = load_vocoder(
+                    vocoder_name="vocos",
+                    is_local=True,
+                    local_path=str(VOCOS_DIR),
+                    device=DEVICE,
+                )
 
-            logger.info("Loading TTS model on %s...", DEVICE)
-            model_cfg = dict(dim=1024, depth=22, heads=16, ff_mult=2, text_dim=512, conv_layers=4)
-            tts_model = load_model(DiT, model_cfg, str(WEIGHTS_PATH), vocab_file=str(VOCAB_PATH), device=DEVICE)
+                logger.info("Loading TTS model %s on %s...", Path(WEIGHTS_PATH).name, DEVICE)
+                model_cfg = dict(dim=1024, depth=22, heads=16, ff_mult=2, text_dim=512, conv_layers=4)
+                tts_model = load_model(DiT, model_cfg, str(WEIGHTS_PATH), vocab_file=str(VOCAB_PATH),
+                                       device=DEVICE)
+            except Exception as exc:
+                logger.error("F5-TTS did not load (%s: %s) -- voice output is off",
+                             type(exc).__name__, str(exc).splitlines()[0][:300] if str(exc) else "")
+                vocoder = tts_model = None
 
         accentor = None
         accentor_loaded = False

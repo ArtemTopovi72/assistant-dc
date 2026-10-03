@@ -16,7 +16,7 @@ Steps:
    6. browser       Playwright's Chromium (web search / research)
    7. config        .env from .env.example, never overwritten
    8. ffmpeg        on PATH (installed with winget on Windows)
-   9. voice         vocoder download; F5 weights when F5_WEIGHTS_REPO is set
+   9. voice         vocoder + Russian F5-TTS weights (Misha24-10, v4 winter)
   10. lmstudio      LM Studio, its server, the chat + embedding models
   11. shortcut      desktop shortcut (Windows)
   12. health        scripts/healthcheck.py -- the verdict
@@ -327,6 +327,45 @@ def _hf_download(repo, filename, dest_dir):
     return hf_hub_download(repo_id=repo, filename=filename, local_dir=str(dest_dir))
 
 
+F5_REPO = "Misha24-10/F5-TTS_RUSSIAN"
+F5_FOLDER = "F5TTS_v1_Base_v4_winter"
+
+
+def _download_f5(dest: Path) -> str:
+    """The newest checkpoint (+ vocab.txt) of the Russian F5-TTS folder into dest.
+
+    The file name is not hard-coded: the folder is listed and the .safetensors
+    with the highest step number wins, so a re-upload under a new step still
+    installs. F5_WEIGHTS_REPO / F5_WEIGHTS_DIR / F5_WEIGHTS_FILE override."""
+    from huggingface_hub import list_repo_files
+    repo = os.getenv("F5_WEIGHTS_REPO", "").strip() or F5_REPO
+    folder = os.getenv("F5_WEIGHTS_DIR", "").strip().strip("/") or F5_FOLDER
+    files = [f for f in list_repo_files(repo) if f.startswith(folder + "/")]
+    pick = os.getenv("F5_WEIGHTS_FILE", "").strip()
+    if pick:
+        pick = pick if "/" in pick else f"{folder}/{pick}"
+    else:
+        cands = [f for f in files if f.endswith(".safetensors")]
+        if not cands:
+            raise FileNotFoundError(f"no .safetensors in {repo}/{folder}")
+        pick = max(cands, key=lambda f: [int(n) for n in re.findall(r"\d+", Path(f).stem)][-1:] or [-1])
+    stage = ROOT / "models" / ".f5_download"
+    dest.mkdir(parents=True, exist_ok=True)
+    wanted = [pick] + [f for f in files if Path(f).name == "vocab.txt"]
+    for f in wanted:
+        _p(f"  downloading {repo}/{f}")
+        got = Path(_hf_download(repo, f, stage))
+        shutil.move(str(got), str(dest / Path(f).name))
+    shutil.rmtree(stage, ignore_errors=True)
+    return Path(pick).name
+
+
+def _weights_now() -> Path:
+    import importlib
+    config = importlib.import_module("config")
+    return Path(config._f5_weights())
+
+
 def s_voice(args):
     step("9. voice")
     import importlib
@@ -348,26 +387,20 @@ def s_voice(args):
             notes.append("vocoder downloaded")
         except Exception as exc:
             notes.append(f"vocoder download failed ({type(exc).__name__}: {str(exc)[:120]})")
-    weights = Path(config.WEIGHTS_PATH)
-    repo = os.getenv("F5_WEIGHTS_REPO", "").strip()
-    if weights.exists():
-        notes.append("F5 weights present")
-    elif repo and not args.no_models:
-        try:
-            from huggingface_hub import list_repo_files
-            name = os.getenv("F5_WEIGHTS_FILE", "").strip() or next(
-                (f for f in list_repo_files(repo) if f.endswith(weights.name)), "")
-            if not name:
-                raise FileNotFoundError(f"no {weights.name} in {repo}")
-            _p(f"  downloading {repo}/{name}")
-            got = Path(_hf_download(repo, name, ROOT / "models" / "_f5"))
-            shutil.move(str(got), str(weights))
-            notes.append("F5 weights downloaded")
-        except Exception as exc:
-            notes.append(f"F5 weights download failed ({type(exc).__name__}: {str(exc)[:120]})")
+    f5_dir = Path(config.F5_DIR)
+    have = sorted(f5_dir.glob("*.safetensors")) if f5_dir.is_dir() else []
+    if have:
+        notes.append(f"F5 weights present ({have[-1].name})")
+    elif args.no_models:
+        notes.append("F5 weights not downloaded (--no-models)")
     else:
-        notes.append(f"F5 weights missing: put a Russian F5-TTS checkpoint at {weights.name} "
-                     "or set F5_WEIGHTS_REPO (and F5_WEIGHTS_FILE) in .env")
+        try:
+            got = _download_f5(f5_dir)
+            notes.append(f"F5 weights downloaded ({got})")
+        except Exception as exc:
+            notes.append(f"F5 weights download failed ({type(exc).__name__}: {str(exc)[:160]}) "
+                         "-- run the setup again to retry")
+    weights = _weights_now()
     ref = Path(config.DC_REF_WAV)
     if not ref.exists():
         notes.append("no reference voice: set ASSISTANT_REF_WAV in .env to a 5-15 s recording")
