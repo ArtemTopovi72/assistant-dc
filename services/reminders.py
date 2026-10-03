@@ -87,7 +87,17 @@ def register(sender, path) -> int:
         try:
             loaded = json.loads(_PATH.read_text(encoding="utf-8")) if _PATH.exists() else {}
         except Exception:
-            logger.exception("reminders file unreadable -- starting empty")
+            # Keep the damaged file: the next save would overwrite it and every
+            # reminder in it would be gone for good.
+            keep = _PATH.with_name(f"{_PATH.name}.unreadable-{int(time.time())}")
+            try:
+                _PATH.replace(keep)
+            except OSError:
+                keep = _PATH
+            logger.exception("reminders file unreadable -- starting empty (kept as %s)", keep)
+            loaded = {}
+        if not isinstance(loaded, dict):
+            logger.error("reminders file holds %s, not a dict -- ignored", type(loaded).__name__)
             loaded = {}
         for rid, item in loaded.items():
             if rid not in _ITEMS:

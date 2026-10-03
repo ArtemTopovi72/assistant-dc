@@ -47,3 +47,16 @@ def test_long_word_still_matches_by_stem(three):
 def test_all_phrases_cancel_everything(three, phrase):
     assert len(reminders.cancel(7, phrase)) == 3
     assert _left() == []
+
+
+def test_unreadable_file_is_kept_aside_not_overwritten(tmp_path):
+    path = tmp_path / "r.json"
+    path.write_text('{"abc": {"owner": "7", "due": 1', encoding="utf-8")   # torn write
+    reminders.register(lambda cid, t: None, path)
+    try:
+        reminders.add(7, 3600, "новое")
+        kept = list(tmp_path.glob("r.json.unreadable-*"))
+        assert len(kept) == 1 and kept[0].read_text(encoding="utf-8").startswith('{"abc"')
+    finally:
+        reminders.cancel(7, "all")
+        reminders.stop()
