@@ -134,6 +134,24 @@ def _format_comfy_error(resp) -> str:
     return str(err)[:500] or str(data)[:500]
 
 
+def upload_name(path: str) -> str:
+    """The name a local file is uploaded to ComfyUI's input/ under.
+
+    Uploads go in with overwrite=true, and the bare basename is not unique:
+    every combined contact sheet is video_<id>/sheet.jpg, so two chats
+    animating theirs at once rendered from whichever upload landed last. The
+    tag follows the file (full path, size, mtime), so re-uploading the same
+    file reuses its name and a different file never takes it."""
+    import hashlib
+    try:
+        st = os.stat(path)
+        key = f"{os.path.abspath(path)}|{st.st_size}|{st.st_mtime_ns}"
+    except OSError:
+        key = os.path.abspath(path)
+    stem, ext = os.path.splitext(os.path.basename(path))
+    return f"{stem[:60]}_{hashlib.sha1(key.encode('utf-8', 'replace')).hexdigest()[:10]}{ext}"
+
+
 def _upload_image_to_comfy(image_path: str, comfy_url: str) -> Optional[str]:
     """Upload an image file to ComfyUI's /upload/image endpoint.
     Returns the server-side filename on success, None on failure.
@@ -144,13 +162,13 @@ def _upload_image_to_comfy(image_path: str, comfy_url: str) -> Optional[str]:
         with open(image_path, "rb") as f:
             resp = requests.post(
                 f"{comfy_url}/upload/image",
-                files={"image": (os.path.basename(image_path), f, mime)},
+                files={"image": (upload_name(image_path), f, mime)},
                 data={"type": "input", "overwrite": "true"},
                 timeout=30,
             )
         if resp.status_code == 200:
             data = resp.json()
-            name = data.get("name") or os.path.basename(image_path)
+            name = data.get("name") or upload_name(image_path)
             logger.info("Uploaded previous image to ComfyUI: %s", name)
             return name
         logger.error("ComfyUI upload HTTP %d", resp.status_code)

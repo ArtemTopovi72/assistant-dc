@@ -327,10 +327,10 @@ def _upload(path: str, kind: str = "image") -> Optional[str]:
                                                               "application/octet-stream")
         with open(path, "rb") as fh:
             r = requests.post(f"{COMFY_URL}/upload/image",
-                              files={"image": (os.path.basename(path), fh, mime)},
+                              files={"image": (comfy_client.upload_name(path), fh, mime)},
                               data={"type": "input", "overwrite": "true"}, timeout=120)
         if r.status_code == 200:
-            return r.json().get("name") or os.path.basename(path)
+            return r.json().get("name") or comfy_client.upload_name(path)
         logger.error("ComfyUI upload HTTP %d for %s", r.status_code, path)
     except Exception as exc:
         logger.error("ComfyUI upload failed for %s: %s", path, exc)
