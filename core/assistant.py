@@ -54,6 +54,8 @@ _file_handler.setLevel(logging.INFO)
 _file_handler.setFormatter(logging.Formatter(
     "%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))
 logger.addHandler(_file_handler)
+import log_redact  # noqa: E402
+log_redact.install()        # the bot token rides in every Bot API URL
 
 
 _CAM_LABELS = {"idle": "READY", "recording": "● REC", "processing": "… THINKING"}

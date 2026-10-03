@@ -319,6 +319,11 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
         self.log_handler.line.connect(self._on_pipeline_log)
         asst = logging.getLogger("assistant")
         asst.addHandler(self.log_handler)
+        try:
+            import log_redact
+            log_redact.install(self.log_handler)
+        except Exception:
+            pass
         # CRASH FIX: datasets/transformers (pulled in by sentence-transformers) call
         # logging.basicConfig(), adding a root StreamHandler to sys.stderr — which is
         # None under pythonw AND cp1251-encoded. A non-ASCII log char (→, Cyrillic)
