@@ -347,6 +347,7 @@ class CallbackMixin:
         sess = self._get_session(chat_id)
         sess.lang = tg_bot._norm_lang(data.split(":", 1)[1])
         sess.lang_chosen = True
+        sess.lang_pin = sess.turn_lang = ""          # the language chosen wins over an old pin
         self._store.put(sess)
         self._send_text(chat_id, tg_bot._t("lang_set", sess.lang), parse_mode="HTML",
                         keyboard=self._main_menu_kb(sess, sess.lang))

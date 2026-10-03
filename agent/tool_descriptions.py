@@ -42,6 +42,8 @@ _GENERATE_IMAGE_DESC = (
 _GENERATE_VIDEO_DESC = (
     "Generate a short VIDEO WITH SOUND using MiniMax H3. Use whenever the user asks "
     "for a video, clip, animation, or asks to 'animate'/'bring to life' a picture. "
+    "A drawing STYLE (cartoon, мультяшный, anime, 3D) or a complaint about a still "
+    "picture is not a video: that is generate_image / redraw_image. "
     "It covers four cases and picks between them from what is attached: text only "
     "(pure text-to-video); ONE image (that image becomes the first frame); TWO images "
     "(first frame and last frame, so the clip moves between them); or MANY images / a "

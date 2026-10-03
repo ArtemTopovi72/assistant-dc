@@ -48,7 +48,8 @@ class CommandsMixin:
         if cmd == "/lang":
             arg = text[len("/lang"):].strip().lower()
             if arg in tg_bot._LANGS:
-                sess.lang = arg; sess.lang_chosen = True; self._store.put(sess)
+                sess.lang = arg; sess.lang_chosen = True
+                sess.lang_pin = sess.turn_lang = ""; self._store.put(sess)
                 self._send_text(chat_id, tg_bot._t("lang_set", arg), parse_mode="HTML",
                                 keyboard=self._main_menu_kb(sess, arg))
             else:

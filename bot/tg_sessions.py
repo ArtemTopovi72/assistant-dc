@@ -146,6 +146,9 @@ class _Session:
         self.turn_lang: str = d.get("turn_lang", "")
         # «answer in English from now on»: sticks until asked otherwise.
         self.lang_pin: str = d.get("lang_pin", "")
+        # When the pin last served a turn: a pin left from yesterday expired
+        # instead of answering a Russian chat in English for good (10-03).
+        self.lang_pin_ts: float = float(d.get("lang_pin_ts", 0) or 0)
         # The transcript of a forwarded voice note, held while we ask whether the
         # user wants it verbatim or summarised.
         self.fwd_transcript: str = d.get("fwd_transcript", "")
@@ -327,6 +330,7 @@ class _Session:
         with self._lock:
             self.history = []
             self.tg_memory = []
+            self.lang_pin = self.turn_lang = ""     # a fresh start speaks the chat's language
             self.last_link = None
             self.pending_prefix = ""
             # Navigation state, but it decides where ⬅ Back goes. Leaving it set
@@ -403,6 +407,7 @@ class _Session:
                 "target_image_ts":   self._target_ts,
                 "turn_lang":         self.turn_lang,
                 "lang_pin":          self.lang_pin,
+                "lang_pin_ts":       self.lang_pin_ts,
                 "quoted_text":       self.quoted_text,
                 "char_slug":         self.char_slug,
                 "char_ref_ids":      self.char_ref_ids,

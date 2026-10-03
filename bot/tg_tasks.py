@@ -28,6 +28,24 @@ import re as _re
 
 
 _WORD_RE = _re.compile(r"[^\W\d_]+", _re.UNICODE)
+LANG_PIN_TTL = 6 * 3600     # «answer in English from now on» lasts until 6 h of quiet
+
+
+def _lang_pin_after(sess, mode: str, named_en: bool, script: str, now: float = None) -> None:
+    """The «from now on in English» pin after one typed message: set when English
+    is asked for by name, dropped on «по-русски», and over after hours of quiet
+    once the user writes in another alphabet -- a pin from yesterday answered a
+    Russian chat in English for good (10-03)."""
+    now = time.time() if now is None else now
+    pin = getattr(sess, "lang_pin", "")
+    if named_en:
+        sess.lang_pin = "en"
+    elif mode == "ru":
+        sess.lang_pin = ""
+    elif pin and script and script != pin and now - getattr(sess, "lang_pin_ts", 0) > LANG_PIN_TTL:
+        sess.lang_pin = ""
+    if sess.lang_pin:
+        sess.lang_pin_ts = now
 
 
 def _is_button_payload(text: str) -> bool:
@@ -524,10 +542,7 @@ class TaskRunnerMixin:
             import intent
             from graph_language import names_english as _names_en
             _mode = intent.read(None, task.user_text)["language_mode"]
-            if _mode == "en" and _names_en(task.user_text):
-                sess.lang_pin = "en"
-            elif _mode == "ru":
-                sess.lang_pin = ""
+            _lang_pin_after(sess, _mode, _mode == "en" and _names_en(task.user_text), _tl)
         if is_internal:
             _turn_lang = lang
         else:
