@@ -49,6 +49,13 @@ class LyricsMixin:
             tg_bot.logger.exception("[lyrics] %s failed for chat %s", mode, chat_id)
             self._send_text(chat_id, tg_bot._t("lyr_fail", lang))
             return
+        self._lyrics_show(chat_id, lang, mode, res, notes)
+
+    def _lyrics_show(self, chat_id: int, lang: str, mode: str, res: dict, notes: list,
+                     buttons: bool = True) -> None:
+        """Two messages: what was changed (or how it was written), then the lyric
+        alone. `buttons` False when a song is already being made from it."""
+        import lyrics_craft as LC
         sess = self._get_session(chat_id)
         sess.lyrics_last = res["text"][:6000]
         self._store.put(sess)
@@ -64,9 +71,30 @@ class LyricsMixin:
         self._send_text(chat_id, head + ("\n\n" + "\n".join(body) if body else ""), parse_mode="HTML")
         # The lyric alone, no markup: one tap copies it whole.
         lyric = res["text"]
-        self._send_text(chat_id, lyric, parse_mode=None, keyboard={"inline_keyboard": [[
+        kb = {"inline_keyboard": [[
             {"text": tg_bot._t("lyr_sing_btn", lang), "callback_data": "lyr:sing"},
-            {"text": tg_bot._t("lyr_again_btn", lang), "callback_data": "lyr:again"}]]})
+            {"text": tg_bot._t("lyr_again_btn", lang), "callback_data": "lyr:again"}]]} if buttons else None
+        self._send_text(chat_id, lyric, parse_mode=None, keyboard=kb)
+
+    def _song_polish_then_sing(self, chat_id: int, lang: str, draft: str) -> None:
+        """🎵 Song with ready words + «✨ Доработать и спеть»: show what was
+        polished, the lyric itself, then sing it (owner 10-03)."""
+        import lyrics_craft as LC
+        from tg_songs import LYRICS_MARK
+        ctx = self._get_ctx()
+        try:
+            res = LC.polish(ctx, draft)
+            notes = LC.changes_note(ctx, res["original"], res["text"], lang)
+        except Exception:
+            tg_bot.logger.exception("[lyrics] polishing a song's words failed for chat %s", chat_id)
+            res, notes = None, []
+        if res:
+            self._lyrics_show(chat_id, lang, "improve", res, notes, buttons=False)
+            words = res["text"]
+        else:
+            words = draft                      # the polish failed: their own words are sung
+        self._send_text(chat_id, tg_bot._t("song_polish_going", lang))
+        self._start_song_generation(chat_id, LYRICS_MARK + "\n" + words, lang)
 
     def _cb_lyrics(self, chat_id: int, data: str) -> None:
         sess = self._get_session(chat_id)

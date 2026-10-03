@@ -220,6 +220,23 @@ def request_seconds(t: str, after_song: bool = False) -> int:
     return _read(t, after_song)["song_seconds"] if (t or "").strip() else 0
 
 
+def _polished(ctx, lyrics: str, has_stage: bool = True) -> str:
+    """The lyric after the lyrics_craft check/revise loop; the original when the
+    loop fails or loses the section tags the music engine sings by."""
+    try:
+        import lyrics_craft
+        if has_stage:
+            ctx.set_stage("Polishing the lyrics")
+        out = (lyrics_craft.polish(ctx, lyrics) or {}).get("text") or ""
+    except Exception:
+        tg_bot.logger.warning("[songs] polishing the lyrics failed; singing the draft", exc_info=True)
+        return lyrics
+    tags = lambda t: len(_re.findall(r"^\s*\[[^\]]+\]\s*$", t, _re.M))
+    if not out.strip() or (tags(lyrics) and not tags(out)):
+        return lyrics
+    return out
+
+
 def snap_duration(secs: int) -> int:
     """The nearest length the engine offers, or 0 when nothing was asked."""
     if not secs:
@@ -252,6 +269,10 @@ class SongsMixin:
         self._store.put(sess)
         if not draft:
             self._send_text(chat_id, tg_bot._t("song_topic_prompt", lang))
+            return
+        if data.endswith(":polish"):
+            self._send_text(chat_id, tg_bot._t("lyr_working_improve", lang))
+            self._run_busy(chat_id, self._song_polish_then_sing, chat_id, lang, draft)
             return
         topic = (LYRICS_MARK + "\n" + draft) if data.endswith(":keep") else draft
         self._start_song_generation(chat_id, topic, lang)
@@ -366,6 +387,11 @@ class SongsMixin:
                     ctx, _steer.with_notes(topic, notes), song_lang(topic, lang), duration_s=duration, prefs=prefs)
             if given:                   # their own words stay; wishes steer the sound
                 caption = dict(caption, lyrics=structure_lyrics(ctx, given))
+            elif caption.get("lyrics") and not cancelled():
+                # Words the bot wrote itself go through the checks and revisions
+                # of ✨ Improve lyrics before they are sung (owner 10-03: «под
+                # капотом генерится хороший текст, причёсывается автоматом»).
+                caption = dict(caption, lyrics=_polished(ctx, caption["lyrics"], _has_stage))
             if cancelled():
                 return False
             wav_path = _music_mod.generate_music(

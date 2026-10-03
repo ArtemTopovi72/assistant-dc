@@ -229,10 +229,12 @@ _MSG: dict[str, dict[str, str]] = {
     "anv_no": {"en": "✖️ No", "ru": "✖️ Нет"},
     "fwd_own_skipped": {"en": "↪️ A forwarded button is not a press — I'm skipping it. Tap the button itself.",
                         "ru": "↪️ Пересланная кнопка — не нажатие, пропускаю. Нажми саму кнопку."},
-    "song_lyrics_choice": {"en": "🎵 This looks like ready lyrics. Sing them as they are, or write new words on this theme?",
-                           "ru": "🎵 Похоже на готовый текст. Спеть его как есть или написать новые слова на эту тему?"},
+    "song_lyrics_choice": {"en": "🎵 This looks like ready lyrics. Sing them as they are, or polish them first (rhymes, rhythm, sense) and then sing?",
+                           "ru": "🎵 Похоже на готовый текст. Спеть его как есть или сначала доработать (рифмы, ритм, смысл) и потом спеть?"},
     "song_keep_btn": {"en": "🎤 Sing as is", "ru": "🎤 Спеть как есть"},
+    "song_polish_btn": {"en": "✨ Polish and sing", "ru": "✨ Доработать и спеть"},
     "song_new_btn": {"en": "✍️ Write new words", "ru": "✍️ Написать новый текст"},
+    "song_polish_going": {"en": "🎵 Singing the polished lyric…", "ru": "🎵 Пою доработанный текст…"},
     "anv_offer": {"en": "🎙 Voices for the clip ({n} speaking): send your own samples — voice notes "
                         "or round videos, one per person, left to right — or go with the default voices.",
                   "ru": "🎙 Голоса для ролика (говорящих: {n}). Пришли свои — голосовые или кружки, "

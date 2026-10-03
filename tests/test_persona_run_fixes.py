@@ -53,7 +53,7 @@ def test_song_topic_disarms_and_ready_words_are_asked_about():
     src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(tg_dispatch.__file__))), "bot/tg_registration.py"), encoding="utf-8").read()
     i = src.index('sess.reg_state == "song_topic"')
     body = src[i:i + 2500]
-    assert 'sess.reg_state = ""' in body and "song_lyr:keep" in body and "song_lyr:new" in body
+    assert 'sess.reg_state = ""' in body and "song_lyr:keep" in body and "song_lyr:polish" in body
     import tg_songs
     assert tg_songs.looks_like_lyrics("раз\nдва три\nчетыре пять")
 

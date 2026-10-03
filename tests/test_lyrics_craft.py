@@ -233,3 +233,48 @@ def test_a_long_lyric_cut_into_pieces_is_one_text(monkeypatch):
     bot._resolve_and_push(12, [{"type": "text", "text": "первая часть"},
                                {"type": "text", "text": "вторая часть"}])
     assert seen == ["первая часть\nвторая часть"]
+
+
+def test_song_words_the_bot_wrote_are_polished_before_singing(monkeypatch):
+    """Owner 10-03: wishes in 🎵 Songs -> good lyrics «под капотом», automatically."""
+    import tg_songs
+
+    class Ctx:
+        stages = []
+
+        def set_stage(self, s):
+            self.stages.append(s)
+
+        def is_cancelled(self):
+            return False
+    monkeypatch.setattr(L, "LLM_STUB", lambda role, s, u: '{"score": 9, "problems": []}' if role == "critic"
+                        else "[verse]\n" + GOOD.split("\n", 1)[1])
+    c = Ctx()
+    out = tg_songs._polished(c, LAZY)
+    assert "закат" in out and "Polishing the lyrics" in c.stages
+    monkeypatch.setattr(L, "LLM_STUB", lambda role, s, u: '{"score": 9, "problems": []}' if role == "critic"
+                        else "без тегов вообще\nи всё")
+    assert tg_songs._polished(c, LAZY) == LAZY            # lost its [tags]: the draft is sung
+
+
+def test_ready_words_polish_then_sing(monkeypatch):
+    def llm(role, system, user):
+        if role == "critic":
+            return '{"score": 9, "problems": []}'
+        if role == "notes":
+            return "• строка 3: свет/рассвет → закат/горят"
+        return GOOD
+    monkeypatch.setattr(L, "LLM_STUB", llm)
+    bot = _bot()
+    s = bot._get_session(13); s.song_draft = LAZY; s.lang = "ru"; bot._store.put(s)
+    bot._cb_song_lyrics(13, "song_lyr:polish")
+    texts = [t for t, _, _ in bot.sent]
+    assert any("Что поправил" in t for t in texts) and GOOD.strip() in texts
+    assert bot.queued and "[lyrics]" in bot.queued[-1]["text"] and "закат" in bot.queued[-1]["text"]
+
+
+def test_the_ready_words_question_offers_keep_or_polish():
+    import tg_strings
+    assert tg_strings._MSG["song_polish_btn"]["ru"] == "✨ Доработать и спеть"
+    src = open(os.path.join(ROOT, "bot", "tg_registration.py"), encoding="utf-8").read()
+    assert '"song_lyr:polish"' in src and '"song_lyr:keep"' in src

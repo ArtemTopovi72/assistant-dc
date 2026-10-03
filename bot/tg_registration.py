@@ -421,7 +421,7 @@ class RegistrationMixin:
                 self._store.put(sess)
                 self._send_text(chat_id, tg_bot._t("song_lyrics_choice", lang), keyboard={"inline_keyboard": [[
                     {"text": tg_bot._t("song_keep_btn", lang), "callback_data": "song_lyr:keep"},
-                    {"text": tg_bot._t("song_new_btn", lang), "callback_data": "song_lyr:new"}]]})
+                    {"text": tg_bot._t("song_polish_btn", lang), "callback_data": "song_lyr:polish"}]]})
                 return False
             # Disarm NOW: while armed, every next message started another song
             # (live 2026-09-27: a stray multi-forward rendered two at once).

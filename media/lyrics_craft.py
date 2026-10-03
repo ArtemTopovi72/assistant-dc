@@ -400,6 +400,8 @@ def _call(ctx, role: str, system: str, user: str, *, temperature: float, max_tok
           schema=None) -> str:
     if LLM_STUB is not None:
         return LLM_STUB(role, system, user)
+    if os.getenv("F5_TEST_RUN"):
+        return ""                      # suites that do not stub it: no model call
     from llm import call_llm_simple
     kw = {"json_schema": schema} if schema else {}
     return call_llm_simple(ctx, system, user, temperature=temperature, max_tokens=max_tokens,

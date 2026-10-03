@@ -85,6 +85,7 @@ _STAGES: dict[str, dict[str, str]] = {
     "Composing a song":            {"ru": "Сочиняю песню"},
     # tg_songs.py
     "Writing the lyrics":          {"ru": "Пишу текст песни"},
+    "Polishing the lyrics":        {"ru": "Дорабатываю текст: рифмы, ритм, смысл"},
     # gui.py and the desktop tabs — the owner runs the app in Russian too
     "Working":                     {"ru": "Работаю"},
     "Cancelling":                  {"ru": "Отменяю"},
