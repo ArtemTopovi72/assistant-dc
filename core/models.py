@@ -73,13 +73,22 @@ class Models:
             # same text on RU voice notes and better English language detection.
             # The freed card is what lets a 16-18 GB chat model stop spilling.
             import config as _cfg
-            whisper = WhisperModel(
-                getattr(_cfg, "WHISPER_MODEL", "large-v3-turbo"),
-                device=WHISPER_DEVICE,
-                compute_type=WHISPER_COMPUTE_TYPE,
-                cpu_threads=16,
-                num_workers=4,
-            )
+            # Speech input is optional like voice output: the first start
+            # downloads the model from Hugging Face, and an offline machine
+            # (or a blocked hub) must still open the app for text chat.
+            try:
+                whisper = WhisperModel(
+                    getattr(_cfg, "WHISPER_MODEL", "large-v3-turbo"),
+                    device=WHISPER_DEVICE,
+                    compute_type=WHISPER_COMPUTE_TYPE,
+                    cpu_threads=16,
+                    num_workers=4,
+                )
+            except Exception as exc:
+                logger.warning("Whisper not loaded (%s) -- speech recognition is off; "
+                               "it loads on the next start once the model can be downloaded",
+                               str(exc).splitlines()[0][:200])
+                whisper = None
         else:
             whisper = None
 

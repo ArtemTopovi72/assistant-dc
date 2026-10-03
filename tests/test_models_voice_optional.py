@@ -48,3 +48,32 @@ def test_synthesis_is_a_quiet_none_when_voice_is_off():
     import audio
     ctx = SimpleNamespace(models=SimpleNamespace(tts_model=None, vocoder=None))
     assert audio.synth_single_segment(ctx, 0, "DC", "Привет") is None
+
+
+def test_models_load_survives_whisper_download_failure(monkeypatch, tmp_path):
+    """First start offline (or with Hugging Face blocked): faster-whisper raised
+    from its download and the whole app died before the window opened."""
+    import config
+    import faster_whisper
+    import models
+    monkeypatch.setattr(config, "WEIGHTS_PATH", tmp_path / "missing.safetensors")
+    monkeypatch.setattr(config, "VOCOS_DIR", tmp_path / "no_vocos")
+
+    def offline(*a, **k):
+        raise OSError("Tunnel connection failed: 403 Forbidden")
+    monkeypatch.setattr(faster_whisper, "WhisperModel", offline)
+    m = models.Models.load(whisper=True)
+    assert m.whisper is None
+
+
+def test_transcription_is_empty_when_whisper_is_off(monkeypatch, tmp_path):
+    import threading
+    import audio
+    monkeypatch.setattr(audio, "_use_gigaam", lambda: False)
+    ctx = SimpleNamespace(models=SimpleNamespace(whisper=None), asr_lock=threading.Lock(),
+                          transcription_cache={}, save_cache=lambda: None)
+    import numpy as np
+    assert audio.transcribe_audio_array(ctx, np.zeros(16000, dtype=np.float32)) == ""
+    clip = tmp_path / "a.wav"; clip.write_bytes(b"RIFF")
+    assert audio.transcribe_audio_file(ctx, str(clip)) == ""
+    assert ctx.transcription_cache == {}, "an 'ASR off' result must not be cached as the text"

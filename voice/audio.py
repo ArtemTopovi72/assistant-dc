@@ -1098,6 +1098,8 @@ def _whisper_transcribe(ctx, audio_source, engine: str = "auto",
             logger.info("GigaAM returned nothing - falling through to Whisper")
         except Exception:
             logger.exception("GigaAM failed - falling back to Whisper")
+    if ctx.models.whisper is None:
+        raise RuntimeError("speech recognition is off (Whisper model not loaded)")
     with ctx.asr_lock:
         segments, info = ctx.models.whisper.transcribe(
             audio_source, language=WHISPER_LANGUAGE, beam_size=5, vad_filter=True,
