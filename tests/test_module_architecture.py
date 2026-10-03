@@ -209,12 +209,12 @@ def test_pth_puts_source_folders_before_site_packages():
     """An installed package named like one of our modules (pip's `lmstudio`) must not win."""
     import install_paths, tempfile
     site_dir = tempfile.mkdtemp()
-    real = install_paths.site.getsitepackages
-    install_paths.site.getsitepackages = lambda: [site_dir]
+    real = install_paths._site_dir
+    install_paths._site_dir = lambda: site_dir
     try:
         line = open(install_paths.ensure(), encoding="utf-8").read()
     finally:
-        install_paths.site.getsitepackages = real
+        install_paths._site_dir = real
     import site as _site
     saved = sys.path[:]
     try:

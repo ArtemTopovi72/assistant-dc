@@ -7,8 +7,8 @@ the same name (pip's `lmstudio` vs agent/lmstudio.py) silently wins. Idempotent:
 after creating the venv, and again only if the checkout moves.
 """
 import os
-import site
 import sys
+import sysconfig
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FOLDERS = ("core", "agent", "bot", "gui", "imaging", "media", "voice", "research",
@@ -19,12 +19,20 @@ def source_dirs():
     return [os.path.join(ROOT, d) for d in FOLDERS if os.path.isdir(os.path.join(ROOT, d))]
 
 
+def _site_dir():
+    return sysconfig.get_paths()["purelib"]
+
+
 def ensure(write_venv: bool = True):
     """Current process gets the folders now; the venv gets them for every later process."""
     for d in reversed(source_dirs()):
         if d not in sys.path:
             sys.path.insert(0, d)
-    target = os.path.join(site.getsitepackages()[-1], "assistant_dc.pth")
+    # purelib is the one directory `pip install` itself writes to. This was
+    # site.getsitepackages()[-1], which is site-packages on Windows but on a
+    # Debian-built Python names a dist-packages folder that does not even
+    # exist -- the write failed silently and nothing could `import config`.
+    target = os.path.join(_site_dir(), "assistant_dc.pth")
     # Importing launch_all (tests do, from any checkout) must not repoint the
     # shared venv at itself -- 2026-10-01 a clone's suite run did, and the main
     # checkout's tests then imported the clone's stale code.
@@ -35,10 +43,14 @@ def ensure(write_venv: bool = True):
         if not os.path.exists(target) or open(target, encoding="utf-8").read() != want:
             with open(target, "w", encoding="utf-8") as f:
                 f.write(want)
-    except OSError:
-        pass
+    except OSError as exc:
+        print("could not write %s: %s" % (target, exc), file=sys.stderr)
+        return None
     return target
 
 
 if __name__ == "__main__":
-    print("wrote", ensure())
+    where = ensure()
+    if where is None:
+        sys.exit(1)
+    print("wrote", where)
