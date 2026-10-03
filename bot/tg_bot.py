@@ -1395,6 +1395,9 @@ class TelegramBot(AdminMixin, RestyleMixin, AnimVoicesMixin, VoiceLibraryMixin, 
         except Exception as exc:
             logger.warning("reminders not started: %s", exc)
 
+        # Before any thread can enqueue (and so rewrite the journal).
+        inflight = self._take_inflight()
+
         for i in range(_MAX_CONSUMERS):
             t = threading.Thread(target=self._consumer_loop,
                                  daemon=True, name=f"tg-consumer-{i}")
@@ -1419,7 +1422,7 @@ class TelegramBot(AdminMixin, RestyleMixin, AnimVoicesMixin, VoiceLibraryMixin, 
 
         # Tell anyone whose task died with the previous process, before the
         # startup broadcast so the two notifications arrive in a sensible order.
-        threading.Thread(target=self._recover_inflight, daemon=True).start()
+        threading.Thread(target=self._recover_inflight, args=(inflight,), daemon=True).start()
 
         # Send startup notifications to subscribed approved users
         if not self._silent_mode:

@@ -134,7 +134,26 @@ class QueueMixin:
         except Exception as exc:
             tg_bot.logger.debug("inflight write failed: %s", exc)
 
-    def _recover_inflight(self) -> None:
+    def _take_inflight(self) -> list:
+        """Read and remove the previous process's in-flight journal.
+
+        start() calls this BEFORE the poll and consumer threads exist: the
+        first message after a restart enqueues a task, which rewrites the
+        journal, and a recovery reading it afterwards found only that new
+        task -- the users whose tasks died with the crash never heard."""
+        try:
+            if not tg_bot._INFLIGHT_FILE.exists():
+                return []
+            data = json.loads(tg_bot._INFLIGHT_FILE.read_text(encoding="utf-8") or "[]")
+        except Exception:
+            data = []
+        try:
+            tg_bot._INFLIGHT_FILE.unlink()
+        except Exception:
+            pass
+        return data if isinstance(data, list) else []
+
+    def _recover_inflight(self, data: list | None = None) -> None:
         """Notify users whose task was killed by a restart, and offer a retry.
 
         Without this a crash mid-task left the user staring at a "⚙️ Working…"
@@ -152,16 +171,8 @@ class QueueMixin:
         only that backend's leftover "pending" entries get the same
         interrupted/retry treatment as a genuinely running one.
         """
-        try:
-            if not tg_bot._INFLIGHT_FILE.exists():
-                return
-            data = json.loads(tg_bot._INFLIGHT_FILE.read_text(encoding="utf-8") or "[]")
-        except Exception:
-            data = []
-        try:
-            tg_bot._INFLIGHT_FILE.unlink()
-        except Exception:
-            pass
+        if data is None:
+            data = self._take_inflight()
         durable_backend = not isinstance(self._backend, tg_bot.InMemoryBackend)
         # One notice per chat, for its LAST task: two in-flight entries of one
         # chat sent the same "restarted" message twice (live 2026-09-27 16:52).

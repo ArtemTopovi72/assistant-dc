@@ -444,6 +444,32 @@ bot.sent.clear()
 bot._recover_inflight()
 check("recovery is idempotent when nothing was interrupted", not bot.sent)
 
+# The first message after a restart enqueues a task, which rewrites the
+# journal. start() now takes the old journal before any thread runs; recovery
+# used to read the file afterwards and found only the new task.
+bot._running_task[CID] = [T._Task(task_id="dead2", chat_id=CID, user_text="old request")]
+bot._write_inflight()
+bot._running_task.clear()
+taken = bot._take_inflight()
+bot._pending_journal["new1"] = T._Task(task_id="new1", chat_id=CID + 1, user_text="hi again")
+bot._write_inflight()                       # the new message, before recovery ran
+bot.sent.clear()
+bot._recover_inflight(taken)
+check("a message right after restart does not erase the interrupted-task notice",
+      "restarted" in texts(bot).lower() and bot._get_session(CID).last_task_text == "old request",
+      texts(bot)[:200])
+check("and the new task's journal entry is left alone",
+      T._INFLIGHT_FILE.exists() and "new1" in T._INFLIGHT_FILE.read_text(encoding="utf-8"))
+bot._pending_journal.clear()
+T._INFLIGHT_FILE.unlink()
+_s = bot._get_session(CID)                  # the retry checks below use the first task
+_s.last_task_text, _s.last_task_id = "find me a bus tour", "dead1"
+bot._store.put(_s)
+import inspect as _inspect
+_src = _inspect.getsource(T.TelegramBot.start)
+check("start() takes the journal before starting consumer/poll threads",
+      _src.index("_take_inflight()") < _src.index("_consumer_loop"))
+
 # retry re-queues the stored request
 bot._backend = T.InMemoryBackend()
 enq = []
