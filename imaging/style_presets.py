@@ -4,7 +4,8 @@ workflow's controlnet keeps composition/pose from the original, so the prompt
 only has to describe the STYLE change (image.redraw_image_with_comfy folds
 ctx.last_image_prompt -- the subject -- back in automatically).
 
-Every prompt ends with an explicit "keep the pose/outfit/setting" clause.
+Every prompt ends with an explicit "keep the pose/outfit/setting" clause
+(cyberpunk keeps pose, framing and face, and re-imagines the outfit).
 Measured live (2026-09-18) against a real red-carpet photo: dropping that
 clause let the controlnet's own style-transfer strength drift the framing on
 a couple of presets (the subject stayed recognisable but cropped differently
@@ -41,9 +42,18 @@ STYLE_PRESETS: dict[str, dict] = {
     },
     "cyberpunk": {
         "label_ru": "🌆 Киберпанк", "label_en": "🌆 Cyberpunk neon",
+        # Cyberpunk is a world, not a filter: the same hoodie under neon light
+        # read as "a photo with a pink tint" (owner 10-03: «надо адаптировать
+        # и текущую одежду под киберпанк»). The clothes keep their type and
+        # cut and become their cyberpunk version; pose, face and framing stay.
         "prompt": ("convert to a cyberpunk neon illustration, glowing magenta "
                    "and cyan rim lighting, futuristic neon signage reflections, "
-                   "moody high-contrast night atmosphere, " + _KEEP),
+                   "moody high-contrast night atmosphere. Re-imagine the clothes "
+                   "the person is wearing as their cyberpunk version -- the same "
+                   "kind of garment and cut, made of glossy techwear fabric with "
+                   "glowing LED seams, chrome hardware and small cybernetic "
+                   "details -- and the setting as a neon-lit futuristic city. "
+                   "Keep the exact same pose, camera framing, face and identity"),
     },
     "pencil": {
         "label_ru": "✏️ Карандаш", "label_en": "✏️ Pencil sketch",

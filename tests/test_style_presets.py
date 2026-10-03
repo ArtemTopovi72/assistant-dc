@@ -56,3 +56,13 @@ if __name__ == "__main__":
     test_style_reference_button_forces_transfer_image()
     test_style_preset_prefix_does_not_collide_with_style_prefix()
     print("PASS 5  FAIL 0")
+
+
+def test_cyberpunk_adapts_the_outfit_but_keeps_the_person():
+    """Owner 10-03: the cyberpunk button must turn the current clothes into
+    their cyberpunk version, not just tint the photo."""
+    import style_presets as SP
+    p = SP.preset_prompt("cyberpunk")
+    assert "Re-imagine the clothes" in p and "same kind of garment" in p
+    assert "keep the exact same pose" in p.lower() and "face and identity" in p
+    assert "outfit and background" not in p      # the old keep-the-outfit clause
