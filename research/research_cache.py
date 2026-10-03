@@ -61,6 +61,8 @@ class ExtractionCache:
         self.misses = 0
         self.stores = 0
         self.skipped = 0
+        if enabled:
+            self.prune()
 
     def get(self, url: str, category: str = "general") -> Optional[dict]:
         """Return the cached extraction dict if present and within TTL, else None.
@@ -132,6 +134,40 @@ class ExtractionCache:
             (self.dir / f"{_key(url)}.json").unlink(missing_ok=True)
         except Exception:
             pass
+
+    PRUNE_EVERY = 86400
+
+    def prune(self, force: bool = False) -> int:
+        """Delete entries no category could still serve, and old fail marks.
+
+        Nothing removed them: get() only reports a stale entry as a miss and
+        put() rewrites the same URL, so every page ever read (whole extracted
+        texts) stayed on disk for good. Runs at most once a day. -> files removed.
+        """
+        removed = 0
+        try:
+            stamp = self.dir / ".pruned"
+            now = time.time()
+            if (not force and stamp.exists()
+                    and now - stamp.stat().st_mtime < self.PRUNE_EVERY):
+                return 0
+            if not self.dir.is_dir():
+                return 0
+            longest = max(_TTL_BY_CATEGORY.values())
+            for p in self.dir.iterdir():
+                limit = {".json": longest, ".fail": self.FAIL_TTL, ".tmp": 3600}.get(p.suffix)
+                try:
+                    if limit and now - p.stat().st_mtime > limit:
+                        p.unlink()
+                        removed += 1
+                except OSError:
+                    continue
+            stamp.touch()
+        except Exception as exc:
+            logger.debug("cache prune failed: %s", exc)
+        if removed:
+            logger.info("research cache: removed %d expired entries", removed)
+        return removed
 
     def stats(self) -> dict:
         return {"hits": self.hits, "misses": self.misses, "stores": self.stores,
