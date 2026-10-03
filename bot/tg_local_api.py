@@ -18,6 +18,7 @@ import logging
 import os
 import subprocess
 import time
+import urllib.parse
 
 import config as _config
 
@@ -84,6 +85,10 @@ def ensure_server(root: str | None = None, wait_s: float = 20.0) -> bool:
             "--http-port", str(_config.TG_API_PORT),
             "--dir", work, "--temp-dir", os.path.join(work, "tmp"),
             "--max-connections", "10", "--verbosity", "1"]
+    # Its default is every interface: the LAN could reach it (and Windows
+    # raised a firewall prompt). Only this machine talks to a loopback base.
+    if urllib.parse.urlparse(_config.TG_API_BASE).hostname in ("127.0.0.1", "localhost"):
+        args += ["--http-ip-address", "127.0.0.1"]
     try:
         if os.name == "nt":
             si = subprocess.STARTUPINFO()
