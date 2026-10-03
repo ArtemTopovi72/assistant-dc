@@ -1037,10 +1037,9 @@ def _submit_and_collect_locked(ctx, workflow: dict, timeout: int,
 
 
 def adopt_output(path: str, what: str = "file", out_dir=None) -> str:
-    """Copy a finished render out of ComfyUI's output tree into ours.
+    """Move a finished render out of ComfyUI's output tree into ours.
 
-    ComfyUI's output directory is periodically cleaned and is shared with every
-    other graph, so anything we are about to hand to a user should not live
+    ComfyUI's output directory is shared with every other graph, so anything we are about to hand to a user should not live
     there. Returns the new path, or the original one if the copy was impossible
     (delivering the file in place beats failing a whole job over a copy).
 
@@ -1077,8 +1076,14 @@ def adopt_output(path: str, what: str = "file", out_dir=None) -> str:
                 n += 1
             dest = f"{stem}_{n}{ext}"
         shutil.copyfile(path, dest)
-        return dest
     except Exception as exc:
         logger.warning("could not copy the %s into %s (%s) — using it in place",
                        what, dest_dir, exc)
-    return path
+        return path
+    # Moved, not kept twice: nothing cleans ComfyUI's output tree (since
+    # 2026-09-27 it is ours, runtime/comfy), so every render stayed there too.
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+    return dest

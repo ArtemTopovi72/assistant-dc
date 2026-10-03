@@ -96,6 +96,12 @@ def build_runtime(model_name: str, no_think: bool, status_cb=None,
                 pass
 
     cleanup_runtime_artifacts(OUTPUT_DIR)
+    try:
+        from config import INPUT_DIR_COMFY, BASE_DIR
+        from utils import cleanup_comfy_inputs
+        cleanup_comfy_inputs(INPUT_DIR_COMFY, BASE_DIR / "runtime")
+    except Exception:
+        logger.debug("ComfyUI input cleanup skipped", exc_info=True)
     _status("Loading Whisper + F5-TTS…")
     models = Models.load()
     ctx = Context(

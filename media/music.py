@@ -1532,13 +1532,14 @@ def generate_music(ctx, lyrics: str, style: str, *, duration_s: int = 60,
         if ctx is not None and getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
             _MUSIC_FAILURE.update({"reason": "cancelled", "detail": "cancelled"})
             raise MusicUnavailable("cancelled")
-        _MUSIC_FAILURE.update({"reason": "server_error",
-                               "detail": "the render produced no file"})
-        raise MusicUnavailable("the render produced no file")
+        # ComfyUI's own reason when it gave one (same gap video had: with only
+        # "no file" the chat model invented a cause for the user).
+        why = comfy_client.last_failure() or "the render produced no file"
+        _MUSIC_FAILURE.update({"reason": "server_error", "detail": why})
+        raise MusicUnavailable(why)
 
     final = _adopt_output(out)
-    # Faded AFTER adopting, so the taper is written to OUR copy and ComfyUI's
-    # own output tree is left byte-for-byte as the engine produced it.
+    # Faded AFTER adopting: the taper is written to OUR copy.
     apply_fade(final)
     if ctx is not None:
         ctx.last_music_path = final

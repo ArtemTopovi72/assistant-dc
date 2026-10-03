@@ -52,6 +52,33 @@ _TRANSIENT_PATTERNS = (
 )
 
 
+def cleanup_comfy_inputs(directory, owner_root, max_age_days: float = 7.0) -> int:
+    """Delete files older than `max_age_days` from ComfyUI's input folder.
+
+    Every render uploads its reference images there (re-uploaded per job), and
+    nothing removed them. Only when the folder is ours -- inside `owner_root`
+    (the app's runtime/): a COMFY_INPUT_DIR pointed at a shared ComfyUI input
+    folder holds the user's own files. Never raises."""
+    removed = 0
+    try:
+        d, root = Path(directory).resolve(), Path(owner_root).resolve()
+        if root not in d.parents or not d.is_dir():
+            return 0
+        cutoff = time.time() - max_age_days * 86400
+        for f in d.rglob("*"):
+            try:
+                if f.is_file() and f.stat().st_mtime < cutoff:
+                    f.unlink()
+                    removed += 1
+            except OSError:
+                continue
+    except Exception as exc:
+        logger.warning("ComfyUI input cleanup failed: %s", exc)
+    if removed:
+        logger.info("ComfyUI input cleanup: removed %d old upload(s)", removed)
+    return removed
+
+
 def cleanup_runtime_artifacts(directory, max_age_days: float = 7.0) -> int:
     """Delete transient pipeline artifacts in `directory` older than
     `max_age_days`. Returns how many files were removed. Never raises."""

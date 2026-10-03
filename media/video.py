@@ -931,32 +931,10 @@ def generate_video(ctx, description: str, *,
 
 
 def _adopt_output(path: str) -> str:
-    """Copy the clip out of ComfyUI's output tree into ours.
-
-    ComfyUI's output directory is periodically cleaned and is shared with every
-    other graph; a video we are about to hand to a user should not live there.
-    """
-    try:
-        os.makedirs(OUTPUT_DIR, exist_ok=True)
-        dest = os.path.join(OUTPUT_DIR, os.path.basename(path))
-        if os.path.abspath(dest) == os.path.abspath(path):
-            return path
-        # ComfyUI derives its 00001_ counter from what is in ITS output tree, so
-        # once that tree is cleaned the numbering restarts — and a blind
-        # copyfile() would then overwrite a clip we had already kept for the
-        # user. Renders cost minutes of GPU; never silently destroy one.
-        if os.path.exists(dest):
-            stem, ext = os.path.splitext(dest)
-            n = 2
-            while os.path.exists(f"{stem}_{n}{ext}"):
-                n += 1
-            dest = f"{stem}_{n}{ext}"
-        shutil.copyfile(path, dest)
-        return dest
-    except Exception as exc:
-        logger.warning("could not copy the clip into %s (%s) — using it in place",
-                       OUTPUT_DIR, exc)
-    return path
+    """Move the clip out of ComfyUI's output tree into ours (see
+    comfy_client.adopt_output). OUTPUT_DIR is passed at call time: it is the
+    global the suites rebind."""
+    return comfy_client.adopt_output(path, "clip", OUTPUT_DIR)
 
 
 # --------------------------------------------------------------------------- #
