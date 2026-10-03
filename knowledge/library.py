@@ -456,7 +456,22 @@ class Library:
         self.kb = knowledge.KnowledgeBase(
             db_path or DEFAULT_DB,
             embedder=knowledge.Embedder(base_url=base, model=model))
-        self._cross_encoder = load_cross_encoder(ce_model) if ce_model else None
+        # Loaded on the first search that reranks, not here: the GUI opens its
+        # Library on the UI thread at startup to list documents, and loading
+        # here froze the window for the whole reranker download (minutes on a
+        # first start, ~30 s of retries offline) for a tab that never reranks.
+        self._ce_model = ce_model
+
+    @property
+    def _cross_encoder(self):
+        if "_ce" not in self.__dict__:
+            name = self.__dict__.get("_ce_model", "")
+            self.__dict__["_ce"] = load_cross_encoder(name) if name else None
+        return self.__dict__["_ce"]
+
+    @_cross_encoder.setter
+    def _cross_encoder(self, model):
+        self.__dict__["_ce"] = model
 
     # -- build ------------------------------------------------------------- #
     def build(self, paths: List[str], *,
