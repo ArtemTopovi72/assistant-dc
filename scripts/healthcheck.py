@@ -145,9 +145,14 @@ def check_voice():
         missing.append(f"reference voice ({config.DC_REF_WAV})")
     if not missing:
         return Result("voice", OK, "weights, vocoder and reference voice present")
+    hints = []
+    if any(not m.startswith("reference voice") for m in missing):
+        hints.append("run the setup script again: it downloads the vocoder and the "
+                     "F5-TTS weights (models/f5/)")
+    if not config.DC_REF_WAV.exists():
+        hints.append("put a 5-15 s clean recording at that path, or set ASSISTANT_REF_WAV in .env")
     return Result("voice", WARN, "voice output OFF -- missing " + ", ".join(missing),
-                  "set ASSISTANT_REF_WAV in .env to a 5-15 s clean recording; the setup "
-                  "script fetches the vocoder and, if F5_WEIGHTS_REPO is set, the weights")
+                  "; ".join(hints))
 
 
 def _served_ids(base):
@@ -203,7 +208,8 @@ def check_comfyui():
     except Exception:
         return Result("comfyui", WARN, f"not reachable at {config.COMFY_URL} -- images, "
                       "video and music are off",
-                      "install ComfyUI (+ ComfyUI-GGUF); the launcher starts it")
+                      "the launcher starts it; if it is not installed, run the setup "
+                      "script again (it installs ComfyUI, its nodes and models)")
 
 
 def check_docker():

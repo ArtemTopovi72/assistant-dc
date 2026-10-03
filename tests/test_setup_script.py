@@ -93,3 +93,20 @@ def test_qt_libs_step_reports_what_to_install(monkeypatch):
 def test_apt_is_never_run_with_no_install():
     setup = _load("setup")
     assert setup._apt_install(["ffmpeg"], SimpleNamespace(no_install=True)) is False
+
+
+def test_voice_hint_names_the_setup_for_downloadable_parts(tmp_path, monkeypatch):
+    hc = _load("healthcheck")
+    import config
+    monkeypatch.setattr(config, "WEIGHTS_PATH", tmp_path / "none.safetensors")
+    monkeypatch.setattr(config, "VOCOS_DIR", tmp_path / "vocos")
+    ref = tmp_path / "ref.wav"
+    ref.write_bytes(b"RIFF")
+    monkeypatch.setattr(config, "DC_REF_WAV", ref)
+    r = hc.check_voice()
+    text = " ".join(str(x) for x in vars(r).values()) if hasattr(r, "__dict__") else str(r)
+    assert "setup script again" in text and "ASSISTANT_REF_WAV" not in text, text
+    ref.unlink()
+    r = hc.check_voice()
+    text = " ".join(str(x) for x in vars(r).values()) if hasattr(r, "__dict__") else str(r)
+    assert "ASSISTANT_REF_WAV" in text, text
