@@ -48,6 +48,46 @@ class QueueMixin:
                         self._chat_busy[chat_id] = n
         turn_trace.spawn(run, name=f"chat-work-{chat_id}")
 
+    def _run_cancellable(self, chat_id: int, note: str, fn, *args, lang: str = "ru") -> None:
+        """Long work a button starts outside the queue (✍️ / ✨ lyrics, ✨ polish
+        and sing...), with ⛔ under its «working» note -- one call instead of a
+        cancel button wired by hand for every new flow (owner 10-03: «чтобы
+        не продолбать»). fn(ctx, *args) gets its own ctx copy: is_cancelled()
+        turns true on ⛔, and the work stops at its next check. The note
+        loses its button when the work ends."""
+        import copy
+        import threading
+        import uuid
+        base = self._get_ctx()
+        if base is None:                       # no app context (suites): the flag alone
+            ctx = type("JobCtx", (), {"is_cancelled": lambda s: s.cancel_event.is_set()})()
+        else:
+            ctx = copy.copy(base)
+        ctx.cancel_event = threading.Event()
+        jid = uuid.uuid4().hex[:8]
+        jobs = self.__dict__.setdefault("_busy_jobs", {})
+        jobs[jid] = (chat_id, ctx.cancel_event)
+        kb = {"inline_keyboard": [[{"text": tg_bot._t("cancel_btn", lang),
+                                    "callback_data": f"busy:cancel:{jid}"}]]}
+        mid = self._send_get_id(chat_id, note, keyboard=kb)
+
+        def work():
+            try:
+                fn(ctx, *args)
+            finally:
+                jobs.pop(jid, None)
+                if mid:
+                    self._api_post("editMessageReplyMarkup", {
+                        "chat_id": chat_id, "message_id": mid,
+                        "reply_markup": json.dumps({"inline_keyboard": []})})
+        self._run_busy(chat_id, work)
+
+    def _cb_busy_cancel(self, chat_id: int, data: str) -> None:
+        job = getattr(self, "_busy_jobs", {}).get(data.rsplit(":", 1)[-1])
+        if job and job[0] == chat_id:
+            job[1].set()
+        self._send_text(chat_id, tg_bot._t("cancelled", self._lang(self._get_session(chat_id))))
+
     def get_queue_stats(self) -> dict:
         return {
             "depth":        self._backend.depth(),

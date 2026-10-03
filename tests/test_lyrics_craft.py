@@ -98,6 +98,9 @@ def _bot():
     b._send_text = lambda cid, text, parse_mode=None, keyboard=None, **kw: b.sent.append(
         (text, parse_mode, keyboard)) or 1
     b._run_busy = lambda cid, fn, *a: fn(*a)
+    b._send_get_id = lambda cid, text, parse_mode=None, keyboard=None: b.sent.append(
+        (text, parse_mode, keyboard)) or 1
+    b._api_post = lambda *a, **k: {}
     b.queued = []
     b._enqueue_item = lambda cid, item: b.queued.append(item)
     return b
@@ -154,7 +157,7 @@ def test_write_takes_a_theme(monkeypatch):
 def test_text_goes_to_the_lyrics_flow_through_the_resolver(monkeypatch):
     seen = []
     bot = _bot()
-    monkeypatch.setattr(bot, "_lyrics_run", lambda cid, lang, mode, text: seen.append((mode, text)))
+    monkeypatch.setattr(bot, "_lyrics_run", lambda ctx, cid, lang, mode, text: seen.append((mode, text)))
     s = bot._get_session(7); s.lyrics_state = "improve"; s.reg_state = ""; bot._store.put(s)
     bot._resolve_and_push(7, [{"type": "text", "text": LAZY}])
     assert seen == [("improve", LAZY.strip())]
@@ -228,7 +231,7 @@ def test_write_plans_then_keeps_the_best_of_several_drafts(monkeypatch):
 def test_a_long_lyric_cut_into_pieces_is_one_text(monkeypatch):
     seen = []
     bot = _bot()
-    monkeypatch.setattr(bot, "_lyrics_run", lambda cid, lang, mode, text: seen.append(text))
+    monkeypatch.setattr(bot, "_lyrics_run", lambda ctx, cid, lang, mode, text: seen.append(text))
     s = bot._get_session(12); s.lyrics_state = "improve"; s.reg_state = ""; bot._store.put(s)
     bot._resolve_and_push(12, [{"type": "text", "text": "первая часть"},
                                {"type": "text", "text": "вторая часть"}])
@@ -439,3 +442,30 @@ def test_the_person_lookup_does_not_show_up_as_a_search_in_the_reply(monkeypatch
     monkeypatch.setattr(search, "run_web_search", run)
     assert P._search(ctx, "Lenin appearance") == "bald, goatee"
     assert ctx.turn_queries == ["кто такой Ленин"] and ctx.turn_sources == []
+
+
+
+def test_long_lyrics_work_has_a_cancel_and_stops_on_it(monkeypatch):
+    """«✍️ Сочиняю…» ran for minutes with no way to stop it (owner 10-03). One
+    central runner puts ⛔ under the note; ⛔ stops the work and nothing is shown."""
+    bot = _bot()
+    seen = {}
+
+    def llm(role, system, user):
+        if role == "draft":
+            seen["job"].set()                         # ⛔ pressed while drafting
+        return GOOD if role == "draft" else '{"score": 9, "problems": []}'
+    monkeypatch.setattr(L, "LLM_STUB", llm)
+    monkeypatch.setattr(L, "DRAFTS", 3)
+    real = bot._run_busy
+
+    def run_busy(cid, fn, *a):
+        seen["job"] = next(iter(bot._busy_jobs.values()))[1]
+        return real(cid, fn, *a)
+    bot._run_busy = run_busy
+    s = bot._get_session(21); s.lyrics_state = "write"; s.lang = "ru"; bot._store.put(s)
+    assert bot._lyrics_take_text(21, s, "ru", "город ночью")
+    note, _, kb = bot.sent[0]
+    assert "Сочиняю" in note and kb["inline_keyboard"][0][0]["callback_data"].startswith("busy:cancel:")
+    assert len(bot.sent) == 1                         # cancelled: no lyric, no «failed»
+    assert not bot._busy_jobs                         # the job is gone, its button removed

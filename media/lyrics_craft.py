@@ -745,6 +745,8 @@ def polish(ctx, text: str, rounds: int = ROUNDS, on_round=None) -> dict:
                 continue                            # the line fixes are scored next round
             break                                   # a broken rewrite: keep what we have
         cur = new
+    if best is None:                                # ⛔ before the first check
+        best = {"text": text.strip(), "score": 0.0, "left": [], "left_rules": [], "left_sense": []}
     best.update(rounds=done, original=text.strip())
     return best
 

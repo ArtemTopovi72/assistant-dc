@@ -30,13 +30,12 @@ class LyricsMixin:
             return False
         sess.lyrics_state = ""                  # one text per press
         self._store.put(sess)
-        self._send_text(chat_id, tg_bot._t("lyr_working_" + mode, lang))
-        self._run_busy(chat_id, self._lyrics_run, chat_id, lang, mode, text)
+        self._run_cancellable(chat_id, tg_bot._t("lyr_working_" + mode, lang),
+                              self._lyrics_run, chat_id, lang, mode, text, lang=lang)
         return True
 
-    def _lyrics_run(self, chat_id: int, lang: str, mode: str, text: str) -> None:
+    def _lyrics_run(self, ctx, chat_id: int, lang: str, mode: str, text: str) -> None:
         import lyrics_craft as LC
-        ctx = self._get_ctx()
         try:
             if mode == "write":
                 lyric_lang = "Russian" if lang == "ru" or LC._lang_name(text) == "Russian" else "English"
@@ -46,8 +45,12 @@ class LyricsMixin:
                 res = LC.polish(ctx, text)
                 notes = LC.changes_note(ctx, res["original"], res["text"], lang)
         except Exception:
+            if ctx.is_cancelled():
+                return                          # ⛔: «Отменено» is already said
             tg_bot.logger.exception("[lyrics] %s failed for chat %s", mode, chat_id)
             self._send_text(chat_id, tg_bot._t("lyr_fail", lang))
+            return
+        if ctx.is_cancelled():
             return
         self._lyrics_show(chat_id, lang, mode, res, notes)
 
@@ -77,18 +80,19 @@ class LyricsMixin:
             {"text": tg_bot._t("lyr_again_btn", lang), "callback_data": "lyr:again"}]]} if buttons else None
         self._send_text(chat_id, lyric, parse_mode=None, keyboard=kb)
 
-    def _song_polish_then_sing(self, chat_id: int, lang: str, draft: str) -> None:
+    def _song_polish_then_sing(self, ctx, chat_id: int, lang: str, draft: str) -> None:
         """🎵 Song with ready words + «✨ Доработать и спеть»: show what was
         polished, the lyric itself, then sing it (owner 10-03)."""
         import lyrics_craft as LC
         from tg_songs import LYRICS_MARK
-        ctx = self._get_ctx()
         try:
             res = LC.polish(ctx, draft)
             notes = LC.changes_note(ctx, res["original"], res["text"], lang)
         except Exception:
             tg_bot.logger.exception("[lyrics] polishing a song's words failed for chat %s", chat_id)
             res, notes = None, []
+        if ctx.is_cancelled():
+            return                              # ⛔: no polish shown, no song started
         if res:
             self._lyrics_show(chat_id, lang, "improve", res, notes, buttons=False)
             words = res["text"]
@@ -108,8 +112,8 @@ class LyricsMixin:
             from tg_songs import LYRICS_MARK
             self._start_song_generation(chat_id, LYRICS_MARK + "\n" + last, lang)
         elif data == "lyr:again":
-            self._send_text(chat_id, tg_bot._t("lyr_working_improve", lang))
-            self._run_busy(chat_id, self._lyrics_run, chat_id, lang, "improve", last)
+            self._run_cancellable(chat_id, tg_bot._t("lyr_working_improve", lang),
+                                  self._lyrics_run, chat_id, lang, "improve", last, lang=lang)
 
 
 import tg_bot  # noqa: E402  (cycle by design; attrs read at call time)

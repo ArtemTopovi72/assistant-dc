@@ -271,8 +271,8 @@ class SongsMixin:
             self._send_text(chat_id, tg_bot._t("song_topic_prompt", lang))
             return
         if data.endswith(":polish"):
-            self._send_text(chat_id, tg_bot._t("lyr_working_improve", lang))
-            self._run_busy(chat_id, self._song_polish_then_sing, chat_id, lang, draft)
+            self._run_cancellable(chat_id, tg_bot._t("lyr_working_improve", lang),
+                                  self._song_polish_then_sing, chat_id, lang, draft, lang=lang)
             return
         topic = (LYRICS_MARK + "\n" + draft) if data.endswith(":keep") else draft
         self._start_song_generation(chat_id, topic, lang)
