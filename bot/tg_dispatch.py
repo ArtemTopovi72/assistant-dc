@@ -61,11 +61,10 @@ def _asks_as_file(text: str) -> bool:
                           "about their own document is No.", text)
 
 
-def _from_bot(msg: dict) -> bool:
-    """Forwarded from a bot (ours, as a rule): Bot API 7 forward_origin or the old field."""
-    o = msg.get("forward_origin")
-    u = (o or {}).get("sender_user") if isinstance(o, dict) else None
-    return bool((u or {}).get("is_bot") or (msg.get("forward_from") or {}).get("is_bot"))
+def _fwd_author_of(msg: dict) -> str:
+    """The author label of a forwarded piece: the bot's own words get the one
+    label the frames trust; anyone else's name is rewritten if it claims it."""
+    return tg_bot._OWN_AUTHOR if msg.get("_fwd_own") else tg_bot._fwd_author(msg)
 
 
 def _is_button(text: str) -> bool:
@@ -249,13 +248,21 @@ class DispatchMixin:
             except Exception: pass
 
         text = (msg.get("text") or "").strip()
-        # A forwarded copy of the BOT's own message, or of a button label, is not
-        # something to act on. Live 2026-09-27: a stray multi-forward replayed
-        # «🔍 Найти товар» as a button press and fed the bot's own replies into a
-        # running song as wishes. BEFORE the gate: the gate answers pending
-        # prompts (song topic, city…) and took a forwarded storyboard as the topic.
-        if tg_bot._is_forwarded(msg, self_is_own=False) and (
-                _from_bot(msg) or (text and _is_button(text))):
+        # A forwarded button label is not something to act on. Live 2026-09-27:
+        # a stray multi-forward replayed «🔍 Найти товар» as a button press and
+        # fed the bot's own replies into a running song as wishes. BEFORE the
+        # gate: the gate answers pending prompts (song topic, city…) and took a
+        # forwarded storyboard as the topic.
+        # The bot's own REPLIES are material (live 10-03: users could not forward
+        # its reasoning back): they go on, labelled as its own words only when
+        # Telegram names this bot as the sender (_fwd_is_own); a forwarded batch
+        # never steers a running task (tg_resolve). Another bot's message is
+        # material like a person's: a song forwarded from a music bot was
+        # dropped here while 🎤 Cover waited for it (live 10-03).
+        _fwd = tg_bot._is_forwarded(msg, self_is_own=False)
+        if _fwd and tg_bot._fwd_is_own(msg, self.token.split(":", 1)[0]):
+            msg["_fwd_own"] = True
+        if _fwd and text and _is_button(text):
             notes = self.__dict__.setdefault("_fwd_skip_note", {})   # one note per burst
             if time.time() - notes.get(chat_id, 0) > 30:
                 notes[chat_id] = time.time()
@@ -330,7 +337,8 @@ class DispatchMixin:
                                {"type": "text", "text": text, "image_id": _reply_image_id,
                                 "quote": msg.get("_quote", ""),
                                 "forwarded": tg_bot._is_forwarded(msg),
-                                "author": tg_bot._fwd_author(msg)})
+                                "own": bool(msg.get("_fwd_own")),
+                                "author": _fwd_author_of(msg)})
             return
 
         # ── a mashup is collecting its two tracks ─────────────────────────────
@@ -385,7 +393,7 @@ class DispatchMixin:
                 self._enqueue_item(chat_id, {
                     "type": "fwd_voice",
                     "file_id": voice["file_id"],
-                    "author": tg_bot._fwd_author(msg),
+                    "author": _fwd_author_of(msg), "own": bool(msg.get("_fwd_own")),
                     "seconds": int(voice.get("duration") or 0),
                     "caption": (msg.get("caption") or "").strip()})
                 return
@@ -412,7 +420,7 @@ class DispatchMixin:
                 self._enqueue_item(chat_id, {
                     "type": "fwd_voice", "media": "video",
                     "file_id": video_note["file_id"],
-                    "author": tg_bot._fwd_author(msg),
+                    "author": _fwd_author_of(msg), "own": bool(msg.get("_fwd_own")),
                     "seconds": int(video_note.get("duration") or 0),
                     "caption": (msg.get("caption") or "").strip()})
                 return

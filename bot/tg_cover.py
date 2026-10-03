@@ -42,6 +42,16 @@ class CoverMixin:
         media = self._clone_media_of(msg)      # same "anything with sound" rule
         if not media:
             return False
+        # A whole song as a file (flac, wav) is often past the Bot API's 20 MB:
+        # the download fails, and «could not get a sound track» named the wrong cause.
+        from tg_resolve import _bot_file_limit
+        size = max(int((msg.get(k) or {}).get("file_size") or 0)
+                   for k in ("voice", "audio", "video_note", "video", "document"))
+        if size > _bot_file_limit():
+            self._send_text(chat_id, tg_bot._t("cover_fail_too_big", lang,
+                                               mb=f"{size / (1024 * 1024):.0f}",
+                                               limit=f"{_bot_file_limit() // (1024 * 1024)}"))
+            return True
         data = self._dl_bytes(media[0])
         if not data:
             self._send_text(chat_id, tg_bot._t("cover_fail_no_audio", lang))

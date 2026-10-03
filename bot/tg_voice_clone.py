@@ -15,6 +15,10 @@ import threading
 import voice_clone
 
 
+_SOUND_EXTS = {".mp3", ".m4a", ".aac", ".wav", ".flac", ".ogg", ".oga", ".opus", ".wma",
+               ".aif", ".aiff", ".amr", ".mp4", ".m4v", ".mov", ".webm", ".mkv", ".avi", ".3gp"}
+
+
 class VoiceCloneMixin:
     def _clone_dir(self, chat_id: int) -> str:
         # Read at call time: redirect_data_dir() rebinds _MASHUP_DIR's parent in tests.
@@ -43,8 +47,12 @@ class VoiceCloneMixin:
                 return m["file_id"], suf
         doc = msg.get("document") or {}
         mime = str(doc.get("mime_type") or "")
-        if doc.get("file_id") and (mime.startswith("audio/") or mime.startswith("video/")):
-            return doc["file_id"], os.path.splitext(doc.get("file_name") or "")[1] or ".bin"
+        ext = os.path.splitext(doc.get("file_name") or "")[1].lower()
+        # Telegram Desktop sends many songs as application/octet-stream (or no
+        # type at all): an .m4a for 🎤 Cover went to the document reader (10-03).
+        if doc.get("file_id") and (mime.startswith("audio/") or mime.startswith("video/")
+                                   or ext in _SOUND_EXTS):
+            return doc["file_id"], ext or ".bin"
         return None
 
     def _clone_take_media(self, chat_id: int, sess, lang: str, msg: dict) -> bool:

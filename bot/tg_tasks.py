@@ -291,6 +291,8 @@ class TaskRunnerMixin:
                 names.append(who)
             if it.get("type") == "text":
                 body = (it.get("text") or "").strip()
+                if not it.get("own"):
+                    body = tg_bot._unclaim(body)
                 if body:
                     lines.append(f"{who}: {body}" if who else body)
                 continue

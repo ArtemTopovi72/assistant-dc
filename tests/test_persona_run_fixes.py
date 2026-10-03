@@ -40,11 +40,13 @@ def test_self_forwarded_media_is_material():
     assert src.count("_is_forwarded(msg, self_is_own=False)") >= 3
 
 
-def test_forwarded_bot_messages_and_labels_are_not_acted_on():
-    bot = {"forward_origin": {"type": "user", "sender_user": {"id": 1, "is_bot": True}}}
-    assert tg_dispatch._from_bot(bot) and not tg_dispatch._from_bot({"forward_origin": {"type": "hidden_user"}})
+def test_forwarded_labels_are_not_acted_on_but_bot_replies_are_material():
     src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(tg_dispatch.__file__))), "bot/tg_dispatch.py"), encoding="utf-8").read()
-    assert "_from_bot(msg) or (text and _is_button(text))" in src
+    assert "if _fwd and text and _is_button(text):" in src
+    import tg_bot
+    ours = {"forward_origin": {"type": "user", "sender_user": {"id": 1, "is_bot": True}}}
+    assert tg_bot._fwd_is_own(ours, "1") and not tg_bot._fwd_is_own(ours, "2")
+    assert not tg_bot._fwd_is_own({"forward_origin": {"type": "hidden_user"}}, "1")
 
 
 def test_song_topic_disarms_and_ready_words_are_asked_about():
@@ -59,7 +61,7 @@ def test_song_topic_disarms_and_ready_words_are_asked_about():
 def test_forward_skip_runs_before_the_prompt_gate():
     src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(tg_dispatch.__file__))), "bot/tg_dispatch.py"), encoding="utf-8").read()
     body = src[src.index("def _dispatch(self"):]
-    assert body.index("_from_bot(msg) or") < body.index("self._user_gate(chat_id, msg)")
+    assert body.index("if _fwd and text and _is_button(text):") < body.index("self._user_gate(chat_id, msg)")
     assert "< 3600" in body          # «пришли файлом» never digs up an old picture
 
 

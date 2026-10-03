@@ -352,13 +352,32 @@ class ResolveMixin:
 
             if t == "text":
                 raw = item["text"]
+                # 🎨 Restyle / 🎤 Cover waiting for words: this text is them, ahead
+                # of everything that reads text as something else -- a forwarded
+                # lyric went to the chat, an old forwarded voice note took it as
+                # its answer, a song topic left armed sang it (live 10-03: «кавер
+                # не даёт текст вставить»).
+                if (not item.get("fwd_said") and not raw.startswith("/")
+                        and not tg_bot._LABEL2KEY.get(raw.strip())):
+                    if (getattr(sess, "restyle_state", "") == "want_text"
+                            and self._restyle_take_text(chat_id, sess, lang, raw)):
+                        continue
+                    if (getattr(sess, "cover_state", "") == "want_text"
+                            and self._cover_take_text(chat_id, sess, lang, raw)):
+                        continue
                 if item.get("fwd_said"):
                     # The user's words that came with a forwarded batch: the
                     # task, with the conversation as quoted material.
                     texts.append(tg_bot._FWD_TEXT_FRAME.format(text=item["fwd_said"]))
                     texts.append(self._as_request(item, raw))
                     continue
+                if item.get("forwarded") and item.get("own"):
+                    # The bot's own earlier reply, forwarded back: its words,
+                    # still a quotation (tg_bot._FWD_OWN_FRAME).
+                    texts.append(tg_bot._FWD_OWN_FRAME.format(text=raw))
+                    continue
                 if item.get("forwarded"):
+                    raw = tg_bot._unclaim(raw)
                     # Someone else's words: frame them so the model reads a
                     # forwarded post as a quotation and "о чём это?" / "ответь
                     # автору" afterwards refer to it. Not a button, not a
@@ -408,18 +427,6 @@ class ResolveMixin:
                     texts.append(self._as_request(item, raw))
                     sess.fwd_own = ""
                     self._store.put(sess)
-                    continue
-
-                # 🎨 Restyle has its clip: plain text is the new look.
-                if (not key and not raw.startswith("/")
-                        and getattr(sess, "restyle_state", "") == "want_text"
-                        and self._restyle_take_text(chat_id, sess, lang, raw)):
-                    continue
-
-                # 🎤 Cover has its song: plain text is the new lyric.
-                if (not key and not raw.startswith("/")
-                        and getattr(sess, "cover_state", "") == "want_text"
-                        and self._cover_take_text(chat_id, sess, lang, raw)):
                     continue
 
                 # 📚 a voice is waiting for its name: plain text is the name
@@ -1502,7 +1509,10 @@ class ResolveMixin:
         # tg_tasks.py), not here at push time — see the comment there for why
         # (a second task queued right behind this one must not be able to
         # mark this task's own still-unshown Retry button stale first).
-        if self._try_steer(chat_id, task):
+        # Forwarded material alone is not a note to the running task: the bot's
+        # own replies forwarded mid-song went in as wishes (live 2026-09-27).
+        _only_fwd = bool(batch) and all(it.get("forwarded") for it in batch)
+        if not _only_fwd and self._try_steer(chat_id, task):
             return          # a note to the running task, not a new task: not charged
         # Charged only now: a steer note or an «which picture?» question is not a task.
         self._user_store.bump_usage(chat_id, tg_bot.KIND_TASK)
