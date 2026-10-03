@@ -212,8 +212,9 @@ def _row(ctx, n: int, line: str):
         idx = [i for i in (k - 1, k - 2) if i >= 0]
     clauses = list(dict.fromkeys(_clause(last, i) for i in idx))
     supports = list(dict.fromkeys(_support(last, i) for i in idx))
+    pres = list(dict.fromkeys(_pre_vowel(last, i) for i in idx))
     return {"n": n, "text": line, "syl": syl, "beats": beats, "last": last,
-            "stressed": stressed, "clauses": clauses, "supports": supports}
+            "stressed": stressed, "clauses": clauses, "supports": supports, "pres": pres}
 
 
 def _support(word: str, stress: int) -> str:
@@ -230,6 +231,20 @@ def _support(word: str, stress: int) -> str:
     if start + 1 == len(w) and start > 0:          # open: the consonant is in the clause
         start -= 1
     return w[start - 1].translate(_DEVOICE).translate(_VOWEL_MERGE) if start > 0 else ""
+
+
+def _pre_vowel(word: str, stress: int) -> str:
+    """The vowel one syllable before the stressed one: matching too, the rhyme
+    runs over two syllables («дорога / порога») -- the multisyllabic rhyme that
+    rhyme-density studies (DopeLearning, DeepRapper) score highest."""
+    vs = [ch for ch in word.lower() if ch in _VOWELS]
+    if stress < 0 or stress >= len(vs):
+        stress = max(0, len(vs) - 2) if len(vs) > 1 else 0
+    return vs[stress - 1].translate(_VOWEL_MERGE) if stress > 0 else ""
+
+
+def _deep(a: dict, b: dict) -> bool:
+    return any(x and x == y for x in a.get("pres", []) for y in b.get("pres", []))
 
 
 def _rich(a: dict, b: dict) -> bool:
@@ -312,7 +327,7 @@ def analyse(text: str, ctx=None) -> dict:
                 issues.append({"kind": why, "lines": (a["n"], b["n"]), "words": (a["last"], b["last"])})
                 penalty += 0.7 if why == "verbs" else 2.0
             elif _rich(a, b):
-                rich += 1
+                rich += 1 + _deep(a, b)
             if abs(a["syl"] - b["syl"]) > 2:
                 issues.append({"kind": "length", "lines": (a["n"], b["n"]), "syl": (a["syl"], b["syl"])})
                 penalty += 0.5

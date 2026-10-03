@@ -343,3 +343,11 @@ def test_creative_calls_ask_for_min_p(monkeypatch):
     got.clear()
     L._call(None, "critic", "s", "u", temperature=0.0, max_tokens=10)
     assert "sampling" not in got
+
+
+def test_a_two_syllable_rhyme_counts_more():
+    one = "Мне не нужна дорога\nЯ помню всё до слова\nСтою я у порога\nИ жду тебя я снова"
+    two = "Мне не нужна дорога\nЯ помню всё до слова\nВ глазах твоих тревога\nИ жду тебя я снова"
+    a, b = L.analyse(one), L.analyse(two)
+    assert L._deep(L._row(None, 1, "дорога"), L._row(None, 3, "порога"))
+    assert a["rich"] >= b["rich"]
