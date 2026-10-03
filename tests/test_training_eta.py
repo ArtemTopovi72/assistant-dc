@@ -125,10 +125,21 @@ def test_a_run_is_not_started_onto_a_full_disk():
         check("and it names the actual figure", "ГБ" in warn, warn)
     finally:
         LT.MIN_FREE_GB = orig
-    check("an unreadable path is not reported as a full disk",
-          LT.free_gb("Q:/definitely/not/here") == 0.0)
-    check("and an unknown figure does not trigger the warning",
-          LT.disk_warning("Q:/definitely/not/here") == "")
+    # An unreadable drive: Q: does not exist on Windows; elsewhere "Q:/..." is
+    # a relative path that resolves to the working directory, so make the
+    # stat itself fail the way an unmounted/denied drive does.
+    import shutil as _sh
+    _real_du = _sh.disk_usage
+    def _denied(p):
+        raise OSError(13, "denied", p)
+    _sh.disk_usage = _denied
+    try:
+        check("an unreadable path is not reported as a full disk",
+              LT.free_gb("Q:/definitely/not/here") == 0.0)
+        check("and an unknown figure does not trigger the warning",
+              LT.disk_warning("Q:/definitely/not/here") == "")
+    finally:
+        _sh.disk_usage = _real_du
 
     tab = (ROOT / "gui/gui_characters_tab.py").read_text(encoding="utf-8")
     body = tab[tab.index("def _train(self):"):tab.index("def _train_done")]

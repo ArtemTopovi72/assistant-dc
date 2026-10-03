@@ -85,7 +85,7 @@ def test_enable_dark_titlebar_dwm():
         def DwmSetWindowAttribute(self, hwnd, attr, ref, size): return 0   # success -> break
     class FakeWindll:
         dwmapi = FakeDwm()
-    real = _ct.windll
+    real = getattr(_ct, "windll", None)     # Windows-only attribute
     try:
         _ct.windll = FakeWindll()
         w = QWidget(); w.show()
@@ -93,7 +93,10 @@ def test_enable_dark_titlebar_dwm():
         check("dark_titlebar_dwm", True)
         w.close()
     finally:
-        _ct.windll = real
+        if real is None:
+            del _ct.windll
+        else:
+            _ct.windll = real
 
 
 def test_dark_filter_except():

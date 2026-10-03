@@ -18,26 +18,34 @@ def check(name, cond, extra=""):
 
 check("a plain Popen is hidden", N.wants_hiding({}))
 check("capture_output style kwargs are hidden too", N.wants_hiding({"stdout": -1, "text": True}))
-check("CREATE_NEW_CONSOLE is respected", not N.wants_hiding({"creationflags": subprocess.CREATE_NEW_CONSOLE}))
+check("CREATE_NEW_CONSOLE is respected", not N.wants_hiding({"creationflags": N._NEW_CONSOLE}))
 check("DETACHED_PROCESS (GUI apps from launch_all) is left alone", not N.wants_hiding({"creationflags": 0x8}))
 check("an explicit STARTUPINFO is left alone", not N.wants_hiding({"startupinfo": object()}))
 
 seen = {}
 orig = subprocess.Popen.__init__
-N._installed = False
-N.install(force=True)
-try:
-    # call the patched __init__ with a stub that records kwargs
-    def rec(self, *a, **k): seen.update(k)
-    patched = subprocess.Popen.__init__
-    N_orig = patched.__closure__[0].cell_contents
-    patched.__closure__[0].cell_contents = rec
-    patched(object(), ["lms", "ps"], capture_output=True)
-    patched.__closure__[0].cell_contents = N_orig
-finally:
-    subprocess.Popen.__init__ = orig
+if sys.platform != "win32":
+    # creationflags is Windows-only: POSIX Popen raises ValueError on it, so
+    # the hook must never be installed here, forced or not.
     N._installed = False
-check("the installed hook adds CREATE_NO_WINDOW", seen.get("creationflags", 0) & 0x08000000, seen)
+    check("off Windows install() is a no-op even when forced",
+          N.install(force=True) is False and subprocess.Popen.__init__ is orig)
+    N._installed = False
+else:
+    N._installed = False
+    N.install(force=True)
+    try:
+        # call the patched __init__ with a stub that records kwargs
+        def rec(self, *a, **k): seen.update(k)
+        patched = subprocess.Popen.__init__
+        N_orig = patched.__closure__[0].cell_contents
+        patched.__closure__[0].cell_contents = rec
+        patched(object(), ["lms", "ps"], capture_output=True)
+        patched.__closure__[0].cell_contents = N_orig
+    finally:
+        subprocess.Popen.__init__ = orig
+        N._installed = False
+    check("the installed hook adds CREATE_NO_WINDOW", seen.get("creationflags", 0) & 0x08000000, seen)
 check("assistant.main installs it before Qt", "no_console_windows.install()" in open("core/assistant.py", encoding="utf-8").read())
 
 print("\n%d/%d checks passed" % (OK, OK + BAD))
