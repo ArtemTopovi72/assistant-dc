@@ -2,7 +2,7 @@
 10-03: «делай сам»): its torch/transformers pins clash with the app, so it
 lives in its own venv, and it needs a CUDA card.
 
-    python scripts/install_yue2.py                 # Windows: py -3.12 is used for the venv
+    venv\Scripts\python scripts\install_yue2.py   # Python 3.12 comes from uv (setup installs it)
     python scripts/install_yue2.py --cuda cu130    # another torch CUDA build
     python scripts/install_yue2.py --no-models     # the venv only
 
@@ -40,13 +40,29 @@ def has_weights(folder: str) -> bool:
             and bool(glob.glob(os.path.join(folder, "*.safetensors"))))
 
 
+def _uv() -> str:
+    """uv, which setup installs: it fetches Python 3.12 itself, so no system
+    Python 3.12 is needed (a «py -3.12» that is not there failed the venv)."""
+    found = shutil.which("uv")
+    if found:
+        return found
+    for p in (os.path.expanduser("~/.local/bin/uv"), os.path.expanduser("~/.cargo/bin/uv"),
+              os.path.expanduser("~/.local/bin/uv.exe"), os.path.expanduser("~/.cargo/bin/uv.exe")):
+        if os.path.isfile(p):
+            return p
+    return ""
+
+
 def base_python(given: str) -> list:
-    """The interpreter that creates the venv: --python, else 3.12 (YuE2's own)."""
+    """How the venv is made: --python, else uv with Python 3.12 (YuE2's own),
+    else a system 3.12."""
     if given:
-        return given.split()
+        return given.split() + ["-m", "venv"]
+    if _uv():
+        return [_uv(), "venv", "--seed", "-p", "3.12"]
     if os.name == "nt" and shutil.which("py"):
-        return ["py", "-3.12"]
-    return [shutil.which("python3.12") or sys.executable]
+        return ["py", "-3.12", "-m", "venv"]
+    return [shutil.which("python3.12") or sys.executable, "-m", "venv"]
 
 
 def run(cmd: list) -> None:
@@ -59,7 +75,7 @@ def make_venv(python: list) -> None:
         print("venv_yue2: already there")
         return
     print("venv_yue2: creating")
-    run(python + ["-m", "venv", VENV])
+    run(python + [VENV])
     run([venv_python(), "-m", "pip", "install", "--upgrade", "pip"])
 
 

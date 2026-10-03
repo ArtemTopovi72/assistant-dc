@@ -15,7 +15,7 @@
   <img src="https://img.shields.io/badge/python-3.13-3776AB?logo=python&logoColor=white" alt="Python 3.13">
   <img src="https://img.shields.io/badge/platform-Windows-0078D6?logo=windows&logoColor=white" alt="Windows">
   <img src="https://img.shields.io/badge/GPU-RTX%203090%2024GB-76B900?logo=nvidia&logoColor=white" alt="RTX 3090 24GB">
-  <img src="https://img.shields.io/badge/tests-429%20suites-brightgreen" alt="429 test suites">
+  <img src="https://img.shields.io/badge/tests-500%2B%20suites-brightgreen" alt="500+ test suites">
 </p>
 
 ---
@@ -46,8 +46,10 @@ interface are tuned for it. English works too.
 | 🧠 **Agent** | LangGraph, tools with argument validation, user fact memory, history compaction, prompt-injection guard |
 | 🗣 **Voice** | F5-TTS with voice cloning from a short sample, RUAccent stress marks, GigaAM / faster-whisper recognition, VAD |
 | 🎨 **Images** | Generation and local edits in ComfyUI (Ideogram 4, FireRed Image Edit), scene layout, lettering and face checks |
-| 🎬 **Video** | MiniMax H3: text to video, image to video, first + last frame, reference images |
-| 🎵 **Music** | YuE2 songs with Russian vocals, mashups, stem separation (Demucs) |
+| 🎬 **Video** | MiniMax H3: text to video, image to video (the picture is the opening shot and keeps its look), reference images, video restyle |
+| 🎵 **Music** | YuE2 songs with Russian vocals, covers (also from a YouTube link), mashups, stem separation (Demucs) |
+| ✍️ **Lyrics** | Writes or polishes song lyrics: plan, several drafts judged head to head, then a check-and-revise loop for rhyme on the stressed vowel, metre, line length and song form |
+| 🎙 **Voices** | A voice library per chat: clone a voice from a sample, name it, reuse it for the assistant, clips and covers |
 | 🔎 **Deep Research** | Multi-step web research with a cited report and quote verification |
 | 📚 **Documents** | RAG over your own library (BGE-M3 + reranker), .pptx decks with charts and fact checks |
 | 💬 **Telegram** | Multi-user bot: registration, quotas, one-GPU queue, replies as text / voice / both, threaded to the request |
@@ -146,13 +148,26 @@ programs with winget/apt). On Windows they are written the same way: `setup.ps1 
 | start | the desktop shortcut, `start.cmd` (Windows) or `./start.sh` |
 | stop | close the window (LM Studio and ComfyUI keep running; quit them from the tray) |
 | check | `venv\Scripts\python scripts\healthcheck.py` (`venv/bin/python` on Linux) |
-| update | `git pull`, then run the setup script again |
+| update | `git pull` and restart; run the setup script again only when it reports something missing |
+| songs | `venv\Scripts\python scripts\install_yue2.py` (once, see below) |
 | settings | `.env`; every key is explained in `.env.example` |
 
-The YuE2 song engine has its own command, `python scripts\install_yue2.py`
-(`venv_yue2/` plus `models_ext/YuE2-3B` and `models_ext/YuE2-Vae`, see
-[docs/music_generation.md](docs/music_generation.md)). What stays manual:
-Docker Desktop for the `run_code` sandbox. Anything a download
+### Songs: YuE2 (one more command)
+
+YuE2 pins its own torch and transformers, so it lives in a venv of its own and is
+installed separately, after setup:
+
+```powershell
+venv\Scripts\python scripts\install_yue2.py          # Linux: venv/bin/python scripts/install_yue2.py
+```
+
+It makes `venv_yue2/` (Python 3.12 from uv, CUDA torch 2.10.0, `yue2-infer` at the
+commit the app is written against) and downloads `models_ext/YuE2-3B` and
+`models_ext/YuE2-Vae`. Run it again at any time: a step already done is skipped.
+`--cuda cu130` picks another torch build if the card is not seen;
+`--no-models` makes the venv only. Details: [docs/music_generation.md](docs/music_generation.md).
+
+What stays manual: Docker Desktop for the `run_code` sandbox. Anything a download
 could not fetch (network, disk space) is reported with the step that failed; run the
 setup again to retry. Without a part the app runs with that feature off, and the
 health check says which ones.
@@ -289,6 +304,8 @@ documented in `.env.example`.
 |---|---|
 | The bot is silent or answers empty | Is the LM Studio server on, and is `MODEL_NAME` a model you have downloaded? |
 | No images | Is ComfyUI running at `COMFY_URL`, with ComfyUI-GGUF installed? |
+| No songs («YuE2 is not installed») | Run `scripts/install_yue2.py`; the health check names the missing part |
+| New Telegram buttons are not there after an update | Telegram keeps the old keyboard until the bot sends a new one: send `/start` |
 | No voice | Are `model_212000.safetensors` and `vocos/` in place, and is `ASSISTANT_REF_WAV` set? |
 | `unsatisfiable` during install | Install with `uv` and `--override overrides.txt` (the setup script does) |
 | The app closes at once, `0xc0000005` in the log | Old VC++ runtime: run the setup script again, or install the latest [VC++ redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) |
@@ -302,7 +319,7 @@ venv\Scripts\python tests/run_all.py
 venv\Scripts\python tests/run_all.py -k telegram
 ```
 
-About 475 suites run without a GPU or network: the LLM, ComfyUI and Telegram are faked,
+About 500 suites run without a GPU or network: the LLM, ComfyUI and Telegram are faked,
 and the runner ignores your `.env` so local settings cannot change the results.
 CI runs them on Windows for every push to `main`, and runs the setup script twice on
 clean Windows and Linux machines.

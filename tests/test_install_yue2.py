@@ -20,7 +20,7 @@ def _fake_machine(monkeypatch, cuda_ok=True):
 
     def check_call(cmd):
         ran.append(cmd)
-        if cmd[-2:] == ["venv", I.VENV]:
+        if cmd[-1] == I.VENV:
             os.makedirs(os.path.dirname(I.venv_python()), exist_ok=True)
             open(I.venv_python(), "w").close()
         elif I.YUE2_PKG in cmd:
@@ -66,3 +66,9 @@ def test_paths_match_the_apps_check():
     import music
     assert music.YUE2_PYTHON == config.venv_python(os.path.join(ROOT, "venv_yue2"))
     assert I.VENV == os.path.join(ROOT, "venv_yue2") and I.MODELS == os.path.join(ROOT, "models_ext")
+
+
+def test_without_a_python_given_uv_brings_3_12(monkeypatch):
+    monkeypatch.setattr(I, "_uv", lambda: "uv")
+    assert I.base_python("") == ["uv", "venv", "--seed", "-p", "3.12"]
+    assert I.base_python("py -3.12") == ["py", "-3.12", "-m", "venv"]

@@ -735,26 +735,31 @@ def _keep_quoted_names(description: str, state) -> str:
 
 
 def _user_look(state) -> str:
-    """The look the user's own words ask for: a drawn look, "photo", "none", or
-    "" when there are no user words to read (a direct call)."""
+    """The look THIS message asks for: a drawn look, "photo", "none", or "" when
+    there are no user words to read (a direct call). Only this message: «нарисуй
+    кота в стиле аниме», then «нарисуй собаку» drew the dog in anime too
+    (owner 10-03: стиль только из текущего сообщения). A redo («ещё раз») says
+    no look of its own and repeats the request before it, look included."""
     from prompt_guard import user_words
     from ideogram_layout import _look
     st = state or {}
-    texts = [user_words(str(st.get("user_input_original") or st.get("user_input") or ""))]
-    for m in reversed(st.get("messages") or []):
-        if isinstance(m, dict) and m.get("role") == "user" and isinstance(m.get("content"), str):
-            t = user_words(m["content"]).strip()
-            if t and t not in texts:
-                texts.append(t)
-        if len(texts) >= 3:
-            break
-    texts = [t.strip() for t in texts if t and t.strip()]
-    if not texts:
+    text = user_words(str(st.get("user_input_original") or st.get("user_input") or "")).strip()
+    if not text:
         return ""
-    for t in texts:
-        got = _look(t)
-        if got != "none":
-            return got
+    got = _look(text)
+    if got != "none":
+        return got
+    try:
+        import intent
+        redo = intent.read(None, text)["redo"] in ("same", "changed")
+    except Exception:
+        redo = False
+    if redo:
+        for m in reversed(st.get("messages") or []):
+            if isinstance(m, dict) and m.get("role") == "user" and isinstance(m.get("content"), str):
+                t = user_words(m["content"]).strip()
+                if t and t != text:
+                    return _look(t)
     return "none"
 
 

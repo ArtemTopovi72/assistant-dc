@@ -54,7 +54,13 @@ def test_the_look_is_read_from_the_users_words_this_turn_first(monkeypatch):
     st = {"user_input_original": "ещё раз", "messages": [
         {"role": "user", "content": "в стиле аниме кота"}, {"role": "assistant", "content": "вот"},
         {"role": "user", "content": "ещё раз"}]}
+    import intent
+    monkeypatch.setattr(intent, "STUB", {"ещё раз": {"redo": "same"}}.get)
     assert H._user_look(st) == "anime"                      # «ещё раз» after anime stays anime
+    st2 = {"user_input_original": "нарисуй кибер-Ленина", "messages": [
+        {"role": "user", "content": "в стиле аниме кота"}, {"role": "assistant", "content": "вот"},
+        {"role": "user", "content": "нарисуй кибер-Ленина"}]}
+    assert H._user_look(st2) == "none"                      # a new request: its own words only
     assert H._user_look({"user_input_original": "сделай реалистично"}) == "photo"
     assert H._user_look({"user_input_original": "нарисуй кибер-Ленина"}) == "none"
     assert H._user_look({}) == ""

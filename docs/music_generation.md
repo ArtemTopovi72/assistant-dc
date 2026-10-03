@@ -155,10 +155,12 @@ weights are both confirmed in place.
 
 ## Installing YuE2 (the default song engine)
 
-`setup` does not install YuE2; `python scripts/install_yue2.py` does (Windows: it
-makes the venv with `py -3.12`; `--cuda cu130` for another torch build; a second
-run skips what is done). Songs stay off until these exist
-(`media/music.py: yue2_available()` checks them):
+`setup` does not install YuE2; `venv\Scripts\python scripts\install_yue2.py` does.
+It makes the venv with Python 3.12 from uv (installed by setup; `--python "py -3.12"`
+to use another interpreter), installs CUDA torch first and then the package, and
+downloads both models. `--cuda cu130` picks another torch build; a second run skips
+what is done; `scripts/healthcheck.py` reports the songs part. Songs stay off until
+these exist (`media/music.py: yue2_available()` checks them):
 
 | What | Where |
 |---|---|
@@ -170,3 +172,27 @@ run skips what is done). Songs stay off until these exist
 `CachedNAR.__init__(model, chunk, attention, query_chunk_size)`; these match
 yue2-infer 0.1.6 (commit `1dc1c50`). Install torch 2.10.0 from the CUDA index
 before the package, or the resolver takes PyPI's CPU wheel on Windows.
+
+## Lyrics: writing and polishing (`media/lyrics_craft.py`)
+
+Used by ✍️ Write lyrics and ✨ Improve lyrics in the Telegram Music menu, and by
+🎵 Songs before singing (a wish becomes a written lyric; ready words are polished on
+request).
+
+- **Write**: a plan first (the hook line, what each verse shows, concrete images, the
+  metre and rhyme scheme), then `LYRICS_DRAFTS` drafts (3). Each is scored by the rule
+  check and the model critic; when the two best are close, the model compares them head
+  to head, asked both ways round (a judge leans to one position).
+- **Rule check** (`analyse`): a rhyme on the stressed vowel (stress from the voice's
+  accentor, RUAccent with silero-stress for homographs, read for the whole line; ё is
+  always stressed), lazy pairs (same word, one word inside the other, worn pairs, two
+  verbs in one form), line length within a pair, rhythm, lines over 13 syllables, a
+  foreign word in a Russian lyric, song form (verse shape, chorus drift, a short hook
+  line, the same end word twice). A repeated chorus is judged once. Rich and
+  two-syllable rhymes earn a little back.
+- **Polish** (`polish`): up to 3 rounds. A non-rhyming pair first gets versions of its
+  weaker line (the first that passes the check wins, in every repeat of a chorus), then
+  the model rewrites what is still named; the best-scoring version is kept, never a
+  worse rewrite. Creative calls use `min_p` sampling (`LYRICS_MIN_P`, 0.05).
+- The user sees two messages: what was changed and what is left (in their language),
+  then the lyric alone to copy.

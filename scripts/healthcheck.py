@@ -18,6 +18,7 @@ Checks, cheapest first:
   lmstudio    the server answers on LM_STUDIO_BASE and serves the chat model
   chat        one real completion from that model (end-to-end LLM smoke)
   comfyui     answers on COMFY_URL (optional -> no images/video/music)
+  songs       YuE2's venv and weights (optional -> no songs)
   docker      engine up for run_code (optional -> code execution off)
   gui         the real main window is built and closed headlessly
 """
@@ -212,6 +213,25 @@ def check_comfyui():
                       "script again (it installs ComfyUI, its nodes and models)")
 
 
+def check_songs():
+    import install_yue2 as Y
+    missing = [what for what, ok in (
+        ("venv_yue2", os.path.isfile(Y.venv_python())),
+        ("models_ext/YuE2-3B", Y.has_weights(os.path.join(Y.MODELS, "YuE2-3B"))),
+        ("models_ext/YuE2-Vae", Y.has_weights(os.path.join(Y.MODELS, "YuE2-Vae")))) if not ok]
+    if not missing:
+        return Result("songs", OK, "YuE2 venv and weights present")
+    try:
+        import music                    # the yue2.cpp build counts too, as in the app
+        if music.yue2_cpp_available():
+            return Result("songs", OK, "yue2.cpp build present")
+    except Exception:
+        pass
+    py = os.path.join("venv", "Scripts", "python") if os.name == "nt" else "venv/bin/python"
+    return Result("songs", WARN, "songs OFF -- missing " + ", ".join(missing),
+                  f"{py} scripts/install_yue2.py (a second run skips what is done)")
+
+
 def check_docker():
     try:
         import code_runner
@@ -294,7 +314,7 @@ def check_gui(timeout=180):
 
 
 ALL = ("python", "packages", "config", "ffmpeg", "voice", "lmstudio", "chat",
-       "comfyui", "docker", "gui")
+       "comfyui", "songs", "docker", "gui")
 
 
 def run(only=None, skip=(), quiet=False):
@@ -302,7 +322,7 @@ def run(only=None, skip=(), quiet=False):
     funcs = {
         "python": check_python, "packages": check_packages, "config": check_config,
         "ffmpeg": check_ffmpeg, "voice": check_voice, "lmstudio": check_lmstudio,
-        "chat": check_chat, "comfyui": check_comfyui, "docker": check_docker,
+        "chat": check_chat, "comfyui": check_comfyui, "songs": check_songs, "docker": check_docker,
         "gui": check_gui,
     }
     results = []
