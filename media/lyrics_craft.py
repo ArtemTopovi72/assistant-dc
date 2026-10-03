@@ -285,11 +285,23 @@ _ISSUE_EN = {
 }
 
 
-def describe(issue: dict) -> str:
+_ISSUE_RU = {
+    "no_rhyme": "строки {a} и {b} не рифмуются («{x}» / «{y}»)",
+    "same_word": "строки {a} и {b}: слово рифмуется само с собой («{x}»)",
+    "same_root": "строки {a} и {b}: «{x}» / «{y}» — одно слово внутри другого, это не рифма",
+    "worn": "строки {a} и {b}: «{x}» / «{y}» — затёртая рифма",
+    "verbs": "строки {a} и {b}: два глагола в одной форме («{x}» / «{y}») — слабая рифма",
+    "length": "строки {a} и {b} разной длины ({s1} и {s2} слогов)",
+    "rhythm": "строка {a} сбивает ритм куплета",
+}
+
+
+def describe(issue: dict, lang: str = "en") -> str:
     ln = issue["lines"]
     w = issue.get("words") or ("", "")
     s = issue.get("syl") or (0, 0)
-    return _ISSUE_EN[issue["kind"]].format(a=ln[0], b=ln[-1], x=w[0], y=w[1], s1=s[0], s2=s[1])
+    table = _ISSUE_RU if lang == "ru" else _ISSUE_EN
+    return table[issue["kind"]].format(a=ln[0], b=ln[-1], x=w[0], y=w[1], s1=s[0], s2=s[1])
 
 
 # ── the model ────────────────────────────────────────────────────────────────
@@ -336,10 +348,12 @@ def _numbered(text: str) -> str:
 
 
 def critique(ctx, text: str) -> tuple:
-    """(score 0..10, [problems]) from the model; (7, []) when it cannot say."""
+    """(score 0..10, [problems]) from the model, written in the lyric's own
+    language (they are shown to the user); (7, []) when it cannot say."""
     from utils import safe_json_from_llm
     try:
-        raw = _call(ctx, "critic", _CRITIC, _numbered(text), temperature=0.0, max_tokens=600,
+        system = _CRITIC + f" Write the problems in {_lang_name(text)}."
+        raw = _call(ctx, "critic", system, _numbered(text), temperature=0.0, max_tokens=600,
                     schema=_CRITIC_SCHEMA)
         data = safe_json_from_llm(raw, ["score", "problems"]) or {}
         probs = [str(p).strip() for p in (data.get("problems") or []) if str(p).strip()][:8]
@@ -401,7 +415,9 @@ def polish(ctx, text: str, rounds: int = ROUNDS, on_round=None) -> dict:
         logger.info("lyrics round %d: rules %.1f sense %d -> %.2f, %d problems",
                     r, rule["score"], sense, total, len(problems))
         if best is None or total > best["score"]:
-            best = {"text": cur, "score": total, "left": problems}
+            # the user reads what is left: rule findings in their language, by the caller
+            best = {"text": cur, "score": total, "left": problems,
+                    "left_rules": rule["issues"], "left_sense": probs}
         if not problems or r == rounds:
             break
         if on_round:

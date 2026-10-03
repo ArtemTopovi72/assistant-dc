@@ -60,12 +60,14 @@ class LyricsMixin:
         if mode == "improve" and res["text"] == res["original"]:
             body.append(tg_bot._t("lyr_already_good", lang))
         body += [html.escape(n) for n in notes]
-        if res["left"]:
+        left = [LC.describe(i, lang) for i in res.get("left_rules", [])] + list(res.get("left_sense", []))
+        if left:
             body.append(tg_bot._t("lyr_left", lang) + "\n" + "\n".join(
-                "• " + html.escape(p) for p in res["left"][:5]))
+                "• " + html.escape(p) for p in left[:5]))
         self._send_text(chat_id, head + ("\n\n" + "\n".join(body) if body else ""), parse_mode="HTML")
         # The lyric alone, no markup: one tap copies it whole.
-        self._send_text(chat_id, res["text"], parse_mode=None, keyboard={"inline_keyboard": [[
+        lyric = res["text"]
+        self._send_text(chat_id, lyric, parse_mode=None, keyboard={"inline_keyboard": [[
             {"text": tg_bot._t("lyr_sing_btn", lang), "callback_data": "lyr:sing"},
             {"text": tg_bot._t("lyr_again_btn", lang), "callback_data": "lyr:again"}]]})
 

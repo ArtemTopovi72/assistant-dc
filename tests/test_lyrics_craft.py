@@ -162,3 +162,22 @@ def test_text_goes_to_the_lyrics_flow_through_the_resolver(monkeypatch):
 
 def test_numbering_copied_back_is_removed():
     assert L._clean("1: [verse]\n2: Раз два\n3: Три четыре") == "[verse]\nРаз два\nТри четыре"
+
+
+def test_what_is_left_is_shown_in_the_users_language(monkeypatch):
+    def llm(role, system, user):
+        if role == "critic":
+            assert "Write the problems in Russian" in system
+            return '{"score": 6, "problems": ["строка 2 непонятна"]}'
+        return "ок"                                    # no usable rewrite: the lazy rhyme stays
+    monkeypatch.setattr(L, "LLM_STUB", llm)
+    bot = _bot()
+    assert bot._lyrics_take_text(8, _armed(bot, 8), "ru", LAZY)
+    notes = bot.sent[-2][0]
+    assert "Что ещё можно доработать" in notes and "одно слово внутри другого" in notes
+    assert "строка 2 непонятна" in notes and "lines " not in notes
+
+
+def _armed(bot, cid):
+    s = bot._get_session(cid); s.lyrics_state = "improve"; bot._store.put(s)
+    return bot._get_session(cid)
