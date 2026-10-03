@@ -19,6 +19,7 @@ import re
 import sqlite3
 import threading
 import time
+from contextlib import closing
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -424,11 +425,11 @@ class _UserStore:
             stamp = time.strftime("%Y%m%d_%H%M%S")
             dst   = self._bdir / (name or f"tg_users_{stamp}.db")
             # sqlite3.connect backup API is the correct way to copy a live WAL db
-            src_conn = sqlite3.connect(str(self._db))
-            dst_conn = sqlite3.connect(str(dst))
-            src_conn.backup(dst_conn, pages=64)
-            dst_conn.close()
-            src_conn.close()
+            # closing(): a failed backup must not leave the handles open -- on
+            # Windows they lock the live DB and the half-written snapshot.
+            with closing(sqlite3.connect(str(self._db))) as src_conn, \
+                    closing(sqlite3.connect(str(dst))) as dst_conn:
+                src_conn.backup(dst_conn, pages=64)
             self._prune_backups()
         except Exception as exc:
             logger.warning("UserStore backup failed: %s", exc)
@@ -449,10 +450,9 @@ class _UserStore:
             return False
         with self._lock:
             try:
-                src = sqlite3.connect(str(backup_path))
-                dst = sqlite3.connect(str(self._db))
-                src.backup(dst, pages=64)
-                dst.close(); src.close()
+                with closing(sqlite3.connect(str(backup_path))) as src, \
+                        closing(sqlite3.connect(str(self._db))) as dst:
+                    src.backup(dst, pages=64)
                 logger.info("UserStore restored from %s", backup_path)
                 return True
             except Exception as exc:
