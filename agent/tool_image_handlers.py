@@ -768,6 +768,8 @@ def _handle_generate_image(ctx, state, args: dict) -> str:
         return _over
 
     description = _keep_quoted_names(description, state)
+    import person_look
+    description = person_look.with_look(description)     # «Ленин» -> bald, goatee, ...
     ctx.set_stage("Drawing a picture")
     steps, width, height, seed = args.get("steps"), args.get("width"), args.get("height"), args.get("seed")
     logger.info("Tool: generate_image(%s, steps=%s, %sx%s)", description, steps, width, height)
@@ -1262,6 +1264,9 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
                 "To change the format, call generate_image again with the same "
                 "description and the new width/height (e.g. 1680x944 for "
                 "horizontal/YouTube, 944x1680 for vertical/stories).")
+    # «он лысый, это Ленин»: the person may be named only in the picture's own prompt.
+    import person_look
+    instructions = person_look.with_look(instructions, getattr(ctx, "last_image_prompt", "") or "")
     ctx.set_stage("Redrawing the picture")
     logger.info("Tool: redraw_image(mode=%s, instructions=%r, source=%s)",
                 mode, instructions[:80], source)
