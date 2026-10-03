@@ -483,6 +483,11 @@ def _free_comfy_models() -> None:
 # its working context plus the vision tokens of one picture. Below FREE_GPU_MIN_MB
 # (16 GB) is "still draining"; this is "enough to serve".
 RELOAD_LLM_MIN_FREE_MB = _cfg_env.env_int("RELOAD_LLM_MIN_FREE_MB", 19000)
+# Extra wait, after a second /free, when the first FREE_GPU_WAIT_S was not
+# enough. Loading the 18 GB model into a card ComfyUI has not vacated makes
+# the driver spill it into shared system RAM: the load crawls (minutes at
+# 90 %) and every answer after it is slow -- worse than waiting here.
+RELOAD_VRAM_EXTRA_WAIT_S = _cfg_env.env_float("RELOAD_VRAM_EXTRA_WAIT_S", 90)
 
 
 def _release_card() -> None:
@@ -510,7 +515,18 @@ def _release_card() -> None:
         # loaded a few hundred MB short it comes up, then dies on the first
         # picture (live, 2026-09-12, journey 3: crash on a vision call two
         # minutes after the give-back, three turns lost).
-        _LT.wait_vram_free(RELOAD_LLM_MIN_FREE_MB, timeout=_LT.FREE_GPU_WAIT_S)
+        free = _LT.wait_vram_free(RELOAD_LLM_MIN_FREE_MB, timeout=_LT.FREE_GPU_WAIT_S)
+        if free is not None and free < RELOAD_LLM_MIN_FREE_MB and RELOAD_VRAM_EXTRA_WAIT_S > 0:
+            # ComfyUI can take its time letting go (a second queue item, a
+            # slow /free): ask again and give it longer before squeezing in.
+            _notice("waiting for ComfyUI to free the card (%d MiB free, %d needed)"
+                    % (free, RELOAD_LLM_MIN_FREE_MB))
+            _free_comfy_models()
+            free = _LT.wait_vram_free(RELOAD_LLM_MIN_FREE_MB, timeout=RELOAD_VRAM_EXTRA_WAIT_S)
+            if free is not None and free < RELOAD_LLM_MIN_FREE_MB:
+                logger.warning("reloading %s with only %d MiB free (%d wanted): it may spill "
+                               "into shared memory and load and answer slowly", model, free,
+                               RELOAD_LLM_MIN_FREE_MB)
         _LT.reload_llm(model, log=logger.info)
     except Exception:
         logger.exception("could not bring the chat model back")

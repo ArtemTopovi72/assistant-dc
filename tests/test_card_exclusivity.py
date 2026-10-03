@@ -61,12 +61,13 @@ class _FakeLT:
     FREE_GPU_WAIT_S = 25.0
 
     record_wait = False
+    free_readings = []          # successive wait_vram_free results; empty = enough
 
     @staticmethod
     def wait_vram_free(min_free_mb, timeout=25.0, poll=0.5):
         if _FakeLT.record_wait:
             calls.append("wait-vram:%d" % min_free_mb)
-        return min_free_mb
+        return _FakeLT.free_readings.pop(0) if _FakeLT.free_readings else min_free_mb
 
 
 sys.modules["lora_training"] = _FakeLT
@@ -317,6 +318,24 @@ finally:
     # broke the timing check below.
     CC._free_comfy_models = lambda: None
     _FakeLT.record_wait = False
+
+# -- a card ComfyUI has not vacated in time gets a second /free and a longer
+#    wait before the model squeezes in (it spilled into shared RAM and the
+#    reload crawled at 90 % for minutes, live 2026-10-03)
+reset()
+CC._free_comfy_models = lambda: calls.append("comfy-free")
+_FakeLT.record_wait = True
+_FakeLT.free_readings = [6000, CC.RELOAD_LLM_MIN_FREE_MB + 500]
+try:
+    with CC._gpu_slot(exclusive=True, label="Picture"):
+        pass
+    w = "wait-vram:%d" % CC.RELOAD_LLM_MIN_FREE_MB
+    check("a short card is freed again and waited on before the reload",
+          calls == ["free", "comfy-free", w, "comfy-free", w, "reload:chat-model-26b"], calls)
+finally:
+    CC._free_comfy_models = lambda: None
+    _FakeLT.record_wait = False
+    _FakeLT.free_readings = []
 
 # -- and a model that LM Studio lost is put back, not mourned every turn -------
 revived = []
