@@ -296,10 +296,9 @@ class QueueMixin:
             if task_id in self._cancelled:
                 return ""
             # A task cancelled while queued is dropped and never reaches the
-            # consumer that would clear its id, so bound the set rather than let
-            # it grow for the life of the process.
-            if len(self._cancelled) > 512:
-                self._cancelled.clear()
+            # consumer that would clear its id, so the set is bounded: it
+            # forgets the oldest ids, never the one just cancelled
+            # (tg_bot._RecentIds).
             self._cancelled.add(task_id)
             running_ids = {t.task_id for t in (self._running_task.get(chat_id) or [])}
             ev = self._task_cancels.get(task_id)

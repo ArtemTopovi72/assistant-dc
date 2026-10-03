@@ -1127,6 +1127,39 @@ from tg_sessions import _Session, _Store
 # ACTIVITY LOG
 # ═══════════════════════════════════════════════════════════════════════════════
 
+class _RecentIds:
+    """A set of task ids that forgets its OLDEST entries past `limit`.
+
+    Cancelled ids must outlive the cancel until the task is skipped or
+    unwinds; the old bound cleared the whole set at 512, so a task cancelled
+    a moment earlier but not droppable from its queue (Kafka) ran anyway."""
+
+    def __init__(self, limit: int):
+        self._limit = limit
+        self._ids: dict = {}
+
+    def add(self, item) -> None:
+        self._ids.pop(item, None)
+        self._ids[item] = None
+        while len(self._ids) > self._limit:
+            del self._ids[next(iter(self._ids))]
+
+    def discard(self, item) -> None:
+        self._ids.pop(item, None)
+
+    def clear(self) -> None:
+        self._ids.clear()
+
+    def __contains__(self, item) -> bool:
+        return item in self._ids
+
+    def __len__(self) -> int:
+        return len(self._ids)
+
+    def __iter__(self):
+        return iter(list(self._ids))
+
+
 class _ActivityLog:
     """Append-only JSONL activity log for debugging.  Thread-safe."""
 
@@ -1260,7 +1293,7 @@ class TelegramBot(AdminMixin, RestyleMixin, AnimVoicesMixin, VoiceLibraryMixin, 
         # Individual requests cancelled from the inline ⛔ button. A task may be
         # cancelled while it is still queued (dropped before it runs) or while it
         # is running (cancel_event), so both states are tracked here.
-        self._cancelled: set[str] = set()
+        self._cancelled = _RecentIds(512)
         # chat_id -> tasks in flight. Normally at most one; a SECOND slot opens
         # only once the first task has announced (via ctx.set_stage) that it has
         # reached a genuinely slow, backgroundable phase (image render / research
