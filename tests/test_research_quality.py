@@ -1586,7 +1586,17 @@ def test_p33_parallel_io_and_stage_timing():
         with lk:
             st["now"] += 1
             st["max"] = max(st["max"], st["now"])
-        _t.sleep(0.03)
+        # Linger until a peer is in flight (or 0.3 s): a fixed 30 ms let a
+        # loaded Windows runner start the next worker only after this one
+        # finished, so a crawl that does run in parallel read as serial.
+        end = _t.time() + 0.3
+        while _t.time() < end:
+            with lk:
+                if st["now"] >= 2:
+                    break
+            _t.sleep(0.005)
+        with lk:
+            st["max"] = max(st["max"], st["now"])
         with lk:
             st["now"] -= 1
         return {"url": url, "depth": depth, "social": False, "reason": None, "html": None,

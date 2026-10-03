@@ -162,16 +162,24 @@ check("a pipeline may submit several graphs without deadlocking itself",
 order = []
 
 
+# Events, not sleeps: on a loaded CI runner a 0.05 s sleep outlasted the
+# 0.3 s "render" and the order came out render-start, render-end, llm.
+render_started = threading.Event()
+llm_done = threading.Event()
+
+
 def hold_gpu():
     with GPU._gpu_slot():
         order.append("render-start")
-        time.sleep(0.3)
+        render_started.set()
+        llm_done.wait(timeout=10)         # the render stays on the card until the turn ran
         order.append("render-end")
 
 
 def llm_turn():
-    time.sleep(0.05)                      # starts after the render has the slot
+    render_started.wait(timeout=10)       # starts after the render has the slot
     order.append("llm-during-render")
+    llm_done.set()
 
 
 t1 = threading.Thread(target=hold_gpu)

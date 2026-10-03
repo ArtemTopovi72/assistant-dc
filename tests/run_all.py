@@ -119,6 +119,9 @@ def counting_only(name):
     return False
 
 
+_FAIL_LINE = re.compile(r"\s*(\[?FAIL\b|FAILED\b|FAIL:|E   |\w*Error\b|Traceback)")
+
+
 def run_one(name, kind, timeout):
     path = os.path.join(HERE, name)
     if kind == "script":
@@ -204,7 +207,15 @@ def main():
     print("\n" + "=" * 72)
     for name, code, out in sorted(bad):
         print("\n--- %s (exit %s) ---" % (name, code))
-        print("\n".join(out.strip().splitlines()[-25:]))
+        lines = out.strip().splitlines()
+        tail = lines[-25:]
+        # The tail alone can be all log noise (stderr comes last), which hid
+        # the one FAIL line that said why a suite went red on CI.
+        why = [ln for ln in lines[:-25] if _FAIL_LINE.match(ln)][:15]
+        if why:
+            print("\n".join(why))
+            print("  ...")
+        print("\n".join(tail))
     if slow:
         print("\nslowest:")
         for name, dt in sorted(slow, key=lambda r: -r[1])[:10]:

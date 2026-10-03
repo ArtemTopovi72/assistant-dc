@@ -238,8 +238,11 @@ def main():
 
             th = threading.Thread(target=go)
             th.start()
-            # Let it get going, then press Stop exactly as the GUI does.
-            time.sleep(0.5)
+            # Let it get going (first tick in), then press Stop exactly as the
+            # GUI does. A blind sleep raced the HTTP backend's start-up on CI.
+            end = time.time() + 30
+            while not ticks and time.time() < end and th.is_alive():
+                time.sleep(0.02)
             ctx.cancel_event.set()
             th.join(timeout=30)
             check(f"{label}: the run ended after Stop", not th.is_alive())

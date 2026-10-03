@@ -42,6 +42,9 @@ _SEED = {"quick": 300.0, "standard": 900.0, "deep": 2400.0}
 #: Seconds between progress ticks. Long enough that the cancel round-trip has
 #: somewhere to land, short enough that the harness stays fast.
 TICK_S = 0.15
+#: The cancel probe's ticks: its Stop crosses a poll interval (0.25 s) and an
+#: HTTP round-trip, which a loaded CI runner stretched past the whole 1.2 s run.
+CANCEL_PROBE_TICK_S = 1.0
 
 
 def _coerce(name, value):
@@ -108,7 +111,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
                     "cancelled": True}
         if progress is not None:
             progress(phase, {"sources": i, "pages": i * 2, "findings": i * 3}, f"{phase}…")
-        time.sleep(TICK_S)
+        time.sleep(CANCEL_PROBE_TICK_S if topic == "cancel probe" else TICK_S)
     return {
         "report": f"# {topic}\n\nlang={out_lang} depth={depth} "
                   f"queries={DR_MAX_QUERIES} pages={DR_MAX_PAGES} "
