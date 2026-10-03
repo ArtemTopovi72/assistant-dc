@@ -129,13 +129,14 @@ Each step skips what is already done, so after a failure fix the line marked
    (`MODEL_NAME`, `EMBED_MODEL`; the chat model is ~17 GB);
 8. installs ComfyUI v0.38.2 with its own venv under `~/Documents/ComfyUI`
    (`COMFY_BASE_DIR`), the custom nodes the graphs use at pinned commits, and the
-   graphs' model files (~155 GB for pictures + songs + video; it checks free space first);
+   graphs' model files (~127 GB for pictures + video; it checks free space first);
 9. creates an **Assistant DC** desktop shortcut (Windows);
 10. runs the health check (`scripts/healthcheck.py`) and starts the app.
 
 Options: `--no-models` (skip model downloads, for CI or offline installs),
-`--no-comfy` (skip ComfyUI entirely), `--media image,music,video` (which ComfyUI model
-sets to download; e.g. `--media image` for pictures only, ~62 GB),
+`--no-comfy` (skip ComfyUI entirely), `--media image,video` (which ComfyUI model
+sets to download; e.g. `--media image` for pictures only, ~62 GB; add `music` for the
+MiniMax Music3 weights, ~28 GB, used only with `MUSIC_ENGINE=music3`),
 `--no-start` (do not open the app at the end), `--cpu` (CPU PyTorch even with a GPU),
 `--dev` (also install the test dependencies), `--no-install` (do not install system
 programs with winget/apt). On Windows they are written the same way: `setup.ps1 --no-start`.
@@ -148,7 +149,9 @@ programs with winget/apt). On Windows they are written the same way: `setup.ps1 
 | update | `git pull`, then run the setup script again |
 | settings | `.env`; every key is explained in `.env.example` |
 
-What stays manual: Docker Desktop for the `run_code` sandbox. Anything a download
+What stays manual: the YuE2 song engine (`venv_yue2/` plus `models_ext/YuE2-3B` and
+`models_ext/YuE2-Vae`, see [docs/music_generation.md](docs/music_generation.md)) and
+Docker Desktop for the `run_code` sandbox. Anything a download
 could not fetch (network, disk space) is reported with the step that failed; run the
 setup again to retry. Without a part the app runs with that feature off, and the
 health check says which ones.

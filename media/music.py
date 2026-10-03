@@ -1267,16 +1267,25 @@ def yue2_style(style: str, max_chars: int = 300) -> str:
     return out if len(out) <= max_chars else out[:max_chars].rsplit(",", 1)[0]
 
 
-YUE2_PYTHON = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "venv_yue2", "Scripts", "python.exe")
+YUE2_PYTHON = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "venv_yue2",
+                           *(("Scripts", "python.exe") if os.name == "nt" else ("bin", "python")))
 YUE2_ODE_STEPS = _cfg_env.env_int("YUE2_ODE_STEPS", 16)
 YUE2_TIMEOUT = 1500          # measured 235-810 s for one song; long lyrics run longer
+
+
+def _has_weights(folder: str) -> bool:
+    """config.json and a weight file: one model.safetensors or the shards
+    (model-00001-of-0000N.safetensors) a hub download may bring instead."""
+    import glob
+    return (os.path.isfile(os.path.join(folder, "config.json"))
+            and any(os.path.getsize(p) > 0 for p in glob.glob(os.path.join(folder, "*.safetensors"))))
 
 
 def yue2_available() -> bool:
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return (os.path.isfile(YUE2_PYTHON)
-            and os.path.isfile(os.path.join(root, "models_ext", "YuE2-3B", "model.safetensors"))
-            and os.path.isfile(os.path.join(root, "models_ext", "YuE2-Vae", "model.safetensors")))
+            and _has_weights(os.path.join(root, "models_ext", "YuE2-3B"))
+            and _has_weights(os.path.join(root, "models_ext", "YuE2-Vae")))
 
 
 def run_gpu_worker(ctx, python: str, script: str, job: dict, label: str, timeout: int,

@@ -86,6 +86,8 @@ MODELS = [
     ("video", "loras", "minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
      ["lightx2v/Minimax-h3-Turbo", "Kijai/MiniMax-H3_comfy"], [], 1.0),
 ]
+# "music" is MiniMax Music3, used only with MUSIC_ENGINE=music3 (songs run on
+# YuE2 by default), so setup leaves it out unless asked for.
 MEDIA = ("image", "music", "video")
 
 

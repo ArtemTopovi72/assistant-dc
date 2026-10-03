@@ -715,8 +715,11 @@ def main(argv=None):
     ap.add_argument("--dev", action="store_true", help="also install the test dependencies")
     ap.add_argument("--no-comfy", action="store_true",
                     help="do not install ComfyUI (no pictures, video or songs)")
-    ap.add_argument("--media", default="image,music,video",
-                    help="which ComfyUI model sets to download (image,music,video; ~155 GB all)")
+    # "music" is the MiniMax Music3 set (28 GB): only for MUSIC_ENGINE=music3.
+    # Songs run on YuE2 by default, which ComfyUI does not serve.
+    ap.add_argument("--media", default="image,video",
+                    help="which ComfyUI model sets to download (image ~62 GB, video ~65 GB; "
+                         "music = MiniMax Music3, ~28 GB, only for MUSIC_ENGINE=music3)")
     args = ap.parse_args(argv)
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")

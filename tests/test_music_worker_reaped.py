@@ -64,3 +64,19 @@ def test_render_time_log_survives_corruption(tmp_path, monkeypatch):
     (tmp_path / "eta.json").write_text(json.dumps(rows))
     got = music._eta_runs().get("a", [])
     assert (60, 120.0, music._STEPS_REF) in got and (30, 50.0, music._STEPS_REF) in got
+
+
+def test_yue2_weights_may_be_sharded(tmp_path):
+    d = tmp_path / "YuE2-3B"
+    d.mkdir()
+    assert not music._has_weights(str(d))
+    (d / "config.json").write_text("{}")
+    (d / "model-00001-of-00002.safetensors").write_bytes(b"x")
+    assert music._has_weights(str(d))
+    (d / "model-00001-of-00002.safetensors").write_bytes(b"")
+    assert not music._has_weights(str(d))       # an empty stub is not a model
+
+
+def test_yue2_python_matches_the_venv_layout():
+    tail = ("Scripts", "python.exe") if os.name == "nt" else ("bin", "python")
+    assert music.YUE2_PYTHON.endswith(os.path.join("venv_yue2", *tail))

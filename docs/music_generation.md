@@ -152,3 +152,19 @@ Two hand-written examples of exactly what `build_structured_caption` should
 produce — one English, one Russian — are in `docs/sample_songs.md`, for
 manual testing against a real ComfyUI once the Music3 node package and
 weights are both confirmed in place.
+
+## Installing YuE2 (the default song engine)
+
+`setup` does not install YuE2; songs stay off until these exist
+(`media/music.py: yue2_available()` checks them):
+
+| What | Where |
+|---|---|
+| a venv with the official `yue2-infer` package ([multimodal-art-projection/YuE](https://github.com/multimodal-art-projection/YuE), Python 3.12) | `venv_yue2/` |
+| `m-a-p/YuE2-3B` (`config.json` + `*.safetensors`) | `models_ext/YuE2-3B/` |
+| `m-a-p/YuE2-Vae` | `models_ext/YuE2-Vae/` (a local folder: the hub cache needs symlinks, which Windows refuses without developer mode) |
+
+`scripts/yue2_render.py` patches `GraphAR.__init__(attention_backend=)` and
+`CachedNAR.__init__(model, chunk, attention, query_chunk_size)`; these match
+yue2-infer 0.1.6 (commit `1dc1c50`). Install torch 2.10.0 from the CUDA index
+before the package, or the resolver takes PyPI's CPU wheel on Windows.
