@@ -49,7 +49,7 @@ class AnimVoicesMixin:
         self._send_text(chat_id, tg_bot._t("anv_offer", lang, n=n), keyboard={"inline_keyboard": [[
             {"text": tg_bot._t("anv_own", lang), "callback_data": "anv:yes"},
             {"text": tg_bot._t("anv_default", lang), "callback_data": "anv:default"}]]
-            + self._vl_rows(sess, lang, "anv:lib")})
+            + self._vl_rows(sess, lang, "anv:lib") + self._vl_manage_row(lang)})
 
     def _voices_go(self, chat_id: int, sess, lang: str) -> None:
         """Collection over: rerun the waiting clip request, or show the animate presets."""
@@ -78,6 +78,8 @@ class AnimVoicesMixin:
             sess.anim_voice_state = "collect"
             self._store.put(sess)
             rows = self._vl_rows(sess, lang, "anv:lib")
+            if rows:
+                rows += self._vl_manage_row(lang)
             self._send_text(chat_id, tg_bot._t("anv_send", lang, n=len(sess.anim_voices) + 1, max=MAX),
                             keyboard={"inline_keyboard": rows} if rows else None)
             return
@@ -97,8 +99,10 @@ class AnimVoicesMixin:
         if not data:
             self._send_text(chat_id, tg_bot._t("anv_fail", lang))
             return True
-        n = len(sess.anim_voices) + 1
-        path = os.path.join(self._anim_voice_dir(chat_id), f"voice{n}{media[1]}")
+        # A name of its own: voice1.wav was overwritten by the next clip's first
+        # voice, so a voice saved in the library came back as someone else's.
+        import uuid
+        path = os.path.join(self._anim_voice_dir(chat_id), f"voice_{uuid.uuid4().hex[:10]}{media[1]}")
         with open(path, "wb") as fh:
             fh.write(data)
         try:                                     # a round video / voice note -> the sound alone
@@ -108,14 +112,19 @@ class AnimVoicesMixin:
             pass                                 # H3's loader still reads most containers
         sess.anim_voices = list(sess.anim_voices) + [path]
         from tg_voice_library import vl_add
-        vl_add(sess, path)                       # remembered: the last 2 come back as buttons
-        self._anim_voice_added(chat_id, sess, lang)
+        v = vl_add(sess, path)                   # remembered: the last 5 come back as buttons
+        self._anim_voice_added(chat_id, sess, lang, new_id=v["id"])
         return True
 
-    def _anim_voice_added(self, chat_id: int, sess, lang: str) -> None:
+    def _anim_voice_added(self, chat_id: int, sess, lang: str, new_id: str = "") -> None:
+        """«Голос N принят» + «💾 Подписать и сохранить» for a voice just sent:
+        named, it stays in the library for the next clip (owner 10-03)."""
         n = len(sess.anim_voices)
+        save = ([[{"text": tg_bot._t("vl_save_btn", lang), "callback_data": f"vl:name:{new_id}"}]]
+                if new_id else [])
         if n >= MAX:
-            self._send_text(chat_id, tg_bot._t("anv_full", lang, n=n))
+            self._send_text(chat_id, tg_bot._t("anv_full", lang, n=n),
+                            keyboard={"inline_keyboard": save} if save else None)
             self._voices_go(chat_id, sess, lang)
             return
         sess.anim_voice_state = "collect"
@@ -123,7 +132,7 @@ class AnimVoicesMixin:
         self._send_text(chat_id, tg_bot._t("anv_got", lang, n=n), keyboard={"inline_keyboard": [[
             {"text": tg_bot._t("anv_more", lang), "callback_data": "anv:more"},
             {"text": tg_bot._t("anv_done", lang), "callback_data": "anv:done"}]]
-            + self._vl_rows(sess, lang, "anv:lib")})
+            + save + self._vl_rows(sess, lang, "anv:lib") + self._vl_manage_row(lang)})
 
 
 import tg_bot  # noqa: E402  (cycle by design; attrs read at call time)

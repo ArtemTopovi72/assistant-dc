@@ -13,9 +13,10 @@ Where it is used:
 Session: voices [{id, name, ref, text}], voice_naming (id awaiting a name).
 """
 import os
+import time
 import uuid
 
-RECENT = 2          # unnamed voices remembered
+RECENT = 5          # unnamed voices remembered
 MAX = 12            # the whole library
 
 
@@ -24,7 +25,8 @@ def vl_add(sess, ref: str, text: str = "", name: str = "") -> dict:
     lib = [v for v in (getattr(sess, "voices", None) or []) if v.get("ref") != ref]
     old = next((v for v in (getattr(sess, "voices", None) or []) if v.get("ref") == ref), None)
     v = dict(old or {}, id=(old or {}).get("id") or uuid.uuid4().hex[:6], ref=ref,
-             text=text or (old or {}).get("text", ""), name=name or (old or {}).get("name", ""))
+             text=text or (old or {}).get("text", ""), name=name or (old or {}).get("name", ""),
+             ts=(old or {}).get("ts") or int(time.time()))
     lib.insert(0, v)
     recent = [x for x in lib if not x.get("name")]
     drop = {x["id"] for x in recent[RECENT:]}
@@ -43,7 +45,18 @@ def vl_list(sess) -> list:
 
 
 def vl_label(v: dict, lang: str) -> str:
-    return v.get("name") or tg_bot._t("vl_recent", lang)
+    """The name, or when an unnamed voice came: five «недавний голос» buttons
+    could not be told apart (owner 10-03: «не увидел базы голосов»)."""
+    if v.get("name"):
+        return v["name"]
+    ts = v.get("ts")
+    return (tg_bot._t("vl_recent_at", lang, at=time.strftime("%d.%m %H:%M", time.localtime(ts)))
+            if ts else tg_bot._t("vl_recent", lang))
+
+
+def _in_use(sess, ref: str) -> bool:
+    return ref in (getattr(sess, "assistant_ref", ""), getattr(sess, "clone_ref", "")) \
+        or ref in (getattr(sess, "anim_voices", None) or [])
 
 
 class VoiceLibraryMixin:
@@ -61,7 +74,7 @@ class VoiceLibraryMixin:
             rows.append([{"text": ("✓ " if mine else "🗣 ") + vl_label(v, lang)[:24],
                           "callback_data": f"vl:asst:{v['id']}"},
                          {"text": "✏️", "callback_data": f"vl:name:{v['id']}"},
-                         {"text": "✖️", "callback_data": f"vl:drop:{v['id']}"}])
+                         {"text": "🗑", "callback_data": f"vl:drop:{v['id']}"}])
         if getattr(sess, "assistant_ref", ""):
             rows.append([{"text": tg_bot._t("my_voice_reset_btn", lang), "callback_data": "myv:reset"}])
         text = tg_bot._t("my_voice_ask", lang)
@@ -69,6 +82,17 @@ class VoiceLibraryMixin:
             text += "\n\n" + tg_bot._t("vl_help", lang)
         self._send_text(chat_id, text, parse_mode="HTML",
                         keyboard={"inline_keyboard": rows} if rows else None)
+
+    def _vl_manage(self, chat_id: int, sess, lang: str) -> None:
+        """📚 Мои голоса: every voice with ▶️ listen, ✏️ name, 🗑 delete."""
+        rows = [[{"text": "▶️ " + vl_label(v, lang)[:24], "callback_data": f"vl:play:{v['id']}"},
+                 {"text": "✏️", "callback_data": f"vl:name:{v['id']}"},
+                 {"text": "🗑", "callback_data": f"vl:drop:{v['id']}"}] for v in vl_list(sess)]
+        self._send_text(chat_id, tg_bot._t("vl_manage" if rows else "vl_empty", lang), parse_mode="HTML",
+                        keyboard={"inline_keyboard": rows} if rows else None)
+
+    def _vl_manage_row(self, lang: str) -> list:
+        return [[{"text": tg_bot._t("vl_manage_btn", lang), "callback_data": "vl:manage"}]]
 
     def _vl_ask_name(self, chat_id: int, sess, lang: str, vid: str) -> None:
         sess.voice_naming = vid
@@ -92,18 +116,31 @@ class VoiceLibraryMixin:
         sess = self._get_session(chat_id)
         lang = self._lang(sess)
         _, act, vid = (data.split(":") + ["", ""])[:3]
+        if act == "manage":
+            return self._vl_manage(chat_id, sess, lang)
         v = vl_get(sess, vid)
         if not v or not os.path.exists(v.get("ref", "")):
             self._send_text(chat_id, tg_bot._t("vl_gone", lang))
             return
         if act == "name":
             return self._vl_ask_name(chat_id, sess, lang, vid)
-        if act == "drop":                    # off the list; the file itself stays
+        if act == "play":
+            if not self._send_audio(chat_id, v["ref"], vl_label(v, lang)):
+                self._send_text(chat_id, tg_bot._t("vl_gone", lang))
+            return
+        if act == "drop":
             sess.voices = [x for x in sess.voices if x["id"] != vid]
             if sess.assistant_ref == v["ref"]:
                 sess.assistant_ref = sess.assistant_ref_text = ""
+            if not _in_use(sess, v["ref"]) and not any(x.get("ref") == v["ref"] for x in sess.voices):
+                try:
+                    os.remove(v["ref"])          # deleted means deleted: a voice is personal
+                except OSError:
+                    pass
             self._store.put(sess)
             self._send_text(chat_id, tg_bot._t("vl_dropped", lang, name=vl_label(v, lang)))
+            if vl_list(sess):
+                self._vl_manage(chat_id, sess, lang)
             return
         if act in ("asst", "clone"):
             self._run_busy(chat_id, self._vl_use, chat_id, lang, vid, act)
