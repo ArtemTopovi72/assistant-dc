@@ -59,6 +59,13 @@ class _WorkerReader:
             text=True, encoding="utf-8", creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         first = self._p.stdout.readline()
         if '"ready"' not in first:
+            # A worker that answered something else is still running, holding
+            # the EasyOCR model in RAM; _get never retries, so nobody else would end it.
+            try:
+                self._p.kill()
+                self._p.wait(timeout=10)
+            except Exception:
+                pass
             raise RuntimeError("ocr_worker did not start: %r" % first[:200])
         self._io = threading.Lock()
 
