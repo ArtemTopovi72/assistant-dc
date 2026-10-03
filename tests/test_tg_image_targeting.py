@@ -125,9 +125,18 @@ def settle(bot, timeout=8.0):
     deadline = _time.monotonic() + timeout
     while _time.monotonic() < deadline:
         if (len(bot.pushed), len(bot.sent)) != base:
-            _time.sleep(0.15)      # let a batch that has started finish
-            return
+            break
         _time.sleep(0.05)
+    # Then until the batch has finished: quiet for a while. A fixed 0.15 s let
+    # the second task of a two-press batch land after the check on a loaded
+    # Windows runner (CI 10-03: one task seen, the late one leaking into the
+    # double-tap step that followed).
+    last, quiet_since = (len(bot.pushed), len(bot.sent)), _time.monotonic()
+    while _time.monotonic() < deadline and _time.monotonic() - quiet_since < 0.6:
+        _time.sleep(0.05)
+        now = (len(bot.pushed), len(bot.sent))
+        if now != last:
+            last, quiet_since = now, _time.monotonic()
 
 
 def press(bot, data):
