@@ -195,3 +195,17 @@ def test_promo_filters_are_not_questions():
         {"type": "boolFilter", "key": "x2", "boolFilter": {"title": "Больше морковок от Захара"}},
         {"type": "boolFilter", "key": "x3", "boolFilter": {"title": "Самоходный"}}]}]})}}
     assert [f["title"] for f in O.parse_filters(page)] == ["Самоходный"]
+
+
+def test_cart_save_is_atomic_and_load_tolerates_junk(monkeypatch, tmp_path):
+    import tool_ozon_handlers as H
+    monkeypatch.setattr(H, "USERS_DIR", str(tmp_path / "users"))
+    ctx = _ctx("91")
+    H._cart_save(ctx, [{"sku": "1", "name": "чай", "qty": 2}])
+    assert H._cart_load(ctx) == [{"sku": "1", "name": "чай", "qty": 2}]
+    folder = os.path.dirname(H._cart_file(ctx))
+    assert [n for n in os.listdir(folder) if n.endswith(".tmp")] == []
+    H._cart_file(ctx).write_text('{"not": "a list"}', encoding="utf-8")
+    assert H._cart_load(ctx) == []
+    H._cart_file(ctx).write_text('[1, {"sku": "2"}]', encoding="utf-8")
+    assert H._cart_load(ctx) == [{"sku": "2"}]

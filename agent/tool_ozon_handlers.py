@@ -23,7 +23,6 @@ def _rub(n) -> str:
     return f"{n:,}".replace(",", " ") + " ₽" if isinstance(n, int) else "?"
 
 
-import os
 import re as _re
 
 # Per-user Ozon data: <USERS_DIR>/<owner>/{session.json, cart.json}. Tests point
@@ -223,9 +222,20 @@ def _cart_file(ctx):
 def _cart_load(ctx) -> list:
     import json
     try:
-        return json.loads(_cart_file(ctx).read_text(encoding="utf-8"))
+        items = json.loads(_cart_file(ctx).read_text(encoding="utf-8"))
     except Exception:
         return []
+    return [x for x in items if isinstance(x, dict)] if isinstance(items, list) else []
+
+
+def _cart_save(ctx, items) -> None:
+    """Write-then-replace: a crash mid-write used to leave a torn cart.json,
+    which _cart_load reads as empty -- the whole list gone."""
+    import json
+    path = _cart_file(ctx)
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    tmp.write_text(json.dumps(items, ensure_ascii=False, indent=1), encoding="utf-8")
+    os.replace(tmp, path)
 
 
 def _cart_text(items) -> str:
@@ -274,7 +284,7 @@ def _handle_ozon_cart(ctx, state, args: dict) -> str:
             items.append({"sku": str(d.get("sku")), "name": d.get("name"),
                           "price": d.get("price"), "url": d.get("url"), "qty": qty})
     if action != "show":
-        _cart_file(ctx).write_text(json.dumps(items, ensure_ascii=False, indent=1), encoding="utf-8")
+        _cart_save(ctx, items)
     return _cart_text(items)
 
 
@@ -369,7 +379,7 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
                 items.append({"sku": str(c["sku"]), "name": c.get("name"), "price": c.get("price"),
                               "url": c.get("url"), "qty": qty})
         import json
-        _cart_file(ctx).write_text(json.dumps(items, ensure_ascii=False, indent=1), encoding="utf-8")
+        _cart_save(ctx, items)
         basket = "\nAdded to the user's shopping list.\n" + _cart_text(items)
     return S.report(results, p["mode"], _oz.LAST_LOCATION.get("text") or "", basket)
 
