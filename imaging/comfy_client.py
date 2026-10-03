@@ -1057,8 +1057,8 @@ def _submit_and_collect_locked(ctx, workflow: dict, timeout: int,
 def adopt_output(path: str, what: str = "file", out_dir=None) -> str:
     """Move a finished render out of ComfyUI's output tree into ours.
 
-    ComfyUI's output directory is shared with every other graph, so anything we are about to hand to a user should not live
-    there. Returns the new path, or the original one if the copy was impossible
+    ComfyUI's output directory is shared with every other graph, so anything
+    we are about to hand to a user should not live there. Returns the new path, or the original one if the copy was impossible
     (delivering the file in place beats failing a whole job over a copy).
 
     The collision guard is load-bearing, not defensive padding: ComfyUI derives
