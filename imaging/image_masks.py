@@ -27,6 +27,23 @@ import image_grounding
 logger = logging.getLogger("assistant.image")
 
 
+def _face_box_of(crop, tag: str, idm):
+    """face_box of an in-memory crop. The scratch file is per call: with one
+    fixed name, two edits running at once (the bot has several workers) read
+    each other's crop, and a face box from the wrong picture let the mask
+    take in a face. Removed afterwards."""
+    import uuid
+    tmp = scratch_path(OUTPUT_DIR, f"{tag}_{uuid.uuid4().hex[:8]}.png")
+    try:
+        crop.save(tmp)
+        return idm.face_box(str(tmp), pad=0.15)
+    finally:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+
+
 def _item_attributes(*a, **kw):
     """Thin forwarder so runtime patches of image_grounding._item_attributes
     (and of image._item_attributes, which resolves to the same object) are seen
@@ -243,9 +260,7 @@ def _extend_mask_to_paired_changes(crop, res, mcrop, *, max_blobs: int = 2):
         fbox = None
         try:
             import identity_metrics as _idm
-            tmp = scratch_path(OUTPUT_DIR, "_pair_facechk.png")
-            crop.save(tmp)
-            fbox = _idm.face_box(str(tmp), pad=0.15)
+            fbox = _face_box_of(crop, "_pair_facechk", _idm)
         except Exception:
             pass
         picked = []
@@ -346,9 +361,7 @@ def _extend_mask_to_removal_changes(crop, res, mcrop, *, max_total_frac: float =
         fbox = None
         try:
             import identity_metrics as _idm
-            tmp = scratch_path(OUTPUT_DIR, "_rm_facechk.png")
-            crop.save(tmp)
-            fbox = _idm.face_box(str(tmp), pad=0.15)
+            fbox = _face_box_of(crop, "_rm_facechk", _idm)
         except Exception:
             pass
         # Trust level: a substantial mask means segmentation FOUND the target, so
