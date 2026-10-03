@@ -97,6 +97,9 @@ def ensure_server(root: str | None = None, wait_s: float = 20.0) -> bool:
     except Exception as exc:
         logger.error("could not start telegram-bot-api: %s", exc)
         return False
+    finally:
+        if log is not subprocess.DEVNULL:
+            log.close()         # the server holds its own handle
     deadline = time.time() + wait_s
     while time.time() < deadline:
         if server_up():

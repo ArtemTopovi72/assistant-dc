@@ -183,13 +183,13 @@ def ensure_embedder(min_interval: float = 60.0) -> None:
         u = urllib.parse.urlparse(base)
         if u.hostname not in ("127.0.0.1", "localhost") or not os.path.exists(config.EMBED_CPU_SERVER):
             return
-        log = open(os.path.join(os.path.dirname(config.EMBED_CPU_SERVER), "bge_cpu.log"), "ab")
-        subprocess.Popen([config.EMBED_CPU_SERVER, "-m", config.EMBED_GGUF, "--embedding",
-                          "--pooling", "cls", "-c", "8192", "-b", "8192", "-ub", "8192",
-                          "--alias", config.EMBED_MODEL, "--host", "127.0.0.1",
-                          "--port", str(u.port or 8096), "-t", "8"],
-                         stdout=log, stderr=subprocess.STDOUT,
-                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        with open(os.path.join(os.path.dirname(config.EMBED_CPU_SERVER), "bge_cpu.log"), "ab") as log:
+            subprocess.Popen([config.EMBED_CPU_SERVER, "-m", config.EMBED_GGUF, "--embedding",
+                              "--pooling", "cls", "-c", "8192", "-b", "8192", "-ub", "8192",
+                              "--alias", config.EMBED_MODEL, "--host", "127.0.0.1",
+                              "--port", str(u.port or 8096), "-t", "8"],
+                             stdout=log, stderr=subprocess.STDOUT,
+                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         logger.info("started CPU embedding server on %s", base)
     except Exception as exc:
         logger.info("embedder start skipped: %s", exc)
