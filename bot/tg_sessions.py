@@ -11,6 +11,7 @@ tg_bot re-exports both, because the suites build tg_bot._Session directly.
 import json
 import logging
 import threading
+import time
 from pathlib import Path
 
 logger = logging.getLogger("assistant.tg_bot")
@@ -470,7 +471,20 @@ class _Store:
                 with open(self._path, encoding="utf-8") as fh:
                     self._data = json.load(fh)
         except Exception as exc:
-            logger.warning("session store load error: %s", exc)
+            # Move the damaged file aside: the next put() rewrites the store
+            # from the (now empty) memory copy, which erased every user's
+            # session, facts and language for good.
+            keep = self._path.with_name(f"{self._path.name}.unreadable-{int(time.time())}")
+            try:
+                self._path.replace(keep)
+            except OSError:
+                keep = self._path
+            logger.error("session store unreadable (%s) -- starting empty, kept as %s", exc, keep)
+            self._data = {}
+        if not isinstance(self._data, dict):
+            logger.error("session store holds %s, not a dict -- starting empty",
+                         type(self._data).__name__)
+            self._data = {}
 
     def _save(self):
         try:
