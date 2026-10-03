@@ -191,7 +191,10 @@ class DispatchMixin:
             try:
                 self._dispatch(upd)
             finally:
-                turn_trace.finish(_trace, keep_idle=False)
+                # _secret is set inside _dispatch, after start() took the text:
+                # a password turn that logged a warning was written in the clear.
+                turn_trace.finish(_trace, keep_idle=False,
+                                  **({"text": "[secret]"} if msg.get("_secret") else {}))
                 # After, so a password _scrub_secret flagged is never written.
                 if cb:
                     chatlog.write(chat_id, "in", {"button": cb.get("data"),
