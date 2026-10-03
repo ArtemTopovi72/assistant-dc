@@ -22,6 +22,11 @@ import time
 from pathlib import Path
 
 
+# [last snapshot taken, last snapshot written] and the lock that orders writes.
+_INFLIGHT_SEQ = [0, 0]
+_INFLIGHT_IO = threading.Lock()
+
+
 class QueueMixin:
     def _run_busy(self, chat_id: int, fn, *args) -> None:
         """Run fn(*args) on a daemon thread with the chat marked busy until it
@@ -125,12 +130,20 @@ class QueueMixin:
                           for tasks in self._running_task.values() for t in tasks]
                          + [dict(t.to_dict(), _state="pending")
                             for t in self._pending_journal.values()])
+                seq = _INFLIGHT_SEQ[0] = _INFLIGHT_SEQ[0] + 1
             # Atomic: two threads writing at once used to be able to leave a torn
             # file, and recovery then read [] and silently lost every task.
+            # Ordered: the snapshot is taken under the lock but written after it,
+            # so an older snapshot could land last and bring back a finished task
+            # (a crash then told its user it was "interrupted").
             path = tg_bot._INFLIGHT_FILE
-            tmp = path.with_name(f"{path.name}.{threading.get_ident()}.tmp")
-            tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-            os.replace(tmp, path)
+            with _INFLIGHT_IO:
+                if seq < _INFLIGHT_SEQ[1]:
+                    return
+                tmp = path.with_name(f"{path.name}.{threading.get_ident()}.tmp")
+                tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+                os.replace(tmp, path)
+                _INFLIGHT_SEQ[1] = seq
         except Exception as exc:
             tg_bot.logger.debug("inflight write failed: %s", exc)
 
