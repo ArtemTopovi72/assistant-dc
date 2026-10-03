@@ -22,6 +22,13 @@ except Exception: pass
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
+# Off Windows/macOS the native platform is X11 or Wayland: with neither there
+# is no native platform to test (run it under xvfb-run instead).
+if (sys.platform.startswith("linux")
+        and not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))):
+    print("SKIP: no display (run under xvfb-run to exercise the native platform)")
+    sys.exit(0)
+
 CHILD = textwrap.dedent(r'''
     import os, sys, types, threading, time
     # NO QT_QPA_PLATFORM — use whatever the platform really is.
