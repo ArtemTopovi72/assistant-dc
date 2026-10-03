@@ -22,7 +22,7 @@ def convert_wav_to_mp3(source_dir: str, output_dir_name: str = "test 2") -> None
     for wav_file in wav_files:
         mp3_file = output_path / (wav_file.stem + ".mp3")
         cmd = [
-            FFMPEG_EXE,
+            FFMPEG_EXE, "-y",          # no -y: an existing mp3 = an overwrite prompt nobody answers
             "-i", str(wav_file),
             "-codec:a", "libmp3lame",
             "-q:a", "2",
@@ -30,13 +30,16 @@ def convert_wav_to_mp3(source_dir: str, output_dir_name: str = "test 2") -> None
         ]
         try:
             print(f"🔄 Converting: {wav_file.name} → {mp3_file.name}")
-            subprocess.run(cmd, check=True, capture_output=True, text=True)
+            subprocess.run(cmd, check=True, capture_output=True, text=True,
+                           stdin=subprocess.DEVNULL, timeout=600)
             print("✅ Done\n")
         except subprocess.CalledProcessError as e:
             print(f"❌ Error converting {wav_file.name}:")
             print(f"  Exit code: {e.returncode}")
             print("  FFmpeg message:")
             print(e.stderr if e.stderr else e.stdout)
+        except subprocess.TimeoutExpired:
+            print(f"❌ {wav_file.name}: ffmpeg took over 10 minutes, skipped\n")
         except FileNotFoundError:
             print(f"❌ FFmpeg not found. Make sure '{FFMPEG_EXE}' is accessible.")
             print("  Install FFmpeg or set the correct path in FFMPEG_EXE.")

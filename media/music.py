@@ -1287,12 +1287,21 @@ def run_gpu_worker(ctx, python: str, script: str, job: dict, label: str, timeout
             while proc.poll() is None:
                 if ctx is not None and getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
                     proc.kill()
+                    # reaped before the GPU slot is released: a worker still
+                    # dying holds its VRAM, and the next job would start on it
+                    try:
+                        proc.wait(timeout=30)
+                    except subprocess.TimeoutExpired:
+                        pass
                     _MUSIC_FAILURE.update({"reason": "cancelled", "detail": "cancelled"})
                     raise MusicUnavailable("cancelled")
                 if time.time() - t0 > timeout:
                     logger.error("%s: timed out after %ds, killed", label, timeout)
                     proc.kill()
-                    proc.wait()
+                    try:
+                        proc.wait(timeout=30)
+                    except subprocess.TimeoutExpired:
+                        pass
                     break
                 time.sleep(1)
             finished = proc.returncode == 0

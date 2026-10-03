@@ -629,11 +629,12 @@ def start_app():
 def how_to_use():
     start = ("double-click 'Assistant DC' on the desktop, or run start.cmd" if IS_WIN
              else "./start.sh")
+    check = "venv\\Scripts\\python" if IS_WIN else "venv/bin/python"
     _p(f"""
 How to use it
   start      {start}
   stop       close the window (LM Studio / ComfyUI keep running; quit them from the tray)
-  check      {'venv\\Scripts\\python' if IS_WIN else 'venv/bin/python'} scripts/healthcheck.py
+  check      {check} scripts/healthcheck.py
   settings   .env in this folder (every key is explained in .env.example)
   telegram   open the Telegram tab in the app and paste a @BotFather token
   update     git pull, then run the setup script again""")
