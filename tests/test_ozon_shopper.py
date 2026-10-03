@@ -69,6 +69,8 @@ def world(monkeypatch, tmp_path):
     monkeypatch.setattr(L, "analyze_image_with_llm", vision)
     monkeypatch.setattr(requests, "get", lambda url, **k: types.SimpleNamespace(
         content=b"j", raise_for_status=lambda: None))
+    import dr_urls                       # the photo hosts need not resolve offline
+    monkeypatch.setattr(dr_urls, "safe_get", lambda url, **k: requests.get(url, **k))
     return calls, script
 
 
@@ -209,3 +211,14 @@ def test_cart_save_is_atomic_and_load_tolerates_junk(monkeypatch, tmp_path):
     assert H._cart_load(ctx) == []
     H._cart_file(ctx).write_text('[1, {"sku": "2"}]', encoding="utf-8")
     assert H._cart_load(ctx) == [{"sku": "2"}]
+
+
+def test_buyer_photo_fetch_refuses_local_addresses(monkeypatch):
+    """_see used plain requests.get on a URL scraped from the page; a redirect
+    or a crafted link to 127.0.0.1 reached ComfyUI / LM Studio."""
+    import llm as L, requests
+    fetched = []
+    monkeypatch.setattr(requests, "get", lambda url, **k: fetched.append(url))
+    monkeypatch.setattr(L, "analyze_image_with_llm", lambda **k: "seen")
+    assert S._see(_ctx(), "http://127.0.0.1:8000/view?filename=x.png", "q") == ""
+    assert fetched == []

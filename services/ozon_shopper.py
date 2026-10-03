@@ -370,10 +370,14 @@ BUYER_PHOTOS = 2                       # per finalist, from its reviews
 
 
 def _see(ctx, url: str, question: str) -> str:
-    import requests
+    from dr_urls import safe_get
     from llm import analyze_image_with_llm
     try:
-        r = requests.get(url, timeout=20, headers={"User-Agent": "Mozilla/5.0"})
+        # Scraped from the page, so not ours to trust: every hop is checked, as in
+        # tool_ozon_handlers._look_at_photos (a redirect to 127.0.0.1 reached ComfyUI).
+        r = safe_get(url, timeout=20, headers={"User-Agent": "Mozilla/5.0"})
+        if r is None:
+            raise ValueError("unsafe image URL")
         r.raise_for_status()
         return (analyze_image_with_llm(ctx=ctx, image_bytes=r.content, user_text=question,
                                        system_prompt="You check product photos for a buyer.",
