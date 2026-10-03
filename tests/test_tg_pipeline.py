@@ -481,6 +481,26 @@ T._OFFSET_FILE.write_text("not json", encoding="utf-8")
 check("a corrupt offset file degrades to 0 instead of crashing",
       bot17._load_offset() == 0)
 
+# stop() while the long poll is in flight: the GUI starts a NEW bot right away,
+# so the stopped one must not dispatch that batch into its dead queue nor
+# confirm it (moving the offset) -- the new instance has to receive it.
+bot18 = make_bot()
+bot18._offset = 50
+bot18._save_offset(50)
+dispatched18 = []
+bot18._dispatch_logged = lambda u: dispatched18.append(u)
+def _late_fetch():
+    bot18._running = False          # stop() lands while getUpdates is blocked
+    return [{"update_id": 50, "message": {"date": 0, "text": "hi"}}]
+bot18._fetch_updates = _late_fetch
+bot18._running = True
+bot18._poll_loop()
+check("a batch that arrives after stop() is not dispatched", dispatched18 == [],
+      str(dispatched18))
+check("...and is not confirmed (offset stays for the next instance)",
+      bot18._offset == 50 and bot18._load_offset() == 50,
+      f"{bot18._offset} / {bot18._load_offset()}")
+
 
 print()
 print("=" * 70)

@@ -81,7 +81,7 @@ class DispatchMixin:
         backoff = 3.0
         while self._running:
             try:
-                updates = self._get_updates()
+                updates = self._fetch_updates()
                 self._poll_beat = time.monotonic()
                 backoff = 3.0
             except Exception:
@@ -92,6 +92,14 @@ class DispatchMixin:
                 time.sleep(backoff)
                 backoff = min(60.0, backoff * 1.7)
                 continue
+            # stop() landed during the long poll. The GUI builds a NEW bot on
+            # Start, so this stopped instance must neither dispatch the batch
+            # (its consumers are gone: the messages would sit in a dead queue
+            # and never be answered) nor move the offset past it -- leaving it
+            # unconfirmed is what lets the next instance receive it.
+            if not self._running:
+                break
+            self._commit_offset(updates)
 
             if first_poll and updates:
                 # Any updates present on the first poll were sent while the bot was offline
@@ -116,6 +124,16 @@ class DispatchMixin:
                 except Exception: tg_bot.logger.exception("dispatch error")
 
     def _get_updates(self) -> list:
+        result = self._fetch_updates()
+        self._commit_offset(result)
+        return result
+
+    def _commit_offset(self, result: list) -> None:
+        if result:
+            self._offset = result[-1]["update_id"] + 1
+            self._save_offset(self._offset)
+
+    def _fetch_updates(self) -> list:
         r = requests.get(f"{self._api}/getUpdates",
                          params={"offset": self._offset, "timeout": tg_bot._POLL_TIMEOUT},
                          timeout=tg_bot._POLL_TIMEOUT + 5)
@@ -126,11 +144,7 @@ class DispatchMixin:
             # counted as a healthy poll for the watchdog. Raise -> backoff.
             raise RuntimeError(f"getUpdates not ok: {body.get('error_code')} "
                                f"{str(body.get('description'))[:120]}")
-        result = body.get("result", [])
-        if result:
-            self._offset = result[-1]["update_id"] + 1
-            self._save_offset(self._offset)
-        return result
+        return body.get("result", [])
 
     def _dispatch_logged(self, upd: dict):
         """_dispatch inside this chat's full transcript (chatlog.py)."""
