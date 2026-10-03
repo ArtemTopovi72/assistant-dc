@@ -22,6 +22,11 @@ _SENDER = None                      # callable(chat_id: int, text: str) -> None
 _ITEMS: dict[str, dict] = {}        # id -> {"owner", "due", "text"}
 _TIMERS: dict[str, threading.Timer] = {}
 MAX_PER_OWNER = 20
+# Longest single Timer sleep. A reminder further out than this wakes up early
+# and re-arms. On Windows a lock wait cannot exceed threading.TIMEOUT_MAX
+# (~49.7 days): a Timer for "через 2 года" raised OverflowError on its own
+# thread and the reminder silently never fired.
+_MAX_TIMER_S = 86400.0
 
 
 def _save() -> None:
@@ -38,6 +43,10 @@ def _save() -> None:
 
 def _fire(rid: str) -> None:
     with _LOCK:
+        cur = _ITEMS.get(rid)
+        if cur is not None and cur["due"] - time.time() > 1.0:
+            _arm(rid)                   # a capped wait ended early: sleep on
+            return
         item = _ITEMS.pop(rid, None)
         _TIMERS.pop(rid, None)
         # «каждый день в 9» was stored as a one-off while the bot promised
@@ -62,7 +71,8 @@ def _fire(rid: str) -> None:
 
 
 def _arm(rid: str) -> None:
-    t = threading.Timer(max(0.0, _ITEMS[rid]["due"] - time.time()), _fire, (rid,))
+    wait = min(_MAX_TIMER_S, max(0.0, _ITEMS[rid]["due"] - time.time()))
+    t = threading.Timer(wait, _fire, (rid,))
     t.daemon = True
     _TIMERS[rid] = t
     t.start()
