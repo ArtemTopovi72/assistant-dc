@@ -157,7 +157,7 @@ check("the login password is scrubbed too", 51 in bot.deleted, str(bot.deleted))
 # Brute force must hit the lockout rather than run at machine speed.
 s = bot._get_session(CID); s.reg_state = "awaiting_login"; bot._store.put(s)
 bot._login_fails.pop(CID, None)
-bot.sent.clear()
+bot.sent.clear(); bot.deleted.clear()
 for i in range(12):
     bot._user_gate(CID, msg(CID, f"guess{i}", mid=60 + i))
 # Anchor on the message the bot actually sends, not on a guessed wording — and in
@@ -170,6 +170,8 @@ check("repeated wrong passwords trigger the lockout",
       str(bot.sent[-2:]))
 check("a locked-out chat is still not logged in",
       bot._get_session(CID).reg_state == "awaiting_login")
+check("guesses made during the lockout are scrubbed too",
+      all(60 + i in bot.deleted for i in range(12)), str(bot.deleted))
 
 
 print()

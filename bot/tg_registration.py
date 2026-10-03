@@ -151,6 +151,9 @@ class RegistrationMixin:
             # Throttle: the gate accepted unlimited guesses at machine speed.
             state = self._login_fails.get(chat_id) or [0, 0.0]
             if state[1] > time.time():
+                # Still a password attempt: it was left in the chat and went
+                # into the chat log in the clear while the lock lasted.
+                self._scrub_secret(chat_id, msg)
                 self._send_text(chat_id,
                     tg_bot._t("login_locked", lang, sec=int(state[1] - time.time())))
                 return False
