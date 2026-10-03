@@ -6,7 +6,15 @@ cd "$(dirname "$0")"
 
 if ! command -v uv >/dev/null 2>&1 && [ ! -x "$HOME/.local/bin/uv" ]; then
   echo "== installing uv (Python package manager)"
-  curl -LsSf https://astral.sh/uv/install.sh | sh
+  # Minimal Debian/Ubuntu images ship wget but no curl.
+  if command -v curl >/dev/null 2>&1; then
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO- https://astral.sh/uv/install.sh | sh
+  else
+    echo "Neither curl nor wget is installed: install one (e.g. sudo apt install curl) and run ./setup.sh again" >&2
+    exit 1
+  fi
 fi
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 

@@ -61,6 +61,7 @@ def test_wrappers_call_setup_py_and_launcher():
     sh = (ROOT / "setup.sh").read_text(encoding="utf-8")
     assert r"scripts\setup.py" in ps1 and "exit $LASTEXITCODE" in ps1
     assert "scripts/setup.py" in sh and "set -euo pipefail" in sh
+    assert "wget -qO-" in sh                  # images without curl can still get uv
     assert "launch_all.py" in (ROOT / "start.cmd").read_text(encoding="utf-8")
     assert "launch_all.py" in (ROOT / "start.sh").read_text(encoding="utf-8")
 
