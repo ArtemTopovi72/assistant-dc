@@ -155,7 +155,9 @@ weights are both confirmed in place.
 
 ## Installing YuE2 (the default song engine)
 
-`setup` does not install YuE2; songs stay off until these exist
+`setup` does not install YuE2; `python scripts/install_yue2.py` does (Windows: it
+makes the venv with `py -3.12`; `--cuda cu130` for another torch build; a second
+run skips what is done). Songs stay off until these exist
 (`media/music.py: yue2_available()` checks them):
 
 | What | Where |

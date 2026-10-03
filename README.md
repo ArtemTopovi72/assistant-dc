@@ -149,8 +149,9 @@ programs with winget/apt). On Windows they are written the same way: `setup.ps1 
 | update | `git pull`, then run the setup script again |
 | settings | `.env`; every key is explained in `.env.example` |
 
-What stays manual: the YuE2 song engine (`venv_yue2/` plus `models_ext/YuE2-3B` and
-`models_ext/YuE2-Vae`, see [docs/music_generation.md](docs/music_generation.md)) and
+The YuE2 song engine has its own command, `python scripts\install_yue2.py`
+(`venv_yue2/` plus `models_ext/YuE2-3B` and `models_ext/YuE2-Vae`, see
+[docs/music_generation.md](docs/music_generation.md)). What stays manual:
 Docker Desktop for the `run_code` sandbox. Anything a download
 could not fetch (network, disk space) is reported with the step that failed; run the
 setup again to retry. Without a part the app runs with that feature off, and the
