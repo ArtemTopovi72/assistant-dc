@@ -28,10 +28,14 @@ def test_far_reminder_waits_in_capped_steps_and_still_fires(monkeypatch):
     d = tempfile.mkdtemp()
     reminders.register(lambda cid, t: got.append(t), os.path.join(d, "r.json"))
     try:
-        reminders.add(5, 1.5, "far away")
-        time.sleep(1.4)
+        # Due well past the 1 s firing slack, so even a late first wake on a
+        # loaded runner (CI: one 0.2 s wait, then fired) must re-arm.
+        reminders.add(5, 3.0, "far away")
+        end = time.time() + 10
+        while not got and time.time() < end:
+            time.sleep(0.05)
         assert got and "far away" in got[0], got
-        assert len(waits) >= 3, waits          # woke early and re-armed
+        assert len(waits) >= 2, waits          # woke early and re-armed
         assert max(waits) <= 0.2 + 1e-9, waits
     finally:
         reminders.stop()
