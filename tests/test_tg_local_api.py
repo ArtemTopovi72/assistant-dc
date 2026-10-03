@@ -73,6 +73,27 @@ check("the Telegram tab has masked api_id/api_hash fields",
 check("...remembered on Start like the token", "_TG_API_HASH_KEY, self.api_hash_in" in gsrc and "_TG_TOKEN_KEY,  token" in gsrc)
 check("...and applied before the bot starts", gsrc.index("apply_credentials") < gsrc.index("self._bot = TelegramBot("))
 
+# the server is really started (it never was on Linux: STARTUPINFO and
+# creationflags made Popen raise there, and the error was only logged)
+import tempfile, time as _time
+_tmp = tempfile.mkdtemp()
+_flag = os.path.join(_tmp, "started")
+if os.name == "nt":
+    _exe = os.path.join(_tmp, "fake.cmd")
+    open(_exe, "w").write(f'@echo off\r\necho %*> "{_flag}"\r\n')
+else:
+    _exe = os.path.join(_tmp, "fake.sh")
+    open(_exe, "w").write(f'#!/bin/sh\necho "$@" > "{_flag}"\n')
+    os.chmod(_exe, 0o755)
+_saved_exe, _saved_up = C.TG_API_EXE, L.server_up
+C.TG_API_ID, C.TG_API_HASH, C.TG_API_LOCAL = "123", "a" * 32, True
+C.TG_API_EXE = _exe
+L.server_up = lambda *a, **k: os.path.exists(_flag)
+L.time.sleep = _time.sleep
+check("ensure_server starts the executable", L.ensure_server(root=_tmp, wait_s=10), _flag)
+check("...with --local and the credentials", os.path.exists(_flag) and "--local" in open(_flag).read())
+C.TG_API_EXE, L.server_up = _saved_exe, _saved_up
+
 C.TG_API_ID, C.TG_API_HASH, C.TG_API_BASE, C.TG_API_LOCAL = saved
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)

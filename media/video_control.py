@@ -73,7 +73,9 @@ def on_control_server(ctx=None, start_timeout: int = 300):
                               json={"unload_models": True, "free_memory": True}, timeout=10)
             except Exception:
                 pass
-            log = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "runtime", "qi21.log"), "ab")
+            rt = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "runtime")
+            os.makedirs(rt, exist_ok=True)      # a fresh install has no runtime/ yet
+            log = open(os.path.join(rt, "qi21.log"), "ab")
             proc = subprocess.Popen(QI21_CMD, cwd=_COMFY_HOME, stdout=log, stderr=subprocess.STDOUT,
                                     env=dict(os.environ, PYTHONUTF8="1"),
                                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
@@ -82,6 +84,10 @@ def on_control_server(ctx=None, start_timeout: int = 300):
                 cancelled = bool(ctx is not None and getattr(ctx, "is_cancelled", None) and ctx.is_cancelled())
                 if cancelled or proc.poll() is not None or time.time() - t0 > start_timeout:
                     proc.kill()
+                    try:        # reaped: a half-started server still holds VRAM
+                        proc.wait(30)
+                    except Exception:
+                        pass
                     log.close()
                     raise RuntimeError("cancelled" if cancelled else "qi21 did not start (see runtime/qi21.log)")
                 time.sleep(2)
@@ -98,6 +104,10 @@ def on_control_server(ctx=None, start_timeout: int = 300):
                     proc.wait(30)
                 except Exception:
                     proc.kill()
+                    try:
+                        proc.wait(30)
+                    except Exception:
+                        pass
                 log.close()
 
 

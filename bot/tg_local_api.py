@@ -69,7 +69,7 @@ def ensure_server(root: str | None = None, wait_s: float = 20.0) -> bool:
     exe = _config.TG_API_EXE
     if not os.path.exists(exe):
         logger.error("TG_API_ID/HASH are set but %s is missing — run "
-                     "scripts\build_telegram_bot_api.cmd; staying on the cloud API", exe)
+                     "scripts\\build_telegram_bot_api.cmd; staying on the cloud API", exe)
         return False
     root = root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     work = os.path.join(root, "runtime", "tbapi")
@@ -85,12 +85,15 @@ def ensure_server(root: str | None = None, wait_s: float = 20.0) -> bool:
             "--dir", work, "--temp-dir", os.path.join(work, "tmp"),
             "--max-connections", "10", "--verbosity", "1"]
     try:
-        si = subprocess.STARTUPINFO()
-        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        si.wShowWindow = 0
-        subprocess.Popen(args, cwd=work, creationflags=_NO_WINDOW | _NEW_GROUP,
-                         stdout=log, stderr=subprocess.STDOUT,
-                         stdin=subprocess.DEVNULL, startupinfo=si)
+        if os.name == "nt":
+            si = subprocess.STARTUPINFO()
+            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            si.wShowWindow = 0
+            kw = {"creationflags": _NO_WINDOW | _NEW_GROUP, "startupinfo": si}
+        else:   # STARTUPINFO and creationflags are Windows-only (ValueError here)
+            kw = {"start_new_session": True}
+        subprocess.Popen(args, cwd=work, stdout=log, stderr=subprocess.STDOUT,
+                         stdin=subprocess.DEVNULL, **kw)
     except Exception as exc:
         logger.error("could not start telegram-bot-api: %s", exc)
         return False
