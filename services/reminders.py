@@ -99,11 +99,31 @@ def register(sender, path) -> int:
         if not isinstance(loaded, dict):
             logger.error("reminders file holds %s, not a dict -- ignored", type(loaded).__name__)
             loaded = {}
+        armed = 0
         for rid, item in loaded.items():
+            # One bad entry (a hand edit, a half-migrated file) raised out of
+            # _arm mid-loop: the rest were never armed and the bad one stayed
+            # in _ITEMS, where pending() and cancel() then failed on it.
+            if not _valid(item):
+                logger.error("reminder %s is malformed -- dropped: %r", rid, item)
+                continue
             if rid not in _ITEMS:
                 _ITEMS[rid] = item
                 _arm(rid)
-        return len(loaded)
+                armed += 1
+        return armed
+
+
+def _valid(item) -> bool:
+    num = (int, float)
+    try:
+        every = item.get("every") or 0
+        return (str(item["owner"]).lstrip("-").isdigit()
+                and isinstance(item["due"], num) and item["due"] == item["due"]   # not NaN
+                and isinstance(item.get("text"), str)
+                and isinstance(every, num) and (every == 0 or every >= 60))
+    except (AttributeError, KeyError, TypeError):
+        return False
 
 
 def add(owner, delay_s: float, text: str, every_s: float = 0, lang: str = "ru") -> str:

@@ -60,3 +60,22 @@ def test_unreadable_file_is_kept_aside_not_overwritten(tmp_path):
     finally:
         reminders.cancel(7, "all")
         reminders.stop()
+
+
+def test_a_malformed_entry_does_not_stop_the_others(tmp_path):
+    import json
+    import time
+    path = tmp_path / "r.json"
+    later = time.time() + 3600
+    path.write_text(json.dumps({
+        "bad1": {"owner": "7", "text": "no due"},
+        "bad2": {"owner": "7", "due": "tomorrow", "text": "string due"},
+        "bad3": {"owner": "7", "due": later, "text": "spam", "every": 0.5},
+        "good": {"owner": "7", "due": later, "text": "купить хлеб"},
+    }), encoding="utf-8")
+    try:
+        assert reminders.register(lambda cid, t: None, path) == 1
+        assert [i["text"] for i in reminders.pending(7)] == ["купить хлеб"]
+        assert reminders.cancel(7, "all") == ["купить хлеб"]
+    finally:
+        reminders.stop()
