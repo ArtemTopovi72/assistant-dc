@@ -89,6 +89,48 @@ def test_clipping_keeps_both_ends():
     assert out.startswith("START") and out.endswith("END")
 
 
+def test_streamed_output_keeps_both_ends_and_counts_the_cut():
+    buf = R._BoundedOutput()
+    buf._add("START")
+    for _ in range(2000):
+        buf._add("m" * 1000)
+    buf._add("END")
+    out = buf.text()
+    assert out.startswith("START") and out.endswith("END")
+    assert len(out) < R.MAX_OUTPUT_CHARS + 200
+    assert "chars cut" in out
+    # Memory stays bounded however much went through.
+    assert sum(map(len, buf._head)) + sum(map(len, buf._tail)) <= 3 * R.MAX_OUTPUT_CHARS
+
+
+def test_short_output_is_returned_whole():
+    buf = R._BoundedOutput()
+    for part in ("a", "b" * 7000, "c" * 3000):
+        buf._add(part)
+    assert buf.text() == R._clip("a" + "b" * 7000 + "c" * 3000)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX process groups")
+def test_a_timeout_kills_grandchildren_too(box, no_docker, tmp_path):
+    """proc.kill() alone left a spawned grandchild running (and holding the
+    output pipe open, so the run hung past its own deadline)."""
+    marker = tmp_path / "alive"
+    code = ("import subprocess, sys, time\n"
+            "subprocess.Popen([sys.executable, '-c', "
+            "'import time, pathlib\\nwhile True:\\n"
+            "    pathlib.Path(r\"%s\").write_text(str(time.time())); time.sleep(0.2)'])\n"
+            "while True: time.sleep(1)\n" % marker)
+    t0 = time.monotonic()
+    res = R.run_python(box, code, timeout=3, allow_host=True)
+    assert not res.ok and "killed after" in res.output
+    assert time.monotonic() - t0 < 15
+    time.sleep(1.0)
+    before = marker.read_text() if marker.exists() else ""
+    time.sleep(1.0)
+    after = marker.read_text() if marker.exists() else ""
+    assert before == after, "the grandchild is still running after the deadline"
+
+
 def test_the_timeout_is_capped(box, no_docker, monkeypatch):
     seen = {}
 

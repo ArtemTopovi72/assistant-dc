@@ -496,26 +496,95 @@ def _spawn(cmd, cwd, timeout: int) -> RunResult:
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, encoding="utf-8", errors="replace",
             creationflags=creationflags,
+            # POSIX: its own process group, so _kill_tree can end the whole tree.
+            start_new_session=(os.name != "nt"),
         )
     except OSError as exc:
         return RunResult(False, -1, f"Could not start: {exc}", time.monotonic() - t0)
 
+    # Drained on a thread into a BOUNDED buffer. communicate() kept every byte:
+    # a `while True: print(...)` run for its whole deadline buffered gigabytes
+    # in the app's own memory, only for _clip to throw nearly all of it away.
+    buf = _BoundedOutput()
+    reader = threading.Thread(target=buf.drain, args=(proc.stdout,), daemon=True,
+                              name="code-runner-output")
+    reader.start()
     try:
-        out, _ = proc.communicate(timeout=timeout)
+        proc.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
         _kill_tree(proc)
         try:
-            out, _ = proc.communicate(timeout=15)
+            proc.wait(timeout=15)
         except Exception:
-            out = ""
+            pass
+        # A grandchild that survived the kill can hold the pipe open; never
+        # wait on it past a short grace.
+        reader.join(timeout=5)
         return RunResult(
             False, -9,
-            _clip((out or "") + f"\n[killed after {timeout}s — it did not finish. "
-                                f"Endless loops and waiting for input are the "
-                                f"usual causes.]"),
+            buf.text() + (f"\n[killed after {timeout}s — it did not finish. "
+                          f"Endless loops and waiting for input are the "
+                          f"usual causes.]"),
             time.monotonic() - t0)
-    return RunResult(proc.returncode == 0, proc.returncode, _clip(out),
+    reader.join(timeout=15)
+    return RunResult(proc.returncode == 0, proc.returncode, buf.text(),
                      time.monotonic() - t0)
+
+
+class _BoundedOutput:
+    """Head and tail of a stream, never more than ~MAX_OUTPUT_CHARS of each."""
+
+    def __init__(self):
+        self._head: list[str] = []
+        self._head_len = 0
+        self._tail: list[str] = []
+        self._tail_len = 0
+        self._total = 0
+
+    def drain(self, stream) -> None:
+        try:
+            while True:
+                chunk = stream.read(8192)
+                if not chunk:
+                    break
+                self._add(chunk)
+        except Exception:
+            logger.debug("output drain stopped", exc_info=True)
+        finally:
+            try:
+                stream.close()
+            except Exception:
+                pass
+
+    def _add(self, chunk: str) -> None:
+        self._total += len(chunk)
+        if self._head_len < MAX_OUTPUT_CHARS:
+            take = chunk[:MAX_OUTPUT_CHARS - self._head_len]
+            self._head.append(take)
+            self._head_len += len(take)
+            chunk = chunk[len(take):]
+        if chunk:
+            self._tail.append(chunk)
+            self._tail_len += len(chunk)
+            if self._tail_len > 2 * MAX_OUTPUT_CHARS:
+                joined = "".join(self._tail)[-MAX_OUTPUT_CHARS:]
+                self._tail, self._tail_len = [joined], len(joined)
+
+    def text(self) -> str:
+        head = "".join(self._head)
+        tail = "".join(self._tail)
+        if not tail:
+            return _clip(head)
+        tail = tail[-MAX_OUTPUT_CHARS:]
+        seen = len(head) + len(tail)
+        if self._total == seen:
+            return _clip(head + tail)
+        # Some of the middle was never kept; _clip's head/tail shape, with the
+        # real count of what was cut.
+        keep_tail = MAX_OUTPUT_CHARS - _HEAD_CHARS
+        return (head[:_HEAD_CHARS]
+                + f"\n… [{self._total - _HEAD_CHARS - keep_tail} chars cut] …\n"
+                + tail[-keep_tail:])
 
 
 def _kill_tree(proc) -> None:
@@ -532,6 +601,13 @@ def _kill_tree(proc) -> None:
             return
         except Exception:
             logger.debug("taskkill failed; falling back to kill()", exc_info=True)
+    else:
+        try:
+            import signal
+            os.killpg(proc.pid, signal.SIGKILL)     # start_new_session=True
+            return
+        except Exception:
+            logger.debug("killpg failed; falling back to kill()", exc_info=True)
     try:
         proc.kill()
     except Exception:
