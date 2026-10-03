@@ -19,6 +19,12 @@ import threading
 import time
 from pathlib import Path
 
+# Before cv2/PyQt5: PyQt5 bundles MSVCP140 14.26 and whatever loads first wins;
+# torch & co. crash in the old copy (0xc0000005). Every way into the GUI goes
+# through here, not only launch_all/assistant (core/win_runtime.py).
+import win_runtime
+win_runtime.preload_newest_msvcp()
+
 import cv2
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QIcon

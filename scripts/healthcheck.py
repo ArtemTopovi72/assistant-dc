@@ -225,7 +225,9 @@ _GUI_CHILD = textwrap.dedent(r'''
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     os.environ["USE_GUI"] = "0"
     sys.path.insert(0, %(root)r)
+    import faulthandler; faulthandler.enable()   # a native crash prints its Python stack
     import logging; logging.basicConfig(level=logging.CRITICAL)
+    import win_runtime; win_runtime.preload_newest_msvcp()   # as the app does, before PyQt5
     from PyQt5.QtWidgets import QApplication
     from PyQt5.QtCore import QTimer
     import gui
@@ -255,8 +257,14 @@ def check_gui(timeout=180):
             return Result("gui", FAIL, f"main window did not open within {timeout}s")
     if p.returncode == 0 and "GUI-OK" in p.stdout:
         return Result("gui", OK, "main window builds and closes cleanly (headless)")
-    tail = ((p.stderr or "") + (p.stdout or "")).strip().splitlines()[-3:]
-    return Result("gui", FAIL, f"exit {p.returncode}: " + " | ".join(tail)[:400],
+    err = (p.stderr or "") + (p.stdout or "")
+    lines = err.strip().splitlines()
+    # faulthandler's dump ("Windows fatal exception" / "Fatal Python error" +
+    # the stack) says where a native crash happened; keep it whole.
+    start = next((i for i, ln in enumerate(lines) if "fatal" in ln.lower()), None)
+    tail = lines[start:start + 25] if start is not None else lines[-3:]
+    sep = "\n               " if start is not None else " | "
+    return Result("gui", FAIL, f"exit {p.returncode}: " + sep.join(tail)[:3000],
                   "see crash.log in the project folder")
 
 
