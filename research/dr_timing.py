@@ -18,6 +18,7 @@ for a single run, so they have exactly one home and are read through it (see
 import json
 import logging
 import os
+import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 import threading
 
 from config import DR_DIR
@@ -41,7 +42,7 @@ _TIMING_KEEP = 12          # median over the last N runs per depth
 # The median was therefore ~2 minutes, and the bot quoted "2 min" to a user
 # about to wait half an hour. The FASTEST depth is seeded at 900s, so nothing
 # real finishes in five minutes and the floor can say so.
-_MIN_PLAUSIBLE_RUN_S = float(os.getenv("DR_MIN_PLAUSIBLE_RUN_S", "300"))
+_MIN_PLAUSIBLE_RUN_S = _cfg_env.env_float("DR_MIN_PLAUSIBLE_RUN_S", 300)
 _timing_lock = threading.Lock()
 
 

@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import os
+import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 import queue
 import re
 import subprocess
@@ -1080,7 +1081,7 @@ def _gigaam_transcribe(ctx, audio_source) -> str:
 # "Угу." was heard as French (69%) and came back as a goodbye the bot then
 # answered (live, 2026-09-12, journey 22). Under it, the clip is re-read in
 # the language the user is known to speak.
-ASR_LANG_CONFIDENCE = float(os.getenv("ASR_LANG_CONFIDENCE", "0.85"))
+ASR_LANG_CONFIDENCE = _cfg_env.env_float("ASR_LANG_CONFIDENCE", 0.85)
 
 
 def _whisper_transcribe(ctx, audio_source, engine: str = "auto",

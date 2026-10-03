@@ -8,6 +8,7 @@ manual instructions for the user.
 """
 import logging
 import os
+import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 from typing import Optional
 import re
 import subprocess
@@ -29,8 +30,8 @@ _T_RELOAD = 300
 # history and tool results on top of that. House default (user, 2026-09-23):
 # 40k context and ONE parallel slot for every model the app loads (raised from
 # 20k on 2026-09-24: 48k q8 measured, no speed or VRAM cost; the loader kept 20k).
-MIN_CONTEXT_TOKENS = int(os.getenv("LM_MIN_CONTEXT", "40960"))
-DEFAULT_PARALLEL = int(os.getenv("LM_PARALLEL", "1"))
+MIN_CONTEXT_TOKENS = _cfg_env.env_int("LM_MIN_CONTEXT", 40960)
+DEFAULT_PARALLEL = _cfg_env.env_int("LM_PARALLEL", 1)
 
 # Virtual model.yaml lives here: ~/.lmstudio/models/<publisher>/<name>/model.yaml
 _LMS_MODELS_DIR = Path(os.path.expanduser("~")) / ".lmstudio" / "models"
@@ -353,7 +354,7 @@ def load_model_exclusive(
 # had to be shrunk to 1024 px; Gemma 4 spends up to 1120 tokens on one image.
 # `lms load` cannot set it, the REST load can (physical_batch_size, accepted
 # though undocumented in 0.4.x -- echo_load_config shows it applied).
-BATCH_TOKENS = int(os.getenv("LM_BATCH_TOKENS", "2048"))
+BATCH_TOKENS = _cfg_env.env_int("LM_BATCH_TOKENS", 2048)
 
 
 def _rest_load(base_url: str, model: str, context_length: int = 0) -> tuple:
@@ -609,8 +610,8 @@ def reload_via_cli(model_id: str, context_length: int, gpu_offload_pct: int,
 # model_id -> (monotonic time of the last repair, attempts so far)
 _heal_state: dict = {}
 _heal_lock = threading.Lock()
-_HEAL_COOLDOWN_S = float(os.getenv("LM_HEAL_COOLDOWN_S", "90"))
-_HEAL_MAX_ATTEMPTS = int(os.getenv("LM_HEAL_MAX_ATTEMPTS", "5"))
+_HEAL_COOLDOWN_S = _cfg_env.env_float("LM_HEAL_COOLDOWN_S", 90)
+_HEAL_MAX_ATTEMPTS = _cfg_env.env_int("LM_HEAL_MAX_ATTEMPTS", 5)
 
 
 def heal_context(model_id: str, needed_tokens: int) -> tuple:

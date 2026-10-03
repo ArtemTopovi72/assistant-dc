@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import os
+import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 import logging
 import re
 import time
@@ -238,8 +239,8 @@ def free_gpu(log=None, min_free_mb: int = None) -> None:
 
 # What "the card is free" means after an eviction: the 26B chat model alone
 # is ~17 GB, so anything under this is a model still draining.
-FREE_GPU_MIN_MB = int(os.getenv("FREE_GPU_MIN_MB", "16000"))
-FREE_GPU_WAIT_S = float(os.getenv("FREE_GPU_WAIT_S", "25"))
+FREE_GPU_MIN_MB = _cfg_env.env_int("FREE_GPU_MIN_MB", 16000)
+FREE_GPU_WAIT_S = _cfg_env.env_float("FREE_GPU_WAIT_S", 25)
 
 
 def wait_vram_free(min_free_mb: int, timeout: float = 25.0, poll: float = 0.5):

@@ -27,13 +27,14 @@ import hashlib
 import json
 import logging
 import os
+import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 TURNS_DIR = Path(os.getenv("TURNS_DIR", Path(__file__).resolve().parents[1] / "runtime" / "turns"))
-KEEP_DAYS = int(os.getenv("TURNS_KEEP_DAYS", "14"))
+KEEP_DAYS = _cfg_env.env_int("TURNS_KEEP_DAYS", 14)
 
 _cur: contextvars.ContextVar = contextvars.ContextVar("turn_trace", default=None)
 _write_lock = threading.Lock()

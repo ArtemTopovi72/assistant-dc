@@ -23,10 +23,10 @@ def _env_int(name: str, default: int) -> int:
     """Read an int from the environment, falling back to default on a bad value
     so a malformed override never crashes startup at import time."""
     raw = os.getenv(name)
-    if raw is None or raw == "":
+    if raw is None or raw.strip() == "":
         return default
     try:
-        return int(raw)
+        return int(raw.strip())
     except ValueError:
         logger.warning("Invalid %s=%r — using default %d", name, raw, default)
         return default
@@ -34,13 +34,21 @@ def _env_int(name: str, default: int) -> int:
 
 def _env_float(name: str, default: float) -> float:
     raw = os.getenv(name)
-    if raw is None or raw == "":
+    if raw is None or raw.strip() == "":
         return default
     try:
-        return float(raw)
+        return float(raw.strip())
     except ValueError:
         logger.warning("Invalid %s=%r — using default %s", name, raw, default)
         return default
+
+
+# Public names for the rest of the code base. A bare int(os.getenv(...)) at
+# module scope turns one typo in .env (or an empty `TG_WORKERS=`) into an
+# ImportError that keeps the whole app from starting, with a traceback that
+# does not say which setting was wrong.
+env_int = _env_int
+env_float = _env_float
 
 
 # ---------------------------------------------------------------------------
@@ -77,7 +85,7 @@ STARTUP_MODEL = os.getenv("STARTUP_MODEL", MODEL_NAME)
 # Seconds the dialog waits for a human before starting on STARTUP_MODEL. Any
 # key or click cancels the countdown -- someone actively choosing must never be
 # yanked out from under. 0 disables the timeout entirely.
-STARTUP_DIALOG_TIMEOUT_S = int(os.getenv("STARTUP_DIALOG_TIMEOUT_S", "30"))
+STARTUP_DIALOG_TIMEOUT_S = _env_int("STARTUP_DIALOG_TIMEOUT_S", 30)
 COMFY_URL = os.getenv("COMFY_URL", "http://127.0.0.1:8000")
 # Every generation lives under runtime/ (2026-09-27): ComfyUI writes here too, not Documents.
 OUTPUT_DIR_COMFY = Path(os.getenv("COMFY_OUTPUT_DIR", str(Path(__file__).resolve().parents[1] / "runtime" / "comfy")))
@@ -210,8 +218,8 @@ IMAGE_ENGINE = "ideogram4"
 # Set COMFY_RESPECT_GPU_LOCK=0 to draw anyway.
 COMFY_RESPECT_GPU_LOCK = os.getenv("COMFY_RESPECT_GPU_LOCK", "1").strip() not in ("0", "false", "no")
 IDEOGRAM_STEPS = _env_int("IDEOGRAM_STEPS", 20)
-IDEOGRAM_CFG = float(os.getenv("IDEOGRAM_CFG", "7.0"))
-IDEOGRAM_SHIFT = float(os.getenv("IDEOGRAM_SHIFT", "5.0"))
+IDEOGRAM_CFG = _env_float("IDEOGRAM_CFG", 7.0)
+IDEOGRAM_SHIFT = _env_float("IDEOGRAM_SHIFT", 5.0)
 # Ideogram 4 does NOT sample at a constant guidance. Confirmed straight from
 # the real upstream registry (ideogram-oss/ideogram4, src/ideogram4/
 # sampler_configs.py -- fetched and read 2026-09-19, not a third-party guide)
@@ -236,7 +244,7 @@ IDEOGRAM_SHIFT = float(os.getenv("IDEOGRAM_SHIFT", "5.0"))
 # it was pure waste. Reverted to V4_DEFAULT_20. If eyes are still off, the fix
 # is elsewhere (face-region resampling/inpaint pass, not more global steps).
 IDEOGRAM_POLISH_STEPS = _env_int("IDEOGRAM_POLISH_STEPS", 2)  # V4_DEFAULT_20's real 2-step tail
-IDEOGRAM_POLISH_CFG = float(os.getenv("IDEOGRAM_POLISH_CFG", "3.0"))
+IDEOGRAM_POLISH_CFG = _env_float("IDEOGRAM_POLISH_CFG", 3.0)
 # ostris/ideogram_4_turbotime_lora (2026-09-20): a continuous-turbo-trained
 # LoRA good for 2-4 step, near-CFG-free sampling. Measured 35-40% faster
 # across 3 varied scenes (lettering/portrait/busy_scene) with no quality loss
@@ -251,10 +259,10 @@ IDEOGRAM_POLISH_CFG = float(os.getenv("IDEOGRAM_POLISH_CFG", "3.0"))
 # (20 steps + polish tail) clearly more detailed than turbo4.
 IDEOGRAM_TURBO = os.getenv("IDEOGRAM_TURBO", "0").strip() in ("1", "true", "yes")
 IDEOGRAM_PHOTO_LORA = os.getenv("IDEOGRAM_PHOTO_LORA", "lenovo_ideogram4.safetensors")
-IDEOGRAM_PHOTO_LORA_STRENGTH = float(os.getenv("IDEOGRAM_PHOTO_LORA_STRENGTH", "0.8"))
+IDEOGRAM_PHOTO_LORA_STRENGTH = _env_float("IDEOGRAM_PHOTO_LORA_STRENGTH", 0.8)
 IDEOGRAM_TURBO_LORA = os.getenv("IDEOGRAM_TURBO_LORA", "ideogram_4_turbotime_v1.safetensors")
 IDEOGRAM_STEPS_TURBO = _env_int("IDEOGRAM_STEPS_TURBO", 4)
-IDEOGRAM_CFG_TURBO = float(os.getenv("IDEOGRAM_CFG_TURBO", "1.0"))
+IDEOGRAM_CFG_TURBO = _env_float("IDEOGRAM_CFG_TURBO", 1.0)
 # When the planned layout asks for LETTERING in the picture, the render is read
 # back and the words are compared to what was asked for; a garbled string
 # ("POLICE" -> "AVCHKE") buys this many repair rounds — a bigger, correctly
@@ -365,9 +373,9 @@ VIDEO_SPEECH_STRESS = os.getenv("VIDEO_SPEECH_STRESS", "1") != "0"
 # 8 with the Ref2V 8-step LoRA (night A/B 10-02, user's call "8-step LoRA -> 8 steps"):
 # 237 s vs 273 s at 12+2, voice similarity in the same range.
 VIDEO_STEPS_REF2VA_VOICES = _env_int("VIDEO_STEPS_REF2VA_VOICES", 8)
-VIDEO_CFG = float(os.getenv("VIDEO_CFG", "1.0"))
-VIDEO_SHIFT_VIDEO = float(os.getenv("VIDEO_SHIFT_VIDEO", "12.0"))
-VIDEO_SHIFT_AUDIO = float(os.getenv("VIDEO_SHIFT_AUDIO", "3.0"))
+VIDEO_CFG = _env_float("VIDEO_CFG", 1.0)
+VIDEO_SHIFT_VIDEO = _env_float("VIDEO_SHIFT_VIDEO", 12.0)
+VIDEO_SHIFT_AUDIO = _env_float("VIDEO_SHIFT_AUDIO", 3.0)
 # A 33B transformer swapping through 24GB of VRAM is slow. This is the ceiling for
 # one clip; the job is abandoned (and reported honestly) past it rather than hanging
 # a chat turn forever.
@@ -412,7 +420,7 @@ MUSIC_CEILING_SECONDS = _env_int("MUSIC_CEILING_SECONDS", 240)
 # render and scales with the step count; 20 was not worse on the ear. The
 # user can raise it to 50 in the Quality screen (music.STEPS_RANGE).
 MUSIC_STEPS = _env_int("MUSIC_STEPS", 20)
-MUSIC_CFG = float(os.getenv("MUSIC_CFG", "3.0"))
+MUSIC_CFG = _env_float("MUSIC_CFG", 3.0)
 # modulsx/MiniMax-Music-3-Turbo-FP8's 8-step consistency-distillation LoRA
 # (2026-09-20): measured 25% faster wall-clock on a 60s song (124.2s -> 93.6s;
 # only ~7% on a 20s song, since the DiT share of the render grows with
@@ -420,9 +428,9 @@ MUSIC_CFG = float(os.getenv("MUSIC_CFG", "3.0"))
 # MUSIC_CFG_TURBO below, which build_workflow uses in place of MUSIC_STEPS/
 # MUSIC_CFG when steps is not explicitly overridden by the caller.
 MUSIC_TURBO_LORA = os.getenv("MUSIC_TURBO_LORA", "minimax_music3_turbo_lora_8step.safetensors")
-MUSIC_TURBO_STRENGTH = float(os.getenv("MUSIC_TURBO_STRENGTH", "0.85"))
+MUSIC_TURBO_STRENGTH = _env_float("MUSIC_TURBO_STRENGTH", 0.85)
 MUSIC_STEPS_TURBO = _env_int("MUSIC_STEPS_TURBO", 8)
-MUSIC_CFG_TURBO = float(os.getenv("MUSIC_CFG_TURBO", "1.7"))
+MUSIC_CFG_TURBO = _env_float("MUSIC_CFG_TURBO", 1.7)
 # Music3 renders up to max_duration and stops there whether or not the song has
 # finished, so a song that outlasts its slot is cut off mid-phrase at full
 # volume (measured: three 30s renders all ended at 29.99s with last-250ms peaks
@@ -430,8 +438,8 @@ MUSIC_CFG_TURBO = float(os.getenv("MUSIC_CFG_TURBO", "1.7"))
 # sound deliberate instead of severed. The tiny fade-in is just click
 # suppression on a waveform that can start at a non-zero sample.
 # Seconds; 0 disables either.
-MUSIC_FADE_OUT_S = float(os.getenv("MUSIC_FADE_OUT_S", "2.0"))
-MUSIC_FADE_IN_S = float(os.getenv("MUSIC_FADE_IN_S", "0.03"))
+MUSIC_FADE_OUT_S = _env_float("MUSIC_FADE_OUT_S", 2.0)
+MUSIC_FADE_IN_S = _env_float("MUSIC_FADE_IN_S", 0.03)
 
 # ---------------------------------------------------------------------------
 # Hardware
@@ -531,7 +539,7 @@ MAX_TOOL_ROUNDS = 8          # max tool-call iterations per personality turn
 # не успел подвести итог". These rounds are also cheap -- no GPU, no network,
 # milliseconds each -- so the ceiling that protects an image turn from spending
 # minutes is simply the wrong ceiling here.
-SANDBOX_TOOL_ROUNDS = int(os.getenv("SANDBOX_TOOL_ROUNDS", "16"))
+SANDBOX_TOOL_ROUNDS = _env_int("SANDBOX_TOOL_ROUNDS", 16)
 # How many FULL renders a single turn may spend. The agent is told to inspect a
 # picture and fix what is wrong "until it is right", which is correct advice with
 # no cost attached to it — observed live, one turn ran redraw → inspect → redraw →
@@ -546,11 +554,11 @@ IMAGE_MAX_RENDERS_PER_TURN = _env_int("IMAGE_MAX_RENDERS_PER_TURN", 3)
 # is actively dealing with a tool FAILURE (a broken path that needs an alternative
 # chain), grant up to this many extra rounds so legitimate recovery isn't truncated.
 # Only spent while errors persist; a healthy run never touches it.
-RECOVERY_EXTRA_ROUNDS = int(os.getenv("RECOVERY_EXTRA_ROUNDS", "4"))
+RECOVERY_EXTRA_ROUNDS = _env_int("RECOVERY_EXTRA_ROUNDS", 4)
 # After this many tool results in a row come back as errors (across DIFFERENT tools,
 # not just identical retries), inject a "step back and re-plan" signal so the agent
 # stops walking broken paths and either routes around them or answers honestly.
-REPLAN_FAILURE_THRESHOLD = int(os.getenv("REPLAN_FAILURE_THRESHOLD", "3"))
+REPLAN_FAILURE_THRESHOLD = _env_int("REPLAN_FAILURE_THRESHOLD", 3)
 LLM_MAX_RETRIES = 3          # total attempts before giving up on an LLM call
 LLM_RETRY_BASE_DELAY = 0.5   # seconds; doubled each retry (exponential backoff)
 API_MIN_INTERVAL = 1.0       # minimum seconds between outbound API calls
@@ -563,17 +571,17 @@ API_MIN_INTERVAL = 1.0       # minimum seconds between outbound API calls
 #   1. connect stall  -> can't even reach LM Studio.
 #   2. mid-stream stall-> server accepted the request then stopped emitting tokens.
 #   3. runaway stream -> model loops emitting tokens forever (never sends [DONE]).
-LLM_CONNECT_TIMEOUT = float(os.getenv("LLM_CONNECT_TIMEOUT", "20"))   # s to first byte
+LLM_CONNECT_TIMEOUT = _env_float("LLM_CONNECT_TIMEOUT", 20)   # s to first byte
 # Per-read (between-chunks) timeout: no new token for this long => treat as stalled
 # and abort the attempt (retriable). Far tighter than the old 1900s.
-LLM_STREAM_STALL_TIMEOUT = float(os.getenv("LLM_STREAM_STALL_TIMEOUT", "90"))
+LLM_STREAM_STALL_TIMEOUT = _env_float("LLM_STREAM_STALL_TIMEOUT", 90)
 # Absolute wall-clock cap for ONE streaming attempt regardless of trickle: a model
 # stuck in a token loop streams forever (iter_lines never times out because bytes
 # keep coming). Hit this and we stop reading and use whatever we have.
-LLM_STREAM_MAX_SECONDS = float(os.getenv("LLM_STREAM_MAX_SECONDS", "600"))
+LLM_STREAM_MAX_SECONDS = _env_float("LLM_STREAM_MAX_SECONDS", 600)
 # Hard cap on accumulated streamed characters (content + reasoning) — a degenerate
 # repetition loop ("the the the…") is cut off here even if it streams fast.
-LLM_STREAM_MAX_CHARS = int(os.getenv("LLM_STREAM_MAX_CHARS", "200000"))
+LLM_STREAM_MAX_CHARS = _env_int("LLM_STREAM_MAX_CHARS", 200000)
 
 # Repetition guard (llm._looks_degenerate). The char/wall-clock caps above are
 # last-resort and let a stuck model burn 600s + 200k chars before giving up; this
@@ -584,13 +592,13 @@ LLM_STREAM_MAX_CHARS = int(os.getenv("LLM_STREAM_MAX_CHARS", "200000"))
 # of every cycle were never examined). Two strikes are required to abort, so this
 # also sets the waste ceiling on a stuck model: ~2x this many chars. Measured cost
 # is 0.027 ms per check — ~2 ms of CPU per 100k chars generated, i.e. free.
-LLM_REPEAT_CHECK_EVERY = int(os.getenv("LLM_REPEAT_CHECK_EVERY", "1200"))
-LLM_REPEAT_TAIL_CHARS = int(os.getenv("LLM_REPEAT_TAIL_CHARS", "1500"))
-LLM_REPEAT_CYCLE_MAX = int(os.getenv("LLM_REPEAT_CYCLE_MAX", "300"))
+LLM_REPEAT_CHECK_EVERY = _env_int("LLM_REPEAT_CHECK_EVERY", 1200)
+LLM_REPEAT_TAIL_CHARS = _env_int("LLM_REPEAT_TAIL_CHARS", 1500)
+LLM_REPEAT_CYCLE_MAX = _env_int("LLM_REPEAT_CYCLE_MAX", 300)
 # Minimum total repeated span (cycle_len * repeats) before a cycle counts as a
 # loop. Without it, cycle length 1 flags "------------", "....", or a number like
 # 1200000 — all legitimate. Real loops repeat far past this.
-LLM_REPEAT_MIN_SPAN = int(os.getenv("LLM_REPEAT_MIN_SPAN", "200"))
+LLM_REPEAT_MIN_SPAN = _env_int("LLM_REPEAT_MIN_SPAN", 200)
 
 # ---------------------------------------------------------------------------
 # Image generation
@@ -625,7 +633,7 @@ DEFAULT_IMAGE_ASPECT = os.getenv("DEFAULT_IMAGE_ASPECT", "16:9")
 DEFAULT_IMAGE_QUALITY = os.getenv("DEFAULT_IMAGE_QUALITY", "draft")
 # Hard rails. Above ~2048 on a side the turbo models start repeating structures
 # (two heads, doubled horizons) regardless of how much VRAM is free.
-IMAGE_MAX_SIDE = int(os.getenv("IMAGE_MAX_SIDE", "2048"))
+IMAGE_MAX_SIDE = _env_int("IMAGE_MAX_SIDE", 2048)
 IMAGE_MIN_SIDE = 256
 
 

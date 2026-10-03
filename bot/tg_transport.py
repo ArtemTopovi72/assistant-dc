@@ -14,6 +14,7 @@ import contextlib
 import contextvars
 import json
 import os
+import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 import subprocess
 import threading
 import time
@@ -54,7 +55,7 @@ def replying_to(chat_id, msg_id):
 # Telegram cuts a label that is wider than its share of the row («Без на…»).
 # Calibrated on the live 16:57 keyboard: at three a row «🔄 Ещё раз» fits and
 # «🔤 Без надписей» is cut. A knob, not a constant: clients differ.
-TG_ROW_WIDTH = int(os.getenv("TG_ROW_WIDTH", "34"))
+TG_ROW_WIDTH = _cfg_env.env_int("TG_ROW_WIDTH", 34)
 
 
 def _label_width(text: str) -> int:

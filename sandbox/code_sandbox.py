@@ -19,6 +19,7 @@ the root or live underneath it. Everything else raises.
 from __future__ import annotations
 
 import os
+import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 import re
 from pathlib import Path
 
@@ -43,7 +44,7 @@ MAX_LIST_ENTRIES = 400
 # Ceiling on what one unpack may write. A zip's own size says nothing about its
 # contents: a few-KB "zip bomb" member inflates to gigabytes, and the member was
 # read into memory whole. 2 GB is far above any real modpack.
-MAX_UNPACK_BYTES = int(os.getenv("SANDBOX_MAX_UNPACK_BYTES", str(2 * 1024 ** 3)))
+MAX_UNPACK_BYTES = _cfg_env.env_int("SANDBOX_MAX_UNPACK_BYTES", 2 * 1024 ** 3)
 MAX_UNPACK_FILES = 100_000
 # Working debris the agent creates and the user must never receive: the folder
 # unpack() makes, and the private area code_runner installs packages into.

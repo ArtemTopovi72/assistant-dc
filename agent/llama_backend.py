@@ -11,6 +11,7 @@ to the CPU (4.8 tok/s); it is added for the child process only.
 """
 import logging
 import os
+import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 import subprocess
 import time
 import urllib.request
@@ -25,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 SERVER_EXE = os.getenv("LLAMA_SERVER_EXE", r"C:\llamacpp\build\llama-server.exe")
 CUDA_BIN = os.getenv("LLAMA_CUDA_BIN", r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.3\bin")
-PORT = int(os.getenv("LLAMA_PORT", "8091"))  # 8081 is the local Telegram Bot API
+PORT = _cfg_env.env_int("LLAMA_PORT", 8091)  # 8081 is the local Telegram Bot API
 _LOG = Path(__file__).resolve().parents[1] / "runtime" / "llama_server.log"
 
 _GLIMMER_DIR = Path.home() / ".lmstudio" / "models" / "lmstudio-community" / "Muse-Glimmer-30B-GGUF"
@@ -35,7 +36,7 @@ MODELS = {} if os.getenv("LLAMA_BACKEND_GLIMMER") != "1" else {
     "muse-glimmer-30b": {
         "gguf": _GLIMMER_DIR / "Muse-Glimmer-30B-KQuant-17GB-Q4_K_M.gguf",
         "mmproj": _GLIMMER_DIR / "mmproj-Muse-Glimmer-30B-Q4_K_M.gguf",
-        "ctx": int(os.getenv("GLIMMER_CTX", "32768")),
+        "ctx": _cfg_env.env_int("GLIMMER_CTX", 32768),
     },
 }
 

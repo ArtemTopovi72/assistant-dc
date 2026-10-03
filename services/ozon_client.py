@@ -29,6 +29,7 @@ import json
 import turn_trace
 import logging
 import os
+import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 import queue
 import re
 import threading
@@ -39,7 +40,7 @@ logger = logging.getLogger("assistant.ozon")
 
 HOME = "https://www.ozon.ru/"
 API = "https://www.ozon.ru/api/composer-api.bx/page/json/v2?url="
-CHALLENGE_WAIT_S = float(os.getenv("OZON_CHALLENGE_WAIT", "12"))
+CHALLENGE_WAIT_S = _cfg_env.env_float("OZON_CHALLENGE_WAIT", 12)
 IDLE_CLOSE_S = 10 * 60
 CALL_TIMEOUT_S = 150
 # "http://user:pass@host:port" -- a Russian residential/mobile exit. Ozon
@@ -53,7 +54,7 @@ OZON_CHANNEL = os.getenv("OZON_BROWSER_CHANNEL", "msedge").strip()
 OZON_HEADLESS = os.getenv("OZON_HEADLESS", "0").strip() not in ("0", "false", "no")
 # Parallel browsers for one shopping run (user, 2026-09-28: "8 воркеров"). Each is
 # its own Chromium on its own thread; 16 in a row were not blocked.
-OZON_WORKERS = max(1, int(os.getenv("OZON_WORKERS", "8")))
+OZON_WORKERS = max(1, _cfg_env.env_int("OZON_WORKERS", 8))
 
 SORTS = {"popular": "", "price": "price", "price_desc": "price_desc",
          "rating": "rating", "new": "new", "discount": "discount"}

@@ -27,6 +27,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 import random
 import time
 from pathlib import Path
@@ -1248,7 +1249,7 @@ def yue2_style(style: str, max_chars: int = 300) -> str:
 
 
 YUE2_PYTHON = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "venv_yue2", "Scripts", "python.exe")
-YUE2_ODE_STEPS = int(os.getenv("YUE2_ODE_STEPS", "16"))
+YUE2_ODE_STEPS = _cfg_env.env_int("YUE2_ODE_STEPS", 16)
 YUE2_TIMEOUT = 1500          # measured 235-810 s for one song; long lyrics run longer
 
 

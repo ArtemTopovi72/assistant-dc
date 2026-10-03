@@ -29,6 +29,7 @@ passes its own, because ComfyUI reports a saved mp4 under the same history
 import json
 import logging
 import os
+import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 import sys
 import threading
 import time
@@ -357,7 +358,7 @@ class _progress_scope:
 # had queued. This semaphore is what makes the concurrency safe — everything else
 # (LLM calls, web crawling, transcription, file work) overlaps freely, and only
 # the render serialises.
-COMFY_MAX_CONCURRENT = max(1, int(os.getenv("COMFY_MAX_CONCURRENT", "1")))
+COMFY_MAX_CONCURRENT = max(1, _cfg_env.env_int("COMFY_MAX_CONCURRENT", 1))
 _GPU_SEM = threading.Semaphore(COMFY_MAX_CONCURRENT)
 
 
@@ -383,7 +384,7 @@ _GPU_SEM = threading.Semaphore(COMFY_MAX_CONCURRENT)
 COMFY_EVICT_LLM = os.getenv("COMFY_EVICT_LLM", "1") not in ("0", "false", "False", "")
 # How long a claim waits for open LLM streams to finish before unloading the
 # model anyway (a reply mid-sentence is worth a short wait; a stuck stream is not).
-LLM_INFLIGHT_WAIT_S = int(os.getenv("LLM_INFLIGHT_WAIT_S", "120") or 120)
+LLM_INFLIGHT_WAIT_S = _cfg_env.env_int("LLM_INFLIGHT_WAIT_S", 120)
 
 _EXCL_LOCK = threading.RLock()
 _excl_users = 0            # jobs holding OR queued for an exclusive slot
@@ -481,7 +482,7 @@ def _free_comfy_models() -> None:
 # Room the chat model needs to come back with the headroom it had: the 26B at
 # its working context plus the vision tokens of one picture. Below FREE_GPU_MIN_MB
 # (16 GB) is "still draining"; this is "enough to serve".
-RELOAD_LLM_MIN_FREE_MB = int(os.getenv("RELOAD_LLM_MIN_FREE_MB", "19000"))
+RELOAD_LLM_MIN_FREE_MB = _cfg_env.env_int("RELOAD_LLM_MIN_FREE_MB", 19000)
 
 
 def _release_card() -> None:

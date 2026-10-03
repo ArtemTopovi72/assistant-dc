@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 import random
 import re
 import time
@@ -368,7 +369,7 @@ _EXTRA_LORA = _contextvars.ContextVar("firered_extra_lora", default=None)
 
 # Removal adapter for FireRed; "" disables. Picked by bench/eraser_ab.py.
 REMOVAL_LORA = os.getenv("FIRERED_REMOVAL_LORA", "")
-REMOVAL_LORA_STRENGTH = float(os.getenv("FIRERED_REMOVAL_LORA_STRENGTH", "1.0"))
+REMOVAL_LORA_STRENGTH = _cfg_env.env_float("FIRERED_REMOVAL_LORA_STRENGTH", 1.0)
 
 
 @_contextlib.contextmanager

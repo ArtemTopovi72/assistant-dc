@@ -46,6 +46,7 @@ import html as _html_mod
 import json
 import logging
 import os
+import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 import queue as _pyqueue
 import re
 import threading
@@ -100,7 +101,7 @@ _POSITION_POLL_S    = 2.5
 # one task at a time, and (c) the genuinely exclusive resource — the GPU — is
 # held by a semaphore, so two renders never overlap while an LLM turn happily
 # proceeds alongside one.
-_MAX_CONSUMERS      = max(1, int(os.getenv("TG_WORKERS", "3")))
+_MAX_CONSUMERS      = max(1, _cfg_env.env_int("TG_WORKERS", 3))
 # One definition only. tg_markup owns it because _split_html binds it as a
 # default argument at def time; a second copy here would drift silently.
 from tg_markup import _MAX_TEXT

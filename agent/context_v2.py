@@ -50,6 +50,7 @@ import hashlib
 import json
 import logging
 import os
+import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 import re
 from typing import Dict, List, Optional, Tuple
 
@@ -58,9 +59,9 @@ logger = logging.getLogger("assistant.graph")
 MEMORY_MARKER = "[Working memory]\n"
 V1_SUMMARY_MARKER = "[Conversation summary so far]\n"
 
-MASK_AT = float(os.getenv("CONTEXT_MASK_AT", "0.40"))
-COMPACT_AT = float(os.getenv("CONTEXT_COMPACT_AT", "0.65"))
-KEEP_TURNS = int(os.getenv("CONTEXT_KEEP_TURNS", "2"))
+MASK_AT = _cfg_env.env_float("CONTEXT_MASK_AT", 0.40)
+COMPACT_AT = _cfg_env.env_float("CONTEXT_COMPACT_AT", 0.65)
+KEEP_TURNS = _cfg_env.env_int("CONTEXT_KEEP_TURNS", 2)
 MASK_MIN_CHARS = 400
 CARD_BUDGET = 2400            # chars of rendered memory before card selection kicks in
 SECTION_CAP = {"decisions": 14, "artifacts": 16, "open": 8, "prefs": 10, "folded": 12}

@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 import re
 import threading
 import time
@@ -27,7 +28,7 @@ logger = logging.getLogger(__name__)
 TRACE_DIR = Path(os.getenv("FAILED_TURNS_DIR",
                            Path(__file__).resolve().parents[1] / "runtime" / "failed_turns"))
 # Keep the folder bounded: oldest traces go first.
-MAX_TRACES = int(os.getenv("FAILED_TURNS_MAX", "500"))
+MAX_TRACES = _cfg_env.env_int("FAILED_TURNS_MAX", 500)
 
 # -- claims ----------------------------------------------------------------
 # (id, pattern over the answer, tools of which ONE must have succeeded,

@@ -1,5 +1,6 @@
 import json
 import os
+import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 import tempfile
 import json as _json
 import logging
@@ -33,8 +34,8 @@ def _is_gpt_oss(model_name: str) -> bool:
     return ("gpt-oss" in m or "gptoss" in m or "gpt-120" in m or "gpt-20b" in m)
 
 
-GLIMMER_THINK_HEADROOM = int(os.getenv("GLIMMER_THINK_HEADROOM", "768"))
-GLIMMER_THINK_HEADROOM_HIGH = int(os.getenv("GLIMMER_THINK_HEADROOM_HIGH", "4096"))
+GLIMMER_THINK_HEADROOM = _cfg_env.env_int("GLIMMER_THINK_HEADROOM", 768)
+GLIMMER_THINK_HEADROOM_HIGH = _cfg_env.env_int("GLIMMER_THINK_HEADROOM_HIGH", 4096)
 
 
 def _is_glimmer(model_name: str) -> bool:
@@ -1555,7 +1556,7 @@ def call_llm_simple(
 # on a picture (measured: 1024 px 288, 1280 px 441, 2048 px 1068, 3000 px
 # 1136), so 2048 px is the encoder's full resolution. At 1024 px a projector
 # on wallpaper was «телевизор»; at full size the wall shows through.
-VISION_MAX_SIDE = int(os.getenv("VISION_MAX_SIDE", "2048") or 2048)
+VISION_MAX_SIDE = _cfg_env.env_int("VISION_MAX_SIDE", 2048)
 
 
 def _vision_sized(image_path: str) -> str:

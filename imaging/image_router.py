@@ -20,6 +20,7 @@ _strip_lead, _REMOVAL_RE), which image.py re-exports and the suites patch there.
 """
 import logging
 import os
+import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 import random
 import re
 import time
@@ -357,7 +358,7 @@ def transform_image(image_path: str, instruction: str) -> Optional[str]:
 
 _QUOTED_RE = re.compile(r"[\"«“']([^\"»”']{1,80})[\"»”']")
 _CAPS_TEXT_RE = re.compile(r"(?-i:([A-ZА-ЯЁ0-9][A-ZА-ЯЁ0-9!?&%.,\- ]*[A-ZА-ЯЁ0-9!?%]))")
-TEXT_ADD_TRIES = int(os.getenv("TEXT_ADD_TRIES", "3"))
+TEXT_ADD_TRIES = _cfg_env.env_int("TEXT_ADD_TRIES", 3)
 
 TEXT_ADD_FAILED_NOTE = (
     "[TOOL ERROR] The lettering was drawn {n} times and read back each time, and "

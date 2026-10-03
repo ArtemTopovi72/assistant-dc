@@ -19,6 +19,7 @@ it routes. So retrieval only ever NARROWS from a matched set, and when nothing
 matches it hands back the full list untouched.
 """
 import os
+import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 
 
 # Cheap, broadly useful, and the ones a turn most often turns out to need after
@@ -83,8 +84,8 @@ def _embed_pick(text, schemas, k=None, floor=None):
     falls back to the core set exactly as without this option.
     """
     global _EMBEDDER
-    k = k or int(os.getenv("TOOLS_EMBED_K", "4"))
-    floor = float(os.getenv("TOOLS_EMBED_FLOOR", "0.30")) if floor is None else floor
+    k = k or _cfg_env.env_int("TOOLS_EMBED_K", 4)
+    floor = _cfg_env.env_float("TOOLS_EMBED_FLOOR", 0.30) if floor is None else floor
     try:
         if _EMBEDDER is None:
             import knowledge

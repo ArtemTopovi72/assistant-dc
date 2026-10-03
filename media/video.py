@@ -35,6 +35,7 @@ import json
 import logging
 import math
 import os
+import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 import random
 import re
 import shutil
@@ -342,8 +343,8 @@ LATENT_UPSCALER = os.getenv(
 
 # 1.5x, not 2x (user pick 2026-09-27, bench/h3_stage2.py): stage 2 + decode
 # 45 s vs 93 s; the clip comes out 1008x576 instead of 1344x768.
-UPSCALE_FACTOR = float(os.getenv("VIDEO_UPSCALE_FACTOR", "1.5"))
-REFINE_STEPS = max(1, int(os.getenv("VIDEO_REFINE_STEPS", "2")))
+UPSCALE_FACTOR = _cfg_env.env_float("VIDEO_UPSCALE_FACTOR", 1.5)
+REFINE_STEPS = max(1, _cfg_env.env_int("VIDEO_REFINE_STEPS", 2))
 
 
 def _two_stage_on() -> bool:

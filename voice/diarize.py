@@ -11,6 +11,7 @@ missing venv, a single speaker, a clip too short to be a conversation.
 import json
 import logging
 import os
+import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 import subprocess
 import tempfile
 from typing import List, Optional
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PY = os.getenv("DIAR_PYTHON", os.path.join(ROOT, "venv_diar", "Scripts", "python.exe"))
 MODEL = os.getenv("DIAR_MODEL", os.path.join(ROOT, "models_ext", "nemotron-diar"))
-MIN_SECONDS = float(os.getenv("DIAR_MIN_SECONDS", "8"))
+MIN_SECONDS = _cfg_env.env_float("DIAR_MIN_SECONDS", 8)
 MIN_TURN = 0.6            # a "turn" shorter than this is a cough, merged away
 LABEL = {"ru": "Спикер", "en": "Speaker"}
 
