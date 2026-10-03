@@ -17,7 +17,8 @@ Steps:
    7. config        .env from .env.example, never overwritten
    8. ffmpeg        on PATH (installed with winget on Windows)
    9. voice         vocoder + Russian F5-TTS weights (Misha24-10, v4 winter)
-  10. lmstudio      LM Studio, its server, the chat + embedding models
+  10. lmstudio      LM Studio (winget / headless on Linux), server, chat + embedding models
+  10b. comfyui      ComfyUI v0.38.2, pinned custom nodes, the graphs' model files
   11. shortcut      desktop shortcut (Windows)
   12. health        scripts/healthcheck.py -- the verdict
   13. start         the app (unless --no-start)
@@ -468,6 +469,15 @@ def s_lmstudio(args):
         _p("  LM Studio is not installed -- installing with winget")
         run(["winget", "install", "--id", "ElementLabs.LMStudio", "-e", "--silent",
              "--accept-package-agreements", "--accept-source-agreements"], check=False)
+    if not lms and not IS_WIN and not args.no_install and shutil.which("curl"):
+        # Linux/macOS: LM Studio's headless build (llmster daemon + lms CLI),
+        # no desktop app needed; it lands in ~/.lmstudio/bin.
+        _p("  LM Studio is not installed -- installing the headless build")
+        run(["bash", "-c", "curl -fsSL https://lmstudio.ai/install.sh | bash"], check=False,
+            retries=1, timeout=1800)
+        lms = lms_exe()
+        if lms:
+            subprocess.run([lms, "daemon", "up"], capture_output=True, text=True, timeout=180)
     app = lmstudio_app()
     if not lms and app:
         # The app installs its `lms` CLI on first launch.
@@ -483,6 +493,8 @@ def s_lmstudio(args):
         return
     if _served(base) is None:
         _p("  starting the LM Studio server")
+        if not IS_WIN:
+            subprocess.run([lms, "daemon", "up"], capture_output=True, text=True, timeout=180)
         subprocess.run([lms, "server", "start"], capture_output=True, text=True, timeout=120)
         if not _wait(lambda: _served(base) is not None, 60):
             record("lmstudio", "warn" if args.no_models else "fail", f"the LM Studio server does not answer at {base} -- "
@@ -506,6 +518,41 @@ def s_lmstudio(args):
                    f"Download it in LM Studio's search tab, or set MODEL_NAME in .env")
             return
     record("lmstudio", "ok", f"server at {base}; models: {', '.join(wanted)}")
+
+
+# -- 10b. ComfyUI -------------------------------------------------------------------
+
+def s_comfyui(args, gpu):
+    step("10b. ComfyUI (pictures, video, songs)")
+    if args.no_comfy:
+        record("comfyui", "skip", "--no-comfy")
+        return
+    import comfy_setup as C
+    uv = uv_exe()
+    if not uv:
+        record("comfyui", "fail", "uv not found")
+        return
+    want_cuda = bool(gpu) and not args.cpu
+    index = TORCH_CUDA_INDEX if want_cuda else TORCH_CPU_INDEX
+    try:
+        st, detail = C.install_server(uv, index, _p)
+        if st != "ok":
+            record("comfyui", st, detail)
+            return
+        st2, detail2 = C.install_nodes(uv, _p)
+        notes = [detail, detail2]
+        worst = st2
+        if args.no_models:
+            notes.append("model files not downloaded (--no-models)")
+        else:
+            media = tuple(m for m in args.media.split(",") if m in C.MEDIA)
+            st3, detail3 = C.download_models(media, _p)
+            notes.append(detail3)
+            worst = "warn" if "warn" in (st2, st3) else "ok"
+        record("comfyui", worst, "; ".join(notes))
+    except Exception as exc:
+        record("comfyui", "warn", f"ComfyUI setup stopped ({type(exc).__name__}: "
+               f"{str(exc)[:200]}) -- images/video/songs stay off; run the setup again")
 
 
 # -- 11. shortcut ------------------------------------------------------------------
@@ -588,6 +635,10 @@ def main(argv=None):
     ap.add_argument("--no-start", action="store_true", help="do not start the app at the end")
     ap.add_argument("--cpu", action="store_true", help="install the CPU build of torch even with a GPU")
     ap.add_argument("--dev", action="store_true", help="also install the test dependencies")
+    ap.add_argument("--no-comfy", action="store_true",
+                    help="do not install ComfyUI (no pictures, video or songs)")
+    ap.add_argument("--media", default="image,music,video",
+                    help="which ComfyUI model sets to download (image,music,video; ~155 GB all)")
     args = ap.parse_args(argv)
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -608,6 +659,7 @@ def main(argv=None):
         s_ffmpeg(args)
         s_voice(args)
         s_lmstudio(args)
+        s_comfyui(args, gpu)
         s_shortcut(args)
         healthy = s_health(args)
     except SetupError as exc:
