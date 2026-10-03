@@ -12,7 +12,10 @@ logger = logging.getLogger("assistant.config")
 try:
     from dotenv import load_dotenv
     _ENV_FILE = Path(__file__).resolve().parents[1].joinpath(".env")
-    if _ENV_FILE.exists():
+    # Test runs (F5_TEST_RUN) ignore the operator's .env: its values changed
+    # the defaults the suites assert, so a machine that had run the setup
+    # failed tests that pass on a clean checkout.
+    if _ENV_FILE.exists() and not os.getenv("F5_TEST_RUN"):
         load_dotenv(_ENV_FILE, override=False)
         logger.info("Loaded environment overrides from %s", _ENV_FILE)
 except Exception as exc:  # pragma: no cover - defensive

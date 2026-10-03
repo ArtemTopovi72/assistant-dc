@@ -90,7 +90,7 @@ U.preprocess_ref_audio_text = _fake_preprocess
 U.infer_process = _fake_infer
 try:
     ctx = _Ctx()
-    class _M: tts_model = None; vocoder = None
+    class _M: tts_model = object(); vocoder = object()   # None now means "voice off"
     ctx.models = _M()
     out = A.synth_single_segment(
         ctx=ctx, idx=-1, actor=C.ASSISTANT_ACTOR, raw_text="привет",

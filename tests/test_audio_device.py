@@ -237,7 +237,7 @@ def test_synth_single_segment():
 
     class Ctx2:
         def __init__(self):
-            self.models = types.SimpleNamespace(tts_model=None, vocoder=None,
+            self.models = types.SimpleNamespace(tts_model=object(), vocoder=object(),  # stand-ins; infer_process is faked
                                                 accentor_loaded=False, accentor=lambda t: t)
             self.tts_lock = threading.Lock()
             self.custom_ref_wav = None
