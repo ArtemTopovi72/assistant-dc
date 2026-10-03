@@ -613,6 +613,30 @@ def _lock_framing_unless_requested(description: str) -> str:
     return d + _FRAMING_LOCK_SUFFIX
 
 
+# With a picture to start from: the picture IS the opening shot, and its look
+# holds for the whole clip (owner 10-03: «где был реализм там только гипер
+# реализм, где мультяшно там мультяшно… первый снимок это и есть стартовый
+# ракурс»). Said for any picture, so no guess about its style is needed; a
+# camera move the user asks for still happens, but from that opening shot.
+_START_LOCK_SUFFIX = (
+    " The reference image <Picture 1> is the exact first frame: the clip opens on it as it is -- same "
+    "framing, crop, zoom and angle; any camera move or reframing happens only later in the "
+    "clip and only when asked for above. Keep the reference's visual style unchanged from "
+    "the first frame to the last: a photograph stays a photograph (hyper-realistic, "
+    "true-to-life detail, real skin and materials), a cartoon, anime, painting or 3D render "
+    "stays in exactly that style; never switch between realistic and drawn, never restyle "
+    "the faces or the scene.")
+
+
+def _with_lock(description: str, lock: str) -> str:
+    """`lock` restated verbatim at the end of the visual part: the context-IR
+    rewrite paraphrases it away («the camera holds a static shot»)."""
+    if lock in description:
+        return description
+    cut = description.find("\n\noverall_soundscape:")
+    return description[:cut] + lock + description[cut:] if cut > 0 else description + lock
+
+
 _GUIDE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "h3_prompt_guides")
 _CIR_FIELDS = ("integrated_multimodal_description:", "overall_soundscape:", "non_diegetic_music:")
 _CIR_REF_FIELDS = ("subject_definitions", "retention_analysis", "detailed_description")
@@ -869,12 +893,10 @@ def generate_video(ctx, description: str, *,
         description = to_context_ir(ctx, description, mode=mode,
                                     seconds=frames_to_seconds(frames), images=images,
                                     n_videos=len(videos), n_audios=len(audios))
-        if locked and _FRAMING_LOCK_SUFFIX not in description:
-            # the rewrite paraphrases the lock away ("the camera holds a static
-            # shot") -- restate it verbatim at the end of the visual field
-            cut = description.find("\n\noverall_soundscape:")
-            description = (description[:cut] + _FRAMING_LOCK_SUFFIX + description[cut:]
-                           if cut > 0 else description + _FRAMING_LOCK_SUFFIX)
+        if locked:
+            description = _with_lock(description, _FRAMING_LOCK_SUFFIX)
+    if 1 <= len(images) <= 2 and not videos:     # a photo to animate, not a set of references
+        description = _with_lock(description, _START_LOCK_SUFFIX)
     if VIDEO_SPEECH_STRESS:
         description = mark_speech_stress(ctx, description)
     if seed is None or int(seed) < 1:
