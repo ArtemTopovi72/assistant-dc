@@ -217,13 +217,32 @@ def check_docker():
         import code_runner
         if code_runner.docker_available(timeout=8):
             return Result("docker", OK, "engine up (run_code is isolated)")
-        if code_runner.docker_binary():
+        exe = code_runner.docker_binary()
+        if exe:
+            if os.name == "nt":
+                return Result("docker", WARN, "installed, engine not running -- run_code off",
+                              "start Docker Desktop (the launcher does it)")
+            # Linux: the launcher cannot start a root daemon, and a user outside
+            # the docker group sees a running engine as "not running".
+            err = _docker_info_error(exe)
+            if "permission denied" in err.lower():
+                return Result("docker", WARN, "engine running but not usable by this user -- run_code off",
+                              "sudo usermod -aG docker $USER, then log out and back in")
             return Result("docker", WARN, "installed, engine not running -- run_code off",
-                          "start Docker Desktop (the launcher does it)")
+                          "sudo systemctl enable --now docker")
     except Exception as exc:
         return Result("docker", WARN, f"check failed: {exc}")
     return Result("docker", WARN, "not installed -- run_code (code execution) off",
-                  "optional: install Docker Desktop")
+                  "optional: install Docker Desktop" if os.name == "nt"
+                  else "optional: install Docker Engine (https://docs.docker.com/engine/install/)")
+
+
+def _docker_info_error(exe: str) -> str:
+    try:
+        p = subprocess.run([exe, "info"], capture_output=True, text=True, timeout=8)
+        return (p.stderr or "") + (p.stdout or "")
+    except Exception as exc:
+        return str(exc)
 
 
 _GUI_CHILD = textwrap.dedent(r'''

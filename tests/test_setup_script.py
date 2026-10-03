@@ -111,3 +111,19 @@ def test_voice_hint_names_the_setup_for_downloadable_parts(tmp_path, monkeypatch
     r = hc.check_voice()
     text = " ".join(str(x) for x in vars(r).values()) if hasattr(r, "__dict__") else str(r)
     assert "ASSISTANT_REF_WAV" in text, text
+
+
+def test_docker_hint_on_linux_names_the_group_or_the_service(monkeypatch):
+    hc = _load("healthcheck")
+    import code_runner
+    monkeypatch.setattr(hc.os, "name", "posix")
+    monkeypatch.setattr(code_runner, "docker_available", lambda timeout=0: False)
+    monkeypatch.setattr(code_runner, "docker_binary", lambda: "/usr/bin/docker")
+    monkeypatch.setattr(hc, "_docker_info_error", lambda exe: (
+        "permission denied while trying to connect to the Docker daemon socket"))
+    r = hc.check_docker()
+    assert "usermod -aG docker" in str(vars(r)), vars(r)
+    monkeypatch.setattr(hc, "_docker_info_error", lambda exe: (
+        "Cannot connect to the Docker daemon. Is the docker daemon running?"))
+    r = hc.check_docker()
+    assert "systemctl" in str(vars(r)) and "Docker Desktop" not in str(vars(r)), vars(r)
