@@ -118,7 +118,10 @@ def _accent_line(ctx, line: str, words: list) -> list:
         except Exception:
             return []
     got = _PLUS_WORD.findall(out or "")
-    if [w.replace("+", "").lower() for w in got] != [w.lower() for w in words]:
+    # RUAccent restores ё («все» -> «всё»): the same words, not another tokenisation
+    # -- compared strictly, every line with a restored ё lost its stress
+    norm = lambda w: w.replace("+", "").lower().replace("ё", "е")
+    if [norm(w) for w in got] != [norm(w) for w in words]:
         return []                       # tokenised differently: no guessing
     return got
 
@@ -307,9 +310,15 @@ def analyse(text: str, ctx=None) -> dict:
             info.append(rows)
 
     issues, penalty, rich = [], 0.0, 0
+    seen_stanzas = set()
     for rows in info:
         if len(rows) < 2:
             continue
+        # a chorus sung three times is one chorus: its problems once, not thrice
+        key = tuple(r["text"].lower() for r in rows)
+        if key in seen_stanzas:
+            continue
+        seen_stanzas.add(key)
         # which pairs should rhyme: the scheme that rhymes most, or neighbours
         if len(rows) == 4:
             schemes = _SCHEMES[4]
@@ -630,7 +639,8 @@ _JUDGE = (
 def _verdict(ctx, topic: str, a: str, b: str) -> str:
     raw = _call(ctx, "judge", _JUDGE, f"Theme: {topic}\n\nA:\n{a}\n\nB:\n{b}",
                 temperature=0.0, max_tokens=5)
-    m = re.search(r"\b([AB])\b", (raw or "").strip().upper())
+    # Cyrillic А/В look the same and a Russian-tuned model writes them
+    m = re.search(r"\b([AB])\b", (raw or "").strip().upper().translate(str.maketrans("АВ", "AB")))
     return m.group(1) if m else ""
 
 
@@ -681,8 +691,12 @@ def fix_rhymes(ctx, text: str, rule: dict, lang: str, k: int = 3) -> str:
             r = _row(ctx, b_n, cand) if cand else None
             if (r and _rhymes(a, r) and not _banned(a["last"], r["last"])
                     and abs(a["syl"] - r["syl"]) <= 2):
-                lines[b_n - 1] = cand
-                rows[b_n] = r
+                old = lines[b_n - 1]
+                # the same line in every repeat of the chorus, or they drift apart
+                for i, l in enumerate(lines):
+                    if l.strip() == old.strip():
+                        lines[i] = cand
+                        rows[i + 1] = _row(ctx, i + 1, cand)
                 done += 1
                 break
     return "\n".join(lines)
@@ -716,7 +730,8 @@ def polish(ctx, text: str, rounds: int = ROUNDS, on_round=None) -> dict:
         if on_round:
             on_round(r + 1)
         fixed = fix_rhymes(ctx, cur, rule, lang)
-        if fixed != cur:                            # the rhymes mended line by line first
+        mended = fixed != cur
+        if mended:                            # the rhymes mended line by line first
             rule = analyse(fixed, ctx)
             problems = [describe(i) for i in rule["issues"]] + probs
             cur = fixed
@@ -726,6 +741,8 @@ def polish(ctx, text: str, rounds: int = ROUNDS, on_round=None) -> dict:
         new = revise(ctx, cur, problems, lang)
         done += 1
         if not new or len(new) < len(cur) * 0.4:
+            if mended:
+                continue                            # the line fixes are scored next round
             break                                   # a broken rewrite: keep what we have
         cur = new
     best.update(rounds=done, original=text.strip())

@@ -390,3 +390,52 @@ def test_back_under_a_result_keeps_it_and_removes_only_the_buttons():
     assert calls[-1][0] == "editMessageReplyMarkup"
     b._close_menu(5, {"message_id": 9, "text": "Короткий куплет"})
     assert not [c for c in calls if c[0] == "deleteMessage"]
+
+
+# ── analogous bugs found in review (10-03) ───────────────────────────────────
+def test_a_restored_yo_keeps_the_lines_stress(monkeypatch):
+    """RUAccent restores ё («все» -> «всё»): the strict word match threw the
+    whole line's stress away."""
+    monkeypatch.setattr(L, "ACCENT_STUB", lambda line: "Мы вс+ё отд+али")
+    assert L._accent_line(None, "Мы все отдали", ["Мы", "все", "отдали"]) == ["Мы", "вс+ё", "отд+али"]
+
+
+CHORUS3 = """[chorus]
+Это сбруя на диком огне
+Мы куём её снова и вновь
+
+[chorus]
+Это сбруя на диком огне
+Мы куём её снова и вновь"""
+
+
+def test_a_repeated_chorus_is_judged_once():
+    issues = [i for i in L.analyse(CHORUS3)["issues"] if i["kind"] == "no_rhyme"]
+    assert len(issues) == 1 and issues[0]["lines"] == (2, 3)
+
+
+def test_a_mended_chorus_line_is_mended_in_every_repeat(monkeypatch):
+    monkeypatch.setattr(L, "LLM_STUB", lambda role, s, u: "Мы куём её в каждом окне" if role == "lines" else "")
+    out = L.fix_rhymes(None, CHORUS3, L.analyse(CHORUS3), "Russian")
+    assert out.count("Мы куём её в каждом окне") == 2 and "снова и вновь" not in out
+
+
+def test_a_cyrillic_verdict_is_read(monkeypatch):
+    monkeypatch.setattr(L, "LLM_STUB", lambda role, s, u: "В")
+    assert L._verdict(None, "т", "a", "b") == "B"
+
+
+def test_the_person_lookup_does_not_show_up_as_a_search_in_the_reply(monkeypatch):
+    import types
+    import person_look as P
+    import search
+    monkeypatch.delenv("F5_TEST_RUN", raising=False)
+    monkeypatch.setattr(P, "SEARCH_STUB", None)
+    ctx = types.SimpleNamespace(web_search_enabled=True, turn_queries=["кто такой Ленин"], turn_sources=[])
+
+    def run(c, q):
+        c.turn_queries.append(q); c.turn_sources.append({"url": "x"})
+        return "bald, goatee"
+    monkeypatch.setattr(search, "run_web_search", run)
+    assert P._search(ctx, "Lenin appearance") == "bald, goatee"
+    assert ctx.turn_queries == ["кто такой Ленин"] and ctx.turn_sources == []

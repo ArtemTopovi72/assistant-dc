@@ -621,11 +621,21 @@ def _lock_framing_unless_requested(description: str) -> str:
 _START_LOCK_SUFFIX = (
     " The reference image <Picture 1> is the exact first frame: the clip opens on it as it is -- same "
     "framing, crop, zoom and angle; any camera move or reframing happens only later in the "
-    "clip and only when asked for above. Keep the reference's visual style unchanged from "
+    "clip and only when asked for above.")
+_STYLE_LOCK_SUFFIX = (
+    " Keep the reference's visual style unchanged from "
     "the first frame to the last: a photograph stays a photograph (hyper-realistic, "
     "true-to-life detail, real skin and materials), a cartoon, anime, painting or 3D render "
     "stays in exactly that style; never switch between realistic and drawn, never restyle "
     "the faces or the scene.")
+
+
+def _asks_new_style(description: str) -> bool:
+    """«оживи в стиле аниме»: the style lock would fight the request itself."""
+    import intent
+    return intent.ask_yes("A video clip is made from a picture and described as: {text}\n\n"
+                          "Does the description ask to change the picture's visual style (into "
+                          "anime, cartoon, painting, 3D, photoreal, another art style)?", description)
 
 
 def _with_lock(description: str, lock: str) -> str:
@@ -879,6 +889,7 @@ def generate_video(ctx, description: str, *,
     audios = [p for p in (audios or ()) if p and os.path.exists(p)]
     images, videos, audios = fit_references(images, videos, audios)
 
+    asked = description
     description = _lock_framing_unless_requested(description)
     mode = pick_mode(images, videos, audios)
     # Ref2VA's workflow carries the LightX2V Turbo LoRA baked in (see
@@ -896,7 +907,10 @@ def generate_video(ctx, description: str, *,
         if locked:
             description = _with_lock(description, _FRAMING_LOCK_SUFFIX)
     if 1 <= len(images) <= 2 and not videos:     # a photo to animate, not a set of references
+        restyle = _asks_new_style(asked)
         description = _with_lock(description, _START_LOCK_SUFFIX)
+        if not restyle:
+            description = _with_lock(description, _STYLE_LOCK_SUFFIX)
     if VIDEO_SPEECH_STRESS:
         description = mark_speech_stress(ctx, description)
     if seed is None or int(seed) < 1:

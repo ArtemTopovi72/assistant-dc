@@ -12,7 +12,8 @@ os.environ.setdefault("F5_TEST_RUN", "1")
 import video as V  # noqa: E402
 
 
-def _run(monkeypatch, images, description="she smiles and waves", camera=False, ir=None):
+def _run(monkeypatch, images, description="she smiles and waves", camera=False, ir=None,
+         restyle=False):
     got = {}
 
     def build(desc, **kw):
@@ -22,7 +23,7 @@ def _run(monkeypatch, images, description="she smiles and waves", camera=False, 
     monkeypatch.setattr(V, "build_workflow", build)
     monkeypatch.setattr(V, "_image_size", lambda p: (768, 768))
     import intent
-    monkeypatch.setattr(intent, "ask_yes", lambda q, t: camera)
+    monkeypatch.setattr(intent, "ask_yes", lambda q, t: restyle if "visual style" in q else camera)
     if ir is not None:
         monkeypatch.setattr(V, "_context_ir_on", lambda: True)
         monkeypatch.setattr(V, "to_context_ir", lambda ctx, d, **kw: ir)
@@ -38,7 +39,7 @@ def _img():
 
 def test_a_photo_to_animate_opens_on_itself_in_its_own_style(monkeypatch):
     p = _run(monkeypatch, [_img()])
-    assert V._START_LOCK_SUFFIX in p and V._FRAMING_LOCK_SUFFIX in p
+    assert V._START_LOCK_SUFFIX in p and V._FRAMING_LOCK_SUFFIX in p and V._STYLE_LOCK_SUFFIX in p
     assert "exact first frame" in p and "a photograph stays a photograph" in p
     assert "a cartoon, anime" in p and "never switch between realistic and drawn" in p
 
@@ -58,3 +59,8 @@ def test_the_lock_survives_the_rewrite(monkeypatch):
 def test_text_only_or_a_set_of_references_gets_no_start_lock(monkeypatch):
     assert V._START_LOCK_SUFFIX not in _run(monkeypatch, [])
     assert V._START_LOCK_SUFFIX not in _run(monkeypatch, [_img(), _img(), _img()])
+
+
+def test_an_asked_new_style_is_not_fought(monkeypatch):
+    p = _run(monkeypatch, [_img()], "оживи её в стиле аниме", restyle=True)
+    assert V._START_LOCK_SUFFIX in p and V._STYLE_LOCK_SUFFIX not in p

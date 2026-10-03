@@ -57,7 +57,15 @@ def _search(ctx, query: str) -> str:
     if os.getenv("F5_TEST_RUN") or ctx is None or not getattr(ctx, "web_search_enabled", True):
         return ""
     import search
-    txt = search.run_web_search(ctx, query) or ""
+    # A lookup for the drawing, not an answer: the reply under the picture
+    # must not list «🔎 Искал: Lenin appearance…» and its sources.
+    kept = {k: list(getattr(ctx, k)) for k in ("turn_queries", "turn_sources")
+            if isinstance(getattr(ctx, k, None), list)}
+    try:
+        txt = search.run_web_search(ctx, query) or ""
+    finally:
+        for k, v in kept.items():
+            getattr(ctx, k)[:] = v
     return "" if txt in (search.NO_RESULTS, search.SEARCH_FAILED) else txt
 
 
