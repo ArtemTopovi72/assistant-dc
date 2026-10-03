@@ -64,6 +64,11 @@ class _Handler(logging.Handler):
 
 
 _handler = _Handler()
+try:
+    import log_redact                   # the trace is a file too: no bot token in it
+    log_redact.install(_handler)
+except Exception:
+    pass
 _root = logging.getLogger("assistant")
 if not any(isinstance(h, _Handler) for h in _root.handlers):
     _root.addHandler(_handler)

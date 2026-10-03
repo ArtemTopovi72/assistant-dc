@@ -63,3 +63,27 @@ def test_crash_log_is_redacted(tmp_path, monkeypatch):
     crash_diag._write_crash_log("UNCAUGHT", f"ConnectionError: /bot{TOKEN}/getUpdates")
     text = (tmp_path / "crash.log").read_text(encoding="utf-8")
     assert TOKEN.split(":")[1] not in text and "getUpdates" in text
+
+
+def test_turn_trace_and_chatlog_files_are_redacted(tmp_path, monkeypatch):
+    """Both keep their own copy of the log lines of a turn, outside the file
+    handler's filter: a token in a warning landed in turns/ and chat_logs/."""
+    import tempfile
+    import tg_bot as T
+    import chatlog
+    import turn_trace
+    T.redirect_data_dir(tempfile.mkdtemp())
+    monkeypatch.setenv("TURNS_DIR", str(tmp_path))
+    monkeypatch.setattr(turn_trace, "TURNS_DIR", tmp_path)
+    chatlog.install()
+    lg = logging.getLogger("assistant.tg_redact_case")
+    lg.setLevel(logging.INFO)
+    tok = turn_trace.start(chat=9, task="message", text="x")
+    with chatlog.bind(9):
+        lg.warning("sendVideo failed: url /bot%s/sendVideo", TOKEN)
+    turn_trace.finish(tok)
+    secret = TOKEN.split(":")[1]
+    trace = "".join(p.read_text(encoding="utf-8") for p in tmp_path.glob("*.jsonl"))
+    assert "sendVideo failed" in trace and secret not in trace
+    log = open(os.path.join(chatlog._dir(), "9.jsonl"), encoding="utf-8").read()
+    assert "sendVideo failed" in log and secret not in log

@@ -76,4 +76,10 @@ def install() -> None:
     global _installed
     if not _installed:
         _installed = True
-        logging.getLogger().addHandler(_Handler())
+        h = _Handler()
+        try:
+            import log_redact           # requests errors quote the Bot API URL, token and all
+            log_redact.install(h)
+        except Exception:
+            pass
+        logging.getLogger().addHandler(h)
