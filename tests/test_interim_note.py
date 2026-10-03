@@ -2,7 +2,8 @@
 
 The user asked for a reaction in real time, not only when the work is done
 (2026-09-18). The model's own pre-tool sentence goes out when it is clean,
-otherwise a one-line note naming the work; one per turn; long tools only.
+nothing otherwise (a canned note repeated the status line: live 10-03
+«лишне дублирует»); one per turn; long tools only.
 """
 import os, sys, json, threading
 os.environ.setdefault("F5_TEST_RUN", "1")
@@ -35,10 +36,9 @@ check("a colon-ending plan header is not sent", I.clean_note("План дейс�
 check("a wall of text is not sent", I.clean_note("слово " * 60) == "")
 
 # --- composition ---------------------------------------------------------------
-check("own words win, with the icon", I.compose("generate_image", "Рисую кота!", "ru") == "🎨 Рисую кота!")
-check("no words -> the RU note", I.compose("generate_image", "", "ru") == "🎨 Понял, рисую — это займёт пару минут.")
-check("no words -> the EN note", I.compose("deep_research", "", "en") == "🔬 Got it, researching — a few minutes.")
-check("an unknown language falls back to English", I.compose("run_code", "", "de").startswith("💻 Got it,"))
+check("own words, with the icon", I.compose("generate_image", "Рисую кота!") == "🎨 Рисую кота!")
+check("no words -> no canned note (the status line says it)", I.compose("redraw_image", "") == "")
+check("unfit words -> no note either", I.compose("deep_research", "[tool] x") == "")
 
 # --- offer: the callback, the cap ---------------------------------------------
 class _Ctx:
@@ -46,14 +46,15 @@ class _Ctx:
     def __init__(self): self.sent = []; self.interim_callback = self.sent.append
 c = _Ctx()
 check("no long tool -> nothing sent", not I.offer(c, "hi", [tc("calculate")], 0) and not c.sent)
-check("a long tool -> one note", I.offer(c, "", [tc("generate_music")], 0) and c.sent == ["🎵 Понял, сочиняю и пою — несколько минут."], c.sent)
-check("the cap: a second note in the same turn is not sent", not I.offer(c, "", [tc("generate_music")], 1))
+check("a long tool, no words -> nothing sent", not I.offer(c, "", [tc("redraw_image")], 0) and not c.sent, c.sent)
+check("a long tool -> one note", I.offer(c, "Пишу песню.", [tc("generate_music")], 0) and c.sent == ["🎵 Пишу песню."], c.sent)
+check("the cap: a second note in the same turn is not sent", not I.offer(c, "Ещё.", [tc("generate_music")], 1))
 c2 = _Ctx(); c2.interim_callback = None
-check("no callback (desktop) -> nothing, no error", not I.offer(c2, "", [tc("generate_image")], 0))
+check("no callback (desktop) -> nothing, no error", not I.offer(c2, "Рисую.", [tc("generate_image")], 0))
 c3 = _Ctx()
 def _boom(t): raise RuntimeError("telegram down")
 c3.interim_callback = _boom
-check("a failing callback is swallowed", not I.offer(c3, "", [tc("generate_image")], 0))
+check("a failing callback is swallowed", not I.offer(c3, "Рисую.", [tc("generate_image")], 0))
 
 # --- through the real loop -------------------------------------------------------
 import test_agent_loop_hardening as H
