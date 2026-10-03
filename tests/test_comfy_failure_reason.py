@@ -62,3 +62,29 @@ def test_a_new_submit_clears_the_old_reason(monkeypatch):
     monkeypatch.setattr(CC, "server_healthy", lambda: False)
     CC._submit_and_poll(None, {}, timeout=5)
     assert "old" not in CC.last_failure()
+
+
+def test_submit_exception_is_the_reason(monkeypatch):
+    _no_server_checks(monkeypatch)
+
+    def boom(*a, **k):
+        raise CC.requests.exceptions.ConnectionError("refused")
+    monkeypatch.setattr(CC.requests, "post", boom)
+    assert CC._submit_and_poll(None, {}, timeout=5) is None
+    why = CC.last_failure()
+    assert "could not submit" in why and "ConnectionError" in why, why
+
+
+def test_a_timed_out_job_is_stopped_on_the_server(monkeypatch):
+    _no_server_checks(monkeypatch)
+    monkeypatch.setattr(CC.requests, "post", lambda *a, **k: _Resp(200, {"prompt_id": "p9"}))
+    monkeypatch.setattr(CC.requests, "get", lambda *a, **k: _Resp(200, {}))
+    monkeypatch.setattr(CC, "_job_still_known", lambda pid: True)
+    cancelled = []
+    monkeypatch.setattr(CC, "_cancel_job", cancelled.append)
+    clock = iter(range(0, 10_000, 7))
+    monkeypatch.setattr(CC.time, "time", lambda: next(clock))
+    monkeypatch.setattr(CC.time, "sleep", lambda s: None)
+    assert CC._submit_and_poll(None, {}, timeout=30) is None
+    assert cancelled == ["p9"]
+    assert "did not finish" in CC.last_failure()

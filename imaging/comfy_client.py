@@ -829,6 +829,8 @@ def _submit_and_poll_locked(ctx, workflow: dict, timeout: int, label: str,
         holder["id"] = prompt_id
     except Exception as exc:
         logger.error("ComfyUI request failed: %s", exc)
+        _fail(f"could not submit the job to ComfyUI at {COMFY_URL} "
+              f"({type(exc).__name__}: {str(exc)[:160]})")
         if progress is not None:
             progress.stop()
         return None
@@ -957,6 +959,9 @@ def _poll_history(ctx, prompt_id, timeout, label, validate=None):
         delay = min(delay * 1.5, 5.0)
 
     logger.error("ComfyUI timeout after %d seconds", timeout)
+    # Abandoned is not stopped: left running it keeps the card, and the next
+    # job (or the chat model reloading) waits behind a render nobody will read.
+    _cancel_job(prompt_id)
     _fail(f"the render did not finish within {timeout} s")
     return None
 
