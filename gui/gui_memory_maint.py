@@ -19,7 +19,7 @@ from PyQt5.QtWidgets import (
     QTabWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 from ui_scale import px, scale_style as _ss
-from gui_common import MUTED, _FlowWidget, _card, _flow, _fmt_bytes, _fmt_ts, _section
+from gui_common import MUTED, _FlowWidget, _card, _flow, _fmt_bytes, _fmt_ts, _section, open_in_os
 import logging
 
 logger = logging.getLogger("assistant.gui")
@@ -252,6 +252,6 @@ class MemoryMaintenanceMixin:
         d = self.store.profile_dir(self._profile())
         d.mkdir(parents=True, exist_ok=True)
         try:
-            os.startfile(str(d))  # Windows
+            open_in_os(d)
         except Exception as e:
             self._toast(f"Could not open folder: {e}")

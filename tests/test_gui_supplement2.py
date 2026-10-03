@@ -159,14 +159,14 @@ def test_mc_profiles_and_import():
             break
     tab._prof_delete(); check("mc_prof_delete", "extra" not in store.profiles())
     tab._prof_suggested(); check("mc_prof_suggested", True)
-    # _open_folder (patch os.startfile which doesn't exist on non-Windows path anyway)
-    real = getattr(os, "startfile", None)
-    os.startfile = lambda p: None
+    # _open_folder hands the profile folder to the desktop (stubbed: no real window)
+    import gui_memory_maint as _gmm
+    real, opened = _gmm.open_in_os, []
+    _gmm.open_in_os = opened.append
     try:
-        tab._open_folder(); check("mc_open_folder", True)
+        tab._open_folder(); check("mc_open_folder", len(opened) == 1 and os.path.isdir(opened[0]), opened)
     finally:
-        if real is not None: os.startfile = real
-        else: delattr(os, "startfile")
+        _gmm.open_in_os = real
     # _import: export a backup first, then import it (confirm yes)
     zp = os.path.join(_TMP, "bk.zip")
     store.export_zip(store.profiles(), Path(zp))

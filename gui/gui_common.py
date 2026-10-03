@@ -61,6 +61,22 @@ ACCENT = "#2b6cf0"; ACCENT2 = "#00d3a7"; REC = "#e23b3b"
 TEXT = "#e8e9ee"; MUTED = "#8b8fa3"; BORDER = "#2c2e3a"
 
 
+def open_in_os(path) -> None:
+    """Open a file or folder with the desktop's own handler. Raises on failure.
+
+    os.startfile exists only on Windows: the folder buttons that called it
+    straight failed elsewhere with "module 'os' has no attribute 'startfile'".
+    """
+    import sys
+    if sys.platform.startswith("win"):
+        os.startfile(str(path))                       # noqa: S606 - the user's own file
+        return
+    from PyQt5.QtCore import QUrl
+    from PyQt5.QtGui import QDesktopServices
+    if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(path))):
+        raise OSError(f"no application to open {path}")
+
+
 def enable_dark_titlebar(widget) -> None:
     """Make a top-level window's NATIVE Windows title bar dark (the main window is
     frameless, but QDialogs — Settings, mask editor, message boxes — use the OS frame,

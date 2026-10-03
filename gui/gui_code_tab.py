@@ -26,7 +26,7 @@ from PyQt5.QtWidgets import (QComboBox, QFileDialog, QHBoxLayout, QLabel,
 
 import code_sandbox as _cs
 import sandbox_access as _sa
-from gui_common import MUTED, _ScopedCtx, _section
+from gui_common import MUTED, _ScopedCtx, _section, open_in_os
 from ui_scale import px
 
 import logging
@@ -432,7 +432,7 @@ class CodeTab(QWidget):
         try:
             # The platform's own file manager, via the stdlib -- no dependency
             # and no shell string to quote wrong.
-            os.startfile(str(Path(target).parent))       # noqa: S606 (Windows)
+            open_in_os(Path(target).parent)
         except Exception as exc:
             self.status.setText(f"Could not open the folder: {exc}")
 

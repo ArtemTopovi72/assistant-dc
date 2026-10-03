@@ -303,13 +303,13 @@ def test_memory_center_small_guards():
     tab.store.sync_into_ctx = lambda ctx, prof: (_ for _ in ()).throw(RuntimeError("sync"))
     tab._after_mutation()
     # _open_folder startfile raising (3051-3052)
-    real = getattr(os, "startfile", None)
-    os.startfile = lambda p: (_ for _ in ()).throw(OSError("no shell"))
+    import gui_memory_maint as _gmm
+    real = _gmm.open_in_os
+    _gmm.open_in_os = lambda p: (_ for _ in ()).throw(OSError("no shell"))
     try:
         tab._open_folder()
     finally:
-        if real is not None: os.startfile = real
-        else: delattr(os, "startfile")
+        _gmm.open_in_os = real
     # refresh_all sub-refresh raising -> except (3079-3080)
     tab._refresh_timeline = lambda: (_ for _ in ()).throw(RuntimeError("boom"))
     tab.refresh_all()
