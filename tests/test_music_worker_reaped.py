@@ -49,3 +49,18 @@ def test_timeout_kills_and_reports(monkeypatch):
     ok, _tail = music.run_gpu_worker(None, sys.executable, "", {}, "t", timeout=1,
                                      cmd=[sys.executable, "-c", "import time; time.sleep(30)"])
     assert ok is False and time.time() - t0 < 10
+
+
+def test_render_time_log_survives_corruption(tmp_path, monkeypatch):
+    monkeypatch.setattr(music, "_eta_path", lambda: tmp_path / "eta.json")
+    (tmp_path / "eta.json").write_text('[{"preset": "a", "asked": 60, "wa')   # torn write
+    music.record_render_time("a", 60, 120.0)
+    music.record_render_time("a", 30, 50.0)
+    import json
+    rows = json.loads((tmp_path / "eta.json").read_text())
+    assert [r["wall"] for r in rows] == [120.0, 50.0]
+    # one malformed row does not hide the rows after it
+    rows.insert(0, {"preset": "a"})
+    (tmp_path / "eta.json").write_text(json.dumps(rows))
+    got = music._eta_runs().get("a", [])
+    assert (60, 120.0, music._STEPS_REF) in got and (30, 50.0, music._STEPS_REF) in got

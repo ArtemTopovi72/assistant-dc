@@ -443,8 +443,10 @@ def edit_image_with_firered(ctx, image_path: str, instruction: str, **kw) -> Opt
         lin[os.path.abspath(out)] = {"root": os.path.abspath(root), "chain": chain + [instruction]}
         try:
             os.makedirs(os.path.dirname(_LINEAGE_FILE), exist_ok=True)
-            with open(_LINEAGE_FILE, "w", encoding="utf-8") as f:
+            tmp = f"{_LINEAGE_FILE}.{os.getpid()}.tmp"     # torn file = every chain forgotten
+            with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(dict(list(lin.items())[-500:]), f, ensure_ascii=False)
+            os.replace(tmp, _LINEAGE_FILE)
         except Exception:
             logger.debug("firered lineage not saved", exc_info=True)
     return out

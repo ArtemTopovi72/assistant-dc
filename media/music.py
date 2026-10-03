@@ -29,6 +29,7 @@ import logging
 import os
 import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 import random
+import threading
 import time
 from pathlib import Path
 import re
@@ -552,6 +553,9 @@ def _steps_factor(preset: str, steps: int) -> float:
     return (1.0 - share) + share * (max(1, int(steps)) / float(_STEPS_REF))
 
 
+_ETA_LOCK = threading.Lock()
+
+
 def _eta_path():
     return Path(OUTPUT_DIR) / _ETA_FILE
 
@@ -562,11 +566,15 @@ def _eta_runs() -> dict:
     try:
         import json
         with open(_eta_path(), "r", encoding="utf-8") as fh:
-            for row in json.load(fh):
-                runs.setdefault(str(row["preset"]), []).append(
-                    (int(row["asked"]), float(row["wall"]), int(row.get("steps", _STEPS_REF))))
+            rows = json.load(fh)
     except Exception:
-        pass
+        return runs
+    for row in rows if isinstance(rows, list) else []:
+        try:    # one malformed row must not drop every row after it
+            runs.setdefault(str(row["preset"]), []).append(
+                (int(row["asked"]), float(row["wall"]), int(row.get("steps", _STEPS_REF))))
+        except Exception:
+            continue
     return runs
 
 
@@ -577,16 +585,27 @@ def record_render_time(preset: str, asked_s: int, wall_s: float, steps: int = _S
     try:
         import json
         import time as _time
-        path = _eta_path()
-        rows = []
-        if path.exists():
-            with open(path, "r", encoding="utf-8") as fh:
-                rows = json.load(fh)
-        rows.append({"preset": preset, "asked": int(asked_s), "wall": round(float(wall_s), 1),
-                     "steps": int(steps or _STEPS_REF), "at": int(_time.time())})
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w", encoding="utf-8") as fh:
-            json.dump(rows[-200:], fh)
+        with _ETA_LOCK:     # two songs finishing together must not drop a row
+            path = _eta_path()
+            rows = []
+            try:
+                with open(path, "r", encoding="utf-8") as fh:
+                    rows = json.load(fh)
+            except FileNotFoundError:
+                pass
+            except ValueError:
+                # a torn file used to fail every later call, so render times
+                # stopped being learned for good; start the log over instead
+                logger.warning("render-time log %s was unreadable; starting it over", path)
+            if not isinstance(rows, list):
+                rows = []
+            rows.append({"preset": preset, "asked": int(asked_s), "wall": round(float(wall_s), 1),
+                         "steps": int(steps or _STEPS_REF), "at": int(_time.time())})
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+            with open(tmp, "w", encoding="utf-8") as fh:
+                json.dump(rows[-200:], fh)
+            os.replace(tmp, path)
     except Exception:
         logger.warning("could not record the render time", exc_info=True)
 
