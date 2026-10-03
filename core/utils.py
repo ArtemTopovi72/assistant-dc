@@ -454,26 +454,36 @@ def throttle_external_calls(ctx) -> None:
         ctx.last_api_call_time = time.time()
 
 
-def ensure_required_files() -> None:
-    from config import WEIGHTS_PATH, VOCAB_PATH, DC_REF_WAV, WORKFLOW_FIRERED_EDIT_PATH, OUTPUT_DIR
+def ensure_required_files() -> list:
+    """Check the files the app needs. Returns what voice output is missing.
+
+    Only files that ship WITH the repo are fatal (their absence means a broken
+    checkout). The voice files are private downloads, and refusing to start
+    without them meant a fresh clone could not even open the app to chat
+    (live 10-03: a friend's clone died on it twice). Without them the
+    assistant starts with voice output off and says so; everything else works.
+    """
+    from config import (WEIGHTS_PATH, VOCAB_PATH, DC_REF_WAV, WORKFLOW_FIRERED_EDIT_PATH,
+                        OUTPUT_DIR, VOCOS_DIR)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    missing = []
-    for path, label in [
-        (WEIGHTS_PATH, "weights"),
-        (VOCAB_PATH, "vocab"),
-        (DC_REF_WAV, "reference wav"),
-        (WORKFLOW_FIRERED_EDIT_PATH, "workflow"),
-    ]:
-        if not path.exists():
-            missing.append(f"{label}: {path}")
-    if missing:
-        # a fresh clone has neither (both are private, gitignored): say what to do,
-        # not just what is missing (live 10-03: a friend's clone died on it twice)
+    broken = [f"{label}: {path}" for path, label in (
+        (VOCAB_PATH, "vocab"), (WORKFLOW_FIRERED_EDIT_PATH, "workflow"))
+        if not path.exists()]
+    if broken:
         raise FileNotFoundError(
-            "Missing required files:\n" + "\n".join(missing) + "\n\n"
-            "weights: put a Russian F5-TTS checkpoint at that path (see README).\n"
-            "reference wav: a clean 5-15 s recording of the voice to speak with, at that\n"
-            "path or set ASSISTANT_REF_WAV=C:\\path\\to\\voice.wav")
+            "Missing required files:\n" + "\n".join(broken) + "\n\n"
+            "These ship with the repository -- the checkout is incomplete. "
+            "Run `git status` / re-clone.")
+    voice_missing = [f"{label}: {path}" for path, label in (
+        (WEIGHTS_PATH, "F5-TTS weights"), (VOCOS_DIR / "config.yaml", "vocos vocoder"),
+        (DC_REF_WAV, "reference voice")) if not Path(path).exists()]
+    if voice_missing:
+        logger.warning(
+            "Voice output is OFF -- missing:\n  %s\nRun the setup script (setup.ps1 / "
+            "setup.sh) to fetch the vocoder and weights, and set ASSISTANT_REF_WAV "
+            "to a clean 5-15 s recording of the voice to speak with.",
+            "\n  ".join(voice_missing))
+    return voice_missing
 
 
 def truncate_text(text: str, limit: int = 12000) -> str:

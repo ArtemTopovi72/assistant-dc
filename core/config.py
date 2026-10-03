@@ -178,6 +178,10 @@ GIGAAM_MODEL = os.getenv("GIGAAM_MODEL", "gigaam-v3-e2e-rnnt")
 BASE_DIR = Path(__file__).resolve().parents[1]
 WEIGHTS_PATH = BASE_DIR / "model_212000.safetensors"
 VOCAB_PATH = BASE_DIR / "vocab.txt"
+# The F5 vocoder (charactr/vocos-mel-24khz: config.yaml + pytorch_model.bin).
+# Absolute, not the relative "vocos" it used to be loaded from: that resolved
+# against whatever the CWD was, so a launch from another folder lost the voice.
+VOCOS_DIR = Path(os.getenv("VOCOS_DIR", str(BASE_DIR / "vocos")))
 DC_REF_WAV = Path(os.getenv("ASSISTANT_REF_WAV", BASE_DIR / "Stepan_short.wav"))
 # Runtime working files: uploaded photos, contained crops, TTS wavs, scratch tiles.
 # This used to be BASE_DIR/"tests" — the project's own test directory — so every

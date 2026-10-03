@@ -83,17 +83,27 @@ class Models:
         else:
             whisper = None
 
-        logger.info("Loading vocoder...")
-        vocoder = load_vocoder(
-            vocoder_name="vocos",
-            is_local=True,
-            local_path="vocos",
-            device=DEVICE,
-        )
+        # Voice output is optional: the checkpoint and vocoder are private
+        # downloads, and without them the rest of the app still works (text
+        # replies, images, research). synth_single_segment returns None when
+        # tts_model is None, which every caller already treats as "no audio".
+        from config import VOCOS_DIR
+        vocoder = tts_model = None
+        if not (Path(WEIGHTS_PATH).exists() and (Path(VOCOS_DIR) / "config.yaml").exists()):
+            logger.warning("F5-TTS weights or vocoder missing (%s, %s) -- voice output is off",
+                           WEIGHTS_PATH, VOCOS_DIR)
+        else:
+            logger.info("Loading vocoder...")
+            vocoder = load_vocoder(
+                vocoder_name="vocos",
+                is_local=True,
+                local_path=str(VOCOS_DIR),
+                device=DEVICE,
+            )
 
-        logger.info("Loading TTS model on %s...", DEVICE)
-        model_cfg = dict(dim=1024, depth=22, heads=16, ff_mult=2, text_dim=512, conv_layers=4)
-        tts_model = load_model(DiT, model_cfg, str(WEIGHTS_PATH), vocab_file=str(VOCAB_PATH), device=DEVICE)
+            logger.info("Loading TTS model on %s...", DEVICE)
+            model_cfg = dict(dim=1024, depth=22, heads=16, ff_mult=2, text_dim=512, conv_layers=4)
+            tts_model = load_model(DiT, model_cfg, str(WEIGHTS_PATH), vocab_file=str(VOCAB_PATH), device=DEVICE)
 
         accentor = None
         accentor_loaded = False

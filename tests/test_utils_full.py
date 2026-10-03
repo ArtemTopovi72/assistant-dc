@@ -228,11 +228,27 @@ def test_throttle_external_calls():
 
 
 def test_ensure_required_files():
+    # This used to accept either outcome (ran / raised), so it could not fail.
+    import config as C
+    from pathlib import Path as _P
+    saved = (C.WEIGHTS_PATH, C.DC_REF_WAV, C.VOCOS_DIR, C.VOCAB_PATH)
     try:
-        U.ensure_required_files()
-        check("ensure_required_files_ran", True)
-    except FileNotFoundError as e:
-        check("ensure_required_files_raised_missing", "Missing required files" in str(e))
+        # Missing VOICE files: the app still starts, and is told what is missing.
+        C.WEIGHTS_PATH = _P("/no/such/model.safetensors")
+        C.DC_REF_WAV = _P("/no/such/voice.wav")
+        C.VOCOS_DIR = _P("/no/such/vocos")
+        missing = U.ensure_required_files()
+        check("voice_files_missing_is_not_fatal", len(missing) == 3, str(missing))
+        # A file that ships WITH the repo missing is a broken checkout: fatal.
+        C.VOCAB_PATH = _P("/no/such/vocab.txt")
+        try:
+            U.ensure_required_files(); raised = ""
+        except FileNotFoundError as e:
+            raised = str(e)
+        check("repo_file_missing_is_fatal", "Missing required files" in raised and "vocab" in raised,
+              raised)
+    finally:
+        C.WEIGHTS_PATH, C.DC_REF_WAV, C.VOCOS_DIR, C.VOCAB_PATH = saved
 
 
 def test_truncate_text():

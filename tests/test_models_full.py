@@ -148,14 +148,25 @@ def test_models_load_success_and_accentor_fail():
             stress = {"BilingualAccentor": lambda **kw: (_ for _ in ()).throw(RuntimeError("no accentor"))}
         return fw, uinfer, f5model, stress
 
-    # success path incl. accentor loaded
+    # success path incl. accentor loaded. The voice files must EXIST for the
+    # loaders to be called at all (a missing one now means "voice off").
+    import config as _C, tempfile as _tf
+    from pathlib import Path as _P
+    _d = _P(_tf.mkdtemp())
+    (_d / "w.safetensors").write_bytes(b"x")
+    (_d / "vocos").mkdir(); (_d / "vocos" / "config.yaml").write_text("x")
+    _saved = (_C.WEIGHTS_PATH, _C.VOCOS_DIR)
+    _C.WEIGHTS_PATH, _C.VOCOS_DIR = _d / "w.safetensors", _d / "vocos"
     fw, uinfer, f5model, stress = stub_env(True)
-    with fake_modules(faster_whisper=fw):
-        # f5_tts.infer.utils_infer and f5_tts.model are dotted; inject directly
-        with fake_modules(**{"f5_tts.infer.utils_infer": uinfer, "f5_tts.model": f5model, "stress": stress}):
-            # the intermediate packages must exist for `from f5_tts.infer.utils_infer import ...`
-            with fake_modules(**{"f5_tts": {}, "f5_tts.infer": {}}):
-                m = M.Models.load()
+    try:
+        with fake_modules(faster_whisper=fw):
+            # f5_tts.infer.utils_infer and f5_tts.model are dotted; inject directly
+            with fake_modules(**{"f5_tts.infer.utils_infer": uinfer, "f5_tts.model": f5model, "stress": stress}):
+                # the intermediate packages must exist for `from f5_tts.infer.utils_infer import ...`
+                with fake_modules(**{"f5_tts": {}, "f5_tts.infer": {}}):
+                    m = M.Models.load()
+    finally:
+        _C.WEIGHTS_PATH, _C.VOCOS_DIR = _saved
     check("load_success", m.whisper == "WHISPER" and m.tts_model == "TTS"
           and m.vocoder == "VOCODER" and m.accentor_loaded is True)
 

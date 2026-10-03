@@ -1294,6 +1294,9 @@ def synth_single_segment(
         use_censoring: bool = True,
         apply_stress: bool = True,
 ) -> Optional[str]:
+    models = getattr(ctx, "models", None)
+    if models is not None and getattr(models, "tts_model", True) is None:
+        return None                      # voice output is off (no weights/vocoder)
     from f5_tts.infer.utils_infer import infer_process, preprocess_ref_audio_text
     try:
         processed_text = preprocess_text_for_synthesis(
