@@ -127,6 +127,31 @@ for name, (st, kw) in variants.items():
     check(f"lyrics as {name}: the cover starts", ok and len(INVOKES) == n0,
           [t[:60] for _, t in bot.sent[n:]])
     s_ = bot._get_session(CID); s_.fwd_transcript = ""; s_.reg_state = ""; s_.pending_instruction = ""; s_.song_draft = ""; bot._store.put(s_)
+# A YouTube link is the song too (owner 10-03), then the words as usual.
+import tg_links
+_real_fetch = tg_links.fetch_video
+_real_busy = bot._run_busy
+bot._run_busy = lambda cid, fn, *a: fn(*a)
+tg_links.fetch_video = lambda url, *a, **k: {"data": b"MP4", "seconds": 200, "title": "t"}
+s_ = bot._get_session(CID); s_.cover_state = "want_audio"; s_.cover_src = ""; bot._store.put(s_)
+n = len(bot.sent)
+bot._dispatch(m(text="https://www.youtube.com/watch?v=dQw4w9WgXcQ"))
+check("a YouTube link is taken as the song", wait(lambda: bot._get_session(CID).cover_state == "want_text", 5)
+      and bot._get_session(CID).cover_src.endswith("song.mp4"), [t[:60] for _, t in bot.sent[n:]])
+GO.clear()
+bot._run_busy = lambda cid, fn, *a: GO.append(a)
+bot._dispatch(m(text="Новые слова про ютуб\nhttps://youtu.be/xyz в куплете"))
+check("...then a lyric that quotes a link is still the lyric", wait(lambda: GO, 5), GO)
+bot._run_busy = lambda cid, fn, *a: fn(*a)
+tg_links.fetch_video = lambda url, *a, **k: {"too_long": True, "seconds": 3600, "title": "t"}
+s_ = bot._get_session(CID); s_.cover_state = "want_audio"; bot._store.put(s_)
+n = len(bot.sent)
+bot._dispatch(m(text="https://youtu.be/long"))
+check("an hour-long video is named as too long", wait(lambda: any("60 мин" in t for _, t in bot.sent[n:]), 5),
+      [t[:60] for _, t in bot.sent[n:]])
+tg_links.fetch_video = _real_fetch
+bot._run_busy = _real_busy
+
 bot._running = False; thr.join(timeout=8)
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)

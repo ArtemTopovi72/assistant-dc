@@ -359,6 +359,9 @@ class ResolveMixin:
                 # не даёт текст вставить»).
                 if (not item.get("fwd_said") and not raw.startswith("/")
                         and not tg_bot._LABEL2KEY.get(raw.strip())):
+                    if (getattr(sess, "cover_state", "")
+                            and self._cover_take_link(chat_id, sess, lang, raw)):
+                        continue
                     if (getattr(sess, "restyle_state", "") == "want_text"
                             and self._restyle_take_text(chat_id, sess, lang, raw)):
                         continue

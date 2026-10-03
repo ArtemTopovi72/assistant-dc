@@ -2,7 +2,7 @@
 
 States on the session (cover_state):
   "want_audio"  the button was pressed; the next voice / audio / video / round
-                video / audio-or-video file is the song to cover.
+                video / audio-or-video file, or a video link, is the song to cover.
   "want_text"   the song is saved; the next plain text is the new lyric (a first
                 line «Стиль: …» sets the style), or the inline «📝 Keep the words»
                 button re-sings its own words. A new clip replaces the song; any
@@ -56,7 +56,39 @@ class CoverMixin:
         if not data:
             self._send_text(chat_id, tg_bot._t("cover_fail_no_audio", lang))
             return True
-        src = os.path.join(self._cover_dir(chat_id), "song" + media[1])
+        self._cover_have_song(chat_id, sess, lang, data, media[1])
+        return True
+
+    def _cover_take_link(self, chat_id: int, sess, lang: str, text: str) -> bool:
+        """A video link (YouTube, VK, TikTok...) while the cover waits for its
+        song: the clip's sound is the song (owner 10-03: «если ссылку на ютуб
+        дам»). While the words are awaited, only a bare link counts as a new
+        song -- a lyric that quotes a link is still the lyric."""
+        state = getattr(sess, "cover_state", "")
+        if state not in ("want_audio", "want_text"):
+            return False
+        import tg_links
+        url = tg_links.video_url(text)
+        if not url or (state == "want_text" and text.strip() != url):
+            return False
+        self._send_text(chat_id, tg_bot._t("cover_link_fetch", lang))
+
+        def job():
+            vid = tg_links.fetch_video(url)
+            if vid.get("too_long"):
+                self._send_text(chat_id, tg_bot._t("cover_link_long", lang,
+                                                   mins=max(1, int(vid.get("seconds", 0)) // 60),
+                                                   limit=tg_links.VIDEO_MAX_SECONDS // 60))
+                return
+            if not vid.get("data"):
+                self._send_text(chat_id, tg_bot._t("cover_link_fail", lang))
+                return
+            self._cover_have_song(chat_id, self._get_session(chat_id), lang, vid["data"], ".mp4")
+        self._run_busy(chat_id, job)
+        return True
+
+    def _cover_have_song(self, chat_id: int, sess, lang: str, data: bytes, ext: str) -> None:
+        src = os.path.join(self._cover_dir(chat_id), "song" + ext)
         with open(src, "wb") as fh:
             fh.write(data)
         sess.cover_state = "want_text"
@@ -65,7 +97,6 @@ class CoverMixin:
         kb = {"inline_keyboard": [[{"text": tg_bot._t("cover_keep_btn", lang),
                                     "callback_data": "cover:keep"}]]}
         self._send_text(chat_id, tg_bot._t("cover_ask_text", lang), parse_mode="HTML", keyboard=kb)
-        return True
 
     def _cover_take_text(self, chat_id: int, sess, lang: str, text: str) -> bool:
         if getattr(sess, "cover_state", "") != "want_text" or not (text or "").strip():

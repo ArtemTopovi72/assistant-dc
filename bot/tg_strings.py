@@ -942,9 +942,9 @@ _MSG: dict[str, dict[str, str]] = {
                      "ru": "Авто выбирает вертикаль или горизонталь по твоему запросу. "
                            "Чем выше качество, тем дольше рисуется."},
     # ── 🎤 cover (tg_cover) ──
-    "cover_ask_audio": {"en": "🎤 <b>Cover</b> · send the song to re-sing: an audio file, a voice message, a video, "
+    "cover_ask_audio": {"en": "🎤 <b>Cover</b> · send the song to re-sing: a YouTube/VK link, an audio file, a voice message, a video, "
                               "a round video or a file. The melody and feel stay, the words change.",
-                        "ru": "🎤 <b>Кавер</b> · пришли песню, которую перепеть: аудиофайл, голосовое, видео, "
+                        "ru": "🎤 <b>Кавер</b> · пришли песню, которую перепеть: ссылку на YouTube/VK, аудиофайл, голосовое, видео, "
                               "кружок или файл. Мелодия и настроение останутся, слова поменяются."},
     "cover_ask_text": {"en": "✅ Got the song. Now send the <b>new lyrics</b>, a line per sung line. "
                              "A first line like <i>Style: rock, male vocal</i> sets the style. "
@@ -958,6 +958,11 @@ _MSG: dict[str, dict[str, str]] = {
     "cover_done":     {"en": "🎤 Cover", "ru": "🎤 Кавер"},
     "cover_fail_off":      {"en": "⚠️ The cover engine is not installed on this machine.",
                             "ru": "⚠️ Движок каверов на этой машине не установлен."},
+    "cover_link_fetch": {"en": "🎤 Fetching the song from the link…", "ru": "🎤 Скачиваю песню по ссылке…"},
+    "cover_link_long":  {"en": "⚠️ That video is {mins} min long; a cover takes up to {limit} min. Send a shorter one or the song itself.",
+                         "ru": "⚠️ Это видео на {mins} мин, а для кавера — до {limit} мин. Пришли покороче или саму песню."},
+    "cover_link_fail":  {"en": "⚠️ Couldn't download that link. Send the song as a file or another link.",
+                         "ru": "⚠️ Не смог скачать по ссылке. Пришли песню файлом или другую ссылку."},
     "cover_fail_too_big":  {"en": "⚠️ That file is {mb} MB; I can receive up to {limit} MB. Send it as an mp3 or a voice message, or cut it shorter.",
                             "ru": "⚠️ Файл весит {mb} МБ, а я принимаю до {limit} МБ. Пришли его в mp3 или голосовым, либо обрежь покороче."},
     "cover_fail_no_audio": {"en": "⚠️ I could not get a sound track out of that. Send an audio file or a voice message.",
