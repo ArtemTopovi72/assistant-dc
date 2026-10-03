@@ -55,3 +55,11 @@ def test_the_app_log_handlers_carry_it():
     assert "log_redact.install()" in src
     assert "log_redact.install(self.log_handler)" in open(
         os.path.join(ROOT, "gui", "gui.py"), encoding="utf-8").read()
+
+
+def test_crash_log_is_redacted(tmp_path, monkeypatch):
+    import crash_diag
+    monkeypatch.setattr(crash_diag, "_CRASH_LOG", tmp_path / "crash.log")
+    crash_diag._write_crash_log("UNCAUGHT", f"ConnectionError: /bot{TOKEN}/getUpdates")
+    text = (tmp_path / "crash.log").read_text(encoding="utf-8")
+    assert TOKEN.split(":")[1] not in text and "getUpdates" in text

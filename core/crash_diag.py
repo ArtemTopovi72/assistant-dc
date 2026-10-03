@@ -57,6 +57,11 @@ def _stamp() -> str:
 def _write_crash_log(header: str, body: str) -> None:
     """Append a record to crash.log. Never raises."""
     try:
+        try:
+            from log_redact import redact      # tracebacks quote Bot API URLs
+            header, body = redact(header), redact(body)
+        except Exception:
+            pass
         with _CRASH_LOG.open("a", encoding="utf-8") as fp:
             fp.write(f"\n{'=' * 70}\n{_stamp()}  {header}\n{'=' * 70}\n{body}\n")
     except Exception:
