@@ -477,10 +477,17 @@ def _run_in_container(sandbox, argv, timeout: int, *, network: bool,
     return res
 
 
+_SECRET_ENV = re.compile(r"TOKEN|SECRET|PASSWORD|PASSWD|API_HASH|API_KEY|_KEY$|CREDENTIAL|COOKIE",
+                         re.IGNORECASE)
+
+
 def _spawn(cmd, cwd, timeout: int) -> RunResult:
     """One subprocess, one deadline, no stdin, whole tree killed on expiry."""
     t0 = time.monotonic()
-    env = dict(os.environ)
+    # The app's credentials (.env is loaded into os.environ: VK_TOKEN,
+    # TG_API_HASH, ...) are not the script's business -- on the host backend
+    # a model-written script would otherwise read them straight from its env.
+    env = {k: v for k, v in os.environ.items() if not _SECRET_ENV.search(k)}
     env["PYTHONIOENCODING"] = "utf-8"
     env["PYTHONUTF8"] = "1"
     env["PYTHONDONTWRITEBYTECODE"] = "1"
