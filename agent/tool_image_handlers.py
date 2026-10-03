@@ -969,6 +969,32 @@ def _current_image_paths(ctx, state) -> list:
     return out
 
 
+# A clip is minutes of GPU and the whole turn: it is made only when the user's
+# own words ask for one. Live 10-03: «Почему он у тебя не лысый … ты нарисовал
+# какого-то урода, а не Ленина» -- a complaint about a PICTURE -- started a
+# video («🎬 делаю видео»), then «лимит на генерацию видео исчерпан».
+_ASKS_VIDEO = re.compile(
+    r"видео|видос|ролик|клип|аними|анимац|ожив|кружок|кружоч|мультфильм|мультик\b|"
+    r"\bгиф|\bgif|video|clip|animat|movie|footage|\breel|shorts|фильм", re.I)
+
+
+def asks_for_video(ctx, state) -> bool:
+    """The user's words this turn ask for a clip, or ask to redo the last one."""
+    from prompt_guard import user_words
+    said = user_words(str((state or {}).get("user_input_original") or "")
+                      + " " + str((state or {}).get("user_input") or "")).strip()
+    if not said or _ASKS_VIDEO.search(said):     # no words to judge (a direct call): not ours to refuse
+        return True
+    last = getattr(ctx, "last_video_path", None)
+    if last and os.path.exists(last):
+        try:
+            import intent
+            return intent.read(None, said)["redo"] in ("same", "changed")
+        except Exception:
+            return False
+    return False
+
+
 def _handle_generate_video(ctx, state, args: dict) -> str:
     import tools as _t   # the render seam is owned by tools; read it at CALL time
     import video as video_mod
@@ -978,6 +1004,13 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         return ("[TOOL ERROR] generate_video needs a 'description' of the shot. "
                 "Re-call it describing what should be on screen, what moves, and "
                 "what it should sound like.")
+    if not asks_for_video(ctx, state):
+        logger.warning("generate_video refused: the user did not ask for a video")
+        return ("[TOOL ERROR] The user did not ask for a video in this message, so no "
+                "clip is made. Answer what they actually said: a complaint about a "
+                "picture is fixed on the picture (redraw_image / inpaint_image / "
+                "generate_image), a question is answered. Do not call generate_video "
+                "again this turn.")
 
     ok, why = video_mod.engine_available(ctx)
     if not ok:
