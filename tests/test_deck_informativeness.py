@@ -476,7 +476,6 @@ head("A WRAPPED BULLET DOES NOT RESTART AT THE MARGIN")
 _dw = slides.normalize_deck({"title": "T", "slides": [
     {"heading": "H", "bullets": ["История началась весной 1961 года во время "
                                  "визита Никиты Хрущева в США"]}]})
-_outw = os.path.join(_tf.mkdtemp(), "wrap.pptx") if "_tf" in dir() else None
 import tempfile as _tf2
 _outw = os.path.join(_tf2.mkdtemp(), "wrap.pptx")
 slides.build_pptx(_dw, _outw)
@@ -519,8 +518,7 @@ _dense = slides.normalize_deck({"title": "T", "theme": "academic", "slides": [
                {"value": "30-60", "label": "нг/мл при дефиците"}],
      "chart": {"title": "Диапазоны", "kind": "bar",
                "labels": ["норма", "цель"], "values": [20, 60]}}]})
-_od = os.path.join(_tf3.mkdtemp() if "_tf3" in dir() else __import__("tempfile").mkdtemp(),
-                   "dense.pptx")
+_od = os.path.join(_tf2.mkdtemp(), "dense.pptx")
 slides.build_pptx(_dense, _od, topic="витамин")
 from pptx import Presentation as _P4  # noqa: E402
 from pptx.util import Emu as _Emu  # noqa: E402

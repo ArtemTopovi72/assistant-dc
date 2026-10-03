@@ -40,7 +40,7 @@ def run_one(wf):
     ws = websocket.create_connection(f"ws://{COMFY}/ws?clientId={cid}", timeout=3600)
     pid = requests.post(f"http://{COMFY}/prompt", json={"prompt": wf, "client_id": cid}, timeout=60).json()["prompt_id"]
     t0 = time.time()
-    marks, cur, steps = [], None, []
+    marks, cur, cur_t, steps = [], None, 0.0, []
     while True:
         m = ws.recv()
         if not isinstance(m, str):

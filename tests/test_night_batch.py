@@ -27,6 +27,8 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 
 _DATA_DIR = tempfile.mkdtemp(prefix="tgtest_night_")
 import tg_bot as T
+from pathlib import Path as _Path
+_ROOT = _Path(__file__).resolve().parents[1]
 
 # The 📋 retelling is a ONE-SHOT model call outside the agent since 1cdadf4
 # (2026-09-14): it never enters the task queue. The suite records that call.
@@ -166,8 +168,8 @@ check("an artefact-only turn sends no 'ничего не ответила' line 
       "IS the answer",
       'final.get(k) for k in (' in _delivery and 'Every reply goes out as text too' in _delivery and 'reply = "" if produced' in _delivery)
 check("the shown text is localized",
-      '"empty_reply"' in (ROOT / "bot/tg_strings.py").read_text(encoding="utf-8")
-      if "ROOT" in dir() else '_t("empty_reply"' in _delivery)
+      '"empty_reply"' in (_ROOT / "bot/tg_strings.py").read_text(encoding="utf-8")
+      and '_t("empty_reply"' in _delivery)
 
 # ══════════════════════════════════════════════════════════════════════════════
 print("\n" + "=" * 70)
