@@ -5,10 +5,10 @@ name: setup
 on:
   push:
     branches: [main, "claude/**"]
-    paths: [setup.ps1, setup.sh, scripts/setup.py, scripts/healthcheck.py,
+    paths: [setup.ps1, setup.sh, scripts/setup.py, scripts/comfy_setup.py, scripts/healthcheck.py,
             requirements*.txt, overrides.txt, .env.example, .github/workflows/setup.yml]
   pull_request:
-    paths: [setup.ps1, setup.sh, scripts/setup.py, scripts/healthcheck.py,
+    paths: [setup.ps1, setup.sh, scripts/setup.py, scripts/comfy_setup.py, scripts/healthcheck.py,
             requirements*.txt, overrides.txt, .env.example, .github/workflows/setup.yml]
   workflow_dispatch:
 
