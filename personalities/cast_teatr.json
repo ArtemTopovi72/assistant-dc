@@ -1,0 +1,30 @@
+[
+  {
+    "id": "c1_theater_actor",
+    "name": "Степан",
+    "voice": "Stepan_short.wav",
+    "personality": "personalities/theater_actor.txt",
+    "prompt": ""
+  },
+  {
+    "id": "c2_teatr_rezhisser",
+    "name": "Лев Борисович",
+    "voice": "DC_short.wav",
+    "personality": "personalities/teatr_rezhisser.txt",
+    "prompt": ""
+  },
+  {
+    "id": "c3_teatr_osvetitel",
+    "name": "Гена",
+    "voice": "Egr_short.wav",
+    "personality": "personalities/teatr_osvetitel.txt",
+    "prompt": ""
+  },
+  {
+    "id": "c4_teatr_kritik",
+    "name": "Аркадий",
+    "voice": "Prig_short.wav",
+    "personality": "personalities/teatr_kritik.txt",
+    "prompt": ""
+  }
+]

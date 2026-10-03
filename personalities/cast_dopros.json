@@ -1,0 +1,23 @@
+[
+  {
+    "id": "c1_dopros_sledovatel",
+    "name": "Веретенников",
+    "voice": "Prig_short.wav",
+    "personality": "personalities/dopros_sledovatel.txt",
+    "prompt": ""
+  },
+  {
+    "id": "c2_dopros_svidetel",
+    "name": "Зинаида",
+    "voice": "Dh_short.wav",
+    "personality": "personalities/dopros_svidetel.txt",
+    "prompt": ""
+  },
+  {
+    "id": "c3_dopros_podozrevaemyi",
+    "name": "Марк",
+    "voice": "Stepan_short.wav",
+    "personality": "personalities/dopros_podozrevaemyi.txt",
+    "prompt": ""
+  }
+]

@@ -1,0 +1,11 @@
+[flake8]
+max-line-length = 120
+exclude = venv*,tools,models*,.claude,__pycache__,tests,bench,scripts,docker,runtime,out,outputs
+# House style, deliberate:
+#   E701/E702  short guard + action on one line (`if x: return`, `a; b`)
+#   E221/E127/E128/E131  aligned tables and continuation lines
+#   E402  lazy and path-dependent imports (flat module layout, sys.path set at startup)
+#   E731/E741  small lambdas; `l` in geometry code
+#   F401  modules re-export names other modules import from them
+#   E501  long prompt strings and URLs
+extend-ignore = E701,E702,E221,E127,E128,E131,E402,E731,E741,F401,E501

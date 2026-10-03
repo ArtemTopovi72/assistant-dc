@@ -1,0 +1,247 @@
+<p align="center">
+  <img src="assets/banner.png" alt="Assistant DC" width="100%">
+</p>
+
+<h1 align="center">Assistant DC</h1>
+
+<p align="center">
+  <b>A personal AI assistant that lives entirely on your own graphics card.</b><br>
+  It talks, draws, edits photos, makes videos, writes songs, researches the web and builds slide decks,<br>
+  in a desktop app and in Telegram, with no cloud and no subscription.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="GPL-3.0">
+  <img src="https://img.shields.io/badge/python-3.13-3776AB?logo=python&logoColor=white" alt="Python 3.13">
+  <img src="https://img.shields.io/badge/platform-Windows-0078D6?logo=windows&logoColor=white" alt="Windows">
+  <img src="https://img.shields.io/badge/GPU-RTX%203090%2024GB-76B900?logo=nvidia&logoColor=white" alt="RTX 3090 24GB">
+  <img src="https://img.shields.io/badge/tests-429%20suites-brightgreen" alt="429 test suites">
+</p>
+
+---
+
+## Why it is different
+
+Most "local assistants" are a chat window over a model. Assistant DC is an agent that
+**does the work** and **checks itself** before it answers:
+
+- It draws from a **scene plan**, a JSON layout with boxes, not from one prompt line,
+  and reads the lettering back with OCR.
+- In slide decks it **checks every figure** against the sources it found (MiniCheck) and
+  drops what the sources do not support.
+- It remembers facts about the user and **replaces the outdated ones** instead of piling up
+  contradictions.
+- Structured answers are decoded under a **JSON schema** (constrained decoding), so plans
+  and layouts never break halfway through.
+- It shares **one GPU** between the LLM, images, video, music and voice, and queues work
+  fairly between users.
+
+Russian is the first-class language: voice, stress marks, speech recognition and the bot's
+interface are tuned for it. English works too.
+
+## Features
+
+| | |
+|---|---|
+| 🧠 **Agent** | LangGraph, tools with argument validation, user fact memory, history compaction, prompt-injection guard |
+| 🗣 **Voice** | F5-TTS with voice cloning from a short sample, RUAccent stress marks, GigaAM / faster-whisper recognition, VAD |
+| 🎨 **Images** | Generation and local edits in ComfyUI (Ideogram 4, FireRed Image Edit), scene layout, lettering and face checks |
+| 🎬 **Video** | MiniMax H3: text to video, image to video, first + last frame, reference images |
+| 🎵 **Music** | YuE2 songs with Russian vocals, mashups, stem separation (Demucs) |
+| 🔎 **Deep Research** | Multi-step web research with a cited report and quote verification |
+| 📚 **Documents** | RAG over your own library (BGE-M3 + reranker), .pptx decks with charts and fact checks |
+| 💬 **Telegram** | Multi-user bot: registration, quotas, one-GPU queue, replies as text / voice / both, threaded to the request |
+
+## Measured on an RTX 3090 (24 GB) + 96 GB RAM
+
+Every number below comes from an A/B run on the development machine, not from a spec sheet.
+
+| What | Result |
+|---|---|
+| Chat model, Gemma 4 26B A4B (Q4 QAT) | **137 tok/s** in LM Studio; 148 tok/s with the MTP draft head on llama-server |
+| Voice, F5-TTS at 10 flow steps | **0.81 s** per phrase (1.16 s at 16 steps, no extra recognition errors) |
+| Speech recognition, GigaAM v3 vs Whisper large-v3-turbo | WER **10.4%** vs 13.3% on crowd recordings; 12.5 min of audio in **20 s** vs 80 s |
+| Whisper large-v3-turbo, int8 | **1.0 GB** VRAM vs 3.8 GB for large-v3, 2x faster |
+| Cross-language search (Russian query, English documents) | recall@10 **0.965** with BGE-M3 vs 0.000 with nomic-embed |
+| Photo edit, FireRed Image Edit (fp8) | **22–24 s** per edit |
+| Video, MiniMax H3 (int8 + 4-step turbo LoRA) | **~200 s** per 5 s clip (~390 s without the LoRA) |
+| Song, YuE2 verse + chorus | **41 s** with the cuDNN attention backend (73.5 s with SDPA) |
+| Deck planning under a JSON schema | **3/3** valid plans vs 0/3 without the schema |
+| Deck fact check, MiniCheck | invented claim **0.01**, supported claim **0.98** |
+| Deep research, standard depth | ~35 min for a full cited report |
+
+## How it fits together
+
+```mermaid
+flowchart LR
+    U[User] -->|PyQt5 GUI| A
+    U -->|Telegram| B[Bot] --> A
+    A[LangGraph agent] -->|chat, JSON schemas| L[LM Studio]
+    A -->|images, video, music| C[ComfyUI]
+    A -->|voice| T[F5-TTS / ASR]
+    A -->|search, documents| R[Web + RAG]
+    Q[(GPU queue)] -.- L & C & T
+```
+
+Everything runs on one machine. LM Studio and ComfyUI are separate local servers; the
+launcher starts them and the app keeps them from fighting over video memory.
+
+---
+
+## Installation
+
+### 0. What you need
+
+- Windows 10 or 11.
+- An NVIDIA GPU. Everything was built and measured on an RTX 3090 24 GB with 96 GB RAM;
+  smaller cards are untested. Video generation needs the full 24 GB.
+- Disk: about 60 GB for the MiniMax H3 video weights, plus the chat model and ComfyUI models.
+- Installed first: [Git](https://git-scm.com), [uv](https://docs.astral.sh/uv/getting-started/installation/),
+  [ffmpeg](https://www.gyan.dev/ffmpeg/builds/) on `PATH`, [LM Studio](https://lmstudio.ai),
+  [ComfyUI](https://www.comfy.org). Docker Desktop is only for the `run_code` sandbox.
+
+### 1. Code and environment
+
+```bash
+git clone https://github.com/ArtemTopovi72/assistant-dc.git
+cd assistant-dc
+uv venv -p 3.13 venv
+venv\Scripts\activate
+uv pip install torch==2.8.0 torchaudio==2.8.0 torchvision==0.23.0 --index-url https://download.pytorch.org/whl/cu128
+uv pip install -r requirements.txt --override overrides.txt
+python scripts/install_paths.py
+playwright install chromium
+copy .env.example .env
+```
+
+> **Why uv and not pip?** `overrides.txt` lifts an over-cautious `rich<14` pin in
+> `cached-path` (pulled in by f5-tts), which otherwise blocks `py7zz`, the rar/7z
+> extractor. pip cannot override a dependency's pin.
+
+### 2. LM Studio: the brain
+
+1. Download a chat model in LM Studio. The default is `google/gemma-4-26b-a4b-qat`; for any other model
+   set `MODEL_NAME=<model id from LM Studio>` in `.env`.
+2. Context: the system prompt plus the tool schemas take about 10k tokens, so the app
+   reloads the model with at least **40960** tokens itself (`LM_MIN_CONTEXT`). Leave
+   room for it in VRAM.
+3. Download the embedding model **text-embedding-bge-m3**.
+4. Start the server (Developer → Start Server). The default address is
+   `http://127.0.0.1:1234`; change it with `LM_STUDIO_BASE`.
+
+### 3. ComfyUI: images, video, music
+
+1. Install ComfyUI and the **ComfyUI-GGUF** custom node.
+2. The workflow graphs ship in [`workflows/`](workflows) (`workflows/<kind>/workflow_*.json`). The MiniMax H3 video
+   weights (~60 GB, resumable) are fetched by:
+   ```bash
+   python scripts/fetch_h3_weights.py
+   ```
+3. The server is expected at `http://127.0.0.1:8000` (`COMFY_URL`). If ComfyUI is not in
+   `Documents\ComfyUI`, set `COMFY_BASE_DIR`.
+
+Without ComfyUI the assistant still works: chat, voice, search and documents, everything
+except media generation.
+
+### 4. Voice
+
+TTS weights are not in the repo:
+
+- a Russian F5-TTS checkpoint → the repo root, named `model_212000.safetensors`;
+- the [charactr/vocos-mel-24khz](https://huggingface.co/charactr/vocos-mel-24khz) vocoder → the `vocos/` folder;
+- the assistant's voice sample (5–15 s of clean speech, `.wav`) → its path in `.env`:
+  `ASSISTANT_REF_WAV=C:\path\to\voice.wav`.
+
+Whisper, GigaAM, RUAccent and Silero VAD download themselves on first use.
+
+### 5. Run
+
+```bash
+python scripts/launch_all.py
+```
+
+The launcher starts LM Studio and ComfyUI if they are not already up, then opens the GUI.
+Non-default install paths go in `LMSTUDIO_EXE`, `LMS_CLI` and `COMFY_EXE`.
+
+### 6. Telegram bot (optional)
+
+1. Create a bot with [@BotFather](https://t.me/BotFather) and copy its token.
+2. Open the **Telegram** tab in the app, paste the token, press start.
+
+The token is kept in Windows settings, not in project files. Quotas, queue limits and
+2 GB uploads through a self-hosted Bot API server are configured in `.env`; every key is
+documented in `.env.example`.
+
+---
+
+## Documentation
+
+- [Desktop app](docs/gui.md): the three pages, every Workspace tab, settings and interface language
+- [Telegram bot](docs/telegram.md): menus, the reply format picker, commands, queue
+
+## Project layout
+
+| Folder | Contents |
+|---|---|
+| [`core/`](core) | config, context, shared utilities |
+| [`agent/`](agent) | LangGraph agent, tools, prompts, LM Studio client, per-turn trace |
+| [`bot/`](bot) | Telegram bot: menus, queue, users, forwarded batches |
+| [`gui/`](gui) | PyQt5 desktop app, one module per tab |
+| [`imaging/`](imaging) | image generation and editing through ComfyUI, layout, lettering and face checks |
+| [`media/`](media) | video (MiniMax H3), music (YuE2), video storyboards |
+| [`voice/`](voice) | TTS (F5), ASR (GigaAM, Whisper), stress marks, diarization |
+| [`research/`](research) | web search, deep research, report builder |
+| [`knowledge/`](knowledge) | document library (RAG), user fact memory |
+| [`services/`](services) | background services shared by the GUI and the bot |
+| [`sandbox/`](sandbox), [`docker/`](docker) | code sandbox and its container |
+| [`workflows/`](workflows) | ComfyUI graphs the app sends (see below) |
+| [`personalities/`](personalities) | characters and casts for role-play scenes |
+| [`h3_prompt_guides/`](h3_prompt_guides) | prompt guides for the video model |
+| [`models/`](models) | small bundled models (face, stress marks) |
+| [`assets/`](assets) | icon, banner, self-test image |
+| [`docs/`](docs) | feature docs and audits |
+| [`scripts/`](scripts) | launcher, installers, tools (`scripts/turns.py` reads turn traces) |
+| [`tests/`](tests), [`bench/`](bench) | test suite (`tests/run_all.py`), live harnesses and benchmarks |
+
+### ComfyUI workflows
+
+| Folder | Graphs |
+|---|---|
+| [`workflows/image/`](workflows/image) | `workflow_ideogram4.json` drawing, `workflow_firered_edit.json` photo edits, `*_ui.json` copies to open in the ComfyUI editor |
+| [`workflows/video/`](workflows/video) | `workflow_video_h3.json` text/image to video, `workflow_video_h3_ref.json` reference images, `*_ui.json` editor copies |
+| [`workflows/music/`](workflows/music) | `workflow_music3.json` |
+| [`workflows/other/`](workflows/other) | standalone graphs not called by the app |
+
+`scripts/install_paths.py` puts these folders on the venv's import path (modules keep flat names).
+
+## Troubleshooting
+
+| Symptom | Check |
+|---|---|
+| The bot is silent or answers empty | Is the LM Studio server on, and is `MODEL_NAME` a model you have downloaded? |
+| No images | Is ComfyUI running at `COMFY_URL`, with ComfyUI-GGUF installed? |
+| No voice | Are `model_212000.safetensors` and `vocos/` in place, and is `ASSISTANT_REF_WAV` set? |
+| `unsatisfiable` during install | Install with `uv` and `--override overrides.txt` |
+
+## Tests
+
+```bash
+uv pip install -r requirements-dev.txt --override overrides.txt
+set F5_TEST_RUN=1
+python tests/run_all.py
+python tests/run_all.py -k telegram
+```
+
+All 429 suites run without a GPU or network: the LLM, ComfyUI and Telegram are faked.
+For live runs there is `bench/tg_sim.py`, a local Telegram simulator
+(http://127.0.0.1:8765) where the bot talks to the real model.
+
+## License
+
+The code is [GPL-3.0](LICENSE), because the GUI is built on PyQt5, which is GPL v3.
+
+Model weights are not in the repo and each has its own license. Check it before use,
+commercial use especially: F5-TTS checkpoints are CC-BY-NC-4.0, Gemma is under the Gemma
+Terms of Use. The repo does include the face detector and recognizer from
+[OpenCV Zoo](https://github.com/opencv/opencv_zoo) (YuNet: MIT, SFace: Apache-2.0).
+The texts in `bench/rag_eval/corpus` come from Wikipedia (CC BY-SA 4.0).

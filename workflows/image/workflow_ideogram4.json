@@ -1,0 +1,221 @@
+{
+  "158": {
+    "inputs": {
+      "vae_name": "flux2-vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "166": {
+    "inputs": {
+      "unet_name": "ig4-int8mixedrow_simple.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Ideogram 4 (conditional)"
+    }
+  },
+  "181": {
+    "inputs": {
+      "unet_name": "ig4_uncond-int8mixedrow_simple.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Ideogram 4 (unconditional)"
+    }
+  },
+  "168": {
+    "inputs": {
+      "clip_name": "qwen3vl_8b_fp8_scaled.safetensors",
+      "type": "ideogram4",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Qwen3-VL text encoder"
+    }
+  },
+  "198": {
+    "inputs": {
+      "shift": 5,
+      "model": [
+        "166",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingAuraFlow",
+    "_meta": {
+      "title": "Model Sampling AuraFlow"
+    }
+  },
+  "184": {
+    "inputs": {
+      "cfg": 3,
+      "start_percent": 0.9,
+      "end_percent": 1,
+      "model": [
+        "198",
+        0
+      ]
+    },
+    "class_type": "CFGOverride",
+    "_meta": {
+      "title": "CFG Override (tail steps)"
+    }
+  },
+  "167": {
+    "inputs": {
+      "text": "",
+      "clip": [
+        "168",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Positive prompt"
+    }
+  },
+  "159": {
+    "inputs": {
+      "conditioning": [
+        "167",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut",
+    "_meta": {
+      "title": "Zeroed negative"
+    }
+  },
+  "182": {
+    "inputs": {
+      "cfg": 7,
+      "model": [
+        "184",
+        0
+      ],
+      "positive": [
+        "167",
+        0
+      ],
+      "model_negative": [
+        "181",
+        0
+      ],
+      "negative": [
+        "159",
+        0
+      ]
+    },
+    "class_type": "DualModelGuider",
+    "_meta": {
+      "title": "Dual Model Guider"
+    }
+  },
+  "190": {
+    "inputs": {
+      "scheduler": "simple",
+      "steps": 28,
+      "denoise": 1,
+      "model": [
+        "198",
+        0
+      ]
+    },
+    "class_type": "BasicScheduler",
+    "_meta": {
+      "title": "Scheduler"
+    }
+  },
+  "163": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "Sampler"
+    }
+  },
+  "165": {
+    "inputs": {
+      "noise_seed": 0
+    },
+    "class_type": "RandomNoise",
+    "_meta": {
+      "title": "Noise"
+    }
+  },
+  "160": {
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1
+    },
+    "class_type": "EmptyFlux2LatentImage",
+    "_meta": {
+      "title": "Empty latent"
+    }
+  },
+  "161": {
+    "inputs": {
+      "noise": [
+        "165",
+        0
+      ],
+      "guider": [
+        "182",
+        0
+      ],
+      "sampler": [
+        "163",
+        0
+      ],
+      "sigmas": [
+        "190",
+        0
+      ],
+      "latent_image": [
+        "160",
+        0
+      ]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": {
+      "title": "Sampler (custom advanced)"
+    }
+  },
+  "162": {
+    "inputs": {
+      "samples": [
+        "161",
+        0
+      ],
+      "vae": [
+        "158",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "200": {
+    "inputs": {
+      "filename_prefix": "ideogram",
+      "images": [
+        "162",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  }
+}

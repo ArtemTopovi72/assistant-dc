@@ -1,0 +1,74 @@
+# Python 3.13, Windows 10/11, NVIDIA GPU (24 GB tested).
+# Torch first, from the CUDA index:
+#   uv pip install torch==2.8.0 torchaudio==2.8.0 torchvision==0.23.0 --index-url https://download.pytorch.org/whl/cu128
+#   uv pip install -r requirements.txt --override overrides.txt
+#   playwright install chromium
+
+# Core ML
+transformers==4.57.6
+accelerate==1.13.0
+safetensors==0.7.0
+huggingface_hub==0.36.2
+hf_xet==1.4.3          # fast HF downloads; without it every model download warns and falls back to HTTP
+sentence-transformers==3.4.1
+scikit-learn==1.8.0
+numpy==2.4.3
+scipy==1.17.1
+gguf==0.19.0
+
+# Agent
+langgraph==1.1.10
+langgraph-checkpoint==4.0.3
+langgraph-prebuilt==1.0.13
+pydantic==2.13.3
+
+# Voice
+f5-tts==1.1.20
+faster-whisper==1.2.1
+onnx-asr==0.12.0
+onnxruntime==1.29.0
+silero-vad==6.2.1
+ruaccent==1.5.8.3
+num2words==0.5.14
+pymorphy3==2.0.6
+librosa==0.11.0
+soundfile==0.13.1
+sounddevice==0.5.5
+pydub==0.25.1
+demucs==4.1.0
+
+# Vision / images
+pillow==12.1.1
+opencv-python==4.13.0.92
+easyocr==1.7.2
+
+# Web, search, documents
+requests==2.33.1
+yt-dlp==2026.08.19
+beautifulsoup4==4.14.3
+lxml==6.1.0
+trafilatura==2.0.0
+ddgs==9.14.1
+playwright==1.63.0
+websocket-client==1.9.0
+pypdf==6.13.2
+python-docx==1.2.0
+python-pptx==1.0.2
+Markdown==3.10.2
+pymdown-extensions==10.21.3
+ftfy==6.3.1
+wordfreq==3.1.1
+py7zz==1.4.0
+
+# Services
+fastapi==0.136.1
+uvicorn==0.46.0
+redis==5.2.1
+kafka-python==3.0.11
+python-dotenv==1.2.2
+PyYAML==6.0.3
+psutil==7.2.2
+
+# Desktop GUI (GPL-3.0: the reason this project is GPL-3.0)
+PyQt5==5.15.11
+PyQtWebEngine==5.15.7

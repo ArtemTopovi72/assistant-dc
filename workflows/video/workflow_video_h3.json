@@ -1,0 +1,195 @@
+{
+  "1": {
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "H3 transformer (int8 fused)"
+    },
+    "inputs": {
+      "unet_name": "MiniMax-H3-Pruned-Ref-Delta-Fused-r1024-comfy-int8-convrot.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "2": {
+    "class_type": "MiniMaxH3SigmaShift",
+    "_meta": {
+      "title": "flow shift (video/audio)"
+    },
+    "inputs": {
+      "model": [
+        "13",
+        0
+      ],
+      "shift_video": 12.0,
+      "shift_audio": 3.0
+    }
+  },
+  "3": {
+    "class_type": "CLIPLoaderGGUF",
+    "_meta": {
+      "title": "H3-Encoder (Qwen3-VL-32B)"
+    },
+    "inputs": {
+      "clip_name": "qwen3vl_32b_minimax_h3-Q4_K_M.gguf",
+      "type": "minimax"
+    }
+  },
+  "4": {
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "H3-VisualVAE"
+    },
+    "inputs": {
+      "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+    }
+  },
+  "5": {
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "H3-AudioVAE"
+    },
+    "inputs": {
+      "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+    }
+  },
+  "6": {
+    "class_type": "MiniMaxH3ImageToVideo",
+    "_meta": {
+      "title": "t2va / fl2va conditioning + AV latent"
+    },
+    "inputs": {
+      "clip": [
+        "3",
+        0
+      ],
+      "vae": [
+        "4",
+        0
+      ],
+      "prompt": "",
+      "width": 1344,
+      "height": 768,
+      "length": 124
+    }
+  },
+  "7": {
+    "class_type": "ConditioningZeroOut",
+    "_meta": {
+      "title": "negative (model is CFG-distilled; cfg stays 1.0)"
+    },
+    "inputs": {
+      "conditioning": [
+        "6",
+        0
+      ]
+    }
+  },
+  "8": {
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "sample the packed AV latent"
+    },
+    "inputs": {
+      "model": [
+        "2",
+        0
+      ],
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "latent_image": [
+        "6",
+        1
+      ],
+      "seed": 0,
+      "steps": 4,
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0
+    }
+  },
+  "9": {
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "decode video half of the nested latent"
+    },
+    "inputs": {
+      "samples": [
+        "8",
+        0
+      ],
+      "vae": [
+        "4",
+        0
+      ]
+    }
+  },
+  "10": {
+    "class_type": "VAEDecodeAudio",
+    "_meta": {
+      "title": "decode audio half of the nested latent"
+    },
+    "inputs": {
+      "samples": [
+        "8",
+        0
+      ],
+      "vae": [
+        "5",
+        0
+      ]
+    }
+  },
+  "11": {
+    "class_type": "CreateVideo",
+    "_meta": {
+      "title": "mux 24fps video with its native stereo track"
+    },
+    "inputs": {
+      "images": [
+        "9",
+        0
+      ],
+      "fps": 24.0,
+      "audio": [
+        "10",
+        0
+      ]
+    }
+  },
+  "12": {
+    "class_type": "SaveVideo",
+    "_meta": {
+      "title": "save"
+    },
+    "inputs": {
+      "video": [
+        "11",
+        0
+      ],
+      "filename_prefix": "video/assistant_h3",
+      "format": "auto",
+      "codec": "auto"
+    }
+  },
+  "13": {
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LightX2V FL2V Turbo 4-step v1.2 768p LoRA",
+      "note": "huggingface.co/lightx2v/Minimax-h3-Turbo. Distilled for 4 NFE; video.build_workflow zeroes it at any other step count. Night A/B 2026-09-24: -45% time, equal/better quality at shift 12."
+    },
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "lora_name": "minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors",
+      "strength_model": 1.0
+    }
+  }
+}

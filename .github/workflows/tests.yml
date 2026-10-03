@@ -1,0 +1,28 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      F5_TEST_RUN: "1"
+      PYTHONIOENCODING: utf-8
+      UV_LINK_MODE: copy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          activate-environment: true
+      # CPU torch: the suites fake every GPU call, and the CUDA wheel alone is 3 GB.
+      - run: uv pip install torch==2.8.0 torchaudio==2.8.0 torchvision==0.23.0 --index-url https://download.pytorch.org/whl/cpu
+      - run: uv pip install -r requirements-dev.txt --override overrides.txt
+      - run: choco install ffmpeg -y --no-progress
+      - run: python scripts/install_paths.py
+      - run: python -m playwright install chromium
+      - run: python tests/run_all.py

@@ -1,0 +1,30 @@
+[
+  {
+    "id": "c1_ekipazh_kapitan",
+    "name": "Дорн",
+    "voice": "DC_short.wav",
+    "personality": "personalities/ekipazh_kapitan.txt",
+    "prompt": ""
+  },
+  {
+    "id": "c2_ekipazh_inzhener",
+    "name": "Марта",
+    "voice": "San_short.wav",
+    "personality": "personalities/ekipazh_inzhener.txt",
+    "prompt": ""
+  },
+  {
+    "id": "c3_ekipazh_ii",
+    "name": "КАСТОР",
+    "voice": "Egr_short.wav",
+    "personality": "personalities/ekipazh_ii.txt",
+    "prompt": ""
+  },
+  {
+    "id": "c4_ekipazh_stazher",
+    "name": "Юна",
+    "voice": "Dh_short.wav",
+    "personality": "personalities/ekipazh_stazher.txt",
+    "prompt": ""
+  }
+]

@@ -1,0 +1,145 @@
+# ---------------------------------------------------------------------------
+# Secrets and user data. NOTHING here may ever be committed.
+#
+# The bot token is not in this tree (it lives in Windows QSettings) and no
+# hardcoded token was found in source. The exposure risk is DATA: registered
+# users and their password hashes, live chat sessions, and per-user memory.
+# ---------------------------------------------------------------------------
+tg_users.db
+tg_users.db-*
+tg_users_backups/
+tg_sessions.json
+tg_artifacts.db
+tg_artifacts.db-*
+tg_sessions.json.bak-*
+tg_offset.json
+tg_inflight.json
+.assistant_singleton.lock
+tg_activity.jsonl
+tg_memory/
+tg_images/
+tg_libraries/
+tg_mashup/
+memory/
+facts.json
+session_memory.json
+transcriptions.json
+ui_settings.json
+.env
+
+# ---------------------------------------------------------------------------
+# Environments and weights. 16 GB of venv and ~2.5 GB of model files; these are
+# reproducible from requirements and downloads, and git handles neither well.
+# ---------------------------------------------------------------------------
+venv/
+models/*
+!models/face/
+vocos/
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.gguf
+*.bin
+*.onnx
+!models/face/*.onnx
+
+# Bundled ffmpeg shared libraries (~250 MB) — installed, not authored.
+*.dll
+*.exe
+
+# ---------------------------------------------------------------------------
+# Build, cache, generated output
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+dist/
+build/
+*.egg-info/
+outputs/
+runtime/
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---------------------------------------------------------------------------
+# Logs and crash dumps
+# ---------------------------------------------------------------------------
+*.log
+crash.log
+crash_*.txt
+
+# ---------------------------------------------------------------------------
+# Test ARTIFACTS, not test code.
+#
+# tests/ is 2.7 GB, nearly all of it images written by past runs into the tests
+# root. The 230 .py suites and tests/fixtures/ are source and ARE committed;
+# everything a run produces is not.
+# ---------------------------------------------------------------------------
+tests/*_out/
+tests/_dr_eval/
+tests/_sci_audit/
+tests/_guiwidgets/
+tests/*.png
+tests/*.jpg
+tests/*.jpeg
+tests/*.webp
+tests/*.mp4
+tests/*.wav
+tests/*.json
+tests/*.db
+
+# ---------------------------------------------------------------------------
+# Media in the project root: voice reference clips, probe renders, scratch
+# images. Inputs and experiments, not source.
+# ---------------------------------------------------------------------------
+/*.wav
+/*.ogg
+/*.mp3
+/*.mp4
+/*.png
+/*.jpg
+/*.jpeg
+
+# Keep the ComfyUI workflow graphs — those ARE source.
+!workflow_*.json
+
+# Claude Code runtime state
+.claude/scheduled_tasks.lock
+.claude/*.lock
+
+# generated tab-close glyphs (see gui_common._make_tab_close_icons)
+assets/_tabclose*.png
+
+# Masks the transfer tests WRITE at runtime (transfer_mask_<epoch-ms>.png).
+# 102 of them had been committed as if they were fixtures; nothing references
+# them by name -- the filename is generated from time.time().
+tests/masks/transfer_mask_*[0-9].png
+
+# Third-party trainer clone + its own venv (multi-GB); installed, not vendored.
+tools/
+bench/assets/man_at_desk.jpg
+bench/assets/red_carpet.jpg
+models_ext/
+venv_yue2/
+venv_diar/
+venv_mula/
+
+# Local tooling and personal data
+.claude/
+.idea/
+voice_clone/
+chat_logs/
+cover/
+tg_feedback.jsonl
+/*.webp
+*.bak
+*.bak[0-9]*
+
+# Skyrim / Mantella voice stack: local only, never published
+mantella/
+# runtime logs never belong in the repo (edit_routing.jsonl leaked user prompts)
+**/edit_routing.jsonl

@@ -1,0 +1,346 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="135.0mm"
+     height="7.0mm"
+     viewBox="0 0 135.0 7.0">
+
+  <defs>
+    <style>
+
+      .base {
+        stroke:black;
+        stroke-width:0.18;
+        fill:none;
+      }
+
+      .major {
+        stroke:black;
+        stroke-width:0.18;
+      }
+
+      .mid {
+        stroke:black;
+        stroke-width:0.12;
+      }
+
+      .txt-top {
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 2.2px;
+        fill: black;
+      }
+
+    </style>
+  </defs>
+
+<line class="base" x1="0" y1="6" x2="135.0" y2="6" />
+<line class="major" x1="0.00" y1="6.2" x2="0.00" y2="7.2" />
+<line class="major" x1="13.50" y1="6.2" x2="13.50" y2="7.2" />
+<line class="major" x1="27.00" y1="6.2" x2="27.00" y2="7.2" />
+<line class="major" x1="40.50" y1="6.2" x2="40.50" y2="7.2" />
+<line class="major" x1="54.00" y1="6.2" x2="54.00" y2="7.2" />
+<line class="major" x1="67.50" y1="6.2" x2="67.50" y2="7.2" />
+<line class="major" x1="81.00" y1="6.2" x2="81.00" y2="7.2" />
+<line class="major" x1="94.50" y1="6.2" x2="94.50" y2="7.2" />
+<line class="major" x1="108.00" y1="6.2" x2="108.00" y2="7.2" />
+<line class="major" x1="121.50" y1="6.2" x2="121.50" y2="7.2" />
+<line class="major" x1="135.00" y1="6.2" x2="135.00" y2="7.2" />
+<line class="mid" x1="6.75" y1="6.7" x2="6.75" y2="7.2" />
+<line class="mid" x1="20.25" y1="6.7" x2="20.25" y2="7.2" />
+<line class="mid" x1="33.75" y1="6.7" x2="33.75" y2="7.2" />
+<line class="mid" x1="47.25" y1="6.7" x2="47.25" y2="7.2" />
+<line class="mid" x1="60.75" y1="6.7" x2="60.75" y2="7.2" />
+<line class="mid" x1="74.25" y1="6.7" x2="74.25" y2="7.2" />
+<line class="mid" x1="87.75" y1="6.7" x2="87.75" y2="7.2" />
+<line class="mid" x1="101.25" y1="6.7" x2="101.25" y2="7.2" />
+<line class="mid" x1="114.75" y1="6.7" x2="114.75" y2="7.2" />
+<line class="mid" x1="128.25" y1="6.7" x2="128.25" y2="7.2" />
+<line class="major" x1="134.46" y1="4.00" x2="134.46" y2="5.20" />
+<line class="major" x1="133.71" y1="4.00" x2="133.71" y2="5.20" />
+<line class="major" x1="132.96" y1="4.00" x2="132.96" y2="5.20" />
+<line class="major" x1="132.22" y1="4.00" x2="132.22" y2="5.20" />
+<line class="major" x1="131.48" y1="2.60" x2="131.48" y2="5.20" />
+<line class="major" x1="130.74" y1="4.00" x2="130.74" y2="5.20" />
+<line class="major" x1="130.01" y1="4.00" x2="130.01" y2="5.20" />
+<line class="major" x1="129.28" y1="4.00" x2="129.28" y2="5.20" />
+<line class="major" x1="128.56" y1="4.00" x2="128.56" y2="5.20" />
+<line class="major" x1="127.84" y1="3.00" x2="127.84" y2="5.20" />
+<line class="major" x1="127.12" y1="4.00" x2="127.12" y2="5.20" />
+<line class="major" x1="126.41" y1="4.00" x2="126.41" y2="5.20" />
+<line class="major" x1="125.70" y1="4.00" x2="125.70" y2="5.20" />
+<line class="major" x1="124.99" y1="4.00" x2="124.99" y2="5.20" />
+<line class="major" x1="124.28" y1="2.60" x2="124.28" y2="5.20" />
+<line class="major" x1="123.58" y1="4.00" x2="123.58" y2="5.20" />
+<line class="major" x1="122.89" y1="4.00" x2="122.89" y2="5.20" />
+<line class="major" x1="122.19" y1="4.00" x2="122.19" y2="5.20" />
+<line class="major" x1="121.50" y1="4.00" x2="121.50" y2="5.20" />
+<line class="major" x1="120.81" y1="3.00" x2="120.81" y2="5.20" />
+<line class="major" x1="120.13" y1="4.00" x2="120.13" y2="5.20" />
+<line class="major" x1="119.44" y1="4.00" x2="119.44" y2="5.20" />
+<line class="major" x1="118.77" y1="4.00" x2="118.77" y2="5.20" />
+<line class="major" x1="118.09" y1="4.00" x2="118.09" y2="5.20" />
+<line class="major" x1="117.42" y1="2.60" x2="117.42" y2="5.20" />
+<line class="major" x1="116.74" y1="4.00" x2="116.74" y2="5.20" />
+<line class="major" x1="116.08" y1="4.00" x2="116.08" y2="5.20" />
+<line class="major" x1="115.41" y1="4.00" x2="115.41" y2="5.20" />
+<line class="major" x1="114.75" y1="4.00" x2="114.75" y2="5.20" />
+<line class="major" x1="114.09" y1="3.00" x2="114.09" y2="5.20" />
+<line class="major" x1="113.43" y1="4.00" x2="113.43" y2="5.20" />
+<line class="major" x1="112.78" y1="4.00" x2="112.78" y2="5.20" />
+<line class="major" x1="112.13" y1="4.00" x2="112.13" y2="5.20" />
+<line class="major" x1="111.48" y1="4.00" x2="111.48" y2="5.20" />
+<line class="major" x1="110.83" y1="2.60" x2="110.83" y2="5.20" />
+<line class="major" x1="110.19" y1="4.00" x2="110.19" y2="5.20" />
+<line class="major" x1="109.55" y1="4.00" x2="109.55" y2="5.20" />
+<line class="major" x1="108.91" y1="4.00" x2="108.91" y2="5.20" />
+<line class="major" x1="108.27" y1="4.00" x2="108.27" y2="5.20" />
+<line class="major" x1="107.64" y1="3.00" x2="107.64" y2="5.20" />
+<line class="major" x1="107.01" y1="4.00" x2="107.01" y2="5.20" />
+<line class="major" x1="106.38" y1="4.00" x2="106.38" y2="5.20" />
+<line class="major" x1="105.75" y1="4.00" x2="105.75" y2="5.20" />
+<line class="major" x1="105.13" y1="4.00" x2="105.13" y2="5.20" />
+<line class="major" x1="104.50" y1="2.60" x2="104.50" y2="5.20" />
+<line class="major" x1="103.88" y1="4.00" x2="103.88" y2="5.20" />
+<line class="major" x1="103.26" y1="4.00" x2="103.26" y2="5.20" />
+<line class="major" x1="102.65" y1="4.00" x2="102.65" y2="5.20" />
+<line class="major" x1="102.04" y1="4.00" x2="102.04" y2="5.20" />
+<line class="major" x1="101.42" y1="3.00" x2="101.42" y2="5.20" />
+<line class="major" x1="100.82" y1="4.00" x2="100.82" y2="5.20" />
+<line class="major" x1="100.21" y1="4.00" x2="100.21" y2="5.20" />
+<line class="major" x1="99.60" y1="4.00" x2="99.60" y2="5.20" />
+<line class="major" x1="99.00" y1="4.00" x2="99.00" y2="5.20" />
+<line class="major" x1="98.40" y1="2.60" x2="98.40" y2="5.20" />
+<line class="major" x1="97.80" y1="4.00" x2="97.80" y2="5.20" />
+<line class="major" x1="97.20" y1="4.00" x2="97.20" y2="5.20" />
+<line class="major" x1="96.61" y1="4.00" x2="96.61" y2="5.20" />
+<line class="major" x1="96.02" y1="4.00" x2="96.02" y2="5.20" />
+<line class="major" x1="95.42" y1="3.00" x2="95.42" y2="5.20" />
+<line class="major" x1="94.84" y1="4.00" x2="94.84" y2="5.20" />
+<line class="major" x1="94.25" y1="4.00" x2="94.25" y2="5.20" />
+<line class="major" x1="93.66" y1="4.00" x2="93.66" y2="5.20" />
+<line class="major" x1="93.08" y1="4.00" x2="93.08" y2="5.20" />
+<line class="major" x1="92.50" y1="2.60" x2="92.50" y2="5.20" />
+<line class="major" x1="91.92" y1="4.00" x2="91.92" y2="5.20" />
+<line class="major" x1="91.34" y1="4.00" x2="91.34" y2="5.20" />
+<line class="major" x1="90.77" y1="4.00" x2="90.77" y2="5.20" />
+<line class="major" x1="90.19" y1="4.00" x2="90.19" y2="5.20" />
+<line class="major" x1="89.62" y1="3.00" x2="89.62" y2="5.20" />
+<line class="major" x1="89.05" y1="4.00" x2="89.05" y2="5.20" />
+<line class="major" x1="88.48" y1="4.00" x2="88.48" y2="5.20" />
+<line class="major" x1="87.91" y1="4.00" x2="87.91" y2="5.20" />
+<line class="major" x1="87.35" y1="4.00" x2="87.35" y2="5.20" />
+<line class="major" x1="86.78" y1="2.60" x2="86.78" y2="5.20" />
+<line class="major" x1="86.22" y1="4.00" x2="86.22" y2="5.20" />
+<line class="major" x1="85.66" y1="4.00" x2="85.66" y2="5.20" />
+<line class="major" x1="85.10" y1="4.00" x2="85.10" y2="5.20" />
+<line class="major" x1="84.54" y1="4.00" x2="84.54" y2="5.20" />
+<line class="major" x1="83.99" y1="3.00" x2="83.99" y2="5.20" />
+<line class="major" x1="83.43" y1="4.00" x2="83.43" y2="5.20" />
+<line class="major" x1="82.88" y1="4.00" x2="82.88" y2="5.20" />
+<line class="major" x1="82.33" y1="4.00" x2="82.33" y2="5.20" />
+<line class="major" x1="81.78" y1="4.00" x2="81.78" y2="5.20" />
+<line class="major" x1="81.23" y1="2.60" x2="81.23" y2="5.20" />
+<line class="major" x1="80.69" y1="4.00" x2="80.69" y2="5.20" />
+<line class="major" x1="80.14" y1="4.00" x2="80.14" y2="5.20" />
+<line class="major" x1="79.60" y1="4.00" x2="79.60" y2="5.20" />
+<line class="major" x1="79.06" y1="4.00" x2="79.06" y2="5.20" />
+<line class="major" x1="78.52" y1="3.00" x2="78.52" y2="5.20" />
+<line class="major" x1="77.98" y1="4.00" x2="77.98" y2="5.20" />
+<line class="major" x1="77.44" y1="4.00" x2="77.44" y2="5.20" />
+<line class="major" x1="76.91" y1="4.00" x2="76.91" y2="5.20" />
+<line class="major" x1="76.37" y1="4.00" x2="76.37" y2="5.20" />
+<line class="major" x1="75.84" y1="2.60" x2="75.84" y2="5.20" />
+<line class="major" x1="75.31" y1="4.00" x2="75.31" y2="5.20" />
+<line class="major" x1="74.78" y1="4.00" x2="74.78" y2="5.20" />
+<line class="major" x1="74.25" y1="4.00" x2="74.25" y2="5.20" />
+<line class="major" x1="73.72" y1="4.00" x2="73.72" y2="5.20" />
+<line class="major" x1="73.20" y1="3.00" x2="73.20" y2="5.20" />
+<line class="major" x1="72.67" y1="4.00" x2="72.67" y2="5.20" />
+<line class="major" x1="72.15" y1="4.00" x2="72.15" y2="5.20" />
+<line class="major" x1="71.63" y1="4.00" x2="71.63" y2="5.20" />
+<line class="major" x1="71.11" y1="4.00" x2="71.11" y2="5.20" />
+<line class="major" x1="70.59" y1="2.60" x2="70.59" y2="5.20" />
+<line class="major" x1="70.07" y1="4.00" x2="70.07" y2="5.20" />
+<line class="major" x1="69.55" y1="4.00" x2="69.55" y2="5.20" />
+<line class="major" x1="69.04" y1="4.00" x2="69.04" y2="5.20" />
+<line class="major" x1="68.52" y1="4.00" x2="68.52" y2="5.20" />
+<line class="major" x1="68.01" y1="3.00" x2="68.01" y2="5.20" />
+<line class="major" x1="67.50" y1="4.00" x2="67.50" y2="5.20" />
+<line class="major" x1="66.99" y1="4.00" x2="66.99" y2="5.20" />
+<line class="major" x1="66.48" y1="4.00" x2="66.48" y2="5.20" />
+<line class="major" x1="65.97" y1="4.00" x2="65.97" y2="5.20" />
+<line class="major" x1="65.47" y1="2.60" x2="65.47" y2="5.20" />
+<line class="major" x1="64.96" y1="4.00" x2="64.96" y2="5.20" />
+<line class="major" x1="64.46" y1="4.00" x2="64.46" y2="5.20" />
+<line class="major" x1="63.95" y1="4.00" x2="63.95" y2="5.20" />
+<line class="major" x1="63.45" y1="4.00" x2="63.45" y2="5.20" />
+<line class="major" x1="62.95" y1="3.00" x2="62.95" y2="5.20" />
+<line class="major" x1="62.45" y1="4.00" x2="62.45" y2="5.20" />
+<line class="major" x1="61.95" y1="4.00" x2="61.95" y2="5.20" />
+<line class="major" x1="61.46" y1="4.00" x2="61.46" y2="5.20" />
+<line class="major" x1="60.96" y1="4.00" x2="60.96" y2="5.20" />
+<line class="major" x1="60.47" y1="2.60" x2="60.47" y2="5.20" />
+<line class="major" x1="59.97" y1="4.00" x2="59.97" y2="5.20" />
+<line class="major" x1="59.48" y1="4.00" x2="59.48" y2="5.20" />
+<line class="major" x1="58.99" y1="4.00" x2="58.99" y2="5.20" />
+<line class="major" x1="58.50" y1="4.00" x2="58.50" y2="5.20" />
+<line class="major" x1="58.01" y1="3.00" x2="58.01" y2="5.20" />
+<line class="major" x1="57.52" y1="4.00" x2="57.52" y2="5.20" />
+<line class="major" x1="57.04" y1="4.00" x2="57.04" y2="5.20" />
+<line class="major" x1="56.55" y1="4.00" x2="56.55" y2="5.20" />
+<line class="major" x1="56.07" y1="4.00" x2="56.07" y2="5.20" />
+<line class="major" x1="55.58" y1="2.60" x2="55.58" y2="5.20" />
+<line class="major" x1="55.10" y1="4.00" x2="55.10" y2="5.20" />
+<line class="major" x1="54.62" y1="4.00" x2="54.62" y2="5.20" />
+<line class="major" x1="54.14" y1="4.00" x2="54.14" y2="5.20" />
+<line class="major" x1="53.66" y1="4.00" x2="53.66" y2="5.20" />
+<line class="major" x1="53.18" y1="3.00" x2="53.18" y2="5.20" />
+<line class="major" x1="52.70" y1="4.00" x2="52.70" y2="5.20" />
+<line class="major" x1="52.23" y1="4.00" x2="52.23" y2="5.20" />
+<line class="major" x1="51.75" y1="4.00" x2="51.75" y2="5.20" />
+<line class="major" x1="51.28" y1="4.00" x2="51.28" y2="5.20" />
+<line class="major" x1="50.80" y1="2.60" x2="50.80" y2="5.20" />
+<line class="major" x1="50.33" y1="4.00" x2="50.33" y2="5.20" />
+<line class="major" x1="49.86" y1="4.00" x2="49.86" y2="5.20" />
+<line class="major" x1="49.39" y1="4.00" x2="49.39" y2="5.20" />
+<line class="major" x1="48.92" y1="4.00" x2="48.92" y2="5.20" />
+<line class="major" x1="48.45" y1="3.00" x2="48.45" y2="5.20" />
+<line class="major" x1="47.98" y1="4.00" x2="47.98" y2="5.20" />
+<line class="major" x1="47.52" y1="4.00" x2="47.52" y2="5.20" />
+<line class="major" x1="47.05" y1="4.00" x2="47.05" y2="5.20" />
+<line class="major" x1="46.59" y1="4.00" x2="46.59" y2="5.20" />
+<line class="major" x1="46.12" y1="2.60" x2="46.12" y2="5.20" />
+<line class="major" x1="45.66" y1="4.00" x2="45.66" y2="5.20" />
+<line class="major" x1="45.20" y1="4.00" x2="45.20" y2="5.20" />
+<line class="major" x1="44.74" y1="4.00" x2="44.74" y2="5.20" />
+<line class="major" x1="44.28" y1="4.00" x2="44.28" y2="5.20" />
+<line class="major" x1="43.82" y1="3.00" x2="43.82" y2="5.20" />
+<line class="major" x1="43.36" y1="4.00" x2="43.36" y2="5.20" />
+<line class="major" x1="42.90" y1="4.00" x2="42.90" y2="5.20" />
+<line class="major" x1="42.45" y1="4.00" x2="42.45" y2="5.20" />
+<line class="major" x1="41.99" y1="4.00" x2="41.99" y2="5.20" />
+<line class="major" x1="41.54" y1="2.60" x2="41.54" y2="5.20" />
+<line class="major" x1="41.08" y1="4.00" x2="41.08" y2="5.20" />
+<line class="major" x1="40.63" y1="4.00" x2="40.63" y2="5.20" />
+<line class="major" x1="40.18" y1="4.00" x2="40.18" y2="5.20" />
+<line class="major" x1="39.73" y1="4.00" x2="39.73" y2="5.20" />
+<line class="major" x1="39.28" y1="3.00" x2="39.28" y2="5.20" />
+<line class="major" x1="38.83" y1="4.00" x2="38.83" y2="5.20" />
+<line class="major" x1="38.38" y1="4.00" x2="38.38" y2="5.20" />
+<line class="major" x1="37.93" y1="4.00" x2="37.93" y2="5.20" />
+<line class="major" x1="37.48" y1="4.00" x2="37.48" y2="5.20" />
+<line class="major" x1="37.04" y1="2.60" x2="37.04" y2="5.20" />
+<line class="major" x1="36.59" y1="4.00" x2="36.59" y2="5.20" />
+<line class="major" x1="36.15" y1="4.00" x2="36.15" y2="5.20" />
+<line class="major" x1="35.70" y1="4.00" x2="35.70" y2="5.20" />
+<line class="major" x1="35.26" y1="4.00" x2="35.26" y2="5.20" />
+<line class="major" x1="34.82" y1="3.00" x2="34.82" y2="5.20" />
+<line class="major" x1="34.38" y1="4.00" x2="34.38" y2="5.20" />
+<line class="major" x1="33.94" y1="4.00" x2="33.94" y2="5.20" />
+<line class="major" x1="33.50" y1="4.00" x2="33.50" y2="5.20" />
+<line class="major" x1="33.06" y1="4.00" x2="33.06" y2="5.20" />
+<line class="major" x1="32.62" y1="2.60" x2="32.62" y2="5.20" />
+<line class="major" x1="32.19" y1="4.00" x2="32.19" y2="5.20" />
+<line class="major" x1="31.75" y1="4.00" x2="31.75" y2="5.20" />
+<line class="major" x1="31.31" y1="4.00" x2="31.31" y2="5.20" />
+<line class="major" x1="30.88" y1="4.00" x2="30.88" y2="5.20" />
+<line class="major" x1="30.44" y1="3.00" x2="30.44" y2="5.20" />
+<line class="major" x1="30.01" y1="4.00" x2="30.01" y2="5.20" />
+<line class="major" x1="29.58" y1="4.00" x2="29.58" y2="5.20" />
+<line class="major" x1="29.15" y1="4.00" x2="29.15" y2="5.20" />
+<line class="major" x1="28.72" y1="4.00" x2="28.72" y2="5.20" />
+<line class="major" x1="28.29" y1="2.60" x2="28.29" y2="5.20" />
+<line class="major" x1="27.86" y1="4.00" x2="27.86" y2="5.20" />
+<line class="major" x1="27.43" y1="4.00" x2="27.43" y2="5.20" />
+<line class="major" x1="27.00" y1="4.00" x2="27.00" y2="5.20" />
+<line class="major" x1="26.57" y1="4.00" x2="26.57" y2="5.20" />
+<line class="major" x1="26.15" y1="3.00" x2="26.15" y2="5.20" />
+<line class="major" x1="25.72" y1="4.00" x2="25.72" y2="5.20" />
+<line class="major" x1="25.30" y1="4.00" x2="25.30" y2="5.20" />
+<line class="major" x1="24.87" y1="4.00" x2="24.87" y2="5.20" />
+<line class="major" x1="24.45" y1="4.00" x2="24.45" y2="5.20" />
+<line class="major" x1="24.02" y1="2.60" x2="24.02" y2="5.20" />
+<line class="major" x1="23.60" y1="4.00" x2="23.60" y2="5.20" />
+<line class="major" x1="23.18" y1="4.00" x2="23.18" y2="5.20" />
+<line class="major" x1="22.76" y1="4.00" x2="22.76" y2="5.20" />
+<line class="major" x1="22.34" y1="4.00" x2="22.34" y2="5.20" />
+<line class="major" x1="21.92" y1="3.00" x2="21.92" y2="5.20" />
+<line class="major" x1="21.50" y1="4.00" x2="21.50" y2="5.20" />
+<line class="major" x1="21.08" y1="4.00" x2="21.08" y2="5.20" />
+<line class="major" x1="20.67" y1="4.00" x2="20.67" y2="5.20" />
+<line class="major" x1="20.25" y1="4.00" x2="20.25" y2="5.20" />
+<line class="major" x1="19.83" y1="2.60" x2="19.83" y2="5.20" />
+<line class="major" x1="19.42" y1="4.00" x2="19.42" y2="5.20" />
+<line class="major" x1="19.00" y1="4.00" x2="19.00" y2="5.20" />
+<line class="major" x1="18.59" y1="4.00" x2="18.59" y2="5.20" />
+<line class="major" x1="18.18" y1="4.00" x2="18.18" y2="5.20" />
+<line class="major" x1="17.76" y1="3.00" x2="17.76" y2="5.20" />
+<line class="major" x1="17.35" y1="4.00" x2="17.35" y2="5.20" />
+<line class="major" x1="16.94" y1="4.00" x2="16.94" y2="5.20" />
+<line class="major" x1="16.53" y1="4.00" x2="16.53" y2="5.20" />
+<line class="major" x1="16.12" y1="4.00" x2="16.12" y2="5.20" />
+<line class="major" x1="15.71" y1="2.60" x2="15.71" y2="5.20" />
+<line class="major" x1="15.30" y1="4.00" x2="15.30" y2="5.20" />
+<line class="major" x1="14.89" y1="4.00" x2="14.89" y2="5.20" />
+<line class="major" x1="14.49" y1="4.00" x2="14.49" y2="5.20" />
+<line class="major" x1="14.08" y1="4.00" x2="14.08" y2="5.20" />
+<line class="major" x1="13.67" y1="3.00" x2="13.67" y2="5.20" />
+<line class="major" x1="13.27" y1="4.00" x2="13.27" y2="5.20" />
+<line class="major" x1="12.86" y1="4.00" x2="12.86" y2="5.20" />
+<line class="major" x1="12.46" y1="4.00" x2="12.46" y2="5.20" />
+<line class="major" x1="12.06" y1="4.00" x2="12.06" y2="5.20" />
+<line class="major" x1="11.65" y1="2.60" x2="11.65" y2="5.20" />
+<line class="major" x1="11.25" y1="4.00" x2="11.25" y2="5.20" />
+<line class="major" x1="10.85" y1="4.00" x2="10.85" y2="5.20" />
+<line class="major" x1="10.45" y1="4.00" x2="10.45" y2="5.20" />
+<line class="major" x1="10.05" y1="4.00" x2="10.05" y2="5.20" />
+<line class="major" x1="9.65" y1="3.00" x2="9.65" y2="5.20" />
+<line class="major" x1="9.25" y1="4.00" x2="9.25" y2="5.20" />
+<line class="major" x1="8.85" y1="4.00" x2="8.85" y2="5.20" />
+<line class="major" x1="8.45" y1="4.00" x2="8.45" y2="5.20" />
+<line class="major" x1="8.05" y1="4.00" x2="8.05" y2="5.20" />
+<line class="major" x1="7.66" y1="2.60" x2="7.66" y2="5.20" />
+<line class="major" x1="7.26" y1="4.00" x2="7.26" y2="5.20" />
+<line class="major" x1="6.86" y1="4.00" x2="6.86" y2="5.20" />
+<line class="major" x1="6.47" y1="4.00" x2="6.47" y2="5.20" />
+<line class="major" x1="6.07" y1="4.00" x2="6.07" y2="5.20" />
+<line class="major" x1="5.68" y1="3.00" x2="5.68" y2="5.20" />
+<line class="major" x1="5.29" y1="4.00" x2="5.29" y2="5.20" />
+<line class="major" x1="4.89" y1="4.00" x2="4.89" y2="5.20" />
+<line class="major" x1="4.50" y1="4.00" x2="4.50" y2="5.20" />
+<line class="major" x1="4.11" y1="4.00" x2="4.11" y2="5.20" />
+<line class="major" x1="3.72" y1="2.60" x2="3.72" y2="5.20" />
+<line class="major" x1="3.33" y1="4.00" x2="3.33" y2="5.20" />
+<line class="major" x1="2.94" y1="4.00" x2="2.94" y2="5.20" />
+<line class="major" x1="2.55" y1="4.00" x2="2.55" y2="5.20" />
+<line class="major" x1="2.16" y1="4.00" x2="2.16" y2="5.20" />
+<line class="major" x1="1.77" y1="3.00" x2="1.77" y2="5.20" />
+<line class="major" x1="1.38" y1="4.00" x2="1.38" y2="5.20" />
+<line class="major" x1="0.99" y1="4.00" x2="0.99" y2="5.20" />
+<line class="major" x1="0.61" y1="4.00" x2="0.61" y2="5.20" />
+<line class="major" x1="0.22" y1="4.00" x2="0.22" y2="5.20" />
+<text class="txt-top" x="2.0" y="2" text-anchor="start">113</text>
+<text class="txt-top" x="133.00" y="2" text-anchor="end">86.5</text>
+<text class="txt-top" x="124.28" y="2" text-anchor="middle">88</text>
+<text class="txt-top" x="117.42" y="2" text-anchor="middle">89</text>
+<text class="txt-top" x="110.83" y="2" text-anchor="middle">90</text>
+<text class="txt-top" x="104.50" y="2" text-anchor="middle">91</text>
+<text class="txt-top" x="98.40" y="2" text-anchor="middle">92</text>
+<text class="txt-top" x="92.50" y="2" text-anchor="middle">93</text>
+<text class="txt-top" x="86.78" y="2" text-anchor="middle">94</text>
+<text class="txt-top" x="81.23" y="2" text-anchor="middle">95</text>
+<text class="txt-top" x="75.84" y="2" text-anchor="middle">96</text>
+<text class="txt-top" x="70.59" y="2" text-anchor="middle">97</text>
+<text class="txt-top" x="65.47" y="2" text-anchor="middle">98</text>
+<text class="txt-top" x="60.47" y="2" text-anchor="middle">99</text>
+<text class="txt-top" x="55.58" y="2" text-anchor="middle">100</text>
+<text class="txt-top" x="50.80" y="2" text-anchor="middle">101</text>
+<text class="txt-top" x="46.12" y="2" text-anchor="middle">102</text>
+<text class="txt-top" x="41.54" y="2" text-anchor="middle">103</text>
+<text class="txt-top" x="37.04" y="2" text-anchor="middle">104</text>
+<text class="txt-top" x="32.62" y="2" text-anchor="middle">105</text>
+<text class="txt-top" x="28.29" y="2" text-anchor="middle">106</text>
+<text class="txt-top" x="24.02" y="2" text-anchor="middle">107</text>
+<text class="txt-top" x="19.83" y="2" text-anchor="middle">108</text>
+<text class="txt-top" x="15.71" y="2" text-anchor="middle">109</text>
+<text class="txt-top" x="11.65" y="2" text-anchor="middle">110</text>
+<text class="txt-top" x="7.66" y="2" text-anchor="middle">111</text>
+</svg>

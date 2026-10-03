@@ -1,0 +1,216 @@
+{
+  "1": {
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "H3 Ref2VA transformer: Singularity v1.3 (pruned int8)",
+      "note": "A/B 2026-09-24 vs MiniMax-H3-Ref2VA-Q4_K_M.gguf, same turbo LoRA/seed: keeps the face toward the camera and the identity; base turned its back mid-clip. huggingface.co/WarmBloodAban/Minimax-h3_Singularity"
+    },
+    "inputs": {
+      "unet_name": "Minimax-h3_Singularity_ref2va_Pruned_v1.3_int8.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "2": {
+    "class_type": "MiniMaxH3SigmaShift",
+    "_meta": {
+      "title": "flow shift (video/audio)"
+    },
+    "inputs": {
+      "model": [
+        "14",
+        0
+      ],
+      "shift_video": 12.0,
+      "shift_audio": 3.0
+    }
+  },
+  "13": {
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LightX2V Ref2V Turbo 8-step v1.0 LoRA",
+      "note": "Distilled for 8 NFE on Ref2VA (lightx2v/Minimax-h3-Turbo discussion 51): euler/beta, shift 12/3, strength 1.0. Night A/B 10-02 vs FL2V 4-step@1.1 er_sde 12+2: 237 s vs 273 s, voices alike. The old ref2v v0.1 4-step LoRA smeared hands."
+    },
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "lora_name": "minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
+      "strength_model": 1.0
+    }
+  },
+  "3": {
+    "class_type": "CLIPLoaderGGUF",
+    "_meta": {
+      "title": "H3-Encoder (Qwen3-VL-32B)"
+    },
+    "inputs": {
+      "clip_name": "qwen3vl_32b_minimax_h3-Q4_K_M.gguf",
+      "type": "minimax"
+    }
+  },
+  "4": {
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "H3-VisualVAE"
+    },
+    "inputs": {
+      "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+    }
+  },
+  "5": {
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "H3-AudioVAE"
+    },
+    "inputs": {
+      "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+    }
+  },
+  "6": {
+    "class_type": "MiniMaxH3ReferenceToVideo",
+    "_meta": {
+      "title": "omni-reference conditioning + AV latent",
+      "note": "video.py injects ref_image_1..9 / ref_video_1..3 / ref_video_audio_1..3 / ref_audio_1..3 here; the prompt refers to them as <Picture i> / <Video k> / <Audio j>"
+    },
+    "inputs": {
+      "clip": [
+        "3",
+        0
+      ],
+      "vae": [
+        "4",
+        0
+      ],
+      "audio_vae": [
+        "5",
+        0
+      ],
+      "prompt": "",
+      "width": 1344,
+      "height": 768,
+      "length": 124,
+      "ref_image_size": "match"
+    }
+  },
+  "7": {
+    "class_type": "ConditioningZeroOut",
+    "_meta": {
+      "title": "negative (model is CFG-distilled; cfg stays 1.0)"
+    },
+    "inputs": {
+      "conditioning": [
+        "6",
+        0
+      ]
+    }
+  },
+  "8": {
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "sample the packed AV latent"
+    },
+    "inputs": {
+      "model": [
+        "2",
+        0
+      ],
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "latent_image": [
+        "6",
+        1
+      ],
+      "seed": 0,
+      "steps": 8,
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "beta",
+      "denoise": 1.0
+    }
+  },
+  "9": {
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "decode video half of the nested latent"
+    },
+    "inputs": {
+      "samples": [
+        "8",
+        0
+      ],
+      "vae": [
+        "4",
+        0
+      ]
+    }
+  },
+  "10": {
+    "class_type": "VAEDecodeAudio",
+    "_meta": {
+      "title": "decode audio half of the nested latent"
+    },
+    "inputs": {
+      "samples": [
+        "8",
+        0
+      ],
+      "vae": [
+        "5",
+        0
+      ]
+    }
+  },
+  "11": {
+    "class_type": "CreateVideo",
+    "_meta": {
+      "title": "mux 24fps video with its native stereo track"
+    },
+    "inputs": {
+      "images": [
+        "9",
+        0
+      ],
+      "fps": 24.0,
+      "audio": [
+        "10",
+        0
+      ]
+    }
+  },
+  "12": {
+    "class_type": "SaveVideo",
+    "_meta": {
+      "title": "save"
+    },
+    "inputs": {
+      "video": [
+        "11",
+        0
+      ],
+      "filename_prefix": "video/assistant_h3",
+      "format": "auto",
+      "codec": "auto"
+    }
+  },
+  "14": {
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "fl2v lightx2v rank21 @0.4 (motion, sharpness; A/B 10-02)"
+    },
+    "inputs": {
+      "model": [
+        "13",
+        0
+      ],
+      "strength_model": 0.4,
+      "lora_name": "minimax_h3_fl2v_lightx2v_turbo_4step_v0.1_comfy_resized_avg_rank_21_bf16.safetensors"
+    }
+  }
+}

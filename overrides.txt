@@ -1,0 +1,2 @@
+# cached-path (via f5-tts) pins rich<14 for progress bars only; py7zz needs rich>=14.
+rich>=14

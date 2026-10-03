@@ -1,0 +1,23 @@
+[
+  {
+    "id": "c1_garazh_mekhanik",
+    "name": "Лёха",
+    "voice": "Leha_short.wav",
+    "personality": "personalities/garazh_mekhanik.txt",
+    "prompt": ""
+  },
+  {
+    "id": "c2_garazh_dyadya",
+    "name": "Слава",
+    "voice": "Dh_short.wav",
+    "personality": "personalities/garazh_dyadya.txt",
+    "prompt": ""
+  },
+  {
+    "id": "c3_garazh_student",
+    "name": "Кирилл",
+    "voice": "San_short.wav",
+    "personality": "personalities/garazh_student.txt",
+    "prompt": ""
+  }
+]
