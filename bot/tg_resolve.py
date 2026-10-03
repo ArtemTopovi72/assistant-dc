@@ -452,7 +452,6 @@ class ResolveMixin:
 
                 if key == "my_voice":
                     self._goto_menu(sess, "settings")
-                    kb = tg_bot._settings_kb(sess.reply_mode, sess.is_admin, lang)
                     # Always arms for a NEW sample; going back to the default is the ↩️ button.
                     sess.clone_state = "want_assistant"
                     self._store.put(sess)
