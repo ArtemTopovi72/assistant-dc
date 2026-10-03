@@ -310,6 +310,19 @@ def load_model_exclusive(
             ok, last_err = _rest_load(base_url, cand, context_length)
             if ok:
                 return True, last_err
+            if isinstance(last_err, _StillLoading):
+                # The server accepted the load and is still reading the GGUF
+                # (an 18 GB file off a cold disk can take minutes). A CLI load
+                # now would start a SECOND full load of the same model: double
+                # the wait, two instances fighting for one card, and the
+                # "<id>:2" phantom drop_phantoms has to clean up after.
+                logger.warning("REST load of %r still in progress (%s); waiting for it "
+                               "instead of loading a second copy", cand, last_err)
+                if _wait_served(base_url, cand, timeout=_T_RELOAD):
+                    return True, f"loaded {cand} (slow load finished)"
+                return False, (f"{cand!r} did not finish loading within "
+                               f"{_T_RELOAD + LOAD_SERVED_WAIT_S:.0f}s -- check LM Studio "
+                               f"(VRAM, disk speed)")
             logger.warning("REST load of %r failed (%s); trying lms load", cand, last_err)
         cmd = ["lms", "load", cand, "-y",
                "-c", str(context_length if context_length and context_length > 0
@@ -357,6 +370,10 @@ def load_model_exclusive(
 BATCH_TOKENS = _cfg_env.env_int("LM_BATCH_TOKENS", 2048)
 
 
+class _StillLoading(str):
+    """A _rest_load failure that means "accepted, not finished yet"."""
+
+
 def _rest_load(base_url: str, model: str, context_length: int = 0) -> tuple:
     try:
         r = requests.post(base_url.rstrip("/") + "/api/v1/models/load", json={
@@ -369,10 +386,13 @@ def _rest_load(base_url: str, model: str, context_length: int = 0) -> tuple:
         if r.status_code != 200 or body.get("status") != "loaded":
             return False, str(body.get("error") or body or r.status_code)[:300]
         if not _wait_served(base_url, model):
-            return False, f"{model!r} loaded but is not being served"
+            return False, _StillLoading(f"{model!r} loaded but is not being served yet")
         cfg = body.get("load_config") or {}
         return True, (f"loaded {model} ctx={cfg.get('context_length')} "
                       f"ubatch={cfg.get('physical_batch_size')} parallel={cfg.get('parallel')}")
+    except requests.exceptions.ReadTimeout as exc:
+        # Sent and accepted; the server is still working on it.
+        return False, _StillLoading(f"no answer within {_T_RELOAD}s ({exc})")
     except Exception as exc:
         return False, str(exc)
 
