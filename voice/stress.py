@@ -20,6 +20,7 @@ through unchanged.
 import re
 import logging
 import threading
+import time
 from functools import lru_cache
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,12 @@ _EN_WORD = re.compile(r"[A-Za-z]+(?:['’][A-Za-z]+)?")
 # IPA vowel nuclei (a maximal run of these = one syllable nucleus / one diphthong).
 _IPA_VOWELS = set("iɪyʏeøɛœæaɶɑɒɔoʊuʌəɐɚɝɵʉɨ")
 _PRIMARY = "ˈ"
+
+# After a model fails to load (offline, hub down, broken cache) it is not tried
+# again for this long. Every attempt is a hub download with its own retries
+# (~25 s), and the loaders ran once per word: a reply with five English words
+# stalled the voice for two minutes, every reply.
+LOAD_RETRY_S = 600.0
 
 
 def _count_ipa_nuclei(ipa: str) -> int:
@@ -106,6 +113,9 @@ class BilingualAccentor:
         self._ru_lock = threading.Lock()   # warm-up thread vs first real call
         self._en_tok = None
         self._en_model = None
+        self._en_lock = threading.Lock()
+        self._ru_failed_at = 0.0
+        self._en_failed_at = 0.0
 
     # ----- Russian -----------------------------------------------------------
     def warm(self) -> None:
@@ -118,6 +128,17 @@ class BilingualAccentor:
             return self._ensure_ru_locked()
 
     def _ensure_ru_locked(self):
+        if self._ru is None:
+            if time.monotonic() - self._ru_failed_at < LOAD_RETRY_S and self._ru_failed_at:
+                raise RuntimeError("RUAccent failed to load recently; not retrying yet")
+            try:
+                return self._load_ru()
+            except Exception:
+                self._ru_failed_at = time.monotonic()
+                raise
+        return self._ru
+
+    def _load_ru(self):
         if self._ru is None:
             from ruaccent.ruaccent import RUAccent
             import pathlib
@@ -142,6 +163,7 @@ class BilingualAccentor:
         return self._silero_homographs(ru, out)
 
     _silero = None
+    _silero_failed_at = 0.0
 
     def _silero_homographs(self, ru, out: str) -> str:
         """On a homograph (замо́к/за́мок, мука́/му́ка) silero-stress reads the
@@ -151,8 +173,15 @@ class BilingualAccentor:
         Bench 2026-10-02: 20/25 RUAccent, 21/25 silero, see the test."""
         try:
             if BilingualAccentor._silero is None:
-                from silero_stress import load_accentor
-                BilingualAccentor._silero = load_accentor()
+                if (BilingualAccentor._silero_failed_at
+                        and time.monotonic() - BilingualAccentor._silero_failed_at < LOAD_RETRY_S):
+                    return out
+                try:
+                    from silero_stress import load_accentor
+                    BilingualAccentor._silero = load_accentor()
+                except Exception:
+                    BilingualAccentor._silero_failed_at = time.monotonic()
+                    raise
             sil = BilingualAccentor._silero(out.replace("+", ""))
         except Exception as exc:
             logger.debug("silero-stress unavailable: %s", exc)
@@ -171,13 +200,23 @@ class BilingualAccentor:
 
     # ----- English -----------------------------------------------------------
     def _ensure_en(self):
-        if self._en_model is None:
-            from transformers import T5ForConditionalGeneration, AutoTokenizer
-            self._en_tok = AutoTokenizer.from_pretrained("google/byt5-small")
-            self._en_model = T5ForConditionalGeneration.from_pretrained(self.en_model_name)
-            self._en_model.to(self.device).eval()
-            logger.info("BilingualAccentor: CharsiuG2P %s ready (device=%s)",
-                        self.en_model_name, self.device)
+        if self._en_model is not None:
+            return self._en_model
+        with self._en_lock:     # two voice replies at once loaded it twice
+            if self._en_model is None:
+                if self._en_failed_at and time.monotonic() - self._en_failed_at < LOAD_RETRY_S:
+                    raise RuntimeError("CharsiuG2P failed to load recently; not retrying yet")
+                try:
+                    from transformers import T5ForConditionalGeneration, AutoTokenizer
+                    tok = AutoTokenizer.from_pretrained("google/byt5-small")
+                    model = T5ForConditionalGeneration.from_pretrained(self.en_model_name)
+                    model.to(self.device).eval()
+                except Exception:
+                    self._en_failed_at = time.monotonic()
+                    raise
+                self._en_tok, self._en_model = tok, model
+                logger.info("BilingualAccentor: CharsiuG2P %s ready (device=%s)",
+                            self.en_model_name, self.device)
         return self._en_model
 
     @lru_cache(maxsize=20000)
