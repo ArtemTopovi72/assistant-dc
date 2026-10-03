@@ -63,3 +63,33 @@ def test_wrappers_call_setup_py_and_launcher():
     assert "scripts/setup.py" in sh and "set -euo pipefail" in sh
     assert "launch_all.py" in (ROOT / "start.cmd").read_text(encoding="utf-8")
     assert "launch_all.py" in (ROOT / "start.sh").read_text(encoding="utf-8")
+
+
+def test_deb_package_names():
+    setup = _load("setup")
+    assert setup._deb_package("libxcb-icccm.so.4") == "libxcb-icccm4"
+    assert setup._deb_package("libxkbcommon-x11.so.0") == "libxkbcommon-x11-0"
+    assert setup._deb_package("libGL.so.1") == "libgl1"
+
+
+def test_qt_libs_step_reports_what_to_install(monkeypatch):
+    setup = _load("setup")
+    if setup.IS_WIN:
+        return
+    setup.STEPS.clear()
+    monkeypatch.setattr(setup, "_qt_missing_libs", lambda: ["libxcb-icccm.so.4"])
+    monkeypatch.setattr(setup, "_apt_install", lambda pkgs, args: False)
+    setup.s_qt_libs(SimpleNamespace(no_install=True))
+    name, status, detail = setup.STEPS[-1]
+    assert status == "warn" and "apt install libxcb-icccm4" in detail, detail
+    # once installed the step re-checks and passes
+    left = [["libxcb-icccm.so.4"], []]
+    monkeypatch.setattr(setup, "_qt_missing_libs", lambda: left.pop(0))
+    monkeypatch.setattr(setup, "_apt_install", lambda pkgs, args: True)
+    setup.s_qt_libs(SimpleNamespace(no_install=False))
+    assert setup.STEPS[-1][1] == "ok"
+
+
+def test_apt_is_never_run_with_no_install():
+    setup = _load("setup")
+    assert setup._apt_install(["ffmpeg"], SimpleNamespace(no_install=True)) is False

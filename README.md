@@ -118,16 +118,27 @@ Each step skips what is already done, so after a failure fix the line marked
 3. installs PyTorch (CUDA 12.8 build when an NVIDIA GPU is present, CPU otherwise),
    the requirements and the import path; then Playwright Chromium;
 4. creates `.env` from `.env.example` (an existing `.env` is never overwritten);
-5. installs ffmpeg (winget on Windows) and downloads the vocoder;
-6. installs LM Studio (winget), starts its server and downloads the chat and
-   embedding models (`MODEL_NAME`, `EMBED_MODEL`; the chat model is ~17 GB);
-7. creates an **Assistant DC** desktop shortcut (Windows);
-8. runs the health check (`scripts/healthcheck.py`) and starts the app.
+5. on Linux, installs the X11 libraries Qt needs to open a window and ffmpeg
+   (apt, when it can run without a password prompt; otherwise it prints the command);
+   on Windows, ffmpeg via winget;
+6. voice: the vocoder and the Russian F5-TTS weights
+   ([Misha24-10/F5-TTS_RUSSIAN](https://huggingface.co/Misha24-10/F5-TTS_RUSSIAN),
+   `F5TTS_v1_Base_v4_winter`, newest checkpoint) into `models/f5/`;
+7. installs LM Studio (winget on Windows, the official headless installer on Linux),
+   starts its server and downloads the chat and embedding models
+   (`MODEL_NAME`, `EMBED_MODEL`; the chat model is ~17 GB);
+8. installs ComfyUI v0.38.2 with its own venv under `~/Documents/ComfyUI`
+   (`COMFY_BASE_DIR`), the custom nodes the graphs use at pinned commits, and the
+   graphs' model files (~155 GB for pictures + songs + video; it checks free space first);
+9. creates an **Assistant DC** desktop shortcut (Windows);
+10. runs the health check (`scripts/healthcheck.py`) and starts the app.
 
-Options: `--no-models` (skip model downloads and LM Studio, for CI or offline installs),
+Options: `--no-models` (skip model downloads, for CI or offline installs),
+`--no-comfy` (skip ComfyUI entirely), `--media image,music,video` (which ComfyUI model
+sets to download; e.g. `--media image` for pictures only, ~62 GB),
 `--no-start` (do not open the app at the end), `--cpu` (CPU PyTorch even with a GPU),
 `--dev` (also install the test dependencies), `--no-install` (do not install system
-programs with winget). On Windows they are written the same way: `setup.ps1 --no-start`.
+programs with winget/apt). On Windows they are written the same way: `setup.ps1 --no-start`.
 
 | | |
 |---|---|
@@ -137,14 +148,14 @@ programs with winget). On Windows they are written the same way: `setup.ps1 --no
 | update | `git pull`, then run the setup script again |
 | settings | `.env`; every key is explained in `.env.example` |
 
-What stays manual, because it is large, private or optional: the voice files
-([section 4](#4-voice)), ComfyUI for images/video/music ([section 3](#3-comfyui-images-video-music))
-and Docker Desktop for the `run_code` sandbox. Without them the app runs with those
-features off, and the health check says which ones.
+What stays manual: Docker Desktop for the `run_code` sandbox. Anything a download
+could not fetch (network, disk space) is reported with the step that failed; run the
+setup again to retry. Without a part the app runs with that feature off, and the
+health check says which ones.
 
 ### 0. What you need
 
-- Windows 10 or 11 (the main target). Linux works for chat, voice, research and the bot.
+- Windows 10 or 11 (the main target). Linux (Ubuntu/Debian) runs the whole app too: the window opens on X11 and setup installs ComfyUI and LM Studio there as well.
 - An NVIDIA GPU. Everything was built and measured on an RTX 3090 24 GB with 96 GB RAM;
   smaller cards are untested. Video generation needs the full 24 GB.
 - Disk: about 60 GB for the MiniMax H3 video weights, plus the chat model and ComfyUI models.

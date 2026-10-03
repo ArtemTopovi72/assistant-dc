@@ -324,7 +324,11 @@ def test_misc_slot_branches():
     try:
         w = _win()
         # _on_compact_done save-fail branch (make summary_file dir unwritable via bad path)
-        w.ctx.active_memory_dir = Path("Z:/no/such/dir/hopefully")
+        # under a regular FILE: mkdir fails on every OS ("Z:/..." is merely a
+        # relative path off Windows -- it was created in the repo root there)
+        _blocker = Path(_TMP) / "not_a_dir"
+        _blocker.write_text("x")
+        w.ctx.active_memory_dir = _blocker / "sub"
         w._on_compact_done("summary")   # mkdir/open likely raise -> "save failed" branch
         # restore a good dir
         w.ctx.active_memory_dir = Path(_TMP) / "wmem5"

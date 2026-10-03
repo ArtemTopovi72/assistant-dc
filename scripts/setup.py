@@ -305,6 +305,66 @@ def s_config(args):
         (ROOT / d).mkdir(exist_ok=True)
 
 
+# -- 7b. Linux system libraries ----------------------------------------------------
+
+def _apt_install(pkgs, args) -> bool:
+    """apt-get install pkgs when that can run unattended (root, or sudo without
+    a password). -> whether it ran and succeeded."""
+    if IS_WIN or args.no_install or not pkgs or not shutil.which("apt-get"):
+        return False
+    if os.geteuid() == 0:
+        pre = []
+    elif shutil.which("sudo") and subprocess.run(["sudo", "-n", "true"], capture_output=True,
+                                                 timeout=15).returncode == 0:
+        pre = ["sudo", "-n"]
+    else:
+        return False
+    env = dict(os.environ, DEBIAN_FRONTEND="noninteractive")
+    _p(f"  apt-get install {' '.join(pkgs)}")
+    subprocess.run(pre + ["apt-get", "update", "-q"], capture_output=True, timeout=600, env=env)
+    p = subprocess.run(pre + ["apt-get", "install", "-y", "-q", *pkgs], capture_output=True,
+                       text=True, timeout=1800, env=env)
+    return p.returncode == 0
+
+
+def _deb_package(soname: str) -> str:
+    """libxcb-icccm.so.4 -> libxcb-icccm4; libxkbcommon-x11.so.0 -> libxkbcommon-x11-0."""
+    stem, _, ver = soname.partition(".so.")
+    ver = ver.split(".")[0]
+    name = f"{stem}{'-' if stem[-1:].isdigit() else ''}{ver}" if ver else stem
+    return name.lower()
+
+
+def _qt_missing_libs() -> list:
+    """Shared libraries Qt's X11 plugin needs that this machine lacks."""
+    try:
+        import PyQt5
+    except ImportError:
+        return []
+    plug = Path(PyQt5.__file__).parent / "Qt5" / "plugins" / "platforms" / "libqxcb.so"
+    if not plug.exists() or not shutil.which("ldd"):
+        return []
+    out = subprocess.run(["ldd", str(plug)], capture_output=True, text=True, timeout=60).stdout
+    return sorted({ln.split()[0] for ln in out.splitlines() if "not found" in ln})
+
+
+def s_qt_libs(args):
+    if IS_WIN or sys.platform == "darwin":
+        return
+    step("7b. window libraries (Linux)")
+    missing = _qt_missing_libs()
+    if missing:
+        pkgs = sorted({_deb_package(m) for m in missing})
+        if _apt_install(pkgs, args):
+            missing = _qt_missing_libs()
+        if missing:
+            record("qt-libs", "warn", "the app window cannot open (Qt's xcb plugin lacks "
+                   f"{', '.join(missing)}): sudo apt install {' '.join(pkgs)}  "
+                   "(Telegram and the headless parts work without it)")
+            return
+    record("qt-libs", "ok", "Qt can open a window")
+
+
 # -- 8. ffmpeg ---------------------------------------------------------------------
 
 def _winget_links():
@@ -321,6 +381,8 @@ def s_ffmpeg(args):
              "--accept-package-agreements", "--accept-source-agreements"], check=False)
         if _winget_links().is_dir():
             os.environ["PATH"] = str(_winget_links()) + os.pathsep + os.environ["PATH"]
+        exe = shutil.which("ffmpeg")
+    if not exe and not IS_WIN and _apt_install(["ffmpeg"], args):
         exe = shutil.which("ffmpeg")
     if exe:
         record("ffmpeg", "ok", exe)
@@ -672,6 +734,7 @@ def main(argv=None):
         s_import_path(args)
         s_browser(args)
         s_config(args)
+        s_qt_libs(args)
         s_ffmpeg(args)
         s_voice(args)
         s_lmstudio(args)
