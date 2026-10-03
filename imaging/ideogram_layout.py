@@ -393,6 +393,43 @@ def apply_style_floor(layout: dict, prompt: str) -> dict:
     return layout
 
 
+_GRAPHIC = re.compile(r"vector|graphic design|logo|icon|emblem|sticker|badge|infographic|"
+                      r"diagram|poster typography", re.I)
+_DRAWN = re.compile(r"illustrat|painting|drawn|drawing|cartoon|anime|comic|render|digital art|"
+                    r"concept art|sketch|watercolou?r|pixel|stylized|stylised|cel", re.I)
+
+
+def enforce_user_look(layout: dict, look: str) -> dict:
+    """The USER's words decide the kind of picture, not the agent's description.
+
+    The description handed to the planner is the agent's English rewrite, and it
+    likes «epic digital painting»: «Кибернетический Ленин … дерётся с чертями»
+    came back a cartoon again and again, while the owner wanted a photograph
+    (live 10-03: «он всё нахуярит мультяшно, а я просил фотореализм»). `look` is
+    _look() of the user's own words: "photo" -> a photograph, always; "none" ->
+    a photograph unless the planner made graphic design (a logo stays a logo);
+    a drawn look -> that look. "" -> no user words to go by: the layout as is.
+    """
+    if not isinstance(layout, dict) or not look:
+        return layout
+    style = " ".join(str(layout.get(k) or "") for k in ("art_style", "medium", "aesthetics"))
+    if look in _LOOKS:
+        if not str(layout.get("art_style") or "").strip():
+            layout["art_style"] = look
+            layout["medium"] = "illustration"
+            layout["photo"] = ""
+        return layout
+    if look == "none" and _GRAPHIC.search(style):
+        return layout
+    if look == "photo" or str(layout.get("art_style") or "").strip() or _DRAWN.search(style):
+        if str(layout.get("art_style") or "").strip() or _DRAWN.search(style):
+            logger.info("Ideogram: the user named no drawn look -- %r becomes a photograph", style[:80])
+        layout.update(_DEFAULT_PHOTO_STYLE)
+        layout["aesthetics"] = "photorealistic, true-to-life detail, cinematic"
+        layout["art_style"] = ""
+    return layout
+
+
 def _clamp01(v, default=0.0):
     try:
         return max(0.0, min(1.0, float(v)))

@@ -734,6 +734,30 @@ def _keep_quoted_names(description: str, state) -> str:
     return description
 
 
+def _user_look(state) -> str:
+    """The look the user's own words ask for: a drawn look, "photo", "none", or
+    "" when there are no user words to read (a direct call)."""
+    from prompt_guard import user_words
+    from ideogram_layout import _look
+    st = state or {}
+    texts = [user_words(str(st.get("user_input_original") or st.get("user_input") or ""))]
+    for m in reversed(st.get("messages") or []):
+        if isinstance(m, dict) and m.get("role") == "user" and isinstance(m.get("content"), str):
+            t = user_words(m["content"]).strip()
+            if t and t not in texts:
+                texts.append(t)
+        if len(texts) >= 3:
+            break
+    texts = [t.strip() for t in texts if t and t.strip()]
+    if not texts:
+        return ""
+    for t in texts:
+        got = _look(t)
+        if got != "none":
+            return got
+    return "none"
+
+
 def _handle_generate_image(ctx, state, args: dict) -> str:
     import tools as _t   # the render seam is owned by tools; read it at CALL time
     description = (args.get("description") or "").strip()
@@ -769,7 +793,7 @@ def _handle_generate_image(ctx, state, args: dict) -> str:
 
     description = _keep_quoted_names(description, state)
     import person_look
-    description = person_look.with_look(description)     # «Ленин» -> bald, goatee, ...
+    description = person_look.with_look(description, ctx=ctx)     # «Ленин» -> bald, goatee, ...
     ctx.set_stage("Drawing a picture")
     steps, width, height, seed = args.get("steps"), args.get("width"), args.get("height"), args.get("seed")
     logger.info("Tool: generate_image(%s, steps=%s, %sx%s)", description, steps, width, height)
@@ -803,9 +827,17 @@ def _handle_generate_image(ctx, state, args: dict) -> str:
             )
         logger.info("reference-person mode did not produce an image (%s); using text2image", info)
 
-    result = _t.generate_image_with_refinement(
-        ctx=ctx, description=description, steps=steps, width=width, height=height, seed=seed,
-    )
+    # The kind of picture is the USER's call, not the agent's rewrite (see
+    # ideogram_layout.enforce_user_look): read from their own words, this turn
+    # first, then the last two requests («ещё раз» after «в стиле аниме»).
+    _prev_look = getattr(ctx, "user_look", "")
+    ctx.user_look = _user_look(state)
+    try:
+        result = _t.generate_image_with_refinement(
+            ctx=ctx, description=description, steps=steps, width=width, height=height, seed=seed,
+        )
+    finally:
+        ctx.user_look = _prev_look
     img_path = result.get("path")
     # A returned path must actually EXIST on disk before we treat it as a result. A
     # stale/bogus path from the renderer, or a temp file deleted between render and
@@ -1299,7 +1331,7 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
                 "horizontal/YouTube, 944x1680 for vertical/stories).")
     # «он лысый, это Ленин»: the person may be named only in the picture's own prompt.
     import person_look
-    instructions = person_look.with_look(instructions, getattr(ctx, "last_image_prompt", "") or "")
+    instructions = person_look.with_look(instructions, getattr(ctx, "last_image_prompt", "") or "", ctx=ctx)
     ctx.set_stage("Redrawing the picture")
     logger.info("Tool: redraw_image(mode=%s, instructions=%r, source=%s)",
                 mode, instructions[:80], source)
@@ -1311,7 +1343,17 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
     # these could handle) was removed from the product along with its checkpoint
     # files, so a picture that is neither of the above now surfaces as a
     # [TOOL ERROR] below instead of silently falling through to a dead engine.
-    new_path, engine = redraw_whole_image(ctx, source, instructions)
+    # Only a look the user NAMES this turn re-styles a redraw («сделай реалистично»);
+    # «он лысый» keeps the picture's own style.
+    _prev_look = getattr(ctx, "user_look", "")
+    from prompt_guard import user_words
+    from ideogram_layout import _look
+    _said = user_words(str(state.get("user_input_original") or state.get("user_input") or "")).strip()
+    ctx.user_look = _look(_said) if _said else ""
+    try:
+        new_path, engine = redraw_whole_image(ctx, source, instructions)
+    finally:
+        ctx.user_look = _prev_look
     verb = "redrawn"
     if new_path and os.path.exists(new_path):
         ctx.last_image_path = new_path

@@ -121,7 +121,8 @@ def is_black_frame(path: str) -> bool:
 # proxy seam to maintain.
 from ideogram_layout import (
     _looks_like_layout, _repair_json, _extract_json, _iter_json_objects, named_style,
-    _DEFAULT_PHOTO_STYLE, wants_realism, apply_style_floor, bbox, element, blank_layout,
+    _DEFAULT_PHOTO_STYLE, wants_realism, apply_style_floor, enforce_user_look, bbox, element,
+    blank_layout,
     normalize_layout, layout_to_caption, caption_to_layout, hex_palette, build_caption,
     merged_layout, filled_layout,
 )
@@ -635,8 +636,9 @@ def plan_layout(ctx, prompt: str) -> dict:
     Kept separate from `plan_caption` so the storyboard editor can show, move and
     reword the boxes before anything is rendered.
     """
+    look = getattr(ctx, "user_look", "") if ctx is not None else ""
     fallback = lambda: ensure_text_elements(
-        apply_style_floor(blank_layout(prompt), prompt), prompt)
+        enforce_user_look(apply_style_floor(blank_layout(prompt), prompt), look), prompt)
     if ctx is None:
         return fallback()
     try:
@@ -651,7 +653,7 @@ def plan_layout(ctx, prompt: str) -> dict:
         # "three tall palm trees" in one box render as one merged mass, as in an edit.
         from draw_agent import split_counted_boxes, merge_text_column   # draw_agent imports this module
         layout, _ = split_counted_boxes(merge_text_column(layout), [])
-        return ensure_text_elements(apply_style_floor(layout, prompt), prompt)
+        return ensure_text_elements(enforce_user_look(apply_style_floor(layout, prompt), look), prompt)
     except Exception:
         logger.exception("Ideogram planning failed — using the flat layout")
         return fallback()
@@ -665,8 +667,10 @@ def plan_caption(ctx, prompt: str) -> dict:
     # bare build_caption() here carried no style at all. Built LAZILY: eagerly
     # meant the floor's "no style, applying the default" warning was logged on
     # every realism prompt, including the ones where the planner did fine.
+    look = getattr(ctx, "user_look", "") if ctx is not None else ""
+
     def fallback():
-        return layout_to_caption(apply_style_floor(blank_layout(prompt), prompt))
+        return layout_to_caption(enforce_user_look(apply_style_floor(blank_layout(prompt), prompt), look))
     if ctx is None:
         return fallback()
     try:
@@ -686,7 +690,7 @@ def plan_caption(ctx, prompt: str) -> dict:
         if not layout["elements"]:
             logger.warning("Ideogram planner produced no usable elements — flat caption")
             return fallback()
-        layout = ensure_text_elements(apply_style_floor(layout, prompt), prompt)
+        layout = ensure_text_elements(enforce_user_look(apply_style_floor(layout, prompt), look), prompt)
         return layout_to_caption(layout)
     except Exception:
         logger.exception("Ideogram planning failed — using the flat caption")

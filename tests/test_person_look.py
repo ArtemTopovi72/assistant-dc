@@ -50,5 +50,29 @@ def test_a_failing_model_changes_nothing(monkeypatch):
 
 def test_both_handlers_use_it():
     src = open(os.path.join(ROOT, "agent", "tool_image_handlers.py"), encoding="utf-8").read()
-    assert "description = person_look.with_look(description)" in src
+    assert "description = person_look.with_look(description, ctx=ctx)" in src
     assert "instructions = person_look.with_look(instructions," in src
+
+
+def test_the_looks_come_from_the_web_when_it_answers(monkeypatch):
+    """Owner 10-03: «описание брать в интернете норм»."""
+    queries = []
+    monkeypatch.setattr(P, "SEARCH_STUB", lambda q: queries.append(q) or "Lenin was bald with a red goatee")
+
+    def stub(text):
+        if text.startswith("WEB:"):
+            assert "red goatee" in text
+            return ("", "completely bald, short red goatee and moustache, high forehead")
+        return _stub(text)
+    monkeypatch.setattr(P, "STUB", stub)
+    P._CACHE.clear()
+    out = P.with_look("Ленин в аду", ctx=object())
+    assert queries and queries[0].startswith("Vladimir Lenin appearance")
+    assert "short red goatee" in out
+
+
+def test_no_web_answer_falls_back_to_the_models_memory(monkeypatch):
+    monkeypatch.setattr(P, "SEARCH_STUB", lambda q: "")
+    monkeypatch.setattr(P, "STUB", _stub)
+    P._CACHE.clear()
+    assert "bald head" in P.with_look("Ленин", ctx=object())

@@ -271,6 +271,17 @@ def edit_via_layout(ctx, image_path: str, instruction: str,
     layout, notes = draw_agent.edit_layout(ctx, rec["layout"], instruction)
     logger.info("layout edit %r: %s", instruction[:60],
                 "; ".join(notes) if notes else "no layout change")
+    # «сделай реалистично» on our cartoon: a look the USER named in this turn
+    # re-styles the picture (live 10-03: every redraw came back a cartoon again).
+    look = getattr(ctx, "user_look", "") if ctx is not None else ""
+    if look and look != "none":
+        before = {k: layout.get(k) for k in ("art_style", "medium", "photo", "aesthetics")}
+        from ideogram_layout import enforce_user_look
+        layout = enforce_user_look(layout, look)
+        if look == "photo":
+            layout["art_style"] = ""
+        if {k: layout.get(k) for k in before} != before:
+            notes = [n for n in notes if n != "the model proposed no change"] + [f"look -> {look}"]
     if notes == ["the model proposed no change"]:
         # Nothing was understood. Re-rendering an unchanged layout would burn a
         # generation to hand back the same picture and call it an edit.
