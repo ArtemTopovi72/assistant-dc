@@ -22,6 +22,23 @@ except Exception as exc:  # pragma: no cover - defensive
     logger.debug("No .env loaded: %s", exc)
 
 
+# LM Studio, ComfyUI and the sandbox are local servers. With HTTP(S)_PROXY set
+# (a VPN client or a corporate proxy) and no NO_PROXY, `requests` sent even
+# 127.0.0.1 through the proxy and every local call failed while the servers
+# ran fine. Loopback is always exempt; the user's own entries are kept.
+def _exempt_loopback_from_proxy() -> None:
+    need = ("127.0.0.1", "localhost", "::1")
+    for var in ("NO_PROXY", "no_proxy"):
+        have = [h.strip() for h in os.environ.get(var, "").split(",") if h.strip()]
+        if "*" in have:
+            continue
+        missing = [h for h in need if h not in have]
+        if missing:
+            os.environ[var] = ",".join(have + missing)
+
+
+_exempt_loopback_from_proxy()
+
 def _env_int(name: str, default: int) -> int:
     """Read an int from the environment, falling back to default on a bad value
     so a malformed override never crashes startup at import time."""
