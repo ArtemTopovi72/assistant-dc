@@ -422,3 +422,78 @@ def test_but_it_is_still_reachable_when_named(tmp_path):
     box = Sandbox(tmp_path / "sbx")
     box.write_text(f"{AGENT_DIR}/run_1.py", "print(1)")
     assert box.read_text(f"{AGENT_DIR}/run_1.py") == "print(1)"
+
+
+# --- walks must not follow links out of the tree -----------------------------
+# run_code's container writes into the sandbox and can leave a symlink to an
+# absolute path; the HOST then follows it. resolve() guards named paths, but
+# search() and pack() walk the tree and used to read/zip whatever a link hit.
+
+def _link_or_skip(link: Path, target: Path):
+    try:
+        link.symlink_to(target)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlinks not available here")
+
+
+def test_search_does_not_follow_a_link_out(box, tmp_path):
+    secret = tmp_path / "secret.txt"
+    secret.write_text("TOKEN=hunter2", encoding="utf-8")
+    _link_or_skip(box.root / "leak.txt", secret)
+    hits = box.search("hunter2")
+    assert not any("hunter2" in h for h in hits), hits
+
+
+def test_pack_does_not_zip_a_file_outside(box, tmp_path):
+    secret = tmp_path / "secret.txt"
+    secret.write_text("TOKEN=hunter2", encoding="utf-8")
+    _link_or_skip(box.root / "config" / "leak.txt", secret)
+    out = box.pack("config", "out.zip")
+    with zipfile.ZipFile(out) as zf:
+        names = zf.namelist()
+        assert "leak.txt" not in names, names
+        assert "settings.json" in names
+
+
+def test_list_does_not_descend_a_linked_dir(box, tmp_path):
+    outside = tmp_path / "outside_dir"
+    outside.mkdir()
+    (outside / "private.txt").write_text("x", encoding="utf-8")
+    _link_or_skip(box.root / "linked", outside)
+    listing = box.list_dir(".", depth=3)
+    assert not any("private.txt" in e for e in listing), listing
+
+
+# --- unpack size gate ---------------------------------------------------------
+
+def test_unpack_refuses_a_decompression_bomb(box, monkeypatch):
+    import code_sandbox
+    monkeypatch.setattr(code_sandbox, "MAX_UNPACK_BYTES", 100_000)
+    zp = box.root / "bomb.zip"
+    with zipfile.ZipFile(zp, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("zeros.bin", b"\0" * 1_000_000)     # ~1 KB compressed
+    with pytest.raises(SandboxError, match="limit"):
+        box.unpack("bomb.zip")
+    left = box.root / ("bomb" + code_sandbox.UNPACK_SUFFIX) / "zeros.bin"
+    assert not left.exists() or left.stat().st_size <= 100_000
+
+
+def test_copy_is_counted_whatever_the_header_claims(monkeypatch):
+    """The declared file_size is the archive's own claim; the copy is counted."""
+    import io
+    import code_sandbox
+    monkeypatch.setattr(code_sandbox, "MAX_UNPACK_BYTES", 3 * 1024 * 1024)
+    budget = [code_sandbox.MAX_UNPACK_BYTES]
+    with pytest.raises(SandboxError, match="limit"):
+        Sandbox._copy_capped(io.BytesIO(b"\0" * (5 * 1024 * 1024)), io.BytesIO(),
+                             budget, "x.zip")
+
+
+def test_unpack_normal_archive_still_works(box):
+    zp = box.root / "mod.zip"
+    with zipfile.ZipFile(zp, "w") as zf:
+        zf.writestr("a/b.txt", "hello")
+        zf.writestr("c.json", "{}")
+    out = box.unpack("mod.zip")
+    assert "(2 files)" in out
+    assert (box.root / "mod_unpacked" / "a" / "b.txt").read_text() == "hello"

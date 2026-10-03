@@ -40,12 +40,18 @@ TEXT_SUFFIXES = frozenset({
 MAX_READ_BYTES = 200_000
 MAX_WRITE_BYTES = 2_000_000
 MAX_LIST_ENTRIES = 400
+# Ceiling on what one unpack may write. A zip's own size says nothing about its
+# contents: a few-KB "zip bomb" member inflates to gigabytes, and the member was
+# read into memory whole. 2 GB is far above any real modpack.
+MAX_UNPACK_BYTES = int(os.getenv("SANDBOX_MAX_UNPACK_BYTES", str(2 * 1024 ** 3)))
+MAX_UNPACK_FILES = 100_000
 # Working debris the agent creates and the user must never receive: the folder
 # unpack() makes, and the private area code_runner installs packages into.
 UNPACK_SUFFIX = "_unpacked"
 AGENT_DIR = ".agent"
 
 _DRIVE_RELATIVE_RE = re.compile(r"^[A-Za-z]:(?![\\/])")
+_DRIVE_ABSOLUTE_RE = re.compile(r"^[A-Za-z]:[\\/]")
 
 
 class SandboxError(Exception):
@@ -88,7 +94,11 @@ class Sandbox:
                 f"'{rel}' is a drive-relative path, which does not mean what it "
                 f"looks like. Use a path relative to the project root.")
         candidate = Path(raw)
-        if candidate.is_absolute() or candidate.drive:
+        # `_DRIVE_ABSOLUTE_RE` as well as is_absolute(): on a POSIX host
+        # "C:/Windows/win.ini" is a RELATIVE path, so it was quietly honoured
+        # as a folder literally named "C:" -- the edit "succeeded" somewhere
+        # the model did not mean, unlike on the Windows host it was written for.
+        if candidate.is_absolute() or candidate.drive or _DRIVE_ABSOLUTE_RE.match(raw):
             raise SandboxError(
                 f"'{rel}' is an absolute path. Use a path relative to the "
                 f"project root instead.")
@@ -102,6 +112,20 @@ class Sandbox:
                 f"'{rel}' points outside the project. You can only read and "
                 f"write files under the project root.")
         return full
+
+    def _contains(self, p: Path) -> bool:
+        """Is `p` -- after following every link -- still inside the root?
+
+        resolve() guards the paths the model names; this guards the ones a
+        WALK finds. run_code's container writes into this tree, and code there
+        can leave a symlink to an absolute path, which the host then follows:
+        search and pack would read or zip up a file from outside the sandbox.
+        """
+        try:
+            full = p.resolve(strict=False)
+        except OSError:
+            return False
+        return full == self.root or self.root in full.parents
 
     def _nearby(self, rel: str, limit: int = 12) -> str:
         """What IS there, phrased as the correction to a wrong guess.
@@ -166,7 +190,7 @@ class Sandbox:
                     return
                 name = self.relative(p)
                 if p.is_dir():
-                    if level < depth:
+                    if level < depth and not p.is_symlink():
                         out.append(f"{name}/")
                         walk(p, level + 1)
                     elif depth == 1:
@@ -446,7 +470,7 @@ class Sandbox:
         per_file: list[tuple[str, bool, list[tuple[int, str]]]] = []
         scanned = 0
         for path in base.rglob("*"):
-            if not path.is_file():
+            if path.is_symlink() or not path.is_file() or not self._contains(path):
                 continue
             scanned += 1
             _rel = self.relative(path)
@@ -572,17 +596,42 @@ class Sandbox:
         if not zipfile.is_zipfile(src):
             return self._unpack_other(src, archive_rel, dest, dest_rel)
         written = 0
+        budget = [MAX_UNPACK_BYTES]
         with zipfile.ZipFile(src) as zf:
-            for info in zf.infolist():
-                if info.is_dir():
-                    continue
+            members = [i for i in zf.infolist() if not i.is_dir()]
+            declared = sum(i.file_size for i in members)
+            if len(members) > MAX_UNPACK_FILES or declared > MAX_UNPACK_BYTES:
+                raise SandboxError(self._too_big(archive_rel, len(members), declared))
+            for info in members:
                 # resolve() raises on anything that leaves the tree.
                 target = self.resolve(f"{dest_rel}/{info.filename}")
                 target.parent.mkdir(parents=True, exist_ok=True)
                 with zf.open(info) as fh, open(target, "wb") as out:
-                    out.write(fh.read())
+                    # Streamed and counted: the declared sizes in the header
+                    # are the archive's own claim, not a fact.
+                    self._copy_capped(fh, out, budget, archive_rel)
                 written += 1
         return f"{self.relative(dest)} ({written} files)"
+
+    @staticmethod
+    def _too_big(archive_rel: str, files: int, size: int) -> str:
+        return (f"'{archive_rel}' unpacks to {size} bytes in {files} files, over the "
+                f"{MAX_UNPACK_BYTES}-byte / {MAX_UNPACK_FILES}-file limit for one "
+                f"unpack. It is too large (or a decompression bomb) -- tell the user.")
+
+    @staticmethod
+    def _copy_capped(src, dst, budget: list, archive_rel: str) -> None:
+        while True:
+            chunk = src.read(1024 * 1024)
+            if not chunk:
+                return
+            budget[0] -= len(chunk)
+            if budget[0] < 0:
+                raise SandboxError(
+                    f"'{archive_rel}' unpacks to more than {MAX_UNPACK_BYTES} bytes, "
+                    f"the limit for one unpack. It is too large (or a decompression "
+                    f"bomb) -- tell the user.")
+            dst.write(chunk)
 
     def _unpack_other(self, src: Path, archive_rel: str, dest: Path, dest_rel: str) -> str:
         """rar / 7z / tar[.gz] / anything 7-Zip reads, through py7zz.
@@ -605,6 +654,18 @@ class Sandbox:
                 f"'{archive_rel}' is not a zip/jar and the rar/7z/tar extractor "
                 "(py7zz) is not installed on the server. Tell the user.")
         written = 0
+        # 7-Zip writes the whole archive out before a single file is checked,
+        # so the size gate has to come first, from the archive's listing. That
+        # listing is the archive's own claim; the copy below is counted too.
+        try:
+            with py7zz.SevenZipFile(str(src), "r") as sz:
+                listed = [i for i in sz.infolist() if not i.is_dir()]
+            declared = sum(int(getattr(i, "file_size", 0) or 0) for i in listed)
+        except Exception:
+            listed, declared = [], 0     # unlistable: extract_archive says why
+        if len(listed) > MAX_UNPACK_FILES or declared > MAX_UNPACK_BYTES:
+            raise SandboxError(self._too_big(archive_rel, len(listed), declared))
+        budget = [MAX_UNPACK_BYTES]
         with tempfile.TemporaryDirectory(prefix="unpack_") as tmp:
             try:
                 py7zz.extract_archive(str(src), tmp)
@@ -628,7 +689,8 @@ class Sandbox:
                 rel = f.relative_to(tmp_root).as_posix()
                 target = self.resolve(f"{dest_rel}/{rel}")
                 target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(f, target)
+                with open(f, "rb") as fh, open(target, "wb") as out:
+                    self._copy_capped(fh, out, budget, archive_rel)
                 written += 1
         return f"{self.relative(dest)} ({written} files)"
 
@@ -656,7 +718,7 @@ class Sandbox:
         count = 0
         with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
             for p in sorted(base.rglob("*")):
-                if not p.is_file() or p == out:
+                if p.is_symlink() or not p.is_file() or p == out or not self._contains(p):
                     continue
                 rel = p.relative_to(base)
                 # Leave our own working debris out of what the user receives.
