@@ -4,7 +4,6 @@ Assistant GUI. Targeted by the desktop shortcut (run via pythonw, no console).
 Each external app is only started if its server isn't already up, so re-running
 is safe. Errors are written to launch_error.log (pythonw has no console).
 """
-import msvcrt
 import os
 import subprocess
 import sys
@@ -46,7 +45,16 @@ def _acquire_singleton_lock() -> bool:
         # msvcrt.locking locks at the CURRENT position: always byte 0, so a
         # file that grows can never move the lock to a byte nobody else tries.
         _singleton_handle.seek(0)
-        msvcrt.locking(_singleton_handle.fileno(), msvcrt.LK_NBLCK, 1)
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(_singleton_handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            # Same semantics on POSIX: an advisory lock the kernel drops when
+            # the process dies, so a crash leaves nothing stale behind. flock,
+            # not lockf: it is held per open file like msvcrt, so a second open
+            # in the SAME process is refused too.
+            import fcntl
+            fcntl.flock(_singleton_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         # Who holds it, for the refusal message: 2026-09-24 a restart was refused
         # with no app process alive, and the holder could only be found by
         # killing candidates. Fixed-width PID in bytes 1..10, never byte 0.
@@ -109,6 +117,7 @@ def _newest_comfy_src():
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import OUTPUT_DIR_COMFY, INPUT_DIR_COMFY   # one place for every generation
+import config as _config  # noqa: E402
 
 COMFY_SRC = _newest_comfy_src()
 COMFY_BASE_DIR = os.getenv("COMFY_BASE_DIR", os.path.expanduser(r"~\Documents\ComfyUI"))
@@ -142,8 +151,11 @@ COMFY_LOG = os.getenv("COMFY_LOG", os.path.expanduser(r"~\Documents\ComfyUI\comf
 LMSTUDIO_EXE = os.getenv("LMSTUDIO_EXE", os.path.expanduser(r"~\AppData\Local\Programs\LM Studio\LM Studio.exe"))
 LMS_CLI = os.getenv("LMS_CLI", os.path.expanduser(r"~\.lmstudio\bin\lms.exe"))
 
-COMFY_URL = "http://127.0.0.1:8000/"
-LMSTUDIO_URL = "http://localhost:1234/v1/models"
+# From config, so COMFY_URL / LM_STUDIO_BASE in .env move the health checks
+# with the servers. These were hardcoded -- and "localhost" for LM Studio,
+# which config.py documents as a ~2 s IPv6 detour on this machine.
+COMFY_URL = _config.COMFY_URL.rstrip("/") + "/"
+LMSTUDIO_URL = _config.LM_STUDIO_BASE.rstrip("/") + "/v1/models"
 _DETACHED = getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
 # Without its own process group, a console CLOSE event reaches the child: ComfyUI died
@@ -214,10 +226,16 @@ def _lock_holder() -> str:
         with open(_SINGLETON_LOCK_PATH, "rb") as f:
             f.seek(1)
             pid = int(f.read(10).decode().strip())
-        out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
-                             capture_output=True, text=True, timeout=10,
-                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout
-        name = out.split(",")[0].strip('"') if out.startswith('"') else "not running"
+        try:
+            import psutil       # portable; tasklist exists only on Windows
+            name = psutil.Process(pid).name()
+        except ImportError:
+            out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
+                                 capture_output=True, text=True, timeout=10,
+                                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout
+            name = out.split(",")[0].strip('"') if out.startswith('"') else "not running"
+        except Exception:
+            name = "not running"
         return f" (PID {pid}: {name})"
     except Exception:
         return ""
