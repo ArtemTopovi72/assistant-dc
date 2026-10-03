@@ -280,13 +280,15 @@ documented in `.env.example`.
 ## Tests
 
 ```bash
-uv pip install -r requirements-dev.txt --override overrides.txt
-set F5_TEST_RUN=1
-python tests/run_all.py
-python tests/run_all.py -k telegram
+setup.ps1 --dev --no-start          # or ./setup.sh --dev --no-start: adds the test dependencies
+venv\Scripts\python tests/run_all.py
+venv\Scripts\python tests/run_all.py -k telegram
 ```
 
-All 429 suites run without a GPU or network: the LLM, ComfyUI and Telegram are faked.
+About 475 suites run without a GPU or network: the LLM, ComfyUI and Telegram are faked,
+and the runner ignores your `.env` so local settings cannot change the results.
+CI runs them on Windows for every push to `main`, and runs the setup script twice on
+clean Windows and Linux machines.
 For live runs there is `bench/tg_sim.py`, a local Telegram simulator
 (http://127.0.0.1:8765) where the bot talks to the real model.
 
