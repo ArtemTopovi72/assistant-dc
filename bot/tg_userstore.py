@@ -19,7 +19,7 @@ import re
 import sqlite3
 import threading
 import time
-from contextlib import closing
+from contextlib import closing, contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -239,14 +239,24 @@ class _UserStore:
 
     # ── connection factory ────────────────────────────────────────────────────
 
-    def _conn(self) -> sqlite3.Connection:
+    @contextmanager
+    def _conn(self):
+        """A transaction on a connection of its own, CLOSED afterwards.
+
+        `with sqlite3.connect(...)` commits but does not close: every call left
+        an open handle to tg_users.db until garbage collection, and one kept
+        alive by a traceback or a cycle held the file locked on Windows."""
         conn = sqlite3.connect(str(self._db), check_same_thread=False,
                                timeout=10)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA synchronous=NORMAL")
-        conn.execute("PRAGMA foreign_keys=ON")
-        return conn
+        try:
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.execute("PRAGMA foreign_keys=ON")
+            with conn:
+                yield conn
+        finally:
+            conn.close()
 
     # ── init + migration ──────────────────────────────────────────────────────
 

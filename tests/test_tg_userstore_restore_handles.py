@@ -64,3 +64,28 @@ def test_a_high_scrypt_cost_still_hashes_and_verifies(monkeypatch):
     h = U._hash_password("hunter2!", 1)
     assert h.startswith("v3$18$")
     assert U._verify_password("hunter2!", 1, h)[0]
+
+
+def test_ordinary_operations_close_every_connection(tmp_path, monkeypatch):
+    """`with sqlite3.connect(...)` commits but does not close: each call left
+    a handle to tg_users.db open until garbage collection."""
+    s = U._UserStore(tmp_path / "u.db", backup_dir=tmp_path / "bk", legacy_json=tmp_path / "none.json")
+    opened = _tracking(monkeypatch)
+    s.put(U._User(chat_id=8, name="A"))
+    assert s.get(8).name == "A"
+    s.all()
+    s.approved()
+    s.delete(8)
+    assert opened and all(_closed(c) for c in opened), len(opened)
+
+
+def test_artifact_store_closes_its_connections(tmp_path, monkeypatch):
+    import tg_artifacts_store as A
+    store = A._ArtifactStore(tmp_path / "a.db")
+    opened = []
+    real = sqlite3.connect
+    monkeypatch.setattr(A.sqlite3, "connect", lambda *a, **k: opened.append(real(*a, **k)) or opened[-1])
+    f = tmp_path / "x.png"
+    f.write_bytes(b"x")
+    store.add(1, "image", str(f))
+    assert opened and all(_closed(c) for c in opened)

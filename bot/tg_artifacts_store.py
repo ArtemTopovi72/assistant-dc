@@ -34,6 +34,7 @@ ever holding, or handing back, anything but what the bot genuinely sent.
 from __future__ import annotations
 
 import hashlib
+from contextlib import contextmanager
 import os
 import sqlite3
 import threading
@@ -93,12 +94,19 @@ class _ArtifactStore:
         self._lock = threading.Lock()
         self._init_db()
 
-    def _conn(self) -> sqlite3.Connection:
+    @contextmanager
+    def _conn(self):
+        """A transaction on its own connection, closed afterwards (a bare
+        `with conn:` commits but leaves the handle open until GC)."""
         conn = sqlite3.connect(self._path, check_same_thread=False, timeout=10)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA synchronous=NORMAL")
-        return conn
+        try:
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            with conn:
+                yield conn
+        finally:
+            conn.close()
 
     def _init_db(self) -> None:
         with self._lock, self._conn() as conn:
