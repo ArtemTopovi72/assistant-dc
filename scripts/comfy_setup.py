@@ -220,6 +220,10 @@ def _present(models_dir: Path, name: str) -> Path | None:
     if not models_dir.is_dir():
         return None
     for p in models_dir.rglob(name):
+        # the download stage is not where ComfyUI looks; a file left there by
+        # an interrupted move is not installed
+        if ".download" in p.relative_to(models_dir).parts:
+            continue
         if p.is_file() and p.stat().st_size > 0:
             return p
     return None
