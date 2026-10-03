@@ -34,7 +34,7 @@ class _Session:
                  # the step-by-step flows too: «Мэшап · трек 1 из 2» had no way out
                  "mashup_state", "clone_state", "restyle_state", "anim_voice_state", "voice_naming",
                  # ✍️ Свой вариант: the forwarded material waiting for the user's request
-                 "fwd_own")
+                 "fwd_own", "lyrics_state")
     _WAIT_BOOL = ("awaiting_animate_photo", "awaiting_style_photo")
     _NOT_CANCELLABLE = ("", "awaiting_login", "awaiting_name", "awaiting_password")
 
@@ -189,6 +189,9 @@ class _Session:
         # 🎙 voices for 🎬 Animate (tg_anim_voices): "" | "collect", and the samples
         self.anim_voice_state: str = d.get("anim_voice_state", "")
         self.song_draft: str = d.get("song_draft", "")     # ready lyrics awaiting «как есть / новый»
+        # ✨/✍️ lyrics (tg_lyrics): "" | "improve" | "write", and the last result
+        self.lyrics_state: str = d.get("lyrics_state", "")
+        self.lyrics_last: str = d.get("lyrics_last", "")
         self.anim_voices: list = list(d.get("anim_voices") or [])
         # a clip request waiting for «свои голоса / стандартные», and the answer
         self.voice_pending: str = d.get("voice_pending", "")
@@ -357,6 +360,7 @@ class _Session:
             self.voice_pending = ""
             self.voice_choice = ""
             self.voice_naming = ""
+            self.lyrics_state = ""
             self.song_draft = ""
             self.mashup_vocal_path = ""
             self.mashup_vocal_speech = False
@@ -417,6 +421,8 @@ class _Session:
                 "restyle_src":         self.restyle_src,
                 "anim_voice_state":    self.anim_voice_state,
                 "song_draft":          self.song_draft,
+                "lyrics_state":        self.lyrics_state,
+                "lyrics_last":         self.lyrics_last,
                 "anim_voices":         self.anim_voices,
                 "voice_pending":       self.voice_pending,
                 "voices":              self.voices,

@@ -106,6 +106,7 @@ class CallbackMixin:
         if data == "animate_custom": return self._cb_animate_custom(chat_id)
         if data.startswith("anv:"): return self._cb_anim_voices(chat_id, data)
         if data.startswith("song_lyr:"): return self._cb_song_lyrics(chat_id, data)
+        if data.startswith("lyr:"): return self._cb_lyrics(chat_id, data)
         if data.startswith("myv:"): return self._cb_my_voice(chat_id, data)
         if data.startswith("vl:"): return self._cb_voice_library(chat_id, data)
         cmd = tg_bot._CB_CMDS.get(data)

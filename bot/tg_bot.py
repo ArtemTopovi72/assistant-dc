@@ -858,6 +858,8 @@ _DIRECT_KB: dict[str, str] = {
     "animate_btn": "__animate_photo__",
     "clone_btn":   "__clone_voice__",
     "cover_btn":   "__cover__",
+    "lyr_improve_btn": "__lyrics_improve__",
+    "lyr_write_btn":   "__lyrics_write__",
     "restyle_btn": "__restyle__",
     "style_menu_btn": "__style_photo__",
     # documents
@@ -1263,9 +1265,10 @@ from tg_restyle import RestyleMixin  # noqa: E402
 from tg_anim_voices import AnimVoicesMixin  # noqa: E402
 from tg_voice_library import VoiceLibraryMixin  # noqa: E402
 from tg_cover import CoverMixin  # noqa: E402
+from tg_lyrics import LyricsMixin  # noqa: E402
 
 
-class TelegramBot(AdminMixin, RestyleMixin, AnimVoicesMixin, VoiceLibraryMixin, CoverMixin, VoiceCloneMixin, LongVideoMixin, AccountsMixin, CallbackMixin, CommandsMixin, DispatchMixin,
+class TelegramBot(AdminMixin, RestyleMixin, AnimVoicesMixin, VoiceLibraryMixin, CoverMixin, LyricsMixin, VoiceCloneMixin, LongVideoMixin, AccountsMixin, CallbackMixin, CommandsMixin, DispatchMixin,
                   LibraryMixin, QueueMixin, RegistrationMixin, ResolveMixin,
                   SongsMixin, CharactersMixin, LoraCollectMixin, TaskRunnerMixin,
                   TransportMixin,

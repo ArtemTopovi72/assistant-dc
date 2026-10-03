@@ -101,6 +101,8 @@ _BTN: dict[str, dict[str, str]] = {
     "animate_btn":    {"en": "🎞 Animate photo",  "ru": "🎞 Анимация фото"},
     "clone_btn":      {"en": "🎙 Clone voice",    "ru": "🎙 Клонировать голос"},
     "cover_btn":      {"en": "🎤 Cover",          "ru": "🎤 Кавер"},
+    "lyr_improve_btn": {"en": "✨ Improve lyrics", "ru": "✨ Улучшить текст"},
+    "lyr_write_btn":   {"en": "✍️ Write lyrics",   "ru": "✍️ Сочинить текст"},
     "restyle_btn":    {"en": "🎨 Restyle video",  "ru": "🎨 Перерисовать видео"},
     "style_menu_btn": {"en": "🎭 Change style",   "ru": "🎭 Сменить стиль"},
 }
@@ -942,6 +944,26 @@ _MSG: dict[str, dict[str, str]] = {
                      "ru": "Авто выбирает вертикаль или горизонталь по твоему запросу. "
                            "Чем выше качество, тем дольше рисуется."},
     # ── 🎤 cover (tg_cover) ──
+    "lyr_ask_improve": {"en": "✨ <b>Improve lyrics</b> · send the lyric. I'll check every rhyme (no lazy ones like light/tonight), the rhythm, the line lengths and the sense, and polish it in a few passes.",
+                        "ru": "✨ <b>Улучшить текст</b> · пришли текст песни. Проверю каждую рифму (без банальных вроде свет/рассвет), ритм, длину строк и смысл, и доведу за несколько проходов."},
+    "lyr_ask_write":   {"en": "✍️ <b>Write lyrics</b> · send the theme or a description: what the song is about, the mood, who sings it.",
+                        "ru": "✍️ <b>Сочинить текст</b> · пришли тему или описание: о чём песня, настроение, от чьего лица."},
+    "lyr_working_improve": {"en": "✨ Working on the lyric: checking rhymes, rhythm and sense…",
+                            "ru": "✨ Работаю над текстом: проверяю рифмы, ритм и смысл…"},
+    "lyr_working_write":   {"en": "✍️ Writing: a draft, then checks and polish…",
+                            "ru": "✍️ Сочиняю: черновик, потом проверки и шлифовка…"},
+    "lyr_head_improve": {"en": "✨ <b>Your improved lyric</b> — score {score}/10 after {rounds} pass(es). What changed:",
+                         "ru": "✨ <b>Ваш улучшенный текст</b> — оценка {score}/10, проходов: {rounds}. Что поправил:"},
+    "lyr_head_write":   {"en": "✍️ <b>Lyric written</b> — score {score}/10 after {rounds} pass(es) of checks. The text is in the next message.",
+                         "ru": "✍️ <b>Текст готов</b> — оценка {score}/10, проходов проверки: {rounds}. Сам текст — следующим сообщением."},
+    "lyr_already_good": {"en": "Nothing to fix: rhymes, rhythm and sense hold up.",
+                         "ru": "Править нечего: рифмы, ритм и смысл держатся."},
+    "lyr_left":   {"en": "Still not perfect:", "ru": "Что ещё можно доработать:"},
+    "lyr_sing_btn":  {"en": "🎵 Sing it", "ru": "🎵 Спеть"},
+    "lyr_again_btn": {"en": "✨ One more pass", "ru": "✨ Ещё улучшить"},
+    "lyr_gone": {"en": "That lyric is gone — send it again.", "ru": "Этого текста уже нет — пришли его снова."},
+    "lyr_fail": {"en": "⚠️ Couldn't work on the lyric right now — try again.",
+                 "ru": "⚠️ Не получилось обработать текст — попробуй ещё раз."},
     "cover_ask_audio": {"en": "🎤 <b>Cover</b> · send the song to re-sing: a YouTube/VK link, an audio file, a voice message, a video, "
                               "a round video or a file. The melody and feel stay, the words change.",
                         "ru": "🎤 <b>Кавер</b> · пришли песню, которую перепеть: ссылку на YouTube/VK, аудиофайл, голосовое, видео, "

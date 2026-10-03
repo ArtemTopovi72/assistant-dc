@@ -359,6 +359,9 @@ class ResolveMixin:
                 # не даёт текст вставить»).
                 if (not item.get("fwd_said") and not raw.startswith("/")
                         and not tg_bot._LABEL2KEY.get(raw.strip())):
+                    if (getattr(sess, "lyrics_state", "")
+                            and self._lyrics_take_text(chat_id, sess, lang, raw)):
+                        continue
                     if (getattr(sess, "cover_state", "")
                             and self._cover_take_link(chat_id, sess, lang, raw)):
                         continue
@@ -503,6 +506,8 @@ class ResolveMixin:
                     self._clone_disarm(sess)
                 if direct and direct != "__cover__":
                     self._cover_disarm(sess)
+                if direct and direct not in ("__lyrics_improve__", "__lyrics_write__"):
+                    self._lyrics_disarm(sess)
                 if direct and direct != "__restyle__":
                     self._restyle_disarm(sess)
                 if direct and (getattr(sess, "anim_voice_state", "") or getattr(sess, "voice_naming", "")):
@@ -515,6 +520,11 @@ class ResolveMixin:
                 if direct == "__cover__":
                     self._goto_menu(sess, "cr_music")
                     self._start_cover_flow(chat_id, sess, lang); continue
+                if direct in ("__lyrics_improve__", "__lyrics_write__"):
+                    self._goto_menu(sess, "cr_music")
+                    self._start_lyrics_flow(chat_id, sess, lang,
+                                            "improve" if direct == "__lyrics_improve__" else "write")
+                    continue
                 if direct == "__clone_voice__":
                     self._goto_menu(sess, "cr_music")
                     self._start_clone_flow(chat_id, sess, lang); continue

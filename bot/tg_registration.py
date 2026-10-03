@@ -400,8 +400,9 @@ class RegistrationMixin:
             self._activity.log(chat_id, "system", f"[song settings] {field}={n} (typed)")
             return False
 
-        # 🎤 Cover / 🎨 Restyle waiting for words outrank a song topic left armed.
+        # 🎤 Cover / 🎨 Restyle / ✨ lyrics waiting for words outrank a song topic left armed.
         if (user and user.status == "approved" and sess.reg_state == "song_topic"
+                and not getattr(sess, "lyrics_state", "")
                 and "want_text" not in (getattr(sess, "cover_state", ""),
                                         getattr(sess, "restyle_state", ""))):
             done = self._capture_preamble(chat_id, sess, lang, text)
