@@ -210,7 +210,7 @@ MODE_LABELS = {
 # Readiness
 # --------------------------------------------------------------------------- #
 def _models_dir() -> str:
-    return os.getenv("COMFY_BASE_DIR", os.path.expanduser(r"~\Documents\ComfyUI"))
+    return os.getenv("COMFY_BASE_DIR", os.path.join(os.path.expanduser("~"), "Documents", "ComfyUI"))
 
 
 REQUIRED_FILES = {

@@ -457,7 +457,7 @@ class SongwritingFailed(RuntimeError):
 # Readiness
 # --------------------------------------------------------------------------- #
 def _models_dir() -> str:
-    return os.getenv("COMFY_BASE_DIR", os.path.expanduser(r"~\Documents\ComfyUI"))
+    return os.getenv("COMFY_BASE_DIR", os.path.join(os.path.expanduser("~"), "Documents", "ComfyUI"))
 
 
 # Which weight variant this install runs, measured rather than assumed. All
@@ -1267,8 +1267,8 @@ def yue2_style(style: str, max_chars: int = 300) -> str:
     return out if len(out) <= max_chars else out[:max_chars].rsplit(",", 1)[0]
 
 
-YUE2_PYTHON = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "venv_yue2",
-                           *(("Scripts", "python.exe") if os.name == "nt" else ("bin", "python")))
+YUE2_PYTHON = _config.venv_python(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                               "venv_yue2"))
 YUE2_ODE_STEPS = _cfg_env.env_int("YUE2_ODE_STEPS", 16)
 YUE2_TIMEOUT = 1500          # measured 235-810 s for one song; long lyrics run longer
 

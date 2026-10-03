@@ -19,7 +19,7 @@ from typing import List, Optional
 logger = logging.getLogger(__name__)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PY = os.getenv("DIAR_PYTHON", os.path.join(ROOT, "venv_diar", "Scripts", "python.exe"))
+PY = os.getenv("DIAR_PYTHON", _cfg_env.venv_python(os.path.join(ROOT, "venv_diar")))
 MODEL = os.getenv("DIAR_MODEL", os.path.join(ROOT, "models_ext", "nemotron-diar"))
 MIN_SECONDS = _cfg_env.env_float("DIAR_MIN_SECONDS", 8)
 MIN_TURN = 0.6            # a "turn" shorter than this is a cough, merged away

@@ -237,6 +237,15 @@ OUTPUT_DIR = Path(os.getenv("ASSISTANT_OUTPUT_DIR", str(BASE_DIR / "runtime")))
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def venv_python(venv_dir) -> str:
+    """The interpreter of a venv: Scripts\\python.exe on Windows, bin/python
+    elsewhere. The side venvs (venv_yue2, venv_mula, venv_diar, venv_eraser,
+    ComfyUI-qi21) were addressed by the Windows path alone, so on Linux each
+    of those features read as "not installed"."""
+    return os.path.join(str(venv_dir), *(("Scripts", "python.exe") if os.name == "nt"
+                                          else ("bin", "python")))
+
+
 def scratch_path(out_dir, name):
     """Where an intermediate render/mask/tile goes: <out_dir>/generated/_intermediate,
     out of the runtime/ root (owner 10-03). Takes the caller's OUTPUT_DIR so suites
@@ -1133,7 +1142,7 @@ TG_INVOKE_TIMEOUT_S = _env_int("TG_INVOKE_TIMEOUT_S", 1800)
 EMBED_BASE  = os.getenv("EMBED_BASE", "http://127.0.0.1:8096")
 EMBED_CPU_SERVER = os.getenv("EMBED_CPU_SERVER", r"C:\llamacpp\build\llama-server.exe")
 EMBED_GGUF = os.getenv("EMBED_GGUF", os.path.expanduser(
-    r"~\.lmstudio\models\ggml-org\bge-m3-Q8_0-GGUF\bge-m3-q8_0.gguf"))
+    os.path.join("~", ".lmstudio", "models", "ggml-org", "bge-m3-Q8_0-GGUF", "bge-m3-q8_0.gguf")))
 EMBED_MODEL = os.getenv("EMBED_MODEL", "text-embedding-bge-m3")
 EMBED_DIM   = _env_int("EMBED_DIM", 1024)
 

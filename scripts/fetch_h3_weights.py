@@ -31,7 +31,7 @@ from pathlib import Path
 
 # The ComfyUI --base-directory: models/ lives here, shared by every versioned
 # ComfyUI-<ver> source tree next to it.
-COMFY_BASE = Path(os.getenv("COMFY_BASE_DIR", os.path.expanduser(r"~\Documents\ComfyUI")))
+COMFY_BASE = Path(os.getenv("COMFY_BASE_DIR", os.path.join(os.path.expanduser("~"), "Documents", "ComfyUI")))
 
 REPO = "Abiray/MiniMax-H3-GGUF"
 

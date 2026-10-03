@@ -5,7 +5,7 @@ it is given; the length follows the reference. It runs in venv_mula with the
 card to itself (music.run_gpu_worker). Weights are CC BY-NC: the user allowed
 the button for every bot user (personal, free bot — non-commercial).
 """
-from config import scratch_path
+from config import scratch_path, venv_python
 import logging
 import os
 import random
@@ -19,7 +19,7 @@ from config import OUTPUT_DIR
 logger = logging.getLogger("assistant.cover")
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MULA_PYTHON = os.path.join(ROOT, "venv_mula", "Scripts", "python.exe")
+MULA_PYTHON = venv_python(os.path.join(ROOT, "venv_mula"))
 CKPT = os.path.join(ROOT, "models_ext", "mulacover_ckpt")
 TIMEOUT = 900
 DEFAULT_TAGS = "pop, clear lead vocal, full band"

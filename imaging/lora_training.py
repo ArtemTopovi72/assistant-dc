@@ -157,7 +157,8 @@ DEFAULTS = {**_BASE_DEFAULTS, **IDEOGRAM_PROFILE}
 
 def toolkit_python():
     """The trainer's OWN interpreter, or None. Never this process's executable."""
-    for rel in ("venv/Scripts/python.exe", "venv/bin/python", ".venv/Scripts/python.exe"):
+    for rel in ("venv/Scripts/python.exe", "venv/bin/python", ".venv/Scripts/python.exe",
+                ".venv/bin/python"):
         p = TOOLKIT_DIR / rel
         if p.is_file():
             return p

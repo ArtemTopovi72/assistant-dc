@@ -32,9 +32,10 @@ KINDS = ("canny", "raw")
 # The control nodes exist only in the newer ComfyUI clone (qi21, own venv). The
 # live ComfyUI stays as it is; a restyle starts qi21 for the job and stops it
 # after, so its models never sit beside the live server's in 24 GB.
+from config import venv_python as _venv_python  # noqa: E402
 QI21_URL = os.getenv("H3_CONTROL_URL", "http://127.0.0.1:8010")
-_COMFY_HOME = os.getenv("COMFY_HOME", os.path.expanduser(r"~\Documents\ComfyUI"))
-QI21_CMD = [os.path.join(_COMFY_HOME, "ComfyUI-qi21", ".venv", "Scripts", "python.exe"),
+_COMFY_HOME = os.getenv("COMFY_HOME", os.path.join(os.path.expanduser("~"), "Documents", "ComfyUI"))
+QI21_CMD = [_venv_python(os.path.join(_COMFY_HOME, "ComfyUI-qi21", ".venv")),
             os.path.join(_COMFY_HOME, "ComfyUI-qi21", "main.py"), "--base-directory", _COMFY_HOME,
             "--port", QI21_URL.rsplit(":", 1)[-1], "--reserve-vram", "2",
             "--use-sage-attention"]   # sageattention installed in the qi21 venv 2026-09-27 (same wheel as main)

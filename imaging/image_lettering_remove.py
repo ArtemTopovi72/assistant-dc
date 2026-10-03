@@ -10,7 +10,7 @@ the hole is repainted by FireRed on the crop; afterwards the OCR reads the resul
 second pass with a wider mask cleans what survived.
 """
 from __future__ import annotations
-from config import scratch_path
+from config import scratch_path, venv_python
 import logging
 import os
 import re
@@ -185,7 +185,7 @@ def smear_ratio(path: str, boxes: List[Box], pad: int = 16, ring: int = 60) -> f
         return 1.0
 
 
-OC_PYTHON = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "venv_eraser", "Scripts", "python.exe")
+OC_PYTHON = venv_python(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "venv_eraser"))
 OC_WORKER = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts", "objectclear_worker.py")
 
 
