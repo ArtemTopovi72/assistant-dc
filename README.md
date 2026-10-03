@@ -280,7 +280,7 @@ documented in `.env.example`.
 ## Tests
 
 ```bash
-setup.ps1 --dev --no-start          # or ./setup.sh --dev --no-start: adds the test dependencies
+powershell -ExecutionPolicy Bypass -File setup.ps1 --dev --no-start   # Linux: ./setup.sh --dev --no-start
 venv\Scripts\python tests/run_all.py
 venv\Scripts\python tests/run_all.py -k telegram
 ```
