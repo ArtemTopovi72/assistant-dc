@@ -90,21 +90,68 @@ launcher starts them and the app keeps them from fighting over video memory.
 
 ## Installation
 
-### 0. What you need
+### Quick start (one command)
 
-- Windows 10 or 11.
-- An NVIDIA GPU. Everything was built and measured on an RTX 3090 24 GB with 96 GB RAM;
-  smaller cards are untested. Video generation needs the full 24 GB.
-- Disk: about 60 GB for the MiniMax H3 video weights, plus the chat model and ComfyUI models.
-- Installed first: [Git](https://git-scm.com), [uv](https://docs.astral.sh/uv/getting-started/installation/),
-  [ffmpeg](https://www.gyan.dev/ffmpeg/builds/) on `PATH`, [LM Studio](https://lmstudio.ai),
-  [ComfyUI](https://www.comfy.org). Docker Desktop is only for the `run_code` sandbox.
+Windows (PowerShell):
 
-### 1. Code and environment
+```powershell
+git clone https://github.com/ArtemTopovi72/assistant-dc.git
+cd assistant-dc
+powershell -ExecutionPolicy Bypass -File setup.ps1
+```
+
+Linux / macOS:
 
 ```bash
 git clone https://github.com/ArtemTopovi72/assistant-dc.git
 cd assistant-dc
+./setup.sh
+```
+
+The setup script needs only Git; it fetches everything else and is safe to run again.
+Each step skips what is already done, so after a failure fix the line marked
+`FAIL` and run it again. It:
+
+1. installs [uv](https://docs.astral.sh/uv/) and a Python 3.13 venv in `venv/`;
+2. on Windows, updates the Microsoft VC++ runtime when it is older than 14.40
+   (an old `msvcp140.dll` crashes the app with `0xc0000005`);
+3. installs PyTorch (CUDA 12.8 build when an NVIDIA GPU is present, CPU otherwise),
+   the requirements and the import path; then Playwright Chromium;
+4. creates `.env` from `.env.example` (an existing `.env` is never overwritten);
+5. installs ffmpeg (winget on Windows) and downloads the vocoder;
+6. installs LM Studio (winget), starts its server and downloads the chat and
+   embedding models (`MODEL_NAME`, `EMBED_MODEL`; the chat model is ~17 GB);
+7. creates an **Assistant DC** desktop shortcut (Windows);
+8. runs the health check (`scripts/healthcheck.py`) and starts the app.
+
+Options: `--no-models` (skip model downloads and LM Studio, for CI or offline installs),
+`--no-start` (do not open the app at the end), `--cpu` (CPU PyTorch even with a GPU),
+`--dev` (also install the test dependencies), `--no-install` (do not install system
+programs with winget). On Windows they are written the same way: `setup.ps1 --no-start`.
+
+| | |
+|---|---|
+| start | the desktop shortcut, `start.cmd` (Windows) or `./start.sh` |
+| stop | close the window (LM Studio and ComfyUI keep running; quit them from the tray) |
+| check | `venv\Scripts\python scripts\healthcheck.py` (`venv/bin/python` on Linux) |
+| update | `git pull`, then run the setup script again |
+| settings | `.env`; every key is explained in `.env.example` |
+
+What stays manual, because it is large, private or optional: the voice files
+([section 4](#4-voice)), ComfyUI for images/video/music ([section 3](#3-comfyui-images-video-music))
+and Docker Desktop for the `run_code` sandbox. Without them the app runs with those
+features off, and the health check says which ones.
+
+### 0. What you need
+
+- Windows 10 or 11 (the main target). Linux works for chat, voice, research and the bot.
+- An NVIDIA GPU. Everything was built and measured on an RTX 3090 24 GB with 96 GB RAM;
+  smaller cards are untested. Video generation needs the full 24 GB.
+- Disk: about 60 GB for the MiniMax H3 video weights, plus the chat model and ComfyUI models.
+
+### 1. Manual install (what setup does)
+
+```bash
 uv venv -p 3.13 venv
 venv\Scripts\activate
 uv pip install torch==2.8.0 torchaudio==2.8.0 torchvision==0.23.0 --index-url https://download.pytorch.org/whl/cu128
@@ -147,20 +194,25 @@ except media generation.
 
 TTS weights are not in the repo:
 
-- a Russian F5-TTS checkpoint → the repo root, named `model_212000.safetensors`;
-- the [charactr/vocos-mel-24khz](https://huggingface.co/charactr/vocos-mel-24khz) vocoder → the `vocos/` folder;
+- a Russian F5-TTS checkpoint → the repo root, named `model_212000.safetensors`
+  (or set `F5_WEIGHTS_REPO` and `F5_WEIGHTS_FILE` in `.env` and the setup script downloads it);
+- the [charactr/vocos-mel-24khz](https://huggingface.co/charactr/vocos-mel-24khz) vocoder → the `vocos/` folder
+  (the setup script downloads it);
 - the assistant's voice sample (5–15 s of clean speech, `.wav`) → its path in `.env`:
   `ASSISTANT_REF_WAV=C:\path\to\voice.wav`.
 
-Whisper, GigaAM, RUAccent and Silero VAD download themselves on first use.
+Whisper, GigaAM, RUAccent and Silero VAD download themselves on first use. Without the
+voice files the app starts with voice output off; without network on the first start,
+speech recognition is off until the next start.
 
 ### 5. Run
 
 ```bash
-python scripts/launch_all.py
+start.cmd            # Windows (or the desktop shortcut)
+./start.sh           # Linux
 ```
 
-The launcher starts LM Studio and ComfyUI if they are not already up, then opens the GUI.
+Both run `scripts/launch_all.py` with the venv's Python. The launcher starts LM Studio and ComfyUI if they are not already up, then opens the GUI.
 Non-default install paths go in `LMSTUDIO_EXE`, `LMS_CLI` and `COMFY_EXE`.
 
 ### 6. Telegram bot (optional)
@@ -221,7 +273,9 @@ documented in `.env.example`.
 | The bot is silent or answers empty | Is the LM Studio server on, and is `MODEL_NAME` a model you have downloaded? |
 | No images | Is ComfyUI running at `COMFY_URL`, with ComfyUI-GGUF installed? |
 | No voice | Are `model_212000.safetensors` and `vocos/` in place, and is `ASSISTANT_REF_WAV` set? |
-| `unsatisfiable` during install | Install with `uv` and `--override overrides.txt` |
+| `unsatisfiable` during install | Install with `uv` and `--override overrides.txt` (the setup script does) |
+| The app closes at once, `0xc0000005` in the log | Old VC++ runtime: run the setup script again, or install the latest [VC++ redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) |
+| Not sure what is missing | `venv\Scripts\python scripts\healthcheck.py` lists every part with what to do |
 
 ## Tests
 

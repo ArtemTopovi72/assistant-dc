@@ -1,0 +1,45 @@
+name: setup
+
+# The one-command install, from a clean runner, run twice: the second run must
+# find everything done and still pass.
+on:
+  push:
+    branches: [main, "claude/**"]
+    paths: [setup.ps1, setup.sh, scripts/setup.py, scripts/healthcheck.py,
+            requirements*.txt, overrides.txt, .env.example, .github/workflows/setup.yml]
+  pull_request:
+    paths: [setup.ps1, setup.sh, scripts/setup.py, scripts/healthcheck.py,
+            requirements*.txt, overrides.txt, .env.example, .github/workflows/setup.yml]
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      PYTHONIOENCODING: utf-8
+      UV_LINK_MODE: copy
+    steps:
+      - uses: actions/checkout@v4
+      # winget is not on the hosted runners; --no-install leaves system
+      # programs to us, so ffmpeg comes from choco here.
+      - run: choco install ffmpeg -y --no-progress
+      - name: first run
+        run: powershell -ExecutionPolicy Bypass -File setup.ps1 --no-models --no-start --no-install --cpu
+      - name: second run (idempotent)
+        run: powershell -ExecutionPolicy Bypass -File setup.ps1 --no-models --no-start --no-install --cpu
+      - run: venv\Scripts\python scripts\healthcheck.py --skip lmstudio chat
+
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      UV_LINK_MODE: copy
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg libportaudio2 libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3
+      - name: first run
+        run: ./setup.sh --no-models --no-start --no-install --cpu
+      - name: second run (idempotent)
+        run: ./setup.sh --no-models --no-start --no-install --cpu
+      - run: venv/bin/python scripts/healthcheck.py --skip lmstudio chat
