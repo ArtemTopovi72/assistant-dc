@@ -137,13 +137,13 @@ def start(model_id: str, timeout: float = 240.0) -> tuple:
 def unload_lmstudio_chat() -> None:
     """Free the card of LM Studio chat models, keeping the embedding model."""
     try:
-        out = subprocess.run(["lms", "ps"], capture_output=True, text=True, timeout=30, shell=True).stdout
+        out = subprocess.run(["lms", "ps"], capture_output=True, text=True, timeout=30, shell=(os.name == "nt")).stdout
         for line in out.splitlines()[1:]:
             ident = line.split()[0] if line.split() else ""
             if ident and "embed" not in ident.lower() and "rerank" not in ident.lower() \
                     and ident != "IDENTIFIER":
                 subprocess.run(["lms", "unload", ident], capture_output=True, text=True,
-                               timeout=60, shell=True)
+                               timeout=60, shell=(os.name == "nt"))
     except Exception as exc:
         logger.info("lms unload skipped: %s", exc)
 

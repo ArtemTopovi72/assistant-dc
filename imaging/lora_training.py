@@ -209,7 +209,7 @@ def free_gpu(log=None, min_free_mb: int = None) -> None:
             log(m)
     try:
         subprocess.run(["lms", "unload", "--all"], capture_output=True,
-                       text=True, timeout=60, shell=True)
+                       text=True, timeout=60, shell=(os.name == "nt"))
         say("LM Studio: выгружено")
     except Exception as exc:
         say("LM Studio не отвечает (%s) — продолжаю" % exc)

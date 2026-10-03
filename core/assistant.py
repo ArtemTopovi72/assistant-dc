@@ -8,6 +8,13 @@ import shutil
 import threading
 import time
 
+# Before cv2/torch/PyQt5 load any C++ runtime: PyQt5 bundles MSVCP140 14.26,
+# and torch & co. crash in it (0xc0000005) on a machine without a fresh VC++
+# runtime. launch_all did this, but starting the app any other way
+# (`python core/assistant.py`, an IDE) skipped it. No-op off Windows.
+import win_runtime
+win_runtime.preload_newest_msvcp()
+
 import cv2
 import numpy as np
 
