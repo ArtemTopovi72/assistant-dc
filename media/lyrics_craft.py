@@ -45,6 +45,7 @@ import threading
 logger = logging.getLogger("assistant.lyrics")
 
 ROUNDS = 3
+LONG_LINE = 13              # syllables: a sung line longer than this is crammed
 _VOWELS_RU = "аеёиоуыэюя"
 _VOWELS = _VOWELS_RU + "aeiouy"
 _TAG = re.compile(r"^\s*[\[(].*[\])]\s*$")
@@ -186,6 +187,55 @@ def _sections(text: str) -> list:
     return out
 
 
+def _row(ctx, n: int, line: str):
+    """One sung line read for sound: syllables, stressed beats, the rhyme part
+    of its last word (and the consonant before it, for a rich rhyme)."""
+    ws = _WORD.findall(line)
+    if not ws:
+        return None
+    got = _accent_line(ctx, line, ws)
+    stressed = bool(got)
+    pw = got if stressed else ws
+    syl, beats, pos = 0, [], 0
+    for w, p in zip(ws, pw):
+        k = _syllables(w)
+        s = _stress_index(p) if stressed else -1
+        if k > 1 and s >= 0:
+            beats.append(pos + s)
+        pos += k
+        syl += k
+    last, plast = ws[-1], pw[-1]
+    if stressed:
+        idx = [_stress_index(plast)]
+    else:                                  # unknown stress: the last or the one before
+        k = _syllables(last)
+        idx = [i for i in (k - 1, k - 2) if i >= 0]
+    clauses = list(dict.fromkeys(_clause(last, i) for i in idx))
+    supports = list(dict.fromkeys(_support(last, i) for i in idx))
+    return {"n": n, "text": line, "syl": syl, "beats": beats, "last": last,
+            "stressed": stressed, "clauses": clauses, "supports": supports}
+
+
+def _support(word: str, stress: int) -> str:
+    """The sound right before the rhyme part (опорный звук): when it matches
+    too, the rhyme is rich -- «луна/стена» is plain, «луна/струна» and
+    «туман/обман» rich (Russian prosody; rhyme scored by phonetic distance)."""
+    w = word.lower().replace("-", "").replace("ь", "").replace("ъ", "")
+    vpos = [i for i, ch in enumerate(w) if ch in _VOWELS]
+    if not vpos:
+        return ""
+    if stress < 0 or stress >= len(vpos):
+        stress = max(0, len(vpos) - 2) if len(vpos) > 1 else 0
+    start = vpos[stress]
+    if start + 1 == len(w) and start > 0:          # open: the consonant is in the clause
+        start -= 1
+    return w[start - 1].translate(_DEVOICE).translate(_VOWEL_MERGE) if start > 0 else ""
+
+
+def _rich(a: dict, b: dict) -> bool:
+    return any(x and x == y for x in a.get("supports", []) for y in b.get("supports", []))
+
+
 def _rhymes(a: dict, b: dict) -> bool:
     return any(_clauses_rhyme(x, y) for x in a["clauses"] for y in b["clauses"])
 
@@ -229,36 +279,13 @@ def analyse(text: str, ctx=None) -> dict:
     stanzas = [st for _, st in sections]
     info, n_lines, n_stressed = [], 0, 0
     for st in stanzas:
-        rows = []
-        for n, line in st:
-            ws = _WORD.findall(line)
-            if not ws:
-                continue
-            got = _accent_line(ctx, line, ws)
-            n_lines += 1
-            n_stressed += bool(got)
-            stressed = bool(got)
-            pw = got if stressed else ws
-            syl, beats, pos = 0, [], 0
-            for w, p in zip(ws, pw):
-                k = _syllables(w)
-                s = _stress_index(p) if stressed else -1
-                if k > 1 and s >= 0:
-                    beats.append(pos + s)
-                pos += k
-                syl += k
-            last, plast = ws[-1], pw[-1]
-            if stressed:
-                clauses = [_clause(last, _stress_index(plast))]
-            else:                              # unknown stress: the last or the one before
-                k = _syllables(last)
-                clauses = list(dict.fromkeys(_clause(last, i) for i in (k - 1, k - 2) if i >= 0))
-            rows.append({"n": n, "text": line, "syl": syl, "beats": beats, "last": last,
-                         "stressed": stressed, "clauses": clauses})
+        rows = [r for r in (_row(ctx, n, line) for n, line in st) if r]
+        n_lines += len(rows)
+        n_stressed += sum(r["stressed"] for r in rows)
         if rows:
             info.append(rows)
 
-    issues, penalty = [], 0.0
+    issues, penalty, rich = [], 0.0, 0
     for rows in info:
         if len(rows) < 2:
             continue
@@ -284,9 +311,17 @@ def analyse(text: str, ctx=None) -> dict:
             if why:
                 issues.append({"kind": why, "lines": (a["n"], b["n"]), "words": (a["last"], b["last"])})
                 penalty += 0.7 if why == "verbs" else 2.0
+            elif _rich(a, b):
+                rich += 1
             if abs(a["syl"] - b["syl"]) > 2:
                 issues.append({"kind": "length", "lines": (a["n"], b["n"]), "syl": (a["syl"], b["syl"])})
                 penalty += 0.5
+        for r in rows:
+            # one line = one sung phrase: past ~13 syllables it no longer fits a
+            # bar and the singer crams it (Suno / topline practice: 6-10, at most 12)
+            if r["syl"] > LONG_LINE:
+                issues.append({"kind": "long_line", "lines": (r["n"],), "syl": (r["syl"], r["syl"])})
+                penalty += 0.4
         if all(r["stressed"] for r in rows):
             beats = [b for r in rows for b in r["beats"]]
             if len(beats) >= 4:
@@ -300,8 +335,10 @@ def analyse(text: str, ctx=None) -> dict:
     f_issues, f_pen = _form_issues(sections, info)
     issues += f_issues
     penalty += f_pen
-    return {"issues": issues, "score": max(0.0, round(10 - penalty, 1)),
-            "stressed": bool(n_lines) and n_stressed == n_lines}
+    # rich rhymes earn back a little: up to one point
+    penalty -= min(1.0, 0.25 * rich)
+    return {"issues": issues, "score": max(0.0, min(10.0, round(10 - penalty, 1))),
+            "stressed": bool(n_lines) and n_stressed == n_lines, "rich": rich}
 
 
 def _form_issues(sections: list, info: list) -> tuple:
@@ -366,6 +403,7 @@ _ISSUE_EN = {
     "chorus_drift": "the chorus from line {a} is worded differently from the first chorus",
     "hook_long": "the chorus (line {a}) has no short hook line: make its first or last line 10 words or fewer",
     "end_repeat": "lines {a} and {b} end on the same word «{x}»",
+    "long_line": "line {a} is too long to sing in one breath ({s1} syllables): one line, one phrase",
 }
 
 
@@ -381,6 +419,7 @@ _ISSUE_RU = {
     "chorus_drift": "припев со строки {a} написан иначе, чем первый припев",
     "hook_long": "в припеве (строка {a}) нет короткой строки-хука: первая или последняя строка — до 10 слов",
     "end_repeat": "строки {a} и {b} кончаются одним и тем же словом «{x}»",
+    "long_line": "строка {a} слишком длинная, на одном дыхании не спеть ({s1} слогов): одна строка — одна фраза",
 }
 
 
@@ -394,6 +433,8 @@ def describe(issue: dict, lang: str = "en") -> str:
 
 # ── the model ────────────────────────────────────────────────────────────────
 LLM_STUB = None             # suites: LLM_STUB(role, system, user) -> str
+MIN_P = float(os.getenv("LYRICS_MIN_P", "0.05") or 0)
+_CREATIVE = ("draft", "revise", "lines")
 
 
 def _call(ctx, role: str, system: str, user: str, *, temperature: float, max_tokens: int,
@@ -404,6 +445,10 @@ def _call(ctx, role: str, system: str, user: str, *, temperature: float, max_tok
         return ""                      # suites that do not stub it: no model call
     from llm import call_llm_simple
     kw = {"json_schema": schema} if schema else {}
+    if role in _CREATIVE and MIN_P:
+        # min-p keeps high temperature coherent and off the cliché tokens
+        # (Nguyen et al. 2024, arxiv 2407.01082)
+        kw["sampling"] = {"min_p": MIN_P}
     return call_llm_simple(ctx, system, user, temperature=temperature, max_tokens=max_tokens,
                            prefill="<think></think>", **kw) or ""
 
@@ -418,7 +463,8 @@ _RULES = (
     "ненавидеть); no worn pairs (любовь/кровь, розы/морозы, ночь/прочь, мечты/цветы, "
     "fire/desire, heart/apart); avoid rhyming two verbs in the same form; one steady "
     "metre per section (the stresses fall on the same beats in every line), rhyming "
-    "lines of about the same length; concrete images, a clear thought, no filler words "
+    "lines of about the same length; one line = one sung phrase of 6-12 "
+    "syllables (a breath; no line runs on into the next); concrete images, a clear thought, no filler words "
     "put in for the rhyme; natural word order; it must be easy to sing.")
 
 _CRITIC = (
@@ -509,17 +555,19 @@ def draft(ctx, topic: str, lang: str, the_plan: str = "") -> str:
         "[bridge] 2-4 lines, [chorus]. Pick one metre and keep it; rhyme ABAB or AABB in "
         "every section; verse 2 has the same syllable shape as verse 1 (it is sung to the "
         "same melody). Verses SHOW through concrete detail, the chorus states the feeling "
-        "and holds the hook in its first or last line, every chorus is identical. "
+        "and holds the hook in its first or last line, every chorus is identical; a hook may "
+        "come back with a small variation (repetition with variation makes it stick). "
         + _RULES + " Output only the lyric with its section tags.")
     user = "Theme: " + topic + (("\n\nPlan:\n" + the_plan) if the_plan else "")
     return _clean(_call(ctx, "draft", system, user, temperature=0.9, max_tokens=1200))
 
 
 def write(ctx, topic: str, lang: str, on_round=None) -> dict:
-    """✍️ A theme -> a lyric: plan, several drafts (the best one by the checks wins,
-    the over-generate-and-rank of PoeLM), then the polish loop."""
+    """✍️ A theme -> a lyric: plan, several drafts (over-generate and rank, as
+    PoeLM), the two best by the checks meet head to head (a judge picking one of
+    two is steadier than its 0-10 scores), then the polish loop."""
     the_plan = plan(ctx, topic, lang)
-    best, best_score = "", -1.0
+    scored = []
     for _ in range(DRAFTS):
         if ctx is not None and getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
             break
@@ -528,11 +576,82 @@ def write(ctx, topic: str, lang: str, on_round=None) -> dict:
             continue
         score = _total(analyse(d, ctx), critique(ctx, d)[0])
         logger.info("lyrics draft scored %.2f", score)
-        if score > best_score:
-            best, best_score = d, score
-    if not best:
+        scored.append((score, d))
+    if not scored:
         raise RuntimeError("no draft")
+    scored.sort(key=lambda x: -x[0])
+    best = scored[0][1]
+    if len(scored) > 1 and scored[0][0] - scored[1][0] < 1.5:
+        best = compare(ctx, topic, scored[0][1], scored[1][1])
     return polish(ctx, best, on_round=on_round)
+
+
+_JUDGE = (
+    "You judge two song lyrics on the same theme as a hit songwriter would: which "
+    "one is the better SONG -- a hook that sticks, images shown not told, clean "
+    "rhymes, a steady singable rhythm, a story that moves. Answer with one letter: "
+    "A or B.")
+
+
+def _verdict(ctx, topic: str, a: str, b: str) -> str:
+    raw = _call(ctx, "judge", _JUDGE, f"Theme: {topic}\n\nA:\n{a}\n\nB:\n{b}",
+                temperature=0.0, max_tokens=5)
+    m = re.search(r"\b([AB])\b", (raw or "").strip().upper())
+    return m.group(1) if m else ""
+
+
+def compare(ctx, topic: str, first: str, second: str) -> str:
+    """The better of two lyrics by the model, asked both ways round (a judge
+    leans to one position); `first` -- the checks' pick -- unless both say B."""
+    try:
+        one = _verdict(ctx, topic, first, second)
+        two = _verdict(ctx, topic, second, first)
+    except Exception:
+        logger.warning("lyrics judge failed", exc_info=True)
+        return first
+    return second if (one, two) == ("B", "A") else first
+
+
+_LINES = (
+    "You fix one line of a {lang} song. Give {k} different versions of the line "
+    "marked >>> so that it ends on a true rhyme with «{word}» (the stressed vowel and "
+    "what follows sound alike, not the same word or root, not a worn pair), keeps "
+    "about {syl} syllables and the same meaning in context. One version per line, "
+    "nothing else.")
+
+
+def fix_rhymes(ctx, text: str, rule: dict, lang: str, k: int = 3) -> str:
+    """Line by line before the whole rewrite: for a pair that does not rhyme,
+    a few versions of its weaker (later) line, the first that passes the rule
+    check is kept (Amuse / line-level variants). The rest of the lyric is left
+    as it is."""
+    lines = text.splitlines()
+    rows = {r["n"]: r for r in (_row(ctx, n, l) for n, l in enumerate(lines, 1)) if r}
+    done = 0
+    for issue in rule.get("issues", []):
+        if issue["kind"] not in ("no_rhyme", "worn", "same_root", "same_word") or done >= 4:
+            continue
+        a_n, b_n = issue["lines"]
+        a, b = rows.get(a_n), rows.get(b_n)
+        if not a or not b:
+            continue
+        ctx_lines = "\n".join((">>> " if n == b_n else "") + l
+                              for n, l in enumerate(lines, 1) if abs(n - b_n) <= 3)
+        try:
+            raw = _call(ctx, "lines", _LINES.format(lang=lang, k=k, word=a["last"], syl=a["syl"]),
+                        ctx_lines, temperature=0.9, max_tokens=300)
+        except Exception:
+            continue
+        for cand in _clean(raw).splitlines()[:k + 2]:
+            cand = re.sub(r"^\s*(?:>>>|[-•*]|\d+[.):])\s*", "", cand).strip()
+            r = _row(ctx, b_n, cand) if cand else None
+            if (r and _rhymes(a, r) and not _banned(a["last"], r["last"])
+                    and abs(a["syl"] - r["syl"]) <= 2):
+                lines[b_n - 1] = cand
+                rows[b_n] = r
+                done += 1
+                break
+    return "\n".join(lines)
 
 
 def _total(rule: dict, sense: int) -> float:
@@ -562,6 +681,14 @@ def polish(ctx, text: str, rounds: int = ROUNDS, on_round=None) -> dict:
             break
         if on_round:
             on_round(r + 1)
+        fixed = fix_rhymes(ctx, cur, rule, lang)
+        if fixed != cur:                            # the rhymes mended line by line first
+            rule = analyse(fixed, ctx)
+            problems = [describe(i) for i in rule["issues"]] + probs
+            cur = fixed
+            done += 1
+            if not problems:
+                continue                            # scored on the next round
         new = revise(ctx, cur, problems, lang)
         done += 1
         if not new or len(new) < len(cur) * 0.4:

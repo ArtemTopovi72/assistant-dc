@@ -278,3 +278,68 @@ def test_the_ready_words_question_offers_keep_or_polish():
     assert tg_strings._MSG["song_polish_btn"]["ru"] == "✨ Доработать и спеть"
     src = open(os.path.join(ROOT, "bot", "tg_registration.py"), encoding="utf-8").read()
     assert '"song_lyr:polish"' in src and '"song_lyr:keep"' in src
+
+
+# ── 10-03 research: rich rhyme, one line = one phrase, pairwise pick, line fixes
+def test_a_rich_rhyme_scores_above_a_plain_one():
+    plain = "Ночью вышла луна\nНа пороге стена\nОгонёк у окна\nТишина и весна"
+    rich = "Ночью вышла луна\nЗазвенела струна\nНа пороге стена\nОпустела страна"
+    a, b = L.analyse(plain), L.analyse(rich)
+    assert b["rich"] > a["rich"] and b["score"] >= a["score"]
+
+
+def test_a_line_too_long_to_sing_is_named():
+    text = ("[verse]\nМы шли по улицам ночного города и говорили обо всём на свете\n"
+            "Огни горели\nИ ветер пел\nНо мы не знали")
+    issues = L.analyse(text)["issues"]
+    long = [i for i in issues if i["kind"] == "long_line"]
+    assert long and long[0]["lines"] == (2,)
+    assert "одна строка — одна фраза" in L.describe(long[0], "ru")
+
+
+def test_two_close_drafts_meet_head_to_head_asked_both_ways(monkeypatch):
+    seen = []
+
+    def llm(role, system, user):
+        seen.append(role)
+        if role == "judge":
+            # GOOD wins in both orders
+            return "B" if "B:\n" + GOOD in user else "A"
+        return ""
+    monkeypatch.setattr(L, "LLM_STUB", llm)
+    assert L.compare(None, "т", LAZY, GOOD) == GOOD
+    assert seen.count("judge") == 2
+
+    # a judge that just likes position A: the checks' pick stays
+    monkeypatch.setattr(L, "LLM_STUB", lambda role, s, u: "A")
+    assert L.compare(None, "т", LAZY, GOOD) == LAZY
+
+
+def test_a_non_rhyming_line_is_mended_alone_from_versions(monkeypatch):
+    text = "Над рекой туман\nТихо спит вода\nВетер был сильный\nНе уйду туда"
+    asked = []
+
+    def llm(role, system, user):
+        if role == "lines":
+            asked.append((system, user))
+            return "1. Сердце в огне\n2. Ветер был сильный\n3. Вновь пришёл обман"  # only 3 rhymes
+        return ""
+    monkeypatch.setattr(L, "LLM_STUB", llm)
+    out = L.fix_rhymes(None, text, L.analyse(text), "Russian")
+    lines = out.splitlines()
+    assert asked and "«туман»" in asked[0][0] and ">>> Ветер был сильный" in asked[0][1]
+    assert lines[2] == "Вновь пришёл обман"
+    assert lines[:2] + lines[3:] == text.splitlines()[:2] + text.splitlines()[3:]  # the rest stays
+    assert not L.analyse(out)["issues"]
+
+
+def test_creative_calls_ask_for_min_p(monkeypatch):
+    import llm as LLM
+    got = {}
+    monkeypatch.delenv("F5_TEST_RUN", raising=False)
+    monkeypatch.setattr(LLM, "call_llm_simple", lambda *a, **k: got.update(k) or "x")
+    L._call(None, "draft", "s", "u", temperature=0.9, max_tokens=10)
+    assert got.get("sampling") == {"min_p": L.MIN_P}
+    got.clear()
+    L._call(None, "critic", "s", "u", temperature=0.0, max_tokens=10)
+    assert "sampling" not in got

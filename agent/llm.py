@@ -506,6 +506,7 @@ def send_to_lm_studio(
     reasoning_effort: Optional[str] = None,
     force_think: bool = False,
     json_schema: Optional[dict] = None,
+    sampling: Optional[dict] = None,
 ) -> Optional[dict]:
     """
     Sends messages to LM Studio. Returns the full message dict from the assistant
@@ -621,6 +622,9 @@ def send_to_lm_studio(
         # "```json" fences and missing keys become impossible (measured 3/3 vs 0/3 bare).
         payload["response_format"] = {"type": "json_schema", "json_schema": {
             "name": "answer", "strict": True, "schema": json_schema}}
+    if sampling:
+        # per-call samplers (min_p for creative writing: arxiv 2407.01082)
+        payload.update({k: v for k, v in sampling.items() if v is not None})
 
     if is_glimmer:
         pass    # the system-prompt line above is its only reasoning control
@@ -1522,6 +1526,7 @@ def call_llm_simple(
     reasoning_effort: Optional[str] = None,
     force_think: bool = False,
     json_schema: Optional[dict] = None,
+    sampling: Optional[dict] = None,
 ) -> Optional[str]:
     """Simple LLM call without tool calling. Returns text content only.
 
@@ -1544,6 +1549,7 @@ def call_llm_simple(
         reasoning_effort=reasoning_effort,
         force_think=force_think,
         json_schema=json_schema,
+        **({"sampling": sampling} if sampling else {}),
     )
     if result is None:
         return None
