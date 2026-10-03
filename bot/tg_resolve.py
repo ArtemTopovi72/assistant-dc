@@ -331,6 +331,17 @@ class ResolveMixin:
         # this batch is even processed.
         pressed_image_id = ""
 
+        # A long lyric is cut by Telegram into several messages that land in one
+        # batch: while 🎤 Cover or ✨/✍️ lyrics wait for words, the pieces are one
+        # text (the first piece alone was the lyric, the rest went to the chat).
+        if getattr(sess, "cover_state", "") == "want_text" or getattr(sess, "lyrics_state", ""):
+            _pieces = [it for it in batch if it.get("type") == "text" and not it.get("fwd_said")
+                       and not (it.get("text") or "").startswith("/")
+                       and not tg_bot._LABEL2KEY.get((it.get("text") or "").strip())]
+            if len(_pieces) > 1:
+                _joined = dict(_pieces[0], text="\n".join(it["text"] for it in _pieces))
+                batch = [_joined] + [it for it in batch if it not in _pieces]
+
         fwd, fwd_at = [], None
         for item in batch:
             t = item["type"]

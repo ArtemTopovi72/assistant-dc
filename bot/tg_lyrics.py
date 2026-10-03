@@ -40,10 +40,7 @@ class LyricsMixin:
         try:
             if mode == "write":
                 lyric_lang = "Russian" if lang == "ru" or LC._lang_name(text) == "Russian" else "English"
-                first = LC.draft(ctx, text, lyric_lang)
-                if not first:
-                    raise RuntimeError("empty draft")
-                res = LC.polish(ctx, first)
+                res = LC.write(ctx, text, lyric_lang)
                 notes = []
             else:
                 res = LC.polish(ctx, text)

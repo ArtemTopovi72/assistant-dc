@@ -23,8 +23,17 @@ The rules (Russian is the main case; English is checked more loosely):
                should fall on the same beat (binary feet: even or odd
                syllables); a line that breaks it is named.
   * length   -- lines that rhyme should be about as long (±2 syllables).
-  * sense    -- the model reads it as an editor would: meaning, images, logic,
-               singability, clichés.
+  * form     -- a later verse keeps the first verse's syllable shape (same
+               melody), repeated choruses stay identical, the chorus has a short
+               hook line (under 10 words, first or last), no word closes lines
+               in two different stanzas.
+  * sense    -- the model reads it as an editor would (the Pattison / Berklee
+               craft): meaning, show-don't-tell, verse/chorus/bridge roles, the
+               hook, singability, clichés, filler.
+✍️ writing plans first (hook, story per section, concrete images, metre,
+rhyme scheme -- decompose-then-write, DECRIM), drafts several versions and
+keeps the best by the same checks (over-generate and rank, PoeLM), then
+polishes it.
 """
 from __future__ import annotations
 
@@ -147,17 +156,34 @@ def _clause(word: str, stress: int) -> str:
 
 def _lines(text: str) -> list:
     """Stanzas of sung lines: a blank line or a [tag] line starts a new one."""
-    stanzas, cur = [], []
+    return [st for _, st in _sections(text)]
+
+
+def _section_kind(tag: str) -> str:
+    t = tag.lower()
+    if re.search(r"chorus|припев|refrain|hook", t):
+        return "chorus"
+    if re.search(r"verse|куплет", t):
+        return "verse"
+    return ""
+
+
+def _sections(text: str) -> list:
+    """[(kind, [(line_no, line)])]: kind is "verse", "chorus" or "" from the
+    nearest [tag] above (a blank line keeps it: a second stanza of a verse)."""
+    out, cur, kind = [], [], ""
     for n, raw in enumerate((text or "").splitlines(), 1):
         if not raw.strip() or _TAG.match(raw):
             if cur:
-                stanzas.append(cur)
+                out.append((kind, cur))
                 cur = []
+            if raw.strip():
+                kind = _section_kind(raw)
             continue
         cur.append((n, raw.strip()))
     if cur:
-        stanzas.append(cur)
-    return stanzas
+        out.append((kind, cur))
+    return out
 
 
 def _rhymes(a: dict, b: dict) -> bool:
@@ -199,7 +225,8 @@ _SCHEMES = {4: [((0, 1), (2, 3)), ((0, 2), (1, 3)), ((0, 3), (1, 2)), ((1, 3),)]
 
 def analyse(text: str, ctx=None) -> dict:
     """{"issues": [...], "score": 0..10, "stressed": bool} for the lyric."""
-    stanzas = _lines(text)
+    sections = _sections(text)
+    stanzas = [st for _, st in sections]
     info, n_lines, n_stressed = [], 0, 0
     for st in stanzas:
         rows = []
@@ -270,8 +297,61 @@ def analyse(text: str, ctx=None) -> dict:
                     if r["beats"] and len(off) * 2 > len(r["beats"]):
                         issues.append({"kind": "rhythm", "lines": (r["n"],)})
                         penalty += 0.5
+    f_issues, f_pen = _form_issues(sections, info)
+    issues += f_issues
+    penalty += f_pen
     return {"issues": issues, "score": max(0.0, round(10 - penalty, 1)),
             "stressed": bool(n_lines) and n_stressed == n_lines}
+
+
+def _form_issues(sections: list, info: list) -> tuple:
+    """Song form, beyond single rhymes (songwriting practice: the melody repeats,
+    so must the words' shape):
+      verse_shape   a later verse's line is not as long as the first verse's line
+                    in the same place (it is sung to the same melody, ±2 syllables)
+      chorus_drift  a repeated chorus is worded differently from the first one
+      hook_long     the chorus has no short line to hold the hook: neither its
+                    first nor its last line is 10 words or fewer
+      end_repeat    the same word closes lines in two different stanzas
+    """
+    rows_of = {}
+    flat = [r for rows in info for r in rows]
+    for r in flat:
+        rows_of[r["n"]] = r
+    issues, pen = [], 0.0
+    verses = [st for kind, st in sections if kind == "verse"]
+    if len(verses) > 1:
+        first = verses[0]
+        for other in verses[1:]:
+            for (n1, _), (n2, _) in zip(first, other):
+                a, b = rows_of.get(n1), rows_of.get(n2)
+                if a and b and abs(a["syl"] - b["syl"]) > 2:
+                    issues.append({"kind": "verse_shape", "lines": (n1, n2), "syl": (a["syl"], b["syl"])})
+                    pen += 0.4
+    choruses = [st for kind, st in sections if kind == "chorus"]
+    if choruses:
+        ref = [l.lower() for _, l in choruses[0]]
+        for ch in choruses[1:]:
+            got = [l.lower() for _, l in ch]
+            if got and got != ref[:len(got)]:
+                issues.append({"kind": "chorus_drift", "lines": (ch[0][0],)})
+                pen += 0.5
+        first = choruses[0]
+        if len(first) >= 2 and all(len(_WORD.findall(l)) > 10 for _, l in (first[0], first[-1])):
+            issues.append({"kind": "hook_long", "lines": (first[0][0],)})
+            pen += 0.5
+    seen = {}
+    chorus_lines = {n for st in choruses for n, _ in st}
+    for si, rows in enumerate(info):
+        for r in rows:
+            if r["n"] in chorus_lines:
+                continue
+            w = r["last"].lower().replace("ё", "е")
+            if w in seen and seen[w][0] != si and len(w) > 2:
+                issues.append({"kind": "end_repeat", "lines": (seen[w][1], r["n"]), "words": (r["last"], r["last"])})
+                pen += 0.3
+            seen.setdefault(w, (si, r["n"]))
+    return issues, pen
 
 
 _ISSUE_EN = {
@@ -282,6 +362,10 @@ _ISSUE_EN = {
     "verbs": "lines {a} and {b}: two verbs in the same form («{x}» / «{y}») is a weak rhyme",
     "length": "lines {a} and {b} differ in length ({s1} vs {s2} syllables)",
     "rhythm": "line {a} breaks the rhythm of its stanza",
+    "verse_shape": "line {b} is sung to the melody of line {a} but has {s2} syllables, not about {s1}",
+    "chorus_drift": "the chorus from line {a} is worded differently from the first chorus",
+    "hook_long": "the chorus (line {a}) has no short hook line: make its first or last line 10 words or fewer",
+    "end_repeat": "lines {a} and {b} end on the same word «{x}»",
 }
 
 
@@ -293,6 +377,10 @@ _ISSUE_RU = {
     "verbs": "строки {a} и {b}: два глагола в одной форме («{x}» / «{y}») — слабая рифма",
     "length": "строки {a} и {b} разной длины ({s1} и {s2} слогов)",
     "rhythm": "строка {a} сбивает ритм куплета",
+    "verse_shape": "строка {b} поётся на мелодию строки {a}, но в ней {s2} слогов, а не около {s1}",
+    "chorus_drift": "припев со строки {a} написан иначе, чем первый припев",
+    "hook_long": "в припеве (строка {a}) нет короткой строки-хука: первая или последняя строка — до 10 слов",
+    "end_repeat": "строки {a} и {b} кончаются одним и тем же словом «{x}»",
 }
 
 
@@ -332,11 +420,16 @@ _RULES = (
     "put in for the rhyme; natural word order; it must be easy to sing.")
 
 _CRITIC = (
-    "You are a demanding song editor. Read the lyric (lines are numbered) and list "
-    "only real problems of MEANING and SOUND: unclear or illogical lines, filler or "
-    "padding, clichés, forced word order, clumsy or hard-to-sing phrases, images that "
-    "contradict each other. Name the line number in each problem. Return JSON "
-    "{\"score\": 0-10, \"problems\": [\"...\"]}; an empty list when it is good.")
+    "You are a demanding song editor (the Pattison / Berklee school). Read the lyric "
+    "(lines are numbered) and list only real problems of MEANING and SOUND: unclear or "
+    "illogical lines; filler or padding words put in for the rhyme or the count; "
+    "clichés and stock images; forced word order; clumsy or hard-to-sing phrases "
+    "(consonant pile-ups, a stressed syllable on a weak word); emotions NAMED instead "
+    "of shown through concrete, sensory detail; verses that do not move the story or "
+    "add new detail; a chorus that is not the emotional summary or has no memorable "
+    "hook line; a bridge that brings no new angle; images that contradict each other. "
+    "Name the line number in each problem. Return JSON {\"score\": 0-10, "
+    "\"problems\": [\"...\"]}; an empty list when it is good.")
 
 _CRITIC_SCHEMA = {"type": "object", "properties": {
     "score": {"type": "integer"}, "problems": {"type": "array", "items": {"type": "string"}}},
@@ -376,23 +469,68 @@ def _clean(raw: str) -> str:
 def revise(ctx, text: str, problems: list, lang: str) -> str:
     system = (
         f"You are a skilled {lang} lyricist and editor. Rewrite the song lyric to fix "
-        "EVERY listed problem. Keep its theme, story, language, section tags ([verse], "
-        "[chorus]...) and the lines that are fine; change only what the problems need. "
-        + _RULES + " Output only the full lyric, no comments, no line numbers.")
+        "EVERY listed problem. Keep its theme, story, language and section tags ([verse], "
+        "[chorus]...); a line no problem names stays word for word. When a rhyme pair "
+        "is wrong, rewrite the weaker line of the pair, not both. Keep every repeated "
+        "chorus identical. " + _RULES + " Output only the full lyric, no comments, no "
+        "line numbers.")
     user = ("Lyric (lines numbered as the problems name them):\n" + _numbered(text)
             + "\n\nProblems to fix:\n" + "\n".join(f"- {p}" for p in problems))
     return _clean(_call(ctx, "revise", system, user, temperature=0.7,
                         max_tokens=max(800, len(text) * 2)))
 
 
-def draft(ctx, topic: str, lang: str) -> str:
+DRAFTS = max(1, int(os.getenv("LYRICS_DRAFTS", "3") or 3))
+
+_PLAN = (
+    "You plan a song before it is written (decompose first, then write). For the "
+    "theme below, in {lang}, give: the HOOK -- the title line, under 10 words, that "
+    "sums up the song's feeling; the story: what verse 1 shows, what verse 2 adds "
+    "(new detail, time moves on), what the bridge turns to (a new angle); 6-10 "
+    "concrete sensory images (things one can see, hear, touch -- object writing) to "
+    "SHOW the feeling instead of naming it; the metre (e.g. 4-foot trochee) and the "
+    "rhyme scheme (ABAB or AABB). Plain text, short.")
+
+
+def plan(ctx, topic: str, lang: str) -> str:
+    try:
+        return _clean(_call(ctx, "plan", _PLAN.format(lang=lang), "Theme: " + topic,
+                            temperature=0.7, max_tokens=500))
+    except Exception:
+        return ""
+
+
+def draft(ctx, topic: str, lang: str, the_plan: str = "") -> str:
     system = (
         f"You are a skilled songwriter. Write an original song lyric in {lang} on the "
         "theme below: [verse 1] 4 lines, [chorus] 4 lines, [verse 2] 4 lines, [chorus], "
         "[bridge] 2-4 lines, [chorus]. Pick one metre and keep it; rhyme ABAB or AABB in "
-        "every section. The chorus carries the hook and is the most memorable part. "
+        "every section; verse 2 has the same syllable shape as verse 1 (it is sung to the "
+        "same melody). Verses SHOW through concrete detail, the chorus states the feeling "
+        "and holds the hook in its first or last line, every chorus is identical. "
         + _RULES + " Output only the lyric with its section tags.")
-    return _clean(_call(ctx, "draft", system, "Theme: " + topic, temperature=0.9, max_tokens=1200))
+    user = "Theme: " + topic + (("\n\nPlan:\n" + the_plan) if the_plan else "")
+    return _clean(_call(ctx, "draft", system, user, temperature=0.9, max_tokens=1200))
+
+
+def write(ctx, topic: str, lang: str, on_round=None) -> dict:
+    """✍️ A theme -> a lyric: plan, several drafts (the best one by the checks wins,
+    the over-generate-and-rank of PoeLM), then the polish loop."""
+    the_plan = plan(ctx, topic, lang)
+    best, best_score = "", -1.0
+    for _ in range(DRAFTS):
+        if ctx is not None and getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
+            break
+        d = draft(ctx, topic, lang, the_plan)
+        if not d:
+            continue
+        score = _total(analyse(d, ctx), critique(ctx, d)[0])
+        logger.info("lyrics draft scored %.2f", score)
+        if score > best_score:
+            best, best_score = d, score
+    if not best:
+        raise RuntimeError("no draft")
+    return polish(ctx, best, on_round=on_round)
 
 
 def _total(rule: dict, sense: int) -> float:

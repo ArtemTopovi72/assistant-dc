@@ -181,3 +181,55 @@ def test_what_is_left_is_shown_in_the_users_language(monkeypatch):
 def _armed(bot, cid):
     s = bot._get_session(cid); s.lyrics_state = "improve"; bot._store.put(s)
     return bot._get_session(cid)
+
+
+def test_song_form_is_checked():
+    song = """[verse 1]
+Над городом гаснет закат
+И окна, как свечи, горят
+[chorus]
+Мы будем гореть до утра
+Пока не наступит пора
+[verse 2]
+Ночная дорога ведёт нас сквозь самый тёмный закат
+И где-то вдали фонари над рекой незаметно горят
+[chorus]
+Мы будем гореть до конца
+Пока не наступит пора"""
+    kinds = [i["kind"] for i in L.analyse(song)["issues"]]
+    assert "verse_shape" in kinds            # verse 2 is far longer than verse 1
+    assert "chorus_drift" in kinds           # «до утра» became «до конца»
+    assert "end_repeat" in kinds             # «закат» closes lines in both verses
+    long_hook = "[chorus]\n" + "\n".join(["раз два три четыре пять шесть семь восемь девять десять одиннадцать"] * 2)
+    assert "hook_long" in [i["kind"] for i in L.analyse(long_hook)["issues"]]
+
+
+def test_write_plans_then_keeps_the_best_of_several_drafts(monkeypatch):
+    drafts = iter([LAZY, GOOD, LAZY])
+    seen = []
+
+    def llm(role, system, user):
+        seen.append(role)
+        if role == "plan":
+            return "HOOK: огни над городом"
+        if role == "draft":
+            assert "Plan:\nHOOK: огни над городом" in user
+            return next(drafts)
+        if role == "critic":
+            return '{"score": 8, "problems": []}'
+        return ""
+    monkeypatch.setattr(L, "LLM_STUB", llm)
+    monkeypatch.setattr(L, "DRAFTS", 3)
+    res = L.write(None, "город ночью", "Russian")
+    assert seen[0] == "plan" and seen.count("draft") == 3
+    assert res["original"] == GOOD.strip()   # the best draft is the one polished
+
+
+def test_a_long_lyric_cut_into_pieces_is_one_text(monkeypatch):
+    seen = []
+    bot = _bot()
+    monkeypatch.setattr(bot, "_lyrics_run", lambda cid, lang, mode, text: seen.append(text))
+    s = bot._get_session(12); s.lyrics_state = "improve"; s.reg_state = ""; bot._store.put(s)
+    bot._resolve_and_push(12, [{"type": "text", "text": "первая часть"},
+                               {"type": "text", "text": "вторая часть"}])
+    assert seen == ["первая часть\nвторая часть"]
