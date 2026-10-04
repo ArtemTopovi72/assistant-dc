@@ -187,6 +187,17 @@ def caption(title: str, n: int, total: int, part: int = 1, parts: int = 1) -> st
     return head + (f" · часть {part}/{parts}" if parts > 1 else "")
 
 
+def heard_matches(text: str, heard: str, floor: float = 0.7) -> bool:
+    """The piece, transcribed back, still says the text (word overlap): a cut-off, looped or
+    reference-bleeding piece fails. An empty transcript is not evidence either way."""
+    import difflib
+    norm = lambda t: re.findall(r"\w+", (t or "").lower().replace("ё", "е"))
+    a, b = norm(text), norm(heard)
+    if not b or len(a) < 4:
+        return True
+    return difflib.SequenceMatcher(None, a, b, autojunk=False).ratio() >= floor
+
+
 def _plausible(text: str, seconds: float) -> bool:
     """Speech runs ~12-20 characters a second; far outside that the piece was cut off, empty or looped."""
     chars = max(1, len(re.sub(r"\W", "", text)))
@@ -203,8 +214,9 @@ def _trim(seg, floor_db: float = -45.0, keep_ms: int = 60):
 
 
 def render_chapter(synth, title: str, body: str, n: int, out_wav: str, cancelled=lambda: False,
-                   on_piece=lambda i, total: None) -> bool:
+                   on_piece=lambda i, total: None, verify=None) -> bool:
     """Speak one chapter into out_wav. `synth(text) -> wav path | None` is the cloned voice.
+    `verify(text, wav) -> bool` (optional) is the ASR check: a piece that does not say its text is re-spoken once.
     False when cancelled or nothing could be spoken."""
     from pydub import AudioSegment
     pieces = chunk_text(body)
@@ -221,12 +233,18 @@ def render_chapter(synth, title: str, body: str, n: int, out_wav: str, cancelled
             wav = synth(text)
             if wav and os.path.exists(wav):
                 cand = AudioSegment.from_file(wav)
+                said = True
+                if verify is not None:
+                    try:
+                        said = verify(text, wav)
+                    except Exception:
+                        said = True               # a broken checker never blocks the book
                 try:
                     os.unlink(wav)
                 except OSError:
                     pass
                 cand = _trim(cand)
-                if _plausible(text, len(cand) / 1000.0):
+                if said and _plausible(text, len(cand) / 1000.0):
                     seg = cand
                     break
                 seg = seg or cand                # keep the odd one if the retry is no better

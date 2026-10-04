@@ -106,6 +106,7 @@ class CallbackMixin:
         if data.startswith("animate_preset:"): return self._cb_animate_preset(chat_id, data)
         if data == "animate_custom": return self._cb_animate_custom(chat_id)
         if data.startswith("anv:"): return self._cb_anim_voices(chat_id, data)
+        if data.startswith("bk:"): return self._cb_book(chat_id, data)
         if data.startswith("song_lyr:"): return self._cb_song_lyrics(chat_id, data)
         if data.startswith("lyr:"): return self._cb_lyrics(chat_id, data)
         if data.startswith("myv:"): return self._cb_my_voice(chat_id, data)

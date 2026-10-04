@@ -102,5 +102,21 @@ dlg = A.chunk_text(chr(10).join(["— Да.", "— Нет.", "— Может б�
 check("one-word dialogue lines are not synthesised alone (F5 bleeds the reference tail into short pieces)",
       all(len(t) >= A.MIN_PIECE for t, _ in dlg), dlg)
 
+
+# ASR check: the piece, heard back, must say its text; a mismatch is re-spoken once
+check("heard_matches: the same words pass, a looped / cut-off piece fails",
+      A.heard_matches("Он шёл по улице и было холодно", "он шел по улице и было холодно")
+      and not A.heard_matches("Он шёл по улице и было холодно", "холодно холодно холодно")
+      and A.heard_matches("Он шёл по улице и было холодно", ""))
+calls = {"v": 0}
+def verify_once_bad(text, wav):
+    calls["v"] += 1
+    return calls["v"] > 1
+SEEN.clear()
+okv = A.render_chapter(fake_synth, "", "Первое предложение здесь. Второе предложение там.", 1, os.path.join(D, "v.wav"), verify=verify_once_bad)
+check("a piece that fails the ASR check is spoken again", okv and len(SEEN) >= 2 and calls["v"] >= 2, (len(SEEN), calls))
+check("a crashing checker never blocks the book",
+      A.render_chapter(fake_synth, "", "Раз два три четыре пять шесть.", 1, os.path.join(D, "w.wav"), verify=lambda t, w: 1 / 0))
+
 print(f"\n{OK}/{OK + BAD} checks passed")
 sys.exit(1 if BAD else 0)

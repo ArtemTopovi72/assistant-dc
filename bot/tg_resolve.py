@@ -456,6 +456,11 @@ class ResolveMixin:
                         and self._vl_take_name(chat_id, sess, lang, raw)):
                     continue
 
+                # 📚 Audiobook waits for the narrator: a video link is the sample, not a video to retell.
+                if (not key and getattr(sess, "book_state", "") == "want_voice"
+                        and self._book_take_link(chat_id, sess, lang, raw)):
+                    continue
+
                 # 📚 Audiobook waits for the book: a pasted text is the book, a short one only a hint.
                 if (not key and not raw.startswith("/") and getattr(sess, "book_state", "") == "want_book"
                         and self._book_take_text(chat_id, sess, lang, raw)):

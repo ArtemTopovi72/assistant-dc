@@ -126,7 +126,8 @@ bot._dispatch(m(document=doc("Война и мир.txt")))
 check("the book is read: voice messages arrive, one per chapter", wait(lambda: len(VOICES) >= 2, 40), (len(VOICES), bot.sent[-3:]))
 check("each voice message carries a caption: which chapter of how many, and its name",
       len(CAPS) >= 2 and "1/2" in CAPS[0] and "Начало" in CAPS[0] and "2/2" in CAPS[1], CAPS)
-check("every piece used the SAME reference voice", {r for r, _ in SPOKEN} == {SAMPLE}, {r for r, _ in SPOKEN})
+check("every piece used the SAME reference voice (the narrator copy kept for resuming)", len({r for r, _ in SPOKEN}) == 1
+      and os.path.basename(SPOKEN[0][0]).startswith("narrator"), {r for r, _ in SPOKEN})
 check("chapter 1 opens with its spoken title, chapter 2 too",
       SPOKEN and SPOKEN[0][1].startswith("Глава 1. Начало") and any(t.startswith("Глава 2") for _, t in SPOKEN))
 check("ISOLATION: the book was not indexed, not queued as a document, not given to the agent",
@@ -144,6 +145,36 @@ bot._dispatch(m(text="📚 Аудиокнига"))
 wait(lambda: st() == "want_voice")
 bot._dispatch(m(text="🎙 Клонировать голос"))
 check("another button disarms the audiobook", wait(lambda: st() == ""), st())
+
+
+# resume after a restart: the job file says chapter 1 is done, the button offers to finish
+import json
+check("a finished book leaves no job file", not os.path.exists(os.path.join(_bd, "job.json")))
+nar = os.path.join(_bd, "narrator.wav")
+json.dump({"chapters": [["Глава 1", "Раз. " * 40], ["Глава 2", "Два. " * 40]], "ref": nar, "ref_text": "образец", "next": 1},
+          open(os.path.join(_bd, "job.json"), "w", encoding="utf-8"), ensure_ascii=False)
+VOICES.clear(); CAPS.clear(); SPOKEN.clear()
+kb = []
+bot._send_text = lambda cid, t, **kw: (bot.sent.append((cid, t)), kb.append(kw.get("keyboard")), 1)[1]
+bot._dispatch(m(text="📚 Аудиокнига"))
+check("an unfinished book: the button offers to finish it (1 chapter left)",
+      wait(lambda: any("недочитанная" in t and "осталось глав 1" in t for _, t in bot.sent[-3:]), 10), bot.sent[-2:])
+check("...with Finish / New buttons", any(k and "bk:resume" in json.dumps(k) and "bk:new" in json.dumps(k) for k in kb[-3:]))
+bot._handle_callback(CID, "bk:resume") if hasattr(bot, "_handle_callback") else bot._cb_book(CID, "bk:resume")
+check("resuming voices ONLY the remaining chapter", wait(lambda: len(VOICES) == 1, 40) and CAPS and "2/2" in CAPS[0]
+      and SPOKEN and SPOKEN[0][1].startswith("Глава 2"), (CAPS, SPOKEN[:1]))
+check("and the job file is gone afterwards", wait(lambda: not os.path.exists(os.path.join(_bd, "job.json")), 10))
+
+
+# a YouTube link as the narrator's sample (live 10-04: it was retold as a video instead)
+import tg_links
+tg_links.fetch_video = lambda url, *a, **k: {"data": open(SAMPLE, "rb").read(), "seconds": 12, "title": "t", "description": ""}
+before = len(INVOKES)
+bot._dispatch(m(text="📚 Аудиокнига"))
+check("the button is armed again for a new narrator", wait(lambda: st() == "want_voice", 10), st())
+bot._dispatch(m(text="https://www.youtube.com/watch?v=UhPKSA2UhnU"))
+check("a video link is taken as the narrator's sample (then asks for the book), not retold",
+      wait(lambda: st() == "want_book", 20) and len(INVOKES) == before, (st(), INVOKES[before:]))
 
 print(f"\n{OK}/{OK + BAD} checks passed")
 sys.exit(1 if BAD else 0)

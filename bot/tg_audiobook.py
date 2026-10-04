@@ -9,6 +9,7 @@ While armed, the sample and the book are CONSUMED here: nothing reaches the docu
 sandbox, or the agent, and a book that is not sent through this button is never read aloud. The state
 is dropped by any other menu press, like every other flow.
 """
+import json
 import os
 import shutil
 import uuid
@@ -26,10 +27,81 @@ class AudiobookMixin:
         os.makedirs(d, exist_ok=True)
         return d
 
-    def _start_book_flow(self, chat_id: int, sess, lang: str) -> None:
+    def _job_path(self, chat_id: int) -> str:
+        return os.path.join(self._book_dir(chat_id), "job.json")
+
+    def _job_load(self, chat_id: int):
+        """The unfinished book of this chat ({chapters, ref, ref_text, next}) or None."""
+        try:
+            with open(self._job_path(chat_id), encoding="utf-8") as fh:
+                job = json.load(fh)
+            if job["next"] < len(job["chapters"]) and os.path.exists(job["ref"]):
+                return job
+        except Exception:
+            pass
+        return None
+
+    def _job_save(self, chat_id: int, job: dict) -> None:
+        with open(self._job_path(chat_id), "w", encoding="utf-8") as fh:
+            json.dump(job, fh, ensure_ascii=False)
+
+    def _job_drop(self, chat_id: int) -> None:
+        try:
+            os.unlink(self._job_path(chat_id))
+        except OSError:
+            pass
+
+    def _cb_book(self, chat_id: int, data: str) -> None:
+        """bk:resume finishes the unfinished book; bk:new forgets it and asks for a voice."""
+        sess = self._get_session(chat_id)
+        lang = self._lang(sess)
+        job = self._job_load(chat_id)
+        if data == "bk:resume" and job:
+            left = job["chapters"][job["next"]:]
+            self._run_cancellable(chat_id, tg_bot._t("book_resuming", lang, n=len(left)),
+                                  self._book_run, chat_id, lang, job["chapters"], job["ref"], job["ref_text"],
+                                  job["next"], lang=lang)
+            return
+        self._job_drop(chat_id)
         sess.book_state = "want_voice"
         self._store.put(sess)
         self._send_text(chat_id, tg_bot._t("book_ask_voice", lang), parse_mode="HTML")
+
+    def _start_book_flow(self, chat_id: int, sess, lang: str) -> None:
+        job = self._job_load(chat_id)
+        if job:                                  # a restart or a cancel left a book half-read
+            self._send_text(chat_id, tg_bot._t("book_unfinished", lang, n=len(job["chapters"]) - job["next"],
+                                               total=len(job["chapters"])),
+                            keyboard={"inline_keyboard": [[
+                                {"text": tg_bot._t("book_resume_btn", lang), "callback_data": "bk:resume"},
+                                {"text": tg_bot._t("book_new_btn", lang), "callback_data": "bk:new"}]]})
+            return
+        sess.book_state = "want_voice"
+        self._store.put(sess)
+        self._send_text(chat_id, tg_bot._t("book_ask_voice", lang), parse_mode="HTML")
+
+    def _book_take_link(self, chat_id: int, sess, lang: str, text: str) -> bool:
+        """A video link (YouTube, TikTok, VK...) while waiting for the narrator's sample: its sound track
+        is the sample, like in 🎙 Clone voice. True when it was ours (live 10-04: the link was retold instead)."""
+        if getattr(sess, "book_state", "") != "want_voice":
+            return False
+        import tg_links
+        url = tg_links.video_url(text)
+        if not url:
+            return False
+        self._send_text(chat_id, tg_bot._t("clone_working", lang))
+
+        def job():
+            vid = tg_links.fetch_video(url)
+            if not vid.get("data"):
+                self._send_text(chat_id, tg_bot._t("clone_fail_no_audio", lang))
+                return
+            src = os.path.join(self._book_dir(chat_id), "sample.mp4")
+            with open(src, "wb") as fh:
+                fh.write(vid["data"])
+            self._book_prepare(chat_id, lang, src)
+        self._run_busy(chat_id, job)
+        return True
 
     def _book_disarm(self, sess) -> None:
         if getattr(sess, "book_state", ""):
@@ -143,22 +215,31 @@ class AudiobookMixin:
         sess.book_state = ""                     # disarmed before the slow part
         self._store.put(sess)
         minutes = max(1, int(sum(len(b) for _, b in chapters) / SPEECH_CHARS_PER_SECOND / 60))
+        keep = os.path.join(self._book_dir(chat_id), "narrator" + os.path.splitext(ref)[1])
+        if os.path.abspath(keep) != os.path.abspath(ref):
+            shutil.copyfile(ref, keep)           # the job outlives the sample's temp home
+        self._job_save(chat_id, {"chapters": chapters, "ref": keep, "ref_text": ref_text, "next": 0})
         self._run_cancellable(chat_id, tg_bot._t("book_working", lang, n=len(chapters), m=minutes),
-                              self._book_run, chat_id, lang, chapters, ref, ref_text, lang=lang)
+                              self._book_run, chat_id, lang, chapters, keep, ref_text, 0, lang=lang)
 
-    def _book_run(self, ctx, chat_id: int, lang: str, chapters: list, ref: str, ref_text: str) -> None:
+    def _book_run(self, ctx, chat_id: int, lang: str, chapters: list, ref: str, ref_text: str, start: int = 0) -> None:
         work = os.path.join(self._book_dir(chat_id), "run_" + uuid.uuid4().hex[:8])   # one per job: two books never share files
         os.makedirs(work, exist_ok=True)
 
         def synth(text):
             return voice_clone.speak(ctx, ref, ref_text, text, work)
+        def verify(text, wav):
+            from audio import transcribe_audio_file
+            return audiobook.heard_matches(text, transcribe_audio_file(ctx, wav, lang_hint=lang or "ru") or "")
         done = 0
         try:
             for n, (title, body) in enumerate(chapters, start=1):
+                if n <= start:
+                    continue
                 if ctx.is_cancelled():
                     return
                 wav = os.path.join(work, f"ch{n}.wav")
-                if not audiobook.render_chapter(synth, title, body, n, wav, cancelled=ctx.is_cancelled):
+                if not audiobook.render_chapter(synth, title, body, n, wav, cancelled=ctx.is_cancelled, verify=verify):
                     if ctx.is_cancelled():
                         return
                     self._send_text(chat_id, tg_bot._t("book_chapter_fail", lang, n=n))
@@ -171,6 +252,8 @@ class AudiobookMixin:
                         break
                 else:
                     done += 1
+                self._job_save(chat_id, {"chapters": chapters, "ref": ref, "ref_text": ref_text, "next": n})
+            self._job_drop(chat_id)
             self._send_text(chat_id, tg_bot._t("book_done", lang, n=done, total=len(chapters)))
         except Exception:
             tg_bot.logger.exception("[audiobook] failed for chat %s", chat_id)
