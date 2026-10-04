@@ -867,7 +867,8 @@ def enforce_vocal(style: str, vocal: str) -> str:
     out = re.sub(r"(?<![A-Za-z])(" + "|".join(table) + r")(?![A-Za-z])",
                  lambda m: table[m.group(1).lower()], style, flags=re.I)
     who = "MALE (a man's voice, no female vocals)" if male else "FEMALE (a woman's voice, no male vocals)"
-    return out.rstrip() + f"\nThe lead vocal is {who}, as the user chose."
+    tag = "male vocal, man's voice" if male else "female vocal, woman's voice"   # short: survives yue2_style's fragment cap
+    return tag + ".\n" + out.rstrip() + f"\nThe lead vocal is {who}, as the user chose."
 
 
 def _lyrics_gender_rule(vocal: str) -> str:
@@ -951,11 +952,25 @@ def _requirements_block(prefs: Optional[dict]) -> str:
 # fast end (3.3, which overran the slot on purpose and relied on the chop +
 # fade) to just under the middle of the measured band: the words run out
 # near the ask and the [outro] lands inside the headroom.
-SECONDS_PER_SUNG_LINE = 3.8      # near the middle of the measured band
-_RATE_FAST = 3.3                 # fastest measured -> how many lines to ask for
-_RATE_SLOW = 4.6                 # slowest measured in Russian -> the floor
-MIN_SUNG_LINES = 8
+# YuE2 (the engine since 2026-09-25) re-measured 2026-10-04 with bench/yue2_seconds_per_line.py, one render per
+# size, same style and seed (Russian pop, 100 BPM, female, piano), lines counted with the [outro]:
+#     9 lines -> 60.0 s,  17 -> 109.2 s,  25 -> 147.6 s,  37 -> 200.6 s
+# i.e. song = ~15 s of intro/outro + 5.0-5.5 s per sung line (long songs sing a little faster). The rates above
+# are Music3's and made a 180 s slot ask for 47 lines = ~250 s of song.
+SONG_LEAD_SECONDS = 15           # intro + outro that no line pays for
+SECONDS_PER_SUNG_LINE = 5.2      # the middle of the measured band
+_RATE_FAST = 4.8                 # fastest measured (37 lines)
+_RATE_SLOW = 5.6                 # slowest after the lead-in (17 lines)
+MIN_SUNG_LINES = 4               # a 30 s ask: 4 lines + outro ~ 40 s is as short as YuE2 goes
 MAX_SUNG_LINES = 80
+
+
+def trim_to_lines(lyrics: str, max_lines: int) -> str:
+    """Drop whole sections just before the LAST one (the outro) until at most `max_lines` are sung."""
+    parts = [p for p in re.split(r"\n\s*\n", (lyrics or "").strip()) if p.strip()]
+    while len(parts) > 3 and count_sung_lines("\n\n".join(parts)) > max_lines:
+        del parts[-2]
+    return "\n\n".join(parts)
 
 
 def count_sung_lines(lyrics: str) -> int:
@@ -980,7 +995,7 @@ def lines_for_duration(duration_s) -> int:
         secs = 0.0
     if secs <= 0:
         return 0
-    want = int(round(secs / SECONDS_PER_SUNG_LINE))
+    want = int(round(max(0.0, secs - SONG_LEAD_SECONDS) / SECONDS_PER_SUNG_LINE))
     return max(MIN_SUNG_LINES, min(want, MAX_SUNG_LINES))
 
 
@@ -1002,8 +1017,8 @@ def line_budget(duration_s) -> tuple:
     if not target:
         return 0, 0, 0
     secs = float(duration_s)
-    lo = max(MIN_SUNG_LINES, int(secs / _RATE_SLOW))
-    return target, min(lo, target), MAX_SUNG_LINES
+    lo = max(MIN_SUNG_LINES, int(max(0.0, secs - SONG_LEAD_SECONDS) / _RATE_SLOW))
+    return target, min(lo, target), min(MAX_SUNG_LINES, int(target * 1.3) + 1)   # YuE2 sings every word: a real ceiling
 
 
 def _no_vocals(topic: str) -> bool:
@@ -1200,6 +1215,9 @@ def build_structured_caption(ctx, topic: str, lang: str, *,
             # models an unchecked instruction is a suggestion -- the same
             # lesson as the deck planner's bullet floor.
             got_lines = count_sung_lines(lyrics)
+            if max_lines and got_lines > max_lines:      # live 10-04: a 60 s slot came back 134 s of song
+                lyrics = trim_to_lines(lyrics, max_lines)
+                got_lines = count_sung_lines(lyrics)
             if min_lines and got_lines < min_lines:
                 if i < len(attempts):
                     logger.warning("songwriter attempt %d wrote %d sung lines for a "
@@ -1220,7 +1238,7 @@ def build_structured_caption(ctx, topic: str, lang: str, *,
             if not caption_is_structured(style):
                 logger.warning("shipping an unstructured caption after %d "
                                "attempts — the song will be vaguer than asked", i)
-            return {"lyrics": lyrics, "style": enforce_vocal(enforce_pins(style, prefs), (prefs or {}).get("vocal", ""))}
+            return {"lyrics": lyrics, "style": enforce_pins(enforce_vocal(style, (prefs or {}).get("vocal", "")), prefs)}
         logger.warning("songwriter attempt %d produced no usable lyrics/style "
                        "(%d chars back)", i, len(raw))
         if ctx is not None and getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():

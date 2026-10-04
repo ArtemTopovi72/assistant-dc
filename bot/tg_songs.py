@@ -391,7 +391,9 @@ class SongsMixin:
                 # Words the bot wrote itself go through the checks and revisions
                 # of ✨ Improve lyrics before they are sung (owner 10-03: «под
                 # капотом генерится хороший текст, причёсывается автоматом»).
-                caption = dict(caption, lyrics=_polished(ctx, caption["lyrics"], _has_stage, prefs.get("vocal", "")))
+                _words = _polished(ctx, caption["lyrics"], _has_stage, prefs.get("vocal", ""))
+                _cap = _music_mod.line_budget(duration)[2]       # polish rounds grow the lyric past the slot
+                caption = dict(caption, lyrics=_music_mod.trim_to_lines(_words, _cap) if _cap else _words)
             if cancelled():
                 return False
             wav_path = _music_mod.generate_music(

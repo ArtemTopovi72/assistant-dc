@@ -196,3 +196,15 @@ request).
   worse rewrite. Creative calls use `min_p` sampling (`LYRICS_MIN_P`, 0.05).
 - The user sees two messages: what was changed and what is left (in their language),
   then the lyric alone to copy.
+
+## YuE2: how long a lyric sings (measured 2026-10-04, `bench/yue2_seconds_per_line.py`)
+One render per size, same style/seed (Russian pop, 100 BPM, female, piano); lines counted with the `[outro]`:
+
+| sung lines | audio | s/line | wall |
+|---|---|---|---|
+| 9 | 60.0 s | 6.7 | 37 s |
+| 17 | 109.2 s | 6.4 | 50 s |
+| 25 | 147.6 s | 5.9 | 64 s |
+| 37 | 200.6 s | 5.4 | 85 s |
+
+Song ≈ **15 s of intro/outro + 5.0–5.5 s per sung line**. `music.line_budget` was Music3's (3.8 s/line, 180 s → 47 lines ≈ 250 s of song); it is now `SONG_LEAD_SECONDS=15`, `SECONDS_PER_SUNG_LINE=5.2`, rates 4.8–5.6, `MIN_SUNG_LINES=4` (30 s ask → 4 lines ≈ 36–40 s, the shortest YuE2 goes). The model card says the model decides the length; the duration button only sizes the lyric.

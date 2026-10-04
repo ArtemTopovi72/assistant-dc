@@ -95,10 +95,9 @@ check("a 180s slot asks for more than the 17 lines that gave 131s", t180 > 17,
 # Measured live, and the reason the floor was raised: a 180s slot accepted a
 # 30-line lyric and the render came back at 138.3s -- 4.6s per line, not the
 # 7.7s of the English pop probe the floor had been built from.
-check("the 30-line lyric that produced 138s is now below the floor",
-      lo180 > 30, (lo180, t180))
-check("the floor, sung at the SLOWEST measured Russian rate, fills the slot",
-      lo180 * M._RATE_SLOW >= 180 * 0.95, (lo180, lo180 * M._RATE_SLOW))
+# Re-measured on YuE2 (bench/yue2_seconds_per_line.py): a 15 s lead-in, then 4.8-5.6 s per line.
+check("the floor, sung at the SLOWEST measured rate after the lead-in, fills the slot",
+      M.SONG_LEAD_SECONDS + lo180 * M._RATE_SLOW >= 180 * 0.9, (lo180, lo180 * M._RATE_SLOW))
 # The render now has headroom (render_ceiling), so the target sits near the
 # middle of the measured band: sung fast the words run out a little before
 # the ask, sung slow the [outro] lands inside the headroom instead of the chop.
@@ -233,6 +232,13 @@ check("every offered duration still gets a sane budget",
       all(M.line_budget(d)[1] <= M.line_budget(d)[0] <= M.MAX_SUNG_LINES
           for d in M.DURATIONS),
       [(d, M.line_budget(d)) for d in M.DURATIONS])
+
+
+_long = chr(10).join(["[verse]"] + ["l%d" % n for n in range(8)] + ["", ""]) * 8 + "[outro]" + chr(10) + "bye" + chr(10) + "bye"
+_t = M.trim_to_lines(_long, 30)
+check("trim_to_lines caps the sung lines and keeps the outro", M.count_sung_lines(_t) <= 30 and _t.rstrip().endswith("bye"), M.count_sung_lines(_t))
+check("the ceiling is real: a 60 s slot allows far fewer than 80 lines", M.line_budget(60)[2] < 30, M.line_budget(60))
+check("enforce_vocal puts a short vocal tag first", M.yue2_style(M.enforce_vocal("Lo-fi, 75 BPM", "male")).startswith("male vocal"))
 
 
 print("%d passed, %d failed" % (OK, BAD))

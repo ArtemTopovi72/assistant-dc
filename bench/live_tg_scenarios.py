@@ -996,7 +996,33 @@ def sc_audiobook(bot, ctx):
     return u
 
 
-SCENARIOS = {"audiobook": sc_audiobook, "remove_cat": sc_remove_cat, "video_link": sc_video_link, "clone_link": sc_clone_link, "deds_voices": sc_deds_voices, "cover": sc_cover, "sandbox_links": sc_sandbox_links, "photo": sc_photo, "misc": sc_misc, "document": sc_document, "fwd_voice": sc_fwd_voice,
+def sc_song_male(bot, ctx):
+    """Мужской вокал в теме + 60 с: the style that reaches the engine names a MAN, the song is ~60 s (YuE2 re-calibration)."""
+    u = D.Chat(bot, 910091, "Man")
+    t0 = time.time()
+    u.say("сочини песню про осенний дождь, мужской вокал, около 60 секунд")
+    evs = u.wait(until=lambda e: e["method"] in ("sendAudio", "sendDocument"), timeout=1200, quiet=600)
+    timed("song_male", "song", t0, evs)
+    sanity("song_male", evs, expect_file="sendAudio")
+    aud = D.files_of(evs, "sendAudio")
+    if aud:
+        import soundfile as sf
+        dur = sf.info(aud[-1]).duration
+        print(f"     audio: {dur:.1f}s")
+        if not 40 <= dur <= 90:
+            note("song_male", "a 60 s ask came back far from 60 s", duration=dur)
+    log = open(os.path.join(ROOT, "runtime", "live_drive_app.log"), encoding="utf-8", errors="replace").read()
+    styles = [l for l in log.splitlines() if "YuE2 (" in l and "style:" in l]
+    print("     engine style:", styles[-1][-260:] if styles else "(none logged)")
+    last = (styles[-1].lower() if styles else "")
+    if "female" in last.replace("no female", "") or "woman" in last:
+        note("song_male", "the style that reached the engine names a woman", style=last[-200:])
+    if styles and "male" not in last:
+        note("song_male", "the style does not say male", style=last[-200:])
+    return u
+
+
+SCENARIOS = {"song_male": sc_song_male, "audiobook": sc_audiobook, "remove_cat": sc_remove_cat, "video_link": sc_video_link, "clone_link": sc_clone_link, "deds_voices": sc_deds_voices, "cover": sc_cover, "sandbox_links": sc_sandbox_links, "photo": sc_photo, "misc": sc_misc, "document": sc_document, "fwd_voice": sc_fwd_voice,
              "two_draws": sc_two_draws, "stop_song": sc_stop_song, "buttons": sc_buttons, "weather": sc_weather, "stop": sc_stop, "sign": sc_sign, "search": sc_search, "memory": sc_memory,
              "chat": sc_chat, "music": sc_music, "picture": sc_picture, "render": sc_render,
              "voice": sc_voice, "two_users": sc_two_users,
