@@ -48,6 +48,34 @@ def _md_tables_to_fences(text: str) -> str:
     return "\n".join(out)
 
 
+_TEX_SYMBOLS = {
+    "rightarrow": "→", "to": "→", "leftarrow": "←", "Rightarrow": "⇒", "Leftarrow": "⇐",
+    "leftrightarrow": "↔", "times": "×", "cdot": "·", "div": "÷", "pm": "±", "approx": "≈",
+    "neq": "≠", "ne": "≠", "leq": "≤", "le": "≤", "geq": "≥", "ge": "≥", "infty": "∞",
+    "sum": "Σ", "prod": "∏", "sqrt": "√", "alpha": "α", "beta": "β", "gamma": "γ",
+    "delta": "δ", "Delta": "Δ", "pi": "π", "sigma": "σ", "mu": "μ", "lambda": "λ",
+    "theta": "θ", "omega": "ω", "degree": "°", "ldots": "…", "dots": "…", "%": "%",
+}
+_TEX_SPAN = re.compile(
+    r"\$\$(.+?)\$\$|\\\[(.+?)\\\]|\\\((.+?)\\\)|(?<![\\\w$])\$([^$\n]+?)\$(?![\w$])", re.DOTALL)
+_SUP = dict(zip("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹"))
+
+
+def _latex_to_text(text: str) -> str:
+    r"""$\rightarrow$ / $x^2$ / \frac{a}{b} -> plain Unicode. Telegram renders no
+    TeX; a raw `$\rightarrow$` reached the chat (live 2026-10-04). Code is left alone."""
+    def one(m):
+        e = next(g for g in m.groups() if g is not None)
+        e = re.sub(r"\\(?:text|mathrm|mathbf|operatorname)\{([^}]*)\}", r"\1", e)
+        e = re.sub(r"\\d?frac\{([^{}]*)\}\{([^{}]*)\}", r"(\1)/(\2)", e)
+        e = re.sub(r"\\sqrt\{([^{}]*)\}", r"√(\1)", e)
+        e = re.sub(r"\^\{?(\d+)\}?", lambda k: "".join(_SUP[c] for c in k.group(1)), e)
+        e = re.sub(r"\\([A-Za-z]+|%)", lambda k: _TEX_SYMBOLS.get(k.group(1), k.group(1)), e)
+        return re.sub(r"[{}]", "", e).strip()
+    return "".join(p if p.startswith("`") else _TEX_SPAN.sub(one, p)
+                   for p in re.split(r"(```.*?```|`[^`\n]*`)", text, flags=re.DOTALL))
+
+
 def _md_to_html(text: str) -> str:
     """Markdown -> the small HTML subset Telegram accepts (b/i/u/s/a/code/pre).
 
@@ -60,7 +88,7 @@ def _md_to_html(text: str) -> str:
     # the source text (model output, an extracted PDF) would be read back as a
     # placeholder index and raise IndexError — which the delivery try/except then
     # swallowed, so the user silently received NOTHING. Drop it up front.
-    t = _html_mod.escape(_md_tables_to_fences(text.replace("\x00", "")), quote=False)
+    t = _html_mod.escape(_md_tables_to_fences(_latex_to_text(text.replace("\x00", ""))), quote=False)
     # fenced + inline code first, so markup inside them is left alone.
     # A fenced block is put on lines of its own: every emphasis rule below is
     # line-bounded, so newline isolation is what makes a multi-line <pre> block

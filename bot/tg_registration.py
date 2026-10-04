@@ -410,6 +410,13 @@ class RegistrationMixin:
                 return done
             if not text:
                 return False
+            import tg_links as _links
+            if _links.video_url(text):
+                # A video link is something to WATCH, not a song topic (live 10-04:
+                # a YouTube link sent for analysis started a song).
+                sess.reg_state = ""
+                self._store.put(sess)
+                return True
             # Ready words (forwarded, or several short lines) are not a topic:
             # ask whether to sing them as they are or write new ones. Live
             # 2026-09-27 a forwarded storyboard was sung as a "topic" unasked.

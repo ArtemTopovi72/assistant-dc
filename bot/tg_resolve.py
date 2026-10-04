@@ -82,13 +82,15 @@ class ResolveMixin:
             # A video link is watched like a sent video: ears + eyes.
             self._api_post("sendChatAction", {"chat_id": chat_id, "action": "typing"})
             _heard = self._transcribe(ctx, _vu, "video", lang_hint=(sess.lang or "ru"),
-                                      data=_vid["data"])
+                                      data=_vid["data"], speakers=True)   # who said what
             _seen = self._look_video(ctx, _vu, data=_vid["data"], lang=(sess.lang or "ru"),
                                      transcript=_heard or "")
             scaffold.append(f"[The user's message links a {_vid['seconds']}-second video "
                             f"«{_vid['title']}» ({_vu}). It was downloaded and watched "
                             f"for you; answer from it, never say you cannot watch links. "
                             f"Speech in it: {_heard or '(none)'}"
+                            + (" «Спикер N:» / «Speaker N:» marks DIFFERENT people talking; "
+                               "keep them apart." if "Спикер 2" in (_heard or "") or "Speaker 2" in (_heard or "") else "")
                             + (f" The uploader's description under the video: "
                                f"{_vid['description']}" if _vid.get("description") else "")
                             + "]")
@@ -940,7 +942,8 @@ class ResolveMixin:
                         self._long_video_offer(chat_id, sess, lang, item); return
                 _data = self._dl_bytes(item["file_id"]) if _media == "video" else None
                 transcribed = self._transcribe(ctx, item["file_id"], _media,
-                                               lang_hint=(sess.lang or "ru"), data=_data)
+                                               lang_hint=(sess.lang or "ru"), data=_data,
+                                               speakers=(_media == "video"))
                 _seen = (self._look_video(ctx, item["file_id"], data=_data, lang=(sess.lang or "ru"),
                                           transcript=transcribed or "")
                          if _media == "video" else {})

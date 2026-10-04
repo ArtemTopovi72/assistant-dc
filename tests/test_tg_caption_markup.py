@@ -224,6 +224,14 @@ check("...without ever stripping the markup (that was not the problem)",
       all(c.get("parse_mode") == "HTML" for c in blocked.calls),
       [c.get("parse_mode") for c in blocked.calls])
 
+# LaTeX never renders in Telegram: a raw dollar-rightarrow reached the chat (live 2026-10-04).
+_m = T._md_to_html
+BS = chr(92)
+check("TeX arrows and fractions become Unicode",
+      _m(f"A ${BS}rightarrow$ B, ${BS}frac{{a}}{{b}}$, $x^2$") == "A → B, (a)/(b), x²", _m(f"A ${BS}rightarrow$ B"))
+check("prices and code spans keep their dollars",
+      _m("$5 and $10") == "$5 and $10" and f"${BS}to$" in _m(f"`${BS}to$`"), _m("$5 and $10"))
+
 print()
 print(f"{OK}/{OK + BAD} checks passed")
 sys.exit(1 if BAD else 0)

@@ -396,7 +396,9 @@ def choose_auto_params(ctx, topic: str, lang: str, *, genre: bool = False,
     sys_p = ("You are a music producer choosing the production parameters that suit a song "
              "topic best. Reply with ONLY a JSON object, no commentary, with exactly these keys: "
              + "; ".join(spec[k] for k in want)
-             + f"; why: one short sentence in {lang_word} explaining the choice to the listener.")
+             + f"; why: one short sentence in {lang_word} explaining the choice to the listener."
+             " If the topic itself names the singer's voice in any language (male / female / duet,"
+             " «мужской вокал», «поёт женщина»), that is the vocal -- copy it, never override it.")
     given = "; ".join(f"{k}: {v}" for k, v in (fixed or {}).items() if v)
     user_p = f"Song topic: {topic}"
     if given:
