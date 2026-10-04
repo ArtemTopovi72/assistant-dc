@@ -147,5 +147,25 @@ boxes[0][0][:] = [[60, 0], [110, 0], [110, 20], [60, 20]]
 txt = A.lines_from_boxes(boxes)
 check("OCR boxes: words in reading order, scraps dropped, a big gap = a paragraph", txt == "Привет мир" + chr(10) * 2 + "Новый", repr(txt))
 
+
+# a real PDF's furniture (live 10-04: «100 лучших книг: www.100bestbooks.ru» + the title on every page was READ ALOUD)
+NLc = chr(10)
+page = NLc.join(["100 лучших книг всех времен: www.100bestbooks.ru"] + ["Строка стиха номер %d" % i + "," for i in range(30)]
+                + ["", "Александр Пушкин «Сказка о царе Салтане»", ""])
+doc = (NLc * 2).join([page] * 4)
+cl = A.clean(doc)
+check("a web address line and a footer repeated page after page are dropped",
+      "100bestbooks" not in cl and "Сказка о царе Салтане" not in cl and cl.count("Строка стиха номер 3,") == 4, cl[:200])
+refrain = NLc.join(["Ой, да не будите меня,", "Ой, да не будите меня,", "Спит река, спит луна,", "Ой, да не будите меня,", "Тишина."] * 3)
+check("a refrain (close repeats) is NOT furniture", A.clean(refrain).count("Ой, да не будите меня,") == 9)
+check("a PDF's comma-dash «царица,-» becomes a comma", "царица," in A.clean("Кабы я была царица,-" + NLc + "Говорит одна девица,-") and ",-" not in A.clean("царица,-"))
+poem = NLc.join(["Три девицы под окном", "Пряли поздно вечерком.", "Кабы я была царица,", "Говорит одна девица,", "То на весь крещёный мир", "Приготовила б я пир.",
+                 "Только вымолвить успела", "Дверь тихонько заскрыпела", "И в светлицу входит царь,", "Стороны той государь."])
+check("a poem is recognised as verse, prose is not", A.is_verse(poem) and not A.is_verse("Он шёл по улице. " * 30 + NLc + "Было холодно."))
+pcs = A.chunk_text(poem)
+check("verse lines make a few breathing pieces, not one stop per line", len(pcs) <= 3 and sum(1 for _, e in pcs if e) == 1, pcs)
+check("a line with no end mark gets a comma (the breath), a finished one keeps its stop",
+      "под окном, Пряли" in pcs[0][0] and "вечерком." in pcs[0][0], pcs[0][0])
+
 print(f"\n{OK}/{OK + BAD} checks passed")
 sys.exit(1 if BAD else 0)

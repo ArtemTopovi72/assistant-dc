@@ -215,12 +215,31 @@ def _ocr_pdf_easy(path: str, on_page=lambda i, total: None, cancelled=lambda: Fa
     return (chr(10) * 2).join(p for p in pages if p)
 
 
+_URL_LINE = re.compile(r"(?i)\bwww\.|https?://|\b[\w-]+\.(?:ru|com|net|org|su|info)\b")
+
+
+def drop_furniture(lines: list) -> list:
+    """Lines a reader must not hear: any line with a web address (a site's banner on every page) and a line that
+    comes back again and again far apart (a running header/footer: the author and title on each page). A refrain
+    sits close to itself (a few lines), a footer sits a page away -- that gap tells them apart."""
+    lines = [ln for ln in lines if not _URL_LINE.search(ln)]
+    key = lambda ln: re.sub(r"\d+", "#", re.sub(r"\s+", " ", ln.strip().lower()))
+    seen = {}
+    for i, ln in enumerate(lines):
+        if len(ln.strip()) >= 6:
+            seen.setdefault(key(ln), []).append(i)
+    furniture = {k for k, pos in seen.items()
+                 if len(pos) >= 3 and min(b - a for a, b in zip(pos, pos[1:])) >= 12}
+    return [ln for ln in lines if key(ln) not in furniture]
+
+
 def clean(text: str) -> str:
     """Page furniture out: hyphenated line breaks joined, bare page numbers dropped, blanks collapsed."""
     text = text.replace("\r", "").replace("­", "")
     text = re.sub(r"\[\d{1,3}\]|[¹²³⁰-⁹]+", "", text)             # [12] and superscript note marks
     text = re.sub(r"(\w)-\n(\w)", r"\1\2", text)
-    lines = [ln.rstrip() for ln in text.split("\n")]
+    lines = drop_furniture([ln.rstrip() if ln.strip() else "" for ln in text.split("\n")])
+    lines = [re.sub(r"([,.!?;:])\s*[-–—]$", r"\1", ln) for ln in lines]      # «царица,-» (a PDF's comma-dash) is just a comma
     lines = [ln for ln in lines if not re.fullmatch(r"\s*[-–—]\s*\d{1,4}\s*[-–—]\s*", ln)]    # «- 12 -» page marks
     return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
 
@@ -267,10 +286,38 @@ def split_chapters(text: str) -> list:
     return chapters
 
 
+def is_verse(body: str) -> bool:
+    """Most lines short and unfinished: a poem, whose line ends are breaths, not paragraph ends."""
+    ls = [ln.strip() for ln in body.split("\n") if ln.strip()]
+    if len(ls) < 6:
+        return False
+    short = sum(1 for ln in ls if len(ln) <= 55)
+    return short / len(ls) >= 0.8 and sum(len(ln) for ln in ls) / len(ls) <= 42
+
+
+def verse_paragraphs(body: str) -> str:
+    """A poem as paragraphs of its own: lines of a stanza become one run (a missing line-end mark becomes a
+    comma, so the voice breathes there), a blank line starts the next stanza. Without this every short line was
+    a «paragraph» with a long stop after it."""
+    stanzas, cur = [], []
+    for ln in body.split("\n"):
+        ln = ln.strip()
+        if not ln:
+            if cur:
+                stanzas.append(cur); cur = []
+            continue
+        cur.append(ln if re.search(r"[.,!?;:…»\")]$", ln) else ln + ",")
+    if cur:
+        stanzas.append(cur)
+    return "\n".join(" ".join(s) for s in stanzas)
+
+
 def chunk_text(body: str, limit: int = MAX_CHUNK) -> list:
     """[(sentences_text, paragraph_end)] -- whole sentences packed up to `limit`; a longer sentence is cut at
     its last comma/space under the limit. paragraph_end marks the piece that closes a paragraph."""
     out = []
+    if is_verse(body):
+        body = verse_paragraphs(body)
     for para in [p.strip() for p in re.split(r"\n+", body) if p.strip()]:
         para = re.sub(r"\s+", " ", para)
         pieces, cur = [], ""
