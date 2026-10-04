@@ -6,7 +6,7 @@ pick(): chooses joy | anger | sad | neutral for the line (the model reads it; ne
         Voices with no pack yet get one built in the background and speak plainly meanwhile.
 finish(): a one-sentence question gets the Russian IK-3 contour (voice/prosody.py).
 Explicit control: ctx.delivery_emotion ("" = plain, None = automatic), ctx.delivery_ik3 (False = off).
-Off switch: EMOTION_DELIVERY=0.  Only cloned voices (ctx.custom_ref_wav) are touched; failures fall back to plain speech.
+Off switch: EMOTION_DELIVERY=0.  Cloned voices and the standard voice (actor DC) are touched; failures fall back to plain speech.
 """
 import logging
 import os
