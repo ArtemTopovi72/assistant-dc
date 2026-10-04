@@ -162,8 +162,10 @@ class _CloneCtx:
     another chat's reply in flight; this wrapper keeps the override local.
     """
 
-    def __init__(self, ctx, ref_wav: str, ref_text: str):
+    def __init__(self, ctx, ref_wav: str, ref_text: str, cfg: float = 0.0, speed_mul: float = 0.0):
         object.__setattr__(self, "_ctx", ctx)
+        object.__setattr__(self, "tts_cfg", cfg)
+        object.__setattr__(self, "tts_speed_mul", speed_mul)
         object.__setattr__(self, "custom_ref_wav", ref_wav)
         object.__setattr__(self, "custom_ref_text", ref_text)
 
@@ -174,10 +176,10 @@ class _CloneCtx:
         setattr(self._ctx, name, value)
 
 
-def speak(ctx, ref_wav: str, ref_text: str, text: str, out_dir: str) -> Optional[str]:
-    """Synthesize `text` in the cloned voice. -> wav path or None."""
+def speak(ctx, ref_wav: str, ref_text: str, text: str, out_dir: str, cfg: float = 0.0, speed_mul: float = 0.0) -> Optional[str]:
+    """Synthesize `text` in the cloned voice. -> wav path or None. cfg / speed_mul (0 = default) shape the delivery."""
     import audio
     os.makedirs(out_dir, exist_ok=True)
     stem = os.path.join(out_dir, f"clone_out_{uuid.uuid4().hex[:8]}.wav")
-    return audio.synth_single_segment(_CloneCtx(ctx, ref_wav, ref_text), 0, "clone", text,
+    return audio.synth_single_segment(_CloneCtx(ctx, ref_wav, ref_text, cfg, speed_mul), 0, "clone", text,
                                       out_stem=stem)

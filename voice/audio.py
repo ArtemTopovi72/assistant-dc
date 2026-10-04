@@ -1352,7 +1352,8 @@ def synth_single_segment(
                 ref_file, ref_text_proc, processed_text,
                 ctx.models.tts_model, ctx.models.vocoder,
                 cross_fade_duration=0.1, nfe_step=config.TTS_NFE_STEP,
-                speed=actor_speed, device=config.DEVICE,
+                cfg_strength=getattr(ctx, "tts_cfg", None) or 2.0,          # lower = livelier, less stable (F5 default 2)
+                speed=actor_speed * (getattr(ctx, "tts_speed_mul", None) or 1.0), device=config.DEVICE,
             )
 
         if wav is None or not isinstance(wav, np.ndarray) or wav.size == 0:
