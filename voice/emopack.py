@@ -16,11 +16,13 @@ import subprocess
 from pathlib import Path
 from typing import Optional, Tuple
 
+import config
+
 logger = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parent.parent
 DONORS = ROOT / "models_ext" / "emodonors"
 MANIFEST = ROOT / "voice" / "emodonors.json"
-PY = ROOT / "venv_qwen" / "Scripts" / "python.exe"
+PY = Path(config.venv_python(ROOT / "venv_qwen"))
 WORKER = ROOT / "scripts" / "seedvc_batch.py"
 EMOTIONS = ("joy", "anger", "sad")
 

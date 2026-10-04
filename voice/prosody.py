@@ -104,3 +104,35 @@ def shape(src: str, emotion: str, dst: str, strength: float = 1.0, center=None) 
         y = np.tanh(y / peak * 1.5) / np.tanh(1.5) * 0.95
     parselmouth.Sound(y, out.sampling_frequency).save(dst, "WAV")
     return dst
+
+
+def one_question(text: str) -> bool:
+    t = (text or "").strip()
+    return t.endswith("?") and not any(c in t[:-1] for c in ".!?…")
+
+
+def question_shape(ctx, wav: str, text: str, dst: str = "") -> str:
+    """Russian IK-3 on a synthesised one-sentence question: the model names the word with the main meaning, the stressed
+    vowel of that word gets the rise, the pitch falls after it. Any failure -> the input wav unchanged."""
+    import re
+    try:
+        import audio
+        import intent
+        stressed = audio.preprocess_text_for_synthesis(ctx, text, use_censoring=False, apply_stress=True)
+        toks = re.findall(r"[А-Яа-яЁё+]+", stressed)
+        words = word_times(ctx, wav)
+        if not toks or len(toks) != len(words):
+            return wav
+        plain = [t.replace("+", "").lower() for t in toks]
+        cand = tuple(dict.fromkeys(w for w in plain if len(w) >= 4)) or tuple(plain)
+        pick = intent.ask_choice("Which single word of this Russian question carries its main meaning, the word the "
+                                 "speaker stresses with the question tone? {text}", text, cand, default=cand[-1])
+        idx = plain.index(pick) if pick in plain else len(plain) - 1
+        out = dst or wav
+        shape(wav, "question", out + ".tmp.wav" if out == wav else out, center=centre_window(words, stressed, idx))
+        if out == wav:
+            import os
+            os.replace(out + ".tmp.wav", wav)
+        return out
+    except Exception:                                            # noqa: BLE001 -- a nicety, never a blocker
+        return wav

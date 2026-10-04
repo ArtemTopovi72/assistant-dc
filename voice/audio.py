@@ -1315,6 +1315,8 @@ def synth_single_segment(
             # the text; re-deriving it per line was a second a line.
             ref_wav = custom
             ref_text = str(getattr(ctx, "custom_ref_text", "") or "")
+            import delivery
+            ref_wav, ref_text = delivery.pick(ctx, ref_wav, ref_text, raw_text)   # emotional reference of this voice
         ref_wav = resolve_ref_audio(ref_wav)  # accept any audio format
         if ref_wav is not None:
             # BEFORE the transcript is taken, or the transcript describes audio
@@ -1370,6 +1372,9 @@ def synth_single_segment(
         if TTS_TAIL_SILENCE_MS > 0:
             seg = seg + AudioSegment.silent(duration=TTS_TAIL_SILENCE_MS)  # guard last word vs playback truncation
         seg.export(out_wav, format="wav")
+        if custom:
+            import delivery
+            return delivery.finish(ctx, str(out_wav), raw_text)       # Russian question intonation
         return str(out_wav)
     except Exception as exc:
         logger.error("TTS error: %s", exc)

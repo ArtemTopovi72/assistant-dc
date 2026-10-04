@@ -167,12 +167,15 @@ class _CloneCtx:
     another chat's reply in flight; this wrapper keeps the override local.
     """
 
-    def __init__(self, ctx, ref_wav: str, ref_text: str, cfg: float = 0.0, speed_mul: float = 0.0):
+    def __init__(self, ctx, ref_wav: str, ref_text: str, cfg: float = 0.0, speed_mul: float = 0.0,
+                 emotion=None, ik3=None):
         object.__setattr__(self, "_ctx", ctx)
         object.__setattr__(self, "tts_cfg", cfg)
         object.__setattr__(self, "tts_speed_mul", speed_mul)
         object.__setattr__(self, "custom_ref_wav", ref_wav)
         object.__setattr__(self, "custom_ref_text", ref_text)
+        object.__setattr__(self, "delivery_emotion", emotion)
+        object.__setattr__(self, "delivery_ik3", ik3)
 
     def __getattr__(self, name):
         return getattr(self._ctx, name)
@@ -182,15 +185,12 @@ class _CloneCtx:
 
 
 def speak(ctx, ref_wav: str, ref_text: str, text: str, out_dir: str, cfg: float = 0.0, speed_mul: float = 0.0,
-          emotion: str = "") -> Optional[str]:
+          emotion: str = "", ik3: Optional[bool] = None) -> Optional[str]:
     """Synthesize `text` in the cloned voice. -> wav path or None. cfg / speed_mul (0 = default) shape the delivery;
-    emotion (joy | anger | sad) takes the reference from the voice's emotion pack when it has one (voice/emopack.py)."""
+    emotion ("" / None = decided per line, joy | anger | sad | neutral = forced) and ik3 (False = no Russian
+    question intonation) override voice/delivery.py."""
     import audio
-    import emopack
-    alt = emopack.ref_for(ref_wav, emotion)
-    if alt:
-        ref_wav, ref_text = alt
     os.makedirs(out_dir, exist_ok=True)
     stem = os.path.join(out_dir, f"clone_out_{uuid.uuid4().hex[:8]}.wav")
-    return audio.synth_single_segment(_CloneCtx(ctx, ref_wav, ref_text, cfg, speed_mul), 0, "clone", text,
-                                      out_stem=stem)
+    cc = _CloneCtx(ctx, ref_wav, ref_text, cfg, speed_mul, emotion or None, ik3)   # None = decided per line
+    return audio.synth_single_segment(cc, 0, "clone", text, out_stem=stem)
