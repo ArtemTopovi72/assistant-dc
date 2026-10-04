@@ -20,6 +20,10 @@ class Steerer:
         self.alpha = 0.0
         self.vec = {}
         self.rec = {}
+        self.skip = 0                 # leading tokens (reference audio) left untouched
+        self.blocks_on = None         # None = all, else set of block indices
+        self.steps_on = None          # None = all flow steps, else number of first steps
+        self.step = 0
         for i, b in enumerate(self.blocks):
             b._orig_forward = b.forward
             b.forward = self._make(i, b)
@@ -31,10 +35,14 @@ class Steerer:
             if self.mode == "record":
                 self.rec[i] = x[0].detach().float().mean(dim=0).cpu()          # conditional branch, mean over time -> [D]
             elif self.mode == "apply" and i in self.vec and self.alpha:
-                orig = x.norm(dim=-1, keepdim=True)
-                v = self.vec[i].to(x.device, x.dtype)
-                steered = x + self.alpha * orig * v                                  # v is unit-ish; scaled by the token's own norm
-                x = steered * (orig / (steered.norm(dim=-1, keepdim=True) + 1e-8))
+                if i == 0:
+                    self.step = self.step % 10 + 1          # 10 flow steps per synthesis, one call each
+                if (self.blocks_on is None or i in self.blocks_on) and (self.steps_on is None or self.step <= self.steps_on):
+                    orig = x.norm(dim=-1, keepdim=True)
+                    v = self.vec[i].to(x.device, x.dtype)
+                    steered = x + self.alpha * orig * v                              # v is unit-ish; scaled by the token's own norm
+                    steered = steered * (orig / (steered.norm(dim=-1, keepdim=True) + 1e-8))
+                    x = torch.cat([x[:, :self.skip], steered[:, self.skip:]], 1) if self.skip else steered
             norm = b.ff_norm(x) * (1 + scale_mlp[:, None]) + shift_mlp[:, None]
             return x + gate_mlp.unsqueeze(1) * b.ff(norm)
         return forward
@@ -46,8 +54,9 @@ class Steerer:
         self.mode = "off"
         return dict(self.rec)
 
-    def apply(self, vec: dict, alpha: float):
+    def apply(self, vec: dict, alpha: float, skip=0, blocks=None, steps=None):
         self.mode, self.vec, self.alpha = "apply", vec, alpha
+        self.skip, self.blocks_on, self.steps_on, self.step = skip, blocks, steps, 0
 
     def off(self):
         self.mode, self.alpha = "off", 0.0
