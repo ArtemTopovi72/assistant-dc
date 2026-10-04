@@ -105,3 +105,18 @@ def test_menu_button_ends_collection():
     bot._cb_anim_voices(CID, "anv:yes")
     bot._resolve_and_push(CID, [{"type": "text", "text": S._BTN["cover_btn"]["ru"]}])
     assert bot._get_session(CID).anim_voice_state == ""
+
+
+def test_video_link_is_a_voice_sample(monkeypatch):
+    import tg_links
+    bot = _bot()
+    bot._animate_ask_voices(CID, bot._get_session(CID), "ru")
+    bot._cb_anim_voices(CID, "anv:yes")
+    bot._run_busy = lambda chat_id, fn, *a, **k: fn(*a)           # the job inline
+    monkeypatch.setattr(tg_links, "fetch_video", lambda url, *a, **k: {"data": b"\x00" * 600})
+    s = bot._get_session(CID)
+    assert bot._anim_voice_take_link(CID, s, "ru", "https://www.youtube.com/watch?v=UhPKSA2UhnU")
+    assert "Голос 1 принят" in bot.sent[-1][0] and len(bot._get_session(CID).anim_voices) == 1
+    assert not bot._anim_voice_take_link(CID, s, "ru", "просто текст")       # plain text is not ours
+    bot._cb_anim_voices(CID, "anv:done")
+    assert not bot._anim_voice_take_link(CID, bot._get_session(CID), "ru", "https://youtu.be/x")   # not collecting

@@ -99,10 +99,37 @@ class AnimVoicesMixin:
         if not data:
             self._send_text(chat_id, tg_bot._t("anv_fail", lang))
             return True
+        self._anim_voice_save(chat_id, sess, lang, data, media[1])
+        return True
+
+    def _anim_voice_take_link(self, chat_id: int, sess, lang: str, text: str) -> bool:
+        """A video link (YouTube, TikTok, VK...) while collecting voices: its sound is the next sample
+        (owner 10-04). True when it was ours."""
+        if getattr(sess, "anim_voice_state", "") != "collect":
+            return False
+        import tg_links
+        url = tg_links.video_url(text)
+        if not url:
+            return False
+        self._send_text(chat_id, tg_bot._t("clone_working", lang))
+
+        def job():
+            vid = tg_links.fetch_video(url)
+            if not vid.get("data"):
+                self._send_text(chat_id, tg_bot._t("anv_fail", lang))
+                return
+            s2 = self._get_session(chat_id)
+            if len(s2.anim_voices) >= MAX:
+                return
+            self._anim_voice_save(chat_id, s2, lang, vid["data"], ".mp4")
+        self._run_busy(chat_id, job)
+        return True
+
+    def _anim_voice_save(self, chat_id: int, sess, lang: str, data: bytes, ext: str) -> None:
         # A name of its own: voice1.wav was overwritten by the next clip's first
         # voice, so a voice saved in the library came back as someone else's.
         import uuid
-        path = os.path.join(self._anim_voice_dir(chat_id), f"voice_{uuid.uuid4().hex[:10]}{media[1]}")
+        path = os.path.join(self._anim_voice_dir(chat_id), f"voice_{uuid.uuid4().hex[:10]}{ext}")
         with open(path, "wb") as fh:
             fh.write(data)
         try:                                     # a round video / voice note -> the sound alone
@@ -114,7 +141,6 @@ class AnimVoicesMixin:
         from tg_voice_library import vl_add
         v = vl_add(sess, path)                   # remembered: the last 5 come back as buttons
         self._anim_voice_added(chat_id, sess, lang, new_id=v["id"])
-        return True
 
     def _anim_voice_added(self, chat_id: int, sess, lang: str, new_id: str = "") -> None:
         """«Голос N принят» + «💾 Подписать и сохранить» for a voice just sent:
