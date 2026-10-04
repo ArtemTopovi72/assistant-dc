@@ -30,6 +30,8 @@ check("chapters follow the book's headings; «Глава 1» takes its own name 
       "Глава 1. Начало" in titles and "Глава 2" in titles, titles)
 check("a stray short «3» is glued to the previous chapter, not read as a chapter",
       not any(t == "3" for t in titles), titles)
+short = A.split_chapters("Глава 1" + chr(10) * 2 + "Раз. " * 20 + chr(10) * 2 + "Глава 2" + chr(10) * 2 + "Два. " * 20)
+check("short TITLED chapters stay separate (poems, tiny stories)", [t for t, _ in short] == ["Глава 1", "Глава 2"], short)
 plain = A.split_chapters("Просто текст. " * 1500)
 check("a book with no headings is cut into «Часть N»", len(plain) >= 3 and plain[0][0] == "Часть 1", [t for t, _ in plain])
 
@@ -56,14 +58,14 @@ out = os.path.join(D, "ch.wav")
 okr = A.render_chapter(fake_synth, "Глава 1. Начало", "Первое предложение. Второе предложение.\nНовый абзац.", 1, out)
 from pydub import AudioSegment
 check("a chapter renders into one file", okr and os.path.exists(out) and len(AudioSegment.from_wav(out)) > 3000)
-check("its title is spoken first", SEEN[0] == "Глава 1. Начало", SEEN[:2])
+check("its title is spoken first, inside the first piece", SEEN[0].startswith("Глава 1. Начало."), SEEN[:2])
 
 cancel = {"n": 0}
 def stop_after_two():
     cancel["n"] += 1
     return cancel["n"] > 2
 check("cancel stops the chapter and returns False",
-      A.render_chapter(fake_synth, "", "Раз. " * 50, 1, os.path.join(D, "c.wav"), cancelled=stop_after_two) is False)
+      A.render_chapter(fake_synth, "", "Раз два три четыре пять шесть. " * 40, 1, os.path.join(D, "c.wav"), cancelled=stop_after_two) is False)
 check("a voice that returns nothing fails the chapter instead of delivering silence",
       A.render_chapter(lambda t: None, "", "Раз. Два.", 1, os.path.join(D, "n.wav")) is False)
 
@@ -95,6 +97,10 @@ check("a long chapter is cut into parts under the limit", len(parts) >= 2 and al
 check("citation marks [12] and superscripts are not read", "[12]" not in A.clean("Слово[12] и ещё² текст.") and "²" not in A.clean("ещё² текст"))
 tone = AudioSegment.silent(duration=400) + AudioSegment.from_file(fake_synth("тест тест")) + AudioSegment.silent(duration=500)
 check("the engine's own edge silence is cut (a hair stays)", len(A._trim(tone)) < len(tone) - 600, (len(A._trim(tone)), len(tone)))
+
+dlg = A.chunk_text(chr(10).join(["— Да.", "— Нет.", "— Может быть, завтра, когда рассветёт и стихнет ветер над рекой."]))
+check("one-word dialogue lines are not synthesised alone (F5 bleeds the reference tail into short pieces)",
+      all(len(t) >= A.MIN_PIECE for t, _ in dlg), dlg)
 
 print(f"\n{OK}/{OK + BAD} checks passed")
 sys.exit(1 if BAD else 0)

@@ -958,7 +958,45 @@ def sc_remove_cat(bot, ctx):
     return u
 
 
-SCENARIOS = {"remove_cat": sc_remove_cat, "video_link": sc_video_link, "clone_link": sc_clone_link, "deds_voices": sc_deds_voices, "cover": sc_cover, "sandbox_links": sc_sandbox_links, "photo": sc_photo, "misc": sc_misc, "document": sc_document, "fwd_voice": sc_fwd_voice,
+def sc_audiobook(bot, ctx):
+    """📚 Аудиокнига: button -> a voice sample -> a 2-chapter book as a .txt -> a voice message per chapter,
+    each opening with its title, each with a caption. Heard back with the bot's own Whisper."""
+    u = D.Chat(bot, 910090, "Book")
+    ref = os.path.join(ROOT, "DC_short_ref12.wav")
+    book = os.path.join(D.OUT, "book.txt")
+    s1 = ("Старый дом стоял на краю деревни. Окна его давно потемнели, но по вечерам в них мелькал свет. "
+          "Никто не знал, кто там живёт. Мальчишки обходили забор стороной и шептались о привидениях. "
+          "Только почтальон каждую пятницу приносил туда письмо. Он оставлял его на крыльце и быстро уходил.")
+    s2 = ("Утром пришёл дождь. Он стучал по крыше и смывал пыль с дороги. Река поднялась и подошла к самому порогу. "
+          "В доме открылась дверь, и на крыльцо вышла старая женщина с лампой. Она посмотрела на небо и улыбнулась. "
+          "Потом взяла письмо, села на ступеньку и стала читать его вслух самой себе.")
+    NL = chr(10)
+    open(book, "w", encoding="utf-8").write("Глава 1" + NL + "Старый дом" + NL + NL + s1 + NL + NL
+                                           + "Глава 2" + NL + "Дождь" + NL + NL + s2 + NL)
+    u.say("📚 Аудиокнига"); evs = u.wait(timeout=60, quiet=4)
+    print("     msg:", " | ".join(t[:100] for t in texts(evs)))
+    t0 = time.time(); u.voice(ref); evs = u.wait(timeout=240, quiet=8)
+    timed("audiobook", "voice sample", t0, evs)
+    print("     msg:", " | ".join(t[:100] for t in texts(evs)))
+    t0 = time.time(); u.document(book)
+    evs = u.wait(until=lambda e, _n=[0]: (_n.__setitem__(0, _n[0] + (e["method"] == "sendVoice")), _n[0] >= 2)[1], timeout=1500, quiet=120)
+    timed("audiobook", "two chapters", t0, evs)
+    voices = [e for e in evs if e["method"] == "sendVoice"]
+    if len(voices) < 2:
+        note("audiobook", "fewer than two chapter voices came back", got=len(voices), msgs=texts(evs)[-4:])
+    for i, e in enumerate(voices, 1):
+        heard = D.transcribe(ctx, e["file"]) if e["file"] else ""
+        cap = e["payload"].get("caption", "")
+        print(f"     ch{i}: caption={cap!r} heard={heard[:140]!r}")
+        if "глава" not in heard.lower()[:40]:
+            note("audiobook", f"chapter {i} does not open with its title", heard=heard[:80])
+        if not cap:
+            note("audiobook", f"chapter {i} has no caption")
+    sanity("audiobook", evs)
+    return u
+
+
+SCENARIOS = {"audiobook": sc_audiobook, "remove_cat": sc_remove_cat, "video_link": sc_video_link, "clone_link": sc_clone_link, "deds_voices": sc_deds_voices, "cover": sc_cover, "sandbox_links": sc_sandbox_links, "photo": sc_photo, "misc": sc_misc, "document": sc_document, "fwd_voice": sc_fwd_voice,
              "two_draws": sc_two_draws, "stop_song": sc_stop_song, "buttons": sc_buttons, "weather": sc_weather, "stop": sc_stop, "sign": sc_sign, "search": sc_search, "memory": sc_memory,
              "chat": sc_chat, "music": sc_music, "picture": sc_picture, "render": sc_render,
              "voice": sc_voice, "two_users": sc_two_users,

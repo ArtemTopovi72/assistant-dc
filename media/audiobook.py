@@ -18,7 +18,8 @@ import zipfile
 BOOK_EXTS = {".txt", ".text", ".md", ".fb2", ".epub", ".pdf", ".docx"}   # + .fb2.zip via the .zip check
 MAX_CHUNK = 220            # characters per synthesis call (F5: ~30 s of audio per pass, reference included)
 PART_CHARS = 6000          # a book without headings: about this much text per «Часть»
-MIN_CHAPTER = 600          # a «chapter» shorter than this is glued to the previous one
+MIN_PIECE = 40             # characters: shorter than this F5 bleeds the reference's last words into the speech
+MIN_CHAPTER = 600          # a bare-number «chapter» shorter than this (a page number) is glued to the previous one; a titled short chapter stays
 MAX_CHAPTER_SECONDS = 25 * 60   # a voice message is cut here (the rest follows as the next part)
 
 # A chapter heading is a SHORT line that opens with one of these words or is a bare number / roman numeral.
@@ -114,7 +115,7 @@ def split_chapters(text: str) -> list:
             body = "\n".join(lines[body_start:b]).strip()
             if not body:
                 continue
-            if chapters and len(body) < MIN_CHAPTER and chapters[-1][0]:    # a stray page number or an epigraph
+            if chapters and len(body) < MIN_CHAPTER and chapters[-1][0] and re.fullmatch(r"(?:\d{1,3}|[IVXLC]{1,7})[.)]?", title.strip()):   # a stray page number
                 chapters[-1] = (chapters[-1][0], chapters[-1][1] + "\n" + title + "\n" + body)
             else:
                 chapters.append((title, body))
@@ -162,7 +163,15 @@ def chunk_text(body: str, limit: int = MAX_CHUNK) -> list:
         if cur:
             pieces.append(cur)
         out += [(p, False) for p in pieces[:-1]] + ([(pieces[-1], True)] if pieces else [])
-    return out
+    merged = []
+    for text, para_end in out:           # a very short piece makes F5 speak the reference's tail (live 10-04): join it to the next
+        if merged and len(merged[-1][0]) < MIN_PIECE:
+            merged[-1] = (merged[-1][0] + " " + text, para_end)
+        else:
+            merged.append((text, para_end))
+    if len(merged) > 1 and len(merged[-1][0]) < MIN_PIECE:      # a short last piece joins the one before it
+        merged[-2:] = [(merged[-2][0] + " " + merged[-1][0], merged[-1][1])]
+    return merged
 
 
 def spoken_title(title: str, n: int) -> str:
@@ -198,7 +207,10 @@ def render_chapter(synth, title: str, body: str, n: int, out_wav: str, cancelled
     """Speak one chapter into out_wav. `synth(text) -> wav path | None` is the cloned voice.
     False when cancelled or nothing could be spoken."""
     from pydub import AudioSegment
-    pieces = [(spoken_title(title, n), True)] + chunk_text(body)
+    pieces = chunk_text(body)
+    head = spoken_title(title, n) + "."
+    # the title rides WITH the first sentences: spoken alone (2-3 words) F5 bleeds the reference tail into it
+    pieces = [(head + " " + pieces[0][0], pieces[0][1])] + pieces[1:] if pieces else [(head, True)]
     audio = AudioSegment.silent(duration=300)
     bad = 0
     for i, (text, para_end) in enumerate(pieces):
@@ -221,7 +233,7 @@ def render_chapter(synth, title: str, body: str, n: int, out_wav: str, cancelled
         if seg is None:
             bad += 1
             continue
-        audio += seg + AudioSegment.silent(duration=1300 if i == 0 else (800 if para_end else 300))
+        audio += seg + AudioSegment.silent(duration=800 if para_end else 300)
         on_piece(i + 1, len(pieces))
     if bad > len(pieces) // 2 or len(audio) < 1500:
         return False
