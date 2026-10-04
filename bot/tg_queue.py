@@ -453,14 +453,19 @@ class QueueMixin:
             # fragment that arrives, capped from the first one. Five fragments
             # of one thought 0.6 s apart used to be cut after the third and
             # answered as two separate requests (live, 2026-09-12).
+            # A bare forward (only forwarded material, nothing the user typed) waits longer: the instruction
+            # ("объясни Степану прикол") is typed a few seconds later, and answering the forward alone gave
+            # two replies to one request (live 2026-10-05).
             t_first = time.monotonic()
-            deadline = t_first + tg_bot._DEBOUNCE_S
+            def _quiet(): return (tg_bot._DEBOUNCE_FWD_S if all(i.get("forwarded") for i in batch) else tg_bot._DEBOUNCE_S)
+            def _cap(): return (tg_bot._DEBOUNCE_FWD_MAX_S if all(i.get("forwarded") for i in batch) else tg_bot._DEBOUNCE_MAX_S)
+            deadline = t_first + _quiet()
             while True:
-                left = min(deadline, t_first + tg_bot._DEBOUNCE_MAX_S) - time.monotonic()
+                left = min(deadline, t_first + _cap()) - time.monotonic()
                 if left <= 0: break
                 try: batch.append(q.get(timeout=left))
                 except _pyqueue.Empty: break
-                deadline = time.monotonic() + tg_bot._DEBOUNCE_S
+                deadline = time.monotonic() + _quiet()
             # The batch is a turn of its own (a forwarded voice + кружки are
             # transcribed and looked at right here): traced, and logged to
             # the chat's transcript, like an update in _dispatch_logged.

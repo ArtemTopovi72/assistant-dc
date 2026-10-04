@@ -36,6 +36,7 @@ bot = T.TelegramBot("1:TEST", lambda: None, lambda: None, lambda: {}, silent_mod
 batches = []
 bot._resolve_and_push = lambda chat_id, batch: batches.append(list(batch))
 T._DEBOUNCE_S, T._DEBOUNCE_MAX_S = 0.5, 2.0
+T._DEBOUNCE_FWD_S, T._DEBOUNCE_FWD_MAX_S = 1.5, 3.0
 
 q = queue.Queue(); bot._queues[7] = q
 th = threading.Thread(target=bot._debounce_loop, args=(7,), daemon=True); th.start()
@@ -55,6 +56,15 @@ batches.clear()
 q.put({"type": "text", "text": "one"}); time.sleep(0.9)
 q.put({"type": "text", "text": "two"}); time.sleep(1.2)
 check("a pause longer than the quiet period splits", len(batches) == 2, [len(b) for b in batches])
+
+batches.clear()
+q.put({"type": "text", "text": "fwd", "forwarded": True}); time.sleep(1.0)
+q.put({"type": "text", "text": "объясни прикол"}); time.sleep(1.2)
+check("a bare forward waits for the typed instruction: ONE batch", len(batches) == 1 and len(batches[0]) == 2, [len(b) for b in batches])
+
+batches.clear()
+q.put({"type": "text", "text": "alone", "forwarded": True}); time.sleep(2.2)
+check("a forward with no instruction still goes out", len(batches) == 1, [len(b) for b in batches])
 
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)
