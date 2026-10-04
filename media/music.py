@@ -1336,6 +1336,30 @@ YUE2_ODE_STEPS = _cfg_env.env_int("YUE2_ODE_STEPS", 16)
 YUE2_TIMEOUT = 1500          # measured 235-810 s for one song; long lyrics run longer
 
 
+def yue2_tags(ctx, style: str) -> str:
+    """YuE2 wants a flat list of tags (genre, instruments, mood, vocal, tempo, key); scene and story phrases belong in the
+    lyrics ("dimly lit apartment at dusk" dilutes the style). The model drops those from the tag list, keeping every tempo,
+    key, genre and vocal tag; anything off (no model, a mangled answer, a lost BPM/vocal tag) keeps the list as it was."""
+    tags = [t.strip() for t in (style or "").split(",") if t.strip()]
+    if len(tags) < 5:
+        return style
+    try:
+        import lyrics_craft
+        from utils import safe_json_from_llm
+        raw = lyrics_craft._call(
+            ctx, "style", "You clean the style tag list of a song generator. Keep tags for: genre, instruments (at most three), "
+            "mood (at most two), vocal (gender and timbre), tempo (BPM), key. Delete scenery, story, imagery, usage and "
+            "emotional-arc phrases. Keep the order and the exact wording of what you keep. Reply JSON {\"tags\": [..]}.",
+            ", ".join(tags), temperature=0.0, max_tokens=200)
+        kept = [str(t).strip() for t in ((safe_json_from_llm(raw, ["tags"]) or {}).get("tags") or []) if str(t).strip()]
+        must = [t for t in tags if re.search(r"(?i)\bbpm\b|\bkey\b|\bvocal\b|\bvoice\b", t)]
+        if 3 <= len(kept) <= 12 and all(m.lower() in (k.lower() for k in kept) for m in must):
+            return ", ".join(kept)
+    except Exception:                                            # noqa: BLE001 -- the uncleaned list still works
+        logger.warning("YuE2 style cleanup failed", exc_info=True)
+    return style
+
+
 def yue2_language(style: str, lyrics: str) -> str:
     """The card: put the singing language in the style ("naming the language steers pronunciation"). Russian lyrics
     without the word get it right after the leading tag; other scripts are left to the model."""
@@ -1458,7 +1482,7 @@ def _generate_yue2(ctx, lyrics: str, style: str, seed: int) -> str:
         raise MusicUnavailable("YuE2 is not installed")
     ext = "mp3" if cpp else "flac"
     out = str(OUTPUT_DIR / f"song_yue2_{int(time.time() * 1000)}.{ext}")
-    job = {"lyrics": yue2_lyrics(lyrics), "style": yue2_language(yue2_style(style), lyrics), "seed": int(seed), "out": out}
+    job = {"lyrics": yue2_lyrics(lyrics), "style": yue2_language(yue2_tags(ctx, yue2_style(style)), lyrics), "seed": int(seed), "out": out}
     logger.info("YuE2 (%s): seed %d, style: %s", "cpp bf16" if cpp else "torch", seed, job["style"])
     t0 = time.time()
     for attempt in (1, 2):

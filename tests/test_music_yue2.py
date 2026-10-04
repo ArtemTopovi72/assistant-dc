@@ -34,3 +34,26 @@ def test_cpp_render_uses_16_ode_steps(monkeypatch, tmp_path):
     monkeypatch.setattr(M, "_valid_audio_file", lambda p: True)
     M._generate_yue2(None, "[verse]\nраз", "pop", 5)
     assert jobs[0]["steps"] == 16
+
+
+_SCENIC = "75 BPM, Lo-fi hip hop, male vocal, minor key, lonely, dimly lit apartment at dusk, study music"
+
+
+def test_style_cleanup_drops_scenery_keeps_tempo_and_vocal(monkeypatch):
+    import lyrics_craft
+    monkeypatch.setattr(lyrics_craft, "LLM_STUB",
+                        lambda r, s, u: '{"tags": ["75 BPM", "Lo-fi hip hop", "male vocal", "minor key", "lonely"]}')
+    assert M.yue2_tags(None, _SCENIC) == "75 BPM, Lo-fi hip hop, male vocal, minor key, lonely"
+
+
+def test_style_cleanup_refuses_an_answer_that_lost_bpm_or_vocal(monkeypatch):
+    import lyrics_craft
+    monkeypatch.setattr(lyrics_craft, "LLM_STUB", lambda r, s, u: '{"tags": ["Lo-fi hip hop", "lonely", "ambient"]}')
+    assert M.yue2_tags(None, _SCENIC) == _SCENIC
+    monkeypatch.setattr(lyrics_craft, "LLM_STUB", lambda r, s, u: "nonsense")
+    assert M.yue2_tags(None, _SCENIC) == _SCENIC
+
+
+def test_russian_lyrics_name_the_language_in_the_style():
+    assert M.yue2_language("male vocal, pop", "Мы идём по дороге") == "male vocal, Russian vocal, pop"
+    assert M.yue2_language("male vocal, pop", "We walk") == "male vocal, pop"
