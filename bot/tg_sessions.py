@@ -32,7 +32,7 @@ class _Session:
     _WAIT_STR = ("pending_prefix", "pending_instruction", "pending_photo", "pending_style_target",
                  "pending_animate_target", "cover_state", "cover_src", "song_draft",
                  # the step-by-step flows too: «Мэшап · трек 1 из 2» had no way out
-                 "mashup_state", "clone_state", "restyle_state", "anim_voice_state", "voice_naming",
+                 "mashup_state", "clone_state", "restyle_state", "continue_state", "anim_voice_state", "voice_naming",
                  # ✍️ Свой вариант: the forwarded material waiting for the user's request
                  "fwd_own", "lyrics_state")
     _WAIT_BOOL = ("awaiting_animate_photo", "awaiting_style_photo")
@@ -189,6 +189,10 @@ class _Session:
         # 🎨 Restyle video: "" | "want_video" | "want_text" (tg_restyle)
         self.restyle_state: str = d.get("restyle_state", "")
         self.restyle_src: str = d.get("restyle_src", "")
+        # ▶️ Continue video: "" | "want_video" | "want_text" (tg_continue)
+        self.continue_state: str = d.get("continue_state", "")
+        self.continue_src: str = d.get("continue_src", "")
+        self.continue_tail: str = d.get("continue_tail", "")
         # 🎙 voices for 🎬 Animate (tg_anim_voices): "" | "collect", and the samples
         self.anim_voice_state: str = d.get("anim_voice_state", "")
         self.song_draft: str = d.get("song_draft", "")     # ready lyrics awaiting «как есть / новый»
@@ -359,6 +363,8 @@ class _Session:
             self.clone_state = ""
             self.cover_state = ""
             self.restyle_state = ""
+            self.continue_state = ""
+            self.continue_src = self.continue_tail = ""
             self.anim_voice_state = ""
             self.anim_voices = []
             self.voice_pending = ""
@@ -424,6 +430,9 @@ class _Session:
                 "cover_src":           self.cover_src,
                 "restyle_state":       self.restyle_state,
                 "restyle_src":         self.restyle_src,
+                "continue_state":      self.continue_state,
+                "continue_src":        self.continue_src,
+                "continue_tail":       self.continue_tail,
                 "anim_voice_state":    self.anim_voice_state,
                 "song_draft":          self.song_draft,
                 "lyrics_state":        self.lyrics_state,

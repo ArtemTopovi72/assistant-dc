@@ -378,6 +378,9 @@ class ResolveMixin:
                     if (getattr(sess, "cover_state", "")
                             and self._cover_take_link(chat_id, sess, lang, raw)):
                         continue
+                    if (getattr(sess, "continue_state", "") == "want_text"
+                            and self._continue_take_text(chat_id, sess, lang, raw)):
+                        continue
                     if (getattr(sess, "restyle_state", "") == "want_text"
                             and self._restyle_take_text(chat_id, sess, lang, raw)):
                         continue
@@ -523,10 +526,15 @@ class ResolveMixin:
                     self._lyrics_disarm(sess)
                 if direct and direct != "__restyle__":
                     self._restyle_disarm(sess)
+                if direct and direct != "__continue_video__":
+                    self._continue_disarm(sess)
                 if direct and (getattr(sess, "anim_voice_state", "") or getattr(sess, "voice_naming", "")):
                     sess.anim_voice_state = ""      # a menu press ends 🎙 sample collection
                     sess.voice_naming = ""          # ... and an unanswered «как подписать»
                     self._store.put(sess)
+                if direct == "__continue_video__":
+                    self._goto_menu(sess, "cr_video")
+                    self._start_continue_flow(chat_id, sess, lang); continue
                 if direct == "__restyle__":
                     self._goto_menu(sess, "cr_video")
                     self._start_restyle_flow(chat_id, sess, lang); continue

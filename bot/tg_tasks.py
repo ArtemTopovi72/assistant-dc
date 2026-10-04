@@ -772,6 +772,14 @@ class TaskRunnerMixin:
             self._store.put(sess)
         elif task.user_text.startswith(("[animate]", "animate this photo")):
             ctx.voice_choice = "default"     # the presets carry «🎙 Добавить свои голоса»
+        # ▶️ Continue video: the clip's tail (its motion + sound) rides this ONE request.
+        ctx.continue_tail = ctx.continue_src = ""
+        _ct = getattr(sess, "continue_tail", "")
+        if _ct and os.path.exists(_ct) and task.user_text.startswith("animate this photo"):
+            ctx.continue_tail, ctx.continue_src = _ct, getattr(sess, "continue_src", "")
+            ctx.voice_choice = "default"     # no «свои голоса» question: the tail brings the voices
+            sess.continue_tail = sess.continue_src = ""
+            self._store.put(sess)
 
         # No model, no turn. The desktop app can be started with the LLM
         # deliberately not loaded; the graph still exists, so nothing here would

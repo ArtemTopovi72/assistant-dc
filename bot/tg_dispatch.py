@@ -353,6 +353,10 @@ class DispatchMixin:
         if getattr(_msess, "anim_voice_state", "") and self._anim_voice_take_media(
                 chat_id, _msess, self._lang(_msess), msg):
             return
+        # ▶️ Continue armed: a video is the clip to go on from.
+        if getattr(_msess, "continue_state", "") and self._continue_take_media(
+                chat_id, _msess, self._lang(_msess), msg):
+            return
         # 🎨 Restyle armed: a video is the clip to redraw (before cover/clone: both eat videos).
         if getattr(_msess, "restyle_state", "") and self._restyle_take_media(
                 chat_id, _msess, self._lang(_msess), msg):

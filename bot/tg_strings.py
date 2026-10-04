@@ -104,6 +104,7 @@ _BTN: dict[str, dict[str, str]] = {
     "lyr_improve_btn": {"en": "✨ Improve lyrics", "ru": "✨ Улучшить текст"},
     "lyr_write_btn":   {"en": "✍️ Write lyrics",   "ru": "✍️ Сочинить текст"},
     "restyle_btn":    {"en": "🎨 Restyle video",  "ru": "🎨 Перерисовать видео"},
+    "continue_btn":   {"en": "▶️ Continue video", "ru": "▶️ Продолжить видео"},
     "style_menu_btn": {"en": "🎭 Change style",   "ru": "🎭 Сменить стиль"},
 }
 _LABEL2KEY: dict[str, str] = {
@@ -218,6 +219,12 @@ _MSG: dict[str, dict[str, str]] = {
                           "ru": "🎨 Пришли видео (возьму первые ~5 с). Движение сохраню, а внешний вид перерисую."},
     "restyle_ask_text": {"en": "✅ Got the clip. Now write the new look: <i>anime</i>, <i>winter, snow</i>, <i>clay animation</i>…",
                          "ru": "✅ Видео есть. Теперь напиши, каким сделать: <i>аниме</i>, <i>зима, снег</i>, <i>пластилин</i>…"},
+    "continue_ask_video": {"en": "▶️ Send the video to continue (the last sharp frame and the voices are taken from it).",
+                           "ru": "▶️ Пришли видео, которое продолжить: возьму из него самый чёткий последний кадр и голоса."},
+    "continue_ask_text": {"en": "✅ Got the clip. What should happen next? Describe the scene, the action, what they say.",
+                          "ru": "✅ Видео есть. Что должно происходить дальше? Опиши сцену, действие, что говорят."},
+    "continue_fail_dl": {"en": "▶️ Could not read the video — send it again.",
+                         "ru": "▶️ Не смог прочитать видео — пришли ещё раз."},
     "restyle_fail_dl": {"en": "🎨 Could not get the video — send it again.",
                         "ru": "🎨 Не смог забрать видео — пришли ещё раз."},
     "restyle_fail_render": {"en": "🎨 The restyle failed. Try again later.",

@@ -125,6 +125,7 @@ def _cr_music_kb(lang: str = _DEFAULT_LANG) -> dict:
 def _cr_video_kb(lang: str = _DEFAULT_LANG) -> dict:
     return _kb([[_b("video_setup", lang)],
                 [_b("restyle_btn", lang)],
+                [_b("continue_btn", lang)],
                 [_b("animate_btn", lang)],
                 [_b("back", lang)]], lang)
 

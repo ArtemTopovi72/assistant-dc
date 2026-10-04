@@ -1079,8 +1079,19 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         if lv and os.path.exists(lv):
             videos = [lv]
 
+    # ▶️ Continue video (tg_continue): the clip's tail is the reference -- its motion, faces and
+    # its own sound -- and the new part is joined to the original afterwards.
+    cont_tail = getattr(ctx, "continue_tail", "") or ""
+    cont_src = getattr(ctx, "continue_src", "") or ""
+    continuing = bool(cont_tail and os.path.exists(cont_tail))
+    if continuing:
+        videos = [cont_tail]
+        ctx.continue_tail = ctx.continue_src = ""          # one clip per request
+        description = video_mod.CONTINUE_PREFIX + description
+
     audios = []
-    anim = [p for p in (getattr(ctx, "anim_voices", None) or []) if p and os.path.exists(p)]
+    anim = ([] if continuing else
+            [p for p in (getattr(ctx, "anim_voices", None) or []) if p and os.path.exists(p)])
     speakers = int(args.get("speakers") or 0)
     if not speakers:
         # The model forgets `speakers` (live 10-02: two quoted lines, speakers=0,
@@ -1111,7 +1122,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 description += (f" The people, from left to right, speak with the voices "
                                 f"{tags_a}: the leftmost <Audio 1>, the next <Audio 2>, "
                                 "and so on; each person keeps their own voice.")
-    elif args.get("use_my_voice"):
+    elif args.get("use_my_voice") and not continuing:
         # The chat's cloned voice (tg_tasks sets ctx.voice_ref from 🎙 Клон голоса).
         ref = getattr(ctx, "voice_ref", "") or ""
         if not (ref and os.path.exists(ref)):
@@ -1164,6 +1175,13 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 "give them THIS reason in plain words; do NOT invent another cause, do NOT "
                 "blame the prompt unless the reason says so, and do NOT imply or claim that "
                 "a video was created.")
+
+    if continuing and cont_src and os.path.exists(cont_src):
+        joined = video_mod.join_continuation(cont_src, path)
+        if joined:
+            path = video_mod._adopt_output(joined)       # the whole thing: original + what comes next
+        else:
+            logger.warning("continue video: the join failed, delivering the new part alone")
 
     state["video_path"] = path
     state["video_status"] = "success"

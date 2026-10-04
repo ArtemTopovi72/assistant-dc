@@ -1005,6 +1005,64 @@ def probe(path: str) -> dict:
     return info
 
 
+CONTINUE_PREFIX = (
+    "Continue the shot of <Video 1> directly, with no cut and no reset: the new footage begins "
+    "exactly where <Video 1> ends, on <Picture 1>, and keeps its motion going. The same people with "
+    "the same faces, clothes, location and lighting; the camera keeps moving at the same speed. "
+    "Their voices and the ambient sound of <Video 1> go on unchanged. What happens next: ")
+
+
+def join_continuation(src: str, new: str, fade: float = 0.25, drop_frames: int = 2) -> Optional[str]:
+    """`src` followed by its generated continuation `new`, as one clip, or None when ffmpeg fails.
+
+    The continuation opens on (nearly) the last frame of `src`, so its first frames are
+    dropped (the model regenerates the overlap and the first two often glitch, and the seed
+    frame would otherwise be held twice), then the picture and the sound crossfade over `fade`
+    seconds. Both sides are brought to the continuation's size, 24 fps and 48 kHz stereo; a
+    side without sound gets silence so the audio crossfade has something to blend.
+    ponytail: no colour matching across the join -- add a per-channel histogram match if grading drifts.
+    """
+    ff = shutil.which("ffmpeg")
+    a, b = probe(src), probe(new)
+    if not ff or not (a["seconds"] > fade * 2 and b["seconds"] > fade * 2 and b["width"] and b["height"]):
+        return None
+    w, h = b["width"], b["height"]
+    skip = drop_frames / 24.0
+    off = max(0.0, a["seconds"] - fade)
+    vnorm = f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=24,format=yuv420p"
+    anorm = "aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo"
+    cmd = [ff, "-y", "-v", "error", "-i", src, "-i", new]
+    sil = []
+    for i, p in enumerate((a, b)):
+        if not p["has_audio"]:
+            sil.append(i)
+            cmd += ["-f", "lavfi", "-t", f"{p['seconds']:.2f}", "-i", "anullsrc=r=48000:cl=stereo"]
+    # input index of each side's audio: its own stream, or the silence appended after the two clips
+    aidx = {}
+    nxt = 2
+    for i in (0, 1):
+        if i in sil:
+            aidx[i] = nxt
+            nxt += 1
+        else:
+            aidx[i] = i
+    fc = (f"[0:v]{vnorm}[v0];[1:v]trim=start={skip:.4f},setpts=PTS-STARTPTS,{vnorm}[v1];"
+          f"[v0][v1]xfade=transition=fade:duration={fade}:offset={off:.3f}[v];"
+          f"[{aidx[0]}:a]{anorm}[a0];[{aidx[1]}:a]atrim=start={skip:.4f},asetpts=PTS-STARTPTS,{anorm}[a1];"
+          f"[a0][a1]acrossfade=d={fade}:c1=tri:c2=tri[a]")
+    fh = tempfile.NamedTemporaryFile(prefix="vidjoin_", suffix=".mp4", delete=False)
+    fh.close()
+    cmd += ["-filter_complex", fc, "-map", "[v]", "-map", "[a]", "-c:v", "libx264", "-preset", "veryfast",
+            "-crf", "18", "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", fh.name]
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=600,
+                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    if r.returncode != 0 or not os.path.exists(fh.name) or os.path.getsize(fh.name) == 0:
+        logger.warning("join_continuation failed: %s", (r.stderr or "")[-400:])
+        _discard(fh.name)
+        return None
+    return fh.name
+
+
 def _discard(tmp: Optional[str]) -> None:
     """Delete a scratch file we created and are not going to hand to anyone.
 
