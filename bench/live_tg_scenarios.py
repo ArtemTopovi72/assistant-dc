@@ -933,7 +933,7 @@ def sc_clone_link(bot, ctx):
     print("     link:", texts(evs)[-2:])
     t0 = time.time(); u.say("Привет, это проверка клонированного голоса.")
     evs = u.wait(quiet=10); timed("clone_link", "speak", t0, evs)
-    voices = D.files_of(evs, "voice")
+    voices = D.files_of(evs, "sendVoice")
     print("     voices:", voices, "heard:", [D.transcribe(ctx, v) for v in voices][:1])
     return u
 
@@ -1022,7 +1022,23 @@ def sc_song_male(bot, ctx):
     return u
 
 
-SCENARIOS = {"song_male": sc_song_male, "audiobook": sc_audiobook, "remove_cat": sc_remove_cat, "video_link": sc_video_link, "clone_link": sc_clone_link, "deds_voices": sc_deds_voices, "cover": sc_cover, "sandbox_links": sc_sandbox_links, "photo": sc_photo, "misc": sc_misc, "document": sc_document, "fwd_voice": sc_fwd_voice,
+def sc_continue_video(bot, ctx):
+    """▶️ Продолжить видео: button -> a short clip -> what happens next -> original + continuation back."""
+    import tg_strings
+    u = D.Chat(bot, 910090, "Artem")
+    u.say(tg_strings._BTN["continue_btn"]["ru"]); evs = u.wait(quiet=4); print("     bot:", texts(evs)[-1:])
+    u.video_note(os.path.join(ROOT, "anim_voices", "386455236", "voice2.mp4")); evs = u.wait(timeout=120, quiet=5)
+    print("     bot:", texts(evs)[-1:])
+    t0 = time.time(); u.say("Человек поворачивается к камере и улыбается.")
+    evs = u.wait(until=lambda e: e["method"] in ("sendVideo", "sendVideoNote"), timeout=1800, quiet=90)
+    timed("continue_video", "clip", t0, evs); print("     bot:", texts(evs)[-3:])
+    vids = [e["file"] for e in evs if e["method"] in ("sendVideo", "sendVideoNote") and e["file"]]
+    if not vids:
+        note("continue_video", "no clip came back")
+    return u
+
+
+SCENARIOS = {"continue_video": sc_continue_video, "song_male": sc_song_male, "audiobook": sc_audiobook, "remove_cat": sc_remove_cat, "video_link": sc_video_link, "clone_link": sc_clone_link, "deds_voices": sc_deds_voices, "cover": sc_cover, "sandbox_links": sc_sandbox_links, "photo": sc_photo, "misc": sc_misc, "document": sc_document, "fwd_voice": sc_fwd_voice,
              "two_draws": sc_two_draws, "stop_song": sc_stop_song, "buttons": sc_buttons, "weather": sc_weather, "stop": sc_stop, "sign": sc_sign, "search": sc_search, "memory": sc_memory,
              "chat": sc_chat, "music": sc_music, "picture": sc_picture, "render": sc_render,
              "voice": sc_voice, "two_users": sc_two_users,
