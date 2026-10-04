@@ -46,3 +46,26 @@ def test_one_speaker_short_clip_or_off_is_none(monkeypatch, tmp_path):
 def test_worker_failure_is_none(monkeypatch, tmp_path):
     _on(monkeypatch, None)
     assert D.speaker_transcript(None, _wav(tmp_path)) is None
+
+
+def _llm_says(monkeypatch, answer):
+    import llm
+    monkeypatch.setattr(llm, "call_llm_simple", lambda *a, **k: answer)
+
+
+def test_name_used_only_when_spoken(monkeypatch):
+    t = "Спикер 1: Иван, подойди сюда.\nСпикер 2: Иду.\nСпикер 1: Быстрее."
+    _llm_says(monkeypatch, '{"1": "", "2": "Иван"}')
+    assert D.name_speakers(None, t).startswith("Спикер 1: Иван, подойди")
+    assert "Иван (Спикер 2): Иду." in D.name_speakers(None, t)
+    _llm_says(monkeypatch, '{"1": "Пётр", "2": ""}')          # never said in the talk -> dropped
+    assert D.name_speakers(None, t) == t
+
+
+def test_name_pass_is_harmless_on_failure(monkeypatch):
+    t = "Спикер 1: Привет.\nСпикер 2: Здравствуй."
+    _llm_says(monkeypatch, "not json at all")
+    assert D.name_speakers(None, t) == t
+    import llm
+    monkeypatch.setattr(llm, "call_llm_simple", lambda *a, **k: 1 / 0)
+    assert D.name_speakers(None, t) == t

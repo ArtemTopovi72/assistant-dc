@@ -101,4 +101,31 @@ def speaker_transcript(ctx, wav: str, lang: str = "ru", asr_lang: str = "") -> O
                 lines.append((who, [said]))
     if len({w for w, _ in lines}) < 2:
         return None
-    return "\n".join(f"{w}: {' '.join(s)}" for w, s in lines)
+    return name_speakers(ctx, "\n".join(f"{w}: {' '.join(s)}" for w, s in lines), lang)
+
+
+def name_speakers(ctx, transcript: str, lang: str = "ru") -> str:
+    """«Спикер 2» -> «Иван» when the talk itself names them («Иван, подойди»). The LLM proposes,
+    a literal check disposes: a name that never occurs in the text is dropped, so nothing is invented."""
+    import re
+    label = LABEL.get(lang, LABEL["en"])
+    ids = sorted(set(re.findall(rf"^{label} (\d+):", transcript or "", re.M)))
+    if len(ids) < 2:
+        return transcript
+    try:
+        import llm as _llm
+        from utils import safe_json_from_llm
+        raw = _llm.call_llm_simple(
+            ctx, 'Name the speakers of a transcript. Answer ONLY JSON {"1": "name or empty", ...}. '
+                 "A name counts ONLY if it is spoken in the text itself (someone addresses or introduces them); "
+                 "otherwise empty. Never guess.", transcript[:6000],
+            temperature=0.0, max_tokens=300, force_think=False) or ""
+        got = safe_json_from_llm(raw) or {}
+    except Exception:
+        return transcript
+    low = transcript.lower()
+    for i in ids:
+        name = str(got.get(i) or "").strip()
+        if 2 <= len(name) <= 30 and re.fullmatch(r"[\w .-]+", name) and name[: max(3, len(name) - 2)].lower() in low:
+            transcript = re.sub(rf"^{label} {i}:", f"{name} ({label} {i}):", transcript, flags=re.M)
+    return transcript
