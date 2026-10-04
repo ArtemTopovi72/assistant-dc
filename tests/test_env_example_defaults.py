@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SKIP_DIRS = {"tests", "bench", "venv", ".venv", ".git", "node_modules"}
+SKIP_DIRS = {"runtime", "tests", "bench", "venv", ".venv", ".git", "node_modules"}
 # Defaults given as a module constant rather than a literal.
 CONSTANT_DEFAULTS = {"SANDBOX_IMAGE"}
 
