@@ -142,6 +142,15 @@ def _extract_pdf_text(raw: bytes) -> Optional[str]:
         return None
 
 
+def _scrub(text: str, url: str) -> str:
+    """Strangers' pages: cut chunks aimed at the AI (agent/injection_scan.py; fails open)."""
+    try:
+        import injection_scan
+        return injection_scan.scrub(text, url)
+    except Exception:
+        return text
+
+
 def _fetch_page(url: str) -> tuple:
     """Fetch one URL. Returns (html, pdf_text): exactly one is non-None on
     success, both None on failure. PDFs (scholarly papers, arXiv) are downloaded
@@ -264,7 +273,7 @@ def _acquire_page(url, depth, seed, category, use_adapters, cache) -> dict:
                 cache.mark_failed(url)
             return res
         page = {"url": url, "domain": _domain(url), "title": title,
-                "text": text[:budget],
+                "text": _scrub(text[:budget], url),
                 "equations": _formula_audit.extract_equations(text)}
         if cache is not None:
             cache.put(url, title, text)
