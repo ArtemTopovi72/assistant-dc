@@ -353,6 +353,10 @@ class DispatchMixin:
         if getattr(_msess, "anim_voice_state", "") and self._anim_voice_take_media(
                 chat_id, _msess, self._lang(_msess), msg):
             return
+        # 📚 Audiobook armed: the voice sample and then the book are ours (never the library / sandbox / agent).
+        if getattr(_msess, "book_state", "") and self._book_take_media(
+                chat_id, _msess, self._lang(_msess), msg):
+            return
         # ▶️ Continue armed: a video is the clip to go on from.
         if getattr(_msess, "continue_state", "") and self._continue_take_media(
                 chat_id, _msess, self._lang(_msess), msg):

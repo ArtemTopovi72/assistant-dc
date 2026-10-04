@@ -456,6 +456,11 @@ class ResolveMixin:
                         and self._vl_take_name(chat_id, sess, lang, raw)):
                     continue
 
+                # 📚 Audiobook waits for the book: a pasted text is the book, a short one only a hint.
+                if (not key and not raw.startswith("/") and getattr(sess, "book_state", "") == "want_book"
+                        and self._book_take_text(chat_id, sess, lang, raw)):
+                    continue
+
                 # 🎙 Clone voice armed + a video link: the video's voice is the
                 # sample (owner 10-03: «сделать с голоса ютуба»).
                 if (not key and getattr(sess, "clone_state", "")
@@ -528,10 +533,15 @@ class ResolveMixin:
                     self._restyle_disarm(sess)
                 if direct and direct != "__continue_video__":
                     self._continue_disarm(sess)
+                if direct and direct != "__audiobook__":
+                    self._book_disarm(sess)
                 if direct and (getattr(sess, "anim_voice_state", "") or getattr(sess, "voice_naming", "")):
                     sess.anim_voice_state = ""      # a menu press ends 🎙 sample collection
                     sess.voice_naming = ""          # ... and an unanswered «как подписать»
                     self._store.put(sess)
+                if direct == "__audiobook__":
+                    self._goto_menu(sess, "cr_music")
+                    self._start_book_flow(chat_id, sess, lang); continue
                 if direct == "__continue_video__":
                     self._goto_menu(sess, "cr_video")
                     self._start_continue_flow(chat_id, sess, lang); continue

@@ -32,7 +32,7 @@ class _Session:
     _WAIT_STR = ("pending_prefix", "pending_instruction", "pending_photo", "pending_style_target",
                  "pending_animate_target", "cover_state", "cover_src", "song_draft",
                  # the step-by-step flows too: «Мэшап · трек 1 из 2» had no way out
-                 "mashup_state", "clone_state", "restyle_state", "continue_state", "anim_voice_state", "voice_naming",
+                 "mashup_state", "clone_state", "restyle_state", "continue_state", "book_state", "anim_voice_state", "voice_naming",
                  # ✍️ Свой вариант: the forwarded material waiting for the user's request
                  "fwd_own", "lyrics_state")
     _WAIT_BOOL = ("awaiting_animate_photo", "awaiting_style_photo")
@@ -193,6 +193,10 @@ class _Session:
         self.continue_state: str = d.get("continue_state", "")
         self.continue_src: str = d.get("continue_src", "")
         self.continue_tail: str = d.get("continue_tail", "")
+        # 📚 Audiobook: "" | "want_voice" | "want_book" (tg_audiobook); the narrator's reference
+        self.book_state: str = d.get("book_state", "")
+        self.book_ref: str = d.get("book_ref", "")
+        self.book_ref_text: str = d.get("book_ref_text", "")
         # 🎙 voices for 🎬 Animate (tg_anim_voices): "" | "collect", and the samples
         self.anim_voice_state: str = d.get("anim_voice_state", "")
         self.song_draft: str = d.get("song_draft", "")     # ready lyrics awaiting «как есть / новый»
@@ -365,6 +369,7 @@ class _Session:
             self.restyle_state = ""
             self.continue_state = ""
             self.continue_src = self.continue_tail = ""
+            self.book_state = ""
             self.anim_voice_state = ""
             self.anim_voices = []
             self.voice_pending = ""
@@ -433,6 +438,9 @@ class _Session:
                 "continue_state":      self.continue_state,
                 "continue_src":        self.continue_src,
                 "continue_tail":       self.continue_tail,
+                "book_state":          self.book_state,
+                "book_ref":            self.book_ref,
+                "book_ref_text":       self.book_ref_text,
                 "anim_voice_state":    self.anim_voice_state,
                 "song_draft":          self.song_draft,
                 "lyrics_state":        self.lyrics_state,

@@ -118,6 +118,7 @@ def _cr_music_kb(lang: str = _DEFAULT_LANG) -> dict:
     return _kb([[_b("songs", lang), _b("mashup", lang)],
                 [_b("song_setup", lang)],
                 [_b("cover_btn", lang), _b("clone_btn", lang)],
+                [_b("book_btn", lang)],
                 [_b("lyr_improve_btn", lang), _b("lyr_write_btn", lang)],
                 [_b("back", lang)]], lang)
 

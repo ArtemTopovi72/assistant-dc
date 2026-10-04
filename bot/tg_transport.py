@@ -631,7 +631,7 @@ class TransportMixin:
         return False
 
     def _send_voice_from_wav(self, chat_id: int, wav_path: str,
-                             keyboard=None) -> bool:
+                             keyboard=None, caption: str = "") -> bool:
         """Convert an existing WAV to OGG/Opus and send as a Telegram voice note.
 
         Attaches *keyboard* (reply_markup) to the voice message when provided,
@@ -658,6 +658,13 @@ class TransportMixin:
                 return False
             self._api_post("sendChatAction", {"chat_id": chat_id, "action": "record_voice"})
             data: dict = {"chat_id": chat_id}
+            if caption:
+                data["caption"] = caption[:1000]
+            try:                         # without it a voice over ~5 min shows 0:00 in the player (audiobook chapters)
+                import soundfile as _sf
+                data["duration"] = int(round(_sf.info(wav_path).duration))
+            except Exception:
+                pass
             if keyboard:
                 data["reply_markup"] = json.dumps(keyboard)
             for attempt in range(tg_bot._API_RETRIES):
