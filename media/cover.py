@@ -124,6 +124,19 @@ def original_words(ctx, wav: str) -> str:
     return "\n".join(lines)
 
 
+def vocal_stem(wav: str, dst: str) -> str:
+    """Demucs vocal stem of `wav` -> `dst` (the melody is read from it, not from the full mix). "" when it fails."""
+    try:
+        import soundfile as sf
+        import mashup_stems
+        from mashup_dsp import SAMPLE_RATE
+        sf.write(dst, mashup_stems.separate(wav)["vocals"], SAMPLE_RATE)
+        return dst
+    except Exception:                                            # noqa: BLE001 -- the worker then reads the full mix
+        logger.warning("cover: vocal stem failed", exc_info=True)
+        return ""
+
+
 def make_cover(ctx, src: str, lyrics: str, tags: str = "", seed: int = 0) -> str:
     """Re-sing `src` with `lyrics`. Returns the cover's path; raises CoverFailed(reason)."""
     if not available():
@@ -134,7 +147,8 @@ def make_cover(ctx, src: str, lyrics: str, tags: str = "", seed: int = 0) -> str
     stamp = int(time.time() * 1000)
     ref = to_wav(src, str(scratch_path(OUTPUT_DIR, f"_INTERMEDIATE_cover_ref_{stamp}.wav")))
     out = str(OUTPUT_DIR / f"cover_{stamp}.wav")
-    job = {"ref": ref, "lyrics": lyr, "tags": named_style(ctx, tags, lyr),
+    vox = vocal_stem(ref, str(scratch_path(OUTPUT_DIR, f"_INTERMEDIATE_cover_vox_{stamp}.wav")))
+    job = {"ref": ref, "vocals": vox, "lyrics": lyr, "tags": named_style(ctx, tags, lyr),
            "seed": seed or random.randint(1, 2**31 - 1), "out": out}
     logger.info("cover: %s, tags %r, %d lyric lines", os.path.basename(src), job["tags"],
                 lyr.count("\n"))
@@ -143,10 +157,11 @@ def make_cover(ctx, src: str, lyrics: str, tags: str = "", seed: int = 0) -> str
         _, tail = music.run_gpu_worker(ctx, MULA_PYTHON, "mulacover_render.py", job,
                                        "MuLaCover", TIMEOUT)
     finally:
-        try:
-            os.unlink(ref)              # our own intermediate
-        except OSError:
-            pass
+        for tmp in (ref, vox):
+            try:
+                os.unlink(tmp)          # our own intermediates
+            except OSError:
+                pass
     if not music._valid_audio_file(out):
         logger.error("cover: no file: %s", tail)
         raise CoverFailed("render")

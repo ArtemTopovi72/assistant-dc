@@ -1336,6 +1336,18 @@ YUE2_ODE_STEPS = _cfg_env.env_int("YUE2_ODE_STEPS", 16)
 YUE2_TIMEOUT = 1500          # measured 235-810 s for one song; long lyrics run longer
 
 
+def yue2_language(style: str, lyrics: str) -> str:
+    """The card: put the singing language in the style ("naming the language steers pronunciation"). Russian lyrics
+    without the word get it right after the leading tag; other scripts are left to the model."""
+    letters = [c for c in (lyrics or "") if c.isalpha()]
+    if not letters or sum("Ѐ" <= c <= "ӿ" for c in letters) / len(letters) < 0.5:
+        return style
+    if re.search(r"(?i)russian", style or ""):
+        return style
+    head, _, rest = (style or "").partition(",")
+    return f"{head}, Russian vocal, {rest.strip()}".strip(" ,") if rest.strip() else f"{head}, Russian vocal".strip(" ,")
+
+
 def _has_weights(folder: str) -> bool:
     """config.json and a weight file: one model.safetensors or the shards
     (model-00001-of-0000N.safetensors) a hub download may bring instead."""
@@ -1446,7 +1458,7 @@ def _generate_yue2(ctx, lyrics: str, style: str, seed: int) -> str:
         raise MusicUnavailable("YuE2 is not installed")
     ext = "mp3" if cpp else "flac"
     out = str(OUTPUT_DIR / f"song_yue2_{int(time.time() * 1000)}.{ext}")
-    job = {"lyrics": yue2_lyrics(lyrics), "style": yue2_style(style), "seed": int(seed), "out": out}
+    job = {"lyrics": yue2_lyrics(lyrics), "style": yue2_language(yue2_style(style), lyrics), "seed": int(seed), "out": out}
     logger.info("YuE2 (%s): seed %d, style: %s", "cpp bf16" if cpp else "torch", seed, job["style"])
     t0 = time.time()
     for attempt in (1, 2):
