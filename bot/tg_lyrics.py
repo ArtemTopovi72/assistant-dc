@@ -36,13 +36,14 @@ class LyricsMixin:
 
     def _lyrics_run(self, ctx, chat_id: int, lang: str, mode: str, text: str) -> None:
         import lyrics_craft as LC
+        singer = (tg_bot._music_prefs(self._get_session(chat_id)) or {}).get("vocal", "")
         try:
             if mode == "write":
                 lyric_lang = "Russian" if lang == "ru" or LC._lang_name(text) == "Russian" else "English"
-                res = LC.write(ctx, text, lyric_lang)
+                res = LC.write(ctx, text, lyric_lang, singer=singer)
                 notes = []
             else:
-                res = LC.polish(ctx, text)
+                res = LC.polish(ctx, text, singer=singer)
                 notes = LC.changes_note(ctx, res["original"], res["text"], lang)
         except Exception:
             if ctx.is_cancelled():
@@ -86,7 +87,7 @@ class LyricsMixin:
         import lyrics_craft as LC
         from tg_songs import LYRICS_MARK
         try:
-            res = LC.polish(ctx, draft)
+            res = LC.polish(ctx, draft, singer=(tg_bot._music_prefs(self._get_session(chat_id)) or {}).get("vocal", ""))
             notes = LC.changes_note(ctx, res["original"], res["text"], lang)
         except Exception:
             tg_bot.logger.exception("[lyrics] polishing a song's words failed for chat %s", chat_id)

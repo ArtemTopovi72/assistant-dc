@@ -220,14 +220,14 @@ def request_seconds(t: str, after_song: bool = False) -> int:
     return _read(t, after_song)["song_seconds"] if (t or "").strip() else 0
 
 
-def _polished(ctx, lyrics: str, has_stage: bool = True) -> str:
+def _polished(ctx, lyrics: str, has_stage: bool = True, singer: str = "") -> str:
     """The lyric after the lyrics_craft check/revise loop; the original when the
     loop fails or loses the section tags the music engine sings by."""
     try:
         import lyrics_craft
         if has_stage:
             ctx.set_stage("Polishing the lyrics")
-        out = (lyrics_craft.polish(ctx, lyrics) or {}).get("text") or ""
+        out = (lyrics_craft.polish(ctx, lyrics, singer=singer) or {}).get("text") or ""
     except Exception:
         tg_bot.logger.warning("[songs] polishing the lyrics failed; singing the draft", exc_info=True)
         return lyrics
@@ -391,7 +391,7 @@ class SongsMixin:
                 # Words the bot wrote itself go through the checks and revisions
                 # of ✨ Improve lyrics before they are sung (owner 10-03: «под
                 # капотом генерится хороший текст, причёсывается автоматом»).
-                caption = dict(caption, lyrics=_polished(ctx, caption["lyrics"], _has_stage))
+                caption = dict(caption, lyrics=_polished(ctx, caption["lyrics"], _has_stage, prefs.get("vocal", "")))
             if cancelled():
                 return False
             wav_path = _music_mod.generate_music(

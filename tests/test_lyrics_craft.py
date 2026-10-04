@@ -89,6 +89,16 @@ def test_a_worse_or_broken_rewrite_never_replaces_the_lyric(monkeypatch):
     assert res["text"] == GOOD.strip()
 
 
+def test_the_singer_gender_reaches_the_lyric_prompts(monkeypatch):
+    assert "WOMAN" in L.singer_rule("a FEMALE lead vocal") and "MAN" in L.singer_rule("a MALE lead vocal")
+    assert "WOMAN" not in L.singer_rule("a MALE lead vocal")
+    assert "duet" in L.singer_rule("duet") and L.singer_rule("") == ""
+    seen = []
+    monkeypatch.setattr(L, "LLM_STUB", lambda role, system, user: (seen.append(system), "")[1])
+    L.draft(None, "дорога домой", "Russian", singer="a MALE lead vocal")
+    assert any("The singer is a MAN" in s for s in seen)
+
+
 # ── the bot ──────────────────────────────────────────────────────────────────
 def _bot():
     import tg_bot

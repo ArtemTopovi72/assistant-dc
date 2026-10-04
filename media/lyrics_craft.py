@@ -557,14 +557,30 @@ def _clean(raw: str) -> str:
     return "\n".join(lines).strip()
 
 
-def revise(ctx, text: str, problems: list, lang: str) -> str:
+def singer_rule(vocal: str) -> str:
+    """One sentence for a lyric prompt: who sings, so first-person grammar agrees with the voice.
+    `vocal` is the music prefs phrase («a MALE lead vocal») or a bare word (male / female / duet)."""
+    v = (vocal or "").lower()
+    if "duet" in v:
+        return ("The song is a male/female duet: lines sung by the man use masculine first-person "
+                "forms, lines sung by the woman feminine ones (Russian: «я шёл» / «я шла»).")
+    if "female" in v or "woman" in v:
+        return ("The singer is a WOMAN: every first-person verb and adjective agrees with a woman "
+                "(Russian past tense «я шла», «я была», «я рада»), never masculine forms.")
+    if "male" in v or "man" in v:
+        return ("The singer is a MAN: every first-person verb and adjective agrees with a man "
+                "(Russian past tense «я шёл», «я был», «я рад»), never feminine forms.")
+    return ""
+
+
+def revise(ctx, text: str, problems: list, lang: str, singer: str = "") -> str:
     system = (
         f"You are a skilled {lang} lyricist and editor. Rewrite the song lyric to fix "
         "EVERY listed problem. Keep its theme, story, language and section tags ([verse], "
         "[chorus]...); a line no problem names stays word for word. When a rhyme pair "
         "is wrong, rewrite the weaker line of the pair, not both. Keep every repeated "
-        "chorus identical. " + _RULES + " Output only the full lyric, no comments, no "
-        "line numbers.")
+        "chorus identical. " + _RULES + " " + singer_rule(singer) + " Output only the full lyric, "
+        "no comments, no line numbers.")
     user = ("Lyric (lines numbered as the problems name them):\n" + _numbered(text)
             + "\n\nProblems to fix:\n" + "\n".join(f"- {p}" for p in problems))
     return _clean(_call(ctx, "revise", system, user, temperature=0.7,
@@ -591,7 +607,7 @@ def plan(ctx, topic: str, lang: str) -> str:
         return ""
 
 
-def draft(ctx, topic: str, lang: str, the_plan: str = "") -> str:
+def draft(ctx, topic: str, lang: str, the_plan: str = "", singer: str = "") -> str:
     system = (
         f"You are a skilled songwriter. Write an original song lyric in {lang} on the "
         "theme below: [verse 1] 4 lines, [chorus] 4 lines, [verse 2] 4 lines, [chorus], "
@@ -600,12 +616,12 @@ def draft(ctx, topic: str, lang: str, the_plan: str = "") -> str:
         "same melody). Verses SHOW through concrete detail, the chorus states the feeling "
         "and holds the hook in its first or last line, every chorus is identical; a hook may "
         "come back with a small variation (repetition with variation makes it stick). "
-        + _RULES + " Output only the lyric with its section tags.")
+        + _RULES + " " + singer_rule(singer) + " Output only the lyric with its section tags.")
     user = "Theme: " + topic + (("\n\nPlan:\n" + the_plan) if the_plan else "")
     return _clean(_call(ctx, "draft", system, user, temperature=0.9, max_tokens=1200))
 
 
-def write(ctx, topic: str, lang: str, on_round=None) -> dict:
+def write(ctx, topic: str, lang: str, on_round=None, singer: str = "") -> dict:
     """✍️ A theme -> a lyric: plan, several drafts (over-generate and rank, as
     PoeLM), the two best by the checks meet head to head (a judge picking one of
     two is steadier than its 0-10 scores), then the polish loop."""
@@ -614,7 +630,7 @@ def write(ctx, topic: str, lang: str, on_round=None) -> dict:
     for _ in range(DRAFTS):
         if ctx is not None and getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
             break
-        d = draft(ctx, topic, lang, the_plan)
+        d = draft(ctx, topic, lang, the_plan, singer)
         if not d:
             continue
         score = _total(analyse(d, ctx), critique(ctx, d)[0])
@@ -626,7 +642,7 @@ def write(ctx, topic: str, lang: str, on_round=None) -> dict:
     best = scored[0][1]
     if len(scored) > 1 and scored[0][0] - scored[1][0] < 1.5:
         best = compare(ctx, topic, scored[0][1], scored[1][1])
-    return polish(ctx, best, on_round=on_round)
+    return polish(ctx, best, on_round=on_round, singer=singer)
 
 
 _JUDGE = (
@@ -706,7 +722,7 @@ def _total(rule: dict, sense: int) -> float:
     return round(0.6 * rule["score"] + 0.4 * sense, 2)
 
 
-def polish(ctx, text: str, rounds: int = ROUNDS, on_round=None) -> dict:
+def polish(ctx, text: str, rounds: int = ROUNDS, on_round=None, singer: str = "") -> dict:
     """The check -> revise loop. {"text", "score", "rounds", "left": [problems],
     "original"}; the best scoring version is kept, never a worse rewrite."""
     lang = _lang_name(text)
@@ -738,7 +754,7 @@ def polish(ctx, text: str, rounds: int = ROUNDS, on_round=None) -> dict:
             done += 1
             if not problems:
                 continue                            # scored on the next round
-        new = revise(ctx, cur, problems, lang)
+        new = revise(ctx, cur, problems, lang, singer)
         done += 1
         if not new or len(new) < len(cur) * 0.4:
             if mended:

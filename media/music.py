@@ -834,6 +834,13 @@ def build_workflow(lyrics: str, style: str, *, duration_s: int, seed: int,
 # --------------------------------------------------------------------------- #
 # LLM-authored song structure
 # --------------------------------------------------------------------------- #
+def _lyrics_gender_rule(vocal: str) -> str:
+    """The lyric's first person agrees with the singer: in Russian «я шёл / я шла», «рад / рада»
+    (a male vocal that sings feminine verbs is a mismatch the listener hears at once)."""
+    import lyrics_craft
+    return lyrics_craft.singer_rule(vocal)
+
+
 def _requirements_block(prefs: Optional[dict]) -> str:
     """The user's chosen settings, phrased as top-precedence requirements.
 
@@ -865,7 +872,7 @@ def _requirements_block(prefs: Optional[dict]) -> str:
                      "underneath any of them.")
     elif prefs.get("vocal"):
         lines.append(f"  * The lead vocal IS {prefs['vocal']}. Say so explicitly "
-                     "under Vocal Gender & Timbre.")
+                     "under Vocal Gender & Timbre. " + _lyrics_gender_rule(prefs['vocal']))
     if not lines:
         return ""
     return ("\n\nHARD REQUIREMENTS — these outrank everything else in this "
