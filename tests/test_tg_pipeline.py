@@ -243,6 +243,16 @@ check("flushing an unknown album is a no-op",
 check("flushing twice does not double-enqueue",
       (bot9._flush_album("grp1"), len(enq))[1] == 1)
 
+# A forwarded album's pages trickle in: a pause shorter than the quiet period must NOT cut it into two albums.
+import time as _t
+_q, T._ALBUM_COLLECT_S = T._ALBUM_COLLECT_S, 0.4
+enq.clear()
+for i in range(5):
+    bot9._buffer_album(CID, "slow", f"s{i}", ""); _t.sleep(0.25)
+_t.sleep(0.8)
+check("slowly arriving pages become ONE album", len(enq) == 1 and len(enq[0][1]["file_ids"]) == 5, str(enq))
+T._ALBUM_COLLECT_S = _q
+
 # …and the resolver has to understand what the buffer produced, or the whole
 # album path ends in a task nobody can run.
 bot9b = make_bot(); approved(bot9b, CID + 101)

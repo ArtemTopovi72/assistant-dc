@@ -582,12 +582,18 @@ class DispatchMixin:
             return ""
 
     def _buffer_album(self, chat_id, group_id, file_id, caption):
+        # A QUIET period, not a fixed window: a forwarded album of 10 pages arrives over several seconds, and a
+        # timer started by the first page cut it into pieces answered one by one (live 2026-10-05).
         with self._album_lock:
-            if group_id not in self._albums:
-                t = threading.Timer(tg_bot._ALBUM_COLLECT_S, self._flush_album, (group_id,))
-                t.daemon = True; t.start()
-                self._albums[group_id] = {"chat_id": chat_id, "photos": [], "timer": t}
-            self._albums[group_id]["photos"].append({"file_id": file_id, "caption": caption})
+            e = self._albums.get(group_id)
+            if e is None:
+                e = self._albums[group_id] = {"chat_id": chat_id, "photos": [], "timer": None, "t0": time.monotonic()}
+            elif e["timer"] is not None:
+                e["timer"].cancel()
+            e["photos"].append({"file_id": file_id, "caption": caption})
+            wait = max(0.05, min(tg_bot._ALBUM_COLLECT_S, e["t0"] + tg_bot._ALBUM_MAX_S - time.monotonic()))
+            t = threading.Timer(wait, self._flush_album, (group_id,))
+            t.daemon = True; t.start(); e["timer"] = t
 
     def _flush_album(self, group_id):
         with self._album_lock: entry = self._albums.pop(group_id, None)
