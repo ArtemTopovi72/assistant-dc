@@ -239,5 +239,14 @@ check("a chosen genre and a typed length are kept; only tempo and vocal are the 
       and "жанр" not in bot.sent[-1] and "длина" not in bot.sent[-1] and "темп — 104 BPM" in bot.sent[-1],
       (seen, bot.sent[-1:]))
 
+# the vocal button decides the singer: a caption naming the other gender is rewritten
+_m = M.enforce_vocal("Vocal Details: a soulful female singer, her voice airy.", "a MALE lead vocal")
+check("a MALE choice rewrites a female caption and says so",
+      "male singer" in _m and "MALE (a man" in _m and "female singer" not in _m, _m)
+_f = M.enforce_vocal("Vocal Details: a gritty male baritone, he growls.", "a FEMALE lead vocal")
+check("a FEMALE choice rewrites a male caption", "female alto" in _f and "FEMALE (a woman" in _f, _f)
+check("a duet or no choice leaves the caption alone",
+      M.enforce_vocal("x", "a male/female duet trading lines") == "x" and M.enforce_vocal("x", "") == "x")
+
 print(f"\n{PASSED}/{PASSED + FAILED} checks passed")
 sys.exit(1 if FAILED else 0)

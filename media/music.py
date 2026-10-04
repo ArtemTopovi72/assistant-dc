@@ -834,6 +834,26 @@ def build_workflow(lyrics: str, style: str, *, duration_s: int, seed: int,
 # --------------------------------------------------------------------------- #
 # LLM-authored song structure
 # --------------------------------------------------------------------------- #
+_TO_MALE = {"females": "males", "female": "male", "women": "men", "woman": "man", "girl": "boy",
+            "soprano": "baritone", "alto": "tenor", "she": "he", "her": "his"}
+_TO_FEMALE = {"males": "females", "male": "female", "men": "women", "man": "woman", "boy": "girl",
+              "baritone": "alto", "tenor": "soprano", "he": "she", "his": "her"}
+
+
+def enforce_vocal(style: str, vocal: str) -> str:
+    """The 🎤 button decides the singer: a caption naming the other gender is rewritten to the
+    chosen one and ends with an explicit line (the writer model only SEES the choice, it can ignore it)."""
+    v = (vocal or "").lower()
+    if not style or "duet" in v or not ("male" in v):
+        return style
+    male = "female" not in v
+    table = _TO_MALE if male else _TO_FEMALE
+    out = re.sub(r"(?<![A-Za-z])(" + "|".join(table) + r")(?![A-Za-z])",
+                 lambda m: table[m.group(1).lower()], style, flags=re.I)
+    who = "MALE (a man's voice, no female vocals)" if male else "FEMALE (a woman's voice, no male vocals)"
+    return out.rstrip() + f"\nThe lead vocal is {who}, as the user chose."
+
+
 def _lyrics_gender_rule(vocal: str) -> str:
     """The lyric's first person agrees with the singer: in Russian «я шёл / я шла», «рад / рада»
     (a male vocal that sings feminine verbs is a mismatch the listener hears at once)."""
@@ -1184,7 +1204,7 @@ def build_structured_caption(ctx, topic: str, lang: str, *,
             if not caption_is_structured(style):
                 logger.warning("shipping an unstructured caption after %d "
                                "attempts — the song will be vaguer than asked", i)
-            return {"lyrics": lyrics, "style": style}
+            return {"lyrics": lyrics, "style": enforce_vocal(style, (prefs or {}).get("vocal", ""))}
         logger.warning("songwriter attempt %d produced no usable lyrics/style "
                        "(%d chars back)", i, len(raw))
         if ctx is not None and getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
