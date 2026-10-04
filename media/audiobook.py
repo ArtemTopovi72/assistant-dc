@@ -140,7 +140,55 @@ def lines_from_boxes(items: list) -> str:
     return chr(10).join(out)
 
 
+def _paddle_python() -> str:
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    p = os.path.join(root, "venv_paddle", "Scripts", "python.exe")
+    return p if os.path.exists(p) else ""
+
+
 def ocr_pdf(path: str, on_page=lambda i, total: None, cancelled=lambda: False) -> str:
+    """Text of a scanned PDF. PaddleOCR PP-OCRv5 (own venv, CPU) when installed -- it reads Russian print
+    nearly error-free; the project's EasyOCR worker is the fallback."""
+    py = _paddle_python()
+    if py:
+        try:
+            return _ocr_pdf_paddle(py, path, on_page, cancelled)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning("[audiobook] PaddleOCR failed; falling back to EasyOCR", exc_info=True)
+    return _ocr_pdf_easy(path, on_page, cancelled)
+
+
+def _ocr_pdf_paddle(py: str, path: str, on_page, cancelled) -> str:
+    import json
+    import subprocess
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    env = dict(os.environ, PYTHONIOENCODING="utf-8", PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK="True")
+    p = subprocess.Popen([py, os.path.join(root, "scripts", "paddle_pdf_worker.py"), path, str(OCR_MAX_PAGES)],
+                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, encoding="utf-8",
+                         cwd=os.path.dirname(py), env=env,        # NOT the project dir: a stray torch/ there breaks modelscope
+                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    pages = []
+    try:
+        for line in p.stdout:
+            if cancelled():
+                break
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue                                  # a library banner, not a page
+            pages.append(lines_from_boxes([(b, t, s) for b, t, s in row["items"]]))
+            on_page(row["page"], row["total"])
+    finally:
+        if p.poll() is None:
+            p.kill()
+        p.wait()
+    if not pages:
+        raise ValueError("PaddleOCR returned nothing")
+    return (chr(10) * 2).join(x for x in pages if x)
+
+
+def _ocr_pdf_easy(path: str, on_page=lambda i, total: None, cancelled=lambda: False) -> str:
     """Text of a scanned PDF through the project's EasyOCR worker (ru+en, CPU, own process)."""
     import pypdfium2
     sys_path_fix = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "imaging")
