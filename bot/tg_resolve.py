@@ -1261,6 +1261,8 @@ class ResolveMixin:
                         except Exception: pass
                 if doc_text:
                     from prompt_guard import wrap_document
+                    import injection_scan
+                    doc_text = injection_scan.scrub(doc_text, fname)
                     texts.append(f"{cap}\n\n{wrap_document(fname, doc_text)}" if cap
                                  else wrap_document(fname, doc_text))
                 elif cap:

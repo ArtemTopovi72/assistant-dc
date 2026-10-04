@@ -58,6 +58,11 @@ def fetch_video(url: str, max_seconds: int = VIDEO_MAX_SECONDS) -> dict:
                 secs = int(info.get("duration") or 0)
                 title = info.get("title") or ""
                 desc = (info.get("description") or "").strip()[:2000]
+                try:
+                    import injection_scan
+                    desc = injection_scan.scrub(desc, "video description")
+                except Exception:
+                    pass
                 if secs > max_seconds:
                     return {"too_long": True, "seconds": secs, "title": title}
                 y.download([url])

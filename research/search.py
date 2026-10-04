@@ -439,6 +439,8 @@ def run_web_search(ctx, query: str) -> str:
         ctx, query, max_results=max(SEARCH_MAX_RESULTS, want * 2) if want else None)
     if raw in (NO_RESULTS, SEARCH_FAILED):
         return raw
+    import injection_scan
+    raw = injection_scan.scrub(raw, "web search")      # pages are written by strangers
     facts = distill_search_results(ctx, query, raw) if SEARCH_DISTILL else ""
     usable = facts and "insufficient information" not in facts.lower()
     # One more round, at the model's discretion: it reads what was found and
