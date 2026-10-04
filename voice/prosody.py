@@ -16,7 +16,7 @@ PRESETS = {
     "anger":    (+1.0, 1.35, +1.5, -0.5, 0.0, 1.05, +9.0),  # very loud, sometimes high
     "sad":      (-3.5, 0.75, +2.5, -5.0, 0.0, 0.88, -3.0),  # low, falls from high to low, slower, quiet
     "neutral":  (-0.5, 0.35, 0.0, -0.5, 0.0, 0.95, -1.0),   # nearly flat, distant, smooth
-    "question": (0.0, 1.25, 0.0, -0.5, +6.0, 1.0, 0.0),     # rises at the end
+    "question": (0.0, 1.1, -1.0, -1.0, 0.0, 1.0, 0.0),      # Russian IK-3: the rise is on the centre word (see `center`), not at the end
 }
 
 
@@ -30,7 +30,41 @@ def _phrases(times, gap=0.30):
     return out
 
 
-def shape(src: str, emotion: str, dst: str, strength: float = 1.0) -> str:
+def word_times(ctx, wav: str):
+    """[(word, start, end)] from faster-whisper word timestamps."""
+    segs, _ = ctx.models.whisper.transcribe(wav, language="ru", word_timestamps=True)
+    return [(w.word.strip(), w.start, w.end) for sg in segs for w in sg.words]
+
+
+def centre_window(words, stressed_text: str, focus: int):
+    """(t0, t1) of the stressed vowel of word number `focus`. `stressed_text` carries RUAccent '+' before the stressed vowel."""
+    import re
+    toks = re.findall(r"[А-Яа-яЁё+]+", stressed_text)
+    tok = toks[focus]
+    plain = tok.replace("+", "")
+    k = tok.index("+") if "+" in tok else max(i for i, c in enumerate(plain) if c in "аеёиоуыэюяАЕЁИОУЫЭЮЯ")
+    _, a, b = words[focus]
+    n = max(1, len(plain))
+    c = a + (b - a) * (k + 0.5) / n
+    half = max(0.06, (b - a) / n)
+    return c - half, c + half
+
+
+def _centre_curve(t, c0, c1, rise=7.0, drop=-3.0):
+    """Additive semitones: low before the centre, sharp rise on it, quick fall right after and stay low."""
+    pre = -1.0
+    if t < c0 - 0.10:
+        return pre
+    if t < c0:
+        return pre + (rise - pre) * (t - (c0 - 0.10)) / 0.10
+    if t <= c1:
+        return rise
+    if t < c1 + 0.20:
+        return rise + (drop - rise) * (t - c1) / 0.20
+    return drop
+
+
+def shape(src: str, emotion: str, dst: str, strength: float = 1.0, center=None) -> str:
     shift, rng, p0, p1, rise, tempo, gain = PRESETS[emotion]
     shift, p0, p1, rise, gain = (v * strength for v in (shift, p0, p1, rise, gain))
     rng = 1 + (rng - 1) * strength
@@ -51,6 +85,8 @@ def shape(src: str, emotion: str, dst: str, strength: float = 1.0) -> str:
         decl = p0 + (p1 - p0) * k                                # hi -> lo (or the reverse) across the phrase
         tail = rise * np.clip((k - 0.7) / 0.3, 0, 1) ** 1.5      # final rise
         new[a:b] = st[a:b] * rng + shift + decl + tail
+        if center is not None:
+            new[a:b] += [_centre_curve(ti, *center) for ti in t[a:b]]
     f2 = med * 2 ** (new / 12)
     call(pt, "Remove points between", 0, t[-1] + 1)
     for ti, fi in zip(t, f2):

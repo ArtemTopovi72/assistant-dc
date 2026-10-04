@@ -122,6 +122,11 @@ def prepare_reference(ctx, src: str, out_dir: str, lang: str = "ru") -> Tuple[st
     text = _transcribe(ctx, ref, lang)
     if len(re.findall(r"\w+", text)) < 3:
         raise CloneError("no_words")
+    try:
+        import emopack
+        emopack.build_async(ref, ctx)           # emotional variants of this voice, ready a few minutes later
+    except Exception:                           # noqa: BLE001 -- an extra, never a blocker
+        pass
     return ref, text
 
 
@@ -176,9 +181,15 @@ class _CloneCtx:
         setattr(self._ctx, name, value)
 
 
-def speak(ctx, ref_wav: str, ref_text: str, text: str, out_dir: str, cfg: float = 0.0, speed_mul: float = 0.0) -> Optional[str]:
-    """Synthesize `text` in the cloned voice. -> wav path or None. cfg / speed_mul (0 = default) shape the delivery."""
+def speak(ctx, ref_wav: str, ref_text: str, text: str, out_dir: str, cfg: float = 0.0, speed_mul: float = 0.0,
+          emotion: str = "") -> Optional[str]:
+    """Synthesize `text` in the cloned voice. -> wav path or None. cfg / speed_mul (0 = default) shape the delivery;
+    emotion (joy | anger | sad) takes the reference from the voice's emotion pack when it has one (voice/emopack.py)."""
     import audio
+    import emopack
+    alt = emopack.ref_for(ref_wav, emotion)
+    if alt:
+        ref_wav, ref_text = alt
     os.makedirs(out_dir, exist_ok=True)
     stem = os.path.join(out_dir, f"clone_out_{uuid.uuid4().hex[:8]}.wav")
     return audio.synth_single_segment(_CloneCtx(ctx, ref_wav, ref_text, cfg, speed_mul), 0, "clone", text,

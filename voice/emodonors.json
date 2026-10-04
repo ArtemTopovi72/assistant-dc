@@ -1,0 +1,38 @@
+{
+ "anger": [
+  {
+   "file": "anger_0.wav",
+   "text": "Ты такая же тупая, как и дядя.",
+   "src": "angry_74ee72bea28fc820fd9ead78b118bc65.wav"
+  },
+  {
+   "file": "anger_1.wav",
+   "text": "Кто запретил мультик козлятины страны?",
+   "src": "angry_07c2ee0321c44f7a0c0abaa5b3ac50a5.wav"
+  }
+ ],
+ "sad": [
+  {
+   "file": "sad_0.wav",
+   "text": "Не знаю, мама зовёт.",
+   "src": "sad_b07b920d93cc5af5a4c3902d69a7e7d8.wav"
+  },
+  {
+   "file": "sad_1.wav",
+   "text": "Детский садик, вторая смена.",
+   "src": "sad_af40c6666a669f047127d3320b2bb407.wav"
+  }
+ ],
+ "joy": [
+  {
+   "file": "joy_0.wav",
+   "text": "Спасибо, что сказал!",
+   "src": "positive_d815cbfc81c83fd46cbd0c17e100908b.wav"
+  },
+  {
+   "file": "joy_1.wav",
+   "text": "Да что ты мне говоришь такое, а я говорю тебе, шестое апреля.",
+   "src": "positive_cde7f59cf975bdd461fcd6e65e960166.wav"
+  }
+ ]
+}
