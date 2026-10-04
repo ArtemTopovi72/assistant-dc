@@ -128,6 +128,8 @@ bench/assets/red_carpet.jpg
 models_ext/
 venv_yue2/
 venv_diar/
+venv_paddle/
+bench/diar_set/
 venv_mula/
 
 # Local tooling and personal data
