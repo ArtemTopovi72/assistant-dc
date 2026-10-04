@@ -316,7 +316,6 @@ VOCALS: dict = {
     "auto":         "",
     "female":       "a FEMALE lead vocal",
     "male":         "a MALE lead vocal",
-    "duet":         "a male/female duet trading lines",
     "instrumental": "INSTRUMENTAL",      # a different SHAPE — see prefs_from
 }
 
@@ -389,7 +388,7 @@ def choose_auto_params(ctx, topic: str, lang: str, *, genre: bool = False,
     spec = {
         "genre": "genre: one of " + ", ".join(k for k in GENRES if k != "auto"),
         "bpm": f"bpm: an integer {BPM_RANGE[0]}-{BPM_RANGE[1]}",
-        "vocal": "vocal: one of female, male, duet",
+        "vocal": "vocal: one of female, male",
         "seconds": f"seconds: an integer {DURATION_RANGE[0]}-{DURATION_RANGE[1]} -- a jingle or a joke "
                    "is short, a ballad or an anthem is long; 60-120 fits most songs",
     }
@@ -424,7 +423,7 @@ def choose_auto_params(ctx, topic: str, lang: str, *, genre: bool = False,
     except (TypeError, ValueError):
         pass
     v = str(data.get("vocal", "")).strip().lower()
-    if vocal and v in ("female", "male", "duet"):
+    if vocal and v in ("female", "male"):
         out["vocal"] = v
     if vocal and _no_vocals(topic):
         out["vocal"] = "instrumental"          # «джингл без вокала» was reported as a male vocal
@@ -840,6 +839,23 @@ _TO_FEMALE = {"males": "females", "male": "female", "men": "women", "man": "woma
               "baritone": "alto", "tenor": "soprano", "he": "she", "his": "her"}
 
 
+def enforce_pins(style: str, prefs: Optional[dict]) -> str:
+    """YuE2's card: the style leads with what matters most -- tempo/BPM, genre, the singer. The user's
+    buttons go FIRST, exact, and a BPM the writer model invented against the pinned one is dropped."""
+    prefs = prefs or {}
+    lead = []
+    bpm = str(prefs.get("tempo") or "")
+    m = re.search(r"(\d{2,3})\s*(?:-\s*(\d{2,3}))?\s*BPM", bpm)
+    if m:
+        n = (int(m.group(1)) + int(m.group(2) or m.group(1))) // 2 if "exactly" not in bpm else int(m.group(1))
+        lead.append(f"{n} BPM")
+        style = re.sub(r"~?\d{2,3}(?:\s*-\s*\d{2,3})?\s*BPM", "", style or "", flags=re.I)
+    if prefs.get("genre"):
+        lead.append(str(prefs["genre"]))
+    head = "Global Metadata: " + ", ".join(lead) + ".\n" if lead else ""
+    return head + (style or "")
+
+
 def enforce_vocal(style: str, vocal: str) -> str:
     """The 🎤 button decides the singer: a caption naming the other gender is rewritten to the
     chosen one and ends with an explicit line (the writer model only SEES the choice, it can ignore it)."""
@@ -1204,7 +1220,7 @@ def build_structured_caption(ctx, topic: str, lang: str, *,
             if not caption_is_structured(style):
                 logger.warning("shipping an unstructured caption after %d "
                                "attempts — the song will be vaguer than asked", i)
-            return {"lyrics": lyrics, "style": enforce_vocal(style, (prefs or {}).get("vocal", ""))}
+            return {"lyrics": lyrics, "style": enforce_vocal(enforce_pins(style, prefs), (prefs or {}).get("vocal", ""))}
         logger.warning("songwriter attempt %d produced no usable lyrics/style "
                        "(%d chars back)", i, len(raw))
         if ctx is not None and getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():

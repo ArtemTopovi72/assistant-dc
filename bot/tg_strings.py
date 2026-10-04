@@ -941,7 +941,7 @@ _MSG: dict[str, dict[str, str]] = {
     "mv_female":       {"en": "👩 Female",       "ru": "👩 Женский"},
     "mv_male":         {"en": "👨 Male",         "ru": "👨 Мужской"},
     "mv_duet":         {"en": "👫 Duet",         "ru": "👫 Дуэт"},
-    "mv_instrumental": {"en": "🎻 Instrumental", "ru": "🎻 Инструментал"},
+    "mv_instrumental": {"en": "🎻 No words (may hum)", "ru": "🎻 Без слов (возможен вокализ)"},
 
     # ── image size picker ─────────────────────────────────────────────────────
     "size_title":   {"en": "📐 <b>Image size</b>\nNow: <b>{w}×{h}</b> ({mp} MP)",

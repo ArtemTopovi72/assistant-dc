@@ -248,5 +248,10 @@ check("a FEMALE choice rewrites a male caption", "female alto" in _f and "FEMALE
 check("a duet or no choice leaves the caption alone",
       M.enforce_vocal("x", "a male/female duet trading lines") == "x" and M.enforce_vocal("x", "") == "x")
 
+_pin = M.enforce_pins("Pop, 90 BPM, dreamy.", {"tempo": "exactly 118 BPM", "genre": "Rock"})
+check("pinned tempo and genre lead the style; the writer's own BPM is dropped",
+      _pin.startswith("Global Metadata: 118 BPM, Rock.") and "90" not in _pin, _pin)
+check("no duet button: the model cannot place who sings where", "duet" not in M.VOCALS)
+
 print(f"\n{PASSED}/{PASSED + FAILED} checks passed")
 sys.exit(1 if FAILED else 0)
