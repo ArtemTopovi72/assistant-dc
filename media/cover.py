@@ -22,7 +22,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MULA_PYTHON = venv_python(os.path.join(ROOT, "venv_mula"))
 CKPT = os.path.join(ROOT, "models_ext", "mulacover_ckpt")
 TIMEOUT = 900
-DEFAULT_TAGS = "pop, clear lead vocal, full band"
+DEFAULT_TAGS = "topic:[Love]; genre:[pop]; instrument:[Piano,acoustic guitar,drums]; mood:[warm]"
 _STYLE_LINE = re.compile(r"^\s*(стиль|style)\s*[:\-—]\s*(.+)$", re.I)
 
 
@@ -46,6 +46,34 @@ def split_style(text: str) -> tuple:
         else:
             lines.append(line)
     return "\n".join(lines).strip(), tags
+
+
+_FIELDS = ("topic", "genre", "instrument", "mood")
+
+
+def named_style(ctx, tags: str, lyrics: str = "") -> str:
+    """The model was trained on ONE line of named fields, `topic:[Longing]; genre:[country]; instrument:[Strings,acoustic
+    guitar]; mood:[hopeful]`; a free list like «pop, full band» is off-distribution and is barely heard. Free text from the
+    user (Russian or English) is turned into that line by the model; any failure keeps the words as the genre."""
+    t = (tags or "").strip()
+    if not t:
+        return DEFAULT_TAGS
+    if "genre:[" in t.lower():
+        return t
+    try:
+        import lyrics_craft
+        from utils import safe_json_from_llm
+        raw = lyrics_craft._call(
+            ctx, "style", "Turn the user's style wish for a song into English fields for a cover generator. Reply JSON "
+            '{"topic": one or two words about what the song is about, "genre": one genre, "instrument": up to three instruments '
+            'separated by commas, "mood": one mood word}. Keep the wish: the gender/voice of the singer goes into instrument '
+            "as a word like male vocal.", f"Wish: {t}\nLyrics start: {lyrics[:200]}", temperature=0.0, max_tokens=120)
+        d = safe_json_from_llm(raw, list(_FIELDS)) or {}
+        if all(str(d.get(k) or "").strip() for k in _FIELDS):
+            return "; ".join(f"{k}:[{str(d[k]).strip()}]" for k in _FIELDS)
+    except Exception:                                            # noqa: BLE001 -- the plain wrap below still works
+        logger.warning("cover style fields failed", exc_info=True)
+    return f"topic:[Love]; genre:[{t}]; instrument:[Piano,drums]; mood:[warm]"
 
 
 def cover_lyrics(text: str) -> str:
@@ -106,7 +134,7 @@ def make_cover(ctx, src: str, lyrics: str, tags: str = "", seed: int = 0) -> str
     stamp = int(time.time() * 1000)
     ref = to_wav(src, str(scratch_path(OUTPUT_DIR, f"_INTERMEDIATE_cover_ref_{stamp}.wav")))
     out = str(OUTPUT_DIR / f"cover_{stamp}.wav")
-    job = {"ref": ref, "lyrics": lyr, "tags": tags or DEFAULT_TAGS,
+    job = {"ref": ref, "lyrics": lyr, "tags": named_style(ctx, tags, lyr),
            "seed": seed or random.randint(1, 2**31 - 1), "out": out}
     logger.info("cover: %s, tags %r, %d lyric lines", os.path.basename(src), job["tags"],
                 lyr.count("\n"))
