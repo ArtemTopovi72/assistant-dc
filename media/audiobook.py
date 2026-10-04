@@ -62,7 +62,7 @@ def _fb2_text(raw: bytes) -> str:
     return "\n".join(out)
 
 
-def read_book(path: str) -> str:
+def read_book(path: str, on_scanned=lambda pages: None) -> str:
     """The plain text of a book file. ValueError for a type we do not read."""
     low = path.lower()
     if low.endswith(".zip"):
@@ -79,9 +79,92 @@ def read_book(path: str) -> str:
         with open(path, "rb") as fh:
             return _decode(fh.read())
     if ext in (".pdf", ".epub", ".docx"):
-        from knowledge import library        # the project's own extractors; reading only, nothing is indexed
-        return library.extract_text(path)
+        import sys
+        _k = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "knowledge")
+        if _k not in sys.path:
+            sys.path.append(_k)
+        import library                       # knowledge/library.py (the package name is shadowed by knowledge.py); the project's own extractors; reading only, nothing is indexed
+        text = library.extract_text(path)
+        if ext == ".pdf" and is_scanned(path, text):
+            on_scanned(_pdf_pages(path))
+            return ocr_pdf(path)
+        return text
     raise ValueError("unsupported book type: " + ext)
+
+
+OCR_MAX_PAGES = 400
+
+
+def _pdf_pages(path: str) -> int:
+    try:
+        import pypdfium2
+        return len(pypdfium2.PdfDocument(path))
+    except Exception:
+        return 0
+
+
+def is_scanned(path: str, text: str) -> bool:
+    """A PDF whose pages are pictures: far less than a paragraph of text per page."""
+    pages = _pdf_pages(path)
+    return pages > 0 and len(re.sub(r"\s", "", text or "")) < 80 * pages
+
+
+def lines_from_boxes(items: list) -> str:
+    """OCR boxes [(box, text, conf)] -> reading-order text: words of one line joined left to right,
+    a gap taller than a line starts a new paragraph. Low-confidence scraps (< 0.2) are dropped."""
+    rows = []
+    for box, txt, conf in items:
+        if conf < 0.2 or not str(txt).strip():
+            continue
+        ys, xs = [p[1] for p in box], [p[0] for p in box]
+        rows.append({"y": (min(ys) + max(ys)) / 2, "h": max(ys) - min(ys), "x": min(xs), "t": str(txt).strip()})
+    if not rows:
+        return ""
+    rows.sort(key=lambda r: r["y"])
+    med = sorted(r["h"] for r in rows)[len(rows) // 2] or 1
+    lines, cur = [], [rows[0]]
+    for r in rows[1:]:
+        if abs(r["y"] - cur[-1]["y"]) < 0.6 * med:
+            cur.append(r)
+        else:
+            lines.append(cur); cur = [r]
+    lines.append(cur)
+    out, prev = [], None
+    for ln in lines:
+        ln.sort(key=lambda r: r["x"])
+        y = sum(r["y"] for r in ln) / len(ln)
+        if prev is not None and y - prev > 1.9 * med:
+            out.append("")
+        out.append(" ".join(r["t"] for r in ln))
+        prev = y
+    return chr(10).join(out)
+
+
+def ocr_pdf(path: str, on_page=lambda i, total: None, cancelled=lambda: False) -> str:
+    """Text of a scanned PDF through the project's EasyOCR worker (ru+en, CPU, own process)."""
+    import pypdfium2
+    sys_path_fix = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "imaging")
+    import sys
+    if sys_path_fix not in sys.path:
+        sys.path.insert(0, sys_path_fix)
+    import ocr_reader
+    reader = ocr_reader._get()
+    if reader is None:
+        raise ValueError("no OCR engine")
+    import tempfile
+    doc = pypdfium2.PdfDocument(path)
+    total = min(len(doc), OCR_MAX_PAGES)
+    pages = []
+    with tempfile.TemporaryDirectory() as tmp:
+        for i in range(total):
+            if cancelled():
+                break
+            png = os.path.join(tmp, f"p{i}.png")
+            doc[i].render(scale=2.2).to_pil().convert("L").save(png)
+            pages.append(lines_from_boxes(reader.readtext(png, detail=1, paragraph=False)))
+            os.unlink(png)
+            on_page(i + 1, total)
+    return (chr(10) * 2).join(p for p in pages if p)
 
 
 def clean(text: str) -> str:

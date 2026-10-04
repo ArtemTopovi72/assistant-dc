@@ -118,5 +118,34 @@ check("a piece that fails the ASR check is spoken again", okv and len(SEEN) >= 2
 check("a crashing checker never blocks the book",
       A.render_chapter(fake_synth, "", "Раз два три четыре пять шесть.", 1, os.path.join(D, "w.wav"), verify=lambda t, w: 1 / 0))
 
+
+# PDF / DOCX through the project's extractors (live 10-04: «cannot import name library» -> every pdf failed)
+import docx as _docx
+dp = os.path.join(D, "b.docx")
+_d = _docx.Document(); _d.add_paragraph("Глава 1"); _d.add_paragraph("Жил-был царь Салтан. " * 5); _d.save(dp)
+check("docx is read through library.extract_text", "Салтан" in A.read_book(dp))
+from PIL import Image, ImageDraw, ImageFont
+page = Image.new("RGB", (1240, 1754), "white")
+dr = ImageDraw.Draw(page)
+fnt = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", 44)
+for k, ln in enumerate(["Глава 1", "", "Три девицы под окном", "Пряли поздно вечерком"]):
+    dr.text((100, 120 + k * 90), ln, fill="black", font=fnt)
+pdf = os.path.join(D, "scan.pdf")
+page.save(pdf, "PDF", resolution=150)
+check("a PDF of pictures is recognised as scanned", A.is_scanned(pdf, ""))
+check("a PDF with plenty of text is not", not A.is_scanned(pdf, "слово " * 400))
+got = []
+try:
+    import ocr_reader  # noqa: F401  (imaging/ on the path via ocr_pdf)
+except Exception:
+    pass
+ocr = A.read_book(pdf, on_scanned=lambda n: got.append(n))
+check("a scanned PDF is announced and read by OCR", got == [1] and "девицы" in ocr.lower(), (got, ocr))
+boxes = [([[0, 0], [50, 0], [50, 20], [0, 20]], "мир", 0.9), ([[0, 0], [30, 0], [30, 20], [0, 20]], "Привет", 0.9),
+         ([[0, 100], [60, 100], [60, 120], [0, 120]], "Новый", 0.9), ([[0, 0], [5, 0], [5, 5], [0, 5]], "мусор", 0.05)]
+boxes[0][0][:] = [[60, 0], [110, 0], [110, 20], [60, 20]]
+txt = A.lines_from_boxes(boxes)
+check("OCR boxes: words in reading order, scraps dropped, a big gap = a paragraph", txt == "Привет мир" + chr(10) * 2 + "Новый", repr(txt))
+
 print(f"\n{OK}/{OK + BAD} checks passed")
 sys.exit(1 if BAD else 0)

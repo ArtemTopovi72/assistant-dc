@@ -201,7 +201,8 @@ class AudiobookMixin:
             self._send_text(chat_id, tg_bot._t("book_ask_voice", lang), parse_mode="HTML")
             return
         try:
-            chapters = audiobook.split_chapters(audiobook.read_book(path))
+            chapters = audiobook.split_chapters(audiobook.read_book(
+                path, on_scanned=lambda pages: self._send_text(chat_id, tg_bot._t("book_ocr", lang, n=pages, m=max(1, pages * 5 // 60)))))
         except Exception:
             tg_bot.logger.exception("[audiobook] reading the book failed for chat %s", chat_id)
             self._send_text(chat_id, tg_bot._t("book_fail_read", lang))

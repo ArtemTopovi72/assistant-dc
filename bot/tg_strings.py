@@ -242,6 +242,8 @@ _MSG: dict[str, dict[str, str]] = {
     "book_resume_btn": {"en": "▶️ Finish it", "ru": "▶️ Дочитать"},
     "book_new_btn": {"en": "🆕 New book", "ru": "🆕 Новая книга"},
     "book_resuming": {"en": "📚 Continuing: {n} chapters left.", "ru": "📚 Продолжаю: осталось глав {n}."},
+    "book_ocr": {"en": "📚 This PDF is scanned pages ({n}). Recognising the text first, about {m} min.",
+                 "ru": "📚 Это PDF из картинок-сканов ({n} стр.). Сначала распознаю текст, примерно {m} мин."},
     "book_done": {"en": "📚 Done: {n} of {total} chapters.", "ru": "📚 Готово: глав {n} из {total}."},
     "book_fail_run": {"en": "📚 The audiobook stopped on an error. What was ready has been sent.",
                       "ru": "📚 Озвучка остановилась из-за ошибки. Что было готово — отправлено."},
