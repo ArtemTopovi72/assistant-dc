@@ -459,8 +459,12 @@ class QueueMixin:
             # ("объясни Степану прикол") is typed a few seconds later, and answering the forward alone gave
             # two replies to one request (live 2026-10-05).
             t_first = time.monotonic()
-            def _quiet(): return (tg_bot._DEBOUNCE_FWD_S if all(i.get("forwarded") for i in batch) else tg_bot._DEBOUNCE_S)
-            def _cap(): return (tg_bot._DEBOUNCE_FWD_MAX_S if all(i.get("forwarded") for i in batch) else tg_bot._DEBOUNCE_MAX_S)
+            def _fwd(): return all(i.get("forwarded") or i.get("type") == "fwd_voice" for i in batch)
+            # a forwarded post's videos/voices come with pictures that land a couple of seconds later (an album is
+            # flushed after its own quiet period); a lone forwarded video must not wait the full text-forward window
+            def _quiet(): return ((tg_bot._DEBOUNCE_FWDV_S if any(i.get("type") == "fwd_voice" for i in batch) else tg_bot._DEBOUNCE_FWD_S)
+                                  if _fwd() else tg_bot._DEBOUNCE_S)
+            def _cap(): return ((tg_bot._DEBOUNCE_FWDV_MAX_S if any(i.get("type") == "fwd_voice" for i in batch) else tg_bot._DEBOUNCE_FWD_MAX_S) if _fwd() else tg_bot._DEBOUNCE_MAX_S)
             def _lag(it):
                 # Forwards that reach us late (a stalled getUpdates, live 2026-10-05: three pieces sent together came
                 # in at 11:59, 12:01, 12:02) have more of the same burst still on the way: wait that long again.

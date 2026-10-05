@@ -36,7 +36,8 @@ def _main_kb(voice_on: bool, is_admin: bool = False, lang: str = _DEFAULT_LANG) 
     }
 
 
-def _fwd_voice_kb(lang: str = _DEFAULT_LANG, fwd_id: str = "", board: bool = False) -> dict:
+def _fwd_voice_kb(lang: str = _DEFAULT_LANG, fwd_id: str = "", board: bool = False,
+                  cont: bool = False, pick: bool = False) -> dict:
     """What to do with a forwarded voice note. One definition, two callers —
     the ask and the re-ask after an unusable choice.
 
@@ -59,6 +60,12 @@ def _fwd_voice_kb(lang: str = _DEFAULT_LANG, fwd_id: str = "", board: bool = Fal
     # offered, never pushed: most of the time the words are what matters.
     if board:
         rows.append([{"text": _t("fwd_voice_board", lang), "callback_data": "fwdv:board" + suffix}])
+    # one video: it can be continued; several videos/pictures: the user picks which one to work with
+    # (nothing is attached to the chat by guesswork)
+    if cont:
+        rows.append([{"text": _t("fwd_continue", lang), "callback_data": "fwdv:cont" + suffix}])
+    if pick:
+        rows.append([{"text": _t("fwd_pick", lang), "callback_data": "fwdv:pick" + suffix}])
     rows.append([{"text": _t("fwd_voice_own", lang), "callback_data": "fwdv:own" + suffix}])
     return {"inline_keyboard": rows}
 

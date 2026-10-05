@@ -141,7 +141,7 @@ class DispatchMixin:
             # 409 (a second instance polling) / 401 (revoked token) come back at
             # once: returning [] here spun a tight request loop and still
             # counted as a healthy poll for the watchdog. Raise -> backoff.
-            raise RuntimeError(f"getUpdates not ok: HTTP {r.status_code} {body.get('error_code')} "
+            raise RuntimeError(f"getUpdates not ok: HTTP {getattr(r, "status_code", "")} {body.get('error_code')} "
                                f"{str(body.get('description'))[:120]} body={str(body)[:160]}")
         return body.get("result", [])
 
@@ -462,10 +462,11 @@ class DispatchMixin:
                 return
             caption = (msg.get("caption") or "").strip()
             group   = msg.get("media_group_id")
+            _fwd = tg_bot._is_forwarded(msg, self_is_own=False)
             if group:
-                self._buffer_album(chat_id, group, largest["file_id"], caption)
+                self._buffer_album(chat_id, group, largest["file_id"], caption, _fwd)
             else:
-                self._enqueue_item(chat_id, {"type": "photo",
+                self._enqueue_item(chat_id, {"type": "photo", "forwarded": _fwd,
                     "file_id": largest["file_id"], "caption": caption})
             return
 
@@ -581,13 +582,14 @@ class DispatchMixin:
             tg_bot.logger.exception("could not save an incoming photo")
             return ""
 
-    def _buffer_album(self, chat_id, group_id, file_id, caption):
+    def _buffer_album(self, chat_id, group_id, file_id, caption, forwarded=False):
         # A QUIET period, not a fixed window: a forwarded album of 10 pages arrives over several seconds, and a
         # timer started by the first page cut it into pieces answered one by one (live 2026-10-05).
         with self._album_lock:
             e = self._albums.get(group_id)
             if e is None:
-                e = self._albums[group_id] = {"chat_id": chat_id, "photos": [], "timer": None, "t0": time.monotonic()}
+                e = self._albums[group_id] = {"chat_id": chat_id, "photos": [], "timer": None, "t0": time.monotonic(),
+                                              "forwarded": forwarded}
             elif e["timer"] is not None:
                 e["timer"].cancel()
             e["photos"].append({"file_id": file_id, "caption": caption})
@@ -600,7 +602,7 @@ class DispatchMixin:
         if not entry: return
         cap = next((p["caption"] for p in entry["photos"] if p["caption"]), "")
         self._enqueue_item(entry["chat_id"], {
-            "type": "album",
+            "type": "album", "forwarded": entry.get("forwarded", False),
             "file_ids": [p["file_id"] for p in entry["photos"]],
             "caption": cap})
 

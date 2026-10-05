@@ -302,11 +302,17 @@ class TaskRunnerMixin:
         self._send_text(chat_id, tg_bot._t("fwd_video_work" if _video else "fwd_voice_work", lang))
         self._api_post("sendChatAction", {"chat_id": chat_id, "action": "typing"})
         lines, boards, names, sheets = [], [], [], []
-        n = {"voice": 0, "video": 0}
+        n = {"voice": 0, "video": 0, "photo": 0}
+        seen_caps: list = []
+        media_list: list = []              # what the user can pick from afterwards
         for it in items:
             who = (it.get("author") or "").strip()
             if who and who not in names:
                 names.append(who)
+            _cap = (it.get("caption") or "").strip()
+            if _cap and _cap not in seen_caps and it.get("type") != "text":
+                seen_caps.append(_cap)           # the post's own words ride on its first media
+                lines.append(f"{who}: {_cap}" if who else _cap)
             if it.get("type") == "text":
                 body = (it.get("text") or "").strip()
                 if not it.get("own"):
@@ -314,10 +320,29 @@ class TaskRunnerMixin:
                 if body:
                     lines.append(f"{who}: {body}" if who else body)
                 continue
+            if it.get("type") in ("photo", "album"):
+                import llm as _llm
+                for fid in (it.get("file_ids") or [it.get("file_id")]):
+                    n["photo"] += 1
+                    label = tg_bot._t("fwd_lbl_photo", lang, n=n["photo"])
+                    media_list.append({"kind": "photo", "file_id": fid, "label": label})
+                    try:
+                        data = self._dl_bytes(fid)
+                        seen_pic = " ".join((_llm.analyze_image_with_llm(
+                            ctx, image_bytes=data, temperature=0.1,
+                            user_text="Describe this picture in one or two sentences, in " + ("Russian" if (sess.lang or "ru") == "ru" else "English") + ".") or "").split()) if data else ""
+                    except Exception:
+                        tg_bot.logger.warning("forwarded picture read failed", exc_info=True)
+                        seen_pic = ""
+                    if seen_pic:
+                        lines.append(f"{who} [{label}]: {seen_pic}" if who else f"[{label}]: {seen_pic}")
+                continue
             media = "video" if it.get("media") == "video" else "voice"
             n[media] += 1
             label = tg_bot._t("fwd_lbl_" + media, lang, n=n[media])
             data = self._dl_bytes(it["file_id"]) if media == "video" else None
+            if media == "video":
+                media_list.append({"kind": "video", "file_id": it["file_id"], "label": label})
             # A note with a known author is that person speaking; diarization
             # only helps an unattributed recording of several people.
             heard = (self._transcribe(ctx, it["file_id"], media, lang_hint=(sess.lang or "ru"),
@@ -356,8 +381,13 @@ class TaskRunnerMixin:
         sess.fwd_transcript_id = uuid.uuid4().hex[:8]
         sess.remember_fwd(sess.fwd_transcript_id, said)
         sess.fwd_transcript_done = False
-        if sheet:
+        # One video: its frames are the picture in play, as before. Several pieces: nothing is attached at random,
+        # the user picks which picture or video to work with (the 🎞 button).
+        if sheet and len(media_list) <= 1:
             tg_bot._put_in_play(sess, sheet, "video frames")
+        sess.__dict__.setdefault("fwd_media", {})[sess.fwd_transcript_id] = media_list
+        while len(sess.fwd_media) > 8:
+            sess.fwd_media.pop(next(iter(sess.fwd_media)))
         self._store.put(sess)
         self._activity.log(chat_id, "system",
                            f"[fwd batch] {len(items)} pieces, {len(names)} senders, "
@@ -368,14 +398,17 @@ class TaskRunnerMixin:
             parts = ", ".join(x for x in (
                 tg_bot._t("fwd_lbl_voice", lang, n=n["voice"]) if n["voice"] else "",
                 tg_bot._t("fwd_lbl_video", lang, n=n["video"]) if n["video"] else "",
-                tg_bot._t("fwd_lbl_text", lang, n=len(items) - n["voice"] - n["video"])
-                if len(items) > n["voice"] + n["video"] else "") if x)
+                tg_bot._t("fwd_lbl_photo", lang, n=n["photo"]) if n["photo"] else "",
+                tg_bot._t("fwd_lbl_text", lang, n=sum(1 for i in items if i.get("type") == "text"))
+                if any(i.get("type") == "text" for i in items) else "") if x)
             who_line = tg_bot._t("fwd_batch_who", lang,
                                  names=_html_mod.escape(", ".join(names))) if names else ""
             self._send_text(chat_id, tg_bot._t("fwd_batch_ask", lang, parts=parts, who=who_line),
                             parse_mode="HTML",
                             keyboard=tg_bot._fwd_voice_kb(lang, sess.fwd_transcript_id,
-                                                          board=bool(boards)))
+                                                          board=bool(boards),
+                                                          cont=len(media_list) == 1 and media_list[0]["kind"] == "video",
+                                                          pick=len(media_list) > 1))
         return said
 
     def _commit_media_turn(self, chat_id: int, said: str, reply: str, is_video: bool) -> None:

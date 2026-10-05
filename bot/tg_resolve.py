@@ -271,8 +271,11 @@ class ResolveMixin:
             # Several forwarded pieces (voices, кружки, texts, several people,
             # any order): one conversation, each line under its author, asked
             # about ONCE -- not a "what do I do with it?" per piece.
+            # A forwarded POST is its videos and its pictures together: the pictures are read into the same
+            # conversation, never answered on their own (live 2026-10-05: «Что ты хочешь сделать с этим фото?»
+            # next to the post's «что с ней сделать?»).
             _fwd_items = [it for it in batch if it.get("type") == "fwd_voice"
-                          or (it.get("type") == "text" and it.get("forwarded"))]
+                          or (it.get("type") in ("text", "photo", "album") and it.get("forwarded"))]
             if len(_fwd_items) > 1:
                 # Anything else in the window -- a menu button pressed while the
                 # forward was landing (live 11:37: «↩ Назад» among ten кружки),
@@ -1069,11 +1072,14 @@ class ResolveMixin:
                 if _seen.get("sheet") and os.path.exists(_seen["sheet"]):
                     tg_bot._put_in_play(sess, _seen["sheet"], "video frames")
                     self._store.put(sess)
+                if _media == "video":
+                    sess.__dict__.setdefault("fwd_media", {})[sess.fwd_transcript_id] = [
+                        {"kind": "video", "file_id": item["file_id"], "label": tg_bot._t("fwd_lbl_video", lang, n=1)}]
                 if _seen.get("description"):
                     self._send_text(chat_id, tg_bot._t("fwd_video_ask", lang, mins=mins),
                                     parse_mode="HTML",
                                     keyboard=tg_bot._fwd_voice_kb(lang, sess.fwd_transcript_id,
-                                                                  board=True))
+                                                                  board=True, cont=True))
                     self._activity.log(chat_id, "system",
                                        f"[fwd video] {len(said)} chars, {len(_seen.get('times') or [])} frames seen",
                                        (user.name if user else str(chat_id)))

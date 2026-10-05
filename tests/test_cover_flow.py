@@ -15,6 +15,7 @@ _DATA = tempfile.mkdtemp(prefix="fwdtext_")
 import logging; logging.basicConfig(level=logging.CRITICAL)
 import tg_bot as T
 T.redirect_data_dir(_DATA)
+T._DEBOUNCE_FWD_S, T._DEBOUNCE_FWD_MAX_S = 1.5, 3.0   # production waits longer for a typed instruction
 import graph as graph_mod
 import tg_tasks
 

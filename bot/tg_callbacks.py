@@ -242,6 +242,8 @@ class CallbackMixin:
         _parts = data.split(":", 2)
         _choice = _parts[1] if len(_parts) > 1 else ""
         _btn_id = _parts[2] if len(_parts) > 2 else ""
+        if _choice in ("cont", "pick") or (_choice[:1] == "m" and _choice[1:].isdigit()):
+            return self._cb_fwd_media(chat_id, sess, lang, _choice, _btn_id)
         # A bare "fwdv:<choice>" (no id) is a keyboard sent before ids
         # existed — honoured unconditionally, same backward-compat rule
         # the image-verb buttons use for a pre-id keyboard. One WITH an
@@ -260,6 +262,33 @@ class CallbackMixin:
             return
         self._do_fwd_voice(chat_id, _choice, said)
         return
+
+    def _cb_fwd_media(self, chat_id: int, sess, lang: str, choice: str, fwd_id: str) -> None:
+        """The pictures and videos of a forwarded message: continue the video, or pick the one to work with."""
+        media = (getattr(sess, "fwd_media", None) or {}).get(fwd_id or getattr(sess, "fwd_transcript_id", ""), [])
+        if not media:
+            self._send_text(chat_id, tg_bot._t("fwd_voice_gone", lang))
+            return
+        if choice == "pick":
+            rows = [[{"text": m["label"], "callback_data": f"fwdv:m{i}:{fwd_id}"}] for i, m in enumerate(media)]
+            self._send_text(chat_id, tg_bot._t("fwd_pick_ask", lang), keyboard={"inline_keyboard": rows})
+            return
+        m = media[0] if choice == "cont" else media[int(choice[1:])] if int(choice[1:]) < len(media) else None
+        if not m:
+            self._send_text(chat_id, tg_bot._t("fwd_voice_gone", lang))
+            return
+        if m["kind"] == "video":
+            sess.continue_state = "want_video"
+            self._continue_take_media(chat_id, sess, lang, {"video": {"file_id": m["file_id"]}})
+            return
+        path = self._save_incoming_photo(m["file_id"])
+        if not path:
+            self._send_text(chat_id, tg_bot._t("img_gone", lang))
+            return
+        sess.target_image = tg_bot._log_image(sess, path, label=m["label"], src="user")
+        sess.turn_image = sess.target_image
+        self._store.put(sess)
+        self._send_text(chat_id, tg_bot._t("fwd_picked", lang, label=m["label"]))
 
     def _cb_pick_image(self, chat_id: int, data: str) -> None:
         sess = self._get_session(chat_id)

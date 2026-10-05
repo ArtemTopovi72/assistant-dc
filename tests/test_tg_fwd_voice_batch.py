@@ -381,6 +381,45 @@ _ask = next((t for _, t in bot.sent if "Forwarded video" in t), "")
 check("the video ask does not dump the storyboard", ok and "cat on a sofa" not in _ask, _ask)
 stop_bot(bot)
 
+section("a forwarded POST (videos + pictures + its words) is ONE conversation and ONE ask")
+# Live 2026-10-05: 8 videos and 2 pictures of one post: the videos got the ask, the pictures were answered
+# on their own («Что ты хочешь сделать с этим фото?» + a voice reply).
+CID_POST = 900304
+approve(bot, CID_POST)
+_heard.update({"p1": "no words", "p2": "no words either"})
+bot._dl_bytes = lambda fid: b"x"
+_kbs = []
+bot._send_text = lambda cid, t, **kw: (bot.sent.append((cid, t)), _kbs.append(kw.get("keyboard")), 1)[2]
+_llm0.analyze_image_with_llm = lambda ctx, **kw: "a tattoo that looks like mold"
+bot.sent.clear(); INVOKES.clear()
+bot._dispatch(fwd_from(CID_POST, "Dvach", caption="a post about tattoos", video={"file_id": "p1", "duration": 5}))
+bot._dispatch(fwd_from(CID_POST, "Dvach", video={"file_id": "p2", "duration": 5}))
+for _i in range(2):
+    bot._dispatch(fwd_from(CID_POST, "Dvach", media_group_id="g1",
+                           photo=[{"file_id": f"pic{_i}", "width": 90, "height": 90, "file_size": 99}]))
+ok = settle(lambda: any("Forwarded conversation" in t for _, t in bot.sent), timeout=20)
+time.sleep(2)
+held = bot._get_session(CID_POST).fwd_transcript
+check("the post's words and both pictures are in the held conversation",
+      ok and "a post about tattoos" in held and "picture 1" in held and "picture 2" in held, held)
+check("one ask and no turn run on the pictures", ok and sum("Forwarded" in t for _, t in bot.sent) == 1 and not INVOKES,
+      (bot.sent, INVOKES))
+_kb = next((k for k in reversed(_kbs) if k and "inline_keyboard" in k and bot._get_session(CID_POST).fwd_transcript_id in str(k)), {})
+_cbs = [b["callback_data"] for row in _kb.get("inline_keyboard", []) for b in row]
+check("several pieces: a pick button, no continue, nothing attached at random",
+      any(c.startswith("fwdv:pick") for c in _cbs) and not any(c.startswith("fwdv:cont") for c in _cbs)
+      and not bot._get_session(CID_POST).turn_image, _cbs)
+_pick = next(c for c in _cbs if c.startswith("fwdv:pick"))
+bot.sent.clear(); _kbs.clear()
+bot._save_incoming_photo = lambda fid: __import__("pathlib").Path(_DATA, fid + ".jpg").write_bytes(b"x") and str(__import__("pathlib").Path(_DATA, fid + ".jpg"))
+_press = lambda d: bot._dispatch_callback({"id": "1", "data": d, "message": {"message_id": 5, "chat": {"id": CID_POST}}, "from": {"id": CID_POST}})
+_press(_pick)
+_menu = next((k for k in _kbs if k and "inline_keyboard" in k), {})
+_mcbs = [b["callback_data"] for row in _menu.get("inline_keyboard", []) for b in row]
+check("the pick button lists every piece", len(_mcbs) == 4 and all(c.startswith("fwdv:m") for c in _mcbs), (_mcbs, bot.sent))
+_press(next(c for c in _mcbs if c.startswith("fwdv:m2")))      # videos 0,1 then pictures 2,3
+check("a picked picture becomes the target of the next words", bool(bot._get_session(CID_POST).target_image), bot.sent)
+
 print(f"\n{OK}/{OK + BAD} passed")
 if BAD:
     print("FAILURES:", FAILURES)
