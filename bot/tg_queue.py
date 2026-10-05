@@ -416,6 +416,8 @@ class QueueMixin:
         # task with a post-Stop enqueue_ts that _stop_requested_after let
         # through — the render happened anyway.
         item.setdefault("_arrival_ts", time.time())
+        # When the USER sent it (Telegram's message date), not when we got it: a stalled poll delivers a burst late
+        item.setdefault("_sent_ts", (getattr(self, "_msg_date", {}) or {}).get(chat_id))
         with self._mgmt_lock:
             if chat_id not in self._queues:
                 self._queues[chat_id] = _pyqueue.Queue()
@@ -459,13 +461,20 @@ class QueueMixin:
             t_first = time.monotonic()
             def _quiet(): return (tg_bot._DEBOUNCE_FWD_S if all(i.get("forwarded") for i in batch) else tg_bot._DEBOUNCE_S)
             def _cap(): return (tg_bot._DEBOUNCE_FWD_MAX_S if all(i.get("forwarded") for i in batch) else tg_bot._DEBOUNCE_MAX_S)
-            deadline = t_first + _quiet()
+            def _lag(it):
+                # Forwards that reach us late (a stalled getUpdates, live 2026-10-05: three pieces sent together came
+                # in at 11:59, 12:01, 12:02) have more of the same burst still on the way: wait that long again.
+                s = it.get("_sent_ts")
+                return min(30.0, max(0.0, time.time() - s)) if s and it.get("forwarded") and time.time() - s > 3 else 0.0
+            extra = _lag(first)
+            deadline = t_first + _quiet() + extra
             while True:
-                left = min(deadline, t_first + _cap()) - time.monotonic()
+                left = min(deadline, t_first + _cap() + extra) - time.monotonic()
                 if left <= 0: break
                 try: batch.append(q.get(timeout=left))
                 except _pyqueue.Empty: break
-                deadline = time.monotonic() + _quiet()
+                extra = max(extra, _lag(batch[-1]))
+                deadline = time.monotonic() + _quiet() + _lag(batch[-1])
             # The batch is a turn of its own (a forwarded voice + кружки are
             # transcribed and looked at right here): traced, and logged to
             # the chat's transcript, like an update in _dispatch_logged.

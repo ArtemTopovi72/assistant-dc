@@ -66,5 +66,11 @@ batches.clear()
 q.put({"type": "text", "text": "alone", "forwarded": True}); time.sleep(2.2)
 check("a forward with no instruction still goes out", len(batches) == 1, [len(b) for b in batches])
 
+batches.clear()
+for i in range(3):   # sent together, delivered late and 2 s apart (a stalled poll): still one batch
+    q.put({"type": "text", "text": f"late {i}", "forwarded": True, "_sent_ts": time.time() - 4}); time.sleep(2.0)
+time.sleep(6.5)
+check("forwards sent together but delivered late stay ONE batch", len(batches) == 1 and len(batches[0]) == 3, [len(b) for b in batches])
+
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)
