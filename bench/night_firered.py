@@ -53,7 +53,7 @@ def variant(wf, name):
         # the 1.1-native Lightning LoRAs (we ran 1.0's on the 1.1 model)
         wf["183"]["inputs"]["lora_name"] = "FireRed-Image-Edit-1.1-Lightning-8steps-v1.%s.safetensors" % name[-1]
     elif name == "te_bf16":
-        wf["182"]["inputs"]["clip_name"] = "qwen_2.5_vl_7b.safetensors"
+        wf["182"]["inputs"]["clip_name"] = "qwen_2.5_vl_7b_fp8_scaled.safetensors"
     elif name == "fp8mixed":
         wf["184"]["inputs"]["unet_name"] = "FireRed-Image-Edit-1.1_fp8mixed_comfy.safetensors"
     elif name == "zoomfix":
