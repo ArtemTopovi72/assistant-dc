@@ -400,6 +400,7 @@ class ResolveMixin:
                     continue
                 if item.get("forwarded"):
                     raw = tg_bot._unclaim(raw)
+                    sess.fwd_text_ts = time.time()   # in memory only: see the picture-choice gate
                     # Someone else's words: frame them so the model reads a
                     # forwarded post as a quotation and "о чём это?" / "ответь
                     # автору" afterwards refer to it. Not a button, not a
@@ -1483,6 +1484,12 @@ class ResolveMixin:
                 and tg_bot._needs_image_choice(own_words)):
             live = tg_bot._live_images(sess)
             _in_play = getattr(sess, "turn_image", "")
+            # A short question typed after a forwarded TEXT is about that text, not about one of the old pictures
+            # (live 10-05: «Речь про китайцев?» after Stepan's forwards got «Какую картинку? В этом чате их 12»).
+            _fwd = getattr(sess, "fwd_text_ts", 0) or 0
+            if (_fwd and time.time() - _fwd < 900
+                    and _fwd > max([e.get("ts") or 0 for e in live] or [0])):
+                live = []
             if len(live) > 1 and _in_play and live[-1].get("id") == _in_play:
                 # The newest picture is the one the previous turn was about
                 # (sent, pointed at, or just delivered): a follow-up continues
