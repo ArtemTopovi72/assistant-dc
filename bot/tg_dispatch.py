@@ -141,8 +141,8 @@ class DispatchMixin:
             # 409 (a second instance polling) / 401 (revoked token) come back at
             # once: returning [] here spun a tight request loop and still
             # counted as a healthy poll for the watchdog. Raise -> backoff.
-            raise RuntimeError(f"getUpdates not ok: {body.get('error_code')} "
-                               f"{str(body.get('description'))[:120]}")
+            raise RuntimeError(f"getUpdates not ok: HTTP {r.status_code} {body.get('error_code')} "
+                               f"{str(body.get('description'))[:120]} body={str(body)[:160]}")
         return body.get("result", [])
 
     def _dispatch_logged(self, upd: dict):
