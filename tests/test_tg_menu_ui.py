@@ -516,12 +516,12 @@ check("an inline menu without an exit gains Back",
       _kb["inline_keyboard"][-1][0]["callback_data"] == "nav:close", repr(_kb))
 _kb2 = T.TelegramBot._with_wait_cancel(bot, CID, {"inline_keyboard": [[{"text": "x", "callback_data": "wait:cancel"}]]})
 check("a menu that already has an exit is left alone", len(_kb2["inline_keyboard"]) == 1, repr(_kb2))
-_s.mashup_state = "want1"; bot._store.put(_s)
+_s.cover_state = "want_audio"; bot._store.put(_s)
 _kb3 = T.TelegramBot._with_wait_cancel(bot, CID, None)
-check("a mashup step waiting for a track carries Cancel",
+check("a remix step waiting for a song carries Cancel",
       _kb3 and _kb3["inline_keyboard"][-1][0]["callback_data"] == "wait:cancel", repr(_kb3))
 _s.drop_waiting(); bot._store.put(_s)
-check("Cancel ends the mashup step", sess(bot).mashup_state == "")
+check("Cancel ends the remix step", sess(bot).cover_state == "")
 
 print()
 print(f"{OK} passed, {BAD} failed")

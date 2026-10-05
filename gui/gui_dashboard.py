@@ -27,7 +27,6 @@ from gui_memory_tab import MemoryCenterTab
 from gui_model_config_tab import ModelConfigTab
 from gui_music_tab import MusicTab
 from gui_weather_tab import WeatherTab
-from gui_mashup_tab import MashupTab
 from gui_storyboard_tab import StoryboardTab
 from gui_stress_tab import StressTab
 from gui_system_info_tab import SystemInfoTab
@@ -321,7 +320,6 @@ class DashboardMixin:
         self.stress_tab = StressTab(self)
         self.music_tab = MusicTab(self)
         self.weather_tab = WeatherTab(self)
-        self.mashup_tab = MashupTab(self)
         from gui_voice_clone_tab import VoiceCloneTab
         self.voice_clone_tab = VoiceCloneTab(self)
         self.madhouse_tab = MadhouseTab(self)
@@ -348,7 +346,6 @@ class DashboardMixin:
             ("stress",   _scroll_page(self.stress_tab),        "Stress"),
             ("music",    _scroll_page(self.music_tab),         "Music"),
             ("weather",  _scroll_page(self.weather_tab),       "Weather"),
-            ("mashup",   _scroll_page(self.mashup_tab),        "Mashup"),
             ("voice_clone", _scroll_page(self.voice_clone_tab), 'Voice Clone'),
             ("restyle",  _scroll_page(self.restyle_tab),       'Restyle Video'),
             ("madhouse", _scroll_page(self.madhouse_tab),      "Madhouse"),

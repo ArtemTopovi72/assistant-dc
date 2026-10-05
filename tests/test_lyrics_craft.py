@@ -121,7 +121,7 @@ def test_the_music_menu_has_both_buttons_in_one_new_row():
     rows = [[b for b in r] for r in K._cr_music_kb("ru")["keyboard"]]
     assert rows[-2] == ["✨ Улучшить текст", "✍️ Сочинить текст"]
     assert rows[-1] == [K._b("back", "ru")]
-    assert ["🎤 Кавер", "🎙 Клонировать голос"] in rows          # the old rows stay
+    assert ["🎙 Клонировать голос", "📚 Аудиокнига"] in rows and ["🎵 Песни", "🎚 Кавер / Мэшап"] in rows
 
 
 def test_improve_answers_in_two_messages_and_can_be_sung(monkeypatch):

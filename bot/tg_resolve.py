@@ -527,16 +527,6 @@ class ResolveMixin:
                 direct = tg_bot._DIRECT_KB.get(key, "")
                 if not direct and _tg_music.is_reset_phrase(raw):
                     direct = "__song_reset__"
-                # Pressing any OTHER button abandons a half-collected mashup.
-                # Without this the flow stayed armed after the user navigated
-                # away, and the next voice message they sent -- meaning it as
-                # speech to the bot -- was silently eaten as "track 2". That is
-                # the same trap the forwarded-voice transcript had.
-                if direct and direct != "__mashup__" and getattr(sess, "mashup_state", ""):
-                    sess.mashup_state = ""
-                    sess.mashup_vocal_path = ""
-                    sess.mashup_vocal_speech = False
-                    self._store.put(sess)
                 if direct and direct != "__clone_voice__":
                     self._clone_disarm(sess)
                 if direct and direct != "__cover__":
@@ -644,9 +634,6 @@ class ResolveMixin:
                 if direct == "__songs__":
                     self._goto_menu(sess, "cr_music")
                     self._start_song_flow(chat_id, sess, lang); continue
-                if direct == "__mashup__":
-                    self._goto_menu(sess, "cr_music")
-                    self._start_mashup_flow(chat_id, sess, lang); continue
                 if direct == "__sandbox__":
                     # Routed through the same handler as /files: one grant
                     # check, one refusal wording, nothing here to keep in sync

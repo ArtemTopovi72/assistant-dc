@@ -11,7 +11,7 @@ for sub in ("", "bench", "voice", "agent", "core", "media", "bot"):
 os.chdir(ROOT)
 import numpy as np, soundfile as sf
 import config, cover, mashup_stems
-from mashup_dsp import SAMPLE_RATE
+from mashup_stems import SAMPLE_RATE
 
 src = sys.argv[1]
 target = sys.argv[2] if len(sys.argv) > 2 and not sys.argv[2].startswith("--") else str(config.DC_REF_WAV)

@@ -112,7 +112,7 @@ class BusyStateMixin:
         hosts = [self]
         for attr in ("transfer_tab", "storyboard_tab", "madhouse_tab",
                      "model_config_tab", "memory_center_tab", "code_tab",
-                     "voice_clone_tab", "mashup_tab"):
+                     "voice_clone_tab"):
             h = getattr(self, attr, None)
             if h is not None:
                 hosts.append(h)

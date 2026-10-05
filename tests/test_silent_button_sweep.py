@@ -106,8 +106,7 @@ def test_the_standalone_tabs_use_their_own_status_line():
     """They are plain QWidgets, not window mixins: _add_system does not exist
     on them, and calling it would be an AttributeError inside a Qt slot -- a
     silent button traded for a native crash."""
-    for mod, fn, own in [("gui/gui_music_tab.py", "_generate", "MusicTab"),
-                         ("gui/gui_mashup_tab.py", "_build", "MashupTab")]:
+    for mod, fn, own in [("gui/gui_music_tab.py", "_generate", "MusicTab")]:
         src = _src(mod)
         body = _func(src, fn)
         check(f"{mod}:{fn} writes to its own status line",

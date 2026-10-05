@@ -1,4 +1,4 @@
-"""Two audio flows the 🎨 Creativity menu offers: write a song, build a mashup.
+"""The audio flow the 🎨 Creativity menu offers: write a song (the remix lives in tg_cover.py).
 
 Lifted out of tg_accounts.py. Both are menu-first and multi-turn -- the user
 presses the button, then sends what the flow asked for -- and both do the
@@ -7,9 +7,6 @@ actual work on a background thread so the poll loop keeps serving other chats.
 Songs arm `song_topic` and hand the topic to music.py. Unlike the weather
 flow's `wtw_city`, the state is cleared once the attempt FINISHES either way:
 a song topic has no "didn't resolve, try again" case worth staying armed for.
-
-Mashups collect two tracks before anything can run, so they keep their own
-`mashup_state` rather than a reg_state: the vocal, then the backing.
 
 Paths are read through ``tg_bot`` at call time (_MASHUP_DIR in particular is
 rebound by redirect_data_dir(), which a by-value import would never see).
@@ -22,7 +19,6 @@ import re as _re
 import threading
 import turn_trace
 
-import mashup as _mashup_mod
 import music as _music_mod
 
 
@@ -456,146 +452,6 @@ class SongsMixin:
             except Exception:
                 pass
         return False
-
-    # ── mashup: the voice of one track over the music of another ─────────────
-    def _start_mashup_flow(self, chat_id: int, sess, lang: str) -> None:
-        """Arm the two-track capture and ask for the first one.
-
-        Menu-first by design: the user presses 🎚 Мэшап, then sends the tracks
-        one at a time and is told which is which. The alternative -- watching
-        for any two audio messages in a row -- would have to guess which of
-        them the voice comes from, and that is the one thing a mashup cannot
-        guess for you.
-        """
-        if not _mashup_mod.engine_available():
-            self._send_text(chat_id, tg_bot._t("mash_off", lang),
-                            keyboard=self._main_menu_kb(sess, lang))
-            return
-        sess.mashup_state = "want1"
-        sess.mashup_vocal_path = ""
-        sess.mashup_vocal_speech = False
-        self._store.put(sess)
-        self._send_text(chat_id, tg_bot._t("mash_ask1", lang), parse_mode="HTML")
-
-    def _mashup_dir(self, chat_id: int) -> str:
-        """Per-chat scratch space for the two tracks.
-
-        Read off tg_bot._MASHUP_DIR at call time rather than captured at import:
-        redirect_data_dir() rebinds it, and a by-value copy would leave test
-        runs writing tracks into the live tree -- the same mistake that once
-        put test chat ids into the production user database.
-        """
-        d = os.path.join(str(tg_bot._MASHUP_DIR), str(chat_id))
-        os.makedirs(d, exist_ok=True)
-        return d
-
-    def _mashup_take_audio(self, chat_id: int, sess, lang: str, file_id: str,
-                           is_voice: bool, suffix: str = ".ogg") -> bool:
-        """Store one of the two tracks. Returns True if it was consumed here.
-
-        Downloads on the poll thread deliberately: a Telegram audio file is a
-        few megabytes over a local-ish HTTP hop, and the alternative (spawning
-        a thread per track) would let the SECOND track arrive and start a
-        mashup while the FIRST was still being written to disk.
-        """
-        data = self._dl_bytes(file_id)
-        if not data:
-            self._send_text(chat_id, tg_bot._t("mash_need_audio", lang))
-            return True
-        slot = "1" if sess.mashup_state == "want1" else "2"
-        path = os.path.join(self._mashup_dir(chat_id), "track%s%s" % (slot, suffix))
-        try:
-            with open(path, "wb") as fh:
-                fh.write(data)
-        except Exception:
-            tg_bot.logger.exception("[mashup] could not save track for chat %s", chat_id)
-            self._send_text(chat_id, tg_bot._t("mash_need_audio", lang))
-            return True
-
-        if sess.mashup_state == "want1":
-            sess.mashup_vocal_path = path
-            sess.mashup_vocal_speech = bool(is_voice)
-            sess.mashup_state = "want2"
-            self._store.put(sess)
-            self._send_text(chat_id, tg_bot._t("mash_got1", lang))
-            self._send_text(chat_id, tg_bot._t("mash_ask2", lang), parse_mode="HTML")
-            return True
-
-        vocal_path = sess.mashup_vocal_path
-        is_speech = bool(sess.mashup_vocal_speech)
-        # Disarmed BEFORE the slow work starts: leaving it armed meant the next
-        # audio message the user sent while waiting was swallowed as "track 2"
-        # of a mashup that was already running.
-        sess.mashup_state = ""
-        sess.mashup_vocal_path = ""
-        sess.mashup_vocal_speech = False
-        self._store.put(sess)
-        if not vocal_path or not os.path.exists(vocal_path):
-            self._send_text(chat_id, tg_bot._t("mash_failed", lang,
-                                               why=tg_bot._t("mash_need_audio", lang)))
-            return True
-        self._send_text(chat_id, tg_bot._t("mash_work", lang))
-        turn_trace.spawn(self._run_mashup, chat_id, lang, vocal_path, path, is_speech,
-                         name=f"mashup-{chat_id}")
-        return True
-
-    def _run_mashup(self, chat_id: int, lang: str, vocal_path: str,
-                    instr_path: str, is_speech: bool) -> None:
-        """Separate, match, mix and deliver -- off the poll thread.
-
-        Two Demucs passes plus a time-stretch is tens of seconds of GPU work,
-        and this is reached from the loop every other chat's updates queue
-        behind, exactly like _start_weather_lookup and _generate_song.
-        """
-        sess = self._get_session(chat_id)
-        try:
-            out = _mashup_mod.default_out_path(str(chat_id))
-            rep = _mashup_mod.make_mashup(
-                vocal_path, instr_path, out, vocal_is_speech=is_speech,
-                progress=lambda st: self._activity.log(
-                    chat_id, "stage", "Mashup: %s" % st))
-            caption = tg_bot._t(
-                "mash_done", lang, secs=rep["seconds"],
-                kv=rep["key_vocal"] or "?", bv=rep["bpm_vocal"] or "?",
-                ki=rep["key_instr"] or "?", bi=rep["bpm_instr"] or "?",
-                stretch=rep["stretch"], semis=rep["semitones"], took=rep["took"])
-            # A pair that cannot work is delivered anyway -- the user asked for
-            # it -- but with the reason attached. Silently handing back four
-            # minutes of two songs fighting each other, with no explanation,
-            # is what made the feature look broken rather than misused.
-            if rep.get("warnings"):
-                caption += "\n\n" + tg_bot._t("mash_mismatch", lang,
-                                              why="; ".join(rep["warnings"]))
-            if not self._send_audio(chat_id, out, caption):
-                tg_bot.logger.error("[mashup] delivery failed for chat %s (%s)",
-                                    chat_id, out)
-                self._send_text(chat_id, tg_bot._t("mash_failed", lang, why="delivery"))
-        except _mashup_mod.MashupUnavailable as exc:
-            # Carries a sentence written for the user -- see mashup.py's module
-            # docstring -- so it is passed through rather than replaced.
-            tg_bot.logger.warning("[mashup] refused for chat %s: %s", chat_id, exc)
-            try:
-                self._send_text(chat_id, tg_bot._t("mash_failed", lang, why=str(exc)))
-            except Exception:
-                pass
-        except Exception as exc:
-            tg_bot.logger.exception("[mashup] failed for chat %s", chat_id)
-            try:
-                self._send_text(chat_id, tg_bot._t("mash_failed", lang, why=str(exc)))
-            except Exception:
-                pass
-        finally:
-            # The separator holds GPU memory the next image or song render
-            # needs; this machine has 24GB for everything at once.
-            try:
-                _mashup_mod.release_separator()
-            except Exception:
-                pass
-            try:
-                self._send_text(chat_id, tg_bot._t("main_menu", lang),
-                                keyboard=self._main_menu_kb(sess, lang))
-            except Exception:
-                pass
 
 
 import tg_bot  # noqa: E402  (cycle by design; attrs read at call time)

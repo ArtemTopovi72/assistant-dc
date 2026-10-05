@@ -1,17 +1,19 @@
-"""🎤 Cover (Creativity menu): a track in, the same song re-sung with new words out.
+"""🎚 Remix (Creativity menu; it replaced the separate Cover and Mashup buttons).
+
+A song goes in; then EITHER text (the song sings it in its own voice and melody) OR a second
+song (the first song's voice sings the second one's melody and words over its backing).
 
 States on the session (cover_state):
   "want_audio"  the button was pressed; the next voice / audio / video / round
-                video / audio-or-video file, or a video link, is the song to cover.
-  "want_text"   the song is saved; the next plain text is the new lyric (a first
-                line «Стиль: …» sets the style), or the inline «📝 Keep the words»
-                button re-sings its own words. A new clip replaces the song; any
-                menu button disarms, the same rule as mashup and voice clone.
-The slow parts (demucs + GigaAM, MuLaCover) run off the poll thread.
+                video / audio-or-video file, or a video link, is the first song.
+  "want_text"   the first song is saved; the next plain text is the new lyric, and
+                the next clip or link is the second song. Any menu button disarms.
+The slow parts (demucs, TTS, SoulX-SVC) run off the poll thread (media/remix.py).
 """
 import os
 
 import cover
+import remix
 
 
 class CoverMixin:
@@ -22,7 +24,7 @@ class CoverMixin:
         return d
 
     def _start_cover_flow(self, chat_id: int, sess, lang: str) -> None:
-        if not cover.available():
+        if not remix.available():
             self._send_text(chat_id, tg_bot._t("cover_fail_off", lang))
             return
         sess.cover_state = "want_audio"
@@ -88,27 +90,24 @@ class CoverMixin:
         return True
 
     def _cover_have_song(self, chat_id: int, sess, lang: str, data: bytes, ext: str) -> None:
-        src = os.path.join(self._cover_dir(chat_id), "song" + ext)
+        """The first song arms the text step; a clip arriving at that step is the SECOND song and starts the render."""
+        second = getattr(sess, "cover_state", "") == "want_text" and bool(getattr(sess, "cover_src", ""))
+        src = os.path.join(self._cover_dir(chat_id), ("song2" if second else "song") + ext)
         with open(src, "wb") as fh:
             fh.write(data)
+        if second:
+            return self._cover_go(chat_id, sess, lang, "", src)
         sess.cover_state = "want_text"
         sess.cover_src = src
         self._store.put(sess)
-        kb = {"inline_keyboard": [[{"text": tg_bot._t("cover_keep_btn", lang),
-                                    "callback_data": "cover:keep"}]]}
-        self._send_text(chat_id, tg_bot._t("cover_ask_text", lang), parse_mode="HTML", keyboard=kb)
+        self._send_text(chat_id, tg_bot._t("cover_ask_text", lang), parse_mode="HTML")
 
     def _cover_take_text(self, chat_id: int, sess, lang: str, text: str) -> bool:
         if getattr(sess, "cover_state", "") != "want_text" or not (text or "").strip():
             return False
-        lyrics, tags = cover.split_style(text)
-        return self._cover_go(chat_id, sess, lang, lyrics, tags, keep=False)
+        return self._cover_go(chat_id, sess, lang, text.strip(), "")
 
-    def _cb_cover_keep(self, chat_id: int, data: str) -> None:
-        sess = self._get_session(chat_id)
-        self._cover_go(chat_id, sess, self._lang(sess), "", "", keep=True)
-
-    def _cover_go(self, chat_id, sess, lang, lyrics, tags, keep) -> bool:
+    def _cover_go(self, chat_id, sess, lang, lyrics, song2) -> bool:
         src = getattr(sess, "cover_src", "")
         if not src or not os.path.exists(src):
             sess.cover_state = "want_audio"
@@ -120,27 +119,23 @@ class CoverMixin:
         sess.cover_state = ""
         self._store.put(sess)
         self._send_text(chat_id, tg_bot._t("cover_working", lang))
-        self._run_busy(chat_id, self._cover_render, chat_id, lang, src, lyrics, tags, keep)
+        self._run_busy(chat_id, self._cover_render, chat_id, lang, src, lyrics, song2)
         return True
 
-    def _cover_render(self, chat_id: int, lang: str, src: str, lyrics: str, tags: str,
-                      keep: bool) -> None:
+    def _cover_render(self, chat_id: int, lang: str, src: str, lyrics: str, song2: str) -> None:
         ctx = self._get_ctx()
         try:
-            if keep:
-                wav = cover.to_wav(src, os.path.join(self._cover_dir(chat_id), "song_words.wav"))
-                lyrics = cover.original_words(ctx, wav)
-                if not lyrics.strip():
-                    raise cover.CoverFailed("no_words")
-                self._send_text(chat_id, tg_bot._t("cover_words", lang, words=lyrics[:900]))
-            out = cover.make_cover(ctx, src, lyrics, tags)
+            out = remix.remix_voice(ctx, src, song2) if song2 else remix.remix_words(ctx, src, lyrics)
             if not self._send_audio(chat_id, out, tg_bot._t("cover_done", lang)):
                 self._send_text(chat_id, tg_bot._t("cover_fail_render", lang))
         except cover.CoverFailed as exc:
             self._send_text(chat_id, tg_bot._t("cover_fail_" + str(exc), lang))
         except Exception:
-            tg_bot.logger.exception("[cover] failed for chat %s", chat_id)
+            tg_bot.logger.exception("[remix] failed for chat %s", chat_id)
             self._send_text(chat_id, tg_bot._t("cover_fail_render", lang))
+        finally:
+            import mashup_stems
+            mashup_stems.release_separator()      # Demucs holds VRAM the next render needs
 
 
 import tg_bot  # noqa: E402  (cycle by design; attrs read at call time)

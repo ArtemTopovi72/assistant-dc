@@ -341,11 +341,11 @@ class DispatchMixin:
                                 "author": _fwd_author_of(msg)})
             return
 
-        # ── a mashup is collecting its two tracks ─────────────────────────────
+        # ── armed audio flows take the next clip (remix, clone, book...) ──────────────────────────────
         # Checked BEFORE the normal audio routing, because every branch below
         # sends audio somewhere else: a voice note becomes speech to the bot, a
         # forwarded one raises the transcript prompt, and an mp3 lands in the
-        # document reader. While 🎚 Mashup is waiting, an audio message is a
+        # document reader. While a flow is waiting, an audio message is a
         # track and nothing else. Non-audio messages fall through untouched so
         # the menu buttons still work and the user is never trapped here.
         _msess = self._get_session(chat_id)
@@ -373,24 +373,6 @@ class DispatchMixin:
         if getattr(_msess, "clone_state", "") and self._clone_take_media(
                 chat_id, _msess, self._lang(_msess), msg):
             return
-        if getattr(_msess, "mashup_state", ""):
-            _mlang = self._lang(_msess)
-            _aud = msg.get("audio") or msg.get("voice")
-            if _aud:
-                self._mashup_take_audio(
-                    chat_id, _msess, _mlang, _aud["file_id"],
-                    is_voice=bool(msg.get("voice")),
-                    suffix=".ogg" if msg.get("voice") else ".mp3")
-                return
-            _doc = msg.get("document")
-            if _doc and str(_doc.get("mime_type", "")).startswith("audio"):
-                _name = _doc.get("file_name", "track")
-                _ext = os.path.splitext(_name)[1] or ".mp3"
-                self._mashup_take_audio(chat_id, _msess, _mlang,
-                                        _doc["file_id"], is_voice=False,
-                                        suffix=_ext)
-                return
-
         voice = msg.get("voice") or msg.get("audio")
         if voice:
             # A FORWARDED voice note is not the user talking to the bot — it is

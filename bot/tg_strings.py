@@ -83,7 +83,6 @@ _BTN: dict[str, dict[str, str]] = {
     "songs":      {"en": "🎵 Songs",           "ru": "🎵 Песни"},
     "song_setup": {"en": "🎛 Song settings",   "ru": "🎛 Настройки песни"},
     "video_setup": {"en": "🎬 Long video recap", "ru": "🎬 Пересказ длинных видео"},
-    "mashup":     {"en": "🎚 Mashup",           "ru": "🎚 Мэшап"},
     "sandbox_btn": {"en": "📁 Sandbox",         "ru": "📁 Песочница"},
     "ozon":         {"en": "🛒 Ozon",           "ru": "🛒 Озон"},
     "ozon_find":    {"en": "🔍 Find",           "ru": "🔍 Найти товар"},
@@ -100,7 +99,7 @@ _BTN: dict[str, dict[str, str]] = {
     "characters_btn": {"en": "🧑 Characters",    "ru": "🧑 Персонажи"},
     "animate_btn":    {"en": "🎞 Animate photo",  "ru": "🎞 Анимация фото"},
     "clone_btn":      {"en": "🎙 Clone voice",    "ru": "🎙 Клонировать голос"},
-    "cover_btn":      {"en": "🎤 Cover",          "ru": "🎤 Кавер"},
+    "cover_btn": {"en": '🎚 Cover / Mashup', "ru": '🎚 Кавер / Мэшап'},
     "lyr_improve_btn": {"en": "✨ Improve lyrics", "ru": "✨ Улучшить текст"},
     "lyr_write_btn":   {"en": "✍️ Write lyrics",   "ru": "✍️ Сочинить текст"},
     "restyle_btn":    {"en": "🎨 Restyle video",  "ru": "🎨 Перерисовать видео"},
@@ -999,20 +998,10 @@ _MSG: dict[str, dict[str, str]] = {
     "lyr_gone": {"en": "That lyric is gone — send it again.", "ru": "Этого текста уже нет — пришли его снова."},
     "lyr_fail": {"en": "⚠️ Couldn't work on the lyric right now — try again.",
                  "ru": "⚠️ Не получилось обработать текст — попробуй ещё раз."},
-    "cover_ask_audio": {"en": "🎤 <b>Cover</b> · send the song to re-sing: a YouTube/VK link, an audio file, a voice message, a video, "
-                              "a round video or a file. The melody and feel stay, the words change.",
-                        "ru": "🎤 <b>Кавер</b> · пришли песню, которую перепеть: ссылку на YouTube/VK, аудиофайл, голосовое, видео, "
-                              "кружок или файл. Мелодия и настроение останутся, слова поменяются."},
-    "cover_ask_text": {"en": "✅ Got the song. Now send the <b>new lyrics</b>, a line per sung line. "
-                             "A first line like <i>Style: rock, male vocal</i> sets the style. "
-                             "Or keep its own words with the button.",
-                       "ru": "✅ Песню получил. Теперь пришли <b>новый текст</b>, строка на строку пения. "
-                             "Первой строкой можно задать стиль: <i>Стиль: рок, мужской вокал</i>. "
-                             "Или оставь её слова кнопкой."},
-    "cover_keep_btn": {"en": "📝 Keep the words", "ru": "📝 Оставить слова"},
-    "cover_working":  {"en": "🎤 Re-singing — about two minutes…", "ru": "🎤 Перепеваю — пара минут…"},
-    "cover_words":    {"en": "📝 Heard these words:\n{words}", "ru": "📝 Расслышал такие слова:\n{words}"},
-    "cover_done":     {"en": "🎤 Cover", "ru": "🎤 Кавер"},
+    "cover_ask_audio": {"en": '🎚 <b>Cover / Mashup</b> · send the song: a YouTube/VK link, an audio file, a voice message or a video. Its voice and melody stay.', "ru": '🎚 <b>Кавер / Мэшап</b> · пришли песню: ссылку на YouTube/VK, аудиофайл, голосовое или видео. Её голос и мелодия останутся.'},
+    "cover_ask_text": {"en": "✅ Got the song. Now send either:\n• <b>text</b> — the song will sing it in its own voice and melody;\n• a <b>second song</b> (file or link) — the first song's voice will sing the second one's melody.", "ru": '✅ Песню получил. Теперь пришли одно из двух:\n• <b>текст</b> — песня споёт его своим голосом и на своей мелодии;\n• <b>вторую песню</b> (файл или ссылку) — голос первой споёт мелодию второй.'},
+    "cover_working": {"en": '🎚 Working on it — a few minutes…', "ru": '🎚 Делаю — несколько минут…'},
+    "cover_done": {"en": '🎚 Remix', "ru": '🎚 Готово'},
     "cover_fail_off":      {"en": "⚠️ The cover engine is not installed on this machine.",
                             "ru": "⚠️ Движок каверов на этой машине не установлен."},
     "cover_link_fetch": {"en": "🎤 Fetching the song from the link…", "ru": "🎤 Скачиваю песню по ссылке…"},
@@ -1127,40 +1116,6 @@ _MSG: dict[str, dict[str, str]] = {
                        "ru": "🎧 Этого голосового у меня больше нет — перешли его заново."},
     "fwd_voice_head": {"en": "📝 <b>Transcript</b>", "ru": "📝 <b>Расшифровка</b>"},
     "fwd_voice_work": {"en": "🎧 Listening to it…", "ru": "🎧 Слушаю…"},
-
-    # ── mashup: the voice of one track over the music of another ─────────────
-    "mash_ask1": {"en": "🎚 <b>Mashup</b> · track 1 of 2\nSend the track whose "
-                        "VOICE you want — a song, or your own voice message.",
-                  "ru": "🎚 <b>Мэшап</b> · трек 1 из 2\nПришли трек, ГОЛОС "
-                        "которого возьмём — песню или своё голосовое."},
-    "mash_ask2": {"en": "🎚 <b>Mashup</b> · track 2 of 2\nNow send the track "
-                        "whose MUSIC you want — the voice from the first one "
-                        "will sing over it.",
-                  "ru": "🎚 <b>Мэшап</b> · трек 2 из 2\nТеперь пришли трек, "
-                        "МУЗЫКУ которого возьмём — голос из первого ляжет "
-                        "поверх неё."},
-    "mash_got1": {"en": "✅ Got the voice track.",
-                  "ru": "✅ Голосовой трек принят."},
-    "mash_work": {"en": "🎚 Building the mashup — this takes a minute…",
-                  "ru": "🎚 Собираю мэшап — это займёт минуту…"},
-    "mash_need_audio": {"en": "🎚 That is not audio — send a song or a voice "
-                              "message, or press ⬅️ Back to leave.",
-                        "ru": "🎚 Это не аудио — пришли песню или голосовое, "
-                              "либо нажми ⬅️ Назад, чтобы выйти."},
-    "mash_failed": {"en": "🎚 The mashup did not work out: {why}",
-                    "ru": "🎚 С мэшапом не вышло: {why}"},
-    "mash_done": {"en": "🎚 <b>Mashup</b> · {secs}s\nVoice {kv} at {bv} BPM "
-                        "over music {ki} at {bi} BPM.\nStretch ×{stretch}, "
-                        "pitch {semis} semitones. Built in {took}s.",
-                  "ru": "🎚 <b>Мэшап</b> · {secs} с\nГолос {kv}, {bv} BPM "
-                        "поверх музыки {ki}, {bi} BPM.\nРастяжение ×{stretch}, "
-                        "сдвиг {semis} полутонов. Собрано за {took} с."},
-    "mash_off": {"en": "🎚 The mashup engine is not installed on this machine.",
-                 "ru": "🎚 Движок мэшапа не установлен на этой машине."},
-    "mash_mismatch": {"en": "⚠️ These two do not really fit: {why}. It will "
-                            "sound off — try a pair closer in tempo and key.",
-                      "ru": "⚠️ Эти двое плохо сочетаются: {why}. Будет звучать "
-                            "криво — возьми пару ближе по темпу и тональности."},
 
     # ── pointing at a specific image ─────────────────────────────────────────
     "img_gone":     {"en": "🖼 That picture is no longer available — send it again, "

@@ -15,6 +15,7 @@ logger = logging.getLogger("assistant.mashup")
 
 
 STEM_MODEL = "htdemucs"
+SAMPLE_RATE = 44100          # htdemucs' native rate; everything resamples to it
 
 
 # Which stems make up "the instrumental". htdemucs emits four; the backing
@@ -109,27 +110,6 @@ def backing_of(stems: dict) -> np.ndarray:
     parts = [stems[k] for k in _BACKING_STEMS if k in stems]
     if not parts:
         raise MashupUnavailable("The separator returned no instrumental stems.")
-    n = max(len(p) for p in parts)
-    total = np.zeros(n, dtype=np.float32)
-    for p in parts:
-        total[:len(p)] += p
-    return total
-
-
-def percussive_of(stems: dict) -> np.ndarray:
-    """Drums (plus bass) from a stem set -- what tempo should be measured on.
-
-    The first version measured the vocal donor's tempo on its VOCAL stem, which
-    is close to unmeasurable: singing has almost no percussive onsets, and
-    librosa's beat tracker returned an 8.1% beat-interval drift against 2.5%
-    for the same song's backing. Every downstream decision -- the stretch
-    ratio, the alignment -- was then built on that bad number. The donor's
-    drums are already separated and were simply being thrown away.
-    """
-    parts = [stems[k] for k in ("drums", "bass") if k in stems]
-    parts = [p for p in parts if p.size]
-    if not parts:
-        return np.array([], dtype=np.float32)
     n = max(len(p) for p in parts)
     total = np.zeros(n, dtype=np.float32)
     for p in parts:

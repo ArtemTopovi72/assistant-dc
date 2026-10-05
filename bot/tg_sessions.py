@@ -32,7 +32,7 @@ class _Session:
     _WAIT_STR = ("pending_prefix", "pending_instruction", "pending_photo", "pending_style_target",
                  "pending_animate_target", "cover_state", "cover_src", "song_draft",
                  # the step-by-step flows too: «Мэшап · трек 1 из 2» had no way out
-                 "mashup_state", "clone_state", "restyle_state", "continue_state", "book_state", "anim_voice_state", "voice_naming",
+                 "clone_state", "restyle_state", "continue_state", "book_state", "anim_voice_state", "voice_naming",
                  # ✍️ Свой вариант: the forwarded material waiting for the user's request
                  "fwd_own", "lyrics_state")
     _WAIT_BOOL = ("awaiting_animate_photo", "awaiting_style_photo")
@@ -176,14 +176,9 @@ class _Session:
         self.fwd_recent: dict = dict(d.get("fwd_recent") or {})
         # ✍️ Свой вариант pressed: the transcript the next typed message is about.
         self.fwd_own: str = d.get("fwd_own", "")
-        # ── mashup: collecting the two tracks, one message at a time ─────────
-        # "" | "want1" | "want2". The downloaded track 1 is held on disk rather
-        # than in the session, because a song is megabytes and the session is
-        # serialised to JSON on every write.
-        self.mashup_state: str = d.get("mashup_state", "")
         # 🎙 Clone voice: "" | "want_audio" | "want_text" (tg_voice_clone)
         self.clone_state: str = d.get("clone_state", "")
-        # 🎤 Cover: "" | "want_audio" | "want_text" (tg_cover); the song on disk.
+        # 🎚 Remix (was Cover): "" | "want_audio" | "want_text" (tg_cover); the song on disk.
         self.cover_state: str = d.get("cover_state", "")
         self.cover_src: str = d.get("cover_src", "")
         # 🎨 Restyle video: "" | "want_video" | "want_text" (tg_restyle)
@@ -216,11 +211,6 @@ class _Session:
         # experiments do not change how the bot answers. "" = house voice.
         self.assistant_ref: str = d.get("assistant_ref", "")
         self.assistant_ref_text: str = d.get("assistant_ref_text", "")
-        self.mashup_vocal_path: str = d.get("mashup_vocal_path", "")
-        # Whether track 1 arrived as a voice note. Speech skips the tempo and
-        # key matching (see mashup.make_mashup), so this has to survive the
-        # wait for track 2 -- it cannot be re-derived from the file.
-        self.mashup_vocal_speech: bool = bool(d.get("mashup_vocal_speech", False))
         self.last_image_prompt: str = d.get("last_image_prompt", "")
         self.last_deck: dict = d.get("last_deck") or {}
         # Pinned facts (remember_fact) are ALSO global on ctx — same leak as
@@ -363,7 +353,6 @@ class _Session:
             self.fwd_transcript_id = ""
             self.fwd_transcript_done = False
             self.fwd_recent = {}
-            self.mashup_state = ""
             self.clone_state = ""
             self.cover_state = ""
             self.restyle_state = ""
@@ -377,8 +366,6 @@ class _Session:
             self.voice_naming = ""
             self.lyrics_state = ""
             self.song_draft = ""
-            self.mashup_vocal_path = ""
-            self.mashup_vocal_speech = False
             # Pinned facts too. They were kept out of the wipe because they have
             # their own 🧠 button — but they are injected into EVERY turn, so a
             # user who cleared the chat and was then told their own earlier steps
@@ -429,7 +416,6 @@ class _Session:
                 "fwd_transcript_done": self.fwd_transcript_done,
                 "fwd_recent":        self.fwd_recent,
                 "fwd_own":           self.fwd_own,
-                "mashup_state":        self.mashup_state,
                 "clone_state":         self.clone_state,
                 "cover_state":         self.cover_state,
                 "cover_src":           self.cover_src,
@@ -454,8 +440,6 @@ class _Session:
                 "clone_ref_text":      self.clone_ref_text,
                 "assistant_ref":       self.assistant_ref,
                 "assistant_ref_text":  self.assistant_ref_text,
-                "mashup_vocal_path":   self.mashup_vocal_path,
-                "mashup_vocal_speech": self.mashup_vocal_speech,
                 "last_image_prompt": self.last_image_prompt,
                 "last_deck":         self.last_deck,
                 "tg_facts":          self.tg_facts,

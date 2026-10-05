@@ -54,8 +54,8 @@ bot._running = True
 thr = threading.Thread(target=bot._consumer_loop, daemon=True); thr.start()
 
 
-import cover
-cover.available = lambda: True
+import cover, remix
+cover.available = lambda: True; remix.available = lambda: True
 CID = 9_300_077
 bot._user_store.put(T._User(chat_id=CID, name="Cv", status="approved", is_admin=False))
 sess = bot._get_session(CID); sess.clear_context(); sess.lang = "ru"; sess.lang_chosen = True; sess.reg_state = ""; bot._store.put(sess)
@@ -128,6 +128,14 @@ for name, (st, kw) in variants.items():
     check(f"lyrics as {name}: the cover starts", ok and len(INVOKES) == n0,
           [t[:60] for _, t in bot.sent[n:]])
     s_ = bot._get_session(CID); s_.fwd_transcript = ""; s_.reg_state = ""; s_.pending_instruction = ""; s_.song_draft = ""; bot._store.put(s_)
+# A clip at the text step is the SECOND song: the first song's voice sings its melody (one remix button).
+for name, kw in {"audio": dict(audio=A), "voice": dict(voice={"file_id": "V", "duration": 30}),
+                 "video": dict(video={"file_id": "VD", "duration": 30, "mime_type": "video/mp4"})}.items():
+    arm(); GO.clear()
+    bot._dispatch(m(**kw))
+    ok = wait(lambda: GO, 6)
+    check(f"a second song as {name}: the voice remix starts", ok and GO and GO[0][-1].endswith(("song2.mp3", "song2.ogg", "song2.mp4", "song2.mp3")) or (ok and GO and "song2" in GO[0][-1]), GO)
+    check(f"...and the first song is the voice ({name})", ok and GO and GO[0][2].endswith(("song.mp3", ".mp3")), GO)
 # A YouTube link is the song too (owner 10-03), then the words as usual.
 import tg_links
 _real_fetch = tg_links.fetch_video

@@ -100,7 +100,6 @@ from gui_model_config_tab import ModelConfigTab, ReloadModelWorker
 from gui_stress_tab import StressTab
 from gui_music_tab import MusicTab, MusicWorker
 from gui_weather_tab import WeatherTab, WeatherWorker
-from gui_mashup_tab import MashupTab, MashupWorker
 from gui_audio_visualizer import AudioVisualizer, _wav_envelope
 from gui_log_bridge import QtLogHandler
 from gui_chrome import StageIndicator, _DarkTitleBarFilter

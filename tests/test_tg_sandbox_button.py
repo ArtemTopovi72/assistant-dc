@@ -34,11 +34,11 @@ def check(name, cond, extra=""):
 # -- the row ----------------------------------------------------------------
 for lang in ("ru", "en"):
     rows = K._creativity_kb(lang)["keyboard"]
-    row = [r for r in K._cr_music_kb(lang)["keyboard"] if _b("mashup", lang) in r]
-    check(f"[{lang}] mashup row exists", bool(row), rows)
+    row = [r for r in K._cr_music_kb(lang)["keyboard"] if _b("cover_btn", lang) in r]
+    check(f"[{lang}] remix row exists", bool(row), rows)
     if row:
         # Mashup sits with Songs in the Music tier; the sandbox stays on top.
-        check(f"[{lang}] songs sit beside mashup", _b("songs", lang) in row[0], row[0])
+        check(f"[{lang}] songs sit beside the remix button", _b("songs", lang) in row[0], row[0])
     check(f"[{lang}] sandbox is in the creativity menu",
           any(_b("sandbox_btn", lang) in r for r in rows), rows)
 

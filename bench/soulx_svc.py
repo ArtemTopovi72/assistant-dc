@@ -5,7 +5,7 @@ from pathlib import Path
 import librosa, numpy as np, pyworld as pw, soundfile as sf
 ROOT = Path(__file__).resolve().parent.parent
 SX = ROOT / "models_ext/soulx_singer"
-PY = Path("E:/venvs/venv_soulx/Scripts/python.exe")
+PY = Path("Z:/venvs/venv_soulx/Scripts/python.exe")
 SR, HOP = 24000, 480
 
 
@@ -16,7 +16,7 @@ def _f0(wav24: Path, npy: Path):
 
 
 def convert(source, prompt, out, shift=0, steps=32):
-    d = Path(tempfile.mkdtemp(prefix="sx_", dir="E:/venvs/tmp"))
+    d = Path(tempfile.mkdtemp(prefix="sx_", dir="Z:/venvs/tmp"))
     for k, p in (("src", source), ("prm", prompt)):
         y, _ = librosa.load(p, sr=SR, mono=True)
         sf.write(d / f"{k}.wav", y, SR)

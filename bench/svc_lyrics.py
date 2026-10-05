@@ -13,7 +13,7 @@ for sub in ("", "bench", "voice", "agent", "core", "media", "bot"):
 os.chdir(ROOT)
 import librosa, numpy as np, soundfile as sf
 import config, cover, mashup_stems
-from mashup_dsp import SAMPLE_RATE as SR
+from mashup_stems import SAMPLE_RATE as SR
 
 src, lyr_file = sys.argv[1], sys.argv[2]
 name = sys.argv[sys.argv.index("--name") + 1] if "--name" in sys.argv else "words"

@@ -882,7 +882,7 @@ _DIRECT_KB: dict[str, str] = {
     "songs":      "__songs__",
     "song_setup": "__song_settings__",
     "video_setup": "__video_settings__",
-    "mashup":     "__mashup__",
+    "mashup":     "__cover__",     # the old button label still lands in the one remix flow
     "sandbox_btn": "__sandbox__",
     "characters_btn": "__menu_characters__",
     "search":     "__menu_search__",

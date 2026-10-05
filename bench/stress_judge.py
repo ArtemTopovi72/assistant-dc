@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def vocals(path):
     import mashup_stems as S
-    from mashup_dsp import SAMPLE_RATE
+    from mashup_stems import SAMPLE_RATE
     return S.separate(path)["vocals"], SAMPLE_RATE
 
 

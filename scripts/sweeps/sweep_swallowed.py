@@ -27,8 +27,8 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 LANE = {"config", "llm", "graph", "graph_personality", "graph_fastpath", "graph_finalize",
-        "tools", "utils", "audio", "mashup", "mashup_dsp", "mashup_analysis",
-        "mashup_stems", "mashup_arrange", "music", "comfy_client"}
+        "tools", "utils", "audio", "remix",
+        "mashup_stems", "music", "comfy_client"}
 SKIP_DIRS = {"venv", "models", "runtime", "outputs", ".git", "tg_images",
              "tg_libraries", "tg_memory", "tg_users_backups", "__pycache__"}
 BROAD_BODY = 12
