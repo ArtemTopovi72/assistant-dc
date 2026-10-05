@@ -24,7 +24,7 @@ def _notes(model, wav, instruments=None):
     from muscriptor import NoteStartEvent, NoteEndEvent
     out = []
     for ev in model.transcribe(wav, instruments=instruments):
-        if isinstance(ev, NoteEndEvent):
+        if isinstance(ev, NoteEndEvent) or type(ev).__name__ == "NoteEndEvent":   # the GGUF build has its own classes
             s = ev.start_event
             out.append((s.start_time, max(ev.end_time, s.start_time), s.pitch, s.instrument))
     return out
@@ -44,12 +44,24 @@ def install_muscriptor(job):
 
         def transcribe(self, audio_path):
             try:
-                model = TranscriptionModel.load_model(MUSCRIPTOR, device="cuda:0" if torch.cuda.is_available() else "cpu")
-                mix = _notes(model, str(audio_path))
-                if vocals and os.path.isfile(vocals):
-                    voice = _notes(model, vocals, instruments=["voice"])
-                else:
-                    voice = [n for n in mix if n[3] == "voice"]
+                srv = None
+                try:
+                    model = TranscriptionModel.load_model(MUSCRIPTOR, device="cuda:0" if torch.cuda.is_available() else "cpu")
+                except Exception as exc:                         # noqa: BLE001 -- gated weights: the open GGUF build
+                    print("muscriptor official weights unavailable, GGUF:", repr(exc)[:120], flush=True)
+                    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+                    import muscriptor_gguf
+                    srv = muscriptor_gguf.Server().__enter__()
+                    model = muscriptor_gguf.GgufModel(device="cuda" if torch.cuda.is_available() else "cpu")
+                try:
+                    mix = _notes(model, str(audio_path))
+                    if vocals and os.path.isfile(vocals):
+                        voice = [(o, f, p, "voice") for o, f, p, i in _notes(model, vocals, instruments=["voice"]) if i != "drums"]
+                    else:
+                        voice = [n for n in mix if n[3] in ("voice", "program_52")]
+                finally:
+                    if srv:
+                        srv.__exit__()
                 del model
                 torch.cuda.empty_cache()
                 if len(voice) < 8:
