@@ -15,7 +15,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GGUF_DIR = os.path.join(ROOT, "models_ext", "muscriptor_gguf")
 SERVER_EXE = os.path.join(ROOT, "models_ext", "muscriptor_llama", "build", "bin", "llama-server.exe")
 MODEL = os.path.join(GGUF_DIR, "model_fp16_8k.gguf")
-PORT = int(os.getenv("MUSCRIPTOR_PORT", "8081"))
+PORT = int(os.getenv("MUSCRIPTOR_PORT", "18081"))
 sys.path.insert(0, GGUF_DIR)
 
 
