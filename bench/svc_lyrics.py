@@ -71,6 +71,25 @@ for i, (l, sp) in enumerate(zip(lines, spans)):
     y = librosa.effects.time_stretch(y, rate=rate)
     s0 = int(sp[0] * SR)
     canvas[s0:s0 + len(y)] += y[:max(0, len(canvas) - s0)]
+if "--pitch" in sys.argv:
+    # the spoken line takes the ORIGINAL singer's pitch contour (same timeline), so Seed-VC gets a melody to follow
+    import pyworld as pw
+    R = 22050
+    a = librosa.resample(canvas.astype(np.float64), orig_sr=SR, target_sr=R)
+    o = librosa.resample(vox.astype(np.float64), orig_sr=SR, target_sr=R)
+    fa, ta = pw.harvest(a, R, f0_floor=70, f0_ceil=500, frame_period=10.0)
+    fo, _ = pw.harvest(o, R, f0_floor=70, f0_ceil=700, frame_period=10.0)
+    n = min(len(fa), len(fo)); fa, fo = fa[:n], fo[:n]
+    ok = np.flatnonzero(fo > 0)
+    f_new = np.zeros(n)
+    if len(ok):
+        held = np.interp(np.arange(n), ok, fo[ok])      # unvoiced gaps in the singer hold the last pitch
+        f_new = np.where(fa > 0, held, 0.0)
+    sp = pw.cheaptrick(a, fa, ta[:len(fa)], R)[:n]; ap = pw.d4c(a, fa, ta[:len(fa)], R)[:n]
+    y = pw.synthesize(f_new, sp, ap, R, 10.0)
+    canvas = librosa.resample(y.astype(np.float32), orig_sr=R, target_sr=SR)
+    canvas = np.pad(canvas, (0, max(0, len(vox) - len(canvas))))[:len(vox)]
+    name += "_pitch"
 sf.write(OUT / f"{name}_speech.wav", canvas, SR)
 
 # 5. onto the original singer: the target is the loudest 20 s of the original vocal
