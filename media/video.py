@@ -1008,7 +1008,9 @@ def probe(path: str) -> dict:
 CONTINUE_PREFIX = (
     "Continue the shot of <Video 1> directly, with no cut and no reset: the new footage begins "
     "exactly where <Video 1> ends, on <Picture 1>, and keeps its motion going. The same people with "
-    "the same faces, clothes, location and lighting; the camera keeps moving at the same speed. "
+    "the same faces, location and lighting, and everyone exactly as they are in <Picture 1> (its last "
+    "frame): whatever changed during <Video 1> -- clothes taken off or put on, things moved, broken "
+    "or picked up -- stays changed. The camera keeps moving at the same speed. "
     "Their voices and the ambient sound of <Video 1> go on unchanged. What happens next: ")
 
 

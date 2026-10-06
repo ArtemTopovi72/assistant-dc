@@ -8,8 +8,9 @@ How the continuation is built (50 searches, 2026-10-04, docs/video_continuation_
   * the last ~4 s of the clip ride as <Video 1>: its motion, camera speed, faces AND its own
     soundtrack (the voices) -- one still frame fixes the picture but not its direction, and the
     clip stalls at the join; a reference video carries its sound with it;
-  * one frame rides as <Picture 1>: the sharpest of the last 2 s that still has momentum -- the
-    literal last frame is where generators have already slowed down;
+  * one frame rides as <Picture 1>: the sharpest of the last 0.5 s. Not further back: live
+    10-06 the "sharpest moving frame of the last 2 s" was 2 s before the end, the coat taken
+    off in those 2 s was back on in the continuation;
   * generate_video wraps the user's words in a «continue, no cut» template and, when the new
     part is done, joins original + continuation with a crossfade (media/video.join_continuation).
 """
@@ -17,15 +18,15 @@ import os
 import subprocess
 import uuid
 
-TAIL_SECONDS = 4.0          # the reference clip: its motion and its sound
+TAIL_SECONDS = 2.5          # the reference clip: its motion and its sound (longer = older states)
 FRAME_WINDOW = 3.0          # seconds looked at for the start frame
-FRAME_CANDIDATES = 20       # ... of which the last 2 s (at 10 fps) can be chosen
+FRAME_CANDIDATES = 5        # ... of which the last 0.5 s (at 10 fps) can be chosen
 
 
 def seed_frame(src: str, out_jpg: str) -> bool:
-    """Save the start frame for the continuation as out_jpg: the sharpest of the last 2 s
-    among frames that are still moving as fast as the clip was (the very last frames are
-    where a generator has already slowed down, and a blurred swing makes a bad first frame)."""
+    """Save the start frame for the continuation as out_jpg: the sharpest of the last 0.5 s
+    (preferring frames still moving as fast as the clip was -- a blurred swing makes a bad
+    first frame). Never earlier: whatever happened in the clip must stay happened."""
     import numpy as np
     from PIL import Image
     import video_look

@@ -1,8 +1,8 @@
 """▶️ Continue video: the start frame and the clip's tail are taken, the tool gets the tail as <Video 1>,
 and the result is the original joined with its continuation.
 
-Real ffmpeg on a synthetic 4 s clip (sharp test pattern, a blurred last half-second, silence for 2 s then
-a tone). The flow: button -> video -> "what happens next" -> the animate request -> generate_video with the
+Real ffmpeg on a synthetic 4 s clip (test pattern, a red block appears at 3.3 s -- the coat taken off --
+silence for 2 s then a tone). The flow: button -> video -> "what happens next" -> the animate request -> generate_video with the
 tail as its reference video -> the joined clip.
 """
 import os, sys, time, threading, tempfile, subprocess
@@ -26,7 +26,7 @@ CLIP = os.path.join(_DATA, "clip.mp4")
 subprocess.run(["ffmpeg", "-y", "-loglevel", "error",
                 "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=24:duration=4",
                 "-f", "lavfi", "-i", "sine=frequency=300:duration=4",
-                "-vf", "boxblur=12:enable='gte(t,3.5)'",
+                "-vf", "drawbox=x=100:y=80:w=120:h=80:color=red:t=fill:enable='gte(t,3.3)'",
                 "-af", "volume=0:enable='lt(t,2)'", "-shortest",
                 "-c:v", "libx264", "-pix_fmt", "yuv420p", CLIP], check=True)
 
@@ -37,16 +37,15 @@ import numpy as np
 
 frame = os.path.join(_DATA, "last.jpg")
 check("a start frame is taken", C.seed_frame(CLIP, frame) and os.path.exists(frame))
-sharp = video_look._sharpness(np.asarray(Image.open(frame).convert("L").resize((320, 320)), dtype=np.float32))
-blur_ref = os.path.join(_DATA, "blur.jpg")
-subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-sseof", "-0.1", "-i", CLIP, "-frames:v", "1", blur_ref], check=True)
-blur = video_look._sharpness(np.asarray(Image.open(blur_ref).convert("L").resize((320, 320)), dtype=np.float32))
-check("the chosen frame is sharper than the blurred end of the clip", sharp > blur * 3, (sharp, blur))
+# Live 10-06: the frame came from 2 s before the end; the coat taken off in those 2 s was back on.
+px = np.asarray(Image.open(frame).convert("RGB"), dtype=np.int16)[100:140, 130:190].mean(axis=(0, 1))
+check("the start frame shows the clip's FINAL state (what changed near the end stays changed)",
+      px[0] > 180 and px[1] < 80 and px[2] < 80, px.tolist())
 
 tail = os.path.join(_DATA, "tail.mp4")
 import video as V
 check("the tail is cut with its sound", C.cut_tail(CLIP, tail)
-      and 3.0 < V.probe(tail)["seconds"] < 4.5 and V.probe(tail)["has_audio"], V.probe(tail))
+      and 2.0 < V.probe(tail)["seconds"] < 3.0 and V.probe(tail)["has_audio"], V.probe(tail))
 
 # the join: original + continuation, crossfaded, first frames of the new part dropped
 NEW = os.path.join(_DATA, "new.mp4")
