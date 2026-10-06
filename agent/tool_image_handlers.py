@@ -1057,6 +1057,43 @@ def asks_for_video(ctx, state) -> bool:
         "picture, a complaint about a picture, or a question?", said)
 
 
+def _render_remaining_parts(ctx, path: str, parts: list, args: dict) -> str:
+    """Parts 2..n of a long script, each continuing the clip so far from its real
+    last frame (its tail as <Video 1>, that frame as <Picture 1>), joined on. A part
+    that fails or a cancel stops here: the clip made so far is still delivered."""
+    import tempfile
+    import tg_continue
+    import video as video_mod
+    work = tempfile.mkdtemp(prefix="vidparts_")
+    for i, part in enumerate(parts[1:], start=2):
+        if getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
+            break
+        ctx.set_stage(f"Generating a video ({i}/{len(parts)})")
+        frame = os.path.join(work, f"seed_{i}.jpg")
+        tail = os.path.join(work, f"tail_{i}.mp4")
+        if not (tg_continue.seed_frame(path, frame) and tg_continue.cut_tail(path, tail)):
+            logger.warning("video parts: could not take the end of part %d", i - 1)
+            break
+        try:
+            r = video_mod.generate_video(ctx, video_mod.CONTINUE_PREFIX + part,
+                                         images=[frame], videos=[tail],
+                                         aspect=args.get("aspect") or "", seed=args.get("seed"))
+        except Exception:
+            logger.exception("video parts: part %d crashed", i)
+            break
+        new = r.get("path")
+        if not (new and os.path.exists(new)):
+            logger.warning("video parts: part %d produced no clip (%s)", i, r.get("reason"))
+            break
+        joined = video_mod.join_continuation(path, new)
+        if not joined:
+            logger.warning("video parts: joining part %d failed", i)
+            break
+        path = video_mod._adopt_output(joined)
+        logger.info("video parts: %d/%d joined -> %s", i, len(parts), os.path.basename(path))
+    return path
+
+
 def _handle_generate_video(ctx, state, args: dict) -> str:
     import tools as _t   # the render seam is owned by tools; read it at CALL time
     import video as video_mod
@@ -1163,6 +1200,17 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         # «с баяном и ударами» reused the last clip and the user's voices were gone.
         logger.info("generate_video: voice samples given -> the previous clip is not a reference")
         videos = []
+    # A script longer than one clip holds is rendered in parts, each the next one's
+    # continuation from the last frame (the user's idea, 10-06: "split it into 5.2 s
+    # blocks"): the first part here, the rest after it below.
+    raw = (args.get("description") or "").strip()
+    parts = [raw] if args.get("seconds") else video_mod.split_script(raw)
+    if len(parts) > 1 and raw in description:
+        description = description.replace(raw, parts[0], 1)
+        logger.info("generate_video: the script needs %d parts: %s", len(parts),
+                    [round(video_mod.estimate_seconds(p), 1) for p in parts])
+    else:
+        parts = [raw]
     mode = video_mod.pick_mode(images, videos, audios)
     tags = video_mod.reference_tags(len(images) if mode == "ref2va" else 0, len(videos), len(audios))
     logger.info("Tool: generate_video(mode=%s, %d image(s), %d video(s)) %s",
@@ -1207,6 +1255,10 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             path = video_mod._adopt_output(joined)       # the whole thing: original + what comes next
         else:
             logger.warning("continue video: the join failed, delivering the new part alone")
+
+    if len(parts) > 1:
+        path = _render_remaining_parts(ctx, path, parts, args)
+        result["seconds"] = video_mod.probe(path).get("seconds") or result.get("seconds")
 
     state["video_path"] = path
     state["video_status"] = "success"

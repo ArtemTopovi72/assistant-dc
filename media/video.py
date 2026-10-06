@@ -106,7 +106,7 @@ _HOLD = re.compile(r"\b(?:for (?:a few|several|some|\d+) seconds?|for a while|"
                    r"несколько секунд|какое-то время)\b", re.I)
 
 
-def estimate_seconds(description: str) -> float:
+def estimate_seconds(description: str, capped: bool = True) -> float:
     """How long the scripted clip needs to play out, when nobody said a length.
 
     A fixed 5.2 s cut every multi-action script short (live 10-06: "puts on a suit,
@@ -122,8 +122,40 @@ def estimate_seconds(description: str) -> float:
     words = len(spoken.split())
     beats = max(1, len([b for b in _BEAT.split(rest) if b and any(c.isalpha() for c in b)]))
     secs = 1.0 + words / 2.3 + beats * 1.3 + 2.0 * len(_HOLD.findall(rest))
-    top = frames_to_seconds(VIDEO_MAX_FRAMES_AUTO)
+    top = frames_to_seconds(VIDEO_MAX_FRAMES_AUTO) if capped else float("inf")
     return round(min(top, max(frames_to_seconds(VIDEO_DEFAULT_FRAMES), secs)), 2)
+
+
+_SENT = re.compile(r"(?<=[.!?;])\s+|(?<=,)\s+(?=(?:then|after that|afterwards|затем|потом|после этого)\b)", re.I)
+
+
+def split_script(description: str, max_seconds: float = 0.0) -> list:
+    """A script too long for one clip, as consecutive parts that each fit one
+    (`estimate_seconds` <= max_seconds, default the auto cap). Cuts only between
+    sentences or before "then"; a quoted line is never split. One part = fits as is."""
+    top = max_seconds or frames_to_seconds(VIDEO_MAX_FRAMES_AUTO)
+    text = (description or "").strip()
+    if estimate_seconds(text, capped=False) <= top:
+        return [text]
+    quotes = []
+
+    def _hide(m):
+        quotes.append(m.group(0))
+        return f"\x00{len(quotes) - 1}\x00"
+    hidden = _QUOTED.sub(_hide, text)
+    pieces = [x for x in _SENT.split(hidden) if x and x.strip()]
+    restore = lambda t: re.sub(r"\x00(\d+)\x00", lambda m: quotes[int(m.group(1))], t)
+    parts, cur = [], ""
+    for piece in pieces:
+        cand = (cur + " " + piece).strip()
+        if cur and estimate_seconds(restore(cand), capped=False) > top:
+            parts.append(restore(cur))
+            cur = piece.strip()
+        else:
+            cur = cand
+    if cur:
+        parts.append(restore(cur))
+    return parts
 
 
 def seconds_to_frames(seconds: float) -> int:

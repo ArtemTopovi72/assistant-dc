@@ -143,6 +143,9 @@ _CLOSER = re.compile(r"^Looking closer \((?P<n>\d+)/(?P<of>\d+)\)$")
 
 _LETTERING_PASS = re.compile(r"^Removing the lettering \((?P<n>\d+)/(?P<of>\d+)\)$")
 
+# A long script rendered in parts, each continuing the last (agent/tool_image_handlers).
+_VIDEO_PART = re.compile(r"^Generating a video \((?P<n>\d+)/(?P<of>\d+)\)$")
+
 
 _OZON = [
     (re.compile(r"^planning the purchase$"), "планирую покупку"),
@@ -213,6 +216,10 @@ def translate(stage: str, lang: str = DEFAULT_LANG) -> str:
     m = _LETTERING_PASS.match(stage)
     if m and lang == "ru":
         return f"Убираю надписи ({m.group('n')}/{m.group('of')})"
+
+    m = _VIDEO_PART.match(stage)
+    if m and lang == "ru":
+        return f"Генерирую видео ({m.group('n')}/{m.group('of')})"
 
     phase = _pick(_PHASES, stage, lang)
     if phase:
