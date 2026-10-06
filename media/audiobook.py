@@ -142,7 +142,8 @@ def lines_from_boxes(items: list) -> str:
 
 def _paddle_python() -> str:
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    p = os.path.join(root, "venv_paddle", "Scripts", "python.exe")
+    from config import venv_python
+    p = venv_python(os.path.join(root, "venv_paddle"))
     return p if os.path.exists(p) else ""
 
 

@@ -157,6 +157,17 @@ class ResolveMixin:
                 self._push_style_transfer_task(chat_id, sess, lang, _ref_item, _arrival_ts)
                 return
 
+        # 👗 armed pending_outfit_target: a photo now is the CLOTHING reference
+        # for the picture 👗 was pressed under, its caption (if any) the
+        # wishes. Text alone goes on through pending_prefix as before.
+        if sess.pending_outfit_target:
+            _ref_item = next((it for it in batch if it.get("type") in ("photo", "album")), None)
+            if _ref_item is not None:
+                _wish = " ".join((it.get("caption") or "").strip() for it in batch).strip()
+                self._push_style_transfer_task(chat_id, sess, lang, _ref_item, _arrival_ts,
+                                               outfit_wish=_wish)
+                return
+
         # 🎞 Animate photo (__animate_photo__ direct action) armed
         # awaiting_animate_photo: unlike style, this button lives in the
         # Creativity menu with no picture already in view, so it asks for
@@ -1339,6 +1350,7 @@ class ResolveMixin:
         if merged and sess.pending_prefix:
             merged = sess.pending_prefix + merged
             sess.pending_prefix = ""
+            sess.pending_outfit_target = ""   # 👗 answered in words, not a photo
             try: self._store.put(sess)
             except Exception: pass
 
@@ -1666,7 +1678,7 @@ class ResolveMixin:
         return
 
     def _push_style_transfer_task(self, chat_id: int, sess, lang: str,
-                                   item: dict, arrival_ts: float) -> None:
+                                   item: dict, arrival_ts: float, outfit_wish=None) -> None:
         """Consume the reference photo pending_style_target was waiting for
         and push a dedicated transfer_image task with BOTH images attached.
 
@@ -1691,8 +1703,15 @@ class ResolveMixin:
                                     used=used.get(check, 0), limit=limit),
                                     parse_mode="HTML", keyboard=self._main_menu_kb(sess, lang))
                     return
-        target_id = sess.pending_style_target
-        sess.pending_style_target = ""
+        # outfit_wish (str, may be "") = the 👗 flow: same two-image transfer, the
+        # reference is the clothes and the caption says what else to do.
+        outfit = outfit_wish is not None
+        target_id = sess.pending_outfit_target if outfit else sess.pending_style_target
+        if outfit:
+            sess.pending_outfit_target = ""
+            sess.pending_prefix = ""
+        else:
+            sess.pending_style_target = ""
         target = tg_bot._image_by_id(sess, target_id)
         if not target or not os.path.exists(target.get("path", "")):
             self._store.put(sess)
@@ -1710,13 +1729,14 @@ class ResolveMixin:
                        f"tg_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.jpg")
         with open(ref_path, "wb") as fh:
             fh.write(data)
-        tg_bot._log_image(sess, ref_path, label="style reference", src="user")
+        tg_bot._log_image(sess, ref_path, label="outfit reference" if outfit else "style reference",
+                          src="user")
         self._store.put(sess)
 
         task = tg_bot._Task(
             task_id=str(uuid.uuid4()),
             chat_id=chat_id,
-            user_text=(
+            user_text=(_outfit_text(outfit_wish) if outfit else
                 "[style] call transfer_image with instructions=\"Change the visual "
                 "style of the target image to match the reference image: lighting, "
                 "colour palette, contrast, texture, atmosphere and photographic "
@@ -1738,8 +1758,8 @@ class ResolveMixin:
             self._pending_journal[task.task_id] = task
         self._backend.push(task)
         self._write_inflight()
-        tg_bot.logger.info("Enqueued task %s chat=%s kind=style depth=%d",
-                    task.task_id[:8], chat_id, self._backend.depth())
+        tg_bot.logger.info("Enqueued task %s chat=%s kind=%s depth=%d",
+                    task.task_id[:8], chat_id, "outfit" if outfit else "style", self._backend.depth())
         try:
             ahead = self._backend.tasks_ahead(task.task_id)
         except Exception:
@@ -1748,6 +1768,20 @@ class ResolveMixin:
             self._send_text(chat_id,
                 tg_bot._t("queue_pos", lang, pos=len(ahead) + 1, eta=tg_bot._fmt_eta(ahead, lang)),
                 parse_mode="HTML")
+
+
+def _outfit_text(wish: str) -> str:
+    """👗 + a photo of clothes: dress the earlier picture's person in them.
+    The wish is the user's caption, quoted as theirs."""
+    from prompt_guard import wrap_quoted
+    extra = ("\n" + wrap_quoted("the user's wishes for the outfit", wish)) if wish else ""
+    return ("[outfit] call transfer_image with instructions=\"Dress the person in the target "
+            "image in the clothing shown in the reference image (the garment itself: cut, "
+            "colour, fabric, print). Remove their current outfit. Keep the person's face, "
+            "identity, body, pose, background and framing exactly.\" using the two loaded "
+            "images (the target to dress is the earlier one, the clothing reference is the "
+            "one just sent)." + (" Follow the user's wishes below in the instructions too."
+                                 if wish else "") + extra)
 
 
 import tg_bot  # noqa: E402  (cycle by design; attrs read at call time)

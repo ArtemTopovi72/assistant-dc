@@ -29,7 +29,7 @@ class _Session:
     # Everything that makes the bot wait for the user's NEXT message (a topic,
     # a photo, a name, a city…). ✖️ Отмена under the prompt clears all of it
     # (user 2026-09-27: «всегда иметь возможность отменить … в любом сценарии»).
-    _WAIT_STR = ("pending_prefix", "pending_instruction", "pending_photo", "pending_style_target",
+    _WAIT_STR = ("pending_prefix", "pending_instruction", "pending_photo", "pending_style_target", "pending_outfit_target",
                  "pending_animate_target", "cover_state", "cover_src", "song_draft",
                  # the step-by-step flows too: «Мэшап · трек 1 из 2» had no way out
                  "clone_state", "restyle_state", "continue_state", "book_state", "anim_voice_state", "voice_naming",
@@ -286,6 +286,10 @@ class _Session:
         # next photo/album in tg_resolve.py, which short-circuits straight to a
         # transfer_image task instead of the normal caption/vision flow.
         self.pending_style_target: str = d.get("pending_style_target", "")
+        # 👗 pressed under a picture: the id of the picture to re-dress. The next
+        # photo (caption or not) is the CLOTHING reference, not a new picture to
+        # edit; plain text answers through pending_prefix as before.
+        self.pending_outfit_target: str = d.get("pending_outfit_target", "")
         # 🎞 Animate photo pressed with no picture yet: waiting for the next
         # photo/album, which becomes the animation subject. Consumed in
         # tg_resolve.py, which then offers the animate-preset keyboard instead
@@ -337,6 +341,7 @@ class _Session:
             self.menu = ""
             self.pending_photo = ""
             self.pending_style_target = ""
+            self.pending_outfit_target = ""
             self.awaiting_animate_photo = False
             self.pending_animate_target = ""
             self.awaiting_style_photo = False
@@ -465,6 +470,7 @@ class _Session:
                 "menu":              self.menu,
                 "pending_photo":     self.pending_photo,
                 "pending_style_target": self.pending_style_target,
+                "pending_outfit_target": self.pending_outfit_target,
                 "awaiting_animate_photo": self.awaiting_animate_photo,
                 "pending_animate_target": self.pending_animate_target,
                 "awaiting_style_photo":   self.awaiting_style_photo,

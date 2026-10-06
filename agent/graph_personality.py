@@ -371,6 +371,7 @@ _BUTTON_TOOL = (
     # regression above happen once already. Added alongside the new preset
     # feature rather than waiting for its own live failure.
     ("[style]", "transfer_image"),
+    ("[outfit]", "transfer_image"),   # 👗 + a photo of the clothes (tg_resolve._outfit_text)
     ("[style_preset]", "redraw_image"),
     # "create a presentation about: <topic>" (tg_bot._MENU_PREFIX["deck"]) had
     # no entry either -- live 2026-09-18, the model answered a joke topic

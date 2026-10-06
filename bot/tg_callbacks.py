@@ -1073,6 +1073,10 @@ class CallbackMixin:
         new -- now asks first."""
         sess = self._get_session(chat_id)
         sess.pending_prefix = "change the outfit to: "
+        # A photo of the clothes answers too (user 10-06: «референс одежды +
+        # описание, либо просто текст, либо пикчу»): tg_resolve takes the next
+        # photo as the clothing reference for THIS picture.
+        sess.pending_outfit_target = sess.target_image or ""
         self._store.put(sess)
         self._send_text(chat_id, tg_bot._t("describe_clothes", self._lang(sess)),
                         keyboard=self._state_kb(sess))

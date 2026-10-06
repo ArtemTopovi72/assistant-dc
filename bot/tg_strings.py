@@ -722,9 +722,11 @@ _MSG: dict[str, dict[str, str]] = {
     "describe_edit": {"en": "✏️ Describe what to change:",
                       "ru": "✏️ Опиши, что изменить:"},
     "describe_clothes": {"en": "👗 What should the outfit become? E.g. \"the hat "
-                                "into a cap\" or \"a white summer dress\":",
+                                "into a cap\" or \"a white summer dress\". Or send a photo "
+                                "of the clothes (a caption is optional):",
                          "ru": "👗 Во что переодеть? Например: «шапку на шляпу» "
-                               "или «белое летнее платье»:"},
+                               "или «белое летнее платье». Или пришли фото одежды "
+                               "(можно с подписью):"},
     "menu_draw_title":   {"en": "🎨 <b>Draw &amp; Edit</b>",
                           "ru": "🎨 <b>Рисование и редактирование</b>"},
     "menu_search_title": {"en": "🔎 <b>Search</b>", "ru": "🔎 <b>Поиск</b>"},
