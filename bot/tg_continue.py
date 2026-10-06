@@ -21,6 +21,7 @@ import uuid
 TAIL_SECONDS = 2.5          # the reference clip: its motion and its sound (longer = older states)
 FRAME_WINDOW = 3.0          # seconds looked at for the start frame
 FRAME_CANDIDATES = 5        # ... of which the last 0.5 s (at 10 fps) can be chosen
+MAX_PEOPLE = 2               # new people from photos (<Picture 2>, <Picture 3>) a continuation takes
 
 
 def seed_frame(src: str, out_jpg: str) -> bool:
@@ -83,12 +84,43 @@ class ContinueMixin:
             sess.continue_state = ""
             self._store.put(sess)
 
+    def _continue_take_person(self, chat_id: int, sess, lang: str, msg: dict) -> bool:
+        """A photo after the clip is a NEW person for the continuation (<Picture 2>, <Picture 3>):
+        before this it replaced the start frame and the clip went on from the wrong picture."""
+        if getattr(sess, "continue_state", "") != "want_text":
+            return False
+        from tg_dispatch import _largest_photo
+        ph = _largest_photo(msg.get("photo"))
+        doc = msg.get("document") or {}
+        fid = (ph or {}).get("file_id") or (doc.get("file_id") if (doc.get("mime_type") or "").startswith("image/") else None)
+        if not fid:
+            return False
+        people = list(getattr(sess, "continue_people", None) or [])
+        if len(people) >= MAX_PEOPLE:
+            self._send_text(chat_id, tg_bot._t("continue_people_full", lang))
+            return True
+        data = self._dl_bytes(fid)
+        if not data:
+            self._send_text(chat_id, tg_bot._t("continue_fail_dl", lang))
+            return True
+        path = os.path.join(self._continue_dir(chat_id), f"person_{uuid.uuid4().hex[:8]}.jpg")
+        with open(path, "wb") as fh:
+            fh.write(data)
+        people.append(path)
+        sess.continue_people = people
+        self._store.put(sess)
+        caption = (msg.get("caption") or "").strip()
+        if caption:                               # photo + "he walks in and says…": go
+            return self._continue_take_text(chat_id, sess, lang, caption)
+        self._send_text(chat_id, tg_bot._t("continue_got_person", lang, n=len(people)))
+        return True
+
     def _continue_take_media(self, chat_id: int, sess, lang: str, msg: dict) -> bool:
         if getattr(sess, "continue_state", "") not in ("want_video", "want_text"):
             return False
         fid = self._video_of(msg)
         if not fid:
-            return False
+            return self._continue_take_person(chat_id, sess, lang, msg)
         data = self._dl_bytes(fid)
         if not data:
             self._send_text(chat_id, tg_bot._t("continue_fail_dl", lang))
@@ -106,6 +138,7 @@ class ContinueMixin:
         # the start frame is the picture the next shot starts from, like an uploaded photo
         sess.target_image = tg_bot._log_image(sess, frame, label=tg_bot._t("to_animate_label", lang), src="user")
         sess.continue_src, sess.continue_tail = src, tail
+        sess.continue_people = []                 # a new clip starts a new cast
         sess.continue_state = "want_text"
         self._store.put(sess)
         self._send_text(chat_id, tg_bot._t("continue_ask_text", lang), parse_mode="HTML")

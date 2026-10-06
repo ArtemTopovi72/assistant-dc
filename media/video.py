@@ -1076,6 +1076,20 @@ CONTINUE_PREFIX = (
     "Their voices and the ambient sound of <Video 1> go on unchanged. What happens next: ")
 
 
+def new_people_clause(first: int, n: int) -> str:
+    """The continuation brings in people who are not in <Video 1>, one per picture
+    from <Picture first>: each enters the shot and keeps that picture's face, hair,
+    body and clothes (only the person is taken from it, not its background)."""
+    tags = [f"<Picture {first + i}>" for i in range(n)]
+    who = tags[0] if n == 1 else ", ".join(tags[:-1]) + " and " + tags[-1]
+    return (f" NEW PEOPLE: the person shown in {who} is not in <Video 1>"
+            if n == 1 else f" NEW PEOPLE: the people shown in {who} are not in <Video 1>") + (
+        " -- they come into this same location from off-screen and join the scene as the "
+        "request above says, each with exactly the face, hair, body and clothes of their own "
+        "picture. Only the person is taken from that picture, never its background or framing; "
+        "the people already in the shot stay as they are.")
+
+
 def join_continuation(src: str, new: str, fade: float = 0.25, drop_frames: int = 2) -> Optional[str]:
     """`src` followed by its generated continuation `new`, as one clip, or None when ffmpeg fails.
 

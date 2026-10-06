@@ -188,6 +188,8 @@ class _Session:
         self.continue_state: str = d.get("continue_state", "")
         self.continue_src: str = d.get("continue_src", "")
         self.continue_tail: str = d.get("continue_tail", "")
+        # photos of NEW people to bring into the continuation (sent after the clip)
+        self.continue_people: list = list(d.get("continue_people") or [])
         # 📚 Audiobook: "" | "want_voice" | "want_book" (tg_audiobook); the narrator's reference
         self.book_state: str = d.get("book_state", "")
         self.book_ref: str = d.get("book_ref", "")
@@ -363,6 +365,7 @@ class _Session:
             self.restyle_state = ""
             self.continue_state = ""
             self.continue_src = self.continue_tail = ""
+            self.continue_people = []
             self.book_state = ""
             self.anim_voice_state = ""
             self.anim_voices = []
@@ -429,6 +432,7 @@ class _Session:
                 "continue_state":      self.continue_state,
                 "continue_src":        self.continue_src,
                 "continue_tail":       self.continue_tail,
+                "continue_people":     self.continue_people,
                 "book_state":          self.book_state,
                 "book_ref":            self.book_ref,
                 "book_ref_text":       self.book_ref_text,

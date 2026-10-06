@@ -1149,7 +1149,13 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     if continuing:
         videos = [cont_tail]
         ctx.continue_tail = ctx.continue_src = ""          # one clip per request
+        people = [p for p in (getattr(ctx, "continue_people", None) or []) if p and os.path.exists(p)]
+        ctx.continue_people = []
         description = video_mod.CONTINUE_PREFIX + description
+        if people:
+            # New people from photos sent after the clip: the start frame stays <Picture 1>.
+            images = (images or [])[-1:] + people
+            description += video_mod.new_people_clause(len(images) - len(people) + 1, len(people))
 
     audios = []
     anim = ([] if continuing else
