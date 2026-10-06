@@ -385,6 +385,8 @@ WORKFLOW_VIDEO_REF_PATH = BASE_DIR / "workflows" / "video" / "workflow_video_h3_
 VIDEO_FPS = 24
 VIDEO_DEFAULT_FRAMES = _env_int("VIDEO_DEFAULT_FRAMES", 124)
 VIDEO_MAX_FRAMES = _env_int("VIDEO_MAX_FRAMES", 362)
+# Longest clip picked AUTOMATICALLY from the script length (an explicit length can go to MAX).
+VIDEO_MAX_FRAMES_AUTO = _env_int("VIDEO_MAX_FRAMES_AUTO", 243)
 # 768 short edge with a 768*1344 area cap, every axis a multiple of 32 — taken from
 # the node's own adapt_canvas(); going outside it is not a quality knob, it is a
 # shape the model was never trained on.

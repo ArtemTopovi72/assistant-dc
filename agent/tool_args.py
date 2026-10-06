@@ -127,7 +127,8 @@ class GenerateVideoArgs(_ToolArgs):
         "'<Picture 1> walks toward the camera' or 'the camera move from <Video 1> "
         "applied to <Picture 1>'."))
     seconds: Optional[float] = Field(None, ge=1.0, le=15.0, description=(
-        "Clip length in seconds, 1-15. Leave unset for ~5s, which is much faster. "
+        "Clip length in seconds, 1-15. Leave unset unless the user names a length: then it "
+        "follows the script (5-10s, enough for every action and spoken line in it). "
         "The real length snaps to the model's frame grid, so it may differ slightly."))
     aspect: Optional[Literal["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"]] = Field(
         None, description=(

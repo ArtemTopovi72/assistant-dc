@@ -49,7 +49,7 @@ import config as _config
 import comfy_client
 from config import (
     COMFY_URL, OUTPUT_DIR, WORKFLOW_VIDEO_PATH, WORKFLOW_VIDEO_REF_PATH,
-    VIDEO_FPS, VIDEO_DEFAULT_FRAMES, VIDEO_MAX_FRAMES,
+    VIDEO_FPS, VIDEO_DEFAULT_FRAMES, VIDEO_MAX_FRAMES, VIDEO_MAX_FRAMES_AUTO,
     VIDEO_SHORT_EDGE, VIDEO_MAX_PIXELS, VIDEO_CANVAS_MULTIPLE,
     VIDEO_STEPS, VIDEO_STEPS_REF2VA, VIDEO_STEPS_REF2VA_VOICES, VIDEO_SPEECH_STRESS, VIDEO_T2VA_LORA_3STEP, VIDEO_CFG, VIDEO_SHIFT_VIDEO, VIDEO_SHIFT_AUDIO,
     VIDEO_JOB_TIMEOUT,
@@ -97,6 +97,33 @@ def snap_frames(length: int) -> int:
     while cap % 17 != 5:
         cap -= 1
     return min(n, cap)
+
+
+_QUOTED = re.compile(r'«([^»]*)»|"([^"]*)"|“([^”]*)”')
+_BEAT = re.compile(r"[,.;:!?—]|\b(?:then|and then|after that|afterwards|while|before|until|"
+                   r"затем|потом|после этого|и снова|снова)\b", re.I)
+_HOLD = re.compile(r"\b(?:for (?:a few|several|some|\d+) seconds?|for a while|"
+                   r"несколько секунд|какое-то время)\b", re.I)
+
+
+def estimate_seconds(description: str) -> float:
+    """How long the scripted clip needs to play out, when nobody said a length.
+
+    A fixed 5.2 s cut every multi-action script short (live 10-06: "puts on a suit,
+    takes a broom, sweeps for several seconds, stops, looks at the camera, says a
+    line, sweeps again" ended mid-way). Spoken lines at ~2.3 words/s, every other
+    beat ~1.3 s, a held action ("for several seconds") +2 s; 5.2 s at the least.
+    """
+    text = description or ""
+    if text.startswith(CONTINUE_PREFIX):          # the template, not the script
+        text = text[len(CONTINUE_PREFIX):]
+    spoken = " ".join(next(g for g in m.groups() if g is not None) for m in _QUOTED.finditer(text))
+    rest = _QUOTED.sub(" ", text)
+    words = len(spoken.split())
+    beats = max(1, len([b for b in _BEAT.split(rest) if b and any(c.isalpha() for c in b)]))
+    secs = 1.0 + words / 2.3 + beats * 1.3 + 2.0 * len(_HOLD.findall(rest))
+    top = frames_to_seconds(VIDEO_MAX_FRAMES_AUTO)
+    return round(min(top, max(frames_to_seconds(VIDEO_DEFAULT_FRAMES), secs)), 2)
 
 
 def seconds_to_frames(seconds: float) -> int:
@@ -897,7 +924,10 @@ def generate_video(ctx, description: str, *,
     # model's 8 -- an explicit caller-supplied `steps` still wins.
     if steps is None:
         steps = (VIDEO_STEPS_REF2VA_VOICES if audios else VIDEO_STEPS_REF2VA) if mode == "ref2va" else VIDEO_STEPS
-    frames = seconds_to_frames(seconds) if seconds else snap_frames(VIDEO_DEFAULT_FRAMES)
+    if not seconds:
+        seconds = estimate_seconds(asked)
+        logger.info("video length from the script: %.1fs", seconds)
+    frames = seconds_to_frames(seconds)
     width, height = resolve_size(aspect, _image_size(images[0]) if images else None)
     if _context_ir_on():
         locked = description.endswith(_FRAMING_LOCK_SUFFIX)
