@@ -2,7 +2,8 @@
 
     venv_yue2/Scripts/python scripts/yue2_render.py job.json
 
-job.json: {"lyrics": str, "style": str, "seed": int, "out": path}. Prints "OK <path>" on success.
+job.json: {"lyrics": str, "style": str, "seed": int, "out": path, ["abc": melody score, "cot": "melody"|"full"]}.
+Prints "OK <path>" on success.
 """
 import json
 import os
@@ -40,7 +41,9 @@ def main():
     _decode = pipe.decode
     pipe.decode = lambda latents, **k: _decode(latents, full=True)
     try:
-        song = pipe(style=job["style"], lyrics=job["lyrics"], cot="full", seed=int(job["seed"]))
+        # a cover: an ABC score (SheetSage2) fixes the melody, cot="melody" plans only the arrangement around it
+        extra = {"abc": job["abc"], "cot": job.get("cot", "melody")} if job.get("abc") else {"cot": "full"}
+        song = pipe(style=job["style"], lyrics=job["lyrics"], seed=int(job["seed"]), **extra)
         song.save(job["out"])
         if getattr(song, "truncated", False):
             print("TRUNCATED", flush=True)   # music._generate_yue2 retries shorter
