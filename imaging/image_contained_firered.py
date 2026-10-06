@@ -270,6 +270,39 @@ def _contained_region_mask(ctx, image_path: str, region_phrase: str, *,
     return orig, mask, (x0, y0, x1, y1)
 
 
+def _tone_matched_tile(tile, orig, paste, real, tile_xy):
+    """FireRed's wall is a shade off the original. Outside the new garment, pull the
+    tile's low frequencies onto the original's, measured on the wall ring just
+    outside the pasted area and spread by normalized Gaussian convolution."""
+    if orig is None:
+        return tile
+    try:
+        import numpy as np
+        import cv2
+        from scipy import ndimage
+        from PIL import Image
+        x, y = tile_xy
+        w, h = tile.size
+        t = np.asarray(tile.convert("RGB")).astype(np.float32)
+        o = np.asarray(orig.convert("RGB").crop((x, y, x + w, y + h))).astype(np.float32)
+        p = paste[y:y + h, x:x + w]
+        r = real[y:y + h, x:x + w]
+        ring = ndimage.binary_dilation(p, iterations=30) & ~p
+        if ring.sum() < 500:
+            return tile
+        k = ring.astype(np.float32)
+        den = cv2.GaussianBlur(k, (0, 0), 40) + 1e-4
+        field = np.stack([cv2.GaussianBlur((o[..., c] - t[..., c]) * k, (0, 0), 40) / den
+                          for c in range(3)], axis=2)
+        # Full correction on the wall/skin the tile brings in, none on the garment.
+        wgt = cv2.GaussianBlur((~ndimage.binary_dilation(r, iterations=2)).astype(np.float32), (0, 0), 3)
+        out = np.clip(t + field * wgt[..., None], 0, 255).astype("uint8")
+        return Image.fromarray(out)
+    except Exception:
+        logger.warning("contained-firered: tile tone match failed", exc_info=True)
+        return tile
+
+
 def _refill_uncovered_background(ctx, result_path: str, old_mask, region_phrase: str,
                                  seed, timeout, tile=None, tile_xy=(0, 0), orig=None) -> Optional[str]:
     """Where the OLD region was but the NEW one is not, the background is FireRed's own
@@ -330,11 +363,45 @@ def _refill_uncovered_background(ctx, result_path: str, old_mask, region_phrase:
             # outer border is a few px off the original.
             # Plus the new garment where it spills a little PAST the old mask: cut
             # at the old border, that hem tip faded into the floor as the haze.
-            spill = (np.asarray(new_region) > 127) & ndimage.binary_dilation(old, iterations=25)
-            g = Image.fromarray((old | spill | garment).astype("uint8") * 255)
+            # The garment's REAL outline: the SAM mask came grown ~21 px outward,
+            # and pasting that ring of FireRed's wall drew a light halo ("waves on
+            # the wall", live 10-06) around the whole new sweater.
+            real = ndimage.binary_erosion(garment, iterations=18)
+            paste = old | garment
             x, y = tile_xy
+            tm = _tone_matched_tile(tile, orig, paste, real, tile_xy)
+            alpha = paste.astype(np.float32)
+            if orig is not None:
+                # The seam compositor feathered FireRed's wall 25+43 px past the
+                # region; everything outside the pasted area is the original's.
+                o_full = orig.convert("RGB").resize(comp.size)
+                keep = Image.fromarray((~ndimage.binary_dilation(paste, iterations=3))
+                                       .astype("uint8") * 255).filter(ImageFilter.GaussianBlur(2))
+                comp.paste(o_full, (0, 0), keep)
+                # Inside it, FireRed's pixel only where it really CHANGED something:
+                # where the tile shows the same wall/hair a shade off, the original
+                # stays (that shade was the halo).
+                o = np.asarray(o_full).astype(np.float32)[y:y + tile.height, x:x + tile.width]
+                d = np.abs(np.asarray(tm).astype(np.float32) - o).sum(axis=2)
+                # A rim light FireRed adds to the wall along the shoulder is ~30-40
+                # off; a garment over the wall, a patch or hair is 150+.
+                d = ndimage.grey_dilation(d, size=3)
+                chg = np.ones(alpha.shape, np.float32)
+                chg[y:y + tile.height, x:x + tile.width] = np.clip((d - 55.0) / 30.0, 0, 1)
+                # The garment's own area is always FireRed's, its edge patches too:
+                # a flag's white stripes over the old WHITE sweater read "unchanged".
+                own = ndimage.binary_dilation(real, iterations=2) | ndimage.binary_erosion(span, iterations=18)
+                alpha *= np.maximum(chg, own)
+                # A stand collar rises past the mask's face guard (cut flat under the
+                # chin, live 10-06): right next to the garment, take FireRed's pixel
+                # where it plainly differs -- the aligned face/hand stay well under.
+                near = np.zeros(alpha.shape, np.float32)
+                near[y:y + tile.height, x:x + tile.width] = np.clip((d - 85.0) / 30.0, 0, 1)
+                near *= ndimage.binary_dilation(garment, iterations=30) & ~paste
+                alpha = np.maximum(alpha, near)
+            g = Image.fromarray((alpha * 255).astype("uint8"))
             g_crop = g.crop((x, y, x + tile.width, y + tile.height)).filter(ImageFilter.GaussianBlur(2))
-            comp.paste(tile, (x, y), g_crop)
+            comp.paste(tm, (x, y), g_crop)
             result_path = str(scratch_path(OUTPUT_DIR, f"_INTERMEDIATE_garment_{int(time.time() * 1000)}.png"))
             comp.save(result_path)
         # ObjectClear only on the band along the OLD border, where the tile's
@@ -348,6 +415,7 @@ def _refill_uncovered_background(ctx, result_path: str, old_mask, region_phrase:
         # `uncovered`; floor-bright pixels only, the fabric is far darker.
         px = np.asarray(Image.open(result_path).convert("RGB")).astype(np.int16)
         odd = np.zeros_like(old)
+        protect = None
         if uncovered.sum() > 500:
             med = np.median(px[uncovered], axis=0)
             floorlike = np.abs(px.sum(axis=2) - med.sum()) < 150
@@ -357,6 +425,19 @@ def _refill_uncovered_background(ctx, result_path: str, old_mask, region_phrase:
             # ...but not the garment's own bright details: a red monogram and a
             # flag patch read as "halo" and ObjectClear wiped them (live 10-06).
             odd &= ~ndimage.binary_erosion(span, iterations=3)
+            if tile is not None:
+                # A patch on the sleeve EDGE escapes every mask above (its notch is
+                # open to the wall). Next to the garment, what is far from the wall
+                # colour is the garment's -- fabric, stripes, hair -- never refilled.
+                body = old | garment
+                ring = ndimage.binary_dilation(body, iterations=45) & ~ndimage.binary_dilation(body, iterations=30)
+                wall = np.median(px[ring], axis=0) if ring.any() else med
+                protect = (ndimage.binary_dilation(garment, iterations=25)
+                           & (np.abs(px - wall).sum(axis=2) > 80)
+                           & (np.abs(px - med).sum(axis=2) > 80))
+                protect = ndimage.binary_dilation(protect, iterations=3)
+                uncovered &= ~protect
+                odd &= ~protect
         if orig is not None:
             # What still looks like the ORIGINAL there is not uncovered background:
             # hair hanging over the old sweater stays hair. Live 10-06 (white
@@ -372,8 +453,10 @@ def _refill_uncovered_background(ctx, result_path: str, old_mask, region_phrase:
         if uncovered.sum() < 200:
             return result_path if tile is not None else None
         m = Image.fromarray((uncovered * 255).astype("uint8")).filter(ImageFilter.MaxFilter(13))
-        m = Image.fromarray((((np.asarray(m) > 127) & ~(np.asarray(new_region) > 127)) | odd)
-                            .astype("uint8") * 255)
+        m = (((np.asarray(m) > 127) & ~(np.asarray(new_region) > 127)) | odd)
+        if protect is not None:
+            m &= ~protect
+        m = Image.fromarray(m.astype("uint8") * 255)
         mask_path = str(scratch_path(OUTPUT_DIR, f"_INTERMEDIATE_uncovered_mask_{int(time.time() * 1000)}.png"))
         m.save(mask_path)
         out = _lr._fill_objectclear(ctx, result_path, mask_path, 6)
