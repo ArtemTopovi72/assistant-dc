@@ -1022,14 +1022,21 @@ def asks_for_video(ctx, state) -> bool:
                       + " " + str((state or {}).get("user_input") or "")).strip()
     if not said or _ASKS_VIDEO.search(said):     # no words to judge (a direct call): not ours to refuse
         return True
+    import intent
     last = getattr(ctx, "last_video_path", None)
     if last and os.path.exists(last):
         try:
-            import intent
-            return intent.read(None, said)["redo"] in ("same", "changed")
+            if intent.read(None, said)["redo"] in ("same", "changed"):
+                return True
         except Exception:
-            return False
-    return False
+            pass
+    # A shot script with no word «видео» is still a clip. Live 10-06: «Мужчина берёт
+    # банку … говорит "Полная хуета" … бросает банку … опрокидывает стеллаж» was
+    # refused here. The model reads it; a complaint about a picture stays a no.
+    return intent.ask_yes(
+        "A user wrote: {text}\n\nIs this a request for a video clip: a scene that unfolds "
+        "over time (people act one after another, move, speak lines), not a single still "
+        "picture, a complaint about a picture, or a question?", said)
 
 
 def _handle_generate_video(ctx, state, args: dict) -> str:

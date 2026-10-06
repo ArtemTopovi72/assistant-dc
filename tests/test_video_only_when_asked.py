@@ -57,3 +57,17 @@ def test_a_cartoon_style_is_not_an_animation_request():
     assert "generate_video only when MOTION is asked for" in intent.SYSTEM
     import tool_image_handlers as H
     assert not H._ASKS_VIDEO.search("ты нарисовал какого-то урода а не Ленина ещё и мультяшного")
+
+
+def test_a_shot_script_without_the_word_video_is_asked_to_the_model(monkeypatch):
+    """Live 10-06: a scene script («Мужчина берёт банку … говорит … бросает …
+    опрокидывает стеллаж») has no «видео» and was refused. The model now reads it."""
+    import intent
+    script = ("Мужчина берёт банку, смотрит на неё внимательно. Ухмыляется, смотрит в камеру. "
+              "Говорит \"Полная хуета\" и бросает банку на пол. Опрокидывает весь стеллаж.")
+    asked = []
+    monkeypatch.setattr(intent, "YES_STUB", lambda q, t: asked.append(t) or "unfolds over time" in q)
+    assert H.asks_for_video(_Ctx(), _st(script))
+    assert asked and "банку" in asked[0]
+    monkeypatch.setattr(intent, "YES_STUB", lambda q, t: False)
+    assert not H.asks_for_video(_Ctx(), _st(script))
