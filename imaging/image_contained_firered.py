@@ -271,7 +271,7 @@ def _contained_region_mask(ctx, image_path: str, region_phrase: str, *,
 
 
 def _refill_uncovered_background(ctx, result_path: str, old_mask, region_phrase: str,
-                                 seed, timeout, tile=None, tile_xy=(0, 0)) -> Optional[str]:
+                                 seed, timeout, tile=None, tile_xy=(0, 0), orig=None) -> Optional[str]:
     """Where the OLD region was but the NEW one is not, the background is FireRed's own
     re-render; refill that band with ObjectClear so it continues the original lines.
     None = nothing uncovered, no new-region mask, or no ObjectClear (keep the composite)."""
@@ -280,15 +280,45 @@ def _refill_uncovered_background(ctx, result_path: str, old_mask, region_phrase:
         from scipy import ndimage
         from PIL import Image, ImageFilter
         import image_lettering_remove as _lr
-        got = _contained_region_mask(ctx, result_path, region_phrase, grow=0,
-                                     seed=seed or 1, timeout=timeout, protect_face=False,
-                                     _qa_retry=True)
-        if not got:
-            return None
-        new_region = got[1].filter(ImageFilter.MaxFilter(9))          # keep the garment's own edge
         old = np.asarray(old_mask.convert("L")) > 127
+        garment = None
+        if tile is not None:
+            # The NEW garment's own outline, read on FireRed's tile: cut at the OLD
+            # outline, a stand collar under a V-neck sweater lost its top to the
+            # original skin (live 10-06, white V-neck -> navy quarter-zip).
+            tile_path = str(scratch_path(OUTPUT_DIR, f"_INTERMEDIATE_tile_{int(time.time() * 1000)}.png"))
+            tile.save(tile_path)
+            # No VLM cutout QA here: it is a union with the checked old region, and
+            # the QA's flaky WRONG dropped the collar again on the next run.
+            tg = _contained_region_mask(ctx, tile_path, region_phrase, grow=0,
+                                        seed=seed or 1, timeout=timeout, protect_face=False,
+                                        stage1_qa=False)
+            if tg:
+                full = Image.new("L", old_mask.size, 0)
+                full.paste(tg[1].convert("L").resize(tile.size), tile_xy)
+                garment = np.asarray(full) > 127
+        if garment is None:
+            got = _contained_region_mask(ctx, result_path, region_phrase, grow=0,
+                                         seed=seed or 1, timeout=timeout, protect_face=False,
+                                         _qa_retry=True)
+            if not got:
+                return None
+            garment = np.asarray(got[1].convert("L")) > 127
+        # Logos, patches and a hand over the fabric are holes in a "clothing"
+        # mask; they are the garment's, not uncovered background.
+        # A patch on the sleeve edge is a notch, not a hole: close wide enough
+        # to bridge it (padded so the frame edge does not erode the closing).
+        garment = np.pad(garment, 24)
+        garment = ndimage.binary_closing(garment, iterations=20)[24:-24, 24:-24]
+        garment = ndimage.binary_fill_holes(garment)
+        # A patch on the sleeve edge cuts a notch OPEN to the outside (live 10-06,
+        # flag patch): no closing fills it. Row by row, everything between the
+        # garment's outer edges is the garment's for the "do not refill" tests.
+        span = (np.maximum.accumulate(garment, axis=1)
+                & np.maximum.accumulate(garment[:, ::-1], axis=1)[:, ::-1])
+        new_region = Image.fromarray(span.astype("uint8") * 255).filter(ImageFilter.MaxFilter(9))
         uncovered = old & ~(np.asarray(new_region) > 127)
-        if uncovered.sum() < 0.03 * max(1, old.sum()):
+        if tile is None and uncovered.sum() < 0.03 * max(1, old.sum()):
             return None
         if tile is not None:
             # The garment itself straight from FireRed's tile: the seam blend had
@@ -301,7 +331,7 @@ def _refill_uncovered_background(ctx, result_path: str, old_mask, region_phrase:
             # Plus the new garment where it spills a little PAST the old mask: cut
             # at the old border, that hem tip faded into the floor as the haze.
             spill = (np.asarray(new_region) > 127) & ndimage.binary_dilation(old, iterations=25)
-            g = Image.fromarray((old | spill).astype("uint8") * 255)
+            g = Image.fromarray((old | spill | garment).astype("uint8") * 255)
             x, y = tile_xy
             g_crop = g.crop((x, y, x + tile.width, y + tile.height)).filter(ImageFilter.GaussianBlur(2))
             comp.paste(tile, (x, y), g_crop)
@@ -324,7 +354,21 @@ def _refill_uncovered_background(ctx, result_path: str, old_mask, region_phrase:
             odd = (ndimage.binary_dilation(old, iterations=10) & floorlike
                    & (np.abs(px - med).sum(axis=2) > 60))
             odd = ndimage.binary_dilation(odd, iterations=8)
+            # ...but not the garment's own bright details: a red monogram and a
+            # flag patch read as "halo" and ObjectClear wiped them (live 10-06).
+            odd &= ~ndimage.binary_erosion(span, iterations=3)
+        if orig is not None:
+            # What still looks like the ORIGINAL there is not uncovered background:
+            # hair hanging over the old sweater stays hair. Live 10-06 (white
+            # sweater -> navy hoodie): blonde strands are wall-bright, read as a
+            # "halo", and ObjectClear smeared skin-coloured blobs over both shoulders.
+            o = np.asarray(orig.convert("RGB").resize((px.shape[1], px.shape[0]))).astype(np.int16)
+            same = ndimage.binary_dilation(np.abs(px - o).sum(axis=2) < 60, iterations=2)
+            uncovered &= ~same
+            odd &= ~same
         uncovered = (uncovered & border) | odd
+        if tile is None and uncovered.sum() < 0.03 * max(1, old.sum()) and not odd.any():
+            return None
         if uncovered.sum() < 200:
             return result_path if tile is not None else None
         m = Image.fromarray((uncovered * 255).astype("uint8")).filter(ImageFilter.MaxFilter(13))
@@ -343,6 +387,17 @@ def _refill_uncovered_background(ctx, result_path: str, old_mask, region_phrase:
             if left.any():
                 left = ndimage.binary_dilation(left, iterations=3).astype("uint8") * 255
                 cv2.imwrite(out, cv2.inpaint(bgr, left, 5, cv2.INPAINT_TELEA))
+        if out:
+            # The fill owns its mask and nothing else: ObjectClear re-renders the
+            # whole crop and smeared the flag patch on the sleeve edge beside it
+            # (live 10-06).
+            own = np.asarray(m) > 127
+            if odd.any():
+                own |= odd
+            own = Image.fromarray(ndimage.binary_dilation(own, iterations=2).astype("uint8") * 255)
+            res = Image.open(result_path).convert("RGB")
+            res.paste(Image.open(out).convert("RGB"), (0, 0), own.filter(ImageFilter.GaussianBlur(1.5)))
+            res.save(out)
         if out:
             logger.info("contained-firered: refilled %d uncovered px with ObjectClear -> %s",
                         int(uncovered.sum()), os.path.basename(out))
@@ -524,7 +579,7 @@ def edit_region_contained_via_firered(
     # that uncovered band from the surrounding original with ObjectClear.
     if whole_region and not instruction.lstrip().lower().startswith(("remove", "completely remove", "erase")):
         refilled = _refill_uncovered_background(ctx, str(final), mask, region_phrase, seed, timeout,
-                                                tile=res, tile_xy=(x0, y0))
+                                                tile=res, tile_xy=(x0, y0), orig=orig)
         if refilled:
             final = type(final)(refilled)
             out = Image.open(refilled).convert("RGB")

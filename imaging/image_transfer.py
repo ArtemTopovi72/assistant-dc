@@ -611,6 +611,37 @@ _PLACEMENT_PARTS = (
 
 
 
+_GARMENT_CACHE: dict = {}
+
+
+def _garment_details(ctx, path: str) -> str:
+    """One line on a garment photo: type, colour, collar, closures and every
+    logo/patch/print with its colour and place. "" when the vision model is out."""
+    if not path or not os.path.exists(path):
+        return ""
+    key = (path, os.path.getsize(path))
+    if key in _GARMENT_CACHE:
+        return _GARMENT_CACHE[key]
+    try:
+        from llm import analyze_image_with_llm
+        txt = analyze_image_with_llm(
+            ctx=ctx, image_path=path,
+            user_text="Describe this garment in ONE line for a tailor who must copy it exactly.",
+            system_prompt=("Describe only the garment: its type, colour, collar or neckline, "
+                           "closures (zip, buttons) and their colour, cuffs and hem, and EVERY "
+                           "logo, emblem, lettering, patch or print with its colour and exact "
+                           "position (e.g. 'red embroidered monogram on the left chest'). One "
+                           "line, English, no preamble, at most 60 words."),
+            max_tokens=120) or ""
+    except Exception as exc:
+        logger.info("garment details: vision call failed (%s)", exc)
+        txt = ""
+    txt = re.sub(r"\s+", " ", txt).strip().strip('"').rstrip(".")[:400]
+    logger.info("garment details for %s: %r", os.path.basename(path), txt)
+    _GARMENT_CACHE[key] = txt
+    return txt
+
+
 def _placement_region_from_instruction(instruction):
     """Extract the body part / surface a placement instruction names, as a SAM3
     region phrase (e.g. "upper arm"), or None. Lets the contained transfer mask
@@ -676,6 +707,18 @@ def transfer_reference_contained(ctx, target_path, ref, instruction=None, *,
     if ref.is_extractable() and not ref.extracted_asset_path:
         _image.extract_reference_asset(ctx, ref)
     ref_clause = "image 2"
+    if role == ROLE_CLOTHING:
+        # FireRed knows "image 2", not "the reference image", and copies only what
+        # it is told: live 10-06 a navy quarter-zip with a red monogram and a flag
+        # patch came out a plain navy jumper. Name the garment's details for it.
+        details = _garment_details(ctx, ref.extracted_asset_path or ref.path)
+        lead = (f"Replace the clothing with the garment shown in {ref_clause}"
+                + (f" ({details})" if details else "") + ", fitted to the body, with all its "
+                "details, logos and patches exactly as in " + ref_clause)
+        extra = (instruction or "").strip()
+        extra = re.sub(r"(?i)\b(?:the )?(?:reference|clothing reference) (?:image|photo|picture)", ref_clause, extra)
+        extra = re.sub(r"(?i)\b(?:the )?target (?:image|photo|picture)", "image 1", extra)
+        instruction = lead + (f". {extra}" if extra else "")
     instr = (instruction or "").strip() or {
         ROLE_CLOTHING: f"Replace the clothing with the garment shown in {ref_clause}, fitted to the body",
         ROLE_HAIR: f"Replace the hair with the hairstyle shown in {ref_clause}",
