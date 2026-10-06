@@ -491,7 +491,25 @@ def _handle_transfer_image(ctx, state, args: dict) -> str:
     except Exception as exc:
         logger.info("transfer_image: face-based target heuristic skipped: %s", exc)
 
-    references = [p for p in imgs if p != target]
+    # By CONTENT: the graph edits a byte-identical _working_input_* copy of the
+    # target, so the target's own file came back as a "reference". Live 10-06
+    # (👗 + a hoodie photo): refs=2, two passes, the first "dressed" her in her
+    # own sweater -- twice the time, twice the damage.
+    def _key(p):
+        try:
+            return os.path.getsize(p), open(p, "rb").read(65536)
+        except OSError:
+            return p
+    seen = {_key(target)}
+    references = []
+    for p in imgs:
+        k = _key(p)
+        if p != target and k not in seen:
+            seen.add(k)
+            references.append(p)
+    if not references:
+        return ("[TOOL ERROR] transfer_image needs a reference image different from the "
+                "target; only copies of the target are loaded.")
 
     instructions = (args.get("instructions") or "").strip()
     roles = args.get("roles") or []

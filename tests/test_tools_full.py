@@ -22,7 +22,7 @@ _TMP = Path(tempfile.mkdtemp(prefix="tools_"))
 
 def _img(name="im.png"):
     p = _TMP / name
-    p.write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 64)
+    p.write_bytes(b"\x89PNG\r\n\x1a\n" + name.encode() + b"0" * 64)   # distinct: transfer dedupes by content
     return str(p)
 
 RESULTS = []

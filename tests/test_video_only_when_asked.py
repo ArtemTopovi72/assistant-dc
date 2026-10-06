@@ -71,3 +71,4 @@ def test_a_shot_script_without_the_word_video_is_asked_to_the_model(monkeypatch)
     assert asked and "банку" in asked[0]
     monkeypatch.setattr(intent, "YES_STUB", lambda q, t: False)
     assert not H.asks_for_video(_Ctx(), _st(script))
+
