@@ -123,6 +123,33 @@ def _mix(voice_wav: str, back: np.ndarray, out_mp3: str) -> str:
     return out_mp3
 
 
+# Whisper's stock lines on a bare backing track: the credits of the subtitle sets it learned
+# from. 10-07 «3 сентября» ended in four «Субтитры создавал DimaTorzok», each given a lyric line.
+_HALLUCINATED = re.compile(r"субтитр|dimatorzok|редактор|корректор|продолжение следует|"
+                           r"спасибо за просмотр|подписывайтесь|thank you|subtitles|amara", re.I)
+
+
+def _sung_words(segs) -> list:
+    """Word timings of a sung vocal from Whisper segments: credit-line hallucinations dropped,
+    and a number spelled out the way it is sung («3 сентября» -> «третье», 2 syllables, not 0)."""
+    from num2words import num2words
+    out = []
+    for sg in segs:
+        if _HALLUCINATED.search(sg.text or ""):
+            continue
+        for w in sg.words or []:
+            t = w.word.strip()
+            if not t:
+                continue
+            if re.fullmatch(r"\d+[.,]?", t):
+                try:
+                    t = num2words(int(re.sub(r"\D", "", t)), lang="ru", to="ordinal", gender="n")
+                except Exception:
+                    pass
+            out.append({"w": t, "s": w.start, "e": w.end})
+    return out
+
+
 def _phrases(words: list, gap: float = 0.45, longest: float = 9.0) -> list:
     """The original vocal's sung phrases: words split at breaths (or every ~9 s)."""
     out, cur = [], []
@@ -265,7 +292,7 @@ def _speak_on_melody(ctx, vox: np.ndarray, lines: list, work: str, plan: list = 
     wh = ctx.models.whisper
     if plan is None:
         segs, _ = wh.transcribe(vp, word_timestamps=True)
-        words = [{"w": w.word.strip(), "s": w.start, "e": w.end} for sg in segs for w in (sg.words or []) if w.word.strip()]
+        words = _sung_words(segs)
         if len(words) < 3:
             raise cover.CoverFailed("no_words")
         plan = _plan(_phrases(words), lines)

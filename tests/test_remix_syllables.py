@@ -93,3 +93,16 @@ def test_spoken_syllables_land_on_the_sung_ones(tmp_path):
         k = lo + int(np.argmax(env[lo:lo + int(0.3 * sr)] > 0.2))
         on.append(k / sr)
     assert np.max(np.abs(np.array(on) - np.array(dst[:-1]))) < 0.03, on
+
+
+class _Seg:
+    def __init__(self, text, words):
+        self.text, self.words = text, [type("W", (), {"word": w, "start": s, "end": e}) for w, s, e in words]
+
+
+def test_credit_hallucinations_dropped_and_numbers_sung():
+    segs = [_Seg(" 3 сентября", [(" 3", 0.0, 0.4), (" сентября", 0.4, 1.2)]),
+            _Seg(" Субтитры создавал DimaTorzok", [(" Субтитры", 2.0, 2.5), (" создавал", 2.5, 3.0)])]
+    words = R._sung_words(segs)
+    assert [w["w"] for w in words] == ["третье", "сентября"]
+    assert len(R._syl_marks(words)) - 1 == 5          # тре-тье-сен-тяб-ря, not 3
