@@ -315,6 +315,7 @@ def _speak_on_melody(ctx, vox: np.ndarray, lines: list, work: str, plan: list = 
                           dst_ends=[e - t0 for e in _syl_ends(ph)])
         s0 = int(t0 * SR)
         canvas[s0:s0 + len(seg)] += seg[:max(0, len(canvas) - s0)]
+    sf.write(os.path.join(work, "canvas.wav"), canvas, SR)    # the words alone, for an F0-driven voice
     return _lay_pitch(canvas, vox, work)
 
 

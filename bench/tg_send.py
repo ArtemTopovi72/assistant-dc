@@ -11,7 +11,8 @@ s = QSettings("AssistantApp", "TelegramBot")
 tok = next(str(s.value(k)) for k in s.allKeys() if "token" in k.lower() and s.value(k))
 for f in files:
     p = Path(f)
-    m, field = ("sendAudio", "audio") if p.suffix in (".mp3", ".wav", ".m4a") else ("sendDocument", "document")
+    m, field = (("sendAudio", "audio") if p.suffix in (".mp3", ".wav", ".m4a")
+                else ("sendVideo", "video") if p.suffix == ".mp4" else ("sendDocument", "document"))
     for base in ("http://127.0.0.1:8081", "https://api.telegram.org"):
         try:
             r = requests.post(f"{base}/bot{tok}/{m}", data={"chat_id": chat, "caption": cap or p.name},
