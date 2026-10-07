@@ -123,45 +123,128 @@ def _mix(voice_wav: str, back: np.ndarray, out_mp3: str) -> str:
     return out_mp3
 
 
-def _line_spans(words: list, lines: list) -> list:
-    """Spread our lines over the original word timings by cumulative syllable share."""
-    ow = np.cumsum([_syl(w["w"]) for w in words]).astype(float)
-    ow /= ow[-1]
-    nl = np.cumsum([_syl(l) for l in lines]).astype(float)
-    nl /= nl[-1]
-    spans = []
-    for i in range(len(lines)):
-        lo, hi = (nl[i - 1] if i else 0.0), nl[i]
-        idx = [k for k in range(len(words)) if lo <= ((ow[k - 1] if k else 0.0) + ow[k]) / 2 < hi]
-        spans.append((words[idx[0]]["s"], words[idx[-1]]["e"]) if idx else None)
-    return spans
+def _phrases(words: list, gap: float = 0.45, longest: float = 9.0) -> list:
+    """The original vocal's sung phrases: words split at breaths (or every ~9 s)."""
+    out, cur = [], []
+    for w in words:
+        if cur and (w["s"] - cur[-1]["e"] > gap or w["e"] - cur[0]["s"] > longest):
+            out.append(cur)
+            cur = []
+        cur.append(w)
+    return out + ([cur] if cur else [])
+
+
+def _syl_marks(words: list) -> list:
+    """Onset of every syllable (vowel) in `words`, split evenly inside each word, plus the end."""
+    marks = []
+    for w in words:
+        n = _syl(w["w"]) if _VOW.search(w["w"]) else 0
+        marks += [w["s"] + k * (w["e"] - w["s"]) / max(n, 1) for k in range(n)]
+    return marks + [words[-1]["e"]] if words else []
+
+
+def _fit_line(ctx, line: str, n: int) -> str:
+    """`line` reworded to exactly `n` syllables (a parody fits the meter, not the other way)."""
+    if _syl(line) == n:
+        return line
+    import llm
+    for _ in range(3):
+        try:
+            got = llm.call_llm_simple(
+                ctx, "You fit song lyrics to a melody. Rewrite the line so it has EXACTLY the asked "
+                "number of syllables (one per vowel), same language, same meaning, keep its key words "
+                "and its rhyme word at the end. Reply with the line only.",
+                f"Syllables: {n}\nLine: {line}", temperature=0.5, max_tokens=200).strip().strip('"«»')
+        except Exception:
+            return line
+        got = got.splitlines()[0].strip() if got else ""
+        if got and _syl(got) == n:
+            return got
+    return line
+
+
+def _plan(phrases: list, lines: list) -> list:
+    """Line i goes to phrase i; the song's later phrases go round the lyric again."""
+    return [(ph, lines[i % len(lines)]) for i, ph in enumerate(phrases) if _syl_marks(ph)]
+
+
+def _stretch(y: np.ndarray, n: int, path: str) -> np.ndarray:
+    """`y` time-stretched to exactly `n` samples, pitch kept (rubberband R3)."""
+    import soundfile as sf
+    import mashup_auto
+    if n <= 0 or len(y) < 64:
+        return np.zeros(max(n, 0), np.float32)
+    sf.write(path + ".in.wav", y, SR)
+    subprocess.run([mashup_auto.RUBBERBAND, "-q", "--fine", "-D", f"{n / SR:.6f}", path + ".in.wav", path + ".wav"],
+                   check=True, capture_output=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    out, _ = sf.read(path + ".wav", dtype="float32")
+    out = out.mean(1) if out.ndim > 1 else out
+    return np.pad(out, (0, max(0, n - len(out))))[:n]
+
+
+def _onto_marks(y: np.ndarray, src: list, dst: list, length: int, work: str, tag: str) -> np.ndarray:
+    """`y` warped so its syllable onsets `src` (s) land on `dst` (s, from 0); `length` samples.
+    Syllable by syllable: one time map over the whole line smears each onset ~70-90 ms early
+    where a short spoken gap is stretched to a long sung note (10-07 test)."""
+    k = min(len(src), len(dst))
+    if k < 2:
+        return y[:length]
+    xs = np.linspace(0, 1, k)
+    s_ = (np.interp(xs, np.linspace(0, 1, len(src)), src) - src[0]) * SR
+    d_ = np.interp(xs, np.linspace(0, 1, len(dst)), dst) * SR
+    y = y[int(src[0] * SR):]           # the first syllable opens the phrase
+    out = np.zeros(length, np.float32)
+    fade = int(0.006 * SR)
+    for j in range(k - 1):
+        a0, a1, b0, b1 = int(s_[j]), int(s_[j + 1]), int(d_[j]), int(d_[j + 1])
+        seg = _stretch(y[a0:a1], min(b1, length) - b0, os.path.join(work, f"{tag}_{j}"))
+        if len(seg) > 2 * fade:
+            seg[:fade] *= np.linspace(0, 1, fade)
+            seg[-fade:] *= np.linspace(1, 0, fade)
+        out[b0:b0 + len(seg)] += seg
+    return out
 
 
 def _speak_on_melody(ctx, vox: np.ndarray, lines: list, work: str) -> str:
-    """Our lines, spoken into the spans of the original words, carrying the original singer's pitch."""
+    """Our lines sung syllable for syllable where the original's were: each line takes one of
+    the song's phrases, is reworded to that phrase's syllable count, spoken, and its syllables
+    are stretched onto the original syllables; then the original pitch goes on top."""
     import librosa
-    import pyworld as pw
     import soundfile as sf
     import audio
     vp = os.path.join(work, "orig_vox.wav")
     sf.write(vp, vox, SR)
-    segs, _ = ctx.models.whisper.transcribe(vp, word_timestamps=True)
+    wh = ctx.models.whisper
+    segs, _ = wh.transcribe(vp, word_timestamps=True)
     words = [{"w": w.word.strip(), "s": w.start, "e": w.end} for sg in segs for w in (sg.words or []) if w.word.strip()]
     if len(words) < 3:
         raise cover.CoverFailed("no_words")
     canvas = np.zeros(len(vox), dtype=np.float32)
-    for i, (line, sp) in enumerate(zip(lines, _line_spans(words, lines))):
-        if sp is None:
-            continue
+    for i, (ph, line) in enumerate(_plan(_phrases(words), lines)):
+        dst = _syl_marks(ph)
+        line = _fit_line(ctx, line, len(dst) - 1)
         w = audio.synth_single_segment(ctx, 5000 + i, "DC", line, out_stem=os.path.join(work, f"l{i}"))
         if not w:
             continue
         y, _ = librosa.load(w, sr=SR)
         y, _ = librosa.effects.trim(y, top_db=35)
-        rate = float(np.clip(len(y) / SR / max(0.3, sp[1] - sp[0]), 0.5, 2.5))
-        y = librosa.effects.time_stretch(y, rate=rate)
-        s0 = int(sp[0] * SR)
-        canvas[s0:s0 + len(y)] += y[:max(0, len(canvas) - s0)]
+        tp = os.path.join(work, f"l{i}_t.wav")
+        sf.write(tp, y, SR)
+        ts, _ = wh.transcribe(tp, word_timestamps=True)
+        tw = [{"w": x.word.strip(), "s": x.start, "e": x.end} for sg in ts for x in (sg.words or []) if x.word.strip()]
+        src = _syl_marks(tw)[:-1] + [len(y) / SR] if tw else [0.0, len(y) / SR]
+        t0 = dst[0]
+        seg = _onto_marks(y, src, [d - t0 for d in dst], int((dst[-1] - t0) * SR) + SR // 10, work, f"l{i}")
+        s0 = int(t0 * SR)
+        canvas[s0:s0 + len(seg)] += seg[:max(0, len(canvas) - s0)]
+    return _lay_pitch(canvas, vox, work)
+
+
+def _lay_pitch(canvas: np.ndarray, vox: np.ndarray, work: str) -> str:
+    """`canvas` (speech or another singing on the song's timeline) takes the original vocal's pitch contour."""
+    import librosa
+    import pyworld as pw
+    import soundfile as sf
     R = 22050                                       # the speech takes the original pitch contour on the same timeline
     a = librosa.resample(canvas.astype(np.float64), orig_sr=SR, target_sr=R)
     o = librosa.resample(vox.astype(np.float64), orig_sr=SR, target_sr=R)
