@@ -84,5 +84,21 @@ j = V.join_pinned(clip("a.mp4", 3, "red"), clip("b.mp4", 2, "blue"))
 got = real_probe(j)["seconds"] if j else 0
 check(j and abs(got - (5 - 22 / 24)) < 0.1, f"joined length = old - 22 frames + new ({got})")
 
+# bridge_part: the next part starts from where the last one ended, lines kept verbatim
+import llm
+frame = os.path.join(d, "f.jpg")
+open(frame, "wb").write(b"x")
+part = "He sweeps the carrots into a steaming pot and says «Соли маловато»"
+llm.analyze_image_with_llm = lambda ctx, **k: ('{"missing": ["pot"], "bridge": '
+                                                 '"He turns to the stove where a pot steams."}')
+out = V.bridge_part(None, frame, part)
+check(out.startswith("He turns to the stove where a pot steams. Then he sweeps") and part[1:] in out,
+      f"the bridge goes first, the part stays word for word: {out}")
+llm.analyze_image_with_llm = lambda ctx, **k: '{"missing": [], "bridge": ""}'
+check(V.bridge_part(None, frame, part) == part, "nothing missing, nothing added")
+def boom(ctx, **k): raise RuntimeError("down")
+llm.analyze_image_with_llm = boom
+check(V.bridge_part(None, frame, part) == part, "a failed rewrite keeps the part")
+
 print(f"\n{sum(ok)}/{len(ok)}")
 sys.exit(0 if all(ok) else 1)

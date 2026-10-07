@@ -1075,6 +1075,8 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict) -> str:
             logger.warning("video parts: could not take the end of part %d", i - 1)
             break
         pinned = video_mod.motion_context_on()
+        if pinned:
+            part = video_mod.bridge_part(ctx, frame, part)
         try:
             if pinned:
                 r = video_mod.generate_video(ctx, video_mod.CONTINUE_CTX_PREFIX + part,

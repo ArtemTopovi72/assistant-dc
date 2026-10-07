@@ -52,6 +52,8 @@ def chain(first, pinned):
         assert tg_continue.seed_frame(path, frame) and tg_continue.cut_tail(path, tail)
         log(f"{'NEW' if pinned else 'OLD'} part {i}")
         if pinned:
+            part = V.bridge_part(None, frame, part)
+            log("  bridged:", part)
             new, dt = render(V.CONTINUE_CTX_PREFIX + part, context_video=tail, seed=SEED + i)
             j = V.join_pinned(path, new)
         else:

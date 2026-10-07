@@ -1154,6 +1154,41 @@ CONTINUE_CTX_PREFIX = (
     "changed stays changed, and voices and ambient sound go on unchanged. What happens next: ")
 
 
+def bridge_part(ctx, last_frame: str, part: str) -> str:
+    """The next part of a long script with one bridging sentence in front, so it starts
+    from `last_frame` (where the previous part really ended). A part that names a place or
+    a thing not in that frame ("sweeps the carrots into a steaming pot" while he stands at a
+    bare board) made the model conjure the pot out of nothing right after the pinned frames
+    (10-07). Asked to REWRITE the part, Gemma echoed it unchanged, so it is asked what is
+    missing and for the move that brings it in, and that sentence goes first. The part
+    itself is never touched; any failure keeps it as it was."""
+    if not (part and last_frame and os.path.exists(last_frame)):
+        return part
+    guide = ("The image is the last frame of a video so far. The next part of its script is "
+             "given. List every place, object or person the next part's FIRST action needs that "
+             "is not visible in the frame or not within the person's reach. If any, write ONE "
+             "short sentence in English of the movement that comes first and say WHERE the "
+             "missing thing already is, off-frame: e.g. 'He turns to the stove behind him, "
+             "where a pot is already steaming.' or 'She walks to the door at the left.' -- "
+             "only that movement, never the action itself. Reply as JSON only: "
+             '{"missing": ["..."], "bridge": "sentence, or empty when nothing is missing"}')
+    import llm as _llm
+    from utils import safe_json_from_llm
+    try:
+        raw = _llm.analyze_image_with_llm(ctx, image_path=last_frame, user_text="Next part: " + part,
+                                          system_prompt=guide, temperature=0.2, max_tokens=400)
+    except Exception as exc:
+        logger.warning("bridge_part failed: %s", exc)
+        return part
+    got = safe_json_from_llm(raw or "", ["bridge"]) or {}
+    bridge = str(got.get("bridge") or "").strip()
+    if not got.get("missing") or not bridge or len(bridge) > 300:
+        logger.info("bridge_part: nothing to bridge (%s)", got.get("missing"))
+        return part
+    logger.info("bridge_part: missing %s -> %s", got.get("missing"), bridge)
+    return bridge[:1].upper() + bridge[1:].rstrip(".") + ". Then " + part[:1].lower() + part[1:]
+
+
 def new_people_clause(first: int, n: int) -> str:
     """The continuation brings in people who are not in <Video 1>, one per picture
     from <Picture first>: each enters the shot and keeps that picture's face, hair,
