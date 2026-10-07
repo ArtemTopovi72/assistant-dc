@@ -16,8 +16,11 @@ def test_video_url_hosts():
         assert L.video_url(u) == "", u
 
 
+SEEN = []
+
+
 class _FakeYDL:
-    def __init__(self, opts): self.opts = opts
+    def __init__(self, opts): self.opts = opts; SEEN.append(opts)
     def __enter__(self): return self
     def __exit__(self, *a): return False
     def extract_info(self, url, download=False):
@@ -33,6 +36,11 @@ def test_fetch_video_downloads_and_caps_length():
         assert r == {"data": b"MP4", "seconds": 55, "title": "t", "description": "d"}, r
         r = L.fetch_video("https://youtu.be/v?d=4000")
         assert r == {"too_long": True, "seconds": 4000, "title": "t"}, r
+        # live 10-07: every YouTube link died on "Sign in to confirm you're not a bot";
+        # the mweb client with a node-solved JS challenge still downloads
+        o = SEEN[-1]
+        assert "mweb" in o["extractor_args"]["youtube"]["player_client"], o
+        assert "node" in o["js_runtimes"], o
     finally:
         del sys.modules["yt_dlp"]
 

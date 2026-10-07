@@ -52,7 +52,11 @@ def fetch_video(url: str, max_seconds: int = VIDEO_MAX_SECONDS) -> dict:
                     # YouTube serves picture and sound as separate streams
                     "format": "bv*[height<=720]+ba/b[height<=720]/b",
                     "merge_output_format": "mp4",
-                    "outtmpl": os.path.join(d, "v.%(ext)s"), "socket_timeout": 20}
+                    "outtmpl": os.path.join(d, "v.%(ext)s"), "socket_timeout": 20,
+                    # YouTube (2026-10): the default clients get "Sign in to confirm you're not
+                    # a bot"; mweb still serves formats once its JS challenge is solved (node).
+                    "extractor_args": {"youtube": {"player_client": ["default", "mweb"]}},
+                    "js_runtimes": {"node": {}}, "remote_components": ["ejs:github"]}
             with yt_dlp.YoutubeDL(opts) as y:
                 info = y.extract_info(url, download=False)
                 secs = int(info.get("duration") or 0)
