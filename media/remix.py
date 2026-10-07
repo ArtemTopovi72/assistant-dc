@@ -569,6 +569,19 @@ def _clarity(heard: str, lyric: str) -> float:
     return sum(1 for l in lines if _line_heard(h, l) >= 0.8) / len(lines)
 
 
+def _likeness(heard: str, lyric: str) -> float:
+    """How close Whisper's hearing is to the lyric: the mean best-window similarity of its lines.
+    A voice is judged by this, not _clarity: a sung line through RVC reads «сарок лет как пад
+    наркозам» -- 0.79, under _clarity's 0.8 cliff -- so the same conversion swung 0.28..0.59 on
+    _clarity while its likeness stayed 0.62..0.77 (10-08 sweep, 6 models x 2 takes)."""
+    h = _letters(heard)
+    lines = {_letters(l) for l in (lyric or "").splitlines() if l.strip() and not l.strip().startswith("[")}
+    lines = [l for l in lines if len(l) >= 8]
+    if not lines:
+        return 1.0
+    return sum(_line_heard(h, l) for l in lines) / len(lines)
+
+
 def resing(ctx, song: str, lyrics: str, info: dict = None) -> str:
     """`song` re-sung with `lyrics`: YuE2 renders the original's full score with the new words
     (new notes where the words need them, its own backing in the original's style), then the
@@ -623,13 +636,17 @@ def resing(ctx, song: str, lyrics: str, info: dict = None) -> str:
     else:
         ref = _singer_ref(vox, work, "a")
         voices = [(v, lambda o, v=v: sing_as(ctx, yvox_wav, ref, o, order=(v,))) for v in ("seedvc", "soulx")]
-    return _mix_vocal(_voice_keeping_words(ctx, voices, yvox_wav, layout, best[0], work, lang), yvox, yback)
+    return _mix_vocal(_voice_keeping_words(ctx, voices, yvox_wav, layout, work, lang), yvox, yback)
 
 
-def _voice_keeping_words(ctx, voices: list, yvox_wav: str, layout: str, clear: float, work: str, lang) -> str:
+def _voice_keeping_words(ctx, voices: list, yvox_wav: str, layout: str, work: str, lang) -> str:
     """The first singer's-voice conversion that keeps the words; else the take's own vocal.
     10-07 live: a take heard at 97% came out of SoulX as «Субтитры... ЧИИИИИИ...» and the user
-    got that mush. A conversion that loses more than a fifth of the heard lines is dropped."""
+    got that mush. A conversion heard less than 0.8 as close to the lyric as the take is dropped
+    (by _likeness: on _clarity's cliff every RVC voice fell under it and the singer never sang)."""
+    def heard(path):
+        return _likeness(" ".join(w["w"] for w in _sung_words(_hear(ctx.models.whisper, path, lang))), layout)
+    take = None
     for vname, convert in voices:
         out = os.path.join(work, vname + ".wav")
         try:
@@ -637,9 +654,11 @@ def _voice_keeping_words(ctx, voices: list, yvox_wav: str, layout: str, clear: f
         except Exception as exc:
             logger.warning("resing: %s failed: %s", vname, exc)
             continue
-        kept = _clarity(" ".join(w["w"] for w in _sung_words(_hear(ctx.models.whisper, out, lang))), layout)
-        logger.info("resing: %s voice keeps %.0f%% of the lines (take %.0f%%)", vname, kept * 100, clear * 100)
-        if kept >= clear * 0.8:
+        if take is None:
+            take = heard(yvox_wav)
+        kept = heard(out)
+        logger.info("resing: %s voice heard %.2f like the lyric (take %.2f)", vname, kept, take)
+        if kept >= take * 0.8:
             return out
     logger.warning("resing: no voice kept the words, sending the take's own vocal")
     return yvox_wav
@@ -655,7 +674,7 @@ def resing_rvc(ctx, info: dict) -> str:
     if not rvc_voice.model_of(name) and not rvc_voice.train(ctx, name, os.path.join(work, "a_vox.wav")):
         raise cover.CoverFailed("render")
     voices = [("rvc", lambda o: rvc_voice.convert(ctx, name, info["yvox_wav"], o))]
-    conv = _voice_keeping_words(ctx, voices, info["yvox_wav"], info["layout"], info["clarity"], work, info.get("lang"))
+    conv = _voice_keeping_words(ctx, voices, info["yvox_wav"], info["layout"], work, info.get("lang"))
     return _mix_vocal(conv, info["yvox"], info["yback"])
 
 

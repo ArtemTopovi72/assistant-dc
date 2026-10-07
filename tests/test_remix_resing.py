@@ -110,7 +110,7 @@ def _fake_resing_run(monkeypatch, tmp_path, trained: bool):
     monkeypatch.setattr(music, "_master", lambda p, *a, **k: None)
     monkeypatch.setattr(R, "_singer_ref", lambda vox, work, name: "ref.wav")
     monkeypatch.setattr(R, "sing_as", lambda ctx, src, ref, out, order=(): (calls.append("zero-shot"), out)[1])
-    monkeypatch.setattr(R, "_voice_keeping_words", lambda ctx, voices, yvox_wav, layout, clear, work, lang:
+    monkeypatch.setattr(R, "_voice_keeping_words", lambda ctx, voices, yvox_wav, layout, work, lang:
                         voices[0][1](os.path.join(str(tmp_path), "v.wav")))
     monkeypatch.setattr(R, "_mix_vocal", lambda conv, yvox, yback: conv)
     monkeypatch.setattr(rvc_voice, "available", lambda: True)
@@ -243,7 +243,8 @@ def test_sung_vocal_is_heard_with_vad_and_no_conditioning():
 
 def test_a_voice_that_loses_the_words_is_not_sent(monkeypatch, tmp_path):
     # 10-07 live: a take heard at 97% came out of SoulX as «Субтитры... ЧИИИИИИ...»; the user got the mush.
-    heard = {"seedvc.wav": "бу бу бу", "soulx.wav": "сорок лет как под наркозом я работал говновозом"}
+    heard = {"seedvc.wav": "бу бу бу", "soulx.wav": "сорок лет как под наркозом я работал говновозом",
+             "take.wav": "сорок лет как под наркозом я работал говновозом"}
 
     class W:
         def transcribe(self, path, **k):
@@ -256,10 +257,14 @@ def test_a_voice_that_loses_the_words_is_not_sent(monkeypatch, tmp_path):
     layout = "[Verse]\nсорок лет как под наркозом\nя работал говновозом"
     tried = []
     voices = [(v, lambda o, v=v: (tried.append(v), open(o, "wb").close())) for v in ("seedvc", "soulx")]
-    got = R._voice_keeping_words(ctx, voices, "take.wav", layout, 1.0, str(tmp_path), "ru")
+    got = R._voice_keeping_words(ctx, voices, "take.wav", layout, str(tmp_path), "ru")
     assert tried == ["seedvc", "soulx"] and os.path.basename(got) == "soulx.wav"
     heard["soulx.wav"] = "ЧИИИИИИИ"
-    assert R._voice_keeping_words(ctx, voices, "take.wav", layout, 1.0, str(tmp_path), "ru") == "take.wav"
+    assert R._voice_keeping_words(ctx, voices, "take.wav", layout, str(tmp_path), "ru") == "take.wav"
+    # 10-08: RVC sings every word a little off -- each line ~0.8 similar, half the lines under
+    # _clarity's cliff -- and that singer's voice is what the user wants, not the take's.
+    heard["soulx.wav"] = "сарок лет как пад наркозам я рабатал гавновозам"
+    assert os.path.basename(R._voice_keeping_words(ctx, voices, "take.wav", layout, str(tmp_path), "ru")) == "soulx.wav"
 
 
 def _lyrics_run(monkeypatch, heard_lines, tidy):
