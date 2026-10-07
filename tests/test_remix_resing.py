@@ -309,6 +309,7 @@ def test_rvc_trains_on_the_russian_pretrain_and_converts_without_the_index(monke
         with open(d / f, "wb") as fh:
             fh.truncate(int(2e8))
     monkeypatch.setattr(rvc_voice, "_run", lambda ctx, args, *a: runs.append(args))
+    monkeypatch.setattr(rvc_voice, "_clean_vocal", lambda ctx, wav, work: wav)
     monkeypatch.setattr(rvc_voice, "model_of", lambda name: ("m.pth", "m.index"))
     wav = tmp_path / "v.wav"
     wav.write_bytes(b"x")
@@ -321,3 +322,33 @@ def test_rvc_trains_on_the_russian_pretrain_and_converts_without_the_index(monke
     rvc_voice.convert(None, "artist", str(wav), str(out))
     inf = runs[-1]
     assert inf[inf.index("--index-rate") + 1] == "0" and inf[inf.index("--protect") + 1] == "0.33"
+
+
+def test_the_singer_is_trained_alone_and_dry(monkeypatch, tmp_path):
+    # 10-08: Snowie on the bare Demucs stem kept 0.62 likeness, on lead-only + dereverbed 0.68.
+    import rvc_voice
+    import music
+    monkeypatch.setattr(rvc_voice, "APPLIO", str(tmp_path))
+    monkeypatch.setattr(rvc_voice, "SEPARATOR", str(tmp_path / "sep.exe"))
+    (tmp_path / "sep.exe").write_bytes(b"")
+    models = []
+
+    def sep(ctx, py, script, job, label, timeout, cmd=None, env=None, cwd=None):
+        src, model, out = cmd[1], cmd[3], cmd[5]
+        models.append(model)
+        stem = os.path.splitext(os.path.basename(src))[0]
+        tags = ("(Vocals)", "(Instrumental)") if "karaoke" in model else ("(noreverb)", "(reverb)")
+        for t in tags:
+            with open(os.path.join(out, f"{stem}_{t}_{model[:8]}.wav"), "w", encoding="utf-8") as f:
+                f.write(t)
+        return True, ""
+    monkeypatch.setattr(music, "run_gpu_worker", sep)
+    runs = []
+    monkeypatch.setattr(rvc_voice, "_run", lambda ctx, args, *a: runs.append(args))
+    monkeypatch.setattr(rvc_voice, "_pretrain_args", lambda: [])
+    monkeypatch.setattr(rvc_voice, "model_of", lambda name: ("m.pth", "m.index"))
+    wav = tmp_path / "a_vox.wav"
+    wav.write_text("stem", encoding="utf-8")
+    rvc_voice.train(None, "artist", str(wav))
+    assert models == [rvc_voice.LEAD_MODEL, rvc_voice.DRY_MODEL]
+    assert (tmp_path / "datasets" / "artist" / "vocal.wav").read_text(encoding="utf-8") == "(noreverb)"

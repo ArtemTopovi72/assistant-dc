@@ -67,6 +67,37 @@ def _run(ctx, args: list, label: str, timeout: int) -> str:
     return tail
 
 
+SEPARATOR = os.path.join(ROOT, "venv_applio", "Scripts", "audio-separator.exe")
+LEAD_MODEL = "mel_band_roformer_karaoke_aufr33_viperx_sdr_10.1956.ckpt"
+DRY_MODEL = "dereverb_mel_band_roformer_anvuew_sdr_19.1729.ckpt"
+
+
+def _clean_vocal(ctx, vocal_wav: str, work: str) -> str:
+    """The singer alone and dry: the lead voice off the backing vocals, then the reverb off it.
+    10-08 sweep (Whisper likeness of a YuE take sung through, 2 takes x 3 settings): Snowie on
+    the bare Demucs stem 0.62, on the cleaned one 0.68 -- the model no longer learns the choir
+    and the hall as part of the voice. The bare stem when the separator is missing or fails."""
+    if not os.path.isfile(SEPARATOR):
+        return vocal_wav
+    models = os.path.join(APPLIO, "sep_models")
+    src = vocal_wav
+    try:
+        for i, (model, keep) in enumerate(((LEAD_MODEL, "(Vocals)"), (DRY_MODEL, "(noreverb)"))):
+            out = os.path.join(work, f"clean{i}")
+            os.makedirs(out, exist_ok=True)
+            music.run_gpu_worker(ctx, PY, "", {}, "RVC clean", 900, env={**os.environ, "PYTHONUTF8": "1"},
+                                 cmd=[SEPARATOR, src, "-m", model, "--output_dir", out, "--model_file_dir", models,
+                                      "--output_format", "WAV"], cwd=APPLIO)
+            got = [f for f in glob.glob(os.path.join(out, "*.wav")) if keep in os.path.basename(f)]
+            if not got:
+                raise RuntimeError(f"{model}: no {keep} stem")
+            src = got[0]
+        return src
+    except Exception as exc:
+        logger.warning("rvc: vocal cleanup failed (%s), training on the bare stem", exc)
+        return vocal_wav
+
+
 def _pretrain_args() -> list:
     """The Russian Snowie pretrain (fetched once into Applio's custom pretraineds); the stock
     one when it can't be had."""
@@ -90,7 +121,7 @@ def train(ctx, name: str, vocal_wav: str):
     """Train `name` on one vocal stem. Returns (pth, index) or None."""
     data = os.path.join(APPLIO, "datasets", name)
     os.makedirs(data, exist_ok=True)
-    shutil.copy(vocal_wav, os.path.join(data, "vocal.wav"))
+    shutil.copy(_clean_vocal(ctx, vocal_wav, data + "_clean"), os.path.join(data, "vocal.wav"))
     sr = "40000"
     _run(ctx, ["preprocess", "--model-name", name, "--dataset-path", data, "--sample-rate", sr,
                "--cut-preprocess", "Automatic", "--process-effects"], "RVC prep", 900)
