@@ -76,36 +76,47 @@ def _f0_npy(wav: str, npy: str) -> None:
     np.save(npy, f.astype(np.float32)[: len(y) // 480 + 1])
 
 
-def sing_as(ctx, source: str, prompt: str, out: str) -> str:
-    """`source` (singing) in the timbre of `prompt`. SoulX-Singer-SVC, else Seed-VC."""
+def _soulx(ctx, source: str, prompt: str, out: str) -> bool:
+    if not (os.path.isfile(SX_MODEL) and os.path.isfile(SX_PY)):
+        return False
+    import shutil
     work = tempfile.mkdtemp(prefix="remix_svc_")
-    if os.path.isfile(SX_MODEL) and os.path.isfile(SX_PY):
-        import shutil
-        shutil.copy(source, os.path.join(work, "src.wav"))
-        shutil.copy(prompt, os.path.join(work, "prm.wav"))
-        for k in ("src", "prm"):
-            _f0_npy(os.path.join(work, k + ".wav"), os.path.join(work, k + "_f0.npy"))
-        cmd = [SX_PY, os.path.join(SX, "cli", "inference_svc.py"), "--device", "cuda", "--model_path", SX_MODEL,
-               "--config", os.path.join(SX, "soulxsinger", "config", "soulxsinger.yaml"),
-               "--prompt_wav_path", os.path.join(work, "prm.wav"), "--target_wav_path", os.path.join(work, "src.wav"),
-               "--prompt_f0_path", os.path.join(work, "prm_f0.npy"), "--target_f0_path", os.path.join(work, "src_f0.npy"),
-               "--save_dir", os.path.join(work, "o"), "--auto_shift", "--pitch_shift", "0", "--n_steps", "32", "--fp16"]
-        env = {**os.environ, "PYTHONPATH": SX}
-        music.run_gpu_worker(ctx, SX_PY, "", {}, "SoulX-SVC", 900, cmd=cmd, env=env)
-        gen = os.path.join(work, "o", "generated.wav")
-        if os.path.isfile(gen):
-            shutil.copy(gen, out)
-            return out
-        logger.warning("remix: SoulX gave no file, falling back to Seed-VC")
-    job = [{"source": source, "target": prompt, "out": out}]
-    jf = os.path.join(work, "jobs.json")
+    shutil.copy(source, os.path.join(work, "src.wav"))
+    shutil.copy(prompt, os.path.join(work, "prm.wav"))
+    for k in ("src", "prm"):
+        _f0_npy(os.path.join(work, k + ".wav"), os.path.join(work, k + "_f0.npy"))
+    cmd = [SX_PY, os.path.join(SX, "cli", "inference_svc.py"), "--device", "cuda", "--model_path", SX_MODEL,
+           "--config", os.path.join(SX, "soulxsinger", "config", "soulxsinger.yaml"),
+           "--prompt_wav_path", os.path.join(work, "prm.wav"), "--target_wav_path", os.path.join(work, "src.wav"),
+           "--prompt_f0_path", os.path.join(work, "prm_f0.npy"), "--target_f0_path", os.path.join(work, "src_f0.npy"),
+           "--save_dir", os.path.join(work, "o"), "--auto_shift", "--pitch_shift", "0", "--n_steps", "32", "--fp16"]
+    music.run_gpu_worker(ctx, SX_PY, "", {}, "SoulX-SVC", 900, cmd=cmd, env={**os.environ, "PYTHONPATH": SX})
+    gen = os.path.join(work, "o", "generated.wav")
+    if not os.path.isfile(gen):
+        return False
+    shutil.copy(gen, out)
+    return True
+
+
+def _seedvc(ctx, source: str, prompt: str, out: str) -> bool:
+    if not os.path.isfile(SEEDVC_PY):
+        return False
+    jf = os.path.join(tempfile.mkdtemp(prefix="remix_svc_"), "jobs.json")
     with open(jf, "w", encoding="utf-8") as fh:
-        json.dump(job, fh)
+        json.dump([{"source": source, "target": prompt, "out": out}], fh)
     music.run_gpu_worker(ctx, SEEDVC_PY, "seedvc_batch.py", {}, "Seed-VC", 900,
                          cmd=[SEEDVC_PY, os.path.join(ROOT, "scripts", "seedvc_batch.py"), jf])
-    if not os.path.isfile(out):
-        raise cover.CoverFailed("render")
-    return out
+    return os.path.isfile(out)
+
+
+def sing_as(ctx, source: str, prompt: str, out: str, order=("soulx", "seedvc")) -> str:
+    """`source` (singing) in the timbre of `prompt`, by the first converter in `order` that
+    gives a file. Raises cover.CoverFailed when none does."""
+    for name in order:
+        if {"soulx": _soulx, "seedvc": _seedvc}[name](ctx, source, prompt, out):
+            return out
+        logger.warning("remix: %s gave no file", name)
+    raise cover.CoverFailed("render")
 
 
 def _mix(voice_wav: str, back: np.ndarray, out_mp3: str) -> str:
@@ -600,12 +611,36 @@ def resing(ctx, song: str, lyrics: str, info: dict = None) -> str:
     name = rvc_voice.slug(artist) if rvc_voice.available() else ""
     if info is not None:
         info.update({"work": work, "artist": artist, "rvc": name, "yvox": yvox, "yback": yback,
-                     "yvox_wav": yvox_wav, "clarity": best[0], "trained": bool(name and rvc_voice.model_of(name))})
+                     "yvox_wav": yvox_wav, "clarity": best[0], "layout": layout,
+                     "trained": bool(name and rvc_voice.model_of(name))})
+    lang = "ru" if re.search("[а-яё]", lyrics, re.I) else None
+    if info is not None:
+        info["lang"] = lang
     if name and rvc_voice.model_of(name):
-        conv = rvc_voice.convert(ctx, name, yvox_wav, os.path.join(work, "rvc.wav"))
+        voices = [("rvc", lambda o: rvc_voice.convert(ctx, name, yvox_wav, o))]
     else:
-        conv = sing_as(ctx, yvox_wav, _singer_ref(vox, work, "a"), os.path.join(work, "conv.wav"))
-    return _mix_vocal(conv, yvox, yback)
+        ref = _singer_ref(vox, work, "a")
+        voices = [(v, lambda o, v=v: sing_as(ctx, yvox_wav, ref, o, order=(v,))) for v in ("seedvc", "soulx")]
+    return _mix_vocal(_voice_keeping_words(ctx, voices, yvox_wav, layout, best[0], work, lang), yvox, yback)
+
+
+def _voice_keeping_words(ctx, voices: list, yvox_wav: str, layout: str, clear: float, work: str, lang) -> str:
+    """The first singer's-voice conversion that keeps the words; else the take's own vocal.
+    10-07 live: a take heard at 97% came out of SoulX as «Субтитры... ЧИИИИИИ...» and the user
+    got that mush. A conversion that loses more than a fifth of the heard lines is dropped."""
+    for vname, convert in voices:
+        out = os.path.join(work, vname + ".wav")
+        try:
+            convert(out)
+        except Exception as exc:
+            logger.warning("resing: %s failed: %s", vname, exc)
+            continue
+        kept = _clarity(" ".join(w["w"] for w in _sung_words(_hear(ctx.models.whisper, out, lang))), layout)
+        logger.info("resing: %s voice keeps %.0f%% of the lines (take %.0f%%)", vname, kept * 100, clear * 100)
+        if kept >= clear * 0.8:
+            return out
+    logger.warning("resing: no voice kept the words, sending the take's own vocal")
+    return yvox_wav
 
 
 def resing_rvc(ctx, info: dict) -> str:
@@ -617,7 +652,8 @@ def resing_rvc(ctx, info: dict) -> str:
         ctx.set_stage("Learning the singer's voice")
     if not rvc_voice.model_of(name) and not rvc_voice.train(ctx, name, os.path.join(work, "a_vox.wav")):
         raise cover.CoverFailed("render")
-    conv = rvc_voice.convert(ctx, name, info["yvox_wav"], os.path.join(work, "rvc.wav"))
+    voices = [("rvc", lambda o: rvc_voice.convert(ctx, name, info["yvox_wav"], o))]
+    conv = _voice_keeping_words(ctx, voices, info["yvox_wav"], info["layout"], info["clarity"], work, info.get("lang"))
     return _mix_vocal(conv, info["yvox"], info["yback"])
 
 

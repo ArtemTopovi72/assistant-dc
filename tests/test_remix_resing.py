@@ -109,7 +109,9 @@ def _fake_resing_run(monkeypatch, tmp_path, trained: bool):
     monkeypatch.setattr(music, "_valid_audio_file", lambda p: True)
     monkeypatch.setattr(music, "_master", lambda p, *a, **k: None)
     monkeypatch.setattr(R, "_singer_ref", lambda vox, work, name: "ref.wav")
-    monkeypatch.setattr(R, "sing_as", lambda ctx, src, ref, out: (calls.append("zero-shot"), out)[1])
+    monkeypatch.setattr(R, "sing_as", lambda ctx, src, ref, out, order=(): (calls.append("zero-shot"), out)[1])
+    monkeypatch.setattr(R, "_voice_keeping_words", lambda ctx, voices, yvox_wav, layout, clear, work, lang:
+                        voices[0][1](os.path.join(str(tmp_path), "v.wav")))
     monkeypatch.setattr(R, "_mix_vocal", lambda conv, yvox, yback: conv)
     monkeypatch.setattr(rvc_voice, "available", lambda: True)
     monkeypatch.setattr(rvc_voice, "model_of", lambda name: ("m.pth", "m.index") if trained or "trained" in calls else None)
@@ -200,7 +202,7 @@ def _takes_run(monkeypatch, heard_by_take):
             base = os.path.basename(path)
             if base.startswith("a_"):
                 return [], None
-            text = heard_by_take[int(base[1])]
+            text = heard_by_take[int(base[1])] if base[0] == "y" else "сорок лет как под наркозом я работал говновозом"
             return [type("S", (), {"words": [type("W", (), {"word": " " + t, "start": i, "end": i + 0.5})()
                                              for i, t in enumerate(text.split())], "text": text})()], None
     monkeypatch.setattr(R, "_sung_words", lambda segs: [{"w": w.word.strip(), "s": w.start, "e": w.end}
@@ -234,3 +236,25 @@ def test_sung_vocal_is_heard_with_vad_and_no_conditioning():
             return iter([]), None
     assert R._hear(W(), "take.wav", "ru") == []
     assert seen["vad_filter"] is True and seen["condition_on_previous_text"] is False and seen["language"] == "ru"
+
+
+
+def test_a_voice_that_loses_the_words_is_not_sent(monkeypatch, tmp_path):
+    # 10-07 live: a take heard at 97% came out of SoulX as «Субтитры... ЧИИИИИИ...»; the user got the mush.
+    heard = {"seedvc.wav": "бу бу бу", "soulx.wav": "сорок лет как под наркозом я работал говновозом"}
+
+    class W:
+        def transcribe(self, path, **k):
+            text = heard[os.path.basename(path)]
+            return [type("S", (), {"words": [type("W", (), {"word": " " + t, "start": i, "end": i + 0.5})()
+                                             for i, t in enumerate(text.split())], "text": text})()], None
+    monkeypatch.setattr(R, "_sung_words", lambda segs: [{"w": w.word.strip(), "s": w.start, "e": w.end}
+                                                         for s in segs for w in s.words])
+    ctx = type("C", (), {"models": type("M", (), {"whisper": W()})()})()
+    layout = "[Verse]\nсорок лет как под наркозом\nя работал говновозом"
+    tried = []
+    voices = [(v, lambda o, v=v: (tried.append(v), open(o, "wb").close())) for v in ("seedvc", "soulx")]
+    got = R._voice_keeping_words(ctx, voices, "take.wav", layout, 1.0, str(tmp_path), "ru")
+    assert tried == ["seedvc", "soulx"] and os.path.basename(got) == "soulx.wav"
+    heard["soulx.wav"] = "ЧИИИИИИИ"
+    assert R._voice_keeping_words(ctx, voices, "take.wav", layout, 1.0, str(tmp_path), "ru") == "take.wav"
