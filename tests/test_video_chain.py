@@ -184,3 +184,15 @@ def test_a_prepared_part_calls_no_model(monkeypatch, tmp_path):
     monkeypatch.setattr(V, "build_chain_part", lambda *a, **k: (_ for _ in ()).throw(V.VideoUnavailable("stop")))
     r = V.generate_video(None, "ready prompt", seconds=6.0, prepared=True, chain=("h3_continuous/chZ", 2))
     assert r["reason"] == "stop"
+
+
+def test_a_chain_part_samples_like_a_plain_clip():
+    """Live 10-07: the chain ran the FL2V turbo LoRA at 6 steps and came back soapy;
+    the plain t2va clip (TaoMate 3-step LoRA) was crisp. Same LoRA, same steps."""
+    plain = V.build_workflow("a chef", mode="t2va", width=1344, height=768, frames=226, seed=1,
+                             images=[], videos=[], audios=[], steps=V.VIDEO_STEPS, ctx=None)
+    for idx in (1, 2):
+        part = V.build_chain_part("a chef", chain="h3_continuous/chX", idx=idx, width=1344,
+                                  height=768, seconds=9.4, seed=1)
+        assert part[V.N_LORA]["inputs"] == plain[V.N_LORA]["inputs"]
+        assert part[V.N_SAMPLER]["inputs"]["steps"] == plain[V.N_SAMPLER]["inputs"]["steps"]

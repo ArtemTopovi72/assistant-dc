@@ -680,7 +680,9 @@ def latent_file(tag: str) -> str:
 # StitchSavedChain then cuts each protected head and crossfades the joins. Live chef A/B:
 # both seams continuous, ~200 s per 6 s part at 768x1024 (bench/herrgott_chain.py).
 # Each chain owns a folder: LoadLatent picks the newest file with the slot number in it.
-HERRGOTT_STEPS = int(os.getenv("VIDEO_HERRGOTT_STEPS", "6"))      # FL2V turbo LoRA v1.2: 6 sharpens it
+# Same steps and LoRA as a plain clip (TaoMate 3-step). Live 10-07 the chain ran the FL2V
+# v1.2 turbo LoRA at 6 steps and came back soapy where plain clips were crisp.
+HERRGOTT_STEPS = int(os.getenv("VIDEO_HERRGOTT_STEPS", str(VIDEO_STEPS)))
 HERRGOTT_CONTEXT = "39"                                           # protected frames, the suite's default
 CHAIN_DIR = "h3_continuous"
 
@@ -704,6 +706,8 @@ def build_chain_part(prompt: str, *, chain: str, idx: int, width: int, height: i
     base = _load_workflow("t2va")
     wf = {k: base[k] for k in (N_UNET, N_SHIFT, N_CLIP, N_VAE_VIDEO, N_VAE_AUDIO, N_LORA)}
     wf[N_SHIFT]["inputs"].update(shift_video=float(VIDEO_SHIFT_VIDEO), shift_audio=float(VIDEO_SHIFT_AUDIO))
+    if HERRGOTT_STEPS == 3 and VIDEO_T2VA_LORA_3STEP:
+        wf[N_LORA]["inputs"]["lora_name"] = VIDEO_T2VA_LORA_3STEP
     common = {"clip": [N_CLIP, 0], "vae": [N_VAE_VIDEO, 0], "prompt": prompt, "width": int(width),
               "height": int(height), "duration": float(seconds), "ref_image_size": "match"}
     if idx <= 1:
