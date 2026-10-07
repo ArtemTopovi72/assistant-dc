@@ -1092,7 +1092,7 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict) -> str:
             logger.warning("video parts: part %d produced no clip (%s)", i, r.get("reason"))
             break
         # pinned: the new part starts on the frame after the old one ends -- butt-join
-        joined = (video_mod.join_continuation(path, new, fade=1 / 24, drop_frames=0) if pinned
+        joined = (video_mod.join_pinned(path, new) if pinned
                   else video_mod.join_continuation(path, new))
         if not joined:
             logger.warning("video parts: joining part %d failed", i)
@@ -1272,7 +1272,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 "a video was created.")
 
     if continuing and cont_src and os.path.exists(cont_src):
-        joined = (video_mod.join_continuation(cont_src, path, fade=1 / 24, drop_frames=0) if pinned_tail
+        joined = (video_mod.join_pinned(cont_src, path) if pinned_tail
                   else video_mod.join_continuation(cont_src, path))
         if joined:
             path = video_mod._adopt_output(joined)       # the whole thing: original + what comes next

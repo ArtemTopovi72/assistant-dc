@@ -609,10 +609,11 @@ def build_workflow(prompt: str, *, mode: str, width: int, height: int,
 
 # Continuation by pinned frames (ComfyUI-H3-Motion-Context v0.3.1, the release for
 # ComfyUI <= 0.33): the last 22 frames and the last second of sound of the previous
-# clip sit at the head of the NEW clip's own timeline as never-denoised rows, then come
-# off again (Trim). The old way handed the tail in as a <Video 1> reference -- 60 more
+# clip sit at the head of the NEW clip's own timeline as never-denoised rows and stay
+# there: join_pinned cuts the old clip at that point.
+# The old way handed the tail in as a <Video 1> reference -- 60 more
 # frames of tokens in a quadratic attention, and the sound restarted instead of going on.
-MOTION_CONTEXT_FRAMES = 22                       # on the VAE grid: 5, 22, 39, 56
+MOTION_CONTEXT_FRAMES = int(os.getenv("VIDEO_MOTION_CONTEXT_FRAMES", "22"))                      # on the VAE grid: 5, 22, 39, 56
 
 
 def motion_context_on() -> bool:
@@ -639,7 +640,7 @@ def _add_motion_context(wf: dict, context_video: str) -> None:
     out = wf[N_SAVE]["inputs"]["video"][0]                   # CreateVideo
     v = wf[out]["inputs"]
     wf[trim] = {"class_type": "MiniMaxH3MotionContextTrim", "inputs": {
-        "images": v["images"], "audio": v["audio"], "trim_frames": [mc, 1],
+        "images": v["images"], "audio": v["audio"], "trim_frames": 0,
         "fps": 24.0, "match_tail": True}}
     v["images"], v["audio"] = [trim, 0], [trim, 1]
 
@@ -1090,8 +1091,6 @@ def generate_video(ctx, description: str, *,
     if ctx is not None:
         ctx.last_video_path = final
         ctx.last_video_prompt = description
-    if context_video:
-        frames -= MOTION_CONTEXT_FRAMES
     return {"path": final, "mode": mode, "seconds": frames_to_seconds(frames),
             "frames": frames, "width": width, "height": height, "seed": seed,
             "status": "success"}
@@ -1167,6 +1166,39 @@ def new_people_clause(first: int, n: int) -> str:
         "request above says, each with exactly the face, hair, body and clothes of their own "
         "picture. Only the person is taken from that picture, never its background or framing; "
         "the people already in the shot stay as they are.")
+
+
+def join_pinned(src: str, new: str, head: int = MOTION_CONTEXT_FRAMES) -> Optional[str]:
+    """`src` without its last `head` frames, then `new` whole -- `new` opens on the model's own
+    rendering of exactly those frames (the pinned head), so the cut lands between two
+    near-identical frames and the turn into the new action happens inside one clip.
+    A crossfade at the end of the pins blended two different poses into a double image
+    (live 10-07, the stirring hand). Sound is cut at the same point, with a 10 ms blend.
+    """
+    ff = shutil.which("ffmpeg")
+    a, b = probe(src), probe(new)
+    keep = a["seconds"] - head / 24.0
+    if not ff or keep <= 0.1 or not (b["width"] and b["height"] and a["has_audio"] and b["has_audio"]):
+        return None
+    w, h = b["width"], b["height"]
+    vnorm = f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=24,format=yuv420p"
+    anorm = "aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo"
+    fc = (f"[0:v]{vnorm},trim=end={keep:.4f},setpts=PTS-STARTPTS[v0];[1:v]{vnorm}[v1];"
+          f"[v0][v1]concat=n=2:v=1:a=0[v];"
+          f"[0:a]{anorm},atrim=end={keep + 0.01:.4f},asetpts=PTS-STARTPTS[a0];[1:a]{anorm}[a1];"
+          f"[a0][a1]acrossfade=d=0.01[a]")
+    fh = tempfile.NamedTemporaryFile(prefix="vidjoin_", suffix=".mp4", delete=False)
+    fh.close()
+    cmd = [ff, "-y", "-v", "error", "-i", src, "-i", new, "-filter_complex", fc,
+           "-map", "[v]", "-map", "[a]", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+           "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", fh.name]
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=600,
+                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    if r.returncode != 0 or not os.path.exists(fh.name) or os.path.getsize(fh.name) == 0:
+        logger.warning("join_pinned failed: %s", (r.stderr or "")[-400:])
+        _discard(fh.name)
+        return None
+    return fh.name
 
 
 def join_continuation(src: str, new: str, fade: float = 0.25, drop_frames: int = 2) -> Optional[str]:

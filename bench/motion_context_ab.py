@@ -53,7 +53,7 @@ def chain(first, pinned):
         log(f"{'NEW' if pinned else 'OLD'} part {i}")
         if pinned:
             new, dt = render(V.CONTINUE_CTX_PREFIX + part, context_video=tail, seed=SEED + i)
-            j = V.join_continuation(path, new, fade=1 / 24, drop_frames=0)
+            j = V.join_pinned(path, new)
         else:
             new, dt = render(V.CONTINUE_PREFIX + part, images=[frame], videos=[tail], seed=SEED + i)
             j = V.join_continuation(path, new)
