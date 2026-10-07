@@ -347,6 +347,169 @@ def _out() -> str:
     return str(OUTPUT_DIR / f"remix_{int(time.time() * 1000)}.mp3")
 
 
+# ── Re-sing: the way an AI cover gets new words right ──────────────────────────
+# 10-07: a day of laying new words into the original's syllables ended in «ты пытаешься в
+# слово из 4 букв затолкать целое слово». The user's reference (Udio «Modern Talking —
+# Говновоз») RE-SINGS the song: its score, new notes for the new words, its own backing.
+# YuE2 does that from the original's full score (melody + chords) -> «МОЛОДЕЦ!!!».
+SHEETSAGE = os.path.join(music._CPP_DIR, "gguf", "SheetSage2-Q8_0.gguf")
+YUE_TRANSCRIBE = os.path.join(os.path.dirname(music.YUE2_CPP_EXE), "yue-transcribe.exe")
+_SECTION = {"intro": "Intro", "verse": "Verse", "pre-chorus": "Pre-Chorus", "chorus": "Chorus",
+            "bridge": "Bridge", "interlude": "Interlude", "outro": "Outro", "inst": "Interlude"}
+
+
+def resing_available() -> bool:
+    return music.yue2_cpp_available() and os.path.isfile(YUE_TRANSCRIBE) and os.path.isfile(SHEETSAGE)
+
+
+def _score(ctx, wav: str, work: str) -> str:
+    """The recording's full score (melody + chord symbols + section marks) as ABC."""
+    abc = os.path.join(work, "score.abc")
+    music.run_gpu_worker(ctx, "", "", {}, "SheetSage", 600,
+                         cmd=[YUE_TRANSCRIBE, "--model", SHEETSAGE, "--audio", wav, "--out", abc])
+    if not os.path.isfile(abc):
+        raise cover.CoverFailed("render")
+    with open(abc, encoding="utf-8") as fh:
+        return fh.read()
+
+
+def _score_parts(abc: str) -> list:
+    """The score's sections in order ("% verse" marks) as (YuE2 lyric tag, sung notes).
+    A section the melody leaves silent is instrumental whatever its name."""
+    out, voice = [], ""
+    for line in (abc or "").splitlines():
+        m = re.match(r"^%\s*([a-z-]+)", line)
+        if m:
+            tag = _SECTION.get(m.group(1).lower())
+            out.append([tag, 0] if tag else None)
+            continue
+        if line.startswith("V:"):
+            voice = line[2:].strip()
+        elif voice.startswith("Voc") and out and out[-1] and not re.match(r"^[A-Z]:", line):
+            out[-1][1] += len(re.findall(r"[A-Ga-g]", re.sub(r'"[^"]*"', "", line)))
+    parts = [(t, n) for t, n in (x for x in out if x)]
+    return parts or [("Verse", 60), ("Chorus", 60), ("Verse", 60), ("Chorus", 60)]
+
+
+def _score_sections(abc: str) -> list:
+    return [t for t, _ in _score_parts(abc)]
+
+
+def _score_tempo_key(abc: str) -> str:
+    q = re.search(r"^Q:\s*1/4=(\d+)", abc or "", re.M)
+    k = re.search(r"^K:\s*([A-G][#b]?m?)", abc or "", re.M)
+    parts = []
+    if q:
+        parts.append(f"{q.group(1)} bpm")
+    if k:
+        key = k.group(1)
+        name = key[0] + {"#": " sharp", "b": " flat"}.get(key[1:2], "")
+        parts.append(name + (" minor" if key.endswith("m") else " major"))
+    return ", ".join(parts)
+
+
+_INSTRUMENTAL = ("Intro", "Interlude", "Outro")
+_MIN_SUNG = 8          # a section with fewer melody notes is a fill, not a sung part
+
+
+def _layout(ctx, lyrics: str, parts: list) -> str:
+    """The new lyric laid out on the original's sections, each sung section holding about as
+    many syllables as its melody has notes (10-07: Cheri Cheri Lady got 144 syllables on a
+    44-note chorus and YuE2 mumbled them). The model places lines; the budget is enforced
+    here by dropping a section's last lines; a broken plan falls back to an even split."""
+    lines = [l.strip() for l in (lyrics or "").splitlines() if l.strip() and not re.fullmatch(r"\[.*\]", l.strip())]
+    sung = [(t, n) for t, n in parts if t not in _INSTRUMENTAL and n >= _MIN_SUNG]
+    import llm
+    from utils import safe_json_from_llm
+    got = {}
+    try:
+        raw = llm.call_llm_simple(
+            ctx, "You lay a song's lyric out on a melody's sections. Each section can carry about the "
+            "given number of syllables (one per note) -- never more. Return JSON {\"sections\": "
+            "[[line numbers], ...]} with one list per given section in that order. A chorus repeats the "
+            "same refrain lines each time; verses take the other lines in order; lines that do not fit "
+            "anywhere are left out. Reply with JSON only.",
+            "Sections:\n" + "\n".join(f"{i}. {t}: ~{n} syllables" for i, (t, n) in enumerate(sung, 1))
+            + "\nLines (syllables):\n" + "\n".join(f"{i}. {l} ({_syl(l)})" for i, l in enumerate(lines, 1)),
+            temperature=0.2, max_tokens=800)
+        got = safe_json_from_llm(raw or "", ["sections"]) or {}
+    except Exception as exc:
+        logger.warning("resing: layout failed: %s", exc)
+    plan = got.get("sections") if isinstance(got, dict) else None
+    if not (isinstance(plan, list) and len(plan) == len(sung)
+            and all(isinstance(x, list) and x for x in plan)
+            and all(isinstance(n, int) and 1 <= n <= len(lines) for x in plan for n in x)):
+        per = max(1, len(lines) // max(1, len(sung)))
+        plan = [list(range(1 + i * per, 1 + min(len(lines), (i + 1) * per))) or [len(lines)]
+                for i in range(len(sung))]
+    fitted = []
+    for (tag, notes), nums in zip(sung, plan):
+        nums = list(nums)
+        while len(nums) > 1 and sum(_syl(lines[n - 1]) for n in nums) > notes * 1.1:
+            nums.pop()
+        fitted.append(nums)
+    blocks, k = [], 0
+    for tag, notes in parts:
+        if tag in _INSTRUMENTAL or notes < _MIN_SUNG:
+            blocks.append(f"[{'Interlude' if tag not in _INSTRUMENTAL else tag}]")
+            continue
+        blocks.append(f"[{tag}]\n" + "\n".join(lines[n - 1] for n in fitted[k]))
+        k += 1
+    return "\n\n".join(blocks)
+
+
+def _resing_style(ctx, heard: str, tempo_key: str) -> str:
+    """YuE2 tags for the original's sound: the model names the song from its first sung
+    lines (it knows «3 сентября» is 90s Russian chanson); tempo and key come from the score."""
+    tags = ""
+    try:
+        import llm
+        tags = llm.call_llm_simple(
+            ctx, "Name the musical style of the song these sung lines come from, as 8-12 comma-separated "
+            "music tags: genre, era, lead vocal (gender, timbre), main instruments, mood. Tags only.",
+            heard[:600], temperature=0.2, max_tokens=120).strip().splitlines()[0]
+    except Exception as exc:
+        logger.warning("resing: style failed: %s", exc)
+    tags = re.sub(r"[^\w ,'&/-]", "", tags or "")[:240] or "pop ballad, male lead vocal, synthesizer, drums, bass"
+    return ", ".join(t for t in (tags, tempo_key) if t)
+
+
+def resing(ctx, song: str, lyrics: str) -> str:
+    """`song` re-sung with `lyrics`: YuE2 renders the original's full score with the new words
+    (new notes where the words need them, its own backing in the original's style), then the
+    original singer's timbre goes on the vocal. Returns an mp3 path; raises cover.CoverFailed."""
+    import soundfile as sf
+    import mashup_auto
+    if not [l for l in (lyrics or "").splitlines() if l.strip() and not re.fullmatch(r"\[.*\]", l.strip())]:
+        raise cover.CoverFailed("no_words")
+    work = tempfile.mkdtemp(prefix="resing_")
+    logger.info("resing: work %s", work)
+    vox, _ = _stems(song, work, "a")
+    abc = _score(ctx, os.path.join(work, "a_ref.wav"), work)
+    segs, _ = ctx.models.whisper.transcribe(os.path.join(work, "a_vox.wav"), word_timestamps=True)
+    heard = " ".join(w["w"] for w in _sung_words(segs))
+    out = os.path.join(work, "yue.mp3")
+    job = {"lyrics": music.yue2_lyrics(_layout(ctx, lyrics, _score_parts(abc))),
+           "style": music.yue2_language(_resing_style(ctx, heard, _score_tempo_key(abc)), lyrics),
+           "abc": abc, "out": out}
+    logger.info("resing: style %s", job["style"])
+    if ctx is not None and hasattr(ctx, "set_stage"):
+        ctx.set_stage("Composing a song")
+    music._render_yue2_once(ctx, True, job, int(time.time()) % 100000)
+    if not music._valid_audio_file(out):
+        raise cover.CoverFailed("render")
+    music._master(out)
+    yvox, yback = _stems(out, work, "y")
+    conv = sing_as(ctx, os.path.join(work, "y_vox.wav"), _singer_ref(vox, work, "a"), os.path.join(work, "conv.wav"))
+    v, sr = sf.read(conv, dtype="float32")
+    v = v.mean(1) if v.ndim > 1 else v
+    if sr != SR:
+        import librosa
+        v = librosa.resample(v, orig_sr=sr, target_sr=SR)
+    ratio = mashup_auto._rms(yvox, gate=0.01) / max(1e-6, mashup_auto._rms(yback))
+    return mashup_auto.mix(v, yback, ratio, _out())
+
+
 def remix_words(ctx, song: str, lyrics: str) -> str:
     """`song` sings `lyrics` (its own melody, voice, backing). Returns an mp3 path; raises cover.CoverFailed."""
     lines = [l.strip() for l in (lyrics or "").splitlines() if l.strip() and not re.fullmatch(r"\[.*\]", l.strip())]

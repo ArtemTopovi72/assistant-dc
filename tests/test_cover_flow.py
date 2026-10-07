@@ -178,8 +178,14 @@ mashup_auto.make = _boom
 bot._cover_render(CID, "ru", "/x/song.mp3", "", "/x/song2.mp3")
 check("a failed mashup still sends the voice remix", [p for p, _ in AUD] == ["voice.mp3"], AUD)
 AUD.clear(); remix.remix_words = lambda ctx, a, l: "words.mp3"; mashup_auto.make = lambda *a: "mash.mp3"
+remix.resing = lambda ctx, a, l: "resing.mp3"
+remix.resing_available = lambda: False
 bot._cover_render(CID, "ru", "/x/song.mp3", "новые слова", "")
-check("new words: no mashup", [p for p, _ in AUD] == ["words.mp3"], AUD)
+check("new words without YuE2: the syllable remix, no mashup", [p for p, _ in AUD] == ["words.mp3"], AUD)
+# 10-07: new words are re-sung on the original's score («МОЛОДЕЦ!!!»), not squeezed into its syllables.
+AUD.clear(); remix.resing_available = lambda: True
+bot._cover_render(CID, "ru", "/x/song.mp3", "новые слова", "")
+check("new words with YuE2: the song is re-sung", [p for p, _ in AUD] == ["resing.mp3"], AUD)
 
 bot._running = False; thr.join(timeout=8)
 print("\n%d/%d checks passed" % (OK, OK + BAD))

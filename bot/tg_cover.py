@@ -127,7 +127,7 @@ class CoverMixin:
         try:
             if song2:
                 self._mashup_first(chat_id, lang, ctx, src, song2)
-            out = remix.remix_voice(ctx, src, song2) if song2 else remix.remix_words(ctx, src, lyrics)
+            out = remix.remix_voice(ctx, src, song2) if song2 else (remix.resing if remix.resing_available() else remix.remix_words)(ctx, src, lyrics)
             if not self._send_audio(chat_id, out, tg_bot._t("cover_done", lang)):
                 self._send_text(chat_id, tg_bot._t("cover_fail_render", lang))
         except cover.CoverFailed as exc:
