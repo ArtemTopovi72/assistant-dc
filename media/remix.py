@@ -143,30 +143,73 @@ def _syl_marks(words: list) -> list:
     return marks + [words[-1]["e"]] if words else []
 
 
+def _syl_ends(words: list) -> list:
+    """Where each syllable of `_syl_marks` stops sounding: the next syllable, or its word's
+    end when a pause follows -- a held vowel must not run through the band's bar."""
+    ends = []
+    for w in words:
+        n = _syl(w["w"]) if _VOW.search(w["w"]) else 0
+        ends += [w["s"] + (k + 1) * (w["e"] - w["s"]) / max(n, 1) for k in range(n)]
+    return ends
+
+
 def _fit_line(ctx, line: str, n: int) -> str:
-    """`line` reworded to exactly `n` syllables (a parody fits the meter, not the other way)."""
-    if _syl(line) == n:
+    """`line` reworded to `n` syllables, give or take one (a parody fits the meter, not the
+    other way). Gemma cannot count syllables: told only the target it handed the line back
+    unchanged every time (10-07), so it is told the count it has and how many to add or cut."""
+    if abs(_syl(line) - n) <= 1:
         return line
     import llm
+    best = line
     for _ in range(3):
+        have = _syl(best)
+        verb = f"add {n - have}" if n > have else f"remove {have - n}"
         try:
             got = llm.call_llm_simple(
-                ctx, "You fit song lyrics to a melody. Rewrite the line so it has EXACTLY the asked "
-                "number of syllables (one per vowel), same language, same meaning, keep its key words "
-                "and its rhyme word at the end. Reply with the line only.",
-                f"Syllables: {n}\nLine: {line}", temperature=0.5, max_tokens=200).strip().strip('"«»')
+                ctx, "You fit song lyrics to a melody. Syllables are counted as vowels "
+                "(а е ё и о у ы э ю я). Rewrite the line to the asked syllable count by adding or "
+                "dropping small words, repeating a word or cutting a phrase -- same language, same "
+                "meaning, keep its key words and its last word. Reply with the line only.",
+                f"Line ({have} syllables): {best}\nNeeded: {n} syllables, so {verb}.",
+                temperature=0.5, max_tokens=200).strip().strip('"«»')
         except Exception:
-            return line
+            return best
         got = got.splitlines()[0].strip() if got else ""
-        if got and _syl(got) == n:
-            return got
-    return line
+        if got and abs(_syl(got) - n) < abs(_syl(best) - n):
+            best = got
+        if abs(_syl(best) - n) <= 1:
+            break
+    return best
+
+
+def _sung(phrases: list) -> list:
+    """Phrases with a vowel, minus Whisper's stock hallucinations on a bare backing track
+    ("Thank you.", "Subtitles by...") -- Latin words in a song that is otherwise Cyrillic."""
+    def cyr(ph):
+        return any(re.search(r"[а-яё]", w["w"], re.I) for w in ph)
+    out = [ph for ph in phrases if len(_syl_marks(ph)) > 1]
+    if sum(map(cyr, out)) * 2 > len(out):
+        out = [ph for ph in out if cyr(ph)]
+    return out
 
 
 def _plan(phrases: list, lines: list) -> list:
-    """Line i goes to phrase i; the song's later phrases go round the lyric again."""
-    sung = [ph for ph in phrases if len(_syl_marks(ph)) > 1]    # a phrase of bare "м-м" carries no line
-    return [(ph, lines[i % len(lines)]) for i, ph in enumerate(sung)]
+    """(words, line) pairs in song order: each line takes the run of sung phrases whose
+    syllables come closest to its own, so rewording only trims a syllable or two. One line
+    per Whisper phrase gave 3-syllable phrases 19-syllable lines (10-07). The lyric goes
+    round again when the song is longer."""
+    sung, out, i, k = _sung(phrases), [], 0, 0
+    while i < len(sung):
+        line = lines[k % len(lines)]
+        n, words, have = _syl(line), [], 0
+        while i < len(sung):
+            more = len(_syl_marks(sung[i])) - 1
+            if words and abs(have + more - n) > abs(have - n):
+                break
+            words, have, i = words + sung[i], have + more, i + 1
+        out.append((words, line))
+        k += 1
+    return out
 
 
 def _stretch(y: np.ndarray, n: int, path: str) -> np.ndarray:
@@ -183,7 +226,8 @@ def _stretch(y: np.ndarray, n: int, path: str) -> np.ndarray:
     return np.pad(out, (0, max(0, n - len(out))))[:n]
 
 
-def _onto_marks(y: np.ndarray, src: list, dst: list, length: int, work: str, tag: str) -> np.ndarray:
+def _onto_marks(y: np.ndarray, src: list, dst: list, length: int, work: str, tag: str,
+                dst_ends: list = None) -> np.ndarray:
     """`y` warped so its syllable onsets `src` (s) land on `dst` (s, from 0); `length` samples.
     Syllable by syllable: one time map over the whole line smears each onset ~70-90 ms early
     where a short spoken gap is stretched to a long sung note (10-07 test)."""
@@ -198,6 +242,8 @@ def _onto_marks(y: np.ndarray, src: list, dst: list, length: int, work: str, tag
     fade = int(0.006 * SR)
     for j in range(k - 1):
         a0, a1, b0, b1 = int(s_[j]), int(s_[j + 1]), int(d_[j]), int(d_[j + 1])
+        if dst_ends is not None and len(dst_ends) == k - 1:      # stop where the singer stopped
+            b1 = max(b0 + fade * 3, min(b1, int(dst_ends[j] * SR)))
         seg = _stretch(y[a0:a1], min(b1, length) - b0, os.path.join(work, f"{tag}_{j}"))
         if len(seg) > 2 * fade:
             seg[:fade] *= np.linspace(0, 1, fade)
@@ -206,22 +252,25 @@ def _onto_marks(y: np.ndarray, src: list, dst: list, length: int, work: str, tag
     return out
 
 
-def _speak_on_melody(ctx, vox: np.ndarray, lines: list, work: str) -> str:
-    """Our lines sung syllable for syllable where the original's were: each line takes one of
-    the song's phrases, is reworded to that phrase's syllable count, spoken, and its syllables
-    are stretched onto the original syllables; then the original pitch goes on top."""
+def _speak_on_melody(ctx, vox: np.ndarray, lines: list, work: str, plan: list = None) -> str:
+    """Our lines sung syllable for syllable where the original's were: each line takes a run
+    of the song's phrases (_plan), is reworded to their syllable count, spoken, and its
+    syllables are stretched onto the original syllables; then the original pitch goes on
+    top. `plan`: (words, line) pairs made earlier (lines fitted while the LLM was loaded)."""
     import librosa
     import soundfile as sf
     import audio
     vp = os.path.join(work, "orig_vox.wav")
     sf.write(vp, vox, SR)
     wh = ctx.models.whisper
-    segs, _ = wh.transcribe(vp, word_timestamps=True)
-    words = [{"w": w.word.strip(), "s": w.start, "e": w.end} for sg in segs for w in (sg.words or []) if w.word.strip()]
-    if len(words) < 3:
-        raise cover.CoverFailed("no_words")
+    if plan is None:
+        segs, _ = wh.transcribe(vp, word_timestamps=True)
+        words = [{"w": w.word.strip(), "s": w.start, "e": w.end} for sg in segs for w in (sg.words or []) if w.word.strip()]
+        if len(words) < 3:
+            raise cover.CoverFailed("no_words")
+        plan = _plan(_phrases(words), lines)
     canvas = np.zeros(len(vox), dtype=np.float32)
-    for i, (ph, line) in enumerate(_plan(_phrases(words), lines)):
+    for i, (ph, line) in enumerate(plan):
         dst = _syl_marks(ph)
         line = _fit_line(ctx, line, len(dst) - 1)
         w = audio.synth_single_segment(ctx, 5000 + i, "DC", line, out_stem=os.path.join(work, f"l{i}"))
@@ -235,7 +284,8 @@ def _speak_on_melody(ctx, vox: np.ndarray, lines: list, work: str) -> str:
         tw = [{"w": x.word.strip(), "s": x.start, "e": x.end} for sg in ts for x in (sg.words or []) if x.word.strip()]
         src = _syl_marks(tw)[:-1] + [len(y) / SR] if tw else [0.0, len(y) / SR]
         t0 = dst[0]
-        seg = _onto_marks(y, src, [d - t0 for d in dst], int((dst[-1] - t0) * SR) + SR // 10, work, f"l{i}")
+        seg = _onto_marks(y, src, [d - t0 for d in dst], int((dst[-1] - t0) * SR) + SR // 10, work, f"l{i}",
+                          dst_ends=[e - t0 for e in _syl_ends(ph)])
         s0 = int(t0 * SR)
         canvas[s0:s0 + len(seg)] += seg[:max(0, len(canvas) - s0)]
     return _lay_pitch(canvas, vox, work)

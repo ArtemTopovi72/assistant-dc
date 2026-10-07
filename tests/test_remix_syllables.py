@@ -29,11 +29,31 @@ def test_syllable_marks_one_per_vowel_plus_the_end():
     assert m == [1.0, 1.2, 2.0, 2.2, 2.6]
 
 
-def test_lines_take_phrases_in_order_and_go_round():
-    ph = [[_w("а", i, i + 0.5)] for i in range(5)]
-    assert [l for _, l in R._plan(ph, ["x", "y"])] == ["x", "y", "x", "y", "x"]
-    ph.insert(1, [_w("мм", 0.6, 0.8)])                  # no vowel: skipped, and no line lost to it
-    assert [l for _, l in R._plan(ph, ["x", "y"])] == ["x", "y", "x", "y", "x"]
+def _ph(t, text):
+    """A phrase starting at t: one word per space, 0.3 s each."""
+    return [_w(x, t + 0.3 * k, t + 0.3 * k + 0.25) for k, x in enumerate(text.split())]
+
+
+def test_a_line_takes_the_run_of_phrases_its_syllables_need():
+    # 10-07: one line per Whisper phrase put 19-syllable lines on 3-syllable phrases
+    ph = [_ph(0, "все не то"), _ph(2, "все не так ты мой друг"), _ph(5, "я твой враг"),
+          _ph(7, "как же так")]
+    line9 = "ехал по дороге говновоз"                          # 9 syllables
+    plan = R._plan(ph, [line9, "да"])
+    assert [len(R._syl_marks(w)) - 1 for w, _ in plan][:1] == [9]
+    assert [l for _, l in plan] == [line9, "да", line9]       # "да" takes one phrase, then round again
+
+
+def test_the_lyric_goes_round_and_vowelless_phrases_carry_nothing():
+    ph = [_ph(i * 2, "ла") for i in range(5)]
+    ph.insert(1, [_w("мм", 0.6, 0.8)])
+    assert [l for _, l in R._plan(ph, ["ой", "ай"])] == ["ой", "ай", "ой", "ай", "ой"]
+
+
+def test_whisper_hallucinations_on_the_backing_take_no_line():
+    ph = [_ph(0, "Thank you."), _ph(2, "все не то"), _ph(4, "все не так")]
+    plan = R._plan(ph, ["ой-ёй-ёй", "ай-яй"])
+    assert all("Thank" not in " ".join(x["w"] for x in w) for w, _ in plan)
 
 
 def test_a_line_is_fitted_to_the_phrase_syllables(monkeypatch):
@@ -46,7 +66,13 @@ def test_a_line_is_fitted_to_the_phrase_syllables(monkeypatch):
     monkeypatch.setattr(llm, "call_llm_simple", fake)
     assert R._syl("ехал по дороге говновоз") == 9
     assert R._fit_line(None, "едет говновоз", 9) == "ехал по дороге говновоз"
-    assert "9" in asked[0] and len(asked) == 2      # a wrong count is asked again
+    assert "add 4" in asked[0] and len(asked) == 2      # told what it has and what to change
+    assert R._fit_line(None, "ехал по дороге говновоз", 10) == "ехал по дороге говновоз"   # ±1 is fine
+
+
+def test_a_held_syllable_stops_where_the_singer_stopped():
+    e = R._syl_ends([_w("сно", 1.0, 1.2), _w("ва", 1.2, 1.4), _w("тре", 2.0, 2.2)])
+    assert e == [1.2, 1.4, 2.2]          # "ва" ends at 1.4, not at "тре" (2.0): the breath stays
 
 
 @pytest.mark.skipif(not os.path.exists(M.RUBBERBAND), reason="rubberband not installed")
