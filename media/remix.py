@@ -132,6 +132,16 @@ _HALLUCINATED = re.compile(r"субтитр|dimatorzok|редактор|корр
                            r"спасибо за просмотр|подписывайтесь|thank you|subtitles|amara", re.I)
 
 
+def _hear(whisper, path: str, language=None) -> list:
+    """Whisper segments of a bare sung vocal. VAD on and no conditioning on the previous text:
+    with the defaults one credit-line hallucination repeats through the whole stem (10-07: a
+    clear take came back as 13 x «Продолжение следует...», 0 words, and the take picker
+    scored it 0%); with these the same take read almost word for word."""
+    segs, _ = whisper.transcribe(path, word_timestamps=True, language=language, vad_filter=True,
+                                 condition_on_previous_text=False)
+    return list(segs)
+
+
 def _sung_words(segs) -> list:
     """Word timings of a sung vocal from Whisper segments: credit-line hallucinations dropped,
     and a number spelled out the way it is sung («3 сентября» -> «третье», 2 syllables, not 0)."""
@@ -294,7 +304,7 @@ def _speak_on_melody(ctx, vox: np.ndarray, lines: list, work: str, plan: list = 
     sf.write(vp, vox, SR)
     wh = ctx.models.whisper
     if plan is None:
-        segs, _ = wh.transcribe(vp, word_timestamps=True)
+        segs = _hear(wh, vp)
         words = _sung_words(segs)
         if len(words) < 3:
             raise cover.CoverFailed("no_words")
@@ -310,7 +320,7 @@ def _speak_on_melody(ctx, vox: np.ndarray, lines: list, work: str, plan: list = 
         y, _ = librosa.effects.trim(y, top_db=35)
         tp = os.path.join(work, f"l{i}_t.wav")
         sf.write(tp, y, SR)
-        ts, _ = wh.transcribe(tp, word_timestamps=True)
+        ts = _hear(wh, tp)
         tw = [{"w": x.word.strip(), "s": x.start, "e": x.end} for sg in ts for x in (sg.words or []) if x.word.strip()]
         src = _syl_marks(tw)[:-1] + [len(y) / SR] if tw else [0.0, len(y) / SR]
         t0 = dst[0]
@@ -559,7 +569,7 @@ def resing(ctx, song: str, lyrics: str, info: dict = None) -> str:
     logger.info("resing: work %s", work)
     vox, _ = _stems(song, work, "a")
     abc = _score(ctx, os.path.join(work, "a_ref.wav"), work)
-    segs, _ = ctx.models.whisper.transcribe(os.path.join(work, "a_vox.wav"), word_timestamps=True)
+    segs = _hear(ctx.models.whisper, os.path.join(work, "a_vox.wav"))
     heard = " ".join(w["w"] for w in _sung_words(segs))
     style, artist = _resing_style(ctx, heard, _score_tempo_key(abc))
     layout = _layout(ctx, lyrics, _score_parts(abc))
@@ -575,7 +585,8 @@ def resing(ctx, song: str, lyrics: str, info: dict = None) -> str:
             continue
         music._master(out)
         yvox, yback = _stems(out, work, f"y{take}")
-        tsegs, _ = ctx.models.whisper.transcribe(os.path.join(work, f"y{take}_vox.wav"), word_timestamps=True)
+        tsegs = _hear(ctx.models.whisper, os.path.join(work, f"y{take}_vox.wav"),
+                      "ru" if re.search("[а-яё]", lyrics, re.I) else None)
         clear = _clarity(" ".join(w["w"] for w in _sung_words(tsegs)), layout)
         logger.info("resing: take %d heard %.0f%% of the lines", take + 1, clear * 100)
         if best is None or clear > best[0]:

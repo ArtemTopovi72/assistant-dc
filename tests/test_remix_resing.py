@@ -222,3 +222,15 @@ def test_resing_stops_at_the_first_clear_take(monkeypatch):
     monkeypatch.setattr(R, "RESING_TAKES", 3)
     seeds, converted = _takes_run(monkeypatch, ["сорок лет как под наркозом я работал говновозом", "x", "x"])
     assert len(seeds) == 1 and converted == ["y0_vox.wav"]
+
+
+def test_sung_vocal_is_heard_with_vad_and_no_conditioning():
+    # 10-07: with Whisper's defaults a clear take came back as 13 x «Продолжение следует...».
+    seen = {}
+
+    class W:
+        def transcribe(self, path, **k):
+            seen.update(k)
+            return iter([]), None
+    assert R._hear(W(), "take.wav", "ru") == []
+    assert seen["vad_filter"] is True and seen["condition_on_previous_text"] is False and seen["language"] == "ru"
