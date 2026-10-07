@@ -186,7 +186,14 @@ try:
     with comfy_client.card_session("video chain"):
         check("inside a card_session the card is in use (queue empty)",
               comfy_client.card_in_use() is True)
-    check("...and free again after it", comfy_client.card_in_use() is False)
+    check("right after it the turn still has its reply to write (grace)",
+          comfy_client.card_in_use() is True)
+    _g = comfy_client.CARD_GRACE_S
+    comfy_client.CARD_GRACE_S = 0.0
+    try:
+        check("...and free once the grace is over", comfy_client.card_in_use() is False)
+    finally:
+        comfy_client.CARD_GRACE_S = _g
 finally:
     comfy_client.requests.get = _real_get
 

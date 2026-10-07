@@ -178,11 +178,24 @@ def _upload_image_to_comfy(image_path: str, comfy_url: str) -> Optional[str]:
         return None
 
 
+CARD_GRACE_S = 120.0
+_excl_released_at = 0.0
+
+
+def _mark_released() -> None:
+    global _excl_released_at
+    _excl_released_at = time.time()
+
+
 def card_in_use() -> bool:
     """True while a render here holds the card (one submit, or a card_session such as a
-    whole video chain). Between two parts of a chain ComfyUI's queue is empty for a few
-    seconds; a deadline asking only server_busy() abandoned a chain at 30 min (10-07)."""
-    return _excl_users > 0
+    whole video chain), while the chat model is being brought back after it, and for
+    CARD_GRACE_S after that -- the turn still has to write its reply about the render.
+    Between two parts of a chain ComfyUI's queue is empty for a few seconds, and after
+    the last one the model reload takes ~10 s: a deadline asking only server_busy()
+    abandoned a finished chain at both points (10-07)."""
+    return (_excl_users > 0 or not _excl_free.is_set()
+            or time.time() - _excl_released_at < CARD_GRACE_S)
 
 
 def server_busy() -> bool:
@@ -550,6 +563,7 @@ def _release_card() -> None:
         model, _excl_model, _excl_label = _excl_model, "", ""
     if not model:
         _excl_free.set()
+        _mark_released()
         return
     try:
         import lora_training as _LT
@@ -583,6 +597,7 @@ def _release_card() -> None:
         logger.exception("could not bring the chat model back")
     finally:
         _excl_free.set()
+        _mark_released()
 
 
 class card_session:
