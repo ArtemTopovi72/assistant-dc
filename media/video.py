@@ -1159,7 +1159,8 @@ def bridge_part(ctx, last_frame: str, part: str) -> str:
     from `last_frame` (where the previous part really ended). A part that names a place or
     a thing not in that frame ("sweeps the carrots into a steaming pot" while he stands at a
     bare board) made the model conjure the pot out of nothing right after the pinned frames
-    (10-07). Asked to REWRITE the part, Gemma echoed it unchanged, so it is asked what is
+    (10-07). A bridge saying only where the pot was had it slide into the shot on its
+    own; the owner: things do not move by themselves, a hand brings them in. Asked to REWRITE the part, Gemma echoed it unchanged, so it is asked what is
     missing and for the move that brings it in, and that sentence goes first. The part
     itself is never touched; any failure keeps it as it was."""
     if not (part and last_frame and os.path.exists(last_frame)):
@@ -1167,10 +1168,12 @@ def bridge_part(ctx, last_frame: str, part: str) -> str:
     guide = ("The image is the last frame of a video so far. The next part of its script is "
              "given. List every place, object or person the next part's FIRST action needs that "
              "is not visible in the frame or not within the person's reach. If any, write ONE "
-             "short sentence in English of the movement that comes first and say WHERE the "
-             "missing thing already is, off-frame: e.g. 'He turns to the stove behind him, "
-             "where a pot is already steaming.' or 'She walks to the door at the left.' -- "
-             "only that movement, never the action itself. Reply as JSON only: "
+             "short sentence in English of how the person gets it first. Things never move "
+             "by themselves: a person picks the object up off-frame with their hands and "
+             "brings it into the shot, or walks to the place -- unless the script says "
+             "otherwise. E.g. 'He reaches off-frame to the right, lifts a steaming pot with "
+             "both hands and sets it on the counter in front of him.' or 'She walks to the "
+             "door at the left.' -- only that movement, never the action itself. Reply as JSON only: "
              '{"missing": ["..."], "bridge": "sentence, or empty when nothing is missing"}')
     import llm as _llm
     from utils import safe_json_from_llm
