@@ -1183,7 +1183,9 @@ CONTINUE_PREFIX = (
 CONTINUE_CTX_PREFIX = (
     "The shot continues with no cut and no reset: the same people, place, framing and "
     "lighting, picking up exactly where the opening frames leave off; whatever already "
-    "changed stays changed, and voices and ambient sound go on unchanged. What happens next: ")
+    "changed stays changed, and voices and ambient sound go on unchanged. Every object keeps "
+    "its shape and stays the same object: to use a different tool, the hand first sets the "
+    "one it holds down on the counter, then picks the new one up. What happens next: ")
 
 
 def bridge_part(ctx, last_frame: str, part: str) -> str:
