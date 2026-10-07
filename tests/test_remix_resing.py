@@ -359,3 +359,27 @@ def test_a_long_training_still_saves_its_last_epoch():
     import rvc_voice
     assert rvc_voice._save_every(60) == 60 and rvc_voice._save_every(120) == 60
     assert rvc_voice._save_every(300) == 100 and rvc_voice._save_every(250) == 50
+
+
+def test_a_training_that_died_on_its_port_runs_again(monkeypatch, tmp_path):
+    # 10-08: Applio's random torch.distributed port fell in Windows' reserved 53091..53790, the
+    # run died in TCPStore, printed «trained successfully» and left no weights.
+    import rvc_voice
+    monkeypatch.setattr(rvc_voice, "APPLIO", str(tmp_path))
+    monkeypatch.setattr(rvc_voice, "_clean_vocal", lambda ctx, wav, work: wav)
+    monkeypatch.setattr(rvc_voice, "_pretrain_args", lambda: [])
+    trains = []
+
+    def run(ctx, args, *a):
+        if args[0] == "train":
+            trains.append(1)
+            if len(trains) == 2:
+                d = tmp_path / "logs" / "artist"
+                d.mkdir(parents=True, exist_ok=True)
+                (d / "artist_60e_900s.pth").write_bytes(b"w")
+                (d / "artist.index").write_bytes(b"i")
+    monkeypatch.setattr(rvc_voice, "_run", run)
+    wav = tmp_path / "v.wav"
+    wav.write_bytes(b"x")
+    assert rvc_voice.train(None, "artist", str(wav))[0].endswith("artist_60e_900s.pth")
+    assert len(trains) == 2

@@ -133,9 +133,19 @@ def train(ctx, name: str, vocal_wav: str):
                "--cut-preprocess", "Automatic", "--process-effects"], "RVC prep", 900)
     _run(ctx, ["extract", "--model-name", name, "--f0-method", "rmvpe", "--sample-rate", sr, "--gpu", "0"],
          "RVC extract", 900)
-    _run(ctx, ["train", "--model-name", name, "--sample-rate", sr, "--total-epoch", str(EPOCHS),
-               "--save-every-epoch", str(_save_every(EPOCHS)), "--save-only-latest", "--batch-size", "8", "--gpu", "0",
-               "--pretrained", *_pretrain_args(), "--index-algorithm", "Auto"], "RVC train", TRAIN_TIMEOUT)
+    # Applio binds a random port in 20000..55555 for torch.distributed; Windows reserves
+    # 53091..53790 and 50000..50059 here, and on those the run dies in TCPStore (10-08: the
+    # Russian bind error crashed its own decoding) yet still prints «trained successfully».
+    # A run that left no weights is run again.
+    pths = lambda: glob.glob(os.path.join(APPLIO, "logs", name, f"{name}_*e_*s.pth"))
+    for _ in range(3):
+        _run(ctx, ["train", "--model-name", name, "--sample-rate", sr, "--total-epoch", str(EPOCHS),
+                   "--save-every-epoch", str(_save_every(EPOCHS)), "--save-only-latest", "--batch-size", "8",
+                   "--gpu", "0", "--pretrained", *_pretrain_args(), "--index-algorithm", "Auto"],
+             "RVC train", TRAIN_TIMEOUT)
+        if pths():
+            break
+        logger.warning("rvc: training %s left no weights, again", name)
     _run(ctx, ["index", "--model-name", name], "RVC index", 900)
     got = model_of(name)
     logger.info("rvc: trained %s -> %s", name, got)
