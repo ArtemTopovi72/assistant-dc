@@ -107,3 +107,11 @@ def test_resing_renders_the_full_score_with_new_words(monkeypatch, tmp_path):
 def test_resing_needs_words():
     with pytest.raises(cover.CoverFailed):
         R.resing(None, "song.mp3", "[Verse]\n\n")
+
+
+def test_yue2_renders_with_lyric_guidance(monkeypatch):
+    # 10-07: at the protocol's cfg 1.0 (no guidance) Whisper heard 1 of 21 lines; at 3.0, 20 of 21.
+    seen = {}
+    monkeypatch.setattr(music, "run_gpu_worker", lambda ctx, py, script, job, *a, **k: (seen.update(job), (True, ""))[1])
+    music._render_yue2_once(None, True, {"out": "x.mp3", "lyrics": "", "style": ""}, 7)
+    assert seen["cfg_scale"] >= 2.0 and seen["cot"] == "full" and seen["lm_seed"] == 7

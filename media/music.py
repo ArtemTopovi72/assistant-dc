@@ -1333,6 +1333,10 @@ def yue2_style(style: str, max_chars: int = 300) -> str:
 YUE2_PYTHON = _config.venv_python(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                                "venv_yue2"))
 YUE2_ODE_STEPS = _cfg_env.env_int("YUE2_ODE_STEPS", 16)
+# Lyric guidance on the semantic stage. The protocol's 1.0 in cot full/melody is NO guidance:
+# 10-07 Cheri Cheri Lady x Govnovoz, Whisper found 1/21 lines sung right at 1.0, 20/21 at 3.0
+# on three seeds (1.5: 8-17/21), same render time (outputs/yue_cover/sweep).
+YUE2_CFG = _cfg_env.env_float("YUE2_CFG", 3.0)
 YUE2_TIMEOUT = 1500          # measured 235-810 s for one song; long lyrics run longer
 
 
@@ -1546,7 +1550,7 @@ def _render_yue2_once(ctx, cpp: bool, job: dict, seed: int) -> str:
     if cpp:
         # 16 ODE steps, not the reference 32: NAR was 50 of 99 s on a 3.6-min
         # song (bench 2026-10-02, $TEMP/yueab); yue2.cpp's own default is 16.
-        job.update({"cot": "full", "lm_seed": int(seed), "steps": YUE2_ODE_STEPS})
+        job.update({"cot": "full", "lm_seed": int(seed), "steps": YUE2_ODE_STEPS, "cfg_scale": YUE2_CFG})
         env = dict(os.environ)
         env["PATH"] = os.pathsep.join([os.path.dirname(YUE2_CPP_EXE),
                                        os.path.join(os.environ.get("CUDA_PATH", ""), "bin"), env["PATH"]])
