@@ -39,6 +39,7 @@ def log(*a):
 def render(desc, **kw):
     t = time.time()
     r = V.generate_video(Ctx(), desc, aspect="3:4", **kw)
+    V._LAST_LATENT = r.get("latent", "")
     dt = time.time() - t
     log(f"  -> {r.get('status')} {dt:.0f}s {r.get('frames')} frames {r.get('path')}")
     return r.get("path"), dt
@@ -65,6 +66,42 @@ def chain(first, pinned):
     return path, times
 
 
+def cuts(path):
+    """Frame-to-frame change / median: a hard cut shows up as a spike well above 5."""
+    import subprocess, numpy as np
+    r = subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-vf", "scale=96:128", "-f", "rawvideo",
+                        "-pix_fmt", "gray", "-"], capture_output=True)
+    f = np.frombuffer(r.stdout, np.uint8).reshape(-1, 128, 96).astype(float)
+    d = np.abs(np.diff(f, axis=0)).mean(axis=(1, 2))
+    m = np.median(d)
+    return [(int(i), round(float(d[i] / m), 1)) for i in np.argsort(d)[-5:][::-1]]
+
+
+def chain_latent():
+    """Pins sliced from the previous part's saved first-pass latent (no pixels)."""
+    p1 = os.path.join(OUT, "lat_part1.mp4")
+    log("LAT part 1")
+    src, _ = render(PARTS[0], seed=SEED1, save_latent=True)
+    lat = V._LAST_LATENT
+    shutil.copy(src, p1)
+    path, times = p1, []
+    for i, part in enumerate(PARTS[1:], start=2):
+        frame = os.path.join(OUT, f"lat_seed_{i}.jpg")
+        tail = os.path.join(OUT, f"lat_tail_{i}.mp4")
+        assert tg_continue.seed_frame(path, frame) and tg_continue.cut_tail(path, tail)
+        part = V.bridge_part(None, frame, part)
+        log(f"LAT part {i}: {part[:120]}  latent={lat}")
+        new, dt = render(V.CONTINUE_CTX_PREFIX + part, context_video=tail, context_latent=lat,
+                         save_latent=True, seed=SEED + i)
+        lat = V._LAST_LATENT
+        times.append(dt)
+        log("  cuts in the new part:", cuts(new))
+        j = V.join_pinned(path, new)
+        path = os.path.join(OUT, f"lat_upto{i}.mp4")
+        shutil.move(j, path)
+    log("LAT done", times, "cuts:", cuts(path))
+
+
 if __name__ == "__main__":
     log("motion context on:", V.motion_context_on())
     p1 = os.path.join(OUT, "part1.mp4")
@@ -73,6 +110,9 @@ if __name__ == "__main__":
         src, _ = render(PARTS[0], seed=SEED1)
         shutil.copy(src, p1)
     which = sys.argv[1:] or ["new", "old"]
+    if which == ["lat"]:
+        chain_latent()
+        sys.exit(0)
     res = {}
     for w in which:
         final, times = chain(p1, w == "new")
@@ -80,3 +120,4 @@ if __name__ == "__main__":
         log(w, json.dumps(res[w]))
     json.dump(res, open(os.path.join(OUT, "result.json"), "w"), indent=1)
     log("done", json.dumps(res))
+

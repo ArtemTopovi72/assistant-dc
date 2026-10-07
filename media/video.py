@@ -52,7 +52,7 @@ from config import (
     VIDEO_FPS, VIDEO_DEFAULT_FRAMES, VIDEO_MAX_FRAMES, VIDEO_MAX_FRAMES_AUTO,
     VIDEO_SHORT_EDGE, VIDEO_MAX_PIXELS, VIDEO_CANVAS_MULTIPLE,
     VIDEO_STEPS, VIDEO_STEPS_REF2VA, VIDEO_STEPS_REF2VA_VOICES, VIDEO_SPEECH_STRESS, VIDEO_T2VA_LORA_3STEP, VIDEO_CFG, VIDEO_SHIFT_VIDEO, VIDEO_SHIFT_AUDIO,
-    VIDEO_JOB_TIMEOUT,
+    VIDEO_JOB_TIMEOUT, OUTPUT_DIR_COMFY,
 )
 
 logger = logging.getLogger("assistant.video")
@@ -484,7 +484,8 @@ def build_workflow(prompt: str, *, mode: str, width: int, height: int,
                    audios: Sequence[str] = (),
                    steps: Optional[int] = None,
                    ref_image_size: str = "match", ctx=None, two_stage: Optional[bool] = None,
-                   context_video: str = "") -> dict:
+                   context_video: str = "", context_latent: str = "",
+                   save_latent: str = "") -> dict:
     """The ComfyUI API graph for one clip, with every reference already uploaded.
 
     Split out from `generate_video` so the shape of the graph can be asserted in
@@ -601,8 +602,10 @@ def build_workflow(prompt: str, *, mode: str, width: int, height: int,
             wf[node_id] = {"class_type": "LoadImage", "inputs": {"image": name}}
             cond[slot] = [node_id, 0]
             node_id = str(int(node_id) + 1)
-    if context_video:
-        _add_motion_context(wf, context_video)
+    if context_video or context_latent:
+        _add_motion_context(wf, context_video, context_latent)
+    if save_latent:
+        _add_latent_save(wf, save_latent)
     _apply_overrides(wf)
     return wf
 
@@ -626,18 +629,27 @@ def motion_context_on() -> bool:
     return bool(_server_has_node("MiniMaxH3MotionContext"))
 
 
-def _add_motion_context(wf: dict, context_video: str) -> None:
-    name = _upload(context_video, "video")
-    if not name:
-        raise VideoUnavailable(f"could not upload the clip to continue {context_video}")
+def _add_motion_context(wf: dict, context_video: str = "", context_latent: str = "") -> None:
+    """Pin the end of the previous clip. From its saved first-pass LATENT when there is one
+    (the node author's way: the same numbers the model made, no decode/encode, sound
+    included), else from its decoded frames and sound."""
     base = max(int(k) for k in wf) + 1
-    load, comp, mc, trim = (str(base + i) for i in range(4))
-    wf[load] = {"class_type": "LoadVideo", "inputs": {"file": name}}
-    wf[comp] = {"class_type": "GetVideoComponents", "inputs": {"video": [load, 0]}}
-    wf[mc] = {"class_type": "MiniMaxH3MotionContext", "inputs": {
-        "conditioning": [N_COND, 0], "vae": [N_VAE_VIDEO, 0], "latent": [N_COND, 1],
-        "context_length": str(MOTION_CONTEXT_FRAMES), "audio_context_length": 24,
-        "context_frames": [comp, 0], "audio_vae": [N_VAE_AUDIO, 0], "context_audio": [comp, 1]}}
+    src, mc, trim = (str(base + i) for i in range(3))
+    inputs = {"conditioning": [N_COND, 0], "vae": [N_VAE_VIDEO, 0], "latent": [N_COND, 1],
+              "context_length": str(MOTION_CONTEXT_FRAMES), "audio_context_length": 24}
+    if context_latent:
+        wf[src] = {"class_type": "MiniMaxH3MotionContextLoadLatent",
+                   "inputs": {"latent_path": context_latent, "clip_index": 0}}
+        inputs["context_latent"] = [src, 0]
+    else:
+        name = _upload(context_video, "video")
+        if not name:
+            raise VideoUnavailable(f"could not upload the clip to continue {context_video}")
+        comp = str(base + 3)
+        wf[src] = {"class_type": "LoadVideo", "inputs": {"file": name}}
+        wf[comp] = {"class_type": "GetVideoComponents", "inputs": {"video": [src, 0]}}
+        inputs.update(context_frames=[comp, 0], audio_vae=[N_VAE_AUDIO, 0], context_audio=[comp, 1])
+    wf[mc] = {"class_type": "MiniMaxH3MotionContext", "inputs": inputs}
     # Only the first pass reads the pins; a two-stage refine starts from a latent that
     # already holds them, and its guider keeps the plain conditioning.
     wf[N_SAMPLER]["inputs"]["positive"] = [mc, 0]
@@ -647,6 +659,17 @@ def _add_motion_context(wf: dict, context_video: str) -> None:
         "images": v["images"], "audio": v["audio"], "trim_frames": 0,
         "fps": 24.0, "match_tail": True}}
     v["images"], v["audio"] = [trim, 0], [trim, 1]
+
+
+def _add_latent_save(wf: dict, tag: str) -> None:
+    """Keep this clip's first-pass latent so a continuation can pin its end exactly."""
+    node = str(max(int(k) for k in wf) + 1)
+    wf[node] = {"class_type": "MiniMaxH3MotionContextSaveLatent", "inputs": {
+        "latent": [N_SAMPLER, 0], "filename_prefix": f"h3_context/{tag}", "clip_index": 1}}
+
+
+def latent_file(tag: str) -> str:
+    return str(OUTPUT_DIR_COMFY / "h3_context" / f"{tag}_00001.safetensors")
 
 
 def _apply_overrides(wf: dict) -> None:
@@ -987,7 +1010,8 @@ def generate_video(ctx, description: str, *,
                    seed: Optional[int] = None,
                    steps: Optional[int] = None,
                    on_progress: Optional[Callable] = None,
-                   context_video: str = "") -> dict:
+                   context_video: str = "", context_latent: str = "",
+                   save_latent: bool = False) -> dict:
     """Render one clip. `context_video`: a clip whose end this one continues (pinned
     frames, see _add_motion_context); its pinned head is cut off the result. Returns {path, mode, seconds, width, height, seed, status}.
 
@@ -1024,7 +1048,7 @@ def generate_video(ctx, description: str, *,
         seconds = estimate_seconds(asked)
         logger.info("video length from the script: %.1fs", seconds)
     frames = seconds_to_frames(seconds)
-    if context_video:
+    if context_video or context_latent:
         # the pinned head is rendered too, then trimmed: the clip grows by it
         frames = snap_frames(frames + MOTION_CONTEXT_FRAMES - 5)
     src_size = _image_size(images[0]) if images else None
@@ -1056,11 +1080,13 @@ def generate_video(ctx, description: str, *,
     if ctx is not None and hasattr(ctx, "set_stage"):
         ctx.set_stage("Generating a video")
 
+    tag = f"c{seed}_{random.randint(0, 1 << 30)}" if save_latent else ""
     try:
         wf = build_workflow(description, mode=mode, width=width, height=height,
                             frames=frames, seed=seed, images=images, videos=videos,
                             audios=audios, steps=steps, ctx=ctx,
-                            context_video=context_video)
+                            context_video=context_video, context_latent=context_latent,
+                            save_latent=tag)
         if ctx is not None and hasattr(ctx, "set_stage"):
             ctx.set_stage("Generating a video")
         wf = _normalize_save_node(wf)
@@ -1095,7 +1121,9 @@ def generate_video(ctx, description: str, *,
     if ctx is not None:
         ctx.last_video_path = final
         ctx.last_video_prompt = description
-    return {"path": final, "mode": mode, "seconds": frames_to_seconds(frames),
+    lat = latent_file(tag) if tag else ""
+    return {"path": final, "latent": lat if lat and os.path.exists(lat) else "",
+            "mode": mode, "seconds": frames_to_seconds(frames),
             "frames": frames, "width": width, "height": height, "seed": seed,
             "status": "success"}
 

@@ -41,6 +41,20 @@ for two in (False, True):
         g = next(v for v in wf.values() if v["class_type"] == "CFGGuider")
         check(g["inputs"]["positive"] == [V.N_COND, 0], "the refine keeps the plain conditioning")
 
+# latent pins: sliced from the previous part's saved latent, no pixels re-encoded
+wf = V.build_workflow("next", mode="t2va", width=768, height=1024, frames=124, seed=7,
+                      two_stage=False, context_latent="prev.safetensors", save_latent="c7")
+by = {v["class_type"]: k for k, v in wf.items()}
+i = wf[by["MiniMaxH3MotionContext"]]["inputs"]
+ld = i.get("context_latent", [None])[0]
+check(ld and wf[ld]["class_type"] == "MiniMaxH3MotionContextLoadLatent"
+      and wf[ld]["inputs"]["latent_path"] == "prev.safetensors" and "context_frames" not in i,
+      "latent pins load the saved latent instead of the video frames")
+sv = wf.get(by.get("MiniMaxH3MotionContextSaveLatent"), {}).get("inputs", {})
+check(sv.get("latent") == [V.N_SAMPLER, 0] and sv.get("filename_prefix") == "h3_context/c7",
+      "the sampled latent is saved for the next part")
+check(V.latent_file("c7").endswith("h3_context" + os.sep + "c7_00001.safetensors"), "latent_file path")
+
 wf = V.build_workflow("x", mode="ref2va", width=1344, height=768, frames=124, seed=7,
                       images=["seed.jpg"], two_stage=False)
 check(not any(v["class_type"] == "MiniMaxH3MotionContext" for v in wf.values()),
