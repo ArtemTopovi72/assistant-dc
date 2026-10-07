@@ -442,11 +442,25 @@ def _layout(ctx, lyrics: str, parts: list) -> str:
         per = max(1, len(lines) // max(1, len(sung)))
         plan = [list(range(1 + i * per, 1 + min(len(lines), (i + 1) * per))) or [len(lines)]
                 for i in range(len(sung))]
-    fitted = []
+    # Only a chorus repeats. A verse that re-sings lines another verse had (10-07: the model
+    # gave verse 2 the lines of verse 1 and the tourists' verse was never sung) takes the
+    # next lines nobody has sung yet instead.
+    refrain = {n for (tag, _), nums in zip(sung, plan) if tag == "Chorus" for n in nums}
+    fitted, used = [], set()
     for (tag, notes), nums in zip(sung, plan):
         nums = list(nums)
+        if tag != "Chorus":
+            kept = [n for n in nums if n not in used]
+            fresh = [n for n in range(1, len(lines) + 1) if n not in used and n not in refrain and n not in kept]
+            for _ in range(len(nums) - len(kept)):
+                if fresh and sum(_syl(lines[n - 1]) for n in kept) + _syl(lines[fresh[0] - 1]) <= notes * 1.1:
+                    kept.append(fresh.pop(0))
+            nums = kept
+            nums = sorted(nums) or [n for n in range(1, len(lines) + 1) if n not in refrain][:1] or [1]
         while len(nums) > 1 and sum(_syl(lines[n - 1]) for n in nums) > notes * 1.1:
             nums.pop()
+        if tag != "Chorus":
+            used.update(nums)
         fitted.append(nums)
     blocks, k = [], 0
     for tag, notes in parts:

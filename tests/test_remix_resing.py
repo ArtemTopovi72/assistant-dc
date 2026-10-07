@@ -67,6 +67,13 @@ def test_layout_keeps_a_section_within_its_notes(monkeypatch):
     assert text == "[Chorus]\nла ла ла ла ла\nли ли ли ли ли"
 
 
+def test_a_verse_never_resings_another_verse(monkeypatch):
+    # 10-07: the model gave verse 2 the lines of verse 1; the third verse's lines were never sung.
+    monkeypatch.setattr(llm, "call_llm_simple", lambda *a, **k: '{"sections": [[1, 2], [5], [1, 2]]}')
+    text = R._layout(None, "ла ла\nли ли\nло ло\nлу лу\nле ле", [("Verse", 8), ("Chorus", 10), ("Verse", 8)])
+    assert text == "[Verse]\nла ла\nли ли\n\n[Chorus]\nле ле\n\n[Verse]\nло ло\nлу лу"
+
+
 def test_a_silent_section_is_instrumental(monkeypatch):
     monkeypatch.setattr(llm, "call_llm_simple", lambda *a, **k: '{"sections": [[1]]}')
     assert R._layout(None, "ла ла", [("Verse", 2), ("Chorus", 20)]) == "[Interlude]\n\n[Chorus]\nла ла"
