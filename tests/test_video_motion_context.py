@@ -48,7 +48,8 @@ by = {v["class_type"]: k for k, v in wf.items()}
 i = wf[by["MiniMaxH3MotionContext"]]["inputs"]
 ld = i.get("context_latent", [None])[0]
 check(ld and wf[ld]["class_type"] == "MiniMaxH3MotionContextLoadLatent"
-      and wf[ld]["inputs"]["latent_path"] == "prev.safetensors" and "context_frames" not in i,
+      and wf[ld]["inputs"]["latent_path"] == "prev.safetensors"
+      and wf[ld]["inputs"]["clip_index"] >= 1 and "context_frames" not in i,
       "latent pins load the saved latent instead of the video frames")
 sv = wf.get(by.get("MiniMaxH3MotionContextSaveLatent"), {}).get("inputs", {})
 check(sv.get("latent") == [V.N_SAMPLER, 0] and sv.get("filename_prefix") == "h3_context/c7",

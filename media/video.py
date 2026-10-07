@@ -639,7 +639,7 @@ def _add_motion_context(wf: dict, context_video: str = "", context_latent: str =
               "context_length": str(MOTION_CONTEXT_FRAMES), "audio_context_length": 24}
     if context_latent:
         wf[src] = {"class_type": "MiniMaxH3MotionContextLoadLatent",
-                   "inputs": {"latent_path": context_latent, "clip_index": 0}}
+                   "inputs": {"latent_path": context_latent, "clip_index": 1}}   # 0 = load nothing (first clip)
         inputs["context_latent"] = [src, 0]
     else:
         name = _upload(context_video, "video")
