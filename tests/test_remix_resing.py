@@ -236,6 +236,8 @@ def test_sung_vocal_is_heard_with_vad_and_no_conditioning():
             return iter([]), None
     assert R._hear(W(), "take.wav", "ru") == []
     assert seen["vad_filter"] is True and seen["condition_on_previous_text"] is False and seen["language"] == "ru"
+    # 10-08: the temperature fallback made the same vocal score 0.03 / 0.41 / 0.52 run to run.
+    assert seen["temperature"] == 0.0
 
 
 

@@ -147,9 +147,11 @@ def _hear(whisper, path: str, language=None) -> list:
     """Whisper segments of a bare sung vocal. VAD on and no conditioning on the previous text:
     with the defaults one credit-line hallucination repeats through the whole stem (10-07: a
     clear take came back as 13 x «Продолжение следует...», 0 words, and the take picker
-    scored it 0%); with these the same take read almost word for word."""
+    scored it 0%); with these the same take read almost word for word. Greedy at temperature 0:
+    with the fallback ladder the same converted vocal scored 0.03, 0.41, 0.52 on three runs
+    (10-08), so takes and voices were picked on noise; at 0 it is 0.52 every time."""
     segs, _ = whisper.transcribe(path, word_timestamps=True, language=language, vad_filter=True,
-                                 condition_on_previous_text=False)
+                                 condition_on_previous_text=False, temperature=0.0)
     return list(segs)
 
 
