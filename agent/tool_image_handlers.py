@@ -1152,6 +1152,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     # ▶️ Continue video (tg_continue): the clip's tail is the reference -- its motion, faces and
     # its own sound -- and the new part is joined to the original afterwards.
     cont_tail = getattr(ctx, "continue_tail", "") or ""
+    pinned_tail = ""
     cont_src = getattr(ctx, "continue_src", "") or ""
     continuing = bool(cont_tail and os.path.exists(cont_tail))
     if continuing:
@@ -1159,7 +1160,13 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         ctx.continue_tail = ctx.continue_src = ""          # one clip per request
         people = [p for p in (getattr(ctx, "continue_people", None) or []) if p and os.path.exists(p)]
         ctx.continue_people = []
-        description = video_mod.CONTINUE_PREFIX + description
+        # Pinned frames (same as the parts of a long script): faster and seamless, but they
+        # take no pictures -- new people from photos still need the reference path.
+        if not people and video_mod.motion_context_on():
+            pinned_tail, videos, images = cont_tail, [], []
+            description = video_mod.CONTINUE_CTX_PREFIX + description
+        else:
+            description = video_mod.CONTINUE_PREFIX + description
         if people:
             # New people from photos sent after the clip: the start frame stays <Picture 1>.
             images = (images or [])[-1:] + people
@@ -1237,6 +1244,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             seconds=args.get("seconds") or 0.0,
             aspect=args.get("aspect") or "",
             seed=args.get("seed"),
+            context_video=pinned_tail,
         )
     except Exception as exc:
         logger.exception("generate_video crashed")
@@ -1264,7 +1272,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 "a video was created.")
 
     if continuing and cont_src and os.path.exists(cont_src):
-        joined = video_mod.join_continuation(cont_src, path)
+        joined = (video_mod.join_continuation(cont_src, path, fade=1 / 24, drop_frames=0) if pinned_tail
+                  else video_mod.join_continuation(cont_src, path))
         if joined:
             path = video_mod._adopt_output(joined)       # the whole thing: original + what comes next
         else:

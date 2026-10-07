@@ -124,6 +124,7 @@ def fake_gen(ctx, description, **kw):
     return {"path": NEW, "status": "success", "seconds": 3.0, "width": 320, "height": 240}
 V.generate_video = fake_gen
 V.engine_available = lambda ctx=None: (True, "")
+V.motion_context_on = lambda: False             # the reference-tail path first
 H.asks_for_video = lambda ctx, state: True
 _T._render_budget_exhausted = lambda *a, **k: None
 H._current_image_paths = lambda ctx, state: [frame]
@@ -141,6 +142,15 @@ st = {}
 H._handle_generate_video(TCtx(), st, {"description": "they leave"})
 check("the delivered clip is the joined one (longer than the new part)",
       st.get("video_path") and V.probe(st["video_path"])["seconds"] > 5.5, st)
+
+# Pinned frames on: the tail is pinned into the new clip's head, not a reference
+V.motion_context_on = lambda: True
+SEEN.clear()
+H._handle_generate_video(TCtx(), {}, {"description": "they leave the room laughing"})
+check("pinned: the tail goes in as context_video", SEEN.get("context_video") == tail, SEEN)
+check("pinned: no reference video or picture", not SEEN.get("videos") and not SEEN.get("images"), SEEN)
+check("pinned: the no-cut prompt without <Video 1>",
+      SEEN["description"].startswith(V.CONTINUE_CTX_PREFIX) and "<Video 1>" not in SEEN["description"])
 
 print(f"\n{OK}/{OK + BAD} checks passed")
 sys.exit(1 if BAD else 0)
