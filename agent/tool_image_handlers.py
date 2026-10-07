@@ -1074,10 +1074,16 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict) -> str:
         if not (tg_continue.seed_frame(path, frame) and tg_continue.cut_tail(path, tail)):
             logger.warning("video parts: could not take the end of part %d", i - 1)
             break
+        pinned = video_mod.motion_context_on()
         try:
-            r = video_mod.generate_video(ctx, video_mod.CONTINUE_PREFIX + part,
-                                         images=[frame], videos=[tail],
-                                         aspect=args.get("aspect") or "", seed=args.get("seed"))
+            if pinned:
+                r = video_mod.generate_video(ctx, video_mod.CONTINUE_CTX_PREFIX + part,
+                                             context_video=tail,
+                                             aspect=args.get("aspect") or "", seed=args.get("seed"))
+            else:
+                r = video_mod.generate_video(ctx, video_mod.CONTINUE_PREFIX + part,
+                                             images=[frame], videos=[tail],
+                                             aspect=args.get("aspect") or "", seed=args.get("seed"))
         except Exception:
             logger.exception("video parts: part %d crashed", i)
             break
@@ -1085,7 +1091,9 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict) -> str:
         if not (new and os.path.exists(new)):
             logger.warning("video parts: part %d produced no clip (%s)", i, r.get("reason"))
             break
-        joined = video_mod.join_continuation(path, new)
+        # pinned: the new part starts on the frame after the old one ends -- butt-join
+        joined = (video_mod.join_continuation(path, new, fade=1 / 24, drop_frames=0) if pinned
+                  else video_mod.join_continuation(path, new))
         if not joined:
             logger.warning("video parts: joining part %d failed", i)
             break

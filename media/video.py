@@ -115,8 +115,9 @@ def estimate_seconds(description: str, capped: bool = True) -> float:
     beat ~1.3 s, a held action ("for several seconds") +2 s; 5.2 s at the least.
     """
     text = description or ""
-    if text.startswith(CONTINUE_PREFIX):          # the template, not the script
-        text = text[len(CONTINUE_PREFIX):]
+    for pre in (CONTINUE_PREFIX, CONTINUE_CTX_PREFIX):   # the template, not the script
+        if text.startswith(pre):
+            text = text[len(pre):]
     spoken = " ".join(next(g for g in m.groups() if g is not None) for m in _QUOTED.finditer(text))
     rest = _QUOTED.sub(" ", text)
     words = len(spoken.split())
@@ -339,6 +340,22 @@ def _server_has_h3_nodes():
     return ok
 
 
+def _server_has_node(cls: str):
+    """Whether the live ComfyUI knows node `cls` (None: it did not answer). Cached per URL."""
+    key = (COMFY_URL, cls)
+    if key in _NODE_CACHE:
+        return _NODE_CACHE[key]
+    try:
+        import requests
+        r = requests.get(f"{COMFY_URL}/object_info/{cls}", timeout=10)
+        ok = r.status_code == 200 and bool(r.json())
+    except Exception as exc:
+        logger.warning("could not ask ComfyUI about %s: %s", cls, exc)
+        return None
+    _NODE_CACHE[key] = ok
+    return ok
+
+
 def _valid_video_file(path: str) -> bool:
     """A real, non-empty video container — not a truncated write or a stub.
 
@@ -466,7 +483,8 @@ def build_workflow(prompt: str, *, mode: str, width: int, height: int,
                    images: Sequence[str] = (), videos: Sequence[str] = (),
                    audios: Sequence[str] = (),
                    steps: Optional[int] = None,
-                   ref_image_size: str = "match", ctx=None, two_stage: Optional[bool] = None) -> dict:
+                   ref_image_size: str = "match", ctx=None, two_stage: Optional[bool] = None,
+                   context_video: str = "") -> dict:
     """The ComfyUI API graph for one clip, with every reference already uploaded.
 
     Split out from `generate_video` so the shape of the graph can be asserted in
@@ -583,8 +601,47 @@ def build_workflow(prompt: str, *, mode: str, width: int, height: int,
             wf[node_id] = {"class_type": "LoadImage", "inputs": {"image": name}}
             cond[slot] = [node_id, 0]
             node_id = str(int(node_id) + 1)
+    if context_video:
+        _add_motion_context(wf, context_video)
     _apply_overrides(wf)
     return wf
+
+
+# Continuation by pinned frames (ComfyUI-H3-Motion-Context v0.3.1, the release for
+# ComfyUI <= 0.33): the last 22 frames and the last second of sound of the previous
+# clip sit at the head of the NEW clip's own timeline as never-denoised rows, then come
+# off again (Trim). The old way handed the tail in as a <Video 1> reference -- 60 more
+# frames of tokens in a quadratic attention, and the sound restarted instead of going on.
+MOTION_CONTEXT_FRAMES = 22                       # on the VAE grid: 5, 22, 39, 56
+
+
+def motion_context_on() -> bool:
+    if os.getenv("VIDEO_MOTION_CONTEXT", "1") != "1":
+        return False
+    return bool(_server_has_node("MiniMaxH3MotionContext"))
+
+
+def _add_motion_context(wf: dict, context_video: str) -> None:
+    name = _upload(context_video, "video")
+    if not name:
+        raise VideoUnavailable(f"could not upload the clip to continue {context_video}")
+    base = max(int(k) for k in wf) + 1
+    load, comp, mc, trim = (str(base + i) for i in range(4))
+    wf[load] = {"class_type": "LoadVideo", "inputs": {"file": name}}
+    wf[comp] = {"class_type": "GetVideoComponents", "inputs": {"video": [load, 0]}}
+    wf[mc] = {"class_type": "MiniMaxH3MotionContext", "inputs": {
+        "conditioning": [N_COND, 0], "vae": [N_VAE_VIDEO, 0], "latent": [N_COND, 1],
+        "context_length": str(MOTION_CONTEXT_FRAMES), "audio_context_length": 24,
+        "context_frames": [comp, 0], "audio_vae": [N_VAE_AUDIO, 0], "context_audio": [comp, 1]}}
+    # Only the first pass reads the pins; a two-stage refine starts from a latent that
+    # already holds them, and its guider keeps the plain conditioning.
+    wf[N_SAMPLER]["inputs"]["positive"] = [mc, 0]
+    out = wf[N_SAVE]["inputs"]["video"][0]                   # CreateVideo
+    v = wf[out]["inputs"]
+    wf[trim] = {"class_type": "MiniMaxH3MotionContextTrim", "inputs": {
+        "images": v["images"], "audio": v["audio"], "trim_frames": [mc, 1],
+        "fps": 24.0, "match_tail": True}}
+    v["images"], v["audio"] = [trim, 0], [trim, 1]
 
 
 def _apply_overrides(wf: dict) -> None:
@@ -924,8 +981,10 @@ def generate_video(ctx, description: str, *,
                    seconds: float = 0.0, aspect: str = "",
                    seed: Optional[int] = None,
                    steps: Optional[int] = None,
-                   on_progress: Optional[Callable] = None) -> dict:
-    """Render one clip. Returns {path, mode, seconds, width, height, seed, status}.
+                   on_progress: Optional[Callable] = None,
+                   context_video: str = "") -> dict:
+    """Render one clip. `context_video`: a clip whose end this one continues (pinned
+    frames, see _add_motion_context); its pinned head is cut off the result. Returns {path, mode, seconds, width, height, seed, status}.
 
     `status` is "success" or "fail"; on failure `_VIDEO_FAILURE["reason"]` says
     why in terms the tool layer can turn into an honest sentence.
@@ -960,7 +1019,14 @@ def generate_video(ctx, description: str, *,
         seconds = estimate_seconds(asked)
         logger.info("video length from the script: %.1fs", seconds)
     frames = seconds_to_frames(seconds)
-    width, height = resolve_size(aspect, _image_size(images[0]) if images else None)
+    if context_video:
+        # the pinned head is rendered too, then trimmed: the clip grows by it
+        frames = snap_frames(frames + MOTION_CONTEXT_FRAMES - 5)
+    src_size = _image_size(images[0]) if images else None
+    if context_video and not src_size:              # a continuation keeps the clip's own shape
+        p = probe(context_video)
+        src_size = (p["width"], p["height"]) if p.get("width") else None
+    width, height = resolve_size(aspect, src_size)
     if _context_ir_on():
         locked = description.endswith(_FRAMING_LOCK_SUFFIX)
         description = to_context_ir(ctx, description, mode=mode,
@@ -988,7 +1054,8 @@ def generate_video(ctx, description: str, *,
     try:
         wf = build_workflow(description, mode=mode, width=width, height=height,
                             frames=frames, seed=seed, images=images, videos=videos,
-                            audios=audios, steps=steps, ctx=ctx)
+                            audios=audios, steps=steps, ctx=ctx,
+                            context_video=context_video)
         if ctx is not None and hasattr(ctx, "set_stage"):
             ctx.set_stage("Generating a video")
         wf = _normalize_save_node(wf)
@@ -1023,6 +1090,8 @@ def generate_video(ctx, description: str, *,
     if ctx is not None:
         ctx.last_video_path = final
         ctx.last_video_prompt = description
+    if context_video:
+        frames -= MOTION_CONTEXT_FRAMES
     return {"path": final, "mode": mode, "seconds": frames_to_seconds(frames),
             "frames": frames, "width": width, "height": height, "seed": seed,
             "status": "success"}
@@ -1074,6 +1143,16 @@ CONTINUE_PREFIX = (
     "frame): whatever changed during <Video 1> -- clothes taken off or put on, things moved, broken "
     "or picked up -- stays changed. The camera keeps moving at the same speed. "
     "Their voices and the ambient sound of <Video 1> go on unchanged. What happens next: ")
+
+# With pinned frames the previous shot is not a reference at all, it IS the opening of
+# this clip, and it carries the faces too. No <Picture 1> on purpose: with the end frame as
+# a ref2va reference the model played the pins and then CUT to a fresh shot of the next
+# action (bench/motion_context_ab.py, 10-07, twice of twice); the plain FL2V graph with the
+# same pins went straight on, in 166 s against the old way's 348 s.
+CONTINUE_CTX_PREFIX = (
+    "The shot continues with no cut and no reset: the same people, place, framing and "
+    "lighting, picking up exactly where the opening frames leave off; whatever already "
+    "changed stays changed, and voices and ambient sound go on unchanged. What happens next: ")
 
 
 def new_people_clause(first: int, n: int) -> str:
