@@ -352,3 +352,10 @@ def test_the_singer_is_trained_alone_and_dry(monkeypatch, tmp_path):
     rvc_voice.train(None, "artist", str(wav))
     assert models == [rvc_voice.LEAD_MODEL, rvc_voice.DRY_MODEL]
     assert (tmp_path / "datasets" / "artist" / "vocal.wav").read_text(encoding="utf-8") == "(noreverb)"
+
+
+def test_a_long_training_still_saves_its_last_epoch():
+    # 10-08: RVC_EPOCHS=120 -> Applio refused «--save-every-epoch 120 is not in the range 1<=x<=100».
+    import rvc_voice
+    assert rvc_voice._save_every(60) == 60 and rvc_voice._save_every(120) == 60
+    assert rvc_voice._save_every(300) == 100 and rvc_voice._save_every(250) == 50

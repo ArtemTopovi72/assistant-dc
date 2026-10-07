@@ -117,6 +117,12 @@ def _pretrain_args() -> list:
     return ["--custom-pretrained", "--g-pretrained-path", paths[0], "--d-pretrained-path", paths[1]]
 
 
+def _save_every(epochs: int) -> int:
+    """Applio takes --save-every-epoch 1..100 only (RVC_EPOCHS=120 failed: «120 is not in the
+    range»); the largest step that lands on the last epoch."""
+    return next(k for k in range(min(epochs, 100), 0, -1) if epochs % k == 0)
+
+
 def train(ctx, name: str, vocal_wav: str):
     """Train `name` on one vocal stem. Returns (pth, index) or None."""
     data = os.path.join(APPLIO, "datasets", name)
@@ -128,7 +134,7 @@ def train(ctx, name: str, vocal_wav: str):
     _run(ctx, ["extract", "--model-name", name, "--f0-method", "rmvpe", "--sample-rate", sr, "--gpu", "0"],
          "RVC extract", 900)
     _run(ctx, ["train", "--model-name", name, "--sample-rate", sr, "--total-epoch", str(EPOCHS),
-               "--save-every-epoch", str(EPOCHS), "--save-only-latest", "--batch-size", "8", "--gpu", "0",
+               "--save-every-epoch", str(_save_every(EPOCHS)), "--save-only-latest", "--batch-size", "8", "--gpu", "0",
                "--pretrained", *_pretrain_args(), "--index-algorithm", "Auto"], "RVC train", TRAIN_TIMEOUT)
     _run(ctx, ["index", "--model-name", name], "RVC index", 900)
     got = model_of(name)
