@@ -110,7 +110,7 @@ def _fake_resing_run(monkeypatch, tmp_path, trained: bool):
     monkeypatch.setattr(music, "_master", lambda p, *a, **k: None)
     monkeypatch.setattr(R, "_singer_ref", lambda vox, work, name: "ref.wav")
     monkeypatch.setattr(R, "sing_as", lambda ctx, src, ref, out, order=(): (calls.append("zero-shot"), out)[1])
-    monkeypatch.setattr(R, "_voice_keeping_words", lambda ctx, voices, yvox_wav, layout, work, lang:
+    monkeypatch.setattr(R, "_voice_keeping_words", lambda ctx, voices, yvox_wav, layout, work, lang, best=False:
                         voices[0][1](os.path.join(str(tmp_path), "v.wav")))
     monkeypatch.setattr(R, "_mix_vocal", lambda conv, yvox, yback: conv)
     monkeypatch.setattr(rvc_voice, "available", lambda: True)
@@ -383,3 +383,26 @@ def test_a_training_that_died_on_its_port_runs_again(monkeypatch, tmp_path):
     wav.write_bytes(b"x")
     assert rvc_voice.train(None, "artist", str(wav))[0].endswith("artist_60e_900s.pth")
     assert len(trains) == 2
+
+
+def test_the_singer_is_sung_a_few_times_and_the_closest_kept(monkeypatch, tmp_path):
+    # 10-08: one RVC model/settings/take came out 0.52..0.78 like the lyric over four runs.
+    lines = "сорок лет как под наркозом я работал говновозом"
+    heard = {"take.wav": lines, "rvc0.wav": "сарак лит как пат наркозам я рабатал гавнавозам",
+             "rvc1.wav": "сорок лет как под наркозам я работал говновозам", "rvc2.wav": "бу бу"}
+
+    class W:
+        def transcribe(self, path, **k):
+            text = heard[os.path.basename(path)]
+            return [type("S", (), {"words": [type("W", (), {"word": " " + t, "start": i, "end": i + 0.5})()
+                                             for i, t in enumerate(text.split())], "text": text})()], None
+    monkeypatch.setattr(R, "_sung_words", lambda segs: [{"w": w.word.strip(), "s": w.start, "e": w.end}
+                                                         for s in segs for w in s.words])
+    ctx = type("C", (), {"models": type("M", (), {"whisper": W()})()})()
+    import rvc_voice
+    sung = []
+    monkeypatch.setattr(rvc_voice, "convert", lambda ctx, name, src, out: (sung.append(out), open(out, "wb").close()))
+    voices = R._rvc_voices(ctx, "artist", "take.wav")
+    got = R._voice_keeping_words(ctx, voices, "take.wav", "[Verse]\nсорок лет как под наркозом\nя работал говновозом",
+                                 str(tmp_path), "ru", best=True)
+    assert len(sung) == 3 and os.path.basename(got) == "rvc1.wav"

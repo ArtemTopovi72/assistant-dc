@@ -632,21 +632,34 @@ def resing(ctx, song: str, lyrics: str, info: dict = None) -> str:
     if info is not None:
         info["lang"] = lang
     if name and rvc_voice.model_of(name):
-        voices = [("rvc", lambda o: rvc_voice.convert(ctx, name, yvox_wav, o))]
+        conv = _voice_keeping_words(ctx, _rvc_voices(ctx, name, yvox_wav), yvox_wav, layout, work, lang, best=True)
     else:
         ref = _singer_ref(vox, work, "a")
         voices = [(v, lambda o, v=v: sing_as(ctx, yvox_wav, ref, o, order=(v,))) for v in ("seedvc", "soulx")]
-    return _mix_vocal(_voice_keeping_words(ctx, voices, yvox_wav, layout, work, lang), yvox, yback)
+        conv = _voice_keeping_words(ctx, voices, yvox_wav, layout, work, lang)
+    return _mix_vocal(conv, yvox, yback)
 
 
-def _voice_keeping_words(ctx, voices: list, yvox_wav: str, layout: str, work: str, lang) -> str:
-    """The first singer's-voice conversion that keeps the words; else the take's own vocal.
+# An RVC conversion is a draw too: one model, settings and take came out 0.52..0.78 like the
+# lyric over four runs (10-08, runtime/govnovoz/rep_sweep.py), so the voice is sung a few times
+# and the closest kept.
+RVC_TRIES = int(os.getenv("RVC_TRIES", "3"))
+
+
+def _rvc_voices(ctx, name: str, src: str) -> list:
+    import rvc_voice
+    return [(f"rvc{k}", lambda o: rvc_voice.convert(ctx, name, src, o)) for k in range(RVC_TRIES)]
+
+
+def _voice_keeping_words(ctx, voices: list, yvox_wav: str, layout: str, work: str, lang, best=False) -> str:
+    """The first singer's-voice conversion that keeps the words (`best`: the closest of them all,
+    stopping early at one as clear as the take); else the take's own vocal.
     10-07 live: a take heard at 97% came out of SoulX as «Субтитры... ЧИИИИИИ...» and the user
     got that mush. A conversion heard less than 0.8 as close to the lyric as the take is dropped
     (by _likeness: on _clarity's cliff every RVC voice fell under it and the singer never sang)."""
     def heard(path):
         return _likeness(" ".join(w["w"] for w in _sung_words(_hear(ctx.models.whisper, path, lang))), layout)
-    take = None
+    take = top = None
     for vname, convert in voices:
         out = os.path.join(work, vname + ".wav")
         try:
@@ -658,8 +671,12 @@ def _voice_keeping_words(ctx, voices: list, yvox_wav: str, layout: str, work: st
             take = heard(yvox_wav)
         kept = heard(out)
         logger.info("resing: %s voice heard %.2f like the lyric (take %.2f)", vname, kept, take)
-        if kept >= take * 0.8:
+        if kept >= take * 0.8 and (not best or kept >= take * 0.95):
             return out
+        if kept >= take * 0.8 and (top is None or kept > top[0]):
+            top = (kept, out)
+    if top:
+        return top[1]
     logger.warning("resing: no voice kept the words, sending the take's own vocal")
     return yvox_wav
 
@@ -673,8 +690,8 @@ def resing_rvc(ctx, info: dict) -> str:
         ctx.set_stage("Learning the singer's voice")
     if not rvc_voice.model_of(name) and not rvc_voice.train(ctx, name, os.path.join(work, "a_vox.wav")):
         raise cover.CoverFailed("render")
-    voices = [("rvc", lambda o: rvc_voice.convert(ctx, name, info["yvox_wav"], o))]
-    conv = _voice_keeping_words(ctx, voices, info["yvox_wav"], info["layout"], work, info.get("lang"))
+    conv = _voice_keeping_words(ctx, _rvc_voices(ctx, name, info["yvox_wav"]), info["yvox_wav"], info["layout"],
+                                work, info.get("lang"), best=True)
     return _mix_vocal(conv, info["yvox"], info["yback"])
 
 
