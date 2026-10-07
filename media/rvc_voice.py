@@ -18,7 +18,12 @@ logger = logging.getLogger("assistant.rvc")
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APPLIO = os.path.join(ROOT, "models_ext", "applio")
 PY = venv_python(os.path.join(ROOT, "venv_applio"))
-EPOCHS = int(os.getenv("RVC_EPOCHS", "200"))
+# 10-08 sweep on Marshal (4.9 min of vocal, YuE take heard at 0.97): the stock pretrain at 200
+# epochs kept 0.52 of the lines, TITAN at 60 -- 0.34, the Russian Snowie V3.1 pretrain at 60 --
+# 0.59 in 5 min instead of 10. «Epochs x minutes of vocal ~ 300» is the usual budget.
+EPOCHS = int(os.getenv("RVC_EPOCHS", "60"))
+PRETRAIN_URL = "https://huggingface.co/Politrees/RVC_resources/resolve/main/pretrained/v2/40k/Snowie/"
+PRETRAIN = ("G_SnowieV3.1_40k.pth", "D_SnowieV3.1_40k.pth")
 TRAIN_TIMEOUT = int(os.getenv("RVC_TRAIN_TIMEOUT", "3600"))
 _TRANSLIT = dict(zip("абвгдеёжзийклмнопрстуфхцчшщъыьэюя",
                      ["a", "b", "v", "g", "d", "e", "e", "zh", "z", "i", "y", "k", "l", "m", "n", "o", "p", "r", "s",
@@ -62,6 +67,25 @@ def _run(ctx, args: list, label: str, timeout: int) -> str:
     return tail
 
 
+def _pretrain_args() -> list:
+    """The Russian Snowie pretrain (fetched once into Applio's custom pretraineds); the stock
+    one when it can't be had."""
+    d = os.path.join(APPLIO, "rvc", "models", "pretraineds", "custom")
+    paths = [os.path.join(d, f) for f in PRETRAIN]
+    for f, path in zip(PRETRAIN, paths):
+        if os.path.isfile(path) and os.path.getsize(path) > 1e8:
+            continue
+        try:
+            import urllib.request
+            os.makedirs(d, exist_ok=True)
+            urllib.request.urlretrieve(PRETRAIN_URL + f, path + ".part")
+            os.replace(path + ".part", path)
+        except Exception as exc:
+            logger.warning("rvc: no Snowie pretrain (%s), stock one", exc)
+            return []
+    return ["--custom-pretrained", "--g-pretrained-path", paths[0], "--d-pretrained-path", paths[1]]
+
+
 def train(ctx, name: str, vocal_wav: str):
     """Train `name` on one vocal stem. Returns (pth, index) or None."""
     data = os.path.join(APPLIO, "datasets", name)
@@ -73,8 +97,8 @@ def train(ctx, name: str, vocal_wav: str):
     _run(ctx, ["extract", "--model-name", name, "--f0-method", "rmvpe", "--sample-rate", sr, "--gpu", "0"],
          "RVC extract", 900)
     _run(ctx, ["train", "--model-name", name, "--sample-rate", sr, "--total-epoch", str(EPOCHS),
-               "--save-every-epoch", "50", "--save-only-latest", "--batch-size", "8", "--gpu", "0",
-               "--pretrained", "--index-algorithm", "Auto"], "RVC train", TRAIN_TIMEOUT)
+               "--save-every-epoch", str(EPOCHS), "--save-only-latest", "--batch-size", "8", "--gpu", "0",
+               "--pretrained", *_pretrain_args(), "--index-algorithm", "Auto"], "RVC train", TRAIN_TIMEOUT)
     _run(ctx, ["index", "--model-name", name], "RVC index", 900)
     got = model_of(name)
     logger.info("rvc: trained %s -> %s", name, got)
@@ -82,11 +106,12 @@ def train(ctx, name: str, vocal_wav: str):
 
 
 def convert(ctx, name: str, vocal_wav: str, out_wav: str) -> str:
-    """`vocal_wav` sung in `name`'s voice. Settings that keep the words (applio-rvc-cover):
-    index 0.4, protect 0.5, volume envelope 1 -- 0.75/0.33 mumbled."""
+    """`vocal_wav` sung in `name`'s voice. 10-08 Whisper sweep (share of the lyric's lines heard):
+    index 0 / protect 0.33 kept 0.52-0.59, index 0.4 / protect 0.5 -- 0.48, 0.75 -- 0.45, -12 -- 0.31.
+    The index pulls the stem's mumble in; the timbre is in the model."""
     pth, idx = model_of(name)
     _run(ctx, ["infer", "--input-path", os.path.abspath(vocal_wav), "--output-path", os.path.abspath(out_wav),
-               "--pth-path", pth, "--index-path", idx, "--pitch", "0", "--index-rate", "0.4", "--protect", "0.5",
+               "--pth-path", pth, "--index-path", idx, "--pitch", "0", "--index-rate", "0", "--protect", "0.33",
                "--f0-method", "rmvpe", "--volume-envelope", "1", "--export-format", "WAV"], "RVC", 900)
     if not os.path.isfile(out_wav):
         raise RuntimeError("rvc convert gave no file")

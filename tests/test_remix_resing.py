@@ -288,3 +288,29 @@ def test_a_tidy_up_that_rewrites_the_words_is_dropped(monkeypatch):
 def test_an_instrumental_second_song_has_no_words(monkeypatch):
     with pytest.raises(cover.CoverFailed):
         _lyrics_run(monkeypatch, ["ла ла"], "{}")
+
+
+def test_rvc_trains_on_the_russian_pretrain_and_converts_without_the_index(monkeypatch, tmp_path):
+    # 10-08 Whisper sweep on Marshal: Snowie 60e kept 0.59 of the lines (stock 200e -- 0.52) in
+    # half the time; index 0 / protect 0.33 beat index 0.4 / protect 0.5.
+    import rvc_voice
+    runs = []
+    monkeypatch.setattr(rvc_voice, "APPLIO", str(tmp_path))
+    d = tmp_path / "rvc" / "models" / "pretraineds" / "custom"
+    d.mkdir(parents=True)
+    for f in rvc_voice.PRETRAIN:
+        with open(d / f, "wb") as fh:
+            fh.truncate(int(2e8))
+    monkeypatch.setattr(rvc_voice, "_run", lambda ctx, args, *a: runs.append(args))
+    monkeypatch.setattr(rvc_voice, "model_of", lambda name: ("m.pth", "m.index"))
+    wav = tmp_path / "v.wav"
+    wav.write_bytes(b"x")
+    rvc_voice.train(None, "artist", str(wav))
+    tr = next(a for a in runs if a[0] == "train")
+    assert "--custom-pretrained" in tr and tr[tr.index("--g-pretrained-path") + 1].endswith("G_SnowieV3.1_40k.pth")
+    assert tr[tr.index("--total-epoch") + 1] == "60"
+    out = tmp_path / "o.wav"
+    out.write_bytes(b"x")
+    rvc_voice.convert(None, "artist", str(wav), str(out))
+    inf = runs[-1]
+    assert inf[inf.index("--index-rate") + 1] == "0" and inf[inf.index("--protect") + 1] == "0.33"
