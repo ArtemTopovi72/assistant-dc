@@ -171,3 +171,54 @@ def test_yue2_renders_with_lyric_guidance(monkeypatch):
     monkeypatch.setattr(music, "run_gpu_worker", lambda ctx, py, script, job, *a, **k: (seen.update(job), (True, ""))[1])
     music._render_yue2_once(None, True, {"out": "x.mp3", "lyrics": "", "style": ""}, 7)
     assert seen["cfg_scale"] >= 2.0 and seen["cot"] == "full" and seen["lm_seed"] == 7
+
+
+def test_clarity_counts_the_lines_whisper_heard():
+    lyric = "[Verse]\nсорок лет как под наркозом\nя работал говновозом\n\n[Chorus]\nговновоз говновоз говновоз"
+    assert R._clarity("Сорок лет, как под наркозом, я работал говновозом. Говновоз, говновоз, говновоз!", lyric) == 1.0
+    assert R._clarity("Сорок лет, как под наркозом, бу-бу-бу", lyric) == pytest.approx(1 / 3)
+
+
+def _takes_run(monkeypatch, heard_by_take):
+    """resing with each take's Whisper text given; returns (rendered seeds, the vocal converted)."""
+    import rvc_voice
+    seeds, converted = [], []
+    monkeypatch.setattr(R, "_stems", lambda song, work, name: (np.zeros(10), np.zeros(10)))
+    monkeypatch.setattr(R, "_score", lambda ctx, wav, work: ABC)
+    monkeypatch.setattr(R, "_layout", lambda ctx, lyrics, parts: "[Verse]\nсорок лет как под наркозом\nя работал говновозом")
+    monkeypatch.setattr(llm, "call_llm_simple", _llm)
+    monkeypatch.setattr(music, "_render_yue2_once", lambda ctx, cpp, job, seed: (seeds.append(seed), open(job["out"], "wb").close()))
+    monkeypatch.setattr(music, "_valid_audio_file", lambda p: True)
+    monkeypatch.setattr(music, "_master", lambda p, *a, **k: None)
+    monkeypatch.setattr(R, "_mix_vocal", lambda conv, yvox, yback: conv)
+    monkeypatch.setattr(rvc_voice, "available", lambda: True)
+    monkeypatch.setattr(rvc_voice, "model_of", lambda name: ("m.pth", "m.index"))
+    monkeypatch.setattr(rvc_voice, "convert", lambda ctx, name, src, out: (converted.append(os.path.basename(src)), out)[1])
+
+    class W:
+        def transcribe(self, path, **k):
+            base = os.path.basename(path)
+            if base.startswith("a_"):
+                return [], None
+            text = heard_by_take[int(base[1])]
+            return [type("S", (), {"words": [type("W", (), {"word": " " + t, "start": i, "end": i + 0.5})()
+                                             for i, t in enumerate(text.split())], "text": text})()], None
+    monkeypatch.setattr(R, "_sung_words", lambda segs: [{"w": w.word.strip(), "s": w.start, "e": w.end}
+                                                         for s in segs for w in s.words])
+    ctx = type("C", (), {"models": type("M", (), {"whisper": W()})()})()
+    R.resing(ctx, "song.mp3", "сорок лет как под наркозом\nя работал говновозом")
+    return seeds, converted
+
+
+def test_resing_keeps_the_clearest_take(monkeypatch):
+    # 10-07: «крути песни пока не будет идеального произношения» -- the same score gave 27..36/42
+    # lines heard depending on the seed.
+    monkeypatch.setattr(R, "RESING_TAKES", 3)
+    seeds, converted = _takes_run(monkeypatch, ["бу-бу-бу", "сорок лет как под наркозом бу", "мама мыла раму"])
+    assert len(seeds) == 3 and len(set(seeds)) == 3 and converted == ["y1_vox.wav"]
+
+
+def test_resing_stops_at_the_first_clear_take(monkeypatch):
+    monkeypatch.setattr(R, "RESING_TAKES", 3)
+    seeds, converted = _takes_run(monkeypatch, ["сорок лет как под наркозом я работал говновозом", "x", "x"])
+    assert len(seeds) == 1 and converted == ["y0_vox.wav"]

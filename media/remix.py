@@ -510,6 +510,42 @@ def _mix_vocal(conv: str, yvox, yback) -> str:
     return mashup_auto.mix(v, yback, ratio, _out())
 
 
+# A take of YuE2 is a draw: on «3 сентября» the same score, words and settings gave 27..36 of
+# 42 lines heard right depending on the seed (10-07, outputs/yue_cover/sweep). The user asked to
+# keep re-rolling until the words are clear, so up to RESING_TAKES takes are sung, each scored
+# by Whisper against the laid-out lyric, and the first clear one (or the clearest) is kept.
+RESING_TAKES = int(os.getenv("RESING_TAKES", "3"))
+RESING_CLEAR = float(os.getenv("RESING_CLEAR", "0.9"))
+
+
+def _letters(s: str) -> str:
+    return re.sub(r"[^а-яa-z]+", "", (s or "").lower().replace("ё", "е"))
+
+
+def _line_heard(heard: str, line: str) -> float:
+    """How well `line` appears anywhere in `heard`: the best fuzzy window, 0..1."""
+    import difflib
+    n = len(line)
+    best = 0.0
+    for i in range(0, max(1, len(heard) - n + 1), 3):
+        r = difflib.SequenceMatcher(None, heard[i:i + n + 4], line, autojunk=False).ratio()
+        if r > best:
+            best = r
+            if best >= 0.95:
+                break
+    return best
+
+
+def _clarity(heard: str, lyric: str) -> float:
+    """Share of the lyric's distinct lines Whisper heard in the take (each >= 0.8 similar)."""
+    h = _letters(heard)
+    lines = {_letters(l) for l in (lyric or "").splitlines() if l.strip() and not l.strip().startswith("[")}
+    lines = [l for l in lines if len(l) >= 8]
+    if not lines:
+        return 1.0
+    return sum(1 for l in lines if _line_heard(h, l) >= 0.8) / len(lines)
+
+
 def resing(ctx, song: str, lyrics: str, info: dict = None) -> str:
     """`song` re-sung with `lyrics`: YuE2 renders the original's full score with the new words
     (new notes where the words need them, its own backing in the original's style), then the
@@ -526,25 +562,38 @@ def resing(ctx, song: str, lyrics: str, info: dict = None) -> str:
     segs, _ = ctx.models.whisper.transcribe(os.path.join(work, "a_vox.wav"), word_timestamps=True)
     heard = " ".join(w["w"] for w in _sung_words(segs))
     style, artist = _resing_style(ctx, heard, _score_tempo_key(abc))
-    out = os.path.join(work, "yue.mp3")
-    job = {"lyrics": music.yue2_lyrics(_layout(ctx, lyrics, _score_parts(abc))),
-           "style": music.yue2_language(style, lyrics), "abc": abc, "out": out}
+    layout = _layout(ctx, lyrics, _score_parts(abc))
+    job = {"lyrics": music.yue2_lyrics(layout), "style": music.yue2_language(style, lyrics), "abc": abc}
     logger.info("resing: artist %r, style %s", artist, job["style"])
     if ctx is not None and hasattr(ctx, "set_stage"):
         ctx.set_stage("Composing a song")
-    music._render_yue2_once(ctx, True, job, int(time.time()) % 100000)
-    if not music._valid_audio_file(out):
+    seed, best = int(time.time()) % 100000, None
+    for take in range(max(1, RESING_TAKES)):
+        out = os.path.join(work, f"yue{take}.mp3")
+        music._render_yue2_once(ctx, True, dict(job, out=out), seed + take)
+        if not music._valid_audio_file(out):
+            continue
+        music._master(out)
+        yvox, yback = _stems(out, work, f"y{take}")
+        tsegs, _ = ctx.models.whisper.transcribe(os.path.join(work, f"y{take}_vox.wav"), word_timestamps=True)
+        clear = _clarity(" ".join(w["w"] for w in _sung_words(tsegs)), layout)
+        logger.info("resing: take %d heard %.0f%% of the lines", take + 1, clear * 100)
+        if best is None or clear > best[0]:
+            best = (clear, take, yvox, yback)
+        if clear >= RESING_CLEAR:
+            break
+    if best is None:
         raise cover.CoverFailed("render")
-    music._master(out)
-    yvox, yback = _stems(out, work, "y")
+    _, take, yvox, yback = best
+    yvox_wav = os.path.join(work, f"y{take}_vox.wav")
     name = rvc_voice.slug(artist) if rvc_voice.available() else ""
     if info is not None:
         info.update({"work": work, "artist": artist, "rvc": name, "yvox": yvox, "yback": yback,
-                     "trained": bool(name and rvc_voice.model_of(name))})
+                     "yvox_wav": yvox_wav, "clarity": best[0], "trained": bool(name and rvc_voice.model_of(name))})
     if name and rvc_voice.model_of(name):
-        conv = rvc_voice.convert(ctx, name, os.path.join(work, "y_vox.wav"), os.path.join(work, "rvc.wav"))
+        conv = rvc_voice.convert(ctx, name, yvox_wav, os.path.join(work, "rvc.wav"))
     else:
-        conv = sing_as(ctx, os.path.join(work, "y_vox.wav"), _singer_ref(vox, work, "a"), os.path.join(work, "conv.wav"))
+        conv = sing_as(ctx, yvox_wav, _singer_ref(vox, work, "a"), os.path.join(work, "conv.wav"))
     return _mix_vocal(conv, yvox, yback)
 
 
@@ -557,7 +606,7 @@ def resing_rvc(ctx, info: dict) -> str:
         ctx.set_stage("Learning the singer's voice")
     if not rvc_voice.model_of(name) and not rvc_voice.train(ctx, name, os.path.join(work, "a_vox.wav")):
         raise cover.CoverFailed("render")
-    conv = rvc_voice.convert(ctx, name, os.path.join(work, "y_vox.wav"), os.path.join(work, "rvc.wav"))
+    conv = rvc_voice.convert(ctx, name, info["yvox_wav"], os.path.join(work, "rvc.wav"))
     return _mix_vocal(conv, info["yvox"], info["yback"])
 
 
