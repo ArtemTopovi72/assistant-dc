@@ -83,6 +83,7 @@ _STAGES: dict[str, dict[str, str]] = {
     "Redrawing the photo":         {"ru": "Перерисовываю фото"},
     # music.py
     "Composing a song":            {"ru": "Сочиняю песню"},
+    "Learning the singer's voice": {"ru": "Учу голос певца"},
     # tg_songs.py
     "Writing the lyrics":          {"ru": "Пишу текст песни"},
     "Polishing the lyrics":        {"ru": "Дорабатываю текст: рифмы, ритм, смысл"},

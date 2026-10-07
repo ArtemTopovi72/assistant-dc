@@ -91,13 +91,62 @@ class _Whisper:
                                "text": "я"})()], None
 
 
+def _llm(ctx, sys_, user, **k):
+    if "artist" in sys_:
+        return '{"artist": "Михаил Шуфутинский", "tags": "russian chanson, male baritone"}'
+    return '{"sections": [[1], [2], [1], [2]]}'
+
+
+def _fake_resing_run(monkeypatch, tmp_path, trained: bool):
+    """resing up to the voice: stems/score/YuE stubbed, returns the voice calls made."""
+    import rvc_voice
+    calls = []
+    monkeypatch.setattr(R, "_stems", lambda song, work, name: (np.zeros(10), np.zeros(10)))
+    monkeypatch.setattr(R, "_score", lambda ctx, wav, work: ABC)
+    monkeypatch.setattr(R, "_sung_words", lambda segs: [{"w": "я", "s": 0, "e": 1}])
+    monkeypatch.setattr(llm, "call_llm_simple", _llm)
+    monkeypatch.setattr(music, "_render_yue2_once", lambda ctx, cpp, job, seed: open(job["out"], "wb").close())
+    monkeypatch.setattr(music, "_valid_audio_file", lambda p: True)
+    monkeypatch.setattr(music, "_master", lambda p, *a, **k: None)
+    monkeypatch.setattr(R, "_singer_ref", lambda vox, work, name: "ref.wav")
+    monkeypatch.setattr(R, "sing_as", lambda ctx, src, ref, out: (calls.append("zero-shot"), out)[1])
+    monkeypatch.setattr(R, "_mix_vocal", lambda conv, yvox, yback: conv)
+    monkeypatch.setattr(rvc_voice, "available", lambda: True)
+    monkeypatch.setattr(rvc_voice, "model_of", lambda name: ("m.pth", "m.index") if trained or "trained" in calls else None)
+    monkeypatch.setattr(rvc_voice, "convert", lambda ctx, name, src, out: (calls.append("rvc:" + name), out)[1])
+    monkeypatch.setattr(rvc_voice, "train", lambda ctx, name, wav: (calls.append("trained"), ("m.pth", "m.index"))[1])
+    ctx = type("C", (), {"models": type("M", (), {"whisper": _Whisper()})()})()
+    info = {}
+    R.resing(ctx, "song.mp3", "строка раз\nстрока два", info=info)
+    return calls, info, ctx
+
+
+def test_a_known_artist_sings_in_their_trained_rvc_voice(monkeypatch, tmp_path):
+    calls, info, _ = _fake_resing_run(monkeypatch, tmp_path, trained=True)
+    assert calls == ["rvc:mihail_shufutinskiy"] and info["trained"]
+
+
+def test_a_new_artist_gets_zero_shot_first_then_their_rvc_voice(monkeypatch, tmp_path):
+    # 10-07: «а rvc будет автоматом генерится?» -- the singer's own voice is trained on the
+    # original's vocal stem once per artist, the cover goes out again in it.
+    calls, info, ctx = _fake_resing_run(monkeypatch, tmp_path, trained=False)
+    assert calls == ["zero-shot"] and info["rvc"] == "mihail_shufutinskiy" and not info["trained"]
+    R.resing_rvc(ctx, info)
+    assert calls == ["zero-shot", "trained", "rvc:mihail_shufutinskiy"]
+
+
+def test_artist_slug_is_ascii():
+    import rvc_voice
+    assert rvc_voice.slug("Михаил Шуфутинский") == "mihail_shufutinskiy"
+    assert rvc_voice.slug("Modern Talking") == "modern_talking"
+
+
 def test_resing_renders_the_full_score_with_new_words(monkeypatch, tmp_path):
     seen = {}
     monkeypatch.setattr(R, "_stems", lambda song, work, name: (np.zeros(10), np.zeros(10)))
     monkeypatch.setattr(R, "_score", lambda ctx, wav, work: ABC)
     monkeypatch.setattr(R, "_sung_words", lambda segs: [{"w": "я", "s": 0, "e": 1}])
-    monkeypatch.setattr(llm, "call_llm_simple", lambda ctx, sys_, user, **k:
-                        "russian chanson, male baritone" if "style" in sys_ else '{"sections": [[1], [2], [1], [2]]}')
+    monkeypatch.setattr(llm, "call_llm_simple", _llm)
 
     def render(ctx, cpp, job, seed):
         seen.update(job)

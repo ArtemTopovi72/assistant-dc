@@ -472,28 +472,48 @@ def _layout(ctx, lyrics: str, parts: list) -> str:
     return "\n\n".join(blocks)
 
 
-def _resing_style(ctx, heard: str, tempo_key: str) -> str:
-    """YuE2 tags for the original's sound: the model names the song from its first sung
-    lines (it knows «3 сентября» is 90s Russian chanson); tempo and key come from the score."""
-    tags = ""
+def _resing_style(ctx, heard: str, tempo_key: str) -> tuple:
+    """(YuE2 tags for the original's sound, its lead singer). The model names the song from its
+    first sung lines (it knows «3 сентября» is 90s Russian chanson by Shufutinsky); tempo and
+    key come from the score. The singer keys the RVC voice kept for that artist."""
+    from utils import safe_json_from_llm
+    got = {}
     try:
         import llm
-        tags = llm.call_llm_simple(
-            ctx, "Name the musical style of the song these sung lines come from, as 8-12 comma-separated "
-            "music tags: genre, era, lead vocal (gender, timbre), main instruments, mood. Tags only.",
-            heard[:600], temperature=0.2, max_tokens=120).strip().splitlines()[0]
+        raw = llm.call_llm_simple(
+            ctx, "These are sung lines of a song. Return JSON {\"artist\": the lead singer's name if you "
+            "recognize the song, else \"\", \"tags\": 8-12 comma-separated music tags: genre, era, lead "
+            "vocal (gender, timbre), main instruments, mood}. JSON only.",
+            heard[:600], temperature=0.2, max_tokens=200)
+        got = safe_json_from_llm(raw or "", ["tags"]) or {}
     except Exception as exc:
         logger.warning("resing: style failed: %s", exc)
-    tags = re.sub(r"[^\w ,'&/-]", "", tags or "")[:240] or "pop ballad, male lead vocal, synthesizer, drums, bass"
-    return ", ".join(t for t in (tags, tempo_key) if t)
+    tags = got.get("tags") if isinstance(got, dict) else ""
+    tags = ", ".join(tags) if isinstance(tags, list) else str(tags or "")
+    tags = re.sub(r"[^\w ,'&/-]", "", tags)[:240] or "pop ballad, male lead vocal, synthesizer, drums, bass"
+    artist = str(got.get("artist") or "").strip()[:60] if isinstance(got, dict) else ""
+    return ", ".join(t for t in (tags, tempo_key) if t), artist
 
 
-def resing(ctx, song: str, lyrics: str) -> str:
-    """`song` re-sung with `lyrics`: YuE2 renders the original's full score with the new words
-    (new notes where the words need them, its own backing in the original's style), then the
-    original singer's timbre goes on the vocal. Returns an mp3 path; raises cover.CoverFailed."""
+def _mix_vocal(conv: str, yvox, yback) -> str:
     import soundfile as sf
     import mashup_auto
+    v, sr = sf.read(conv, dtype="float32")
+    v = v.mean(1) if v.ndim > 1 else v
+    if sr != SR:
+        import librosa
+        v = librosa.resample(v, orig_sr=sr, target_sr=SR)
+    ratio = mashup_auto._rms(yvox, gate=0.01) / max(1e-6, mashup_auto._rms(yback))
+    return mashup_auto.mix(v, yback, ratio, _out())
+
+
+def resing(ctx, song: str, lyrics: str, info: dict = None) -> str:
+    """`song` re-sung with `lyrics`: YuE2 renders the original's full score with the new words
+    (new notes where the words need them, its own backing in the original's style), then the
+    original singer's voice goes on the vocal -- the artist's own RVC model when one was
+    trained, else a zero-shot timbre. `info` (if given) gets what resing_rvc needs to redo the
+    voice once the artist's model is trained. Returns an mp3 path; raises cover.CoverFailed."""
+    import rvc_voice
     if not [l for l in (lyrics or "").splitlines() if l.strip() and not re.fullmatch(r"\[.*\]", l.strip())]:
         raise cover.CoverFailed("no_words")
     work = tempfile.mkdtemp(prefix="resing_")
@@ -502,11 +522,11 @@ def resing(ctx, song: str, lyrics: str) -> str:
     abc = _score(ctx, os.path.join(work, "a_ref.wav"), work)
     segs, _ = ctx.models.whisper.transcribe(os.path.join(work, "a_vox.wav"), word_timestamps=True)
     heard = " ".join(w["w"] for w in _sung_words(segs))
+    style, artist = _resing_style(ctx, heard, _score_tempo_key(abc))
     out = os.path.join(work, "yue.mp3")
     job = {"lyrics": music.yue2_lyrics(_layout(ctx, lyrics, _score_parts(abc))),
-           "style": music.yue2_language(_resing_style(ctx, heard, _score_tempo_key(abc)), lyrics),
-           "abc": abc, "out": out}
-    logger.info("resing: style %s", job["style"])
+           "style": music.yue2_language(style, lyrics), "abc": abc, "out": out}
+    logger.info("resing: artist %r, style %s", artist, job["style"])
     if ctx is not None and hasattr(ctx, "set_stage"):
         ctx.set_stage("Composing a song")
     music._render_yue2_once(ctx, True, job, int(time.time()) % 100000)
@@ -514,14 +534,28 @@ def resing(ctx, song: str, lyrics: str) -> str:
         raise cover.CoverFailed("render")
     music._master(out)
     yvox, yback = _stems(out, work, "y")
-    conv = sing_as(ctx, os.path.join(work, "y_vox.wav"), _singer_ref(vox, work, "a"), os.path.join(work, "conv.wav"))
-    v, sr = sf.read(conv, dtype="float32")
-    v = v.mean(1) if v.ndim > 1 else v
-    if sr != SR:
-        import librosa
-        v = librosa.resample(v, orig_sr=sr, target_sr=SR)
-    ratio = mashup_auto._rms(yvox, gate=0.01) / max(1e-6, mashup_auto._rms(yback))
-    return mashup_auto.mix(v, yback, ratio, _out())
+    name = rvc_voice.slug(artist) if rvc_voice.available() else ""
+    if info is not None:
+        info.update({"work": work, "artist": artist, "rvc": name, "yvox": yvox, "yback": yback,
+                     "trained": bool(name and rvc_voice.model_of(name))})
+    if name and rvc_voice.model_of(name):
+        conv = rvc_voice.convert(ctx, name, os.path.join(work, "y_vox.wav"), os.path.join(work, "rvc.wav"))
+    else:
+        conv = sing_as(ctx, os.path.join(work, "y_vox.wav"), _singer_ref(vox, work, "a"), os.path.join(work, "conv.wav"))
+    return _mix_vocal(conv, yvox, yback)
+
+
+def resing_rvc(ctx, info: dict) -> str:
+    """The same re-sung song in the artist's own RVC voice, trained now on the original's vocal
+    stem (once per artist; later covers reuse it). Returns an mp3 path."""
+    import rvc_voice
+    work, name = info["work"], info["rvc"]
+    if ctx is not None and hasattr(ctx, "set_stage"):
+        ctx.set_stage("Learning the singer's voice")
+    if not rvc_voice.model_of(name) and not rvc_voice.train(ctx, name, os.path.join(work, "a_vox.wav")):
+        raise cover.CoverFailed("render")
+    conv = rvc_voice.convert(ctx, name, os.path.join(work, "y_vox.wav"), os.path.join(work, "rvc.wav"))
+    return _mix_vocal(conv, info["yvox"], info["yback"])
 
 
 def remix_words(ctx, song: str, lyrics: str) -> str:

@@ -178,7 +178,7 @@ mashup_auto.make = _boom
 bot._cover_render(CID, "ru", "/x/song.mp3", "", "/x/song2.mp3")
 check("a failed mashup still sends the voice remix", [p for p, _ in AUD] == ["voice.mp3"], AUD)
 AUD.clear(); remix.remix_words = lambda ctx, a, l: "words.mp3"; mashup_auto.make = lambda *a: "mash.mp3"
-remix.resing = lambda ctx, a, l: "resing.mp3"
+remix.resing = lambda ctx, a, l, info=None: "resing.mp3"
 remix.resing_available = lambda: False
 bot._cover_render(CID, "ru", "/x/song.mp3", "новые слова", "")
 check("new words without YuE2: the syllable remix, no mashup", [p for p, _ in AUD] == ["words.mp3"], AUD)
@@ -186,6 +186,24 @@ check("new words without YuE2: the syllable remix, no mashup", [p for p, _ in AU
 AUD.clear(); remix.resing_available = lambda: True
 bot._cover_render(CID, "ru", "/x/song.mp3", "новые слова", "")
 check("new words with YuE2: the song is re-sung", [p for p, _ in AUD] == ["resing.mp3"], AUD)
+# 10-07: a new artist's first cover goes out in a zero-shot timbre, then again in their own RVC
+# voice trained on the original's vocal; a known artist's comes once, already in it.
+AUD.clear()
+def _resing_new(ctx, a, l, info=None):
+    info.update({"rvc": "artist", "trained": False})
+    return "resing.mp3"
+remix.resing = _resing_new
+remix.resing_rvc = lambda ctx, info: "resing_rvc.mp3"
+bot._cover_render(CID, "ru", "/x/song.mp3", "новые слова", "")
+check("new artist: zero-shot cover first, then the same cover in the trained RVC voice",
+      [p for p, _ in AUD] == ["resing.mp3", "resing_rvc.mp3"], AUD)
+AUD.clear()
+def _resing_known(ctx, a, l, info=None):
+    info.update({"rvc": "artist", "trained": True})
+    return "resing.mp3"
+remix.resing = _resing_known
+bot._cover_render(CID, "ru", "/x/song.mp3", "новые слова", "")
+check("known artist: one cover, already in their voice", [p for p, _ in AUD] == ["resing.mp3"], AUD)
 
 bot._running = False; thr.join(timeout=8)
 print("\n%d/%d checks passed" % (OK, OK + BAD))

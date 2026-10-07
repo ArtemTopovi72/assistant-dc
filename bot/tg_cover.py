@@ -127,9 +127,20 @@ class CoverMixin:
         try:
             if song2:
                 self._mashup_first(chat_id, lang, ctx, src, song2)
-            out = remix.remix_voice(ctx, src, song2) if song2 else (remix.resing if remix.resing_available() else remix.remix_words)(ctx, src, lyrics)
+            info = {}
+            if song2:
+                out = remix.remix_voice(ctx, src, song2)
+            elif remix.resing_available():
+                out = remix.resing(ctx, src, lyrics, info=info)
+            else:
+                out = remix.remix_words(ctx, src, lyrics)
             if not self._send_audio(chat_id, out, tg_bot._t("cover_done", lang)):
                 self._send_text(chat_id, tg_bot._t("cover_fail_render", lang))
+            elif info.get("rvc") and not info.get("trained"):
+                # The first cover of an artist went out in a zero-shot timbre; their own RVC
+                # voice is trained now on the original's vocal and the cover sent again in it.
+                self._send_text(chat_id, tg_bot._t("cover_rvc_training", lang))
+                self._send_audio(chat_id, remix.resing_rvc(ctx, info), tg_bot._t("cover_rvc_done", lang))
         except cover.CoverFailed as exc:
             self._send_text(chat_id, tg_bot._t("cover_fail_" + str(exc), lang))
         except Exception:

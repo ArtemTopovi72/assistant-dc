@@ -1392,7 +1392,7 @@ def yue2_available() -> bool:
 
 
 def run_gpu_worker(ctx, python: str, script: str, job: dict, label: str, timeout: int,
-                   cmd=None, env=None) -> tuple:
+                   cmd=None, env=None, cwd=None) -> tuple:
     """Run one render script in its own venv with the card to itself.
 
     The job goes in as a JSON file; the worker's output goes to a temp LOG FILE,
@@ -1409,7 +1409,7 @@ def run_gpu_worker(ctx, python: str, script: str, job: dict, label: str, timeout
     try:
         with comfy_client._gpu_slot(exclusive=True, label=label), open(log_path, "wb") as log:
             argv = [a.replace("{job}", f.name) for a in cmd] if cmd else [python, os.path.join(root, "scripts", script), f.name]
-            proc = subprocess.Popen(argv, cwd=root, env=env, stdout=log, stderr=subprocess.STDOUT,
+            proc = subprocess.Popen(argv, cwd=cwd or root, env=env, stdout=log, stderr=subprocess.STDOUT,
                                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             # From launch, not from the call: a second song queued behind the
             # first spent its whole timeout waiting for the card and was killed
