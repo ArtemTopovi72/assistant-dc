@@ -178,6 +178,13 @@ def _upload_image_to_comfy(image_path: str, comfy_url: str) -> Optional[str]:
         return None
 
 
+def card_in_use() -> bool:
+    """True while a render here holds the card (one submit, or a card_session such as a
+    whole video chain). Between two parts of a chain ComfyUI's queue is empty for a few
+    seconds; a deadline asking only server_busy() abandoned a chain at 30 min (10-07)."""
+    return _excl_users > 0
+
+
 def server_busy() -> bool:
     """True if ComfyUI has anything running or queued right now.
 

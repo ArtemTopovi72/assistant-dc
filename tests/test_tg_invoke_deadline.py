@@ -173,12 +173,32 @@ finally:
 
 print()
 print("=" * 70)
+print("A CHAIN HOLDING THE CARD IS WORKING, EVEN WITH AN EMPTY QUEUE")
+print("=" * 70)
+print("""
+Live, 2026-10-07: a four-part Herrgott video chain was abandoned at 30 min --
+between two parts ComfyUI's queue is empty for a moment, and the deadline read
+that as idle. A render pipeline holding the card is not a hung call.
+""")
+comfy_client.requests.get = lambda *a, **k: _Resp({"queue_running": [], "queue_pending": []})
+try:
+    check("no card held: card_in_use is False", comfy_client.card_in_use() is False)
+    with comfy_client.card_session("video chain"):
+        check("inside a card_session the card is in use (queue empty)",
+              comfy_client.card_in_use() is True)
+    check("...and free again after it", comfy_client.card_in_use() is False)
+finally:
+    comfy_client.requests.get = _real_get
+
+print()
+print("=" * 70)
 print("THE SHIPPED POLICY MATCHES THE ONE TESTED ABOVE")
 print("=" * 70)
 
 src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
                         "bot/tg_tasks.py"), encoding="utf-8").read()
 check("tg_tasks consults server_busy before abandoning", "server_busy()" in src)
+check("tg_tasks also counts a held card as working", "card_in_use()" in src)
 check("tg_tasks bounds the extension by TG_TASK_MAX_S", "TG_TASK_MAX_S" in src)
 check("the base deadline is no longer a flat 300s",
       'TG_INVOKE_TIMEOUT_S", 300)' not in src)

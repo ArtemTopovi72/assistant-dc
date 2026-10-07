@@ -23,6 +23,7 @@ llm, prompts, identity_metrics and search stay CALL-time imports inside the
 functions that need them, exactly as before: hoisting them here would drag the
 model stack into every import of the tool table.
 """
+import contextlib
 import functools
 import logging
 import os
@@ -1057,6 +1058,40 @@ def asks_for_video(ctx, state) -> bool:
         "picture, a complaint about a picture, or a question?", said)
 
 
+def _bridged(ctx, clip: str, part: str) -> str:
+    """`part` led by the move that brings in what it needs and the clip's last frame lacks."""
+    import tempfile
+    import tg_continue
+    import video as video_mod
+    frame = os.path.join(tempfile.mkdtemp(prefix="vidbridge_"), "last.jpg")
+    return video_mod.bridge_part(ctx, frame, part) if tg_continue.seed_frame(clip, frame) else part
+
+
+def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str) -> int:
+    """Parts 2..n of a long script (already bridged, video.bridge_script) as the next
+    links of `chain` (each continues the previous part's saved latent). Returns the last part made; a failure or a cancel
+    stops there and the parts so far are still joined and delivered."""
+    import video as video_mod
+    last, prev = 1, first
+    for i, part in enumerate(parts[1:], start=2):
+        if getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
+            break
+        ctx.set_stage(f"Generating a video ({i}/{len(parts)})")
+        try:
+            r = video_mod.generate_video(ctx, video_mod.CONTINUE_CTX_PREFIX + part,
+                                         aspect=args.get("aspect") or "", seed=args.get("seed"),
+                                         chain=(chain, i), size_from=prev)
+        except Exception:
+            logger.exception("video chain: part %d crashed", i)
+            break
+        new = r.get("path")
+        if not (new and os.path.exists(new)):
+            logger.warning("video chain: part %d produced no clip (%s)", i, r.get("reason"))
+            break
+        last, prev = i, new
+    return last
+
+
 def _render_remaining_parts(ctx, path: str, parts: list, args: dict) -> str:
     """Parts 2..n of a long script, each continuing the clip so far from its real
     last frame (its tail as <Video 1>, that frame as <Picture 1>), joined on. A part
@@ -1157,14 +1192,22 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     pinned_tail = ""
     cont_src = getattr(ctx, "continue_src", "") or ""
     continuing = bool(cont_tail and os.path.exists(cont_tail))
+    chain_id, chain_idx = "", 0
     if continuing:
         videos = [cont_tail]
         ctx.continue_tail = ctx.continue_src = ""          # one clip per request
         people = [p for p in (getattr(ctx, "continue_people", None) or []) if p and os.path.exists(p)]
         ctx.continue_people = []
+        # A clip this bot made as a Herrgott chain goes on from its own saved latent
+        # (no reference, no re-encode); new people from photos still need the reference path.
+        prior = video_mod.chain_of(cont_src) if (not people and video_mod.herrgott_on()) else ()
+        if prior:
+            chain_id, chain_idx = prior[0], prior[1] + 1
+            videos, images = [], []
+            description = video_mod.CONTINUE_CTX_PREFIX + _bridged(ctx, cont_src, description)
         # Pinned frames (same as the parts of a long script): faster and seamless, but they
         # take no pictures -- new people from photos still need the reference path.
-        if not people and video_mod.motion_context_on():
+        elif not people and video_mod.motion_context_on():
             pinned_tail, videos, images = cont_tail, [], []
             description = video_mod.CONTINUE_CTX_PREFIX + description
         else:
@@ -1234,46 +1277,76 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                     [round(video_mod.estimate_seconds(p), 1) for p in parts])
     else:
         parts = [raw]
+    # A fresh clip with no voices or reference clips (and at most a start photo) is part 1
+    # of a Herrgott chain: its latent is kept, so the parts after it -- or a later
+    # ▶️ Continue -- go on from the exact numbers instead of a reset.
+    if (not continuing and not audios and not videos and len(images) <= 1
+            and video_mod.herrgott_on()):
+        chain_id, chain_idx = video_mod.new_chain(), 1
+        if len(parts) > 1:
+            parts = video_mod.bridge_script(ctx, parts)
     mode = video_mod.pick_mode(images, videos, audios)
     tags = video_mod.reference_tags(len(images) if mode == "ref2va" else 0, len(videos), len(audios))
     logger.info("Tool: generate_video(mode=%s, %d image(s), %d video(s)) %s",
                 mode, len(images), len(videos), description[:80])
 
-    ctx.set_stage("Generating a video")
-    try:
-        result = video_mod.generate_video(
-            ctx, description, images=images, videos=videos, audios=audios,
-            seconds=args.get("seconds") or 0.0,
-            aspect=args.get("aspect") or "",
-            seed=args.get("seed"),
-            context_video=pinned_tail,
-        )
-    except Exception as exc:
-        logger.exception("generate_video crashed")
-        return (f"[TOOL ERROR] Video generation failed: {exc}. Tell the user the "
-                "clip could not be made; do NOT claim one was created.")
+    # The whole chain holds the card: no model call runs between its parts (the bridges
+    # were written above), so the chat model stays out instead of being loaded back for
+    # every gap -- and the turn deadline sees the card in use, not an idle ComfyUI.
+    hold = contextlib.ExitStack()
+    if chain_id and len(parts) > 1:
+        import comfy_client
+        hold.enter_context(comfy_client.card_session("video chain"))
+    with hold:
+        ctx.set_stage("Generating a video")
+        try:
+            result = video_mod.generate_video(
+                ctx, description, images=images, videos=videos, audios=audios,
+                seconds=args.get("seconds") or 0.0,
+                aspect=args.get("aspect") or "",
+                seed=args.get("seed"),
+                context_video=pinned_tail,
+                chain=(chain_id, chain_idx) if chain_id else (),
+                size_from=cont_src if chain_id and continuing else "",
+            )
+        except Exception as exc:
+            logger.exception("generate_video crashed")
+            return (f"[TOOL ERROR] Video generation failed: {exc}. Tell the user the "
+                    "clip could not be made; do NOT claim one was created.")
 
-    path = result.get("path")
-    if path and not os.path.exists(path):
-        logger.error("generate_video returned a non-existent path %r", path)
-        path = None
+        path = result.get("path")
+        if path and not os.path.exists(path):
+            logger.error("generate_video returned a non-existent path %r", path)
+            path = None
 
-    if not path:
-        if result.get("status") == "cancelled":
-            return ("[TOOL ERROR] The video was cancelled before it finished. Tell the "
-                    "user it was stopped and no clip was produced.")
-        gpu = _gpu_busy_error("Video generation")
-        if gpu:
-            return gpu
-        detail = result.get("reason") or "the render produced no file"
-        return (f"[TOOL ERROR] Video generation failed — no clip was produced. "
-                f"Reason reported by the renderer: {detail}. "
-                "You MUST tell the user clearly that the video could not be generated and "
-                "give them THIS reason in plain words; do NOT invent another cause, do NOT "
-                "blame the prompt unless the reason says so, and do NOT imply or claim that "
-                "a video was created.")
+        if not path:
+            if result.get("status") == "cancelled":
+                return ("[TOOL ERROR] The video was cancelled before it finished. Tell the "
+                        "user it was stopped and no clip was produced.")
+            gpu = _gpu_busy_error("Video generation")
+            if gpu:
+                return gpu
+            detail = result.get("reason") or "the render produced no file"
+            return (f"[TOOL ERROR] Video generation failed — no clip was produced. "
+                    f"Reason reported by the renderer: {detail}. "
+                    "You MUST tell the user clearly that the video could not be generated and "
+                    "give them THIS reason in plain words; do NOT invent another cause, do NOT "
+                    "blame the prompt unless the reason says so, and do NOT imply or claim that "
+                    "a video was created.")
 
-    if continuing and cont_src and os.path.exists(cont_src):
+        if chain_id:
+            if len(parts) > 1:
+                chain_idx = _render_chain_parts(ctx, path, parts, args, chain_id)
+            if chain_idx > 1:
+                joined = video_mod.stitch_chain(ctx, chain_id, chain_idx)
+                if joined:
+                    path = joined
+                else:
+                    logger.warning("video chain: the join failed, delivering the last part alone")
+            video_mod.remember_chain(path, chain_id, chain_idx)
+            if len(parts) > 1:
+                result["seconds"] = video_mod.probe(path).get("seconds") or result.get("seconds")
+    if not chain_id and continuing and cont_src and os.path.exists(cont_src):
         joined = (video_mod.join_pinned(cont_src, path) if pinned_tail
                   else video_mod.join_continuation(cont_src, path))
         if joined:
@@ -1281,7 +1354,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         else:
             logger.warning("continue video: the join failed, delivering the new part alone")
 
-    if len(parts) > 1:
+    if len(parts) > 1 and not chain_id:
         path = _render_remaining_parts(ctx, path, parts, args)
         result["seconds"] = video_mod.probe(path).get("seconds") or result.get("seconds")
 

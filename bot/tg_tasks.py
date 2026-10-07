@@ -1437,7 +1437,7 @@ class TaskRunnerMixin:
             if _waited >= _invoke_timeout:
                 try:
                     import comfy_client as _comfy_mod
-                    if not _comfy_mod.server_busy():
+                    if not (_comfy_mod.card_in_use() or _comfy_mod.server_busy()):
                         break
                 except Exception:
                     break

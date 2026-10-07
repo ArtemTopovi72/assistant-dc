@@ -41,6 +41,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 from typing import Callable, Optional, Sequence
 
 import config as _config
@@ -672,6 +673,152 @@ def latent_file(tag: str) -> str:
     return str(OUTPUT_DIR_COMFY / "h3_context" / f"{tag}_00001.safetensors")
 
 
+# Continuation as a chain (Herrgott's H3 Infinite Continuation Suite v1.4, 2026-10-07):
+# every part saves its full video+audio latent; the next part COPIES the previous tail
+# into its own latent and hard-protects it with ComfyUI's native per-stream denoise mask
+# (PR #15375), so motion, objects and the voice go on instead of restarting. The suite's
+# StitchSavedChain then cuts each protected head and crossfades the joins. Live chef A/B:
+# both seams continuous, ~200 s per 6 s part at 768x1024 (bench/herrgott_chain.py).
+# Each chain owns a folder: LoadLatent picks the newest file with the slot number in it.
+HERRGOTT_STEPS = int(os.getenv("VIDEO_HERRGOTT_STEPS", "6"))      # FL2V turbo LoRA v1.2: 6 sharpens it
+HERRGOTT_CONTEXT = "39"                                           # protected frames, the suite's default
+CHAIN_DIR = "h3_continuous"
+
+
+def herrgott_on() -> bool:
+    # Suites stay off the live server unless they ask (it would answer True on this machine).
+    default = "0" if os.getenv("F5_TEST_RUN") == "1" else "1"
+    if os.getenv("VIDEO_HERRGOTT", default) != "1":
+        return False
+    return bool(_server_has_node("H3ContinuousContinueV14"))
+
+
+def new_chain() -> str:
+    return f"{CHAIN_DIR}/ch{int(time.time())}_{random.randint(0, 1 << 20)}"
+
+
+def build_chain_part(prompt: str, *, chain: str, idx: int, width: int, height: int,
+                     seconds: float, seed: int, first_frame: str = "") -> dict:
+    """Part `idx` of `chain`: 1 starts it (optionally from a photo), 2+ continue the
+    saved latent of part idx-1. Saves its own latent + handover, returns the full clip."""
+    base = _load_workflow("t2va")
+    wf = {k: base[k] for k in (N_UNET, N_SHIFT, N_CLIP, N_VAE_VIDEO, N_VAE_AUDIO, N_LORA)}
+    wf[N_SHIFT]["inputs"].update(shift_video=float(VIDEO_SHIFT_VIDEO), shift_audio=float(VIDEO_SHIFT_AUDIO))
+    common = {"clip": [N_CLIP, 0], "vae": [N_VAE_VIDEO, 0], "prompt": prompt, "width": int(width),
+              "height": int(height), "duration": float(seconds), "ref_image_size": "match"}
+    if idx <= 1:
+        wf["cond"] = {"class_type": "H3ContinuousStartV14", "inputs": common}
+        if first_frame:
+            name = _upload(first_frame, "image")
+            if not name:
+                raise VideoUnavailable(f"could not upload the start frame {first_frame}")
+            wf["first"] = {"class_type": "LoadImage", "inputs": {"image": name}}
+            common["first_frame"] = ["first", 0]
+    else:
+        wf["prev"] = {"class_type": "H3ContinuousLoadLatent", "inputs": {"latent_path": chain, "clip_index": idx - 1}}
+        wf["cond"] = {"class_type": "H3ContinuousContinueV14", "inputs": dict(
+            common, previous_latent=["prev", 0], handover=["prev", 3], masked_context_frames=HERRGOTT_CONTEXT,
+            audio_feather_ticks=0, duration_mode="Net New Content", audio_tail_carryover="Full Previous Tail")}
+    wf.update({
+        "neg": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["cond", 0]}},
+        N_SAMPLER: {"class_type": "KSampler", "inputs": {
+            "model": [N_SHIFT, 0], "positive": ["cond", 0], "negative": ["neg", 0], "latent_image": ["cond", 1],
+            "seed": int(seed), "steps": HERRGOTT_STEPS, "cfg": float(VIDEO_CFG), "sampler_name": "euler",
+            "scheduler": "simple", "denoise": 1.0}},
+        "dec": {"class_type": "VAEDecode", "inputs": {"samples": [N_SAMPLER, 0], "vae": [N_VAE_VIDEO, 0]}},
+        "deca": {"class_type": "VAEDecodeAudio", "inputs": {"samples": [N_SAMPLER, 0], "vae": [N_VAE_AUDIO, 0]}},
+        "hand": {"class_type": "H3ContinuousAnalyzeHandoverV14", "inputs": {
+            "images": ["dec", 0], "preset": "Balanced", "analysis_window": 72, "freeze_hold": 8,
+            "safety_margin": 3, "context_frames": "39", "analysis_size": 192,
+            "final_mean_diff_threshold": 0.012, "final_active_pixel_threshold": 0.025,
+            "max_final_active_area_percent": 3.0, "transition_mean_diff_threshold": 0.002,
+            "transition_active_pixel_threshold": 0.01, "max_transition_active_area_percent": 1.0,
+            "min_static_transition_percent": 70.0, "max_consecutive_motion_outliers": 2,
+            "final_reference_frames": 15, "min_final_match_percent": 75.0,
+            "max_consecutive_final_outliers": 3, "safety_mode": "fixed"}},
+        "keep": {"class_type": "H3ContinuousSaveLatent", "inputs": {
+            "latent": [N_SAMPLER, 0], "filename_prefix": f"{chain}/clip", "clip_index": int(idx),
+            "handover": ["hand", 0]}},
+        "mux": {"class_type": "CreateVideo", "inputs": {"images": ["dec", 0], "audio": ["deca", 0], "fps": float(VIDEO_FPS)}},
+        N_SAVE: {"class_type": "SaveVideo", "inputs": {"video": ["mux", 0], "filename_prefix": "video/assistant_h3",
+                                                       "format": "auto", "codec": "auto"}},
+    })
+    if idx > 1:
+        wf["keep"]["inputs"]["head_context_frames"] = ["cond", 2]
+    _apply_overrides(wf)
+    return wf
+
+
+def build_chain_stitch(chain: str, last: int) -> dict:
+    base = _load_workflow("t2va")
+    return {N_VAE_VIDEO: base[N_VAE_VIDEO], N_VAE_AUDIO: base[N_VAE_AUDIO],
+            "stitch": {"class_type": "H3ContinuousStitchSavedChainV14", "inputs": {
+                "video_vae": [N_VAE_VIDEO, 0], "audio_vae": [N_VAE_AUDIO, 0], "latent_prefix": f"{chain}/clip",
+                "first_clip": 1, "last_clip": int(last), "filename_prefix": f"video/{chain.rsplit('/', 1)[-1]}_joined",
+                "video_crossfade_frames": 4, "audio_crossfade_ms": 15.0, "luminance_match": False,
+                "luminance_fade_frames": 16, "max_luminance_correction_percent": 10.0, "crf": 18,
+                "max_safe_tail_bridge_frames": 0}}}
+
+
+def stitch_chain(ctx, chain: str, last: int) -> Optional[str]:
+    """Parts 1..last of `chain` as one clip (heads cut, joins crossfaded), adopted into OUTPUT_DIR."""
+    if last <= 1:
+        return None
+    start = time.time()
+    # The node writes the file itself and reports nothing to /history, so the poll
+    # comes back empty by design: the file is found by its prefix instead.
+    comfy_client._submit_and_poll(ctx, build_chain_stitch(chain, last), timeout=VIDEO_JOB_TIMEOUT,
+                                  label="H3 chain join", validate=_valid_video_file,
+                                  job_timeout=VIDEO_JOB_TIMEOUT, exclusive=True)
+    name = chain.rsplit("/", 1)[-1] + "_joined"
+    got = [p for p in (OUTPUT_DIR_COMFY / "video").glob(name + "*.mp4") if p.stat().st_mtime >= start - 1]
+    if not got:
+        logger.error("chain join produced no file for %s", chain)
+        return None
+    path = str(max(got, key=lambda p: p.stat().st_mtime))
+    return _adopt_output(path) if _valid_video_file(path) else None
+
+
+_CHAINS = OUTPUT_DIR_COMFY / CHAIN_DIR / "chains.json"
+
+
+def _clip_print(path: str) -> dict:
+    import hashlib
+    p = probe(path)
+    with open(path, "rb") as fh:
+        sha = hashlib.sha1(fh.read()).hexdigest()
+    return {"sha1": sha, "seconds": round(p.get("seconds") or 0.0, 2), "w": p.get("width"), "h": p.get("height")}
+
+
+def remember_chain(path: str, chain: str, idx: int) -> None:
+    """A delivered clip is part `idx` of `chain`: ▶️ Continue on it goes on from that latent."""
+    try:
+        reg = json.loads(_CHAINS.read_text(encoding="utf-8")) if _CHAINS.exists() else []
+        reg = [r for r in reg if r.get("chain") != chain][-199:]
+        reg.append(dict(_clip_print(path), chain=chain, idx=int(idx)))
+        _CHAINS.parent.mkdir(parents=True, exist_ok=True)
+        _CHAINS.write_text(json.dumps(reg), encoding="utf-8")
+    except Exception:
+        logger.warning("could not remember chain %s", chain, exc_info=True)
+
+
+def chain_of(path: str) -> tuple:
+    """(chain, last idx) for a clip this bot made as a chain, else (). Telegram hands a sent
+    file back byte for byte; a re-encoded copy matches on length and size instead."""
+    try:
+        if not (path and _CHAINS.exists()):
+            return ()
+        me = _clip_print(path)
+        for r in reversed(json.loads(_CHAINS.read_text(encoding="utf-8"))):
+            same = r["sha1"] == me["sha1"] or (
+                abs(r["seconds"] - me["seconds"]) < 0.08 and (r["w"], r["h"]) == (me["w"], me["h"]))
+            if same and os.path.isdir(OUTPUT_DIR_COMFY / r["chain"]):
+                return r["chain"], int(r["idx"])
+    except Exception:
+        logger.warning("chain lookup failed for %s", path, exc_info=True)
+    return ()
+
+
 def _apply_overrides(wf: dict) -> None:
     """VIDEO_WF_OVERRIDES='{"13.lora_name": "x", "8.sampler_name": "euler"}' for A/B runs
     without editing the graph files; a node id that is not in this graph is skipped."""
@@ -1011,8 +1158,10 @@ def generate_video(ctx, description: str, *,
                    steps: Optional[int] = None,
                    on_progress: Optional[Callable] = None,
                    context_video: str = "", context_latent: str = "",
-                   save_latent: bool = False) -> dict:
-    """Render one clip. `context_video`: a clip whose end this one continues (pinned
+                   save_latent: bool = False, chain: tuple = (), size_from: str = "") -> dict:
+    """Render one clip. `chain` = (chain, idx): part idx of a Herrgott chain (see
+    build_chain_part) -- 1 starts it from `images[0]` if given, 2+ continue it;
+    `size_from`: a clip whose shape this one keeps. `context_video`: a clip whose end this one continues (pinned
     frames, see _add_motion_context); its pinned head is cut off the result. Returns {path, mode, seconds, width, height, seed, status}.
 
     `status` is "success" or "fail"; on failure `_VIDEO_FAILURE["reason"]` says
@@ -1052,8 +1201,8 @@ def generate_video(ctx, description: str, *,
         # the pinned head is rendered too, then trimmed: the clip grows by it
         frames = snap_frames(frames + MOTION_CONTEXT_FRAMES - 5)
     src_size = _image_size(images[0]) if images else None
-    if context_video and not src_size:              # a continuation keeps the clip's own shape
-        p = probe(context_video)
+    if (context_video or size_from) and not src_size:   # a continuation keeps the clip's own shape
+        p = probe(size_from or context_video)
         src_size = (p["width"], p["height"]) if p.get("width") else None
     width, height = resolve_size(aspect, src_size)
     if _context_ir_on():
@@ -1082,11 +1231,17 @@ def generate_video(ctx, description: str, *,
 
     tag = f"c{seed}_{random.randint(0, 1 << 30)}" if save_latent else ""
     try:
-        wf = build_workflow(description, mode=mode, width=width, height=height,
-                            frames=frames, seed=seed, images=images, videos=videos,
-                            audios=audios, steps=steps, ctx=ctx,
-                            context_video=context_video, context_latent=context_latent,
-                            save_latent=tag)
+        if chain:
+            # Net new seconds: the protected head of a continuation comes on top.
+            wf = build_chain_part(description, chain=chain[0], idx=int(chain[1]), width=width,
+                                  height=height, seconds=frames_to_seconds(frames), seed=seed,
+                                  first_frame=images[0] if images and int(chain[1]) <= 1 else "")
+        else:
+            wf = build_workflow(description, mode=mode, width=width, height=height,
+                                frames=frames, seed=seed, images=images, videos=videos,
+                                audios=audios, steps=steps, ctx=ctx,
+                                context_video=context_video, context_latent=context_latent,
+                                save_latent=tag)
         if ctx is not None and hasattr(ctx, "set_stage"):
             ctx.set_stage("Generating a video")
         wf = _normalize_save_node(wf)
@@ -1224,6 +1379,46 @@ def bridge_part(ctx, last_frame: str, part: str) -> str:
         return part
     logger.info("bridge_part: missing %s -> %s", got.get("missing"), bridge)
     return bridge[:1].upper() + bridge[1:].rstrip(".") + ". Then " + part[:1].lower() + part[1:]
+
+
+def bridge_script(ctx, parts: list) -> list:
+    """`parts` of one long script, each from the second on led by the move that brings in
+    what its first action needs and the previous part did not leave at hand. Read from the
+    words alone, all at once, BEFORE anything renders: asked per part from the last frame
+    (bridge_part) the vision model was loaded back onto the card between every two parts of
+    a chain -- 18 GB beside H3, ~10 min a part, and the turn deadline saw an idle ComfyUI in
+    the gap and abandoned the job (live 10-07). Any failure keeps the parts as they were."""
+    if len(parts) < 2:
+        return list(parts)
+    guide = ("A video script is split into numbered parts rendered one after another; each part "
+             "starts exactly where the previous one ended. For every part from 2 on: if its FIRST "
+             "action needs a place, object or person that the end of the previous part does not "
+             "leave visible and within reach, write ONE short English sentence of how the person "
+             "gets it first. Things never move by themselves: a person reaches off-frame and "
+             "brings the object into the shot with their hands, or walks to the place. E.g. 'He "
+             "reaches off-frame to the right, lifts a steaming pot with both hands and sets it on "
+             "the counter in front of him.' Only that movement, never the action itself; empty "
+             "when nothing is missing. Reply as JSON only: "
+             '{"bridges": ["sentence or empty for part 2", "... for part 3", ...]}')
+    import llm as _llm
+    from utils import safe_json_from_llm
+    listing = "\n".join(f"{i}. {p}" for i, p in enumerate(parts, start=1))
+    try:
+        raw = _llm.call_llm_simple(ctx, guide, listing, temperature=0.2, max_tokens=600)
+    except Exception as exc:
+        logger.warning("bridge_script failed: %s", exc)
+        return list(parts)
+    got = (safe_json_from_llm(raw or "", ["bridges"]) or {}).get("bridges")
+    if not isinstance(got, list):
+        return list(parts)
+    out = [parts[0]]
+    for part, b in zip(parts[1:], got + [""] * len(parts)):
+        b = str(b or "").strip()
+        if b and len(b) <= 300:
+            logger.info("bridge_script: %s", b)
+            part = b[:1].upper() + b[1:].rstrip(".") + ". Then " + part[:1].lower() + part[1:]
+        out.append(part)
+    return out
 
 
 def new_people_clause(first: int, n: int) -> str:
