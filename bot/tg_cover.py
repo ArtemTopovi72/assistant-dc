@@ -125,6 +125,8 @@ class CoverMixin:
     def _cover_render(self, chat_id: int, lang: str, src: str, lyrics: str, song2: str) -> None:
         ctx = self._get_ctx()
         try:
+            if song2:
+                self._mashup_first(chat_id, lang, ctx, src, song2)
             out = remix.remix_voice(ctx, src, song2) if song2 else remix.remix_words(ctx, src, lyrics)
             if not self._send_audio(chat_id, out, tg_bot._t("cover_done", lang)):
                 self._send_text(chat_id, tg_bot._t("cover_fail_render", lang))
@@ -136,6 +138,16 @@ class CoverMixin:
         finally:
             import mashup_stems
             mashup_stems.release_separator()      # Demucs holds VRAM the next render needs
+
+
+    def _mashup_first(self, chat_id: int, lang: str, ctx, src: str, song2: str) -> None:
+        """The classic mashup (song 1's vocal over song 2's backing, bar-aligned and in key)
+        goes out first: it takes ~30 s, the voice swap after it several minutes."""
+        try:
+            import mashup_auto
+            self._send_audio(chat_id, mashup_auto.make(ctx, src, song2), tg_bot._t("mashup_done", lang))
+        except Exception:
+            tg_bot.logger.exception("[mashup] failed for chat %s", chat_id)
 
 
 import tg_bot  # noqa: E402  (cycle by design; attrs read at call time)

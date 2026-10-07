@@ -161,6 +161,26 @@ check("an hour-long video is named as too long", wait(lambda: any("60 мин" in
 tg_links.fetch_video = _real_fetch
 bot._run_busy = _real_busy
 
+# _cover_render with a second song: the bar-aligned mashup goes out first, then the voice remix;
+# a failed mashup never costs the remix.
+import mashup_auto, mashup_stems
+mashup_stems.release_separator = lambda: None
+AUD = []
+bot._send_audio = lambda cid, path, cap="", **k: (AUD.append((path, cap)), True)[1]
+mashup_auto.make = lambda ctx, a, b, *x: f"mash:{os.path.basename(a)}+{os.path.basename(b)}"
+remix.remix_voice = lambda ctx, a, b: "voice.mp3"
+bot._cover_render(CID, "ru", "/x/song.mp3", "", "/x/song2.mp3")
+check("second song: the mashup (song 1 vocal over song 2) goes first, then the voice remix",
+      [p for p, _ in AUD] == ["mash:song.mp3+song2.mp3", "voice.mp3"] and "Мэшап" in AUD[0][1], AUD)
+AUD.clear()
+def _boom(*a): raise RuntimeError("demucs died")
+mashup_auto.make = _boom
+bot._cover_render(CID, "ru", "/x/song.mp3", "", "/x/song2.mp3")
+check("a failed mashup still sends the voice remix", [p for p, _ in AUD] == ["voice.mp3"], AUD)
+AUD.clear(); remix.remix_words = lambda ctx, a, l: "words.mp3"; mashup_auto.make = lambda *a: "mash.mp3"
+bot._cover_render(CID, "ru", "/x/song.mp3", "новые слова", "")
+check("new words: no mashup", [p for p, _ in AUD] == ["words.mp3"], AUD)
+
 bot._running = False; thr.join(timeout=8)
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)
