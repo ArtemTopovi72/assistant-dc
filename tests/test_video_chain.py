@@ -99,6 +99,9 @@ def _wire(monkeypatch, tmp_path):
     monkeypatch.setattr(V, "herrgott_on", lambda: True)
     monkeypatch.setattr(V, "motion_context_on", lambda: False)
     monkeypatch.setattr(V, "bridge_part", lambda ctx, f, part: "BRIDGE. " + part)
+    monkeypatch.setattr(V, "prepare_prompt",
+                        lambda ctx, d, **kw: calls.append(("PREP", {"card": comfy_client.card_in_use()}))
+                        or (d, 6.0))
     monkeypatch.setattr(tg_continue, "seed_frame", lambda src, out: open(out, "wb").write(b"j") > 0)
     monkeypatch.setattr(tg_continue, "cut_tail", lambda src, out: open(out, "wb").write(b"t") > 0)
     monkeypatch.setattr(V, "stitch_chain",
@@ -128,6 +131,10 @@ def test_a_long_script_is_one_chain_stitched_once(monkeypatch, tmp_path):
     st = {}
     H._handle_generate_video(_Ctx(), st, {"description": LONG, "use_current_images": False})
     n = len(V.split_script(LONG))
+    preps = [kw for d, kw in calls if d == "PREP"]
+    assert len(preps) == n and calls[:n] == [("PREP", {"card": False})] * n   # all prepared first, model loaded
+    del calls[:n]
+    assert all(kw["prepared"] for _, kw in calls)
     chains = {kw["chain"][0] for _, kw in calls}
     assert len(calls) == n and len(chains) == 1, calls
     assert [kw["chain"][1] for _, kw in calls] == list(range(1, n + 1))
@@ -163,3 +170,17 @@ def test_voices_keep_the_old_path(monkeypatch, tmp_path):
     ctx.anim_voices = [str(voice)]
     H._handle_generate_video(ctx, {}, {"description": "He says «Привет».", "use_current_images": False})
     assert calls and not calls[0][1].get("chain") and not stitched
+
+
+def test_a_prepared_part_calls_no_model(monkeypatch, tmp_path):
+    """Inside a chain the card is held and the chat model is out: generate_video must not
+    reach for it (live 10-07: the Context-IR rewrite met an unloaded model every part)."""
+    def boom(*a, **k):
+        raise AssertionError("model call during a prepared render")
+    for name in ("estimate_seconds", "to_context_ir", "mark_speech_stress"):
+        monkeypatch.setattr(V, name, boom)
+    monkeypatch.setattr(V, "engine_available", lambda ctx: (True, ""))
+    monkeypatch.setattr(V, "_context_ir_on", lambda: True)
+    monkeypatch.setattr(V, "build_chain_part", lambda *a, **k: (_ for _ in ()).throw(V.VideoUnavailable("stop")))
+    r = V.generate_video(None, "ready prompt", seconds=6.0, prepared=True, chain=("h3_continuous/chZ", 2))
+    assert r["reason"] == "stop"

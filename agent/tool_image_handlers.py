@@ -1068,8 +1068,9 @@ def _bridged(ctx, clip: str, part: str) -> str:
 
 
 def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str) -> int:
-    """Parts 2..n of a long script (already bridged, video.bridge_script) as the next
-    links of `chain` (each continues the previous part's saved latent). Returns the last part made; a failure or a cancel
+    """Parts 2..n of a long script as the next links of `chain` (each continues the
+    previous part's saved latent). `parts` are ALL the parts as (prompt, seconds) from video.prepare_prompt,
+    made before the card was taken: nothing in here calls a model. Returns the last part made; a failure or a cancel
     stops there and the parts so far are still joined and delivered."""
     import video as video_mod
     last, prev = 1, first
@@ -1078,7 +1079,7 @@ def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str) ->
             break
         ctx.set_stage(f"Generating a video ({i}/{len(parts)})")
         try:
-            r = video_mod.generate_video(ctx, video_mod.CONTINUE_CTX_PREFIX + part,
+            r = video_mod.generate_video(ctx, part[0], seconds=part[1], prepared=True,
                                          aspect=args.get("aspect") or "", seed=args.get("seed"),
                                          chain=(chain, i), size_from=prev)
         except Exception:
@@ -1285,6 +1286,12 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         chain_id, chain_idx = video_mod.new_chain(), 1
         if len(parts) > 1:
             parts = video_mod.bridge_script(ctx, parts)
+    # Every model call of every part happens here, while the chat model is loaded; the
+    # renders below then run with the card held (and the model out) start to finish.
+    prepped = []
+    if chain_id and len(parts) > 1:
+        prepped = [video_mod.prepare_prompt(ctx, description, images=images)]
+        prepped += [video_mod.prepare_prompt(ctx, video_mod.CONTINUE_CTX_PREFIX + p) for p in parts[1:]]
     mode = video_mod.pick_mode(images, videos, audios)
     tags = video_mod.reference_tags(len(images) if mode == "ref2va" else 0, len(videos), len(audios))
     logger.info("Tool: generate_video(mode=%s, %d image(s), %d video(s)) %s",
@@ -1301,8 +1308,10 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         ctx.set_stage("Generating a video")
         try:
             result = video_mod.generate_video(
-                ctx, description, images=images, videos=videos, audios=audios,
-                seconds=args.get("seconds") or 0.0,
+                ctx, prepped[0][0] if prepped else description,
+                images=images, videos=videos, audios=audios,
+                seconds=prepped[0][1] if prepped else (args.get("seconds") or 0.0),
+                prepared=bool(prepped),
                 aspect=args.get("aspect") or "",
                 seed=args.get("seed"),
                 context_video=pinned_tail,
@@ -1336,7 +1345,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
 
         if chain_id:
             if len(parts) > 1:
-                chain_idx = _render_chain_parts(ctx, path, parts, args, chain_id)
+                chain_idx = _render_chain_parts(ctx, path, prepped, args, chain_id)
             if chain_idx > 1:
                 joined = video_mod.stitch_chain(ctx, chain_id, chain_idx)
                 if joined:

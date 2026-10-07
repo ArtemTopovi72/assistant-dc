@@ -1150,6 +1150,39 @@ def fit_references(images: Sequence[str], videos: Sequence[str], audios: Sequenc
     return images, videos, audios
 
 
+def prepare_prompt(ctx, description: str, *, images: Sequence[str] = (), videos: Sequence[str] = (),
+                   audios: Sequence[str] = (), seconds: float = 0.0, head: bool = False) -> tuple:
+    """(prompt H3 gets, seconds): every model call a render needs before it is submitted --
+    the length read from the script, the Context-IR rewrite, speech stress. Apart from
+    generate_video so a chain can prepare all its parts while the chat model is loaded and
+    then hold the card through every render (live 10-07: called inside the hold, each call
+    met an unloaded model and the parts went out unrewritten)."""
+    asked = description
+    description = _lock_framing_unless_requested(description)
+    mode = pick_mode(images, videos, audios)
+    if not seconds:
+        seconds = estimate_seconds(asked)
+        logger.info("video length from the script: %.1fs", seconds)
+    frames = seconds_to_frames(seconds)
+    if head:
+        frames = snap_frames(frames + MOTION_CONTEXT_FRAMES - 5)
+    if _context_ir_on():
+        locked = description.endswith(_FRAMING_LOCK_SUFFIX)
+        description = to_context_ir(ctx, description, mode=mode,
+                                    seconds=frames_to_seconds(frames), images=images,
+                                    n_videos=len(videos), n_audios=len(audios))
+        if locked:
+            description = _with_lock(description, _FRAMING_LOCK_SUFFIX)
+    if 1 <= len(images) <= 2 and not videos:     # a photo to animate, not a set of references
+        restyle = _asks_new_style(asked)
+        description = _with_lock(description, _START_LOCK_SUFFIX)
+        if not restyle:
+            description = _with_lock(description, _STYLE_LOCK_SUFFIX)
+    if VIDEO_SPEECH_STRESS:
+        description = mark_speech_stress(ctx, description)
+    return description, seconds
+
+
 def generate_video(ctx, description: str, *,
                    images: Sequence[str] = (), videos: Sequence[str] = (),
                    audios: Sequence[str] = (),
@@ -1158,10 +1191,12 @@ def generate_video(ctx, description: str, *,
                    steps: Optional[int] = None,
                    on_progress: Optional[Callable] = None,
                    context_video: str = "", context_latent: str = "",
-                   save_latent: bool = False, chain: tuple = (), size_from: str = "") -> dict:
+                   save_latent: bool = False, chain: tuple = (), size_from: str = "",
+                   prepared: bool = False) -> dict:
     """Render one clip. `chain` = (chain, idx): part idx of a Herrgott chain (see
     build_chain_part) -- 1 starts it from `images[0]` if given, 2+ continue it;
-    `size_from`: a clip whose shape this one keeps. `context_video`: a clip whose end this one continues (pinned
+    `size_from`: a clip whose shape this one keeps; `prepared`: `description` and `seconds`
+    already came from prepare_prompt (no model call here). `context_video`: a clip whose end this one continues (pinned
     frames, see _add_motion_context); its pinned head is cut off the result. Returns {path, mode, seconds, width, height, seed, status}.
 
     `status` is "success" or "fail"; on failure `_VIDEO_FAILURE["reason"]` says
@@ -1185,17 +1220,16 @@ def generate_video(ctx, description: str, *,
     audios = [p for p in (audios or ()) if p and os.path.exists(p)]
     images, videos, audios = fit_references(images, videos, audios)
 
-    asked = description
-    description = _lock_framing_unless_requested(description)
     mode = pick_mode(images, videos, audios)
     # Ref2VA's workflow carries the LightX2V Turbo LoRA baked in (see
     # workflow_video_h3_ref.json) and is distilled for 4 steps, not the plain
     # model's 8 -- an explicit caller-supplied `steps` still wins.
     if steps is None:
         steps = (VIDEO_STEPS_REF2VA_VOICES if audios else VIDEO_STEPS_REF2VA) if mode == "ref2va" else VIDEO_STEPS
-    if not seconds:
-        seconds = estimate_seconds(asked)
-        logger.info("video length from the script: %.1fs", seconds)
+    if not prepared:
+        description, seconds = prepare_prompt(ctx, description, images=images, videos=videos,
+                                              audios=audios, seconds=seconds,
+                                              head=bool(context_video or context_latent))
     frames = seconds_to_frames(seconds)
     if context_video or context_latent:
         # the pinned head is rendered too, then trimmed: the clip grows by it
@@ -1205,20 +1239,6 @@ def generate_video(ctx, description: str, *,
         p = probe(size_from or context_video)
         src_size = (p["width"], p["height"]) if p.get("width") else None
     width, height = resolve_size(aspect, src_size)
-    if _context_ir_on():
-        locked = description.endswith(_FRAMING_LOCK_SUFFIX)
-        description = to_context_ir(ctx, description, mode=mode,
-                                    seconds=frames_to_seconds(frames), images=images,
-                                    n_videos=len(videos), n_audios=len(audios))
-        if locked:
-            description = _with_lock(description, _FRAMING_LOCK_SUFFIX)
-    if 1 <= len(images) <= 2 and not videos:     # a photo to animate, not a set of references
-        restyle = _asks_new_style(asked)
-        description = _with_lock(description, _START_LOCK_SUFFIX)
-        if not restyle:
-            description = _with_lock(description, _STYLE_LOCK_SUFFIX)
-    if VIDEO_SPEECH_STRESS:
-        description = mark_speech_stress(ctx, description)
     if seed is None or int(seed) < 1:
         seed = random.randint(1, 2**31 - 1)
 
