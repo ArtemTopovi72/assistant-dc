@@ -32,6 +32,8 @@ def test_syllable_marks_one_per_vowel_plus_the_end():
 def test_lines_take_phrases_in_order_and_go_round():
     ph = [[_w("а", i, i + 0.5)] for i in range(5)]
     assert [l for _, l in R._plan(ph, ["x", "y"])] == ["x", "y", "x", "y", "x"]
+    ph.insert(1, [_w("мм", 0.6, 0.8)])                  # no vowel: skipped, and no line lost to it
+    assert [l for _, l in R._plan(ph, ["x", "y"])] == ["x", "y", "x", "y", "x"]
 
 
 def test_a_line_is_fitted_to_the_phrase_syllables(monkeypatch):

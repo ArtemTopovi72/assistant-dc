@@ -165,7 +165,8 @@ def _fit_line(ctx, line: str, n: int) -> str:
 
 def _plan(phrases: list, lines: list) -> list:
     """Line i goes to phrase i; the song's later phrases go round the lyric again."""
-    return [(ph, lines[i % len(lines)]) for i, ph in enumerate(phrases) if _syl_marks(ph)]
+    sung = [ph for ph in phrases if len(_syl_marks(ph)) > 1]    # a phrase of bare "м-м" carries no line
+    return [(ph, lines[i % len(lines)]) for i, ph in enumerate(sung)]
 
 
 def _stretch(y: np.ndarray, n: int, path: str) -> np.ndarray:
