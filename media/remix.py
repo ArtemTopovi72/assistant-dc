@@ -657,6 +657,41 @@ def resing_rvc(ctx, info: dict) -> str:
     return _mix_vocal(conv, info["yvox"], info["yback"])
 
 
+def lyrics_of(ctx, song: str) -> str:
+    """The words of `song`, heard off its vocal stem, as a lyric with [Verse]/[Chorus] tags.
+    10-07: «говновоз делать по 2 ссылкам» -- the second song gives the words, the first the
+    melody and the singer. Whisper's phrases are the lines; the model only groups them into
+    sections and mends a mis-heard word -- a tidy-up that drifts from what was heard is
+    dropped for the plain lines."""
+    import difflib
+    work = tempfile.mkdtemp(prefix="lyrics_")
+    _stems(song, work, "w")
+    segs = [sg for sg in _hear(ctx.models.whisper, os.path.join(work, "w_vox.wav"))
+            if not _HALLUCINATED.search(sg.text or "")]
+    lines = [re.sub(r"\s+", " ", sg.text).strip() for sg in segs if len(_letters(sg.text)) >= 3]
+    if sum(len(l.split()) for l in lines) < 12:
+        raise cover.CoverFailed("no_words")
+    raw = "\n".join(lines)
+    text = ""
+    try:
+        import llm
+        from utils import safe_json_from_llm
+        got = safe_json_from_llm(llm.call_llm_simple(
+            ctx, "These are a song's lines as speech recognition heard them. Return JSON {\"lyrics\": the "
+            "song as lyric lines with section tags [Verse] / [Pre-Chorus] / [Chorus] / [Bridge] / [Outro] "
+            "on their own lines}. Keep the words and their order; split run-on lines at the sung phrase; "
+            "fix only an obviously mis-heard word; drop credits and noise. JSON only.",
+            raw[:6000], temperature=0.1, max_tokens=3000) or "", ["lyrics"]) or {}
+        text = str(got.get("lyrics") or "") if isinstance(got, dict) else ""
+    except Exception as exc:
+        logger.warning("lyrics_of: tidy failed: %s", exc)
+    body = "\n".join(l for l in text.splitlines() if not l.strip().startswith("["))
+    if not text or difflib.SequenceMatcher(None, _letters(raw), _letters(body), autojunk=False).ratio() < 0.8:
+        text = raw
+    logger.info("lyrics_of: %d lines from %s", len(lines), os.path.basename(song))
+    return text
+
+
 def remix_words(ctx, song: str, lyrics: str) -> str:
     """`song` sings `lyrics` (its own melody, voice, backing). Returns an mp3 path; raises cover.CoverFailed."""
     lines = [l.strip() for l in (lyrics or "").splitlines() if l.strip() and not re.fullmatch(r"\[.*\]", l.strip())]

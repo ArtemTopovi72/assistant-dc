@@ -1,7 +1,7 @@
 """🎚 Remix (Creativity menu; it replaced the separate Cover and Mashup buttons).
 
 A song goes in; then EITHER text (the song sings it in its own voice and melody) OR a second
-song (the first song's voice sings the second one's melody and words over its backing).
+song (a quick mashup, then the first song sings the second one's words on its own melody).
 
 States on the session (cover_state):
   "want_audio"  the button was pressed; the next voice / audio / video / round
@@ -128,7 +128,12 @@ class CoverMixin:
             if song2:
                 self._mashup_first(chat_id, lang, ctx, src, song2)
             info = {}
-            if song2:
+            if song2 and remix.resing_available():
+                # 10-07 «говновоз делать по 2 ссылкам»: the second song gives the words, the
+                # first sings them on its own melody in its own singer's voice.
+                self._send_text(chat_id, tg_bot._t("cover_two_songs_words", lang))
+                out = remix.resing(ctx, src, remix.lyrics_of(ctx, song2), info=info)
+            elif song2:
                 out = remix.remix_voice(ctx, src, song2)
             elif remix.resing_available():
                 out = remix.resing(ctx, src, lyrics, info=info)

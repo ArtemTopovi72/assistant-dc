@@ -258,3 +258,33 @@ def test_a_voice_that_loses_the_words_is_not_sent(monkeypatch, tmp_path):
     assert tried == ["seedvc", "soulx"] and os.path.basename(got) == "soulx.wav"
     heard["soulx.wav"] = "ЧИИИИИИИ"
     assert R._voice_keeping_words(ctx, voices, "take.wav", layout, 1.0, str(tmp_path), "ru") == "take.wav"
+
+
+def _lyrics_run(monkeypatch, heard_lines, tidy):
+    monkeypatch.setattr(R, "_stems", lambda song, work, name: (np.zeros(10), np.zeros(10)))
+    monkeypatch.setattr(R, "_hear", lambda wh, path, language=None:
+                        [type("S", (), {"text": t})() for t in heard_lines])
+    monkeypatch.setattr(llm, "call_llm_simple", lambda *a, **k: tidy)
+    return R.lyrics_of(type("C", (), {"models": type("M", (), {"whisper": None})()})(), "song2.mp3")
+
+
+HEARD = ["Сорок лет как под наркозом я работал говновозом", "ой ой ой",
+         "Субтитры делал DimaTorzok", "не шофером не таксистом а вонючим говночистом"]
+
+
+def test_second_song_words_are_tidied_into_sections(monkeypatch):
+    # 10-07 «говновоз делать по 2 ссылкам»: the second song gives the words.
+    tidy = ('{"lyrics": "[Verse]\nСорок лет, как под наркозом,\nя работал говновозом, ой-ой-ой,\n'
+            'не шофером, не таксистом,\nа вонючим говночистом"}')
+    got = _lyrics_run(monkeypatch, HEARD, tidy)
+    assert got.startswith("[Verse]") and "говночистом" in got and "DimaTorzok" not in got
+
+
+def test_a_tidy_up_that_rewrites_the_words_is_dropped(monkeypatch):
+    got = _lyrics_run(monkeypatch, HEARD, '{"lyrics": "[Verse]\nЯ люблю тебя жизнь\nи надеюсь что это взаимно"}')
+    assert got.splitlines()[0] == HEARD[0] and "DimaTorzok" not in got
+
+
+def test_an_instrumental_second_song_has_no_words(monkeypatch):
+    with pytest.raises(cover.CoverFailed):
+        _lyrics_run(monkeypatch, ["ла ла"], "{}")

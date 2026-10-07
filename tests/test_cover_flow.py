@@ -169,6 +169,7 @@ AUD = []
 bot._send_audio = lambda cid, path, cap="", **k: (AUD.append((path, cap)), True)[1]
 mashup_auto.make = lambda ctx, a, b, *x: f"mash:{os.path.basename(a)}+{os.path.basename(b)}"
 remix.remix_voice = lambda ctx, a, b: "voice.mp3"
+remix.resing_available = lambda: False
 bot._cover_render(CID, "ru", "/x/song.mp3", "", "/x/song2.mp3")
 check("second song: the mashup (song 1 vocal over song 2) goes first, then the voice remix",
       [p for p, _ in AUD] == ["mash:song.mp3+song2.mp3", "voice.mp3"] and "Мэшап" in AUD[0][1], AUD)
@@ -177,6 +178,21 @@ def _boom(*a): raise RuntimeError("demucs died")
 mashup_auto.make = _boom
 bot._cover_render(CID, "ru", "/x/song.mp3", "", "/x/song2.mp3")
 check("a failed mashup still sends the voice remix", [p for p, _ in AUD] == ["voice.mp3"], AUD)
+# 10-07 «говновоз делать по 2 ссылкам»: with YuE2 the second song gives the WORDS and the first
+# sings them on its own melody (after the quick mashup).
+AUD.clear()
+mashup_auto.make = lambda ctx, a, b, *x: "mash.mp3"
+remix.resing_available = lambda: True
+remix.lyrics_of = lambda ctx, song: "слова из " + os.path.basename(song)
+SUNG = []
+def _resing2(ctx, a, l, info=None):
+    SUNG.append((os.path.basename(a), l))
+    info.update({"rvc": "artist", "trained": True})
+    return "resing2.mp3"
+remix.resing = _resing2
+bot._cover_render(CID, "ru", "/x/song.mp3", "", "/x/song2.mp3")
+check("two songs: mashup, then song 1 re-sung with song 2's words",
+      [p for p, _ in AUD] == ["mash.mp3", "resing2.mp3"] and SUNG == [("song.mp3", "слова из song2.mp3")], (AUD, SUNG))
 AUD.clear(); remix.remix_words = lambda ctx, a, l: "words.mp3"; mashup_auto.make = lambda *a: "mash.mp3"
 remix.resing = lambda ctx, a, l, info=None: "resing.mp3"
 remix.resing_available = lambda: False
