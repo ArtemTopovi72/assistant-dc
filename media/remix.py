@@ -27,7 +27,10 @@ logger = logging.getLogger("assistant.remix")
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SX = os.path.join(ROOT, "models_ext", "soulx_singer")
-SX_PY = venv_python("Z:/venvs/venv_soulx")   # on the SSD: C: is nearly full, E: is an HDD
+# On C:, not Z: -- from the QLC Z: drive torch's CUDA libraries (cuDNN...) load lazily inside
+# the first segment: 3+ min cold, and the bot's 900 s timeout hit while another job wrote to Z:
+# (10-07); warm, the whole 3-min song converts in 49 s.
+SX_PY = venv_python(os.path.join(ROOT, "venv_soulx"))
 SX_MODEL = os.path.join(SX, "pretrained_models", "SoulX-Singer", "model-svc.pt")
 SEEDVC_PY = venv_python(os.path.join(ROOT, "venv_qwen"))
 SR = 44100

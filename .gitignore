@@ -131,6 +131,7 @@ venv_diar/
 venv_paddle/
 bench/diar_set/
 venv_mula/
+venv_soulx/
 
 # Local tooling and personal data
 .claude/
