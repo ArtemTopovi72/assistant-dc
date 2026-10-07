@@ -66,9 +66,8 @@ check((seen.get("width"), seen.get("height")) == V.fit_canvas(768, 1024),
 check(seen.get("mode") == "t2va" and seen.get("context_video") == "tail.mp4",
       "pinned continuation runs the plain FL2V graph")
 
-os.environ["VIDEO_MOTION_CONTEXT"] = "0"
-check(V.motion_context_on() is False, "VIDEO_MOTION_CONTEXT=0 turns it off")
-os.environ.pop("VIDEO_MOTION_CONTEXT")
+os.environ.pop("VIDEO_MOTION_CONTEXT", None)
+check(V.motion_context_on() is False, "off unless VIDEO_MOTION_CONTEXT=1 (it reset the motion after the pins)")
 
 # join_pinned: the old clip loses exactly the pinned head, the new one is kept whole
 import subprocess, tempfile

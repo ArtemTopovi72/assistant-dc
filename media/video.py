@@ -617,7 +617,11 @@ MOTION_CONTEXT_FRAMES = int(os.getenv("VIDEO_MOTION_CONTEXT_FRAMES", "22"))     
 
 
 def motion_context_on() -> bool:
-    if os.getenv("VIDEO_MOTION_CONTEXT", "1") != "1":
+    # Off by default (10-07): on ComfyUI 0.33 with node v0.3.1 and pixel pins, the model
+    # often did not carry the motion on after the pins -- a hard reset on the frame after
+    # the 22nd (knife in hand -> another pose, no knife), plus objects morphing. Opt in
+    # with VIDEO_MOTION_CONTEXT=1 to retest (latent pins / ComfyUI >= 0.34 untried).
+    if os.getenv("VIDEO_MOTION_CONTEXT", "0") != "1":
         return False
     return bool(_server_has_node("MiniMaxH3MotionContext"))
 
