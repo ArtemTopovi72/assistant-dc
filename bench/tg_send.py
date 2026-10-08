@@ -1,11 +1,11 @@
 """Send files to the owner's Telegram chat with the bot's saved token (never printed).
-    venv/Scripts/python.exe bench/tg_send.py file [file ...] [--caption "text"] [--chat 386455236]"""
+    venv/Scripts/python.exe bench/tg_send.py file [file ...] [--caption "text"] [--chat ID]"""
 import sys, requests
 from pathlib import Path
 from PyQt5.QtCore import QSettings
 a = sys.argv[1:]
 arg = lambda k, d=None: a[a.index(k) + 1] if k in a else d
-chat, cap = arg("--chat", "386455236"), arg("--caption", "")
+chat, cap = arg("--chat", os.environ.get("TG_CHAT_ID", "")), arg("--caption", "")
 files = [x for i, x in enumerate(a) if not x.startswith("--") and (i == 0 or not a[i - 1].startswith("--"))]
 s = QSettings("AssistantApp", "TelegramBot")
 tok = next(str(s.value(k)) for k in s.allKeys() if "token" in k.lower() and s.value(k))

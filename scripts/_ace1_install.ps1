@@ -1,5 +1,5 @@
-cd C:\Users\Artem\f5-tts-project
-& "C:\Users\Artem\AppData\Local\Programs\Python\Python311\python.exe" -m venv venv_ace1
+Set-Location (Join-Path $PSScriptRoot '..')
+& "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe" -m venv venv_ace1
 $py="venv_ace1\Scripts\python.exe"
 & $py -m pip install -U pip
 & $py -m pip install torch==2.7.1+cu128 torchvision==0.22.1+cu128 torchaudio==2.7.1+cu128 --extra-index-url https://download.pytorch.org/whl/cu128

@@ -37,7 +37,7 @@ def mono16(path):
 def main():
     for d in (MIX, SEP):
         os.makedirs(d, exist_ok=True)
-    bed_dir = demucs(os.path.join(ROOT, "cover", "386455236", "song.ogg"), os.path.join(MIX, "_song"))
+    bed_dir = demucs(os.path.join(ROOT, "cover", os.environ.get("TG_CHAT_ID", "user"), "song.ogg"), os.path.join(MIX, "_song"))
     bed = mono16(os.path.join(bed_dir, "no_vocals.wav"))
     for f in sorted(os.listdir(SET)):
         if not (f.startswith("clip") and f.endswith(".wav")):

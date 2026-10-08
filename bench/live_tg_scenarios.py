@@ -1027,7 +1027,7 @@ def sc_continue_video(bot, ctx):
     import tg_strings
     u = D.Chat(bot, 910090, "Artem")
     u.say(tg_strings._BTN["continue_btn"]["ru"]); evs = u.wait(quiet=4); print("     bot:", texts(evs)[-1:])
-    u.video_note(os.path.join(ROOT, "anim_voices", "386455236", "voice2.mp4")); evs = u.wait(timeout=120, quiet=5)
+    u.video_note(os.path.join(ROOT, "anim_voices", os.environ.get("TG_CHAT_ID", "user"), "voice2.mp4")); evs = u.wait(timeout=120, quiet=5)
     print("     bot:", texts(evs)[-1:])
     t0 = time.time(); u.say("Человек поворачивается к камере и улыбается.")
     evs = u.wait(until=lambda e: e["method"] in ("sendVideo", "sendVideoNote"), timeout=1800, quiet=90)

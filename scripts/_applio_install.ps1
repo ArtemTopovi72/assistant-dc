@@ -1,5 +1,5 @@
-cd C:\Users\Artem\f5-tts-project
-& "C:\Users\Artem\AppData\Local\Programs\Python\Python312\python.exe" -m venv venv_applio
+Set-Location (Join-Path $PSScriptRoot '..')
+& "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe" -m venv venv_applio
 $py="venv_applio\Scripts\python.exe"
 & $py -m pip install -U pip uv
 & venv_applio\Scripts\uv.exe pip install --python $py -r models_ext\applio\requirements.txt --extra-index-url https://download.pytorch.org/whl/cu128 --index-strategy unsafe-best-match
