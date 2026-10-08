@@ -187,7 +187,7 @@ def _takes_run(monkeypatch, heard_by_take):
     seeds, converted = [], []
     monkeypatch.setattr(R, "_stems", lambda song, work, name: (np.zeros(10), np.zeros(10)))
     monkeypatch.setattr(R, "_score", lambda ctx, wav, work: ABC)
-    monkeypatch.setattr(R, "_layout", lambda ctx, lyrics, parts: "[Verse]\nсорок лет как под наркозом\nя работал говновозом")
+    monkeypatch.setattr(R, "_layout", lambda ctx, lyrics, parts, **k: "[Verse]\nсорок лет как под наркозом\nя работал говновозом")
     monkeypatch.setattr(llm, "call_llm_simple", _llm)
     monkeypatch.setattr(music, "_render_yue2_once", lambda ctx, cpp, job, seed: (seeds.append(seed), open(job["out"], "wb").close()))
     monkeypatch.setattr(music, "_valid_audio_file", lambda p: True)
@@ -406,3 +406,61 @@ def test_the_singer_is_sung_a_few_times_and_the_closest_kept(monkeypatch, tmp_pa
     got = R._voice_keeping_words(ctx, voices, "take.wav", "[Verse]\nсорок лет как под наркозом\nя работал говновозом",
                                  str(tmp_path), "ru", best=True)
     assert len(sung) == 3 and os.path.basename(got) == "rvc1.wav"
+
+
+def test_profile_reads_how_the_original_repeats_itself():
+    prof = R._repetition_profile(["третье сентября", "день прощанья", "третье сентября", "сентябрь сентябрь сентябрь горит",
+                                  "ой ой ой", "я сжигаю я сжигаю письма", "я пишу тебе"])
+    text = " ".join(prof)
+    assert "refrain" in text and "in a row" in text and "anaphora" in text and "interjection" in text
+
+
+def test_hook_is_the_lyrics_own_refrain():
+    assert R._hook_words(["говновоз говновоз", "много роз", "говновоз говновоз"]) == {"говновоз"}
+
+
+def test_arrangement_with_foreign_words_or_over_budget_is_refused():
+    sung, plain = [("Chorus", 8)], [["говновоз едет"]]
+    assert R._arrange_score([["говновоз говновоз едет"]], sung, plain, {"говновоз"}) is not None
+    assert R._arrange_score([["самосвал едет"]], sung, plain, {"говновоз"}) is None
+    assert R._arrange_score([["говновоз говновоз говновоз говновоз едет"]], sung, plain, {"говновоз"}) is None
+
+
+def test_spare_notes_are_filled_by_repeating_the_hook(monkeypatch):
+    calls = []
+    def fake(ctx, sys_, user, **k):
+        calls.append(user)
+        if "repeats itself" in user or "Hook" in user or "hook" in user:
+            return '{"sections": [["говновоз говновоз говновоз", "много роз"]]}'
+        return '{"sections": [[1, 2]]}'
+    monkeypatch.setattr(llm, "call_llm_simple", fake)
+    text = R._layout(None, "говновоз\nмного роз", [("Chorus", 12)], profile=["it sings one key word 3 times in a row"])
+    assert "говновоз говновоз говновоз" in text
+    assert any("3 times in a row" in c for c in calls)
+
+
+def test_an_arrangement_that_breaks_the_rules_keeps_the_plain_lines(monkeypatch):
+    monkeypatch.setattr(llm, "call_llm_simple", lambda ctx, s, u, **k:
+                        '{"sections": [["совсем другие слова"]]}' if "hook" in u else '{"sections": [[1]]}')
+    assert R._layout(None, "говновоз едет", [("Chorus", 10)], profile=[]) == "[Chorus]\nговновоз едет"
+
+
+def test_hook_is_the_most_sung_content_word_not_a_whole_line():
+    lines = ["говновоз говновоз говновоз её чистить", "говночист говночист говночист должен быть плечист",
+             "говночист заклинатель говна", "говночист говночист говночист должен быть плечист",
+             "говновоз говновоз подгоняй насос"]
+    assert R._hook_words(lines) == {"говночист", "говновоз"}
+
+
+def test_a_repeat_that_eats_the_meaning_costs_more():
+    sung, plain = [("Verse", 16)], [["сорок лет я работал говновозом"]]
+    keep = R._arrange_score([["сорок лет я работал говновозом говновозом"]], sung, plain, {"говновозом"})
+    eat = R._arrange_score([["сорок лет говновозом говновозом говновозом"]], sung, plain, {"говновозом"})
+    assert keep < eat
+
+
+def test_glued_lines_are_split_back_into_sung_phrases(monkeypatch):
+    monkeypatch.setattr(llm, "call_llm_simple", lambda ctx, s, u, **k:
+                        '{"sections": [["говновоз едет. Говновоз, говновоз стоит."]]}' if "hook" in u else '{"sections": [[1, 2]]}')
+    assert R._layout(None, "говновоз едет\nговновоз стоит", [("Chorus", 14)], profile=[]) == \
+        "[Chorus]\nговновоз едет.\nГовновоз, говновоз стоит."

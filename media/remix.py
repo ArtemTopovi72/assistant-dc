@@ -438,11 +438,164 @@ _INSTRUMENTAL = ("Intro", "Interlude", "Outro")
 _MIN_SUNG = 8          # a section with fewer melody notes is a fill, not a sung part
 
 
-def _layout(ctx, lyrics: str, parts: list) -> str:
+_WORD = re.compile(r"[а-яёa-z]+(?:-[а-яёa-z]+)*", re.I)
+
+
+def _words(s: str) -> list:
+    return [w.lower().replace("ё", "е") for w in _WORD.findall(s or "")]
+
+
+def _repetition_profile(phrases: list) -> list:
+    """How the ORIGINAL repeats itself, as short notes for the model -- the shape, not its words.
+    A singable adaptation keeps the original's map of repeats (Kim & Goto, ISMIR 2023: the
+    self-similarity of sections stays the same across languages when a song is sung well);
+    10-08 the user asked for repeats placed with meaning, as in «3 сентября» / «Я русский»."""
+    lines = [" ".join(_words(p)) for p in phrases if _words(p)]
+    notes = []
+    counts = {}
+    for l in lines:
+        if len(l) >= 8:
+            counts[l] = counts.get(l, 0) + 1
+    refrains = sorted((n for n in counts.values() if n >= 2), reverse=True)
+    if refrains:
+        notes.append(f"{len(refrains)} of its lines come back as a refrain (the most repeated is sung "
+                     f"{refrains[0]} times) -- choruses repeat the same refrain word for word")
+    run = 0
+    for l in lines:
+        ws = l.split()
+        best = max((sum(1 for _ in g) for w, g in __import__("itertools").groupby(ws) if len(w) >= 4), default=1)
+        run = max(run, best)
+    if run >= 2:
+        notes.append(f"it sings one key word {run} times in a row (like «word, word, word») -- "
+                     f"do the same with YOUR key word, at the same kind of place (the hook)")
+    starts = [l.split()[0] for l in lines if len(l.split()) >= 3]
+    ana = sum(1 for a, b in zip(starts, starts[1:]) if a == b)      # «я ..., я ...» counts
+    if ana:
+        notes.append(f"{ana} pairs of neighbouring lines start with the same word (anaphora)")
+    voc = [l for l in lines if all(len(w) <= 3 for w in l.split()) and len(set(l.split())) == 1 and len(l.split()) >= 2]
+    if voc:
+        notes.append("it fills short gaps with a sung interjection (like «ой-ой-ой»); "
+                     "keep such interjections where your lyric already has them")
+    return notes
+
+
+_ARRANGE = (
+    "You fit a song lyric onto a melody's sections the way a good songwriter adapts words to an "
+    "existing tune. Each section can carry about the given number of syllables (one per note). "
+    "Rules:\n"
+    "1. Use ONLY words that are already in that section's lines (you may also use the lyric's "
+    "hook/title words in any section). Never invent new words, never change the meaning.\n"
+    "2. Repeat with meaning: when a section has notes to spare, fill them by repeating the KEY "
+    "word or the hook phrase (the title, the name the song is about), never a filler word like "
+    "'and', 'the', 'и', 'а', 'же'. A key word may be sung 2-3 times in a row («word, word, word»).\n"
+    "3. Put the hook at the start of a chorus, and again at its end when there is room.\n"
+    "4. Every chorus is the same refrain, word for word.\n"
+    "5. When a section has too few notes, drop the least important line or words, never the hook.\n"
+    "6. Keep each line a natural sung phrase; the stressed syllables of the words stay natural.\n"
+    "Reply with JSON only: {\"sections\": [[\"line\", ...], ...]} -- one list per given section, "
+    "in that order.")
+
+
+def _arrange_score(cand: list, sung: list, plain: list, hook: set, spare: list = ()) -> float:
+    """Deterministic check of one arrangement (rule-based feedback beats a model judge for form,
+    ICCC 2025): syllables on budget, no foreign words, choruses alike, hook repeated. Lower is
+    better; None when the arrangement broke a hard rule."""
+    if not isinstance(cand, list) or len(cand) != len(sung):
+        return None
+    extra = set(_words(" ".join(spare)))
+    allowed_all = set(_words(" ".join(" ".join(p) for p in plain))) | hook | extra
+    cost, choruses = 0.0, []
+    for (tag, notes), lines, base in zip(sung, cand, plain):
+        if not (isinstance(lines, list) and lines and all(isinstance(l, str) and l.strip() for l in lines)):
+            return None
+        allowed = set(_words(" ".join(base))) | hook | (extra if tag != "Chorus" else set())
+        if not set(_words(" ".join(lines))) <= (allowed if base else allowed_all):
+            return None
+        syl = sum(_syl(l) for l in lines)
+        if syl > notes * 1.25:
+            return None
+        cost += (2 if syl > notes else 1) * abs(notes - syl) / max(1, notes)   # crowding hurts more
+        # Repeats must not eat the meaning: «я работал говновозом» -> «говновоз, говновоз» lost
+        # who did what (10-08 draft); every content word the plain lines had and this one lost costs.
+        kept = {w for w in _words(" ".join(base)) if len(w) >= 4}
+        cost += 0.5 * len(kept - set(_words(" ".join(lines)))) / max(1, len(kept))
+        if tag == "Chorus":
+            choruses.append([l.strip().lower() for l in lines])
+    if len({tuple(c) for c in choruses}) > 1:
+        cost += 0.5
+    if hook and choruses and not any(set(_words(c[0])) & hook for c in choruses):
+        cost += 0.3
+    return cost
+
+
+ARRANGE_TRIES = int(os.getenv("ARRANGE_TRIES", "3"))
+
+
+_SENT = re.compile(r"(?<=[.!?…])\s+(?=[А-ЯЁA-Z])")
+
+
+def _need(notes: int, lines: list) -> str:
+    have = sum(_syl(l) for l in lines)
+    if have < notes * 0.85:
+        return f"{notes - have} notes to spare: FILL them (repeat the hook, or add an unused line in a verse)"
+    if have > notes * 1.1:
+        return f"{have - notes} syllables too many: cut the least important words"
+    return "fits; repeat the hook only where the original repeats"
+
+
+def _arrange(ctx, sung: list, plain: list, profile: list, hook: set, spare: list = ()) -> list:
+    """The plain line placement (`plain`, one list of lines per sung section) re-arranged with
+    meaningful repeats. Several drafts, the best by `_arrange_score`; none that keeps the rules
+    -> the plain placement."""
+    import llm
+    from utils import safe_json_from_llm
+    user = ("Sections (syllables the melody holds):\n"
+            + "\n".join(f"{i}. {t}: ~{n} notes, lines now {sum(_syl(l) for l in p)} syllables -- {_need(n, p)}:\n   "
+                        + "\n   ".join(p) for i, ((t, n), p) in enumerate(zip(sung, plain), 1))
+            + ("\nUnused lines of the lyric (a verse with room may take them, in order):\n   "
+               + "\n   ".join(spare) if spare else "")
+            + "\nThe hook / title words: " + (", ".join(sorted(hook)) or "pick the chorus's key word")
+            + ("\nHow the original song repeats itself (copy this shape with these words):\n- "
+               + "\n- ".join(profile) if profile else ""))
+    best, best_cost = plain, _arrange_score(plain, sung, plain, hook, spare)
+    best_cost = 9.0 if best_cost is None else best_cost
+    for k in range(max(1, ARRANGE_TRIES)):
+        try:
+            raw = llm.call_llm_simple(ctx, _ARRANGE, user, temperature=0.4 + 0.2 * k, max_tokens=1200)
+            got = safe_json_from_llm(raw or "", ["sections"]) or {}
+        except Exception as exc:
+            logger.warning("resing: arrange failed: %s", exc)
+            continue
+        cand = got.get("sections") if isinstance(got, dict) else None
+        cost = _arrange_score(cand, sung, plain, hook, spare)
+        logger.info("resing: arrangement %d cost %s", k + 1, None if cost is None else round(cost, 2))
+        if cost is not None and cost < best_cost:
+            # one sung phrase per line: the model glued two lines into one string with «. »
+            best = [[p.strip() for l in sec for p in _SENT.split(l.strip()) if p.strip()] for sec in cand]
+            best_cost = cost
+    return best
+
+
+def _hook_words(lines: list) -> set:
+    """The lyric's hook: its one or two most sung content words (the song's subject -- «говновоз»,
+    «говночист»), counted over every line. The most repeated whole LINE was tried first and
+    named «должен быть закалённый плечист» the hook (10-08)."""
+    wc = {}
+    for l in lines:
+        for w in _words(l):
+            if len(w) >= 4:
+                wc[w] = wc.get(w, 0) + 1
+    top = sorted(wc.items(), key=lambda kv: -kv[1])[:2]
+    return {w for w, n in top if n >= 2 and n >= top[0][1] * 0.5}
+
+
+def _layout(ctx, lyrics: str, parts: list, profile: list = None) -> str:
     """The new lyric laid out on the original's sections, each sung section holding about as
     many syllables as its melody has notes (10-07: Cheri Cheri Lady got 144 syllables on a
     44-note chorus and YuE2 mumbled them). The model places lines; the budget is enforced
-    here by dropping a section's last lines; a broken plan falls back to an even split."""
+    here by dropping a section's last lines; a broken plan falls back to an even split.
+    With the original's `profile` (how it repeats itself) the placed lines are then arranged
+    with meaningful repeats of the hook (`_arrange`)."""
     lines = [l.strip() for l in (lyrics or "").splitlines() if l.strip() and not re.fullmatch(r"\[.*\]", l.strip())]
     sung = [(t, n) for t, n in parts if t not in _INSTRUMENTAL and n >= _MIN_SUNG]
     import llm
@@ -488,12 +641,17 @@ def _layout(ctx, lyrics: str, parts: list) -> str:
         if tag != "Chorus":
             used.update(nums)
         fitted.append(nums)
+    placed = [[lines[n - 1] for n in nums] for nums in fitted]
+    if profile is not None:
+        sung_now = {l for p in placed for l in p}
+        placed = _arrange(ctx, sung, placed, profile, _hook_words(lines),
+                          [l for n, l in enumerate(lines, 1) if l not in sung_now and n not in refrain])
     blocks, k = [], 0
     for tag, notes in parts:
         if tag in _INSTRUMENTAL or notes < _MIN_SUNG:
             blocks.append(f"[{'Interlude' if tag not in _INSTRUMENTAL else tag}]")
             continue
-        blocks.append(f"[{tag}]\n" + "\n".join(lines[n - 1] for n in fitted[k]))
+        blocks.append(f"[{tag}]\n" + "\n".join(placed[k]))
         k += 1
     return "\n\n".join(blocks)
 
@@ -598,7 +756,9 @@ def resing(ctx, song: str, lyrics: str, info: dict = None) -> str:
     segs = _hear(ctx.models.whisper, os.path.join(work, "a_vox.wav"))
     heard = " ".join(w["w"] for w in _sung_words(segs))
     style, artist = _resing_style(ctx, heard, _score_tempo_key(abc))
-    layout = _layout(ctx, lyrics, _score_parts(abc))
+    profile = _repetition_profile([" ".join(w["w"] for w in p) for p in _phrases(_sung_words(segs))])
+    logger.info("resing: the original repeats itself: %s", profile)
+    layout = _layout(ctx, lyrics, _score_parts(abc), profile=profile)
     job = {"lyrics": music.yue2_lyrics(layout), "style": music.yue2_language(style, lyrics), "abc": abc}
     logger.info("resing: artist %r, style %s", artist, job["style"])
     if ctx is not None and hasattr(ctx, "set_stage"):
