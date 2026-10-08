@@ -93,3 +93,18 @@ if __name__ == "__main__":
     import subprocess
     r = subprocess.run([sys.executable, "-m", "pytest", __file__, "-q"])
     sys.exit(r.returncode)
+
+
+# 10-08 live: «аллергия на орехи» was in the facts and dinner advice still offered
+# «кедровые орешки» -- the allergy note only forbade PROMISING a dish free of the allergen.
+import intent as _intent_mod
+from graph_compose import facts_parts as _facts_parts
+_intent_mod.YES_STUB = lambda q, t: "аллерги" in t
+try:
+    _txt = " ".join(_facts_parts("Пользователя зовут Марат, он вегетарианец и у него аллергия на орехи."))
+    assert "never offer a dish or ingredient that contains the allergen" in _txt, _txt
+    assert "diet" in _txt
+    assert len(_facts_parts("Пользователя зовут Марат.")) == 1
+finally:
+    _intent_mod.YES_STUB = None
+print("ok an allergy or diet is a hard limit on suggestions, not only on promises")

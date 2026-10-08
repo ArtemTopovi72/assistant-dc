@@ -125,13 +125,18 @@ def facts_parts(facts_text: str) -> list:
              "them when relevant; newest are last — if two facts conflict, the later "
              f"one is correct):\n{facts_text}"]
     # «шоколадный медовик -- в нём точно нет арахиса»: a guarantee nobody can give.
+    # 10-08 live: after «аллергия на орехи, я вегетарианец» dinner advice was a pasta with
+    # «кедровыми орешками» -- the allergy only forbade PROMISING, never SUGGESTING.
     import intent
-    if intent.ask_yes("Saved facts about a user: {text}\n\nDo they say the user has a food "
-                      "allergy or intolerance?", facts_text):
-        parts.append("The user has an allergy or intolerance. Never promise a dish, "
-                     "cake or product is free of the allergen (no «точно нет», «гарантированно»); "
-                     "suggest options without it and tell them to confirm the ingredients and "
-                     "cross-contamination with the maker or the label.")
+    if intent.ask_yes("Saved facts about a user: {text} -- do they say the user has a food "
+                      "allergy, an intolerance or a diet (vegetarian, no gluten...)?", facts_text):
+        parts.append("The user has a food allergy, intolerance or diet. It is a hard limit on "
+                     "every food suggestion: never offer a dish or ingredient that contains the "
+                     "allergen or breaks the diet (not even 'swap it out' -- offer only what is "
+                     "safe from the start), and check each ingredient against the saved facts "
+                     "before answering. Never promise a dish, cake or product is free of the "
+                     "allergen (no «точно нет», «гарантированно»); tell them to confirm the "
+                     "ingredients and cross-contamination with the maker or the label.")
     return parts
 
 
