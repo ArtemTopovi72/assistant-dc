@@ -119,6 +119,7 @@ def estimate_seconds(description: str, capped: bool = True) -> float:
     for pre in (CONTINUE_PREFIX, CONTINUE_CTX_PREFIX):   # the template, not the script
         if text.startswith(pre):
             text = text[len(pre):]
+    text = _SCENE_NOTE_RE.sub("", text)                    # nor the scene-so-far note
     spoken = " ".join(next(g for g in m.groups() if g is not None) for m in _QUOTED.finditer(text))
     rest = _QUOTED.sub(" ", text)
     words = len(spoken.split())
@@ -1363,8 +1364,20 @@ CONTINUE_CTX_PREFIX = (
     "The shot continues with no cut and no reset: the same people, place, framing and "
     "lighting, picking up exactly where the opening frames leave off; whatever already "
     "changed stays changed, and voices and ambient sound go on unchanged. Every object keeps "
-    "its shape and stays the same object: to use a different tool, the hand first sets the "
-    "one it holds down on the counter, then picks the new one up. What happens next: ")
+    "its shape and stays the same object; nothing appears or vanishes on its own. What happens next: ")
+# 10-09: the prefix carried a kitchen example («to use a different tool, the hand sets it down on
+# the counter, then picks the new one up»), and part 2 of «naked women walk past the bag of money
+# at Lakhta» came out as a hand putting a tool on a counter and hitting a stone with a wooden
+# mallet: the prompt writer took the example for the scene, and knew nothing else of it. Every
+# part after the first now carries the scene so far, as a note it must not replay.
+_SCENE_NOTE = " (The scene so far, for reference only -- do not replay it: {})"
+_SCENE_NOTE_RE = re.compile(r" \(The scene so far, for reference only -- do not replay it: .*\)\s*$", re.S)
+
+
+def with_scene(part: str, scene: str) -> str:
+    """`part` of a long script with what the earlier parts showed (who, where), as a note."""
+    scene = " ".join((scene or "").split())
+    return part + _SCENE_NOTE.format(scene[:700]) if scene else part
 
 
 def bridge_part(ctx, last_frame: str, part: str) -> str:

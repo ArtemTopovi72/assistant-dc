@@ -1128,7 +1128,8 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict) -> str:
             part = video_mod.bridge_part(ctx, frame, part)
         try:
             if pinned:
-                r = video_mod.generate_video(ctx, video_mod.CONTINUE_CTX_PREFIX + part,
+                r = video_mod.generate_video(ctx, video_mod.CONTINUE_CTX_PREFIX
+                                             + video_mod.with_scene(part, " ".join(parts[:i - 1])),
                                              context_video=tail,
                                              aspect=args.get("aspect") or "", seed=args.get("seed"))
             else:
@@ -1304,7 +1305,9 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     prepped = []
     if chain_id and len(parts) > 1:
         prepped = [video_mod.prepare_prompt(ctx, description, images=images)]
-        prepped += [video_mod.prepare_prompt(ctx, video_mod.CONTINUE_CTX_PREFIX + p) for p in parts[1:]]
+        prepped += [video_mod.prepare_prompt(
+            ctx, video_mod.CONTINUE_CTX_PREFIX + video_mod.with_scene(p, " ".join(parts[:i])))
+            for i, p in enumerate(parts[1:], start=1)]
     mode = video_mod.pick_mode(images, videos, audios)
     tags = video_mod.reference_tags(len(images) if mode == "ref2va" else 0, len(videos), len(audios))
     logger.info("Tool: generate_video(mode=%s, %d image(s), %d video(s)) %s",

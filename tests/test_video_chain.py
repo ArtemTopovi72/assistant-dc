@@ -196,3 +196,14 @@ def test_a_chain_part_samples_like_a_plain_clip():
                                   height=768, seconds=9.4, seed=1)
         assert part[V.N_LORA]["inputs"] == plain[V.N_LORA]["inputs"]
         assert part[V.N_SAMPLER]["inputs"]["steps"] == plain[V.N_SAMPLER]["inputs"]["steps"]
+
+
+def test_later_parts_know_the_scene_and_carry_no_example_action():
+    # 10-09: part 2 of «naked women walk past the bag of money at Lakhta» came out as a hand
+    # putting a tool on a counter and hitting a stone with a mallet -- the prefix's own example.
+    assert "counter" not in V.CONTINUE_CTX_PREFIX and "tool" not in V.CONTINUE_CTX_PREFIX
+    part = "They walk on toward the water."
+    d = V.CONTINUE_CTX_PREFIX + V.with_scene(part, "A paper bag of money at Lakhta; women walk in.")
+    assert "bag of money at Lakhta" in d and d.startswith(V.CONTINUE_CTX_PREFIX + part)
+    assert V.estimate_seconds(d) == V.estimate_seconds(part)
+    assert V.with_scene(part, "") == part
