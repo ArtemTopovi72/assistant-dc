@@ -62,3 +62,22 @@ def test_mask_takes_the_shadow_below():
     m.paste(255, (40, 20, 60, 120))                      # object 100 px tall
     box = O._with_contact_shadow(m).getbbox()
     assert box[3] >= 165 and box[1] == 20 and box[0] == 40, box
+
+
+def test_mask_over_the_cap_is_not_filled(tmp_path, monkeypatch):
+    # live 10-08: a leftover-logo mask covered 53% of the picture; ObjectClear rewrote
+    # the whole wall and the person
+    import image_contained_firered as CF
+    import image_lettering_remove as LR
+    src = _img(tmp_path)
+    big = Image.new("L", (64, 64), 0)
+    big.paste(255, (0, 0, 64, 34))                       # 53% of the picture
+    small = Image.new("L", (64, 64), 0)
+    small.paste(255, (0, 0, 16, 16))                     # 6%
+    filled = []
+    monkeypatch.setattr(LR, "_fill_objectclear", lambda *a, **k: filled.append(1) or "oc.png")
+    monkeypatch.setattr(CF, "_contained_region_mask", lambda *a, **k: (None, big, (0, 0, 64, 34)))
+    assert O._remove_via_objectclear(None, src, "logo", seed=1, timeout=5, max_cover=0.2) is None
+    assert not filled
+    monkeypatch.setattr(CF, "_contained_region_mask", lambda *a, **k: (None, small, (0, 0, 16, 16)))
+    assert O._remove_via_objectclear(None, src, "logo", seed=1, timeout=5, max_cover=0.2) == "oc.png"

@@ -319,7 +319,9 @@ def remove_lettering_and_logos(ctx, image_path: str, **kw) -> Optional[str]:
     try:
         import image_objects
         ctx.set_stage("Removing the lettering (logo)")
-        more = image_objects.remove_object_with_comfy(ctx, base, phrase)
+        # a leftover logo is a small thing: a mask over a fifth of the picture is the
+        # wall or the person, and filling it rewrites them
+        more = image_objects.remove_object_with_comfy(ctx, base, phrase, max_cover=0.2)
     except Exception:
         logger.warning("lettering-remove: logo pass failed", exc_info=True)
         more = None

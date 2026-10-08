@@ -94,7 +94,7 @@ def _with_contact_shadow(mask, frac: float = 0.5):
 
 
 def _remove_via_objectclear(ctx, image_path: str, target_phrase: str, *, seed: int,
-                            timeout: int) -> Optional[str]:
+                            timeout: int, max_cover: float = 1.0) -> Optional[str]:
     """Mask the target with the contained-edit masker, fill it with ObjectClear.
     None when there is no mask or ObjectClear failed."""
     try:
@@ -109,6 +109,15 @@ def _remove_via_objectclear(ctx, image_path: str, target_phrase: str, *, seed: i
         if not got:
             return None
         _orig, mask, _box = got
+        if max_cover < 1.0:
+            import numpy as _np
+            _cover = float((_np.asarray(mask.convert("L")) > 127).mean())
+            if _cover > max_cover:
+                # «white letters and icon background» selected half the picture and
+                # ObjectClear rewrote the whole wall and the person (live 2026-10-08)
+                logger.warning("remove-object: mask covers %.0f%% of the picture (limit %.0f%%) "
+                               "-- not filled", _cover * 100, max_cover * 100)
+                return None
         mask = _with_contact_shadow(mask)
         mask_path = str(scratch_path(_image.OUTPUT_DIR, f"_INTERMEDIATE_remove_mask_{int(time.time() * 1000)}.png"))
         mask.save(mask_path)
@@ -126,7 +135,8 @@ def _remove_via_objectclear(ctx, image_path: str, target_phrase: str, *, seed: i
 
 def remove_object_with_comfy(
         ctx, image_path: str, target_phrase: str,
-        *, seed: Optional[int] = None, fill_hint: str = "", timeout: int = 1900) -> Optional[str]:
+        *, seed: Optional[int] = None, fill_hint: str = "", timeout: int = 1900,
+        max_cover: float = 1.0) -> Optional[str]:
     """Localized object / person removal — FireRed contained edit.
 
     Removes only what `target_phrase` names, leaving the rest of the image as the
@@ -158,7 +168,8 @@ def remove_object_with_comfy(
     # 2026-09-25: faster, 58-89 s vs 90-97 s, and preferred by eye). A fill hint
     # ("put a lamp there") needs an instruction model, so that stays on FireRed.
     if not (fill_hint or "").strip() and os.getenv("OBJECT_REMOVE_ENGINE", "objectclear") == "objectclear":
-        out = _remove_via_objectclear(ctx, image_path, target_phrase, seed=seed, timeout=timeout)
+        out = _remove_via_objectclear(ctx, image_path, target_phrase, seed=seed, timeout=timeout,
+                                      max_cover=max_cover)
         # no FireRed fallback: it re-lit the table and left a cat-shaped halo
         # (owner 10-03: «убери запасной FireRed»); FireRed only draws a fill_hint
         if not out:
