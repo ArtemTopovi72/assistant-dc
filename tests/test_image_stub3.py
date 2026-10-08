@@ -251,6 +251,27 @@ def test_contained_firered_success_no_qa():
         out = I.edit_region_contained_via_firered(ctx, img, "hand", "fix it")
         check("cfirered_success_no_qa", out is not None and Path(out).exists())
 
+def test_contained_firered_refill_scratch_not_returned():
+    """The uncovered-background refill saves a scratch _INTERMEDIATE_ file; the
+    edit must come back under a deliverable name, not that path."""
+    ctx = Ctx()
+    img = _photo("cf5r.png", w=100, h=100)
+    orig = Image.open(img).convert("RGB")
+    mask = Image.new("L", (100, 100), 0)
+    px = mask.load()
+    for y in range(30, 70):
+        for x in range(30, 70): px[x, y] = 255
+    tile_out = _photo("cf5r_tile.png", w=40, h=40, col=(220, 40, 40))
+    scratch = _photo("_INTERMEDIATE_garment_1.png", w=100, h=100, col=(10, 10, 10))
+    with _Patches(_contained_region_mask=lambda *a, **k: (orig, mask, (30, 30, 70, 70)),
+                  edit_image_with_firered=lambda *a, **k: tile_out,
+                  _content_aware_alpha=lambda *a, **k: None,
+                  _refill_uncovered_background=lambda *a, **k: scratch,
+                  MASK_QA_ENABLED=False):
+        out = I.edit_region_contained_via_firered(ctx, img, "dress", "make it black")
+        check("cfirered_refill_deliverable",
+              out is not None and not I.is_intermediate_artifact(out), str(out))
+
 def test_contained_firered_stage2_qa_wrong_rejects():
     ctx = Ctx()
     img = _photo("cf6.png", w=100, h=100)

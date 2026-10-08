@@ -664,8 +664,14 @@ def edit_region_contained_via_firered(
         refilled = _refill_uncovered_background(ctx, str(final), mask, region_phrase, seed, timeout,
                                                 tile=res, tile_xy=(x0, y0), orig=orig)
         if refilled:
-            final = type(final)(refilled)
+            # The refill is saved under a scratch name; adopting that path made
+            # the delivery gate reject the whole edit as an intermediate tile.
+            # Take its pixels, keep the deliverable name.
             out = Image.open(refilled).convert("RGB")
+            if _image.is_intermediate_artifact(refilled):
+                out.save(str(final))
+            else:
+                final = type(final)(refilled)
 
     # ---- STAGE-2 QA: did the edit land correctly inside the region? ----
     # Overlay the generated result back over the original with the mask region tinted,
