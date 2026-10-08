@@ -481,7 +481,8 @@ def test_a_cover_lyric_keeps_the_originals_shape():
     o = R._sections_of(ORIG)
     assert R._cover_cost(good, o) < R._cover_cost(off, o)        # the refrain repeats where it did
     assert R._cover_cost(copied, o) is None                      # a new text, not the old one
-    assert R._cover_cost("[Verse]\nодна строка\n", o) is None
+    assert R._cover_cost("[Verse]\nодна строка\n", o) > R._cover_cost(good, o) + 0.5   # a miss costs
+    assert R._cover_cost("", o) is None
 
 
 def test_cover_words_picks_the_draft_closest_to_the_shape(monkeypatch):

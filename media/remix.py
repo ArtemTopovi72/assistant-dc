@@ -998,15 +998,16 @@ def _cover_cost(new: str, orig_sections: list) -> float:
     """How far a new lyric is from the original's shape (lower is better; None if broken):
     section and line counts, syllables per line, the repeat map, words copied."""
     secs = _sections_of(new)
-    if len(secs) != len(orig_sections):
+    if not secs:
         return None
+    # A long song's shape is rarely hit line for line (10-08: «Крошка моя», three drafts, all
+    # off by a line or a section, and the cover failed): a miss costs, it does not refuse.
     a, b = _shape(orig_sections), _shape(secs)
-    if len(a) != len(b):
-        return None
-    cost = sum(abs(x[1] - y[1]) / max(1, x[1]) for x, y in zip(a, b)) / len(a)
+    cost = 0.5 * abs(len(secs) - len(orig_sections)) / len(orig_sections) + abs(len(a) - len(b)) / len(a)
+    cost += sum(abs(x[1] - y[1]) / max(1, x[1]) for x, y in zip(a, b)) / len(a)
     rep = [(i, x[2]) for i, x in enumerate(a) if x[2] is not None]
     if rep:
-        cost += sum(1 for i, j in rep if b[i][2] != j) / len(rep)
+        cost += sum(1 for i, j in rep if i >= len(b) or b[i][2] != j) / len(rep)
     # A new text, never the old one with the title word swapped (10-08: shown the original's
     # lines, the model kept SHAMAN's lyric and changed «русский» to «дачник»).
     ow = {w for _, ls in orig_sections for l in ls for w in _words(l) if len(w) >= 4}
