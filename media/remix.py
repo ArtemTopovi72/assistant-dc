@@ -932,20 +932,46 @@ def _shape(sections: list) -> list:
     return out
 
 
+def _shape_rows(orig: list) -> list:
+    """The original as the model sees it: per line its syllables, repeats and hook place -- not
+    its words, so the new lyric cannot lean on them."""
+    import itertools
+    shape = _shape(orig)
+    hook = _hook_words([l for _, ls in orig for l in ls])
+    rows, k = [], 0
+    for tag, lines in orig:
+        rows.append(f"[{tag}]")
+        for l in lines:
+            _, n, rep = shape[k]
+            k += 1
+            ws = _words(l)
+            notes = [f"{n} syllables"]
+            if rep is not None:
+                notes.append(f"= line {rep + 1}")
+            at = [i for i, w in enumerate(ws) if w in hook]
+            if at:
+                notes.append("HOOK at the " + ("start" if at[0] <= 1 else "end" if at[-1] >= len(ws) - 2 else "middle"))
+            run = max((sum(1 for _ in g) for w, g in itertools.groupby(ws) if len(w) >= 2), default=1)
+            if run >= 2:
+                notes.append(f"word x{run}")
+            rows.append(f"{k}. " + "; ".join(notes))
+    return rows
+
+
 _WRITE_OVER = (
     "You write NEW words for an existing song -- a cover on a new theme, the way Weird Al writes "
-    "parodies: keep the original's shape exactly, change everything it says. You are given the "
-    "original lyric line by line with each line's syllable count and which lines repeat an earlier "
-    "line. Rules:\n"
+    "parodies: keep the original's shape exactly, say something new. You are given only the "
+    "original's SHAPE, line by line: syllables, which lines repeat an earlier line, and where its "
+    "hook sits. Rules:\n"
     "1. Same sections, same tags, same number of lines in each section.\n"
     "2. Each new line has the SAME number of syllables as the original line (one less or more at "
     "most), so it sits on the same notes; the stressed syllables fall naturally.\n"
-    "3. Make ONE hook for the new theme: a short, punchy phrase. Put it EXACTLY where the original "
-    "puts its hook/title, and repeat it as many times as the original repeats its hook.\n"
+    "3. Make ONE hook for the new theme: a short, punchy phrase (the song's new title). Every line "
+    "marked HOOK carries it -- at the start or the end of the line, as marked; the rest of that line "
+    "is new and may differ from one HOOK line to the next.\n"
     "4. A line marked (= line N) repeats line N: write the SAME new line there, word for word.\n"
-    "5. Where the original sings a word several times in a row, or starts neighbouring lines with "
-    "the same word, do the same with YOUR key word. Keep sung interjections (ой, эй, ла-ла).\n"
-    "6. Do not reuse the original's words except tiny function words -- it is a new text.\n"
+    "5. A line marked 'word xN' sings one word N times in a row: do that with YOUR key word.\n"
+    "6. Everything is your own text about the theme.\n"
     "7. Verses tell the theme's story with concrete details; the chorus sums it up around the hook. "
     "Make it witty and singable, in {lang}.\n"
     "Reply with JSON only: {{\"lyrics\": the new lyric with the section tags on their own lines -- "
@@ -965,10 +991,12 @@ def _cover_cost(new: str, orig_sections: list) -> float:
     rep = [(i, x[2]) for i, x in enumerate(a) if x[2] is not None]
     if rep:
         cost += sum(1 for i, j in rep if b[i][2] != j) / len(rep)
+    # A new text, never the old one with the title word swapped (10-08: shown the original's
+    # lines, the model kept SHAMAN's lyric and changed «русский» to «дачник»).
     ow = {w for _, ls in orig_sections for l in ls for w in _words(l) if len(w) >= 4}
     nw = {w for _, ls in secs for l in ls for w in _words(l) if len(w) >= 4}
-    if nw and len(ow & nw) / len(nw) > 0.3:
-        cost += 1.0                                  # a new text, not the old one re-used
+    if nw and len(ow & nw) / len(nw) > 0.25:
+        return None
     return cost
 
 
@@ -985,15 +1013,7 @@ def cover_words(ctx, song: str, theme: str, lang: str = "Russian") -> str:
     orig = _sections_of(lyrics_of(ctx, song))
     if not orig:
         raise cover.CoverFailed("no_words")
-    shape = _shape(orig)
-    rows, k = [], 0
-    for tag, lines in orig:
-        rows.append(f"[{tag}]")
-        for l in lines:
-            _, n, rep = shape[k]
-            k += 1
-            rows.append(f"{k}. {l}  ({n} syllables{f'; = line {rep + 1}' if rep is not None else ''})")
-    user = f"Theme of the new words: {theme}\n\nOriginal lyric:\n" + "\n".join(rows)
+    user = f"Theme of the new words: {theme}\n\nThe original's shape:\n" + "\n".join(_shape_rows(orig))
     best, best_cost = "", None
     for t in range(max(1, COVER_WORD_TRIES)):
         try:

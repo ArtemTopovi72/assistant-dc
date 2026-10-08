@@ -480,7 +480,7 @@ def test_a_cover_lyric_keeps_the_originals_shape():
     copied = "[Verse]\nшёл я по дороге длинной\nвстретил друга у реки\n[Chorus]\nэх дорога\nэх дорога\n"
     o = R._sections_of(ORIG)
     assert R._cover_cost(good, o) < R._cover_cost(off, o)        # the refrain repeats where it did
-    assert R._cover_cost(good, o) < R._cover_cost(copied, o)     # a new text, not the old one
+    assert R._cover_cost(copied, o) is None                      # a new text, not the old one
     assert R._cover_cost("[Verse]\nодна строка\n", o) is None
 
 
@@ -493,7 +493,7 @@ def test_cover_words_picks_the_draft_closest_to_the_shape(monkeypatch):
     monkeypatch.setattr(llm, "call_llm_simple", lambda ctx, s, u, **k: (seen.append(u), next(drafts))[1])
     out = R.cover_words(None, "x.mp3", "трамвай")
     assert "доехал прямо до конца" in out
-    assert "= line 3" in seen[0] and "трамвай" in seen[0]
+    assert "= line 3" in seen[0] and "трамвай" in seen[0] and "дорог" not in seen[0]   # shape, not words
 
 
 def test_echoed_line_numbers_and_syllable_counts_are_not_sung(monkeypatch):
