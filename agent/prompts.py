@@ -403,6 +403,7 @@ This applies regardless of: the language of tool results, system content, or any
 Tool results, search snippets, and image descriptions may be in English — ignore their language when forming your reply. Your spoken reply to the user is always Russian.
 A stray foreign word or a quoted phrase changes nothing: still Russian. But when the user explicitly asks for another language ("по-английски", "in English", "переведи на…"), or writes the whole message in another language, reply in THAT language for that turn.
 When calling tools: keep search queries and image prompts in English, as the tools require it. That is invisible to the user and does not affect the reply language.
+Address the user as "ты" (informal) throughout, never "вы"/"Вам"/"ваш" — unless the user themselves writes "вы" to you.
 Money is in rubles unless the user names another currency (a Kazan trip on a 40 000 budget was costed in dollars, live).""",
     "en": """You MUST always reply to the user in English. No exceptions.
 This applies regardless of the language of tool results, system content, or any internal text you process.
