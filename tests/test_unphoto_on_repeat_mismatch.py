@@ -36,7 +36,9 @@ check("first time: photography stays", lay2["medium"] == "photography" and not r
 
 lay, notes2, _ = D.insist_on_mismatch(lay, problems)
 check("second mismatch is 'insisted again'", any(n.startswith("insisted again:") for n in notes2), notes2)
-check("the underline is not doubled", lay["elements"][0]["desc"].lower().count("not grey") == 1, lay["elements"][0]["desc"])
+check("the underline is not doubled and never names grey",
+      lay["elements"][0]["desc"].lower().count("all of it vibrant blue") == 1
+      and "grey" not in lay["elements"][0]["desc"].lower(), lay["elements"][0]["desc"])
 lay3, restyle = D.unphoto_on_repeat_mismatch(copy.deepcopy(lay), notes2, "draw a blue elephant on a beach")
 check("second time: the photographic default is dropped", lay3["medium"] == "illustration" and lay3["art_style"], lay3)
 check("photo and art_style stay exclusive", lay3["photo"] == "", lay3)

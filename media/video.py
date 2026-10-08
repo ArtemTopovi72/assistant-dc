@@ -1039,7 +1039,9 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
             "as its action, with a timing word, whether or not the user mentioned it: 'as "
             "the boots hit the cobbles in step, a heavy rhythmic stomp', 'as she tips the "
             "jug, water splashes loudly into the basin', 'as the fist lands, a loud wet "
-            "crack'. A sound listed apart from its action ('marching sounds', 'punch "
+            "crack' (these quotes show the FORM only: their boots, jug and fist are never "
+            "part of this scene -- write only the request's own things and actions). "
+            "A sound listed apart from its action ('marching sounds', 'punch "
             "sounds') plays late or not at all; each repeated hit, step or slam gets its "
             "own. Keep the user's strength words (juicy, loud, crisp); never soften them "
             "into 'muffled' or move them to the soundscape. "
@@ -1399,7 +1401,8 @@ def bridge_part(ctx, last_frame: str, part: str) -> str:
              "brings it into the shot, or walks to the place -- unless the script says "
              "otherwise. E.g. 'He reaches off-frame to the right, lifts a steaming pot with "
              "both hands and sets it on the counter in front of him.' or 'She walks to the "
-             "door at the left.' -- only that movement, never the action itself. Reply as JSON only: "
+             "door at the left.' -- only that movement, never the action itself; the examples show "
+             "the form only, their pot and door are never in this video. Reply as JSON only: "
              '{"missing": ["..."], "bridge": "sentence, or empty when nothing is missing"}')
     import llm as _llm
     from utils import safe_json_from_llm
@@ -1434,7 +1437,8 @@ def bridge_script(ctx, parts: list) -> list:
              "gets it first. Things never move by themselves: a person reaches off-frame and "
              "brings the object into the shot with their hands, or walks to the place. E.g. 'He "
              "reaches off-frame to the right, lifts a steaming pot with both hands and sets it on "
-             "the counter in front of him.' Only that movement, never the action itself; empty "
+             "the counter in front of him.' (the form only -- that pot and counter are never in this "
+             "video). Only that movement, never the action itself; empty "
              "when nothing is missing. Reply as JSON only: "
              '{"bridges": ["sentence or empty for part 2", "... for part 3", ...]}')
     import llm as _llm

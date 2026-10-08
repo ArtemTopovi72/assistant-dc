@@ -453,13 +453,14 @@ _lay = {"elements": [{"desc": "a large, vibrant bright pink elephant", "x": 0.1,
 _l2, _notes, _left = D.insist_on_mismatch(_lay, ["The elephant is orange/red instead of bright pink",
                                                  "The palm tree is cut off at the top"])
 check("the element keeps its intended look and gains the insistence",
-      _l2["elements"][0]["desc"] == "a large, vibrant bright pink elephant, bright pink -- not orange/red",
+      _l2["elements"][0]["desc"] == "a large, vibrant bright pink elephant, bright pink -- all of it bright pink",
       _l2["elements"][0]["desc"])
 check("the note says what was insisted on", _notes and "bright pink" in _notes[0], _notes)
 check("the unrelated complaint is left for the editor", _left == ["The palm tree is cut off at the top"], _left)
 _l3, _n3, _left3 = D.insist_on_mismatch(_l2, ["The elephant is brown instead of bright pink"])
-check("a second insistence is added, the first is kept",
-      "not orange/red" in _l3["elements"][0]["desc"] and "not brown" in _l3["elements"][0]["desc"])
+check("a second insistence is not doubled, and the wrong colours are never written in (a model draws what it reads)",
+      _l3["elements"][0]["desc"].count("all of it bright pink") == 1 and _n3[0].startswith("insisted again")
+      and "orange" not in _l3["elements"][0]["desc"] and "brown" not in _l3["elements"][0]["desc"], _l3)
 _l4, _n4, _left4 = D.insist_on_mismatch(_lay, ["The sky is grey instead of blue"])
 check("a complaint about nothing in the layout passes through", not _n4 and _left4 == ["The sky is grey instead of blue"])
 _src = open(D.__file__, encoding="utf-8").read()

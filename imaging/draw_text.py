@@ -191,8 +191,10 @@ def auto_fix_text(layout: dict) -> tuple:
 TOP_MARGIN = 0.16        # what a grown host leaves above itself
 IN_FRAME = 0.76          # a host that grows for its lettering stops here, whole -- the model draws it larger than its box, and at 0.88 the cap was still cut
 WHOLE_NOTE = "shown whole from top to bottom, entirely inside the frame"
-ONLY_NOTE = ("the ONLY lettering anywhere in the picture; no other writing, "
-             "letters, numbers, brand names, logos or small print on anything")
+# Said as what IS there: a caption that lists «no brand names, logos or small print» names
+# them to a model that draws what it reads (ideogram.py's rule: «no whiskers» draws whiskers).
+ONLY_NOTE = ("the ONLY lettering anywhere in the picture; every other surface is plain, "
+             "smooth and blank")
 STRAY_MIN_CHARS = 3      # shorter readings are ornament, not words
 
 
@@ -220,14 +222,14 @@ def suppress_stray_text(layout: dict, stray: list) -> tuple:
             host["desc"] = (str(host.get("desc") or "").rstrip(". ")
                             + "; apart from that one label every part of it -- foil, "
                               "cap, neck, shoulders, back and base -- is plain and "
-                              "unmarked: no brand, no monogram, no vintage, no small print")
+                              "unmarked, smooth and blank")
     hl = str(layout.get("high_level_description") or "").rstrip(". ")
     if wanted and "the one and only lettering" not in hl.lower():
         quoted = " and ".join("“%s”" % " ".join(w.split()) for w in wanted)
         layout["high_level_description"] = (
             hl + ". The label reads " + quoted + " -- that label is wanted and must "
             "be there, and it is the one and only lettering in the picture; every "
-            "other surface is blank, with no other text, numbers, logos or monograms")
+            "other surface is plain, smooth and blank")
     if stray:
         notes.append("the picture carried lettering nobody asked for (%s) — every "
                      "surface is now described as blank apart from the requested words"
@@ -328,8 +330,8 @@ def spell_out(el: dict) -> str:
         # (live 2026-09-28): the hyphens are painted, so the letters are
         # counted and named instead, with separators ruled out explicitly.
         return (f'{surface} (the {len(text)}-letter word “{text}” as one solid word, in '
-                f"clean bold block capitals, every letter correctly formed, no hyphens, "
-                f"dots or gaps between the letters)")
+                f"clean bold block capitals, every letter correctly formed, the letters set "
+                f"closely side by side)")
     # Several words or lines: hyphenating the letters made the model PAINT the
     # hyphens ("ПРОЛЕТАР-СК-сой", live 2026-09-12). State the lines instead,
     # each as its own quoted phrase, in order.

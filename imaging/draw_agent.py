@@ -763,8 +763,12 @@ _MISMATCH_RE = re.compile(
 
 def insist_on_mismatch(layout: dict, problems: list) -> tuple:
     """Turn "the elephant is brown instead of bright pink" into an underlined
-    description ("... elephant, bright pink -- not brown") on the element it
-    names. Returns (layout, notes, problems left for the editor)."""
+    description ("... elephant, bright pink -- all of it bright pink") on the element it
+    names. Returns (layout, notes, problems left for the editor).
+    The wrong colour is never written into the caption: «vibrant blue -- not grey» named grey to
+    a model that draws what it reads (the blue elephant came out grey five times, 09-12; the
+    same rule as Ideogram's own «no whiskers» draws whiskers, and YuE2's «no female vocals»,
+    10-09)."""
     notes, left = [], []
     els = layout.get("elements") or []
     for p in problems or []:
@@ -785,7 +789,7 @@ def insist_on_mismatch(layout: dict, problems: list) -> tuple:
                     hit = el; break
         if hit is None:
             left.append(p); continue
-        tag = f"{want} -- not {got}"
+        tag = f"{want} -- all of it {want}"
         if tag.lower() not in str(hit.get("desc") or "").lower():
             hit["desc"] = str(hit.get("desc") or "").rstrip(". ") + f", {tag}"
             notes.append(f"insisted: {head or what} must be {want}, not {got}")
