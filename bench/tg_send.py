@@ -1,6 +1,6 @@
 """Send files to the owner's Telegram chat with the bot's saved token (never printed).
     venv/Scripts/python.exe bench/tg_send.py file [file ...] [--caption "text"] [--chat ID]"""
-import sys, requests
+import os, sys, requests
 from pathlib import Path
 from PyQt5.QtCore import QSettings
 a = sys.argv[1:]
