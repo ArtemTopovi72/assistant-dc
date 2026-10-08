@@ -150,6 +150,25 @@ _DELIVERY_CLAIM_RE = re.compile(
 )
 
 
+def _inspection_misses_request(request: str, verdict: str, tools_called: set) -> bool:
+    """The inspector labels every point PRESENT yet its own description shows the
+    request was not met: three cats for «пусть котов будет два», a rider behind
+    the car for «рядом с машиной» (live 2026-10-08) -- both answered «готово».
+    Labels are matched by _inspection_contradicts_work; counts and places live
+    in the description, which only a reading can judge."""
+    if not (set(tools_called or ()) & (_EDIT_TOOLS | {"generate_image"})):
+        return False
+    if not (request or "").strip() or not (verdict or "").strip():
+        return False
+    import intent
+    return intent.ask_yes(
+        "A user asked for a picture change: «" + request.strip()[:400].replace("{", "(")
+        + "». A checker then described the result: {text} -- does that description show "
+        "that the request is NOT met (a wrong number of things, the wrong place or "
+        "position, a wrong colour, something asked for missing)?",
+        verdict.strip()[:1200], default=False)
+
+
 def _inspection_contradicts_work(verdict: str, tools_called: set, removal: str = "") -> bool:
     """A negative inspection is a verdict only about something this turn MADE.
 
@@ -1978,6 +1997,10 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             if tool_name == "inspect_image":
                 verification_negative = _inspection_contradicts_work(
                     tool_result, tools_called_this_turn, removal_turn)
+                if not verification_negative and _inspection_misses_request(
+                        original_input or user_input, tool_result, tools_called_this_turn):
+                    logger.info("inspection description contradicts the request")
+                    verification_negative = True
             is_error = tool_result.lstrip().startswith(("[TOOL ERROR]", "Unknown tool"))
             if is_error:
                 consecutive_failures += 1

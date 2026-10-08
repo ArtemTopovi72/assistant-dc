@@ -38,3 +38,13 @@ def test_single_picture_question_reads_only_the_current_one(tmp_path, monkeypatc
     monkeypatch.setattr(intent, "YES_STUB", lambda q, t: False, raising=False)
     out = graph._add_earlier_pictures(_Ctx([a], b), {"user_input": "что на фото?"}, "a man")
     assert out == "a man" and not calls
+
+
+def test_inspection_description_that_misses_the_request_counts_as_negative(monkeypatch):
+    import graph_personality as gp
+    monkeypatch.setattr(intent, "YES_STUB", lambda q, t: "three" in t.lower(), raising=False)
+    edit = {"inpaint_image"}
+    assert gp._inspection_misses_request("пусть котов будет два", "Three grey cats sit. | Two cats: PRESENT", edit)
+    assert not gp._inspection_misses_request("пусть котов будет два", "Two cats sit.", edit)
+    # nothing was made this turn -> no verdict about a requested change
+    assert not gp._inspection_misses_request("пусть котов будет два", "Three grey cats", set())
