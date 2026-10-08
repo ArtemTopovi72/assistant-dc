@@ -665,7 +665,20 @@ def _layout(ctx, lyrics: str, parts: list, profile: list = None) -> str:
     return "\n\n".join(blocks)
 
 
-def _resing_style(ctx, heard: str, tempo_key: str) -> tuple:
+def _song_title(path: str) -> str:
+    """«Artist - Title» from the file's own tags (a Telegram audio, a downloaded mp3), or ''."""
+    try:
+        import mutagen
+        f = mutagen.File(path, easy=True)
+        tags = getattr(f, "tags", None) or {}
+        artist = " ".join(tags.get("artist") or [])
+        title = " ".join(tags.get("title") or [])
+        return " - ".join(x for x in (artist, title) if x)[:120]
+    except Exception:
+        return ""
+
+
+def _resing_style(ctx, heard: str, tempo_key: str, title: str = "") -> tuple:
     """(YuE2 tags for the original's sound, its lead singer). The model names the song from its
     first sung lines (it knows «3 сентября» is 90s Russian chanson by Shufutinsky); tempo and
     key come from the score. The singer keys the RVC voice kept for that artist."""
@@ -677,7 +690,9 @@ def _resing_style(ctx, heard: str, tempo_key: str) -> tuple:
             ctx, "These are sung lines of a song. Return JSON {\"artist\": the lead singer's name if you "
             "recognize the song, else \"\", \"tags\": 8-12 comma-separated music tags: genre, era, lead "
             "vocal (gender, timbre), main instruments, mood}. JSON only.",
-            heard[:600], temperature=0.2, max_tokens=200)
+            # The title names the singer; the sung lines alone made SHAMAN's «Я русский»
+            # «Alexander Marshal», and the cover went out in Marshal's voice (10-08).
+            (f"File title: {title}\n" if title else "") + heard[:600], temperature=0.2, max_tokens=200)
         got = safe_json_from_llm(raw or "", ["tags"]) or {}
     except Exception as exc:
         logger.warning("resing: style failed: %s", exc)
@@ -764,7 +779,8 @@ def resing(ctx, song: str, lyrics: str, info: dict = None) -> str:
     abc = _score(ctx, os.path.join(work, "a_ref.wav"), work)
     segs = _hear(ctx.models.whisper, os.path.join(work, "a_vox.wav"))
     heard = " ".join(w["w"] for w in _sung_words(segs))
-    style, artist = _resing_style(ctx, heard, _score_tempo_key(abc))
+    title = str((info or {}).get("title") or "") or _song_title(song)
+    style, artist = _resing_style(ctx, heard, _score_tempo_key(abc), title)
     profile = _repetition_profile([" ".join(w["w"] for w in p) for p in _phrases(_sung_words(segs))])
     logger.info("resing: the original repeats itself: %s", profile)
     layout = _layout(ctx, lyrics, _score_parts(abc), profile=profile)

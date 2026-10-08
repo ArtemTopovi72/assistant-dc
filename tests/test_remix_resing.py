@@ -503,3 +503,10 @@ def test_echoed_line_numbers_and_syllable_counts_are_not_sung(monkeypatch):
                         '[Chorus]\n3. ах трамвайчик (4)\n4. ах трамвайчик (4; = line 3)"}')
     out = R.cover_words(None, "x.mp3", "трамвай")
     assert "сел я на трамвай последний\nдоехал прямо до конца" in out and "(" not in out and "1." not in out
+
+
+def test_the_file_title_names_the_singer(monkeypatch):
+    seen = []
+    monkeypatch.setattr(llm, "call_llm_simple", lambda ctx, s, u, **k: (seen.append(u), '{"artist": "SHAMAN", "tags": "pop"}')[1])
+    _, artist = R._resing_style(None, "я русский я иду до конца", "120 bpm", "SHAMAN - Я РУССКИЙ")
+    assert artist == "SHAMAN" and "File title: SHAMAN - Я РУССКИЙ" in seen[0]
