@@ -29,13 +29,16 @@ class SearchArgs(_ToolArgs):
     query: str = Field(..., min_length=1, description=(
         "A focused search query in keywords, not a full sentence. Include "
         "distinguishing details, and the year for recent events "
-        "(e.g. 'Tokyo population 2024', not 'how many people live in Tokyo')."))
+        "(e.g. 'Tokyo population 2024', not 'how many people live in Tokyo'). Ask the "
+        "NEUTRAL question: never put in a name or figure you only guess as the "
+        "answer — it steers the results toward your guess."))
 
 
 class DeepResearchArgs(_ToolArgs):
     topic: str = Field(..., min_length=1, description=(
         "The research topic/question, as rich as possible "
-        "(English preferred for source coverage)."))
+        "(English preferred for source coverage). Ask the NEUTRAL question: never "
+        "name a candidate answer you only guess — it steers the research to it."))
     depth: Literal["quick", "standard", "deep"] = Field("standard", description=(
         "How exhaustive to be. 'standard' is the default; 'deep' reads more pages "
         "and follows links; 'quick' is a fast pass."))

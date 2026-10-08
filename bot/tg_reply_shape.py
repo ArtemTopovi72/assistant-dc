@@ -84,7 +84,11 @@ def shape_search_reply(reply_html: str, queries: list, sources: list, lang: str 
         # dropped rather than shown as a citation nobody can follow.
         return " ".join(marks)
 
-    body = _BARE_RE.sub(lambda m: _mark(m) or m.group(0), _CITE_RE.sub(_mark, reply_html or ""))
+    # Numbers are this function's to give. A «[1]» the model wrote itself pointed at
+    # whatever source happened to be listed first: «cbr.ru [1]» over a list that
+    # held only checko.ru (live 2026-10-08).
+    reply_html = re.sub(r"[ \t]*(?<!\w)\[\d{1,2}\]", "", reply_html or "")
+    body = _BARE_RE.sub(lambda m: _mark(m) or m.group(0), _CITE_RE.sub(_mark, reply_html))
     body = re.sub(r"[ \t]+([.,;:!?])", r"\1", body)       # "fact ." after a dropped mark
     body = re.sub(r"\s+(\[\d+\])", r" \1", body)          # "text [1]" not "text  [1]"
     listed = list(cited)

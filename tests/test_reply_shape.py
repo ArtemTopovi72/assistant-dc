@@ -73,6 +73,11 @@ check("a repeated search does not duplicate the register", len(ctx.turn_queries)
 import payload_guard as PG
 check("the model is told to keep the (source: domain) marks", "(source: domain)" in PG.SKEPTIC_BANNER)
 
+_own = S.shape_search_reply("Официальный сайт: cbr.ru [1]. Массив a[1] цел.",
+                            ["q"], [{"domain": "checko.ru", "title": "Банк России", "url": "https://checko.ru/x"}], "ru")
+check("a [n] the model wrote is not kept (it pointed at the wrong source)",
+      "cbr.ru [1]" not in _own.split("🔗")[0] and "a[1]" in _own, _own)
+
 print(f"\n{PASSED}/{PASSED + FAILED} checks passed")
 sys.exit(1 if FAILED else 0)
 
