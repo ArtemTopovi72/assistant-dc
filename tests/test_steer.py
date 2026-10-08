@@ -158,5 +158,9 @@ check("the push site tries to steer first",
 check("the loop drains before every model call",
       "_steer.drain_into(ctx, messages)" in open("agent/graph_personality.py", encoding="utf-8").read())
 
+m3 = [{"role": "tool", "content": "Image generated"}]
+S.fold_into(m3, ["фон красный"])
+check("the note tells the model to change what was already made", "ALREADY made" in m3[0]["content"] and "красный" in m3[0]["content"])
+
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)

@@ -83,7 +83,9 @@ def fold_into(messages: list, notes: List[str]) -> bool:
     if not notes or not messages:
         return False
     block = ("\n\n[UPDATE FROM THE USER while you were working -- apply it to "
-             "the rest of this task; if it is unrelated, answer it briefly in "
+             "the rest of this task; if a picture, file or text was ALREADY made "
+             "without it, change what was made so it includes the update, "
+             "instead of only saying you noted it; if it is unrelated, answer it briefly in "
              "your reply]:\n" + "\n".join(f"- {n}" for n in notes))
     last = messages[-1]
     if last.get("role") in ("tool", "user"):
