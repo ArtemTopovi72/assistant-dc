@@ -104,6 +104,35 @@ def translate_node(ctx: Context, state: AgentState) -> AgentState:
     return state
 
 
+def _add_earlier_pictures(ctx, state, summary: str) -> str:
+    """«что общего у двух фото?»: the overview covers the current picture only,
+    and the answer was "you sent just one photo" (live 2026-10-08). When the
+    user relates several pictures, the chat's earlier ones are read with the
+    same question and put next to it."""
+    earlier = [p for p in (getattr(ctx, "image_undo", None) or [])
+               if p and p != getattr(ctx, "last_image_path", None) and Path(p).exists()][-2:]
+    text = state.get("user_input_original") or state.get("user_input") or ""
+    if not earlier or not summary or "Failed to analyze" in summary or not text.strip():
+        return summary
+    import intent
+    if not intent.ask_yes("The user wrote: {text}. Do they ask about several of the pictures "
+                          "they sent together (compare them, what they share, which is "
+                          "better, both of them)?", text, default=False):
+        return summary
+    parts = ["Latest picture:" + chr(10) + summary]
+    for i, path in enumerate(earlier, 1):
+        try:
+            with open(path, "rb") as fh:
+                got = analyze_image_with_llm(ctx=ctx, image_bytes=downscale_image_bytes(fh.read()),
+                                             user_text=text, system_prompt=VISION_PROMPT)
+        except Exception:
+            logger.warning("earlier picture could not be read", exc_info=True)
+            continue
+        if got:
+            parts.append("Earlier picture %d of %d sent in this chat:" % (i, len(earlier)) + chr(10) + got)
+    return (chr(10) * 2).join(parts) if len(parts) > 1 else summary
+
+
 def vision_agent_node(ctx: Context, state: AgentState) -> AgentState:
     image_bytes = state.get("image_data")
     if not image_bytes:
@@ -133,6 +162,7 @@ def vision_agent_node(ctx: Context, state: AgentState) -> AgentState:
                     # A question deserves the small details too (vision_close).
                     response = _close_look(ctx, current_bytes, user_text, response)
                 vision_summary = response if response else "Failed to analyze image."
+                vision_summary = _add_earlier_pictures(ctx, state, vision_summary)
                 state["vision_summary"] = vision_summary
                 if "Failed to analyze" not in vision_summary:
                     ctx.remember("vision", vision_summary, {"has_image": True})
@@ -195,6 +225,7 @@ def vision_agent_node(ctx: Context, state: AgentState) -> AgentState:
         # label, the number, the thing in the hand make it into the answer.
         response = _close_look(ctx, original_bytes, state.get("user_input", ""), response)
     vision_summary = response if response else "Failed to analyze image."
+    vision_summary = _add_earlier_pictures(ctx, state, vision_summary)
     state["vision_summary"] = vision_summary
     if ctx.last_image_path and vision_summary and "Failed to analyze" not in vision_summary:
         # Used as the prompt seed if the user later asks to redraw the whole thing.

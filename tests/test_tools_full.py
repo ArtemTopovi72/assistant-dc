@@ -361,6 +361,27 @@ def test_inspect_image():
         check("inspect_dark_plus_substance_stands", "a flaw was flagged" in r, r[:200])
 
 
+def test_inspect_image_compares_earlier_pictures():
+    """«что общего у двух фото»: with earlier=1 both pictures are read."""
+    old = _img("cmp_old.png")
+    c = _ctx(last_image_path=_img("cmp_new.png"))
+    c.image_undo = [old]
+    seen = []
+    import llm as _llm
+    with mock_env(vision="Everything is correct and present"):
+        _orig = _llm.analyze_image_with_llm
+        _llm.analyze_image_with_llm = lambda **k: seen.append(k.get("image_path")) or _orig(**k)
+        try:
+            r = T._handle_inspect_image(c, {}, {"check": "what do they share?", "earlier": 1})
+            one = len(seen)
+            seen.clear()
+            T._handle_inspect_image(c, {}, {"check": "what do they share?"})
+        finally:
+            _llm.analyze_image_with_llm = _orig
+    check("inspect_compare_reads_both", one == 2 and "Picture 1 of 2" in r and "(the latest)" in r, r[:200])
+    check("inspect_default_reads_one", len(seen) == 1)
+
+
 # ------------------------------------------------------------------ inpaint_image
 
 def test_inpaint_image():

@@ -74,7 +74,8 @@ _INSPECT_IMAGE_DESC = (
     "objects — BEFORE telling the user it is done. It reports, per element, whether it is "
     "present, partial, missing, or distorted (artifacts). If something is missing or "
     "malformed, fix it with inpaint_image and inspect again. Never claim an element is in "
-    "the image without inspecting first."
+    "the image without inspecting first. To compare two or more photos from the chat "
+    "(\"what do these two have in common\") pass earlier=1 (or 2)."
 )
 
 _INPAINT_IMAGE_DESC = (

@@ -206,6 +206,9 @@ class InspectImageArgs(_ToolArgs):
         "What to verify, phrased as a concrete checklist/question. E.g. 'Is a "
         "fork held in his hand and pressing into the dough? Are the hand and fork "
         "free of artifacts (extra fingers, bent tines)?'"))
+    earlier: int = Field(0, ge=0, le=3, description=(
+        "How many pictures sent BEFORE the current one to look at as well (0 = only "
+        "the current picture). Use 1 to compare two photos, 2 for three."))
 
 
 class InpaintImageArgs(_ToolArgs):

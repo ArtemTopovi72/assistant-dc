@@ -91,6 +91,19 @@ def _handle_inspect_image(ctx, state, args: dict) -> str:
     check = (args.get("check") or "").strip() or "Describe exactly what is in the image."
     ctx.set_stage("Looking at the picture")
     logger.info("Tool: inspect_image(check=%r, source=%s)", check[:80], source)
+    # «что общего у двух фото»: the chat's earlier pictures, newest last, each
+    # read on its own and labelled, so the answer can compare them.
+    _n = int(args.get("earlier") or 0)
+    if _n > 0:
+        _before = [p for p in (getattr(ctx, "image_undo", None) or [])
+                   if p and p != source and os.path.exists(p)][-_n:]
+        if _before:
+            _parts = []
+            for _i, _p in enumerate(_before + [source], 1):
+                _sub = _handle_inspect_image(ctx, {**state, "image_path": _p}, {"check": check})
+                _parts.append(f"Picture {_i} of {len(_before) + 1}"
+                              f"{' (the latest)' if _p == source else ''}:{chr(10)}{_sub}")
+            return (chr(10) * 2).join(_parts)
 
     from llm import analyze_image_with_llm
     from prompts import IMAGE_INSPECT_PROMPT
