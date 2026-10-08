@@ -1881,6 +1881,15 @@ class TaskRunnerMixin:
                 _out_is_ours = bool(out_img)
             owed_image = (bool(tg_bot._IMAGE_PRODUCING_RE.match(task.user_text or ""))
                           or _out_is_ours or bool(img_status))
+            # 10-08 live: «Не удалось нарисовать… Попробовать ещё раз?» was followed by
+            # «На самом деле не получилось… не обращай внимания на сообщение выше» --
+            # a retraction of a reply that had already admitted the failure.
+            if owed_image and not delivered and reply:
+                import intent as _intent
+                if _intent.ask_yes("A bot answered a user: {text} -- does that answer already "
+                                   "tell the user that the picture could not be made?", reply,
+                                   default=False):
+                    owed_image = False
             if owed_image and not delivered:
                 self._send_text(chat_id, tg_bot._t("img_missing", lang),
                                 parse_mode="HTML", keyboard=main_kb)

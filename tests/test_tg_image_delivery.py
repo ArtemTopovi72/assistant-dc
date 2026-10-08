@@ -118,6 +118,18 @@ seen = run_turn({"final_answer": NARRATION})
 check("a tool-error turn sends no photo", seen["photo"] == [])
 check("and the false claim is corrected", warned(seen), str(seen["text"])[:120])
 
+# 10-08 live: a reply that ALREADY admits the failure is not retracted a second time.
+import intent as _intent
+_intent.YES_STUB = lambda q, t: "не удалось" in t.lower()
+try:
+    seen = run_turn({"final_answer": "Не удалось нарисовать сырники, возникла ошибка. Попробовать ещё раз?"})
+    check("a reply that already admits the failure gets no second warning", not warned(seen),
+          str(seen["text"])[:140])
+    seen = run_turn({"final_answer": NARRATION})
+    check("a false success claim is still retracted", warned(seen), str(seen["text"])[:110])
+finally:
+    _intent.YES_STUB = None
+
 for label, state in {
     "a failed image_status": {"final_answer": NARRATION, "image_path": good,
                               "image_status": "fail"},
