@@ -61,6 +61,21 @@ STARS = (("tsoi_hq", "Виктор Цой"), ("gorshok_hq", "Горшок (Ки�
          ("ruki_vverh", "Руки Вверх"))
 
 
+# The song's artist as the style step names it -> the star voice trained on many songs, which
+# beats the one-song model made from that artist's first cover.
+ALIASES = {"viktor_tsoy": "tsoi_hq", "viktor_tsoi": "tsoi_hq", "kino": "tsoi_hq",
+           "korol_i_shut": "gorshok_hq", "mihail_gorshenev": "gorshok_hq", "gorshok": "gorshok_hq",
+           "modern_talking": "anders_hq", "tomas_anders": "anders_hq", "thomas_anders": "anders_hq",
+           "rammstein": "lindemann_hq", "till_lindemann": "lindemann_hq", "til_lindemann": "lindemann_hq",
+           "lindemann": "lindemann_hq"}
+
+
+def best_voice(name: str) -> str:
+    """`name`'s star model when one is trained, else `name` itself."""
+    star = ALIASES.get(name or "")
+    return star if star and model_of(star) else name
+
+
 def stars() -> list:
     """[(model name, label)] of the star voices trained here."""
     seen, out = set(), []
@@ -91,27 +106,36 @@ LEAD_MODEL = "mel_band_roformer_karaoke_aufr33_viperx_sdr_10.1956.ckpt"
 DRY_MODEL = "dereverb_mel_band_roformer_anvuew_sdr_19.1729.ckpt"
 
 
+def split_lead(ctx, vocal_wav: str, work: str) -> tuple:
+    """A vocal stem -> (the lead voice dry, the backing vocals or None): the karaoke model takes
+    the lead off the choir, the dereverb model the hall off the lead. Raises when it can't."""
+    if not os.path.isfile(SEPARATOR):
+        raise RuntimeError("no audio-separator")
+    models = os.path.join(APPLIO, "sep_models")
+    src, backing = vocal_wav, None
+    for i, (model, keep) in enumerate(((LEAD_MODEL, "(Vocals)"), (DRY_MODEL, "(noreverb)"))):
+        out = os.path.join(work, f"clean{i}")
+        os.makedirs(out, exist_ok=True)
+        music.run_gpu_worker(ctx, PY, "", {}, "RVC clean", 900, env={**os.environ, "PYTHONUTF8": "1"},
+                             cmd=[SEPARATOR, src, "-m", model, "--output_dir", out, "--model_file_dir", models,
+                                  "--output_format", "WAV"], cwd=APPLIO)
+        wavs = glob.glob(os.path.join(out, "*.wav"))
+        got = [f for f in wavs if keep in os.path.basename(f)]
+        if not got:
+            raise RuntimeError(f"{model}: no {keep} stem")
+        if i == 0:
+            backing = next((f for f in wavs if keep not in os.path.basename(f)), None)
+        src = got[0]
+    return src, backing
+
+
 def _clean_vocal(ctx, vocal_wav: str, work: str) -> str:
     """The singer alone and dry: the lead voice off the backing vocals, then the reverb off it.
     10-08 sweep (Whisper likeness of a YuE take sung through, 2 takes x 3 settings): Snowie on
     the bare Demucs stem 0.62, on the cleaned one 0.68 -- the model no longer learns the choir
     and the hall as part of the voice. The bare stem when the separator is missing or fails."""
-    if not os.path.isfile(SEPARATOR):
-        return vocal_wav
-    models = os.path.join(APPLIO, "sep_models")
-    src = vocal_wav
     try:
-        for i, (model, keep) in enumerate(((LEAD_MODEL, "(Vocals)"), (DRY_MODEL, "(noreverb)"))):
-            out = os.path.join(work, f"clean{i}")
-            os.makedirs(out, exist_ok=True)
-            music.run_gpu_worker(ctx, PY, "", {}, "RVC clean", 900, env={**os.environ, "PYTHONUTF8": "1"},
-                                 cmd=[SEPARATOR, src, "-m", model, "--output_dir", out, "--model_file_dir", models,
-                                      "--output_format", "WAV"], cwd=APPLIO)
-            got = [f for f in glob.glob(os.path.join(out, "*.wav")) if keep in os.path.basename(f)]
-            if not got:
-                raise RuntimeError(f"{model}: no {keep} stem")
-            src = got[0]
-        return src
+        return split_lead(ctx, vocal_wav, work)[0]
     except Exception as exc:
         logger.warning("rvc: vocal cleanup failed (%s), training on the bare stem", exc)
         return vocal_wav
@@ -171,13 +195,13 @@ def train(ctx, name: str, vocal_wav: str):
     return got
 
 
-def convert(ctx, name: str, vocal_wav: str, out_wav: str) -> str:
+def convert(ctx, name: str, vocal_wav: str, out_wav: str, index_rate: float = 0.0) -> str:
     """`vocal_wav` sung in `name`'s voice. 10-08 Whisper sweep (share of the lyric's lines heard):
     index 0 / protect 0.33 kept 0.52-0.59, index 0.4 / protect 0.5 -- 0.48, 0.75 -- 0.45, -12 -- 0.31.
     The index pulls the stem's mumble in; the timbre is in the model."""
     pth, idx = model_of(name)
     _run(ctx, ["infer", "--input-path", os.path.abspath(vocal_wav), "--output-path", os.path.abspath(out_wav),
-               "--pth-path", pth, "--index-path", idx, "--pitch", "0", "--index-rate", "0", "--protect", "0.33",
+               "--pth-path", pth, "--index-path", idx, "--pitch", "0", "--index-rate", f"{index_rate:g}", "--protect", "0.33",
                "--f0-method", "rmvpe", "--volume-envelope", "1", "--export-format", "WAV"], "RVC", 900)
     if not os.path.isfile(out_wav):
         raise RuntimeError("rvc convert gave no file")

@@ -808,7 +808,7 @@ def resing(ctx, song: str, lyrics: str, info: dict = None) -> str:
         raise cover.CoverFailed("render")
     _, take, yvox, yback = best
     yvox_wav = os.path.join(work, f"y{take}_vox.wav")
-    name = rvc_voice.slug(artist) if rvc_voice.available() else ""
+    name = rvc_voice.best_voice(rvc_voice.slug(artist)) if rvc_voice.available() else ""
     if info is not None:
         info.update({"work": work, "artist": artist, "rvc": name, "yvox": yvox, "yback": yback,
                      "yvox_wav": yvox_wav, "clarity": best[0], "layout": layout,
@@ -871,6 +871,34 @@ def _voice_keeping_words(ctx, voices: list, yvox_wav: str, layout: str, work: st
         return top[1]
     logger.warning("resing: no voice kept the words, sending the take's own vocal")
     return yvox_wav
+
+
+# A real singer's lead carries the words a YuE take loses through RVC; the index adds the star's
+# own timbre texture there (night run 10-09 sang with 0.3).
+STAR_INDEX_RATE = float(os.getenv("STAR_INDEX_RATE", "0.3"))
+
+
+def sing_original_as(ctx, song: str, name: str) -> str:
+    """`song` as it is -- its melody, words and backing -- but its lead sung in the trained voice
+    `name` (10-09 «пусть Цой споёт Куклу колдуна»): Demucs vocal -> the lead dry off the choir
+    -> RVC -> over the backing plus the choir. Returns an mp3 path; raises cover.CoverFailed."""
+    import librosa
+    import soundfile as sf
+    import rvc_voice
+    if not rvc_voice.model_of(name):
+        raise cover.CoverFailed("render")
+    work = tempfile.mkdtemp(prefix="star_")
+    if ctx is not None and hasattr(ctx, "set_stage"):
+        ctx.set_stage("Singing in the chosen voice")
+    _, back = _stems(song, work, "o")
+    lead, choir = rvc_voice.split_lead(ctx, os.path.join(work, "o_vox.wav"), work)
+    if choir:
+        bv, _ = librosa.load(choir, sr=SR, mono=True)
+        n = min(len(bv), len(back))
+        back = back[:n] + bv[:n]
+    conv = rvc_voice.convert(ctx, name, lead, os.path.join(work, "star.wav"), index_rate=STAR_INDEX_RATE)
+    v0, _ = librosa.load(lead, sr=SR, mono=True)
+    return _mix_vocal(conv, v0, back)
 
 
 def resing_rvc(ctx, info: dict) -> str:

@@ -111,6 +111,10 @@ class CoverMixin:
         opts += list(rvc_voice.stars()) if rvc_voice.available() else []
         rows = [[{"text": ("✅ " if (v == cur or (v == "auto" and not cur)) else "") + label,
                   "callback_data": f"cvv:{v}"}] for v, label in opts]
+        if cur not in ("", "none") and getattr(sess, "cover_state", "") == "want_text":
+            # the song as it is, only its singer swapped (no new words needed)
+            label = dict(opts).get(cur, cur)
+            rows.append([{"text": tg_bot._t("cover_voice_go", lang, who=label), "callback_data": "cvv:go"}])
         return {"inline_keyboard": rows}
 
     def _cb_cover_voice(self, chat_id: int, msg: dict, data: str) -> None:
@@ -118,6 +122,16 @@ class CoverMixin:
         sess = self._get_session(chat_id)
         lang = self._lang(sess)
         v = data.split(":", 1)[1]
+        if v == "go":
+            src = getattr(sess, "cover_src", "")
+            if sess.cover_voice in ("", "none") or getattr(sess, "cover_state", "") != "want_text" \
+                    or not src or not os.path.exists(src):
+                return
+            sess.cover_state = ""
+            self._store.put(sess)
+            self._send_text(chat_id, tg_bot._t("cover_working", lang))
+            self._run_busy(chat_id, self._cover_star, chat_id, lang, src, sess.cover_voice)
+            return
         if v == "auto":
             v = ""
         elif v != "none" and v not in dict(rvc_voice.stars()):
@@ -181,6 +195,20 @@ class CoverMixin:
             import mashup_stems
             mashup_stems.release_separator()      # Demucs holds VRAM the next render needs
 
+
+    def _cover_star(self, chat_id: int, lang: str, src: str, voice: str) -> None:
+        ctx = self._get_ctx()
+        try:
+            if not self._send_audio(chat_id, remix.sing_original_as(ctx, src, voice), tg_bot._t("cover_done", lang)):
+                self._send_text(chat_id, tg_bot._t("cover_fail_render", lang))
+        except cover.CoverFailed as exc:
+            self._send_text(chat_id, tg_bot._t("cover_fail_" + str(exc), lang))
+        except Exception:
+            tg_bot.logger.exception("[remix] star voice failed for chat %s", chat_id)
+            self._send_text(chat_id, tg_bot._t("cover_fail_render", lang))
+        finally:
+            import mashup_stems
+            mashup_stems.release_separator()
 
     def _mashup_first(self, chat_id: int, lang: str, ctx, src: str, song2: str) -> None:
         """The classic mashup (song 1's vocal over song 2's backing, bar-aligned and in key)

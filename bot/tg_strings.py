@@ -1013,6 +1013,7 @@ _MSG: dict[str, dict[str, str]] = {
     "cover_two_songs_words": {"en": "📝 Taking the second song's words — the first will sing them on its melody…",
                               "ru": "📝 Беру слова второй песни — первая споёт их на своей мелодии…"},
     "cover_voice_pick": {"en": "🎤 Whose voice sings it? (kept for later covers)", "ru": "🎤 Чьим голосом петь? (запомню для следующих каверов)"},
+    "cover_voice_go": {"en": "▶️ Sing this song as is in {who}'s voice", "ru": "▶️ Спеть эту песню как есть голосом: {who}"},
     "cover_voice_auto": {"en": "🎤 The original singer's", "ru": "🎤 Голосом исполнителя оригинала"},
     "cover_voice_none": {"en": "🗣 No voice swap (clearest words)", "ru": "🗣 Без замены голоса (слова чище)"},
     "cover_rvc_done": {"en": "🎚 In the singer's own voice", "ru": "🎚 Голосом певца"},

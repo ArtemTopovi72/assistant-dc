@@ -151,6 +151,41 @@ def test_star_list_shows_only_trained_voices_once_per_singer(monkeypatch):
     assert rvc_voice.stars() == [("tsoi_hq", "Виктор Цой"), ("shaman", "SHAMAN")]
 
 
+def test_the_artist_gets_the_star_model_when_it_is_trained(monkeypatch):
+    import rvc_voice
+    monkeypatch.setattr(rvc_voice, "model_of", lambda n: n == "tsoi_hq" or None)
+    assert rvc_voice.best_voice("viktor_tsoy") == "tsoi_hq"
+    assert rvc_voice.best_voice("shaman") == "shaman"
+    monkeypatch.setattr(rvc_voice, "model_of", lambda n: None)
+    assert rvc_voice.best_voice("viktor_tsoy") == "viktor_tsoy"
+
+
+def test_sing_original_as_swaps_only_the_lead(monkeypatch, tmp_path):
+    # 10-09 «пусть Цой споёт Куклу колдуна»: the song's own lead converted, the choir stays in
+    # the backing, the star's index on.
+    import rvc_voice, soundfile as sf
+    lead, choir = str(tmp_path / "lead.wav"), str(tmp_path / "choir.wav")
+    sf.write(lead, np.full(R.SR, 0.1, np.float32), R.SR)
+    sf.write(choir, np.full(R.SR, 0.2, np.float32), R.SR)
+    seen = {}
+    monkeypatch.setattr(R, "_stems", lambda song, work, name: (np.zeros(R.SR), np.full(R.SR, 0.5, np.float32)))
+    monkeypatch.setattr(rvc_voice, "model_of", lambda n: ("m.pth", "m.index"))
+    monkeypatch.setattr(rvc_voice, "split_lead", lambda ctx, wav, work: (lead, choir))
+    monkeypatch.setattr(rvc_voice, "convert", lambda ctx, name, src, out, index_rate=0.0:
+                        (seen.update(name=name, src=src, idx=index_rate), lead)[1])
+    monkeypatch.setattr(R, "_mix_vocal", lambda conv, v0, back: (seen.update(back=float(back[0])), "out.mp3")[1])
+    assert R.sing_original_as(None, "kukla.mp3", "tsoi_hq") == "out.mp3"
+    assert seen["name"] == "tsoi_hq" and seen["src"] == lead and seen["idx"] > 0
+    assert abs(seen["back"] - 0.7) < 1e-3      # backing + choir
+
+
+def test_sing_original_as_needs_a_trained_voice(monkeypatch):
+    import rvc_voice, cover
+    monkeypatch.setattr(rvc_voice, "model_of", lambda n: None)
+    with pytest.raises(cover.CoverFailed):
+        R.sing_original_as(None, "kukla.mp3", "nobody")
+
+
 def test_artist_slug_is_ascii():
     import rvc_voice
     assert rvc_voice.slug("Михаил Шуфутинский") == "mihail_shufutinskiy"

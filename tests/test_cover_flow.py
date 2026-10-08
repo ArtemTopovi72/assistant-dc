@@ -246,6 +246,28 @@ remix.resing = _resing_pick
 bot._cover_render(CID, "ru", "/x/song.mp3", "новые слова", "")
 check("the picked voice goes into the render and no second RVC pass follows",
       GOT.get("voice") == "tsoi_hq" and [p for p, _ in AUD] == ["resing.mp3"], (GOT, AUD))
+# «▶️ спеть эту песню как есть»: shown only for a star while the song waits for words
+_s = bot._get_session(CID); _s.cover_voice = "tsoi_hq"; _s.cover_state = "want_text"
+_src = os.path.join(tempfile.mkdtemp(), "kukla.mp3"); open(_src, "wb").close(); _s.cover_src = _src
+bot._store.put(_s)
+kb = bot._cover_voice_kb(_s, "ru")["inline_keyboard"]
+check("a star while the song waits: the «sing it as is» button", kb[-1][0]["callback_data"] == "cvv:go", kb)
+STAR = []
+remix.sing_original_as = lambda ctx, src, name: (STAR.append((os.path.basename(src), name)), "star.mp3")[1]
+_real_busy2 = bot._run_busy
+bot._run_busy = lambda cid, fn, *a: fn(*a)
+AUD.clear()
+bot._cb_cover_voice(CID, {"message_id": 5}, "cvv:go")
+check("«sing it as is»: the song goes out in the star's voice, the flow disarmed",
+      STAR == [("kukla.mp3", "tsoi_hq")] and [p for p, _ in AUD] == ["star.mp3"]
+      and bot._get_session(CID).cover_state == "", (STAR, AUD))
+bot._cb_cover_voice(CID, {"message_id": 5}, "cvv:go")
+check("a second tap does nothing (the song was taken)", len(STAR) == 1, STAR)
+_s = bot._get_session(CID); _s.cover_voice = "none"; _s.cover_state = "want_text"; bot._store.put(_s)
+check("no star: no «sing it as is» button",
+      all(r[0]["callback_data"] != "cvv:go" for r in bot._cover_voice_kb(_s, "ru")["inline_keyboard"]))
+_s.cover_state = ""; bot._store.put(_s)
+bot._run_busy = _real_busy2
 bot._cb_cover_voice(CID, {"message_id": 5}, "cvv:auto")
 check("auto clears the choice", bot._get_session(CID).cover_voice == "")
 bot._edit_text = _real_edit
