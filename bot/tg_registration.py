@@ -221,6 +221,16 @@ class RegistrationMixin:
                 if not text or len(text.strip()) < 2:
                     self._send_text(chat_id, tg_bot._t("name_again", lang), parse_mode="HTML")
                     return False
+                # 10-08 live: «нарисуй кота» sent to «напиши своё имя» became the account's
+                # name («Приятно познакомиться, нарисуй кота!»). A request is not a name;
+                # a single word is taken as is (nicknames), a phrase is asked of the model.
+                import intent
+                if len(text.split()) >= 2 and not intent.ask_yes(
+                        "A new user was asked to tell their name and wrote: {text}. Is that a "
+                        "person's name or nickname, rather than a request, a question or a "
+                        "sentence?", text.strip(), default=True):
+                    self._send_text(chat_id, tg_bot._t("name_again", lang), parse_mode="HTML")
+                    return False
                 sess.reg_name  = text.strip()[:50]
                 sess.reg_state = "awaiting_password"
                 self._store.put(sess)
