@@ -143,14 +143,14 @@ _HALLUCINATED = re.compile(r"субтитр|dimatorzok|редактор|корр
                            r"спасибо за просмотр|подписывайтесь|thank you|subtitles|amara", re.I)
 
 
-def _hear(whisper, path: str, language=None) -> list:
+def _hear(whisper, path: str, language=None, vad: bool = True) -> list:
     """Whisper segments of a bare sung vocal. VAD on and no conditioning on the previous text:
     with the defaults one credit-line hallucination repeats through the whole stem (10-07: a
     clear take came back as 13 x «Продолжение следует...», 0 words, and the take picker
     scored it 0%); with these the same take read almost word for word. Greedy at temperature 0:
     with the fallback ladder the same converted vocal scored 0.03, 0.41, 0.52 on three runs
     (10-08), so takes and voices were picked on noise; at 0 it is 0.52 every time."""
-    segs, _ = whisper.transcribe(path, word_timestamps=True, language=language, vad_filter=True,
+    segs, _ = whisper.transcribe(path, word_timestamps=True, language=language, vad_filter=vad,
                                  condition_on_previous_text=False, temperature=0.0)
     return list(segs)
 
@@ -457,6 +457,15 @@ def _repetition_profile(phrases: list) -> list:
         if len(l) >= 8:
             counts[l] = counts.get(l, 0) + 1
     refrains = sorted((n for n in counts.values() if n >= 2), reverse=True)
+    if not refrains:
+        # Whisper cuts the same sung line at different breaths, so whole phrases rarely match
+        # (SHAMAN «Я русский»: no refrain found, 10-08); a 3-word run sung 3+ times is one.
+        grams = {}
+        for l in lines:
+            ws = l.split()
+            for g in {" ".join(ws[i:i + 3]) for i in range(len(ws) - 2)}:
+                grams[g] = grams.get(g, 0) + 1
+        refrains = sorted((n for n in grams.values() if n >= 3), reverse=True)[:5]
     if refrains:
         notes.append(f"{len(refrains)} of its lines come back as a refrain (the most repeated is sung "
                      f"{refrains[0]} times) -- choruses repeat the same refrain word for word")
@@ -864,8 +873,14 @@ def lyrics_of(ctx, song: str) -> str:
     import difflib
     work = tempfile.mkdtemp(prefix="lyrics_")
     _stems(song, work, "w")
-    segs = [sg for sg in _hear(ctx.models.whisper, os.path.join(work, "w_vox.wav"))
-            if not _HALLUCINATED.search(sg.text or "")]
+    # An original's stem under a dense mix: with VAD on Whisper kept ~50 of SHAMAN's words and
+    # skipped the verses, off it heard 161 (10-08). Both are heard; the fuller one is kept
+    # (credit-line hallucinations are filtered either way).
+    heard = []
+    for vad in (True, False):
+        heard.append([sg for sg in _hear(ctx.models.whisper, os.path.join(work, "w_vox.wav"), vad=vad)
+                      if not _HALLUCINATED.search(sg.text or "")])
+    segs = max(heard, key=lambda ss: sum(len((sg.text or "").split()) for sg in ss))
     lines = [re.sub(r"\s+", " ", sg.text).strip() for sg in segs if len(_letters(sg.text)) >= 3]
     if sum(len(l.split()) for l in lines) < 12:
         raise cover.CoverFailed("no_words")
@@ -888,6 +903,117 @@ def lyrics_of(ctx, song: str) -> str:
         text = raw
     logger.info("lyrics_of: %d lines from %s", len(lines), os.path.basename(song))
     return text
+
+
+def _sections_of(lyric: str) -> list:
+    """[(tag, [lines])] of a tagged lyric; untagged text is one [Verse]."""
+    out = []
+    for raw in (lyric or "").splitlines():
+        l = raw.strip()
+        m = re.fullmatch(r"\[([^\]]+)\]", l)
+        if m:
+            out.append((m.group(1).strip(), []))
+        elif l:
+            if not out:
+                out.append(("Verse", []))
+            out[-1][1].append(l)
+    return [(t, ls) for t, ls in out if ls]
+
+
+def _shape(sections: list) -> list:
+    """Per line of a lyric: (section index, syllables, index of the earlier identical line or
+    None) -- the map of repeats a new lyric has to keep."""
+    seen, out = {}, []
+    for si, (_, lines) in enumerate(sections):
+        for l in lines:
+            key = " ".join(_words(l))
+            out.append((si, _syl(l), seen.get(key)))
+            seen.setdefault(key, len(out) - 1)
+    return out
+
+
+_WRITE_OVER = (
+    "You write NEW words for an existing song -- a cover on a new theme, the way Weird Al writes "
+    "parodies: keep the original's shape exactly, change everything it says. You are given the "
+    "original lyric line by line with each line's syllable count and which lines repeat an earlier "
+    "line. Rules:\n"
+    "1. Same sections, same tags, same number of lines in each section.\n"
+    "2. Each new line has the SAME number of syllables as the original line (one less or more at "
+    "most), so it sits on the same notes; the stressed syllables fall naturally.\n"
+    "3. Make ONE hook for the new theme: a short, punchy phrase. Put it EXACTLY where the original "
+    "puts its hook/title, and repeat it as many times as the original repeats its hook.\n"
+    "4. A line marked (= line N) repeats line N: write the SAME new line there, word for word.\n"
+    "5. Where the original sings a word several times in a row, or starts neighbouring lines with "
+    "the same word, do the same with YOUR key word. Keep sung interjections (ой, эй, ла-ла).\n"
+    "6. Do not reuse the original's words except tiny function words -- it is a new text.\n"
+    "7. Verses tell the theme's story with concrete details; the chorus sums it up around the hook. "
+    "Make it witty and singable, in {lang}.\n"
+    "Reply with JSON only: {{\"lyrics\": the new lyric with the section tags on their own lines -- "
+    "no line numbers, no syllable counts}}.")
+
+
+def _cover_cost(new: str, orig_sections: list) -> float:
+    """How far a new lyric is from the original's shape (lower is better; None if broken):
+    section and line counts, syllables per line, the repeat map, words copied."""
+    secs = _sections_of(new)
+    if len(secs) != len(orig_sections):
+        return None
+    a, b = _shape(orig_sections), _shape(secs)
+    if len(a) != len(b):
+        return None
+    cost = sum(abs(x[1] - y[1]) / max(1, x[1]) for x, y in zip(a, b)) / len(a)
+    rep = [(i, x[2]) for i, x in enumerate(a) if x[2] is not None]
+    if rep:
+        cost += sum(1 for i, j in rep if b[i][2] != j) / len(rep)
+    ow = {w for _, ls in orig_sections for l in ls for w in _words(l) if len(w) >= 4}
+    nw = {w for _, ls in secs for l in ls for w in _words(l) if len(w) >= 4}
+    if nw and len(ow & nw) / len(nw) > 0.3:
+        cost += 1.0                                  # a new text, not the old one re-used
+    return cost
+
+
+COVER_WORD_TRIES = int(os.getenv("COVER_WORD_TRIES", "3"))
+
+
+def cover_words(ctx, song: str, theme: str, lang: str = "Russian") -> str:
+    """New words for `song` on `theme`, written line for line over its own lyric: the same
+    sections, syllables and map of repeats, a new hook where its hook was (10-08: a lyric
+    written blind from the theme alone came out a quiet ballad for SHAMAN's «Я русский» anthem).
+    Several drafts, the closest to the original's shape kept. Raises cover.CoverFailed."""
+    import llm
+    from utils import safe_json_from_llm
+    orig = _sections_of(lyrics_of(ctx, song))
+    if not orig:
+        raise cover.CoverFailed("no_words")
+    shape = _shape(orig)
+    rows, k = [], 0
+    for tag, lines in orig:
+        rows.append(f"[{tag}]")
+        for l in lines:
+            _, n, rep = shape[k]
+            k += 1
+            rows.append(f"{k}. {l}  ({n} syllables{f'; = line {rep + 1}' if rep is not None else ''})")
+    user = f"Theme of the new words: {theme}\n\nOriginal lyric:\n" + "\n".join(rows)
+    best, best_cost = "", None
+    for t in range(max(1, COVER_WORD_TRIES)):
+        try:
+            raw = llm.call_llm_simple(ctx, _WRITE_OVER.format(lang=lang), user,
+                                      temperature=0.7 + 0.1 * t, max_tokens=3000)
+            got = safe_json_from_llm(raw or "", ["lyrics"]) or {}
+        except Exception as exc:
+            logger.warning("cover_words: draft failed: %s", exc)
+            continue
+        text = str(got.get("lyrics") or "") if isinstance(got, dict) else ""
+        # the model echoed the prompt's «3. » numbers and «(9 syllables)» notes -- YuE would sing them
+        text = "\n".join(re.sub(r"\s*\((?:\d+[^)]*|= ?line[^)]*)\)\s*$", "", re.sub(r"^\s*\d+[.)]\s*", "", l))
+                         for l in text.splitlines())
+        cost = _cover_cost(text, orig)
+        logger.info("cover_words: draft %d cost %s", t + 1, None if cost is None else round(cost, 2))
+        if cost is not None and (best_cost is None or cost < best_cost):
+            best, best_cost = text, cost
+    if not best:
+        raise cover.CoverFailed("no_words")
+    return best
 
 
 def remix_words(ctx, song: str, lyrics: str) -> str:

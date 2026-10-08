@@ -269,7 +269,7 @@ def test_a_voice_that_loses_the_words_is_not_sent(monkeypatch, tmp_path):
 
 def _lyrics_run(monkeypatch, heard_lines, tidy):
     monkeypatch.setattr(R, "_stems", lambda song, work, name: (np.zeros(10), np.zeros(10)))
-    monkeypatch.setattr(R, "_hear", lambda wh, path, language=None:
+    monkeypatch.setattr(R, "_hear", lambda wh, path, language=None, vad=True:
                         [type("S", (), {"text": t})() for t in heard_lines])
     monkeypatch.setattr(llm, "call_llm_simple", lambda *a, **k: tidy)
     return R.lyrics_of(type("C", (), {"models": type("M", (), {"whisper": None})()})(), "song2.mp3")
@@ -464,3 +464,42 @@ def test_glued_lines_are_split_back_into_sung_phrases(monkeypatch):
                         '{"sections": [["говновоз едет. Говновоз, говновоз стоит."]]}' if "hook" in u else '{"sections": [[1, 2]]}')
     assert R._layout(None, "говновоз едет\nговновоз стоит", [("Chorus", 14)], profile=[]) == \
         "[Chorus]\nговновоз едет.\nГовновоз, говновоз стоит."
+
+
+def test_a_hook_cut_at_different_breaths_is_still_a_refrain():
+    prof = R._repetition_profile(["я русский я иду до конца", "и снова я русский я иду", "ну а я русский я иду вперёд"])
+    assert any("refrain" in n for n in prof)
+
+
+ORIG = "[Verse]\nшёл я по дороге длинной\nвстретил друга у реки\n[Chorus]\nэх дорога\nэх дорога\n"
+
+
+def test_a_cover_lyric_keeps_the_originals_shape():
+    good = "[Verse]\nсел я на трамвай последний\nдоехал прямо до конца\n[Chorus]\nах трамвайчик\nах трамвайчик\n"
+    off = "[Verse]\nсел я на трамвай последний\nдоехал прямо до конца\n[Chorus]\nах трамвайчик\nну и ладно\n"
+    copied = "[Verse]\nшёл я по дороге длинной\nвстретил друга у реки\n[Chorus]\nэх дорога\nэх дорога\n"
+    o = R._sections_of(ORIG)
+    assert R._cover_cost(good, o) < R._cover_cost(off, o)        # the refrain repeats where it did
+    assert R._cover_cost(good, o) < R._cover_cost(copied, o)     # a new text, not the old one
+    assert R._cover_cost("[Verse]\nодна строка\n", o) is None
+
+
+def test_cover_words_picks_the_draft_closest_to_the_shape(monkeypatch):
+    monkeypatch.setattr(R, "lyrics_of", lambda ctx, song: ORIG)
+    drafts = iter(['{"lyrics": "[Verse]\nсел я на трамвай последний\nдоехал\n[Chorus]\nах трамвайчик\nну и ладно"}',
+                   '{"lyrics": "[Verse]\nсел я на трамвай последний\nдоехал прямо до конца\n[Chorus]\nах трамвайчик\nах трамвайчик"}',
+                   'not json'])
+    seen = []
+    monkeypatch.setattr(llm, "call_llm_simple", lambda ctx, s, u, **k: (seen.append(u), next(drafts))[1])
+    out = R.cover_words(None, "x.mp3", "трамвай")
+    assert "доехал прямо до конца" in out
+    assert "= line 3" in seen[0] and "трамвай" in seen[0]
+
+
+def test_echoed_line_numbers_and_syllable_counts_are_not_sung(monkeypatch):
+    monkeypatch.setattr(R, "lyrics_of", lambda ctx, song: ORIG)
+    monkeypatch.setattr(llm, "call_llm_simple", lambda ctx, s, u, **k:
+                        '{"lyrics": "[Verse]\n1. сел я на трамвай последний (8)\n2. доехал прямо до конца (8 syllables)\n'
+                        '[Chorus]\n3. ах трамвайчик (4)\n4. ах трамвайчик (4; = line 3)"}')
+    out = R.cover_words(None, "x.mp3", "трамвай")
+    assert "сел я на трамвай последний\nдоехал прямо до конца" in out and "(" not in out and "1." not in out
