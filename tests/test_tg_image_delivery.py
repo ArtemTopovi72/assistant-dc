@@ -376,6 +376,13 @@ sent, seen, _ = salvage("", also_uploaded=good)
 check("the user's own upload is never posted back as a result",
       not sent and seen["photo"] == [], str(seen["photo"]))
 
+# The offer «Сделать что-нибудь с картинкой?» is for a bare comment, not for the
+# answer to a question about the picture («сколько тут итого?»).
+_intent.STUB = lambda t: {"is_question": t.endswith("?")}
+check("a question about the picture gets no offer line", T.TelegramBot._asked_a_question("сколько тут итого?"))
+check("a bare comment still gets it", not T.TelegramBot._asked_a_question("вот фото"))
+_intent.STUB = None
+
 print()
 print(f"{OK} passed, {BAD} failed")
 sys.exit(1 if BAD else 0)

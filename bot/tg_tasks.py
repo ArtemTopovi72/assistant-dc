@@ -688,6 +688,14 @@ class TaskRunnerMixin:
                 self._cancelled.discard(task.task_id)
             self._write_inflight()
 
+    @staticmethod
+    def _asked_a_question(text: str) -> bool:
+        """The user's own words are a question (the model's read)."""
+        import intent
+        from prompt_guard import user_words
+        t = user_words(text or "").strip()
+        return bool(t) and intent.read(None, t)["is_question"]
+
     def _try_steer(self, chat_id: int, task) -> bool:
         """A text that arrives while this chat's task is still running goes
         into that task's inbox instead of the queue (steer.py). True when
@@ -1626,7 +1634,9 @@ class TaskRunnerMixin:
             if _turn_img_entry and os.path.exists(_turn_img_entry.get("path", "")):
                 main_kb = tg_bot._image_kb(lang, _turn_img_id)
                 # Edit buttons under a bare comment read as a mistake (live 2026-09-29): ask first.
-                if reply and not reply_is_failure:
+                # ...but not after the answer to a question about the picture
+                # («сколько тут итого?»): the answer was the point, the offer is noise.
+                if reply and not reply_is_failure and not self._asked_a_question(task.user_text):
                     reply = reply.rstrip() + "\n\n" + tg_bot._t("img_offer", lang)
         try:
             if sess.voice_on and self._tts_enabled_fn() \
