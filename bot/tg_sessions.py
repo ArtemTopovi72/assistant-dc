@@ -181,6 +181,9 @@ class _Session:
         # 🎚 Remix (was Cover): "" | "want_audio" | "want_text" (tg_cover); the song on disk.
         self.cover_state: str = d.get("cover_state", "")
         self.cover_src: str = d.get("cover_src", "")
+        # whose voice sings a cover: "" the original singer's (auto), "none" YuE2's own (no
+        # conversion, the clearest words), or a trained star voice (rvc_voice.stars()). Kept.
+        self.cover_voice: str = d.get("cover_voice", "")
         # 🎨 Restyle video: "" | "want_video" | "want_text" (tg_restyle)
         self.restyle_state: str = d.get("restyle_state", "")
         self.restyle_src: str = d.get("restyle_src", "")
@@ -427,6 +430,7 @@ class _Session:
                 "clone_state":         self.clone_state,
                 "cover_state":         self.cover_state,
                 "cover_src":           self.cover_src,
+                "cover_voice":         self.cover_voice,
                 "restyle_state":       self.restyle_state,
                 "restyle_src":         self.restyle_src,
                 "continue_state":      self.continue_state,

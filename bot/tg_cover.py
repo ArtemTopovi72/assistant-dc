@@ -101,6 +101,32 @@ class CoverMixin:
         sess.cover_src = src
         self._store.put(sess)
         self._send_text(chat_id, tg_bot._t("cover_ask_text", lang), parse_mode="HTML")
+        self._send_text(chat_id, tg_bot._t("cover_voice_pick", lang), keyboard=self._cover_voice_kb(sess, lang))
+
+    def _cover_voice_kb(self, sess, lang: str) -> dict:
+        """Whose voice sings the cover; the ✅ marks the kept choice."""
+        import rvc_voice
+        cur = getattr(sess, "cover_voice", "") or ""
+        opts = [("auto", tg_bot._t("cover_voice_auto", lang)), ("none", tg_bot._t("cover_voice_none", lang))]
+        opts += list(rvc_voice.stars()) if rvc_voice.available() else []
+        rows = [[{"text": ("✅ " if (v == cur or (v == "auto" and not cur)) else "") + label,
+                  "callback_data": f"cvv:{v}"}] for v, label in opts]
+        return {"inline_keyboard": rows}
+
+    def _cb_cover_voice(self, chat_id: int, msg: dict, data: str) -> None:
+        import rvc_voice
+        sess = self._get_session(chat_id)
+        lang = self._lang(sess)
+        v = data.split(":", 1)[1]
+        if v == "auto":
+            v = ""
+        elif v != "none" and v not in dict(rvc_voice.stars()):
+            return
+        sess.cover_voice = v
+        self._store.put(sess)
+        if msg.get("message_id"):
+            self._edit_text(chat_id, msg["message_id"], tg_bot._t("cover_voice_pick", lang),
+                            keyboard=self._cover_voice_kb(sess, lang))
 
     def _cover_take_text(self, chat_id: int, sess, lang: str, text: str) -> bool:
         if getattr(sess, "cover_state", "") != "want_text" or not (text or "").strip():
@@ -127,7 +153,7 @@ class CoverMixin:
         try:
             if song2:
                 self._mashup_first(chat_id, lang, ctx, src, song2)
-            info = {}
+            info = {"voice": getattr(self._get_session(chat_id), "cover_voice", "") or ""}
             if song2 and remix.resing_available():
                 # 10-07 «говновоз делать по 2 ссылкам»: the second song gives the words, the
                 # first sings them on its own melody in its own singer's voice.
@@ -141,7 +167,7 @@ class CoverMixin:
                 out = remix.remix_words(ctx, src, lyrics)
             if not self._send_audio(chat_id, out, tg_bot._t("cover_done", lang)):
                 self._send_text(chat_id, tg_bot._t("cover_fail_render", lang))
-            elif info.get("rvc") and not info.get("trained"):
+            elif info.get("rvc") and not info.get("trained") and not info.get("voice"):
                 # The first cover of an artist went out in a zero-shot timbre; their own RVC
                 # voice is trained now on the original's vocal and the cover sent again in it.
                 self._send_text(chat_id, tg_bot._t("cover_rvc_training", lang))

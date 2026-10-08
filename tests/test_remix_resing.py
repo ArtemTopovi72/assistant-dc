@@ -97,7 +97,7 @@ def _llm(ctx, sys_, user, **k):
     return '{"sections": [[1], [2], [1], [2]]}'
 
 
-def _fake_resing_run(monkeypatch, tmp_path, trained: bool):
+def _fake_resing_run(monkeypatch, tmp_path, trained: bool, voice: str = ""):
     """resing up to the voice: stems/score/YuE stubbed, returns the voice calls made."""
     import rvc_voice
     calls = []
@@ -118,7 +118,7 @@ def _fake_resing_run(monkeypatch, tmp_path, trained: bool):
     monkeypatch.setattr(rvc_voice, "convert", lambda ctx, name, src, out: (calls.append("rvc:" + name), out)[1])
     monkeypatch.setattr(rvc_voice, "train", lambda ctx, name, wav: (calls.append("trained"), ("m.pth", "m.index"))[1])
     ctx = type("C", (), {"models": type("M", (), {"whisper": _Whisper()})()})()
-    info = {}
+    info = {"voice": voice} if voice else {}
     R.resing(ctx, "song.mp3", "строка раз\nстрока два", info=info)
     return calls, info, ctx
 
@@ -135,6 +135,20 @@ def test_a_new_artist_gets_zero_shot_first_then_their_rvc_voice(monkeypatch, tmp
     assert calls == ["zero-shot"] and info["rvc"] == "mihail_shufutinskiy" and not info["trained"]
     R.resing_rvc(ctx, info)
     assert calls == ["zero-shot", "trained", "rvc:mihail_shufutinskiy"]
+
+
+def test_the_users_voice_setting_beats_the_artist(monkeypatch, tmp_path):
+    # 10-09 «кавер дефолтным голосом без рвс или кавер голосом знаменитости и выбор»
+    calls, _, _ = _fake_resing_run(monkeypatch, tmp_path, trained=True, voice="none")
+    assert calls == []                      # YuE2's own vocal, no conversion
+    calls, _, _ = _fake_resing_run(monkeypatch, tmp_path, trained=True, voice="tsoi_hq")
+    assert calls == ["rvc:tsoi_hq"]         # the picked star, not the song's artist
+
+
+def test_star_list_shows_only_trained_voices_once_per_singer(monkeypatch):
+    import rvc_voice
+    monkeypatch.setattr(rvc_voice, "model_of", lambda n: n in ("viktor_tsoy", "tsoi_hq", "shaman") or None)
+    assert rvc_voice.stars() == [("tsoi_hq", "Виктор Цой"), ("shaman", "SHAMAN")]
 
 
 def test_artist_slug_is_ascii():

@@ -816,7 +816,14 @@ def resing(ctx, song: str, lyrics: str, info: dict = None) -> str:
     lang = "ru" if re.search("[а-яё]", lyrics, re.I) else None
     if info is not None:
         info["lang"] = lang
-    if name and rvc_voice.model_of(name):
+    chosen = str((info or {}).get("voice") or "")
+    if chosen == "none":
+        # the user's setting: YuE2's own voice, no conversion -- the clearest words (GigaAM on
+        # the mix, 10-09: Лесник 71% bare, 30% through the artist's RVC)
+        conv = yvox_wav
+    elif chosen and rvc_voice.model_of(chosen):
+        conv = _voice_keeping_words(ctx, _rvc_voices(ctx, chosen, yvox_wav), yvox_wav, layout, work, lang, best=True)
+    elif name and rvc_voice.model_of(name):
         conv = _voice_keeping_words(ctx, _rvc_voices(ctx, name, yvox_wav), yvox_wav, layout, work, lang, best=True)
     else:
         ref = _singer_ref(vox, work, "a")

@@ -52,6 +52,25 @@ def slug(artist: str) -> str:
     return s
 
 
+# Star voices offered in the cover's voice picker: trained on ~15 songs of the singer's lead
+# vocal each (runtime/covers_batch/tsoi_night/night.py, 10-09), then the one-song models kept
+# from earlier covers. Only the trained ones are shown; one per label, the first wins.
+STARS = (("tsoi_hq", "Виктор Цой"), ("gorshok_hq", "Горшок (КиШ)"), ("anders_hq", "Томас Андерс"),
+         ("lindemann_hq", "Тиль Линдеманн"), ("viktor_tsoy", "Виктор Цой"), ("korol_i_shut", "Горшок (КиШ)"),
+         ("shaman", "SHAMAN"), ("mihail_shufutinskiy", "Михаил Шуфутинский"), ("lyube", "Любэ"),
+         ("ruki_vverh", "Руки Вверх"))
+
+
+def stars() -> list:
+    """[(model name, label)] of the star voices trained here."""
+    seen, out = set(), []
+    for name, label in STARS:
+        if label not in seen and model_of(name):
+            seen.add(label)
+            out.append((name, label))
+    return out
+
+
 def model_of(name: str):
     """(pth, index) of a trained voice, or None."""
     d = os.path.join(APPLIO, "logs", name)

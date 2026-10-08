@@ -221,6 +221,35 @@ remix.resing = _resing_known
 bot._cover_render(CID, "ru", "/x/song.mp3", "новые слова", "")
 check("known artist: one cover, already in their voice", [p for p, _ in AUD] == ["resing.mp3"], AUD)
 
+# 10-09: the voice picker under «Песню получил» -- original singer (auto) / no swap / a star;
+# the choice is kept on the session and goes into the render; a picked voice is the only pass.
+import rvc_voice
+rvc_voice.available = lambda: True
+rvc_voice.stars = lambda: [("tsoi_hq", "Виктор Цой")]
+_s = bot._get_session(CID); _s.cover_voice = ""
+kb = bot._cover_voice_kb(_s, "ru")["inline_keyboard"]
+check("voice picker: auto (ticked), no swap, the trained stars",
+      [r[0]["callback_data"] for r in kb] == ["cvv:auto", "cvv:none", "cvv:tsoi_hq"] and kb[0][0]["text"].startswith("✅"), kb)
+EDITS = []
+_real_edit = bot._edit_text
+bot._edit_text = lambda cid, mid, text, parse_mode=None, keyboard=None: EDITS.append(keyboard)
+bot._cb_cover_voice(CID, {"message_id": 5}, "cvv:tsoi_hq")
+check("picking a star keeps it and moves the tick",
+      bot._get_session(CID).cover_voice == "tsoi_hq" and EDITS and EDITS[-1]["inline_keyboard"][2][0]["text"].startswith("✅"), EDITS)
+bot._cb_cover_voice(CID, {"message_id": 5}, "cvv:evil_model")
+check("an unknown voice name is ignored", bot._get_session(CID).cover_voice == "tsoi_hq")
+AUD.clear(); GOT = {}
+def _resing_pick(ctx, a, l, info=None):
+    GOT.update(info); info.update({"rvc": "artist", "trained": False})
+    return "resing.mp3"
+remix.resing = _resing_pick
+bot._cover_render(CID, "ru", "/x/song.mp3", "новые слова", "")
+check("the picked voice goes into the render and no second RVC pass follows",
+      GOT.get("voice") == "tsoi_hq" and [p for p, _ in AUD] == ["resing.mp3"], (GOT, AUD))
+bot._cb_cover_voice(CID, {"message_id": 5}, "cvv:auto")
+check("auto clears the choice", bot._get_session(CID).cover_voice == "")
+bot._edit_text = _real_edit
+
 bot._running = False; thr.join(timeout=8)
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)

@@ -79,6 +79,7 @@ class CallbackMixin:
         if data.startswith("size:"): return self._cb_image_size(chat_id, msg, data)
         if data.startswith("reply:"): return self._cb_reply_mode(chat_id, msg, data)
         if data.startswith("music:"): return self._cb_song_settings(chat_id, msg, data)
+        if data.startswith("cvv:"): return self._cb_cover_voice(chat_id, msg, data)
         if data.startswith("video:"): return self._cb_video_settings(chat_id, msg, data)
         if data.startswith("lv:"): return self._cb_long_video(chat_id, data)
         if data.startswith("depth:"): return self._cb_research_depth(chat_id, msg, data)
