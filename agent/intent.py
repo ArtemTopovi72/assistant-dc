@@ -345,7 +345,9 @@ def read(ctx, text: str, previous: str = "", attached: str = "") -> dict:
     except Exception:
         logger.warning("intent: model read failed, taking the full loop", exc_info=True)
         return dict(FALLBACK)
-    logger.info("intent: %r -> %s", text[:80], out)
+    if os.getenv("INTENT_TRACE") and not attached:
+        import traceback; logger.info("intent-trace %s", " | ".join("%s:%d" % (f.name, f.lineno) for f in traceback.extract_stack()[-7:-1]))
+    logger.info("intent: %r%s -> %s", text[:80], (" [with: %s]" % attached) if attached else "", out)
     with _LOCK:
         _CACHE[key] = out
         while len(_CACHE) > 256:

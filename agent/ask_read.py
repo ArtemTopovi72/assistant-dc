@@ -62,8 +62,10 @@ items: for sort, the list items exactly as written.
 percents: for percent, [{"pct": N, "of": number}] for each «N% от X».
 words_asked: a length the user orders in words («на 1200 слов» -> 1200), else 0.
 detailed: true when they ask for a detailed / long answer.
-earlier_talk: true when they ask about the earlier conversation (what we discussed,
-  what I asked first, what you said before).
+earlier_talk: true ONLY when they ask about the earlier conversation itself (what we
+  discussed, what I asked first, what you said before). A question about their own
+  purchases, money, a photo, a receipt or a document is NOT earlier_talk, even when
+  it says "I spent" or "I bought".
 dose: true when they ask a medicine dose (paracetamol, ibuprofen and their brands).
 weight_kg: the body weight in kg named in the message, else 0.
 code: true when they ask to write, fix, test or explain program code.
