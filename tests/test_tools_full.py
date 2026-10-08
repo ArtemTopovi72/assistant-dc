@@ -315,6 +315,15 @@ def test_redraw_image():
     # log_edit_decision raising is swallowed
     with mock_env(log_edit=lambda **k: (_ for _ in ()).throw(IOError("log"))):
         check("redraw_log_swallow", "redrawn" in T._handle_redraw_image(c, {}, {"mode": "redraw", "instructions": "x"}))
+    # extending the canvas is not supported: said plainly, no format substitute offered
+    import image_router as _ir
+    _ir.EDIT_STUB = lambda t: {"kind": "outpaint", "reformats": True}
+    try:
+        with mock_env():
+            r = T._handle_redraw_image(c, {}, {"mode": "redraw", "instructions": "extend the picture in all directions"})
+    finally:
+        _ir.EDIT_STUB = None
+    check("redraw_outpaint_unsupported", r.startswith("[TOOL ERROR]") and "outpaint" in r and "NOT offer a different format" in r, r[:120])
 
 
 # ------------------------------------------------------------------ inspect_image

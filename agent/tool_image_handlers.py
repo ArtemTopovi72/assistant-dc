@@ -1542,7 +1542,15 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
                 "Briefly confirm to the user, in their language.")
 
     import image_router
-    if image_router.edit_plan(instructions)["reformats"]:
+    _plan = image_router.edit_plan(instructions)
+    if _plan.get("kind") == "outpaint":
+        # Said once, plainly: the model was left suggesting other formats and
+        # offering to try again (live 2026-10-08).
+        return ("[TOOL ERROR] Extending the picture beyond its edges (outpaint) is not "
+                "something this assistant can do: that engine was removed. Nothing was "
+                "changed. Tell the user plainly it is not supported; do NOT retry and do "
+                "NOT offer a different format as a substitute.")
+    if _plan["reformats"]:
         # A redraw keeps the source's size: "the same, but horizontal for YouTube"
         # came back vertical and was announced as done.
         return ("[TOOL ERROR] redraw_image keeps the picture's size and orientation. "
