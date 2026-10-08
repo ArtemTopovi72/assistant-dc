@@ -138,8 +138,9 @@ class CoverMixin:
             return
         sess.cover_voice = v
         self._store.put(sess)
-        if msg.get("message_id"):
-            self._edit_text(chat_id, msg["message_id"], tg_bot._t("cover_voice_pick", lang),
+        mid = msg.get("message_id")
+        if mid:
+            self._edit_text(chat_id, mid, tg_bot._t("cover_voice_pick", lang),
                             keyboard=self._cover_voice_kb(sess, lang))
 
     def _cover_take_text(self, chat_id: int, sess, lang: str, text: str) -> bool:

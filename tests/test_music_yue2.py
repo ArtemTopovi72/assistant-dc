@@ -22,7 +22,7 @@ def test_default_engine_is_yue2(monkeypatch):
     monkeypatch.setattr(M, "yue2_available", lambda: True)
     assert M.MUSIC_ENGINE == "yue2" and M.engine_available() == (True, "")
     calls = []
-    monkeypatch.setattr(M, "_generate_yue2", lambda ctx, l, s, seed: calls.append(s) or __file__)
+    monkeypatch.setattr(M, "_generate_yue2", lambda ctx, l, s, seed, prefs=None: calls.append(s) or __file__)
     monkeypatch.setattr(M, "apply_fade", lambda p: False)
     assert M.generate_music(None, "[verse]\nраз", "pop") == __file__ and calls == ["pop"]
 
@@ -57,3 +57,28 @@ def test_style_cleanup_refuses_an_answer_that_lost_bpm_or_vocal(monkeypatch):
 def test_russian_lyrics_name_the_language_in_the_style():
     assert M.yue2_language("male vocal, pop", "Мы идём по дороге") == "male vocal, Russian vocal, pop"
     assert M.yue2_language("male vocal, pop", "We walk") == "male vocal, pop"
+
+
+def test_the_vocal_button_reaches_yue2_as_a_positive_tag():
+    # 10-09 «мужской не доезжал»: «no female vocals» put the word «female» in the tags
+    p = M.prefs_from(genre="punk", vocal="male")
+    got = M.yue2_pin("female vocal, Pop, Bright female soprano lead vocal, 120 BPM, synth", p)
+    assert got.split(", ")[0] == "male vocal" and "female" not in got
+    assert "Punk rock" in got and "Pop" not in got.split(", ")
+    assert "female" not in M.enforce_vocal("Vocal Details: female soprano.", p["vocal"]).replace("male vocal", "")
+    got = M.yue2_pin("male vocal, man's voice, Pop, 120 BPM", M.prefs_from(vocal="female"))
+    assert got.split(", ")[0] == "female vocal" and "man" not in got.replace("woman", "")
+
+
+def test_an_instrumental_has_no_vocal_tags_and_no_words(monkeypatch, tmp_path):
+    # 10-09 «инструментал со словами»
+    p = M.prefs_from(vocal="instrumental")
+    assert M.yue2_pin("Pop, Russian vocal, airy female vocal, synth", p) == "instrumental, Pop, synth"
+    seen = {}
+    monkeypatch.setattr(M, "yue2_cpp_available", lambda: True)
+    monkeypatch.setattr(M, "yue2_tags", lambda ctx, s: s)
+    monkeypatch.setattr(M, "_render_yue2_once", lambda ctx, cpp, job, seed: (seen.update(job), "")[1])
+    monkeypatch.setattr(M, "_valid_audio_file", lambda p: True)
+    monkeypatch.setattr(M, "_master", lambda *a, **k: None)
+    M._generate_yue2(None, "[verse]\nслова песни", "Pop, synth", 1, prefs=p)
+    assert seen["lyrics"] == "[instrumental]" and seen["style"].startswith("instrumental")

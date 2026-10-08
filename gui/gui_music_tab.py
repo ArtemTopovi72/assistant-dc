@@ -35,6 +35,27 @@ _GENRE_LABELS = {
     "synth": "Synth-pop", "hiphop": "Hip-hop", "rnb": "R&B", "soul": "Soul",
     "jazz": "Jazz", "folk": "Folk", "country": "Country", "metal": "Metal",
     "cinematic": "Cinematic", "lofi": "Lo-fi",
+    "punk": "Punk rock",
+    "poppunk": "Pop punk",
+    "postpunk": "Post-punk",
+    "ska": "Ska punk",
+    "grunge": "Grunge",
+    "indie": "Indie rock",
+    "rusrock": "Russian rock",
+    "metalcore": "Metalcore",
+    "blues": "Blues",
+    "chanson": "Chanson",
+    "bard": "Bard song",
+    "reggae": "Reggae",
+    "funk": "Funk / disco",
+    "synthwave": "Synthwave",
+    "dnb": "Drum & bass",
+    "techno": "Techno",
+    "trance": "Trance",
+    "phonk": "Phonk",
+    "kpop": "K-pop",
+    "latin": "Latin",
+    "classical": "Classical",
 }
 _TEMPO_LABELS = {
     "auto": "Auto", "slow": "Slow (~70)", "medium": "Medium (~100)",
@@ -118,7 +139,7 @@ class MusicWorker(QThread):
             path = music.generate_music(self.ctx, lyrics, style,
                                         duration_s=duration,
                                         preset=self.preset or None,
-                                        steps=self.steps or None)
+                                        steps=self.steps or None, prefs=self.prefs)
             if chosen:
                 self.chose.emit(chosen)
             self.done.emit(path or "", lyrics, style)

@@ -526,7 +526,8 @@ class CallbackMixin:
             table = {"genre": tg_bot._MUSIC_GENRES,
                      "tempo": tg_bot._MUSIC_TEMPOS,
                      "vocal": tg_bot._MUSIC_VOCALS,
-                     "quality": tg_bot._MUSIC_PRESETS}.get(field)
+                     "quality": tg_bot._MUSIC_PRESETS,
+                     "voice": _tg_music.voices()}.get(field)
             if field == "duration":
                 ok = value == "auto" or value in {str(d) for d in tg_bot._MUSIC_DURATIONS}
             elif field == "tempo":

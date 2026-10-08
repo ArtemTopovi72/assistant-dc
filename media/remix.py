@@ -878,7 +878,7 @@ def _voice_keeping_words(ctx, voices: list, yvox_wav: str, layout: str, work: st
 STAR_INDEX_RATE = float(os.getenv("STAR_INDEX_RATE", "0.3"))
 
 
-def sing_original_as(ctx, song: str, name: str) -> str:
+def sing_original_as(ctx, song: str, name: str, index_rate: float = None) -> str:
     """`song` as it is -- its melody, words and backing -- but its lead sung in the trained voice
     `name` (10-09 «пусть Цой споёт Куклу колдуна»): Demucs vocal -> the lead dry off the choir
     -> RVC -> over the backing plus the choir. Returns an mp3 path; raises cover.CoverFailed."""
@@ -896,7 +896,8 @@ def sing_original_as(ctx, song: str, name: str) -> str:
         bv, _ = librosa.load(choir, sr=SR, mono=True)
         n = min(len(bv), len(back))
         back = back[:n] + bv[:n]
-    conv = rvc_voice.convert(ctx, name, lead, os.path.join(work, "star.wav"), index_rate=STAR_INDEX_RATE)
+    conv = rvc_voice.convert(ctx, name, lead, os.path.join(work, "star.wav"),
+                             index_rate=STAR_INDEX_RATE if index_rate is None else index_rate)
     v0, _ = librosa.load(lead, sr=SR, mono=True)
     return _mix_vocal(conv, v0, back)
 

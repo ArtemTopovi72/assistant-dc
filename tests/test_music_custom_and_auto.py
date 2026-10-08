@@ -242,9 +242,11 @@ check("a chosen genre and a typed length are kept; only tempo and vocal are the 
 # the vocal button decides the singer: a caption naming the other gender is rewritten
 _m = M.enforce_vocal("Vocal Details: a soulful female singer, her voice airy.", "a MALE lead vocal")
 check("a MALE choice rewrites a female caption and says so",
-      "male singer" in _m and "MALE (a man" in _m and "female singer" not in _m, _m)
+      "male singer" in _m and "a man's voice, as the user chose" in _m and "female" not in _m, _m)
 _f = M.enforce_vocal("Vocal Details: a gritty male baritone, he growls.", "a FEMALE lead vocal")
-check("a FEMALE choice rewrites a male caption", "female alto" in _f and "FEMALE (a woman" in _f, _f)
+check("a FEMALE choice rewrites a male caption, never naming the other gender (a tag model reads «no male» as «male»)",
+      "female alto" in _f and "a woman's voice, as the user chose" in _f
+      and "male" not in _f.replace("female", ""), _f)
 check("a duet or no choice leaves the caption alone",
       M.enforce_vocal("x", "a male/female duet trading lines") == "x" and M.enforce_vocal("x", "") == "x")
 
@@ -252,6 +254,21 @@ _pin = M.enforce_pins("Pop, 90 BPM, dreamy.", {"tempo": "exactly 118 BPM", "genr
 check("pinned tempo and genre lead the style; the writer's own BPM is dropped",
       _pin.startswith("Global Metadata: 118 BPM, Rock.") and "90" not in _pin, _pin)
 check("no duet button: the model cannot place who sings where", "duet" not in M.VOCALS)
+
+# 10-09 «опцию кастомный голос выкл или 1 из 4»: 🎙 Own voice in the song settings
+import rvc_voice
+rvc_voice.available = lambda: True
+rvc_voice.stars = lambda: [("tsoi_hq", "Виктор Цой"), ("lindemann_hq", "Тиль Линдеманн")]
+bot = make_bot(); sess = bot._get_session(CID)
+check("the menu has «Свой голос: Выкл»", any(t.startswith("🎙 Свой голос: Выкл") for t in kb_texts(TM._music_menu_kb(sess, "ru"))))
+check("the picker: off, then the trained stars",
+      kb_texts(TM._field_kb(sess, "voice", "ru"))[:3] == ["✅ Выкл", "Виктор Цой", "Тиль Линдеманн"],
+      kb_texts(TM._field_kb(sess, "voice", "ru")))
+bot._cb_song_settings(CID, {"message_id": 7}, "music:set:voice:tsoi_hq")
+check("a star is kept", TM._resolve(bot._get_session(CID), "voice") == "tsoi_hq")
+bot._cb_song_settings(CID, {"message_id": 7}, "music:set:voice:nobody")
+check("an untrained name is refused", TM._resolve(bot._get_session(CID), "voice") == "tsoi_hq")
+check("genres: punk and friends are offered", all(g in M.GENRES for g in ("punk", "poppunk", "postpunk", "rusrock", "chanson")))
 
 print(f"\n{PASSED}/{PASSED + FAILED} checks passed")
 sys.exit(1 if FAILED else 0)

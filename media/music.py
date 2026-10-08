@@ -252,6 +252,28 @@ GENRES: dict = {
     "metal":      "Hard rock / metal",
     "cinematic":  "Cinematic orchestral / epic soundtrack",
     "lofi":       "Lo-fi hip hop / ambient chill",
+    # 10-09 «добавь больше жанров типо панк рок»
+    "punk": "Punk rock",
+    "poppunk": "Pop punk",
+    "postpunk": "Post-punk",
+    "ska": "Ska punk",
+    "grunge": "Grunge / 90s alternative rock",
+    "indie": "Indie rock",
+    "rusrock": "Russian rock / 80s Leningrad rock",
+    "metalcore": "Metalcore / hardcore",
+    "blues": "Blues rock",
+    "chanson": "Russian chanson",
+    "bard": "Bard song / acoustic guitar singer-songwriter",
+    "reggae": "Reggae",
+    "funk": "Funk / disco",
+    "synthwave": "Synthwave / retrowave",
+    "dnb": "Drum and bass",
+    "techno": "Techno",
+    "trance": "Trance",
+    "phonk": "Phonk",
+    "kpop": "K-pop",
+    "latin": "Latin pop / reggaeton",
+    "classical": "Classical / neoclassical piano",
 }
 
 # Tempo is offered as BANDS rather than a free BPM number on purpose: the
@@ -866,7 +888,9 @@ def enforce_vocal(style: str, vocal: str) -> str:
     table = _TO_MALE if male else _TO_FEMALE
     out = re.sub(r"(?<![A-Za-z])(" + "|".join(table) + r")(?![A-Za-z])",
                  lambda m: table[m.group(1).lower()], style, flags=re.I)
-    who = "MALE (a man's voice, no female vocals)" if male else "FEMALE (a woman's voice, no male vocals)"
+    # Never the other gender's word, not even negated: YuE2 got the tag «no female vocals» and
+    # heard «female» (10-09, the 🎤 Male button «не доезжал»).
+    who = "a man's voice" if male else "a woman's voice"
     tag = "male vocal, man's voice" if male else "female vocal, woman's voice"   # short: survives yue2_style's fragment cap
     return tag + ".\n" + out.rstrip() + f"\nThe lead vocal is {who}, as the user chose."
 
@@ -1474,7 +1498,69 @@ def _drop_last_section(yue_lyrics: str) -> str:
     return "\n\n".join(parts[:-1]) if len(parts) > 2 else ""
 
 
-def _generate_yue2(ctx, lyrics: str, style: str, seed: int) -> str:
+_SHE = r"female|females|woman|women|womans|girl|girls|soprano|mezzo|diva|alto"
+_HE = r"male|males|man|men|mans|boy|boys|baritone|tenor|bass-baritone"
+_SUNG = r"vocal|vocals|voice|voices|singer|singing|sung|choir|rap|rapping|croon\w*|vox|harmonies|lyrics?|chant\w*"
+
+
+def yue2_pin(style: str, prefs: Optional[dict]) -> str:
+    """The 🎤 button over YuE2's tag list (10-09 «мужской не доезжал, инструментал со словами»):
+    the chosen singer goes first as a plain positive tag and every tag naming the other gender is
+    dropped -- a tag model reads «no female vocals» as «female»; an instrumental leads with
+    «instrumental» (YuE2 Studio's rule, from the official requests) and loses every vocal tag."""
+    prefs = prefs or {}
+    tags = [t.strip() for t in (style or "").split(",") if t.strip()]
+    has = lambda words, t: re.search(r"(?i)(?<![a-z])(" + words + r")(?:'s)?(?![a-z])", t)
+    if prefs.get("genre"):
+        # the writer's own genre beside the pinned one («Punk rock, ..., Pop») splits the vote:
+        # a tag that IS another genre of the picker goes
+        mine = {g.strip().lower() for g in re.split(r"[/,]", str(prefs["genre"]))}
+        other = {g.strip().lower() for p in GENRES.values() for g in re.split(r"[/,]", p) if g.strip()} - mine
+        tags = [t for t in tags if t.lower() not in other]
+        if not any(t.lower() in mine or str(prefs["genre"]).lower() in t.lower() for t in tags):
+            tags.insert(0, str(prefs["genre"]).split("/")[0].strip())
+    v = str(prefs.get("vocal") or "").lower()
+    if prefs.get("instrumental"):
+        lead, tags = "instrumental", [t for t in tags if not has(_SUNG, t)]
+    elif "duet" in v or not v:
+        return ", ".join(tags)
+    elif "female" in v:
+        lead, tags = "female vocal", [t for t in tags if not has(_HE, t)]
+    else:
+        lead, tags = "male vocal", [t for t in tags if not has(_SHE, t)]
+    return ", ".join([lead] + [t for t in tags if t.lower() != lead])
+
+
+def _strip_vocals(path: str) -> None:
+    """In place: an instrumental that came out sung anyway keeps only its backing (Demucs).
+    A take whose vocal stem is near silence is left as it rendered."""
+    try:
+        import mashup_stems
+        import soundfile as sf
+        st = mashup_stems.separate(path)
+        back = mashup_stems.backing_of(st)
+        vox = st.get("vocals")
+        if vox is None or float(np.sqrt(np.mean(vox ** 2))) < 0.15 * float(np.sqrt(np.mean(back ** 2)) or 1):
+            return
+        tmp = path + ".inst.wav"
+        sf.write(tmp, back, mashup_stems.SAMPLE_RATE)
+        import subprocess
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", tmp, path + ".inst" + os.path.splitext(path)[1]],
+                       check=True)
+        os.replace(path + ".inst" + os.path.splitext(path)[1], path)
+        os.remove(tmp)
+        logger.info("YuE2: the instrumental was sung anyway, its vocal removed")
+    except Exception:
+        logger.warning("YuE2: could not strip the vocal off an instrumental", exc_info=True)
+    finally:
+        try:
+            import mashup_stems
+            mashup_stems.release_separator()
+        except Exception:
+            pass
+
+
+def _generate_yue2(ctx, lyrics: str, style: str, seed: int, prefs: Optional[dict] = None) -> str:
     """One YuE2 render with the card to itself.
 
     yue2.cpp BF16 first (2026-09-27: user picked it by ear over our PyTorch
@@ -1486,7 +1572,10 @@ def _generate_yue2(ctx, lyrics: str, style: str, seed: int) -> str:
         raise MusicUnavailable("YuE2 is not installed")
     ext = "mp3" if cpp else "flac"
     out = str(OUTPUT_DIR / f"song_yue2_{int(time.time() * 1000)}.{ext}")
-    job = {"lyrics": yue2_lyrics(lyrics), "style": yue2_language(yue2_tags(ctx, yue2_style(style)), lyrics), "seed": int(seed), "out": out}
+    words = "" if (prefs or {}).get("instrumental") else lyrics
+    job = {"lyrics": yue2_lyrics(lyrics) if words else "[instrumental]",
+           "style": yue2_pin(yue2_language(yue2_tags(ctx, yue2_style(style)), words), prefs),
+           "seed": int(seed), "out": out}
     logger.info("YuE2 (%s): seed %d, style: %s", "cpp bf16" if cpp else "torch", seed, job["style"])
     t0 = time.time()
     for attempt in (1, 2):
@@ -1566,7 +1655,7 @@ def generate_music(ctx, lyrics: str, style: str, *, duration_s: int = 60,
                    seed: Optional[int] = None,
                    preset: Optional[str] = None,
                    on_progress: Optional[Callable] = None, steps: Optional[int] = None,
-                   engine: Optional[str] = None) -> str:
+                   engine: Optional[str] = None, prefs: Optional[dict] = None) -> str:
     """Render one song. Returns the local path to the resulting audio file.
 
     `engine="yue2"` renders with YuE2 instead of Music3 (same lyric and caption).
@@ -1583,7 +1672,9 @@ def generate_music(ctx, lyrics: str, style: str, *, duration_s: int = 60,
         if ctx is not None and hasattr(ctx, "set_stage"):
             ctx.set_stage("Composing a song")
         final = _generate_yue2(ctx, lyrics, style,
-                               seed if seed and int(seed) > 0 else random.randint(1, 2**31 - 1))
+                               seed if seed and int(seed) > 0 else random.randint(1, 2**31 - 1), prefs=prefs)
+        if (prefs or {}).get("instrumental"):
+            _strip_vocals(final)
         apply_fade(final)
         if ctx is not None:
             ctx.last_music_path = final

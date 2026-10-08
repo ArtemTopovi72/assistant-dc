@@ -44,8 +44,25 @@ _TEMPO_BPM = _music.TEMPO_BPM
 
 PRESETS = _music.WEIGHT_PRESETS
 # "quality" (Music3 weight presets + DiT steps) only while Music3 is the engine.
-FIELDS: tuple = ("genre", "tempo", "vocal", "duration") + (
+FIELDS: tuple = ("genre", "tempo", "vocal", "voice", "duration") + (
     ("quality",) if _music.MUSIC_ENGINE != "yue2" else ())
+
+
+def voices() -> dict:
+    """🎙 Own voice: {"auto": off} + the trained star voices (rvc_voice.stars()). A song
+    rendered by the engine gets its lead re-sung in the chosen star's voice (10-09)."""
+    out = {"auto": ""}
+    try:
+        import rvc_voice
+        if rvc_voice.available():
+            out.update(rvc_voice.stars())
+    except Exception:
+        logger.warning("star voices unavailable", exc_info=True)
+    return out
+
+
+def _table(field: str) -> dict:
+    return {"genre": GENRES, "tempo": TEMPOS, "vocal": VOCALS}.get(field) or (voices() if field == "voice" else {})
 
 
 # ── resolving persisted state ────────────────────────────────────────────────
@@ -77,7 +94,9 @@ def _resolve(sess, field: str) -> str:
         # SOME weights, so an unchosen quality resolves to the default preset
         # rather than to Auto.
         return val if val in PRESETS else _music.DEFAULT_PRESET
-    table = {"genre": GENRES, "tempo": TEMPOS, "vocal": VOCALS}[field]
+    if field == "voice":
+        return raw if isinstance(raw, str) and raw in voices() and raw != "auto" else ""
+    table = _table(field)
     return val if val in table and val != "auto" else ""
 
 
@@ -177,6 +196,8 @@ def _value_label(field: str, value: str, lang: str) -> str:
         return f"{_t('mq_' + value, lang)} · {_music.eta_label(_music.eta_seconds(key), lang)}"
     if field == "steps":
         return str(value)
+    if field == "voice":
+        return voices().get(value) or _t("m_voice_off", lang) if value else _t("m_voice_off", lang)
     if not value:
         return _t("m_auto", lang)
     if field == "duration":
@@ -239,7 +260,7 @@ def _field_kb(sess, field: str, lang: str = _DEFAULT_LANG) -> dict:
         values = list(PRESETS)          # fast / quality / max, in that order
         return _quality_kb(sess, cur, lang)
     else:
-        values = list({"genre": GENRES, "tempo": TEMPOS, "vocal": VOCALS}[field])
+        values = list(_table(field))
         values = ["" if v == "auto" else v for v in values]
     rows, row = [], []
     per_row = 1 if field == "quality" else 2   # the cost label needs the width

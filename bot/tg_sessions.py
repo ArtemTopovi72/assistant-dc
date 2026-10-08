@@ -242,6 +242,7 @@ class _Session:
         self.music_genre:    str = d.get("music_genre", "")
         self.music_tempo:    str = d.get("music_tempo", "")
         self.music_vocal:    str = d.get("music_vocal", "")
+        self.music_voice:    str = d.get("music_voice", "")     # 🎙 a star's RVC voice or ""
         self.music_duration: str = d.get("music_duration", "")
         # Weight preset (fast/quality/max). Unlike the others this has no
         # "no opinion": a render always uses SOME weights, so an empty
@@ -465,6 +466,7 @@ class _Session:
                 "music_genre":       self.music_genre,
                 "music_tempo":       self.music_tempo,
                 "music_vocal":       self.music_vocal,
+                "music_voice":       self.music_voice,
                 "music_duration":    self.music_duration,
                 "music_quality":     self.music_quality,
                 "music_steps":       self.music_steps,

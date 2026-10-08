@@ -383,7 +383,9 @@ class SongsMixin:
                     ctx, _steer.with_notes(topic, notes), song_lang(topic, lang), duration_s=duration, prefs=prefs)
             if given:                   # their own words stay; wishes steer the sound
                 caption = dict(caption, lyrics=structure_lyrics(ctx, given))
-            elif caption.get("lyrics") and not cancelled():
+            elif caption.get("lyrics") and not cancelled() and not prefs.get("instrumental"):
+                # (an instrumental's lyric is bare section tags: the polisher wrote words under
+                # them and the 🎹 Instrumental song came back sung, 10-09)
                 # Words the bot wrote itself go through the checks and revisions
                 # of ✨ Improve lyrics before they are sung (owner 10-03: «под
                 # капотом генерится хороший текст, причёсывается автоматом»).
@@ -394,7 +396,21 @@ class SongsMixin:
                 return False
             wav_path = _music_mod.generate_music(
                 ctx, caption.get("lyrics", ""), caption.get("style", ""),
-                duration_s=duration, preset=preset, steps=steps)
+                duration_s=duration, preset=preset, steps=steps, prefs=prefs)
+            if cancelled():
+                return False
+            star = _tg_music._resolve(self._get_session(chat_id), "voice")
+            if star and not prefs.get("instrumental"):
+                # 🎙 Own voice: the engine's singer re-sung in the star's voice (YuE's take: no
+                # index, it pulls the mumble in -- 10-08 sweep)
+                try:
+                    import remix
+                    if _has_stage:
+                        ctx.set_stage("Singing in the chosen voice")
+                    wav_path = remix.sing_original_as(ctx, wav_path, star, index_rate=0.0)
+                except Exception:
+                    tg_bot.logger.warning("[songs] star voice %s failed, the engine's own voice goes out",
+                                          star, exc_info=True)
             if cancelled():
                 return False
             t = song_title(caption.get("lyrics", ""))

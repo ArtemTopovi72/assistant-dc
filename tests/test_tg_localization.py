@@ -214,7 +214,7 @@ PLACEHOLDER = re.compile(r"\{(\w+)(?::[^}]*)?\}")
 # be an invented word no reader uses, so identical is the CORRECT translation
 # rather than a missing one. Deliberately a short, named list: anything not on
 # it is still required to differ between the two languages.
-_SAME_IN_BOTH = {"mg_edm", "mg_rnb", "mg_lofi"}
+_SAME_IN_BOTH = {"mg_edm", "mg_rnb", "mg_lofi", "mg_kpop"}
 
 missing_ru, mismatched, identical = [], [], []
 for key, forms in T._MSG.items():
