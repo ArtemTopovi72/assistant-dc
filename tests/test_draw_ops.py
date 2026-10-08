@@ -138,6 +138,15 @@ out, _ = D.apply_ops(lay, [{"op": "text", "target": "the sign board", "text": "S
 check("the lettering on a box can be changed", out["elements"][1]["text"] == "SHERIFF")
 out, _ = D.apply_ops(lay, [{"op": "background", "to": "a rainy street at night"}])
 check("so can the background", out["background"] == "a rainy street at night")
+_lay = {"background": "soft neutral studio wall", "elements": [
+    {"desc": "a bar chart", "text": "", "x": .1, "y": .2, "w": .8, "h": .7},
+    {"desc": "empty space above a bar chart: soft neutral studio wall, out of focus", "text": "",
+     "x": 0., "y": .04, "w": 1., "h": .16}]}
+out, _ = D.apply_ops(G.normalize_layout(_lay), [{"op": "background", "to": "red"}])
+check("a bare colour becomes a backdrop, not an object", "backdrop" in out["background"], out["background"])
+check("the empty-space element no longer paints the old backdrop",
+      all("neutral studio" not in e.get("desc", "") for e in out["elements"]),
+      [e.get("desc") for e in out["elements"]])
 
 out, notes = D.apply_ops(lay, [{"op": "shift", "target": "the tree", "x": 0.42, "desc": "a leafy oak"}])
 check("an op name nobody anticipated still applies what it asked for",

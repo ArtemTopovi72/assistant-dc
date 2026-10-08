@@ -569,7 +569,18 @@ def apply_ops(layout: dict, ops: list, *, additive_only: bool = False,
                 notes.append(f'lettering on “{els[i].get("desc", "")}” -> '
                              f'“{els[i]["text"]}”')
             elif op in ("background", "set_background"):
-                layout["background"] = str(raw.get("desc") or raw.get("to") or "").strip()
+                old_bg = str(layout.get("background") or "").strip()
+                new_bg = str(raw.get("desc") or raw.get("to") or "").strip()
+                if new_bg and len(new_bg.split()) <= 3 and "background" not in new_bg.lower():
+                    new_bg += " background wall and backdrop"      # a bare «red» is read as an object
+                layout["background"] = new_bg
+                # The empty-space element above the subject is built from the OLD
+                # background text; left alone it kept painting the old backdrop
+                # («фон пусть будет красный» -> still a neutral grey, live 2026-10-08).
+                if old_bg and new_bg:
+                    for el in els:
+                        if old_bg in str(el.get("desc") or ""):
+                            el["desc"] = str(el["desc"]).replace(old_bg, new_bg)
                 notes.append("background changed")
             elif op in ("style", "set_style"):
                 for k in ("aesthetics", "lighting", "photo", "medium", "art_style",
