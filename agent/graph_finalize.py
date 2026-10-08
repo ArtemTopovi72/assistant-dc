@@ -239,11 +239,27 @@ _PROMISE_NOUN = {
 }
 
 
-def _honest_failure_line(failed_promises) -> str:
+def _tool_said_unsupported(messages) -> bool:
+    """The last tool result of the turn says the assistant cannot do this at all
+    (an engine that was removed): «попробуй ещё раз» would send the user in
+    circles (live 2026-10-08, «расширь картинку со всех сторон»)."""
+    for m in reversed(list(messages or [])):
+        if m.get("role") == "user":
+            break
+        if m.get("role") == "tool":
+            return "[TOOL ERROR]" in str(m.get("content") or "") and \
+                "not something this assistant can do" in str(m.get("content") or "")
+    return False
+
+
+def _honest_failure_line(failed_promises, unsupported: bool = False) -> str:
     nouns = [_PROMISE_NOUN[t] for t in sorted(failed_promises)
              if t in _PROMISE_NOUN]
     if not nouns:
         return ""
+    if unsupported:
+        return ("Такое я сделать не умею, поэтому ничего не менял. Повторять просьбу "
+                "бесполезно; выдавать несделанное за готовое я не стану.")
     what = nouns[0] if len(nouns) == 1 else " и ".join((", ".join(nouns[:-1]),
                                                         nouns[-1]))
     return (f"Не получилось сделать {what} — инструмент вернул ошибку и ничего "
@@ -501,7 +517,8 @@ def _finalize_answer(ctx: Context, state: AgentState, messages: list,
             _claims = (_gp._DELIVERY_CLAIM_RE.search(final_answer)
                        or _gp._PROMISE_CLAIM_RE.search(final_answer)
                        or _gp._ACTION_CLAIM_RE.search(final_answer))
-            _line = _honest_failure_line(_artifact_fails) if _artifact_fails else ""
+            _line = (_honest_failure_line(_artifact_fails, _tool_said_unsupported(messages))
+                     if _artifact_fails else "")
             if _artifact_fails and _claims and _line:
                 logger.warning("Answer claims a deliverable from failed "
                                "tool(s) %s — replacing", sorted(_artifact_fails))

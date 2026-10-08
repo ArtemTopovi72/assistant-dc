@@ -273,7 +273,7 @@ check("every artifact tool has a noun",
 
 _fin_src = __import__("inspect").getsource(GF._finalize_answer)
 check("the file backstop is wired",
-      "_honest_failure_line(_artifact_fails)" in _fin_src
+      "_honest_failure_line(_artifact_fails, _tool_said_unsupported(messages))" in _fin_src
       and "final_answer = _line" in _fin_src)
 check("the replacement is wired with both triggers",
       "_STATED_RESULT_RE.search(final_answer) or _degenerate" in _fin_src)
@@ -313,6 +313,18 @@ check("the scrub is wired into finalisation",
 import inspect
 src = inspect.getsource(P.personality_node)
 check("the loop actually calls the detector", "_detect_silent_failure" in src)
+
+# --- a request the assistant cannot do at all is not «попробуй ещё раз» ----
+_unsup = [{"role": "user", "content": "расширь картинку"},
+          {"role": "tool", "content": "[TOOL ERROR] Extending the picture (outpaint) is not something this assistant can do"}]
+check("an unsupported tool error is recognised", GF._tool_said_unsupported(_unsup))
+check("an ordinary tool error is not", not GF._tool_said_unsupported(
+    [{"role": "tool", "content": "[TOOL ERROR] ComfyUI server failed"}]))
+check("a result from an earlier turn does not count", not GF._tool_said_unsupported(
+    _unsup + [{"role": "user", "content": "нарисуй кота"}]))
+_line = GF._honest_failure_line({"redraw_image"}, True)
+check("the unsupported line does not ask to try again", "ещё раз" not in _line and "не умею" in _line, _line)
+check("the ordinary line still does", "ещё раз" in GF._honest_failure_line({"redraw_image"}))
 
 ok = sum(1 for _, o, _ in checks if o)
 print(f"\n{ok}/{len(checks)} checks passed")
