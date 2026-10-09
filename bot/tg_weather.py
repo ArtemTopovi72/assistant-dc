@@ -148,10 +148,14 @@ def _city_of_fact(fact: str) -> str:
     return c if 1 < len(c) < 40 else ""
 
 
+def default_city_for(lang: str) -> str:
+    return _config.WEATHER_DEFAULT_CITY_RU if lang == "ru" else _config.WEATHER_DEFAULT_CITY
+
+
 class WeatherMixin:
     def _start_weather_flow(self, chat_id: int, sess, lang: str) -> None:
         user = self._user_store.get(chat_id)
-        default_city = ((user.prefs or {}).get("city") if user else "") or _config.WEATHER_DEFAULT_CITY
+        default_city = ((user.prefs or {}).get("city") if user else "") or default_city_for(lang)
         sess.reg_state = "wtw_city"
         self._store.put(sess)
         self._send_text(chat_id,

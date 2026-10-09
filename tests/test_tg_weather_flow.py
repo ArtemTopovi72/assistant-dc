@@ -110,7 +110,7 @@ check("pressing What to Wear arms wtw_city",
 check("...and puts the session in the weather submenu",
       bot._get_session(CID).menu == "weather")
 check("...and sends a prompt naming the configured default city",
-      any(CFG.WEATHER_DEFAULT_CITY in s or "🌤" in s for s in bot.sent[-1:]),
+      any(CFG.WEATHER_DEFAULT_CITY in s or CFG.WEATHER_DEFAULT_CITY_RU in s or "🌤" in s for s in bot.sent[-1:]),
       extra=f"default={CFG.WEATHER_DEFAULT_CITY!r} sent={bot.sent[-1:]!r}")
 
 print()
@@ -147,7 +147,8 @@ finally:
 check("default-city button clears reg_state once the city resolves",
       bot._get_session(CID).reg_state == "")
 check("it fetches weather for the configured default city",
-      any(f"STUB WEATHER FOR {CFG.WEATHER_DEFAULT_CITY}" in s for s in bot.sent),
+      any(f"STUB WEATHER FOR {c}" in s for s in bot.sent
+          for c in (CFG.WEATHER_DEFAULT_CITY, CFG.WEATHER_DEFAULT_CITY_RU)),   # the chat's language names it
       bot.sent)
 
 print()

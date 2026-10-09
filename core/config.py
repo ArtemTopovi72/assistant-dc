@@ -117,6 +117,8 @@ INPUT_DIR_COMFY = Path(os.getenv("COMFY_INPUT_DIR", str(Path(__file__).resolve()
 # their own (each user's own pick, once made, overrides this -- see
 # weather.py / User.prefs["city"]).
 WEATHER_DEFAULT_CITY = os.getenv("WEATHER_DEFAULT_CITY", "Saint Petersburg")
+# the same city as a Russian chat names it (the menu said «Использовать Saint Petersburg»)
+WEATHER_DEFAULT_CITY_RU = os.getenv("WEATHER_DEFAULT_CITY_RU", "Санкт-Петербург")
 
 # ---------------------------------------------------------------------------
 # Audio

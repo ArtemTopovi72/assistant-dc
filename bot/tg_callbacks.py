@@ -655,7 +655,8 @@ class CallbackMixin:
         sess = self._get_session(chat_id)
         lang = self._lang(sess)
         user = self._user_store.get(chat_id)
-        city = ((user.prefs or {}).get("city") if user else "") or _config.WEATHER_DEFAULT_CITY
+        import tg_weather
+        city = ((user.prefs or {}).get("city") if user else "") or tg_weather.default_city_for(lang)
         # Re-arm (not clear): the abandon-any-button-press guard above
         # already cleared reg_state before this branch runs, but the
         # lookup below is async and the default city could still fail
