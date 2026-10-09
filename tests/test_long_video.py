@@ -32,6 +32,7 @@ def make_bot():
     bot._send_text = lambda cid, t, **kw: bot.sent.append((t, kw.get("keyboard")))
     bot._edit_text = lambda cid, mid, t, **kw: bot.sent.append((t, kw.get("keyboard")))
     bot._send_photo = lambda cid, path, **kw: bot.sent.append(("<photo>", None))
+    bot._send_get_id = lambda cid, t, **kw: bot.sent.append((t, kw.get("keyboard"))) or 77
     bot._api_post = lambda *a, **k: {}
     bot._activity.log = lambda *a, **k: None
     bot._user_store.put(T._User(chat_id=CID, name="T", status="approved"))
@@ -44,9 +45,9 @@ def texts(bot): return "\n".join(t for t, _ in bot.sent)
 # ── settings ─────────────────────────────────────────────────────────────────
 bot = make_bot()
 sess = bot._get_session(CID)
-check("defaults: 5-minute portions, 12 frames, both, long from 2 min",
+check("defaults: 5-minute portions, 12 frames, brief (one retelling + questions), long from 2 min",
       (V.chunk_seconds(sess), V.frames_per_chunk(sess), V.output_mode(sess), V.long_threshold(sess))
-      == (300, 12, "both", 120))
+      == (300, 12, "brief", 120))
 kb = V._video_menu_kb(sess, "ru")
 check("the menu states every value", all(":" in r[0]["text"] for r in kb["inline_keyboard"][:4]), kb)
 bot._cb_video_settings(CID, {"message_id": 7}, "video:set:chunk:10")
@@ -65,7 +66,8 @@ bot._long_video_offer(CID, sess, "ru", {"file_id": "F1", "seconds": 1800, "capti
 t, kb = bot.sent[-1]
 check("the offer names the length and the setup", "30 мин" in t and "Порция" in t, t)
 data = [b["callback_data"] for r in kb["inline_keyboard"] for b in r]
-check("the offer has ▶️ / ⚙️ / ✖", any(d.startswith("lv:go:") for d in data)
+check("the offer has ▶️ / ❓ / ⚙️ / ✖", any(d.startswith("lv:go:") for d in data)
+      and any(d.startswith("lv:ask:") for d in data)
       and "video:menu" in data and any(d.startswith("lv:skip:") for d in data), data)
 job_id = bot._get_session(CID).long_video["id"]
 bot._cb_long_video(CID, "lv:go:stale")
@@ -81,7 +83,7 @@ subprocess.run(["ffmpeg", "-y", "-loglevel", "error",
                 "-f", "lavfi", "-i", "sine=f=440:d=150",
                 "-shortest", "-pix_fmt", "yuv420p", str(clip)], check=True, timeout=120)
 bot = make_bot(); sess = bot._get_session(CID)
-sess.video_chunk = "2"; sess.video_frames = "6"; bot._store.put(sess)     # 150 s -> 2 portions
+sess.video_chunk = "2"; sess.video_frames = "6"; sess.video_out = "both"; bot._store.put(sess)  # 150 s -> 2 portions
 bot._dl_bytes = lambda fid: clip.read_bytes()
 bot._get_ctx = lambda: None
 asr_calls, look_calls, retell_calls = [], [], []
@@ -123,9 +125,66 @@ check("render_retelling: bold title + bold labels + bullets, markdown stars gone
       html.startswith("📋 <b>Пересказ</b>") and "<b>Основная тема:</b> лампа." in html and "\n• Свет: слабый" in html
       and "<b>Что требуется:</b>" in html and "**" not in html, html)
 
-# ── Stop between portions ────────────────────────────────────────────────────
+check("a detailed run still saves its notes, so ❓ works after it too",
+      (tmp / "longvideo_j1" / "material.json").exists())
+
+# ── brief (the default): nothing per portion, one retelling, then questions ──
+# 10-09: 11 portions x storyboard + retelling + sheet buried the chat
+bot = make_bot(); sess = bot._get_session(CID)
+sess.video_chunk = "2"; sess.video_frames = "6"; sess.video_out = ""; bot._store.put(sess)
+bot._dl_bytes = lambda fid: clip.read_bytes(); bot._get_ctx = lambda: None
+_audio.transcribe_audio_file = lambda ctx, p, lang_hint="ru": "речь части"
+calls = []
+_llm.call_llm_simple = lambda ctx, sysm, user, **kw: calls.append((sysm, user)) or (
+    "Основная тема: ремонт.\nКлючевые моменты:\n• 0:10 — плата" if "WHOLE" in sysm else
+    "0:10 — ответ по видео" if "QUESTION" in user else "пересказ части")
+stop = threading.Event(); bot._lv_jobs()[CID] = stop
+bot._long_video_job(CID, {"id": "b1", "file_id": "F1", "seconds": 150}, stop)
+out = texts(bot)
+check("brief: no per-part storyboards, retellings or sheets in the chat",
+      "Часть 1/2" not in out and "<photo>" not in out and "пересказ части" not in out, out)
+check("brief: one progress line, edited in place", out.count("Смотрю видео") == 2 and "Посмотрел: 2" in out, out)
+check("brief: one retelling of the whole video, built from the parts' retellings",
+      "Пересказ всего видео" in out and any("WHOLE" in s and "пересказ части" in u for s, u in calls), out)
+kb = bot.sent[-1][1] or {}
+data = [b["callback_data"] for r in kb.get("inline_keyboard", []) for b in r]
+check("under it: ❓ ask and 📜 every part", "lv:more:b1" in data and "lv:parts:b1" in data, data)
+
+bot.sent.clear()
+bot._cb_long_video(CID, "lv:parts:b1")
+check("📜 opens every part on demand", "Часть 1/2" in texts(bot) and "Часть 2/2" in texts(bot), texts(bot))
+bot.sent.clear()
+bot._cb_long_video(CID, "lv:more:b1")
+check("❓ arms the next message as the question", bot._get_session(CID).reg_state == "lv_more:b1"
+      and "Что тебя интересует" in texts(bot), texts(bot))
+import turn_trace as _tt
+_tt.spawn = lambda fn, *a, **k: fn(*a)
+bot.sent.clear(); calls.clear()
+bot._user_gate(CID, {"text": "какая частота на осциллографе?", "from": {}})
+check("the question is answered from the saved notes, no re-watch",
+      "ответ по видео" in texts(bot) and calls and "STORYBOARD" in calls[-1][1]
+      and "какая частота" in calls[-1][1] and bot._get_session(CID).reg_state == "", texts(bot))
+
+# ── ❓ before the job: the job answers the question instead of retelling ─────
 bot = make_bot(); sess = bot._get_session(CID)
 sess.video_chunk = "2"; sess.video_frames = "6"; bot._store.put(sess)
+bot._dl_bytes = lambda fid: clip.read_bytes(); bot._get_ctx = lambda: None
+bot._long_video_offer(CID, sess, "ru", {"file_id": "F1", "seconds": 150})
+job = bot._get_session(CID).long_video["id"]
+bot._cb_long_video(CID, f"lv:ask:{job}")
+check("❓ on the offer asks for the question and keeps the video pending",
+      bot._get_session(CID).reg_state == f"lv_question:{job}" and bot._get_session(CID).long_video)
+ran = []
+bot._long_video_start = lambda cid, s, l, pending: ran.append(pending)
+bot._user_gate(CID, {"text": "где он паяет транзистор?", "from": {}})
+check("the question starts the job with it", ran and ran[0].get("question") == "где он паяет транзистор?", ran)
+check("material_text keeps every storyboard and trims transcripts to the budget",
+      len(V.material_text([{"a": "0:00", "b": "5:00", "board": "0:10 — плата", "said": "слово " * 9000}], 3000)) <= 3000
+      and "0:10 — плата" in V.material_text([{"a": "0:00", "b": "5:00", "board": "0:10 — плата", "said": "x" * 9000}], 3000))
+
+# ── Stop between portions ────────────────────────────────────────────────────
+bot = make_bot(); sess = bot._get_session(CID)
+sess.video_chunk = "2"; sess.video_frames = "6"; sess.video_out = "both"; bot._store.put(sess)
 bot._dl_bytes = lambda fid: clip.read_bytes(); bot._get_ctx = lambda: None
 stop = threading.Event(); bot._lv_jobs()[CID] = stop
 _audio.transcribe_audio_file = lambda ctx, p, lang_hint="ru": (stop.set(), "речь")[1]   # Stop during part 1

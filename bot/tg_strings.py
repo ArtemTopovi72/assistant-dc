@@ -874,12 +874,13 @@ _MSG: dict[str, dict[str, str]] = {
     "vs_title": {"en": "🎬 <b>Long video recap</b>", "ru": "🎬 <b>Пересказ длинных видео</b>"},
     "vs_hint": {"en": "A short clip or a round note is watched and listened to in one go. A LONG "
                       "video is taken apart portion by portion: transcript + key frames + a "
-                      "retelling with timecodes, each portion delivered as soon as it is ready; "
+                      "retelling with timecodes. By default you get one retelling of the whole video and "
+                      "can ask about it; «Deliver» sends every portion as it is ready instead. "
                       "⛔ Stop ends it between portions. Just send the video to the chat.",
                 "ru": "Короткий ролик или кружок смотрю и слушаю целиком. ДЛИННОЕ видео разбираю по "
-                      "частям: расшифровка + ключевые кадры + пересказ с таймкодами, каждая часть "
-                      "приходит, как только готова; ⛔ Стоп прерывает между частями. Просто кинь видео "
-                      "в чат."},
+                      "частям: расшифровка + ключевые кадры + пересказ с таймкодами. По умолчанию приходит "
+                      "один пересказ всего видео, и про него можно спросить; «Отдавать» включает "
+                      "выдачу каждой части. ⛔ Стоп прерывает между частями. Просто кинь видео в чат."},
     "vs_field_title": {"en": "🎬 <b>{field}</b>", "ru": "🎬 <b>{field}</b>"},
     "vs_chunk": {"en": "Portion", "ru": "Порция"},
     "vs_frames": {"en": "Frames per portion", "ru": "Кадров на порцию"},
@@ -889,12 +890,16 @@ _MSG: dict[str, dict[str, str]] = {
                       "ru": "Сколько минут видео в одной порции."},
     "vs_pick_frames": {"en": "Key frames picked per portion (where the picture changed, the sharpest one).",
                        "ru": "Сколько ключевых кадров на порцию (где картинка изменилась, берётся самый резкий)."},
-    "vs_pick_out": {"en": "What each portion delivers.", "ru": "Что приходит на каждую порцию."},
+    "vs_pick_out": {"en": "«Summary + questions»: one retelling at the end, then ask what you want. "
+                          "The others send every portion as it is ready.",
+                    "ru": "«Кратко + вопросы»: один пересказ в конце, дальше спрашиваешь, что интересно. "
+                          "Остальные присылают каждую порцию, как только готова."},
     "vs_pick_long": {"en": "A video at least this long is taken apart by portions; shorter ones are "
                            "watched in one go.",
                      "ru": "Видео от этой длины разбирается по частям; короче — смотрится целиком."},
     "vs_min": {"en": "{n} min", "ru": "{n} мин"},
     "vs_frames_n": {"en": "{n}", "ru": "{n}"},
+    "vs_out_brief": {"en": "summary + questions", "ru": "кратко + вопросы"},
     "vs_out_both": {"en": "storyboard + retelling", "ru": "раскадровка + пересказ"},
     "vs_out_board": {"en": "storyboard", "ru": "раскадровка"},
     "vs_out_retell": {"en": "retelling", "ru": "пересказ"},
@@ -905,6 +910,16 @@ _MSG: dict[str, dict[str, str]] = {
                        "({setup}). Start?",
                  "ru": "🎬 <b>Длинное видео</b> · {mins} мин\nРазберу по частям ({setup}). Поехали?"},
     "lv_go": {"en": "▶️ Go", "ru": "▶️ Поехали"},
+    "lv_ask": {"en": "❓ Ask about it", "ru": "❓ Спросить про видео"},
+    "lv_ask_prompt": {"en": "❓ What do you want to know about this video? Write the question — "
+                            "I will answer with timecodes.",
+                      "ru": "❓ Что тебя интересует в этом видео? Напиши вопрос — отвечу с таймкодами."},
+    "lv_more": {"en": "❓ Ask about the video", "ru": "❓ Спросить про видео"},
+    "lv_parts": {"en": "📜 Every part in detail", "ru": "📜 Подробно по частям"},
+    "lv_progress": {"en": "⏳ Watching the video ({total}): part {n} of {of}…",
+                    "ru": "⏳ Смотрю видео ({total}): часть {n} из {of}…"},
+    "lv_watched": {"en": "✅ Watched: {parts} part(s), {total}.", "ru": "✅ Посмотрел: {parts} ч., {total}."},
+    "lv_overview": {"en": "Retelling of the whole video", "ru": "Пересказ всего видео"},
     "lv_settings": {"en": "⚙️ Settings", "ru": "⚙️ Настройки"},
     "lv_skip": {"en": "✖ Not now", "ru": "✖ Не надо"},
     "lv_gone": {"en": "⌛ That video is no longer pending — send it again.",

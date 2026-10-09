@@ -148,7 +148,8 @@ class CallbackMixin:
         _cb_sess0 = self._get_session(chat_id)
         if _cb_sess0.reg_state in ("feedback", "change_name", "change_password",
                                    "set_badge", "wtw_city", "wtw_date", "song_topic",
-                                   "char_prompt") or str(_cb_sess0.reg_state).startswith(("admin_say:", "music_custom:")):
+                                   "char_prompt") or str(_cb_sess0.reg_state).startswith(
+                                       ("admin_say:", "music_custom:", "lv_question:", "lv_more:")):
             _cb_sess0.reg_state = ""
             self._store.put(_cb_sess0)
 

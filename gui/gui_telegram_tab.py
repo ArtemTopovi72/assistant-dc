@@ -101,6 +101,15 @@ _STATUS_COLORS = {
 }
 
 
+def _feed_line(text: str, limit: int) -> str:
+    """One feed row: whitespace collapsed, a long text cut on a word boundary with «…»."""
+    one = " ".join((text or "").split())
+    if len(one) <= limit:
+        return one
+    cut = one[:limit].rsplit(" ", 1)[0] or one[:limit]
+    return cut.rstrip(",.;:—- ") + "…"
+
+
 class TelegramTab(QWidget):
     """Telegram bot control panel.
 
@@ -838,8 +847,12 @@ class TelegramTab(QWidget):
     def _on_message(self, chat_id: int, user_text: str, bot_reply: str):
         stamp = time.strftime("%H:%M:%S")
         cid   = str(chat_id)
-        item_u = QListWidgetItem(f"[{stamp}]  👤 {cid}:  {user_text[:120]}")
-        item_b = QListWidgetItem(f"[{stamp}]  🤖 {cid}:  {bot_reply[:150]}")
+        # A hard [:150] cut the reply mid-word with no mark («…делает схему ещё чётч», 10-09):
+        # a longer line ends on a word with «…», and the whole message is on hover.
+        item_u = QListWidgetItem(f"[{stamp}]  👤 {cid}:  {_feed_line(user_text, 300)}")
+        item_b = QListWidgetItem(f"[{stamp}]  🤖 {cid}:  {_feed_line(bot_reply, 500)}")
+        item_u.setToolTip((user_text or "")[:4000])
+        item_b.setToolTip((bot_reply or "")[:4000])
         item_b.setForeground(QColor(ACCENT2))
         self._log_append(item_u)
         self._log_append(item_b)

@@ -378,6 +378,18 @@ class RegistrationMixin:
             return False
 
         if (user and user.status == "approved"
+                and (sess.reg_state or "").startswith(("lv_question:", "lv_more:"))):
+            # ❓ about a long video: the next message is the question
+            done = self._capture_preamble(chat_id, sess, lang, text, empty_abandons=True)
+            if done is not None:
+                return done
+            state = sess.reg_state
+            sess.reg_state = ""
+            self._store.put(sess)
+            self._long_video_question(chat_id, sess, lang, state, text)
+            return False
+
+        if (user and user.status == "approved"
                 and (sess.reg_state or "").startswith(_tg_music.CUSTOM_STATE)):
             field = sess.reg_state[len(_tg_music.CUSTOM_STATE):]
             done = self._capture_preamble(chat_id, sess, lang, text, empty_abandons=True)
