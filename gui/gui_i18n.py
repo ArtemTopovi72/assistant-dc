@@ -40,7 +40,9 @@ def _compile(table: dict) -> None:
     for en, ru in table.items():
         if re.search(r"%(?:[-+ 0#]*\d*(?:\.\d+)?)[sdif]", en):
             parts = re.split(r"(%(?:[-+ 0#]*\d*(?:\.\d+)?)[sdif])", en)
-            rx = "".join("(.+?)" if i % 2 else re.escape(p.replace("%%", "%")) for i, p in enumerate(parts))
+            # %d / %f hold only numbers: '%ss' (seconds) as (.+?) turned «Facts» into «Fact с»
+            rx = "".join(("([-+]?\\d+)" if p.endswith("d") else "([-+]?\\d+(?:[.,]\\d+)?)" if p.endswith("f")
+                          else "(.+?)") if i % 2 else re.escape(p.replace("%%", "%")) for i, p in enumerate(parts))
             _templates.append((re.compile("^" + rx + "$", re.S),
                                re.sub(r"%(?:[-+ 0#]*\d*(?:\.\d+)?)[sdif]", "%s", ru)))
         else:
@@ -76,8 +78,10 @@ def _one(s: str) -> str | None:
 def tr(s, log=True):
     """Text for the screen in the chosen language. Never raises.
     log=False for sinks that also carry model output and log lines (text panes)."""
-    if LANG == "en" or not isinstance(s, str) or not _LATIN.search(s):
+    if LANG == "en" or not isinstance(s, str):
         return s
+    if not _LATIN.search(s):
+        return _exact.get(s, s)        # «24 h», «60s»: one Latin letter, still listed in the table
     try:
         out = _one(s)
         if out is None and "\n" in s:

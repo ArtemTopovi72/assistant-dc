@@ -122,15 +122,22 @@ def _make_tab_close_icons():
             path = os.path.join(assets, name)
             img.save(path)
             out[name.split(".")[0]] = path.replace("\\", "/")
-        # the combo chevron: Qt draws no CSS border-triangle, the old rule showed a bar «▬»
-        for name, col in (("_chevron.png", MUTED), ("_chevron_hover.png", TEXT)):
+        # chevrons and the check mark: Qt draws no CSS border-triangle (the old rules showed
+        # a bar «▬» on every combo and spin box) and a checked box was a blank blue square
+        shapes = {
+            "_chevron.png": (MUTED, ((0.22, 0.38, 0.5, 0.66), (0.5, 0.66, 0.78, 0.38))),
+            "_chevron_hover.png": (TEXT, ((0.22, 0.38, 0.5, 0.66), (0.5, 0.66, 0.78, 0.38))),
+            "_chevron_up.png": (MUTED, ((0.22, 0.62, 0.5, 0.34), (0.5, 0.34, 0.78, 0.62))),
+            "_check.png": ("#ffffff", ((0.2, 0.52, 0.42, 0.74), (0.42, 0.74, 0.8, 0.3))),
+        }
+        for name, (col, lines) in shapes.items():
             img = QImage(s, s, QImage.Format_ARGB32)
             img.fill(QColor(0, 0, 0, 0))
             pr = QPainter(img)
             pr.setRenderHint(QPainter.Antialiasing, True)
             pen = QPen(QColor(col)); pen.setWidth(max(1, s // 7)); pr.setPen(pen)
-            pr.drawLine(int(s * 0.22), int(s * 0.38), int(s * 0.5), int(s * 0.66))
-            pr.drawLine(int(s * 0.5), int(s * 0.66), int(s * 0.78), int(s * 0.38))
+            for x1, y1, x2, y2 in lines:
+                pr.drawLine(int(s * x1), int(s * y1), int(s * x2), int(s * y2))
             pr.end()
             path = os.path.join(assets, name)
             img.save(path)
@@ -161,8 +168,13 @@ def build_qss() -> str:
     else:
         close_css = ""
     chevron_css = (
-        f'QComboBox::down-arrow {{ image: url("{_ic["_chevron"]}"); width: {p(12)}px; height: {p(12)}px; '
+        f'QComboBox::down-arrow, QDateEdit::down-arrow {{ image: url("{_ic["_chevron"]}"); width: {p(12)}px; height: {p(12)}px; '
         f'border: none; }} QComboBox::down-arrow:hover {{ image: url("{_ic["_chevron_hover"]}"); }}'
+        f'QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {{ image: url("{_ic["_chevron_up"]}"); '
+        f'width: {p(10)}px; height: {p(10)}px; border: none; }}'
+        f'QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{ image: url("{_ic["_chevron"]}"); '
+        f'width: {p(10)}px; height: {p(10)}px; border: none; }}'
+        f'QCheckBox::indicator:checked {{ image: url("{_ic["_check"]}"); }}'
     ) if _ic.get("_chevron") else ""
     return f"""
 {close_css}
@@ -222,12 +234,11 @@ QTabBar::tab:selected {{ background: {ACCENT}; color: white; margin-bottom: -{p(
 QTabBar::tab:hover:!selected {{ background: #2d2f3a; color: {TEXT}; }}
 QTabWidget#pages > QTabBar {{ font-size: {p(14)}px; font-weight: bold; }}
 QTabWidget#pages > QTabBar::tab {{ padding: {p(9)}px {p(22)}px; }}
-QComboBox::drop-down {{ border: none; width: {p(22)}px; }}
+QComboBox::drop-down, QDateEdit::drop-down {{ border: none; width: {p(22)}px; }}
 QComboBox::down-arrow {{ image: none; width: 0; height: 0;
                          border-left: {p(5)}px solid transparent;
                          border-right: {p(5)}px solid transparent;
                          border-top: {p(6)}px solid {MUTED}; }}
-{chevron_css}
 QSpinBox::up-button, QSpinBox::down-button {{ background: {PANEL2}; border: none;
                                               width: {p(18)}px; border-radius: {p(4)}px; }}
 QSpinBox::up-arrow {{ image: none; width: 0; height: 0;
@@ -251,7 +262,7 @@ QPushButton#winclose {{ background: transparent; border: none; border-radius: {p
 QPushButton#winclose:hover {{ background: {REC}; color: white; }}
 QProgressBar {{ background: {BG}; border: {p(1)}px solid {BORDER}; border-radius: {p(5)}px; }}
 QProgressBar::chunk {{ background: {ACCENT}; border-radius: {p(5)}px; }}
-QComboBox, QSpinBox {{ background: {BG}; border: {p(1)}px solid {BORDER}; border-radius: {p(8)}px; padding: {p(5)}px; }}
+QComboBox, QSpinBox, QDateEdit, QTimeEdit, QDoubleSpinBox {{ background: {BG}; border: {p(1)}px solid {BORDER}; border-radius: {p(8)}px; padding: {p(5)}px; }}
 QScrollBar:vertical {{ background: {BG}; width: {p(10)}px; border-radius: {p(5)}px; margin: 0; }}
 QScrollBar::handle:vertical {{ background: {BORDER}; border-radius: {p(5)}px; min-height: {p(24)}px; }}
 QScrollBar::handle:vertical:hover {{ background: {MUTED}; }}
@@ -299,6 +310,7 @@ QSlider::handle:horizontal {{ background: {ACCENT}; width: {p(16)}px; margin: -{
                   border-radius: {p(8)}px; }}
 QSlider::sub-page:horizontal {{ background: {ACCENT}; border-radius: {p(2)}px; }}
 QMessageBox, QInputDialog {{ background: {BG}; }}
+{chevron_css}
 """
 
 

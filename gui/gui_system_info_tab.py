@@ -47,6 +47,7 @@ class SystemInfoTab(QWidget):
         self._text.setReadOnly(True)
         self._text.setObjectName("terminal")
         self._text.setStyleSheet(_ss("font-size:11px;"))
+        self._text.setPlaceholderText("The status fills in once the models are loaded — or press Refresh.")
         root.addWidget(self._text, 1)
 
     def set_context(self, ctx, base_url: str):

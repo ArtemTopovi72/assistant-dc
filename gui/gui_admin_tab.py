@@ -17,6 +17,7 @@ from PyQt5.QtWidgets import (QAbstractItemView, QComboBox, QGridLayout, QHBoxLay
 
 from gui_common import ACCENT2, BORDER, MUTED, PANEL2, REC, TEXT, _card, _section
 from tg_admin import _dur
+from ui_scale import px
 
 logger = logging.getLogger("assistant.gui")
 _STATUS_COLOR = {"approved": "#3ddc84", "pending": "#f0b429", "banned": REC}
@@ -75,6 +76,7 @@ def _buttons(spec, per_row: int = 2) -> QGridLayout:
     g.setHorizontalSpacing(8); g.setVerticalSpacing(6)
     for i, (label, slot) in enumerate(spec):
         b = QPushButton(label); b.clicked.connect(slot)
+        b.setObjectName("ghost")      # row actions, not the page's primary action: all-blue read as four "Send" buttons
         g.addWidget(b, i // per_row, i % per_row)
     return g
 
@@ -97,7 +99,7 @@ class AdminTab(QWidget):
         lay = QVBoxLayout(self)
         head = QHBoxLayout()
         title = QLabel('🔐 <b>Bot admin</b>')
-        title.setStyleSheet(f"font-size:16pt;color:{TEXT};")
+        title.setStyleSheet(f"font-size:{px(18)}px;color:{TEXT};")
         self.meta = QLabel('bot is not running')
         self.meta.setStyleSheet(f"color:{MUTED};")
         head.addWidget(title); head.addStretch(1); head.addWidget(self.meta)

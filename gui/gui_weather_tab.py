@@ -120,6 +120,7 @@ class WeatherTab(QWidget):
         self.date_edit = QDateEdit(QDate.currentDate())
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDisplayFormat("dd.MM.yyyy")
+        self.date_edit.setMinimumWidth(px(140))   # the date was cut to «10.10.202»
         # Open-Meteo's hourly forecast runs about two weeks out; offering dates
         # past that just produces the no-data message.
         self.date_edit.setDateRange(QDate.currentDate(),

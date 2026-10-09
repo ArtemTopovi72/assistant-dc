@@ -275,7 +275,7 @@ class TelegramTab(QWidget):
             "send <code>/newbot</code> → follow the steps → copy the token above.<br>"
             "First-time users must register (name + password) and await admin approval.")
         hint.setWordWrap(True)
-        hint.setStyleSheet(f"color:{MUTED}; font-size:{pt(9)}pt;")
+        hint.setStyleSheet(f"color:{MUTED}; font-size:{pt(13)}px;")
         hint.setTextFormat(Qt.RichText)
         root.addWidget(hint)
 
@@ -286,14 +286,14 @@ class TelegramTab(QWidget):
         self.status_board.setWordWrap(True)
         self.status_board.setTextFormat(Qt.RichText)
         self.status_board.setStyleSheet(
-            f"font-family:monospace; font-size:{pt(9)}pt; "
+            f"font-family:monospace; font-size:{pt(13)}px; "
             f"padding:{px(6)}px; background:rgba(0,0,0,0.18); "
             f"border-radius:{px(6)}px;")
         self.status_board.setMinimumHeight(px(48))
         root.addWidget(self.status_board)
 
         self.queue_lbl = QLabel("Queue: — tasks")
-        self.queue_lbl.setStyleSheet(f"color:{MUTED}; font-size:{pt(9)}pt;")
+        self.queue_lbl.setStyleSheet(f"color:{MUTED}; font-size:{pt(13)}px;")
         root.addWidget(self.queue_lbl)
 
         # ── 3. User management ─────────────────────────────────────────────
@@ -302,7 +302,7 @@ class TelegramTab(QWidget):
         # Pending badge
         self.pending_badge = QLabel("")
         self.pending_badge.setStyleSheet(
-            f"color:{_STATUS_COLORS['pending']}; font-weight:700; font-size:{pt(10)}pt;")
+            f"color:{_STATUS_COLORS['pending']}; font-weight:700; font-size:{pt(14)}px;")
         root.addWidget(self.pending_badge)
 
         # User table: chat_id | Name | @username | Status | Admin | Registered
@@ -364,7 +364,7 @@ class TelegramTab(QWidget):
         # clicking along a row of similar-looking buttons.
         sbrow = QHBoxLayout()
         sblbl = QLabel("Sandbox:")
-        sblbl.setStyleSheet(f"color:{MUTED}; font-size:{pt(9)}pt;")
+        sblbl.setStyleSheet(f"color:{MUTED}; font-size:{pt(13)}px;")
         self.sbx_combo = QComboBox()
         self.sbx_combo.addItems(["off", "files", "code", "host"])
         self.sbx_combo.setToolTip(
@@ -384,7 +384,7 @@ class TelegramTab(QWidget):
             "Their access level is left unchanged.")
         self.sbx_reset_btn.clicked.connect(self._reset_sandbox_selected)
         self.sbx_status_lbl = QLabel("")
-        self.sbx_status_lbl.setStyleSheet(f"color:{MUTED}; font-size:{pt(9)}pt;")
+        self.sbx_status_lbl.setStyleSheet(f"color:{MUTED}; font-size:{pt(13)}px;")
         sbrow.addWidget(sblbl)
         sbrow.addWidget(self.sbx_combo)
         sbrow.addWidget(self.sbx_apply_btn)
@@ -395,7 +395,7 @@ class TelegramTab(QWidget):
         # DB backup controls
         dbrow = QHBoxLayout()
         self.backup_info_lbl = QLabel("DB: tg_users.db  (SQLite WAL)")
-        self.backup_info_lbl.setStyleSheet(f"color:{MUTED}; font-size:{pt(9)}pt;")
+        self.backup_info_lbl.setStyleSheet(f"color:{MUTED}; font-size:{pt(13)}px;")
         self.restore_btn = QPushButton("⏮  Restore backup")
         self.restore_btn.setObjectName("ghost")
         self.restore_btn.setToolTip("Pick a snapshot from tg_users_backups/ and restore it")
