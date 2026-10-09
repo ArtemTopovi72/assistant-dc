@@ -27,6 +27,7 @@ from ui_scale import pt, px, scale_style as _ss
 import config as _config
 from config import LM_STUDIO_BASE, MODEL_NAME
 from gui_common import MUTED, REC, _fit_dialog, _section, build_qss
+from gui_i18n import tr
 
 import logging
 logger = logging.getLogger("assistant.gui")
@@ -419,7 +420,7 @@ class SettingsDialog(QDialog):
             mid = m.get("id", "")
             gb = _size_gb(mid, sizes)
             size_str = f"{gb:.1f} GB" if gb is not None else "?"
-            loaded = "   ·   loaded" if m.get("state") == "loaded" else ""
+            loaded = "   ·   " + tr("loaded") if m.get("state") == "loaded" else ""
             # Row = radio (no text) + a word-wrapping label, so long model ids are
             # fully readable instead of being clipped by a horizontal scrollbar.
             row = QWidget()

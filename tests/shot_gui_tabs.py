@@ -51,4 +51,17 @@ for tabs in win.findChildren(QTabWidget):
             continue
         safe = "".join(c for c in label if c.isalnum() or c in " _-").strip().replace(" ", "_")[:30] or f"tab{i}"
         snap(f"{len(seen):02d}_{safe}")
+from gui_settings_dialog import SettingsDialog
+dlg = SettingsDialog("shot-model", ctx=None, parent=win)
+dlg.resize(1000, 800); dlg.show()
+for t in dlg.findChildren(QTabWidget):
+    for i in range(t.count()):
+        t.setCurrentIndex(i)
+        for _ in range(3): app.processEvents()
+        safe = "".join(c for c in t.tabText(i) if c.isalnum() or c in " _-").strip().replace(" ", "_")[:30]
+        dlg.grab().save(str(out / f"settings_{i:02d}_{safe}.png"))
+if not dlg.findChildren(QTabWidget):
+    for _ in range(3): app.processEvents()
+    dlg.grab().save(str(out / "settings.png"))
+dlg.close()
 print("saved", len(list(out.glob('*.png'))), "shots to", out)
