@@ -40,6 +40,9 @@ if os.environ.get("SHOT_FILLED"):
     win._add_user("Нарисуй кота в космосе")
     win._add_assistant("Готово — **рыжий кот** в скафандре на фоне Сатурна. Хочешь другой ракурс?")
     win._add_system("⏳ В очереди (2): сочини песню про кота")
+    win._add_assistant("## Сравнение\n- **Asus** — дешевле\n  - 16 ГБ\n- *Lenovo* — тише\n\n"
+                       "| Модель | Цена |\n|---|---|\n| Asus | 50 000 ₽ |\n| Lenovo | 55 000 ₽ |\n\n"
+                       "> Совет: бери Lenovo\n\n```python\nprint('ok')\n```")
     win._add_user("Какая погода завтра в Питере?")
     win._add_assistant("Завтра в Санкт-Петербурге +9…+12 °C, облачно, к вечеру дождь. Возьми зонт.")
     win._task_queue = [{"text": "сочини песню про кота", "status": "pending"},

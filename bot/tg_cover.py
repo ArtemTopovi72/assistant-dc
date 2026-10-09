@@ -108,7 +108,7 @@ class CoverMixin:
         import rvc_voice
         cur = getattr(sess, "cover_voice", "") or ""
         opts = [("auto", tg_bot._t("cover_voice_auto", lang)), ("none", tg_bot._t("cover_voice_none", lang))]
-        opts += list(rvc_voice.stars()) if rvc_voice.available() else []
+        opts += list(rvc_voice.stars(lang)) if rvc_voice.available() else []
         rows = [[{"text": ("✅ " if (v == cur or (v == "auto" and not cur)) else "") + label,
                   "callback_data": f"cvv:{v}"}] for v, label in opts]
         if cur not in ("", "none") and getattr(sess, "cover_state", "") == "want_text":

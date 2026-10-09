@@ -823,6 +823,7 @@ _MSG: dict[str, dict[str, str]] = {
                       "Auto lets the songwriter choose what suits the topic.",
                 "ru": "Применяются ко всем песням, которые ты будешь "
                       "генерировать дальше. «Авто» — пусть подбирает под тему."},
+    "set_now": {"en": "Now: {mode}", "ru": "Сейчас: {mode}"},
     "ms_tags": {"en": "🏷 The model gets: <code>{tags}</code>\n"
                       "<i>+ the songwriter's own tags (language, instruments, mood).</i>",
                 "ru": "🏷 Модель получит: <code>{tags}</code>\n"

@@ -59,6 +59,10 @@ STARS = (("tsoi_hq", "Виктор Цой"), ("gorshok_hq", "Горшок (Ки�
          ("lindemann_hq", "Тиль Линдеманн"), ("viktor_tsoy", "Виктор Цой"), ("korol_i_shut", "Горшок (КиШ)"),
          ("shaman", "SHAMAN"), ("mihail_shufutinskiy", "Михаил Шуфутинский"), ("lyube", "Любэ"),
          ("ruki_vverh", "Руки Вверх"))
+# the same names for an English chat (the menu listed «Виктор Цой» in an English interface)
+STARS_EN = {"Виктор Цой": "Viktor Tsoi", "Горшок (КиШ)": "Gorshok (Korol i Shut)", "Томас Андерс": "Thomas Anders",
+            "Тиль Линдеманн": "Till Lindemann", "Михаил Шуфутинский": "Mikhail Shufutinsky", "Любэ": "Lyube",
+            "Руки Вверх": "Ruki Vverh"}
 
 
 # The song's artist as the style step names it -> the star voice trained on many songs, which
@@ -76,13 +80,13 @@ def best_voice(name: str) -> str:
     return star if star and model_of(star) else name
 
 
-def stars() -> list:
-    """[(model name, label)] of the star voices trained here."""
+def stars(lang: str = "ru") -> list:
+    """[(model name, label)] of the star voices trained here, labelled in `lang`."""
     seen, out = set(), []
     for name, label in STARS:
         if label not in seen and model_of(name):
             seen.add(label)
-            out.append((name, label))
+            out.append((name, label if lang == "ru" else STARS_EN.get(label, label)))
     return out
 
 

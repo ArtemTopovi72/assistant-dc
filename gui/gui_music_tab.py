@@ -293,7 +293,8 @@ class MusicTab(QWidget):
         try:
             import rvc_voice
             if rvc_voice.available():
-                for name, label in rvc_voice.stars():
+                import gui_i18n
+                for name, label in rvc_voice.stars(gui_i18n.LANG):
                     self.voice_combo.addItem(label, name)
         except Exception:
             logger.warning("star voices unavailable", exc_info=True)

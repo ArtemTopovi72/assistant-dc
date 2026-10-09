@@ -28,9 +28,27 @@ logger = logging.getLogger("assistant.gui")
 def _md(text: str) -> str:
     """Escaped text with the model's light markdown drawn: **bold**, *italic*, `code`, line breaks.
     The reply showed «**рыжий кот**» with its stars (Qt draws no markdown in insertHtml)."""
+    try:
+        # the bot's converter: headings, lists, tables, links, quotes and code look the same
+        # in both windows, and it escapes first so model text cannot inject tags
+        from tg_markup import _md_to_html
+        t = _md_to_html(text or "").strip("\n")
+        # Qt's own block margins are huge inside a bubble and it collapses indent spaces:
+        # blocks get small margins, a quote a bar, line breaks next to a block go
+        t = re.sub(r"\n*(</?(?:pre|blockquote)\b[^>]*>)\n*", r"\1", t)
+        t = t.replace("<pre>", '<pre style="margin:6px 0;">')
+        t = re.sub(r"<blockquote>(.*?)</blockquote>",
+                   lambda m: f'<p style="margin:6px 0; color:{MUTED};">▎ ' + m.group(1).replace("\n", "<br>▎ ") + "</p>",
+                   t, flags=re.S)
+        t = re.sub(r"\n{3,}", "\n\n", t)
+        parts = re.split(r"(<pre\b.*?</pre>)", t, flags=re.S)
+        return "".join(p if p.startswith("<pre") else
+                       re.sub(r"(?m)^( +)", lambda m: "&nbsp;" * len(m.group(1)), p).replace("\n", "<br>")
+                       for p in parts)
+    except Exception:
+        logger.debug("chat markdown fell back to plain", exc_info=True)
     t = _esc(text)
     t = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", t, flags=re.S)
-    t = re.sub(r"(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])", r"<i>\1</i>", t)
     t = re.sub(r"`([^`]+)`", r"<code>\1</code>", t)
     return t.replace("\n", "<br>")
 

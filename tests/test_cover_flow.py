@@ -225,7 +225,7 @@ check("known artist: one cover, already in their voice", [p for p, _ in AUD] == 
 # the choice is kept on the session and goes into the render; a picked voice is the only pass.
 import rvc_voice
 rvc_voice.available = lambda: True
-rvc_voice.stars = lambda: [("tsoi_hq", "Виктор Цой")]
+rvc_voice.stars = lambda *a, **k: [("tsoi_hq", "Виктор Цой")]
 _s = bot._get_session(CID); _s.cover_voice = ""
 kb = bot._cover_voice_kb(_s, "ru")["inline_keyboard"]
 check("voice picker: auto (ticked), no swap, the trained stars",

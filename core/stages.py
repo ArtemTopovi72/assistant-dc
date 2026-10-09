@@ -34,6 +34,7 @@ DEFAULT_LANG = "en"
 # these and you find both the emitter and this table.
 _STAGES: dict[str, dict[str, str]] = {
     # graph.py
+    "Singing in the chosen voice": {"ru": "Пою выбранным голосом"},
     "Compacting the chat history": {"ru": "Сжимаю историю диалога"},
     "Removing the lettering":      {"ru": "Убираю надписи"},
     "Removing the lettering (logo)": {"ru": "Убираю надписи (логотип)"},

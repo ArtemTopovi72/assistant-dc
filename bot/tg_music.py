@@ -48,14 +48,14 @@ FIELDS: tuple = ("genre", "tempo", "vocal", "voice", "duration") + (
     ("quality",) if _music.MUSIC_ENGINE != "yue2" else ())
 
 
-def voices() -> dict:
+def voices(lang: str = "ru") -> dict:
     """🎙 Own voice: {"auto": off} + the trained star voices (rvc_voice.stars()). A song
     rendered by the engine gets its lead re-sung in the chosen star's voice (10-09)."""
     out = {"auto": ""}
     try:
         import rvc_voice
         if rvc_voice.available():
-            out.update(rvc_voice.stars())
+            out.update(rvc_voice.stars(lang))
     except Exception:
         logger.warning("star voices unavailable", exc_info=True)
     return out
@@ -197,7 +197,7 @@ def _value_label(field: str, value: str, lang: str) -> str:
     if field == "steps":
         return str(value)
     if field == "voice":
-        return voices().get(value) or _t("m_voice_off", lang) if value else _t("m_voice_off", lang)
+        return voices(lang).get(value) or _t("m_voice_off", lang) if value else _t("m_voice_off", lang)
     if not value:
         return _t("m_auto", lang)
     if field == "duration":

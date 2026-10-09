@@ -258,7 +258,7 @@ check("no duet button: the model cannot place who sings where", "duet" not in M.
 # 10-09 «опцию кастомный голос выкл или 1 из 4»: 🎙 Own voice in the song settings
 import rvc_voice
 rvc_voice.available = lambda: True
-rvc_voice.stars = lambda: [("tsoi_hq", "Виктор Цой"), ("lindemann_hq", "Тиль Линдеманн")]
+rvc_voice.stars = lambda *a, **k: [("tsoi_hq", "Виктор Цой"), ("lindemann_hq", "Тиль Линдеманн")]
 bot = make_bot(); sess = bot._get_session(CID)
 check("the menu has «Свой голос: Выкл»", any(t.startswith("🎙 Свой голос: Выкл") for t in kb_texts(TM._music_menu_kb(sess, "ru"))))
 check("the picker: off, then the trained stars",

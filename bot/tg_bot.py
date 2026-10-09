@@ -1697,7 +1697,9 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         names the setting in both languages, and drop the bullet.
         """
         lang = lang if lang is not None else self._lang(sess)
-        return f"<b>{_b('settings', lang)}</b>\n" + _b("reply_" + sess.reply_mode, lang)
+        # «Сейчас:» -- a bare «💬 Ответ: текст» under the title read as one more button
+        return (f"<b>{_b('settings', lang)}</b>\n"
+                + _t("set_now", lang, mode=_b("reply_" + sess.reply_mode, lang)))
 
     def _main_menu_kb(self, sess, lang: str = None) -> dict:
         """The main keyboard — and the state that must go with it.
