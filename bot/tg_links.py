@@ -66,7 +66,9 @@ def fetch_video(url: str, max_seconds: int = VIDEO_MAX_SECONDS) -> dict:
                     import injection_scan
                     desc = injection_scan.scrub(desc, "video description")
                 except Exception:
-                    pass
+                    # an unscanned description is untrusted text for the LLM: drop it, not pass it
+                    logger.warning("injection scan failed, video description dropped", exc_info=True)
+                    desc = ""
                 if secs > max_seconds:
                     return {"too_long": True, "seconds": secs, "title": title}
                 y.download([url])

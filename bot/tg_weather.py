@@ -307,7 +307,7 @@ class WeatherMixin:
             # the table in a proportional font, so no column lined up.
             self._send_text(chat_id, reply, parse_mode="HTML", keyboard=kb)
         except Exception:
-            pass
+            tg_bot.logger.warning("weather: forecast not sent", exc_info=True)
         # Only a resolved city ends the flow. On failure reg_state was left
         # armed by the callers (_user_gate's text path never cleared it;
         # wtw_default re-arms it before calling here) so the user's next

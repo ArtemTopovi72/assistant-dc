@@ -426,54 +426,5 @@ class AccountsMixin:
         # The live console (tg_admin): one message, refreshed in place.
         self._admin_show(chat_id)
 
-    def _send_admin_panel_legacy(self, chat_id: int):
-        depth = self._backend.depth()
-        with self._stages_lock:
-            stages = dict(self._active_stages)
-        pending = self._user_store.pending()
-        approved = self._user_store.approved()
-
-        lang = self._lang(self._get_session(chat_id))
-        lines = [
-            tg_bot._t("adm_title", lang),
-            f"👥 <b>{tg_bot._t('st_approved', lang)}:</b> {len(approved)} · "
-            f"<b>{tg_bot._t('st_pending', lang)}:</b> {len(pending)}",
-            tg_bot._t("adm_queue", lang, n=depth),
-            tg_bot._t("status_backend", lang,
-               name=_html_mod.escape(self._backend.name())),
-        ]
-        lines.append(self._training_line(lang))
-        if stages:
-            lines.append(tg_bot._t("adm_active", lang))
-            for cid, stage in stages.items():
-                u = self._user_store.get(int(cid))
-                uname = u.name if u else str(cid)
-                lines.append(f"  • <b>{_html_mod.escape(uname)}</b>: {_html_mod.escape(stage)}")
-        if pending:
-            lines.append(tg_bot._t("adm_pending", lang))
-            kb_rows = []
-            for u in pending[:5]:
-                lines.append(
-                    f"  • <b>{_html_mod.escape(u.name)}</b>"
-                    + (f" (@{_html_mod.escape(u.tg_username)})" if u.tg_username else "")
-                    + f"  —  <code>{u.chat_id}</code>"
-                )
-                kb_rows.append([
-                    {"text": f"✅ {u.name}",  "callback_data": f"admin_approve:{u.chat_id}"},
-                    {"text": tg_bot._t("reject_btn", lang),
-                     "callback_data": f"admin_reject:{u.chat_id}"},
-                ])
-            if len(pending) > 5:
-                lines.append(tg_bot._t("adm_pending_more", lang,
-                                 n=len(pending) - 5, shown=5))
-            kb = {"inline_keyboard": kb_rows} if kb_rows else None
-            self._send_text(chat_id, "\n".join(lines), parse_mode="HTML", keyboard=kb)
-            self._send_admin_stats(chat_id)
-            return
-
-        lines.append(tg_bot._t("adm_bcast_tip", lang))
-        self._send_text(chat_id, "\n".join(lines), parse_mode="HTML")
-        self._send_admin_stats(chat_id)
-
 
 import tg_bot  # noqa: E402  (cycle by design; attrs read at call time)

@@ -209,7 +209,7 @@ class TransportMixin:
                 p["text"] = _lg.guard_text(p.get("text", ""), _lang, _chat)
                 keyboard = _lg.guard_keyboard(keyboard, _lang, _chat)
         except Exception:
-            pass
+            tg_bot.logger.warning("ui language guard failed, text sent unchecked", exc_info=True)
         if parse_mode: p["parse_mode"] = parse_mode
         if keyboard and "keyboard" in keyboard:
             # Menus stay open: without this a client folds the reply keyboard
@@ -808,10 +808,6 @@ class TransportMixin:
                 if attempt < tg_bot._API_RETRIES - 1: time.sleep(1.5 ** attempt)
                 else: tg_bot.logger.warning("API GET %s failed: %s", method, exc)
         return {}
-
-    def _get_me(self) -> Optional[dict]:
-        r = self._api_get("getMe")
-        return r.get("result") if r.get("ok") else None
 
     def _identify(self) -> tuple:
         """(info, error) — who we are, or why we cannot start.

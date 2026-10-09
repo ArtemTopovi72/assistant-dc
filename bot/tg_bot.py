@@ -1224,16 +1224,6 @@ class _ActivityLog:
         except Exception as exc:
             logger.warning("activity log write error: %s", exc)
 
-    def read_recent(self, n: int = 200) -> list[dict]:
-        try:
-            if not self._path.exists():
-                return []
-            with self._lock:
-                lines = self._path.read_text(encoding="utf-8").splitlines()
-            return [json.loads(l) for l in lines[-n:] if l.strip()]
-        except Exception:
-            return []
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # TYPING KEEPALIVE
@@ -1389,13 +1379,6 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         self._poll_thread: Optional[threading.Thread] = None
         self._watchdog: Optional[threading.Thread] = None
         self._poll_beat: float = 0.0    # last successful getUpdates (monotonic)
-
-    # ── public helpers for GUI ────────────────────────────────────────────────
-
-    def reload_extremism_keywords(self):
-        global _EXTREMISM_KW
-        _EXTREMISM_KW = _load_extremism_keywords()
-        logger.info("Reloaded extremism keywords: %d entries", len(_EXTREMISM_KW))
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
 

@@ -1360,17 +1360,6 @@ _MSG: dict[str, dict[str, str]] = {
     'ax_say_cancel': {"en": 'Cancelled.', "ru": 'Отменено.'},
     'ax_say_sent': {"en": '✅ Sent.', "ru": '✅ Отправлено.'},
     "adm_title":     {"en": "🔐 <b>Admin Panel</b>\n", "ru": "🔐 <b>Панель админа</b>\n"},
-    "adm_queue":     {"en": "📋 <b>Queue depth:</b> {n}",
-                      "ru": "📋 <b>Длина очереди:</b> {n}"},
-    "adm_active":    {"en": "\n⚡ <b>Active dialogs:</b>",
-                      "ru": "\n⚡ <b>Активные диалоги:</b>"},
-    "adm_pending":   {"en": "\n⏳ <b>Pending approval:</b>",
-                      "ru": "\n⏳ <b>Ждут одобрения:</b>"},
-    "adm_pending_more": {"en": "\n… and {n} more waiting — only the first {shown} are "
-                               "actionable here; approve/reject the rest from the "
-                               "desktop GUI.",
-                         "ru": "\n… и ещё {n} в ожидании — здесь можно одобрить/отклонить "
-                               "только первые {shown}; остальных — через GUI на компьютере."},
     "adm_bcast_tip": {"en": "\n📢 <code>/broadcast &lt;message&gt;</code> to announce.",
                       "ru": "\n📢 <code>/broadcast &lt;текст&gt;</code> — объявление."},
     "adm_stats_title": {"en": "📊 <b>Usage — last 7 days</b>\n",
