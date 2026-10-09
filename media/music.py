@@ -1607,27 +1607,21 @@ def _generate_yue2(ctx, lyrics: str, style: str, seed: int, prefs: Optional[dict
         logger.error("YuE2 produced no file: %s", tail[-800:])
         _MUSIC_FAILURE.update({"reason": "server_error", "detail": "YuE2 produced no file"})
         raise MusicUnavailable("YuE2 produced no file")
-    _master(out, fade=("(truncated)" in tail or "TRUNCATED" in tail))
+    _master(out)
     logger.info("YuE2: %s in %.0fs", os.path.basename(out), time.time() - t0)
     return out
 
 
-def _master(path: str, fade: bool = False) -> None:
+def _master(path: str) -> None:
     """In place: loudness to -14 LUFS with true peak under -1 dBTP (YuE2's raw
-    output level wanders song to song), and a 2 s fade-out on a song the token
-    budget cut off mid-line. No ffmpeg or a failed pass -> the file as it was."""
+    output level wanders song to song). No ffmpeg or a failed pass -> the file as it was.
+    No fade here: generate_music's apply_fade tapers every song, a cut-off one included --
+    a second fade here stacked on it and sank the last 2 s twice."""
     import shutil
     import subprocess
     if not shutil.which("ffmpeg"):
         return
     af = "loudnorm=I=-14:TP=-1:LRA=11"
-    if fade:
-        try:
-            import soundfile as sf
-            dur = sf.info(path).duration
-            af += f",afade=t=out:st={max(0.0, dur - 2):.2f}:d=2"
-        except Exception:
-            pass
     root, ext = os.path.splitext(path)
     tmp = f"{root}.master{ext}"
     try:
