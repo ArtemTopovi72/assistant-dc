@@ -35,6 +35,29 @@ def snap(name):
     win.grab().save(str(out / f"{name}.png"))
 
 
+if os.environ.get("SHOT_FILLED"):
+    # screens as they look in use: a conversation, a queue, the bot's feed, a forecast
+    win._add_user("Нарисуй кота в космосе")
+    win._add_assistant("Готово — **рыжий кот** в скафандре на фоне Сатурна. Хочешь другой ракурс?")
+    win._add_system("⏳ В очереди (2): сочини песню про кота")
+    win._add_user("Какая погода завтра в Питере?")
+    win._add_assistant("Завтра в Санкт-Петербурге +9…+12 °C, облачно, к вечеру дождь. Возьми зонт.")
+    win._task_queue = [{"text": "сочини песню про кота", "status": "pending"},
+                       {"text": "перескажи видео с лекцией", "status": "pending"},
+                       {"text": "нарисуй закат", "status": "done"}]
+    win._refresh_queue_ui()
+    tg = win.telegram_tab
+    tg._on_message(7147556811, "А, вот оно что! Через три контакта G R и Y?",
+                   "Понял: GRY — это три отдельных контакта (G, R и Y). Это в корне меняет дело и делает "
+                   "схему ещё чётче и понятнее для сборки: G на землю, R через резистор 220 Ом, Y на выход.")
+    tg._on_stage(7147556811, "Рисую картинку", False)
+    w = win.weather_tab.table
+    rows = [("10.10", "утро", "+9", "82 %", "3 м/с", "☁ облачно"), ("10.10", "день", "+12", "70 %", "4 м/с", "🌦 дождь")]
+    from PyQt5.QtWidgets import QTableWidgetItem
+    w.setRowCount(len(rows))
+    for r, row in enumerate(rows):
+        for c, v in enumerate(row):
+            w.setItem(r, c, QTableWidgetItem(v))
 snap("00_main")
 seen = set()
 for tabs in win.findChildren(QTabWidget):

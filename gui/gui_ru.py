@@ -1211,6 +1211,8 @@ RU = {
     'Own voice:': 'Свой голос:',
     'Off': 'Выкл',
     'Total memories': 'Всего записей',
+    '%d pending': '%d в очереди',
+    '%d pending ▶': '%d в очереди ▶',
     'Auto (model decides)': 'Авто (решает модель)',
     'Ultra-short (one sentence)': 'Очень коротко (одно предложение)',
     'Short (1–3 sentences)': 'Коротко (1–3 предложения)',

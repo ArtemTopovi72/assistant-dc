@@ -14,6 +14,7 @@ without the video stack still opens the window.
 """
 import logging
 import os
+import re
 import sys
 
 from PyQt5.QtGui import QTextCursor
@@ -24,6 +25,23 @@ from gui_common import ACCENT, ACCENT2, MUTED, PANEL2, TEXT, _esc
 logger = logging.getLogger("assistant.gui")
 
 
+def _md(text: str) -> str:
+    """Escaped text with the model's light markdown drawn: **bold**, *italic*, `code`, line breaks.
+    The reply showed «**рыжий кот**» with its stars (Qt draws no markdown in insertHtml)."""
+    t = _esc(text)
+    t = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", t, flags=re.S)
+    t = re.sub(r"(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])", r"<i>\1</i>", t)
+    t = re.sub(r"`([^`]+)`", r"<code>\1</code>", t)
+    return t.replace("\n", "<br>")
+
+
+def _bubble(inner: str, bg: str, fg: str, align: str) -> str:
+    """A chat bubble Qt can draw: rich text ignores padding and radius on a span (the line
+    looked like a text selection), a one-cell table keeps its cellpadding and background."""
+    return (f'<table align="{align}" cellpadding="10" cellspacing="0" '
+            f'style="background-color:{bg}; margin:4px 0;"><tr><td style="color:{fg};">{inner}</td></tr></table>')
+
+
 class ChatViewMixin:
     """Renders user/assistant/system lines, images and video cards."""
 
@@ -32,12 +50,10 @@ class ChatViewMixin:
         cur.insertHtml(html + "<br>"); self.chat.setTextCursor(cur); self.chat.ensureCursorVisible()
 
     def _add_user(self, text):
-        self._append_html(f'<div align="right"><span style="background:{ACCENT};color:#fff;'
-                           f'padding:8px 12px;border-radius:12px;">{_esc(text)}</span></div>')
+        self._append_html(_bubble(_esc(text).replace("\n", "<br>"), ACCENT, "#ffffff", "right"))
 
     def _add_assistant(self, text):
-        self._append_html(f'<div align="left"><span style="background:{PANEL2};color:{TEXT};'
-                           f'padding:8px 12px;border-radius:12px;">{_esc(text)}</span></div>')
+        self._append_html(_bubble(_md(text), PANEL2, TEXT, "left"))
 
     def _add_system(self, text):
         text = gui_i18n.tr(text)
@@ -54,11 +70,8 @@ class ChatViewMixin:
         align = "right" if is_user else "left"
         bubble = ACCENT if is_user else PANEL2
         colour = "#fff" if is_user else TEXT
-        self._append_html(
-            f'<div align="{align}">'
-            f'<span style="color:{ACCENT2};font-size:11px;">{_esc(name)}</span><br>'
-            f'<span style="background:{bubble};color:{colour};'
-            f'padding:8px 12px;border-radius:12px;">{_esc(text)}</span></div>')
+        self._append_html(_bubble(f'<span style="color:{ACCENT2};font-size:11px;">{_esc(name)}</span><br>'
+                                  + _md(text), bubble, colour, align))
 
     def _add_user_image(self, path):
         url = "file:///" + path.replace("\\", "/")
