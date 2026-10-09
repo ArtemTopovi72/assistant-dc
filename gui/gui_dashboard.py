@@ -202,6 +202,7 @@ class DashboardMixin:
         new_prof_btn = QPushButton("+")
         new_prof_btn.setObjectName("ghost")
         new_prof_btn.setFixedSize(px(28), px(28))
+        new_prof_btn.setStyleSheet("padding: 0;")   # the ghost padding left no room: an empty square
         new_prof_btn.setToolTip("Create a new memory profile")
         new_prof_btn.clicked.connect(self._new_memory_profile)
         mem_row.addWidget(new_prof_btn)
@@ -249,6 +250,7 @@ class DashboardMixin:
         self.camera_label.hide()
         clay.addWidget(self.camera_label)
         self.chat = QTextEdit(); self.chat.setReadOnly(True)
+        self.chat.setPlaceholderText("Write below, or press 🎤 Talk on the Commands page.")
         self.chat.viewport().installEventFilter(self)  # drops, image clicks, resize for scroll-btn
         # Deliver buttonless MouseMove events so the event filter can swap the text
         # I-beam for a pointing hand while hovering a chat image (visual cue that
