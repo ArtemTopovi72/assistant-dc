@@ -269,6 +269,7 @@ class SettingsDialog(QDialog):
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         self._ok_btn = buttons.button(QDialogButtonBox.Ok)
         self._ok_btn.setText("Apply / Select model")
+        buttons.button(QDialogButtonBox.Cancel).setText("Cancel")   # Qt's own label skips our tr()
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         outer.addWidget(buttons)
