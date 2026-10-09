@@ -146,6 +146,18 @@ check("the menu now states every chosen value",
       all(s in " ".join(kb_texts(bot.edits[-1][1]))
           for s in ("Джаз", "Медленно", "Женский", "120")),
       kb_texts(bot.edits[-1][1]))
+# YuE2 reads tags, not buttons: the menu shows the line the choices become, so a choice that
+# never reaches the model is visible before a render (10-09 «мужской не доезжал»)
+_text = str(bot.edits[-1][0])
+check("the menu shows the tags the choices pin, the singer first",
+      M.MUSIC_ENGINE != "yue2" or "<code>female vocal, " in _text and "jazz" in _text and "70 BPM" in _text, _text)
+bot._dispatch(cb(CID, "music:set:vocal:instrumental"))
+bot._dispatch(cb(CID, "music:menu"))
+_text = str(bot.edits[-1][0])
+check("...an instrumental leads with «instrumental», names no singer and keeps the genre (not «Vocal jazz»)",
+      M.MUSIC_ENGINE != "yue2" or "<code>instrumental, " in _text and "vocal" not in _text.split("<code>")[1].lower()
+      and "jazz" in _text.split("<code>")[1], _text)
+bot._dispatch(cb(CID, "music:set:vocal:female"))
 
 print()
 print("=" * 70)

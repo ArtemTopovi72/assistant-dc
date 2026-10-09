@@ -369,7 +369,18 @@ def chose_line(chosen: dict, lang: str = _DEFAULT_LANG) -> str:
 # ── texts ────────────────────────────────────────────────────────────────────
 def _music_menu_text(sess, lang: str = _DEFAULT_LANG) -> str:
     return (_t("ms_title", lang) + "\n\n"
-            + _html_mod.escape(_t("ms_hint", lang)))
+            + _html_mod.escape(_t("ms_hint", lang)) + _tags_preview(sess, lang))
+
+
+def _tags_preview(sess, lang: str) -> str:
+    """YuE2 reads tags, not buttons: the line it will get from these settings, so a choice that
+    does not reach the model is visible before a render. Music3 reads a caption -- no line."""
+    if _music.MUSIC_ENGINE != "yue2":
+        return ""
+    tags = _music.yue2_preview(prefs_of(sess))
+    if not tags:
+        return "\n\n" + _t("ms_tags_auto", lang)
+    return "\n\n" + _t("ms_tags", lang, tags=_html_mod.escape(tags))
 
 
 def _field_text(sess, field: str, lang: str = _DEFAULT_LANG) -> str:

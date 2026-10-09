@@ -82,3 +82,11 @@ def test_an_instrumental_has_no_vocal_tags_and_no_words(monkeypatch, tmp_path):
     monkeypatch.setattr(M, "_master", lambda *a, **k: None)
     M._generate_yue2(None, "[verse]\nслова песни", "Pop, synth", 1, prefs=p)
     assert seen["lyrics"] == "[instrumental]" and seen["style"].startswith("instrumental")
+
+
+def test_an_instrumental_keeps_its_pinned_genre():
+    # «Vocal jazz / jazz ballad / swing»: the vocal filter took the only genre tag with it
+    p = M.prefs_from(genre="jazz", vocal="instrumental")
+    got = M.yue2_pin("Vocal jazz, piano, 70 BPM", p)
+    assert got.startswith("instrumental, ") and "jazz ballad" in got and "vocal" not in got.lower()
+    assert M.yue2_preview(M.prefs_from(genre="jazz", vocal="male")).startswith("male vocal, Vocal jazz")

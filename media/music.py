@@ -1517,18 +1517,30 @@ def yue2_pin(style: str, prefs: Optional[dict]) -> str:
         mine = {g.strip().lower() for g in re.split(r"[/,]", str(prefs["genre"]))}
         other = {g.strip().lower() for p in GENRES.values() for g in re.split(r"[/,]", p) if g.strip()} - mine
         tags = [t for t in tags if t.lower() not in other]
-        if not any(t.lower() in mine or str(prefs["genre"]).lower() in t.lower() for t in tags):
-            tags.insert(0, str(prefs["genre"]).split("/")[0].strip())
     v = str(prefs.get("vocal") or "").lower()
     if prefs.get("instrumental"):
         lead, tags = "instrumental", [t for t in tags if not has(_SUNG, t)]
     elif "duet" in v or not v:
-        return ", ".join(tags)
+        lead = ""
     elif "female" in v:
         lead, tags = "female vocal", [t for t in tags if not has(_HE, t)]
     else:
         lead, tags = "male vocal", [t for t in tags if not has(_SHE, t)]
-    return ", ".join([lead] + [t for t in tags if t.lower() != lead])
+    if prefs.get("genre") and not any(t.lower() in mine or str(prefs["genre"]).lower() in t.lower() for t in tags):
+        # after the vocal filter, which would drop «Vocal jazz» off an instrumental and leave
+        # it with no genre at all: an instrumental gets the first name that sings nothing
+        names = [g.strip() for g in str(prefs["genre"]).split("/") if g.strip()]
+        name = next((g for g in names if not (lead == "instrumental" and has(_SUNG, g))), "")
+        if name:
+            tags.insert(0, name)
+    return ", ".join(([lead] if lead else []) + [t for t in tags if t.lower() != lead])
+
+
+def yue2_preview(prefs: Optional[dict]) -> str:
+    """The tags the song-settings buttons pin in YuE2's card, through the same chain a render
+    runs (enforce_pins -> yue2_style -> yue2_pin) minus the songwriter's own tags. The settings
+    menu shows it so «the model ignored my choice» can be checked before a render (10-09)."""
+    return yue2_pin(yue2_style(enforce_pins("", prefs)), prefs)
 
 
 def _strip_vocals(path: str) -> None:
