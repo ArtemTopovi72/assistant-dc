@@ -14,7 +14,7 @@ that returns usable lyrics, and any of the three can be missing or fumble a
 turn. Every one of those has to reach the user as a status message, never a
 crash and never a hang.
 """
-from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QLineEdit, QSpinBox,
                              QPushButton, QVBoxLayout, QWidget)
 
@@ -86,7 +86,7 @@ class MusicWorker(QThread):
 
     def __init__(self, ctx, topic: str, lang: str = "ru", *,
                  prefs: dict = None, duration_s: int = 0, preset: str = "",
-                 steps: int = 0):
+                 steps: int = 0, star: str = ""):
         super().__init__()
         self.ctx, self.topic, self.lang = ctx, topic, lang
         # Snapshotted at construction, not read off the widgets in run():
@@ -97,6 +97,7 @@ class MusicWorker(QThread):
         self.duration_s = duration_s
         self.preset = preset
         self.steps = int(steps or 0)
+        self.star = star                  # 🎙 Own voice: a trained star RVC, "" = the engine's singer
 
     def run(self):
         try:
@@ -140,6 +141,13 @@ class MusicWorker(QThread):
                                         duration_s=duration,
                                         preset=self.preset or None,
                                         steps=self.steps or None, prefs=self.prefs)
+            if path and self.star and not self.prefs.get("instrumental"):
+                # the same re-sing as the Telegram side (tg_songs): no index, it pulls the mumble in
+                try:
+                    import remix
+                    path = remix.sing_original_as(self.ctx, path, self.star, index_rate=0.0)
+                except Exception:
+                    logger.warning("star voice %s failed, the engine's own voice is kept", self.star, exc_info=True)
             if chosen:
                 self.chose.emit(chosen)
             self.done.emit(path or "", lyrics, style)
@@ -279,8 +287,34 @@ class MusicTab(QWidget):
         self.dur_combo.currentIndexChanged.connect(
             lambda _i: self.dur_spin.setVisible(self.dur_combo.currentData() == _CUSTOM))
         set_row.addWidget(self.dur_spin)
+        # 🎙 Own voice -- the trained star voices (rvc_voice.stars), same list as the bot's menu
+        self.voice_combo = QComboBox()
+        self.voice_combo.addItem("Off", "")
+        try:
+            import rvc_voice
+            if rvc_voice.available():
+                for name, label in rvc_voice.stars():
+                    self.voice_combo.addItem(label, name)
+        except Exception:
+            logger.warning("star voices unavailable", exc_info=True)
+        self.voice_combo.setToolTip("The finished song's lead re-sung in this voice (RVC). Off = the engine's singer.")
+        set_row.addWidget(QLabel("Own voice:"))
+        set_row.addWidget(self.voice_combo)
         set_row.addStretch(1)
         root.addLayout(set_row)
+
+        # YuE2 reads tags, not pickers: the line these choices pin, so one that never
+        # reaches the model is visible before a render (the bot's menu shows the same)
+        self.tags_lbl = QLabel()
+        self.tags_lbl.setWordWrap(True)
+        self.tags_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.tags_lbl.setStyleSheet(f"color:{MUTED};")
+        root.addWidget(self.tags_lbl)
+        for b in self._combos.values():
+            b.currentIndexChanged.connect(lambda _i: self._refresh_tags())
+        self.bpm_spin.valueChanged.connect(lambda _v: self._refresh_tags())
+        self.voice_combo.currentIndexChanged.connect(lambda _i: self._refresh_tags())
+        self._refresh_tags()
 
         self.status = QLabel("Idle.")
         self.status.setWordWrap(True)
@@ -322,6 +356,22 @@ class MusicTab(QWidget):
             duration = int(d or 0)
         return (prefs, duration,
                 self.qual_combo.currentData() or _music.DEFAULT_PRESET)
+
+    def _refresh_tags(self):
+        import music as _music
+        if _music.MUSIC_ENGINE != "yue2":
+            self.tags_lbl.setVisible(False)
+            return
+        from gui_i18n import tr
+        tags = _music.yue2_preview(self._settings()[0])
+        text = (tr("🏷 The model gets:") + " " + tags + "  + " + tr("the songwriter's own tags")) if tags else \
+            tr("🏷 All on Auto: the songwriter picks every tag.")
+        if self.voice_combo.currentData():
+            text += "\n🎙 " + tr("Then re-sung in the voice:") + " " + self.voice_combo.currentText() + " (RVC)"
+        # past the i18n wrapper: the tags are what the model reads and must stay verbatim
+        # (it would show «Punk rock» as «Панк-рок»)
+        _set = getattr(QLabel.setText, "__wrapped__", QLabel.setText)
+        _set(self.tags_lbl, text)
 
     def _refresh_eta(self):
         """Redraw the measured wait for every preset at the chosen steps,
@@ -367,7 +417,8 @@ class MusicTab(QWidget):
         lang = getattr(ctx, "lang", None) or "ru"
         self.music_worker = MusicWorker(ctx, topic, lang,
                                         prefs=prefs, duration_s=duration,
-                                        preset=preset, steps=steps)
+                                        preset=preset, steps=steps,
+                                        star=self.voice_combo.currentData() or "")
         self._last_chosen = {}
         self.music_worker.chose.connect(self._on_chose)
         self.music_worker.done.connect(self._on_done)

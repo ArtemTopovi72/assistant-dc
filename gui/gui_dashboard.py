@@ -26,6 +26,7 @@ from gui_madhouse_tab import MadhouseTab
 from gui_memory_tab import MemoryCenterTab
 from gui_model_config_tab import ModelConfigTab
 from gui_music_tab import MusicTab
+from gui_nav import NavTabs, WorkspaceNav
 from gui_weather_tab import WeatherTab
 from gui_storyboard_tab import StoryboardTab
 from gui_stress_tab import StressTab
@@ -306,8 +307,8 @@ class DashboardMixin:
         self.pages.addTab(self.splitter, "Conversation")
 
         # ---- page 3: the workspace tabs ----
-        right, rlay = _card()
-        self.tabs = tabs = QTabWidget()
+        right, rlay = _card(QHBoxLayout)
+        self.tabs = tabs = NavTabs()
         self.images_panel = ImagesPanel()
         self.search_view = QTextEdit(); self.search_view.setReadOnly(True)
         self.search_view.setPlaceholderText("Search results will appear here.")
@@ -366,7 +367,10 @@ class DashboardMixin:
         tabs.setMovable(True)          # drag tabs to reorder
         tabs.setTabsClosable(True)     # each tab gets a ✕ to close it
         tabs.tabCloseRequested.connect(self._on_tab_close_requested)
-        rlay.addWidget(tabs)
+        tabs.tabBar().hide()           # the grouped list on the left replaces the strip (gui_nav)
+        self.workspace_nav = WorkspaceNav(tabs, self._tab_key_for_widget)
+        rlay.addWidget(self.workspace_nav)
+        rlay.addWidget(tabs, 1)
         _shadow(right)
         self.pages.addTab(right, "Workspace")
         self.pages.setCurrentIndex(1)

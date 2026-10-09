@@ -122,6 +122,19 @@ def _make_tab_close_icons():
             path = os.path.join(assets, name)
             img.save(path)
             out[name.split(".")[0]] = path.replace("\\", "/")
+        # the combo chevron: Qt draws no CSS border-triangle, the old rule showed a bar «▬»
+        for name, col in (("_chevron.png", MUTED), ("_chevron_hover.png", TEXT)):
+            img = QImage(s, s, QImage.Format_ARGB32)
+            img.fill(QColor(0, 0, 0, 0))
+            pr = QPainter(img)
+            pr.setRenderHint(QPainter.Antialiasing, True)
+            pen = QPen(QColor(col)); pen.setWidth(max(1, s // 7)); pr.setPen(pen)
+            pr.drawLine(int(s * 0.22), int(s * 0.38), int(s * 0.5), int(s * 0.66))
+            pr.drawLine(int(s * 0.5), int(s * 0.66), int(s * 0.78), int(s * 0.38))
+            pr.end()
+            path = os.path.join(assets, name)
+            img.save(path)
+            out[name.split(".")[0]] = path.replace("\\", "/")
     except Exception:
         return {}
     return out
@@ -147,6 +160,10 @@ def build_qss() -> str:
         )
     else:
         close_css = ""
+    chevron_css = (
+        f'QComboBox::down-arrow {{ image: url("{_ic["_chevron"]}"); width: {p(12)}px; height: {p(12)}px; '
+        f'border: none; }} QComboBox::down-arrow:hover {{ image: url("{_ic["_chevron_hover"]}"); }}'
+    ) if _ic.get("_chevron") else ""
     return f"""
 {close_css}
 QSplitter::handle {{ background: {BORDER}; }}
@@ -210,6 +227,7 @@ QComboBox::down-arrow {{ image: none; width: 0; height: 0;
                          border-left: {p(5)}px solid transparent;
                          border-right: {p(5)}px solid transparent;
                          border-top: {p(6)}px solid {MUTED}; }}
+{chevron_css}
 QSpinBox::up-button, QSpinBox::down-button {{ background: {PANEL2}; border: none;
                                               width: {p(18)}px; border-radius: {p(4)}px; }}
 QSpinBox::up-arrow {{ image: none; width: 0; height: 0;
@@ -268,6 +286,14 @@ QHeaderView::section {{ background: {PANEL2}; color: {MUTED}; border: none;
                   border-right: {p(1)}px solid {BORDER}; padding: {p(5)}px {p(8)}px;
                   font-weight: 600; }}
 QTableCornerButton::section {{ background: {PANEL2}; border: none; }}
+QListWidget#workspaceNav {{ background: {PANEL}; border: none; border-right: {p(1)}px solid {BORDER};
+                  border-radius: 0; padding: {p(6)}px {p(4)}px; outline: 0; }}
+QListWidget#workspaceNav::item {{ padding: {p(3)}px {p(8)}px; border-radius: {p(6)}px; color: {TEXT}; }}
+QListWidget#workspaceNav::item:disabled {{ color: {MUTED}; padding-top: {p(10)}px; font-size: {fp(11)}px;
+                  background: transparent; }}
+QListWidget#workspaceNav::item:hover:!disabled {{ background: {PANEL2}; }}
+QListWidget#workspaceNav::item:selected {{ background: {PANEL2}; color: #ffffff;
+                  border-left: {p(3)}px solid {ACCENT}; }}
 QSlider::groove:horizontal {{ height: {p(5)}px; background: {PANEL2}; border-radius: {p(2)}px; }}
 QSlider::handle:horizontal {{ background: {ACCENT}; width: {p(16)}px; margin: -{p(6)}px 0;
                   border-radius: {p(8)}px; }}
