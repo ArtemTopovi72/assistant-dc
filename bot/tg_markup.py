@@ -93,8 +93,10 @@ def _md_to_html(text: str) -> str:
     # A fenced block is put on lines of its own: every emphasis rule below is
     # line-bounded, so newline isolation is what makes a multi-line <pre> block
     # impossible to half-wrap.
-    t = re.sub(r"```[\w]*\n?(.*?)```",
-               lambda m: "\n<pre>" + m.group(1) + "</pre>\n", t, flags=re.DOTALL)
+    # The fence's language rides along: Telegram labels the block with it.
+    t = re.sub(r"```([\w+#-]*)[ \t]*\n?(.*?)```",
+               lambda m: ("\n<pre><code class=\"language-%s\">%s</code></pre>\n" % (m.group(1).lower(), m.group(2))
+                          if m.group(1) else "\n<pre>" + m.group(2) + "</pre>\n"), t, flags=re.DOTALL)
     # Inline code only OUTSIDE <pre>: `x` inside a fenced block became <code>
     # and the quoted snippet lost its backticks (live 2026-09-28).
     t = "".join(p if p.startswith("<pre>") else re.sub(r"`([^`\n]+)`", r"<code>\1</code>", p)
@@ -170,6 +172,14 @@ def _md_to_html(text: str) -> str:
     t = _stash_elems(t, "b")
     t = re.sub(r"(?<!\w)_(?!\s)([^\n_/]+?)(?<!\s)_(?!\w)", r"<i>\1</i>", t)
     t = _stash_elems(t, "i")
+    # ~~strike~~, a --- rule, > quotes: they reached the chat as literal «~~», «---» and «&gt;»
+    t = re.sub(r"~~(?!\s)([^\n~]+?)(?<!\s)~~", r"<s>\1</s>", t)
+    t = _stash_elems(t, "s")
+    t = re.sub(r"(?m)^[ \t]{0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$", "──────────", t)
+    t = re.sub(r"(?m)(?:^[ \t]{0,3}&gt;[ \t]?.*(?:\n|$))+",
+               lambda m: "<blockquote>" + "\n".join(
+                   re.sub(r"^[ \t]{0,3}&gt;[ \t]?", "", ln) for ln in m.group(0).rstrip("\n").split("\n"))
+               + "</blockquote>" + ("\n" if m.group(0).endswith("\n") else ""), t)
     # ATX headings -> bold line (Telegram has no heading tag). Last, because by
     # now a line holds nothing but plain text and placeholders, so wrapping the
     # whole line cannot cut through anything. "# **X**" still nests correctly.
@@ -182,6 +192,7 @@ def _md_to_html(text: str) -> str:
     t = re.sub(r"(?m)^[ \t]{0,3}#{1,6}[ \t]+(.+?)[ \t]*#*[ \t]*$", r"<b>\1</b>", t)
     # Bullets before the restore: a code block whose line starts with "- " would
     # otherwise have its source rewritten into a bullet.
+    t = re.sub(r"(?m)^[ \t]{2,}[-*+][ \t]+", "    ◦ ", t)      # a nested item keeps its step in
     t = re.sub(r"(?m)^\s{0,3}[-*+]\s+", "• ", t)
     # Restore is iterative: placeholders nest (a heading holds a bold, which holds
     # a link, which holds a code span), so one pass would leave a raw \x00 marker
@@ -216,7 +227,7 @@ def _html_to_plain(text: str) -> str:
 # Telegram closes/reopens nothing for us: a chunk that ends inside <b> is rejected
 # with "Unclosed tag" and the whole message is lost. Tracked so _split_html can
 # close them at a chunk boundary and reopen them in the next chunk.
-_TAG_RE = re.compile(r"<(/?)(b|i|u|s|code|pre|a)(\s[^>]*)?>", re.IGNORECASE)
+_TAG_RE = re.compile(r"<(/?)(b|i|u|s|code|pre|a|blockquote)(\s[^>]*)?>", re.IGNORECASE)
 
 
 def _balance_html(chunk: str, carry: list) -> tuple:
