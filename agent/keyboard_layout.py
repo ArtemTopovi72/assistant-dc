@@ -51,17 +51,44 @@ def _reads_russian(run: str) -> bool:
     return bool(ru) and sum(c in _RU_VOWELS for c in ru) / len(ru) >= 0.33
 
 
+def _tail_is_letter(word: str, ch: str) -> bool:
+    """«dc.» before more words: «вс.» or «всю»? The «,»/«.» keys are «б»/«ю» on the Russian
+    layout, and a word may end on one (live 10-09: «прибрал всю хату» came out «прибра вс. хату»).
+    The dictionary decides; «ghbdtn, rfr» stays «привет, как»."""
+    try:
+        from wordfreq import zipf_frequency as z
+    except ImportError:
+        return False
+    w = word.lower().translate(_MAP)
+    return z(w + ch.translate(_MAP), "ru") > z(w, "ru") + 0.5
+
+
 def fix(text: str) -> str:
     """The text with every wrong-layout run converted; unchanged if none."""
     t = text or ""
     if re.search(r"https?://|www\.|@\w|/\w", t):
         return text
-    return _RUN.sub(lambda m: m.group(0).translate(_MAP) if _reads_russian(m.group(0)) else m.group(0), t)
+    out, pos = [], 0
+    for m in _RUN.finditer(t):
+        out.append(t[pos:m.start()])
+        run, pos = m.group(0), m.end()
+        if not _reads_russian(run):
+            out.append(run)
+            continue
+        out.append(run.translate(_MAP))
+        if (pos < len(t) and t[pos] in ",." and re.match(r"[ \t]+[A-Za-z\[\];'`]", t[pos + 1:])
+                and _tail_is_letter(run.split()[-1], t[pos])):
+            out.append(t[pos].translate(_MAP))
+            pos += 1
+    out.append(t[pos:])
+    return "".join(out)
 
 
 if __name__ == "__main__":
     assert fix("NEN ;T ERFPFYJ XNJ DFHBFYN CVSCKJDJT TLBYCNDJ YT GHFDBKMYS").lower().startswith("тут же указано что вариант")
     assert fix("ghbdtn rfr ltkf") == "привет как дела"
+    assert fix("ghbdtn, rfr ltkf") == "привет, как дела"
+    assert "прибрал всю хату" in fix("vtuf[jxe tcnm ghb,hfk dc. [fne ctqxfc gjqle")
     assert fix("привет rfr дела?") == "привет как дела?"
     assert fix("hello world, how are you") == "hello world, how are you"
     assert fix("Stable Diffusion prompt") == "Stable Diffusion prompt"
