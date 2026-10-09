@@ -87,10 +87,18 @@ def stars() -> list:
 
 
 def model_of(name: str):
-    """(pth, index) of a trained voice, or None."""
+    """(pth, index) of a trained voice, or None. The latest checkpoint, unless best.txt in the
+    model's folder names another: the last is not the best (10-09 night run, words heard in the
+    mix: Tsoi singing «Du hast» 71 % at 25 epochs, 32 % at 75)."""
     d = os.path.join(APPLIO, "logs", name)
     pths = sorted(glob.glob(os.path.join(d, f"{name}_*e_*s.pth")), key=os.path.getmtime)
     idx = [p for p in glob.glob(os.path.join(d, "*.index")) if "trained" not in os.path.basename(p)]
+    try:
+        pinned = os.path.join(d, open(os.path.join(d, "best.txt"), encoding="utf-8").read().strip())
+        if pinned in pths:
+            pths.append(pinned)
+    except OSError:
+        pass
     return (pths[-1], idx[0]) if pths and idx else None
 
 

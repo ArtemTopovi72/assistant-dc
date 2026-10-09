@@ -560,3 +560,20 @@ def test_the_file_title_names_the_singer(monkeypatch):
     monkeypatch.setattr(llm, "call_llm_simple", lambda ctx, s, u, **k: (seen.append(u), '{"artist": "SHAMAN", "tags": "pop"}')[1])
     _, artist = R._resing_style(None, "я русский я иду до конца", "120 bpm", "SHAMAN - Я РУССКИЙ")
     assert artist == "SHAMAN" and "File title: SHAMAN - Я РУССКИЙ" in seen[0]
+
+
+def test_a_pinned_checkpoint_beats_the_latest(monkeypatch, tmp_path):
+    import rvc_voice
+    monkeypatch.setattr(rvc_voice, "APPLIO", str(tmp_path))
+    d = tmp_path / "logs" / "star"
+    d.mkdir(parents=True)
+    for i, ep in enumerate((25, 50, 75)):
+        p = d / f"star_{ep}e_{ep * 100}s.pth"
+        p.write_bytes(b"x")
+        os.utime(p, (1000 + i, 1000 + i))
+    (d / "added_star.index").write_bytes(b"x")
+    assert rvc_voice.model_of("star")[0].endswith("star_75e_7500s.pth")
+    (d / "best.txt").write_text("star_25e_2500s.pth", encoding="utf-8")
+    assert rvc_voice.model_of("star")[0].endswith("star_25e_2500s.pth")
+    (d / "best.txt").write_text("gone.pth", encoding="utf-8")
+    assert rvc_voice.model_of("star")[0].endswith("star_75e_7500s.pth")
