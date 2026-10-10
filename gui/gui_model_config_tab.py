@@ -83,15 +83,14 @@ class ModelConfigTab(QWidget):
         refresh_btn.setObjectName("ghost")
         refresh_btn.setToolTip('Re-read the model state from LM Studio')
         refresh_btn.clicked.connect(self.refresh)
+        # the name sits by its state dot: alone on the header row the dot read as a stray «○»
+        self._model_lbl = QLabel('Waiting for LM Studio…')
+        self._model_lbl.setStyleSheet(_ss("font-weight:bold; font-size:%dpx;" % px(15)))
+        self._model_lbl.setWordWrap(True)
         hdr.addWidget(self._state_dot)
-        hdr.addStretch(1)
+        hdr.addWidget(self._model_lbl, 1)
         hdr.addWidget(refresh_btn)
         root.addLayout(hdr)
-
-        self._model_lbl = QLabel('(no model)')
-        self._model_lbl.setStyleSheet(_ss("font-weight:bold; font-size:12px;"))
-        self._model_lbl.setWordWrap(True)
-        root.addWidget(self._model_lbl)
 
         # ── info grid ──
         info_grid = QVBoxLayout()
