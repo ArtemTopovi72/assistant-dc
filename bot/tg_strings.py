@@ -413,7 +413,7 @@ _MSG: dict[str, dict[str, str]] = {
                             "закончена — придумай <b>пароль</b> (минимум 4 символа).\n"
                             "<i>/cancel — начать заново.</i>"},
     "locked_out":    {"en": "🔒 This chat is logged out. Send your <b>password</b> to log in.",
-                      "ru": "🔒 Чат разлогинен. Отправь <b>пароль</b>, чтобы войти."},
+                      "ru": "🔒 В этом чате выполнен выход. Отправь <b>пароль</b>, чтобы войти."},
     "wrong_pwd":     {"en": "❌ Wrong password. Try again (attempts left: {left}):",
                       "ru": "❌ Неверный пароль. Ещё раз (осталось попыток: {left}):"},
     "login_locked":  {"en": "⏱ Too many failed attempts. Try again in {sec}s.",
