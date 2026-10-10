@@ -318,6 +318,7 @@ class TelegramTab(QWidget):
         self.user_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.user_table.setAlternatingRowColors(False)
         self.user_table.verticalHeader().setVisible(False)
+        self.user_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.user_table.setMinimumHeight(px(140))
         self.user_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         root.addWidget(self.user_table)

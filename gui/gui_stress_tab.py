@@ -58,6 +58,7 @@ class StressTab(QWidget):
         self.table = QTableWidget(0, 2)
         self.table.setHorizontalHeaderLabels(["Word", "Stressed (+)"])
         self.table.verticalHeader().setVisible(False)
+        self.table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
