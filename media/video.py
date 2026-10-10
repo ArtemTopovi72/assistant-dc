@@ -161,6 +161,12 @@ def split_script(description: str, max_seconds: float = 0.0) -> list:
     return parts
 
 
+def render_eta_s(clip_seconds: float) -> float:
+    """Wall time to render one H3 part of this length on the 3090, prompt prep included.
+    Measured 2026-10-10 on a 5-part chain: 8.0 s took ~440 s, 5.2 s ~320 s."""
+    return 40.0 + 50.0 * max(0.0, float(clip_seconds))
+
+
 def seconds_to_frames(seconds: float) -> int:
     return snap_frames(int(round(max(0.2, float(seconds)) * VIDEO_FPS)))
 
@@ -1055,7 +1061,15 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
             "(4) non_diegetic_music is only a score nobody in the scene plays, given by "
             "instruments, tempo and dynamics, never mood words like 'epic'; when the user "
             "asked for music it is clearly audible: under the dialogue during lines, "
-            "swelling back up between them, never 'faint' or 'distant' unless they said so.\n\n"
+            "swelling back up between them, never 'faint' or 'distant' unless they said so.\n"
+            # Live 10-10 (kettle): three voice samples and a Russian request with the
+            # narrator's own words came back as three people saying «It's almost ready».
+            "SPEECH RULES -- (1) Only the people the request has speak, and only what the "
+            "request gives them to say: its spoken words go in word for word in the "
+            "request's own language, never translated, never extended. (2) When the "
+            "request names no words, nobody speaks a scripted line -- never invent "
+            "dialogue. (3) Voice samples are the voices of the request's speakers, not a "
+            "count of speakers: unused samples stay unused.\n\n"
             "Request:\n" + description)
     import llm as _llm
     try:

@@ -1294,12 +1294,13 @@ from tg_restyle import RestyleMixin  # noqa: E402
 from tg_continue import ContinueMixin  # noqa: E402
 from tg_audiobook import AudiobookMixin  # noqa: E402
 from tg_anim_voices import AnimVoicesMixin  # noqa: E402
+from tg_video_plan import VideoPlanMixin  # noqa: E402
 from tg_voice_library import VoiceLibraryMixin  # noqa: E402
 from tg_cover import CoverMixin  # noqa: E402
 from tg_lyrics import LyricsMixin  # noqa: E402
 
 
-class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimVoicesMixin, VoiceLibraryMixin, CoverMixin, LyricsMixin, VoiceCloneMixin, LongVideoMixin, AccountsMixin, CallbackMixin, CommandsMixin, DispatchMixin,
+class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimVoicesMixin, VideoPlanMixin, VoiceLibraryMixin, CoverMixin, LyricsMixin, VoiceCloneMixin, LongVideoMixin, AccountsMixin, CallbackMixin, CommandsMixin, DispatchMixin,
                   LibraryMixin, QueueMixin, RegistrationMixin, ResolveMixin,
                   SongsMixin, CharactersMixin, LoraCollectMixin, TaskRunnerMixin,
                   TransportMixin,

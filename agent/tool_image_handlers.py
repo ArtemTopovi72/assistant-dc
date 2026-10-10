@@ -1292,6 +1292,21 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                     [round(video_mod.estimate_seconds(p), 1) for p in parts])
     else:
         parts = [raw]
+    # 🎬 The plan the user approved under the card (tg_video_plan): exactly those parts.
+    approved = [p for p in (getattr(ctx, "video_plan_parts", None) or []) if p]
+    ctx.video_plan_parts = []
+    if approved:
+        description = (description.replace(raw, approved[0], 1) if raw and raw in description
+                       else approved[0])
+        parts = approved
+    elif len(parts) > 1 and getattr(ctx, "video_plan_ask", False):
+        # Several minutes per part: the chat sees the parts, the clip length and the
+        # render time first, and may drop or condense parts (user, 2026-10-10).
+        state["video_plan"] = [{"text": p, "sec": video_mod.estimate_seconds(p)} for p in parts]
+        return ("[NOT MADE YET] The script needs several parts, and the user approves the "
+                "plan first: it is shown under your message with buttons. Reply with ONE "
+                "short line in their language that the plan is below. Do not describe the "
+                "clip, do not call generate_video again this turn.")
     # A fresh clip with no voices or reference clips (and at most a start photo) is part 1
     # of a Herrgott chain: its latent is kept, so the parts after it -- or a later
     # ▶️ Continue -- go on from the exact numbers instead of a reset.

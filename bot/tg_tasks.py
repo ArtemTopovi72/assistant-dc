@@ -813,6 +813,13 @@ class TaskRunnerMixin:
             self._store.put(sess)
         elif task.user_text.startswith(("[animate]", "animate this photo")):
             ctx.voice_choice = "default"     # the presets carry «🎙 Добавить свои голоса»
+        # 🎬 a multi-part clip shows its plan first; the approved parts ride the rerun only
+        ctx.video_plan_ask = True
+        ctx.video_plan_parts = []
+        if getattr(sess, "video_plan_ok", None) and task.user_text == getattr(sess, "video_plan_request", ""):
+            ctx.video_plan_parts = list(sess.video_plan_ok)
+            sess.video_plan, sess.video_plan_request, sess.video_plan_ok = [], "", []
+            self._store.put(sess)
         # ▶️ Continue video: the clip's tail (its motion + sound) rides this ONE request.
         ctx.continue_tail = ctx.continue_src = ""
         ctx.continue_people = []
@@ -1601,7 +1608,7 @@ class TaskRunnerMixin:
                 "image_path", "image_status", "video_path", "document_path",
                 "research_report", "tts_path"))
             reply = "" if produced else tg_bot._t("empty_reply", lang)
-        if final.get("ask_voices"):
+        if final.get("ask_voices") or final.get("video_plan"):
             # The clip waits for «свои голоса / стандартные»: the offer below IS the
             # reply. The model's own line said «не удалось из-за технической ошибки»
             # about a clip that was only paused (live 10-02).
@@ -1767,6 +1774,13 @@ class TaskRunnerMixin:
                 self._offer_voices(chat_id, sess, lang, task.user_text, int(final["ask_voices"]))
             except Exception:
                 tg_bot.logger.exception("voice offer failed chat=%s", chat_id)
+
+        # ── the multi-part plan generate_video stopped on ─────────────────────
+        if final.get("video_plan"):
+            try:
+                self._offer_video_plan(chat_id, sess, lang, task.user_text, final["video_plan"])
+            except Exception:
+                tg_bot.logger.exception("video plan offer failed chat=%s", chat_id)
 
         # ── video delivery ────────────────────────────────────────────────────
         # Before the picture block, because a turn that made a CLIP should hand over

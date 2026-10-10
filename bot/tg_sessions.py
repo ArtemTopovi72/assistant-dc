@@ -206,6 +206,11 @@ class _Session:
         self.anim_voices: list = list(d.get("anim_voices") or [])
         # a clip request waiting for «свои голоса / стандартные», and the answer
         self.voice_pending: str = d.get("voice_pending", "")
+        # 🎬 a multi-part clip waiting for the user's OK (tg_video_plan): its parts
+        # [{text, sec}], the request to rerun, and the approved parts for that rerun
+        self.video_plan: list = list(d.get("video_plan") or [])
+        self.video_plan_request: str = d.get("video_plan_request", "")
+        self.video_plan_ok: list = list(d.get("video_plan_ok") or [])
         # 📚 the voice library (tg_voice_library) and the voice waiting for a name
         self.voices: list = list(d.get("voices") or [])
         self.voice_naming: str = d.get("voice_naming", "")
@@ -375,6 +380,7 @@ class _Session:
             self.anim_voices = []
             self.voice_pending = ""
             self.voice_choice = ""
+            self.video_plan, self.video_plan_request, self.video_plan_ok = [], "", []
             self.voice_naming = ""
             self.lyrics_state = ""
             self.song_draft = ""
@@ -447,6 +453,9 @@ class _Session:
                 "lyrics_last":         self.lyrics_last,
                 "anim_voices":         self.anim_voices,
                 "voice_pending":       self.voice_pending,
+                "video_plan":          self.video_plan,
+                "video_plan_request":  self.video_plan_request,
+                "video_plan_ok":       self.video_plan_ok,
                 "voices":              self.voices,
                 "voice_naming":        self.voice_naming,
                 "voice_choice":        self.voice_choice,
