@@ -487,6 +487,23 @@ def _sandbox_has_files(sandbox) -> bool:
         return False
 
 
+def _sandbox_touched_recently(sandbox, within_s: float = 1800.0) -> bool:
+    """Did anything at the top of the working folder change in the last half hour?
+
+    The file-promise check is about files the user just handed over (the live
+    112 MB DCIM.zip). Gated on "has files" alone it fired on every turn of a chat
+    whose folder held something old: an Arduino conversation 2026-10-09 lost two
+    corrective rounds per reply to «проверим», «напишем» in plain advice."""
+    if sandbox is None:
+        return False
+    try:
+        import time as _time
+        cutoff = _time.time() - within_s
+        return any(p.stat().st_mtime >= cutoff for p in sandbox.root.iterdir())
+    except Exception:
+        return False
+
+
 def _kit_always(ctx, tools_called, has_image: bool = False) -> set:
     """Which tools must survive retrieval this round, whatever the words were.
 
@@ -1413,7 +1430,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             # after half the work is still a promise, so tools_ran_now is no
             # excuse here.
             if (corrective_count < _MAX_CORRECTIVE and draft
-                    and _sandbox_has_files(getattr(ctx, "sandbox", None))
+                    and _sandbox_touched_recently(getattr(ctx, "sandbox", None))
                     and _FILE_PROMISE_RE.search(draft)):
                 corrective_count += 1
                 logger.warning("Answer promises file work (tools ran: %s) — "
