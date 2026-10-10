@@ -313,7 +313,7 @@ class DashboardMixin:
         self.tabs = tabs = NavTabs()
         self.images_panel = ImagesPanel()
         self.search_view = QTextEdit(); self.search_view.setReadOnly(True)
-        self.search_view.setPlaceholderText("Search results will appear here.")
+        self.search_view.setPlaceholderText("Search results will appear here. Ask in Conversation: «find …» or «search the web for …».")
         self.research_container = self._build_research_tab()
         self.terminal = QTextEdit(); self.terminal.setReadOnly(True); self.terminal.setObjectName("terminal")
         self.model_config_tab = ModelConfigTab()

@@ -192,6 +192,7 @@ class StoryboardTab(QWidget):
         for wgt in (self.agent_box, pick_btn, load_btn, save_btn):
             row3.addWidget(wgt)
         root.addWidget(_FlowWidget(row3))
+        root.addStretch(1)   # a pane taller than its rows spread the slack between them
         self.vsplit.addWidget(top)
 
         # ---- canvas (gets the slack) ----------------------------------------

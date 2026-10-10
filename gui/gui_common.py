@@ -287,6 +287,7 @@ QToolTip {{ background: {PANEL2}; color: {TEXT}; border: {p(1)}px solid {BORDER}
             border-radius: {p(6)}px; padding: {p(4)}px {p(8)}px; font-size: {fp(13)}px; }}
 QPlainTextEdit {{ background: {BG}; border: {p(1)}px solid {BORDER}; border-radius: {p(8)}px;
                   padding: {p(6)}px; color: {TEXT}; }}
+QGroupBox {{ border: {p(1)}px solid {BORDER}; border-radius: {p(8)}px; margin-top: 0; padding: {p(2)}px; }}
 QTableWidget, QListWidget {{ background: {BG}; color: {TEXT}; border: {p(1)}px solid {BORDER};
                   border-radius: {p(8)}px; gridline-color: {BORDER};
                   alternate-background-color: {PANEL2}; }}
@@ -406,8 +407,9 @@ class FlowLayout(QLayout):
         self._items = []
         self._hspace = hspacing
         self._vspace = vspacing
-        if parent is not None:
-            self.setContentsMargins(margin, margin, margin, margin)
+        # always: a parentless layout keeps the style's ~11 px (x UI scale) margins, and
+        # _flow() rows are built parentless — 26 px indents and gaps around every row
+        self.setContentsMargins(margin, margin, margin, margin)
 
     def __del__(self):
         while self._items:
@@ -457,23 +459,26 @@ class FlowLayout(QLayout):
 
     def _do_layout(self, rect, test_only):
         m = self.contentsMargins()
-        x = rect.x() + m.left()
-        y = rect.y() + m.top()
-        line_height = 0
+        left = rect.x() + m.left()
         right = rect.right() - m.right()
+        lines, line, x = [], [], left
         for item in self._items:
             hint = item.sizeHint()
-            next_x = x + hint.width() + self._space(True)
-            if next_x - self._space(True) > right and line_height > 0:
-                x = rect.x() + m.left()
-                y = y + line_height + self._space(False)
-                next_x = x + hint.width() + self._space(True)
-                line_height = 0
+            if line and x + hint.width() > right:
+                lines.append(line); line, x = [], left
+            line.append((item, hint, x))
+            x += hint.width() + self._space(True)
+        if line:
+            lines.append(line)
+        y = rect.y() + m.top()
+        for n, line in enumerate(lines):
+            h = max(hint.height() for _, hint, _ in line)
             if not test_only:
-                item.setGeometry(QRect(QPoint(x, y), hint))
-            x = next_x
-            line_height = max(line_height, hint.height())
-        return y + line_height - rect.y() + m.bottom()
+                # centred in the row: a checkbox or label beside taller buttons sat on the top edge
+                for item, hint, ix in line:
+                    item.setGeometry(QRect(QPoint(ix, y + (h - hint.height()) // 2), hint))
+            y += h + (self._space(False) if n < len(lines) - 1 else 0)
+        return y - rect.y() + m.bottom()
 
 
 class _FlowWidget(QWidget):
@@ -502,12 +507,14 @@ class _FlowWidget(QWidget):
         return self.layout().heightForWidth(w)
 
     def sizeHint(self):
-        w = self.width() or 400
-        return QSize(w, self.layout().heightForWidth(w))
+        return self.minimumSizeHint()
 
     def minimumSizeHint(self):
-        w = self.width() or 200
-        return QSize(0, self.layout().heightForWidth(w))
+        # before the first resize width() is 0: wrapping at a guessed 200 px stacked every
+        # button on its own line and the parent kept that height as gaps between rows
+        if not self.width():
+            return QSize(0, self.layout().sizeHint().height())
+        return QSize(0, self.layout().heightForWidth(self.width()))
 
     def resizeEvent(self, e):
         super().resizeEvent(e)

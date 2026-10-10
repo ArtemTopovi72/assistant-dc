@@ -692,7 +692,7 @@ RU = {
     'Scientific': 'Научно',
     'Scroll to bottom': 'Прокрутить вниз',
     'Search & filter': 'Поиск и фильтр',
-    'Search results will appear here.': 'Здесь появятся результаты поиска.',
+    'Search results will appear here. Ask in Conversation: «find …» or «search the web for …».': 'Здесь появятся результаты поиска. Спроси в «Разговоре»: «найди …» или «поищи в интернете …».',
     'Searching documents': 'Ищу по документам',
     'Second-stage reranking': 'Повторное ранжирование (второй этап)',
     'Select a memory above to view or edit it.': 'Выбери запись выше, чтобы посмотреть или изменить её.',
