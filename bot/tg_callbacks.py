@@ -49,6 +49,10 @@ class CallbackMixin:
             return self._cb_admin_panel(chat_id, cb, data)
         self._api_post("answerCallbackQuery", {"callback_query_id": cb_id})
         if not chat_id: return
+        # Private chats only, as for messages (tg_dispatch): in a group anyone
+        # could press the owner's buttons.
+        if (msg.get("chat") or {}).get("type", "private") not in ("private", ""):
+            return
 
         # Both of these are unconditional preamble, not routing -- see the
         # module docstring for why each exists.
