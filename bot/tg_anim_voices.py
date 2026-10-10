@@ -1,13 +1,14 @@
-"""🎙 Voices for 🎬 Animate: up to three voice samples the clip's people speak with.
+"""🎙 Voices for 🎬 Animate: three voice slots, one per person left to right.
 
-The presets carry a «🎙 Добавить свои голоса» button; it arms
-collection: each voice note / audio / round video is one sample, the user may
-send them one at a time, and after each the bot says «🎙 Голос N принят» with
-«Ещё» / «Готово». Three samples, or «Готово», or «Нет» moves on to the presets.
-The samples ride to generate_video as reference audio (<Audio 1..3>) via
-ctx.anim_voices (set per task in tg_tasks, cleared after the clip).
+The slot card (owner 10-10: «голоса в видео хочется видеть как
+конфигурируемые слоты») lists 1 / 2 / 3 with the voice in each or «стандартный»;
+🎤 N arms collection into slot N (a voice note / audio / round video / link, or
+a library voice), 🗑 N empties it, «Готово» moves on. The slots ride to
+generate_video via ctx.anim_voices (set per task in tg_tasks, cleared after the
+clip); an empty slot is "" and that person keeps the default voice.
 
-Session: anim_voice_state "" | "collect", anim_voices [paths].
+Session: anim_voice_state "" | "collect", anim_voice_slot (0-based target),
+anim_voices [path | ""] by slot.
 """
 import os
 
@@ -31,6 +32,33 @@ class AnimVoicesMixin:
         rows.append([{"text": tg_bot._t("anv_btn", lang), "callback_data": "anv:yes"}])
         self._send_text(chat_id, tg_bot._t("animate_ask_preset", lang), keyboard={"inline_keyboard": rows})
 
+    def _slots(self, sess) -> list:
+        v = [p if p and os.path.exists(p) else "" for p in (sess.anim_voices or [])][:MAX]
+        return v + [""] * (MAX - len(v))
+
+    def _slot_label(self, sess, ref: str, lang: str) -> str:
+        if not ref:
+            return tg_bot._t("anv_slot_empty", lang)
+        from tg_voice_library import vl_label
+        v = next((x for x in (getattr(sess, "voices", None) or []) if x.get("ref") == ref), None)
+        return vl_label(v, lang) if v else tg_bot._t("vl_recent", lang)
+
+    def _voice_slots_card(self, chat_id: int, sess, lang: str, new_id: str = "") -> None:
+        slots = self._slots(sess)
+        lines = [tg_bot._t("anv_slots_title", lang)]
+        rows = []
+        for i, ref in enumerate(slots):
+            lines.append(f"{i + 1}. " + ("🗣 " if ref else "▫️ ") + self._slot_label(sess, ref, lang))
+            row = [{"text": f"🎤 {i + 1}", "callback_data": f"anv:slot:{i}"}]
+            if ref:
+                row.append({"text": f"🗑 {i + 1}", "callback_data": f"anv:clr:{i}"})
+            rows.append(row)
+        if new_id:
+            rows.append([{"text": tg_bot._t("vl_save_btn", lang), "callback_data": f"vl:name:{new_id}"}])
+        rows.append([{"text": tg_bot._t("anv_done", lang), "callback_data": "anv:done"}])
+        rows += self._vl_manage_row(lang)
+        self._send_text(chat_id, "\n".join(lines), keyboard={"inline_keyboard": rows})
+
     def _animate_ask_voices(self, chat_id: int, sess, lang: str) -> None:
         """Entry of every animate path: straight to the presets. Voice samples
         are an optional button there -- asking «Будут образцы голосов?» first
@@ -48,14 +76,13 @@ class AnimVoicesMixin:
         self._store.put(sess)
         self._send_text(chat_id, tg_bot._t("anv_offer", lang, n=n), keyboard={"inline_keyboard": [[
             {"text": tg_bot._t("anv_own", lang), "callback_data": "anv:yes"},
-            {"text": tg_bot._t("anv_default", lang), "callback_data": "anv:default"}]]
-            + self._vl_rows(sess, lang, "anv:lib") + self._vl_manage_row(lang)})
+            {"text": tg_bot._t("anv_default", lang), "callback_data": "anv:default"}]]})
 
     def _voices_go(self, chat_id: int, sess, lang: str) -> None:
         """Collection over: rerun the waiting clip request, or show the animate presets."""
         sess.anim_voice_state = ""
         if sess.voice_pending:
-            sess.voice_choice = "own" if sess.anim_voices else "default"
+            sess.voice_choice = "own" if any(self._slots(sess)) else "default"
             self._store.put(sess)
             self._enqueue_item(chat_id, {"type": "text", "text": sess.voice_pending})
             return
@@ -65,26 +92,37 @@ class AnimVoicesMixin:
     def _cb_anim_voices(self, chat_id: int, data: str) -> None:
         sess = self._get_session(chat_id)
         lang = self._lang(sess)
-        if data.startswith("anv:lib:"):          # a voice from the library is the next speaker
+        if data.startswith("anv:lib:"):          # a library voice into the armed slot
             from tg_voice_library import vl_get
             v = vl_get(sess, data.split(":", 2)[2])
-            if v and os.path.exists(v["ref"]) and len(sess.anim_voices) < MAX:
-                sess.anim_voices = list(sess.anim_voices) + [v["ref"]]
+            if v and os.path.exists(v["ref"]):
+                self._put_slot(sess, v["ref"])
             return self._anim_voice_added(chat_id, sess, lang)
         if data == "anv:default":
             sess.anim_voices = []
             return self._voices_go(chat_id, sess, lang)
-        if data == "anv:yes":
-            sess.anim_voice_state = "collect"
+        if data in ("anv:yes", "anv:more"):
+            sess.anim_voice_state = ""
+            self._store.put(sess)
+            return self._voice_slots_card(chat_id, sess, lang)
+        if data.startswith(("anv:slot:", "anv:clr:")):
+            try:
+                i = int(data.rsplit(":", 1)[1])
+            except ValueError:
+                return
+            if not 0 <= i < MAX:
+                return
+            if data.startswith("anv:clr:"):
+                slots = self._slots(sess)
+                slots[i] = ""
+                sess.anim_voices, sess.anim_voice_state = slots, ""
+                self._store.put(sess)
+                return self._voice_slots_card(chat_id, sess, lang)
+            sess.anim_voice_slot, sess.anim_voice_state = i, "collect"
             self._store.put(sess)
             rows = self._vl_rows(sess, lang, "anv:lib")
-            if rows:
-                rows += self._vl_manage_row(lang)
-            self._send_text(chat_id, tg_bot._t("anv_send", lang, n=len(sess.anim_voices) + 1, max=MAX),
+            self._send_text(chat_id, tg_bot._t("anv_send_slot", lang, n=i + 1),
                             keyboard={"inline_keyboard": rows} if rows else None)
-            return
-        if data == "anv:more":
-            self._send_text(chat_id, tg_bot._t("anv_send", lang, n=len(sess.anim_voices) + 1, max=MAX))
             return
         # anv:no / anv:done
         self._voices_go(chat_id, sess, lang)
@@ -119,8 +157,6 @@ class AnimVoicesMixin:
                 self._send_text(chat_id, tg_bot._t("anv_fail", lang))
                 return
             s2 = self._get_session(chat_id)
-            if len(s2.anim_voices) >= MAX:
-                return
             self._anim_voice_save(chat_id, s2, lang, vid["data"], ".mp4")
         self._run_busy(chat_id, job)
         return True
@@ -137,28 +173,24 @@ class AnimVoicesMixin:
             path = cover.to_wav(path, os.path.splitext(path)[0] + ".wav")
         except Exception:
             pass                                 # H3's loader still reads most containers
-        sess.anim_voices = list(sess.anim_voices) + [path]
+        self._put_slot(sess, path)
         from tg_voice_library import vl_add
         v = vl_add(sess, path)                   # remembered: the last 5 come back as buttons
         self._anim_voice_added(chat_id, sess, lang, new_id=v["id"])
 
-    def _anim_voice_added(self, chat_id: int, sess, lang: str, new_id: str = "") -> None:
-        """«Голос N принят» + «💾 Подписать и сохранить» for a voice just sent:
-        named, it stays in the library for the next clip (owner 10-03)."""
-        n = len(sess.anim_voices)
-        save = ([[{"text": tg_bot._t("vl_save_btn", lang), "callback_data": f"vl:name:{new_id}"}]]
-                if new_id else [])
-        if n >= MAX:
-            self._send_text(chat_id, tg_bot._t("anv_full", lang, n=n),
-                            keyboard={"inline_keyboard": save} if save else None)
-            self._voices_go(chat_id, sess, lang)
-            return
-        sess.anim_voice_state = "collect"
-        self._store.put(sess)
-        self._send_text(chat_id, tg_bot._t("anv_got", lang, n=n), keyboard={"inline_keyboard": [[
-            {"text": tg_bot._t("anv_more", lang), "callback_data": "anv:more"},
-            {"text": tg_bot._t("anv_done", lang), "callback_data": "anv:done"}]]
-            + save + self._vl_rows(sess, lang, "anv:lib") + self._vl_manage_row(lang)})
+    def _put_slot(self, sess, ref: str) -> None:
+        slots = self._slots(sess)
+        i = getattr(sess, "anim_voice_slot", 0)
+        if not 0 <= i < MAX:
+            i = slots.index("") if "" in slots else MAX - 1
+        slots[i] = ref
+        sess.anim_voices = slots
 
+    def _anim_voice_added(self, chat_id: int, sess, lang: str, new_id: str = "") -> None:
+        """The slot card again, with «💾 Подписать и сохранить» for a voice just
+        sent: named, it stays in the library for the next clip (owner 10-03)."""
+        sess.anim_voice_state = ""
+        self._store.put(sess)
+        self._voice_slots_card(chat_id, sess, lang, new_id=new_id)
 
 import tg_bot  # noqa: E402  (cycle by design; attrs read at call time)

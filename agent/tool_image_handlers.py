@@ -1233,8 +1233,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             description += video_mod.new_people_clause(len(images) - len(people) + 1, len(people))
 
     audios = []
-    anim = ([] if continuing else
-            [p for p in (getattr(ctx, "anim_voices", None) or []) if p and os.path.exists(p)])
+    # by slot, left to right; "" = that person keeps the default voice
+    slots = ([] if continuing else
+             [p if p and os.path.exists(p) else "" for p in (getattr(ctx, "anim_voices", None) or [])])
+    slots = slots[:video_mod.MAX_REF_AUDIOS]
+    anim = [p for p in slots if p]
     speakers = int(args.get("speakers") or 0)
     if not speakers:
         # The model forgets `speakers` (live 10-02: two quoted lines, speakers=0,
@@ -1255,9 +1258,18 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     if anim:
         # 🎙 samples collected before the clip (tg_anim_voices): one voice per
         # speaker, in the order the user was asked for -- left to right.
-        audios = anim[:video_mod.MAX_REF_AUDIOS]
+        audios = anim
         ctx.anim_voices = []                      # one clip per collection
-        if "<Audio 1>" not in description:
+        if "<Audio 1>" not in description and len(audios) < len(slots):
+            nth = ["leftmost", "second from the left", "third from the left"]
+            k = 0
+            said = []
+            for i, p in enumerate(slots):
+                if p:
+                    k += 1
+                    said.append(f"the {nth[i]} person speaks with the voice of <Audio {k}>")
+            description += " " + "; ".join(said)[:1].upper() + "; ".join(said)[1:] + "; everyone else keeps a natural voice of their own."
+        elif "<Audio 1>" not in description:
             if len(audios) == 1:
                 description += " The person speaks with the voice of <Audio 1>."
             else:

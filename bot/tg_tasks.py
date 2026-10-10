@@ -807,7 +807,7 @@ class TaskRunnerMixin:
         ctx.voice_choice = getattr(sess, "voice_choice", "") or ""
         if ctx.voice_choice or (getattr(sess, "anim_voices", None) and
                                 task.user_text.startswith(("[animate]", "animate this photo"))):
-            ctx.anim_voices = [p for p in sess.anim_voices if os.path.exists(p)]
+            ctx.anim_voices = [p if p and os.path.exists(p) else "" for p in sess.anim_voices]
             ctx.voice_choice = ctx.voice_choice or "own"
             sess.anim_voices, sess.voice_choice, sess.voice_pending = [], "", ""
             self._store.put(sess)

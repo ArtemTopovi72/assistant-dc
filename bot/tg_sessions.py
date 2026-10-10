@@ -204,6 +204,7 @@ class _Session:
         self.lyrics_state: str = d.get("lyrics_state", "")
         self.lyrics_last: str = d.get("lyrics_last", "")
         self.anim_voices: list = list(d.get("anim_voices") or [])
+        self.anim_voice_slot: int = int(d.get("anim_voice_slot") or 0)
         # a clip request waiting for «свои голоса / стандартные», and the answer
         self.voice_pending: str = d.get("voice_pending", "")
         # 🎬 a multi-part clip waiting for the user's OK (tg_video_plan): its parts
@@ -452,6 +453,7 @@ class _Session:
                 "lyrics_state":        self.lyrics_state,
                 "lyrics_last":         self.lyrics_last,
                 "anim_voices":         self.anim_voices,
+                "anim_voice_slot":     self.anim_voice_slot,
                 "voice_pending":       self.voice_pending,
                 "video_plan":          self.video_plan,
                 "video_plan_request":  self.video_plan_request,

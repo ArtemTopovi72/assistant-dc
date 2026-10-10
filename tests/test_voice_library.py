@@ -42,10 +42,12 @@ def test_name_flow_and_clip_buttons(tmp_path):
     assert L.vl_get(bot._get_session(9), v["id"])["name"] == "Бабушка"
     bot._enqueue_item = lambda *a: None
     bot._offer_voices(9, bot._get_session(9), "ru", "видео", 1)
+    bot._cb_anim_voices(9, "anv:yes")                 # the slot card
+    bot._cb_anim_voices(9, "anv:slot:0")              # slot 1: send one or pick from the library
     rows = bot.sent[-1][1]["keyboard"]["inline_keyboard"]
     assert any(b["callback_data"] == f"anv:lib:{v['id']}" for r in rows for b in r)
     bot._cb_anim_voices(9, f"anv:lib:{v['id']}")
-    assert bot._get_session(9).anim_voices == [v["ref"]]
+    assert bot._get_session(9).anim_voices == [v["ref"], "", ""]
 
 
 def test_library_voice_becomes_assistant(tmp_path, monkeypatch):
@@ -81,8 +83,9 @@ def test_clip_voice_offers_save_then_manage_rename_and_delete(tmp_path, monkeypa
     save = [b["callback_data"] for r in rows for b in r if b["callback_data"].startswith("vl:name:")]
     assert save and any(b["callback_data"] == "vl:manage" for r in rows for b in r)
     # a second voice does not overwrite the first file
+    bot._cb_anim_voices(11, "anv:slot:1")
     assert bot._anim_voice_take_media(11, bot._get_session(11), "ru", {"voice": {"file_id": "F2"}})
-    assert len(set(bot._get_session(11).anim_voices)) == 2 and os.path.exists(first)
+    assert len(set(filter(None, bot._get_session(11).anim_voices))) == 2 and os.path.exists(first)
     # name it
     bot._cb_voice_library(11, save[0])
     assert bot._vl_take_name(11, bot._get_session(11), "ru", "Степан")
