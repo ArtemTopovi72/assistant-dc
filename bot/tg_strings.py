@@ -159,7 +159,7 @@ _MSG: dict[str, dict[str, str]] = {
     "wait_cancel_btn": {"en": "✖️ Cancel", "ru": "✖️ Отмена"},
     "stopping":      {"en": "⛔ <b>Stopping…</b>{extra}",
                       "ru": "⛔ <b>Останавливаю…</b>{extra}"},
-    "stop_dropped":  {"en": " Discarded {n} queued message(s).",
+    "stop_dropped":  {"en": " Queued messages discarded: {n}.",
                       "ru": " Отброшено сообщений в очереди: {n}."},
     "stop_idle":     {"en": "⛔ Nothing was running.",
                       "ru": "⛔ Сейчас ничего не выполняется."},
@@ -323,9 +323,9 @@ _MSG: dict[str, dict[str, str]] = {
     "off":           {"en": "OFF ❌", "ru": "ВЫКЛ ❌"},
     "queue_pos":     {"en": "⏳ <b>You're #{pos} in queue</b> — about {eta} ahead of you.",
                       "ru": "⏳ <b>Ты #{pos} в очереди</b> — впереди примерно {eta}."},
-    "too_many":      {"en": "🚧 You already have {n} request(s) waiting. "
+    "too_many":      {"en": "🚧 Requests already waiting: {n}. "
                             "Let them finish, or press ⛔ Stop to clear them.",
-                      "ru": "🚧 У тебя уже {n} запрос(ов) в очереди. "
+                      "ru": "🚧 Уже в очереди запросов: {n}. "
                             "Дождись их или нажми ⛔ Стоп, чтобы сбросить."},
     "quota_hit":     {"en": "🚦 Daily limit reached for <b>{kind}</b> "
                             "({used}/{limit}). It resets at midnight UTC.",
@@ -414,7 +414,7 @@ _MSG: dict[str, dict[str, str]] = {
                             "<i>/cancel — начать заново.</i>"},
     "locked_out":    {"en": "🔒 This chat is logged out. Send your <b>password</b> to log in.",
                       "ru": "🔒 Чат разлогинен. Отправь <b>пароль</b>, чтобы войти."},
-    "wrong_pwd":     {"en": "❌ Wrong password. Try again ({left} attempt(s) left):",
+    "wrong_pwd":     {"en": "❌ Wrong password. Try again (attempts left: {left}):",
                       "ru": "❌ Неверный пароль. Ещё раз (осталось попыток: {left}):"},
     "login_locked":  {"en": "⏱ Too many failed attempts. Try again in {sec}s.",
                       "ru": "⏱ Слишком много неудачных попыток. Повтори через {sec} с."},
@@ -492,7 +492,7 @@ _MSG: dict[str, dict[str, str]] = {
                            "отправлю обратно.\n"
                            "/files — что лежит в папке (/files папка — заглянуть "
                            "внутрь) · /sandbox — статус · /reset_sandbox — очистить всё"},
-    "sbx_reset":    {"en": "🧹 Working folder cleared, {n} object(s) removed.",
+    "sbx_reset":    {"en": "🧹 Working folder cleared, objects removed: {n}.",
                      "ru": "🧹 Рабочая папка очищена, удалено объектов: {n}."},
     "sbx_status":   {"en": "🧰 Sandbox\n\n• Access: {access}\n• Files: {files}, size: {kb} KB\n"
                            "• Running code: {backend}",
@@ -527,9 +527,9 @@ _MSG: dict[str, dict[str, str]] = {
     "facts_header":  {"en": "🧠 <b>What I remember about you</b>\n",
                       "ru": "🧠 <b>Что я о тебе помню</b>\n"},
     "facts_forget":  {"en": "🗑 Forget all", "ru": "🗑 Забыть всё"},
-    "facts_cleared": {"en": "🗑 Forgot {n} fact(s).", "ru": "🗑 Забыто фактов: {n}."},
+    "facts_cleared": {"en": "🗑 Facts forgotten: {n}.", "ru": "🗑 Забыто фактов: {n}."},
     "facts_clear_confirm": {
-        "en": "🗑 Forget all {n} saved fact(s)? This cannot be undone.",
+        "en": "🗑 Forget all saved facts ({n})? This cannot be undone.",
         "ru": "🗑 Забыть все сохранённые факты ({n})? Это необратимо."},
     "facts_clear_yes": {"en": "🗑 Yes, forget all", "ru": "🗑 Да, забыть всё"},
     "facts_clear_no":  {"en": "↩️ Cancel", "ru": "↩️ Отмена"},
@@ -919,7 +919,7 @@ _MSG: dict[str, dict[str, str]] = {
     "lv_parts": {"en": "📜 Every part in detail", "ru": "📜 Подробно по частям"},
     "lv_progress": {"en": "⏳ Watching the video ({total}): part {n} of {of}…",
                     "ru": "⏳ Смотрю видео ({total}): часть {n} из {of}…"},
-    "lv_watched": {"en": "✅ Watched: {parts} part(s), {total}.", "ru": "✅ Посмотрел: {parts} ч., {total}."},
+    "lv_watched": {"en": "✅ Watched: parts {parts}, {total}.", "ru": "✅ Посмотрел: {parts} ч., {total}."},
     "lv_overview": {"en": "Retelling of the whole video", "ru": "Пересказ всего видео"},
     "lv_settings": {"en": "⚙️ Settings", "ru": "⚙️ Настройки"},
     "lv_skip": {"en": "✖ Not now", "ru": "✖ Не надо"},
@@ -931,14 +931,14 @@ _MSG: dict[str, dict[str, str]] = {
     "lv_downloading": {"en": "⬇️ Downloading the video…", "ru": "⬇️ Скачиваю видео…"},
     "lv_no_file": {"en": "⚠️ Could not download the video (files over 20 MB need the local Bot API server).",
                    "ru": "⚠️ Не смог скачать видео (файлы больше 20 МБ требуют локальный Bot API сервер)."},
-    "lv_start": {"en": "🎬 {total} → {parts} portion(s) of {mins} min. Delivering each as it is ready; ⛔ Stop ends it.",
+    "lv_start": {"en": "🎬 {total} → parts: {parts}, {mins} min each. Delivering each as it is ready; ⛔ Stop ends it.",
                  "ru": "🎬 {total} → {parts} ч. по {mins} мин. Отдаю каждую, как готова; ⛔ Стоп прерывает."},
     "lv_part_head": {"en": "🎬 <b>Part {n}/{of}</b> · {a}–{b}", "ru": "🎬 <b>Часть {n}/{of}</b> · {a}–{b}"},
     "lv_board": {"en": "Storyboard", "ru": "Раскадровка"},
     "lv_retell": {"en": "Retelling", "ru": "Пересказ"},
     "lv_part_failed": {"en": "⚠️ Part {n}: could not cut it, skipping.", "ru": "⚠️ Часть {n}: не смог вырезать, пропускаю."},
     "lv_stopped": {"en": "⛔ Stopped after {done}/{of} portions.", "ru": "⛔ Остановлено после {done}/{of} частей."},
-    "lv_done": {"en": "✅ Done: {parts} portion(s), {total}.", "ru": "✅ Готово: {parts} ч., {total}."},
+    "lv_done": {"en": "✅ Done: parts {parts}, {total}.", "ru": "✅ Готово: {parts} ч., {total}."},
     "lv_failed": {"en": "⚠️ The long-video job failed — see the log.", "ru": "⚠️ Разбор видео сорвался — смотри лог."},
     "ms_back":  {"en": "↩ Back",           "ru": "↩ Назад"},
     "ms_was_reset": {"en": "♻️ Song settings reset to Auto.",
@@ -1216,16 +1216,16 @@ _MSG: dict[str, dict[str, str]] = {
     # ── admin tools ───────────────────────────────────────────────────────────
     "bcast_usage":   {"en": "📢 Usage: <code>/broadcast your message</code>",
                       "ru": "📢 Использование: <code>/broadcast текст</code>"},
-    "bcast_confirm": {"en": "📢 Send this to <b>{n}</b> approved user(s)?\n\n{body}",
-                      "ru": "📢 Отправить это <b>{n}</b> одобренным пользователям?"
+    "bcast_confirm": {"en": "📢 Send this to approved users (<b>{n}</b>)?\n\n{body}",
+                      "ru": "📢 Отправить это одобренным пользователям (<b>{n}</b>)?"
                             "\n\n{body}"},
     "bcast_go_btn":  {"en": "📤 Send", "ru": "📤 Отправить"},
     "bcast_no_btn":  {"en": "↩ Cancel", "ru": "↩ Отмена"},
     "bcast_cancelled": {"en": "↩ Broadcast cancelled.", "ru": "↩ Рассылка отменена."},
     "bcast_announce":  {"en": "📢 <b>Announcement</b>\n\n{body}",
                         "ru": "📢 <b>Объявление</b>\n\n{body}"},
-    "bcast_sent":    {"en": "📢 Sent to {sent} user(s), {failed} failed.",
-                      "ru": "📢 Отправлено {sent} пользователям, ошибок: {failed}."},
+    "bcast_sent":    {"en": "📢 Sent: {sent}, failed: {failed}.",
+                      "ru": "📢 Отправлено: {sent}, ошибок: {failed}."},
     "stats_none":    {"en": "📊 No usage recorded in the last 7 days.",
                       "ru": "📊 За последние 7 дней активности не было."},
     "feedback_from": {"en": "📬 <b>Feedback from {name}</b>\n\n{body}",

@@ -137,7 +137,7 @@ for i in range(6):
 cap = T._cfg_int("TG_MAX_QUEUED_PER_USER", 3)
 check(f"queued tasks capped at {cap}", bot._backend.chat_depth(CID) == cap,
       bot._backend.chat_depth(CID))
-check("user is told why", "already have" in texts(bot).lower(), texts(bot)[-200:])
+check("user is told why", "already waiting" in texts(bot).lower(), texts(bot)[-200:])
 
 # quota: force the limit down to 1 and confirm the 2nd research is refused
 bot._backend = T.InMemoryBackend()
