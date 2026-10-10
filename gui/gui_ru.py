@@ -407,6 +407,8 @@ RU = {
     '— running': '— выполняется',
     '— PAUSED': '— ПАУЗА',
     '  ⚠ files with errors: %s: ': '  ⚠ файлов с ошибками: %s: ',
+    'Revisions': 'Версии',
+    'Whitepapers': 'Отраслевые отчёты',
     'Queue: —': 'Очередь: —',
     'Show the token': 'Показать токен',
     'Indexed: %s documents · %s passages · %s%% embedded · embedding model %s': 'В базе: документов %s · фрагментов %s · эмбеддингов %s%% · модель эмбеддингов %s',
