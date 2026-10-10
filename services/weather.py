@@ -779,7 +779,9 @@ def format_forecast(buckets: list, lang: str = "en", advice_map: dict = None) ->
         # checking only the previous line re-emitted the separator before
         # every row of the same day.
         if b["date"] != shown_date:
-            rows.append(b["date"].strftime("%d.%m"))
+            wd = (("пн", "вт", "ср", "чт", "пт", "сб", "вс") if ru else
+                  ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"))[b["date"].weekday()]
+            rows.append(f'{b["date"].strftime("%d.%m")} {wd}')
             shown_date = b["date"]
         hum = b.get("humidity")
         hum_s = f"{hum:.0f}%" if hum is not None else "—"
