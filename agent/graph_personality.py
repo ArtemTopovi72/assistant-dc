@@ -723,6 +723,11 @@ def _detect_silent_failure(tool_name: str, result: str, state: AgentState) -> st
                 f"the request. Whatever it loaded is NOT what was asked for — "
                 f"do not describe it as the requested subject. Say plainly "
                 f"that nothing matching was found.")
+    # A multi-part video waits for the user's OK on the plan card: no clip yet is the
+    # answer, not a failure. Read as a failure it was retried ~20 times (live 2026-10-10,
+    # cat + dog continuation) and the turn ended in "не получилось".
+    if result.lstrip().startswith("[NOT MADE YET]") and state.get("video_plan"):
+        return result
     key = _TOOL_ARTIFACT.get(tool_name)
     if key and not str(state.get(key) or "").strip():
         return (f"[TOOL ERROR] {tool_name} reported success but produced no "

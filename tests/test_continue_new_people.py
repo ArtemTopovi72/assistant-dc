@@ -113,3 +113,19 @@ def test_the_generator_gets_the_start_frame_then_the_people(monkeypatch, tmp_pat
 
 def test_clause_names_every_new_picture():
     assert "<Picture 2> and <Picture 3>" in V.new_people_clause(2, 2)
+
+
+def test_continue_text_is_not_a_search_when_a_search_menu_was_open(tmp_path):
+    # 🔎 Поиск armed before the clip turned the scene into "search the web for: …"
+    b, s = Bot(str(tmp_path)), Sess()
+    s.continue_people, s.pending_prefix, s.menu = [], "search the web for: ", "search"
+    assert b._continue_take_text(1, s, "ru", "кот приходит и играет с собакой")
+    assert s.pending_prefix == "" and s.menu == ""
+
+
+def test_a_plan_waiting_for_the_user_is_not_a_failed_render():
+    # Read as "success with no video" it was retried ~20 times and the turn gave up.
+    import graph_personality as G
+    msg = "[NOT MADE YET] The script needs several parts, and the user approves the plan first"
+    assert G._detect_silent_failure("generate_video", msg, {"video_plan": [{"text": "a"}]}) == msg
+    assert G._detect_silent_failure("generate_video", "done", {}).startswith("[TOOL ERROR]")

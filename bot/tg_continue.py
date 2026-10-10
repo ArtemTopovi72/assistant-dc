@@ -148,6 +148,10 @@ class ContinueMixin:
         if getattr(sess, "continue_state", "") != "want_text" or not (text or "").strip():
             return False
         sess.continue_state = ""         # disarmed before the slow part
+        # A submenu armed before the clip (🔎 Поиск) would turn this into "search the
+        # web for: animate this photo: …" -- live 2026-10-10 the bot chatted about the
+        # search instead of rendering.
+        sess.pending_prefix, sess.menu = "", ""
         self._store.put(sess)
         # the ordinary animate request; tg_tasks hands the clip's tail to generate_video
         self._enqueue_item(chat_id, {"type": "text", "text": "animate this photo: " + text.strip()})
