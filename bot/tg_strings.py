@@ -1220,7 +1220,7 @@ _MSG: dict[str, dict[str, str]] = {
     "img_which":    {"en": "🖼 <b>Which picture?</b>\nI have {n} in this chat. Pick one, "
                            "or reply directly to the picture you mean.",
                      "ru": "🖼 <b>Какую картинку?</b>\nВ этом чате их {n}. Выбери нужную "
-                           "или ответь (reply) прямо на неё."},
+                           "или ответь на неё (свайп влево по картинке)."},
     "img_latest":   {"en": "🆕 The most recent one", "ru": "🆕 Самая последняя"},
     "img_picked":   {"en": "🖼 Working on picture {i}. Say what to do with it.",
                      "ru": "🖼 Работаю с картинкой {i}. Скажи, что с ней сделать."},
