@@ -121,3 +121,17 @@ def test_the_parts_are_rendered_as_continuations_and_joined(monkeypatch, tmp_pat
 def test_the_part_stage_is_shown_in_russian():
     import stages
     assert stages.translate("Generating a video (2/3)", "ru") == "Генерирую видео (2/3)"
+
+
+def test_sound_and_light_lines_are_never_a_part_of_their_own():
+    # Live 2026-10-10: "2. Soundscape: soft indoor ambience…" was a whole part with no action.
+    s = ("The cat walks in from the side and sniffs the puppy. The puppy wags and hops around it. "
+         "The camera remains steady as they play on the couch. "
+         "Soundscape: soft indoor ambience, light scratching of paws on fabric, playful chirps, "
+         "muffled puppy yaps, quiet breathing and the hum of a fridge in the next room; no music. "
+         "The lighting is soft and warm, maintaining a high-quality, realistic look throughout the clip.")
+    assert V.split_script(s) == [s]
+    long_action = " ".join(f"Then the cat does trick number {i} and the dog answers it." for i in range(12))
+    parts = V.split_script(long_action + " Soundscape: soft ambience; no music.")
+    assert len(parts) > 1 and all("Soundscape" in p for p in parts)
+    assert not any(p.lstrip().startswith("Soundscape") for p in parts)

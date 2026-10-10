@@ -129,6 +129,11 @@ def estimate_seconds(description: str, capped: bool = True) -> float:
     return round(min(top, max(frames_to_seconds(VIDEO_DEFAULT_FRAMES), secs)), 2)
 
 
+_LOOK = re.compile(
+    r"(?:soundscape|sound(?:track)?|audio|music|ambien\w*|lighting|the lighting|light is|"
+    r"style|the style|look|overall|throughout|color|colour|quality|the camera|camera)\b"
+    r"|(?:the\s+)?(?:lighting|look|tone|mood|atmosphere|palette)\b.{0,40}\b(?:is|remains|stays)\b",
+    re.I)
 _SENT = re.compile(r"(?<=[.!?;])\s+|(?<=,)\s+(?=(?:then|after that|afterwards|затем|потом|после этого)\b)", re.I)
 
 
@@ -148,6 +153,15 @@ def split_script(description: str, max_seconds: float = 0.0) -> list:
     hidden = _QUOTED.sub(_hide, text)
     pieces = [x for x in _SENT.split(hidden) if x and x.strip()]
     restore = lambda t: re.sub(r"\x00(\d+)\x00", lambda m: quotes[int(m.group(1))], t)
+    # Sound, light and look lines take no screen time and belong to every part: as a
+    # part of their own they were "2. Soundscape: soft indoor ambience…" with no action
+    # (live 2026-10-10), and their words had pushed a one-clip script into two.
+    look = " ".join(p.strip() for p in pieces if _LOOK.match(p.strip()))
+    pieces = [p for p in pieces if not _LOOK.match(p.strip())]
+    if look:
+        action = restore(" ".join(p.strip() for p in pieces))
+        if not pieces or estimate_seconds(action, capped=False) <= top:
+            return [text]
     parts, cur = [], ""
     for piece in pieces:
         cand = (cur + " " + piece).strip()
@@ -158,6 +172,8 @@ def split_script(description: str, max_seconds: float = 0.0) -> list:
             cur = cand
     if cur:
         parts.append(restore(cur))
+    if look:
+        parts = [p + " " + restore(look) for p in parts]
     return parts
 
 
@@ -1487,7 +1503,10 @@ def new_people_clause(first: int, n: int) -> str:
         " -- they come into this same location from off-screen and join the scene as the "
         "request above says, each with exactly the face, hair, body and clothes of their own "
         "picture. Only the person is taken from that picture, never its background or framing; "
-        "the people already in the shot stay as they are.")
+        "the people already in the shot stay as they are. The camera does NOT move to find "
+        "them: same angle, distance and framing as the end of <Video 1>, no pan, no tilt, no "
+        "zoom, no cut -- the newcomer steps into the frame that is already there. Unless the "
+        "request says otherwise, everyone meets calmly and friendly; nobody hits or bites.")
 
 
 def join_pinned(src: str, new: str, head: int = MOTION_CONTEXT_FRAMES) -> Optional[str]:

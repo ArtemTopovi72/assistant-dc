@@ -1324,6 +1324,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         # Several minutes per part: the chat sees the parts, the clip length and the
         # render time first, and may drop or condense parts (user, 2026-10-10).
         state["video_plan"] = [{"text": p, "sec": video_mod.estimate_seconds(p)} for p in parts]
+        if continuing:      # nothing rendered: the clip and its new people wait for the ▶ rerun
+            ctx.continue_tail, ctx.continue_src, ctx.continue_people = cont_tail, cont_src, people
         return ("[NOT MADE YET] The script needs several parts, and the user approves the "
                 "plan first: it is shown under your message with buttons. Reply with ONE "
                 "short line in their language that the plan is below. Do not describe the "

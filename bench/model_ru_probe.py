@@ -47,6 +47,9 @@ def ask(model: str, prompt: str, system: str = "") -> dict:
         # The app's no-think lever (llm.GEMMA_NO_THINK_PREFILL).
         import llm
         msgs.append({"role": "assistant", "content": llm.GEMMA_NO_THINK_PREFILL})
+    elif "qwen" in model.lower():
+        import llm
+        msgs.append({"role": "assistant", "content": llm.QWEN_NO_THINK_PREFILL})
     t0 = time.perf_counter()
     first = None
     content, reasoning, n = [], [], 0

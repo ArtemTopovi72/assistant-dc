@@ -5,10 +5,10 @@ cd "$(dirname "$0")/.."
 for M in "$@"; do
   D="outputs/shootout/$M"; mkdir -p "$D"
   echo "=== $M  $(date +%T)"
-  export MODEL_NAME="$M" PYTHONIOENCODING=utf-8 F5_TEST_RUN=
-  lms unload --all >/dev/null 2>&1
-  # The probes do not load a model themselves: load it at the context the app uses.
-  if ! lms load "$M" -c 40960 --gpu max -y > "$D/load.log" 2>&1; then
+  export MODEL_NAME="$M" PYTHONIOENCODING=utf-8 PYTHONUNBUFFERED=1 F5_TEST_RUN=
+  # The probes do not load a model themselves: load it the way the app does (REST,
+  # ctx 40960, parallel 1 -- `lms load --parallel 1` left the slot count at 4).
+  if ! venv/Scripts/python.exe bench/load_like_app.py "$M" > "$D/load.log" 2>&1; then
     echo "load failed"; cat "$D/load.log"; continue
   fi
   venv/Scripts/python.exe bench/model_ru_probe.py --model "$M" --out "$D/ru.json" > "$D/ru.log" 2>&1

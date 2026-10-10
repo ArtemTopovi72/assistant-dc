@@ -58,6 +58,10 @@ def _glimmer_strength(messages: List[dict], strength: str) -> List[dict]:
     return out
 
 
+def _is_qwen(model_name: str) -> bool:
+    return "qwen" in (model_name or "").lower()
+
+
 def _is_gemma4(model_name: str) -> bool:
     """True for Gemma 4 models, which reason by a different contract again.
 
@@ -92,6 +96,12 @@ GEMMA_MIN_TOKENS = 3000
 # that summarise work already done -- it removes the thinking, not just the
 # budget.
 GEMMA_NO_THINK_PREFILL = "<|channel>thought\n<channel|>"
+# Qwen 3.x's own closed think block. The uncensored fine-tunes (Qwen3.6-35B-A3B
+# HauhauCS, 2026-10-07) ignore both `/no_think` and enable_thinking=false and
+# reason in the content: the 300-token intent read came back as 1000+ chars of
+# "Thinking Process" and no JSON (65/134 vs Gemma 130/134). With this block
+# already in the assistant turn it answers at once.
+QWEN_NO_THINK_PREFILL = "<think>\n\n</think>\n\n"
 
 
 # Every Gemma 4 call gets that prefill (send_to_lm_studio: reasoning is off
@@ -408,6 +418,18 @@ def _strip_model_artifacts(messages: List[dict]) -> List[dict]:
     return out
 
 
+def _system_first(messages: List[dict]) -> List[dict]:
+    """Qwen's chat template raises "System message must be at the beginning" (HTTP 500,
+    120 times on the 2026-10-07 tool bench) for the mid-conversation system notes the
+    agent loop adds; Gemma takes them. A later system turn goes as a user note, in place."""
+    out = []
+    for i, m in enumerate(messages):
+        if i > 0 and m.get("role") == "system":
+            m = {"role": "user", "content": "[system note] " + str(m.get("content") or "")}
+        out.append(m)
+    return out
+
+
 def _apply_no_think(messages: List[dict]) -> List[dict]:
     """Return a copy of messages with the Qwen3 `/no_think` switch in a system turn.
 
@@ -586,8 +608,17 @@ def send_to_lm_studio(
             # utils.safe_json_from_llm.
             json_schema = None
 
+    if _is_qwen(model_name) and no_think and prefill is None and not (
+            tools and tool_choice == "required"):
+        # See QWEN_NO_THINK_PREFILL. A forced tool call is a grammar and needs
+        # no prefill (it dies on it, as on Gemma); a json_schema grammar too.
+        prefill = QWEN_NO_THINK_PREFILL
+        json_schema = None
+
     # Strip Gemma 4 <channel|> artifacts that may have been saved to history.
     messages = _strip_model_artifacts(messages)
+    if _is_qwen(model_name):
+        messages = _system_first(messages)
     # gpt-oss ignores the Qwen `/no_think` marker — don't pollute its messages with it.
     outbound = messages if is_oss else (_apply_no_think(messages) if no_think else messages)
     if is_glimmer:
