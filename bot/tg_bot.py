@@ -742,7 +742,30 @@ _LABEL_TAG_FALLBACK = {"upscale": "Upscale 4×", "enhance": "Enhance faces",
                        "restore": "Restore"}
 
 
-def _friendly_image_label(raw: str) -> str:
+_QUOTE_HEAD_RE = re.compile(r"<<<QUOTED MESSAGE -- [^>]*>>>\s*", re.S)
+
+
+def _user_words(raw: str, lang: str | None = None) -> str:
+    """A queued request as its sender would recognise it: the pipeline's English
+    routing prefix and the forwarded-quote frame removed («generate an image of: кот»
+    -> «кот»); a request that IS a whole fixed command shows its button label.
+    Live 2026-10-04/05: the picker and the admin console showed «generate an image
+    of», «QUOTED MESSAGE -- the user forwarded…» in Russian chats."""
+    t = _QUOTE_HEAD_RE.sub("↪ ", raw or "").replace("<<<END OF QUOTED MESSAGE>>>", " ")
+    t = " ".join(t.split())
+    low = t.lower()
+    if lang:
+        for table in (_DIRECT_KB, _CB_CMDS):
+            for key, cmd in table.items():
+                if cmd and not cmd.startswith("__") and low.startswith(cmd.lower()):
+                    return _b(key, lang)
+    for prefix in sorted((v.strip() for v in _PROMPT_KB.values()), key=len, reverse=True):
+        if prefix and low.startswith(prefix.lower()):
+            return t[len(prefix):].strip()
+    return t
+
+
+def _friendly_image_label(raw: str, lang: str | None = None) -> str:
     """A stored image-log label, cleaned up for display in a picker button.
 
     Unwraps a forced tool-call string to the actual instructions it carries
@@ -758,7 +781,7 @@ def _friendly_image_label(raw: str) -> str:
     elif tag_m and tag_m.group(1).lower() in _LABEL_TAG_FALLBACK:
         return _LABEL_TAG_FALLBACK[tag_m.group(1).lower()]
     else:
-        t = _LABEL_PREFIX_RE.sub("", t)
+        t = _user_words(_LABEL_PREFIX_RE.sub("", t), lang)
         t = _LABEL_BOILERPLATE_RE.sub("", t).strip()
     if len(t) <= 40:
         return t
@@ -779,7 +802,7 @@ def _image_choice_kb(sess, lang: str = _DEFAULT_LANG) -> dict:
     rows = [[{"text": _t("img_latest", lang), "callback_data": "pick:latest"}]]
     live = _live_images(sess)
     for n, e in enumerate(reversed(live), 1):
-        label = _friendly_image_label(e.get("label") or "") or _t("img_unlabelled", lang)
+        label = _friendly_image_label(e.get("label") or "", lang) or _t("img_unlabelled", lang)
         # Numeral + the request the picture came from: identical in every
         # language, so it is built here rather than kept as a "translation" that
         # is the same string twice.

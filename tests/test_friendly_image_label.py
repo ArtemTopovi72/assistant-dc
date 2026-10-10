@@ -71,6 +71,16 @@ check("a long plain sentence truncates on a word boundary with an ellipsis",
       == "The girl's nose has comically shrunk…",
       F("The girl's nose has comically shrunk, and she herself is smiling"))
 
+# Live 2026-10-04/05: Russian chats got picker buttons reading «generate an image
+# of…» and «QUOTED MESSAGE -- the user forwarded…» — the pipeline's own English.
+check("a button's routing prefix is not shown", F("generate an image of: рыжий кот", "ru") == "рыжий кот",
+      F("generate an image of: рыжий кот", "ru"))
+check("a whole fixed command shows its button label in the chat's language",
+      "надпис" in F("remove all the lettering from the image", "ru").lower(),
+      F("remove all the lettering from the image", "ru"))
+_q = "<<<QUOTED MESSAGE -- the user forwarded this>>>\nпривет\n<<<END OF QUOTED MESSAGE>>>"
+check("a forwarded-quote frame is not shown", "QUOTED" not in F(_q, "ru"), F(_q, "ru"))
+
 print(f"\n{OK}/{OK + BAD} checks passed")
 if __name__ == "__main__":
     sys.exit(0 if BAD == 0 else 1)

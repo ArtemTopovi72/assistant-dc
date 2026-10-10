@@ -23,7 +23,10 @@ _gpu_cache = {"t": 0.0, "v": ""}
 
 
 def _short(text: str, n: int = _TEXT_CUT) -> str:
+    import tg_bot
     t = " ".join((text or "").split())
+    if not t.startswith("[song") and not t.lower().startswith("do a deep research on:"):
+        t = tg_bot._user_words(t)
     if t.startswith("[song"):
         t = "🎵 " + t.split("]", 1)[-1].strip()
     elif t.lower().startswith("do a deep research on:"):
