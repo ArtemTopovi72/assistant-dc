@@ -10,6 +10,7 @@ clip); an empty slot is "" and that person keeps the default voice.
 Session: anim_voice_state "" | "collect", anim_voice_slot (0-based target),
 anim_voices [path | ""] by slot.
 """
+import html
 import os
 
 
@@ -48,7 +49,7 @@ class AnimVoicesMixin:
         lines = [tg_bot._t("anv_slots_title", lang)]
         rows = []
         for i, ref in enumerate(slots):
-            lines.append(f"{i + 1}. " + ("🗣 " if ref else "▫️ ") + self._slot_label(sess, ref, lang))
+            lines.append(f"{i + 1}. " + ("🗣 " if ref else "▫️ ") + html.escape(self._slot_label(sess, ref, lang)))
             row = [{"text": f"🎤 {i + 1}", "callback_data": f"anv:slot:{i}"}]
             if ref:
                 row.append({"text": f"🗑 {i + 1}", "callback_data": f"anv:clr:{i}"})
@@ -57,7 +58,7 @@ class AnimVoicesMixin:
             rows.append([{"text": tg_bot._t("vl_save_btn", lang), "callback_data": f"vl:name:{new_id}"}])
         rows.append([{"text": tg_bot._t("anv_done", lang), "callback_data": "anv:done"}])
         rows += self._vl_manage_row(lang)
-        self._send_text(chat_id, "\n".join(lines), keyboard={"inline_keyboard": rows})
+        self._send_text(chat_id, "\n".join(lines), parse_mode="HTML", keyboard={"inline_keyboard": rows})
 
     def _animate_ask_voices(self, chat_id: int, sess, lang: str) -> None:
         """Entry of every animate path: straight to the presets. Voice samples
