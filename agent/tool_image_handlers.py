@@ -259,8 +259,17 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
     engine = _edit_checkpoint(ctx, args)
     manual_whole = ((getattr(ctx, "image_edit_engine", "auto") or "auto")
                     .strip().lower() == "firered_whole")
+    # The instructions alone read as an insert when they name the result: live 10-10
+    # «сделай красный круг зелёным» came as region='red circle', instructions='a green
+    # circle' and a second, green circle was added next to the red one.
+    import intent as _intent
     if (not removal and not manual_whole and region
-            and classify_edit_intent(instructions) == "object_insert"):
+            and classify_edit_intent(instructions) == "object_insert"
+            and _intent.ask_yes(
+                "An image edit names a part of the picture and what to do there:\n{text}\n\n"
+                "Does it ask to ADD a new object while that part stays as it is (not to "
+                "turn that part itself into something else, recolour or replace it)?",
+                f"part: {region}\nwhat to do: {instructions}", default=True)):
         ctx.set_stage("Inserting object")
         logger.info("Tool: inpaint_image additive-shortcut -> route_edit_request "
                     "anchor=%r instructions=%r source=%s", region, instructions[:80], source)
