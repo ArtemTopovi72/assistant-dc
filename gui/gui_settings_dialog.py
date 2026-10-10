@@ -143,9 +143,11 @@ class SettingsDialog(QDialog):
         lay.addLayout(lrow)
 
         # gpt-oss reasoning depth. Only gpt-oss models honor `reasoning_effort`
-        # (low/medium/high); for other models this is ignored, so it's safe to
-        # always show. Default high = deepest reasoning.
-        erow = QHBoxLayout()
+        # (low/medium/high), so the row shows only when one is in the list: next to
+        # Gemma it was a knob that did nothing. Default high = deepest reasoning.
+        self._effort_row = QWidget()
+        erow = QHBoxLayout(self._effort_row)
+        erow.setContentsMargins(0, 0, 0, 0)
         erow.addWidget(QLabel("Reasoning effort (gpt-oss)"))
         self.reasoning_effort = QComboBox()
         self.reasoning_effort.addItems(["low", "medium", "high"])
@@ -155,7 +157,8 @@ class SettingsDialog(QDialog):
             "Reasoning depth for OpenAI gpt-oss models (gpt-oss-20b / 120b): "
             "high = deepest, most thorough chains; low = fastest. Ignored by non-gpt-oss models.")
         erow.addWidget(self.reasoning_effort, 1)
-        lay.addLayout(erow)
+        lay.addWidget(self._effort_row)
+        self._effort_row.setVisible(getattr(self, "_has_gpt_oss", False))
 
         # ---- Interface (DPI / resolution-aware scaling) — app-level, always shown ----
         lay.addWidget(_section("Interface"))
@@ -388,6 +391,9 @@ class SettingsDialog(QDialog):
                 w.deleteLater()
 
         models = list_models(LM_STUDIO_BASE)
+        self._has_gpt_oss = any("gpt-oss" in (m.get("id") or "") for m in models or [])
+        if hasattr(self, "_effort_row"):
+            self._effort_row.setVisible(self._has_gpt_oss)
         sizes = _index_model_sizes(_MODELS_DIR)
         cur_model = (self.ctx.model_name if self.ctx else self._default_model)
         self._initial_model_id = cur_model
