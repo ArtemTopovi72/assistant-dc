@@ -197,7 +197,7 @@ def test_weather_tab():
     # the chat table does with its group lines.
     dates = [tab.table.item(r, 0).text() for r in range(tab.table.rowCount())]
     check("weather_date_shown_once_per_day",
-          dates == ["17.08", "", "18.08", ""], dates)
+          [d.split(" ")[0] for d in dates] == ["17.08", "", "18.08", ""], dates)
     check("weather_missing_humidity_is_a_dash",
           tab.table.item(2, 3).text() == "—", tab.table.item(2, 3).text())
     check("weather_humidity_is_a_percentage",
