@@ -202,7 +202,7 @@ class DatabaseTabMixin:
             msg += (" Embedding model offline → keyword (BM25) search only. Load the "
                     "embedding model in LM Studio and Build again for semantic search.")
         if errs:
-            msg += f"  ⚠ {len(errs)} file(s) had errors: " + "; ".join(errs[:3])
+            msg += f"  ⚠ files with errors: {len(errs)}: " + "; ".join(errs[:3])
         self.db_status.setText(msg)
 
     def _on_db_failed(self, err):
@@ -232,7 +232,7 @@ class DatabaseTabMixin:
             return
         try:
             n = self._get_library().purge_all()
-            self.db_status.setText(f"Cleared {n} document(s) from the database.")
+            self.db_status.setText(f"Documents removed from the database: {n}.")
         except Exception as exc:
             self.db_status.setText(f"Clear failed: {exc}")
         self.db_file_list.clear()

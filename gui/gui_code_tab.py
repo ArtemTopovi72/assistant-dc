@@ -350,7 +350,7 @@ class CodeTab(QWidget):
                 self.status.setText(f"{Path(p).name}: {exc}")
         self._refresh_files()
         if added:
-            self.status.setText(f"Added {added} file(s).")
+            self.status.setText(f"Files added: {added}.")
 
     def _reset(self):
         who = self.who.currentText() or DESKTOP_KEY
@@ -367,7 +367,7 @@ class CodeTab(QWidget):
             return
         self.viewer.clear()
         self._refresh_files()
-        self.status.setText(f"Reset — removed {removed} object(s).")
+        self.status.setText(f"Reset — objects removed: {removed}.")
 
     # ---- the agent ---------------------------------------------------------
 
