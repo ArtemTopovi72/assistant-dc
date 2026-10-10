@@ -1292,6 +1292,13 @@ class TaskRunnerMixin:
         # presses on two different pictures, queued one behind the other, both
         # used to resolve to whichever picture the SECOND press had already
         # overwritten that slot with by the time either task actually ran.
+        # ✏️ custom motion under 🎬: the picture chosen there, not the one-turn
+        # target slot -- live 10-10 that slot was empty by the time the words came
+        # and the clip was made from nothing («оживи фото», 0 images).
+        _anim = getattr(sess, "pending_animate_target", "")
+        if _anim and (task.user_text or "").startswith("animate this photo") and not getattr(task, "image_id", ""):
+            task.image_id = _anim
+            sess.pending_animate_target = ""
         _target_id = getattr(task, "image_id", "") or getattr(sess, "target_image", "")
         _target = tg_bot._image_by_id(sess, _target_id)
         if (task.user_text or "").startswith(tg_bot._TEXT_ONLY_MARK):
