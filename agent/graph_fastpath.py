@@ -15,7 +15,8 @@ render a short-circuit reply.
 import logging
 import re
 
-from graph_compose import _GenSettings, FORGOTTEN_NOTE, _word_count_note, facts_parts, no_history_note
+from graph_compose import (_GenSettings, FORGOTTEN_NOTE, _word_count_note, facts_parts, no_history_note,
+                           translate_previous_note)
 from models import AgentState, Context
 from prompts import build_system_prompt_lite
 from utils import strip_think_tags, strip_reasoning_leak
@@ -319,9 +320,14 @@ def _fast_path_reply(ctx: Context, messages: list, gen: "_GenSettings",
         lite_user_parts.extend(facts_parts(facts_text))
     elif getattr(ctx, "facts_forgotten", False):
         lite_user_parts.append(FORGOTTEN_NOTE)
-    if original_input:
+    _tr_prev = translate_previous_note(original_input or user_input, messages[1:-1])
+    if original_input and not _tr_prev:
+        # A bare path or a number has no language: live 10-10 «C:/Program Files/Git/start»
+        # in a Russian chat was answered in Spanish.
+        _chat_lang = {"ru": "Russian", "en": "English"}.get(getattr(ctx, "reply_lang", "ru") or "ru", "Russian")
         lite_user_parts.append(
-            f"[Reply in the same language as: «{original_input}»]")
+            f"[Reply in the same language as: «{original_input}» -- if it has no clear "
+            f"language of its own (a path, a number, a link), reply in {_chat_lang}]")
     prefill = gen.prefill
     if vision_summary:
         # Photo intake (_is_photo_intake): describe it, then ask. The description
@@ -342,7 +348,8 @@ def _fast_path_reply(ctx: Context, messages: list, gen: "_GenSettings",
     # After the question: placed before it, the model ignored it once history existed (4/4 wrong).
     lite_user_parts.extend(p for p in [_word_count_note(original_input or user_input)
                                        or no_history_note(original_input or user_input,
-                                                          messages[1:-1])] if p)
+                                                          messages[1:-1])
+                                       or _tr_prev] if p)
     lite_user_msg = {"role": "user", "content": "\n\n".join(lite_user_parts)}
 
     fast_msgs = [{"role": "system", "content": lite_system}]

@@ -119,6 +119,21 @@ def no_history_note(text: str, history) -> str:
             "you have nothing earlier to go on; do not invent a past conversation.]")
 
 
+def translate_previous_note(text: str, history) -> str:
+    """«Translate to Russian» with no text of its own means the reply above. Live 10-09
+    the fast path translated the request itself and sent back «Переведи на русский»."""
+    import intent
+    if not any(m.get("role") == "assistant" and m.get("content") for m in history or []):
+        return ""
+    if not intent.read(None, text)["translate"]:
+        return ""
+    if intent.ask_yes("A user wrote: {text}\n\nBesides the request to translate, does the "
+                      "message itself contain the text to be translated?", text, default=True):
+        return ""
+    return ("[The text to translate is your previous reply above. Output only its full "
+            "translation into the language asked for -- not the request itself, no comments.]")
+
+
 def facts_parts(facts_text: str) -> list:
     """Saved-facts block for both the fast path and the full loop."""
     parts = ["Saved facts (you remembered these earlier; treat them as known and use "
@@ -289,7 +304,9 @@ def _compose_user_message(ctx: Context, state: AgentState) -> tuple:
     parts = []
     _cnt = (_word_count_note(state.get("user_input_original") or user_input)
             or no_history_note(state.get("user_input_original") or user_input,
-                               state.get("messages")))
+                               state.get("messages"))
+            or translate_previous_note(state.get("user_input_original") or user_input,
+                                       (state.get("messages") or [])[:-1]))
     facts_text = ctx.facts_text(state.get("user_input_original") or user_input)
     if facts_text:
         parts.extend(facts_parts(facts_text))
