@@ -121,6 +121,38 @@ class ResolveMixin:
                                    f"[link] read {sess.last_link[:80]}",
                                    (user.name if user else str(chat_id)))
 
+    _FWD_JOIN_S = 120.0
+
+    def _join_waiting(self, chat_id: int, task) -> bool:
+        """Fold this chat's newest still-waiting task into `task` (its text first).
+
+        Only a task nobody has started (drop_task succeeds), queued in the last
+        two minutes, and never two pictures into one turn. True when folded."""
+        try:
+            waiting = [t for t in self._backend.service_order() if t.chat_id == chat_id]
+        except Exception:
+            return False
+        if not waiting:
+            return False
+        prev = waiting[-1]
+        if time.time() - (prev.enqueue_ts or 0) > self._FWD_JOIN_S or prev.style_ref_path:
+            return False
+        if prev.image_path and task.image_path:
+            return False
+        if not self._backend.drop_task(prev.task_id):
+            return False            # a worker took it meanwhile
+        with self._task_lock:
+            self._pending_journal.pop(prev.task_id, None)
+        task.user_text = prev.user_text + "\n\n" + task.user_text
+        for f in ("image_path", "image_id", "image_is_photo"):
+            if not getattr(task, f):
+                setattr(task, f, getattr(prev, f))
+        task.enqueue_ts = prev.enqueue_ts
+        task.reply_to = prev.reply_to or task.reply_to
+        tg_bot.logger.info("Forward joined waiting task %s -> %s chat=%s",
+                           prev.task_id[:8], task.task_id[:8], chat_id)
+        return True
+
     def _resolve_and_push(self, chat_id: int, batch: list):
         # Earliest arrival time across the batch, stamped at _enqueue_item —
         # BEFORE the debounce delay — so a Stop that landed while this batch
@@ -1587,10 +1619,14 @@ class ResolveMixin:
         _only_fwd = bool(batch) and all(it.get("forwarded") for it in batch)
         if not _only_fwd and self._try_steer(chat_id, task):
             return          # a note to the running task, not a new task: not charged
-        # Charged only now: a steer note or an «which picture?» question is not a task.
-        self._user_store.bump_usage(chat_id, tg_bot.KIND_TASK)
-        if kind != tg_bot.KIND_TASK:
-            self._user_store.bump_usage(chat_id, kind)
+        # A forward that lands while this chat's previous turn still WAITS (a late
+        # part of the same paste, a getUpdates gap) joins it: one answer, not two.
+        _joined = any(it.get("forwarded") for it in batch) and self._join_waiting(chat_id, task)
+        if not _joined:
+            # Charged only now: a steer note or an «which picture?» question is not a task.
+            self._user_store.bump_usage(chat_id, tg_bot.KIND_TASK)
+            if kind != tg_bot.KIND_TASK:
+                self._user_store.bump_usage(chat_id, kind)
         with self._task_lock:
             self._pending_journal[task.task_id] = task
         self._backend.push(task)
