@@ -23,6 +23,37 @@ def _mins(seconds: float) -> int:
     return max(1, math.ceil(seconds / 60.0))
 
 
+def _summaries(texts: list, lang: str) -> list:
+    """One short line per part in the chat's language: the parts themselves are the
+    English prompts the video model reads, and the card showed them as is (user,
+    2026-10-10: «а почему на английском»). Any failure: the prompts, cut short."""
+    if not texts or lang == "en":
+        return [""] * len(texts)
+    import llm
+    from utils import safe_json_from_llm
+    name = {"ru": "Russian"}.get(lang, lang)
+    try:
+        raw = llm.call_llm_simple(
+            None,
+            f"Retell each numbered video shot description in {name} as ONE short line "
+            "(at most 12 words): who does what. No camera, sound or lighting details. "
+            'Reply with JSON only: {"lines": ["...", "..."]}, one line per shot, same order.',
+            "\n".join(f"{i}. {t}" for i, t in enumerate(texts, 1)),
+            temperature=0.2, max_tokens=120 + 60 * len(texts)) or ""
+        lines = (safe_json_from_llm(raw, ["lines"]) or {}).get("lines") or []
+    except Exception:
+        tg_bot.logger.exception("video plan: summaries failed")
+        lines = []
+    lines = [str(x).strip() for x in lines]
+    return lines if len(lines) == len(texts) and all(lines) else [""] * len(texts)
+
+
+def _with_summaries(plan: list, lang: str) -> list:
+    for p, say in zip(plan, _summaries([p["text"] for p in plan], lang)):
+        p["say"] = say
+    return plan
+
+
 class VideoPlanMixin:
     def _video_plan_card(self, sess, lang: str) -> tuple:
         import video
@@ -32,7 +63,7 @@ class VideoPlanMixin:
         lines = [tg_bot._t("vp_title", lang, n=len(plan), clip=f"{clip:.0f}", mins=_mins(render))]
         for i, p in enumerate(plan, 1):
             lines.append(tg_bot._t("vp_part", lang, i=i, sec=f"{float(p.get('sec') or 0):.1f}",
-                                   text=html.escape(_cut(p.get("text", "")))))
+                                   text=html.escape(_cut(p.get("say") or p.get("text", "")))))
         lines.append(tg_bot._t("vp_hint", lang))
         rows = [[{"text": tg_bot._t("vp_go", lang, mins=_mins(render)), "callback_data": "vp:go"}]]
         if len(plan) > 1:
@@ -43,7 +74,8 @@ class VideoPlanMixin:
         return "\n".join(lines), {"inline_keyboard": rows}
 
     def _offer_video_plan(self, chat_id: int, sess, lang: str, request: str, plan: list) -> None:
-        sess.video_plan = [{"text": str(p.get("text", "")), "sec": float(p.get("sec") or 0)} for p in plan]
+        sess.video_plan = _with_summaries(
+            [{"text": str(p.get("text", "")), "sec": float(p.get("sec") or 0)} for p in plan], lang)
         sess.video_plan_request, sess.video_plan_ok = request, []
         self._store.put(sess)
         text, kb = self._video_plan_card(sess, lang)
@@ -74,7 +106,7 @@ class VideoPlanMixin:
             self._send_text(chat_id, tg_bot._t("vp_squeeze_fail", lang))
             return
         parts = video.split_script(out)
-        sess.video_plan = [{"text": p, "sec": video.estimate_seconds(p)} for p in parts]
+        sess.video_plan = _with_summaries([{"text": p, "sec": video.estimate_seconds(p)} for p in parts], lang)
         self._store.put(sess)
         text, kb = self._video_plan_card(sess, lang)
         self._send_text(chat_id, text, parse_mode="HTML", keyboard=kb)
