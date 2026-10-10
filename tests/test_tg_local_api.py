@@ -89,7 +89,9 @@ _saved_exe, _saved_up = C.TG_API_EXE, L.server_up
 C.TG_API_ID, C.TG_API_HASH, C.TG_API_LOCAL = "123", "a" * 32, True
 C.TG_API_BASE = "http://127.0.0.1:8081"
 C.TG_API_EXE = _exe
-L.server_up = lambda *a, **k: os.path.exists(_flag)
+# non-empty, not just present: cmd creates the redirect target before it writes, and under
+# a loaded full run the check read an empty file ("--local" missing)
+L.server_up = lambda *a, **k: os.path.exists(_flag) and os.path.getsize(_flag) > 0
 L.time.sleep = _time.sleep
 check("ensure_server starts the executable", L.ensure_server(root=_tmp, wait_s=10), _flag)
 check("...with --local and the credentials", os.path.exists(_flag) and "--local" in open(_flag).read())
