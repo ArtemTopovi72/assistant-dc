@@ -1390,6 +1390,10 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             if (corrective_count < _MAX_CORRECTIVE and not tools_ran_now and draft
                     and (state.get("image_data") or (getattr(ctx, "last_image_path", None)
                                                      and _PICTURE_WORD_RE.search(draft)))
+                    # only when the user's own words asked for a picture action (or the
+                    # read failed): a photo of a circuit board plus advice — «добавим
+                    # резистор», «уберите кнопку» — cost two rounds a reply (2026-10-09)
+                    and (user_image_intent or not _own_read.get("ok"))
                     and _ACTION_CLAIM_RE.search(draft)):
                 corrective_count += 1
                 logger.warning("Answer claims an action but no tool was called — "
