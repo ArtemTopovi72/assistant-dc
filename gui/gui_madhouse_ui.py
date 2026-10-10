@@ -113,7 +113,12 @@ class MadhouseUIMixin:
         # Voice mode. "Own voices" clones each character's reference WAV; "Default
         # voice" speaks everyone with the assistant's normal voice (cheaper — no
         # per-character reference preprocessing); "Silent" is text only.
-        trow.addWidget(QLabel("Voices"))
+        # label and combo as one flow item: the flow row tops its items, a bare
+        # label sat off its combo's middle
+        voices_box = QWidget()
+        voices_row = QHBoxLayout(voices_box)
+        voices_row.setContentsMargins(0, 0, 0, 0)
+        voices_row.addWidget(QLabel("Voices"))
         self.voice_mode = QComboBox()
         self.voice_mode.addItem("🔊  Own voices", "own")
         self.voice_mode.addItem("🗣  Default voice", "default")
@@ -123,7 +128,8 @@ class MadhouseUIMixin:
             "Default voice — everyone speaks with the assistant's voice.\n"
             "Silent — nothing is spoken; the room runs as text only.")
         self.voice_mode.currentIndexChanged.connect(self._on_voice_mode)
-        trow.addWidget(self.voice_mode)
+        voices_row.addWidget(self.voice_mode)
+        trow.addWidget(voices_box)
         root.addWidget(_FlowWidget(trow))
 
         self.vsplit.addWidget(_top)

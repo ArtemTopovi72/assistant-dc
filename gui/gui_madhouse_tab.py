@@ -26,6 +26,8 @@ import threading
 import time
 from pathlib import Path
 
+import gui_i18n
+
 from PyQt5.QtCore import QThread, QTimer, Qt, pyqtSignal
 from PyQt5.QtWidgets import (
     QCheckBox, QComboBox, QFileDialog, QLabel, QLineEdit, QListWidget, QMessageBox,
@@ -141,7 +143,7 @@ class MadhouseTab(MadhouseUIMixin, MadhouseCastMixin, QWidget):
         self.player = AudioPlayer()
         # You, the human, are a permanent participant: always in the "speak as" list,
         # never picked by the auto-dialogue, and never synthesized (you have a voice).
-        self.user = {"id": self.USER_ID, "name": "You", "voice": "", "personality": "",
+        self.user = {"id": self.USER_ID, "name": gui_i18n.tr("You"), "voice": "", "personality": "",
                      "prompt": "", "_voice_wav": None, "_is_user": True}
         self.reply_worker = None
         self.speak_worker = None
@@ -343,7 +345,7 @@ class MadhouseTab(MadhouseUIMixin, MadhouseCastMixin, QWidget):
     # ----- manual turn -------------------------------------------------------
     def _on_my_name_changed(self, text):
         # Past lines keep the name they were said under; only new ones change.
-        self.user["name"] = (text or "").strip() or "You"
+        self.user["name"] = (text or "").strip() or gui_i18n.tr("You")
         idx = self.who.findData(self.USER_ID)
         if idx >= 0:
             self.who.setItemText(idx, f"🙋  {self.user['name']}")

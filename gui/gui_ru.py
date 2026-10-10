@@ -380,6 +380,7 @@ RU = {
     'Include source types': 'Типы источников',
     'Index rebuilt (entries re-scanned).': 'Индекс пересобран (записи пересканированы).',
     'Waiting for LM Studio…': 'Жду LM Studio…',
+    'You': 'Я',
     'Queue: —': 'Очередь: —',
     'Show the token': 'Показать токен',
     'Indexed: %s documents · %s passages · %s%% embedded · embedding model %s': 'В базе: документов %s · фрагментов %s · эмбеддингов %s%% · модель эмбеддингов %s',

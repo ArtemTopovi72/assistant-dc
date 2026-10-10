@@ -290,7 +290,7 @@ QPlainTextEdit {{ background: {BG}; border: {p(1)}px solid {BORDER}; border-radi
 QTableWidget, QListWidget {{ background: {BG}; color: {TEXT}; border: {p(1)}px solid {BORDER};
                   border-radius: {p(8)}px; gridline-color: {BORDER};
                   alternate-background-color: {PANEL2}; }}
-QTableWidget::item, QListWidget::item {{ padding: {p(4)}px {p(6)}px; color: {TEXT}; }}
+QTableWidget::item, QListWidget::item {{ padding: {p(4)}px {p(6)}px; color: {TEXT}; border: 0; }}
 QTableWidget::item:alternate {{ background: {PANEL2}; color: {TEXT}; }}
 QTableWidget::item:selected, QListWidget::item:selected {{ background: {ACCENT}; color: #ffffff; }}
 QHeaderView::section {{ background: {PANEL2}; color: {MUTED}; border: none;

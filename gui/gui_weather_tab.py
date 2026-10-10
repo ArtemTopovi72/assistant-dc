@@ -100,7 +100,8 @@ class WeatherTab(QWidget):
 
         row = QHBoxLayout()
         self.city_in = QLineEdit()
-        self.city_in.setText(getattr(_cfg, "WEATHER_DEFAULT_CITY", "") or "")
+        self.city_in.setText((gui_i18n.LANG == "ru" and getattr(_cfg, "WEATHER_DEFAULT_CITY_RU", ""))
+                             or getattr(_cfg, "WEATHER_DEFAULT_CITY", "") or "")
         self.city_in.setPlaceholderText("City")
         self.city_in.returnPressed.connect(lambda: self._lookup(hours=24))
         row.addWidget(QLabel("City:"))
@@ -143,6 +144,7 @@ class WeatherTab(QWidget):
         self.table.setHorizontalHeaderLabels(
             ["Date", "When", "°C", "Humidity", "Wind", "Conditions"])
         self.table.verticalHeader().setVisible(False)
+        self.table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setSelectionMode(QAbstractItemView.NoSelection)
         self.table.setAlternatingRowColors(True)
