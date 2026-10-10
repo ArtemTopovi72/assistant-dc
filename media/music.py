@@ -1548,6 +1548,7 @@ def _strip_vocals(path: str) -> None:
     A take whose vocal stem is near silence is left as it rendered."""
     try:
         import mashup_stems
+        import numpy as np
         import soundfile as sf
         st = mashup_stems.separate(path)
         back = mashup_stems.backing_of(st)
