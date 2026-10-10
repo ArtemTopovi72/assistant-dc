@@ -288,7 +288,7 @@ class LibraryMixin:
             tg_bot._t("status_comfy", lang, v=comfy),
             tg_bot._t("status_queue", lang, waiting=self._backend.depth(), running=running),
             (tg_bot._t("status_uptime_min", lang, m=int(max(up, 0) // 60)) if up < 3600 else
-             tg_bot._t("status_uptime", lang, h=f"{up / 3600:.1f}")),
+             tg_bot._t("status_uptime", lang, h=f"{up / 3600:.1f}".replace(".", "," if lang == "ru" else "."))),
         ] + ([tg_bot._t("status_backend", lang,
                         name=_html_mod.escape(self._backend.name()))]
              # operator detail, same rule as /settings

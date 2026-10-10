@@ -234,7 +234,8 @@ def _size_of(sess) -> tuple:
 
 def _size_summary(sess, lang: str, key: str = "size_set") -> str:
     w, h = _size_of(sess)
-    return _t(key, lang, w=w, h=h, mp=f"{w * h / 1_000_000:.1f}")
+    mp = f"{w * h / 1_000_000:.1f}"
+    return _t(key, lang, w=w, h=h, mp=mp.replace(".", ",") if lang == "ru" else mp)
 
 
 def _size_menu_kb(sess, lang: str = _DEFAULT_LANG) -> dict:
