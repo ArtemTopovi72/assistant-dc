@@ -463,7 +463,12 @@ class FlowLayout(QLayout):
         right = rect.right() - m.right()
         lines, line, x = [], [], left
         for item in self._items:
+            w = item.widget()
+            if w is not None and w.isHidden():   # a hidden picker still took a gap
+                continue
             hint = item.sizeHint()
+            if hint.width() <= 0:                # an empty label or a box of hidden pickers too
+                continue
             if line and x + hint.width() > right:
                 lines.append(line); line, x = [], left
             line.append((item, hint, x))

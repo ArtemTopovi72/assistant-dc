@@ -21,7 +21,7 @@ from PyQt5.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QLineEdit, QSpinBox
 import config as _cfg
 from audio import AudioPlayer
 from ui_scale import px
-from gui_common import MUTED, _section
+from gui_common import MUTED, _FlowWidget, _flow, _section
 import gui_i18n
 
 import logging
@@ -58,6 +58,19 @@ _GENRE_LABELS = {
     "latin": "Latin",
     "classical": "Classical",
 }
+
+
+def _pair(label, widget):
+    """A label and its picker as one flow item, so a wrap never splits them."""
+    box = QWidget()
+    lay = QHBoxLayout(box)
+    lay.setContentsMargins(0, 0, 0, 0)
+    lay.setSpacing(px(6))
+    lay.addWidget(label)
+    lay.addWidget(widget)
+    return box
+
+
 _TEMPO_LABELS = {
     "auto": "Auto", "slow": "Slow (~70)", "medium": "Medium (~100)",
     "fast": "Fast (~130)", "veryfast": "Very fast (~150)",
@@ -203,7 +216,9 @@ class MusicTab(QWidget):
         # cannot appear on only one of the two surfaces).
         import music as _music
         self._combos = {}
-        set_row = QHBoxLayout()
+        # a flow, not an HBox: five pickers at TV scale ran past the window and the
+        # page scrolled sideways, cutting «Generate» off; each label rides with its picker
+        set_row = _flow(spacing=px(10))
         for field, table, labels in (
                 ("genre", _music.GENRES, _GENRE_LABELS),
                 ("tempo", _music.TEMPOS, _TEMPO_LABELS),
@@ -214,8 +229,7 @@ class MusicTab(QWidget):
                 # display string and must never be what gets resolved.
                 box.addItem(labels.get(key, key.title()), key)
             self._combos[field] = box
-            set_row.addWidget(QLabel(field.title() + ":"))
-            set_row.addWidget(box)
+            set_row.addWidget(_pair(QLabel(field.title() + ":"), box))
             if field == "tempo":
                 box.addItem("Custom BPM...", _CUSTOM)
                 self.bpm_spin = QSpinBox()
@@ -243,8 +257,7 @@ class MusicTab(QWidget):
             "Maximum exceeds VRAM and streams, which is why it is "
             "disproportionately slower.")
         self.qual_lbl = QLabel("Quality:")
-        set_row.addWidget(self.qual_lbl)
-        set_row.addWidget(self.qual_combo)
+        set_row.addWidget(_pair(self.qual_lbl, self.qual_combo))
         # DiT sampler steps: the second half of the "how long" trade. 20 is
         # the default (A/B 15.09 heard no loss against 30); 50 is the finest.
         self.steps_spin = QSpinBox()
@@ -277,8 +290,7 @@ class MusicTab(QWidget):
         _default = getattr(_cfg, "MUSIC_DEFAULT_SECONDS", 60)
         if _default in _music.DURATIONS:
             self.dur_combo.setCurrentIndex(list(_music.DURATIONS).index(_default) + 1)
-        set_row.addWidget(QLabel("Length:"))
-        set_row.addWidget(self.dur_combo)
+        set_row.addWidget(_pair(QLabel("Length:"), self.dur_combo))
         self.dur_spin = QSpinBox()
         self.dur_spin.setRange(*_music.DURATION_RANGE)
         self.dur_spin.setValue(_default)
@@ -299,10 +311,8 @@ class MusicTab(QWidget):
         except Exception:
             logger.warning("star voices unavailable", exc_info=True)
         self.voice_combo.setToolTip("The finished song's lead re-sung in this voice (RVC). Off = the engine's singer.")
-        set_row.addWidget(QLabel("Own voice:"))
-        set_row.addWidget(self.voice_combo)
-        set_row.addStretch(1)
-        root.addLayout(set_row)
+        set_row.addWidget(_pair(QLabel("Own voice:"), self.voice_combo))
+        root.addWidget(_FlowWidget(set_row))
 
         # YuE2 reads tags, not pickers: the line these choices pin, so one that never
         # reaches the model is visible before a render (the bot's menu shows the same)

@@ -22,7 +22,7 @@ app = QApplication(sys.argv)
 gui.ModelLoader.start = lambda self: None
 import gui_i18n
 gui_i18n.install(os.environ.get("SHOT_LANG", "en"))
-ui_scale._effective = 1.0; ui_scale._font_mult = 1.0
+ui_scale._effective = float(os.environ.get("SHOT_SCALE", "1.0")); ui_scale._font_mult = 1.0
 gui.apply_ui_scale(app)
 win = gui.AssistantWindow("shot-model", True)
 win.stack.setCurrentWidget(win.dashboard)
