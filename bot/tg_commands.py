@@ -267,10 +267,16 @@ class CommandsMixin:
             import code_runner as _cr
             files, total = box.usage()
             _backend, _why = _cr.backend_status()
+            # backend_status/describe are English for the log and the admin panel;
+            # the chat gets the same facts in its language
+            _be = ("sbx_be_docker" if _backend == "docker" else
+                   "sbx_be_stopped" if _cr.docker_binary() else "sbx_be_none")
             self._send_text(chat_id,
                             tg_bot._t("sbx_status", lang,
-                                      access=_sa.describe(user), files=files,
-                                      kb=total // 1024, backend=_why) + how,
+                                      access=tg_bot._t("sbx_lvl_" + _sa.level_for(user), lang),
+                                      files=files, kb=total // 1024,
+                                      backend=tg_bot._t(_be, lang, image=_cr.CONTAINER_IMAGE,
+                                                        mem=_cr.CONTAINER_MEMORY)) + how,
                             keyboard=self._main_menu_kb(sess, lang))
             return
 

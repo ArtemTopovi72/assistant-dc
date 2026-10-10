@@ -774,6 +774,9 @@ def _friendly_image_label(raw: str, lang: str | None = None) -> str:
     word boundary instead of mid-word."""
     t = (raw or "").strip()
     tag_m = _LABEL_BRACKET_TAG_RE.match(t)
+    if tag_m and lang and ("img_tag_" + tag_m.group(1).lower()) in _MSG:
+        # a button's forced call carries English instructions for the tool, not words to show
+        return _t("img_tag_" + tag_m.group(1).lower(), lang)
     t = _LABEL_BRACKET_TAG_RE.sub("", t)
     m = _LABEL_QUOTED_ARG_RE.search(t)
     if m:
