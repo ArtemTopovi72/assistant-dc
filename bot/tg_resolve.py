@@ -1052,7 +1052,7 @@ class ResolveMixin:
                     # The note goes in as quoted material, the words as the
                     # request, and the turn runs -- no "what do I do with it?".
                     if _seen.get("sheet") and os.path.exists(_seen["sheet"]):
-                        tg_bot._put_in_play(sess, _seen["sheet"], "video frames")
+                        tg_bot._put_in_play(sess, _seen["sheet"], tg_bot._t("lbl_video_frames", lang))
                         self._store.put(sess)
                     texts.append(tg_bot._FWD_TEXT_FRAME.format(text=said[:20000]))
                     texts.append(_companion)
@@ -1072,7 +1072,7 @@ class ResolveMixin:
                 # again (graph.needs_relook) instead of reasoning from the
                 # storyboard's one-liners.
                 if _seen.get("sheet") and os.path.exists(_seen["sheet"]):
-                    tg_bot._put_in_play(sess, _seen["sheet"], "video frames")
+                    tg_bot._put_in_play(sess, _seen["sheet"], tg_bot._t("lbl_video_frames", lang))
                     self._store.put(sess)
                 if _media == "video":
                     sess.__dict__.setdefault("fwd_media", {})[sess.fwd_transcript_id] = [

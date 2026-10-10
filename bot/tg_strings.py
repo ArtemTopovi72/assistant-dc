@@ -1152,6 +1152,7 @@ _MSG: dict[str, dict[str, str]] = {
     "fwd_batch_who": {"en": "\n👥 {names}", "ru": "\n👥 {names}"},
     "fwd_lbl_voice": {"en": "🎤 voice {n}", "ru": "🎤 ГС {n}"},
     "fwd_lbl_video": {"en": "🎥 video {n}", "ru": "🎥 видео {n}"},
+    "lbl_video_frames": {"en": "🎞 video frames", "ru": "🎞 кадры видео"},
     "fwd_lbl_text":  {"en": "💬 {n}", "ru": "💬 {n}"},
     "fwd_continue": {"en": "▶️ Continue the video", "ru": "▶️ Продолжить видео"},
     "fwd_pick":     {"en": "🎞 Pick a picture or video", "ru": "🎞 Выбрать фото или видео"},
