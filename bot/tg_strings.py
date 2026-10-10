@@ -873,15 +873,16 @@ _MSG: dict[str, dict[str, str]] = {
 
     # ── long videos (Creativity ▸ 🎬 Video) ──────────────────────────────────
     "vs_title": {"en": "🎬 <b>Long video recap</b>", "ru": "🎬 <b>Пересказ длинных видео</b>"},
-    "vs_hint": {"en": "A short clip or a round note is watched and listened to in one go. A LONG "
-                      "video is taken apart portion by portion: transcript + key frames + a "
-                      "retelling with timecodes. By default you get one retelling of the whole video and "
-                      "can ask about it; «Deliver» sends every portion as it is ready instead. "
-                      "⛔ Stop ends it between portions. Just send the video to the chat.",
-                "ru": "Короткий ролик или кружок смотрю и слушаю целиком. ДЛИННОЕ видео разбираю по "
-                      "частям: расшифровка + ключевые кадры + пересказ с таймкодами. По умолчанию приходит "
-                      "один пересказ всего видео, и про него можно спросить; «Отдавать» включает "
-                      "выдачу каждой части. ⛔ Стоп прерывает между частями. Просто кинь видео в чат."},
+    "vs_hint": {"en": "A short clip or a round note I watch and hear in one go. A long video goes "
+                      "in parts: transcript, key frames and a retelling with timecodes.\n\n"
+                      "First comes one retelling of the whole video — ask anything about it. "
+                      "«Deliver» also sends each part as it is ready. ⛔ Stop ends it between parts.\n\n"
+                      "Just send the video to the chat.",
+                "ru": "Короткий ролик или кружок смотрю и слушаю целиком. Длинное видео разбираю "
+                      "по частям: расшифровка, ключевые кадры и пересказ с таймкодами.\n\n"
+                      "Сначала придёт один пересказ всего видео — по нему можно спрашивать. "
+                      "«Отдавать» присылает ещё и каждую часть по готовности. ⛔ Стоп прерывает между частями.\n\n"
+                      "Просто пришли видео в чат."},
     "vs_field_title": {"en": "🎬 <b>{field}</b>", "ru": "🎬 <b>{field}</b>"},
     "vs_chunk": {"en": "Portion", "ru": "Порция"},
     "vs_frames": {"en": "Frames per portion", "ru": "Кадров на порцию"},
