@@ -14,7 +14,7 @@ import os
 from pathlib import Path
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QAbstractItemView, QComboBox, QFileDialog, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit,
+    QAbstractItemView, QComboBox, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
     QListWidget, QListWidgetItem, QMenu, QMessageBox, QPlainTextEdit, QPushButton, QSpinBox,
     QTabWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
@@ -123,7 +123,8 @@ class MemoryMaintenanceMixin:
         self.audit_table.horizontalHeader().setStretchLastSection(True)
         self.audit_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.audit_table.verticalHeader().setVisible(False)
-        self.audit_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        # fixed, not ResizeToContents: that re-measures every row on each insert (22 s GUI stall on the user list)
+        self.audit_table.verticalHeader().setDefaultSectionSize(px(30))
         lay.addWidget(self.audit_table, 1)
         return w
 
