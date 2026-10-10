@@ -1784,6 +1784,13 @@ class TaskRunnerMixin:
 
         # ── the multi-part plan generate_video stopped on ─────────────────────
         if final.get("video_plan"):
+            # The ▶ rerun is the render: the continued clip and its new people go back to
+            # the session for it. Taken by this plan-only turn, the rerun had 1 image and
+            # 0 videos (live 2026-10-10) and drew a made-up cat and dog.
+            if getattr(ctx, "continue_tail", ""):
+                sess.continue_tail, sess.continue_src = ctx.continue_tail, ctx.continue_src
+                sess.continue_people = list(getattr(ctx, "continue_people", None) or [])
+                self._store.put(sess)
             try:
                 self._offer_video_plan(chat_id, sess, lang, task.user_text, final["video_plan"])
             except Exception:

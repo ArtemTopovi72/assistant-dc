@@ -129,3 +129,30 @@ def test_a_plan_waiting_for_the_user_is_not_a_failed_render():
     msg = "[NOT MADE YET] The script needs several parts, and the user approves the plan first"
     assert G._detect_silent_failure("generate_video", msg, {"video_plan": [{"text": "a"}]}) == msg
     assert G._detect_silent_failure("generate_video", "done", {}).startswith("[TOOL ERROR]")
+
+
+def test_a_plan_keeps_the_clip_and_the_new_person_for_the_approved_run(monkeypatch, tmp_path):
+    # Live 2026-10-10: the plan-only turn used them up; the ▶ run got 1 image, 0 videos.
+    import tool_image_handlers as H
+    seed, person, tail = (tmp_path / "seed.jpg"), (tmp_path / "cat.jpg"), (tmp_path / "tail.mp4")
+    for p in (seed, person, tail):
+        p.write_bytes(b"x")
+    monkeypatch.setattr(V, "generate_video", lambda *a, **k: (_ for _ in ()).throw(AssertionError("rendered")))
+    monkeypatch.setattr(V, "engine_available", lambda ctx: (True, ""))
+    monkeypatch.setattr(V, "split_script", lambda text: ["part one " + text, "part two"])
+    monkeypatch.setattr(H, "_current_image_paths", lambda ctx, state: [str(seed)])
+
+    class Ctx:
+        reference_images = []
+        voice_choice = "default"
+        video_plan_ask, video_plan_parts = True, []
+        continue_tail, continue_src = str(tail), str(tail)
+        continue_people = [str(person)]
+        def set_stage(self, *_): pass
+        def is_cancelled(self): return False
+        def remember(self, *a): pass
+        def memory_text(self): return ""
+    ctx, state = Ctx(), {}
+    out = H._handle_generate_video(ctx, state, {"description": "a cat walks in and plays with the dog"})
+    assert "[NOT MADE YET]" in str(out) and state.get("video_plan")
+    assert ctx.continue_tail == str(tail) and ctx.continue_people == [str(person)]
