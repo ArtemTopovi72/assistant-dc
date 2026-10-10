@@ -208,7 +208,9 @@ class WeatherTab(QWidget):
             hum = b.get("humidity")
             date_txt = ""
             if b["date"] != shown_date:
-                date_txt = b["date"].strftime("%d.%m")
+                date_txt = b["date"].strftime("%d.%m") + " " + (
+                    ("пн", "вт", "ср", "чт", "пт", "сб", "вс") if lang == "ru" else
+                    ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"))[b["date"].weekday()]
                 shown_date = b["date"]
             cells = [date_txt,
                      _w._period_label(b["period"], lang),
