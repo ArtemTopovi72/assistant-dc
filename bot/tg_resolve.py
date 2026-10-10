@@ -701,6 +701,10 @@ class ResolveMixin:
                 if direct == "__admin_panel__" and sess.is_admin:
                     sess.pending_prefix = ""; self._store.put(sess)
                     self._send_admin_panel(chat_id); continue
+                if direct == "__admin_panel__":
+                    # a stale keyboard (rights revoked) or a typed label: it fell through and
+                    # went to the model as «search the web for: 🔐 Админ-панель»
+                    self._send_text(chat_id, tg_bot._t("admin_only", lang)); continue
                 if direct == "__account__":
                     sess.pending_prefix = ""; self._store.put(sess)
                     self._send_account_menu(chat_id, user, sess); continue
