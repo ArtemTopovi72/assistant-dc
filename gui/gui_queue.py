@@ -11,6 +11,7 @@ The mixin expects from the host class: `_add_system`, `_busy`,
 `_turn_had_error`, `_turn_cancelled` and the three counters), all created in
 AssistantWindow.__init__.
 """
+import gui_i18n
 from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import (
     QHBoxLayout, QLabel, QListWidget, QPushButton, QVBoxLayout, QWidget,
@@ -114,20 +115,22 @@ class TaskQueueMixin:
         done = f"  ·  ✓{self._completed_count}" if self._completed_count else ""
         failed = f" ✗{self._failed_count}" if self._failed_count else ""
         stopped = f" ⃠{self._cancelled_count}" if self._cancelled_count else ""
-        running = " — running" if self._running_task else ""
+        # the pieces translated here: glued into one template they split arbitrarily
+        running = " " + gui_i18n.tr("— running") if self._running_task else ""
+        paused = " " + gui_i18n.tr("— PAUSED") if self._queue_paused else ""
         # Header summary so a folded queue still shows it holds work.
         if hasattr(self, "q_head_lbl"):
             collapsed = not self.q_toggle.isChecked()
             if n_pending or self._running_task:
                 self.q_head_lbl.setText(
                     f"{n_pending} pending{' ▶' if self._running_task else ''}"
-                    f"{' — PAUSED' if self._queue_paused else ''}")
+                    f"{paused}")
                 self.q_head_lbl.setVisible(True)
             else:
                 self.q_head_lbl.setVisible(collapsed and bool(self._completed_count))
                 self.q_head_lbl.setText(f"✓{self._completed_count}" if self._completed_count else "")
         self.queue_list.setToolTip(
-            (f"{n_pending} pending{running}{' — PAUSED' if self._queue_paused else ''}"
+            (f"{n_pending} pending{running}{paused}"
              f"{done}{failed}{stopped}. Runs top-to-bottom when the assistant is free.")
             if (self._task_queue or self._completed_count) else
             "Task queue is empty. Messages sent while the assistant is busy are staged here.")

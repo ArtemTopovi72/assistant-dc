@@ -41,7 +41,10 @@ def _compile(table: dict) -> None:
         if re.search(r"%(?:[-+ 0#]*\d*(?:\.\d+)?)[sdif]", en):
             parts = re.split(r"(%(?:[-+ 0#]*\d*(?:\.\d+)?)[sdif])", en)
             # %d / %f hold only numbers: '%ss' (seconds) as (.+?) turned «Facts» into «Fact с»
+            # a %s run against another placeholder may be empty: '%s pending%s%s%s' fills the
+            # optional ' ▶' / ' — PAUSED' parts with "" and never matched with (.+?)
             rx = "".join(("([-+]?\\d+)" if p.endswith("d") else "([-+]?\\d+(?:[.,]\\d+)?)" if p.endswith("f")
+                          else "(.*?)" if (i > 1 and parts[i - 1] == "") or (i + 2 < len(parts) and parts[i + 1] == "")
                           else "(.+?)") if i % 2 else re.escape(p.replace("%%", "%")) for i, p in enumerate(parts))
             _templates.append((re.compile("^" + rx + "$", re.S),
                                re.sub(r"%(?:[-+ 0#]*\d*(?:\.\d+)?)[sdif]", "%s", ru)))

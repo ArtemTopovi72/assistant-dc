@@ -404,6 +404,8 @@ RU = {
     'Classical': 'Классика',
     'Total memories:': 'Всего записей:',
     'Tech docs': 'Техдокументация',
+    '— running': '— выполняется',
+    '— PAUSED': '— ПАУЗА',
     'Queue: —': 'Очередь: —',
     'Show the token': 'Показать токен',
     'Indexed: %s documents · %s passages · %s%% embedded · embedding model %s': 'В базе: документов %s · фрагментов %s · эмбеддингов %s%% · модель эмбеддингов %s',
