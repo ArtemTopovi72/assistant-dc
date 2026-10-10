@@ -1297,6 +1297,8 @@ _MSG: dict[str, dict[str, str]] = {
                             "{running} в работе"},
     "status_uptime": {"en": "• Uptime: <b>{h} h</b>",
                       "ru": "• Аптайм: <b>{h} ч</b>"},
+    "status_uptime_min": {"en": "• Uptime: <b>{m} min</b>",
+                          "ru": "• Аптайм: <b>{m} мин</b>"},
     "status_llm_busy": {"en": "busy with a render", "ru": "занята рендером"},
     "status_backend": {"en": "• Backend: <code>{name}</code>",
                        "ru": "• Бэкенд: <code>{name}</code>"},
