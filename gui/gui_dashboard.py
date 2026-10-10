@@ -316,6 +316,7 @@ class DashboardMixin:
         self.search_view.setPlaceholderText("Search results will appear here. Ask in Conversation: «find …» or «search the web for …».")
         self.research_container = self._build_research_tab()
         self.terminal = QTextEdit(); self.terminal.setReadOnly(True); self.terminal.setObjectName("terminal")
+        self.terminal.setPlaceholderText("The assistant's working log appears here: every step of a request, as it runs.")
         self.model_config_tab = ModelConfigTab()
         self.system_info_tab = SystemInfoTab()
         self.memory_center_tab = MemoryCenterTab(self)

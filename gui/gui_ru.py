@@ -381,6 +381,7 @@ RU = {
     'Index rebuilt (entries re-scanned).': 'Индекс пересобран (записи пересканированы).',
     'Waiting for LM Studio…': 'Жду LM Studio…',
     'You': 'Я',
+    "The assistant's working log appears here: every step of a request, as it runs.": 'Здесь появится рабочий лог ассистента: каждый шаг запроса по ходу выполнения.',
     'Queue: —': 'Очередь: —',
     'Show the token': 'Показать токен',
     'Indexed: %s documents · %s passages · %s%% embedded · embedding model %s': 'В базе: документов %s · фрагментов %s · эмбеддингов %s%% · модель эмбеддингов %s',
