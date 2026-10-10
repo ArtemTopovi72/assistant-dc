@@ -22,6 +22,7 @@ import config as _cfg
 from audio import AudioPlayer
 from ui_scale import px
 from gui_common import MUTED, _section
+import gui_i18n
 
 import logging
 logger = logging.getLogger("assistant.gui")   # same channel as gui.py
@@ -268,7 +269,7 @@ class MusicTab(QWidget):
         self.dur_combo = QComboBox()
         self.dur_combo.addItem("Bot decides", _BOT_DECIDES)
         for secs in _music.DURATIONS:
-            self.dur_combo.addItem(f"{secs}s", secs)
+            self.dur_combo.addItem(gui_i18n.tr(f"{secs}s"), secs)
         self.dur_combo.addItem("Custom...", _CUSTOM)
         self.dur_combo.setToolTip(
             "The song is written for this length and closes on its own outro "
@@ -293,7 +294,6 @@ class MusicTab(QWidget):
         try:
             import rvc_voice
             if rvc_voice.available():
-                import gui_i18n
                 for name, label in rvc_voice.stars(gui_i18n.LANG):
                     self.voice_combo.addItem(label, name)
         except Exception:

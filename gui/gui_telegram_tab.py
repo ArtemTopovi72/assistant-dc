@@ -188,7 +188,9 @@ class TelegramTab(QWidget):
         self.token_in.setPlaceholderText("Paste token from @BotFather  e.g. 1234567890:AAH...")
         self.token_in.setEchoMode(QLineEdit.Password)
         self.show_btn = QPushButton("👁")
-        self.show_btn.setFixedWidth(px(32))
+        self.show_btn.setFixedWidth(px(44))
+        self.show_btn.setStyleSheet("padding: 0;")   # the QSS button padding left the eye a dot
+        self.show_btn.setToolTip("Show the token")
         self.show_btn.setCheckable(True)
         self.show_btn.toggled.connect(
             lambda on: self.token_in.setEchoMode(
@@ -229,7 +231,7 @@ class TelegramTab(QWidget):
         arow.addWidget(self.admin_ids_in, 1)
         root.addLayout(arow)
 
-        orow = _flow(spacing=px(8))
+        orow = _flow(spacing=px(22))   # a box nearer the previous label read as its box
         self.tts_box = QCheckBox("🔊  Send voice replies")
         self.tts_box.setToolTip(
             "After each text reply, synthesize with F5-TTS and send as a voice note.")
@@ -292,7 +294,7 @@ class TelegramTab(QWidget):
         self.status_board.setMinimumHeight(px(48))
         root.addWidget(self.status_board)
 
-        self.queue_lbl = QLabel("Queue: — tasks")
+        self.queue_lbl = QLabel("Queue: —")
         self.queue_lbl.setStyleSheet(f"color:{MUTED}; font-size:{pt(13)}px;")
         root.addWidget(self.queue_lbl)
 
@@ -532,7 +534,7 @@ class TelegramTab(QWidget):
             self._bot = None
         self._active_chats.clear()
         self.status_board.setText("—  no active chats")
-        self.queue_lbl.setText("Queue: — tasks")
+        self.queue_lbl.setText("Queue: —")
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         self.token_in.setEnabled(True)
