@@ -156,3 +156,9 @@ def test_a_plan_keeps_the_clip_and_the_new_person_for_the_approved_run(monkeypat
     out = H._handle_generate_video(ctx, state, {"description": "a cat walks in and plays with the dog"})
     assert "[NOT MADE YET]" in str(out) and state.get("video_plan")
     assert ctx.continue_tail == str(tail) and ctx.continue_people == [str(person)]
+
+
+def test_the_newcomer_walks_into_the_existing_frame():
+    # Live 2026-10-10: the camera whipped from the selfie down to the cat, and the cat hit the dog.
+    c = V.new_people_clause(2, 1)
+    assert "no pan" in c and "steps into the frame" in c and "nobody hits" in c

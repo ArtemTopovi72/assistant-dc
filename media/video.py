@@ -1487,7 +1487,10 @@ def new_people_clause(first: int, n: int) -> str:
         " -- they come into this same location from off-screen and join the scene as the "
         "request above says, each with exactly the face, hair, body and clothes of their own "
         "picture. Only the person is taken from that picture, never its background or framing; "
-        "the people already in the shot stay as they are.")
+        "the people already in the shot stay as they are. The camera does NOT move to find "
+        "them: same angle, distance and framing as the end of <Video 1>, no pan, no tilt, no "
+        "zoom, no cut -- the newcomer steps into the frame that is already there. Unless the "
+        "request says otherwise, everyone meets calmly and friendly; nobody hits or bites.")
 
 
 def join_pinned(src: str, new: str, head: int = MOTION_CONTEXT_FRAMES) -> Optional[str]:
