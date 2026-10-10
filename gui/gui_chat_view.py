@@ -65,7 +65,9 @@ class ChatViewMixin:
 
     def _append_html(self, html):
         cur = self.chat.textCursor(); cur.movePosition(QTextCursor.End)
-        cur.insertHtml(html + "<br>"); self.chat.setTextCursor(cur); self.chat.ensureCursorVisible()
+        # a table or div is its own block: a <br> after one added an empty line between messages
+        cur.insertHtml(html if html.startswith(("<table", "<div")) else html + "<br>")
+        self.chat.setTextCursor(cur); self.chat.ensureCursorVisible()
 
     def _add_user(self, text):
         self._append_html(_bubble(_esc(text).replace("\n", "<br>"), ACCENT, "#ffffff", "right"))
