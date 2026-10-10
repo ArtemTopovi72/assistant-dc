@@ -81,7 +81,21 @@ def tr(s, log=True):
     if LANG == "en" or not isinstance(s, str):
         return s
     if not _LATIN.search(s):
-        return _exact.get(s, s)        # «24 h», «60s»: one Latin letter, still listed in the table
+        # «24 h», «60s»: one Latin letter; the exact table first, then the numeric templates
+        # («60s» only matches '%fs', and the song-length combo stayed English)
+        hit = _exact.get(s)
+        if hit is not None:
+            return hit
+        if not any(c.isalpha() for c in s):
+            return s
+        for rx, ru in _templates:
+            m = rx.match(s)
+            if m:
+                try:
+                    return ru % m.groups()
+                except (TypeError, ValueError):
+                    return s
+        return s
     try:
         out = _one(s)
         if out is None and "\n" in s:
