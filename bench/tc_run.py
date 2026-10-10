@@ -20,6 +20,8 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
+# bench/knowledge.py would shadow the app's knowledge package: drop this dir from the path
+sys.path = [p for p in sys.path if Path(p or ".").resolve() != Path(__file__).resolve().parent]
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 for _s in (sys.stdout, sys.stderr):
     try:
