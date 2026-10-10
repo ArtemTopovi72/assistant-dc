@@ -111,7 +111,7 @@ class SettingsDialog(QDialog):
         _hint = QLabel("Off = direct mode: short answers, fewer tool calls, acts "
                        "instead of planning out loud.")
         _hint.setWordWrap(True)
-        _hint.setStyleSheet("color: #9aa4b2; font-size: 11px;")
+        _hint.setStyleSheet(_ss(f"color:{MUTED}; font-size:11px;"))
         lay.addWidget(_hint)
         self._think_hint = _hint
         self._think_hint_default = _hint.text()
