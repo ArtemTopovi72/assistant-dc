@@ -287,7 +287,7 @@ class LibraryMixin:
             tg_bot._t("status_llm", lang, v=llm),
             tg_bot._t("status_comfy", lang, v=comfy),
             tg_bot._t("status_queue", lang, waiting=self._backend.depth(), running=running),
-            tg_bot._t("status_uptime", lang, h=f"{up / 3600:.1f}"),
+            tg_bot._t("status_uptime", lang, h=f"{max(up, 0) / 3600:.1f}"),
         ] + ([tg_bot._t("status_backend", lang,
                         name=_html_mod.escape(self._backend.name()))]
              # operator detail, same rule as /settings

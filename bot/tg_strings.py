@@ -305,7 +305,7 @@ _MSG: dict[str, dict[str, str]] = {
     "my_voice_off": {"en": "🗣 Back to the default assistant voice.",
                      "ru": "🗣 Вернул голос ассистента по умолчанию."},
     "my_voice_ask": {"en": "🗣 Send a voice note or clip (5-12 s, one speaker) — the assistant will answer in this voice from now on.",
-                     "ru": "🗣 Пришли голосовое или запись (5-12 с, один голос) — дальше ассистент будет отвечать этим голосом."},
+                     "ru": "🗣 Пришли голосовое или запись (5–12 с, один голос) — дальше ассистент будет отвечать этим голосом."},
     "my_voice_ready": {"en": "🗣 Assistant voice changed.", "ru": "🗣 Голос ассистента изменён."},
     "my_voice_ready_off": {"en": "🔇 But voice replies are off — turn them on to hear it.",
                            "ru": "🔇 Но голосовые ответы выключены — включи, чтобы его услышать."},
@@ -331,8 +331,8 @@ _MSG: dict[str, dict[str, str]] = {
                             "({used}/{limit}). It resets at midnight UTC.",
                       "ru": "🚦 Дневной лимит исчерпан: <b>{kind}</b> "
                             "({used}/{limit}). Сбросится в полночь UTC."},
-    "prompt_hint":   {"en": "✏️ <b>{hint}</b> — type your query:",
-                      "ru": "✏️ <b>{hint}</b> — напиши запрос:"},
+    "prompt_hint":   {"en": "✏️ {hint}",
+                      "ru": "✏️ {hint}"},
     # What the user is being asked for, in their own language.
     #
     # These used to be filled with the raw _PROMPT_KB routing prefix, so a
