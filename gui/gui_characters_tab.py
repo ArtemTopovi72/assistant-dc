@@ -219,9 +219,14 @@ class CharactersTab(QWidget):
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        hh = self.table.horizontalHeader()
+        hh.setStretchLastSection(False)
+        for c in range(len(_COLS)):
+            hh.setSectionResizeMode(c, QHeaderView.ResizeToContents)
+        hh.setSectionResizeMode(3, QHeaderView.Stretch)   # the status line is the long one
+        self.table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.table.itemSelectionChanged.connect(self._on_select)
-        root.addWidget(self.table, 1)
+        root.addWidget(self.table, 3)
 
         row = QHBoxLayout()
         self.new_btn = QPushButton('➕  New character')
@@ -292,7 +297,7 @@ class CharactersTab(QWidget):
 
         self.log = QTextEdit(); self.log.setReadOnly(True)
         self.log.setMinimumHeight(px(120))
-        root.addWidget(self.log)
+        root.addWidget(self.log, 1)
 
         self._poll = QTimer(self)
         self._poll.setInterval(5000)
