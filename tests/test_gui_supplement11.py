@@ -181,7 +181,7 @@ def test_db_finished_close_except_and_load_except():
                                            close=lambda: None)
         oq = QMessageBox.question; QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.Yes)
         try:
-            w._db_clear(); check("db_clear_ok11", "Cleared" in w.db_status.text())
+            w._db_clear(); check("db_clear_ok11", "removed from the database" in w.db_status.text())
         finally:
             QMessageBox.question = oq
         _close(w)

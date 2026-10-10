@@ -343,7 +343,7 @@ def test_db_and_scan_progress():
                                            is_empty=lambda: True)
         oq = QMessageBox.question; QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.Yes)
         try:
-            w._db_clear(); check("db_clear_success", "Cleared" in w.db_status.text())
+            w._db_clear(); check("db_clear_success", "removed from the database" in w.db_status.text())
         finally:
             QMessageBox.question = oq
         # _db_load_existing documents() raising (5973)
