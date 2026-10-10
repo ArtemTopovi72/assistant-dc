@@ -90,7 +90,9 @@ queue backend: `_enqueue_item` ([`bot/tg_queue.py`](../../bot/tg_queue.py)) star
 `_debounce_loop` thread that waits out a quiet period, 1.8s by default, capped at 7s, longer
 for a forwarded message whose instruction may arrive a few seconds later, then hands the
 whole batch to `_resolve_and_push` ([`bot/tg_resolve.py`](../../bot/tg_resolve.py)), which decides what kind of task it
-is and pushes one `_Task` ([`bot/tg_queue_backends.py`](../../bot/tg_queue_backends.py)). `_consumer_loop` pops from the
+is and pushes one `_Task` ([`bot/tg_queue_backends.py`](../../bot/tg_queue_backends.py)). A forward that lands after the
+debounce, while that chat's previous task still waits unstarted (at most two minutes old), is folded
+into it by `_join_waiting` instead of becoming a second task. `_consumer_loop` pops from the
 backend and admits at most two tasks per chat: a fresh task always runs alone, and a second
 is admitted only once the first has announced (via `ctx.set_stage`) that it reached a slow,
 backgroundable phase such as a render or a web crawl.
