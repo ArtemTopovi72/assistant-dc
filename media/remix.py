@@ -417,10 +417,6 @@ def _score_parts(abc: str) -> list:
     return parts or [("Verse", 60), ("Chorus", 60), ("Verse", 60), ("Chorus", 60)]
 
 
-def _score_sections(abc: str) -> list:
-    return [t for t, _ in _score_parts(abc)]
-
-
 def _score_tempo_key(abc: str) -> str:
     q = re.search(r"^Q:\s*1/4=(\d+)", abc or "", re.M)
     k = re.search(r"^K:\s*([A-G][#b]?m?)", abc or "", re.M)
