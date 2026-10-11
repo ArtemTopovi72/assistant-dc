@@ -29,11 +29,10 @@ import models
 
 _TMP = Path(tempfile.mkdtemp(prefix="imgrefine_"))
 RESULTS = []
-import os as _os
 def check(name, cond, detail=""):
     RESULTS.append((name, bool(cond)))
     print("[" + ("PASS" if cond else "FAIL") + "] " + name + ("" if cond or not detail else " - " + detail))
-    if not cond and _os.environ.get("PYTEST_CURRENT_TEST"):
+    if not cond and os.environ.get("PYTEST_CURRENT_TEST"):
         raise AssertionError(str(name) + (": " + str(detail) if detail else ""))
 
 def Ctx():
@@ -47,8 +46,6 @@ def _photo(name="p.png"):
     Image.new("RGB", (64, 64), (10, 20, 30)).save(p)
     return str(p)
 
-
-_BASE_PROMPT = ("a cat", 8, 1.0, 42, 960, 544)
 
 def test_immediate_success():
     ctx = Ctx()
@@ -187,7 +184,7 @@ def test_refine_user_overrides_width_height_seed():
     with _Patches(
                   generate_image_with_comfy=gen,
                   evaluate_image=lambda *a, **k: {"verdict": "success", "score": 9}):
-        out = I.generate_image_with_refinement(ctx, "a cat", steps=20, width=512, height=512, seed=777)
+        I.generate_image_with_refinement(ctx, "a cat", steps=20, width=512, height=512, seed=777)
         check("refine_user_overrides", seen.get("steps") == 20 and seen.get("width") == 512
               and seen.get("seed") == 777, seen)
 

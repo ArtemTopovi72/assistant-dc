@@ -14,7 +14,6 @@ except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
 from pathlib import Path
 
-import numpy as np
 from PIL import Image
 import config as C
 import image as I

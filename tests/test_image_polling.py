@@ -16,11 +16,10 @@ import comfy_client as I
 
 _TMP = Path(tempfile.mkdtemp(prefix="imgpoll_"))
 RESULTS = []
-import os as _os
 def check(name, cond, detail=""):
     RESULTS.append((name, bool(cond)))
     print("[" + ("PASS" if cond else "FAIL") + "] " + name + ("" if cond or not detail else " - " + detail))
-    if not cond and _os.environ.get("PYTEST_CURRENT_TEST"):
+    if not cond and os.environ.get("PYTEST_CURRENT_TEST"):
         raise AssertionError(str(name) + (": " + str(detail) if detail else ""))
 
 class FakeResp:
@@ -195,9 +194,6 @@ def test_connection_error_exceeds_grace():
     try:
         exc = I.requests.exceptions.ConnectionError("down")
         _install(get_seq=[exc], post=FakeResp(200, {"prompt_id": "abc"}))
-        # shrink grace window for the test
-        orig_grace = None
-        import image as Imod
         # monkeypatch time.time to fast-forward past the 60s grace on 2nd call
         real_time = time.time
         calls = {"n": 0}

@@ -132,8 +132,6 @@ check("an aggregator that stamps its own watermark is refused too",
       got == [GOOD["image"]], got)
 
 print()
-
-print()
 print("=" * 66)
 print("A PACKSHOT ON WHITE IS NOT A COVER")
 print("=" * 66)
