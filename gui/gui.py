@@ -9,7 +9,6 @@ QThreads so the window, camera preview and audio visualizer stay smooth.
 """
 import logging
 import os
-import random
 import re
 import shutil
 import sys
