@@ -63,11 +63,10 @@ def _kind_label(kind: str, lang: str = _DEFAULT_LANG) -> str:
 
 def _quota_limit(kind: str) -> int:
     try:
-        import config as _cfg_mod
         return int({
-            KIND_RESEARCH: getattr(_cfg_mod, "TG_QUOTA_DEEP_RESEARCH", 5),
-            KIND_IMAGE:    getattr(_cfg_mod, "TG_QUOTA_IMAGE", 40),
-            KIND_TASK:     getattr(_cfg_mod, "TG_QUOTA_TASKS", 200),
+            KIND_RESEARCH: getattr(_config, "TG_QUOTA_DEEP_RESEARCH", 5),
+            KIND_IMAGE:    getattr(_config, "TG_QUOTA_IMAGE", 40),
+            KIND_TASK:     getattr(_config, "TG_QUOTA_TASKS", 200),
         }.get(kind, 0))
     except Exception:
         return 0
@@ -75,8 +74,7 @@ def _quota_limit(kind: str) -> int:
 
 def _cfg_int(name: str, default: int) -> int:
     try:
-        import config as _cfg_mod
-        return int(getattr(_cfg_mod, name, default))
+        return int(getattr(_config, name, default))
     except Exception:
         return default
 

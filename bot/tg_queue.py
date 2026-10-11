@@ -55,7 +55,6 @@ class QueueMixin:
         turns true on ⛔, and the work stops at its next check. The note
         loses its button when the work ends."""
         import copy
-        import threading
         import uuid
         base = self._get_ctx()
         if base is None:                       # no app context (suites): the flag alone

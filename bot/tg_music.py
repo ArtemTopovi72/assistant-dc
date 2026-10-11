@@ -202,8 +202,6 @@ def _value_label(field: str, value: str, lang: str) -> str:
         return _t("m_auto", lang)
     if field == "duration":
         return _t("m_auto_bot", lang) if value == "auto" else _t("m_secs", lang, n=value)
-    if field == "steps":
-        return str(value)
     if field == "tempo" and _music.custom_bpm(value):
         return f"{_music.custom_bpm(value)} BPM"
     return _t({"genre": "mg_", "tempo": "mt_", "vocal": "mv_"}[field] + value, lang)
@@ -257,20 +255,18 @@ def _field_kb(sess, field: str, lang: str = _DEFAULT_LANG) -> dict:
     if field == "duration":
         values = ["auto"] + [str(d) for d in DURATIONS]
     elif field == "quality":
-        values = list(PRESETS)          # fast / quality / max, in that order
         return _quality_kb(sess, cur, lang)
     else:
         values = list(_table(field))
         values = ["" if v == "auto" else v for v in values]
     rows, row = [], []
-    per_row = 1 if field == "quality" else 2   # the cost label needs the width
     for v in values:
         label = _value_label(field, v, lang)
         if field == "tempo" and v and _TEMPO_BPM.get(v):
             label = f"{label} · {_TEMPO_BPM[v]}"
         row.append({"text": ("✅ " if cur == v else "") + label,
                     "callback_data": f"music:set:{field}:{v or 'auto'}"})
-        if len(row) == per_row:
+        if len(row) == 2:
             rows.append(row); row = []
     if row:
         rows.append(row)

@@ -41,7 +41,6 @@ def _largest_photo(photos) -> Optional[dict]:
 
 
 _TYPED_STOP = {"stop", "стоп", "хватит", "отмена", "отмени", "cancel", "остановись"}
-import re as _re
 
 
 def _asks_as_file(text: str) -> bool:
@@ -311,7 +310,7 @@ class DispatchMixin:
 
         # Only a real command token: "/etc/nginx/nginx.conf почему не
         # работает?" is a question, and was answered "unknown command".
-        if _re.match(r"/[A-Za-z0-9_]{1,32}(?:@\w+)?(?:\s|$)", text):
+        if re.match(r"/[A-Za-z0-9_]{1,32}(?:@\w+)?(?:\s|$)", text):
             self._handle_command(chat_id, text)
             return
         if text:

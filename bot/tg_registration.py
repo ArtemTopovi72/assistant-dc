@@ -174,8 +174,6 @@ class RegistrationMixin:
         # ── NEW USER — start registration ─────────────────────────────────────
         if user is None:
             if not sess.reg_state:
-                # Check if they are a pre-configured admin
-                auto_admin = chat_id in self._admin_chat_ids
                 sess.reg_state = "awaiting_name"
                 self._store.put(sess)
                 self._activity.log(chat_id, "system",

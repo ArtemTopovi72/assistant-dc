@@ -110,7 +110,7 @@ def caption(i: int, p: dict, lang: str = "ru") -> str:
     if p.get("old_price"):
         price += f"  <s>{_rub(p['old_price'])}</s>"
     if price:
-        lines.append(("💰 " if ru else "💰 ") + price)
+        lines.append("💰 " + price)
     if p.get("rating"):
         r = f"⭐ {p['rating']}"
         if p.get("reviews"):

@@ -21,6 +21,7 @@ stay patchable from one place.
 from __future__ import annotations
 
 import html as _html_mod
+import time
 from pathlib import Path
 
 
@@ -343,7 +344,6 @@ class AccountsMixin:
         including a previous session.
         """
         left = "осталось ~" if lang == "ru" else "left ~"
-        import time
         try:
             import characters as _C
             import lora_training as LT
