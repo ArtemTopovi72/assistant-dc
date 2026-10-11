@@ -119,8 +119,8 @@ class RegistrationMixin:
 
         # ── LOGGED OUT — require the account password before anything else ────
         if user is not None and sess.reg_state == "awaiting_login":
-            # This branch used to run unconditionally once reg_state was
-            # "awaiting_login", with no check of user.status at all. That local
+            # This branch must check user.status, not just reg_state ==
+            # "awaiting_login". That local
             # session flag only ever means "logged out, needs the password
             # again" -- it says nothing about whether the account is still in
             # good standing. approve_user/reject_user/ban_user only ever flip
@@ -309,7 +309,7 @@ class RegistrationMixin:
                         except Exception: pass
                 return False
             # A state left over from an account that no longer exists (deleted
-            # by an admin mid-"feedback"/"change_name") used to answer every
+            # by an admin mid-"feedback"/"change_name") would answer every
             # message with silence, forever. Start registration over.
             sess.reg_state = "awaiting_name"
             self._store.put(sess)
@@ -440,8 +440,8 @@ class RegistrationMixin:
                 self._store.put(sess)
                 return True
             # Ready words (forwarded, or several short lines) are not a topic:
-            # ask whether to sing them as they are or write new ones. Live
-            # 2026-09-27 a forwarded storyboard was sung as a "topic" unasked.
+            # ask whether to sing them as they are or write new ones (a
+            # forwarded storyboard must not be sung as a "topic" unasked).
             import tg_songs as _songs
             if tg_bot._is_forwarded(msg, self_is_own=False) or _songs.looks_like_lyrics(text):
                 if getattr(sess, "song_draft", ""):
@@ -452,8 +452,8 @@ class RegistrationMixin:
                     {"text": tg_bot._t("song_keep_btn", lang), "callback_data": "song_lyr:keep"},
                     {"text": tg_bot._t("song_polish_btn", lang), "callback_data": "song_lyr:polish"}]]})
                 return False
-            # Disarm NOW: while armed, every next message started another song
-            # (live 2026-09-27: a stray multi-forward rendered two at once).
+            # Disarm NOW: while armed, every next message starts another song
+            # (a stray multi-forward would render two at once).
             sess.reg_state = ""
             self._store.put(sess)
             self._start_song_generation(chat_id, text.strip(), lang)
@@ -466,10 +466,8 @@ class RegistrationMixin:
             if not text and msg.get("photo"):
                 # Photos sent in character mode are REFERENCES for the scene
                 # (pose, outfit, framing, style), the caption is the scene.
-                # They used to hit `if not text: return False` and vanish
-                # without a word (live 2026-09-17 16:10, two stills of
-                # American Psycho + «Нарисуй Степана так, чтобы он ... в этом
-                # стиле» -- no reaction at all).
+                # They must not hit `if not text: return False` and vanish
+                # without a word.
                 self._collect_character_reference(chat_id, sess, lang, msg)
                 return False
             if not text:

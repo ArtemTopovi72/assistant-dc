@@ -149,7 +149,7 @@ class ContinueMixin:
             return False
         sess.continue_state = ""         # disarmed before the slow part
         # A submenu armed before the clip (🔎 Поиск) would turn this into "search the
-        # web for: animate this photo: …" -- live 2026-10-10 the bot chatted about the
+        # web for: animate this photo: …" -- the bot would chat about the
         # search instead of rendering.
         sess.pending_prefix, sess.menu = "", ""
         self._store.put(sess)

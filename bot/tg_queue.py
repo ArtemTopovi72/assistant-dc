@@ -146,7 +146,7 @@ class QueueMixin:
                         ev = self._task_cancels.get(tid)
                     # The task runs on its OWN scoped context (_execute_task),
                     # not the shared desktop ctx — setting the shared event here
-                    # used to abort whatever the desktop assistant was doing
+                    # would abort whatever the desktop assistant was doing
                     # while leaving the actual runaway task running forever.
                     if ev is not None:
                         try: ev.set()
@@ -171,8 +171,8 @@ class QueueMixin:
                          + [dict(t.to_dict(), _state="pending")
                             for t in self._pending_journal.values()])
                 seq = _INFLIGHT_SEQ[0] = _INFLIGHT_SEQ[0] + 1
-            # Atomic: two threads writing at once used to be able to leave a torn
-            # file, and recovery then read [] and silently lost every task.
+            # Atomic: two threads writing at once could leave a torn
+            # file, and recovery would then read [] and silently lose every task.
             # Ordered: the snapshot is taken under the lock but written after it,
             # so an older snapshot could land last and bring back a finished task
             # (a crash then told its user it was "interrupted").
@@ -228,7 +228,7 @@ class QueueMixin:
             data = self._take_inflight()
         durable_backend = not isinstance(self._backend, tg_bot.InMemoryBackend)
         # One notice per chat, for its LAST task: two in-flight entries of one
-        # chat sent the same "restarted" message twice (live 2026-09-27 16:52).
+        # chat sent the same "restarted" message twice.
         last = {}
         for d in data or []:
             if d.get("_state") == "pending" and durable_backend:
@@ -315,8 +315,8 @@ class QueueMixin:
         """
         with self._task_lock:
             # A task whose reply already landed is only compacting history —
-            # to the user nothing is running (live 2026-09-13, mega step 78:
-            # Stop one second after the picture arrived got "Stopping…").
+            # to the user nothing is running (a Stop right after the picture
+            # arrived must not answer "Stopping…").
             was_running = any(not getattr(t, "delivered", False)
                               for t in (self._running_task.get(chat_id) or []))
         was_running = was_running or chat_id in self.__dict__.get("_debouncing", ())
@@ -410,7 +410,7 @@ class QueueMixin:
     def _enqueue_item(self, chat_id: int, item: dict):
         # Stamped on ARRIVAL, before the debounce delay (_DEBOUNCE_S) — not at
         # task-creation time in _resolve_and_push, which runs after the delay.
-        # A Stop pressed during the debounce window used to find nothing
+        # A Stop pressed during the debounce window would find nothing
         # running/queued yet (the item was still sitting here un-stamped) and
         # report "Nothing was running", while the batch went on to become a
         # task with a post-Stop enqueue_ts that _stop_requested_after let
@@ -453,11 +453,11 @@ class QueueMixin:
             self.__dict__.setdefault("_debouncing", set()).add(chat_id)
             # A QUIET period, not a fixed window: the deadline moves with every
             # fragment that arrives, capped from the first one. Five fragments
-            # of one thought 0.6 s apart used to be cut after the third and
-            # answered as two separate requests (live, 2026-09-12).
+            # of one thought 0.6 s apart must not be cut after the third and
+            # answered as two separate requests.
             # A bare forward (only forwarded material, nothing the user typed) waits longer: the instruction
-            # ("объясни Степану прикол") is typed a few seconds later, and answering the forward alone gave
-            # two replies to one request (live 2026-10-05).
+            # ("объясни Степану прикол") is typed a few seconds later, and answering the forward alone gives
+            # two replies to one request.
             t_first = time.monotonic()
             def _fwd(): return all(i.get("forwarded") or i.get("type") == "fwd_voice" for i in batch)
             # a forwarded post's videos/voices come with pictures that land a couple of seconds later (an album is
@@ -466,8 +466,8 @@ class QueueMixin:
                                   if _fwd() else tg_bot._DEBOUNCE_S)
             def _cap(): return ((tg_bot._DEBOUNCE_FWDV_MAX_S if any(i.get("type") == "fwd_voice" for i in batch) else tg_bot._DEBOUNCE_FWD_MAX_S) if _fwd() else tg_bot._DEBOUNCE_MAX_S)
             def _lag(it):
-                # Forwards that reach us late (a stalled getUpdates, live 2026-10-05: three pieces sent together came
-                # in at 11:59, 12:01, 12:02) have more of the same burst still on the way: wait that long again.
+                # Forwards that reach us late (a stalled getUpdates: pieces sent together arrive
+                # minutes apart) have more of the same burst still on the way: wait that long again.
                 s = it.get("_sent_ts")
                 return min(30.0, max(0.0, time.time() - s)) if s and it.get("forwarded") and time.time() - s > 3 else 0.0
             extra = _lag(first)

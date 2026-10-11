@@ -394,7 +394,7 @@ class AccountsMixin:
                     # "ОСТАНОВЛЕНО на шаге 1147/0" reads as a bug. Skip it.
                     # Only a RECENT one: a run stopped weeks ago sat in the
                     # admin header as «Обучение: neurostepan…» and read as a
-                    # live run with the GPU at 0% (2026-09-27).
+                    # live run with the GPU at 0%.
                     try:
                         _age = time.time() - LT.log_path(rec["slug"]).stat().st_mtime
                     except OSError:

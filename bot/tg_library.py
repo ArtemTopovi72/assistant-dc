@@ -81,7 +81,7 @@ class LibraryMixin:
         lang = self._lang(sess)
         # A file whose extension the indexer can never handle (a forwarded
         # video/GIF/animation sent as a Telegram "document", an image, an
-        # archive, ...) used to sail straight into "Indexing... this may take
+        # archive, ...) would sail straight into "Indexing... this may take
         # a minute" and then fail with a bare "RuntimeError" -- a real error
         # class name that tells the user nothing about WHY, for a case that
         # was never going to work. Reject it up front with a message that
@@ -244,9 +244,9 @@ class LibraryMixin:
             if text:
                 lines.append(f"{i}. {_html_mod.escape(text[:300])}")
         # Up to 40 facts x ~300 chars can reach ~12k chars — well past the blind
-        # 4096-char slice _send_text used to apply, which silently swallowed the
-        # back half of the list with no "showing N of M" and no way to see the
-        # rest. Route through the same tag-safe splitter used elsewhere for this
+        # 4096-char slice a plain _send_text would apply, which silently swallows
+        # the back half of the list with no "showing N of M" and no way to see
+        # the rest. Route through the same tag-safe splitter used elsewhere for this
         # exact problem, and only attach the Forget-all button to the last chunk.
         chunks = tg_bot._split_html("\n".join(lines))
         kb = {"inline_keyboard": [[

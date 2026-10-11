@@ -22,13 +22,13 @@ import copy as _copy_mod
 class _Session:
     # A picture pointed at by a button that led nowhere (Анимация/Стиль menu
     # left open) stayed "pointed at" until the next message, hours later: a
-    # text Ozon search went down the vision path with the picture keyboard
-    # (live 2026-09-27 20:24, a 16:56 photo). The gesture expires.
+    # text Ozon search went down the vision path with the picture keyboard.
+    # The gesture expires.
     TARGET_TTL_S = 15 * 60
 
     # Everything that makes the bot wait for the user's NEXT message (a topic,
     # a photo, a name, a city…). ✖️ Отмена under the prompt clears all of it
-    # (user 2026-09-27: «всегда иметь возможность отменить … в любом сценарии»).
+    # (the user must always be able to cancel, in any scenario).
     _WAIT_STR = ("pending_prefix", "pending_instruction", "pending_photo", "pending_style_target", "pending_outfit_target",
                  "pending_animate_target", "cover_state", "cover_src", "song_draft",
                  # the step-by-step flows too: «Мэшап · трек 1 из 2» had no way out
@@ -85,7 +85,7 @@ class _Session:
         d = data or {}
         self.chat_id        = chat_id
         self.history: list  = d.get("history", [])
-        # Text by default: a voice note repeating the text doubled every answer (live 2026-09-29).
+        # Text by default: a voice note repeating the text doubled every answer.
         self.reply_mode: str = d.get("reply_mode") if d.get("reply_mode") in self.REPLY_MODES else "text"
         # Model reasoning, per user; OFF unless they turn it on in Settings.
         self.think: bool = bool(d.get("think", False))
@@ -133,15 +133,15 @@ class _Session:
         # at, or delivered by the bot. A follow-up that plainly needs a picture
         # ("now remove the lettering") continues on it instead of asking
         # "which of the 6?" -- a chat that has drawn a car, read a receipt and
-        # just recoloured a dress is not a fresh choice between six pictures
-        # (live 2026-09-13, mega journey). Cleared by a turn with no picture.
+        # just recoloured a dress is not a fresh choice between six pictures.
+        # Cleared by a turn with no picture.
         self.turn_image: str = d.get("turn_image", "")
         # The alphabet of the user's last TYPED message ("en"/"ru"/""). The
         # reply follows it for the turn, and for the button presses, emoji and
         # links that come after it: an English question in a Russian-language
         # chat got "Столица Австралии — Канберра" and the English "draw a
         # lighthouse" was followed by Russian captions on upscale/outpaint
-        # (live 2026-09-13, mega journey). Only a message written wholly in one
+        # Only a message written wholly in one
         # script moves it; mixed text and machine payloads inherit.
         self.turn_lang: str = d.get("turn_lang", "")
         # «answer in English from now on»: sticks until asked otherwise.
@@ -154,7 +154,7 @@ class _Session:
         self.fwd_transcript: str = d.get("fwd_transcript", "")
         # Identifies WHICH forward fwd_transcript belongs to. The choice buttons
         # (fwdv:text/sum/both) carry no per-message identity of their own — a
-        # second forward arriving before the first is answered used to silently
+        # second forward arriving before the first is answered would silently
         # overwrite the single fwd_transcript slot, so tapping the FIRST "which
         # do you want?" prompt (still on screen, indistinguishable from the
         # second) delivered the SECOND voice's content under it. Reproduced
@@ -172,7 +172,7 @@ class _Session:
         self.fwd_transcript_done: bool = bool(d.get("fwd_transcript_done", False))
         # Every recent forward by id, so each on-screen prompt's buttons reach
         # ITS voice: two voices forwarded together made the first prompt answer
-        # "that voice is gone" (live 2026-09-27 19:18).
+        # "that voice is gone".
         self.fwd_recent: dict = dict(d.get("fwd_recent") or {})
         # ✍️ Свой вариант pressed: the transcript the next typed message is about.
         self.fwd_own: str = d.get("fwd_own", "")
@@ -269,7 +269,7 @@ class _Session:
         # message after several unrelated turns. Without an id tying the button
         # to the specific request it was sent for, tapping that stale button
         # silently retried whatever the user asked MOST RECENTLY instead of the
-        # request that actually failed. The button now carries this id
+        # request that actually failed. The button carries this id
         # (retry:<id>) and the handler refuses to fire if it no longer matches.
         # Both fields are set at the moment each failure is actually DELIVERED
         # (tg_tasks.py's two `except Exception` retry-button sites, and the

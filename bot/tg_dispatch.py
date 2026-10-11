@@ -237,9 +237,8 @@ class DispatchMixin:
             try: self._store.put(sess0)
             except Exception: pass
         # The client's language is a guess: a user whose Telegram is English but
-        # who WRITES Russian got every menu and status in English (live
-        # 2026-09-27). Until they pick a language themselves,
-        # the words they type decide.
+        # who WRITES Russian would get every menu and status in English. Until
+        # they pick a language themselves, the words they type decide.
         _t0 = msg.get("text") or msg.get("caption") or ""
         if (not sess0.lang_chosen and sess0.lang != "ru" and not tg_bot._is_forwarded(msg)
                 and len(re.findall(r"[А-Яа-яЁё]{2,}", _t0)) >= 2):
@@ -248,9 +247,9 @@ class DispatchMixin:
             except Exception: pass
 
         text = (msg.get("text") or "").strip()
-        # A forwarded button label is not something to act on. Live 2026-09-27:
-        # a stray multi-forward replayed «🔍 Найти товар» as a button press and
-        # fed the bot's own replies into a running song as wishes. BEFORE the
+        # A forwarded button label is not something to act on: a stray
+        # multi-forward would replay «🔍 Найти товар» as a button press and
+        # feed the bot's own replies into a running song as wishes. BEFORE the
         # gate: the gate answers pending prompts (song topic, city…) and took a
         # forwarded storyboard as the topic.
         # The bot's own REPLIES are material (live 10-03: users could not forward
@@ -276,15 +275,15 @@ class DispatchMixin:
         # Stop is handled HERE, before the debounce queue — routing it through the
         # normal path would make it queue up behind the very work it is meant to
         # cancel, so the user would tap Stop and watch nothing happen.
-        # A bare typed «Stop» too: live 2026-09-27 it went into the running redraw
-        # as a steer note («👌 Noted: Stop») and the render carried on.
+        # A bare typed «Stop» too: otherwise it goes into the running redraw
+        # as a steer note («👌 Noted: Stop») and the render carries on.
         if tg_bot._LABEL2KEY.get(text) == "stop" or text.lower().strip(" .!") in _TYPED_STOP:
             sess = self._get_session(chat_id)
             lang = self._lang(sess)
             self._stop_and_report(chat_id, sess, lang)
             return
         # «пришли файлом» / "as a file": the model has no way to send one and
-        # answered with right-click advice five times (persona run 2026-09-27).
+        # answered with right-click advice.
         # a keyboard label is never that request: «📚 Документы» was read as one and
         # sent the last picture as a file instead of opening the menu (live 10-03)
         if len(text) <= 60 and not _is_button(text) and _asks_as_file(text):
@@ -330,8 +329,8 @@ class DispatchMixin:
             # channel post ("Внимание! В субботу перекрывают движение...") was
             # answered as if the user had asked it -- with document search on,
             # "the documents say nothing about a road closure" -- and the
-            # follow-up "о чём это?" then had nothing to refer to (live
-            # 2026-09-13, mega journey). The flag travels with the item; the
+            # follow-up "о чём это?" then had nothing to refer to. The flag
+            # travels with the item; the
             # resolver frames the text as a quotation.
             self._enqueue_item(chat_id,
                                {"type": "text", "text": text, "image_id": _reply_image_id,
@@ -402,8 +401,7 @@ class DispatchMixin:
         # _transcribe uses to extract the audio track — everything downstream
         # (the ask keyboard, fwd_transcript, _fwdv_intent) is unchanged.
         # An ordinary video (not the round note) rides the same path: it is
-        # looked at (frames every 5 s) and listened to. Before 2026-09-14 it
-        # was not handled at all.
+        # looked at (frames every 5 s) and listened to.
         video_note = msg.get("video_note") or msg.get("video")
         if video_note:
             if tg_bot._is_forwarded(msg, self_is_own=False):
@@ -566,7 +564,7 @@ class DispatchMixin:
 
     def _buffer_album(self, chat_id, group_id, file_id, caption, forwarded=False):
         # A QUIET period, not a fixed window: a forwarded album of 10 pages arrives over several seconds, and a
-        # timer started by the first page cut it into pieces answered one by one (live 2026-10-05).
+        # timer started by the first page cut it into pieces answered one by one.
         with self._album_lock:
             e = self._albums.get(group_id)
             if e is None:

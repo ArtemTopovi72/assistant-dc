@@ -207,7 +207,7 @@ def _delete_chat_facts_file(chat_id: int) -> None:
 # Every action offered under a picture, in display order (3 per row). This is
 # the ONE place that needs a new entry to make an action appear under EVERY
 # future picture -- bot-generated ones (already wired through tg_tasks.py's
-# delivery block) and, since 2026-09-19, a plain photo the user just uploaded
+# delivery block) and a plain photo the user just uploaded
 # (see tg_tasks.py's use of sess.turn_image).
 #
 # A verb that is a simple one-shot command (like upscale/outpaint) only needs
@@ -277,11 +277,11 @@ _INTERRUPTIBLE_STAGE_KEYWORDS = (
 )
 # NOTE: "describe" is deliberately NOT a member. _image_kb() never emits a
 # describe: button, and _CB_CMDS has no "describe" entry, so a describe:<id>
-# callback used to strip the id, ARM sess.target_image, then fall through every
+# callback would strip the id, ARM sess.target_image, then fall through every
 # handler in total silence — leaving a stale armed target that could silently
 # re-point the user's next unrelated message. Since nothing in this codebase
-# emits the verb, the smaller/safer fix is to not recognise it at all: a
-# describe:<id> (or bare describe) callback now falls straight through as an
+# emits the verb, it is not recognised at all: a
+# describe:<id> (or bare describe) callback falls straight through as an
 # unmatched string (same as any other unknown callback_data) instead of arming
 # anything.
 _IMAGE_ID_RE = re.compile(r"[0-9a-f]{8}")
@@ -419,10 +419,9 @@ def _is_forwarded(msg: dict, self_is_own: bool = True) -> bool:
                                   "forward_from_chat", "forward_sender_name",
                                   "forward_date")):
         return False
-    # A SELF-forward (Saved Messages -> the bot) is the user's own words. Live
-    # 2026-09-14: «найди все мосты ... собери коллаж» + DCIM.zip forwarded
-    # from the user's own chat was framed "someone else's message, not
-    # addressed to you" and the instruction was acknowledged, not done.
+    # A SELF-forward (Saved Messages -> the bot) is the user's own words, not
+    # "someone else's message, not addressed to you" (e.g. an instruction plus
+    # a file forwarded from the user's own chat must be acted on).
 
     def _id(v):
         return v.get("id") if isinstance(v, dict) else None
@@ -431,8 +430,8 @@ def _is_forwarded(msg: dict, self_is_own: bool = True) -> bool:
     sender = _id(origin.get("sender_user")) if isinstance(origin, dict) else None
     old = _id(msg.get("forward_from"))
     # A voice/video note is recorded MATERIAL even when it is the user's own
-    # (live 2026-09-27: a self-forwarded round video was answered as a question
-    # instead of offering the retelling) -- media callers pass self_is_own=False.
+    # (a self-forwarded round video must offer the retelling, not be answered as
+    # a question) -- media callers pass self_is_own=False.
     if self_is_own and me and (sender == me or old == me):
         return False
     return True
@@ -608,9 +607,8 @@ def _live_images(sess) -> list:
 # promoted admin starts muted and has to choose to subscribe.
 FEEDBACK_OPT_OUT = "feedback_off"   # kept for backward compat with rows written
 # by the old opt-out scheme; still HONOURED
-# (an admin who explicitly muted before the
-# flip stays muted), just no longer the
-# thing new admins default to.
+# (an admin who explicitly muted stays muted),
+# but not what new admins default to.
 FEEDBACK_OPT_IN = "feedback_subscribed"
 
 
@@ -660,11 +658,6 @@ from tg_keyboards import (
 )
 
 
-# ── "which picture do you mean?" ──────────────────────────────────────────────
-# An instruction that needs an image but names none. Deliberately NARROW: it only
-# has to catch requests that will otherwise be silently answered about the wrong
-# picture. Anything it misses behaves exactly as before (newest image wins), so a
-# false negative costs nothing new — a false POSITIVE would nag, which is worse.
 def _needs_text_beside_voice(reply: str) -> bool:
     """A voice note stands alone only when the voice can actually say it.
 
@@ -677,6 +670,11 @@ def _needs_text_beside_voice(reply: str) -> bool:
     return lat > cyr and lat >= 8
 
 
+# ── "which picture do you mean?" ──────────────────────────────────────────────
+# An instruction that needs an image but names none. Deliberately NARROW: it only
+# has to catch requests that will otherwise be silently answered about the wrong
+# picture. Anything it misses behaves exactly as before (newest image wins), so a
+# false negative costs nothing new — a false POSITIVE would nag, which is worse.
 def _picture_read(text: str) -> dict:
     """The model's read of the user's words with several pictures in the chat
     (agent/intent.py). It replaced an edit/describe word list and an ordinal
@@ -722,9 +720,9 @@ def _needs_image_choice(text: str) -> bool:
 # button press that is the literal tool-call string the graph executes
 # ("[style_preset] call redraw_image with mode=\"redraw\" instructions=\"...\"
 # on the current image. Do not generate a new image."), not anything meant for
-# a human to read. Live, 2026-09-19: the "Какую картинку?" list showed six
-# entries as "[style_preset] call redraw_image with mo…" -- unreadable and
-# indistinguishable from each other.
+# a human to read: shown raw, the "Какую картинку?" list would read
+# "[style_preset] call redraw_image with mo…" -- unreadable and
+# indistinguishable entries.
 _LABEL_BRACKET_TAG_RE = re.compile(r"^\s*\[([a-z_]+)\]\s*", re.I)
 _LABEL_QUOTED_ARG_RE = re.compile(
     r"\b(?:instructions|description|prompt)\s*=\s*[\"']([^\"']{4,})[\"']", re.I)
@@ -815,9 +813,9 @@ def _image_choice_kb(sess, lang: str = _DEFAULT_LANG) -> dict:
 
 
 _CB_CMDS: dict[str, str] = {
-    # No longer reached directly from a button press: tg_callbacks._cb_
+    # Not reached directly from a button press: tg_callbacks._cb_
     # change_clothes intercepts "change_clothes" first and asks the user what
-    # to change the outfit TO (2026-09-19 -- a bare "something different" swap
+    # to change the outfit TO (a bare "something different" swap
     # answered a question the user never asked, and looked different every
     # time). Kept as the fallback text/shape for anything that still enqueues
     # this verb without going through that ask-flow.
@@ -873,7 +871,7 @@ _DIRECT_KB: dict[str, str] = {
     "facts":      "__facts__",
     "lang":       "__lang__",
     "wear":       "__wear__",
-    # Each forecast window is its own entry point, so 48h no longer requires
+    # Each forecast window is its own entry point, so 48h does not require
     # sitting through a 24h lookup first.
     "wtw_now":      "__wtw_now__",
     "wtw_24":       "__wtw_24__",
@@ -954,7 +952,7 @@ _MACHINE_PAYLOADS: frozenset = frozenset(_CB_CMDS.values()) | frozenset(
     _DIRECT_KB.get(k, "") for k in ("regenerate", "analyze")) - {""}
 
 # Grouped and short: one 18-dash rule wrapped to a second line on a phone, and fourteen
-# one-per-feature lines read as a wall (10-10 screen review of every menu).
+# one-per-feature lines read as a wall.
 _HELP_EN = (
     "🎨 <b>Create</b>\n"
     "• Picture — /draw &lt;what&gt; or just ask\n"
@@ -1048,9 +1046,8 @@ def _check_extremism(text: str) -> bool:
 
 # ── document extraction ───────────────────────────────────────────────────────
 
-# Source files and archives sent with "найди баги" were not read at all
-# (live 2026-09-28: a .zip with a question got "not a document ... send it
-# along with your question" -- which is what the user had done).
+# Source files and archives sent with "найди баги" must be read, not rejected
+# as "not a document ... send it along with your question".
 _CODE_EXTS = {".py", ".js", ".ts", ".tsx", ".jsx", ".java", ".kt", ".c", ".h", ".cpp",
               ".hpp", ".cs", ".go", ".rs", ".rb", ".php", ".sh", ".ps1", ".bat", ".sql",
               ".html", ".css", ".xml", ".toml", ".ini", ".cfg", ".lua", ".swift"}
@@ -1155,7 +1152,6 @@ def _scoped_ctx(base, cancel_event=None):
     # The GUI hands the bot a gui_common._ScopedCtx, whose __setattr__ writes
     # through to the app's real Context: every per-task field below landed on
     # the SHARED context and the task read the wrapper's own cancel token.
-    # Live 2026-09-27: ⛔ Cancel answered «Cancelling…» and the redraw ran anyway.
     # Copy the real context; the task's own event already isolates it from Stop.
     try:
         base = object.__getattribute__(base, "_ctx")
@@ -1513,7 +1509,7 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
             pass
         # Each in-flight task runs on its own _scoped_ctx with its own cancel
         # event (registered in self._task_cancels); the SHARED ctx belongs to
-        # the desktop assistant. Setting the shared event here used to abort
+        # the desktop assistant. Setting the shared event here would abort
         # whatever the desktop GUI happened to be doing while every in-flight
         # Telegram task kept running (unaffected) against a bot that no longer
         # polls. Cancel each of OUR own running tasks via its own event instead.
@@ -1550,8 +1546,8 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
     def _broadcast_startup(self):
         time.sleep(1)   # let poll thread start first
         for user in self._user_store.approved():
-            # `or []` — one row with a NULL subscriptions column used to raise here
-            # and, because this whole loop runs in its own thread, silently killed
+            # `or []` — one row with a NULL subscriptions column would raise here
+            # and, because this whole loop runs in its own thread, silently kill
             # the greeting for every user after it.
             if "startup" in (user.subscriptions or []):
                 try:

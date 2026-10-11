@@ -28,9 +28,9 @@ class _Task:
     # The picture this task acts on, captured at PRESS time (when the
     # id-carrying callback like "upscale:ab12cd" was parsed) — not read lazily
     # from sess.target_image at execution time. A second button press on a
-    # DIFFERENT picture, queued while the first is still pending, used to
+    # DIFFERENT picture, queued while the first is still pending, would
     # overwrite the single sess.target_image slot before the first task ever
-    # ran, so both tasks silently resolved to whichever picture was pressed
+    # ran, so both tasks would silently resolve to whichever picture was pressed
     # LAST. Threading the id through the task closes that race.
     image_id:    str = ""
     # True only for a picture the user actually SENT this turn (a photo or the

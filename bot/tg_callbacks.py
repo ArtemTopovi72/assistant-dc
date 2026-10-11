@@ -196,16 +196,15 @@ class CallbackMixin:
         """(data, pressed_image_id, ok). ok=False means the press is over."""
         # The image keyboard sends "upscale:ab12cd": the verb, and the id of
         # the picture it sits under. Pressing a button under an OLD image must
-        # act on THAT image — previously every button meant "the current one",
-        # so scrolling up and pressing ⬆ upscaled whatever was newest instead.
-        # A bare verb (a keyboard sent before this change) still works and
-        # keeps the old "current image" meaning.
+        # act on THAT image, not whatever is newest.
+        # A bare verb (a legacy keyboard without an id) still works and
+        # means "the current image".
         # Captured here, at PRESS time, and threaded straight into the
         # enqueued item/_Task below — NOT read back out of sess.target_image
         # at execution time. A second press on a different picture while the
-        # first is still queued used to overwrite that single slot before the
-        # first task ever ran, so both silently resolved to whichever picture
-        # was pressed last.
+        # first is still queued would overwrite that single slot before the
+        # first task ever ran, so both would silently resolve to whichever
+        # picture was pressed last.
         _pressed_image_id = ""
         if data in tg_bot._IMAGE_VERBS:
             # A keyboard sent before ids existed. The callback still tells us
@@ -343,7 +342,7 @@ class CallbackMixin:
         status = self._cancel_task(chat_id, task_id)
         # "running": the task's own unwind guard in _run_task_inner will
         # send cancel_done once it actually stops — sending it here too
-        # is the double "⛔ Request cancelled." the user used to see.
+        # would produce a double "⛔ Request cancelled.".
         # Only acknowledge here; only "dropped"/"already" get the final
         # word from this callback, since nothing else will ever report
         # on those two outcomes.
@@ -367,8 +366,8 @@ class CallbackMixin:
         # Telegram buttons never expire, and last_task_text/last_task_id
         # are overwritten by every later push (success or failure) — so a
         # button still showing under an OLD failed message may no longer
-        # match what last_task_text now holds. Only the bare pre-id form
-        # (old messages sent before this fix) is honored unconditionally;
+        # match what last_task_text now holds. Only the bare id-less form
+        # (legacy messages) is honored unconditionally;
         # an id-bearing button that doesn't match the CURRENT id is stale
         # and must say so rather than silently retrying whatever the user
         # asked most recently.
@@ -586,8 +585,8 @@ class CallbackMixin:
         value = data.split(":", 1)[1].strip().lower()
         if value not in tg_bot._DEPTHS:
             tg_bot.logger.warning("depth callback: unknown depth %r", value)
-            # A stale/hand-crafted tap used to just `return` here — the
-            # keyboard on screen kept its OLD ✅, silently lying about
+            # A stale/hand-crafted tap must not just `return` — the
+            # keyboard on screen would keep its OLD ✅, silently lying about
             # which depth is actually active. Redraw against whatever
             # IS active (unchanged) so the ✅ is honest again, instead of
             # leaving a keyboard whose state nobody can trust.

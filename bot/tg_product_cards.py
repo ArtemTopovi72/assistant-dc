@@ -34,9 +34,9 @@ def _reviews_ru(n) -> str:
 
 
 # A line of the text reply that only restates a card: it links to a carded
-# product. 2026-09-24, user: the answer listed five products as
+# product. An answer listing five products as
 # "…доставка сегодня: ссылка (https://www.ozon.ru/product/…)" and then the
-# same five came again as cards -- the list is noise once the cards exist.
+# same five again as cards -- the list is noise once the cards exist.
 
 
 def _heading(line: str) -> bool:
@@ -56,8 +56,7 @@ def condense(reply: str, products: list) -> str:
             last = next((j for j in range(len(keep) - 1, -1, -1) if keep[j].strip()), None)
             if last is not None and _heading(keep[last]):
                 # Its section went into the cards: a sub-heading («Мелочёвка и
-                # запчасти:») would stand over nothing (live 2026-09-27 20:25,
-                # two bare headings); the first lead-in points at the cards.
+                # запчасти:») would stand over nothing; the first lead-in points at the cards.
                 if any(k.strip() for k in keep[:last]):
                     del keep[last]
                 else:

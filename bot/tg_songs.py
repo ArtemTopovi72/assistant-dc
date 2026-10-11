@@ -22,10 +22,9 @@ import turn_trace
 import music as _music_mod
 
 
-# A song asked for in plain words. Live, 2026-09-12: "сочини короткую весёлую
-# песню про кота" reached the chat model, which WROTE four lines of lyrics and
-# read them out as a voice note. The song engine was a menu tap away and the
-# user had no way to know that. A request that names a song and a making verb
+# A song asked for in plain words: "сочини короткую весёлую
+# песню про кота" must not reach the chat model, which would WRITE four lines of
+# lyrics and read them out as a voice note. A request that names a song and a making verb
 # is the song flow, whichever way it arrives.
 
 
@@ -46,9 +45,7 @@ _SONG_TASK_RE = _re.compile(r"^\[song(?::(\d+))?\]\s*(.*)$", _re.DOTALL)
 
 
 # "а теперь сочини на него песню" right after the bot wrote lyrics: the
-# words are THOSE words, not a new song about the sentence. Live,
-# 2026-09-12: four lines about autumn were followed by a song about city
-# lights. The topic then carries the lyrics behind this marker.
+# words are THOSE words, not a new song about the sentence. The topic then carries the lyrics behind this marker.
 LYRICS_MARK = "[lyrics]"
 
 
@@ -433,7 +430,7 @@ class SongsMixin:
             if cancelled():
                 return False        # Stop interrupted the writer; not a failure
             # The engine is fine; the writer model fumbled. Worth retrying, and
-            # worth saying so -- this used to be reported as "not set up yet".
+            # worth saying so -- not reporting it as "not set up yet".
             tg_bot.logger.warning("[songs] songwriting failed for chat %s",
                                   chat_id, exc_info=True)
             try:

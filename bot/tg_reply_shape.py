@@ -71,8 +71,8 @@ def shape_search_reply(reply_html: str, queries: list, sources: list, lang: str 
             k = _dom_key(dom)
             s = by_dom.get(k)
             if s is None:
-                # "(source: wikipedia.org)" for a ru.wikipedia.org page stayed
-                # raw in the reply (live 2026-09-28): match on the domain suffix.
+                # "(source: wikipedia.org)" for a ru.wikipedia.org page would stay
+                # raw in the reply: match on the domain suffix.
                 s = next((v for d, v in by_dom.items()
                           if k and (d.endswith("." + k) or k.endswith("." + d))), None)
             if s is None:
@@ -86,15 +86,14 @@ def shape_search_reply(reply_html: str, queries: list, sources: list, lang: str 
 
     # Numbers are this function's to give. A «[1]» the model wrote itself pointed at
     # whatever source happened to be listed first: «cbr.ru [1]» over a list that
-    # held only checko.ru (live 2026-10-08).
+    # held only checko.ru.
     reply_html = re.sub(r"[ \t]*(?<!\w)\[\d{1,2}\]", "", reply_html or "")
     body = _BARE_RE.sub(lambda m: _mark(m) or m.group(0), _CITE_RE.sub(_mark, reply_html))
     body = re.sub(r"[ \t]+([.,;:!?])", r"\1", body)       # "fact ." after a dropped mark
     body = re.sub(r"\s+(\[\d+\])", r" \1", body)          # "text [1]" not "text  [1]"
     listed = list(cited)
     # With citations in the text, the list is what was cited -- padding it
-    # with the other hits listed a Norfolk, Virginia museum under «Эрмитаж»
-    # (live 2026-09-28).
+    # with the other hits listed a Norfolk, Virginia museum under «Эрмитаж».
     for s in ([] if cited else sources or []):
         if len(listed) >= MAX_SOURCES:
             break

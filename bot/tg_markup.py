@@ -98,7 +98,7 @@ def _md_to_html(text: str) -> str:
                lambda m: ("\n<pre><code class=\"language-%s\">%s</code></pre>\n" % (m.group(1).lower(), m.group(2))
                           if m.group(1) else "\n<pre>" + m.group(2) + "</pre>\n"), t, flags=re.DOTALL)
     # Inline code only OUTSIDE <pre>: `x` inside a fenced block became <code>
-    # and the quoted snippet lost its backticks (live 2026-09-28).
+    # and the quoted snippet lost its backticks.
     t = "".join(p if p.startswith("<pre>") else re.sub(r"`([^`\n]+)`", r"<code>\1</code>", p)
                 for p in re.split(r"(<pre>.*?</pre>)", t, flags=re.DOTALL))
 
@@ -145,7 +145,7 @@ def _md_to_html(text: str) -> str:
     # "site.ru/<i>foo</i>/bar" and the link would break. Escaping ran first, so
     # the only real tags present are ones we created.
     # The emphasis rules are line-bounded while <pre> is not, which is the other
-    # half of the crossed-tag problem: "# ```\n```" used to become
+    # half of the crossed-tag problem: "# ```\n```" would become
     # "<b><pre></b>\n</pre>".
     t = re.sub(r"<a\b[^>]*>.*?</a>|<[^>]+>|https?://[^\s\x00]+",
                _stash, t, flags=re.DOTALL)
