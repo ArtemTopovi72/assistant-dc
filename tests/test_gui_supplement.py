@@ -18,7 +18,7 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 
 from PyQt5.QtWidgets import QApplication, QDialog, QMessageBox, QWidget, QFileDialog
 from PyQt5.QtGui import QImage, QColor, QPixmap
-from PyQt5.QtCore import Qt, QEvent, QPoint
+from PyQt5.QtCore import QEvent, QPoint
 import gui
 
 _app = QApplication.instance() or QApplication(sys.argv)
@@ -26,7 +26,6 @@ _TMP = tempfile.mkdtemp(prefix="guisupp_")
 
 def _png(name="s.png", w=40, h=30, col="#77aa55"):
     p = os.path.join(_TMP, name)
-    QImage(w, h, QImage.Format_RGB32).__class__  # noqa
     img = QImage(w, h, QImage.Format_RGB32); img.fill(QColor(col)); img.save(p)
     return p
 

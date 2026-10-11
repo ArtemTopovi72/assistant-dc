@@ -21,8 +21,7 @@ try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
 
-from PyQt5.QtWidgets import QApplication, QPushButton
-from PyQt5.QtCore import Qt, QThread
+from PyQt5.QtWidgets import QApplication
 from PyQt5.QtTest import QTest
 import gui
 
@@ -254,7 +253,6 @@ def test_injection_unicode_huge_strings_escaped():
     for p in payloads:
         w._add_user(p); w._add_assistant(p); w._add_system(p)
     txt = w.chat.toPlainText()
-    check("no_raw_script_tag", "<script>" not in w.chat.toHtml().replace("&lt;", "<") or True)
     # the ESCAPED entity must be present (angle brackets converted), proving _esc ran
     check("angle_brackets_escaped", "&lt;script&gt;" in w.chat.toHtml(),
           "user-supplied <script> must be HTML-escaped in the chat")

@@ -265,9 +265,7 @@ def test_start_worker_variants_and_ondone():
         w = _win()
         # _start_worker with ctx None and a worker lacking `info`
         w.ctx = None
-        class BareWorker(gui_workers.RequestWorker):
-            pass
-        # remove info signal? RequestWorker has info; use a minimal QThread-like with no info
+        # a minimal QThread-like worker with no `info` signal
         from PyQt5.QtCore import QThread, pyqtSignal
         class NoInfoWorker(QThread):
             recognized = pyqtSignal(str); done = pyqtSignal(dict); failed = pyqtSignal(str)
@@ -291,7 +289,6 @@ def test_transfer_run_busy_and_gather_norefs():
     tab.worker = types.SimpleNamespace(isRunning=lambda: True)
     tab._run("plan")
     tab.worker = None
-    check("transfer_run_busy10", "?" or True)
     # _gather no refs: single target row only
     tab._add_row(_png("gg1.png"))
     tab._rows[0]["combo"].setCurrentIndex(0)   # target; no refs
@@ -435,7 +432,6 @@ if __name__ == "__main__":
     # Widgets built here (AssistantWindow, TransferTab) were still alive at
     # interpreter shutdown, and a QWidget outliving its QApplication segfaults
     # inside Qt.
-    from qt_teardown import release_widgets
     release_widgets(_app)
     # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]

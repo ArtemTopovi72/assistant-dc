@@ -2,7 +2,7 @@
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_supplement11.py
 """
-import os, sys, types, tempfile, threading, contextlib, builtins
+import os, sys, types, tempfile, threading, builtins
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("USE_GUI", "0")
 os.environ["GUI_REPORT_HTML"] = "0"
@@ -17,7 +17,6 @@ import numpy as np
 from PyQt5.QtWidgets import QApplication, QDialog, QInputDialog, QMessageBox, QWidget
 from PyQt5.QtWidgets import QFileDialog as _QFD
 from PyQt5.QtGui import QImage, QColor
-from PyQt5.QtCore import Qt, QEvent
 import gui
 from _gui_patch import stub_workers as _stub_workers, restore as _gui_restore
 
@@ -34,22 +33,6 @@ def check(name, cond, detail=""):
     RESULTS.append((name, bool(cond)))
     print(f"[{'PASS' if cond else 'FAIL'}] {name}" + (f" — {detail}" if detail and not cond else ""))
     assert cond, f"{name}: {detail}"
-
-@contextlib.contextmanager
-def fake_modules(**mods):
-    saved = {}
-    for name, mod in mods.items():
-        saved[name] = sys.modules.get(name)
-        if mod is None: sys.modules[name] = None
-        else:
-            m = types.ModuleType(name)
-            for k, v in mod.items(): setattr(m, k, v)
-            sys.modules[name] = m
-    try: yield
-    finally:
-        for name, old in saved.items():
-            if old is None: sys.modules.pop(name, None)
-            else: sys.modules[name] = old
 
 _orig_loader = gui.ModelLoader
 _WN = ["RequestWorker", "RedrawWorker", "FixHandsWorker", "TransferWorker", "CompactMemoryWorker",
