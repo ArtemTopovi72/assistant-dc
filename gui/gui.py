@@ -22,8 +22,8 @@ import cv2
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
-    QApplication, QDialog, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow,
-    QMenu, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton, QRadioButton, QSpinBox,
+    QApplication, QDialog, QHBoxLayout, QLabel, QListWidgetItem, QMainWindow, QMenu,
+    QMessageBox, QPlainTextEdit, QProgressBar, QPushButton, QRadioButton, QSpinBox,
     QStackedWidget, QStatusBar, QTableWidget, QTableWidgetItem, QTabWidget, QTextEdit,
     QVBoxLayout, QWidget,
 )
