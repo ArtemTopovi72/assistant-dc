@@ -746,23 +746,6 @@ SANDBOX_BASE = Path(__file__).resolve().parents[1] / "runtime" / "sandboxes"
 _KEY_SAFE_RE = re.compile(r"[^A-Za-z0-9_-]")
 
 
-def redirect_sandbox_base(path) -> Path:
-    """Point every sandbox at `path`. For tests, and only for tests.
-
-    tg_bot.redirect_data_dir moves the user database out of the operator's live
-    data, and every suite that builds a bot is required to call it -- but it
-    never covered this tree. A suite that drives a document upload for a user
-    WITH sandbox access therefore wrote a real file into the operator's real
-    sandbox: writing tests/test_tg_sandbox_upload.py left a stray
-    runtime/sandboxes/999877 behind on the first run, which is how this was
-    found. Same discipline, second door.
-    """
-    global SANDBOX_BASE
-    SANDBOX_BASE = Path(path)
-    SANDBOX_BASE.mkdir(parents=True, exist_ok=True)
-    return SANDBOX_BASE
-
-
 def sandbox_key(owner) -> str:
     """A directory name from a chat/user id.
 

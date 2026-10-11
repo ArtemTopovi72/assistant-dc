@@ -22,6 +22,7 @@ Run: venv/Scripts/python.exe tests/test_tg_sandbox_upload.py
 import os
 import sys
 import tempfile
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -40,7 +41,7 @@ import sandbox_access as SA
 
 # redirect_data_dir moves the user DB, but NOT the sandbox tree. Without this
 # the uploads below land in the operator's real runtime/sandboxes.
-CS.redirect_sandbox_base(tempfile.mkdtemp(prefix="tgtest_sbxroot_"))
+CS.SANDBOX_BASE = Path(tempfile.mkdtemp(prefix="tgtest_sbxroot_"))
 
 RESULTS = []
 
