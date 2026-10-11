@@ -1,7 +1,7 @@
 """A black render is not a refusal card, and a quoted chat is not lettering.
 
-Live 2026-09-14 14:41-14:51: seven character renders in a row came back as
-«Не получилось нарисовать». The log said "Ideogram refusal card detected";
+Seven character renders in a row once came back as «Не получилось
+нарисовать». The log said "Ideogram refusal card detected";
 none was the (grey) card -- each was a black frame (mean 1-7), rendered from
 a forwarded chat whose ten «...» quotes had all become lettering strips.
 """

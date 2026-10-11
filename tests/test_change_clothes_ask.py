@@ -1,13 +1,13 @@
 """👗 Change outfit button: asks WHAT to change into, instead of silently
 applying a random "something different" swap.
 
-Live, 2026-09-19: the user asked for the same "what to what" free-text
-capture ✏️ Edit already has ("I write, for example, the hat to a hat")
-after complaining the old bare-verb button changed the outfit but never
-asked. tg_callbacks._cb_change_clothes now arms pending_prefix = "change
-the outfit to: " and asks describe_clothes, mirroring _cb_edit_image
-exactly; the next free-text message becomes "change the outfit to: <text>"
-via the normal pending_prefix consumption path (tg_bot._resolve_and_push).
+The old bare-verb button changed the outfit but never asked; this button has
+the same "what to what" free-text capture ✏️ Edit already has ("I write, for
+example, the hat to a hat"). tg_callbacks._cb_change_clothes arms
+pending_prefix = "change the outfit to: " and asks describe_clothes,
+mirroring _cb_edit_image exactly; the next free-text message becomes "change
+the outfit to: <text>" via the normal pending_prefix consumption path
+(tg_bot._resolve_and_push).
 
 Run: venv/Scripts/python.exe tests/test_change_clothes_ask.py
 """

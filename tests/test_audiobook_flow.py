@@ -166,7 +166,7 @@ check("resuming voices ONLY the remaining chapter", wait(lambda: len(VOICES) == 
 check("and the job file is gone afterwards", wait(lambda: not os.path.exists(os.path.join(_bd, "job.json")), 10))
 
 
-# a YouTube link as the narrator's sample (live 10-04: it was retold as a video instead)
+# a YouTube link as the narrator's sample (it used to be retold as a video instead)
 import tg_links
 tg_links.fetch_video = lambda url, *a, **k: {"data": open(SAMPLE, "rb").read(), "seconds": 12, "title": "t", "description": ""}
 before = len(INVOKES)

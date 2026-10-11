@@ -87,7 +87,7 @@ def test_binary_files_are_not_read_as_text(box):
 
 
 def test_a_log_is_text(box):
-    # live 10-03: crash.log / assistant_app.log refused as «not a text file»
+    # crash.log / assistant_app.log were once refused as «not a text file»
     (box.root / "crash.log").write_text("Traceback: boom", encoding="utf-8")
     assert "boom" in box.read_text("crash.log")
 

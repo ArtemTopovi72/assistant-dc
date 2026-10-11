@@ -386,7 +386,7 @@ def test_an_empty_folder_does_not_pin_the_kit(box):
 # --- a delivered archive is opened, not narrated about ------------------------
 
 def test_a_delivered_archive_forces_unpack(box):
-    """Live 2026-09-14: a 112 MB DCIM.zip reached the sandbox with the
+    """A 112 MB DCIM.zip reached the sandbox with the
     "[The file ... is now in your working folder]" note; the model wrote
     «Сначала я распакую архив ... Начинаю поиск.» and ended the turn with no
     tool call. Every consumer idled; the user waited on a promise."""
@@ -409,7 +409,7 @@ def test_a_delivered_archive_forces_unpack(box):
     assert "_forced_unpack(" in src
 
 
-# --- no "done" on code nobody ran (mini-swe-agent's loop) --------------------
+# --- no "done" on code nobody ran --------------------------------------------
 
 def _edit_then_answer(box, script, user_level=A.CODE):
     llm = _TGF.LLM(script)
@@ -462,7 +462,7 @@ def test_no_run_is_demanded_from_an_account_that_cannot_run_code(box):
     assert "Поправил" in (out.get("final_answer") or "")
 
 
-# --- changed-but-never-packed guard (real-model bench 2026-09-23) ------------
+# --- changed-but-never-packed guard -------------------------------------------
 
 def _unpack_then(box, script, *, touch=True):
     import time as _t
@@ -513,7 +513,7 @@ def test_reading_an_unpacked_archive_needs_no_pack(box):
 
 
 def test_packing_the_other_folder_does_not_settle_the_changed_one(box):
-    # Real-model run: edited MoreVillagers, packed Thief, answered.
+    # The model edited MoreVillagers, packed Thief, answered.
     import time as _t
     for d in ("a_unpacked", "b_unpacked"):
         (box.root / d).mkdir()
@@ -543,8 +543,8 @@ def test_packing_the_other_folder_does_not_settle_the_changed_one(box):
 
 
 def test_a_repeated_write_says_nothing_changed(ctx):
-    # Bench deliver_symptom 2026-09-23: five identical write_file calls, each
-    # "Wrote ...", until the rounds ran out and the fix was never packed.
+    # Five identical write_file calls, each "Wrote ...", used to run until the
+    # rounds ran out and the fix was never packed.
     _call(ctx, "write_file", path="a.json", content='{"x": 1}')
     again = _call(ctx, "write_file", path="a.json", content='{"x": 1}')
     assert "Nothing changed" in again and "pack_archive" in again

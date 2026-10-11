@@ -165,10 +165,10 @@ def test_batch_cap_bounds_execution():
 
 
 def test_runaway_round_runs_nothing():
-    """Live 2026-09-18 09:02: an outpaint's [done] was answered with 83
-    redraw_image calls; the first was RUN (a second expansion on top of the
-    first) and the refusals behind it counted as consecutive failures. A round
-    that big is a runaway: none of it runs, the model answers with what it has."""
+    """An outpaint's [done] was once answered with 83 redraw_image calls; the
+    first was RUN (a second expansion on top of the first) and the refusals
+    behind it counted as consecutive failures. A round that big is a runaway:
+    none of it runs, the model answers with what it has."""
     calls = {"calc": 0}
     import tools as tools_mod
     spec = tools_mod._BY_NAME["calculate"]
@@ -222,13 +222,12 @@ def _ensure_probe() -> str:
 
 
 def test_repeated_identical_look_is_not_re_executed():
-    """Live 2026-09-18 00:46-00:48 (chat 100000001): the model asked for the
-    SAME inspect_image check on the SAME unchanged picture 9+ times per round
-    across several rounds -- inspect_image always "succeeds" (a critique is
-    never a [TOOL ERROR]), so the identical-failure guard never saw it, and
-    each repeat spent a real vision round trip on an answer already given.
-    The second and later identical calls must be answered from cache, not
-    re-executed."""
+    """The model asked for the SAME inspect_image check on the SAME unchanged
+    picture 9+ times per round across several rounds -- inspect_image always
+    "succeeds" (a critique is never a [TOOL ERROR]), so the identical-failure
+    guard never saw it, and each repeat spent a real vision round trip on an
+    answer already given. The second and later identical calls must be
+    answered from cache, not re-executed."""
     calls = {"look": 0}
     import tools as tools_mod
     spec = tools_mod._BY_NAME["inspect_image"]

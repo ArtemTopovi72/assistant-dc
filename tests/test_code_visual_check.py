@@ -1,6 +1,6 @@
 """Eyes for run_code: a picture a script drew is looked at before it is sent.
 
-Live 2026-09-18: a flowchart came as one column of boxes with an arrow drawn
+A flowchart could come out as one column of boxes with an arrow drawn
 through every box and its text; the script ran without error, so the loop
 had no way to know. Now the newest picture goes to the vision model with the
 request, plainly visible defects come back as a fix request (once per turn),

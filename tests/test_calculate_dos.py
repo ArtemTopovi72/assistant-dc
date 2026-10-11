@@ -8,10 +8,10 @@ try/except cannot save the process):
   - sequence-repetition bombs ([0]*10**9)
   - single huge exponent (10**100000)
   - RIGHT-nested power tower (a**b**c)
-  - LEFT-nested power tower ((a**b)**c)  <-- BUG #9, found by self-red-team:
-    the original guard only inspected the RIGHT operand of `**`, so a left-nested
-    tower had a constant <=1000 exponent at every node and sailed past both the tower
-    and exponent checks; ((10**900)**900)**900 = 10**729_000_000 hung the process.
+  - LEFT-nested power tower ((a**b)**c): the original guard only inspected the
+    RIGHT operand of `**`, so a left-nested tower had a constant <=1000 exponent
+    at every node and sailed past both the tower and exponent checks;
+    ((10**900)**900)**900 = 10**729_000_000 hung the process.
 
 Run: venv/Scripts/python.exe tests/test_calculate_dos.py
 """

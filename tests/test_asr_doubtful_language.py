@@ -1,8 +1,8 @@
 """A short mumbled clip is re-read in the user's language when Whisper's
 language guess is a coin toss.
 
-Live 2026-09-12 (journey 22): a one-word "Угу." voice note was detected as
-French (69%), transcribed as a goodbye, and the bot said goodbye back. With
+A one-word "Угу." voice note was once detected as French (69%),
+transcribed as a goodbye, and the bot said goodbye back. With
 auto-detection on, a guess under ASR_LANG_CONFIDENCE that disagrees with the
 session language triggers one forced re-read; a confident guess, an agreeing
 guess, or a forced WHISPER_LANGUAGE never does.

@@ -1,7 +1,7 @@
 """The callback_query path used to skip the user gate ENTIRELY.
 
-A 12-family real-chat button audit (2026-08-03) proved the same hole from six
-angles: a banned/pending/logged-out account's OLD inline keyboard still worked —
+A real-chat button audit proved the same hole from six angles: a
+banned/pending/logged-out account's OLD inline keyboard still worked —
 image verbs enqueued real renders, `retry`/`lang:`/`facts_clear` executed with no
 check at all, and worst of all `acct_setpwd` let a LOGGED-OUT chat set a brand new
 password with zero credentials and silently re-authenticate itself, bypassing the

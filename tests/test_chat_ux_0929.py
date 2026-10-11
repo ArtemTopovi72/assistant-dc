@@ -1,5 +1,5 @@
-"""Live 2026-09-29: menus piled up, answers were not threaded to the request, every
-answer came twice (voice + the same text), a button's English payload got an
+"""Chat UX regressions: menus piled up, answers were not threaded to the request,
+every answer came twice (voice + the same text), a button's English payload got an
 English reply in a Russian chat, and the OCR worker's cp1251 pipe broke on «ы»."""
 import os, sys, tempfile, time, json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

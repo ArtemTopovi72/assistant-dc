@@ -1,7 +1,7 @@
 """Claimed actions on the tool-less fast path, and the path-less write_file name.
 
-Routing bench 2026-09-24: cue-less requests took the fast path (no tools sent)
-and the model claimed what it never did -- "Хорошо, я забыл все факты",
+Cue-less requests used to take the fast path (no tools sent) and the model
+claimed what it never did -- "Хорошо, я забыл все факты",
 "я запустил глубокое исследование", a JSON pseudo-call written as text,
 "Этот код выведет …". Each must fall through to the full loop. Hard
 arithmetic must not take the fast path at all, or the calculator force can
