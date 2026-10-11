@@ -1,8 +1,12 @@
 # Knowledge Layer — Implementation & Validation
 
 Implements the approved discovery-first architecture (see
-`knowledge_architecture.md`). Module: [`knowledge.py`](../knowledge.py).
-Benchmark: [`tests/bench_knowledge.py`](../tests/bench_knowledge.py).
+`knowledge_architecture.md`). Module: [`knowledge/knowledge.py`](../knowledge/knowledge.py).
+Benchmark: [`bench/knowledge.py`](../bench/knowledge.py).
+
+The sizes, the nomic embedding model and the benchmark numbers below are the
+measurements taken when the layer was built. The embedder has since moved to
+BGE-M3 (1024-d, CPU server), so rerun the benchmark for current figures.
 
 ## 1. Discovery pass — candidate classification (A index / B don't / C unsure)
 
@@ -96,13 +100,15 @@ correctly even though their wording lacks the topic keywords). "keyword" = the
 - **Honest caveat:** semantic was *not* a universal win — on two paraphrase queries
   whose wording still shared keywords, keyword/FTS edged it. Hybrid hedges both.
 
-## 5. Integration & next steps
+## 5. Integration
 - Keep **working memory (facts/session/summary) on JSON + KeywordRetriever** — too
   small to index; must stay exact. (Unchanged.)
 - The `SemanticRetriever(available=False)` seam in `memory_center.py` remains the
   drop-in point if semantic *re-ranking of memory* is ever wanted; the knowledge
   corpus itself lives in its own `KnowledgeBase` (correct separation — it indexes
   pages, not memory entries).
-- **Not yet wired into the GUI**: a "Knowledge" tab (search box + fts/semantic/hybrid
-  toggle + score-breakdown rows, reusing the Diagnostics retrieval-trace pattern) is
-  the recommended next step; the backend it needs is done and benchmarked.
+- **No Knowledge tab in the GUI**: a search box with an fts/semantic/hybrid toggle and
+  score-breakdown rows (reusing the Diagnostics retrieval-trace pattern) was proposed;
+  the backend it would need is done and benchmarked. The document library is exposed
+  through the Database tab (`document_database.md`).
+
