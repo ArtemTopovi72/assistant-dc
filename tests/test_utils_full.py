@@ -167,7 +167,7 @@ def test_throttle_external_calls():
     ctx = Ctx()
     t0 = time.time()
     U.throttle_external_calls(ctx)
-    check("throttle_waits_when_too_soon", time.time() - t0 >= 0.0)
+    check("throttle_waits_when_too_soon", time.time() - t0 >= 0.04, time.time() - t0)   # api_min_interval is 0.05 s
 
     class Ctx2:
         def __init__(self):

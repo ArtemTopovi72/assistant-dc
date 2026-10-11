@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # send_to_lm_studio returning None is the documented "model unavailable"
 # contract every caller already handles.
 import offline_guard; offline_guard.offline_llm()
+offline_guard.public_dns()   # the SSRF guard resolves hosts; the public-URL checks need no network
 
 # Run me as a script, not through pytest. main() below fixes an ORDER --
 # test_p39 reloads config and deep_research, so it has to go last -- and

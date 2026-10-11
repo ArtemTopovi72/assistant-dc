@@ -56,6 +56,14 @@ def test_wiki_lang_title():
 
 
 def test_fetch_wikipedia_real():
+    # This one talks to the real Wikipedia (it checks the API's shape has not changed), so it
+    # needs a network: with no DNS there is nothing to test, and it must not fail the suite.
+    import socket
+    try:
+        socket.getaddrinfo("en.wikipedia.org", 443)
+    except OSError:
+        print("SKIP fetch_wikipedia_real_success: no network (en.wikipedia.org does not resolve)")
+        return
     out = S.fetch_wikipedia("https://en.wikipedia.org/wiki/Python_(programming_language)")
     check("fetch_wikipedia_real_success", out is not None and out["via"] in ("wikipedia-api", "wikipedia-summary")
           and len(out["text"]) > 0)
