@@ -302,11 +302,9 @@ def test_music_tab():
     host2 = _Host(ctx=None)
     tab_noctx = gui.MusicTab(host2)
     tab_noctx.topic_in.setText("a song about rain"); tab_noctx._generate()
-    # Re-anchored: "No model loaded yet — load one first." conflated two states
-    # once the app grew a "start without a model" option. ctx is None means the
-    # runtime is still coming up (waiting fixes it); a ctx with an empty
-    # model_name means no model was loaded ON PURPOSE (only Settings fixes it),
-    # and each says so separately now. What is pinned is that BOTH speak.
+    # ctx is None means the runtime is still coming up (waiting fixes it); a ctx
+    # with an empty model_name means no model was loaded ON PURPOSE (only
+    # Settings fixes it). Each says so separately; both must speak.
     check("music_no_ctx", bool(tab_noctx.status.text().strip())
           and tab_noctx.music_worker is None)
     import types as _types
@@ -419,13 +417,9 @@ def test_music_tab():
           seen.get("gen_kw", {}).get("duration_s") == 180, seen.get("gen_kw"))
 
     # An unavailable engine must surface as a clean "failed", not a crashed worker.
-    #
-    # This used to run the worker fully unpatched and assert it failed -- which
-    # only held because nothing was installed. With ComfyUI actually up and the
-    # Music3 weights present, engine_available() returns True, the worker starts
-    # a REAL render (minutes of GPU) and never emits "failed", so the check went
-    # red on a HEALTHY machine and made an offline suite do live work. The intent
-    # was always "the unavailable path fails cleanly", so say that explicitly.
+    # engine_available is patched explicitly: unpatched, a healthy machine (ComfyUI
+    # up, Music3 weights present) would start a REAL render (minutes of GPU) and
+    # never emit "failed".
     with fake_modules(music={
         "engine_available": lambda ctx=None, preset=None: (False, "weights not downloaded"),
     }):
@@ -560,9 +554,8 @@ def test_transfer_tab_gather_and_run():
         def __getattr__(self, n): return types.SimpleNamespace(connect=lambda *a, **k: None)
         def isRunning(self): return False
         def start(self): started["n"] += 1
-    # TransferTab moved to gui_transfer_tab.py and resolves TransferWorker as a
-    # global of THAT module, so patching gui's copy alone no longer intercepts
-    # anything — the fake would go dead and this would run a real transfer.
+    # TransferTab resolves TransferWorker as a global of gui_transfer_tab, so
+    # patch it there too or a real transfer would run.
     import gui_transfer_tab as _TT
     orig = _TT.TransferWorker
     _TT.TransferWorker = FakeWorker; gui.TransferWorker = FakeWorker
@@ -592,9 +585,8 @@ def test_transfer_tab_draw_mask_and_masks():
         mask_path = maskfile; protect_face = False
         def __init__(self, *a, **k): pass
         def exec_(self): return QDialog.Accepted
-    # Same relocation as TransferWorker: _draw_mask now resolves MaskDrawDialog
-    # in gui_transfer_tab (imported there from gui_dialogs), so patching gui's
-    # copy alone left the REAL dialog in place and exec_() blew up on the fake.
+    # _draw_mask resolves MaskDrawDialog in gui_transfer_tab (imported there from
+    # gui_dialogs), so patch it there too.
     import gui_transfer_tab as _TT2
     orig = _TT2.MaskDrawDialog
     _TT2.MaskDrawDialog = FakeDlg; gui.MaskDrawDialog = FakeDlg

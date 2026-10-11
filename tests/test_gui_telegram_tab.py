@@ -4,9 +4,7 @@ Telegram chat_ids are 64-bit and routinely exceed +-2^31 (e.g. group chat ids,
 which are large negative numbers to begin with, and some private chat_ids are
 themselves already past 2^31). PyQt's plain `int` signal argument type maps to
 a C `int` (32-bit signed), not Python's arbitrary-precision int -- a value
-outside that range silently wraps. Live symptom that motivated this test: the
-desktop log showed "user -1442377781" for a chat whose real id was
-7147556811 -- exactly what 7147556811 wraps to as a signed 32-bit int.
+outside that range silently wraps: 7147556811 shows up as -1442377781.
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_telegram_tab.py
 """
@@ -42,12 +40,10 @@ def _bare_tab() -> "G.TelegramTab":
     return tab
 
 
-# The real chat_id from the live bug report -- a group chat id, large and
-# negative in Telegram's own numbering, chosen because it's an actual
-# documented failure case, not a synthetic edge value.
+# A real chat_id above 2^31, not a synthetic edge value.
 _BIG_CHAT_ID = 7147556811
-# Its exact 32-bit-signed wraparound, i.e. what the OLD `pyqtSignal(int, ...)`
-# declaration produced and what the live screenshot showed.
+# Its exact 32-bit-signed wraparound, i.e. what a `pyqtSignal(int, ...)`
+# declaration would deliver.
 _WRAPPED = -1442377781
 
 
