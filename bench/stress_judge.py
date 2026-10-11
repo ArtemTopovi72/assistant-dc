@@ -1,4 +1,4 @@
-"""Which syllable of a sung word got the stress? (2026-09-28: YuE2 sings гнИлое.)
+"""Which syllable of a sung word got the stress? (YuE2 sings гнИлое.)
 
 Vocal stem (demucs) -> Whisper word timestamps -> inside the target word, the
 voiced runs (pyin) = syllable nuclei -> the stressed one is the longest (the

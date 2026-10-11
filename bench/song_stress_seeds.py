@@ -1,4 +1,4 @@
-"""Acute accent did NOT hold in a full song (гнИлое again, 2026-09-28). One-seed
+"""Acute accent did NOT hold in a full song (гнИлое again). One-seed
 A/B was luck. 3 seeds x 3 spellings of the same two lines, judged by ear."""
 import os, shutil, sys, threading, types
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

@@ -1,5 +1,5 @@
 """Does YuE2's own ABC melody put Russian stress on the right syllable?
-(2026-09-28: the acute accent in the lyric is ignored -- гнИлое.)
+(The acute accent in the lyric is ignored -- гнИлое.)
 
 cot=full makes YuE2 write an ABC score first; the vocal notes of a lyric line
 are its syllables in order. A stressed syllable should sit on a long note or
