@@ -215,7 +215,7 @@ def test_open_settings_accepted_scalechange():
 
 
 def test_language_change_switches_in_place():
-    """The saved language used to wait for a restart nobody was told about."""
+    """A language change in settings switches in place, without a restart."""
     import gui_i18n
     orig = _noop()
     switched = []

@@ -110,10 +110,9 @@ def test_transfer_worker_crop_and_identity_none():
 
 _orig_loader = gui.ModelLoader
 _WN = ["RequestWorker", "RedrawWorker", "FixHandsWorker", "FixArtifactWorker", "TransferWorker"]
-# The worker classes no longer all live on `gui` (RequestWorker moved to
-# gui_workers, TransferWorker to gui_transfer_tab), so patching only `gui` was
-# either an AttributeError or a silent no-op. _gui_patch.stub_workers patches
-# every loaded module that actually binds the name and raises if none does.
+# The worker classes live in several modules (RequestWorker in gui_workers,
+# TransferWorker in gui_transfer_tab). _gui_patch.stub_workers patches every
+# loaded module that actually binds the name and raises if none does.
 def _noop():
     return _stub_workers(_WN)
 def _restore(o):
