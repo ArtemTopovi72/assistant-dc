@@ -452,7 +452,8 @@ class _UserStore:
             snaps = sorted(self._bdir.glob("tg_users_*.db"))
             for old in snaps[:-_USERS_BACKUP_KEEP]:
                 old.unlink(missing_ok=True)
-        except Exception: pass
+        except OSError as exc:
+            logger.warning("UserStore backup prune failed: %s", exc)
 
     def restore_from_backup(self, backup_path: Path | str) -> bool:
         """Replace the live DB with a backup snapshot.  Returns True on success."""

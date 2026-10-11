@@ -241,7 +241,8 @@ class ResolveMixin:
         if sess.pending_instruction:
             sess.pending_instruction = ""
             try: self._store.put(sess)
-            except Exception: pass
+            except Exception:
+                tg_bot.logger.warning("session persist failed", exc_info=True)
 
         # A Stop pressed while this batch was still debouncing pre-dates it —
         # drop the whole batch rather than let it become a task that
@@ -1388,7 +1389,8 @@ class ResolveMixin:
             sess.pending_prefix = ""
             sess.pending_outfit_target = ""   # 👗 answered in words, not a photo
             try: self._store.put(sess)
-            except Exception: pass
+            except Exception:
+                tg_bot.logger.warning("session persist failed", exc_info=True)
 
         _age = time.time() - (getattr(self, "_msg_date", {}).get(chat_id) or time.time())
         if _age > 600:
@@ -1411,7 +1413,8 @@ class ResolveMixin:
         if _quote:
             sess.quoted_text = ""
             try: self._store.put(sess)
-            except Exception: pass
+            except Exception:
+                tg_bot.logger.warning("session persist failed", exc_info=True)
 
         # Photo sent without caption — just acknowledge; vision_agent_node handles it.
         # Deliberately after the prefix block: a caption-less photo must NOT consume
@@ -1517,7 +1520,8 @@ class ResolveMixin:
             if _named:
                 sess.target_image = _named
                 try: self._store.put(sess)
-                except Exception: pass
+                except Exception:
+                    tg_bot.logger.warning("session persist failed", exc_info=True)
                 self._activity.log(chat_id, "system", f"[target] named picture {_named}", uname)
         if (not img_bytes and not file_in_folder and not _new_picture
                 and not getattr(sess, "target_image", "")
@@ -1537,20 +1541,23 @@ class ResolveMixin:
                 # on it. Older pictures are still one reply/button away.
                 sess.target_image = _in_play
                 try: self._store.put(sess)
-                except Exception: pass
+                except Exception:
+                    tg_bot.logger.warning("session persist failed", exc_info=True)
                 self._activity.log(chat_id, "system",
                                    f"[target] picture in play {_in_play} of {len(live)}", uname)
             elif len(live) > 1 and tg_bot._one_lineage(live):
                 # One picture in several states -- the latest is "the picture".
                 sess.target_image = live[-1]["id"]
                 try: self._store.put(sess)
-                except Exception: pass
+                except Exception:
+                    tg_bot.logger.warning("session persist failed", exc_info=True)
                 self._activity.log(chat_id, "system",
                                    f"[target] one lineage of {len(live)} -> latest {live[-1]['id']}", uname)
             elif len(live) > 1:
                 sess.pending_instruction = merged
                 try: self._store.put(sess)
-                except Exception: pass
+                except Exception:
+                    tg_bot.logger.warning("session persist failed", exc_info=True)
                 self._send_text(chat_id, tg_bot._t("img_which", lang, n=len(live)),
                                 parse_mode="HTML",
                                 keyboard=tg_bot._image_choice_kb(sess, lang))
@@ -1583,7 +1590,8 @@ class ResolveMixin:
             # "the one I sent earlier" has something to resolve to.
             tg_bot._log_image(sess, img_path, label=merged[:80], src="user")
             try: self._store.put(sess)
-            except Exception: pass
+            except Exception:
+                tg_bot.logger.warning("session persist failed", exc_info=True)
 
         # Log the rest of the album so "the second one"/"the third one" has
         # something to resolve against later, even though only the first
@@ -1598,7 +1606,8 @@ class ResolveMixin:
                 tg_bot._log_image(sess, _extra_path,
                                   label=f"{merged[:70]} (#{_i})", src="user")
             try: self._store.put(sess)
-            except Exception: pass
+            except Exception:
+                tg_bot.logger.warning("session persist failed", exc_info=True)
 
         task = tg_bot._Task(
             task_id=str(uuid.uuid4()),

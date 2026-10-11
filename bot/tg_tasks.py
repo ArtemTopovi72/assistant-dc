@@ -514,7 +514,8 @@ class TaskRunnerMixin:
             tg_bot._log_image(sess, path,
                               msg_id=getattr(self, "_last_photo_msg_id", 0), src="bot")
             try: self._store.put(sess)
-            except Exception: pass
+            except Exception:
+                tg_bot.logger.warning("session persist failed", exc_info=True)
             self._activity.log(chat_id, "system", f"[salvage] sent {path}", uname)
             return True
         except Exception:
@@ -996,7 +997,8 @@ class TaskRunnerMixin:
                 sess.last_task_text = task.user_text
                 sess.last_task_id = task.task_id
                 try: self._store.put(sess)
-                except Exception: pass
+                except Exception:
+                    tg_bot.logger.warning("session persist failed", exc_info=True)
                 self._send_text(chat_id,
                     tg_bot._t("dr_failed", lang, err=_html_mod.escape(err)),
                     parse_mode="HTML",
@@ -1481,7 +1483,8 @@ class TaskRunnerMixin:
                 sess.last_task_text = task.user_text
                 sess.last_task_id = task.task_id
                 try: self._store.put(sess)
-                except Exception: pass
+                except Exception:
+                    tg_bot.logger.warning("session persist failed", exc_info=True)
                 # The deadline is not proof that nothing was made. A render that
                 # already finished is the answer the user asked for, and the
                 # inspection calls that ran the clock out do not unmake it --
@@ -1520,7 +1523,8 @@ class TaskRunnerMixin:
                 sess.last_task_text = task.user_text
                 sess.last_task_id = task.task_id
                 try: self._store.put(sess)
-                except Exception: pass
+                except Exception:
+                    tg_bot.logger.warning("session persist failed", exc_info=True)
                 self._send_text(chat_id,
                     tg_bot._t("err_generic", lang, err=_html_mod.escape(err_text)),
                     parse_mode="HTML",
@@ -1547,7 +1551,8 @@ class TaskRunnerMixin:
                     sess.last_task_text = task.user_text
                     sess.last_task_id = task.task_id
                     try: self._store.put(sess)
-                    except Exception: pass
+                    except Exception:
+                        tg_bot.logger.warning("session persist failed", exc_info=True)
                     self._send_text(chat_id,
                         tg_bot._t("err_generic", lang, err="malformed result"),
                         parse_mode="HTML",
@@ -1867,7 +1872,8 @@ class TaskRunnerMixin:
                                        msg_id=getattr(self, "_last_photo_msg_id", 0),
                                        src="bot")
                             try: self._store.put(sess)
-                            except Exception: pass
+                            except Exception:
+                                tg_bot.logger.warning("session persist failed", exc_info=True)
                             delivered = True
                             # the toggle, or "нарисуй ..., пришли файлом" in this very
                             # request (was honoured only for an already-sent picture)
@@ -1999,7 +2005,8 @@ class TaskRunnerMixin:
                       and m["content"].startswith(RAG_HEAD) else m for m in latest]
             sess.set_history(latest)
             try: self._store.put(sess)
-            except Exception: pass
+            except Exception:
+                tg_bot.logger.warning("session persist failed", exc_info=True)
 
     def _look_video(self, ctx, file_id: str, data: bytes | None = None, lang: str = "ru",
                     transcript: str = "") -> dict:
