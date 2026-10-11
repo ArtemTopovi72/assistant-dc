@@ -50,10 +50,6 @@ class ToolRecorder:
                     f"right now. Try a different approach.")
         return _STUBS[name](state, args)
 
-    def call_stub(self, state, name, args):
-        """Run the honest stub for `name` (used by faults that fail-then-succeed)."""
-        return _STUBS[name](state, args)
-
     # -- convenience -------------------------------------------------------
     @property
     def names(self):
@@ -177,5 +173,3 @@ _STUBS = {
     "find_photo": _find_photo,
     "create_presentation": _presentation,
 }
-
-ALL_TOOLS = sorted(_STUBS)
