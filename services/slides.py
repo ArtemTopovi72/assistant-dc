@@ -392,7 +392,7 @@ def plan_deck(ctx, topic: str, n_slides: int = 0, out_lang: str = "",
     # because repeating an identical prompt to a model that just failed it mostly
     # fails again.
     attempts = (
-        dict(prompt=_PLAN_PROMPT, temperature=0.4, max_tokens=6000, force_think=False),   # 2026-09-25: no reasoning anywhere
+        dict(prompt=_PLAN_PROMPT, temperature=0.4, max_tokens=6000, force_think=False),
         dict(prompt=_PLAN_PROMPT, temperature=0.7, max_tokens=8000, force_think=False),
         dict(prompt=_PLAN_MINIMAL, temperature=0.3, max_tokens=8000, force_think=False),
     )

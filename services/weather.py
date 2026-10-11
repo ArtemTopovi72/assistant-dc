@@ -135,9 +135,7 @@ _ALIASES = {"питер": "Санкт-Петербург", "спб": "Санкт
 def geocode_city(city: str, lang: str = "en") -> Optional[dict]:
     """Return {"lat", "lon", "name", "country"} for the best match, or None.
 
-    `lang` picks the language of the returned NAME: the geocoder used to be
-    asked in English only, so a Russian user got a card headed "Sochi" and
-    "Kazan’". Open-Meteo answers in the
+    `lang` picks the language of the returned NAME. Open-Meteo answers in the
     language asked for and falls back to English when it has no local name.
     """
     city = (city or "").strip()
@@ -261,12 +259,8 @@ def _clothing_advice(temp_c: float, code: int, wind_kmh: float, lang: str) -> st
     if lang == "ru":
         # NOMINATIVE, deliberately: these are noun phrases listed under a
         # "что надеть" heading ("Утро — лёгкая куртка"), not objects of a verb.
-        # They were briefly accusative, to read as "надень лёгкую куртку" --
-        # but the primary advice path is the LLM (see the advise_fn contract
-        # above), which returns a plain nominative noun phrase, so the verb
-        # prefix produced "надень футболка и ветровка" on every real reply.
-        # Dropping the verb makes both paths grammatical instead of asking a
-        # model to reliably inflect Russian case.
+        # The primary advice path is the LLM, which returns a plain nominative
+        # noun phrase, so a verb prefix here would be ungrammatical for it.
         if temp_c <= -10:
             base = "пуховик, тёплая шапка и перчатки"
         elif temp_c <= 0:
@@ -741,17 +735,11 @@ def what_to_wear_periods_for_loc(loc: dict, lang: str = "en",
 def format_forecast(buckets: list, lang: str = "en", advice_map: dict = None) -> str:
     """Render buckets as a monospace table, a conditions legend, and advice.
 
-    Was one prose line per bucket, each ending in its own clothing sentence.
-    For a 48h forecast that repeated the SAME advice up to six times ("надень
-    лёгкую куртку или худи" five times over), which is what made the reply
-    look like a wall of text — the numbers a reader actually wants to compare
-    were buried inside repeated sentences.
-
     A <pre> block is used because Telegram renders it in a monospace font,
     which is the only way columns line up in a chat message. NOTE that this
     makes parse_mode="HTML" mandatory at the send site: without it Telegram
     shows the tags literally AND draws the table in a proportional font, so
-    every column is ragged (which is exactly what shipped first).
+    every column is ragged.
 
     Three things are de-duplicated rather than repeated per row, because for a
     48h forecast each of them was otherwise printed up to six times:
