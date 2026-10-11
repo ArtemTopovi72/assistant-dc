@@ -5,9 +5,9 @@ it: the scale chosen here has to be applied to the QApplication BEFORE any
 widget is built, since px()/pt() are read at construction time and a widget
 already laid out will not re-scale.
 
-Both consumers — AssistantWindow and run_gui — stay in gui.py, so gui.py
-re-exports these two and the suites that patch gui.SettingsDialog (four of
-them) keep intercepting exactly as before.
+Both consumers — AssistantWindow and run_gui — are in gui.py, which
+re-exports these two so the suites that patch gui.SettingsDialog keep
+intercepting.
 """
 import os
 
@@ -46,7 +46,6 @@ logger = logging.getLogger("assistant.gui")
 # abort with no traceback, not a test failure. The comparison should not depend
 # on the dialog class the caller happens to be holding.
 NO_MODEL = "__no_model__"
-_NO_MODEL = NO_MODEL
 
 
 class SettingsDialog(QDialog):
@@ -371,9 +370,9 @@ class SettingsDialog(QDialog):
         self._cancel_autostart()
         super().wheelEvent(event)
 
-    # The sentinel lives at MODULE level (below) and is mirrored here only for
+    # The sentinel lives at MODULE level (above) and is mirrored here only for
     # readability at the call sites that already have the class in hand.
-    NO_MODEL = _NO_MODEL
+    NO_MODEL = NO_MODEL
 
     def _populate_models(self):
         from model_selector import list_models, _index_model_sizes, _size_gb, _MODELS_DIR

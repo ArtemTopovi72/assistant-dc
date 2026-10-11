@@ -1,8 +1,8 @@
 """Telegram bot control panel, and the settings scope that protects the token.
 
-Fourth tab out of gui.py. It moved together with its ENTIRE settings unit —
-_TG_SETTINGS_SCOPE, _TG_SETTINGS_DIR, redirect_settings() and _tg_settings() —
-and that is the important part of this file.
+It owns its ENTIRE settings unit — _TG_SETTINGS_SCOPE, _TG_SETTINGS_DIR,
+redirect_settings() and _tg_settings() — and that is the important part of
+this file.
 
 The panel PERSISTS the bot token when it starts, so any test that drives a real
 TelegramTab writes into the user's live QSettings store and destroys their real
@@ -51,10 +51,6 @@ _TG_SILENT_KEY  = "telegram/silent_mode"
 _TG_API_ID_KEY   = "telegram/api_id"
 _TG_API_HASH_KEY = "telegram/api_hash"
 
-# The panel PERSISTS the token on _start(), so any test that drives a real
-# TelegramTab writes into the user's live store and destroys their real token.
-# Tests call redirect_settings(tmpdir) first; see tg_bot.redirect_data_dir for
-# the same protection over the user database.
 _TG_SETTINGS_SCOPE = ("AssistantApp", "TelegramBot")
 _TG_SETTINGS_DIR: str | None = None
 
@@ -785,7 +781,6 @@ class TelegramTab(QWidget):
                 "Could not restore the backup. Check the log for details.")
 
     def _export_log(self):
-        from pathlib import Path
         log_path = Path(__file__).resolve().parents[1].joinpath("tg_activity.jsonl")
         if log_path.exists():
             try:

@@ -5,8 +5,7 @@ Split out of gui_memory_tab.py as a mixin, because MemoryCenterTab is one class
 
 What it requires from the host: .store, .host, ._active_profile(), ._confirm(),
 ._toast(), .refresh_all(), and the two widgets it builds (.prof_list,
-.profile_combo). Nothing else, which is what makes the seam honest rather than
-cosmetic.
+.profile_combo). Nothing else.
 """
 from PyQt5.QtWidgets import (
     QGridLayout, QInputDialog, QListWidget, QMessageBox, QPushButton, QVBoxLayout, QWidget,
