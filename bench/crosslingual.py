@@ -19,6 +19,9 @@ from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT))
+# This directory holds bench/knowledge.py, which would shadow the app's knowledge
+# module when this file runs as a script: drop it from the path first.
+sys.path = [p for p in sys.path if Path(p or ".").resolve() != Path(__file__).resolve().parent]
 
 import knowledge
 
