@@ -27,9 +27,6 @@ def _bot_file_limit() -> int:
     return (2000 if getattr(_config, "TG_API_LOCAL", False) else 20) * 1024 * 1024
 
 
-TG_BOT_FILE_LIMIT = _bot_file_limit()
-
-
 def _save_image_bytes(data: bytes) -> str:
     """Write downloaded image bytes to a fresh file in tg_bot._IMAGE_DIR; its path."""
     tg_bot._IMAGE_DIR.mkdir(parents=True, exist_ok=True)
