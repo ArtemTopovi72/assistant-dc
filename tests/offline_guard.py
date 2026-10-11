@@ -107,9 +107,50 @@ def no_model_management():
     _lms.reload_via_cli = _no_reload
 
 
+_REAL_GETADDRINFO = None
+
+
+def public_dns():
+    """Make hostnames resolve to a public address without a network.
+
+    The crawler's SSRF guard (dr_urls._is_safe_public_url) resolves every host with
+    socket.getaddrinfo and refuses anything that does not come back public, failing closed
+    on a lookup error. A suite that fakes `requests` and fetches "https://x.com/a" therefore
+    still needed real DNS: offline (CI, a sandbox) every such fetch was refused before the fake
+    was reached, and the suite failed for a reason unrelated to what it tests.
+
+    IP literals, "localhost" and the reserved names (.invalid, .local, .internal, .localhost)
+    keep the real resolver's answer, so a suite that checks the guard still sees it refuse them.
+    """
+    global _REAL_GETADDRINFO
+    if _REAL_GETADDRINFO is not None:
+        return
+    import ipaddress
+    import socket
+    _REAL_GETADDRINFO = socket.getaddrinfo
+
+    def _getaddrinfo(host, port, *args, **kwargs):
+        h = str(host or "").lower()
+        try:
+            ipaddress.ip_address(h)
+            literal = True
+        except ValueError:
+            literal = False
+        if literal or h == "localhost" or h.endswith((".invalid", ".local", ".internal", ".localhost")):
+            return _REAL_GETADDRINFO(host, port, *args, **kwargs)
+        # 93.184.216.34 (example.com) is a global address, unlike the documentation ranges.
+        return [(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("93.184.216.34", int(port or 0)))]
+
+    socket.getaddrinfo = _getaddrinfo
+
+
 def restore():
     """Put the real function back (for a suite that tests the guard itself)."""
-    global _ORIGINAL, _ORIGINAL_UNLOAD, _ORIGINAL_RELOAD
+    global _ORIGINAL, _ORIGINAL_UNLOAD, _ORIGINAL_RELOAD, _REAL_GETADDRINFO
+    if _REAL_GETADDRINFO is not None:
+        import socket
+        socket.getaddrinfo = _REAL_GETADDRINFO
+        _REAL_GETADDRINFO = None
     # The two guards are installed independently, so they are lifted
     # independently: an early return here left the model guard latched on.
     if _ORIGINAL is not None:
