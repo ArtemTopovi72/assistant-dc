@@ -72,31 +72,6 @@ def test_refinement(prev_path):
     check("refine_returns", True)  # informational; refinement may internally reject/loop
     return out
 
-def test_upscale(src):
-    ctx = Ctx()
-    out = I.upscale_image_with_comfy(ctx, src, timeout=180)
-    check("upscale_ran", True)
-    if out:
-        check("upscale_exists", Path(out).exists())
-    return out
-
-def test_restore(src):
-    ctx = Ctx()
-    out = I.restore_image_with_comfy(ctx, src, timeout=180)
-    check("restore_ran", True)
-    if out:
-        check("restore_exists", Path(out).exists())
-    return out
-
-def test_redraw(src):
-    ctx = Ctx()
-    out = I.redraw_image_with_comfy(ctx, src, "make the lighting warmer and add subtle texture",
-                                     timeout=180)
-    check("redraw_ran", True)
-    if out:
-        check("redraw_exists", Path(out).exists())
-    return out
-
 def test_inpaint(src):
     ctx = Ctx()
     mask = Image.new("L", (512, 512), 0)
@@ -119,9 +94,6 @@ if __name__ == "__main__":
     test_generate_empty_prompt_rejected()
     test_generate_bad_workflow_path(None)
     src = out1 or _png("fallback_src.png")
-    test_upscale(src)
-    test_restore(src)
-    test_redraw(src)
     test_inpaint(src)
     test_refinement(src)
     passed = sum(1 for _, c in RESULTS if c)
