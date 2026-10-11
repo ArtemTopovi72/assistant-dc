@@ -19,9 +19,6 @@ from pathlib import Path
 
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
 
-import logging
-logger = logging.getLogger("assistant.gui")   # same channel as gui.py
-
 
 class MadhouseCastMixin:
     """Cast assets, add/remove, load/save. Mixed into MadhouseTab, never alone."""
