@@ -51,6 +51,19 @@ fake3 = types.SimpleNamespace(_acquire_page=lambda *a: (_ for _ in ()).throw(Run
 sys.modules["dr_crawl"] = fake3
 check("a fetch failure yields nothing, never raises", L.link_context("https://x/y") == "")
 
+# An Ozon product link goes to the ozon_product tool: the crawler is not asked, and the
+# model is told it is a shopping question (a bare link once became a video plan).
+_OZ = "https://www.ozon.ru/product/avtomaticheskaya-kormushka-1884026101/?at=abc&sh=xyz"
+_oz = L.link_context(_OZ)
+check("an Ozon product link names the ozon_product tool", "ozon_product" in _oz and _OZ in _oz, _oz[:200])
+check("an Ozon product link says it is not a video request", "do not make a video" in _oz)
+check("an Ozon link is never sent to the page crawler",
+      L.link_context(_OZ) != "" and "title:" not in L.link_context(_OZ))
+check("a follow-up about an earlier Ozon link says so",
+      "linked earlier" in L.link_context("а отзывы какие?", url=_OZ))
+check("ozon.ru is matched, an ozon-looking foreign host is not",
+      L.link_context("https://notozon.ru/product/1") == "" and L.link_context("https://ozon.ru.evil.example/product/1") == "")
+
 src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(L.__file__))), "bot/tg_resolve.py"), encoding="utf-8").read()
 check("the resolver attaches the page as scaffolding", "_tg_links.link_context(text)" in src and "self._read_links(" in src and "scaffold.append(_lc)" in src)
 check("and never under F5_TEST_RUN", 'not os.getenv("F5_TEST_RUN")' in src)
