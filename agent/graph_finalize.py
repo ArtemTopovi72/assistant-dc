@@ -519,6 +519,12 @@ def _finalize_answer(ctx: Context, state: AgentState, messages: list,
                        or _gp._ACTION_CLAIM_RE.search(final_answer))
             _line = (_honest_failure_line(_artifact_fails, _tool_said_unsupported(messages))
                      if _artifact_fails else "")
+            # A failed render whose draft still announces a plan "below" (it
+            # read the plan card in the history): live 2026-10-11 the user got
+            # «Не получилось…» followed by «План видео ниже!» and an epic pitch.
+            if ("generate_video" in _artifact_fails
+                    and re.search(r"\bплан\w*|\bplan\b|сценари\w*", final_answer, re.I)):
+                _claims = _claims or True
             if _artifact_fails and _claims and _line:
                 logger.warning("Answer claims a deliverable from failed "
                                "tool(s) %s — replacing", sorted(_artifact_fails))

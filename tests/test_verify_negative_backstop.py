@@ -308,3 +308,11 @@ def test_forwarded_numbers_do_not_force_a_tool():
     own = user_words(_FWD.replace("скину вечером", "33163118 + 66022055, Екатеринбург")
                      + "что из этого взять в проект?")
     assert "33163118" not in own and "Екатеринбург" not in own and "в проект" in own
+
+
+def test_a_failed_render_does_not_still_announce_a_plan():
+    # Live 2026-10-11: «Не получилось…» was followed by «План видео ниже!» and an epic pitch.
+    out = _fin("План видео ниже! Я прописал в сценарии максимально эпичный момент.",
+               failed={"generate_video"})
+    assert out == GF._honest_failure_line({"generate_video"})
+    assert "План" not in out
