@@ -6,7 +6,7 @@ and its own module, since write volume here (one row per photo/video/song/
 document actually SENT) is much higher than the user table's and should not
 multiply tg_userstore's per-write backup-and-prune cost.
 
-WHY THIS EXISTS (live, 2026-09-19): `sess.image_log` already survives a
+WHY THIS EXISTS: `sess.image_log` already survives a
 restart (it rides inside tg_sessions.json), but nothing else does — a video
 just delivered is remembered only in an in-memory `dict` on the bot object
 (`self._chat_videos`), and a song or presentation is not remembered at all
@@ -22,13 +22,13 @@ that pattern to every artifact kind, in one durable place, so:
     caller can produce uniformly instead of re-deriving its own os.path.exists
     check per artifact kind, as img_gone alone used to.
 
-WHY THIS DOES NOT REPEAT THE DCIM.ZIP INCIDENT (journey 33, 2026-09-14): the
+WHY THIS CANNOT BECOME A DIRECTORY LISTING: the
 only writers of this table are the four real Telegram delivery points —
 `_log_image`, and `_send_video`/`_send_document`/`_send_audio` in
 tg_transport.py — each firing once per file actually handed to one real chat.
 Nothing here ever walks a directory or a sandbox extraction tree, and every
 read is capped at `_MAX_ROWS` regardless of how it is called, so there is no
-path from "a zip full of 173 photos landed somewhere on disk" to this store
+path from "a zip full of photos landed somewhere on disk" to this store
 ever holding, or handing back, anything but what the bot genuinely sent.
 """
 from __future__ import annotations
