@@ -62,7 +62,7 @@ def stage_suites():
 def stage_payload():
     with tempfile.TemporaryDirectory() as d:
         j = Path(d) / "p.json"
-        out, rc, dt = _run(["bench/payload_audit.py", "--sandbox", "--json", str(j)], 900)
+        _, rc, dt = _run(["bench/payload_audit.py", "--sandbox", "--json", str(j)], 900)
         rows = json.loads(j.read_text(encoding="utf-8")) if j.exists() else []
     return {"rc": rc, "seconds": dt,
             "tokens": {r["kind"]: r["total_tokens"] for r in rows},
@@ -79,7 +79,7 @@ def stage_sandbox(reps):
 
 
 def stage_triage():
-    out, rc, dt = _run(["bench/triage_failures.py", "--days", "7", "--show", "0"], 300)
+    out, rc, _ = _run(["bench/triage_failures.py", "--days", "7", "--show", "0"], 300)
     counts = dict((k, int(v)) for k, v in re.findall(r"^== (\S+): (\d+)", out, re.M))
     return {"rc": rc, "counts": counts}
 
