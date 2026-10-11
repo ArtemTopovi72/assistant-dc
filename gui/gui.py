@@ -47,7 +47,7 @@ from config import SAMPLE_RATE, LM_STUDIO_BASE, MODEL_NAME, MEMORY_DIR
 from audio import AudioPlayer
 import gui_i18n
 import ui_scale
-from ui_scale import px, pt, scale_style as _ss
+from ui_scale import px, scale_style as _ss
 
 logger = logging.getLogger("assistant.gui")
 
