@@ -35,7 +35,7 @@ import config
 import image as image_mod
 import tool_graph
 from image import (
-    _INPAINT_FAILURE, _is_removal_instruction, classify_edit_intent,
+    _INPAINT_FAILURE, classify_edit_intent,
     inpaint_region_with_comfy, route_edit_request,
 )
 from tool_context import _remember, _set_current_image
