@@ -39,11 +39,10 @@ import models
 
 _TMP = Path(tempfile.mkdtemp(prefix="imgstub3_"))
 RESULTS = []
-import os as _os
 def check(name, cond, detail=""):
     RESULTS.append((name, bool(cond)))
     print("[" + ("PASS" if cond else "FAIL") + "] " + name + ("" if cond or not detail else " - " + detail))
-    if not cond and _os.environ.get("PYTEST_CURRENT_TEST"):
+    if not cond and os.environ.get("PYTEST_CURRENT_TEST"):
         raise AssertionError(str(name) + (": " + str(detail) if detail else ""))
 
 def Ctx():
@@ -68,6 +67,15 @@ def _mask_file(name, w=120, h=120, box=None):
     p = _TMP / name
     m.save(p)
     return str(p)
+
+
+def _square_mask(size=100, lo=30, hi=70):
+    """A size x size mask with a filled lo..hi square: the region the contained edit repaints."""
+    m = Image.new("L", (size, size), 0)
+    px = m.load()
+    for y in range(lo, hi):
+        for x in range(lo, hi): px[x, y] = 255
+    return m
 
 
 
@@ -223,10 +231,7 @@ def test_contained_firered_firered_no_tile():
     ctx = Ctx()
     img = _photo("cf4.png", w=100, h=100)
     orig = Image.open(img).convert("RGB")
-    mask = Image.new("L", (100, 100), 0)
-    px = mask.load()
-    for y in range(30, 70):
-        for x in range(30, 70): px[x, y] = 255
+    mask = _square_mask()
     with _Patches(_contained_region_mask=lambda *a, **k: (orig, mask, (30, 30, 70, 70)),
                   edit_image_with_firered=lambda *a, **k: None):
         out = I.edit_region_contained_via_firered(ctx, img, "hand", "fix it")
@@ -236,10 +241,7 @@ def test_contained_firered_success_no_qa():
     ctx = Ctx()
     img = _photo("cf5.png", w=100, h=100)
     orig = Image.open(img).convert("RGB")
-    mask = Image.new("L", (100, 100), 0)
-    px = mask.load()
-    for y in range(30, 70):
-        for x in range(30, 70): px[x, y] = 255
+    mask = _square_mask()
     # A DIFFERENT colour from the source: the pipeline rejects a no-op edit
     # (engine handed back the tile unchanged) so the caller can retry or fall
     # back. A tile identical to the crop therefore exercises the no-op guard,
@@ -257,10 +259,7 @@ def test_contained_firered_refill_scratch_not_returned():
     ctx = Ctx()
     img = _photo("cf5r.png", w=100, h=100)
     orig = Image.open(img).convert("RGB")
-    mask = Image.new("L", (100, 100), 0)
-    px = mask.load()
-    for y in range(30, 70):
-        for x in range(30, 70): px[x, y] = 255
+    mask = _square_mask()
     tile_out = _photo("cf5r_tile.png", w=40, h=40, col=(220, 40, 40))
     scratch = _photo("_INTERMEDIATE_garment_1.png", w=100, h=100, col=(10, 10, 10))
     with _Patches(_contained_region_mask=lambda *a, **k: (orig, mask, (30, 30, 70, 70)),
@@ -276,10 +275,7 @@ def test_contained_firered_stage2_qa_wrong_rejects():
     ctx = Ctx()
     img = _photo("cf6.png", w=100, h=100)
     orig = Image.open(img).convert("RGB")
-    mask = Image.new("L", (100, 100), 0)
-    px = mask.load()
-    for y in range(30, 70):
-        for x in range(30, 70): px[x, y] = 255
+    mask = _square_mask()
     tile_out = _photo("cf6_tile.png", w=40, h=40)
     with _Patches(_contained_region_mask=lambda *a, **k: (orig, mask, (30, 30, 70, 70)),
                   edit_image_with_firered=lambda *a, **k: tile_out,
@@ -292,14 +288,8 @@ def test_contained_firered_stage2_qa_good_accepts():
     ctx = Ctx()
     img = _photo("cf7.png", w=100, h=100)
     orig = Image.open(img).convert("RGB")
-    mask = Image.new("L", (100, 100), 0)
-    px = mask.load()
-    for y in range(30, 70):
-        for x in range(30, 70): px[x, y] = 255
-    # A DIFFERENT colour from the source: the pipeline rejects a no-op edit
-    # (engine handed back the tile unchanged) so the caller can retry or fall
-    # back. A tile identical to the crop therefore exercises the no-op guard,
-    # not the success path this test is about.
+    mask = _square_mask()
+    # A different colour from the source, as in test_contained_firered_success_no_qa.
     tile_out = _photo("cf7_tile.png", w=40, h=40, col=(220, 40, 40))
     with _Patches(_contained_region_mask=lambda *a, **k: (orig, mask, (30, 30, 70, 70)),
                   edit_image_with_firered=lambda *a, **k: tile_out,
@@ -314,10 +304,7 @@ def test_contained_firered_vlm_qa_off_skips_verdict():
     ctx = Ctx()
     img = _photo("cf8.png", w=100, h=100)
     orig = Image.open(img).convert("RGB")
-    mask = Image.new("L", (100, 100), 0)
-    px = mask.load()
-    for y in range(30, 70):
-        for x in range(30, 70): px[x, y] = 255
+    mask = _square_mask()
     tile_out = _photo("cf8_tile.png", w=40, h=40, col=(220, 40, 40))
     with _Patches(_contained_region_mask=lambda *a, **k: (orig, mask, (30, 30, 70, 70)),
                   edit_image_with_firered=lambda *a, **k: tile_out,
@@ -333,10 +320,7 @@ def test_contained_firered_qa_reject_sets_reason():
     ctx = Ctx()
     img = _photo("cf9.png", w=100, h=100)
     orig = Image.open(img).convert("RGB")
-    mask = Image.new("L", (100, 100), 0)
-    px = mask.load()
-    for y in range(30, 70):
-        for x in range(30, 70): px[x, y] = 255
+    mask = _square_mask()
     tile_out = _photo("cf9_tile.png", w=40, h=40, col=(220, 40, 40))
     I._INPAINT_FAILURE.clear()
     with _Patches(_contained_region_mask=lambda *a, **k: (orig, mask, (30, 30, 70, 70)),
