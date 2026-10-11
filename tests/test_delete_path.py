@@ -4,10 +4,9 @@ Live 2026-09-14: «не захламляй: удали архив и папку 
 оставь». There was no delete tool -- only run_code, which a FILES-level user
 does not have -- so the clean-up the working folder invites was impossible.
 """
-import os, sys, tempfile
+import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pytest
-from pathlib import Path
 from code_sandbox import Sandbox, SandboxError
 import tool_code_handlers as H
 

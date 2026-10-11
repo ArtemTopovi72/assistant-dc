@@ -261,7 +261,6 @@ print("=" * 66)
 print("THE PLANNER RETRIES INSTEAD OF ACCEPTING A FRAGMENT")
 print("=" * 66)
 
-import types as _types
 _real_llm = sys.modules.get("llm")
 
 

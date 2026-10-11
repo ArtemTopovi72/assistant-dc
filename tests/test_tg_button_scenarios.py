@@ -3,7 +3,7 @@
 Drives the REAL TelegramBot object with the network layer stubbed, so routing,
 prefix handling and modality merging are exercised for real.
 """
-import os, sys, types, tempfile, pathlib
+import os, sys, types, tempfile
 import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass

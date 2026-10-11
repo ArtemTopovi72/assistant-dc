@@ -1,14 +1,13 @@
 """A plain-prose button payload must never look like the user typed English.
 
-Live, 2026-09-19: pressing "Сменить одежду" (change_clothes) in a Russian
-chat answered in English and skipped asking what outfit. tg_tasks._is_button_
-payload only recognised _DIRECT_KB/_PROMPT_KB phrases as machine text; the
-three _CB_CMDS buttons whose payload has no [bracket] tag (change_clothes,
+Pressing "Сменить одежду" (change_clothes) in a Russian chat used to answer
+in English and skip asking what outfit. tg_tasks._is_button_payload only
+recognised _DIRECT_KB/_PROMPT_KB phrases as machine text; the three
+_CB_CMDS buttons whose payload has no [bracket] tag (change_clothes,
 regenerate, outpaint) fell through, so their English prose was read as the
 USER writing in English and flipped sess.turn_lang for the whole session --
 the exact bug this file's sibling, test_reply_language_follows_user.py,
-already covers for a different code path (live, 2026-09-18, the "📷 Analyze
-Photo" bare press).
+already covers for a different code path (the "📷 Analyze Photo" bare press).
 
 Run: venv/Scripts/python.exe tests/test_button_payload_no_lang_leak.py
 """

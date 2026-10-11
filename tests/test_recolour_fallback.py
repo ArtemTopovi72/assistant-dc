@@ -7,7 +7,7 @@ colour of a named thing counts as a content complaint, and a layout edit whose
 re-render still carries problems hands the original to the pixel pipeline
 (FireRed contained), which paints the change in place.
 """
-import os, sys, types
+import os, sys
 os.environ.setdefault("F5_TEST_RUN", "1")
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass

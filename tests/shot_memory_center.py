@@ -6,7 +6,6 @@ width (to prove responsive column hiding + button reflow). Run with the venv
 python on a desktop session.
 """
 import os, sys, tempfile, shutil
-import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 from pathlib import Path

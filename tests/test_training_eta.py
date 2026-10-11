@@ -12,7 +12,6 @@ average would not.
 
 Run: venv/Scripts/python.exe tests/test_training_eta.py
 """
-import io
 import os
 import sys
 import tempfile

@@ -16,7 +16,6 @@ the same name.
 
 Run: venv/Scripts/python.exe tests/test_character_engine_route.py
 """
-import json
 import os
 import sys
 import tempfile

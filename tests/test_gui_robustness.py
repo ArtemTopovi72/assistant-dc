@@ -12,7 +12,7 @@ fake/malformed payloads. Focus: the classes of GUI bug the phase names —
 Run headless:  QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe -m pytest tests/test_gui_robustness.py -q
 Or directly:   QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_robustness.py
 """
-import os, sys, threading, types, time
+import os, sys, threading, types
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("USE_GUI", "0")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -303,10 +303,7 @@ if __name__ == "__main__":
         except Exception as e:
             failed += 1; print(f"  ERROR in {fn.__name__}: {type(e).__name__}: {e}")
     print(f"\n{len(fns)-failed}/{len(fns)} GUI robustness tests passed")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

@@ -11,7 +11,7 @@ Run: .\\venv\\Scripts\\python.exe tests\\test_agent_dialogue.py
 # tests/, there is no pass/fail signal here for run_all.py to act on, so
 # auto-running it on every full sweep would only burn the card for nothing.
 NOT_IN_RUN_ALL = True
-import sys, os, time, json
+import sys, os, time
 sys.path.insert(0, ".")
 
 # The Windows console is cp1251 here: Cyrillic replies and the ✓/✗ marks below
@@ -39,7 +39,7 @@ def check_lm_studio():
         if not models:
             return None
         return models[0]["id"]
-    except Exception as e:
+    except Exception:
         return None
 
 model_id = check_lm_studio()
@@ -52,7 +52,7 @@ print(f"LM Studio: model '{model_id}' is loaded\n")
 
 # ── test via the graph agent ──────────────────────────────────────────────────
 from graph import build_graph
-from models import Models, Context
+from models import Context
 from pathlib import Path
 import threading
 

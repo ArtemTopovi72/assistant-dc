@@ -270,8 +270,8 @@ check("only the collage repair chain is wrapped, never the critic loop",
 
 
 # -- a test run must never unload the operator's live model ------------------
-# Suites that drive the render path with a stubbed ComfyUI reached
-# `lms unload --all` for real and took the machine's chat model down mid-run.
+# A suite that drives the render path with a stubbed ComfyUI must not reach
+# `lms unload --all` for real and take the machine's chat model down.
 reset()
 _real_lt = sys.modules.pop("lora_training", None)
 os.environ["F5_TEST_RUN"] = "1"
@@ -296,9 +296,9 @@ finally:
 
 
 # -- the model must come back into a card ComfyUI has VACATED -----------------
-# 2026-09-11: after a render the chat model was reloaded while ComfyUI still
-# held the render's weights; it came up short of headroom, crashed on the first
-# vision call, and every turn for the next hour was "No models loaded".
+# If the chat model is reloaded while ComfyUI still holds the render's weights,
+# it comes up short of headroom, crashes on the first vision call, and every
+# turn after is "No models loaded".
 reset()
 freed = []
 _orig_free = CC._free_comfy_models
@@ -320,8 +320,8 @@ finally:
     _FakeLT.record_wait = False
 
 # -- a card ComfyUI has not vacated in time gets a second /free and a longer
-#    wait before the model squeezes in (it spilled into shared RAM and the
-#    reload crawled at 90 % for minutes, live 2026-10-03)
+#    wait before the model squeezes in (otherwise it spills into shared RAM and
+#    the reload crawls at 90 % for minutes)
 reset()
 CC._free_comfy_models = lambda: calls.append("comfy-free")
 _FakeLT.record_wait = True
@@ -393,9 +393,9 @@ finally:
         sys.modules.pop("lmstudio", None)
 
 # -- a claim lets the streams that are open finish before unloading ----------
-# Live, 2026-09-12: two users drew at once; the first claim unloaded the model
-# while the second user's planner was still streaming, the revive loaded it
-# back into the render's card, and everything crawled for twenty minutes.
+# When two users draw at once, the first claim must not unload the model while
+# the second user's planner is still streaming: the revive would load it back
+# into the render's card and everything would crawl.
 reset()
 CC.LLM_INFLIGHT_WAIT_S = 5
 order = []

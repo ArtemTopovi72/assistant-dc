@@ -1,7 +1,7 @@
 """The pre-render layout check (draw_preview): the plan drawn as a sketch,
 shown to the vision model with the request, its ops applied to the boxes
 BEFORE the card is spent on a render."""
-import os, sys, json, tempfile
+import os, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("F5_TEST_RUN", "1")
 

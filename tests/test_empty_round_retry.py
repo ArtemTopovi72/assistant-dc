@@ -17,7 +17,7 @@ phase is not consumed by the silence.
 
 Run: venv/Scripts/python.exe tests/test_empty_round_retry.py
 """
-import os, sys, json, threading
+import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass

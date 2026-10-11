@@ -7,7 +7,7 @@ killed it again with "Model reloaded." -- a message the revive did not
 recognise -- and the 60 s cooldown then returned the cached "ok" while every
 turn died on "No models loaded". Four steps of the journey were lost.
 """
-import os, sys, io, base64, json
+import os, sys, io, base64
 os.environ.setdefault("F5_TEST_RUN", "1")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")

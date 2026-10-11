@@ -90,19 +90,12 @@ def _ids_match_responses(messages):
     return None
 
 
-import re as _re
-_MATCH_EVERYTHING = _re.compile("")
-
-
 def _run(fn, user="go", state_extra=None):
     """Drive the REAL loop with a scripted LLM.
 
-    The short-message fast path answers in one lite call BEFORE the tool round
-    loop, so it silently ate scripted response #1 and every assertion below slid
-    by one — `test_null_and_duplicate_ids_normalized` was passing vacuously
-    because with no tool-call turn in the transcript there is nothing to check.
-    Neutralising _TOOL_TRIGGER_RE is the same switch production uses: anything
-    tool-ish skips the fast path. These tests are ABOUT the loop, so they say so.
+    The short-message fast path answers in one lite call before the tool round
+    loop and would consume scripted response #1, shifting every later one;
+    _assert_tool_turn_present keeps the id checks from passing vacuously.
     """
     _script["fn"] = fn
     _script["n"] = 0
@@ -112,12 +105,7 @@ def _run(fn, user="go", state_extra=None):
     st["user_input"] = user
     if state_extra:
         st.update(state_extra)
-    pass
-    pass
-    try:
-        final = g.invoke(st)
-    finally:
-        pass
+    final = g.invoke(st)
     return c, final
 
 
@@ -177,10 +165,10 @@ def test_batch_cap_bounds_execution():
 
 
 def test_runaway_round_runs_nothing():
-    """Live 2026-09-18 09:02: an outpaint's [done] was answered with 83
-    redraw_image calls; the first was RUN (a second expansion on top of the
-    first) and the refusals behind it counted as consecutive failures. A round
-    that big is a runaway: none of it runs, the model answers with what it has."""
+    """An outpaint's [done] was once answered with 83 redraw_image calls; the
+    first was RUN (a second expansion on top of the first) and the refusals
+    behind it counted as consecutive failures. A round that big is a runaway:
+    none of it runs, the model answers with what it has."""
     calls = {"calc": 0}
     import tools as tools_mod
     spec = tools_mod._BY_NAME["calculate"]
@@ -234,13 +222,12 @@ def _ensure_probe() -> str:
 
 
 def test_repeated_identical_look_is_not_re_executed():
-    """Live 2026-09-18 00:46-00:48 (chat 100000001): the model asked for the
-    SAME inspect_image check on the SAME unchanged picture 9+ times per round
-    across several rounds -- inspect_image always "succeeds" (a critique is
-    never a [TOOL ERROR]), so the identical-failure guard never saw it, and
-    each repeat spent a real vision round trip on an answer already given.
-    The second and later identical calls must be answered from cache, not
-    re-executed."""
+    """The model asked for the SAME inspect_image check on the SAME unchanged
+    picture 9+ times per round across several rounds -- inspect_image always
+    "succeeds" (a critique is never a [TOOL ERROR]), so the identical-failure
+    guard never saw it, and each repeat spent a real vision round trip on an
+    answer already given. The second and later identical calls must be
+    answered from cache, not re-executed."""
     calls = {"look": 0}
     import tools as tools_mod
     spec = tools_mod._BY_NAME["inspect_image"]

@@ -159,7 +159,7 @@ def test_paste_hasimage_fails_then_urls():
     try:
         w = _win()
         img = _png("ph12.png")
-        # hasImage load returns False -> falls through to urls loop (6916-6921)
+        # hasImage load returns False -> falls through to urls loop
         w._load_pasted_qimage = lambda q: False
         md = QMimeData(); md.setImageData(QImage(img)); md.setUrls([QUrl.fromLocalFile(img)])
         QApplication.clipboard().setMimeData(md)

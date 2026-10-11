@@ -10,7 +10,7 @@ new behaviour fires:
 
 Usage: python tests/hardening_probe.py <lmstudio_model_id>
 """
-import os, sys, re, json, time, logging, threading
+import os, sys, re, time, logging, threading
 from pathlib import Path
 from types import SimpleNamespace
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

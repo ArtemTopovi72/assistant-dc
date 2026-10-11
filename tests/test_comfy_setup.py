@@ -3,7 +3,6 @@
 Exercised with real git (local repos stand in for GitHub) and a faked
 Hugging Face hub; nothing leaves the machine.
 """
-import os
 import subprocess
 import sys
 import types

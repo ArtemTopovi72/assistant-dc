@@ -7,7 +7,7 @@ touching the network. Blocking dialogs and audio/camera devices are faked.
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_window.py
 """
-import os, sys, types, tempfile, threading, contextlib
+import os, sys, types, tempfile, threading
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("USE_GUI", "0")
 # QtWebEngine's setHtml segfaults in headless/offscreen (no GL context). Force the
@@ -804,10 +804,7 @@ if __name__ == "__main__":
             QInputDialog.getText = _saved_getText
     print(f"\n{len(fns)-failed}/{len(fns)} window test functions passed "
           f"({sum(1 for _,c in RESULTS if c)}/{len(RESULTS)} checks)")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

@@ -1,6 +1,6 @@
-"""A keyboard label is never «send it as a file» (live 10-03: «📚 Документы» was
-read as that request and the last picture came back as a document instead of
-the Documents menu)."""
+"""A keyboard label is never «send it as a file» («📚 Документы» was once read
+as that request and the last picture came back as a document instead of the
+Documents menu)."""
 import os, sys, tempfile, time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

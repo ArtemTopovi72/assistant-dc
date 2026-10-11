@@ -1,4 +1,4 @@
-"""Scored evaluation harness for Deep Research (spec D).
+"""Scored evaluation harness for Deep Research.
 
 Runs the FULL pipeline on benchmark tasks (tests/eval_tasks.py) and scores each run
 on nine metrics, then writes evaluation_report.json + evaluation_report.md.
@@ -31,7 +31,6 @@ import io
 import json
 import os
 import re
-import sys
 import time
 import threading
 import traceback
@@ -47,7 +46,6 @@ import logging
 logging.basicConfig(level=logging.WARNING,
                     format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
-import config
 from eval_tasks import TASKS, by_category
 
 OUT = os.path.join(os.path.dirname(__file__), "_dr_eval")

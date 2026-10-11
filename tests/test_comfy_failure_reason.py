@@ -1,8 +1,8 @@
 """A failed render reports ComfyUI's real reason, not a blank "no file".
 
 With only "the render produced no file" the chat model invented a cause for
-the user ("a conflict in the animation algorithms", live 2026-10-03) while the
-actual error sat in the log.
+the user ("a conflict in the animation algorithms") while the actual error sat
+in the log.
 """
 import os
 import sys

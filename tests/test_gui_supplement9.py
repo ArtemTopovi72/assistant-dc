@@ -205,10 +205,10 @@ def test_three_pages_and_queue_beside_chat():
 
 def test_apply_tab_config_dup_and_switch_busy():
     w = _win()
-    # duplicate key in order -> `if k in seen: continue` (4518)
+    # duplicate key in order -> `if k in seen: continue`
     w._apply_tab_config(["images", "images", "log"], "images", known=["images", "log"])
     check("apply_tab_dup", True)
-    # _switch_memory_profile busy snap-back with a resolvable current (6672)
+    # _switch_memory_profile busy snap-back with a resolvable current
     cur = w.ctx.active_memory_dir.name
     w.mem_combo.blockSignals(True); w.mem_combo.clear()
     w.mem_combo.addItem(cur); w.mem_combo.addItem("target9"); w.mem_combo.blockSignals(False)
@@ -223,7 +223,7 @@ def test_titlebar_manual_fallback():
     w = _win()
     from PyQt5.QtGui import QMouseEvent
     from PyQt5.QtCore import QPointF, QPoint
-    # force startSystemMove to return False -> manual drag_offset fallback (4089-4090)
+    # force startSystemMove to return False -> manual drag_offset fallback
     real_wh = w.windowHandle
     class WH:
         def startSystemMove(self): return False
@@ -243,7 +243,7 @@ def test_viewer_escape_and_reset_report_web_except():
     dlg.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key_Escape, Qt.NoModifier))  # 1918->1919
     check("viewer_escape", True)
     dlg.close()
-    # _reset_report_view web setHtml raising (6256-6257)
+    # _reset_report_view web setHtml raising
     real_view, real_en = gui._QWebEngineView, gui._REPORT_HTML_ENABLED
     class StubWV(QWidget):
         def setHtml(self, *a, **k): raise RuntimeError("boom")
@@ -258,17 +258,17 @@ def test_viewer_escape_and_reset_report_web_except():
 
 
 def test_misc_small_guards():
-    # _mime_is_droppable with neither image nor urls -> False (6803)
+    # _mime_is_droppable with neither image nor urls -> False
     w = _win()
     md = QMimeData(); md.setText("just text")
     check("mime_not_droppable", w._mime_is_droppable(md) is False)
-    # _queue_move a real pending swap (5462)
+    # _queue_move a real pending swap
     w._queue_paused = True
     w._enqueue("a", announce=False); w._enqueue("b", announce=False)
     w.queue_list.setCurrentRow(0); w._queue_move(1)
     check("queue_move_swap", [it["text"] for it in w._task_queue][:2] == ["b", "a"])
     _close(w)
-    # FlowLayout._space default (line 372) via a layout with default spacing (-1)
+    # FlowLayout._space default via a layout with default spacing (-1)
     fl = gui.FlowLayout(); fl.addWidget(QWidget())
     from PyQt5.QtCore import QRect
     fl.setGeometry(QRect(0, 0, 100, 50))
@@ -277,9 +277,9 @@ def test_misc_small_guards():
 
 def test_tab_and_tabkey_none():
     w = _win()
-    # _tab_key_for_widget with an unregistered widget -> None (4458)
+    # _tab_key_for_widget with an unregistered widget -> None
     check("tabkey_none", w._tab_key_for_widget(QWidget()) is None)
-    # _preset_names with settings.value raising -> [] (4590-4591)
+    # _preset_names with settings.value raising -> []
     class BadS:
         def value(self, *a, **k): raise RuntimeError("x")
     w._settings = lambda: BadS()
@@ -295,14 +295,14 @@ def test_memory_center_small_guards():
                                  session_memory=[]), _set_status=lambda m: None,
                                  _memory_center_set_profile=lambda p: None)
     tab = gui.MemoryCenterTab(host); tab.store = store; tab.refresh_all()
-    # _prof_rename no selection (2800)
+    # _prof_rename no selection
     tab.prof_list.clearSelection(); tab._prof_rename()
-    # _revisions_dialog no selection (2618)
+    # _revisions_dialog no selection
     tab._sel = None; tab._revisions_dialog()
-    # _after_mutation sync_into_ctx raising (2232-2233)
+    # _after_mutation sync_into_ctx raising
     tab.store.sync_into_ctx = lambda ctx, prof: (_ for _ in ()).throw(RuntimeError("sync"))
     tab._after_mutation()
-    # _open_folder startfile raising (3051-3052)
+    # _open_folder startfile raising
     import gui_memory_maint as _gmm
     real = _gmm.open_in_os
     _gmm.open_in_os = lambda p: (_ for _ in ()).throw(OSError("no shell"))
@@ -310,7 +310,7 @@ def test_memory_center_small_guards():
         tab._open_folder()
     finally:
         _gmm.open_in_os = real
-    # refresh_all sub-refresh raising -> except (3079-3080)
+    # refresh_all sub-refresh raising -> except
     tab._refresh_timeline = lambda: (_ for _ in ()).throw(RuntimeError("boom"))
     tab.refresh_all()
     check("mc_small_guards", True)
@@ -320,9 +320,9 @@ def test_transfer_small_guards():
     host = types.SimpleNamespace(ctx=None, images_panel=types.SimpleNamespace(add_image=lambda p: None),
                                  _add_system=lambda m: None)
     tab = gui.TransferTab(host)
-    # _pull_loaded ctx None (3651)
+    # _pull_loaded ctx None
     tab._pull_loaded()
-    # _gather with rows but no non-target reference (3849)
+    # _gather with rows but no non-target reference
     host2 = types.SimpleNamespace(ctx=types.SimpleNamespace(reference_images=[]),
                                   images_panel=types.SimpleNamespace(add_image=lambda p: None),
                                   _add_system=lambda m: None)
@@ -335,9 +335,9 @@ def test_transfer_small_guards():
     for r in tab2._rows:
         r["combo"].blockSignals(True); r["combo"].setCurrentIndex(0); r["combo"].blockSignals(False)
     tab2._gather()
-    # _style_row with frame None (3736)
+    # _style_row with frame None
     tab2._style_row({"frame": None}, True)
-    # _drop_mask_file os.remove raising (3768-3769)
+    # _drop_mask_file os.remove raising
     owned = str(gui.OUTPUT_DIR_GUI_MASK() / "transfer_mask_del.png")
     open(owned, "wb").write(b"x")
     row = {"mask": owned}
@@ -365,7 +365,7 @@ def test_run_gui_defensive_excepts():
     # excepts, not restyling, so the restyle is stubbed out for the call.
     real_apply = gui.apply_ui_scale
     gui.apply_ui_scale = lambda app: None
-    # crash_diag stub whose install RAISES -> covers the crash_diag except (7083-7084)
+    # crash_diag stub whose install RAISES -> covers the crash_diag except
     fc = types.ModuleType("crash_diag")
     fc.install = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("cd"))
     fc.install_qt_message_handler = lambda *a, **k: None
@@ -380,7 +380,7 @@ def test_run_gui_defensive_excepts():
                 return boom
             return getattr(real_qapp, n)
     gui.QApplication = QAppProxy()
-    # ctypes.windll.shell32 call raising -> shell32 except (7060-7061)
+    # ctypes.windll.shell32 call raising -> shell32 except
     import ctypes as _ct
     real_windll = getattr(_ct, "windll", None)
     class BadShell:
@@ -457,10 +457,7 @@ if __name__ == "__main__":
     # gui.run_gui now applies after app.exec_().
     from qt_teardown import release_widgets
     release_widgets(_app)
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

@@ -10,7 +10,7 @@ not a new toggle.
 
 Run: venv/Scripts/python.exe tests/test_ideogram_quality_turbo.py
 """
-import os, sys, types
+import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass

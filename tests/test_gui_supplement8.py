@@ -101,7 +101,7 @@ def test_enable_dark_titlebar_dwm():
 
 def test_dark_filter_except():
     filt = gui._DarkTitleBarFilter()
-    # obj.winId() raising -> except swallowed (lines 111-112)
+    # obj.winId() raising -> except swallowed
     bad = types.SimpleNamespace(isWindow=lambda: True, winId=lambda: (_ for _ in ()).throw(RuntimeError()))
     # need isinstance(obj, QWidget); use a real widget but patch winId
     w = QWidget()
@@ -162,7 +162,7 @@ def test_set_report_markdown_fallback():
 
 
 def test_init_screen_geometry_except():
-    # primaryScreen().availableGeometry() raising during __init__ -> except pass (3948-3949)
+    # primaryScreen().availableGeometry() raising during __init__ -> except pass
     real = QApplication.primaryScreen
     QApplication.primaryScreen = staticmethod(lambda: (_ for _ in ()).throw(RuntimeError("no screen")))
     try:
@@ -176,7 +176,7 @@ def test_init_screen_geometry_except():
 
 
 def test_flowlayout_parent_margins():
-    # FlowLayout(parent) with a parent -> setContentsMargins branch (line 326)
+    # FlowLayout(parent) with a parent -> setContentsMargins branch
     host = QWidget()
     fl = gui.FlowLayout(parent=host, margin=6)
     check("flow_parent_margins", fl is not None)
@@ -188,14 +188,14 @@ def test_memory_center_setprofile_and_switch_busy():
     store.create_profile("default")
     w = _win()
     w.memory_center_tab.store = store
-    # _memory_center_set_profile with ctx None -> "Load the model first" (6696)
+    # _memory_center_set_profile with ctx None -> "Load the model first"
     saved_ctx = w.ctx; w.ctx = None
     w._memory_center_set_profile("default"); check("mc_setprofile_noctx", True)
     w.ctx = saved_ctx
-    # _memory_center_set_profile that resolves to an existing combo entry (6704)
+    # _memory_center_set_profile that resolves to an existing combo entry
     w._refresh_mem_combo()
     w._memory_center_set_profile("default"); check("mc_setprofile_idx", True)
-    # _switch_memory_profile busy snap-back (6672)
+    # _switch_memory_profile busy snap-back
     w.worker = object()
     w.mem_combo.blockSignals(True); w.mem_combo.addItem("workX"); w.mem_combo.blockSignals(False)
     w._switch_memory_profile("workX")
@@ -206,7 +206,7 @@ def test_memory_center_setprofile_and_switch_busy():
 
 def test_new_memory_profile_guards():
     w = _win()
-    # ctx None -> early return (6708)
+    # ctx None -> early return
     saved = w.ctx; w.ctx = None
     w._new_memory_profile(); check("newprof_noctx", True)
     w.ctx = saved
@@ -224,7 +224,7 @@ def test_prof_delete_active_and_decline():
                                  session_memory=[]), _set_status=lambda m: None,
                                  _memory_center_set_profile=lambda p: None)
     tab = gui.MemoryCenterTab(host); tab.store = store; tab.refresh_all()
-    # active guard: select active profile -> warning (2816)
+    # active guard: select active profile -> warning
     for i in range(tab.prof_list.count()):
         tab.prof_list.setCurrentRow(i)
         if tab._selected_profile_name() == "default": break
@@ -233,7 +233,7 @@ def test_prof_delete_active_and_decline():
         tab._prof_delete(); check("prof_delete_active", "default" in store.profiles())
     finally:
         QMessageBox.warning = ow
-    # decline: select non-active + _confirm False -> return (2824)
+    # decline: select non-active + _confirm False -> return
     for i in range(tab.prof_list.count()):
         tab.prof_list.setCurrentRow(i)
         if tab._selected_profile_name() == "other": break
@@ -258,13 +258,13 @@ def test_titlebar_fallback_and_viewer_keys():
     w = _win()
     from PyQt5.QtGui import QMouseEvent, QKeyEvent
     from PyQt5.QtCore import QPointF, QPoint
-    # startSystemMove tends to return False offscreen -> manual fallback (4089-4090)
+    # startSystemMove tends to return False offscreen -> manual fallback
     ev = QMouseEvent(QEvent.MouseButtonPress, QPointF(5, 5), QPoint(5, 5),
                      Qt.LeftButton, Qt.LeftButton, Qt.NoModifier)
     w._titlebar_press(ev)
     check("titlebar_fallback", True)
     _close(w)
-    # ImageViewerDialog PageUp key (1919-1920)
+    # ImageViewerDialog PageUp key
     dlg = gui.ImageViewerDialog([_png("k1.png"), _png("k2.png")])
     dlg.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key_PageUp, Qt.NoModifier))
     check("viewer_pageup", True)
@@ -366,10 +366,7 @@ if __name__ == "__main__":
     QInputDialog.getText = staticmethod(_saved["gt"])
     print(f"\n{len(fns)-failed}/{len(fns)} supplement8 functions passed "
           f"({sum(1 for _,c in RESULTS if c)}/{len(RESULTS)} checks)")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

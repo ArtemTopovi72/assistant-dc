@@ -5,7 +5,7 @@ The user asked for a reaction in real time, not only when the work is done
 nothing otherwise (a canned note repeated the status line: live 10-03
 «лишне дублирует»); one per turn; long tools only.
 """
-import os, sys, json, threading
+import os, sys
 os.environ.setdefault("F5_TEST_RUN", "1")
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass

@@ -5,7 +5,7 @@ _band_masks, _is_continuation, _color_harmonize, _seamless_clone_arr,
 _laplacian_blend, _blend_region, _seam_blend_tile, _mask_quality_ok.
 Run: venv/Scripts/python.exe tests/test_image_synthetic_blend.py
 """
-import os, sys, tempfile, time
+import os, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
@@ -414,10 +414,7 @@ if __name__ == "__main__":
             print("  ERROR in " + fn.__name__ + ": " + type(e).__name__ + ": " + str(e))
     passed = sum(1 for _, c in RESULTS if c)
     print(f"\n{len(fns)-failed}/{len(fns)} functions, {passed}/{len(RESULTS)} checks passed")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

@@ -19,7 +19,7 @@ Two layers are checked:
 
 Run: venv/Scripts/python.exe tests/test_dr_output_language.py
 """
-import os, sys, re, inspect, threading, tempfile
+import os, sys, re, inspect
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")

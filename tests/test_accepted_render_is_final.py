@@ -2,9 +2,8 @@
 
 generate_image judges its output with the vision model. When that judgement
 is a pass, a further edit by the agent in the SAME turn is not verification,
-it is a second, unreliable critic with the power to redraw. Live, 2026-09-11:
-a 10/10 render was "fixed" for a shadow that was not there, lost its subject
-to the removal, and went through six more renders before the model crashed.
+it is a second, unreliable critic with the power to redraw: a 10/10 render
+"fixed" for a shadow that was not there loses its subject to the removal.
 
 The user is the only critic who may send it back -- in their own words, in
 their own turn, which arrives with a fresh state.
@@ -76,8 +75,6 @@ check("generate_image itself is never gated by this",
 
 # ── the next turn starts clean ───────────────────────────────────────────────
 import graph as G
-st = dict(accepted, user_input="убери фон")
-st = G.translate_node(types.SimpleNamespace(), st) if False else st   # translate needs an LLM
 # translate_node pops the key before anything else; assert on its source, since
 # running it would call the translator.
 import inspect

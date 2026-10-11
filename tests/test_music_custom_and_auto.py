@@ -2,7 +2,7 @@
 бота» for the length, the bot's own picks for every Auto field before the
 songwriting, and the «🎲 Бот выбрал сам» line after the song. The engine is
 stubbed; the settings, capture and reporting are real."""
-import sys, os, types, tempfile
+import sys, os, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # The model's reads are stubbed here; the phrases run live in bench/intent_rest_live.py.
 import intent

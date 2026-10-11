@@ -7,7 +7,7 @@ result again, and a logo the vision model still sees gets one segmenter pass.
 Verified live on bench/assets/red_carpet.jpg: INSGATE, USEMAID and the
 lady/tch.ua watermark gone in one pass (lettering-remove_00001_.png).
 """
-import os, sys, io, types, tempfile
+import os, sys, tempfile
 os.environ.setdefault("F5_TEST_RUN", "1")
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass

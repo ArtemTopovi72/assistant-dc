@@ -15,7 +15,7 @@ the guards that existed:
 These drive the real _finalize_answer rather than grepping its source: a source
 grep has now twice passed against a mutation that broke the behaviour.
 """
-import sys, os, types
+import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import graph_finalize as GF
 

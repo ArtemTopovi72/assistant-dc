@@ -274,7 +274,7 @@ print("=" * 70)
 # tg_bot._IMAGE_DIR (the same persistent directory _save_incoming_photo already
 # uses for a reply-fetched photo) and has the cleanup skip anything under it.
 
-import threading, time as _time, copy as _copy
+import threading, time as _time
 
 def _make_photo_bot():
     ctx = _Ctx()
