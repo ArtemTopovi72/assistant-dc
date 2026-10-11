@@ -1,6 +1,6 @@
 """Torture the real bot with the real DCIM.zip under REAL-CHAT conditions.
 
-The user's verdict of 2026-09-14 ("твои 30 тестов это мусор"): journeys 31-33
+The user's verdict ("твои 30 тестов это мусор"): journeys 31-33
 went green while the real chat kept failing on the same archive. The bench
 chats were pristine -- a fresh user, no history, the archive as the first
 message, sent as text/plain. The real chat had a long history with old

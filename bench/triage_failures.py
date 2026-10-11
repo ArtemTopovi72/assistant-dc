@@ -6,7 +6,7 @@
 For each reason: how many turns, which tools were involved (errored tools
 marked "!"), and a few examples with the request, the tool chain and the
 answer. The point is to find the NEXT harness defect from real use, the way
-the delivery bench traces found five on 2026-09-23.
+the delivery bench traces found five.
 """
 import argparse
 import collections

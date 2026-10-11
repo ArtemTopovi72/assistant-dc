@@ -1,4 +1,4 @@
-"""ObjectClear vs FireRed on OBJECT removal (lettering was settled 2026-09-25).
+"""ObjectClear vs FireRed on OBJECT removal (lettering is already settled).
 
 Same SAM3 mask for both arms, so only the fill engine differs. Output:
 runtime/oc_obj_ab/<obj>_{mask,oc,fr}.png + a side-by-side sheet.

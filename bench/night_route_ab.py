@@ -1,4 +1,4 @@
-"""Routing bench A/B: TOOLS_EMBED off vs on, same cases, 2 reps each (item 12)."""
+"""Routing bench A/B: TOOLS_EMBED off vs on, same cases, 2 reps each."""
 import os, subprocess
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PY = os.path.join(ROOT, "venv", "Scripts", "python.exe")

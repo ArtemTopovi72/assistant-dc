@@ -1,5 +1,5 @@
 """YuE2 has no notion of stress: 'анализы' came out аналИзы, 'гнилое' гнИлое
-(user, 2026-09-28). A/B of three lyric spellings, same seed, judged by ear:
+(reported by the user). A/B of three lyric spellings, same seed, judged by ear:
 plain / acute accent (а́) / capital stressed vowel (анАлизы)."""
 import os, re, shutil, sys, threading, types
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

@@ -3,7 +3,7 @@
 The scripted journeys (live_journeys.py) type what a developer expects a user
 to type. Real users do not: they tap whatever button is there, type in the
 wrong layout, change their mind, cancel, spam, write «stop», expect a button to
-do what its label says. 2026-09-27: a night of green suites, and the first
+do what its label says. A night of green suites, and the first
 real user got «🎵 Songs» -> «Ыщтпы» -> a redrawn photo -> a Cancel that did
 nothing. This harness sits a PERSONA in front of the bot:
 

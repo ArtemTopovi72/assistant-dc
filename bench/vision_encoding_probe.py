@@ -1,6 +1,6 @@
 """Does the vision model see the picture we send, or a dark one?
 
-Live, 2026-09-12: on every plain render the outer judge and inspect_image said
+Seen live: on every plain render the outer judge and inspect_image said
 "extremely dark / underexposed" about pictures that measure normally exposed,
 and the code now overrules them. This asks the SAME question about the same
 picture in several encodings (raw PNG, JPEG, downscaled) to find out whether
