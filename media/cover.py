@@ -5,7 +5,7 @@ it is given; the length follows the reference. It runs in venv_mula with the
 card to itself (music.run_gpu_worker). Weights are CC BY-NC: the user allowed
 the button for every bot user (personal, free bot — non-commercial).
 """
-from config import scratch_path, venv_python
+from config import venv_python
 import logging
 import os
 import re
