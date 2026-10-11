@@ -76,14 +76,14 @@ from dr_extract import (
     classify_extraction, _ar5iv_url, _inline_mathml_as_tex,
     _looks_like_unmarked_math, _fix_mojibake, _extract_text, _extract_title,
     _extract_links, _social_outlinks, _content_similarity, dedupe_pages,
-    _shingles, _jaccard, _SHINGLE_CAP, _DUP_SIM,
+    _shingles, _jaccard, _SHINGLE_CAP,
 )
 # Re-exported so the GATE_* verdicts and the shingle helpers keep resolving as
 # `deep_research.X` after the move to dr_extract (callers and tests read them
 # there).
 _REEXPORTED_FROM_DR_EXTRACT = (GATE_EMPTY, GATE_THIN, GATE_CHALLENGE, GATE_SHELL,
                                _content_similarity, _shingles, _jaccard,
-                               _SHINGLE_CAP, _DUP_SIM)
+                               _SHINGLE_CAP)
 import entities as _entities
 import contradiction as _contra
 import research_graph as _rgraph
