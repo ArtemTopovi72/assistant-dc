@@ -2,10 +2,10 @@
 gui.py. Each drives a specific early-return / error-handler path. Also covers the
 run_gui defensive excepts (ctypes / high-DPI / crash_diag all forced to raise).
 
-Documented dead code (NOT covered, proven unreachable):
-  * MaskCanvas.is_empty line 3172: `for _ in range(0): pass` — range(0) is empty,
+Dead code (NOT covered, unreachable):
+  * MaskCanvas.is_empty: `for _ in range(0): pass` — range(0) is empty,
     the body can never execute (it's a leftover placeholder above the real check).
-  * _show_tab lines 4492-4493: `except ValueError: rank = len(default_order)` —
+  * _show_tab: `except ValueError: rank = len(default_order)` —
     `key` always comes from self._tab_registry, so default_order.index(key) can
     never raise ValueError.
 
@@ -118,32 +118,32 @@ def test_window_guard_returns():
         # _refresh_search_panel ctx None
         c = w.ctx; w.ctx = None
         w._refresh_search_panel()
-        w._save_memory()           # 6730 ctx None
-        w._model_has_vision()      # 6835 ctx None -> True
+        w._save_memory()           # ctx None
+        w._model_has_vision()      # ctx None -> True
         w._pull_loaded = getattr(w, "_pull_loaded", None)
         w.ctx = c
         # _model_has_vision ctx None already; restore
-        # _fix_hands_last_image while busy -> 6477
+        # _fix_hands_last_image while busy
         w.worker = object(); w._fix_hands_last_image(); w.worker = None
-        # _retry_hands source missing -> 6503
+        # _retry_hands source missing
         w._last_handfix_source = "C:/no/such_zzz.png"; w._retry_hands()
-        # _update_camera cap None -> 6622
+        # _update_camera cap None
         w.cap = None; w._update_camera()
-        # _cancel_current cancels scan worker -> 6291
+        # _cancel_current cancels scan worker
         w.ctx.cancel_event.clear()
         w._scan_worker = types.SimpleNamespace(cancel=lambda: None)
         w.worker = object()
         w._cancel_current()
         w.worker = None; w._scan_worker = None
-        # _start_scan already running -> 6111
+        # _start_scan already running
         w._scan_worker = object(); w._start_scan("q"); w._scan_worker = None
-        # _drop_text_file read error -> 6986
+        # _drop_text_file read error
         w._drop_text_file("C:/no/such_text.txt")
-        # _on_pipeline_log bar None -> 5274
+        # _on_pipeline_log bar None
         w._research_active = True; w._log_bar = None
         w._on_pipeline_log("12:00:00  x: msg")
         w._research_active = False
-        # _on_research_progress bad phase -> 6203-6204 (ValueError swallowed)
+        # _on_research_progress bad phase (ValueError swallowed)
         w._on_research_progress("NotAPhase", {}, "msg")
         check("window_guards", True)
         _close(w)
@@ -153,7 +153,7 @@ def test_window_guard_returns():
 
 def test_capture_frame_write_fail_and_reset_layout():
     w = _win()
-    # _capture_frame with a frame but write fails (OUTPUT_DIR -> a file) -> 5604-5605
+    # _capture_frame with a frame but write fails (OUTPUT_DIR -> a file)
     w.current_frame = np.zeros((8, 8, 3), dtype=np.uint8)
     real_out = config.OUTPUT_DIR
     badfile = Path(_TMP) / "outfile"; badfile.write_bytes(b"x")
@@ -163,7 +163,7 @@ def test_capture_frame_write_fail_and_reset_layout():
         check("capture_write_fail", w.captured_image is not None)
     finally:
         config.OUTPUT_DIR = real_out
-    # _reset_layout settings.remove raises -> 4568-4569
+    # _reset_layout settings.remove raises
     class BadS:
         def remove(self, *a): raise RuntimeError("x")
         def value(self, *a, **k): return ""
@@ -240,7 +240,7 @@ def test_titlebar_manual_fallback():
 
 def test_viewer_escape_and_reset_report_web_except():
     dlg = gui.ImageViewerDialog([_png("v9a.png"), _png("v9b.png")])
-    dlg.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key_Escape, Qt.NoModifier))  # 1918->1919
+    dlg.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key_Escape, Qt.NoModifier))
     check("viewer_escape", True)
     dlg.close()
     # _reset_report_view web setHtml raising
@@ -352,17 +352,11 @@ def test_transfer_small_guards():
 
 def test_run_gui_defensive_excepts():
     import sys as _sys
-    # run_gui reapplies the stylesheet to every live widget. The ten tests
-    # above leave a pile of them behind, and Qt walking one whose C++ side is
-    # already gone takes the process down with an access violation -- the whole
-    # file died here, and this test passes on its own. Close what is left and
-    # let the deleteLater queue drain before touching the application.
     # run_gui reapplies the stylesheet to the whole application, which
     # re-polishes every live widget. The ten tests above leave a pile of them
     # behind, and Qt walking one whose C++ side is already gone takes the
-    # process down with an access violation -- the whole FILE died here, and
-    # this test passes on its own. What is under test is run_gui's defensive
-    # excepts, not restyling, so the restyle is stubbed out for the call.
+    # process down with an access violation. What is under test is run_gui's
+    # defensive excepts, not restyling, so the restyle is stubbed out for the call.
     real_apply = gui.apply_ui_scale
     gui.apply_ui_scale = lambda app: None
     # crash_diag stub whose install RAISES -> covers the crash_diag except
@@ -422,7 +416,7 @@ def test_request_worker_crosslingual_append_lines():
     lib = {"Library": FakeLib, "cross_lingual_targets": lambda t, s: ["Russian"],
            "build_rag_prompt": lambda l, t, k=None, extra_queries=None: ("AUG " + t, "note")}
     w = gui_workers.RequestWorker(ctx, graph, {"messages": []}, text="q", use_db=True)
-    w._translate_query = lambda text, lang: "translated"   # -> extra.append (1342-1343)
+    w._translate_query = lambda text, lang: "translated"   # -> extra.append
     with fake_modules(library=lib, graph={"compact_history_if_needed": lambda c, m: m}):
         recinfo = []
         w.info.connect(lambda s: recinfo.append(s))
@@ -451,10 +445,8 @@ if __name__ == "__main__":
     # Destroy the widgets these tests built while the QApplication is still alive.
     # Left to interpreter shutdown, the wrapper objects and the QApplication are
     # released in an order CPython does not define, and a QWidget outliving its
-    # QApplication is a segfault inside Qt — not an exception. This suite exited
-    # 139 roughly once in six runs with every check passed and every line printed,
-    # which reads in a sweep as a failure with no failing test. Same discipline
-    # gui.run_gui now applies after app.exec_().
+    # QApplication is a segfault inside Qt — not an exception. Same discipline
+    # gui.run_gui applies after app.exec_().
     from qt_teardown import release_widgets
     release_widgets(_app)
     # A failed check() must reach the exit code; `failed` counts exceptions only.

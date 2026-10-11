@@ -1,7 +1,7 @@
 """Seventh supplement: precise remaining gui.py branches — worker log-except paths,
 RequestWorker cross-lingual append, TransferWorker plan/identity excepts, and a
 batch of AssistantWindow / MemoryCenterTab / ImageViewerDialog / SystemInfoTab
-guard branches identified line-by-line from the coverage map.
+guard branches.
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_supplement7.py
 """
@@ -220,15 +220,12 @@ def test_prof_suggested_and_create_errors():
     tab = gui.MemoryCenterTab(host); tab.store = store; tab.refresh_all()
     real = store.create_profile
     K = len(tab._SUGGESTED)
-    # (a) create always returns True -> loop2 hits the append branch (2790->2791)
+    # (a) create always returns True -> loop2 hits the append branch
     store.create_profile = lambda name: True
     tab._prof_suggested(); check("prof_suggested_append", True)
     # (b) one suggestion blows up -> the except branch swallows it, the rest are
-    # still created. The old version counted calls on the assumption of TWO loops
-    # (a comprehension plus a guarded one); _prof_suggested is a single guarded
-    # loop now, so the count could never exceed K and the check failed on a
-    # refactor. Assert the BEHAVIOUR instead: one bad profile must not abort the
-    # batch, and must not be reported as created.
+    # still created. One bad profile must not abort the batch, and must not be
+    # reported as created.
     seen = []
     def cp(name):
         seen.append(name)

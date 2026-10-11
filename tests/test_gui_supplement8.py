@@ -210,7 +210,7 @@ def test_new_memory_profile_guards():
     saved = w.ctx; w.ctx = None
     w._new_memory_profile(); check("newprof_noctx", True)
     w.ctx = saved
-    # valid name -> creates + switches (6723 setCurrentIndex)
+    # valid name -> creates + switches (setCurrentIndex)
     QInputDialog.getText = staticmethod(lambda *a, **k: ("Fresh Profile", True))
     w._new_memory_profile(); check("newprof_valid", w.ctx.active_memory_dir.name == "Fresh_Profile")
     _close(w)
@@ -279,12 +279,12 @@ def test_layout_settings_excepts():
         def value(self, *a, **k): raise RuntimeError("registry locked")
         def remove(self, *a): raise RuntimeError("x")
     w._settings = lambda: BadSettings()
-    w._persist_layout()          # setValue raises -> except (4576)
-    w._restore_last_layout()     # value raises -> except (4583-4584)
+    w._persist_layout()          # setValue raises -> except
+    w._restore_last_layout()     # value raises -> except
     w._save_preset() if False else None
     QInputDialog.getText = staticmethod(lambda *a, **k: ("p", True))
-    w._save_preset()             # setValue raises -> except (4606-4607)
-    w._load_preset("p")          # value raises -> except (4615-4616)
+    w._save_preset()             # setValue raises -> except
+    w._load_preset("p")          # value raises -> except
     w._delete_preset("p")        # remove raises -> except
     check("layout_excepts", True)
     _close(w)
