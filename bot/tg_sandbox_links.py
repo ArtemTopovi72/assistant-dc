@@ -62,11 +62,8 @@ def linkify(reply_html: str, chat_id, box, bot_username: str) -> str:
 
     out = []
     for part in _SEG_RE.split(reply_html):
-        low = part[:4].lower()
-        if part.startswith("<") and (low.startswith("<a") or low.startswith("<pre")):
-            out.append(part)                    # already a link / a code block
-        elif part.startswith("<"):
-            out.append(part)                    # a tag
+        if part.startswith("<"):
+            out.append(part)                    # a tag, an existing link or a code block
         else:
             out.append(pat.sub(_link, part))
     # <code>name</code> -> link around the name: Telegram cannot nest <a> in <code>.

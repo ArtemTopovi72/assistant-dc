@@ -1,9 +1,5 @@
 """The "what to wear" flow: ask for a city, look it up, describe the day.
 
-Lifted out of tg_accounts.py, which had accumulated three unrelated user
-flows (weather, songs, mashups) around the account code they had nothing to
-do with.
-
 The flow is deliberately spread over several turns and two threads, and the
 reg_state contract between them is the subtle part: `wtw_city` and `wtw_date`
 stay ARMED while the async lookup runs, because whether a city resolves is not
@@ -23,9 +19,10 @@ the same convention the rest of the tg_* family uses.
 from __future__ import annotations
 
 import _thread
-import os as _os
 import datetime as _dt
+import functools as _functools
 import html as _html_mod
+import os as _os
 import re as _re
 import threading
 
@@ -56,10 +53,8 @@ def _when(read: dict, today) -> tuple:
 
 
 def _forecast(text: str, previous: str, today, followup: bool = False) -> dict:
-    """{} or {"city", "date", "hours"} from the model's read (agent/intent.py).
-    It replaced a weather-word list with its exclusions («погода в игре»,
-    «вообще бывает осенью», several questions) and a city regex that named
-    «на» and «сейчас» cities under IGNORECASE."""
+    """{} or {"city", "date", "hours"} from the model's read (agent/intent.py),
+    which tells a forecast question from «погода в игре» or «вообще бывает осенью»."""
     t = (text or "").strip()
     if not t or len(t) > 200:
         return {}
@@ -89,8 +84,8 @@ def weather_request(text: str, today=None) -> dict:
 
 
 # The advice call queues for the ONE model slot behind whatever else is running
-# (live: 25-80 s behind other chats), and the forecast waited with it. Past the
-# deadline the forecast goes out with the fixed temperature-band advice; the
+# (tens of seconds behind other chats), and the forecast would wait with it. Past
+# the deadline the forecast goes out with the fixed temperature-band advice; the
 # late LLM answer is dropped.
 ADVICE_WAIT_S = 8.0
 
@@ -110,13 +105,10 @@ def _deadline(fn, seconds):
     return wrapped
 
 
-import functools as _functools
-
-
 @_functools.lru_cache(maxsize=256)
 def city_tz(city: str) -> str:
-    """IANA zone of a named city, "" when unknown (network miss is not cached
-    as a real answer only for the process lifetime -- good enough)."""
+    """IANA zone of a named city, "" when unknown. Cached for the process lifetime,
+    misses included."""
     try:
         loc = _weather_mod.geocode_city(city, "ru") or {}
         return loc.get("timezone") or ""
@@ -171,9 +163,9 @@ class WeatherMixin:
                 or self._fact_city(chat_id)
                 or _config.WEATHER_DEFAULT_CITY)
 
-    def _fact_city(self, chat_id: int) -> str:  # noqa: D401
-        """Newest pinned 'lives in / moved to X'. Live: «переехал в Самару»
-        was remembered, then «погода завтра» came back for St Petersburg."""
+    def _fact_city(self, chat_id: int) -> str:
+        """Newest pinned 'lives in / moved to X', so «переехал в Самару» followed by
+        «погода завтра» forecasts Samara."""
         try:
             facts = self._store.get(chat_id).get_tg_facts()
         except Exception:
@@ -188,14 +180,12 @@ class WeatherMixin:
     def _weather_quick(self, chat_id: int, sess, lang: str, hours: int) -> None:
         """A forecast window straight from a button, no questions asked.
 
-        The whole point of the reworked keyboard: 🕗 48 ч used to be reachable
-        only as a follow-up under a 24h result, so getting it meant waiting
-        through a lookup nobody wanted. `hours=0` means current conditions.
+        `hours=0` means current conditions.
 
-        Any armed text capture is cleared first — pressing a forecast button
-        while the bot was waiting for a city (or a date) previously left that
-        state armed, so the NEXT ordinary message was silently eaten as the
-        answer to a question the user had visibly moved on from.
+        Any armed text capture is cleared first: pressing a forecast button while
+        the bot is waiting for a city (or a date) must not leave that state armed,
+        or the NEXT ordinary message is silently eaten as the answer to a question
+        the user has moved on from.
         """
         if sess.reg_state in ("wtw_city", "wtw_date"):
             sess.reg_state = ""
@@ -231,13 +221,10 @@ class WeatherMixin:
 
         The remember-as-default write itself also happens on that background
         thread, and only once the city is confirmed to actually geocode (see
-        _send_weather) -- saving it unconditionally here, before the lookup
-        even ran, meant a typo'd/garbage city name got permanently baked in
-        as the default the moment it was typed, even though the reply back
-        said "couldn't find that city". Every future press of the default-
-        city button would then retry the same unresolvable name forever,
-        with no way back except typing a fresh city (there is no "clear
-        city" control, unlike the admin badge's Clear button).
+        _send_weather): saving it unconditionally here would bake a typo'd or
+        garbage city name in as the default, and every press of the default-
+        city button would retry the same unresolvable name (there is no "clear
+        city" control).
 
         `loc`: a location ALREADY resolved (see sess.wtw_loc) -- the 48h and
         pick-a-date follow-up buttons under a forecast reuse the city the
@@ -247,10 +234,9 @@ class WeatherMixin:
         self._run_busy(chat_id, self._send_weather,
                        chat_id, city, lang, remember_for, hours, date, loc)
 
-    # Both hooks moved into weather.py so the desktop Weather tab uses the SAME
-    # advisor and the same city corrector -- a second copy of either prompt is
-    # a second place for the two surfaces to diverge. Kept as methods because
-    # this is where the flow reads, and one test drives them from the bot.
+    # Both hooks live in weather.py (shared with the desktop Weather tab); kept
+    # as methods because this is where the flow reads, and one test drives them
+    # from the bot.
     def _weather_periods_advise_fn(self, ctx):
         return _deadline(_weather_mod.periods_advise_fn(ctx), ADVICE_WAIT_S)
 
@@ -305,10 +291,8 @@ class WeatherMixin:
             ]]}
         try:
             # parse_mode is NOT optional here: the forecast is a <pre> table
-            # (see weather.format_forecast). Sent as plain text -- which is
-            # what this call did at first, uniquely among the send sites in
-            # this file -- Telegram printed the "<pre>" tags verbatim and drew
-            # the table in a proportional font, so no column lined up.
+            # (see weather.format_forecast); as plain text Telegram prints the
+            # "<pre>" tags verbatim and no column lines up.
             self._send_text(chat_id, reply, parse_mode="HTML", keyboard=kb)
         except Exception:
             tg_bot.logger.warning("weather: forecast not sent", exc_info=True)
@@ -322,9 +306,9 @@ class WeatherMixin:
                 sess = self._get_session(chat_id)
                 if sess.reg_state in ("wtw_city", "wtw_date"):
                     sess.reg_state = ""
-                # The model never saw this answer: «погода в Казани», then
-                # «а там есть метро?» was answered about Moscow.
-                # The forecast joins the chat history.
+                # The model never saw this answer: the forecast joins the chat
+                # history so «а там есть метро?» after «погода в Казани» is
+                # answered about Kazan.
                 with self._history_lock(chat_id):
                     hist = sess.get_history()
                     hist += [{"role": "user", "content": f"[weather forecast asked for {loc['name']}]"},

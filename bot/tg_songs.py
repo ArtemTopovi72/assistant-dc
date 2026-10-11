@@ -14,25 +14,15 @@ rebound by redirect_data_dir(), which a by-value import would never see).
 from __future__ import annotations
 
 import html as _html_mod
-import os
 import re as _re
-import threading
-import turn_trace
 
 import music as _music_mod
 
 
-# A song asked for in plain words: "сочини короткую весёлую
-# песню про кота" must not reach the chat model, which would WRITE four lines of
-# lyrics and read them out as a voice note. A request that names a song and a making verb
-# is the song flow, whichever way it arrives.
-
-
 def _read(text: str, after_song: bool = False) -> dict:
-    """The model's read of a chat message (agent/intent.py). It replaced six
-    word lists (song verbs x nouns, lyrics-only, seconds, «на него», redo,
-    rewrite) -- «как научиться петь» and «расскажи про гимн» each had their
-    own exclusion."""
+    """The model's read of a chat message (agent/intent.py): song request, seconds,
+    «на него», redo, rewrite. A request that names a song and a making verb is the
+    song flow, whichever way it arrives; «как научиться петь» is not."""
     import intent
     return intent.read(None, text or "", "The assistant just sent a song." if after_song else "")
 
@@ -142,8 +132,8 @@ def _repeats_are_chorus(tagged: str) -> str:
 
 def structure_lyrics(ctx, given: str) -> str:
     """Tag the user's own words. Laid-out text keeps its layout; plain text goes
-    to the model, whose answer is taken ONLY if every sung line survived verbatim
-    (the user: «а ллм не сможет как-то учесть?»). Otherwise the four-line chunks."""
+    to the model, whose answer is taken ONLY if every sung line survived verbatim.
+    Otherwise the four-line chunks."""
     if ctx is None or any(_music_mod._RU_TAG_RE.match(l.strip()) or _SECTION_LABEL_RE.match(l.strip())
                           for l in given.splitlines() if l.strip()):
         return tag_lyrics(given)
@@ -381,11 +371,10 @@ class SongsMixin:
             if given:                   # their own words stay; wishes steer the sound
                 caption = dict(caption, lyrics=structure_lyrics(ctx, given))
             elif caption.get("lyrics") and not cancelled() and not prefs.get("instrumental"):
-                # (an instrumental's lyric is bare section tags: the polisher wrote words under
-                # them and the 🎹 Instrumental song came back sung, 10-09)
+                # (an instrumental's lyric is bare section tags: the polisher would write
+                # words under them and the 🎹 Instrumental song would come back sung)
                 # Words the bot wrote itself go through the checks and revisions
-                # of ✨ Improve lyrics before they are sung (owner 10-03: «под
-                # капотом генерится хороший текст, причёсывается автоматом»).
+                # of ✨ Improve lyrics before they are sung.
                 _words = _polished(ctx, caption["lyrics"], _has_stage, prefs.get("vocal", ""))
                 _cap = _music_mod.line_budget(duration)[2]       # polish rounds grow the lyric past the slot
                 caption = dict(caption, lyrics=_music_mod.trim_to_lines(_words, _cap) if _cap else _words)
@@ -399,7 +388,7 @@ class SongsMixin:
             star = _tg_music._resolve(self._get_session(chat_id), "voice")
             if star and not prefs.get("instrumental"):
                 # 🎙 Own voice: the engine's singer re-sung in the star's voice (YuE's take: no
-                # index, it pulls the mumble in -- 10-08 sweep)
+                # index, it pulls the mumble in)
                 try:
                     import remix
                     if _has_stage:

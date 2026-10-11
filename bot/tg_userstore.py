@@ -1,14 +1,12 @@
 """Registered users: the record, the SQLite store, and password hashing.
 
-Lifted out of tg_bot.py. Nothing here knows about Telegram updates, sessions
-or the queue — it answers who exists, who is approved, and what they have
-spent today.
+Nothing here knows about Telegram updates, sessions or the queue — it answers
+who exists, who is approved, and what they have spent today.
 
-ONE THING MATTERS MORE THAN THE LINE COUNT. The JSON migration source and the
-rolling backup directory are defined HERE and nowhere else, and tg_bot's
-redirect_data_dir() rebinds them ON THIS MODULE. Two copies of a path that a
-test reassigns is how a suite quietly writes its fixtures into the live
-tg_users.db — which has happened in this repo before.
+The JSON migration source and the rolling backup directory are defined HERE and
+nowhere else, and tg_bot's redirect_data_dir() rebinds them ON THIS MODULE. Two
+copies of a path that a test reassigns would let a suite quietly write its
+fixtures into the live tg_users.db.
 """
 import hashlib
 import hmac
@@ -36,12 +34,9 @@ _USERS_BACKUP_KEEP  = 10   # keep last N backup snapshots
 # ── password hashing ──────────────────────────────────────────────────────────
 # Stored form: "v2$<salt_hex>$<scrypt_hex>".
 #
-# The original scheme was a single sha256(password + chat_id): one fast pass, so
-# anyone who obtained tg_users.db could brute-force a 4-character password at
-# billions of guesses per second. chat_id acted as a salt (no rainbow tables) but
-# did nothing about speed. scrypt is memory-hard, which is the property that makes
-# offline cracking expensive. Legacy hashes still verify and are transparently
-# re-hashed on the next successful login, so nobody has to reset anything.
+# scrypt is memory-hard, which is what makes offline cracking of tg_users.db
+# expensive. Legacy hashes (a single sha256(password + chat_id)) still verify and
+# are transparently re-hashed on the next successful login.
 _LEGACY_HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 
 

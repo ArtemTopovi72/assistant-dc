@@ -1,7 +1,6 @@
 """Every user-visible string the Telegram bot can send, and the lookup for them.
 
-Lifted out of tg_bot.py: 586 lines of message catalogue and button labels that
-nothing but _t() and _b() ever read.
+Message catalogue and button labels; only _t() and _b() read them.
 
 _DEFAULT_LANG is defined HERE and only here, and that is load-bearing rather
 than tidy. A dozen functions across the tg_* modules take lang=_DEFAULT_LANG as
@@ -115,9 +114,8 @@ _LABEL2KEY: dict[str, str] = {
 def _pick_form(forms: dict, lang: str) -> str:
     """Requested language → house default → any language we do have.
 
-    The last step matters now that the default is Russian: before, a form that
-    only had "en" still rendered, because English WAS the fallback. Falling back
-    to the raw key would ship "acct_lang_btn" into a keyboard.
+    The last step keeps a form that only has one language rendering instead of
+    falling back to the raw key, which would ship "acct_lang_btn" into a keyboard.
     """
     if not forms:
         return ""
@@ -150,9 +148,7 @@ _MSG: dict[str, dict[str, str]] = {
                       "ru": "👋 <b>Привет! Я твой ИИ-ассистент.</b>"},
     "main_menu":     {"en": "🏠 Main menu", "ru": "🏠 Главное меню"},
     # clear_context() also wipes tg_facts (deliberate — see clear_context's
-    # docstring), so the reply says so: a user who read "Clear Chat" as
-    # "clear history" would otherwise lose their saved facts with no
-    # warning and no undo.
+    # docstring), so the reply says so: no warning and no undo otherwise.
     "cleared":       {"en": "🗑 Conversation and saved facts cleared.",
                       "ru": "🗑 Диалог и сохранённые факты очищены."},
     "cancelled":     {"en": "❌ Cancelled.", "ru": "❌ Отменено."},
@@ -183,17 +179,15 @@ _MSG: dict[str, dict[str, str]] = {
     "cancel_gone":   {"en": "⌛ That request already finished.",
                       "ru": "⌛ Этот запрос уже завершён."},
     "cancel_pending": {"en": "⛔ Cancelling…", "ru": "⛔ Отменяю…"},
-    # The graph came back with no text at all. "(no response)" was literally
-    # what the user received -- a debug placeholder, in English, in a Russian
-    # chat, with no hint that trying again is usually enough.
+    # The graph came back with no text at all: say so in the chat's language,
+    # with the hint that trying again is usually enough.
     "empty_reply": {
         "en": "🤔 The model returned nothing this time. Send it again — it "
               "usually works on the second try.",
         "ru": "🤔 Модель ничего не ответила. Повтори запрос — обычно со второго "
               "раза получается."},
-    # Admin panel: a LoRA run owns the card for most of a day, and it is the
-    # single most useful thing for the operator to see from a phone. Asked
-    # repeatedly in chat as "как процесс?" while the answer sat in a log file.
+    # Admin panel: a LoRA run owns the card for most of a day, so its progress is
+    # the most useful thing for the operator to see from a phone.
     "adm_training": {
         "en": "🧠 <b>Training:</b> {slug} — step {step}/{total} ({pct}%)"
               "{eta}{rate}",
@@ -202,9 +196,9 @@ _MSG: dict[str, dict[str, str]] = {
     "adm_training_idle": {
         "en": "🧠 <b>Training:</b> nothing running.",
         "ru": "🧠 <b>Обучение:</b> не идёт."},
-    # "not running" hid the difference between a run that FINISHED and one that
-    # was killed part-way. Which it was decides whether the next move is to
-    # publish a checkpoint or to restart, so the panel says.
+    # A run that FINISHED and one killed part-way look alike as "not running".
+    # Which it was decides whether the next move is to publish a checkpoint or
+    # to restart, so the panel says.
     "adm_training_stopped": {
         "en": "🧠 <b>Training:</b> {slug} — STOPPED at step {step}/{total}.",
         "ru": "🧠 <b>Обучение:</b> {slug} — ОСТАНОВЛЕНО на шаге {step}/{total}."},
@@ -340,12 +334,9 @@ _MSG: dict[str, dict[str, str]] = {
                       "ru": "✏️ {hint}"},
     # What the user is being asked for, in their own language.
     #
-    # These are not the raw _PROMPT_KB routing prefix, which would answer a
-    # Russian user tapping 🖼 Создать картинку with
-    # "✏️ generate an image of — напиши запрос:" — an internal English token,
-    # mid-sentence, in a Russian message. The prefix is a pipeline instruction
-    # that happens to be English because the agent reasons in English; it was
-    # never meant to be read by anyone.
+    # These are not the raw _PROMPT_KB routing prefix: that is a pipeline
+    # instruction in English (the agent reasons in English) and must never be
+    # shown mid-sentence in a Russian message.
     "hint_gen_image":  {"en": "Image description", "ru": "Описание картинки"},
     "hint_edit_image": {"en": "What to change",    "ru": "Что изменить"},
     "hint_remove_obj": {"en": "What to remove",    "ru": "Что убрать"},
@@ -400,8 +391,7 @@ _MSG: dict[str, dict[str, str]] = {
                             "⏳ Аккаунт <b>ждёт одобрения администратора</b>.\n"
                             "Пришлю уведомление, когда рассмотрят."},
     # The session outlived the account record (a purge, a restored backup, a
-    # deleted row). Pressing 👤 Аккаунт then did nothing at all -- and doing
-    # nothing is exactly what a broken bot looks like.
+    # deleted row): say so instead of doing nothing.
     "acct_gone": {
         "en": "👤 I no longer have an account for this chat — send /start to "
               "register again.",
@@ -477,10 +467,8 @@ _MSG: dict[str, dict[str, str]] = {
                              "приложить его к сообщению, отправь вместе с вопросом."},
     "lib_toggled":   {"en": "📚 Document search: <b>{state}</b>",
                       "ru": "📚 Поиск по документам: <b>{state}</b>"},
-    # -- the coding sandbox. Its whole point is being understood, and it was
-    # shipped as Russian string literals in tg_commands, so an English user got
-    # Russian. Same rule as everything else: the surface says nothing the
-    # dictionary does not.
+    # -- the coding sandbox. Same rule as everything else: the surface says
+    # nothing the dictionary does not.
     "sbx_denied":   {"en": "🔐 The working folder is not enabled for this account "
                            "— an administrator grants it.",
                      "ru": "🔐 Рабочая папка для этого аккаунта не включена — "
@@ -594,10 +582,8 @@ _MSG: dict[str, dict[str, str]] = {
                       "ru": "✅ <b>Отзыв получен.</b> Спасибо!"},
 
     # ── account lifecycle ─────────────────────────────────────────────────────
-    # These were the last hardcoded-English messages in a bilingual bot, and they
-    # sat on the most important path there is: the first thing a new user ever
-    # reads. `approve_user` even computed `lang` and passed it to _help_text(),
-    # so a Russian user got an English paragraph followed by Russian help.
+    # The first thing a new user reads after approval; localized so a Russian user
+    # does not get an English paragraph followed by Russian help.
     "acct_approved": {"en": "✅ <b>Your account has been approved!</b>\n\n"
                             "You now have full access to the assistant.\n",
                       "ru": "✅ <b>Твой аккаунт одобрен!</b>\n\n"
@@ -1223,10 +1209,9 @@ _MSG: dict[str, dict[str, str]] = {
     "img_gone":     {"en": "🖼 That picture is no longer available — send it again, "
                            "or pick another one.",
                      "ru": "🖼 Этой картинки больше нет — пришли её заново или выбери другую."},
-    # Same honest-refusal shape as img_gone, generalised to the other artifact
-    # kinds the durable store (tg_artifacts_store.py) tracks, for callers
-    # that resolve "that video" /
-    # "that song" / "that file" and find the row's path no longer on disk.
+    # Same honest-refusal shape as img_gone, for the other artifact kinds the
+    # durable store (tg_artifacts_store.py) tracks: "that video" / "that song" /
+    # "that file" whose row's path is no longer on disk.
     "vid_gone":     {"en": "🎬 That video is no longer available on the server — "
                            "ask me to make it again.",
                      "ru": "🎬 Этого видео больше нет на сервере — попроси сделать заново."},
@@ -1279,10 +1264,8 @@ _MSG: dict[str, dict[str, str]] = {
 
     # ── image action buttons (under every generated picture) ──────────────────
     # Kept short on purpose: Telegram lays out 3 inline buttons per row at a fixed
-    # width, so anything past ~11-12 Cyrillic characters (incl. the emoji) gets
-    # cut off with "…" ("Улучшить ка…" / "Сменить оде…" / "Перерисоват…"). The
-    # fuller phrasing (which action, what it does) belongs in the
-    # bot's own reply text, not the button.
+    # width, so anything past ~11-12 Cyrillic characters (incl. the emoji) is cut
+    # off with "…". The fuller phrasing belongs in the bot's own reply text.
     "img_change_clothes": {"en": "👗 Outfit",   "ru": "👗 Одежда"},
     "img_remove_object": {"en": "🧽 Remove",   "ru": "🧽 Убрать"},
     "img_remove_text": {"en": "🔤 No lettering", "ru": "🔤 Без надписей"},

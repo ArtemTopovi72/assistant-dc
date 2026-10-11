@@ -1,6 +1,6 @@
 """Telegram HTTP transport and media delivery.
 
-Split out of tg_bot.py: everything that speaks to api.telegram.org — the
+Everything that speaks to api.telegram.org — the
 retrying POST/GET wrappers, message send/edit/delete, and the photo, video,
 document and voice delivery paths with their parse-mode fallbacks.
 
@@ -16,7 +16,6 @@ import json
 import os
 import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 import subprocess
-import threading
 import time
 from pathlib import Path
 from typing import Optional
@@ -53,7 +52,7 @@ def replying_to(chat_id, msg_id):
 
 # Display width of a row of buttons, in characters (an emoji counts two).
 # Telegram cuts a label that is wider than its share of the row («Без на…»).
-# Calibrated on the live 16:57 keyboard: at three a row «🔄 Ещё раз» fits and
+# Calibrated so that at three buttons a row «🔄 Ещё раз» fits and
 # «🔤 Без надписей» is cut. A knob, not a constant: clients differ.
 TG_ROW_WIDTH = _cfg_env.env_int("TG_ROW_WIDTH", 34)
 
@@ -99,8 +98,7 @@ def _fit_markup(markup):
             if isinstance(m.get(key), list):
                 m = dict(m, **{key: fit_rows(m[key])})
         if isinstance(m.get("keyboard"), list):
-            # A menu the client may collapse leaves a picker message with no way
-            # back.
+            # A menu the client may collapse leaves a picker message with no way back.
             m.setdefault("is_persistent", True)
         return json.dumps(m) if isinstance(markup, str) else m
     except Exception:
@@ -186,18 +184,16 @@ class TransportMixin:
         """
         if not isinstance(resp, dict) or resp.get("ok"):
             return False
-        # One shared rule with the media senders. The old test here was
-        # "parse"/"entit"/"tag" as bare substrings, which also matched
-        # "Request Entity Too Large" and "chat not found ... tag" — resending
-        # those without markup fails identically.
+        # One shared rule with the media senders; bare "parse"/"entit"/"tag"
+        # substrings would also match "Request Entity Too Large" and
+        # "chat not found ... tag", which fail identically without markup.
         return tg_bot._is_markup_error(resp.get("description", ""))
 
     def _post_message(self, method: str, p: dict, parse_mode, keyboard) -> dict:
         """sendMessage/editMessageText with a plain-text retry.
 
-        A single malformed tag used to cost the user the ENTIRE answer: the
-        response was never inspected, so a "can't parse entities" rejection looked
-        exactly like success and the reply was silently dropped.
+        The response is inspected: a "can't parse entities" rejection must not look
+        like success, or a single malformed tag silently drops the ENTIRE answer.
         """
         # The one language checkpoint: every message and inline button of a
         # Russian chat (ui_lang_guard: translates known stages, logs leftovers).
@@ -503,9 +499,8 @@ class TransportMixin:
         self._api_post("deleteMessage", {"chat_id": chat_id, "message_id": msg_id})
 
     def _close_menu(self, chat_id, msg: dict) -> None:
-        """↩ Назад under a message takes its buttons away and nothing else.
-        It deleted the message, and so the song text under «🎵 Спеть / ✨ Ещё»
-        went with it: what the user got is never deleted."""
+        """↩ Назад under a message takes its buttons away and nothing else: what
+        the user got (the song text under «🎵 Спеть / ✨ Ещё») is never deleted."""
         self._api_post("editMessageReplyMarkup", {"chat_id": chat_id,
                                                   "message_id": msg.get("message_id"),
                                                   "reply_markup": json.dumps({"inline_keyboard": []})})
@@ -812,11 +807,10 @@ class TransportMixin:
     def _identify(self) -> tuple:
         """(info, error) — who we are, or why we cannot start.
 
-        "Bad token or no network" told an operator nothing: those two need
-        completely different fixes, and one of them is not their fault. _api_get
-        already distinguishes them — it returns {} when the request never got an
-        answer, and Telegram's own {ok: false, error_code, description} when it
-        did — so the caller can say which.
+        A bad token and no network need completely different fixes. _api_get
+        distinguishes them — it returns {} when the request never got an answer,
+        and Telegram's own {ok: false, error_code, description} when it did — so
+        the caller can say which.
         """
         r = self._api_get("getMe")
         if r.get("ok"):

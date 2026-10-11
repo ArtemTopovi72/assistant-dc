@@ -90,7 +90,7 @@ class StressOverrides:
             data = {}
         m = {}
         if isinstance(data, dict):
-            for _, stressed in data.items():
+            for stressed in data.values():
                 s = normalize_stress(str(stressed))
                 if s and "+" in s:
                     m[base_form(s)] = s.lower()
@@ -102,7 +102,7 @@ class StressOverrides:
 
     def save(self) -> None:
         with self._lock:
-            data = {b: s for b, s in sorted(self._map.items())}
+            data = dict(sorted(self._map.items()))
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_suffix(self.path.suffix + ".tmp")
         tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
