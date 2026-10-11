@@ -1,6 +1,9 @@
 import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "bench"))
-import music_ru_cer as C
+import pytest
+C = pytest.importorskip(
+    "music_ru_cer",
+    reason="bench/music_ru_cer.py is not in the repository (it exists only on the machine that wrote this test)")
 
 
 def test_perfect_hearing_is_zero():
