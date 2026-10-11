@@ -79,7 +79,6 @@ def test_read_clipboard_failure_is_tagged():
 def test_image_handlers_no_false_success_on_none():
     """redraw/inpaint/transfer/fix_hands/fix_artifact must all fail cleanly when their
     render dependency returns None."""
-    import image as image_mod
     ctx = _ctx(); ctx.last_image_path = None
     # no source -> all should error (proves the no-source guard too)
     for name, args in [("redraw_image", {"mode": "enhance"}),

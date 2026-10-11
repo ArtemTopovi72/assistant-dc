@@ -25,7 +25,6 @@ import os
 import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
-import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -66,7 +65,6 @@ def test_each_role_distinct_instruction():
     for r, kw in want.items():
         _check(kw.lower() in instrs[r].lower(),
                f"{r} instruction lacks '{kw}': {instrs[r]!r}")
-    # contained-path instruction map also distinct for the 4 localizable roles
     print(f"PASS: each of {len(_ALL)} roles -> distinct role-appropriate instruction")
     return True
 

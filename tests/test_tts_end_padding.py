@@ -63,7 +63,7 @@ check("with a hard-coded fallback if the env var is cleared",
 # Nowhere else: a second append is path-dependent and audible as a long pause.
 # mantella/ exists only in a local checkout, never in git.
 _MANTELLA = "mantella/mantella_f5_server.py"
-_HAVE_MANTELLA = os.path.exists(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), _MANTELLA))
+_HAVE_MANTELLA = os.path.exists(os.path.join(ROOT, _MANTELLA))
 for mod in ("agent/graph.py", "bot/tg_transport.py", "gui/gui_madhouse_tab.py") + ((_MANTELLA,) if _HAVE_MANTELLA else ()):
     code = chr(10).join(l for l in read(mod).splitlines()
                         if not l.lstrip().startswith("#"))

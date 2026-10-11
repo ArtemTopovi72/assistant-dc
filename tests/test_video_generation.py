@@ -462,15 +462,14 @@ except Exception as _exc:
     check("the graph builds so its schema can be inspected", False, _exc)
 
 # The delivery sites must key off those exact names, or declaring them is moot.
-import inspect as _inspect
 import tg_bot as _tgb
 # Follow the METHOD on the class, not the module file. Reading the source of
 # tg_bot.py went stale the moment the monolith was split: delivery now lives in
 # tg_tasks.py and is mixed into TelegramBot, so the grep found nothing and
 # reported a missing feature that was working the whole time.
 _tg_src = ""
-for _n, _m in _inspect.getmembers(_tgb.TelegramBot, _inspect.isfunction):
-    _s = _inspect.getsource(_m)
+for _n, _m in inspect.getmembers(_tgb.TelegramBot, inspect.isfunction):
+    _s = inspect.getsource(_m)
     if "[video delivery]" in _s:
         _tg_src = _s
         break

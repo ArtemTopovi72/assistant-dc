@@ -49,7 +49,7 @@ def test_graph_loop_survives_none_tool_result():
     """Even if execute_tool were bypassed and yielded a non-str, the graph loop's
     own guard must keep .lstrip() from crashing. We simulate by monkeypatching the
     module-level execute_tool the graph calls to return None once."""
-    import threading, copy
+    import threading
     from pathlib import Path
     import graph as graph_mod, tools as tools_mod
     from models import Context

@@ -93,7 +93,6 @@ check("the turn still ends with an answer", "частями" in (final.get("fina
 
 # --- the ceiling ---------------------------------------------------------------------
 builder_rounds = [t for t, names in seen_tokens if "run_code" in names or "write_file" in names]
-plain_rounds = [t for t, names in seen_tokens if names and "run_code" not in names and "write_file" not in names]
 check("a round that may write code gets room for the code",
       builder_rounds and all(t >= GP.BUILDER_LOOP_TOKENS for t in builder_rounds), seen_tokens)
 

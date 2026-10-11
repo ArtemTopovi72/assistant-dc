@@ -140,9 +140,7 @@ def _fake_llm(ctx, system_prompt, user_msg, **kw):
 
 import llm as _llm_mod
 _orig_call = _llm_mod.call_llm_simple
-S_call = None
 try:
-    import slides
     # plan_deck imports call_llm_simple locally from `llm` — patch the module.
     _llm_mod.call_llm_simple = _fake_llm
     _seen_prompts.clear()
@@ -183,9 +181,6 @@ def _fake_make_presentation(ctx, topic, out_dir, *, n_slides=0, image_fetcher=No
             "deck": {"title": topic, "slides": [{"heading": "a"}, {"heading": "b"}]}}
 
 class _FakeImageMod:
-    class OUTPUT_DIR:
-        @staticmethod
-        def mkdir(*a, **k): pass
     OUTPUT_DIR = type("P", (), {"mkdir": staticmethod(lambda *a, **k: None),
                                 "__str__": lambda self: "/tmp"})()
 

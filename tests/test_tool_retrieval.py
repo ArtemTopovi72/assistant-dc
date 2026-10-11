@@ -65,7 +65,6 @@ def test_each_intent_reaches_its_tool():
         "вставь то, что в буфере обмена": "read_clipboard",
     }
     for text, want in cases.items():
-        want = WANTS[text][0]
         assert want in _sel(text), f"{want} dropped for {text!r}: {_sel(text)}"
 
 
