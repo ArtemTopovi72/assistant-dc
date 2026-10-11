@@ -33,7 +33,7 @@ def _png(name="s.png"):
 RESULTS = []
 def check(name, cond, detail=""):
     RESULTS.append((name, bool(cond)))
-    print("[" + ("PASS" if cond else "FAIL") + "] " + name + ("" if cond or not detail else " - " + detail))
+    print("[" + ("PASS" if cond else "FAIL") + "] " + name + ("" if cond or not detail else " - " + str(detail)))
     assert cond, name + ": " + detail
 
 _orig_loader = gui.ModelLoader

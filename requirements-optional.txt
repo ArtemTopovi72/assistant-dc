@@ -1,0 +1,16 @@
+# Packages the code imports lazily (inside a function) that requirements.txt does not install.
+# Each feature below fails with ImportError / "No module named ..." on a fresh install until
+# its package is present. Versions are deliberately not pinned: they were not recorded in the
+# repo, so pin the ones that work on your machine (`pip freeze | grep -i <name>`).
+#
+#   uv pip install -r requirements-optional.txt
+
+mutagen              # media/remix.py: artist/title from an audio file's own tags
+pyworld              # media/remix.py: pitch contour (F0) for the remix and speech-on-song paths
+praat-parselmouth    # voice/prosody.py: pitch/tempo shaping of synthesized speech (voice/delivery.py)
+pdfminer.six         # bot/tg_bot.py: text of an uploaded PDF
+pypdfium2            # media/audiobook.py: page count and rendering for scanned-PDF OCR
+silero-stress        # voice/stress.py: Russian stress marks (falls back without it)
+
+# Not on PyPI: media/mashup_auto.py (downbeats) imports beat_this.
+#   pip install https://github.com/CPJKU/beat_this/archive/main.zip
