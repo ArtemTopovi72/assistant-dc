@@ -587,7 +587,6 @@ def _eta_runs() -> dict:
     """{preset: [(asked, wall), ...]} -- the seeds plus what was recorded."""
     runs = {k: list(v) for k, v in _ETA_SEEDS.items()}
     try:
-        import json
         with open(_eta_path(), "r", encoding="utf-8") as fh:
             rows = json.load(fh)
     except Exception:
@@ -606,8 +605,6 @@ def record_render_time(preset: str, asked_s: int, wall_s: float, steps: int = _S
     if not preset or asked_s <= 0 or wall_s <= 0:
         return
     try:
-        import json
-        import time as _time
         with _ETA_LOCK:     # two songs finishing together must not drop a row
             path = _eta_path()
             rows = []
@@ -623,7 +620,7 @@ def record_render_time(preset: str, asked_s: int, wall_s: float, steps: int = _S
             if not isinstance(rows, list):
                 rows = []
             rows.append({"preset": preset, "asked": int(asked_s), "wall": round(float(wall_s), 1),
-                         "steps": int(steps or _STEPS_REF), "at": int(_time.time())})
+                         "steps": int(steps or _STEPS_REF), "at": int(time.time())})
             path.parent.mkdir(parents=True, exist_ok=True)
             tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
             with open(tmp, "w", encoding="utf-8") as fh:
