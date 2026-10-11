@@ -1,7 +1,7 @@
 """✨ Better lyrics: a draft is checked by rules and by the model, then revised,
 until it passes or the rounds run out; the best version wins.
 
-Owner 10-03: the model writes decent lyrics when it is pushed again and again
+Owner: the model writes decent lyrics when it is pushed again and again
 to keep the metre and the rhymes -- so push it, but with real checks, not its
 own opinion of itself: «с валидированными рифмами, без тупых рифм типа свет и
 рассвет». The approach follows the lyric-editing literature: revise a draft
@@ -83,7 +83,7 @@ _PLUS_WORD = re.compile(r"[A-Za-zА-Яа-яЁё+]+(?:-[A-Za-zА-Яа-яЁё+]+)*
 
 def _accentor(ctx):
     """The voice's own accentor: RUAccent, with silero-stress deciding the
-    homographs (voice/stress.py, bench 2026-10-02) -- or None."""
+    homographs (voice/stress.py, bench) -- or None."""
     global _ACC
     acc = getattr(getattr(ctx, "models", None), "accentor", None)
     if acc is not None:
@@ -132,8 +132,8 @@ def _syllables(word: str) -> int:
 
 def _stress_index(plus_word: str) -> int:
     """0-based syllable the «+» marks; with no mark, ё (always stressed --
-    RUAccent leaves it unmarked, and «огнём / куём» read as no rhyme, live
-    10-03) or the only vowel; -1 when it is unknown."""
+    RUAccent leaves it unmarked, and «огнём / куём» read as no rhyme)
+    or the only vowel; -1 when it is unknown."""
     i = plus_word.find("+")
     if i < 0:
         low = plus_word.lower()

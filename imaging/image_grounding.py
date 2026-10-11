@@ -442,7 +442,7 @@ def _is_removal_instruction(text: str) -> bool:
 def _is_removal_of(instructions: str, region: str = "", ctx=None) -> bool:
     """The edit leaves `region` gone -- removed, or described as absent ("bare
     neck, no scarf", "the empty table where the vase was"). Not when it removes
-    something ELSE on the region: live 2026-09-11 'Remove the large black shadow
+    something ELSE on the region: 'Remove the large black shadow
     covering the cat-shaped object' deleted the cat from the layout and the
     agent spent four renders getting it back. The model's read (edit_plan
     removes_region); it replaced a verb regex, an object parser, stem
@@ -533,7 +533,7 @@ def _firered_style_instruction(ctx, instructions: str, image_path: Optional[str]
 
     _firered_instruction names one region and demands everything ELSE stay
     put -- right for a targeted edit, self-contradictory for a style transfer
-    with no region at all. Live bug (2026-09-20): calling it with region=""
+    with no region at all. Calling it with region=""
     produced "Change the it to: X. Keep everything else the same", which read
     as "restyle a subject, preserve the frame" and came back as a cropped,
     partial redraw that dropped the title text and clipped a person out of

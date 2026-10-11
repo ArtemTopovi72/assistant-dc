@@ -2,7 +2,7 @@
 
 The image engine draws from the words it is given and does not know faces by
 name: «кибернетический Ленин» came back with a full head of hair, then as
-«какой-то урод», and a redraw «он лысый» did not fix it (live 10-03). The model
+«какой-то урод», and a redraw «он лысый» did not fix it. The model
 that plans the picture names the person; their looks are read from the web
 (the model's own memory when the search finds nothing) and ride along with
 the description.
@@ -70,7 +70,7 @@ def _search(ctx, query: str) -> str:
 
 
 def _look_from_web(ctx, person: str) -> str:
-    """The person's looks as the web describes them (owner 10-03: «описание
+    """The person's looks as the web describes them (owner: «описание
     брать в интернете норм»); '' when the search finds nothing."""
     try:
         found = _search(ctx, f"{person} appearance face hair beard description")

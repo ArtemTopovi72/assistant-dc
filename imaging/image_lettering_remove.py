@@ -1,6 +1,6 @@
 """«Убери все надписи с фона»: the mask comes from OCR, not from a phrase.
 
-Live 2026-09-18 (journey 3): asked to remove ALL the lettering behind a
+Asked to remove ALL the lettering behind a
 girl, the contained edit asked SAM3 for 'wall inscriptions', got one strip
 166 px tall, cleaned it, and shipped a picture with "INSGATE" still on the
 left. A segmenter given a phrase finds ONE thing; "all the text" is every
@@ -162,7 +162,7 @@ def smear_ratio(path: str, boxes: List[Box], pad: int = 16, ring: int = 60) -> f
     """Fine-detail energy inside the filled boxes relative to a ring around them.
 
     "The OCR reads nothing" was the only success test, so a LaMa smear over a
-    feather hem shipped (2026-09-24: inside 2.5 vs ring 6.1; the untouched
+    feather hem shipped (inside 2.5 vs ring 6.1; the untouched
     source measured 10.1 inside). A real fill keeps texture close to its
     surroundings; a flat patch drops far below them. 1.0 = no evidence."""
     try:
@@ -190,7 +190,7 @@ OC_WORKER = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file_
 
 
 def _fill_objectclear(ctx, image_path: str, mask_path: str, grow: int) -> Optional[str]:
-    """ObjectClear, the user's pick on the 26-item eraser A/B (2026-09-25):
+    """ObjectClear, the user's pick on the 26-item eraser A/B:
     FireRed left embossed ghosts of the letters. Own venv, whole card (the chat
     model is evicted for it and brought back). None -> the caller uses FireRed."""
     if (os.getenv("LETTERING_ENGINE", "objectclear") != "objectclear" or os.getenv("F5_TEST_RUN")

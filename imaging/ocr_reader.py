@@ -1,8 +1,7 @@
 """A deterministic reader for the lettering in a render (EasyOCR, ru+en, CPU).
 
 The vision model reads Cyrillic badly and deterministically: a crisp,
-hand-painted "У ОЛЬГИ" came back "УАЗЬЛ" four times out of four (live,
-2026-09-12), so a perfect café sign was condemned, redrawn twice, and the
+hand-painted "У ОЛЬГИ" came back "УАЗЬЛ" four times out of four, so a perfect café sign was condemned, redrawn twice, and the
 agent spent nine more minutes "fixing" it. EasyOCR on the same crop reads
 "У ОАЬГИ" -- one letter off in a stylised font -- and the three-line
 champagne label character for character.

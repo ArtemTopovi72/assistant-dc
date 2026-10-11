@@ -32,7 +32,7 @@ def _is_whole_face(phrase: str) -> bool:
     """The region is a whole face or head -- not one feature of it (eyes, lips)
     and not a person or body that also names the face. Read by the model: the
     old word regex took «the man's body and face» for a face, YuNet masked only
-    the face and the man stayed in his chair (live 10-02)."""
+    the face and the man stayed in his chair."""
     import intent
     return intent.ask_yes(
         "An image region is described as: {text}\n\nIs this region exactly a whole "
@@ -200,8 +200,7 @@ _TINTS = {"red": (255, 0, 0), "cyan": (0, 220, 255), "green": (0, 230, 0), "mage
 
 def qa_tint(orig_rgb, result_rgb, mask_l) -> str:
     """The highlight colour least like the region itself. A red tint over a red
-    dress on a red wall told the VLM nothing, and it rejected a good edit WRONG
-    (live 2026-09-25)."""
+    dress on a red wall told the VLM nothing, and it rejected a good edit WRONG."""
     import numpy as np
     m = np.asarray(mask_l.convert("L").resize(orig_rgb.size)) > 127
     if not m.any():

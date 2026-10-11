@@ -254,7 +254,7 @@ def _give_headroom(layout: dict, host: dict, notes: list) -> None:
 
     A box is a suggestion to the renderer, and a tall object ignores its top:
     a champagne bottle in a 0.62-high box was painted with its neck running
-    off the frame in five renders out of five (2026-09-12). Given the strip
+    off the frame in five renders out of five. Given the strip
     above it as an element of its own -- out-of-focus room, empty air -- the
     same seed drew the bottle whole, cap and all. Added once, only when
     nothing else already owns that strip, and never when the host starts at
@@ -485,7 +485,7 @@ def read_text(ctx, image_path: str) -> Optional[list]:
     condemn every render that carries lettering.
 
     Runs on config.TEXT_READ_MODEL, not the active chat model: measured
-    2026-07-29 on the same eight test frames, the 9B chat model read a clean
+    on the same eight test frames, the 9B chat model read a clean
     84px "STOP" as "HIT" and scored garbled renders HIGHER than correct ones —
     using it here would redraw good pictures at random. gemma-4-12b transcribed
     all eight exactly (correct 1.00, garbled at most 0.50).
@@ -540,8 +540,7 @@ def _letter_swapped(na: str, nb: str) -> bool:
     """Same length, same words, one or two letters that are not reader
     confusables -- "пятницы" painted as "пятниця". The renderer does this
     (it invents a Cyrillic letter that fits the shape), and at ratio 0.93 the
-    old check called it a match; the poster went out misspelled (live,
-    2026-09-12, journey 25)."""
+    old check called it a match; the poster went out misspelled."""
     if len(na) != len(nb) or na == nb or len(na) < 4:
         return False
     diff = [(x, y) for x, y in zip(na, nb) if x != y]
@@ -571,7 +570,7 @@ def _match_lines(want: str, read: list) -> tuple:
     The reader lists each painted line as its own string, so a three-line
     label comes back as three candidates and none of them alone resembles the
     whole -- 'Пролетарской' scored 0.59 against a label that was printed
-    perfectly (live, 2026-09-12). Each line is matched on its own and the
+    perfectly. Each line is matched on its own and the
     score is the weakest line; one candidate may also carry the whole text.
     """
     lines = lines_of(want)

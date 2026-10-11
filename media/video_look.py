@@ -1,6 +1,6 @@
 """Look at a video, not only listen to it.
 
-Live 2026-09-14 21:23: a forwarded round video (33 s, a grow lamp on a stand
+A forwarded round video (33 s, a grow lamp on a stand
 by a window) was handled as «Пересланное голосовое» -- the audio track was
 transcribed and the picture never seen. The user's ask: frames every 5 s or
 some other way, but the bot must SEE what is in a video.

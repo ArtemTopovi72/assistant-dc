@@ -4,7 +4,7 @@ Ideogram 4 does NOT take a plain prose prompt. Its text encoder expects a
 *structured JSON caption* that deconstructs the picture into a background plus a
 list of elements, each with an optional bounding box saying WHERE that element
 goes. Feeding it a bare sentence makes the model emit its grey "Image blocked by
-safety filter" card instead of a picture (verified 2026-07-22 — the same request
+safety filter" card instead of a picture (verified — the same request
 as a structured caption rendered correctly).
 
 So this module has two halves:
@@ -74,12 +74,12 @@ def _frame_stats(path: str) -> tuple:
 def is_refusal_card(path: str) -> bool:
     """Detect the refusal card: a near-flat grey frame with a line of text.
 
-    Measured (2026-07-22): refusal cards land at std≈9-11 with ~5k unique colours;
+    Measured: refusal cards land at std≈9-11 with ~5k unique colours;
     real renders sit at std≈50-70 with 150k+. The gap is wide enough that a plain
     threshold is reliable, and a genuinely flat legitimate image (a solid colour
     study) is not something this engine is asked for.
 
-    Live 2026-09-14: seven renders in a row were reported as refusals and the
+    Seven renders in a row were reported as refusals and the
     user saw «Не получилось нарисовать» for each. None was the card -- every one
     was a BLACK frame (mean 1-7). The card is grey, so the mean is checked too;
     a black frame is a different failure and is handled by is_black_frame.
@@ -814,7 +814,7 @@ def generate(ctx, prompt: str, *, width: int = 1024, height: int = 1024,
         logger.info("Ideogram: turbo LoRA, %d steps @ cfg %.1f", n_steps, IDEOGRAM_CFG_TURBO)
     if not lora_name and is_photo_caption(caption) and IDEOGRAM_PHOTO_LORA:
         # Ideogram's known plastic skin: Lenovo UltraReal on photographs only
-        # (A/B 10-02 runtime/ideogram_int8_ab/skin.jpg: pores and film light,
+        # (A/B runtime/ideogram_int8_ab/skin.jpg: pores and film light,
         # same face, same lettering, same 40 s). A character LoRA keeps its own.
         lora_name, lora_strength = IDEOGRAM_PHOTO_LORA, IDEOGRAM_PHOTO_LORA_STRENGTH
     if lora_name:

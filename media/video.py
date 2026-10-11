@@ -110,7 +110,7 @@ _HOLD = re.compile(r"\b(?:for (?:a few|several|some|\d+) seconds?|for a while|"
 def estimate_seconds(description: str, capped: bool = True) -> float:
     """How long the scripted clip needs to play out, when nobody said a length.
 
-    A fixed 5.2 s cut every multi-action script short (live 10-06: "puts on a suit,
+    A fixed 5.2 s cut every multi-action script short ("puts on a suit,
     takes a broom, sweeps for several seconds, stops, looks at the camera, says a
     line, sweeps again" ended mid-way). Spoken lines at ~2.3 words/s, every other
     beat ~1.3 s, a held action ("for several seconds") +2 s; 5.2 s at the least.
@@ -179,7 +179,7 @@ def split_script(description: str, max_seconds: float = 0.0) -> list:
 
 def render_eta_s(clip_seconds: float) -> float:
     """Wall time to render one H3 part of this length on the 3090, prompt prep included.
-    Measured 2026-10-10 on a 5-part chain: 8.0 s took ~440 s, 5.2 s ~320 s."""
+    Measured on a 5-part chain: 8.0 s took ~440 s, 5.2 s ~320 s."""
     return 40.0 + 50.0 * max(0.0, float(clip_seconds))
 
 
@@ -263,7 +263,7 @@ def pick_mode(images: Sequence[str] = (), videos: Sequence[str] = (),
     In principle one/two images are keyframe work the FL2VA checkpoint does
     better, since those images become actual frames rather than something the
     model is merely reminded of, and 3+ images (or any video/audio reference)
-    need the omni-reference checkpoint. In practice, live 2026-09-19: every
+    need the omni-reference checkpoint. In practice every
     i2va/flf2va job this deployment has ever submitted (3 for 3, across two
     separate real animate requests plus this fix's own verification run) got
     stuck in KSampler and never finished on its own -- each had to be killed
@@ -457,7 +457,7 @@ def _two_stage_on() -> bool:
 def _add_latent_upscale(wf: dict, seed: int, factor: float = 0.0) -> None:
     """Render at half size, upscale the video latent 2x, refine 2 steps.
 
-    Night bench 2026-09-24 (bench/night_upscale.py, same seed/prompt): t1 149s vs
+    Night bench (bench/night_upscale.py, same seed/prompt): t1 149s vs
     212s, t2 176s vs 211s single-stage at full size; speech still exact (GigaAM),
     hands and faces intact, the green flare artifact gone. Text-to-video only:
     a reference render was not measured. Sigma tail from the upstream LBH
@@ -912,7 +912,7 @@ _FRAMING_LOCK_SUFFIX = (
 def _lock_framing_unless_requested(description: str) -> str:
     """Append a static-camera directive unless the request itself asks for motion.
 
-    Live, 2026-09-19: "the video model doesn't preserve the original at all on
+    "the video model doesn't preserve the original at all on
     complex requests, sometimes crops without being asked." Researched against
     the model's own prompt guide (MiniMax H3): a request with several distinct
     actions but no explicit camera line gets the model improvising a shot --
@@ -932,7 +932,7 @@ def _lock_framing_unless_requested(description: str) -> str:
 
 
 # With a picture to start from: the picture IS the opening shot, and its look
-# holds for the whole clip (owner 10-03: «где был реализм там только гипер
+# holds for the whole clip (owner: «где был реализм там только гипер
 # реализм, где мультяшно там мультяшно… первый снимок это и есть стартовый
 # ракурс»). Said for any picture, so no guess about its style is needed; a
 # camera move the user asks for still happens, but from that opening shot.
@@ -971,7 +971,7 @@ _CIR_REF_FIELDS = ("subject_definitions", "retention_analysis", "detailed_descri
 
 
 def _context_ir_on() -> bool:
-    """On by default since the night A/B of 2026-09-24 (same seed, same prompts):
+    """On by default since the night A/B (same seed, same prompts):
     Ref2VA from an illustrated photo kept the illustration style, ONE continuous
     shot and the same face for all 5 s, where the plain prompt switched to
     photoreal within 1.5 s, cut to her back at 3 s and ended on another woman.
@@ -1117,7 +1117,7 @@ AUDIO_REF_TOTAL_MS = 15000   # H3: 2-15 s per audio reference, 15 s for all of t
 
 def fit_audio_refs(audios: Sequence[str]) -> list:
     """Each voice sample cut to its densest speech so all of them fit H3's 15 s
-    audio budget. Live 10-01: two 43-51 s samples went in whole and the clip
+    audio budget. Two 43-51 s samples went in whole and the clip
     spoke with neither voice. A sample that cannot be read stays as it is."""
     from pydub import AudioSegment
     import voice_clone
@@ -1192,7 +1192,7 @@ def prepare_prompt(ctx, description: str, *, images: Sequence[str] = (), videos:
     """(prompt H3 gets, seconds): every model call a render needs before it is submitted --
     the length read from the script, the Context-IR rewrite, speech stress. Apart from
     generate_video so a chain can prepare all its parts while the chat model is loaded and
-    then hold the card through every render (live 10-07: called inside the hold, each call
+    then hold the card through every render (called inside the hold, each call
     met an unloaded model and the parts went out unrewritten)."""
     asked = description
     description = _lock_framing_unless_requested(description)
@@ -1390,14 +1390,14 @@ CONTINUE_PREFIX = (
 # With pinned frames the previous shot is not a reference at all, it IS the opening of
 # this clip, and it carries the faces too. No <Picture 1> on purpose: with the end frame as
 # a ref2va reference the model played the pins and then CUT to a fresh shot of the next
-# action (bench/motion_context_ab.py, 10-07, twice of twice); the plain FL2V graph with the
+# action (bench/motion_context_ab.py, twice of twice); the plain FL2V graph with the
 # same pins went straight on, in 166 s against the old way's 348 s.
 CONTINUE_CTX_PREFIX = (
     "The shot continues with no cut and no reset: the same people, place, framing and "
     "lighting, picking up exactly where the opening frames leave off; whatever already "
     "changed stays changed, and voices and ambient sound go on unchanged. Every object keeps "
     "its shape and stays the same object; nothing appears or vanishes on its own. What happens next: ")
-# 10-09: the prefix carried a kitchen example («to use a different tool, the hand sets it down on
+# The prefix carried a kitchen example («to use a different tool, the hand sets it down on
 # the counter, then picks the new one up»), and part 2 of «naked women walk past the bag of money
 # at Lakhta» came out as a hand putting a tool on a counter and hitting a stone with a wooden
 # mallet: the prompt writer took the example for the scene, and knew nothing else of it. Every
@@ -1416,8 +1416,8 @@ def bridge_part(ctx, last_frame: str, part: str) -> str:
     """The next part of a long script with one bridging sentence in front, so it starts
     from `last_frame` (where the previous part really ended). A part that names a place or
     a thing not in that frame ("sweeps the carrots into a steaming pot" while he stands at a
-    bare board) made the model conjure the pot out of nothing right after the pinned frames
-    (10-07). A bridge saying only where the pot was had it slide into the shot on its
+    bare board) made the model conjure the pot out of nothing right after the pinned frames.
+    A bridge saying only where the pot was had it slide into the shot on its
     own; the owner: things do not move by themselves, a hand brings them in. Asked to REWRITE the part, Gemma echoed it unchanged, so it is asked what is
     missing and for the move that brings it in, and that sentence goes first. The part
     itself is never touched; any failure keeps it as it was."""
@@ -1457,7 +1457,7 @@ def bridge_script(ctx, parts: list) -> list:
     words alone, all at once, BEFORE anything renders: asked per part from the last frame
     (bridge_part) the vision model was loaded back onto the card between every two parts of
     a chain -- 18 GB beside H3, ~10 min a part, and the turn deadline saw an idle ComfyUI in
-    the gap and abandoned the job (live 10-07). Any failure keeps the parts as they were."""
+    the gap and abandoned the job. Any failure keeps the parts as they were."""
     if len(parts) < 2:
         return list(parts)
     guide = ("A video script is split into numbered parts rendered one after another; each part "
@@ -1514,7 +1514,7 @@ def join_pinned(src: str, new: str, head: int = MOTION_CONTEXT_FRAMES) -> Option
     rendering of exactly those frames (the pinned head), so the cut lands between two
     near-identical frames and the turn into the new action happens inside one clip.
     A crossfade at the end of the pins blended two different poses into a double image
-    (live 10-07, the stirring hand). Sound is cut at the same point, with a 10 ms blend.
+    (the stirring hand). Sound is cut at the same point, with a 10 ms blend.
     """
     ff = shutil.which("ffmpeg")
     a, b = probe(src), probe(new)

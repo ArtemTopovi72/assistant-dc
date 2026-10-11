@@ -252,7 +252,7 @@ GENRES: dict = {
     "metal":      "Hard rock / metal",
     "cinematic":  "Cinematic orchestral / epic soundtrack",
     "lofi":       "Lo-fi hip hop / ambient chill",
-    # 10-09 «добавь больше жанров типо панк рок»
+    # «добавь больше жанров типо панк рок»
     "punk": "Punk rock",
     "poppunk": "Pop punk",
     "postpunk": "Post-punk",
@@ -1358,7 +1358,7 @@ YUE2_PYTHON = _config.venv_python(os.path.join(os.path.dirname(os.path.dirname(o
                                                "venv_yue2"))
 YUE2_ODE_STEPS = _cfg_env.env_int("YUE2_ODE_STEPS", 16)
 # Lyric guidance on the semantic stage. The protocol's 1.0 in cot full/melody is NO guidance:
-# 10-07 Cheri Cheri Lady x Govnovoz, Whisper found 1/21 lines sung right at 1.0, 20/21 at 3.0
+# Cheri Cheri Lady x Govnovoz, Whisper found 1/21 lines sung right at 1.0, 20/21 at 3.0
 # on three seeds (1.5: 8-17/21), same render time (outputs/yue_cover/sweep).
 YUE2_CFG = _cfg_env.env_float("YUE2_CFG", 3.0)
 YUE2_TIMEOUT = 1500          # measured 235-810 s for one song; long lyrics run longer
@@ -1504,7 +1504,7 @@ _SUNG = r"vocal|vocals|voice|voices|singer|singing|sung|choir|rap|rapping|croon\
 
 
 def yue2_pin(style: str, prefs: Optional[dict]) -> str:
-    """The 🎤 button over YuE2's tag list (10-09 «мужской не доезжал, инструментал со словами»):
+    """The 🎤 button over YuE2's tag list («мужской не доезжал, инструментал со словами»):
     the chosen singer goes first as a plain positive tag and every tag naming the other gender is
     dropped -- a tag model reads «no female vocals» as «female»; an instrumental leads with
     «instrumental» (YuE2 Studio's rule, from the official requests) and loses every vocal tag."""
@@ -1539,7 +1539,7 @@ def yue2_pin(style: str, prefs: Optional[dict]) -> str:
 def yue2_preview(prefs: Optional[dict]) -> str:
     """The tags the song-settings buttons pin in YuE2's card, through the same chain a render
     runs (enforce_pins -> yue2_style -> yue2_pin) minus the songwriter's own tags. The settings
-    menu shows it so «the model ignored my choice» can be checked before a render (10-09)."""
+    menu shows it so «the model ignored my choice» can be checked before a render."""
     return yue2_pin(yue2_style(enforce_pins("", prefs)), prefs)
 
 
@@ -1576,7 +1576,7 @@ def _strip_vocals(path: str) -> None:
 def _generate_yue2(ctx, lyrics: str, style: str, seed: int, prefs: Optional[dict] = None) -> str:
     """One YuE2 render with the card to itself.
 
-    yue2.cpp BF16 first (2026-09-27: user picked it by ear over our PyTorch
+    yue2.cpp BF16 first (user picked it by ear over our PyTorch
     path, 7-21 s faster per song); the PyTorch venv is the fallback.
     """
     cpp = yue2_cpp_available()

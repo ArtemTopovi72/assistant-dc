@@ -7,7 +7,7 @@ The vocal is never cut or stretched, so every word survives; the BED adapts to i
   4. B's bars are laid one by one onto A's bar grid with one rubberband time map, so B's
      drums land on A's downbeats for the whole song (B bars loop if A is longer).
 Mixed at the vocal/backing balance song A itself had. Measured against our old
-cut-the-vocal engine (2026-08-19): WER 47% vs 74% -- see mashup-upstream-benchmark.
+cut-the-vocal engine: WER 47% vs 74% -- see mashup-upstream-benchmark.
 """
 import logging
 import os

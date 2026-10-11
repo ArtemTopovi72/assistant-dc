@@ -2,8 +2,7 @@
 
 One vision call on a 1024-px proxy answers with the biggest things in the
 frame and misses the small ones -- a label, a number on a sign, a scar, the
-thing in someone's hand -- which are often what the question is about (live
-2026-09-18: «на картинках видит только самые здоровые детали, на мелкие
+thing in someone's hand -- which are often what the question is about (user report: «на картинках видит только самые здоровые детали, на мелкие
 вообще забивает, а часто они самые важные»).
 
 For a QUESTION about a picture (not an edit) the picture is also cut into

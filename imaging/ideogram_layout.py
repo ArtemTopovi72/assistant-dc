@@ -93,7 +93,7 @@ def photo_in_words(photo: str) -> str:
 
     Ideogram treats a figure in the caption as something to print: the
     default "50mm lens, f/4" came out as "4/4" on a champagne label and as
-    "//4" on another (2026-09-12). The setting still says what it said --
+    "//4" on another. The setting still says what it said --
     depth of field and framing -- but in language the renderer cannot letter.
     """
     def _ap(m):
@@ -316,7 +316,7 @@ _LOOKS = ("caricature", "cartoon", "anime", "comic strip", "watercolour",
 def _look(prompt: str) -> str:
     """The look the user asked the picture to have: one of _LOOKS, "photo", or
     "none". Read by the model: a painting HANGING on the wall in the scene is
-    not a request for a painted picture (live 2026-09-12, the render came back
+    not a request for a painted picture (the render came back
     as a framed canvas), and word lists could not tell the two apart."""
     import intent
     return intent.ask_choice(
@@ -405,7 +405,7 @@ def enforce_user_look(layout: dict, look: str) -> dict:
     The description handed to the planner is the agent's English rewrite, and it
     likes «epic digital painting»: «Кибернетический Ленин … дерётся с чертями»
     came back a cartoon again and again, while the owner wanted a photograph
-    (live 10-03: «он всё нахуярит мультяшно, а я просил фотореализм»). `look` is
+    («он всё нахуярит мультяшно, а я просил фотореализм»). `look` is
     _look() of the user's own words: "photo" -> a photograph, always; "none" ->
     a photograph unless the planner made graphic design (a logo stays a logo);
     a drawn look -> that look. "" -> no user words to go by: the layout as is.

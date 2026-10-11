@@ -144,7 +144,7 @@ def log_edit_decision(*, request: str, classifier: str, tool: str, workflow: str
     """Append one image-edit routing record to a PERSISTENT, app-independent log.
 
     The console logger is the only existing sink and it is not written to disk
-    unless stdout happens to be redirected (it was not during the 2026-06-20
+    unless stdout happens to be redirected (it was not during one
     session, which is why a dress->redraw routing could not be proven after the
     fact). This writes an always-on JSONL trail so every edit's
     REQUEST / CLASSIFIER_DECISION / SELECTED_TOOL / SELECTED_WORKFLOW /
@@ -385,7 +385,7 @@ def firered_extra_lora(name: Optional[str], strength: float = 1.0):
 # Edit-on-edit drifts: FireRed was trained on single edits, and by the 4th
 # chained pass colour noise and a drifting face pile up. From the
 # (FIRERED_REBASE_AFTER+1)th edit in a row it edits the ORIGINAL with every
-# instruction so far instead (FireRed findings 10-02). A chain longer than
+# instruction so far instead (FireRed findings). A chain longer than
 # FIRERED_REBASE_MAX starts over from the current picture.
 FIRERED_REBASE_AFTER = 3
 FIRERED_REBASE_MAX = 6

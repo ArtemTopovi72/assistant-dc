@@ -1,6 +1,6 @@
 """Find photos matching a description inside a folder of pictures.
 
-Live 2026-09-14: «найди мост» over a 173-photo DCIM.zip. The agent had
+«найди мост» over a 173-photo DCIM.zip. The agent had
 open_image + inspect_image -- one picture per two tool calls -- so 173 photos
 were 346 calls, far past the round limit. It could not do the task, so it
 narrated a plan instead ("Сначала я распакую архив ... Начинаю поиск.") and

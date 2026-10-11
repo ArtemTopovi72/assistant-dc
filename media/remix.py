@@ -138,18 +138,18 @@ def _mix(voice_wav: str, back: np.ndarray, out_mp3: str) -> str:
 
 
 # Whisper's stock lines on a bare backing track: the credits of the subtitle sets it learned
-# from. 10-07 «3 сентября» ended in four «Субтитры создавал DimaTorzok», each given a lyric line.
+# from. «3 сентября» ended in four «Субтитры создавал DimaTorzok», each given a lyric line.
 _HALLUCINATED = re.compile(r"субтитр|dimatorzok|редактор|корректор|продолжение следует|"
                            r"спасибо за просмотр|подписывайтесь|thank you|subtitles|amara", re.I)
 
 
 def _hear(whisper, path: str, language=None, vad: bool = True) -> list:
     """Whisper segments of a bare sung vocal. VAD on and no conditioning on the previous text:
-    with the defaults one credit-line hallucination repeats through the whole stem (10-07: a
+    with the defaults one credit-line hallucination repeats through the whole stem (a
     clear take came back as 13 x «Продолжение следует...», 0 words, and the take picker
     scored it 0%); with these the same take read almost word for word. Greedy at temperature 0:
-    with the fallback ladder the same converted vocal scored 0.03, 0.41, 0.52 on three runs
-    (10-08), so takes and voices were picked on noise; at 0 it is 0.52 every time."""
+    with the fallback ladder the same converted vocal scored 0.03, 0.41, 0.52 on three runs,
+    so takes and voices were picked on noise; at 0 it is 0.52 every time."""
     segs, _ = whisper.transcribe(path, word_timestamps=True, language=language, vad_filter=vad,
                                  condition_on_previous_text=False, temperature=0.0)
     return list(segs)
@@ -209,7 +209,7 @@ def _syl_ends(words: list) -> list:
 def _fit_line(ctx, line: str, n: int) -> str:
     """`line` reworded to `n` syllables, give or take one (a parody fits the meter, not the
     other way). Gemma cannot count syllables: told only the target it handed the line back
-    unchanged every time (10-07), so it is told the count it has and how many to add or cut."""
+    unchanged every time, so it is told the count it has and how many to add or cut."""
     if abs(_syl(line) - n) <= 1:
         return line
     import llm
@@ -249,7 +249,7 @@ def _sung(phrases: list) -> list:
 def _plan(phrases: list, lines: list) -> list:
     """(words, line) pairs in song order: each line takes the run of sung phrases whose
     syllables come closest to its own, so rewording only trims a syllable or two. One line
-    per Whisper phrase gave 3-syllable phrases 19-syllable lines (10-07). The lyric goes
+    per Whisper phrase gave 3-syllable phrases 19-syllable lines. The lyric goes
     round again when the song is longer."""
     sung, out, i, k = _sung(phrases), [], 0, 0
     while i < len(sung):
@@ -283,7 +283,7 @@ def _onto_marks(y: np.ndarray, src: list, dst: list, length: int, work: str, tag
                 dst_ends: list = None) -> np.ndarray:
     """`y` warped so its syllable onsets `src` (s) land on `dst` (s, from 0); `length` samples.
     Syllable by syllable: one time map over the whole line smears each onset ~70-90 ms early
-    where a short spoken gap is stretched to a long sung note (10-07 test)."""
+    where a short spoken gap is stretched to a long sung note."""
     k = min(len(src), len(dst))
     if k < 2:
         return y[:length]
@@ -374,7 +374,7 @@ def _out() -> str:
 
 
 # ── Re-sing: the way an AI cover gets new words right ──────────────────────────
-# 10-07: a day of laying new words into the original's syllables ended in «ты пытаешься в
+# A day of laying new words into the original's syllables ended in «ты пытаешься в
 # слово из 4 букв затолкать целое слово». The user's reference (Udio «Modern Talking —
 # Говновоз») RE-SINGS the song: its score, new notes for the new words, its own backing.
 # YuE2 does that from the original's full score (melody + chords) -> «МОЛОДЕЦ!!!».
@@ -449,7 +449,7 @@ def _repetition_profile(phrases: list) -> list:
     """How the ORIGINAL repeats itself, as short notes for the model -- the shape, not its words.
     A singable adaptation keeps the original's map of repeats (Kim & Goto, ISMIR 2023: the
     self-similarity of sections stays the same across languages when a song is sung well);
-    10-08 the user asked for repeats placed with meaning, as in «3 сентября» / «Я русский»."""
+    The user asked for repeats placed with meaning, as in «3 сентября» / «Я русский»."""
     lines = [" ".join(_words(p)) for p in phrases if _words(p)]
     notes = []
     counts = {}
@@ -459,7 +459,7 @@ def _repetition_profile(phrases: list) -> list:
     refrains = sorted((n for n in counts.values() if n >= 2), reverse=True)
     if not refrains:
         # Whisper cuts the same sung line at different breaths, so whole phrases rarely match
-        # (SHAMAN «Я русский»: no refrain found, 10-08); a 3-word run sung 3+ times is one.
+        # (SHAMAN «Я русский»: no refrain found); a 3-word run sung 3+ times is one.
         grams = {}
         for l in lines:
             ws = l.split()
@@ -588,7 +588,7 @@ def _arrange(ctx, sung: list, plain: list, profile: list, hook: set, spare: list
 def _hook_words(lines: list) -> set:
     """The lyric's hook: its one or two most sung content words (the song's subject -- «говновоз»,
     «говночист»), counted over every line. The most repeated whole LINE was tried first and
-    named «должен быть закалённый плечист» the hook (10-08)."""
+    named «должен быть закалённый плечист» the hook."""
     wc = {}
     for l in lines:
         for w in _words(l):
@@ -600,7 +600,7 @@ def _hook_words(lines: list) -> set:
 
 def _layout(ctx, lyrics: str, parts: list, profile: list = None) -> str:
     """The new lyric laid out on the original's sections, each sung section holding about as
-    many syllables as its melody has notes (10-07: Cheri Cheri Lady got 144 syllables on a
+    many syllables as its melody has notes (Cheri Cheri Lady got 144 syllables on a
     44-note chorus and YuE2 mumbled them). The model places lines; the budget is enforced
     here by dropping a section's last lines; a broken plan falls back to an even split.
     With the original's `profile` (how it repeats itself) the placed lines are then arranged
@@ -755,7 +755,7 @@ def _likeness(heard: str, lyric: str) -> float:
     """How close Whisper's hearing is to the lyric: the mean best-window similarity of its lines.
     A voice is judged by this, not _clarity: a sung line through RVC reads «сарок лет как пад
     наркозам» -- 0.79, under _clarity's 0.8 cliff -- so the same conversion swung 0.28..0.59 on
-    _clarity while its likeness stayed 0.62..0.77 (10-08 sweep, 6 models x 2 takes)."""
+    _clarity while its likeness stayed 0.62..0.77 (sweep, 6 models x 2 takes)."""
     h = _letters(heard)
     lines = {_letters(l) for l in (lyric or "").splitlines() if l.strip() and not l.strip().startswith("[")}
     lines = [l for l in lines if len(l) >= 8]
@@ -819,7 +819,7 @@ def resing(ctx, song: str, lyrics: str, info: dict = None) -> str:
     chosen = str((info or {}).get("voice") or "")
     if chosen == "none":
         # the user's setting: YuE2's own voice, no conversion -- the clearest words (GigaAM on
-        # the mix, 10-09: Лесник 71% bare, 30% through the artist's RVC)
+        # the mix: Лесник 71% bare, 30% through the artist's RVC)
         conv = yvox_wav
     elif chosen and rvc_voice.model_of(chosen):
         conv = _voice_keeping_words(ctx, _rvc_voices(ctx, chosen, yvox_wav), yvox_wav, layout, work, lang, best=True)
@@ -846,7 +846,7 @@ def _rvc_voices(ctx, name: str, src: str) -> list:
 def _voice_keeping_words(ctx, voices: list, yvox_wav: str, layout: str, work: str, lang, best=False) -> str:
     """The first singer's-voice conversion that keeps the words (`best`: the closest of them all,
     stopping early at one as clear as the take); else the take's own vocal.
-    10-07 live: a take heard at 97% came out of SoulX as «Субтитры... ЧИИИИИИ...» and the user
+    A take heard at 97% came out of SoulX as «Субтитры... ЧИИИИИИ...» and the user
     got that mush. A conversion heard less than 0.8 as close to the lyric as the take is dropped
     (by _likeness: on _clarity's cliff every RVC voice fell under it and the singer never sang)."""
     def heard(path):
@@ -874,13 +874,13 @@ def _voice_keeping_words(ctx, voices: list, yvox_wav: str, layout: str, work: st
 
 
 # A real singer's lead carries the words a YuE take loses through RVC; the index adds the star's
-# own timbre texture there (night run 10-09 sang with 0.3).
+# own timbre texture there (a night run sang with 0.3).
 STAR_INDEX_RATE = float(os.getenv("STAR_INDEX_RATE", "0.3"))
 
 
 def sing_original_as(ctx, song: str, name: str, index_rate: float = None) -> str:
     """`song` as it is -- its melody, words and backing -- but its lead sung in the trained voice
-    `name` (10-09 «пусть Цой споёт Куклу колдуна»): Demucs vocal -> the lead dry off the choir
+    `name` («пусть Цой споёт Куклу колдуна»): Demucs vocal -> the lead dry off the choir
     -> RVC -> over the backing plus the choir. Returns an mp3 path; raises cover.CoverFailed."""
     import librosa
     import soundfile as sf
@@ -918,7 +918,7 @@ def resing_rvc(ctx, info: dict) -> str:
 
 def lyrics_of(ctx, song: str) -> str:
     """The words of `song`, heard off its vocal stem, as a lyric with [Verse]/[Chorus] tags.
-    10-07: «говновоз делать по 2 ссылкам» -- the second song gives the words, the first the
+    «говновоз делать по 2 ссылкам» -- the second song gives the words, the first the
     melody and the singer. Whisper's phrases are the lines; the model only groups them into
     sections and mends a mis-heard word -- a tidy-up that drifts from what was heard is
     dropped for the plain lines."""
@@ -1058,7 +1058,7 @@ COVER_WORD_TRIES = int(os.getenv("COVER_WORD_TRIES", "3"))
 
 def cover_words(ctx, song: str, theme: str, lang: str = "Russian") -> str:
     """New words for `song` on `theme`, written line for line over its own lyric: the same
-    sections, syllables and map of repeats, a new hook where its hook was (10-08: a lyric
+    sections, syllables and map of repeats, a new hook where its hook was (a lyric
     written blind from the theme alone came out a quiet ballad for SHAMAN's «Я русский» anthem).
     Several drafts, the closest to the original's shape kept. Raises cover.CoverFailed."""
     import llm

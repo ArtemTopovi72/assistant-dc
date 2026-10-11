@@ -78,7 +78,7 @@ def remove_background_with_comfy(
 def _with_contact_shadow(mask, frac: float = 0.5):
     """The mask smeared DOWN by `frac` of the object's height: the shadow and the
     contact patch under an object are not in its segmentation, and ObjectClear
-    left a dark cat-shaped stain on the table (live 10-03).
+    left a dark cat-shaped stain on the table.
     ponytail: assumes light from above; a long side shadow needs a shadow segmenter."""
     import numpy as np
     from PIL import Image
@@ -171,7 +171,7 @@ def remove_object_with_comfy(
         out = _remove_via_objectclear(ctx, image_path, target_phrase, seed=seed, timeout=timeout,
                                       max_cover=max_cover)
         # no FireRed fallback: it re-lit the table and left a cat-shaped halo
-        # (owner 10-03: «убери запасной FireRed»); FireRed only draws a fill_hint
+        # (owner: «убери запасной FireRed»); FireRed only draws a fill_hint
         if not out:
             logger.warning("remove-object: ObjectClear failed, no fallback")
         return out

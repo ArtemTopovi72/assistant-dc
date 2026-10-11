@@ -420,7 +420,7 @@ def add_text_verified(ctx, image_path: str, instruction: str,
         if score >= TEXT_MATCH_OK:
             return out, reading, " / ".join(wanted)
     # FireRed could not spell it (a year prior: "2026" -> "2025" in 21/21
-    # renders on the night bench). Lay the exact words onto the ORIGINAL --
+    # renders on the bench). Lay the exact words onto the ORIGINAL --
     # the misspelt render is not a base to fix, its letters are already wrong.
     try:
         import text_overlay

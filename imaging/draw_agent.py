@@ -165,7 +165,7 @@ def _find(layout, target) -> int:
 
 def _pick_twin(els, idx: int, cue: str) -> int:
     """Three "a grey cat" boxes: a description finds the first, but «кота справа»
-    meant the right one (it recoloured the left, live 2026-09-29). Among
+    meant the right one (it recoloured the left). Among
     identical twins the side/ordinal word in the target or instruction decides."""
     key = lambda e: (str(e.get("desc") or "").lower(), str(e.get("text") or ""))
     twins = sorted((k for k, e in enumerate(els) if key(e) == key(els[idx])),
@@ -766,9 +766,8 @@ def insist_on_mismatch(layout: dict, problems: list) -> tuple:
     description ("... elephant, bright pink -- all of it bright pink") on the element it
     names. Returns (layout, notes, problems left for the editor).
     The wrong colour is never written into the caption: «vibrant blue -- not grey» named grey to
-    a model that draws what it reads (the blue elephant came out grey five times, 09-12; the
-    same rule as Ideogram's own «no whiskers» draws whiskers, and YuE2's «no female vocals»,
-    10-09)."""
+    a model that draws what it reads (the blue elephant came out grey five times; the
+    same rule as Ideogram's own «no whiskers» draws whiskers, and YuE2's «no female vocals»)."""
     notes, left = [], []
     els = layout.get("elements") or []
     for p in problems or []:
@@ -811,7 +810,7 @@ def unphoto_on_repeat_mismatch(layout: dict, notes: list, request: str = "") -> 
     """Drop the photographic DEFAULT when the underlined attribute still did
     not come through.
 
-    Live, 2026-09-12 (journey 4): "a blue elephant on a beach" was rendered as
+    "a blue elephant on a beach" was rendered as
     a photograph five times, grey every time -- the photo prior of a real
     animal beats any wording, and the caption had been insisting on "vibrant
     blue -- not grey" since attempt two. The photography was the floor the
@@ -1343,7 +1342,7 @@ def render_without_collage(ctx, layout, *, width: int, height: int, seed: int,
 def _drop_unfounded(image_path: str, problems: list) -> list:
     """Throw out darkness complaints the pixels contradict.
 
-    Measured 2026-08-29 over the fourteen bench renders: the critic called
+    Measured over the fourteen bench renders: the critic called
     move_cat "extremely dark and incoherent, making most elements
     unidentifiable" and replace_mug "mostly black silhouettes". Both are
     ordinary, clearly lit interiors -- mean luminance 73 and 109 of 255, 95th

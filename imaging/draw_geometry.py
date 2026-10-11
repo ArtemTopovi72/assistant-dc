@@ -401,7 +401,7 @@ _SETTLE_GAP = 0.10
 def _settle_onto_surfaces(els) -> list:
     """Drop a prop that hangs just above the surface it is standing on.
 
-    Measured 2026-08-29 on the bench renders: the planner put the mug's box at
+    Measured on the bench renders: the planner put the mug's box at
     y 0.28-0.42 with the table at 0.45-0.75, so the mug ended ABOVE the table
     top with nothing under it. Ideogram drew the sensible picture -- a mug on
     the table -- and the critic then condemned the render for disobeying the
