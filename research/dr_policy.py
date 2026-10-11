@@ -155,9 +155,8 @@ def _apply_trust_floor(trust: str, url: str, category: str = "general") -> str:
     score = _authority_score(url, category)
     host = _domain(url)
     # Floor: established authority hosts are at least SECONDARY.
-    if score >= _AUTH_BASE_SCORE and _TRUST_RANK[trust] > _TRUST_RANK["SECONDARY"]:
-        trust = "SECONDARY"
-    elif score >= _AUTH_CATEGORY_SCORE and _TRUST_RANK[trust] > _TRUST_RANK["SECONDARY"]:
+    if ((score >= _AUTH_BASE_SCORE or score >= _AUTH_CATEGORY_SCORE)
+            and _TRUST_RANK[trust] > _TRUST_RANK["SECONDARY"]):
         trust = "SECONDARY"
     # Encyclopedic/tertiary ceiling: Wikipedia/Britannica are tertiary references —
     # never a PRIMARY source no matter how the brief model rated the page.
