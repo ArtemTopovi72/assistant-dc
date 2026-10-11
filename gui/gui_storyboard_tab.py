@@ -1,8 +1,5 @@
 """Storyboard tab: plan a picture as BOXES, then draw and edit it through them.
 
-Third tab out of gui.py — 939 lines with its four background workers and the
-box canvas.
-
 The whole point of this tab is the layout: a picture is planned as labelled
 rectangles, and an edit rewords a BOX rather than re-rendering the frame. That
 is what keeps an edit from becoming a re-roll — the seed is reused, and

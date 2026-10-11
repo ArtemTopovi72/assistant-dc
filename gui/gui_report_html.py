@@ -2,8 +2,7 @@
 
 Pure string work — no Qt, no widgets, no state. It takes the report markdown
 and the palette from gui_common and produces the document the report pane
-displays, which is why it is the one piece of gui.py that could always have
-lived anywhere.
+displays.
 
 Kept separate from the report WIDGET on purpose: the widget is about scrolling
 and sizing, this is about what the document looks like, and only this half is

@@ -6,13 +6,12 @@ slow call and reports back via signals). The whole generation path
 (build_structured_caption -> generate_music) runs off the UI thread so a
 slow or stuck call never freezes the window.
 
-music.py is a real engine now (MiniMax Music 3 on the local ComfyUI), not the
-stub this tab was first written against — but the try/except around the call
-stays load-bearing rather than becoming defensive copy-paste: a render needs
-multi-GB weights, a ComfyUI carrying the Music3 nodes, and a songwriter LLM
-that returns usable lyrics, and any of the three can be missing or fumble a
-turn. Every one of those has to reach the user as a status message, never a
-crash and never a hang.
+music.py is a real engine (MiniMax Music 3 on the local ComfyUI), and the
+try/except around the call is load-bearing: a render needs multi-GB weights, a
+ComfyUI carrying the Music3 nodes, and a songwriter LLM that returns usable
+lyrics, and any of the three can be missing or fumble a turn. Every one of
+those has to reach the user as a status message, never a crash and never a
+hang.
 """
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QLineEdit, QSpinBox,
@@ -91,9 +90,8 @@ class MusicWorker(QThread):
 
     One worker covers both calls (rather than splitting caption/generate into
     two workers like Madhouse's reply/speak split) because there is nothing
-    useful to show the user between them yet: the stub can't stream partial
-    progress, and a caption with no song to follow isn't a usable interim
-    result."""
+    useful to show the user between them: a caption with no song to follow
+    isn't a usable interim result."""
     done = pyqtSignal(str, str, str)      # wav_path, lyrics, style
     failed = pyqtSignal(str)
     chose = pyqtSignal(dict)              # what the bot picked for the Auto fields
@@ -166,7 +164,7 @@ class MusicWorker(QThread):
             self.done.emit(path or "", lyrics, style)
         except Exception as exc:
             # Covers music.MusicUnavailable (still a RuntimeError) as well as any
-            # other stub/engine failure — one message, no traceback in the UI.
+            # other engine failure — one message, no traceback in the UI.
             logger.exception("Music generation failed")
             self.failed.emit(str(exc))
 

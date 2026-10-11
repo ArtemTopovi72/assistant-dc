@@ -5,9 +5,9 @@ it: the scale chosen here has to be applied to the QApplication BEFORE any
 widget is built, since px()/pt() are read at construction time and a widget
 already laid out will not re-scale.
 
-Both consumers — AssistantWindow and run_gui — stay in gui.py, so gui.py
-re-exports these two and the suites that patch gui.SettingsDialog (four of
-them) keep intercepting exactly as before.
+Both consumers — AssistantWindow and run_gui — are in gui.py, which
+re-exports these two so the suites that patch gui.SettingsDialog keep
+intercepting.
 """
 import os
 

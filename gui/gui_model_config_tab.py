@@ -7,7 +7,7 @@ exists for no other reason.
 Note for anyone patching this in a test: gui.ReloadModelWorker is no longer the
 binding that matters. The tab resolves the name in THIS module, so a fake must
 be installed here (gui_model_config_tab.ReloadModelWorker) or it will not
-intercept — test_gui_adversarial learned that the hard way.
+intercept (see test_gui_adversarial).
 """
 from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtWidgets import (QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel,
