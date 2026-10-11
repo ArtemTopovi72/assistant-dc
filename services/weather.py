@@ -137,7 +137,7 @@ def geocode_city(city: str, lang: str = "en") -> Optional[dict]:
 
     `lang` picks the language of the returned NAME: the geocoder used to be
     asked in English only, so a Russian user got a card headed "Sochi" and
-    "Kazan’" (live, 2026-09-12, journey 7). Open-Meteo answers in the
+    "Kazan’". Open-Meteo answers in the
     language asked for and falls back to English when it has no local name.
     """
     city = (city or "").strip()

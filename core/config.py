@@ -250,7 +250,7 @@ def venv_python(venv_dir) -> str:
 
 def scratch_path(out_dir, name):
     """Where an intermediate render/mask/tile goes: <out_dir>/generated/_intermediate,
-    out of the runtime/ root (owner 10-03). Takes the caller's OUTPUT_DIR so suites
+    out of the runtime/ root. Takes the caller's OUTPUT_DIR so suites
     that rebind it to a temp dir keep fixtures out of the real tree."""
     d = Path(out_dir) / "generated" / "_intermediate"
     d.mkdir(parents=True, exist_ok=True)
@@ -422,7 +422,7 @@ VIDEO_T2VA_LORA_3STEP = os.getenv("VIDEO_T2VA_LORA_3STEP", "night\\taomate_h3_3s
 # for 8 NFE, euler/beta, shift 12/3), so 8 is its own regime, not past it.
 VIDEO_STEPS_REF2VA = _env_int("VIDEO_STEPS_REF2VA", 8)
 # With voice samples the voices, the score and the hits converge last (H3 guide:
-# "speech and voice timbre converge last"); live 10-01 at 4 steps the accordion
+# "speech and voice timbre converge last"); at 4 steps the accordion
 # was gone, at 8 it came through. +115 s on a 5 s clip (241 s -> 356 s).
 VIDEO_SPEECH_STRESS = os.getenv("VIDEO_SPEECH_STRESS", "1") != "0"
 # 8 steps WITH the turbo LoRA kept on (10-02, user's call): before, 8 steps
@@ -445,7 +445,7 @@ VIDEO_JOB_TIMEOUT = _env_int("VIDEO_JOB_TIMEOUT", 5400)
 # The DiT alone is ~19.4 GB of Q4 weights (see video.py's generate_video); with
 # less than that plus the CLIP encoder and both VAEs free, ComfyUI holds part
 # of the graph in system RAM and swaps it in per step instead of keeping
-# everything resident. Live, 2026-09-19: a render that started with 16-17 GB
+# everything resident. A render that started with 16-17 GB
 # free took 35-49 minutes instead of the usual 8-12 -- the two fast completions
 # in the same window both started at 17.5-20 GB free.
 VIDEO_MIN_FREE_MB = _env_int("VIDEO_MIN_FREE_MB", 20500)

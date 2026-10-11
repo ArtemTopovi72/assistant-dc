@@ -45,7 +45,7 @@ def _ask(text: str) -> dict:
     return ask_read.read(text)
 
 
-# Live 2026-09-28: 'о' in «обороноспособность» -> 5 (7), «программирование»
+# 'о' in «обороноспособность» -> 5 (7), «программирование»
 # reversed -> «еироваиммаргорп», 9 words -> 10. Letters are not tokens.
 def _text_ops_note(text: str) -> str:
     a = _ask(text)
@@ -55,7 +55,7 @@ def _text_ops_note(text: str) -> str:
         n = word.lower().count(ch.lower())
         return (f"[Counted exactly by the program: «{word}» contains the letter «{ch}» "
                 f"{n} times. Use this number.]")
-    # «отсортируй по алфавиту: яблоко, груша, ...» put груша after ёжевика (live).
+    # «отсортируй по алфавиту: яблоко, груша, ...» put груша after ёжевика.
     if op == "sort":
         key = lambda w: w.lower().replace("ё", "е￿")
         return ("[Sorted exactly by the program (Russian alphabet, ё after е): "
@@ -75,7 +75,7 @@ def _text_ops_note(text: str) -> str:
 
 
 def _dose_note(text: str) -> str:
-    """Live 2026-09-28: a 14 kg child's paracetamol dose came back as
+    """A 14 kg child's paracetamol dose came back as
     «7-14 mg/kg, 100-200 mg» -- the standard single dose is 10-15 mg/kg."""
     a = _ask(text)
     if not a["dose"]:
@@ -120,8 +120,8 @@ def no_history_note(text: str, history) -> str:
 
 
 def translate_previous_note(text: str, history) -> str:
-    """«Translate to Russian» with no text of its own means the reply above. Live 10-09
-    the fast path translated the request itself and sent back «Переведи на русский»."""
+    """«Translate to Russian» with no text of its own means the reply above. The
+    fast path used to translate the request itself and sent back «Переведи на русский»."""
     import intent
     if not any(m.get("role") == "assistant" and m.get("content") for m in history or []):
         return ""
@@ -140,7 +140,7 @@ def facts_parts(facts_text: str) -> list:
              "them when relevant; newest are last — if two facts conflict, the later "
              f"one is correct):\n{facts_text}"]
     # «шоколадный медовик -- в нём точно нет арахиса»: a guarantee nobody can give.
-    # 10-08 live: after «аллергия на орехи, я вегетарианец» dinner advice was a pasta with
+    # After «аллергия на орехи, я вегетарианец» dinner advice was a pasta with
     # «кедровыми орешками» -- the allergy only forbade PROMISING, never SUGGESTING.
     import intent
     if intent.ask_yes("Saved facts about a user: {text} -- do they say the user has a food "
@@ -155,8 +155,8 @@ def facts_parts(facts_text: str) -> list:
     return parts
 
 
-# An explicit length in the request ("на 1200 слов", "подробно"). Live
-# 2026-09-28: "инструкция на 1200 слов" hit the 700-token concise ceiling and
+# An explicit length in the request ("на 1200 слов", "подробно").
+# "инструкция на 1200 слов" hit the 700-token concise ceiling and
 # arrived as 2.5k chars cut mid-word.
 def _asked_tokens(text: str) -> int:
     a = _ask(text)
@@ -407,7 +407,7 @@ def _compose_user_message(ctx: Context, state: AgentState) -> tuple:
             _asked = _asked[:-1]
         _asked = [a[:200] for a in _asked if a][-20:]
         if _asked:
-            # Live 2026-09-28: "что я спросил три сообщения назад?" named the
+            # "что я спросил три сообщения назад?" named the
             # previous question and called the current one "the first".
             effective_input = (
                 "[The user's earlier messages in this chat, oldest first; each is "

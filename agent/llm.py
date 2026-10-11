@@ -90,7 +90,7 @@ GEMMA_MIN_TOKENS = 3000
 # There is no request knob for this (see _is_gemma4), but the prefill is.
 # Measured 2026-09-23 on hauhaucs gemma4-26b-a4b q5_k_m, the forced closing
 # reply after a failed tool chain, 3 runs each: without it 377-652 tokens of
-# reasoning before the answer (and live, 2026-09-22, 3 x 3000 tokens of pure
+# reasoning before the answer (and once 3 x 3000 tokens of pure
 # reasoning with NO answer -- the user got a sentence cut off mid-word); with
 # it 157-158 tokens, ~2 s, a direct honest answer every time. Only for turns
 # that summarise work already done -- it removes the thinking, not just the
@@ -268,7 +268,7 @@ def extract_gemma4_tool_calls(content: str):
     remaining = _G4_BARE_RE.sub("", remaining).strip()
 
     # Format F: `[TOOL_CALL]generate_image(description='…')` — a Python call.
-    # Live 2026-09-29, 1 draw in 3 on the house model: the markup was the reply.
+    # 1 draw in 3 on the house model: the markup was the reply.
     for name, args, span in _py_calls_in(remaining):
         tc_list.append({
             "id": f"call_g4_{idx}",
@@ -280,8 +280,8 @@ def extract_gemma4_tool_calls(content: str):
     remaining = remaining.strip()
 
     # Format E: a JSON call in prose — `<tool_call>{"name": "generate_image",
-    # "arguments": {...}}</tool_call>` or the bare object. Live 2026-09-13
-    # (mega run 3, steps 72/75/77): three drawing turns in a row came back
+    # "arguments": {...}}</tool_call>` or the bare object.
+    # Three drawing turns in a row came back
     # this way, utils.strip_textual_tool_calls deleted the block as a leak,
     # and the user got "Вот ваш логотип" with no picture. A call the model
     # wrote out is still a call: parse it, run it.
@@ -445,7 +445,7 @@ def _apply_no_think(messages: List[dict]) -> List[dict]:
 
 
 # How many LLM streams are open right now. A render that wants the whole card
-# must not pull the model out from under one of them: live, 2026-09-12, two
+# must not pull the model out from under one of them: two
 # users drew at once, the first claim unloaded the model while the second
 # user's layout planner was still streaming ("Model unloaded"), the revive
 # then loaded 20 GB back INTO the render's card, and both the render and
@@ -547,7 +547,7 @@ def send_to_lm_studio(
     model_name = getattr(ctx, "model_name", "") or MODEL_NAME
     # Reasoning is OFF for every call, here, in the one function every model
     # call goes through -- not per caller, not by the thinking switch, not by
-    # force_think. Live 2026-10-01 16:51: with the switch on, a 7-second кружок
+    # force_think. With the switch on, a 7-second кружок
     # spent 2813 tokens and 26.7 s on six storyboard lines and each zoomed tile
     # 300-750 tokens against a 350 budget; a per-call opt-out had let it through.
     no_think = True

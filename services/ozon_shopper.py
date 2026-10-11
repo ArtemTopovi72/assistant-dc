@@ -403,7 +403,7 @@ def look(ctx, d: dict, need: str) -> dict:
     d["photo_ok"], d["photo_seen"], d["buyer_photos"] = None, "", []
     title = str(d.get("name") or need)[:140]
     if img:
-        # Live 2026-09-23: without the listing title a picnic blanket shown with
+        # Without the listing title a picnic blanket shown with
         # its bag and pegs was judged "something else" and dropped. NO is for a
         # different KIND of product, not for an angle, a package or a set.
         ans = _see(ctx, img, f"Listing: '{title}'. The buyer needs: {need}. Is this photo of that "
@@ -530,7 +530,7 @@ _CLARIFY_SYS = (
 
 def clarify(ctx, request: str) -> list:
     """Questions to ask BEFORE shopping, from the category's own Ozon filters.
-    Live 2026-09-27: the user had to volunteer «самоходный, электростартер» for a
+    The user had to volunteer «самоходный, электростартер» for a
     snow blower -- a seller would have asked. [] = specific enough, or no filters."""
     p = plan(ctx, request)
     if p["mode"] != "one":

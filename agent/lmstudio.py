@@ -333,7 +333,7 @@ def load_model_exclusive(
         try:
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=_T_RELOAD)
             if r.returncode == 0 and not _wait_served(base_url, cand):
-                # Live, 2026-09-12: the model crashed, `lms load` exited 0 in
+                # The model crashed, `lms load` exited 0 in
                 # nine seconds, and the server then answered "Model reloaded."
                 # followed by "No models loaded" for the next minute. The
                 # revive path trusted the exit code, cached "ok", and every
@@ -414,7 +414,7 @@ def _wait_served(base_url: str, model_id: str, timeout: float = None) -> bool:
         time.sleep(1.0)
 
 
-# One loader at a time, process-wide. Live, 2026-09-12: a crash revive from
+# One loader at a time, process-wide. A crash revive from
 # the LLM retry path and the card release's reload ran together, LM Studio
 # answered "2 models match the provided model key on the same device ...
 # Operation canceled", then Internal Server Error, and four turns died. The
@@ -460,7 +460,7 @@ def ensure_exclusive(
 def drop_phantoms(model_id: str) -> list:
     """Unload every "<id>:N" copy beside the real instance. A request that lands
     while the loader has the model unloaded makes LM Studio JIT-load its own
-    copy, and the loader's copy then arrives as a second one (live 10-02: an
+    copy, and the loader's copy then arrives as a second one (an
     app restart mid-revive left two 18 GB instances). Returns what it unloaded."""
     gone = []
     for ident in loaded_instances(model_id):

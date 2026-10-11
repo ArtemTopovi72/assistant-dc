@@ -113,7 +113,7 @@ def _handle_inspect_image(ctx, state, args: dict) -> str:
     # The same measured-exposure evidence the outer judge gets: this vision
     # model calls a normally lit picture "extremely dark" and then labels every
     # element MISSING, which sent the agent into a second 70-second re-render of
-    # a picture that was already right (live, 2026-09-12, the recolour edit).
+    # a picture that was already right (the recolour edit).
     import exposure as _exposure
     _measured = _exposure.evidence(source)
     result = ""
@@ -237,8 +237,8 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
     # those get routed as "change the scarf to ..." and come back recoloured.
     removal = image_mod._is_removal_of(instructions, region, ctx=ctx)
     # A region that names an ABSENCE ("the area where the vase was") is not a
-    # thing to remove: the thing is already gone. Live 2026-09-25 (journey #39)
-    # the model re-ran a removal on that phrase after a good one; grounding
+    # thing to remove: the thing is already gone. The
+    # model re-ran a removal on that phrase after a good one; grounding
     # picked a patch of wall and the delivered picture got a pasted light square.
     if removal and image_mod._item_attributes(ctx, region).get("former_place") is True:
         return ("[TOOL ERROR] region names where something WAS, so it is already removed. "
@@ -259,7 +259,7 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
     engine = _edit_checkpoint(ctx, args)
     manual_whole = ((getattr(ctx, "image_edit_engine", "auto") or "auto")
                     .strip().lower() == "firered_whole")
-    # The instructions alone read as an insert when they name the result: live 10-10
+    # The instructions alone read as an insert when they name the result:
     # «сделай красный круг зелёным» came as region='red circle', instructions='a green
     # circle' and a second, green circle was added next to the red one.
     import intent as _intent
@@ -300,8 +300,8 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
         _lettering_out = None
         if removal and not _has_layout and _lett.is_lettering_removal(region, instructions):
             # "Remove all the lettering": the mask is every piece the OCR reads,
-            # not the one strip a segmenter finds for a phrase (journey 3,
-            # 2026-09-18: "INSGATE" survived on the left). A picture with a
+            # not the one strip a segmenter finds for a phrase ("INSGATE"
+            # survived on the left). A picture with a
             # layout still goes through its boxes below.
             ctx.set_stage("Removing the lettering")
             _lettering_out = _lett.remove_lettering_and_logos(ctx, source)
@@ -341,7 +341,7 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
             # A style change (anime/cartoon/oil painting/...) applies to the WHOLE
             # picture, never to just the region the agent happened to name (it called
             # inpaint_image with e.g. region="her"/"the girl", not "whole image").
-            # Live, 2026-09-19: the contained pipeline segmented that region, cropped
+            # The contained pipeline segmented that region, cropped
             # it, re-rendered ONLY the crop in the new style, and composited it back
             # over the untouched original -- so the result came back with a hard seam
             # cutting through the head, half photorealistic and half anime. Passing an
@@ -515,7 +515,7 @@ def _handle_transfer_image(ctx, state, args: dict) -> str:
         logger.info("transfer_image: face-based target heuristic skipped: %s", exc)
 
     # By CONTENT: the graph edits a byte-identical _working_input_* copy of the
-    # target, so the target's own file came back as a "reference". Live 10-06
+    # target, so the target's own file came back as a "reference"
     # (👗 + a hoodie photo): refs=2, two passes, the first "dressed" her in her
     # own sweater -- twice the time, twice the damage.
     def _key(p):
@@ -718,7 +718,7 @@ def _render_budget_exhausted(state, what: str, cost: int = 1) -> Optional[str]:
     """Spend `cost` of this turn's full renders; returns a refusal when they run out.
 
     The agent is told to inspect its picture and fix what is wrong "until it is
-    right" — good advice with no cost attached. Live, one turn ran redraw →
+    right" — good advice with no cost attached. One turn ran redraw →
     inspect → redraw → inspect → draw, each a full render, holding ComfyUI for
     minutes while other users queued. The self-correction loop is kept; it just
     gets a budget. On exhaustion the agent is told to deliver what it has and say
@@ -780,7 +780,7 @@ def _user_look(state) -> str:
     """The look THIS message asks for: a drawn look, "photo", "none", or "" when
     there are no user words to read (a direct call). Only this message: «нарисуй
     кота в стиле аниме», then «нарисуй собаку» drew the dog in anime too
-    (owner 10-03: стиль только из текущего сообщения). A redo («ещё раз») says
+    (the style comes only from the current message). A redo («ещё раз») says
     no look of its own and repeats the request before it, look included."""
     from prompt_guard import user_words
     from ideogram_layout import _look
@@ -917,8 +917,8 @@ def _handle_generate_image(ctx, state, args: dict) -> str:
         quality_note = " (base quality — refinement unavailable)" if status == "partial" else ""
         # An ACCEPTED render is final for this turn. The renderer has already
         # judged it with the same vision model the agent would use; a second
-        # look does not see more, it invents -- live, 2026-09-11, a 10/10
-        # picture was "fixed" for a shadow that was not there, lost its subject,
+        # look does not see more, it invents -- a 10/10
+        # picture was once "fixed" for a shadow that was not there, lost its subject,
         # and was redrawn six more times. tool_graph refuses edits on it; the
         # user asks for changes in their own words, in their own turn.
         accepted = status == "success" and int(score or 0) >= tool_graph.ACCEPTED_SCORE
@@ -1019,7 +1019,7 @@ def _current_image_paths(ctx, state) -> list:
     Deduped by CONTENT, not just path. tg_bot._image_by_content's own docstring
     explains why a second path can exist for the same picture: the graph edits a
     byte-identical "working copy" (_working_input_<ts>.*) of whatever image it
-    started from, under its own filename. Live, 2026-09-19: pressing Animate
+    started from, under its own filename. Pressing Animate
     under a just-styled photo passed BOTH the styled file's own path and that
     working-copy snapshot of the SAME bytes into generate_video, which saw two
     distinct-looking images and picked first-frame/last-frame mode (morphing
@@ -1049,7 +1049,7 @@ def _current_image_paths(ctx, state) -> list:
 
 
 # A clip is minutes of GPU and the whole turn: it is made only when the user's
-# own words ask for one. Live 10-03: «Почему он у тебя не лысый … ты нарисовал
+# own words ask for one. «Почему он у тебя не лысый … ты нарисовал
 # какого-то урода, а не Ленина» -- a complaint about a PICTURE -- started a
 # video («🎬 делаю видео»), then «лимит на генерацию видео исчерпан».
 _ASKS_VIDEO = re.compile(
@@ -1072,7 +1072,7 @@ def asks_for_video(ctx, state) -> bool:
                 return True
         except Exception:
             pass
-    # A shot script with no word «видео» is still a clip. Live 10-06: «Мужчина берёт
+    # A shot script with no word «видео» is still a clip. «Мужчина берёт
     # банку … говорит "Полная хуета" … бросает банку … опрокидывает стеллаж» was
     # refused here. The model reads it; a complaint about a picture stays a no.
     return intent.ask_yes(
@@ -1250,7 +1250,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     anim = [p for p in slots if p]
     speakers = int(args.get("speakers") or 0)
     if not speakers:
-        # The model forgets `speakers` (live 10-02: two quoted lines, speakers=0,
+        # The model forgets `speakers` (two quoted lines, speakers=0,
         # no voice question). Spoken lines in quotes are a fact, not a guess.
         speakers = min(len(re.findall(r'«[^»]{2,}»|"[^"]{2,}"|“[^”]{2,}”',
                                       args.get("description") or "")), video_mod.MAX_REF_AUDIOS)
@@ -1299,7 +1299,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             description += " The person speaks with the voice of <Audio 1>."
     if audios and videos:
         # A reference clip brings its OWN soundtrack (ref_video_audio_N rides with
-        # ref_video_N): with voice samples it outvoiced them -- live 10-01, a redo
+        # ref_video_N): with voice samples it outvoiced them -- a redo
         # «с баяном и ударами» reused the last clip and the user's voices were gone.
         logger.info("generate_video: voice samples given -> the previous clip is not a reference")
         videos = []
@@ -1474,7 +1474,7 @@ def redraw_whole_image(ctx, source: str, instructions: str):
         # besides image_router.route_edit_request's style_transfer path — the
         # agent reaches this one directly via redraw_image(mode="redraw", ...)
         # with its OWN free-text instructions, never through the classifier.
-        # Live, 2026-09-20: passing the agent's raw instruction straight
+        # Passing the agent's raw instruction straight
         # through (as before) cropped a person out of frame on a style
         # request even after route_edit_request's style_transfer path was
         # fixed, because THIS path never called it. Route a style change
@@ -1497,7 +1497,7 @@ def redraw_whole_image(ctx, source: str, instructions: str):
 
     # Every other edit handler in this file (inpaint, transfer, fix_hands,
     # fix_artifact) runs its result through assert_deliverable before it can reach
-    # the user; this one never did. Live, 2026-09-19: a redraw delivered
+    # the user; this one never did. A redraw delivered
     # "_INTERMEDIATE_tile_firered_00001_.png" straight to the user's chat — a
     # cropped FireRed working tile, not a finished picture. redraw/enhance can
     # fall through several engines (layout edit, whole-frame FireRed, the old model
@@ -1511,7 +1511,7 @@ def redraw_whole_image(ctx, source: str, instructions: str):
     # ORIGINAL face back unless the user explicitly asked to change the face.
     #
     # A STYLE change (anime/cartoon/oil painting/…) is the one whole-frame redraw
-    # where this must NOT run at all. Live, 2026-09-19: sending the same photo
+    # where this must NOT run at all. Sending the same photo
     # for an anime restyle over and over kept coming back with an anime BODY and
     # the original PHOTOREALISTIC face pasted on top — preserve_identity_face's
     # own face-change detector only catches an explicit attribute edit
@@ -1553,7 +1553,7 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
         instructions = "improve the overall quality: sharpen fine detail, clean up noise and artifacts"
 
     # A colour conversion is exact arithmetic and must never be re-rendered,
-    # whichever tool the model reaches for. Live: asked for black and white, the
+    # whichever tool the model reaches for. Asked for black and white, the
     # generative path returned a DIFFERENT TRACTOR — in colour — and the model
     # reported failure while the picture was delivered anyway. Delegating here
     # (not only in route_edit_request) means the deterministic path wins even

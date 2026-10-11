@@ -156,7 +156,7 @@ def _read(text: str) -> dict:
 
 # The model's read alone is not enough to switch a Russian chat to English: a
 # false "en" on «Кибернетический Ленин … бьёт кулаком» answered the whole
-# conversation in English (live 10-03). A request for English names English.
+# conversation in English. A request for English names English.
 _NAMES_ENGLISH = re.compile(r"англ|english|\beng\b|инглиш", re.I)
 
 
@@ -321,8 +321,8 @@ def _translate_to_english(ctx, text: str, context: str = "") -> str:
         return head + RAG_QUESTION_SEAM + _translate_to_english(ctx, tail)
     if not t or t.isascii() or t.startswith("[internal] "):
         # "[internal] ": an instruction the bot wrote to itself in English over
-        # a payload in the user's language (tg_bot._TEXT_ONLY_MARK). Live 23:01
-        # the translator wrapped it in «Below is the English translation of
+        # a payload in the user's language (tg_bot._TEXT_ONLY_MARK). The
+        # translator wrapped it in «Below is the English translation of
         # your message:» and the model answered about the wrapper.
         return t
     # One or two words are not worth a translation and often cannot survive
@@ -394,7 +394,7 @@ def _unparrot(ctx, answer: str, original_input: str, history=()) -> str:
             or difflib.SequenceMatcher(None, a, q).ratio() < 0.8
             or _asks_to_echo(original_input)):
         return answer
-    # Context-free, the retry conceded «я ошибся» to a wrong 418 (live).
+    # Context-free, the retry conceded «я ошибся» to a wrong 418.
     hist = list(history or [])
     last_user = max((i for i, m in enumerate(hist) if m.get("role") == "user"), default=len(hist))
     prev = next((str(m.get("content") or "") for m in reversed(hist[:last_user])
@@ -456,7 +456,7 @@ _MONEY_RE = re.compile(r"(?<![\d.,])(\d[\d\u00a0]*)\.(\d{2})(?!\d|\.\d)")   # «
 _DECIMAL_UNIT_RE = re.compile(
     r"(?<![\d.])(\d[\d\u00a0]*)\.(\d{1,4})(?=\s*(?:%|₽|\$|€|руб|р\.|коп|евро|доллар|долл|"
     r"кг|км|м\b|см|мм|л\b|литр|грамм|г\b|°|градус|раза?\b|мил|километр|метр|сантиметр|миллиметр|час|минут|секунд|процент|лет\b|год|штук|тонн|фут|дюйм|унци|фунт|галлон|млн|млрд|тыс"
-    # recipe units: «сахар 2.6 ст.л., соль 0.875 ч.л.» beside «437,5 г» (live)
+    # recipe units: «сахар 2.6 ст.л., соль 0.875 ч.л.» beside «437,5 г»
     r"|ст\.?\s?л|ч\.?\s?л|шт\b|мл\b|стакан|ложк|щепот))")
 
 

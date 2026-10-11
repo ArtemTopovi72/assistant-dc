@@ -586,7 +586,7 @@ def _handle_set_reminder(ctx, state, args: dict) -> str:
 
 
 def _handle_forget_facts(ctx, state, args: dict) -> str:
-    """The counterpart of remember_fact. Live, 2026-09-12: 'забудь всё, что я
+    """The counterpart of remember_fact. 'забудь всё, что я
     про себя рассказывал' was answered 'Хорошо, я забыл' with nothing to
     forget with, and the next question got the allergy back by name."""
     what = (args.get("what") or "all").strip()
@@ -899,7 +899,7 @@ _ARG_SYNONYMS: dict[str, dict[str, str]] = {
     "rag_add":        {"file": "path", "filename": "path", "document": "path"},
     "deep_research":  {"query": "topic", "question": "topic", "prompt": "topic"},
     "remember_fact":  {"text": "fact", "message": "fact", "content": "fact", "memory": "fact"},
-    # Live, 2026-09-12: the planner's FIRST inpaint call was rejected with
+    # The planner's FIRST inpaint call was rejected with
     # "instructions: Field required" on every recolour edit and cost a retry
     # nudge; the model names the field in its own words.
     "inpaint_image":  {"prompt": "instructions", "text": "instructions", "description": "instructions",
@@ -912,7 +912,7 @@ _ARG_SYNONYMS: dict[str, dict[str, str]] = {
 
 
 # write_file sent with only 'content' gets a filename picked from what the
-# content is. Live 2026-09-22 (the mods.rar turn): Gemma dropped 'path' from
+# content is. In the mods.rar turn Gemma dropped 'path' from
 # five consecutive write_file calls, each a different ~2 KB script, so neither
 # the validation message nor the identical-failure guard (the content differed
 # every time) ever got it back on track. The name chosen here is reported in

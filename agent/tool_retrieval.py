@@ -186,7 +186,7 @@ def _select_tools(text, schemas, *, always=(), limit=12, wants=None):
     # writing code is. Same shape as calculate/search above.
     # An explicit "нарисуй" is the user choosing a picture: "нарисуй график продаж
     # по месяцам, как картинку" lost generate_image here and the model looped on
-    # inspect_image with nothing to draw with (live journey 34). Both are offered.
+    # inspect_image with nothing to draw with. Both are offered.
     if "run_code" in matched and "generate_image" not in (always or ()) \
             and "generate_image" not in matched:
         contradicted.add("generate_image")

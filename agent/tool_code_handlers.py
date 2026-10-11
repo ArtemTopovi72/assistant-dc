@@ -467,7 +467,7 @@ def _handle_search_files(ctx, state, args: dict) -> str:
 def _handle_find_content(ctx, state, args: dict) -> str:
     """Search the working folder by content: pictures by description, text by words.
 
-    Live 2026-09-14: «найди мост» over 173 photos. The tools on offer could
+    «найди мост» over 173 photos. The tools on offer could
     look at ONE picture per two calls, so the task did not fit in a turn and
     the model narrated a plan instead of acting -- twice. This is the tool
     that makes the task fit: contact sheets + verification (photo_search),
@@ -533,7 +533,7 @@ def _handle_find_content(ctx, state, args: dict) -> str:
 
 @_guard
 def _handle_delete_path(ctx, state, args: dict) -> str:
-    """Live 2026-09-14: «не захламляй: удали архив и папку, коллаж оставь».
+    """«не захламляй: удали архив и папку, коллаж оставь».
 
     Without this the only way to delete was run_code, which a FILES-level
     account does not have -- so a plain clean-up request was impossible for
@@ -551,7 +551,7 @@ def _handle_delete_path(ctx, state, args: dict) -> str:
 
 @_guard
 def _handle_dedupe_photos(ctx, state, args: dict) -> str:
-    """Journey 33, four runs: told in the description, the schema and the run
+    """Four runs: told in the description, the schema and the run
     result to call assistant_tools.dedupe, the model wrote its own exact-bytes
     hash every time and reported the copies gone. A tool it can CALL is the
     lever that works (find_content taught the same lesson)."""
@@ -578,7 +578,7 @@ def _handle_dedupe_photos(ctx, state, args: dict) -> str:
                                    or _recall_found(box))
                  if Path(p).exists()]
         if found and not args.get("whole_folder"):
-            # Journey 33: with no `paths` the model de-duplicated the WHOLE
+            # With no `paths` the model de-duplicated the WHOLE
             # archive (173 photos) and then picked eight arbitrary "unique"
             # pictures -- sunsets -- for a collage of bridges. The set it
             # meant is the one find_content just returned; pin on that state.
@@ -627,7 +627,7 @@ _RECORD_FILE = Path(".agent") / "record.txt"
 
 def _record(box, tool: str, what: str) -> None:
     """A one-line-per-event log of what the file tools did in this working
-    folder. Torture run #4 2026-09-14: after history compaction the model
+    folder. After history compaction the model
     answered «сколько мостов нашёл?» with «я текстовый помощник, я не
     проводил поиск». The folder remembers what the chat forgot; the record
     is shown to the model every turn while the folder has files."""
@@ -822,7 +822,7 @@ def _pictures_in(box) -> dict:
 def _deliver_new_pictures(box, state, before: dict, ctx) -> str:
     """A script that wrote a picture has produced the result; hand it over.
 
-    Journey 32, 2026-09-14: the script built bridge_collage.jpg, but the
+    The script built bridge_collage.jpg, but the
     current picture was still the first bridge that find_content had set, so
     the chat received a single bridge photo and the collage only inside a
     zip. Without this there is no route from run_code to the user's eyes --

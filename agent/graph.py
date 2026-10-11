@@ -371,7 +371,7 @@ def is_picture_question(ctx, state) -> bool:
 
 def _file_newer_than(ctx, image_path) -> bool:
     """A file landed in the working folder after this picture: «в чём там ошибка?»
-    is about the file (live 10-03: crash logs forwarded, the question re-read the
+    is about the file (crash logs forwarded, the question re-read the
     last picture and critiqued an apple)."""
     root = getattr(getattr(ctx, "sandbox", None), "root", None)
     if root is None:
@@ -388,8 +388,8 @@ def needs_relook(ctx: Optional[Context], state: AgentState) -> bool:
 
     Two cases. The model reads the message as about the picture (intent
     about_picture), or the user pointed at it.
-    And ANY question when the working image is a photo the user sent: live
-    (journey 2), a receipt was photographed and read, then "which item is the
+    And ANY question when the working image is a photo the user sent: a
+    receipt was photographed and read, then "which item is the
     most expensive?" was answered with "I need to see the receipt" -- the first
     look had summarised the items and dropped the prices, and nothing routed
     the follow-up back to the photo. One extra vision call is cheap; a wrong
@@ -413,7 +413,7 @@ def needs_relook(ctx: Optional[Context], state: AgentState) -> bool:
     if r["about_picture"] or getattr(ctx, "image_pointed_at", False):
         return True
     # Any question about a photo the user sent or a video they sent: a receipt
-    # read once, then "which item is the most expensive?" (journey 2).
+    # read once, then "which item is the most expensive?".
     return bool(r["is_question"]) and (is_video_sheet(last_path)
                                       or Path(last_path).name.startswith(_USER_UPLOAD_STEM))
 

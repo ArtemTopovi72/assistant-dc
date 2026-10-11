@@ -58,7 +58,7 @@ _ACTION_CLAIM_RE = re.compile(
 )
 
 
-# The same promise, about FILES. Live 2026-09-14, twice in a row on a 112 MB
+# The same promise, about FILES. Twice in a row on a 112 MB
 # archive: «Сначала я распакую архив ... Начинаю поиск.» / «сначала распакую
 # его, а затем просканирую ... Начинаю исследование.» — and the turn ended with
 # no tool call. A reply that announces file work with zero tool calls while
@@ -69,7 +69,7 @@ _FILE_PROMISE_RE = re.compile(
     r"просканиру[юем]\w*|проверю|проверим|изучу|изучим|исследую|исследуем|"
     r"открою|откроем|прочитаю|прочитаем|посмотрю|посмотрим|найду|найдём|найдем|"
     r"начинаю|начну|приступаю|приступлю|"
-    # Live 2026-09-14, «заново» after a dedupe ask: «применю ... проведу ...
+    # «заново» after a dedupe ask: «применю ... проведу ...
     # сформирую ... коллаж будет готов» -- a plan in the future tense with
     # zero tool calls slipped past the verbs above.
     r"применю|применим|провед[уё]м?|сформиру[юе]м?|собер[уё]м?|пересобер[уё]м?|"
@@ -86,8 +86,8 @@ _FILE_PROMISE_RE = re.compile(
 )
 
 
-# «Я уже выполнил эту задачу!» to a request the user has just REPEATED (live
-# 2026-09-14: the same dedupe ask sent twice, then «заново»). A repeated
+# «Я уже выполнил эту задачу!» to a request the user has just REPEATED
+# (the same dedupe ask sent twice, then «заново»). A repeated
 # request means the last result did not satisfy them; an answer that points
 # at the previous turn, with no tool called now, is a refusal dressed as
 # diligence -- and after a restart the "previous turn" may be a lie the
@@ -157,7 +157,7 @@ def _fact_of_remember_request(text: str) -> str:
 
 # The two "I produced nothing" texts. A turn that ends in one of them has NOT
 # answered the question, and callers that keep a chat history must not store
-# it as if it had: live (2026-09-12, journey 5) two such turns in a row left
+# it as if it had: two such turns in a row left
 # two unanswered questions in the transcript, and the model answered the
 # OLDER of them when the user asked a third, different one.
 _STUCK_RU = ("Я задумался и не выдал ответ — это сбой на моей "
@@ -358,8 +358,8 @@ def _closing_prefill(ctx, default):
 
     On Gemma 4 this is its own empty thought block (llm.GEMMA_NO_THINK_PREFILL):
     the closing reply only reports work already done, and left to think the
-    model spent 3 x 3000 tokens deliberating and never answered (live
-    2026-09-22, the mods.rar turn -- the user got a sentence cut off mid-word).
+    model spent 3 x 3000 tokens deliberating and never answered
+    (the mods.rar turn -- the user got a sentence cut off mid-word).
     Shrinking max_tokens could never help: llm floors it to GEMMA_MIN_TOKENS.
     """
     import llm

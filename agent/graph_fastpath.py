@@ -46,8 +46,8 @@ _IMAGE_ACTION_TOOLS = {"generate_image", "redraw_image", "inpaint_image",
 
 # A tool-less reply that CLAIMS a deliverable. "а теперь просто картинку
 # этого же кота" had no draw verb, took the fast path, and the model wrote
-# "Вот ваша картинка с рыжим котом" with nothing attached (live, 2026-09-12,
-# journey 28). Such a reply is thrown away and the turn falls through to the
+# "Вот ваша картинка с рыжим котом" with nothing attached.
+# Such a reply is thrown away and the turn falls through to the
 # tool loop, exactly like a capability denial.
 _FAST_PATH_DELIVERY_CLAIM_RE = re.compile(
     r"^\s*(?:(?:конечно|отлично|хорошо|сделано|sure|of\s+course|okay|ok)[!,.]?\s+)?"
@@ -80,10 +80,10 @@ _FAST_PATH_ACTION_CLAIM_RE = re.compile(
     # a promise to act right now
     r"\b(?:запускаю|начинаю|приступаю|генерирую|рисую|создаю|напомню|отправляю|"
     r"звоню|заказываю|оформляю|бронирую|оплачиваю)\b|"
-    # passive "done" claims: «Будильник на 7 утра отменен» with no tool (live)
+    # passive "done" claims: «Будильник на 7 утра отменен» with no tool
     r"(?:напоминани|будильник)\w*[^.!?\n]{0,30}\b(?:отмен[её]н|удал[её]н|снят|установлен|поставлен)\w*|"
     r"\bя\s+(?:\w+\s+){0,2}?отменил\w*|"
-    # «Запомнил, 47 -- интересное число» with no remember_fact (live)
+    # «Запомнил, 47 -- интересное число» with no remember_fact
     r"(?:^|[.!?]\s+)(?:запомнил|записал|сохранил|отменил|удалил|поставил|установил|"
     r"сделал|добавил|убрал|изменил|переделал|сократил|исправил|обновил|заменил)\w*\b|"
     r"\b(?:разбужу|напомню|поставлю\s+(?:таймер|будильник))\b|"
@@ -321,7 +321,7 @@ def _fast_path_reply(ctx: Context, messages: list, gen: "_GenSettings",
         lite_user_parts.append(FORGOTTEN_NOTE)
     _tr_prev = translate_previous_note(original_input or user_input, messages[1:-1])
     if original_input and not _tr_prev:
-        # A bare path or a number has no language: live 10-10 «C:/Program Files/Git/start»
+        # A bare path or a number has no language: «C:/Program Files/Git/start»
         # in a Russian chat was answered in Spanish.
         _chat_lang = {"ru": "Russian", "en": "English"}.get(getattr(ctx, "reply_lang", "ru") or "ru", "Russian")
         lite_user_parts.append(
@@ -380,7 +380,7 @@ def _fast_path_reply(ctx: Context, messages: list, gen: "_GenSettings",
     fast_content = strip_think_tags(
         strip_reasoning_leak((fast_resp or {}).get("content", "") or ""))
     if (fast_resp or {}).get("finish_reason") == "length":
-        # Live: a 60-row table stopped at row 25 mid-cell and was delivered.
+        # A 60-row table stopped at row 25 mid-cell and was delivered.
         logger.info("Fast path hit its token cap — falling through to the full loop")
         return None
     if fast_content and _FAST_PATH_DELIVERY_CLAIM_RE.search(fast_content):
@@ -392,7 +392,7 @@ def _fast_path_reply(ctx: Context, messages: list, gen: "_GenSettings",
     if fast_content and not _FAST_PATH_CAPABILITY_DENIAL_RE.search(fast_content):
         # The fast path returns before graph_finalize, so the drift guard
         # never saw its answers: "а теперь расскажи её по-русски" on an
-        # English session came back in English (live, 2026-09-12, journey 26).
+        # English session came back in English.
         from graph_language import _match_reply_language, _unparrot, _ru_thousands, _fix_totals, _prompt_leak_guard
         fast_content = _match_reply_language(ctx, fast_content, original_input)
         fast_content = _unparrot(ctx, fast_content, original_input, messages[1:])

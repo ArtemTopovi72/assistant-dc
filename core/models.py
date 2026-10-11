@@ -253,7 +253,7 @@ class Context:
     # under it); graph.needs_relook then answers any question by looking.
     image_pointed_at: bool = False
     # The plan of the most recent deck, so "добавь слайд" edits it instead of
-    # planning a new one from scratch (live: the theme and every slide changed).
+    # planning a new one from scratch (the theme and every slide changed).
     last_deck: Optional[dict] = None
 
     # A picture this turn actually RENDERED, as opposed to one it merely loaded.

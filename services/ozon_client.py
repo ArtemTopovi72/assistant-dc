@@ -396,7 +396,7 @@ def search_filters(query: str) -> list:
 def resolve_short(url: str) -> str:
     """ozon.ru/t/<code> (the app's share link) -> /product/.../ . A plain HTTP
     request gets 501 from the anti-bot wall; the browser follows the redirect.
-    Live 10-01: the third of three shared links was never opened and the agent
+    The third of three shared links was never opened and the agent
     found a product by guessing its name instead."""
     def go(page):
         page.goto(url, wait_until="domcontentloaded", timeout=90000)

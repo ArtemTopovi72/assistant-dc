@@ -271,9 +271,8 @@ def _edit_deck(ctx, previous: dict, change: str, out_lang: str) -> dict:
     """Apply `change` to `previous` (a normalized deck) and return the new deck.
 
     "добавь слайд про спутники Марса" used to re-plan the whole deck from a
-    merged topic: a different theme, different slides, different title (live,
-    2026-09-12, journey 19). The model now gets the existing plan and the
-    change; a plan it cannot produce leaves the previous deck untouched with
+    merged topic: a different theme, different slides, different title. The model now gets the existing
+    plan and the change; a plan it cannot produce leaves the previous deck untouched with
     `edit_failed` set so the caller can say so.
     """
     dropped = _dropped_slide(previous, change)
@@ -364,7 +363,7 @@ def plan_deck(ctx, topic: str, n_slides: int = 0, out_lang: str = "",
                 "and no others; a chart plots them.")
     if facts:
         # A literal web search on the topic string can surface hits that share
-        # a WORD with it but not its actual subject -- live, 2026-09-19: a
+        # a WORD with it but not its actual subject -- a
         # joke deck about slacking off at work ("idle correctly at work")
         # came back with car-carburetor and Python-IDE snippets, because the
         # search matched "idle" rather than the intent, and the planner was
@@ -986,13 +985,13 @@ def normalize_deck(data: dict, topic: str = "", n_slides: int = 0) -> dict:
     # not a hint — honour it, counting the cover the builder adds.
     if n_slides and n_slides > 0:
         # The cover AND the closing sources slide both count: "4 slides" used
-        # to come back as cover + 3 + sources = 5 (live, 2026-09-12).
+        # to come back as cover + 3 + sources = 5.
         closing = 1 if out.get("sources") else 0
         want_content = min(int(n_slides), MAX_SLIDES) - 1 - closing
         if want_content < 2 and closing:
             # A tiny deck ("3 слайда") cannot spend a third of itself on a
             # sources slide: cover + ONE content slide + sources was refused
-            # downstream as a stub (live, 2026-09-12, journey 19). The sources
+            # downstream as a stub. The sources
             # move into the speaker notes of the last slide instead.
             closing = 0
             want_content = min(int(n_slides), MAX_SLIDES) - 1

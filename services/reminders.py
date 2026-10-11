@@ -1,6 +1,6 @@
 """Reminders for the Telegram bot: "напомни через 2 минуты выпить воды".
 
-Live 2026-09-28 the bot answered "Договорились! Напомню" with no way to do it.
+The bot answered "Договорились! Напомню" with no way to do it.
 Pending reminders live in a JSON file next to the bot's data, so a restart
 re-arms them (an overdue one fires at once, marked late); a threading.Timer
 per reminder does the sending through the sender the bot registers at start.
@@ -63,7 +63,7 @@ def _fire(rid: str) -> None:
         return
     late = time.time() - item["due"] > 120
     try:
-        # "remind me in 1 minute" fired as «⏰ Напоминание: check the oven» (live).
+        # "remind me in 1 minute" fired as «⏰ Напоминание: check the oven».
         pre = (("⏰ Reminder (late): " if late else "⏰ Reminder: ") if item.get("lang") == "en"
                else ("⏰ Напоминание (с опозданием): " if late else "⏰ Напоминание: "))
         _SENDER(int(item["owner"]), pre + item["text"])
