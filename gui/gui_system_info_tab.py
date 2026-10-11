@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (QHBoxLayout, QPushButton, QTextEdit,
 
 from ui_scale import px, scale_style as _ss
 from config import MEMORY_DIR
-from gui_common import MUTED, _section
+from gui_common import _section
 
 import logging
 logger = logging.getLogger("assistant.gui")
