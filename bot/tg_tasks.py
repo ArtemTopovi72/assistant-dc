@@ -1,6 +1,6 @@
 """Running one queued task to completion.
 
-Split out of tg_bot.py. Owns _execute_task and _run_task_inner -- the stage
+Owns _execute_task and _run_task_inner -- the stage
 plumbing, per-chat context scoping, cancellation checks, depth/ETA reporting
 and the delivery of whatever the graph produced (text, image, video, voice,
 report file) -- plus the voice transcription helper and the forwarded-voice
@@ -20,6 +20,8 @@ import tempfile
 import threading
 import turn_trace
 import time
+import uuid
+from pathlib import Path
 from typing import Optional
 
 import stages as _stages
@@ -34,8 +36,8 @@ LANG_PIN_TTL = 6 * 3600     # «answer in English from now on» lasts until 6 h 
 def _lang_pin_after(sess, mode: str, named_en: bool, script: str, now: float = None) -> None:
     """The «from now on in English» pin after one typed message: set when English
     is asked for by name, dropped on «по-русски», and over after hours of quiet
-    once the user writes in another alphabet -- a pin from yesterday answered a
-    Russian chat in English for good (10-03)."""
+    once the user writes in another alphabet, so a stale pin cannot answer a
+    Russian chat in English for good."""
     now = time.time() if now is None else now
     pin = getattr(sess, "lang_pin", "")
     if named_en:
@@ -53,12 +55,10 @@ def _is_button_payload(text: str) -> bool:
     bracket-tagged internal command, or one of tg_bot's own English
     _DIRECT_KB/_PROMPT_KB/_CB_CMDS phrases (e.g. "describe and analyze this
     image in detail", "create a presentation about: <topic>"). None of these
-    carry a real language signal -- treating them as one flipped a Russian
-    session's turn_lang to English on a bare 📷 Analyze Photo press (live
-    2026-09-18). change_clothes/regenerate/outpaint (_CB_CMDS) are plain prose
-    with no bracket tag, the same gap that let this leak through again for a
-    change_clothes press in a Russian chat, in English, without asking what
-    outfit (live, 2026-09-19)."""
+    carry a real language signal -- treating them as one would flip a Russian
+    session's turn_lang to English on a bare 📷 Analyze Photo press.
+    change_clothes/regenerate/outpaint (_CB_CMDS) are plain prose with no
+    bracket tag, so they are matched by their exact text."""
     t = (text or "")
     if t.startswith("["):
         return True
@@ -86,7 +86,7 @@ def _message_script(text: str) -> str:
     words = _WORD_RE.findall(t)
     if len(words) < 3:
         return ""
-    # «Qual è la capitale…»: accented Latin is still Latin (was '' -> Russian reply)
+    # «Qual è la capitale…»: accented Latin is still Latin
     latin = sum(1 for w in words if all(ch < "\u0250" for ch in w))
     cyr = sum(1 for w in words if all("\u0400" <= ch <= "\u04ff" for ch in w))
     if latin == len(words):
@@ -100,17 +100,14 @@ def _plainly_not_a_doc_question(text: str) -> bool:
     """True when the message is not for document retrieval -- and for a
     message that carries its own material: a pasted press release under
     'сократи до 3 пунктов' was wrapped as a QUESTION to the rental contract,
-    and the follow-up 'выдели 5 ключевых слов' then found no text in the chat
-    (live 2026-09-13, mega journey).
+    and the follow-up 'выдели 5 ключевых слов' then found no text in the chat.
 
     Which messages the documents could answer is the model's read
-    (agent/intent.py doc_question); a word list sent «нарисуй витрину
-    пекарни» and «какая погода в Казани» into the RAG prompt (live
-    2026-09-13) and was patched word by word since."""
+    (agent/intent.py doc_question): «нарисуй витрину пекарни» or «какая погода
+    в Казани» must not go into the RAG prompt."""
     t = (text or "").strip()
     # Files in the working folder carry their own material and are read whole:
-    # three logs were answered from old indexed fragments, none opened (owner
-    # 10-03: «он прочитал только 1 из 3»)
+    # three logs would be answered from old indexed fragments, none opened
     if "[The file '" in t or "[The last thing the user sent was the file" in t:
         return True
     from prompt_guard import has_quote
@@ -129,12 +126,11 @@ def _about_the_last_video(last_image_path: str, user_input: str) -> bool:
     checked here (before ctx.last_image_path is populated) so a question
     about the video does not fall through to document retrieval.
 
-    Live 2026-09-18 20:14 (chat 100000001): "Что ответить?" right after a
-    forwarded video's summary has no image_id/target_image (a video is not a
-    photo), so the RAG gate below let it through -- it got wrapped around 25
-    passages of an UNRELATED indexed .md file, and the resulting bloated,
-    irrelevant context sent the model into a non-terminating generation
-    (task still "running" 9+ minutes later)."""
+    "Что ответить?" right after a forwarded video's summary has no
+    image_id/target_image (a video is not a photo), so without this check the RAG
+    gate lets it through and wraps it around passages of an UNRELATED indexed
+    file; the bloated, irrelevant context can send the model into a
+    non-terminating generation."""
     if not last_image_path or not _graph.is_video_sheet(last_image_path):
         return False
     import intent
@@ -159,13 +155,12 @@ _STAGE_ICON = {
 def _turn_messages(new_msgs: list, snapshot_len: int, inputs) -> list:
     """The messages THIS turn added to `new_msgs`.
 
-    Torture run #5 2026-09-14: the graph sanitizes (drops tool turns) and
-    trims the history to 8 non-system messages before appending the turn, so
-    slicing at the persisted length skipped the turn's own user message
-    whenever the old history held tool results -- the archive requests were
-    never in the transcript and a later «заново» redid the cat edit from
-    six turns earlier. The turn starts at its user message: the last user
-    entry whose text is this turn's input; the old slice is the fallback.
+    The graph sanitizes (drops tool turns) and trims the history to 8
+    non-system messages before appending the turn, so slicing at the persisted
+    length skips the turn's own user message whenever the old history held tool
+    results (a later «заново» would then redo an edit from several turns
+    earlier). The turn starts at its user message: the last user entry whose
+    text is this turn's input; the old slice is the fallback.
     """
     wants = {(w or "").strip() for w in (inputs if isinstance(inputs, tuple) else (inputs,))}
     wants.discard("")
@@ -265,12 +260,11 @@ class TaskRunnerMixin:
                 self._send_text(chat_id, chunk, parse_mode="HTML")
         if what in ("sum", "both"):
             # A retelling is DATA in, text out: it runs as a one-shot model
-            # call with no chat history. Through the agent it inherited the
-            # chat's last picture (live 23:02: a collage -> vision path ->
-            # «контекст нашего диалога»), and a second press of the same
-            # button was answered «вы прислали тот же текст, хотите иначе?»
-            # -- wording could not talk the model out of noticing the repeat,
-            # so the repeat is simply not visible to it.
+            # call with no chat history. Through the agent it would inherit the
+            # chat's last picture (vision path, answer about «контекст нашего
+            # диалога»), and a second press of the same button would be answered
+            # «вы прислали тот же текст, хотите иначе?» -- so the repeat is
+            # simply not visible to the model.
             turn_trace.spawn(self._retell_transcript, chat_id, said, lang, "👁 " in said,
                              name=f"fwd-retell-{chat_id}")
         elif what == "text":
@@ -412,17 +406,14 @@ class TaskRunnerMixin:
         """Put a forwarded voice/video into the chat history the model sees.
 
         The retelling is deliberately a one-shot call outside the agent, and
-        the transcript goes out as data -- so neither ever reached
-        sess.history. Live 15:39: right after «Что требуется: дать экспертное
-        мнение…» the user typed «Дай экспертное мнение» and the model,
-        with no trace of the video in its history, offered topics from
-        conversations days old. The turn is committed the way a deep-research
-        report is: the media as the user's message, the retelling (or the
+        the transcript goes out as data -- so neither would reach sess.history,
+        and a follow-up like «Дай экспертное мнение» would find no trace of the
+        video. The turn is committed the way a deep-research report is: the media as the user's message, the retelling (or the
         transcript itself) as the assistant's, so a follow-up lands on it.
         """
         kind = "video message" if is_video else "voice message"
-        # Framed as something the bot WATCHED and heard: "не видя самого
-        # видео… пришлите видео" (live 16:07) came from a bare label.
+        # Framed as something the bot WATCHED and heard: a bare label makes it
+        # answer "не видя самого видео… пришлите видео".
         user_msg = ((f"[forwarded {kind} -- you have WATCHED it (its keyframes are the chat's "
                      "current picture) and heard it; the transcript and storyboard follow. Answer "
                      "as someone who saw it; never say you cannot see the video.]"
@@ -459,7 +450,6 @@ class TaskRunnerMixin:
                                         max_tokens=900, prefill="<think></think>") or "").strip()
         except Exception:
             tg_bot.logger.exception("fwd retell failed chat=%s", chat_id)
-        import turn_trace
         turn_trace.answer("final", out)
         sess = self._get_session(chat_id)
         if not out:
@@ -478,8 +468,7 @@ class TaskRunnerMixin:
 
         The watchdog fires on the whole turn, not on the render, so a picture
         that was drawn, scored and accepted can still be thrown away by tool
-        calls that came after it -- which is exactly what happened live: the
-        render finished at 09:06:57 with 9/10 and the user got "try again".
+        calls that came after it.
 
         Reads ctx.last_render_path, never ctx.last_image_path: the latter holds
         the user's own upload just as readily, and posting that back at them
@@ -514,7 +503,8 @@ class TaskRunnerMixin:
             tg_bot._log_image(sess, path,
                               msg_id=getattr(self, "_last_photo_msg_id", 0), src="bot")
             try: self._store.put(sess)
-            except Exception: pass
+            except Exception:
+                tg_bot.logger.warning("session persist failed", exc_info=True)
             self._activity.log(chat_id, "system", f"[salvage] sent {path}", uname)
             return True
         except Exception:
@@ -536,9 +526,8 @@ class TaskRunnerMixin:
             return
 
         # THIS task's own view of the context: its own working image, memory,
-        # facts, output size and cancel event. Without it, running two tasks at
-        # once would let one chat see another chat's picture and let one chat's
-        # Stop cancel another chat's request.
+        # facts, output size and cancel event, so two tasks running at once cannot
+        # see each other's picture or cancel each other's request.
         _cancel = threading.Event()
         ctx = tg_bot._scoped_ctx(_shared, cancel_event=_cancel)
         # The reply language follows the USER's session language: an English
@@ -557,17 +546,16 @@ class TaskRunnerMixin:
         # A button-generated payload ("[style_preset] call redraw_image...",
         # "describe and analyze this image in detail") is machine text, not
         # typed by the user -- its English wording carries no language
-        # signal, and it must not consult (or update) turn_lang. Before this
-        # a stale/newly-set turn_lang="en" leaked English into the interim
-        # note and the final reply for a plain button press in a Russian
-        # session ("Got it, redrawing"; 📷 Analyze Photo's own answer).
+        # signal, and it must not consult (or update) turn_lang: otherwise a
+        # stale/newly-set turn_lang="en" leaks English into the interim note and
+        # the final reply for a plain button press in a Russian session.
         is_internal = _is_button_payload(task.user_text)
         _tl = "" if is_internal else _message_script(task.user_text)
         from graph_language import asks_for_english as _ask_en
         if _tl and not _ask_en(task.user_text):
             sess.turn_lang = _tl          # an explicit "по-английски" is one turn, not a mode
-        # Live: «can you answer in English from now on?» -- "Of course!",
-        # then the next Russian line got a Russian answer. The model's read.
+        # «can you answer in English from now on?» sets a pin that outlives the
+        # turn (the model's read).
         if not is_internal and (task.user_text or "").strip():
             import intent
             from graph_language import names_english as _names_en
@@ -585,9 +573,8 @@ class TaskRunnerMixin:
         # This chat's own memory directory. remember_fact persists immediately
         # via ctx.save_memory(ctx.active_memory_dir), and the scoped copy
         # inherits the DESKTOP app's directory — so a Telegram user's fact was
-        # written straight into the owner's profile, and (now that the scoped
-        # facts list holds only this chat's facts) it OVERWROTE facts.json with
-        # them. Same reasoning as the per-chat document index.
+        # written straight into the owner's profile, overwriting facts.json with
+        # this chat's facts. Same reasoning as the per-chat document index.
         try:
             _mem_dir = tg_bot._MEMORY_DIR / f"chat_{chat_id}"
             _mem_dir.mkdir(parents=True, exist_ok=True)
@@ -626,11 +613,9 @@ class TaskRunnerMixin:
 
         # …and a graph BOUND TO IT. build_graph closes over the context it is
         # handed, so the app's prebuilt graph runs every node and every tool
-        # against the SHARED context no matter what we scope here. That made the
-        # isolation above decorative: remember_fact wrote its fact into the
-        # desktop app's context instead of this task's (so 🧠 My facts stayed
-        # empty right after the bot said "я запомнил" — found live), and the same
-        # hole applies to the working image and the cancel event, across users.
+        # against the SHARED context no matter what we scope here: remember_fact
+        # would write into the desktop app's context instead of this task's, and
+        # the same holds for the working image and the cancel event, across users.
         # Rebuilding costs ~17 ms against a multi-second turn.
         try:
             from graph import build_graph as _build_graph
@@ -657,7 +642,6 @@ class TaskRunnerMixin:
                            (task.user_text or "")[:120])
         _outcome = "crashed"
         _t0 = time.monotonic()      # the watchdog pops _task_started on cancel
-        import turn_trace
         _trace = turn_trace.start(chat=chat_id, task=task.task_id[:8], user=uname,
                                   text=(task.user_text or "")[:1500])
         try:
@@ -683,6 +667,19 @@ class TaskRunnerMixin:
                 self._task_cancels.pop(task.task_id, None)
                 self._cancelled.discard(task.task_id)
             self._write_inflight()
+
+    def _remember_failed_task(self, sess, task) -> None:
+        """Tie the 🔄 Retry button to THIS failure. Recorded when the failure is
+        actually DELIVERED, not when the task is pushed: a second task queued (or
+        concurrently admitted, see _mark_interruptible) right behind this one
+        would otherwise overwrite last_task_id before this one fails, and its own
+        fresh Retry button would be refused as "stale". "Newest delivered outcome
+        wins" still holds for outcomes the user has since moved past."""
+        sess.last_task_text = task.user_text
+        sess.last_task_id = task.task_id
+        try: self._store.put(sess)
+        except Exception:
+            tg_bot.logger.warning("session persist failed", exc_info=True)
 
     @staticmethod
     def _asked_a_question(text: str) -> bool:
@@ -733,12 +730,10 @@ class TaskRunnerMixin:
                              update_status):
         """The one place a stage becomes a status line.
 
-        Extracted from _run_task_inner so a render that does NOT go through the
-        task queue -- the Персонажи flow -- reports progress through the same
-        pipeline rather than growing a second, slightly different one. Icon
-        choice, translation, the desktop feed, the activity log and the
-        interruptible gate all live here, and all of them were previously
-        reachable only from inside one closure.
+        Shared with renders that do NOT go through the task queue -- the
+        Персонажи flow -- so they report progress through the same pipeline.
+        Icon choice, translation, the desktop feed, the activity log and the
+        interruptible gate all live here.
         """
         def on_stage(stage: str) -> None:
             # A blank stage means "no stage", not "a stage with no name". The
@@ -980,23 +975,7 @@ class TaskRunnerMixin:
                 tg_bot.logger.exception("Telegram deep research failed chat=%s", chat_id)
                 _clear_status()
                 err = str(exc)[:300]
-                # Recorded HERE, at delivery of THIS failure, not back when the
-                # task was merely pushed to the queue. A chat may have a second
-                # task queued right behind this one (or admitted to run
-                # concurrently — see _mark_interruptible) that hasn't started
-                # yet; setting this at push time let that still-pending push
-                # overwrite last_task_id before this task even got a chance to
-                # fail, so THIS failure's own, genuinely-fresh Retry button was
-                # refused as "stale" the instant it was shown — reproduced live
-                # via the adversarial harness. Setting it at the moment each
-                # failure is actually delivered keeps the existing "newest
-                # delivered outcome wins" contract (retry for an outcome the
-                # user has since moved past is still correctly refused) without
-                # that premature-overwrite race.
-                sess.last_task_text = task.user_text
-                sess.last_task_id = task.task_id
-                try: self._store.put(sess)
-                except Exception: pass
+                self._remember_failed_task(sess, task)
                 self._send_text(chat_id,
                     tg_bot._t("dr_failed", lang, err=_html_mod.escape(err)),
                     parse_mode="HTML",
@@ -1250,7 +1229,7 @@ class TaskRunnerMixin:
         # existed; the cleaned list is what gets written back after the turn.
         from prompt_guard import fact_rejection
         # load_memory above already read facts.json, the same facts again:
-        # without the text check every turn doubled them (live: 4x «Казань»).
+        # without the text check every turn would double them.
         _seen = {str((f or {}).get("text", "")) for f in ctx.pinned_facts if isinstance(f, dict)}
         for f in sess.get_tg_facts():
             t = str((f or {}).get("text", ""))
@@ -1258,7 +1237,7 @@ class TaskRunnerMixin:
                 _seen.add(t)
                 ctx.pinned_facts.append(f)
         # «я живу в Новосибирске»: clock lines and "at 9:00" reminders follow
-        # the user's zone, not the server's (live: 23:48 told at 03:48).
+        # the user's zone, not the server's.
         try:
             from tg_weather import city_tz as _city_tz
             _home = self._fact_city(chat_id)
@@ -1288,8 +1267,8 @@ class TaskRunnerMixin:
         # would resolve to whichever picture the SECOND press had already
         # overwritten that slot with by the time either task actually ran.
         # ✏️ custom motion under 🎬: the picture chosen there, not the one-turn
-        # target slot -- live 10-10 that slot was empty by the time the words came
-        # and the clip was made from nothing («оживи фото», 0 images).
+        # target slot, which can be empty by the time the words come (the clip
+        # would be made from nothing).
         _anim = getattr(sess, "pending_animate_target", "")
         if _anim and (task.user_text or "").startswith("animate this photo") and not getattr(task, "image_id", ""):
             task.image_id = _anim
@@ -1298,9 +1277,8 @@ class TaskRunnerMixin:
         _target = tg_bot._image_by_id(sess, _target_id)
         if (task.user_text or "").startswith(tg_bot._TEXT_ONLY_MARK):
             # An internal instruction over a transcript (the 📋 button on a
-            # forwarded voice/video). Live 23:02: it inherited the chat's last
-            # picture (a collage), went down the vision path and answered
-            # about «контекст нашего диалога» instead of the video.
+            # forwarded voice/video): it must not inherit the chat's last picture
+            # and go down the vision path instead of answering about the video.
             _target = None
             ctx.last_image_path = None
         elif _target and os.path.exists(_target.get("path", "")):
@@ -1426,11 +1404,10 @@ class TaskRunnerMixin:
 
         _invoke_thread = turn_trace.spawn(_run_invoke, name=f"tg-invoke-{task.task_id[:8]}")
         # A flat deadline on the whole turn cannot tell "this task is stuck"
-        # apart from "this task has not been given the GPU yet". Measured live:
-        # a Music3 track holds the GPU for ~70 minutes, and a picture queued
-        # behind one burned its entire 300s WAITING and was abandoned before it
-        # ran a single step -- the user saw "took too long, try again" for a
-        # request that had not started. Retrying just re-joined the same queue.
+        # apart from "this task has not been given the GPU yet": a Music3 track
+        # holds the GPU for ~70 minutes, and a picture queued behind one would
+        # burn its whole deadline WAITING and be abandoned before it ran a
+        # single step. Retrying just re-joins the same queue.
         #
         # So: wait out the base deadline, then keep waiting for as long as the
         # render server is genuinely working, up to the hard per-task ceiling.
@@ -1467,27 +1444,18 @@ class TaskRunnerMixin:
         _invoke_timeout = int(_waited) or _invoke_timeout
 
         try:
-            # Recorded at delivery of each failure below, not at push time —
-            # a second task queued (or concurrently admitted) right behind
-            # this one must not be able to mark THIS task's own Retry button
-            # stale before this task even got a chance to fail. See the
-            # matching comment on the deep-research failure handler above.
+            # Each failure below records last_task_id via _remember_failed_task.
             if _invoke_thread.is_alive():
                 tg_bot.logger.error(
                     "graph.invoke exceeded %ss chat=%s task=%s — abandoning "
                     "(consumer thread freed; call may still run in the "
                     "background)", _invoke_timeout, chat_id, task.task_id[:8])
                 _clear_status()
-                sess.last_task_text = task.user_text
-                sess.last_task_id = task.task_id
-                try: self._store.put(sess)
-                except Exception: pass
+                self._remember_failed_task(sess, task)
                 # The deadline is not proof that nothing was made. A render that
                 # already finished is the answer the user asked for, and the
                 # inspection calls that ran the clock out do not unmake it --
-                # so hand it over before admitting the timeout. Measured live:
-                # the picture existed, scored 9/10, and was discarded because
-                # two more tool calls came after it.
+                # so hand it over before admitting the timeout.
                 # The task's SCOPED ctx, not self._ctx: the shared one belongs
                 # to the desktop app and every other chat.
                 salvaged = self._deliver_salvaged_render(
@@ -1517,10 +1485,7 @@ class TaskRunnerMixin:
                 tg_bot.logger.error("graph.invoke failed chat=%s: %r", chat_id, exc)
                 _clear_status()
                 err_text = str(exc)[:300]
-                sess.last_task_text = task.user_text
-                sess.last_task_id = task.task_id
-                try: self._store.put(sess)
-                except Exception: pass
+                self._remember_failed_task(sess, task)
                 self._send_text(chat_id,
                     tg_bot._t("err_generic", lang, err=_html_mod.escape(err_text)),
                     parse_mode="HTML",
@@ -1544,10 +1509,7 @@ class TaskRunnerMixin:
                         "graph.invoke returned %r (expected dict) chat=%s",
                         type(_raw).__name__, chat_id)
                     _clear_status()
-                    sess.last_task_text = task.user_text
-                    sess.last_task_id = task.task_id
-                    try: self._store.put(sess)
-                    except Exception: pass
+                    self._remember_failed_task(sess, task)
                     self._send_text(chat_id,
                         tg_bot._t("err_generic", lang, err="malformed result"),
                         parse_mode="HTML",
@@ -1581,12 +1543,9 @@ class TaskRunnerMixin:
         # asked for it to stop — delivering the half-finished answer (and a voice
         # note of it) is exactly what they pressed the button to avoid.
         #
-        # BOTH cancel paths have to be checked here. Testing only the
-        # inline ⛔ button's set would honour the ⛔ Stop KEY for queued work
-        # and ignored for the work in flight: cancellation is cooperative, and a
-        # ComfyUI render that finished before the loop reached its next check
-        # sailed straight through to delivery. Observed live — Stop answered
-        # "Останавливаю…", and the picture arrived anyway two minutes later.
+        # BOTH cancel paths have to be checked here: cancellation is cooperative,
+        # and a ComfyUI render that finished before the loop reached its next
+        # check would otherwise sail straight through to delivery after Stop.
         if self._is_cancelled(task.task_id) or self._stop_requested_after(task):
             self._send_text(chat_id, tg_bot._t("cancel_done", lang),
                             keyboard=self._main_menu_kb(sess, lang))
@@ -1594,9 +1553,8 @@ class TaskRunnerMixin:
             return
 
         new_msgs = final.get("messages", base["messages"])
-        # "(no response)" was a debug placeholder that went out verbatim, in
-        # English, in a Russian chat. Kept as an internal sentinel (voice must
-        # not be synthesised for it) but never shown.
+        # An empty reply is an internal sentinel (voice must not be synthesised
+        # for it) and is never shown as a debug placeholder.
         reply = (final.get("final_answer") or "").strip()
         empty_reply = not reply
         from graph_finalize import is_failure_placeholder
@@ -1613,7 +1571,7 @@ class TaskRunnerMixin:
         if final.get("ask_voices") or final.get("video_plan"):
             # The clip waits for «свои голоса / стандартные»: the offer below IS the
             # reply. The model's own line said «не удалось из-за технической ошибки»
-            # about a clip that was only paused (live 10-02).
+            # about a clip that was only paused.
             reply = ""
 
         # ── deliver voice note (before text so keyboard attaches to voice) ────
@@ -1630,9 +1588,8 @@ class TaskRunnerMixin:
         # required leaving the chat for the 🎨 Creativity menu.
         # NOT sess.turn_image directly: that slot is also filled by a video
         # note's frame SHEET (tg_resolve._look_video's img_bytes, registered
-        # the same way a real photo is) -- a first pass here keyed off it and
-        # a следующий кружок immediately inherited the picture-editing
-        # keyboard. task.image_is_photo is only ever True for an actual
+        # the same way a real photo is), and the next round video would inherit
+        # the picture-editing keyboard. task.image_is_photo is only ever True for an actual
         # photo/album upload (tg_resolve.py's "photo"/"album" branches), so a
         # derived sheet never qualifies no matter what sess.turn_image holds.
         _turn_img_id = (_target or {}).get("id", "") if _target else (
@@ -1753,10 +1710,9 @@ class TaskRunnerMixin:
 
         # A presentation the user asked for and did not receive must be admitted,
         # exactly like a missing picture. The 📊 button's prefix is machine-made,
-        # so "this turn owed a file" is a fact, not a guess. Live, the deck really
-        # was built and the state key carrying its path was silently dropped by
-        # the graph — the user was told "презентация готова" and got nothing, with
-        # no signal anywhere that delivery had been skipped.
+        # so "this turn owed a file" is a fact, not a guess (the graph can drop
+        # the state key carrying the deck's path while the model says
+        # "презентация готова").
         try:
             if (task.user_text or "").strip().lower().startswith(
                     "create a presentation about:") and not doc_delivered:
@@ -1867,10 +1823,10 @@ class TaskRunnerMixin:
                                        msg_id=getattr(self, "_last_photo_msg_id", 0),
                                        src="bot")
                             try: self._store.put(sess)
-                            except Exception: pass
+                            except Exception:
+                                tg_bot.logger.warning("session persist failed", exc_info=True)
                             delivered = True
-                            # the toggle, or "нарисуй ..., пришли файлом" in this very
-                            # request (was honoured only for an already-sent picture)
+                            # the toggle, or "нарисуй ..., пришли файлом" in this very request
                             import tg_dispatch as _tgd
                             if getattr(sess, "photo_file", False) or _tgd._asks_as_file(task.user_text or ""):
                                 self._send_document(chat_id, out_img)   # full quality, no JPEG re-encode
@@ -1913,9 +1869,8 @@ class TaskRunnerMixin:
                 _out_is_ours = bool(out_img)
             owed_image = (bool(tg_bot._IMAGE_PRODUCING_RE.match(task.user_text or ""))
                           or _out_is_ours or bool(img_status))
-            # 10-08 live: «Не удалось нарисовать… Попробовать ещё раз?» was followed by
-            # «На самом деле не получилось… не обращай внимания на сообщение выше» --
-            # a retraction of a reply that had already admitted the failure.
+            # A reply that already admitted the failure («Не удалось нарисовать…
+            # Попробовать ещё раз?») must not be followed by a retraction.
             if owed_image and not delivered and reply:
                 import intent as _intent
                 if _intent.ask_yes("A bot answered a user: {text} -- does that answer already "
@@ -1999,13 +1954,14 @@ class TaskRunnerMixin:
                       and m["content"].startswith(RAG_HEAD) else m for m in latest]
             sess.set_history(latest)
             try: self._store.put(sess)
-            except Exception: pass
+            except Exception:
+                tg_bot.logger.warning("session persist failed", exc_info=True)
 
     def _look_video(self, ctx, file_id: str, data: bytes | None = None, lang: str = "ru",
                     transcript: str = "") -> dict:
         """See the picture of a video message: frames every 5 s on one sheet,
-        one vision call. Live 2026-09-14 21:23: a forwarded round video was
-        only listened to. Returns video_look's dict; description "" on any
+        one vision call, so a forwarded round video is seen as well as
+        listened to. Returns video_look's dict; description "" on any
         failure -- the audio path is never blocked by the eyes."""
         data = data if data is not None else self._dl_bytes(file_id)
         if not data:
@@ -2073,8 +2029,8 @@ class TaskRunnerMixin:
                 heard = fix_voice_imperative(
                     transcribe_audio_file(ctx, src, lang_hint=lang_hint or "ru") or "")
             # A video with a stray word or two is a silent video: ASR hears «Oh»
-            # in 7 s of room noise (live 16:11), and the retelling then asked
-            # for a transcript. Decided here, once, for every reader -- they
+            # in 7 s of room noise, and the retelling would then ask for a
+            # transcript. Decided here, once, for every reader -- they
             # get "" and say «(без слов)». A voice note's «Да» is real speech.
             if media == "video" and len(_re.findall(r"\w+", _re.sub(r"\[[^\]]*\]:?", " ", heard))) <= 2:
                 return ""
@@ -2089,8 +2045,6 @@ class TaskRunnerMixin:
                 except Exception: pass
 
 
-import uuid
-from pathlib import Path
 import tg_bot  # noqa: E402  (cycle by design; attrs read at call time)
 import tg_songs as _tg_songs  # noqa: E402
 import tg_transport  # noqa: E402

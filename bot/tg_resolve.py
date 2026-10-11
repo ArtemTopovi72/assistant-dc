@@ -1,6 +1,6 @@
 """Batch resolution: deciding what kind of task an incoming batch is.
 
-Split out of tg_dispatch.py. _resolve_and_push is the single decision point
+_resolve_and_push is the single decision point
 between "the debounce timer fired with these messages" and "a task of some kind
 went on the queue" -- menu labels, pending prefixes, photos, documents, voice,
 forwarded voice and the plain-text fallback all resolve here.
@@ -27,7 +27,13 @@ def _bot_file_limit() -> int:
     return (2000 if getattr(_config, "TG_API_LOCAL", False) else 20) * 1024 * 1024
 
 
-TG_BOT_FILE_LIMIT = _bot_file_limit()
+def _save_image_bytes(data: bytes) -> str:
+    """Write downloaded image bytes to a fresh file in tg_bot._IMAGE_DIR; its path."""
+    tg_bot._IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+    path = str(tg_bot._IMAGE_DIR / f"tg_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.jpg")
+    with open(path, "wb") as fh:
+        fh.write(data)
+    return path
 
 
 class ResolveMixin:
@@ -102,8 +108,7 @@ class ResolveMixin:
             self._activity.log(chat_id, "system", f"[video link] watched {_vu[:80]}",
                                (user.name if user else str(chat_id)))
         elif _vid.get("too_long"):
-            # the same portioned job as a long video FILE (live 10-03: an 81-min
-            # film by link got «посмотрю первые 10 минут, пришли файл»)
+            # the same portioned job as a long video FILE, not a "send me the file" brush-off
             sess.last_link = _vu
             self._long_video_offer(chat_id, sess, self._lang(sess),
                                    {"url": _vu, "seconds": _vid["seconds"], "caption": text})
@@ -228,20 +233,16 @@ class ResolveMixin:
         # to be resurrected by pressing pick: on the exact prompt it came from
         # (tg_dispatch.py's pick: handler already clears it before re-pushing,
         # so this is a no-op on that path). Any OTHER batch reaching here means
-        # the user did something else instead of answering, so their attention
-        # has moved on. Telegram buttons never expire, so without this, tapping
-        # that old "which picture?" prompt minutes or messages later — out of
-        # curiosity, by accident, to reference it — silently resurrected and
-        # ran the forgotten instruction. Reproduced live: ask "restore quality"
-        # with two pictures, get asked which one, send three unrelated messages
-        # instead of answering, then tap the stale button — the abandoned
-        # "restore quality" fired on its own. Cleared unconditionally here; the
-        # "ask instead of guessing" block below re-arms it fresh if THIS batch
-        # also turns out to need asking.
+        # the user did something else instead of answering. Telegram buttons
+        # never expire, so without this a tap on that old "which picture?"
+        # prompt would silently resurrect and run the forgotten instruction.
+        # Cleared unconditionally here; the "ask instead of guessing" block
+        # below re-arms it fresh if THIS batch also turns out to need asking.
         if sess.pending_instruction:
             sess.pending_instruction = ""
             try: self._store.put(sess)
-            except Exception: pass
+            except Exception:
+                tg_bot.logger.warning("session persist failed", exc_info=True)
 
         # A Stop pressed while this batch was still debouncing pre-dates it —
         # drop the whole batch rather than let it become a task that
@@ -257,53 +258,30 @@ class ResolveMixin:
             return
 
         # A batch can legitimately contain button presses aimed at DIFFERENT
-        # pictures — e.g. tap [upscale] under an old picture, then immediately
-        # tap [upscale] under a newer one, both landing in the same debounce
-        # window. Merging the whole batch into one _Task can only carry a
-        # single image_id (see pressed_image_id below), so the earlier
-        # press's target was silently overwritten by whichever came last —
-        # and if the two presses also produced identical command text (the
-        # common case: the same button, two pictures), the "collapse a
-        # double-tap" dedup further down treated them as one repeated press
-        # and dropped the first one's text outright. Reproduced live via the
-        # adversarial harness: upscale picture A, then upscale picture B —
-        # A's request vanished with no error, no result, no trace.
-        # Split on a genuine conflict instead of merging across targets; a
-        # batch that agrees on its target (the overwhelmingly common case —
-        # plain conversation, or several taps on the SAME picture) is
-        # completely unaffected.
+        # pictures (tap [upscale] under an old picture, then under a newer one,
+        # both inside one debounce window). A merged _Task carries a single
+        # image_id (see pressed_image_id below), and identical command text
+        # would be collapsed by the double-tap dedup further down, so the
+        # earlier press would vanish silently. Split on a genuine conflict
+        # instead of merging across targets; a batch that agrees on its target
+        # (plain conversation, or several taps on the SAME picture) is
+        # unaffected.
         _distinct_targets = {it.get("image_id") for it in batch if it.get("image_id")}
-        # Same bug class, different slot: two SEPARATE (non-album) photo
-        # uploads -- or a photo alongside an album -- landing in the same
-        # debounce window are two distinct "photo"/"album" items in one
-        # batch. The loop below keeps a single per-batch `img_bytes` slot,
-        # so a second image-bearing item silently overwrote the first's
-        # downloaded bytes with no error and no trace (only its caption, if
-        # any, survived via texts.append). A batch with only ONE
-        # image-bearing item (the overwhelmingly common case: one photo,
-        # possibly with text around it) is unaffected -- merging a single
-        # image with surrounding text is the whole point of this loop.
+        # Same for two SEPARATE photo uploads (or a photo and an album) in one
+        # window: the loop below keeps a single per-batch `img_bytes` slot, so a
+        # second image-bearing item would silently overwrite the first's bytes.
+        # One image-bearing item with text around it is the normal merge.
         _image_bearing = sum(1 for it in batch if it.get("type") in ("photo", "album"))
-        # A forwarded voice/video note is a hard `return` inside this loop, on
-        # every path (asked-intent handled, or the "what should I do with it?"
-        # ask) -- it never falls through to the merge-and-push code below. If
-        # ANY other item shares its debounce window, that return fires before
-        # the batch is ever pushed: earlier items already looped over (e.g. a
-        # photo's bytes downloaded into the local img_bytes/texts accumulator)
-        # are thrown away with them, and later items are never looked at at
-        # all. No error, no trace -- reproduced live via the adversarial
-        # harness: forward a voice note, then immediately send a photo; the
-        # photo vanishes silently regardless of which order they land in.
-        # Same fix as the image-target/img_bytes splits above: a batch that
-        # contains a fwd_voice/fwd video note alongside anything else is not a
-        # genuine merge candidate (a forwarded note starts its own ask/queue
-        # flow), so split it into independent single-item pushes instead.
+        # A forwarded voice/video note is a hard `return` inside this loop on
+        # every path (it starts its own ask/queue flow), so any other item in
+        # its debounce window would be thrown away with the batch. A batch with
+        # a fwd_voice/fwd video note alongside anything else is therefore not a
+        # merge candidate: it is split into independent single-item pushes.
         _has_fwd_voice = any(it.get("type") == "fwd_voice" for it in batch)
         # ...except a forwarded note WITH the user's own words in the same
         # batch («Что думаешь?» typed next to a forwarded кружок): the words
-        # are the instruction for the note. Split, they were answered apart
-        # -- the text as small talk, the note with a "what do I do with it?"
-        # -- and the user's question was ignored.
+        # are the instruction for the note, so they must not be answered apart
+        # as small talk.
         if _has_fwd_voice and len(batch) > 1:
             _notes = [it for it in batch if it.get("type") == "fwd_voice"]
             _words = [(it.get("text") or "").strip() for it in batch
@@ -356,21 +334,17 @@ class ResolveMixin:
         img_bytes: Optional[bytes] = None
         # True only when img_bytes is a picture the user actually SENT (photo/
         # album), never an internally-derived one (a video's frame sheet, a
-        # sandbox render). A video note's sheet rides img_bytes
-        # exactly like a real photo, gets registered the same way, and its id
-        # would otherwise look indistinguishable from a genuine upload to
-        # anything downstream that offers picture-editing actions for "the
-        # photo this turn was about" -- see its use in tg_tasks.py.
+        # sandbox render). A video note's sheet rides img_bytes exactly like a
+        # real photo and is registered the same way, so downstream code that
+        # offers picture-editing actions for "the photo this turn was about"
+        # needs this flag to tell them apart -- see its use in tg_tasks.py.
         _photo_upload = False
         file_in_folder = False
         # Every OTHER successfully-downloaded photo from an album, beyond the
         # one that drives this task (a task can only carry one image_path/
-        # img_bytes -- see the single-slot design below). Without this, an
-        # album of N photos silently kept only photo #1: the rest were
-        # downloaded, thrown away with no image_log entry and no user-visible
-        # sign anything was dropped -- "upscale the second one" from a
-        # 5-photo album had nothing to resolve against. Logged (not run)
-        # alongside the driving photo, same as any other photo upload.
+        # img_bytes -- see the single-slot design below). They are logged (not
+        # run) alongside the driving photo so "upscale the second one" has
+        # something to resolve against.
         _album_extra_bytes: list[bytes] = []
         # The picture id captured at PRESS time on an image-verb button
         # (threaded in via the enqueued item's "image_id" key), NOT read out of
@@ -381,7 +355,7 @@ class ResolveMixin:
 
         # A long lyric is cut by Telegram into several messages that land in one
         # batch: while 🎤 Cover or ✨/✍️ lyrics wait for words, the pieces are one
-        # text (the first piece alone was the lyric, the rest went to the chat).
+        # text.
         if getattr(sess, "cover_state", "") == "want_text" or getattr(sess, "lyrics_state", ""):
             _pieces = [it for it in batch if it.get("type") == "text" and not it.get("fwd_said")
                        and not (it.get("text") or "").startswith("/")
@@ -414,8 +388,7 @@ class ResolveMixin:
                 # 🎨 Restyle / 🎤 Cover waiting for words: this text is them, ahead
                 # of everything that reads text as something else -- a forwarded
                 # lyric went to the chat, an old forwarded voice note took it as
-                # its answer, a song topic left armed sang it (live 10-03: «кавер
-                # не даёт текст вставить»).
+                # its answer, a song topic left armed sang it.
                 if (not item.get("fwd_said") and not raw.startswith("/")
                         and not tg_bot._LABEL2KEY.get(raw.strip())):
                     if (getattr(sess, "lyrics_state", "")
@@ -457,8 +430,7 @@ class ResolveMixin:
                         fwd_at = len(texts)
                         texts.append("")
                     texts[fwd_at] = tg_bot._FWD_TEXT_FRAME.format(text="\n".join(fwd))
-                    # a forwarded link is material too (live 10-03: Stepan's
-                    # forwarded Shorts got «не могу посмотреть по ссылке»)
+                    # a forwarded link is material too (a forwarded Short must be watched, not refused)
                     if ("://" in raw and not sess.reg_state and not sess.pending_prefix
                             and not os.getenv("F5_TEST_RUN")):
                         if self._read_links(ctx, sess, chat_id, user, raw, scaffold):
@@ -519,7 +491,7 @@ class ResolveMixin:
                     continue
 
                 # 🎙 Clone voice armed + a video link: the video's voice is the
-                # sample (owner 10-03: «сделать с голоса ютуба»).
+                # sample.
                 if (not key and getattr(sess, "clone_state", "")
                         and self._clone_take_link(chat_id, sess, lang, raw)):
                     continue
@@ -660,9 +632,9 @@ class ResolveMixin:
                     self._store.put(sess)
                     self._send_text(chat_id, tg_bot._t("animate_ask_photo", lang)); continue
                 if direct == "__style_photo__":
-                    # item 7: 🎭 Change style from the Creativity menu, not
-                    # tied to a picture already in the chat -- asks for the
-                    # photo first, same shape as __animate_photo__.
+                    # 🎭 Change style from the Creativity menu, not tied to a
+                    # picture already in the chat -- asks for the photo first,
+                    # same shape as __animate_photo__.
                     self._goto_menu(sess, "cr_images")
                     sess.awaiting_style_photo = True
                     self._store.put(sess)
@@ -718,13 +690,12 @@ class ResolveMixin:
                     if user:
                         sub_on = "startup" in user.subscriptions
                         state = tg_bot._t("on", lang) if sub_on else tg_bot._t("off", lang)
-                        # Named "Startup" while it also gates the going-offline
-                        # notice, so the label understated what the toggle does.
+                        # The toggle gates both the startup and the going-offline notice.
                         body = tg_bot._t("notif_state", lang, state=state)
                     else:
                         # No user record behind this session (deleted or rejected
-                        # while the keyboard was still on screen). The old code
-                        # answered NOTHING here, so the button looked broken.
+                        # while the keyboard was still on screen): answer anyway,
+                        # a silent button looks broken.
                         body = tg_bot._t("no_account", lang)
                     self._send_text(chat_id, tg_bot._t("notif_title", lang) + body,
                         parse_mode="HTML",
@@ -826,22 +797,15 @@ class ResolveMixin:
                         sess.pending_prefix = ""; sess.pending_photo = ""
                         self._store.put(sess)
                     # 📷 Analyze Photo asks about an image that has to already exist.
-                    # Pressed FIRST — the natural order, "tell it what I want, then
-                    # hand it the photo" — it fired a full turn against nothing and
-                    # the agent answered "there is no image". Arm it instead and let
-                    # the next photo trigger it.
+                    # Pressed FIRST ("tell it what I want, then hand it the photo")
+                    # it would fire a full turn against nothing, so arm it instead
+                    # and let the next photo trigger it.
                     # `last_image_path` alone is the wrong question: it is a
-                    # single slot refreshed from the context at the end of a turn,
-                    # while the per-chat image REGISTER is what the buttons and
-                    # "which picture?" actually resolve against. Live, three
-                    # pictures were sitting in the chat and 📷 answered "send me a
-                    # photo" because the slot happened to be empty.
-                    # A bare truthy string is not proof the file is still there:
-                    # `last_image_path` outlives the picture it names (deleted off
-                    # disk, tmp-dir cleaned). `_live_images` already existence-checks
-                    # the register; hold the slot to the same bar so a stale path
-                    # falls through to "no image" instead of firing a turn against
-                    # nothing.
+                    # single slot refreshed at the end of a turn, while the
+                    # per-chat image REGISTER is what the buttons and "which
+                    # picture?" resolve against. And it outlives the picture it
+                    # names (deleted off disk, tmp-dir cleaned), so hold it to the
+                    # same existence check `_live_images` applies to the register.
                     _path_alive = bool(sess.last_image_path
                                         and os.path.exists(sess.last_image_path))
                     _have_image = (_path_alive or bool(tg_bot._live_images(sess)))
@@ -850,21 +814,17 @@ class ResolveMixin:
                         self._store.put(sess)
                         self._send_text(chat_id, tg_bot._t("await_photo", lang),
                                         keyboard=self._state_kb(sess, lang)); continue
-                    # item 11: a picture is already in the chat, so this runs
-                    # analyze on it immediately (unchanged) -- but the button
-                    # gave no way to hand over a DIFFERENT photo instead. Arm
-                    # pending_photo alongside the immediate run: a fresh photo
-                    # sent right after still pairs with the analyze instruction
-                    # (the usual "genuine text turn disarms it" rule at line
-                    # ~532 only fires for plain text, never for the photo
-                    # itself), so the user can just send another picture.
+                    # A picture is already in the chat, so analyze runs on it
+                    # immediately -- but arm pending_photo alongside, so a fresh
+                    # photo sent right after still pairs with the analyze
+                    # instruction (the "genuine text turn disarms it" rule below
+                    # only fires for plain text, never for the photo itself).
                     if key == "analyze" and _have_image and img_bytes is None:
                         sess.pending_photo = direct
                         self._store.put(sess)
-                    # 🔄 Regenerate with nothing to regenerate yet burnt a full
-                    # agent turn (and an image-quota unit) only to have the model
-                    # answer "there is nothing to regenerate". Give the same honest
-                    # refusal 📷 Analyze already gets instead of enqueueing a task.
+                    # 🔄 Regenerate with nothing to regenerate would burn a full
+                    # agent turn (and an image-quota unit): give the same honest
+                    # refusal 📷 Analyze gets instead of enqueueing a task.
                     if key == "regenerate" and not sess.last_image_prompt \
                             and not _have_image and img_bytes is None:
                         self._send_text(chat_id, tg_bot._t("no_regenerate", lang),
@@ -874,11 +834,9 @@ class ResolveMixin:
                 if key in tg_bot._PROMPT_KB:
                     sess.pending_prefix = tg_bot._PROMPT_KB[key]; self._store.put(sess)
                     hint = tg_bot._prompt_label(tg_bot._PROMPT_KB[key], lang)
-                    # Stay in the submenu the button lives in. Sending the MAIN
-                    # keyboard here closed the menu the user had just opened: tap
-                    # 🎨 Draw ▸ 🖼 Generate Image and the Draw menu vanished, so
-                    # reaching ✏️ Edit or 📷 Analyze next meant navigating back in.
-                    # 📌 Remember lives in Settings and did the same there.
+                    # Stay in the submenu the button lives in (the MAIN keyboard
+                    # would close the menu the user just opened). 📌 Remember
+                    # lives in Settings.
                     self._send_text(chat_id,
                         tg_bot._t("prompt_hint", lang, hint=_html_mod.escape(hint)),
                         parse_mode="HTML",
@@ -898,10 +856,9 @@ class ResolveMixin:
                     sess.pending_photo = ""
                     self._store.put(sess)
 
-                # "Сочини песню про кота" typed in plain chat IS the song flow;
-                # without this it reached the chat model, which wrote lyrics
-                # and read them aloud. Only outside the
-                # armed capture states -- those already own the text.
+                # "Сочини песню про кота" typed in plain chat IS the song flow (the
+                # chat model would write lyrics and read them aloud). Only outside
+                # the armed capture states -- those already own the text.
                 # Same for a forecast asked in plain words: the weather API
                 # answers it; web search does not.
                 _wx = _tg_weather.weather_request(raw) \
@@ -911,7 +868,7 @@ class ResolveMixin:
                     _wx = _tg_weather.weather_followup(raw)   # "а в Сочи?"
                 if _wx:
                     # "а в Москве?" after "погода завтра в Париже" means
-                    # tomorrow in Moscow, not the next 24 hours (live).
+                    # tomorrow in Moscow, not the next 24 hours.
                     _when = self.__dict__.setdefault("_wx_when", {})
                     if _wx["date"] is None and _wx["hours"] is None:
                         _wx = dict(_wx, **dict(zip(("date", "hours"),
@@ -922,7 +879,7 @@ class ResolveMixin:
                     _when[chat_id] = (_wx["date"], _wx["hours"])
                     self._goto_menu(sess, "weather")
                     # An English question gets an English forecast, whatever the
-                    # session language (live: London in Russian).
+                    # session language.
                     from tg_tasks import _message_script
                     if _message_script(raw) == "en":
                         lang = "en"
@@ -965,12 +922,8 @@ class ResolveMixin:
 
                 # A double-tap on an inline action button lands as two identical
                 # items inside one debounce window, and the batch is joined with
-                # newlines — so the model was handed "outpaint the current image…"
-                # twice and dutifully answered it twice, in one message. Users
-                # double-tap precisely when the first tap looked like it did
-                # nothing, which is exactly the case the delivery correction below
-                # now covers. Collapsing a repeat cannot lose meaning: the merged
-                # turn reads the same either way.
+                # newlines — the model would answer "outpaint the current image…"
+                # twice in one message. Collapsing a repeat cannot lose meaning.
                 _req = self._as_request(item, raw)
                 if not texts or texts[-1] != _req:
                     texts.append(_req)
@@ -988,7 +941,7 @@ class ResolveMixin:
                     # «а когда основан?» after a link was answered from the cut
                     # fitted to the first question: refit the page to this one.
                     # a watched video is answered from what was seen and heard,
-                    # not from its YouTube page (live 10-03)
+                    # not from its YouTube page
                     _lc = (_tg_links.WATCHED.get(sess.last_link)
                            or _tg_links.link_context(raw, url=sess.last_link))
                     if _lc:
@@ -1056,14 +1009,9 @@ class ResolveMixin:
                 if not said:
                     self._send_text(chat_id, tg_bot._t("fwd_voice_none", lang),
                                     keyboard=self._main_menu_kb(sess, lang)); return
-                # Hold the transcript and ASK. Deciding for the user between a
-                # verbatim transcript and a summary is exactly the guess that makes
-                # the bot feel like it is doing its own thing: a two-minute rant
-                # wants a summary, a delivery address wants every word.
-                # A fresh id per forward — see _Session.fwd_transcript_id: without
-                # it, forwarding a SECOND voice before answering the first's "which
-                # do you want?" silently swapped the content that prompt would act
-                # on, and the button gave no sign it now meant something else.
+                # Hold the transcript and ASK: a two-minute rant wants a summary, a
+                # delivery address wants every word, and the bot must not guess.
+                # A fresh id per forward — see _Session.fwd_transcript_id.
                 sess.fwd_transcript = said[:20000]
                 sess.fwd_transcript_id = uuid.uuid4().hex[:8]
                 sess.remember_fwd(sess.fwd_transcript_id, sess.fwd_transcript)
@@ -1072,8 +1020,7 @@ class ResolveMixin:
                 sess.fwd_transcript_done = False
                 self._store.put(sess)
                 # If they already said what they want ("перескажи", "расшифруй"),
-                # do it. The caption was being captured and then ignored, so the
-                # bot asked a question the user had answered a second earlier.
+                # do it instead of asking again.
                 _companion = (item.get("companion") or "").strip()
                 _asked = tg_bot._fwdv_intent(item.get("caption") or _companion)
                 if _asked:
@@ -1121,9 +1068,8 @@ class ResolveMixin:
                 self._send_text(chat_id, tg_bot._t("fwd_voice_ask", lang, mins=mins),
                                 parse_mode="HTML",
                                 keyboard=tg_bot._fwd_voice_kb(lang, sess.fwd_transcript_id))
-                # `uname` is bound further down this function, after the quota
-                # block — referencing it here raised UnboundLocalError and took the
-                # whole turn down.
+                # `uname` is bound further down, after the quota block: use the
+                # user record here.
                 self._activity.log(chat_id, "system",
                                    f"[fwd voice] {len(said)} chars transcribed",
                                    (user.name if user else str(chat_id)))
@@ -1162,9 +1108,8 @@ class ResolveMixin:
             elif t == "document":
                 fname = item.get("filename", "file")
                 cap = (item.get("caption") or "").strip()
-                # Bot API getFile stops at 20 MB. A 112 MB DCIM.zip came back
-                # as "Could not read DCIM.zip" and the user asked "why?" —
-                # the bot had no idea. Name the limit before trying.
+                # Bot API getFile stops at 20 MB: name the limit before trying
+                # instead of answering "Could not read X".
                 _size = int(item.get("file_size") or 0)
                 if _size > _bot_file_limit():
                     self._send_text(chat_id,
@@ -1179,11 +1124,9 @@ class ResolveMixin:
                     return
                 data = self._dl_bytes(item["file_id"])
                 # A download failure or an empty file must always be reported —
-                # even with a caption attached. Falling straight to the
-                # `elif cap:` arm below would queue the caption alone and let the
-                # model answer as if it had read a file that never arrived: an
-                # honest `doc_unreadable` was only reachable when there was no
-                # caption at all.
+                # even with a caption attached; the `elif cap:` arm below would
+                # queue the caption alone and let the model answer as if it had
+                # read a file that never arrived.
                 if not data:
                     self._send_text(chat_id,
                         tg_bot._t("doc_unreadable", lang, name=_html_mod.escape(fname)),
@@ -1192,10 +1135,9 @@ class ResolveMixin:
 
                 # If this user has a sandbox, the raw bytes go into it as well.
                 # ADDITIONALLY, not instead: a PDF still gets indexed and stays
-                # answerable the way it always was. But a .jar or a .zip is not
-                # extractable text at all, so without this the only thing the
-                # assistant could do with a modpack was ask the user to paste
-                # its source code — which is the complaint that started this.
+                # answerable. But a .jar or a .zip is not extractable text at
+                # all, so without this the assistant could only ask the user to
+                # paste its source code.
                 _saved_as = ""
                 file_in_folder = True   # the instruction is about THIS file
                 try:
@@ -1210,15 +1152,15 @@ class ResolveMixin:
                         _target = _box.resolve(_safe)
                         _target.write_bytes(data)
                         _saved_as = _box.relative(_target)
-                        # say where it went (owner 10-03: «класть в песочницу и говорить»)
+                        # say where it went
                         self._send_text(chat_id, tg_bot._t(
                             "doc_in_sandbox", lang, name=_html_mod.escape(_saved_as)),
                             parse_mode="HTML")
                 except Exception:
                     tg_bot.logger.exception("could not store %s in the sandbox", fname)
-                # A picture sent "as a file" (uncompressed) is still a picture:
-                # receipt.jpg as a document got «текст не удалось извлечь»
-                # Without a working folder it goes the photo way.
+                # A picture sent "as a file" (uncompressed) is still a picture
+                # (receipt.jpg must not get «текст не удалось извлечь»). Without a
+                # working folder it goes the photo way.
                 if (not _saved_as and img_bytes is None
                         and Path(fname).suffix.lower() in (".jpg", ".jpeg", ".png", ".webp", ".bmp")):
                     img_bytes = data; _photo_upload = True
@@ -1229,11 +1171,8 @@ class ResolveMixin:
                     # this is scaffolding on the turn, and the reasoning side of
                     # the pipeline works in English.
                     #
-                    # The tool named has to MATCH the file. Pointing at
-                    # read_file for a .png sent as a document was a dead end --
-                    # read_file refuses an image, correctly, and the model had
-                    # nothing else to try, so it asked the user to send the
-                    # photo again.
+                    # The tool named has to MATCH the file: read_file refuses an
+                    # image, so a .png needs open_image instead.
                     import tool_code_handlers as _tch
                     _hint = ("open_image, then inspect_image"
                              if Path(_saved_as).suffix.lower()
@@ -1251,29 +1190,19 @@ class ResolveMixin:
                         fh.write(data); tmp = fh.name
                     try:
                         doc_text = tg_bot._extract_doc(tmp, fname)
-                        # A book pasted into the prompt was truncated at 8000
-                        # characters and the rest silently thrown away — sending a
-                        # 400-page PDF did not do remotely what the user expected.
-                        # Anything substantial goes into the user's own hybrid index
-                        # instead, and questions are answered by retrieval.
-                        # EVERY uploaded file is indexed, whatever its size. Only
-                        # indexing the big ones meant a short file was pasted into
-                        # one prompt and then existed nowhere: 📚 My documents
-                        # stayed empty so the upload looked like it had failed, and
-                        # with no caption to answer the turn became "here is some
-                        # text, what would you like me to do with it?" instead of
-                        # an acknowledgement. Small files are STILL inlined when
-                        # the user sent an instruction with them, so asking about
-                        # a short file in the same message keeps working.
+                        # A book pasted into the prompt would be truncated and the
+                        # rest silently thrown away, so anything substantial goes
+                        # into the user's own hybrid index and questions are
+                        # answered by retrieval. Small files are STILL inlined when
+                        # the user sent an instruction with them, so asking about a
+                        # short file in the same message keeps working.
                         inline_cap = tg_bot._cfg_int("TG_DOC_INLINE_CHARS", 6000)
                         _will_inline = bool(cap) and len(doc_text) <= inline_cap \
                                        and Path(fname).suffix.lower() != ".epub"
                         # Indexing is by the button only: inside 📚 Documents, or
                         # when there is no working folder for the file to live in.
                         # Otherwise it goes to the sandbox and the agent reads it
-                        # there (owner 10-03: «индексировать только по кнопке,
-                        # остальное читать и класть в песочницу и говорить»;
-                        # crash logs got «📚 Индексирую…» and stalled on embeddings)
+                        # there (indexing a crash log would stall on embeddings).
                         _index = sess.menu == "library" or not _saved_as
                         if _index:
                             self._index_document(chat_id, sess, tmp, fname,
@@ -1289,11 +1218,9 @@ class ResolveMixin:
                                 or Path(fname).suffix.lower() == ".epub" or not cap:
                             if cap:
                                 texts.append(cap)
-                                # The caption is a question about THIS file.
-                                # «Что думаешь?» under a 50 KB report was
-                                # answered by retrieval on those two words
-                                # alone -- say which
-                                # document the words are about.
+                                # The caption is a question about THIS file:
+                                # retrieval on «Что думаешь?» alone would miss it,
+                                # so say which document the words are about.
                                 scaffold.append(
                                     f"[The user attached the document '{fname}' "
                                     f"({len(doc_text)} characters) to this message; "
@@ -1319,8 +1246,8 @@ class ResolveMixin:
                 elif cap:
                     if cap not in texts:
                         texts.append(cap)
-                    # «открой» under junk.bin was answered «какой файл?» -- the
-                    # model never learned a file had come.
+                    # «открой» under junk.bin must not be answered «какой файл?» --
+                    # the model has to learn a file came.
                     if not any(fname in s for s in scaffold):
                         scaffold.append(
                             f"[The user attached '{fname}', but its text could not be "
@@ -1335,9 +1262,8 @@ class ResolveMixin:
         merged = "\n".join(texts).strip()
         if not merged and not scaffold and img_bytes is None:
             return
-        # A batch of files is ONE material: three notes made the agent read the
-        # first log and answer about it alone (owner 10-03: «заслал пачкой и
-        # ожидал комплексный ответ»)
+        # A batch of files is ONE material: three notes would make the agent
+        # read the first log and answer about it alone.
         _fnotes = [s for s in scaffold if s.startswith("[The file '")]
         if len(_fnotes) > 1:
             _names = [re.match(r"\[The file '([^']+)'", s).group(1) for s in _fnotes]
@@ -1346,17 +1272,16 @@ class ResolveMixin:
                             f"folder ({len(_names)} files sent together). Read ALL of them "
                             "(read_file each) and answer once, about them as a whole -- "
                             "not file by file. Do not ask the user to send their contents.]")
-        # Files with no words: «📁 Положил X в песочницу» was the answer; a turn
-        # on our own note alone answered «я всё изучил и готов» without opening
-        # anything (live 10-03, Stepan's logs)
+        # Files with no words: «📁 Положил X в песочницу» is the answer; a turn on
+        # our own note alone would claim «я всё изучил» without opening anything.
         if (not merged and img_bytes is None and scaffold
                 and all(s.startswith("[The file '") for s in scaffold)):
             return
         if merged and img_bytes is None and not any(s.startswith("[The file '") for s in scaffold):
             _latest = self._latest_sandbox_file(chat_id, sess)
             if _latest:
-                # «В ЧЕМ ТАМ ОШИБКА?» after forwarded logs critiqued the last
-                # picture (live 10-03): the last thing sent was the file
+                # «В ЧЕМ ТАМ ОШИБКА?» after forwarded logs must not critique the last
+                # picture: the last thing sent was the file
                 scaffold.append(f"[The last thing the user sent was the file '{_latest}' "
                                 f"(in your working folder, after any picture). A question "
                                 f"about «it», «there» or «the error» means that file: "
@@ -1366,33 +1291,31 @@ class ResolveMixin:
         own_words = user_words(merged)
 
         # Apply the pending prompt prefix here — AFTER every modality has been merged.
-        # Applying it only in the text branch would mean answering a prompt button
-        # ("🔬 Deep Research" -> "type your query") with a VOICE message or a photo
-        # caption silently dropped the prefix: the turn ran as an ordinary question
-        # and the stale prefix then leaked onto the next text message. Nav/direct
-        # buttons return or clear the prefix before reaching this point, so they
-        # still never consume it.
-        # ...but only onto something the USER said. Measured live: a .jar
-        # uploaded with no caption produced a turn whose entire text was our own
-        # "[The file ... is now in your working folder]" note, a stale draw
-        # prefix was glued to the front of it, and the bot answered a file
-        # upload by generating a picture. A prompt prefix is an instruction
-        # about the user's next words; with none to attach to it must WAIT
-        # rather than seize our scaffolding.
+        # Applying it only in the text branch would drop it when a prompt button
+        # ("🔬 Deep Research" -> "type your query") is answered with a VOICE
+        # message or a photo caption, and the stale prefix would leak onto the
+        # next text message. Nav/direct buttons return or clear the prefix before
+        # reaching this point, so they still never consume it.
+        # ...but only onto something the USER said: a .jar uploaded with no
+        # caption yields a turn whose entire text is our own "[The file ... is now
+        # in your working folder]" note, and a draw prefix glued to it would
+        # answer a file upload by generating a picture. A prompt prefix is an
+        # instruction about the user's next words; with none to attach to it must
+        # WAIT rather than seize our scaffolding.
         # 🖼 Create picture asks for a NEW picture: the words describe it, they
-        # never point at an old one (live 10-03: a scene with a broken window
-        # got «Какую картинку? В этом чате их 12»).
+        # never point at an old one (else a scene description triggers «Какую картинку?»).
         _new_picture = bool(merged) and sess.pending_prefix == tg_bot._PROMPT_KB["gen_image"]
         if merged and sess.pending_prefix:
             merged = sess.pending_prefix + merged
             sess.pending_prefix = ""
             sess.pending_outfit_target = ""   # 👗 answered in words, not a photo
             try: self._store.put(sess)
-            except Exception: pass
+            except Exception:
+                tg_bot.logger.warning("session persist failed", exc_info=True)
 
         _age = time.time() - (getattr(self, "_msg_date", {}).get(chat_id) or time.time())
         if _age > 600:
-            # A backlog after downtime reads as "now": «ты спишь?» from yesterday got «я не сплю».
+            # A backlog after downtime reads as "now": «ты спишь?» from yesterday must not get «я не сплю».
             scaffold.append("[This message was written %s ago; you were switched off and are only "
                             "answering it now. Do not claim you were awake or online then; say briefly "
                             "that you were offline.]" % (
@@ -1411,7 +1334,8 @@ class ResolveMixin:
         if _quote:
             sess.quoted_text = ""
             try: self._store.put(sess)
-            except Exception: pass
+            except Exception:
+                tg_bot.logger.warning("session persist failed", exc_info=True)
 
         # Photo sent without caption — just acknowledge; vision_agent_node handles it.
         # Deliberately after the prefix block: a caption-less photo must NOT consume
@@ -1442,14 +1366,11 @@ class ResolveMixin:
             with self._task_lock:
                 running = list(self._running_task.get(chat_id) or [])
             # The verb string alone is not enough: all six image buttons say
-            # "on the current image" and are byte-identical regardless of WHICH
-            # picture was tapped, so comparing text only refused a second press
-            # of the same verb on a genuinely DIFFERENT picture. Comparing the
-            # target image id too tells the two presses apart. Non-image
-            # machine payloads (e.g. plain "regenerate the image") carry no id
-            # on either side, so this still degrades to a text-only compare for
-            # them, same as before. A chat may have 2 tasks in flight now (a
-            # slow one plus an admitted interject); a dupe of EITHER counts.
+            # "on the current image" regardless of WHICH picture was tapped, so
+            # the target image id is compared too. Non-image machine payloads
+            # carry no id on either side and degrade to a text-only compare. A
+            # chat may have 2 tasks in flight (a slow one plus an admitted
+            # interject); a dupe of EITHER counts.
             if any(r.user_text == merged and r.image_id == pressed_image_id
                    for r in running):
                 self._send_text(chat_id, tg_bot._t("already_running", lang),
@@ -1500,16 +1421,13 @@ class ResolveMixin:
         # ── ask instead of guessing ───────────────────────────────────────────
         # An instruction that plainly needs a picture, with no picture attached,
         # nothing pointed at, and several to choose from. Guessing "the newest"
-        # here is exactly how a question about one image got answered about
-        # another. Ask once; the answer arms the target and re-pushes this same
-        # instruction, so nothing is lost.
+        # would answer a question about one image about another. Ask once; the
+        # answer arms the target and re-pushes this same instruction, so nothing
+        # is lost.
         # A BUTTON press is exempt: it was pressed on a specific picture, so either
-        # it resolved to one above, or the picture is simply the current one. Asking
-        # "which picture?" after the user physically tapped one would be absurd.
-        # A DOCUMENT in the same message is the thing the instruction is
-        # about: «найди все мосты, убери дубликаты ... коллаж» + DCIM.zip
-        # must not get «Какую картинку? В этом чате их 9» -- «убери» read
-        # as an edit of one of the old collages.
+        # it resolved to one above, or the picture is simply the current one.
+        # A DOCUMENT in the same message is the thing the instruction is about
+        # («убери дубликаты» + DCIM.zip must not get «Какую картинку?»).
         if (not img_bytes and not file_in_folder
                 and not getattr(sess, "target_image", "")
                 and merged not in tg_bot._MACHINE_PAYLOADS):
@@ -1517,7 +1435,8 @@ class ResolveMixin:
             if _named:
                 sess.target_image = _named
                 try: self._store.put(sess)
-                except Exception: pass
+                except Exception:
+                    tg_bot.logger.warning("session persist failed", exc_info=True)
                 self._activity.log(chat_id, "system", f"[target] named picture {_named}", uname)
         if (not img_bytes and not file_in_folder and not _new_picture
                 and not getattr(sess, "target_image", "")
@@ -1526,7 +1445,7 @@ class ResolveMixin:
             live = tg_bot._live_images(sess)
             _in_play = getattr(sess, "turn_image", "")
             # A short question typed after a forwarded TEXT is about that text, not about one of the old pictures
-            # (live 10-05: «Речь про китайцев?» after Stepan's forwards got «Какую картинку? В этом чате их 12»).
+            # (else «Речь про китайцев?» after forwards gets «Какую картинку? В этом чате их 12»).
             _fwd = getattr(sess, "fwd_text_ts", 0) or 0
             if (_fwd and time.time() - _fwd < 900
                     and _fwd > max([e.get("ts") or 0 for e in live] or [0])):
@@ -1537,20 +1456,23 @@ class ResolveMixin:
                 # on it. Older pictures are still one reply/button away.
                 sess.target_image = _in_play
                 try: self._store.put(sess)
-                except Exception: pass
+                except Exception:
+                    tg_bot.logger.warning("session persist failed", exc_info=True)
                 self._activity.log(chat_id, "system",
                                    f"[target] picture in play {_in_play} of {len(live)}", uname)
             elif len(live) > 1 and tg_bot._one_lineage(live):
                 # One picture in several states -- the latest is "the picture".
                 sess.target_image = live[-1]["id"]
                 try: self._store.put(sess)
-                except Exception: pass
+                except Exception:
+                    tg_bot.logger.warning("session persist failed", exc_info=True)
                 self._activity.log(chat_id, "system",
                                    f"[target] one lineage of {len(live)} -> latest {live[-1]['id']}", uname)
             elif len(live) > 1:
                 sess.pending_instruction = merged
                 try: self._store.put(sess)
-                except Exception: pass
+                except Exception:
+                    tg_bot.logger.warning("session persist failed", exc_info=True)
                 self._send_text(chat_id, tg_bot._t("img_which", lang, n=len(live)),
                                 parse_mode="HTML",
                                 keyboard=tg_bot._image_choice_kb(sess, lang))
@@ -1563,42 +1485,29 @@ class ResolveMixin:
         # entry a later "the one I sent earlier" resolves against — so it has
         # to be a PERSISTENT file (tg_bot._IMAGE_DIR, same directory
         # _save_incoming_photo uses for a reply-fetched photo), not a bare
-        # tempfile. A bare tempfile was unconditionally unlinked by
-        # tg_queue.py's post-task cleanup (task.image_path and this register
-        # path are the same string), so every plain photo upload's register
-        # entry pointed at a file deleted the moment its own turn finished —
-        # the picture could never be referenced again, and any second reader
-        # of image_log (another debounced item, the picker) found it already
-        # gone. Reproduced live via the adversarial harness's photo-upload
-        # sections: image_log gained the right number of entries, but every
-        # entry's bytes were unreadable by the time the turn had settled.
+        # tempfile: tg_queue.py's post-task cleanup unlinks task.image_path, which
+        # is the same string as the register path.
         img_path = ""
         if img_bytes:
-            tg_bot._IMAGE_DIR.mkdir(parents=True, exist_ok=True)
-            img_path = str(tg_bot._IMAGE_DIR /
-                           f"tg_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.jpg")
-            with open(img_path, "wb") as fh:
-                fh.write(img_bytes)
+            img_path = _save_image_bytes(img_bytes)
             # A photo the user just sent goes into the register too, so a later
             # "the one I sent earlier" has something to resolve to.
             tg_bot._log_image(sess, img_path, label=merged[:80], src="user")
             try: self._store.put(sess)
-            except Exception: pass
+            except Exception:
+                tg_bot.logger.warning("session persist failed", exc_info=True)
 
         # Log the rest of the album so "the second one"/"the third one" has
         # something to resolve against later, even though only the first
         # photo drives THIS task (a _Task carries a single image_path).
         if _album_extra_bytes:
-            tg_bot._IMAGE_DIR.mkdir(parents=True, exist_ok=True)
             for _i, _extra in enumerate(_album_extra_bytes, start=2):
-                _extra_path = str(tg_bot._IMAGE_DIR /
-                    f"tg_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.jpg")
-                with open(_extra_path, "wb") as fh:
-                    fh.write(_extra)
+                _extra_path = _save_image_bytes(_extra)
                 tg_bot._log_image(sess, _extra_path,
                                   label=f"{merged[:70]} (#{_i})", src="user")
             try: self._store.put(sess)
-            except Exception: pass
+            except Exception:
+                tg_bot.logger.warning("session persist failed", exc_info=True)
 
         task = tg_bot._Task(
             task_id=str(uuid.uuid4()),
@@ -1611,9 +1520,7 @@ class ResolveMixin:
             reply_to=getattr(self, "_msg_id", {}).get(chat_id, 0),
         )
         # last_task_id/last_task_text are set at DELIVERY of a failure (in
-        # tg_tasks.py), not here at push time — see the comment there for why
-        # (a second task queued right behind this one must not be able to
-        # mark this task's own still-unshown Retry button stale first).
+        # tg_tasks.py _remember_failed_task), not here at push time.
         # Forwarded material alone is not a note to the running task: the bot's
         # own replies forwarded mid-song would go in as wishes.
         _only_fwd = bool(batch) and all(it.get("forwarded") for it in batch)
@@ -1635,8 +1542,7 @@ class ResolveMixin:
                     task.task_id[:8], chat_id, kind, self._backend.depth())
 
         # Queue position must count what is actually AHEAD OF THIS USER under
-        # round-robin, not the global depth — telling someone they are "#3" when
-        # the two ahead belong to other chats was both wrong and useless.
+        # round-robin, not the global depth.
         try:
             ahead = self._backend.tasks_ahead(task.task_id)
         except Exception:
@@ -1661,11 +1567,7 @@ class ResolveMixin:
             self._store.put(sess)
             self._send_text(chat_id, tg_bot._t("img_gone", lang))
             return
-        tg_bot._IMAGE_DIR.mkdir(parents=True, exist_ok=True)
-        img_path = str(tg_bot._IMAGE_DIR /
-                       f"tg_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.jpg")
-        with open(img_path, "wb") as fh:
-            fh.write(data)
+        img_path = _save_image_bytes(data)
         image_id = tg_bot._log_image(sess, img_path,
                                      label=tg_bot._t("to_animate_label", lang), src="user")
         sess.pending_animate_target = image_id
@@ -1676,11 +1578,10 @@ class ResolveMixin:
         sess.target_image = image_id
         self._store.put(sess)
         self._animate_ask_voices(chat_id, sess, lang)   # voice samples first, then presets
-        return
 
     def _register_style_photo(self, chat_id: int, sess, lang: str, item: dict) -> None:
-        """Consume the photo awaiting_style_photo was waiting for (item 7:
-        🎭 Change style from the Creativity menu), register it, and arm
+        """Consume the photo awaiting_style_photo was waiting for (🎭 Change
+        style from the Creativity menu), register it, and arm
         pending_style_target -- from here on this is EXACTLY the existing
         under-a-picture style flow (_cb_style_image's keyboard, then
         _cb_style_preset/_cb_style_custom), just entered from a different
@@ -1694,11 +1595,7 @@ class ResolveMixin:
             self._store.put(sess)
             self._send_text(chat_id, tg_bot._t("img_gone", lang))
             return
-        tg_bot._IMAGE_DIR.mkdir(parents=True, exist_ok=True)
-        img_path = str(tg_bot._IMAGE_DIR /
-                       f"tg_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.jpg")
-        with open(img_path, "wb") as fh:
-            fh.write(data)
+        img_path = _save_image_bytes(data)
         image_id = tg_bot._log_image(sess, img_path,
                                      label=tg_bot._t("to_restyle_label", lang), src="user")
         sess.pending_style_target = image_id
@@ -1715,7 +1612,6 @@ class ResolveMixin:
                       "callback_data": "style_custom"}])
         self._send_text(chat_id, tg_bot._t("style_ask_ref", lang),
                         keyboard={"inline_keyboard": rows})
-        return
 
     def _push_style_transfer_task(self, chat_id: int, sess, lang: str,
                                    item: dict, arrival_ts: float, outfit_wish=None) -> None:
@@ -1764,11 +1660,7 @@ class ResolveMixin:
             self._store.put(sess)
             self._send_text(chat_id, tg_bot._t("img_gone", lang))
             return
-        tg_bot._IMAGE_DIR.mkdir(parents=True, exist_ok=True)
-        ref_path = str(tg_bot._IMAGE_DIR /
-                       f"tg_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.jpg")
-        with open(ref_path, "wb") as fh:
-            fh.write(data)
+        ref_path = _save_image_bytes(data)
         tg_bot._log_image(sess, ref_path, label="outfit reference" if outfit else "style reference",
                           src="user")
         self._store.put(sess)

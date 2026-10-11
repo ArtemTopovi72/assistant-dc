@@ -126,10 +126,8 @@ def stress_plus(ctx, text: str) -> str:
     out = text
     # `ctx.models` is None whenever nothing has been loaded — a headless run, a
     # test context, or a turn that reached TTS before the model bundle was ready.
-    # Reaching straight through it would raise AttributeError, which
-    # takes down the whole TTS call and, with it, the reply that call is voicing.
-    # Every OTHER step in this function degrades to plain text; this one
-    # does too — unaccented speech beats no speech.
+    # Reaching straight through it would raise AttributeError and take down the
+    # whole TTS call: unaccented speech beats no speech.
     _models = getattr(ctx, "models", None)
     if getattr(_models, "accentor_loaded", False):
         try:
@@ -235,9 +233,9 @@ def _number_to_russian_words(match: "re.Match") -> str:
         return token
 
 
-# "На этикетке 2 строки" was voiced "два строки": num2words
-# knows nothing about the noun that follows. One and two are the only numerals
-# that agree in gender, and the noun's ending after them says which gender.
+# "На этикетке 2 строки" must be voiced "две строки", but num2words knows
+# nothing about the noun that follows. One and two are the only numerals that
+# agree in gender, and the noun's ending after them says which gender.
 _ONE_TWO_RE = re.compile(r"(?<![\d.,])(\d{1,4})(?!\d)([ \u00a0]+)([а-яё]+)", re.IGNORECASE)
 
 
@@ -291,10 +289,10 @@ _RU_SPELLED_ACRONYMS = frozenset(("ГИБДД",))   # said letter by letter desp
 def _ru_acronym(match: "re.Match") -> str:
     word = match.group(1)
     if word not in _RU_SPELLED_ACRONYMS and any(ch.lower() in _RU_VOWELS for ch in word):
-        # Said as a word -- and said better in ordinary case: the voice read
-        # the sign "У ОЛЬГИ" as "у Олюги"; the fine-tune
-        # rarely saw shouting. Three letters or fewer (США, ООН, СМИ) stay as
-        # they are, they are acronyms the voice knows as words.
+        # Said as a word -- and said better in ordinary case: the fine-tune
+        # rarely saw shouting ("У ОЛЬГИ" comes out as "у Олюги"). Three letters
+        # or fewer (США, ООН, СМИ) stay as they are, they are acronyms the voice
+        # knows as words.
         return word if len(word) <= 3 else word.capitalize()
     return "-".join(_RU_LETTER_NAMES.get(ch.lower(), ch) for ch in word)
 
@@ -304,9 +302,8 @@ def spell_cyrillic_acronyms(text: str) -> str:
     return _RU_ACRONYM_RE.sub(_ru_acronym, text or "")
 
 
-# A link is for the screen, not the voice. Read aloud, "https://cbr.ru/..."
-# came out as "Вплюс отс плюс ссылка": the scheme, the
-# slashes and the Latin host are all outside what the Russian voice can say.
+# A link is for the screen, not the voice: the scheme, the slashes and the Latin
+# host of "https://cbr.ru/..." are all outside what the Russian voice can say.
 # The written reply keeps the URL; the spoken one says "ссылка" in its place
 # (or drops it when the sentence already says so: "вот ссылка: https://...").
 _URL_RE = re.compile(r"(?:https?://|www\.)\S+", re.IGNORECASE)
@@ -325,8 +322,7 @@ def _voice_urls(text: str) -> str:
 def post_process_answer(text: str) -> str:
     # Spell out numbers in Russian words so F5-TTS voices them naturally (the model
     # is told to write digits for on-screen accuracy; this runs ONLY on TTS input,
-    # never on the displayed text). num2words handles any integer/decimal correctly
-    # — the old hand map only covered a few values and corrupted decimals.
+    # never on the displayed text). num2words handles any integer/decimal.
     text = spoken_lists(text)            # before digits become words and "*" bullets vanish
     text = text.replace("*", "")
     text = _voice_urls(text)
@@ -359,10 +355,7 @@ def post_process_answer(text: str) -> str:
 # vocab.txt carries 82 Latin tokens because the F5 base vocabulary is
 # multilingual, so a word like "Arduino" tokenises cleanly and nothing warns.
 # The RUSSIAN fine-tune (model_212000) never heard those tokens against Russian
-# audio, so their pronunciation is undefined -- it emits a noise burst. Whisper
-# transcribed one such reply as "разбираюсь в 1-0 с написанием кода", which is
-# how this was found: the voice had not broken, it had been handed letters it
-# cannot say.
+# audio, so their pronunciation is undefined -- it emits a noise burst.
 #
 # Spelling the word in Cyrillic is not a translation and is not meant to be
 # perfect English. It only has to land inside the sound inventory the voice was
@@ -572,8 +565,7 @@ def preprocess_text_for_synthesis(
         text = stress_plus(ctx, text)
     # Collapse accidental double markers, then KEEP a single '+' before the stressed
     # vowel: the F5 vocab contains '+' (verified) and the Russian model was trained
-    # with it, so the stress must reach synthesis. (Previously every '+' was stripped
-    # here, which silently discarded all accentuation before the TTS ever saw it.)
+    # with it, so the stress must reach synthesis.
     text = re.sub(r"\+\+", "+", text)
     # Drop a stray '+' that is NOT immediately before a vowel (e.g. from "C++"), so
     # only real stress markers survive.
@@ -1076,10 +1068,9 @@ def _gigaam_transcribe(ctx, audio_source) -> str:
     return " ".join(p for p in out if p).strip()
 
 
-# Below this Whisper's guess about the language is a coin toss: a one-word
-# "Угу." was heard as French (69%) and came back as a goodbye the bot then
-# answered. Under it, the clip is re-read in
-# the language the user is known to speak.
+# Below this Whisper's guess about the language is a coin toss (a one-word
+# "Угу." can be heard as French at 69%). Under it, the clip is re-read in the
+# language the user is known to speak.
 ASR_LANG_CONFIDENCE = _cfg_env.env_float("ASR_LANG_CONFIDENCE", 0.85)
 
 
@@ -1121,8 +1112,8 @@ def detect_media_language(ctx, path: str, min_prob: float = 0.5) -> str:
     """Spoken language of a whole media file ("" when unsure or on failure).
 
     A video's language is its content's, not the chat's: passing the session
-    language as the hint re-read an English clip as Russian whenever Whisper was
-    below ASR_LANG_CONFIDENCE. Detected ONCE over several windows of the whole
+    language as the hint would re-read an English clip as Russian whenever Whisper
+    is below ASR_LANG_CONFIDENCE. Detected ONCE over several windows of the whole
     file, so short diarized turns and video portions inherit a stable answer."""
     if WHISPER_LANGUAGE:
         return WHISPER_LANGUAGE
@@ -1154,8 +1145,7 @@ def _doubtful_language(info, lang_hint: str) -> bool:
 # A voice note that opens with a first-person future verb — «Нарисую синего
 # слона», «Сделаю слона розовым» — is the ASR mishearing the imperative
 # («Нарисуй», «Сделай»): nobody tells the bot what THEY are about to draw.
-# The model took the statement at face value and replied with filler about
-# the session memory, no picture.
+# Taken at face value, the statement gets filler instead of a picture.
 # Only the first word of the transcript is touched.
 _VOICE_IMPERATIVE = {
     "нарисую": "нарисуй", "сделаю": "сделай", "напишу": "напиши", "найду": "найди",
@@ -1243,10 +1233,8 @@ def trim_ref_to_cap(ref_wav: str) -> str:
 
     F5 clips a long reference to 12 s but is handed the transcript of the WHOLE
     file. The model then still has text left to say when the reference audio
-    ends, and finishes it — the tail of the reference is spoken INTO the reply.
-    A 20 s reference here put "это довольно длинное сообщение" into a sentence
-    about roubles and minutes, which reads as "the voice went bad" rather than
-    as a mismatch.
+    ends, and finishes it — the tail of the reference is spoken INTO the reply,
+    which reads as "the voice went bad" rather than as a mismatch.
 
     Trimming on our side makes the transcript describe exactly the audio F5
     hears, and its own clipping a no-op. Cut on silence, like F5 does, so the
@@ -1331,11 +1319,9 @@ def synth_single_segment(
         # preprocess_ref_audio_text, which decodes audio through torchaudio ->
         # torchcodec. torchcodec is version-locked to both torch AND the
         # installed FFmpeg, so a mismatch there raises and takes the whole
-        # synthesis down — every reply loses its voice while the text still
-        # arrives, which is why this reads as "TTS randomly stopped working"
-        # rather than as a crash. Our faster-whisper path decodes via PyAV and
-        # has no such coupling, and its result is cached in transcriptions.json,
-        # so this also stops re-transcribing the same reference on every turn.
+        # synthesis down. Our faster-whisper path decodes via PyAV and has no
+        # such coupling, and its result is cached in transcriptions.json, so this
+        # also stops re-transcribing the same reference on every turn.
         if not ref_text:
             ref_text = transcribe_audio_file(ctx, ref_wav, engine="whisper") or ""
         ref_file, ref_text_proc = preprocess_ref_audio_text(ref_wav, ref_text)
@@ -1343,11 +1329,10 @@ def synth_single_segment(
         with ctx.tts_lock:
             # 16, not 24: f5_tts.model.cfm's EPSS table (Empirically Pruned Step
             # Sampling) only has hand-tuned non-uniform timesteps for
-            # {5,6,7,10,12,16} -- 24 isn't one of them, so it silently fell back
+            # {5,6,7,10,12,16} -- 24 isn't one of them, so it silently falls back
             # to a naive linspace(0,1,25), the one schedule shape the model was
             # never tuned for. 16 IS in the table and is the official F5 "fast"
             # point (~2x speedup, WER 2.42%->2.53% on the upstream benchmark).
-            # Measured on our own RU checkpoint: 1.95s -> 0.82s per segment.
             wav, sr, _ = infer_process(
                 ref_file, ref_text_proc, processed_text,
                 ctx.models.tts_model, ctx.models.vocoder,
@@ -1370,7 +1355,6 @@ def synth_single_segment(
         if TTS_TAIL_SILENCE_MS > 0:
             seg = seg + AudioSegment.silent(duration=TTS_TAIL_SILENCE_MS)  # guard last word vs playback truncation
         seg.export(out_wav, format="wav")
-        import delivery
         return delivery.finish(ctx, str(out_wav), raw_text)           # Russian question intonation
     except Exception as exc:
         logger.error("TTS error: %s", exc)

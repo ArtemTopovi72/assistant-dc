@@ -24,7 +24,6 @@ DONORS = ROOT / "models_ext" / "emodonors"
 MANIFEST = ROOT / "voice" / "emodonors.json"
 PY = Path(config.venv_python(ROOT / "venv_qwen"))
 WORKER = ROOT / "scripts" / "seedvc_batch.py"
-EMOTIONS = ("joy", "anger", "sad")
 
 
 def pack_dir(ref_wav: str) -> Path:

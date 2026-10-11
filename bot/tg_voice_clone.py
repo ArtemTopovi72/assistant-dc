@@ -10,7 +10,6 @@ States on the session (clone_state):
 The slow parts (ffmpeg + GigaAM, then F5) run off the poll thread.
 """
 import os
-import threading
 
 import voice_clone
 
@@ -49,7 +48,8 @@ class VoiceCloneMixin:
         mime = str(doc.get("mime_type") or "")
         ext = os.path.splitext(doc.get("file_name") or "")[1].lower()
         # Telegram Desktop sends many songs as application/octet-stream (or no
-        # type at all): an .m4a for 🎤 Cover went to the document reader (10-03).
+        # type at all): without the extension check an .m4a for 🎤 Cover would go to
+        # the document reader.
         if doc.get("file_id") and (mime.startswith("audio/") or mime.startswith("video/")
                                    or ext in _SOUND_EXTS):
             return doc["file_id"], ext or ".bin"

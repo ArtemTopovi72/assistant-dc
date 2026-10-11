@@ -35,8 +35,8 @@ _PRIMARY = "ˈ"
 
 # After a model fails to load (offline, hub down, broken cache) it is not tried
 # again for this long. Every attempt is a hub download with its own retries
-# (~25 s), and the loaders ran once per word: a reply with five English words
-# stalled the voice for two minutes, every reply.
+# (~25 s) and the loaders run once per word, so retrying each time would stall
+# every voice reply for minutes.
 LOAD_RETRY_S = 600.0
 
 
@@ -120,7 +120,7 @@ class BilingualAccentor:
     # ----- Russian -----------------------------------------------------------
     def warm(self) -> None:
         """Load RUAccent on a daemon thread: cold it costs ~2 min 10 s on the first
-        voice reply after a restart (live 2026-09-25)."""
+        voice reply after a restart."""
         threading.Thread(target=self._ensure_ru, daemon=True).start()
 
     def _ensure_ru(self):
@@ -170,7 +170,7 @@ class BilingualAccentor:
         context better; on rare words (электроу́дочник) RUAccent's dictionary
         wins. So RUAccent's line stands and only a word RUAccent itself lists as
         a homograph takes silero's stress, when silero picks one of its forms.
-        Bench 2026-10-02: 20/25 RUAccent, 21/25 silero, see the test."""
+        Bench: 20/25 RUAccent, 21/25 silero, see the test."""
         try:
             if BilingualAccentor._silero is None:
                 if (BilingualAccentor._silero_failed_at

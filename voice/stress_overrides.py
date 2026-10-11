@@ -90,7 +90,7 @@ class StressOverrides:
             data = {}
         m = {}
         if isinstance(data, dict):
-            for _, stressed in data.items():
+            for stressed in data.values():
                 s = normalize_stress(str(stressed))
                 if s and "+" in s:
                     m[base_form(s)] = s.lower()
@@ -102,7 +102,7 @@ class StressOverrides:
 
     def save(self) -> None:
         with self._lock:
-            data = {b: s for b, s in sorted(self._map.items())}
+            data = dict(sorted(self._map.items()))
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_suffix(self.path.suffix + ".tmp")
         tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -117,19 +117,6 @@ class StressOverrides:
         """Sorted list of (base_word, stressed_form) for display."""
         with self._lock:
             return sorted(self._map.items())
-
-    def set_from_stressed(self, stressed_forms) -> int:
-        """Replace ALL entries from an iterable of stressed spellings. Returns the
-        count kept (invalid / markless entries are dropped). Saves to disk."""
-        m = {}
-        for s in stressed_forms:
-            s = normalize_stress(str(s))
-            if s and "+" in s and base_form(s):
-                m[base_form(s)] = s.lower()
-        with self._lock:
-            self._map = m
-        self.save()
-        return len(m)
 
     def upsert(self, stressed: str) -> bool:
         s = normalize_stress(stressed)
