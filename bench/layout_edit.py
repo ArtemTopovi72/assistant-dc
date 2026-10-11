@@ -37,8 +37,6 @@ logging.basicConfig(level=logging.WARNING,
 import requests
 import config
 import image as I
-import ideogram as G
-import draw_agent as D
 
 _n = _bad = 0
 
