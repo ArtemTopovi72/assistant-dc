@@ -4,6 +4,12 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import style_presets as SP
 import graph_personality as P
+import image_style as IS
+
+
+def _built(key):
+    IS._who = lambda ctx, path: ""
+    return IS.build(None, SP.preset_prompt(key))
 
 
 def test_every_preset_has_a_prompt_and_labels():
@@ -12,7 +18,8 @@ def test_every_preset_has_a_prompt_and_labels():
         assert key in SP.STYLE_PRESETS
         prompt = SP.preset_prompt(key)
         assert prompt and len(prompt) > 20
-        assert "pose" in prompt and "setting" in prompt
+        instr, _ = _built(key)          # the keep-clause rides every preset (image_style)
+        assert "pose" in instr and "setting" in instr and "entire image" in instr
         assert SP.preset_label(key, "ru")
         assert SP.preset_label(key, "en")
 
@@ -53,8 +60,10 @@ def test_cyberpunk_adapts_the_outfit_but_keeps_the_person():
     version, not just tint the photo."""
     p = SP.preset_prompt("cyberpunk")
     assert "Re-imagine the clothes" in p and "same kind of garment" in p
-    assert "keep the exact same pose" in p.lower() and "face and identity" in p
-    assert "outfit and background" not in p      # the old keep-the-outfit clause
+    instr, _ = _built("cyberpunk")
+    assert "same pose" in instr and "face and identity" in instr
+    assert "same clothing" not in instr          # the keep-the-outfit clause would undo it
+    assert "same clothing" in _built("anime")[0]
 
 
 if __name__ == "__main__":

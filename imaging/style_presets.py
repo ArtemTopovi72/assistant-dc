@@ -1,78 +1,101 @@
 """Named art-style presets for the single-image style change (redraw_image,
-mode='redraw'). No second reference photo needed -- the old controlnet
-workflow's controlnet keeps composition/pose from the original, so the prompt
-only has to describe the STYLE change (image.redraw_image_with_comfy folds
-ctx.last_image_prompt -- the subject -- back in automatically).
+mode='redraw', rendered by image_style.restyle).
 
-Every prompt ends with an explicit "keep the pose/outfit/setting" clause
-(cyberpunk keeps pose, framing and face, and re-imagines the outfit).
-Measured live against a real red-carpet photo: dropping that
-clause let the controlnet's own style-transfer strength drift the framing on
-a couple of presets (the subject stayed recognisable but cropped differently
-between runs); keeping it made the four re-tested presets consistently
-preserve the exact composition run to run.
+Each style is spelled out as what makes it THAT style -- medium, line, shading,
+faces, palette. One-word styles all came back alike: «anime» and «comic» were
+the same outlined comic on the photo (owner, 2026-10-11), «oil painting» a photo
+with a warm filter. bench/style_ab.py compared the wordings and the sampler on a
+street photo and two cartoons; the detail only shows once the sampler has real
+guidance (image_style.STYLE_STEPS / STYLE_CFG).
+
+`target` is what the style turns the picture INTO: "drawn" gets a negative
+against the photo look, "photo" (realism) the realism LoRA and a negative
+against the drawn look.
 """
-
-_KEEP = ("keep the exact same pose, camera framing, outfit and background "
-         "setting -- change only the art style, not the content")
 
 STYLE_PRESETS: dict[str, dict] = {
     "anime": {
-        "label_ru": "🎌 Аниме", "label_en": "🎌 Anime",
-        "prompt": ("convert to anime art style, cel-shaded anime illustration, "
-                   "clean bold line art, vibrant flat anime colors, " + _KEEP),
+        "label_ru": "🎌 Аниме", "label_en": "🎌 Anime", "target": "drawn",
+        "prompt": ("Turn picture 1 into a still frame from a Japanese 2D anime film. Every person "
+                   "gets an anime face: large expressive eyes with bright highlights, a tiny nose "
+                   "and mouth, smooth simplified skin, hair drawn as clean pointed clumps with "
+                   "sharp highlights. Flat cel shading with two or three tones and hard-edged "
+                   "shadow shapes, thin clean dark lineart around every form, a painted anime "
+                   "background with soft gradients and vivid saturated colors."),
     },
     "watercolor": {
-        "label_ru": "🎨 Акварель", "label_en": "🎨 Watercolor",
-        "prompt": ("convert to a watercolor painting, soft translucent washes of "
-                   "color, visible paper texture and pigment bleed at the edges, "
-                   "loose painterly brushwork, " + _KEEP),
+        "label_ru": "🎨 Акварель", "label_en": "🎨 Watercolor", "target": "drawn",
+        "prompt": ("Turn picture 1 into a traditional watercolor painting on textured cold-press "
+                   "paper: transparent pigment washes, soft wet-in-wet edges bleeding into each "
+                   "other, pigment granulation, white paper left unpainted in the highlights, "
+                   "faint pencil underdrawing lines, loose simplified details and no hard outlines."),
     },
     "oil_painting": {
-        "label_ru": "🖼️ Масло", "label_en": "🖼️ Oil painting",
-        "prompt": ("convert to a classical oil painting, visible canvas texture "
-                   "and confident brush strokes, rich layered color, dramatic "
-                   "painterly lighting like a fine-art portrait, " + _KEEP),
+        "label_ru": "🖼️ Масло", "label_en": "🖼️ Oil painting", "target": "drawn",
+        "prompt": ("Turn picture 1 into a classical oil painting on canvas: thick impasto "
+                   "brushstrokes visible on every surface, canvas weave texture, rich layered "
+                   "glazes, warm Rembrandt-style chiaroscuro light, painterly simplified details "
+                   "like a museum fine-art painting."),
     },
     "comic": {
-        "label_ru": "💥 Комикс", "label_en": "💥 Comic book",
-        "prompt": ("convert to a comic book / pop-art illustration, bold black "
-                   "ink outlines, flat halftone-dot shading, punchy saturated "
-                   "colors, graphic-novel cover style, " + _KEEP),
+        "label_ru": "💥 Комикс", "label_en": "💥 Comic book", "target": "drawn",
+        "prompt": ("Turn picture 1 into a panel from an American comic book printed on paper. "
+                   "Heavy black ink outlines of varying weight, solid black spot shadows and ink "
+                   "hatching, flat bold printed colors, Ben-Day halftone dot patterns in the mid "
+                   "tones, gritty inked texture. Faces keep realistic proportions drawn in a "
+                   "classic comic-book way (not anime, no big eyes)."),
     },
     "cyberpunk": {
-        "label_ru": "🌆 Киберпанк", "label_en": "🌆 Cyberpunk neon",
-        # Cyberpunk is a world, not a filter: the same hoodie under neon light
-        # read as "a photo with a pink tint" (owner: «надо адаптировать
-        # и текущую одежду под киберпанк»). The clothes keep their type and
-        # cut and become their cyberpunk version; pose, face and framing stay.
-        "prompt": ("convert to a cyberpunk neon illustration, glowing magenta "
-                   "and cyan rim lighting, futuristic neon signage reflections, "
-                   "moody high-contrast night atmosphere. Re-imagine the clothes "
-                   "the person is wearing as their cyberpunk version -- the same "
-                   "kind of garment and cut, made of glossy techwear fabric with "
-                   "glowing LED seams, chrome hardware and small cybernetic "
-                   "details -- and the setting as a neon-lit futuristic city. "
-                   "Keep the exact same pose, camera framing, face and identity"),
+        "label_ru": "🌆 Киберпанк", "label_en": "🌆 Cyberpunk neon", "target": "drawn",
+        # Cyberpunk is a world, not a filter: the same hoodie under neon light read as
+        # "a photo with a pink tint" (owner: «надо адаптировать и текущую одежду под
+        # киберпанк»). The clothes keep their type and cut and become their cyberpunk
+        # version; pose, face and framing stay.
+        "keeps_clothes": False,
+        "prompt": ("Turn picture 1 into a cyberpunk neon illustration: a rainy neon-lit "
+                   "futuristic city at night, glowing magenta and cyan rim light, neon sign "
+                   "reflections on wet surfaces, high-contrast moody atmosphere. Re-imagine the "
+                   "clothes each person wears as their cyberpunk version -- the same kind of "
+                   "garment and cut in glossy techwear fabric with glowing LED seams, chrome "
+                   "hardware and small cybernetic details. Keep each face and identity."),
     },
     "pencil": {
-        "label_ru": "✏️ Карандаш", "label_en": "✏️ Pencil sketch",
-        "prompt": ("convert to a detailed graphite pencil sketch, fine cross-"
-                   "hatching and shading, monochrome, visible paper grain, "
-                   "sketchbook portrait style, " + _KEEP),
+        "label_ru": "✏️ Карандаш", "label_en": "✏️ Pencil sketch", "target": "drawn",
+        "prompt": ("Turn picture 1 into a hand-drawn graphite pencil sketch on white sketchbook "
+                   "paper: grey graphite only with no color, confident contour lines, "
+                   "cross-hatching in the shadows, smudged soft shading, sketchy unfinished edges "
+                   "fading into blank paper."),
+    },
+    "photo": {
+        "label_ru": "📷 Реализм", "label_en": "📷 Real photo", "target": "photo",
+        "prompt": ("Change picture 1 into a real photograph taken with a full-frame DSLR camera, "
+                   "as if the scene were shot in real life: real human beings with natural adult "
+                   "human proportions, realistic faces and eyes of normal size, natural skin "
+                   "texture with pores and fine hairs, real hair strands, real fabric weave, real "
+                   "materials, natural photographic lighting and shallow depth of field."),
     },
 }
 
 # Display order for the keyboard -- dict insertion order is already this, but
 # a keyboard-builder should not depend on that being remembered.
 STYLE_PRESET_ORDER = ("anime", "watercolor", "oil_painting", "comic",
-                      "cyberpunk", "pencil")
+                      "cyberpunk", "pencil", "photo")
 
 
 def preset_prompt(key: str) -> str:
     """The redraw instructions for `key`, or "" if it is not a known preset."""
     p = STYLE_PRESETS.get(key)
     return p["prompt"] if p else ""
+
+
+def preset_for(instructions: str):
+    """The preset whose prompt `instructions` carries (the button's task passes it
+    through the agent, which may add words around it), or None."""
+    text = " ".join((instructions or "").split())
+    for key, p in STYLE_PRESETS.items():
+        if p["prompt"][:80] in text:
+            return key
+    return None
 
 
 def preset_label(key: str, lang: str = "ru") -> str:

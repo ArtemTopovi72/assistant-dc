@@ -382,6 +382,22 @@ def firered_extra_lora(name: Optional[str], strength: float = 1.0):
         _EXTRA_LORA.reset(tok)
 
 
+_SAMPLER = _contextvars.ContextVar("firered_sampler", default=None)
+
+
+@_contextlib.contextmanager
+def firered_sampler(steps: int, cfg: float, *, lightning: bool = True, negative: str = ""):
+    """Every FireRed edit inside the block samples with these settings instead of
+    the template's Lightning 8 steps at cfg 1 (image_style: a restyle needs real
+    guidance and a negative, bench/style_ab.py)."""
+    tok = _SAMPLER.set({"steps": int(steps), "cfg": float(cfg), "lightning": lightning,
+                        "negative": negative})
+    try:
+        yield
+    finally:
+        _SAMPLER.reset(tok)
+
+
 # Edit-on-edit drifts: FireRed was trained on single edits, and by the 4th
 # chained pass colour noise and a drifting face pile up. From the
 # (FIRERED_REBASE_AFTER+1)th edit in a row it edits the ORIGINAL with every
@@ -516,6 +532,16 @@ def _edit_image_with_firered_once(ctx, image_path: str, instruction: str,
                                     "megapixels": 1.0, "resolution_steps": 1}}
         workflow["187"]["inputs"][slot] = [sid, 0]
         workflow["188"]["inputs"][slot] = [sid, 0]
+
+    _sm = _SAMPLER.get()
+    if _sm:
+        workflow["189"]["inputs"]["steps"] = _sm["steps"]
+        workflow["189"]["inputs"]["cfg"] = _sm["cfg"]
+        workflow["188"]["inputs"]["prompt"] = _sm["negative"]
+        if not _sm["lightning"] and "183" in workflow:
+            workflow["183"]["inputs"]["strength_model"] = 0.0
+        logger.info("firered: sampler %d steps cfg %.1f lightning=%s", _sm["steps"], _sm["cfg"],
+                    _sm["lightning"])
 
     # A task LoRA stacked on the Lightning one (removal: QIE-2511 remover
     # adapters, which FireRed -- a Qwen-Image-Edit derivative -- can load).

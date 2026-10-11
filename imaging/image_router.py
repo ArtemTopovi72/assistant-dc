@@ -650,9 +650,9 @@ def _route_edit_request(
     # contradiction for a whole-canvas restyle that came back live
     # as a cropped, partial cartoon redraw missing the title text and a person.
     if category == "style_transfer":
-        instr = _image._firered_style_instruction(ctx, text, image_path=image_path)
-    else:
-        instr = _image._firered_instruction(ctx, "", text, removal=False)
+        import image_style
+        return category, image_style.restyle(ctx, image_path, text, seed=seed, timeout=timeout)
+    instr = _image._firered_instruction(ctx, "", text, removal=False)
     return category, _image.edit_image_with_firered(ctx, image_path, instr, seed=seed, timeout=timeout)
 
 

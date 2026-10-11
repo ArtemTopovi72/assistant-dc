@@ -233,6 +233,15 @@ def _inspection_contradicts_work(verdict: str, tools_called: set, removal: str =
         # was" over a visibly black cat. Truthy, but its own
         # wording in graph_finalize.
         return "partial"
+    if hits:
+        # A spelled-out style is checked point by point: "cyberpunk: PRESENT | neon
+        # city: PRESENT | ... | chrome hardware: MISSING" over a plainly cyberpunk
+        # picture was answered «нужного изменения нет — остался прежним». Most points
+        # there = the change landed, only not every detail of it.
+        v = verdict or ""
+        present = len(re.findall(r"(?<!not )\bpresent\b", v, re.I))
+        if present > len(_VERIFY_NEGATIVE_RE.findall(v)):
+            return "partial"
     return bool(hits)
 
 

@@ -207,3 +207,14 @@ def test_removal_description_in_the_tool_result_format():
          "Is the cat completely removed from the table?: PRESENT\n"
          "Is there only an empty wooden table?: PRESENT")
     assert GP._inspection_contradicts_work(v, {"inpaint_image"}, removal="cat") is False
+
+
+# A plainly cyberpunk picture, checked point by point against the spelled-out
+# preset, had one detail MISSING and was answered «нужного изменения нет —
+# остался прежним» (2026-10-11).
+def test_one_missing_detail_among_presents_is_partial_not_unchanged():
+    assert GP._inspection_contradicts_work(
+        "Cyberpunk neon illustration: PRESENT. | Neon city at night: PRESENT. | "
+        "Techwear clothes: PRESENT. | Chrome hardware: MISSING.", {"redraw_image"}) == "partial"
+    assert GP._inspection_contradicts_work(
+        "Cyberpunk: MISSING. | Neon city: MISSING. | Rain: PRESENT.", {"redraw_image"}) is True

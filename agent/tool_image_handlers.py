@@ -1504,20 +1504,17 @@ def redraw_whole_image(ctx, source: str, instructions: str):
         # Passing the agent's raw instruction straight
         # through (as before) cropped a person out of frame on a style
         # request even after route_edit_request's style_transfer path was
-        # fixed, because THIS path never called it. Route a style change
-        # through the same anti-crop + vision-layout-locked builder so both
-        # entry points get the same protection.
-        if classify_edit_intent(instructions) == "style_transfer":
-            firered_instr = image_mod._firered_style_instruction(
-                ctx, instructions, image_path=source)
-            logger.info("Tool: redraw_image -> mask-free FireRed whole-image STYLE "
-                       "edit (layout-locked): %r", instructions[:80])
-        else:
-            firered_instr = instructions
-            logger.info("Tool: redraw_image -> mask-free FireRed whole-image edit: %r",
-                        instructions[:80])
+        # fixed, because THIS path never called it. Both entry points render a
+        # style through image_style.restyle.
+        # The edit classifier is not asked: «an ultra-realistic photograph of a baker…»
+        # was not a style to it, went to the plain edit and the cartoon stayed a
+        # cartoon. restyle's own read of the words decides, and a non-style redraw
+        # is edited as written there.
+        import image_style
+        logger.info("Tool: redraw_image -> mask-free FireRed whole-image edit: %r",
+                    instructions[:80])
         try:
-            new_path = image_mod.edit_image_with_firered(ctx, source, firered_instr)
+            new_path = image_style.restyle(ctx, source, instructions)
             engine = "edit_image_with_firered (whole frame, NO mask)"
         except Exception:
             logger.exception("FireRed redraw failed for %s", source)
