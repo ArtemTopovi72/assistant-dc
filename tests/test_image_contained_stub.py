@@ -12,7 +12,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
-import numpy as np
 from pathlib import Path
 from PIL import Image
 import image as I
@@ -34,11 +33,10 @@ import models
 
 _TMP = Path(tempfile.mkdtemp(prefix="imgstub_"))
 RESULTS = []
-import os as _os
 def check(name, cond, detail=""):
     RESULTS.append((name, bool(cond)))
     print("[" + ("PASS" if cond else "FAIL") + "] " + name + ("" if cond or not detail else " - " + detail))
-    if not cond and _os.environ.get("PYTEST_CURRENT_TEST"):
+    if not cond and os.environ.get("PYTEST_CURRENT_TEST"):
         raise AssertionError(str(name) + (": " + str(detail) if detail else ""))
 
 def Ctx():
