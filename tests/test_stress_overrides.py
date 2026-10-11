@@ -1,6 +1,6 @@
 """Coverage for stress_overrides.py: base-form key derivation, stress-mark
 normalization, case-preserving replacement, the StressOverrides class
-(reload/save/pairs/set_from_stressed/upsert/remove/apply, hot-reload-on-mtime),
+(reload/save/pairs/upsert/remove/apply, hot-reload-on-mtime),
 and the process-wide singleton. Real filesystem, no GPU/network.
 Run: venv/Scripts/python.exe tests/test_stress_overrides.py
 """
@@ -116,14 +116,6 @@ def test_stress_overrides_save():
     check("save_writes_file", p.exists())
     data = json.loads(p.read_text(encoding="utf-8"))
     check("save_content_correct", data == {"привет": "прив+ет"})
-
-
-def test_stress_overrides_set_from_stressed():
-    p = _TMP / "setfrom.json"
-    so = SOV.StressOverrides(p)
-    n = so.set_from_stressed(["прив+ет", "т+ест", "invalidnoplus", ""])
-    check("set_from_stressed_count", n == 2)
-    check("set_from_stressed_pairs", len(so.pairs()) == 2)
 
 
 def test_stress_overrides_upsert():

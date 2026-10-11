@@ -118,19 +118,6 @@ class StressOverrides:
         with self._lock:
             return sorted(self._map.items())
 
-    def set_from_stressed(self, stressed_forms) -> int:
-        """Replace ALL entries from an iterable of stressed spellings. Returns the
-        count kept (invalid / markless entries are dropped). Saves to disk."""
-        m = {}
-        for s in stressed_forms:
-            s = normalize_stress(str(s))
-            if s and "+" in s and base_form(s):
-                m[base_form(s)] = s.lower()
-        with self._lock:
-            self._map = m
-        self.save()
-        return len(m)
-
     def upsert(self, stressed: str) -> bool:
         s = normalize_stress(stressed)
         if not s or "+" not in s or not base_form(s):
