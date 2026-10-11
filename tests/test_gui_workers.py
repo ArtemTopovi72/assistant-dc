@@ -267,20 +267,19 @@ def test_transcribe_worker():
     # (gui_common keeps the module light that way), so `audio` is the only
     # binding a stub can reach.
     import audio as _audio
-    with fake_modules():
-        _audio.transcribe_audio_array = lambda ctx, audio: "hello world"
-        w = gui_voice_tab.TranscribeWorker(_ctx(), b"audio")
-        rec = cap(w, "recognized", "failed")
-        w.run()
-        check("transcribe_ok", rec["recognized"] == ["hello world"])
-        _audio.transcribe_audio_array = lambda ctx, audio: ""
-        w2 = gui_voice_tab.TranscribeWorker(_ctx(), b"a"); rec2 = cap(w2, "recognized", "failed")
-        w2.run()
-        check("transcribe_empty", len(rec2["failed"]) == 1)
-        _audio.transcribe_audio_array = lambda ctx, audio: (_ for _ in ()).throw(RuntimeError("asr crash"))
-        w3 = gui_voice_tab.TranscribeWorker(_ctx(), b"a"); rec3 = cap(w3, "recognized", "failed")
-        w3.run()
-        check("transcribe_crash", rec3["failed"] == ["asr crash"])
+    _audio.transcribe_audio_array = lambda ctx, audio: "hello world"
+    w = gui_voice_tab.TranscribeWorker(_ctx(), b"audio")
+    rec = cap(w, "recognized", "failed")
+    w.run()
+    check("transcribe_ok", rec["recognized"] == ["hello world"])
+    _audio.transcribe_audio_array = lambda ctx, audio: ""
+    w2 = gui_voice_tab.TranscribeWorker(_ctx(), b"a"); rec2 = cap(w2, "recognized", "failed")
+    w2.run()
+    check("transcribe_empty", len(rec2["failed"]) == 1)
+    _audio.transcribe_audio_array = lambda ctx, audio: (_ for _ in ()).throw(RuntimeError("asr crash"))
+    w3 = gui_voice_tab.TranscribeWorker(_ctx(), b"a"); rec3 = cap(w3, "recognized", "failed")
+    w3.run()
+    check("transcribe_crash", rec3["failed"] == ["asr crash"])
 
 
 # --------------------------------------------------------------- CompactMemoryWorker
