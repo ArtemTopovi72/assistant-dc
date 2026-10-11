@@ -44,7 +44,7 @@ _REPORT_HTML_ENABLED = os.getenv("GUI_REPORT_HTML", "1").strip().lower() not in 
 
 import config
 from config import SAMPLE_RATE, LM_STUDIO_BASE, MODEL_NAME, MEMORY_DIR
-from audio import AudioPlayer, MicRecorder, VadListener, transcribe_audio_array
+from audio import AudioPlayer, VadListener, transcribe_audio_array
 import gui_i18n
 import ui_scale
 from ui_scale import px, pt, scale_style as _ss
