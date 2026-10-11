@@ -48,10 +48,6 @@ def gt(pred):
     return {d for d in all_docs if pred(doctext[d])}
 
 
-def has(*subs):
-    return lambda t: all(s in t for s in subs)
-
-
 def any_of(*subs):
     return lambda t: any(s in t for s in subs)
 
