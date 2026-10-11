@@ -66,7 +66,7 @@ def _stage(ctx, text: str) -> None:
     try:
         ctx.set_stage(text)
     except Exception:
-        pass
+        logger.debug("set_stage failed", exc_info=True)
 
 
 def _rub(n) -> str:
@@ -576,7 +576,7 @@ def shop_photo(ctx, request: str, image_path: str, strategy: str = "balanced") -
 
 
 def shop(ctx, request: str, strategy: str = "balanced") -> tuple:
-    """(report text, plan, results). Raises OzonBlocked / ShopCancelled."""
+    """(plan, results). Raises OzonBlocked / ShopCancelled."""
     _stage(ctx, "Ozon: planning the purchase")
     p = plan(ctx, request)
     results = []

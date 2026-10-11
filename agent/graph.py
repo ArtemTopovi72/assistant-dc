@@ -119,7 +119,7 @@ def _add_earlier_pictures(ctx, state, summary: str) -> str:
                           "they sent together (compare them, what they share, which is "
                           "better, both of them)?", text, default=False):
         return summary
-    parts = ["Latest picture:" + chr(10) + summary]
+    parts = ["Latest picture:\n" + summary]
     for i, path in enumerate(earlier, 1):
         try:
             with open(path, "rb") as fh:
@@ -129,8 +129,8 @@ def _add_earlier_pictures(ctx, state, summary: str) -> str:
             logger.warning("earlier picture could not be read", exc_info=True)
             continue
         if got:
-            parts.append("Earlier picture %d of %d sent in this chat:" % (i, len(earlier)) + chr(10) + got)
-    return (chr(10) * 2).join(parts) if len(parts) > 1 else summary
+            parts.append("Earlier picture %d of %d sent in this chat:" % (i, len(earlier)) + "\n" + got)
+    return "\n\n".join(parts) if len(parts) > 1 else summary
 
 
 def vision_agent_node(ctx: Context, state: AgentState) -> AgentState:

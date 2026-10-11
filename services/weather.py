@@ -204,6 +204,12 @@ def not_found_message(city: str, lang: str) -> str:
             f"Не нашёл город «{city}» — попробуй написать иначе.")
 
 
+def _unavailable_message(lang: str) -> str:
+    return ("Weather service is unavailable right now — try again in a bit."
+            if lang != "ru" else
+            "Сервис погоды сейчас недоступен — попробуй чуть позже.")
+
+
 def fetch_current(lat: float, lon: float) -> Optional[dict]:
     """Return {"temp_c", "wind_kmh", "code"} for the given coordinates, or None."""
     try:
@@ -310,9 +316,7 @@ def what_to_wear_for_loc(loc: dict, lang: str = "en", advise_fn=None) -> str:
     user's default)."""
     cur = fetch_current(loc["lat"], loc["lon"])
     if not cur:
-        return ("Weather service is unavailable right now — try again in a bit."
-                if lang != "ru" else
-                "Сервис погоды сейчас недоступен — попробуй чуть позже.")
+        return _unavailable_message(lang)
     temp = cur["temp_c"]
     desc = _code_desc(cur["code"], lang)
     advice = ""
@@ -566,9 +570,7 @@ def forecast_data(loc: dict, lang: str = "en", hours: Optional[int] = None,
         days_needed = max(2, -(-int(hours) // 24) + 1)
     hourly = fetch_hourly(loc["lat"], loc["lon"], days=days_needed)
     if not hourly:
-        return [], {}, ("Weather service is unavailable right now — try again in a bit."
-                        if lang != "ru" else
-                        "Сервис погоды сейчас недоступен — попробуй чуть позже.")
+        return [], {}, _unavailable_message(lang)
     local_now = _dt.datetime.utcnow() + _dt.timedelta(seconds=hourly["utc_offset_seconds"])
     if date is not None:
         start_dt = _dt.datetime.combine(date, _dt.time(0, 0))

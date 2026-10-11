@@ -209,7 +209,6 @@ def extract_gemma4_tool_calls(content: str):
     Returns (tool_calls_list, remaining_text). If no markup is found,
     returns ([], original content).
     """
-    import json as _json
     tc_list = []
     idx = 0
 
@@ -355,7 +354,6 @@ def _json_object_end(text: str, start: int) -> int:
 
 def _json_calls_in(text: str):
     """Yield (name, args, (start, end)) for every JSON tool call in `text`."""
-    import json as _json
     i = 0
     while True:
         m = _JSON_CALL_START_RE.search(text, i)
@@ -1037,7 +1035,7 @@ _MODEL_GONE = _re.compile(r"No models loaded|model has crashed|model is not load
 # The request that killed the model gets one of these; the ones queued behind
 # it get "No models loaded".
 _MODEL_CRASHED = _re.compile(r"model has crashed|Model reloaded", _re.I)
-_revive_lock = __import__("threading").Lock()
+_revive_lock = threading.Lock()
 _revive_last = 0.0
 _revive_ok = False
 LLM_REVIVE_MIN_INTERVAL_S = 60.0
@@ -1091,8 +1089,6 @@ def _try_revive_model(body: str, payload: dict) -> bool:
             if not (_revive_ok and not _model_served(model)):
                 return bool(_revive_ok)
             logger.warning("model %s died again inside the revive cooldown - reviving", model)
-        _revive_last = now
-        _revive_ok = False
         _revive_last = now
         _revive_ok = False
         try:
@@ -1174,8 +1170,9 @@ def _log_context_hint(body: str, payload: dict) -> None:
         # The numberless phrasing ("Context size has been exceeded."). It says
         # nothing about sizes, yet this message's whole job is to name the number
         # the user has to raise, so it must not stay silent on the phrasing that
-        # carries no number. Estimate it instead: ~3 characters per token is close enough to point at the
-        # right order of magnitude, which is all the reader needs.
+        # carries no number. Estimate it instead: ~3 characters per token is
+        # close enough to point at the right order of magnitude, which is all
+        # the reader needs.
         if _looks_like_context_overflow(body):
             _chars = len(_json.dumps(payload.get("messages") or [],
                                      ensure_ascii=False))
@@ -1454,8 +1451,9 @@ def _stream_chat_raw(ctx, payload: dict):
                 # BOTH channels are sampled. `streamed_chars` counts content AND
                 # reasoning, so a tail built from content_parts alone would let a
                 # model looping inside its REASONING channel tick the checkpoint
-                # over and over against an empty tail and never be caught. That is the house model's channel: Gemma 4
-                # spends most of its budget thinking (which is why max_tokens is
+                # over and over against an empty tail and never be caught. That is
+                # the house model's channel: Gemma 4 spends most of its budget
+                # thinking (which is why max_tokens is
                 # floored to GEMMA_MIN_TOKENS), so a content-only guard is blind exactly
                 # where it is needed. Measured on an identical 47-char loop: a content
                 # loop was cut after 2.4k chars, the same loop in reasoning ran to

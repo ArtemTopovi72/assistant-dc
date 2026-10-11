@@ -103,7 +103,7 @@ def _handle_inspect_image(ctx, state, args: dict) -> str:
                 _sub = _handle_inspect_image(ctx, {**state, "image_path": _p}, {"check": check})
                 _parts.append(f"Picture {_i} of {len(_before) + 1}"
                               f"{' (the latest)' if _p == source else ''}:{chr(10)}{_sub}")
-            return (chr(10) * 2).join(_parts)
+            return "\n\n".join(_parts)
 
     from llm import analyze_image_with_llm
     from prompts import IMAGE_INSPECT_PROMPT
@@ -688,12 +688,13 @@ def _handle_find_photo(ctx, state, args: dict) -> str:
 
     import search as _search
     ctx.set_stage("Finding a photo online")
-    ts = int(__import__("time").time() * 1000)
+    import time
+    ts = int(time.time() * 1000)
     dest = os.path.join(str(image_mod.OUTPUT_DIR), f"webphoto_{ts}.jpg")
     try:
         image_mod.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     except Exception:
-        pass
+        logger.debug("could not create the output folder", exc_info=True)
     photo = _search.fetch_reference_photo(ctx, query, dest, require_face=want_face)
     if not photo or not os.path.exists(photo):
         return (f"[TOOL ERROR] Could not find a usable {'photo with a clear face' if want_face else 'photo'} "
@@ -1541,7 +1542,6 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
     if _over:
         return _over
 
-    mode = (args.get("mode") or "").strip().lower()
     instructions = (args.get("instructions") or "").strip()
     # 'enhance'/'upscale'/'restore'/'outpaint' have no engine left to run on: the
     # old model checkpoint behind them was removed from the product (Ideogram +
@@ -1633,7 +1633,7 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
             workflow=engine or "redraw: no engine produced a file",
             returned_file=new_path, source=source)
     except Exception:
-        pass
+        logger.debug("could not log the redraw decision", exc_info=True)
     if not new_path or not os.path.exists(new_path):
         return (
             "[TOOL ERROR] Could not redraw the image — "

@@ -285,11 +285,9 @@ def _handle_write_file(ctx, state, args: dict) -> str:
         n_old = len(prior.splitlines())
         if n_old > REWRITE_MAX_LINES and prior != content.encode("utf-8"):
             raise SandboxError(
-                f"NOT written: {path} already exists ({n_old} lines) and is not rewritten "
-                f"whole. Fix it in place: read_file the part you need (start=..., "
-                f"lines=...), then edit_file with the exact old text and its "
-                f"replacement (or start_line/end_line) -- one edit per fix. To add "
-                f"code at the end use write_file with append=true.")
+                f"NOT written: {path} already exists ({n_old} lines) and "
+                f"{_REWRITE_REFUSED_TAIL} To add code at the end use write_file "
+                f"with append=true.")
     # A complete call is accepted whatever its length: its tokens are already
     # spent, and refusing it only throws them away (sandbox bench 2026-09-24,
     # nine refused 170-700 line writes in a row). The ~150-line advice in the

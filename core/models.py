@@ -377,13 +377,13 @@ class Context:
             import turn_trace   # every front end's phases, one place
             turn_trace.stage(stage)
         except Exception:
-            pass
+            logger.debug("turn_trace stage failed", exc_info=True)
         cb = self.stage_callback
         if cb is not None:
             try:
                 cb(stage)
             except Exception:
-                pass
+                logger.debug("stage_callback failed", exc_info=True)
 
     def save_cache(self) -> None:
         try:

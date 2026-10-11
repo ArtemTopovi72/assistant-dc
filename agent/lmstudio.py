@@ -184,7 +184,7 @@ def fetch_model(base_url: str, model_id: str) -> dict:
             if not data.get("error"):
                 return data
     except Exception:
-        pass
+        logger.debug("could not fetch model %s directly", model_id, exc_info=True)
     for m in fetch_models(base_url):
         if m.get("id") == model_id:
             return m
@@ -821,9 +821,7 @@ def supported_fields(compatibility_type: str) -> set:
     ct = (compatibility_type or "").lower()
     if ct == "gguf":
         return {"contextLength", "kvCacheQuantization", "gpuOffload", "flashAttention"}
-    if ct == "mlx":
-        return {"contextLength"}
-    return {"contextLength"}
+    return {"contextLength"}      # mlx, and anything unknown
 
 
 def wait_for_loaded(base_url: str, model_id: str, timeout: float = 120.0) -> bool:

@@ -653,7 +653,8 @@ def _handle_create_presentation(ctx, state, args: dict) -> str:
     def _fetch(query: str):
         # require_face=False: a deck illustration is a place/object far more often
         # than a person, and a face gate would reject most of them.
-        ts = int(__import__("time").time() * 1000)
+        import time
+        ts = int(time.time() * 1000)
         dest = os.path.join(str(image_mod.OUTPUT_DIR), f"slide_{ts}.jpg")
         try:
             image_mod.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

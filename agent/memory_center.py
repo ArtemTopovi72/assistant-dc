@@ -677,8 +677,9 @@ class MemoryStore:
                         z.write(fp, f"{p}/{fn}")
         return dest
 
-    def preview_import(self, path: Path) -> dict:
-        """Read an export (JSON or ZIP) and report what it contains — no commit."""
+    def preview_import(self, path: Path) -> Tuple[dict, dict]:
+        """Read an export (JSON or ZIP) and report what it contains — no commit.
+        Returns ({profile: entry count}, the parsed export)."""
         path = Path(path)
         data = None
         if path.suffix.lower() == ".zip":

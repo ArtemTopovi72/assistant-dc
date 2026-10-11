@@ -494,8 +494,7 @@ def _sandbox_touched_recently(sandbox, within_s: float = 1800.0) -> bool:
     if sandbox is None:
         return False
     try:
-        import time as _time
-        cutoff = _time.time() - within_s
+        cutoff = time.time() - within_s
         return any(p.stat().st_mtime >= cutoff for p in sandbox.root.iterdir())
     except Exception:
         return False
@@ -745,7 +744,7 @@ _BUILDER_TOOLS = frozenset({"run_code", "write_file"})
 # cut mid-string -- "Failed to parse tool call", 80 s lost, and the
 # half-written call in history made LM Studio answer 500 to every request
 # after it.
-BUILDER_LOOP_TOKENS = int(__import__("os").getenv("BUILDER_LOOP_TOKENS", "9000"))  # 6000 cut a 170-line rx.py 4x (2026-09-24)
+BUILDER_LOOP_TOKENS = int(os.getenv("BUILDER_LOOP_TOKENS", "9000"))  # 6000 cut a 170-line rx.py 4x (2026-09-24)
 _TRUNCATED_ARGS = '{"_truncated": true}'
 
 
@@ -1926,7 +1925,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                 # tool ran, with what, and what came back. Args and result heads only.
                 logger.info("tool %s(%s) -> %s", tool_name,
                             json.dumps(tool_args, ensure_ascii=False)[:300],
-                            tool_result.replace(chr(10), " ")[:200])
+                            tool_result.replace("\n", " ")[:200])
                 _errored = tool_result.lstrip().startswith(("[TOOL ERROR]", "Unknown tool"))
                 audit_calls.append(tool_name + ("!" if _errored else ""))
                 if _errored:

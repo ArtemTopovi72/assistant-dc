@@ -60,7 +60,8 @@ def eligible(text: str, has_file: bool, interruptible: bool) -> bool:
         return False
     if t.startswith("/"):
         return False
-    if interruptible and __import__("intent").read(None, t)["is_question"]:
+    import intent
+    if interruptible and intent.read(None, t)["is_question"]:
         return False
     return True
 
