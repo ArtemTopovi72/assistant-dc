@@ -70,7 +70,6 @@ from gui_common import (
 from gui_memory_tab import MemoryCenterTab, CompactMemoryWorker
 # Cross-tab plumbing that lives in gui_common so extracted tabs need not
 # import gui.py: _ScopedCtx (four tabs) and TranscribeWorker (two).
-from gui_common import TranscribeWorker
 # The Madhouse (tab, grid, workers, reply/speaker logic) extracted whole.
 # AssistantWindow constructs MadhouseTab; the rest are re-exported because the
 # suites address them through `gui`.
