@@ -153,10 +153,23 @@ def _fit(body: str, question: str, limit: int) -> str:
     return head + ("\n...\n" + "\n".join(extra) if extra else "") + note
 
 
+# An Ozon product card is read by the ozon_product tool, not by the page crawler (the
+# site serves the crawler an anti-bot page). A bare link otherwise reaches the model
+# with no instruction at all, and it filled the gap from the chat history.
+_OZON_PRODUCT_RE = re.compile(r"^https?://(?:[\w-]+\.)*ozon\.ru/(?:product|t)/", re.IGNORECASE)
+
+
 def link_context(text: str, limit: int = LINK_TEXT_CHARS, url: str = "") -> str:
     """Scaffolding for the model: the text of the first readable link in
     `text`, or "" when there is none / it cannot be read."""
     for url in ([url] if url else urls_in(text)[:2]):
+        if _OZON_PRODUCT_RE.match(url):
+            said = ("The user asks about an Ozon product they linked earlier" if url not in (text or "")
+                    else "The user's message contains an Ozon product link")
+            return (f"[{said} ({url}). Read that card with ozon_product (and ozon_reviews if they ask "
+                    f"what buyers say). If the user only sent the link, tell them briefly what the "
+                    f"product is, its price and what buyers say. This is a shopping question: do not "
+                    f"make a video, a picture or a file.]")
         page = read_link(url)
         if page:
             body = _fit(re.sub(r"\n{3,}", "\n\n", page["text"]).strip(), text, limit)
