@@ -17,10 +17,9 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 from pathlib import Path
 
 import numpy as np
-from PyQt5.QtWidgets import QApplication, QDialog, QInputDialog, QMessageBox
+from PyQt5.QtWidgets import QApplication, QInputDialog, QMessageBox
 from PyQt5.QtWidgets import QFileDialog as _QFD
 from PyQt5.QtGui import QImage, QColor
-from PyQt5.QtCore import Qt
 import gui
 import gui_workers
 import gui_voice_tab
@@ -256,22 +255,18 @@ def test_prof_suggested_and_create_errors():
 
 
 def test_on_compact_done_writefail_and_success():
-    o = {n: getattr(gui, n) for n in ("CompactMemoryWorker",)}
-    try:
-        w = _win()
-        # write-fail: active_memory_dir is a FILE -> mkdir raises -> "save failed"
-        badfile = os.path.join(_TMP, "notadir"); open(badfile, "w").write("x")
-        w.ctx.active_memory_dir = Path(badfile)
-        w._on_compact_done("summary text")
-        check("compact_writefail", "save failed" in w.chat.toPlainText().lower())
-        # success with memory_center_tab.refresh_all
-        good = Path(_TMP) / "cok"; good.mkdir(parents=True, exist_ok=True)
-        w.ctx.active_memory_dir = good
-        w._on_compact_done("good summary")
-        check("compact_success", (good / "summary.json").exists())
-        _close(w)
-    finally:
-        pass
+    w = _win()
+    # write-fail: active_memory_dir is a FILE -> mkdir raises -> "save failed"
+    badfile = os.path.join(_TMP, "notadir"); open(badfile, "w").write("x")
+    w.ctx.active_memory_dir = Path(badfile)
+    w._on_compact_done("summary text")
+    check("compact_writefail", "save failed" in w.chat.toPlainText().lower())
+    # success with memory_center_tab.refresh_all
+    good = Path(_TMP) / "cok"; good.mkdir(parents=True, exist_ok=True)
+    w.ctx.active_memory_dir = good
+    w._on_compact_done("good summary")
+    check("compact_success", (good / "summary.json").exists())
+    _close(w)
 
 
 def test_save_copy_missing_path_valid_pix():

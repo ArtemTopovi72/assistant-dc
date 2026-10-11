@@ -23,10 +23,10 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 from pathlib import Path
 
 import numpy as np
-from PyQt5.QtWidgets import QApplication, QDialog, QInputDialog, QMessageBox, QWidget
+from PyQt5.QtWidgets import QApplication, QDialog, QInputDialog, QWidget
 from PyQt5.QtWidgets import QFileDialog as _QFD
 from PyQt5.QtGui import QImage, QColor, QKeyEvent
-from PyQt5.QtCore import Qt, QEvent, QMimeData, QUrl
+from PyQt5.QtCore import Qt, QEvent, QMimeData
 import gui
 import gui_workers
 import gui_database_tab
@@ -351,7 +351,6 @@ def test_transfer_small_guards():
 
 
 def test_run_gui_defensive_excepts():
-    import sys as _sys
     # run_gui reapplies the stylesheet to the whole application, which
     # re-polishes every live widget. The ten tests above leave a pile of them
     # behind, and Qt walking one whose C++ side is already gone takes the
@@ -364,7 +363,7 @@ def test_run_gui_defensive_excepts():
     fc.install = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("cd"))
     fc.install_qt_message_handler = lambda *a, **k: None
     fc.log_stage = lambda *a, **k: None
-    real_cd = _sys.modules.get("crash_diag"); _sys.modules["crash_diag"] = fc
+    real_cd = sys.modules.get("crash_diag"); sys.modules["crash_diag"] = fc
     real_qapp = gui.QApplication
     class QAppProxy:
         def __call__(self, *a, **k): return _app
@@ -401,8 +400,8 @@ def test_run_gui_defensive_excepts():
         gui.QApplication = real_qapp; gui.SettingsDialog = real_sd
         gui.apply_ui_scale = real_apply
         if real_windll is not None: _ct.windll = real_windll
-        if real_cd is not None: _sys.modules["crash_diag"] = real_cd
-        else: _sys.modules.pop("crash_diag", None)
+        if real_cd is not None: sys.modules["crash_diag"] = real_cd
+        else: sys.modules.pop("crash_diag", None)
 
 
 def test_request_worker_crosslingual_append_lines():
