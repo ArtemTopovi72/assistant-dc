@@ -8,7 +8,6 @@ the button for every bot user (personal, free bot — non-commercial).
 from config import scratch_path, venv_python
 import logging
 import os
-import random
 import re
 import subprocess
 import time
