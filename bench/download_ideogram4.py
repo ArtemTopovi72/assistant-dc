@@ -1,4 +1,4 @@
-"""Fetch what Ideogram 4 LoRA training needs, into E:\hf-cache.
+r"""Fetch what Ideogram 4 LoRA training needs, into E:\hf-cache.
 
 Two repos, and NOT all of either:
 
