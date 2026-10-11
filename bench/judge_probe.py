@@ -9,7 +9,6 @@ there. This shows what the judge actually says. Vision calls only; no render.
     venv/Scripts/python.exe bench/judge_probe.py <image> [<image>...] --n 3
 """
 import argparse
-import json
 import os
 import sys
 import types

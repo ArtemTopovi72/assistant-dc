@@ -1,7 +1,7 @@
 """SEmoEdit on our F5: emotional reference = the user's own voice shaped by PSOLA (voice/prosody.py), then velocity transport.
     unset F5_TEST_RUN; venv/Scripts/python.exe -u bench/emoedit_ab.py [--strengths 0.5,1,1.5]
 Output: outputs/emoedit/<emotion>_<strength>/t<i>.wav + SER / F0 / WER table."""
-import argparse, os, sys
+import argparse, sys
 from pathlib import Path
 sys.stdout.reconfigure(encoding="utf-8")
 ROOT = Path(__file__).resolve().parent.parent

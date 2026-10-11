@@ -1,10 +1,10 @@
 """Cross-lingual retrieval A/B: RUSSIAN queries against an ENGLISH corpus.
 
 This is the case the embedding switch was made for. The monolingual benchmark
-(bench_knowledge.py) cannot show it: both models were trained on English, so
+(bench/knowledge.py) cannot show it: both models were trained on English, so
 English-to-English retrieval flatters the weaker one.
 
-Ground truth reuses bench_knowledge's predicate style — a document is relevant
+Ground truth reuses knowledge.py's predicate style — a document is relevant
 if its full text contains one of the given substrings — so the labels are
 language-independent and identical for both models.
 
@@ -15,7 +15,6 @@ import os
 import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
-import sys
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent

@@ -1,13 +1,12 @@
 """Expanded gold set for the Russian stress benchmark + bootstrap CIs.
 
-Reuses the canonicalisation/scoring helpers from bench_stress_data. All golds are
+Reuses the canonicalisation/scoring helpers from bench/stress_data.py. All golds are
 hand-verified against standard orthoepic norms. This is a CURATED expansion (not
 an auto-generated "several hundred") to keep gold correctness high — the binomial
 CIs reported make the remaining sample-size uncertainty explicit rather than
 hiding it. Categories: homographs, hard/OOV words, plus mixed registers
 (punctuation, dialogue, literary, technical, conversational).
 """
-import random
 import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass

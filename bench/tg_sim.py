@@ -14,7 +14,7 @@ reply_to is a message id in the chat; forward_from a name (someone else's words)
 ago seconds in the past (a backlog while the bot was down). User messages come
 back in /events as method "user" under their real ids.
 """
-import base64, json, os, sys, tempfile, threading
+import base64, json, os, sys, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
