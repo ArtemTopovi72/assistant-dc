@@ -50,7 +50,7 @@ flowchart TD
 
 ### Intent routing
 
-One model read of the raw message, cached per text, replaces the keyword routers this codebase used to carry at every one of these decision points.
+One model read of the raw message, cached per text, decides each of these routing points.
 
 ```mermaid
 flowchart TD

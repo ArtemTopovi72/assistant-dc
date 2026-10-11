@@ -1,4 +1,4 @@
-"""Scholarly citation-graph enrichment (Phase 9).
+"""Scholarly citation-graph enrichment.
 
 For research-grade questions the engine must reconstruct the intellectual
 lineage — the seminal paper, its citation count, and the most-influential works

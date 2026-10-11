@@ -10,14 +10,12 @@ rather than a measurement. `_profile_signature` fingerprints what each depth
 DOES, so changing the caps discards history instead of averaging across two
 different pipelines.
 
-Split out of deep_research.py. The caps themselves stay in deep_research: they
-are computed from DR_* module globals that `apply_overrides` mutates in place
-for a single run, so they have exactly one home and are read through it (see
-`_profile_signature`'s deferred import).
+The caps themselves live in dr_policy (`_resolve_caps`), computed from the DR_*
+knobs that `apply_overrides` swaps for a single run; `_profile_signature` reads
+them through deep_research.
 """
 import json
 import logging
-import os
 import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 import threading
 
@@ -35,7 +33,7 @@ _TIMING_FILE = DR_DIR / "_timings.json"
 _TIMING_SEED = {"quick": 900, "standard": 1800, "deep": 3600}
 _TIMING_KEEP = 12          # median over the last N runs per depth
 # Below this a "run" did not really happen (stub, abort, cache hit).
-# 300s, not 60. Measured 2026-08-29 from the live history: quick held
+# 300s, not 60. Measured from the live history: quick held
 # [5492, 120, 120, 93, 117, 90] and standard [119, 244, 120, 126]. Exactly one
 # of those is a research run -- the 91-minute one; the rest are stubs and
 # aborted runs from test and bench passes that reached the "completed" call.
@@ -56,10 +54,10 @@ def _profile_signature() -> str:
     caps must therefore discard the history rather than average across two
     different products.
 
-    `_resolve_caps` is imported HERE rather than at module scope on purpose: it
-    reads deep_research's DR_* globals, which `apply_overrides` swaps out for the
-    duration of a run. Binding it once at import would fingerprint the caps as
-    they were at startup and miss an override entirely.
+    `_resolve_caps` is imported HERE rather than at module scope because
+    deep_research imports this module, so a module-level import would be
+    circular. It reads the DR_* knobs at call time, so an active override is
+    fingerprinted too.
     """
     import hashlib
     from deep_research import _resolve_caps
@@ -143,7 +141,7 @@ def estimate_duration(depth: str = "standard") -> tuple:
         depth = "standard"
     timings = _load_timings()
     # Discard junk that predates the floor above (the file is persisted, so a
-    # previously poisoned history would otherwise keep quoting 0 minutes).
+    # poisoned history would otherwise keep quoting 0 minutes).
     samples = [x for x in (timings.get(depth) or []) if x >= _MIN_PLAUSIBLE_RUN_S]
     if samples:
         return float(_median(samples)), len(samples)

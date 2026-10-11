@@ -5,9 +5,9 @@ canonicalisation (`_norm_url`, `_domain`), junk + landing-page detection,
 authority scoring, source-type classification, the SSRF guard
 (`_is_safe_public_url`), and the whitelist/blacklist/per-domain-cap filters.
 
-Split out of deep_research.py. Nothing here reads a DR_* module global — every
-knob arrives as an argument — so these functions carry no configuration state
-and `deep_research.apply_overrides` has nothing to patch on this module.
+Nothing here reads a DR_* knob — every setting arrives as an argument — so these
+functions carry no configuration state and `apply_overrides` has nothing to patch
+on this module.
 """
 import ipaddress
 import logging
@@ -205,7 +205,7 @@ def _is_junk_source(url: str) -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# Graded authority scoring (Phase 4)
+# Graded authority scoring
 #
 # The old _source_rank was binary (0 = authority, 1 = everything else), so a
 # personal blog and a major trade publication sorted identically and a fluent
@@ -230,7 +230,7 @@ _JUNK_SCORE = 0.0
 
 # Hosts that are community/UGC/blog platforms: useful as leads but must never be
 # rated above COMMUNITY (a fluent post here is still not a primary source). VK /
-# Telegram are deliberately EXCLUDED for local/people topics (see _is_community).
+# Telegram are deliberately EXCLUDED for local/people topics (see _is_community_host).
 _COMMUNITY_HOSTS = (
     "reddit.com", "habr.com", "medium.com", "blogspot.", "wordpress.",
     "livejournal.com", "dzen.ru", "zen.yandex", "pikabu.ru", "vc.ru",

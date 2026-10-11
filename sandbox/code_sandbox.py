@@ -195,8 +195,8 @@ class Sandbox:
                         out.append(f"{name}/")
                         walk(p, level + 1)
                     elif depth == 1:
-                        # The one-level listing /files parses stays exactly as
-                        # it always was: "name/".
+                        # The one-level listing /files parses
+                        # is "name/".
                         out.append(f"{name}/")
                     else:
                         try:
@@ -379,8 +379,8 @@ class Sandbox:
         """Delete ONE entry -- a file or a whole folder -- inside the sandbox.
 
         The root itself ("", ".", "*", "all") empties the folder through
-        reset(): live 2026-09-14 «удали все файлы» hit a refusal here and the
-        model reported «Я удалил все файлы» over 17 surviving entries. It is
+        reset(): a refusal here let the model report «Я удалил все файлы»
+        over surviving entries. It is
         the user's own working folder and /reset_sandbox does the same, so
         the honest tool is one that actually does it. Any other path goes
         through resolve() so a symlink cannot point the deletion outside.
@@ -638,9 +638,8 @@ class Sandbox:
         """rar / 7z / tar[.gz] / anything 7-Zip reads, through py7zz.
 
         py7zz ships its own 7zz binary inside the wheel, which is the point:
-        live 2026-09-22 a user's mods.rar hit "not a zip/jar archive" and the
-        model spent two turns on rarfile, which is only a wrapper around an
-        unrar executable that neither this host nor the run_code image has.
+        rarfile is only a wrapper around an unrar executable that neither this
+        host nor the run_code image has.
 
         7-Zip extracts into a private temp dir first; every file is then copied
         in through resolve(), the same zip-slip gate the zip branch uses, and
@@ -701,11 +700,11 @@ class Sandbox:
         Returns the real path, for delivery. A lone file (a .jar the user
         wants exactly as it is, not re-wrapped in a zip) is delivered
         verbatim, under its own real name -- `out_rel` is ignored for it.
-        Before this, a single file raised SandboxError and the model had no
-        real way to satisfy "just the jar, not a zip": observed live, it
-        answered with a fabricated `sandbox:/mnt/data/...` markdown link --
-        a ChatGPT-code-interpreter path this bot has never had -- instead of
-        admitting the tool it actually has only zips folders.
+        Zipping a lone file would leave the model no real way to satisfy
+        "just the jar, not a zip": it would answer with a fabricated
+        `sandbox:/mnt/data/...` markdown link -- a ChatGPT-code-interpreter
+        path this bot has never had -- instead of admitting the tool only
+        zips folders.
         """
         import zipfile
 

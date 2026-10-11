@@ -98,8 +98,8 @@ def brief_source(ctx, topic: str, page: dict) -> Optional[str]:
     out = dr_calls.call_llm_simple(_c, SOURCE_BRIEF_PROMPT, user,
                           temperature=0.2, max_tokens=safe, prefill="<think></think>")
     out = (out or "").strip()
-    # Two different outcomes used to share one return value, and a counter built
-    # on it could not tell an OUTAGE from a page that genuinely had nothing:
+    # Two different outcomes must stay distinguishable, so a counter can tell an
+    # OUTAGE from a page that genuinely had nothing:
     #   ""   -- the model said nothing at all (empty completion): our failure.
     #   None -- the model read the page and judged it useless: the page's.
     # Both are falsy, so every existing caller behaves as before; the one that
@@ -130,8 +130,8 @@ def _brief_tag(b) -> str:
     corro = f" | copies={cs}" if cs > 1 else ""
     # Every field is read defensively. This runs during final synthesis, after the
     # whole crawl: a brief missing a key — a source adapter that never set
-    # `domain`, or state resumed from a run that predates a schema change — used
-    # to raise KeyError and destroy an entire completed report at the last step.
+    # `domain`, or state resumed from a run that predates a schema change — would
+    # raise KeyError and destroy an entire completed report at the last step.
     # A source with a blank domain is worth far more than no report at all.
     head = (f"[Source: {b.get('domain') or 'unknown'} | trust={b.get('trust', 'COMMUNITY')}"
             f"{corro}] {b.get('title') or 'untitled'}\n{b.get('brief') or ''}")
@@ -143,8 +143,8 @@ def _brief_tag(b) -> str:
     # (\vskip/\cr/glue) don't reach the model and get echoed into the prose.
     eqs = [_repair_latex_artifacts(e).strip() for e in (b.get("equations") or []) if e and e.strip()]
     if eqs:
-        # NO fixed cap on equations per source (was [:12] — a formula-dense paper has
-        # far more, and capping dropped them from the narrative). Downstream context
+        # NO fixed cap on equations per source (a formula-dense paper has far more
+        # than a small cap keeps, and capping dropped them from the narrative). Downstream context
         # fitting (_select_section_evidence char budget, _consolidate_evidence) trims
         # the whole tag to fit the window, so this never overflows; it only stops
         # losing math the writer could integrate.

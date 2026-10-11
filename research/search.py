@@ -14,6 +14,7 @@ from config import (
     SEARCH_DISTILL_MAX_TOKENS, SEARCH_READ_PAGES, SEARCH_PAGE_CHARS, SEARCH_FETCH_WORKERS, SEARCH_FOLLOWUP_ROUND,
 )
 from prompts import SEARCHER_PROMPT
+from dr_urls import _domain
 from llm import call_llm_simple
 from utils import truncate_text, throttle_external_calls
 
@@ -97,15 +98,6 @@ def _is_landing_url(url: str) -> bool:
     return tail in _SECTION_TAILS or (len(parts) == 1 and "-" not in tail)
 
 
-def _domain(url: str) -> str:
-    """Bare registrable host, e.g. 'https://www.example.com/x' -> 'example.com'."""
-    try:
-        net = urlparse(url).netloc.lower()
-        return net[4:] if net.startswith("www.") else net
-    except Exception:
-        return url
-
-
 # Sentinel so callers can pass timelimit=None ("all time") and still be
 # distinguished from "caller didn't specify, use the config default".
 _UNSET = object()
@@ -137,7 +129,7 @@ def _ddgs_retry(ctx, do_query, error_label: str) -> list:
 
 def _region_for(ctx) -> str:
     """A Russian speaker asking about «Эрмитаж» got the Norfolk, Virginia
-    museum from a worldwide English search (live 2026-09-28). An explicit
+    museum from a worldwide English search. An explicit
     SEARCH_REGION setting wins; the worldwide default follows the reader."""
     if SEARCH_REGION != "wt-wt":
         return SEARCH_REGION
@@ -289,7 +281,7 @@ def search_duckduckgo_and_fetch(ctx, query: str, max_results: Optional[int] = No
         return NO_RESULTS
 
     # Prefer DEEP links over site roots/section pages. The per-domain cap below keeps
-    # sources diverse, but it used to be filled by whichever result came first — for a
+    # sources diverse, but it would be filled by whichever result came first — for a
     # news query that is often the outlet's homepage, so the actual articles from that
     # outlet were dropped and the user got "ria.ru" instead of the story. Sorting
     # landing pages last (stably, so relevance order is otherwise preserved) means a
@@ -367,8 +359,8 @@ def distill_search_results(ctx, query: str, raw_results: str) -> str:
     user_msg = f"User query: {query}\n\nSearch results:\n{raw_results}"
     # A request for N THINGS cannot be delivered inside a 400-token budget meant
     # for "1-4 sentences of distilled facts": five jokes came back as "there is
-    # one about an aeroplane and one about a fence". The prompt now allows a full
-    # list, so the budget has to allow it too, or the fix stops at the token cap.
+    # one about an aeroplane and one about a fence". The prompt allows a full
+    # list, so the budget has to allow it too, or the answer stops at the token cap.
     want = wanted_count(query)
     budget = SEARCH_DISTILL_MAX_TOKENS
     if want:
@@ -539,7 +531,7 @@ def image_search_urls(ctx, query: str, *, max_results: int = 12,
     # for "Кировец soviet agricultural tractor field" the engine's own top hit is
     # a photograph of the tractor at 800x533, and the deck came back with a
     # 4096x2160 flag of Kenya on its cover — 8.8 megapixels against 0.4 beats any
-    # bonus this function can apply. Relevance is now the spine and size is a
+    # bonus this function can apply. Relevance is the spine and size is a
     # floor, not a score.
     MIN_AREA = 160_000        # ~400x400: below this a slide picture is mush
 
@@ -637,7 +629,6 @@ def download_image(ctx, url: str, dest_path: str, *, timeout: int = 20,
     """Download a single image URL to ``dest_path``. Returns True iff it saved a
     file that PIL can open as a real, non-trivial image (filters HTML error pages,
     1px trackers, and truncated/corrupt downloads). Never raises."""
-    import requests
     try:
         if ctx is not None:
             throttle_external_calls(ctx)
@@ -747,9 +738,10 @@ def fetch_reference_photo(ctx, query: str, dest_path: str, *, tries: int = 10,
         try:
             shutil.copyfile(gray_fallback, dest_path)
             os.remove(gray_fallback)
-        except Exception:
-            pass
-        logger.info("fetch_reference_photo: no colour photo; using grayscale fallback for %r", query)
+        except Exception as exc:
+            logger.warning("fetch_reference_photo: grayscale fallback copy failed for %r: %s", query, exc)
+        else:
+            logger.info("fetch_reference_photo: no colour photo; using grayscale fallback for %r", query)
         return dest_path
     logger.warning("fetch_reference_photo: no candidate with a clear face in %d checked for %r",
                    checked, query)

@@ -19,7 +19,6 @@ import logging
 import sys
 import time
 import types
-from pathlib import Path
 from typing import Callable, Optional
 
 import dr_settings as S
@@ -33,18 +32,14 @@ from dr_urls import (
     _authority_score, _source_rank, _classify_source_type, _domain_allowed,
     _is_safe_public_url, _source_type_allowed, _mutate_query, _cap_per_domain,
     _AUTH_BASE_SCORE, _AUTH_CATEGORY_SCORE, _MID_SCORE, _COMMUNITY_SCORE,
-    _JUNK_SCORE, _SOURCE_TYPES,
 )
-# Re-exported unchanged so `deep_research._classify_source_type` / `._SOURCE_TYPES`
-# keep resolving on this module after the move to dr_urls (callers and tests
-# reach for them here).
-_REEXPORTED_FROM_DR_URLS = (_classify_source_type, _SOURCE_TYPES,
-                            _COMMUNITY_SCORE, _JUNK_SCORE)
-from dr_lang import DR_LANG_NAMES, _DOC_LABELS, _norm_out_lang, lang_of_text, _lab, _lang_directive
+# Re-exported unchanged so `deep_research._classify_source_type` keeps resolving
+# on this module after the move to dr_urls (callers and tests reach for it here).
+_REEXPORTED_FROM_DR_URLS = (_classify_source_type, _COMMUNITY_SCORE)
+from dr_lang import _DOC_LABELS, _norm_out_lang, lang_of_text, _lab, _lang_directive
 # Re-exported: gui_workers calls `dr.lang_of_text(topic)` to pick the report
-# language, and the output-language suite reads DR_LANG_NAMES/_DOC_LABELS off
-# this module.
-_REEXPORTED_FROM_DR_LANG = (DR_LANG_NAMES, _DOC_LABELS, lang_of_text)
+# language, and the output-language suite reads _DOC_LABELS off this module.
+_REEXPORTED_FROM_DR_LANG = (_DOC_LABELS, lang_of_text)
 from dr_timing import (
     DEPTHS, _TIMING_SEED, _TIMING_KEEP, _profile_signature,
     estimate_duration, record_run_duration,
@@ -62,14 +57,11 @@ from dr_timing import (
 # AttributeError.
 _REEXPORTED_FROM_DR_TIMING = (DEPTHS, _TIMING_SEED, _TIMING_KEEP, _profile_signature,
                               estimate_duration, record_run_duration)
-from dr_math import (
-    _repair_latex_artifacts, audit_math, _MATH_CMDS, _TEX_GLUE, _DOMAIN_RE,
-)
+from dr_math import _repair_latex_artifacts, audit_math
 # Re-exported: the pure suite and the live math probes (tests/math_live.py,
 # tests/math_stage_trace.py) call `dr.audit_math` / `DR._repair_latex_artifacts`.
 # Pure functions and constants; nothing here is patched, so no split state.
-_REEXPORTED_FROM_DR_MATH = (_repair_latex_artifacts, audit_math, _MATH_CMDS,
-                            _TEX_GLUE, _DOMAIN_RE)
+_REEXPORTED_FROM_DR_MATH = (_repair_latex_artifacts, audit_math)
 from dr_outline import (
     _clean_report_title, _extract_outline_json, _default_outline, _repair_outline_text,
     _outline_overview, _toc, _est_tokens,
@@ -84,14 +76,14 @@ from dr_extract import (
     classify_extraction, _ar5iv_url, _inline_mathml_as_tex,
     _looks_like_unmarked_math, _fix_mojibake, _extract_text, _extract_title,
     _extract_links, _social_outlinks, _content_similarity, dedupe_pages,
-    _shingles, _jaccard, _SHINGLE_CAP, _DUP_SIM,
+    _shingles, _jaccard, _SHINGLE_CAP,
 )
 # Re-exported so the GATE_* verdicts and the shingle helpers keep resolving as
 # `deep_research.X` after the move to dr_extract (callers and tests read them
 # there).
 _REEXPORTED_FROM_DR_EXTRACT = (GATE_EMPTY, GATE_THIN, GATE_CHALLENGE, GATE_SHELL,
                                _content_similarity, _shingles, _jaccard,
-                               _SHINGLE_CAP, _DUP_SIM)
+                               _SHINGLE_CAP)
 import entities as _entities
 import contradiction as _contra
 import research_graph as _rgraph
@@ -107,12 +99,12 @@ from dr_state import _slug, _save_state, _now_iso, _write_report
 # Re-exported: the synth suite drives _save_state/_write_report/_now_iso and the
 # pure suite _slug through this module.
 _REEXPORTED_FROM_DR_STATE = (_slug, _save_state, _write_report, _now_iso)
-from dr_calls import _think_call, _model_context, _resolve_effort
+from dr_calls import _think_call, _model_context
 # Re-exported: the survey/classification suites patch `deep_research.call_llm_simple`
 # — which is dr_calls' import, so they must patch it THERE. `_think_call` itself is
 # read off this module by those suites, so it stays reachable here.
-_REEXPORTED_FROM_DR_CALLS = (_think_call, _model_context, _resolve_effort)
-from dr_progress import PHASES, _Progress
+_REEXPORTED_FROM_DR_CALLS = (_think_call, _model_context)
+from dr_progress import _Progress
 from dr_policy import (
     _is_practical_request, _apply_scholarly_floor, _apply_trust_floor, _resolve_caps,
     _SCHOLARLY_CATEGORIES, _PRACTICAL_CATEGORIES, _SCHOLARLY_FLOOR_KEEP,
@@ -123,9 +115,8 @@ from dr_policy import (
 # second copy (the DR_* knobs _resolve_caps reads live in dr_settings).
 _REEXPORTED_FROM_DR_POLICY = (_is_practical_request, _apply_trust_floor, _resolve_caps,
                               _SCHOLARLY_CATEGORIES, _PRACTICAL_CATEGORIES)
-# Re-exported: research_api mirrors deep_research.PHASES, and the fetch
-# suite drives `_Progress` through this module.
-_REEXPORTED_FROM_DR_PROGRESS = (PHASES, _Progress)
+# Re-exported: the fetch suite drives `_Progress` through this module.
+_REEXPORTED_FROM_DR_PROGRESS = (_Progress,)
 from dr_relevance import (
     _entity_terms, _term_in, _term_in_any, _relevance_hits, _min_hits, _brief_is_relevant,
     _filter_offtopic_briefs,
@@ -216,7 +207,7 @@ sys.modules[__name__].__class__ = _SettingsView
 def no_briefs_report(topic: str, pages, silent: int) -> str:
     """What to tell the reader when the run produced no briefs at all.
 
-    There are two different failures here and they used to share one sentence.
+    There are two different failures here.
     Measured live with the model unloaded mid-run: every briefing call came
     back empty and the report said eight successfully fetched pages "contained
     no facts relevant to the topic" -- blaming the sources for our own outage.
@@ -293,7 +284,7 @@ def hop_anchor(profile: dict, topic: str) -> str:
     The DISTILLED subject, never the raw request. Searching, crawling and
     briefing are English throughout -- that is where the sources are -- and
     plan_queries already produces an English noun phrase for exactly this.
-    Observed live before the fix: a Russian request produced multi-hop queries
+    A Russian request would otherwise produce multi-hop queries
     like "Robusta Чем отличается кофе арабика от робусты" -- half the retrieval
     passes searching in the wrong language, with the whole question glued on.
 
@@ -396,8 +387,8 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
     # 2. Collect sources
     sources = collect_sources(ctx, queries, S.DR_RESULTS_PER_QUERY, prog, run_dir, profile)
 
-    # 2b. Coverage / diversity check + bounded corrective re-plan loop (Phase 3,
-    # extended for manual control). DR_MAX_COLLECTION_ROUNDS=1 (default) reproduces
+    # 2b. Coverage / diversity check + bounded corrective re-plan loop
+    # (extended for manual control). DR_MAX_COLLECTION_ROUNDS=1 (default) reproduces
     # the original "one corrective re-plan" exactly. Raising it, or setting
     # DR_MIN_SOURCES/DR_TARGET_SOURCES/DR_MIN_UNIQUE_DOMAINS/DR_FORCE_EXHAUSTIVE,
     # makes the agent keep broadening across MULTIPLE rounds until those targets
@@ -606,14 +597,14 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
     prog.stats["contradictions"] = contra_sig["count"]
     _save_state(run_dir, phase="contradiction", contradictions=contra_sig)
 
-    # 4b. Citation-graph enrichment for scholarly topics (Phase 9): inject a
-    # PRIMARY synthetic source carrying citation counts + lineage from OpenAlex,
-    # so synthesis can build the intellectual-lineage table that plain web
-    # search can never supply.
     if dropped_irrelevant:
         prog.stats["off_topic_dropped"] = dropped_irrelevant
         logger.info("Relevance gate dropped %d off-topic briefs", dropped_irrelevant)
 
+    # 4c. Citation-graph enrichment for scholarly topics: inject a
+    # PRIMARY synthetic source carrying citation counts + lineage from OpenAlex,
+    # so synthesis can build the intellectual-lineage table that plain web
+    # search can never supply.
     have_citations, cit_body = False, ""
     if (S.DR_CITATIONS_ENABLED and profile.get("category") in _SCHOLARLY_CATEGORIES
             and not cancelled()):
@@ -846,12 +837,10 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
 
     report = None
     survey = None
-    # PRACTICAL intent gets a bookable-options list, NOT a survey paper. Survey mode
-    # used to be unconditional, so "дай мне ссылки на конкретные экскурсии" returned
-    # "Digital Infrastructure for Urban Tourism: A Survey of Booking Systems" — an
-    # abstract and a table of contents where the user wanted links, prices and
-    # departure times. The category was already classified `local`; it just was not
-    # used to pick the report FORM.
+    # PRACTICAL intent gets a bookable-options list, NOT a survey paper.
+    # A survey gives an abstract and a table of contents where the user wants links,
+    # prices and departure times. The category is already classified `local`; it
+    # must also pick the report FORM.
     topic = _steer.with_notes(topic, _steer.take(ctx))    # last one before the writing
     _practical = _is_practical_request(topic, profile)
     if _practical:

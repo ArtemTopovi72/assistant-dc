@@ -6,12 +6,9 @@ to a sane default when it returns nothing usable, repair mojibake in its strings
 render the overview and the table of contents, clean the report title, and the
 small text utilities the assembler uses around them.
 
-Split out of deep_research.py. Every function here is pure. Note what is NOT
-here: `_normalize_outline` reads DR_SURVEY_MAX_SECTIONS and `synthesize_survey`
-reads DR_SURVEY_SECTION_TOKENS, and both of those are manual-control knobs that
-`deep_research.apply_overrides` swaps in that module's globals for the duration
-of a run. Moving them would bind the knob at import time and silently ignore
-every override, so they stay where the globals live.
+Every function here is pure. `_normalize_outline` is not here: it reads the
+DR_SURVEY_MAX_SECTIONS knob and lives in dr_synthesis with the other code that
+reads the DR_SURVEY_* knobs.
 """
 import re
 from typing import Optional
@@ -25,10 +22,10 @@ def _extract_outline_json(text: str) -> Optional[dict]:
     """Best-effort parse of the planner's JSON (tolerates code fences / stray prose)."""
     if not text:
         return None
-    # Was: first '{' to last '}'. A reply with a brace after the object — trailing
-    # prose, or the duplicate ```json block these models append — spanned two
-    # objects, failed to parse, and silently dropped the planner's real outline in
-    # favour of _default_outline. Verified against both shapes.
+    # A reply with a brace after the object (trailing prose, or the duplicate
+    # ```json block these models append) must still parse: slicing from the first
+    # '{' to the last '}' spans two objects, fails, and silently drops the planner's
+    # real outline in favour of _default_outline.
     return safe_json_from_llm(text, required_keys=("sections", "title"))
 
 
