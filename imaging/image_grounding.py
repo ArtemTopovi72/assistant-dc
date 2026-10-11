@@ -573,7 +573,7 @@ def _firered_style_instruction(ctx, instructions: str, image_path: Optional[str]
             "re-pose, crop, or zoom in on anyone or anything, even to follow "
             "the conventions of the requested style. "
             # This model cannot render legible lettering under a full restyle --
-            # confirmed live 2026-09-20, a restyled poster's background neon
+            # confirmed: a restyled poster's background neon
             # signs came out as illegible mush. Prompting it to "keep the text
             # crisp" does not work (it has no mechanism to render clean glyphs
             # here); the reliable fix is to stop it from ATTEMPTING new words at

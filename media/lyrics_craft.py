@@ -363,7 +363,7 @@ def analyse(text: str, ctx=None) -> dict:
                         issues.append({"kind": "rhythm", "lines": (r["n"],)})
                         penalty += 0.5
     if _lang_name(text) == "Russian":
-        # «Harness держит её» in a Russian song (live 10-03): sung as nonsense
+        # «Harness держит её» in a Russian song: sung as nonsense
         for rows in info:
             for r in rows:
                 latin = re.findall(r"\b[A-Za-z]{2,}\b", r["text"])

@@ -155,7 +155,7 @@ def split_script(description: str, max_seconds: float = 0.0) -> list:
     restore = lambda t: re.sub(r"\x00(\d+)\x00", lambda m: quotes[int(m.group(1))], t)
     # Sound, light and look lines take no screen time and belong to every part: as a
     # part of their own they were "2. Soundscape: soft indoor ambience…" with no action
-    # (live 2026-10-10), and their words had pushed a one-clip script into two.
+    # and their words had pushed a one-clip script into two.
     look = " ".join(p.strip() for p in pieces if _LOOK.match(p.strip()))
     pieces = [p for p in pieces if not _LOOK.match(p.strip())]
     if look:
@@ -299,7 +299,7 @@ def _models_dir() -> str:
 
 REQUIRED_FILES = {
     # t2va: workflow_video_h3.json; ref2va (every "animate this photo" request):
-    # Singularity fine-tune, A/B 2026-09-24
+    # Singularity fine-tune, chosen by A/B
     "diffusion_models": ["MiniMax-H3-Pruned-Ref-Delta-Fused-r1024-comfy-int8-convrot.safetensors",
                          "Minimax-h3_Singularity_ref2va_Pruned_v1.3_int8.safetensors"],
     "text_encoders": ["qwen3vl_32b_minimax_h3-Q4_K_M.gguf"],
@@ -336,7 +336,7 @@ def engine_available(ctx=None) -> tuple[bool, str]:
                        + ") — run scripts/fetch_h3_weights.py")
     has = _server_has_h3_nodes()
     if has is None:
-        # Down is not "too old" (live 10-02 night: the agent told the user video
+        # Down is not "too old" (the agent once told the user video
         # "is not set up yet" while ComfyUI was merely not running).
         return False, f"ComfyUI is not responding at {COMFY_URL} (not running) — try again shortly"
     if not has:
@@ -441,7 +441,7 @@ LATENT_UPSCALER = os.getenv(
     "VIDEO_LATENT_UPSCALER", "night\\minimax_h3_latent_upscaler_3d_conv_v1_bf16.safetensors")
 
 
-# 1.5x, not 2x (user pick 2026-09-27, bench/h3_stage2.py): stage 2 + decode
+# 1.5x, not 2x (user pick, bench/h3_stage2.py): stage 2 + decode
 # 45 s vs 93 s; the clip comes out 1008x576 instead of 1344x768.
 UPSCALE_FACTOR = _cfg_env.env_float("VIDEO_UPSCALE_FACTOR", 1.5)
 REFINE_STEPS = max(1, _cfg_env.env_int("VIDEO_REFINE_STEPS", 2))
@@ -491,7 +491,7 @@ def _add_latent_upscale(wf: dict, seed: int, factor: float = 0.0) -> None:
         "noise": [n["noise"], 0], "guider": [n["guide"], 0], "sampler": [n["smp"], 0],
         "sigmas": [n["sig"], 0], "latent_image": [n["cat"], 0]}}
     # The refine re-noises the WHOLE pack, audio included, and rebuilds it in a
-    # couple of steps -- that thinned the hits and the score (10-02). The picture
+    # couple of steps -- that thinned the hits and the score. The picture
     # comes from the refine, the sound stays the clean stage-1 sound.
     wf[n["sep2"]] = {"class_type": "LTXVSeparateAVLatent", "inputs": {"av_latent": [n["adv"], 0]}}
     wf[n["cat2"]] = {"class_type": "LTXVConcatAVLatent",
@@ -532,7 +532,7 @@ def build_workflow(prompt: str, *, mode: str, width: int, height: int,
 
     # The Turbo LoRA baked into workflow_video_h3_ref.json (node 13) is
     # distilled for EXACTLY 4 NFE (huggingface.co/lightx2v/Minimax-h3-Turbo).
-    # Live 2026-09-20: ref2va renders came back "оч мыльно" (soft/blurry) and
+    # ref2va renders came back "оч мыльно" (soft/blurry) and
     # steps was raised past 4 to fix it -- but sampling a 4-step-distilled
     # LoRA for more steps is outside its trained regime and won't sharpen
     # anything (same lesson as the Ideogram turbo LoRA fighting its own
@@ -543,7 +543,7 @@ def build_workflow(prompt: str, *, mode: str, width: int, height: int,
     if N_LORA in wf and mode == "t2va" and smp["steps"] == 3 and VIDEO_T2VA_LORA_3STEP:
         wf[N_LORA]["inputs"]["lora_name"] = VIDEO_T2VA_LORA_3STEP
     # A turbo LoRA stays on ABOVE 4 steps (community range 6-8 sharpens it);
-    # zeroed there, the bare model at cfg 1 turned a fist into mush (10-02).
+    # zeroed there, the bare model at cfg 1 turned a fist into mush.
     elif N_LORA in wf and smp["steps"] < 4:
         wf[N_LORA]["inputs"]["strength_model"] = 0.0
 
@@ -555,7 +555,7 @@ def build_workflow(prompt: str, *, mode: str, width: int, height: int,
         if mode == "t2va" and not images:
             _add_latent_upscale(wf, seed)
         elif mode == "ref2va":
-            # Half size, then 2x back to full (live 10-02, the deds fight at 8
+            # Half size, then 2x back to full (the deds fight at 8
             # steps: 267 s vs 348 s single-stage, hands clean at 1344x768).
             _add_latent_upscale(wf, seed, factor=2.0)
 
@@ -644,7 +644,7 @@ MOTION_CONTEXT_FRAMES = int(os.getenv("VIDEO_MOTION_CONTEXT_FRAMES", "22"))     
 
 
 def motion_context_on() -> bool:
-    # Off by default (10-07): on ComfyUI 0.33 with node v0.3.1 and pixel pins, the model
+    # Off by default: on ComfyUI 0.33 with node v0.3.1 and pixel pins, the model
     # often did not carry the motion on after the pins -- a hard reset on the frame after
     # the 22nd (knife in hand -> another pose, no knife), plus objects morphing. Opt in
     # with VIDEO_MOTION_CONTEXT=1 to retest (latent pins / ComfyUI >= 0.34 untried).
@@ -696,14 +696,14 @@ def latent_file(tag: str) -> str:
     return str(OUTPUT_DIR_COMFY / "h3_context" / f"{tag}_00001.safetensors")
 
 
-# Continuation as a chain (Herrgott's H3 Infinite Continuation Suite v1.4, 2026-10-07):
+# Continuation as a chain (Herrgott's H3 Infinite Continuation Suite v1.4):
 # every part saves its full video+audio latent; the next part COPIES the previous tail
 # into its own latent and hard-protects it with ComfyUI's native per-stream denoise mask
 # (PR #15375), so motion, objects and the voice go on instead of restarting. The suite's
 # StitchSavedChain then cuts each protected head and crossfades the joins. Live chef A/B:
 # both seams continuous, ~200 s per 6 s part at 768x1024 (bench/herrgott_chain.py).
 # Each chain owns a folder: LoadLatent picks the newest file with the slot number in it.
-# Same steps and LoRA as a plain clip (TaoMate 3-step). Live 10-07 the chain ran the FL2V
+# Same steps and LoRA as a plain clip (TaoMate 3-step). The chain once ran the FL2V
 # v1.2 turbo LoRA at 6 steps and came back soapy where plain clips were crisp.
 HERRGOTT_STEPS = int(os.getenv("VIDEO_HERRGOTT_STEPS", str(VIDEO_STEPS)))
 HERRGOTT_CONTEXT = "39"                                           # protected frames, the suite's default
@@ -1008,7 +1008,7 @@ def mark_speech_stress(ctx, prompt: str) -> str:
 
     def one(m):
         # Only the spoken words go through the accentor: RUAccent normalizes
-        # punctuation away and turned the closing "</d>" into "d>" (live 10-02),
+        # punctuation away and turned the closing "</d>" into "d>",
         # leaving the line unterminated for H3.
         head, line, tail = re.match(r"(«|\"|<d>(?:\[[^\]]*\]\s*)?)(.*?)(»|\"|</d>)$", m.group(0), re.S).groups()
         try:
@@ -1045,7 +1045,7 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
     user = (f"Mode: {task}. Target duration: {seconds:.2f} seconds. "
             f"Reference pictures attached in order: {len(images)}; reference videos: "
             f"{n_videos}; reference audios: {n_audios}.\n"
-            # Live 10-02 the summary said «[video continuation + audio reference]» with
+            # The summary once said «[video continuation + audio reference]» with
             # no video at all: the task type names only what the references really do.
             + ("" if n_videos else "There is NO reference video: the summary's task type is "
                "never 'video continuation' or 'video editing' -- pictures are 'reference "
@@ -1053,7 +1053,7 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
             "Rewrite the request below into the final prompt exactly as the guide's final "
             "prompt structure prescribes (instruction line first where the mode needs one, "
             "then the fields in order). Output ONLY the final prompt, no commentary.\n"
-            # Live 10-01: «сочные удары, эпичный баян» came out as «muffled thudding
+            # «сочные удары, эпичный баян» came out as «muffled thudding
             # hits» in the soundscape and a whisper of accordion. The guide's own
             # rules: a synchronized sound sits next to its action, the mix is stated.
             "SOUND RULES -- H3 places a sound on the frame by the words beside it. "
@@ -1078,7 +1078,7 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
             "instruments, tempo and dynamics, never mood words like 'epic'; when the user "
             "asked for music it is clearly audible: under the dialogue during lines, "
             "swelling back up between them, never 'faint' or 'distant' unless they said so.\n"
-            # Live 10-10 (kettle): three voice samples and a Russian request with the
+            # Three voice samples and a Russian request with the
             # narrator's own words came back as three people saying «It's almost ready».
             "SPEECH RULES -- (1) Only the people the request has speak, and only what the "
             "request gives them to say: its spoken words go in word for word in the "
@@ -1311,7 +1311,7 @@ def generate_video(ctx, description: str, *,
     # nothing but ComfyUI runs between submit and file. Left NON-exclusive the
     # chat model stayed resident, the DiT got 13.4 GB of the card, 6.2 GB were
     # offloaded to RAM and a 5-second clip took 25 minutes at 190 s/step
-    # (live, 2026-09-12, journey 28) -- the chat turn that followed then
+    # -- the chat turn that followed then
     # fought the render for the card and timed out three times.
     out = comfy_client._submit_and_poll(ctx, wf, timeout=VIDEO_JOB_TIMEOUT,
                                         label=f"H3 {mode}", on_progress=on_progress,
@@ -1324,7 +1324,7 @@ def generate_video(ctx, description: str, *,
             _VIDEO_FAILURE.update({"reason": "cancelled", "detail": "cancelled"})
             return {"path": None, "status": "cancelled", "reason": "cancelled"}
         # The real cause, not a blank: with only "no file" the chat model made
-        # one up for the user (live 2026-10-03).
+        # one up for the user.
         why = comfy_client.last_failure() or "the render produced no file"
         _VIDEO_FAILURE.update({"reason": "server_error", "detail": why})
         return {"path": None, "status": "fail", "reason": why}

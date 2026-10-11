@@ -189,7 +189,7 @@ def train(ctx, name: str, vocal_wav: str):
     _run(ctx, ["extract", "--model-name", name, "--f0-method", "rmvpe", "--sample-rate", sr, "--gpu", "0"],
          "RVC extract", 900)
     # Applio binds a random port in 20000..55555 for torch.distributed; Windows reserves
-    # 53091..53790 and 50000..50059 here, and on those the run dies in TCPStore (10-08: the
+    # 53091..53790 and 50000..50059 here, and on those the run dies in TCPStore (the
     # Russian bind error crashed its own decoding) yet still prints «trained successfully».
     # A run that left no weights is run again.
     pths = lambda: glob.glob(os.path.join(APPLIO, "logs", name, f"{name}_*e_*s.pth"))

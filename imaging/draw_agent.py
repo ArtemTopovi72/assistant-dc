@@ -437,8 +437,8 @@ def apply_ops(layout: dict, ops: list, *, additive_only: bool = False,
                     notes.append(f'kept “{str(els[i].get("desc") or "")[:30]}”: it was just '
                                  f"moved or reworded, deleting it too contradicts that")
                     continue
-                # The requested lettering is never the critic's to delete. On
-                # 2026-09-12 it saw stray text NEXT TO the label, answered with
+                # The requested lettering is never the critic's to delete. Once
+                # it saw stray text NEXT TO the label, answered with
                 # "delete the label", and the next three renders had no words
                 # to print at all. A user's own instruction to remove it is a
                 # different path (edit_layout with that instruction).
@@ -449,7 +449,7 @@ def apply_ops(layout: dict, ops: list, *, additive_only: bool = False,
                     continue
                 # Nor is the thing the lettering is written ON: with the bottle
                 # gone the label had no host, grew to half the frame, and the
-                # render became a crop of a label (live, 2026-09-12).
+                # render became a crop of a label.
                 _hosted = [t for t in els if str(t.get("text") or "").strip()
                            and _box_contains(els[i], t)]
                 if _hosted and not any(_instruction_removes(instruction, s, els[i].get("desc") or "") for s in
@@ -576,7 +576,7 @@ def apply_ops(layout: dict, ops: list, *, additive_only: bool = False,
                 layout["background"] = new_bg
                 # The empty-space element above the subject is built from the OLD
                 # background text; left alone it kept painting the old backdrop
-                # («фон пусть будет красный» -> still a neutral grey, live 2026-10-08).
+                # («фон пусть будет красный» -> still a neutral grey).
                 if old_bg and new_bg:
                     for el in els:
                         if old_bg in str(el.get("desc") or ""):
@@ -873,8 +873,8 @@ def edit_layout(ctx, layout: dict, instruction: str) -> tuple:
 
 
 # "let there be two cats" came back as ONE box described "two fluffy gray cats
-# sitting together" — and the renderer drew one merged mass with extra limbs
-# (live 2026-09-13, mega step 127; the same in the 12.09 run). A countable
+# sitting together" — and the renderer drew one merged mass with extra limbs.
+# A countable
 # subject gets its own box: the box is split side by side, one subject each.
 # Explicit numbers only: "a pair of glasses" is one object.
 _COUNT_WORDS = {"two": 2, "2": 2, "three": 3, "3": 3, "four": 4, "4": 4}
@@ -1040,7 +1040,7 @@ def split_edit(ctx, instruction: str) -> dict:
 # --------------------------------------------------------------------------- #
 # Looking at the result
 # --------------------------------------------------------------------------- #
-# Kept SHORT on purpose. Measured 2026-07-29 on the reader model: the length of
+# Kept SHORT on purpose. Measured on the reader model: the length of
 # this prompt drives how long the model deliberates before answering, and the
 # deliberation is what eats the token budget. A version with worked examples of
 # every operation burned 1997 reasoning tokens and answered 1 time in 4 — the
@@ -1378,13 +1378,13 @@ _LAYOUT_CONCERN_RE = re.compile(
     r"lacks|lacking|too dark|entirely black|underexpos|"   # real on a picture that measures dark
     # Something EXTRA is as wrong as something missing: "a third cat visible
     # on the left which was not in the layout" was dropped as taste and a
-    # two-cat request shipped with three (live, 2026-09-12, journey 21).
+    # two-cat request shipped with three.
     r"\bextra\b|additional|\b(?:third|fourth|fifth)\b|more than (?:one|two|three|four)|"
     r"not in the (?:layout|plan|request)|not (?:asked|requested)|wasn't (?:in|part of)|"
     r"was not (?:in|part of|requested)|stray|unwanted|unrequested|"
     # The COLOUR of a named thing is content, not taste: "The elephant is not
     # pink as requested" was dropped as taste and a tan elephant shipped as a
-    # successful recolour, twice (live 2026-09-18, journey 4).
+    # successful recolour, twice.
     r"wrong colou?r|colou?r is (?:wrong|not|off)|"
     r"\b(?:is|are|looks?|appears?|remains?|still)\s+not\s+(?:red|pink|blue|green|yellow|"
     r"orange|purple|violet|black|white|brown|grey|gray|golden?|silver|turquoise|"
@@ -1423,7 +1423,7 @@ def critique(ctx, image_path: str, layout: dict, evidence: Optional[list] = None
         # No <think></think> prefill on vision calls — it breaks them (see
         # docs/vision_pipeline_forensics.md); the JSON instruction carries the format.
         # Same reader model as the transcription: on every live render measured
-        # 2026-07-29 the chat model answered this with no JSON at all, so the
+        # the chat model answered this with no JSON at all, so the
         # critic reported "unavailable" and had no vote on any real picture.
         raw = llm.analyze_image_with_llm(
             _reader(ctx), image_path=image_path,
@@ -1453,7 +1453,7 @@ def critique(ctx, image_path: str, layout: dict, evidence: Optional[list] = None
         problems = [str(p) for p in (data.get("problems") or []) if str(p).strip()]
         if _exposure.judge_is_blind(problems, image_path):
             # "The image is almost entirely black" about a twilight café that
-            # measures 100+/255 (live, 2026-09-12, four verdicts in a row).
+            # measures 100+/255 (four verdicts in a row).
             # A critic that did not see the picture gets no vote on it -- not
             # on the darkness, and not on the "missing" things it lists as a
             # consequence of the darkness it imagined.
@@ -1683,7 +1683,7 @@ def run(ctx, request: str = "", *, layout: Optional[dict] = None,
         if text_check.get("failures"):
             layout, notes = repair_text(layout, text_check["failures"], attempt)
             if garbled & _garbled_before:
-                # Live 2026-09-18 (journey 25): "только до пятницы" came back
+                # "только до пятницы" came back
                 # "только до пятниИЦЬ" on TWO attempts in a row, byte-identical,
                 # because the seed never changed -- repair_text only enlarges the
                 # box and restates the spelling, both geometric, so a fixed seed
@@ -1719,7 +1719,7 @@ def run(ctx, request: str = "", *, layout: Optional[dict] = None,
         # "X is orange instead of bright pink" is a REPORT, not an instruction.
         # Handed to the editor as one, it rewrote the element to "an orange-red
         # elephant", the next render was orange, and the critic -- judging
-        # against the rewritten layout -- scored it 10 (live, 2026-09-12; the
+        # against the rewritten layout -- scored it 10 (the
         # same again with brown). A wrong-attribute complaint keeps the layout's
         # wording, underlines it, and re-rolls the seed instead.
         layout, notes, unmet = insist_on_mismatch(layout, unmet)

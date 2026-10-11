@@ -103,7 +103,7 @@ def _remove_via_objectclear(ctx, image_path: str, target_phrase: str, *, seed: i
         got = _cf._contained_region_mask(ctx, image_path, target_phrase, grow=18, seed=seed,
                                          timeout=timeout, protect_face=False,
                                          # the VLM cutout judge rejected a clean cat mask twice
-                                         # (live 10-03) and the removal fell to FireRed, which
+                                         # and the removal fell to FireRed, which
                                          # left a halo
                                          stage1_qa=False)
         if not got:
@@ -114,7 +114,7 @@ def _remove_via_objectclear(ctx, image_path: str, target_phrase: str, *, seed: i
             _cover = float((_np.asarray(mask.convert("L")) > 127).mean())
             if _cover > max_cover:
                 # «white letters and icon background» selected half the picture and
-                # ObjectClear rewrote the whole wall and the person (live 2026-10-08)
+                # ObjectClear rewrote the whole wall and the person
                 logger.warning("remove-object: mask covers %.0f%% of the picture (limit %.0f%%) "
                                "-- not filled", _cover * 100, max_cover * 100)
                 return None
@@ -124,7 +124,7 @@ def _remove_via_objectclear(ctx, image_path: str, target_phrase: str, *, seed: i
         out = _lr._fill_objectclear(ctx, image_path, mask_path, 18)
         # no smear gate here: a clean fill of a plain table measured 0.475 against
         # a busy window ring (gate 0.6), and with no fallback a rejection is only a
-        # failure (live 10-03); the gate stays for lettering
+        # failure; the gate stays for lettering
         if out:
             logger.info("Remove-object: ObjectClear -> %s", os.path.basename(out))
         return out
@@ -164,8 +164,8 @@ def remove_object_with_comfy(
     # the router hands «the cat»; the instructions add their own article («the the cat»)
     target_phrase = re.sub(r"^(?:the|a|an)\s+", "", target_phrase.strip(), flags=re.I) or target_phrase.strip()
 
-    # --- PRIMARY: ObjectClear on the SAM3 mask (user's pick on the vase/cat A/B,
-    # 2026-09-25: faster, 58-89 s vs 90-97 s, and preferred by eye). A fill hint
+    # --- PRIMARY: ObjectClear on the SAM3 mask (user's pick on the vase/cat A/B:
+    # faster, 58-89 s vs 90-97 s, and preferred by eye). A fill hint
     # ("put a lamp there") needs an instruction model, so that stays on FireRed.
     if not (fill_hint or "").strip() and os.getenv("OBJECT_REMOVE_ENGINE", "objectclear") == "objectclear":
         out = _remove_via_objectclear(ctx, image_path, target_phrase, seed=seed, timeout=timeout,
@@ -179,7 +179,7 @@ def remove_object_with_comfy(
     # --- FireRed contained tile-edit (clean semantic reconstruction) ---
     if (fill_hint or "").strip():
         # "and its shadow and reflection": without it FireRed leaves a ghost of
-        # the object on the floor or glass (FireRed findings, 2026-10-02)
+        # the object on the floor or glass (FireRed findings)
         rm_instr = (f"Completely remove the {target_phrase} and its shadow and reflection. In its place show "
                     f"{fill_hint.strip()}, seamlessly matching the surrounding area. "
                     f"Photorealistic, natural, keep everything else identical.")

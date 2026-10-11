@@ -128,7 +128,7 @@ def auto_fix_text(layout: dict) -> tuple:
             # on a shop -- must stay on it. The single-line rule stretched
             # 'Для гостей театра на Пролетарской' (34 chars) to 94% of the
             # frame and the label floated off its bottle as a banner across
-            # the picture (live, 2026-09-12). Wrap it as a printer would; and
+            # the picture. Wrap it as a printer would; and
             # if even wrapped it needs more room than the host has at the
             # glyph floor, the SHOT moves closer -- the host grows around its
             # centre -- rather than the letters shrinking into scribble.
@@ -139,7 +139,7 @@ def auto_fix_text(layout: dict) -> tuple:
             need_w, need_h = w / 0.92, h / 0.6
             if need_w > host["w"] or need_h > host["h"]:
                 # The host must stay WHOLE: a bottle that grows to the frame
-                # edge comes back with its cap cut off (live, 2026-09-12),
+                # edge comes back with its cap cut off,
                 # so it is capped at IN_FRAME of the frame and told so.
                 f = min(max(need_w / host["w"], need_h / host["h"]),
                         IN_FRAME / host["w"], IN_FRAME / host["h"])
@@ -326,14 +326,14 @@ def spell_out(el: dict) -> str:
     if len(lines) == 1 and " " not in text:
         # One word: letter by letter is the one thing that reliably fixes a
         # garbled render (POLICE -> AVCHKE).
-        # The spelling was "В-Е-Ч-Е-Р" and the sign came out "ВЕ-Ч-ЕР"
-        # (live 2026-09-28): the hyphens are painted, so the letters are
+        # The spelling was "В-Е-Ч-Е-Р" and the sign came out "ВЕ-Ч-ЕР":
+        # the hyphens are painted, so the letters are
         # counted and named instead, with separators ruled out explicitly.
         return (f'{surface} (the {len(text)}-letter word “{text}” as one solid word, in '
                 f"clean bold block capitals, every letter correctly formed, the letters set "
                 f"closely side by side)")
     # Several words or lines: hyphenating the letters made the model PAINT the
-    # hyphens ("ПРОЛЕТАР-СК-сой", live 2026-09-12). State the lines instead,
+    # hyphens ("ПРОЛЕТАР-СК-сой"). State the lines instead,
     # each as its own quoted phrase, in order.
     quoted = " / ".join("“%s”" % ln for ln in lines)
     return (f"{surface} (the lettering reads, in {len(lines)} line"

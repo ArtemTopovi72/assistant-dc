@@ -83,8 +83,8 @@ def server_healthy(force: bool = False) -> bool:
 
 # Why the last submit on THIS thread came back empty, in words a user can be
 # told. Callers used to say only "the render produced no file", and the chat
-# model then invented a cause ("a conflict in the animation algorithms",
-# live 2026-10-03) while the real one sat in the log.
+# model then invented a cause ("a conflict in the animation algorithms")
+# while the real one sat in the log.
 _FAILURE = threading.local()
 
 
@@ -570,7 +570,7 @@ def _release_card() -> None:
         _notice("render queue empty - bringing %s back" % model)
         # ComfyUI FIRST. It still holds the render's weights, and a chat model
         # loaded into what they leave behind comes up short of the headroom it
-        # had before the render -- on 2026-09-11 it loaded, then crashed on
+        # had before the render -- it loaded, then crashed on
         # the first vision call (a 1728x2304 inspect) and every turn after
         # that was "No models loaded". Same order the claim used, mirrored.
         _free_comfy_models()
@@ -578,7 +578,7 @@ def _release_card() -> None:
         # before the tensors are gone, the same way `lms unload` does on the
         # way in. The model still needs the room it had before the render;
         # loaded a few hundred MB short it comes up, then dies on the first
-        # picture (live, 2026-09-12, journey 3: crash on a vision call two
+        # picture (a crash on a vision call two
         # minutes after the give-back, three turns lost).
         free = _LT.wait_vram_free(RELOAD_LLM_MIN_FREE_MB, timeout=_LT.FREE_GPU_WAIT_S)
         if free is not None and free < RELOAD_LLM_MIN_FREE_MB and RELOAD_VRAM_EXTRA_WAIT_S > 0:
@@ -769,7 +769,7 @@ def _submit_and_poll(ctx, workflow: dict, timeout: int = 1900, label: str = "",
     _fail("")
     if ctx is not None and getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
         # Stop pressed while the prompt was being planned: claiming the card
-        # would unload the chat model for a job nobody wants (live 2026-09-28).
+        # would unload the chat model for a job nobody wants.
         logger.info("ComfyUI submit skipped: cancelled%s", f" ({label})" if label else "")
         return None
     if not server_healthy():
@@ -1120,8 +1120,8 @@ def adopt_output(path: str, what: str = "file", out_dir=None) -> str:
         logger.warning("could not copy the %s into %s (%s) — using it in place",
                        what, dest_dir, exc)
         return path
-    # Moved, not kept twice: nothing cleans ComfyUI's output tree (since
-    # 2026-09-27 it is ours, runtime/comfy), so every render stayed there too.
+    # Moved, not kept twice: nothing cleans ComfyUI's output tree (it is
+    # ours, runtime/comfy), so every render stayed there too.
     try:
         os.remove(path)
     except OSError:

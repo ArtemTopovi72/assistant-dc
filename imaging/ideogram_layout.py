@@ -159,7 +159,7 @@ def build_caption(background: str, elements: list, *, high_level: str = "",
 
 
 # No instruction is appended to `background` to keep unlisted signage
-# lettering-free. Tried in 4595f07 and measured 2026-09-23 (three scenes,
+# lettering-free. Measured (three scenes,
 # fixed seeds, with/without; bench/signage_guard_ab.py): the pseudo-lettering
 # on signs came out the same either way, so the clause bought nothing while
 # putting renderer instructions into a field that is scene content.

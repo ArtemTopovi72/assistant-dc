@@ -29,7 +29,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SX = os.path.join(ROOT, "models_ext", "soulx_singer")
 # On C:, not Z: -- from the QLC Z: drive torch's CUDA libraries (cuDNN...) load lazily inside
 # the first segment: 3+ min cold, and the bot's 900 s timeout hit while another job wrote to Z:
-# (10-07); warm, the whole 3-min song converts in 49 s.
+# Warm, the whole 3-min song converts in 49 s.
 SX_PY = venv_python(os.path.join(ROOT, "venv_soulx"))
 SX_MODEL = os.path.join(SX, "pretrained_models", "SoulX-Singer", "model-svc.pt")
 SEEDVC_PY = venv_python(os.path.join(ROOT, "venv_qwen"))
@@ -525,7 +525,7 @@ def _arrange_score(cand: list, sung: list, plain: list, hook: set, spare: list =
             return None
         cost += (2 if syl > notes else 1) * abs(notes - syl) / max(1, notes)   # crowding hurts more
         # Repeats must not eat the meaning: «я работал говновозом» -> «говновоз, говновоз» lost
-        # who did what (10-08 draft); every content word the plain lines had and this one lost costs.
+        # who did what; every content word the plain lines had and this one lost costs.
         kept = {w for w in _words(" ".join(base)) if len(w) >= 4}
         cost += 0.5 * len(kept - set(_words(" ".join(lines)))) / max(1, len(kept))
         if tag == "Chorus":
@@ -630,7 +630,7 @@ def _layout(ctx, lyrics: str, parts: list, profile: list = None) -> str:
         per = max(1, len(lines) // max(1, len(sung)))
         plan = [list(range(1 + i * per, 1 + min(len(lines), (i + 1) * per))) or [len(lines)]
                 for i in range(len(sung))]
-    # Only a chorus repeats. A verse that re-sings lines another verse had (10-07: the model
+    # Only a chorus repeats. A verse that re-sings lines another verse had (the model
     # gave verse 2 the lines of verse 1 and the tourists' verse was never sung) takes the
     # next lines nobody has sung yet instead.
     refrain = {n for (tag, _), nums in zip(sung, plan) if tag == "Chorus" for n in nums}
@@ -691,7 +691,7 @@ def _resing_style(ctx, heard: str, tempo_key: str, title: str = "") -> tuple:
             "recognize the song, else \"\", \"tags\": 8-12 comma-separated music tags: genre, era, lead "
             "vocal (gender, timbre), main instruments, mood}. JSON only.",
             # The title names the singer; the sung lines alone made SHAMAN's «Я русский»
-            # «Alexander Marshal», and the cover went out in Marshal's voice (10-08).
+            # «Alexander Marshal», and the cover went out in Marshal's voice.
             (f"File title: {title}\n" if title else "") + heard[:600], temperature=0.2, max_tokens=200)
         got = safe_json_from_llm(raw or "", ["tags"]) or {}
     except Exception as exc:
@@ -716,7 +716,7 @@ def _mix_vocal(conv: str, yvox, yback) -> str:
 
 
 # A take of YuE2 is a draw: on «3 сентября» the same score, words and settings gave 27..36 of
-# 42 lines heard right depending on the seed (10-07, outputs/yue_cover/sweep). The user asked to
+# 42 lines heard right depending on the seed (outputs/yue_cover/sweep). The user asked to
 # keep re-rolling until the words are clear, so up to RESING_TAKES takes are sung, each scored
 # by Whisper against the laid-out lyric, and the first clear one (or the clearest) is kept.
 RESING_TAKES = int(os.getenv("RESING_TAKES", "3"))
@@ -833,7 +833,7 @@ def resing(ctx, song: str, lyrics: str, info: dict = None) -> str:
 
 
 # An RVC conversion is a draw too: one model, settings and take came out 0.52..0.78 like the
-# lyric over four runs (10-08, runtime/govnovoz/rep_sweep.py), so the voice is sung a few times
+# lyric over four runs (runtime/govnovoz/rep_sweep.py), so the voice is sung a few times
 # and the closest kept.
 RVC_TRIES = int(os.getenv("RVC_TRIES", "3"))
 
@@ -926,7 +926,7 @@ def lyrics_of(ctx, song: str) -> str:
     work = tempfile.mkdtemp(prefix="lyrics_")
     _stems(song, work, "w")
     # An original's stem under a dense mix: with VAD on Whisper kept ~50 of SHAMAN's words and
-    # skipped the verses, off it heard 161 (10-08). Both are heard; the fuller one is kept
+    # skipped the verses, off it heard 161. Both are heard; the fuller one is kept
     # (credit-line hallucinations are filtered either way).
     heard = []
     for vad in (True, False):
@@ -1036,7 +1036,7 @@ def _cover_cost(new: str, orig_sections: list) -> float:
     secs = _sections_of(new)
     if not secs:
         return None
-    # A long song's shape is rarely hit line for line (10-08: «Крошка моя», three drafts, all
+    # A long song's shape is rarely hit line for line («Крошка моя», three drafts, all
     # off by a line or a section, and the cover failed): a miss costs, it does not refuse.
     a, b = _shape(orig_sections), _shape(secs)
     cost = 0.5 * abs(len(secs) - len(orig_sections)) / len(orig_sections) + abs(len(a) - len(b)) / len(a)
@@ -1044,7 +1044,7 @@ def _cover_cost(new: str, orig_sections: list) -> float:
     rep = [(i, x[2]) for i, x in enumerate(a) if x[2] is not None]
     if rep:
         cost += sum(1 for i, j in rep if i >= len(b) or b[i][2] != j) / len(rep)
-    # A new text, never the old one with the title word swapped (10-08: shown the original's
+    # A new text, never the old one with the title word swapped (shown the original's
     # lines, the model kept SHAMAN's lyric and changed «русский» to «дачник»).
     ow = {w for _, ls in orig_sections for l in ls for w in _words(l) if len(w) >= 4}
     nw = {w for _, ls in secs for l in ls for w in _words(l) if len(w) >= 4}

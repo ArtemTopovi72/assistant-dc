@@ -674,7 +674,7 @@ def _whole_small_library(lib: "Library") -> List[knowledge.SearchResult]:
 
 # The RAG wrapper's fixed head and the seam before the user's own words. The
 # entry translator (graph_language) splits on these: it must translate the
-# QUESTION alone, never the whole wrapper -- live 2026-09-18 00:44 the model
+# QUESTION alone, never the whole wrapper -- once the model
 # "translated" 6 KB of passages + «Что нарисовано?» into «The documents do not
 # specify what is drawn.» and the user's question was gone before the turn began.
 RAG_HEAD = "Passages retrieved from the user's documents are below."
@@ -701,7 +701,7 @@ def build_rag_prompt(lib: "Library", question: str, k: Optional[int] = None,
         # against a one-page contract that says "домашних животных" was an
         # FTS miss (no embeddings under tests), the question went to the
         # model bare, and it answered from whatever else was in the chat
-        # (live 2026-09-13, mega journey). When the whole library fits the
+        # When the whole library fits the
         # passage budget, hand it over instead of nothing.
         results = _whole_small_library(lib)
         if not results:

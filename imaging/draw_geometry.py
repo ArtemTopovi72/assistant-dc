@@ -236,7 +236,7 @@ def geometry_report(layout: dict) -> list:
         hits = [(_covered(els[i], o), j) for j, o in enumerate(els)
                 if j != i and not _attached_to(els[i], o)]
         # Summed: a title spread over two musicians' heads, 13% on each, was
-        # clear by every single-pair measure (live 2026-09-29).
+        # clear by every single-pair measure.
         if hits and sum(c for c, _ in hits) >= TEXT_CLEARANCE:
             j = max(hits)[1]
             other = els[j]

@@ -253,7 +253,7 @@ def remove_lettering(ctx, image_path: str, *, grow: int = 10, passes: int = 2,
             return current if current != image_path else None
         # FireRed repaints the masked crop: it continues fur, folds, floor.
         # (The Big-LaMa fill smeared a flat rectangle over a feather hem,
-        # 2026-09-24, and was removed.) A fill that measures as a smear is
+        # and was removed.) A fill that measures as a smear is
         # refused, never shipped.
         if ctx is not None and hasattr(ctx, "set_stage"):
             ctx.set_stage("Removing the lettering" + (f" ({p}/{passes})" if passes > 1 else ""))

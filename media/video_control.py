@@ -38,7 +38,7 @@ _COMFY_HOME = os.getenv("COMFY_HOME", os.path.join(os.path.expanduser("~"), "Doc
 QI21_CMD = [_venv_python(os.path.join(_COMFY_HOME, "ComfyUI-qi21", ".venv")),
             os.path.join(_COMFY_HOME, "ComfyUI-qi21", "main.py"), "--base-directory", _COMFY_HOME,
             "--port", QI21_URL.rsplit(":", 1)[-1], "--reserve-vram", "2",
-            "--use-sage-attention"]   # sageattention installed in the qi21 venv 2026-09-27 (same wheel as main)
+            "--use-sage-attention"]   # sageattention installed in the qi21 venv (same wheel as main)
 from config import OUTPUT_DIR_COMFY as _OUT, INPUT_DIR_COMFY as _IN
 QI21_CMD += ["--output-directory", str(_OUT), "--input-directory", str(_IN)]
 _swap_lock = threading.Lock()
@@ -126,7 +126,7 @@ def build_control_workflow(prompt: str, control_video: str, *, kind: str = "cann
     wf = V.build_workflow(prompt, mode="t2va", width=width, height=height, frames=frames,
                           seed=seed, images=(), steps=steps, two_stage=False)
     # two_stage=False: at the half-size first stage the control could not hold the
-    # layout, and the refine pass redrew it (bench 2026-09-25); full size holds it.
+    # layout, and the refine pass redrew it; full size holds it.
     if first_frame:
         wf["20"] = {"class_type": "LoadImage", "inputs": {"image": first_frame}}
         wf[V.N_COND]["inputs"]["first_frame"] = ["20", 0]

@@ -318,7 +318,7 @@ def _refill_uncovered_background(ctx, result_path: str, old_mask, region_phrase:
         if tile is not None:
             # The NEW garment's own outline, read on FireRed's tile: cut at the OLD
             # outline, a stand collar under a V-neck sweater lost its top to the
-            # original skin (live 10-06, white V-neck -> navy quarter-zip).
+            # original skin (white V-neck -> navy quarter-zip).
             tile_path = str(scratch_path(OUTPUT_DIR, f"_INTERMEDIATE_tile_{int(time.time() * 1000)}.png"))
             tile.save(tile_path)
             # No VLM cutout QA here: it is a union with the checked old region, and
@@ -344,8 +344,8 @@ def _refill_uncovered_background(ctx, result_path: str, old_mask, region_phrase:
         garment = np.pad(garment, 24)
         garment = ndimage.binary_closing(garment, iterations=20)[24:-24, 24:-24]
         garment = ndimage.binary_fill_holes(garment)
-        # A patch on the sleeve edge cuts a notch OPEN to the outside (live 10-06,
-        # flag patch): no closing fills it. Row by row, everything between the
+        # A patch on the sleeve edge cuts a notch OPEN to the outside
+        # (flag patch): no closing fills it. Row by row, everything between the
         # garment's outer edges is the garment's for the "do not refill" tests.
         span = (np.maximum.accumulate(garment, axis=1)
                 & np.maximum.accumulate(garment[:, ::-1], axis=1)[:, ::-1])
@@ -356,7 +356,7 @@ def _refill_uncovered_background(ctx, result_path: str, old_mask, region_phrase:
         if tile is not None:
             # The garment itself straight from FireRed's tile: the seam blend had
             # washed the new hem into the old floor (a pink haze at the bottom of
-            # the dress, 2026-09-25) -- the tile's hem was crisp.
+            # the dress) -- the tile's hem was crisp.
             comp = Image.open(result_path).convert("RGB")
             # The WHOLE old region from the tile (garment and the floor/wall it
             # uncovered): the tile's hem is crisp and its floor clean; only its
@@ -365,7 +365,7 @@ def _refill_uncovered_background(ctx, result_path: str, old_mask, region_phrase:
             # at the old border, that hem tip faded into the floor as the haze.
             # The garment's REAL outline: the SAM mask came grown ~21 px outward,
             # and pasting that ring of FireRed's wall drew a light halo ("waves on
-            # the wall", live 10-06) around the whole new sweater.
+            # the wall") around the whole new sweater.
             real = ndimage.binary_erosion(garment, iterations=18)
             paste = old | garment
             x, y = tile_xy
@@ -393,7 +393,7 @@ def _refill_uncovered_background(ctx, result_path: str, old_mask, region_phrase:
                 own = ndimage.binary_dilation(real, iterations=2) | ndimage.binary_erosion(span, iterations=18)
                 alpha *= np.maximum(chg, own)
                 # A stand collar rises past the mask's face guard (cut flat under the
-                # chin, live 10-06): right next to the garment, take FireRed's pixel
+                # chin): right next to the garment, take FireRed's pixel
                 # where it plainly differs -- the aligned face/hand stay well under.
                 near = np.zeros(alpha.shape, np.float32)
                 near[y:y + tile.height, x:x + tile.width] = np.clip((d - 85.0) / 30.0, 0, 1)
@@ -423,7 +423,7 @@ def _refill_uncovered_background(ctx, result_path: str, old_mask, region_phrase:
                    & (np.abs(px - med).sum(axis=2) > 60))
             odd = ndimage.binary_dilation(odd, iterations=8)
             # ...but not the garment's own bright details: a red monogram and a
-            # flag patch read as "halo" and ObjectClear wiped them (live 10-06).
+            # flag patch read as "halo" and ObjectClear wiped them.
             odd &= ~ndimage.binary_erosion(span, iterations=3)
             if tile is not None:
                 # A patch on the sleeve EDGE escapes every mask above (its notch is
@@ -440,7 +440,7 @@ def _refill_uncovered_background(ctx, result_path: str, old_mask, region_phrase:
                 odd &= ~protect
         if orig is not None:
             # What still looks like the ORIGINAL there is not uncovered background:
-            # hair hanging over the old sweater stays hair. Live 10-06 (white
+            # hair hanging over the old sweater stays hair. (white
             # sweater -> navy hoodie): blonde strands are wall-bright, read as a
             # "halo", and ObjectClear smeared skin-coloured blobs over both shoulders.
             o = np.asarray(orig.convert("RGB").resize((px.shape[1], px.shape[0]))).astype(np.int16)
@@ -472,8 +472,7 @@ def _refill_uncovered_background(ctx, result_path: str, old_mask, region_phrase:
                 cv2.imwrite(out, cv2.inpaint(bgr, left, 5, cv2.INPAINT_TELEA))
         if out:
             # The fill owns its mask and nothing else: ObjectClear re-renders the
-            # whole crop and smeared the flag patch on the sleeve edge beside it
-            # (live 10-06).
+            # whole crop and smeared the flag patch on the sleeve edge beside it.
             own = np.asarray(m) > 127
             if odd.any():
                 own |= odd
@@ -658,7 +657,7 @@ def edit_region_contained_via_firered(
 
     # A new garment smaller than the old one uncovers background FireRed painted
     # itself, a few px off the original: panel mouldings step, the floor line
-    # breaks (live 2026-09-25, black ball gown -> red mermaid dress). Refill just
+    # breaks (black ball gown -> red mermaid dress). Refill just
     # that uncovered band from the surrounding original with ObjectClear.
     if whole_region and not instruction.lstrip().lower().startswith(("remove", "completely remove", "erase")):
         refilled = _refill_uncovered_background(ctx, str(final), mask, region_phrase, seed, timeout,
@@ -680,7 +679,7 @@ def edit_region_contained_via_firered(
     # retry / fall back instead of returning a bad result.
     # vlm_qa=False: the caller measures the fill itself (lettering removal: smear
     # ratio + OCR read-back). The VLM judged the red tint, not the fill, and
-    # rejected clean removals (2026-09-25 bench: every lettering fill WRONG).
+    # rejected clean removals (every lettering fill WRONG).
     if vlm_qa and image_maskqa.MASK_QA_ENABLED:
         _tint = image_maskqa.qa_tint(orig, out, mask)
         prev_png = _image._overlay_preview_png(orig, out, mask, (x0, y0, x1, y1), tint=_tint)
@@ -701,7 +700,7 @@ def edit_region_contained_via_firered(
         if verdict in ("WRONG", "PARTIAL") and whole_region:
             # Advisory only for a whole-region swap (clothing/hair): the composite is
             # pasted THROUGH the mask, so nothing can leak outside it, and the VLM
-            # rejected a clean dress swap three times running (2026-09-25; red tint
+            # rejected a clean dress swap three times running (red tint
             # on red, then a cyan tint over the uncovered floor it read as a leak).
             logger.info("contained-firered STAGE-2 QA: %s for %r (advisory for a "
                         "whole-region swap -- committing)", verdict, region_phrase)

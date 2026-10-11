@@ -277,7 +277,7 @@ def evaluate_image(ctx, img_path: str, goal: str, current_prompt: str,
     if isinstance(data, dict) and _measured \
             and str(data.get("verdict", "")).lower() != "success" \
             and _exposure.is_dark_complaint(data.get("reason", "")):
-        # Live, 2026-09-12: "the cat is extremely dark, a black silhouette"
+        # "the cat is extremely dark, a black silhouette"
         # about a sunlit orange cat -- three renders in a row, then an
         # apology to the user for a shadow that was not there. The pixels
         # were measured; the judge was not looking at them.

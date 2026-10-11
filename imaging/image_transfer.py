@@ -709,7 +709,7 @@ def transfer_reference_contained(ctx, target_path, ref, instruction=None, *,
     ref_clause = "image 2"
     if role == ROLE_CLOTHING:
         # FireRed knows "image 2", not "the reference image", and copies only what
-        # it is told: live 10-06 a navy quarter-zip with a red monogram and a flag
+        # it is told: a navy quarter-zip with a red monogram and a flag
         # patch came out a plain navy jumper. Name the garment's details for it.
         details = _garment_details(ctx, ref.extracted_asset_path or ref.path)
         lead = (f"Replace the clothing with the garment shown in {ref_clause}"

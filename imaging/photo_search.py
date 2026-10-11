@@ -49,7 +49,7 @@ def list_photos(folder: Path) -> list[Path]:
         if not (p.is_file() and p.suffix.lower() in IMAGE_SUFFIXES):
             continue
         # Hidden folders hold our own contact sheets and the run_code
-        # scripts' home; live 2026-09-14 a sheet came back as a "bridge".
+        # scripts' home; a sheet once came back as a "bridge".
         if any(part.startswith(".") for part in p.relative_to(folder).parts):
             continue
         out.append(p)

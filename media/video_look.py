@@ -288,7 +288,7 @@ def look_at_video(ctx, path: str, *, every: float = EVERY_SECONDS,
     sheet = make_sheet(frames, work_dir / "sheet.jpg", offset=offset)
     # Every frame goes to the model as its OWN picture, in one call, each
     # labelled with its time. The sheet gave a frame ~CELL px and was shrunk
-    # again (live 2026-10-01: a projector became «красный цилиндрический
+    # again (a projector became «красный цилиндрический
     # объект»); frames read one by one lost how they follow each other. One
     # call with all frames at full size has both (and is 1 call, not 7).
     # The sheet is still made: it is the picture a follow-up question sees.

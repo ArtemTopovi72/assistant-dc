@@ -272,7 +272,7 @@ def edit_via_layout(ctx, image_path: str, instruction: str,
     logger.info("layout edit %r: %s", instruction[:60],
                 "; ".join(notes) if notes else "no layout change")
     # «сделай реалистично» on our cartoon: a look the USER named in this turn
-    # re-styles the picture (live 10-03: every redraw came back a cartoon again).
+    # re-styles the picture (every redraw came back a cartoon again).
     look = getattr(ctx, "user_look", "") if ctx is not None else ""
     if look and look != "none":
         before = {k: layout.get(k) for k in ("art_style", "medium", "photo", "aesthetics")}
@@ -299,7 +299,7 @@ def edit_via_layout(ctx, image_path: str, instruction: str,
                         res.get("layout") or layout, width=width, height=height,
                         seed=res.get("seed", use_seed))
     # The re-render was judged and the edit is NOT in it ("the elephant is
-    # not pink as requested", twice, live 2026-09-18): the same seed keeps
+    # not pink as requested", twice): the same seed keeps
     # the old picture's colours whatever the box now says. Hand the ORIGINAL
     # to the pixel pipeline, which paints the change in place, instead of
     # shipping the unchanged picture as an edit.
@@ -438,8 +438,8 @@ def add_text_verified(ctx, image_path: str, instruction: str,
 
 # A pixel-local removal (a stray dog head on a poster) leaves the lettering and
 # the boxes exactly where they were. Without carrying the layout record to the
-# new file, the NEXT "замени нижнюю надпись" found no layout and refused (live,
-# journey 25). Other categories repaint too much for the old boxes to hold.
+# new file, the NEXT "замени нижнюю надпись" found no layout and refused.
+# Other categories repaint too much for the old boxes to hold.
 _LAYOUT_SURVIVES = frozenset({"object_remove", "person_remove"})
 
 
@@ -481,8 +481,8 @@ def _route_edit_request(
     # him blond" came back with a blonde woman's face over the man's. The layout
     # moves only what was asked for and redraws from the same seed.
     # Removals are the exception: the re-render reframed the scene, could draw
-    # the removed thing again, and a second pixel pass then left floating petals
-    # (journeys #39/#40, 2026-09-25). The user's verdict: the pixel removal on
+    # the removed thing again, and a second pixel pass then left floating petals.
+    # The user's verdict: the pixel removal on
     # the original (scene intact) is the good one. The box is dropped from the
     # record in route_edit_request.
     if (category in _LAYOUT_EDITABLE and category not in _LAYOUT_SURVIVES
@@ -541,7 +541,7 @@ def _route_edit_request(
         _image._REMOVAL_VERIFY["incomplete"] = False
         _image._REMOVAL_VERIFY["target"] = ""
         target = edit_plan(text)["target"] or ("the person" if category == "person_remove" else "the object")
-        # FireRed only: the Big-LaMa fill was removed 2026-09-24 -- over fur,
+        # FireRed only: the Big-LaMa fill was removed -- over fur,
         # fabric or hair it left a flat smudge that no check looked at.
         out = _image.remove_object_with_comfy(ctx, image_path, target, seed=seed, timeout=timeout)
         # Post-removal verification (fail-open: None/uncertain = accept). A recolor
@@ -611,7 +611,7 @@ def _route_edit_request(
         if edit_plan(text)["resizes"]:
             # A size/proportion fix changes the OUTLINE: the new head is bigger or
             # smaller than the mask of the old one, so the contained path's QA
-            # rejects it as leaking every time (live 2026-09-27: "fix the head
+            # rejects it as leaking every time ("fix the head
             # proportions" failed twice, picture unchanged). Whole-frame FireRed.
             logger.info("Router: proportion/size change -> whole-frame FireRed")
             # Not _firered_instruction(region=""): that reads "Change the it to: X".
@@ -647,7 +647,7 @@ def _route_edit_request(
     # style_transfer gets its own instruction builder: _firered_instruction's
     # region="" branch produces "Change the it to: X. Keep everything else the
     # same", which reads as "restyle one subject, preserve the frame" — a
-    # contradiction for a whole-canvas restyle that came back live (2026-09-20)
+    # contradiction for a whole-canvas restyle that came back live
     # as a cropped, partial cartoon redraw missing the title text and a person.
     if category == "style_transfer":
         instr = _image._firered_style_instruction(ctx, text, image_path=image_path)
