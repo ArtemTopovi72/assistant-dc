@@ -18,9 +18,6 @@ from PyQt5.QtWidgets import (
 )
 from ui_scale import px, scale_style as _ss
 from gui_common import MUTED, _fmt_bytes, _fmt_ts, _section, open_in_os
-import logging
-
-logger = logging.getLogger("assistant.gui")
 
 
 class MemoryMaintenanceMixin:
