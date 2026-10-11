@@ -1310,9 +1310,9 @@ def generate_video(ctx, description: str, *,
     # The whole card, nothing less: the H3 DiT is ~19.4 GB of Q4 weights and
     # nothing but ComfyUI runs between submit and file. Left NON-exclusive the
     # chat model stayed resident, the DiT got 13.4 GB of the card, 6.2 GB were
-    # offloaded to RAM and a 5-second clip took 25 minutes at 190 s/step
-    # -- the chat turn that followed then
-    # fought the render for the card and timed out three times.
+    # offloaded to RAM and a 5-second clip took 25 minutes at 190 s/step.
+    # The chat turn that followed fought the render for the card and timed
+    # out three times.
     out = comfy_client._submit_and_poll(ctx, wf, timeout=VIDEO_JOB_TIMEOUT,
                                         label=f"H3 {mode}", on_progress=on_progress,
                                         validate=_valid_video_file,
