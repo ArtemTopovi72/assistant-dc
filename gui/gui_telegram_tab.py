@@ -785,7 +785,6 @@ class TelegramTab(QWidget):
                 "Could not restore the backup. Check the log for details.")
 
     def _export_log(self):
-        from pathlib import Path
         log_path = Path(__file__).resolve().parents[1].joinpath("tg_activity.jsonl")
         if log_path.exists():
             try:
