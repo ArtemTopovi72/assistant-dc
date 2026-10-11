@@ -38,8 +38,8 @@ ROOT = os.path.dirname(HERE)
 # block (test_library_fixes.py, test_tg_fwd_voice_batch.py, test_deck_
 # informativeness.py, test_tg_style_button.py). All of them silently fell
 # through every branch below to "skip" and were never run by run_all.py at
-# all -- caught 2026-09-18 when a brand-new test file (test_tg_style_
-# button.py) turned out to be missing from run_all's own summary.
+# all -- caught when a brand-new test file (test_tg_style_button.py)
+# turned out to be missing from run_all's own summary.
 def _has_module_level_exit(src: str) -> bool:
     try:
         tree = ast.parse(src)
@@ -162,7 +162,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("-k", default="", help="only files containing this")
     ap.add_argument("--timeout", type=int, default=600)
-    ap.add_argument("-j", type=int, default=24)  # 28 logical CPUs; owner 10-03: 24
+    ap.add_argument("-j", type=int, default=24)  # 28 logical CPUs
     ap.add_argument("--list", action="store_true")
     args = ap.parse_args()
 

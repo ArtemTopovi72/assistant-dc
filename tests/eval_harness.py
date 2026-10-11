@@ -1,4 +1,4 @@
-"""Scored evaluation harness for Deep Research (spec D).
+"""Scored evaluation harness for Deep Research.
 
 Runs the FULL pipeline on benchmark tasks (tests/eval_tasks.py) and scores each run
 on nine metrics, then writes evaluation_report.json + evaluation_report.md.
