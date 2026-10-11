@@ -75,7 +75,7 @@ from http.server import ThreadingHTTPServer
 from service_http import JsonHandler
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from research_api import OPERATIONS, RESULT_FIELDS, ResearchBackendError
+from research_api import OPERATIONS, ResearchBackendError
 
 logger = logging.getLogger("assistant.research.service")
 
@@ -407,12 +407,6 @@ class HttpResearchClient:
 
     def knob_defaults(self) -> Dict[str, Any]:
         return self._post("knob_defaults")
-
-
-def result_is_complete(result: Dict[str, Any]) -> bool:
-    """Every RESULT_FIELDS key present. Used by the differential suite to prove
-    the two backends return the same SHAPE, not just the same report text."""
-    return all(f in (result or {}) for f in RESULT_FIELDS)
 
 
 # --------------------------------------------------------------------------- #
