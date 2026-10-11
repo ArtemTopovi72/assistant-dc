@@ -149,3 +149,19 @@ def test_parts_are_about_six_seconds_one_beat_each():
 def test_the_rules_every_clip_carries_add_no_screen_time():
     s = "A cat walks in and sniffs the dog."
     assert V.estimate_seconds(s + V.RU_SPEECH + V.CAUSE_RULE) == V.estimate_seconds(s)
+
+
+def test_look_lines_cost_no_part_time():
+    """Sound/light/camera lines ride every part; counted as beats, five of them put
+    every part of a 5-part train plan at the 10.1 s cap (2026-10-11)."""
+    look = (" The soundscape is screeching metal. The lighting is harsh daylight. The camera is "
+            "handheld. The style is gritty. The atmosphere is tense.")
+    base = "Two guys leap off the tracks. The train derails."
+    assert V.estimate_seconds(base + look) == V.estimate_seconds(base)
+    script = ("A man stands by the rails. Two guys jump onto the tracks and shout. A train "
+              "rushes past. The guys leap aside. The train derails. Crates burst open. "
+              "A huge explosion throws debris." + look)
+    parts = V.split_script(script)
+    assert len(parts) > 1
+    assert all(V.estimate_seconds(p) <= V.VIDEO_PART_MAX_S for p in parts), parts
+    assert all(not p.startswith("The soundscape") for p in parts), parts

@@ -122,6 +122,9 @@ def estimate_seconds(description: str, capped: bool = True) -> float:
     text = _SCENE_NOTE_RE.sub("", text)                    # nor the scene-so-far note
     for rule in (CAUSE_RULE, RU_SPEECH):                    # nor the rules every clip carries
         text = text.replace(rule, "")
+    # Sound/light/camera lines ride every part (split_script) and take no screen time;
+    # counted as beats, five of them pushed every part of a 5-part plan to the 10.1 s cap.
+    text = " ".join(s for s in _SENT.split(text) if s and not _LOOK.match(s.strip()))
     spoken = " ".join(next(g for g in m.groups() if g is not None) for m in _QUOTED.finditer(text))
     rest = _QUOTED.sub(" ", text)
     words = len(spoken.split())
@@ -132,7 +135,7 @@ def estimate_seconds(description: str, capped: bool = True) -> float:
 
 
 _LOOK = re.compile(
-    r"(?:soundscape|sound(?:track)?|audio|music|ambien\w*|lighting|the lighting|light is|"
+    r"(?:the\s+)?(?:soundscape|sound(?:track)?|audio|music|ambien\w*|lighting|the lighting|light is|"
     r"style|the style|look|overall|throughout|color|colour|quality|the camera|camera)\b"
     r"|(?:the\s+)?(?:lighting|look|tone|mood|atmosphere|palette)\b.{0,40}\b(?:is|remains|stays)\b",
     re.I)
