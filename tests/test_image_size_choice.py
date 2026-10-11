@@ -14,7 +14,6 @@ import os
 import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
-import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -49,7 +48,7 @@ def check(cond, label):
 def test_resolver():
     print("[resolver]")
     for aspect, (rw, rh) in C.IMAGE_ASPECTS.items():
-        for quality, mp in C.IMAGE_QUALITIES.items():
+        for quality in C.IMAGE_QUALITIES:
             w, h = C.resolve_image_size(aspect, quality)
             tag = f"{aspect}/{quality}"
             check(w % 16 == 0 and h % 16 == 0, f"{tag}: not a multiple of 16 ({w}x{h})")
@@ -243,18 +242,6 @@ def test_parse_defaults():
     check((w, h) == (1200, 1600), f"WxH in prompt ignored: {w}x{h}")
 
 
-# The shapes the model actually returns. The prefill ends inside "[generate]",
-# so the usual reply is a bare BODY plus the closer; the fully tagged form and
-# the no-tag fallback both happen too, and all three have to end up at the
-# session's size rather than at a hardcoded default.
-_RESPONSES = [
-    ("[generate]a cat, studio light[/generate]", "fully tagged"),
-    ("a cat, studio light[/generate]",           "prefill continuation"),
-    ("Thought process: I will draw a cat.",      "no tag at all"),
-    ("",                                         "empty response"),
-]
-
-
 def test_tool_schema():
     print("[tool schema]")
     import tools
@@ -411,7 +398,6 @@ def test_tg_callback(tmpdir):
             press(junk)
         except Exception as exc:                                   # noqa: BLE001
             check(False, f"malformed callback {junk!r} raised {exc!r}")
-    check(True, "malformed callbacks survived")
 
     # the picker has a way back to the Draw menu (it must not be a dead end)
     datas = [b["callback_data"] for row in T._size_menu_kb(s, "ru")["inline_keyboard"] for b in row]
