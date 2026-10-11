@@ -144,7 +144,7 @@ from gui_telegram_tab import (
     _TG_ADMINS_KEY,
 )
 from gui_madhouse_tab import (
-    choose_next_speaker, _name_is_addressed,
+    _name_is_addressed,
 )
 
 
