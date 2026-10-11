@@ -32,7 +32,7 @@ class QueueMixin:
         """Run fn(*args) on a daemon thread with the chat marked busy until it
         returns. Work started outside the queue (weather lookup, voice-clone
         prep and synthesis) otherwise left the turn looking finished at its
-        "Checking…" line (live journeys #7, #38, 2026-09-25)."""
+        "Checking…" line."""
         with self._task_lock:
             self._chat_busy[chat_id] = self._chat_busy.get(chat_id, 0) + 1
 

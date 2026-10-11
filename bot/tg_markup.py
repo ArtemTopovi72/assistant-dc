@@ -24,7 +24,7 @@ _TABLE_SEP = re.compile(r"^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$")
 
 def _md_tables_to_fences(text: str) -> str:
     """A markdown pipe table -> a fenced block with aligned columns. Telegram
-    has no tables; "| --- |" arrived as raw pipes (live 2026-09-28)."""
+    has no tables; "| --- |" arrived as raw pipes."""
     lines = text.split("\n")
     out, i = [], 0
     while i < len(lines):
@@ -63,7 +63,7 @@ _SUP = dict(zip("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹"))
 
 def _latex_to_text(text: str) -> str:
     r"""$\rightarrow$ / $x^2$ / \frac{a}{b} -> plain Unicode. Telegram renders no
-    TeX; a raw `$\rightarrow$` reached the chat (live 2026-10-04). Code is left alone."""
+    TeX; a raw `$\rightarrow$` reached the chat. Code is left alone."""
     def one(m):
         e = next(g for g in m.groups() if g is not None)
         e = re.sub(r"\\(?:text|mathrm|mathbf|operatorname)\{([^}]*)\}", r"\1", e)

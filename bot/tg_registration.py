@@ -435,8 +435,8 @@ class RegistrationMixin:
                 return False
             import tg_links as _links
             if _links.video_url(text):
-                # A video link is something to WATCH, not a song topic (live 10-04:
-                # a YouTube link sent for analysis started a song).
+                # A video link is something to WATCH, not a song topic (a YouTube link
+                # sent for analysis would start a song).
                 sess.reg_state = ""
                 self._store.put(sess)
                 return True

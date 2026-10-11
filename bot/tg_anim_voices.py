@@ -63,7 +63,7 @@ class AnimVoicesMixin:
     def _animate_ask_voices(self, chat_id: int, sess, lang: str) -> None:
         """Entry of every animate path: straight to the presets. Voice samples
         are an optional button there -- asking «Будут образцы голосов?» first
-        annoyed a kid who just wanted it to wave (persona run 2026-09-27)."""
+        annoyed a kid who just wanted it to wave."""
         sess.anim_voices, sess.anim_voice_state = [], ""
         self._store.put(sess)
         self._send_animate_presets(chat_id, lang)

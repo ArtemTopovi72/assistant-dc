@@ -254,12 +254,12 @@ class DispatchMixin:
         # feed the bot's own replies into a running song as wishes. BEFORE the
         # gate: the gate answers pending prompts (song topic, city…) and took a
         # forwarded storyboard as the topic.
-        # The bot's own REPLIES are material (live 10-03: users could not forward
-        # its reasoning back): they go on, labelled as its own words only when
+        # The bot's own REPLIES are material (users forward its reasoning
+        # back): they go on, labelled as its own words only when
         # Telegram names this bot as the sender (_fwd_is_own); a forwarded batch
         # never steers a running task (tg_resolve). Another bot's message is
         # material like a person's: a song forwarded from a music bot was
-        # dropped here while 🎤 Cover waited for it (live 10-03).
+        # dropped here while 🎤 Cover waited for it.
         _fwd = tg_bot._is_forwarded(msg, self_is_own=False)
         if _fwd and tg_bot._fwd_is_own(msg, self.token.split(":", 1)[0]):
             msg["_fwd_own"] = True
@@ -287,7 +287,7 @@ class DispatchMixin:
         # «пришли файлом» / "as a file": the model has no way to send one and
         # answered with right-click advice.
         # a keyboard label is never that request: «📚 Документы» was read as one and
-        # sent the last picture as a file instead of opening the menu (live 10-03)
+        # sent the last picture as a file instead of opening the menu
         if len(text) <= 60 and not _is_button(text) and _asks_as_file(text):
             sess = self._get_session(chat_id)
             rep = (msg.get("reply_to_message") or {}).get("message_id")
@@ -428,7 +428,7 @@ class DispatchMixin:
             self._enqueue_item(chat_id, {"type": "fwd_voice" if tg_bot._is_forwarded(msg, self_is_own=False) else "voice",
                 "media": "video", "file_id": _doc["file_id"],
                 # a GIF also arrives as a video/mp4 document, with its real length
-                # on `animation` (live 10-03: a 3 s GIF was offered as «16667 мин»)
+                # on `animation` (without it a 3 s GIF was offered as «16667 мин»)
                 "seconds": int((msg.get("animation") or {}).get("duration") or 10 ** 6),
                 "caption": (msg.get("caption") or "").strip()})
             return
@@ -529,8 +529,8 @@ class DispatchMixin:
                 # A reply INSIDE forwarded material is its author's, not the user's,
                 # and it sits inside the forward's own quote frame: a nested frame
                 # was labelled «the user is replying» and its close ended the outer
-                # frame early (live 10-01: Stepan's «подтверди» quoting «можно любой
-                # положить» was read as the user's words -> an Ozon cart answer).
+                # frame early (a reply «подтверди» quoting «можно любой
+                # положить» was read as the user's words).
                 one_line = " ".join(quoted.split())[:300]
                 msg["text"] = f"(in reply to: «{one_line}») " + msg["text"]
             elif quoted and msg.get("text"):

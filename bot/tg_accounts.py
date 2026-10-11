@@ -275,7 +275,7 @@ class AccountsMixin:
         rows.append([{"text": tg_bot._t("acct_logout_btn", lang),
                       "callback_data": "acct_logout"}])
         from tg_strings import _nav_back_row
-        rows.append(_nav_back_row(lang))   # live 10-03: «НЕТ КНОПКИ НАЗАД»
+        rows.append(_nav_back_row(lang))   # every account screen needs a way back
         self._send_text(chat_id, text, parse_mode="HTML",
                         keyboard={"inline_keyboard": rows})
 

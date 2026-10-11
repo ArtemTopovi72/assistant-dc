@@ -67,7 +67,7 @@ class LyricsMixin:
         body = []
         left = [LC.describe(i, lang) for i in res.get("left_rules", [])] + list(res.get("left_sense", []))
         if mode == "improve" and res["text"] == res["original"]:
-            # «Править нечего» above a list of what is left read as a lie (live 10-03)
+            # «Править нечего» above a list of what is left read as a lie
             body.append(tg_bot._t("lyr_not_better" if left else "lyr_already_good", lang))
         body += [html.escape(n) for n in notes]
         if left:

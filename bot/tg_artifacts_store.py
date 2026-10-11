@@ -77,7 +77,7 @@ def _content_key(path: str) -> str:
     pattern documented in tg_bot._image_by_content -- a byte-identical copy of
     an already-registered file under a different name, which is what made a
     single styled photo look like two different reference images to
-    generate_video (live, 2026-09-19).
+    generate_video.
     """
     try:
         size = os.path.getsize(path)

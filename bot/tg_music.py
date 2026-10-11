@@ -109,7 +109,7 @@ STEPS_HOME = "quality"               # the screen the step count lives on
 
 # A TYPED «сбрось настройки песни» / "reset song settings". Without this the
 # phrase reached the chat model, which answered «Настройки песни сброшены.»
-# and reset nothing (live, 15.09: the tempo stayed 118 BPM).
+# and reset nothing.
 def is_reset_phrase(text: str) -> bool:
     import intent   # the model's read: song "reset"
     t = (text or "").strip()

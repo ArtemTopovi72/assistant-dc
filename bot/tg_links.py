@@ -1,10 +1,7 @@
 """A link in a chat message is a page to read, not a string to admire.
 
-Live, 2026-09-12: the user sent one bare Wikipedia URL and the reply was
-"This is a link to an article about omelettes on Wikipedia; you can find
-detailed information there." The bot has a whole page fetcher (dr_crawl)
-and never used it in chat. Now a message that carries a URL gets the page's
-text attached, so "о чём это?", a summary or a question about it are
+A message that carries a URL gets the page's text attached (fetched with
+dr_crawl), so "о чём это?", a summary or a question about it are
 answered from the page.
 """
 from __future__ import annotations
@@ -22,7 +19,7 @@ def urls_in(text: str) -> list:
     return [u.rstrip(".,;:!?)»") for u in _URL_RE.findall(text or "")]
 
 
-# Hosts whose links are videos to watch, not pages to read (live 10-03: a
+# Hosts whose links are videos to watch, not pages to read (a
 # YouTube Shorts link got «я не умею смотреть видео по ссылкам»).
 _VIDEO_RE = re.compile(
     r"^https?://(?:[\w-]+\.)*(?:youtube\.com/(?:watch|shorts/|live/)|youtu\.be/|"
@@ -122,8 +119,8 @@ _SAME = [{"жител", "насел", "числе", "popul", "inhab"}, {"осн�
 
 def _fit(body: str, question: str, limit: int) -> str:
     """The page's head plus the paragraphs that share words with the question.
-    Live 2026-09-28: Kazan's population sat past the 6000-char cut, and the
-    bot said the article did not mention it."""
+    A plain head cut lost facts past the limit (a population figure far down
+    the article), and the bot said the page did not mention it."""
     if len(body) <= limit:
         return body
     head = body[:limit * 2 // 3]

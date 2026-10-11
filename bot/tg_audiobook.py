@@ -82,7 +82,7 @@ class AudiobookMixin:
 
     def _book_take_link(self, chat_id: int, sess, lang: str, text: str) -> bool:
         """A video link (YouTube, TikTok, VK...) while waiting for the narrator's sample: its sound track
-        is the sample, like in 🎙 Clone voice. True when it was ours (live 10-04: the link was retold instead)."""
+        is the sample, like in 🎙 Clone voice. True when it was ours (otherwise the link would be retold as text)."""
         if getattr(sess, "book_state", "") != "want_voice":
             return False
         import tg_links

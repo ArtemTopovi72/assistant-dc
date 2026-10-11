@@ -1070,19 +1070,17 @@ class CallbackMixin:
         """👗 pressed under a picture: ask what to change the outfit TO, instead
         of silently applying a random "something different" swap.
 
-        Live, 2026-09-19: the user asked for this to work "in the spirit of
-        what-to-what, like I write 'the hat to a hat' [sic, meant a specific
-        garment]" -- the same free-text capture _cb_edit_image already uses,
-        just with its own prefix so the agent gets "change the outfit to: X"
-        rather than a bare edit instruction. _CB_CMDS["change_clothes"] is left
+        Uses the same free-text capture as _cb_edit_image, with its own prefix
+        so the agent gets "change the outfit to: X" rather than a bare edit
+        instruction. _CB_CMDS["change_clothes"] is left
         in place as the underlying enqueued text shape for old code paths/tests;
         this handler is reached BEFORE that generic dispatch (see the `if data
         == "change_clothes"` line above it), so every press -- old keyboard or
         new -- now asks first."""
         sess = self._get_session(chat_id)
         sess.pending_prefix = "change the outfit to: "
-        # A photo of the clothes answers too (user 10-06: «референс одежды +
-        # описание, либо просто текст, либо пикчу»): tg_resolve takes the next
+        # A photo of the clothes answers too (a clothing reference, a
+        # description or both): tg_resolve takes the next
         # photo as the clothing reference for THIS picture.
         sess.pending_outfit_target = sess.target_image or ""
         self._store.put(sess)
@@ -1106,10 +1104,8 @@ class CallbackMixin:
         # _state_kb, NOT _main_menu_kb: the latter exists to CLEAR
         # pending_prefix so the keyboard can never contradict the state,
         # so asking it for a keyboard one line after arming the prefix
-        # wiped the prefix. Live consequence — the user tapped ✏️, typed
-        # "the lettering is crooked", and the agent received a bare
-        # complaint with no instruction to edit anything; it floundered
-        # for two rounds and answered that it could not call any tools.
+        # wiped the prefix, and the agent then received a bare complaint
+        # ("the lettering is crooked") with no instruction to edit anything.
         # "edit the image: " is already in _PREFIX_MENU, so the matching
         # keyboard was there the whole time.
         self._send_text(chat_id, tg_bot._t("describe_edit", self._lang(sess)),

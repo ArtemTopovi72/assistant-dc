@@ -69,7 +69,7 @@ class LibraryMixin:
         see the unsupported branch below.
 
         `quiet` is for a file small enough to ALSO be inlined and answered
-        directly this same turn (see tg_resolve.py). Live, 2026-09-19: forwarding
+        directly this same turn (see tg_resolve.py). Forwarding
         a short .md note with "read this and summarize" got "📚 Индексирую... —
         это займёт минуту" ahead of the actual answer, and the success reply
         silently switched sess.menu to "library" and swapped in the Documents
