@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -97,7 +98,6 @@ def main() -> int:
 
     free_gb = 0.0
     try:
-        import shutil
         free_gb = shutil.disk_usage(COMFY_BASE).free / 1e9
     except OSError:
         pass
@@ -134,8 +134,7 @@ def main() -> int:
         except OSError:
             # Different volume, or the staging file is a symlink into the HF cache:
             # fall back to a copy so the model still lands where ComfyUI looks.
-            import shutil as _sh
-            _sh.copyfile(got, final)
+            shutil.copyfile(got, final)
         mins = (time.time() - t0) / 60
         print(f"    done in {mins:.1f} min -> {final}", flush=True)
 

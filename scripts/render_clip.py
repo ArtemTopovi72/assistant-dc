@@ -72,12 +72,10 @@ def main() -> int:
     ctx = models.Context(models=None, transcription_cache={}, cache_file=None,
                          asr_lock=threading.Lock(), tts_lock=threading.Lock())
 
-    marks: list[tuple[str, float]] = []
     t0 = time.time()
     state = {"last": 0, "sampling_done": None, "first_step": None}
 
     def on_stage(s):
-        marks.append((s, time.time() - t0))
         print(f"  [{human(time.time() - t0)}] {s}", flush=True)
 
     def on_progress(i, total):

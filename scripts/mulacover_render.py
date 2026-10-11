@@ -21,7 +21,7 @@ MUSCRIPTOR = os.getenv("MUSCRIPTOR_SIZE", "large")
 
 def _notes(model, wav, instruments=None):
     """MuScriptor events -> [(onset, offset, pitch, instrument)] in seconds."""
-    from muscriptor import NoteStartEvent, NoteEndEvent
+    from muscriptor import NoteEndEvent
     out = []
     for ev in model.transcribe(wav, instruments=instruments):
         if isinstance(ev, NoteEndEvent) or type(ev).__name__ == "NoteEndEvent":   # the GGUF build has its own classes

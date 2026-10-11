@@ -71,8 +71,6 @@ def free_names(nodes):
             elif isinstance(sub, (ast.Import, ast.ImportFrom)):
                 for a in sub.names:
                     bound.add((a.asname or a.name).split(".")[0])
-            elif isinstance(sub, ast.Attribute):
-                pass
             elif isinstance(sub, ast.ExceptHandler) and sub.name:
                 bound.add(sub.name)
             elif isinstance(sub, (ast.Global, ast.Nonlocal)):
