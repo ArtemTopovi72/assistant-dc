@@ -13,7 +13,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import sandbox_e2e as E                      # noqa: E402
-from code_sandbox import AGENT_DIR           # noqa: E402
 
 
 def _hidden(box, code: str, need: int):
