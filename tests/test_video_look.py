@@ -31,8 +31,6 @@ def _clip(tmp_path):
 
 def test_look_at_video_builds_a_sheet_and_asks_once(tmp_path):
     clip = _clip(tmp_path)
-    if clip is None:
-        return
     calls = []
     def vision(p, q, system):
         calls.append((p, q))

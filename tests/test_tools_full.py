@@ -495,13 +495,6 @@ def test_execute_tool():
     check("exec_args_nondict", r2.startswith("[TOOL ERROR]"))
     # successful dispatch through validation (calculate coerces + runs)
     check("exec_ok", T.execute_tool(c, {}, "calculate", {"expression": "3*3"}) == "9")
-    # handler raises -> wrapped
-    with mock_env():
-        T._handle_calculate_saved = T._handle_calculate
-        # patch the ToolSpec handler? simpler: patch _BY_NAME entry's handler via a tool that raises
-        # use read_clipboard with a raising subprocess is already [TOOL ERROR]; instead force
-        # a handler exception via calculate monkeypatch on the spec
-        pass
     # handler returns None -> coerced
     spec = T._BY_NAME["calculate"]
     orig = spec.handler
