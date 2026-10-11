@@ -83,7 +83,7 @@ class LyricsMixin:
 
     def _song_polish_then_sing(self, ctx, chat_id: int, lang: str, draft: str) -> None:
         """🎵 Song with ready words + «✨ Доработать и спеть»: show what was
-        polished, the lyric itself, then sing it (owner 10-03)."""
+        polished, the lyric itself, then sing it."""
         import lyrics_craft as LC
         from tg_songs import LYRICS_MARK
         try:

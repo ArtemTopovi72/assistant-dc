@@ -1,7 +1,6 @@
 """Self-hosted Telegram Bot API server (telegram-bot-api --local).
 
-Telegram's cloud Bot API refuses getFile over 20 MB; a forwarded 112 MB
-DCIM.zip could only be explained, not read. The official server, built by
+Telegram's cloud Bot API refuses getFile over 20 MB. The official server, built by
 scripts/build_telegram_bot_api.cmd and run here with --local, lifts that to
 2 GB and hands files back as absolute paths on this disk (tg_transport reads
 them directly). It needs the app credentials from https://my.telegram.org/apps

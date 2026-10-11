@@ -1,6 +1,6 @@
 """Update polling, routing and enqueue.
 
-Split out of tg_bot.py. Owns the long-poll loop, _dispatch (the router that
+Owns the long-poll loop, _dispatch (the router that
 turns a raw Telegram update into an action: callback buttons, commands, menu
 labels, photos, albums, documents, voice), _handle_command, the reply-target
 and incoming-photo helpers, and _resolve_and_push, which decides what kind of
@@ -26,19 +26,10 @@ import requests
 def _largest_photo(photos) -> Optional[dict]:
     """Pick Telegram's largest PhotoSize entry, tolerating a hostile shape.
 
-    `msg["photo"]` is documented as a list of PhotoSize dicts, but nothing
-    stops a malformed/adversarial update (a corrupted webhook payload, a
-    buggy relay) from sending it as a string, a dict, or a list containing
-    non-dict junk. `max(photos, key=lambda p: p.get(...))` on a string
-    silently iterates its CHARACTERS and crashes with
-    "'str' object has no attribute 'get'" the moment it calls .get() on the
-    first one — an unhandled exception straight out of _dispatch. The outer
-    poll loop's per-update try/except keeps this from taking the process
-    down, but it still drops that update's whole turn with a stack trace
-    instead of the ordinary "couldn't make sense of that" silence every
-    other malformed-field path in this router already gives. Filter to only
-    genuine PhotoSize-shaped entries and return None if nothing usable
-    survives, exactly like `if photos:` on an absent/empty field already do.
+    `msg["photo"]` is documented as a list of PhotoSize dicts, but a malformed
+    update can send a string, a dict, or a list with non-dict junk (`max` over
+    a string iterates its characters and crashes on `.get`). Only genuine
+    PhotoSize-shaped entries are considered; None if nothing usable survives.
     """
     if not isinstance(photos, list):
         return None
@@ -139,8 +130,8 @@ class DispatchMixin:
         body = r.json()
         if not body.get("ok", False):
             # 409 (a second instance polling) / 401 (revoked token) come back at
-            # once: returning [] here spun a tight request loop and still
-            # counted as a healthy poll for the watchdog. Raise -> backoff.
+            # once: returning [] would spin a tight request loop that still
+            # counts as a healthy poll for the watchdog. Raise -> backoff.
             raise RuntimeError(f"getUpdates not ok: HTTP {getattr(r, "status_code", "")} {body.get('error_code')} "
                                f"{str(body.get('description'))[:120]} body={str(body)[:160]}")
         return body.get("result", [])
@@ -205,10 +196,9 @@ class DispatchMixin:
                                                   if k not in ("chat", "from")})
 
     def _dispatch(self, upd: dict):
-        # An inline-keyboard press is a different update SHAPE, not a
-        # variation on a message: no text, no sender gate, its own
-        # answerCallbackQuery handshake and its own 20-family routing table.
-        # It lives in tg_callbacks.CallbackMixin; this is the whole seam.
+        # An inline-keyboard press is a different update SHAPE, not a variation
+        # on a message: no text, no sender gate, its own answerCallbackQuery
+        # handshake and routing table (tg_callbacks.CallbackMixin).
         cb = upd.get("callback_query")
         if cb:
             self._dispatch_callback(cb)
@@ -219,9 +209,8 @@ class DispatchMixin:
         if not chat_id: return
 
         # ── private chats only ────────────────────────────────────────────────
-        # Nothing checked the chat type: added to a group the bot would run the
-        # registration flow in it, ask for a password in public, and map the whole
-        # group to a single account.
+        # In a group the bot would run the registration flow, ask for a password
+        # in public and map the whole group to a single account.
         chat_type = (msg.get("chat") or {}).get("type", "private")
         if chat_type not in ("private", ""):
             if not (msg.get("new_chat_members") or msg.get("left_chat_member")):
@@ -327,13 +316,9 @@ class DispatchMixin:
             return
         if text:
             # A FORWARDED text is material the user wants something done with,
-            # not the user talking to the bot. Fed in bare, a forwarded
-            # channel post ("Внимание! В субботу перекрывают движение...") was
-            # answered as if the user had asked it -- with document search on,
-            # "the documents say nothing about a road closure" -- and the
-            # follow-up "о чём это?" then had nothing to refer to. The flag
-            # travels with the item; the
-            # resolver frames the text as a quotation.
+            # not the user talking to the bot: fed in bare, a forwarded channel
+            # post would be answered as if the user had asked it. The flag
+            # travels with the item; the resolver frames the text as a quotation.
             self._enqueue_item(chat_id,
                                {"type": "text", "text": text, "image_id": _reply_image_id,
                                 "quote": msg.get("_quote", ""),
@@ -435,9 +420,7 @@ class DispatchMixin:
 
         photos = msg.get("photo")
         if photos:
-            # file_size is OPTIONAL in Telegram's PhotoSize. When it is missing the
-            # old key was 0 for every entry and max() kept the FIRST — the smallest
-            # thumbnail — so the vision model silently got a postage stamp. Fall
+            # file_size is OPTIONAL in Telegram's PhotoSize: _largest_photo falls
             # back to pixel area, which is always present.
             largest = _largest_photo(photos)
             if largest is None:
@@ -480,18 +463,11 @@ class DispatchMixin:
         leave the turn exactly as it would have been, never half-targeted.
 
         Returns the resolved image id ("" if this reply named no picture). The
-        caller threads this into the enqueued item's "image_id", the same
-        capture-at-commit-time carry the image-verb buttons already use
-        (see the "captured here, at PRESS time" note in _dispatch above) —
-        `sess.target_image` alone is a SINGLE shared slot, and a task built
-        from this reply may sit queued for a while (behind an already-running
-        task in this chat) before it actually executes. A second reply to a
-        DIFFERENT picture arriving in that window overwrites the slot before
-        the first task ever reads it, so relying on a live re-read of
-        sess.target_image at execution time silently answered about whichever
-        picture was replied to LAST, not the one THIS turn was actually about
-        — reproduced live: reply to picture A, then (before A's task runs)
-        reply to picture B, and A's task answered about B.
+        caller threads it into the enqueued item's "image_id", the same
+        capture-at-press-time carry the image-verb buttons use (see
+        tg_callbacks._cb_retarget_image): `sess.target_image` is a SINGLE shared
+        slot, so a second reply to a different picture arriving while this
+        task waits in the queue would otherwise make it answer about that one.
         """
         reply = msg.get("reply_to_message") or {}
         if not reply:

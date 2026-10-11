@@ -1,6 +1,6 @@
 """Per-chat document library, status and report delivery.
 
-Split out of tg_bot.py. Owns the chat-scoped document library (path, open,
+Owns the chat-scoped document library (path, open,
 stats, indexing an uploaded file, listing and clearing it) and the read-only
 user surfaces built from it: /status, the pinned-facts page, the language
 menu and report-file delivery.
@@ -69,31 +69,20 @@ class LibraryMixin:
         see the unsupported branch below.
 
         `quiet` is for a file small enough to ALSO be inlined and answered
-        directly this same turn (see tg_resolve.py). Forwarding
-        a short .md note with "read this and summarize" got "📚 Индексирую... —
-        это займёт минуту" ahead of the actual answer, and the success reply
-        silently switched sess.menu to "library" and swapped in the Documents
-        keyboard — the user never asked to open the library, they asked a
-        question that was already being answered inline. Indexing (for 📄 My
-        documents) still runs; only the chat-visible announcement and the
-        menu/keyboard side effects are skipped.
+        directly this same turn (see tg_resolve.py): the "Indexing…" notice and
+        the success reply (which would switch sess.menu to "library") are
+        skipped, so the user is not pulled into the library for a question that
+        is being answered inline. Indexing (for 📄 My documents) still runs.
         """
         lang = self._lang(sess)
         # A file whose extension the indexer can never handle (a forwarded
-        # video/GIF/animation sent as a Telegram "document", an image, an
-        # archive, ...) would sail straight into "Indexing... this may take
-        # a minute" and then fail with a bare "RuntimeError" -- a real error
-        # class name that tells the user nothing about WHY, for a case that
-        # was never going to work. Reject it up front with a message that
-        # actually explains what's supported, and skip the pointless attempt.
+        # video/GIF sent as a "document", an image, an archive, ...) is rejected
+        # up front with a message that explains what's supported, instead of
+        # failing later with a bare error class name.
         ext = Path(fname).suffix.lower()
         if ext not in library.SUPPORTED_EXTS:
-            # ...unless the file was accepted somewhere else. Measured live: a
-            # .jar the assistant had just ASKED FOR was answered with "not a
-            # document I can add to your library ... send it along with your
-            # question" -- while sitting in the sandbox, sent with a question.
-            # Every clause was wrong for that user, because this branch only
-            # knew about one of the file's two destinations.
+            # ...unless the file was accepted somewhere else (the sandbox): then
+            # "not a document I can add to your library" would be wrong for it.
             if not sandboxed and not quiet:
                 self._send_text(chat_id,
                     tg_bot._t("lib_unsupported", lang, name=_html_mod.escape(fname),
@@ -112,28 +101,23 @@ class LibraryMixin:
         lib = None
         try:
             # Stage under a SANITIZED basename: `< > ? | " *` are legal in a
-            # Telegram filename (Android/iOS/Linux senders) but Windows rejects
-            # them in a path, so `report<v2>.txt` etc. could never be staged at
-            # all. The real display name is untouched — it is stored separately
-            # as `title=` by lib.build/add_document and is what 📄 My documents
-            # and the confirmation message show.
+            # Telegram filename but Windows rejects them in a path. The real
+            # display name is untouched -- it is stored separately as `title=`
+            # and is what 📄 My documents and the confirmation message show.
             safe_name = re.sub(r'[<>:"|?*\x00-\x1f]', "_", Path(fname).name) or "file"
             staged = str(Path(tempfile.mkdtemp(prefix="tgdoc_")) / safe_name)
             shutil.copyfile(path, staged)
             lib = self._open_library(chat_id)
-            # A stable per-chat+filename id, not the staged temp path: every
-            # upload lands in a FRESH mkdtemp that is rmtree'd right after, so
-            # keying dedup on that abspath (the old default) meant a re-upload
-            # never matched its own previous copy and just duplicated it.
+            # A stable per-chat+filename id, not the staged temp path (every
+            # upload lands in a FRESH mkdtemp), so a re-upload matches its
+            # previous copy instead of duplicating it.
             sid = f"tg:{chat_id}:{fname}"
             before = {d.get("title"): d.get("chunks", 0) for d in lib.documents()}
             stats = lib.ingest([staged], source_ids={staged: sid},
                                titles={staged: fname})
             docs = lib.documents()
             chunks = sum(d.get("chunks", 0) for d in docs)
-            # Per-file delta, not the whole library's total — "two.txt indexed
-            # (15 passages)" for a 3-word note (the library's 15th) read like the
-            # file itself had exploded into 15 chunks.
+            # Per-file count, not the whole library's total.
             this_file_chunks = next((d.get("chunks", 0) for d in docs
                                      if d.get("title") == fname), None)
             if this_file_chunks is None:
@@ -143,13 +127,11 @@ class LibraryMixin:
                 raise RuntimeError(errors[0])
             sess.use_docs = True
             if not quiet:
-                # The menu is NOT switched to 📚 Documents: an index from an upload
-                # left the chat «in Documents» unseen, and every later file was
-                # indexed instead of read (owner 10-03: «он сам открыл вкладку»).
-                # A stale prefix from an earlier menu (e.g. "generate an image of: "
-                # armed by 🎨 Draw, then abandoned for an upload) otherwise survives
-                # this transition and glues itself onto the next ordinary question,
-                # like every other menu-changing branch already clears it here.
+                # The menu is NOT switched to 📚 Documents: that would leave the
+                # chat «in Documents» unseen, and every later file would be
+                # indexed instead of read. A stale prefix from an earlier menu
+                # (e.g. "generate an image of: " armed by 🎨 Draw) is cleared so it
+                # cannot glue itself onto the next ordinary question.
                 sess.pending_prefix = ""
             self._store.put(sess)
             if not quiet:
@@ -195,14 +177,13 @@ class LibraryMixin:
         for d in shown:
             lines.append(f"• <b>{_html_mod.escape(str(d.get('title') or '?'))}</b>"
                          f" — {d.get('chunks', 0)}")
-        # The header claims the FULL count, so a silent 40-item cap with no note
-        # made the list look complete when it wasn't (a message that just ends
-        # mid-line, no "showing N of M", no way to see the rest).
+        # The header claims the FULL count, so a 40-item cap needs a
+        # "showing N of M" note.
         if len(st["docs"]) > len(shown):
             lines.append(tg_bot._t("lib_truncated", lang, shown=len(shown), n=len(st["docs"])))
         # Route through _split_html rather than the blind 4096-char slice
         # _send_text falls back to: that slice is tag-blind and can land inside
-        # a <b>, and either way a long list was simply cut off with no warning.
+        # a <b>.
         chunks = tg_bot._split_html("\n".join(lines))
         for i, chunk in enumerate(chunks):
             self._send_text(chat_id, chunk, parse_mode="HTML",
@@ -229,8 +210,8 @@ class LibraryMixin:
     def _send_facts(self, chat_id: int, sess) -> None:
         """Show what the assistant has pinned about this user, with a way out.
 
-        remember_fact writes facts that are injected into EVERY turn, and until now
-        there was no way to see them or take one back.
+        remember_fact writes facts that are injected into EVERY turn, so the user
+        can see them and take them back.
         """
         lang = self._lang(sess)
         facts = sess.get_tg_facts()
@@ -243,11 +224,9 @@ class LibraryMixin:
             text = str((f or {}).get("text", "")).strip() if isinstance(f, dict) else str(f)
             if text:
                 lines.append(f"{i}. {_html_mod.escape(text[:300])}")
-        # Up to 40 facts x ~300 chars can reach ~12k chars — well past the blind
-        # 4096-char slice a plain _send_text would apply, which silently swallows
-        # the back half of the list with no "showing N of M" and no way to see
-        # the rest. Route through the same tag-safe splitter used elsewhere for this
-        # exact problem, and only attach the Forget-all button to the last chunk.
+        # Up to 40 facts x ~300 chars can reach ~12k chars, past the blind
+        # 4096-char slice a plain _send_text would apply: use the tag-safe
+        # splitter and attach the Forget-all button to the last chunk only.
         chunks = tg_bot._split_html("\n".join(lines))
         kb = {"inline_keyboard": [[
                 {"text": tg_bot._t("facts_forget", lang), "callback_data": "facts_clear"}]]}
@@ -256,8 +235,7 @@ class LibraryMixin:
                             keyboard=kb if i == len(chunks) - 1 else None)
 
     def _send_status(self, chat_id: int, sess) -> None:
-        """Health probe. A downed ComfyUI or LM Studio used to surface only as a
-        generic failure in the middle of a request."""
+        """Health probe: LM Studio and ComfyUI reachability, queue, uptime, usage."""
         lang = self._lang(sess)
         import config as _cfg_mod
 

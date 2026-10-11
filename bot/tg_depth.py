@@ -1,10 +1,8 @@
 """Task-kind quota accounting and deep-research depth selection.
 
-Split out of tg_bot.py. Every caller outside this module already reaches
-these through `tg_bot.<name>` (tg_accounts, tg_library, tg_resolve, tg_tasks,
-tg_commands, tg_dispatch, tg_queue all do) — that convention is what makes
-this move safe: tg_bot.py re-exports every name here by import, so those call
-sites need no change.
+Callers outside this module reach these through `tg_bot.<name>` (tg_accounts,
+tg_library, tg_resolve, tg_tasks, tg_commands, tg_dispatch, tg_queue):
+tg_bot.py re-exports every name here by import.
 
 The one seam that matters: test_depth_eta_fixes.py patches
 `tg_bot._depth_eta_seconds` directly to make `_fmt_eta`'s queue estimate
@@ -56,8 +54,8 @@ def _classify_task(text: str) -> str:
 
 
 def _kind_label(kind: str, lang: str = _DEFAULT_LANG) -> str:
-    """Human name for a quota bucket. The status page used to print the raw key
-    ("deep_research" with the underscore swapped for a space), untranslated."""
+    """Human name for a quota bucket, translated (an unknown key falls back to
+    the raw key with underscores swapped for spaces)."""
     return _t({KIND_TASK: "kind_task", KIND_IMAGE: "kind_image",
                KIND_RESEARCH: "kind_research"}.get(kind, ""), lang) \
         if kind in (KIND_TASK, KIND_IMAGE, KIND_RESEARCH) else kind.replace("_", " ")
@@ -92,14 +90,10 @@ def _fmt_eta(tasks: list, lang: str = _DEFAULT_LANG) -> str:
     """
     import tg_bot as _tb  # the queue-eta seam: _depth_eta_seconds is patched on tg_bot
     per_task = max(1, _cfg_int("TG_ETA_TASK_SEC", 45))
-    # A research task's real cost is measured (deep_research records every completed
-    # run); an env var stays an explicit override. The old `_cfg_int(..., 0) or
-    # ...` never actually reached the measured branch: config.py bakes
-    # TG_ETA_RESEARCH_SEC to a nonzero default (900) whether or not the user set
-    # it, so the "0 means unset" sentinel could never fire — this quoted the
-    # same flat 900s forever, off by more than half on a machine where a
-    # standard run takes ~35 min. Read the raw environment variable instead, so
-    # "unset" and "explicitly 900" are actually distinguishable.
+    # A research task's real cost is measured (deep_research records every
+    # completed run); an env var stays an explicit override. The raw environment
+    # is read because config.py bakes TG_ETA_RESEARCH_SEC to a nonzero default
+    # (900), which would make "unset" and "explicitly 900" indistinguishable.
     _eta_override = os.environ.get("TG_ETA_RESEARCH_SEC", "").strip()
     per_res = int(_eta_override) if _eta_override.isdigit() else int(_tb._depth_eta_seconds())
     per_res = max(1, per_res)
@@ -129,9 +123,8 @@ _DEPTHS = ("quick", "standard", "deep")
 
 
 def _resolve_depth(sess) -> str:
-    # `dr_depth` is user-controlled persisted state (loaded straight from a
-    # JSON/DB row), so a non-string value already sitting there — corrupted
-    # data, a manual edit, a future schema change — must not crash `.lower()`.
+    # `dr_depth` is persisted state (a JSON/DB row), so a non-string value
+    # (corrupted data, a manual edit) must not crash `.lower()`.
     d = getattr(sess, "dr_depth", "") or ""
     d = d.lower() if isinstance(d, str) else ""
     return d if d in _DEPTHS else _config_default_depth()

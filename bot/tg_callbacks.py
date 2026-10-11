@@ -1,10 +1,8 @@
 """Inline-keyboard callbacks: what happens when a user taps a button.
 
-Split out of tg_dispatch.py, where this was the 680-line ``if cb:`` arm of
-_dispatch and dwarfed the message path it shared a function with. The two
-halves of that router answer different update shapes (``callback_query`` vs
-``message``) and share nothing but the chat id, so they are now two functions
-in two files; _dispatch still owns routing and hands a callback straight here.
+Callbacks (``callback_query``) and messages (``message``) are different update
+shapes that share nothing but the chat id: _dispatch (tg_dispatch.py) owns
+routing and hands a callback straight here.
 
 Three things run BEFORE any button is routed, and all three are load-bearing:
 
@@ -136,20 +134,13 @@ class CallbackMixin:
         self._activity.log(chat_id, "system", "[wait] cancelled by button")
 
     def _cb_abandon_capture(self, chat_id: int) -> None:
-        # 📝 Feedback / ✏️ Change name / 🔑 Change password all arm
-        # sess.reg_state to steal the user's VERY NEXT bit of input as their
-        # answer. The message-text path already abandons that mode on a
-        # recognized button LABEL, a slash command, or empty text (see
-        # tests/test_feedback_trap.py) — but an INLINE keyboard press (a
-        # different update shape entirely: callback_query, not message) was
-        # never covered by that guard. Press 📝 Feedback, change your mind
-        # and tap an unrelated inline button (⚙️ a /size choice, 🌐 a
-        # language pick, anything) instead of typing, and reg_state stayed
-        # "feedback" forever — silently filing the user's NEXT ordinary
-        # message as a feedback submission instead of routing it normally.
-        # acct_setname/acct_setpwd/acct_newprofile_yes deliberately RE-ARM
-        # (possibly a different) capture mode right after this, so clearing
-        # here first is harmless — it is immediately overwritten by them.
+        # 📝 Feedback / ✏️ Change name / 🔑 Change password arm sess.reg_state
+        # to take the user's VERY NEXT input as the answer. The message path
+        # abandons that mode on a button label, a slash command or empty text
+        # (tests/test_feedback_trap.py); an INLINE press must do the same, or
+        # the next ordinary message is filed as a feedback submission.
+        # acct_setname/acct_setpwd/acct_newprofile_yes RE-ARM a capture mode
+        # right after this, so clearing first is harmless.
         _cb_sess0 = self._get_session(chat_id)
         if _cb_sess0.reg_state in ("feedback", "change_name", "change_password",
                                    "set_badge", "wtw_city", "wtw_date", "song_topic",
@@ -159,14 +150,11 @@ class CallbackMixin:
             self._store.put(_cb_sess0)
 
     def _cb_status_allows(self, chat_id: int, data: str) -> bool:
-        # A callback has no message-path _user_gate call anywhere on its route,
-        # so a banned/pending/logged-out account's OLD keyboard (upscale,
-        # retry, lang, facts_clear, acct_setpwd, fwdv:*, ...) silently still
-        # worked. `acct_setpwd` in particular could re-authenticate a
-        # logged-out chat as a side effect of "changing" its password with no
-        # credentials at all. Admin actions authorize the presser themselves
-        # (below) and are exempt here; a stopped-by-someone-else cancel is
-        # harmless and also exempt.
+        # A callback has no _user_gate on its route, so a banned, pending or
+        # logged-out account's OLD keyboard would still work -- `acct_setpwd`
+        # could even re-authenticate a logged-out chat with no credentials.
+        # Admin actions authorize the presser themselves (below) and are
+        # exempt, as is cancel (harmless).
         if not any(data.startswith(p) for p in self._CB_SELF_AUTHORIZING):
             _cb_user = self._user_store.get(chat_id)
             _cb_sess = self._get_session(chat_id)
@@ -181,12 +169,10 @@ class CallbackMixin:
                 return False
             if _cb_sess.reg_state in ("awaiting_login", "awaiting_name",
                                       "awaiting_password"):
-                # Logged out (or mid first-time registration) — the account
-                # itself is fine, but this CHAT is locked behind a password
-                # re-entry. `acct_setpwd` in particular must not be reachable
-                # here: it would let a stale button set a brand-new password
-                # with zero credentials and silently re-authenticate the chat
-                # as a side effect.
+                # Logged out (or mid first-time registration): the account is
+                # fine, but this CHAT is locked behind a password re-entry.
+                # `acct_setpwd` must not be reachable here (it would set a
+                # new password with no credentials).
                 self._send_text(chat_id, tg_bot._t("locked_out", _cb_lang), parse_mode="HTML")
                 return False
         return True
@@ -249,17 +235,11 @@ class CallbackMixin:
         _btn_id = _parts[2] if len(_parts) > 2 else ""
         if _choice in ("cont", "pick") or (_choice[:1] == "m" and _choice[1:].isdigit()):
             return self._cb_fwd_media(chat_id, sess, lang, _choice, _btn_id)
-        # A bare "fwdv:<choice>" (no id) is a keyboard sent before ids
-        # existed — honoured unconditionally, same backward-compat rule
-        # the image-verb buttons use for a pre-id keyboard. One WITH an
-        # id must match the currently pending forward: forwarding a
-        # SECOND voice before answering the first's prompt silently
-        # overwrote the single fwd_transcript slot, so the FIRST (still
-        # on-screen) prompt would otherwise deliver the SECOND voice's
-        # content — reproduced live. Report it the same way a picture
-        # that is gone is reported, instead of silently acting on
-        # whatever happens to be pending now. Now each id resolves to its own
-        # voice via fwd_recent; "gone" only once it has aged out.
+        # A bare "fwdv:<choice>" (no id) is a keyboard from before ids existed
+        # and is honoured unconditionally, like the image-verb buttons. One
+        # WITH an id resolves to its own voice via fwd_recent, so a second
+        # forward cannot answer the first prompt; "gone" only once the id has
+        # aged out.
         if _btn_id and _btn_id != getattr(sess, "fwd_transcript_id", ""):
             said = sess.fwd_recent.get(_btn_id, "")
         if not said:
@@ -310,25 +290,15 @@ class CallbackMixin:
         self._store.put(sess)
         idx = len(live) - live.index(entry) if entry in live else 1
         if held:
-            # Re-push the instruction the user already typed. Making them
-            # retype it would be a worse answer than the wrong guess.
+            # Re-push the instruction the user already typed (retyping it
+            # would be a worse answer than the wrong guess).
             #
-            # image_id travels WITH this item, exactly like every other
-            # "captured at press time" carry in this router (button
-            # presses, replies) — NOT left to a lazy re-read of
-            # sess.target_image at task-execution time. Telegram's
-            # "which picture?" keyboard never expires, so without this,
-            # a re-push here that only set sess.target_image could still
-            # be answered about the WRONG picture: this task queues
-            # (behind whatever else is running in the chat), and if the
-            # user taps that same never-expiring keyboard a second time
-            # before it runs — even for an unrelated already-answered
-            # prompt, out of curiosity or by accident — target_image is
-            # silently overwritten and the queued task executes against
-            # a picture the user picked AFTER this one was already
-            # decided. Reproduced: pick B for "upscale this" (queues
-            # behind a slow task), then tap the same stale keyboard for
-            # A before it runs — "upscale this" ran on A, not B.
+            # image_id travels WITH this item, like every other "captured at
+            # press time" carry in this router, instead of being re-read from
+            # sess.target_image at execution time: the "which picture?"
+            # keyboard never expires, so a second tap on it before this task
+            # runs would overwrite target_image and the queued task would run
+            # on the wrong picture.
             self._resolve_and_push(chat_id, [{"type": "text", "text": held,
                                                "image_id": entry["id"]}])
         else:
@@ -911,7 +881,7 @@ class CallbackMixin:
         text custom style, or the older reference-photo flow. Arms
         pending_style_target either way, since a preset/custom pick still
         needs to know WHICH picture it targets and a reference photo remains
-        a valid third option; tg_resolve.py's photo branch is untouched."""
+        a valid third option."""
         sess = self._get_session(chat_id)
         target = sess.target_image
         entry = tg_bot._image_by_id(sess, target) if target else None
@@ -1072,11 +1042,9 @@ class CallbackMixin:
 
         Uses the same free-text capture as _cb_edit_image, with its own prefix
         so the agent gets "change the outfit to: X" rather than a bare edit
-        instruction. _CB_CMDS["change_clothes"] is left
-        in place as the underlying enqueued text shape for old code paths/tests;
-        this handler is reached BEFORE that generic dispatch (see the `if data
-        == "change_clothes"` line above it), so every press -- old keyboard or
-        new -- now asks first."""
+        instruction. This handler is reached BEFORE the generic _CB_CMDS
+        dispatch (see the `if data == "change_clothes"` line above), so every
+        press -- old keyboard or new -- asks first."""
         sess = self._get_session(chat_id)
         sess.pending_prefix = "change the outfit to: "
         # A photo of the clothes answers too (a clothing reference, a

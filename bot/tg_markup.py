@@ -1,9 +1,8 @@
 """Telegram markup: markdown -> Telegram HTML, and tag-safe splitting.
 
-Split out of tg_bot.py. Pure text in, pure text out -- no network, no session,
-no localization. That is what made it safe to move: nothing here reads bot
-state, and tg_bot re-exports every name, so tg_library / tg_tasks /
-tg_transport keep resolving `tg_bot._split_html` and friends unchanged.
+Pure text in, pure text out -- no network, no session, no localization.
+tg_bot re-exports every name, so tg_library / tg_tasks / tg_transport resolve
+`tg_bot._split_html` and friends.
 
 Load-bearing, despite being "just formatting": Telegram REJECTS a message
 whose markup is malformed, and a rejected edit deletes the reply the user was

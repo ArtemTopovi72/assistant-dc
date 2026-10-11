@@ -96,16 +96,14 @@ _ALBUM_MAX_S        = 15.0
 _WORKER_IDLE_S      = 180
 _TYPING_INTERVAL_S  = 4.0
 _POSITION_POLL_S    = 2.5
-# How many tasks may be IN FLIGHT at once. This was 1, so the whole bot stalled
-# for the 40+ seconds a ComfyUI render takes, or the minutes a web crawl takes,
-# with the LLM sitting idle and everyone else queued behind it — a queue that
-# exists only to make people wait.
+# How many tasks may be IN FLIGHT at once (a single consumer would stall the bot
+# for the 40+ seconds of a ComfyUI render or the minutes of a web crawl).
 #
-# Concurrency is safe because (a) every task now runs on its own scoped Context
+# Concurrency is safe because (a) every task runs on its own scoped Context
 # (see _scoped_ctx) so nothing leaks between chats, (b) one chat still gets only
-# one task at a time, and (c) the genuinely exclusive resource — the GPU — is
-# held by a semaphore, so two renders never overlap while an LLM turn happily
-# proceeds alongside one.
+# one task at a time (a second slot opens only for a backgroundable stage), and
+# (c) the genuinely exclusive resource -- the GPU -- is held by a semaphore, so
+# two renders never overlap while an LLM turn proceeds alongside one.
 _MAX_CONSUMERS      = max(1, _cfg_env.env_int("TG_WORKERS", 3))
 # One definition only. tg_markup owns it because _split_html binds it as a
 # default argument at def time; a second copy here would drift silently.
@@ -231,15 +229,10 @@ _IMAGE_ACTIONS: tuple[tuple[str, str], ...] = (
 def _image_kb(lang: str = None, img_id: str = "") -> dict:
     """The actions offered under every picture (bot-drawn or user-uploaded).
 
-    This used to be a module-level constant with English labels, so a Russian
-    user got a fully Russian bot and then six English buttons under every image —
-    the single most-seen keyboard in the whole product.
-
-    Each button carries the id of the image it sits UNDER (`upscale:ab12cd`), so
-    pressing ⬆ under a picture from ten messages ago upscales THAT picture. Before
-    this the callback was a bare verb and every button silently meant "whatever is
-    current", which is how a request about one image answered about another.
-    Bare verbs are still accepted, for keyboards sent before this change.
+    Labels follow the user's language. Each button carries the id of the image
+    it sits UNDER (`upscale:ab12cd`), so pressing ⬆ under a picture from ten
+    messages ago upscales THAT picture, not whatever is current. Bare verbs are
+    still accepted, for keyboards sent before ids existed.
     """
     lang = lang or _DEFAULT_LANG
     sfx = (":" + img_id) if img_id else ""
@@ -275,15 +268,11 @@ _INTERRUPTIBLE_STAGE_KEYWORDS = (
     "enhancing faces", "finding a reference photo", "finding a photo online",
     "converting the colours", "crawl", "research",
 )
-# NOTE: "describe" is deliberately NOT a member. _image_kb() never emits a
-# describe: button, and _CB_CMDS has no "describe" entry, so a describe:<id>
-# callback would strip the id, ARM sess.target_image, then fall through every
-# handler in total silence — leaving a stale armed target that could silently
-# re-point the user's next unrelated message. Since nothing in this codebase
-# emits the verb, it is not recognised at all: a
-# describe:<id> (or bare describe) callback falls straight through as an
-# unmatched string (same as any other unknown callback_data) instead of arming
-# anything.
+# "describe" is deliberately NOT a verb: _image_kb() never emits it and
+# _CB_CMDS has no entry for it, so a describe:<id> callback would arm
+# sess.target_image and then fall through every handler in silence, leaving a
+# stale target to re-point the user's next message. It falls through as an
+# unmatched callback_data instead.
 _IMAGE_ID_RE = re.compile(r"[0-9a-f]{8}")
 
 
@@ -599,14 +588,12 @@ def _live_images(sess) -> list:
     return out
 
 
-# Admins do NOT receive user feedback/service notifications by default -- an
-# admin who never asked to be paged should not be spammed with reports the
-# moment they're promoted. The marker is an explicit opt-IN, so a freshly
-# promoted admin starts muted and has to choose to subscribe.
-FEEDBACK_OPT_OUT = "feedback_off"   # kept for backward compat with rows written
-# by the old opt-out scheme; still HONOURED
-# (an admin who explicitly muted stays muted),
-# but not what new admins default to.
+# Admins do NOT receive user feedback/service notifications by default: the
+# marker is an explicit opt-IN, so a freshly promoted admin starts muted and
+# has to choose to subscribe.
+# FEEDBACK_OPT_OUT is the legacy opt-out marker: still HONOURED (an admin who
+# explicitly muted stays muted), but not what new admins default to.
+FEEDBACK_OPT_OUT = "feedback_off"
 FEEDBACK_OPT_IN = "feedback_subscribed"
 
 
@@ -1129,12 +1116,10 @@ from tg_music import (
 def _scoped_ctx(base, cancel_event=None):
     """A per-TASK view of the shared Context.
 
-    Concurrency prerequisite. The bot used to run exactly one task at a time and
-    got away with mutating the single shared Context in place — save the old
-    value, overwrite it, restore it in `finally`. With more than one consumer that
-    is a data leak: chat A's working image, session memory, pinned facts, output
-    size and cancel_event would all be visible to chat B mid-turn, and A pressing
-    Stop would kill B's request (the old code says so in a comment).
+    Concurrency prerequisite: with more than one consumer, mutating the single
+    shared Context in place would leak chat A's working image, session memory,
+    pinned facts, output size and cancel_event to chat B mid-turn, and A
+    pressing Stop would kill B's request.
 
     `copy.copy` on the Context dataclass gives a new instance that SHARES the
     expensive, genuinely global things by reference — the loaded models, the
@@ -1198,8 +1183,9 @@ class _RecentIds:
     """A set of task ids that forgets its OLDEST entries past `limit`.
 
     Cancelled ids must outlive the cancel until the task is skipped or
-    unwinds; the old bound cleared the whole set at 512, so a task cancelled
-    a moment earlier but not droppable from its queue (Kafka) ran anyway."""
+    unwinds, so only the oldest are forgotten (clearing everything at the
+    limit would let a task cancelled a moment earlier, but not droppable from
+    its queue -- Kafka -- run anyway)."""
 
     def __init__(self, limit: int):
         self._limit = limit
@@ -1410,13 +1396,8 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
     # ── lifecycle ─────────────────────────────────────────────────────────────
 
     def start(self) -> bool:
-        """Bring the bot up. Returns False when it did NOT start.
-
-        This used to return None on failure and write nothing to the activity log,
-        so a bot that never came up left no trace anywhere an operator looks —
-        while stop() kept logging "Bot stopped". The log filled with 26 stops and
-        no starts, and every message sent to the bot went unanswered with no
-        explanation. The return value is what lets the caller keep its own UI
+        """Bring the bot up. Returns False when it did NOT start (the failure is
+        also written to the activity log), so the caller can keep its own UI
         honest about whether the bot is actually running.
         """
         if self._running:
@@ -1483,16 +1464,9 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
             threading.Thread(target=self._broadcast_startup, daemon=True).start()
         return True
 
-    # ── supervision ───────────────────────────────────────────────────────────
-
-    # ── crash recovery ────────────────────────────────────────────────────────
-
     def stop(self):
-        # Stopping something that never started is not an event. Without this the
-        # activity log recorded "Bot stopped" every time the operator pressed a
-        # Stop button that should not even have been enabled — 26 of them in a row
-        # with no matching start — and users were told the bot was "going offline"
-        # by a bot that had never been online.
+        # Stopping something that never started is not an event: no "Bot
+        # stopped" log line and no "going offline" notice to users.
         if not self._running:
             self._on_status("⏹  Stopped")
             return
@@ -1525,8 +1499,6 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
 
         Gated on the same subscription as the startup notice: they are one pair of
         messages, and /unsubscribe promises "unsubscribed from all notifications".
-        This used to go to every approved user regardless, so unsubscribing silenced
-        only half of what it said it would.
         """
         for user in self._user_store.approved():
             if "startup" not in (user.subscriptions or []):
@@ -1561,8 +1533,6 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
                                        "Startup notification sent", user.name)
                 except Exception as exc:
                     logger.warning("startup notify failed for %s: %s", user.chat_id, exc)
-
-    # ── polling ───────────────────────────────────────────────────────────────
 
     # ── offset persistence ────────────────────────────────────────────────────
 
@@ -1610,24 +1580,12 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
                     parse_mode="HTML")
             except Exception: pass
 
-    # ── polling ───────────────────────────────────────────────────────────────
-
-    # ── dispatch ──────────────────────────────────────────────────────────────
-
     # Callbacks that carry their OWN presser/target authorization (admin actions
     # authorize the presser explicitly; cancel: only ever drops the presser's own
     # task). Everything else must go through the same status gate the message
     # path uses, or a stale/replayed button silently acts for a banned, pending,
     # or logged-out account — see [[tg-callback-gate-hole]].
     _CB_SELF_AUTHORIZING = ("admin_approve:", "admin_reject:", "bcast:", "cancel:")
-
-    # ── user gate + registration flow ─────────────────────────────────────────
-
-    # ── album buffer ──────────────────────────────────────────────────────────
-
-    # ── command handler ───────────────────────────────────────────────────────
-
-    # ── per-chat debounce layer ───────────────────────────────────────────────
 
     # ── language ──────────────────────────────────────────────────────────────
 
@@ -1645,7 +1603,7 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         sess.menu = menu
         self._store.put(sess)
 
-    # ── per-user document library ─────────────────────────────────────────────
+    # ── sessions ──────────────────────────────────────────────────────────────
 
     def _get_session(self, chat_id: int) -> _Session:
         with self._mgmt_lock:
@@ -1680,21 +1638,15 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
     def _state_kb(self, sess, lang: str = None) -> dict:
         """The keyboard that matches the session's CURRENT state.
 
-        Replies used to always carry the main keyboard while `pending_prefix`
-        stayed set, so after one generated image the user saw the top-level menu
-        but their next plain message was still turned into an image prompt. This
-        keeps the submenu on screen for as long as the submenu is armed — the
-        multi-shot flow (several prompts in a row) still works, and the keyboard
-        no longer contradicts the state.
+        The submenu stays on screen for as long as it is armed -- the multi-shot
+        flow (several prompts in a row) works, and the keyboard never contradicts
+        a still-set `pending_prefix`.
         """
         lang = lang if lang is not None else self._lang(sess)
         menu = self._PREFIX_MENU.get(getattr(sess, "pending_prefix", "") or "")
-        # No prefix armed (a direct action like 📷 Analyze with no image consumes
-        # it) does not mean "no submenu": `sess.menu` is the standing record of
-        # which submenu the user is in, and it must win here too — otherwise the
-        # keyboard silently jumps back to the main menu while the stored menu
-        # still says "draw"/"search", contradicting the state exactly like the
-        # docstring above already guards against for pending_prefix.
+        # No prefix armed (a direct action like 📷 Analyze consumes it) does not
+        # mean "no submenu": `sess.menu` is the standing record of which submenu
+        # the user is in, and it wins here too.
         if not menu:
             menu = getattr(sess, "menu", "") or ""
         if menu == "draw":
@@ -1712,10 +1664,8 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
     def _settings_header(self, sess, lang: str = None) -> str:
         """Header shown above the Settings keyboard.
 
-        It used to be `⚙️ Settings\\n• 🎙 <b>OFF ❌</b>` — a one-item bullet list whose
-        item had no name, so it read as a stray dot next to a mic and a cross with
-        nothing saying what was off. Reuse the `voice_state` string, which already
-        names the setting in both languages, and drop the bullet.
+        The current setting is named (`set_now`), not a bare bullet with a mic and
+        a cross.
         """
         lang = lang if lang is not None else self._lang(sess)
         # «Сейчас:» -- a bare «💬 Ответ: текст» under the title read as one more button
@@ -1760,10 +1710,9 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         """Per-chat lock guarding a read→append→write of sess.history.
 
         Two tasks for the same chat (the slow one and an admitted interject)
-        each do sess.get_history() → append → sess.set_history(...) — a
-        sequence with no lock of its own, since only one task per chat ever ran
-        at once until interject tasks existed. Without this, the second
-        writer's append can silently clobber the first's (a lost-update race).
+        each do sess.get_history() → append → sess.set_history(...), a sequence
+        with no lock of its own; without this the second writer's append can
+        silently clobber the first's (a lost-update race).
         """
         with self._history_locks_lock:
             lk = self._history_locks.get(chat_id)
@@ -1773,9 +1722,8 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
             return lk
 
     # Telegram's own "/" menu. setMyCommands takes a language_code, so the list
-    # can be registered once per language instead of shipping one English menu to
-    # everyone — this was the last English surface a Russian user could not escape,
-    # since it is drawn by Telegram itself and never passes through _send_text.
+    # is registered once per language; it is drawn by Telegram itself and never
+    # passes through _send_text.
     _COMMANDS = [
         ("start",       "Welcome + keyboard",
                         "Приветствие и клавиатура"),

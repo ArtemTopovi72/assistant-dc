@@ -1,10 +1,7 @@
 """Operator actions on accounts, and the admin surface in chat.
 
-Split out of tg_bot.py, then thinned again: the gate every non-approved chat
-has to pass moved to tg_registration.py, and the weather / song / mashup flows
-that had collected here moved to tg_weather.py and tg_songs.py. What remains
-is one subject -- what an operator can DO to an account, and what an admin
-sees.
+One subject -- what an operator can DO to an account, and what an admin
+sees. (The registration gate lives in tg_registration.py.)
 
   * approve / reject / ban / make_admin / revoke_admin, called from the GUI
     and from the inline admin buttons, plus the DB backup listing and restore.
@@ -44,25 +41,14 @@ class AccountsMixin:
         self._user_store.put(user)
         sess = self._get_session(chat_id)
         sess.is_admin = user.is_admin
-        # A self-service edit mode (change_name / change_password / feedback /
-        # wtw_city / set_badge) armed before this user was banned or rejected
-        # is stale once they land back on "approved" -- reg_state survives
-        # status transitions because nothing else ever clears it, and
-        # _user_gate's edit-mode branch only checks status == "approved", not
-        # how long ago that became true. Concretely: arm 🔑 Change password,
-        # get banned mid-flow, get re-approved (allow_from_any_status, the
-        # GUI's own path) -- the very next ordinary message this person
-        # sends, with no idea any of this happened, is silently swallowed as
-        # their new password. Clearing it here, at the one choke point every
-        # path back to "approved" already goes through, is cheaper and more
-        # reliable than teaching ban_user/reject_user to reach into a session
-        # that may not even be loaded yet.
-        #
-        # wtw_city and set_badge were added after this guard's list was first
-        # written and never joined it -- same leak, milder blast radius (a
-        # swallowed message becomes a garbage city, or an admin's ordinary
-        # message gets rejected as "not a valid emoji" and stays armed) but
-        # the same class of bug the list exists to close.
+        # A self-service edit mode armed before this user was banned or
+        # rejected is stale once they are "approved" again: reg_state survives
+        # status transitions, and _user_gate's edit-mode branch only checks
+        # status == "approved". Without this, arming 🔑 Change password,
+        # getting banned mid-flow and re-approved from the GUI would swallow
+        # the next ordinary message as the new password. Cleared here, at the
+        # one choke point every path back to "approved" goes through, rather
+        # than in ban_user/reject_user (the session may not be loaded).
         if getattr(sess, "reg_state", "") in ("change_name", "change_password",
                                               "feedback", "wtw_city", "wtw_date",
                                               "set_badge", "song_topic",
@@ -84,18 +70,12 @@ class AccountsMixin:
         """Move a user to 'rejected'. Returns 'ok', 'not_found', or
         'not_pending' (status guard).
 
-        Inline admin buttons never expire. Two admins can be looking at the
-        same pending-applicant panel message, or one admin can revisit an old
-        one, after a DIFFERENT admin has already approved that applicant and
-        the account is now actively in use. Before this guard, a stale
-        admin_reject: press on that old message silently downgraded a live
-        approved user to 'rejected' -- the same "un-ban via stale button"
-        shape already fixed for approve_user, just on the other verb. Reject
-        is for deciding on a pending applicant, not for revoking an already-
-        approved user (that is what ban_user is for); the Telegram callback
-        path therefore only allows it from 'pending'. The desktop GUI's
-        explicit Reject action opts in via allow_from_any_status=True, same
-        pattern as approve_user's override.
+        Inline admin buttons never expire, so a stale admin_reject: press on
+        an old panel message must not downgrade an applicant another admin
+        has since approved. Reject decides on a pending applicant (ban_user
+        revokes an approved one), so the Telegram callback path only allows
+        it from 'pending'. The desktop GUI's explicit Reject opts in via
+        allow_from_any_status=True, as with approve_user.
         """
         user = self._user_store.get(chat_id)
         if not user: return "not_found"
@@ -115,20 +95,10 @@ class AccountsMixin:
         """Move a user to 'banned'. Returns 'ok', 'not_found', or
         'not_banned_already' (status guard).
 
-        Brought in line with approve_user/reject_user's contract for
-        consistency and defense-in-depth: unlike them, ban_user had no status
-        guard at all and silently no-opped on a missing user row (the caller
-        could not tell "banned" from "there was no such user"). Not currently
-        reachable as a live exploit -- the only caller is the desktop GUI's
-        Ban button, which only ever offers rows already present in the user
-        list -- but the same "stale button silently mutates state on the
-        wrong user/status" shape that motivated approve_user/reject_user's
-        guards applies here too if a second UI surface (or a future Telegram
-        admin_ban: callback) is ever added. A user already banned is left
-        alone rather than re-banned (re-sending acct_banned, re-logging,
-        re-firing _on_user_change for no state change); the GUI's explicit
-        Ban action opts in via allow_from_any_status=True, same pattern as
-        approve_user/reject_user's GUI call sites.
+        Same contract as approve_user/reject_user: a missing user is reported
+        as 'not_found', and a user already banned is left alone rather than
+        re-banned (no second acct_banned, log entry or _on_user_change); the
+        GUI's explicit Ban action opts in via allow_from_any_status=True.
         """
         user = self._user_store.get(chat_id)
         if not user: return "not_found"
@@ -155,8 +125,6 @@ class AccountsMixin:
         try:
             self._send_text(chat_id,
                 tg_bot._t("acct_admin_ok", self._lang(sess)),
-                # This was the one keyboard built without `lang`: promoting a
-                # Russian user to admin redrew their whole keyboard in English.
                 parse_mode="HTML", keyboard=self._main_menu_kb(sess))
         except Exception: pass
         self._on_user_change(chat_id, user.name, "admin")
@@ -370,11 +338,9 @@ class AccountsMixin:
     def _training_line(self, lang: str) -> str:
         """One line about the LoRA run that owns the card, for the admin panel.
 
-        The operator asked "как процесс?" in chat repeatedly while the answer
-        sat in a log file on a machine they were not at. Reads the same
-        lora_training.progress() the desktop tab does -- disk only, no process
-        handle -- so it reports a run started from anywhere, including a
-        previous session.
+        Reads the same lora_training.progress() the desktop tab does -- disk
+        only, no process handle -- so it reports a run started from anywhere,
+        including a previous session.
         """
         left = "осталось ~" if lang == "ru" else "left ~"
         import time

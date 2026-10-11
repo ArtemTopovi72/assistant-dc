@@ -33,19 +33,14 @@ def _reviews_ru(n) -> str:
     return "отзывов"
 
 
-# A line of the text reply that only restates a card: it links to a carded
-# product. An answer listing five products as
-# "…доставка сегодня: ссылка (https://www.ozon.ru/product/…)" and then the
-# same five again as cards -- the list is noise once the cards exist.
-
-
 def _heading(line: str) -> bool:
     return line.rstrip().rstrip("*").rstrip().endswith(":")
 
 
 def condense(reply: str, products: list) -> str:
-    """The reply without the lines the cards repeat. Keeps the lead-in and
-    anything the model said about its choice; empty lead-in gets a short one."""
+    """The reply without the lines the cards repeat (a line that links to a
+    carded product only restates its card). Keeps the lead-in and anything the
+    model said about its choice; empty lead-in gets a short one."""
     picked = pick(reply, products)
     if not picked:
         return reply

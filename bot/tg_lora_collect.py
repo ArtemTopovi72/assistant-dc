@@ -1,9 +1,8 @@
 """Telegram: an admin drops reference photos straight into a LoRA dataset.
 
-Built for exactly one workflow: the operator's brother is curating pictures
-for a Fallout-STYLE adapter (not a person's likeness) -- Frank Horrigan, NCR
-soldiers, the Master, whatever, all sharing the same pre-rendered CGI look.
-Style training wants variety of subject under one constant visual style, so
+Built for exactly one workflow: curating pictures for a Fallout-STYLE adapter
+(not a person's likeness) -- many different subjects sharing the same
+pre-rendered CGI look. Style training wants variety of subject under one constant visual style, so
 unlike the identity pipeline (characters.py, prep_lora_dataset.py) there is no
 stripping of content out of captions here -- the curator's own caption IS the
 training caption, verbatim.
@@ -55,9 +54,7 @@ class LoraCollectMixin:
         # Telegram puts the ONE caption on only one message of the album; by
         # the time it reaches here _flush_album has already found it and
         # attached it to every file in the group. A shared caption across a
-        # multi-angle turnaround of the SAME scene is normal for a style
-        # dataset -- it is not the "49 identical captions" problem, which was
-        # about one caption covering an entire unrelated 49-image set.
+        # multi-angle turnaround of the SAME scene is normal for a style dataset.
         self._lora_collect_save(chat_id, sess, lang, file_ids, caption)
 
     def _lora_collect_save(self, chat_id: int, sess, lang: str,

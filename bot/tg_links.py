@@ -50,8 +50,8 @@ def fetch_video(url: str, max_seconds: int = VIDEO_MAX_SECONDS) -> dict:
                     "format": "bv*[height<=720]+ba/b[height<=720]/b",
                     "merge_output_format": "mp4",
                     "outtmpl": os.path.join(d, "v.%(ext)s"), "socket_timeout": 20,
-                    # YouTube (2026-10): the default clients get "Sign in to confirm you're not
-                    # a bot"; mweb still serves formats once its JS challenge is solved (node).
+                    # YouTube's default clients get "Sign in to confirm you're not a bot";
+                    # mweb still serves formats once its JS challenge is solved (node).
                     "extractor_args": {"youtube": {"player_client": ["default", "mweb"]}},
                     "js_runtimes": {"node": {}}, "remote_components": ["ejs:github"]}
             with yt_dlp.YoutubeDL(opts) as y:
@@ -89,8 +89,8 @@ def read_link(url: str) -> dict:
         if page.get("text"):
             text = page["text"]
             # The crawler's adapters return a summary (Wikipedia: 8000 chars);
-            # a chat question may be about the rest (Kazan's population,
-            # live). One more fetch of the whole page; _fit picks the part.
+            # a chat question may be about the rest (a figure far down the
+            # article). One more fetch of the whole page; _fit picks the part.
             # ponytail: second download per link; cache if links get frequent.
             try:
                 if not url.lower().endswith(".pdf"):
@@ -138,7 +138,7 @@ def _fit(body: str, question: str, limit: int) -> str:
             scored.append((-hits, i, para))
             if len(para) < 80:
                 # A matched heading: its section may be a bare table of
-                # numbers (Kazan's population) that shares no word with anything.
+                # numbers (a population series) that shares no word with anything.
                 # A table runs oldest to newest: its last two rows are the answer.
                 j = i + 1
                 while j < len(paras) and ("|" in paras[j] or not paras[j].strip()):

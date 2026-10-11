@@ -50,7 +50,7 @@ FIELDS: tuple = ("genre", "tempo", "vocal", "voice", "duration") + (
 
 def voices(lang: str = "ru") -> dict:
     """🎙 Own voice: {"auto": off} + the trained star voices (rvc_voice.stars()). A song
-    rendered by the engine gets its lead re-sung in the chosen star's voice (10-09)."""
+    rendered by the engine gets its lead re-sung in the chosen star's voice."""
     out = {"auto": ""}
     try:
         import rvc_voice

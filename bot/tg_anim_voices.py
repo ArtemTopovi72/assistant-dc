@@ -1,7 +1,6 @@
 """🎙 Voices for 🎬 Animate: three voice slots, one per person left to right.
 
-The slot card (owner 10-10: «голоса в видео хочется видеть как
-конфигурируемые слоты») lists 1 / 2 / 3 with the voice in each or «стандартный»;
+The slot card lists 1 / 2 / 3 with the voice in each or «стандартный»;
 🎤 N arms collection into slot N (a voice note / audio / round video / link, or
 a library voice), 🗑 N empties it, «Готово» moves on. The slots ride to
 generate_video via ctx.anim_voices (set per task in tg_tasks, cleared after the
@@ -142,8 +141,8 @@ class AnimVoicesMixin:
         return True
 
     def _anim_voice_take_link(self, chat_id: int, sess, lang: str, text: str) -> bool:
-        """A video link (YouTube, TikTok, VK...) while collecting voices: its sound is the next sample
-        (owner 10-04). True when it was ours."""
+        """A video link (YouTube, TikTok, VK...) while collecting voices: its sound is the next sample.
+        True when it was ours."""
         if getattr(sess, "anim_voice_state", "") != "collect":
             return False
         import tg_links
@@ -173,7 +172,7 @@ class AnimVoicesMixin:
             import cover
             path = cover.to_wav(path, os.path.splitext(path)[0] + ".wav")
         except Exception:
-            pass                                 # H3's loader still reads most containers
+            pass                                 # the video model's loader still reads most containers
         self._put_slot(sess, path)
         from tg_voice_library import vl_add
         v = vl_add(sess, path)                   # remembered: the last 5 come back as buttons
@@ -189,7 +188,7 @@ class AnimVoicesMixin:
 
     def _anim_voice_added(self, chat_id: int, sess, lang: str, new_id: str = "") -> None:
         """The slot card again, with «💾 Подписать и сохранить» for a voice just
-        sent: named, it stays in the library for the next clip (owner 10-03)."""
+        sent: named, it stays in the library for the next clip."""
         sess.anim_voice_state = ""
         self._store.put(sess)
         self._voice_slots_card(chat_id, sess, lang, new_id=new_id)
