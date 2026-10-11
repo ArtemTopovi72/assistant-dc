@@ -6,7 +6,7 @@ a batch of small MemoryCenter/StressTab/TransferTab/ImageViewer guards.
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_supplement8.py
 """
-import os, sys, types, tempfile, threading, contextlib
+import os, sys, types, tempfile, threading
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("USE_GUI", "0")
 os.environ["GUI_REPORT_HTML"] = "0"
@@ -37,22 +37,6 @@ def check(name, cond, detail=""):
     RESULTS.append((name, bool(cond)))
     print(f"[{'PASS' if cond else 'FAIL'}] {name}" + (f" — {detail}" if detail and not cond else ""))
     assert cond, f"{name}: {detail}"
-
-@contextlib.contextmanager
-def fake_modules(**mods):
-    saved = {}
-    for name, mod in mods.items():
-        saved[name] = sys.modules.get(name)
-        if mod is None: sys.modules[name] = None
-        else:
-            m = types.ModuleType(name)
-            for k, v in mod.items(): setattr(m, k, v)
-            sys.modules[name] = m
-    try: yield
-    finally:
-        for name, old in saved.items():
-            if old is None: sys.modules.pop(name, None)
-            else: sys.modules[name] = old
 
 _orig_loader = gui.ModelLoader
 def _win():
@@ -101,9 +85,7 @@ def test_enable_dark_titlebar_dwm():
 
 def test_dark_filter_except():
     filt = gui._DarkTitleBarFilter()
-    # obj.winId() raising -> except swallowed
-    bad = types.SimpleNamespace(isWindow=lambda: True, winId=lambda: (_ for _ in ()).throw(RuntimeError()))
-    # need isinstance(obj, QWidget); use a real widget but patch winId
+    # obj.winId() raising -> except swallowed (needs a real QWidget with winId patched)
     w = QWidget()
     w.winId = lambda: (_ for _ in ()).throw(RuntimeError("no winid"))
     filt.eventFilter(w, QEvent(QEvent.Show))
@@ -281,7 +263,6 @@ def test_layout_settings_excepts():
     w._settings = lambda: BadSettings()
     w._persist_layout()          # setValue raises -> except
     w._restore_last_layout()     # value raises -> except
-    w._save_preset() if False else None
     QInputDialog.getText = staticmethod(lambda *a, **k: ("p", True))
     w._save_preset()             # setValue raises -> except
     w._load_preset("p")          # value raises -> except
@@ -337,16 +318,13 @@ def test_image_url_at_real_image():
     # scan cursor positions across the document to find the image format
     from PyQt5.QtGui import QTextCursor
     doc = w.chat.document()
-    found = None
     cur = QTextCursor(doc); cur.movePosition(QTextCursor.Start)
     for _ in range(doc.characterCount()):
         pt = w.chat.cursorRect(cur).center()
-        url = w._image_url_at(pt)
-        if url:
-            found = url; break
+        if w._image_url_at(pt):
+            break
         if not cur.movePosition(QTextCursor.NextCharacter):
             break
-    check("image_url_at_found", found is not None or True)   # best-effort; may not map offscreen
     _close(w)
 
 
