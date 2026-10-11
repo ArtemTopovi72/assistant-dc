@@ -1,8 +1,7 @@
 """delete_path: a contained, selective delete for the working folder.
 
-Live 2026-09-14: «не захламляй: удали архив и папку с фотками, коллаж
-оставь». There was no delete tool -- only run_code, which a FILES-level user
-does not have -- so the clean-up the working folder invites was impossible.
+The only other way to clean up the working folder is run_code, which a
+FILES-level user does not have.
 """
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -39,8 +38,7 @@ def test_deletes_a_folder_and_counts(box):
 
 
 def test_the_root_empties_the_folder(box):
-    # Live 2026-09-14: «удали все файлы» was refused here and the model
-    # claimed it deleted everything anyway. Now it really does.
+    # «удали все файлы» really empties the working folder.
     out = H._handle_delete_path(_Ctx(box), {}, {"path": "."})
     assert "everything in the working folder" in out and "4 entries" in out
     assert not any(box.root.iterdir()) and box.root.exists()
@@ -88,7 +86,7 @@ def test_it_is_in_the_kit_and_registered():
     assert any(s["function"]["name"] == "delete_path" for s in tools.TOOL_SCHEMAS)
 
 
-# --- a script that writes a picture delivers it (journey 32) ----------------
+# --- a script that writes a picture delivers it ------------------------------
 
 def _run_code_with(box, monkeypatch, writer):
     import code_runner as R, sandbox_access as A
@@ -125,7 +123,7 @@ def test_hidden_folders_are_not_deliverables(box, monkeypatch):
     assert state["image_path"].endswith("1.jpg")
 
 
-# --- a hand-rolled photo hash gets called out (journey 33) ------------------
+# --- a hand-rolled photo hash gets called out -------------------------------
 
 def test_hand_rolled_dedupe_is_flagged():
     code = "h = hash(img.tobytes())\nif h in seen: print('duplicate')"

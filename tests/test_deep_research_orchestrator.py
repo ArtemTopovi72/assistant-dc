@@ -171,8 +171,8 @@ def test_decision_gate_asks():
                   _gate=type(sys)("fakegate")):
         DR._gate.decide = lambda *a, **k: fake_decision
         DR._gate.assess_ambiguity = lambda *a, **k: {}
-        # gate_banner takes the output language too — the banner sits at the top
-        # of the finished document and was English inside Russian reports.
+        # gate_banner takes the output language too: the banner sits at the top
+        # of the finished document.
         DR._gate.gate_banner = lambda d, out_lang="en": "GATE: " + d["decision"]
         DR._gate.ASK = "ASK"
         DR._gate.ABSTAIN = "ABSTAIN"

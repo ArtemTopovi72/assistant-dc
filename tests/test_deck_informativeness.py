@@ -719,9 +719,8 @@ check("nothing overflows its box on a crowded deck",
       _audit["overflow"] == [], _audit["overflow"])
 
 # A slide carrying nothing but its own heading is a defect the plan-side numbers
-# cannot see. Found in a real deck in runtime/, from a run where the planner had
-# failed: heading, footer, page number, and nothing else. The refusal upstream
-# covers that cause; the audit names the symptom whatever causes it next time.
+# cannot see. The refusal upstream covers the known cause; the audit names the
+# symptom whatever causes it.
 check("a real deck has no content-free slides", _audit["empty"] == [], _audit["empty"])
 check("...nor does the picture one", _pa["empty"] == [], _pa["empty"])
 
@@ -732,8 +731,7 @@ check("a heading-only slide IS reported",
       slides.pptx_audit(_outt)["empty"] == [2],
       slides.pptx_audit(_outt)["empty"])
 # The cover is a title slide BY DESIGN -- heading, subtitle, nothing else -- so
-# it must never be reported. (The first version of this check asserted
-# `2 not in [1]`, which is a tautology: it could not have failed.)
+# it must never be reported.
 check("...and the cover is never counted as empty",
       1 not in slides.pptx_audit(_outt)["empty"],
       slides.pptx_audit(_outt)["empty"])
@@ -903,9 +901,8 @@ check("none of them is PowerPoint's default blue",
 # A pie has no axis, so unlabelled slices cannot be read at all.
 check("the slices carry their values", _pie.plots[0].has_data_labels)
 
-# The first attempt reached for chart.plots[0].points, which PiePlot does not
-# have; the AttributeError went into an `except` and a still-default pie shipped
-# while every check passed. So this asserts on the FILE, not on the helper.
+# Asserted on the FILE, not on the helper: a swallowed AttributeError inside the
+# builder would otherwise ship a still-default pie while every check passes.
 _shades = slides._pie_shades(slides.pick_theme(_pd, "")["accent"], 4)
 check("the shades run from the accent toward light",
       slides._is_light(_shades[-1]) and not slides._is_light(_shades[0]),
@@ -980,10 +977,9 @@ check("a shape past the edge IS reported",
 
 print()
 # "4 slides" means four slides in the FILE: the cover and the closing sources
-# slide both count (live, 2026-09-12: a 4-slide request came back as 5) — but a
-# tiny deck never spends a slide on sources: "3 слайда" came back as cover +
-# ONE content slide + sources and was refused as a stub (journey 19). Below
-# two content slides the sources move into the speaker notes instead.
+# slide both count — but a tiny deck never spends a slide on sources (it would
+# be refused as a stub). Below two content slides the sources move into the
+# speaker notes instead.
 _six = [{"heading": f"S{i}", "bullets": [f"fact {i}"]} for i in range(6)]
 _src = [{"title": "a", "url": "https://example.com/a"}]
 _d = slides.normalize_deck({"title": "T", "slides": list(_six), "sources": list(_src)}, "T", n_slides=4)

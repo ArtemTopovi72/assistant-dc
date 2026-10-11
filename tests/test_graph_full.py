@@ -16,8 +16,6 @@ from pathlib import Path
 
 import graph as G
 # Patch the LLM at its own module, not at whichever module calls it.
-# compact_history_if_needed moved from graph to graph_history; a patch on
-# graph.send_to_lm_studio silently stopped reaching it.
 import llm as _LLMMOD
 import models as M
 
@@ -77,10 +75,8 @@ class Tools:
         # Mirror the real handlers' state contract. tools.py sets image_path /
         # video_path / document_path on success, and the delivery layers
         # (tg_bot, the GUI) read exactly those keys — a tool that "succeeds"
-        # without setting one delivers nothing to the user, which the loop now
-        # treats as a silent failure. A double that returns a success string
-        # and writes no key was claiming something the real tool never does,
-        # so every test using it was exercising an impossible state.
+        # without setting one delivers nothing, which the loop treats as a
+        # silent failure.
         if isinstance(r, str) and not r.lstrip().startswith(
                 ("[TOOL ERROR]", "Unknown tool")):
             key = _P._TOOL_ARTIFACT.get(tool_name)
@@ -174,10 +170,7 @@ def test_compact_not_on_boundary():
 
 
 def test_compact_too_few_turns():
-    # Derived from the constant, not hardcoded: these tests were written when
-    # HISTORY_COMPACT_EVERY was 5 and silently stopped compacting when it became
-    # 3 — the counter no longer landed on a boundary, so the tests asserted
-    # against an untouched list instead of a compacted one.
+    # Derived from the constant, not hardcoded, so the counter always lands on a boundary.
     c = _ctx(total_user_turns=G.HISTORY_COMPACT_EVERY - 1)  # +1 -> boundary, but too few user turns
     msgs = [{"role": "system", "content": "sys"},
             {"role": "user", "content": "u1"}, {"role": "assistant", "content": "a1"}]
@@ -307,7 +300,7 @@ def test_tool_normal_then_answer():
 
 
 def test_answer_cut_at_token_cap_is_continued():
-    """Live: a 118-row table stopped at row 34 and was delivered half-written."""
+    """A 118-row table cut at row 34 by the token cap is continued, not delivered half-written."""
     c = _ctx()
     cut = dict(_asst("| 1 | H |\n| 2 | He"), finish_reason="length")
     # The half row is dropped and the model resumes after the last whole line.
@@ -595,7 +588,7 @@ def test_slow_llm_warning():
 
 def test_verbatim_save_short_fact_skipped():
     c = _ctx()
-    # user asks to remember but the fact is < 6 chars -> verbatim save skipped (522->529)
+    # user asks to remember but the fact is < 6 chars -> verbatim save skipped
     llm = LLM([_asst("я запомнил"), _asst("ok")])
     tools = Tools()
     _run(c, llm, tools, {"messages": [], "user_input": "запомни: ab"})
@@ -616,7 +609,7 @@ def test_recovery_budget_extension():
 def test_forced_close_returns_none():
     c = _ctx()
     calls = [_asst("", [_tc("calculate", {"e": str(i)}, cid=f"c{i}")]) for i in range(8)]
-    # budget exhausted mid-chain; forced closing call returns None -> generic close (723->738)
+    # budget exhausted mid-chain; forced closing call returns None -> generic close
     # The forced close RETRIES (3 attempts) — a model with no reasoning-effort
     # knob returns pure reasoning ~40% of the time, so one shot is not enough.
     llm = LLM(calls + [None, None, None])
@@ -659,9 +652,8 @@ def test_compact_fallback_empty_users_returns_original():
 
 
 # ---------------------------------------------------------------- fast path
-# The fast path had NO tests of its own, yet adding it silently invalidated nine
-# loop tests (it consumes the first scripted response). Cover it directly so the
-# next change to it fails loudly here instead of corrupting unrelated tests.
+# The fast path consumes the first scripted response of a loop test, so it is
+# covered directly here.
 
 def test_fastpath_short_question_answers_in_one_call():
     c = _ctx()
@@ -701,12 +693,10 @@ def test_fastpath_stores_cleaned_answer_in_history():
 
 def test_fastpath_lite_prompt_includes_facts_but_not_session_memory():
     # The fast path trades context for latency by skipping tool schemas, but
-    # Saved facts must still reach the model -- see graph_fastpath.py and
-    # tests/test_fastpath_facts_injection.py: a fact saved via remember_fact
-    # was silently invisible on this path (live 2026-09-18, journey 9), so the
-    # model confidently denied a fact it had genuinely stored. Session memory
-    # (raw prior-turn notes, as opposed to a pinned fact) is a separate, much
-    # larger block that the fast path still deliberately omits.
+    # Saved facts must still reach the model (see
+    # tests/test_fastpath_facts_injection.py). Session memory (raw prior-turn
+    # notes, as opposed to a pinned fact) is a much larger block that the fast
+    # path deliberately omits.
     c = _ctx()
     c.pin_fact("user likes tea")
     c.remember("note", "prior session note")

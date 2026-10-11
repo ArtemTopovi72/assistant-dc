@@ -1,17 +1,13 @@
 """The run header must not undercount what the run actually read.
 
-Live run, "как выбрать и купить б/у электромобиль в России в 2026 году": the
-header said "43 источников найдено, 4 страниц прочитано" for a run whose own
-progress log shows four crawl waves reading 8, 4, 4 and 4 pages -- twenty in
-all, Russian sources among them.
+`_Progress.update()` ASSIGNS each counter, and the crawler used to report
+`pages=len(pages)` where `pages` is the list for the CURRENT wave. Every wave
+therefore overwrote the total with its own size (a run that read 8, 4, 4 and 4
+pages reported "4 страниц прочитано", with the last wave the smallest). Page
+counts accumulate through `bump()`.
 
-The cause is one line: `_Progress.update()` ASSIGNS each counter, and the
-crawler reported `pages=len(pages)` where `pages` is the list for the CURRENT
-wave. Every wave therefore overwrote the total with its own size, and the last
-wave happened to be the smallest.
-
-That is a credibility number. A reader deciding how much to trust a report looks
-at how much was read, and "4 pages" understates it fivefold.
+That is a credibility number: a reader deciding how much to trust a report looks
+at how much was read.
 
 Offline: no LLM, no search, no GPU.
 """

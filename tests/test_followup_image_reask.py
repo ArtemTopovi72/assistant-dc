@@ -1,21 +1,14 @@
-"""Live-chat bug (2026-08-04): two photos sent back to back, then a plain
-text follow-up ("Что там написано?" / "what's written there?") was answered
-describing the FIRST photo's content, not the second (current) one.
+"""A bare text follow-up about the picture ("Что там написано?" / "what's written
+there?") is answered from the CURRENT photo.
 
-Root cause: `vision_agent_node` (graph.py) only ever runs vision analysis on
-the turn a NEW photo arrives (`state["image_data"]` present). A later text-only
-question has nothing fresh to answer from — it falls back to whatever sits in
-`ctx.session_memory`, which accumulates ONE vision summary per photo ever
-sent, with nothing marking which is "current". The model just picked from
-memory and got the wrong one.
-
-Fix: `vision_agent_node` now re-analyzes `ctx.last_image_path` FRESH whenever
-there's no new photo this turn but the question plainly needs a look at the
-picture (`_ASKS_ABOUT_CURRENT_IMAGE_RE`), so the CURRENT working image is what
-gets described, not a stale multi-photo memory dump. tg_bot.py's own
-`_NEEDS_IMAGE_RE` (the separate "which picture do you mean?" ambiguity gate for
-when 2+ images are live) had the same gap — "written"/"написано" phrasing
-wasn't recognized — fixed alongside it.
+`vision_agent_node` (graph.py) only runs vision analysis on the turn a NEW photo
+arrives (`state["image_data"]` present). With no fresh photo the answer used to
+come from `ctx.session_memory`, which holds ONE vision summary per photo ever
+sent with nothing marking which is "current". `vision_agent_node` therefore
+re-analyzes `ctx.last_image_path` FRESH whenever there is no new photo but the
+question plainly needs a look at the picture, and tg_bot's `_needs_image_choice`
+(the "which picture do you mean?" ambiguity gate for when 2+ images are live)
+recognizes the same "written"/"написано" phrasing.
 
 Run: venv/Scripts/python.exe tests/test_followup_image_reask.py
 """
@@ -46,7 +39,7 @@ intent.STUB = lambda t: ({"is_question": True, "about_picture": True}
 
 print()
 print("=" * 70)
-print("2. tg_bot's ambiguity-gate regex has the same 'written' coverage")
+print("1. tg_bot's ambiguity-gate regex has the same 'written' coverage")
 print("=" * 70)
 
 for t in ("Что там написано?", "what is written there?"):
@@ -55,7 +48,7 @@ for t in ("Что там написано?", "what is written there?"):
 
 print()
 print("=" * 70)
-print("3. vision_agent_node re-analyzes the CURRENT image on a bare follow-up")
+print("2. vision_agent_node re-analyzes the CURRENT image on a bare follow-up")
 print("=" * 70)
 
 _TMP = tempfile.mkdtemp(prefix="followup_reask_")

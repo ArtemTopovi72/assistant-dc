@@ -1,9 +1,8 @@
 """find_content: the universal by-content search over the working folder.
 
-Live 2026-09-14: «найди мост» over a 173-photo DCIM.zip. open_image +
-inspect_image look at ONE picture per two calls; the task did not fit in a
-turn and the model narrated a plan instead of acting, twice. Contact sheets
-+ verification make the whole folder one call; text files are grepped.
+open_image + inspect_image look at ONE picture per two calls, so «найди мост»
+over a 173-photo folder does not fit in a turn. Contact sheets + verification
+make the whole folder one call; text files are grepped.
 """
 import os, sys, tempfile, inspect
 os.environ.setdefault("F5_TEST_RUN", "1")

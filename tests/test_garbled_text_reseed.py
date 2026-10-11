@@ -1,6 +1,6 @@
 """A garbled sign that survives its own repair needs a new seed, not a bigger box.
 
-Live 2026-09-18 (journey 25): "замени нижнюю надпись на «только до пятницы»"
+Example: "замени нижнюю надпись на «только до пятницы»"
 came back "только до пятниИЦЬ" on TWO consecutive attempts, byte-identical.
 repair_text() only enlarges the lettering box and restates the spelling in
 the caption -- both geometric -- while draw_agent.run() holds the seed fixed

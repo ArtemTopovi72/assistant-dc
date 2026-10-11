@@ -1,19 +1,11 @@
 """Every producer of a deliverable file must speak the sender's word.
 
 tg_tasks sends `document_path` only when `document_status` reads exactly
-"success". pack_archive wrote "ok". So every archive the coding agent built was
-dropped in silence -- and the tool's own return value said "it will be sent to
-the user", so the model told the user it had been. Nothing anywhere noticed:
-
-  * the unit suites stub the delivery layer, so they never compare the two;
-  * bench/sandbox_e2e checked that a file existed at document_path and never
-    the status, so it reported "delivered Thief_modified.jar" for a file
-    Telegram would have thrown away;
-  * the honesty correction that catches an undelivered file only arms for
-    presentation requests, by prefix, so a packed archive had no backstop.
-
-A string agreed on in two files and checked in neither is not a contract. This
-suite reads both sides out of the source and compares them.
+"success". A producer that writes another value (pack_archive once wrote "ok")
+has its file dropped in silence while the tool's own return value still says
+"it will be sent to the user". The unit suites stub the delivery layer and the
+e2e bench must check the status as well as the path, so this suite reads both
+sides out of the source and compares them.
 
 Run: venv/Scripts/python.exe tests/test_document_delivery_contract.py
 """

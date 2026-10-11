@@ -20,9 +20,8 @@ intent.STUB = lambda t: ({"needs_tool": True, "wants": ["calculate"], "must_call
 
 
 # --- the loop actually uses it ---------------------------------------------
-# Not a source grep. A grep of the call site has twice passed against mutations
-# that broke the behaviour, so this drives the real loop and reads the
-# tool_choice that reached the LLM boundary.
+# Not a source grep: this drives the real loop and reads the tool_choice that
+# reached the LLM boundary.
 
 import importlib.util as _ilu
 _spec = _ilu.spec_from_file_location(
@@ -68,10 +67,9 @@ def test_forced_call_answered_in_text_is_retried_with_required():
     _TGF._run(_TGF._ctx(), llm, tools, {"user_input": "сколько будет 1234 * 5678?", "messages": []},
               fastpath=False)
     choices = [c["kw"].get("tool_choice") for c in llm.calls]
-    # The retry is now "auto with an explicit order" first and `required` only
-    # if that is ignored too (graph_personality: "forced X answered in text --
-    # retrying auto with an order"). What matters: the text answer was not
-    # accepted, and the calculator ran.
+    # The retry is "auto with an explicit order" first and `required` only if
+    # that is ignored too (graph_personality). What matters: the text answer was
+    # not accepted, and the calculator ran.
     assert len(choices) >= 2, choices                      # the text was not accepted
     assert [n for n, _ in tools.calls] == ["calculate"], tools.calls
 

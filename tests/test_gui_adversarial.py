@@ -139,11 +139,10 @@ def _teardown(w):
 class _Sleeper(QThread):
     """A cancellable worker that is still running when the window closes.
 
-    The duration is deliberately far longer than any shutdown wait: an earlier
-    version used 2.5s, and the other shutdown steps burned more than that in
-    their own waits, so the thread finished on its own and a missing join looked
-    like a pass. Cancellation is the contract being tested — a correct teardown
-    asks each worker to stop and THEN joins it.
+    The duration is deliberately far longer than any shutdown wait, so a missing
+    join cannot look like a pass because the thread finished on its own.
+    Cancellation is the contract being tested — a correct teardown asks each
+    worker to stop and THEN joins it.
     """
     def __init__(self, secs=20.0):
         super().__init__()
@@ -496,8 +495,8 @@ def test_model_reload_and_chat_turn_are_mutually_exclusive():
 
     real = gui.ReloadModelWorker
     # Subclass the real worker so its pyqtSignals exist; only start() is neutered.
-    # ModelConfigTab moved to gui_model_config_tab.py and resolves
-    # ReloadModelWorker there, so gui's copy alone no longer intercepts.
+    # ModelConfigTab resolves ReloadModelWorker in gui_model_config_tab, so
+    # gui's copy alone does not intercept.
     import gui_model_config_tab as _MC
     _MC.ReloadModelWorker = gui.ReloadModelWorker = type("NoopReload", (real,),
                                  {"start": lambda self: started.append(1),

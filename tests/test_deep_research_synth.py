@@ -118,13 +118,11 @@ def test_brief_source():
     with _Patches(call_llm_simple=lambda *a, **k: "NO USEFUL CONTENT"):
         check("brief_source_no_useful_content_none", DR.brief_source(FakeCtx(), "topic", _page()) is None)
     with _Patches(call_llm_simple=lambda *a, **k: "   "):
-        # A blank answer still produces NO BRIEF -- that part is unchanged. What
-        # changed is that it is now distinguishable from a rejection: "" means
-        # the model said nothing (our failure), None means it read the page and
-        # judged it useless (the page's). Conflating them let an outage be
-        # reported to the reader as "the pages contained no facts relevant to
-        # the topic". The old check asserted the identity rather than the
-        # contract, so it broke on a change that was the point.
+        # A blank answer produces NO BRIEF but is distinguishable from a
+        # rejection: "" means the model said nothing (our failure), None means it
+        # read the page and judged it useless (the page's). Conflating them would
+        # report an outage to the reader as "the pages contained no facts
+        # relevant to the topic".
         blank = DR.brief_source(FakeCtx(), "topic", _page())
         check("brief_source_blank_yields_no_brief", not blank)
         check("brief_source_blank_is_not_a_rejection", blank is not None, repr(blank))

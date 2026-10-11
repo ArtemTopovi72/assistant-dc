@@ -1,8 +1,8 @@
 """The delivery round, driven through the REAL loop with a scripted model.
 
-Bench deliver_fix 2026-09-23: the model made the right edit on the very last
-tool round and answered "Готово" with nothing packed. Now a spent budget with
-an unpacked-and-changed folder buys exactly one more round, for pack_archive.
+If the model makes the right edit on the very last tool round and answers
+"Готово" with nothing packed, a spent budget with an unpacked-and-changed folder
+buys exactly one more round, for pack_archive.
 """
 import os, sys, json, zipfile, threading
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

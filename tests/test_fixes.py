@@ -1,11 +1,6 @@
 """
 Regression tests for the still-current fixes.
 Run from project root: .\\venv\\Scripts\\python.exe tests\\test_fixes.py
-
-NOTE: tests that covered the old CLIPSeg/Florence + controlnet regional-mask
-inpaint (region-presence parsing, mask_soft/fmask node detection, the Florence
-region-description wording) were removed when inpaint_image moved to the mask-free
-FireRed Image Edit engine.
 """
 import sys
 import sys
@@ -164,9 +159,8 @@ def test_social_wired():
 def test_corrective_counter():
     import ast
     import glob
-    # Every graph module, not graph.py alone: the personality node moved into
-    # graph_personality.py when the monolith was split, and this check then
-    # reported the anti-fabrication guard missing while it was working.
+    # Every graph module, not graph.py alone: the personality node lives in
+    # graph_personality.py.
     names = set()
     for f in sorted(glob.glob("agent/graph*.py")):
         tree = ast.parse(open(f, encoding="utf-8").read())

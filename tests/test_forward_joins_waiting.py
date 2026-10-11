@@ -1,10 +1,10 @@
 """A forward that lands while the chat's previous turn still waits joins it.
 
-Open item 2026-10-05: a forwarded post arriving after the debounce had already
-queued the user's turn (a late part of the same paste, a getUpdates gap) became
-a second task — two answers to one question. A forward now folds into the
-newest WAITING task of the same chat: never into one a worker has started,
-never one older than two minutes, never two pictures into one turn.
+A forwarded post arriving after the debounce had already queued the user's turn
+(a late part of the same paste, a getUpdates gap) must not become a second task
+— two answers to one question. A forward folds into the newest WAITING task of
+the same chat: never into one a worker has started, never one older than two
+minutes, never two pictures into one turn.
 """
 import logging
 import os

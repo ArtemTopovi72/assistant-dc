@@ -1,10 +1,10 @@
 """An edit made from the working copy of an upload is a VERSION of that upload.
 
-Live 2026-09-13 (journey 3): the user's photo is registered as
-images/tg_<ts>.jpg, the graph edits a byte-identical _working_input_<ts>.jpg
-and reports that path as image_derived_from. The path lookup found nothing,
-the edited dress was registered as a second root, and "теперь убери все
-надписи с фона" got "Which picture? There are 2" instead of the edit.
+The user's photo is registered as images/tg_<ts>.jpg, the graph edits a
+byte-identical _working_input_<ts>.jpg and reports that path as
+image_derived_from. If the path lookup finds nothing the edited dress is
+registered as a second root, and "теперь убери все надписи с фона" gets
+"Which picture? There are 2" instead of the edit.
 """
 import os, sys, types, tempfile, shutil
 os.environ.setdefault("F5_TEST_RUN", "1")

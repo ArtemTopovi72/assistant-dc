@@ -1,10 +1,10 @@
 """🎤 Cover: every way a song and its new words arrive reaches the render.
 
-Live 10-03 («каверы наглухо убиты … не даёт текст вставить»): a song
-forwarded from a music bot was dropped as "the bot's own message", an .m4a
-sent as a file (application/octet-stream) went to the document reader, and
-the new words were taken by whatever else reads text -- a forwarded lyric by
-the chat, an old forwarded voice note as its answer, an armed song topic.
+A song forwarded from a music bot must not be dropped as "the bot's own
+message", an .m4a sent as a file (application/octet-stream) must not go to the
+document reader, and the new words must not be taken by whatever else reads text
+(a forwarded lyric by the chat, an old forwarded voice note as its answer, an
+armed song topic).
 """
 import os, sys, time, threading, tempfile
 os.environ.setdefault("F5_TEST_RUN", "1")
@@ -136,7 +136,7 @@ for name, kw in {"audio": dict(audio=A), "voice": dict(voice={"file_id": "V", "d
     ok = wait(lambda: GO, 6)
     check(f"a second song as {name}: the voice remix starts", ok and GO and GO[0][-1].endswith(("song2.mp3", "song2.ogg", "song2.mp4", "song2.mp3")) or (ok and GO and "song2" in GO[0][-1]), GO)
     check(f"...and the first song is the voice ({name})", ok and GO and GO[0][2].endswith(("song.mp3", ".mp3")), GO)
-# A YouTube link is the song too (owner 10-03), then the words as usual.
+# A YouTube link is the song too, then the words as usual.
 import tg_links
 _real_fetch = tg_links.fetch_video
 _real_busy = bot._run_busy
@@ -178,8 +178,8 @@ def _boom(*a): raise RuntimeError("demucs died")
 mashup_auto.make = _boom
 bot._cover_render(CID, "ru", "/x/song.mp3", "", "/x/song2.mp3")
 check("a failed mashup still sends the voice remix", [p for p, _ in AUD] == ["voice.mp3"], AUD)
-# 10-07 «говновоз делать по 2 ссылкам»: with YuE2 the second song gives the WORDS and the first
-# sings them on its own melody (after the quick mashup).
+# With YuE2 the second song gives the WORDS and the first sings them on its own melody
+# (after the quick mashup).
 AUD.clear()
 mashup_auto.make = lambda ctx, a, b, *x: "mash.mp3"
 remix.resing_available = lambda: True
@@ -198,11 +198,11 @@ remix.resing = lambda ctx, a, l, info=None: "resing.mp3"
 remix.resing_available = lambda: False
 bot._cover_render(CID, "ru", "/x/song.mp3", "новые слова", "")
 check("new words without YuE2: the syllable remix, no mashup", [p for p, _ in AUD] == ["words.mp3"], AUD)
-# 10-07: new words are re-sung on the original's score («МОЛОДЕЦ!!!»), not squeezed into its syllables.
+# New words are re-sung on the original's score, not squeezed into its syllables.
 AUD.clear(); remix.resing_available = lambda: True
 bot._cover_render(CID, "ru", "/x/song.mp3", "новые слова", "")
 check("new words with YuE2: the song is re-sung", [p for p, _ in AUD] == ["resing.mp3"], AUD)
-# 10-07: a new artist's first cover goes out in a zero-shot timbre, then again in their own RVC
+# A new artist's first cover goes out in a zero-shot timbre, then again in their own RVC
 # voice trained on the original's vocal; a known artist's comes once, already in it.
 AUD.clear()
 def _resing_new(ctx, a, l, info=None):
@@ -221,7 +221,7 @@ remix.resing = _resing_known
 bot._cover_render(CID, "ru", "/x/song.mp3", "новые слова", "")
 check("known artist: one cover, already in their voice", [p for p, _ in AUD] == ["resing.mp3"], AUD)
 
-# 10-09: the voice picker under «Песню получил» -- original singer (auto) / no swap / a star;
+# The voice picker under «Песню получил» -- original singer (auto) / no swap / a star;
 # the choice is kept on the session and goes into the render; a picked voice is the only pass.
 import rvc_voice
 rvc_voice.available = lambda: True

@@ -1,9 +1,9 @@
 """After a refused whole-file rewrite the loop holds EDIT MODE.
 
-Sandbox bench 2026-09-24 (regex case): one forced read_file|edit_file round was
-not enough -- the model read the file, then resent the whole file next round.
-Now: one `required` round, then EDIT_MODE_ROUNDS more rounds with no
-write_file offered but tool_choice=auto, so the model can still finish.
+One forced read_file|edit_file round is not enough (the model reads the file,
+then resends the whole file next round), so: one `required` round, then
+EDIT_MODE_ROUNDS more rounds with no write_file offered but tool_choice=auto, so
+the model can still finish.
 """
 import os, sys, types, pathlib
 os.environ["F5_TEST_RUN"] = "1"

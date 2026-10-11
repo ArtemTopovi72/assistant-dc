@@ -1,19 +1,16 @@
-"""Regression tests for the 🎨 Draw submenu audit (audit_02_draw.md, 2026-08-03).
+"""Draw submenu behaviour of tg_bot.py's `_resolve_and_push` / `_state_kb`:
 
-Five bugs fixed in tg_bot.py's `_resolve_and_push` / `_state_kb`:
-
-1. A button pressed in the same debounce batch as another message used to
-   `return` out of the loop and drop every sibling item (photo/typed prompt).
-   Fixed: button branches `continue` instead of `return`.
-2. 🔄 Regenerate with nothing to regenerate ran a full agent turn (image
-   quota burnt). Fixed: same honest-refusal precondition as 📷 Analyze.
-3. 📷 Analyze accepted a `last_image_path` that no longer exists on disk.
-   Fixed: `os.path.exists` gate.
-4. 📷 with no image dropped the user out of the Draw submenu because
-   `_state_kb` only looked at `pending_prefix`, not `sess.menu`. Fixed:
-   fall back to `sess.menu`.
-5. An armed `pending_photo` never expired on an unrelated turn. Fixed:
-   a genuine free-text turn disarms it.
+1. A button pressed in the same debounce batch as another message must not drop
+   every sibling item (photo/typed prompt): button branches `continue`, not
+   `return`.
+2. 🔄 Regenerate with nothing to regenerate must not run a full agent turn (image
+   quota burnt): same honest-refusal precondition as 📷 Analyze.
+3. 📷 Analyze must not accept a `last_image_path` that no longer exists on disk
+   (`os.path.exists` gate).
+4. 📷 with no image must not drop the user out of the Draw submenu: `_state_kb`
+   falls back to `sess.menu` when `pending_prefix` is empty.
+5. An armed `pending_photo` expires on an unrelated turn: a genuine free-text
+   turn disarms it.
 
 Run: venv/Scripts/python.exe tests/test_draw_fixes.py
 """

@@ -1,6 +1,6 @@
 """📝 Feedback used to arm a trap that ate the VERY NEXT input, whatever it was.
 
-A real-chat audit (2026-08-03) proved: tap 📝 Feedback, change your mind, tap
+Scenario: tap 📝 Feedback, change your mind, tap
 anything else — including ⛔ Stop — and the feedback branch (which runs inside
 `_user_gate`, before the pre-queue Stop interception and before `_LABEL2KEY`
 button resolution) filed the button's LABEL as one-word feedback and mailed it
@@ -147,12 +147,10 @@ print()
 print("=" * 70)
 print("AN INLINE-KEYBOARD PRESS ALSO ESCAPES THE TRAP (callback, not text)")
 print("=" * 70)
-# The message-text path (_handle_command / _user_gate) is a completely
-# different route from callback_query dispatch. Fixing "any recognized
-# button label" only covered the reply-keyboard (text) case; a genuine
-# inline-keyboard press (e.g. a /size choice) is an entirely different
-# update shape and used to sail straight past every guard above, leaving
-# reg_state="feedback" armed to eat the user's NEXT ordinary message.
+# The message-text path (_handle_command / _user_gate) is a different route
+# from callback_query dispatch: a genuine inline-keyboard press (e.g. a /size
+# choice) must also abandon armed feedback mode, or reg_state="feedback" stays
+# armed and eats the user's NEXT ordinary message.
 
 bot, sent = make_bot()
 CID = 7005
@@ -174,7 +172,7 @@ print()
 print("=" * 70)
 print("acct_setpwd STILL RE-ARMS change_password AFTER THE CLEAR")
 print("=" * 70)
-# Sibling check: the fix clears reg_state up front for every callback, so
+# Sibling check: reg_state is cleared up front for every callback, so
 # acct_setname/acct_setpwd/acct_newprofile_yes must still be able to
 # re-arm their OWN capture mode right after, undisturbed by the clear.
 

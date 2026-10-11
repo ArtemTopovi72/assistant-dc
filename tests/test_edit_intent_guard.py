@@ -1,14 +1,10 @@
 """Pressing ✏️ and describing a change must not produce a brand-new picture.
 
-Live failure (2026-07-29 21:43, Telegram): the user tapped ✏️, typed "добавь ему
-надпись на футболку имя польского философа", the prefix arrived intact — and the
-agent called generate_image anyway, replied "Я создал изображение банки меда с
-фекалиями внутри" and delivered a completely different picture. Their image was
-discarded and the change they asked for never happened.
-
-The system prompt already forbids this ("you MUST edit THAT image ... NEVER call
-generate_image in that case"). The prompt lost. So the rule is enforced in the
-tool layer, where it cannot be talked out of.
+With the ✏️ prefix intact the agent used to call generate_image anyway and
+deliver a completely different picture: the user's image was discarded and the
+change they asked for never happened. The system prompt already forbids this
+("you MUST edit THAT image ... NEVER call generate_image in that case"); the rule
+is enforced in the tool layer, where it cannot be talked out of.
 
 Run: venv/Scripts/python.exe tests/test_edit_intent_guard.py
 """
@@ -64,10 +60,7 @@ print("\nTHE EDIT BUTTON'S PREFIX IS RECORDED AS INTENT")
 check("the prefix constant matches what the bot sends",
       G._EDIT_INTENT_PREFIX == "edit the image:", G._EDIT_INTENT_PREFIX)
 
-# The ✏️ handler keeps moving (tg_bot.py → tg_dispatch.py → tg_callbacks.py),
-# and a hardcoded module list goes stale on every move — which is how this
-# check ended up reading a pair of files the handler had already left. Glob
-# the whole tg_* family so the anchor follows the code instead of chasing it.
+# Glob the whole tg_* family so the anchor follows the ✏️ handler wherever it lives.
 import glob as _glob
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 src = "\n".join(open(_p, encoding="utf-8").read()
@@ -75,10 +68,8 @@ src = "\n".join(open(_p, encoding="utf-8").read()
 check("and the bot really sends that prefix",
       'pending_prefix = "edit the image: "' in src)
 
-# translate_node is a module-level function now, not a closure inside
-# build_graph. This check is about the ORDER of two statements inside that
-# node, so it must read that node; .index() raises if either moves away,
-# which is the loud failure we want.
+# This check is about the ORDER of two statements inside translate_node;
+# .index() raises if either moves away, which is the loud failure we want.
 tsrc = inspect.getsource(G.translate_node)
 check("intent is taken from the RAW text, before translation rewrites it",
       tsrc.index("edit_intent") < tsrc.index("_translate_to_english"),

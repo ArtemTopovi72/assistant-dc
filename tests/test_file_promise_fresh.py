@@ -1,8 +1,8 @@
 """The «you promised file work» correction fires only for a freshly touched folder.
 
-Live 2026-10-09: an Arduino chat whose working folder held old files lost two
-corrective rounds per reply — «проверим», «напишем» in plain advice matched the
-file-promise words. The check exists for files the user just handed over.
+In a chat whose working folder holds old files, «проверим» / «напишем» in plain
+advice must not match the file-promise words and cost corrective rounds. The
+check exists for files the user just handed over.
 """
 import os
 import sys

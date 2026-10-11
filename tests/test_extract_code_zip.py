@@ -1,4 +1,4 @@
-"""Code files and zips sent with a question are read (live: zip rejected, .py ignored)."""
+"""Code files and zips sent with a question are read."""
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import tg_bot

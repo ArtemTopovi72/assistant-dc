@@ -1,9 +1,7 @@
 """The first-round forced tool comes from the model's read (intent.must_call).
 
-Replaces the keyword forcers (_forced_deck, _forced_photo_math,
-_forced_place_search, _forced_aggregate, _forced_code_execution): their phrases
-now run against the real model in bench/intent_force_live.py. Here: what the
-loop does with a read, and what the read is given.
+The phrases run against the real model in bench/intent_force_live.py. Here: what
+the loop does with a read, and what the read is given.
 """
 import os, sys
 os.environ.setdefault("F5_TEST_RUN", "1")

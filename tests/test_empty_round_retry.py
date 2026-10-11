@@ -1,19 +1,15 @@
 """Regression: an all-reasoning round must not end the tool phase.
 
-BUG (found live on google/gemma-4-26b-a4b-qat): Gemma regularly spends a whole
-turn in its reasoning channel and returns neither content nor a tool call. The
-loop treated "no tool_calls" as "the model is done and this is the final answer"
-and broke out — after ONE silent round. The next call therefore carried zero tool
-schemas and the system line "the tool phase is over — tool calls are IMPOSSIBLE
-now", at which point the model emitted generate_image where it could no longer be
-run, and signed off with "I cannot draw, the drawing tools are unavailable".
+Gemma regularly spends a whole turn in its reasoning channel and returns neither
+content nor a tool call. The loop must not treat "no tool_calls" as "the model
+is done and this is the final answer" after ONE silent round: the next call
+would carry zero tool schemas and the system line "the tool phase is over — tool
+calls are IMPOSSIBLE now", and the model would sign off with "I cannot draw, the
+drawing tools are unavailable" for a feature that works.
 
-Reproduced end to end: a plain "нарисуй лису" got 11 tools on round 1, returned
-nothing, and the user got a refusal for a feature that works.
-
-The fix retries the round WITH the tools still offered, bounded by
-_MAX_EMPTY_ROUNDS and paid for out of an extra round each time so a genuine tool
-phase is not consumed by the silence.
+The round is retried WITH the tools still offered, bounded by _MAX_EMPTY_ROUNDS
+and paid for out of an extra round each time so a genuine tool phase is not
+consumed by the silence.
 
 Run: venv/Scripts/python.exe tests/test_empty_round_retry.py
 """

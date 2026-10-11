@@ -45,13 +45,8 @@ print("A PRESENTATION THAT WAS DESCRIBED BUT NEVER BUILT")
 print("=" * 66)
 
 import inspect
-# These guards used to live in the personality_node CLOSURE inside build_graph,
-# so this read the whole agent loop. The nodes are module-level functions now
-# and build_graph is bare wiring; personality_node itself later moved out of
-# graph.py entirely, to graph_personality.py (seam-blocked names read back
-# through `graph` at call time, everything else moved outright). Read THAT
-# module: a source-text anchor that silently finds nothing is worse than
-# useless, and graph_personality is where the guard actually lives now.
+# The guards live in graph_personality.py: read that module, because a
+# source-text anchor that silently finds nothing is worse than useless.
 src = inspect.getsource(GP)
 
 check("the deck prefix is matched literally, not guessed",
@@ -114,11 +109,9 @@ check("it re-offers the real choices", set(data) == {"fwdv:text", "fwdv:sum",
                                                      "fwdv:both", "fwdv:own"}, data)
 
 # the real payloads still work, and mark the note as acted on WITHOUT
-# discarding it -- the keyboard is inline and stays clickable, so wiping the
-# transcript here made every choice after the first answer 'that voice note
-# is no longer in my hands' for a note still on screen (see test_voice_routing
-# section F). Staleness is decided by the button's forward id, not by whether
-# some earlier choice already ran.
+# discarding it -- the keyboard is inline and stays clickable, so a choice after
+# the first must still find the transcript. Staleness is decided by the button's
+# forward id, not by whether some earlier choice already ran.
 for what, must in (("text", "выручка"), ("both", "выручка")):
     bot = make_bot()
     s = bot._get_session(CID)
@@ -147,8 +140,7 @@ for _ in range(50):
     if retold: break
     _time.sleep(0.05)
 # The retelling is a one-shot model call over the transcript, NOT an agent
-# turn: through the agent it inherited the chat's last picture and noticed a
-# second press as «тот же текст» (live 2026-09-14 23:02).
+# turn (through the agent it inherited the chat's last picture).
 check("choice 'sum' retells the transcript one-shot, not through the agent",
       retold == [(SAID, False)] and not pushed, (retold, pushed))
 retold.clear()
@@ -166,11 +158,9 @@ produced = {b["callback_data"].split(":", 1)[1]
 check("every button the keyboard offers is a choice _do_fwd_voice accepts",
       produced <= {"text", "sum", "both", "board", "own"}, produced)
 
-# 3. THE VIDEO MUST BE IN THE HISTORY THE MODEL SEES. Live 15:39: the retelling
-# ended with «Что требуется: дать экспертное мнение», the user typed «Дай
-# экспертное мнение», and the model -- whose history had no trace of the
-# video -- offered topics from days-old chats. The retelling is a one-shot call
-# outside the agent, so the turn has to be committed by hand.
+# 3. THE VIDEO MUST BE IN THE HISTORY THE MODEL SEES. The retelling is a
+# one-shot call outside the agent, so the turn has to be committed by hand;
+# otherwise a follow-up has no trace of the video.
 import llm as _llm
 bot = make_bot()
 _llm.call_llm_simple = lambda ctx, sysm, user, **kw: "Основная тема: оценка ремонта кухни.\nЧто требуется:\n- дать экспертное мнение"
