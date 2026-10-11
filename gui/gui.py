@@ -143,9 +143,6 @@ from gui_telegram_tab import (
     TelegramTab, redirect_settings, _tg_settings, _TG_SETTINGS_SCOPE, _TG_TOKEN_KEY,
     _TG_ADMINS_KEY,
 )
-from gui_madhouse_tab import (
-    _name_is_addressed,
-)
 
 
 # --------------------------------------------------------------------------- #
