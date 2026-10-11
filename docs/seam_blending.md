@@ -4,8 +4,9 @@ When a region is re-rendered (clothing change, face guard, contained edit) and p
 back over the original, the boundary can show a visible **seam**: a low-frequency colour
 / illumination step, or a high-frequency texture mismatch. A simple alpha feather blends
 *opacity*, not *tone or texture*, so it cannot hide either. This module
-(`image.py`) layers three techniques, each routed to the regime where it actually helps,
-proven by `tests/bench_seam.py`.
+(`imaging/compositing.py`) layers three techniques, each routed to the regime where it
+actually helps, as measured by a benchmark script that is no longer in the repository
+(see "Regression tests & reproducibility").
 
 ## Functions
 
@@ -17,7 +18,7 @@ proven by `tests/bench_seam.py`.
 | `_seamless_clone_arr(bg, patch, m)` | array Poisson (`cv2.seamlessClone`, NORMAL_CLONE) — membrane-levels low frequencies, preserves gradients |
 | `_laplacian_blend(bg, patch, α)` | multi-band (Laplacian-pyramid) blend: low freqs cross the boundary gradually, high freqs sharply |
 | `_blend_region(bg, patch, m)` | **unified entry point** — routes by `_is_continuation` |
-| `_seam_blend_tile(...)` | back-compat Poisson-only wrapper |
+| `_seam_blend_tile(...)` | back-compat Poisson-only wrapper (`imaging/image_masks.py`) |
 
 ## Routing (the key design decision)
 
@@ -34,7 +35,7 @@ perturb the gradients Poisson preserves). So `_blend_region` picks one path:
 This is the evidence-based refinement of the original "harmonize → Poisson → multi-band"
 stack: all three are implemented, but each is applied only where it measurably wins.
 
-## Benchmark (16 real images, `tests/bench_seam.py`)
+## Benchmark (16 real images)
 
 Seam quality is measured in a thin band straddling the boundary, against the original
 photo as the seamless reference.
@@ -79,15 +80,17 @@ and the benchmark before/after delta.
 - `tests/test_seam_compositor.py` — 21 deterministic invariant checks (band masks,
   continuation routing, harmonize interior/outside, Poisson guards/locality, Laplacian
   alpha extremes, blend routing, determinism, face-guard passthrough). No GPU/ComfyUI.
-- `tests/bench_seam.py --save-baseline` stores `results_baseline.json`; every run prints
-  a delta vs the baseline so regressions are visible. Seed-fixed → reproducible.
+- The benchmark that produced the tables above (`tests/bench_seam.py`, seed-fixed, with a
+  stored baseline) is not tracked in the repository, so those figures cannot be
+  regenerated from it.
 
 ## Where it is used
 
-- `edit_region_contained_via_firered` whole-region composite-back (clothing/hair edits).
-- `_preserve_face_after_upscale` — blends the faithful face back over the ESRGAN result.
+- `edit_region_contained_via_firered` (`imaging/image_contained_firered.py`) whole-region
+  composite-back (clothing/hair edits).
+- `_preserve_face_after_upscale` (`imaging/image_identity.py`) — blends the faithful face back over the ESRGAN result.
 
-## Limitations / future work
+## Limitations
 
 - The benchmark's patches are derived from the original photo, so Poisson (gradient-
   preserving) is somewhat favoured; a held-out set of *true* independent re-renders paired
