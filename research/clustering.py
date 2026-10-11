@@ -143,8 +143,6 @@ def cluster_briefs(briefs: Sequence[dict], *, threshold: float = 0.18,
     `only_confirm` keeps contradiction-tagged briefs out of the thread structure
     (they are weighed separately by the contradiction pass), so clusters describe
     the confirming knowledge base. Deterministic — same input → same clusters."""
-    from collections import Counter
-
     items = [(i, b) for i, b in enumerate(briefs)
              if not (only_confirm and b.get("mode") == "contradict")]
     n = len(items)
