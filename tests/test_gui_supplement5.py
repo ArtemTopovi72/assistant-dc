@@ -17,8 +17,7 @@ except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
 from pathlib import Path
 
-import numpy as np
-from PyQt5.QtWidgets import QApplication, QDialog, QInputDialog, QMessageBox
+from PyQt5.QtWidgets import QApplication, QDialog, QInputDialog
 from PyQt5.QtWidgets import QFileDialog as _QFD
 from PyQt5.QtGui import QImage, QColor
 from PyQt5.QtCore import Qt
@@ -278,7 +277,6 @@ def test_load_image_vision_warning_and_dedup():
     img = _png("li.png")
     w.ctx.reference_images = [img, _png("old1.png"), _png("old2.png")]
     w._load_image_file_as_working(img)
-    check("load_vision_warn", "vision" in w.chat.toPlainText().lower() or "vision" in w.statusBar().currentMessage().lower() or True)
     check("load_dedup", w.ctx.reference_images[-1] == img)
     _close(w)
 
