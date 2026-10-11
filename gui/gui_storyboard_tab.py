@@ -29,7 +29,7 @@ from PyQt5.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QLabel,
                              QLineEdit, QListWidget, QPushButton, QSpinBox,
                              QSplitter, QVBoxLayout, QWidget)
 
-from ui_scale import pt, px
+from ui_scale import px
 from gui_common import _FlowWidget, _ScopedCtx, _flow, _section
 
 import logging

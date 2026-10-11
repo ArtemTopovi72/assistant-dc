@@ -4,14 +4,13 @@ _ThumbLabel travels with it — it is the clickable thumbnail the panel is made
 of and has no other caller. Clicking one opens the shared viewer from
 gui_dialogs, which is why that lives in neither this module nor a tab.
 """
-import os
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap
-from PyQt5.QtWidgets import QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QLabel, QScrollArea, QVBoxLayout, QWidget
 
-from ui_scale import px, scale_style as _ss
-from gui_common import BG, MUTED, _section
+from ui_scale import scale_style as _ss
+from gui_common import BG, MUTED
 from gui_dialogs import show_image_viewer
 
 import logging

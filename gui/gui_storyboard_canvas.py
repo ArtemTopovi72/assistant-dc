@@ -4,19 +4,11 @@ Lifted out of gui_storyboard_tab.py. Self-contained QWidget -- it owns the
 painting and mouse handling and talks to its parent only through signals, which
 is what let it move without dragging tab state along.
 """
-import copy
-import json
-import os
-import random
-import threading
 from PyQt5.QtCore import QRect, Qt, pyqtSignal
 from PyQt5.QtGui import QColor, QPainter, QPen
-from PyQt5.QtWidgets import (
-    QCheckBox, QComboBox, QFileDialog, QLabel, QLineEdit, QListWidget, QPushButton, QSpinBox,
-    QWidget,
-)
+from PyQt5.QtWidgets import QWidget
 from ui_scale import pt, px
-from gui_common import BORDER, PANEL2, _FlowWidget, _flow, _section
+from gui_common import BORDER, PANEL2
 
 
 class _BoxCanvas(QWidget):

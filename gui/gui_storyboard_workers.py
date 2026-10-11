@@ -9,18 +9,7 @@ global THERE, so the existing seam -- suites patch gui_storyboard_tab.
 IdeogramWorker and gui.IdeogramWorker to install a spy -- keeps working. Moving
 the callers instead would have orphaned both patches silently.
 """
-import copy
-import json
-import os
-import random
-import threading
-from PyQt5.QtCore import QThread, Qt, pyqtSignal
-from PyQt5.QtWidgets import (
-    QCheckBox, QComboBox, QFileDialog, QLabel, QLineEdit, QListWidget, QPushButton, QSpinBox,
-    QWidget,
-)
-from ui_scale import pt, px
-from gui_common import _FlowWidget, _flow, _section
+from PyQt5.QtCore import QThread, pyqtSignal
 import logging
 
 logger = logging.getLogger("assistant.gui")

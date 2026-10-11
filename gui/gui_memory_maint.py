@@ -10,16 +10,14 @@ each _build_* creates. The compaction worker lifecycle (._compact_worker,
 exactly one owner.
 """
 import json
-import os
 from pathlib import Path
-from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QAbstractItemView, QComboBox, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
-    QListWidget, QListWidgetItem, QMenu, QMessageBox, QPlainTextEdit, QPushButton, QSpinBox,
-    QTabWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QAbstractItemView, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMessageBox,
+    QPlainTextEdit, QPushButton, QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout,
+    QWidget,
 )
 from ui_scale import px, scale_style as _ss
-from gui_common import MUTED, _FlowWidget, _card, _flow, _fmt_bytes, _fmt_ts, _section, open_in_os
+from gui_common import MUTED, _fmt_bytes, _fmt_ts, _section, open_in_os
 import logging
 
 logger = logging.getLogger("assistant.gui")

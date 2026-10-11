@@ -19,26 +19,19 @@ with its own cancel token.
 _MADHOUSE_TTS_LOCK serialises speech: the characters generate concurrently but
 must not talk over one another.
 """
-import json
 import os
 import random
 import threading
 import time
-from pathlib import Path
 
 import gui_i18n
 
-from PyQt5.QtCore import QThread, QTimer, Qt, pyqtSignal
-from PyQt5.QtWidgets import (
-    QCheckBox, QComboBox, QFileDialog, QLabel, QLineEdit, QListWidget, QMessageBox,
-    QPushButton, QWidget,
-)
+from PyQt5.QtCore import QThread, QTimer, pyqtSignal
+from PyQt5.QtWidgets import QWidget
 
 from audio import AudioPlayer, MicRecorder
 from config import MIC_GAIN_DB, OUTPUT_DIR
-from ui_scale import px
-from gui_common import (MUTED, TranscribeWorker,
-                        _FlowWidget, _ScopedCtx, _flow, _section)
+from gui_common import (TranscribeWorker, _ScopedCtx)
 
 import logging
 logger = logging.getLogger("assistant.gui")   # same channel as gui.py

@@ -14,19 +14,15 @@ The heavy imports — memory_center, llm, prompts — stay FUNCTION-LOCAL exactl
 as they were in gui.py: this tab is constructed at startup, and loading the
 memory store or the LLM client just to build a widget would slow every launch.
 """
-import json
-import os
 from pathlib import Path
 
 from PyQt5.QtCore import QEvent, QThread, Qt, pyqtSignal
 from PyQt5.QtGui import QCursor
-from PyQt5.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QFileDialog,
-                             QFrame, QGridLayout, QHBoxLayout, QHeaderView,
-                             QInputDialog, QLabel, QLineEdit, QListWidget,
+from PyQt5.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QFrame, QGridLayout,
+                             QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
                              QListWidgetItem, QMenu, QMessageBox, QPlainTextEdit,
-                             QPushButton, QScrollArea, QSlider, QSpinBox,
-                             QTabWidget, QTableWidget, QTableWidgetItem,
-                             QVBoxLayout, QWidget)
+                             QPushButton, QScrollArea, QSlider, QSpinBox, QTabWidget,
+                             QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from ui_scale import px, scale_style as _ss
 from gui_common import (BG, MUTED, _FlowWidget, _card, _fit_dialog, _flow,
