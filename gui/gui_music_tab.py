@@ -139,7 +139,6 @@ class MusicWorker(QThread):
                     self.prefs = dict(picked, **self.prefs)     # the user's own choices win
                     if not duration and chosen.get("seconds"):
                         duration = int(chosen["seconds"])
-            self.chosen = chosen
             duration = duration or MUSIC_DEFAULT_SECONDS
             # Same duration for both: Music3 stops when the words run out, so
             # the songwriter needs to know how much to write, and a render
