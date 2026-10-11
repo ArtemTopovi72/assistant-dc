@@ -2,7 +2,7 @@
 
 Owns the one heavyweight, cached resource in the engine — the separator model
 and its lock — plus MashupUnavailable, the user-facing error every layer
-raises. Split out of mashup.py unchanged.
+raises.
 """
 import logging
 import os
