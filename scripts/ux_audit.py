@@ -1,7 +1,7 @@
 """UX audit over the real per-chat transcripts (chat_logs/*.jsonl, chatlog.py).
 
 Unit suites check each piece; they cannot see what the USER lived through.
-2026-09-27: «🎵 Songs» was 'layout-fixed' into «Ыщтпы», redrew a photo, Cancel
+Seen live: «🎵 Songs» was 'layout-fixed' into «Ыщтпы», redrew a photo, Cancel
 said «Cancelling…» and the render went on, a typed «Stop» became a steer note —
 every suite was green. Each rule below is a symptom a person would notice.
 
@@ -96,7 +96,6 @@ def audit_chat(rows, labels):
             prev = o
 
     # 7. a Russian-speaking user got a message with no Russian in it
-    #    (live 2026-09-27: every status said «⚙️ Starting…» to Russian users)
     cyr = sum(bool(re.search("[а-яё]", t, re.I)) for _r, t in ins)
     #    A Latin reply is RIGHT after a Latin-script question, an ask for
     #    English / a translation, or «answer in English from now on».

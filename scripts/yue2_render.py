@@ -22,7 +22,7 @@ def main():
     # The Windows torch build has the flash op's symbol but not the kernel, so
     # "auto" picks flash and dies ("USE_FLASH_ATTENTION was not enabled").
     # Masked SDPA (what "auto" fell back to) ran a slow kernel: one verse+chorus
-    # took 71 s; cuDNN 41-49 s; flash-attn via yue2_fa2 24 s (bench 2026-09-27).
+    # took 71 s; cuDNN 41-49 s; flash-attn via yue2_fa2 24 s.
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import yue2_fa2
     backend = os.getenv("YUE2_ATTN") or ("flash" if yue2_fa2.install() else "cudnn")
@@ -30,7 +30,7 @@ def main():
     _init = _cg.GraphAR.__init__
     _cg.GraphAR.__init__ = lambda self, *a, **k: _init(self, *a, **{**k, "attention_backend": backend})
     # NAR attention takes the whole song as ONE query block on cuda: a long metal
-    # lyric OOM'd at 22 GB (live 2026-09-25 21:15, 21:23). 1024-row blocks cap it.
+    # lyric OOM'd at 22 GB. 1024-row blocks cap it.
     import yue2.nar as _nar
     _nar_init = _nar.CachedNAR.__init__
     _nar.CachedNAR.__init__ = lambda self, m, c, attention="sdpa", query_chunk_size=None: \

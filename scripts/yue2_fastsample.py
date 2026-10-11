@@ -31,8 +31,8 @@ def distribution(logits, sampling, history, step, phase, legacy_off=False):
     from yue2.protocol import ABC_END, MUSIC_END
     if legacy_off:                       # historical BF16 path: leave it exact
         return _REF(logits, sampling, history, step, phase, legacy_off)
-    scores = logits.float() + _allowed(logits.float(), phase, ABC_END if phase == "abc" else MUSIC_END)
     end = ABC_END if phase == "abc" else MUSIC_END
+    scores = logits.float() + _allowed(logits.float(), phase, end)
     if step < sampling.min_tokens:
         scores[..., end] = -torch.inf
     recent = history[-sampling.penalty_window:]

@@ -22,7 +22,7 @@ def convert_wav_to_mp3(source_dir: str, output_dir_name: str = "test 2") -> None
     for wav_file in wav_files:
         mp3_file = output_path / (wav_file.stem + ".mp3")
         cmd = [
-            FFMPEG_EXE, "-y",          # no -y: an existing mp3 = an overwrite prompt nobody answers
+            FFMPEG_EXE, "-y",          # -y: overwrite existing mp3s without prompting
             "-i", str(wav_file),
             "-codec:a", "libmp3lame",
             "-q:a", "2",

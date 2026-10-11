@@ -138,7 +138,6 @@ def build_svg() -> str:
 
         freq = t / 10.0
 
-        # ✔ correct filter skip point
         if abs(freq - 113.0) < 1e-6:
             continue
 
@@ -177,7 +176,6 @@ def build_svg() -> str:
 
         freq = float(f_label)
 
-        # ✔ fix: actually works now
         if abs(freq - 113.0) < 1e-6:
             continue
 

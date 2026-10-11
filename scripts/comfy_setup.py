@@ -95,11 +95,6 @@ def comfy_base() -> Path:
     return Path(os.getenv("COMFY_BASE_DIR") or Path.home() / "Documents" / "ComfyUI")
 
 
-def comfy_exe() -> Path:
-    return Path(os.getenv("COMFY_EXE") or Path.home() / "AppData" / "Local" / "Programs"
-                / "ComfyUI" / "ComfyUI.exe")
-
-
 def _version_key(name: str):
     try:
         return tuple(int(x) for x in name.split("-", 1)[1].split("."))
