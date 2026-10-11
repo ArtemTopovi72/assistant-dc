@@ -30,7 +30,7 @@ from typing import Optional
 import ideogram
 from text_layout import (MIN_TEXT_H, MIN_LINE_H, CHAR_ASPECT, MAX_TEXT_CHARS,
                          SHAPE_TOLERANCE, TEXT_MATCH_OK,
-                         text_geometry, text_geometry_lines, fit_text_in, lines_of,
+                         text_geometry_lines, fit_text_in, lines_of,
                          _norm_text)
 from utils import safe_json_from_llm
 

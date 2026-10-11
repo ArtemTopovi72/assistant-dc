@@ -321,7 +321,6 @@ def add_polish_pass(workflow: dict, steps: int, polish: int, cfg: float) -> bool
     return True
 
 
-NODE_SAVE = "200"            # SaveImage
 
 
 # ---------------------------------------------------------------------------

@@ -8,13 +8,9 @@ The callers (run, edit_layout) stay in draw_agent, so any suite that patches
 draw_agent.auto_fix_geometry still reaches the code that runs.
 """
 import copy
-import json
-import random
 import re
 import ideogram
 import text_layout as _text_layout
-from text_layout import text_geometry, _norm_text
-from utils import safe_json_from_llm
 import draw_text as _draw_text
 
 from draw_text import _clamp_box, _els

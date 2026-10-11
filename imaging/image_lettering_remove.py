@@ -13,7 +13,6 @@ from __future__ import annotations
 from config import scratch_path, venv_python
 import logging
 import os
-import re
 import time
 from typing import List, Optional, Tuple
 
