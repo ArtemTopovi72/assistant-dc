@@ -14,6 +14,7 @@ from config import (
     SEARCH_DISTILL_MAX_TOKENS, SEARCH_READ_PAGES, SEARCH_PAGE_CHARS, SEARCH_FETCH_WORKERS, SEARCH_FOLLOWUP_ROUND,
 )
 from prompts import SEARCHER_PROMPT
+from dr_urls import _domain
 from llm import call_llm_simple
 from utils import truncate_text, throttle_external_calls
 
@@ -95,15 +96,6 @@ def _is_landing_url(url: str) -> bool:
     if len(parts) == 2 and parts[0].lower() in _INDEX_PREFIXES:
         return True
     return tail in _SECTION_TAILS or (len(parts) == 1 and "-" not in tail)
-
-
-def _domain(url: str) -> str:
-    """Bare registrable host, e.g. 'https://www.example.com/x' -> 'example.com'."""
-    try:
-        net = urlparse(url).netloc.lower()
-        return net[4:] if net.startswith("www.") else net
-    except Exception:
-        return url
 
 
 # Sentinel so callers can pass timelimit=None ("all time") and still be

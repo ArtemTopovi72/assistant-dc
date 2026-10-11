@@ -31,6 +31,8 @@ from urllib.parse import urlparse, unquote
 
 import requests
 
+from dr_urls import _domain
+
 logger = logging.getLogger("assistant.research.adapters")
 
 _TIMEOUT = 12
@@ -44,14 +46,6 @@ _HEADERS = {"User-Agent": "f5-research-bot/1.0 (research assistant"
             "Accept": "application/json"}
 _warned_no_contact = False
 _MAX_TEXT = 8000
-
-
-def _domain(url: str) -> str:
-    try:
-        net = urlparse(url).netloc.lower()
-        return net[4:] if net.startswith("www.") else net
-    except Exception:
-        return url
 
 
 def _adapter_guard(name: str):
