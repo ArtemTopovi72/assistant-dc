@@ -207,3 +207,20 @@ def test_later_parts_know_the_scene_and_carry_no_example_action():
     assert "bag of money at Lakhta" in d and d.startswith(V.CONTINUE_CTX_PREFIX + part)
     assert V.estimate_seconds(d) == V.estimate_seconds(part)
     assert V.with_scene(part, "") == part
+
+
+def test_a_small_flying_thing_gets_a_close_up_and_the_next_part_cuts_back(monkeypatch):
+    # Live 2026-10-11: on a wide shot the cork never left the bottle and the apple fell unseen.
+    import llm
+    monkeypatch.setattr(llm, "call_llm_simple", lambda *a, **k: '{"close": [2]}')
+    out = V.mark_inserts(None, ["A man twists the cork.", "The cork shoots out.", "Everyone laughs."])
+    assert out[0] == "A man twists the cork."
+    assert out[1].startswith(V.INSERT_HEAD) and out[2].startswith(V.INSERT_BACK)
+    assert "Close-up:" in V.CONTINUE_CTX_PREFIX
+
+
+def test_marking_fails_soft(monkeypatch):
+    import llm
+    monkeypatch.setattr(llm, "call_llm_simple", lambda *a, **k: "no json here")
+    parts = ["a", "b"]
+    assert V.mark_inserts(None, parts) == parts

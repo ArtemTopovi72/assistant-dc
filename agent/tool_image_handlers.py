@@ -1332,6 +1332,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     # blocks"): the first part here, the rest after it below.
     raw = (args.get("description") or "").strip()
     parts = [raw] if args.get("seconds") else video_mod.split_script(raw)
+    if len(parts) > 1:
+        parts = video_mod.mark_inserts(ctx, parts)
     if len(parts) > 1 and raw in description:
         description = description.replace(raw, parts[0], 1)
         logger.info("generate_video: the script needs %d parts: %s", len(parts),

@@ -1418,7 +1418,9 @@ CONTINUE_CTX_PREFIX = (
     "changed stays changed, and voices and ambient sound go on unchanged. Every object keeps "
     "its shape and stays the same object; nothing appears or vanishes on its own. The camera "
     "keeps the angle and distance it ends on -- no close-up, zoom or reframing onto whoever the "
-    "next action is about; they are shown inside this same frame. What happens next: ")
+    "next action is about; they are shown inside this same frame -- unless what happens next "
+    "starts with \"Close-up:\" (then cut to that close-up) or \"Back to the wider view\" (then "
+    "cut back to the framing from before it). What happens next: ")
 # 10-09: the prefix carried a kitchen example («to use a different tool, the hand sets it down on
 # the counter, then picks the new one up»), and part 2 of «naked women walk past the bag of money
 # at Lakhta» came out as a hand putting a tool on a counter and hitting a stone with a wooden
@@ -1508,10 +1510,49 @@ def bridge_script(ctx, parts: list) -> list:
     out = [parts[0]]
     for part, b in zip(parts[1:], got + [""] * len(parts)):
         b = str(b or "").strip()
-        if b and len(b) <= 300:
+        if b and len(b) <= 300 and not part.startswith((INSERT_HEAD, INSERT_BACK)):
             logger.info("bridge_script: %s", b)
             part = b[:1].upper() + b[1:].rstrip(".") + ". Then " + part[:1].lower() + part[1:]
         out.append(part)
+    return out
+
+
+INSERT_HEAD = "Close-up: "
+INSERT_BACK = "Back to the wider view from before the close-up. "
+
+
+def mark_inserts(ctx, parts: list) -> list:
+    """Parts whose main beat is a SMALL thing in flight or falling (a cork, an apple, a
+    stone, a ball far away) become a close-up insert, and the part after one cuts back
+    to the wider view. On a wide shot the model loses such a thing: the cork never left
+    the bottle, the apple fell unseen (live 2026-10-11, five-story bench). Any failure
+    keeps the parts as they were."""
+    if len(parts) < 2:
+        return list(parts)
+    guide = ("A video script is split into numbered parts. List the parts whose MAIN action is a "
+             "small object (smaller than a hand: a cork, an apple, a stone, a coin, a ball seen "
+             "from afar) flying through the air, falling or hitting something -- the moment a "
+             "wide shot would lose. Not parts where a person or animal is the main action. "
+             'Reply as JSON only: {"close": [part numbers]} -- an empty list is a fine answer.')
+    import llm as _llm
+    from utils import safe_json_from_llm
+    listing = "\n".join(f"{i}. {p}" for i, p in enumerate(parts, start=1))
+    try:
+        raw = _llm.call_llm_simple(ctx, guide, listing, temperature=0.1, max_tokens=120)
+        got = (safe_json_from_llm(raw or "", ["close"]) or {}).get("close") or []
+        close = {int(x) for x in got if str(x).strip().isdigit() and 1 <= int(x) <= len(parts)}
+    except Exception as exc:
+        logger.warning("mark_inserts failed: %s", exc)
+        return list(parts)
+    if close:
+        logger.info("mark_inserts: close-up parts %s", sorted(close))
+    out = []
+    for i, p in enumerate(parts, start=1):
+        if i in close:
+            p = INSERT_HEAD + p
+        elif i - 1 in close:
+            p = INSERT_BACK + p
+        out.append(p)
     return out
 
 
