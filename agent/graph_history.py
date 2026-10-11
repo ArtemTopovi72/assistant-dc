@@ -205,7 +205,7 @@ def compact_history_if_needed(ctx, messages):
         from prompts import HISTORY_SUMMARY_PROMPT
         # Surface the stage: this runs AFTER the reply is delivered and makes up to
         # two extra LLM calls — without a stage update the GUI looks frozen/hung
-        # for the length of a summarisation call every 5th turn.
+        # for the length of a summarisation call, once every HISTORY_COMPACT_EVERY turns.
         ctx.set_stage("Compacting the chat history")
         # NOTE: no prefill here. A closed-<think> prefill makes this finetune return
         # EMPTY content for a pure summarisation request (verified live), which would

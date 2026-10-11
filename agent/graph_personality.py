@@ -1480,7 +1480,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             # then «Коллаж готов!» -- and the one found photo went out as the
             # collage. A collage exists only if a script built it this turn.
             if (corrective_count < _MAX_CORRECTIVE and draft
-                    and __import__("intent").read(None, (original_input or user_input or ""))["collage"]
+                    and _user_read(original_input or user_input or "")["collage"]
                     and _COLLAGE_DONE_RE.search(draft)
                     and not (tools_called_this_turn & _BUILDER_TOOLS)):
                 corrective_count += 1

@@ -1600,7 +1600,7 @@ def _vision_sized_bytes(image_bytes: bytes) -> tuple:
     """(bytes, mime) bounded to VISION_MAX_SIDE, like _vision_sized for paths.
 
     The chat-turn photo arrives as BYTES through graph.vision_agent_node's
-    1536-px proxy and skipped the 1024 bound that every path-based call gets;
+    1536-px proxy and skipped the VISION_MAX_SIDE bound that every path-based call gets;
     a 933x1400 upload crashed the model 4 times out of 4
     ("The model has crashed without additional information"), each time costing
     a revive and the turn. Same picture at 682x1024 never did.

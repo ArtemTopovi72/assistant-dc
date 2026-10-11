@@ -26,10 +26,10 @@ _T_RELOAD = 300
 # Smallest context the agent can actually work in. The system prompt is ~2.4k
 # tokens and the full tool-schema list adds ~7k, so anything at or below 8192
 # rejects every tool-bearing call outright ("n_keep >= n_ctx") — measured with
-# google/gemma-4-26b-a4b-qat at 9905 needed vs 8192 loaded. 32768 leaves room for
-# history and tool results on top of that. House default (user, 2026-09-23):
-# 40k context and ONE parallel slot for every model the app loads (raised from
-# 20k on 2026-09-24: 48k q8 measured, no speed or VRAM cost; the loader kept 20k).
+# google/gemma-4-26b-a4b-qat at 9905 needed vs 8192 loaded. The default below
+# leaves room for history and tool results on top of that. House default:
+# 40k context and ONE parallel slot for every model the app loads (48k q8
+# measured: no speed or VRAM cost; the loader used to keep 20k).
 MIN_CONTEXT_TOKENS = _cfg_env.env_int("LM_MIN_CONTEXT", 40960)
 DEFAULT_PARALLEL = _cfg_env.env_int("LM_PARALLEL", 1)
 
