@@ -180,3 +180,65 @@ def test_an_approved_plan_or_a_continue_click_is_already_a_request_for_video(mon
     assert H.asks_for_video(c, state)
     c.video_plan_parts, c.continue_tail = [], "tail.mp4"
     assert H.asks_for_video(c, state)
+
+
+def _video_ctx(**kw):
+    class Ctx:
+        reference_images = []
+        voice_choice = "default"
+        video_plan_ask, video_plan_parts = False, []
+        continue_tail = continue_src = ""
+        continue_people = []
+        last_video_path = None
+        def set_stage(self, *_): pass
+        def is_cancelled(self): return False
+        def remember(self, *a): pass
+        def memory_text(self): return ""
+    c = Ctx()
+    c.__dict__.update(kw)
+    return c
+
+
+def _fake_render(monkeypatch, seen, tmp_path):
+    def fake_gen(ctx, description, **kw):
+        seen.update(kw, description=description)
+        out = tmp_path / "new.mp4"
+        out.write_bytes(b"v")
+        return {"path": str(out), "status": "success", "seconds": 5.2, "width": 768, "height": 768}
+    monkeypatch.setattr(V, "generate_video", fake_gen)
+    monkeypatch.setattr(V, "engine_available", lambda ctx: (True, ""))
+    monkeypatch.setattr(V, "join_continuation", lambda a, b: b)
+    monkeypatch.setattr(V, "_adopt_output", lambda p: p)
+
+
+def test_a_video_asked_on_a_forwarded_clips_sheet_continues_that_clip(monkeypatch, tmp_path):
+    # Live 2026-10-11: «сделай продолжение…» typed under a forward animated the frame grid.
+    import tool_image_handlers as H
+    import video_look
+    sheet = tmp_path / "sheet.jpg"
+    sheet.write_bytes(b"x")
+    (tmp_path / video_look.CONTINUE_CLIP).write_bytes(b"clip")
+    monkeypatch.setattr(tg_continue, "seed_frame", lambda src, out: open(out, "wb").write(b"s") > 0)
+    monkeypatch.setattr(tg_continue, "cut_tail", lambda src, out: open(out, "wb").write(b"t") > 0)
+    monkeypatch.setattr(H, "_current_image_paths", lambda ctx, state: [str(sheet)])
+    seen = {}
+    _fake_render(monkeypatch, seen, tmp_path)
+    H._handle_generate_video(_video_ctx(), {}, {"description": "the imam throws him out of the mosque"})
+    assert seen["videos"] and seen["videos"][0].endswith("_tail.mp4")
+    assert seen["images"] and seen["images"][0].endswith("_seed.jpg")
+
+
+def test_a_russian_chat_gets_russian_speech(monkeypatch, tmp_path):
+    # Live 2026-10-11: the clip's writer invented "Get out!" in English.
+    import tool_image_handlers as H
+    monkeypatch.setattr(H, "asks_for_video", lambda ctx, state: True)
+    monkeypatch.setattr(H, "_current_image_paths", lambda ctx, state: [])
+    seen = {}
+    _fake_render(monkeypatch, seen, tmp_path)
+    H._handle_generate_video(_video_ctx(), {"user_input_original": "имам выгоняет его"},
+                             {"description": "an angry imam shouts and throws him out"})
+    assert "in Russian" in seen["description"]
+    seen.clear()
+    H._handle_generate_video(_video_ctx(), {"user_input_original": "пусть скажет «Hello»"},
+                             {"description": 'he says "Hello"'})
+    assert "in Russian" not in seen["description"]

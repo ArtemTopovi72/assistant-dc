@@ -2022,8 +2022,14 @@ class TaskRunnerMixin:
                 fh.write(data); src_file = fh.name
             import video_look
             work = Path(tg_bot._IMAGE_DIR) / f"video_{uuid.uuid4().hex[:8]}"
-            return video_look.look_at_video(ctx, src_file, work_dir=work, lang=lang,
+            seen = video_look.look_at_video(ctx, src_file, work_dir=work, lang=lang,
                                             transcript=transcript)
+            # The clip stays beside its frame sheet: «сделай продолжение» typed under a
+            # forwarded video continues THIS clip (video_look.CONTINUE_CLIP), not a still of its sheet.
+            if seen.get("sheet") and os.path.exists(seen["sheet"]):
+                import shutil
+                shutil.copyfile(src_file, os.path.join(os.path.dirname(seen["sheet"]), video_look.CONTINUE_CLIP))
+            return seen
         except Exception:
             tg_bot.logger.exception("video look failed file_id=%s", file_id)
             return {"description": "", "sheet": "", "duration": 0, "times": []}

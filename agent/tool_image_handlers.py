@@ -1176,6 +1176,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         return ("[TOOL ERROR] generate_video needs a 'description' of the shot. "
                 "Re-call it describing what should be on screen, what moves, and "
                 "what it should sound like.")
+    # A Russian chat with no line written out: the clip's own writer invented "Get out!"
+    # in English (live 2026-10-11). Lines the user did write keep their language.
+    if (re.search(r"[а-яё]", str((state or {}).get("user_input_original") or ""), re.I)
+            and not re.search(r'[«"“]|<d>', description)):
+        description += " Anyone who says something out loud says it in Russian."
     if not asks_for_video(ctx, state):
         logger.warning("generate_video refused: the user did not ask for a video")
         return ("[TOOL ERROR] The user did not ask for a video in this message, so no "
@@ -1213,6 +1218,21 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         lv = getattr(ctx, "last_video_path", None)
         if lv and os.path.exists(lv):
             videos = [lv]
+
+    # A forwarded video is in play as its frame sheet, its clip kept beside it: a clip asked
+    # for on it continues that clip from its real end. Animating the sheet itself made a new
+    # scene from a grid of frames (live 2026-10-11, «сделай продолжение как имам…»).
+    if not getattr(ctx, "continue_tail", ""):
+        import video_look
+        for p in images:
+            clip = os.path.join(os.path.dirname(p), video_look.CONTINUE_CLIP)
+            if os.path.basename(p).startswith("sheet") and os.path.exists(clip):
+                import tg_continue
+                seed, tail = clip[:-4] + "_seed.jpg", clip[:-4] + "_tail.mp4"
+                if tg_continue.seed_frame(clip, seed) and tg_continue.cut_tail(clip, tail):
+                    ctx.continue_tail, ctx.continue_src = tail, clip
+                    images = [seed if q == p else q for q in images]
+                break
 
     # ▶️ Continue video (tg_continue): the clip's tail is the reference -- its motion, faces and
     # its own sound -- and the new part is joined to the original afterwards.

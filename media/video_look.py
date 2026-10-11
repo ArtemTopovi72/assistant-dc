@@ -22,6 +22,8 @@ from pathlib import Path
 from typing import Callable, Optional
 
 logger = logging.getLogger("assistant.video_look")
+# The forwarded clip, kept beside its frame sheet so a typed «продолжи» can continue it.
+CONTINUE_CLIP = "clip.mp4"
 
 EVERY_SECONDS = 5
 MAX_FRAMES = 12
