@@ -100,7 +100,7 @@ def _fit_markup(markup):
                 m = dict(m, **{key: fit_rows(m[key])})
         if isinstance(m.get("keyboard"), list):
             # A menu the client may collapse leaves a picker message with no way
-            # back (live 10-02: «Размер» -> quality tapped -> no menu at all).
+            # back.
             m.setdefault("is_persistent", True)
         return json.dumps(m) if isinstance(markup, str) else m
     except Exception:
@@ -505,7 +505,7 @@ class TransportMixin:
     def _close_menu(self, chat_id, msg: dict) -> None:
         """↩ Назад under a message takes its buttons away and nothing else.
         It deleted the message, and so the song text under «🎵 Спеть / ✨ Ещё»
-        went with it (live 10-03): what the user got is never deleted."""
+        went with it: what the user got is never deleted."""
         self._api_post("editMessageReplyMarkup", {"chat_id": chat_id,
                                                   "message_id": msg.get("message_id"),
                                                   "reply_markup": json.dumps({"inline_keyboard": []})})

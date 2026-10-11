@@ -100,8 +100,7 @@ def _plainly_not_a_doc_question(text: str) -> bool:
     """True when the message is not for document retrieval -- and for a
     message that carries its own material: a pasted press release under
     'сократи до 3 пунктов' was wrapped as a QUESTION to the rental contract,
-    and the follow-up 'выдели 5 ключевых слов' then found no text in the chat
-    (live 2026-09-13, mega journey).
+    and the follow-up 'выдели 5 ключевых слов' then found no text in the chat.
 
     Which messages the documents could answer is the model's read
     (agent/intent.py doc_question); a word list sent «нарисуй витрину
@@ -1290,8 +1289,8 @@ class TaskRunnerMixin:
         # would resolve to whichever picture the SECOND press had already
         # overwritten that slot with by the time either task actually ran.
         # ✏️ custom motion under 🎬: the picture chosen there, not the one-turn
-        # target slot -- live 10-10 that slot was empty by the time the words came
-        # and the clip was made from nothing («оживи фото», 0 images).
+        # target slot, which can be empty by the time the words come (the clip
+        # would be made from nothing).
         _anim = getattr(sess, "pending_animate_target", "")
         if _anim and (task.user_text or "").startswith("animate this photo") and not getattr(task, "image_id", ""):
             task.image_id = _anim
@@ -1618,7 +1617,7 @@ class TaskRunnerMixin:
         if final.get("ask_voices") or final.get("video_plan"):
             # The clip waits for «свои голоса / стандартные»: the offer below IS the
             # reply. The model's own line said «не удалось из-за технической ошибки»
-            # about a clip that was only paused (live 10-02).
+            # about a clip that was only paused.
             reply = ""
 
         # ── deliver voice note (before text so keyboard attaches to voice) ────

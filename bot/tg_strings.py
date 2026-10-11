@@ -134,7 +134,7 @@ def _b(key: str, lang: str) -> str:
 
 def _nav_back_row(lang: str) -> list:
     """⬅ under an inline picker: back to the menu the user is in (nav:back).
-    Without it a picker message was a dead end (live 10-02, «Размер»)."""
+    Without it a picker message is a dead end."""
     return [{"text": _b("back", lang), "callback_data": "nav:back"}]
 
 

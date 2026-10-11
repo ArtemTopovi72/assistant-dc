@@ -120,7 +120,7 @@ class BilingualAccentor:
     # ----- Russian -----------------------------------------------------------
     def warm(self) -> None:
         """Load RUAccent on a daemon thread: cold it costs ~2 min 10 s on the first
-        voice reply after a restart (live 2026-09-25)."""
+        voice reply after a restart."""
         threading.Thread(target=self._ensure_ru, daemon=True).start()
 
     def _ensure_ru(self):

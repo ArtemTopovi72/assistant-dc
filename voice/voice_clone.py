@@ -47,7 +47,7 @@ def _to_wav(src: str, dst: str) -> None:
 def _voice_spans(seg):
     """[(start_ms, end_ms)] where Silero VAD hears a VOICE, or None when VAD is
     unavailable. Loudness alone picked the music of a YouTube clip and the
-    sample had no words (live 10-03); a voice under music still counts."""
+    sample had no words; a voice under music still counts."""
     try:
         import numpy as np, torch
         from silero_vad import get_speech_timestamps

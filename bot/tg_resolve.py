@@ -102,8 +102,7 @@ class ResolveMixin:
             self._activity.log(chat_id, "system", f"[video link] watched {_vu[:80]}",
                                (user.name if user else str(chat_id)))
         elif _vid.get("too_long"):
-            # the same portioned job as a long video FILE (live 10-03: an 81-min
-            # film by link got «посмотрю первые 10 минут, пришли файл»)
+            # the same portioned job as a long video FILE, not a "send me the file" brush-off
             sess.last_link = _vu
             self._long_video_offer(chat_id, sess, self._lang(sess),
                                    {"url": _vu, "seconds": _vid["seconds"], "caption": text})
@@ -415,8 +414,7 @@ class ResolveMixin:
                 # 🎨 Restyle / 🎤 Cover waiting for words: this text is them, ahead
                 # of everything that reads text as something else -- a forwarded
                 # lyric went to the chat, an old forwarded voice note took it as
-                # its answer, a song topic left armed sang it (live 10-03: «кавер
-                # не даёт текст вставить»).
+                # its answer, a song topic left armed sang it.
                 if (not item.get("fwd_said") and not raw.startswith("/")
                         and not tg_bot._LABEL2KEY.get(raw.strip())):
                     if (getattr(sess, "lyrics_state", "")
@@ -458,8 +456,7 @@ class ResolveMixin:
                         fwd_at = len(texts)
                         texts.append("")
                     texts[fwd_at] = tg_bot._FWD_TEXT_FRAME.format(text="\n".join(fwd))
-                    # a forwarded link is material too (live 10-03: Stepan's
-                    # forwarded Shorts got «не могу посмотреть по ссылке»)
+                    # a forwarded link is material too (a forwarded Short must be watched, not refused)
                     if ("://" in raw and not sess.reg_state and not sess.pending_prefix
                             and not os.getenv("F5_TEST_RUN")):
                         if self._read_links(ctx, sess, chat_id, user, raw, scaffold):
@@ -989,7 +986,7 @@ class ResolveMixin:
                     # «а когда основан?» after a link was answered from the cut
                     # fitted to the first question: refit the page to this one.
                     # a watched video is answered from what was seen and heard,
-                    # not from its YouTube page (live 10-03)
+                    # not from its YouTube page
                     _lc = (_tg_links.WATCHED.get(sess.last_link)
                            or _tg_links.link_context(raw, url=sess.last_link))
                     if _lc:
@@ -1349,15 +1346,15 @@ class ResolveMixin:
                             "not file by file. Do not ask the user to send their contents.]")
         # Files with no words: «📁 Положил X в песочницу» was the answer; a turn
         # on our own note alone answered «я всё изучил и готов» without opening
-        # anything (live 10-03, Stepan's logs)
+        # anything
         if (not merged and img_bytes is None and scaffold
                 and all(s.startswith("[The file '") for s in scaffold)):
             return
         if merged and img_bytes is None and not any(s.startswith("[The file '") for s in scaffold):
             _latest = self._latest_sandbox_file(chat_id, sess)
             if _latest:
-                # «В ЧЕМ ТАМ ОШИБКА?» after forwarded logs critiqued the last
-                # picture (live 10-03): the last thing sent was the file
+                # «В ЧЕМ ТАМ ОШИБКА?» after forwarded logs must not critique the last
+                # picture: the last thing sent was the file
                 scaffold.append(f"[The last thing the user sent was the file '{_latest}' "
                                 f"(in your working folder, after any picture). A question "
                                 f"about «it», «there» or «the error» means that file: "
@@ -1381,8 +1378,7 @@ class ResolveMixin:
         # about the user's next words; with none to attach to it must WAIT
         # rather than seize our scaffolding.
         # 🖼 Create picture asks for a NEW picture: the words describe it, they
-        # never point at an old one (live 10-03: a scene with a broken window
-        # got «Какую картинку? В этом чате их 12»).
+        # never point at an old one (else a scene description triggers «Какую картинку?»).
         _new_picture = bool(merged) and sess.pending_prefix == tg_bot._PROMPT_KB["gen_image"]
         if merged and sess.pending_prefix:
             merged = sess.pending_prefix + merged
@@ -1530,7 +1526,7 @@ class ResolveMixin:
             live = tg_bot._live_images(sess)
             _in_play = getattr(sess, "turn_image", "")
             # A short question typed after a forwarded TEXT is about that text, not about one of the old pictures
-            # (live 10-05: «Речь про китайцев?» after Stepan's forwards got «Какую картинку? В этом чате их 12»).
+            # (else «Речь про китайцев?» after forwards gets «Какую картинку? В этом чате их 12»).
             _fwd = getattr(sess, "fwd_text_ts", 0) or 0
             if (_fwd and time.time() - _fwd < 900
                     and _fwd > max([e.get("ts") or 0 for e in live] or [0])):
