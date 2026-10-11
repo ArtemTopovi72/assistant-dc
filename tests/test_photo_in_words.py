@@ -1,8 +1,8 @@
 """Camera settings reach the caption as words, never as figures.
 
 Ideogram treats a figure in the caption as something to print: the default
-"50mm lens, f/4" came out as "4/4" on a champagne label and "//4" on another
-(2026-09-12). Pure string work; nothing here touches a model.
+"50mm lens, f/4" would come out as "4/4" on a label. Pure string work; nothing
+here touches a model.
 
 Run: venv/Scripts/python.exe tests/test_photo_in_words.py
 """

@@ -1,7 +1,6 @@
 """Console children of the pythonw app must not flash a window.
 
-Live 2026-09-14: «при загрузке и выгрузке модели экран мерцает и открываются
-питон терминалы» -- every `lms load/unload` around a render popped a console.
+Every `lms load/unload` around a render would otherwise pop a console.
 """
 import os, sys, subprocess
 os.environ.setdefault("F5_TEST_RUN", "1")

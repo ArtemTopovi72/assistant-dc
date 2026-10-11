@@ -3,7 +3,7 @@
 The tg_* package is a deliberate import cycle: tg_bot pulls in twelve mixins
 with `from tg_x import XMixin`, and each mixin ends with a bare `import tg_bot`
 so it can reach module-level helpers at call time.  That works in BOTH import
-orders only because of two properties nothing was checking:
+orders only because of two properties:
 
   * the back-edge is a bare `import tg_bot`, never `from tg_bot import name`
     -- a from-import needs the module fully executed, and in a cycle it is not;

@@ -1,12 +1,10 @@
 """A follow-up question about the user's photo looks at the photo again.
 
-Live 2026-09-12 (journey 2): a receipt was photographed and summarised, then
-"which item is the most expensive?" got "I need to see the receipt". Two
-defects: `entry_router` never sent a turn without a new photo to
-vision_agent_node, so its re-look branch was unreachable in the wired graph;
-and the re-look gate only fired on questions that NAMED the picture. Now the
-router is bound to ctx and any question is a re-look when the working image
-is a user upload.
+After a receipt is photographed and summarised, "which item is the most
+expensive?" must re-look at the receipt, not answer "I need to see the receipt".
+`entry_router` is bound to ctx and sends any question to vision_agent_node when
+the working image is a user upload, so the re-look branch is reachable in the
+wired graph (the re-look gate does not require the question to NAME the picture).
 """
 import os, sys, tempfile, threading
 os.environ.setdefault("F5_TEST_RUN", "1")

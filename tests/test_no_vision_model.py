@@ -1,8 +1,8 @@
 """A text-only model is not a blind one.
 
-Live log 2026-09-24 00:04: muse-glimmer-30b (no vision) got the start-up vision
-self-test; LM Studio answered 400 "does not support image inputs", the call was
-retried 3x, the self-test logged "broken projector" and reloaded the model.
+A model without vision (muse-glimmer-30b) that gets the start-up vision self-test
+makes LM Studio answer 400 "does not support image inputs"; that must not be
+retried, logged as a "broken projector", or answered by reloading the model.
 """
 import os, sys, types
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

@@ -1,4 +1,4 @@
-"""All of an Ozon card's photos go to vision as ONE sheet, one call (owner 10-03)."""
+"""All of an Ozon card's photos go to vision as ONE sheet, one call."""
 import io, os, sys, types
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 for d in ("agent", "imaging", "research", "core"):

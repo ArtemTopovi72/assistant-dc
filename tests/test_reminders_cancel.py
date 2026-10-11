@@ -1,8 +1,8 @@
 """Cancelling one reminder must never wipe the others.
 
-cancel() dropped words of two letters or fewer before matching, and an empty
-word list meant "cancel everything": asking to cancel the "ТО" (car service)
-reminder, or the one "в 9", deleted every reminder the user had.
+cancel() must not drop words of two letters or fewer before matching (an empty
+word list would mean "cancel everything"): asking to cancel the "ТО" (car
+service) reminder, or the one "в 9", must not delete every reminder the user has.
 """
 import os
 import sys

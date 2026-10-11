@@ -1,11 +1,10 @@
-"""«Сделай слона розовым» on a layout picture (journey 4, live 2026-09-18).
+"""«Сделай слона розовым» on a layout picture.
 
-The layout re-render with the same seed kept the old colours whatever the box
-said, the critic's "The elephant is not pink as requested" was dropped as
-taste, and a tan elephant shipped as a successful recolour -- twice. Now the
-colour of a named thing counts as a content complaint, and a layout edit whose
-re-render still carries problems hands the original to the pixel pipeline
-(FireRed contained), which paints the change in place.
+A layout re-render with the same seed can keep the old colours whatever the box
+says, so the critic's "The elephant is not pink as requested" must not be dropped
+as taste. The colour of a named thing counts as a content complaint, and a layout
+edit whose re-render still carries problems hands the original to the pixel
+pipeline (FireRed contained), which paints the change in place.
 """
 import os, sys
 os.environ.setdefault("F5_TEST_RUN", "1")

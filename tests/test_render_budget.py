@@ -1,10 +1,9 @@
 """One turn cannot spend unlimited full renders.
 
-Live (2026-07-29, ~21:39-21:45): a single turn ran redraw → inspect → redraw →
-inspect → draw → draw, each one a full image generation, holding ComfyUI for
-minutes while another user sat in the queue. The agent was doing what it was
-told — the system prompt says to inspect the result and fix what is wrong "until
-it is right" — but nothing attached a cost to that loop.
+A single turn can run redraw → inspect → redraw → inspect → draw → draw, each one
+a full image generation, holding ComfyUI for minutes while another user sits in
+the queue. The system prompt says to inspect the result and fix what is wrong
+"until it is right", so that loop needs a cost.
 
 The loop is kept (it genuinely fixes pictures); it gets a budget. On exhaustion
 the agent is told to deliver what it has and say plainly what it could not fix,

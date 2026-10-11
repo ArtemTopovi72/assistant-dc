@@ -142,10 +142,10 @@ check("...and the requested max_duration in seconds",
 check("the seed reaches the text-encode node",
       wf[M.N_TEXT]["inputs"]["seed"] == 42)
 check("the seed reaches the sampler", wf[M.N_SAMPLER]["inputs"]["seed"] == 42)
-# 2026-09-20: when steps is not given, build_workflow now defaults to the
-# Turbo LoRA path (measured 25% faster on a 60s song), not the plain
-# MUSIC_STEPS/MUSIC_CFG config values -- those only apply when a caller
-# explicitly asks for a step count (the GUI's Quality slider).
+# When steps is not given, build_workflow defaults to the Turbo LoRA path
+# (measured 25% faster on a 60s song), not the plain MUSIC_STEPS/MUSIC_CFG
+# config values -- those only apply when a caller explicitly asks for a step
+# count (the GUI's Quality slider).
 check("steps default to the turbo LoRA's step count when not given",
       wf[M.N_SAMPLER]["inputs"]["steps"] == C.MUSIC_STEPS_TURBO)
 check("cfg defaults to the turbo LoRA's cfg when not given",
@@ -216,8 +216,8 @@ check("a tag written with an underscore is still recognised",
 check("normalising twice changes nothing the second time (idempotent)",
       M.normalize_lyrics(M.normalize_lyrics("[Verse] a\n\n\n[Chorus] b")) ==
       M.normalize_lyrics("[Verse] a\n\n\n[Chorus] b"))
-# 3. Everything in `lyrics` is SUNG (live 2026-09-18 01:33: «(Low bass drone)»
-# under [intro] came out as sung words, «часть слов типа хэви бас пропелась»).
+# 3. Everything in `lyrics` is SUNG: «(Low bass drone)» under [intro] would
+# otherwise come out as sung words.
 _dir = M.normalize_lyrics("[intro]\n(Low bass drone)\n(Heavy beat kicks in)\n\n[verse]\nДобрый вечер!")
 check("a whole-line sound direction under [intro] is dropped, not sung",
       "bass" not in _dir.lower() and "beat" not in _dir.lower() and "Добрый вечер!" in _dir, repr(_dir))
@@ -251,10 +251,9 @@ check("build_workflow normalises lyrics before they reach the graph",
       wf_norm[M.N_TEXT]["inputs"]["lyrics"] == "[verse]\nshared line",
       repr(wf_norm[M.N_TEXT]["inputs"]["lyrics"]))
 
-# The weight variant is named in ONE place. It used to be written both in
-# music.REQUIRED_FILES and in workflow_music3.json's loader nodes, so changing
-# one left a graph pointing at a file the readiness check had already declared
-# present -- engine_available() says yes, then ComfyUI rejects the graph.
+# The weight variant is named in ONE place: if music.REQUIRED_FILES and
+# workflow_music3.json's loader nodes disagreed, engine_available() would say
+# yes and then ComfyUI would reject the graph.
 _wf_v = M.build_workflow("[verse]\nx", "y", duration_s=10, seed=1)
 check("the graph loads the DiT that REQUIRED_FILES checks for",
       _wf_v[M.N_UNET]["inputs"]["unet_name"] == M.REQUIRED_FILES["diffusion_models"][0],
@@ -442,9 +441,9 @@ check("the prompt demands an [outro] that resolves the song",
       "[outro]" in _calls_o[0] and "resolves" in _calls_o[0], _calls_o[0][:300])
 check("...and warns that overshooting the slot gets the song cut off",
       "cut off" in _calls_o[0].lower(), _calls_o[0][:300])
-# The ask is a LINE COUNT now, not "roughly N seconds" -- the writer cannot
-# know the renderer's singing rate, and guessed short every time it was asked
-# to. See tests/test_music_length_budget.py for the measurements.
+# The ask is a LINE COUNT, not "roughly N seconds" -- the writer cannot know
+# the renderer's singing rate. See tests/test_music_length_budget.py for the
+# measurements.
 check("...and asks for a line count rather than a duration",
       "sung lines" in _calls_o[0] and str(M.line_budget(60)[0]) in _calls_o[0],
       _calls_o[0][-300:])
@@ -530,10 +529,8 @@ try:
 finally:
     L.call_llm_simple = _real_call
 
-# A writer failure must NOT masquerade as "the engine isn't installed": the
-# live bug reported "song generation isn't set up yet" while the weights, the
-# ComfyUI nodes and the server were all present and healthy, sending the user
-# off to check an installation that was fine.
+# A writer failure must NOT masquerade as "the engine isn't installed" (that
+# would send the user off to check a healthy installation).
 check("SongwritingFailed is NOT a MusicUnavailable (they mean different things)",
       not issubclass(M.SongwritingFailed, M.MusicUnavailable))
 
@@ -565,7 +562,7 @@ try:
           len(_calls) == 3, len(_calls))
     check("...and the recovered song is returned normally",
           out["lyrics"].startswith("[verse]"), out)
-    # 2026-09-25, user: no reasoning anywhere by default (it cost minutes per call).
+    # no reasoning anywhere by default (it cost minutes per call).
     check("no rung makes the model think (force_think off)",
           not any(c.get("force_think") for c in _calls), _calls)
     check("a later rung stops it thinking, so the budget holds the ANSWER",

@@ -10,26 +10,21 @@ import os
 import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
-import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# The docstring above says "no LLM", and it was not true. The stubs below
-# replace collection, crawling, briefing and synthesis, but run_deep_research
-# also plans, reflects, clusters and gates -- and every one of those went to
-# the real LM Studio. It made a suite advertised as milliseconds take six
-# minutes of a full run, and made its result depend on which model happened
-# to be loaded. send_to_lm_studio returning None is the documented
-# "model unavailable" contract every caller already handles.
+# The stubs below replace collection, crawling, briefing and synthesis, but
+# run_deep_research also plans, reflects, clusters and gates, which would reach
+# the real LM Studio and make the result depend on which model is loaded.
+# send_to_lm_studio returning None is the documented "model unavailable"
+# contract every caller already handles.
 import offline_guard; offline_guard.offline_llm()
 
 # Run me as a script, not through pytest. main() below fixes an ORDER --
 # test_p39 reloads config and deep_research, so it has to go last -- and
-# pytest ignores that list and runs test_ functions in definition order,
-# where three tests follow p39. The reload then landed mid-run and took
-# pytest's own output capture down with it at teardown.
+# pytest ignores that list and runs test_ functions in definition order.
 RUN_AS_SCRIPT = True
 
 import deep_research as dr
@@ -57,9 +52,7 @@ def _check(cond, msg):
 class _isolated_dr_dir:
     """Redirect dr.DR_DIR to a throwaway temp dir for the test body. Without this,
     every test that drives the real run_deep_research() (not a mocked stand-in)
-    writes a permanent run folder into the user's real memory/research — repeated
-    test runs accumulate junk "BGE reranker quality"/"obscure undocumented thing"
-    directories forever (found 2026-06-20: ~100 such dirs from this file alone)."""
+    writes a permanent run folder into the user's real memory/research."""
     def __enter__(self):
         import pathlib
         self._old = dr.DR_DIR
@@ -352,13 +345,13 @@ def test_p9f_deterministic_postprocess():
     out = dr._postprocess_report(md)
     _check(out.count("Common Misconceptions") == 1, "duplicate section not removed")
     _check("first" in out and "second dup" not in out, "wrong dup copy kept")
-    # numbered subsection vs top-level header must still dedupe (v5 regression)
+    # numbered subsection vs top-level header must still dedupe
     md_num = ("### 6. Common Misconceptions\nA\n\n# Detailed\nB\n\n"
               "# Common Misconceptions\nDUP\n")
     on = dr._postprocess_report(md_num)
     _check(on.count("Common Misconceptions") == 1 and "DUP" not in on,
            "numbered-header duplicate not collapsed")
-    # "(Dedicated Section)" suffix duplicate must also collapse (v7 regression)
+    # "(Dedicated Section)" suffix duplicate must also collapse
     md_ded = ("### Common Misconceptions\nA\n\n# Method Comparison\nB\n\n"
               "# Common Misconceptions (Dedicated Section)\nDUP2\n")
     od = dr._postprocess_report(md_ded)
@@ -564,7 +557,7 @@ def test_p7_adapter_routing_and_fallback():
 
 # ═══════════════════ Phase 9 — research-grade upgrade ═══════════════════════
 def test_p9a_truncation_and_gating():
-    # report token budget scales with depth (no more 2000-token truncation on deep)
+    # report token budget scales with depth (no 2000-token truncation on deep)
     q = dr._resolve_caps("quick")["report_tokens"]
     s = dr._resolve_caps("standard")["report_tokens"]
     d = dr._resolve_caps("deep")["report_tokens"]
@@ -578,8 +571,6 @@ def test_p9a_truncation_and_gating():
             + [{"href": f"https://blog{i}.tld/p", "domain": f"blog{i}.tld"} for i in range(15)])
     kept = dr._apply_scholarly_floor(list(srcs), "science")
     _check(len(kept) < len(srcs), "scholarly floor pruned nothing")
-    _check(all(dr._authority_score(s["href"], "science") > dr._MID_SCORE
-               or kept.index(s) >= 0 for s in kept), "kept set invalid")
     # but NOT pruned for a non-scholarly category
     _check(len(dr._apply_scholarly_floor(list(srcs), "news")) == len(srcs),
            "scholarly floor wrongly applied to news")
@@ -922,7 +913,7 @@ def test_p20_hierarchical_pipeline():
             # the synthesis received the hierarchical thread scaffold
             _check(syn_capture.get("preamble") and "THREAD STRUCTURE" in syn_capture["preamble"],
                    "synthesis did not receive cluster digest preamble")
-            # state artifacts written for observability (now inside the isolated tempdir).
+            # state artifacts written for observability (inside the isolated tempdir).
             slug = dr._slug("BGE-M3 reranker quality evaluation")
             runs = sorted(p for p in dr.DR_DIR.glob(f"*_{slug}") if p.is_dir())
             _check(runs, "no run dir created for this topic")
@@ -1022,7 +1013,7 @@ def test_p23_graph_communities():
 
 
 def test_p24_phase_history():
-    import tempfile, glob, json as _json
+    import glob, json as _json
     from pathlib import Path
     d = Path(tempfile.mkdtemp())
     dr._save_state(d, phase="planning", queries=["q1", "q2"])
@@ -1045,9 +1036,8 @@ def test_p24_phase_history():
 
 
 def test_p25_eval_scoring():
-    import tempfile, json as _json
+    import json as _json
     from pathlib import Path
-    sys.path.insert(0, os.path.dirname(__file__))
     import eval_harness as EH
     d = Path(tempfile.mkdtemp())
     # synthetic graph.json: 3 sources (1 primary, 1 contradict) on the topic
@@ -1067,7 +1057,7 @@ def test_p25_eval_scoring():
     good = {"report": "# R\nqdrant.tech and blog.io agree on qdrant, milvus, weaviate "
                       "vector tradeoffs.\n## Source Appendix\nqdrant.tech\nblog.io\ncritic.com\n",
             "stats": {"decision": "ANSWER"}}
-    m, aux = EH.score_run(task, good, str(d))
+    m, _ = EH.score_run(task, good, str(d))
     for k in ("retrieval_quality", "source_diversity", "primary_source_precision",
               "contradiction_coverage", "faithfulness", "hallucination_rate",
               "citation_coverage", "answer_completeness", "answer_correctness"):
@@ -1207,11 +1197,10 @@ def test_p27_manual_control_overrides():
         dr.plan_queries = lambda ctx, topic, mq: (
             ["manual control test query"],
             {"category": "general", "recency": "any", "timelimit": None, "news": False})
-        # DR_REPLAN_ENABLED belongs in this list. The coverage/re-plan loop is a
-        # fifth stage that issues queries of its own, with its own knob in
-        # MANUAL_OVERRIDE_SPEC, and one stubbed source makes coverage "weak" --
-        # so it broadened, correctly, and the check below read its queries as a
-        # leak from the four stages that were switched off.
+        # DR_REPLAN_ENABLED belongs in this list: the coverage/re-plan loop is a
+        # fifth stage that issues queries of its own (one stubbed source makes
+        # coverage "weak", so it broadens), and the check below must not read its
+        # queries as a leak from the four stages that were switched off.
         ov = dr.apply_overrides({"DR_MULTIHOP_ENABLED": False, "DR_CONTRADICTION_ENABLED": False,
                                   "DR_REFLECTION_ENABLED": False, "DR_GRAPH_EXPANSION_ENABLED": False,
                                   "DR_REPLAN_ENABLED": False})
@@ -1311,9 +1300,6 @@ def test_p29_exhaustive_collection_loop():
                                           "timelimit": None, "news": False}
             sources = fake_collect_growing(None, queries, 6, dr._Progress(None), None, profile)
 
-            class _FakeCtx:
-                def is_cancelled(self): return False
-            cancelled = _FakeCtx().is_cancelled
             prog = dr._Progress(None)
             max_rounds = max(1, dr.DR_MAX_COLLECTION_ROUNDS)
             for round_n in range(1, max_rounds + 1):
@@ -1328,14 +1314,10 @@ def test_p29_exhaustive_collection_loop():
                 if not (cov["weak"] or targets_unmet or dr.DR_FORCE_EXHAUSTIVE):
                     break
                 # What is under test is the LOOP -- targets, ceiling, stagnation
-                # guard -- not query generation. Asking the real _corrective_queries
-                # for them made the test depend on an LLM inventing something new
-                # every round: with no model it repeats itself, `extra` comes back
-                # empty on round two, and the loop stops at 6 sources for a reason
-                # that has nothing to do with what is being measured.
+                # guard -- not query generation, so the queries are synthetic
+                # (the real _corrective_queries depends on an LLM inventing
+                # something new every round).
                 extra = [f"corrective query round {round_n}"]
-                if not extra:
-                    break
                 more = dr.collect_sources(None, extra, 6, prog, None, profile)
                 have = {dr._norm_url(s["href"]) for s in sources}
                 added = [s for s in more if dr._norm_url(s["href"]) not in have]
@@ -1356,7 +1338,7 @@ def test_p29_exhaustive_collection_loop():
         })
         try:
             sources2 = []
-            queries2, profile2 = ["seed"], profile
+            profile2 = profile
             for round_n in range(1, dr.DR_MAX_COLLECTION_ROUNDS + 1):
                 if dr.DR_MAX_SOURCES > 0 and len(sources2) >= dr.DR_MAX_SOURCES:
                     break
@@ -1430,11 +1412,10 @@ def test_p31_override_atomicity():
 
 
 def test_p34_rerank_backend_resolution():
-    """The reranker hang/no-op fixes: (a) an explicit backend='cross' must ACTUALLY
-    load the cross-encoder — it used to return 'cross' while leaving _ce None, so
-    relevance() silently fell back to lexical (a no-op 'cross'); now it loads it or
-    degrades to a REPORTED dense/lexical. (b) when the cross-encoder can't load, the
-    reranker still scores (lexical) instead of hanging."""
+    """(a) An explicit backend='cross' must ACTUALLY load the cross-encoder (not
+    report 'cross' with _ce None, so relevance() silently falls back to lexical):
+    it loads it or degrades to a REPORTED dense/lexical. (b) when the cross-encoder
+    can't load, the reranker still scores (lexical) instead of hanging."""
     import rerank
     saved_tc = rerank.Reranker._try_cross
     saved_ea = rerank.Reranker._embedder_available
@@ -1460,11 +1441,11 @@ def test_p34_rerank_backend_resolution():
 
 
 def test_p35_cross_encoder_no_download_hang():
-    """The "dead loop with no logs" root cause: backend='cross' with the
-    bge-reranker NOT cached used to block on a silent ~2.3GB HF download mid-run.
-    Guard: _try_cross must REFUSE to instantiate CrossEncoder when the model isn't
-    cached and DR_RERANK_ALLOW_DOWNLOAD isn't set — it degrades instead of hanging.
-    Opt-in (env) or an already-cached model lets it proceed."""
+    """backend='cross' with the bge-reranker NOT cached must not block on a silent
+    ~2.3GB HF download mid-run: _try_cross must REFUSE to instantiate CrossEncoder
+    when the model isn't cached and DR_RERANK_ALLOW_DOWNLOAD isn't set — it
+    degrades instead of hanging. Opt-in (env) or an already-cached model lets it
+    proceed."""
     import rerank
     saved_allow = rerank._ALLOW_DOWNLOAD
     saved_cached = rerank._model_is_cached
@@ -1754,7 +1735,7 @@ def test_p37_survey_synthesis():
         _check(doc.startswith("# The Color Structure Tensor"), "document missing its own H1 title")
         _check("## Abstract" in doc, "abstract missing")
         # the abstract must be SYNTHESIZED prose, not the planner's one-line directive
-        # ("abstract_focus") dumped verbatim (the old fake-abstract bug).
+        # ("abstract_focus") dumped verbatim.
         _check(calls.get("abstract") == 1, "abstract must be written in its own call")
         _check("synthesized abstract summarizes" in doc, "real abstract text missing")
         _check("Establishes the multichannel tensor." not in doc,
@@ -1951,9 +1932,8 @@ def test_p41_latex_artifact_repair():
 def test_p40_query_distillation():
     """A verbose/instruction-style request (here a long Russian 'write me a doctoral
     paper that...' prompt) must be DISTILLED via the planner's core_topic and never
-    seeded into search verbatim — that was the bug that crawled 49 junk pages, 0
-    findings. Also: an LLM that returns nothing must not fall back to the 532-char
-    essay as a query."""
+    seeded into search verbatim. Also: an LLM that returns nothing must not fall
+    back to the 532-char essay as a query."""
     raw = ("знания по структурному тензору Di zenzo нужны все формулы входящие в эту "
            "парадигму при этом каждый входящий элемент формулы должен быть детально "
            "расписан не просто название а что это такое мне нужна научная работа "
@@ -2000,13 +1980,10 @@ def test_p40_query_distillation():
 def test_hop_anchor_language():
     """The follow-up passes must search in the language the sources are in.
 
-    Observed on a live run: the main queries were English ("Arabica vs Robusta
-    coffee composition and flavor profile"), and then the multi-hop pass sent
-    "Robusta Чем отличается кофе арабика от робусты" -- it built its anchor from
-    the RAW request instead of the distilled subject plan_queries already
-    returns. Half the retrieval passes were searching in the wrong language,
-    against the pipeline's own documented design, with the whole question glued
-    on to boot.
+    When the main queries are English ("Arabica vs Robusta coffee composition and
+    flavor profile"), the multi-hop pass must not send "Robusta Чем отличается кофе
+    арабика от робусты": its anchor is the distilled subject plan_queries already
+    returns, not the RAW request.
     """
     prof = {"core_topic": "Arabica vs Robusta coffee composition"}
     topic_ru = "Чем отличается кофе арабика от робусты по составу и вкусу"

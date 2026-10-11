@@ -1,10 +1,10 @@
 """With document search on, tool-shaped requests bypass retrieval.
 
-Live 2026-09-13 (mega journey, steps 58-60): after a rental PDF was indexed,
-'нарисуй витрину пекарни с вывеской «ХЛЕБ У ДОМА»' was wrapped into the RAG
-prompt ("Using 1 passage(s) from dogovor.pdf", "answer ONLY from the passages,
-do not use web search") — and so was every later drawing, weather and song
-request in the chat. Questions about the documents must still hit retrieval.
+After a rental PDF is indexed, 'нарисуй витрину пекарни с вывеской «ХЛЕБ У ДОМА»'
+must not be wrapped into the RAG prompt ("Using 1 passage(s) from dogovor.pdf",
+"answer ONLY from the passages, do not use web search") — nor any later
+drawing, weather or song request in the chat. Questions about the documents
+must still hit retrieval.
 """
 import os, sys, inspect
 os.environ.setdefault("F5_TEST_RUN", "1")
@@ -33,12 +33,11 @@ for t in ("[upscale]", "https://ru.wikipedia.org/wiki/Омлет", "👍",
     check("bypasses retrieval: " + t[:40], T._plainly_not_a_doc_question(t))
 for t in DOCS:
     check("still retrieves: " + t, not T._plainly_not_a_doc_question(t))
-# owner 10-03: three logs answered from old library fragments, none opened
+# sandbox files must be read, not answered from old library fragments
 intent.STUB = lambda t: {"doc_question": True}      # the model would call it a doc question
 check("sandbox files are read, not retrieved",
       T._plainly_not_a_doc_question("в чём ошибка?\n"
                                     "[The file 'a.log', 'b.log' are now in your working folder]"))
-intent.STUB = lambda t: {"doc_question": t in DOCS}
 intent.STUB = None
 check("no read (model down) bypasses: the plain loop, not a wrong RAG wrap",
       T._plainly_not_a_doc_question("можно ли с собакой?"))

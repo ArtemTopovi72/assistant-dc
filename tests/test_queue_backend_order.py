@@ -1,10 +1,10 @@
 """Order and thread-safety of the durable queue backends, without live services.
 
-RedisBackend.requeue used to inherit the default push(), which appends to the
-TAIL of the chat's list: a task the consumer had to defer (its chat was already
-busy) went behind the messages the user sent after it, so a busy chat's turns
-were answered out of order. KafkaBackend.pop was called from every consumer
-thread (TG_WORKERS, default 3) on one KafkaConsumer, which is not thread-safe.
+RedisBackend.requeue must put a task back at the HEAD of the chat's list (not
+the tail via the default push()): a task the consumer had to defer (its chat was
+already busy) must not go behind the messages the user sent after it.
+KafkaBackend.pop is called from every consumer thread (TG_WORKERS, default 3)
+on one KafkaConsumer, which is not thread-safe, so access must be serialized.
 """
 import threading
 import time

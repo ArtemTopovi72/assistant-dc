@@ -1,11 +1,10 @@
 """Words about a picture the user pointed at are answered by looking at it.
 
-Live 16:57: «обсудим цитату» after pressing ❓ under a quote photo is not
-phrased as a question; the ❓ button used to glue a text prefix on the message
-that three regexes then parsed back out. Now the press makes the picture the
-target (like a reply to it) and one rule in graph.needs_relook covers both:
-the user's own words about a pointed-at picture -> look again, unless they
-order an edit. A button's own task (task.image_id) is an action, not words.
+«обсудим цитату» after pressing ❓ under a quote photo is not phrased as a
+question. The press makes the picture the target (like a reply to it) and one
+rule in graph.needs_relook covers both: the user's own words about a
+pointed-at picture -> look again, unless they order an edit. A button's own
+task (task.image_id) is an action, not words.
 """
 import os, sys, inspect
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -28,7 +27,6 @@ assert not G.needs_relook(Cx(), st("убери надпись"))
 Cx.image_pointed_at = False
 assert not G.needs_relook(Cx(), st("обсудим цитату")) or G.is_video_sheet(__file__)
 assert "image_pointed_at = not getattr(task, \"image_id\", \"\")" in inspect.getsource(tg_tasks)
-assert "pending_prefix" not in inspect.getsource(tg_callbacks.CallbackMixin._cb_ask_image) \
-    if hasattr(tg_callbacks, "CallbackMixin") else True
+assert "pending_prefix" not in inspect.getsource(tg_callbacks.CallbackMixin._cb_ask_image)
 assert "about this picture" not in inspect.getsource(tg_callbacks) + inspect.getsource(G) + inspect.getsource(tg_bot)
 print("ok")

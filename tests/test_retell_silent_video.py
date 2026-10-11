@@ -1,11 +1,10 @@
 """A forwarded video with no speech is retold from its storyboard.
 
-Live 16:11: a 7-second кружок with no words, «📋 Краткое содержание» ->
-«пришлите ТРАНСКРИПТ… у меня есть только раскадровка». The retelling prompt
-promised a transcript; given a storyboard and no words the model asked for the
-missing half instead of retelling what it saw. Silence is now decided where
-speech is heard and reaches the retelling as «(без слов)». The offline part always runs; the live part needs LM Studio and is
-skipped without it.
+A 7-second кружок with no words, «📋 Краткое содержание», must not be answered with
+«пришлите ТРАНСКРИПТ… у меня есть только раскадровка»: given a storyboard and no
+words the model must retell what it saw. Silence is decided where speech is heard
+and reaches the retelling as «(без слов)». The offline part always runs; the live
+part needs LM Studio and is skipped without it.
 Run: venv/Scripts/python.exe tests/test_retell_silent_video.py
 """
 import os
@@ -35,7 +34,7 @@ def check(name, cond, extra=""):
 
 # Silence is decided once, where speech is heard (_transcribe): a stray word
 # ASR finds in a video is no speech, so every reader gets "" and the composer
-# writes «(без слов)». Live 16:11: Whisper heard «Oh» in 7 silent seconds.
+# writes «(без слов)» (Whisper may hear «Oh» in 7 silent seconds).
 import audio  # noqa: E402
 _heard = {"text": "Oh"}
 audio.transcribe_audio_file = lambda *a, **k: _heard["text"]

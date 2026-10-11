@@ -1,10 +1,10 @@
 """A follow-up continues on the picture the previous turn was about.
 
-Live 2026-09-13 (mega journey, step 16): the chat had drawn a car, read a
-receipt and just recoloured a dress -- six pictures, three roots. "теперь
-убери все надписи с фона" got "Which picture? There are 6" instead of the
-edit. The picture the previous turn delivered (or the user sent, or pointed
-at) is "the picture" for a follow-up; older ones stay one reply/button away.
+In a chat that has drawn a car, read a receipt and just recoloured a dress (six
+pictures, three roots), "теперь убери все надписи с фона" must run the edit,
+not answer "Which picture? There are 6". The picture the previous turn
+delivered (or the user sent, or pointed at) is "the picture" for a follow-up;
+older ones stay one reply/button away.
 """
 import sys, os, types, tempfile
 os.environ.setdefault("F5_TEST_RUN", "1")
@@ -23,10 +23,9 @@ intent.STUB = {"describe the image": {"is_question": True, "about_picture": True
                    {"needs_tool": True, "wants": ["inpaint_image"]}}.get
 # The dispatch harness from test_tg_image_targeting (that module exits at
 # import, so its helpers are re-bound here by source, not imported).
-import types as _types
 _src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_tg_image_targeting.py"), encoding="utf-8").read()
 _helpers = _src.split("bot = make_bot()")[0].split("OK = BAD = 0")[1]
-H = _types.ModuleType("H"); H.__dict__.update(dict(sys=sys, os=os, types=types, tempfile=tempfile, T=T))
+H = types.ModuleType("H"); H.__dict__.update(dict(sys=sys, os=os, types=types, tempfile=tempfile, T=T))
 exec(_helpers, H.__dict__)
 
 OK = BAD = 0
@@ -40,7 +39,7 @@ bot = H.make_bot()
 s = bot._get_session(H.CID); s.clear_context()
 car, receipt, girl, dress = (H.make_png(n) for n in ("car.png", "receipt.png", "girl.png", "dress.png"))
 id_car = T._log_image(s, car, msg_id=1, label="draw a car", src="bot")
-id_rec = T._log_image(s, receipt, msg_id=2, label="receipt", src="user")
+T._log_image(s, receipt, msg_id=2, label="receipt", src="user")
 id_girl = T._log_image(s, girl, msg_id=3, label="photo", src="user")
 id_dress = T._log_image(s, dress, msg_id=4, label="black dress", src="bot", parent=id_girl)
 s.last_image_path = dress; s.lang = "en"

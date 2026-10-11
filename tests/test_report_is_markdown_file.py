@@ -1,9 +1,9 @@
 """A research run must return a MARKDOWN FILE, not a chat full of bubbles.
 
-The result of a 15-60 minute research run is a document. It used to be sent as a
-.md attachment only past 6000 characters; anything shorter was pasted into the
-chat — and pasted through _md_to_html, so the Markdown was converted AWAY and the
-user got a wall of formatted bubbles instead of the document they asked for.
+The result of a 15-60 minute research run is a document. It must be sent as a
+.md attachment whatever its length: pasting it into the chat through _md_to_html
+would convert the Markdown AWAY and give the user a wall of formatted bubbles
+instead of the document they asked for.
 
 Chat text remains the fallback for a FAILED upload: then it is the only copy that
 exists and losing it would be worse than the noise.
@@ -37,7 +37,6 @@ REPORT = ("# Отчёт\n\n## Введение\n\nКороткий отчёт с
 
 
 def make_bot(upload_ok=True):
-    import types
     bot = T.TelegramBot("123:TEST", lambda: object(), lambda: object(),
                         lambda: {}, silent_mode=True)
     bot.sent, bot.docs = [], []
@@ -55,7 +54,7 @@ def make_bot(upload_ok=True):
     return bot
 
 
-# ── 1. the threshold no longer hides short reports in the chat ───────────────
+# ── 1. the threshold does not hide short reports in the chat ─────────────────
 print("\n" + "=" * 70)
 print("1. EVERY REPORT GOES OUT AS A FILE")
 print("=" * 70)

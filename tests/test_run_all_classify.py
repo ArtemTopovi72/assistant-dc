@@ -1,13 +1,12 @@
 """tests/run_all.py's own classify() must not silently drop real suites.
 
-Live 2026-09-18: adding test_tg_style_button.py (a real, offline, check()-
-based suite whose sys.exit lives under `if __name__ == "__main__":`) turned
-out to be MISSING from run_all's own printed summary -- classify()'s old
-`^sys\\.exit\\(` regex only matched a line whose first character is the call,
-so both "indented under a module-level if" and "compound `x; sys.exit(...)`"
-shapes fell through every branch to "skip" and never ran at all. A sweep
-that silently drops suites is worse than one that is merely slow: it reports
-green while asserting nothing for the dropped files.
+A real, offline, check()-based suite whose sys.exit lives under
+`if __name__ == "__main__":` (test_tg_style_button.py), or in a compound
+`x; sys.exit(...)` statement, must be classified as a script: a regex matching
+only a line whose first character is the call would let both shapes fall
+through every branch to "skip" and never run. A sweep that silently drops
+suites is worse than one that is merely slow: it reports green while asserting
+nothing for the dropped files.
 
 Run: venv/Scripts/python.exe tests/test_run_all_classify.py
 """

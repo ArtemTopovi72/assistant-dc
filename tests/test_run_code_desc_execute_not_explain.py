@@ -2,15 +2,12 @@
 run_code when a request also wants to see/save/send a result, not just print
 the source as a chat answer.
 
-Live 2026-09-18: "напиши код на python с graphviz, который рисует блок-схему
-... сохрани картинку и покажи её мне" (write code that draws a flowchart,
-save the picture, show it) got answered with the graphviz source pasted into
-the chat reply plus a "how this works" paragraph -- no run_code call, no
-file, no picture. journeys.json for that run: step 1 problems =
-["no sendPhoto", "working folder lacks ['*.png', '*.py']", "no photo to
-look at"]. The description already said "never paste the code into your
-reply", which was not enough to override "write code that does X" being read
-as the deliverable rather than the method.
+"напиши код на python с graphviz, который рисует блок-схему ... сохрани картинку и
+покажи её мне" (write code that draws a flowchart, save the picture, show it)
+must not be answered with the graphviz source pasted into the chat reply plus a
+"how this works" paragraph -- it needs a run_code call, a file and a picture.
+"never paste the code into your reply" alone is not enough to override "write
+code that does X" being read as the deliverable rather than the method.
 
 Run: venv/Scripts/python.exe tests/test_run_code_desc_execute_not_explain.py
 """

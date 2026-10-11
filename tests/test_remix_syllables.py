@@ -1,5 +1,5 @@
-"""New words are sung syllable for syllable where the original's were (10-07: the cover of
-«3 сентября» spread the lines by syllable share and every word landed off the melody)."""
+"""New words are sung syllable for syllable where the original's were (spreading the
+lines by syllable share would land every word off the melody)."""
 import os
 import sys
 
@@ -35,7 +35,7 @@ def _ph(t, text):
 
 
 def test_a_line_takes_the_run_of_phrases_its_syllables_need():
-    # 10-07: one line per Whisper phrase put 19-syllable lines on 3-syllable phrases
+    # one line per Whisper phrase would put 19-syllable lines on 3-syllable phrases
     ph = [_ph(0, "все не то"), _ph(2, "все не так ты мой друг"), _ph(5, "я твой враг"),
           _ph(7, "как же так")]
     line9 = "ехал по дороге говновоз"                          # 9 syllables

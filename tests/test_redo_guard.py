@@ -1,6 +1,6 @@
 """A repeated request answered with «уже выполнил» and no tool call is a
 refusal; a future-tense plan («применю … сформирую … будет готов») is a
-promise. Both seen live 2026-09-14 on the dedupe ask after a restart.
+promise.
 """
 import os, sys, inspect
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -32,7 +32,7 @@ def test_already_done_phrases():
 
 
 def test_redo_detection():
-    import intent   # the model's read (agent/intent.py)
+    # the model's read (agent/intent.py)
     intent.STUB = {"заново": {"redo": "same"}, "сделай ещё раз": {"redo": "same"}}.get
     assert F._is_redo_request("заново", [])
     assert F._is_redo_request("сделай ещё раз", [])
@@ -54,9 +54,9 @@ def test_correction_names_file_tools_when_the_folder_has_files():
 
 
 def test_promise_after_partial_work_is_still_caught():
-    """Torture run 2026-09-14 19:46: find_content + dedupe_photos ran, then
-    «Сейчас соберу из них коллаж!» ended the turn. The guard must not be
-    disarmed by tools having run earlier in the turn."""
+    """find_content + dedupe_photos ran, then «Сейчас соберу из них коллаж!» ended
+    the turn. The guard must not be disarmed by tools having run earlier in the
+    turn."""
     assert F._FILE_PROMISE_RE.search("Осталось 4 уникальных фото. Сейчас соберу из них коллаж!")
     src = inspect.getsource(G.personality_node)
     i = src.index("_FILE_PROMISE_RE.search(draft)")
@@ -65,9 +65,9 @@ def test_promise_after_partial_work_is_still_caught():
 
 
 def test_bare_redo_is_pinned_to_the_previous_request():
-    """Torture run 2026-09-14 19:47: «заново» after the collage ask redid the
-    cat edit from six turns earlier (redraw_image over a bridge photo)."""
-    import intent   # the model reads the bare redo (agent/intent.py)
+    """«заново» after the collage ask must not redo the cat edit from six turns
+    earlier (redraw_image over a bridge photo)."""
+    # the model reads the bare redo (agent/intent.py)
     intent.STUB = {"заново": {"redo": "same"}, "again": {"redo": "same"}, "ещё раз": {"redo": "same"},
                    "пересобери коллаж без дубликатов": {"redo": "changed"}}.get
     h = [{"role": "user", "content": "сделай кота чёрным"}, {"role": "assistant", "content": "не вышло"},
@@ -85,8 +85,8 @@ def test_bare_redo_is_pinned_to_the_previous_request():
 
 
 def test_collage_claim_needs_a_script_run():
-    """Torture run 2026-09-14 20:00: «Коллаж готов!» after dedupe_photos with
-    no run_code; the one found photo went out as the collage."""
+    """«Коллаж готов!» after dedupe_photos with no run_code must not stand: the one
+    found photo would go out as the collage."""
     assert G._COLLAGE_DONE_RE.search("Я нашёл 8 мостов, теперь их 4. Коллаж готов!")
     assert G._COLLAGE_DONE_RE.search("Вот коллаж из 4 мостов.")
     assert G._COLLAGE_DONE_RE.search("The collage is ready.")
@@ -98,8 +98,8 @@ def test_collage_claim_needs_a_script_run():
 
 
 def test_run_code_is_forced_once_the_photos_are_picked():
-    """Torture runs #2-#3: after find_content + dedupe_photos the model never
-    chose run_code by itself, even after two corrective rounds."""
+    """After find_content + dedupe_photos the model does not choose run_code by
+    itself, even after two corrective rounds, so it is forced."""
     # the model's read is stubbed; phrases run live in bench/intent_rest_live.py
     intent.STUB = lambda t: {"collage": "коллаж" in t.lower(), "dedupe": "дубл" in t.lower()}
     offered = [{"function": {"name": n}} for n in ("run_code", "dedupe_photos", "find_content")]

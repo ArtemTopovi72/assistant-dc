@@ -1,4 +1,4 @@
-"""The layout planner burnt a guaranteed-miss attempt on the house model.
+"""The layout planner must not burn a guaranteed-miss attempt on the house model.
 
 _ask_planner climbs a ladder of asks: rung 0 is a narrow 900-token squeeze,
 rung 1 a bit wider, and the last rung a minimal prompt with a 6000-token budget.
@@ -8,9 +8,9 @@ rung 0.
 Gemma 4 thinks on EVERY turn and cannot be told not to — the <think></think>
 prefill is a Qwen lever and llm.py drops it for Gemma. Measured on
 gemma-4-26b-a4b-qat, rung 0 spends its entire budget reasoning (8.7k characters),
-returns nothing, and the ladder then jumps to the wide rung anyway. The recovery
-worked; the wasted attempt was pure cost — about 32 s of GPU on EVERY drawing,
-measured back to back on the same box:
+returns nothing, and the ladder then jumps to the wide rung anyway. That wasted
+attempt costs about 32 s of GPU on EVERY drawing, measured back to back on the
+same box:
 
     lettering prompt   74.1s -> 41.9s
     plain scene        51.7s -> 19.5s
@@ -114,8 +114,7 @@ check("...and it is allowed its Qwen prefill",
       asks and asks[0]["prefill"] == "<think></think>", asks)
 
 # ...and the escape hatch still works for a non-Gemma model that reasons away
-# its budget: that recovery is what this change makes unnecessary on Gemma, not
-# something it removes.
+# its budget (it is only unnecessary on Gemma).
 asks, out = _drive("qwen3.5-9b-uncensored", answers=[None, GOOD_LAYOUT])
 check("a reasoning-only miss still jumps straight to the wide rung",
       [a["max_tokens"] for a in asks] == [900, 6000],

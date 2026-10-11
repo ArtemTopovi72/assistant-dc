@@ -1,20 +1,18 @@
 """The final answer must not be doubled, and must be in the user's language.
 
-Both reproduced live in Telegram on 2026-07-29 13:18 from ONE Russian question
-("Кто такой Виктор Робертович Шемякин", via the 🔍 Search button):
+Both can happen from ONE Russian question ("Кто такой Виктор Робертович Шемякин",
+via the 🔍 Search button):
 
     I could not find any information about Viktor Robertovich Shemyakin.I could
     not find any information about Viktor Robertovich Shemyakin.
 
-  · doubled — the same sentence twice with NO separator. The activity log shows a
-    single user_msg, so it is not the debounce double-send of
-    [tg-image-delivery-and-double-tap]; the model emitted it twice. The streaming
-    repetition guard samples every LLM_REPEAT_CHECK_EVERY chars and cannot see a
-    doubled one-liner.
+  · doubled — the same sentence twice with NO separator (the model emitted it
+    twice). The streaming repetition guard samples every LLM_REPEAT_CHECK_EVERY
+    chars and cannot see a doubled one-liner.
   · English — the english-first pipeline asks for the reply in the user's
-    language with a directive. On a plain turn that holds (13:11, same session,
-    answered in Russian). After a tool chain it does not: the tool output and the
-    model's own reasoning are all English, so the closing turn is English too.
+    language with a directive. On a plain turn that holds. After a tool chain it
+    may not: the tool output and the model's own reasoning are all English, so
+    the closing turn is English too.
 
 Run: venv/Scripts/python.exe tests/test_reply_finalization.py
 """
@@ -99,9 +97,8 @@ RU_Q = "Кто такой Виктор Робертович Шемякин"
 RU_A = "Я не нашёл информации о Викторе Робертовиче Шемякине."
 
 # NOTE: patch the LLM at its own module (llm.call_llm_simple), not at whichever
-# module happens to call it. _match_reply_language moved from graph to
-# graph_language; a patch on graph.call_llm_simple silently stopped reaching it,
-# which is the failure mode where the stub dies and the suite still passes.
+# module happens to call it: a patch on a caller's alias can silently stop
+# reaching it, and then the stub dies while the suite still passes.
 import llm as _LLMMOD
 calls = []
 def _fake_llm(ctx, system, user, **kw):
@@ -168,12 +165,9 @@ print("=" * 70)
 
 # Assert the calls REASSIGN final_answer — a check that merely finds the function
 # name would also pass if the result were computed and thrown away.
-# These checks read the SOURCE of _finalize_answer, so they must follow it. It
-# has moved twice (graph.py -> graph_personality.py -> graph_finalize.py), and
-# each move would silently empty the checks if the file were named here by hand
-# — an AST walk over the wrong module finds no `final_answer` assignment at all
-# and every check below would fail (or, worse, a future rename could make them
-# vacuously pass). Resolve the owning module from the function object instead.
+# These checks read the SOURCE of _finalize_answer, so they must follow it:
+# resolve the owning module from the function object instead of naming a file
+# by hand (an AST walk over the wrong module finds no `final_answer` assignment).
 _FIN = inspect.getmodule(GP._finalize_answer)
 tree = ast.parse(open(_FIN.__file__, encoding="utf-8").read())
 assigns = [n for n in ast.walk(tree)
@@ -195,13 +189,13 @@ src = open(_FIN.__file__, encoding="utf-8").read()
 i_collapse = src.index("collapse_verbatim_repetition(final_answer)")
 for marker in ["forcing a closing reply", "Last resort", "final_answer = strip_textual_tool_calls"]:
     check(f"the filter runs after: {marker[:38]}", src.index(marker) < i_collapse)
-# The persist is not in the same module any more: the filter runs inside
-# _finalize_answer (graph_finalize), and the turn's own ctx.remember() /
-# state["final_answer"] persist is in its CALLER, personality_node. So the
-# ordering is now enforced across a call boundary — assert it there: the
-# _finalize_answer(...) call must come before both persists in the caller's
-# source. ctx.remember() appears more than once (the fast path has its own),
-# so the check is on the first occurrence AFTER the finalisation call.
+# The persist is not in the same module: the filter runs inside
+# _finalize_answer, and the turn's own ctx.remember() / state["final_answer"]
+# persist is in its CALLER, personality_node. So the ordering is enforced across
+# a call boundary — assert it there: the _finalize_answer(...) call must come
+# before both persists in the caller's source. ctx.remember() appears more than
+# once (the fast path has its own), so the check is on the first occurrence
+# AFTER the finalisation call.
 caller_src = inspect.getsource(inspect.getmodule(GP.personality_node))
 i_final = caller_src.index("_finalize_answer(ctx, state, messages")
 check("the filter runs before the answer is persisted to memory",

@@ -1,5 +1,4 @@
-"""A new format is a new generate_image: redraw keeps the size, so it must refuse, and
-'горизонтально' must put generate_image in the agent's tool list."""
+"""A new format is a new generate_image: redraw keeps the size, so it must refuse."""
 import os, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from types import SimpleNamespace
@@ -13,9 +12,6 @@ ctx = SimpleNamespace(last_image_path=img, set_stage=lambda *a, **k: None)
 r = h._handle_redraw_image(ctx, {"image_path": img}, {"instructions": "horizontal landscape for YouTube"})
 assert r.startswith("[TOOL ERROR]") and "generate_image" in r, r
 
-schemas = [{"type": "function", "function": {"name": n, "description": n, "parameters": {}}}
-           for n in ("generate_image", "search", "calculate")]
-os.environ["F5_TOOL_EMBED"] = "0"
 print("ok")
 from tool_args import GenerateImageArgs as _G
 _a = _G(description="a wide landscape image for a YouTube banner with coffee", width=1920, height=3508)

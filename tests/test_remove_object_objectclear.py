@@ -1,4 +1,4 @@
-"""Object removal: ObjectClear only (user's pick 2026-09-25); FireRed only draws a fill hint.
+"""Object removal: ObjectClear only ; FireRed only draws a fill hint.
 
 Run: venv/Scripts/python.exe -m pytest tests/test_remove_object_objectclear.py -q
 """
@@ -25,7 +25,7 @@ def test_objectclear_result_is_used(tmp_path, monkeypatch):
 
 
 def test_no_firered_fallback(tmp_path, monkeypatch):
-    # owner 10-03: the FireRed fallback left a cat-shaped halo -- removed
+    # no FireRed fallback: it leaves a cat-shaped halo
     monkeypatch.setattr(O, "_remove_via_objectclear", lambda *a, **k: None)
     monkeypatch.setattr(O._image, "edit_region_contained_cropped", lambda *a, **k: "fr.png")
     assert O.remove_object_with_comfy(None, _img(tmp_path), "vase") is None
@@ -39,8 +39,8 @@ def test_fill_hint_goes_straight_to_firered(tmp_path, monkeypatch):
 
 
 def test_objectclear_mask_skips_vlm_cutout_judge(tmp_path, monkeypatch):
-    # live 10-03: the VLM cutout judge rejected a clean cat mask twice, the removal
-    # fell to FireRed and left a halo; the ObjectClear fill is judged by the smear check
+    # the VLM cutout judge must not reject a clean mask (the removal would fall to
+    # FireRed and leave a halo); the ObjectClear fill is judged by the smear check
     import image_contained_firered as CF
     seen = {}
     monkeypatch.setattr(CF, "_contained_region_mask", lambda *a, **k: seen.update(k) or None)
@@ -57,7 +57,7 @@ def test_firered_instruction_has_one_article(tmp_path, monkeypatch):
 
 
 def test_mask_takes_the_shadow_below():
-    # live 10-03: the cat's shadow on the table was outside its mask -> a dark stain
+    # the cat's shadow on the table must be inside the mask, or it leaves a dark stain
     m = Image.new("L", (100, 200), 0)
     m.paste(255, (40, 20, 60, 120))                      # object 100 px tall
     box = O._with_contact_shadow(m).getbbox()
@@ -65,8 +65,8 @@ def test_mask_takes_the_shadow_below():
 
 
 def test_mask_over_the_cap_is_not_filled(tmp_path, monkeypatch):
-    # live 10-08: a leftover-logo mask covered 53% of the picture; ObjectClear rewrote
-    # the whole wall and the person
+    # a leftover-logo mask covering 53% of the picture must not be filled (ObjectClear
+    # would rewrite the whole wall and the person)
     import image_contained_firered as CF
     import image_lettering_remove as LR
     src = _img(tmp_path)
