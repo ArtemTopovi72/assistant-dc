@@ -17,7 +17,7 @@ except Exception: pass
 logging.basicConfig(level=logging.CRITICAL)
 
 from PyQt5.QtWidgets import QApplication, QFileDialog, QWidget, QLabel, QDialog
-from PyQt5.QtGui import QPixmap, QImage, QColor
+from PyQt5.QtGui import QImage, QColor
 from PyQt5.QtCore import Qt, QRect, QSize
 import gui
 
@@ -222,7 +222,7 @@ def test_settings_dialog_no_ctx_and_empty_models():
     dlg.close()
 
 
-def test_settings_dialog_pickers(monkeypatch=None):
+def test_settings_dialog_pickers():
     _stub_model_selector([{"id": "qwen", "state": "loaded"}])
     ctx = _ctx()
     dlg = gui.SettingsDialog("qwen", ctx=ctx)
@@ -353,7 +353,7 @@ def test_images_panel():
     check("panel_two_thumbs", len(panel._thumbs) == 2)
     panel.add_image("C:/no/such.png")   # null pixmap -> ignored
     check("panel_ignores_bad", len(panel._thumbs) == 2)
-    panel.resizeEvent(None) if False else panel._avail_width()
+    panel._avail_width()
     # open_viewer
     # Patch the name in the module that CALLS it: ImagesPanel imports
     # show_image_viewer by value from gui_dialogs.

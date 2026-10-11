@@ -21,7 +21,7 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 from pathlib import Path
 
 import numpy as np
-from PyQt5.QtWidgets import (QApplication, QDialog, QFileDialog, QInputDialog, QMessageBox)
+from PyQt5.QtWidgets import (QApplication, QDialog, QInputDialog, QMessageBox)
 from PyQt5.QtGui import QImage, QColor
 from PyQt5.QtCore import Qt, QPoint, QMimeData, QUrl, QEvent
 import gui
@@ -185,7 +185,6 @@ def test_layout_and_presets():
         w._save_preset()
         check("preset_saved", "mypreset" in w._preset_names())
         w._load_preset("mypreset")
-        w._open_layout_menu.__wrapped__ if False else None
         w._delete_preset("mypreset")
         check("preset_deleted", "mypreset" not in w._preset_names())
         QInputDialog.getText = staticmethod(lambda *a, **k: ("", False))
@@ -271,8 +270,7 @@ def test_chat_helpers():
     p = _png("chatimg.png")
     w._add_user_image(p); w._add_result_image(p)
     check("chat_populated", "hi" in w.chat.toPlainText())
-    check("url_to_local", w._url_to_local("file:///C:/x/y.png") == os.path.normpath("C:/x/y.png").replace("/", os.sep) or True)
-    check("image_url_at_none", w._image_url_at(QPoint(2, 2)) is None or True)
+    w._url_to_local("file:///C:/x/y.png"); w._image_url_at(QPoint(2, 2))   # must not raise
     w._clear_chat(); check("chat_cleared", w.chat.toPlainText() == "")
     w._on_length_changed(1); check("length_changed", w.ctx.response_length == "short")
     _close(w)
@@ -654,7 +652,6 @@ def test_redraw_fixhands_artifact():
         _close(w)
     finally:
         _restore_workers()
-        QInputDialog.getText = QInputDialog.getText
 
 
 def test_memory_profiles():
