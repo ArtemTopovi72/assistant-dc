@@ -65,7 +65,7 @@ def build_keyframe_api() -> dict:
     first_frame is stretched to the canvas (crop "disabled"); last_frame gets an
     aspect-preserving COVER-CROP (crop "center") in the node. So a mismatched
     aspect distorts the first frame but genuinely crops the last one — set the
-    canvas from the image with legal_canvas() to avoid both.
+    canvas from the image with --canvas-for to avoid both.
     """
     img = first_file("LoadImage", "image")
     return {
@@ -300,18 +300,6 @@ LENGTH vs FPS - the one that silently desyncs the sound
   audio ends early and looks like "the sound cut out at 12 seconds".
   Want a longer clip WITH sound? raise `length` (frames), never lower fps.
       length 124 -> 5.2s     length 294 -> 12.25s     length 362 -> 15.1s"""
-
-
-def legal_canvas(width: int, height: int) -> tuple[int, int]:
-    """Best legal H3 canvas for a source image: smallest aspect error.
-
-    fit_canvas-style rounding of each axis independently can drift the aspect
-    (1920x1080 -> 1344x768 turns 1.778 into 1.750). Here we search every /32
-    pair under the pixel cap and take the closest aspect, preferring more
-    pixels on a tie, so the stretch/crop the node applies is as small as the
-    model's grid allows.
-    """
-    return canvas_candidates(width, height)[0][0]
 
 
 def canvas_candidates(width: int, height: int, limit: int = 3):
