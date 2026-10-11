@@ -112,11 +112,6 @@ class DispatchMixin:
                 try: self._dispatch_logged(upd)
                 except Exception: tg_bot.logger.exception("dispatch error")
 
-    def _get_updates(self) -> list:
-        result = self._fetch_updates()
-        self._commit_offset(result)
-        return result
-
     def _commit_offset(self, result: list) -> None:
         if result:
             self._offset = result[-1]["update_id"] + 1

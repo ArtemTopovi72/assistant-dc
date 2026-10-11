@@ -449,6 +449,11 @@ print("=" * 70)
 bot17 = make_bot()
 bot17._offset = 0
 calls = []
+def _poll_once(b):
+    """What _poll_loop does per iteration: fetch a batch, then commit the offset."""
+    result = b._fetch_updates()
+    b._commit_offset(result)
+    return result
 class _R:
     def __init__(self, payload): self._p = payload
     def json(self): return self._p
@@ -457,7 +462,7 @@ _real_get = _rq.get
 _rq.get = lambda url, **k: (calls.append(k.get("params")),
                             _R({"ok": True, "result": [{"update_id": 41}, {"update_id": 42}]}))[1]
 try:
-    got = bot17._get_updates()
+    got = _poll_once(bot17)
 finally:
     _rq.get = _real_get
 check("every update in the batch is returned", len(got) == 2)
@@ -468,7 +473,7 @@ check("the offset is persisted immediately", bot17._load_offset() == 43,
 
 _rq.get = lambda url, **k: _R({"ok": True, "result": []})
 try:
-    bot17._get_updates()
+    _poll_once(bot17)
 finally:
     _rq.get = _real_get
 check("an empty poll does not rewind the offset", bot17._offset == 43)
@@ -477,7 +482,7 @@ check("an empty poll does not rewind the offset", bot17._offset == 43)
 # the watchdog read as healthy. It must raise so the poll loop backs off.
 _rq.get = lambda url, **k: _R({"ok": False, "error_code": 409, "description": "Conflict"})
 try:
-    bot17._get_updates(); _raised = False
+    _poll_once(bot17); _raised = False
 except RuntimeError:
     _raised = True
 finally:
