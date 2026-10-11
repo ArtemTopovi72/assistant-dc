@@ -378,9 +378,9 @@ class _UserStore:
         deleted. A backup is taken first — this is the only destructive user op."""
         with self._lock:
             try:
-                # Its own file: a same-second put() used to overwrite the
+                # Its own file: a same-second put() would overwrite the
                 # per-second snapshot with the post-delete state, and routine
-                # puts rotated it out within minutes.
+                # puts would rotate it out within minutes.
                 self._make_backup(name=f"deleted_{chat_id}_{time.strftime('%Y%m%d_%H%M%S')}.db")
                 with self._conn() as conn:
                     cur = conn.execute("DELETE FROM users WHERE chat_id=?", (chat_id,))

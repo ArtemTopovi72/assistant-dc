@@ -1,6 +1,6 @@
 """Work queue, cancellation and the worker/watchdog loops.
 
-Split out of tg_bot.py. Owns the path a message takes from "accepted" to
+Owns the path a message takes from "accepted" to
 "running": the debounce buffer, _enqueue_item, the consumer threads, the
 per-chat and per-task cancellation bookkeeping (_request_stop, _cancel_task,
 _is_cancelled, _stop_requested_after, _mark_interruptible), the crash-recovery
@@ -8,8 +8,8 @@ in-flight journal, the poll watchdog and the queue statistics the GUI reads.
 
 _INFLIGHT_FILE and friends are read as tg_bot.<name> rather than imported by
 value -- redirect_data_dir() rebinds them at runtime, and a by-value import
-here would have pinned this module to the LIVE data directory even in a test
-that redirected it.
+would pin this module to the LIVE data directory even in a test that
+redirected it.
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ class QueueMixin:
         """Run fn(*args) on a daemon thread with the chat marked busy until it
         returns. Work started outside the queue (weather lookup, voice-clone
         prep and synthesis) otherwise left the turn looking finished at its
-        "Checking…" line (live journeys #7, #38, 2026-09-25)."""
+        "Checking…" line."""
         with self._task_lock:
             self._chat_busy[chat_id] = self._chat_busy.get(chat_id, 0) + 1
 
@@ -51,12 +51,10 @@ class QueueMixin:
     def _run_cancellable(self, chat_id: int, note: str, fn, *args, lang: str = "ru") -> None:
         """Long work a button starts outside the queue (✍️ / ✨ lyrics, ✨ polish
         and sing...), with ⛔ under its «working» note -- one call instead of a
-        cancel button wired by hand for every new flow (owner 10-03: «чтобы
-        не продолбать»). fn(ctx, *args) gets its own ctx copy: is_cancelled()
+        cancel button wired by hand for every new flow. fn(ctx, *args) gets its own ctx copy: is_cancelled()
         turns true on ⛔, and the work stops at its next check. The note
         loses its button when the work ends."""
         import copy
-        import threading
         import uuid
         base = self._get_ctx()
         if base is None:                       # no app context (suites): the flag alone
@@ -146,7 +144,7 @@ class QueueMixin:
                         ev = self._task_cancels.get(tid)
                     # The task runs on its OWN scoped context (_execute_task),
                     # not the shared desktop ctx — setting the shared event here
-                    # used to abort whatever the desktop assistant was doing
+                    # would abort whatever the desktop assistant was doing
                     # while leaving the actual runaway task running forever.
                     if ev is not None:
                         try: ev.set()
@@ -157,12 +155,11 @@ class QueueMixin:
     def _write_inflight(self) -> None:
         """Persist the set of tasks currently executing OR merely queued.
 
-        A "running" entry means a crash killed an active graph.invoke() — the
-        pre-existing case. A "pending" entry means the task was pushed onto
-        the backend but never popped: with the default InMemoryBackend that
-        queue lives only in this process's RAM, so a crash there is just as
-        fatal to the task as a crash mid-execution, even though nothing was
-        ever "running". Both are recorded so a restart is visible either way.
+        A "running" entry means a crash killed an active graph.invoke(). A
+        "pending" entry means the task was pushed onto the backend but never
+        popped: with the default InMemoryBackend that queue lives only in this
+        process's RAM, so a crash there is just as fatal to the task. Both are
+        recorded so a restart is visible either way.
         """
         try:
             with self._task_lock:
@@ -171,8 +168,8 @@ class QueueMixin:
                          + [dict(t.to_dict(), _state="pending")
                             for t in self._pending_journal.values()])
                 seq = _INFLIGHT_SEQ[0] = _INFLIGHT_SEQ[0] + 1
-            # Atomic: two threads writing at once used to be able to leave a torn
-            # file, and recovery then read [] and silently lost every task.
+            # Atomic: two threads writing at once could leave a torn
+            # file, and recovery would then read [] and silently lose every task.
             # Ordered: the snapshot is taken under the lock but written after it,
             # so an older snapshot could land last and bring back a finished task
             # (a crash then told its user it was "interrupted").
@@ -209,26 +206,23 @@ class QueueMixin:
     def _recover_inflight(self, data: list | None = None) -> None:
         """Notify users whose task was killed by a restart, and offer a retry.
 
-        Without this a crash mid-task left the user staring at a "⚙️ Working…"
-        status message that would never change — the most confusing possible
-        failure mode, because the bot looks alive and simply never answers.
+        Otherwise the user is left staring at a "⚙️ Working…" status message
+        that never changes.
 
         A "pending" (queued-but-not-yet-popped) entry is only ever meaningful
         here for a non-durable backend (InMemoryBackend): a Redis/Kafka-backed
         queue keeps its own copy outside this process, so a task still sitting
         there at restart will simply be popped and run normally by the fresh
-        consumer threads once they start — reporting it "interrupted" here
-        would be an outright lie (the user would see BOTH an "interrupted,
-        retry?" message AND, moments later, the real answer). Only the
-        in-memory backend actually loses a pending task across a restart, so
-        only that backend's leftover "pending" entries get the same
+        consumer threads once they start, so reporting it "interrupted" would be
+        a lie. Only the in-memory backend loses a pending task across a
+        restart, so only its leftover "pending" entries get the same
         interrupted/retry treatment as a genuinely running one.
         """
         if data is None:
             data = self._take_inflight()
         durable_backend = not isinstance(self._backend, tg_bot.InMemoryBackend)
         # One notice per chat, for its LAST task: two in-flight entries of one
-        # chat sent the same "restarted" message twice (live 2026-09-27 16:52).
+        # chat sent the same "restarted" message twice.
         last = {}
         for d in data or []:
             if d.get("_state") == "pending" and durable_backend:
@@ -309,14 +303,13 @@ class QueueMixin:
         """Stop whatever this chat has in flight or queued, and say what happened.
 
         Shared by the ⛔ Stop button and /cancel so the two cannot drift. Telling
-        the user "Stopping…" when nothing is running is the bot claiming work it
-        is not doing — the same false-success family as narrating an image it
-        never sent.
+        the user "Stopping…" when nothing is running would claim work the bot is
+        not doing.
         """
         with self._task_lock:
             # A task whose reply already landed is only compacting history —
-            # to the user nothing is running (live 2026-09-13, mega step 78:
-            # Stop one second after the picture arrived got "Stopping…").
+            # to the user nothing is running (a Stop right after the picture
+            # arrived must not answer "Stopping…").
             was_running = any(not getattr(t, "delivered", False)
                               for t in (self._running_task.get(chat_id) or []))
         was_running = was_running or chat_id in self.__dict__.get("_debouncing", ())
@@ -351,10 +344,9 @@ class QueueMixin:
                        NOT also send `cancel_done`, or the user sees it twice.
           "dropped"  — the task was only queued and is gone for good; nothing
                        else will ever report on it, so the caller must confirm.
-          ""         — (falsy, matching the old bool contract) already
-                       cancelled/finished by an earlier press, or never
-                       existed/failed to drop: an honest "already finished"
-                       reply, not a repeated false "cancelled".
+          ""         — (falsy) already cancelled/finished by an earlier
+                       press, or never existed/failed to drop: an honest
+                       "already finished" reply, not a repeated "cancelled".
         """
         with self._task_lock:
             if task_id in self._cancelled:
@@ -408,13 +400,11 @@ class QueueMixin:
         return bool(ts) and task.enqueue_ts <= ts
 
     def _enqueue_item(self, chat_id: int, item: dict):
-        # Stamped on ARRIVAL, before the debounce delay (_DEBOUNCE_S) — not at
-        # task-creation time in _resolve_and_push, which runs after the delay.
-        # A Stop pressed during the debounce window used to find nothing
-        # running/queued yet (the item was still sitting here un-stamped) and
-        # report "Nothing was running", while the batch went on to become a
-        # task with a post-Stop enqueue_ts that _stop_requested_after let
-        # through — the render happened anyway.
+        # Stamped on ARRIVAL, before the debounce delay (_DEBOUNCE_S), not at
+        # task-creation time in _resolve_and_push (after the delay): otherwise a
+        # Stop pressed during the debounce window would not see this item, and
+        # the task it becomes would carry a post-Stop enqueue_ts that
+        # _stop_requested_after lets through.
         item.setdefault("_arrival_ts", time.time())
         # When the USER sent it (Telegram's message date), not when we got it: a stalled poll delivers a burst late
         item.setdefault("_sent_ts", (getattr(self, "_msg_date", {}) or {}).get(chat_id))
@@ -423,12 +413,9 @@ class QueueMixin:
                 self._queues[chat_id] = _pyqueue.Queue()
             q = self._queues[chat_id]
             # The put happens INSIDE the lock, and the worker's idle-exit path
-            # re-checks the queue under the same lock. Otherwise there is a window
-            # where the worker has already timed out but is not dead yet:
-            # is_alive() says True, so no replacement is started, the item is put,
-            # and then the worker deregisters and exits — leaving the message
-            # sitting in a queue nobody serves. The user simply got no reply, and
-            # it only unwedged when they sent something else.
+            # re-checks the queue under the same lock. Otherwise a worker that has
+            # timed out but is not dead yet (is_alive() still True) would get no
+            # replacement, then exit, leaving the message in a queue nobody serves.
             q.put(item)
             w = self._workers.get(chat_id)
             if w is None or not w.is_alive():
@@ -448,16 +435,16 @@ class QueueMixin:
                     self._workers.pop(chat_id, None)
                     return
             batch = [first]
-            # Stop during this window must know a batch is pending (it said
-            # "nothing is running" while dropping an essay request, live).
+            # Stop during this window must know a batch is pending (see
+            # _stop_and_report).
             self.__dict__.setdefault("_debouncing", set()).add(chat_id)
             # A QUIET period, not a fixed window: the deadline moves with every
             # fragment that arrives, capped from the first one. Five fragments
-            # of one thought 0.6 s apart used to be cut after the third and
-            # answered as two separate requests (live, 2026-09-12).
+            # of one thought 0.6 s apart must not be cut after the third and
+            # answered as two separate requests.
             # A bare forward (only forwarded material, nothing the user typed) waits longer: the instruction
-            # ("объясни Степану прикол") is typed a few seconds later, and answering the forward alone gave
-            # two replies to one request (live 2026-10-05).
+            # ("объясни Степану прикол") is typed a few seconds later, and answering the forward alone gives
+            # two replies to one request.
             t_first = time.monotonic()
             def _fwd(): return all(i.get("forwarded") or i.get("type") == "fwd_voice" for i in batch)
             # a forwarded post's videos/voices come with pictures that land a couple of seconds later (an album is
@@ -466,8 +453,8 @@ class QueueMixin:
                                   if _fwd() else tg_bot._DEBOUNCE_S)
             def _cap(): return ((tg_bot._DEBOUNCE_FWDV_MAX_S if any(i.get("type") == "fwd_voice" for i in batch) else tg_bot._DEBOUNCE_FWD_MAX_S) if _fwd() else tg_bot._DEBOUNCE_MAX_S)
             def _lag(it):
-                # Forwards that reach us late (a stalled getUpdates, live 2026-10-05: three pieces sent together came
-                # in at 11:59, 12:01, 12:02) have more of the same burst still on the way: wait that long again.
+                # Forwards that reach us late (a stalled getUpdates: pieces sent together arrive
+                # minutes apart) have more of the same burst still on the way: wait that long again.
                 s = it.get("_sent_ts")
                 return min(30.0, max(0.0, time.time() - s)) if s and it.get("forwarded") and time.time() - s > 3 else 0.0
             extra = _lag(first)
@@ -523,34 +510,22 @@ class QueueMixin:
                                    "[stop] dropped queued task", str(task.chat_id))
                 continue
             # ── AT MOST TWO TASKS PER CHAT, AND ONLY WHEN THE FIRST IS SLOW ──
-            # With a single consumer "one at a time" was implicit. With several,
-            # the round-robin backend happily hands two tasks from the SAME chat
-            # to two workers, and the user gets the same turn answered twice —
-            # seen live: two identical "Я задумался и не выдал ответ" replies in
-            # the same second, plus a pile of orphaned Cancel buttons. That gate
-            # stays: a chat starts at 0 running tasks and a fresh task is always
-            # admitted alone. A SECOND task for the same chat is only admitted
-            # once the first has announced (via ctx.set_stage, see
-            # _mark_interruptible) that it is now in a genuinely slow,
-            # backgroundable phase — an image render, a web/deep-research crawl —
-            # so a quick new message can be answered without waiting for the
-            # whole thing, while the slow task keeps running untouched on its
-            # own thread. A third task for the same chat always still queues.
+            # With several consumers the round-robin backend would hand two
+            # tasks from the SAME chat to two workers and the user would get the
+            # same turn answered twice. A fresh task is therefore admitted
+            # alone; a SECOND task for the chat is admitted only once the first
+            # has announced (via ctx.set_stage, see _mark_interruptible) that it
+            # is in a genuinely slow, backgroundable phase -- an image render, a
+            # web/deep-research crawl -- so a quick new message is answered
+            # without waiting for the whole thing. A third task always queues.
             with self._task_lock:
                 n = self._chat_busy.get(task.chat_id, 0)
                 interruptible = self._chat_interruptible.get(task.chat_id, False)
                 # A candidate whose text is BYTE-IDENTICAL to the task already
-                # running for this chat is never a genuine "quick interject" —
-                # it is the same request arriving twice (a client-side retry
-                # sending the same message again after the first looked stuck,
-                # observed live during a slow image-generation turn: the exact
-                # same translate call, tool round and prompt-engineering steps
-                # all ran a second time, CONCURRENTLY, doubling GPU/LLM load and
-                # producing two near-simultaneous identical replies). Running
-                # the identical text twice at once can never be "answer this
-                # quickly while the slow thing continues" — it just wastes a
-                # full second turn, so it still queues and waits, exactly as
-                # before this concurrency mechanism existed.
+                # running for this chat is never a genuine "quick interject":
+                # it is the same request arriving twice (a client-side retry),
+                # and running it concurrently would only double the GPU/LLM load
+                # and produce two identical replies, so it still queues and waits.
                 running = self._running_task.get(task.chat_id) or []
                 is_exact_repeat = any(r.user_text == task.user_text for r in running)
                 admit = (n == 0) or (n == 1 and interruptible and not is_exact_repeat)
@@ -579,14 +554,10 @@ class QueueMixin:
                         self._chat_interruptible.pop(task.chat_id, None)
                     else:
                         self._chat_busy[task.chat_id] = n
-                # task.image_path now lives under tg_bot._IMAGE_DIR (see
-                # tg_resolve.py) precisely because it is ALSO the path
-                # registered into sess.image_log for later "the one I sent
-                # earlier" lookups -- deleting it here as if it were a
-                # throwaway temp file left every register entry for a plain
-                # photo upload dangling the instant its own task finished.
-                # Only clean up a path that is genuinely NOT part of that
-                # persistent register (e.g. an older/foreign temp path).
+                # task.image_path lives under tg_bot._IMAGE_DIR (see tg_resolve.py)
+                # because it is ALSO the path registered into sess.image_log for
+                # later lookups, so it must not be deleted like a temp file. Only
+                # clean up a path that is NOT part of that persistent register.
                 if task.image_path and os.path.exists(task.image_path):
                     try:
                         _under_image_dir = Path(task.image_path).resolve().is_relative_to(

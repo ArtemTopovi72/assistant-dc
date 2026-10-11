@@ -4,13 +4,13 @@ States on the session (continue_state), same shape as 🎨 Restyle:
   "want_video"  the button was pressed; the next video / round video / video file is the clip.
   "want_text"   the clip is saved; the next plain text is what should happen next.
 
-How the continuation is built (50 searches, 2026-10-04, docs/video_continuation_sota_2026-10.md):
+How the continuation is built (see docs/video_continuation_sota_2026-10.md):
   * the last ~4 s of the clip ride as <Video 1>: its motion, camera speed, faces AND its own
     soundtrack (the voices) -- one still frame fixes the picture but not its direction, and the
     clip stalls at the join; a reference video carries its sound with it;
-  * one frame rides as <Picture 1>: the sharpest of the last 0.5 s. Not further back: live
-    10-06 the "sharpest moving frame of the last 2 s" was 2 s before the end, the coat taken
-    off in those 2 s was back on in the continuation;
+  * one frame rides as <Picture 1>: the sharpest of the last 0.5 s. Not further back: the
+    "sharpest moving frame of the last 2 s" was 2 s before the end, so a coat taken off in
+    those 2 s was back on in the continuation;
   * generate_video wraps the user's words in a «continue, no cut» template and, when the new
     part is done, joins original + continuation with a crossfade (media/video.join_continuation).
 """
@@ -149,7 +149,7 @@ class ContinueMixin:
             return False
         sess.continue_state = ""         # disarmed before the slow part
         # A submenu armed before the clip (🔎 Поиск) would turn this into "search the
-        # web for: animate this photo: …" -- live 2026-10-10 the bot chatted about the
+        # web for: animate this photo: …" -- the bot would chat about the
         # search instead of rendering.
         sess.pending_prefix, sess.menu = "", ""
         self._store.put(sess)

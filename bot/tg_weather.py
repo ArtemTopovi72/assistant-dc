@@ -49,7 +49,7 @@ def _when(read: dict, today) -> tuple:
     if when in _WEEKDAY_NAMES:
         return today + _dt.timedelta(days=(_WEEKDAY_NAMES.index(when) - today.weekday()) % 7), None
     if when == "weekend":
-        # Live 2026-09-28: "погода в Питере на выходных" got the next 24 hours.
+        # "погода в Питере на выходных" must cover the weekend, not the next 24 hours.
         wd = today.weekday()
         return (today if wd >= 5 else today + _dt.timedelta(days=5 - wd)), (24 if wd == 6 else 48)
     return None, None
@@ -323,8 +323,8 @@ class WeatherMixin:
                 if sess.reg_state in ("wtw_city", "wtw_date"):
                     sess.reg_state = ""
                 # The model never saw this answer: «погода в Казани», then
-                # «а там есть метро?» was answered about Moscow (live
-                # 2026-09-29). The forecast joins the chat history.
+                # «а там есть метро?» was answered about Moscow.
+                # The forecast joins the chat history.
                 with self._history_lock(chat_id):
                     hist = sess.get_history()
                     hist += [{"role": "user", "content": f"[weather forecast asked for {loc['name']}]"},

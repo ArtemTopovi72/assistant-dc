@@ -1,9 +1,8 @@
 """Telegram markup: markdown -> Telegram HTML, and tag-safe splitting.
 
-Split out of tg_bot.py. Pure text in, pure text out -- no network, no session,
-no localization. That is what made it safe to move: nothing here reads bot
-state, and tg_bot re-exports every name, so tg_library / tg_tasks /
-tg_transport keep resolving `tg_bot._split_html` and friends unchanged.
+Pure text in, pure text out -- no network, no session, no localization.
+tg_bot re-exports every name, so tg_library / tg_tasks / tg_transport resolve
+`tg_bot._split_html` and friends.
 
 Load-bearing, despite being "just formatting": Telegram REJECTS a message
 whose markup is malformed, and a rejected edit deletes the reply the user was
@@ -24,7 +23,7 @@ _TABLE_SEP = re.compile(r"^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$")
 
 def _md_tables_to_fences(text: str) -> str:
     """A markdown pipe table -> a fenced block with aligned columns. Telegram
-    has no tables; "| --- |" arrived as raw pipes (live 2026-09-28)."""
+    has no tables; "| --- |" arrived as raw pipes."""
     lines = text.split("\n")
     out, i = [], 0
     while i < len(lines):
@@ -63,7 +62,7 @@ _SUP = dict(zip("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹"))
 
 def _latex_to_text(text: str) -> str:
     r"""$\rightarrow$ / $x^2$ / \frac{a}{b} -> plain Unicode. Telegram renders no
-    TeX; a raw `$\rightarrow$` reached the chat (live 2026-10-04). Code is left alone."""
+    TeX; a raw `$\rightarrow$` reached the chat. Code is left alone."""
     def one(m):
         e = next(g for g in m.groups() if g is not None)
         e = re.sub(r"\\(?:text|mathrm|mathbf|operatorname)\{([^}]*)\}", r"\1", e)
@@ -98,7 +97,7 @@ def _md_to_html(text: str) -> str:
                lambda m: ("\n<pre><code class=\"language-%s\">%s</code></pre>\n" % (m.group(1).lower(), m.group(2))
                           if m.group(1) else "\n<pre>" + m.group(2) + "</pre>\n"), t, flags=re.DOTALL)
     # Inline code only OUTSIDE <pre>: `x` inside a fenced block became <code>
-    # and the quoted snippet lost its backticks (live 2026-09-28).
+    # and the quoted snippet lost its backticks.
     t = "".join(p if p.startswith("<pre>") else re.sub(r"`([^`\n]+)`", r"<code>\1</code>", p)
                 for p in re.split(r"(<pre>.*?</pre>)", t, flags=re.DOTALL))
 
@@ -145,7 +144,7 @@ def _md_to_html(text: str) -> str:
     # "site.ru/<i>foo</i>/bar" and the link would break. Escaping ran first, so
     # the only real tags present are ones we created.
     # The emphasis rules are line-bounded while <pre> is not, which is the other
-    # half of the crossed-tag problem: "# ```\n```" used to become
+    # half of the crossed-tag problem: "# ```\n```" would become
     # "<b><pre></b>\n</pre>".
     t = re.sub(r"<a\b[^>]*>.*?</a>|<[^>]+>|https?://[^\s\x00]+",
                _stash, t, flags=re.DOTALL)

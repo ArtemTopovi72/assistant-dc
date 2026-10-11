@@ -108,8 +108,7 @@ def _apos_to_plus(text: str) -> str:
     i = 0
     # Only a VOWEL followed by the marker is a stress mark. Any other
     # apostrophe -- the quotes of a leaked JSON blob, an English possessive,
-    # "don't" -- used to become a '+' too, and F5 read those aloud as "плюс"
-    # (live, 2026-09-12).
+    # "don't" -- must not become a '+' too, or F5 reads those aloud as "плюс".
     while i < len(text):
         if i + 1 < len(text) and text[i + 1] in _APOS and text[i].lower() in _VOWELS_ANY:
             out.append("+")
@@ -127,10 +126,10 @@ def stress_plus(ctx, text: str) -> str:
     out = text
     # `ctx.models` is None whenever nothing has been loaded — a headless run, a
     # test context, or a turn that reached TTS before the model bundle was ready.
-    # This line used to reach straight through it and raise AttributeError, which
-    # took down the whole TTS call and, with it, the reply that call was voicing.
-    # Every OTHER step in this function already degrades to plain text; this one
-    # now does too — unaccented speech beats no speech.
+    # Reaching straight through it would raise AttributeError, which
+    # takes down the whole TTS call and, with it, the reply that call is voicing.
+    # Every OTHER step in this function degrades to plain text; this one
+    # does too — unaccented speech beats no speech.
     _models = getattr(ctx, "models", None)
     if getattr(_models, "accentor_loaded", False):
         try:
@@ -236,7 +235,7 @@ def _number_to_russian_words(match: "re.Match") -> str:
         return token
 
 
-# "На этикетке 2 строки" was voiced "два строки" (live, 2026-09-12): num2words
+# "На этикетке 2 строки" was voiced "два строки": num2words
 # knows nothing about the noun that follows. One and two are the only numerals
 # that agree in gender, and the noun's ending after them says which gender.
 _ONE_TWO_RE = re.compile(r"(?<![\d.,])(\d{1,4})(?!\d)([ \u00a0]+)([а-яё]+)", re.IGNORECASE)
@@ -293,7 +292,7 @@ def _ru_acronym(match: "re.Match") -> str:
     word = match.group(1)
     if word not in _RU_SPELLED_ACRONYMS and any(ch.lower() in _RU_VOWELS for ch in word):
         # Said as a word -- and said better in ordinary case: the voice read
-        # the sign "У ОЛЬГИ" as "у Олюги" (live, 2026-09-12); the fine-tune
+        # the sign "У ОЛЬГИ" as "у Олюги"; the fine-tune
         # rarely saw shouting. Three letters or fewer (США, ООН, СМИ) stay as
         # they are, they are acronyms the voice knows as words.
         return word if len(word) <= 3 else word.capitalize()
@@ -306,7 +305,7 @@ def spell_cyrillic_acronyms(text: str) -> str:
 
 
 # A link is for the screen, not the voice. Read aloud, "https://cbr.ru/..."
-# came out as "Вплюс отс плюс ссылка" (live 2026-09-13): the scheme, the
+# came out as "Вплюс отс плюс ссылка": the scheme, the
 # slashes and the Latin host are all outside what the Russian voice can say.
 # The written reply keeps the URL; the spoken one says "ссылка" in its place
 # (or drops it when the sentence already says so: "вот ссылка: https://...").
@@ -1079,7 +1078,7 @@ def _gigaam_transcribe(ctx, audio_source) -> str:
 
 # Below this Whisper's guess about the language is a coin toss: a one-word
 # "Угу." was heard as French (69%) and came back as a goodbye the bot then
-# answered (live, 2026-09-12, journey 22). Under it, the clip is re-read in
+# answered. Under it, the clip is re-read in
 # the language the user is known to speak.
 ASR_LANG_CONFIDENCE = _cfg_env.env_float("ASR_LANG_CONFIDENCE", 0.85)
 
@@ -1156,7 +1155,7 @@ def _doubtful_language(info, lang_hint: str) -> bool:
 # слона», «Сделаю слона розовым» — is the ASR mishearing the imperative
 # («Нарисуй», «Сделай»): nobody tells the bot what THEY are about to draw.
 # The model took the statement at face value and replied with filler about
-# the session memory, no picture (live 2026-09-13, mega run 3, step 25).
+# the session memory, no picture.
 # Only the first word of the transcript is touched.
 _VOICE_IMPERATIVE = {
     "нарисую": "нарисуй", "сделаю": "сделай", "напишу": "напиши", "найду": "найди",
@@ -1348,8 +1347,7 @@ def synth_single_segment(
             # to a naive linspace(0,1,25), the one schedule shape the model was
             # never tuned for. 16 IS in the table and is the official F5 "fast"
             # point (~2x speedup, WER 2.42%->2.53% on the upstream benchmark).
-            # A/B'd 2026-09-19 on our own RU checkpoint: 1.95s -> 0.82s per
-            # segment, samples sent to Telegram for a listen before switching.
+            # Measured on our own RU checkpoint: 1.95s -> 0.82s per segment.
             wav, sr, _ = infer_process(
                 ref_file, ref_text_proc, processed_text,
                 ctx.models.tts_model, ctx.models.vocoder,

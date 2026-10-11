@@ -150,8 +150,8 @@ _MSG: dict[str, dict[str, str]] = {
                       "ru": "👋 <b>Привет! Я твой ИИ-ассистент.</b>"},
     "main_menu":     {"en": "🏠 Main menu", "ru": "🏠 Главное меню"},
     # clear_context() also wipes tg_facts (deliberate — see clear_context's
-    # docstring) but the reply used to say nothing about it, so a user who
-    # read "Clear Chat" as "clear history" lost their saved facts with no
+    # docstring), so the reply says so: a user who read "Clear Chat" as
+    # "clear history" would otherwise lose their saved facts with no
     # warning and no undo.
     "cleared":       {"en": "🗑 Conversation and saved facts cleared.",
                       "ru": "🗑 Диалог и сохранённые факты очищены."},
@@ -340,8 +340,8 @@ _MSG: dict[str, dict[str, str]] = {
                       "ru": "✏️ {hint}"},
     # What the user is being asked for, in their own language.
     #
-    # These used to be filled with the raw _PROMPT_KB routing prefix, so a
-    # Russian user tapping 🖼 Создать картинку was answered with
+    # These are not the raw _PROMPT_KB routing prefix, which would answer a
+    # Russian user tapping 🖼 Создать картинку with
     # "✏️ generate an image of — напиши запрос:" — an internal English token,
     # mid-sentence, in a Russian message. The prefix is a pipeline instruction
     # that happens to be English because the agent reasons in English; it was
@@ -1224,8 +1224,8 @@ _MSG: dict[str, dict[str, str]] = {
                            "or pick another one.",
                      "ru": "🖼 Этой картинки больше нет — пришли её заново или выбери другую."},
     # Same honest-refusal shape as img_gone, generalised to the other artifact
-    # kinds the durable store (tg_artifacts_store.py) now tracks. Added
-    # 2026-09-19 alongside that store, for callers that resolve "that video" /
+    # kinds the durable store (tg_artifacts_store.py) tracks, for callers
+    # that resolve "that video" /
     # "that song" / "that file" and find the row's path no longer on disk.
     "vid_gone":     {"en": "🎬 That video is no longer available on the server — "
                            "ask me to make it again.",
@@ -1280,9 +1280,8 @@ _MSG: dict[str, dict[str, str]] = {
     # ── image action buttons (under every generated picture) ──────────────────
     # Kept short on purpose: Telegram lays out 3 inline buttons per row at a fixed
     # width, so anything past ~11-12 Cyrillic characters (incl. the emoji) gets
-    # cut off with "…" -- live, 2026-09-19, the user saw a grid of unreadable
-    # "Улучшить ка…" / "Сменить оде…" / "Перерисоват…" buttons. The fuller
-    # phrasing this used to carry (which action, what it does) belongs in the
+    # cut off with "…" ("Улучшить ка…" / "Сменить оде…" / "Перерисоват…"). The
+    # fuller phrasing (which action, what it does) belongs in the
     # bot's own reply text, not the button.
     "img_change_clothes": {"en": "👗 Outfit",   "ru": "👗 Одежда"},
     "img_remove_object": {"en": "🧽 Remove",   "ru": "🧽 Убрать"},

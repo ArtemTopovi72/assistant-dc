@@ -1,8 +1,5 @@
 """Slash commands: everything a user can type starting with "/".
 
-Split out of tg_dispatch.py, which kept growing three unrelated concerns in one
-class: the long-poll/route loop, this command table, and batch resolution.
-
 _handle_command reads every table and string it needs as ``tg_bot.<name>`` --
 _t, _LANGS, _SLASH, _help_text and friends -- so each keeps a single definition
 and a single patch point. Importing them by value here would give this module a
@@ -32,9 +29,8 @@ class CommandsMixin:
                 keyboard=self._main_menu_kb(sess, lang))
             return
 
-        if cmd in ("/cancel", "/stop"):   # /stop: what people type (was "unknown command")
-            # Same path as the ⛔ Stop button: also discards QUEUED work, which the
-            # old cancel_event-only version left running after the current task died.
+        if cmd in ("/cancel", "/stop"):
+            # Same path as the ⛔ Stop button: also discards QUEUED work.
             self._stop_and_report(chat_id, sess, lang)
             return
 
@@ -196,8 +192,7 @@ class CommandsMixin:
                                 parse_mode="HTML")
             return
 
-        # The panel exists and has its own button, but an admin's first instinct
-        # is to type the word — and typing it did nothing at all.
+        # The panel has its own button, but an admin's first instinct is to type the word.
         if cmd == "/admin":
             if sess.is_admin:
                 self._send_admin_panel(chat_id)
@@ -221,9 +216,9 @@ class CommandsMixin:
                     keyboard=self._state_kb(sess, lang))
             return
 
-        # Anything else beginning with "/" fell off the end of this function and
-        # the user got SILENCE — a typo ("/serch") and a dead bot look exactly
-        # the same from the chat. Say so, and show what does exist.
+        # Anything else beginning with "/" gets an answer, not silence (a typo
+        # like "/serch" would look the same as a dead bot): say so and show
+        # what does exist.
         self._send_text(chat_id,
                         tg_bot._t("unknown_cmd", lang,
                            cmd=_html_mod.escape(cmd[:32])) + tg_bot._help_text(lang),
@@ -249,11 +244,9 @@ class CommandsMixin:
         import code_sandbox as _cs
         box = _cs.sandbox_for(chat_id)
 
-        # Every answer carries the how-to. The mode has no switch to flip -- it
-        # is simply on for a granted account -- and that was the confusing part:
-        # people looked for a "code mode" button, found a folder listing, and
-        # had no idea what to do next. Sending a file IS the entry point, so
-        # say so, every time, wherever they arrive from.
+        # Every answer carries the how-to: the mode has no switch (it is simply
+        # on for a granted account) and sending a file IS the entry point, so
+        # say so wherever they arrive from.
         how = tg_bot._t("sbx_how", lang)
 
         if cmd == "/reset_sandbox":

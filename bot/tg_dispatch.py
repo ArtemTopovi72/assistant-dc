@@ -1,6 +1,6 @@
 """Update polling, routing and enqueue.
 
-Split out of tg_bot.py. Owns the long-poll loop, _dispatch (the router that
+Owns the long-poll loop, _dispatch (the router that
 turns a raw Telegram update into an action: callback buttons, commands, menu
 labels, photos, albums, documents, voice), _handle_command, the reply-target
 and incoming-photo helpers, and _resolve_and_push, which decides what kind of
@@ -26,19 +26,10 @@ import requests
 def _largest_photo(photos) -> Optional[dict]:
     """Pick Telegram's largest PhotoSize entry, tolerating a hostile shape.
 
-    `msg["photo"]` is documented as a list of PhotoSize dicts, but nothing
-    stops a malformed/adversarial update (a corrupted webhook payload, a
-    buggy relay) from sending it as a string, a dict, or a list containing
-    non-dict junk. `max(photos, key=lambda p: p.get(...))` on a string
-    silently iterates its CHARACTERS and crashes with
-    "'str' object has no attribute 'get'" the moment it calls .get() on the
-    first one — an unhandled exception straight out of _dispatch. The outer
-    poll loop's per-update try/except keeps this from taking the process
-    down, but it still drops that update's whole turn with a stack trace
-    instead of the ordinary "couldn't make sense of that" silence every
-    other malformed-field path in this router already gives. Filter to only
-    genuine PhotoSize-shaped entries and return None if nothing usable
-    survives, exactly like `if photos:` on an absent/empty field already do.
+    `msg["photo"]` is documented as a list of PhotoSize dicts, but a malformed
+    update can send a string, a dict, or a list with non-dict junk (`max` over
+    a string iterates its characters and crashes on `.get`). Only genuine
+    PhotoSize-shaped entries are considered; None if nothing usable survives.
     """
     if not isinstance(photos, list):
         return None
@@ -50,7 +41,6 @@ def _largest_photo(photos) -> Optional[dict]:
 
 
 _TYPED_STOP = {"stop", "стоп", "хватит", "отмена", "отмени", "cancel", "остановись"}
-import re as _re
 
 
 def _asks_as_file(text: str) -> bool:
@@ -122,11 +112,6 @@ class DispatchMixin:
                 try: self._dispatch_logged(upd)
                 except Exception: tg_bot.logger.exception("dispatch error")
 
-    def _get_updates(self) -> list:
-        result = self._fetch_updates()
-        self._commit_offset(result)
-        return result
-
     def _commit_offset(self, result: list) -> None:
         if result:
             self._offset = result[-1]["update_id"] + 1
@@ -139,8 +124,8 @@ class DispatchMixin:
         body = r.json()
         if not body.get("ok", False):
             # 409 (a second instance polling) / 401 (revoked token) come back at
-            # once: returning [] here spun a tight request loop and still
-            # counted as a healthy poll for the watchdog. Raise -> backoff.
+            # once: returning [] would spin a tight request loop that still
+            # counts as a healthy poll for the watchdog. Raise -> backoff.
             raise RuntimeError(f"getUpdates not ok: HTTP {getattr(r, "status_code", "")} {body.get('error_code')} "
                                f"{str(body.get('description'))[:120]} body={str(body)[:160]}")
         return body.get("result", [])
@@ -205,10 +190,9 @@ class DispatchMixin:
                                                   if k not in ("chat", "from")})
 
     def _dispatch(self, upd: dict):
-        # An inline-keyboard press is a different update SHAPE, not a
-        # variation on a message: no text, no sender gate, its own
-        # answerCallbackQuery handshake and its own 20-family routing table.
-        # It lives in tg_callbacks.CallbackMixin; this is the whole seam.
+        # An inline-keyboard press is a different update SHAPE, not a variation
+        # on a message: no text, no sender gate, its own answerCallbackQuery
+        # handshake and routing table (tg_callbacks.CallbackMixin).
         cb = upd.get("callback_query")
         if cb:
             self._dispatch_callback(cb)
@@ -219,9 +203,8 @@ class DispatchMixin:
         if not chat_id: return
 
         # ── private chats only ────────────────────────────────────────────────
-        # Nothing checked the chat type: added to a group the bot would run the
-        # registration flow in it, ask for a password in public, and map the whole
-        # group to a single account.
+        # In a group the bot would run the registration flow, ask for a password
+        # in public and map the whole group to a single account.
         chat_type = (msg.get("chat") or {}).get("type", "private")
         if chat_type not in ("private", ""):
             if not (msg.get("new_chat_members") or msg.get("left_chat_member")):
@@ -235,30 +218,31 @@ class DispatchMixin:
         if not sess0.lang:
             sess0.lang = tg_bot._norm_lang((msg.get("from") or {}).get("language_code", ""))
             try: self._store.put(sess0)
-            except Exception: pass
+            except Exception as exc:
+                tg_bot.logger.warning("session persist failed (chat %s): %s", chat_id, exc)
         # The client's language is a guess: a user whose Telegram is English but
-        # who WRITES Russian got every menu and status in English (live
-        # 2026-09-27). Until they pick a language themselves,
-        # the words they type decide.
+        # who WRITES Russian would get every menu and status in English. Until
+        # they pick a language themselves, the words they type decide.
         _t0 = msg.get("text") or msg.get("caption") or ""
         if (not sess0.lang_chosen and sess0.lang != "ru" and not tg_bot._is_forwarded(msg)
                 and len(re.findall(r"[А-Яа-яЁё]{2,}", _t0)) >= 2):
             sess0.lang = "ru"
             try: self._store.put(sess0)
-            except Exception: pass
+            except Exception as exc:
+                tg_bot.logger.warning("session persist failed (chat %s): %s", chat_id, exc)
 
         text = (msg.get("text") or "").strip()
-        # A forwarded button label is not something to act on. Live 2026-09-27:
-        # a stray multi-forward replayed «🔍 Найти товар» as a button press and
-        # fed the bot's own replies into a running song as wishes. BEFORE the
+        # A forwarded button label is not something to act on: a stray
+        # multi-forward would replay «🔍 Найти товар» as a button press and
+        # feed the bot's own replies into a running song as wishes. BEFORE the
         # gate: the gate answers pending prompts (song topic, city…) and took a
         # forwarded storyboard as the topic.
-        # The bot's own REPLIES are material (live 10-03: users could not forward
-        # its reasoning back): they go on, labelled as its own words only when
+        # The bot's own REPLIES are material (users forward its reasoning
+        # back): they go on, labelled as its own words only when
         # Telegram names this bot as the sender (_fwd_is_own); a forwarded batch
         # never steers a running task (tg_resolve). Another bot's message is
         # material like a person's: a song forwarded from a music bot was
-        # dropped here while 🎤 Cover waited for it (live 10-03).
+        # dropped here while 🎤 Cover waited for it.
         _fwd = tg_bot._is_forwarded(msg, self_is_own=False)
         if _fwd and tg_bot._fwd_is_own(msg, self.token.split(":", 1)[0]):
             msg["_fwd_own"] = True
@@ -276,17 +260,17 @@ class DispatchMixin:
         # Stop is handled HERE, before the debounce queue — routing it through the
         # normal path would make it queue up behind the very work it is meant to
         # cancel, so the user would tap Stop and watch nothing happen.
-        # A bare typed «Stop» too: live 2026-09-27 it went into the running redraw
-        # as a steer note («👌 Noted: Stop») and the render carried on.
+        # A bare typed «Stop» too: otherwise it goes into the running redraw
+        # as a steer note («👌 Noted: Stop») and the render carries on.
         if tg_bot._LABEL2KEY.get(text) == "stop" or text.lower().strip(" .!") in _TYPED_STOP:
             sess = self._get_session(chat_id)
             lang = self._lang(sess)
             self._stop_and_report(chat_id, sess, lang)
             return
         # «пришли файлом» / "as a file": the model has no way to send one and
-        # answered with right-click advice five times (persona run 2026-09-27).
+        # answered with right-click advice.
         # a keyboard label is never that request: «📚 Документы» was read as one and
-        # sent the last picture as a file instead of opening the menu (live 10-03)
+        # sent the last picture as a file instead of opening the menu
         if len(text) <= 60 and not _is_button(text) and _asks_as_file(text):
             sess = self._get_session(chat_id)
             rep = (msg.get("reply_to_message") or {}).get("message_id")
@@ -321,18 +305,14 @@ class DispatchMixin:
 
         # Only a real command token: "/etc/nginx/nginx.conf почему не
         # работает?" is a question, and was answered "unknown command".
-        if _re.match(r"/[A-Za-z0-9_]{1,32}(?:@\w+)?(?:\s|$)", text):
+        if re.match(r"/[A-Za-z0-9_]{1,32}(?:@\w+)?(?:\s|$)", text):
             self._handle_command(chat_id, text)
             return
         if text:
             # A FORWARDED text is material the user wants something done with,
-            # not the user talking to the bot. Fed in bare, a forwarded
-            # channel post ("Внимание! В субботу перекрывают движение...") was
-            # answered as if the user had asked it -- with document search on,
-            # "the documents say nothing about a road closure" -- and the
-            # follow-up "о чём это?" then had nothing to refer to (live
-            # 2026-09-13, mega journey). The flag travels with the item; the
-            # resolver frames the text as a quotation.
+            # not the user talking to the bot: fed in bare, a forwarded channel
+            # post would be answered as if the user had asked it. The flag
+            # travels with the item; the resolver frames the text as a quotation.
             self._enqueue_item(chat_id,
                                {"type": "text", "text": text, "image_id": _reply_image_id,
                                 "quote": msg.get("_quote", ""),
@@ -402,8 +382,7 @@ class DispatchMixin:
         # _transcribe uses to extract the audio track — everything downstream
         # (the ask keyboard, fwd_transcript, _fwdv_intent) is unchanged.
         # An ordinary video (not the round note) rides the same path: it is
-        # looked at (frames every 5 s) and listened to. Before 2026-09-14 it
-        # was not handled at all.
+        # looked at (frames every 5 s) and listened to.
         video_note = msg.get("video_note") or msg.get("video")
         if video_note:
             if tg_bot._is_forwarded(msg, self_is_own=False):
@@ -428,16 +407,14 @@ class DispatchMixin:
             self._enqueue_item(chat_id, {"type": "fwd_voice" if tg_bot._is_forwarded(msg, self_is_own=False) else "voice",
                 "media": "video", "file_id": _doc["file_id"],
                 # a GIF also arrives as a video/mp4 document, with its real length
-                # on `animation` (live 10-03: a 3 s GIF was offered as «16667 мин»)
+                # on `animation` (without it a 3 s GIF was offered as «16667 мин»)
                 "seconds": int((msg.get("animation") or {}).get("duration") or 10 ** 6),
                 "caption": (msg.get("caption") or "").strip()})
             return
 
         photos = msg.get("photo")
         if photos:
-            # file_size is OPTIONAL in Telegram's PhotoSize. When it is missing the
-            # old key was 0 for every entry and max() kept the FIRST — the smallest
-            # thumbnail — so the vision model silently got a postage stamp. Fall
+            # file_size is OPTIONAL in Telegram's PhotoSize: _largest_photo falls
             # back to pixel area, which is always present.
             largest = _largest_photo(photos)
             if largest is None:
@@ -480,18 +457,11 @@ class DispatchMixin:
         leave the turn exactly as it would have been, never half-targeted.
 
         Returns the resolved image id ("" if this reply named no picture). The
-        caller threads this into the enqueued item's "image_id", the same
-        capture-at-commit-time carry the image-verb buttons already use
-        (see the "captured here, at PRESS time" note in _dispatch above) —
-        `sess.target_image` alone is a SINGLE shared slot, and a task built
-        from this reply may sit queued for a while (behind an already-running
-        task in this chat) before it actually executes. A second reply to a
-        DIFFERENT picture arriving in that window overwrites the slot before
-        the first task ever reads it, so relying on a live re-read of
-        sess.target_image at execution time silently answered about whichever
-        picture was replied to LAST, not the one THIS turn was actually about
-        — reproduced live: reply to picture A, then (before A's task runs)
-        reply to picture B, and A's task answered about B.
+        caller threads it into the enqueued item's "image_id", the same
+        capture-at-press-time carry the image-verb buttons use (see
+        tg_callbacks._cb_retarget_image): `sess.target_image` is a SINGLE shared
+        slot, so a second reply to a different picture arriving while this
+        task waits in the queue would otherwise make it answer about that one.
         """
         reply = msg.get("reply_to_message") or {}
         if not reply:
@@ -529,8 +499,8 @@ class DispatchMixin:
                 # A reply INSIDE forwarded material is its author's, not the user's,
                 # and it sits inside the forward's own quote frame: a nested frame
                 # was labelled «the user is replying» and its close ended the outer
-                # frame early (live 10-01: Stepan's «подтверди» quoting «можно любой
-                # положить» was read as the user's words -> an Ozon cart answer).
+                # frame early (a reply «подтверди» quoting «можно любой
+                # положить» was read as the user's words).
                 one_line = " ".join(quoted.split())[:300]
                 msg["text"] = f"(in reply to: «{one_line}») " + msg["text"]
             elif quoted and msg.get("text"):
@@ -566,7 +536,7 @@ class DispatchMixin:
 
     def _buffer_album(self, chat_id, group_id, file_id, caption, forwarded=False):
         # A QUIET period, not a fixed window: a forwarded album of 10 pages arrives over several seconds, and a
-        # timer started by the first page cut it into pieces answered one by one (live 2026-10-05).
+        # timer started by the first page cut it into pieces answered one by one.
         with self._album_lock:
             e = self._albums.get(group_id)
             if e is None:

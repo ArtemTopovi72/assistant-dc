@@ -173,9 +173,8 @@ class CharactersMixin:
             self._send_text(chat_id, tg_bot._t("no_model_loaded", lang))
             return
         # Registered as a real in-flight task BEFORE the thread starts, so the
-        # status message can carry the same ⛔ button every other render has.
-        # Without this the character flow was the one long operation in the bot
-        # with no way out but ⛔ Stop, which also kills everything else queued.
+        # status message can carry the same ⛔ button every other render has
+        # (otherwise the only way out is ⛔ Stop, which kills everything queued).
         import uuid
         from tg_queue_backends import _Task
         task_id = "char_" + uuid.uuid4().hex[:12]
@@ -302,12 +301,8 @@ class CharactersMixin:
             return
         # Registered in the image log like every other delivered picture, so a
         # follow-up ("сделай её светлее", a reply to the photo) can resolve
-        # WHICH image it is about. A picture the bot sends without logging is
-        # invisible to that machinery. Live: no image-action keyboard and no
-        # msg_id meant the render LOOKED like it never landed in the chat --
-        # replying to it or tapping a button (neither of which existed) did
-        # nothing, same delivery contract every other picture path already
-        # honours (tg_tasks._deliver_salvaged_render, tg_callbacks._cb_*).
+        # WHICH image it is about, with the image-action keyboard and msg_id
+        # (same delivery contract as tg_tasks._deliver_salvaged_render).
         img_id = tg_bot._log_image(sess, path, label=text[:80], src="bot")
         self._store.put(sess)
         self._last_photo_msg_id = 0
@@ -317,11 +312,10 @@ class CharactersMixin:
                               msg_id=getattr(self, "_last_photo_msg_id", 0), src="bot")
             # This render runs off the task queue on a throwaway _scoped_ctx
             # copy, so nothing else persists it as "the current picture" the
-            # way tg_tasks.py does after every queued task (tg_tasks.py:1222-3).
-            # Without this, a plain-text follow-up right after a character
-            # render ("what's drawn here?") wrongly asks the user to upload a
-            # photo, because the next turn's ctx.last_image_path is seeded
-            # from sess.last_image_path (tg_tasks.py:1006).
+            # way tg_tasks.py does after every queued task. Without this, a
+            # follow-up ("what's drawn here?") would ask for an upload, because
+            # the next turn's ctx.last_image_path is seeded from
+            # sess.last_image_path.
             sess.last_image_path = path
             sess.turn_image = img_id          # the picture in play for the next turn
             sess.last_image_prompt = prompt
