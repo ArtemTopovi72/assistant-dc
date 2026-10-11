@@ -40,7 +40,7 @@ def human(sec: float) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--seconds", type=float, default=5.0,
-                    help="clip length; 0 -> this many seconds (default 5)")
+                    help="clip length in seconds (default 5)")
     ap.add_argument("--aspect", default="16:9")
     ap.add_argument("--out", default=os.path.join("runtime", "video"),
                     help="target folder for the finished clip")
