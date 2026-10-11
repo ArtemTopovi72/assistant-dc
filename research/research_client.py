@@ -29,9 +29,9 @@ what the stubs accept. Do not "tidy" them.
 
 WHAT THIS CLIENT OWNS THAT THE CALLERS USED TO
 -----------------------------------------------
-The apply/run/restore dance. Every caller previously open-coded it, and the GUI
-worker was the only one that got the `finally:` right. Here it is one
-try/finally in one place, so overrides can never leak into a later run — which
+The apply/run/restore dance, as one try/finally in one place (the GUI worker
+was the only caller that got the `finally:` right), so overrides can never leak
+into a later run — which
 is also the only way the operation is safe to expose to a backend that might one
 day run two of them.
 """
@@ -80,8 +80,8 @@ def open_research() -> "ResearchClient":
 class InProcessResearchClient:
     """The default backend: a thin, behaviour-preserving delegator to deep_research.
 
-    It adds no policy of its own beyond owning the overrides save/restore that
-    every caller used to open-code. Every other method forwards one-to-one, so
+    It adds no policy of its own beyond owning the overrides save/restore.
+    Every other method forwards one-to-one, so
     switching a consumer from `import deep_research` to `open_research()` cannot
     change what that consumer observes — including which exceptions it sees,
     which is why nothing here is wrapped in try/except.

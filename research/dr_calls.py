@@ -63,7 +63,7 @@ def _think_call(ctx, system: str, user: str, max_tokens: int,
     budget = min(max_tokens, safe)
     _effort = _resolve_effort(effort)
     out = call_llm_simple(ctx, system, user, temperature=temperature,
-                          max_tokens=budget, force_think=False,   # 2026-09-25 user: no reasoning;
+                          max_tokens=budget, force_think=False,   # reasoning off;
                           reasoning_effort=_effort)             # the thinking retry below stays the fallback
     if (out or "").strip():
         return out.strip()

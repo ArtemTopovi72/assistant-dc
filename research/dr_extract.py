@@ -24,7 +24,7 @@ logger = logging.getLogger("assistant.research")
 
 
 # --------------------------------------------------------------------------- #
-# Content-quality gate (Phase 1)
+# Content-quality gate
 #
 # Static extraction frequently returns NOT "nothing" but a misleading shell:
 # an anti-bot/CAPTCHA interstitial, a JS skeleton with only nav chrome, or a few
@@ -264,7 +264,7 @@ def _social_outlinks(html: str, base_url: str) -> list:
 
 
 # --------------------------------------------------------------------------- #
-# Near-duplicate content collapse (Phase 2)
+# Near-duplicate content collapse
 #
 # The old dedupe hashed the leading 500 chars, so it only caught BYTE-identical
 # reposts. Syndicated wire stories, lightly-edited copies, and the same article

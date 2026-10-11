@@ -35,7 +35,7 @@ _TIMING_FILE = DR_DIR / "_timings.json"
 _TIMING_SEED = {"quick": 900, "standard": 1800, "deep": 3600}
 _TIMING_KEEP = 12          # median over the last N runs per depth
 # Below this a "run" did not really happen (stub, abort, cache hit).
-# 300s, not 60. Measured 2026-08-29 from the live history: quick held
+# 300s, not 60. Measured from the live history: quick held
 # [5492, 120, 120, 93, 117, 90] and standard [119, 244, 120, 126]. Exactly one
 # of those is a research run -- the 91-minute one; the rest are stubs and
 # aborted runs from test and bench passes that reached the "completed" call.
@@ -143,7 +143,7 @@ def estimate_duration(depth: str = "standard") -> tuple:
         depth = "standard"
     timings = _load_timings()
     # Discard junk that predates the floor above (the file is persisted, so a
-    # previously poisoned history would otherwise keep quoting 0 minutes).
+    # poisoned history would otherwise keep quoting 0 minutes).
     samples = [x for x in (timings.get(depth) or []) if x >= _MIN_PLAUSIBLE_RUN_S]
     if samples:
         return float(_median(samples)), len(samples)

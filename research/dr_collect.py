@@ -120,7 +120,7 @@ def plan_queries(ctx, topic: str, max_queries: int) -> tuple:
         "core_topic": seed or topic,
     }
     # Drop near-duplicate paraphrases so the search budget buys real coverage,
-    # not the same query four times (Phase 5).
+    # not the same query four times.
     final = diversify_queries(ordered, max_queries)
     # A floor as well as a filter. When the planner fails, the heuristic above
     # appends short suffixes to the topic -- and on a LONG topic a two-word
@@ -176,7 +176,7 @@ def _citation_query(topic: str, queries: list) -> str:
 def _corrective_queries(ctx, topic: str, profile: dict, existing: list,
                         max_queries: int) -> list:
     """Generate a small batch of BROADENING queries for the single corrective
-    re-plan (Phase 3). Nudges the planner toward alternate terms, the primary
+    re-plan. Nudges the planner toward alternate terms, the primary
     source, and the other language, then drops anything overlapping the queries
     we already ran. Bounded and best-effort — failure just means no re-plan."""
     cat = profile.get("category", "general")
@@ -315,7 +315,7 @@ def collect_sources(ctx, queries: list, per_query: int, prog: _Progress,
 
 
 # --------------------------------------------------------------------------- #
-# Coverage / diversity check (Phase 3) + query diversification (Phase 5)
+# Coverage / diversity check + query diversification
 # --------------------------------------------------------------------------- #
 def _query_lang(q: str) -> str:
     return "ru" if _LANG_RE_CYR.search(q or "") else "en"
@@ -379,7 +379,7 @@ def coverage_signals(sources: list, profile: dict) -> dict:
 
 
 # --------------------------------------------------------------------------- #
-# Computed confidence inputs (Phase 5)
+# Computed confidence inputs
 #
 # Confidence used to be whatever label the model felt like writing. We now feed
 # synthesis the hard evidence structure (independent clusters, max authority,

@@ -379,8 +379,8 @@ class Sandbox:
         """Delete ONE entry -- a file or a whole folder -- inside the sandbox.
 
         The root itself ("", ".", "*", "all") empties the folder through
-        reset(): live 2026-09-14 «удали все файлы» hit a refusal here and the
-        model reported «Я удалил все файлы» over 17 surviving entries. It is
+        reset(): a refusal here let the model report «Я удалил все файлы»
+        over surviving entries. It is
         the user's own working folder and /reset_sandbox does the same, so
         the honest tool is one that actually does it. Any other path goes
         through resolve() so a symlink cannot point the deletion outside.
@@ -638,9 +638,8 @@ class Sandbox:
         """rar / 7z / tar[.gz] / anything 7-Zip reads, through py7zz.
 
         py7zz ships its own 7zz binary inside the wheel, which is the point:
-        live 2026-09-22 a user's mods.rar hit "not a zip/jar archive" and the
-        model spent two turns on rarfile, which is only a wrapper around an
-        unrar executable that neither this host nor the run_code image has.
+        rarfile is only a wrapper around an unrar executable that neither this
+        host nor the run_code image has.
 
         7-Zip extracts into a private temp dir first; every file is then copied
         in through resolve(), the same zip-slip gate the zip branch uses, and

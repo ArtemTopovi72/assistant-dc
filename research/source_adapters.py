@@ -1,4 +1,4 @@
-"""Structured source adapters for JS-heavy / API-backed domains (Phase 7).
+"""Structured source adapters for JS-heavy / API-backed domains.
 
 Static HTML extraction fails or degrades on several high-value domains. Where a
 domain exposes a *keyless* structured endpoint, we fetch the clean canonical

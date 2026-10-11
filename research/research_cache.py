@@ -1,4 +1,4 @@
-"""URL extraction cache for the deep-research crawler (Phase 6).
+"""URL extraction cache for the deep-research crawler.
 
 Caches the *extracted* result of a URL (clean text + title + content hash) on
 disk, keyed by normalized URL, with a category-aware TTL. A cache hit skips both

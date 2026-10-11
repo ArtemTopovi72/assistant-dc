@@ -36,7 +36,7 @@ from prompts import (OUTLINE_PLANNER_PROMPT, REPORT_SYNTHESIS_PROMPT,
 logger = logging.getLogger("assistant.research")
 
 
-# Phase 9 — detect analyses the user's prompt explicitly asked for, so synthesis
+# Detect analyses the user's prompt explicitly asked for, so synthesis
 # adds them as extra sections instead of always emitting the fixed template.
 _SECTION_TRIGGERS = {
     "Chronological Timeline": ("timeline", "chronolog", "historical evolution",

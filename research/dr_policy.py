@@ -37,7 +37,7 @@ logger = logging.getLogger("assistant.research")
 
 
 # Categories where the answer should rest on scholarly/authoritative sources and
-# random blogs/tutorials/SEO add noise rather than signal (Phase 9, critique #10).
+# random blogs/tutorials/SEO add noise rather than signal.
 _SCHOLARLY_CATEGORIES = {"science", "legal", "health"}
 
 
@@ -124,7 +124,7 @@ def _apply_scholarly_floor(sources: list, category: str) -> list:
 
 
 # --------------------------------------------------------------------------- #
-# Trust floor/ceiling (Phase 4)
+# Trust floor/ceiling
 #
 # The brief model self-labels each page PRIMARY/SECONDARY/COMMUNITY/LOW, but a
 # well-written content farm reads "authoritative" to a 9B. We clamp the label by

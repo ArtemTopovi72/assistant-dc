@@ -152,8 +152,7 @@ def desktop_binary() -> str | None:
 def ensure_docker(wait_s: float = 90.0, log=None) -> bool:
     """Start Docker Desktop if the engine is down; True when it answers.
 
-    Live 2026-09-14: «собери коллаж скриптом» -- the bot found every bridge
-    and then had to say "Docker не запущен", because Docker Desktop was
+    Without this the bot reports "Docker не запущен" when Docker Desktop is
     installed and healthy but simply not launched. Code execution is part of
     the app, so the app starts its engine the way it starts LM Studio and
     ComfyUI. Measured: the engine answers ~5 s after the exe is spawned.
@@ -218,8 +217,8 @@ def dockerfile_digest() -> str:
 
 
 def image_stale(timeout: int = 15) -> bool:
-    """The house image was built from an older Dockerfile (2026-09-18: graphviz
-    was added for flowcharts and the image was never rebuilt -- ensure_image
+    """The house image was built from an older Dockerfile (e.g. graphviz
+    was added for flowcharts but the image was never rebuilt -- ensure_image
     only knew "missing", not "outdated")."""
     exe = docker_binary()
     if not exe or CONTAINER_IMAGE != HOUSE_IMAGE:
@@ -239,9 +238,8 @@ def image_stale(timeout: int = 15) -> bool:
 def ensure_image(log=None, timeout: int = 1800) -> bool:
     """Build the house sandbox image if it is not there yet (once, ~2-4 min).
 
-    The user's ask, 2026-09-14: "собрать докер образ с предустановленными
-    либами" -- so that a collage or a chart runs on the first script instead
-    of after a minute of pip inside a 64 MB tmpfs. Only the house image is
+    The image ships preinstalled libs so that a collage or a chart runs on the
+    first script instead of after a minute of pip inside a 64 MB tmpfs. Only the house image is
     built here; a custom SANDBOX_IMAGE from .env is the operator's own.
     """
     if CONTAINER_IMAGE != HOUSE_IMAGE:
@@ -433,7 +431,7 @@ def _run_in_container(sandbox, argv, timeout: int, *, network: bool,
     # Named, so a timeout can stop the CONTAINER. Killing the docker client
     # (all _kill_tree reaches) leaves a `--rm` container running: three
     # `while True` scripts from a bench sat at 99% CPU each for 20+ minutes
-    # after their runs had been reported "killed after 120s" (2026-09-24).
+    # after their runs had been reported "killed after 120s".
     import uuid as _uuid
     name = f"sbx_{_uuid.uuid4().hex[:12]}"
     cmd = [

@@ -216,7 +216,7 @@ sys.modules[__name__].__class__ = _SettingsView
 def no_briefs_report(topic: str, pages, silent: int) -> str:
     """What to tell the reader when the run produced no briefs at all.
 
-    There are two different failures here and they used to share one sentence.
+    There are two different failures here.
     Measured live with the model unloaded mid-run: every briefing call came
     back empty and the report said eight successfully fetched pages "contained
     no facts relevant to the topic" -- blaming the sources for our own outage.
@@ -396,8 +396,8 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
     # 2. Collect sources
     sources = collect_sources(ctx, queries, S.DR_RESULTS_PER_QUERY, prog, run_dir, profile)
 
-    # 2b. Coverage / diversity check + bounded corrective re-plan loop (Phase 3,
-    # extended for manual control). DR_MAX_COLLECTION_ROUNDS=1 (default) reproduces
+    # 2b. Coverage / diversity check + bounded corrective re-plan loop
+    # (extended for manual control). DR_MAX_COLLECTION_ROUNDS=1 (default) reproduces
     # the original "one corrective re-plan" exactly. Raising it, or setting
     # DR_MIN_SOURCES/DR_TARGET_SOURCES/DR_MIN_UNIQUE_DOMAINS/DR_FORCE_EXHAUSTIVE,
     # makes the agent keep broadening across MULTIPLE rounds until those targets
@@ -606,7 +606,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
     prog.stats["contradictions"] = contra_sig["count"]
     _save_state(run_dir, phase="contradiction", contradictions=contra_sig)
 
-    # 4b. Citation-graph enrichment for scholarly topics (Phase 9): inject a
+    # 4b. Citation-graph enrichment for scholarly topics: inject a
     # PRIMARY synthetic source carrying citation counts + lineage from OpenAlex,
     # so synthesis can build the intellectual-lineage table that plain web
     # search can never supply.
@@ -846,12 +846,10 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
 
     report = None
     survey = None
-    # PRACTICAL intent gets a bookable-options list, NOT a survey paper. Survey mode
-    # used to be unconditional, so "дай мне ссылки на конкретные экскурсии" returned
-    # "Digital Infrastructure for Urban Tourism: A Survey of Booking Systems" — an
-    # abstract and a table of contents where the user wanted links, prices and
-    # departure times. The category was already classified `local`; it just was not
-    # used to pick the report FORM.
+    # PRACTICAL intent gets a bookable-options list, NOT a survey paper.
+    # A survey gives an abstract and a table of contents where the user wants links,
+    # prices and departure times. The category is already classified `local`; it
+    # must also pick the report FORM.
     topic = _steer.with_notes(topic, _steer.take(ctx))    # last one before the writing
     _practical = _is_practical_request(topic, profile)
     if _practical:

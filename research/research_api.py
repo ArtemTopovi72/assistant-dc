@@ -151,7 +151,7 @@ class ResearchClient(Protocol):
                    cancellation locally, never sends it.
         out_lang   None means "derive it from `topic`" — the document is written
                    in the language the user typed in, which is what every caller
-                   wants and what every caller previously open-coded.
+                   wants.
         overrides  DR_* knobs for THIS RUN ONLY. Applied and restored by the
                    backend as an indivisible part of the run, including on
                    failure. An unknown key or an out-of-range value raises, and

@@ -137,7 +137,7 @@ def _ddgs_retry(ctx, do_query, error_label: str) -> list:
 
 def _region_for(ctx) -> str:
     """A Russian speaker asking about «Эрмитаж» got the Norfolk, Virginia
-    museum from a worldwide English search (live 2026-09-28). An explicit
+    museum from a worldwide English search. An explicit
     SEARCH_REGION setting wins; the worldwide default follows the reader."""
     if SEARCH_REGION != "wt-wt":
         return SEARCH_REGION

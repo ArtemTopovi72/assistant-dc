@@ -205,7 +205,7 @@ def _is_junk_source(url: str) -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# Graded authority scoring (Phase 4)
+# Graded authority scoring
 #
 # The old _source_rank was binary (0 = authority, 1 = everything else), so a
 # personal blog and a major trade publication sorted identically and a fluent

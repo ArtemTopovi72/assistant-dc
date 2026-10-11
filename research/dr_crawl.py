@@ -117,7 +117,7 @@ def _fetch_ar5iv(url: str) -> Optional[str]:
 
 
 def _extract_pdf_text(raw: bytes) -> Optional[str]:
-    """Extract text from a PDF byte string via pypdf (Phase 9). Returns None on
+    """Extract text from a PDF byte string via pypdf. Returns None on
     any failure or for image-only/scanned PDFs (no extractable text layer)."""
     try:
         import io
@@ -154,7 +154,7 @@ def _scrub(text: str, url: str) -> str:
 def _fetch_page(url: str) -> tuple:
     """Fetch one URL. Returns (html, pdf_text): exactly one is non-None on
     success, both None on failure. PDFs (scholarly papers, arXiv) are downloaded
-    and text-extracted instead of being skipped as 'not HTML' (Phase 9)."""
+    and text-extracted instead of being skipped as 'not HTML'."""
     if not _is_safe_public_url(url):
         logger.debug("blocked non-public/unsafe URL: %s", url)
         return None, None
@@ -290,8 +290,8 @@ def crawl_pages(ctx, sources: list, caps: dict, prog: _Progress, run_dir: Path,
                 profile: Optional[dict] = None, cache=None) -> list:
     """Breadth-first crawl of the seed sources (optionally following in-domain
     links up to caps['depth']). Returns a list of page dicts; bad pages are
-    quarantined with a reason code (Phase 1), not silently dropped. A structured
-    API adapter (Phase 7) and the extraction cache (Phase 6) short-circuit the
+    quarantined with a reason code, not silently dropped. A structured
+    API adapter and the extraction cache short-circuit the
     network fetch where they apply. Fetches run in bounded waves (one URL per
     domain per wave for politeness) when DR_FETCH_CONCURRENCY > 1; bookkeeping
     (visited/pages/queue/quarantine) stays single-threaded."""
