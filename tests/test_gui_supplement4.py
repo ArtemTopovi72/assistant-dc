@@ -18,7 +18,7 @@ from pathlib import Path
 from PyQt5.QtWidgets import QApplication, QDialog, QInputDialog, QMessageBox
 from PyQt5.QtWidgets import QFileDialog as _QFD
 from PyQt5.QtGui import QImage, QColor
-from PyQt5.QtCore import Qt, QMimeData, QUrl, QEvent, QPoint
+from PyQt5.QtCore import Qt, QMimeData, QUrl, QEvent
 import gui
 from _gui_patch import stub_workers as _stub_workers, restore as _gui_restore
 
@@ -105,7 +105,7 @@ def test_eventfilter_paste_and_dragmove():
     # Ctrl+V with only text -> falls through (not intercepted)
     QApplication.clipboard().setText("plain text")
     kev2 = QKeyEvent(QEvent.KeyPress, Qt.Key_V, Qt.ControlModifier)
-    check("ctrlv_text_fallthrough", w.eventFilter(w.input, kev2) in (False, True))
+    w.eventFilter(w.input, kev2)   # not intercepted; must not raise
     _close(w)
 
 

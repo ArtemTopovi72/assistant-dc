@@ -192,7 +192,7 @@ def test_cropped_firered_engine_success():
         check("cropped_firered_success", out is not None and Path(out).exists())
 
 def test_cropped_firered_keeps_original_style():
-    # Live, 2026-09-19: change_clothes on an already-stylized (anime/
+    # change_clothes on an already-stylized (anime/
     # illustrated) photo came back with a photorealistic garment. Root cause:
     # this call passed edit_prompt to FireRed bare, with none of the "match
     # the original style" guidance the whole-frame fallback

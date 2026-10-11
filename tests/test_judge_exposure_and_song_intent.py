@@ -1,4 +1,4 @@
-"""Two things the live drive of 2026-09-12 found (bench/live_tg_scenarios.py).
+"""Two things the live drive found (bench/live_tg_scenarios.py).
 
 1. The outer image judge called a sunlit orange cat "a black silhouette" on
    three renders in a row (5/10, 4/10, 5/10), so a plain scene cost three

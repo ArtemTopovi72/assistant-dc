@@ -14,7 +14,6 @@ except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
 from pathlib import Path
 
-import numpy as np
 from PIL import Image
 import config as C
 import image as I
@@ -36,10 +35,9 @@ def check(name, cond, detail=""):
 def test_snap_and_resolution():
     check("snap_min", I._snap_to_8(10) == 64)
     check("snap_round", I._snap_to_8(1000) == 1000 and I._snap_to_8(1001) == 1000)
-    # normalize_resolution used to return the constants (544,960)/(960,544) for
-    # EVERY input, which threw away any size the user picked. It now only puts a
-    # size on the rails: orientation and aspect are preserved, the min/max side
-    # are enforced, and the result is a multiple of 16.
+    # normalize_resolution only puts a size on the rails: orientation and aspect
+    # are preserved, the min/max side are enforced, and the result is a multiple
+    # of 16 (it must not collapse every input to a constant size).
     pw, ph = I.normalize_resolution(100, 200)
     check("normalize_portrait", ph > pw and abs(ph / pw - 2.0) < 0.05,
           f"{pw}x{ph}")
@@ -106,10 +104,8 @@ def test_intermediate_and_deliverable():
     check("inter_firered", I.is_intermediate_artifact("x/_firered_tile_1.png"))
     check("inter_false", not I.is_intermediate_artifact("out/final.png"))
     check("inter_none", not I.is_intermediate_artifact(None))
-    # Found by the live journey run: the harness used the app's own predicate,
-    # and it picked a hand-drawn source-region crop as "the picture that was
-    # drawn". Both of these are working files written into OUTPUT_DIR beside
-    # the real renders.
+    # Working files written into OUTPUT_DIR beside the real renders: a hand-drawn
+    # source-region crop must not be mistaken for "the picture that was drawn".
     check("inter_srcregion", I.is_intermediate_artifact("out/_srcregion_123.png"))
     check("inter_florence", I.is_intermediate_artifact("out/_florence_proxy_1.png"))
     # …and the other side of it: these ARE the finished picture at their write

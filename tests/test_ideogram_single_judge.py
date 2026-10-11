@@ -1,31 +1,20 @@
-"""Live report (2026-08-05): "image generation is broken — we use Ideogram but I
-see old-model in the prompt, it gets stuck in an infinite loop, loads a second
-model into memory for some reason, and everything freezes and crashes."
+"""Fresh generation under IMAGE_ENGINE=ideogram4 has three invariants:
 
-Three separate defects, all in the FRESH-generation path under IMAGE_ENGINE=ideogram4:
+1. The user's own words reach the renderer. generate_image_with_refinement must
+   not run a prose prompt engineer (build_image_prompt_from_llm) first: Ideogram
+   is driven by ideogram.plan_layout's structured caption and
+   IDEOGRAM_STEPS/IDEOGRAM_CFG, so that round would be discarded.
 
-1. `generate_image_with_refinement` called `build_image_prompt_from_llm`, whose
-   system prompt opens "You are a prompt engineer for the old model
-   text-to-image model" and returns the old model prose + the old model steps/cfg. Ideogram
-   takes NONE of that — it is driven by ideogram.plan_layout's structured caption
-   and IDEOGRAM_STEPS/IDEOGRAM_CFG — so the whole 700-token round was discarded
-   and plan_layout re-read the same request anyway. That is the "old-model in the
-   prompt" the user saw.
-
-2. Double judging. draw_agent already runs a complete judge-and-repair loop
+2. No double judging. draw_agent already runs a complete judge-and-repair loop
    (render -> read the lettering back on a vision model -> critique -> rearrange
-   the boxes -> render again). The outer refinement loop then judged the SAME
-   picture on a different rubric and, on disagreement, re-drew it from scratch —
-   re-planning the layout and re-running draw_agent's whole loop — up to
-   MAX_IMAGE_REFINEMENT_ATTEMPTS times. Worst case 6 Ideogram renders (two 9GB
-   UNETs + a 10GB text encoder each) and ~18 vision calls for one request.
+   the boxes -> render again). The outer refinement loop must not judge the SAME
+   picture on a different rubric and re-draw it from scratch, up to
+   MAX_IMAGE_REFINEMENT_ATTEMPTS times (each render loads two 9GB UNETs and a
+   10GB text encoder).
 
-3. Those vision calls alternated between two LM Studio models, because
-   TEXT_READ_MODEL pinned the lettering read-back to a different model from the
-   chat model. That choice was measured against the OLD 9B house model; the house
-   model is now the 26B. On a 24GB card already holding Ideogram's weights there
-   is no room for a second resident chat model — the "loads a second model and
-   everything freezes" part.
+3. The vision calls do not alternate between two LM Studio models: TEXT_READ_MODEL
+   defaults to the chat model, since a 24GB card already holding Ideogram's
+   weights has no room for a second resident chat model.
 
 No live LM Studio / ComfyUI / GPU: every boundary is intercepted.
 
@@ -42,10 +31,7 @@ import config as C
 import image as I
 import models
 # generate_image_with_refinement LIVES in image_generate and calls its own
-# module globals; `image` only re-exports them. Patching image.* therefore
-# steered nothing, and this suite made a REAL Ideogram render -- minutes of GPU
-# in a suite that is supposed to be deterministic and offline. Patch where the
-# call actually resolves.
+# module globals; `image` only re-exports them, so patch where the call resolves.
 import image_generate as IG
 
 OK = BAD = 0

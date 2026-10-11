@@ -1,5 +1,5 @@
 """Cover the QWebEngine report-view branches in gui.py that segfault under a real
-QtWebEngine render headless. Per the sanctioned approach, _QWebEngineView is
+QtWebEngine render headless. _QWebEngineView is
 replaced BEFORE window construction with a lightweight QWidget stub that records
 setHtml (the branch executes; nothing renders), so _build_research_tab (web),
 _set_report (web + fallback) and _reset_report_view (web) are all exercised.
@@ -75,7 +75,6 @@ def test_webengine_report_paths():
         # _set_report web path: renders HTML into the stub, hides the text view
         w._set_report("# Report\n\n$x^2$\n\n| a | b |\n|---|---|\n| 1 | 2 |")
         check("web_sethtml", StubWebView.last_html is not None and "MathJax" in StubWebView.last_html)
-        check("web_shown", w.research_web.isVisibleTo(w) or not w.research_view.isVisibleTo(w) or True)
         # _reset_report_view web path: clears + hides the web view
         w._reset_report_view()
         check("web_reset", True)

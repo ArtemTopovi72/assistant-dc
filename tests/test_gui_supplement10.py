@@ -2,11 +2,11 @@
 tail. Each drives one specific early-return / error path. Also covers run_gui's
 non-Windows and no-WebEngine branches (via sys.platform / _QWebEngineView patch).
 
-Documented DEAD code (unreachable, intentionally not covered):
-  * MaskCanvas.is_empty:3172  -> `for _ in range(0): pass` (empty range).
-  * _show_tab:4492-4493       -> `except ValueError` on default_order.index(key);
+Unreachable code, intentionally not covered:
+  * MaskCanvas.is_empty       -> `for _ in range(0): pass` (empty range).
+  * _show_tab                 -> `except ValueError` on default_order.index(key);
                                   key always comes from self._tab_registry.
-  * _fmt_bytes:2179           -> trailing `return` after a loop whose "GB" arm
+  * _fmt_bytes                -> trailing `return` after a loop whose "GB" arm
                                   always returns first.
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_supplement10.py
@@ -126,7 +126,7 @@ def test_module_level_guards():
         out = gui._make_tab_close_icons(); check("tabicons_except", out == {})
     finally:
         os.makedirs = real_makedirs
-    # enable_dark_titlebar: attr 20 fails, attr 19 succeeds (92-93 loop second iter)
+    # enable_dark_titlebar: attr 20 fails, attr 19 succeeds (loop second iter)
     import ctypes as _ct
     class Dwm:
         def __init__(self): self.calls = 0
@@ -163,7 +163,7 @@ def test_request_worker_crosslingual_except():
         def __init__(self): pass
         def corpus_scripts(self): return {"Cyrillic"}
         def close(self): pass
-    # cross_lingual_targets raises -> except; build_rag_prompt note "" -> 1348 false
+    # cross_lingual_targets raises -> except; build_rag_prompt note "" -> no note appended
     lib = {"Library": FakeLib,
            "cross_lingual_targets": lambda t, s: (_ for _ in ()).throw(RuntimeError("cl")),
            "build_rag_prompt": lambda l, t, k=None, extra_queries=None: ("AUG " + t, "")}
@@ -197,8 +197,8 @@ def test_run_gui_platform_and_no_webengine():
     real_plat = gui.sys.platform
     real_view = gui._QWebEngineView
     try:
-        gui.sys.platform = "linux"          # 7056->7066 (skip win block)
-        gui._QWebEngineView = None          # 7074->7078 (skip share-GL attr)
+        gui.sys.platform = "linux"          # skip win block
+        gui._QWebEngineView = None          # skip share-GL attr
         gui.run_gui()
         check("run_gui_linux_noweb", True)
     finally:
@@ -212,7 +212,7 @@ def test_window_single_guards():
     o = _noop()
     try:
         w = _win()
-        # _titlebar_press success (startSystemMove True) -> 4089-4090
+        # _titlebar_press success (startSystemMove True)
         class WH:
             def startSystemMove(self): return True
         from PyQt5.QtGui import QMouseEvent
@@ -263,11 +263,9 @@ def test_start_worker_variants_and_ondone():
     o = _noop()
     try:
         w = _win()
-        # _start_worker with ctx None (5790->5792) and a worker lacking `info` (5796->5798)
+        # _start_worker with ctx None and a worker lacking `info`
         w.ctx = None
-        class BareWorker(gui_workers.RequestWorker):
-            pass
-        # remove info signal? RequestWorker has info; use a minimal QThread-like with no info
+        # a minimal QThread-like worker with no `info` signal
         from PyQt5.QtCore import QThread, pyqtSignal
         class NoInfoWorker(QThread):
             recognized = pyqtSignal(str); done = pyqtSignal(dict); failed = pyqtSignal(str)
@@ -291,12 +289,11 @@ def test_transfer_run_busy_and_gather_norefs():
     tab.worker = types.SimpleNamespace(isRunning=lambda: True)
     tab._run("plan")
     tab.worker = None
-    check("transfer_run_busy10", "?" or True)
     # _gather no refs: single target row only
     tab._add_row(_png("gg1.png"))
     tab._rows[0]["combo"].setCurrentIndex(0)   # target; no refs
     check("gather_norefs", tab._gather() is None)
-    # _on_done no info + ctx None (3895->3897, 3901->3904)
+    # _on_done no info + ctx None
     tab.host.ctx = None
     tab._on_done({"output": _png("gout.png")})   # no "info", ctx None
     check("on_done_noinfo", True)
@@ -327,10 +324,9 @@ def test_memory_center_single_guards():
     # _import cancelled
     _QFD.getOpenFileName = staticmethod(lambda *a, **k: ("", ""))
     tab._import()
-    # _run_diag with a query (2974 selected loop) — add data first
+    # _run_diag with a query — add data first
     store.add("default", "dark theme note", etype="fact", source="manual", importance=70)
     tab.refresh_all(); tab.diag_query.setText("dark"); tab._run_diag()
-    # _gen_compaction: profile == active but no sources -> info (2877 branch) already; ensure
     check("mc_single_guards", True)
 
 
@@ -367,7 +363,7 @@ def test_populate_and_maybe_drain():
     tab._populate({"id": "m", "state": "loaded", "max_context_length": {"bad": "dict"},
                    "loaded_context_length": 4096, "compatibility_type": "gguf"})
     check("populate_bad_maxctx", True)
-    # _maybe_drain_queue finalize a failed running task (5507-5508 failed branch)
+    # _maybe_drain_queue finalize a failed running task (failed branch)
     o = _noop()
     try:
         w = _win()
@@ -393,14 +389,11 @@ def test_clear_context_unlink_except():
         prof = w.ctx.active_memory_dir
         (prof / "summary.json").mkdir(parents=True, exist_ok=True)   # a dir named like the file
         # app_runtime, NOT assistant: _clear_context does
-        # `from app_runtime import make_base_state`. This used to fake
-        # `assistant`, which stopped being the source long ago -- so the fake
-        # was dead and the REAL app_runtime was imported instead. It also faked
-        # `utils` wholesale, and that bare stub then broke image.py's
+        # `from app_runtime import make_base_state`. `utils` must not be faked
+        # wholesale: a bare stub breaks image.py's
         # `from utils import safe_json_from_llm` further down the real
-        # app_runtime import chain: the test failed on its own scaffolding,
-        # nowhere near the branch it exists to cover. The real utils stays
-        # loaded; only the one attribute is swapped, just below.
+        # app_runtime import chain. The real utils stays loaded; only the one
+        # attribute is swapped, just below.
         with fake_modules(app_runtime={"make_base_state":
                                        lambda: {"messages": [], "_from_fake": True}}):
             import utils as _u
@@ -410,8 +403,7 @@ def test_clear_context_unlink_except():
             finally:
                 _u.free_process_memory = _real
         # The point of the test: summary.json is a DIRECTORY, so unlink raises,
-        # and _clear_context must swallow it and carry on. `check(..., True)`
-        # asserted nothing at all and could not have gone red.
+        # and _clear_context must swallow it and carry on.
         check("clear_ctx_unlink_dir_survives", (prof / "summary.json").is_dir())
         check("clear_ctx_ran_past_except", w.base_state.get("_from_fake") is True)
         check("clear_ctx_reset_state", w.captured_image is None
@@ -439,8 +431,7 @@ if __name__ == "__main__":
           f"({sum(1 for _,c in RESULTS if c)}/{len(RESULTS)} checks)")
     # Widgets built here (AssistantWindow, TransferTab) were still alive at
     # interpreter shutdown, and a QWidget outliving its QApplication segfaults
-    # inside Qt. Measured 9 crashes in 25 runs, every check passing each time.
-    from qt_teardown import release_widgets
+    # inside Qt.
     release_widgets(_app)
     # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]

@@ -5,10 +5,10 @@ comes out empty the model is NOT neutral — it falls back to its own stylised h
 look. So every path that loses the style turns "draw it realistically" into a
 cartoon, silently, with no error anywhere.
 
-The live failure this suite was written from: the planner emitted malformed JSON
-(a stray "and" spliced in front of a key, then a duplicate ```json block).
-`_extract_json` salvaged the first thing that happened to parse — one of the INNER
-element objects — and every downstream guard accepted it because it was a dict.
+A planner reply with malformed JSON (a stray "and" spliced in front of a key,
+then a duplicate ```json block) must not degrade to an INNER element object:
+`_extract_json` must not salvage the first thing that happens to parse, since
+every downstream guard accepts any dict.
 
 Run: venv/Scripts/python.exe tests/test_ideogram_style.py
 """
@@ -37,7 +37,7 @@ print("=" * 66)
 print("JSON EXTRACTION NEVER RETURNS A FRAGMENT")
 print("=" * 66)
 
-# Verbatim shape of the reply that caused the bug.
+# Shape of a malformed planner reply.
 BROKEN = '''{
   "high_level_description": "A realistic photo of a ginger cat.",
   "aesthetics": "photorealistic, sharp focus",
@@ -148,10 +148,9 @@ check("a cartoon request is not forced into photography",
       toon["medium"] != "photography", repr(toon["medium"]))
 
 # ── the floor must cover the COMMON case, not just explicit realism ──────────
-# The original fix only applied when the prompt said "realistic", so an ordinary
-# "нарисуй машину во дворе" still shipped an EMPTY style_description — and empty
-# is not neutral, it hands the choice to Ideogram, whose house look is cartoon.
-# That is why every picture came back a cartoon unless realism was asked for.
+# An ordinary "нарисуй машину во дворе" must not ship an EMPTY
+# style_description either: empty is not neutral, it hands the choice to
+# Ideogram, whose house look is cartoon.
 def _styleless(layout):
     return not any(str(layout.get(k) or "").strip()
                    for k in ("aesthetics", "lighting", "photo", "medium", "art_style"))
@@ -189,9 +188,8 @@ for p, want in NAMED.items():
 
 check("a neutral prompt names no style", I.named_style("нарисуй машину") == "")
 
-# A style word that is also a NOUN FOR A PROP names no style. Live, 2026-09-12:
-# "hangs a painting depicting a calm sea" made the floor call the whole scene
-# "a painting" and the render came back as a framed canvas with an inset border.
+# A style word that is also a NOUN FOR A PROP names no style: "hangs a painting
+# depicting a calm sea" must not make the floor call the whole scene "a painting".
 PROPS = ["On the wall behind the sofa hangs a painting depicting a calm sea.",
          "a living room with a painting of the sea above the sofa",
          "a boy holding a drawing of a dog",

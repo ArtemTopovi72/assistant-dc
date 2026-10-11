@@ -1,6 +1,6 @@
 """«Убери все надписи с фона»: the mask comes from the OCR, not from a phrase.
 
-Journey 3, live 2026-09-18: SAM3 given 'wall inscriptions' returned one
+SAM3 given 'wall inscriptions' returned one
 166-px strip and "INSGATE" stayed on the left. Now a removal aimed at the
 lettering masks every OCR box (faces cut out), LaMa fills, the OCR reads the
 result again, and a logo the vision model still sees gets one segmenter pass.

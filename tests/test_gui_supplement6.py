@@ -17,11 +17,10 @@ except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
 from pathlib import Path
 
-import numpy as np
 from PyQt5.QtWidgets import QApplication, QDialog, QInputDialog, QMessageBox
 from PyQt5.QtWidgets import QFileDialog as _QFD
 from PyQt5.QtGui import QImage, QColor
-from PyQt5.QtCore import Qt, QEvent, QPoint
+from PyQt5.QtCore import Qt, QEvent
 
 import gui
 from _gui_patch import stub_workers as _stub_workers, restore as _gui_restore
@@ -99,21 +98,19 @@ def test_transfer_worker_crop_and_identity_none():
     rec2 = cap(w2, "done", "failed")
     with fake_modules(image=_im()):
         # no identity_metrics module -> ImportError swallowed
-        with fake_modules(identity_metrics=None) if False else contextlib.nullcontext():
-            import sys as _s; saved = _s.modules.pop("identity_metrics", None)
-            try:
-                w2.run()
-            finally:
-                if saved is not None: _s.modules["identity_metrics"] = saved
+        saved = sys.modules.pop("identity_metrics", None)
+        try:
+            w2.run()
+        finally:
+            if saved is not None: sys.modules["identity_metrics"] = saved
     check("tw_identity_import_swallowed", len(rec2["done"]) == 1)
 
 
 _orig_loader = gui.ModelLoader
 _WN = ["RequestWorker", "RedrawWorker", "FixHandsWorker", "FixArtifactWorker", "TransferWorker"]
-# The worker classes no longer all live on `gui` (RequestWorker moved to
-# gui_workers, TransferWorker to gui_transfer_tab), so patching only `gui` was
-# either an AttributeError or a silent no-op. _gui_patch.stub_workers patches
-# every loaded module that actually binds the name and raises if none does.
+# The worker classes live in several modules (RequestWorker in gui_workers,
+# TransferWorker in gui_transfer_tab). _gui_patch.stub_workers patches every
+# loaded module that actually binds the name and raises if none does.
 def _noop():
     return _stub_workers(_WN)
 def _restore(o):
@@ -222,8 +219,7 @@ def test_eventfilter_dblclick_none_and_drop_busy():
     # double-click where no image is under the cursor -> _image_url_at returns None, not handled
     w._image_url_at = lambda pos: None
     ev = QMouseEvent(QEvent.MouseButtonDblClick, QPointF(3, 3), Qt.LeftButton, Qt.LeftButton, Qt.NoModifier)
-    res = w.eventFilter(w.chat.viewport(), ev)
-    check("dblclick_no_image", res in (False, True))
+    w.eventFilter(w.chat.viewport(), ev)   # not handled; must not raise
     # Drop while busy -> not routed (real QDropEvent)
     md = QMimeData(); md.setUrls([QUrl.fromLocalFile(_png("efb.png"))])
     w.worker = object()
@@ -312,7 +308,6 @@ def test_load_image_pil_exception_and_manual_toggle():
         PImage.open = real
     # Manual Control expand toggle (mc_toggle.toggled -> _toggle_body)
     w.mc_toggle.setChecked(True)
-    check("manual_expand", w.mc_max_btn.isVisible() or True)
     w.mc_toggle.setChecked(False)
     _close(w)
 

@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _sweep_stub  # noqa: F401  chains the centre stub above
 import draw_agent as D
 
-# «убери дату» on a poster was refused as "the critic's say-so" (live 2026-09-29)
+# «убери дату» on a poster was refused as "the critic's say-so"
 assert D._instruction_removes("убери дату", "12 октября")
 assert D._instruction_removes("удали заголовок", "РОК НОЧЬ")
 assert D._instruction_removes("remove the date", "12 October")
@@ -19,7 +19,7 @@ _poster = G.normalize_layout({"background": "stage", "elements": [
     {"desc": "guitarist", "x": .55, "y": .2, "w": .4, "h": .7},
     {"desc": "drummer", "x": .05, "y": .2, "w": .4, "h": .7},
     {"desc": "title", "text": "РОК НОЧЬ", "x": 0, "y": 0, "w": 1, "h": .3}]})
-# 13% on each head: clear pair by pair, 27% in sum (live 2026-09-29)
+# 13% on each head: clear pair by pair, 27% in sum
 assert any(p["kind"] == "text_collision" for p in D.geometry_report(_poster))
 _fixed, _ = D.auto_fix_geometry(_poster)
 assert not D.geometry_report(_fixed), D.geometry_report(_fixed)

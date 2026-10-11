@@ -1,4 +1,4 @@
-"""Mock-'requests' coverage for image.py's ComfyUI polling loops
+"""Mock-'requests' coverage for comfy_client's ComfyUI polling loops
 (_submit_and_poll / _submit_and_collect). These branches (HTTP errors,
 cancel-mid-poll, connection-error grace period, corrupt-file, errored/empty
 job, timeout) don't need a live GPU -- just controlled fake HTTP responses.
@@ -11,17 +11,15 @@ except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
 from pathlib import Path
 from PIL import Image
-# The ComfyUI polling loop moved out of image.py into comfy_client.py; this
-# suite was always testing the transport, not the image editing around it.
+# This suite tests the transport (comfy_client), not the image editing around it.
 import comfy_client as I
 
 _TMP = Path(tempfile.mkdtemp(prefix="imgpoll_"))
 RESULTS = []
-import os as _os
 def check(name, cond, detail=""):
     RESULTS.append((name, bool(cond)))
     print("[" + ("PASS" if cond else "FAIL") + "] " + name + ("" if cond or not detail else " - " + detail))
-    if not cond and _os.environ.get("PYTEST_CURRENT_TEST"):
+    if not cond and os.environ.get("PYTEST_CURRENT_TEST"):
         raise AssertionError(str(name) + (": " + str(detail) if detail else ""))
 
 class FakeResp:
@@ -40,13 +38,12 @@ def _save_real_png(name="out.png"):
 
 def _install(get_seq=None, post=None):
     calls = {"get": 0}
-    # _submit_and_poll now runs a liveness probe first, because a WEDGED ComfyUI
+    # _submit_and_poll runs a liveness probe first, because a WEDGED ComfyUI
     # (accepts the socket, never answers) otherwise costs the full read timeout on
-    # every call -- ~5 min for one draw, reported to the user as mere slowness.
-    # These tests are about the POLL loop, not the probe (tests/test_comfy_wedged.py
-    # owns that), so present a healthy server. Stubbing the function rather than
-    # answering /system_stats through fake_get keeps the job's request sequence AND
-    # the faked time.time() call counts in these tests exactly as they were.
+    # every call. These tests are about the POLL loop, not the probe
+    # (tests/test_comfy_wedged.py owns that), so present a healthy server. Stubbing
+    # the function rather than answering /system_stats through fake_get keeps the
+    # job's request sequence AND the faked time.time() call counts unchanged.
     I.server_healthy = lambda force=False: True
     def fake_post(url, json=None, timeout=None):
         return post
@@ -113,10 +110,8 @@ def test_saved_image_success():
 
 def test_saved_audio_success():
     """Audio-producing jobs (SaveAudio, SaveAudioAdvanced) report their file
-    under an "audio" history key, not "images" -- confirmed live: a real
-    MiniMax Music3 render completed successfully server-side but the client
-    reported "no output" because _poll_history only ever looked at
-    node_out["images"]. Regression for that bug.
+    under an "audio" history key, not "images"; _poll_history must look at both,
+    or a render that succeeded server-side is reported as "no output".
     """
     orig_post, orig_get = I.requests.post, I.requests.get
     try:
@@ -199,9 +194,6 @@ def test_connection_error_exceeds_grace():
     try:
         exc = I.requests.exceptions.ConnectionError("down")
         _install(get_seq=[exc], post=FakeResp(200, {"prompt_id": "abc"}))
-        # shrink grace window for the test
-        orig_grace = None
-        import image as Imod
         # monkeypatch time.time to fast-forward past the 60s grace on 2nd call
         real_time = time.time
         calls = {"n": 0}

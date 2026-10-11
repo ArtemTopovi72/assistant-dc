@@ -129,8 +129,7 @@ print("=" * 70)
 print("SERIALISATION")
 print("=" * 70)
 
-# Comments mention the old spelling, so look at CODE only — an earlier version
-# of this check matched the explanatory comment and failed on a correct fix.
+# Comments mention the old spelling, so look at CODE only.
 src = "\n".join(line.split("#", 1)[0]
                 for line in inspect.getsource(I.generate).splitlines())
 _dump = [l for l in src.splitlines() if "json.dumps(caption" in l]

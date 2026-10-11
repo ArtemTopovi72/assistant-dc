@@ -114,7 +114,7 @@ upload(bot, CID, "notes.txt", TXT)
 check("upload clears the stale pending_prefix",
       bot._get_session(CID).pending_prefix == "",
       repr(bot._get_session(CID).pending_prefix))
-check("an upload does not switch into the library menu (owner 10-03)", bot._get_session(CID).menu != "library")
+check("an upload does not switch into the library menu", bot._get_session(CID).menu != "library")
 
 bot.posts.clear(); bot._backend = T.InMemoryBackend()
 bot._resolve_and_push(CID, [{"type": "text", "text": "what does it say about revenue?"}])
@@ -164,7 +164,7 @@ check("the file was NOT added to the library",
 
 bot.posts.clear(); bot._backend = T.InMemoryBackend()
 upload(bot, CID, "photo.jpg", b"\xff\xd8\xff" + b"\x00" * 200)
-# Since 2026-09-28 a picture sent "as a file" goes the photo way (receipt.jpg
+# A picture sent "as a file" goes the photo way (receipt.jpg
 # as a document was answered «text could not be extracted», live).
 check("an image sent as a document is not rejected as a document",
       not any("isn't a document i can add" in t.lower() for t in sent(bot)), sent(bot))

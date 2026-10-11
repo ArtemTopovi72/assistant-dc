@@ -21,7 +21,7 @@ import numpy as np
 from PyQt5.QtWidgets import QApplication, QDialog, QInputDialog, QMessageBox
 from PyQt5.QtWidgets import QFileDialog as _QFD
 from PyQt5.QtGui import QImage, QColor, QPixmap
-from PyQt5.QtCore import Qt, QPoint
+from PyQt5.QtCore import QPoint
 import gui
 
 _app = QApplication.instance() or QApplication(sys.argv)
@@ -74,8 +74,7 @@ def test_system_info_variants():
 def test_image_viewer_save_fallback():
     p = _png("iv.png")
     dlg = gui.ImageViewerDialog([p])
-    # save where copyfile raises but pixmap save works: point source at a missing file but
-    # keep a valid loaded pixmap, and save to a dir path? Simpler: stub shutil.copyfile to raise.
+    # copyfile raises but the pixmap save still works.
     dest = os.path.join(_TMP, "ivsave.png")
     _QFD.getSaveFileName = staticmethod(lambda *a, **k: (dest, ""))
     orig = gui.shutil.copyfile
@@ -98,7 +97,6 @@ def test_maskcanvas_paint_and_dialog_load():
     check("maskcanvas_paint", not pm.isNull())
     # MaskDrawDialog _load_existing error branch (bad mask file)
     dlg = gui.MaskDrawDialog(_png("mcv2.png"), existing_mask=None)
-    dlg.canvas._overlay = dlg.canvas._overlay  # no-op
     # call _load_existing with a non-image file -> logged + swallowed
     bad = os.path.join(_TMP, "notimg.png"); open(bad, "wb").write(b"not an image")
     dlg._load_existing(bad)
@@ -129,9 +127,6 @@ def test_stress_invalid_entry():
 
 
 def test_transfer_small_branches():
-    host = types.SimpleNamespace(ctx=None, images_panel=types.SimpleNamespace(add_image=lambda p: None),
-                                 _add_system=lambda m: None)
-    tab = gui.TransferTab(host)
     # _on_done where host.add_image raises -> swallowed
     outp = _png("tout.png")
     host2 = types.SimpleNamespace(ctx=types.SimpleNamespace(last_image_path=None, reference_images=[]),
@@ -208,7 +203,7 @@ def test_window_guard_branches():
     finally:
         QMessageBox.question = oq
     # _image_url_at over empty area
-    check("img_url_none", w._image_url_at(QPoint(1, 1)) is None or True)
+    w._image_url_at(QPoint(1, 1))   # empty area: must not raise
     _close(w)
 
 
@@ -234,14 +229,13 @@ def test_window_apply_tab_and_show():
 
 def test_helpers_edge():
     # _crash_log_stage when crash_diag import fails
-    import sys as _sys
-    real = _sys.modules.get("crash_diag")
-    _sys.modules["crash_diag"] = None   # ImportError inside
+    real = sys.modules.get("crash_diag")
+    sys.modules["crash_diag"] = None   # ImportError inside
     try:
         gui._crash_log_stage("x"); check("crash_stage_fallback", True)
     finally:
-        if real is not None: _sys.modules["crash_diag"] = real
-        else: _sys.modules.pop("crash_diag", None)
+        if real is not None: sys.modules["crash_diag"] = real
+        else: sys.modules.pop("crash_diag", None)
     # OUTPUT_DIR_GUI_MASK config-missing fallback
     p = gui.OUTPUT_DIR_GUI_MASK(); check("output_mask_dir", p.exists())
 

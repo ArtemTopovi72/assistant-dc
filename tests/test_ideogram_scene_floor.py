@@ -1,15 +1,8 @@
 """A layout with no high_level_description must still say it is ONE picture.
 
-Measured at one seed on the worst render of a 14-scene run: a black cat on the
-floor, a ginger cat in an armchair, a wooden table, over the one-word background
-"комната". It came back as a 2x2 grid of four separate stock photographs, two of
-which contained invented people.
-
-The thin background was not the cause -- the same layout rendered with a rich
-background produced the SAME 2x2 collage. The missing high_level_description
-was: every element names its own surface, nothing says they share a frame, and
-the model resolves three settings as three pictures. Supplying one synthesized
-sentence, changing nothing else, produced a single coherent room with all three.
+Without one, every element names its own surface and nothing says they share a
+frame, so the model resolves three settings as three pictures (a 2x2 collage of
+stock photographs). A single synthesized sentence fixes that.
 
 So this suite pins the floor: the sentence exists, it names every element, it is
 written in the layout's own language, and it never overwrites one the planner
@@ -57,8 +50,8 @@ cap = L.layout_to_caption(dict(RU))
 hl = cap.get("high_level_description", "")
 check("a layout with no high_level gets one", bool(hl.strip()), hl)
 check("it says the elements share ONE frame", "одном кадре" in hl, hl)
-# Measured: "Одно изображение" left the 2x2 collage standing AND added a
-# transparency checkerboard under it. The noun has to be ФОТОГРАФИЯ.
+# "Одно изображение" leaves the 2x2 collage standing AND adds a transparency
+# checkerboard under it. The noun has to be ФОТОГРАФИЯ.
 check("it says PHOTOGRAPH, the word that actually held the frame together",
       "фотография" in hl.lower(), hl)
 for el in RU["elements"]:

@@ -1,7 +1,7 @@
 """A word to the user BEFORE a long tool runs (interim.py).
 
-The user asked for a reaction in real time, not only when the work is done
-(2026-09-18). The model's own pre-tool sentence goes out when it is clean,
+The user asked for a reaction in real time, not only when the work is done.
+The model's own pre-tool sentence goes out when it is clean,
 nothing otherwise (a canned note repeated the status line: live 10-03
 «лишне дублирует»); one per turn; long tools only.
 """

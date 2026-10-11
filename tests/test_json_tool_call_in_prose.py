@@ -1,6 +1,6 @@
 """A JSON tool call written into the prose is a call, not a leak.
 
-Live 2026-09-13 (mega run 3, steps 72/75/77): after a model reload three
+After a model reload three
 drawing turns in a row came back with the call as text —
 `<tool_call>{"name": "generate_image", "arguments": {...}}</tool_call>` —
 utils.strip_textual_tool_calls deleted the block as a leak and the user got
@@ -56,7 +56,7 @@ for prose in ('The JSON {"name": "Marat", "age": 30} describes a user.',
 src = inspect.getsource(L)
 check("the stream path treats a JSON call as markup", "_JSON_CALL_START_RE.search(content)" in src)
 
-# Format F, live 2026-09-29: `world[TOOL_CALL]generate_image(description='…')` was the reply.
+# Format F: `world[TOOL_CALL]generate_image(description='…')` was the reply.
 _calls, _rest = L.extract_gemma4_tool_calls(
     "world[TOOL_CALL]generate_image(description='A ginger cat (fluffy) on a sofa', width=944)[/TOOL_CALL]")
 check("a python-style call is parsed", [c["function"]["name"] for c in _calls] == ["generate_image"]

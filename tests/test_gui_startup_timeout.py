@@ -20,7 +20,7 @@ try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
 
-from PyQt5.QtWidgets import QApplication, QDialog
+from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QKeyEvent, QMouseEvent
 from PyQt5.QtCore import Qt, QEvent, QPointF
 
@@ -30,12 +30,11 @@ import gui_settings_dialog as GSD
 _app = QApplication.instance() or QApplication(sys.argv)
 
 RESULTS = []
-import os as _os
 def check(name, cond, detail=""):
     RESULTS.append((name, bool(cond)))
     print("[" + ("PASS" if cond else "FAIL") + "] " + name
           + ("" if cond or not detail else " - " + str(detail)[:200]))
-    if not cond and _os.environ.get("PYTEST_CURRENT_TEST"):
+    if not cond and os.environ.get("PYTEST_CURRENT_TEST"):
         raise AssertionError(str(name) + (": " + str(detail) if detail else ""))
 
 
