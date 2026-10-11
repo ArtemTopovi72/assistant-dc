@@ -223,7 +223,7 @@ class TransportMixin:
         # A short menu reply to a button press joins the tail the next press wipes (tg_dispatch).
         tail = getattr(self, "_menu_tail", {}).get(p.get("chat_id"))
         if (tail and tail["open"] and method == "sendMessage" and len(p.get("text", "")) <= 200
-                and not getattr(_REPLY, "target", None) and (r.get("result") or {}).get("message_id")):
+                and not _REPLY.get() and (r.get("result") or {}).get("message_id")):
             tail["ids"].append(r["result"]["message_id"])
         return r
 
