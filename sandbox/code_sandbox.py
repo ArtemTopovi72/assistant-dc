@@ -195,8 +195,7 @@ class Sandbox:
                         out.append(f"{name}/")
                         walk(p, level + 1)
                     elif depth == 1:
-                        # The one-level listing /files parses
-                        # is "name/".
+                        # The one-level listing (what /files parses) is plain "name/".
                         out.append(f"{name}/")
                     else:
                         try:
@@ -380,11 +379,10 @@ class Sandbox:
 
         The root itself ("", ".", "*", "all") empties the folder through
         reset(): a refusal here let the model report «Я удалил все файлы»
-        over surviving entries. It is
-        the user's own working folder and /reset_sandbox does the same, so
-        the honest tool is one that actually does it. Any other path goes
-        through resolve() so a symlink cannot point the deletion outside.
-        Returns what was removed, for the reply.
+        over surviving entries. It is the user's own working folder and
+        /reset_sandbox does the same, so the honest tool is one that actually
+        does it. Any other path goes through resolve() so a symlink cannot
+        point the deletion outside. Returns what was removed, for the reply.
         """
         import shutil
         rel = (rel or "").strip()
