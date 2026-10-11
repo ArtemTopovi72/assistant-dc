@@ -180,16 +180,8 @@ def main(tag):
             return fn()
         return run
 
-    stage("03_redraw_img2img", guard(
-        lambda: I.redraw_image_with_comfy(ctx, apple(), "a green apple", seed=SEED)))
-
-    stage("04_outpaint", guard(
-        lambda: I.outpaint_image_with_comfy(ctx, apple(), "wooden table", right=128, seed=SEED)))
-
-    # region given explicitly so this stage does NOT depend on the LLM grounder
-    stage("05_insert_object", guard(
-        lambda: I.insert_object_with_comfy(ctx, apple(), "a silver fork",
-                                           region=(0.05, 0.55, 0.45, 0.95), seed=SEED)))
+    # Stages 03-05 (img2img redraw, outpaint, insert object) and 11 (face enhance) are gone:
+    # image.py no longer has redraw/outpaint/insert_object/enhance_faces_with_comfy.
 
     stage("06_remove_object", guard(
         lambda: I.remove_object_with_comfy(ctx, apple(), "apple", seed=SEED)))
@@ -207,12 +199,6 @@ def main(tag):
 
     stage("10_firered_edit", guard(
         lambda: I.edit_image_with_firered(ctx, apple(), "make the apple green", seed=SEED)))
-
-    def _faces():
-        if not face():
-            raise RuntimeError("no portrait — stage 02 failed, skipped")
-        return I.enhance_faces_with_comfy(ctx, face())
-    stage("11_enhance_faces", _faces)
 
     def _hands():
         if not face():
