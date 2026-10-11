@@ -57,7 +57,6 @@ class H(BaseHTTPRequestHandler):
             chat(cid)
             with D.WIRE.lock:
                 evs = [e for e in D.WIRE.sent if e["chat_id"] == cid]
-            c = CHATS[cid]
             with BOT._task_lock:
                 busy = bool(BOT._chat_busy.get(cid, 0)) or bool(BOT._running_task.get(cid))
             return self._json({"events": evs[since:], "n": len(evs), "busy": busy})
