@@ -25,7 +25,10 @@ STORIES = [
 
 out_dir = os.path.join(ROOT, "runtime", "story_probe"); os.makedirs(out_dir, exist_ok=True)
 H._current_image_paths = lambda c, s: []
+ONLY = {int(x) for x in sys.argv[1:]}
 for i, (ru, en) in enumerate(STORIES, 1):
+    if ONLY and i not in ONLY:
+        continue
     print(f"=== story {i}: parts={len(video.split_script(en))}", flush=True)
     ctx = models.Context(models=None, transcription_cache={}, cache_file=None,
                          asr_lock=threading.Lock(), tts_lock=threading.Lock())

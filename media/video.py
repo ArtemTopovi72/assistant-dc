@@ -1416,7 +1416,9 @@ CONTINUE_CTX_PREFIX = (
     "The shot continues with no cut and no reset: the same people, place, framing and "
     "lighting, picking up exactly where the opening frames leave off; whatever already "
     "changed stays changed, and voices and ambient sound go on unchanged. Every object keeps "
-    "its shape and stays the same object; nothing appears or vanishes on its own. What happens next: ")
+    "its shape and stays the same object; nothing appears or vanishes on its own. The camera "
+    "keeps the angle and distance it ends on -- no close-up, zoom or reframing onto whoever the "
+    "next action is about; they are shown inside this same frame. What happens next: ")
 # 10-09: the prefix carried a kitchen example («to use a different tool, the hand sets it down on
 # the counter, then picks the new one up»), and part 2 of «naked women walk past the bag of money
 # at Lakhta» came out as a hand putting a tool on a counter and hitting a stone with a wooden
