@@ -23,7 +23,7 @@ try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
 from pathlib import Path
-from PyQt5.QtWidgets import QApplication, QMessageBox
+from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QImage, QColor
 import gui
 

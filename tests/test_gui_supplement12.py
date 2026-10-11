@@ -16,10 +16,9 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 from pathlib import Path
 
 import numpy as np
-from PyQt5.QtWidgets import QApplication, QMessageBox, QInputDialog
-from PyQt5.QtWidgets import QFileDialog as _QFD
+from PyQt5.QtWidgets import QApplication, QMessageBox
 from PyQt5.QtGui import QImage, QColor
-from PyQt5.QtCore import Qt, QMimeData, QUrl
+from PyQt5.QtCore import QMimeData, QUrl
 import gui
 from _gui_patch import stub_workers as _stub_workers, restore as _gui_restore
 
