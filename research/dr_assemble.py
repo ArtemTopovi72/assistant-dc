@@ -173,7 +173,7 @@ def strip_empty_fields(report: str) -> tuple:
             if not sep or "·" not in meta:
                 out_lines.append(line)
                 continue
-        parts = [p for p in meta.split("·")]
+        parts = meta.split("·")
         keep, run = [], []
         for part in parts:
             if _is_placeholder(part):
@@ -345,8 +345,8 @@ def provenance_footer(briefs: list, stats: dict, depth: str,
     refl = stats.get("reflection") or {}
     if refl.get("needs_second_pass") and not stats.get("reflection_iterations"):
         parts.append(f"*{L('gap_open')}*")
-    head = chr(10) * 2 + "## " + L("how_made") + chr(10) * 2
-    return head + ("  " + chr(10)).join(parts) + chr(10)
+    head = "\n\n## " + L("how_made") + "\n\n"
+    return head + "  \n".join(parts) + "\n"
 
 
 def _contradiction_note(sig: dict, out_lang: str = "en") -> str:

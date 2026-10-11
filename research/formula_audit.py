@@ -53,7 +53,6 @@ _MATH_CMDS = ("frac", "sum", "int", "sqrt", "alpha", "beta", "gamma", "delta",
 # common UTF-8-mis-decoded-as-cp1252 mojibake signatures.
 _MOJIBAKE_RE = re.compile(r"Ã[\x80-\xbf©¨¤¶]|Â[\x80-\xbf°±·]|â€[\x9c\x9d\x99\x93\x94]|Ð[\x90-\xbf]|Ñ[\x80-\x8f]")
 _UNICODE_MATH = "∑∏∫∬∮√∂∇αβγδεζηθικλμνξπρστυφχψωΓΔΘΛΞΠΣΦΨΩ≤≥≠≈→←↔×÷±∞∈∉⊂⊆∪∩ℝℕℤℚℂ"
-_DOLLAR = chr(36)
 
 
 def _math_spans(text: str):
@@ -118,7 +117,7 @@ def formula_profile(text: str) -> dict:
         w for span in spans for w in _MATH_CMDS
         if re.search(r"(?<![\\A-Za-z])" + w + r"\b", span)
     })
-    n_dollar = text.count(_DOLLAR)
+    n_dollar = text.count("$")
     # block ($$) vs inline ($) balance
     n_block = len(re.findall(r"\$\$", text))
     blocks_balanced = (n_block % 2 == 0)
