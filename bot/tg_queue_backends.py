@@ -342,7 +342,8 @@ class RedisBackend(_Backend):
             tasks = []
             for raw in (self._r.lrange(self._PFX + c, 0, -1) or []):
                 try: tasks.append(_Task.from_dict(json.loads(raw)))
-                except Exception: pass
+                except Exception as exc:
+                    logger.warning("Redis pending: skipping undecodable entry for %s: %s", c, exc)
             out[c] = tasks
         return out
 

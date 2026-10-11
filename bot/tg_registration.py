@@ -306,7 +306,8 @@ class RegistrationMixin:
                                     {"text": tg_bot._t("reject_btn", alang),
                                      "callback_data": f"admin_reject:{chat_id}"},
                                 ]]})
-                        except Exception: pass
+                        except Exception as exc:
+                            tg_bot.logger.warning("admin registration notice to %s failed: %s", admin_id, exc)
                 return False
             # A state left over from an account that no longer exists (deleted
             # by an admin mid-"feedback"/"change_name") would answer every

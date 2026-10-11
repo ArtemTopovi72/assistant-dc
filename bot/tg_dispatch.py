@@ -235,7 +235,8 @@ class DispatchMixin:
         if not sess0.lang:
             sess0.lang = tg_bot._norm_lang((msg.get("from") or {}).get("language_code", ""))
             try: self._store.put(sess0)
-            except Exception: pass
+            except Exception as exc:
+                tg_bot.logger.warning("session persist failed (chat %s): %s", chat_id, exc)
         # The client's language is a guess: a user whose Telegram is English but
         # who WRITES Russian would get every menu and status in English. Until
         # they pick a language themselves, the words they type decide.
@@ -244,7 +245,8 @@ class DispatchMixin:
                 and len(re.findall(r"[А-Яа-яЁё]{2,}", _t0)) >= 2):
             sess0.lang = "ru"
             try: self._store.put(sess0)
-            except Exception: pass
+            except Exception as exc:
+                tg_bot.logger.warning("session persist failed (chat %s): %s", chat_id, exc)
 
         text = (msg.get("text") or "").strip()
         # A forwarded button label is not something to act on: a stray
