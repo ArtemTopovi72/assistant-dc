@@ -801,12 +801,9 @@ def repair_sources(sources: list, collected: list) -> tuple:
         elif same and key not in seen:
             seen.add(key)
             out.append(s)                   # ambiguous domain: do not guess
-        else:
-            # Nothing was collected on this domain at all, so the address
-            # cannot be checked. Dropped rather than printed: a deck whose
-            # sources slide 404s is worse than one with fewer citations, and
-            # the search results backfill the list below.
-            fixed += 0
+        # Otherwise nothing was collected on this domain, so the address cannot be
+        # checked. Dropped rather than printed: a deck whose sources slide 404s is
+        # worse than one with fewer citations, and the search results backfill the list.
     return out, fixed
 
 
