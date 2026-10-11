@@ -1,12 +1,9 @@
 """Focused reproducibility/sensitivity check with retry on transient render errors."""
 import hashlib, os, sys, time
 from PIL import Image
-import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import image
-
-PROMPT = ("a red ceramic coffee mug on a wooden table, soft daylight from the left, "
-          "shallow depth of field, photorealistic")
+from _verify_common import PROMPT, meandiff
 
 def gen(seed, w=512, h=512, tries=3):
     for attempt in range(tries):
@@ -21,13 +18,6 @@ def gen(seed, w=512, h=512, tries=3):
         print(f"  (retry {attempt+1}/{tries} for seed={seed} after transient None)")
         time.sleep(3)
     return None, None, None
-
-def meandiff(a, b):
-    ia = np.asarray(Image.open(a).convert("RGB"), dtype=np.float64)
-    ib = np.asarray(Image.open(b).convert("RGB"), dtype=np.float64)
-    if ia.shape != ib.shape:
-        return 999.0
-    return float(np.abs(ia - ib).mean())
 
 print("=== reproducibility (same seed) + sensitivity (diff seed) ===")
 # Order A(12345) -> C(99999) -> B(12345): the middle different-seed render

@@ -19,6 +19,7 @@ Usage mirrors the old per-suite helper:
         ...
 """
 import deep_research as _DR
+from _patch_base import RebindPatches
 
 import dr_assemble
 import dr_brief
@@ -46,27 +47,17 @@ def homes(name):
     return [m for m in ENGINE_MODULES if name in vars(m)]
 
 
-class Patches:
+class Patches(RebindPatches):
     """Rebind engine seams for the duration of a `with` block."""
 
-    def __init__(self, **kw):
-        self.kw = kw
-        self.saved = []          # (module, name, original)
-
-    def __enter__(self):
-        for name, value in self.kw.items():
-            targets = homes(name)
-            if not targets:
-                raise AttributeError(
-                    f"no research-engine module binds {name!r} — patching it "
-                    f"would be a silent no-op, so the suite is wrong, not the code")
-            for mod in targets:
-                self.saved.append((mod, name, getattr(mod, name)))
-                setattr(mod, name, value)
-        return self
-
-    def __exit__(self, *exc):
-        for mod, name, original in reversed(self.saved):
-            setattr(mod, name, original)
-        self.saved.clear()
-        return False
+    def _apply(self, name, value):
+        targets = homes(name)
+        if not targets:
+            raise AttributeError(
+                f"no research-engine module binds {name!r} — patching it "
+                f"would be a silent no-op, so the suite is wrong, not the code")
+        changed = []
+        for mod in targets:
+            changed.append((mod, getattr(mod, name)))
+            setattr(mod, name, value)
+        return changed

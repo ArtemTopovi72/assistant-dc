@@ -7,14 +7,13 @@ not have caught that defect, so the assertion behind it is decoration.
 Run: venv/Scripts/python.exe tests/_mut_image_size.py
 """
 import io
-import sys
-try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception: pass
 import os
 import subprocess
 import sys
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+from _mut_common import ROOT, utf8_stdout
+
+utf8_stdout()
 SUITE = os.path.join(ROOT, "tests", "test_image_size_choice.py")
 PY = sys.executable
 

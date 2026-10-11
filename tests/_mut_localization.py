@@ -6,11 +6,11 @@ have caught that regression.
 
 Run: PYTHONIOENCODING=utf-8 venv/Scripts/python.exe tests/_mut_localization.py
 """
-import os, sys, subprocess
+import os, sys
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception: pass
+from _mut_common import ROOT, first_fail, run_suite, utf8_stdout
+
+utf8_stdout()
 
 SUITE = "tests/test_tg_localization.py"
 
@@ -121,16 +121,14 @@ for label, find, repl in MUTANTS:
     try:
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(ORIGINAL.replace(find, repl, 1))
-        r = subprocess.run([sys.executable, SUITE], cwd=ROOT, env=env,
-                           capture_output=True, text=True, timeout=300)
+        r = run_suite(SUITE, env, 300)
     finally:
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(ORIGINAL)
     if r.returncode != 0:
         caught += 1
-        fails = [l for l in (r.stdout or "").splitlines() if l.startswith("FAIL")]
         print(f"CAUGHT    {label}\n            by: "
-              f"{(fails[0][6:].strip() if fails else '(crashed)')[:100]}")
+              f"{first_fail(r)[:100]}")
     else:
         survived += 1
         print(f"SURVIVED  {label}   <-- not caught")

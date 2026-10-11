@@ -4,9 +4,7 @@ import hashlib, os, sys
 from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import image
-
-PROMPT = ("a red ceramic coffee mug on a wooden table, soft daylight from the left, "
-          "shallow depth of field, photorealistic")
+from _verify_common import PROMPT, meandiff
 
 def gen(seed, w, h, steps=8, cfg=1.0):
     p = image.generate_image_with_comfy(
@@ -18,14 +16,6 @@ def gen(seed, w, h, steps=8, cfg=1.0):
         size = im.size
     h_ = hashlib.sha1(open(p, "rb").read()).hexdigest()[:12]
     return p, size, h_
-
-def meandiff(a, b):
-    import numpy as np
-    ia = np.asarray(Image.open(a).convert("RGB"), dtype=np.float64)
-    ib = np.asarray(Image.open(b).convert("RGB"), dtype=np.float64)
-    if ia.shape != ib.shape:
-        return 999.0
-    return float(np.abs(ia - ib).mean())
 
 print("=== PRIORITY 2: resolution fidelity ===")
 res_ok = True

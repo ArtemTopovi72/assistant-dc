@@ -5,11 +5,11 @@ new test would not have caught the original bug.
 
 Run: PYTHONIOENCODING=utf-8 venv/Scripts/python.exe tests/_mut_cancel_bcast.py
 """
-import os, sys, shutil, subprocess, tempfile
+import os, sys, shutil, tempfile
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception: pass
+from _mut_common import ROOT, first_fail, run_suite, utf8_stdout
+
+utf8_stdout()
 
 Q = chr(34)
 
@@ -91,15 +91,13 @@ for label, fname, find, repl, suite in MUTANTS:
     try:
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(mutated)
-        r = subprocess.run([sys.executable, suite], cwd=ROOT, env=env,
-                           capture_output=True, text=True, timeout=300)
+        r = run_suite(suite, env, 300)
     finally:
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(original)
     if r.returncode != 0:
         caught += 1
-        fails = [l for l in (r.stdout or "").splitlines() if l.startswith("FAIL")]
-        why = fails[0][6:].strip() if fails else "(crashed)"
+        why = first_fail(r)
         print(f"CAUGHT    {label}\n            by: {why}")
     else:
         survived += 1
