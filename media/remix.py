@@ -9,6 +9,7 @@ Pipeline: Demucs stems -> (words: Whisper times the original words, TTS speaks o
 spans, pyworld lays the original singer's pitch on them) -> SoulX-Singer-SVC puts the singer's
 timbre on it (Seed-VC if SoulX is not installed) -> mixed over the original backing.
 """
+import itertools
 import json
 import logging
 import os
@@ -21,7 +22,7 @@ import numpy as np
 
 import cover
 import music
-from config import OUTPUT_DIR, scratch_path, venv_python
+from config import OUTPUT_DIR, venv_python
 
 logger = logging.getLogger("assistant.remix")
 
@@ -417,10 +418,6 @@ def _score_parts(abc: str) -> list:
     return parts or [("Verse", 60), ("Chorus", 60), ("Verse", 60), ("Chorus", 60)]
 
 
-def _score_sections(abc: str) -> list:
-    return [t for t, _ in _score_parts(abc)]
-
-
 def _score_tempo_key(abc: str) -> str:
     q = re.search(r"^Q:\s*1/4=(\d+)", abc or "", re.M)
     k = re.search(r"^K:\s*([A-G][#b]?m?)", abc or "", re.M)
@@ -472,7 +469,7 @@ def _repetition_profile(phrases: list) -> list:
     run = 0
     for l in lines:
         ws = l.split()
-        best = max((sum(1 for _ in g) for w, g in __import__("itertools").groupby(ws) if len(w) >= 4), default=1)
+        best = max((sum(1 for _ in g) for w, g in itertools.groupby(ws) if len(w) >= 4), default=1)
         run = max(run, best)
     if run >= 2:
         notes.append(f"it sings one key word {run} times in a row (like «word, word, word») -- "
@@ -987,7 +984,6 @@ def _shape(sections: list) -> list:
 def _shape_rows(orig: list) -> list:
     """The original as the model sees it: per line its syllables, repeats and hook place -- not
     its words, so the new lyric cannot lean on them."""
-    import itertools
     shape = _shape(orig)
     hook = _hook_words([l for _, ls in orig for l in ls])
     rows, k = [], 0
@@ -1105,6 +1101,6 @@ def remix_voice(ctx, voice_song: str, melody_song: str) -> str:
     """The voice of `voice_song` sings `melody_song` (its words and melody) over its backing."""
     work = tempfile.mkdtemp(prefix="remix_")
     vox1, _ = _stems(voice_song, work, "a")
-    vox2, back2 = _stems(melody_song, work, "b")
+    _, back2 = _stems(melody_song, work, "b")
     conv = sing_as(ctx, os.path.join(work, "b_vox.wav"), _singer_ref(vox1, work, "a"), os.path.join(work, "conv.wav"))
     return _mix(conv, back2, _out())

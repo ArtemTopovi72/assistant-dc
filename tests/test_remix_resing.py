@@ -39,10 +39,6 @@ A B c d e f g a b c d |
 """
 
 
-def test_sections_follow_the_score():
-    assert R._score_sections(ABC) == ["Intro", "Verse", "Chorus", "Interlude", "Verse", "Chorus", "Outro"]
-
-
 def test_section_notes_count_only_the_melody():
     assert R._score_parts(ABC) == [("Intro", 0), ("Verse", 8), ("Chorus", 10), ("Interlude", 0),
                                    ("Verse", 8), ("Chorus", 10), ("Outro", 0)]

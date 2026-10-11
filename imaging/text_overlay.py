@@ -8,7 +8,6 @@ typography LoRA. Reseeding cannot beat a prior. Drawn type is never wrong.
 from __future__ import annotations
 
 import os
-import re
 import time
 from typing import Optional
 

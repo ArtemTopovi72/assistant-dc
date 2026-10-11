@@ -408,7 +408,7 @@ def render_chapter(synth, title: str, body: str, n: int, out_wav: str, cancelled
         if cancelled():
             return False
         seg = None
-        for _try in (1, 2):                      # ponytail: one retry; add an ASR check if bad pieces persist
+        for _try in (1, 2):                      # one retry; `verify` is the optional ASR check
             wav = synth(text)
             if wav and os.path.exists(wav):
                 cand = AudioSegment.from_file(wav)

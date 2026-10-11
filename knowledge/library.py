@@ -700,9 +700,9 @@ def build_rag_prompt(lib: "Library", question: str, k: Optional[int] = None,
         # A small library is its own best retrieval. "можно ли с собакой?"
         # against a one-page contract that says "домашних животных" was an
         # FTS miss (no embeddings under tests), the question went to the
-        # model bare, and it answered from whatever else was in the chat
-        # When the whole library fits the
-        # passage budget, hand it over instead of nothing.
+        # model bare, and it answered from whatever else was in the chat.
+        # When the whole library fits the passage budget, hand it over
+        # instead of nothing.
         results = _whole_small_library(lib)
         if not results:
             return question, "📚 No relevant passages found in the database for this query."

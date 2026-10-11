@@ -18,11 +18,9 @@ import re
 
 
 # --------------------------------------------------------------------------- #
-# Ideogram renders legible text — when the box it is given can hold the string.
-# A police car whose lettering box was 0.09 x 0.05 came back reading "AVCHKE":
-# six characters squeezed into a box barely wider than it was tall, so the model
-# painted letter-shaped strokes instead of letters. These numbers are the shape a
-# string actually needs.
+# Ideogram renders legible text only when the box it is given can hold the
+# string; these numbers are the shape a string actually needs (see the module
+# docstring for the measurement they come from).
 MIN_TEXT_H = 0.08        # below this the glyphs have too few pixels to form
 CHAR_ASPECT = 0.6        # width of one block capital, in units of the box height
 MAX_TEXT_CHARS = 24      # past this the model stops spelling and starts scribbling

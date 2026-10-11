@@ -7,8 +7,8 @@ Nothing selects it unless you ask for it:
     set KNOWLEDGE_SERVICE_URL=http://127.0.0.1:8790
     venv\\Scripts\\python.exe knowledge_service.py --port 8790
 
-The default remains the in-process backend, so an unconfigured install is
-byte-for-byte the product it was before this branch.
+The default remains the in-process backend, so an unconfigured install never
+touches this service.
 
 DEPENDENCIES
 ------------
@@ -52,7 +52,6 @@ what a cancelling user observes.
 """
 from __future__ import annotations
 
-import json
 import logging
 import os
 import threading
