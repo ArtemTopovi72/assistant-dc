@@ -162,3 +162,21 @@ def test_the_newcomer_walks_into_the_existing_frame():
     # Live 2026-10-10: the camera whipped from the selfie down to the cat, and the cat hit the dog.
     c = V.new_people_clause(2, 1)
     assert "no pan" in c and "steps into the frame" in c and "nobody hits" in c
+
+
+def test_an_approved_plan_or_a_continue_click_is_already_a_request_for_video(monkeypatch):
+    # Live 2026-10-11: the ▶ rerun was re-judged, the model said "not a video", it was refused.
+    import tool_image_handlers as H
+    import intent
+    monkeypatch.setattr(intent, "ask_yes", lambda *a, **k: False)
+    state = {"user_input": "Сделай продолжение как имам выкидывает его из мечети"}
+
+    class Ctx:
+        last_video_path = None
+        video_plan_parts, continue_tail = [], ""
+    c = Ctx()
+    assert not H.asks_for_video(c, state)
+    c.video_plan_parts = ["part one"]
+    assert H.asks_for_video(c, state)
+    c.video_plan_parts, c.continue_tail = [], "tail.mp4"
+    assert H.asks_for_video(c, state)

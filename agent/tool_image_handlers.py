@@ -1063,6 +1063,10 @@ def asks_for_video(ctx, state) -> bool:
                       + " " + str((state or {}).get("user_input") or "")).strip()
     if not said or _ASKS_VIDEO.search(said):     # no words to judge (a direct call): not ours to refuse
         return True
+    # A button already said "video": ▶ under the plan card, or ▶️ Continue with its clip.
+    # Live 2026-10-11 the ▶ rerun was re-asked here, the model said no, the turn failed.
+    if getattr(ctx, "video_plan_parts", None) or getattr(ctx, "continue_tail", ""):
+        return True
     import intent
     last = getattr(ctx, "last_video_path", None)
     if last and os.path.exists(last):
