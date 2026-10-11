@@ -6,7 +6,7 @@
   request payloads — see below, identical string in ON and OFF runs).
 - **Provider / backend:** LM Studio, local, llama.cpp GGUF (`@q8_0` quant).
 - **Endpoint:** `http://localhost:1234/v1/chat/completions` (`config.LM_STUDIO_URL`).
-- Capture method: `requests.post` wrapped inside `llm.py` to record the **real**
+- Capture method: `requests.post` wrapped inside `agent/llm.py` to record the **real**
   outbound payload and inbound JSON — not a reconstruction.
   (`tests/concise_evidence.py`, `tests/reasoning_lever.py`, `tests/prefill_tools.py`.)
 - `usage.completion_tokens` is the decisive metric: it counts tokens the model
@@ -15,7 +15,7 @@
 
 ## What the toggle did originally — PRESENTATION ONLY
 
-`ctx.no_think` only affected `llm.py`: append `/no_think`, set
+`ctx.no_think` only affected `agent/llm.py`: append `/no_think`, set
 `chat_template_kwargs.enable_thinking=False`, set `reasoning:"off"` (the last one was
 set unconditionally in both modes). It then **stripped** `<think>` from the output.
 Everything governing behaviour — system prompt, tools, `temperature=0.5`,
@@ -64,11 +64,11 @@ Prefilling a **closed** `<think></think>` as the assistant turn forces generatio
 begin *after* the reasoning block, so the model **cannot** generate one. This:
 - genuinely cuts generated tokens (97 → 40 with tools; 62 → 5 without) — the model
   **reasons less**, it is not merely stripped afterward;
-- **still returns correct `tool_calls`** (the `llm.py` docstring's "do not combine
+- **still returns correct `tool_calls`** (the `agent/llm.py` docstring's "do not combine
   with tools" warning is overly cautious for this LM Studio backend — empirically
   verified compatible).
 
-## The fix (graph.py)
+## The fix (`agent/graph_compose.py`, `_generation_settings`)
 
 Direct mode (`ctx.no_think`) now sets, for **every** agent LLM call (the tool-loop
 call and the forced closing reply):
@@ -76,7 +76,8 @@ call and the forced closing reply):
   generating the planning block;
 - the concise system directive (`prompts._CONCISE_DIRECTIVE`): fewest tools, short
   answers, act-don't-narrate;
-- `temperature 0.2`, `max_tokens 700`.
+- `temperature 0.2`, `max_tokens 700` (the default reply length; the Reply length
+  setting now overrides the token budget, see `_generation_settings`).
 
 `/no_think` + `enable_thinking:false` are kept (harmless; help models that DO honor
 them).
@@ -98,7 +99,7 @@ them).
   `tests/prefill_tools.py`.
 
 ## Files
-`prompts.py` (`_CONCISE_DIRECTIVE`, `build_system_prompt(concise=)`) ·
-`graph.py` (`gen_prefill`/`gen_temperature`/`gen_max_tokens` from `concise`) ·
-`gui.py` (label + hint) · `tests/concise_evidence.py`, `tests/reasoning_lever.py`,
-`tests/prefill_tools.py`.
+`agent/prompts.py` (`_CONCISE_DIRECTIVE`, `build_system_prompt(concise=)`) ·
+`agent/graph_compose.py` (`gen_prefill`/`gen_temperature`/`gen_max_tokens` from `concise`) ·
+the GUI settings dialog (label + hint) · `tests/concise_evidence.py`,
+`tests/reasoning_lever.py`, `tests/prefill_tools.py`.
