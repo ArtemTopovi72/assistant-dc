@@ -14,9 +14,6 @@ from ui_scale import px, scale_style as _ss
 from config import MEMORY_DIR
 from gui_common import _section
 
-import logging
-logger = logging.getLogger("assistant.gui")
-
 
 # --------------------------------------------------------------------------- #
 # System / diagnostics tab
