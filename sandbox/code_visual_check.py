@@ -4,7 +4,7 @@ A script can run without error and still draw garbage (e.g. an arrow drawn
 straight through every box and its text), so "did it write a file" is not a
 sufficient check.
 
-Now the newest picture a script wrote is shown to the vision model together
+The newest picture a script wrote is shown to the vision model together
 with the request; concrete layout defects (lines through boxes or text,
 overlapping or unreadable labels, an empty canvas, cut-off content) come
 back into the tool result as a fix request, once per turn. The judge is told

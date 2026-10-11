@@ -16,7 +16,6 @@ import random
 import re
 import time
 from collections import deque
-from concurrent.futures import as_completed
 from pathlib import Path
 from typing import Optional
 

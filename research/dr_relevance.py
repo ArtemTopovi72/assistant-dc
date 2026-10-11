@@ -16,7 +16,7 @@ Two deliberately different strengths:
 import re
 
 
-# Source-relevance gate (Phase-9 repair): for scholarly topics, drop briefs that
+# Source-relevance gate: for scholarly topics, drop briefs that
 # don't mention the core entity, so off-topic papers (e.g. a Josephson-effect
 # paper on a "Di Zenzo structure tensor" query) never reach the report as PRIMARY.
 _RELEVANCE_STOPWORDS = {

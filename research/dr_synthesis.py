@@ -400,7 +400,7 @@ def _synthesize_abstract(ctx, outline: dict, body_text: str,
                          out_lang: str = "en") -> str:
     """Write a REAL abstract for the finished document. The outline's `abstract_focus`
     is only a one-sentence DIRECTIVE from the planner ("what the abstract should
-    claim") — emitting it verbatim as the Abstract (the old behavior) gave a fake,
+    claim") — emitting it verbatim as the Abstract would give a fake,
     one-line abstract. Instead summarize the actual assembled body into a proper
     150–250 word academic abstract. Falls back to the focus line if the call fails."""
     focus = (_fix_mojibake(outline.get("abstract_focus", "")) or

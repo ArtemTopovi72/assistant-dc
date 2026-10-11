@@ -16,7 +16,6 @@ DR_* knobs, which `apply_overrides` swaps out for a single run. How LONG each
 profile takes (the measured ETA) is dr_timing's job.
 """
 import logging
-import re
 
 import dr_settings as S
 from dr_urls import (_authority_score, _domain, _is_community_host, _is_landing_url,

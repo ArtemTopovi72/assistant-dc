@@ -7,8 +7,8 @@ Nothing selects it unless you ask for it:
     set RESEARCH_SERVICE_URL=http://127.0.0.1:8791
     venv\\Scripts\\python.exe research_service.py --port 8791
 
-The default remains the in-process backend, so an unconfigured install is
-byte-for-byte the product it was before this branch.
+The default remains the in-process backend, so an unconfigured install runs
+research in-process exactly as if this service did not exist.
 
 WHY THIS ONE IS ALLOWED OUT OF PROCESS AT ALL
 ----------------------------------------------

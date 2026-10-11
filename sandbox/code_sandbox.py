@@ -195,8 +195,8 @@ class Sandbox:
                         out.append(f"{name}/")
                         walk(p, level + 1)
                     elif depth == 1:
-                        # The one-level listing /files parses stays exactly as
-                        # it always was: "name/".
+                        # The one-level listing /files parses
+                        # is "name/".
                         out.append(f"{name}/")
                     else:
                         try:
@@ -700,11 +700,11 @@ class Sandbox:
         Returns the real path, for delivery. A lone file (a .jar the user
         wants exactly as it is, not re-wrapped in a zip) is delivered
         verbatim, under its own real name -- `out_rel` is ignored for it.
-        Before this, a single file raised SandboxError and the model had no
-        real way to satisfy "just the jar, not a zip": observed live, it
-        answered with a fabricated `sandbox:/mnt/data/...` markdown link --
-        a ChatGPT-code-interpreter path this bot has never had -- instead of
-        admitting the tool it actually has only zips folders.
+        Zipping a lone file would leave the model no real way to satisfy
+        "just the jar, not a zip": it would answer with a fabricated
+        `sandbox:/mnt/data/...` markdown link -- a ChatGPT-code-interpreter
+        path this bot has never had -- instead of admitting the tool only
+        zips folders.
         """
         import zipfile
 

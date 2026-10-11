@@ -44,7 +44,6 @@ import sys
 import threading
 import time
 from dataclasses import dataclass
-from pathlib import Path
 
 logger = logging.getLogger("assistant.code_runner")
 

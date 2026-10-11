@@ -19,7 +19,6 @@ import logging
 import sys
 import time
 import types
-from pathlib import Path
 from typing import Callable, Optional
 
 import dr_settings as S
@@ -293,7 +292,7 @@ def hop_anchor(profile: dict, topic: str) -> str:
     The DISTILLED subject, never the raw request. Searching, crawling and
     briefing are English throughout -- that is where the sources are -- and
     plan_queries already produces an English noun phrase for exactly this.
-    Observed live before the fix: a Russian request produced multi-hop queries
+    A Russian request would otherwise produce multi-hop queries
     like "Robusta Чем отличается кофе арабика от робусты" -- half the retrieval
     passes searching in the wrong language, with the whole question glued on.
 

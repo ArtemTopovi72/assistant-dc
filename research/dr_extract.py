@@ -213,8 +213,8 @@ def _extract_title(html: str) -> str:
         soup = BeautifulSoup(html, "lxml")
         if soup.title and soup.title.string:
             return soup.title.string.strip()[:160]
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("title extraction failed: %s", exc)
     return ""
 
 
@@ -236,8 +236,8 @@ def _extract_links(html: str, base_url: str) -> list:
                 continue
             seen.add(key)
             out.append(absu)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("links extraction failed: %s", exc)
     return out
 
 
@@ -258,8 +258,8 @@ def _social_outlinks(html: str, base_url: str) -> list:
                 continue
             seen.add(key)
             out.append(absu)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("social outlinks extraction failed: %s", exc)
     return out
 
 

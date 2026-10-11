@@ -265,9 +265,9 @@ All four steps landed for the deep-research boundary.
 
 Two things are worth carrying forward:
 
-**The overrides dance moved into the boundary.** Every caller used to open-code
-`apply_overrides` / run / `restore_overrides`, and only the GUI worker got the
-`finally:` right. It is now one try/finally in `research_client`, which is also
+**The overrides dance lives in the boundary.** Callers do not open-code
+`apply_overrides` / run / `restore_overrides`. It is one try/finally in
+`research_client`, which is also
 the only reason the operation is safe to expose to a backend that might one day
 run two of them — and why `research_service` serialises runs behind `_RUN_LOCK`
 rather than pretending concurrent runs with different module globals are fine.

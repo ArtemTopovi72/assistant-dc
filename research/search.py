@@ -367,8 +367,8 @@ def distill_search_results(ctx, query: str, raw_results: str) -> str:
     user_msg = f"User query: {query}\n\nSearch results:\n{raw_results}"
     # A request for N THINGS cannot be delivered inside a 400-token budget meant
     # for "1-4 sentences of distilled facts": five jokes came back as "there is
-    # one about an aeroplane and one about a fence". The prompt now allows a full
-    # list, so the budget has to allow it too, or the fix stops at the token cap.
+    # one about an aeroplane and one about a fence". The prompt allows a full
+    # list, so the budget has to allow it too, or the answer stops at the token cap.
     want = wanted_count(query)
     budget = SEARCH_DISTILL_MAX_TOKENS
     if want:
@@ -539,7 +539,7 @@ def image_search_urls(ctx, query: str, *, max_results: int = 12,
     # for "Кировец soviet agricultural tractor field" the engine's own top hit is
     # a photograph of the tractor at 800x533, and the deck came back with a
     # 4096x2160 flag of Kenya on its cover — 8.8 megapixels against 0.4 beats any
-    # bonus this function can apply. Relevance is now the spine and size is a
+    # bonus this function can apply. Relevance is the spine and size is a
     # floor, not a score.
     MIN_AREA = 160_000        # ~400x400: below this a slide picture is mush
 
@@ -637,7 +637,6 @@ def download_image(ctx, url: str, dest_path: str, *, timeout: int = 20,
     """Download a single image URL to ``dest_path``. Returns True iff it saved a
     file that PIL can open as a real, non-trivial image (filters HTML error pages,
     1px trackers, and truncated/corrupt downloads). Never raises."""
-    import requests
     try:
         if ctx is not None:
             throttle_external_calls(ctx)
