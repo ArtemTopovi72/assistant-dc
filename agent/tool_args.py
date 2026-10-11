@@ -631,6 +631,10 @@ class OzonReviewsArgs(_ToolArgs):
     product: str = Field(..., min_length=1, description=(
         "An Ozon product link, SKU number, or slug."))
     limit: int = Field(15, ge=1, le=30, description="How many recent reviews to read.")
+    topic: str = Field("", description=(
+        "What the user asks about, as 1-3 words in the reviews' language (e.g. "
+        "'протечка вода'); the low-rated reviews are then searched for it. Empty "
+        "for a general summary."))
 
 
 class RunCodeArgs(_ToolArgs):

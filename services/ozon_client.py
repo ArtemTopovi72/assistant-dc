@@ -872,6 +872,19 @@ def reviews(product: str, limit: int = 10, pages: int = 4) -> dict:
     return r
 
 
+def worst_reviews(product: str, limit: int = 15, pages: int = 1) -> list:
+    """The lowest-scored reviews of the whole card (every variant). The newest
+    page of a well-rated item is all praise: «а что про протечку?» was answered
+    «никто не жалуется» while the 1-3★ pages held exactly that (2026-10-11)."""
+    base = product_path(product) + "reviews/"
+    r = parse_reviews(fetch_page(base + "?sort=score_asc"), limit, None)
+    got, n = r["reviews"], 1
+    while len(got) < limit and r.get("next") and n < pages:
+        r = parse_reviews(fetch_page(base + r["next"]), limit - len(got), None)
+        got += r["reviews"]; n += 1
+    return got
+
+
 # ── delivery location (pickup point) ────────────────────────────────────────────
 #
 # Without an address Ozon picks the region from the exit IP. Choosing a pickup
