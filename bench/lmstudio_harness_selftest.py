@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from lmstudio_harness import (
     chat, ensure_loaded, serial_lock, list_models, model_state,
-    ModelNotFound, ModelUnavailable, ModelSubstitution, HarnessError,
+    ModelNotFound, ModelSubstitution, HarnessError,
 )
 
 PHANTOM = "qwen3.6-35b-a3b-uncensored-heretic-i1"   # NOT in catalog (the original phantom)
