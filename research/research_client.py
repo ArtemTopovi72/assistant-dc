@@ -129,8 +129,7 @@ class InProcessResearchClient:
 
     def knob_defaults(self) -> Dict[str, Any]:
         import deep_research as dr
-        g = vars(dr)
-        return {name: g.get(name) for name in dr.MANUAL_OVERRIDE_SPEC}
+        return {name: getattr(dr, name, None) for name in dr.MANUAL_OVERRIDE_SPEC}
 
     # -- cancellation -------------------------------------------------------- #
     def cancel(self, ctx=None) -> bool:

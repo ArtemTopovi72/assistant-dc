@@ -138,8 +138,7 @@ def _dispatch(op: str, args: Dict[str, Any]) -> Any:
     if op == "knob_spec":
         return dict(dr.MANUAL_OVERRIDE_SPEC)
     if op == "knob_defaults":
-        g = vars(dr)
-        return {name: g.get(name) for name in dr.MANUAL_OVERRIDE_SPEC}
+        return {name: getattr(dr, name, None) for name in dr.MANUAL_OVERRIDE_SPEC}
     if op == "cancel":
         return _cancel_run(str(args.get("run_id") or ""))
     raise ResearchBackendError(f"unknown operation: {op}")

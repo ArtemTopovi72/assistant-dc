@@ -801,7 +801,7 @@ def format_forecast(buckets: list, lang: str = "en", advice_map: dict = None) ->
 def what_to_wear_periods(city: str, lang: str = "en", hours: Optional[int] = None,
                          date=None, advise_fn=None, correct_fn=None) -> str:
     """Same as what_to_wear_periods_for_loc, resolving `city` first."""
-    loc = resolve_city(city, correct_fn=correct_fn)
+    loc = resolve_city(city, correct_fn=correct_fn, lang=lang)
     if not loc:
         return not_found_message(city, lang)
     return what_to_wear_periods_for_loc(loc, lang, hours=hours, date=date,
