@@ -12,8 +12,8 @@ import image_transfer as T  # noqa: E402
 
 
 def test_clothing_instruction_carries_garment_details(tmp_path, monkeypatch):
-    """Live 10-06: a navy quarter-zip with a red monogram and a flag patch came out
-    a plain navy jumper -- FireRed was never told about the monogram or the flag."""
+    """A navy quarter-zip with a red monogram and a flag patch must not come out a
+    plain navy jumper: FireRed is told about the monogram and the flag."""
     target = tmp_path / "person.jpg"; target.write_bytes(b"P" * 50)
     garment = tmp_path / "hoodie.jpg"; garment.write_bytes(b"H" * 50)
     T._GARMENT_CACHE.clear()

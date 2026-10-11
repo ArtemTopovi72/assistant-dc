@@ -1,4 +1,4 @@
-"""What the voice said wrong on the live drive of 2026-09-12.
+"""Two things the voice said wrong:
 
   "На этикетке 2 строки"           -> voiced "два строки"    (must be "две строки")
   "по данным ЦБ РФ"                -> voiced as one garbled word ("цбров")

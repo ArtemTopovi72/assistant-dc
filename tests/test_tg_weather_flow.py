@@ -248,7 +248,7 @@ sess = bot._get_session(CID); sess.reg_state = "wtw_city"; bot._store.put(sess)
 _w.geocode_city = lambda city, lang="en": None   # unresolvable, even after correction
 _llm.call_llm_simple = lambda ctx, sys_p, user_p, **kw: "Nonexistentville"
 try:
-    allowed = bot._user_gate(CID, msg(CID, "Спб"))
+    bot._user_gate(CID, msg(CID, "Спб"))
 finally:
     _w.geocode_city = _orig_geocode
     _llm.call_llm_simple = _orig_call_llm_simple
@@ -356,7 +356,6 @@ check("pick-a-date arms wtw_date", bot._get_session(CID).reg_state == "wtw_date"
 check("...and sends a date prompt", any("🗓" in s for s in bot.sent), bot.sent)
 
 bot.sent.clear(); bot.sent_kb.clear()
-import datetime as _dtm
 _seen_dates = []
 def _stub_dated(loc, lang="en", hours=None, date=None, advise_fn=None):
     _seen_dates.append(date)
@@ -367,7 +366,7 @@ try:
 finally:
     _w.what_to_wear_periods_for_loc = _orig_wtwfl
 check("'tomorrow' parses to today+1 and drives the forecast",
-      _seen_dates == [_dtm.date.today() + _dtm.timedelta(days=1)], _seen_dates)
+      _seen_dates == [_dt_mod.date.today() + _dt_mod.timedelta(days=1)], _seen_dates)
 check("a date-based forecast does NOT carry the 48h/pick-a-date buttons",
       not (bot.sent_kb[-1] or {}).get("inline_keyboard") if bot.sent_kb else True,
       bot.sent_kb)
@@ -463,7 +462,6 @@ print("=" * 66)
 # then confirm the parsed-out dict is keyed exactly like weather.py's own
 # lookup (`f'{date.isoformat()}_{period}'`) expects.
 import datetime as _dtm2, re as _re2
-_orig_call_llm_simple2 = _llm.call_llm_simple
 advisor = bot._weather_periods_advise_fn(object())
 _buckets = [
     {"date": _dtm2.date(2026, 8, 15), "period": "afternoon",
@@ -480,7 +478,7 @@ _llm.call_llm_simple = _echo_llm
 try:
     result = advisor(_buckets, "en")
 finally:
-    _llm.call_llm_simple = _orig_call_llm_simple2
+    _llm.call_llm_simple = _orig_call_llm_simple
 _expected_keys = {f'{b["date"].isoformat()}_{b["period"]}' for b in _buckets}
 check("the prompt's own keys contain no ':' for the parser to trip over",
       all(":" not in k for k in _re2.findall(r"^(\S+) \|", _captured_prompt.get("text", ""),

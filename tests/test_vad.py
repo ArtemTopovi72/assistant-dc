@@ -4,7 +4,6 @@ Usage: .\\venv\\Scripts\\python.exe tests\\test_vad.py [seconds]
 Default: listens for 15 seconds then exits.
 """
 import sys
-import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 import time
@@ -46,7 +45,7 @@ def _rms_callback(indata, frames, time_info, status):
 if DEVICE is not None:
     print(f"Using device [{DEVICE}]: {sd.query_devices(DEVICE)['name']}\n")
 else:
-    print(f"Using default input device\n")
+    print("Using default input device\n")
 
 monitor = sd.InputStream(samplerate=16000, channels=1, dtype="float32",
                           blocksize=512, callback=_rms_callback, device=DEVICE)

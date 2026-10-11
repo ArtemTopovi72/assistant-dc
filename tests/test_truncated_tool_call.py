@@ -1,6 +1,6 @@
 """A tool call cut off at the token ceiling must not poison the turn.
 
-Live 2026-09-15 19:11: a 300-line matplotlib script did not fit the 1500-token
+A 300-line matplotlib script did not fit the 1500-token
 loop ceiling, the call arrived with half a JSON string ("Failed to parse tool
 call"), the half-written call stayed in history and LM Studio answered 500 to
 the next nine requests. Now: rounds that may write code get a bigger ceiling,
@@ -93,7 +93,6 @@ check("the turn still ends with an answer", "частями" in (final.get("fina
 
 # --- the ceiling ---------------------------------------------------------------------
 builder_rounds = [t for t, names in seen_tokens if "run_code" in names or "write_file" in names]
-plain_rounds = [t for t, names in seen_tokens if names and "run_code" not in names and "write_file" not in names]
 check("a round that may write code gets room for the code",
       builder_rounds and all(t >= GP.BUILDER_LOOP_TOKENS for t in builder_rounds), seen_tokens)
 

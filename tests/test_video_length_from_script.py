@@ -1,5 +1,5 @@
 """A clip with no asked length is as long as its script needs (5.2 s .. the auto cap),
-not always 5.2 s: live 10-06 every multi-action script ended cut short."""
+not always 5.2 s: a multi-action script must not end cut short."""
 import os
 import sys
 

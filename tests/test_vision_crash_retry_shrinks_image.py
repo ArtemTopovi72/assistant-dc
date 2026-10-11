@@ -1,6 +1,6 @@
 """A picture that crashes the model is retried smaller, and the model is revived again.
 
-Live 2026-09-13 (journey 3): a 683x1024 photo tripped llama.cpp's
+A 683x1024 photo tripped llama.cpp's
 `n_ubatch >= n_tokens` assert (non-causal attention over image tokens). The
 revive brought the model back in 15 s, the retry re-sent the same picture and
 killed it again with "Model reloaded." -- a message the revive did not

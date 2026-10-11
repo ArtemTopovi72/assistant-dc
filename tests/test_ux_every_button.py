@@ -3,7 +3,7 @@ dispatcher of a real TelegramBot (network stubbed). A label must reach its
 handler byte-identical and never be queued for the model as if it were a
 question.
 
-Live 2026-09-27: «🎵 Songs» was rewritten to «Ыщтпы» before any handler saw it
+«🎵 Songs» was once rewritten to «Ыщтпы» before any handler saw it
 and redrew a photo, while every unit suite was green. The transcript auditor
 (scripts/ux_audit.py) must also flag each known failure shape — checked on a
 synthetic chat at the end.

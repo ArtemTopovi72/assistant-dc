@@ -1,6 +1,6 @@
 """A question about a picture reads the zoomed parts too (vision_close).
 
-Live 2026-09-18: «на картинках видит только самые здоровые детали, на мелкие
+«на картинках видит только самые здоровые детали, на мелкие
 вообще забивает». One 1024-px look answers with the biggest things; for a
 QUESTION the picture is also cut into zoomed parts and the answer is written
 from the overview plus the parts.

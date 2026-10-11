@@ -1,6 +1,6 @@
 """When the photographic default keeps overriding a colour, draw it as an illustration.
 
-Live 2026-09-12 (journey 4): "a blue elephant on a beach" came back as a
+"a blue elephant on a beach" came back as a
 grey photograph five times; the caption had been insisting "vibrant blue --
 not grey" since the second attempt. Photography was the style FLOOR, not a
 request, so the second insistence drops it. Realism the user asked for stays.

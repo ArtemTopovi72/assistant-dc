@@ -1,6 +1,6 @@
 """Big pictures are sent to the vision model as a bounded copy.
 
-Live, 2026-09-12: a 933x1400 phone photo and a 1920x1088 upscale both made
+A 933x1400 phone photo and a 1920x1088 upscale both made
 LM Studio "reload" the model mid-stream and the user got an empty turn.
 Pure: no LLM call.
 
@@ -45,7 +45,7 @@ check("a missing file falls through to the original", llm._vision_sized(os.path.
 
 # The chat-turn photo travels as BYTES (graph.vision_agent_node's 1536-px
 # proxy) and skipped the bound: a 933x1400 upload crashed the model 4/4
-# times live on 2026-09-13. Bytes get the same cap as paths.
+# times live. Bytes get the same cap as paths.
 import io as _io
 buf = _io.BytesIO(); Image.new("RGB", (2000, 3000), (120, 90, 60)).save(buf, "JPEG", quality=90)
 out_b, mime = llm._vision_sized_bytes(buf.getvalue())

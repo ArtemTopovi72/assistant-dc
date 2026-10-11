@@ -1,11 +1,10 @@
 """A tool call must never be turned into a chat message by our own stripper.
 
-From the live bot log (2026-07-28 23:29): the user asked a question, the bot
-answered with
+A user question was once answered with
 
     call:search{query:<|"|>who is Evgeniy Prigozhin<|"|>}
 
-and no search ever ran. Five times in twelve minutes, across five questions.
+and no search ever ran.
 
 Cause: `utils._CONTROL_TOKEN_RE` (added by the control-token-leak fix) treats
 `<|tool_call>` and `<tool_call|>` as decorative control tokens and deletes them.
@@ -172,7 +171,7 @@ print()
 print("=" * 70)
 print("A REACT-STYLE JSON CALL IN THE CLOSING MESSAGE IS SWEPT")
 print("=" * 70)
-# Live, 2026-09-12: the picture was drawn, then the closing message began with
+# The picture was drawn, then the closing message began with
 # { "action": "generate_image", "action_input": "{...}" } and the voice note
 # read the JSON aloud.
 _LEAK = ('{ "action": "generate_image", "action_input": "{' + chr(39) + 'description' + chr(39) + ': '

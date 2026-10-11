@@ -1,6 +1,6 @@
 """A voice note misheard as a first-person statement is read as the command.
 
-Live 2026-09-13 (mega run 3, step 25): the ASR turned «Нарисуй синего слона
+The ASR turned «Нарисуй синего слона
 на пляже под пальмой» into «Нарисую синего слона…» — "I will draw" — and the
 model, taking it as a statement, replied with filler about the session memory
 and drew nothing. Nobody tells the bot what they are about to draw: a leading

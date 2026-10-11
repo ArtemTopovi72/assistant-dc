@@ -138,7 +138,7 @@ def test_target_enforcement_and_gather():
 
 def test_source_region_crop_and_threading():
     """A source mask on a reference row crops that reference to the masked bbox, and
-    _gather threads the mask so the worker can crop it (C/H: source region)."""
+    _gather threads the mask so the worker can crop it."""
     import image as im
     from PIL import Image, ImageDraw
     d = tempfile.mkdtemp()

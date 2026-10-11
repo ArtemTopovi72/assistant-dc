@@ -288,7 +288,7 @@ _FWD = __import__("prompt_guard").wrap_quoted(
 
 
 def test_retelling_forwarded_news_of_a_file_is_not_the_bots_promise():
-    """Live 2026-10-01 11:58: a question about forwarded video notes was answered
+    """A question about forwarded video notes was answered
     with «Готового файла у меня нет» -- the answer had retold Boris saying his
     presentation was ready."""
     draft = "Борис говорит, что презентация готова; из этого можно взять структуру слайдов."

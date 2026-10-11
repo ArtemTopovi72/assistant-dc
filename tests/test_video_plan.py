@@ -1,6 +1,6 @@
 """A multi-part clip shows its plan before any rendering starts.
 
-User, 2026-10-10, during a 5-part kettle clip: «показать сколько частей
+Asked during a 5-part kettle clip: «показать сколько частей
 планируется и сколько займёт и дать что-то уплотнить, что-то выкинуть». Each
 part is minutes of GPU; the chat now gets the parts, the clip length and the
 render time first, and the clip renders only the parts it approves.
