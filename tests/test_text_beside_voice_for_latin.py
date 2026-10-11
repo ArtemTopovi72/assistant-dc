@@ -1,6 +1,6 @@
 """An English reply is sent as text beside the voice note.
 
-Live 2026-09-12 (journey 6): an English user's "describe the picture" came
+An English user's "describe the picture" came
 back as a voice note only, and the Russian F5 voice speaks English by
 transliteration -- the reader had no way to get the actual sentence.
 """

@@ -4,7 +4,6 @@ Drives the REAL TelegramBot object with the network layer stubbed, so routing,
 prefix handling and modality merging are exercised for real.
 """
 import os, sys, types, tempfile
-import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 
@@ -117,7 +116,6 @@ check("caption-less photo keeps prefix for next msg",
 # 6. navigation buttons must not consume the prefix
 reset(bot)
 bot._resolve_and_push(CID, [{"type": "text", "text": "🔬 Deep Research"}])
-before = bot._get_session(CID).pending_prefix
 bot._resolve_and_push(CID, [{"type": "text", "text": "❓ Help"}])
 check("nav button does not push a task", not bot.pushed,
       str([p.user_text for p in bot.pushed]))

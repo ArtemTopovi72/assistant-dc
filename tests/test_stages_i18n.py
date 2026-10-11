@@ -173,7 +173,6 @@ def drive(lang, stage):
             return {"messages": [types.SimpleNamespace(content="done")]}
     graph = _Graph()
 
-    T._User(chat_id=CID, name="U", status="approved")
     bot._user_store.put(T._User(chat_id=CID, name="U", status="approved"))
     sess = bot._get_session(CID); sess.lang = lang; sess.voice_on = False
     bot._store.put(sess)
@@ -300,11 +299,9 @@ SKIP = {
     "",
 }
 
-# Pinned on the STATE of the tree, not on a list of file names. A curated list
-# went stale the moment the monoliths were split: graph.py's emitters moved to
-# graph_fastpath/graph_finalize/graph_personality and image.py's to
-# tool_image_handlers/image_transforms, so the scan found 7 stages instead of
-# 25 and the reverse check then declared every real translation dead weight.
+# Pinned on the STATE of the tree, not on a list of file names: a curated list
+# goes stale whenever a module is split, the scan then finds too few stages and
+# the reverse check declares every real translation dead weight.
 emitted = set()
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 from install_paths import source_dirs

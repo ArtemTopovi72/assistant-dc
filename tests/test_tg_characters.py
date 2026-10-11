@@ -76,9 +76,8 @@ def _bot():
     bot._api_post = lambda *a, **k: {}
     bot._user_store.put(T._User(chat_id=CID, name="U", status="approved"))
     # The render is the only slow, external part; capture the request instead.
-    # task/cancel/status_id arrived when the character render gained the same
-    # ⛔ button and status line every other render has; they are captured too,
-    # because a render that is started WITHOUT them is one the user cannot stop.
+    # task/cancel/status_id are captured too, because a render that is started
+    # WITHOUT them is one the user cannot stop.
     def _fake_render(chat_id, rec, text, lang, task=None, cancel=None,
                      status_id=None, ref_file_ids=None):
         bot.renders.append((rec["slug"], text, rec.get("lora_file")))
@@ -178,7 +177,7 @@ def test_picking_arms_the_next_message_as_a_scene():
     _say(bot, "на фоне гор")
     check("the scene reaches the renderer", len(bot.renders) == 1, bot.renders)
     if bot.renders:
-        slug, text, lora = bot.renders[0]
+        slug, text, _ = bot.renders[0]
         check("with the right character and text",
               slug == "hero" and text == "на фоне гор", bot.renders[0])
     check("the mode is cleared after the render", _sess(bot).reg_state == "",
@@ -230,10 +229,9 @@ def test_an_unrelated_button_press_disarms_the_scene_capture():
 
 
 def test_photos_in_character_mode_are_references_not_silence():
-    """Live 2026-09-17 16:10: two stills + «Нарисуй Степана так, чтобы он ...
-    в этом стиле» sent while НейроСтепан was armed got NO reaction -- the
-    gate consumed a photo message as an empty scene. Now every page of the
-    album is collected, and one render starts after the quiet period with
+    """Two stills + «Нарисуй Степана так, чтобы он ... в этом стиле» sent while
+    a character was armed must not be consumed as an empty scene: every page of
+    the album is collected, and one render starts after the quiet period with
     the caption as the scene and the photos as references."""
     import time as _t
     import tg_characters as TC
@@ -273,7 +271,7 @@ def test_reference_description_folds_into_the_scene():
 
 
 def test_delivered_render_carries_the_image_keyboard_and_msg_id():
-    """Regression (live report, item 15): a character render was sent with
+    """Regression: a character render was sent with
     _send_photo(chat_id, path) and NOTHING else -- no keyboard, no msg_id
     capture -- unlike every other picture path in the bot. It LOOKED like it
     never landed in the chat: no button under it worked, and replying to it
@@ -318,11 +316,11 @@ def test_delivered_render_carries_the_image_keyboard_and_msg_id():
 
 
 def test_delivered_render_becomes_the_current_picture_for_follow_ups():
-    """Regression (live report, item 15 follow-up): character rendering runs
+    """Regression: character rendering runs
     off the task queue on a throwaway _scoped_ctx copy, so a mutation to
     ctx.last_image_path never reaches sess. A plain-text question right
     after the render ("what's drawn here?") is seeded from
-    sess.last_image_path (tg_tasks.py:1006) -- if this was never set, the
+    sess.last_image_path -- if this was never set, the
     next turn thinks there is no current picture at all and asks the user
     to upload a photo, even though one was just delivered with a keyboard."""
     import image_generate as G

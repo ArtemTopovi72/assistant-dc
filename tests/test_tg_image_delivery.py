@@ -118,7 +118,7 @@ seen = run_turn({"final_answer": NARRATION})
 check("a tool-error turn sends no photo", seen["photo"] == [])
 check("and the false claim is corrected", warned(seen), str(seen["text"])[:120])
 
-# 10-08 live: a reply that ALREADY admits the failure is not retracted a second time.
+# A reply that ALREADY admits the failure is not retracted a second time.
 import intent as _intent
 _intent.YES_STUB = lambda q, t: "не удалось" in t.lower()
 try:
@@ -267,12 +267,10 @@ print("=" * 70)
 # to two places: task.image_path (read once, then cleaned up by the consumer
 # loop in tg_queue.py after the task finishes) and sess.image_log via
 # _log_image (meant to persist, so a later "the one I sent earlier" still
-# resolves). Those two lifetimes conflict: if the saved path is an ordinary
-# tempfile, the post-task cleanup deletes it out from under the register the
-# moment the task completes, and every plain photo upload becomes
-# unreferenceable one turn later. The fix keeps the register path under
-# tg_bot._IMAGE_DIR (the same persistent directory _save_incoming_photo already
-# uses for a reply-fetched photo) and has the cleanup skip anything under it.
+# resolves). Those two lifetimes conflict unless the register path lives under
+# tg_bot._IMAGE_DIR (the same persistent directory _save_incoming_photo uses for
+# a reply-fetched photo) and the cleanup skips anything under it; otherwise
+# every plain photo upload becomes unreferenceable one turn later.
 
 import threading, time as _time
 
@@ -332,9 +330,9 @@ print()
 print("=" * 70)
 print("A TURN THAT RAN OUT OF TIME STILL HANDS OVER A FINISHED PICTURE")
 print("=" * 70)
-# Live: the render finished at 09:06:57 and scored 9/10, then two inspect_image
-# calls pushed the turn past the 300s watchdog and the user got "try again".
-# The deadline is not proof that nothing was made.
+# A render can finish and score well, then two inspect_image calls push the turn
+# past the watchdog and the user gets "try again". The deadline is not proof
+# that nothing was made.
 
 def salvage(render_path, render_status="success", also_uploaded=""):
     ctx = _Ctx()

@@ -14,11 +14,10 @@ from pathlib import Path
 import search as SE
 
 RESULTS = []
-import os as _os
 def check(name, cond, detail=""):
     RESULTS.append((name, bool(cond)))
     print("[" + ("PASS" if cond else "FAIL") + "] " + name + ("" if cond or not detail else " - " + detail))
-    if not cond and _os.environ.get("PYTEST_CURRENT_TEST"):
+    if not cond and os.environ.get("PYTEST_CURRENT_TEST"):
         raise AssertionError(str(name) + (": " + str(detail) if detail else ""))
 
 _TMP = Path(tempfile.mkdtemp(prefix="searchmod_"))
@@ -144,8 +143,6 @@ def test_raw_search_results_exception_then_retry_succeeds():
 def test_raw_search_results_exception_twice_empty():
     _install_fake_ddgs(raises=RuntimeError("boom"))
     try:
-        with _Patches():
-            import search as _s
         out = SE.raw_search_results(FakeCtx(), "query")
         check("raw_search_results_both_attempts_fail_empty", out == [])
     finally:
@@ -153,8 +150,7 @@ def test_raw_search_results_exception_twice_empty():
 
 
 def test_search_duckduckgo_and_fetch():
-    # Derived from config, not hardcoded: the cap moved 1 -> 2 and this test kept
-    # asserting the old number, so it failed for a settings change rather than a bug.
+    # Derived from config, not hardcoded, so a settings change is not a test failure.
     from config import SEARCH_MAX_PER_DOMAIN as CAP
     over = CAP + 1
     _install_fake_ddgs(text_results=(
@@ -218,9 +214,7 @@ def test_run_web_search():
 
 def test_image_search_urls():
     # img1 is LANDSCAPE and img2 portrait, so the portrait bonus has something to
-    # overtake. This used to be 100x100 vs 100x200, where the winner was decided
-    # by pixel AREA -- the ranking that put a 4096x2160 flag of Kenya on a deck
-    # cover and was replaced by relevance-first ordering.
+    # overtake (equal-area or pixel-area ordering would not exercise it).
     _install_fake_ddgs(images_results=[
         {"image": "https://a.com/img1.jpg", "width": 200, "height": 100},
         {"image": "https://a.com/img2.jpg", "width": 100, "height": 200},  # portrait
@@ -252,14 +246,6 @@ def test_download_image():
         def __init__(self, status=200, content=b"", headers=None):
             self.status_code = status; self.content = content
             self.headers = headers or {"Content-Type": "image/jpeg"}
-
-    with _Patches():
-        pass
-    import types as _t
-
-    with_requests = _t.SimpleNamespace(get=lambda *a, **k: FakeResp(content=good_bytes.read_bytes()))
-    import search as _mod
-    orig_requests_import = None
 
     # download_image imports `requests` at call-time inside the function body via
     # `import requests` — patch the real module's attributes temporarily instead.
@@ -304,8 +290,6 @@ def test_has_clear_face():
     noface_path = _TMP / "noface.jpg"
     Image.fromarray((np.random.rand(200, 200, 3) * 255).astype("uint8")).save(noface_path)
 
-    with _Patches():
-        pass
     import builtins
     real_import = builtins.__import__
     def fail_idm(name, *a, **k):
@@ -379,11 +363,6 @@ def test_fetch_reference_photo():
         check("fetch_ref_photo_grayscale_fallback_used", out2 == str(dest))
 
     with _Patches(image_search_urls=lambda ctx, q, **k: ["https://x.com/1"],
-                  download_image=lambda ctx, url, d, **k: True,
-                  _has_clear_face=lambda p: False, _is_grayscale=lambda p: False):
-        check("fetch_ref_photo_require_face_false_still_checks_face_since_default_true", True)
-
-    with _Patches(image_search_urls=lambda ctx, q, **k: ["https://x.com/1"],
                   download_image=lambda ctx, url, d, **k: True):
         out3 = SE.fetch_reference_photo(FakeCtx(), "q", str(_TMP / "ref6.jpg"), require_face=False, prefer_color=False)
         check("fetch_ref_photo_no_gates_accepts_first", out3 == str(_TMP / "ref6.jpg"))
@@ -427,7 +406,7 @@ def test_refused_pages_are_backfilled_from_further_down():
 
 
 def test_best_passages_finds_the_answer_deep_in_the_page():
-    page = "Главная страница сайта. " + "Меню и реклама разделов. " * 200 +            "Курс биткоина сегодня составляет 83 805 долларов. " + "Подвал сайта. " * 50
+    page = "Главная страница сайта. " + "Меню и реклама разделов. " * 200 + "Курс биткоина сегодня составляет 83 805 долларов. " + "Подвал сайта. " * 50
     got = SE.best_passages(page, "курс биткоина сегодня", 400)
     check("answer sentence kept", "83 805" in got, got)
     check("page opening kept", got.startswith("Главная"), got[:60])
@@ -473,8 +452,6 @@ def test_followup_round_fills_a_gap():
                   SEARCH_FOLLOWUP_ROUND=True, call_llm_simple=lambda *a, **k: "NONE"):
         out = SE.run_web_search(FakeCtx(), "q")
     check("NONE means one round only", searched == ["q"] and out == "facts: first round", (searched, out))
-    check("a repeat of the query is not a new round",
-          SE.followup_query.__code__ and True)
     with _Patches(call_llm_simple=lambda *a, **k: "Q"):
         check("same query is ignored", SE.followup_query(FakeCtx(), "q", "x") == "")
     with _Patches(call_llm_simple=lambda *a, **k: "кто выиграл чемпионат мира 2022 счёт"):

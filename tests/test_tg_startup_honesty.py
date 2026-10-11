@@ -1,7 +1,7 @@
 """A bot that did not start must not look like one that did.
 
-Reconstructed from a real activity log: 26 consecutive "Bot stopped" entries with
-no matching "Bot started", and every message the user sent went unanswered.
+A log of "Bot stopped" entries with no matching "Bot started" means every message
+the user sends goes unanswered.
 
   · TelegramBot.start() returned None on failure and wrote NOTHING to the
     activity log — the one place an operator looks recorded nothing at all;
@@ -130,7 +130,7 @@ noisy.stop()
 check("a never-started bot does not announce going offline",
       noisy.sent == [], str(noisy.sent))
 
-# Repeated stops must stay quiet — this is what produced 26 log lines.
+# Repeated stops must stay quiet.
 quiet = make_bot(UNREACHABLE)
 quiet.start(); quiet.logged.clear()
 for _ in range(10):

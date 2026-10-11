@@ -13,11 +13,10 @@ from pathlib import Path
 import stress_overrides as SOV
 
 RESULTS = []
-import os as _os
 def check(name, cond, detail=""):
     RESULTS.append((name, bool(cond)))
     print("[" + ("PASS" if cond else "FAIL") + "] " + name + ("" if cond or not detail else " - " + detail))
-    if not cond and _os.environ.get("PYTEST_CURRENT_TEST"):
+    if not cond and os.environ.get("PYTEST_CURRENT_TEST"):
         raise AssertionError(str(name) + (": " + str(detail) if detail else ""))
 
 _TMP = Path(tempfile.mkdtemp(prefix="stressov_"))
@@ -41,7 +40,6 @@ def test_normalize_stress():
 
 
 def test_recase():
-    check("recase_allcaps", SOV._recase("ПРИВЕТ", "прив+ет") == "ПРИ+ВЕТ" or SOV._recase("ПРИВЕТ", "прив+ет").isupper() or True)
     check("recase_titlecase", SOV._recase("Привет", "прив+ет")[0] == "п".upper())
     check("recase_lowercase_unchanged", SOV._recase("привет", "прив+ет") == "прив+ет")
     check("recase_no_letters_returns_override", SOV._recase("+++", "прив+ет") == "прив+ет")

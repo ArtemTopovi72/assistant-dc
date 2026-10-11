@@ -1,11 +1,10 @@
 """A song is a queued task, not a bare thread.
 
-Live, 2026-09-12: a song ran on its own thread, so ⛔ Стоп answered "Сейчас
-ничего не выполняется" and the song arrived anyway 60 s later; the chat never
-looked busy, there was no status line and no queue position. Now the topic
-becomes a "[song:N] topic" task handled in _run_task_inner under the task's
-status line and cancel event; a Stop mid-write is silent, not "the writer
-fumbled".
+A song on its own thread would leave ⛔ Стоп answering "Сейчас ничего не
+выполняется" while the song arrived anyway, with no status line and no queue
+position. Instead the topic becomes a "[song:N] topic" task handled in
+_run_task_inner under the task's status line and cancel event; a Stop mid-write
+is silent, not "the writer fumbled".
 
 Pure: music.py and the LLM are stubbed; no GPU.
 
@@ -130,7 +129,7 @@ finally:
     M.engine_available, M.build_structured_caption, M.generate_music = _engine, _cap, _gen
 
 # "а теперь сочини на него песню" after the bot wrote four lines: the song
-# must use THOSE lines (live, 2026-09-12: it sang about city lights instead).
+# must use THOSE lines.
 check("'на него' refers to the previous text", S.refers_to_previous_text("а теперь сочини на него песню, 30 секунд"))
 check("a plain topic does not", not S.refers_to_previous_text("сочини песню про кота"))
 check("'из него' / 'положи это на музыку' / 'можешь это спеть' sing the previous text",

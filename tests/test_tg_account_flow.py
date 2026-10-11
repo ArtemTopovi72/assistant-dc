@@ -97,7 +97,7 @@ check("the password message is deleted from the chat", 42 in bot.deleted,
       str(bot.deleted))
 check("registration state is cleared", bot._get_session(CID).reg_state == "")
 
-# 10-08 live: «нарисуй кота» typed to «напиши своё имя» became the account's name.
+# «нарисуй кота» typed to «напиши своё имя» must not become the account's name.
 import intent as _intent
 CID_REQ = 999604
 bot._user_gate(CID_REQ, msg(CID_REQ, "hi"))
@@ -178,9 +178,7 @@ bot.sent.clear(); bot.deleted.clear()
 for i in range(12):
     bot._user_gate(CID, msg(CID, f"guess{i}", mid=60 + i))
 # Anchor on the message the bot actually sends, not on a guessed wording — and in
-# the language it actually sends it in. This said "en" while the house language is
-# Russian (TG_DEFAULT_LANG), so it compared an English prefix against "⏱ Слишком
-# много неудачных попыток…" and failed even though the lockout fired correctly.
+# the language it actually sends it in (the house language, TG_DEFAULT_LANG).
 _locked = T._t("login_locked", T._DEFAULT_LANG, sec=1).split("{")[0][:20]
 check("repeated wrong passwords trigger the lockout",
       any(t.startswith(_locked[:12]) for t in bot.sent),
@@ -481,8 +479,7 @@ _bz._user_gate(_cz, msg(_cz, "hello?"))
 check("a stale reg_state without an account restarts registration",
       _bz._get_session(_cz).reg_state == "awaiting_name" and _bz.sent, (_bz._get_session(_cz).reg_state, _bz.sent))
 
-# The account card is a menu like any other: it needs a way back (live 10-03:
-# «НЕТ КНОПКИ НАЗАД»)
+# The account card is a menu like any other: it needs a way back.
 _bk = make_bot(); _ck = 999700
 _kbs = []
 _bk._send_text = lambda cid, text, **kw: (_kbs.append(kw.get("keyboard")), 1)[1]

@@ -7,7 +7,7 @@ pixel pipeline half an hour later. Observed live: the delivered file was
 old-model-inpaint_00010_.png with no sidecar, and the box edit had nothing to work
 with. Failing loudly is the better trade — the user can just ask again.
 
-The old model is now gone from the product entirely (2026-09-23); this suite keeps
+The old model is gone from the product entirely; this suite keeps
 the contract that a failed or refused Ideogram render is reported, never
 substituted, and that an edit is refused here rather than redrawn.
 
@@ -18,7 +18,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
-import config
 import image as I
 # _ideogram_draw is a bare local name inside image_generate, so image's copy
 # is NOT the one generate_image_with_comfy calls.
@@ -43,7 +42,7 @@ _oldmodel_calls = []
 
 
 def _fake_oldmodel(*a, **kw):
-    """Stands in for the whole the old model path below the Ideogram branch.
+    """Stands in for the whole old-model path below the Ideogram branch.
 
     Records the workflow LABEL, which is what this seam actually carries —
     `previous_image_path` never reaches `_submit_and_poll`, so spying for it
@@ -123,7 +122,7 @@ check("the three messages are actually different",
 
 print("\nAN EDIT IS NOT THIS FUNCTION'S JOB")
 # Editing goes through FireRed (a user's photo) or the layout boxes (our own
-# Ideogram picture). The old img2img-by-the old model branch is gone; handing this
+# Ideogram picture). The old img2img-by-old-model branch is gone; handing this
 # function a previous image must refuse, not quietly draw something new.
 photo = os.path.join(TMP, "photo.png")
 open(photo, "wb").write(b"a photo")

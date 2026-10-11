@@ -54,7 +54,6 @@ def check(name, cond, detail=""):
 
 
 CID = 999877
-_SANDBOX_BASE = tempfile.mkdtemp(prefix="tgtest_sbxroot_")
 
 
 def _bot(level):
@@ -87,7 +86,6 @@ def _texts(bot):
 
 
 def test_jar_to_a_user_with_a_sandbox_is_not_refused():
-    orig_base = CS.SANDBOX_BASE if hasattr(CS, "SANDBOX_BASE") else None
     bot = _bot(SA.FILES)
     _send_jar(bot, "вытащи id блоков")
     body = _texts(bot)
@@ -97,7 +95,6 @@ def test_jar_to_a_user_with_a_sandbox_is_not_refused():
     pushed = " ".join(str(t) for t in bot.pushed)
     check("the model is told where the file landed",
           ".jar" in pushed and "working folder" in pushed, pushed[:300])
-    assert orig_base is None or True
 
 
 def test_jar_without_a_sandbox_is_still_explained():
@@ -106,8 +103,8 @@ def test_jar_without_a_sandbox_is_still_explained():
     _send_jar(bot, "что это?")
     body = _texts(bot)
     # With a caption the turn goes to the model, which is told plainly that the
-    # file could not be read and why (tg_resolve scaffold, 2026-09-28); without
-    # one the library's own rejection is the answer.
+    # file could not be read and why (tg_resolve scaffold); without one the
+    # library's own rejection is the answer.
     pushed = " ".join(str(t) for t in getattr(bot, "pushed", []))
     check("a user with no sandbox still gets the explanation",
           "библиотек" in body.lower() or "library" in body.lower()
@@ -135,7 +132,7 @@ def test_a_stale_draw_prefix_cannot_seize_a_bare_upload():
           "Нарисуй" not in pushed, pushed[:300])
     check("the turn is not classified as an image",
           T._classify_task(pushed) != T.KIND_IMAGE, T._classify_task(pushed))
-    # no words, no turn: the user is told where the file went (owner 10-03)
+    # no words, no turn: the user is told where the file went
     check("the user is told the file is in the sandbox",
           any("📁" in t for _, t in bot.sent), bot.sent[-2:])
 
@@ -148,8 +145,8 @@ def test_a_stale_draw_prefix_cannot_seize_a_bare_upload():
 
 
 def test_indexing_is_by_the_button_only():
-    """owner 10-03: «индексировать только по кнопке, остальное читать и класть в
-    песочницу и говорить» -- crash logs got «📚 Индексирую…» and stalled."""
+    """Index only via the button; anything else is read, put in the sandbox and
+    announced -- crash logs must not get «📚 Индексирую…» and stall."""
     bot = _bot(SA.FILES)
     seen = []
     bot._index_document = lambda cid, sess, path, name, **kw: seen.append(name)
@@ -162,7 +159,7 @@ def test_indexing_is_by_the_button_only():
     sess = bot._get_session(CID); sess.menu = "library"; bot._store.put(sess)
     bot._resolve_and_push(CID, [{"type": "document", "file_id": "p9", "filename": "book.pdf"}])
     check("inside 📚 Documents a file is indexed", seen == ["book.pdf"], seen)
-    # owner 10-03: «у вкладки документы приоритет» -- even with a question
+    # the Documents tab has priority -- even with a question
     bot._resolve_and_push(CID, [{"type": "text", "text": "в чём ошибка?"},
                                 {"type": "document", "file_id": "p8", "filename": "crash.log"}])
     check("in 📚 Documents a file is indexed even with a question",
@@ -170,8 +167,8 @@ def test_indexing_is_by_the_button_only():
 
 
 def test_files_alone_run_no_turn_and_the_next_question_is_about_them():
-    """live 10-03: forwarded logs alone -> «я всё изучил и готов» without opening
-    them; then «В ЧЕМ ТАМ ОШИБКА?» critiqued the last picture"""
+    """Forwarded logs alone must not yield «я всё изучил и готов» without opening
+    them; and the next «В ЧЕМ ТАМ ОШИБКА?» must not critique the last picture."""
     bot = _bot(SA.FILES)
     bot._dl_bytes = lambda fid: b"Traceback (most recent call last):\n  boom\n"
     bot._resolve_and_push(CID, [{"type": "document", "file_id": "z1", "filename": "app.log"}])
@@ -182,8 +179,8 @@ def test_files_alone_run_no_turn_and_the_next_question_is_about_them():
 
 
 def test_a_batch_is_one_material_and_indexing_never_opens_documents():
-    """owner 10-03: «он сам открыл вкладку документов» and «ответил по одному,
-    хотя я заслал пачкой и ожидал комплексный ответ»"""
+    """A batch is answered as one piece of material, and indexing must not open
+    the Documents tab by itself."""
     bot = _bot(SA.FILES)
     bot._dl_bytes = lambda fid: b"Traceback (most recent call last):\n  boom\n"
     sess = bot._get_session(CID); sess.menu = ""; bot._store.put(sess)

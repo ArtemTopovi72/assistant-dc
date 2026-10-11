@@ -14,11 +14,10 @@ pool is never permanently wedged:
      expected).
   3. graph.invoke() hangs indefinitely. graph.py/tools.py never check
      ctx.cancel_event on the ordinary-turn path (only deep_research's own
-     progress loop does), so this used to have NO enforced ceiling anywhere:
-     the consumer thread blocked forever, and once _task_started's slot never
-     cleared, that chat's admission gate (tg_queue.py's `_chat_busy`) was
-     wedged permanently too. Fixed by running graph.invoke() on its own
-     thread and joining it with config.TG_INVOKE_TIMEOUT_S.
+     progress loop does), so the ceiling has to be enforced by the bot: it
+     runs graph.invoke() on its own thread and joins it with
+     config.TG_INVOKE_TIMEOUT_S, otherwise the consumer thread blocks forever
+     and the chat's admission gate (`_chat_busy`) stays wedged too.
   4. graph.invoke() succeeds with a false "done" claim -- final_answer says
      the artifact is ready but image_status/document_status say otherwise, or
      the reported path does not exist on disk. Same shape as the historical
@@ -165,7 +164,7 @@ def settle(predicate, timeout=10.0, interval=0.1):
 
 
 def texts_for(bot, cid):
-    return [t for c, t, k in bot.sent if c == cid]
+    return [t for c, t, _ in bot.sent if c == cid]
 
 
 def n_running(bot, cid):
@@ -287,13 +286,11 @@ section("3. graph.invoke() hangs indefinitely -- is there an ENFORCED timeout?")
 _orig_timeout = _cfg.TG_INVOKE_TIMEOUT_S
 _cfg.TG_INVOKE_TIMEOUT_S = 2
 
-# The deadline now EXTENDS while the render server is genuinely working, so a
+# The deadline EXTENDS while the render server is genuinely working, so a
 # picture queued behind a ~70-minute music job is not killed for waiting its
-# turn (see tests/test_tg_invoke_deadline.py). That means this section has to
-# say which world it is testing: here the call is truly hung and the server is
-# idle, so the deadline must fire. Without this stub the check would ask the
-# REAL ComfyUI -- making an offline suite depend on whether the machine happens
-# to be rendering, which is exactly how it went red on a healthy box.
+# turn (see tests/test_tg_invoke_deadline.py). Here the call is truly hung and
+# the server is idle, so the deadline must fire; the stub keeps this offline
+# suite from asking the REAL ComfyUI whether the machine happens to be rendering.
 import comfy_client as _comfy_stub
 _orig_busy = _comfy_stub.server_busy
 _comfy_stub.server_busy = lambda: False

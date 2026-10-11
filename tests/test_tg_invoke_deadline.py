@@ -92,10 +92,8 @@ print()
 print("=" * 70)
 print("THE HARD CEILING STILL BOUNDS AN ENDLESSLY 'BUSY' SERVER")
 print("=" * 70)
-print("""
-A server that reports busy forever must not hold a consumer thread forever --
-otherwise one wedged render silently costs a worker permanently.
-""")
+# A server that reports busy forever must not hold a consumer thread forever --
+# otherwise one wedged render silently costs a worker permanently.
 
 t = worker(30)
 t0 = time.time()
@@ -109,10 +107,8 @@ print()
 print("=" * 70)
 print("AN UNREACHABLE SERVER MUST NOT LOOK 'BUSY'")
 print("=" * 70)
-print("""
-server_busy() is conservative on purpose: if ComfyUI cannot be reached at all,
-reporting it busy would extend every task to the ceiling during an outage.
-""")
+# server_busy() is conservative on purpose: if ComfyUI cannot be reached at all,
+# reporting it busy would extend every task to the ceiling during an outage.
 
 _real_get = comfy_client.requests.get
 class _Down:
@@ -148,17 +144,12 @@ print()
 print("=" * 70)
 print("A TIMEOUT IS THE OPPOSITE SIGNAL FROM AN UNREACHABLE SERVER")
 print("=" * 70)
-print("""
-Live, 2026-09-20: a 41-minute H3 video render (near-100% GPU, heavy VRAM
-offload) had this /queue poll time out ONCE, deep into an otherwise-healthy
-render that finished 40 seconds later. Before this fix, a Timeout was caught
-by the same bare `except Exception` as a connection refusal and read as "not
-busy" -- the caller's extend-while-busy loop abandoned the task 9 seconds
-before the real video was ready, and the user got "cancelled, try again" for
-a render that had already succeeded. A server too saturated to answer a
-lightweight status check in time IS busy; only a genuine connection failure
-means it might be down.
-""")
+# A long video render (near-100% GPU, heavy VRAM offload) can make one /queue
+# poll time out deep into an otherwise-healthy render. A Timeout must not be
+# read as "not busy" like a connection refusal: the caller's extend-while-busy
+# loop would abandon a task whose render is about to succeed. A server too
+# saturated to answer a lightweight status check in time IS busy; only a
+# genuine connection failure means it might be down.
 
 
 class _Timeout:
@@ -175,11 +166,9 @@ print()
 print("=" * 70)
 print("A CHAIN HOLDING THE CARD IS WORKING, EVEN WITH AN EMPTY QUEUE")
 print("=" * 70)
-print("""
-Live, 2026-10-07: a four-part Herrgott video chain was abandoned at 30 min --
-between two parts ComfyUI's queue is empty for a moment, and the deadline read
-that as idle. A render pipeline holding the card is not a hung call.
-""")
+# Between two parts of a multi-part video chain ComfyUI's queue is empty for a
+# moment, and the deadline must not read that as idle. A render pipeline
+# holding the card is not a hung call.
 comfy_client.requests.get = lambda *a, **k: _Resp({"queue_running": [], "queue_pending": []})
 try:
     check("no card held: card_in_use is False", comfy_client.card_in_use() is False)

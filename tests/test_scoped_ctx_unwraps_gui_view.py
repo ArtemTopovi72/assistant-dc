@@ -1,7 +1,7 @@
 """The bot's per-task ctx built over the GUI's _ScopedCtx view must own its
-cancel token and fields. Live 2026-09-27: Cancel said «Cancelling…» and the
-redraw ran anyway -- the task read the wrapper's token, and pinned facts /
-session memory were written onto the app's shared Context."""
+cancel token and fields. Otherwise Cancel says «Cancelling…» while the task
+reads the wrapper's token and keeps going, and pinned facts / session memory
+are written onto the app's shared Context."""
 import os, sys, threading, types
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from gui_common import _ScopedCtx

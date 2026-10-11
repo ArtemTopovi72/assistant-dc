@@ -16,8 +16,8 @@ REPLY = ("Дешевле всего [Чайник B](https://www.ozon.ru/product
 
 
 class Bot:
-    """Photos are now downloaded by us and uploaded as bytes (the local Bot API
-    server fetching Ozon's CDN through the VPN failed silently), so the fake
+    """Photos are downloaded by us and uploaded as bytes (the local Bot API
+    server fetching Ozon's CDN through the VPN fails silently), so the fake
     replaces the download and the upload, not a URL-taking _api_post."""
     def __init__(self, photo_ok=True):
         self.calls, self.photo_ok = [], photo_ok

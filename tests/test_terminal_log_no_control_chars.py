@@ -1,6 +1,6 @@
 """The GUI log pane must never receive ANSI escapes or control characters.
 
-Live 2026-09-13: after a photo made LM Studio reload the model, the
+After a photo made LM Studio reload the model, the
 "model revive ok" record carried the raw `lms load` TUI (ESC[?25l plus a
 braille spinner). QTextEdit.append crashed the whole app with an access
 violation inside DirectWrite (faulthandler: gui._append_log). The bridge

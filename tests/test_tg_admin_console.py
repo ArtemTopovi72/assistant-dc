@@ -109,7 +109,6 @@ check("tab lists the queue and the users", tab.q_t.rowCount() >= 2 and tab.u_t.r
 rows = {tab.q_t.item(r, 0).data(G.Qt.UserRole): r for r in range(tab.q_t.rowCount())}
 tab.q_t.selectRow(rows["e" * 36])
 done = threading.Event()
-_orig_act = tab._act
 tab._act = lambda label, fn, *a: (fn(bot, *a), done.set())
 tab._bump()
 check("⬆️ from the tab reorders the real queue",

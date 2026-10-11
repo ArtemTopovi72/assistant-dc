@@ -55,7 +55,7 @@ def _progress(running=True, **kw):
 
 
 class _Patch:
-    def __init__(self, prog, chars=(("neurostepan", ), )):
+    def __init__(self, prog):
         self.prog = prog
 
     def __enter__(self):
