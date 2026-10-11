@@ -37,7 +37,7 @@ class _Progress:
         # 9B?". stage_timings[phase] = total seconds spent reporting that phase.
         self._phase_started = time.time()
         # Ordered (stage_name, text) snapshots for the per-stage formula trace
-        # (only populated on scientific/math runs — see _snap_formula).
+        # (only populated on scientific/math runs — see snap_formula).
         self.formula_snapshots = []
 
     def _accumulate_phase_time(self, new_phase: str) -> None:

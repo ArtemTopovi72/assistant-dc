@@ -6,7 +6,7 @@ delimiter that never closed. `audit_math` then reports what is still wrong
 ($ and $$ balance, commands that look like they lost their backslash) so the
 caller can say so instead of shipping broken notation silently.
 
-Split out of deep_research.py. Pure: no DR_* knob, no I/O, no LLM call.
+Pure: no DR_* knob, no I/O, no LLM call.
 """
 import re
 

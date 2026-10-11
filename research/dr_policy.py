@@ -12,8 +12,8 @@ fetched or any word is written:
   quick/standard/deep run gets.  `_resolve_caps`.
 
 The caps live here rather than in dr_timing because they are computed from the
-DR_* knobs, which `apply_overrides` swaps out for a single run. How LONG each
-profile takes (the measured ETA) is dr_timing's job.
+DR_* knobs in dr_settings, which `apply_overrides` swaps out for a single run.
+How LONG each profile takes (the measured ETA) is dr_timing's job.
 """
 import logging
 
@@ -45,20 +45,14 @@ _SCHOLARLY_CATEGORIES = {"science", "legal", "health"}
 # local/shopping/travel (near-always an actionable ask), "product" also covers
 # pure comparison/spec questions ("how does the K-700 differ from the K-744",
 # "Kubota vs John Deere") that read like research, not a booking/purchase intent.
-# A product-category topic only counts as practical when it ALSO matches the
-# explicit action regex below (buy/price/ticket/etc.) — see _is_practical_request.
+# A product-category topic only counts as practical when `_ask_kind` also reads the
+# request as an actionable ask (buy/price/ticket/etc.) — see _is_practical_request.
 _PRACTICAL_CATEGORIES = {"local", "shopping", "travel"}
 
 
-# Comparison/factual phrasing. When this fires, the topic is a "explain how these
-# differ" question, not a "help me get/buy/book one" question — it must win over
-# a practical CATEGORY guess (e.g. "product") even though a comparison can
-# incidentally use practical-sounding words like "price" in passing.
-
-
-# Explicit asks for concrete, actionable results. Matched against the RAW request
-# (the user's own words) — the distilled core_topic deliberately strips exactly
-# these verbs, so intent must be read before distillation.
+# The model's read of the RAW request (the user's own words): the distilled
+# core_topic deliberately strips exactly the verbs that signal intent, so intent
+# must be read before distillation.
 def _ask_kind(topic: str) -> str:
     """compare | practical | research -- the model's read of the raw request."""
     import intent
@@ -175,7 +169,7 @@ def _apply_trust_floor(trust: str, url: str, category: str = "general") -> str:
 # Depth profiles.
 #
 # The caps live here, not in dr_timing, because they are computed from the DR_*
-# globals of THIS module — the ones `apply_overrides` swaps out for a single run.
+# knobs in dr_settings — the ones `apply_overrides` swaps out for a single run.
 # How long each profile takes (the measured ETA) is dr_timing's job.
 # --------------------------------------------------------------------------- #
 
@@ -226,6 +220,7 @@ _NEWS_CATEGORIES = {"news"}
 _RECENCY_RANK = {"day": 0, "week": 1, "month": 2, "year": 3, "any": 4}
 
 
+# Some categories go stale fast no matter what the planner guessed: a job posting
 # or a breaking story from two years ago is noise. Clamp recency no looser than
 # this floor for those categories.
 _CATEGORY_RECENCY_FLOOR = {"jobs": "month", "news": "week", "finance": "month"}

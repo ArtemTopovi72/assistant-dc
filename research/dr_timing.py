@@ -10,10 +10,9 @@ rather than a measurement. `_profile_signature` fingerprints what each depth
 DOES, so changing the caps discards history instead of averaging across two
 different pipelines.
 
-Split out of deep_research.py. The caps themselves stay in deep_research: they
-are computed from DR_* module globals that `apply_overrides` mutates in place
-for a single run, so they have exactly one home and are read through it (see
-`_profile_signature`'s deferred import).
+The caps themselves live in dr_policy (`_resolve_caps`), computed from the DR_*
+knobs that `apply_overrides` swaps for a single run; `_profile_signature` reads
+them through deep_research.
 """
 import json
 import logging
@@ -55,10 +54,10 @@ def _profile_signature() -> str:
     caps must therefore discard the history rather than average across two
     different products.
 
-    `_resolve_caps` is imported HERE rather than at module scope on purpose: it
-    reads deep_research's DR_* globals, which `apply_overrides` swaps out for the
-    duration of a run. Binding it once at import would fingerprint the caps as
-    they were at startup and miss an override entirely.
+    `_resolve_caps` is imported HERE rather than at module scope because
+    deep_research imports this module, so a module-level import would be
+    circular. It reads the DR_* knobs at call time, so an active override is
+    fingerprinted too.
     """
     import hashlib
     from deep_research import _resolve_caps

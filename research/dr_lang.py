@@ -7,14 +7,14 @@ Which language the finished document is written in, and the fixed scaffolding
 clamps it to a supported code, `_lab` looks up a scaffolding label and
 `_lang_directive` is the instruction appended to every synthesis prompt.
 
-Split out of deep_research.py. Pure: no DR_* knob, no I/O.
+Pure: no DR_* knob, no I/O.
 """
 import re
 from typing import Optional
 
 
-# Script-level language sniffing. Shared with deep_research's query-diversity
-# check, which asks the same question of a search query.
+# Script-level language sniffing. Shared with dr_collect's coverage check, which
+# asks the same question of a search query.
 _LANG_RE_CYR = re.compile(r"[а-яё]", re.IGNORECASE)
 
 
@@ -22,9 +22,9 @@ _LANG_RE_CYR = re.compile(r"[а-яё]", re.IGNORECASE)
 # Output language.
 #
 # The pipeline is English-INTERNALLY on purpose: queries, briefs and analysis stay
-# English because that is where the evidence and the model's competence are (see
-# the english-first design). Only the DOCUMENT the user reads is written in their
-# language, and only at the writing calls — never at the search/brief calls.
+# English because that is where the evidence and the model's competence are. Only
+# the DOCUMENT the user reads is written in their language, and only at the
+# writing calls — never at the search/brief calls.
 # --------------------------------------------------------------------------- #
 DR_LANG_NAMES = {"en": "English", "ru": "Russian"}
 

@@ -7,10 +7,9 @@ unmarked-math heuristic, the social-outlink hop, the extraction quality gate
 (`classify_extraction` + its GATE_* verdicts) and shingle-based near-duplicate
 clustering (`dedupe_pages`).
 
-Split out of deep_research.py. Every function here is pure: it reads no DR_*
-module global and performs no network I/O — the fetchers stay in deep_research
-and hand their bytes in. The `logger` is the same "assistant.research" logger the
-rest of the pipeline writes to, so log capture is unchanged.
+Nothing here reads a DR_* knob or performs network I/O — the fetchers live in
+dr_crawl and hand their bytes in. The `logger` is the same "assistant.research"
+logger the rest of the pipeline writes to.
 """
 import logging
 import re

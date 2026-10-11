@@ -35,9 +35,6 @@ from utils import safe_json_from_llm
 logger = logging.getLogger("assistant.research")
 
 
-# Some categories go stale fast no matter what the planner guessed: a job posting
-
-
 def plan_queries(ctx, topic: str, max_queries: int) -> tuple:
     """Expand a topic into diverse search queries via the LLM, with a heuristic
     fallback so the run never starves for queries.

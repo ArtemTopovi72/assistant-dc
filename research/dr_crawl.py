@@ -38,11 +38,7 @@ from utils import throttle_external_calls
 logger = logging.getLogger("assistant.research")
 
 
-# Briefs are LOSSILY compressed (batch consolidation) before single-pass synthesis
-# ONLY when they won't fit the model's ACTUAL context window — computed at runtime in
-# `_consolidate_evidence` from `_model_context(ctx)` (reserve ~1/3 for think+output),
-# optionally lowered by a DR_MAX_REDUCE_CHARS env value. With a large context the raw
-# briefs are fed verbatim (no lossy pass that could drop a fact or mangle an equation).
+# Cap on one fetched HTML page: bytes streamed in, and characters kept after decoding.
 _MAX_HTML_CHARS = 2_000_000
 
 

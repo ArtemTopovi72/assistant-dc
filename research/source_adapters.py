@@ -17,7 +17,7 @@ high-value AND well-served by a keyless API:
 
 Everything else returns None and the caller falls back to normal fetch+extract.
 JS sites with NO keyless API (kinopoisk, okko, dzen, venue SPAs) are left to the
-deferred headless-browser phase (P8); we do not scrape them here.
+deferred headless-browser work; we do not scrape them here.
 
 Every adapter is network-guarded and returns None on ANY failure so a flaky API
 never aborts a run.

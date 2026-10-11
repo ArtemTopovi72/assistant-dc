@@ -597,14 +597,14 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
     prog.stats["contradictions"] = contra_sig["count"]
     _save_state(run_dir, phase="contradiction", contradictions=contra_sig)
 
-    # 4b. Citation-graph enrichment for scholarly topics: inject a
-    # PRIMARY synthetic source carrying citation counts + lineage from OpenAlex,
-    # so synthesis can build the intellectual-lineage table that plain web
-    # search can never supply.
     if dropped_irrelevant:
         prog.stats["off_topic_dropped"] = dropped_irrelevant
         logger.info("Relevance gate dropped %d off-topic briefs", dropped_irrelevant)
 
+    # 4c. Citation-graph enrichment for scholarly topics: inject a
+    # PRIMARY synthetic source carrying citation counts + lineage from OpenAlex,
+    # so synthesis can build the intellectual-lineage table that plain web
+    # search can never supply.
     have_citations, cit_body = False, ""
     if (S.DR_CITATIONS_ENABLED and profile.get("category") in _SCHOLARLY_CATEGORIES
             and not cancelled()):
