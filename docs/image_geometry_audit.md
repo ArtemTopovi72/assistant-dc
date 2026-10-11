@@ -2,7 +2,18 @@
 
 **Scope:** every editing pipeline in `image.py` + the workflow JSON templates.
 **Method:** static dimension-flow trace of each ComfyUI graph (node ids + source
-lines). No fixes applied — this is the evidence pass requested ("audit first").
+lines). This is the evidence pass that preceded the fixes; they are described in
+`image_geometry_fixes.md`.
+
+> **Status:** the audit is kept as the record of the root causes. `image.py` has
+> since been split into the `imaging/` package, so the `image.py:NNN` anchors below
+> are historical. The helpers named in the fixes now live in
+> `imaging/image_sizing.py` (`_source_dims`, `_enforce_output_size`),
+> `imaging/image.py` (`edit_image_with_firered`, `inpaint_region_with_comfy`),
+> `imaging/image_transforms.py` (`relight_image_with_comfy`) and
+> `imaging/image_router.py` (`route_edit_request`, `_orchestrate_multi_op`).
+> `replace_background_with_comfy` and `redraw_image_with_comfy` no longer exist
+> as functions.
 
 Runtime subject-bounding-box measurement requires a live ComfyUI+GPU run; the
 resize transforms below are **deterministic from code**, so the pixel-dimension
@@ -99,7 +110,7 @@ absolute pixels (→ blur at original size). Relight is the exception if it lett
 
 ---
 
-## Ranked fix plan (proposed — not yet applied)
+## Ranked fix plan (implemented — see `image_geometry_fixes.md`)
 
 1. **RC-1 FireRed restore-to-source (highest impact, most categories).**
    After node 190 `VAEDecode`, add an `ImageScale`/`ResizeImageMaskNode` back to
