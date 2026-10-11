@@ -564,7 +564,10 @@ class QueueMixin:
                             tg_bot._IMAGE_DIR.resolve())
                     except Exception:
                         _under_image_dir = False
-                    if not _under_image_dir:
+                    # A bot result (runtime/lettering_clean_*.png) is registered where it was
+                    # made: 🎬 under it deleted it, and the second 🎬 said «картинки больше нет».
+                    if not _under_image_dir and not tg_bot._image_by_path(
+                            self._get_session(task.chat_id), task.image_path):
                         try: os.unlink(task.image_path)
                         except Exception: pass
 
