@@ -7,7 +7,6 @@ import json, os, sys, time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import bench.live_tg_scenarios as S  # noqa: E402
 D = S.D
-import requests  # noqa: E402
 
 OWNER = int(os.getenv("TG_OWNER_CHAT", "100000001"))   # the chat this harness drives (.env)
 
