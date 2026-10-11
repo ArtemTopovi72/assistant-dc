@@ -175,7 +175,7 @@ class LayoutMixin:
             avail = QApplication.primaryScreen().availableGeometry()
             w = min(w, int(avail.width() * 0.96))
             h = min(h, int(avail.height() * 0.94))
-        except AttributeError:
+        except Exception:
             pass
         return w, h
 
