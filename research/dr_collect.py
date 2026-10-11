@@ -320,8 +320,7 @@ def _query_lang(q: str) -> str:
 
 MIN_QUERIES = 3
 # A search engine cannot match an essay: a long "query" comes back as nav junk.
-# The planner path already distils, and the top-up below must not undo that --
-# it did, and an existing check caught it.
+# The planner path already distils, and the top-up below must not undo that.
 MAX_QUERY_CHARS = 130
 
 

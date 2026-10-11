@@ -353,8 +353,8 @@ def _contradiction_note(sig: dict, out_lang: str = "en") -> str:
     """Render the contradiction-pass result as a short report block. Always shown
     (even 'none found') so the reader knows disconfirmation was actively attempted.
 
-    Localised. This was hardcoded English and showed up as an English section in
-    the middle of a Russian document.
+    Localised: heading and body follow `out_lang`, so a Russian document never
+    carries an English section.
     """
     if not sig:
         return ""
