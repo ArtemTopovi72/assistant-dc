@@ -1,5 +1,4 @@
-"""Eleventh supplement: exact remaining reachable guard/except branches in gui.py,
-targeted line-by-line from the coverage map. Final push toward ~99-100%.
+"""Eleventh supplement: exact remaining reachable guard/except branches in gui.py.
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_supplement11.py
 """
@@ -123,7 +122,7 @@ def test_queue_and_send_guards():
         w.input.setText("   "); w._send_text()
         # _enqueue empty
         w._enqueue("   ", announce=False)
-        # _queue_move valid pending swap (5461->5462)
+        # _queue_move valid pending swap
         w._queue_paused = True
         w._enqueue("qa", announce=False); w._enqueue("qb", announce=False)
         w.queue_list.setCurrentRow(0); w._queue_move(1)
@@ -134,7 +133,7 @@ def test_queue_and_send_guards():
         w._turn_had_error = False
         w._maybe_drain_queue()
         check("drain_valueerror", w._running_task is None)
-        # _refresh_queue_ui early return when no queue_list (5410->5411)
+        # _refresh_queue_ui early return when no queue_list
         saved = w.queue_list; del w.queue_list
         w._refresh_queue_ui()
         w.queue_list = saved
@@ -173,7 +172,7 @@ def test_db_finished_close_except_and_load_except():
         w._lib_build_worker = None
         w._on_db_finished()   # close() raises -> except pass; then stats lazily reopens
         check("db_finished_close_except", w._lib_build_worker is None)
-        # _db_load_existing: documents() raises (5972->5973)
+        # _db_load_existing: documents() raises
         w._library = types.SimpleNamespace(documents=lambda: (_ for _ in ()).throw(RuntimeError("x")))
         w._db_load_existing()
         # _db_clear success
@@ -203,7 +202,7 @@ def test_drop_pdf_truncation():
         real = sys.modules.get("pypdf"); sys.modules["pypdf"] = fake
         try:
             pf = os.path.join(_TMP, "big.pdf"); open(pf, "wb").write(b"%PDF")
-            w._drop_pdf_file(pf)   # truncated=True -> 7006
+            w._drop_pdf_file(pf)   # truncated=True
             check("drop_pdf_trunc", w.worker is not None)
             w._worker_finished()
         finally:
@@ -218,18 +217,18 @@ def test_retry_hands_and_drop_text_and_mc_setprofile():
     o = _noop()
     try:
         w = _win()
-        # _retry_hands source missing (6502->6503)
+        # _retry_hands source missing
         w._last_handfix_source = "C:/no/such_rh.png"
         w._retry_hands()
         check("retry_missing", "Nothing to retry" in w.chat.toPlainText())
-        # _drop_text_file read error (6985->6986 truncation) — use a big real file
+        # _drop_text_file read error (truncation) — use a big real file
         big = os.path.join(_TMP, "big.txt"); open(big, "w", encoding="utf-8").write("B" * (w._DROP_CHARS + 300))
-        w._drop_text_file(big)   # truncated -> line 6986
+        w._drop_text_file(big)   # truncated
         w._worker_finished()
-        # _memory_center_set_profile ctx None (6695->6696)
+        # _memory_center_set_profile ctx None
         c = w.ctx; w.ctx = None; w._memory_center_set_profile("p")
         check("mc_setprofile_none11", "Load the model" in w.chat.toPlainText()); w.ctx = c
-        # _new_memory_profile valid -> setCurrentIndex (6722->6723)
+        # _new_memory_profile valid -> setCurrentIndex
         QInputDialog.getText = staticmethod(lambda *a, **k: ("Prof11", True))
         w._new_memory_profile()
         check("newprof11", w.ctx.active_memory_dir.name == "Prof11")
@@ -247,13 +246,13 @@ def test_gen_compaction_no_sources_and_run_diag():
                                session_memory=[]), _set_status=lambda m: None,
                                _memory_center_set_profile=lambda p: None)
     mc = gui.MemoryCenterTab(mh); mc.store = store; mc.refresh_all()
-    # _gen_compaction: profile == active, no session sources -> "Nothing to compact" (2876->2877)
+    # _gen_compaction: profile == active, no session sources -> "Nothing to compact"
     oi = QMessageBox.information; QMessageBox.information = staticmethod(lambda *a, **k: None)
     try:
         mc._gen_compaction(); check("gen_no_sources11", True)
     finally:
         QMessageBox.information = oi
-    # _run_diag with a query producing selected entries (2973->2974 loop body)
+    # _run_diag with a query producing selected entries (loop body)
     mc.diag_query.setText("fact"); mc._run_diag()
     check("run_diag11", "Profile" in mc.diag_out.toPlainText())
 

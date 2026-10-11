@@ -41,10 +41,9 @@ def test_dark_titlebar_filter():
     filt = gui._DarkTitleBarFilter()
     w = QWidget(); w.show()
     calls = {"n": 0}
-    # _DarkTitleBarFilter moved to gui_chrome.py and calls enable_dark_titlebar
-    # as a global of THAT module (it comes from gui_common). Patching gui's copy
-    # alone stopped intercepting, so the REAL one ran — which calls DWM ctypes
-    # and is unsafe offscreen — and the counter stayed 0.
+    # _DarkTitleBarFilter lives in gui_chrome.py and calls enable_dark_titlebar
+    # as a global of THAT module (it comes from gui_common). Patch it there too:
+    # the real one calls DWM ctypes and is unsafe offscreen.
     import gui_chrome as _CHR
     orig = _CHR.enable_dark_titlebar
     _fake = lambda obj: calls.__setitem__("n", calls["n"] + 1)
@@ -160,9 +159,8 @@ def test_memory_center_confirm_and_compaction():
 
     # _gen_compaction: active profile matches -> starts a CompactMemoryWorker (stub start)
     # The tab's _gen_compaction lives in gui_memory_maint and reaches the worker
-    # back through the gui_memory_tab MODULE, so patch it there. Patching
-    # gui.CompactMemoryWorker only covers AssistantWindow._compact_memory; from
-    # here it was a silent no-op that started a REAL compaction thread.
+    # back through the gui_memory_tab MODULE, so patch it there (gui.CompactMemoryWorker
+    # only covers AssistantWindow._compact_memory).
     import gui_memory_tab as _mt
     class FakeCompact(_mt.CompactMemoryWorker):
         def start(self): pass
@@ -209,8 +207,7 @@ def test_chat_double_click_and_clipboard_url():
     w._add_result_image(img)
     opened = {"n": 0}
     # eventFilter lives in gui_dropzone and reaches the viewer through the
-    # gui_dialogs MODULE, so patch it at its own home — a patch on
-    # gui.show_image_viewer would be a silent no-op from here.
+    # gui_dialogs MODULE, so patch it at its own home.
     import gui_dialogs
     orig_show = gui_dialogs.show_image_viewer
     gui_dialogs.show_image_viewer = lambda *a, **k: opened.__setitem__("n", opened["n"] + 1)

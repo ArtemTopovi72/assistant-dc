@@ -2,7 +2,7 @@
 
 Builds the REAL AssistantWindow but stubs ModelLoader so no models load and no
 network is touched, then drives the real slots + state machine directly with
-fake/malformed payloads. Focus: the classes of GUI bug the phase names —
+fake/malformed payloads. Focus:
   * frozen "Loading…"/"Working" after a failed turn
   * buttons left permanently disabled
   * state corruption in the task queue
@@ -222,11 +222,8 @@ def test_malformed_on_done_payloads_no_crash():
 
 
 def test_document_path_is_surfaced_and_opened():
-    """create_presentation set final["document_path"] correctly, but _on_done only
-    read it to suppress the "empty turn" fallback -- the finished .pptx was never
-    shown or made reachable in the desktop app at all. Live, 2026-09-19: the user's
-    top-priority ask was "make sure the button works in Telegram AND the app" --
-    Telegram already attaches the file; the app silently dropped it."""
+    """_on_done must surface a finished document (open it and name it in the chat),
+    not merely use final["document_path"] to suppress the "empty turn" fallback."""
     import tempfile
     w = _make_window()
     opened = []
