@@ -20,7 +20,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import llm
-import config
 from models import Context
 
 # --- tighten the watchdog so the test runs in seconds, not minutes -----------
