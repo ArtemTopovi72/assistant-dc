@@ -256,7 +256,6 @@ def _cart_text(items) -> str:
 
 @_owned
 def _handle_ozon_cart(ctx, state, args: dict) -> str:
-    import json
     action = args.get("action") or "show"
     items = _cart_load(ctx)
     if action == "clear":
@@ -380,7 +379,6 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
             else:
                 items.append({"sku": str(c["sku"]), "name": c.get("name"), "price": c.get("price"),
                               "url": c.get("url"), "qty": qty})
-        import json
         _cart_save(ctx, items)
         basket = "\nAdded to the user's shopping list.\n" + _cart_text(items)
     return S.report(results, p["mode"], _oz.LAST_LOCATION.get("text") or "", basket)

@@ -548,7 +548,6 @@ def build_system_prompt(personality_text: str = "", concise: bool = False,
     ``length`` ("auto" | "short" | "long") selects the [Response length] directive
     that formatting rule 3 defers to — an axis independent of ``concise``.
     """
-    from datetime import date
     # Inject the real date each turn: the model's training-data clock is behind,
     # so without this it puts a stale year into search queries ("…курс доллара
     # 2024" in 2026) and gets stale answers back.
@@ -614,7 +613,6 @@ def _now_line(tz: str = "") -> str:
 def build_system_prompt_lite(personality_text: str = "", concise: bool = False,
                              length: str = "auto", reply_lang: str = "ru", tz: str = "") -> str:
     """Tiny system prompt for the fast path: language + tone only, no tool docs."""
-    from datetime import date
     base = _SYSTEM_PROMPT_LITE.replace("{lite_language}", _LITE_LANGUAGE[_lang_key(reply_lang)]).rstrip()
     # The full prompt has carried the date for a while; the fast path did not,
     # and answered "Сегодня 23 мая 2024" in September 2026 (live).

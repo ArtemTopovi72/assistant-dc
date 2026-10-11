@@ -4,7 +4,6 @@
 import copy
 import logging
 import os
-import shutil
 import threading
 import time
 
@@ -18,15 +17,14 @@ win_runtime.preload_newest_msvcp()
 import cv2
 import numpy as np
 
-from config import SAMPLE_RATE, OUTPUT_DIR, MEMORY_DIR
-from models import Models, Context, AgentState
+from config import SAMPLE_RATE
+from models import Context, AgentState
 from prompts import SYSTEM_PROMPT_PERSONALITY
-from utils import load_transcription_cache, ensure_required_files
+from utils import ensure_required_files
 from audio import (
     record_audio_until_enter,
     MicRecorder,
     transcribe_audio_array,
-    transcribe_audio_file,
 )
 from graph import build_graph
 
