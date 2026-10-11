@@ -639,18 +639,6 @@ from tg_keyboards import (
 )
 
 
-def _needs_text_beside_voice(reply: str) -> bool:
-    """A voice note stands alone only when the voice can actually say it.
-
-    The house F5 voice is a Russian fine-tune; Latin-script text is spoken by
-    transliteration, so a reply that is mostly Latin letters (an English user's
-    turn) is delivered as text too, and the voice is the bonus.
-    """
-    cyr = len(re.findall(r"[А-Яа-яЁё]", reply or ""))
-    lat = len(re.findall(r"[A-Za-z]", reply or ""))
-    return lat > cyr and lat >= 8
-
-
 # ── "which picture do you mean?" ──────────────────────────────────────────────
 # An instruction that needs an image but names none. Deliberately NARROW: it only
 # has to catch requests that will otherwise be silently answered about the wrong
