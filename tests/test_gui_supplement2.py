@@ -1,8 +1,7 @@
 """Second supplement: drive the inner dialog-button CLOSURES and remaining
 accept-paths that the main suites reject/decline — MemoryCenterTab add/trash/
 revisions/import/profile dialogs, AssistantWindow closeEvent (with stoppable
-workers), _drop_pdf_file (mocked pypdf), _fix_artifact edge branches, and the
-run_gui() early-return app-setup path.
+workers), _drop_pdf_file (mocked pypdf) and _fix_artifact edge branches.
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_supplement2.py
 """
@@ -20,7 +19,6 @@ from pathlib import Path
 from PyQt5.QtWidgets import (QApplication, QDialog, QPushButton, QListWidget, QMessageBox,
                              QInputDialog, QFileDialog)
 from PyQt5.QtGui import QImage, QColor
-from PyQt5.QtCore import Qt
 import gui
 from _gui_patch import stub_workers as _stub_workers, restore as _gui_restore
 
@@ -237,27 +235,26 @@ def test_drop_pdf_and_fix_artifact():
     try:
         w = _win()
         # _drop_pdf_file with a mocked pypdf module
-        import sys as _sys
         fake_pdf = types.ModuleType("pypdf")
         class _Page:
             def extract_text(self): return "pdf page text"
         class PdfReader:
             def __init__(self, path): self.pages = [_Page(), _Page()]
         fake_pdf.PdfReader = PdfReader
-        realmod = _sys.modules.get("pypdf"); _sys.modules["pypdf"] = fake_pdf
+        realmod = sys.modules.get("pypdf"); sys.modules["pypdf"] = fake_pdf
         try:
             pf = os.path.join(_TMP, "d.pdf"); open(pf, "wb").write(b"%PDF-1.4")
             w._drop_pdf_file(pf); check("drop_pdf", w.worker is not None)
             w._worker_finished()
         finally:
-            if realmod is not None: _sys.modules["pypdf"] = realmod
-            else: _sys.modules.pop("pypdf", None)
+            if realmod is not None: sys.modules["pypdf"] = realmod
+            else: sys.modules.pop("pypdf", None)
         # pypdf ImportError branch
-        _sys.modules["pypdf"] = None  # forces ImportError on `from pypdf import PdfReader`
+        sys.modules["pypdf"] = None  # forces ImportError on `from pypdf import PdfReader`
         try:
             w._drop_pdf_file(pf); check("drop_pdf_noimport", True)
         finally:
-            _sys.modules.pop("pypdf", None)
+            sys.modules.pop("pypdf", None)
         # _fix_artifact: mask dialog accepted but nothing painted -> "nothing selected"
         src = _png("fa.png"); w.ctx.last_image_path = src
         class MaskNoDraw:
@@ -281,30 +278,6 @@ def test_drop_pdf_and_fix_artifact():
         _close(w)
     finally:
         _gui_restore(orig)
-
-
-def _skip_run_gui_early_return():
-    """Cover run_gui's app-setup path via the SettingsDialog-rejected early return,
-    without constructing a second QApplication or entering the event loop."""
-    real_qapp = gui.QApplication
-    class _QAppProxy:
-        def __call__(self, *a, **k): return _app
-        def __getattr__(self, n): return getattr(real_qapp, n)
-    gui.QApplication = _QAppProxy()
-    class FakeSettings:
-        def __init__(self, *a, **k): pass
-        def setWindowIcon(self, *a): pass
-        def exec_(self): return QDialog.Rejected     # -> run_gui returns before AssistantWindow
-        def apply_ui_scale_setting(self): return False
-        def apply_language_setting(self): return False
-        def result_choice(self): return "m", True, "high"
-    real_settings = gui.SettingsDialog; gui.SettingsDialog = FakeSettings
-    try:
-        gui.run_gui()   # must return cleanly (dialog rejected)
-        check("run_gui_early_return", True)
-    finally:
-        gui.QApplication = real_qapp
-        gui.SettingsDialog = real_settings
 
 
 if __name__ == "__main__":
