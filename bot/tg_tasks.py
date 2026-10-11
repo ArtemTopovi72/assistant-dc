@@ -803,6 +803,9 @@ class TaskRunnerMixin:
             self._store.put(sess)
         elif task.user_text.startswith(("[animate]", "animate this photo")):
             ctx.voice_choice = "default"     # the presets carry «🎙 Добавить свои голоса»
+        # A plan-only turn spends the answer; the ▶ rerun gets it back (below), or it
+        # asked for voices again and «Стандартные» then drew a fresh plan, round and round.
+        ctx.plan_voice = (ctx.voice_choice, list(ctx.anim_voices))
         # 🎬 a multi-part clip shows its plan first; the approved parts ride the rerun only
         ctx.video_plan_ask = True
         ctx.video_plan_parts = []
@@ -1740,6 +1743,10 @@ class TaskRunnerMixin:
             if getattr(ctx, "continue_tail", ""):
                 sess.continue_tail, sess.continue_src = ctx.continue_tail, ctx.continue_src
                 sess.continue_people = list(getattr(ctx, "continue_people", None) or [])
+                self._store.put(sess)
+            choice, voices = getattr(ctx, "plan_voice", ("", []))
+            if choice:
+                sess.voice_choice, sess.anim_voices = choice, voices
                 self._store.put(sess)
             try:
                 self._offer_video_plan(chat_id, sess, lang, task.user_text, final["video_plan"])

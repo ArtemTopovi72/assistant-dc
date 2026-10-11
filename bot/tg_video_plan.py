@@ -118,6 +118,7 @@ class VideoPlanMixin:
             return
         if data == "vp:x":
             sess.video_plan, sess.video_plan_request, sess.video_plan_ok = [], "", []
+            sess.voice_choice, sess.anim_voices = "", []
             self._store.put(sess)
             self._send_text(chat_id, tg_bot._t("vp_cancelled", lang))
             return
