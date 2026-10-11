@@ -6,7 +6,6 @@ note the melody lands on), louder breaking ties. A heuristic: calibrate it
 against the user's ears before trusting a score.
 usage: stress_judge.py WORD_PREFIX file.mp3 ...   (e.g. гнил)"""
 import os, sys
-import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
