@@ -46,7 +46,7 @@ def _served_model():
 
 
 def _make_ctx(model_id):
-    from models import Models, Context
+    from models import Context
 
     class StubModels:
         whisper = tts_model = vocoder = accentor = None
