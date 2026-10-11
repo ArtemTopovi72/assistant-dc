@@ -140,6 +140,3 @@ if served:
 
 print(f"\n{_n - _bad}/{_n} checks passed")
 sys.exit(1 if _bad else 0)
-
-print(f"\n{_n - _bad}/{_n} checks passed")
-sys.exit(1 if _bad else 0)
