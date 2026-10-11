@@ -620,10 +620,10 @@ class _ScopedCtx:
 
     Everything is delegated to the real ctx EXCEPT cancellation. `ctx.cancel_event`
     is global and is set by the main chat's Stop button, then cleared only when the
-    main chat starts its next turn — so a single Stop press used to mute the whole
-    Madhouse permanently: every reply returned None and the room printed "the model
-    returned no text" forever (diagnosed 2026-07-22; a set cancel flag is the only
-    state in which send_to_lm_studio returns None here).
+    main chat starts its next turn — so sharing it would let a single Stop press mute
+    the whole Madhouse permanently: every reply would return None and the room would
+    print "the model returned no text" (a set cancel flag is the only state in which
+    send_to_lm_studio returns None here).
 
     The same flag collision runs the other way too: an operation that *clears* the
     global flag when it starts or finishes un-cancels whatever else is in flight.

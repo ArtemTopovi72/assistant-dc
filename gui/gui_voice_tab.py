@@ -3,8 +3,7 @@
 Everything that turns hardware into a turn. The VAD state machine is the part
 worth having in one file: push-to-talk and hands-free share the recorder but
 NOT the lifecycle — hands-free must survive between utterances, push-to-talk
-must not — and that distinction was previously spread across 200 lines of an
-otherwise unrelated class.
+must not.
 
 gui_workers.RequestWorker and config.OUTPUT_DIR are read through their defining modules
 (gui_workers, config) rather than imported by value, because gui.py reads them

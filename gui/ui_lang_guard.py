@@ -1,5 +1,4 @@
-"""The one language check every outgoing Telegram message passes (user,
-2026-09-27: «мучаемся каждый раз — то слова недоперевели … централизацию»).
+"""The one language check every outgoing Telegram message passes.
 
 _post_message hands every text and every inline button label here:
   1. a whole line / label that is a known stage phrase is translated

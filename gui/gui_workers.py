@@ -11,8 +11,7 @@ why this move needed no test changes: roughly twenty suites patch
 gui.ModelLoader and friends, and because the CALLER did not move it still
 resolves those names as gui.py globals, so the fakes intercept exactly as
 before. (Moving a callee alone is safe; it is moving the caller that kills a
-monkeypatch — learned at 16b2521, and the reason the workers were left until
-the tabs that used to own some of them were gone.)
+monkeypatch.)
 
 Heavy imports stay inside run(): a worker module imported at startup should not
 drag in the model stack, and each run() is a separate slow path anyway.

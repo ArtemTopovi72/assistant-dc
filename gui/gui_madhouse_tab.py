@@ -11,9 +11,9 @@ files that only ever call each other.
 
 Cancellation is the subtle part and it lives in _ScopedCtx (gui_common): the
 global ctx.cancel_event is set by the main chat's Stop button and cleared only
-when the main chat takes its next turn, so one Stop press used to mute the whole
-room permanently — every reply came back None and the room printed "the model
-returned no text" forever. Each long-running tab therefore takes a scoped view
+when the main chat takes its next turn, so sharing it would let one Stop press
+mute the whole room permanently — every reply would come back None and the room
+would print "the model returned no text". Each long-running tab therefore takes a scoped view
 with its own cancel token.
 
 _MADHOUSE_TTS_LOCK serialises speech: the characters generate concurrently but
