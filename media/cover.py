@@ -12,7 +12,6 @@ import re
 import subprocess
 
 import music
-from config import OUTPUT_DIR
 
 logger = logging.getLogger("assistant.cover")
 
