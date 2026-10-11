@@ -23,9 +23,12 @@ the whole pipeline:
 - **Chunking** — `knowledge.chunk_text` (~240-word passages, 40-word overlap).
 - **BM25 / keyword** — SQLite **FTS5** (`chunks_fts`, porter+unicode61) for exact names,
   numbers, and phrases.
-- **Semantic** — embeddings from the LM Studio `/v1/embeddings` endpoint
-  (`text-embedding-nomic-embed-text-v1.5`, 768-d), stored as float32 BLOBs. No new heavy
-  dependency, no resident VRAM.
+- **Semantic** — embeddings from an OpenAI-style `/v1/embeddings` endpoint
+  (`config.EMBED_BASE`, default a CPU-only llama-server on port 8096; model
+  `config.EMBED_MODEL`, default `text-embedding-bge-m3`, 1024-d), stored as float32 BLOBs.
+  No new heavy dependency, no resident VRAM. The first version used
+  nomic-embed-text-v1.5 (768-d); BGE-M3 replaced it for the bilingual corpus
+  (rationale in `core/config.py`).
 - **Fusion** — **Reciprocal Rank Fusion** of the BM25 and cosine rankings (`mode="auto"`
   → hybrid when embeddings exist, else BM25-only).
 - **Rerank** — `Library.retrieve()` pulls a larger candidate pool (`max(k+7, 12)` with the
@@ -68,8 +71,8 @@ fixing an observed case where the model web-searched and fabricated specifics (e
 of *War and Peace* characters that Tolstoy never states) instead of answering from the PDF.
 
 ## Build speed (embedding throughput)
-Embeddings are computed by the GPU-backed LM Studio `/v1/embeddings` endpoint, not on the
-local CPU — the build's only local cost is HTTP round-trip latency. So the build embeds
+Embeddings are computed by a separate server behind `/v1/embeddings`, not in the app
+process — the build's only local cost is HTTP round-trip latency. So the build embeds
 with **bigger batches and concurrent in-flight requests** to keep that GPU fed instead of
 idling between sequential calls: `KnowledgeBase.ensure_embeddings(batch=, workers=)`,
 driven for the library by `LIBRARY_EMBED_BATCH` (default 128) and `LIBRARY_EMBED_WORKERS`
@@ -77,7 +80,9 @@ driven for the library by `LIBRARY_EMBED_BATCH` (default 128) and `LIBRARY_EMBED
 waves); SQLite writes stay on the calling thread. Set `LIBRARY_EMBED_WORKERS=1` to force
 the old sequential behaviour.
 
-**Sweet spot (measured, 300 real chunks vs live LM Studio + RTX 3060):** throughput
+**Sweet spot (measured when embeddings still ran on the GPU, 300 real chunks vs live
+LM Studio + RTX 3060; the CPU embedder used now indexes about 30x slower, so absolute
+numbers differ):** throughput
 saturates at **~15.6 chunks/s** — the endpoint is GPU-bound, so beyond a point more
 concurrency/batch doesn't help. `batch=16/workers=1` = 4.9 ch/s; the **default
 batch=128/workers=4 ≈ 15.5 ch/s (3.2× faster)**, matching the plateau with only 4
