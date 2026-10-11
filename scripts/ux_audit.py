@@ -96,7 +96,6 @@ def audit_chat(rows, labels):
             prev = o
 
     # 7. a Russian-speaking user got a message with no Russian in it
-    #    (live 2026-09-27: every status said «⚙️ Starting…» to Russian users)
     cyr = sum(bool(re.search("[а-яё]", t, re.I)) for _r, t in ins)
     #    A Latin reply is RIGHT after a Latin-script question, an ask for
     #    English / a translation, or «answer in English from now on».

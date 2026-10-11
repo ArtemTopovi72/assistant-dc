@@ -34,8 +34,8 @@ def ensure(write_venv: bool = True):
     # exist -- the write failed silently and nothing could `import config`.
     target = os.path.join(_site_dir(), "assistant_dc.pth")
     # Importing launch_all (tests do, from any checkout) must not repoint the
-    # shared venv at itself -- 2026-10-01 a clone's suite run did, and the main
-    # checkout's tests then imported the clone's stale code.
+    # shared venv at itself (a clone's suite run would, and the main
+    # checkout's tests then import the clone's stale code).
     if not write_venv:
         return target
     want = f"import sys; sys.path[0:0] = [d for d in {source_dirs()!r} if d not in sys.path]\n"
