@@ -29,10 +29,9 @@ what the stubs accept. Do not "tidy" them.
 
 WHAT THIS CLIENT OWNS INSTEAD OF THE CALLERS
 ---------------------------------------------
-The apply/run/restore dance, as one try/finally in one place, so overrides can never leak
-into a later run — which
-is also the only way the operation is safe to expose to a backend that might one
-day run two of them.
+The apply/run/restore dance, as one try/finally in one place, so overrides can
+never leak into a later run — which is also the only way the operation is safe to
+expose to a backend that might one day run two of them.
 """
 from __future__ import annotations
 

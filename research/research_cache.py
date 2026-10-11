@@ -51,8 +51,9 @@ def content_hash(text: str) -> str:
 
 
 class ExtractionCache:
-    """Tiny file-per-URL JSON cache. Thread-safety is not required: the crawler
-    is single-threaded, and a torn write just degrades to a miss."""
+    """Tiny file-per-URL JSON cache. Safe to call from the crawler's worker
+    threads: each URL has its own file, writes are atomic (tmp + rename), and a
+    torn read just degrades to a miss. The stats counters are best-effort."""
 
     def __init__(self, cache_dir: Path, enabled: bool = True):
         self.dir = Path(cache_dir)

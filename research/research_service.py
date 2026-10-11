@@ -40,7 +40,7 @@ WHAT THE HTTP BACKEND STILL CANNOT DO, AND SAYS SO
   deployment only. A client on another host gets a path it cannot open; the
   report text itself is in result["report"] and is complete, so a remote-host
   caller must use that and ignore the path.
-* Overrides are applied to the SERVICE process's deep_research globals for the
+* Overrides are applied to the SERVICE process's DR_* knobs (dr_settings) for the
   duration of one run. apply/restore is per-run and in a finally, but it is
   still module-global state: the service therefore serialises runs behind
   _RUN_LOCK rather than pretending concurrent runs with different knobs are
@@ -92,7 +92,7 @@ ENV_DR_MODULE = "RESEARCH_SERVICE_DR_MODULE"
 #: run_id -> _ServerCtx for runs currently in flight.
 _RUNS: Dict[str, "_ServerCtx"] = {}
 _RUNS_LOCK = threading.Lock()
-#: Overrides patch deep_research's module globals, so one run at a time.
+#: Overrides patch the process-wide DR_* knobs, so one run at a time.
 _RUN_LOCK = threading.Lock()
 
 

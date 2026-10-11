@@ -51,8 +51,8 @@ Derived by grepping the real call sites, not from what looked tidy:
 NOTE THAT apply_overrides / restore_overrides ARE **NOT** ON THE BOUNDARY
 ------------------------------------------------------------------------
 They are not a service operation; they are the pipeline mutating its OWN module
-globals in place for the duration of one run (deep_research.py:228-250, and see
-dr_timing.py:52 / dr_outline.py:12, which read those globals). Exposing them
+globals in place for the duration of one run (dr_settings.apply_overrides swaps
+the DR_* knobs that every pipeline stage reads). Exposing them
 across a boundary would export a race: two concurrent runs in one server process
 would stamp on each other's knobs. The contract therefore takes `overrides` as
 an ARGUMENT TO run(), and the backend owns the save/apply/restore as an
@@ -62,9 +62,9 @@ GUI worker did by hand; out-of-process it is what makes concurrency safe at all.
 CANCELLATION — READ THIS BEFORE ADDING A REMOTE BACKEND
 --------------------------------------------------------
 `deep_research` polls `ctx.is_cancelled()` — i.e. `ctx.cancel_event`, a
-`threading.Event` — at six points (deep_research.py:749, 765, 1025, 1524, 1811,
-2377). A `threading.Event` is PROCESS-LOCAL. The GUI's Stop button
-(gui.AssistantWindow._cancel_current, gui.py:2255) sets that event; the
+`threading.Event` — at every stage boundary (query collection, the crawl loop,
+briefing, each survey section). A `threading.Event` is PROCESS-LOCAL. The GUI's
+Stop button (gui.AssistantWindow._cancel_current) sets that event; the
 Madhouse/transfer/storyboard tabs hold a private one via
 `gui_common._ScopedCtx`.
 

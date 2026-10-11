@@ -6,7 +6,7 @@ evidence instead of the full raw retrieval set (spec #3 — "the final LLM shoul
 only read the top-ranked sources, not the full raw retrieval set").
 
 Relevance (this module) is kept SEPARATE from source scoring (authority/trust,
-which lives in deep_research). The two only meet at the very end, where the
+which lives in dr_urls). The two only meet at the very end, where the
 final order FUSES semantic relevance with caller-supplied authority via
 Reciprocal Rank Fusion — so neither signal alone dominates and either can be
 tuned without touching the other.
@@ -146,7 +146,7 @@ class Reranker:
         try:
             # Loud + timed: the first call may download ~2.3GB and the load can
             # stall under VRAM pressure — without this log the stage looked like an
-            # "infinite reranking" hang with no output. CPU by default (see top).
+            # "infinite reranking" hang with no output. Device: see _RERANK_DEVICE.
             logger.info("loading cross-encoder %s on %s (first use may download ~2.3GB)…",
                         self.cross_model, _RERANK_DEVICE)
             t0 = time.time()
