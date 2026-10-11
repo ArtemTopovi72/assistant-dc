@@ -99,11 +99,11 @@ from dr_state import _slug, _save_state, _now_iso, _write_report
 # Re-exported: the synth suite drives _save_state/_write_report/_now_iso and the
 # pure suite _slug through this module.
 _REEXPORTED_FROM_DR_STATE = (_slug, _save_state, _write_report, _now_iso)
-from dr_calls import _think_call, _model_context, _resolve_effort
+from dr_calls import _think_call, _model_context
 # Re-exported: the survey/classification suites patch `deep_research.call_llm_simple`
 # — which is dr_calls' import, so they must patch it THERE. `_think_call` itself is
 # read off this module by those suites, so it stays reachable here.
-_REEXPORTED_FROM_DR_CALLS = (_think_call, _model_context, _resolve_effort)
+_REEXPORTED_FROM_DR_CALLS = (_think_call, _model_context)
 from dr_progress import PHASES, _Progress
 from dr_policy import (
     _is_practical_request, _apply_scholarly_floor, _apply_trust_floor, _resolve_caps,
