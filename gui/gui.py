@@ -43,7 +43,7 @@ except Exception as _webeng_exc:  # pragma: no cover - environment dependent
 _REPORT_HTML_ENABLED = os.getenv("GUI_REPORT_HTML", "1").strip().lower() not in ("0", "false", "no", "off")
 
 import config
-from config import SAMPLE_RATE, LM_STUDIO_BASE, MODEL_NAME, MIC_GAIN_DB, MEMORY_DIR
+from config import SAMPLE_RATE, LM_STUDIO_BASE, MODEL_NAME, MEMORY_DIR
 from audio import AudioPlayer, MicRecorder, VadListener, transcribe_audio_array
 import gui_i18n
 import ui_scale
