@@ -111,9 +111,8 @@ def _fake_ctx():
 
 import gui_database_tab
 
-# A worker must be stubbed in the module its CALLER lives in — patching it on
-# `gui` when the caller moved to a mixin leaves the fake dead and runs the real
-# worker. Each entry is (module, name).
+# A worker must be stubbed in the module its CALLER lives in, or the fake is
+# dead and the real worker runs. Each entry is (module, name).
 _WORKER_NAMES = [(gui_workers, "RequestWorker"), (gui, "DeepResearchWorker"),
                  (gui, "ModelSwitchWorker"), (gui, "RedrawWorker"),
                  (gui, "FixHandsWorker"), (gui, "FixArtifactWorker"),
@@ -331,9 +330,8 @@ def test_sending_paths():
 
         # ── started without a model ──────────────────────────────────────────
         # The window is UP -- graph, tabs, queue -- but no LLM was ever loaded.
-        # Every door into a turn has to refuse and say why. Before this, the
-        # message reached the graph and came back as "Модель не ответила,
-        # проверьте LM Studio", blaming LM Studio for the user's own choice.
+        # Every door into a turn has to refuse and say why, rather than let the
+        # graph answer "Модель не ответила, проверьте LM Studio".
         w.ctx.model_name = ""
         before = len(w._task_queue)
         w.input.setText("это не должно уйти")
@@ -356,8 +354,7 @@ def test_sending_paths():
 
         # ── busy ─────────────────────────────────────────────────────────────
         # A launch handler that declines while something is running must say so:
-        # sixteen of them used to return in silence, which reads as a dead
-        # button at exactly the moment the app is slowest.
+        # a silent return reads as a dead button.
         w.redraw_worker = object()          # anything -> _busy() is True
         try:
             check("busy_is_reported", w._reject_if_busy("перерисовка") is True)
@@ -524,11 +521,7 @@ def test_cancel_and_clear_context():
     w._cancel_current(); check("cancel_set", w.ctx.cancel_event.is_set())
     w._cancel_current()  # already cancelling
     w.worker = None
-    # clear context (stub app_runtime.make_base_state).
-    # This used to fake the `assistant` module. make_base_state moved to
-    # app_runtime when the gui <-> assistant import cycle was broken, so a fake
-    # `assistant` no longer intercepts anything — the stub would have gone
-    # silently dead while the test still passed, because make_base_state is pure.
+    # clear context (stub app_runtime.make_base_state, which _clear_context imports).
     import sys as _sys
     fake_asst = types.ModuleType("app_runtime")
     fake_asst.make_base_state = lambda: {"messages": []}
