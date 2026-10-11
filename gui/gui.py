@@ -11,7 +11,6 @@ import logging
 import os
 import shutil
 import sys
-import time
 from pathlib import Path
 
 # Before cv2/PyQt5: PyQt5 bundles MSVCP140 14.26 and whatever loads first wins;
