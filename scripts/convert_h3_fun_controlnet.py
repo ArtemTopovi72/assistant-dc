@@ -2,7 +2,7 @@
 
 to_q/to_k/to_v -> qkv_proj (concatenated), norm_q/k -> q_norm/k_norm, to_out.0 -> out_proj,
 ff.net.0.proj -> mlp.fc1 with its halves SWAPPED (diffusers SwiGLU is [up, gate], Comfy's is
-[gate, up]; verified 2026-09-25 by row-norm correlation against the base DiT block: 0.99999 swapped
+[gate, up]; verified by row-norm correlation against the base DiT block: 0.99999 swapped
 vs 0.963 as-is), ff.net.2 -> mlp.fc2.
 """
 import sys

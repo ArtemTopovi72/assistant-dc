@@ -1,6 +1,6 @@
 """Helpers preinstalled in the run_code sandbox image (import assistant_tools).
 
-Measured 2026-09-14: asked to drop near-duplicate photos, the model wrote an
+Asked to drop near-duplicate photos, the model wrote an
 exact-bytes "hash" three times in a row even after being told to use a
 perceptual hash -- so the working implementation is shipped as a function.
 And a perceptual hash would not have worked either: re-shots of the same
@@ -89,7 +89,7 @@ def group_near_duplicates(paths, threshold: int = 25, window: int = 16):
 
     Every pair is compared when the set is small. A whole folder is not:
     173 photos are 14.9k ORB matches, ~30 s on a desktop and past the
-    run_code timeout inside the container (live 2026-09-14, after which the
+    run_code timeout inside the container (seen live, after which the
     model wrote its own pHash). Re-shots are shot together, so for a big set
     only photos within `window` positions of each other in name order are
     compared -- 2.7k matches for those 173 -- and this also drops the one

@@ -1,6 +1,6 @@
 """Seed-VC batch worker (venv_qwen): models load ONCE, then every job converts timbre only-ish (F0 kept) onto a target voice.
     venv_qwen/Scripts/python.exe scripts/seedvc_batch.py jobs.json     jobs = [{"source":..., "target":..., "out":...}]
-Prints one JSON line per finished job. Run with cwd away from the project dir is NOT needed; it chdirs into models_ext/seed-vc."""
+Prints one JSON line per finished job. The cwd does not matter: it chdirs into models_ext/seed-vc."""
 import argparse, json, os, shutil, sys, tempfile
 from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
