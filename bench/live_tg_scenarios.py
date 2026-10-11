@@ -381,7 +381,7 @@ def sc_buttons(bot, ctx):
 
 
 def sc_bare_photo_buttons(bot, ctx):
-    """New feature (2026-09-19): a bare photo with no caption should get a
+    """A bare photo with no caption should get a
     description AND the full picture-action keyboard right under that reply,
     keyed to that exact photo -- no trip to the Creativity menu needed. A
     video note (кружок) right after must NOT pick up that keyboard: it is a

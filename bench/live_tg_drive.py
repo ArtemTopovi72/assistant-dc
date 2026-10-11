@@ -10,7 +10,7 @@ bot's own Whisper, and time each turn.
 This is not a test; it makes real GPU calls and must not run under run_all.
 Stop the desktop app first (it holds Whisper/F5 and the bot's token):
 
-    venv/Scripts/python.exe bench/live_tg_drive.py --scenario music,picture,chat
+    venv/Scripts/python.exe bench/live_tg_scenarios.py music picture chat
 
 Results land in runtime/live_drive/<stamp>/ : transcript.jsonl, one folder of
 media per chat, and a summary printed at the end.

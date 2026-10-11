@@ -1,4 +1,4 @@
-"""Live ComfyUI + LM Studio test for the 2026-06-26 image-pipeline changes:
+"""Live ComfyUI + LM Studio test for the region-grounding and orientation path of image.py:
  A) region inventory + grounding (vision),
  B) absent-region short-circuit (NO wasted render),
  C) present-region real edit (full ComfyUI render, dims preserved),

@@ -2,7 +2,7 @@
 Self-test for tests/lmstudio_harness.py. Proves each guard catches the exact confound
 that produced the wrong vision conclusion (docs/vision_pipeline_forensics.md).
 
-Run: ./venv/Scripts/python.exe tests/test_lmstudio_harness.py
+Run: ./venv/Scripts/python.exe bench/lmstudio_harness_selftest.py
 Requires LM Studio running with a vlm loaded. Does NOT evict it. Which model that is
 comes from MODEL_NAME (the same knob config.py reads), so live runs can be pointed at
 whatever is actually loaded instead of assuming the 9B.

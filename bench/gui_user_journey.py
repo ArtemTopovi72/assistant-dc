@@ -20,7 +20,7 @@ SAFETY: redirect_settings + redirect_data_dir are called BEFORE the window is
 built, so this never writes to the live QSettings scope (a previous suite
 overwrote the real BotFather token that way) or the live user store.
 
-Run: venv/Scripts/python.exe tests/test_gui_user_journey.py
+Run: venv/Scripts/python.exe bench/gui_user_journey.py
 """
 import os, sys, subprocess, tempfile, textwrap, urllib.request
 

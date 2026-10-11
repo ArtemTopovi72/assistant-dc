@@ -24,7 +24,7 @@ What it proves, in order:
   5. the edited image carries its own layout, so it can be edited again.
 
 Needs LM Studio. Does NOT need ComfyUI.
-Run: venv/Scripts/python.exe tests/test_layout_edit_live.py
+Run: venv/Scripts/python.exe bench/layout_edit.py
 """
 import os, sys, json, copy, threading, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
