@@ -36,11 +36,10 @@ from dr_urls import (
 # Re-exported unchanged so `deep_research._classify_source_type` keeps resolving
 # on this module after the move to dr_urls (callers and tests reach for it here).
 _REEXPORTED_FROM_DR_URLS = (_classify_source_type, _COMMUNITY_SCORE)
-from dr_lang import DR_LANG_NAMES, _DOC_LABELS, _norm_out_lang, lang_of_text, _lab, _lang_directive
+from dr_lang import _DOC_LABELS, _norm_out_lang, lang_of_text, _lab, _lang_directive
 # Re-exported: gui_workers calls `dr.lang_of_text(topic)` to pick the report
-# language, and the output-language suite reads DR_LANG_NAMES/_DOC_LABELS off
-# this module.
-_REEXPORTED_FROM_DR_LANG = (DR_LANG_NAMES, _DOC_LABELS, lang_of_text)
+# language, and the output-language suite reads _DOC_LABELS off this module.
+_REEXPORTED_FROM_DR_LANG = (_DOC_LABELS, lang_of_text)
 from dr_timing import (
     DEPTHS, _TIMING_SEED, _TIMING_KEEP, _profile_signature,
     estimate_duration, record_run_duration,
