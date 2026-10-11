@@ -35,7 +35,6 @@ def _is_gpt_oss(model_name: str) -> bool:
 
 
 GLIMMER_THINK_HEADROOM = _cfg_env.env_int("GLIMMER_THINK_HEADROOM", 768)
-GLIMMER_THINK_HEADROOM_HIGH = _cfg_env.env_int("GLIMMER_THINK_HEADROOM_HIGH", 4096)
 
 
 def _is_glimmer(model_name: str) -> bool:
@@ -551,21 +550,9 @@ def send_to_lm_studio(
     # spent 2813 tokens and 26.7 s on six storyboard lines and each zoomed tile
     # 300-750 tokens against a 350 budget; a per-call opt-out had let it through.
     no_think = True
-    force_think = False
     is_oss = _is_gpt_oss(model_name)
     is_gemma = _is_gemma4(model_name)
     is_glimmer = _is_glimmer(model_name)
-
-    # force_think: deliberately let a reasoning fine-tune think (long-form synthesis
-    # writes far better WITH chain-of-thought). Suppressing it on these models (the
-    # /no_think marker + reasoning:"off" + a <think></think> prefill, all at once) makes
-    # them emit an UNCLOSED <think> block that strip_think_tags reduces to empty — the
-    # exact cause of empty report sections. In force_think mode we send a clean prompt
-    # (no marker, no prefill, reasoning ON) and rely on strip_think_tags to remove the
-    # CLOSED think block, keeping the real answer. Caller must budget tokens for both.
-    if force_think and not is_oss:
-        no_think = False
-        prefill = None
 
     if is_gemma:
         # None of the other families' switches mean anything here, and the
@@ -621,15 +608,13 @@ def send_to_lm_studio(
     if is_glimmer:
         # Same policy as everywhere: no reasoning unless the user or the caller
         # asks for it. The Qwen marker and prefill mean nothing to it.
-        _wants = False
-        outbound = _glimmer_strength(messages, "high" if _wants else "low")
+        outbound = _glimmer_strength(messages, "low")
         prefill = None
         # It still thinks at "low" (~100-250 tokens measured), and that is billed
         # against max_tokens: the vision self-test's 80-token budget came back
         # as "Yes, there is a". Headroom on top, so a short budget still means a
         # short ANSWER.
-        max_tokens = max_tokens + (GLIMMER_THINK_HEADROOM_HIGH if _wants
-                                   else GLIMMER_THINK_HEADROOM)
+        max_tokens = max_tokens + GLIMMER_THINK_HEADROOM
 
     # The <think></think> prefill is a Qwen lever; for gpt-oss it injects literal junk
     # into the harmony stream, so skip it there.
@@ -681,9 +666,6 @@ def send_to_lm_studio(
         payload["reasoning_effort"] = (
             "low"   # gpt-oss cannot switch reasoning off; the lowest it has
         )
-    elif force_think:
-        # Let the reasoning model think; enable the template's thinking path explicitly.
-        payload["chat_template_kwargs"] = {"enable_thinking": True}
     else:
         payload["reasoning"] = "off"
         if no_think:

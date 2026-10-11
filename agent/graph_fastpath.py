@@ -37,7 +37,6 @@ logger = logging.getLogger("assistant.graph")
 _UNTRUSTED_DATA_TOOLS = {"read_clipboard", "search", "ozon_product", "ozon_reviews", "ozon_shop"}
 
 
-_DELIVERABLE_TOOLS = ("generate_image", "generate_video", "create_presentation", "find_photo")
 _IMAGE_ACTION_TOOLS = {"generate_image", "redraw_image", "inpaint_image",
                        "transfer_image", "fix_hands", "fix_artifact"}
 
