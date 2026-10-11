@@ -357,7 +357,7 @@ def crawl_pages(ctx, sources: list, caps: dict, prog: _Progress, run_dir: Path,
             pages.append(page)
             suffix = " (social)" if r["social"] else ""
             # bump, not update: this wave counts its own pages from zero, and
-            # a later wave used to overwrite the run's total with its own size.
+            # update() would let a later wave overwrite the run's total with its own size.
             prog.bump("Crawling",
                       f"[{len(pages)}/{max_pages}] {page['domain']}{suffix}",
                       pages=1)

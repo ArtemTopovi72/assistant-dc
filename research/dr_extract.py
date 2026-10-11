@@ -28,7 +28,7 @@ logger = logging.getLogger("assistant.research")
 #
 # Static extraction frequently returns NOT "nothing" but a misleading shell:
 # an anti-bot/CAPTCHA interstitial, a JS skeleton with only nav chrome, or a few
-# hundred chars of boilerplate. Those used to flow straight into the brief step
+# hundred chars of boilerplate. Left alone, those would flow straight into the brief step
 # and become "evidence" (e.g. the hal.science CAPTCHA page in the science run).
 # This gate classifies each extraction and quarantines the bad ones with an
 # explicit reason code so failures are visible in logs/stats, never silent.

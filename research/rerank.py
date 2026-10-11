@@ -111,9 +111,9 @@ class Reranker:
 
     # -- backend resolution -------------------------------------------------- #
     def _resolve(self, backend: str) -> str:
-        # Explicit "cross" must ACTUALLY load the cross-encoder (it used to return
-        # "cross" while leaving self._ce None → relevance() silently fell back to
-        # lexical, so "cross" was a no-op). Now it loads it or degrades cleanly.
+        # Explicit "cross" must ACTUALLY load the cross-encoder (returning
+        # "cross" while leaving self._ce None would make relevance() silently fall
+        # back to lexical, so "cross" would be a no-op). It loads it or degrades cleanly.
         if backend == "cross":
             if self._try_cross():
                 return "cross"

@@ -27,10 +27,9 @@ The call SHAPES matter for the same reason and are deliberately minimal:
 topic, depth=, out_lang=, progress=)` with no other keywords — that is exactly
 what the stubs accept. Do not "tidy" them.
 
-WHAT THIS CLIENT OWNS THAT THE CALLERS USED TO
------------------------------------------------
-The apply/run/restore dance, as one try/finally in one place (the GUI worker
-was the only caller that got the `finally:` right), so overrides can never leak
+WHAT THIS CLIENT OWNS INSTEAD OF THE CALLERS
+---------------------------------------------
+The apply/run/restore dance, as one try/finally in one place, so overrides can never leak
 into a later run — which
 is also the only way the operation is safe to expose to a backend that might one
 day run two of them.

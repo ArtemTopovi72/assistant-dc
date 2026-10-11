@@ -98,8 +98,8 @@ def brief_source(ctx, topic: str, page: dict) -> Optional[str]:
     out = dr_calls.call_llm_simple(_c, SOURCE_BRIEF_PROMPT, user,
                           temperature=0.2, max_tokens=safe, prefill="<think></think>")
     out = (out or "").strip()
-    # Two different outcomes used to share one return value, and a counter built
-    # on it could not tell an OUTAGE from a page that genuinely had nothing:
+    # Two different outcomes must stay distinguishable, so a counter can tell an
+    # OUTAGE from a page that genuinely had nothing:
     #   ""   -- the model said nothing at all (empty completion): our failure.
     #   None -- the model read the page and judged it useless: the page's.
     # Both are falsy, so every existing caller behaves as before; the one that

@@ -28,10 +28,10 @@ logger = logging.getLogger("assistant.research")
 # --------------------------------------------------------------------------- #
 # Source quality filtering
 #
-# The crawler used to ingest whatever the search backend returned, so a niche
-# technical query could end up sourced from pirate-streaming, Q&A, or SEO
-# glossary farms — junk that the synthesis step then "filled in" with
-# hallucinations. We now hard-drop known-junk domains and crawl high-authority
+# A crawler that ingests whatever the search backend returns lets a niche
+# technical query end up sourced from pirate-streaming, Q&A, or SEO
+# glossary farms — junk that the synthesis step then "fills in" with
+# hallucinations. We hard-drop known-junk domains and crawl high-authority
 # sources first, so the bounded page budget is spent on credible material.
 # --------------------------------------------------------------------------- #
 

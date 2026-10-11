@@ -289,7 +289,7 @@ def search_duckduckgo_and_fetch(ctx, query: str, max_results: Optional[int] = No
         return NO_RESULTS
 
     # Prefer DEEP links over site roots/section pages. The per-domain cap below keeps
-    # sources diverse, but it used to be filled by whichever result came first — for a
+    # sources diverse, but it would be filled by whichever result came first — for a
     # news query that is often the outlet's homepage, so the actual articles from that
     # outlet were dropped and the user got "ria.ru" instead of the story. Sorting
     # landing pages last (stably, so relevance order is otherwise preserved) means a

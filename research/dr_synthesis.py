@@ -133,14 +133,12 @@ def synthesize_report(ctx, topic: str, briefs: list, prog: _Progress,
     # user's setting unless the caller overrides `effort`; the llm-layer guard
     # guarantees raw CoT is never emitted as the report even if the model still runs
     # out of room.
-    # BUGFIX: `max_tokens` (the caller's per-depth report budget / the manual
-    # "Report budget" override) and DR_REASONING_HEADROOM used to be accepted and
-    # then thrown away — send_budget was DR_SECTION_TOKEN_CEILING and nothing else,
-    # so quick/standard/deep and the override knob were all the same number. They
-    # are now the actual budget: report budget + reasoning headroom, still clamped
-    # by the ceiling and by the real context window. At stock config
+    # `max_tokens` (the caller's per-depth report budget / the manual "Report
+    # budget" override) and DR_REASONING_HEADROOM make up the budget: report
+    # budget + reasoning headroom, clamped by the ceiling and by the real
+    # context window. At stock config
     # (8000 + 40000 vs a 32000 ceiling) the ceiling still wins, so the default
-    # behaviour is byte-identical; lowering either knob now has an effect.
+    # behaviour is byte-identical; lowering either knob has an effect.
     # DR_REPORT_TOKENS (2000) was a tiny report on a 262k window, but the whole window
     # is not the answer either — an unbounded budget just lets a degenerate loop run
     # until the 600s wall-clock guard fires. DR_SECTION_TOKEN_CEILING is the generous

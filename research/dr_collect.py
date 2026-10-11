@@ -381,7 +381,7 @@ def coverage_signals(sources: list, profile: dict) -> dict:
 # --------------------------------------------------------------------------- #
 # Computed confidence inputs
 #
-# Confidence used to be whatever label the model felt like writing. We now feed
+# Confidence is not left to whatever label the model feels like writing. We feed
 # synthesis the hard evidence structure (independent clusters, max authority,
 # trust mix) AND a rule that ties confidence levels to that structure, so "High"
 # means the same thing across runs and can't be claimed on one weak source.
