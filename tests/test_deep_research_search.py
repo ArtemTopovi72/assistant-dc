@@ -50,9 +50,7 @@ def test_search_one_query():
         out = DR._search_one_query(FakeCtx(), "q", 5, None, False)
         check("search_one_success", out == [h("https://a.com/1")])
 
-    calls = {"n": 0}
     def raiser(ctx, q, n, timelimit=None, news=False):
-        calls["n"] += 1
         raise RuntimeError("boom")
     with _Patches(raw_search_results=raiser):
         out = DR._search_one_query(FakeCtx(), "q", 5, None, False)

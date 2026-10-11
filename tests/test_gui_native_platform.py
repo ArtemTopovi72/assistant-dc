@@ -15,7 +15,6 @@ more than a moment.
 Run: venv/Scripts/python.exe tests/test_gui_native_platform.py
 """
 import os, sys, subprocess, tempfile, textwrap
-import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 

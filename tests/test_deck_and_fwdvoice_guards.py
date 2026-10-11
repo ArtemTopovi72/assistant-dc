@@ -45,13 +45,8 @@ print("A PRESENTATION THAT WAS DESCRIBED BUT NEVER BUILT")
 print("=" * 66)
 
 import inspect
-# These guards used to live in the personality_node CLOSURE inside build_graph,
-# so this read the whole agent loop. The nodes are module-level functions now
-# and build_graph is bare wiring; personality_node itself later moved out of
-# graph.py entirely, to graph_personality.py (seam-blocked names read back
-# through `graph` at call time, everything else moved outright). Read THAT
-# module: a source-text anchor that silently finds nothing is worse than
-# useless, and graph_personality is where the guard actually lives now.
+# The guards live in graph_personality.py: read that module, because a
+# source-text anchor that silently finds nothing is worse than useless.
 src = inspect.getsource(GP)
 
 check("the deck prefix is matched literally, not guessed",
@@ -114,11 +109,9 @@ check("it re-offers the real choices", set(data) == {"fwdv:text", "fwdv:sum",
                                                      "fwdv:both", "fwdv:own"}, data)
 
 # the real payloads still work, and mark the note as acted on WITHOUT
-# discarding it -- the keyboard is inline and stays clickable, so wiping the
-# transcript here made every choice after the first answer 'that voice note
-# is no longer in my hands' for a note still on screen (see test_voice_routing
-# section F). Staleness is decided by the button's forward id, not by whether
-# some earlier choice already ran.
+# discarding it -- the keyboard is inline and stays clickable, so a choice after
+# the first must still find the transcript. Staleness is decided by the button's
+# forward id, not by whether some earlier choice already ran.
 for what, must in (("text", "выручка"), ("both", "выручка")):
     bot = make_bot()
     s = bot._get_session(CID)
@@ -147,8 +140,7 @@ for _ in range(50):
     if retold: break
     _time.sleep(0.05)
 # The retelling is a one-shot model call over the transcript, NOT an agent
-# turn: through the agent it inherited the chat's last picture and noticed a
-# second press as «тот же текст» (live 2026-09-14 23:02).
+# turn (through the agent it inherited the chat's last picture).
 check("choice 'sum' retells the transcript one-shot, not through the agent",
       retold == [(SAID, False)] and not pushed, (retold, pushed))
 retold.clear()
@@ -166,11 +158,9 @@ produced = {b["callback_data"].split(":", 1)[1]
 check("every button the keyboard offers is a choice _do_fwd_voice accepts",
       produced <= {"text", "sum", "both", "board", "own"}, produced)
 
-# 3. THE VIDEO MUST BE IN THE HISTORY THE MODEL SEES. Live 15:39: the retelling
-# ended with «Что требуется: дать экспертное мнение», the user typed «Дай
-# экспертное мнение», and the model -- whose history had no trace of the
-# video -- offered topics from days-old chats. The retelling is a one-shot call
-# outside the agent, so the turn has to be committed by hand.
+# 3. THE VIDEO MUST BE IN THE HISTORY THE MODEL SEES. The retelling is a
+# one-shot call outside the agent, so the turn has to be committed by hand;
+# otherwise a follow-up has no trace of the video.
 import llm as _llm
 bot = make_bot()
 _llm.call_llm_simple = lambda ctx, sysm, user, **kw: "Основная тема: оценка ремонта кухни.\nЧто требуется:\n- дать экспертное мнение"
@@ -194,16 +184,16 @@ check("a transcript delivered verbatim is remembered too, as a voice message",
 # 4. A follow-up about a video looks at the FRAMES again. The keyframe sheet
 # is the chat's current picture; "дай экспертное мнение" has no question word,
 # but the model reads it as about the video (intent about_picture).
-import graph as _graph, types as _types, os as _os, tempfile as _tempfile, intent as _intent
+import types as _types, intent as _intent
 _intent.STUB = {"дай экспертное мнение": {"about_picture": True},
                 "нарисуй кота": {"needs_tool": True, "wants": ["generate_image"]}}.get
-_vd = _os.path.join(_tempfile.mkdtemp(), "video_ab12cd34"); _os.makedirs(_vd)
-_sheet = _os.path.join(_vd, "sheet.jpg"); open(_sheet, "wb").close()
+_vd = os.path.join(tempfile.mkdtemp(), "video_ab12cd34"); os.makedirs(_vd)
+_sheet = os.path.join(_vd, "sheet.jpg"); open(_sheet, "wb").close()
 _ctx = _types.SimpleNamespace(last_image_path=_sheet)
-check("the video sheet is recognised", _graph.is_video_sheet(_sheet) and not _graph.is_video_sheet(_os.path.join(_vd, "x.jpg")))
+check("the video sheet is recognised", G.is_video_sheet(_sheet) and not G.is_video_sheet(os.path.join(_vd, "x.jpg")))
 check("an opinion asked after a video re-looks at its frames",
-      _graph.needs_relook(_ctx, {"user_input": "дай экспертное мнение"})
-      and not _graph.needs_relook(_ctx, {"user_input": "нарисуй кота"}))
+      G.needs_relook(_ctx, {"user_input": "дай экспертное мнение"})
+      and not G.needs_relook(_ctx, {"user_input": "нарисуй кота"}))
 check("the history frames the video as WATCHED",
       "WATCHED" in hist[0]["content"] and "never say you cannot see" in hist[0]["content"], hist[0]["content"][:120])
 

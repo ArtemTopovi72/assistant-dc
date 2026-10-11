@@ -76,7 +76,7 @@ def test_weak_claims():
             {"rel": "supported_by", "src": "c1", "dst": "s1"},  # single low-trust -> weak
             {"rel": "supported_by", "src": "c2", "dst": "s1"},  # primary -> not weak
             {"rel": "supported_by", "src": "c3", "dst": "s1"},
-            {"rel": "supported_by", "src": "c3", "dst": "s1"},  # 2 sources -> not weak (even if low trust)... actually same src twice
+            {"rel": "supported_by", "src": "c3", "dst": "s1"},  # same source twice (not asserted below)
         ])
     out = GG.weak_claims(graph)
     check("weak_claims_single_low_trust_included", any(w["claim"] == "some claim" for w in out))

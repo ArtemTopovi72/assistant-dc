@@ -1,21 +1,11 @@
 """A deep-research report is written in the READER's language, not the pipeline's.
 
-Live complaint (2026-07-31): a Russian user asked for a research paper and got an
-English one. The pipeline is English-internally on purpose — queries, crawling and
-per-source briefs stay English because that is where the sources are — but the
-DOCUMENT is what the user reads, and nothing ever told the writer which language to
-write it in. Every writing call inherited English from its system prompt and from
-the English evidence in front of it.
-
-Two layers are checked:
-
-  OFFLINE — the directive reaches every writing call and NO analysis call, the
-  scaffolding labels (Abstract / TOC / appendix / header) are localized, and the
-  default is still English so existing callers are untouched.
-
-  LIVE — the real model, given real English evidence, actually writes Russian.
-  That is the part no amount of plumbing proves; an offline test would pass while
-  the model kept answering in English.
+The pipeline is English-internally on purpose — queries, crawling and per-source
+briefs stay English because that is where the sources are — but the DOCUMENT is
+what the user reads, so every writing call must be told which language to write
+it in. Checked offline: the directive reaches every writing call and NO analysis
+call, the scaffolding labels (Abstract / TOC / appendix / header) are localized,
+and the default is still English so existing callers are untouched.
 
 Run: venv/Scripts/python.exe tests/test_dr_output_language.py
 """
@@ -26,7 +16,6 @@ try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
 
-import config
 import deep_research as D
 
 _n = _bad = 0
@@ -78,8 +67,6 @@ check("it forbids emitting an English version alongside",
 
 # ───────────────────────────────────────────────── which calls get the directive
 print("\nTHE DIRECTIVE REACHES THE WRITERS AND ONLY THE WRITERS")
-src = inspect.getsource(D)
-
 
 def fn_src(name):
     return inspect.getsource(getattr(D, name))
@@ -143,17 +130,14 @@ check("every English label has a Russian one",
 # ─────────────────────────────────────────────────────────── the callers wire it
 print("\nTHE CALLERS PASS IT")
 import tools, gui, tg_bot
-# TelegramBot was split into mixin modules; the research call now lives in
-# tg_tasks.py. Search the whole family so this anchor cannot go vacuous.
+# The research call lives in tg_tasks.py: search the whole family so this
+# anchor cannot go vacuous.
 import tg_tasks
 bot_src = inspect.getsource(tg_bot) + inspect.getsource(tg_tasks)
 # Match the CALL, not the comment above it that also names run_deep_research().
 m = re.search(r"_dr\.run_deep_research\((.{0,120})", bot_src, re.S)
 # The bot must derive the document language from the TOPIC, not from the
-# session's RU/EN UI toggle. This assertion used to demand `out_lang=lang`
-# (the UI toggle) and forbid `lang_of_text` — i.e. it pinned the very bug
-# that "detect out_lang from typed topic, not session UI lang" removed, so
-# it went red against correct code. Assert the shipped contract instead.
+# session's RU/EN UI toggle.
 check("the Telegram bot derives the document language from the topic",
       m is not None and "out_lang=" in m.group(1) and "out_lang=lang" not in m.group(1),
       m.group(1) if m else "no run_deep_research call found in tg_bot")
@@ -163,10 +147,7 @@ check("a Russian topic under an English UI yields a Russian document",
       D.lang_of_text("Расскажи про квантовые вычисления") == "ru")
 check("an English topic under a Russian UI still yields English",
       D.lang_of_text("deep research on quantum computing") == "en")
-# Check the BEHAVIOUR, not the source text. This used to grep for the literal
-# 'lang_of_text(state.get("user_input_original")' and broke the moment the helper
-# was resolved off the module with getattr — the tool still derived the language
-# correctly, the assertion just could not see it. Drive the handler and read the
+# Check the BEHAVIOUR, not the source text: drive the handler and read the
 # out_lang it actually passes to run_deep_research.
 def _out_lang_for(state):
     import deep_research as _dr
@@ -198,11 +179,10 @@ check("the agent tool derives it from the user's ORIGINAL message",
       f"the English-translated topic must not be the signal; got {_out_lang_for(_ru_state)!r}")
 check("an already-English turn stays English",
       _out_lang_for(_en_state) == "en", repr(_out_lang_for(_en_state)))
-# The derivation has moved twice now: out of gui.py into gui_workers.py, and
-# then behind the research service boundary into research_client.py. So this
-# anchor searches the whole family and keys on a MARKER exported by
-# research_api, not on a call expression that moves whenever the code moves.
-# A source-text check that finds nothing must go RED, not quietly vacuous.
+# The derivation sits behind the research service boundary, so this anchor
+# searches the whole family and keys on a MARKER exported by research_api, not
+# on a call expression. A source-text check that finds nothing must go RED, not
+# quietly vacuous.
 import gui_workers, research_api, research_client
 _gui_src = (inspect.getsource(gui) + inspect.getsource(gui_workers)
             + inspect.getsource(research_client))
@@ -248,14 +228,10 @@ check("the in-process research client defaults out_lang from the topic",
       _seen_lang.get("out_lang") == "ru", repr(_seen_lang))
 
 
-
-
 # ── the survey document must say how it was made ────────────────────────────
 # Survey mode writes its own title, abstract and contents, so the run header is
-# deliberately not prepended -- which left the PRIMARY product with no
-# provenance at all. Measured on a live run: 34,000 characters that never said
-# what depth it ran at, how many sources were searched, or how many pages were
-# actually read.
+# deliberately not prepended; the footer must carry the provenance (depth, how
+# many sources were searched, how many pages were actually read).
 _st = {"sources": 47, "pages": 20, "quarantined": {"fetch_failed": 3},
        "reflection": {"needs_second_pass": True}, "reflection_iterations": 0}
 _briefs = [{"trust": "PRIMARY"}, {"trust": "SECONDARY"}]
@@ -282,8 +258,8 @@ check("...nor is one that was never flagged",
       "пробел" not in D.provenance_footer(_briefs, {"sources": 1, "pages": 1},
                                           "deep", "ru"))
 
-# Russian counts agree with their noun; "1 страниц прочитано" was printed on the
-# first line of every report that read one page.
+# Russian counts agree with their noun ("1 страница прочитана", not
+# "1 страниц прочитано").
 _one = D.provenance_footer([{"trust": "PRIMARY"}], {"sources": 1, "pages": 1},
                            "quick", "ru")
 check("one page reads as one page", "1 страница прочитана" in _one, _one)

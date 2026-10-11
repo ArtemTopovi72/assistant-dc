@@ -1,11 +1,11 @@
 """A forwarded TEXT reaches the agent framed as someone else's words.
 
-Live 2026-09-13 (mega journey, journey 25 inside the long chat): a forwarded
-channel post ("Внимание! В субботу ... перекрывают движение") went in as if
-the user had said it; with document search on the bot answered "the documents
-say nothing about a road closure", and "о чём это?" afterwards was answered
-about the last picture. Forwarded text is now flagged at dispatch, framed as
-a quotation by the resolver, and never wrapped into the document prompt.
+A forwarded channel post ("Внимание! В субботу ... перекрывают движение") must
+not go in as if the user had said it (with document search on, the bot answered
+"the documents say nothing about a road closure", and "о чём это?" afterwards
+was answered about the last picture). Forwarded text is flagged at dispatch,
+framed as a quotation by the resolver, and never wrapped into the document
+prompt.
 """
 import os, sys, time, threading, tempfile
 os.environ.setdefault("F5_TEST_RUN", "1")

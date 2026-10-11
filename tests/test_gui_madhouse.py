@@ -1,17 +1,11 @@
 """Drive the Madhouse tab for real: set a cast, force a turn, check who spoke.
 
-docs/refactor_blockers.md section 4 says this suite does not exist, and that
-its absence is why the Madhouse split had to be trusted on a structural
-artifact instead of a test. Three mutations were planted in the moved code at
-the time -- MadhouseGrid.set_characters returning early, choose_next_speaker
-raising, MadhouseGrid.__init__ raising outright -- and test_gui_adversarial
-and test_gui_tabs stayed exit 0 through all three. The room is constructed
-defensively enough that a completely broken one reads as a passing suite.
-
-So this file does the thing those two cannot: it drives the tab. It asserts on
-STATE the tab produced (the transcript, the grid's sprite table, the combo
-contents, who was picked), not merely that a call did not raise -- "did not
-raise" is exactly the assertion that let those three mutations through.
+The room is constructed defensively enough that a completely broken one can read
+as a passing suite (MadhouseGrid.set_characters returning early,
+choose_next_speaker raising and MadhouseGrid.__init__ raising outright all stay
+exit 0 under test_gui_adversarial and test_gui_tabs). This file drives the tab
+and asserts on STATE the tab produced (the transcript, the grid's sprite table,
+the combo contents, who was picked), not merely that a call did not raise.
 
 Offline and deterministic by construction:
   * `llm` is replaced with a fake module for the router test, so no LM Studio
@@ -113,8 +107,7 @@ def test_add_cast_populates_every_view():
     check("who_rows", tab.who.count() == 3)
     check("who_data", [tab.who.itemData(i) for i in (1, 2)]
           == [c["id"] for c in tab.characters])
-    # The grid really took the cast -- set_characters returning early was one of
-    # the three planted mutations that no suite caught.
+    # The grid really took the cast (set_characters returning early must fail here).
     check("grid_took_cast", len(tab.grid._chars) == 2)
     check("grid_avatars_assigned", all(c.get("_avatar") for c in tab.characters))
     check("two_chars_enable_start", tab.start_btn.isEnabled())
@@ -268,7 +261,7 @@ class _InstantReplyWorker:
 
 
 def test_tick_runs_a_turn_and_posts_the_chosen_speaker():
-    """The end-to-end assertion docs/refactor_blockers.md asked for."""
+    """End to end: a tick runs a turn and posts the chosen speaker."""
     tab = _tab()
     _cast(tab, "Alice", "Bob")
     tab._auto = True                       # _tick returns early otherwise
@@ -453,11 +446,7 @@ def test_no_model_reply_is_a_placeholder_not_a_crash():
 
 # ----------------------------------------------------------------------- grid
 def test_grid_renders_with_a_cast_and_a_bubble():
-    """MadhouseGrid.__init__ raising outright was a planted mutation nothing caught.
-
-    Painting to a real pixmap is what makes that visible: a broken grid cannot
-    render.
-    """
+    """Painting to a real pixmap makes a broken grid visible: it cannot render."""
     grid = MG.MadhouseGrid()
     grid.resize(320, 240)
     grid.set_characters([{"id": "a", "name": "Alice", "_avatar": "🧑"},

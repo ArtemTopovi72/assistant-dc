@@ -131,8 +131,7 @@ def test_a_broken_probe_falls_back_instead_of_raising():
 def test_the_diagnosis_is_only_for_a_turn_that_produced_NOTHING():
     """A video- or document-only turn legitimately has no text: the artefact IS
     the answer. Diagnosing "модель не ответила" over it would be a lie about a
-    turn that worked. The list used to name only image_status and
-    research_report, so a delivered clip or file was reported as silence."""
+    turn that worked."""
     src = (ROOT / "gui/gui.py").read_text(encoding="utf-8")
     i = src.index("_empty_turn_diagnosis()")
     guard = src[max(0, i - 900):i]

@@ -1,18 +1,17 @@
-"""Regression tests for the 2026-08-03 audit's 🧠 Facts findings.
+"""Regression tests for the 🧠 Facts findings.
 
-Offline only (no LM Studio, no ComfyUI, no GPU). See
-scratchpad/audit_11_facts.md for the original proof of each bug.
+Offline only (no LM Studio, no ComfyUI, no GPU).
 
 Covers:
-F1. 🗑 Forget all had no presser check and no confirmation before an
-    irreversible wipe (a stranger's `from.id` on an old inline keyboard could
+F1. 🗑 Forget all needs a presser check and a confirmation before an
+    irreversible wipe (a stranger's `from.id` on an old inline keyboard must not
     clear someone else's facts with one tap).
-F2. remember_fact's on-disk shadow copy (tg_memory/chat_<id>/facts.json) was
-    never deleted by Forget-all, Clear Chat, or logout.
-F3. 🧠 My facts silently truncated at 4096 chars with no "showing N of M".
-F4. 🗑 Clear Chat destroyed pinned facts with no warning in either language.
-F5. The 40-fact cap silently dropped the oldest fact while the confirmation
-    still said "saved permanently".
+F2. remember_fact's on-disk shadow copy (tg_memory/chat_<id>/facts.json) is
+    deleted by Forget-all, Clear Chat, and logout.
+F3. 🧠 My facts does not silently truncate at 4096 chars.
+F4. 🗑 Clear Chat warns about pinned facts in both languages.
+F5. The 40-fact cap does not silently drop the oldest fact while the
+    confirmation still says "saved permanently".
 
 Run: venv/Scripts/python.exe tests/test_facts_fixes.py
 """
@@ -158,7 +157,6 @@ bot._store.put(sess)
 bot.sent.clear()
 bot._send_facts(CID, sess)
 
-total_chars = sum(len(t) for _, t, _ in bot.sent)
 check("the facts were split across more than one message instead of one "
       "blind 4096-char slice",
       len(bot.sent) > 1, len(bot.sent))

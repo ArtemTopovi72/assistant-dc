@@ -1,11 +1,10 @@
 """The bot's own reply, forwarded back to it, is read as its own words.
 
-Live 10-03: users could not forward the bot's reasoning back ("you said X --
-why?"); every forward from a bot was dropped as a replay. Now a forward whose
+Users forward the bot's reasoning back ("you said X -- why?"), so a forward whose
 Telegram origin is THIS bot's id is framed as its own earlier message, still a
-quotation. Nobody else can claim that: a forged sender name, a fake label in
-the text, or frame markers inside the text all stay someone else's words.
-Forwarded button labels are still not replayed.
+quotation. Nobody else can claim that: a forged sender name, a fake label in the
+text, or frame markers inside the text all stay someone else's words. Forwarded
+button labels are still not replayed.
 """
 import os, sys, time, threading, tempfile
 os.environ.setdefault("F5_TEST_RUN", "1")
@@ -18,7 +17,6 @@ import tg_bot as T
 T.redirect_data_dir(_DATA)
 T._DEBOUNCE_FWD_S, T._DEBOUNCE_FWD_MAX_S = 1.5, 3.0   # production waits longer for a typed instruction
 import graph as graph_mod
-import tg_tasks
 
 OK = BAD = 0
 def check(name, cond, extra=""):

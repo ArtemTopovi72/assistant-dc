@@ -1,7 +1,7 @@
 """FireRed's working resolution never drops below 1.0 MP.
 
-A/B 2026-09-24: at 0.52 MP (a 960x544 source) the edit came back zoomed ~1.4x,
-legs and sand cropped; at 1.0 and 2.0 MP the framing was identical to the source.
+At 0.52 MP (a 960x544 source) the edit came back zoomed ~1.4x, legs and sand
+cropped; at 1.0 and 2.0 MP the framing was identical to the source.
 TextEncodeQwenImageEditPlus scales its reference to ~1 MP by itself.
 """
 import os, sys

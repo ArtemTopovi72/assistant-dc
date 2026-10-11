@@ -1,11 +1,8 @@
 """Every value .env.example sets must equal the code's own default.
 
 The setup script copies .env.example to .env, so a stale example value is not
-documentation drift: it silently overrides the code. Three had already undone
-fixes (TG_ETA_RESEARCH_SEC=900 pinned the research ETA the code now measures,
-TG_REPORT_FILE_CHARS=6000 hid short reports in the chat again, and
-DR_BRIEF_TOKEN_CEILING=2048 cut the brief budget to a third). A knob whose
-example value differs on purpose belongs commented out, with a note.
+documentation drift: it silently overrides the code. A knob whose example value
+differs on purpose belongs commented out, with a note.
 """
 import re
 from pathlib import Path

@@ -1,18 +1,14 @@
-"""Two live failures from 2026-07-29, both of which made the boxes unreachable.
+"""Two regressions that made the edit boxes unreachable.
 
-A. The ✏️ button armed `pending_prefix = "edit the image: "` and then asked
-   `_main_menu_kb` for a keyboard — the one function whose job is to CLEAR that
-   prefix so the keyboard can never contradict the state. The prefix was wiped
-   one line after being set. The agent received a bare complaint ("надписи
-   кривые") with no instruction to edit, floundered two rounds, and told the user
-   it could not call any tools. Proof in tg_activity.jsonl: the "generate" flow
-   logged its prefix, the ✏️ flow logged the message without one.
+A. The ✏️ button arms `pending_prefix = "edit the image: "` and must keep it: it
+   may not ask `_main_menu_kb` for a keyboard, because that is the one function
+   whose job is to CLEAR the prefix. The agent would receive a bare complaint
+   with no instruction to edit.
 
-B. The quality-refinement loop repainted attempt 2+ through the old model img2img.
-   On an Ideogram picture that means a different model paints over a composition
-   it never planned, and — worse — the delivered file carries no layout, so every
-   later "move that box" silently falls back to a pixel pipeline. The image the
-   user was trying to edit was old-model-inpaint_00010_.png, with no sidecar.
+B. The quality-refinement loop must not repaint attempt 2+ through the old model
+   img2img. On an Ideogram picture that means a different model paints over a
+   composition it never planned, and the delivered file carries no layout, so
+   every later "move that box" silently falls back to a pixel pipeline.
 
 Run: venv/Scripts/python.exe tests/test_edit_button_and_refine.py
 """
@@ -39,12 +35,9 @@ def check(label, cond, detail=""):
 print("\nA. THE EDIT BUTTON KEEPS THE PREFIX IT JUST ARMED")
 import tg_bot as T
 
-# The ✏️ handler has moved twice already (tg_bot.py → tg_dispatch.py →
-# tg_callbacks.py), and each move silently invalidated a hardcoded module
-# list. Anchor on what the handler IS instead of where it lives: the one
-# function in the tg_* family whose body arms the edit prefix. That survives
-# the next move, and this suite ABORTS when nothing matches, so a stale
-# anchor is loud rather than vacuous.
+# Anchor on what the ✏️ handler IS instead of where it lives: the one
+# function in the tg_* family whose body arms the edit prefix. This suite
+# ABORTS when nothing matches, so a stale anchor is loud rather than vacuous.
 import ast as _ast
 import glob as _glob
 
@@ -107,16 +100,10 @@ check("the edit prefix has a keyboard of its own to show",
 check("and it is the draw keyboard",
       cls is not None and cls._PREFIX_MENU.get("edit the image: ") == "draw")
 
-# Every OTHER place that arms a prefix must obey the same rule, or this recurs.
-#
-# This used to be a regex that looked 320 characters past the assignment for a
-# `return`/`if`/`elif` terminator. The explanation of the fix is a 9-line
-# comment sitting in exactly that gap, so the terminator was out of reach and
-# the sweep matched NOTHING — a guard that silently covered zero sites, in both
-# the old file and the new one. Walk the functions instead: every tg_* function
-# that arms a non-empty prefix must not also ask _main_menu_kb (whose job is to
-# clear it). The count is asserted so "no sites" can never again read as "all
-# sites pass".
+# Every OTHER place that arms a prefix must obey the same rule. Walk the
+# functions: every tg_* function that arms a non-empty prefix must not also ask
+# _main_menu_kb (whose job is to clear it). The count is asserted so "no sites"
+# can never read as "all sites pass".
 print("\n   no other site arms a prefix and then clears it")
 _armers = []
 for _path in sorted(_glob.glob(os.path.join(_ROOT, "bot", "tg_*.py"))):
@@ -148,10 +135,8 @@ check("the sweep actually covered a prefix-arming site", bool(_seen),
 print("\nB. REFINING AN IDEOGRAM PICTURE DOES NOT REPAINT IT WITH THE OLD MODEL")
 import image as I
 
-# The refinement loop moved twice: out of generate_and_verify_image into
-# generate_image_with_refinement, and out of image.py into image_generate.py.
-# So locate it by its MARKER across the image module family rather than by name
-# or by __module__ — an anchor that pins either one goes stale on the next move.
+# Locate the refinement loop by its MARKER across the image module family
+# rather than by name or by __module__.
 loop, loopname = "", ""
 _mods = [I]
 for _m in ("image_generate", "image_contained", "image_router"):

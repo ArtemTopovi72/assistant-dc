@@ -124,7 +124,7 @@ def test_continue_text_is_not_a_search_when_a_search_menu_was_open(tmp_path):
 
 
 def test_a_plan_waiting_for_the_user_is_not_a_failed_render():
-    # Read as "success with no video" it was retried ~20 times and the turn gave up.
+    # A plan awaiting approval is not a "success with no video": it must not be retried.
     import graph_personality as G
     msg = "[NOT MADE YET] The script needs several parts, and the user approves the plan first"
     assert G._detect_silent_failure("generate_video", msg, {"video_plan": [{"text": "a"}]}) == msg
@@ -132,7 +132,7 @@ def test_a_plan_waiting_for_the_user_is_not_a_failed_render():
 
 
 def test_a_plan_keeps_the_clip_and_the_new_person_for_the_approved_run(monkeypatch, tmp_path):
-    # Live 2026-10-10: the plan-only turn used them up; the ▶ run got 1 image, 0 videos.
+    # The plan-only turn must not consume the clip and the new person: the approved ▶ run needs both.
     import tool_image_handlers as H
     seed, person, tail = (tmp_path / "seed.jpg"), (tmp_path / "cat.jpg"), (tmp_path / "tail.mp4")
     for p in (seed, person, tail):
@@ -159,6 +159,6 @@ def test_a_plan_keeps_the_clip_and_the_new_person_for_the_approved_run(monkeypat
 
 
 def test_the_newcomer_walks_into_the_existing_frame():
-    # Live 2026-10-10: the camera whipped from the selfie down to the cat, and the cat hit the dog.
+    # The newcomer enters the existing frame: no camera pan, nobody hits anybody.
     c = V.new_people_clause(2, 1)
     assert "no pan" in c and "steps into the frame" in c and "nobody hits" in c

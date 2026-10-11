@@ -1,9 +1,8 @@
 """A document over Telegram's 20 MB bot download limit is named as such.
 
-Live 2026-09-13: a forwarded 112 MB DCIM.zip came back as
-«Не удалось прочитать DCIM.zip», the user asked «Почему?», and the bot had
-no idea — getFile had simply refused. The dispatcher now carries file_size
-and the resolver explains the limit before trying to download.
+The dispatcher carries file_size and the resolver explains the limit before
+trying to download (a 112 MB DCIM.zip used to come back as a bare
+«Не удалось прочитать DCIM.zip»).
 """
 import os, sys, tempfile
 os.environ.setdefault("F5_TEST_RUN", "1")
@@ -21,9 +20,8 @@ def check(name, cond, extra=""):
     OK += bool(cond); BAD += (not cond)
     print(("PASS  " if cond else "FAIL  ") + name, ("  " + str(extra)) if (extra and not cond) else "")
 
-# The machine now carries real api_id/api_hash in .env, so config reports the
-# local Bot API (2 GB) at import time; this half of the suite is about the
-# CLOUD limit and pins it.
+# .env may configure the local Bot API (2 GB); this half of the suite is about
+# the CLOUD limit and pins it.
 import config as C
 C.TG_API_LOCAL = False
 
@@ -62,7 +60,7 @@ check("...and a failed download is still 'could not read'", any("Не удало
 import inspect, tg_dispatch
 check("dispatcher carries file_size on document items", '"file_size": int(doc.get("file_size")' in inspect.getsource(tg_dispatch))
 check("the limit is Telegram's 20 MB on the cloud API", tg_resolve._bot_file_limit() == 20 * 1024 * 1024)
-import config as C, tg_transport
+import tg_transport
 C.TG_API_LOCAL = True
 check("...and 2 GB behind a local Bot API server", tg_resolve._bot_file_limit() == 2000 * 1024 * 1024)
 C.TG_API_LOCAL = False

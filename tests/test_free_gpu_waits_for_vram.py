@@ -1,10 +1,9 @@
 """free_gpu() waits until the driver has the memory back.
 
-`lms unload --all` returns before VRAM is released; a render that started
-0.2 s later loaded beside the draining chat model and took 296 s instead of
-48 s (live, 2026-09-12, journey 21). The eviction now polls nvidia-smi until
-FREE_GPU_MIN_MB is free (bounded by FREE_GPU_WAIT_S), and a machine without
-nvidia-smi is never held up.
+`lms unload --all` returns before VRAM is released; a render that started 0.2 s
+later loaded beside the draining chat model and took 296 s instead of 48 s. The
+eviction polls nvidia-smi until FREE_GPU_MIN_MB is free (bounded by
+FREE_GPU_WAIT_S), and a machine without nvidia-smi is never held up.
 """
 import os, sys, time
 os.environ.setdefault("F5_TEST_RUN", "1")

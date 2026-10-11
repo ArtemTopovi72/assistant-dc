@@ -1,24 +1,12 @@
-"""The context self-heal must stay armed, because the fault comes BACK.
+"""The context self-heal must stay armed: the fault comes back.
 
-WHAT WAS OBSERVED. Two chats talking at once both got "Я задумался и не выдал
-ответ". The log said `Context size has been exceeded` / `n_keep: 11073 >= n_ctx:
-8192` — while `lms ps` showed the model resident TWICE:
-
-    google/gemma-4-26b-a4b-qat      ...  CONTEXT 8192   PARALLEL 4
-    google/gemma-4-26b-a4b-qat:2    ...  CONTEXT 32768  PARALLEL 4
-
-LM Studio JIT-loads a second instance at the model's default context and then
-answers from either one, so the same prompt succeeds or fails depending on who
-picks it up — and concurrency makes the bad one far more likely to be hit.
-
-THE ACTUAL DEFECT was the guard, not the reload: `_healed` was a permanent
-"one reload per model per size" latch. First heal succeeded; the phantom came
-back; every later repair returned "already attempted a reload at 32768" and the
-server stayed broken for the life of the process. It is now a rate limit.
-
-NOT the cause, and worth recording because it is the obvious guess: PARALLEL 4
-does NOT divide the context between slots. Measured — one instance at 32768 with
-PARALLEL 4 served two concurrent tool-bearing requests in 11 s each.
+LM Studio can hold the same model resident twice (`<id>` at a small context and
+`<id>:2` at the model default) and answer from either, so a prompt that did not
+fit succeeds or fails depending on which copy picks it up. heal_context is a
+rate limit (cooldown plus attempt cap), not a one-shot latch: a second heal at
+the same size must still run, a permanently broken server must stop after the
+cap, and a reload asks for ONE instance that is big enough without multiplying
+the context by the PARALLEL slot count.
 
 Run: venv/Scripts/python.exe tests/test_context_heal_latch.py
 """
@@ -71,7 +59,7 @@ try:
     ok1, _ = L.heal_context(MODEL, 11073)
     ok2, _ = L.heal_context(MODEL, 11073)      # the phantom reappeared
     check("the first repair runs", ok1)
-    check("a LATER repair at the same size runs too (this was the bug)", ok2)
+    check("a LATER repair at the same size runs too", ok2)
     check("both reloads actually happened", len(reloads) == 2, reloads)
 
     # ── but it must not spin ─────────────────────────────────────────────────
@@ -100,8 +88,8 @@ try:
     L.heal_context(MODEL, 11073)
     model, ctx, parallel = reloads[0]
     check("it asks for at least the needed tokens", ctx >= 11073 + 2048, ctx)
-    check("it does NOT multiply the context by the parallel slot count "
-          "(that theory was disproved)", ctx <= 65536, ctx)
+    check("it does NOT multiply the context by the parallel slot count",
+          ctx <= 65536, ctx)
     check("it reloads the model that failed", model == MODEL, model)
 
     # a bigger requirement must not be blocked by a smaller earlier repair

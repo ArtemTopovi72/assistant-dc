@@ -37,7 +37,7 @@ import numpy as np
 
 frame = os.path.join(_DATA, "last.jpg")
 check("a start frame is taken", C.seed_frame(CLIP, frame) and os.path.exists(frame))
-# Live 10-06: the frame came from 2 s before the end; the coat taken off in those 2 s was back on.
+# The start frame comes from the very end of the clip, not from ~2 s earlier.
 px = np.asarray(Image.open(frame).convert("RGB"), dtype=np.int16)[100:140, 130:190].mean(axis=(0, 1))
 check("the start frame shows the clip's FINAL state (what changed near the end stays changed)",
       px[0] > 180 and px[1] < 80 and px[2] < 80, px.tolist())

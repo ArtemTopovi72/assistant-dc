@@ -1,13 +1,11 @@
-"""tg_bot._friendly_image_label: the "Which picture?" picker showed raw
+"""tg_bot._friendly_image_label: the "Which picture?" picker must not show raw
 tool-call strings as button text.
 
-Live, 2026-09-19: pressing a style preset registers the picture with
-label=task.user_text -- for a forced button press that is the literal
-scaffolding the graph executes ("[style_preset] call redraw_image with
-mode=\"redraw\" instructions=\"...\" on the current image. Do not generate a
-new image."), not anything meant for a human to read. The picker showed six
-entries as "[style_preset] call redraw_image with mo…", indistinguishable
-from each other.
+Pressing a style preset registers the picture with label=task.user_text -- for a
+forced button press that is the literal scaffolding the graph executes
+("[style_preset] call redraw_image with mode=\"redraw\" instructions=\"...\" on
+the current image. Do not generate a new image."), not anything meant for a
+human to read.
 
 Run: venv/Scripts/python.exe tests/test_friendly_image_label.py
 """
@@ -71,8 +69,8 @@ check("a long plain sentence truncates on a word boundary with an ellipsis",
       == "The girl's nose has comically shrunk…",
       F("The girl's nose has comically shrunk, and she herself is smiling"))
 
-# Live 2026-10-04/05: Russian chats got picker buttons reading «generate an image
-# of…» and «QUOTED MESSAGE -- the user forwarded…» — the pipeline's own English.
+# Russian chats must not get picker buttons reading «generate an image of…» or
+# «QUOTED MESSAGE -- the user forwarded…» (the pipeline's own English).
 check("a button's routing prefix is not shown", F("generate an image of: рыжий кот", "ru") == "рыжий кот",
       F("generate an image of: рыжий кот", "ru"))
 check("a whole fixed command shows its button label in the chat's language",

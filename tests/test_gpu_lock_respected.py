@@ -1,16 +1,14 @@
 """A whole-card job must not be drawn over, and the user must be told why.
 
-gpu_lock has existed since two trainers were launched on the same card (step
-time 5.93 -> 8.98 s, both writing the same checkpoints), but until now ONLY the
-bench scripts consulted it: the app and the bot submitted ComfyUI jobs straight
-through a live training run. On 24 GB that is not a queue -- the diffusion
-model loads on top of the trainer, both thrash, and the render usually dies on
-an OOM after slowing the training for minutes.
+The app and the bot must consult gpu_lock before submitting ComfyUI jobs: on
+24 GB a render submitted through a live training run is not a queue -- the
+diffusion model loads on top of the trainer, both thrash, and the render usually
+dies on an OOM after slowing the training for minutes.
 
 Refusing is only half of it. Every renderer returns None on failure and the
-tool boundary said "the ComfyUI image server encountered an error… tell the
-user the image could not be generated", which invites an immediate retry -- for
-the hours the training run lasts. So the holder is asked FIRST, ahead of the
+tool boundary used to say "the ComfyUI image server encountered an error… tell
+the user the image could not be generated", which invites an immediate retry --
+for the hours the training run lasts. So the holder is asked FIRST, ahead of the
 recorded sub-reason, at each place a failure is turned into words.
 
 Run: venv/Scripts/python.exe tests/test_gpu_lock_respected.py
@@ -43,8 +41,8 @@ import gpu_lock
 # The gate ignores the lock under F5_TEST_RUN unless the lock PATH has been
 # redirected -- otherwise every suite that stubs ComfyUI and drives
 # _submit_and_poll would pass or fail depending on whether a training run
-# happened to be going on the machine, which is exactly what happened the first
-# time this landed. This suite is testing the mechanism, so it redirects.
+# happened to be going on the machine. This suite is testing the mechanism, so
+# it redirects.
 gpu_lock.LOCK_PATH = Path(tempfile.mkdtemp(prefix="gpulockchk_")) / "gpu.lock"
 
 

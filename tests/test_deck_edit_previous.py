@@ -1,10 +1,8 @@
 """'добавь слайд про спутники Марса' edits the deck just made.
 
-Live 2026-09-12 (journey 19): the follow-up re-planned a whole new deck from a
-merged topic — different theme (tech → energy), different slides, a different
-title. Now the previous plan travels on ctx.last_deck (persisted per Telegram
-session), the planner receives it with the change, and the untouched slides,
-title and theme survive.
+The previous plan travels on ctx.last_deck (persisted per Telegram session), the
+planner receives it with the change, and the untouched slides, title and theme
+survive instead of the follow-up re-planning a whole new deck.
 """
 import os, sys, json, tempfile
 os.environ.setdefault("F5_TEST_RUN", "1")
@@ -110,8 +108,7 @@ check("session serialises last_deck", d.get("last_deck", {}).get("title") == PRE
 s.clear_context()
 check("clear_context drops it", not s.last_deck)
 
-# Live 2026-09-28: a content slide named "Титульный лист" and an edit that
-# duplicated a slide instead of removing one.
+# A content slide named "Титульный лист" and a duplicated slide are dropped.
 _d = slides.normalize_deck({"title": "История чая", "slides": [
     {"heading": "Титульный лист", "bullets": ["a"]}, {"heading": "Древние истоки", "bullets": ["b"]},
     {"heading": "Япония", "bullets": ["c"]}, {"heading": "Древние истоки", "bullets": ["b"]}]}, "t", 0)

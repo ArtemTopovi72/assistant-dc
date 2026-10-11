@@ -1,19 +1,18 @@
-"""The depth/ETA UI was found to structurally lie about research cost.
-
-A real-chat audit (2026-08-03) proved: a Quick research run took 92 minutes
-while the picker advertised ~15. Root cause chain, all fixed here:
+"""The depth/ETA UI must not misreport research cost (a Quick research run took
+92 minutes while the picker advertised ~15). Pinned here, one item per cause:
 
   1. `_get_queue_eta`'s `_cfg_int("TG_ETA_RESEARCH_SEC", 0) or int(_depth_eta_seconds())`
      could never reach the measured branch — config.py bakes a NONZERO default
      (900) for TG_ETA_RESEARCH_SEC whether or not the user set it, so the "0
-     means unset" sentinel never fired. Fixed to read the raw env var directly.
+     means unset" sentinel never fired. It reads the raw env var directly.
   2. `dr_started` (the message sent the instant a research run begins — the one
-     moment the user commits to the wait) quoted only the ETA text, discarding
-     whether it was measured or a 0-sample seed.
-  3. A stale/hand-crafted `depth:` tap with an unknown value used to `return`
-     silently, leaving a keyboard whose ✅ lied about the real setting.
-  4. A non-string `dr_depth` already in a stored session crashed `_resolve_depth`
-     on `.lower()`.
+     moment the user commits to the wait) quotes whether the ETA was measured or
+     a 0-sample seed.
+  3. A stale/hand-crafted `depth:` tap with an unknown value redraws the
+     keyboard instead of returning silently with a ✅ that lies about the real
+     setting.
+  4. A non-string `dr_depth` already in a stored session does not crash
+     `_resolve_depth` on `.lower()`.
 
 Run: venv/Scripts/python.exe tests/test_depth_eta_fixes.py
 """
@@ -159,7 +158,7 @@ except Exception as exc:
           False, repr(exc))
 
 # ── the ETA must not be dragged to nothing by runs that never happened ───────
-# Measured 2026-08-29 from the live history: quick held
+# Measured from the live history: quick held
 # [5492, 120, 120, 93, 117, 90] and standard [119, 244, 120, 126]. One of those
 # is a research run; the rest are stubs and aborted runs from test and bench
 # passes that still reached the "completed" call. The median came out at ~2

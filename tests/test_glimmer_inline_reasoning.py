@@ -1,6 +1,6 @@
 """Muse Glimmer via LM Studio 2.44: reasoning arrives inline in content as
 `to=self<|message|> ... <|eom|>answer`. It reached a Telegram user as
-"to=selfUser says "привет". Need respond in Russian…Привет!" (2026-09-24)."""
+"to=selfUser says "привет". Need respond in Russian…Привет!"."""
 import sys
 from pathlib import Path
 
