@@ -658,7 +658,7 @@ def _handle_create_presentation(ctx, state, args: dict) -> str:
         try:
             image_mod.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         except Exception:
-            pass
+            logger.debug("could not create the output folder", exc_info=True)
         # Slide artwork, not a face reference: a portrait cropped into a wide
         # panel loses most of its subject.
         got = _search.fetch_reference_photo(ctx, query, dest, require_face=False,
@@ -710,7 +710,7 @@ def _handle_create_presentation(ctx, state, args: dict) -> str:
     try:
         ctx.last_deck = dict(deck)
     except Exception:
-        pass
+        logger.debug("could not remember the deck on the context", exc_info=True)
     _remember(ctx, state, "presentation", f"Built a deck: {deck.get('title', topic)}",
               {"path": path})
     headings = [s.get("heading", "") for s in deck.get("slides", [])]

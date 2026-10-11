@@ -522,7 +522,7 @@ class _Browser:
                         try:
                             slot[0].close()
                         except Exception:
-                            pass
+                            logger.debug("could not close a stale Ozon context", exc_info=True)
                     ctxs.clear()
                     seen_gen = self.gen
                 for attempt in range(2):
@@ -580,11 +580,11 @@ class _Browser:
                 if browser is not None:
                     browser.close()
             except Exception:
-                pass
+                logger.debug("could not close the Ozon browser", exc_info=True)
             try:
                 pw.stop()
             except Exception:
-                pass
+                logger.debug("could not stop playwright", exc_info=True)
 
     def _launch(self, pw):
         kw = dict(channel=OZON_CHANNEL or None, headless=OZON_HEADLESS,
@@ -639,7 +639,7 @@ class _Browser:
         try:
             slot[0].close()
         except Exception:
-            pass
+            logger.debug("could not close an Ozon context", exc_info=True)
 
     def _drain(self, err):
         while True:

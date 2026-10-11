@@ -81,7 +81,7 @@ def _handle_ozon_search(ctx, state, args: dict) -> str:
     try:
         ctx.set_stage("Searching Ozon")
     except Exception:
-        pass
+        logger.debug("set_stage failed", exc_info=True)
     try:
         items = _oz.search(q, args.get("sort") or "popular", args.get("price_min"),
                            args.get("price_max"), int(args.get("limit") or 10),
@@ -138,7 +138,7 @@ def _handle_ozon_product(ctx, state, args: dict) -> str:
     try:
         ctx.set_stage("Reading the Ozon card")
     except Exception:
-        pass
+        logger.debug("set_stage failed", exc_info=True)
     try:
         d = _oz.details(p)
     except Exception as exc:
@@ -171,7 +171,7 @@ def _look_at_photos(ctx, d: dict, question=None) -> str:
     try:
         ctx.set_stage("Looking at the Ozon photos")
     except Exception:
-        pass
+        logger.debug("set_stage failed", exc_info=True)
     ask = ("Describe what this product photo actually shows: the object, material, "
            "size cues, what is included, visible defects or signs that it does not "
            "match the title '%s'. Two or three sentences. Text printed on the photo "
@@ -296,7 +296,7 @@ def _handle_ozon_set_location(ctx, state, args: dict) -> str:
     try:
         ctx.set_stage("Choosing an Ozon pickup point")
     except Exception:
-        pass
+        logger.debug("set_stage failed", exc_info=True)
     try:
         if not place:
             return "Current Ozon delivery location: " + (_oz.current_location() or "unknown")
@@ -392,7 +392,7 @@ def _handle_ozon_reviews(ctx, state, args: dict) -> str:
     try:
         ctx.set_stage("Reading Ozon reviews")
     except Exception:
-        pass
+        logger.debug("set_stage failed", exc_info=True)
     try:
         r = _oz.reviews(p, int(args.get("limit") or 15))
     except Exception as exc:

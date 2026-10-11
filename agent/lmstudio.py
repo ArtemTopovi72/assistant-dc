@@ -75,7 +75,7 @@ def _parse_virtual_yaml(yaml_path: Path) -> dict:
                 out["enable_thinking"] = bool(cf.get("defaultValue", False))
         return out
     except Exception:
-        pass
+        logger.debug("PyYAML parse of %s failed; using the minimal parser", yaml_path, exc_info=True)
     # Minimal fallback parser.
     m = re.search(r"^\s*base:\s*(.+?)\s*$", text, re.MULTILINE)
     if m:

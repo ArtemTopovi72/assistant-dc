@@ -109,7 +109,7 @@ def _handle_open_image(ctx, state, args: dict) -> str:
     try:
         ctx.last_image_path = str(full)
     except Exception:
-        pass
+        logger.debug("could not record the opened picture on the context", exc_info=True)
     return (f"Opened '{rel}' ({full.stat().st_size} bytes). It is now the "
             f"current picture — call inspect_image to look at it.")
 
@@ -196,7 +196,7 @@ def _syntax_note(box, rel: str) -> str:
                 f"{exc.msg}. Fix it with edit_file unless you are still writing "
                 f"the rest of the file.]")
     except Exception:
-        pass
+        logger.debug("syntax check of %s skipped", rel, exc_info=True)
     return ""
 
 
@@ -374,7 +374,7 @@ def _agent_library_key(ctx) -> str:
         if box is not None:
             return box.root.name
     except Exception:
-        pass
+        logger.debug("no sandbox root name for the library key", exc_info=True)
     return "default"
 
 
@@ -419,8 +419,10 @@ def _handle_rag_add(ctx, state, args: dict) -> str:
         chunks = next((d.get("chunks", 0) for d in lib.documents()
                        if d.get("title") == full.name), 0)
     finally:
-        try: lib.close()
-        except Exception: pass
+        try:
+            lib.close()
+        except Exception:
+            logger.debug("could not close the knowledge base", exc_info=True)
     _record(box, "rag_add", f"indexed {rel} into the knowledge base ({chunks} passages)")
     return (f"Indexed '{rel}' into the knowledge base ({chunks} passages). "
             f"rag_search can now retrieve it.")
@@ -439,8 +441,10 @@ def _handle_rag_search(ctx, state, args: dict) -> str:
                     "working folder, or answer from what you already know.")
         hits = lib.retrieve(query, k=int(args.get("k") or 5))
     finally:
-        try: lib.close()
-        except Exception: pass
+        try:
+            lib.close()
+        except Exception:
+            logger.debug("could not close the knowledge base", exc_info=True)
     if not hits:
         return f"No stored passages match {query!r}."
     lines = [f"Passages from the knowledge base matching {query!r}:"]
@@ -495,8 +499,10 @@ def _handle_find_content(ctx, state, args: dict) -> str:
         if photos:
             _stage = getattr(ctx, "set_stage", None)
             if callable(_stage):
-                try: _stage(f"Looking through {len(photos)} pictures")
-                except Exception: pass
+                try:
+                    _stage(f"Looking through {len(photos)} pictures")
+                except Exception:
+                    logger.debug("set_stage failed", exc_info=True)
             res = _ps.find_in_photos(ctx, folder, query,
                                      work_dir=box.root / ".contact_sheets")
             matches = res["matches"]
@@ -508,7 +514,7 @@ def _handle_find_content(ctx, state, args: dict) -> str:
                     ctx.last_image_path = str(first)
                     ctx.found_image_paths = [str(m) for m in matches]
                 except Exception:
-                    pass
+                    logger.debug("could not record found pictures on the context", exc_info=True)
                 _remember_found(box, matches)
                 _record(box, "find_content", f"found {len(matches)} of {res['scanned']} photos "
                         f"showing {query!r}: " + ", ".join(_rel(box, m) for m in matches))
@@ -590,8 +596,10 @@ def _handle_dedupe_photos(ctx, state, args: dict) -> str:
         return "[TOOL ERROR] No pictures to compare."
     _stage = getattr(ctx, "set_stage", None)
     if callable(_stage):
-        try: _stage(f"Comparing {len(paths)} pictures")
-        except Exception: pass
+        try:
+            _stage(f"Comparing {len(paths)} pictures")
+        except Exception:
+            logger.debug("set_stage failed", exc_info=True)
     groups = at.group_near_duplicates(paths)
     kept, lines = [], []
     for g in groups:
@@ -809,7 +817,7 @@ def _pictures_in(box) -> dict:
             if p.is_file() and p.suffix.lower() in IMAGE_SUFFIXES:
                 out[p] = p.stat().st_mtime
     except Exception:
-        pass
+        logger.debug("could not list pictures in the working folder", exc_info=True)
     return out
 
 
@@ -834,7 +842,7 @@ def _deliver_new_pictures(box, state, before: dict, ctx) -> str:
     try:
         ctx.last_image_path = str(newest)
     except Exception:
-        pass
+        logger.debug("could not record the new picture on the context", exc_info=True)
     names = ", ".join(str(p.relative_to(box.root)).replace("\\", "/") for p in new[-5:])
     note = (f"\n[the script wrote {len(new)} picture(s): {names}. "
             f"'{newest.relative_to(box.root)}' is now the current picture and "
