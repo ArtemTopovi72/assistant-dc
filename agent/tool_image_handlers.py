@@ -1180,7 +1180,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     # in English (live 2026-10-11). Lines the user did write keep their language.
     if (re.search(r"[а-яё]", str((state or {}).get("user_input_original") or ""), re.I)
             and not re.search(r'[«"“]|<d>', description)):
-        description += " Anyone who says something out loud says it in Russian."
+        description += video_mod.RU_SPEECH
+    description += video_mod.CAUSE_RULE
     if not asks_for_video(ctx, state):
         logger.warning("generate_video refused: the user did not ask for a video")
         return ("[TOOL ERROR] The user did not ask for a video in this message, so no "

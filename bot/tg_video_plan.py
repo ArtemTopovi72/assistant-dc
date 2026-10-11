@@ -87,7 +87,7 @@ class VideoPlanMixin:
         import video
         script = " ".join(p["text"] for p in sess.video_plan)
         target = max(1, len(sess.video_plan) - 1)
-        top = video.frames_to_seconds(video.VIDEO_MAX_FRAMES_AUTO)
+        top = video.VIDEO_PART_MAX_S
         try:
             out = llm.call_llm_simple(
                 None,

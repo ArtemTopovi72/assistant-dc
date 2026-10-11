@@ -120,6 +120,8 @@ def estimate_seconds(description: str, capped: bool = True) -> float:
         if text.startswith(pre):
             text = text[len(pre):]
     text = _SCENE_NOTE_RE.sub("", text)                    # nor the scene-so-far note
+    for rule in (CAUSE_RULE, RU_SPEECH):                    # nor the rules every clip carries
+        text = text.replace(rule, "")
     spoken = " ".join(next(g for g in m.groups() if g is not None) for m in _QUOTED.finditer(text))
     rest = _QUOTED.sub(" ", text)
     words = len(spoken.split())
@@ -137,11 +139,26 @@ _LOOK = re.compile(
 _SENT = re.compile(r"(?<=[.!?;])\s+|(?<=,)\s+(?=(?:then|after that|afterwards|затем|потом|после этого)\b)", re.I)
 
 
+# One part of a longer script: about one action. Chains (throw -> flight -> hit) crammed
+# into 10 s lost their middle: stones "fell from the sky" with no hand throwing them
+# (live 2026-10-11); one beat per ~6 s part, each going on from the last frame.
+VIDEO_PART_MAX_S = float(os.environ.get("VIDEO_PART_MAX_S", "6.0"))
+
+RU_SPEECH = " Anyone who says something out loud says it in Russian."
+
+# Appended to every clip: the model shows results without their causes unless told.
+CAUSE_RULE = (" Show every cause on screen: anything thrown is first held in a visible hand, "
+              "leaves it, and travels in an arc from that hand to where it lands; nothing appears "
+              "from nowhere or falls from the sky unless the script says so. Faces and bodies react "
+              "to what happens to them: someone being thrown out or hit looks shocked or hurt, "
+              "not happy.")
+
+
 def split_script(description: str, max_seconds: float = 0.0) -> list:
     """A script too long for one clip, as consecutive parts that each fit one
     (`estimate_seconds` <= max_seconds, default the auto cap). Cuts only between
     sentences or before "then"; a quoted line is never split. One part = fits as is."""
-    top = max_seconds or frames_to_seconds(VIDEO_MAX_FRAMES_AUTO)
+    top = max_seconds or min(VIDEO_PART_MAX_S, frames_to_seconds(VIDEO_MAX_FRAMES_AUTO))
     text = (description or "").strip()
     if estimate_seconds(text, capped=False) <= top:
         return [text]

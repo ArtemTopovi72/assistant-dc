@@ -135,3 +135,17 @@ def test_sound_and_light_lines_are_never_a_part_of_their_own():
     parts = V.split_script(long_action + " Soundscape: soft ambience; no music.")
     assert len(parts) > 1 and all("Soundscape" in p for p in parts)
     assert not any(p.lstrip().startswith("Soundscape") for p in parts)
+
+
+def test_parts_are_about_six_seconds_one_beat_each():
+    # Live 2026-10-11: two events in one 10 s clip lost their middle (stones fell from the sky).
+    s = ("The imam grabs the dog and throws him out of the door. The dog lands on the street, "
+         "shocked. Then people outside pick up snowballs and throw them at the dog, who runs away.")
+    parts = V.split_script(s)
+    assert len(parts) >= 2
+    assert all(V.estimate_seconds(p, capped=False) <= V.VIDEO_PART_MAX_S + 1.5 for p in parts)
+
+
+def test_the_rules_every_clip_carries_add_no_screen_time():
+    s = "A cat walks in and sniffs the dog."
+    assert V.estimate_seconds(s + V.RU_SPEECH + V.CAUSE_RULE) == V.estimate_seconds(s)
