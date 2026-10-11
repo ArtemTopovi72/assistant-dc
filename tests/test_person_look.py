@@ -1,8 +1,8 @@
 """A real person named in a drawing request reaches the engine with their looks.
 
-Live 10-03: «кибернетический Ленин …» was drawn with hair and «какой-то урод»;
-the engine does not know faces by name. person_look adds the recognisable
-traits to the description (generate) and to the instruction (redraw).
+The engine does not know faces by name («кибернетический Ленин …» would be drawn
+with hair). person_look adds the recognisable traits to the description
+(generate) and to the instruction (redraw).
 """
 import os
 import sys
@@ -55,7 +55,7 @@ def test_both_handlers_use_it():
 
 
 def test_the_looks_come_from_the_web_when_it_answers(monkeypatch):
-    """Owner 10-03: «описание брать в интернете норм»."""
+    """The looks are taken from a web search when it answers."""
     queries = []
     monkeypatch.setattr(P, "SEARCH_STUB", lambda q: queries.append(q) or "Lenin was bald with a red goatee")
 

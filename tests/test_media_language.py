@@ -1,8 +1,7 @@
 """A video's ASR language is detected from the clip, not taken from the chat.
 
-An English video in a Russian chat was re-read as Russian whenever Whisper's
-guess fell under ASR_LANG_CONFIDENCE, because the session language was the hint.
-No model is loaded; Whisper is a fake.
+When Whisper's guess falls under ASR_LANG_CONFIDENCE there is no hint at all; the
+session language is never used as one. No model is loaded; Whisper is a fake.
 
 Run: venv/Scripts/python.exe tests/test_media_language.py
 """

@@ -1,7 +1,7 @@
-"""ObservationPack (SoL-Pi, 2026-09), driven through the REAL loop with a scripted model.
+"""ObservationPack, driven through the REAL loop with a scripted model.
 
 A big tool result is sent in full for two rounds, then shrunk to a 1 KB excerpt.
-Off by default (OBS_PACK=0): nothing may change for the live app until the A/B.
+On by default; OBS_PACK=0 turns it off.
 """
 import os, sys, json, threading
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -33,7 +33,6 @@ def _run(tmp_path, rounds=4):
     llm_mod.send_to_lm_studio = send
     saved_exec = graph_mod.execute_tool
     graph_mod.execute_tool = lambda ctx, name, args, *a, **k: BIG
-    pass
     _sent.clear()
     c = Context(models=None, transcription_cache={}, cache_file=tmp_path / "c.json",
                 asr_lock=threading.Lock(), tts_lock=threading.Lock(),
@@ -56,7 +55,7 @@ def _first_result_len(sent):
 
 
 def test_off_nothing_shrinks(tmp_path, monkeypatch):
-    # On by default since the 2026-09-24 A/B; OBS_PACK=0 is the way back.
+    # On by default; OBS_PACK=0 turns it off.
     monkeypatch.setenv("OBS_PACK", "0")
     sent = _run(tmp_path)
     lens = [x for x in _first_result_len(sent) if x]

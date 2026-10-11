@@ -16,7 +16,6 @@ import os
 import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
-import sys
 import json
 import tempfile
 
@@ -190,7 +189,7 @@ def test_full_deterministic_spine():
     briefs = [_brief(f"s{i}.org", v, trust="PRIMARY") for i, v in enumerate(FORMULAS.values())]
     briefs += [_brief(f"s{i}.org", v, trust="PRIMARY") for i, v in enumerate(FORMULAS.values())]  # dups
     merged, _ = _cmerge.merge_claims(briefs, threshold=0.55)
-    g = _rgraph.build_graph(merged)
+    _rgraph.build_graph(merged)
     cs = _cluster.cluster_briefs(merged, threshold=0.18, major_min_size=2)
     body = "\n\n".join(b["brief"] for b in cs.briefs)
     report = dr._postprocess_report(f"# Detailed Analysis\n{body}\n")
@@ -262,11 +261,10 @@ def test_ar5iv_mathml_inlining():
 
 def test_bare_math_risk_flag():
     """audit_math alone can't catch a PDF that lost ALL markup (0 $ trivially
-    'balances'). _looks_like_unmarked_math is the extraction-time companion check,
-    confirmed live on a real NeurIPS PDF whose attention-mechanism section came
-    back as plain prose with zero LaTeX (the fraction QK^T/sqrt(d_k) flattened to
-    bare text). It must flag math-heavy unmarked text, and stay silent on plain
-    prose or text that already carries proper $...$ markup."""
+    'balances'). _looks_like_unmarked_math is the extraction-time companion check:
+    it must flag math-heavy unmarked text (e.g. QK^T/sqrt(d_k) flattened to bare
+    prose), and stay silent on plain prose or text that already carries proper
+    $...$ markup."""
     mathy_unmarked = ("We compute the softmax of the matrix product, take the "
                        "gradient, and check the eigenvalue of the tensor ∑ term.")
     _check(dr._looks_like_unmarked_math(mathy_unmarked),
@@ -283,9 +281,8 @@ def test_bare_math_risk_flag():
 def test_formula_audit_profile_and_diff():
     """formula_audit.formula_profile categorizes math structure and detects
     corruption; diff_profiles flags hallucination (new tokens), loss, and
-    corruption-appeared. REGRESSION: \\sum_i / \\int_0 (command + subscript) MUST
-    be counted — the original \\b boundary failed here because '_' is a regex
-    word-char (a real bug found 2026-06-20)."""
+    corruption-appeared. \\sum_i / \\int_0 (command + subscript) MUST be counted
+    ('_' is a regex word-char, so a plain \\b boundary would miss them)."""
     import formula_audit as fa
     p = fa.formula_profile(
         r"$\theta_t=\theta_{t-1}-\frac{\alpha\hat{m}_t}{\sqrt{\hat{v}_t}+\epsilon}$ "
@@ -320,11 +317,10 @@ def test_formula_audit_profile_and_diff():
 
 
 def test_equation_preservation():
-    """ROOT-CAUSE FIX: the stage trace proved display equations are present at
-    SOURCE+EXTRACTION but LOST AT BRIEFING (the 9B paraphrases them away). So we
-    extract raw equation blocks at extraction, carry them on each brief, and
-    surface them verbatim+attributed in the report via _build_equations_section —
-    guaranteeing equations reach the report even when the LLM drops them."""
+    """Display equations are present at SOURCE+EXTRACTION but the briefing LLM
+    paraphrases them away. So raw equation blocks are extracted at extraction,
+    carried on each brief, and surfaced verbatim+attributed in the report via
+    _build_equations_section — equations reach the report even when the LLM drops them."""
     import formula_audit as fa
     src = (r"Intro text. $$\mathrm{Attention}(Q,K,V)=\mathrm{softmax}"
            r"(\frac{QK^{T}}{\sqrt{d_{k}}})V$$ and an aligned block "
@@ -357,10 +353,8 @@ def test_equation_preservation():
 
 
 def test_claim_merge_unions_equations():
-    """RELEASE-BLOCKING (found in the sci-fidelity audit 2026-06-20): when two
-    near-duplicate briefs merge, the representative kept ONLY its own equations and
-    silently dropped the folded brief's unique equation — equation loss at the
-    claim-merge stage. Fix: union preserved equations across the whole group."""
+    """When two near-duplicate briefs merge, the preserved equations of the whole
+    group are unioned: the folded brief's unique equation must not be dropped."""
     import claim_merge as cm
     briefs = [
         {"url": "a", "domain": "arxiv.org", "trust": "PRIMARY", "mode": "confirm",
@@ -385,22 +379,16 @@ def test_claim_merge_unions_equations():
 
 
 def test_equations_survive_page_truncation():
-    """RELEASE-BLOCKING (found in the GUI live LoRA run 2026-06-20): equation
-    preservation ran on page['text'], which collect_sources truncates to
-    DR_PAGE_CHARS (6000) for the LLM map step. A paper's key display equations sit
-    DEEP in the body (LoRA's first $$...$$ is at char ~12.4k), so the truncated head
-    had ZERO equations -> brief.equations empty -> no equations reached the report,
-    even though ar5iv extraction recovered them perfectly. The sci-audit masked this
-    by extracting from FULL text. Fix: extract equations from the full document at
-    collection time (page['equations']) BEFORE truncation; _brief_pages prefers it."""
+    """collect_sources truncates page['text'] to DR_PAGE_CHARS for the LLM map step,
+    but a paper's key display equations can sit deep in the body, past the
+    truncation. Equations are therefore extracted from the full document at
+    collection time (page['equations']) BEFORE truncation, and _brief_pages
+    prefers them."""
     import formula_audit as fa
     # full document: prose head longer than DR_PAGE_CHARS, then a deep display eq.
     deep_eq = r"$$h=W_{0}x+\Delta Wx=W_{0}x+BAx$$"
-    # The head must be DERIVED from DR_PAGE_CHARS, not a hardcoded repeat count:
-    # this was `* 600` (10.2k chars), which stopped exceeding the limit the moment
-    # DR_PAGE_CHARS was raised from 6000 to 32000 — the setup then built a document
-    # that was never truncated, so the test failed on its own premise instead of
-    # exercising the regression.
+    # The head is derived from DR_PAGE_CHARS (not a hardcoded repeat count) so it
+    # always exceeds the truncation limit.
     _filler = "LoRA background. "
     _reps = (dr.DR_PAGE_CHARS // len(_filler)) + 100
     full = (_filler * _reps) + "\n" + deep_eq + "\nmore text.\n"

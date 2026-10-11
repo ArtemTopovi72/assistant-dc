@@ -1,13 +1,12 @@
 """A removal verb must name the REGION before the region is deleted.
 
-Live, 2026-09-11: a render scored 10/10, then the agent asked
+For
     inpaint_image(region='cat-shaped object',
                   instructions='Remove the large black shadow covering the
                                 cat-shaped object ...', removal=True)
-The verb fired, the CAT was deleted from the layout, and the agent spent four
-more renders trying to put it back -- the last of them through 'Restore the
-cat-shaped object ...', which the router read as PHOTO restoration and answered
-with a 2x upscale. Seven renders of one good picture.
+the verb must not fire on the region: removing the shadow that covers the cat
+must not delete the CAT from the layout (and a later 'Restore the cat-shaped
+object ...' must not be read as PHOTO restoration).
 
 Whether an edit removes the region is the model's read (image_router.edit_plan
 removes_region); the phrases run live in bench/removal_intent_live.py. Here:

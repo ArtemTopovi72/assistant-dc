@@ -1,8 +1,8 @@
 """A reminder far in the future must not arm one giant Timer.
 
 On Windows a lock wait is limited to threading.TIMEOUT_MAX (~49.7 days); a
-Timer for "через 2 года" raised OverflowError on its own thread and the
-reminder never fired. Timers are now capped and re-arm until the due time.
+Timer for "через 2 года" would raise OverflowError on its own thread and the
+reminder would never fire. Timers are capped and re-arm until the due time.
 """
 import os
 import sys

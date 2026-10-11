@@ -1,11 +1,11 @@
 """THE node: a replied-to message rides BESIDE the user words.
 
-Live 2026-09-13 (mega journey, journey 25 inside the long chat): a forwarded
-channel post ("Внимание! В субботу ... перекрывают движение") went in as if
-the user had said it; with document search on the bot answered "the documents
-say nothing about a road closure", and "о чём это?" afterwards was answered
-about the last picture. Forwarded text is now flagged at dispatch, framed as
-a quotation by the resolver, and never wrapped into the document prompt.
+A forwarded channel post ("Внимание! В субботу ... перекрывают движение") must not
+go in as if the user had said it (with document search on, the bot would answer
+"the documents say nothing about a road closure", and "о чём это?" afterwards
+would be answered about the last picture). Forwarded text is flagged at
+dispatch, framed as a quotation by the resolver, and never wrapped into the
+document prompt.
 """
 import os, sys, time, threading, tempfile
 os.environ.setdefault("F5_TEST_RUN", "1")
@@ -81,7 +81,6 @@ check("...with the quote attached once, framed", got.count("<<<QUOTED MESSAGE --
 check("...and the words after it", got.rstrip().endswith("мне больше нравится Кино"), got[-80:])
 check("no song task was made", not any("[song" in g for g in INVOKES))
 time.sleep(0.5)
-# a button label stays a button even as a reply
 from prompt_guard import user_words
 check("user_words of the request is exactly the words", user_words(got) == "мне больше нравится Кино", user_words(got))
 

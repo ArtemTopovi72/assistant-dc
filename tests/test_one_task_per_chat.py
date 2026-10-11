@@ -1,9 +1,8 @@
 """One chat must never be answered twice at the same time.
 
-Seen in production after the bot was given several worker threads: the user got
-the SAME reply twice in the same second ("Я задумался и не выдал ответ…" ×2),
-plus a stack of orphaned "⛔ Отменить запрос" buttons pointing at requests that
-had already finished.
+With several worker threads, a chat could get the SAME reply twice in the same
+second, plus a stack of orphaned "⛔ Отменить запрос" buttons pointing at requests
+that had already finished.
 
 Cause: the round-robin backend hands out one task per chat per rotation, but with
 several consumers it will hand the SAME chat's next task to a second worker
@@ -101,14 +100,12 @@ for cid in (CID_A, CID_B):
     for i in range(2):
         bot2._backend.push(T._Task(task_id=f"{cid}-{i}", chat_id=cid,
                                    user_text=f"m{i}"))
-t0 = time.time()
 run_consumers(bot2, n=3, seconds=2.6)
-elapsed = time.time() - t0
 
 check("all four ran", len(bot2.order) == 4, bot2.order)
 check("neither chat doubled up",
       bot2.peak.get(CID_A) == 1 and bot2.peak.get(CID_B) == 1, bot2.peak)
-# 4 tasks x 0.5s = 2.0s serial; two chats in parallel should finish near 1.0s.
+# 4 tasks x 0.5s = 2.0s serial; the first two to start must be one per chat.
 _first_two = {c for c, _ in bot2.order[:2]}
 check("the first two to start were from DIFFERENT chats (real overlap)",
       _first_two == {CID_A, CID_B}, bot2.order[:2])

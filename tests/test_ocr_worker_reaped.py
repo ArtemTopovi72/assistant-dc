@@ -1,9 +1,9 @@
 """imaging/ocr_reader: a worker that does not report ready is killed.
 
-Bug: when ocr_worker.py printed anything other than its "ready" line, the
-constructor raised but left the process running with the EasyOCR model loaded;
-_get() marks OCR failed and never retries, so the process lived until the app
-exited.
+When ocr_worker.py prints anything other than its "ready" line, the constructor
+raises and must also kill and reap the process: _get() marks OCR failed and
+never retries, so a leaked worker would keep the EasyOCR model loaded until
+the app exits.
 """
 import os
 import subprocess

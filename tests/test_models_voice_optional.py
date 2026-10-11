@@ -1,9 +1,8 @@
 """The app starts without the private voice files; voice output is simply off.
 
-Models.load used to load the F5 checkpoint and vocoder unconditionally, and
-assistant.main refused to start without them, so a fresh clone could not open
-the app to chat at all. Now a missing checkpoint/vocoder leaves tts_model None
-and synth_single_segment returns None (no audio) without touching F5.
+A missing F5 checkpoint/vocoder leaves tts_model None and synth_single_segment
+returns None (no audio) without touching F5, so a fresh clone can still open
+the app to chat.
 """
 import os
 import sys

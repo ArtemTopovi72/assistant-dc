@@ -21,8 +21,7 @@ def test_photo_item_searches_by_the_photo_and_keeps_the_budget(monkeypatch):
 def test_tool_needs_a_picture():
     import tool_ozon_handlers as H
     ctx = types.SimpleNamespace(last_image_path=None, user_id="t")
-    r = H._handle_ozon_shop.__wrapped__(ctx, {}, {"request": "подешевле", "by_photo": True}) \
-        if hasattr(H._handle_ozon_shop, "__wrapped__") else H._handle_ozon_shop(ctx, {}, {"request": "подешевле", "by_photo": True})
+    r = H._handle_ozon_shop.__wrapped__(ctx, {}, {"request": "подешевле", "by_photo": True})
     assert "no picture" in r
 
 

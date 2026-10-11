@@ -1,6 +1,6 @@
 """A size/proportion fix must not go through the contained (mask) path: the new
 outline never fits the old mask, QA rejects it as leaking, the picture stays
-unchanged (live 2026-09-27, 'fix the head proportions' twice)."""
+unchanged ('fix the head proportions')."""
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import image_router as R

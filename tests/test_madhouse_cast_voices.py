@@ -1,7 +1,7 @@
 """The shipped Madhouse cast: every character has a voice of its own.
 
 A character with no voice falls back to the assistant's default reference
-(Stepan_short.wav) -- «Сан» had an empty voice and spoke as Степан.
+(Stepan_short.wav), so an empty voice would speak as Степан.
 The reference .wav files are local (not in the repo): on a clean checkout
 only the cast file itself is checked.
 Run: venv/Scripts/python.exe tests/test_madhouse_cast_voices.py

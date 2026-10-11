@@ -1,6 +1,6 @@
 """A document-backed turn: the entry translator must translate the user's
-QUESTION only, never the RAG wrapper around it (live 2026-09-18 00:44 the
-whole wrapper was 'translated' into an answer and the question vanished)."""
+QUESTION only, never the RAG wrapper around it (translating the whole wrapper
+would turn it into an answer and the question would vanish)."""
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("F5_TEST_RUN", "1")
@@ -31,9 +31,8 @@ p, info = library.build_rag_prompt(_Lib(), "Что думаешь?")
 check("build_rag_prompt uses the shared head and seam",
       p.startswith(library.RAG_HEAD) and p.endswith(library.RAG_QUESTION_SEAM + "Что думаешь?"))
 
-# «Скажи а» -> "Say, uh..." (live 2026-09-17 20:56): a one- or two-word
-# message is passed through untranslated, and a bare "say" no longer sends
-# the turn to the vision model.
+# «Скажи а» -> "Say, uh...": a one- or two-word message is passed through
+# untranslated, and a bare "say" does not send the turn to the vision model.
 seen.clear()
 check("a two-word quip is not translated", GL._translate_to_english(object(), "Скажи а") == "Скажи а" and not seen)
 # «Скажи а» vs "what does it say" about a picture: bench/intent_picture_live.py

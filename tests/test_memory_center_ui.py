@@ -14,7 +14,6 @@ import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-import sys
 import tempfile
 import shutil
 from pathlib import Path
@@ -39,9 +38,8 @@ import ui_scale
 import gui
 import memory_center
 
-# Screenshots go to a scratch directory by default. They used to overwrite the
-# TRACKED files in docs/validation on every run, so `git status` was dirty
-# after any test pass and the rendered noise got swept into unrelated commits.
+# Screenshots go to a scratch directory by default so a test pass leaves the
+# tracked files in docs/validation untouched.
 # Set MC_REFRESH_DOCS=1 when you actually mean to update the documentation.
 if os.environ.get("MC_REFRESH_DOCS") == "1":
     OUT = _ROOT / "docs" / "validation"
@@ -106,7 +104,7 @@ app.processEvents()
 before_total = store.overview("default")["total"]
 
 # --- add ---
-e_added = store.add("default", "AUDIT added memory entry", etype="fact", source="manual")
+store.add("default", "AUDIT added memory entry", etype="fact", source="manual")
 mc._after_mutation(); app.processEvents()
 check(store.overview("default")["total"] == before_total + 1, "add: total increments")
 

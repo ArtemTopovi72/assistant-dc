@@ -2,7 +2,7 @@
 tests/test_image_size_choice.py and tests/test_pinned_size_bypass.py rather
 than duplicating them.
 
-Focus areas (see scratchpad audit_04_size.md for the original 4 findings):
+Focus areas:
 
 1. Mutation-style stress on the `not pinned` guards in parse_generation_params
    — several resolution keywords, the digitsxdigits regex, and width=/height=
@@ -12,7 +12,7 @@ Focus areas (see scratchpad audit_04_size.md for the original 4 findings):
 2. orientation= AND a resolution keyword/width=/height= together while pinned
    — the pin must win over ALL of them, not just whichever is checked first.
 3. The refine-pass re-orientation fix for a SQUARE (1:1) pin — proving the
-   `pin_w == pin_h` special case (added alongside this test) actually forces a
+   `pin_w == pin_h` special case actually forces a
    square result instead of silently landing on portrait either way.
 4. width=/height= WITHOUT pinning — confirms explicit tag params still win
    when nothing is pinned (no regression from the guards above).
@@ -123,7 +123,7 @@ print("=" * 70)
 
 
 def _simulate_eval_reorient(pin_w, pin_h, cw, ch):
-    """Mirrors the block at image.py ~7700-7712 exactly (post-fix)."""
+    """Mirrors the refine/eval re-orientation block in image.py."""
     if pin_w == pin_h:
         side = I._snap_to_8(int((cw * ch) ** 0.5))
         cw = ch = side
@@ -151,7 +151,7 @@ check("square pin + square eval suggestion -> stays square",
 check("square-pin result respects the normal 2048px rail",
       max(cw, ch) <= config.IMAGE_MAX_SIDE, (cw, ch, config.IMAGE_MAX_SIDE))
 
-# Sanity: non-square pins still behave as before (regression guard on the fix)
+# Sanity: non-square pins are still re-oriented
 PORTRAIT_PIN = (944, 1680)
 cw, ch = _simulate_eval_reorient(*PORTRAIT_PIN, 2560, 1440)
 check("portrait pin + landscape eval suggestion -> still re-oriented to portrait",

@@ -75,15 +75,13 @@ def test_choosing_it_loads_nothing_and_frees_the_card():
           settings.index("free_gpu(") < settings.index("_start_model_switch"))
     check("the startup path handles it too",
           GUI.count("gui_settings_dialog.NO_MODEL") >= 2)
-    dlg_src = (ROOT / "gui/gui_settings_dialog.py").read_text(encoding="utf-8")
     check("the sentinel is defined at module level so a stubbed dialog "
           "cannot break the comparison",
-          any(ln.startswith("NO_MODEL = ") for ln in dlg_src.splitlines()))
+          any(ln.startswith("NO_MODEL = ") for ln in DLG.splitlines()))
 
 
 def test_the_startup_countdown_still_exists():
-    """Pinned because it was thought lost while this option was being added:
-    the countdown is cancelled by any click, which is easy to mistake for the
+    """The countdown is cancelled by any click, which is easy to mistake for the
     feature having been removed."""
     check("the countdown is armed when the dialog is built",
           "self._start_autostart_countdown()" in DLG)
