@@ -44,7 +44,7 @@ def check(name, cond, detail=""):
     if cond:
         OK += 1; print("[PASS] " + name)
     else:
-        BAD += 1; print("[FAIL] " + name + (" - " + detail if detail else ""))
+        BAD += 1; print("[FAIL] " + name + (" - " + str(detail) if detail else ""))
 
 
 LIMIT = 4096

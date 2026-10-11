@@ -19,7 +19,7 @@ _TMP = Path(tempfile.mkdtemp(prefix="models_"))
 RESULTS = []
 def check(name, cond, detail=""):
     RESULTS.append((name, bool(cond)))
-    print("[" + ("PASS" if cond else "FAIL") + "] " + name + ("" if cond or not detail else " - " + detail))
+    print("[" + ("PASS" if cond else "FAIL") + "] " + name + ("" if cond or not detail else " - " + str(detail)))
     assert cond, name + ": " + detail
 
 
