@@ -72,5 +72,3 @@ if __name__ == "__main__":
         for w, syl, runs in judge(f, prefix):
             d = " ".join(f"{r[1]:.2f}s" for r in runs)
             print(f"{os.path.basename(f):22} {w:12} stressed syllable: {syl}   durations: {d}")
-        else:
-            pass
