@@ -17,14 +17,12 @@ media per chat, and a summary printed at the end.
 """
 from __future__ import annotations
 
-import argparse
 import io
 import json
 import os
 import sys
 import threading
 import time
-import traceback
 from pathlib import Path
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
