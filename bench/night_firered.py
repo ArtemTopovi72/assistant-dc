@@ -58,7 +58,7 @@ def variant(wf, name):
         wf["184"]["inputs"]["unet_name"] = "FireRed-Image-Edit-1.1_fp8mixed_comfy.safetensors"
     elif name == "zoomfix":
         # lrzjason QwenEditUtils: the encoder pads instead of squeezing to 1 MP,
-        # the result is cropped back by pad_info -> no shift/zoom (Qwen-Edit #229)
+        # the result is cropped back by pad_info -> no shift/zoom
         for nid, src in (("300", "187"), ("301", "188")):
             wf[nid] = {"class_type": "TextEncodeQwenImageEditPlusAdvance_lrzjason", "inputs": {
                 "clip": ["182", 0], "vae": ["181", 0], "prompt": wf[src]["inputs"]["prompt"],

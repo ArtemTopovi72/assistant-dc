@@ -273,7 +273,7 @@ class Chat:
         if caption: m["caption"] = caption
         if self_forward:
             # Telegram marks a message forwarded from Saved Messages with the
-            # user's own id (live 2026-09-14 19:29).
+            # user's own id.
             m["forward_origin"] = {"type": "user", "date": int(time.time()) - 60,
                                    "sender_user": dict(m["from"])}
             m["forward_from"] = dict(m["from"]); m["forward_date"] = int(time.time()) - 60
