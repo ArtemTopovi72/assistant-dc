@@ -22,7 +22,7 @@ overwrote the real BotFather token that way) or the live user store.
 
 Run: venv/Scripts/python.exe tests/test_gui_user_journey.py
 """
-import os, sys, subprocess, tempfile, textwrap, json, urllib.request
+import os, sys, subprocess, tempfile, textwrap, urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -38,7 +38,6 @@ def _up(url, timeout=6):
 
 
 import config
-import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except (AttributeError, ValueError, OSError): pass
 
