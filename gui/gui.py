@@ -11,7 +11,6 @@ import logging
 import os
 import shutil
 import sys
-from pathlib import Path
 
 # Before cv2/PyQt5: PyQt5 bundles MSVCP140 14.26 and whatever loads first wins;
 # torch & co. crash in the old copy (0xc0000005). Every way into the GUI goes
