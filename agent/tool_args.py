@@ -598,8 +598,8 @@ class OzonShopArgs(_ToolArgs):
     @classmethod
     def _query_is_request(cls, v):
         # The model reuses ozon_search's shape ({query, price_max}); rejecting it
-        # dropped the turn to a bare search that read no reviews (live 2026-09-28,
-        # "наушники до 3000, чтоб без брака").
+        # dropped the turn to a bare search that read no reviews
+        # ("наушники до 3000, чтоб без брака").
         if not isinstance(v, dict):
             return v
         v = dict(v)

@@ -463,10 +463,10 @@ def _finalize_answer(ctx: Context, state: AgentState, messages: list,
     # speakable text (e.g. it kept emitting tool syntax). Give the user an honest
     # generic close instead of silence — the work itself (image, report) is done
     # and visible in the UI.
-    # This used to require `tools_ran`, so a plain conversational turn whose
-    # model output was all reasoning fell through to an EMPTY answer, and the
-    # delivery layer printed the literal placeholder "(no response)". Silence
-    # is never an acceptable reply — say something true instead.
+    # This applies even when no tool ran: a plain conversational turn whose
+    # model output was all reasoning would otherwise end in an EMPTY answer, and
+    # the delivery layer would print the literal placeholder "(no response)".
+    # Silence is never an acceptable reply — say something true instead.
     if not final_answer and not ctx.is_cancelled():
         # Non-ASCII original => the user writes in Russian (this project's user
         # base); pure-ASCII turns get the English variant.
@@ -546,7 +546,7 @@ def _finalize_answer(ctx: Context, state: AgentState, messages: list,
                 if "generate_image" in _called and not (_called & _edits):
                     # A fresh picture has no "change" that could be missing:
                     # "нужного изменения нет — остался прежним" under a new logo
-                    # read as nonsense (live 2026-09-28).
+                    # read as nonsense.
                     final_answer = _VERIFY_DRAW_ANSWER
                 else:
                     final_answer = (_VERIFY_PARTIAL_ANSWER if verification_negative == "partial"
@@ -601,7 +601,7 @@ def _finalize_answer(ctx: Context, state: AgentState, messages: list,
         logger.warning("No usable answer from the model on this turn")
     try:
         # The model's own words, kept when the guards above changed them: a
-        # replaced answer used to leave no trace of what had been replaced.
+        # replaced answer would otherwise leave no trace of what had been replaced.
         import turn_trace
         _draft = (last_message or {}).get("content", "") or ""
         if _draft.strip() and _draft.strip() != final_answer.strip():

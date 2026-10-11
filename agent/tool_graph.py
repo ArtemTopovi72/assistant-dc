@@ -234,7 +234,7 @@ TRANSFER_ROLES = (
 _MATH_NAMES = frozenset(
     [k for k in dir(math) if not k.startswith("_")] + ["abs", "round", "int", "float"]
     # tools._calendar_ns: blocking these made "сколько дней до 1 января" fall
-    # back to mental math and answer 94 instead of 95 (live 2026-09-28).
+    # back to mental math and answer 94 instead of 95.
     + ["today", "date", "days_between", "years_between", "weekday"])
 
 

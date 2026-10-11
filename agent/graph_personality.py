@@ -113,7 +113,7 @@ _TOOL_ARTIFACT: dict = {
 # Handing the user a result, as opposed to claiming to have made one.
 # A picture from earlier turns stays in ctx.last_image_path forever, so an
 # action verb in a reply about something else ("запущу", "сделал" in an AnyDesk
-# chat, live 2026-09-25) forced picture-tool rounds and invented actions. With
+# chat) forced picture-tool rounds and invented actions. With
 # only a stale picture, the guard needs the draft to be about a picture.
 _PICTURE_WORD_RE = re.compile(
     r"(?i)картин|фото|изображ|рисун|снимок|снимк|кадр|очк|фон|image|photo|picture|drawing")
@@ -184,7 +184,7 @@ def _inspection_contradicts_work(verdict: str, tools_called: set, removal: str =
     if removal:
         # For a removal "BAG: MISSING" IS the success; only something still
         # there is a failure. A cleanly removed bag was reported as "nothing
-        # changed" and removed twice more (live 2026-09-28). `removal` is the
+        # changed" and removed twice more. `removal` is the
         # removed region; a PRESENT line counts only when it names that thing
         # ("Area replacement: PRESENT" is the fill, not the bag).
         v = verdict or ""
@@ -221,7 +221,7 @@ def _inspection_contradicts_work(verdict: str, tools_called: set, removal: str =
         return False
     # "Are there any major distortions? ABSENT" is a pass: the model asked
     # about a defect and there is none. A clean red hat was reported as
-    # "nothing changed" and redrawn twice (live 2026-09-28).
+    # "nothing changed" and redrawn twice.
     verdict = re.sub(
         r"[^|\n]*\b(?:distort\w*|artifact\w*|defect\w*|problem\w*|issue\w*|glitch\w*|"
         r"damage\w*|deform\w*|extra\s+\w+|blur\w*|искаж\w*|артефакт\w*|дефект\w*)"
@@ -230,13 +230,13 @@ def _inspection_contradicts_work(verdict: str, tools_called: set, removal: str =
     if hits and hits <= {"partial", "частично"}:
         # Most points PRESENT and one nitpicked PARTIAL ("sharp edges, lacks
         # true watercolor translucency" on a plainly watercolour picture) is a
-        # pass, not a caveat (live 2026-09-28, style button).
+        # pass, not a caveat.
         v = verdict or ""
         if len(re.findall(r"\bpresent\b", v, re.I)) > len(re.findall(r"\bpartial\b", v, re.I)):
             return False
         # "PARTIAL" means the change landed, just not fully (a black cat with
         # dark-brown tabby hints). It was answered "the picture stayed as it
-        # was" over a visibly black cat (live 2026-09-28). Truthy, but its own
+        # was" over a visibly black cat. Truthy, but its own
         # wording in graph_finalize.
         return "partial"
     return bool(hits)
@@ -254,7 +254,7 @@ _VERIFY_NEGATIVE_RE = re.compile(
 # unavailable search can honestly be answered from memory; a broken calculator
 # cannot -- the whole reason to call it is that the model's arithmetic is not
 # trustworthy, so a number invented after it failed is worse than no answer.
-# Sandbox tools that CHANGE something joined the set live 2026-09-14: «удали
+# Sandbox tools that CHANGE something joined the set: «удали
 # все файлы» -> delete_path refused the root -> «Я удалил все файлы» over 17
 # surviving entries. A failed mutation followed by a success claim is the
 # same lie as an invented number.
@@ -306,7 +306,7 @@ def _is_calc_result(result: str) -> bool:
     if text.lower() in _CALC_NON_NUMERIC:
         return True
     # The date helpers return a weekday name or an ISO date -- real answers
-    # ("какой день недели был 6.06.1799" was refused twice, live 2026-09-28).
+    # ("какой день недели был 6.06.1799" was refused twice).
     if text in _WEEKDAYS or re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
         return True
     try:
@@ -378,10 +378,8 @@ def _answer_contradicts_reality(draft: str, verification_negative: bool,
 # and no tool call at all, and the user got the "actually nothing happened"
 # correction. A button is not a request to be weighed; the tool is forced.
 _BUTTON_TOOL = (
-    # [upscale]/[enhance]/[restore] and the outpaint prefix used to tag those
-    # buttons -- removed along with the old model, their only engine, whose
-    # checkpoint files were deleted from disk (Ideogram + FireRed are the only
-    # drawing/edit engines left in the product).
+    # No entries for [upscale]/[enhance]/[restore] or the outpaint prefix
+    # (Ideogram + FireRed are the only drawing/edit engines in the product).
     ("regenerate the image", "generate_image"),
     ("remove all the lettering", "inpaint_image"),   # 🔤 button -> ObjectClear via the lettering path
     # [style] (reference-photo transfer, tg_resolve._push_style_transfer_task)
@@ -393,7 +391,7 @@ _BUTTON_TOOL = (
     ("[outfit]", "transfer_image"),   # 👗 + a photo of the clothes (tg_resolve._outfit_text)
     ("[style_preset]", "redraw_image"),
     # "create a presentation about: <topic>" (tg_bot._MENU_PREFIX["deck"]) had
-    # no entry either -- live 2026-09-18, the model answered a joke topic
+    # no entry either, so the model answered a joke topic
     # ("Гайд как срать") by calling generate_video instead of
     # create_presentation, then on retry never called any tool at all.
     ("generate an image of:", "generate_image"),
@@ -724,8 +722,8 @@ def _detect_silent_failure(tool_name: str, result: str, state: AgentState) -> st
                 f"do not describe it as the requested subject. Say plainly "
                 f"that nothing matching was found.")
     # A multi-part video waits for the user's OK on the plan card: no clip yet is the
-    # answer, not a failure. Read as a failure it was retried ~20 times (live 2026-10-10,
-    # cat + dog continuation) and the turn ended in "не получилось".
+    # answer, not a failure. Read as a failure it was retried ~20 times
+    # and the turn ended in "не получилось".
     if result.lstrip().startswith("[NOT MADE YET]") and state.get("video_plan"):
         return result
     key = _TOOL_ARTIFACT.get(tool_name)
@@ -747,7 +745,7 @@ _BUILDER_TOOLS = frozenset({"run_code", "write_file"})
 # flowchart is ~3500 tokens, and at the 1500-token loop ceiling the call was
 # cut mid-string -- "Failed to parse tool call", 80 s lost, and the
 # half-written call in history made LM Studio answer 500 to every request
-# after it (live 2026-09-15 19:11).
+# after it.
 BUILDER_LOOP_TOKENS = int(__import__("os").getenv("BUILDER_LOOP_TOKENS", "9000"))  # 6000 cut a 170-line rx.py 4x (2026-09-24)
 _TRUNCATED_ARGS = '{"_truncated": true}'
 
@@ -1212,7 +1210,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                 return ""
             # Forwarded material is someone else's words: numbers and a city in
             # a forwarded chat forced calculate and weather_forecast on «что из
-            # этого можно взять в свой проект?» (live 2026-10-01 11:57).
+            # этого можно взять в свой проект?».
             return user_words(t)
         _turn_text = _own(user_input) + " " + _own(original_input)
         _edit_mode_now = False
@@ -1343,7 +1341,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                 break
             _part = response_message.get("content") or ""
             # Resume on a whole line: a cut mid-row came back as «Тулий 16870
-            # Tm Тулий 168,93» and the table changed format (live 2026-09-29).
+            # Tm Тулий 168,93» and the table changed format.
             if "\n" in _part.rstrip():
                 _part = _part.rstrip()[:_part.rstrip().rfind("\n") + 1]
             _anchor = (_part.rstrip().rsplit("\n", 1)[-1])[-200:]
@@ -1720,13 +1718,13 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
         # tool message rather than being skipped.
         #
         # Over the cap, the calls are CUT from the assistant message rather
-        # than each answered with an error: live 2026-09-14 the model guessed
+        # than each answered with an error: the model guessed
         # 100APPLE..104APPLE and dozens of list_files in one round, the 15+
         # refusals stayed in history, the next request no longer fit and LM
         # Studio answered 500 for the rest of the turn. One refusal carries
         # the lesson; fifteen carry it off a cliff.
         # A round with DOZENS of calls is not a plan, it is a runaway
-        # generation: live 2026-09-18 09:02 the model answered an outpaint's
+        # generation: the model answered an outpaint's
         # [done] with 83 redraw_image calls (then 85, then 74), the first of
         # each round was RUN -- the canvas was expanded a second time on top
         # of the first -- and the eight refusals behind it counted as "3
@@ -1815,7 +1813,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                              ", cut at the token ceiling" if _cut else "", exc)
                 # The half-written arguments must not stay in history: every
                 # later request carried them, and LM Studio answered 500 to
-                # each one until the chat was compacted (live 2026-09-15).
+                # each one until the chat was compacted.
                 try:
                     tc["function"]["arguments"] = _TRUNCATED_ARGS
                 except Exception:
@@ -1837,8 +1835,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             call_key = (tool_name, json.dumps(tool_args, sort_keys=True, ensure_ascii=False))
             if tool_name == "ozon_search" and "ozon_shop" in tools_called_this_turn:
                 # The shopper already read reviews and photos; a bare search after
-                # it was delivered instead, unvetted, to a "чтоб без брака" ask
-                # (live 2026-09-28).
+                # it was delivered instead, unvetted, to a "чтоб без брака" ask.
                 messages.append({"role": "tool", "tool_call_id": tool_id, "content": (
                     "[TOOL ERROR] Not searched: ozon_shop already returned vetted results "
                     "this turn. Answer from them -- CHOICE is the main pick and 'also "

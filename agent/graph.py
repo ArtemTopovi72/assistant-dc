@@ -90,7 +90,7 @@ def translate_node(ctx: Context, state: AgentState) -> AgentState:
         state["edit_intent"] = True
     # The previous reply disambiguates a short follow-up: «что посмотреть в
     # первый день?» after a Kazan trip plan became "what to watch" (films)
-    # and the answer lost the city (live 2026-09-28).
+    # and the answer lost the city.
     _prev = next((str(m.get("content") or "") for m in reversed(state.get("messages") or [])
                   if m.get("role") == "assistant" and m.get("content")), "")
     try:
@@ -401,8 +401,8 @@ def needs_relook(ctx: Optional[Context], state: AgentState) -> bool:
     if not last_path or not Path(last_path).exists():
         return False
     # Someone else's forwarded words are not the user's question: «За кого
-    # проходит?» in a forwarded chat re-read the last photo four tiles deep
-    # (live 2026-09-29) -- the read sees the user's own words only.
+    # проходит?» in a forwarded chat re-read the last photo four tiles deep;
+    # the read sees the user's own words only.
     if _file_newer_than(ctx, last_path):
         return False
     r = _picture_read(ctx, state)

@@ -935,7 +935,7 @@ def _handle_generate_image(ctx, state, args: dict) -> str:
         _why = str(result.get("reason") or "").strip()
         if status == "partial" and _why:
             # The checker rejected it and the user got "Вот три варианта" with a
-            # garbled name on one of them (live 2026-09-28): say what is wrong.
+            # garbled name on one of them: say what is wrong.
             return (
                 f"Image generated and saved: {img_path}\n"
                 f"Score: {score}/10, attempts: {attempts}, status: {status}\n"
@@ -1586,7 +1586,7 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
     _plan = image_router.edit_plan(instructions)
     if _plan.get("kind") == "outpaint":
         # Said once, plainly: the model was left suggesting other formats and
-        # offering to try again (live 2026-10-08).
+        # offering to try again.
         return ("[TOOL ERROR] Extending the picture beyond its edges (outpaint) is not "
                 "something this assistant can do: that engine was removed. Nothing was "
                 "changed. Tell the user plainly it is not supported; do NOT retry and do "

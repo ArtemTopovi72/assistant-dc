@@ -19,10 +19,10 @@ from typing import Optional
 logger = logging.getLogger("assistant.interim")
 
 # tool -> icon. Only tools that take a while get a note.
-# A canned «Понял, перерисовываю — это пара минут» used to go out when the
-# model said nothing of its own; it repeated the status line right under it
-# («🎨 Перерисовываю картинку…» with its Cancel button) word for word (live
-# 10-03: «лишне дублирует»). Only the model's own sentence is sent now.
+# No canned «Понял, перерисовываю — это пара минут» goes out when the model
+# says nothing of its own: it would repeat the status line right under it
+# («🎨 Перерисовываю картинку…» with its Cancel button) word for word. Only
+# the model's own sentence is sent.
 _LONG_TOOLS = {
     "generate_image": "🎨", "redraw_image": "🎨", "inpaint_image": "🖌",
     "transfer_image": "🖌", "upscale_image": "🔍", "fix_hands": "🖌",

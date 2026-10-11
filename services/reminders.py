@@ -51,7 +51,7 @@ def _fire(rid: str) -> None:
         item = _ITEMS.pop(rid, None)
         _TIMERS.pop(rid, None)
         # «каждый день в 9» was stored as a one-off while the bot promised
-        # daily (live 2026-09-28): a repeating one re-arms for its next slot.
+        # daily: a repeating one re-arms for its next slot.
         if item and item.get("every"):
             nxt = dict(item)
             while nxt["due"] <= time.time():

@@ -175,8 +175,8 @@ class Context:
     # Set by forget_facts("all") and cleared by the next remember_fact: the
     # dropped facts are still IN the chat history ("remember: ... allergic to
     # nuts" three turns up), and the model answered "you are allergic to nuts"
-    # from there right after confirming it had forgotten (live 2026-09-13,
-    # mega run 3, step 61). While this holds, every turn carries a note that
+    # from there right after confirming it had forgotten.
+    # While this holds, every turn carries a note that
     # what the user said about themselves earlier is void.
     facts_forgotten: bool = False
 

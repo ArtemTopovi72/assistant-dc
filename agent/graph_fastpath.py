@@ -305,11 +305,10 @@ def _fast_path_reply(ctx: Context, messages: list, gen: "_GenSettings",
     # ~300 tokens even with facts included; tool schemas are the expensive
     # part (2-3k tokens), not the couple of lines a fact store holds.
     #
-    # Saved facts ARE still included below. Live 2026-09-18, journey 9: this
-    # path used to skip them entirely, so "как меня зовут и что ты обо мне
-    # знаешь?" (short, no tool trigger -> fast path) got a confident "you
-    # haven't told me your name yet" three turns after remember_fact saved
-    # it -- the model never saw the block that would have answered it.
+    # Saved facts ARE included below: without them "как меня зовут и что ты
+    # обо мне знаешь?" (short, no tool trigger -> fast path) gets a confident
+    # "you haven't told me your name yet" after remember_fact saved it -- the
+    # model never sees the block that would answer it.
     lite_system = build_system_prompt_lite(
         ctx.custom_personality_text, concise=gen.concise, length=gen.length,
         reply_lang=getattr(ctx, "reply_lang", "ru") or "ru",

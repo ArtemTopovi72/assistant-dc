@@ -59,7 +59,7 @@ def _strip_markup(text: str) -> str:
 def _looks_like_json(text: str) -> bool:
     # Only a payload that IS json: prose with a `{"` somewhere inside (a script
     # snippet scraped off a review page) was blocked whole as "broken JSON" and
-    # the model said there was no data on the iPhone 16 vs S25 (live 2026-09-28).
+    # the model said there was no data on the iPhone 16 vs S25.
     t = text.lstrip()
     return t.startswith("{") or (t.startswith("[") and t.rstrip().endswith("]")
                                  and not re.match(r"\[\d+\]\s*\w", t))

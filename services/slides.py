@@ -502,7 +502,7 @@ def _is_figure(value: str) -> bool:
     """
     v = (value or "").strip()
     # Filler dressed as a figure: a sleep deck led with «24/7 цикл
-    # восстановления» and «100% необходимость для мозга» (live 2026-09-29).
+    # восстановления» and «100% необходимость для мозга».
     if v.replace(" ", "").lower() in {"24/7", "24/7/365", "100%", "360°", "365", "№1", "#1"}:
         return False
     digits = sum(1 for ch in v if ch.isdigit())
@@ -967,7 +967,7 @@ def normalize_deck(data: dict, topic: str = "", n_slides: int = 0) -> dict:
     if len(out["slides"]) > 1 and _slug_title(out["slides"][0]["heading"]) == _t_norm:
         out["slides"].pop(0)
     # ...or is literally NAMED the title slide ("Титульный лист" as content
-    # slide 1 ate half of a 4-slide deck, live 2026-09-28), and an edit that
+    # slide 1 ate half of a 4-slide deck), and an edit that
     # repeats a slide instead of removing one ("убери последний слайд" came
     # back with "Древние истоки" twice).
     _seen = set()

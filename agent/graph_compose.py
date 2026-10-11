@@ -314,7 +314,7 @@ def _compose_user_message(ctx: Context, state: AgentState) -> tuple:
         parts.append(FORGOTTEN_NOTE)
     if memory_text:
         # Neutral label: "Session memory:" was read back as a feature to announce
-        # ("память сессии загружена", live 2026-09-25).
+        # ("память сессии загружена").
         parts.append(f"Earlier in this chat (background only; never mention or summarise it):\n{memory_text}")
     if vision_summary:
         parts.append(f"Image description:\n{vision_summary}")

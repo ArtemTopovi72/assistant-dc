@@ -116,7 +116,7 @@ def _handle_search(ctx, state, args: dict) -> str:
         return ("[TOOL ERROR] search needs a 'query'. Re-call it with the question as "
                 "short English keywords, or answer directly if no search is needed.")
     # "the last World Cup" with no year was distilled from pages about 2022 into
-    # "Argentina" in September 2026 (live 2026-09-28). The current year anchors it.
+    # "Argentina" in September 2026. The current year anchors it.
     _asked = " ".join(str((state or {}).get(k) or "")
                       for k in ("user_input", "user_input_original"))
     _fresh = r"\b(?:last|latest|current|recent|newest|now)\b|последн|текущ|нынешн"
@@ -154,7 +154,7 @@ def _handle_search(ctx, state, args: dict) -> str:
     import datetime as _dtm
     # The model's memory ends before today: it read "Winner: Spain" for the
     # 2026 World Cup, decided the tournament was still "scheduled" and searched
-    # for 2022 instead (live 2026-09-28).
+    # for 2022 instead.
     dated = (f"\n[Today is {_dtm.date.today():%Y-%m-%d}. Anything the results date "
              f"before today HAS happened, even if you do not remember it; the newest "
              f"dated outcome in the results is the latest one -- do not replace it with "
@@ -603,7 +603,7 @@ def _handle_forget_facts(ctx, state, args: dict) -> str:
     except Exception:
         logger.exception("forget_facts: could not persist")
     # Only saved facts go here. «удали все мои данные» was answered «Все
-    # данные удалены» while the chat history stayed (live 2026-09-28).
+    # данные удалены» while the chat history stayed.
     scope = (" This tool removes saved FACTS only: the chat history stays until the "
              "user sends /clear -- say so if they asked to delete all their data.")
     if n == 0:

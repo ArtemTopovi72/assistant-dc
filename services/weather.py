@@ -124,7 +124,7 @@ def _nominative(city: str) -> str:
 
 
 # Colloquial names, keyed by the stem (case endings stripped). "Питер" geocoded
-# to a village and gave St Petersburg +1 and snow (live 2026-09-28).
+# to a village and gave St Petersburg +1 and snow.
 _ALIASES = {"питер": "Санкт-Петербург", "спб": "Санкт-Петербург", "мск": "Москва",
             "екб": "Екатеринбург", "ёбург": "Екатеринбург", "екатеринбург": "Екатеринбург",
             "нск": "Новосибирск", "новосиб": "Новосибирск", "нижний": "Нижний Новгород",
@@ -151,7 +151,7 @@ def geocode_city(city: str, lang: str = "en") -> Optional[dict]:
             if found:
                 return found
     # The language also steers MATCHING: "New York" asked in Russian found
-    # York, Nebraska (live 2026-09-28, local_time said 10:09 at 11:09).
+    # York, Nebraska.
     # A Latin-script name is matched in English.
     if not re.search("[а-яё]", city, re.I):
         lang = "en"

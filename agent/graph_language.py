@@ -233,14 +233,14 @@ def _match_reply_language(ctx, answer: str, original_input: str) -> str:
     if not answer or not original_input or ctx.is_cancelled():
         return answer
     # An explicit request for English ("и то же самое по-английски") is the
-    # one Cyrillic turn whose English answer is RIGHT. The guard used to
-    # translate it back (live, 2026-09-12, journey 18) -- the model had
-    # obeyed the user and the pipeline undid it.
+    # one Cyrillic turn whose English answer is RIGHT. The guard must not
+    # translate it back -- the model has obeyed the user and the pipeline
+    # would undo it.
     _r = _read(original_input)
     if (_r["reply_language"] == "en" and names_english(original_input)) or _r["translate"]:
         return answer
     # «answer in English from now on», then a Russian line: the model follows
-    # the question's script, not the directive (live 2026-09-28).
+    # the question's script, not the directive.
     if (getattr(ctx, "reply_lang", "") == "en" and _foreign_ratio(answer) < 0.1
             and _foreign_ratio(original_input) >= 0.3):
         return answer          # English as pinned -- not "drift" to translate back
@@ -259,14 +259,14 @@ def _match_reply_language(ctx, answer: str, original_input: str) -> str:
         return out if out and _foreign_ratio(out) < 0.1 else answer
     # The user typed in a non-Latin script but the answer came back all-Latin,
     # or the reverse: «Wie spät ist es in Berlin?» in a Russian session was
-    # answered in Russian (live 2026-09-28) -- the model only saw the English
+    # answered in Russian -- the model only saw the English
     # translation, so the session language won.
     _latin_q = (_foreign_ratio(original_input) < 0.1
                 and len(re.findall(r"[A-Za-z]{2,}", original_input)) >= 3
                 and _read(original_input)["reply_language"] not in ("ru", "russian"))
     # A Russian chat with a Latin input is a button payload ("remove all the lettering
     # from the image"): typed English flips reply_lang in tg_tasks. Its English reply
-    # went out as is (live 2026-09-29).
+    # went out as is.
     _ru_payload = getattr(ctx, "reply_lang", "") == "ru" and _foreign_ratio(original_input) < 0.3
     if _ru_payload:
         _latin_q = False
@@ -274,7 +274,7 @@ def _match_reply_language(ctx, answer: str, original_input: str) -> str:
             return answer
     elif _latin_q:
         # «¿Cuántos habitantes tiene Madrid?» -> "Madrid has approximately…":
-        # English is not the user's language either (live 2026-09-28).
+        # English is not the user's language either.
         if _foreign_ratio(answer) < 0.3 and not (_english_words(answer) >= 1
                                                  and _english_words(original_input) == 0):
             return answer
@@ -327,14 +327,13 @@ def _translate_to_english(ctx, text: str, context: str = "") -> str:
         return t
     # One or two words are not worth a translation and often cannot survive
     # one: «Скажи а» (a word game) became "Say, uh..." and was answered with
-    # "what did you want to ask?" (live 2026-09-17 20:56). The model reads
+    # "what did you want to ask?". The model reads
     # Russian; the pipeline's English-first rule is for reasoning over long
     # requests, not for a two-word quip.
     if len(re.findall(r"\w+", t)) <= 2:
         return t
     # Sorting, counting letters, reversing: the words ARE the material. The
-    # list was sorted as "apple, pear..." and translated back out of order
-    # (live 2026-09-28).
+    # list was sorted as "apple, pear..." and translated back out of order.
     # «переведи на английский: <письмо>» -- translating it at the entry hands
     # the model an English letter and it answered «You already translated it
     # perfectly!» (live 2026-09-28). The text to translate is the material.

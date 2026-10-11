@@ -584,7 +584,7 @@ def send_to_lm_studio(
         no_think = False
         # A forced tool call (tool_choice="required") is grammar-constrained,
         # and the grammar rejects the empty thought block as its first piece:
-        # live 2026-09-23 the video button failed 6/6 with "Failed to
+        # the video button failed 6/6 with "Failed to
         # initialize samplers: Unexpected empty grammar stack after accepting
         # piece: <|channel>" and the user got "Я задумался и не выдал ответ".
         # Such a call is a tool call and nothing else, so there is no
@@ -1069,7 +1069,7 @@ def _try_revive_model(body: str, payload: dict) -> bool:
             return False
         if not _cc._excl_free.is_set():
             # A render is handing the card back and is already reloading the
-            # model; a second load raced it (live 2026-09-28, 5-min hang).
+            # model; a second load raced it (5-min hang).
             logger.info("render is giving the card back - waiting for its reload")
             if _cc.wait_for_card(600) and _model_served(payload.get("model", "") or MODEL_NAME):
                 return True
@@ -1086,7 +1086,7 @@ def _try_revive_model(body: str, payload: dict) -> bool:
         now = time.time()
         if now - _revive_last < LLM_REVIVE_MIN_INTERVAL_S:
             # The cooldown is for a model that dies ON LOAD. One that loaded
-            # fine and was then killed by a request (live 2026-09-13: a tall
+            # fine and was then killed by a request (a tall
             # photo tripped llama.cpp's n_ubatch assert twice in 20 s) is a
             # new incident -- the cached "ok" would let every turn for the
             # next minute die on "No models loaded".
@@ -1587,7 +1587,7 @@ def call_llm_simple(
     return result.get("content") or None
 
 
-# The crashes on big images (1400x2100, 1920x1088, live 2026-09-12) were the
+# The crashes on big images (1400x2100, 1920x1088) were the
 # llama.cpp micro-batch: an image's tokens must fit one ubatch, default 512.
 # lmstudio._rest_load sets it to 2048 and Gemma 4 spends at most 1120 tokens
 # on a picture (measured: 1024 px 288, 1280 px 441, 2048 px 1068, 3000 px
