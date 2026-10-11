@@ -417,7 +417,7 @@ class MemoryCenterTab(_MemoryProfilesMixin, _MemoryMaintenanceMixin, QWidget):
         self.table.setSortingEnabled(False)
         self.table.setRowCount(0)
         self._rows = []
-        for e, score, reason in results:
+        for e, _, _ in results:
             r = self.table.rowCount(); self.table.insertRow(r)
             cells = [e.type, e.source, _fmt_ts(e.created), str(e.importance),
                      ", ".join(e.tags), e.preview(120)]
