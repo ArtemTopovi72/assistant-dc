@@ -6,7 +6,7 @@ delimiter that never closed. `audit_math` then reports what is still wrong
 ($ and $$ balance, commands that look like they lost their backslash) so the
 caller can say so instead of shipping broken notation silently.
 
-Split out of deep_research.py. Pure: no DR_* knob, no I/O, no LLM call.
+Pure: no DR_* knob, no I/O, no LLM call.
 """
 import re
 
@@ -81,19 +81,18 @@ def audit_math(report: str) -> dict:
     blocks_balanced = (block_spans % 2 == 0)
     stripped = text.replace("$$", "")
     # count unescaped single $
-    import re as _re
-    single = len(_re.findall(r"(?<!\\)\$", stripped))
+    single = len(re.findall(r"(?<!\\)\$", stripped))
     inline_balanced = (single % 2 == 0)
     # lost-backslash: a command word followed by { or _ or ^ with NO preceding backslash,
     # occurring inside any math span.
-    spans = _re.findall(r"\$\$(.+?)\$\$", text, flags=_re.S) + _re.findall(r"(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)", text, flags=_re.S)
+    spans = re.findall(r"\$\$(.+?)\$\$", text, flags=re.S) + re.findall(r"(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)", text, flags=re.S)
     lost = []
     for s in spans:
         for cmd in _MATH_CMDS:
-            for mm in _re.finditer(rf"(?<![\\A-Za-z]){cmd}(?=[{{_^]| )", s):
+            for mm in re.finditer(rf"(?<![\\A-Za-z]){cmd}(?=[{{_^]| )", s):
                 # allow plain words like "sum"/"int" only if clearly not a command;
                 # require an adjacent {, _, or ^ to call it a stripped command.
-                if mm.group(0) and _re.match(rf"{cmd}[{{_^]", s[mm.start():mm.start()+len(cmd)+1]):
+                if mm.group(0) and re.match(rf"{cmd}[{{_^]", s[mm.start():mm.start()+len(cmd)+1]):
                     lost.append(cmd)
     out = {"inline_dollars": single, "block_dollars": block_spans,
            "inline_balanced": inline_balanced, "blocks_balanced": blocks_balanced,

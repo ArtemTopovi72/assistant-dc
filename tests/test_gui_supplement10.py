@@ -2,11 +2,11 @@
 tail. Each drives one specific early-return / error path. Also covers run_gui's
 non-Windows and no-WebEngine branches (via sys.platform / _QWebEngineView patch).
 
-Documented DEAD code (unreachable, intentionally not covered):
-  * MaskCanvas.is_empty:3172  -> `for _ in range(0): pass` (empty range).
-  * _show_tab:4492-4493       -> `except ValueError` on default_order.index(key);
+Unreachable code, intentionally not covered:
+  * MaskCanvas.is_empty       -> `for _ in range(0): pass` (empty range).
+  * _show_tab                 -> `except ValueError` on default_order.index(key);
                                   key always comes from self._tab_registry.
-  * _fmt_bytes:2179           -> trailing `return` after a loop whose "GB" arm
+  * _fmt_bytes                -> trailing `return` after a loop whose "GB" arm
                                   always returns first.
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_supplement10.py
@@ -105,28 +105,28 @@ def _close(w):
 
 
 def test_module_level_guards():
-    # build_qss with empty icon dict -> the no-icons css branch (162)
+    # build_qss with empty icon dict -> the no-icons css branch
     real = gui._make_tab_close_icons
     gui._make_tab_close_icons = lambda: {}
     try:
         s = gui.build_qss(); check("build_qss_noicons", isinstance(s, str))
     finally:
         gui._make_tab_close_icons = real
-    # _wav_envelope with stereo data -> mean over channels (444)
+    # _wav_envelope with stereo data -> mean over channels
     import soundfile as sf
     p = os.path.join(_TMP, "stereo.wav")
     sr = 16000; t = np.linspace(0, 0.3, int(sr*0.3), False)
     stereo = np.stack([0.2*np.sin(2*np.pi*220*t), 0.2*np.sin(2*np.pi*330*t)], axis=1).astype("float32")
     sf.write(p, stereo, sr)
     env = gui._wav_envelope(p); check("wav_stereo", isinstance(env, list) and len(env) > 0)
-    # _make_tab_close_icons save-failure branch (138-139): QImage.save raising via bad assets dir
+    # _make_tab_close_icons save-failure branch: QImage.save raising via bad assets dir
     real_makedirs = os.makedirs
     os.makedirs = lambda *a, **k: (_ for _ in ()).throw(OSError("ro"))
     try:
         out = gui._make_tab_close_icons(); check("tabicons_except", out == {})
     finally:
         os.makedirs = real_makedirs
-    # enable_dark_titlebar: attr 20 fails, attr 19 succeeds (92-93 loop second iter)
+    # enable_dark_titlebar: attr 20 fails, attr 19 succeeds (loop second iter)
     import ctypes as _ct
     class Dwm:
         def __init__(self): self.calls = 0
@@ -163,7 +163,7 @@ def test_request_worker_crosslingual_except():
         def __init__(self): pass
         def corpus_scripts(self): return {"Cyrillic"}
         def close(self): pass
-    # cross_lingual_targets raises -> except (1342-1343); build_rag_prompt note "" -> 1348 false
+    # cross_lingual_targets raises -> except; build_rag_prompt note "" -> no note appended
     lib = {"Library": FakeLib,
            "cross_lingual_targets": lambda t, s: (_ for _ in ()).throw(RuntimeError("cl")),
            "build_rag_prompt": lambda l, t, k=None, extra_queries=None: ("AUG " + t, "")}
@@ -197,8 +197,8 @@ def test_run_gui_platform_and_no_webengine():
     real_plat = gui.sys.platform
     real_view = gui._QWebEngineView
     try:
-        gui.sys.platform = "linux"          # 7056->7066 (skip win block)
-        gui._QWebEngineView = None          # 7074->7078 (skip share-GL attr)
+        gui.sys.platform = "linux"          # skip win block
+        gui._QWebEngineView = None          # skip share-GL attr
         gui.run_gui()
         check("run_gui_linux_noweb", True)
     finally:
@@ -212,7 +212,7 @@ def test_window_single_guards():
     o = _noop()
     try:
         w = _win()
-        # _titlebar_press success (startSystemMove True) -> 4089-4090
+        # _titlebar_press success (startSystemMove True)
         class WH:
             def startSystemMove(self): return True
         from PyQt5.QtGui import QMouseEvent
@@ -227,30 +227,30 @@ def test_window_single_guards():
         md = QMimeData(); md.setImageData(QImage(img)); md.setUrls([QUrl.fromLocalFile(img)])
         QApplication.clipboard().setMimeData(md)
         w._paste_image_from_clipboard()
-        # _send_text busy enqueue (5623)
+        # _send_text busy enqueue
         w.graph = None; w.input.setText("hi"); w._send_text(); w.graph = object()
-        # _toggle_voice ctx None (5852)
+        # _toggle_voice ctx None
         c = w.ctx; w.ctx = None; w._toggle_voice(); w.ctx = c
-        # _busy lib_build_worker not None (5349)
+        # _busy lib_build_worker not None
         w._lib_build_worker = object(); assert w._busy(); w._lib_build_worker = None
-        # _compact_memory worker already running (6739)
+        # _compact_memory worker already running
         w.compact_worker = object(); w._compact_memory(); w.compact_worker = None
-        # _redraw_last_image busy (6435)
+        # _redraw_last_image busy
         w.worker = object(); w._redraw_last_image(); w.worker = None
-        # _fix_artifact busy (6512)
+        # _fix_artifact busy
         w.worker = object(); w._fix_artifact_last_image(); w.worker = None
-        # _start_deep_research busy (6171)
+        # _start_deep_research busy
         w.worker = object(); w._start_deep_research("t"); w.worker = None
-        # _append_log while loading page active (5530)
+        # _append_log while loading page active
         w.stack.setCurrentWidget(w.loading_page); w._append_log("x: y line"); w.stack.setCurrentWidget(w.dashboard)
         # _prof_delete via memory tab: covered elsewhere
-        # _drop_text_file read error (6986)
+        # _drop_text_file read error
         w._drop_text_file("C:/no/such_qq.txt")
-        # _retry_hands source missing (6503)
+        # _retry_hands source missing
         w._last_handfix_source = "C:/no/such_rr.png"; w._retry_hands()
-        # _memory_center_set_profile ctx None (6696)
+        # _memory_center_set_profile ctx None
         w.ctx = None; w._memory_center_set_profile("p"); w.ctx = c
-        # _new_memory_profile: valid -> setCurrentIndex (6723)
+        # _new_memory_profile: valid -> setCurrentIndex
         QInputDialog.getText = staticmethod(lambda *a, **k: ("P10", True))
         w._new_memory_profile()
         check("window_single", True)
@@ -263,11 +263,9 @@ def test_start_worker_variants_and_ondone():
     o = _noop()
     try:
         w = _win()
-        # _start_worker with ctx None (5790->5792) and a worker lacking `info` (5796->5798)
+        # _start_worker with ctx None and a worker lacking `info`
         w.ctx = None
-        class BareWorker(gui_workers.RequestWorker):
-            pass
-        # remove info signal? RequestWorker has info; use a minimal QThread-like with no info
+        # a minimal QThread-like worker with no `info` signal
         from PyQt5.QtCore import QThread, pyqtSignal
         class NoInfoWorker(QThread):
             recognized = pyqtSignal(str); done = pyqtSignal(dict); failed = pyqtSignal(str)
@@ -287,20 +285,19 @@ def test_transfer_run_busy_and_gather_norefs():
                                  images_panel=types.SimpleNamespace(add_image=lambda p: None),
                                  _add_system=lambda m: None)
     tab = gui.TransferTab(host)
-    # _run busy (3857)
+    # _run busy
     tab.worker = types.SimpleNamespace(isRunning=lambda: True)
     tab._run("plan")
     tab.worker = None
-    check("transfer_run_busy10", "?" or True)
-    # _gather no refs (3849): single target row only
+    # _gather no refs: single target row only
     tab._add_row(_png("gg1.png"))
     tab._rows[0]["combo"].setCurrentIndex(0)   # target; no refs
     check("gather_norefs", tab._gather() is None)
-    # _on_done no info + ctx None (3895->3897, 3901->3904)
+    # _on_done no info + ctx None
     tab.host.ctx = None
     tab._on_done({"output": _png("gout.png")})   # no "info", ctx None
     check("on_done_noinfo", True)
-    # _owns_mask exception path (3759-3760): pass an object that breaks Path()
+    # _owns_mask exception path: pass an object that breaks Path()
     check("owns_mask_bad", tab._owns_mask(object()) is False)
     release(tab)
 
@@ -313,24 +310,23 @@ def test_memory_center_single_guards():
                                  session_memory=[]), _set_status=lambda m: None,
                                  _memory_center_set_profile=lambda p: None)
     tab = gui.MemoryCenterTab(host); tab.store = store; tab.refresh_all()
-    # _prof_delete no selection (2816)
+    # _prof_delete no selection
     tab.prof_list.clearSelection(); tab._prof_delete()
-    # _on_row_selected where get() returns None (2551): select a row, patch get->None
+    # _on_row_selected where get() returns None: select a row, patch get->None
     if tab.table.rowCount():
         tab.store.get = lambda prof, rid: None
         tab.table.selectRow(0); tab._on_row_selected()
-    # _approve_compaction declined (2903)
+    # _approve_compaction declined
     tab.compact_summary.setPlainText("s"); tab._confirm = lambda *a, **k: False
     tab._approve_compaction()
-    # _delete_matching with no results (2697)
+    # _delete_matching with no results
     tab.search_box.setText("zzz-nomatch-xyz"); tab._delete_matching(); tab.search_box.setText("")
-    # _import cancelled (3024)
+    # _import cancelled
     _QFD.getOpenFileName = staticmethod(lambda *a, **k: ("", ""))
     tab._import()
-    # _run_diag with a query (2974 selected loop) — add data first
+    # _run_diag with a query — add data first
     store.add("default", "dark theme note", etype="fact", source="manual", importance=70)
     tab.refresh_all(); tab.diag_query.setText("dark"); tab._run_diag()
-    # _gen_compaction: profile == active but no sources -> info (2877 branch) already; ensure
     check("mc_single_guards", True)
 
 
@@ -338,7 +334,7 @@ def test_db_and_scan_progress():
     o = _noop()
     try:
         w = _win()
-        # _db_clear success (6084-6085): confirm Yes + a library that purges
+        # _db_clear success: confirm Yes + a library that purges
         w._library = types.SimpleNamespace(purge_all=lambda: 3, stats=lambda: {}, close=lambda: None,
                                            is_empty=lambda: True)
         oq = QMessageBox.question; QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.Yes)
@@ -346,13 +342,13 @@ def test_db_and_scan_progress():
             w._db_clear(); check("db_clear_success", "removed from the database" in w.db_status.text())
         finally:
             QMessageBox.question = oq
-        # _db_load_existing documents() raising (5973)
+        # _db_load_existing documents() raising
         w._library = types.SimpleNamespace(documents=lambda: (_ for _ in ()).throw(RuntimeError("x")))
         w._db_load_existing()
         # _on_scan_progress + _on_scan_done
         w._on_scan_progress(1, 3); w._on_scan_done("answer text")
         w._on_scan_done("")   # empty -> "(no answer produced)"
-        # _on_db_finished with a library to close (6068-6069)
+        # _on_db_finished with a library to close
         w._library = types.SimpleNamespace(close=lambda: None); w._lib_build_worker = None
         w._on_db_finished()
         check("db_scan_progress", True)
@@ -362,12 +358,12 @@ def test_db_and_scan_progress():
 
 
 def test_populate_and_maybe_drain():
-    # ModelConfigTab._populate max_ctx TypeError branch (1696-1697)
+    # ModelConfigTab._populate max_ctx TypeError branch
     tab = gui.ModelConfigTab()
     tab._populate({"id": "m", "state": "loaded", "max_context_length": {"bad": "dict"},
                    "loaded_context_length": 4096, "compatibility_type": "gguf"})
     check("populate_bad_maxctx", True)
-    # _maybe_drain_queue finalize a failed running task (5507-5508 failed branch)
+    # _maybe_drain_queue finalize a failed running task (failed branch)
     o = _noop()
     try:
         w = _win()
@@ -389,18 +385,15 @@ def test_clear_context_unlink_except():
     o = _noop()
     try:
         w = _win()
-        # make one of the profile files a directory so unlink raises -> except (6311-6312)
+        # make one of the profile files a directory so unlink raises -> except
         prof = w.ctx.active_memory_dir
         (prof / "summary.json").mkdir(parents=True, exist_ok=True)   # a dir named like the file
         # app_runtime, NOT assistant: _clear_context does
-        # `from app_runtime import make_base_state`. This used to fake
-        # `assistant`, which stopped being the source long ago -- so the fake
-        # was dead and the REAL app_runtime was imported instead. It also faked
-        # `utils` wholesale, and that bare stub then broke image.py's
+        # `from app_runtime import make_base_state`. `utils` must not be faked
+        # wholesale: a bare stub breaks image.py's
         # `from utils import safe_json_from_llm` further down the real
-        # app_runtime import chain: the test failed on its own scaffolding,
-        # nowhere near the branch it exists to cover. The real utils stays
-        # loaded; only the one attribute is swapped, just below.
+        # app_runtime import chain. The real utils stays loaded; only the one
+        # attribute is swapped, just below.
         with fake_modules(app_runtime={"make_base_state":
                                        lambda: {"messages": [], "_from_fake": True}}):
             import utils as _u
@@ -410,8 +403,7 @@ def test_clear_context_unlink_except():
             finally:
                 _u.free_process_memory = _real
         # The point of the test: summary.json is a DIRECTORY, so unlink raises,
-        # and _clear_context must swallow it and carry on. `check(..., True)`
-        # asserted nothing at all and could not have gone red.
+        # and _clear_context must swallow it and carry on.
         check("clear_ctx_unlink_dir_survives", (prof / "summary.json").is_dir())
         check("clear_ctx_ran_past_except", w.base_state.get("_from_fake") is True)
         check("clear_ctx_reset_state", w.captured_image is None
@@ -439,13 +431,9 @@ if __name__ == "__main__":
           f"({sum(1 for _,c in RESULTS if c)}/{len(RESULTS)} checks)")
     # Widgets built here (AssistantWindow, TransferTab) were still alive at
     # interpreter shutdown, and a QWidget outliving its QApplication segfaults
-    # inside Qt. Measured 9 crashes in 25 runs, every check passing each time.
-    from qt_teardown import release_widgets
+    # inside Qt.
     release_widgets(_app)
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

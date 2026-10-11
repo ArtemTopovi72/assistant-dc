@@ -1,8 +1,8 @@
 """An explicit request for English is not translated back to Russian.
 
-Live 2026-09-12 (journey 18): "и то же самое по-английски" got an English
-reply from the model, and _match_reply_language -- seeing a Cyrillic turn
-with a Latin answer -- translated it back. The model had obeyed; the guard undid it.
+"и то же самое по-английски" gets an English reply from the model, and
+_match_reply_language -- seeing a Cyrillic turn with a Latin answer -- must not
+translate it back: the model obeyed, the guard must not undo it.
 """
 import os, sys
 os.environ.setdefault("F5_TEST_RUN", "1")

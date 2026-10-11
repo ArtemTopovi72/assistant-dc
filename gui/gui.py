@@ -7,17 +7,10 @@ Launched from assistant.main() when config.USE_GUI is true. Layout:
 All heavy work (Whisper, the LangGraph agent, F5-TTS) runs on background
 QThreads so the window, camera preview and audio visualizer stay smooth.
 """
-import copy
-import json
 import logging
 import os
-import random
-import re
 import shutil
 import sys
-import threading
-import time
-from pathlib import Path
 
 # Before cv2/PyQt5: PyQt5 bundles MSVCP140 14.26 and whatever loads first wins;
 # torch & co. crash in the old copy (0xc0000005). Every way into the GUI goes
@@ -29,11 +22,8 @@ import cv2
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout, QGroupBox,
-    QToolButton, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow,
-    QMenu, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton, QRadioButton, QSpinBox,
-    QStackedWidget, QStatusBar, QTableWidget, QTableWidgetItem, QTabWidget, QTextEdit,
-    QVBoxLayout, QWidget,
+    QApplication, QDialog, QHBoxLayout, QLabel, QMainWindow, QMenu, QProgressBar,
+    QStackedWidget, QStatusBar, QVBoxLayout, QWidget,
 )
 from PyQt5.QtCore import QSettings
 
@@ -53,11 +43,11 @@ except Exception as _webeng_exc:  # pragma: no cover - environment dependent
 _REPORT_HTML_ENABLED = os.getenv("GUI_REPORT_HTML", "1").strip().lower() not in ("0", "false", "no", "off")
 
 import config
-from config import SAMPLE_RATE, LM_STUDIO_BASE, MODEL_NAME, MIC_GAIN_DB, MEMORY_DIR
-from audio import AudioPlayer, MicRecorder, VadListener, transcribe_audio_array
+from config import SAMPLE_RATE, LM_STUDIO_BASE, MODEL_NAME, MEMORY_DIR
+from audio import AudioPlayer
 import gui_i18n
 import ui_scale
-from ui_scale import px, pt, scale_style as _ss
+from ui_scale import px, scale_style as _ss
 
 logger = logging.getLogger("assistant.gui")
 
@@ -80,7 +70,6 @@ from gui_common import (
 from gui_memory_tab import MemoryCenterTab, CompactMemoryWorker
 # Cross-tab plumbing that lives in gui_common so extracted tabs need not
 # import gui.py: _ScopedCtx (four tabs) and TranscribeWorker (two).
-from gui_common import TranscribeWorker
 # The Madhouse (tab, grid, workers, reply/speaker logic) extracted whole.
 # AssistantWindow constructs MadhouseTab; the rest are re-exported because the
 # suites address them through `gui`.
@@ -153,10 +142,6 @@ from gui_transfer_tab import TransferTab, TransferWorker, _TRANSFER_ROLES
 from gui_telegram_tab import (
     TelegramTab, redirect_settings, _tg_settings, _TG_SETTINGS_SCOPE, _TG_TOKEN_KEY,
     _TG_ADMINS_KEY,
-)
-from gui_madhouse_tab import (
-    MadhouseTab, MadhouseGrid, MadhouseReplyWorker, generate_madhouse_reply,
-    choose_next_speaker, _name_is_addressed,
 )
 
 
@@ -322,7 +307,7 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
             import log_redact
             log_redact.install(self.log_handler)
         except Exception:
-            pass
+            logger.debug("log_redact install failed", exc_info=True)
         # CRASH FIX: datasets/transformers (pulled in by sentence-transformers) call
         # logging.basicConfig(), adding a root StreamHandler to sys.stderr — which is
         # None under pythonw AND cp1251-encoded. A non-ASCII log char (→, Cyrillic)
@@ -355,8 +340,8 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
     def _on_runtime_ready(self, ctx, base_state, graph):
         # This slot runs on the GUI thread via a queued signal right after the model
         # loader thread finishes ("LLM ready" in the log). Each step is fenced so a
-        # failure in one panel cannot escape the slot — an exception escaping here is
-        # exactly what used to abort the process with 0xC0000409. Per-step lifecycle
+        # failure in one panel cannot escape the slot — an exception escaping here
+        # aborts the process. Per-step lifecycle
         # logs pinpoint the offending panel in crash.log / console.
         def _step(name, fn):
             try:
@@ -691,7 +676,7 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
         if self._scan_worker is not None:    # the scan loop polls its own flag, not cancel_event
             self._scan_worker.cancel()
         # Tabs that run long jobs hold their own cancel token (see _ScopedCtx), so
-        # setting the global flag alone no longer reaches them.
+        # setting the global flag alone does not reach them.
         for attr in ("transfer_tab", "storyboard_tab", "code_tab"):
             tab = getattr(self, attr, None)
             cancel = getattr(tab, "cancel", None) if tab is not None else None
@@ -959,7 +944,7 @@ def run_gui() -> None:
             import ctypes
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("AssistantDC.Voice.1")
         except Exception:
-            pass
+            logger.debug("could not set the Windows AppUserModelID", exc_info=True)
 
     # High-DPI MUST be enabled before the QApplication is constructed so Qt honours
     # the Windows display-scaling setting (100..300%). PassThrough keeps fractional
@@ -968,7 +953,7 @@ def run_gui() -> None:
         QApplication.setHighDpiScaleFactorRoundingPolicy(
             Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     except Exception:
-        pass
+        logger.debug("High-DPI rounding policy unavailable", exc_info=True)
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
     QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
     # Required for QtWebEngine (the research report viewer) to share the GL context.
@@ -982,7 +967,7 @@ def run_gui() -> None:
         crash_diag.install_qt_message_handler()
         crash_diag.log_stage("run_gui: QApplication about to be constructed")
     except Exception:
-        pass
+        logger.debug("crash_diag setup failed", exc_info=True)
 
     app = QApplication(sys.argv)
     app.setWindowIcon(QIcon(ICON_PATH))
@@ -1022,12 +1007,9 @@ def run_gui() -> None:
         logger.info("LIFECYCLE: ASSISTANT_AUTOSTART=1 — skipping the settings "
                     "dialog, starting on the default model")
     elif dlg.exec_() != QDialog.Accepted:
-        # Say so on the way out. Dismissing this dialog exits the process
-        # before the window is ever built and before the bot starts, and it
-        # used to do that in total silence: the log simply stopped after "UI
-        # scale", which is indistinguishable from a hang or a crash. A launch
-        # that quietly does nothing is the hardest kind of failure to explain
-        # half an hour later.
+        # Dismissing this dialog exits the process before the window is built
+        # and before the bot starts; log it so the exit is not mistaken for a
+        # hang or a crash.
         logger.info("LIFECYCLE: settings dialog dismissed — exiting before the "
                     "window was built (the Telegram bot never starts)")
         return

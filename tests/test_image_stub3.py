@@ -461,7 +461,7 @@ def test_inpaint_firered_failure_is_not_substituted():
                   _contained_edit_validated=lambda *a, **k: other,
                   # the whole-frame fallback must fail too, and must not reach the
                   # LIVE ComfyUI: unpatched it rendered a real picture, and the
-                  # check flipped with whatever the server returned (2026-09-24)
+                  # check flipped with whatever the server returned
                   edit_image_with_firered=lambda *a, **k: None):
         out = I.inpaint_region_with_comfy(ctx, img, "the hat", "make it red")
         check("inpaint_firered_failure_returns_none", out is None)
@@ -546,10 +546,7 @@ if __name__ == "__main__":
             print("  ERROR in " + fn.__name__ + ": " + type(e).__name__ + ": " + str(e))
     passed = sum(1 for _, c in RESULTS if c)
     print(f"\n{len(fns)-failed}/{len(fns)} functions, {passed}/{len(RESULTS)} checks passed")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

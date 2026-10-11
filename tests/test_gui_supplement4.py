@@ -18,7 +18,7 @@ from pathlib import Path
 from PyQt5.QtWidgets import QApplication, QDialog, QInputDialog, QMessageBox
 from PyQt5.QtWidgets import QFileDialog as _QFD
 from PyQt5.QtGui import QImage, QColor
-from PyQt5.QtCore import Qt, QMimeData, QUrl, QEvent, QPoint
+from PyQt5.QtCore import Qt, QMimeData, QUrl, QEvent
 import gui
 from _gui_patch import stub_workers as _stub_workers, restore as _gui_restore
 
@@ -105,7 +105,7 @@ def test_eventfilter_paste_and_dragmove():
     # Ctrl+V with only text -> falls through (not intercepted)
     QApplication.clipboard().setText("plain text")
     kev2 = QKeyEvent(QEvent.KeyPress, Qt.Key_V, Qt.ControlModifier)
-    check("ctrlv_text_fallthrough", w.eventFilter(w.input, kev2) in (False, True))
+    w.eventFilter(w.input, kev2)   # not intercepted; must not raise
     _close(w)
 
 
@@ -273,10 +273,7 @@ if __name__ == "__main__":
     QInputDialog.getText = staticmethod(_saved["gt"])
     print(f"\n{len(fns)-failed}/{len(fns)} supplement4 functions passed "
           f"({sum(1 for _,c in RESULTS if c)}/{len(RESULTS)} checks)")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

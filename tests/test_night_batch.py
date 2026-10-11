@@ -1,19 +1,13 @@
-"""The batch of complaints from 2026-08-01, each pinned to a check.
+"""Regressions pinned by one check each:
 
-Every one of these was a real report, not a hypothesis:
-
-  1. "why are you feeding it all the tools when I only press one button" — the
-     inline image buttons were missing from the intent map, so the single most
-     unambiguous input in the product shipped all 14 tool schemas every round.
-  2. "after clearing the chat it repeated all the steps back to me" — pinned facts
-     survived clear_context and are injected into EVERY turn.
-  3. "every time I ask for a redraw — no response" — an empty final_answer reached
-     the delivery layer, which printed the literal placeholder "(no response)".
-  4. "I asked for 5 jokes and got 'there's one about an aeroplane'" — the search
-     distiller was hard-capped at "1 to 4 sentences" with a 400-token budget.
-  5. "deep research spat out unstructured text" — my own retry nudge told the model
-     to drop everything but the text, and it dropped the Markdown with it.
-  6. forwarded voice notes: transcript or summary, by choice.
+  1. One inline image button must not ship the whole tool list every round: the
+     inline buttons are in the intent map.
+  2. clear_context also drops pinned facts, which are injected into EVERY turn.
+  3. An empty final_answer never reaches delivery as the literal "(no response)".
+  4. "5 jokes" gives 5: the search distiller is not hard-capped at "1 to 4
+     sentences" with a small token budget.
+  5. The deep-research retry nudge keeps the Markdown structure.
+  6. Forwarded voice notes: transcript or summary, by choice.
   7. PowerPoint decks as a real deliverable file.
 
 Run: venv/Scripts/python.exe tests/test_night_batch.py
@@ -30,8 +24,8 @@ import tg_bot as T
 from pathlib import Path as _Path
 _ROOT = _Path(__file__).resolve().parents[1]
 
-# The 📋 retelling is a ONE-SHOT model call outside the agent since 1cdadf4
-# (2026-09-14): it never enters the task queue. The suite records that call.
+# The 📋 retelling is a ONE-SHOT model call outside the agent: it never enters
+# the task queue. The suite records that call.
 import llm as _llm_mod, time as _time
 RETOLD = []
 def _fake_retell(ctx, system, said, **k):
@@ -139,12 +133,9 @@ print("\n" + "=" * 70)
 print("3. NEVER ANSWER WITH SILENCE")
 print("=" * 70)
 
-# _finalize_answer (the retry ladder + last-resort text) has moved twice now:
-# out of graph.py into graph_personality.py, and from there into
-# graph_finalize.py when the personality cluster was split into layers. Each
-# move silently emptied this structural check, because `inspect.getsource(GP)`
-# named a FILE rather than the code under test. Ask the function itself which
-# module it lives in, so the next move cannot break the check either.
+# _finalize_answer (the retry ladder + last-resort text) is looked up through
+# the module it lives in, not a hardcoded file, so moving it between modules
+# cannot silently empty this structural check.
 src = inspect.getsource(inspect.getmodule(GP._finalize_answer))
 check("the closing reply is retried, not attempted once",
       "closing reply was empty — retry" in src)
@@ -154,10 +145,9 @@ check("the last-resort answer no longer requires that tools ran",
       "if not final_answer and not ctx.is_cancelled():" in src)
 check("and it admits the fault instead of blaming the user",
       "not a refusal" in src)
-# The delivery layer's placeholder is what the user actually SAW -- verbatim,
-# in English, in a Russian chat. The guard still exists (voice must not be
-# synthesised for an empty reply) but it is now a flag, and what goes out is a
-# translated line saying a retry usually works.
+# The delivery layer must not show the English placeholder in a Russian chat.
+# The guard is a flag (voice must not be synthesised for an empty reply) and
+# what goes out is a translated line saying a retry usually works.
 _delivery = "".join(inspect.getsource(_m)
                     for _n, _m in inspect.getmembers(T.TelegramBot, inspect.isfunction))
 check("the empty-reply guard still exists", "empty_reply" in _delivery)
@@ -293,11 +283,10 @@ check("'both' sends the text AND retells it",
       bot.docs is not None and len(_got) == 1 and texts(bot),
       f"sent={len(bot.sent)} retold={len(_got)}")
 
-# A finished choice no longer makes the keyboard stale: the transcript is kept
-# so the other two buttons still work (that is the whole point -- the inline
-# keyboard stays on screen, and wiping the transcript made the second press
-# claim the note was gone). What IS stale is a button belonging to an EARLIER
-# forward, which is what carries an id that no longer matches.
+# A finished choice does not make the keyboard stale: the transcript is kept
+# so the other buttons still work while the inline keyboard stays on screen.
+# What IS stale is a button belonging to an EARLIER forward, which carries an
+# id that no longer matches.
 s.fwd_transcript = "тут длинный монолог про доставку в четверг"
 s.fwd_transcript_id = "curr1234"
 bot._store.put(s)
@@ -309,11 +298,10 @@ check("the transcript is cleared by a context wipe",
       (bot._get_session(CID).clear_context() or True)
       and bot._get_session(CID).fwd_transcript == "")
 
-# A second forward arriving before the first is answered used to silently
-# overwrite the single pending transcript, so tapping the FIRST (still
-# on-screen) "which do you want?" prompt delivered the SECOND voice's
-# content under it -- reproduced live via forward A -> ignore -> forward B
-# -> tap A's button.
+# A second forward arriving before the first is answered must not overwrite
+# the pending transcript: tapping the FIRST (still on-screen) "which do you
+# want?" prompt must deliver the FIRST voice's content (forward A -> ignore ->
+# forward B -> tap A's button).
 s = bot._get_session(CID); s.clear_context(); s.lang = "ru"; bot._store.put(s)
 bot._transcribe = lambda ctx, fid, media="voice", **kw: {
     "VA": "voice A content", "VB": "voice B content"}.get(fid, "")
@@ -331,7 +319,6 @@ check("the second forward's button carries a different id from the first's",
       data_a != data_b, (data_a, data_b))
 
 press(data_a)
-# live 2026-09-27: two forwards in a row -- the FIRST prompt must still deliver A
 check("the first prompt's button delivers A's content, not B's and not 'gone'",
       "voice A content" in texts(bot) and "voice B content" not in texts(bot),
       texts(bot)[:120])
@@ -392,10 +379,8 @@ check("a missing picture costs the picture, not the slide",
                         images={0: os.path.join(out, "nope.png")}) is not None)
 
 # The bot has to actually SEND it — a tool that reports success while the user
-# receives nothing is the exact failure this project keeps re-learning.
-# Follow the METHOD on the class, not the module file: the turn body moved into
-# tg_tasks.py when the monolith was split, and a grep of tg_bot.py then reported
-# document delivery missing while it worked perfectly.
+# receives nothing is a failure. Follow the METHOD on the class, not a module
+# file, so the turn body can live in any module.
 bsrc = ""
 for _n, _m in inspect.getmembers(T.TelegramBot, inspect.isfunction):
     _s = inspect.getsource(_m)

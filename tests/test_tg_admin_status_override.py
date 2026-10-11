@@ -54,7 +54,7 @@ class _Host:
     def __init__(self):
         import types
         self.ctx = types.SimpleNamespace(cancel_event=None, throttle=0)
-        self.graph = types.SimpleNamespace() if False else None
+        self.graph = None
         self.base_state = {}
         self.tabs = None
 
@@ -181,49 +181,9 @@ print("=" * 70)
 print("REAL BOT: override actually lifts a banned/rejected status")
 print("=" * 70)
 
-for start_status in ("banned", "rejected"):
-    bot = _T.TelegramBot.__new__(_T.TelegramBot)
-    # Minimal real-bot wiring: reuse the real UserStore/session machinery via
-    # a throwaway instance is out of scope for a read-only-tg_bot.py check;
-    # instead verify the guarded method directly against a stand-in user
-    # object shaped like tg_bot's User record.
-    import types as _types
-    class _StubUser:
-        def __init__(self, status):
-            self.status = status
-            self.is_admin = False
-            self.name = "x"
-    class _StubStore:
-        def __init__(self, user): self._u = user
-        def get(self, cid): return self._u
-        def put(self, u): self._u = u
-    u = _StubUser(start_status)
-    bot._user_store = _StubStore(u)
-    bot._get_session = lambda cid: _types.SimpleNamespace(is_admin=False)
-    bot._store = _StubStore(None)
-    bot._lang = lambda sess: "en"
-    bot._send_text = lambda *a, **k: None
-    bot._main_menu_kb = lambda *a, **k: None
-    bot._activity = _types.SimpleNamespace(log=lambda *a, **k: None)
-    bot._on_user_change = lambda *a, **k: None
-
-    outcome_blocked = bot.approve_user(1)  # default: guarded
-    check(f"unguarded approve_user refuses to move '{start_status}' -> approved",
-          outcome_blocked == "not_pending" and u.status == start_status,
-          (outcome_blocked, u.status))
-
-    outcome_override = bot.approve_user(1, allow_from_any_status=True)
-    check(f"allow_from_any_status=True DOES move '{start_status}' -> approved",
-          outcome_override == "ok" and u.status == "approved",
-          (outcome_override, u.status))
-
-print("=" * 70)
-print("REAL BOT: reject_user guard -- stale reject after another action "
-      "already approved the user")
-print("=" * 70)
-
-
 def _wire_minimal_bot(status):
+    """The guarded methods run directly against a stand-in user record shaped
+    like tg_bot's User, without the real UserStore/session machinery."""
     import types as _types
     bot = _T.TelegramBot.__new__(_T.TelegramBot)
     class _StubUser:
@@ -246,6 +206,24 @@ def _wire_minimal_bot(status):
     bot._on_user_change = lambda *a, **k: None
     return bot, u
 
+
+for start_status in ("banned", "rejected"):
+    bot, u = _wire_minimal_bot(start_status)
+
+    outcome_blocked = bot.approve_user(1)  # default: guarded
+    check(f"unguarded approve_user refuses to move '{start_status}' -> approved",
+          outcome_blocked == "not_pending" and u.status == start_status,
+          (outcome_blocked, u.status))
+
+    outcome_override = bot.approve_user(1, allow_from_any_status=True)
+    check(f"allow_from_any_status=True DOES move '{start_status}' -> approved",
+          outcome_override == "ok" and u.status == "approved",
+          (outcome_override, u.status))
+
+print("=" * 70)
+print("REAL BOT: reject_user guard -- stale reject after another action "
+      "already approved the user")
+print("=" * 70)
 
 # The scenario this guard exists for: chat_id 1 was pending, an admin
 # approved it (status is now 'approved', account actively in use), and a

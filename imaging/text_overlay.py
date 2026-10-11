@@ -1,14 +1,13 @@
 """Exact lettering laid onto a picture with PIL -- the fallback when a model
 cannot spell the words.
 
-Night bench 2026-09-24: FireRed painted "УРОЖАЙ 2025" for "УРОЖАЙ 2026" in
+FireRed painted "УРОЖАЙ 2025" for "УРОЖАЙ 2026" in
 21 renders out of 21 -- every seed, every wording, with and without its
 typography LoRA. Reseeding cannot beat a prior. Drawn type is never wrong.
 """
 from __future__ import annotations
 
 import os
-import re
 import time
 from typing import Optional
 

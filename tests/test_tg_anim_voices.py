@@ -25,7 +25,7 @@ def _cbs(kb):
 
 
 def test_voices_are_slots_left_to_right():
-    """owner 10-10: «голоса в видео хочется видеть как конфигурируемые слоты»."""
+    """Voices in the video are configurable slots, filled left to right."""
     bot = _bot()
     bot._animate_ask_voices(CID, bot._get_session(CID), "ru")
     assert "animate_preset:wave" in _cbs(bot.sent[-1][1]) and "anv:yes" in _cbs(bot.sent[-1][1])

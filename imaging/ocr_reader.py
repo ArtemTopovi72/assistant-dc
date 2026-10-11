@@ -1,8 +1,7 @@
 """A deterministic reader for the lettering in a render (EasyOCR, ru+en, CPU).
 
 The vision model reads Cyrillic badly and deterministically: a crisp,
-hand-painted "У ОЛЬГИ" came back "УАЗЬЛ" four times out of four (live,
-2026-09-12), so a perfect café sign was condemned, redrawn twice, and the
+hand-painted "У ОЛЬГИ" came back "УАЗЬЛ" four times out of four, so a perfect café sign was condemned, redrawn twice, and the
 agent spent nine more minutes "fixing" it. EasyOCR on the same crop reads
 "У ОАЬГИ" -- one letter off in a stylised font -- and the three-line
 champagne label character for character.
@@ -64,8 +63,8 @@ class _WorkerReader:
             try:
                 self._p.kill()
                 self._p.wait(timeout=10)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("could not stop the OCR worker: %s", exc)
             raise RuntimeError("ocr_worker did not start: %r" % first[:200])
         self._io = threading.Lock()
 
@@ -136,8 +135,8 @@ def read(image_path: str) -> Optional[list]:
         im = Image.open(image_path).convert("RGB")
         if max(im.size) < 1600:
             variants.append(np.asarray(im.resize((im.width * 2, im.height * 2), Image.LANCZOS)))
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("upscaled OCR variant unavailable: %s", exc)
     out = []
     for v in variants:
         try:

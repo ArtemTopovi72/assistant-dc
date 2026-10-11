@@ -1,13 +1,9 @@
 """The fast path (short, tool-free turns) must still see Saved facts.
 
-Live 2026-09-18, journey 9: "запомни: меня зовут Марат..." saved the fact
-correctly (remember_fact ran, ctx.pinned_facts held it). Three turns later
-"как меня зовут и что ты обо мне знаешь?" is short and has no tool-trigger
-keyword, so it took graph_fastpath's tool-less path -- which built its prompt
-from a bare system message + the user's line, with a comment saying facts were
-deliberately left out to save tokens. The model, given nothing about Marat,
-answered "you haven't told me your name yet" -- a confident denial of a fact
-it genuinely had saved, just never shown.
+A fact saved with remember_fact ("запомни: меня зовут Марат...") must reach a
+short, keyword-free follow-up ("как меня зовут и что ты обо мне знаешь?") that
+takes graph_fastpath's tool-less path; otherwise the model answers "you haven't
+told me your name yet" -- a confident denial of a fact it genuinely had saved.
 """
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -81,7 +77,7 @@ def test_fast_path_after_forget_shows_the_forgotten_note(monkeypatch):
 
 
 def test_fast_path_cut_by_token_cap_falls_through(monkeypatch):
-    """Live: a 60-row table stopped at row 25 and was delivered as the answer."""
+    """A 60-row table cut at row 25 by the token cap is not delivered as the answer."""
     import graph as _g
     monkeypatch.setattr(_g, "send_to_lm_studio", lambda ctx, m, **kw:
                         {"role": "assistant", "content": "| 25 | Mn", "finish_reason": "length"})
@@ -95,8 +91,7 @@ if __name__ == "__main__":
     sys.exit(r.returncode)
 
 
-# 10-08 live: «аллергия на орехи» was in the facts and dinner advice still offered
-# «кедровые орешки» -- the allergy note only forbade PROMISING a dish free of the allergen.
+# An allergy or diet in the facts is a hard limit on suggestions, not only on promises.
 import intent as _intent_mod
 from graph_compose import facts_parts as _facts_parts
 _intent_mod.YES_STUB = lambda q, t: "аллерги" in t

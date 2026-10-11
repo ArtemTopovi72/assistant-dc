@@ -258,5 +258,5 @@ importer is [`tests/test_edit_state.py`](../../tests/test_edit_state.py).
   part of this domain's source: they reach `route_edit_request`,
   `generate_image_with_comfy`, `draw_agent.run`, and `transfer`'s
   `plan_and_execute_transfer` as the public entry points, and they are what
-  [`docs/transfer_tab_guide.md`](../transfer_tab_guide.md) and [`docs/upscale_modes_and_queue.md`](../upscale_modes_and_queue.md) describe from the
+  [`docs/transfer_tab_guide.md`](../transfer_tab_guide.md) describes from the
   user-facing side.

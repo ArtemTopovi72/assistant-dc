@@ -3,25 +3,18 @@ reports and presentations — not the session's RU/EN UI toggle, and not the
 tool's `topic` argument (which has usually already been through the
 English-first entry translation, see graph.translate_node).
 
-Two bugs fixed here:
-
   1. tg_bot.py's "do a deep research on: X" bypass (typed directly, skips the
-     graph/tool-calling entirely) passed `out_lang=lang` — the session's UI
-     setting — so a Russian-UI user researching an English topic got a
-     Russian-language paper about it, and vice versa. Fixed to
+     graph/tool-calling entirely) passes
      `out_lang=deep_research.lang_of_text(topic, default=lang)`, matching
      what the in-graph tool-calling path (tools.py's deep_research handler)
-     already did correctly via `lang_of_text(state["user_input_original"])`.
+     does via `lang_of_text(state["user_input_original"])`.
 
-  2. slides.py's plan_deck/make_presentation had NO language parameter at
-     all — they relied purely on a soft planner-prompt instruction ("written
-     in the language of the topic"), and `topic` is the tool arg, already
-     translated to English by the time _handle_create_presentation runs. A
-     Russian request for a presentation produced an English deck. Fixed by
-     detecting the language from state["user_input_original"] in
-     tools.py's _handle_create_presentation and threading it through
-     make_presentation -> plan_deck as an explicit `out_lang` directive
-     (deep_research._lang_directive), same mechanism deep research uses.
+  2. slides.py's plan_deck/make_presentation take an explicit `out_lang`
+     directive (deep_research._lang_directive), the same mechanism deep
+     research uses. `topic` is the tool arg, already translated to English by
+     the time _handle_create_presentation runs, so the language is detected
+     from state["user_input_original"] there and threaded through
+     make_presentation -> plan_deck.
 
 Offline only (no live LM Studio) — everything that would call the LLM is
 monkeypatched.
@@ -147,9 +140,7 @@ def _fake_llm(ctx, system_prompt, user_msg, **kw):
 
 import llm as _llm_mod
 _orig_call = _llm_mod.call_llm_simple
-S_call = None
 try:
-    import slides
     # plan_deck imports call_llm_simple locally from `llm` — patch the module.
     _llm_mod.call_llm_simple = _fake_llm
     _seen_prompts.clear()
@@ -190,9 +181,6 @@ def _fake_make_presentation(ctx, topic, out_dir, *, n_slides=0, image_fetcher=No
             "deck": {"title": topic, "slides": [{"heading": "a"}, {"heading": "b"}]}}
 
 class _FakeImageMod:
-    class OUTPUT_DIR:
-        @staticmethod
-        def mkdir(*a, **k): pass
     OUTPUT_DIR = type("P", (), {"mkdir": staticmethod(lambda *a, **k: None),
                                 "__str__": lambda self: "/tmp"})()
 

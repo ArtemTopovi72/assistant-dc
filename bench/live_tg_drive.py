@@ -10,21 +10,19 @@ bot's own Whisper, and time each turn.
 This is not a test; it makes real GPU calls and must not run under run_all.
 Stop the desktop app first (it holds Whisper/F5 and the bot's token):
 
-    venv/Scripts/python.exe bench/live_tg_drive.py --scenario music,picture,chat
+    venv/Scripts/python.exe bench/live_tg_scenarios.py music picture chat
 
 Results land in runtime/live_drive/<stamp>/ : transcript.jsonl, one folder of
 media per chat, and a summary printed at the end.
 """
 from __future__ import annotations
 
-import argparse
 import io
 import json
 import os
 import sys
 import threading
 import time
-import traceback
 from pathlib import Path
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -32,7 +30,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != os.path.dirname(os.path.abspath(__file__))]
 sys.path.insert(0, ROOT)
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception: pass
+except (AttributeError, ValueError, OSError): pass
 
 if os.getenv("F5_TEST_RUN"):
     raise SystemExit("live_tg_drive makes real GPU calls; unset F5_TEST_RUN")
@@ -273,7 +271,7 @@ class Chat:
         if caption: m["caption"] = caption
         if self_forward:
             # Telegram marks a message forwarded from Saved Messages with the
-            # user's own id (live 2026-09-14 19:29).
+            # user's own id.
             m["forward_origin"] = {"type": "user", "date": int(time.time()) - 60,
                                    "sender_user": dict(m["from"])}
             m["forward_from"] = dict(m["from"]); m["forward_date"] = int(time.time()) - 60

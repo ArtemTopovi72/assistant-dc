@@ -1,9 +1,8 @@
 """A Russian chat switches to English only when the user names English.
 
-Live 10-03: «Кибернетический Ленин хуяриться на кулаках с чертями в аду…»
-was answered in English, and so was everything after it -- the model's read
-said reply_language/language_mode "en" for a message that asks nothing of the
-kind, and the pin stuck. The read now counts only when English is named.
+The model's read may say reply_language/language_mode "en" for a message that
+asks nothing of the kind (a Russian sentence about a cyborg Lenin was answered
+in English, and the pin stuck). The read counts only when English is named.
 """
 import os
 import sys
@@ -34,7 +33,7 @@ def test_the_pin_needs_english_named_too():
     assert '_mode == "en" and _names_en(task.user_text)' in src
 
 
-# ── the pin does not stick for good (10-03) ──────────────────────────────────
+# ── the pin does not stick for good ──────────────────────────────────────────
 class _S:
     lang_pin = ""
     lang_pin_ts = 0.0

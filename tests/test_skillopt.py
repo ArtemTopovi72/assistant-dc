@@ -44,7 +44,7 @@ def test_source_rewrite_round_trips(tmp_path):
     edits = [{"tool": "search", "op": "append", "new": "Проверка \"кавычек\" и юникода."},
              {"tool": "calculate", "op": "replace",
               "old": DESC["calculate"][:30], "new": "REPLACED HEAD "}]
-    out, changes = A.apply_to_source(src, tools.TOOL_SCHEMAS, edits)
+    out, _ = A.apply_to_source(src, tools.TOOL_SCHEMAS, edits)
     p = tmp_path / "td.py"
     p.write_text(out, encoding="utf-8")
     spec = importlib.util.spec_from_file_location("td", p)

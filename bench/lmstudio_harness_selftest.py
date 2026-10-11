@@ -2,7 +2,7 @@
 Self-test for tests/lmstudio_harness.py. Proves each guard catches the exact confound
 that produced the wrong vision conclusion (docs/vision_pipeline_forensics.md).
 
-Run: ./venv/Scripts/python.exe tests/test_lmstudio_harness.py
+Run: ./venv/Scripts/python.exe bench/lmstudio_harness_selftest.py
 Requires LM Studio running with a vlm loaded. Does NOT evict it. Which model that is
 comes from MODEL_NAME (the same knob config.py reads), so live runs can be pointed at
 whatever is actually loaded instead of assuming the 9B.
@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from lmstudio_harness import (
     chat, ensure_loaded, serial_lock, list_models, model_state,
-    ModelNotFound, ModelUnavailable, ModelSubstitution, HarnessError,
+    ModelNotFound, ModelSubstitution, HarnessError,
 )
 
 PHANTOM = "qwen3.6-35b-a3b-uncensored-heretic-i1"   # NOT in catalog (the original phantom)

@@ -10,7 +10,7 @@ wf = V.build_workflow("x", mode="ref2va", width=1344, height=768, frames=121, se
 lora = wf[V.N_LORA]["inputs"]
 assert lora["strength_model"] > 0, lora
 assert "ref2v_turbo_8step" in lora["lora_name"], lora   # v0.1 4-step smeared hands; 8-step v1.0 is native
-# rank21 @0.4 rides on top of the turbo LoRA (night A/B 10-02: sharpest clip, no slow-mo)
+# rank21 @0.4 rides on top of the turbo LoRA (sharpest clip, no slow-mo)
 r21 = [n["inputs"] for n in wf.values() if n["class_type"] == "LoraLoaderModelOnly"
        and "rank_21" in n["inputs"]["lora_name"]]
 assert r21 and r21[0]["strength_model"] == 0.4 and r21[0]["model"] == [V.N_LORA, 0], r21

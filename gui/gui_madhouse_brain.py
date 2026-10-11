@@ -78,8 +78,7 @@ def generate_madhouse_reply(ctx, character: dict, history: list) -> str:
     # longer than the window, the slice can start with an "assistant" turn — system
     # then assistant, with nothing to answer — and the model returns empty every
     # time. With a two-character cast the roles alternate perfectly, so that shape
-    # arrives on the third turn: "each says one phrase, then an error" (reproduced
-    # 2026-07-22, call#15 roles=sauauau... -> EMPTY on all retries). Dropping the
+    # arrives on the third turn: "each says one phrase, then an error". Dropping the
     # leading own-turns costs a line or two of already-truncated context.
     while turns and turns[0]["role"] == "assistant":
         turns.pop(0)
@@ -91,7 +90,7 @@ def generate_madhouse_reply(ctx, character: dict, history: list) -> str:
     # prompt, WITH the prefill 12/12 attempts returned a line, WITHOUT it 6/6 came
     # back empty (the model opens an unclosed <think> that strip_think_tags reduces
     # to nothing). So a retry must KEEP the prefill and give it more room — dropping
-    # it, as this used to, turned a flaky first attempt into a guaranteed failure.
+    # it turns a flaky first attempt into a guaranteed failure.
     # The bare attempt stays last, only for models the prefill silences entirely.
     attempts = (
         {"max_tokens": 200, "prefill": "<think></think>"},

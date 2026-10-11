@@ -13,6 +13,8 @@ Usage:
 """
 import sys
 
+from _patch_base import RebindPatches
+
 # Every module that may hold a binding of a patched image-pipeline name.
 _TARGET_MODULES = (
     "image", "image_sizing", "image_grounding", "image_masks", "image_maskqa",
@@ -46,20 +48,8 @@ def broadcast(name, value):
     return changed
 
 
-class Patches:
+class Patches(RebindPatches):
     """Context manager applying `broadcast` to each keyword, then undoing it."""
 
-    def __init__(self, **kw):
-        self.kw = kw
-        self.undo = []
-
-    def __enter__(self):
-        for k, v in self.kw.items():
-            self.undo.extend((m, k, old) for m, old in broadcast(k, v))
-        return self
-
-    def __exit__(self, *a):
-        for mod, name, old in reversed(self.undo):
-            setattr(mod, name, old)
-        self.undo = []
-        return False
+    def _apply(self, name, value):
+        return broadcast(name, value)

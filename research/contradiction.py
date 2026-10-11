@@ -32,12 +32,8 @@ _CONTRADICTION_TEMPLATES = (
     "{topic} caveats OR known issues OR maintainer notes",
 )
 
-# Extra entity-anchored contradiction angles when concrete entities are known.
-_ENTITY_TEMPLATES = (
-    "{e} limitations OR criticism",
-    "{e} bug OR issue OR regression",
-    "{e} benchmark dispute OR overstated",
-)
+# Entity-anchored contradiction angle, used when concrete entities are known.
+_ENTITY_TEMPLATE = "{e} limitations OR criticism"
 
 
 # Conversational filler that carries no search signal. A "topic" made only of these
@@ -107,7 +103,7 @@ def contradiction_queries(topic: str, *, entities: Optional[Sequence[dict]] = No
     for ent in (entities or []):
         if len(out) >= max_queries:
             break
-        _push(_ENTITY_TEMPLATES[0].format(e=ent.get("value", "")))
+        _push(_ENTITY_TEMPLATE.format(e=ent.get("value", "")))
 
     logger.info("contradiction_queries: %d queries (topic=%r)", len(out), core[:50])
     return out[:max_queries]

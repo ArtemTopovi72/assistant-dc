@@ -533,8 +533,8 @@ def transfer_with_references(ctx, target_path, references, instruction=None, *,
             try:
                 import identity_metrics as idm
                 metrics["identity_cosine_after_guard"] = idm.identity_cosine(target_path, out)
-            except Exception:
-                pass
+            except Exception as err:
+                logger.debug("identity cosine after the guard unavailable: %s", err)
 
     try:
         log_edit_decision(request=f"transfer instr={instr!r}",
@@ -543,8 +543,8 @@ def transfer_with_references(ctx, target_path, references, instruction=None, *,
                           workflow="workflow_firered_edit.json + image2/image3 (Qwen multi-image)",
                           returned_file=out, source=target_path,
                           extra={"n_refs": len(refs), **metrics})
-    except Exception:
-        pass
+    except Exception as err:
+        logger.debug("could not log the transfer decision: %s", err)
     return out
 
 
@@ -709,7 +709,7 @@ def transfer_reference_contained(ctx, target_path, ref, instruction=None, *,
     ref_clause = "image 2"
     if role == ROLE_CLOTHING:
         # FireRed knows "image 2", not "the reference image", and copies only what
-        # it is told: live 10-06 a navy quarter-zip with a red monogram and a flag
+        # it is told: a navy quarter-zip with a red monogram and a flag
         # patch came out a plain navy jumper. Name the garment's details for it.
         details = _garment_details(ctx, ref.extracted_asset_path or ref.path)
         lead = (f"Replace the clothing with the garment shown in {ref_clause}"
@@ -763,8 +763,8 @@ def transfer_reference_contained(ctx, target_path, ref, instruction=None, *,
                           tool="transfer_reference_contained",
                           workflow="contained-firered + image2 (mask+composite-back)",
                           returned_file=out, source=target_path, extra=metrics)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("could not log the contained-transfer decision: %s", exc)
     return out
 
 

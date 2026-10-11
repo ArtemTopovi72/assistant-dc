@@ -8,13 +8,9 @@ The callers (run, edit_layout) stay in draw_agent, so any suite that patches
 draw_agent.auto_fix_geometry still reaches the code that runs.
 """
 import copy
-import json
-import random
 import re
 import ideogram
 import text_layout as _text_layout
-from text_layout import text_geometry, _norm_text
-from utils import safe_json_from_llm
 import draw_text as _draw_text
 
 from draw_text import _clamp_box, _els
@@ -236,7 +232,7 @@ def geometry_report(layout: dict) -> list:
         hits = [(_covered(els[i], o), j) for j, o in enumerate(els)
                 if j != i and not _attached_to(els[i], o)]
         # Summed: a title spread over two musicians' heads, 13% on each, was
-        # clear by every single-pair measure (live 2026-09-29).
+        # clear by every single-pair measure.
         if hits and sum(c for c, _ in hits) >= TEXT_CLEARANCE:
             j = max(hits)[1]
             other = els[j]
@@ -401,7 +397,7 @@ _SETTLE_GAP = 0.10
 def _settle_onto_surfaces(els) -> list:
     """Drop a prop that hangs just above the surface it is standing on.
 
-    Measured 2026-08-29 on the bench renders: the planner put the mug's box at
+    Measured on the bench renders: the planner put the mug's box at
     y 0.28-0.42 with the table at 0.45-0.75, so the mug ended ABOVE the table
     top with nothing under it. Ideogram drew the sensible picture -- a mug on
     the table -- and the critic then condemned the render for disobeying the

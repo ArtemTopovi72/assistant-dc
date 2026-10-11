@@ -1,7 +1,7 @@
 """The pre-render layout check (draw_preview): the plan drawn as a sketch,
 shown to the vision model with the request, its ops applied to the boxes
 BEFORE the card is spent on a render."""
-import os, sys, json, tempfile
+import os, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("F5_TEST_RUN", "1")
 
@@ -49,13 +49,6 @@ class _Ctx:
     def is_cancelled(self): return False
 
 
-def _answer(js):
-    llm.analyze_image_with_llm = lambda ctx, image_path=None, user_text="", system_prompt="", **kw: (
-        seen.__setitem__("image", image_path), seen.__setitem__("user", user_text),
-        seen.__setitem__("system", system_prompt), js)[-1]
-
-
-seen = {}
 # ── no ctx: skipped, nothing touched ─────────────────────────────────────────
 out, rep = P.preflight(None, LAY, REQ)
 check("without a context the plan passes through untouched", rep["source"] == "skipped"

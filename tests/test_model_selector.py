@@ -12,11 +12,10 @@ from pathlib import Path
 import model_selector as M
 
 RESULTS = []
-import os as _os
 def check(name, cond, detail=""):
     RESULTS.append((name, bool(cond)))
     print("[" + ("PASS" if cond else "FAIL") + "] " + name + ("" if cond or not detail else " - " + detail))
-    if not cond and _os.environ.get("PYTEST_CURRENT_TEST"):
+    if not cond and os.environ.get("PYTEST_CURRENT_TEST"):
         raise AssertionError(str(name) + (": " + str(detail) if detail else ""))
 
 _TMP = Path(tempfile.mkdtemp(prefix="modelsel_"))
@@ -58,9 +57,8 @@ def test_index_model_sizes():
 
     virt_dir = models_dir / "Pub" / "Virtual"
     virt_dir.mkdir(parents=True, exist_ok=True)
-    base_gguf = repo_dir / "model-q8_0.gguf"
     (virt_dir / "model.yaml").write_text(
-        f"base: ../Model-GGUF/model-q8_0.gguf\n", encoding="utf-8")
+        "base: ../Model-GGUF/model-q8_0.gguf\n", encoding="utf-8")
 
     idx = M._index_model_sizes(models_dir)
     check("index_model_sizes_by_key", ("model-gguf", "q8_0") in idx["by_key"] or ("model", "q8_0") in idx["by_key"])
@@ -135,12 +133,10 @@ def test_size_gb():
 def test_size_gb_three_segment_multiquant_repo():
     # A repo folder holding several .gguf quants side by side gets a server id
     # shaped "publisher/repo/repo-quant.gguf" -- a THIRD segment that is the
-    # actual FILENAME, not the repo. Live, 2026-09-22: the Settings model
-    # picker showed "?" for both quants of exactly this shape, because
-    # _size_gb's old base.split("/")[-1] grabbed the filename and looked IT
-    # up in by_repo (keyed by the folder name) -- a filename never matches a
-    # folder name. Two quants sharing one folder must also resolve to their
-    # OWN sizes, not both collapse onto the folder's largest file.
+    # actual FILENAME, not the repo. The size lookup must not use that last
+    # segment as a by_repo key (by_repo is keyed by the folder name). Two quants
+    # sharing one folder must also resolve to their OWN sizes, not both
+    # collapse onto the folder's largest file.
     index = {
         "by_key": {("gemma-repo", "q5_k"): 5_000_000_000,
                    ("gemma-repo", "q8_k"): 8_000_000_000},
@@ -169,9 +165,7 @@ def test_list_models_native_api():
 
 
 def test_list_models_native_fails_falls_back():
-    calls = {"n": 0}
     def fake_get(url, timeout=10):
-        calls["n"] += 1
         if "/api/v0/" in url:
             raise RuntimeError("native down")
         return FakeResp(data=[{"id": "fallback-model"}])
@@ -182,12 +176,9 @@ def test_list_models_native_fails_falls_back():
 
 
 def test_the_picker_shows_models_that_are_installed_but_not_loaded():
-    """The defect that put this here: the Settings dialog listed ONE model.
-
-    LM Studio's endpoints report what is loaded (or JIT-loadable), not what is
-    on disk, so a machine with eight models offered whichever one happened to
-    be resident. list_models now merges `lms ls` on top of whatever the server
-    says, and a model already reported by the server is not repeated.
+    """LM Studio's endpoints report what is loaded (or JIT-loadable), not what is
+    on disk. list_models merges `lms ls` on top of whatever the server says,
+    and a model already reported by the server is not repeated.
     """
     disk = [{"id": "disk-only-model"}, {"id": "served-model"}]
     with _Patches(_disk_models=lambda: disk,
@@ -216,9 +207,7 @@ def test_list_models_both_fail():
 
 
 def test_list_models_native_empty_falls_through():
-    calls = {"n": 0}
     def fake_get(url, timeout=10):
-        calls["n"] += 1
         if "/api/v0/" in url:
             return FakeResp(data=[{"id": "embed-only", "type": "embeddings"}])  # filtered to empty
         return FakeResp(data=[{"id": "v1-model"}])
@@ -277,7 +266,7 @@ def test_choose_model_interactive_invalid_then_valid():
     try:
         with _Patches(list_models=lambda base_url: [{"id": "model-a"}, {"id": "model-b"}],
                       _index_model_sizes=lambda d: {"by_key": {}, "by_repo": {}}):
-            model, no_think = M.choose_model_interactive("http://x", "model-x")
+            model, _ = M.choose_model_interactive("http://x", "model-x")
             check("choose_model_invalid_retries_then_picks", model == "model-a")
     finally:
         builtins.input = real_input
@@ -290,7 +279,7 @@ def test_choose_model_interactive_default_not_in_list():
     try:
         with _Patches(list_models=lambda base_url: [{"id": "model-a"}, {"id": "model-b"}],
                       _index_model_sizes=lambda d: {"by_key": {}, "by_repo": {}}):
-            model, no_think = M.choose_model_interactive("http://x", "nonexistent-default")
+            model, _ = M.choose_model_interactive("http://x", "nonexistent-default")
             check("choose_model_default_not_in_list_uses_first", model == "model-a")
     finally:
         builtins.input = real_input
@@ -308,10 +297,7 @@ if __name__ == "__main__":
             print("  ERROR in " + fn.__name__ + ": " + type(e).__name__ + ": " + str(e))
     passed = sum(1 for _, c in RESULTS if c)
     print(f"\n{len(fns)-failed}/{len(fns)} functions, {passed}/{len(RESULTS)} checks passed")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

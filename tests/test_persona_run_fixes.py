@@ -1,10 +1,15 @@
-"""Fixes from the persona run 2026-09-27 (bench/persona_users.py)."""
+"""Regressions from the persona run (bench/persona_users.py)."""
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import stages
 import tg_bot
 import tg_dispatch
+
+
+def _read(rel):
+    root = os.path.dirname(os.path.dirname(os.path.abspath(tg_dispatch.__file__)))
+    return open(os.path.join(root, rel), encoding="utf-8").read()
 
 
 def test_looking_closer_is_russian():
@@ -28,7 +33,7 @@ def test_help_explains_mic_and_file():
 
 
 def test_long_reply_goes_as_text_beside_voice():
-    src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(tg_dispatch.__file__))), "bot/tg_tasks.py"), encoding="utf-8").read()
+    src = _read("bot/tg_tasks.py")
     assert "Every reply goes out as text too" in src
 
 
@@ -36,21 +41,20 @@ def test_self_forwarded_media_is_material():
     m = {"from": {"id": 7}, "forward_origin": {"type": "user", "sender_user": {"id": 7}}}
     assert not tg_bot._is_forwarded(m)                    # own text: an instruction
     assert tg_bot._is_forwarded(m, self_is_own=False)     # own round video: offer retelling
-    src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(tg_dispatch.__file__))), "bot/tg_dispatch.py"), encoding="utf-8").read()
+    src = _read("bot/tg_dispatch.py")
     assert src.count("_is_forwarded(msg, self_is_own=False)") >= 3
 
 
 def test_forwarded_labels_are_not_acted_on_but_bot_replies_are_material():
-    src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(tg_dispatch.__file__))), "bot/tg_dispatch.py"), encoding="utf-8").read()
+    src = _read("bot/tg_dispatch.py")
     assert "if _fwd and text and _is_button(text):" in src
-    import tg_bot
     ours = {"forward_origin": {"type": "user", "sender_user": {"id": 1, "is_bot": True}}}
     assert tg_bot._fwd_is_own(ours, "1") and not tg_bot._fwd_is_own(ours, "2")
     assert not tg_bot._fwd_is_own({"forward_origin": {"type": "hidden_user"}}, "1")
 
 
 def test_song_topic_disarms_and_ready_words_are_asked_about():
-    src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(tg_dispatch.__file__))), "bot/tg_registration.py"), encoding="utf-8").read()
+    src = _read("bot/tg_registration.py")
     i = src.index('sess.reg_state == "song_topic"')
     body = src[i:i + 2500]
     assert 'sess.reg_state = ""' in body and "song_lyr:keep" in body and "song_lyr:polish" in body
@@ -59,7 +63,7 @@ def test_song_topic_disarms_and_ready_words_are_asked_about():
 
 
 def test_forward_skip_runs_before_the_prompt_gate():
-    src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(tg_dispatch.__file__))), "bot/tg_dispatch.py"), encoding="utf-8").read()
+    src = _read("bot/tg_dispatch.py")
     body = src[src.index("def _dispatch(self"):]
     assert body.index("if _fwd and text and _is_button(text):") < body.index("self._user_gate(chat_id, msg)")
     assert "< 3600" in body          # «пришли файлом» never digs up an old picture
@@ -83,7 +87,7 @@ def test_own_lyrics_layout_is_verbatim_or_nothing():
 
 
 def test_typed_russian_switches_an_unchosen_language_and_ozon_stages_are_russian():
-    src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(tg_dispatch.__file__))), "bot/tg_dispatch.py"), encoding="utf-8").read()
+    src = _read("bot/tg_dispatch.py")
     assert "not sess0.lang_chosen" in src and 'sess0.lang = "ru"' in src
     import tg_sessions, stages
     assert "lang_chosen" in open(tg_sessions.__file__, encoding="utf-8").read()

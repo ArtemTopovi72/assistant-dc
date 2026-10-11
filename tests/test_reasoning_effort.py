@@ -6,7 +6,6 @@ payload that send_to_lm_studio builds for each model family by stubbing the netw
 layer, so a refactor can't silently send the wrong reasoning control.
 """
 import sys
-import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 import threading
@@ -101,10 +100,10 @@ def _run_with_message(model_name, msg, prefill=None, reasoning_effort=None):
 
 
 def test_gpt_oss_never_dumps_reasoning_as_content():
-    """THE awful-report bug: gpt-oss burned its budget on the analysis channel and
-    returned empty content; the old fallback dumped reasoning_content (raw chain of
-    thought) as the answer. For gpt-oss, empty content must STAY empty; only non-oss
-    (Qwen finetunes that inline the answer into reasoning_content) may recover it."""
+    """If gpt-oss burns its budget on the analysis channel and returns empty content,
+    reasoning_content (raw chain of thought) must not be dumped as the answer. For
+    gpt-oss, empty content must STAY empty; only non-oss (Qwen finetunes that inline
+    the answer into reasoning_content) may recover it."""
     leaked = {"role": "assistant", "content": "",
               "reasoning_content": "Thus we should produce four blocks... (raw CoT)"}
     out_oss, _ = _run_with_message("openai/gpt-oss-120b", leaked)

@@ -28,9 +28,8 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 from pathlib import Path
 
 import numpy as np
-from PyQt5.QtWidgets import QApplication, QMessageBox, QFileDialog, QInputDialog
-from PyQt5.QtGui import QImage, QColor
-from PyQt5.QtCore import QThread, QTimer
+from PyQt5.QtWidgets import QApplication, QMessageBox, QInputDialog
+from PyQt5.QtCore import QThread
 import gui
 import gui_voice_tab
 
@@ -74,12 +73,6 @@ class FakePlayer:
     def play(self, p): self.is_active = True
     def stop(self): self.is_active = False
     def toggle_pause(self): return False
-
-
-def _png(name="a.png", w=32, h=24, col="#336699"):
-    p = os.path.join(_TMP, name)
-    img = QImage(w, h, QImage.Format_RGB32); img.fill(QColor(col)); img.save(p)
-    return p
 
 
 def _fake_ctx():
@@ -139,11 +132,10 @@ def _teardown(w):
 class _Sleeper(QThread):
     """A cancellable worker that is still running when the window closes.
 
-    The duration is deliberately far longer than any shutdown wait: an earlier
-    version used 2.5s, and the other shutdown steps burned more than that in
-    their own waits, so the thread finished on its own and a missing join looked
-    like a pass. Cancellation is the contract being tested — a correct teardown
-    asks each worker to stop and THEN joins it.
+    The duration is deliberately far longer than any shutdown wait, so a missing
+    join cannot look like a pass because the thread finished on its own.
+    Cancellation is the contract being tested — a correct teardown asks each
+    worker to stop and THEN joins it.
     """
     def __init__(self, secs=20.0):
         super().__init__()
@@ -191,7 +183,7 @@ def test_hostile_payloads():
                    {"final_answer": "\x00\x01\x02 null bytes"},
                    {"final_answer": chr(0x202e) + "rtl override"},
                    {"research_report": "", "final_answer": None}]
-    for i, f in enumerate(junk_finals):
+    for f in junk_finals:
         w._on_done(f)
     no_slot_errors("on_done_junk")
 
@@ -496,8 +488,8 @@ def test_model_reload_and_chat_turn_are_mutually_exclusive():
 
     real = gui.ReloadModelWorker
     # Subclass the real worker so its pyqtSignals exist; only start() is neutered.
-    # ModelConfigTab moved to gui_model_config_tab.py and resolves
-    # ReloadModelWorker there, so gui's copy alone no longer intercepts.
+    # ModelConfigTab resolves ReloadModelWorker in gui_model_config_tab, so
+    # gui's copy alone does not intercept.
     import gui_model_config_tab as _MC
     _MC.ReloadModelWorker = gui.ReloadModelWorker = type("NoopReload", (real,),
                                  {"start": lambda self: started.append(1),

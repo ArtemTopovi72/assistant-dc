@@ -23,13 +23,13 @@ check((c["width"], c["height"]) == (672, 384), f"stage 1 at half size ({c['width
 kinds = {n["class_type"]: k for k, n in wf.items()}
 for t in ("LTXVSeparateAVLatent", "MinimaxH3LatentUpscaler3D", "LTXVConcatAVLatent", "SamplerCustomAdvanced"):
     check(t in kinds, f"{t} present")
-# decoders read the final pack: refined video + stage 1's clean audio (19c210a)
+# decoders read the final pack: refined video + stage 1's clean audio
 last_cat = max((k for k, n in wf.items() if n["class_type"] == "LTXVConcatAVLatent"), key=int)
 check(wf["9"]["inputs"]["samples"] == [last_cat, 0] and wf["10"]["inputs"]["samples"] == [last_cat, 0],
       "both decoders read the refined-video / stage-1-audio pack")
 first_sep = min((k for k, n in wf.items() if n["class_type"] == "LTXVSeparateAVLatent"), key=int)
 check(wf[first_sep]["inputs"]["av_latent"] == [V.N_SAMPLER, 0], "upscale reads stage 1")
-check(wf[kinds["MinimaxH3LatentUpscaler3D"]]["inputs"]["mode.scale"] == V.UPSCALE_FACTOR == 1.5, "1.5x (user pick 2026-09-27), dotted dynamic-combo key")
+check(wf[kinds["MinimaxH3LatentUpscaler3D"]]["inputs"]["mode.scale"] == V.UPSCALE_FACTOR == 1.5, "1.5x, dotted dynamic-combo key")
 check(wf[kinds["RandomNoise"]]["inputs"]["noise_seed"] == 6, "refine noise seeded from the clip seed")
 
 V._upload = lambda p, kind: "k.png"

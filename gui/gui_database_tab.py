@@ -170,7 +170,7 @@ class DatabaseTabMixin:
             try:
                 self._library.close()
             except Exception:
-                pass
+                logger.debug("library close failed", exc_info=True)
             self._library = None
         self.db_build_btn.setEnabled(False)
         self.db_progress.setRange(0, 0)   # indeterminate until the first progress tick
@@ -218,7 +218,7 @@ class DatabaseTabMixin:
             try:
                 self._library.close()
             except Exception:
-                pass
+                logger.debug("library close failed", exc_info=True)
             self._library = None
         self._db_update_stats()
         # The build held _busy() True; messages typed during it are queued — run them now.

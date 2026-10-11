@@ -1,6 +1,6 @@
 """`lms load` exiting 0 is not the same as the model being served.
 
-Live 2026-09-12 (journey 3): the chat model crashed on a vision call, the
+The chat model crashed on a vision call, the
 revive ran `lms load`, which exited 0 in nine seconds, and the server then
 answered "Model reloaded." and "No models loaded" for the next minute. The
 revive cached "ok" and every turn inside its cooldown died. Now the loader

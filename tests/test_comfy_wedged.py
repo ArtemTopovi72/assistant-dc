@@ -1,7 +1,7 @@
 """A WEDGED ComfyUI must fail fast, not burn the user's whole request.
 
-Live bug: ComfyUI had been up three days and reached a state where it still
-accepted the TCP connection but never answered. Every comfy call therefore paid
+ComfyUI can reach a state (seen after three days up) where it still accepts
+the TCP connection but never answers. Every comfy call therefore paid
 its FULL read timeout (the /prompt POST alone is (connect=10, read=120)), and a
 draw makes several calls in a row, so the request ran ~5 minutes and then
 surfaced to the user as "the request took too long and was cancelled" -- which

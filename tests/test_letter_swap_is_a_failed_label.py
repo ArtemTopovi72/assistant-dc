@@ -1,6 +1,6 @@
 """A wrong letter is a failed label whatever the similarity ratio says.
 
-Live 2026-09-12 (journey 25): "только до пятницы" was painted as "ТОЛЬКО ДО
+"только до пятницы" was painted as "ТОЛЬКО ДО
 ПЯТНИЦЯ"; ratio 0.93 passed the 0.8 bar and the misspelled poster went out.
 Reader confusables (О/0, Й/И, Latin look-alikes) stay tolerated.
 """

@@ -1,4 +1,4 @@
-"""Stage 2 · control plane: the producer-consumer prerequisite graph and the
+"""The producer-consumer prerequisite graph and the
 semantic argument gate in tool_graph, plus their wiring into tools.execute_tool.
 
 What this pins down:

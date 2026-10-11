@@ -1,6 +1,5 @@
-"""A cover with new words is RE-SUNG on the original's full score (10-07: «3 сентября» with
-the Govnovoz words -- every attempt to squeeze the words into the original's syllables was
-rejected; YuE2 on the full score got «МОЛОДЕЦ!!!»)."""
+"""A cover with new words is RE-SUNG on the original's full score (squeezing the new
+words into the original's syllables is rejected; YuE2 sings them on the full score)."""
 import os
 import sys
 
@@ -39,10 +38,6 @@ A B c d e f g a b c d |
 """
 
 
-def test_sections_follow_the_score():
-    assert R._score_sections(ABC) == ["Intro", "Verse", "Chorus", "Interlude", "Verse", "Chorus", "Outro"]
-
-
 def test_section_notes_count_only_the_melody():
     assert R._score_parts(ABC) == [("Intro", 0), ("Verse", 8), ("Chorus", 10), ("Interlude", 0),
                                    ("Verse", 8), ("Chorus", 10), ("Outro", 0)]
@@ -61,14 +56,14 @@ def test_layout_places_every_line_on_the_sung_sections(monkeypatch):
 
 
 def test_layout_keeps_a_section_within_its_notes(monkeypatch):
-    # 10-07: Cheri Cheri Lady -- 144 syllables on a 44-note chorus came out as mumbling.
+    # 144 syllables on a 44-note chorus come out as mumbling.
     monkeypatch.setattr(llm, "call_llm_simple", lambda *a, **k: '{"sections": [[1, 2, 3]]}')
     text = R._layout(None, "ла ла ла ла ла\nли ли ли ли ли\nло ло ло ло ло", [("Chorus", 10)])
     assert text == "[Chorus]\nла ла ла ла ла\nли ли ли ли ли"
 
 
 def test_a_verse_never_resings_another_verse(monkeypatch):
-    # 10-07: the model gave verse 2 the lines of verse 1; the third verse's lines were never sung.
+    # the model must not give verse 2 the lines of verse 1 and leave the third verse's lines unsung.
     monkeypatch.setattr(llm, "call_llm_simple", lambda *a, **k: '{"sections": [[1, 2], [5], [1, 2]]}')
     text = R._layout(None, "ла ла\nли ли\nло ло\nлу лу\nле ле", [("Verse", 8), ("Chorus", 10), ("Verse", 8)])
     assert text == "[Verse]\nла ла\nли ли\n\n[Chorus]\nле ле\n\n[Verse]\nло ло\nлу лу"
@@ -129,8 +124,8 @@ def test_a_known_artist_sings_in_their_trained_rvc_voice(monkeypatch, tmp_path):
 
 
 def test_a_new_artist_gets_zero_shot_first_then_their_rvc_voice(monkeypatch, tmp_path):
-    # 10-07: «а rvc будет автоматом генерится?» -- the singer's own voice is trained on the
-    # original's vocal stem once per artist, the cover goes out again in it.
+    # the singer's own voice is trained on the original's vocal stem once per artist,
+    # and the cover goes out again in it.
     calls, info, ctx = _fake_resing_run(monkeypatch, tmp_path, trained=False)
     assert calls == ["zero-shot"] and info["rvc"] == "mihail_shufutinskiy" and not info["trained"]
     R.resing_rvc(ctx, info)
@@ -138,7 +133,7 @@ def test_a_new_artist_gets_zero_shot_first_then_their_rvc_voice(monkeypatch, tmp
 
 
 def test_the_users_voice_setting_beats_the_artist(monkeypatch, tmp_path):
-    # 10-09 «кавер дефолтным голосом без рвс или кавер голосом знаменитости и выбор»
+    # the cover can use the default voice (no RVC) or a picked star voice
     calls, _, _ = _fake_resing_run(monkeypatch, tmp_path, trained=True, voice="none")
     assert calls == []                      # YuE2's own vocal, no conversion
     calls, _, _ = _fake_resing_run(monkeypatch, tmp_path, trained=True, voice="tsoi_hq")
@@ -161,8 +156,7 @@ def test_the_artist_gets_the_star_model_when_it_is_trained(monkeypatch):
 
 
 def test_sing_original_as_swaps_only_the_lead(monkeypatch, tmp_path):
-    # 10-09 «пусть Цой споёт Куклу колдуна»: the song's own lead converted, the choir stays in
-    # the backing, the star's index on.
+    # the song's own lead is converted, the choir stays in the backing, the star's index is on.
     import rvc_voice, soundfile as sf
     lead, choir = str(tmp_path / "lead.wav"), str(tmp_path / "choir.wav")
     sf.write(lead, np.full(R.SR, 0.1, np.float32), R.SR)
@@ -180,7 +174,7 @@ def test_sing_original_as_swaps_only_the_lead(monkeypatch, tmp_path):
 
 
 def test_sing_original_as_needs_a_trained_voice(monkeypatch):
-    import rvc_voice, cover
+    import rvc_voice
     monkeypatch.setattr(rvc_voice, "model_of", lambda n: None)
     with pytest.raises(cover.CoverFailed):
         R.sing_original_as(None, "kukla.mp3", "nobody")
@@ -217,7 +211,7 @@ def test_resing_needs_words():
 
 
 def test_yue2_renders_with_lyric_guidance(monkeypatch):
-    # 10-07: at the protocol's cfg 1.0 (no guidance) Whisper heard 1 of 21 lines; at 3.0, 20 of 21.
+    # at the protocol's cfg 1.0 (no guidance) Whisper heard 1 of 21 lines; at 3.0, 20 of 21.
     seen = {}
     monkeypatch.setattr(music, "run_gpu_worker", lambda ctx, py, script, job, *a, **k: (seen.update(job), (True, ""))[1])
     music._render_yue2_once(None, True, {"out": "x.mp3", "lyrics": "", "style": ""}, 7)
@@ -262,8 +256,7 @@ def _takes_run(monkeypatch, heard_by_take):
 
 
 def test_resing_keeps_the_clearest_take(monkeypatch):
-    # 10-07: «крути песни пока не будет идеального произношения» -- the same score gave 27..36/42
-    # lines heard depending on the seed.
+    # the same score gives 27..36/42 lines heard depending on the seed.
     monkeypatch.setattr(R, "RESING_TAKES", 3)
     seeds, converted = _takes_run(monkeypatch, ["бу-бу-бу", "сорок лет как под наркозом бу", "мама мыла раму"])
     assert len(seeds) == 3 and len(set(seeds)) == 3 and converted == ["y1_vox.wav"]
@@ -276,7 +269,7 @@ def test_resing_stops_at_the_first_clear_take(monkeypatch):
 
 
 def test_sung_vocal_is_heard_with_vad_and_no_conditioning():
-    # 10-07: with Whisper's defaults a clear take came back as 13 x «Продолжение следует...».
+    # with Whisper's defaults a clear take comes back as 13 x «Продолжение следует...».
     seen = {}
 
     class W:
@@ -285,13 +278,13 @@ def test_sung_vocal_is_heard_with_vad_and_no_conditioning():
             return iter([]), None
     assert R._hear(W(), "take.wav", "ru") == []
     assert seen["vad_filter"] is True and seen["condition_on_previous_text"] is False and seen["language"] == "ru"
-    # 10-08: the temperature fallback made the same vocal score 0.03 / 0.41 / 0.52 run to run.
+    # the temperature fallback makes the same vocal score 0.03 / 0.41 / 0.52 run to run.
     assert seen["temperature"] == 0.0
 
 
 
 def test_a_voice_that_loses_the_words_is_not_sent(monkeypatch, tmp_path):
-    # 10-07 live: a take heard at 97% came out of SoulX as «Субтитры... ЧИИИИИИ...»; the user got the mush.
+    # a take heard at 97% can come out of SoulX as «Субтитры... ЧИИИИИИ...»: that must not be sent.
     heard = {"seedvc.wav": "бу бу бу", "soulx.wav": "сорок лет как под наркозом я работал говновозом",
              "take.wav": "сорок лет как под наркозом я работал говновозом"}
 
@@ -310,7 +303,7 @@ def test_a_voice_that_loses_the_words_is_not_sent(monkeypatch, tmp_path):
     assert tried == ["seedvc", "soulx"] and os.path.basename(got) == "soulx.wav"
     heard["soulx.wav"] = "ЧИИИИИИИ"
     assert R._voice_keeping_words(ctx, voices, "take.wav", layout, str(tmp_path), "ru") == "take.wav"
-    # 10-08: RVC sings every word a little off -- each line ~0.8 similar, half the lines under
+    # RVC sings every word a little off -- each line ~0.8 similar, half the lines under
     # _clarity's cliff -- and that singer's voice is what the user wants, not the take's.
     heard["soulx.wav"] = "сарок лет как пад наркозам я рабатал гавновозам"
     assert os.path.basename(R._voice_keeping_words(ctx, voices, "take.wav", layout, str(tmp_path), "ru")) == "soulx.wav"
@@ -329,7 +322,7 @@ HEARD = ["Сорок лет как под наркозом я работал г�
 
 
 def test_second_song_words_are_tidied_into_sections(monkeypatch):
-    # 10-07 «говновоз делать по 2 ссылкам»: the second song gives the words.
+    # the second song gives the words.
     tidy = ('{"lyrics": "[Verse]\nСорок лет, как под наркозом,\nя работал говновозом, ой-ой-ой,\n'
             'не шофером, не таксистом,\nа вонючим говночистом"}')
     got = _lyrics_run(monkeypatch, HEARD, tidy)
@@ -347,7 +340,7 @@ def test_an_instrumental_second_song_has_no_words(monkeypatch):
 
 
 def test_rvc_trains_on_the_russian_pretrain_and_converts_without_the_index(monkeypatch, tmp_path):
-    # 10-08 Whisper sweep on Marshal: Snowie 60e kept 0.59 of the lines (stock 200e -- 0.52) in
+    # Whisper sweep on Marshal: Snowie 60e kept 0.59 of the lines (stock 200e -- 0.52) in
     # half the time; index 0 / protect 0.33 beat index 0.4 / protect 0.5.
     import rvc_voice
     runs = []
@@ -374,9 +367,8 @@ def test_rvc_trains_on_the_russian_pretrain_and_converts_without_the_index(monke
 
 
 def test_the_singer_is_trained_alone_and_dry(monkeypatch, tmp_path):
-    # 10-08: Snowie on the bare Demucs stem kept 0.62 likeness, on lead-only + dereverbed 0.68.
+    # Snowie on the bare Demucs stem kept 0.62 likeness, on lead-only + dereverbed 0.68.
     import rvc_voice
-    import music
     monkeypatch.setattr(rvc_voice, "APPLIO", str(tmp_path))
     monkeypatch.setattr(rvc_voice, "SEPARATOR", str(tmp_path / "sep.exe"))
     (tmp_path / "sep.exe").write_bytes(b"")
@@ -404,15 +396,15 @@ def test_the_singer_is_trained_alone_and_dry(monkeypatch, tmp_path):
 
 
 def test_a_long_training_still_saves_its_last_epoch():
-    # 10-08: RVC_EPOCHS=120 -> Applio refused «--save-every-epoch 120 is not in the range 1<=x<=100».
+    # RVC_EPOCHS=120 -> Applio refused «--save-every-epoch 120 is not in the range 1<=x<=100».
     import rvc_voice
     assert rvc_voice._save_every(60) == 60 and rvc_voice._save_every(120) == 60
     assert rvc_voice._save_every(300) == 100 and rvc_voice._save_every(250) == 50
 
 
 def test_a_training_that_died_on_its_port_runs_again(monkeypatch, tmp_path):
-    # 10-08: Applio's random torch.distributed port fell in Windows' reserved 53091..53790, the
-    # run died in TCPStore, printed «trained successfully» and left no weights.
+    # Applio's random torch.distributed port can fall in Windows' reserved 53091..53790: the
+    # run then dies in TCPStore, prints «trained successfully» and leaves no weights.
     import rvc_voice
     monkeypatch.setattr(rvc_voice, "APPLIO", str(tmp_path))
     monkeypatch.setattr(rvc_voice, "_clean_vocal", lambda ctx, wav, work: wav)
@@ -435,7 +427,7 @@ def test_a_training_that_died_on_its_port_runs_again(monkeypatch, tmp_path):
 
 
 def test_the_singer_is_sung_a_few_times_and_the_closest_kept(monkeypatch, tmp_path):
-    # 10-08: one RVC model/settings/take came out 0.52..0.78 like the lyric over four runs.
+    # one RVC model/settings/take comes out 0.52..0.78 like the lyric over four runs.
     lines = "сорок лет как под наркозом я работал говновозом"
     heard = {"take.wav": lines, "rvc0.wav": "сарак лит как пат наркозам я рабатал гавнавозам",
              "rvc1.wav": "сорок лет как под наркозам я работал говновозам", "rvc2.wav": "бу бу"}

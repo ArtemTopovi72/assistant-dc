@@ -81,14 +81,6 @@ def test_progress_class():
     p3.update("Y", "msg")
     check("progress_no_callback_noop", p3.phase == "Y")
 
-    # snap_formula exception path (append raising) — force via a list-like that raises
-    class BadList(list):
-        def append(self, x):
-            raise RuntimeError("boom")
-    p4 = DR._Progress(None)
-    p4.formula_snapshots = BadList()
-    p4.snap_formula("s", "t")
-    check("progress_snap_formula_exception_swallowed", True)
 
 
 # ---------------- _fetch ----------------
@@ -298,10 +290,7 @@ if __name__ == "__main__":
             print("  ERROR in " + fn.__name__ + ": " + type(e).__name__ + ": " + str(e))
     passed = sum(1 for _, c in RESULTS if c)
     print(f"\n{len(fns)-failed}/{len(fns)} functions, {passed}/{len(RESULTS)} checks passed")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

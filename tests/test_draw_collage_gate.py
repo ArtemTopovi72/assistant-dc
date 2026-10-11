@@ -1,20 +1,13 @@
 """A grid of stock photos is not the picture the user asked for.
 
 The `two_of_the_same` layout -- a black cat on the floor, a ginger cat in an
-armchair, a wooden table, over a one-word background -- rendered as a 2x2 grid of
-separate photographs, often on a transparency checkerboard, with invented people
-and posters filling the spare panels.
-
-Eight renders at one fixed seed established that WORDING is not a control
-surface for this. A hand-written "one photograph of one room" sentence produced a
-single coherent room and reproduced pixel for pixel across runs; every
-mechanically built version of it collaged; and changing one preposition in the
-sentence that worked ("в кресле" -> "на кресле") collapsed that one into a
-collage as well. The output is chaotically sensitive to the exact string.
-
-So the picture is measured instead of argued with, and a collage is redrawn on a
-fresh seed. This suite pins the measurement (on images built here, so it depends
-on no fixture) and the redraw.
+armchair, a wooden table, over a one-word background -- can render as a 2x2 grid
+of separate photographs, often on a transparency checkerboard, with invented
+people and posters filling the spare panels. The output is chaotically sensitive
+to the exact wording, so wording is not a control surface for this: the picture
+is measured instead of argued with, and a collage is redrawn on a fresh seed.
+This suite pins the measurement (on images built here, so it depends on no
+fixture) and the redraw.
 
 Offline: no renderer, no LLM, no GPU.
 """
@@ -147,10 +140,9 @@ try:
     check("a collage costs a second render", len(seeds) == 2, seeds)
     check("...on a DIFFERENT seed", len(seeds) == 2 and seeds[0] != seeds[1], seeds)
 
-    # bench/draw_seed_sweep.py rendered the only caption that ever collaged in
-    # the bench at eight seeds and got eight collages: p = 1.00. A re-roll on
-    # the same geometry buys nothing and costs ~85s, so the count is now zero,
-    # and this pins it -- raising it again without a measurement fails here.
+    # A re-roll on the same geometry measured as worthless (eight seeds, eight
+    # collages) and costs ~85s, so the count is zero; raising it again without
+    # a measurement fails here.
     check("re-rolling the same geometry is not a rung any more",
           D.COLLAGE_REROLLS == 0, D.COLLAGE_REROLLS)
     check("and the picture handed back is the good one", res.get("image") == GOOD,
@@ -164,11 +156,9 @@ try:
     seeds.clear()
     _IG.generate = lambda ctx, prompt, **kw: (seeds.append(kw.get("seed")) or GRID)
     res3 = D.run(None, layout=dict(LAYOUT), rounds=0)
-    # The full ladder for a SINGLE-element layout: the first draw, two seed
-    # re-rolls, the wide redraw, then the stretch-to-frame. The merge rung is
-    # skipped -- there is nothing to merge -- so it does not appear here.
-    # The full ladder is now: the first draw, the wide redraw, the stretch. Three
-    # renders, not five -- the two re-rolls in between were measured worthless.
+    # The full ladder for a SINGLE-element layout: the first draw, the wide
+    # redraw, then the stretch-to-frame. The merge rung is skipped -- there is
+    # nothing to merge.
     check("a layout that collages on every seed stops rather than burning the card",
           len(seeds) == D.COLLAGE_REROLLS + 3, seeds)
     check("...which is three renders, not five",
@@ -320,7 +310,7 @@ try:
 
     _IG.generate = _grid_until_merged
     res = D.run(None, layout=dict(LAY), rounds=0)
-    # first draw + two re-rolls + wide + stretch-to-frame + merge, in that order
+    # first draw + wide + stretch-to-frame + merge, in that order
     check("the merged redraw is the LAST rung, after every cheaper one",
           len(seeds) == D.COLLAGE_REROLLS + 4, seeds)
     check("and it is what the caller gets", res.get("image") == GOOD, res.get("image"))

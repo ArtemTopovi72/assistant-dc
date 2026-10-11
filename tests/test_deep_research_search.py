@@ -6,7 +6,7 @@ heuristic fallback, recency floor/timeless clamp) runs deterministically without
 live network or LM Studio.
 Run: venv/Scripts/python.exe tests/test_deep_research_search.py
 """
-import os, sys, tempfile, threading
+import os, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
@@ -50,9 +50,7 @@ def test_search_one_query():
         out = DR._search_one_query(FakeCtx(), "q", 5, None, False)
         check("search_one_success", out == [h("https://a.com/1")])
 
-    calls = {"n": 0}
     def raiser(ctx, q, n, timelimit=None, news=False):
-        calls["n"] += 1
         raise RuntimeError("boom")
     with _Patches(raw_search_results=raiser):
         out = DR._search_one_query(FakeCtx(), "q", 5, None, False)
@@ -220,10 +218,7 @@ if __name__ == "__main__":
             print("  ERROR in " + fn.__name__ + ": " + type(e).__name__ + ": " + str(e))
     passed = sum(1 for _, c in RESULTS if c)
     print(f"\n{len(fns)-failed}/{len(fns)} functions, {passed}/{len(RESULTS)} checks passed")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

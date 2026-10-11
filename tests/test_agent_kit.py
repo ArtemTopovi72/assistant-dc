@@ -171,8 +171,8 @@ def test_digest_parses_pytest_summary():
 # --- retrieval --------------------------------------------------------------
 
 def test_run_tests_imports_the_package_from_a_tests_folder(ctx, box):
-    # Real-model run 2026-09-23: tests/ without __init__.py could not import the
-    # package beside it, every run was "ERROR tests/test_cart.py".
+    # tests/ without __init__.py could not import the package beside it, every
+    # run was "ERROR tests/test_cart.py".
     box.write_text("shop/__init__.py", "")
     box.write_text("shop/money.py", "def cents(r):\n    return int(r * 100)\n")
     box.write_text("tests/test_money.py", "from shop.money import cents\n\ndef test_c():\n    assert cents(2) == 200\n")
@@ -184,7 +184,7 @@ def test_digest_reads_the_unframed_quiet_summary():
     assert "Result: 1 failed, 2 passed in 0.12s" in H._test_digest("1 failed, 2 passed in 0.12s\n")
 
 
-# --- mechanics ported from SWE-agent / Aider / mini-swe-agent -----------------
+# --- read, edit and run mechanics ---------------------------------------------
 
 def test_read_file_is_a_window_on_a_long_file(ctx, box):
     box.write_text("big.py", "".join(f"x{i} = {i}\n" for i in range(1, 1001)))
@@ -247,19 +247,18 @@ def test_outline_ranks_the_referenced_core_first(ctx, box):
 
 
 def test_run_code_imports_the_projects_own_modules(ctx, box):
-    # Real-model run 2026-09-23: scripts live in .agent/, so `import slug` failed
-    # and the hint told the model to pip-install a stranger's 'slug' package.
+    # Scripts live in .agent/, so `import slug` failed and the hint told the
+    # model to pip-install a stranger's 'slug' package.
     box.write_text("slug.py", "def slugify(s):\n    return s.lower()\n")
     out = _call(ctx, "run_code", code="from slug import slugify\nprint(slugify('AB'))")
     assert "ab" in out and "[TOOL ERROR]" not in out, out
 
 
 def test_host_runner_also_sees_the_project_root(box):
-    import sys as _sys
     import code_runner
     box.write_text("mymod.py", "X = 41\n")
     box.write_text(".agent/probe.py", "import mymod\nprint(mymod.X + 1)\n")
-    res = code_runner._spawn([_sys.executable, "-u", str(box.root / ".agent/probe.py")],
+    res = code_runner._spawn([sys.executable, "-u", str(box.root / ".agent/probe.py")],
                              cwd=box.root, timeout=60)
     assert res.ok and "42" in res.output, res.output
 
@@ -273,8 +272,8 @@ def test_a_missing_local_module_is_not_sent_to_pip(ctx, box):
 
 
 def test_inconsistent_indentation_is_not_repaired(ctx, box):
-    # Real-model run: `old` had one line indented and the next not; the repair
-    # indented `temperature`, configparser read it as a continuation of num_ctx.
+    # `old` had one line indented and the next not; the repair indented
+    # `temperature`, and configparser read it as a continuation of num_ctx.
     ini = "[LLM]\nnum_ctx = 8192\ntemperature = 0.85\nmax_tokens = 250\n"
     box.write_text("c.ini", ini)
     out = _call(ctx, "edit_file", path="c.ini",
@@ -285,7 +284,7 @@ def test_inconsistent_indentation_is_not_repaired(ctx, box):
 
 
 def test_list_files_shows_a_tree_so_a_mod_is_one_call(ctx, box):
-    # Real-model run: one level per call spent 12 of 16 rounds walking a mod.
+    # One level per call spent 12 of 16 rounds walking a mod.
     box.write_text("m_unpacked/data/thief/tags/block/medium.json", "{}")
     out = _call(ctx, "list_files", path="m_unpacked")
     assert "m_unpacked/data/thief/" in out and "not expanded" in out, out

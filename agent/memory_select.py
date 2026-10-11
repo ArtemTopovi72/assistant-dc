@@ -1,14 +1,14 @@
 """Just-in-time fact selection: the saved facts THIS turn needs, not all of them.
 
-Pinned facts used to ride along in full on every turn (up to 40). Most turns
-need one or two; the rest is noise the model reads as standing instructions,
-the same way an NPC's summarised joke turned into a rule it kept obeying.
+Sending every pinned fact (up to 40) on every turn is mostly noise: most turns
+need one or two, and the rest the model reads as standing instructions, the
+same way an NPC's summarised joke turned into a rule it kept obeying.
 
 Selection, no LLM on the path:
   * a small store (<= JIT_FACTS_ALL) goes in whole: nothing to gain;
   * otherwise the facts nearest the message (BGE-M3 cosine, floor + top-k),
     plus the newest few: a fact said a minute ago is context whatever the words;
-  * no embedder -> every fact, i.e. exactly the old behaviour. Selection may
+  * no embedder -> every fact, i.e. no selection at all. Selection may
     only ever drop noise, never be the reason a known fact went missing.
 Original order is kept, so "newest are last" in the prompt still holds.
 """

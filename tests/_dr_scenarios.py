@@ -3,7 +3,6 @@ Run: ./venv/Scripts/python.exe tests/_dr_scenarios.py
 Writes each report + a summary to tests/_dr_eval/.
 """
 import sys, os, io, time, json, traceback
-import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -14,7 +13,7 @@ import logging
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
-from models import Context, Models
+from models import Context
 from deep_research import run_deep_research
 
 OUT = os.path.join(os.path.dirname(__file__), "_dr_eval")

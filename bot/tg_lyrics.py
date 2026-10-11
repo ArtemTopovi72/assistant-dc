@@ -67,7 +67,7 @@ class LyricsMixin:
         body = []
         left = [LC.describe(i, lang) for i in res.get("left_rules", [])] + list(res.get("left_sense", []))
         if mode == "improve" and res["text"] == res["original"]:
-            # «Править нечего» above a list of what is left read as a lie (live 10-03)
+            # «Править нечего» above a list of what is left read as a lie
             body.append(tg_bot._t("lyr_not_better" if left else "lyr_already_good", lang))
         body += [html.escape(n) for n in notes]
         if left:
@@ -83,7 +83,7 @@ class LyricsMixin:
 
     def _song_polish_then_sing(self, ctx, chat_id: int, lang: str, draft: str) -> None:
         """🎵 Song with ready words + «✨ Доработать и спеть»: show what was
-        polished, the lyric itself, then sing it (owner 10-03)."""
+        polished, the lyric itself, then sing it."""
         import lyrics_craft as LC
         from tg_songs import LYRICS_MARK
         try:

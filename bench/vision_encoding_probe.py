@@ -1,6 +1,6 @@
 """Does the vision model see the picture we send, or a dark one?
 
-Live, 2026-09-12: on every plain render the outer judge and inspect_image said
+Seen live: on every plain render the outer judge and inspect_image said
 "extremely dark / underexposed" about pictures that measure normally exposed,
 and the code now overrules them. This asks the SAME question about the same
 picture in several encodings (raw PNG, JPEG, downscaled) to find out whether
@@ -16,7 +16,7 @@ import types
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception: pass
+except (AttributeError, ValueError, OSError): pass
 import logging; logging.basicConfig(level=logging.WARNING)
 
 from PIL import Image

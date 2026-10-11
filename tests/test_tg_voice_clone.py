@@ -1,5 +1,5 @@
 """🎙 Clone voice in Telegram, on the REAL bot object with the network stubbed."""
-import os, sys, tempfile, types
+import os, sys, tempfile, threading, types
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import tg_bot as T
 T.redirect_data_dir(tempfile.mkdtemp(prefix="tgtest_clone_"))
@@ -15,7 +15,7 @@ class _Sync:
 
 
 def _bot(monkeypatch):
-    monkeypatch.setattr(TV.threading, "Thread", _Sync)
+    monkeypatch.setattr(threading, "Thread", _Sync)
     bot = T.TelegramBot("123:TEST", lambda: object(), lambda: object(), lambda: {}, silent_mode=True)
     bot.sent, bot.pushed, bot.voices = [], [], []
     bot._send_text = lambda cid, text, **kw: bot.sent.append(text) or 1
@@ -120,7 +120,7 @@ def test_assistant_voice_takes_its_own_sample(monkeypatch, tmp_path):
 
 
 def test_video_link_is_the_sample(monkeypatch, tmp_path):
-    """Owner 10-03: «сделать с голоса ютуба» -- a YouTube link while armed."""
+    """A YouTube link sent while armed is used as the voice sample."""
     import tg_links
     bot = _bot(monkeypatch)
     ref = tmp_path / "ref.wav"; ref.write_bytes(b"RIFF")

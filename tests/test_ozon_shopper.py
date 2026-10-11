@@ -96,7 +96,7 @@ def test_basket_plans_every_item_and_fills_the_cart(world):
 
 
 def test_photo_that_shows_something_else_hands_the_win_to_the_next(world):
-    calls, script = world
+    _, script = world
     script["plan"] = {"mode": "one", "items": [{"need": "скатерть", "queries": ["скатерть"]}]}
     answers = iter(["NO, this is a grille.", "YES"])
     import llm as L
@@ -107,21 +107,21 @@ def test_photo_that_shows_something_else_hands_the_win_to_the_next(world):
 
 
 def test_nothing_found_is_reported_not_invented(world):
-    calls, script = world
+    _, script = world
     script["plan"] = {"mode": "one", "items": [{"need": "вертолёт", "queries": ["вертолёт"]}]}
     out = T.execute_tool(_ctx(), {}, "ozon_shop", {"request": "вертолёт"})
     assert "NOT FOUND" in out and "never substitute" in out
 
 
 def test_planner_failure_falls_back_to_the_words(world):
-    calls, script = world
+    _, script = world
     script["plan"] = {"oops": 1}
     p = S.plan(_ctx(), "скатерть")
     assert p["mode"] == "one" and p["items"][0]["queries"] == ["скатерть"]
 
 
 def test_cancel_stops_between_steps(world):
-    calls, script = world
+    _, script = world
     script["plan"] = {"mode": "one", "items": [{"need": "скатерть", "queries": ["скатерть"]}]}
     ctx = _ctx(); ctx.cancel_event.set()
     assert "cancelled" in T.execute_tool(ctx, {}, "ozon_shop", {"request": "скатерть"})
@@ -138,7 +138,7 @@ def test_review_warning_signs():
 
 
 def test_buttons_route_to_the_shopper():
-    import tg_bot, tg_keyboards, re, tool_retrieval as R
+    import tg_bot, tg_keyboards
     from tg_strings import _b
     for key in ("ozon_cheap", "ozon_best", "ozon_fast", "ozon_basket"):
         assert "ozon_shop" in tg_bot._PROMPT_KB[key]
@@ -165,7 +165,7 @@ def test_review_photo_urls_accept_every_shape():
 
 
 def test_vision_is_told_the_listing_title(world):
-    calls, script = world
+    _, script = world
     script["plan"] = {"mode": "one", "items": [{"need": "скатерть", "queries": ["скатерть"]}]}
     seen = []
     import llm as L
@@ -214,8 +214,8 @@ def test_cart_save_is_atomic_and_load_tolerates_junk(monkeypatch, tmp_path):
 
 
 def test_buyer_photo_fetch_refuses_local_addresses(monkeypatch):
-    """_see used plain requests.get on a URL scraped from the page; a redirect
-    or a crafted link to 127.0.0.1 reached ComfyUI / LM Studio."""
+    """_see must not fetch a URL scraped from the page with plain requests.get:
+    a redirect or a crafted link to 127.0.0.1 would reach ComfyUI / LM Studio."""
     import llm as L, requests
     fetched = []
     monkeypatch.setattr(requests, "get", lambda url, **k: fetched.append(url))

@@ -15,7 +15,6 @@ except Exception: pass
 _ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT))
 
-import json
 from config import MODEL_NAME, MAX_TOOL_ROUNDS
 from prompts import build_system_prompt
 from llm import send_to_lm_studio

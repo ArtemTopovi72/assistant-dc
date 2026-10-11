@@ -36,7 +36,7 @@ from prompts import (OUTLINE_PLANNER_PROMPT, REPORT_SYNTHESIS_PROMPT,
 logger = logging.getLogger("assistant.research")
 
 
-# Phase 9 — detect analyses the user's prompt explicitly asked for, so synthesis
+# Detect analyses the user's prompt explicitly asked for, so synthesis
 # adds them as extra sections instead of always emitting the fixed template.
 _SECTION_TRIGGERS = {
     "Chronological Timeline": ("timeline", "chronolog", "historical evolution",
@@ -128,23 +128,16 @@ def synthesize_report(ctx, topic: str, briefs: list, prog: _Progress,
             "matrix and do NOT claim it grows with channel count.\n")
     scaffold = f"{preamble}\n" if preamble else ""
     # Let the model think as much as it wants here, but don't let reasoning STARVE the
-    # output: gpt-oss spends reasoning + output from one max_tokens pool, so add a
-    # dedicated reasoning headroom on top of the report budget. Effort stays at the
-    # user's setting unless the caller overrides `effort`; the llm-layer guard
-    # guarantees raw CoT is never emitted as the report even if the model still runs
-    # out of room.
-    # BUGFIX: `max_tokens` (the caller's per-depth report budget / the manual
-    # "Report budget" override) and DR_REASONING_HEADROOM used to be accepted and
-    # then thrown away — send_budget was DR_SECTION_TOKEN_CEILING and nothing else,
-    # so quick/standard/deep and the override knob were all the same number. They
-    # are now the actual budget: report budget + reasoning headroom, still clamped
-    # by the ceiling and by the real context window. At stock config
-    # (8000 + 40000 vs a 32000 ceiling) the ceiling still wins, so the default
-    # behaviour is byte-identical; lowering either knob now has an effect.
-    # DR_REPORT_TOKENS (2000) was a tiny report on a 262k window, but the whole window
-    # is not the answer either — an unbounded budget just lets a degenerate loop run
-    # until the 600s wall-clock guard fires. DR_SECTION_TOKEN_CEILING is the generous
-    # upper bound (think + prose); the model still stops on its own well before it.
+    # output: gpt-oss spends reasoning + output from one max_tokens pool, so the
+    # budget is the caller's report budget (per-depth, or the manual "Report budget"
+    # override) plus a dedicated DR_REASONING_HEADROOM, clamped by the ceiling and by
+    # the real context window. Effort stays at the user's setting unless the caller
+    # overrides `effort`; the llm-layer guard guarantees raw CoT is never emitted as
+    # the report even if the model still runs out of room.
+    # The whole window is not the answer: an unbounded budget just lets a degenerate
+    # loop run until the 600s wall-clock guard fires. DR_SECTION_TOKEN_CEILING is the
+    # generous upper bound (think + prose); the model still stops on its own well
+    # before it.
     _ctxw = _model_context(ctx)
     _report_budget = int(max_tokens) if max_tokens else S.DR_REPORT_TOKENS_STANDARD
     send_budget = min(_ctxw, S.DR_SECTION_TOKEN_CEILING,
@@ -320,9 +313,9 @@ def synthesize_survey(ctx, topic: str, briefs: list, prog: _Progress,
     if not briefs:
         return ""
     outline = outline or plan_report_outline(ctx, topic, briefs, prog, out_lang)
-    _repair_outline_text(outline)   # the planner strings (title/headings/focus) can carry
-    # mojibake too (e.g. a double-encoded U+202F in the title);
-    # repair once here so the H1 and TOC aren't garbled.
+    # The planner strings (title/headings/focus) can carry mojibake too (e.g. a
+    # double-encoded U+202F in the title); repair once so the H1 and TOC aren't garbled.
+    _repair_outline_text(outline)
     rule = _confidence_rule(evidence_stats(briefs))
     overview = _outline_overview(outline)
 
@@ -402,7 +395,7 @@ def _synthesize_abstract(ctx, outline: dict, body_text: str,
                          out_lang: str = "en") -> str:
     """Write a REAL abstract for the finished document. The outline's `abstract_focus`
     is only a one-sentence DIRECTIVE from the planner ("what the abstract should
-    claim") — emitting it verbatim as the Abstract (the old behavior) gave a fake,
+    claim") — emitting it verbatim as the Abstract would give a fake,
     one-line abstract. Instead summarize the actual assembled body into a proper
     150–250 word academic abstract. Falls back to the focus line if the call fails."""
     focus = (_fix_mojibake(outline.get("abstract_focus", "")) or

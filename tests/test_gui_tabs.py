@@ -17,7 +17,7 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 from PyQt5.QtWidgets import (QApplication, QDialog, QFileDialog, QInputDialog,
                              QMessageBox, QWidget)
 from PyQt5.QtGui import QImage, QColor
-from PyQt5.QtCore import Qt, QPoint
+from PyQt5.QtCore import Qt
 import gui
 
 _app = QApplication.instance() or QApplication(sys.argv)
@@ -302,15 +302,12 @@ def test_music_tab():
     host2 = _Host(ctx=None)
     tab_noctx = gui.MusicTab(host2)
     tab_noctx.topic_in.setText("a song about rain"); tab_noctx._generate()
-    # Re-anchored: "No model loaded yet — load one first." conflated two states
-    # once the app grew a "start without a model" option. ctx is None means the
-    # runtime is still coming up (waiting fixes it); a ctx with an empty
-    # model_name means no model was loaded ON PURPOSE (only Settings fixes it),
-    # and each says so separately now. What is pinned is that BOTH speak.
+    # ctx is None means the runtime is still coming up (waiting fixes it); a ctx
+    # with an empty model_name means no model was loaded ON PURPOSE (only
+    # Settings fixes it). Each says so separately; both must speak.
     check("music_no_ctx", bool(tab_noctx.status.text().strip())
           and tab_noctx.music_worker is None)
-    import types as _types
-    tab_nomodel = gui.MusicTab(_Host(ctx=_types.SimpleNamespace(model_name="")))
+    tab_nomodel = gui.MusicTab(_Host(ctx=types.SimpleNamespace(model_name="")))
     tab_nomodel.topic_in.setText("a song about rain"); tab_nomodel._generate()
     check("music_no_model_points_at_settings",
           "Settings" in tab_nomodel.status.text()
@@ -352,33 +349,32 @@ def test_music_tab():
     # A picker whose value never reaches the prompt is a lie told with a
     # dropdown, so these follow the selection all the way into the worker's
     # arguments rather than stopping at "the widget exists".
-    import music as _music_mod2
     check("music_has_pickers",
           set(tab._combos) == {"genre", "tempo", "vocal"} and tab.dur_combo is not None,
           list(tab._combos))
     check("music_pickers_offer_every_engine_value",
-          tab._combos["genre"].count() == len(_music_mod2.GENRES)
-          and tab._combos["vocal"].count() == len(_music_mod2.VOCALS),
-          (tab._combos["genre"].count(), len(_music_mod2.GENRES)))
+          tab._combos["genre"].count() == len(_music_mod.GENRES)
+          and tab._combos["vocal"].count() == len(_music_mod.VOCALS),
+          (tab._combos["genre"].count(), len(_music_mod.GENRES)))
     # Steps sit next to Quality: default 20, range 20-50, and the ETA line
     # quotes every preset at the chosen count (the same numbers as Telegram).
-    check("music_steps_default_20", tab.steps_spin.value() == _music_mod2.MUSIC_STEPS == 20
+    check("music_steps_default_20", tab.steps_spin.value() == _music_mod.MUSIC_STEPS == 20
           and (tab.steps_spin.minimum(), tab.steps_spin.maximum()) == (20, 50))
     eta20 = tab.eta_lbl.text()
     tab.steps_spin.setValue(50)
     eta50 = tab.eta_lbl.text()
     check("music_eta_line_follows_steps",
           "Fast" in eta20 and "Max" in eta20 and eta20 != eta50
-          and _music_mod2.eta_label(_music_mod2.eta_seconds("fast", steps=50), "en") in eta50, (eta20, eta50))
-    tab.qual_combo.setCurrentIndex(list(_music_mod2.WEIGHT_PRESETS).index("max"))
+          and _music_mod.eta_label(_music_mod.eta_seconds("fast", steps=50), "en") in eta50, (eta20, eta50))
+    tab.qual_combo.setCurrentIndex(list(_music_mod.WEIGHT_PRESETS).index("max"))
     check("music_eta_line_bolds_the_chosen_preset", "<b>Max" in tab.eta_lbl.text(), tab.eta_lbl.text())
-    tab.qual_combo.setCurrentIndex(list(_music_mod2.WEIGHT_PRESETS).index(_music_mod2.DEFAULT_PRESET))
+    tab.qual_combo.setCurrentIndex(list(_music_mod.WEIGHT_PRESETS).index(_music_mod.DEFAULT_PRESET))
     tab.steps_spin.setValue(20)
     # Auto is the default, and Auto must mean "no opinion" -- not an empty
     # instruction handed to the songwriter.
     prefs0, dur0, preset0 = tab._settings()
     check("music_defaults_to_auto", prefs0 == {}, prefs0)
-    check("music_default_duration_is_real", dur0 in _music_mod2.DURATIONS, dur0)
+    check("music_default_duration_is_real", dur0 in _music_mod.DURATIONS, dur0)
 
     def _pick(box, key):
         box.setCurrentIndex([box.itemData(i) for i in range(box.count())].index(key))
@@ -419,13 +415,9 @@ def test_music_tab():
           seen.get("gen_kw", {}).get("duration_s") == 180, seen.get("gen_kw"))
 
     # An unavailable engine must surface as a clean "failed", not a crashed worker.
-    #
-    # This used to run the worker fully unpatched and assert it failed -- which
-    # only held because nothing was installed. With ComfyUI actually up and the
-    # Music3 weights present, engine_available() returns True, the worker starts
-    # a REAL render (minutes of GPU) and never emits "failed", so the check went
-    # red on a HEALTHY machine and made an offline suite do live work. The intent
-    # was always "the unavailable path fails cleanly", so say that explicitly.
+    # engine_available is patched explicitly: unpatched, a healthy machine (ComfyUI
+    # up, Music3 weights present) would start a REAL render (minutes of GPU) and
+    # never emit "failed".
     with fake_modules(music={
         "engine_available": lambda ctx=None, preset=None: (False, "weights not downloaded"),
     }):
@@ -444,8 +436,8 @@ def test_music_tab():
           prefs4.get("tempo") == "exactly 118 BPM" and dur4 == 100
           and tab.bpm_spin.isVisibleTo(tab) and tab.dur_spin.isVisibleTo(tab), (prefs4, dur4))
     check("music_spins_stay_inside_the_engine_range",
-          (tab.bpm_spin.minimum(), tab.bpm_spin.maximum()) == tuple(_music_mod2.BPM_RANGE)
-          and (tab.dur_spin.minimum(), tab.dur_spin.maximum()) == tuple(_music_mod2.DURATION_RANGE))
+          (tab.bpm_spin.minimum(), tab.bpm_spin.maximum()) == tuple(_music_mod.BPM_RANGE)
+          and (tab.dur_spin.minimum(), tab.dur_spin.maximum()) == tuple(_music_mod.DURATION_RANGE))
     _pick(tab.dur_combo, _gmt._BOT_DECIDES)
     _pick(tab._combos["tempo"], "auto")
     prefs5, dur5, _ = tab._settings()
@@ -458,7 +450,7 @@ def test_music_tab():
             seen.update(gen_kw=kw), wav_path)[-1],
         "choose_auto_params": lambda ctx, topic, lang, fixed=None, **want: (
             asked.update(want=want, fixed=fixed), {"bpm": 92, "seconds": 75, "why": "calm"})[-1],
-        "prefs_from": _music_mod2.prefs_from,
+        "prefs_from": _music_mod.prefs_from,
     }):
         w5 = gui.MusicWorker(host.ctx, "a lullaby", "ru", prefs=prefs5, duration_s=dur5)
         caps5 = cap(w5, "done", "chose")
@@ -560,9 +552,8 @@ def test_transfer_tab_gather_and_run():
         def __getattr__(self, n): return types.SimpleNamespace(connect=lambda *a, **k: None)
         def isRunning(self): return False
         def start(self): started["n"] += 1
-    # TransferTab moved to gui_transfer_tab.py and resolves TransferWorker as a
-    # global of THAT module, so patching gui's copy alone no longer intercepts
-    # anything — the fake would go dead and this would run a real transfer.
+    # TransferTab resolves TransferWorker as a global of gui_transfer_tab, so
+    # patch it there too or a real transfer would run.
     import gui_transfer_tab as _TT
     orig = _TT.TransferWorker
     _TT.TransferWorker = FakeWorker; gui.TransferWorker = FakeWorker
@@ -592,9 +583,8 @@ def test_transfer_tab_draw_mask_and_masks():
         mask_path = maskfile; protect_face = False
         def __init__(self, *a, **k): pass
         def exec_(self): return QDialog.Accepted
-    # Same relocation as TransferWorker: _draw_mask now resolves MaskDrawDialog
-    # in gui_transfer_tab (imported there from gui_dialogs), so patching gui's
-    # copy alone left the REAL dialog in place and exec_() blew up on the fake.
+    # _draw_mask resolves MaskDrawDialog in gui_transfer_tab (imported there from
+    # gui_dialogs), so patch it there too.
     import gui_transfer_tab as _TT2
     orig = _TT2.MaskDrawDialog
     _TT2.MaskDrawDialog = FakeDlg; gui.MaskDrawDialog = FakeDlg
@@ -804,10 +794,7 @@ if __name__ == "__main__":
     shutil.rmtree(_TMP, ignore_errors=True)
     print(f"\n{len(fns)-failed}/{len(fns)} tab test functions passed "
           f"({sum(1 for _,c in RESULTS if c)}/{len(RESULTS)} checks)")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

@@ -1,9 +1,8 @@
 """The per-chat debounce is a QUIET period, not a fixed window.
 
-Live, 2026-09-12: five fragments of one thought, 0.6 s apart, were cut
-after the third (a 1.8 s window from the FIRST message) and answered as two
-separate requests. The deadline now moves with every fragment, capped from
-the first one. Pure: the resolver is stubbed.
+Fragments of one thought (five, 0.6 s apart) must not be cut by a window measured
+from the FIRST message and answered as separate requests: the deadline moves with
+every fragment, capped from the first one. Pure: the resolver is stubbed.
 
 Run: venv/Scripts/python.exe tests/test_debounce_quiet_period.py
 """

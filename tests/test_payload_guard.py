@@ -1,7 +1,6 @@
 """Coverage for payload_guard.py: the silent-payload guard's structural checks
 (empty/malformed/thin/truncated/stale/ok) and the block-message/skeptic-banner
-wrapping. Pure functions, exercised against the exact junk-payload shapes the
-PlanBench-XL benchmark identified.
+wrapping. Pure functions, exercised against junk-payload shapes.
 Run: venv/Scripts/python.exe tests/test_payload_guard.py
 """
 import os, sys
@@ -11,11 +10,10 @@ except Exception: pass
 import payload_guard as PG
 
 RESULTS = []
-import os as _os
 def check(name, cond, detail=""):
     RESULTS.append((name, bool(cond)))
     print("[" + ("PASS" if cond else "FAIL") + "] " + name + ("" if cond or not detail else " - " + detail))
-    if not cond and _os.environ.get("PYTEST_CURRENT_TEST"):
+    if not cond and os.environ.get("PYTEST_CURRENT_TEST"):
         raise AssertionError(str(name) + (": " + str(detail) if detail else ""))
 
 
@@ -23,8 +21,8 @@ def test_strip_markup_and_looks_like_json():
     check("strip_markup_removes_punct", PG._strip_markup('{"a": "b"}') == "ab")
     check("looks_like_json_object", PG._looks_like_json('{"a": 1}'))
     check("looks_like_json_array", PG._looks_like_json("[1, 2, 3]"))
-    # prose that merely CONTAINS a json fragment is prose (live 2026-09-28: a
-    # scraped script snippet blocked a whole phone comparison)
+    # prose that merely CONTAINS a json fragment is prose (a scraped script
+    # snippet must not block a whole phone comparison)
     check("looks_like_json_embedded_is_prose", not PG._looks_like_json('prose {"a": 1}'))
     check("citation_prose_is_not_json", not PG._looks_like_json("[1] Apple says ... [2]"))
     check("looks_like_json_false_for_prose", not PG._looks_like_json("just plain text"))
@@ -127,10 +125,7 @@ if __name__ == "__main__":
             print("  ERROR in " + fn.__name__ + ": " + type(e).__name__ + ": " + str(e))
     passed = sum(1 for _, c in RESULTS if c)
     print(f"\n{len(fns)-failed}/{len(fns)} functions, {passed}/{len(RESULTS)} checks passed")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

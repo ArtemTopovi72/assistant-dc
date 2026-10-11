@@ -6,7 +6,6 @@ Telegram flag", and neither is visible in a mock.
 """
 import os
 import sys
-import tempfile
 from pathlib import Path
 
 import pytest

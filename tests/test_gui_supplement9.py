@@ -2,10 +2,10 @@
 gui.py. Each drives a specific early-return / error-handler path. Also covers the
 run_gui defensive excepts (ctypes / high-DPI / crash_diag all forced to raise).
 
-Documented dead code (NOT covered, proven unreachable):
-  * MaskCanvas.is_empty line 3172: `for _ in range(0): pass` — range(0) is empty,
+Dead code (NOT covered, unreachable):
+  * MaskCanvas.is_empty: `for _ in range(0): pass` — range(0) is empty,
     the body can never execute (it's a leftover placeholder above the real check).
-  * _show_tab lines 4492-4493: `except ValueError: rank = len(default_order)` —
+  * _show_tab: `except ValueError: rank = len(default_order)` —
     `key` always comes from self._tab_registry, so default_order.index(key) can
     never raise ValueError.
 
@@ -23,10 +23,10 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 from pathlib import Path
 
 import numpy as np
-from PyQt5.QtWidgets import QApplication, QDialog, QInputDialog, QMessageBox, QWidget
+from PyQt5.QtWidgets import QApplication, QDialog, QInputDialog, QWidget
 from PyQt5.QtWidgets import QFileDialog as _QFD
 from PyQt5.QtGui import QImage, QColor, QKeyEvent
-from PyQt5.QtCore import Qt, QEvent, QMimeData, QUrl
+from PyQt5.QtCore import Qt, QEvent, QMimeData
 import gui
 import gui_workers
 import gui_database_tab
@@ -118,32 +118,32 @@ def test_window_guard_returns():
         # _refresh_search_panel ctx None
         c = w.ctx; w.ctx = None
         w._refresh_search_panel()
-        w._save_memory()           # 6730 ctx None
-        w._model_has_vision()      # 6835 ctx None -> True
+        w._save_memory()           # ctx None
+        w._model_has_vision()      # ctx None -> True
         w._pull_loaded = getattr(w, "_pull_loaded", None)
         w.ctx = c
         # _model_has_vision ctx None already; restore
-        # _fix_hands_last_image while busy -> 6477
+        # _fix_hands_last_image while busy
         w.worker = object(); w._fix_hands_last_image(); w.worker = None
-        # _retry_hands source missing -> 6503
+        # _retry_hands source missing
         w._last_handfix_source = "C:/no/such_zzz.png"; w._retry_hands()
-        # _update_camera cap None -> 6622
+        # _update_camera cap None
         w.cap = None; w._update_camera()
-        # _cancel_current cancels scan worker -> 6291
+        # _cancel_current cancels scan worker
         w.ctx.cancel_event.clear()
         w._scan_worker = types.SimpleNamespace(cancel=lambda: None)
         w.worker = object()
         w._cancel_current()
         w.worker = None; w._scan_worker = None
-        # _start_scan already running -> 6111
+        # _start_scan already running
         w._scan_worker = object(); w._start_scan("q"); w._scan_worker = None
-        # _drop_text_file read error -> 6986
+        # _drop_text_file read error
         w._drop_text_file("C:/no/such_text.txt")
-        # _on_pipeline_log bar None -> 5274
+        # _on_pipeline_log bar None
         w._research_active = True; w._log_bar = None
         w._on_pipeline_log("12:00:00  x: msg")
         w._research_active = False
-        # _on_research_progress bad phase -> 6203-6204 (ValueError swallowed)
+        # _on_research_progress bad phase (ValueError swallowed)
         w._on_research_progress("NotAPhase", {}, "msg")
         check("window_guards", True)
         _close(w)
@@ -153,7 +153,7 @@ def test_window_guard_returns():
 
 def test_capture_frame_write_fail_and_reset_layout():
     w = _win()
-    # _capture_frame with a frame but write fails (OUTPUT_DIR -> a file) -> 5604-5605
+    # _capture_frame with a frame but write fails (OUTPUT_DIR -> a file)
     w.current_frame = np.zeros((8, 8, 3), dtype=np.uint8)
     real_out = config.OUTPUT_DIR
     badfile = Path(_TMP) / "outfile"; badfile.write_bytes(b"x")
@@ -163,7 +163,7 @@ def test_capture_frame_write_fail_and_reset_layout():
         check("capture_write_fail", w.captured_image is not None)
     finally:
         config.OUTPUT_DIR = real_out
-    # _reset_layout settings.remove raises -> 4568-4569
+    # _reset_layout settings.remove raises
     class BadS:
         def remove(self, *a): raise RuntimeError("x")
         def value(self, *a, **k): return ""
@@ -205,10 +205,10 @@ def test_three_pages_and_queue_beside_chat():
 
 def test_apply_tab_config_dup_and_switch_busy():
     w = _win()
-    # duplicate key in order -> `if k in seen: continue` (4518)
+    # duplicate key in order -> `if k in seen: continue`
     w._apply_tab_config(["images", "images", "log"], "images", known=["images", "log"])
     check("apply_tab_dup", True)
-    # _switch_memory_profile busy snap-back with a resolvable current (6672)
+    # _switch_memory_profile busy snap-back with a resolvable current
     cur = w.ctx.active_memory_dir.name
     w.mem_combo.blockSignals(True); w.mem_combo.clear()
     w.mem_combo.addItem(cur); w.mem_combo.addItem("target9"); w.mem_combo.blockSignals(False)
@@ -223,7 +223,7 @@ def test_titlebar_manual_fallback():
     w = _win()
     from PyQt5.QtGui import QMouseEvent
     from PyQt5.QtCore import QPointF, QPoint
-    # force startSystemMove to return False -> manual drag_offset fallback (4089-4090)
+    # force startSystemMove to return False -> manual drag_offset fallback
     real_wh = w.windowHandle
     class WH:
         def startSystemMove(self): return False
@@ -240,10 +240,10 @@ def test_titlebar_manual_fallback():
 
 def test_viewer_escape_and_reset_report_web_except():
     dlg = gui.ImageViewerDialog([_png("v9a.png"), _png("v9b.png")])
-    dlg.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key_Escape, Qt.NoModifier))  # 1918->1919
+    dlg.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key_Escape, Qt.NoModifier))
     check("viewer_escape", True)
     dlg.close()
-    # _reset_report_view web setHtml raising (6256-6257)
+    # _reset_report_view web setHtml raising
     real_view, real_en = gui._QWebEngineView, gui._REPORT_HTML_ENABLED
     class StubWV(QWidget):
         def setHtml(self, *a, **k): raise RuntimeError("boom")
@@ -258,17 +258,17 @@ def test_viewer_escape_and_reset_report_web_except():
 
 
 def test_misc_small_guards():
-    # _mime_is_droppable with neither image nor urls -> False (6803)
+    # _mime_is_droppable with neither image nor urls -> False
     w = _win()
     md = QMimeData(); md.setText("just text")
     check("mime_not_droppable", w._mime_is_droppable(md) is False)
-    # _queue_move a real pending swap (5462)
+    # _queue_move a real pending swap
     w._queue_paused = True
     w._enqueue("a", announce=False); w._enqueue("b", announce=False)
     w.queue_list.setCurrentRow(0); w._queue_move(1)
     check("queue_move_swap", [it["text"] for it in w._task_queue][:2] == ["b", "a"])
     _close(w)
-    # FlowLayout._space default (line 372) via a layout with default spacing (-1)
+    # FlowLayout._space default via a layout with default spacing (-1)
     fl = gui.FlowLayout(); fl.addWidget(QWidget())
     from PyQt5.QtCore import QRect
     fl.setGeometry(QRect(0, 0, 100, 50))
@@ -277,9 +277,9 @@ def test_misc_small_guards():
 
 def test_tab_and_tabkey_none():
     w = _win()
-    # _tab_key_for_widget with an unregistered widget -> None (4458)
+    # _tab_key_for_widget with an unregistered widget -> None
     check("tabkey_none", w._tab_key_for_widget(QWidget()) is None)
-    # _preset_names with settings.value raising -> [] (4590-4591)
+    # _preset_names with settings.value raising -> []
     class BadS:
         def value(self, *a, **k): raise RuntimeError("x")
     w._settings = lambda: BadS()
@@ -295,14 +295,14 @@ def test_memory_center_small_guards():
                                  session_memory=[]), _set_status=lambda m: None,
                                  _memory_center_set_profile=lambda p: None)
     tab = gui.MemoryCenterTab(host); tab.store = store; tab.refresh_all()
-    # _prof_rename no selection (2800)
+    # _prof_rename no selection
     tab.prof_list.clearSelection(); tab._prof_rename()
-    # _revisions_dialog no selection (2618)
+    # _revisions_dialog no selection
     tab._sel = None; tab._revisions_dialog()
-    # _after_mutation sync_into_ctx raising (2232-2233)
+    # _after_mutation sync_into_ctx raising
     tab.store.sync_into_ctx = lambda ctx, prof: (_ for _ in ()).throw(RuntimeError("sync"))
     tab._after_mutation()
-    # _open_folder startfile raising (3051-3052)
+    # _open_folder startfile raising
     import gui_memory_maint as _gmm
     real = _gmm.open_in_os
     _gmm.open_in_os = lambda p: (_ for _ in ()).throw(OSError("no shell"))
@@ -310,7 +310,7 @@ def test_memory_center_small_guards():
         tab._open_folder()
     finally:
         _gmm.open_in_os = real
-    # refresh_all sub-refresh raising -> except (3079-3080)
+    # refresh_all sub-refresh raising -> except
     tab._refresh_timeline = lambda: (_ for _ in ()).throw(RuntimeError("boom"))
     tab.refresh_all()
     check("mc_small_guards", True)
@@ -320,9 +320,9 @@ def test_transfer_small_guards():
     host = types.SimpleNamespace(ctx=None, images_panel=types.SimpleNamespace(add_image=lambda p: None),
                                  _add_system=lambda m: None)
     tab = gui.TransferTab(host)
-    # _pull_loaded ctx None (3651)
+    # _pull_loaded ctx None
     tab._pull_loaded()
-    # _gather with rows but no non-target reference (3849)
+    # _gather with rows but no non-target reference
     host2 = types.SimpleNamespace(ctx=types.SimpleNamespace(reference_images=[]),
                                   images_panel=types.SimpleNamespace(add_image=lambda p: None),
                                   _add_system=lambda m: None)
@@ -335,9 +335,9 @@ def test_transfer_small_guards():
     for r in tab2._rows:
         r["combo"].blockSignals(True); r["combo"].setCurrentIndex(0); r["combo"].blockSignals(False)
     tab2._gather()
-    # _style_row with frame None (3736)
+    # _style_row with frame None
     tab2._style_row({"frame": None}, True)
-    # _drop_mask_file os.remove raising (3768-3769)
+    # _drop_mask_file os.remove raising
     owned = str(gui.OUTPUT_DIR_GUI_MASK() / "transfer_mask_del.png")
     open(owned, "wb").write(b"x")
     row = {"mask": owned}
@@ -351,26 +351,19 @@ def test_transfer_small_guards():
 
 
 def test_run_gui_defensive_excepts():
-    import sys as _sys
-    # run_gui reapplies the stylesheet to every live widget. The ten tests
-    # above leave a pile of them behind, and Qt walking one whose C++ side is
-    # already gone takes the process down with an access violation -- the whole
-    # file died here, and this test passes on its own. Close what is left and
-    # let the deleteLater queue drain before touching the application.
     # run_gui reapplies the stylesheet to the whole application, which
     # re-polishes every live widget. The ten tests above leave a pile of them
     # behind, and Qt walking one whose C++ side is already gone takes the
-    # process down with an access violation -- the whole FILE died here, and
-    # this test passes on its own. What is under test is run_gui's defensive
-    # excepts, not restyling, so the restyle is stubbed out for the call.
+    # process down with an access violation. What is under test is run_gui's
+    # defensive excepts, not restyling, so the restyle is stubbed out for the call.
     real_apply = gui.apply_ui_scale
     gui.apply_ui_scale = lambda app: None
-    # crash_diag stub whose install RAISES -> covers the crash_diag except (7083-7084)
+    # crash_diag stub whose install RAISES -> covers the crash_diag except
     fc = types.ModuleType("crash_diag")
     fc.install = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("cd"))
     fc.install_qt_message_handler = lambda *a, **k: None
     fc.log_stage = lambda *a, **k: None
-    real_cd = _sys.modules.get("crash_diag"); _sys.modules["crash_diag"] = fc
+    real_cd = sys.modules.get("crash_diag"); sys.modules["crash_diag"] = fc
     real_qapp = gui.QApplication
     class QAppProxy:
         def __call__(self, *a, **k): return _app
@@ -380,7 +373,7 @@ def test_run_gui_defensive_excepts():
                 return boom
             return getattr(real_qapp, n)
     gui.QApplication = QAppProxy()
-    # ctypes.windll.shell32 call raising -> shell32 except (7060-7061)
+    # ctypes.windll.shell32 call raising -> shell32 except
     import ctypes as _ct
     real_windll = getattr(_ct, "windll", None)
     class BadShell:
@@ -407,8 +400,8 @@ def test_run_gui_defensive_excepts():
         gui.QApplication = real_qapp; gui.SettingsDialog = real_sd
         gui.apply_ui_scale = real_apply
         if real_windll is not None: _ct.windll = real_windll
-        if real_cd is not None: _sys.modules["crash_diag"] = real_cd
-        else: _sys.modules.pop("crash_diag", None)
+        if real_cd is not None: sys.modules["crash_diag"] = real_cd
+        else: sys.modules.pop("crash_diag", None)
 
 
 def test_request_worker_crosslingual_append_lines():
@@ -422,7 +415,7 @@ def test_request_worker_crosslingual_append_lines():
     lib = {"Library": FakeLib, "cross_lingual_targets": lambda t, s: ["Russian"],
            "build_rag_prompt": lambda l, t, k=None, extra_queries=None: ("AUG " + t, "note")}
     w = gui_workers.RequestWorker(ctx, graph, {"messages": []}, text="q", use_db=True)
-    w._translate_query = lambda text, lang: "translated"   # -> extra.append (1342-1343)
+    w._translate_query = lambda text, lang: "translated"   # -> extra.append
     with fake_modules(library=lib, graph={"compact_history_if_needed": lambda c, m: m}):
         recinfo = []
         w.info.connect(lambda s: recinfo.append(s))
@@ -451,16 +444,11 @@ if __name__ == "__main__":
     # Destroy the widgets these tests built while the QApplication is still alive.
     # Left to interpreter shutdown, the wrapper objects and the QApplication are
     # released in an order CPython does not define, and a QWidget outliving its
-    # QApplication is a segfault inside Qt — not an exception. This suite exited
-    # 139 roughly once in six runs with every check passed and every line printed,
-    # which reads in a sweep as a failure with no failing test. Same discipline
-    # gui.run_gui now applies after app.exec_().
+    # QApplication is a segfault inside Qt — not an exception. Same discipline
+    # gui.run_gui applies after app.exec_().
     from qt_teardown import release_widgets
     release_widgets(_app)
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

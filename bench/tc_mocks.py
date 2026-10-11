@@ -9,7 +9,6 @@ arguments, how many rounds), not the pixels.
 The only live component is LM Studio: the point of the bench is to observe the
 real model making real routing decisions through the real personality_node.
 """
-import time
 
 
 class ToolRecorder:
@@ -49,10 +48,6 @@ class ToolRecorder:
             self.fail[name] -= 1
             return (f"[TOOL ERROR] {name} failed: the backend is unavailable "
                     f"right now. Try a different approach.")
-        return _STUBS[name](state, args)
-
-    def call_stub(self, state, name, args):
-        """Run the honest stub for `name` (used by faults that fail-then-succeed)."""
         return _STUBS[name](state, args)
 
     # -- convenience -------------------------------------------------------
@@ -178,5 +173,3 @@ _STUBS = {
     "find_photo": _find_photo,
     "create_presentation": _presentation,
 }
-
-ALL_TOOLS = sorted(_STUBS)

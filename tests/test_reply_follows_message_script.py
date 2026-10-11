@@ -1,10 +1,10 @@
 """An English message in a Russian-language chat is answered in English.
 
-Live 2026-09-13 (mega journey, steps 31/33/34): "hi! what's the capital of
-Australia? one line" got "Столица Австралии — Канберра", and the upscale /
-outpaint buttons after "draw a lighthouse..." came back with Russian captions.
-The reply language is now flipped per turn by the script the user wrote in;
-button payloads, emoji and links inherit the last typed script.
+"hi! what's the capital of Australia? one line" must not get "Столица Австралии —
+Канберра", and the upscale / outpaint buttons after "draw a lighthouse..." must
+not come back with Russian captions. The reply language is flipped per turn by
+the script the user wrote in; button payloads, emoji and links inherit the last
+typed script.
 """
 import os, sys, inspect
 os.environ.setdefault("F5_TEST_RUN", "1")
@@ -38,10 +38,9 @@ check("an explicit ask for English wins over the alphabet", ms("и то же с�
 check("...also 'ответь по-английски'", ms("ответь на этот вопрос по-английски, пожалуйста") == "en")
 
 sess = S._Session({})
-check("session carries turn_lang", sess is not None and hasattr(sess, "turn_lang"))
-if sess is not None:
-    sess.turn_lang = "en"
-    check("turn_lang persists", sess.to_dict().get("turn_lang") == "en")
+check("session carries turn_lang", hasattr(sess, "turn_lang"))
+sess.turn_lang = "en"
+check("turn_lang persists", sess.to_dict().get("turn_lang") == "en")
 
 src = inspect.getsource(T.TaskRunnerMixin._execute_task)
 check("the task applies the per-turn override",

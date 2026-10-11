@@ -75,9 +75,6 @@ class DropPasteMixin:
         return False
 
     def dropEvent(self, event):
-        # A dropped file that lands on a busy window used to vanish -- no
-        # message, no chip, nothing on screen moved. Dropping again is the
-        # natural response, and it does nothing either.
         # No graph check of its own: _busy() already covers the initial
         # load, and _reject_if_busy words that case as "ещё загружаюсь".
         if self._reject_if_busy('processing the file'):

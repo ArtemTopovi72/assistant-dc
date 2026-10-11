@@ -1,4 +1,4 @@
-"""Structured source adapters for JS-heavy / API-backed domains (Phase 7).
+"""Structured source adapters for JS-heavy / API-backed domains.
 
 Static HTML extraction fails or degrades on several high-value domains. Where a
 domain exposes a *keyless* structured endpoint, we fetch the clean canonical
@@ -17,7 +17,7 @@ high-value AND well-served by a keyless API:
 
 Everything else returns None and the caller falls back to normal fetch+extract.
 JS sites with NO keyless API (kinopoisk, okko, dzen, venue SPAs) are left to the
-deferred headless-browser phase (P8); we do not scrape them here.
+deferred headless-browser work; we do not scrape them here.
 
 Every adapter is network-guarded and returns None on ANY failure so a flaky API
 never aborts a run.
@@ -30,6 +30,8 @@ from typing import Optional
 from urllib.parse import urlparse, unquote
 
 import requests
+
+from dr_urls import _domain
 
 logger = logging.getLogger("assistant.research.adapters")
 
@@ -44,14 +46,6 @@ _HEADERS = {"User-Agent": "f5-research-bot/1.0 (research assistant"
             "Accept": "application/json"}
 _warned_no_contact = False
 _MAX_TEXT = 8000
-
-
-def _domain(url: str) -> str:
-    try:
-        net = urlparse(url).netloc.lower()
-        return net[4:] if net.startswith("www.") else net
-    except Exception:
-        return url
 
 
 def _adapter_guard(name: str):

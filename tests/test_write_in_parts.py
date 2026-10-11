@@ -1,6 +1,6 @@
 """Code is written in parts and repaired in place, never rewritten whole.
 
-Sandbox bench 2026-09-24: the regex engine was rewritten whole seven times in
+Sandbox bench: the regex engine was rewritten whole seven times in
 one turn; four rewrites were cut off at the token ceiling. One typo in a big
 file must cost one edit_file, not the whole file again.
 """
@@ -115,7 +115,7 @@ def test_indentation_survives_the_args_model(ctx):
 
 
 def test_run_code_cannot_overwrite_a_long_code_file(ctx):
-    # bench 2026-09-24: "let's use run_code to overwrite rx.py completely"
+    # bench: "let's use run_code to overwrite rx.py completely"
     _call(ctx, "write_file", path="rx.py", content=_code(100))
     for script in ('full_code = """x = 1"""\nwith open("rx.py", "w") as f:\n    f.write(full_code)\n',
                    "open('/work/rx.py', mode='w').write('x')\n",

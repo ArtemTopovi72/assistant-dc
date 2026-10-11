@@ -95,9 +95,8 @@ check("add appends a new element", len(out["elements"]) == 4
 check("and says so", any("bench" in n for n in notes), str(notes))
 check("an add with no description at all is refused, not appended",
       len(D.apply_ops(lay, [{"op": "add", "x": 0.1, "y": 0.1}])[0]["elements"]) == 3)
-# Measured live: this is the shape the critic actually writes when it wants a
-# missing element back — the thing to add named in "target", not "desc". Three
-# runs in five, every one skipped as "no description given".
+# The critic writes the thing to add in "target", not "desc", when it wants a
+# missing element back.
 out, notes = D.apply_ops(lay, [{"op": "add", "target": "a red bicycle leaning on a wall",
                                 "x": 0.05, "y": 0.7, "w": 0.25, "h": 0.25}])
 check("an add that names the new thing in “target” is still an add",
@@ -200,15 +199,9 @@ check("both are told the shape lettering needs",
       and "more width and height" in D._CRITIQUE_PROMPT)
 check("a correct picture still gets no ops",
       '"ops" empty when ok is true' in D._CRITIQUE_PROMPT)
-# Load-bearing, and measured: the longer this prompt is, the longer the model
-# deliberates before answering, and a deliberation that overruns the token budget
-# is reported as "the critic could not see". A version with a worked example of
-# every operation answered 1 time in 4 where this one answers 4 in 4. The full
-# vocabulary lives in the editor, which the loop consults instead.
 # --- the op named by its KEY, not by an "op" field -------------------------
-# Live on gemma-4-12b: {"replace": {"target": 1, "desc": "a blonde man ..."}}.
-# The edit inside was exactly right; we discarded it as `unknown op ''`, so
-# "make the man blond" changed nothing and the picture came back as it was.
+# The model sometimes writes {"replace": {"target": 1, "desc": "a blonde man ..."}}.
+# The edit inside is right and must not be discarded as `unknown op ''`.
 _lay, _notes = D.apply_ops(
     {"background": "s", "elements": [dict(CAR), dict(TREE)]},
     [{"replace": {"target": 1, "desc": "a blue van"}}])
@@ -225,6 +218,11 @@ _lay, _notes = D.apply_ops(
 check("but a two-key object is not guessed at",
       "unknown op" in " ".join(_notes), _notes)
 
+# Load-bearing, and measured: the longer this prompt is, the longer the model
+# deliberates before answering, and a deliberation that overruns the token budget
+# is reported as "the critic could not see". A version with a worked example of
+# every operation answered 1 time in 4 where this one answers 4 in 4. The full
+# vocabulary lives in the editor, which the loop consults instead.
 check("the critic's prompt is kept short — a long one silently disables it",
       len(D._CRITIQUE_PROMPT) < 1400, f"{len(D._CRITIQUE_PROMPT)} chars")
 # Measured over six runs of one real render: at 1600 the critic answered once,
@@ -445,9 +443,9 @@ print()
 print("=" * 72)
 print("A WRONG-ATTRIBUTE COMPLAINT UNDERLINES THE LAYOUT, IT DOES NOT REWRITE IT")
 print("=" * 72)
-# Live, 2026-09-12: "the elephant is orange/red instead of bright pink" went to
-# the editor as an instruction, the element became "an orange-red elephant",
-# and the critic scored the orange render 10 against the rewritten layout.
+# "the elephant is orange/red instead of bright pink" must not go to the editor
+# as an instruction (the element would become "an orange-red elephant" and the
+# critic would score the orange render against the rewritten layout).
 _lay = {"elements": [{"desc": "a large, vibrant bright pink elephant", "x": 0.1, "y": 0.2, "w": 0.4, "h": 0.5},
                      {"desc": "a tall palm tree", "x": 0.6, "y": 0.1, "w": 0.2, "h": 0.7}]}
 _l2, _notes, _left = D.insist_on_mismatch(_lay, ["The elephant is orange/red instead of bright pink",

@@ -1,23 +1,12 @@
-"""Synthesis template misclassification (2026-08-03 live TG incident).
+"""Synthesis template classification: a comparison/factual topic must not be routed
+to the practical-guide template.
 
-A "quick" depth research on "Чем трактор К-700 отличается от К-744" (a plain
-comparison/factual question) took ~92 minutes against an advertised ~15 and
-produced a starved 128-character non-report. Root cause: the topic-intent
-classifier (`_is_practical_request`) grouped the "product" CATEGORY into the
-blanket practical/local-service bucket alongside "local"/"shopping"/"travel".
-"product" also covers pure comparison/spec questions (two tractor models, two
-phones) that are NOT a "help me buy/book one" ask, so the topic was routed into
-PRACTICAL_GUIDE_PROMPT — a template built for "find me a plumber" style asks —
-which cannot answer a comparison question no matter how it's nudged. That
-produced three consecutive empty (reasoning-only, no final answer) LLM calls
-inside `_think_call`, each burning most of the 600s wall-clock guard, before
-synthesis gave up with "ERROR: synthesis produced no answer after 3 attempts".
-
-This is the mirror image of the already-fixed practical-vs-survey bug
-(docs: practical-vs-survey-intent memory) — that one misrouted an actionable
-"give me booking links" ask into an academic survey; this one misroutes a
-comparison/factual ask into the practical/booking template. Two things are
-fixed here, independently:
+"product" is a CATEGORY that also covers pure comparison/spec questions (two
+tractor models, two phones) that are NOT a "help me buy/book one" ask. Routed to
+PRACTICAL_GUIDE_PROMPT (built for "find me a plumber" style asks) such a topic
+cannot be answered no matter how it is nudged, and `_think_call` burns most of
+its wall-clock guard on empty (reasoning-only) calls. Two things are pinned,
+independently:
 
   1. CLASSIFICATION — `_is_practical_request` no longer treats "product" as a
      blanket-practical category, and an explicit comparison/factual phrasing
@@ -27,15 +16,15 @@ fixed here, independently:
      "local"/"shopping"/"travel" (genuinely near-always actionable) and the
      existing survey-mode / contradiction-query gate are untouched.
 
-  2. FAIL-FAST RETRY — `_think_call` now accepts a `retries` parameter. The
+  2. FAIL-FAST RETRY — `_think_call` accepts a `retries` parameter. The
      practical-guide call site passes `retries=1` (one retry, not two) so a
      template that is fundamentally wrong for the topic gives up after two
      attempts instead of three, and the caller's existing "practical synthesis
-     failed — falling back" path kicks in sooner instead of burning a third
-     full ~600s wall-clock cycle on a call that cannot succeed.
+     failed — falling back" path kicks in sooner.
 
-No real LM Studio/GPU call is made — `dr_calls.call_llm_simple` (the engine's one model contact) is monkeypatched to
-simulate the "pure reasoning, no answer" failure the live incident hit.
+No real LM Studio/GPU call is made — `dr_calls.call_llm_simple` (the engine's
+one model contact) is monkeypatched to simulate the "pure reasoning, no answer"
+failure.
 
 Run: venv/Scripts/python.exe tests/test_dr_synthesis_classification.py
 """

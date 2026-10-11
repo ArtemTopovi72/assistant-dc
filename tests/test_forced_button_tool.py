@@ -1,16 +1,12 @@
 """A picture button forces its tool.
 
-Live, 2026-09-12 (bench/live_tg_scenarios.py buttons): 🪄 Реставрация sent
-"[restore] call redraw_image with mode='restore' ..." and the model answered
-"Вы хотите восстановить? Подождите" -- no tool call, then the "actually
-nothing happened" correction. The other five buttons happened to be obeyed.
-A button payload names one tool; that tool is forced on the first round,
-released once it has run, and never forced when it is not on offer.
+A button payload names one tool ("[style_preset] call redraw_image with
+mode=..."); that tool is forced on the first round, released once it has run,
+and never forced when it is not on offer. Without the force the model may answer
+in text with no tool call.
 
-[restore]/[upscale]/[enhance] no longer exist as buttons -- the old model, their
-only engine, was removed along with its checkpoint files -- but the forcing
-mechanism itself is still live for [style_preset] (tg_callbacks._cb_style_preset),
-used below as this suite's live example of a bracket-tagged button.
+[style_preset] (tg_callbacks._cb_style_preset) is this suite's live example of a
+bracket-tagged button.
 
 Run: venv/Scripts/python.exe -m pytest tests/test_forced_button_tool.py -q
 """

@@ -1,5 +1,5 @@
 """scripts/install_yue2.py: one command makes exactly what yue2_available()
-checks, and a second run skips what is done (owner 10-03)."""
+checks, and a second run skips what is done."""
 import os
 import sys
 import tempfile

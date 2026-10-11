@@ -273,7 +273,6 @@ def test_query_plan_never_starves():
     check("a working planner keeps its own diverse queries", len(q2) >= 3, q2)
     check("...and its distilled English subject is carried",
           prof2["core_topic"] == "green vs black tea composition", prof2)
-    return True
 
 
 def test_coverage_signals():
@@ -450,7 +449,7 @@ def test_entity_terms_and_term_matching():
     check("entity_terms_includes_adam", "adam" in terms)
     check("term_in_word_boundary", DR._term_in("adam", "the adam optimizer") and not DR._term_in("adam", "team adams here"))
     check("term_in_any_true", DR._term_in_any("hello adam world", ["adam", "eve"]))
-    check("relevance_hits_count", DR._relevance_hits("adam optimizer adam", ["adam"]) == 1)  # word occurs but hits counts terms matched not occurrences? verify below
+    check("relevance_hits_count", DR._relevance_hits("adam optimizer adam", ["adam"]) == 1)
     check("min_hits_many_terms", DR._min_hits(["a", "b", "c"]) == 2)
     check("min_hits_few_terms", DR._min_hits(["a"]) == 1)
     check("brief_is_relevant_no_terms", DR._brief_is_relevant("t", "b", []))
@@ -538,10 +537,7 @@ if __name__ == "__main__":
             print("  ERROR in " + fn.__name__ + ": " + type(e).__name__ + ": " + str(e))
     passed = sum(1 for _, c in RESULTS if c)
     print(f"\n{len(fns)-failed}/{len(fns)} functions, {passed}/{len(RESULTS)} checks passed")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

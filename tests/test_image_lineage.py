@@ -1,9 +1,8 @@
 """One picture in several states is not a choice.
 
-Live, 2026-09-12: draw -> upscale -> outpaint, then "describe the picture"
--> "Which picture? I have 3 in this chat" -- after the user had pressed the
-buttons themselves. Versions now record their parent; when every live
-picture but one is a version of another, the latest is the picture.
+A draw -> upscale -> outpaint chain followed by "describe the picture" must not
+ask "Which picture? I have 3 in this chat". Versions record their parent; when
+every live picture but one is a version of another, the latest is the picture.
 Pure: no bot, no GPU.
 
 Run: venv/Scripts/python.exe tests/test_image_lineage.py
@@ -61,8 +60,7 @@ check("a fresh draw records no parent", "if _derives else" in src2)
 
 # A FREE-TEXT edit ("надень на кота шляпу", then "убери шляпу") is not a
 # button and not a reply, so ctx.source_image_id is empty; the editing tool
-# itself records the picture it started from and the delivery layer uses it
-# (live, 2026-09-12, journey 21: "Which picture? there are 2").
+# itself records the picture it started from and the delivery layer uses it.
 check("delivery falls back to the tool's own source", 'final.get("image_derived_from")' in src2)
 import tool_image_handlers as H
 _st = {"image_path": f("cat.png")}

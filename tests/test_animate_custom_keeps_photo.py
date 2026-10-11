@@ -1,9 +1,9 @@
 """✏️ Custom motion under 🎬 animates the photo chosen there.
 
-Live 10-10: «Сделай всё как тут: поджигает, кипит…» typed after ✏️ reached
+«Сделай всё как тут: поджигает, кипит…» typed after ✏️ used to reach
 generate_video with 0 images -- the one-turn target slot was empty by the time
 the words came, and the clip was invented from nothing. The picture chosen
-under 🎬 (pending_animate_target) now rides the request.
+under 🎬 (pending_animate_target) rides the request.
 """
 import os
 import sys

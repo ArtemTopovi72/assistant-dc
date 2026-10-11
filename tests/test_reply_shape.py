@@ -33,8 +33,8 @@ check("the shaped reply survives tag-safe splitting whole", M._split_html(out) =
 
 bare = S.shape_search_reply("Взрослый: 2390 ₽ (cyclingcols.com). Льготный (www.alpenpass.info, cyclingcols.com).", ["q"], SRC)
 check("a bare (domain) mark is a footnote too", "2390 ₽ [1]." in bare and "Льготный [2] [1]." in bare, bare)
-# A "(source: x)" for a page that was never read is not a citation (live
-# 2026-09-28: a raw "(source: wikipedia.org)" stayed in the answer).
+# A "(source: x)" for a page that was never read is not a citation (a raw
+# "(source: wikipedia.org)" must not stay in the answer).
 check("an unknown source: mark is dropped, not shown raw",
       "source:" not in S.shape_search_reply("x (source: nowhere.org).", ["q"], SRC))
 check("no search this turn → reply untouched", S.shape_search_reply("<b>hi</b>", [], []) == "<b>hi</b>")

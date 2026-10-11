@@ -18,7 +18,7 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 
 from PyQt5.QtWidgets import QApplication, QDialog, QMessageBox, QWidget, QFileDialog
 from PyQt5.QtGui import QImage, QColor, QPixmap
-from PyQt5.QtCore import Qt, QEvent, QPoint
+from PyQt5.QtCore import QEvent, QPoint
 import gui
 
 _app = QApplication.instance() or QApplication(sys.argv)
@@ -26,7 +26,6 @@ _TMP = tempfile.mkdtemp(prefix="guisupp_")
 
 def _png(name="s.png", w=40, h=30, col="#77aa55"):
     p = os.path.join(_TMP, name)
-    QImage(w, h, QImage.Format_RGB32).__class__  # noqa
     img = QImage(w, h, QImage.Format_RGB32); img.fill(QColor(col)); img.save(p)
     return p
 
@@ -41,10 +40,9 @@ def test_dark_titlebar_filter():
     filt = gui._DarkTitleBarFilter()
     w = QWidget(); w.show()
     calls = {"n": 0}
-    # _DarkTitleBarFilter moved to gui_chrome.py and calls enable_dark_titlebar
-    # as a global of THAT module (it comes from gui_common). Patching gui's copy
-    # alone stopped intercepting, so the REAL one ran — which calls DWM ctypes
-    # and is unsafe offscreen — and the counter stayed 0.
+    # _DarkTitleBarFilter lives in gui_chrome.py and calls enable_dark_titlebar
+    # as a global of THAT module (it comes from gui_common). Patch it there too:
+    # the real one calls DWM ctypes and is unsafe offscreen.
     import gui_chrome as _CHR
     orig = _CHR.enable_dark_titlebar
     _fake = lambda obj: calls.__setitem__("n", calls["n"] + 1)
@@ -160,9 +158,8 @@ def test_memory_center_confirm_and_compaction():
 
     # _gen_compaction: active profile matches -> starts a CompactMemoryWorker (stub start)
     # The tab's _gen_compaction lives in gui_memory_maint and reaches the worker
-    # back through the gui_memory_tab MODULE, so patch it there. Patching
-    # gui.CompactMemoryWorker only covers AssistantWindow._compact_memory; from
-    # here it was a silent no-op that started a REAL compaction thread.
+    # back through the gui_memory_tab MODULE, so patch it there (gui.CompactMemoryWorker
+    # only covers AssistantWindow._compact_memory).
     import gui_memory_tab as _mt
     class FakeCompact(_mt.CompactMemoryWorker):
         def start(self): pass
@@ -209,8 +206,7 @@ def test_chat_double_click_and_clipboard_url():
     w._add_result_image(img)
     opened = {"n": 0}
     # eventFilter lives in gui_dropzone and reaches the viewer through the
-    # gui_dialogs MODULE, so patch it at its own home — a patch on
-    # gui.show_image_viewer would be a silent no-op from here.
+    # gui_dialogs MODULE, so patch it at its own home.
     import gui_dialogs
     orig_show = gui_dialogs.show_image_viewer
     gui_dialogs.show_image_viewer = lambda *a, **k: opened.__setitem__("n", opened["n"] + 1)
@@ -252,10 +248,7 @@ if __name__ == "__main__":
             print(f"  ERROR in {fn.__name__}: {type(e).__name__}: {e}")
     print(f"\n{len(fns)-failed}/{len(fns)} supplement functions passed "
           f"({sum(1 for _,c in RESULTS if c)}/{len(RESULTS)} checks)")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

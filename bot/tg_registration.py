@@ -1,10 +1,8 @@
 """_user_gate: everything that must happen before a message is an ordinary one.
 
-Lifted out of tg_accounts.py, where it was a 454-line method wrapped around
-the operator actions it has nothing to do with. One entry point, called by
-_dispatch on every incoming message, returning True only when the chat is an
-approved user in no special state and the message should fall through to
-normal dispatch.
+One entry point, called by _dispatch on every incoming message, returning
+True only when the chat is an approved user in no special state and the
+message should fall through to normal dispatch.
 
 Two kinds of thing live here:
 
@@ -34,23 +32,13 @@ import weather as _weather_mod
 
 class RegistrationMixin:
     # ── the opening every armed capture mode shares ──────────────────────────
-    # 📝 feedback, ✏️ change name, 🔑 change password, 🎖 badge, the weather
-    # city and date, the song topic: each arms sess.reg_state to claim the
-    # user's VERY NEXT message as its answer. All six then have to answer the
-    # same question first -- is this message an answer at all? -- and every
-    # line below is a bug that reached a real user before it was written:
-    #
+    # Each armed mode claims the user's VERY NEXT message as its answer, so
+    # first it must decide whether the message is an answer at all:
     #   /cancel        the way out, and it must say so.
-    #   /anything-else control, not content. "/broadcast hello everyone" once
-    #                  became an admin's new password: long enough to pass the
-    #                  length check, the broadcast never ran, and nothing
-    #                  looked wrong until the next login failed.
+    #   /anything-else control, not content ("/broadcast hello everyone" must
+    #                  not become a password).
     #   a button label the keyboard from BEFORE the mode was armed is still on
-    #                  screen -- nothing replaces it -- so a mis-tap arrived
-    #                  here as free text. A ⛔ Stop press was eaten as feedback
-    #                  while the task it meant to stop kept running; a tap on
-    #                  🎨 Draw could become someone's password.
-    #
+    #                  screen, so a mis-tap (⛔ Stop, 🎨 Draw) arrives as free text.
     # In all three cases the mode is dropped and the message is handed back to
     # normal dispatch, so the tap does what it says instead of being swallowed.
     def _clear_capture(self, sess) -> None:
@@ -94,11 +82,8 @@ class RegistrationMixin:
         tg_uname  = from_data.get("username", "")
         lang      = self._lang(sess)
 
-        # Commands are CONTROL, never registration input. Without this, restarting
-        # the bot mid-registration fed "/start" straight into the awaiting_password
-        # branch: it is >=4 chars, so it was accepted AS THE PASSWORD and the account
-        # was created silently — the user never knowingly set one, and from their side
-        # it looked like the bot "remembered" a password they never entered.
+        # Commands are CONTROL, never registration input: "/start" is >=4 chars and
+        # would be accepted AS THE PASSWORD in the awaiting_password branch.
         # /start re-prompts the current step, /cancel abandons registration.
         if user is None and sess.reg_state and text.startswith("/"):
             cmd = text.split()[0].lower().lstrip("/").split("@")[0]
@@ -119,21 +104,13 @@ class RegistrationMixin:
 
         # ── LOGGED OUT — require the account password before anything else ────
         if user is not None and sess.reg_state == "awaiting_login":
-            # This branch used to run unconditionally once reg_state was
-            # "awaiting_login", with no check of user.status at all. That local
-            # session flag only ever means "logged out, needs the password
-            # again" -- it says nothing about whether the account is still in
-            # good standing. approve_user/reject_user/ban_user only ever flip
-            # the account row's status; none of them reach into every logged-
-            # out chat's session to clear this flag (nor should they -- a
-            # session store write for an account change that hasn't touched
-            # this chat in days is its own kind of surprise). Concretely: log
-            # out, then get banned (or rejected) -- the correct password still
-            # walked you straight back to "Welcome back" and the full menu,
-            # silently undoing the ban. A pending status genuinely cannot reach
-            # here (accounts don't go pending -> awaiting_login), but the check
-            # is written against "not approved" rather than an enumerated bad
-            # set so it still fails closed if that ever changes.
+            # Check user.status, not just reg_state == "awaiting_login": that
+            # session flag only means "logged out, needs the password again" and
+            # says nothing about the account's standing (approve_user/
+            # reject_user/ban_user only flip the account row). Otherwise log
+            # out, get banned, and the correct password would undo the ban. The
+            # check is written against "not approved" rather than an enumerated
+            # bad set so it fails closed.
             if user.status != "approved":
                 if text.startswith("/"):
                     self._send_text(chat_id, tg_bot._t("locked_out", lang), parse_mode="HTML")
@@ -197,8 +174,6 @@ class RegistrationMixin:
         # ── NEW USER — start registration ─────────────────────────────────────
         if user is None:
             if not sess.reg_state:
-                # Check if they are a pre-configured admin
-                auto_admin = chat_id in self._admin_chat_ids
                 sess.reg_state = "awaiting_name"
                 self._store.put(sess)
                 self._activity.log(chat_id, "system",
@@ -209,11 +184,8 @@ class RegistrationMixin:
             if sess.reg_state == "awaiting_name":
                 # A recognized keyboard-button label is never a real name. This
                 # state is also reached by acct_newprofile_yes (an EXISTING user
-                # re-registering), whose old main-menu keyboard is still visible
-                # on screen right when the bot asks for a name — the same class
-                # of bug already fixed below for change_name/change_password/
-                # feedback: a mis-tap on a still-showing button must not get
-                # silently accepted as the answer.
+                # re-registering), whose old main-menu keyboard is still on screen:
+                # a mis-tap on it must not be accepted as the answer.
                 if text and tg_bot._LABEL2KEY.get(text):
                     self._send_text(chat_id, tg_bot._t("not_a_menu_tap", lang),
                                     parse_mode="HTML")
@@ -221,9 +193,8 @@ class RegistrationMixin:
                 if not text or len(text.strip()) < 2:
                     self._send_text(chat_id, tg_bot._t("name_again", lang), parse_mode="HTML")
                     return False
-                # 10-08 live: «нарисуй кота» sent to «напиши своё имя» became the account's
-                # name («Приятно познакомиться, нарисуй кота!»). A request is not a name;
-                # a single word is taken as is (nicknames), a phrase is asked of the model.
+                # A request («нарисуй кота») is not a name; a single word is taken
+                # as is (nicknames), a phrase is asked of the model.
                 import intent
                 if len(text.split()) >= 2 and not intent.ask_yes(
                         "A new user was asked to tell their name and wrote: {text}. Is that a "
@@ -242,9 +213,8 @@ class RegistrationMixin:
 
             if sess.reg_state == "awaiting_password":
                 # Same guard as awaiting_name above: a mis-tapped menu button is
-                # not a password attempt (nothing secret to scrub — it is public
-                # button text), and setting the account's password to a button's
-                # label would leave the user unable to ever log back in.
+                # not a password attempt (nothing secret to scrub), and using a
+                # button's label as the password would lock the user out.
                 if text and tg_bot._LABEL2KEY.get(text):
                     self._send_text(chat_id, tg_bot._t("not_a_menu_tap", lang),
                                     parse_mode="HTML")
@@ -306,10 +276,11 @@ class RegistrationMixin:
                                     {"text": tg_bot._t("reject_btn", alang),
                                      "callback_data": f"admin_reject:{chat_id}"},
                                 ]]})
-                        except Exception: pass
+                        except Exception as exc:
+                            tg_bot.logger.warning("admin registration notice to %s failed: %s", admin_id, exc)
                 return False
             # A state left over from an account that no longer exists (deleted
-            # by an admin mid-"feedback"/"change_name") used to answer every
+            # by an admin mid-"feedback"/"change_name") would answer every
             # message with silence, forever. Start registration over.
             sess.reg_state = "awaiting_name"
             self._store.put(sess)
@@ -337,14 +308,10 @@ class RegistrationMixin:
                 return False
             # reg_state deliberately stays "wtw_city" here -- geocoding runs on
             # the background thread _start_weather_lookup kicks off, and
-            # whether THIS city resolves is not known yet. Clearing it here
-            # unconditionally (the old behaviour) meant a failed lookup
-            # ("Спб" -> "couldn't find that city") silently dropped out of
-            # weather mode: the user's very next message (another retry, e.g.
-            # "Питнр") was routed to the full agent pipeline as an ordinary
-            # question instead of being tried as a city. _send_weather clears
-            # reg_state itself, and only once geocode_city() actually
-            # succeeds.
+            # whether THIS city resolves is not known yet. If it stayed cleared,
+            # a failed lookup would drop the user out of weather mode and their
+            # retry would go to the agent. _send_weather clears reg_state itself,
+            # once geocode_city() actually succeeds.
             self._start_weather_lookup(chat_id, text.strip(), lang, remember_for=chat_id)
             return False
 
@@ -369,10 +336,7 @@ class RegistrationMixin:
                 self._send_text(chat_id, tg_bot._t("wtw_date_invalid", lang))
                 return False
             # reg_state deliberately stays "wtw_date" here, same reasoning as
-            # wtw_city above -- _send_weather is the one place that clears it,
-            # once the lookup has actually run (loc is already known-good
-            # here, so in practice this always resolves, but the contract
-            # stays consistent with wtw_city's retry-safe design).
+            # wtw_city above -- _send_weather is the one place that clears it.
             self._start_weather_lookup(chat_id, loc.get("name", ""), lang,
                                        loc=loc, date=parsed)
             return False
@@ -434,14 +398,14 @@ class RegistrationMixin:
                 return False
             import tg_links as _links
             if _links.video_url(text):
-                # A video link is something to WATCH, not a song topic (live 10-04:
-                # a YouTube link sent for analysis started a song).
+                # A video link is something to WATCH, not a song topic (a YouTube link
+                # sent for analysis would start a song).
                 sess.reg_state = ""
                 self._store.put(sess)
                 return True
             # Ready words (forwarded, or several short lines) are not a topic:
-            # ask whether to sing them as they are or write new ones. Live
-            # 2026-09-27 a forwarded storyboard was sung as a "topic" unasked.
+            # ask whether to sing them as they are or write new ones (a
+            # forwarded storyboard must not be sung as a "topic" unasked).
             import tg_songs as _songs
             if tg_bot._is_forwarded(msg, self_is_own=False) or _songs.looks_like_lyrics(text):
                 if getattr(sess, "song_draft", ""):
@@ -452,8 +416,8 @@ class RegistrationMixin:
                     {"text": tg_bot._t("song_keep_btn", lang), "callback_data": "song_lyr:keep"},
                     {"text": tg_bot._t("song_polish_btn", lang), "callback_data": "song_lyr:polish"}]]})
                 return False
-            # Disarm NOW: while armed, every next message started another song
-            # (live 2026-09-27: a stray multi-forward rendered two at once).
+            # Disarm NOW: while armed, every next message starts another song
+            # (a stray multi-forward would render two at once).
             sess.reg_state = ""
             self._store.put(sess)
             self._start_song_generation(chat_id, text.strip(), lang)
@@ -466,10 +430,8 @@ class RegistrationMixin:
             if not text and msg.get("photo"):
                 # Photos sent in character mode are REFERENCES for the scene
                 # (pose, outfit, framing, style), the caption is the scene.
-                # They used to hit `if not text: return False` and vanish
-                # without a word (live 2026-09-17 16:10, two stills of
-                # American Psycho + «Нарисуй Степана так, чтобы он ... в этом
-                # стиле» -- no reaction at all).
+                # They must not hit `if not text: return False` and vanish
+                # without a word.
                 self._collect_character_reference(chat_id, sess, lang, msg)
                 return False
             if not text:
@@ -486,14 +448,10 @@ class RegistrationMixin:
             return False
 
         if user and user.status == "approved" and sess.reg_state == "set_badge":
-            # empty_abandons, because set_admin_badge("") is the CLEAR action.
-            # A message with no text -- a photo, a sticker, a voice note -- sent
-            # while 🎖 Custom badge was armed fell straight through to
-            # set_admin_badge(chat_id, "".strip()), which happily removed the
-            # admin's badge, returned True, and reported "🏷 Badge set: ." with
-            # nothing after the colon. The message itself was swallowed too.
-            # A photo is not an answer to "send me an emoji": drop the mode and
-            # let the message be dispatched normally, exactly as feedback does.
+            # empty_abandons, because set_admin_badge("") is the CLEAR action: a
+            # message with no text (photo, sticker, voice note) must not reach it.
+            # It is not an answer to "send me an emoji": drop the mode and let the
+            # message be dispatched normally, exactly as feedback does.
             done = self._capture_preamble(chat_id, sess, lang, text,
                                           empty_abandons=True)
             if done is not None:

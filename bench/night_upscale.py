@@ -1,4 +1,4 @@
-"""Item 7: LBH latent upscaler two-stage vs single-stage at full size.
+"""LBH latent upscaler two-stage vs single-stage at full size.
 
 Stage 1 renders at half width/height with the app's own 4-step graph; the video
 latent is upscaled 2x by MinimaxH3LatentUpscaler3D, re-joined with the audio

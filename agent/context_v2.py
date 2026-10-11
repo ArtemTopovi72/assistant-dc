@@ -350,6 +350,12 @@ def _tag(kind: str, items) -> list:
             for x in (items or [])]
 
 
+def _span_kind(msgs: List[dict], text: str) -> str:
+    """The task kind of a span: the one its tool calls agree on, else the model's read."""
+    kinds = {_KIND_BY_TOOL.get(n) for n in _tool_names(msgs).values()} - {None}
+    return kinds.pop() if len(kinds) == 1 else _kind_of(text)
+
+
 def _kind_of(text: str) -> str:
     """image | code | research | chat -- what the text is about, the model's read."""
     import intent
@@ -507,16 +513,14 @@ def manage(ctx, messages: List[dict], *, query: str = "", force: bool = False) -
             span, tail = body[:keep_from], body[keep_from:]
             span_text = _render_span(span)
             _add(state, "artifacts", artifacts_in(span_text))
-            kinds = {_KIND_BY_TOOL.get(n) for n in _tool_names(span).values()} - {None}
-            kind = kinds.pop() if len(kinds) == 1 else _kind_of(span_text)
+            kind = _span_kind(span, span_text)
             aid = archive_put(json.dumps(span, ensure_ascii=False), kind=kind, label="turns")
             now = extract_now(span)
             _add(state, "artifacts", now["artifacts"])
             _add(state, "prefs", now["prefs"])
             for chunk in _turn_chunks(span):
                 ck_text = _render_span(chunk)
-                ck_kinds = {_KIND_BY_TOOL.get(n) for n in _tool_names(chunk).values()} - {None}
-                ck_kind = ck_kinds.pop() if len(ck_kinds) == 1 else _kind_of(ck_text)
+                ck_kind = _span_kind(chunk, ck_text)
                 delta = _llm_delta(ctx, state, ck_text)
                 if delta:
                     for key in ("add_decisions", "add_open"):

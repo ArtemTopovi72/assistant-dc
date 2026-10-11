@@ -1,4 +1,4 @@
-"""Dynamic tool retrieval — catalog mechanic #1.
+"""Dynamic tool retrieval.
 
 On this deployment it is not a token saving, it is a correctness fix: the full
 schema set is ~6800 tokens, and a model loaded at 12288 with parallel 2 gives
@@ -65,7 +65,6 @@ def test_each_intent_reaches_its_tool():
         "вставь то, что в буфере обмена": "read_clipboard",
     }
     for text, want in cases.items():
-        want = WANTS[text][0]
         assert want in _sel(text), f"{want} dropped for {text!r}: {_sel(text)}"
 
 
@@ -87,8 +86,7 @@ def test_an_edit_keeps_its_verifier():
 # --- when it must NOT narrow ------------------------------------------------
 
 def test_no_evidence_means_the_core_set():
-    """No cue: the core set, not all 40 schemas (payload_audit 2026-09-23:
-    "привет" carried 13-32 tool schemas). What the words cannot find, the
+    """No cue: the core set, not all 40 schemas. What the words cannot find, the
     STATE pins -- a picture pins the picture tools, a full folder the file
     kit (graph_personality._kit_always); TOOLS_NOMATCH=all restores send-all."""
     import tool_retrieval as R

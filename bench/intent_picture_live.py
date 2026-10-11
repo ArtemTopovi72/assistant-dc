@@ -34,6 +34,6 @@ for text, att, want in CASES:
     got = EDIT if edit else LOOK if r["about_picture"] else NO
     ok = got == want
     bad += not ok
-    print(("PASS " if ok else "FAIL ") + f"{text!r} [{att}] -> {got} (want {want}) {r}" * 1)
+    print(("PASS " if ok else "FAIL ") + f"{text!r} [{att}] -> {got} (want {want}) {r}")
 print(f"{len(CASES) - bad}/{len(CASES)}")
 sys.exit(1 if bad else 0)

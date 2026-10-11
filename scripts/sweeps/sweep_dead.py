@@ -11,7 +11,6 @@ legitimate consumers). Skips dunders and obvious framework hooks.
 import ast
 import os
 import re
-import sys
 from collections import defaultdict
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -28,7 +27,7 @@ py_files = []
 for dirpath, dirnames, filenames in os.walk(ROOT):
     dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
     for fn in filenames:
-        if fn.endswith(".py") and not fn.endswith((".bak", ".bak9")):
+        if fn.endswith(".py"):
             py_files.append(os.path.join(dirpath, fn))
 
 sources = {}

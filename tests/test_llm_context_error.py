@@ -14,7 +14,7 @@ was in the response the whole time.
 
 Run: venv/Scripts/python.exe tests/test_llm_context_error.py
 """
-import io, json, logging, os, sys
+import json, logging, os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
@@ -189,7 +189,7 @@ try:
         out5 = llm._stream_chat(None, dict(PAYLOAD))
 finally:
     llm.requests.post = _orig_post
-# Since 2026-09-18 a 5xx is the _SERVER_ERROR sentinel: the retry loop mends
+# A 5xx is the _SERVER_ERROR sentinel: the retry loop mends
 # the payload (cut tool calls, then size) and retries; it is never the overflow
 # sentinel, so nothing shrinks a call refused for another reason.
 check("an unrelated 500 is the server-error sentinel, not the overflow one",

@@ -10,7 +10,7 @@ _coerce_override, _reflect, _social_outlinks, _acquire_page, crawl_pages,
 _finish, rerank_for_briefing, synthesize_report, _extract_text, _extract_links.
 Run: venv/Scripts/python.exe tests/test_deep_research_survey.py
 """
-import os, sys, tempfile, threading
+import os, sys, tempfile, threading, time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
@@ -352,7 +352,7 @@ def test_finish_math_audit_and_formula_trace():
     prog.snap_formula("EXTRACTION", "some $x^2$ text")
     briefs = [dict(BRIEFS[0])]
     out = DR._finish(FakeCtx(), _TMP / "finishrun", "t", "# Report\n\nBody $y^2$ text.",
-                     prog, ["q"], briefs, __import__("time").time(), cancelled=False)
+                     prog, ["q"], briefs, time.time(), cancelled=False)
     check("finish_writes_report_with_math_audit", out["path"] is not None)
     check("finish_stats_has_math_audit", "math_audit" in prog.stats)
 
@@ -419,10 +419,7 @@ if __name__ == "__main__":
             print("  ERROR in " + fn.__name__ + ": " + type(e).__name__ + ": " + str(e))
     passed = sum(1 for _, c in RESULTS if c)
     print(f"\n{len(fns)-failed}/{len(fns)} functions, {passed}/{len(RESULTS)} checks passed")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

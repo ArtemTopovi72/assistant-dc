@@ -20,9 +20,9 @@ SAFETY: redirect_settings + redirect_data_dir are called BEFORE the window is
 built, so this never writes to the live QSettings scope (a previous suite
 overwrote the real BotFather token that way) or the live user store.
 
-Run: venv/Scripts/python.exe tests/test_gui_user_journey.py
+Run: venv/Scripts/python.exe bench/gui_user_journey.py
 """
-import os, sys, subprocess, tempfile, textwrap, json, urllib.request
+import os, sys, subprocess, tempfile, textwrap, urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -38,9 +38,8 @@ def _up(url, timeout=6):
 
 
 import config
-import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception: pass
+except (AttributeError, ValueError, OSError): pass
 
 if not _up(config.COMFY_URL.rstrip("/") + "/system_stats"):
     print(f"CANNOT RUN: ComfyUI is not answering at {config.COMFY_URL}. "
@@ -59,11 +58,10 @@ if not _up(config.LM_STUDIO_URL.replace("/chat/completions", "/models")):
 # it is instead of spending ten minutes to report the wrong one.
 _NEED_FREE_MIB = 18000
 try:
-    import subprocess as _sp
-    _free = int(_sp.run(["nvidia-smi", "--query-gpu=memory.free",
-                         "--format=csv,noheader,nounits"],
-                        capture_output=True, text=True, timeout=20,
-                        stdin=_sp.DEVNULL).stdout.strip().splitlines()[0])
+    _free = int(subprocess.run(["nvidia-smi", "--query-gpu=memory.free",
+                                "--format=csv,noheader,nounits"],
+                               capture_output=True, text=True, timeout=20,
+                               stdin=subprocess.DEVNULL).stdout.strip().splitlines()[0])
 except Exception:
     _free = _NEED_FREE_MIB          # cannot tell -- go ahead and try
 if _free < _NEED_FREE_MIB:

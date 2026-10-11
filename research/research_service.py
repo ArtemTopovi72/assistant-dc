@@ -7,8 +7,8 @@ Nothing selects it unless you ask for it:
     set RESEARCH_SERVICE_URL=http://127.0.0.1:8791
     venv\\Scripts\\python.exe research_service.py --port 8791
 
-The default remains the in-process backend, so an unconfigured install is
-byte-for-byte the product it was before this branch.
+The default remains the in-process backend, so an unconfigured install runs
+research in-process exactly as if this service did not exist.
 
 WHY THIS ONE IS ALLOWED OUT OF PROCESS AT ALL
 ----------------------------------------------
@@ -40,7 +40,7 @@ WHAT THE HTTP BACKEND STILL CANNOT DO, AND SAYS SO
   deployment only. A client on another host gets a path it cannot open; the
   report text itself is in result["report"] and is complete, so a remote-host
   caller must use that and ignore the path.
-* Overrides are applied to the SERVICE process's deep_research globals for the
+* Overrides are applied to the SERVICE process's DR_* knobs (dr_settings) for the
   duration of one run. apply/restore is per-run and in a finally, but it is
   still module-global state: the service therefore serialises runs behind
   _RUN_LOCK rather than pretending concurrent runs with different knobs are
@@ -75,7 +75,7 @@ from http.server import ThreadingHTTPServer
 from service_http import JsonHandler
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from research_api import OPERATIONS, RESULT_FIELDS, ResearchBackendError
+from research_api import OPERATIONS, ResearchBackendError
 
 logger = logging.getLogger("assistant.research.service")
 
@@ -92,7 +92,7 @@ ENV_DR_MODULE = "RESEARCH_SERVICE_DR_MODULE"
 #: run_id -> _ServerCtx for runs currently in flight.
 _RUNS: Dict[str, "_ServerCtx"] = {}
 _RUNS_LOCK = threading.Lock()
-#: Overrides patch deep_research's module globals, so one run at a time.
+#: Overrides patch the process-wide DR_* knobs, so one run at a time.
 _RUN_LOCK = threading.Lock()
 
 
@@ -138,8 +138,7 @@ def _dispatch(op: str, args: Dict[str, Any]) -> Any:
     if op == "knob_spec":
         return dict(dr.MANUAL_OVERRIDE_SPEC)
     if op == "knob_defaults":
-        g = vars(dr)
-        return {name: g.get(name) for name in dr.MANUAL_OVERRIDE_SPEC}
+        return {name: getattr(dr, name, None) for name in dr.MANUAL_OVERRIDE_SPEC}
     if op == "cancel":
         return _cancel_run(str(args.get("run_id") or ""))
     raise ResearchBackendError(f"unknown operation: {op}")
@@ -407,12 +406,6 @@ class HttpResearchClient:
 
     def knob_defaults(self) -> Dict[str, Any]:
         return self._post("knob_defaults")
-
-
-def result_is_complete(result: Dict[str, Any]) -> bool:
-    """Every RESULT_FIELDS key present. Used by the differential suite to prove
-    the two backends return the same SHAPE, not just the same report text."""
-    return all(f in (result or {}) for f in RESULT_FIELDS)
 
 
 # --------------------------------------------------------------------------- #

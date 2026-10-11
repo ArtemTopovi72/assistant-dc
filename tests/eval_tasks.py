@@ -1,4 +1,4 @@
-"""Benchmark task suite for the Deep Research scored evaluation harness (spec D).
+"""Benchmark task suite for the Deep Research scored evaluation harness.
 
 50+ tasks across six categories. Each task is a topic plus light gold signals used
 by the scorer (no full reference answers — those don't exist for live web research):

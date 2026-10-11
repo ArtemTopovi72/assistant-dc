@@ -250,7 +250,7 @@ def venv_python(venv_dir) -> str:
 
 def scratch_path(out_dir, name):
     """Where an intermediate render/mask/tile goes: <out_dir>/generated/_intermediate,
-    out of the runtime/ root (owner 10-03). Takes the caller's OUTPUT_DIR so suites
+    out of the runtime/ root. Takes the caller's OUTPUT_DIR so suites
     that rebind it to a temp dir keep fixtures out of the real tree."""
     d = Path(out_dir) / "generated" / "_intermediate"
     d.mkdir(parents=True, exist_ok=True)
@@ -422,7 +422,7 @@ VIDEO_T2VA_LORA_3STEP = os.getenv("VIDEO_T2VA_LORA_3STEP", "night\\taomate_h3_3s
 # for 8 NFE, euler/beta, shift 12/3), so 8 is its own regime, not past it.
 VIDEO_STEPS_REF2VA = _env_int("VIDEO_STEPS_REF2VA", 8)
 # With voice samples the voices, the score and the hits converge last (H3 guide:
-# "speech and voice timbre converge last"); live 10-01 at 4 steps the accordion
+# "speech and voice timbre converge last"); at 4 steps the accordion
 # was gone, at 8 it came through. +115 s on a 5 s clip (241 s -> 356 s).
 VIDEO_SPEECH_STRESS = os.getenv("VIDEO_SPEECH_STRESS", "1") != "0"
 # 8 steps WITH the turbo LoRA kept on (10-02, user's call): before, 8 steps
@@ -445,7 +445,7 @@ VIDEO_JOB_TIMEOUT = _env_int("VIDEO_JOB_TIMEOUT", 5400)
 # The DiT alone is ~19.4 GB of Q4 weights (see video.py's generate_video); with
 # less than that plus the CLIP encoder and both VAEs free, ComfyUI holds part
 # of the graph in system RAM and swaps it in per step instead of keeping
-# everything resident. Live, 2026-09-19: a render that started with 16-17 GB
+# everything resident. A render that started with 16-17 GB
 # free took 35-49 minutes instead of the usual 8-12 -- the two fast completions
 # in the same window both started at 17.5-20 GB free.
 VIDEO_MIN_FREE_MB = _env_int("VIDEO_MIN_FREE_MB", 20500)
@@ -608,7 +608,6 @@ SANDBOX_TOOL_ROUNDS = _env_int("SANDBOX_TOOL_ROUNDS", 16)
 # plainly what it could not fix. Counts generate_image and redraw_image (whole-
 # frame re-renders), not the localized edits the user explicitly asked for.
 IMAGE_MAX_RENDERS_PER_TURN = _env_int("IMAGE_MAX_RENDERS_PER_TURN", 3)
-# (room for search -> generate -> inspect -> inpaint -> inspect)
 # Adaptive recovery budget: when the round budget is about to run out but the agent
 # is actively dealing with a tool FAILURE (a broken path that needs an alternative
 # chain), grant up to this many extra rounds so legitimate recovery isn't truncated.
@@ -620,7 +619,6 @@ RECOVERY_EXTRA_ROUNDS = _env_int("RECOVERY_EXTRA_ROUNDS", 4)
 REPLAN_FAILURE_THRESHOLD = _env_int("REPLAN_FAILURE_THRESHOLD", 3)
 LLM_MAX_RETRIES = 3          # total attempts before giving up on an LLM call
 LLM_RETRY_BASE_DELAY = 0.5   # seconds; doubled each retry (exponential backoff)
-API_MIN_INTERVAL = 1.0       # minimum seconds between outbound API calls
 
 # --- Streaming watchdog: catch a model that GETS STUCK ----------------------
 # Three independent stuck-modes a streaming completion can hit, each with its own
@@ -813,7 +811,6 @@ DR_RERANK_BACKEND = os.getenv("DR_RERANK_BACKEND", "auto")   # auto|cross|dense|
 # Document library reranker (cross-encoder, CPU): hit@1 0.675 -> 0.863 on the
 # 80-question ru eval. Empty string disables it.
 LIBRARY_CROSS_ENCODER = os.getenv("LIBRARY_CROSS_ENCODER", "BAAI/bge-reranker-v2-m3")
-DR_RERANK_MODEL = os.getenv("DR_RERANK_MODEL", "BAAI/bge-reranker-v2-m3")
 DR_RERANK_TOP_K = _env_int("DR_RERANK_TOP_K", 0)            # pages kept for briefing; 0 = keep ALL crawled
 # pages (rerank only REORDERS by relevance, never
 # drops). Was 14 — that silently discarded good
@@ -827,14 +824,12 @@ DR_RERANK_AUTHORITY_WEIGHT = _env_float("DR_RERANK_AUTHORITY_WEIGHT", 0.5)
 # apart from confirmation search; its evidence is tagged and surfaced, not hidden.
 DR_CONTRADICTION_ENABLED = os.getenv("DR_CONTRADICTION_ENABLED", "1") not in ("0", "false", "False")
 DR_CONTRADICTION_QUERIES = _env_int("DR_CONTRADICTION_QUERIES", 4)   # contradiction queries/run
-DR_CONTRADICTION_PER_QUERY = _env_int("DR_CONTRADICTION_PER_QUERY", 4)
 # Entity-driven multi-hop expansion (entities.py): extract named entities from the
 # first-pass briefs, build follow-up queries around the salient ones, search again.
 # Bounded by depth and a visited-set so it never loops.
 DR_MULTIHOP_ENABLED = os.getenv("DR_MULTIHOP_ENABLED", "1") not in ("0", "false", "False")
 DR_MULTIHOP_DEPTH = _env_int("DR_MULTIHOP_DEPTH", 1)         # recursion depth (0 = off)
 DR_MULTIHOP_ENTITIES = _env_int("DR_MULTIHOP_ENTITIES", 4)  # top entities expanded per hop
-DR_MULTIHOP_PER_QUERY = _env_int("DR_MULTIHOP_PER_QUERY", 4)
 # Reflection / error-correction: after the first synthesis-ready brief set, find
 # gaps (weak claims, unexpanded entities, no contradiction evidence) and decide
 # whether a second bounded pass is warranted.
@@ -1073,7 +1068,6 @@ TG_QUOTA_TASKS         = _env_int("TG_QUOTA_TASKS", 200)
 TG_ETA_TASK_SEC     = _env_int("TG_ETA_TASK_SEC", 45)
 TG_ETA_RESEARCH_SEC = _env_int("TG_ETA_RESEARCH_SEC", 900)
 
-# Login throttling for the logged-out password gate.
 # A self-hosted Bot API server (telegram-bot-api --local) lifts the 20 MB
 # download cap to 2 GB and hands files back as local paths. Point TG_API_BASE
 # at it (e.g. http://127.0.0.1:8081); the default is Telegram's cloud API.
@@ -1087,6 +1081,7 @@ _tg_api_default = ("http://127.0.0.1:%d" % TG_API_PORT
                    if (TG_API_ID and TG_API_HASH) else "https://api.telegram.org")
 TG_API_BASE = (os.getenv("TG_API_BASE", "") or _tg_api_default).rstrip("/")
 TG_API_LOCAL = TG_API_BASE != "https://api.telegram.org"
+# Login throttling for the logged-out password gate.
 TG_LOGIN_MAX_FAILS  = _env_int("TG_LOGIN_MAX_FAILS", 5)
 TG_LOGIN_LOCKOUT_S  = _env_int("TG_LOGIN_LOCKOUT_S", 300)
 # scrypt work factor for stored passwords (2**TG_SCRYPT_N_LOG2 iterations).
@@ -1095,7 +1090,6 @@ TG_SCRYPT_N_LOG2    = _env_int("TG_SCRYPT_N_LOG2", 14)
 # Documents: anything longer than this is INDEXED into the user's library
 # instead of being pasted into the prompt and truncated.
 TG_DOC_INLINE_CHARS = _env_int("TG_DOC_INLINE_CHARS", 6000)
-# Reports longer than this are also delivered as a .md file attachment.
 # Report length above which the research result is delivered as a .md ATTACHMENT.
 # 0 = always. A research run produces a document, and at 6000 a short report was
 # pasted into the chat instead — through the Markdown-to-HTML converter, so the

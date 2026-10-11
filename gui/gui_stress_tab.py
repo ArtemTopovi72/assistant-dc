@@ -3,9 +3,6 @@
 Small and completely self-contained — one class, no workers, no shared state.
 It edits the override table that stress.py consults, so a word the accentor
 gets wrong can be corrected once instead of being re-heard wrong forever.
-
-Its closure is a single symbol and no test patches anything in it, which is
-why this extraction needed no seam repair.
 """
 from PyQt5.QtWidgets import (QAbstractItemView, QHBoxLayout, QHeaderView,
                              QLabel, QLineEdit, QMessageBox, QPushButton,
@@ -14,9 +11,6 @@ from PyQt5.QtWidgets import (QAbstractItemView, QHBoxLayout, QHeaderView,
 
 from ui_scale import px
 from gui_common import MUTED, _section
-
-import logging
-logger = logging.getLogger("assistant.gui")
 
 
 class StressTab(QWidget):

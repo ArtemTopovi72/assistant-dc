@@ -1,10 +1,10 @@
 """A bare acknowledgement skips the tool loop even with a picture in the chat.
 
-Live 2026-09-13 (mega journey, step 56): '👍' after the twelfth picture took
-53 s — ctx.last_image_path was set, so the fast path was refused and the
-full tool loop (schemas, history, reasoning) produced "glad you liked it".
+'👍' after the twelfth picture used to take 53 s — ctx.last_image_path was
+set, so the fast path was refused and the full tool loop (schemas, history,
+reasoning) produced "glad you liked it".
 """
-import os, sys, types
+import os, sys
 os.environ.setdefault("F5_TEST_RUN", "1")
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass

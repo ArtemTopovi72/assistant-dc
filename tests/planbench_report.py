@@ -8,7 +8,7 @@ Family-3 fabrication down by payload type, and prints the three rankings
 
 Usage: python tests/planbench_report.py [tests/planbench_9b_full.json]
 """
-import sys, json, math, re
+import sys, json, math
 from pathlib import Path
 
 sys.stdout.reconfigure(encoding="utf-8")
@@ -104,7 +104,7 @@ for r in RES:
     print("\n" + "=" * 100)
     print(f"[{r['scenario']}]  family {r['family']} · kind={r['kind']} · n={r['n']}")
     if trials:
-        s, sci, sk, sn = rate(trials, "succ")
+        s, sci, *_ = rate(trials, "succ")
         rc, rci, *_ = rate(trials, "rec")
         h, hci, *_ = rate(trials, "hon")
         f, fci, fk, _ = rate(trials, "fab")

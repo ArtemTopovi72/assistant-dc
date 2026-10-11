@@ -11,11 +11,10 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 import source_adapters as S
 
 RESULTS = []
-import os as _os
 def check(name, cond, detail=""):
     RESULTS.append((name, bool(cond)))
     print("[" + ("PASS" if cond else "FAIL") + "] " + name + ("" if cond or not detail else " - " + detail))
-    if not cond and _os.environ.get("PYTEST_CURRENT_TEST"):
+    if not cond and os.environ.get("PYTEST_CURRENT_TEST"):
         raise AssertionError(str(name) + (": " + str(detail) if detail else ""))
 
 
@@ -52,7 +51,7 @@ def test_wiki_lang_title():
     check("wiki_lang_title_basic", lang == "en" and title == "Albert Einstein")
     lang2, title2 = S._wiki_lang_title("https://ru.wikipedia.org/wiki/Кот#History")
     check("wiki_lang_title_lang_and_fragment_stripped", lang2 == "ru" and "#" not in (title2 or ""))
-    lang3, title3 = S._wiki_lang_title("https://en.wikipedia.org/notwiki/X")
+    _, title3 = S._wiki_lang_title("https://en.wikipedia.org/notwiki/X")
     check("wiki_lang_title_no_match_none", title3 is None)
 
 
@@ -79,11 +78,10 @@ def test_fetch_wikipedia_stubbed_failures():
 
 
 # A real export.arxiv.org Atom response, trimmed to the elements the adapter
-# reads. Captured rather than requested: this used to call the live API, and a
-# suite that goes to the network fails for reasons that have nothing to do with
-# the code -- it went red today because arXiv simply did not answer. The live
-# probe now lives in bench/source_adapters_live.py, where an outage is a
-# finding rather than a false alarm.
+# reads. Captured rather than requested: a suite that goes to the network fails
+# for reasons that have nothing to do with the code. The live probe lives in
+# bench/source_adapters_live.py, where an outage is a finding rather than a
+# false alarm.
 _ARXIV_ATOM = """<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
   <entry>
@@ -193,10 +191,7 @@ if __name__ == "__main__":
             print("  ERROR in " + fn.__name__ + ": " + type(e).__name__ + ": " + str(e))
     passed = sum(1 for _, c in RESULTS if c)
     print(f"\n{len(fns)-failed}/{len(fns)} functions, {passed}/{len(RESULTS)} checks passed")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

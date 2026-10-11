@@ -1,16 +1,15 @@
-"""Thirteenth (final) supplement: the last precisely-reachable gui.py lines —
-_gen_compaction worker-busy (2877), _run_diag dropped-entry loop body (2974),
-TransferTab._run busy guard (3857), _db_load_existing document loop (5973).
+"""Thirteenth supplement: _gen_compaction worker-busy, _run_diag dropped-entry
+loop body, TransferTab._run busy guard, _db_load_existing document loop.
 
 Clean-exit pattern to avoid PyQt teardown crashes.
 
-Documented UNREACHABLE / dead (intentionally uncovered):
-  * _fmt_bytes:2179          trailing return after a loop whose GB arm always returns.
-  * MaskCanvas.is_empty:3172 `for _ in range(0): pass`.
-  * _show_tab:4492-4493      except ValueError on default_order.index(key); key is
-                              always a registry key -> never raises.
-  * _gather:3849             `if not refs` — unreachable: reaching it needs a single
-                              row, but _gather returns earlier at the len(rows)<2 guard.
+Unreachable code, intentionally uncovered:
+  * _fmt_bytes          trailing return after a loop whose GB arm always returns.
+  * MaskCanvas.is_empty `for _ in range(0): pass`.
+  * _show_tab           except ValueError on default_order.index(key); key is
+                        always a registry key -> never raises.
+  * _gather             `if not refs` — unreachable: reaching it needs a single
+                        row, but _gather returns earlier at the len(rows)<2 guard.
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_supplement13.py
 """
@@ -24,7 +23,7 @@ try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
 from pathlib import Path
-from PyQt5.QtWidgets import QApplication, QMessageBox
+from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QImage, QColor
 import gui
 
@@ -59,7 +58,7 @@ def _mc_tab(seed_sessions=0):
 
 def test_gen_compaction_worker_busy():
     tab, store = _mc_tab(seed_sessions=3)
-    # profile == active, sources exist, but a compact worker is already running -> 2877
+    # profile == active, sources exist, but a compact worker is already running
     tab._compact_worker = object()
     tab._gen_compaction()
     check("gen_compaction_busy", tab._compact_worker is not None)
@@ -67,7 +66,7 @@ def test_gen_compaction_worker_busy():
 
 def test_run_diag_dropped_loop_body():
     tab, store = _mc_tab(seed_sessions=0)
-    # many long session entries so, under a tiny budget, some are dropped -> loop body 2974
+    # many long session entries so, under a tiny budget, some are dropped
     for i in range(40):
         store.add("default", ("dark theme configuration detail paragraph number %d " % i) * 6,
                   etype="session", source="inferred")
@@ -88,7 +87,7 @@ def test_transfer_run_busy_line():
     class Running:
         def isRunning(self): return True
     tab.worker = Running()
-    # _run must hit the busy guard (3853->3854/3857) and return before doing anything
+    # _run must hit the busy guard and return before doing anything
     tab.status.setText("SENTINEL")
     tab._run("plan")
     check("transfer_run_busy_line", tab.status.text() == "SENTINEL")
@@ -100,7 +99,7 @@ def test_db_load_existing_documents_loop():
     gui.ModelLoader = type("NoopLoader", (_orig,), {"start": lambda self: None, "run": lambda self: None})
     w = gui.AssistantWindow("m", True, "high")
     gui.ModelLoader = _orig
-    # _get_library returns a lib whose documents() yields entries -> _db_add_list_item loop (5973)
+    # _get_library returns a lib whose documents() yields entries -> _db_add_list_item loop
     f = _png("dld.png")
     w._library = types.SimpleNamespace(
         documents=lambda: [{"path": f, "title": "Doc One"}, {"path": None, "title": "Doc Two"}],
@@ -117,14 +116,14 @@ def test_db_load_existing_documents_loop():
 
 
 def test_transfer_run_gather_fails():
-    # not busy, but _gather returns None (too few rows) -> second return (3857)
+    # not busy, but _gather returns None (too few rows) -> second return
     host = types.SimpleNamespace(ctx=types.SimpleNamespace(reference_images=[], last_image_path=None,
                                  cancel_event=threading.Event()),
                                  images_panel=types.SimpleNamespace(add_image=lambda p: None),
                                  _add_system=lambda m: None)
     tab = gui.TransferTab(host)
     tab.worker = None                 # not busy
-    tab._run("plan")                  # _gather -> None (0 rows) -> return at 3857
+    tab._run("plan")                  # _gather -> None (0 rows) -> return
     check("transfer_gather_fails", tab.worker is None)
 
 
@@ -142,7 +141,7 @@ def test_new_memory_profile_combo_index():
                                   active_memory_dir=d, save_memory=lambda *a, **k: None,
                                   load_memory=lambda *a, **k: None, session_memory=[])
     w.graph = object(); w.base_state = {"messages": []}; w.stack.setCurrentWidget(w.dashboard); w._set_busy(False)
-    # make the new profile appear in the combo so findText>=0 -> setCurrentIndex (6723)
+    # make the new profile appear in the combo so findText>=0 -> setCurrentIndex
     w._list_memory_profiles = lambda: ["default", "ProfNP"]
     _og = QInputDialog.getText
     QInputDialog.getText = staticmethod(lambda *a, **k: ("ProfNP", True))

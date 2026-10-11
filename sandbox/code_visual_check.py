@@ -1,12 +1,10 @@
 """Eyes for run_code: a picture a script drew is LOOKED AT before it is sent.
 
-Live 2026-09-18: asked for a flowchart, the model lost graphviz (no `dot`
-in the sandbox then), hand-placed boxes in matplotlib and sent a column of
-blocks with one arrow drawn straight through every box and its text. The
-script ran without error, so nothing in the loop could tell that the result
-was garbage -- the only check was "did it write a file".
+A script can run without error and still draw garbage (e.g. an arrow drawn
+straight through every box and its text), so "did it write a file" is not a
+sufficient check.
 
-Now the newest picture a script wrote is shown to the vision model together
+The newest picture a script wrote is shown to the vision model together
 with the request; concrete layout defects (lines through boxes or text,
 overlapping or unreadable labels, an empty canvas, cut-off content) come
 back into the tool result as a fix request, once per turn. The judge is told

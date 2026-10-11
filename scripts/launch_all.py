@@ -55,19 +55,18 @@ def _acquire_singleton_lock() -> bool:
             # in the SAME process is refused too.
             import fcntl
             fcntl.flock(_singleton_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        # Who holds it, for the refusal message: 2026-09-24 a restart was refused
-        # with no app process alive, and the holder could only be found by
-        # killing candidates. Fixed-width PID in bytes 1..10, never byte 0.
+        # Who holds it, for the refusal message, so the holder can be found
+        # without killing candidates. Fixed-width PID in bytes 1..10, never byte 0.
         try:
             _singleton_handle.seek(1)
             _singleton_handle.write(f"{os.getpid():>10}".encode())
-        except Exception:
+        except OSError:
             pass
         return True
     except OSError:
         if _singleton_handle is not None:
             try: _singleton_handle.close()
-            except Exception: pass
+            except OSError: pass
             _singleton_handle = None
         return False
 
@@ -219,14 +218,13 @@ def _spawn_comfy_source():
             si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             si.wShowWindow = 0  # SW_HIDE
             kw["startupinfo"] = si
-        # --reserve-vram 8: live, 2026-09-20 -- with nothing reserved, ComfyUI's
+        # --reserve-vram: with nothing reserved, ComfyUI's
         # dynamic-VRAM manager (comfy-aimdo) sometimes decides an H3 render's model
         # fits fully in VRAM ("loaded completely") when just enough is free, and
         # that path measured 6-29x SLOWER per step than a partial CPU offload
         # ("loaded partially") on the exact same model/workflow -- reproduced
         # cold on a freshly restarted server, so it is not warm-up or fragmentation.
-        # Was 8GB (41s/step -> 10.5s/step on a 4-step H3 render). 2026-09-27: user
-        # chose 1GB; if H3 regresses, disable NVIDIA Sysmem Fallback for python
+        # If H3 regresses, disable NVIDIA Sysmem Fallback for python
         # (user-side setting) or reserve per model.
         subprocess.Popen(
             [COMFY_PY, main_py, "--base-directory", COMFY_BASE_DIR, "--port", COMFY_PORT,

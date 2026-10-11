@@ -1,10 +1,9 @@
 """The task queue backends: the queued item and the three transports.
 
-Lifted out of tg_bot.py whole. Nothing here knows about Telegram, sessions or
-the agent — a backend only moves _Task records around and answers questions
-about who is waiting and in what order. tg_bot re-exports every name, because
-the suites and the sibling tg_* modules address them as tg_bot._Task,
-tg_bot.InMemoryBackend and so on.
+Nothing here knows about Telegram, sessions or the agent — a backend only
+moves _Task records around and answers questions about who is waiting and in
+what order. tg_bot re-exports every name, because the suites and the sibling
+tg_* modules address them as tg_bot._Task, tg_bot.InMemoryBackend and so on.
 """
 import abc
 import json
@@ -27,11 +26,8 @@ class _Task:
     image_path:  str = ""
     # The picture this task acts on, captured at PRESS time (when the
     # id-carrying callback like "upscale:ab12cd" was parsed) — not read lazily
-    # from sess.target_image at execution time. A second button press on a
-    # DIFFERENT picture, queued while the first is still pending, used to
-    # overwrite the single sess.target_image slot before the first task ever
-    # ran, so both tasks silently resolved to whichever picture was pressed
-    # LAST. Threading the id through the task closes that race.
+    # from sess.target_image at execution time, where a later press on a
+    # DIFFERENT picture would have overwritten that single slot.
     image_id:    str = ""
     # True only for a picture the user actually SENT this turn (a photo or the
     # first frame of an album) -- never an internally-derived image such as a
@@ -112,11 +108,9 @@ class _Backend(abc.ABC):
 class InMemoryBackend(_Backend):
     """Round-robin queue: one FIFO per chat, served in rotation.
 
-    A single global FIFO meant one user's 40-minute deep research blocked every
-    other user behind it — with one GPU pipeline that is the difference between a
-    bot that works for a group and one that works for whoever queued first. Tasks
-    are now taken from a different chat each turn, so a burst from one user costs
-    everyone else at most one task of latency.
+    With a single global FIFO one user's 40-minute deep research would block
+    every other user behind it. Tasks are taken from a different chat each turn,
+    so a burst from one user costs everyone else at most one task of latency.
     """
 
     def __init__(self) -> None:
@@ -255,10 +249,9 @@ class RedisBackend(_Backend):
     end
     return 1
     """
-    # Same as push, but to the HEAD of the chat's list (see _Backend.requeue).
-    # Inheriting the default push() put a deferred task at the TAIL, behind the
-    # messages the user sent after it, so with several consumers a busy chat's
-    # turns were answered out of order.
+    # Same as push, but to the HEAD of the chat's list (see _Backend.requeue):
+    # the default push() would put a deferred task at the TAIL, behind the
+    # messages the user sent after it.
     _REQUEUE_LUA = """
     local key = KEYS[2] .. ARGV[1]
     redis.call('LPUSH', key, ARGV[2])
@@ -342,7 +335,8 @@ class RedisBackend(_Backend):
             tasks = []
             for raw in (self._r.lrange(self._PFX + c, 0, -1) or []):
                 try: tasks.append(_Task.from_dict(json.loads(raw)))
-                except Exception: pass
+                except Exception as exc:
+                    logger.warning("Redis pending: skipping undecodable entry for %s: %s", c, exc)
             out[c] = tasks
         return out
 
@@ -482,11 +476,9 @@ class KafkaBackend(_Backend):
 
 # Set by tg_bot.redirect_data_dir, which every test that builds a bot already
 # calls. Without it a suite inherits the operator's REDIS_URL and pushes its
-# fixtures into the LIVE ring: the running bot would pick them up and execute
-# them, and leftovers from one suite made the next one fail at random ("three
-# messages became one task" passing, the same call with a photo pushing
-# nothing). The queue is persistent shared state exactly like tg_users.db, so
-# it is redirected in the same place and for the same reason.
+# fixtures into the LIVE ring, where the running bot would execute them. The
+# queue is persistent shared state exactly like tg_users.db, so it is
+# redirected in the same place and for the same reason.
 _FORCE_INMEMORY = False
 
 

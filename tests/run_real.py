@@ -6,7 +6,6 @@ Builds a minimal duck-typed ctx (no F5/Whisper load), runs the full pipeline
 against the live LM Studio model, and prints the report path + stats so the
 report can be inspected end-to-end."""
 import sys, os, time, threading, pathlib
-import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))

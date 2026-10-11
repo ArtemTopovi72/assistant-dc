@@ -1,8 +1,7 @@
 """The lettering read-back asks EasyOCR first and the vision model only when
-OCR did not confirm the words (live, 2026-09-12: the vision model read a
-crisp "У ОЛЬГИ" as "УАЗЬЛ" four times out of four and a perfect café sign
-was redrawn for ten minutes). Also: a 3-letter host noun ("car", "cup",
-"jar") attaches lettering to its host.
+OCR did not confirm the words (the vision model misreads crisp lettering such
+as "У ОЛЬГИ" as "УАЗЬЛ"). Also: a 3-letter host noun ("car", "cup", "jar")
+attaches lettering to its host.
 
 Pure: EasyOCR is stubbed; no model, no GPU.
 
@@ -91,7 +90,7 @@ try:
     check("when OCR fails the vision model is asked", len(vision_calls) >= 1)
     check("and a garbled render is still a failure", not r["ok"] and r["failures"] == [1], r)
 
-    # 5. no OCR at all -> old behaviour, vision decides
+    # 5. no OCR at all -> vision decides
     O.read = lambda p: None
     vision_calls.clear()
     llm.analyze_image_with_llm = lambda ctx, **kw: '{"strings": ["У ОЛЬГИ"]}'

@@ -183,8 +183,8 @@ def main():
         r_http, t_http = collect(http, Ctx(), "reciprocal rank fusion", depth="quick")
         same("run result", r_ip, r_http)
         check("run result has every contract field",
-              research_service.result_is_complete(r_ip)
-              and research_service.result_is_complete(r_http), repr(r_ip)[:300])
+              all(f in r for r in (r_ip, r_http) for f in research_api.RESULT_FIELDS),
+              repr(r_ip)[:300])
         # The whole reason /op/run streams NDJSON instead of returning one body.
         same("progress stream (ordered, record for record)", t_ip, t_http)
         check("progress actually streamed more than start+end",

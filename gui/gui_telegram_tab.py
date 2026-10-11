@@ -1,8 +1,8 @@
 """Telegram bot control panel, and the settings scope that protects the token.
 
-Fourth tab out of gui.py. It moved together with its ENTIRE settings unit —
-_TG_SETTINGS_SCOPE, _TG_SETTINGS_DIR, redirect_settings() and _tg_settings() —
-and that is the important part of this file.
+It owns its ENTIRE settings unit — _TG_SETTINGS_SCOPE, _TG_SETTINGS_DIR,
+redirect_settings() and _tg_settings() — and that is the important part of
+this file.
 
 The panel PERSISTS the bot token when it starts, so any test that drives a real
 TelegramTab writes into the user's live QSettings store and destroys their real
@@ -51,10 +51,6 @@ _TG_SILENT_KEY  = "telegram/silent_mode"
 _TG_API_ID_KEY   = "telegram/api_id"
 _TG_API_HASH_KEY = "telegram/api_hash"
 
-# The panel PERSISTS the token on _start(), so any test that drives a real
-# TelegramTab writes into the user's live store and destroys their real token.
-# Tests call redirect_settings(tmpdir) first; see tg_bot.redirect_data_dir for
-# the same protection over the user database.
 _TG_SETTINGS_SCOPE = ("AssistantApp", "TelegramBot")
 _TG_SETTINGS_DIR: str | None = None
 
@@ -69,9 +65,7 @@ def redirect_settings(dir_path) -> None:
 
 
 def _tg_settings() -> QSettings:
-    # A suite that built the main window without redirect_settings() read the
-    # REAL token + autostart and started the live bot for its lifetime: real
-    # users' queued messages were answered from a test run (2026-09-28 23:15).
+    # Tests must not touch the live store.
     # Under a test the live store is unreachable, redirected or not.
     if (not _TG_SETTINGS_DIR and os.environ.get("F5_TEST_RUN")
             and tuple(_TG_SETTINGS_SCOPE) == ("AssistantApp", "TelegramBot")):
@@ -511,10 +505,7 @@ class TelegramTab(QWidget):
             on_user_change=self._sig_user_change.emit,
             silent_mode=self.silent_box.isChecked(),
         )
-        # Only claim the bot is running if it actually started. This used to flip
-        # the whole panel into the running state regardless, so a bad token or a
-        # dropped network left the UI insisting the bot was up: Start greyed out,
-        # Stop live, and every message the user sent silently unanswered.
+        # Only claim the bot is running if it actually started.
         if not self._bot.start():
             self._bot = None
             self.start_btn.setEnabled(True)
@@ -755,7 +746,7 @@ class TelegramTab(QWidget):
                 f"·  backend: {stats.get('backend', '?')}")
             self.queue_lbl.setTextFormat(Qt.RichText)
         except Exception:
-            pass
+            logger.debug("queue stats refresh failed", exc_info=True)
 
     def _restore_backup(self):
         if not self._bot:
@@ -790,7 +781,6 @@ class TelegramTab(QWidget):
                 "Could not restore the backup. Check the log for details.")
 
     def _export_log(self):
-        from pathlib import Path
         log_path = Path(__file__).resolve().parents[1].joinpath("tg_activity.jsonl")
         if log_path.exists():
             try:

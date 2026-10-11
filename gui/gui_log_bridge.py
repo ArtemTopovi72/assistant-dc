@@ -22,12 +22,11 @@ _BRAILLE_RE = re.compile(r"[⠀-⣿]")
 def clean_terminal_text(text: str) -> str:
     """Printable text only for the log pane.
 
-    Live 2026-09-13: a "model revive ok" record carried the raw `lms load`
-    TUI -- ESC[?25l cursor codes and a braille spinner -- and
-    QTextEdit.append died with an access violation inside DirectWrite while
-    laying out those glyphs (the whole app went down with it). ANSI escapes
-    and control characters are stripped, a CR-driven progress line keeps
-    its last frame, spinner glyphs are dropped.
+    A record can carry raw `lms load` TUI output -- ESC[?25l cursor codes and a
+    braille spinner -- and QTextEdit.append can die with an access violation
+    inside DirectWrite while laying out those glyphs, taking the app with it.
+    ANSI escapes and control characters are stripped, a CR-driven progress line
+    keeps its last frame, spinner glyphs are dropped.
     """
     text = _ANSI_RE.sub("", str(text))
     text = _BRAILLE_RE.sub("", text)

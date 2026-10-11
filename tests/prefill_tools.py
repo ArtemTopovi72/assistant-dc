@@ -1,6 +1,6 @@
 """Does prefill=<think></think> survive WITH tools? (the only way to kill the
 think block inside the agent's tool loop). Capture whether tool_calls still return."""
-import sys, json, threading
+import sys, threading
 from pathlib import Path
 try: sys.stdout.reconfigure(encoding="utf-8")
 except Exception: pass

@@ -1,32 +1,25 @@
 """Memory Center tab: the console for everything the assistant remembers.
 
-First tab lifted out of gui.py, chosen because it is the largest (927 lines)
-and the most self-contained — AssistantWindow is the only thing that references
-it. It became movable only once gui_common.py existed: nine of the eleven
-gui.py symbols it needed were shared UI primitives, and without them in a
-module of their own this file would have had to import gui.py and rebuild the
-import cycle that was just eliminated.
+AssistantWindow is the only thing that references it. The shared UI primitives
+come from gui_common.py; importing gui.py from here would rebuild the import
+cycle gui_common.py exists to avoid.
 
-CompactMemoryWorker travels with it (it is the tab's own background compaction
-thread) and is re-exported from gui.py, because AssistantWindow drives it too.
+CompactMemoryWorker is the tab's own background compaction thread and is
+re-exported from gui.py, because AssistantWindow drives it too.
 
 The heavy imports — memory_center, llm, prompts — stay FUNCTION-LOCAL exactly
 as they were in gui.py: this tab is constructed at startup, and loading the
 memory store or the LLM client just to build a widget would slow every launch.
 """
-import json
-import os
 from pathlib import Path
 
 from PyQt5.QtCore import QEvent, QThread, Qt, pyqtSignal
 from PyQt5.QtGui import QCursor
-from PyQt5.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QFileDialog,
-                             QFrame, QGridLayout, QHBoxLayout, QHeaderView,
-                             QInputDialog, QLabel, QLineEdit, QListWidget,
+from PyQt5.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QFrame, QGridLayout,
+                             QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
                              QListWidgetItem, QMenu, QMessageBox, QPlainTextEdit,
-                             QPushButton, QScrollArea, QSlider, QSpinBox,
-                             QTabWidget, QTableWidget, QTableWidgetItem,
-                             QVBoxLayout, QWidget)
+                             QPushButton, QScrollArea, QSlider, QSpinBox, QTabWidget,
+                             QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from ui_scale import px, scale_style as _ss
 from gui_common import (BG, MUTED, _FlowWidget, _card, _fit_dialog, _flow,
@@ -129,7 +122,7 @@ class MemoryCenterTab(_MemoryProfilesMixin, _MemoryMaintenanceMixin, QWidget):
         try:
             self.store.sync_into_ctx(ctx, self._profile())
         except Exception:
-            pass
+            logger.debug("sync_into_ctx failed", exc_info=True)
         self.refresh_all()
 
     # ---- build -------------------------------------------------------------
@@ -421,7 +414,7 @@ class MemoryCenterTab(_MemoryProfilesMixin, _MemoryMaintenanceMixin, QWidget):
         self.table.setSortingEnabled(False)
         self.table.setRowCount(0)
         self._rows = []
-        for e, score, reason in results:
+        for e, _, _ in results:
             r = self.table.rowCount(); self.table.insertRow(r)
             cells = [e.type, e.source, _fmt_ts(e.created), str(e.importance),
                      ", ".join(e.tags), e.preview(120)]
@@ -654,16 +647,6 @@ class MemoryCenterTab(_MemoryProfilesMixin, _MemoryMaintenanceMixin, QWidget):
         if hasattr(self.host, "_memory_center_set_profile"):
             self.host._memory_center_set_profile(prof)
         self.refresh_all()
-
-    # ---- Compaction (review before commit) --------------------------------
-
-    # ---- Timeline (audit) --------------------------------------------------
-
-    # ---- Diagnostics -------------------------------------------------------
-
-    # ---- Backup ------------------------------------------------------------
-
-    # ---- misc actions ------------------------------------------------------
 
     # ---- master refresh ----------------------------------------------------
 

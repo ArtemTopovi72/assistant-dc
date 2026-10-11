@@ -11,8 +11,7 @@ is only a ceiling ("the model can end the song earlier", says the node's own
 tooltip). So the planned seconds is the whole answer, and reading it needs no
 UNet, no VAE and no diffusion -- but it is NOT cheap: the planner is
 autoregressive over 25 frames per second of ceiling, at about 2.7 frames/s, so a
-60s probe costs ~9 minutes and a 240s probe costs ~37. Measured, after the first
-version of this file claimed a second per probe.
+60s probe costs ~9 minutes and a 240s probe costs ~37.
 
 That price decides the design. The ceiling is held at 60s and the LYRIC is
 swept, because the question worth the GPU time is whether the words -- the only

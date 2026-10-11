@@ -1,6 +1,6 @@
 """A URL in a voiced reply is spoken as 'ссылка', never spelled out.
 
-Live 2026-09-13 (mega journey, step 85): 'дай ссылку на источник' with voice
+'дай ссылку на источник' with voice
 on was read as 'Вплюс отс плюс ссылка на официальный сайт...' — the scheme,
 slashes and Latin host are outside what the Russian voice can say. The text
 reply keeps the link.

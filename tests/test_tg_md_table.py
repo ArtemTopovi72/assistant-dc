@@ -1,4 +1,4 @@
-"""Live 2026-09-28: a markdown table reached Telegram as raw '| --- |' pipes."""
+"""A markdown table must not reach Telegram as raw '| --- |' pipes."""
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import tg_markup as M
@@ -15,4 +15,3 @@ assert M._md_to_html("a | b") == "a | b"
 h3 = M._md_to_html("```\nx `y`\n```\nand `z`")
 assert "`y`" in h3 and "<code>z</code>" in h3, h3
 print("PASS md table")
-

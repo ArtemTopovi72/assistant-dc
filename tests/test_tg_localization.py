@@ -1,12 +1,10 @@
 """The bot is bilingual — all of it, not just the buttons.
 
-Task "Localization RU/EN" translated the keyboards and the error strings, but 38
-user-facing messages stayed hardcoded English, and they sat on the paths that
-matter most: the approval message a new user reads first, the whole account menu
-(name, password, replace profile, logout), feedback, subscribe/unsubscribe, and
-the Draw/Search submenu headers. `approve_user` even computed `lang` and passed it
-to `_help_text()`, so a Russian user got an English paragraph followed by Russian
-help in the same message.
+User-facing messages must not stay hardcoded English, least of all on the paths
+that matter most: the approval message a new user reads first, the whole account
+menu (name, password, replace profile, logout), feedback, subscribe/unsubscribe,
+and the Draw/Search submenu headers. A Russian user must not get an English
+paragraph followed by Russian help in the same message.
 
 Three layers of protection here:
 
@@ -50,15 +48,12 @@ SRC_FILES = sorted(os.path.relpath(p, _ROOT).replace("\\", "/") for p in glob.gl
 assert "bot/tg_bot.py" in SRC_FILES and len(SRC_FILES) >= 9, SRC_FILES
 SRC_PARTS = {f: open(os.path.join(_ROOT, f), encoding="utf-8").read()
              for f in SRC_FILES}
-SRC_PATH = os.path.join(_ROOT, "bot/tg_bot.py")
-SRC = chr(10).join(SRC_PARTS.values())
 
 
 def _walk_src():
     """Every AST node across tg_bot.py and its mixin modules."""
-    import ast as _a
     for _f, _text in SRC_PARTS.items():
-        for _node in _a.walk(_a.parse(_text)):
+        for _node in ast.walk(ast.parse(_text)):
             yield _node
 
 
@@ -490,8 +485,6 @@ def kb_texts(kb):
 for lang, want_cyr in (("ru", True), ("en", False)):
     labels = kb_texts(T._image_kb(lang))
     # 8: ask, change_clothes, remove_object, remove_text, regenerate, edit, style, animate
-    # (2026-09-23: upscale, enhance, outpaint and restore went with their
-    # engines; 2026-09-24: 🧽 remove_object added; 2026-09-25: 🔤 remove_text).
     check(f"the eight image-action buttons exist ({lang})", len(labels) == 8,
           str(labels))
     check(f"image-action buttons are {'Russian' if want_cyr else 'English'}",
@@ -588,15 +581,12 @@ print("=" * 70)
 # table-shaped checks above only validate keys that DO exist, which cannot see a
 # call site naming one that does not. This walks the AST instead: every literal
 # first argument to _t/_b in tg_bot.py must resolve.
-import ast as _ast, io
-
-_src = io.open(T.__file__, encoding="utf-8").read()
 _missing = []
 _sites = 0
 for _n in _walk_src():
-    if not (isinstance(_n, _ast.Call) and _called_name(_n) in ("_t", "_b")
+    if not (isinstance(_n, ast.Call) and _called_name(_n) in ("_t", "_b")
             and _n.args
-            and isinstance(_n.args[0], _ast.Constant)
+            and isinstance(_n.args[0], ast.Constant)
             and isinstance(_n.args[0].value, str)):
         continue
     _sites += 1

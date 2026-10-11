@@ -58,7 +58,7 @@ _ACTION_CLAIM_RE = re.compile(
 )
 
 
-# The same promise, about FILES. Live 2026-09-14, twice in a row on a 112 MB
+# The same promise, about FILES. Twice in a row on a 112 MB
 # archive: «Сначала я распакую архив ... Начинаю поиск.» / «сначала распакую
 # его, а затем просканирую ... Начинаю исследование.» — and the turn ended with
 # no tool call. A reply that announces file work with zero tool calls while
@@ -69,7 +69,7 @@ _FILE_PROMISE_RE = re.compile(
     r"просканиру[юем]\w*|проверю|проверим|изучу|изучим|исследую|исследуем|"
     r"открою|откроем|прочитаю|прочитаем|посмотрю|посмотрим|найду|найдём|найдем|"
     r"начинаю|начну|приступаю|приступлю|"
-    # Live 2026-09-14, «заново» after a dedupe ask: «применю ... проведу ...
+    # «заново» after a dedupe ask: «применю ... проведу ...
     # сформирую ... коллаж будет готов» -- a plan in the future tense with
     # zero tool calls slipped past the verbs above.
     r"применю|применим|провед[уё]м?|сформиру[юе]м?|собер[уё]м?|пересобер[уё]м?|"
@@ -86,8 +86,8 @@ _FILE_PROMISE_RE = re.compile(
 )
 
 
-# «Я уже выполнил эту задачу!» to a request the user has just REPEATED (live
-# 2026-09-14: the same dedupe ask sent twice, then «заново»). A repeated
+# «Я уже выполнил эту задачу!» to a request the user has just REPEATED
+# (the same dedupe ask sent twice, then «заново»). A repeated
 # request means the last result did not satisfy them; an answer that points
 # at the previous turn, with no tool called now, is a refusal dressed as
 # diligence -- and after a restart the "previous turn" may be a lie the
@@ -128,11 +128,6 @@ def _is_redo_request(user_input: str, messages) -> bool:
     return seen >= 2          # the current turn plus at least one earlier
 
 
-# Imperative remember-requests in the user's input ("запомни: ...", "запиши...",
-# "не забудь..."). When one is present and the turn produced an answer without a
-# remember_fact call, the model is claiming to remember while saving nothing —
-# same fabrication class as the image guard above. (The trailing \b keeps the
-# imperative "запомни" from matching the model's own past tense "запомнил".)
 # The 📊 Presentation button's literal prefix. Machine-generated, so matching it
 # is exact rather than a guess about intent.
 _DECK_PREFIX = "create a presentation about:"
@@ -162,7 +157,7 @@ def _fact_of_remember_request(text: str) -> str:
 
 # The two "I produced nothing" texts. A turn that ends in one of them has NOT
 # answered the question, and callers that keep a chat history must not store
-# it as if it had: live (2026-09-12, journey 5) two such turns in a row left
+# it as if it had: two such turns in a row left
 # two unanswered questions in the transcript, and the model answered the
 # OLDER of them when the user asked a third, different one.
 _STUCK_RU = ("Я задумался и не выдал ответ — это сбой на моей "
@@ -242,7 +237,7 @@ _PROMISE_NOUN = {
 def _tool_said_unsupported(messages) -> bool:
     """The last tool result of the turn says the assistant cannot do this at all
     (an engine that was removed): «попробуй ещё раз» would send the user in
-    circles (live 2026-10-08, «расширь картинку со всех сторон»)."""
+    circles («расширь картинку со всех сторон»)."""
     for m in reversed(list(messages or [])):
         if m.get("role") == "user":
             break
@@ -267,11 +262,6 @@ def _honest_failure_line(failed_promises, unsupported: bool = False) -> str:
             f"готовое я не стану.")
 
 
-# The user has been told nothing at all. Measured as the VAGUE bucket on the
-# chaos bench: 12 of 140 runs where a tool had hard-failed and the answer
-# neither claimed success nor admitted the failure -- not a lie, but the user
-# walks away not knowing the thing they asked for was never made. An admission
-# already in the draft must not be doubled, hence the counter-regex.
 # A claim that a FILE now exists, as opposed to a claim about a picture or a
 # number. Measured end to end on the sandbox bench: after editing a modpack the
 # answer was "запаковал всё обратно, ваш обновленный архив готов" while
@@ -292,16 +282,17 @@ _FILE_READY_RE = re.compile(
 
 _ARTIFACT_KEYS = ("document_path", "image_path", "video_path")
 
-# The user's own words asking for a file. Needed only when forwarded material
-# is in the turn: «презентация готова» there is usually the forwarded person's
-# news being retold, not the bot's promise.
-
 _NO_FILE_ANSWER = (
     "Готового файла у меня нет — собрать его я не успел, отдавать пока нечего. "
     "Скажи, продолжить?"
 )
 
 
+# The user has been told nothing at all. Measured as the VAGUE bucket on the
+# chaos bench: 12 of 140 runs where a tool had hard-failed and the answer
+# neither claimed success nor admitted the failure -- not a lie, but the user
+# walks away not knowing the thing they asked for was never made. An admission
+# already in the draft must not be doubled, hence the counter-regex.
 _ADMISSION_RE = re.compile(
     r"не\s+(?:получилось|удалось|смог\w*|вышло)|не\s+сработал"
     r"|ошибк\w*|сбой|не\s+сраб|техническ\w+\s+пробл"
@@ -339,12 +330,6 @@ _NO_CALC_ANSWER = (
 )
 
 
-# Measured on the chaos bench: `img_inpaint [wrong]`, calls=['inpaint_image'].
-# The tool returned a plausible "Edit applied", the model never called
-# inspect_image at all, and answered "Готово! Я добавил ей очки." The guard that
-# believes a negative verdict could not fire -- there was no verdict. The file
-# exists and is delivered, so this is not a failure and must not be reported as
-# one; what is missing is the RIGHT to assert that the specific change landed.
 def _gp_edit_tools():
     """The one definition lives in graph_personality, with the other tool facts.
 
@@ -355,6 +340,12 @@ def _gp_edit_tools():
     return _gp._EDIT_TOOLS
 
 
+# Measured on the chaos bench: `img_inpaint [wrong]`, calls=['inpaint_image'].
+# The tool returned a plausible "Edit applied", the model never called
+# inspect_image at all, and answered "Готово! Я добавил ей очки." The guard that
+# believes a negative verdict could not fire -- there was no verdict. The file
+# exists and is delivered, so this is not a failure and must not be reported as
+# one; what is missing is the RIGHT to assert that the specific change landed.
 _UNVERIFIED_EDIT_ANSWER = (
     "Картинку обновил и прикладываю. Проверить результат я не смог, так что "
     "не берусь утверждать, что вышло именно то, что нужно — посмотри сам, и "
@@ -367,8 +358,8 @@ def _closing_prefill(ctx, default):
 
     On Gemma 4 this is its own empty thought block (llm.GEMMA_NO_THINK_PREFILL):
     the closing reply only reports work already done, and left to think the
-    model spent 3 x 3000 tokens deliberating and never answered (live
-    2026-09-22, the mods.rar turn -- the user got a sentence cut off mid-word).
+    model spent 3 x 3000 tokens deliberating and never answered
+    (the mods.rar turn -- the user got a sentence cut off mid-word).
     Shrinking max_tokens could never help: llm floors it to GEMMA_MIN_TOKENS.
     """
     import llm
@@ -463,10 +454,10 @@ def _finalize_answer(ctx: Context, state: AgentState, messages: list,
     # speakable text (e.g. it kept emitting tool syntax). Give the user an honest
     # generic close instead of silence — the work itself (image, report) is done
     # and visible in the UI.
-    # This used to require `tools_ran`, so a plain conversational turn whose
-    # model output was all reasoning fell through to an EMPTY answer, and the
-    # delivery layer printed the literal placeholder "(no response)". Silence
-    # is never an acceptable reply — say something true instead.
+    # This applies even when no tool ran: a plain conversational turn whose
+    # model output was all reasoning would otherwise end in an EMPTY answer, and
+    # the delivery layer would print the literal placeholder "(no response)".
+    # Silence is never an acceptable reply — say something true instead.
     if not final_answer and not ctx.is_cancelled():
         # Non-ASCII original => the user writes in Russian (this project's user
         # base); pure-ASCII turns get the English variant.
@@ -552,7 +543,7 @@ def _finalize_answer(ctx: Context, state: AgentState, messages: list,
                 if "generate_image" in _called and not (_called & _edits):
                     # A fresh picture has no "change" that could be missing:
                     # "нужного изменения нет — остался прежним" under a new logo
-                    # read as nonsense (live 2026-09-28).
+                    # read as nonsense.
                     final_answer = _VERIFY_DRAW_ANSWER
                 else:
                     final_answer = (_VERIFY_PARTIAL_ANSWER if verification_negative == "partial"
@@ -607,7 +598,7 @@ def _finalize_answer(ctx: Context, state: AgentState, messages: list,
         logger.warning("No usable answer from the model on this turn")
     try:
         # The model's own words, kept when the guards above changed them: a
-        # replaced answer used to leave no trace of what had been replaced.
+        # replaced answer would otherwise leave no trace of what had been replaced.
         import turn_trace
         _draft = (last_message or {}).get("content", "") or ""
         if _draft.strip() and _draft.strip() != final_answer.strip():

@@ -4,7 +4,7 @@
 
 Mask: white = remove. The model works at short side 512; only the masked area
 (grown + feathered) is pasted back onto the original, every other pixel stays.
-Chosen by the user's eye on the 26-item eraser A/B (2026-09-25).
+Chosen by the user's eye on the 26-item eraser A/B.
 """
 import os
 import sys

@@ -6,7 +6,8 @@ the user explicitly asked to resize (`upscale` / `outpaint` / `restore`).
 
 ## The fix (one uniform mechanism)
 
-`image.py` gains two helpers:
+`image.py` gained two helpers (now in `imaging/image_sizing.py`; see the status
+note in `image_geometry_audit.md` for where the other functions named here live):
 
 - **`_source_dims(path)`** — reads the original `(w, h)`.
 - **`_enforce_output_size(workflow, sw, sh)`** — inserts a lanczos `ImageScale`

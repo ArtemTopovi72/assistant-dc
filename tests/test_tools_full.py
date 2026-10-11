@@ -72,11 +72,9 @@ def mock_env(**over):
         "_is_removal_instruction": lambda t: over.get("is_removal", False),
         "_INPAINT_FAILURE": over.get("inpaint_failure", {}),
     }
-    # Apply to EVERY module that binds the name, not just `tools`. The image
-    # editing handlers moved to tool_image_handlers and import these from
-    # `image` by value, so a patch on T alone stops reaching them — the stub is
-    # ignored and the real ComfyUI path runs. Setting it on each holder keeps
-    # the stub in force wherever the caller happens to live.
+    # Apply to EVERY module that binds the name, not just `tools`: the image
+    # editing handlers live in tool_image_handlers and import these from
+    # `image` by value, so a patch on T alone would not reach them.
     import tool_image_handlers as _tih
     _holders = (T, _tih)
     for k, v in tset.items():
@@ -291,10 +289,8 @@ def test_generate_image():
 # ------------------------------------------------------------------ redraw_image
 
 def test_redraw_image():
-    # the old model ('enhance'/'upscale'/'restore'/'outpaint') was removed from the
-    # product along with its checkpoint files; 'redraw' (FireRed, or the stored
-    # Ideogram layout) is the only mode left. redraw_image now normalizes any
-    # mode/empty-instructions call onto that one path.
+    # 'redraw' (FireRed, or the stored Ideogram layout) is the only mode;
+    # redraw_image normalizes any mode/empty-instructions call onto that one path.
     c = _ctx(last_image_path=_img("src.png"))
     check("redraw_nosrc", T._handle_redraw_image(_ctx(), {}, {"mode": "redraw"}).startswith("[TOOL ERROR]"))
     with mock_env():
@@ -349,7 +345,7 @@ def test_inspect_image():
     # A blind inspector: the picture is normally lit (a mid-grey noisy image),
     # the model calls it "extremely dark" and labels everything MISSING. That
     # verdict is contradicted by the pixels and must not send the agent into
-    # another re-render (live, 2026-09-12: 70 s wasted on a correct picture).
+    # another re-render of a correct picture.
     import numpy as _np
     from PIL import Image as _I
     lit = str(_TMP / "lit.png")
@@ -499,13 +495,6 @@ def test_execute_tool():
     check("exec_args_nondict", r2.startswith("[TOOL ERROR]"))
     # successful dispatch through validation (calculate coerces + runs)
     check("exec_ok", T.execute_tool(c, {}, "calculate", {"expression": "3*3"}) == "9")
-    # handler raises -> wrapped
-    with mock_env():
-        T._handle_calculate_saved = T._handle_calculate
-        # patch the ToolSpec handler? simpler: patch _BY_NAME entry's handler via a tool that raises
-        # use read_clipboard with a raising subprocess is already [TOOL ERROR]; instead force
-        # a handler exception via calculate monkeypatch on the spec
-        pass
     # handler returns None -> coerced
     spec = T._BY_NAME["calculate"]
     orig = spec.handler
@@ -522,7 +511,7 @@ def test_execute_tool():
 
 def test_remaining_branches():
     c = _ctx()
-    # 133: deep_research progress callback body runs when run_deep_research calls progress
+    # deep_research progress callback body runs when run_deep_research calls progress
     def dr_with_progress(ctx, topic, depth="standard", progress=None, **_kw):
         if progress:
             progress("Searching", {"sources": 3, "pages": 5, "findings": 2}, "msg")
@@ -532,22 +521,22 @@ def test_remaining_branches():
         _s.modules["deep_research"].run_deep_research = dr_with_progress
         T._handle_deep_research(c, {}, {"topic": "x"})
         check("dr_progress_cb", True)
-    # 238->206: a Pow with a small constant exponent passes the guard and evaluates
+    # a Pow with a small constant exponent passes the guard and evaluates
     check("calc_small_pow", T._handle_calculate(c, {}, {"expression": "2**10"}) == "1024")
-    # 668->671: inpaint with EMPTY last_image_prompt -> skip the prompt fold
+    # inpaint with EMPTY last_image_prompt -> skip the prompt fold
     ci = _ctx(last_image_path=_img("nf.png"), last_image_prompt="")
     with mock_env(category="subject_edit"):
         check("inpaint_no_baseprompt", "Image edited" in T._handle_inpaint_image(ci, {}, {"instructions": "x", "region": "y"}))
-    # 695: transfer where the target is NOT already in reference_images -> appended
+    # transfer where the target is NOT already in reference_images -> appended
     a, b = _img("ta.png"), _img("tb.png")
     ct = _ctx(reference_images=[a], last_image_path=b)
     with mock_env():
         check("transfer_target_appended", "Transfer complete" in T._handle_transfer_image(ct, {}, {"instructions": "x"}))
-    # 748 / 805: invalid engine coercion in fix_hands / fix_artifact
+    # invalid engine coercion in fix_hands / fix_artifact
     with mock_env():
         check("fixhands_engine_bad", "Hands repaired" in T._handle_fix_hands(_ctx(last_image_path=_img("h.png")), {}, {"engine": "bogus"}))
         check("fixart_engine_bad", "Repaired" in T._handle_fix_artifact(_ctx(last_image_path=_img("a.png")), {}, {"region": "x", "engine": "bogus"}))
-    # 872-873: find_photo where OUTPUT_DIR.mkdir raises (swallowed)
+    # find_photo where OUTPUT_DIR.mkdir raises (swallowed)
     with mock_env():
         T.image_mod.OUTPUT_DIR = types.SimpleNamespace(mkdir=lambda *a, **k: (_ for _ in ()).throw(OSError("ro")))
         r = T._handle_find_photo(_ctx(), {}, {"query": "x"})
@@ -579,10 +568,7 @@ if __name__ == "__main__":
             print("  ERROR in " + fn.__name__ + ": " + type(e).__name__ + ": " + str(e))
     print("\n" + str(len(fns) - failed) + "/" + str(len(fns)) + " tools test functions passed (" +
           str(sum(1 for _, c in RESULTS if c)) + "/" + str(len(RESULTS)) + " checks)")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

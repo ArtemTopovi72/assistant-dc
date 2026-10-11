@@ -14,15 +14,14 @@ downloaded into the local `img_bytes`/`texts` accumulator) is thrown away
 with them, and an item still to come is never even looked at. No error, no
 trace: the picture (or message) just vanishes.
 
-Reproduced live via the adversarial-style real-consumer-thread harness below,
-in both orderings (photo-then-forward, forward-then-photo), plus a sibling
-check that ordinary text sharing the window survives the same way. Fixed by
-folding "batch contains a fwd_voice item alongside anything else" into the
-existing genuine-conflict split in _resolve_and_push (the same mechanism
-already used for conflicting image targets and multiple image-bearing items
-in one batch): each item gets pushed through its own single-item call instead
-of being silently merged into one that only the fwd_voice item's `return`
-ever reaches.
+Driven through the real-consumer-thread harness below in both orderings
+(photo-then-forward, forward-then-photo), plus a sibling check that ordinary
+text sharing the window survives the same way. A batch containing a fwd_voice
+item alongside anything else takes the genuine-conflict split in
+_resolve_and_push (the same mechanism used for conflicting image targets and
+multiple image-bearing items in one batch): each item is pushed through its
+own single-item call instead of being merged into one that only the fwd_voice
+item's `return` ever reaches.
 
 Run: venv/Scripts/python.exe tests/test_tg_fwd_voice_batch.py
 """
@@ -240,8 +239,7 @@ bot._dispatch(msg_update(CID_FT, "what time is it"))
 ok = settle(lambda: any("what time is it" in t for t, _ in INVOKES))
 check("forward-then-text: the text runs through the graph", ok, INVOKES)
 # The words typed next to a forwarded note are the instruction FOR the note
-# (live 2026-09-17: «Что думаешь?» beside a forwarded кружок was answered as
-# small talk while the note asked "what do I do with it?"). One turn: the
+# («Что думаешь?» beside a forwarded кружок is not small talk). One turn: the
 # transcript quoted, the words as the request, no ask.
 _turn = next((t for t, _ in INVOKES if "what time is it" in t), "")
 check("forward-then-text: the transcript rides in the same turn as the words",
@@ -266,8 +264,7 @@ check("text-then-forward: one turn with the transcript and the words",
       ok and "the transcribed forwarded content" in _turn and len(INVOKES) == 1, INVOKES)
 # an explicit intent word still takes the transcript/summary shortcut
 # The retelling is a one-shot llm.call_llm_simple outside the agent (see
-# _retell_transcript), so it is stubbed here; unstubbed it waited on the real
-# model and the suite read the silence as a missing shortcut.
+# _retell_transcript), so it is stubbed here.
 import llm as _llm_mod
 _real_simple = _llm_mod.call_llm_simple
 _llm_mod.call_llm_simple = lambda ctx, system, *a, **k: (
@@ -308,7 +305,6 @@ bot._transcribe = lambda ctx, fid, media="voice", **kw: _heard[fid]
 bot._look_video = lambda ctx, fid, **kw: {"description": "0:00 — a parking lot at dusk\n0:05 — a red car",
                                           "sheet": "", "times": [0, 5]}
 _kbs = []
-_plain_send = bot._send_text
 bot._send_text = lambda cid, t, **kw: (bot.sent.append((cid, t)), _kbs.append(kw.get("keyboard")), 1)[2]
 bot.sent.clear(); INVOKES.clear()
 
@@ -317,7 +313,7 @@ bot._dispatch(fwd_from(CID_FF, "Boris", voice={"file_id": "v2", "duration": 2}))
 bot._dispatch(fwd_from(CID_FF, "Anna", text="ok, waiting"))
 bot._dispatch(fwd_from(CID_FF, "Boris", video_note={"file_id": "c1", "duration": 6}))
 # A menu button pressed while the forward lands must not break the batch apart
-# (live 2026-10-01 11:37: «↩ Назад» among a voice note and nine кружки).
+# («↩ Назад» among a voice note and nine кружки).
 bot._dispatch(msg_update(CID_FF, T._b("back", "en")))
 ok = settle(lambda: any("Forwarded conversation" in t for _, t in bot.sent))
 asks = [t for _, t in bot.sent if "Forwarded conversation" in t or "Forwarded voice" in t]
@@ -354,8 +350,8 @@ check("storyboard button shows the frames under their clip",
 # ✍️ My own request: the next text is the request, the conversation rides along.
 bot._cb_forwarded_voice(CID_FF, "fwdv:own:" + fid)
 check("own request arms the session", bool(bot._get_session(CID_FF).fwd_own))
-# live 16:03: ✍ pressed straight away (no button before it), so the typed
-# question met an un-acted-on transcript and was taken for "retell".
+# ✍ pressed straight away (no button before it): the typed question meets an
+# un-acted-on transcript and must not be taken for "retell".
 _s = bot._get_session(CID_FF); _s.fwd_transcript_done = False; bot._store.put(_s)
 INVOKES.clear()
 bot._dispatch(msg_update(CID_FF, "who drives? в двух словах суть"))
@@ -382,8 +378,8 @@ check("the video ask does not dump the storyboard", ok and "cat on a sofa" not i
 stop_bot(bot)
 
 section("a forwarded POST (videos + pictures + its words) is ONE conversation and ONE ask")
-# Live 2026-10-05: 8 videos and 2 pictures of one post: the videos got the ask, the pictures were answered
-# on their own («Что ты хочешь сделать с этим фото?» + a voice reply).
+# 8 videos and 2 pictures of one post: the pictures must not be answered on
+# their own («Что ты хочешь сделать с этим фото?» + a voice reply).
 CID_POST = 900304
 approve(bot, CID_POST)
 _heard.update({"p1": "no words", "p2": "no words either"})

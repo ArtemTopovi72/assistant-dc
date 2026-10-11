@@ -1,8 +1,7 @@
 """The weather card names the city in the user's language.
 
-Live 2026-09-12 (journey 7): a Russian user asked about Сочи and got a card
-headed "Sochi" — the geocoder was always asked in English. `lang` now
-reaches Open-Meteo's geocoder through resolve_city.
+A Russian user asking about Сочи must get a card headed "Сочи", not "Sochi":
+`lang` reaches Open-Meteo's geocoder through resolve_city.
 """
 import os, sys
 os.environ.setdefault("F5_TEST_RUN", "1")

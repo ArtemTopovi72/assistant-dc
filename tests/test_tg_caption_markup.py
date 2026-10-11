@@ -105,7 +105,7 @@ class _R:
         self.status_code = code; self._d = desc; self._boom = boom
         # The senders log r.text on a non-200; without it the AttributeError is
         # swallowed by the retry loop's `except Exception` and the degrade path
-        # is never reached — which is exactly how this fixture first lied.
+        # is never reached.
         self.text = str(desc or "")
     def json(self):
         if self._boom: raise ValueError("not json")
@@ -129,7 +129,6 @@ print("5. A rejected caption never costs the user the FILE")
 print("=" * 70)
 # Drive the real _send_document against a fake Telegram that rejects any HTML
 # caption. Nothing here touches the network: only requests.post is replaced.
-import types
 
 class _FakeTG:
     def __init__(self, limit_reject=True):
@@ -178,9 +177,8 @@ print("=" * 70)
 print("5b. The senders actually USE _safe_caption (not caption[:1024])")
 print("=" * 70)
 # Sections 1-3 prove the helper is correct; they say nothing about whether the
-# senders call it. Reverting the two call sites to a blind slice left this suite
-# fully green until these checks existed — assert on the body that goes ON THE
-# WIRE, from a caption whose 1024th character sits inside an <a href>.
+# senders call it. Assert on the body that goes ON THE WIRE, from a caption
+# whose 1024th character sits inside an <a href>.
 hostile = "x" * (LIMIT - 10) + '<a href="https://example.com/a/very/long/path">t</a>' + "y" * 300
 for label, sender, kwargs in (
         ("sendDocument", lambda **kw: bot._send_document(123, doc, **kw), {}),
@@ -224,7 +222,7 @@ check("...without ever stripping the markup (that was not the problem)",
       all(c.get("parse_mode") == "HTML" for c in blocked.calls),
       [c.get("parse_mode") for c in blocked.calls])
 
-# LaTeX never renders in Telegram: a raw dollar-rightarrow reached the chat (live 2026-10-04).
+# LaTeX never renders in Telegram, so TeX is converted to Unicode.
 _m = T._md_to_html
 BS = chr(92)
 check("TeX arrows and fractions become Unicode",

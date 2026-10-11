@@ -131,14 +131,8 @@ def test_install_qt_message_handler_real():
 
     from PyQt5 import QtCore
     with _Patches(_CRASH_LOG=_TMP / "crashqt.log"):
-        # Directly exercise the handler function's logic by calling qDebug-style
-        # log levels through the installed hook, using a synthetic context object.
-        class FakeCtx:
-            file = "test.cpp"
-            line = 42
-        # Re-install and grab the handler via a wrapper module-level hook trick:
-        # since install_qt_message_handler defines `handler` locally, we instead
-        # verify indirectly that a real qWarning routes through without raising.
+        # install_qt_message_handler defines its handler locally, so verify
+        # indirectly that a real qWarning routes through without raising.
         try:
             QtCore.qWarning("synthetic warning for coverage")
             check("qt_message_handler_routes_warning", True)
@@ -225,10 +219,7 @@ if __name__ == "__main__":
             print("  ERROR in " + fn.__name__ + ": " + type(e).__name__ + ": " + str(e))
     passed = sum(1 for _, c in RESULTS if c)
     print(f"\n{len(fns)-failed}/{len(fns)} functions, {passed}/{len(RESULTS)} checks passed")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

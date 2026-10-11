@@ -1,10 +1,10 @@
 """Source code is fenced, shown as code, and never spoken.
 
-Live 2026-09-12 (journey 24): "напиши на python функцию…" took the fast path,
-whose prompt forbids markdown outright, so the code arrived as prose in the
-chat. Now: coding requests reach the tool loop, both prompts carve out the
-fenced-block exception, the TTS cleaner drops fenced blocks, and a reply with
-a fence is sent as text even when the voice note went out.
+"напиши на python функцию…" used to take the fast path, whose prompt forbids
+markdown outright, so the code arrived as prose in the chat. Now: coding
+requests reach the tool loop, both prompts carve out the fenced-block
+exception, the TTS cleaner drops fenced blocks, and a reply with a fence is
+sent as text even when the voice note went out.
 """
 import os, sys
 os.environ.setdefault("F5_TEST_RUN", "1")

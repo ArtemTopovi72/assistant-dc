@@ -1,10 +1,9 @@
 """'нарисуй X' with a picture in the chat is steered to generate_image.
 
-Live 2026-09-13 (mega journey re-run, step 48): 'нарисуй набережную Сочи в
-такую погоду' after a lighthouse picture was redrawn ON the lighthouse — the
-'previously created image' steering leans towards the edit tools. A fresh
-drawing verb that does not point at the picture now gets a generate_image
-steer; 'нарисуй ей шляпу' / 'draw a hat on it' still edit.
+'нарисуй набережную Сочи в такую погоду' after a lighthouse picture must not be
+redrawn ON the lighthouse (the 'previously created image' steering leans towards
+the edit tools). A fresh drawing verb that does not point at the picture gets a
+generate_image steer; 'нарисуй ей шляпу' / 'draw a hat on it' still edit.
 """
 import os, sys, types
 os.environ.setdefault("F5_TEST_RUN", "1")

@@ -98,7 +98,7 @@ def hits_to_rows(hits):
             for h in hits]
 
 
-def scrub_docs(rows, root):
+def scrub_docs(rows):
     """documents() returns absolute paths; the two runs index the same files from
     the same directory, so only the db file differs — but scrub anyway so a
     future change of layout cannot make this pass or fail for the wrong reason."""
@@ -120,7 +120,7 @@ def scrub_stats(st):
 # --------------------------------------------------------------------------- #
 # the operation script — one function, run twice
 # --------------------------------------------------------------------------- #
-def run_ops(client, paths, root):
+def run_ops(client, paths):
     out = {}
     out["is_empty_before"] = client.is_empty()
     st = client.ingest(paths)
@@ -129,7 +129,7 @@ def run_ops(client, paths, root):
                       "chunks_embedded", "errors")}
     out["ingest_stats"] = scrub_stats(st)
     out["is_empty_after"] = client.is_empty()
-    out["documents"] = scrub_docs(client.documents(), root)
+    out["documents"] = scrub_docs(client.documents())
     out["stats"] = scrub_stats(client.stats())
     out["corpus_scripts"] = sorted(client.corpus_scripts())
     out["all_chunks"] = client.all_chunks()
@@ -167,7 +167,7 @@ def main():
         check("in-process client type", type(ip).__name__ == "InProcessKnowledgeClient",
               type(ip).__name__)
         try:
-            a = run_ops(ip, paths, root)
+            a = run_ops(ip, paths)
         finally:
             ip.close()
 
@@ -204,7 +204,7 @@ def main():
         http_client = knowledge_client.open_library(os.path.join(root, "http.db"))
         check("http client type", type(http_client).__name__ == "HttpKnowledgeClient",
               type(http_client).__name__)
-        b = run_ops(http_client, paths, root)
+        b = run_ops(http_client, paths)
 
         # ---- compare ------------------------------------------------------ #
         # A comparison of two empty result sets agrees perfectly and proves

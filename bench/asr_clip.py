@@ -1,7 +1,7 @@
 """Transcribe clip audio (Russian, GigaAM on CPU): bench/asr_clip.py a.mp4 [b.mp4 ...]"""
 import os, subprocess, sys, tempfile
 try: sys.stdout.reconfigure(encoding="utf-8")
-except Exception: pass
+except (AttributeError, ValueError, OSError): pass
 import onnx_asr
 m = onnx_asr.load_model("gigaam-v3-e2e-rnnt")
 for p in sys.argv[1:]:

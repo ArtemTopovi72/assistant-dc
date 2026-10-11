@@ -1,11 +1,11 @@
 """Calendar questions must reach `calculate` and be computed, not guessed.
 
-Live 2026-09-12 (journey 14): "сколько дней до нового года?" and "сколько мне
-полных лет?" took the fast path and the model answered from an invented
-"Сегодня 23 мая 2024 года" — 222 days, 34 years. Three things fix it: the
-lite prompt now states today's date, the trigger regex routes calendar
-arithmetic to the tool loop, and calculate has today()/date()/days_between/
-years_between/weekday so the model never counts in its head.
+"сколько дней до нового года?" and "сколько мне полных лет?" used to take the
+fast path and the model answered from an invented "Сегодня 23 мая 2024 года"
+— 222 days, 34 years. Three things fix it: the lite prompt states today's
+date, the trigger regex routes calendar arithmetic to the tool loop, and
+calculate has today()/date()/days_between/years_between/weekday so the model
+never counts in its head.
 """
 import os, sys, datetime as dt
 os.environ.setdefault("F5_TEST_RUN", "1")

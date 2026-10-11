@@ -133,7 +133,7 @@ Guards that exist because of it:
 
 ## Configuration
 
-All in [config.py](../config.py) under "Video generation":
+All in [core/config.py](../core/config.py) under "Video generation":
 `VIDEO_ENGINE`, `VIDEO_DEFAULT_FRAMES`, `VIDEO_MAX_FRAMES`, `VIDEO_SHORT_EDGE`,
 `VIDEO_MAX_PIXELS`, `VIDEO_STEPS`, `VIDEO_CFG`, `VIDEO_SHIFT_VIDEO`,
 `VIDEO_SHIFT_AUDIO`, `VIDEO_JOB_TIMEOUT`, `VIDEO_TG_MAX_BYTES`.
@@ -151,8 +151,8 @@ weights visible to ComfyUI → graphs validate against live schemas → real ren
 Offline suites (no GPU, no ComfyUI, no weights):
 
 ```bash
-venv/Scripts/python.exe tests/test_video_generation.py    # 96 checks
-venv/Scripts/python.exe tests/test_tg_video_delivery.py   # 24 checks
+venv/Scripts/python.exe tests/test_video_generation.py
+venv/Scripts/python.exe tests/test_tg_video_delivery.py
 ```
 
 ## ComfyUI version note

@@ -2,8 +2,7 @@
 
 The house vision model misjudges exposure in one direction, consistently: a
 clearly lit orange cat on a sunlit sill is "a black silhouette", the wooden
-sill under it "a large black bar", an ordinary interior "mostly black" (bench
-2026-08-29; live 2026-09-12, three renders in a row at 5/10, 4/10, 5/10 for the
+sill under it "a large black bar", an ordinary interior "mostly black" (three renders in a row at 5/10, 4/10, 5/10 for the
 same imagined darkness). Asked to simply describe the same picture it names
 the cat, the window and the snow correctly -- and still calls it dark.
 

@@ -27,7 +27,7 @@ def test_default_engine_is_yue2(monkeypatch):
     assert M.generate_music(None, "[verse]\nраз", "pop") == __file__ and calls == ["pop"]
 
 
-def test_cpp_render_uses_16_ode_steps(monkeypatch, tmp_path):
+def test_cpp_render_uses_16_ode_steps(monkeypatch):
     jobs = []
     monkeypatch.setattr(M, "yue2_cpp_available", lambda: True)
     monkeypatch.setattr(M, "run_gpu_worker", lambda ctx, py, sc, job, *a, **k: jobs.append(job) or (True, ""))
@@ -60,7 +60,7 @@ def test_russian_lyrics_name_the_language_in_the_style():
 
 
 def test_the_vocal_button_reaches_yue2_as_a_positive_tag():
-    # 10-09 «мужской не доезжал»: «no female vocals» put the word «female» in the tags
+    # «no female vocals» would put the word «female» in the tags
     p = M.prefs_from(genre="punk", vocal="male")
     got = M.yue2_pin("female vocal, Pop, Bright female soprano lead vocal, 120 BPM, synth", p)
     assert got.split(", ")[0] == "male vocal" and "female" not in got
@@ -70,8 +70,7 @@ def test_the_vocal_button_reaches_yue2_as_a_positive_tag():
     assert got.split(", ")[0] == "female vocal" and "man" not in got.replace("woman", "")
 
 
-def test_an_instrumental_has_no_vocal_tags_and_no_words(monkeypatch, tmp_path):
-    # 10-09 «инструментал со словами»
+def test_an_instrumental_has_no_vocal_tags_and_no_words(monkeypatch):
     p = M.prefs_from(vocal="instrumental")
     assert M.yue2_pin("Pop, Russian vocal, airy female vocal, synth", p) == "instrumental, Pop, synth"
     seen = {}

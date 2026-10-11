@@ -8,10 +8,9 @@ Source condition  = neutral reference of the voice (Rs).   Target condition = th
 
     wav24k = edit(ctx, rs_wav, rs_text, rt_wav, rt_text, "text", strength=1.0)
 """
-import numpy as np
 import torch
 
-from f5_tts.infer.utils_infer import preprocess_ref_audio_text, hop_length, target_rms, target_sample_rate
+from f5_tts.infer.utils_infer import preprocess_ref_audio_text, target_rms, target_sample_rate
 from f5_tts.model.utils import convert_char_to_pinyin, get_epss_timesteps
 import torchaudio
 
@@ -54,13 +53,6 @@ def edit(ctx, rs_wav, rs_text, rt_wav, rt_text, gen_text, strength=1.0, steps=10
     cond = {"s": pad(cs, ls + gl), "t": pad(ct, lt + gl)}
     lens = {"s": ls, "t": lt}
 
-    def velocity(k, x_gen, e_ref):
-        n = lens[k]
-        x = torch.cat([e_ref[k], x_gen], 1)
-        t_ = cond[k]
-        step_cond = t_.clone(); step_cond[:, n:] = 0
-        return None, x, step_cond
-
     g = torch.Generator(device=dev).manual_seed(seed)
     e_gen = torch.randn(1, gl, 100, generator=g, device=dev, dtype=dt_)
     e_ref = {k: torch.randn(1, lens[k], 100, generator=g, device=dev, dtype=dt_) for k in "st"}
@@ -78,7 +70,7 @@ def edit(ctx, rs_wav, rs_text, rt_wav, rt_text, gen_text, strength=1.0, steps=10
         return out[:, n:]
 
     # 1. source sample X0 with Rs
-    x = e_gen.clone() if False else torch.cat([e_ref["s"], e_gen], 1)
+    x = torch.cat([e_ref["s"], e_gen], 1)
     sc = cond["s"].clone(); sc[:, ls:] = 0
     for i in range(len(ts) - 1):
         t, tn = ts[i], ts[i + 1]

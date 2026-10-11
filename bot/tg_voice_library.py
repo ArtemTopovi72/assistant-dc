@@ -2,7 +2,7 @@
 
 Every sample lands here -- 🗣 the assistant's voice, 🎙 a clone, 🎙 the voices
 for a clip -- so nothing has to be recorded twice. Unnamed voices are the
-RECENT ones: the last 2 are kept, older unnamed ones fall off the list (the
+RECENT ones: the last 5 are kept, older unnamed ones fall off the list (the
 file stays on disk). A voice with a name is saved for good, until ✖️.
 
 Where it is used:
@@ -45,8 +45,8 @@ def vl_list(sess) -> list:
 
 
 def vl_label(v: dict, lang: str) -> str:
-    """The name, or when an unnamed voice came: five «недавний голос» buttons
-    could not be told apart (owner 10-03: «не увидел базы голосов»)."""
+    """The name, or when an unnamed voice came: several «недавний голос» buttons
+    could not be told apart."""
     if v.get("name"):
         return v["name"]
     ts = v.get("ts")

@@ -1,10 +1,8 @@
 """The history commit must keep THIS turn's user message.
 
-Torture run #5 2026-09-14: the graph sanitizes (drops tool turns) and trims
-the persisted history before appending the turn, so `new_msgs[len(old):]`
-skipped the user message whenever the old history held tool results. The
-archive requests were never in the transcript; «заново» then redid the cat
-edit from six turns earlier.
+The graph sanitizes (drops tool turns) and trims the persisted history before
+appending the turn, so `new_msgs[len(old):]` skips the user message whenever the
+old history held tool results; the request is then missing from the transcript.
 """
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

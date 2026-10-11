@@ -1,8 +1,7 @@
 """The bot menus: every reply/inline keyboard the user can be shown.
 
-Lifted out of tg_bot.py. These are pure builders — hand them a language (and,
-for the size menu, a session) and they return a Telegram keyboard dict. They
-decide nothing and send nothing.
+Pure builders: hand them a language (and, for the size menu, a session) and
+they return a Telegram keyboard dict. They decide nothing and send nothing.
 
 Labels come from tg_strings via _b/_t, never from literals, so a keyboard
 rendered before a language switch still matches by KEY. The lang default is
@@ -17,10 +16,9 @@ from tg_strings import _DEFAULT_LANG, _b, _nav_back_row, _t
 
 def _main_kb(voice_on: bool, is_admin: bool = False, lang: str = _DEFAULT_LANG) -> dict:
     # `is_admin` is accepted but deliberately unused: the Admin Panel lives in the
-    # Settings menu (_settings_kb), not here. It is an operator tool, not one of
-    # the six things a user reaches for, and a fourth row pushed the everyday
-    # buttons up. The signature stays because ~40 call sites pass the flag and
-    # _settings_kb still needs it. Do NOT re-add the row here.
+    # Settings menu (_settings_kb), not here -- it is an operator tool, and an
+    # extra row pushes the everyday buttons up. The signature stays because
+    # ~40 call sites pass the flag. Do NOT re-add the row here.
     rows = [
         # Long labels («🎨 Творчество», «⚙️ Настройки») were cut off three to a
         # row on a phone; they get two-per-row or a row of their own.
@@ -42,12 +40,9 @@ def _fwd_voice_kb(lang: str = _DEFAULT_LANG, fwd_id: str = "", board: bool = Fal
     the ask and the re-ask after an unusable choice.
 
     `fwd_id` identifies WHICH forward this prompt is about (see _Session.
-    fwd_transcript_id): a second forward arriving before this one is answered
-    used to silently overwrite the single pending transcript, so tapping THIS
-    (now stale) keyboard delivered the wrong voice note's content. Callers
-    that don't pass one get the old bare "fwdv:<choice>" form, which the
-    dispatch side still honours unconditionally — a keyboard sent before this
-    id existed.
+    fwd_transcript_id), so tapping an older keyboard cannot deliver a newer
+    voice note's content. Callers that don't pass one get the bare
+    "fwdv:<choice>" form, which tg_callbacks honours unconditionally.
     """
     suffix = f":{fwd_id}" if fwd_id else ""
     rows = [[
@@ -85,13 +80,9 @@ def _draw_kb(lang: str = _DEFAULT_LANG) -> dict:
 
 
 def _weather_kb(lang: str = _DEFAULT_LANG) -> dict:
-    """Every window reachable in ONE tap.
-
-    Was a single "what to wear" button, which forced the whole flow through a
-    24h lookup first: wanting 48h meant sitting through 24h and then pressing
-    a follow-up button under the result. Each window is now its own entry
-    point, and 🏙 City changes the remembered default so the other buttons
-    never have to ask for it.
+    """Every window reachable in ONE tap: each is its own entry point, and
+    🏙 City changes the remembered default so the other buttons never have to
+    ask for it.
     """
     return {
         "keyboard": [
@@ -105,9 +96,8 @@ def _weather_kb(lang: str = _DEFAULT_LANG) -> dict:
 
 
 def _creativity_kb(lang: str = _DEFAULT_LANG) -> dict:
-    # Grown past one screen, with labels cut to «Настройки пес…»: the images,
-    # music and video tools each get a tier of their own, and a long label
-    # gets a row of its own, so nothing is abbreviated.
+    # The images, music and video tools each get a tier of their own, and a long
+    # label gets a row of its own, so nothing is abbreviated.
     return _kb([[_b("cr_images", lang), _b("cr_music", lang)],
                 [_b("cr_video", lang), _b("deck", lang)],
                 [_b("sandbox_btn", lang)],

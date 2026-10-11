@@ -389,7 +389,7 @@ def test_json_or_empty():
 
 
 # ── one loader at a time ──────────────────────────────────────────────────────
-# Live, 2026-09-12: a crash revive and the card release's reload ran together;
+# A crash revive and the card release's reload ran together;
 # LM Studio said "2 models match ... Operation canceled", then 500, and four
 # turns died. ensure_exclusive is serialised process-wide.
 def test_ensure_exclusive_is_serialised():
@@ -420,10 +420,7 @@ if __name__ == "__main__":
             print("  ERROR in " + fn.__name__ + ": " + type(e).__name__ + ": " + str(e))
     passed = sum(1 for _, c in RESULTS if c)
     print(f"\n{len(fns)-failed}/{len(fns)} functions, {passed}/{len(RESULTS)} checks passed")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

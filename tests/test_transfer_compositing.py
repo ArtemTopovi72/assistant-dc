@@ -10,7 +10,6 @@ import os
 import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
-import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
@@ -87,7 +86,6 @@ def test_small_tile_still_feathers():
 def test_content_aware_alpha_tattoo():
     """Additive edit (ink on skin): only changed pixels composite — surrounding skin
     must stay at alpha 0 so no halo can form."""
-    from PIL import Image, ImageDraw
     w = h = 200
     skin = Image.new("RGB", (w, h), (200, 170, 150))
     res = skin.copy()
@@ -111,7 +109,6 @@ def test_content_aware_alpha_tattoo():
 def test_content_aware_alpha_fullregion_fallback():
     """Whole-region edit (clothing recolor): change fills the mask, so the helper
     returns None and the caller uses the region feather (existing behavior kept)."""
-    from PIL import Image, ImageDraw
     w = h = 200
     a_img = Image.new("RGB", (w, h), (40, 40, 40))         # dark shirt
     b_img = Image.new("RGB", (w, h), (140, 20, 20))        # recolored red

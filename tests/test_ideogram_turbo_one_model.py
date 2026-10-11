@@ -1,5 +1,5 @@
 """Turbo at cfg 1 renders with ONE model: no unconditional branch, the 9 GB
-uncond model never loaded (A/B 2026-10-02: same pictures, 4-9 s vs 7-13 s).
+uncond model never loaded (same pictures, 4-9 s vs 7-13 s).
 An explicit cfg keeps the dual-model guider."""
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -9,7 +9,7 @@ import comfy_client as C
 seen = []
 C._submit_and_poll = lambda ctx, wf, **k: seen.append(wf) or None
 I.IDEOGRAM_CFG_TURBO = 1.0
-I.IDEOGRAM_TURBO = True   # opt-in since 2026-10-02
+I.IDEOGRAM_TURBO = True   # opt-in
 try:
     I.generate(None, "a cat on a sofa")
 except Exception:

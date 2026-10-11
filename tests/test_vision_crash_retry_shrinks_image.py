@@ -1,13 +1,13 @@
 """A picture that crashes the model is retried smaller, and the model is revived again.
 
-Live 2026-09-13 (journey 3): a 683x1024 photo tripped llama.cpp's
+A 683x1024 photo tripped llama.cpp's
 `n_ubatch >= n_tokens` assert (non-causal attention over image tokens). The
 revive brought the model back in 15 s, the retry re-sent the same picture and
 killed it again with "Model reloaded." -- a message the revive did not
 recognise -- and the 60 s cooldown then returned the cached "ok" while every
 turn died on "No models loaded". Four steps of the journey were lost.
 """
-import os, sys, io, base64, json
+import os, sys, io, base64
 os.environ.setdefault("F5_TEST_RUN", "1")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")

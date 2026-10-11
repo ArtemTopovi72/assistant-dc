@@ -1,16 +1,10 @@
 """A link in a research report must be a page we actually read.
 
-Measured on a live run ("как выбрать и купить б/у электромобиль в России"):
-three different cars -- a Nissan Leaf, a Zeekr 001 and a Tesla Model 3, each
-with its own price -- were all linked to `https://carsplus.online`, the bare
-homepage of a source whose collected URL was
-`carsplus.online/news/luchshie-elektrokary`. The same report said in its own
-first paragraph that the sources carried no purchase pages.
-
-The prompt already forbids inventing, guessing or SHORTENING a URL. The model
-did it anyway, which is the house rule about instructions arriving as
-suggestions. A link that looks like a listing and is not one is worse than no
-link: the reader clicks it and the price beside it was never on that page.
+The prompt forbids inventing, guessing or SHORTENING a URL, but a model does it
+anyway (several different cars linked to one bare homepage whose collected URL
+was a specific article), and a link that looks like a listing and is not one is
+worse than no link: the reader clicks it and the price beside it was never on
+that page.
 
 So the report is audited. Two repairs, in order: if the domain has exactly one
 collected URL, that is what the model mangled -- use it; otherwise drop the link
@@ -134,10 +128,9 @@ print("=" * 66)
 
 from dr_assemble import strip_empty_fields  # noqa: E402
 
-# Measured on the same live run: the options prompt describes a fixed row of
-# tour-shaped fields, and a used car has no duration, no departure time and no
-# meeting point -- so each car came out as "... · не указано · не указано ·
-# не указано".
+# The options prompt describes a fixed row of tour-shaped fields, and a used
+# car has no duration, no departure time and no meeting point -- so each car
+# came out as "... · не указано · не указано · не указано".
 car = "- **[Nissan Leaf](https://x.ru/a)** — Nissan · от 2 500 000 ₽ · не указано · не указано · не указано"
 out, n = strip_empty_fields(car)
 check("a run of placeholders is removed", "не указано" not in out, out)
@@ -183,7 +176,7 @@ print()
 
 
 # ── a translator wrapper is not a source ─────────────────────────────────────
-# Observed in a delivered report's source list:
+# Example source entry:
 #   tr-page.yandex.ru/translate?lang=en-ru&url=https://en.wikipedia.org/wiki/Tannin
 # cited as though the translator were the source. It is not: a citation must
 # point at the page a reader can check. The wrapper also hides the real host
@@ -241,8 +234,7 @@ check("the source that reaches the pipeline is the unwrapped page",
 check("...and the wrapped copy is then recognised as the SAME page, not a second one",
       len(_srcs) == 1, _srcs)
 # collect_sources stores the href; the domain is derived downstream from it, so
-# that is what this asserts on. (The first version of this check read a "domain"
-# key that does not exist at this stage and failed for the wrong reason.)
+# that is what this asserts on.
 check("...so every later host decision sees the encyclopaedia",
       _srcs and _U._domain(_srcs[0]["href"]) == "en.wikipedia.org", _srcs)
 

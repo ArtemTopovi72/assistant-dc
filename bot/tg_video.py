@@ -10,20 +10,19 @@ ABSOLUTE timecodes («12:04 — …»). Each portion is delivered as soon as it 
 done, so the user reads part 1 while part 2 is still cooking, and ⛔ Stop
 ends the job between portions.
 
-Settings live under Creativity ▸ 🎬 Video (the user's call: no new tab, the
-existing menus), shaped like tg_music: an inline menu that STATES the
-current value, redrawn in place on every tap.
+Settings live under Creativity ▸ 🎬 Video, shaped like tg_music: an inline menu
+that STATES the current value, redrawn in place on every tap.
 """
 from __future__ import annotations
 
 import html as _html_mod
+import json
 import re
 import logging
 import os
 import subprocess
 import threading
 import turn_trace
-import time
 import uuid
 from pathlib import Path
 
@@ -36,7 +35,7 @@ FIELDS: tuple = ("chunk", "frames", "out", "long")
 CHUNKS = ("2", "5", "10")            # minutes per portion
 FRAMES = ("6", "12", "20")           # key frames per portion
 # «brief»: one retelling of the whole video at the end and questions on demand -- per-portion
-# storyboards (11 parts x 15 lines + a sheet each) buried the chat (10-09); the others stay for
+# storyboards (11 parts x 15 lines + a sheet each) bury the chat; the others stay for
 # whoever wants every part
 OUTS = ("brief", "both", "board", "retell")   # what each portion delivers
 LONGS = ("1", "2", "5")              # a video longer than this (minutes) is "long"
@@ -139,8 +138,7 @@ def cut_portion(src: str, start: float, length: float, dst: str) -> bool:
 
 # ── the job ──────────────────────────────────────────────────────────────────
 # One structure for every retelling (a voice note, a round video, a portion of
-# a long video): the shape the user liked before the one-shot call replaced
-# the agent -- a one-line gist, the key points, and a block of what is asked
+# a long video): a one-line gist, the key points, and a block of what is asked
 # of the listener. The model writes the section labels verbatim; render_retelling
 # turns them into bold lines for Telegram.
 _SECTIONS = {
@@ -186,6 +184,10 @@ _ANSWER_SYSTEM = (
     "(what is said). Answer only from these notes. Start with the direct answer in one or two "
     "sentences, then the moments that show it as bullets «m:ss — what happens there». When the "
     "notes do not show it, say so plainly. Plain text, no markdown. ")
+
+
+def _lang_line(lang: str) -> str:
+    return {"ru": " Write in Russian.", "en": " Write in English."}.get(lang, " Write in Russian.")
 
 
 def material_text(parts: list, budget: int = 24000) -> str:
@@ -234,7 +236,6 @@ def render_retelling(text: str, title: str) -> str:
 
 def _save_material(work: Path, parts: list) -> None:
     """After every portion, so a Stop or a crash keeps what was watched answerable."""
-    import json
     try:
         (work / "material.json").write_text(json.dumps({"parts": parts}, ensure_ascii=False), encoding="utf-8")
     except OSError:
@@ -302,7 +303,6 @@ class LongVideoMixin:
                 self._send_text(chat_id, _t("lv_gone", lang)); return
             pending["question"] = text
             return self._long_video_start(chat_id, sess, lang, pending)
-        import json
         import tg_bot
         try:
             mat = json.loads(_material_path(tg_bot._IMAGE_DIR, job_id).read_text(encoding="utf-8"))
@@ -315,9 +315,8 @@ class LongVideoMixin:
         import llm as _llm
         import tg_bot
         self._api_post("sendChatAction", {"chat_id": chat_id, "action": "typing"})
-        lang_line = {"ru": " Write in Russian.", "en": " Write in English."}.get(lang, " Write in Russian.")
         try:
-            answer = (_llm.call_llm_simple(self._get_ctx(), _ANSWER_SYSTEM + lang_line,
+            answer = (_llm.call_llm_simple(self._get_ctx(), _ANSWER_SYSTEM + _lang_line(lang),
                                            "QUESTION: " + question + "\n\nNOTES:\n" + material_text(parts),
                                            temperature=0.2, max_tokens=900, prefill="<think></think>") or "").strip()
         except Exception:
@@ -336,9 +335,8 @@ class LongVideoMixin:
         import tg_bot
         notes = "\n\n".join(f"=== {p['a']}-{p['b']} ===\n" + (p.get("note") or p.get("board") or "")
                              for p in parts)
-        lang_line = {"ru": " Write in Russian.", "en": " Write in English."}.get(lang, " Write in Russian.")
         try:
-            tale = (_llm.call_llm_simple(self._get_ctx(), _OVERVIEW_SYSTEM + lang_line + "\n"
+            tale = (_llm.call_llm_simple(self._get_ctx(), _OVERVIEW_SYSTEM + _lang_line(lang) + "\n"
                                          + _structure_rules(lang, timecoded=True, ask=False), notes[:24000],
                                          temperature=0.3, max_tokens=1100, prefill="<think></think>") or "").strip()
         except Exception:
@@ -352,7 +350,6 @@ class LongVideoMixin:
 
     def _long_video_after(self, chat_id: int, sess, lang: str, action: str, job_id: str) -> None:
         """❓ another question, or 📜 every portion's storyboard and retelling, on demand."""
-        import json
         import tg_bot
         try:
             mat = json.loads(_material_path(tg_bot._IMAGE_DIR, job_id).read_text(encoding="utf-8"))
@@ -456,9 +453,8 @@ class LongVideoMixin:
                         payload += "TRANSCRIPT:\n" + said + "\n\n"
                     if board:
                         payload += "STORYBOARD:\n" + board
-                    lang_line = {"ru": " Write in Russian.", "en": " Write in English."}.get(lang, " Write in Russian.")
                     try:
-                        tale = (_llm.call_llm_simple(ctx, _RETELL_SYSTEM + lang_line + "\n"
+                        tale = (_llm.call_llm_simple(ctx, _RETELL_SYSTEM + _lang_line(lang) + "\n"
                                                      + _structure_rules(lang, timecoded=True, ask=False), payload,
                                                      temperature=0.3, max_tokens=700,
                                                      prefill="<think></think>") or "").strip()

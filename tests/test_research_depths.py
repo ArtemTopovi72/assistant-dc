@@ -3,9 +3,8 @@ advertise honest times, and every one of them must return a Markdown DOCUMENT.
 
 The product offers ~15 min / ~30 min / ~1 hour. Two things can quietly break that:
 the depth can stop changing what the pipeline actually does (so all three cost the
-same), and the report can come back as unstructured prose after a retry (which is
-exactly what happened once — a nudge asked for the answer "now" and the model
-dropped every heading).
+same), and the report can come back as unstructured prose after a retry (a nudge
+asking for the answer "now" can make the model drop every heading).
 
 Run: venv/Scripts/python.exe tests/test_research_depths.py
 """
@@ -17,9 +16,9 @@ except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
 
 import deep_research as D
-# The timings store moved to dr_timing.py. It is patched below, so it must be
-# patched where it LIVES: deep_research deliberately does not re-export it, and
-# a second copy would let this suite write the user's real ETA history.
+# The timings store lives in dr_timing.py and is patched below where it LIVES:
+# deep_research deliberately does not re-export it, and a second copy would let
+# this suite write the user's real ETA history.
 import dr_timing as DT
 import tg_bot as T
 
@@ -67,9 +66,8 @@ check("the report budget grows with depth",
       <= caps["deep"]["report_tokens"],
       [caps[d]["report_tokens"] for d in D.DEPTHS])
 # The reflection pass is what actually separates the three options in WALL-CLOCK
-# terms: it re-crawls and re-briefs, and briefing is the most expensive stage
-# (22-32 of the 42 minutes a "quick" run took before this). A quick run is ONE
-# pass by definition.
+# terms: it re-crawls and re-briefs, and briefing is the most expensive stage.
+# A quick run is ONE pass by definition.
 check("quick does no reflection pass at all", caps["quick"]["reflect_iters"] == 0,
       caps["quick"]["reflect_iters"])
 check("quick therefore has no reflection budget either",
@@ -85,8 +83,8 @@ check("the reflection budget grows with depth",
       [caps[d]["reflect_budget"] for d in D.DEPTHS])
 
 # ...and the loop must actually READ the caps, not the global constants.
-import inspect as _insp
-_loop_src = _insp.getsource(D.run_deep_research)
+import inspect
+_loop_src = inspect.getsource(D.run_deep_research)
 check("the reflection loop is bounded by the DEPTH, not the global constant",
       'caps.get("reflect_iters"' in _loop_src and "refl_iter < refl_max" in _loop_src,
       "the loop still uses DR_REFLECTION_MAX_ITERATIONS directly")
@@ -119,18 +117,16 @@ try:
           f"{secs} over {n}")
     check("it is the MEDIAN, not the latest or the mean", secs == 1300.0, secs)
 
-    # A stubbed test run or an abort must not be recorded as a measurement. The
-    # LIVE file was found holding [0.1, 0.1, 0.0], which made the bot quote the
-    # user an ETA of "0 min".
+    # A stubbed test run or an abort must not be recorded as a measurement, or the
+    # bot would quote the user an ETA of "0 min".
     D.record_run_duration("standard", 0.1)
     D.record_run_duration("standard", 0.0)
     secs2, n2 = D.estimate_duration("standard")
     # standard has no measurement of its own, but quick just got one (median
     # 1300s) -- infer standard's estimate from it via the seed ratio (1800/900)
     # rather than quoting the flat 1800s seed, which could land out of order
-    # against a sibling that DID get measured (this happened live: an
-    # unmeasured "standard" quoted a flatter/slower seed than a measured
-    # "deep"). n stays 0: this is still an inference, not standard's own data.
+    # against a sibling that DID get measured. n stays 0: this is still an
+    # inference, not standard's own data.
     check("an implausibly short run is not recorded, so a sibling's measurement fills in instead",
           n2 == 0 and secs2 == 1300.0 * (D._TIMING_SEED["standard"] / D._TIMING_SEED["quick"]),
           f"{secs2} over {n2}")
@@ -138,7 +134,6 @@ try:
           D.estimate_duration("standard")[0] >= 60)
 
     # …and a file already poisoned by older junk must be ignored on READ too.
-    import json as _json
     DT._TIMING_FILE.write_text(_json.dumps({"deep": [0.1, 0.0], "quick": [],
                                            "standard": []}), encoding="utf-8")
     secs3, n3 = D.estimate_duration("deep")
@@ -148,9 +143,8 @@ try:
           all(D.estimate_duration(d)[0] >= 60 for d in D.DEPTHS),
           {d: D.estimate_duration(d) for d in D.DEPTHS})
 
-    # A measurement only describes the profile it was measured under. When the
-    # caps changed (quick stopped doing a second reflection pass) the UI kept
-    # quoting "43 min" for a run that had just been halved.
+    # A measurement only describes the profile it was measured under: when the
+    # caps change the UI must not keep quoting the old measurement.
     DT._TIMING_FILE.write_text(_json.dumps(
         {"quick": [2600.0, 2500.0, 2700.0], "standard": [], "deep": [],
          "_profile": D._profile_signature()}), encoding="utf-8")
@@ -194,9 +188,8 @@ print("\n" + "=" * 70)
 print("5. WHATEVER THE DEPTH, THE OUTPUT IS STRUCTURED MARKDOWN")
 print("=" * 70)
 
-# The retry nudge is what once destroyed the structure: it asked for the answer
-# "NOW" and the model answered with a wall of prose.
-import inspect
+# The retry nudge must not destroy the structure (asking for the answer "NOW"
+# can make the model answer with a wall of prose).
 src = inspect.getsource(D._think_call)
 check("the retry still demands the Markdown structure back",
       "Markdown" in src and "heading" in src, "the nudge lost its structure clause")

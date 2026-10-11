@@ -75,7 +75,6 @@ WHAT IS *NOT* ON THE BOUNDARY (deliberately client-side / internal)
       reads such a directory BY PATH. Putting it behind a network hop would add
       one round-trip per URL to a component whose whole purpose is to avoid
       per-URL latency. It is therefore left in-process and out of this contract.
-      (See "NOT MIGRATED" in the branch notes.)
 
 RETURN SHAPES
 -------------

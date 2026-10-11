@@ -1,10 +1,10 @@
 """tg_artifacts_store.py — the durable, restart-safe artifact registry.
 
-Live, 2026-09-19: only sess.image_log survived an app restart; a delivered
-video lived in an in-memory dict, and a song or presentation was never
-remembered past the turn that made it. This store generalises "remember what
-was actually delivered, and admit when the file is gone" to every kind, in
-one SQLite table modeled on tg_userstore.py's own conventions.
+Only sess.image_log used to survive an app restart; a delivered video lived
+in an in-memory dict, and a song or presentation was never remembered past
+the turn that made it. This store generalises "remember what was actually
+delivered, and admit when the file is gone" to every kind, in one SQLite
+table modeled on tg_userstore.py's own conventions.
 
 Run: venv/Scripts/python.exe tests/test_artifacts_store.py
 """

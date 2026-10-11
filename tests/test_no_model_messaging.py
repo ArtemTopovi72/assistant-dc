@@ -103,8 +103,8 @@ def test_the_greeting_and_the_chip_tell_the_truth():
 
 
 def test_startup_does_not_report_stopped_training():
-    """The user asked for startup to carry only what is important; a stopped
-    training run is on the Characters tab."""
+    """Startup carries only what is important; a stopped training run is on the
+    Characters tab."""
     ready = _func(_src("gui/gui.py"), "_on_runtime_ready")
     check("no stopped-run notice at startup", "RUN_STOPPED" not in ready, ready[-1200:])
 
@@ -120,10 +120,9 @@ def test_the_queue_holds_rather_than_burning_through():
 def test_unloading_from_settings_records_the_state():
     """Freeing the VRAM is only half of it.
 
-    Picking "do not load a model" from inside a running app used to evict
-    everything and leave ctx.model_name naming the model that was just thrown
-    out -- so every gate above still believed a model was loaded and kept
-    sending turns to an LM Studio with nothing resident."""
+    Picking "do not load a model" from inside a running app must also clear
+    ctx.model_name -- otherwise every gate above still believes a model is
+    loaded and keeps sending turns to an LM Studio with nothing resident."""
     body = _func(_src("gui/gui.py"), "_open_settings")
     i = body.index("NO_MODEL")
     branch = body[i:i + 1400]

@@ -1,4 +1,4 @@
-"""🎭 Change style button: TG had NO path at all to transfer_image before this.
+"""🎭 Change style button: the Telegram path to transfer_image.
 
 transfer_image (tool_image_handlers._handle_transfer_image) needs TWO images in
 ctx.reference_images, which only the desktop GUI's Transfer tab ever populated.
@@ -15,9 +15,8 @@ Run: venv/Scripts/python.exe tests/test_tg_style_button.py
 """
 # Script, not pytest: check() only counts, and the module-level sys.exit lives
 # under `if __name__ == "__main__":` (indented), which tests/run_all.py's
-# classify() cannot see -- undeclared, this file silently fell through to
-# "skip" and never ran as part of the suite at all (caught 2026-09-18: it was
-# missing from run_all's own summary).
+# classify() cannot see -- undeclared, the file would fall through to "skip"
+# and never run as part of the suite.
 RUN_AS_SCRIPT = True
 import os, sys, tempfile, time, types
 

@@ -21,7 +21,6 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 import tg_bot as T
 import tg_music as TM
 import music as M
-import config as C
 
 _DATA_DIR = tempfile.mkdtemp(prefix="tgtest_musicset_")
 T.redirect_data_dir(_DATA_DIR)
@@ -80,7 +79,7 @@ def kb_datas(kb):
 
 bot = make_bot()
 threading.Thread = _SyncThread
-# The song is a queued task now (tg_songs.song_payload); drive the generation
+# The song is a queued task (tg_songs.song_payload); drive the generation
 # directly so the settings contract below is still exercised end to end.
 bot._start_song_generation = lambda cid, topic, lang, duration=0: bot._generate_song(cid, topic, lang, duration)
 CID = 999901
@@ -147,7 +146,7 @@ check("the menu now states every chosen value",
           for s in ("Джаз", "Медленно", "Женский", "120")),
       kb_texts(bot.edits[-1][1]))
 # YuE2 reads tags, not buttons: the menu shows the line the choices become, so a choice that
-# never reaches the model is visible before a render (10-09 «мужской не доезжал»)
+# never reaches the model is visible before a render
 _text = str(bot.edits[-1][0])
 check("the menu shows the tags the choices pin, the singer first",
       M.MUSIC_ENGINE != "yue2" or "<code>female vocal, " in _text and "jazz" in _text and "70 BPM" in _text, _text)
@@ -184,13 +183,10 @@ print()
 print("=" * 70)
 print("4. A junk / stale tap cannot corrupt the setting or the ✅")
 print("=" * 70)
-print("""
-Telegram buttons never expire, so a keyboard from an older build (or a
-hand-crafted callback) can arrive at any time. The depth picker's fix applies
-here for the same reason: returning silently would leave the ✅ on screen
-pointing at a value we just refused to store, so the keyboard is redrawn
-against what IS active.
-""")
+# Telegram buttons never expire, so a keyboard from an older build (or a
+# hand-crafted callback) can arrive at any time. Returning silently would leave
+# the ✅ on screen pointing at a value we just refused to store, so the keyboard
+# is redrawn against what IS active.
 
 bot._dispatch(cb(CID, "music:set:genre:jazz"))
 bot.edits.clear()
@@ -227,11 +223,9 @@ print()
 print("=" * 70)
 print("5. The settings actually REACH the songwriter")
 print("=" * 70)
-print("""
-The whole point. A picker whose value never reaches the prompt is a lie told
-with a checkmark -- so these follow the value all the way into the system
-prompt string that music.py hands to the LLM.
-""")
+# The whole point. A picker whose value never reaches the prompt is a lie told
+# with a checkmark -- so these follow the value all the way into the system
+# prompt string that music.py hands to the LLM.
 
 s = bot._get_session(CID)
 s.music_genre, s.music_tempo, s.music_vocal, s.music_duration = \
@@ -286,13 +280,11 @@ print()
 print("=" * 70)
 print("6. Instrumental is handled as its own shape, not just a label")
 print("=" * 70)
-print("""
-MiniMax's guide says instrumental work must SAY it is instrumental and name
-the instrument carrying the lead line. Leaving sung words in `lyrics` while
-the caption says "no singer" is a straight contradiction, and the guide's
-precedence rules make that the caption's problem to lose -- so the lyrics are
-dropped to bare tags instead.
-""")
+# MiniMax's guide says instrumental work must SAY it is instrumental and name
+# the instrument carrying the lead line. Leaving sung words in `lyrics` while
+# the caption says "no singer" is a straight contradiction, and the guide's
+# precedence rules make that the caption's problem to lose -- so the lyrics are
+# dropped to bare tags instead.
 
 s.music_vocal = "instrumental"; bot._store.put(s)
 iprefs = TM.prefs_of(s)

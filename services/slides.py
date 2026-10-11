@@ -271,9 +271,8 @@ def _edit_deck(ctx, previous: dict, change: str, out_lang: str) -> dict:
     """Apply `change` to `previous` (a normalized deck) and return the new deck.
 
     "добавь слайд про спутники Марса" used to re-plan the whole deck from a
-    merged topic: a different theme, different slides, different title (live,
-    2026-09-12, journey 19). The model now gets the existing plan and the
-    change; a plan it cannot produce leaves the previous deck untouched with
+    merged topic: a different theme, different slides, different title. The model now gets the existing
+    plan and the change; a plan it cannot produce leaves the previous deck untouched with
     `edit_failed` set so the caller can say so.
     """
     dropped = _dropped_slide(previous, change)
@@ -364,7 +363,7 @@ def plan_deck(ctx, topic: str, n_slides: int = 0, out_lang: str = "",
                 "and no others; a chart plots them.")
     if facts:
         # A literal web search on the topic string can surface hits that share
-        # a WORD with it but not its actual subject -- live, 2026-09-19: a
+        # a WORD with it but not its actual subject -- a
         # joke deck about slacking off at work ("idle correctly at work")
         # came back with car-carburetor and Python-IDE snippets, because the
         # search matched "idle" rather than the intent, and the planner was
@@ -393,7 +392,7 @@ def plan_deck(ctx, topic: str, n_slides: int = 0, out_lang: str = "",
     # because repeating an identical prompt to a model that just failed it mostly
     # fails again.
     attempts = (
-        dict(prompt=_PLAN_PROMPT, temperature=0.4, max_tokens=6000, force_think=False),   # 2026-09-25: no reasoning anywhere
+        dict(prompt=_PLAN_PROMPT, temperature=0.4, max_tokens=6000, force_think=False),
         dict(prompt=_PLAN_PROMPT, temperature=0.7, max_tokens=8000, force_think=False),
         dict(prompt=_PLAN_MINIMAL, temperature=0.3, max_tokens=8000, force_think=False),
     )
@@ -502,7 +501,7 @@ def _is_figure(value: str) -> bool:
     """
     v = (value or "").strip()
     # Filler dressed as a figure: a sleep deck led with «24/7 цикл
-    # восстановления» and «100% необходимость для мозга» (live 2026-09-29).
+    # восстановления» and «100% необходимость для мозга».
     if v.replace(" ", "").lower() in {"24/7", "24/7/365", "100%", "360°", "365", "№1", "#1"}:
         return False
     digits = sum(1 for ch in v if ch.isdigit())
@@ -802,12 +801,9 @@ def repair_sources(sources: list, collected: list) -> tuple:
         elif same and key not in seen:
             seen.add(key)
             out.append(s)                   # ambiguous domain: do not guess
-        else:
-            # Nothing was collected on this domain at all, so the address
-            # cannot be checked. Dropped rather than printed: a deck whose
-            # sources slide 404s is worse than one with fewer citations, and
-            # the search results backfill the list below.
-            fixed += 0
+        # Otherwise nothing was collected on this domain, so the address cannot be
+        # checked. Dropped rather than printed: a deck whose sources slide 404s is
+        # worse than one with fewer citations, and the search results backfill the list.
     return out, fixed
 
 
@@ -967,7 +963,7 @@ def normalize_deck(data: dict, topic: str = "", n_slides: int = 0) -> dict:
     if len(out["slides"]) > 1 and _slug_title(out["slides"][0]["heading"]) == _t_norm:
         out["slides"].pop(0)
     # ...or is literally NAMED the title slide ("Титульный лист" as content
-    # slide 1 ate half of a 4-slide deck, live 2026-09-28), and an edit that
+    # slide 1 ate half of a 4-slide deck), and an edit that
     # repeats a slide instead of removing one ("убери последний слайд" came
     # back with "Древние истоки" twice).
     _seen = set()
@@ -986,15 +982,14 @@ def normalize_deck(data: dict, topic: str = "", n_slides: int = 0) -> dict:
     # not a hint — honour it, counting the cover the builder adds.
     if n_slides and n_slides > 0:
         # The cover AND the closing sources slide both count: "4 slides" used
-        # to come back as cover + 3 + sources = 5 (live, 2026-09-12).
+        # to come back as cover + 3 + sources = 5.
         closing = 1 if out.get("sources") else 0
         want_content = min(int(n_slides), MAX_SLIDES) - 1 - closing
         if want_content < 2 and closing:
             # A tiny deck ("3 слайда") cannot spend a third of itself on a
             # sources slide: cover + ONE content slide + sources was refused
-            # downstream as a stub (live, 2026-09-12, journey 19). The sources
+            # downstream as a stub. The sources
             # move into the speaker notes of the last slide instead.
-            closing = 0
             want_content = min(int(n_slides), MAX_SLIDES) - 1
             out["sources_in_notes"] = True
         want_content = max(2, want_content)
@@ -1964,7 +1959,6 @@ def pptx_audit(path: str) -> dict:
         for sh in slide.shapes:
             if getattr(sh, "has_chart", False):
                 charts += 1
-            if getattr(sh, "has_chart", False):
                 has_visual = True
             if sh.shape_type == 13:                      # PICTURE
                 pictures += 1

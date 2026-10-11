@@ -17,8 +17,7 @@ except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
 from pathlib import Path
 
-import numpy as np
-from PyQt5.QtWidgets import QApplication, QDialog, QInputDialog, QMessageBox
+from PyQt5.QtWidgets import QApplication, QDialog, QInputDialog
 from PyQt5.QtWidgets import QFileDialog as _QFD
 from PyQt5.QtGui import QImage, QColor
 from PyQt5.QtCore import Qt
@@ -215,7 +214,7 @@ def test_open_settings_accepted_scalechange():
 
 
 def test_language_change_switches_in_place():
-    """The saved language used to wait for a restart nobody was told about."""
+    """A language change in settings switches in place, without a restart."""
     import gui_i18n
     orig = _noop()
     switched = []
@@ -278,7 +277,6 @@ def test_load_image_vision_warning_and_dedup():
     img = _png("li.png")
     w.ctx.reference_images = [img, _png("old1.png"), _png("old2.png")]
     w._load_image_file_as_working(img)
-    check("load_vision_warn", "vision" in w.chat.toPlainText().lower() or "vision" in w.statusBar().currentMessage().lower() or True)
     check("load_dedup", w.ctx.reference_images[-1] == img)
     _close(w)
 
@@ -362,10 +360,7 @@ if __name__ == "__main__":
     QInputDialog.getText = staticmethod(_saved["gt"])
     print(f"\n{len(fns)-failed}/{len(fns)} supplement5 functions passed "
           f"({sum(1 for _,c in RESULTS if c)}/{len(RESULTS)} checks)")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

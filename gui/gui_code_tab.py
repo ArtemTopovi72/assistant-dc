@@ -16,7 +16,6 @@ subprocesses, and this project has lost afternoons to Qt slots raising on the
 worker thread -- so nothing here touches a widget from `run()`, and every
 outcome comes back as a signal.
 """
-import os
 from pathlib import Path
 
 from PyQt5.QtCore import QThread, Qt, pyqtSignal

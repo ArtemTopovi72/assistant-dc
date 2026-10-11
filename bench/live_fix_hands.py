@@ -8,7 +8,7 @@ Usage: venv/Scripts/python.exe bench/live_fix_hands.py [source.png]   exit 0 = p
 import os, sys, threading
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception: pass
+except (AttributeError, ValueError, OSError): pass
 
 from pathlib import Path
 from PIL import Image, ImageChops

@@ -1,6 +1,6 @@
 """The reference transcript must describe the audio F5 actually hears.
 
-F5 clips any reference over 12 s (utils_infer.py:324) and carries on, but it
+F5 clips any reference over 12 s (utils_infer.py) and carries on, but it
 is handed the transcript of the WHOLE file. The model then still has text left
 when the reference audio ends and finishes it — the tail of the reference is
 spoken into the reply. A 20.3 s Stepan_short.wav put "это довольно длинное

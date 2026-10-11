@@ -12,11 +12,10 @@ fetched or any word is written:
   quick/standard/deep run gets.  `_resolve_caps`.
 
 The caps live here rather than in dr_timing because they are computed from the
-DR_* knobs, which `apply_overrides` swaps out for a single run. How LONG each
-profile takes (the measured ETA) is dr_timing's job.
+DR_* knobs in dr_settings, which `apply_overrides` swaps out for a single run.
+How LONG each profile takes (the measured ETA) is dr_timing's job.
 """
 import logging
-import re
 
 import dr_settings as S
 from dr_urls import (_authority_score, _domain, _is_community_host, _is_landing_url,
@@ -28,16 +27,16 @@ logger = logging.getLogger("assistant.research")
 # --------------------------------------------------------------------------- #
 # Source quality filtering
 #
-# The crawler used to ingest whatever the search backend returned, so a niche
-# technical query could end up sourced from pirate-streaming, Q&A, or SEO
-# glossary farms — junk that the synthesis step then "filled in" with
-# hallucinations. We now hard-drop known-junk domains and crawl high-authority
+# A crawler that ingests whatever the search backend returns lets a niche
+# technical query end up sourced from pirate-streaming, Q&A, or SEO
+# glossary farms — junk that the synthesis step then "fills in" with
+# hallucinations. We hard-drop known-junk domains and crawl high-authority
 # sources first, so the bounded page budget is spent on credible material.
 # --------------------------------------------------------------------------- #
 
 
 # Categories where the answer should rest on scholarly/authoritative sources and
-# random blogs/tutorials/SEO add noise rather than signal (Phase 9, critique #10).
+# random blogs/tutorials/SEO add noise rather than signal.
 _SCHOLARLY_CATEGORIES = {"science", "legal", "health"}
 
 
@@ -46,20 +45,14 @@ _SCHOLARLY_CATEGORIES = {"science", "legal", "health"}
 # local/shopping/travel (near-always an actionable ask), "product" also covers
 # pure comparison/spec questions ("how does the K-700 differ from the K-744",
 # "Kubota vs John Deere") that read like research, not a booking/purchase intent.
-# A product-category topic only counts as practical when it ALSO matches the
-# explicit action regex below (buy/price/ticket/etc.) — see _is_practical_request.
+# A product-category topic only counts as practical when `_ask_kind` also reads the
+# request as an actionable ask (buy/price/ticket/etc.) — see _is_practical_request.
 _PRACTICAL_CATEGORIES = {"local", "shopping", "travel"}
 
 
-# Comparison/factual phrasing. When this fires, the topic is a "explain how these
-# differ" question, not a "help me get/buy/book one" question — it must win over
-# a practical CATEGORY guess (e.g. "product") even though a comparison can
-# incidentally use practical-sounding words like "price" in passing.
-
-
-# Explicit asks for concrete, actionable results. Matched against the RAW request
-# (the user's own words) — the distilled core_topic deliberately strips exactly
-# these verbs, so intent must be read before distillation.
+# The model's read of the RAW request (the user's own words): the distilled
+# core_topic deliberately strips exactly the verbs that signal intent, so intent
+# must be read before distillation.
 def _ask_kind(topic: str) -> str:
     """compare | practical | research -- the model's read of the raw request."""
     import intent
@@ -124,7 +117,7 @@ def _apply_scholarly_floor(sources: list, category: str) -> list:
 
 
 # --------------------------------------------------------------------------- #
-# Trust floor/ceiling (Phase 4)
+# Trust floor/ceiling
 #
 # The brief model self-labels each page PRIMARY/SECONDARY/COMMUNITY/LOW, but a
 # well-written content farm reads "authoritative" to a 9B. We clamp the label by
@@ -144,9 +137,6 @@ _TRUST_LABEL = {
 }
 
 
-_RANK_TRUST = {v: k for k, v in _TRUST_RANK.items()}
-
-
 _ENCYCLOPEDIC_HOSTS = ("wikipedia.org", "britannica.com", "scholarpedia.org")
 
 
@@ -159,9 +149,8 @@ def _apply_trust_floor(trust: str, url: str, category: str = "general") -> str:
     score = _authority_score(url, category)
     host = _domain(url)
     # Floor: established authority hosts are at least SECONDARY.
-    if score >= _AUTH_BASE_SCORE and _TRUST_RANK[trust] > _TRUST_RANK["SECONDARY"]:
-        trust = "SECONDARY"
-    elif score >= _AUTH_CATEGORY_SCORE and _TRUST_RANK[trust] > _TRUST_RANK["SECONDARY"]:
+    if ((score >= _AUTH_BASE_SCORE or score >= _AUTH_CATEGORY_SCORE)
+            and _TRUST_RANK[trust] > _TRUST_RANK["SECONDARY"]):
         trust = "SECONDARY"
     # Encyclopedic/tertiary ceiling: Wikipedia/Britannica are tertiary references —
     # never a PRIMARY source no matter how the brief model rated the page.
@@ -180,7 +169,7 @@ def _apply_trust_floor(trust: str, url: str, category: str = "general") -> str:
 # Depth profiles.
 #
 # The caps live here, not in dr_timing, because they are computed from the DR_*
-# globals of THIS module — the ones `apply_overrides` swaps out for a single run.
+# knobs in dr_settings — the ones `apply_overrides` swaps out for a single run.
 # How long each profile takes (the measured ETA) is dr_timing's job.
 # --------------------------------------------------------------------------- #
 
@@ -231,6 +220,7 @@ _NEWS_CATEGORIES = {"news"}
 _RECENCY_RANK = {"day": 0, "week": 1, "month": 2, "year": 3, "any": 4}
 
 
+# Some categories go stale fast no matter what the planner guessed: a job posting
 # or a breaking story from two years ago is noise. Clamp recency no looser than
 # this floor for those categories.
 _CATEGORY_RECENCY_FLOOR = {"jobs": "month", "news": "week", "finance": "month"}

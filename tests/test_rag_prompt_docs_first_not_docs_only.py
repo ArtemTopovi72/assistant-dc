@@ -1,11 +1,10 @@
 """The RAG wrapper is docs-first, not docs-only.
 
-Live 2026-09-13 (mega journey re-run, step 89): with a rental PDF indexed,
-'сколько дней до нового года?' got an FTS hit on the contract (it mentions
-'дней') and the old wrapper — "answer ONLY from the passages… say the
-documents do not specify it" — made the bot reply that the documents do not
-say how many days are left until New Year. Weak lexical hits must not turn
-every general question into a documents-are-silent refusal.
+With a rental PDF indexed, 'сколько дней до нового года?' gets an FTS hit on the
+contract (it mentions 'дней'). A wrapper saying "answer ONLY from the
+passages… say the documents do not specify it" would make the bot reply that
+the documents do not say how many days are left until New Year. Weak lexical
+hits must not turn every general question into a documents-are-silent refusal.
 """
 import os, sys, pathlib, tempfile
 os.environ.setdefault("F5_TEST_RUN", "1")

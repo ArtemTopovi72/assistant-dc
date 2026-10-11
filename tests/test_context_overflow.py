@@ -1,15 +1,14 @@
 """Recovering from a prompt that does not fit the model's context.
 
-Observed in the chaos bench log: a long tool chain hit "Context size has been
-exceeded.", the round came back None, and the turn was lost. Three separate
-defects lined up behind it:
+A long tool chain can hit "Context size has been exceeded."; the round then
+comes back None and the turn is lost unless the caller can tell a context
+rejection from any other empty result and shrinks the payload before resending:
 
-  * the rejection was recognised only in its llama.cpp phrasing
-    ("n_keep: 9001 >= n_ctx: 8192"); the newer, numberless "Context size has
-    been exceeded." matched nothing, so the shortfall parsed as 0, the
-    self-heal declined to act and the hint logged nothing at all;
-  * the caller could not tell a context rejection from any other empty result;
-  * so it re-sent the SAME oversized payload three times and gave up.
+  * the rejection is recognised in both phrasings, the llama.cpp one
+    ("n_keep: 9001 >= n_ctx: 8192") and the newer numberless one;
+  * the retry loop shrinks the payload one step at a time instead of re-sending
+    the same oversized payload;
+  * the hint log names a size even when the rejection carries no numbers.
 """
 import sys, os, copy
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -80,8 +79,10 @@ def test_the_recent_messages_are_never_touched():
             break
     m = p["messages"]
     assert m[0]["role"] == "system", "the persona must survive"
-    assert m[-1]["content"].endswith(llm._TRUNC_NOTE) or m[-1]["content"] == BIG,         "the newest tool result must survive"
-    assert any(x.get("content") == "второй вопрос" for x in m),         "the live question must survive"
+    assert m[-1]["content"].endswith(llm._TRUNC_NOTE) or m[-1]["content"] == BIG, \
+        "the newest tool result must survive"
+    assert any(x.get("content") == "второй вопрос" for x in m), \
+        "the live question must survive"
 
 def test_a_dropped_assistant_turn_takes_its_tool_replies_with_it():
     """A tool result with nothing it answers is a 400, not a repair."""
@@ -112,6 +113,11 @@ def test_shrinking_terminates():
 
 # --- the retry loop actually uses it ---------------------------------------
 
+class _Ctx:
+    def is_cancelled(self): return False
+    def set_stage(self, *a, **k): pass
+
+
 def test_the_retry_loop_shrinks_instead_of_resending(monkeypatch):
     """The measured failure: three identical rejections, then a lost turn."""
     seen = []
@@ -126,11 +132,7 @@ def test_the_retry_loop_shrinks_instead_of_resending(monkeypatch):
     monkeypatch.setattr(llm, "_stream_chat", fake_stream)
     monkeypatch.setattr(llm, "throttle_external_calls", lambda ctx: None)
 
-    class Ctx:
-        def is_cancelled(self): return False
-        def set_stage(self, *a, **k): pass
-
-    out = llm.send_to_lm_studio(Ctx(), _chain(), tools=None)
+    out = llm.send_to_lm_studio(_Ctx(), _chain(), tools=None)
     assert out and out.get("content") == "готово", "the turn must not be lost"
     assert len(seen) == 3
     assert seen[1] < seen[0], f"payload was re-sent unshrunk: {seen}"
@@ -142,19 +144,14 @@ def test_an_unshrinkable_prompt_gives_up_instead_of_looping(monkeypatch):
                         lambda ctx, payload: llm._CTX_OVERFLOW)
     monkeypatch.setattr(llm, "throttle_external_calls", lambda ctx: None)
 
-    class Ctx:
-        def is_cancelled(self): return False
-        def set_stage(self, *a, **k): pass
-
     assert llm.send_to_lm_studio(
-        Ctx(), [{"role": "system", "content": "p"},
+        _Ctx(), [{"role": "system", "content": "p"},
                 {"role": "user", "content": "q"}], tools=None) is None
 
 
 # --- _stream_chat must RAISE the signal, not just log it -------------------
-# Missing these let a mutation that returns plain None from the HTTP-error path
-# pass the whole suite: the retry-loop tests above patch _stream_chat wholesale
-# and never exercise its own return value.
+# The retry-loop tests above patch _stream_chat wholesale, so its own return
+# value is only exercised here.
 
 class _Resp:
     def __init__(self, status=400, body="", lines=()):
@@ -172,7 +169,7 @@ def test_an_http_context_rejection_returns_the_overflow_signal(monkeypatch):
     assert llm._stream_chat(None, {"messages": [], "model": "m"}) is llm._CTX_OVERFLOW
 
 
-def test_an_unrelated_http_error_still_returns_none(monkeypatch):
+def test_an_unrelated_http_error_returns_the_server_error_sentinel(monkeypatch):
     """Only a context rejection may trigger trimming. A bare 5xx is the
     _SERVER_ERROR sentinel (not None, not the context-overflow signal)."""
     monkeypatch.setattr(llm.requests, "post",

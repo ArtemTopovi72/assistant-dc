@@ -18,7 +18,7 @@ LM Studio: we monkeypatch `_stream_chat` (for the retry loop) and `requests.post
 
 Run: venv/Scripts/python.exe tests/test_llm_retry_fallback.py
 """
-import os, sys, json, types
+import os, sys, json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
@@ -204,7 +204,6 @@ class FakeResp:
 
 
 def _post_factory(lines, status=200, exc_after=None, exc=None):
-    state = {"i": 0}
     def fake_post(url, **kw):
         return FakeResp(lines, status)
     return fake_post
@@ -217,7 +216,7 @@ def _sse(obj):
 def test_stream_http_error_returns_none():
     requests.post = lambda url, **kw: FakeResp([], status=503)
     msg = _REAL_STREAM(Ctx(), {"messages": []})
-    # 2026-09-18: a 5xx is the _SERVER_ERROR sentinel so the retry loop can
+    # A 5xx is the _SERVER_ERROR sentinel so the retry loop can
     # mend the payload before trying again; a 4xx stays a plain None.
     assert msg is L._SERVER_ERROR, f"HTTP 503 must return _SERVER_ERROR, got {msg!r}"
     requests.post = lambda url, **kw: FakeResp([], status=400)

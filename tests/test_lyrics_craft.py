@@ -1,4 +1,4 @@
-"""✨ Улучшить текст / ✍️ Сочинить текст (owner 10-03).
+"""✨ Улучшить текст / ✍️ Сочинить текст.
 
 The lyric is checked by rules -- a real rhyme on the stressed vowel, no lazy
 pairs (свет/рассвет, любовь/кровь), the rhythm, the line lengths -- and by the
@@ -249,7 +249,7 @@ def test_a_long_lyric_cut_into_pieces_is_one_text(monkeypatch):
 
 
 def test_song_words_the_bot_wrote_are_polished_before_singing(monkeypatch):
-    """Owner 10-03: wishes in 🎵 Songs -> good lyrics «под капотом», automatically."""
+    """Wishes in 🎵 Songs -> good lyrics «под капотом», automatically."""
     import tg_songs
 
     class Ctx:
@@ -293,7 +293,7 @@ def test_the_ready_words_question_offers_keep_or_polish():
     assert '"song_lyr:polish"' in src and '"song_lyr:keep"' in src
 
 
-# ── 10-03 research: rich rhyme, one line = one phrase, pairwise pick, line fixes
+# ── rich rhyme, one line = one phrase, pairwise pick, line fixes
 def test_a_rich_rhyme_scores_above_a_plain_one():
     plain = "Ночью вышла луна\nНа пороге стена\nОгонёк у окна\nТишина и весна"
     rich = "Ночью вышла луна\nЗазвенела струна\nНа пороге стена\nОпустела страна"
@@ -367,7 +367,7 @@ def test_a_two_syllable_rhyme_counts_more():
 
 
 def test_yo_words_rhyme_with_the_accentor_on(monkeypatch):
-    """RUAccent leaves ё unmarked: «огнём / куём» was read as no rhyme (live 10-03)."""
+    """RUAccent leaves ё unmarked: «огнём / куём» was read as no rhyme."""
     marks = {"Это сбруя — контроль над безумным огнём": "Это сбр+уя контр+оль над без+умным огнём",
              "Мы структуру и рамки для мысли куём": "Мы стр+уктуру и р+амки для м+ысли куём"}
     monkeypatch.setattr(L, "ACCENT_STUB", lambda line: marks[line])
@@ -391,7 +391,7 @@ def test_an_unchanged_lyric_with_problems_left_is_not_called_good(monkeypatch):
 
 
 def test_back_under_a_result_keeps_it_and_removes_only_the_buttons():
-    """↩ Назад under «🎵 Спеть / ✨ Ещё» deleted the song text (live 10-03)."""
+    """↩ Назад under «🎵 Спеть / ✨ Ещё» deleted the song text."""
     import tg_bot
     tg_bot.redirect_data_dir(tempfile.mkdtemp(prefix="tgtest_close_"))
     b = tg_bot.TelegramBot("123:TEST", lambda: None, lambda: None, lambda: {}, silent_mode=True)
@@ -405,7 +405,7 @@ def test_back_under_a_result_keeps_it_and_removes_only_the_buttons():
     assert not [c for c in calls if c[0] == "deleteMessage"]
 
 
-# ── analogous bugs found in review (10-03) ───────────────────────────────────
+# ── ё and repeated-chorus handling ───────────────────────────────────────────
 def test_a_restored_yo_keeps_the_lines_stress(monkeypatch):
     """RUAccent restores ё («все» -> «всё»): the strict word match threw the
     whole line's stress away."""
@@ -456,7 +456,7 @@ def test_the_person_lookup_does_not_show_up_as_a_search_in_the_reply(monkeypatch
 
 
 def test_long_lyrics_work_has_a_cancel_and_stops_on_it(monkeypatch):
-    """«✍️ Сочиняю…» ran for minutes with no way to stop it (owner 10-03). One
+    """«✍️ Сочиняю…» ran for minutes with no way to stop it. One
     central runner puts ⛔ under the note; ⛔ stops the work and nothing is shown."""
     bot = _bot()
     seen = {}

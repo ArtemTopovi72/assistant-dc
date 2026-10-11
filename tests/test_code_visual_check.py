@@ -1,13 +1,13 @@
 """Eyes for run_code: a picture a script drew is looked at before it is sent.
 
-Live 2026-09-18: a flowchart came as one column of boxes with an arrow drawn
+A flowchart could come out as one column of boxes with an arrow drawn
 through every box and its text; the script ran without error, so the loop
 had no way to know. Now the newest picture goes to the vision model with the
 request, plainly visible defects come back as a fix request (once per turn),
 flowcharts are steered to graphviz (dot is in the image), and an image built
 from an older Dockerfile is rebuilt instead of trusted.
 """
-import os, sys, io, types, tempfile
+import os, sys, types, tempfile
 os.environ.setdefault("F5_TEST_RUN", "1")
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass

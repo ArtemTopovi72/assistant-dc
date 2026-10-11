@@ -1,7 +1,6 @@
 """The app starts its own Docker engine, like it starts LM Studio and ComfyUI.
 
-Live 2026-09-14: the bot found every bridge and then said "Docker не
-запущен" -- Docker Desktop was installed and healthy, just not launched.
+A healthy but not launched Docker Desktop must not read as "Docker не запущен".
 """
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

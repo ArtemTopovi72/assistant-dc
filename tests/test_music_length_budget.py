@@ -1,8 +1,5 @@
 """The duration buttons must decide how long the song is.
 
-Reported: "I set 40 seconds and it is cut off, I set three minutes and one and a
-half arrives — the model must obey."
-
 Measured on the renderer's own acoustic planner (bench/music_duration.py), which
 reads MiniMaxMusic3TextEncode's `seconds` output without rendering anything:
 
@@ -10,13 +7,12 @@ reads MiniMaxMusic3TextEncode's `seconds` output without rendering anything:
   ceiling 180s, 17 sung lines               -> planned 131.2s, stopped early.
 
 So the planner sings until the WORDS run out, and only then stops; the requested
-duration is a ceiling, never a target. Both reported symptoms are that one
-mechanism: too few lines end the song early, too many are severed by the
-ceiling.
+duration is a ceiling, never a target: too few lines end the song early, too
+many are severed by the ceiling.
 
-The old prompt asked for "roughly N seconds of music", which asks the writer to
-guess the renderer's singing rate. It guessed short. It now gets a line COUNT
-computed from the measured rate, and the count is CHECKED rather than trusted.
+The writer is therefore given a line COUNT computed from the measured rate (not
+"roughly N seconds of music", which asks it to guess the renderer's singing
+rate), and the count is CHECKED rather than trusted.
 
 Offline: no LLM, no ComfyUI, no GPU.
 """
@@ -92,10 +88,8 @@ print("=" * 66)
 t180, lo180, hi180 = M.line_budget(180)
 check("a 180s slot asks for more than the 17 lines that gave 131s", t180 > 17,
       t180)
-# Measured live, and the reason the floor was raised: a 180s slot accepted a
-# 30-line lyric and the render came back at 138.3s -- 4.6s per line, not the
-# 7.7s of the English pop probe the floor had been built from.
-# Re-measured on YuE2 (bench/yue2_seconds_per_line.py): a 15 s lead-in, then 4.8-5.6 s per line.
+# Measured on YuE2 (bench/yue2_seconds_per_line.py): a 15 s lead-in, then
+# 4.8-5.6 s per line.
 check("the floor, sung at the SLOWEST measured rate after the lead-in, fills the slot",
       M.SONG_LEAD_SECONDS + lo180 * M._RATE_SLOW >= 180 * 0.9, (lo180, lo180 * M._RATE_SLOW))
 # The render now has headroom (render_ceiling), so the target sits near the

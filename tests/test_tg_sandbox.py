@@ -73,20 +73,16 @@ bot, sent = make_bot()
 add_user(bot, 100)                       # no grant at all
 sess = bot._get_session(100)
 
-for cmd in ("/files", "/sandbox", "/reset_sandbox"):
-    sent.clear()
-    bot._handle_sandbox_command(100, sess, bot._user_store.get(100), "ru", cmd)
-    txt = last_text(sent)
-    check(f"{cmd} refused without a grant", "не включена" in txt, txt[:80])
-
-# All three must say the SAME thing: a different answer per command is a map of
-# the feature for someone who is not supposed to have it.
-sent.clear()
 answers = []
 for cmd in ("/files", "/sandbox", "/reset_sandbox"):
     sent.clear()
     bot._handle_sandbox_command(100, sess, bot._user_store.get(100), "ru", cmd)
-    answers.append(last_text(sent))
+    txt = last_text(sent)
+    answers.append(txt)
+    check(f"{cmd} refused without a grant", "не включена" in txt, txt[:80])
+
+# All three must say the SAME thing: a different answer per command is a map of
+# the feature for someone who is not supposed to have it.
 check("the refusal is identical for all three", len(set(answers)) == 1, answers)
 
 # A granted user gets a real answer.
@@ -159,9 +155,8 @@ check("nothing was written outside the sandbox base",
 
 
 # ── an English user gets English ─────────────────────────────────────────────
-# The whole point of this surface is being understood, and it shipped as Russian
-# string literals: an English user was told what to do in Russian.
-from tg_strings import _t
+# The whole point of this surface is being understood: an English user must not
+# be told what to do in Russian.
 A.set_level(bot._user_store, 101, A.CODE)
 for cmd in ("/files", "/sandbox", "/reset_sandbox"):
     sent.clear()

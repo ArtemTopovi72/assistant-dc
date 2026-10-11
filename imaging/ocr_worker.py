@@ -1,7 +1,6 @@
 """EasyOCR in its own process (see ocr_reader._WorkerReader).
 
-Inside the app it took 107 s on a picture this process reads in ~4 s (live
-2026-09-27): its torch pool fought ~200 threads of Whisper/F5/reranker/Qt and
+Inside the app it took 107 s on a picture this process reads in ~4 s: its torch pool fought ~200 threads of Whisper/F5/reranker/Qt and
 the GUI looked hung. One JSON line in ({"path": ...}), one JSON line out.
 """
 import json

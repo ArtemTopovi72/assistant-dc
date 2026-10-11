@@ -1,4 +1,4 @@
-"""🎚 Remix (Creativity menu; it replaced the separate Cover and Mashup buttons).
+"""🎚 Remix (Creativity menu).
 
 A song goes in; then EITHER text (the song sings it in its own voice and melody) OR a second
 song (a quick mashup, then the first song sings the second one's words on its own melody).
@@ -63,8 +63,7 @@ class CoverMixin:
 
     def _cover_take_link(self, chat_id: int, sess, lang: str, text: str) -> bool:
         """A video link (YouTube, VK, TikTok...) while the cover waits for its
-        song: the clip's sound is the song (owner 10-03: «если ссылку на ютуб
-        дам»). While the words are awaited, only a bare link counts as a new
+        song: the clip's sound is the song. While the words are awaited, only a bare link counts as a new
         song -- a lyric that quotes a link is still the lyric."""
         state = getattr(sess, "cover_state", "")
         if state not in ("want_audio", "want_text"):
@@ -170,8 +169,8 @@ class CoverMixin:
                 self._mashup_first(chat_id, lang, ctx, src, song2)
             info = {"voice": getattr(self._get_session(chat_id), "cover_voice", "") or ""}
             if song2 and remix.resing_available():
-                # 10-07 «говновоз делать по 2 ссылкам»: the second song gives the words, the
-                # first sings them on its own melody in its own singer's voice.
+                # Two songs: the second gives the words, the first sings them on its
+                # own melody in its own singer's voice.
                 self._send_text(chat_id, tg_bot._t("cover_two_songs_words", lang))
                 out = remix.resing(ctx, src, remix.lyrics_of(ctx, song2), info=info)
             elif song2:

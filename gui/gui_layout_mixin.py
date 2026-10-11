@@ -316,7 +316,7 @@ class LayoutMixin:
         try:
             self._settings().remove("last")   # so the default sticks until changed again
         except Exception:
-            pass
+            logger.debug("could not clear saved layout", exc_info=True)
         self._add_system("Layout reset to default.")
 
     def _persist_layout(self):

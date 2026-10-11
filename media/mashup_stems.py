@@ -2,7 +2,7 @@
 
 Owns the one heavyweight, cached resource in the engine — the separator model
 and its lock — plus MashupUnavailable, the user-facing error every layer
-raises. Split out of mashup.py unchanged.
+raises.
 """
 import logging
 import os
@@ -79,8 +79,8 @@ def release_separator() -> None:
         import torch
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("could not empty the CUDA cache: %s", exc)
 
 
 def separate(path: str, device: str = "") -> dict:

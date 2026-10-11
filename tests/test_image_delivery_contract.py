@@ -12,14 +12,9 @@ points the vision tools at a file already sitting in the working folder. Give
 it a delivery status and the bot posts the user's own screenshot back at them
 every time it looks at one.
 
-KNOWN GAP, deliberately recorded rather than asserted:
-a picture the agent CREATES in the sandbox (run_code writing chart.png) has no
-route to the user at all. open_image sets image_path with no status, so
-delivery skips it, and the honesty correction then tells the user the picture
-could not be delivered. The bot stays truthful and the user still gets no
-chart. Closing that needs a tool that hands a sandbox file over; until it
-exists, test_a_created_picture_has_no_delivery_route holds the shape of the
-hole so it cannot be forgotten or "fixed" by loosening the gate.
+A picture the agent CREATES in the sandbox (run_code writing chart.png) reaches
+the user through find_content, which hands the file over with a status the gate
+accepts. open_image sets image_path with no status, so delivery skips it.
 
 Run: venv/Scripts/python.exe tests/test_image_delivery_contract.py
 """
@@ -98,7 +93,7 @@ def test_open_image_stays_an_input_selector():
 
 
 def test_find_content_is_the_sandbox_delivery_route():
-    """The hole is closed: find_content (2026-09-14) delivers the first match.
+    """find_content delivers the first match.
 
     It sets image_status to a value the gate accepts, so a found photo reaches
     the chat; open_image still must not (see the test above).

@@ -18,11 +18,9 @@ import re
 
 
 # --------------------------------------------------------------------------- #
-# Ideogram renders legible text — when the box it is given can hold the string.
-# A police car whose lettering box was 0.09 x 0.05 came back reading "AVCHKE":
-# six characters squeezed into a box barely wider than it was tall, so the model
-# painted letter-shaped strokes instead of letters. These numbers are the shape a
-# string actually needs.
+# Ideogram renders legible text only when the box it is given can hold the
+# string; these numbers are the shape a string actually needs (see the module
+# docstring for the measurement they come from).
 MIN_TEXT_H = 0.08        # below this the glyphs have too few pixels to form
 CHAR_ASPECT = 0.6        # width of one block capital, in units of the box height
 MAX_TEXT_CHARS = 24      # past this the model stops spelling and starts scribbling
@@ -94,7 +92,7 @@ MAX_TEXT_LINES = 3       # a label wraps to two or three lines; past that it is 
 # The per-LINE floor for wrapped text. MIN_TEXT_H (0.08) was measured on one
 # word squeezed into a box; a multi-line label stated line by line in the
 # caption spelled "Для гостей / театра на / Пролетарской" correctly at a line
-# height of ~0.045 in three renders on 2026-09-12 (864x1152). Holding it to
+# height of ~0.045 in three renders (864x1152). Holding it to
 # 0.08 forced the label to 0.58 of the frame and the bottle under it could no
 # longer fit in the picture whole.
 MIN_LINE_H = 0.05

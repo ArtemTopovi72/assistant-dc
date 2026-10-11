@@ -398,8 +398,8 @@ def _laplacian_blend(bg, patch, alpha, *, levels=5):
             reach = float(cv2.distanceTransform(inner, cv2.DIST_L2, 5).max())
             geo_cap = int(np.floor(np.log2(max(2.0, reach / 3.0))))
             levels = min(levels, max(1, geo_cap))
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("blend depth cap skipped: %s", exc)
     levels = int(max(1, min(levels, max_lvl)))
     B = bg.astype(np.float32)
     P = patch.astype(np.float32)

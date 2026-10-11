@@ -72,8 +72,6 @@ for cmd, prefix in T._SLASH.items():
     label_ru = T._prompt_label(prefix, "ru")
     check(f"{cmd}: resolves to a translated label",
           not _is_ascii_english(label_ru), f"{cmd} -> {label_ru!r}")
-    check(f"{cmd}: matches what the button shows",
-          label_ru == T._prompt_label(prefix, "ru"), label_ru)
 
 print()
 print("=" * 70)

@@ -62,8 +62,7 @@ def main():
 
     # The trigger must NEVER end up in a lettering element. Ideogram renders
     # `text` as legible letters on the picture, so a trigger that lands there is
-    # drawn ON the character rather than conditioning them -- the word appearing
-    # across a shirt, which is what it looked like live.
+    # drawn ON the character rather than conditioning them.
     cap = {"high_level_description": "a man outside a cafe",
            "compositional_deconstruction": {"background": "a street", "elements": [
                {"type": "obj", "desc": "a man"},

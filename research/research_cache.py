@@ -1,4 +1,4 @@
-"""URL extraction cache for the deep-research crawler (Phase 6).
+"""URL extraction cache for the deep-research crawler.
 
 Caches the *extracted* result of a URL (clean text + title + content hash) on
 disk, keyed by normalized URL, with a category-aware TTL. A cache hit skips both
@@ -51,8 +51,9 @@ def content_hash(text: str) -> str:
 
 
 class ExtractionCache:
-    """Tiny file-per-URL JSON cache. Thread-safety is not required: the crawler
-    is single-threaded, and a torn write just degrades to a miss."""
+    """Tiny file-per-URL JSON cache. Safe to call from the crawler's worker
+    threads: each URL has its own file, writes are atomic (tmp + rename), and a
+    torn read just degrades to a miss. The stats counters are best-effort."""
 
     def __init__(self, cache_dir: Path, enabled: bool = True):
         self.dir = Path(cache_dir)
@@ -116,8 +117,8 @@ class ExtractionCache:
             if path.exists() and time.time() - path.stat().st_mtime < self.FAIL_TTL:
                 self.skipped += 1
                 return True
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("cache failed_recently %s: %s", url, exc)
         return False
 
     def mark_failed(self, url: str) -> None:
@@ -132,8 +133,8 @@ class ExtractionCache:
     def invalidate(self, url: str) -> None:
         try:
             (self.dir / f"{_key(url)}.json").unlink(missing_ok=True)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("cache invalidate %s: %s", url, exc)
 
     PRUNE_EVERY = 86400
 

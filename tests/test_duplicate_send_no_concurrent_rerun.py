@@ -1,23 +1,11 @@
-"""Live bug (2026-08-05): a slow image-generation turn ran TWICE, concurrently
-— the exact same translate call, tool-calling round, and prompt-engineering
-steps all fired a second time while the first was still in flight, doubling
-GPU/LLM load and producing two near-simultaneous identical replies.
+"""A duplicate send must not run concurrently with the task it duplicates.
 
-Root cause: a duplicate Telegram message (almost certainly the user's client
-retrying a send that looked stuck) created two separate _Task objects with
-BYTE-IDENTICAL user_text for the same chat. Before this session's interject-
-concurrency feature (_mark_interruptible / the two-tasks-per-chat admission
-gate), the second would just queue and run sequentially afterward — a stale-
-duplicate nuisance, but not concurrent resource contention. The interject gate
-made it worse: once the first task reached a slow/backgroundable stage (image
-generation marks the chat interruptible), the SECOND task — sitting in queue
-with IDENTICAL text — got admitted to run AT THE SAME TIME instead of waiting.
-
-Fix: the admission gate in _consumer_loop now refuses to treat an exact
-byte-for-byte repeat of the currently-running task's text as a legitimate
-"quick interject" — it still queues and waits, exactly as before the
-concurrency feature existed. A genuinely DIFFERENT quick message (the feature
-this session actually built) is unaffected.
+A duplicate Telegram message (typically the client retrying a send that looked
+stuck) creates a second _Task with BYTE-IDENTICAL user_text for the same chat.
+Once the first task reaches a slow/backgroundable stage (image generation marks
+the chat interruptible), the admission gate in _consumer_loop must not treat the
+exact repeat as a legitimate "quick interject": it still queues and waits. A
+genuinely DIFFERENT quick message is unaffected.
 
 Run: venv/Scripts/python.exe tests/test_duplicate_send_no_concurrent_rerun.py
 """

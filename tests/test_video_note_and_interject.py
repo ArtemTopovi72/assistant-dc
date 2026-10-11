@@ -17,7 +17,7 @@
 
 Run: venv/Scripts/python.exe tests/test_video_note_and_interject.py
 """
-import os, sys, tempfile, threading, time
+import os, sys, tempfile, threading
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
@@ -120,7 +120,6 @@ print("=" * 70)
 
 bot4, _ = make_bot()
 CID4 = 9104
-t1 = T._Task(task_id="a1", chat_id=CID4, user_text="hi")
 with bot4._task_lock:
     n = bot4._chat_busy.get(CID4, 0)
     interruptible = bot4._chat_interruptible.get(CID4, False)

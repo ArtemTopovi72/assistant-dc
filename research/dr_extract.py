@@ -7,10 +7,9 @@ unmarked-math heuristic, the social-outlink hop, the extraction quality gate
 (`classify_extraction` + its GATE_* verdicts) and shingle-based near-duplicate
 clustering (`dedupe_pages`).
 
-Split out of deep_research.py. Every function here is pure: it reads no DR_*
-module global and performs no network I/O — the fetchers stay in deep_research
-and hand their bytes in. The `logger` is the same "assistant.research" logger the
-rest of the pipeline writes to, so log capture is unchanged.
+Nothing here reads a DR_* knob or performs network I/O — the fetchers live in
+dr_crawl and hand their bytes in. The `logger` is the same "assistant.research"
+logger the rest of the pipeline writes to.
 """
 import logging
 import re
@@ -24,11 +23,11 @@ logger = logging.getLogger("assistant.research")
 
 
 # --------------------------------------------------------------------------- #
-# Content-quality gate (Phase 1)
+# Content-quality gate
 #
 # Static extraction frequently returns NOT "nothing" but a misleading shell:
 # an anti-bot/CAPTCHA interstitial, a JS skeleton with only nav chrome, or a few
-# hundred chars of boilerplate. Those used to flow straight into the brief step
+# hundred chars of boilerplate. Left alone, those would flow straight into the brief step
 # and become "evidence" (e.g. the hal.science CAPTCHA page in the science run).
 # This gate classifies each extraction and quarantines the bad ones with an
 # explicit reason code so failures are visible in logs/stats, never silent.
@@ -213,8 +212,8 @@ def _extract_title(html: str) -> str:
         soup = BeautifulSoup(html, "lxml")
         if soup.title and soup.title.string:
             return soup.title.string.strip()[:160]
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("title extraction failed: %s", exc)
     return ""
 
 
@@ -236,8 +235,8 @@ def _extract_links(html: str, base_url: str) -> list:
                 continue
             seen.add(key)
             out.append(absu)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("links extraction failed: %s", exc)
     return out
 
 
@@ -258,13 +257,13 @@ def _social_outlinks(html: str, base_url: str) -> list:
                 continue
             seen.add(key)
             out.append(absu)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("social outlinks extraction failed: %s", exc)
     return out
 
 
 # --------------------------------------------------------------------------- #
-# Near-duplicate content collapse (Phase 2)
+# Near-duplicate content collapse
 #
 # The old dedupe hashed the leading 500 chars, so it only caught BYTE-identical
 # reposts. Syndicated wire stories, lightly-edited copies, and the same article

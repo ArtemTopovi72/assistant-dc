@@ -440,7 +440,7 @@ _RUN_CODE_DESC = (
     "the SHARPEST of every same-scene group: re-shots, bursts, other angles -- "
     "use it, never write your own hash), sharpness(path) and "
     "make_collage(paths, out). "
-    # Live 2026-09-15: a 300-line flowchart script was re-sent in full for
+    # A 300-line flowchart script was re-sent in full for
     # every fix («нафиг он код с нуля переписывает, а не через
     # редактирование»), each time near the token ceiling, and once cut off
     # mid-call. A script that will be fixed lives in a file.
@@ -449,7 +449,7 @@ _RUN_CODE_DESC = (
     ".read()); to fix it afterwards use edit_file on the lines that change -- "
     "NEVER resend the whole script. Never paste the code into your reply to "
     "the user either: they asked for the result, not the source. "
-    # Live 2026-09-18: asked to "napishi kod na python s graphviz, kotoryy
+    # Asked to "napishi kod na python s graphviz, kotoryy
     # risuet blok-skhemu ... sokhrani kartinku i pokazhi eyo mne" (write code
     # that draws a flowchart, save the picture, show it to me), the model did
     # exactly what the FIRST half literally says -- wrote the graphviz code

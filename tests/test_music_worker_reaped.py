@@ -1,8 +1,7 @@
 """media.music.run_gpu_worker reaps a killed worker before releasing the GPU.
 
-Bug: on Stop the worker was kill()ed and the GPU slot released at once, with
-the process still dying (and holding its VRAM) -- the next queued job started
-on a card that was not free yet, and on POSIX the child stayed a zombie.
+On Stop the worker is kill()ed and then waited for, so the GPU slot is released
+only once the process has exited and freed its VRAM (and no zombie is left on POSIX).
 """
 import os
 import sys
@@ -44,7 +43,7 @@ def test_cancel_reaps_before_returning(monkeypatch):
     assert seen["p"].returncode is not None      # reaped, not left running/zombie
 
 
-def test_timeout_kills_and_reports(monkeypatch):
+def test_timeout_kills_and_reports():
     t0 = time.time()
     ok, _tail = music.run_gpu_worker(None, sys.executable, "", {}, "t", timeout=1,
                                      cmd=[sys.executable, "-c", "import time; time.sleep(30)"])

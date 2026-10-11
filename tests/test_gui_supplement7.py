@@ -1,7 +1,7 @@
 """Seventh supplement: precise remaining gui.py branches — worker log-except paths,
 RequestWorker cross-lingual append, TransferWorker plan/identity excepts, and a
 batch of AssistantWindow / MemoryCenterTab / ImageViewerDialog / SystemInfoTab
-guard branches identified line-by-line from the coverage map.
+guard branches.
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_supplement7.py
 """
@@ -17,10 +17,9 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 from pathlib import Path
 
 import numpy as np
-from PyQt5.QtWidgets import QApplication, QDialog, QInputDialog, QMessageBox
+from PyQt5.QtWidgets import QApplication, QInputDialog, QMessageBox
 from PyQt5.QtWidgets import QFileDialog as _QFD
 from PyQt5.QtGui import QImage, QColor
-from PyQt5.QtCore import Qt
 import gui
 import gui_workers
 import gui_voice_tab
@@ -220,15 +219,12 @@ def test_prof_suggested_and_create_errors():
     tab = gui.MemoryCenterTab(host); tab.store = store; tab.refresh_all()
     real = store.create_profile
     K = len(tab._SUGGESTED)
-    # (a) create always returns True -> loop2 hits the append branch (2790->2791)
+    # (a) create always returns True -> loop2 hits the append branch
     store.create_profile = lambda name: True
     tab._prof_suggested(); check("prof_suggested_append", True)
     # (b) one suggestion blows up -> the except branch swallows it, the rest are
-    # still created. The old version counted calls on the assumption of TWO loops
-    # (a comprehension plus a guarded one); _prof_suggested is a single guarded
-    # loop now, so the count could never exceed K and the check failed on a
-    # refactor. Assert the BEHAVIOUR instead: one bad profile must not abort the
-    # batch, and must not be reported as created.
+    # still created. One bad profile must not abort the batch, and must not be
+    # reported as created.
     seen = []
     def cp(name):
         seen.append(name)
@@ -259,22 +255,18 @@ def test_prof_suggested_and_create_errors():
 
 
 def test_on_compact_done_writefail_and_success():
-    o = {n: getattr(gui, n) for n in ("CompactMemoryWorker",)}
-    try:
-        w = _win()
-        # write-fail: active_memory_dir is a FILE -> mkdir raises -> "save failed"
-        badfile = os.path.join(_TMP, "notadir"); open(badfile, "w").write("x")
-        w.ctx.active_memory_dir = Path(badfile)
-        w._on_compact_done("summary text")
-        check("compact_writefail", "save failed" in w.chat.toPlainText().lower())
-        # success with memory_center_tab.refresh_all
-        good = Path(_TMP) / "cok"; good.mkdir(parents=True, exist_ok=True)
-        w.ctx.active_memory_dir = good
-        w._on_compact_done("good summary")
-        check("compact_success", (good / "summary.json").exists())
-        _close(w)
-    finally:
-        pass
+    w = _win()
+    # write-fail: active_memory_dir is a FILE -> mkdir raises -> "save failed"
+    badfile = os.path.join(_TMP, "notadir"); open(badfile, "w").write("x")
+    w.ctx.active_memory_dir = Path(badfile)
+    w._on_compact_done("summary text")
+    check("compact_writefail", "save failed" in w.chat.toPlainText().lower())
+    # success with memory_center_tab.refresh_all
+    good = Path(_TMP) / "cok"; good.mkdir(parents=True, exist_ok=True)
+    w.ctx.active_memory_dir = good
+    w._on_compact_done("good summary")
+    check("compact_success", (good / "summary.json").exists())
+    _close(w)
 
 
 def test_save_copy_missing_path_valid_pix():
@@ -360,10 +352,7 @@ if __name__ == "__main__":
     QInputDialog.getText = staticmethod(_saved["gt"])
     print(f"\n{len(fns)-failed}/{len(fns)} supplement7 functions passed "
           f"({sum(1 for _,c in RESULTS if c)}/{len(RESULTS)} checks)")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

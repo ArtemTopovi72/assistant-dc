@@ -1,23 +1,17 @@
-"""Regression tests for three confirmed bugs in the inline image-action keyboard,
-proved by a real-chat audit (scratchpad/audit_03_imagekb.md, 2026-08-03):
+"""Three inline image-action keyboard invariants:
 
-1. Two queued presses on two DIFFERENT pictures both silently resolved to the
-   LAST one — the picture was resolved at EXECUTION time from a single
-   `sess.target_image` slot, which a second press already overwrote. Fixed by
-   threading the pressed image id through the enqueued item and onto `_Task`
-   itself (`_Task.image_id`), captured at PRESS time.
+1. Two queued presses on two DIFFERENT pictures resolve to distinct images: the
+   pressed image id is threaded through the enqueued item onto `_Task.image_id`
+   at PRESS time, rather than resolved at execution time from a single
+   `sess.target_image` slot that a second press overwrites.
 
-2. The duplicate-press guard compared only the machine payload TEXT, which is
-   identical across all six verbs ("on the current image"). Pressing the SAME
-   verb on a DIFFERENT picture while one was already running was wrongly
-   refused as a dupe. Fixed by folding the target image id into the dedupe key.
+2. The duplicate-press guard keys on (verb, image id), not on the machine payload
+   TEXT alone (identical across all six verbs), so the same verb on a DIFFERENT
+   picture while one is running is not refused as a dupe.
 
-3. `describe:<id>` was an accepted verb (`_IMAGE_VERBS`) with no handler in
-   `_CB_CMDS` — it silently ARMED `sess.target_image` and then matched nothing,
-   leaving a stale armed target. Fixed by removing "describe" from
-   `_IMAGE_VERBS` entirely (it was never emitted by `_image_kb`), so the
-   callback now falls through as an ordinary unmatched string instead of
-   arming anything.
+3. `describe:<id>` is not an accepted verb (not in `_IMAGE_VERBS`), so the
+   callback falls through as an ordinary unmatched string instead of silently
+   arming `sess.target_image`.
 
 Offline: `bot._backend` is a stub recording pushed `_Task` objects — nothing
 ever pops the queue, so no worker thread runs and no request reaches

@@ -11,7 +11,8 @@ Three steps, none of them Telegram-specific:
   polish(ctx, text)        punctuation and capitals only. The model may not
                            change a single word: if the words differ the
                            original is kept.
-  speak(ctx, ref, text)    the ordinary F5 path (audio.synth_single_segment),
+  speak(ctx, ref_wav, ref_text, text, out_dir)
+                           the ordinary F5 path (audio.synth_single_segment),
                            so the text gets the same treatment as every other
                            voice reply: acronyms spelled out (USB -> ю-эс-би),
                            numbers as words, stress marks, the trailing dots
@@ -21,7 +22,6 @@ import logging
 import os
 import re
 import subprocess
-import tempfile
 import uuid
 from typing import Optional, Tuple
 
@@ -47,7 +47,7 @@ def _to_wav(src: str, dst: str) -> None:
 def _voice_spans(seg):
     """[(start_ms, end_ms)] where Silero VAD hears a VOICE, or None when VAD is
     unavailable. Loudness alone picked the music of a YouTube clip and the
-    sample had no words (live 10-03); a voice under music still counts."""
+    sample had no words; a voice under music still counts."""
     try:
         import numpy as np, torch
         from silero_vad import get_speech_timestamps

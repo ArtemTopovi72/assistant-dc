@@ -14,12 +14,12 @@ reply_to is a message id in the chat; forward_from a name (someone else's words)
 ago seconds in the past (a backlog while the bot was down). User messages come
 back in /events as method "user" under their real ids.
 """
-import base64, json, os, sys, tempfile, threading
+import base64, json, os, sys, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception: pass
+except (AttributeError, ValueError, OSError): pass
 import bench.live_tg_drive as D  # noqa: E402
 
 PORT = int(os.getenv("TG_SIM_PORT", "8765"))
@@ -57,7 +57,6 @@ class H(BaseHTTPRequestHandler):
             chat(cid)
             with D.WIRE.lock:
                 evs = [e for e in D.WIRE.sent if e["chat_id"] == cid]
-            c = CHATS[cid]
             with BOT._task_lock:
                 busy = bool(BOT._chat_busy.get(cid, 0)) or bool(BOT._running_task.get(cid))
             return self._json({"events": evs[since:], "n": len(evs), "busy": busy})

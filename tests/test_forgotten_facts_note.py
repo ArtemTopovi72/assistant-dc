@@ -1,10 +1,10 @@
 """After forget_facts("all") the chat history's copy of the facts is void.
 
-Live 2026-09-13 (mega run 3, step 61): 'забудь всё, что я про себя
-рассказывал' dropped the saved facts, the bot confirmed — and 'напомни, на
-что у меня аллергия?' got 'У вас аллергия на орехи' straight from the
-'remember: …' message still sitting in the history. Context.facts_forgotten
-now carries a note into every turn until a new fact is remembered.
+'забудь всё, что я про себя рассказывал' drops the saved facts and the bot
+confirms — but 'напомни, на что у меня аллергия?' must not get 'У вас аллергия
+на орехи' straight from the 'remember: …' message still sitting in the history.
+Context.facts_forgotten carries a note into every turn until a new fact is
+remembered.
 """
 import os, sys, threading
 from pathlib import Path

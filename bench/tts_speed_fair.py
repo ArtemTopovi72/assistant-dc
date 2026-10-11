@@ -13,19 +13,16 @@ length, so what is compared is steady-state synthesis.
 import json
 import statistics
 import sys
-import threading
 import time
-import types
 import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "bench"))
 
-import config as C
+from tts_engine_voice_sweep import SPEAKERS, XTTS_URL, _ctx
 
-SPEAKERS = Path(r"C:\llamacpp\xtts_speakers")
-XTTS_URL = "http://127.0.0.1:8020/tts_to_audio/"
 OUT = ROOT / "runtime" / "tts_speed"
 VOICES = ["adril", "mercerfrey", "femaledarkseducer"]
 LINES = [
@@ -35,17 +32,6 @@ LINES = [
     "и теперь придётся идти к кузнецу за новой шестерёнкой.",
 ]
 REPEATS = 3
-
-
-def _ctx():
-    import models as M
-    return types.SimpleNamespace(
-        models=M.Models.load(), model_name=C.MODEL_NAME, no_think=True,
-        reasoning_effort="high", asr_lock=threading.Lock(),
-        tts_lock=threading.Lock(), api_lock=threading.Lock(),
-        last_api_call_time=0.0, api_min_interval=1.0, session_memory=[],
-        pinned_facts=[], cancel_event=threading.Event(),
-        transcription_cache={}, save_cache=lambda: None, custom_ref_wav=None)
 
 
 def xtts(voice, text, dest):

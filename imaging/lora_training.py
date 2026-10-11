@@ -231,7 +231,7 @@ def free_gpu(log=None, min_free_mb: int = None) -> None:
         say("ComfyUI не отвечает (%s) — продолжаю" % exc)
     # `lms unload` returns before the driver has the memory back. A render
     # started 0.2 s later loaded its weights beside the not-yet-released chat
-    # model and ran 296 s instead of 48 s (live, 2026-09-12, journey 21: the
+    # model and ran 296 s instead of 48 s (the
     # 6x tax of sharing the card). Wait for the free counter to say so.
     freed = wait_vram_free(min_free_mb or FREE_GPU_MIN_MB, timeout=FREE_GPU_WAIT_S)
     if freed is not None:
@@ -457,7 +457,7 @@ def is_training(slug: str) -> bool:
         # "Is this a python process" is a NARROWING check, never a rejection on
         # ignorance. psutil does not always hand back a name (permissions, a
         # race with exit, a stubbed iterator), and rejecting on a missing name
-        # reported a live trainer as dead -- the exact failure c080de0 fixed,
+        # reported a live trainer as dead -- the exact failure seen once,
         # where a cold run downloading a 12 GB base model vanished from the tab.
         # When the name is unreadable, the argv match below carries the weight;
         # it is specific enough on its own.

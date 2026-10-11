@@ -52,7 +52,7 @@ def last(path):
     return json.loads(open(path, encoding="utf-8").read().splitlines()[-1])
 
 
-# Work handed to another thread is part of the turn (live 16:11: a forwarded
+# Work handed to another thread is part of the turn (a forwarded
 # video's retelling ran on its own thread and left no trace at all).
 day = os.path.join(os.environ["TURNS_DIR"], os.listdir(os.environ["TURNS_DIR"])[0])
 n_before = len(open(day, encoding="utf-8").read().splitlines())
@@ -88,7 +88,7 @@ check("a press that reached no model and logged nothing is not written",
       TT.finish(tok, keep_idle=False) == "" and last(day)["meta"]["chat"] == 4)
 
 # The whole call is kept: what was sent (pictures as files), what came back,
-# and the file the user sent. Live 2026-10-01: a projector was «красный
+# and the file the user sent. A projector was «красный
 # цилиндр» and the trace held only each prompt's first 80 characters.
 import base64
 tok = TT.start(chat=6, task="batch")

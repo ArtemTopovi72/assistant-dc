@@ -1,5 +1,5 @@
 """Qwen fine-tunes that ignore /no_think get their closed think block as a prefill
-(2026-10-07: Qwen3.6-35B-A3B HauhauCS spent the intent read's 300 tokens thinking)."""
+(Qwen3.6-35B-A3B HauhauCS spent the intent read's 300 tokens thinking)."""
 import os
 import sys
 import threading

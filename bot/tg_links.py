@@ -1,10 +1,7 @@
 """A link in a chat message is a page to read, not a string to admire.
 
-Live, 2026-09-12: the user sent one bare Wikipedia URL and the reply was
-"This is a link to an article about omelettes on Wikipedia; you can find
-detailed information there." The bot has a whole page fetcher (dr_crawl)
-and never used it in chat. Now a message that carries a URL gets the page's
-text attached, so "о чём это?", a summary or a question about it are
+A message that carries a URL gets the page's text attached (fetched with
+dr_crawl), so "о чём это?", a summary or a question about it are
 answered from the page.
 """
 from __future__ import annotations
@@ -22,7 +19,7 @@ def urls_in(text: str) -> list:
     return [u.rstrip(".,;:!?)»") for u in _URL_RE.findall(text or "")]
 
 
-# Hosts whose links are videos to watch, not pages to read (live 10-03: a
+# Hosts whose links are videos to watch, not pages to read (a
 # YouTube Shorts link got «я не умею смотреть видео по ссылкам»).
 _VIDEO_RE = re.compile(
     r"^https?://(?:[\w-]+\.)*(?:youtube\.com/(?:watch|shorts/|live/)|youtu\.be/|"
@@ -53,8 +50,8 @@ def fetch_video(url: str, max_seconds: int = VIDEO_MAX_SECONDS) -> dict:
                     "format": "bv*[height<=720]+ba/b[height<=720]/b",
                     "merge_output_format": "mp4",
                     "outtmpl": os.path.join(d, "v.%(ext)s"), "socket_timeout": 20,
-                    # YouTube (2026-10): the default clients get "Sign in to confirm you're not
-                    # a bot"; mweb still serves formats once its JS challenge is solved (node).
+                    # YouTube's default clients get "Sign in to confirm you're not a bot";
+                    # mweb still serves formats once its JS challenge is solved (node).
                     "extractor_args": {"youtube": {"player_client": ["default", "mweb"]}},
                     "js_runtimes": {"node": {}}, "remote_components": ["ejs:github"]}
             with yt_dlp.YoutubeDL(opts) as y:
@@ -92,8 +89,8 @@ def read_link(url: str) -> dict:
         if page.get("text"):
             text = page["text"]
             # The crawler's adapters return a summary (Wikipedia: 8000 chars);
-            # a chat question may be about the rest (Kazan's population,
-            # live). One more fetch of the whole page; _fit picks the part.
+            # a chat question may be about the rest (a figure far down the
+            # article). One more fetch of the whole page; _fit picks the part.
             # ponytail: second download per link; cache if links get frequent.
             try:
                 if not url.lower().endswith(".pdf"):
@@ -122,8 +119,8 @@ _SAME = [{"жител", "насел", "числе", "popul", "inhab"}, {"осн�
 
 def _fit(body: str, question: str, limit: int) -> str:
     """The page's head plus the paragraphs that share words with the question.
-    Live 2026-09-28: Kazan's population sat past the 6000-char cut, and the
-    bot said the article did not mention it."""
+    A plain head cut lost facts past the limit (a population figure far down
+    the article), and the bot said the page did not mention it."""
     if len(body) <= limit:
         return body
     head = body[:limit * 2 // 3]
@@ -141,7 +138,7 @@ def _fit(body: str, question: str, limit: int) -> str:
             scored.append((-hits, i, para))
             if len(para) < 80:
                 # A matched heading: its section may be a bare table of
-                # numbers (Kazan's population) that shares no word with anything.
+                # numbers (a population series) that shares no word with anything.
                 # A table runs oldest to newest: its last two rows are the answer.
                 j = i + 1
                 while j < len(paras) and ("|" in paras[j] or not paras[j].strip()):

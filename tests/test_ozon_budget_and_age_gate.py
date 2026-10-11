@@ -1,6 +1,6 @@
-"""Live 2026-10-01: a 30 000 ₽ party basket was planned with no budget (the agent's
-retelling dropped it), and «анальная пробка» came back as bath plugs (Ozon's 18+
-gate hid the real listings and other wordings drifted to look-alikes)."""
+"""A 30 000 ₽ party basket must be planned with its budget (the agent's retelling
+can drop it), and «анальная пробка» must not come back as bath plugs (Ozon's 18+
+gate hides the real listings and other wordings drift to look-alikes)."""
 import os, sys, types
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import ozon_client as O

@@ -59,12 +59,6 @@ from tool_image_handlers import (
 
 logger = logging.getLogger("assistant.tools")
 
-# An inspect_image check phrased around ABSENCE — i.e. verifying a removal
-# ("is the puddle still visible?", "убрана ли лужа?"). For these the PRESENT/
-# MISSING labels invert (MISSING = success), so the inspection footer must not
-# treat MISSING as a flaw to fix. Covers the removal verbs plus the "still
-# there / remained / no longer / gone" phrasings a verification question uses.
-
 
 @dataclass(frozen=True)
 class ToolSpec:
@@ -116,7 +110,7 @@ def _handle_search(ctx, state, args: dict) -> str:
         return ("[TOOL ERROR] search needs a 'query'. Re-call it with the question as "
                 "short English keywords, or answer directly if no search is needed.")
     # "the last World Cup" with no year was distilled from pages about 2022 into
-    # "Argentina" in September 2026 (live 2026-09-28). The current year anchors it.
+    # "Argentina" in September 2026. The current year anchors it.
     _asked = " ".join(str((state or {}).get(k) or "")
                       for k in ("user_input", "user_input_original"))
     _fresh = r"\b(?:last|latest|current|recent|newest|now)\b|последн|текущ|нынешн"
@@ -154,7 +148,7 @@ def _handle_search(ctx, state, args: dict) -> str:
     import datetime as _dtm
     # The model's memory ends before today: it read "Winner: Spain" for the
     # 2026 World Cup, decided the tournament was still "scheduled" and searched
-    # for 2022 instead (live 2026-09-28).
+    # for 2022 instead.
     dated = (f"\n[Today is {_dtm.date.today():%Y-%m-%d}. Anything the results date "
              f"before today HAS happened, even if you do not remember it; the newest "
              f"dated outcome in the results is the latest one -- do not replace it with "
@@ -395,7 +389,7 @@ def _handle_remember_fact(ctx, state, args: dict) -> str:
                 "user briefly and plainly that you won't do that, then carry on normally.")
     # Capture the count BEFORE pin_fact so we can tell whether this save pushed
     # the store past PINNED_FACTS_LIMIT and silently evicted the oldest fact —
-    # the confirmation used to say "saved permanently" even when it wasn't.
+    # otherwise the confirmation says "saved permanently" even when it wasn't.
     _limit = getattr(config, "PINNED_FACTS_LIMIT", 40)
     replaced = _superseded_facts(ctx, fact)
     if replaced:
@@ -592,7 +586,7 @@ def _handle_set_reminder(ctx, state, args: dict) -> str:
 
 
 def _handle_forget_facts(ctx, state, args: dict) -> str:
-    """The counterpart of remember_fact. Live, 2026-09-12: 'забудь всё, что я
+    """The counterpart of remember_fact. 'забудь всё, что я
     про себя рассказывал' was answered 'Хорошо, я забыл' with nothing to
     forget with, and the next question got the allergy back by name."""
     what = (args.get("what") or "all").strip()
@@ -603,7 +597,7 @@ def _handle_forget_facts(ctx, state, args: dict) -> str:
     except Exception:
         logger.exception("forget_facts: could not persist")
     # Only saved facts go here. «удали все мои данные» was answered «Все
-    # данные удалены» while the chat history stayed (live 2026-09-28).
+    # данные удалены» while the chat history stayed.
     scope = (" This tool removes saved FACTS only: the chat history stays until the "
              "user sends /clear -- say so if they asked to delete all their data.")
     if n == 0:
@@ -653,12 +647,13 @@ def _handle_create_presentation(ctx, state, args: dict) -> str:
     def _fetch(query: str):
         # require_face=False: a deck illustration is a place/object far more often
         # than a person, and a face gate would reject most of them.
-        ts = int(__import__("time").time() * 1000)
+        import time
+        ts = int(time.time() * 1000)
         dest = os.path.join(str(image_mod.OUTPUT_DIR), f"slide_{ts}.jpg")
         try:
             image_mod.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         except Exception:
-            pass
+            logger.debug("could not create the output folder", exc_info=True)
         # Slide artwork, not a face reference: a portrait cropped into a wide
         # panel loses most of its subject.
         got = _search.fetch_reference_photo(ctx, query, dest, require_face=False,
@@ -710,7 +705,7 @@ def _handle_create_presentation(ctx, state, args: dict) -> str:
     try:
         ctx.last_deck = dict(deck)
     except Exception:
-        pass
+        logger.debug("could not remember the deck on the context", exc_info=True)
     _remember(ctx, state, "presentation", f"Built a deck: {deck.get('title', topic)}",
               {"path": path})
     headings = [s.get("heading", "") for s in deck.get("slides", [])]
@@ -904,7 +899,7 @@ _ARG_SYNONYMS: dict[str, dict[str, str]] = {
     "rag_add":        {"file": "path", "filename": "path", "document": "path"},
     "deep_research":  {"query": "topic", "question": "topic", "prompt": "topic"},
     "remember_fact":  {"text": "fact", "message": "fact", "content": "fact", "memory": "fact"},
-    # Live, 2026-09-12: the planner's FIRST inpaint call was rejected with
+    # The planner's FIRST inpaint call was rejected with
     # "instructions: Field required" on every recolour edit and cost a retry
     # nudge; the model names the field in its own words.
     "inpaint_image":  {"prompt": "instructions", "text": "instructions", "description": "instructions",
@@ -917,7 +912,7 @@ _ARG_SYNONYMS: dict[str, dict[str, str]] = {
 
 
 # write_file sent with only 'content' gets a filename picked from what the
-# content is. Live 2026-09-22 (the mods.rar turn): Gemma dropped 'path' from
+# content is. In the mods.rar turn Gemma dropped 'path' from
 # five consecutive write_file calls, each a different ~2 KB script, so neither
 # the validation message nor the identical-failure guard (the content differed
 # every time) ever got it back on track. The name chosen here is reported in

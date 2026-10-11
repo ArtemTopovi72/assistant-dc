@@ -29,8 +29,7 @@ class _User:
 def _isolated_library_dir(tmp_path_factory, monkeypatch):
     """Every test in this module gets its own tg_bot._LIBRARY_DIR -- otherwise
     a rag_add here would write into the LIVE tg_libraries/ folder (see
-    tg_bot.redirect_data_dir's own docstring: exactly this kind of leak was
-    found live once already)."""
+    tg_bot.redirect_data_dir's own docstring)."""
     import tg_bot
     d = tmp_path_factory.mktemp("libdir")
     monkeypatch.setattr(tg_bot, "_LIBRARY_DIR", d)

@@ -12,7 +12,6 @@ from config import scratch_path
 import logging
 import os
 import random
-import re
 import time
 from typing import Optional
 

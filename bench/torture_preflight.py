@@ -33,7 +33,7 @@ def main():
         LJ.run_journey(97, "TORTURE: layout preflight — relations kept, nothing missing", CHAT, "Ivan", steps(), bot, ctx)
     finally:
         try: bot.stop()
-        except Exception: pass
+        except Exception as e: print("bot.stop failed:", e)
         r = LJ.REPORT[-1]
         print("\n" + "=" * 72)
         for s in r["steps"]:

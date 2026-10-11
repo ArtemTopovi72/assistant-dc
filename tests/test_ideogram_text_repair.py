@@ -1,10 +1,9 @@
 """Lettering must come out spelled the way it was asked for.
 
-A police car drawn on 2026-07-29 came back with "AVCHKE" painted on its door
-where "POLICE" was asked for, and a second render read "IWABG". The picture was
-otherwise fine, which is exactly the problem: the scene critic sees a car with
-lettering on it — the thing the layout asked for — and calls it correct. Nobody
-was comparing the letters.
+A police car can come back with "AVCHKE" painted on its door where "POLICE" was
+asked for. The picture is otherwise fine, which is exactly the problem: the scene
+critic sees a car with lettering on it — the thing the layout asked for — and
+calls it correct. Nobody is comparing the letters.
 
 Two mechanisms, tested here:
 
@@ -32,11 +31,8 @@ import re
 import json
 
 import draw_agent as D
-# verify_text and _crop_for_read moved to draw_text.py. verify_text calls
-# _crop_for_read through THAT module's globals, so patching
-# draw_agent._crop_for_read no longer reaches it -- the stub would be
-# ignored, the real crop would run, and this check would go quietly wrong.
-# Patch the module that owns the function.
+# verify_text calls _crop_for_read through draw_text's globals, so patch the
+# module that owns the function, not draw_agent.
 import draw_text as DT
 import ideogram as G
 import image as I           # imported BEFORE llm is stubbed — image imports from it
@@ -125,13 +121,10 @@ check("one wrong letter is still the word", D._similarity("POLICE", "POLIGE") >=
 check("nothing read at all scores zero", D._similarity("POLICE", "") == 0.0)
 check("cyrillic survives normalisation", D._similarity("ПОЛИЦИЯ", "полиция") > 0.99)
 
-src = inspect.getsource(D)
 check("the transcription prompt forbids correcting the spelling",
       "Never correct a" in D._TEXT_READ_PROMPT)
-# The first version of this prompt illustrated the rule with a concrete fake
-# string. The 12B model then transcribed a clean "STOP" as that string: it copied
-# the example out of the instructions. A prompt that asks for verbatim output must
-# contain nothing quotable.
+# A prompt that asks for verbatim output must contain nothing quotable: a model
+# given a concrete example string copies it out of the instructions.
 check("the prompt contains no example string for the model to copy",
       not re.search(r'"[A-Z]{3,}"', D._TEXT_READ_PROMPT), D._TEXT_READ_PROMPT)
 check("and it says the instructions are not part of the picture",
@@ -190,11 +183,9 @@ try:
     check("no image means no call", D.read_text(CTX, "") is None)
     check("no model means no call", D.read_text(None, "x.png") is None)
 
-    # The transcription must NOT run on the chat model. Measured live on eight
-    # frames: the 9B chat model read a clean "STOP" as "HIT" and scored garbled
-    # renders above correct ones (correct min 0.29 vs garbled max 0.36 — the two
-    # distributions overlapped, so the check would have redrawn good pictures at
-    # random). gemma-4-12b read all eight exactly: correct 1.00, garbled <= 0.50.
+    # The transcription must NOT run on the chat model: a small chat model misreads
+    # clean lettering, so the correct and garbled score distributions overlap and
+    # good pictures would be redrawn at random.
     _rounds_model = C.TEXT_READ_MODEL
     try:
         C.TEXT_READ_MODEL = "reader/model"
@@ -262,11 +253,10 @@ try:
     check("a picture with no lettering skips the vision call entirely",
           v["source"] == "no_text" and sys.modules["llm"].calls == [], str(v))
 
-    # Reading the WHOLE picture does not survive a real render: on a 1024x1024
-    # street scene the reader enumerated "POLICE (partially visible)" forty times
-    # and hit the token limit before emitting any JSON — reported as "could not
-    # look", so the check silently switched itself off. Each element is now read
-    # from its own region, which the same model answers in one line.
+    # Reading the WHOLE picture does not survive a real render: the reader can
+    # enumerate partially visible strings until it hits the token limit before
+    # emitting any JSON, which reads as "could not look". Each element is read
+    # from its own region instead, which the model answers in one line.
     import tempfile
     from PIL import Image
     big = os.path.join(tempfile.mkdtemp(prefix="textread_"), "render.png")
@@ -274,8 +264,8 @@ try:
 
     m = with_llm('{"strings": ["POLICE"]}')
     v = D.verify_text(CTX, big, layout())
-    # Two region reads now: the element's own box, and its host's box for
-    # lettering nobody asked for. Neither is the whole frame.
+    # Two region reads: the element's own box, and its host's box for lettering
+    # nobody asked for. Neither is the whole frame.
     check("the lettering is read from the element's own region, not the whole frame",
           v["ok"] is True and 1 <= len(m.calls) <= 2
           and all(c["image_path"] != big for c in m.calls),
@@ -316,10 +306,9 @@ try:
     print("=" * 72)
 
     # ideogram._extract_json only accepts objects carrying LAYOUT keys. Three
-    # callers pass it something else entirely, so a perfectly good answer scored
-    # zero and was discarded. Measured live on 2026-07-29: the critic ended its
-    # reply with {"ok": true, "score": 10, ...} and still reported "unavailable" —
-    # it had never once judged a real picture.
+    # callers pass it something else entirely, so a perfectly good answer would
+    # score zero and be discarded (e.g. a critic reply ending in
+    # {"ok": true, "score": 10, ...} reported as "unavailable").
     import numpy as np
     noisy = os.path.join(os.path.dirname(big), "noisy.png")
     Image.fromarray(np.random.default_rng(3).integers(
@@ -567,10 +556,10 @@ print("=" * 72)
 print("THE PLANNER FORGETS — THE STRING IS PUT BACK ANYWAY")
 print("=" * 72)
 
-# Live, 2026-07-29: 'a neon sign above the door reading "CAFE ROSA"' was planned
-# as six elements with no `text` field anywhere, so nothing downstream knew the
-# picture had lettering — no sizing, no read-back, no repair. Routing cannot
-# depend on the planner remembering.
+# 'a neon sign above the door reading "CAFE ROSA"' can be planned as elements
+# with no `text` field anywhere, so nothing downstream would know the picture has
+# lettering — no sizing, no read-back, no repair. Routing cannot depend on the
+# planner remembering.
 check("a quoted string asked for as a sign is picked up",
       G.requested_strings('a neon sign above the door reading "CAFE ROSA"') == ["CAFE ROSA"])
 check("so is one asked for as a word", G.requested_strings(
@@ -613,8 +602,8 @@ check("with no plausible surface the lettering still gets an element of its own"
 check("a prompt asking for no lettering leaves the layout untouched",
       G.ensure_text_elements(_base, "a quiet street at dusk") == _base)
 
-# The backstop has to be on the SUCCESS path, not just the fallback: the live
-# failure was a planner that answered perfectly well and simply left `text` out.
+# The backstop has to be on the SUCCESS path, not just the fallback: a planner
+# can answer perfectly well and simply leave `text` out.
 _real_ask = G._ask_planner
 try:
     G._ask_planner = lambda ctx, prompt, attempts=2: {
@@ -649,12 +638,8 @@ try:
     cap_style = G.plan_caption(object(), "draw a caricature of a person")
 finally:
     G._ask_planner = _real_ask2
-# A behavior check, not a literal source-text scan: the earlier version of this
-# check (`"art_style=" in inspect.getsource(G.plan_caption)`) broke when
-# plan_caption was refactored to route through layout_to_caption (which DOES
-# still pass art_style through) instead of building the caption by hand —
-# the string literal moved to a different function while the behavior stayed
-# correct, so the check needs to prove the OUTCOME, not grep the source.
+# A behavior check, not a literal source-text scan: plan_caption routes through
+# layout_to_caption, so the check proves the OUTCOME rather than grepping source.
 check("plan_caption no longer drops art_style (a caricature was captioned as a photo)",
       cap_style["style_description"]["art_style"] == "caricature",
       cap_style["style_description"])

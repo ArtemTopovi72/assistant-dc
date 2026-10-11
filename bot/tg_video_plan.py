@@ -4,9 +4,8 @@ A script longer than one clip is rendered in parts (video.split_script), each
 several minutes on the card. generate_video stops before the first part and
 hands the parts here: the chat sees every part with its length, the clip's
 total and the render time, and can drop a part, condense the script, render or
-cancel (user, 2026-10-10: «показать сколько частей планируется и сколько займёт
-и дать что-то уплотнить, что-то выкинуть»). ▶ reruns the same request with the
-approved parts riding ctx.video_plan_parts (tg_tasks).
+cancel. ▶ reruns the same request with the approved parts riding
+ctx.video_plan_parts (tg_tasks).
 
 Session: video_plan [{text, sec}], video_plan_request, video_plan_ok [texts].
 """
@@ -25,8 +24,8 @@ def _mins(seconds: float) -> int:
 
 def _summaries(texts: list, lang: str) -> list:
     """One short line per part in the chat's language: the parts themselves are the
-    English prompts the video model reads, and the card showed them as is (user,
-    2026-10-10: «а почему на английском»). Any failure: the prompts, cut short."""
+    English prompts the video model reads, which the chat should not see as is.
+    Any failure: the prompts, cut short."""
     if not texts or lang == "en":
         return [""] * len(texts)
     import llm

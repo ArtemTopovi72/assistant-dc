@@ -1,10 +1,9 @@
 """The queue backends: selection precedence (offline) and, when the real
 services are up, a live round trip through Redis and Kafka.
 
-Background: RedisBackend and KafkaBackend existed but had NO test coverage and
-had never been exercised against a real server -- KAFKA_BROKERS/REDIS_URL were
-unset, so _make_backend() silently fell through to InMemoryBackend on every
-start. Two things that only show up against a real server:
+RedisBackend and KafkaBackend are only meaningfully exercised against a real
+server (without KAFKA_BROKERS/REDIS_URL, _make_backend() silently falls through
+to InMemoryBackend). Two things only show up against a real server:
 
   * RedisBackend's pop Lua uses LPOS, which requires Redis >= 6.0.6. The common
     Windows port is stuck at 5.0.14, where the script fails at runtime -- not at
@@ -118,10 +117,9 @@ print("=" * 66)
 
 # NEVER the operator's own ring. This suite DELETES the ring and every
 # per-chat queue before it measures, and the user's live bot is connected to
-# the same server: pointing it at REDIS_URL wiped real queued work, pushed
-# fixtures the running bot would have executed, and made the fairness
-# measurement race with real traffic -- which is how it failed inside a full
-# run while passing on its own. Same host, dedicated database.
+# the same server: pointing it at REDIS_URL would wipe real queued work, push
+# fixtures the running bot would execute, and make the fairness measurement
+# race with real traffic. Same host, dedicated database.
 def _test_db_url(url: str, db: int = 15) -> str:
     return re.sub(r"/\d+$", "", url.rstrip("/")) + "/%d" % db
 
@@ -190,15 +188,13 @@ print()
 print("=" * 66)
 print("FAIRNESS UNDER MULTI-USER LOAD -- THE PRODUCTION-CRITICAL PROPERTY")
 print("=" * 66)
-print("""
-The reported problem was users blocked behind each other. Measured against the
-real services: with chat 100 holding 10 queued jobs, Redis served two later
-light users at positions 2 and 3, while Kafka served them at 11 and 12 -- Kafka
-is FIFO by construction and cannot express per-chat round robin.
-
-That is why REDIS_URL is set and KAFKA_BROKERS is not. These checks pin the
-property so the request path cannot quietly regress to FIFO.
-""")
+# The reported problem was users blocked behind each other. Measured against the
+# real services: with chat 100 holding 10 queued jobs, Redis served two later
+# light users at positions 2 and 3, while Kafka served them at 11 and 12 -- Kafka
+# is FIFO by construction and cannot express per-chat round robin.
+#
+# That is why REDIS_URL is set and KAFKA_BROKERS is not. These checks pin the
+# property so the request path cannot quietly regress to FIFO.
 
 if not _port_open("127.0.0.1", 6379):
     skip("fairness under load", "nothing listening on 6379")

@@ -84,8 +84,7 @@ print("ok7")
 
 # A daily reminder fires and re-arms for the next day instead of vanishing.
 got.clear(); reminders.register(lambda cid, t: got.append((cid, t)), os.path.join(d, "r8.json"))
-rid = reminders.add(555, 0.2, "таблетки", every_s=86400)
-import time as _t
+reminders.add(555, 0.2, "таблетки", every_s=86400)
 _t.sleep(0.6)
 assert any("таблетки" in t for _, t in got), got
 left = [i for i in reminders.pending(555) if i["text"] == "таблетки"]
@@ -104,4 +103,3 @@ import graph as _G, graph_fastpath as _F
 assert _F._FAST_PATH_ACTION_CLAIM_RE.search("Поставил таймер на 10 минут для пасты.")
 assert _F._FAST_PATH_ACTION_CLAIM_RE.search("Хорошо, я разбужу тебя завтра в 7 утра.")
 print("ok10")
-print("ok11")

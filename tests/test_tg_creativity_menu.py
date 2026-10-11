@@ -67,7 +67,7 @@ def msg(cid, text, mid=1):
 bot = make_bot()
 threading.Thread = _SyncThread   # module-level patch: affects tg_accounts too.
 
-# The song is now a QUEUED TASK (tg_songs.song_payload -> _run_task_inner), so
+# The song is a QUEUED TASK (tg_songs.song_payload -> _run_task_inner), so
 # the flow's contract is checked in two halves: the real _start_song_generation
 # must enqueue the payload, and the generation itself is driven directly here.
 _enq = []
@@ -169,15 +169,10 @@ print()
 print("=" * 66)
 print("THE THREE FAILURE MODES SAY THREE DIFFERENT THINGS")
 print("=" * 66)
-print("""
-Live bug: a healthy engine (weights present, ComfyUI up with the Music3
-nodes, engine_available() == (True, "")) told the user "song generation
-isn't set up yet" because the songwriter LLM burned its whole token budget
-reasoning and returned nothing. MusicUnavailable covered three unrelated
-failures -- engine missing, lyrics-writing failed, render produced no file
--- and all three mapped to the one "not set up" string, with NO logging on
-that branch to tell them apart afterwards.
-""")
+# A healthy engine (engine_available() == (True, "")) must not tell the user
+# "song generation isn't set up yet" when the songwriter LLM returned nothing.
+# Three unrelated failures -- engine missing, lyrics-writing failed, render
+# produced no file -- each get their own message.
 
 # 1) engine genuinely unavailable -> "isn't set up yet" (the only truthful use)
 sess = bot._get_session(CID); sess.reg_state = "song_topic"; bot._store.put(sess)

@@ -109,7 +109,7 @@ def _handle_open_image(ctx, state, args: dict) -> str:
     try:
         ctx.last_image_path = str(full)
     except Exception:
-        pass
+        logger.debug("could not record the opened picture on the context", exc_info=True)
     return (f"Opened '{rel}' ({full.stat().st_size} bytes). It is now the "
             f"current picture — call inspect_image to look at it.")
 
@@ -196,7 +196,7 @@ def _syntax_note(box, rel: str) -> str:
                 f"{exc.msg}. Fix it with edit_file unless you are still writing "
                 f"the rest of the file.]")
     except Exception:
-        pass
+        logger.debug("syntax check of %s skipped", rel, exc_info=True)
     return ""
 
 
@@ -285,11 +285,9 @@ def _handle_write_file(ctx, state, args: dict) -> str:
         n_old = len(prior.splitlines())
         if n_old > REWRITE_MAX_LINES and prior != content.encode("utf-8"):
             raise SandboxError(
-                f"NOT written: {path} already exists ({n_old} lines) and is not rewritten "
-                f"whole. Fix it in place: read_file the part you need (start=..., "
-                f"lines=...), then edit_file with the exact old text and its "
-                f"replacement (or start_line/end_line) -- one edit per fix. To add "
-                f"code at the end use write_file with append=true.")
+                f"NOT written: {path} already exists ({n_old} lines) and "
+                f"{_REWRITE_REFUSED_TAIL} To add code at the end use write_file "
+                f"with append=true.")
     # A complete call is accepted whatever its length: its tokens are already
     # spent, and refusing it only throws them away (sandbox bench 2026-09-24,
     # nine refused 170-700 line writes in a row). The ~150-line advice in the
@@ -374,7 +372,7 @@ def _agent_library_key(ctx) -> str:
         if box is not None:
             return box.root.name
     except Exception:
-        pass
+        logger.debug("no sandbox root name for the library key", exc_info=True)
     return "default"
 
 
@@ -419,8 +417,10 @@ def _handle_rag_add(ctx, state, args: dict) -> str:
         chunks = next((d.get("chunks", 0) for d in lib.documents()
                        if d.get("title") == full.name), 0)
     finally:
-        try: lib.close()
-        except Exception: pass
+        try:
+            lib.close()
+        except Exception:
+            logger.debug("could not close the knowledge base", exc_info=True)
     _record(box, "rag_add", f"indexed {rel} into the knowledge base ({chunks} passages)")
     return (f"Indexed '{rel}' into the knowledge base ({chunks} passages). "
             f"rag_search can now retrieve it.")
@@ -439,8 +439,10 @@ def _handle_rag_search(ctx, state, args: dict) -> str:
                     "working folder, or answer from what you already know.")
         hits = lib.retrieve(query, k=int(args.get("k") or 5))
     finally:
-        try: lib.close()
-        except Exception: pass
+        try:
+            lib.close()
+        except Exception:
+            logger.debug("could not close the knowledge base", exc_info=True)
     if not hits:
         return f"No stored passages match {query!r}."
     lines = [f"Passages from the knowledge base matching {query!r}:"]
@@ -465,7 +467,7 @@ def _handle_search_files(ctx, state, args: dict) -> str:
 def _handle_find_content(ctx, state, args: dict) -> str:
     """Search the working folder by content: pictures by description, text by words.
 
-    Live 2026-09-14: «найди мост» over 173 photos. The tools on offer could
+    «найди мост» over 173 photos. The tools on offer could
     look at ONE picture per two calls, so the task did not fit in a turn and
     the model narrated a plan instead of acting -- twice. This is the tool
     that makes the task fit: contact sheets + verification (photo_search),
@@ -495,8 +497,10 @@ def _handle_find_content(ctx, state, args: dict) -> str:
         if photos:
             _stage = getattr(ctx, "set_stage", None)
             if callable(_stage):
-                try: _stage(f"Looking through {len(photos)} pictures")
-                except Exception: pass
+                try:
+                    _stage(f"Looking through {len(photos)} pictures")
+                except Exception:
+                    logger.debug("set_stage failed", exc_info=True)
             res = _ps.find_in_photos(ctx, folder, query,
                                      work_dir=box.root / ".contact_sheets")
             matches = res["matches"]
@@ -508,7 +512,7 @@ def _handle_find_content(ctx, state, args: dict) -> str:
                     ctx.last_image_path = str(first)
                     ctx.found_image_paths = [str(m) for m in matches]
                 except Exception:
-                    pass
+                    logger.debug("could not record found pictures on the context", exc_info=True)
                 _remember_found(box, matches)
                 _record(box, "find_content", f"found {len(matches)} of {res['scanned']} photos "
                         f"showing {query!r}: " + ", ".join(_rel(box, m) for m in matches))
@@ -529,7 +533,7 @@ def _handle_find_content(ctx, state, args: dict) -> str:
 
 @_guard
 def _handle_delete_path(ctx, state, args: dict) -> str:
-    """Live 2026-09-14: «не захламляй: удали архив и папку, коллаж оставь».
+    """«не захламляй: удали архив и папку, коллаж оставь».
 
     Without this the only way to delete was run_code, which a FILES-level
     account does not have -- so a plain clean-up request was impossible for
@@ -547,7 +551,7 @@ def _handle_delete_path(ctx, state, args: dict) -> str:
 
 @_guard
 def _handle_dedupe_photos(ctx, state, args: dict) -> str:
-    """Journey 33, four runs: told in the description, the schema and the run
+    """Four runs: told in the description, the schema and the run
     result to call assistant_tools.dedupe, the model wrote its own exact-bytes
     hash every time and reported the copies gone. A tool it can CALL is the
     lever that works (find_content taught the same lesson)."""
@@ -574,7 +578,7 @@ def _handle_dedupe_photos(ctx, state, args: dict) -> str:
                                    or _recall_found(box))
                  if Path(p).exists()]
         if found and not args.get("whole_folder"):
-            # Journey 33: with no `paths` the model de-duplicated the WHOLE
+            # With no `paths` the model de-duplicated the WHOLE
             # archive (173 photos) and then picked eight arbitrary "unique"
             # pictures -- sunsets -- for a collage of bridges. The set it
             # meant is the one find_content just returned; pin on that state.
@@ -590,8 +594,10 @@ def _handle_dedupe_photos(ctx, state, args: dict) -> str:
         return "[TOOL ERROR] No pictures to compare."
     _stage = getattr(ctx, "set_stage", None)
     if callable(_stage):
-        try: _stage(f"Comparing {len(paths)} pictures")
-        except Exception: pass
+        try:
+            _stage(f"Comparing {len(paths)} pictures")
+        except Exception:
+            logger.debug("set_stage failed", exc_info=True)
     groups = at.group_near_duplicates(paths)
     kept, lines = [], []
     for g in groups:
@@ -621,7 +627,7 @@ _RECORD_FILE = Path(".agent") / "record.txt"
 
 def _record(box, tool: str, what: str) -> None:
     """A one-line-per-event log of what the file tools did in this working
-    folder. Torture run #4 2026-09-14: after history compaction the model
+    folder. After history compaction the model
     answered «сколько мостов нашёл?» with «я текстовый помощник, я не
     проводил поиск». The folder remembers what the chat forgot; the record
     is shown to the model every turn while the folder has files."""
@@ -809,14 +815,14 @@ def _pictures_in(box) -> dict:
             if p.is_file() and p.suffix.lower() in IMAGE_SUFFIXES:
                 out[p] = p.stat().st_mtime
     except Exception:
-        pass
+        logger.debug("could not list pictures in the working folder", exc_info=True)
     return out
 
 
 def _deliver_new_pictures(box, state, before: dict, ctx) -> str:
     """A script that wrote a picture has produced the result; hand it over.
 
-    Journey 32, 2026-09-14: the script built bridge_collage.jpg, but the
+    The script built bridge_collage.jpg, but the
     current picture was still the first bridge that find_content had set, so
     the chat received a single bridge photo and the collage only inside a
     zip. Without this there is no route from run_code to the user's eyes --
@@ -834,7 +840,7 @@ def _deliver_new_pictures(box, state, before: dict, ctx) -> str:
     try:
         ctx.last_image_path = str(newest)
     except Exception:
-        pass
+        logger.debug("could not record the new picture on the context", exc_info=True)
     names = ", ".join(str(p.relative_to(box.root)).replace("\\", "/") for p in new[-5:])
     note = (f"\n[the script wrote {len(new)} picture(s): {names}. "
             f"'{newest.relative_to(box.root)}' is now the current picture and "

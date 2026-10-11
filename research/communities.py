@@ -137,8 +137,7 @@ def detect_communities(graph, *, max_levels: int = 10) -> dict:
         if len(groups) == len(cur_nodes) or q <= prev_q + 1e-9:
             break
         prev_q = q
-        new_nodes = sorted(groups.keys(), key=lambda c: c)
-        new_nodes = [str(c) for c in new_nodes]
+        new_nodes = [str(c) for c in sorted(groups)]
         new_adj: Dict[str, Dict[str, float]] = {n: defaultdict(float) for n in new_nodes}
         for n in cur_nodes:
             for nb, wt in cur_adj[n].items():

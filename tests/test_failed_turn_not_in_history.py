@@ -1,7 +1,7 @@
 """A turn that ends in the "I produced no answer" placeholder must not be
 committed to the chat history.
 
-Live 2026-09-12 (journey 5): two stuck turns in a row left two UNANSWERED
+Two stuck turns in a row used to leave two UNANSWERED
 questions in the transcript ("можно ли с собакой?", "за сколько дней…"), each
 followed by "Повтори вопрос, пожалуйста". When the user then asked a third,
 different question ("а залог возвращают?") the model answered the OLDEST

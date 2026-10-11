@@ -16,27 +16,32 @@ Built for the "upload War & Peace (1,200 pages) → Build → ask about chapter 
 
 ## Architecture
 
-The retrieval engine is the project's existing hybrid index (`knowledge.KnowledgeBase`)
-— **no ChromaDB / new vector DB was added** because that layer already does exactly the
-requested pipeline and is battle-tested:
+The retrieval engine is the project's hybrid index (`knowledge.KnowledgeBase`,
+`knowledge/knowledge.py`). No separate vector DB is used, because that layer already does
+the whole pipeline:
 
 - **Chunking** — `knowledge.chunk_text` (~240-word passages, 40-word overlap).
 - **BM25 / keyword** — SQLite **FTS5** (`chunks_fts`, porter+unicode61) for exact names,
   numbers, and phrases.
-- **Semantic** — embeddings from the LM Studio `/v1/embeddings` endpoint
-  (`text-embedding-nomic-embed-text-v1.5`, 768-d), stored as float32 BLOBs. No new heavy
-  dependency, no resident VRAM.
+- **Semantic** — embeddings from an OpenAI-style `/v1/embeddings` endpoint
+  (`config.EMBED_BASE`, default a CPU-only llama-server on port 8096; model
+  `config.EMBED_MODEL`, default `text-embedding-bge-m3`, 1024-d), stored as float32 BLOBs.
+  No new heavy dependency, no resident VRAM. The first version used
+  nomic-embed-text-v1.5 (768-d); BGE-M3 replaced it for the bilingual corpus
+  (rationale in `core/config.py`).
 - **Fusion** — **Reciprocal Rank Fusion** of the BM25 and cosine rankings (`mode="auto"`
   → hybrid when embeddings exist, else BM25-only).
-- **Rerank** — `retrieve()` pulls a larger candidate pool (`max(k*4, 20)`) and reranks it
-  down to the top-k. Default is a **deterministic lexical reranker** (query-term coverage +
-  density; instant, no model, no VRAM — safe on a shared 12 GB GPU). An **opt-in
-  cross-encoder** (`config.LIBRARY_CROSS_ENCODER` = a sentence-transformers CrossEncoder
-  model name) jointly scores (query, passage) when configured; it loads lazily and **falls
-  back to lexical on any import/load/scoring failure**, so retrieval never breaks. The
-  hybrid rank is kept as a stable prior fused with the rerank score.
+- **Rerank** — `Library.retrieve()` pulls a larger candidate pool (`max(k+7, 12)` with the
+  cross-encoder, `max(k*4, 30)` without) and reranks it down to the top-k. The default is a
+  **cross-encoder on CPU** (`config.LIBRARY_CROSS_ENCODER`, default `BAAI/bge-reranker-v2-m3`;
+  an empty value disables it; `LIBRARY_CE_DEVICE=cuda` moves it to the GPU). It loads lazily
+  on the first reranked search. When it is off or fails to load, the **hybrid order is kept
+  as is**: the lexical reranker (`LIBRARY_LEXICAL_RERANK=1`, opt-in) scored worse than the
+  hybrid order it reordered on the 80-question Russian eval. A scoring failure also returns
+  the hybrid order, so retrieval never breaks. With a reranker the hybrid rank is kept as a
+  stable prior fused with the rerank score.
 
-`library.py` adds only what `knowledge.py` lacked for this feature:
+`knowledge/library.py` adds only what `knowledge/knowledge.py` lacked for this feature:
 
 | Piece | Where |
 |---|---|
@@ -45,10 +50,12 @@ requested pipeline and is battle-tested:
 | Retrieve + format a numbered, source-labelled, char-budgeted context block | `library.Library.retrieve` / `.format_context` |
 | Chunk-level progress + cancel during embedding | added params on `knowledge.KnowledgeBase.ensure_embeddings` (backward-compatible) |
 
-GUI (`gui.py`): `LibraryBuildWorker` (QThread), `_build_database_tab` + `_db_*` handlers,
-the `📚 Use Database` toggle (`_toggle_usedb`). RAG injection happens **inside
+GUI: `LibraryBuildWorker` and `RequestWorker` (QThread, `gui/gui_workers.py`),
+`_build_database_tab` + `_db_*` handlers and the `📚 Use Database` toggle
+(`_toggle_usedb`) in `gui/gui_database_tab.py`. The GUI reaches the library through
+`knowledge_client.open_library()`. RAG injection happens **inside
 `RequestWorker`** (worker thread): when `use_db` is set, after the input text is known
-(typed, or transcribed from voice) it calls `library.build_rag_prompt` to wrap the
+(typed, or transcribed from voice) it calls `knowledge_client.build_rag_prompt` to wrap the
 question with the retrieved passages, sets that as the model's `user_input`, and emits an
 `info` line shown via `_add_system`. Memory and the on-screen user bubble keep the
 *original* text. Doing this in the worker means retrieval never blocks the UI and **typed
@@ -58,14 +65,14 @@ and voice queries are augmented uniformly** (VAD/Talk paths pass `use_db=self.us
 A "Use Database" question must be answered from the user's documents, not the internet.
 So a DB-mode turn is **closed-book**: `RequestWorker` sets `ctx.web_search_enabled = False`
 for that turn only (then restores the user's setting), which makes the agent loop withhold
-the `search` and `find_photo` tools (graph.py). The RAG prompt also forbids outside
+the `search` and `find_photo` tools (`agent/graph_personality.py`). The RAG prompt also forbids outside
 knowledge and tells the model to say "the documents do not specify it" rather than guess —
 fixing an observed case where the model web-searched and fabricated specifics (eye colours
 of *War and Peace* characters that Tolstoy never states) instead of answering from the PDF.
 
 ## Build speed (embedding throughput)
-Embeddings are computed by the GPU-backed LM Studio `/v1/embeddings` endpoint, not on the
-local CPU — the build's only local cost is HTTP round-trip latency. So the build embeds
+Embeddings are computed by a separate server behind `/v1/embeddings`, not in the app
+process — the build's only local cost is HTTP round-trip latency. So the build embeds
 with **bigger batches and concurrent in-flight requests** to keep that GPU fed instead of
 idling between sequential calls: `KnowledgeBase.ensure_embeddings(batch=, workers=)`,
 driven for the library by `LIBRARY_EMBED_BATCH` (default 128) and `LIBRARY_EMBED_WORKERS`
@@ -73,7 +80,9 @@ driven for the library by `LIBRARY_EMBED_BATCH` (default 128) and `LIBRARY_EMBED
 waves); SQLite writes stay on the calling thread. Set `LIBRARY_EMBED_WORKERS=1` to force
 the old sequential behaviour.
 
-**Sweet spot (measured, 300 real chunks vs live LM Studio + RTX 3060):** throughput
+**Sweet spot (measured when embeddings still ran on the GPU, 300 real chunks vs live
+LM Studio + RTX 3060; the CPU embedder used now indexes about 30x slower, so absolute
+numbers differ):** throughput
 saturates at **~15.6 chunks/s** — the endpoint is GPU-bound, so beyond a point more
 concurrency/batch doesn't help. `batch=16/workers=1` = 4.9 ch/s; the **default
 batch=128/workers=4 ≈ 15.5 ch/s (3.2× faster)**, matching the plateau with only 4
@@ -95,13 +104,13 @@ just loads the server harder.
 - **Threading** — the build worker uses its own SQLite connection (connections can't cross
   threads); the GUI reader connection is dropped after a build so the next query sees the
   new data (WAL).
-- **Retrieval never breaks a turn** — any failure in `_augment_with_database` falls back to
+- **Retrieval never breaks a turn** — any failure in `RequestWorker`'s RAG step falls back to
   sending the original question unchanged.
 - **Context budget** — `format_context` truncates to a character budget, so a huge corpus
   can never blow the context window.
 
 ## Tests
-`tests/test_library.py` — **18/18**, runs with the embedder disabled (no LM Studio):
+`tests/test_library.py` (55 checks) runs with the embedder disabled (no LM Studio):
 extraction across TXT/MD/EPUB, unsupported-type rejection, build stats, the FTS-only
 fallback path, idempotent rebuild, BM25 retrieval relevance, context formatting + budget,
 introspection, and purge. The Database tab + RAG injection are additionally validated
@@ -117,22 +126,22 @@ Three layers improve recall on large documents:
    (`_CHARS_PER_PASSAGE`, capped at `_MAX_CONTEXT_CHARS`) so the slider really controls how
    many passages are injected, not just retrieved. `LIBRARY_RETRIEVE_K` (default 25) is the
    non-GUI fallback.
-2. **Cross-lingual query** — `library.cross_lingual_targets` compares the corpus script(s)
+2. **Cross-lingual query** — `knowledge_client.cross_lingual_targets` compares the corpus script(s)
    (`corpus_scripts`) to the question's; if they differ (e.g. Russian book, English
    question), `RequestWorker._translate_query` translates the query into the corpus
    language(s) via the chat model and `retrieve_multi` searches all variants and merges.
    This fixes the BM25 half being useless across languages ("eyes" ≠ "глаза").
 3. **Whole-book scan** — the *"Whole-book scan for the next question"* checkbox in the
    Database tab. With Use Database ON, the question routes to `ScanWorker`: a map-reduce
-   that reads EVERY chunk in batches (`library.map_reduce_scan`, `LIBRARY_SCAN_BATCH_CHARS`
+   that reads EVERY chunk in batches (`map_reduce_scan` in `knowledge/library.py`, `LIBRARY_SCAN_BATCH_CHARS`
    default 12000), extracts relevant facts per batch, then synthesizes one answer. Complete
    but slow (many model calls); cancellable via Stop. Use it for exhaustive "find all X"
    questions that top-k retrieval can't answer.
 
-## Limitations / future work
+## Limitations
 - Whole-book scan cost scales with book size (one model call per ~12k-char batch); a
   1,200-page book is many calls (minutes). It's deliberately opt-in per question.
-- The cross-encoder reranker is opt-in (off by default for VRAM safety); enabling it loads
-  a model. The default lexical reranker is a heuristic, not a learned relevance model.
+- The cross-encoder reranker runs on CPU by default (about 0.45 s per question) and
+  downloads its model on first use; without it retrieval is the plain hybrid order.
 - The database is shared across memory profiles (one `library.db`); per-profile libraries
   are a possible extension.

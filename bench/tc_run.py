@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 for _s in (sys.stdout, sys.stderr):
     try:
         _s.reconfigure(encoding="utf-8", errors="replace")
-    except Exception:
+    except (AttributeError, ValueError, OSError):
         pass
 os.environ.setdefault("TF_USE_LEGACY_KERAS", "1")
 
@@ -46,7 +46,7 @@ def _served_model():
 
 
 def _make_ctx(model_id):
-    from models import Models, Context
+    from models import Context
 
     class StubModels:
         whisper = tts_model = vocoder = accentor = None

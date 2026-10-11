@@ -8,7 +8,7 @@ equal footing. ё is treated as inherently stressed; comparison is ё-folded.
 import re
 import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception: pass
+except (AttributeError, ValueError, OSError): pass
 
 ACUTE = "́"
 _VOWELS = "аеёиоуыэюя"
@@ -198,7 +198,7 @@ def score_model(predict, *, latency_text=None):
     for s in texts:
         try:
             predict(s)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"  latency warm-up: predict failed on {s[:40]!r}: {e!r}", file=sys.stderr)
     res["latency_ms_per_sent"] = (time.perf_counter() - t0) * 1000 / len(texts)
     return res

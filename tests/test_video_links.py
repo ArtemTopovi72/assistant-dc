@@ -1,6 +1,6 @@
-"""A video link is downloaded and watched, not read as a page (live 10-03: a
-YouTube Shorts link got «я не умею смотреть видео по ссылкам»)."""
-import os, sys, types
+"""A video link is downloaded and watched, not read as a page (a
+YouTube Shorts link must not get «я не умею смотреть видео по ссылкам»)."""
+import sys, types
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bot"))
@@ -36,7 +36,7 @@ def test_fetch_video_downloads_and_caps_length():
         assert r == {"data": b"MP4", "seconds": 55, "title": "t", "description": "d"}, r
         r = L.fetch_video("https://youtu.be/v?d=4000")
         assert r == {"too_long": True, "seconds": 4000, "title": "t"}, r
-        # live 10-07: every YouTube link died on "Sign in to confirm you're not a bot";
+        # every YouTube link died on "Sign in to confirm you're not a bot";
         # the mweb client with a node-solved JS challenge still downloads
         o = SEEN[-1]
         assert "mweb" in o["extractor_args"]["youtube"]["player_client"], o

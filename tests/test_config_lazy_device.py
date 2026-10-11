@@ -53,8 +53,8 @@ def test_import_does_not_pull_torch():
 
 def test_importing_lane_modules_does_not_pull_torch():
     # The modules that only ever needed config for its plain settings must stay
-    # Torch-free too — audio.py in particular used to name DEVICE in its
-    # top-level `from config import ...`, which dragged Torch into every process.
+    # Torch-free too (audio.py must not name DEVICE in its top-level
+    # `from config import ...`).
     for mod in ("audio", "llm", "tools", "music", "comfy_client"):
         out = _run("import %s\nprint('torch' in sys.modules)" % mod)
         check("import_%s_leaves_torch_unloaded" % mod, out == "False", out)

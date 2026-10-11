@@ -5,7 +5,7 @@ face-detailer) need a live image server and are out of scope here.
 
 Run: venv/Scripts/python.exe tests/test_image_pure.py
 """
-import os, sys, types, tempfile
+import os, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _sweep_stub  # noqa: F401  the model's narrow reads, stubbed
@@ -14,7 +14,6 @@ except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
 from pathlib import Path
 
-import numpy as np
 from PIL import Image
 import config as C
 import image as I
@@ -36,10 +35,9 @@ def check(name, cond, detail=""):
 def test_snap_and_resolution():
     check("snap_min", I._snap_to_8(10) == 64)
     check("snap_round", I._snap_to_8(1000) == 1000 and I._snap_to_8(1001) == 1000)
-    # normalize_resolution used to return the constants (544,960)/(960,544) for
-    # EVERY input, which threw away any size the user picked. It now only puts a
-    # size on the rails: orientation and aspect are preserved, the min/max side
-    # are enforced, and the result is a multiple of 16.
+    # normalize_resolution only puts a size on the rails: orientation and aspect
+    # are preserved, the min/max side are enforced, and the result is a multiple
+    # of 16 (it must not collapse every input to a constant size).
     pw, ph = I.normalize_resolution(100, 200)
     check("normalize_portrait", ph > pw and abs(ph / pw - 2.0) < 0.05,
           f"{pw}x{ph}")
@@ -106,10 +104,8 @@ def test_intermediate_and_deliverable():
     check("inter_firered", I.is_intermediate_artifact("x/_firered_tile_1.png"))
     check("inter_false", not I.is_intermediate_artifact("out/final.png"))
     check("inter_none", not I.is_intermediate_artifact(None))
-    # Found by the live journey run: the harness used the app's own predicate,
-    # and it picked a hand-drawn source-region crop as "the picture that was
-    # drawn". Both of these are working files written into OUTPUT_DIR beside
-    # the real renders.
+    # Working files written into OUTPUT_DIR beside the real renders: a hand-drawn
+    # source-region crop must not be mistaken for "the picture that was drawn".
     check("inter_srcregion", I.is_intermediate_artifact("out/_srcregion_123.png"))
     check("inter_florence", I.is_intermediate_artifact("out/_florence_proxy_1.png"))
     # …and the other side of it: these ARE the finished picture at their write
@@ -176,10 +172,7 @@ if __name__ == "__main__":
             print("  ERROR in " + fn.__name__ + ": " + type(e).__name__ + ": " + str(e))
     print("\n" + str(len(fns) - failed) + "/" + str(len(fns)) + " image-pure test functions passed (" +
           str(sum(1 for _, c in RESULTS if c)) + "/" + str(len(RESULTS)) + " checks)")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

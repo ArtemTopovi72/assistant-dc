@@ -21,7 +21,7 @@ def wait_for_line(path, needle, max_wait=12 * 3600):
     while time.time() - t0 < max_wait:
         try:
             # skip the queue's own "waiting for <needle>" lines, or a waiter
-            # finds itself and starts at once (it did, 00:57, music ran early)
+            # finds itself and starts at once
             lines = open(path, encoding="utf-8", errors="replace").read().splitlines()
             if any(needle in ln for ln in lines if "waiting for" not in ln):
                 return True

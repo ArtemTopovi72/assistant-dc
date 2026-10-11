@@ -6,7 +6,6 @@ scenario to tests/_dr_eval.jsonl. Also logs the engine's INFO lines (junk drops,
 query plan, crawl counts) to tests/_dr_eval.log for inspection.
 """
 import sys, os, io, json, time, threading, logging
-import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")

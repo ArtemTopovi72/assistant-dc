@@ -1,8 +1,7 @@
 """Regression: the need-tool gate and first-failure recovery.
 
-All three defects here were found by bench/tc_run.py (the live tool-calling
-bench) and are reproduced offline with no LM Studio, no GPU and no network --
-every assertion is a pure regex/AST check.
+Offline: no LM Studio, no GPU and no network -- every assertion is a pure
+regex/AST check (the live tool-calling bench is bench/tc_run.py).
 
 1. _TOOL_TRIGGER_RE is an ALLOWLIST that decides whether the agent is given
    tools at all. Whole capability families were missing from it, so the fast
@@ -20,7 +19,7 @@ every assertion is a pure regex/AST check.
    REPLAN_FAILURE_THRESHOLD failures in a row and tells the model to give up.
    A single injected error made the agent apologise and stop on 4/4 bench runs.
 
-Run: .\venv\Scripts\python.exe tests\test_need_tool_gate.py
+Run: venv/Scripts/python.exe tests/test_need_tool_gate.py
 """
 import sys
 sys.path.insert(0, ".")
@@ -92,7 +91,7 @@ import inspect
 # --- 2b. a tool-less DELIVERY CLAIM is thrown away too --------------------------
 # "а теперь просто картинку этого же кота" had no draw verb, took the fast
 # path, and came back as "Вот ваша картинка с рыжим котом" with nothing
-# attached (journey 28).
+# attached.
 CLAIMS = [
     ("ru_picture", "Вот ваша картинка с рыжим котом, бегущим по пляжу."),
     ("ru_deck",    "Готово! Презентация сохранена и отправлена."),
@@ -129,7 +128,6 @@ src = inspect.getsource(P)
 check("first_failure_nudge_exists", "FIRST failure of" in src)
 check("nudge_is_once_per_tool", "retry_nudged" in src and "retry_nudged.add" in src)
 check("nudge_fires_before_giveup",
-      src.index("_RETRY_ON_FIRST_FAILURE\n") if False else
       src.index("FIRST failure of") < src.index("REPLAN_FAILURE_THRESHOLD):"),
       "the retry nudge must be reachable before the give-up nudge")
 

@@ -1,13 +1,13 @@
 """«Убери все надписи с фона»: the mask comes from the OCR, not from a phrase.
 
-Journey 3, live 2026-09-18: SAM3 given 'wall inscriptions' returned one
+SAM3 given 'wall inscriptions' returned one
 166-px strip and "INSGATE" stayed on the left. Now a removal aimed at the
 lettering masks every OCR box (faces cut out), LaMa fills, the OCR reads the
 result again, and a logo the vision model still sees gets one segmenter pass.
 Verified live on bench/assets/red_carpet.jpg: INSGATE, USEMAID and the
 lady/tch.ua watermark gone in one pass (lettering-remove_00001_.png).
 """
-import os, sys, io, types, tempfile
+import os, sys, tempfile
 os.environ.setdefault("F5_TEST_RUN", "1")
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass

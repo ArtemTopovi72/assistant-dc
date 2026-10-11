@@ -103,8 +103,7 @@ CASES = [
     dict(id="args_upscale_mode", cat="args", image=True,
          text="апскейльни это, человека сохрани как есть",
          expect="redraw_image",
-         # 'upscale' as a distinct mode no longer exists (the old model, its engine,
-         # was removed) -- 'redraw' is the only real mode left.
+         # there is no distinct 'upscale' mode; 'redraw' is the only one.
          check=lambda a: a.get("mode") == "redraw"),
 
     # ---- recovery --------------------------------------------------------
@@ -124,8 +123,7 @@ CASES = [
          forbid=["generate_image", "create_presentation"]),
 
     # =====================================================================
-    # Stage 6 widening. Everything below was added with the hardening pass:
-    # multi-step chains, a much denser need-tool gate, and more of the
+    # Multi-step chains, a much denser need-tool gate, and more of the
     # near-miss pairs the canary bench probes from the other side.
     # =====================================================================
 

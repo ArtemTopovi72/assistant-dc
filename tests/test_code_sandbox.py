@@ -87,7 +87,7 @@ def test_binary_files_are_not_read_as_text(box):
 
 
 def test_a_log_is_text(box):
-    # live 10-03: crash.log / assistant_app.log refused as «not a text file»
+    # crash.log / assistant_app.log were once refused as «not a text file»
     (box.root / "crash.log").write_text("Traceback: boom", encoding="utf-8")
     assert "boom" in box.read_text("crash.log")
 
@@ -297,10 +297,10 @@ def test_no_close_line_means_no_misleading_suggestion(box):
 # --- a real modpack shape ------------------------------------------------------
 
 def _jar_bytes(tag):
-    import io as _io, zipfile as _zf, json as _json
-    buf = _io.BytesIO()
-    with _zf.ZipFile(buf, "w") as z:
-        z.writestr(f"data/{tag}/tag.json", _json.dumps({"mod": tag}))
+    import io
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr(f"data/{tag}/tag.json", json.dumps({"mod": tag}))
     return buf.getvalue()
 
 
@@ -312,7 +312,6 @@ def test_two_mods_with_the_same_filename_do_not_merge(tmp_path):
     mod's tag file believing it was the other's, and answer confidently about a
     file that never existed in that shape.
     """
-    import zipfile
     box = Sandbox(tmp_path / "sbx")
     with zipfile.ZipFile(box.root / "pack.zip", "w") as z:
         z.writestr("mods/thief.jar", _jar_bytes("a"))
@@ -329,7 +328,6 @@ def test_two_mods_with_the_same_filename_do_not_merge(tmp_path):
 
 
 def test_an_archive_at_the_root_still_unpacks_at_the_root(tmp_path):
-    import zipfile
     box = Sandbox(tmp_path / "sbx")
     with zipfile.ZipFile(box.root / "thief.jar", "w") as z:
         z.writestr("pack.mcmeta", "{}")
@@ -339,10 +337,8 @@ def test_an_archive_at_the_root_still_unpacks_at_the_root(tmp_path):
 
 
 def test_an_explicit_destination_is_still_honoured(tmp_path):
-    import zipfile
     box = Sandbox(tmp_path / "sbx")
-    with zipfile.ZipFile(box.root / "a/deep/thief.jar".replace("/", os.sep)
-                         if False else box.root / "thief.jar", "w") as z:
+    with zipfile.ZipFile(box.root / "thief.jar", "w") as z:
         z.writestr("x.txt", "hi")
     box.unpack("thief.jar", "somewhere/else")
     assert box.read_text("somewhere/else/x.txt") == "hi"
@@ -356,9 +352,9 @@ def test_the_delivered_archive_carries_no_working_debris(tmp_path):
     extracted copy of a mod that had already been repacked into its jar beside
     it. The archive was correct AND obviously wrong, at double the size.
     """
-    import io as _io, zipfile
+    import io
     box = Sandbox(tmp_path / "sbx")
-    inner = _io.BytesIO()
+    inner = io.BytesIO()
     with zipfile.ZipFile(inner, "w") as z:
         z.writestr("data/thief/tags/block/medium.json",
                    json.dumps({"values": ["#c:chests"]}))
@@ -378,7 +374,7 @@ def test_the_delivered_archive_carries_no_working_debris(tmp_path):
         jar = z.read("mods/thief.jar")
     assert sorted(names) == ["config/thief.toml", "mods/thief.jar"], names
 
-    with zipfile.ZipFile(_io.BytesIO(jar)) as z:
+    with zipfile.ZipFile(io.BytesIO(jar)) as z:
         data = json.loads(z.read("data/thief/tags/block/medium.json"))
     assert "morevillagers:trading_table" in data["values"], data
 
@@ -386,7 +382,6 @@ def test_the_delivered_archive_carries_no_working_debris(tmp_path):
 def test_packing_an_unpacked_folder_itself_is_the_normal_case(tmp_path):
     """Only NESTED debris is skipped -- "pack thief_unpacked back into a jar" is
     the ordinary flow and must still produce a full archive."""
-    import zipfile
     box = Sandbox(tmp_path / "sbx")
     with zipfile.ZipFile(box.root / "thief.jar", "w") as z:
         z.writestr("pack.mcmeta", "{}")
@@ -398,7 +393,6 @@ def test_packing_an_unpacked_folder_itself_is_the_normal_case(tmp_path):
 
 
 def test_the_private_agent_folder_never_ships(tmp_path):
-    import zipfile
     box = Sandbox(tmp_path / "sbx")
     box.write_text("work/keep.txt", "keep me")
     box.write_text(f"work/{AGENT_DIR}/site-packages/junk.py", "print(1)")

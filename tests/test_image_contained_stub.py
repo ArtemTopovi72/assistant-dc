@@ -12,7 +12,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
-import numpy as np
 from pathlib import Path
 from PIL import Image
 import image as I
@@ -22,11 +21,10 @@ intent.YES_STUB = lambda q, t: "whole face or head" in q and t.strip() in ("her 
 
 # --- hermetic by default -----------------------------------------------------
 # _item_attributes() asks the LLM to classify a phrase, and the mask pipeline
-# calls it from four places. These suites are named "stub" and are supposed to be
-# offline, but they were reaching a live LM Studio on localhost:1234 — so the
-# result depended on whether a model happened to be loaded, and the same test
-# passed on one machine and failed on another. Pin a deterministic classifier;
-# individual tests override it via _Patches when a scenario needs other values.
+# calls it from four places. These suites are offline, so pin a deterministic
+# classifier (a live LM Studio on localhost:1234 would make results depend on
+# whether a model is loaded); individual tests override it via _Patches when a
+# scenario needs other values.
 _ITEM_ATTRS_DEFAULT = {"worn": False, "small": True, "large": False, "multi": False}
 from _image_patch import Patches as _Patches, broadcast as _broadcast
 _broadcast("_item_attributes",
@@ -35,11 +33,10 @@ import models
 
 _TMP = Path(tempfile.mkdtemp(prefix="imgstub_"))
 RESULTS = []
-import os as _os
 def check(name, cond, detail=""):
     RESULTS.append((name, bool(cond)))
     print("[" + ("PASS" if cond else "FAIL") + "] " + name + ("" if cond or not detail else " - " + detail))
-    if not cond and _os.environ.get("PYTEST_CURRENT_TEST"):
+    if not cond and os.environ.get("PYTEST_CURRENT_TEST"):
         raise AssertionError(str(name) + (": " + str(detail) if detail else ""))
 
 def Ctx():
@@ -161,8 +158,8 @@ def test_whole_face_detector_hit_nonempty():
         check("whole_face_detector_success", out is not None)
 
 def test_body_and_face_is_not_a_face_preset():
-    """Live 10-02: «the man's body and face» hit the face regex, YuNet masked
-    the face only and the man stayed in his chair."""
+    """«the man's body and face» must not hit the face regex: YuNet would mask
+    the face only and the rest of the man would stay unedited."""
     called = []
     with _Patches(_face_detector_mask=lambda *a, **k: called.append(1)):
         try:
@@ -175,20 +172,15 @@ def test_body_and_face_is_not_a_face_preset():
 def test_whole_face_detector_miss_falls_to_text_seg():
     ctx = Ctx()
     img = _photo("wf3.png")
-    # A face-sized box (~11% of a 256px frame). The old fixture covered 50% of
-    # the image, which the STAGE-0 quality gate now correctly rejects as
-    # over-coverage for a small region — the test was asserting on a mask no real
-    # face detector would produce, so it failed on the gate rather than on the
-    # fallback branch it is meant to cover.
+    # A face-sized box (~11% of a 256px frame): a box covering half the image
+    # would be rejected by the STAGE-0 quality gate as over-coverage for a small
+    # region, before reaching the fallback branch this test covers.
     maskfile = _mask_file("wf3_mask.png", box=(90, 60, 170, 150))
     # This test is about the FALLBACK BRANCH (detector miss -> text segmentation),
-    # not the Stage-1 vision QA verdict — but a text-segmented mask (unlike a
-    # detector hit) DOES go through Stage-1 QA, which without a stub reaches a
-    # real LM Studio on localhost:1234 and (correctly) rejects a plain solid-
-    # colour test square as not matching "her face", making this "hermetic" test
-    # silently depend on whatever model happens to be loaded. MASK_QA_ENABLED=
-    # False isolates the branch under test the same way the neighbouring
-    # text-seg QA tests do for THEIR non-QA scenarios.
+    # not the Stage-1 vision QA verdict. A text-segmented mask DOES go through
+    # Stage-1 QA, which without a stub would reach a real LM Studio, so
+    # MASK_QA_ENABLED=False isolates the branch under test (as the neighbouring
+    # text-seg tests do for their non-QA scenarios).
     with _Patches(_face_detector_mask=lambda *a, **k: None,
                   _upload_image_to_comfy=lambda *a, **k: "uploaded.png",
                   _region_mask_file=lambda *a, **k: maskfile,
@@ -373,10 +365,7 @@ if __name__ == "__main__":
             import traceback; traceback.print_exc()
             print("  ERROR in " + fn.__name__ + ": " + type(e).__name__ + ": " + str(e))
     passed = sum(1 for _, c in RESULTS if c)
-    # A failed check() must reach the exit code. It used to only print: `failed`
-    # counted exceptions alone, so every assertion in this file could go red
-    # while the suite still exited 0 -- invisible to anything judging by exit
-    # code, which is how these suites are judged.
+    # A failed check() must reach the exit code; `failed` counts exceptions alone.
     bad = [n for n, c in RESULTS if not c]
     print(f"\n{len(fns)-failed}/{len(fns)} functions, {passed}/{len(RESULTS)} checks passed")
     if bad:

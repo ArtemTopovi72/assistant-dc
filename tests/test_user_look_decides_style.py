@@ -1,8 +1,8 @@
 """The USER's words decide whether a picture is a photo or a drawing.
 
-Live 10-03: «кибер-Ленин дерётся с чертями» came back as a cartoon every time,
+«кибер-Ленин дерётся с чертями» came back as a cartoon every time,
 while the owner wanted photorealism -- the agent's English rewrite said
-«epic digital painting» and the planner followed it. Now: no drawn look in the
+«epic digital painting» and the planner followed it. No drawn look in the
 user's words -> a photograph (a logo stays graphic design); a named look wins.
 """
 import os

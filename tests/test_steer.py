@@ -1,10 +1,8 @@
 """What the user says WHILE the bot works changes the work (steer.py).
 
-Live 2026-09-18: «прошу график, вижу, что он пишет код, вкидываю "фон пусть
-будет красный" -- и он на ближайшем свободном моменте: ага, учту». A text
-that arrives during a running task goes into that task's inbox, the user gets
-«👌 Учту: …» at once, the agent loop folds the note into its next round, and
-a note the task never read is re-queued as an ordinary request.
+A text that arrives during a running task goes into that task's inbox, the
+user gets «👌 Учту: …» at once, the agent loop folds the note into its next
+round, and a note the task never read is re-queued as an ordinary request.
 """
 import os, sys, types, threading
 os.environ.setdefault("F5_TEST_RUN", "1")
@@ -125,14 +123,8 @@ class _Bot:
     def _lang(self, sess): return "ru"
     def _send_text(self, cid, text, **k): self.sent.append(text)
     def _enqueue_item(self, cid, item): self.queued.append(item)
-    _try_steer = tg_tasks._TaskMixin._try_steer if hasattr(tg_tasks, "_TaskMixin") else None
 b = _Bot()
-_try = getattr(tg_tasks, "_TaskMixin", None)
-if _try is None:
-    # the methods live on whatever class tg_tasks defines; bind them by name
-    _cls = next(v for v in vars(tg_tasks).values() if isinstance(v, type) and hasattr(v, "_try_steer"))
-else:
-    _cls = _try
+_cls = tg_tasks.TaskRunnerMixin
 task_running = types.SimpleNamespace(task_id="run1", chat_id=7, delivered=False)
 b._running_task[7] = [task_running]; b._steer_inboxes["run1"] = S.Inbox()
 arrival = types.SimpleNamespace(task_id="new1", user_text="а фон красный", image_path="", image_id="")

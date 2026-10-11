@@ -88,10 +88,7 @@ def test_a_removal_instruction_still_removes():
 
 
 def test_which_instructions_count_as_add_only():
-    for text in ("добавь рыжего кота", "дорисуй лампу", "add a lamp",
-                 "включи в сцену стол"):
-        if text.startswith("включи"):
-            continue                      # not in the vocabulary; see below
+    for text in ("добавь рыжего кота", "дорисуй лампу", "add a lamp"):
         assert DA._additive_only(text), text
     for text in ("убери коробку", "замени кружку на бокал", "remove the dog",
                  "добавь лампу вместо кресла",   # add AND remove: not add-only
@@ -476,12 +473,11 @@ def test_something_genuinely_tiny_is_still_grown():
     assert coin["w"] * coin["h"] <= DG.MIN_AREA * 1.6, coin
 
 
-# ── 3. the critic may not condemn a picture for a darkness the pixels deny ────
-# Measured 2026-08-29 over fourteen bench renders: it called an ordinary lit
-# kitchen "extremely dark and incoherent, making most elements unidentifiable".
-# The verdict decides whether to redraw, so an imagined fault throws away a
-# picture that was already right -- which is what a pointless redraw looks like
-# from the outside.
+# ── 8. the critic may not condemn a picture for a darkness the pixels deny ────
+# Measured over fourteen bench renders: it called an ordinary lit kitchen
+# "extremely dark and incoherent, making most elements unidentifiable". The
+# verdict decides whether to redraw, so an imagined fault throws away a picture
+# that was already right.
 
 def _img(tmp_path, name, value):
     from PIL import Image
@@ -516,8 +512,8 @@ def test_an_unreadable_file_leaves_the_verdict_alone(tmp_path):
     assert DA._drop_unfounded(str(tmp_path / "nope.png"), probs) == probs
 
 
-# ── 4. a prop hanging just above a surface is rested on it ───────────────────
-# Measured 2026-08-29: the planner gave the table y 0.45-0.75 and the mug
+# ── 9. a prop hanging just above a surface is rested on it ───────────────────
+# Measured: the planner gave the table y 0.45-0.75 and the mug
 # 0.28-0.42, so the mug's box ended three hundredths of a frame ABOVE the table
 # with nothing under it. Ideogram drew the sensible picture -- a mug ON the
 # table -- and the critic then condemned the render for disobeying the layout,
@@ -575,9 +571,8 @@ def test_a_prop_beside_the_table_is_not_pulled_onto_it():
 def test_the_settle_pass_never_makes_the_report_worse():
     """It runs last, after the collision and lettering repairs have finished.
 
-    Found by regression: resting a box on a surface pushed a sign back across
-    the subject the lettering repair had just moved it off, and
-    test_layout_text_collision went red. A move that raises the problem count
+    Resting a box on a surface must not push a sign back across the subject the
+    lettering repair had just moved it off: a move that raises the problem count
     is undone.
     """
     layout = IG.normalize_layout({

@@ -1,4 +1,4 @@
-"""A Cyrillic name the user quoted is lettered verbatim (live: «Колосок» drawn as 'Kolosok')."""
+"""A Cyrillic name the user quoted is lettered verbatim («Колосок», not transliterated to 'Kolosok')."""
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import tool_image_handlers as H

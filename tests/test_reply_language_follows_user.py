@@ -1,8 +1,8 @@
 """The reply language is the USER's, not the house's.
 
-Live, 2026-09-12: a Telegram user whose session language is English asked
-"what's the capital of Australia?" and got "Столицей Австралии является город
-Канберра" -- the [Language] block hard-coded Russian for everyone. Pure.
+A Telegram user whose session language is English who asks "what's the capital
+of Australia?" must not get a Russian answer (the [Language] block must not
+hard-code Russian for everyone). Pure.
 
 Run: venv/Scripts/python.exe tests/test_reply_language_follows_user.py
 """
@@ -38,9 +38,9 @@ check("lite: English session", "Reply in English only" in len_ and "in Russian" 
 check("lite: no placeholder", "{lite_language}" not in lru + len_)
 check("the legacy alias is the Russian prompt", "reply to the user in Russian" in P.SYSTEM_PROMPT_PERSONALITY)
 
-# "а теперь расскажи её по-русски" on an English session came back in English
-# (journey 26): an explicit request, or a whole message in another language,
-# overrides the session default for that turn — in both prompts.
+# "а теперь расскажи её по-русски" on an English session: an explicit request,
+# or a whole message in another language, overrides the session default for
+# that turn — in both prompts.
 for _p in (ru, en, lru, len_):
     check("an explicit language request overrides the session language",
           "explicitly asks for another language" in _p and "whole message" in _p)

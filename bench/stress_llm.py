@@ -14,7 +14,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 import requests
 from bench.stress_data import (
     HOMOGRAPHS, HARD_WORDS, GENERAL,
-    canonical, base, find_token, n_vowels, is_marked,
+    canonical, base, find_token,
 )
 
 URL = os.getenv("LM_STUDIO_URL", "http://localhost:1234/v1/chat/completions")

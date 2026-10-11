@@ -1,8 +1,8 @@
 """forget_facts: the counterpart of remember_fact.
 
-Live, 2026-09-12: 'забудь всё, что я про себя рассказывал' -> 'Хорошо, я
-забыл' with no tool to forget with; the next question got 'У тебя аллергия
-на орехи, Марат'. Pure.
+'забудь всё, что я про себя рассказывал' needs a tool to forget with: without
+one the model says 'Хорошо, я забыл' and the next question still gets 'У тебя
+аллергия на орехи, Марат'. Pure.
 
 Run: venv/Scripts/python.exe tests/test_forget_facts.py
 """

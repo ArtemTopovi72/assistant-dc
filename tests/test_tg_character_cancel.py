@@ -89,7 +89,7 @@ def test_the_render_cleans_up_and_confirms():
     # The confirmation must come BEFORE the failure branch: a cancelled render
     # returns no path, and reporting "не смог нарисовать" for a render the user
     # deliberately stopped is a lie.
-    # The failure branch now chooses between char_failed and gpu_busy, so the
+    # The failure branch chooses between char_failed and gpu_busy, so the
     # anchor is the failure TEST rather than one of its two messages.
     check("cancellation is reported before the failure branch",
           body.index("cancel.is_set()") < body.index("if not path:"))

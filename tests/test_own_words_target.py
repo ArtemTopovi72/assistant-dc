@@ -1,20 +1,17 @@
 """Decisions about what the user asked for read the USER's words only.
 
-Live 2026-10-01: a forwarded video's storyboard said «…текст сообщает о
-предыдущих инцидентах…», «предыдущих» read as «the previous picture», and
-«Что думаешь по этому поводу?» targeted an old quote photo: the turn looked
-at it and ended with the picture-editing keyboard. Quoted material is framed
-by prompt_guard.wrap_quoted and removed by prompt_guard.user_words -- one pair,
-used by the bot and the agent alike (three hand-made «…» parsers before, and
-the first inner «» ended the quote early).
+Example: a forwarded video's storyboard says «…текст сообщает о предыдущих
+инцидентах…»; «предыдущих» must not read as «the previous picture», or
+«Что думаешь по этому поводу?» targets an old quote photo. Quoted material is
+framed by prompt_guard.wrap_quoted and removed by prompt_guard.user_words -- one
+pair, used by the bot and the agent alike.
 """
 import os, sys, inspect
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, d) for d in ("bot", "agent", "core")]
 import tg_bot, tg_resolve, graph, graph_finalize, graph_personality, intent
-# The model's read (agent/intent.py): «предыдущ…» anywhere names the previous
-# picture, as the old word list did -- so the fixture still shows what the
-# user_words cut is for.
+# The model's read (agent/intent.py) is stubbed: «предыдущ…» anywhere names the
+# previous picture -- so the fixture shows what the user_words cut is for.
 intent.STUB = lambda t: {"names_picture": -2} if "предыдущ" in t else None
 from prompt_guard import user_words, wrap_quoted, wrap_document
 

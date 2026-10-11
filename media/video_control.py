@@ -38,7 +38,7 @@ _COMFY_HOME = os.getenv("COMFY_HOME", os.path.join(os.path.expanduser("~"), "Doc
 QI21_CMD = [_venv_python(os.path.join(_COMFY_HOME, "ComfyUI-qi21", ".venv")),
             os.path.join(_COMFY_HOME, "ComfyUI-qi21", "main.py"), "--base-directory", _COMFY_HOME,
             "--port", QI21_URL.rsplit(":", 1)[-1], "--reserve-vram", "2",
-            "--use-sage-attention"]   # sageattention installed in the qi21 venv 2026-09-27 (same wheel as main)
+            "--use-sage-attention"]   # sageattention installed in the qi21 venv (same wheel as main)
 from config import OUTPUT_DIR_COMFY as _OUT, INPUT_DIR_COMFY as _IN
 QI21_CMD += ["--output-directory", str(_OUT), "--input-directory", str(_IN)]
 _swap_lock = threading.Lock()
@@ -72,8 +72,8 @@ def on_control_server(ctx=None, start_timeout: int = 300):
                 import requests
                 requests.post(comfy_client.COMFY_URL.rstrip("/") + "/free",
                               json={"unload_models": True, "free_memory": True}, timeout=10)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("could not free the live server's models: %s", exc)
             rt = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "runtime")
             os.makedirs(rt, exist_ok=True)      # a fresh install has no runtime/ yet
             log = open(os.path.join(rt, "qi21.log"), "ab")
@@ -87,7 +87,7 @@ def on_control_server(ctx=None, start_timeout: int = 300):
                     proc.kill()
                     try:        # reaped: a half-started server still holds VRAM
                         proc.wait(30)
-                    except Exception:
+                    except (subprocess.TimeoutExpired, OSError):
                         pass
                     log.close()
                     raise RuntimeError("cancelled" if cancelled else "qi21 did not start (see runtime/qi21.log)")
@@ -107,7 +107,7 @@ def on_control_server(ctx=None, start_timeout: int = 300):
                     proc.kill()
                     try:
                         proc.wait(30)
-                    except Exception:
+                    except (subprocess.TimeoutExpired, OSError):
                         pass
                 log.close()
 
@@ -126,7 +126,7 @@ def build_control_workflow(prompt: str, control_video: str, *, kind: str = "cann
     wf = V.build_workflow(prompt, mode="t2va", width=width, height=height, frames=frames,
                           seed=seed, images=(), steps=steps, two_stage=False)
     # two_stage=False: at the half-size first stage the control could not hold the
-    # layout, and the refine pass redrew it (bench 2026-09-25); full size holds it.
+    # layout, and the refine pass redrew it; full size holds it.
     if first_frame:
         wf["20"] = {"class_type": "LoadImage", "inputs": {"image": first_frame}}
         wf[V.N_COND]["inputs"]["first_frame"] = ["20", 0]

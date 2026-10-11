@@ -1,7 +1,7 @@
 """Regression: execute_tool must ALWAYS return a str, and the graph tool loop must
 never crash on a rogue None/non-str tool result.
 
-BUG (found by the randomized fault-injection campaign): a tool handler returning
+A tool handler returning
 None (e.g. a missing `return` on some code path) propagated up through
 execute_tool and crashed the personality_node loop at `tool_result.lstrip()` with
 `AttributeError: 'NoneType' object has no attribute 'lstrip'`, aborting the entire
@@ -49,7 +49,7 @@ def test_graph_loop_survives_none_tool_result():
     """Even if execute_tool were bypassed and yielded a non-str, the graph loop's
     own guard must keep .lstrip() from crashing. We simulate by monkeypatching the
     module-level execute_tool the graph calls to return None once."""
-    import threading, copy
+    import threading
     from pathlib import Path
     import graph as graph_mod, tools as tools_mod
     from models import Context

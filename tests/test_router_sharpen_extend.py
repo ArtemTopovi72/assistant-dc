@@ -40,5 +40,5 @@ assert Image.open(R.transform_image(_p, "rotate the image 90 degrees")).size == 
 assert Image.open(R.transform_image(_p, "flip it horizontally")).size == (40, 20)
 print("PASS rotate/flip/crop are exact pixel operations")
 import tool_descriptions
-assert "rotate the image 90 degrees" in tool_descriptions._REDRAW_IMAGE_DESC   # the agent refused: "не могу повернуть"
+assert "rotate the image 90 degrees" in tool_descriptions._REDRAW_IMAGE_DESC
 print("PASS the agent is told rotation exists; 'the entire image' still counts")

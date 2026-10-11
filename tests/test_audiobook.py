@@ -119,7 +119,7 @@ check("a crashing checker never blocks the book",
       A.render_chapter(fake_synth, "", "Раз два три четыре пять шесть.", 1, os.path.join(D, "w.wav"), verify=lambda t, w: 1 / 0))
 
 
-# PDF / DOCX through the project's extractors (live 10-04: «cannot import name library» -> every pdf failed)
+# PDF / DOCX through the project's extractors («cannot import name library» used to fail every pdf)
 import docx as _docx
 dp = os.path.join(D, "b.docx")
 _d = _docx.Document(); _d.add_paragraph("Глава 1"); _d.add_paragraph("Жил-был царь Салтан. " * 5); _d.save(dp)
@@ -148,7 +148,7 @@ txt = A.lines_from_boxes(boxes)
 check("OCR boxes: words in reading order, scraps dropped, a big gap = a paragraph", txt == "Привет мир" + chr(10) * 2 + "Новый", repr(txt))
 
 
-# a real PDF's furniture (live 10-04: «100 лучших книг: www.100bestbooks.ru» + the title on every page was READ ALOUD)
+# a real PDF's furniture («100 лучших книг: www.100bestbooks.ru» + the title on every page was READ ALOUD)
 NLc = chr(10)
 page = NLc.join(["100 лучших книг всех времен: www.100bestbooks.ru"] + ["Строка стиха номер %d" % i + "," for i in range(30)]
                 + ["", "Александр Пушкин «Сказка о царе Салтане»", ""])

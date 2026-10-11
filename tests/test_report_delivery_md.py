@@ -1,15 +1,13 @@
 """A long report goes out ONCE, as a file — and its headings keep their newlines.
 
-Two live complaints (2026-07-31, screenshot):
+A. A long deep-research report must not be delivered as a .md file AND then pasted
+   into the chat as a dozen bubbles. The attachment is the report; repeating it
+   buries the conversation.
 
-A. A 38k-character deep-research report was delivered as "Почему говно не
-   тонет.md" AND then pasted into the chat as a dozen bubbles. The attachment is
-   the report; repeating it buries the conversation.
-
-B. The chat copy rendered the title and the next heading fused into one word:
-   "…Gastrointestinal PhysiologyAbstract". Cause: the ATX-heading rule ended in
-   `\\s*#*\\s*$`, and `\\s` matches NEWLINES, so it consumed the line break after
-   every heading plus the blank line following it.
+B. The chat copy must not render the title and the next heading fused into one
+   word ("…Gastrointestinal PhysiologyAbstract"): the ATX-heading rule must not
+   end in `\\s*#*\\s*$`, because `\\s` matches NEWLINES and would consume the line
+   break after every heading plus the blank line following it.
 
 Run: venv/Scripts/python.exe tests/test_report_delivery_md.py
 """
@@ -20,10 +18,9 @@ except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
 import tg_bot as T
 
-# TelegramBot is split across a dozen mixin modules, and the split keeps
-# moving -- this list was already several modules out of date. Source-level
-# checks must read ALL of them or moving a method makes the assertion vacuous
-# instead of red, so read the family off disk rather than naming its members.
+# TelegramBot is split across a dozen mixin modules. Source-level checks must
+# read ALL of them or moving a method makes the assertion vacuous instead of
+# red, so read the family off disk rather than naming its members.
 import glob as _glob
 def _bot_source():
     _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -104,11 +101,7 @@ check("the full report is NOT chunked in that branch",
 check("but a failed upload still sends the text — it is the only copy",
       "_split_html" in body and "else:" in body, body[-400:])
 
-sig = inspect.getsource(T.TelegramBot._send_report_file) if hasattr(T, "TelegramBot") else ""
-if not sig:
-    cls = next((v for v in vars(T).values()
-                if isinstance(v, type) and hasattr(v, "_send_report_file")), None)
-    sig = inspect.getsource(cls._send_report_file) if cls else ""
+sig = inspect.getsource(T.TelegramBot._send_report_file)
 check("_send_report_file reports whether it actually delivered",
       "-> bool" in sig and "return True" in sig and "return False" in sig, sig[:200])
 

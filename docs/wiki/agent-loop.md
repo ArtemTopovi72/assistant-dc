@@ -50,7 +50,7 @@ flowchart TD
 
 ### Intent routing
 
-One model read of the raw message, cached per text, replaces the keyword routers this codebase used to carry at every one of these decision points.
+One model read of the raw message, cached per text, decides each of these routing points.
 
 ```mermaid
 flowchart TD
@@ -178,7 +178,7 @@ Neither [`docs/injection_guard.md`](../injection_guard.md) nor [`docs/reasoning_
 
 ## Constraints
 
-- Reasoning is forced off for every call through `llm.send_to_lm_studio`, independent of the caller or of `ctx.no_think`: the function sets `no_think = True` and `force_think = False` unconditionally at its own top, so no caller can opt back in except by passing `force_think=True` explicitly for long-form synthesis.
+- Reasoning is forced off for every call through `llm.send_to_lm_studio`, independent of the caller or of `ctx.no_think`: the function sets `no_think = True` unconditionally at its own top, and the `force_think` parameter is accepted for compatibility but ignored, so no caller can opt back in.
 - A tool-calling round is capped at `MAX_TOOL_CALLS_PER_ROUND` (8) calls; three times that (`RUNAWAY_TOOL_CALLS`, 24) aborts the round as a runaway loop. The round budget itself can extend by `RECOVERY_EXTRA_ROUNDS` while the loop is actively recovering from consecutive tool failures, plus one final "delivery round" grant when work is done but not yet packaged or run.
 - `tool_retrieval.select_tools` only ever narrows the offered tool schemas down from a matched set; it never grows past the full list, and defaults to the full list when nothing matches: an explicit safety invariant against a model losing access to a tool it needs.
 - `prompt_scope.scope` strips `[Tools]` rule-lines for any tool not offered this round, since most of the system prompt is tool-specific policy.

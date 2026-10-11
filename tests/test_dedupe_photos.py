@@ -1,9 +1,8 @@
 """dedupe_photos: same-scene grouping the model can CALL.
 
-Journey 33 (2026-09-14), four runs: with assistant_tools.dedupe named in the
-run_code description, the schema and the result note, the model still wrote
-its own exact-bytes hash and reported the re-shots gone. A dedicated tool is
-the lever that works.
+A dedicated tool is the lever that works: naming assistant_tools.dedupe in the
+run_code description, the schema and the result note was not enough, the model
+still wrote its own exact-bytes hash and reported the re-shots gone.
 """
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -111,11 +110,10 @@ def test_photo_search_skips_hidden_folders(tmp_path):
 
 
 def test_working_folder_record_survives_for_the_next_turn(tmp_path):
-    """Torture run #4 2026-09-14: after compaction «сколько мостов нашёл?» got
-    «я текстовый помощник, я не проводил поиск». The folder keeps a record and
-    the message composer shows it."""
+    """After compaction «сколько мостов нашёл?» must still see the search result:
+    the folder keeps a record and the message composer shows it."""
+    import inspect
     import types
-    import tool_code_handlers as H
     import graph_compose as C
     box = types.SimpleNamespace(root=tmp_path)
     assert H.read_record(box) == ""
@@ -126,5 +124,5 @@ def test_working_folder_record_survives_for_the_next_turn(tmp_path):
     ctx = types.SimpleNamespace(sandbox=box)
     assert "found 8 of 173" in C._working_folder_record(ctx)
     assert C._working_folder_record(types.SimpleNamespace()) == ""
-    src = __import__("inspect").getsource(C._compose_user_message)
+    src = inspect.getsource(C._compose_user_message)
     assert "_working_folder_record(ctx)" in src and "never deny" in src

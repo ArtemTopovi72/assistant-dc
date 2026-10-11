@@ -1,9 +1,8 @@
-"""Eleventh supplement: exact remaining reachable guard/except branches in gui.py,
-targeted line-by-line from the coverage map. Final push toward ~99-100%.
+"""Eleventh supplement: exact remaining reachable guard/except branches in gui.py.
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_supplement11.py
 """
-import os, sys, types, tempfile, threading, contextlib, builtins
+import os, sys, types, tempfile, threading, builtins
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("USE_GUI", "0")
 os.environ["GUI_REPORT_HTML"] = "0"
@@ -18,7 +17,6 @@ import numpy as np
 from PyQt5.QtWidgets import QApplication, QDialog, QInputDialog, QMessageBox, QWidget
 from PyQt5.QtWidgets import QFileDialog as _QFD
 from PyQt5.QtGui import QImage, QColor
-from PyQt5.QtCore import Qt, QEvent
 import gui
 from _gui_patch import stub_workers as _stub_workers, restore as _gui_restore
 
@@ -35,22 +33,6 @@ def check(name, cond, detail=""):
     RESULTS.append((name, bool(cond)))
     print(f"[{'PASS' if cond else 'FAIL'}] {name}" + (f" — {detail}" if detail and not cond else ""))
     assert cond, f"{name}: {detail}"
-
-@contextlib.contextmanager
-def fake_modules(**mods):
-    saved = {}
-    for name, mod in mods.items():
-        saved[name] = sys.modules.get(name)
-        if mod is None: sys.modules[name] = None
-        else:
-            m = types.ModuleType(name)
-            for k, v in mod.items(): setattr(m, k, v)
-            sys.modules[name] = m
-    try: yield
-    finally:
-        for name, old in saved.items():
-            if old is None: sys.modules.pop(name, None)
-            else: sys.modules[name] = old
 
 _orig_loader = gui.ModelLoader
 _WN = ["RequestWorker", "RedrawWorker", "FixHandsWorker", "TransferWorker", "CompactMemoryWorker",
@@ -84,7 +66,7 @@ def _close(w):
 
 
 def test_output_dir_mask_config_fail_and_default_window():
-    # OUTPUT_DIR_GUI_MASK: `import config` fails -> fallback (3294-3295)
+    # OUTPUT_DIR_GUI_MASK: `import config` fails -> fallback
     real = sys.modules.get("config")
     sys.modules["config"] = None
     try:
@@ -92,7 +74,7 @@ def test_output_dir_mask_config_fail_and_default_window():
     finally:
         if real is not None: sys.modules["config"] = real
         else: sys.modules.pop("config", None)
-    # _default_window_size: primaryScreen raises -> except (4441-4442)
+    # _default_window_size: primaryScreen raises -> except
     w = _win()
     realps = QApplication.primaryScreen
     QApplication.primaryScreen = staticmethod(lambda: (_ for _ in ()).throw(RuntimeError("noscreen")))
@@ -119,22 +101,22 @@ def test_queue_and_send_guards():
     o = _noop()
     try:
         w = _win()
-        # _send_text empty (5623)
+        # _send_text empty
         w.input.setText("   "); w._send_text()
-        # _enqueue empty (5443)
+        # _enqueue empty
         w._enqueue("   ", announce=False)
-        # _queue_move valid pending swap (5461->5462)
+        # _queue_move valid pending swap
         w._queue_paused = True
         w._enqueue("qa", announce=False); w._enqueue("qb", announce=False)
         w.queue_list.setCurrentRow(0); w._queue_move(1)
         check("queue_move11", [it["text"] for it in w._task_queue][:2] == ["qb", "qa"])
-        # _maybe_drain_queue: running_task not in queue -> ValueError swallowed (5507-5508)
+        # _maybe_drain_queue: running_task not in queue -> ValueError swallowed
         w._running_task = {"text": "ghost", "status": "running"}
         w._running_dispatched = True   # finalization requires a dispatched task
         w._turn_had_error = False
         w._maybe_drain_queue()
         check("drain_valueerror", w._running_task is None)
-        # _refresh_queue_ui early return when no queue_list (5410->5411)
+        # _refresh_queue_ui early return when no queue_list
         saved = w.queue_list; del w.queue_list
         w._refresh_queue_ui()
         w.queue_list = saved
@@ -147,11 +129,11 @@ def test_stop_vad_and_vad_ultra():
     o = _noop()
     try:
         w = _win()
-        # _stop_vad: listener.stop() raises -> except (5716-5717)
+        # _stop_vad: listener.stop() raises -> except
         w.vad_listener = types.SimpleNamespace(stop=lambda: (_ for _ in ()).throw(RuntimeError("x")))
         w._stop_vad("bye")
         check("stop_vad_except", w.vad_listener is None)
-        # _on_vad_utterance ultra path (5758-5773)
+        # _on_vad_utterance ultra path
         w.ultra_search_on = True
         w.vad_listener = types.SimpleNamespace(is_healthy=lambda: True, set_paused=lambda p: None)
         w.captured_image = None
@@ -167,16 +149,16 @@ def test_db_finished_close_except_and_load_except():
     o = _noop()
     try:
         w = _win()
-        # _on_db_finished: library.close raises (6068-6069)
+        # _on_db_finished: library.close raises
         w._library = types.SimpleNamespace(close=lambda: (_ for _ in ()).throw(OSError("x")),
                                            stats=lambda: {})
         w._lib_build_worker = None
         w._on_db_finished()   # close() raises -> except pass; then stats lazily reopens
         check("db_finished_close_except", w._lib_build_worker is None)
-        # _db_load_existing: documents() raises (5972->5973)
+        # _db_load_existing: documents() raises
         w._library = types.SimpleNamespace(documents=lambda: (_ for _ in ()).throw(RuntimeError("x")))
         w._db_load_existing()
-        # _db_clear success (6084-6085)
+        # _db_clear success
         w._library = types.SimpleNamespace(purge_all=lambda: 2, stats=lambda: {}, is_empty=lambda: True,
                                            close=lambda: None)
         oq = QMessageBox.question; QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.Yes)
@@ -203,7 +185,7 @@ def test_drop_pdf_truncation():
         real = sys.modules.get("pypdf"); sys.modules["pypdf"] = fake
         try:
             pf = os.path.join(_TMP, "big.pdf"); open(pf, "wb").write(b"%PDF")
-            w._drop_pdf_file(pf)   # truncated=True -> 7006
+            w._drop_pdf_file(pf)   # truncated=True
             check("drop_pdf_trunc", w.worker is not None)
             w._worker_finished()
         finally:
@@ -218,18 +200,18 @@ def test_retry_hands_and_drop_text_and_mc_setprofile():
     o = _noop()
     try:
         w = _win()
-        # _retry_hands source missing (6502->6503)
+        # _retry_hands source missing
         w._last_handfix_source = "C:/no/such_rh.png"
         w._retry_hands()
         check("retry_missing", "Nothing to retry" in w.chat.toPlainText())
-        # _drop_text_file read error (6985->6986 truncation) — use a big real file
+        # _drop_text_file read error (truncation) — use a big real file
         big = os.path.join(_TMP, "big.txt"); open(big, "w", encoding="utf-8").write("B" * (w._DROP_CHARS + 300))
-        w._drop_text_file(big)   # truncated -> line 6986
+        w._drop_text_file(big)   # truncated
         w._worker_finished()
-        # _memory_center_set_profile ctx None (6695->6696)
+        # _memory_center_set_profile ctx None
         c = w.ctx; w.ctx = None; w._memory_center_set_profile("p")
         check("mc_setprofile_none11", "Load the model" in w.chat.toPlainText()); w.ctx = c
-        # _new_memory_profile valid -> setCurrentIndex (6722->6723)
+        # _new_memory_profile valid -> setCurrentIndex
         QInputDialog.getText = staticmethod(lambda *a, **k: ("Prof11", True))
         w._new_memory_profile()
         check("newprof11", w.ctx.active_memory_dir.name == "Prof11")
@@ -247,13 +229,13 @@ def test_gen_compaction_no_sources_and_run_diag():
                                session_memory=[]), _set_status=lambda m: None,
                                _memory_center_set_profile=lambda p: None)
     mc = gui.MemoryCenterTab(mh); mc.store = store; mc.refresh_all()
-    # _gen_compaction: profile == active, no session sources -> "Nothing to compact" (2876->2877)
+    # _gen_compaction: profile == active, no session sources -> "Nothing to compact"
     oi = QMessageBox.information; QMessageBox.information = staticmethod(lambda *a, **k: None)
     try:
         mc._gen_compaction(); check("gen_no_sources11", True)
     finally:
         QMessageBox.information = oi
-    # _run_diag with a query producing selected entries (2973->2974 loop body)
+    # _run_diag with a query producing selected entries (loop body)
     mc.diag_query.setText("fact"); mc._run_diag()
     check("run_diag11", "Profile" in mc.diag_out.toPlainText())
 
@@ -262,7 +244,7 @@ def test_edit_personality_read_except_and_refresh_importerror():
     import model_selector as ms
     ms.list_models = lambda base: [{"id": "q", "state": "loaded"}]
     ms._index_model_sizes = lambda d: {}; ms._size_gb = lambda a, b: 1.0
-    # _edit_personality: path set, text empty, open() raises -> except pass (954-955)
+    # _edit_personality: path set, text empty, open() raises -> except pass
     ctx = types.SimpleNamespace(model_name="q", no_think=True, response_length="auto",
                                 reasoning_effort="high", custom_ref_wav=None,
                                 custom_personality_path="C:/no/such_p.txt", custom_personality_text="",
@@ -275,7 +257,7 @@ def test_edit_personality_read_except_and_refresh_importerror():
     finally:
         QDialog.exec_ = oe
     dlg.close()
-    # SystemInfoTab.refresh: an optional dep raising ImportError (2157-2158)
+    # SystemInfoTab.refresh: an optional dep raising ImportError
     tab = gui.SystemInfoTab()
     c = types.SimpleNamespace(model_name="m", no_think=False, tts_disabled=False, mic_disabled=False,
                               web_search_enabled=True, custom_personality_path=None,
@@ -295,7 +277,7 @@ def test_edit_personality_read_except_and_refresh_importerror():
 
 
 def test_dark_titlebar_except():
-    # enable_dark_titlebar: winId() raises -> except pass (92-93)
+    # enable_dark_titlebar: winId() raises -> except pass
     w = QWidget()
     w.winId = lambda: (_ for _ in ()).throw(RuntimeError("no winid"))
     gui.enable_dark_titlebar(w)

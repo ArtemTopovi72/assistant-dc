@@ -23,18 +23,18 @@ def shape(node):
     """AST shape string: structure only, names and literals erased."""
     out = []
 
-    def walk(n, depth):
+    def walk(n):
         if isinstance(n, ast.expr_context):
             return
         out.append(type(n).__name__)
         for child in ast.iter_child_nodes(n):
-            walk(child, depth + 1)
+            walk(child)
     for stmt in node.body:
         # drop a leading docstring
         if (isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant)
                 and isinstance(stmt.value.value, str)):
             continue
-        walk(stmt, 0)
+        walk(stmt)
     return "|".join(out)
 
 
@@ -42,7 +42,7 @@ groups = defaultdict(list)
 for dirpath, dirnames, filenames in os.walk(ROOT):
     dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
     for fn in filenames:
-        if not fn.endswith(".py") or fn.endswith((".bak", ".bak9")):
+        if not fn.endswith(".py"):
             continue
         path = os.path.join(dirpath, fn)
         mod = os.path.relpath(path, ROOT).replace("\\", "/")

@@ -19,7 +19,7 @@ through without a question.
 
 Run: venv/Scripts/python.exe tests/test_tg_image_targeting.py
 """
-import sys, os, types, tempfile, json
+import sys, os, types, tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -127,10 +127,9 @@ def settle(bot, timeout=8.0):
         if (len(bot.pushed), len(bot.sent)) != base:
             break
         _time.sleep(0.05)
-    # Then until the batch has finished: quiet for a while. A fixed 0.15 s let
-    # the second task of a two-press batch land after the check on a loaded
-    # Windows runner (CI 10-03: one task seen, the late one leaking into the
-    # double-tap step that followed).
+    # Then until the batch has finished: quiet for a while. A fixed short wait
+    # lets the second task of a two-press batch land after the check on a loaded
+    # runner and leak into the step that follows.
     last, quiet_since = (len(bot.pushed), len(bot.sent)), _time.monotonic()
     while _time.monotonic() < deadline and _time.monotonic() - quiet_since < 0.6:
         _time.sleep(0.05)
@@ -314,13 +313,12 @@ check("a malformed image id is not accepted",
 print("\n" + "=" * 70)
 print("B2. TWO BUTTON PRESSES ON DIFFERENT PICTURES IN ONE DEBOUNCE WINDOW")
 print("=" * 70)
-# Found by an adversarial harness driving the real bot: tap [upscale] under an
-# OLDER picture, then immediately tap [upscale] under a NEWER one, before the
-# debounce timer fires. Both items land in the same batch. The batch used to
-# be merged into ONE task with a single image_id (whichever item came last) —
-# and since both presses produce byte-identical command text, the "collapse a
-# double-tap" dedup then also folded the two text entries into one, so the
-# FIRST picture's upscale request vanished with no error, no result, no trace.
+# Tap [upscale] under an OLDER picture, then immediately tap [upscale] under a
+# NEWER one, before the debounce timer fires. Both items land in the same
+# batch. Merging them into ONE task with a single image_id (whichever item came
+# last) would be lossy, and since both presses produce byte-identical command
+# text, the "collapse a double-tap" dedup would also fold the two text entries
+# into one, so the FIRST picture's upscale request would vanish without trace.
 
 cat, dog, id_cat, id_dog = seed_two_images(bot)
 bot.pushed.clear(); bot.sent.clear()
@@ -399,9 +397,9 @@ check("the re-pushed task carries the PICKED image's id on the task itself "
       bot.pushed and bot.pushed[0].image_id == id_cat,
       [(p.user_text, p.image_id) for p in bot.pushed])
 
-# Live 2026-09-14: «найди все мосты, убери дубликаты ... коллаж» + DCIM.zip
-# got «Какую картинку? В этом чате их 9». The document IS what the
-# instruction is about; the old collages in the chat are not candidates.
+# «найди все мосты, убери дубликаты ... коллаж» + DCIM.zip must not get
+# «Какую картинку? В этом чате их 9». The document IS what the instruction is
+# about; the old collages in the chat are not candidates.
 bot2 = make_bot(); seed_two_images(bot2); bot2.pushed.clear(); bot2.sent.clear()
 import sandbox_access as _sa
 _u = bot2._user_store.get(CID); _u.sandbox_access = _sa.FILES; bot2._user_store.put(_u)
@@ -413,16 +411,13 @@ check("an instruction on an attached file is NOT a 'which picture?' question",
 check("it is pushed to the agent", len(bot2.pushed) == 1, [p.user_text[:40] for p in bot2.pushed])
 
 # Telegram's "which picture?" keyboard never expires. If picking an answer
-# only set sess.target_image (the pre-fix behaviour) instead of stamping the
-# re-pushed task's own image_id, a SECOND tap on that same stale keyboard --
-# for a totally different, already-answered prompt, out of curiosity or by
-# accident -- silently overwrote target_image before the first re-pushed
-# task got a chance to run (it queues behind whatever else the chat is
-# doing), so it executed against whichever picture was picked LAST, not the
-# one it was actually re-armed for. Reproduced live via the adversarial
-# harness (probe4.py in scratchpad): pick B for "upscale this", then --
-# before that queued task runs -- tap the same stale keyboard for A; the
-# task silently ran on A.
+# only set sess.target_image instead of stamping the re-pushed task's own
+# image_id, a SECOND tap on that same stale keyboard -- for an already-answered
+# prompt, out of curiosity or by accident -- would overwrite target_image
+# before the first re-pushed task got a chance to run (it queues behind
+# whatever else the chat is doing), so it would execute against whichever
+# picture was picked LAST: pick B for "upscale this", then -- before that
+# queued task runs -- tap the same stale keyboard for A, and the task runs on A.
 cat, dog, id_cat, id_dog = seed_two_images(bot)
 bot.pushed.clear(); bot.sent.clear()
 bot._dispatch(msg("describe the image"))
@@ -452,10 +447,10 @@ check("'the most recent one' resolves to the newest picture",
       f"{bot._get_session(CID).target_image} != {id_dog}")
 
 # A stale "which picture?" prompt must not resurrect a forgotten instruction.
-# Telegram buttons never expire, and pending_instruction used to be cleared
-# ONLY by pressing pick: on the prompt it was armed for — so unrelated
-# activity in between left it live, and tapping the old button later (out of
-# curiosity, or by accident) silently re-ran whatever was asked long ago.
+# Telegram buttons never expire, so pending_instruction must not be cleared
+# ONLY by pressing pick: on the prompt it was armed for — otherwise unrelated
+# activity in between leaves it live, and tapping the old button later (out of
+# curiosity, or by accident) silently re-runs whatever was asked long ago.
 cat, dog, id_cat, id_dog = seed_two_images(bot)
 bot.pushed.clear(); bot.sent.clear()
 bot._dispatch(msg("restore quality"))
@@ -485,14 +480,13 @@ print("\n" + "=" * 70)
 print("D. A QUEUED REPLY SURVIVES A LATER REPLY TO A DIFFERENT PICTURE")
 print("=" * 70)
 
-# Reproduces a real defect: reply to picture A, then — BEFORE that task
-# actually runs (it is still sitting in the queue behind whatever this chat
-# is already doing) — reply to picture B. The second reply used to overwrite
-# the single sess.target_image slot, and since only BUTTON presses captured
-# their target at commit time (task.image_id), the queued reply-to-A task
-# read the shared slot lazily at execution time and silently answered about
-# B instead of A. The fix threads _resolve_reply_target's result into the
-# enqueued item's "image_id", exactly like an image-verb button already does.
+# Reply to picture A, then — BEFORE that task actually runs (it is still
+# sitting in the queue behind whatever this chat is already doing) — reply to
+# picture B. The second reply overwrites the single sess.target_image slot, so
+# the queued reply-to-A task must carry its target at commit time
+# (task.image_id, threaded in from _resolve_reply_target's result exactly like
+# an image-verb button) rather than read the shared slot lazily at execution
+# time and answer about B instead of A.
 cat, dog, id_cat, id_dog = seed_two_images(bot)
 bot.pushed.clear(); bot.sent.clear()
 
@@ -562,8 +556,8 @@ for phrase in ("hello, how are you", "what is the capital of Australia",
     check(f"'{phrase[:34]}' is not treated as an image request",
           len(bot.pushed) == 1, texts(bot)[:100])
 
-# Torture run 2026-09-14: «сделай кота из первой картинки чёрным» edited the
-# photo sent LAST. Naming a picture by its place in the chat must pick it.
+# «сделай кота из первой картинки чёрным» must not edit the photo sent LAST:
+# naming a picture by its place in the chat must pick it.
 bot3 = make_bot(); cat3, dog3, id_cat3, id_dog3 = seed_two_images(bot3)
 bot3.pushed.clear(); bot3.sent.clear()
 bot3._dispatch(msg("make the cat from the first picture black")); settle(bot3)
@@ -577,7 +571,7 @@ check("«последнюю картинку» targets the newest", bot3._get_se
       (bot3._get_session(CID).target_image, id_dog3))
 
 # 🖼 Create picture: the description is a NEW picture, never «which one?»
-# (live 10-03: a scene with a broken window got «Какую картинку? их 12»).
+# (a scene with a broken window must not get «Какую картинку? их 12»).
 _scene = "cat sits on the table, the window glass is broken"
 intent.STUB = (lambda t, _o=intent.STUB: {"about_picture": True, "wants": ["inpaint_image"]}
                if t == _scene else _o(t))

@@ -83,8 +83,8 @@ for lang in ("ru", "en"):
     bot._resolve_and_push(77, [{"type": "text", "text": _b("sandbox_btn", lang)}])
     check(f"[{lang}] the press reaches the sandbox handler",
           seen.get("cmd") == "/files", seen)
-    # The entries are inline buttons now (a tap downloads / opens), so the
-    # file name lives in the keyboard, not the message text.
+    # The entries are inline buttons (a tap downloads / opens), so the file
+    # name lives in the keyboard, not the message text.
     txt = " ".join(p.get("text", "") + " " + str(p.get("reply_markup", ""))
                    for m, p in sent if m == "sendMessage")
     check(f"[{lang}] and the folder listing comes back",

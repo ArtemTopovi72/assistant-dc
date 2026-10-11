@@ -6,7 +6,7 @@ prefs blob, a typo in a hand-edited row, a store that raises — every one of th
 has to come back `off`, because the alternative is a stranger executing code on
 someone's desktop.
 """
-import sys, os, tempfile
+import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pytest
 import sandbox_access as A
@@ -33,16 +33,9 @@ class _Store:
 
 @pytest.mark.parametrize("user", [
     None, _U(None), _U({}), _U({"sandbox": ""}), _U({"sandbox": "yes"}),
-    _U({"sandbox": "CODE "}), _U({"sandbox": 1}), _U("not-a-dict"),
+    _U({"sandbox": 1}), _U("not-a-dict"),
 ])
 def test_anything_unclear_is_off(user):
-    """`"CODE "` is in the list deliberately: it is not exactly a level, and a
-    permission check is the wrong place to be lenient about whitespace… except
-    that normalize DOES strip and lowercase, so this one is expected to pass as
-    `code`. It is asserted below on its own."""
-    if isinstance(user, _U) and isinstance(user.prefs, dict) \
-            and str(user.prefs.get("sandbox", "")).strip().lower() in A.LEVELS:
-        pytest.skip("covered by test_whitespace_and_case_are_tolerated")
     assert A.level_for(user) == A.OFF
 
 

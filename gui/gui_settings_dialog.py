@@ -5,9 +5,9 @@ it: the scale chosen here has to be applied to the QApplication BEFORE any
 widget is built, since px()/pt() are read at construction time and a widget
 already laid out will not re-scale.
 
-Both consumers — AssistantWindow and run_gui — stay in gui.py, so gui.py
-re-exports these two and the suites that patch gui.SettingsDialog (four of
-them) keep intercepting exactly as before.
+Both consumers — AssistantWindow and run_gui — are in gui.py, which
+re-exports these two so the suites that patch gui.SettingsDialog keep
+intercepting.
 """
 import os
 
@@ -46,7 +46,6 @@ logger = logging.getLogger("assistant.gui")
 # abort with no traceback, not a test failure. The comparison should not depend
 # on the dialog class the caller happens to be holding.
 NO_MODEL = "__no_model__"
-_NO_MODEL = NO_MODEL
 
 
 class SettingsDialog(QDialog):
@@ -62,8 +61,8 @@ class SettingsDialog(QDialog):
         self._search = _search
 
         # The dialog can be taller than the screen (long model list + many sections),
-        # which used to push the OK/Cancel buttons off the bottom edge so they couldn't
-        # be clicked. Fix: put ALL settings widgets inside an outer scroll area, and
+        # which would push the OK/Cancel buttons off the bottom edge so they couldn't
+        # be clicked. So put ALL settings widgets inside an outer scroll area, and
         # pin the button box BELOW it so it is always visible and clickable.
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -334,10 +333,7 @@ class SettingsDialog(QDialog):
         if not picked and target:
             # STARTUP_MODEL often names a repo that several quants share
             # ("...-balanced" matches both @q5_k_m and the q5_k_p .gguf). The
-            # dialog's own default checked ANY of them, and live 2026-09-22 it
-            # checked q5_k_m while the Telegram bot was mid-answer on q5_k_p:
-            # starting the GUI unloaded the bot's model under it ("Model
-            # unloaded by user or API request") and the photo reply was lost.
+            # dialog must not pick one that unloads a model already in use.
             # Keep whichever matching quant is ALREADY loaded, else the first.
             matches = [rb for rb in self._radios
                        if target.lower() in str(rb.property("model_id") or "").lower()]
@@ -374,9 +370,9 @@ class SettingsDialog(QDialog):
         self._cancel_autostart()
         super().wheelEvent(event)
 
-    # The sentinel lives at MODULE level (below) and is mirrored here only for
+    # The sentinel lives at MODULE level (above) and is mirrored here only for
     # readability at the call sites that already have the class in hand.
-    NO_MODEL = _NO_MODEL
+    NO_MODEL = NO_MODEL
 
     def _populate_models(self):
         from model_selector import list_models, _index_model_sizes, _size_gb, _MODELS_DIR
@@ -515,7 +511,7 @@ class SettingsDialog(QDialog):
             try:
                 with open(self.ctx.custom_personality_path, "r", encoding="utf-8") as f:
                     editor.setPlainText(f.read())
-            except Exception:
+            except (OSError, UnicodeDecodeError):
                 pass
         vl.addWidget(editor)
         hint = QLabel("Changes are applied immediately. To save permanently, use Save.")

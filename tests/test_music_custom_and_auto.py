@@ -2,7 +2,7 @@
 бота» for the length, the bot's own picks for every Auto field before the
 songwriting, and the «🎲 Бот выбрал сам» line after the song. The engine is
 stubbed; the settings, capture and reporting are real."""
-import sys, os, types, tempfile
+import sys, os, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # The model's reads are stubbed here; the phrases run live in bench/intent_rest_live.py.
 import intent
@@ -54,8 +54,7 @@ check("a pinned BPM becomes an exact tempo requirement",
 check("render_ceiling gives the ask headroom for the outro",
       M.render_ceiling(100) == 130 and M.render_ceiling(180) <= C.MUSIC_CEILING_SECONDS)
 
-import tempfile as _tf, config as _cfg2
-_cfg_out = _cfg2.OUTPUT_DIR; M.OUTPUT_DIR = _tf.mkdtemp(prefix="music_eta_")   # never touch the live file
+M.OUTPUT_DIR = tempfile.mkdtemp(prefix="music_eta_")   # never touch the live file
 check("the quality ETA is measured for a 180-second song, not the old 30-second figure",
       M.ETA_QUOTE_SECONDS == 180 and 300 <= M.eta_seconds("fast", steps=30) <= 450
       and M.eta_seconds("max", steps=30) > 1500 and M.eta_label(336, "ru") == "~6 мин" and M.eta_label(45, "ru") == "~45 с")
@@ -255,7 +254,7 @@ check("pinned tempo and genre lead the style; the writer's own BPM is dropped",
       _pin.startswith("Global Metadata: 118 BPM, Rock.") and "90" not in _pin, _pin)
 check("no duet button: the model cannot place who sings where", "duet" not in M.VOCALS)
 
-# 10-09 «опцию кастомный голос выкл или 1 из 4»: 🎙 Own voice in the song settings
+# 🎙 Own voice in the song settings: off or one of the trained stars
 import rvc_voice
 rvc_voice.available = lambda: True
 rvc_voice.stars = lambda *a, **k: [("tsoi_hq", "Виктор Цой"), ("lindemann_hq", "Тиль Линдеманн")]

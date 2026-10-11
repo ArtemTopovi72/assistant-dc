@@ -1,8 +1,8 @@
 """Transfer tab: move a subject, a garment or a face from one picture to another.
 
-Fifth tab out of gui.py. TransferWorker keeps the transfer off the UI thread
-and takes a _ScopedCtx, so the main chat's Stop button cannot cancel a transfer
-and a transfer cannot un-cancel the main chat.
+TransferWorker keeps the transfer off the UI thread and takes a _ScopedCtx, so
+the main chat's Stop button cannot cancel a transfer and a transfer cannot
+un-cancel the main chat.
 
 The viewer and mask dialogs it opens live in gui_dialogs.py rather than here,
 because AssistantWindow and ImagesPanel use them too.
@@ -39,7 +39,6 @@ logger = logging.getLogger("assistant.gui")
 # --------------------------------------------------------------------------- #
 # Multi-image transfer tab (Phase 9 GUI)
 # --------------------------------------------------------------------------- #
-# Display label -> backend role. "TARGET" and None are special (target / auto).
 # FireRed's own documented style-transfer phrasing (prompt_augment.py's rewrite
 # rules for "match picture 2's style"): identical wording to the one Telegram's
 # 🎭 button sends (tg_resolve.py._push_style_transfer_task), so the same request
@@ -52,6 +51,7 @@ _QUICK_STYLE_PROMPT = (
     "the reference."
 )
 
+# Display label -> backend role. "TARGET" and None are special (target / auto).
 _TRANSFER_ROLES = [
     ("Target (edit this)", "TARGET"),
     ("Auto-infer role", None),
@@ -158,7 +158,7 @@ class TransferWorker(QThread):
                     info = f"identity cosine = {c:.3f}" + (
                         "  ⚠ DRIFT" if c < 0.80 else "  ✓ identity preserved")
             except Exception:
-                pass
+                logger.debug("identity cosine unavailable", exc_info=True)
             self.done.emit({"output": out, "info": info})
         except Exception as exc:
             logger.exception("Transfer worker failed")
@@ -583,7 +583,7 @@ class TransferTab(QWidget):
                 self.host.images_panel.add_image(out)
                 self.host._add_system(f"Transfer complete — saved {os.path.basename(out)}.")
             except Exception:
-                pass
+                logger.warning("could not show the transfer result in the UI", exc_info=True)
             self.status.setText("Done. " + (d.get("info") or ""))
         else:
             self.status.setText("Plan ready." if d.get("info") else "Done.")

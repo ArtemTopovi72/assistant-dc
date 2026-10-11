@@ -13,7 +13,7 @@ import shutil
 
 TITLES: dict = {}          # chat_id -> the request the current task is about
 
-# ComfyUI counters too: «ideogram_00115_.png» was delivered under its raw name (live 10-03)
+# ComfyUI counters too: «ideogram_00115_.png» was delivered under its raw name
 _MACHINE = re.compile(r"\d{8,}|_\d{4,}_?$|[0-9a-f]{12,}|^(comfyui|song_|img_|image_|out|output|render|tmp|"
                       r"edit_|gen_|video_|clip_|frame|result)", re.I)
 _KIND = {

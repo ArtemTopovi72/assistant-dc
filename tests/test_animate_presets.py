@@ -1,7 +1,6 @@
 """Animate-photo presets: the preset table itself, and the
-[animate]/"animate this photo:" button-tool hard-force added alongside it
-(same gap pattern as style_presets -- see graph_personality._BUTTON_TOOL's
-comment)."""
+[animate]/"animate this photo:" button-tool hard-force
+(see graph_personality._BUTTON_TOOL)."""
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import animate_presets as AP

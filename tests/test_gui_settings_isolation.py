@@ -115,7 +115,7 @@ check("a fresh tab reads back the redirected token",
 # And the redirect must be reversible, or the desktop app would come up blank
 # in any process that imported a test module.
 # Under a test the live store stays unreachable even after redirect(None):
-# a suite that forgot the redirect started the REAL bot (2026-09-28 23:15).
+# a suite that forgot the redirect started the REAL bot.
 gui.redirect_settings(None)
 check("redirect_settings(None) under a test never reaches the live scope",
       gui._tg_settings().fileName() != QSettings(*gui._TG_SETTINGS_SCOPE).fileName())
@@ -128,7 +128,7 @@ gui.redirect_settings(_DIR)
 # drive DOES move the fingerprint. This is the old, broken behaviour reproduced
 # in a sandbox — the real registry is never involved.
 _real_scope = gui._TG_SETTINGS_SCOPE
-# The scope lives in gui_telegram_tab now, and _tg_settings() reads it THERE.
+# The scope lives in gui_telegram_tab, and _tg_settings() reads it THERE.
 # Assigning gui._TG_SETTINGS_SCOPE would rebind only this module's copy and
 # leave the real ("AssistantApp", "TelegramBot") scope live — i.e. the very
 # token-clobbering this suite exists to prevent.
@@ -194,8 +194,7 @@ check("every TelegramTab suite redirects settings BEFORE building the tab",
 # The tab must go through the redirectable factory. A future edit that inlines
 # QSettings("AssistantApp", ...) back into __init__ would defeat every check
 # above, and the AST scan would keep passing.
-# TelegramTab now lives in gui_telegram_tab.py, so read ITS source. Reading
-# gui.py here made the split below raise IndexError rather than fail a check.
+# TelegramTab lives in gui_telegram_tab.py, so read ITS source.
 src = Path(_TGT.__file__).read_text(encoding="utf-8", errors="replace")
 init_src = src.split("class TelegramTab", 1)[1].split("\n    def _build_ui", 1)[0]
 check("TelegramTab.__init__ uses the _tg_settings() factory",

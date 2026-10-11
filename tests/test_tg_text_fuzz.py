@@ -144,8 +144,8 @@ for _src, _why in REGRESSIONS:
         check("regression: " + _why, False, f"{type(exc).__name__}: {exc}")
 
 # This one must bypass _md_to_html: the point is a real tag reaching _split_html,
-# and running the source through the converter would escape it into plain text —
-# which is how an earlier version of this check passed against the bug.
+# and running the source through the converter would escape it into plain text,
+# so the check would pass against the bug.
 _RAW_SPLIT = [
     # The tag must sit so that the cut point falls INSIDE its attribute: shifting
     # the URL length moves the boundary and the bug hides.
@@ -165,8 +165,8 @@ for _html_src, _why in _RAW_SPLIT:
           all(len(c) <= LIMIT for c in _chunks),
           str(max(len(c) for c in _chunks)))
 
-# The reopen prefix is every open tag carried across a boundary. A fixed 64-byte
-# reserve was not enough for one long tracking URL nested in b/i/u/s, and the
+# The reopen prefix is every open tag carried across a boundary. A small fixed
+# reserve is not enough for one long tracking URL nested in b/i/u/s, and the
 # caller truncates at the limit — cutting the closing tags off, which Telegram
 # rejects. Sweep label lengths so the near-boundary cases are actually hit.
 _URL = "https://example.com/very/long/tracking/url?" + "&".join(

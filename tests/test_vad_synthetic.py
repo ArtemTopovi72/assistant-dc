@@ -5,7 +5,6 @@ No microphone needed.
 Run: .\\venv\\Scripts\\python.exe tests\\test_vad_synthetic.py
 """
 import os, sys, time, threading
-import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 import numpy as np

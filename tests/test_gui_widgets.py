@@ -17,7 +17,7 @@ except Exception: pass
 logging.basicConfig(level=logging.CRITICAL)
 
 from PyQt5.QtWidgets import QApplication, QFileDialog, QWidget, QLabel, QDialog
-from PyQt5.QtGui import QPixmap, QImage, QColor
+from PyQt5.QtGui import QImage, QColor
 from PyQt5.QtCore import Qt, QRect, QSize
 import gui
 
@@ -222,7 +222,7 @@ def test_settings_dialog_no_ctx_and_empty_models():
     dlg.close()
 
 
-def test_settings_dialog_pickers(monkeypatch=None):
+def test_settings_dialog_pickers():
     _stub_model_selector([{"id": "qwen", "state": "loaded"}])
     ctx = _ctx()
     dlg = gui.SettingsDialog("qwen", ctx=ctx)
@@ -274,9 +274,8 @@ def test_model_config_tab():
         def __init__(self, *a, **k): pass
         def __getattr__(self, n): return types.SimpleNamespace(connect=lambda *a, **k: None)
         def start(self): started["n"] += 1
-    # ModelConfigTab moved to gui_model_config_tab.py and resolves
-    # ReloadModelWorker there; patching gui's copy alone left the real worker
-    # in place and started["n"] stayed 0.
+    # ModelConfigTab resolves ReloadModelWorker in gui_model_config_tab, so patch
+    # it there too.
     import gui_model_config_tab as _MC
     orig = _MC.ReloadModelWorker
     _MC.ReloadModelWorker = gui.ReloadModelWorker = FakeWorker
@@ -325,9 +324,8 @@ def test_image_viewer_dialog():
 
 
 def test_show_image_viewer():
-    # show_image_viewer moved to gui_dialogs.py and resolves ImageViewerDialog
-    # as a global of THAT module; patching gui's copy alone stopped
-    # intercepting, so the real dialog was constructed and the counter stayed 0.
+    # show_image_viewer resolves ImageViewerDialog as a global of gui_dialogs,
+    # so patch it there too.
     import gui_dialogs as _DLG
     orig = _DLG.ImageViewerDialog
     opened = {"n": 0}
@@ -355,12 +353,10 @@ def test_images_panel():
     check("panel_two_thumbs", len(panel._thumbs) == 2)
     panel.add_image("C:/no/such.png")   # null pixmap -> ignored
     check("panel_ignores_bad", len(panel._thumbs) == 2)
-    panel.resizeEvent(None) if False else panel._avail_width()
+    panel._avail_width()
     # open_viewer
-    # Patch the name in the module that CALLS it. ImagesPanel imports
-    # show_image_viewer by value from gui_dialogs, so replacing gui's copy left
-    # the real dialog in place: it opened for real and died offscreen with
-    # "first argument of unbound method must have type 'QDialog'".
+    # Patch the name in the module that CALLS it: ImagesPanel imports
+    # show_image_viewer by value from gui_dialogs.
     import gui_images_panel as _panel_mod
     orig = _panel_mod.show_image_viewer; calls = []
     _panel_mod.show_image_viewer = lambda paths, idx, parent: calls.append((paths, idx))
@@ -375,10 +371,8 @@ def test_images_panel():
     # thumb double-click
     panel.add_image(_png("g3.png"))
     th = panel._thumbs[0]
-    # Same trap as open_viewer above: mouseDoubleClickEvent -> open_viewer ->
-    # the module-level show_image_viewer bound in gui_images_panel, not gui's.
-    # Patching gui's copy left the real dialog running here too -- it opened
-    # offscreen and never returned, hanging the whole suite for 600s.
+    # Same as open_viewer above: mouseDoubleClickEvent -> open_viewer -> the
+    # show_image_viewer bound in gui_images_panel, not gui's.
     _panel_mod.show_image_viewer = lambda *a, **k: None
     th.mouseDoubleClickEvent(None)
     _panel_mod.show_image_viewer = orig
@@ -406,10 +400,7 @@ if __name__ == "__main__":
             print(f"  ERROR in {fn.__name__}: {type(e).__name__}: {e}")
     print(f"\n{len(fns)-failed}/{len(fns)} widget test functions passed "
           f"({sum(1 for _,c in RESULTS if c)}/{len(RESULTS)} checks)")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

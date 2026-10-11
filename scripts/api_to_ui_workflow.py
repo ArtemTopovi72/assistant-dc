@@ -79,7 +79,6 @@ def convert(api: dict) -> dict:
                               len(inputs_by_node[nid]), typ])
                 inputs_by_node[nid].append(
                     {"name": name, "type": typ, "link": link_id})
-                outputs_by_node.setdefault(src_id, [])
                 link_id += 1
 
     for nid in order:

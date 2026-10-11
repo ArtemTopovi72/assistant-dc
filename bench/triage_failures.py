@@ -6,7 +6,7 @@
 For each reason: how many turns, which tools were involved (errored tools
 marked "!"), and a few examples with the request, the tool chain and the
 answer. The point is to find the NEXT harness defect from real use, the way
-the delivery bench traces found five on 2026-09-23.
+the delivery bench traces found five.
 """
 import argparse
 import collections
@@ -19,7 +19,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception:
+except (AttributeError, ValueError, OSError):
     pass
 import turn_audit as TA
 
@@ -32,7 +32,8 @@ def load(days: float, folder: Path) -> list:
             continue
         try:
             d = json.loads(f.read_text(encoding="utf-8"))
-        except Exception:
+        except (OSError, ValueError) as e:
+            print(f"skipped {f.name}: {e!r}", file=sys.stderr)
             continue
         d["_file"] = f.name
         out.append(d)

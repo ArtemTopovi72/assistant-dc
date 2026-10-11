@@ -1,6 +1,6 @@
 """Gemma 4 is a third reasoning contract, and we were sending it the other two.
 
-Measured live 2026-07-29 on google/gemma-4-12b-qat:
+Measured on google/gemma-4-12b-qat:
   * `reasoning_effort`, `reasoning:"off"` and `enable_thinking` are ALL no-ops —
     five configurations returned byte-identical output. There is no knob.
   * It thinks on every turn already, 90-800 tokens, scaling with difficulty, and
@@ -10,7 +10,7 @@ Measured live 2026-07-29 on google/gemma-4-12b-qat:
 
 Run: venv/Scripts/python.exe tests/test_gemma_reasoning.py
 """
-import os, sys, json, types
+import os, sys, json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
@@ -92,8 +92,7 @@ p = capture("qwen3.5-9b-uncensored", prefill="<think></think>")
 check("the Qwen prefill still works for Qwen",
       any("<think>" in (m.get("content") or "") for m in p["messages"]))
 
-print("\nROOM TO FINISH THINKING AND STILL ANSWER")
-print("\nNO THINKING BY DEFAULT (2026-09-23: 'всегда и везде')")
+print("\nNO THINKING BY DEFAULT")
 p = capture("google/gemma-4-12b-qat", max_tokens=700)
 check("every Gemma call is prefilled with the empty thought block",
       (p["messages"][-1].get("role") == "assistant"
@@ -106,11 +105,10 @@ def _tool(name):
 
 
 p = capture("google/gemma-4-12b-qat", max_tokens=700, tools=[_tool("edit_file"), _tool("web_search")])
-check("code-editing turns do NOT think by default either (user, 2026-09-23)",
+check("code-editing turns do NOT think by default either",
       p["messages"][-1].get("content") == L.GEMMA_NO_THINK_PREFILL, p["messages"][-1])
 p = capture("google/gemma-4-12b-qat", max_tokens=700, no_think=False)
-check("the thinking switch ON does not bring reasoning back (live 16:51: 2813 "
-      "tokens on six storyboard lines)",
+check("the thinking switch ON does not bring reasoning back",
       p["messages"][-1].get("content") == L.GEMMA_NO_THINK_PREFILL
       and p["max_tokens"] == 700, (p["messages"][-1], p["max_tokens"]))
 
@@ -170,7 +168,7 @@ check("and the plain answer text survives that strip",
 check("the user turn is untouched", out[0] == hist[0])
 
 print("\nFORMAT D: THE CALL SHAPE THAT REACHED THE USER AS TEXT")
-# Live on gemma-4-12b-qat: `call:calculate{expression: "17 * 23 - 91"}<tool_call|>`
+# Seen on gemma-4-12b-qat: `call:calculate{expression: "17 * 23 - 91"}<tool_call|>`
 # — no `<|tool_call>` opener, so Format A missed it; plain quotes instead of
 # <|"|>, so Format C missed it. Neither executed NOR stripped: the tool never ran
 # and the raw markup was the answer the user got.
@@ -208,7 +206,6 @@ check("Format B still parses", len(tc) == 1 and tc[0]["function"]["name"] == "ca
 tc, _ = L.extract_gemma4_tool_calls('call:search{query:<|"|>x<|"|>}')
 check("Format C still parses", len(tc) == 1 and tc[0]["function"]["name"] == "search", tc)
 
-p = capture("google/gemma-4-12b-qat")
 check("and the detection gate knows the new shape",
       "<tool_call|>" in __import__("inspect").getsource(L.send_to_lm_studio))
 

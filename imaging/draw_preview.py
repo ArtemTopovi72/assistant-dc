@@ -241,8 +241,8 @@ def preflight(ctx, layout: dict, request: str, *, width: int = 1024, height: int
     try:
         if hasattr(ctx, "set_stage"):
             ctx.set_stage("Checking the layout")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("could not set the preflight stage: %s", exc)
     for n in range(max(1, passes)):
         try:
             sketch = render_sketch(layout, _sketch_path(), width=width, height=height)

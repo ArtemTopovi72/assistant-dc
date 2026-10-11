@@ -1,8 +1,7 @@
 """A reply INSIDE forwarded material is its author's, written inline; the user's
-own reply keeps the quote frame (live 2026-10-01: Stepan's «Подтверди или
-опровергни» quoting «Можно любой положить, это дефолтный» was framed as the
-user replying, its close ended the forward's frame early, and the bot answered
-about the Ozon cart)."""
+own reply keeps the quote frame (a quoted reply inside a forward must not be
+framed as the user replying: its close would end the forward's frame early and
+the bot would answer about the wrong thing)."""
 import sys, os, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")

@@ -131,7 +131,7 @@ class ChatViewMixin:
                 if info.get("has_audio"):
                     secs += " · with sound"
         except Exception:
-            pass
+            logger.debug("video probe failed", exc_info=True)
 
         if poster and os.path.exists(poster):
             if not hasattr(self, "_video_by_poster"):

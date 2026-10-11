@@ -1,5 +1,5 @@
 """A GIF arrives as a video/mp4 document; its length is on `animation`, not unknown
-(live 10-03: a 3 s GIF was offered as a «16667 мин» long video)."""
+(a 3 s GIF used to be offered as a «16667 мин» long video)."""
 import os, sys, tempfile, time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

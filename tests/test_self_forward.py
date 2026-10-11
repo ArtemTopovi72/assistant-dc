@@ -1,6 +1,6 @@
 """A message the user forwards from their OWN Saved Messages is their own
-instruction, not "someone else's words" (live 2026-09-14: a collage request
-+ DCIM.zip self-forwarded was acknowledged instead of done)."""
+instruction, not "someone else's words": a self-forwarded request must be done,
+not merely acknowledged."""
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import tg_bot as T

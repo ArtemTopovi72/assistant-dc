@@ -3,8 +3,7 @@
 A fixture graph with one loader would pass every check here and still miss the
 defect that matters: workflow_ideogram4.json loads the model twice (the
 positive and the negative branch), and an adapter wired into only one of them
-is silently undone by the other. (It used to be the old model's two-stage
-workflow_turbo.json, removed with old-model.)
+is silently undone by the other.
 """
 import json
 import sys

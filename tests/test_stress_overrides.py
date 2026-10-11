@@ -1,6 +1,6 @@
 """Coverage for stress_overrides.py: base-form key derivation, stress-mark
 normalization, case-preserving replacement, the StressOverrides class
-(reload/save/pairs/set_from_stressed/upsert/remove/apply, hot-reload-on-mtime),
+(reload/save/pairs/upsert/remove/apply, hot-reload-on-mtime),
 and the process-wide singleton. Real filesystem, no GPU/network.
 Run: venv/Scripts/python.exe tests/test_stress_overrides.py
 """
@@ -13,11 +13,10 @@ from pathlib import Path
 import stress_overrides as SOV
 
 RESULTS = []
-import os as _os
 def check(name, cond, detail=""):
     RESULTS.append((name, bool(cond)))
     print("[" + ("PASS" if cond else "FAIL") + "] " + name + ("" if cond or not detail else " - " + detail))
-    if not cond and _os.environ.get("PYTEST_CURRENT_TEST"):
+    if not cond and os.environ.get("PYTEST_CURRENT_TEST"):
         raise AssertionError(str(name) + (": " + str(detail) if detail else ""))
 
 _TMP = Path(tempfile.mkdtemp(prefix="stressov_"))
@@ -41,7 +40,6 @@ def test_normalize_stress():
 
 
 def test_recase():
-    check("recase_allcaps", SOV._recase("ПРИВЕТ", "прив+ет") == "ПРИ+ВЕТ" or SOV._recase("ПРИВЕТ", "прив+ет").isupper() or True)
     check("recase_titlecase", SOV._recase("Привет", "прив+ет")[0] == "п".upper())
     check("recase_lowercase_unchanged", SOV._recase("привет", "прив+ет") == "прив+ет")
     check("recase_no_letters_returns_override", SOV._recase("+++", "прив+ет") == "прив+ет")
@@ -118,14 +116,6 @@ def test_stress_overrides_save():
     check("save_content_correct", data == {"привет": "прив+ет"})
 
 
-def test_stress_overrides_set_from_stressed():
-    p = _TMP / "setfrom.json"
-    so = SOV.StressOverrides(p)
-    n = so.set_from_stressed(["прив+ет", "т+ест", "invalidnoplus", ""])
-    check("set_from_stressed_count", n == 2)
-    check("set_from_stressed_pairs", len(so.pairs()) == 2)
-
-
 def test_stress_overrides_upsert():
     p = _TMP / "upsert.json"
     so = SOV.StressOverrides(p)
@@ -183,10 +173,7 @@ if __name__ == "__main__":
             print("  ERROR in " + fn.__name__ + ": " + type(e).__name__ + ": " + str(e))
     passed = sum(1 for _, c in RESULTS if c)
     print(f"\n{len(fns)-failed}/{len(fns)} functions, {passed}/{len(RESULTS)} checks passed")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

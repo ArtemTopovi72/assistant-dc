@@ -1,6 +1,6 @@
 """Torture the real bot with the real DCIM.zip under REAL-CHAT conditions.
 
-The user's verdict of 2026-09-14 ("твои 30 тестов это мусор"): journeys 31-33
+The user's verdict ("твои 30 тестов это мусор"): journeys 31-33
 went green while the real chat kept failing on the same archive. The bench
 chats were pristine -- a fresh user, no history, the archive as the first
 message, sent as text/plain. The real chat had a long history with old
@@ -16,7 +16,7 @@ This run recreates that chat. It is NOT one of the thirty. Run it alone
   venv/Scripts/python.exe -u bench/torture_dcim.py > runtime/torture.log
 """
 from __future__ import annotations
-import os, shutil, sys, time
+import os, shutil, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE)); sys.path.insert(0, HERE)
 import live_journeys as LJ

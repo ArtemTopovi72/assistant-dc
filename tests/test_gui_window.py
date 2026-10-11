@@ -7,7 +7,7 @@ touching the network. Blocking dialogs and audio/camera devices are faked.
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_window.py
 """
-import os, sys, types, tempfile, threading, contextlib
+import os, sys, types, tempfile, threading
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("USE_GUI", "0")
 # QtWebEngine's setHtml segfaults in headless/offscreen (no GL context). Force the
@@ -21,7 +21,7 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 from pathlib import Path
 
 import numpy as np
-from PyQt5.QtWidgets import (QApplication, QDialog, QFileDialog, QInputDialog, QMessageBox)
+from PyQt5.QtWidgets import (QApplication, QDialog, QInputDialog, QMessageBox)
 from PyQt5.QtGui import QImage, QColor
 from PyQt5.QtCore import Qt, QPoint, QMimeData, QUrl, QEvent
 import gui
@@ -111,9 +111,8 @@ def _fake_ctx():
 
 import gui_database_tab
 
-# A worker must be stubbed in the module its CALLER lives in — patching it on
-# `gui` when the caller moved to a mixin leaves the fake dead and runs the real
-# worker. Each entry is (module, name).
+# A worker must be stubbed in the module its CALLER lives in, or the fake is
+# dead and the real worker runs. Each entry is (module, name).
 _WORKER_NAMES = [(gui_workers, "RequestWorker"), (gui, "DeepResearchWorker"),
                  (gui, "ModelSwitchWorker"), (gui, "RedrawWorker"),
                  (gui, "FixHandsWorker"), (gui, "FixArtifactWorker"),
@@ -186,7 +185,6 @@ def test_layout_and_presets():
         w._save_preset()
         check("preset_saved", "mypreset" in w._preset_names())
         w._load_preset("mypreset")
-        w._open_layout_menu.__wrapped__ if False else None
         w._delete_preset("mypreset")
         check("preset_deleted", "mypreset" not in w._preset_names())
         QInputDialog.getText = staticmethod(lambda *a, **k: ("", False))
@@ -272,8 +270,7 @@ def test_chat_helpers():
     p = _png("chatimg.png")
     w._add_user_image(p); w._add_result_image(p)
     check("chat_populated", "hi" in w.chat.toPlainText())
-    check("url_to_local", w._url_to_local("file:///C:/x/y.png") == os.path.normpath("C:/x/y.png").replace("/", os.sep) or True)
-    check("image_url_at_none", w._image_url_at(QPoint(2, 2)) is None or True)
+    w._url_to_local("file:///C:/x/y.png"); w._image_url_at(QPoint(2, 2))   # must not raise
     w._clear_chat(); check("chat_cleared", w.chat.toPlainText() == "")
     w._on_length_changed(1); check("length_changed", w.ctx.response_length == "short")
     _close(w)
@@ -331,9 +328,8 @@ def test_sending_paths():
 
         # ── started without a model ──────────────────────────────────────────
         # The window is UP -- graph, tabs, queue -- but no LLM was ever loaded.
-        # Every door into a turn has to refuse and say why. Before this, the
-        # message reached the graph and came back as "Модель не ответила,
-        # проверьте LM Studio", blaming LM Studio for the user's own choice.
+        # Every door into a turn has to refuse and say why, rather than let the
+        # graph answer "Модель не ответила, проверьте LM Studio".
         w.ctx.model_name = ""
         before = len(w._task_queue)
         w.input.setText("это не должно уйти")
@@ -356,8 +352,7 @@ def test_sending_paths():
 
         # ── busy ─────────────────────────────────────────────────────────────
         # A launch handler that declines while something is running must say so:
-        # sixteen of them used to return in silence, which reads as a dead
-        # button at exactly the moment the app is slowest.
+        # a silent return reads as a dead button.
         w.redraw_worker = object()          # anything -> _busy() is True
         try:
             check("busy_is_reported", w._reject_if_busy("перерисовка") is True)
@@ -524,11 +519,7 @@ def test_cancel_and_clear_context():
     w._cancel_current(); check("cancel_set", w.ctx.cancel_event.is_set())
     w._cancel_current()  # already cancelling
     w.worker = None
-    # clear context (stub app_runtime.make_base_state).
-    # This used to fake the `assistant` module. make_base_state moved to
-    # app_runtime when the gui <-> assistant import cycle was broken, so a fake
-    # `assistant` no longer intercepts anything — the stub would have gone
-    # silently dead while the test still passed, because make_base_state is pure.
+    # clear context (stub app_runtime.make_base_state, which _clear_context imports).
     import sys as _sys
     fake_asst = types.ModuleType("app_runtime")
     fake_asst.make_base_state = lambda: {"messages": []}
@@ -661,7 +652,6 @@ def test_redraw_fixhands_artifact():
         _close(w)
     finally:
         _restore_workers()
-        QInputDialog.getText = QInputDialog.getText
 
 
 def test_memory_profiles():
@@ -804,10 +794,7 @@ if __name__ == "__main__":
             QInputDialog.getText = _saved_getText
     print(f"\n{len(fns)-failed}/{len(fns)} window test functions passed "
           f"({sum(1 for _,c in RESULTS if c)}/{len(RESULTS)} checks)")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

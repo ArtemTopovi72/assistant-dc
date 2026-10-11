@@ -6,7 +6,7 @@ aspect ratio" to actually reach ComfyUI:
 
   1. config.resolve_image_size turns (aspect, quality) into legal pixels;
   2. image.py honours a session's choice instead of the module default, and
-     normalize_resolution no longer crushes every size to 960x544;
+     normalize_resolution does not crush every size to 960x544;
   3. tg_bot renders the picker, records the tap, and swaps the choice onto ctx
      for the duration of one chat's turn.
 """
@@ -14,8 +14,6 @@ import os
 import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
-import sys
-import types
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -33,10 +31,7 @@ def check(cond, label):
 
     This file is both: `python tests/test_image_size_choice.py` reports a
     tally, and pytest collects the test_ functions directly. Counting alone
-    made the pytest half decorative -- every function returned normally no
-    matter what check() saw, so the suite reported green while a hardcoded
-    960x544 sat in the size path. Verified by mutation: with the count-only
-    version, replacing session_image_size with a constant still passed.
+    would make the pytest half decorative, so a failed check raises there.
     """
     global PASS, FAIL
     if cond:
@@ -53,7 +48,7 @@ def check(cond, label):
 def test_resolver():
     print("[resolver]")
     for aspect, (rw, rh) in C.IMAGE_ASPECTS.items():
-        for quality, mp in C.IMAGE_QUALITIES.items():
+        for quality in C.IMAGE_QUALITIES:
             w, h = C.resolve_image_size(aspect, quality)
             tag = f"{aspect}/{quality}"
             check(w % 16 == 0 and h % 16 == 0, f"{tag}: not a multiple of 16 ({w}x{h})")
@@ -82,18 +77,11 @@ def test_resolver():
     check(C.resolve_image_size("16:9", "draft") == (960, 544),
           "draft 16:9 should reproduce the historic 960x544")
 
-    # The default tier is now DELIBERATELY the cheapest one, and users opt up.
+    # The default tier is DELIBERATELY the cheapest one, and users opt up.
     # One 24 GB card is shared by the LLM, Whisper, F5-TTS and ComfyUI, so
     # rendering every casual picture at 1.6 MP spends the shared queue on people
-    # who never asked for it.
-    #
-    # This used to assert `DEFAULT_WIDTH * DEFAULT_HEIGHT > 1_200_000`, pinning
-    # the fix for "why is everything blurry". That bug was NOT the resolution —
-    # it was that 960x544 was HARD-CODED in the resolver and in the prompt, so a
-    # user who picked "ultra" still got 960x544. A low default that the picker
-    # can actually move is a different thing, so the checks below pin the part
-    # that mattered: the number comes from the tier table, and choosing a bigger
-    # tier really does produce a bigger picture.
+    # who never asked for it. What matters is that the number comes from the tier
+    # table and that choosing a bigger tier really does produce a bigger picture.
     check(C.DEFAULT_IMAGE_QUALITY in C.IMAGE_QUALITIES,
           f"the default tier {C.DEFAULT_IMAGE_QUALITY!r} is not one of the tiers")
     check((C.DEFAULT_WIDTH, C.DEFAULT_HEIGHT)
@@ -254,18 +242,6 @@ def test_parse_defaults():
     check((w, h) == (1200, 1600), f"WxH in prompt ignored: {w}x{h}")
 
 
-# The shapes the model actually returns. The prefill ends inside "[generate]",
-# so the usual reply is a bare BODY plus the closer; the fully tagged form and
-# the no-tag fallback both happen too, and all three have to end up at the
-# session's size rather than at a hardcoded default.
-_RESPONSES = [
-    ("[generate]a cat, studio light[/generate]", "fully tagged"),
-    ("a cat, studio light[/generate]",           "prefill continuation"),
-    ("Thought process: I will draw a cat.",      "no tag at all"),
-    ("",                                         "empty response"),
-]
-
-
 def test_tool_schema():
     print("[tool schema]")
     import tools
@@ -307,8 +283,7 @@ def test_tg_picker():
         sess = S()
         kb = T._size_menu_kb(sess, lang)
         ticked = [b["text"] for row in kb["inline_keyboard"] for b in row if "✅" in b["text"]]
-        # one tick per picker row group: aspect, quality (the engine rows went
-        # with Qwen 2.1, 2026-09-25)
+        # one tick per picker row group: aspect, quality
         check(len(ticked) == 2, f"{lang}: unset session should tick Auto + default quality "
                                 f"(got {ticked})")
         check(not any(b["callback_data"][:8] in ("size:ge:", "size:ee:")
@@ -423,9 +398,8 @@ def test_tg_callback(tmpdir):
             press(junk)
         except Exception as exc:                                   # noqa: BLE001
             check(False, f"malformed callback {junk!r} raised {exc!r}")
-    check(True, "malformed callbacks survived")
 
-    # the picker has a way back to the Draw menu (live 10-02: a dead end)
+    # the picker has a way back to the Draw menu (it must not be a dead end)
     datas = [b["callback_data"] for row in T._size_menu_kb(s, "ru")["inline_keyboard"] for b in row]
     check("nav:back" in datas, "the size picker has no Back button")
     before = len(sent)
@@ -465,16 +439,12 @@ def test_tg_callback(tmpdir):
 def test_orientation_not_pixels():
     """The MODEL chooses the shape; the USER's quality setting chooses the pixels.
 
-    Live regression: IMAGE_GENERATOR_PROMPT dictated literal sizes (960x544 /
-    544x960 / 768x768), so the model wrote width=960 into every [generate] tag —
-    and an explicit width always beat the caller's default. Every picture came
-    back at 0.5 MP no matter what 📐 Size said (measured: 960x544 while the
-    session resolved 1680x944). That is the "blurry" complaint, and the size
-    picker could not fix it because the prompt was overriding the picker.
+    An explicit width in a generation tag beats the caller's default, so the
+    model must be asked for a shape (orientation=...), never literal sizes;
+    otherwise every picture comes back at the prompt's size no matter what
+    📐 Size says.
     """
     print("\n[orientation, not pixels]")
-    # (The prose prompt that dictated sizes, IMAGE_GENERATOR_PROMPT, was removed
-    # with the old model; the parser contract below is what still matters.)
     SESSION = (1680, 944)     # what resolve_image_size gives at the default quality
     for shape, want in (("landscape", (1680, 944)),
                         ("portrait", (944, 1680))):
@@ -502,11 +472,10 @@ def test_orientation_not_pixels():
         "A scene | steps=8 | orientation=diagonal | seed=5", defaults=SESSION)[4:]
     check(junk == SESSION, f"an unknown shape changes nothing (got {junk})")
 
-    # A CHOICE outranks the model's reading of the scene. Live regression: a chat
-    # that had picked 9:16 asked for "a cat on a windowsill", the model said
-    # orientation=landscape, and the picture came back 1680x944 — the picker
-    # silently overruled. Same rule fix_image_params already applies to the text
-    # heuristic.
+    # A CHOICE outranks the model's reading of the scene: a chat that picked 9:16
+    # and asks for "a cat on a windowsill" must not get orientation=landscape
+    # silently overruling the picker. Same rule fix_image_params already applies
+    # to the text heuristic.
     PICKED = C.resolve_image_size("9:16", "high")
     for shape in ("landscape", "square"):
         got = I.parse_generation_params(
@@ -521,11 +490,9 @@ def test_orientation_not_pixels():
           f"…but with nothing pinned the model still chooses (got {unpinned})")
     # width=/height= inside a [generate] TAG is the MODEL's own generated text,
     # not the end user typing pixels — indistinguishable in trustworthiness from
-    # a resolution keyword in prose ("in stunning 4k"). A 12-family real-chat
-    # audit (2026-08-03) proved this exact path let a model-written width=1920/
-    # height=1080 silently override a 9:16 pin, the same "prompt carries a value
-    # the resolver owns" class as the original 960x544 bug. So a pin must beat
-    # this too — reversing what this check used to assert.
+    # a resolution keyword in prose ("in stunning 4k"). A model-written
+    # width=1920/height=1080 must not silently override a 9:16 pin, so a pin must
+    # beat this too.
     px = I.parse_generation_params(
         "A scene | steps=8 | width=1024 | height=512 | seed=5",
         defaults=PICKED, pinned=True)[4:]
@@ -547,8 +514,8 @@ def test_orientation_not_pixels():
 def test_tg_ctx_swap():
     print("[telegram ctx swap]")
     import ast
-    # _run_task_inner moved to tg_tasks.py when TelegramBot was split into
-    # mixins; scan the whole family so this can never silently find nothing.
+    # _run_task_inner lives in one of the TelegramBot mixin modules; scan the
+    # whole family so this can never silently find nothing.
     _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     fn = None
     src = ""
@@ -585,12 +552,10 @@ def test_tg_ctx_swap():
         # session, or the user's choice never reaches the generator.
         check(any("sess" in src for src, _ in assigns),
               f"ctx.{attr} is never assigned from the session — the choice cannot reach ComfyUI")
-        # ...and it must not leak to another chat. That used to be done by saving
-        # the old value and restoring it in a `finally`, which only works while
-        # exactly ONE task runs at a time. The bot now runs several concurrently,
-        # so the guarantee comes from each task holding its OWN scoped Context
-        # (tg_bot._scoped_ctx) instead — nothing global is written, so there is
-        # nothing to restore. Assert the real invariant, not the old mechanism.
+        # ...and it must not leak to another chat. The bot runs several tasks
+        # concurrently, so the guarantee comes from each task holding its OWN
+        # scoped Context (tg_bot._scoped_ctx) — nothing global is written, so
+        # there is nothing to restore.
         check("_scoped_ctx(" in src,
               f"ctx.{attr} can leak: the task does not run on a scoped context")
 

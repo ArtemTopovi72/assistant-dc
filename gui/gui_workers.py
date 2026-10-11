@@ -11,8 +11,7 @@ why this move needed no test changes: roughly twenty suites patch
 gui.ModelLoader and friends, and because the CALLER did not move it still
 resolves those names as gui.py globals, so the fakes intercept exactly as
 before. (Moving a callee alone is safe; it is moving the caller that kills a
-monkeypatch — learned at 16b2521, and the reason the workers were left until
-the tabs that used to own some of them were gone.)
+monkeypatch.)
 
 Heavy imports stay inside run(): a worker module imported at startup should not
 drag in the model stack, and each run() is a separate slow path anyway.
@@ -95,7 +94,6 @@ class RedrawWorker(QThread):
                 # "redraw" and "enhance" (empty instruction) both re-render the
                 # whole picture the same way the redraw_image tool does: our own
                 # Ideogram picture from its boxes, a user's photo through FireRed.
-                # Both used to run the old model graphs whose checkpoint was removed.
                 from tool_image_handlers import redraw_whole_image
                 instructions = self.prompt or (
                     "improve the overall quality: sharpen fine detail, clean up noise "
@@ -110,7 +108,7 @@ class RedrawWorker(QThread):
                     tool="RedrawWorker", workflow=wf,
                     returned_file=path, source=self.source_path)
             except Exception:
-                pass
+                logger.debug("log_edit_decision failed", exc_info=True)
             self.done.emit(path or "")
         except Exception as exc:
             logger.exception("Redraw failed")
@@ -142,7 +140,7 @@ class FixHandsWorker(QThread):
                     workflow=f"MeshGraphormer/SAM/Florence + {self.engine}",
                     returned_file=path, source=self.source_path)
             except Exception:
-                pass
+                logger.debug("log_edit_decision failed", exc_info=True)
             self.done.emit(path or "")
         except Exception as exc:
             logger.exception("Fix-hands failed")
@@ -180,7 +178,7 @@ class FixArtifactWorker(QThread):
                     workflow=f"contained masked inpaint + {self.engine}",
                     returned_file=path, source=self.source_path)
             except Exception:
-                pass
+                logger.debug("log_edit_decision failed", exc_info=True)
             self.done.emit(path or "")
         except Exception as exc:
             logger.exception("Fix-artifact failed")

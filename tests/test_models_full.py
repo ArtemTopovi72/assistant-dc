@@ -11,7 +11,6 @@ try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
 from pathlib import Path
-from collections import deque
 
 import models as M
 
@@ -106,11 +105,9 @@ def test_atomic_write_permission_all_attempts_raise():
 def test_atomic_write_tmp_unlink_oserror_swallowed():
     p = _TMP / "aw4.json"
     real_replace = os.replace
-    real_unlink = os.unlink
     os.replace = lambda s, d: (_ for _ in ()).throw(PermissionError("x"))
     M.time.sleep = lambda *_a, **_k: None
-    # Path.unlink is what the finally calls; patch os-level too. The finally uses
-    # tmp.unlink() (Path.unlink). Patch Path.unlink to raise OSError -> swallowed.
+    # The finally block calls tmp.unlink() (Path.unlink): make it raise OSError -> swallowed.
     import pathlib
     real_path_unlink = pathlib.Path.unlink
     pathlib.Path.unlink = lambda self, *a, **k: (_ for _ in ()).throw(OSError("cannot"))
@@ -129,12 +126,6 @@ def test_atomic_write_tmp_unlink_oserror_swallowed():
 
 # ---------------------------------------------------------- Models.load
 
-def _load_stubs():
-    return dict(
-        faster_whisper={"WhisperModel": lambda *a, **k: "WHISPER"},
-        f5_tts=types.SimpleNamespace(),  # placeholder; sub-packages injected separately
-    )
-
 def test_models_load_success_and_accentor_fail():
     def stub_env(accentor_ok):
         fw = {"WhisperModel": lambda *a, **k: "WHISPER"}
@@ -149,10 +140,9 @@ def test_models_load_success_and_accentor_fail():
         return fw, uinfer, f5model, stress
 
     # success path incl. accentor loaded. The voice files must EXIST for the
-    # loaders to be called at all (a missing one now means "voice off").
-    import config as _C, tempfile as _tf
-    from pathlib import Path as _P
-    _d = _P(_tf.mkdtemp())
+    # loaders to be called at all (a missing one means "voice off").
+    import config as _C
+    _d = Path(tempfile.mkdtemp())
     (_d / "w.safetensors").write_bytes(b"x")
     (_d / "vocos").mkdir(); (_d / "vocos" / "config.yaml").write_text("x")
     _saved = (_C.WEIGHTS_PATH, _C.VOCOS_DIR)
@@ -295,7 +285,7 @@ def test_load_memory_corrupt_inputs():
     c3 = _ctx()
     c3.load_memory(d)
     check("empty_summary_skipped", len(c3.session_memory) == 0)
-    # session_memory.json is INVALID JSON -> json.load raises -> except branch (242-243)
+    # session_memory.json is INVALID JSON -> json.load raises -> except branch
     d2 = _TMP / "corrupt2"; d2.mkdir(parents=True, exist_ok=True)
     (d2 / "session_memory.json").write_text("{ broken json ]", encoding="utf-8")
     c4 = _ctx()
@@ -338,10 +328,7 @@ if __name__ == "__main__":
             M.time.sleep = _real_sleep
     print("\n" + str(len(fns) - failed) + "/" + str(len(fns)) + " model test functions passed (" +
           str(sum(1 for _, c in RESULTS if c)) + "/" + str(len(RESULTS)) + " checks)")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

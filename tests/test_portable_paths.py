@@ -1,10 +1,10 @@
 """Paths the app builds must be valid on Linux as well as Windows.
 
-Bugs found 2026-10-03: the side venvs (venv_yue2, venv_mula, venv_diar,
-venv_eraser, ComfyUI-qi21) were addressed only as Scripts\\python.exe, and the
-ComfyUI model folder as r"~\\Documents\\ComfyUI" -- on Linux that is one
-directory literally named "~\\Documents\\ComfyUI" under home, so video, songs,
-covers and diarisation all read as "not installed" there.
+The side venvs (venv_yue2, venv_mula, venv_diar, venv_eraser, ComfyUI-qi21) must
+not be addressed only as Scripts\\python.exe, and the ComfyUI model folder must
+not be r"~\\Documents\\ComfyUI" -- on Linux that is one directory literally named
+"~\\Documents\\ComfyUI" under home, so video, songs, covers and diarisation would
+all read as "not installed" there.
 """
 import ast
 import glob

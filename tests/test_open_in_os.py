@@ -1,8 +1,8 @@
 """gui_common.open_in_os opens folders on every OS.
 
-Bug: the Memory and Code tabs called os.startfile, which exists only on
-Windows -- elsewhere "Open folder" failed with "module 'os' has no attribute
-'startfile'".
+The Memory and Code tabs must not call os.startfile directly: it exists only on
+Windows, so elsewhere "Open folder" would fail with "module 'os' has no
+attribute 'startfile'".
 """
 import os
 import sys

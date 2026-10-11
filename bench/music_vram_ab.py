@@ -1,7 +1,7 @@
 """Is the song slow because of the model, or because the LLM is holding VRAM?
 
 The GUI label promises ~40 s for a 30-second song on the `fast` preset. A real
-run today took 273 s. The card had LM Studio resident on it (20.5 GB of 24.5),
+run took 273 s. The card had LM Studio resident on it (20.5 GB of 24.5),
 so the question is whether Music3 is streaming its weights.
 
 Same lyrics, same style, same seed, same preset, twice: once with the chat model
@@ -17,7 +17,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception: pass
+except (AttributeError, ValueError, OSError): pass
 
 import logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")

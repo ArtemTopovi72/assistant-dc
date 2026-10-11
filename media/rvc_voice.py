@@ -1,6 +1,6 @@
 """A singer's own RVC voice (Applio), trained once on the original's vocal stem and kept per artist.
 
-10-07: «3 сентября» re-sung by YuE2 got Shufutinsky's voice from an RVC model trained on his
+«3 сентября» re-sung by YuE2 got Shufutinsky's voice from an RVC model trained on his
 vocal stem («МОЛОДЕЦ!!!»); a zero-shot timbre (SoulX / Seed-VC) is only close. Training takes
 ~4 s an epoch on 6 min of vocal, so the first cover of an artist pays it once and the model is
 reused for every later cover of that artist."""
@@ -18,7 +18,7 @@ logger = logging.getLogger("assistant.rvc")
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APPLIO = os.path.join(ROOT, "models_ext", "applio")
 PY = venv_python(os.path.join(ROOT, "venv_applio"))
-# 10-08 sweep on Marshal (4.9 min of vocal, YuE take heard at 0.97): the stock pretrain at 200
+# Sweep on Marshal (4.9 min of vocal, YuE take heard at 0.97): the stock pretrain at 200
 # epochs kept 0.52 of the lines, TITAN at 60 -- 0.34, the Russian Snowie V3.1 pretrain at 60 --
 # 0.59 in 5 min instead of 10. «Epochs x minutes of vocal ~ 300» is the usual budget.
 EPOCHS = int(os.getenv("RVC_EPOCHS", "60"))
@@ -53,7 +53,7 @@ def slug(artist: str) -> str:
 
 
 # Star voices offered in the cover's voice picker: trained on ~15 songs of the singer's lead
-# vocal each (runtime/covers_batch/tsoi_night/night.py, 10-09), then the one-song models kept
+# vocal each (runtime/covers_batch/tsoi_night/night.py), then the one-song models kept
 # from earlier covers. Only the trained ones are shown; one per label, the first wins.
 STARS = (("tsoi_hq", "Виктор Цой"), ("gorshok_hq", "Горшок (КиШ)"), ("anders_hq", "Томас Андерс"),
          ("lindemann_hq", "Тиль Линдеманн"), ("viktor_tsoy", "Виктор Цой"), ("korol_i_shut", "Горшок (КиШ)"),
@@ -92,7 +92,7 @@ def stars(lang: str = "ru") -> list:
 
 def model_of(name: str):
     """(pth, index) of a trained voice, or None. The latest checkpoint, unless best.txt in the
-    model's folder names another: the last is not the best (10-09 night run, words heard in the
+    model's folder names another: the last is not the best (night run, words heard in the
     mix: Tsoi singing «Du hast» 71 % at 25 epochs, 32 % at 75)."""
     d = os.path.join(APPLIO, "logs", name)
     pths = sorted(glob.glob(os.path.join(d, f"{name}_*e_*s.pth")), key=os.path.getmtime)
@@ -143,7 +143,7 @@ def split_lead(ctx, vocal_wav: str, work: str) -> tuple:
 
 def _clean_vocal(ctx, vocal_wav: str, work: str) -> str:
     """The singer alone and dry: the lead voice off the backing vocals, then the reverb off it.
-    10-08 sweep (Whisper likeness of a YuE take sung through, 2 takes x 3 settings): Snowie on
+    Sweep (Whisper likeness of a YuE take sung through, 2 takes x 3 settings): Snowie on
     the bare Demucs stem 0.62, on the cleaned one 0.68 -- the model no longer learns the choir
     and the hall as part of the voice. The bare stem when the separator is missing or fails."""
     try:
@@ -189,7 +189,7 @@ def train(ctx, name: str, vocal_wav: str):
     _run(ctx, ["extract", "--model-name", name, "--f0-method", "rmvpe", "--sample-rate", sr, "--gpu", "0"],
          "RVC extract", 900)
     # Applio binds a random port in 20000..55555 for torch.distributed; Windows reserves
-    # 53091..53790 and 50000..50059 here, and on those the run dies in TCPStore (10-08: the
+    # 53091..53790 and 50000..50059 here, and on those the run dies in TCPStore (the
     # Russian bind error crashed its own decoding) yet still prints «trained successfully».
     # A run that left no weights is run again.
     pths = lambda: glob.glob(os.path.join(APPLIO, "logs", name, f"{name}_*e_*s.pth"))
@@ -208,7 +208,7 @@ def train(ctx, name: str, vocal_wav: str):
 
 
 def convert(ctx, name: str, vocal_wav: str, out_wav: str, index_rate: float = 0.0) -> str:
-    """`vocal_wav` sung in `name`'s voice. 10-08 Whisper sweep (share of the lyric's lines heard):
+    """`vocal_wav` sung in `name`'s voice. Whisper sweep (share of the lyric's lines heard):
     index 0 / protect 0.33 kept 0.52-0.59, index 0.4 / protect 0.5 -- 0.48, 0.75 -- 0.45, -12 -- 0.31.
     The index pulls the stem's mumble in; the timbre is in the model."""
     pth, idx = model_of(name)

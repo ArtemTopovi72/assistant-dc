@@ -1,5 +1,5 @@
 """Cover the QWebEngine report-view branches in gui.py that segfault under a real
-QtWebEngine render headless. Per the sanctioned approach, _QWebEngineView is
+QtWebEngine render headless. _QWebEngineView is
 replaced BEFORE window construction with a lightweight QWidget stub that records
 setHtml (the branch executes; nothing renders), so _build_research_tab (web),
 _set_report (web + fallback) and _reset_report_view (web) are all exercised.
@@ -75,7 +75,6 @@ def test_webengine_report_paths():
         # _set_report web path: renders HTML into the stub, hides the text view
         w._set_report("# Report\n\n$x^2$\n\n| a | b |\n|---|---|\n| 1 | 2 |")
         check("web_sethtml", StubWebView.last_html is not None and "MathJax" in StubWebView.last_html)
-        check("web_shown", w.research_web.isVisibleTo(w) or not w.research_view.isVisibleTo(w) or True)
         # _reset_report_view web path: clears + hides the web view
         w._reset_report_view()
         check("web_reset", True)
@@ -135,10 +134,7 @@ if __name__ == "__main__":
             print(f"  ERROR in {fn.__name__}: {type(e).__name__}: {e}")
     print(f"\n{len(fns)-failed}/{len(fns)} webengine tests passed "
           f"({sum(1 for _,c in RESULTS if c)}/{len(RESULTS)} checks)")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

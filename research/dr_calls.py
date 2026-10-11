@@ -52,8 +52,8 @@ def _think_call(ctx, system: str, user: str, max_tokens: int,
                 effort=_EFFORT_FROM_CONFIG) -> str:
     """A synthesis LLM call that LETS THE MODEL THINK and keeps only the written
     answer. Reasoning fine-tunes (Qwen <think>, gpt-oss harmony) write far better
-    long-form prose WITH chain-of-thought; suppressing it (the old prefill+/no_think
-    combo) backfired into empty sections. `max_tokens` must cover think + answer.
+    long-form prose WITH chain-of-thought; suppressing it (prefill + /no_think)
+    backfired into empty sections. `max_tokens` must cover think + answer.
     Returns the cleaned content (think block already stripped by the llm layer).
 
     Defensively clamps max_tokens so prompt + output stays inside DR_MODEL_CONTEXT —
@@ -63,7 +63,7 @@ def _think_call(ctx, system: str, user: str, max_tokens: int,
     budget = min(max_tokens, safe)
     _effort = _resolve_effort(effort)
     out = call_llm_simple(ctx, system, user, temperature=temperature,
-                          max_tokens=budget, force_think=False,   # 2026-09-25 user: no reasoning;
+                          max_tokens=budget, force_think=False,   # reasoning off;
                           reasoning_effort=_effort)             # the thinking retry below stays the fallback
     if (out or "").strip():
         return out.strip()
@@ -87,10 +87,10 @@ def _think_call(ctx, system: str, user: str, max_tokens: int,
     # be wrong for the topic should pass a smaller `retries` so they fail fast and
     # fall back to a different template instead of hammering the same one.
     for attempt, shrink in enumerate((0.5, 0.3)[:retries], start=1):
-        # The nudge must not cost the FORMAT. An earlier version said only "output
-        # the finished text", and the retry came back as a wall of unstructured
-        # prose — the model dropped the Markdown headings along with the
-        # deliberation, which is a worse failure than the empty it was fixing.
+        # The nudge must not cost the FORMAT. Saying only "output the finished
+        # text" made the retry come back as a wall of unstructured prose — the
+        # model dropped the Markdown headings along with the deliberation, which
+        # is a worse failure than the empty it was fixing.
         nudge = ("\n\nWrite the final answer NOW, in full, in the Markdown "
                  "structure the instructions above require — keep every `#` "
                  "heading and every list. Do not deliberate further and do not "

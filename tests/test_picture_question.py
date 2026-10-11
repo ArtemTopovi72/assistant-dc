@@ -1,6 +1,5 @@
 """A QUESTION about a picture is answered in words, never by an image tool
-(live 2026-09-17 22:31 / 2026-09-18 00:44: «Что нарисовано?» became an
-enhance pass and «Сделал, но проверка показала…»)."""
+(«Что нарисовано?» must not become an enhance pass)."""
 import os, sys, types
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("F5_TEST_RUN", "1")
@@ -32,7 +31,7 @@ st = lambda o: {"user_input": "x", "user_input_original": o}
 # pointed-at picture: anything but an order is looked at
 ctx = types.SimpleNamespace(last_image_path=__file__, image_pointed_at=True)
 check("a question over a pointed-at picture is looked at", graph.needs_relook(ctx, st("Что нарисовано?")))
-# «обсудим цитату» after ❓ is no question, yet it is about the picture (live 16:57)
+# «обсудим цитату» after ❓ is no question, yet it is about the picture
 check("words that are no question over it are looked at too", graph.needs_relook(ctx, st("обсудим цитату")))
 check("an order to change it is not (the editing path has it)", not graph.needs_relook(ctx, st("убери лужу")))
 ctx.image_pointed_at = False

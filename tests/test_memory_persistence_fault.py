@@ -1,13 +1,11 @@
 """Regression: the memory subsystem must survive corrupt/interrupted persistence
 without crashing the assistant.
 
-BUG #11 (found by filesystem/JSON fault injection): a corrupted session_memory.json
-(a JSON object/scalar, or a list containing non-dict entries) loaded non-dict items
-into session_memory, and Context.memory_text() — called on EVERY turn — then crashed
-with `AttributeError: 'str' object has no attribute 'get'`, bricking that memory
-profile until the file was manually deleted. facts.json already filtered to dicts;
-session load did not. Fix: filter session items to dicts on load + a defensive
-isinstance guard in memory_text.
+A corrupted session_memory.json (a JSON object/scalar, or a list containing
+non-dict entries) must not put non-dict items into session_memory: Context.memory_text()
+is called on EVERY turn and would crash with
+`AttributeError: 'str' object has no attribute 'get'`. Session load filters items to
+dicts (as facts.json load does) and memory_text has a defensive isinstance guard.
 
 Run: venv/Scripts/python.exe tests/test_memory_persistence_fault.py
 """
@@ -28,7 +26,7 @@ def _ctx(d):
 def test_corrupt_session_memory_shapes():
     d = Path(tempfile.mkdtemp())
     # The last shape mixes valid dicts with junk. It uses kind="fact" because
-    # load_memory now restores only DURABLE kinds across sessions — with a
+    # load_memory restores only DURABLE kinds across sessions — with a
     # non-durable kind the dict filter would never be exercised and the check
     # would pass for the wrong reason.
     shapes = ['{"x":1}', '["a","b",123]', '42', 'null', 'not json at all',
@@ -42,7 +40,7 @@ def test_corrupt_session_memory_shapes():
             assert isinstance(it, dict), f"non-dict survived load from {shp!r}: {it!r}"
     # the last shape keeps exactly the two valid dict items
     assert len(c.session_memory) == 2, f"expected 2 valid items, got {len(c.session_memory)}"
-    print("PASS corrupt session_memory.json shapes never crash memory_text (BUG #11)")
+    print("PASS corrupt session_memory.json shapes never crash memory_text")
 
     # Pin the durability contract itself: in-session chatter ("assistant",
     # "generate", "search", untyped items) must NOT come back on the next start,
@@ -71,8 +69,7 @@ def test_corrupt_facts_and_summary():
     print("PASS corrupt facts.json / summary.json load without crashing")
 
 
-def test_atomic_write_survives_replace_permissionerror(monkeypatch=None):
-    import models as models_mod
+def test_atomic_write_survives_replace_permissionerror():
     d = Path(tempfile.mkdtemp())
     calls = {"n": 0}
     real_replace = os.replace

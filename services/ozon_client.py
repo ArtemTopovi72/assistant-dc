@@ -1,7 +1,7 @@
 """Ozon (ozon.ru) for the buyer: search, product card, reviews.
 
 Ported from eduard256/ozon-mcp-server (MIT, JavaScript) after comparing the
-public Ozon MCP servers (2026-09-23). Ozon has no public API for buyers; the
+public Ozon MCP servers. Ozon has no public API for buyers; the
 seller-API servers answer a different question, and the extension-based one
 needs the user's live Chrome profile. This approach needs neither: one real
 browser passes the anti-bot challenge once, then every request is a fetch()
@@ -52,8 +52,8 @@ OZON_EXE = os.getenv("OZON_BROWSER_EXE", os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "runtime", "ozon_chromium", "ozon-chromium.exe"))
 OZON_CHANNEL = os.getenv("OZON_BROWSER_CHANNEL", "msedge").strip()
 OZON_HEADLESS = os.getenv("OZON_HEADLESS", "0").strip() not in ("0", "false", "no")
-# Parallel browsers for one shopping run (user, 2026-09-28: "8 воркеров"). Each is
-# its own Chromium on its own thread; 16 in a row were not blocked.
+# Parallel browsers for one shopping run. Each is its own Chromium on its own
+# thread; 16 in a row were not blocked.
 OZON_WORKERS = max(1, _cfg_env.env_int("OZON_WORKERS", 8))
 
 SORTS = {"popular": "", "price": "price", "price_desc": "price_desc",
@@ -327,7 +327,7 @@ def review_photo_urls(content: dict) -> list:
 
 def parse_reviews(page: dict, limit: int = 10, sku=None) -> dict:
     """`sku`: keep only reviews of THAT item. Ozon lists the whole family's
-    reviews on every variant's page (live 2026-09-27: a snow blower was judged by
+    reviews on every variant's page (a snow blower was judged by
     its siblings' reviews) -- each review carries its own itemId."""
     w = _widget(page, "webListReviews") or {}
     raw = w.get("reviews") or w.get("items") or []
@@ -395,9 +395,7 @@ def search_filters(query: str) -> list:
 
 def resolve_short(url: str) -> str:
     """ozon.ru/t/<code> (the app's share link) -> /product/.../ . A plain HTTP
-    request gets 501 from the anti-bot wall; the browser follows the redirect.
-    Live 10-01: the third of three shared links was never opened and the agent
-    found a product by guessing its name instead."""
+    request gets 501 from the anti-bot wall; the browser follows the redirect."""
     def go(page):
         page.goto(url, wait_until="domcontentloaded", timeout=90000)
         return page.url
@@ -522,7 +520,7 @@ class _Browser:
                         try:
                             slot[0].close()
                         except Exception:
-                            pass
+                            logger.debug("could not close a stale Ozon context", exc_info=True)
                     ctxs.clear()
                     seen_gen = self.gen
                 for attempt in range(2):
@@ -580,11 +578,11 @@ class _Browser:
                 if browser is not None:
                     browser.close()
             except Exception:
-                pass
+                logger.debug("could not close the Ozon browser", exc_info=True)
             try:
                 pw.stop()
             except Exception:
-                pass
+                logger.debug("could not stop playwright", exc_info=True)
 
     def _launch(self, pw):
         kw = dict(channel=OZON_CHANNEL or None, headless=OZON_HEADLESS,
@@ -639,7 +637,7 @@ class _Browser:
         try:
             slot[0].close()
         except Exception:
-            pass
+            logger.debug("could not close an Ozon context", exc_info=True)
 
     def _drain(self, err):
         while True:
@@ -652,10 +650,9 @@ class _Browser:
 
 
 def _hide_from_taskbar() -> None:
-    """The browsers sit at -32000,-32000 but still had a taskbar button each
-    (user: "эту прелисть хайдить"). Headless is not an option -- Ozon blocks it
-    (measured 2026-09-28, both old and --headless=new). Tool-window style drops
-    the button; only our off-screen windows are touched."""
+    """The browsers sit at -32000,-32000 but still get a taskbar button each.
+    Headless is not an option -- Ozon blocks it (both old and --headless=new).
+    Tool-window style drops the button; only our off-screen windows are touched."""
     if os.name != "nt" or OZON_HEADLESS:
         return
     try:
@@ -819,7 +816,7 @@ def image_search_path(image_path: str) -> str:
 
 def search_by_image(results_path: str, limit: int = 10, page: int = 1) -> list:
     """Photo results come in likeness order only: a sorting= turns them into the
-    whole catalogue by price/rating (measured 10-01). The priority is the
+    whole catalogue by price/rating. The priority is the
     shopper's to apply."""
     url = results_path
     if page and int(page) > 1:
@@ -879,7 +876,7 @@ def reviews(product: str, limit: int = 10, pages: int = 4) -> dict:
 #
 # Without an address Ozon picks the region from the exit IP. Choosing a pickup
 # point is a site action, not a composer page: a GET of the modal's "Заберу
-# отсюда" link changes nothing. What works (measured 2026-09-23): the point's
+# отсюда" link changes nothing. What works: the point's
 # public page /geo/<city>/<id>/ has "Сохранить адрес и перейти к покупкам";
 # clicking it in the browser stores the point in the anonymous session, and
 # every later search/card is priced and dated for it. No account involved.

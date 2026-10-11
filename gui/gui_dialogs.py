@@ -20,7 +20,7 @@ from PyQt5.QtWidgets import (QCheckBox, QDialog, QDialogButtonBox, QFileDialog,
                              QHBoxLayout, QLabel, QPushButton, QScrollArea,
                              QShortcut, QSlider, QVBoxLayout, QWidget)
 
-from ui_scale import pt, px
+from ui_scale import px
 from gui_common import BG, MUTED
 
 import logging
@@ -326,7 +326,7 @@ class MaskCanvas(QWidget):
         finally:
             try:
                 os.unlink(tmp.name)
-            except Exception:
+            except OSError:
                 pass
         return out_path
 

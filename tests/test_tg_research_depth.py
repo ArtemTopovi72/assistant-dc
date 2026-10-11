@@ -26,10 +26,9 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 _DATA_DIR = tempfile.mkdtemp(prefix="tgtest_depth_")
 import tg_bot as T
 
-# TelegramBot is split across a dozen mixin modules, and the split keeps
-# moving -- this list was already several modules out of date. Source-level
-# checks must read ALL of them or moving a method makes the assertion vacuous
-# instead of red, so read the family off disk rather than naming its members.
+# TelegramBot is split across a dozen mixin modules. Source-level checks must
+# read ALL of them or moving a method makes the assertion vacuous instead of
+# red, so read the family off disk rather than naming its members.
 import glob as _glob
 def _bot_source():
     _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -75,17 +74,13 @@ def make_bot():
         push=lambda t: None, depth=lambda: 0, name=lambda: "stub",
         drop_chat=lambda cid: 0, close=lambda: None)
     bot._activity.log = lambda *a, **k: None
-    # The callback gate added later this session refuses any non-exempt
-    # callback (including depth:) for a chat with no approved user record —
-    # this suite drives depth: presses via _dispatch, so it needs one.
+    # The callback gate refuses any non-exempt callback (including depth:) for
+    # a chat with no approved user record — this suite drives depth: presses
+    # via _dispatch, so it needs one.
     u = T._User(chat_id=CID, name="U", tg_username="u", password_hash="x",
                status="approved")
     bot._user_store.put(u)
     return bot
-
-
-def texts(bot):
-    return " ".join(t for t, _ in bot.kbs)
 
 
 def inline_labels(kb):
@@ -138,9 +133,9 @@ check("an unknown depth is refused, not stored",
        "nonsense" not in json.loads(DT._TIMING_FILE.read_text(encoding="utf-8")))[1])
 check("an unknown depth still gets an estimate rather than a crash",
       D.estimate_duration("nonsense")[0] == D.estimate_duration("standard")[0])
-# Above the plausibility floor on purpose. These used to be 100..117s, which
-# the floor now rejects as stub runs, so the store kept 0 of 18 and this looked
-# like a retention bug. What is under test is the cap, not the floor.
+# Above the plausibility floor on purpose: durations below it are rejected as
+# stub runs, so the store would keep none. What is under test is the cap, not
+# the floor.
 for i in range(D._TIMING_KEEP + 6):
     D.record_run_duration("deep", 1000 + i)
 check("only the last N runs count — the store cannot grow forever",
@@ -179,7 +174,7 @@ for lang in ("ru", "en"):
           lbls)
     body = T._depth_menu_text(s, lang)
     check(f"[{lang}] the menu text names the current depth and its wait",
-          T._t("d_standard", lang).split()[-1] in body and "~" not in body[:0] and
+          T._t("d_standard", lang).split()[-1] in body and
           any(u in body for u in ("min", "мин", "h", "ч", "s", "с")), body[:120])
 
 check("the estimate's provenance is stated when it is only a guess",
@@ -279,7 +274,7 @@ check("the user is told the expected wait when the run STARTS",
       T._MSG["dr_started"]["ru"])
 
 # The queue's own wait estimate must use the same measured number, not a stale
-# constant — it used to quote a flat 900s for a run that takes 2100s.
+# constant.
 eta_src = inspect.getsource(T._fmt_eta)
 check("the queue ETA uses the measured research duration too",
       "_depth_eta_seconds()" in eta_src, eta_src)

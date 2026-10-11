@@ -40,7 +40,7 @@ def human(sec: float) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--seconds", type=float, default=5.0,
-                    help="clip length; 0 -> this many seconds (default 5)")
+                    help="clip length in seconds (default 5)")
     ap.add_argument("--aspect", default="16:9")
     ap.add_argument("--out", default=os.path.join("runtime", "video"),
                     help="target folder for the finished clip")
@@ -72,12 +72,10 @@ def main() -> int:
     ctx = models.Context(models=None, transcription_cache={}, cache_file=None,
                          asr_lock=threading.Lock(), tts_lock=threading.Lock())
 
-    marks: list[tuple[str, float]] = []
     t0 = time.time()
     state = {"last": 0, "sampling_done": None, "first_step": None}
 
     def on_stage(s):
-        marks.append((s, time.time() - t0))
         print(f"  [{human(time.time() - t0)}] {s}", flush=True)
 
     def on_progress(i, total):

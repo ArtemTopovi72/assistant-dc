@@ -4,7 +4,7 @@ per variant to judge object morphing (knife -> spoon, extra spoons) by eye.
 
     VIDEO_MOTION_CONTEXT=1 venv/Scripts/python bench/morph_matrix.py <part1.mp4> <part1_latent>
 """
-import os, sys, time, subprocess, glob
+import os, sys, time, subprocess
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != os.path.dirname(os.path.abspath(__file__))]
 for d in ("", "core", "media", "agent", "bot", "imaging"):

@@ -1,5 +1,5 @@
 """«что общего у двух фото, которые я прислал?»: the vision overview read only the
-current picture and the bot answered "you sent just one photo" (live 2026-10-08).
+current picture and the bot answered "you sent just one photo".
 When the user relates several pictures the earlier ones are read too."""
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

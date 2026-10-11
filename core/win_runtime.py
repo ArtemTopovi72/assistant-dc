@@ -3,8 +3,8 @@
 PyQt5 ships its own MSVCP140.dll 14.26 in PyQt5/Qt5/bin. On a machine without a
 fresh Visual C++ runtime that copy is the one every module gets, and torch &
 co., built against 14.3x, crash in it: a friend's clone died about a minute
-after start, «python.exe ... Faulting module MSVCP140.dll 14.26 ... 0xc0000005»
-(live 10-03). Windows reuses an already-loaded module of the same name, so
+after start, «python.exe ... Faulting module MSVCP140.dll 14.26 ... 0xc0000005».
+Windows reuses an already-loaded module of the same name, so
 loading the newest copy first makes everyone use it.
 """
 import ctypes
