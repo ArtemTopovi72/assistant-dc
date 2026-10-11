@@ -159,7 +159,7 @@ class ResolveMixin:
         # was still debouncing is not blind to it (see _enqueue_item comment).
         # Only what arrived BEFORE a Stop is stale. «привет» sent right after
         # Stop joined the cancelled essay's batch and was dropped with it --
-        # the chat went silent (live 2026-09-28).
+        # the chat would go silent.
         with self._stop_lock:
             _stop_ts0 = self._stop_requests.get(chat_id, 0.0)
         if _stop_ts0:
@@ -303,7 +303,7 @@ class ResolveMixin:
         # batch («Что думаешь?» typed next to a forwarded кружок): the words
         # are the instruction for the note. Split, they were answered apart
         # -- the text as small talk, the note with a "what do I do with it?"
-        # -- and the user's question was ignored (live 2026-09-17).
+        # -- and the user's question was ignored.
         if _has_fwd_voice and len(batch) > 1:
             _notes = [it for it in batch if it.get("type") == "fwd_voice"]
             _words = [(it.get("text") or "").strip() for it in batch
@@ -315,15 +315,15 @@ class ResolveMixin:
             # any order): one conversation, each line under its author, asked
             # about ONCE -- not a "what do I do with it?" per piece.
             # A forwarded POST is its videos and its pictures together: the pictures are read into the same
-            # conversation, never answered on their own (live 2026-10-05: «Что ты хочешь сделать с этим фото?»
+            # conversation, never answered on their own (no «Что ты хочешь сделать с этим фото?»
             # next to the post's «что с ней сделать?»).
             _fwd_items = [it for it in batch if it.get("type") == "fwd_voice"
                           or (it.get("type") in ("text", "photo", "album") and it.get("forwarded"))]
             if len(_fwd_items) > 1:
                 # Anything else in the window -- a menu button pressed while the
-                # forward was landing (live 11:37: «↩ Назад» among ten кружки),
-                # a photo -- goes its own way. It used to veto the merge, and the
-                # batch fell apart into a "what do I do with it?" per note.
+                # forward was landing («↩ Назад» among ten кружки),
+                # a photo -- goes its own way. It must not veto the merge, or the
+                # batch falls apart into a "what do I do with it?" per note.
                 _wordset = set(_words)
                 for _item in batch:
                     if _item in _fwd_items or (_item.get("type") == "text"
@@ -356,7 +356,7 @@ class ResolveMixin:
         img_bytes: Optional[bytes] = None
         # True only when img_bytes is a picture the user actually SENT (photo/
         # album), never an internally-derived one (a video's frame sheet, a
-        # sandbox render). Live 2026-09-19: a video note's sheet rides img_bytes
+        # sandbox render). A video note's sheet rides img_bytes
         # exactly like a real photo, gets registered the same way, and its id
         # would otherwise look indistinguishable from a genuine upload to
         # anything downstream that offers picture-editing actions for "the
@@ -474,8 +474,8 @@ class ResolveMixin:
                 # long afterwards, about something else entirely, must NOT be
                 # captured as an answer for a note already dealt with.
                 # ✍️ armed (fwd_own) means the text IS the free-form question:
-                # «что бы сказали твои друзья?» after ✍ came back as a
-                # transcript (live 2026-10-02 16:03).
+                # «что бы сказали твои друзья?» after ✍ must not come back as a
+                # transcript.
                 if (getattr(sess, "fwd_transcript", "")
                         and not getattr(sess, "fwd_own", "")
                         and not getattr(sess, "fwd_transcript_done", False)):
@@ -887,9 +887,9 @@ class ResolveMixin:
                                   else self._state_kb(sess, lang))); continue
 
                 # An armed 📷 Analyze is a promise about the VERY NEXT photo, not
-                # a standing mode. Nothing used to clear it except another direct
+                # a standing mode. Nothing else clears it except another direct
                 # action or clear_context, so an unrelated question asked in
-                # between left it armed and force-analyzed some later unrelated
+                # between would leave it armed and force-analyze some later unrelated
                 # caption-less photo the user only meant to hand over quietly.
                 # A genuine text turn — one that reaches here, i.e. is neither a
                 # recognised button nor a forwarded-voice answer — means the user
@@ -900,10 +900,10 @@ class ResolveMixin:
 
                 # "Сочини песню про кота" typed in plain chat IS the song flow;
                 # without this it reached the chat model, which wrote lyrics
-                # and read them aloud (live, 2026-09-12). Only outside the
+                # and read them aloud. Only outside the
                 # armed capture states -- those already own the text.
                 # Same for a forecast asked in plain words: the weather API
-                # answers it; web search does not (live, 2026-09-12).
+                # answers it; web search does not.
                 _wx = _tg_weather.weather_request(raw) \
                     if not sess.reg_state and not sess.pending_prefix else {}
                 if (not _wx and sess.menu == "weather" and not sess.reg_state
@@ -1179,8 +1179,8 @@ class ResolveMixin:
                     return
                 data = self._dl_bytes(item["file_id"])
                 # A download failure or an empty file must always be reported —
-                # even with a caption attached. This used to fall straight to the
-                # `elif cap:` arm below, which queued the caption alone and let the
+                # even with a caption attached. Falling straight to the
+                # `elif cap:` arm below would queue the caption alone and let the
                 # model answer as if it had read a file that never arrived: an
                 # honest `doc_unreadable` was only reachable when there was no
                 # caption at all.
@@ -1218,7 +1218,7 @@ class ResolveMixin:
                     tg_bot.logger.exception("could not store %s in the sandbox", fname)
                 # A picture sent "as a file" (uncompressed) is still a picture:
                 # receipt.jpg as a document got «текст не удалось извлечь»
-                # (live 2026-09-28). Without a working folder it goes the photo way.
+                # Without a working folder it goes the photo way.
                 if (not _saved_as and img_bytes is None
                         and Path(fname).suffix.lower() in (".jpg", ".jpeg", ".png", ".webp", ".bmp")):
                     img_bytes = data; _photo_upload = True
@@ -1292,7 +1292,7 @@ class ResolveMixin:
                                 # The caption is a question about THIS file.
                                 # «Что думаешь?» under a 50 KB report was
                                 # answered by retrieval on those two words
-                                # alone (live 2026-09-18 00:30) -- say which
+                                # alone -- say which
                                 # document the words are about.
                                 scaffold.append(
                                     f"[The user attached the document '{fname}' "
@@ -1320,7 +1320,7 @@ class ResolveMixin:
                     if cap not in texts:
                         texts.append(cap)
                     # «открой» under junk.bin was answered «какой файл?» -- the
-                    # model never learned a file had come (live 2026-09-28).
+                    # model never learned a file had come.
                     if not any(fname in s for s in scaffold):
                         scaffold.append(
                             f"[The user attached '{fname}', but its text could not be "
@@ -1366,7 +1366,7 @@ class ResolveMixin:
         own_words = user_words(merged)
 
         # Apply the pending prompt prefix here — AFTER every modality has been merged.
-        # It used to be applied only in the text branch, so answering a prompt button
+        # Applying it only in the text branch would mean answering a prompt button
         # ("🔬 Deep Research" -> "type your query") with a VOICE message or a photo
         # caption silently dropped the prefix: the turn ran as an ordinary question
         # and the stale prefix then leaked onto the next text message. Nav/direct
@@ -1507,8 +1507,8 @@ class ResolveMixin:
         # it resolved to one above, or the picture is simply the current one. Asking
         # "which picture?" after the user physically tapped one would be absurd.
         # A DOCUMENT in the same message is the thing the instruction is
-        # about: live 2026-09-14, «найди все мосты, убери дубликаты ... коллаж»
-        # + DCIM.zip got «Какую картинку? В этом чате их 9» -- «убери» read
+        # about: «найди все мосты, убери дубликаты ... коллаж» + DCIM.zip
+        # must not get «Какую картинку? В этом чате их 9» -- «убери» read
         # as an edit of one of the old collages.
         if (not img_bytes and not file_in_folder
                 and not getattr(sess, "target_image", "")
@@ -1615,7 +1615,7 @@ class ResolveMixin:
         # (a second task queued right behind this one must not be able to
         # mark this task's own still-unshown Retry button stale first).
         # Forwarded material alone is not a note to the running task: the bot's
-        # own replies forwarded mid-song went in as wishes (live 2026-09-27).
+        # own replies forwarded mid-song would go in as wishes.
         _only_fwd = bool(batch) and all(it.get("forwarded") for it in batch)
         if not _only_fwd and self._try_steer(chat_id, task):
             return          # a note to the running task, not a new task: not charged

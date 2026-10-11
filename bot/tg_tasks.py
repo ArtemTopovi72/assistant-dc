@@ -78,8 +78,7 @@ def _message_script(text: str) -> str:
     if not t or t.startswith("[") or _re.search(r"https?://", t):
         return ""
     # "и то же самое по-английски" is Cyrillic and wants an English reply --
-    # the alphabet rule alone pinned it to Russian (live 2026-09-13, mega
-    # journey re-run). An explicit ask for English wins; it is a one-turn
+    # the alphabet rule alone would pin it to Russian. An explicit ask for English wins; it is a one-turn
     # request, so the caller's turn_lang is set for this turn only as well.
     from graph_language import asks_for_english as _ask_en
     if _ask_en(t):
@@ -216,10 +215,10 @@ class TaskRunnerMixin:
         lang = self._lang(sess)
         # Validate BEFORE discarding the transcript. Every branch below is keyed
         # on `what`, so an unrecognised value (a keyboard from an older build, a
-        # payload typo) fell through all of them — having already wiped the one
-        # copy of the transcript. The user pressed a button, got total silence,
-        # and the note was gone: the next press answered "I no longer have that
-        # voice message". Keep it and ask again instead.
+        # payload typo) would fall through all of them — having already wiped the
+        # one copy of the transcript. The user would press a button, get total
+        # silence, and the note would be gone: the next press would answer "I no
+        # longer have that voice message". Keep it and ask again instead.
         if what == "board":
             _speech, board = tg_bot._split_board(said)
             if not board:
@@ -242,13 +241,11 @@ class TaskRunnerMixin:
                             keyboard=tg_bot._fwd_voice_kb(lang, sess.fwd_transcript_id,
                                                           board=bool(tg_bot._split_board(said)[1])))
             return
-        # The transcript is KEPT, not wiped. It used to be cleared here, which
-        # made the three-button keyboard single-use: the keyboard is INLINE, so
-        # it stays on screen and clickable forever, but pressing 📋 after 📝 hit
-        # the empty slot and answered "that voice note is no longer in my hands
-        # -- forward it again" for a note the user could still see. Reproduced
-        # live: 📝 Расшифровка delivered the transcript, and the very next press
-        # on the same keyboard claimed the voice was gone.
+        # The transcript is KEPT, not wiped. Clearing it here would make the
+        # three-button keyboard single-use: the keyboard is INLINE, so
+        # it stays on screen and clickable forever, but pressing 📋 after 📝 would hit
+        # the empty slot and answer "that voice note is no longer in my hands
+        # -- forward it again" for a note the user could still see.
         #
         # Retaining it is safe because the id guard in the fwdv: handler already
         # rejects a button belonging to an EARLIER forward, so a stale keyboard
@@ -545,7 +542,7 @@ class TaskRunnerMixin:
         _cancel = threading.Event()
         ctx = tg_bot._scoped_ctx(_shared, cancel_event=_cancel)
         # The reply language follows the USER's session language: an English
-        # session used to get every answer in Russian (the house default).
+        # session must not get answers in Russian (the house default).
         ctx.reply_lang = lang
         # A page read for this turn (tg_links) is named in the reply's shape.
         try:
@@ -597,9 +594,8 @@ class TaskRunnerMixin:
             ctx.active_memory_dir = _mem_dir
             # _scoped_ctx hands every task a FRESH, empty pinned_facts list --
             # without this, a fact saved by remember_fact in an earlier task
-            # (persisted to facts.json) was never read back, so it vanished
-            # the moment that task ended (live, journey 9, 2026-09-18: "как
-            # меня зовут" forgot a name given three turns earlier).
+            # (persisted to facts.json) would never be read back, so it would vanish
+            # the moment that task ended.
             ctx.load_memory(_mem_dir)
         except Exception:
             tg_bot.logger.exception("could not set a per-chat memory dir for %s", chat_id)
@@ -746,11 +742,10 @@ class TaskRunnerMixin:
         """
         def on_stage(stage: str) -> None:
             # A blank stage means "no stage", not "a stage with no name". The
-            # post-delivery compaction ends with ctx.set_stage(""), which used to
-            # reach here after _clear_status had already run — so it opened a
+            # post-delivery compaction ends with ctx.set_stage(""), which reaches
+            # here after _clear_status has already run — so it would open a
             # BRAND NEW "⚙️ …" bubble carrying a live ⛔ Cancel button, under
-            # every single answer, and nothing ever cleared it. That is the stack
-            # of dead Cancel buttons users kept seeing.
+            # every single answer, and nothing would ever clear it.
             if not (stage or "").strip():
                 with self._stages_lock:
                     self._active_stages.pop(chat_id, None)
@@ -796,7 +791,7 @@ class TaskRunnerMixin:
         ctx.anim_voices = []
         # 🗣 own assistant voice: the graph's TTS speaks with it directly (ctx is this task's copy).
         # Always set: the copy inherits the DESKTOP's custom voice (settings / Дурдом tab
-        # write it on the shared ctx), which every chat's replies used to speak with.
+        # write it on the shared ctx), which every chat's replies would speak with.
         _aref = getattr(sess, "assistant_ref", "")
         _own = bool(_aref and os.path.exists(_aref))
         ctx.custom_ref_wav = _aref if _own else None
@@ -942,9 +937,9 @@ class TaskRunnerMixin:
                     self._active_stages[chat_id] = f"🔬 {s}"
                 self._on_stage(chat_id, f"🔬 {s}", False)
 
-            # NOTE: this used to `ctx.cancel_event.clear()` here, on the theory
-            # that a previous task might have left it set. That is no longer
-            # true (or possible): `_cancel` is a brand-new threading.Event per
+            # NOTE: do not `ctx.cancel_event.clear()` here, on the theory
+            # that a previous task might have left it set. That cannot
+            # happen: `_cancel` is a brand-new threading.Event per
             # task (see _execute_task), so nothing could have set this event
             # except the user pressing Stop/Cancel between the status message
             # (with its live ⛔ button, sent a few lines above) and here — and
@@ -1107,7 +1102,7 @@ class TaskRunnerMixin:
             self._on_stage(chat_id, "🎵 Writing a song", False)
             self._activity.log(chat_id, "stage", "song", uname)
             # No separate "song_generating" line: the status message with its
-            # ⛔ button already says «🎵 Пишу текст песни…» (it doubled, live 2026-09-25).
+            # ⛔ button already says «🎵 Пишу текст песни…» (a second line would double it).
 
             def _song_stage(s: str) -> None:
                 _update_status(
@@ -1182,7 +1177,7 @@ class TaskRunnerMixin:
 
         # Scoped ctx: this callback and this cancel event belong to this task
         # alone, so there is nothing to save and nothing to clear — the event is
-        # freshly created above, and clearing a SHARED one used to wipe a Stop
+        # freshly created above, and clearing a SHARED one would wipe a Stop
         # that arrived while the task was still starting up.
         ctx.stage_callback = on_stage
         # The pre-tool note goes out as an ordinary message, above the status
@@ -1211,7 +1206,7 @@ class TaskRunnerMixin:
         # A message that POINTS AT a picture (a reply to one, a button under
         # one) is about that picture, not about the documents: «Что
         # нарисовано?» over a forwarded sketch was wrapped as a question to
-        # the library and answered with an image edit (live 2026-09-18 00:44).
+        # the library and answered with an image edit.
         _about_a_picture = bool(img_bytes or getattr(task, "image_id", "")
                                 or getattr(sess, "target_image", "")
                                 or _about_the_last_video(getattr(sess, "last_image_path", ""),
@@ -1290,7 +1285,7 @@ class TaskRunnerMixin:
         # `task.image_id` — captured at PRESS time and carried on the task
         # itself — wins over the lazy `sess.target_image` slot: two button
         # presses on two different pictures, queued one behind the other, both
-        # used to resolve to whichever picture the SECOND press had already
+        # would resolve to whichever picture the SECOND press had already
         # overwritten that slot with by the time either task actually ran.
         # ✏️ custom motion under 🎬: the picture chosen there, not the one-turn
         # target slot -- live 10-10 that slot was empty by the time the words came
@@ -1312,8 +1307,8 @@ class TaskRunnerMixin:
             ctx.last_image_path = _target["path"]
             # graph.needs_relook: the user's OWN words about a picture they
             # pointed at (a reply to it, a message after ❓) are answered by
-            # LOOKING at it (live 2026-09-18 00:44 «Что нарисовано?» as a reply
-            # to a sketch became an enhance pass). A button's own task carries
+            # LOOKING at it («Что нарисовано?» as a reply
+            # to a sketch must not become an enhance pass). A button's own task carries
             # the picture in task.image_id and is an action, not words about it.
             ctx.image_pointed_at = not getattr(task, "image_id", "")
             self._activity.log(chat_id, "system",
@@ -1322,8 +1317,8 @@ class TaskRunnerMixin:
         else:
             # The picture in play: the one the PREVIOUS turn was about (sent,
             # pointed at, delivered, a video's frames). Not "the last picture
-            # ever": live 2026-10-01 «Что думаешь?» about a forwarded video
-            # re-read a quote photo from an hour before. A picture further
+            # ever": «Что думаешь?» about a forwarded video
+            # must not re-read a quote photo from an hour before. A picture further
             # back is one reply, button or «на первой картинке» away.
             _in_play = tg_bot._image_by_id(sess, getattr(sess, "turn_image", "") or "")
             ctx.last_image_path = (_in_play["path"] if _in_play and os.path.exists(_in_play.get("path", ""))
@@ -1364,9 +1359,9 @@ class TaskRunnerMixin:
         # to animating whichever picture happened to be last.
         #
         # BUT a task that points at ONE SPECIFIC picture (a button pressed under
-        # it, e.g. animate_preset) must stay scoped to exactly that picture. Live,
-        # 2026-09-19: pressing "Animate" under a freshly style-transferred photo
-        # animated the ORIGINAL instead — task.image_path/ctx.last_image_path
+        # it, e.g. animate_preset) must stay scoped to exactly that picture:
+        # pressing "Animate" under a freshly style-transferred photo
+        # must not animate the ORIGINAL — task.image_path/ctx.last_image_path
         # correctly named the styled result, but this block unconditionally
         # dumped the chat's WHOLE picture history (9 images) into
         # ctx.recent_image_paths too, and tool_image_handlers._current_image_paths
@@ -1377,7 +1372,7 @@ class TaskRunnerMixin:
         # with no specific target ("animate these three photos").
         #
         # And a general request offers the picture IN PLAY, never the history:
-        # live 2026-10-01 «анимируй: два деда дерутся» with no target sent all 9
+        # «анимируй: два деда дерутся» with no target must not send all 9
         # pictures of the chat (a lettering, an old portrait…) as references, and
         # the clip lost the user's voices. Several pictures of THIS turn still come
         # through state["image_paths"] (an album sent with the request).
@@ -1500,8 +1495,8 @@ class TaskRunnerMixin:
                 # Stop the abandoned graph: it keeps running in its thread and,
                 # left alone, goes on forcing renders nobody will receive while
                 # the user is already offered Retry -- which would run it all a
-                # second time. Measured 2026-09-19: generate_video re-forced
-                # after the 3030 s abandon. The round loop and the tool loop
+                # second time (generate_video re-forces after the 3030 s
+                # abandon). The round loop and the tool loop
                 # both check is_cancelled(); this token is THIS task's own.
                 try:
                     ctx.cancel_event.set()
@@ -1586,8 +1581,8 @@ class TaskRunnerMixin:
         # asked for it to stop — delivering the half-finished answer (and a voice
         # note of it) is exactly what they pressed the button to avoid.
         #
-        # BOTH cancel paths have to be checked here. This used to test only the
-        # inline ⛔ button's set, so the ⛔ Stop KEY was honoured for queued work
+        # BOTH cancel paths have to be checked here. Testing only the
+        # inline ⛔ button's set would honour the ⛔ Stop KEY for queued work
         # and ignored for the work in flight: cancellation is cooperative, and a
         # ComfyUI render that finished before the loop reached its next check
         # sailed straight through to delivery. Observed live — Stop answered
@@ -1630,7 +1625,7 @@ class TaskRunnerMixin:
         # pointed at) and produced no artifact of its own (a tool that DOES
         # deliver a picture/video/document attaches its own _image_kb further
         # down, keyed to what it just made — this must not compete with that).
-        # Live, 2026-09-19: sending a bare photo got a description back and
+        # Otherwise a bare photo gets a description back and
         # then nothing else — every editing action (style, animate, upscale…)
         # required leaving the chat for the 🎨 Creativity menu.
         # NOT sess.turn_image directly: that slot is also filled by a video
@@ -1647,7 +1642,7 @@ class TaskRunnerMixin:
             _turn_img_entry = tg_bot._image_by_id(sess, _turn_img_id)
             if _turn_img_entry and os.path.exists(_turn_img_entry.get("path", "")):
                 main_kb = tg_bot._image_kb(lang, _turn_img_id)
-                # Edit buttons under a bare comment read as a mistake (live 2026-09-29): ask first.
+                # Edit buttons under a bare comment read as a mistake: ask first.
                 # ...but not after the answer to a question about the picture
                 # («сколько тут итого?»): the answer was the point, the offer is noise.
                 if reply and not reply_is_failure and not self._asked_a_question(task.user_text):
@@ -1669,8 +1664,8 @@ class TaskRunnerMixin:
                     self._activity.log(chat_id, "system",
                         f"[voice] tts_path={tts_wav!r} — re-synthesising", uname)
                     # Must honour the return value: when synthesis or ffmpeg
-                    # fails this used to set voice_sent=True anyway, so the text
-                    # fallback was skipped and the user received NOTHING AT ALL.
+                    # fails, voice_sent must stay False, or the text
+                    # fallback is skipped and the user receives NOTHING AT ALL.
                     voice_sent = self._send_voice(ctx, chat_id, reply)
         except Exception:
             tg_bot.logger.exception("voice delivery failed chat=%s", chat_id)
@@ -1681,12 +1676,11 @@ class TaskRunnerMixin:
             # is sent as text as well, even when the voice note went out.
             # And a reply that is not Russian is only APPROXIMATED by the
             # voice: the house TTS speaks English through the Russian voice by
-            # transliteration ("а драматик лайтхаус стэндс…" -- live,
-            # 2026-09-12, journey 6), which is a hint, not the words. The text
+            # transliteration ("а драматик лайтхаус стэндс…"), which is a hint, not the words. The text
             # goes out beside it so the reader has the actual sentence.
             # Every reply goes out as text too: users read, copy and skim; a
-            # voice note alone was the top complaint of the persona run
-            # 2026-09-27 («генератор голосовух», «ТЕКСТОМ!» five times).
+            # voice note alone is the top complaint («генератор голосовух»,
+            # «ТЕКСТОМ!»).
             # Unless the user picked voice only: then code and non-Russian still go as text.
             if reply and not (voice_sent and sess.reply_mode == "voice" and "```" not in reply
                               and lang == "ru" and len(_re.findall(r"[A-Za-z]", reply)) < len(reply) // 4):
@@ -1704,8 +1698,8 @@ class TaskRunnerMixin:
                         reply_html, list(ctx.turn_queries or []), list(ctx.turn_sources or []), lang)
                 else:
                     # Nothing was searched: a "(source: un.org)" here is the
-                    # model imitating the citation format, not a source (live
-                    # 2026-09-28). It must not pass for a checked fact.
+                    # model imitating the citation format, not a source.
+                    # It must not pass for a checked fact.
                     import tg_reply_shape as _shape
                     reply_html = _shape._CITE_RE.sub("", reply_html).replace(" .", ".")
                 reply_html = self._sandbox_linkify(chat_id, reply_html)
@@ -1727,7 +1721,7 @@ class TaskRunnerMixin:
             tg_bot.logger.exception("product cards failed chat=%s", chat_id)
 
         # ── deliver image ─────────────────────────────────────────────────────
-        # Every branch below that does NOT send a picture used to just write a
+        # Every branch below that does NOT send a picture must do more than write a
         # line to the activity log. The text reply has already gone out by then,
         # so when the model narrated "I expanded the borders of your image" and
         # delivery was skipped, the user was told the work was done and received
@@ -1785,8 +1779,8 @@ class TaskRunnerMixin:
         # ── the multi-part plan generate_video stopped on ─────────────────────
         if final.get("video_plan"):
             # The ▶ rerun is the render: the continued clip and its new people go back to
-            # the session for it. Taken by this plan-only turn, the rerun had 1 image and
-            # 0 videos (live 2026-10-10) and drew a made-up cat and dog.
+            # the session for it. Taken by this plan-only turn, the rerun would have 1 image and
+            # 0 videos and draw a made-up cat and dog.
             if getattr(ctx, "continue_tail", ""):
                 sess.continue_tail, sess.continue_src = ctx.continue_tail, ctx.continue_src
                 sess.continue_people = list(getattr(ctx, "continue_people", None) or [])
@@ -1970,7 +1964,7 @@ class TaskRunnerMixin:
         # A turn that ended in the "I produced no answer" placeholder (and left
         # no artefact) is not committed at all: the user was told to ask again,
         # and an unanswered question left in the transcript is what made the
-        # model answer the OLD question instead of the next one (journey 5).
+        # model answer the OLD question instead of the next one.
         _failed_turn = (not _compacted and reply_is_failure and not any(
             final.get(k) for k in ("image_path", "video_path", "document_path",
                                    "research_report")))
@@ -1997,7 +1991,7 @@ class TaskRunnerMixin:
                 latest.extend(_added)
             # The passages were for THIS turn: kept in history, 40k chars per
             # question, the next question was answered with the previous
-            # answer (live 2026-09-28, «склад номер 100» -> the safe code).
+            # answer («склад номер 100» -> the safe code).
             from library import RAG_HEAD, RAG_QUESTION_SEAM
             latest = [dict(m, content="[asked about the user's documents] "
                            + m["content"].rpartition(RAG_QUESTION_SEAM)[2])
