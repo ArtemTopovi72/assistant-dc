@@ -9,7 +9,7 @@ import os, re, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE)); sys.path.insert(0, HERE)
 import live_journeys as LJ
-from live_journeys import say, has, no_file, says, silent_on
+from live_journeys import say, no_file, says, silent_on
 import live_tg_drive as D
 
 CHAT = LJ.BASE_CHAT + 97
