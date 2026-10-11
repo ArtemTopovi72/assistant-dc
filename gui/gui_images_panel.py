@@ -13,9 +13,6 @@ from ui_scale import scale_style as _ss
 from gui_common import BG, MUTED
 from gui_dialogs import show_image_viewer
 
-import logging
-logger = logging.getLogger("assistant.gui")
-
 
 # --------------------------------------------------------------------------- #
 # Images gallery
