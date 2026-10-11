@@ -53,13 +53,8 @@ from bench.tc_cases import cases_for              # noqa: E402
 class Fault:
     label = "?"
 
-    def __init__(self, recorder=None):
-        self.recorder = recorder
+    def __init__(self):
         self.n = 0
-
-    def bind(self, recorder):
-        self.recorder = recorder
-        return self
 
     def serve(self, state, args, calls):
         self.n += 1
@@ -150,8 +145,8 @@ class HonestInspector(Fault):
 class Slow(Fault):
     label = "slow"
 
-    def __init__(self, seconds=3.0, **kw):
-        super().__init__(**kw)
+    def __init__(self, seconds=3.0):
+        super().__init__()
         self.seconds = seconds
 
     def poison(self, state, args):
@@ -164,8 +159,8 @@ class Flaky(Fault):
     """Fails `times` times, then genuinely succeeds."""
     label = "flaky2"
 
-    def __init__(self, times=2, name=None, **kw):
-        super().__init__(**kw)
+    def __init__(self, times=2, name=None):
+        super().__init__()
         self.times = times
         self.name = name
 
