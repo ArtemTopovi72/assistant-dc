@@ -1,11 +1,10 @@
 """Regression: a tool that fails QUIETLY must not become "Готово!".
 
-Found with bench/tc_chaos.py, which breaks tools on purpose and scores only
-what the user is finally told. The loop classified a result as failed if and
-only if it began with "[TOOL ERROR]", so the polite failures were handled well
-(11 of 13 runs reported honestly) and the silent ones were not: against tools
-returning "" or a truncated string, the agent said "Готово! Я добавил ей очки"
-on 12 of 21 runs. The tool had produced nothing at all.
+bench/tc_chaos.py breaks tools on purpose and scores only what the user is
+finally told. The loop classified a result as failed if and only if it began
+with "[TOOL ERROR]", so polite failures were handled well and silent ones were
+not: against tools returning "" or a truncated string, the agent said
+"Готово! Я добавил ей очки" although the tool had produced nothing at all.
 
 A model cannot notice an absence. It has to be shown one, which is what
 _detect_silent_failure does -- with two signals that are cheap and certain:
@@ -18,11 +17,11 @@ _detect_silent_failure does -- with two signals that are cheap and certain:
 
 Deliberately NOT attempted here: plausible-but-wrong output with the artifact
 present. That is undetectable by inspection of the result, needs the vision
-verifier, and is left as the known remaining gap (chaos mode "wrong" still
-scores 3 false successes).
+verifier, and is left as the known remaining gap (chaos mode "wrong").
 
-Run: .\venv\Scripts\python.exe tests\test_silent_tool_failure.py
+Run: venv/Scripts/python.exe tests/test_silent_tool_failure.py
 """
+import inspect
 import sys
 sys.path.insert(0, ".")
 for _s in (sys.stdout, sys.stderr):
@@ -150,10 +149,9 @@ for name, text in NOT_DELIVERY:
     check(f"not_delivery_{name}", not P._DELIVERY_CLAIM_RE.search(text),
           repr(text[:50]))
 
-# The decision itself, not a grep of the loop's source: an earlier version of
-# this test only checked that the guard's substrings appeared in
-# personality_node, and putting "False and" in front of the whole condition
-# left it passing. V() is the real predicate the loop calls.
+# The decision itself, not a grep of the loop's source: a substring check on
+# personality_node would still pass with "False and" in front of the whole
+# condition. V() is the real predicate the loop calls.
 V = lambda draft, neg, sent: P._answer_contradicts_reality(draft, neg, set(), sent)
 check("a delivery claim after a negative verdict is caught",
       V("Вот ваш рыжий кот в скафандре!", True, False))
@@ -205,10 +203,9 @@ check("a failed tool alone is not enough without a claim",
       not A("К сожалению, не получилось.", False, {"create_presentation"}, False))
 
 # calculate must return the VALUE, the way tools._handle_calculate does
-# (str(result)). Checking merely for a digit was not enough -- chaos mode
-# "wrong" hands back a numbered list, which has digits, sailed through, and the
-# model then reported "Результат вычисления: 20 962 144.8" against a true value
-# of 20 709 273.6. Parsing it as a number is the handler's own contract.
+# (str(result)). Checking merely for a digit is not enough -- chaos mode
+# "wrong" hands back a numbered list, which has digits. Parsing the result as a
+# number is the handler's own contract.
 for label, val in [("plain", "20709273.6"), ("negative", "-42"),
                    ("scientific", "1e10"), ("bool", "True"),
                    ("inf", "inf"), ("nan", "nan"), ("complex", "(3+4j)")]:
@@ -224,10 +221,8 @@ check("only calculate is held to that rule",
       not is_err(D("search", "no numbers here at all", {})))
 
 # --- the deterministic replacement at finalisation -------------------------
-# Chosen over another corrective round because the two measured very
-# differently: the deterministic scrub of fabricated image links let ZERO
-# through in 140 chaos runs, while a corrective round is advice the model is
-# free to ignore -- and did, on 13 of 28 route_calc runs.
+# Chosen over another corrective round: a corrective round is advice the model
+# is free to ignore, a deterministic scrub is not.
 SR = GF._STATED_RESULT_RE
 for label, text in [("vychisleniya", "Результат вычисления 18432 * 977 равен 20963112"),
                     ("colon", "Результат: 21 045 897.6"),
@@ -238,18 +233,12 @@ for label, text in [("cats", "У неё 2 кота и 3 собаки"),
                     ("price", "Цена равна 500 рублей")]:
     check(f"not_stated_result_{label}", not SR.search(text), text[:45])
 
-# A fragment with no letters ("4.", "0.", ".") is what a small model emits
-# after the corrective round pops its draft. Worse for the user than an honest
-# failure, so it gets the same replacement.
-check("a degenerate fragment has no letters",
-      not any(c.isalpha() for c in "4.") and not any(c.isalpha() for c in "0."))
 check("the honest replacement refuses to name a number",
       not GF._STATED_RESULT_RE.search(GF._NO_CALC_ANSWER), GF._NO_CALC_ANSWER)
 # --- the same backstop for the tools that hand over a FILE -----------------
 # The corrective round asks the model not to claim a result that does not
-# exist; it claimed one anyway on 9 of 27 lying runs ("Вот реальное фото
-# Эйфелевой башни" after find_photo failed). This is the deterministic net
-# under it.
+# exist; it can still claim one ("Вот реальное фото Эйфелевой башни" after
+# find_photo failed). This is the deterministic net under it.
 check("a failed find_photo produces an honest line",
       "фотографию" in GF._honest_failure_line({"find_photo"}))
 check("several failures are named together",
@@ -263,15 +252,15 @@ check("the honest line makes no claim of its own",
       not P._DELIVERY_CLAIM_RE.search(GF._honest_failure_line({"find_photo"}))
       and not P._PROMISE_CLAIM_RE.search(GF._honest_failure_line({"find_photo"})),
       GF._honest_failure_line({"find_photo"}))
-# "не получилось" must survive the negation lookbehind added earlier, or the
-# replacement text would itself read as a false success.
+# "не получилось" must survive the negation lookbehind, or the replacement text
+# would itself read as a false success.
 check("the honest line is not itself a delivery claim",
       not P._DELIVERY_CLAIM_RE.search("Не получилось сделать фотографию"))
 check("every artifact tool has a noun",
       set(GF._PROMISE_NOUN) == set(P._TOOL_ARTIFACT),
       f"{sorted(set(P._TOOL_ARTIFACT) - set(GF._PROMISE_NOUN))} missing")
 
-_fin_src = __import__("inspect").getsource(GF._finalize_answer)
+_fin_src = inspect.getsource(GF._finalize_answer)
 check("the file backstop is wired",
       "_honest_failure_line(_artifact_fails, _tool_said_unsupported(messages))" in _fin_src
       and "final_answer = _line" in _fin_src)
@@ -306,11 +295,9 @@ check("plain text is unchanged",
 # line, which this catches. (A source check would NOT be enough for a guard:
 # putting "False and" in front of one leaves every substring in place.)
 check("the scrub is wired into finalisation",
-      "_strip_fabricated_images(final_answer)"
-      in __import__("inspect").getsource(GF._finalize_answer))
+      "_strip_fabricated_images(final_answer)" in _fin_src)
 
 # --- it is wired into the loop --------------------------------------------
-import inspect
 src = inspect.getsource(P.personality_node)
 check("the loop actually calls the detector", "_detect_silent_failure" in src)
 

@@ -127,7 +127,6 @@ check("and say the folder is not enabled", "не включена" in txt, txt[:
 # ── delivery through the local Bot API server ───────────────────────────────
 import requests
 import config as C
-import tg_transport
 
 posted = []
 class _R:

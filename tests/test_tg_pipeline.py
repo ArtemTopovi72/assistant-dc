@@ -271,12 +271,9 @@ if bot9b.pushed:
     try: os.unlink(bot9b.pushed[0].image_path)
     except Exception: pass
 
-# An album's photos beyond the first used to be downloaded and then thrown
-# away with no image_log entry and no trace: the loop kept a single img_bytes
-# slot and `break`d on the first successful download. Fixed to log every
-# successfully-downloaded photo (the first still drives the task itself --
-# a _Task can only carry one image_path), so "the second one"/"the third
-# one" has something to resolve against later.
+# Every successfully-downloaded photo of an album is logged to image_log (the
+# first still drives the task itself -- a _Task can only carry one image_path),
+# so "the second one"/"the third one" has something to resolve against later.
 bot9d = make_bot(); approved(bot9d, CID + 103)
 _album_bytes = {"x0": b"ALBUM-PHOTO-0", "x1": b"ALBUM-PHOTO-1", "x2": b"ALBUM-PHOTO-2"}
 bot9d._dl_bytes = lambda fid: _album_bytes.get(fid)
@@ -347,11 +344,11 @@ bot10 = make_bot(); approved(bot10)
 bot10._dl_bytes = lambda fid: b"just some readable text in a file"
 _indexed10 = []
 bot10._index_document = lambda cid, sess, path, name, **kw: _indexed10.append(name)
-# CONTRACT CHANGE (measured live): every upload is indexed, whatever its size.
-# Indexing only the big ones left 📚 My documents empty after a short upload — it
-# looked like the upload had failed — and with no caption the turn became "here
-# is some text, what would you like me to do with it?" instead of an
-# acknowledgement. A bare small file is now acknowledged, not pushed to the agent.
+# Every upload is indexed, whatever its size. Indexing only the big ones leaves
+# 📚 My documents empty after a short upload — it looks like the upload failed —
+# and with no caption the turn would become "here is some text, what would you
+# like me to do with it?" instead of an acknowledgement. A bare small file is
+# acknowledged, not pushed to the agent.
 bot10._resolve_and_push(CID, [{"type": "document", "file_id": "d1",
                                "filename": "notes.txt", "caption": ""}])
 check("a small document is indexed like any other", _indexed10 == ["notes.txt"],
@@ -426,10 +423,9 @@ dropped = bot15._request_stop(CID)
 check("Stop reports how much it discarded", dropped >= 0, str(dropped))
 
 bot16 = make_bot(); approved(bot16)
-# _cancel_task now returns one of "running"/"dropped"/"" (tri-state, so a
-# double press of the same Cancel button can honestly say "already finished"
-# instead of repeating a false "cancelled") — "" is falsy, matching the old
-# bool contract for this harmless-unknown-id case.
+# _cancel_task returns one of "running"/"dropped"/"" (tri-state, so a double
+# press of the same Cancel button can honestly say "already finished" instead of
+# repeating a false "cancelled") — "" is falsy for this harmless-unknown-id case.
 check("cancelling an unknown task id is harmless",
       bot16._cancel_task(CID, "no-such-task") in ("running", "dropped", ""))
 check("a cancelled id is remembered", bot16._is_cancelled("no-such-task"))
@@ -587,23 +583,19 @@ print()
 print("=" * 70)
 print("RESTART RECOVERY -- tasks QUEUED (pushed, never popped), not just running")
 print("=" * 70)
-# _recover_inflight (above) only ever fires for a task that had already
-# reached _running_task -- i.e. a consumer had popped it and started
-# graph.invoke(). A task that was merely PUSHED onto the backend and never
-# popped (the debounce timer fired, the task was accepted and queued, but
-# the process died before a consumer got to it) used to leave no trace
-# anywhere: with the default InMemoryBackend that queue lives only in this
-# process's RAM, so a restart drops it silently -- while the daily-quota
-# bump for it (tg_resolve._resolve_and_push bumps usage BEFORE pushing) is
-# already committed to the persisted SQLite usage store. The user is
-# charged for a task that never ran and never hears about it, unlike the
-# mid-execution case above which at least says "interrupted, retry?".
-# _pending_journal + the "_state" tag on _INFLIGHT_FILE entries close that
-# gap for the one backend where it is real (InMemoryBackend); a durable
-# backend (Redis/Kafka) keeps its own copy outside the process, so a
-# leftover "pending" entry for one of those must NOT be reported (the task
-# will simply run normally once consumers start, and a false "interrupted"
-# notice would land right before the real answer does).
+# _recover_inflight (above) covers a task that had already reached
+# _running_task. A task that was merely PUSHED onto the backend and never popped
+# (the process died before a consumer got to it) would otherwise leave no trace:
+# with the default InMemoryBackend that queue lives only in this process's RAM,
+# while the daily-quota bump for it (tg_resolve._resolve_and_push bumps usage
+# BEFORE pushing) is already committed to the persisted SQLite usage store, so
+# the user is charged for a task that never ran and never hears about it.
+# _pending_journal + the "_state" tag on _INFLIGHT_FILE entries close that gap
+# for the one backend where it is real (InMemoryBackend); a durable backend
+# (Redis/Kafka) keeps its own copy outside the process, so a leftover "pending"
+# entry for one of those must NOT be reported (the task will simply run normally
+# once consumers start, and a false "interrupted" notice would land right
+# before the real answer does).
 
 class _FakeDurableBackend(T._Backend):
     """Same push/pop mechanics as InMemoryBackend, but deliberately NOT an
@@ -673,7 +665,7 @@ check("an explicitly cancelled queued task does not resurrect after restart",
       texts(bot28) == "", repr(texts(bot28)))
 
 # A bare typed «Stop» stops; it is not a steer note for the running render
-# (live 2026-09-27: «👌 Noted: Stop» and the redraw went on).
+# («👌 Noted: Stop» while the redraw goes on).
 for word in ("Stop", "стоп!", "Отмена"):
     b = make_bot(); approved(b)
     hit = []

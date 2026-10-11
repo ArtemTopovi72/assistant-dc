@@ -1,11 +1,11 @@
 """Admins must NOT receive feedback/service notifications until they opt in.
 
-Before this fix, _wants_feedback() defaulted every admin to subscribed and
-required an explicit mute -- a freshly promoted admin got paged with every
-piece of user feedback the moment they were promoted. This flips the default
-and locks in both directions of the toggle plus the legacy-opt-out migration
-path (an admin who muted under the OLD scheme must not come back subscribed
-just because the marker's meaning changed).
+_wants_feedback() defaults every admin to muted and requires an explicit
+opt-in -- a freshly promoted admin must not be paged with every piece of user
+feedback the moment they are promoted. Locks in both directions of the toggle
+plus the legacy-opt-out migration path (an admin who muted under the OLD
+scheme must not come back subscribed just because the marker's meaning
+changed).
 
 Run: venv/Scripts/python.exe tests/test_tg_feedback_default.py
 """

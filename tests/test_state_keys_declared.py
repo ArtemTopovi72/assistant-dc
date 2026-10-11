@@ -71,9 +71,8 @@ def keys_read_from(path: str, var: str) -> set:
     return out
 
 
-# The delivery layer split out of tg_bot.py into tg_tasks.py; the reads of the
-# finished state went with it. Scan the whole family so this check follows the
-# code instead of quietly measuring an empty file.
+# The reads of the finished state live in both tg_bot.py and tg_tasks.py; scan
+# the whole family so this check cannot quietly measure an empty file.
 read = set()
 for _mod in ("bot/tg_bot.py", "bot/tg_tasks.py"):
     read |= keys_read_from(os.path.join(ROOT, _mod), "final")
@@ -103,8 +102,6 @@ g = build_graph(ctx)
 seeded = {"messages": [], "user_input": "", "document_path": "C:/tmp/deck.pptx",
           "document_status": "success", "final_answer": "", "image_data": None}
 try:
-    import graph as G
-    _real = G.agent_node if hasattr(G, "agent_node") else None
     out = g.invoke(dict(seeded))
     check("document_path survives a pass through the compiled graph",
           out.get("document_path") == "C:/tmp/deck.pptx", out.get("document_path"))

@@ -1,6 +1,6 @@
 """Lettering edits go to the layout boxes, never to a whole-frame re-render.
 
-Live failure this pins (2026-07-29, Telegram): "исправь надписи на корректные" on
+Live failure this pins (Telegram): "исправь надписи на корректные" on
 a generated picture matched no intent rule, fell through to the default
 `subject_edit`, and was handed to FireRed — which re-rendered the frame, wiped
 the lettering, and reported "Я успешно удалил все надписи". A re-render cannot
@@ -38,7 +38,6 @@ def check(label, cond, detail=""):
         print(f"  FAIL {label}  {detail}")
 
 
-# ---------------------------------------------------- the classifier sees it
 # ------------------------------------------------- the layout survives a render
 print("\nTHE LAYOUT THE PICTURE WAS DRAWN FROM IS REMEMBERED")
 tmp = tempfile.mkdtemp()
@@ -65,9 +64,7 @@ calls = []
 fake = types.ModuleType("draw_agent")
 fake.edit_layout = lambda ctx, lay, instr: (calls.append(("edit_layout", instr)) or
                                             (lay, ["moved the sign"]))
-_seed_seen = {}
 fake.run = lambda ctx, req, **kw: (calls.append(("run", req, kw.get("layout"))) or
-                                   _seed_seen.update(seed=kw.get("seed")) or
                                    {"image": os.path.join(tmp, "fixed.png"),
                                     "layout": kw.get("layout")})
 sys.modules["draw_agent"] = fake

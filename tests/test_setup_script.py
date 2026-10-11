@@ -32,7 +32,7 @@ def test_config_step_creates_env_once_and_never_overwrites(monkeypatch, tmp_path
     (tmp_path / ".env").write_text("A=mine\n", encoding="utf-8")
     setup.s_config(SimpleNamespace())
     assert (tmp_path / ".env").read_text(encoding="utf-8") == "A=mine\n"
-    name, status, detail = setup.STEPS[-1]
+    _, status, detail = setup.STEPS[-1]
     assert status == "ok" and "kept" in detail and "B" in detail, detail
 
 
@@ -81,7 +81,7 @@ def test_qt_libs_step_reports_what_to_install(monkeypatch):
     monkeypatch.setattr(setup, "_qt_missing_libs", lambda: ["libxcb-icccm.so.4"])
     monkeypatch.setattr(setup, "_apt_install", lambda pkgs, args: False)
     setup.s_qt_libs(SimpleNamespace(no_install=True))
-    name, status, detail = setup.STEPS[-1]
+    _, status, detail = setup.STEPS[-1]
     assert status == "warn" and "apt install libxcb-icccm4" in detail, detail
     # once installed the step re-checks and passes
     left = [["libxcb-icccm.so.4"], []]

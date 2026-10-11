@@ -44,7 +44,6 @@ def check(name, cond, detail=""):
 
 
 CID = 999879
-_next_fid = [0]
 
 
 def _bot(is_admin=True):
@@ -61,7 +60,6 @@ def _bot(is_admin=True):
     bot._send_get_id = bot._send_text
     bot._activity.log = lambda *a, **k: None
     bot._api_post = lambda *a, **k: {}
-    _next_fid[0] += 1
     bot._dl_bytes = lambda fid: (b"" if fid == "BAD" else b"jpegbytes" + fid.encode())
     bot._user_store.put(T._User(chat_id=CID, name="U", status="approved"))
     bot._sessions.pop(CID, None)

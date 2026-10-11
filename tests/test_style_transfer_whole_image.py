@@ -1,6 +1,6 @@
 """A whole-image style transfer must not be phrased as a targeted region edit.
 
-WHAT HAPPENED (live, 2026-09-20). A user uploaded a 4-person photo collage with
+WHAT HAPPENED. A user uploaded a 4-person photo collage with
 a title ("Ma' boyz") and asked to redraw the whole thing as a cartoon/comic.
 style_transfer has no region, so the router fell to
 `_firered_instruction(ctx, "", text, removal=False)`, whose region="" branch
@@ -129,9 +129,7 @@ check("falls back to the generic instruction when the vision call raises",
 # live bot's agent calls the `redraw_image` tool directly with its own
 # free-text instructions, reaching tool_image_handlers._handle_redraw_image ->
 # image.edit_image_with_firered with NO classifier and NO layout lock at all.
-# Live, 2026-09-20 (same day, after the fix above shipped): a user re-tested
-# through the live bot and got the leftmost person cropped in half again --
-# their request went through THIS path, which the first fix never touched.
+# Fixing only the router left this path cropping the leftmost person in half.
 print("=" * 66)
 print("REDRAW_IMAGE TOOL ENTRY POINT")
 print("=" * 66)

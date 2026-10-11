@@ -1,7 +1,6 @@
 """A retrieval miss on a tiny library hands over the whole library.
 
-Live 2026-09-13 (mega journey, step 26): "можно ли с собакой?" against a
-one-chunk rental contract that says "домашних животных" was an FTS miss
+Example: "можно ли с собакой?" against a one-chunk rental contract that says "домашних животных" was an FTS miss
 (no embeddings), so the question reached the model bare and it answered
 from the chat's other business (re-running the previous image edit).
 """

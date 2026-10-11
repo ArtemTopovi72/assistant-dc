@@ -11,7 +11,6 @@ import os
 import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
-import sys
 import threading
 import types
 
@@ -21,7 +20,7 @@ import tg_bot as T
 
 # MUST come before any TelegramBot is constructed: the bot's data paths are
 # module-level, so an unredirected run registers its fixture chat ids in the
-# LIVE tg_users.db (this happened — 999101/999102 ended up approved there).
+# LIVE tg_users.db.
 import tempfile
 _DATA_DIR = tempfile.mkdtemp(prefix="tgtest_hardening_")
 T.redirect_data_dir(_DATA_DIR)
@@ -196,11 +195,10 @@ check("garbage stored hash fails closed",
       not T._verify_password("x", CID, "not-a-hash")[0])
 check("empty stored hash fails closed", not T._verify_password("x", CID, "")[0])
 
-# Raising TG_SCRYPT_N_LOG2 used to lock every user out: v2 hashes carry no
-# cost and were checked at the NEW one.
-import hashlib as _hl, config as _cfg
+# Raising TG_SCRYPT_N_LOG2 must not lock users out: v2 hashes carry no cost,
+# so they have to be checked at the original one.
 _salt = b"0123456789abcdef"
-_v2 = "v2$" + _salt.hex() + "$" + _hl.scrypt(b"pw", salt=_salt, n=2 ** 14, r=8, p=1,
+_v2 = "v2$" + _salt.hex() + "$" + hashlib.scrypt(b"pw", salt=_salt, n=2 ** 14, r=8, p=1,
                                              dklen=32, maxmem=256 * 1024 * 1024).hex()
 _saved_cost = getattr(_cfg, "TG_SCRYPT_N_LOG2", None)
 _cfg.TG_SCRYPT_N_LOG2 = 15
@@ -275,9 +273,6 @@ check("queued task is cancelled by dropping it",
       bot._cancel_task(CID, "q1") and bot._backend.depth() == 0)
 
 # running task: cancel_event must be set for THIS chat only
-events = {}
-
-
 class FakeCtx:
     def __init__(self):
         self.cancel_event = threading.Event()
@@ -472,8 +467,8 @@ bot._recover_inflight()
 check("recovery is idempotent when nothing was interrupted", not bot.sent)
 
 # The first message after a restart enqueues a task, which rewrites the
-# journal. start() now takes the old journal before any thread runs; recovery
-# used to read the file afterwards and found only the new task.
+# journal. start() takes the old journal before any thread runs, so recovery
+# does not find only the new task.
 bot._running_task[CID] = [T._Task(task_id="dead2", chat_id=CID, user_text="old request")]
 bot._write_inflight()
 bot._running_task.clear()
@@ -538,14 +533,11 @@ section("RETRY BUTTON — pushing a SECOND task must not stale a FIRST task's "
         "own retry before the first even fails")
 # A chat may have two tasks in flight for the same chat (a slow one plus an
 # admitted interject — see _mark_interruptible), or simply a second message
-# queued right behind a slow first one. sess.last_task_id/last_task_text used
-# to be written at task-PUSH time (tg_resolve.py): pushing task B immediately
-# overwrote the pointer, even though B had not started running yet — so if
-# task A then failed and showed its OWN, genuinely-fresh retry:<A's id>
-# button, pressing it was refused as "stale" because the pointer already
-# named B. Fixed by writing the pointer only at the moment each failure is
-# actually DELIVERED (tg_tasks.py's two `except Exception` retry-button
-# sites), not when a task is merely pushed to the queue.
+# queued right behind a slow first one. sess.last_task_id/last_task_text must
+# be written only at the moment a failure is actually DELIVERED, not when a
+# task is pushed to the queue: otherwise pushing task B overwrites the pointer
+# before B has run, and task A's own, genuinely-fresh retry:<A's id> button is
+# refused as "stale".
 
 bot = make_bot()
 fresh_session(bot)
@@ -636,7 +628,6 @@ bot._index_document = lambda cid, sess, path, fname, **kw: indexed.append(fname)
 
 small = "short note"
 big = "x " * 20000
-bot._extract = None
 _orig_extract = T._extract_doc
 T._extract_doc = lambda path, fname: (big if "big" in fname else small)
 try:
@@ -647,10 +638,10 @@ try:
     indexed.clear()
     bot._resolve_and_push(CID, [{"type": "document", "file_id": "d2",
                                  "filename": "small.txt", "caption": ""}])
-    # CONTRACT CHANGE (measured live): a small file is indexed as well, so it
-    # actually appears in 📚 My documents — indexing only the big ones made a
-    # short upload look like it had failed. With no caption there is nothing to
-    # ask, so it is acknowledged rather than pushed to the agent.
+    # A small file is indexed as well, so it actually appears in 📚 My
+    # documents — indexing only the big ones makes a short upload look like it
+    # failed. With no caption there is nothing to ask, so it is acknowledged
+    # rather than pushed to the agent.
     check("a small document is indexed too",
           indexed == ["small.txt"] and bot._backend.depth() == 0,
           (indexed, bot._backend.depth()))
@@ -699,7 +690,6 @@ dead.start()
 dead.join()
 bot._consumers = [dead]
 bot._poll_thread = dead
-import config as _cfg
 _sv = _cfg.TG_WATCHDOG_S
 _cfg.TG_WATCHDOG_S = 5          # clamped to a 5s floor inside the loop
 try:
@@ -725,11 +715,10 @@ bot = make_bot()
 bot._backend = T.InMemoryBackend()
 admin = T._User(chat_id=CID, name="Boss", status="approved", is_admin=True)
 bot._user_store.put(admin)
-# A confirmed bug fix (2026-08-03) made manual /broadcast honor each recipient's
-# notification opt-out, the same way startup/shutdown broadcasts already did —
-# so a member with no explicit subscription must be given one here, or this
-# fixture is testing the exact behavior ("reaches everyone regardless of
-# opt-out") that was just fixed.
+# Manual /broadcast honors each recipient's notification opt-out, the same way
+# startup/shutdown broadcasts do — so a member with no explicit subscription
+# must be given one here, or this fixture would assume the broadcast reaches
+# everyone regardless of opt-out.
 bot._user_store.put(T._User(chat_id=CID2, name="Member", status="approved",
                             subscriptions=["startup"]))
 fresh_session(bot)
@@ -876,8 +865,8 @@ for _src, _want in _MD_CASES:
 section("HTML chunking never emits a half-written tag")
 
 # Telegram rejects the WHOLE message on a malformed tag, so a bad split does not
-# degrade the formatting — it deletes the answer. _hard_split used to accept any
-# space as a cut point, but tags carry spaces of their own (<a href="a b">).
+# degrade the formatting — it deletes the answer. _hard_split must not accept
+# any space as a cut point, because tags carry spaces of their own (<a href="a b">).
 _over = "x" * 4000 + ' <a href="https://e.example/a b c">tail</a>' + "y" * 500
 for _i, _c in enumerate(T._split_html(_over, limit=4096)):
     check(f"hard-split chunk {_i} has no dangling tag",
@@ -894,8 +883,8 @@ check("balanced chunks stay within the Telegram limit",
 
 section("a rejected-markup reply is resent as plain text, never dropped")
 
-# The response from sendMessage was previously ignored, so "can't parse entities"
-# was indistinguishable from success and the user silently got NOTHING.
+# The response from sendMessage is checked, so "can't parse entities" is not
+# mistaken for success and the user does not silently get NOTHING.
 class _FakeAPI:
     """Rejects the first HTML attempt the way Telegram does, accepts plain text."""
     def __init__(self): self.calls = []
@@ -968,7 +957,6 @@ section("debounce worker never leaves an item unserved")
 # The invariant that closes it: the put and the is_alive check happen under the
 # same lock that the worker's exit path takes.
 import queue as _pyq
-import threading as _th
 
 class _AssertingQueue(_pyq.Queue):
     def __init__(self, probe):
@@ -978,7 +966,7 @@ class _AssertingQueue(_pyq.Queue):
         return super().put(item, *a, **kw)
 
 class _TrackingLock:
-    def __init__(self): self._l = _th.RLock(); self.depth = 0
+    def __init__(self): self._l = threading.RLock(); self.depth = 0
     def __enter__(self): self._l.acquire(); self.depth += 1; return self
     def __exit__(self, *a): self.depth -= 1; self._l.release()
     def acquire(self, *a, **k): return self._l.acquire(*a, **k)
@@ -1000,14 +988,14 @@ bot._debounce_loop = _saved_debounce
 # queue the loop keeps serving instead of returning.
 bot._queues[CID] = _pyq.Queue()
 bot._queues[CID].put({"type": "text", "text": "raced in"})
-bot._workers[CID] = _th.current_thread()
+bot._workers[CID] = threading.current_thread()
 _served = []
 _saved_resolve = bot._resolve_and_push
 bot._resolve_and_push = lambda cid, batch: _served.extend(batch)
 _saved_idle = T._WORKER_IDLE_S
 T._WORKER_IDLE_S = 0.01
 try:
-    _t = _th.Thread(target=bot._debounce_loop, args=(CID,), daemon=True)
+    _t = threading.Thread(target=bot._debounce_loop, args=(CID,), daemon=True)
     _t.start(); _t.join(5.0)
 finally:
     T._WORKER_IDLE_S = _saved_idle
@@ -1100,8 +1088,6 @@ _edit_bot._user_store.put(T._User(chat_id=_EID, name="Edit", status="approved"))
 _esess = _edit_bot._get_session(_EID); _esess.clear_context(); _esess.lang = "en"
 _edit_bot._store.put(_esess)
 
-import time as _time
-
 _edit_bot._dispatch({"message": {"message_id": 42,
                                  "chat": {"id": _EID, "type": "private"},
                                  "from": {"id": _EID}, "text": "orginal typo"}})
@@ -1136,21 +1122,19 @@ check("a text-less edited_message does not crash _dispatch",
       not _crashed, _detail if _crashed else "")
 
 section("stop() must not cancel the DESKTOP assistant")
-# ctx is shared with the GUI. Pressing "Stop bot" in the Telegram tab used to set
-# ctx.cancel_event unconditionally, aborting whatever the desktop turn was doing.
-import threading as _threading
+# ctx is shared with the GUI. Pressing "Stop bot" in the Telegram tab must not set
+# ctx.cancel_event unconditionally, aborting whatever the desktop turn is doing.
 
-_gui_ctx = types.SimpleNamespace(cancel_event=_threading.Event())
+_gui_ctx = types.SimpleNamespace(cancel_event=threading.Event())
 bot2 = make_bot()
 bot2._get_ctx = lambda: _gui_ctx
 bot2._broadcast_shutdown = lambda: None
 bot2._backend.close = lambda: None
 bot2._on_status = lambda *a, **k: None
 bot2._running_task.clear()          # no bot task in flight
-# stop() is now a no-op for a bot that never started (it used to log "Bot stopped"
-# and broadcast "going offline" for one that had never been online), so these two
-# cases have to represent a bot that IS up — which is the only state in which
-# pressing Stop means anything.
+# stop() is a no-op for a bot that never started (no "Bot stopped" log, no
+# "going offline" broadcast), so these two cases have to represent a bot that
+# IS up — which is the only state in which pressing Stop means anything.
 bot2._running = True
 bot2.stop()
 check("stop() leaves an idle ctx uncancelled",
@@ -1160,16 +1144,16 @@ check("stop() leaves an idle ctx uncancelled",
 # …but it must still cancel when one of OUR tasks is genuinely running —
 # via THAT TASK'S OWN scoped cancel event (_task_cancels), never the shared
 # desktop ctx. Every task runs on its own _scoped_ctx with its own event
-# (_execute_task); setting the shared ctx here used to abort whatever the
-# desktop GUI happened to be doing while the actual Telegram task in flight
-# was left running unaffected — the same bug fixed on the watchdog path.
+# (_execute_task); setting the shared ctx here would abort whatever the
+# desktop GUI happens to be doing while the actual Telegram task in flight
+# is left running unaffected — the same rule as on the watchdog path.
 _gui_ctx.cancel_event.clear()
 bot3 = make_bot()
 bot3._get_ctx = lambda: _gui_ctx
 bot3._broadcast_shutdown = lambda: None
 bot3._backend.close = lambda: None
 bot3._on_status = lambda *a, **k: None
-own_ev = _threading.Event()
+own_ev = threading.Event()
 bot3._running_task[CID] = object()
 bot3._task_cancels["own-task"] = own_ev
 bot3._running = True

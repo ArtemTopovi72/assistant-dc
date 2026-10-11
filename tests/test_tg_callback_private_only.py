@@ -2,8 +2,7 @@
 
 Messages from groups were already refused (tg_dispatch: the bot would map a
 whole group to one account); buttons were not, so whoever sat in such a group
-could press the owner's ▶ Render. Found by running the harness-review
-authorization check against _dispatch_callback, 2026-10-10.
+could press the owner's ▶ Render.
 """
 import os
 import sys

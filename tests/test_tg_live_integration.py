@@ -7,7 +7,6 @@ only stub: real document indexing + retrieval, the full _run_task_inner turn
 """
 import os
 import sys
-import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 import threading
@@ -47,13 +46,12 @@ import models as _models
 class Ctx(_models.Context):
     """The real Context, with only the bits this suite needs pre-set.
 
-    It used to be a hand-rolled stand-in listing a handful of attributes. That
-    drifts: the agent core grew `facts_text()` and `custom_personality_text`, the
-    stub did not, and SIX checks failed with "'Ctx' object has no attribute …" —
-    failures that said nothing about the behaviour under test and hid whatever
-    those checks were actually meant to catch. Deriving from the real class means
-    this suite tracks the real contract for free and can only fail for real
-    reasons. Nothing here loads a model: Context(models=None) is inert.
+    A hand-rolled stand-in listing a handful of attributes drifts: when the
+    agent core grows a method the stub lacks, checks fail with "'Ctx' object has
+    no attribute …", which says nothing about the behaviour under test.
+    Deriving from the real class means this suite tracks the real contract and
+    can only fail for real reasons. Nothing here loads a model:
+    Context(models=None) is inert.
     """
 
     def __init__(self):
@@ -123,11 +121,11 @@ class Graph:
 
 
 bot = make_bot(ctx, Graph())
-# A task builds its OWN graph now -- build_graph closes over the context, and
-# the prebuilt one would run every node against the shared context, which is
-# the isolation this file exists to check. So the graph handed to make_bot is
-# no longer the one _execute_task runs, and without this the REAL model
-# answered the question: five checks looked at a prompt nobody had captured.
+# A task builds its OWN graph -- build_graph closes over the context, and the
+# prebuilt one would run every node against the shared context, which is the
+# isolation this file exists to check. So the graph handed to make_bot is not
+# the one _execute_task runs; build_graph is stubbed so the checks look at the
+# prompt this fake captures rather than the REAL model's.
 import graph as _graph_mod
 import intent as _intent
 _intent.STUB = lambda t: {"doc_question": "Kessler" in t}
@@ -146,9 +144,6 @@ if p.exists():
         p.unlink()
     except Exception:
         pass
-
-import tempfile
-import os
 
 tmpdir = tempfile.mkdtemp(prefix="tglive_")
 doc = os.path.join(tmpdir, "kessler_bridge.txt")

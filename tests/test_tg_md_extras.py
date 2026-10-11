@@ -1,4 +1,4 @@
-"""10-10 screen review: a model reply's «> quote», «---», «~~x~~» and a nested list item reached
+"""A model reply's «> quote», «---», «~~x~~» and a nested list item reached
 Telegram literally («&gt;», dashes, tildes) or flattened; a fenced block lost its language."""
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

@@ -1,7 +1,7 @@
 """The self-hosted Bot API server is wired in: config, launcher, bot start.
 
-Live 2026-09-14: a 112 MB forwarded archive cannot pass the cloud API's 20 MB
-getFile cap, so the official server (--local) is started by the app itself
+A 112 MB forwarded archive cannot pass the cloud API's 20 MB getFile cap, so
+the official server (--local) is started by the app itself
 once TG_API_ID/TG_API_HASH are in .env, and the token is moved off the cloud
 with one logOut.
 """
@@ -35,7 +35,7 @@ class _R:
 class _Http:
     def __init__(s, local_codes): s.local, s.calls = list(local_codes), []
     def get(s, url, **k):
-        s.calls.append(("get", url)); return _R(s.local.pop(0), {"ok": True, "result": {}} if s.local == [] or True else {})
+        s.calls.append(("get", url)); return _R(s.local.pop(0), {"ok": True, "result": {}})
     def post(s, url, **k):
         s.calls.append(("post", url)); return _R(200, {"ok": True, "result": True})
 
@@ -73,8 +73,7 @@ check("the Telegram tab has masked api_id/api_hash fields",
 check("...remembered on Start like the token", "_TG_API_HASH_KEY, self.api_hash_in" in gsrc and "_TG_TOKEN_KEY,  token" in gsrc)
 check("...and applied before the bot starts", gsrc.index("apply_credentials") < gsrc.index("self._bot = TelegramBot("))
 
-# the server is really started (it never was on Linux: STARTUPINFO and
-# creationflags made Popen raise there, and the error was only logged)
+# the server is really started (on Linux as well as Windows)
 import tempfile, time as _time
 _tmp = tempfile.mkdtemp()
 _flag = os.path.join(_tmp, "started")

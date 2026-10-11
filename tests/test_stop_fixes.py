@@ -1,7 +1,6 @@
-"""Regression tests for the 2026-08-03 audit's ⛔ Stop/Cancel findings.
+"""Regression tests for the ⛔ Stop/Cancel findings.
 
-Offline probes only (no LM Studio, no ComfyUI, no GPU). See
-scratchpad/audit_10_stop.md for the original proof of each bug.
+Offline probes only (no LM Studio, no ComfyUI, no GPU).
 
 Covers:
 1. The watchdog's runaway-task branch used to cancel the SHARED desktop ctx
@@ -186,8 +185,8 @@ bot._resolve_and_push(CID, stale_batch)
 check("a batch that arrived before the recorded Stop is dropped outright",
       bot._backend.depth() == 0)
 
-# And the mirror case: a batch that arrived AFTER a stale/expired stop request
-# must NOT be dropped (only genuinely-stale batches are).
+# The mirror case: a batch that arrived AFTER an old Stop request must go
+# through the normal path without crashing.
 bot2 = make_bot()
 bot2._backend = T.InMemoryBackend()
 bot2._get_ctx = lambda: FakeCtx()
@@ -195,8 +194,6 @@ with bot2._stop_lock:
     bot2._stop_requests[CID] = time.time() - 100  # a long-past Stop
 fresh_batch = [{"type": "text", "text": "hello", "_arrival_ts": time.time()}]
 bot2._resolve_and_push(CID, fresh_batch)
-check("a batch that arrived AFTER an old Stop request is still processed",
-      bot2._backend.depth() >= 0)  # sanity: did not crash / early-return path taken safely
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -260,8 +257,6 @@ cb_update = {"callback_query": {"id": "1", "data": "cancel:run1",
              "from": {"id": CID}}}
 bot._dispatch(cb_update)
 check("cancelling a RUNNING task signals its event", ev.is_set())
-cancel_done_hits = [t for _, t, _ in bot.sent if "cancel" in str(t).lower()
-                    or "отмен" in str(t).lower()]
 check("the callback did NOT itself send the final 'cancelled' confirmation "
       "(that belongs to the task's own unwind, or a double message results)",
       not any(t == T._t("cancel_done", "en") or t == T._t("cancel_done", "ru")

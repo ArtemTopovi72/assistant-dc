@@ -1,8 +1,7 @@
 """👗 Outfit: the answer can be words, a photo of the clothes, or both.
 
-User 2026-10-06: «можно референс дать типо референс одежды + описание, либо
-просто текст, либо пикчу». 👗 arms pending_outfit_target with the pressed
-picture; the next photo is the CLOTHING reference (tg_resolve ->
+The reference may be clothes + a description, just text, or just a picture.
+👗 arms pending_outfit_target with the pressed picture; the next photo is the CLOTHING reference (tg_resolve ->
 _push_style_transfer_task(outfit_wish=caption)), never a new picture to edit.
 Words alone still go through pending_prefix and disarm the photo wait.
 
@@ -11,9 +10,8 @@ Run: venv/Scripts/python.exe tests/test_tg_outfit_reference.py
 """
 # Script, not pytest: check() only counts, and the module-level sys.exit lives
 # under `if __name__ == "__main__":` (indented), which tests/run_all.py's
-# classify() cannot see -- undeclared, this file silently fell through to
-# "skip" and never ran as part of the suite at all (caught 2026-09-18: it was
-# missing from run_all's own summary).
+# classify() cannot see -- undeclared, the file would fall through to "skip"
+# and never run as part of the suite.
 RUN_AS_SCRIPT = True
 import os, sys, tempfile, time, types
 
@@ -104,8 +102,6 @@ def send_photo(bot, file_id="ref_file_1", caption=""):
             time.sleep(0.1)
             return
         time.sleep(0.03)
-
-
 
 
 for caption in ("", "только без шапки"):

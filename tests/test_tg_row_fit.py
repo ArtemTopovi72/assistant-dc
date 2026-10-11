@@ -1,4 +1,4 @@
-"""Live 2026-10-01: «🔤 Без надписей» was cut to «Без на…» — a row of wide
+"""«🔤 Без надписей» must not be cut to «Без на…» — a row of wide
 labels must be split before it reaches Telegram (tg_transport._logged_post)."""
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

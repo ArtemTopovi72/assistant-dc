@@ -1,9 +1,9 @@
 """⛔ Stop pressed after the reply landed says "nothing to stop".
 
-Live 2026-09-13 (mega journey re-run, step 78): Stop one second after the
-lighthouse picture arrived replied "Останавливаю…" — the task was still in
-_running_task because post-delivery history compaction was running. To the
-user nothing was in flight; the honest reply is stop_idle. A task whose
+Stop one second after the lighthouse picture arrived used to reply
+"Останавливаю…" — the task was still in _running_task because post-delivery
+history compaction was running. To the user nothing is in flight; the honest
+reply is stop_idle. A task whose
 reply has NOT landed yet still gets stopped as before.
 """
 import os, sys, tempfile, threading, inspect

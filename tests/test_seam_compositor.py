@@ -20,12 +20,10 @@ try:
 except Exception:
     pass
 import image as IM  # noqa: E402
-# The seam compositor moved to compositing.py. These four are internal to it
-# (image.py drives _blend_region, not its stages), so they are addressed on
-# their own module rather than re-exported through image just for tests.
+# The stage helpers are internal to compositing.py (image.py drives
+# _blend_region, not its stages), so they are addressed on their own module.
 import compositing as _CMP  # noqa: E402
 
-RNG = np.random.default_rng(0)
 H = W = 160
 
 
@@ -60,11 +58,10 @@ def _recolor(img):
 _RESULTS = []
 
 
-import os as _os
 def _check(name, cond, detail=""):
     _RESULTS.append((name, bool(cond), detail))
     print(f"{'PASS' if cond else 'FAIL'}  {name}" + (f"  — {detail}" if detail else ""))
-    if not cond and _os.environ.get("PYTEST_CURRENT_TEST"):
+    if not cond and os.environ.get("PYTEST_CURRENT_TEST"):
         raise AssertionError(str(name) + (": " + str(detail) if detail else ""))
 
 
@@ -177,7 +174,7 @@ def test_blend_region_determinism():
     _check("blend_region: deterministic (identical on repeat)", bool((a == b).all()))
 
 
-def test_face_guard_no_face_passthrough(tmpdir=None):
+def test_face_guard_no_face_passthrough():
     import tempfile
     d = tempfile.mkdtemp()
     bg = _gradient_bg()

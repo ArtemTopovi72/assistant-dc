@@ -219,9 +219,9 @@ print("=" * 66)
 print("MENU TEXT IS SELF-EXPLANATORY")
 print("=" * 66)
 
-# The Settings header used to be "⚙️ Настройки\n• 🎙 <b>ВЫКЛ ❌</b>": a one-item
-# bullet list whose item had no name. On screen that is a stray dot, a mic and a
-# red cross with nothing saying WHAT is off.
+# A Settings header like "⚙️ Настройки\n• 🎙 <b>ВЫКЛ ❌</b>" is a one-item bullet
+# list whose item has no name: on screen a stray dot, a mic and a red cross with
+# nothing saying WHAT is off.
 for _lang in ("en", "ru"):
     reset(bot, lang=_lang)
     tap(bot, "settings", lang=_lang)
@@ -245,10 +245,10 @@ print("=" * 66)
 print("BUTTONS THAT NEED AN IMAGE WAIT FOR ONE")
 print("=" * 66)
 
-# 📷 Analyze Photo is a DIRECT action: it used to fire "describe and analyze this
-# image in detail" as a full turn the moment it was pressed. Pressed in the natural
-# order — tell the bot what you want, then hand it the photo — that ran against
-# nothing and the agent answered "there is no image".
+# 📷 Analyze Photo is a DIRECT action. Firing "describe and analyze this image in
+# detail" as a full turn the moment it is pressed, in the natural order — tell
+# the bot what you want, then hand it the photo — would run against nothing and
+# the agent would answer "there is no image".
 reset(bot)
 sess(bot).last_image_path = ""
 bot._store.put(sess(bot))
@@ -292,10 +292,9 @@ bot._store.put(sess(bot))
 tap(bot, "analyze")
 check("analyze with an image in hand runs straight away", bool(bot.pushed),
       "nothing was queued")
-# item 11: the button gave no way to hand over a DIFFERENT photo when one
-# was already in the chat. It still runs immediately on the current image,
-# but now also arms pending_photo so a fresh photo sent right after is
-# analyzed instead of just captioned.
+# The button runs immediately on the current image, but also arms pending_photo
+# so a fresh (DIFFERENT) photo sent right after is analyzed instead of just
+# captioned.
 check("analyze with an image ALSO arms pending_photo, for a fresh photo",
       sess(bot).pending_photo == T._DIRECT_KB["analyze"],
       repr(sess(bot).pending_photo))
@@ -351,19 +350,19 @@ check("Notifications answers even with no account behind the session",
 reset(bot)
 bot._library_stats = lambda cid: {"documents": 1, "chunks": 3, "docs": []}
 class _Lib:
-    # _open_library now returns a knowledge_api.KnowledgeClient, and tg_library
-    # calls its boundary method ingest(). `build` stays as the legacy alias the
-    # real client also still exposes, so this fake matches the shipped contract.
+    # _open_library returns a knowledge_api.KnowledgeClient, and tg_library
+    # calls its boundary method ingest(). `build` is the legacy alias the real
+    # client also exposes, so this fake matches the shipped contract.
     def ingest(self, paths, **kw): return {"documents_indexed": 1, "errors": []}
     def build(self, paths, **kw): return self.ingest(paths, **kw)
     def documents(self): return [{"title": "t", "chunks": 3}]
     def close(self): pass
 bot._open_library = lambda cid: _Lib()
-import tempfile as _tf, pathlib as _pl
-_f = _pl.Path(_tf.mkdtemp()) / "book.txt"
+import pathlib as _pl
+_f = _pl.Path(tempfile.mkdtemp()) / "book.txt"
 _f.write_text("hello", encoding="utf-8")
 bot._index_document(CID, sess(bot), str(_f), "book.txt")
-check("indexing never opens the library menu by itself (owner 10-03)",
+check("indexing never opens the library menu by itself",
       sess(bot).menu != "library", repr(sess(bot).menu))
 
 # Wiping the context must not leave Back pointing into a menu we walked out of.
@@ -381,7 +380,7 @@ print("=" * 66)
 
 # Inline buttons never expire. A demoted admin's old admin-panel message still has
 # live ✅/❌ buttons, and in a group any member can press a prompt meant for the
-# admin standing next to them. The old code trusted the button, not the presser.
+# admin standing next to them, so the gate must trust the presser, not the button.
 ADMIN, PLAIN, VICTIM = 999510, 999511, 999512
 for _cid, _adm in ((ADMIN, True), (PLAIN, False)):
     _u = T._User(chat_id=_cid, name=f"u{_cid}", status="approved", is_admin=_adm)
@@ -473,9 +472,8 @@ check("stale-language label still routes",
       repr(sess(bot).pending_prefix))
 
 # Reply format: the Settings button is a fixed name that opens an inline picker
-# (✅ on the current mode). It used to carry the current value and cycle on each
-# press, so "Replies: text+voice" pressed gave voice-only, and the reply keyboard
-# was re-sent, which folded the menu away.
+# (✅ on the current mode), rather than carrying the current value and cycling on
+# each press (which re-sends the reply keyboard and folds the menu away).
 reset(bot)
 tap(bot, "settings")
 _set = [b for row in last_kb(bot)["keyboard"] for b in row]

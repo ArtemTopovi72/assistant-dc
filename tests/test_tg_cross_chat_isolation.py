@@ -19,12 +19,6 @@ message assertion:
   6. duplicate/retry in one chat concurrent with another chat's independent turn
   7. rapid interleaved plain text across all three chats -- session/menu state
 
-All seven passed clean on the run that produced this file: no cross-chat leak
-was found. Several early draft failures turned out to be test-harness timing
-artifacts (debounce merge, exact-repeat dedup, the already_running guard's
-debounce-cycle window) rather than application bugs -- see the inline
-comments at each fix for how that was distinguished from a real defect.
-
 Run: venv/Scripts/python.exe tests/test_tg_cross_chat_isolation.py
 """
 import os, sys, time, copy, threading, tempfile
@@ -60,9 +54,9 @@ def section(t):
     print("=" * 78)
 
 
-# INVOKES now also carries chat_id (extracted from ctx via a per-task attr
-# tg_bot._scoped_ctx sets, `_xchat_cid`) so cross-chat leaks can be asserted
-# directly against which chat's invoke() actually saw which state.
+# One row per graph.invoke(): (text, thread, time, last_image_path, chat_id,
+# image_data), so cross-chat leaks can be asserted directly against which
+# chat's invoke() actually saw which state.
 INVOKES = []
 SCRIPT = {}
 
@@ -82,7 +76,6 @@ class FakeCtx:
         self.total_user_turns = 0
         self.tts_disabled = True
         self.memory_lock = threading.Lock()
-        self._xchat_cid = None      # set by StubGraph.invoke via base["chat_id"] if present
 
     def memory_text(self): return ""
     def set_stage(self, s): pass
@@ -205,7 +198,7 @@ def settle(predicate, timeout=10.0, interval=0.1):
 
 
 def texts_for(bot, cid):
-    return [t for c, t, k in bot.sent if c == cid]
+    return [t for c, t, _ in bot.sent if c == cid]
 
 
 def n_running(bot, cid):
@@ -296,7 +289,7 @@ check("all three concurrent photo uploads ran", ok, INVOKES)
 time.sleep(0.5)
 
 # The uploaded photo's raw bytes are not written into sess.image_log (that
-# only records GENERATED output images -- see tg_tasks.py:741). What each
+# only records GENERATED output images). What each
 # chat's task actually threads through is base["image_data"], built per-task
 # from _dl_bytes(file_id) in the debounce/resolve path. base carries no
 # chat_id key, so attribute each invoke to a chat by reverse-mapping the
@@ -399,7 +392,7 @@ check("A's slow op is actually running before B/C are dispatched", ok_a_running)
 # Measure elapsed from AFTER B/C are dispatched, not from A's dispatch -- A's
 # own debounce window (1.8s) is not part of what "queue independence" means;
 # what matters is whether B/C, dispatched once A is already mid-flight, are
-# themselves serialized behind A's still-running 3s task.
+# themselves serialized behind A's still-running task.
 t0 = time.monotonic()
 bot._dispatch(msg_update(CID_B, "fast op B"))
 bot._dispatch(msg_update(CID_C, "fast op C"))
@@ -407,8 +400,7 @@ ok_bc = settle(lambda: any("fast done B" in t for t in texts_for(bot, CID_B))
                and any("fast done C" in t for t in texts_for(bot, CID_C)), timeout=7)
 elapsed = time.monotonic() - t0
 # Not serialized behind A == B and C answered while A was still running. A
-# wall-clock bound (it was < 2.7 s: 1.8 s debounce + 0.9 s) measured the
-# runner's speed too and failed on a loaded CI machine.
+# wall-clock bound would measure the runner's speed too.
 a_still_running = not any("slow done" in t for t in texts_for(bot, CID_A))
 check("B and C's fast turns complete while A's slow op is still running "
       "(not serialized behind it)", ok_bc and a_still_running, (elapsed, a_still_running))
@@ -437,15 +429,10 @@ ids3 = seed_pics(bot, CID_A, 1, tag="dup")[0]
 UPSCALE2 = T._CB_CMDS["regenerate"]
 # delay must be long enough that the DUPLICATE's own debounce cycle (~1.8s)
 # still lands while the original is running -- the already_running guard is
-# only even consulted once the duplicate's OWN debounce fires (tg_resolve.py
-# ~498-526), so a short delay lets the original finish first and makes the
-# "duplicate" a legitimate second task by the documented "outside the
-# debounce window becomes a second task" rule. Verified in isolation
-# (scratch/isolate_dup.py) against a SINGLE chat before attributing anything
-# to cross-chat behaviour: delay=1.5s reproduces "runs twice" even with only
-# one chat involved, so it is a timing-parameter artifact, not a leak.
-# delay=3.0s (matching the proven adversarial_harness.py CID_DUP3 case)
-# keeps the original genuinely running through the duplicate's own debounce.
+# only consulted once the duplicate's OWN debounce fires, so a short delay lets
+# the original finish first and makes the "duplicate" a legitimate second task
+# (outside the debounce window becomes a second task). delay=3.0s keeps the
+# original genuinely running through the duplicate's own debounce.
 script(UPSCALE2, final_answer="handled-once-A", delay=3.0)
 script("independent B text", final_answer="handled-B", delay=0.05)
 INVOKES.clear(); bot.sent.clear()

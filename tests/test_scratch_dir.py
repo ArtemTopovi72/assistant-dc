@@ -1,5 +1,5 @@
 """Intermediate renders/masks/tiles land in <OUTPUT_DIR>/generated/_intermediate,
-not in the runtime/ root (owner 10-03: 1841 _INTERMEDIATE_ files piled up there)."""
+not in the runtime/ root, where they piled up by the thousand."""
 import os, re, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "core"))

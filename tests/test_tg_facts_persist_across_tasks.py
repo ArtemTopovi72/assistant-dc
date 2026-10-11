@@ -1,5 +1,4 @@
-"""«как меня зовут и что ты обо мне знаешь?» forgot Марат three turns later
-(journey 9, live 2026-09-18).
+"""«как меня зовут и что ты обо мне знаешь?» must not forget Марат three turns later.
 
 _scoped_ctx() hands every Telegram task a FRESH, empty pinned_facts list (by
 design -- one chat must never see another's facts mid-turn). remember_fact

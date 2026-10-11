@@ -62,7 +62,6 @@ print("=" * 62)
 
 bot = make_bot()
 sess = bot._get_session(CID)
-lang = "ru"
 
 # Rebuild the exact closure shape _run_task_inner uses.
 status_id = None
@@ -102,9 +101,8 @@ check("a late stage does not open a NEW status message", after == opened,
 # and the callback itself must ignore a blank stage entirely
 import inspect
 src = inspect.getsource(T.TelegramBot._run_task_inner)
-# on_stage moved OUT of _run_task_inner into _make_stage_callback when the
-# character render was made to use the same status pipeline instead of growing
-# a second one. Look where it lives now, not where it used to.
+# on_stage lives in _make_stage_callback, shared with the character render so
+# there is a single status pipeline.
 _cb_src = inspect.getsource(T.TelegramBot._make_stage_callback)
 check("on_stage drops blank stages before doing anything",
       'if not (stage or "").strip():' in _cb_src)
@@ -139,8 +137,7 @@ check("Stop with a task in flight reports the stop",
 
 # both entry points share the one implementation
 # Read every module the bot is assembled from, not tg_bot.py alone: the command
-# handler and the callback dispatcher moved into tg_commands.py and
-# tg_dispatch.py, and counting call sites in one file found none of them.
+# handler and the callback dispatcher live in separate tg_*.py files.
 import glob as _glob
 _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 src_all = "".join(open(f, encoding="utf-8").read()

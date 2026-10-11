@@ -1,7 +1,7 @@
 """A link in a chat message is read, not admired.
 
-Live, 2026-09-12: a bare Wikipedia URL got "this is a link to an article;
-you can find information there". Pure: the crawler is stubbed, no network.
+A bare Wikipedia URL must not get "this is a link to an article; you can find
+information there". Pure: the crawler is stubbed, no network.
 
 Run: venv/Scripts/python.exe tests/test_tg_links.py
 """
