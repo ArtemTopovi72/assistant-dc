@@ -20,11 +20,10 @@ _app = QApplication.instance() or QApplication(sys.argv)
 import gui_telegram_tab as G
 
 RESULTS = []
-import os as _os
 def check(name, cond, detail=""):
     RESULTS.append((name, bool(cond)))
     print(f"[{'PASS' if cond else 'FAIL'}] {name}" + (f" — {detail}" if detail and not cond else ""))
-    if not cond and _os.environ.get("PYTEST_CURRENT_TEST"):
+    if not cond and os.environ.get("PYTEST_CURRENT_TEST"):
         raise AssertionError(str(name) + (": " + str(detail) if detail else ""))
 
 
