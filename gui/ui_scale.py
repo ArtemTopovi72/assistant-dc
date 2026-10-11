@@ -132,7 +132,7 @@ def auto_factor(screen) -> float:
         if diag_in >= 40:          # television territory
             target *= 1.15
     except Exception:
-        pass
+        logger.debug("physical size unavailable", exc_info=True)
 
     app_factor = target / dpr
     return _snap(max(1.0, min(3.0, app_factor)))

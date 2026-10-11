@@ -1,7 +1,6 @@
 """The dashboard layout: three full-window pages and every tab in them.
 
-Commands · Conversation · Workspace used to be three columns squeezed side by
-side; each is now a page of its own (user, 2026-09-30), with the task queue
+Commands · Conversation · Workspace are one page each, with the task queue
 beside the chat instead of under it. A mixin holding one long method, and that
 is the honest shape of it — the dashboard is built in a single pass. Cutting it into
 _build_left/_build_centre/_build_right would move code without making anything

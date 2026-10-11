@@ -42,7 +42,7 @@ class _DarkTitleBarFilter(QObject):
                     self._seen.add(wid)
                     enable_dark_titlebar(obj)
             except Exception:
-                pass
+                logger.debug("dark titlebar not applied", exc_info=True)
         return False
 
 # --------------------------------------------------------------------------- #

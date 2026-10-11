@@ -22,12 +22,10 @@ class MemoryProfileMixin:
     def _list_memory_profiles(self) -> list:
         """Every profile directory under MEMORY_DIR.
 
-        A profile used to count only once it held one of the memory JSON files, so
-        a freshly created (still empty) profile was invisible: _new_memory_profile
-        made it active but findText() could not locate it, leaving the combo
-        showing the OLD name while the session wrote to the new one — and because
-        the combo was already on that old name, selecting it again fired no signal,
-        so there was no way back.
+        A profile counts even while empty: _new_memory_profile makes it active,
+        and if findText() could not locate it the combo would keep showing the
+        OLD name while the session wrote to the new one — and re-selecting that
+        old name would fire no signal, leaving no way back.
         """
         import gui as _g
         profiles = {"default"}

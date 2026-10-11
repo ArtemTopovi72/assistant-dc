@@ -74,7 +74,7 @@ def _one(s: str) -> str | None:
         if out != s:
             return out
     except Exception:
-        pass
+        logger.debug("stages.translate failed", exc_info=True)
     return None
 
 
@@ -175,7 +175,7 @@ def _keep(obj, prop, src):
         elif prop == "setText" and hasattr(obj, "setData"):
             obj.setData(_ROLE, src)
     except Exception:
-        pass
+        logger.debug("could not remember source text", exc_info=True)
 
 
 def _shown(obj, src):
@@ -184,7 +184,7 @@ def _shown(obj, src):
         if hasattr(obj, "property") and obj.property("_i18n_upper"):
             out = out.upper()          # section headers are shown in capitals
     except Exception:
-        pass
+        logger.debug("could not read _i18n_upper property", exc_info=True)
     return out
 
 

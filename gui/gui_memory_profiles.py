@@ -8,17 +8,11 @@ What it requires from the host: .store, .host, ._active_profile(), ._confirm(),
 .profile_combo). Nothing else, which is what makes the seam honest rather than
 cosmetic.
 """
-import json
-import os
-from pathlib import Path
-from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QComboBox, QFileDialog, QGridLayout, QInputDialog, QLabel, QLineEdit, QListWidget,
-    QListWidgetItem, QMenu, QMessageBox, QPlainTextEdit, QPushButton, QSpinBox, QTabWidget,
-    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QGridLayout, QInputDialog, QListWidget, QMessageBox, QPushButton, QVBoxLayout, QWidget,
 )
 from ui_scale import px
-from gui_common import MUTED, _FlowWidget, _card, _flow, _fmt_bytes, _fmt_ts, _section
+from gui_common import _fmt_bytes
 import logging
 
 logger = logging.getLogger("assistant.gui")
@@ -75,7 +69,7 @@ class MemoryProfilesMixin:
                 if self.store.create_profile(p):
                     created.append(p)
             except Exception:
-                pass
+                logger.debug("suggested profile %s not created", p, exc_info=True)
         self.refresh_all()
         self._toast(f"Created: {', '.join(created) or 'none (already exist)'}")
 

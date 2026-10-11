@@ -175,7 +175,7 @@ class LayoutMixin:
             avail = QApplication.primaryScreen().availableGeometry()
             w = min(w, int(avail.width() * 0.96))
             h = min(h, int(avail.height() * 0.94))
-        except Exception:
+        except AttributeError:
             pass
         return w, h
 
@@ -316,7 +316,7 @@ class LayoutMixin:
         try:
             self._settings().remove("last")   # so the default sticks until changed again
         except Exception:
-            pass
+            logger.debug("could not clear saved layout", exc_info=True)
         self._add_system("Layout reset to default.")
 
     def _persist_layout(self):

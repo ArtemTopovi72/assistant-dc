@@ -1,5 +1,4 @@
-"""The one language check every outgoing Telegram message passes (user,
-2026-09-27: «мучаемся каждый раз — то слова недоперевели … централизацию»).
+"""The one language check every outgoing Telegram message passes.
 
 _post_message hands every text and every inline button label here:
   1. a whole line / label that is a known stage phrase is translated
@@ -76,7 +75,7 @@ def _report(where: str, phrase: str, chat_id) -> None:
             fh.write(json.dumps({"ts": time.strftime("%Y-%m-%d %H:%M:%S"), "where": where,
                                  "chat": chat_id, "phrase": phrase[:300]}, ensure_ascii=False) + "\n")
     except Exception:
-        pass
+        logger.debug("could not write the untranslated-phrase log", exc_info=True)
 
 
 def guard_text(text: str, lang: str, chat_id=None, where: str = "text") -> str:

@@ -45,8 +45,8 @@ class _Poller(QThread):
 
 def _table(headers, stretch: int, rows: int = 4) -> QTableWidget:
     """`stretch` is the free-text column that takes the spare width and elides;
-    the rest fit their contents. Tall enough for `rows` rows plus the header --
-    it used to collapse to a sliver that cut its only row in half."""
+    the rest fit their contents. Tall enough for `rows` rows plus the header,
+    so a single row is never cut in half."""
     t = QTableWidget(0, len(headers))
     t.setHorizontalHeaderLabels(headers)
     t.verticalHeader().setVisible(False)

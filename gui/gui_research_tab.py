@@ -71,9 +71,8 @@ class ResearchTabMixin:
         if self._refuse_without_model():
             return
         if self._busy():
-            # This used to return with no trace at all. Deep research is minutes
-            # of work started from a button; a request that vanishes because
-            # something else was running looks like the button is broken.
+            # Deep research is minutes of work started from a button; tell the
+            # user why nothing started instead of silently returning.
             self._add_system('Busy — wait for the current task to finish and start the research again.')
             return
         self.ctx.cancel_event.clear()
@@ -149,7 +148,8 @@ class ResearchTabMixin:
             try:
                 self.research_web.setHtml("")
             except Exception:
-                pass
+                import gui as _g
+                _g.logger.debug("clearing the web report failed", exc_info=True)
             self.research_web.hide()
 
     def _set_report(self, markdown_text: str):
@@ -173,5 +173,5 @@ class ResearchTabMixin:
                 self.research_view.setMarkdown(markdown_text)
                 return
             except Exception:
-                pass
+                _g.logger.debug("setMarkdown failed; using plain text", exc_info=True)
         self.research_view.setPlainText(markdown_text)

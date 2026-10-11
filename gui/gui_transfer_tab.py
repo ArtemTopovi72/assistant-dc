@@ -158,7 +158,7 @@ class TransferWorker(QThread):
                     info = f"identity cosine = {c:.3f}" + (
                         "  ⚠ DRIFT" if c < 0.80 else "  ✓ identity preserved")
             except Exception:
-                pass
+                logger.debug("identity cosine unavailable", exc_info=True)
             self.done.emit({"output": out, "info": info})
         except Exception as exc:
             logger.exception("Transfer worker failed")
@@ -583,7 +583,7 @@ class TransferTab(QWidget):
                 self.host.images_panel.add_image(out)
                 self.host._add_system(f"Transfer complete — saved {os.path.basename(out)}.")
             except Exception:
-                pass
+                logger.warning("could not show the transfer result in the UI", exc_info=True)
             self.status.setText("Done. " + (d.get("info") or ""))
         else:
             self.status.setText("Plan ready." if d.get("info") else "Done.")

@@ -5,11 +5,10 @@ worker plus whatever the tabs are running. Extracted from gui.py because it is
 the one place that answers that question, and because the teardown join is
 safety code that deserves to be readable on its own.
 
-_thread_hosts / _live_threads / _join_live_threads exist because closeEvent
-used to join five of roughly twelve workers, so the rest were still running
-when the QApplication went away — a segfault, not an exception. They enumerate
-the hosts instead of naming threads one by one, which is what stops the list
-from going stale the next time a tab grows a worker.
+_thread_hosts / _live_threads / _join_live_threads exist so closeEvent joins
+every worker: one still running when the QApplication goes away is a segfault,
+not an exception. They enumerate the hosts instead of naming threads one by
+one, which keeps the list from going stale when a tab grows a worker.
 
 config is read at CALL time inside _tab_job_running: GUI_SERIALIZE_GPU_JOBS is
 a switch a suite flips, and binding it at import would freeze it.
