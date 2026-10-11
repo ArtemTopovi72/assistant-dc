@@ -76,8 +76,6 @@ check("generate_image itself is never gated by this",
 
 # ── the next turn starts clean ───────────────────────────────────────────────
 import graph as G
-st = dict(accepted, user_input="убери фон")
-st = G.translate_node(types.SimpleNamespace(), st) if False else st   # translate needs an LLM
 # translate_node pops the key before anything else; assert on its source, since
 # running it would call the translator.
 import inspect

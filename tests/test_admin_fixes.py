@@ -98,8 +98,8 @@ check("banned user's status is still 'banned' after a stale approve press",
       fresh.status == "banned", fresh.status)
 texts = [str(p) for _, p in sent]
 check("admin was told the approval did not happen",
-      any("not_pending".replace("_", " ") in t.lower() or "не изменено" in t or
-          "banned" in t.lower() or "banned".replace("banned", "") for t in texts) or
+      any("not pending" in t.lower() or "не изменено" in t or
+          "banned" in t.lower() for t in texts) or
       any("no change" in t.lower() or "не изменено" in t for t in texts), texts)
 check("outcome code from approve_user itself is 'not_pending' for a banned user",
       bot.approve_user(BANNED) == "not_pending")

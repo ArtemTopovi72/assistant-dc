@@ -160,7 +160,7 @@ bot._dispatch(m(text="📚 Аудиокнига"))
 check("an unfinished book: the button offers to finish it (1 chapter left)",
       wait(lambda: any("недочитанная" in t and "осталось глав 1" in t for _, t in bot.sent[-3:]), 10), bot.sent[-2:])
 check("...with Finish / New buttons", any(k and "bk:resume" in json.dumps(k) and "bk:new" in json.dumps(k) for k in kb[-3:]))
-bot._handle_callback(CID, "bk:resume") if hasattr(bot, "_handle_callback") else bot._cb_book(CID, "bk:resume")
+bot._cb_book(CID, "bk:resume")
 check("resuming voices ONLY the remaining chapter", wait(lambda: len(VOICES) == 1, 40) and CAPS and "2/2" in CAPS[0]
       and SPOKEN and SPOKEN[0][1].startswith("Глава 2"), (CAPS, SPOKEN[:1]))
 check("and the job file is gone afterwards", wait(lambda: not os.path.exists(os.path.join(_bd, "job.json")), 10))
