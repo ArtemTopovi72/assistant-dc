@@ -37,7 +37,7 @@ def _sse(wfile, obj):
     wfile.write(b"data: " + json.dumps(obj).encode() + b"\n\n"); wfile.flush()
 
 
-def _delta(text=None, tool=None):
+def _delta(text=None):
     d = {}
     if text is not None: d["content"] = text
     return {"choices": [{"index": 0, "delta": d}]}

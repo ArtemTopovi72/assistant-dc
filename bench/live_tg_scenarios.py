@@ -105,7 +105,7 @@ def sc_music(bot, ctx):
     # chat never looks busy: wait on the audio itself.
     evs = u.wait(until=lambda e: e["method"] in ("sendAudio", "sendDocument"),
                  timeout=900, quiet=400)
-    dt = timed("music", "song", t0, evs)
+    timed("music", "song", t0, evs)
     sanity("music", evs, expect_file="sendAudio")
     aud = D.files_of(evs, "sendAudio")
     if aud:
@@ -247,8 +247,7 @@ def sc_search(bot, ctx):
     timed("search", "web", t0, evs)
     sanity("search", evs)
     reply = " ".join(texts(evs))
-    import re as _re
-    if not _re.search(r"\d{2,3}[.,]?\d*", reply):
+    if not re.search(r"\d{2,3}[.,]?\d*", reply):
         note("search", "no number in a rate answer", reply=reply[:200])
     for t in texts(evs):
         print("     msg:", t[:300].replace("\n", " | "))
@@ -390,7 +389,7 @@ def sc_bare_photo_buttons(bot, ctx):
     u = D.Chat(bot, 910016, "Oksana")
     src = os.path.join(D.ROOT, "runtime", "bottle_v3_524263226.png")
     t0 = time.time()
-    m = u.photo(src)
+    u.photo(src)
     evs = u.wait(timeout=600, quiet=8)
     timed("bare_photo_buttons", "bare photo", t0, evs)
     sanity("bare_photo_buttons", evs)
@@ -802,7 +801,6 @@ def sc_cover(bot, ctx):
 
 def sc_sandbox_links(bot, ctx):
     """File names in a sandbox reply are t.me deep links; tapping one sends the file."""
-    import re as _re
     import code_sandbox as _cs
     import sandbox_access as _sa
     u = D.Chat(bot, 910032, "Lena")
@@ -820,7 +818,7 @@ def sc_sandbox_links(bot, ctx):
     sanity("sandbox_links", evs)
     html = "\n".join(e["payload"].get("text") or "" for e in evs if e["method"] == "sendMessage")
     print("     reply:", html[:400].replace("\n", " | "))
-    toks = _re.findall(r'href="https://t\.me/[^?"]+\?start=(f_[0-9a-f]{16})"', html)
+    toks = re.findall(r'href="https://t\.me/[^?"]+\?start=(f_[0-9a-f]{16})"', html)
     if not toks:
         note("sandbox_links", "no file link in the reply", reply=html[:500])
         return u

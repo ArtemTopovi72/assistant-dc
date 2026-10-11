@@ -132,7 +132,7 @@ def main(which):
                   f"  DER {d:.3f}  cpWER {w:.3f}")
         if ders:
             print(f"== {name}: mean DER {sum(ders) / len(ders):.3f}  mean cpWER {sum(wers) / len(wers):.3f}  ({len(ders)} clips)")
-    json.dump({k: v for k, v in results.items()}, open(os.path.join(SET, "results.json"), "w", encoding="utf-8"),
+    json.dump(results, open(os.path.join(SET, "results.json"), "w", encoding="utf-8"),
               ensure_ascii=False)
 
 

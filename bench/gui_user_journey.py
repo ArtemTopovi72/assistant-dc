@@ -58,11 +58,10 @@ if not _up(config.LM_STUDIO_URL.replace("/chat/completions", "/models")):
 # it is instead of spending ten minutes to report the wrong one.
 _NEED_FREE_MIB = 18000
 try:
-    import subprocess as _sp
-    _free = int(_sp.run(["nvidia-smi", "--query-gpu=memory.free",
-                         "--format=csv,noheader,nounits"],
-                        capture_output=True, text=True, timeout=20,
-                        stdin=_sp.DEVNULL).stdout.strip().splitlines()[0])
+    _free = int(subprocess.run(["nvidia-smi", "--query-gpu=memory.free",
+                                "--format=csv,noheader,nounits"],
+                               capture_output=True, text=True, timeout=20,
+                               stdin=subprocess.DEVNULL).stdout.strip().splitlines()[0])
 except Exception:
     _free = _NEED_FREE_MIB          # cannot tell -- go ahead and try
 if _free < _NEED_FREE_MIB:

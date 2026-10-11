@@ -14,11 +14,10 @@ import image as I
 
 _TMP = Path(tempfile.mkdtemp(prefix="imglive_"))
 RESULTS = []
-import os as _os
 def check(name, cond, detail=""):
     RESULTS.append((name, bool(cond)))
     print("[" + ("PASS" if cond else "FAIL") + "] " + name + ("" if cond or not detail else " - " + detail))
-    if not cond and _os.environ.get("PYTEST_CURRENT_TEST"):
+    if not cond and os.environ.get("PYTEST_CURRENT_TEST"):
         raise AssertionError(str(name) + (": " + str(detail) if detail else ""))
 
 def _png(name, w=512, h=512, col=(90, 130, 170)):
@@ -100,8 +99,7 @@ def test_redraw(src):
 
 def test_inpaint(src):
     ctx = Ctx()
-    from PIL import Image as PILImage
-    mask = PILImage.new("L", (512, 512), 0)
+    mask = Image.new("L", (512, 512), 0)
     # paint a white square region to inpaint
     for y in range(150, 350):
         for x in range(150, 350):
