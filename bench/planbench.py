@@ -160,9 +160,6 @@ def _img_fail(name, args, n, counts, rng):
     return ("[TOOL ERROR] Image generation failed — the rendering server is "
             "unavailable (connection refused). The image was NOT created.", False)
 
-def _img_ok(name, args, n, counts, rng):
-    return (_OK_IMAGE, True)
-
 
 def make_scenarios():
     S = []
