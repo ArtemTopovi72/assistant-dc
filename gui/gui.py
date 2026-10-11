@@ -7,7 +7,6 @@ Launched from assistant.main() when config.USE_GUI is true. Layout:
 All heavy work (Whisper, the LangGraph agent, F5-TTS) runs on background
 QThreads so the window, camera preview and audio visualizer stay smooth.
 """
-import json
 import logging
 import os
 import random
