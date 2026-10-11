@@ -588,8 +588,8 @@ def edit_region_contained_via_firered(
         _ftw, _fth = Image.open(fired).size
         logger.info("contained-firered: FireRed tile out %dx%d (expected crop %dx%d): %s",
                     _ftw, _fth, cw, ch, os.path.basename(fired))
-    except Exception:
-        pass
+    except Exception as err:
+        logger.debug("could not read the FireRed tile size for the log: %s", err)
 
     whole_region = False
     try:

@@ -72,8 +72,8 @@ def on_control_server(ctx=None, start_timeout: int = 300):
                 import requests
                 requests.post(comfy_client.COMFY_URL.rstrip("/") + "/free",
                               json={"unload_models": True, "free_memory": True}, timeout=10)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("could not free the live server's models: %s", exc)
             rt = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "runtime")
             os.makedirs(rt, exist_ok=True)      # a fresh install has no runtime/ yet
             log = open(os.path.join(rt, "qi21.log"), "ab")
@@ -87,7 +87,7 @@ def on_control_server(ctx=None, start_timeout: int = 300):
                     proc.kill()
                     try:        # reaped: a half-started server still holds VRAM
                         proc.wait(30)
-                    except Exception:
+                    except (subprocess.TimeoutExpired, OSError):
                         pass
                     log.close()
                     raise RuntimeError("cancelled" if cancelled else "qi21 did not start (see runtime/qi21.log)")
@@ -107,7 +107,7 @@ def on_control_server(ctx=None, start_timeout: int = 300):
                     proc.kill()
                     try:
                         proc.wait(30)
-                    except Exception:
+                    except (subprocess.TimeoutExpired, OSError):
                         pass
                 log.close()
 

@@ -64,8 +64,8 @@ class _WorkerReader:
             try:
                 self._p.kill()
                 self._p.wait(timeout=10)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("could not stop the OCR worker: %s", exc)
             raise RuntimeError("ocr_worker did not start: %r" % first[:200])
         self._io = threading.Lock()
 
@@ -136,8 +136,8 @@ def read(image_path: str) -> Optional[list]:
         im = Image.open(image_path).convert("RGB")
         if max(im.size) < 1600:
             variants.append(np.asarray(im.resize((im.width * 2, im.height * 2), Image.LANCZOS)))
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("upscaled OCR variant unavailable: %s", exc)
     out = []
     for v in variants:
         try:

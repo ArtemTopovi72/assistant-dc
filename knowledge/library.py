@@ -201,8 +201,8 @@ def _extract_epub(path: Path) -> str:
             rootfile = csoup.find("rootfile")
             if rootfile and rootfile.get("full-path"):
                 opf_name = rootfile["full-path"]
-        except Exception:
-            pass
+        except Exception as err:
+            logger.debug("EPUB container.xml unreadable, scanning instead: %s", err)
         ordered: List[str] = []
         if opf_name and opf_name in names:
             try:
@@ -451,8 +451,8 @@ class Library:
             model = getattr(config, "EMBED_MODEL", model) or model
             # Neural reranker on CPU (config.LIBRARY_CROSS_ENCODER); off in test runs.
             ce_model = "" if os.getenv("F5_TEST_RUN") else (getattr(config, "LIBRARY_CROSS_ENCODER", "") or "")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("config unavailable, using the default embedder settings: %s", exc)
         self.kb = knowledge.KnowledgeBase(
             db_path or DEFAULT_DB,
             embedder=knowledge.Embedder(base_url=base, model=model))

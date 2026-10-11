@@ -132,8 +132,10 @@ def main() -> int:
             logger.exception("  FAILED for %s\n", path)
         finally:
             if kb is not None:
-                try: kb.close()
-                except Exception: pass
+                try:
+                    kb.close()
+                except Exception as exc:
+                    logger.debug("kb.close failed: %s", exc)
 
     logger.info("Done. %d chunk(s) re-embedded.", total_re)
     return 0

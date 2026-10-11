@@ -230,7 +230,7 @@ def _extract_json(raw: str) -> Optional[dict]:
         chunks = [text]
         try:
             whole = json.loads(text)
-        except Exception:
+        except (ValueError, RecursionError):
             pass
         else:
             if isinstance(whole, dict):

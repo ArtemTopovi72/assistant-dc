@@ -129,8 +129,8 @@ def run(ctx) -> bool | None:
 def _run_once(ctx) -> bool | None:
     try:
         ctx.last_llm_error = ""
-    except Exception:
-        pass
+    except Exception as err:
+        logger.debug("could not reset ctx.last_llm_error: %s", err)
     try:
         answer = _ask(ctx)
     except Exception as exc:

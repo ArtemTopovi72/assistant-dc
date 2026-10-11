@@ -165,7 +165,7 @@ def log_edit_decision(*, request: str, classifier: str, tool: str, workflow: str
         rec.update(extra)
     try:
         logger.info("EDIT_DECISION %s", json.dumps(rec, ensure_ascii=False))
-    except Exception:
+    except (TypeError, ValueError):
         pass
     try:
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -744,6 +744,6 @@ def _inpaint_region_impl(
         try:
             logger.info("EDIT PATH=whole-frame-firered RESULT [BUILD_ID=%s]: out %s | RETURNED PATH=%s",
                         IMAGE_BUILD_ID, _source_dims(out), out)
-        except Exception:
-            pass
+        except Exception as err:
+            logger.debug("could not log the whole-frame FireRed path: %s", err)
     return out

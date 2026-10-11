@@ -1569,8 +1569,8 @@ def _strip_vocals(path: str) -> None:
         try:
             import mashup_stems
             mashup_stems.release_separator()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("could not release the stem separator: %s", exc)
 
 
 def _generate_yue2(ctx, lyrics: str, style: str, seed: int, prefs: Optional[dict] = None) -> str:

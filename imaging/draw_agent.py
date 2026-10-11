@@ -827,8 +827,8 @@ def unphoto_on_repeat_mismatch(layout: dict, notes: list, request: str = "") -> 
         import ideogram_layout as _il
         if _il.wants_realism(request or ""):
             return layout, ""
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("realism check unavailable, keeping the default: %s", exc)
     layout.update(_ILLUSTRATION_STYLE)
     return layout, "the photographic default kept overriding the colour -- drawing it as an illustration"
 

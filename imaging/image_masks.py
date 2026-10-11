@@ -261,8 +261,8 @@ def _extend_mask_to_paired_changes(crop, res, mcrop, *, max_blobs: int = 2):
         try:
             import identity_metrics as _idm
             fbox = _face_box_of(crop, "_pair_facechk", _idm)
-        except Exception:
-            pass
+        except Exception as err:
+            logger.debug("face-box check unavailable: %s", err)
         picked = []
         for i in range(1, n):
             sz = int(stats[i, cv2.CC_STAT_AREA])
@@ -362,8 +362,8 @@ def _extend_mask_to_removal_changes(crop, res, mcrop, *, max_total_frac: float =
         try:
             import identity_metrics as _idm
             fbox = _face_box_of(crop, "_rm_facechk", _idm)
-        except Exception:
-            pass
+        except Exception as err:
+            logger.debug("face-box check unavailable: %s", err)
         # Trust level: a substantial mask means segmentation FOUND the target, so
         # recovery only picks up what the composite would narrowly miss (siblings,
         # spill) — size- and proximity-gated. A near-empty mask means segmentation

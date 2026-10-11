@@ -181,8 +181,8 @@ def _ground_region_phrase(ctx, image_path: str, region: str) -> str:
         if close:
             logger.info("region grounding: %r -> %r (fuzzy)", region, close[0])
             return close[0]
-    except Exception:
-        pass
+    except Exception as err:
+        logger.debug("fuzzy region match failed: %s", err)
     # Ask the small LLM to map the request onto exactly one visible region (or NONE).
     try:
         sys = ("Map the user's edit target to ONE region from the provided list of "
@@ -213,8 +213,8 @@ def _ground_region_phrase(ctx, image_path: str, region: str) -> str:
         if close:
             logger.info("region grounding: LLM pick %r -> %r (fuzzy)", pick, close[0])
             return close[0]
-    except Exception:
-        pass
+    except Exception as err:
+        logger.debug("fuzzy pick match failed: %s", err)
     return region                          # map returned something off-list; keep original
 
 

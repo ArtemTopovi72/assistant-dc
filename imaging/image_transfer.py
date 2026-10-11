@@ -533,8 +533,8 @@ def transfer_with_references(ctx, target_path, references, instruction=None, *,
             try:
                 import identity_metrics as idm
                 metrics["identity_cosine_after_guard"] = idm.identity_cosine(target_path, out)
-            except Exception:
-                pass
+            except Exception as err:
+                logger.debug("identity cosine after the guard unavailable: %s", err)
 
     try:
         log_edit_decision(request=f"transfer instr={instr!r}",
@@ -543,8 +543,8 @@ def transfer_with_references(ctx, target_path, references, instruction=None, *,
                           workflow="workflow_firered_edit.json + image2/image3 (Qwen multi-image)",
                           returned_file=out, source=target_path,
                           extra={"n_refs": len(refs), **metrics})
-    except Exception:
-        pass
+    except Exception as err:
+        logger.debug("could not log the transfer decision: %s", err)
     return out
 
 
@@ -763,8 +763,8 @@ def transfer_reference_contained(ctx, target_path, ref, instruction=None, *,
                           tool="transfer_reference_contained",
                           workflow="contained-firered + image2 (mask+composite-back)",
                           returned_file=out, source=target_path, extra=metrics)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("could not log the contained-transfer decision: %s", exc)
     return out
 
 

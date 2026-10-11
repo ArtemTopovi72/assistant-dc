@@ -502,8 +502,8 @@ def _route_edit_request(
         if not out and ctx is not None:
             try:
                 ctx.last_text_add_failure = (_read, _want)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("could not record the text-add failure on ctx: %s", exc)
         return category, out
     elif category == "text_edit":
         # No layout at all: nothing here can change what a sign says.

@@ -170,8 +170,8 @@ def _sung_words(segs) -> list:
             if re.fullmatch(r"\d+[.,]?", t):
                 try:
                     t = num2words(int(re.sub(r"\D", "", t)), lang="ru", to="ordinal", gender="n")
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("num2words failed, keeping the digit token: %s", exc)
             out.append({"w": t, "s": w.start, "e": w.end})
     return out
 
