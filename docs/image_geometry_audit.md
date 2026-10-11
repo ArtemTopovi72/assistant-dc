@@ -13,7 +13,8 @@ lines). This is the evidence pass that preceded the fixes; they are described in
 > `imaging/image_transforms.py` (`relight_image_with_comfy`) and
 > `imaging/image_router.py` (`route_edit_request`, `_orchestrate_multi_op`).
 > `replace_background_with_comfy` and `redraw_image_with_comfy` no longer exist
-> as functions.
+> as functions, and `upscale`, `restore` and `outpaint` have no backend any more
+> (FireRed is the only edit engine), so those rows describe removed pipelines.
 
 Runtime subject-bounding-box measurement requires a live ComfyUI+GPU run; the
 resize transforms below are **deterministic from code**, so the pixel-dimension
