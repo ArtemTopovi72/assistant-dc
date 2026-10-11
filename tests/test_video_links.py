@@ -1,6 +1,6 @@
 """A video link is downloaded and watched, not read as a page (live 10-03: a
 YouTube Shorts link got «я не умею смотреть видео по ссылкам»)."""
-import os, sys, types
+import sys, types
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bot"))

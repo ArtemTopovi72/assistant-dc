@@ -7,7 +7,6 @@ an unpacked-and-changed folder buys exactly one more round, for pack_archive.
 import os, sys, json, zipfile, threading
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import logging; logging.basicConfig(level=logging.CRITICAL)
-from pathlib import Path
 
 import graph as graph_mod
 import llm as llm_mod

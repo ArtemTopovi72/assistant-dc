@@ -12,7 +12,7 @@ tool layer, where it cannot be talked out of.
 
 Run: venv/Scripts/python.exe tests/test_edit_intent_guard.py
 """
-import os, sys, types, tempfile, inspect
+import os, sys, tempfile, inspect
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass

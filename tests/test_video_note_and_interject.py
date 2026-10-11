@@ -17,7 +17,7 @@
 
 Run: venv/Scripts/python.exe tests/test_video_note_and_interject.py
 """
-import os, sys, tempfile, threading, time
+import os, sys, tempfile, threading
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass

@@ -19,7 +19,7 @@ Covered here:
 
 Run: venv/Scripts/python.exe tests/test_tg_pipeline.py
 """
-import sys, os, io, json, time, types, tempfile, threading
+import sys, os, json, time, types, tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")

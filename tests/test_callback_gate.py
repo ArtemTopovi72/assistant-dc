@@ -13,7 +13,7 @@ keep their own authorization and are exempt.
 
 Run: venv/Scripts/python.exe tests/test_callback_gate.py
 """
-import os, sys, tempfile, time
+import os, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass

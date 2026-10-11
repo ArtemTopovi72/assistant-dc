@@ -19,7 +19,6 @@ Run: venv/Scripts/python.exe tests/test_document_delivery_contract.py
 """
 import ast
 import os
-import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

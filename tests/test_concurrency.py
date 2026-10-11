@@ -46,7 +46,6 @@ print("1. MORE THAN ONE TASK MAY BE IN FLIGHT")
 print("=" * 70)
 check("the bot runs several consumers", T._MAX_CONSUMERS > 1, T._MAX_CONSUMERS)
 os.environ["TG_WORKERS"] = "7"
-import importlib
 check("the count is configurable via TG_WORKERS",
       max(1, int(os.getenv("TG_WORKERS", "3"))) == 7)
 os.environ.pop("TG_WORKERS", None)

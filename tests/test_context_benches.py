@@ -1,5 +1,5 @@
 """bench/context_cost + context_acon: the counting and the rule merge."""
-import json, os, sys
+import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "bench"))
 import context_cost as CC

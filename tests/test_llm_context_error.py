@@ -14,7 +14,7 @@ was in the response the whole time.
 
 Run: venv/Scripts/python.exe tests/test_llm_context_error.py
 """
-import io, json, logging, os, sys
+import json, logging, os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass

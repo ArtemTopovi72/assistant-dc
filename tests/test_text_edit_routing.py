@@ -8,7 +8,7 @@ spell. The only thing that can is the layout the picture was composed from.
 
 Run: venv/Scripts/python.exe tests/test_text_edit_routing.py
 """
-import os, sys, json, types, tempfile
+import os, sys, types, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass

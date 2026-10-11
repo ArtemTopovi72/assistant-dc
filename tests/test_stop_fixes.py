@@ -202,7 +202,7 @@ check("a batch that arrived AFTER an old Stop request is still processed",
 # ══════════════════════════════════════════════════════════════════════════
 section("4. Deep research: stale cancel_event.clear() call removed")
 
-import inspect, re
+import inspect
 src = inspect.getsource(T.TelegramBot._run_task_inner)
 # Only a comment referencing the OLD call should remain, never an actual
 # (uncommented) call to it.

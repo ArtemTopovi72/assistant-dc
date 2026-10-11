@@ -5,7 +5,7 @@ face-detailer) need a live image server and are out of scope here.
 
 Run: venv/Scripts/python.exe tests/test_image_pure.py
 """
-import os, sys, types, tempfile
+import os, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _sweep_stub  # noqa: F401  the model's narrow reads, stubbed

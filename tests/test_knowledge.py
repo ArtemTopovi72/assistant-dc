@@ -4,7 +4,7 @@ index against a real temp DB, using the REAL live LM Studio embedding endpoint
 Embedder for the degrade-to-FTS-only and embed-failure branches.
 Run: venv/Scripts/python.exe tests/test_knowledge.py
 """
-import os, sys, tempfile, json, time
+import os, sys, tempfile, json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass

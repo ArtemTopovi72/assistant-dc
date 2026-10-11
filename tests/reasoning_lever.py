@@ -3,7 +3,7 @@
 Tests four configs on the same model/task (no tools), capturing whether the raw
 content still contains a <think> block and how many completion tokens were spent.
 """
-import sys, json, time, threading
+import sys, time, threading
 from pathlib import Path
 try: sys.stdout.reconfigure(encoding="utf-8")
 except Exception: pass

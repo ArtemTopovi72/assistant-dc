@@ -7,7 +7,7 @@ request, plainly visible defects come back as a fix request (once per turn),
 flowcharts are steered to graphviz (dot is in the image), and an image built
 from an older Dockerfile is rebuilt instead of trusted.
 """
-import os, sys, io, types, tempfile
+import os, sys, types, tempfile
 os.environ.setdefault("F5_TEST_RUN", "1")
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass

@@ -12,7 +12,7 @@ fake/malformed payloads. Focus: the classes of GUI bug the phase names —
 Run headless:  QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe -m pytest tests/test_gui_robustness.py -q
 Or directly:   QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_robustness.py
 """
-import os, sys, threading, types, time
+import os, sys, threading, types
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("USE_GUI", "0")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

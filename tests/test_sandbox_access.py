@@ -6,7 +6,7 @@ prefs blob, a typo in a hand-edited row, a store that raises — every one of th
 has to come back `off`, because the alternative is a stranger executing code on
 someone's desktop.
 """
-import sys, os, tempfile
+import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pytest
 import sandbox_access as A

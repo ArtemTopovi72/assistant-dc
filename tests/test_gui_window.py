@@ -7,7 +7,7 @@ touching the network. Blocking dialogs and audio/camera devices are faked.
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_window.py
 """
-import os, sys, types, tempfile, threading, contextlib
+import os, sys, types, tempfile, threading
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("USE_GUI", "0")
 # QtWebEngine's setHtml segfaults in headless/offscreen (no GL context). Force the

@@ -8,7 +8,7 @@ Family-3 fabrication down by payload type, and prints the three rankings
 
 Usage: python tests/planbench_report.py [tests/planbench_9b_full.json]
 """
-import sys, json, math, re
+import sys, json, math
 from pathlib import Path
 
 sys.stdout.reconfigure(encoding="utf-8")

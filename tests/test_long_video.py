@@ -6,7 +6,7 @@ portions with absolute timecodes, delivering each portion as it is ready,
 and ⛔ Stop ends it between portions. The heavy parts (download, ASR,
 vision, retelling) are stubbed; the cutting and the sheet are real ffmpeg.
 """
-import os, sys, tempfile, threading, time, subprocess
+import os, sys, tempfile, threading, subprocess
 from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _DATA = tempfile.mkdtemp(prefix="tg_long_video_")

@@ -8,7 +8,7 @@ required, by stubbing the heavy image ops and the identity metrics:
      the current state (so the next op still builds on the last good image);
   3. an op that legitimately changes identity (face_edit) is accepted.
 """
-import sys, types
+import sys
 from pathlib import Path
 _ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT))

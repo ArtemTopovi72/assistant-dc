@@ -9,7 +9,7 @@ raw, and records usage + unstripped content + tool_calls. No app-side stripping.
 
 Writes docs/reasoning_runtime_evidence.json and prints a summary table.
 """
-import json, sys, copy
+import json, sys
 from pathlib import Path
 try: sys.stdout.reconfigure(encoding="utf-8")
 except Exception: pass

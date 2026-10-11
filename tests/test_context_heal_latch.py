@@ -22,7 +22,7 @@ PARALLEL 4 served two concurrent tool-bearing requests in 11 s each.
 
 Run: venv/Scripts/python.exe tests/test_context_heal_latch.py
 """
-import os, sys, time
+import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass

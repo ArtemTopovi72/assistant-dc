@@ -11,7 +11,7 @@ Run: .\\venv\\Scripts\\python.exe tests\\test_agent_dialogue.py
 # tests/, there is no pass/fail signal here for run_all.py to act on, so
 # auto-running it on every full sweep would only burn the card for nothing.
 NOT_IN_RUN_ALL = True
-import sys, os, time, json
+import sys, os, time
 sys.path.insert(0, ".")
 
 # The Windows console is cp1251 here: Cyrillic replies and the ✓/✗ marks below

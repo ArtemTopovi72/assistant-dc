@@ -5,7 +5,7 @@ new test would not have caught the original bug.
 
 Run: PYTHONIOENCODING=utf-8 venv/Scripts/python.exe tests/_mut_cancel_bcast.py
 """
-import os, sys, shutil, tempfile
+import os, sys
 
 from _mut_common import ROOT, first_fail, run_suite, utf8_stdout
 

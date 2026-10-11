@@ -13,7 +13,7 @@ substituted, and that an edit is refused here rather than redrawn.
 
 Run: venv/Scripts/python.exe tests/test_strict_ideogram.py
 """
-import os, sys, types, tempfile
+import os, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass

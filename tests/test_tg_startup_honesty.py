@@ -14,7 +14,7 @@ no matching "Bot started", and every message the user sent went unanswered.
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_tg_startup_honesty.py
 """
-import sys, os, types, tempfile
+import sys, os, tempfile
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("USE_GUI", "0")

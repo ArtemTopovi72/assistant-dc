@@ -5,7 +5,7 @@ _band_masks, _is_continuation, _color_harmonize, _seamless_clone_arr,
 _laplacian_blend, _blend_region, _seam_blend_tile, _mask_quality_ok.
 Run: venv/Scripts/python.exe tests/test_image_synthetic_blend.py
 """
-import os, sys, tempfile, time
+import os, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass

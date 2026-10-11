@@ -3,7 +3,7 @@
 Live 2026-09-14: «при загрузке и выгрузке модели экран мерцает и открываются
 питон терминалы» -- every `lms load/unload` around a render popped a console.
 """
-import os, sys, subprocess, inspect
+import os, sys, subprocess
 os.environ.setdefault("F5_TEST_RUN", "1")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")

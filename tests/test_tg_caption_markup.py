@@ -129,7 +129,6 @@ print("5. A rejected caption never costs the user the FILE")
 print("=" * 70)
 # Drive the real _send_document against a fake Telegram that rejects any HTML
 # caption. Nothing here touches the network: only requests.post is replaced.
-import types
 
 class _FakeTG:
     def __init__(self, limit_reject=True):

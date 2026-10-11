@@ -6,7 +6,7 @@ Stubs _acquire_page / call_llm_simple / _think_call / rerank module / collect_so
 / crawl_pages so every branch runs deterministically without live network/GPU.
 Run: venv/Scripts/python.exe tests/test_deep_research_synth.py
 """
-import os, sys, tempfile, threading, json as _json
+import os, sys, tempfile, threading
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass

@@ -5,7 +5,7 @@ scale_style scaling primitives. Pure logic + real filesystem, a lightweight
 fake screen object stands in for QScreen (no real display needed).
 Run: venv/Scripts/python.exe tests/test_ui_scale.py
 """
-import os, sys, tempfile, json, types
+import os, sys, tempfile, json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
