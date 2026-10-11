@@ -90,7 +90,7 @@ def translate_node(ctx: Context, state: AgentState) -> AgentState:
         state["edit_intent"] = True
     # The previous reply disambiguates a short follow-up: «что посмотреть в
     # первый день?» after a Kazan trip plan became "what to watch" (films)
-    # and the answer lost the city (live 2026-09-28).
+    # and the answer lost the city.
     _prev = next((str(m.get("content") or "") for m in reversed(state.get("messages") or [])
                   if m.get("role") == "assistant" and m.get("content")), "")
     try:
@@ -106,7 +106,7 @@ def translate_node(ctx: Context, state: AgentState) -> AgentState:
 
 def _add_earlier_pictures(ctx, state, summary: str) -> str:
     """«что общего у двух фото?»: the overview covers the current picture only,
-    and the answer was "you sent just one photo" (live 2026-10-08). When the
+    and the answer was "you sent just one photo". When the
     user relates several pictures, the chat's earlier ones are read with the
     same question and put next to it."""
     earlier = [p for p in (getattr(ctx, "image_undo", None) or [])
@@ -119,7 +119,7 @@ def _add_earlier_pictures(ctx, state, summary: str) -> str:
                           "they sent together (compare them, what they share, which is "
                           "better, both of them)?", text, default=False):
         return summary
-    parts = ["Latest picture:" + chr(10) + summary]
+    parts = ["Latest picture:\n" + summary]
     for i, path in enumerate(earlier, 1):
         try:
             with open(path, "rb") as fh:
@@ -129,8 +129,8 @@ def _add_earlier_pictures(ctx, state, summary: str) -> str:
             logger.warning("earlier picture could not be read", exc_info=True)
             continue
         if got:
-            parts.append("Earlier picture %d of %d sent in this chat:" % (i, len(earlier)) + chr(10) + got)
-    return (chr(10) * 2).join(parts) if len(parts) > 1 else summary
+            parts.append("Earlier picture %d of %d sent in this chat:" % (i, len(earlier)) + "\n" + got)
+    return "\n\n".join(parts) if len(parts) > 1 else summary
 
 
 def vision_agent_node(ctx: Context, state: AgentState) -> AgentState:
@@ -274,7 +274,7 @@ def speakable(ctx: Context, text: str) -> str:
 def spoken_text(ctx: Context, text: str) -> str:
     """Everything a reply goes through before a voice says it: retold as speech,
     then numbers, dates and lists spelled for the engine. One function for every
-    path that voices a reply -- the Telegram fallback used to read the raw text."""
+    path that voices a reply."""
     return post_process_answer(speakable(ctx, text))
 
 
@@ -371,7 +371,7 @@ def is_picture_question(ctx, state) -> bool:
 
 def _file_newer_than(ctx, image_path) -> bool:
     """A file landed in the working folder after this picture: «в чём там ошибка?»
-    is about the file (live 10-03: crash logs forwarded, the question re-read the
+    is about the file (crash logs forwarded, the question re-read the
     last picture and critiqued an apple)."""
     root = getattr(getattr(ctx, "sandbox", None), "root", None)
     if root is None:
@@ -388,8 +388,8 @@ def needs_relook(ctx: Optional[Context], state: AgentState) -> bool:
 
     Two cases. The model reads the message as about the picture (intent
     about_picture), or the user pointed at it.
-    And ANY question when the working image is a photo the user sent: live
-    (journey 2), a receipt was photographed and read, then "which item is the
+    And ANY question when the working image is a photo the user sent: a
+    receipt was photographed and read, then "which item is the
     most expensive?" was answered with "I need to see the receipt" -- the first
     look had summarised the items and dropped the prices, and nothing routed
     the follow-up back to the photo. One extra vision call is cheap; a wrong
@@ -401,8 +401,8 @@ def needs_relook(ctx: Optional[Context], state: AgentState) -> bool:
     if not last_path or not Path(last_path).exists():
         return False
     # Someone else's forwarded words are not the user's question: «За кого
-    # проходит?» in a forwarded chat re-read the last photo four tiles deep
-    # (live 2026-09-29) -- the read sees the user's own words only.
+    # проходит?» in a forwarded chat re-read the last photo four tiles deep;
+    # the read sees the user's own words only.
     if _file_newer_than(ctx, last_path):
         return False
     r = _picture_read(ctx, state)
@@ -413,7 +413,7 @@ def needs_relook(ctx: Optional[Context], state: AgentState) -> bool:
     if r["about_picture"] or getattr(ctx, "image_pointed_at", False):
         return True
     # Any question about a photo the user sent or a video they sent: a receipt
-    # read once, then "which item is the most expensive?" (journey 2).
+    # read once, then "which item is the most expensive?".
     return bool(r["is_question"]) and (is_video_sheet(last_path)
                                       or Path(last_path).name.startswith(_USER_UPLOAD_STEM))
 

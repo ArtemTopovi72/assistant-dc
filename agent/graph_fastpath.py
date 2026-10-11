@@ -37,28 +37,16 @@ logger = logging.getLogger("assistant.graph")
 _UNTRUSTED_DATA_TOOLS = {"read_clipboard", "search", "ozon_product", "ozon_reviews", "ozon_shop"}
 
 
-_DELIVERABLE_TOOLS = ("generate_image", "generate_video", "create_presentation", "find_photo")
 _IMAGE_ACTION_TOOLS = {"generate_image", "redraw_image", "inpaint_image",
                        "transfer_image", "fix_hands", "fix_artifact"}
 
 
 
 
-# Fast-path responses that falsely claim the model cannot create/edit images.
-# These must not be saved to history — they poison future turns by making the
-# model believe it told the user it can't draw, then refusing again.
-# The fast path answered with no tools; if that answer is the model DENYING a
-# capability the agent actually has, throw it away and fall through to the real
-# loop where the tool exists. This was image-only, and the bench caught what
-# that missed: "я текстовый помощник и не могу напрямую создать видеофайл, но
-# вы можете использовать Runway или Pika" (video) and "я не вижу содержимое
-# вашего буфера автоматически" (clipboard) both sailed through as final
-# answers. The rule is capability-agnostic now — a denial about ANY deliverable
-# is a fall-through, because the loop can only do better than a flat refusal.
 # A tool-less reply that CLAIMS a deliverable. "а теперь просто картинку
 # этого же кота" had no draw verb, took the fast path, and the model wrote
-# "Вот ваша картинка с рыжим котом" with nothing attached (live, 2026-09-12,
-# journey 28). Such a reply is thrown away and the turn falls through to the
+# "Вот ваша картинка с рыжим котом" with nothing attached.
+# Such a reply is thrown away and the turn falls through to the
 # tool loop, exactly like a capability denial.
 _FAST_PATH_DELIVERY_CLAIM_RE = re.compile(
     r"^\s*(?:(?:конечно|отлично|хорошо|сделано|sure|of\s+course|okay|ok)[!,.]?\s+)?"
@@ -91,10 +79,10 @@ _FAST_PATH_ACTION_CLAIM_RE = re.compile(
     # a promise to act right now
     r"\b(?:запускаю|начинаю|приступаю|генерирую|рисую|создаю|напомню|отправляю|"
     r"звоню|заказываю|оформляю|бронирую|оплачиваю)\b|"
-    # passive "done" claims: «Будильник на 7 утра отменен» with no tool (live)
+    # passive "done" claims: «Будильник на 7 утра отменен» with no tool
     r"(?:напоминани|будильник)\w*[^.!?\n]{0,30}\b(?:отмен[её]н|удал[её]н|снят|установлен|поставлен)\w*|"
     r"\bя\s+(?:\w+\s+){0,2}?отменил\w*|"
-    # «Запомнил, 47 -- интересное число» with no remember_fact (live)
+    # «Запомнил, 47 -- интересное число» with no remember_fact
     r"(?:^|[.!?]\s+)(?:запомнил|записал|сохранил|отменил|удалил|поставил|установил|"
     r"сделал|добавил|убрал|изменил|переделал|сократил|исправил|обновил|заменил)\w*\b|"
     r"\b(?:разбужу|напомню|поставлю\s+(?:таймер|будильник))\b|"
@@ -111,6 +99,17 @@ _FAST_PATH_ACTION_CLAIM_RE = re.compile(
     re.IGNORECASE | re.MULTILINE)
 
 
+# Fast-path responses that falsely claim the model cannot create/edit images.
+# These must not be saved to history — they poison future turns by making the
+# model believe it told the user it can't draw, then refusing again.
+# The fast path answered with no tools; if that answer is the model DENYING a
+# capability the agent actually has, throw it away and fall through to the real
+# loop where the tool exists. This was image-only, and the bench caught what
+# that missed: "я текстовый помощник и не могу напрямую создать видеофайл, но
+# вы можете использовать Runway или Pika" (video) and "я не вижу содержимое
+# вашего буфера автоматически" (clipboard) both sailed through as final
+# answers. The rule is capability-agnostic now — a denial about ANY deliverable
+# is a fall-through, because the loop can only do better than a flat refusal.
 _FAST_PATH_CAPABILITY_DENIAL_RE = re.compile(
     # Russian: "не могу/не умею/не имею возможности" + any deliverable verb.
     r"не\s+(?:могу|умею|способ\w+|имею\s+возможности)\s+"
@@ -238,7 +237,7 @@ def _is_photo_intake(ctx, state: AgentState, user_input: str, original_input: st
     """A photo that just arrived with no request attached: no caption at all
     ("image"), or a caption that only names or introduces it («Вот Френк
     Харриган»). Such a turn only needs the vision description turned into
-    "this is X -- what should I do with it?" (live 2026-09-22: the full loop
+    "this is X -- what should I do with it?" (the full loop
     deliberated for over a minute and never answered)."""
     if not state.get("image_data") or not (state.get("vision_summary") or "").strip():
         return False
@@ -250,8 +249,8 @@ def _is_photo_intake(ctx, state: AgentState, user_input: str, original_input: st
 
 def _followup_of_tool_turn(state, text: str, ctx=None) -> bool:
     """A message right after a turn that used a tool, which the model reads as
-    needing a tool too: «а в Нью-Йорке?» after local_time (live 2026-09-28,
-    the fast path guessed the clock). It gets the previous turn's tools."""
+    needing a tool too: «а в Нью-Йорке?» after local_time (the
+    fast path guessed the clock). It gets the previous turn's tools."""
     msgs = list(state.get("messages", []))
     if msgs and msgs[-1].get("role") == "user":
         msgs = msgs[:-1]                     # the current message, if already in
@@ -305,11 +304,10 @@ def _fast_path_reply(ctx: Context, messages: list, gen: "_GenSettings",
     # ~300 tokens even with facts included; tool schemas are the expensive
     # part (2-3k tokens), not the couple of lines a fact store holds.
     #
-    # Saved facts ARE still included below. Live 2026-09-18, journey 9: this
-    # path used to skip them entirely, so "как меня зовут и что ты обо мне
-    # знаешь?" (short, no tool trigger -> fast path) got a confident "you
-    # haven't told me your name yet" three turns after remember_fact saved
-    # it -- the model never saw the block that would have answered it.
+    # Saved facts ARE included below: without them "как меня зовут и что ты
+    # обо мне знаешь?" (short, no tool trigger -> fast path) gets a confident
+    # "you haven't told me your name yet" after remember_fact saved it -- the
+    # model never sees the block that would answer it.
     lite_system = build_system_prompt_lite(
         ctx.custom_personality_text, concise=gen.concise, length=gen.length,
         reply_lang=getattr(ctx, "reply_lang", "ru") or "ru",
@@ -322,7 +320,7 @@ def _fast_path_reply(ctx: Context, messages: list, gen: "_GenSettings",
         lite_user_parts.append(FORGOTTEN_NOTE)
     _tr_prev = translate_previous_note(original_input or user_input, messages[1:-1])
     if original_input and not _tr_prev:
-        # A bare path or a number has no language: live 10-10 «C:/Program Files/Git/start»
+        # A bare path or a number has no language: «C:/Program Files/Git/start»
         # in a Russian chat was answered in Spanish.
         _chat_lang = {"ru": "Russian", "en": "English"}.get(getattr(ctx, "reply_lang", "ru") or "ru", "Russian")
         lite_user_parts.append(
@@ -381,7 +379,7 @@ def _fast_path_reply(ctx: Context, messages: list, gen: "_GenSettings",
     fast_content = strip_think_tags(
         strip_reasoning_leak((fast_resp or {}).get("content", "") or ""))
     if (fast_resp or {}).get("finish_reason") == "length":
-        # Live: a 60-row table stopped at row 25 mid-cell and was delivered.
+        # A 60-row table stopped at row 25 mid-cell and was delivered.
         logger.info("Fast path hit its token cap — falling through to the full loop")
         return None
     if fast_content and _FAST_PATH_DELIVERY_CLAIM_RE.search(fast_content):
@@ -393,7 +391,7 @@ def _fast_path_reply(ctx: Context, messages: list, gen: "_GenSettings",
     if fast_content and not _FAST_PATH_CAPABILITY_DENIAL_RE.search(fast_content):
         # The fast path returns before graph_finalize, so the drift guard
         # never saw its answers: "а теперь расскажи её по-русски" on an
-        # English session came back in English (live, 2026-09-12, journey 26).
+        # English session came back in English.
         from graph_language import _match_reply_language, _unparrot, _ru_thousands, _fix_totals, _prompt_leak_guard
         fast_content = _match_reply_language(ctx, fast_content, original_input)
         fast_content = _unparrot(ctx, fast_content, original_input, messages[1:])

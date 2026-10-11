@@ -327,7 +327,7 @@ def review_photo_urls(content: dict) -> list:
 
 def parse_reviews(page: dict, limit: int = 10, sku=None) -> dict:
     """`sku`: keep only reviews of THAT item. Ozon lists the whole family's
-    reviews on every variant's page (live 2026-09-27: a snow blower was judged by
+    reviews on every variant's page (a snow blower was judged by
     its siblings' reviews) -- each review carries its own itemId."""
     w = _widget(page, "webListReviews") or {}
     raw = w.get("reviews") or w.get("items") or []
@@ -396,7 +396,7 @@ def search_filters(query: str) -> list:
 def resolve_short(url: str) -> str:
     """ozon.ru/t/<code> (the app's share link) -> /product/.../ . A plain HTTP
     request gets 501 from the anti-bot wall; the browser follows the redirect.
-    Live 10-01: the third of three shared links was never opened and the agent
+    The third of three shared links was never opened and the agent
     found a product by guessing its name instead."""
     def go(page):
         page.goto(url, wait_until="domcontentloaded", timeout=90000)
@@ -522,7 +522,7 @@ class _Browser:
                         try:
                             slot[0].close()
                         except Exception:
-                            pass
+                            logger.debug("could not close a stale Ozon context", exc_info=True)
                     ctxs.clear()
                     seen_gen = self.gen
                 for attempt in range(2):
@@ -580,11 +580,11 @@ class _Browser:
                 if browser is not None:
                     browser.close()
             except Exception:
-                pass
+                logger.debug("could not close the Ozon browser", exc_info=True)
             try:
                 pw.stop()
             except Exception:
-                pass
+                logger.debug("could not stop playwright", exc_info=True)
 
     def _launch(self, pw):
         kw = dict(channel=OZON_CHANNEL or None, headless=OZON_HEADLESS,
@@ -639,7 +639,7 @@ class _Browser:
         try:
             slot[0].close()
         except Exception:
-            pass
+            logger.debug("could not close an Ozon context", exc_info=True)
 
     def _drain(self, err):
         while True:

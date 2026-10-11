@@ -269,7 +269,7 @@ _TEXTUAL_TOOL_CALL_RE = re.compile(
 )
 
 
-# A ReAct-style call written as a bare JSON object. Live, 2026-09-12: after
+# A ReAct-style call written as a bare JSON object. After
 # the picture was already drawn the model's closing message was
 #   { "action": "generate_image", "action_input": "{'description': ...}" }
 #   Вот твой синий слон на пляже!
@@ -487,7 +487,7 @@ def ensure_required_files() -> list:
     Only files that ship WITH the repo are fatal (their absence means a broken
     checkout). The voice files are private downloads, and refusing to start
     without them meant a fresh clone could not even open the app to chat
-    (live 10-03: a friend's clone died on it twice). Without them the
+    (a friend's clone died on it twice). Without them the
     assistant starts with voice output off and says so; everything else works.
     """
     from config import (WEIGHTS_PATH, VOCAB_PATH, DC_REF_WAV, WORKFLOW_FIRERED_EDIT_PATH,

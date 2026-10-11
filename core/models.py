@@ -175,8 +175,8 @@ class Context:
     # Set by forget_facts("all") and cleared by the next remember_fact: the
     # dropped facts are still IN the chat history ("remember: ... allergic to
     # nuts" three turns up), and the model answered "you are allergic to nuts"
-    # from there right after confirming it had forgotten (live 2026-09-13,
-    # mega run 3, step 61). While this holds, every turn carries a note that
+    # from there right after confirming it had forgotten.
+    # While this holds, every turn carries a note that
     # what the user said about themselves earlier is void.
     facts_forgotten: bool = False
 
@@ -253,7 +253,7 @@ class Context:
     # under it); graph.needs_relook then answers any question by looking.
     image_pointed_at: bool = False
     # The plan of the most recent deck, so "добавь слайд" edits it instead of
-    # planning a new one from scratch (live: the theme and every slide changed).
+    # planning a new one from scratch (the theme and every slide changed).
     last_deck: Optional[dict] = None
 
     # A picture this turn actually RENDERED, as opposed to one it merely loaded.
@@ -377,13 +377,13 @@ class Context:
             import turn_trace   # every front end's phases, one place
             turn_trace.stage(stage)
         except Exception:
-            pass
+            logger.debug("turn_trace stage failed", exc_info=True)
         cb = self.stage_callback
         if cb is not None:
             try:
                 cb(stage)
             except Exception:
-                pass
+                logger.debug("stage_callback failed", exc_info=True)
 
     def save_cache(self) -> None:
         try:

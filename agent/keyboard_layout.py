@@ -1,6 +1,6 @@
 """Russian typed on the English layout: «NEN ;T ERFPFYJ» -> «ТУТ ЖЕ УКАЗАНО».
 
-Live 2026-09-26: a schoolkid argued with the bot in the wrong layout and the
+A schoolkid argued with the bot in the wrong layout and the
 bot had to guess. The whole message or only some words can be wrong
 («привет rfr дела»). A run of Latin words is converted only when it reads as
 Russian and not as English: few English vowels before, enough Russian ones
@@ -53,7 +53,7 @@ def _reads_russian(run: str) -> bool:
 
 def _tail_is_letter(word: str, ch: str) -> bool:
     """«dc.» before more words: «вс.» or «всю»? The «,»/«.» keys are «б»/«ю» on the Russian
-    layout, and a word may end on one (live 10-09: «прибрал всю хату» came out «прибра вс. хату»).
+    layout, and a word may end on one («прибрал всю хату» came out «прибра вс. хату»).
     The dictionary decides; «ghbdtn, rfr» stays «привет, как»."""
     try:
         from wordfreq import zipf_frequency as z

@@ -3,8 +3,8 @@
 Replaces the keyword regexes that decided routing (graph._TOOL_TRIGGER_RE,
 graph_fastpath._IMAGE_INTENT_RE, tool_retrieval cue words, the forced-tool
 regexes in graph_personality): a word list cannot read a sentence --
-«добавили» held «оба» and a question about a forwarded video got a transcript
-(live 2026-10-02 16:03); paraphrases with no cue word took the tool-less fast
+«добавили» held «оба» and a question about a forwarded video got a transcript;
+paraphrases with no cue word took the tool-less fast
 path and got invented answers.
 
 read(ctx, text, previous="", attached="") -> dict, cached per input:

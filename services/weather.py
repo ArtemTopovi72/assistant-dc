@@ -104,7 +104,7 @@ def _nominative(city: str) -> str:
     """«Твери» -> «Тверь», «Нижнем Новгороде» -> «Нижний Новгород».
 
     The geocoder matches name PREFIXES: the inflected «Твери» found Tiberias
-    (Тверия, Israel, +31°) for a user asking about Tver (live 2026-09-27).
+    (Тверия, Israel, +31°) for a user asking about Tver.
     Place names and the adjectives in them go to their dictionary form; any
     other word is kept as typed. "" when nothing changes or no morphology."""
     try:
@@ -124,7 +124,7 @@ def _nominative(city: str) -> str:
 
 
 # Colloquial names, keyed by the stem (case endings stripped). "Питер" geocoded
-# to a village and gave St Petersburg +1 and snow (live 2026-09-28).
+# to a village and gave St Petersburg +1 and snow.
 _ALIASES = {"питер": "Санкт-Петербург", "спб": "Санкт-Петербург", "мск": "Москва",
             "екб": "Екатеринбург", "ёбург": "Екатеринбург", "екатеринбург": "Екатеринбург",
             "нск": "Новосибирск", "новосиб": "Новосибирск", "нижний": "Нижний Новгород",
@@ -137,7 +137,7 @@ def geocode_city(city: str, lang: str = "en") -> Optional[dict]:
 
     `lang` picks the language of the returned NAME: the geocoder used to be
     asked in English only, so a Russian user got a card headed "Sochi" and
-    "Kazan’" (live, 2026-09-12, journey 7). Open-Meteo answers in the
+    "Kazan’". Open-Meteo answers in the
     language asked for and falls back to English when it has no local name.
     """
     city = (city or "").strip()
@@ -151,7 +151,7 @@ def geocode_city(city: str, lang: str = "en") -> Optional[dict]:
             if found:
                 return found
     # The language also steers MATCHING: "New York" asked in Russian found
-    # York, Nebraska (live 2026-09-28, local_time said 10:09 at 11:09).
+    # York, Nebraska.
     # A Latin-script name is matched in English.
     if not re.search("[а-яё]", city, re.I):
         lang = "en"
@@ -204,6 +204,12 @@ def not_found_message(city: str, lang: str) -> str:
             f"Не нашёл город «{city}» — попробуй написать иначе.")
 
 
+def _unavailable_message(lang: str) -> str:
+    return ("Weather service is unavailable right now — try again in a bit."
+            if lang != "ru" else
+            "Сервис погоды сейчас недоступен — попробуй чуть позже.")
+
+
 def fetch_current(lat: float, lon: float) -> Optional[dict]:
     """Return {"temp_c", "wind_kmh", "code"} for the given coordinates, or None."""
     try:
@@ -224,16 +230,12 @@ def fetch_current(lat: float, lon: float) -> Optional[dict]:
         return None
 
 
-# Fallback only: used when no LLM advisor is supplied (e.g. LM Studio is
-# unreachable) so the button still answers something useful. The primary path
-# is an LLM call (see tg_accounts._weather_advise), which reasons over the
-# actual conditions instead of picking from a canned table.
 _WET_CODES = frozenset((51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99))
 
 
 def umbrella_line(buckets: list, lang: str = "en") -> str:
     """A yes/no for the umbrella: "погода завтра, брать зонт?" got a table and
-    clothing advice but never the answer (live 2026-09-28)."""
+    clothing advice but never the answer."""
     ru = (lang or "").startswith("ru")
     wet = [b for b in buckets if b.get("wet_hours")]
     if not wet:
@@ -242,6 +244,10 @@ def umbrella_line(buckets: list, lang: str = "en") -> str:
     return f"☔ Возьми зонт — дождь: {whens}" if ru else f"☔ Take an umbrella — rain: {whens}"
 
 
+# Fallback only: used when no LLM advisor is supplied (e.g. LM Studio is
+# unreachable) so the button still answers something useful. The primary path
+# is an LLM call (see tg_accounts._weather_advise), which reasons over the
+# actual conditions instead of picking from a canned table.
 def _clothing_advice(temp_c: float, code: int, wind_kmh: float, lang: str) -> str:
     wet = code in _WET_CODES
     snowy = code in (71, 73, 75, 77, 85, 86)
@@ -310,9 +316,7 @@ def what_to_wear_for_loc(loc: dict, lang: str = "en", advise_fn=None) -> str:
     user's default)."""
     cur = fetch_current(loc["lat"], loc["lon"])
     if not cur:
-        return ("Weather service is unavailable right now — try again in a bit."
-                if lang != "ru" else
-                "Сервис погоды сейчас недоступен — попробуй чуть позже.")
+        return _unavailable_message(lang)
     temp = cur["temp_c"]
     desc = _code_desc(cur["code"], lang)
     advice = ""
@@ -566,9 +570,7 @@ def forecast_data(loc: dict, lang: str = "en", hours: Optional[int] = None,
         days_needed = max(2, -(-int(hours) // 24) + 1)
     hourly = fetch_hourly(loc["lat"], loc["lon"], days=days_needed)
     if not hourly:
-        return [], {}, ("Weather service is unavailable right now — try again in a bit."
-                        if lang != "ru" else
-                        "Сервис погоды сейчас недоступен — попробуй чуть позже.")
+        return [], {}, _unavailable_message(lang)
     local_now = _dt.datetime.utcnow() + _dt.timedelta(seconds=hourly["utc_offset_seconds"])
     if date is not None:
         start_dt = _dt.datetime.combine(date, _dt.time(0, 0))

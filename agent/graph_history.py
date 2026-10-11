@@ -26,10 +26,7 @@ def send_to_lm_studio(*a, **kw):
     return _llm.send_to_lm_studio(*a, **kw)
 
 
-# Rolling chat-history compaction. Every HISTORY_COMPACT_EVERY completed user turns
-# the older messages are folded into a single running summary, so the transcript
-# resent to the model each turn stays small (less VRAM/compute, no context bloat).
-HISTORY_COMPACT_EVERY = 3
+HISTORY_COMPACT_EVERY = 3        # completed user turns between compactions
 _HISTORY_KEEP_TURNS = 2          # most-recent user turns kept verbatim
 _HISTORY_SUMMARY_MARKER = "[Conversation summary so far]\n"
 
@@ -208,7 +205,7 @@ def compact_history_if_needed(ctx, messages):
         from prompts import HISTORY_SUMMARY_PROMPT
         # Surface the stage: this runs AFTER the reply is delivered and makes up to
         # two extra LLM calls — without a stage update the GUI looks frozen/hung
-        # for the length of a summarisation call every 5th turn.
+        # for the length of a summarisation call, once every HISTORY_COMPACT_EVERY turns.
         ctx.set_stage("Compacting the chat history")
         # NOTE: no prefill here. A closed-<think> prefill makes this finetune return
         # EMPTY content for a pure summarisation request (verified live), which would

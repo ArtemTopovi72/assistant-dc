@@ -26,10 +26,10 @@ _T_RELOAD = 300
 # Smallest context the agent can actually work in. The system prompt is ~2.4k
 # tokens and the full tool-schema list adds ~7k, so anything at or below 8192
 # rejects every tool-bearing call outright ("n_keep >= n_ctx") — measured with
-# google/gemma-4-26b-a4b-qat at 9905 needed vs 8192 loaded. 32768 leaves room for
-# history and tool results on top of that. House default (user, 2026-09-23):
-# 40k context and ONE parallel slot for every model the app loads (raised from
-# 20k on 2026-09-24: 48k q8 measured, no speed or VRAM cost; the loader kept 20k).
+# google/gemma-4-26b-a4b-qat at 9905 needed vs 8192 loaded. The default below
+# leaves room for history and tool results on top of that. House default:
+# 40k context and ONE parallel slot for every model the app loads (48k q8
+# measured: no speed or VRAM cost; the loader used to keep 20k).
 MIN_CONTEXT_TOKENS = _cfg_env.env_int("LM_MIN_CONTEXT", 40960)
 DEFAULT_PARALLEL = _cfg_env.env_int("LM_PARALLEL", 1)
 
@@ -75,7 +75,7 @@ def _parse_virtual_yaml(yaml_path: Path) -> dict:
                 out["enable_thinking"] = bool(cf.get("defaultValue", False))
         return out
     except Exception:
-        pass
+        logger.debug("PyYAML parse of %s failed; using the minimal parser", yaml_path, exc_info=True)
     # Minimal fallback parser.
     m = re.search(r"^\s*base:\s*(.+?)\s*$", text, re.MULTILINE)
     if m:
@@ -184,7 +184,7 @@ def fetch_model(base_url: str, model_id: str) -> dict:
             if not data.get("error"):
                 return data
     except Exception:
-        pass
+        logger.debug("could not fetch model %s directly", model_id, exc_info=True)
     for m in fetch_models(base_url):
         if m.get("id") == model_id:
             return m
@@ -333,7 +333,7 @@ def load_model_exclusive(
         try:
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=_T_RELOAD)
             if r.returncode == 0 and not _wait_served(base_url, cand):
-                # Live, 2026-09-12: the model crashed, `lms load` exited 0 in
+                # The model crashed, `lms load` exited 0 in
                 # nine seconds, and the server then answered "Model reloaded."
                 # followed by "No models loaded" for the next minute. The
                 # revive path trusted the exit code, cached "ok", and every
@@ -414,7 +414,7 @@ def _wait_served(base_url: str, model_id: str, timeout: float = None) -> bool:
         time.sleep(1.0)
 
 
-# One loader at a time, process-wide. Live, 2026-09-12: a crash revive from
+# One loader at a time, process-wide. A crash revive from
 # the LLM retry path and the card release's reload ran together, LM Studio
 # answered "2 models match the provided model key on the same device ...
 # Operation canceled", then Internal Server Error, and four turns died. The
@@ -460,7 +460,7 @@ def ensure_exclusive(
 def drop_phantoms(model_id: str) -> list:
     """Unload every "<id>:N" copy beside the real instance. A request that lands
     while the loader has the model unloaded makes LM Studio JIT-load its own
-    copy, and the loader's copy then arrives as a second one (live 10-02: an
+    copy, and the loader's copy then arrives as a second one (an
     app restart mid-revive left two 18 GB instances). Returns what it unloaded."""
     gone = []
     for ident in loaded_instances(model_id):
@@ -821,9 +821,7 @@ def supported_fields(compatibility_type: str) -> set:
     ct = (compatibility_type or "").lower()
     if ct == "gguf":
         return {"contextLength", "kvCacheQuantization", "gpuOffload", "flashAttention"}
-    if ct == "mlx":
-        return {"contextLength"}
-    return {"contextLength"}
+    return {"contextLength"}      # mlx, and anything unknown
 
 
 def wait_for_loaded(base_url: str, model_id: str, timeout: float = 120.0) -> bool:

@@ -1,6 +1,6 @@
 """Steering: what the user says WHILE the bot works changes the work.
 
-Live 2026-09-18: «я прошу график, вижу, что он пишет код, и вкидываю "а фон
+«я прошу график, вижу, что он пишет код, и вкидываю "а фон
 пусть будет красный" -- и он просто на ближайшем свободном моменте: ага,
 учту». Before this a message sent during a task waited in the queue and was
 answered as a separate request once the work was already done (or, in a
@@ -60,14 +60,15 @@ def eligible(text: str, has_file: bool, interruptible: bool) -> bool:
         return False
     if t.startswith("/"):
         return False
-    if interruptible and __import__("intent").read(None, t)["is_question"]:
+    import intent
+    if interruptible and intent.read(None, t)["is_question"]:
         return False
     return True
 
 
 def ack(text: str, lang: str) -> str:
     # Only the user's own words: menu prefixes («find on ozon: ») and machine
-    # frames («[the user forwarded this message…]») were echoed as is (live 16:36).
+    # frames («[the user forwarded this message…]») were echoed as is.
     from prompt_guard import user_words
     t = re.sub(r"\[[^\]]*\]", " ", user_words(text), flags=re.S)
     t = re.sub(r"^\s*[a-z][a-z ]*(?:\([^)]*\))?:\s*", "", t)

@@ -35,7 +35,6 @@ def _is_gpt_oss(model_name: str) -> bool:
 
 
 GLIMMER_THINK_HEADROOM = _cfg_env.env_int("GLIMMER_THINK_HEADROOM", 768)
-GLIMMER_THINK_HEADROOM_HIGH = _cfg_env.env_int("GLIMMER_THINK_HEADROOM_HIGH", 4096)
 
 
 def _is_glimmer(model_name: str) -> bool:
@@ -90,7 +89,7 @@ GEMMA_MIN_TOKENS = 3000
 # There is no request knob for this (see _is_gemma4), but the prefill is.
 # Measured 2026-09-23 on hauhaucs gemma4-26b-a4b q5_k_m, the forced closing
 # reply after a failed tool chain, 3 runs each: without it 377-652 tokens of
-# reasoning before the answer (and live, 2026-09-22, 3 x 3000 tokens of pure
+# reasoning before the answer (and once 3 x 3000 tokens of pure
 # reasoning with NO answer -- the user got a sentence cut off mid-word); with
 # it 157-158 tokens, ~2 s, a direct honest answer every time. Only for turns
 # that summarise work already done -- it removes the thinking, not just the
@@ -135,8 +134,7 @@ def strip_channel_tokens(text: str) -> str:
     """Remove model thinking blocks and channel/control tokens.
 
     Delegates to utils.strip_control_tokens so there is ONE definition of the
-    grammar: this used to carry its own narrower copy that knew only the
-    `<|channel>thought` spelling, and the two drifted apart.
+    grammar.
     """
     if not text:
         return text
@@ -210,7 +208,6 @@ def extract_gemma4_tool_calls(content: str):
     Returns (tool_calls_list, remaining_text). If no markup is found,
     returns ([], original content).
     """
-    import json as _json
     tc_list = []
     idx = 0
 
@@ -270,7 +267,7 @@ def extract_gemma4_tool_calls(content: str):
     remaining = _G4_BARE_RE.sub("", remaining).strip()
 
     # Format F: `[TOOL_CALL]generate_image(description='…')` — a Python call.
-    # Live 2026-09-29, 1 draw in 3 on the house model: the markup was the reply.
+    # 1 draw in 3 on the house model: the markup was the reply.
     for name, args, span in _py_calls_in(remaining):
         tc_list.append({
             "id": f"call_g4_{idx}",
@@ -282,8 +279,8 @@ def extract_gemma4_tool_calls(content: str):
     remaining = remaining.strip()
 
     # Format E: a JSON call in prose — `<tool_call>{"name": "generate_image",
-    # "arguments": {...}}</tool_call>` or the bare object. Live 2026-09-13
-    # (mega run 3, steps 72/75/77): three drawing turns in a row came back
+    # "arguments": {...}}</tool_call>` or the bare object.
+    # Three drawing turns in a row came back
     # this way, utils.strip_textual_tool_calls deleted the block as a leak,
     # and the user got "Вот ваш логотип" with no picture. A call the model
     # wrote out is still a call: parse it, run it.
@@ -356,7 +353,6 @@ def _json_object_end(text: str, start: int) -> int:
 
 def _json_calls_in(text: str):
     """Yield (name, args, (start, end)) for every JSON tool call in `text`."""
-    import json as _json
     i = 0
     while True:
         m = _JSON_CALL_START_RE.search(text, i)
@@ -448,7 +444,7 @@ def _apply_no_think(messages: List[dict]) -> List[dict]:
 
 
 # How many LLM streams are open right now. A render that wants the whole card
-# must not pull the model out from under one of them: live, 2026-09-12, two
+# must not pull the model out from under one of them: two
 # users drew at once, the first claim unloaded the model while the second
 # user's layout planner was still streaming ("Model unloaded"), the revive
 # then loaded 20 GB back INTO the render's card, and both the render and
@@ -550,25 +546,13 @@ def send_to_lm_studio(
     model_name = getattr(ctx, "model_name", "") or MODEL_NAME
     # Reasoning is OFF for every call, here, in the one function every model
     # call goes through -- not per caller, not by the thinking switch, not by
-    # force_think. Live 2026-10-01 16:51: with the switch on, a 7-second кружок
+    # force_think. With the switch on, a 7-second кружок
     # spent 2813 tokens and 26.7 s on six storyboard lines and each zoomed tile
     # 300-750 tokens against a 350 budget; a per-call opt-out had let it through.
     no_think = True
-    force_think = False
     is_oss = _is_gpt_oss(model_name)
     is_gemma = _is_gemma4(model_name)
     is_glimmer = _is_glimmer(model_name)
-
-    # force_think: deliberately let a reasoning fine-tune think (long-form synthesis
-    # writes far better WITH chain-of-thought). Suppressing it on these models (the
-    # /no_think marker + reasoning:"off" + a <think></think> prefill, all at once) makes
-    # them emit an UNCLOSED <think> block that strip_think_tags reduces to empty — the
-    # exact cause of empty report sections. In force_think mode we send a clean prompt
-    # (no marker, no prefill, reasoning ON) and rely on strip_think_tags to remove the
-    # CLOSED think block, keeping the real answer. Caller must budget tokens for both.
-    if force_think and not is_oss:
-        no_think = False
-        prefill = None
 
     if is_gemma:
         # None of the other families' switches mean anything here, and the
@@ -584,7 +568,7 @@ def send_to_lm_studio(
         no_think = False
         # A forced tool call (tool_choice="required") is grammar-constrained,
         # and the grammar rejects the empty thought block as its first piece:
-        # live 2026-09-23 the video button failed 6/6 with "Failed to
+        # the video button failed 6/6 with "Failed to
         # initialize samplers: Unexpected empty grammar stack after accepting
         # piece: <|channel>" and the user got "Я задумался и не выдал ответ".
         # Such a call is a tool call and nothing else, so there is no
@@ -624,15 +608,13 @@ def send_to_lm_studio(
     if is_glimmer:
         # Same policy as everywhere: no reasoning unless the user or the caller
         # asks for it. The Qwen marker and prefill mean nothing to it.
-        _wants = False
-        outbound = _glimmer_strength(messages, "high" if _wants else "low")
+        outbound = _glimmer_strength(messages, "low")
         prefill = None
         # It still thinks at "low" (~100-250 tokens measured), and that is billed
         # against max_tokens: the vision self-test's 80-token budget came back
         # as "Yes, there is a". Headroom on top, so a short budget still means a
         # short ANSWER.
-        max_tokens = max_tokens + (GLIMMER_THINK_HEADROOM_HIGH if _wants
-                                   else GLIMMER_THINK_HEADROOM)
+        max_tokens = max_tokens + GLIMMER_THINK_HEADROOM
 
     # The <think></think> prefill is a Qwen lever; for gpt-oss it injects literal junk
     # into the harmony stream, so skip it there.
@@ -684,9 +666,6 @@ def send_to_lm_studio(
         payload["reasoning_effort"] = (
             "low"   # gpt-oss cannot switch reasoning off; the lowest it has
         )
-    elif force_think:
-        # Let the reasoning model think; enable the template's thinking path explicitly.
-        payload["chat_template_kwargs"] = {"enable_thinking": True}
     else:
         payload["reasoning"] = "off"
         if no_think:
@@ -1038,7 +1017,7 @@ _MODEL_GONE = _re.compile(r"No models loaded|model has crashed|model is not load
 # The request that killed the model gets one of these; the ones queued behind
 # it get "No models loaded".
 _MODEL_CRASHED = _re.compile(r"model has crashed|Model reloaded", _re.I)
-_revive_lock = __import__("threading").Lock()
+_revive_lock = threading.Lock()
 _revive_last = 0.0
 _revive_ok = False
 LLM_REVIVE_MIN_INTERVAL_S = 60.0
@@ -1069,7 +1048,7 @@ def _try_revive_model(body: str, payload: dict) -> bool:
             return False
         if not _cc._excl_free.is_set():
             # A render is handing the card back and is already reloading the
-            # model; a second load raced it (live 2026-09-28, 5-min hang).
+            # model; a second load raced it (5-min hang).
             logger.info("render is giving the card back - waiting for its reload")
             if _cc.wait_for_card(600) and _model_served(payload.get("model", "") or MODEL_NAME):
                 return True
@@ -1079,22 +1058,19 @@ def _try_revive_model(body: str, payload: dict) -> bool:
     global _revive_ok
     # The lock is held for the whole reload: a second caller that hits "No
     # models loaded" while the first is reloading BLOCKS here, then finds a
-    # fresh successful revive and simply retries. It used to return False
-    # inside the cooldown and lose its turn (live, 2026-09-12: the turn right
-    # after a crash always died).
+    # fresh successful revive and simply retries rather than returning False
+    # inside the cooldown and losing its turn.
     with _revive_lock:
         now = time.time()
         if now - _revive_last < LLM_REVIVE_MIN_INTERVAL_S:
             # The cooldown is for a model that dies ON LOAD. One that loaded
-            # fine and was then killed by a request (live 2026-09-13: a tall
+            # fine and was then killed by a request (a tall
             # photo tripped llama.cpp's n_ubatch assert twice in 20 s) is a
             # new incident -- the cached "ok" would let every turn for the
             # next minute die on "No models loaded".
             if not (_revive_ok and not _model_served(model)):
                 return bool(_revive_ok)
             logger.warning("model %s died again inside the revive cooldown - reviving", model)
-        _revive_last = now
-        _revive_ok = False
         _revive_last = now
         _revive_ok = False
         try:
@@ -1174,11 +1150,11 @@ def _log_context_hint(body: str, payload: dict) -> None:
     m = _N_CTX_RE.search(body or "")
     if not m:
         # The numberless phrasing ("Context size has been exceeded."). It says
-        # nothing about sizes, so this used to log NOTHING at all -- the one
-        # message whose whole job is to name the number the user has to raise
-        # stayed silent on the phrasing that carries no number. Estimate it
-        # instead: ~3 characters per token is close enough to point at the
-        # right order of magnitude, which is all the reader needs.
+        # nothing about sizes, yet this message's whole job is to name the number
+        # the user has to raise, so it must not stay silent on the phrasing that
+        # carries no number. Estimate it instead: ~3 characters per token is
+        # close enough to point at the right order of magnitude, which is all
+        # the reader needs.
         if _looks_like_context_overflow(body):
             _chars = len(_json.dumps(payload.get("messages") or [],
                                      ensure_ascii=False))
@@ -1329,12 +1305,12 @@ def _stream_chat_raw(ctx, payload: dict):
         headers=headers,
     ) as resp:
         if resp.status_code != 200:
-            # The BODY is the diagnosis and used to be thrown away. LM Studio
+            # The BODY is the diagnosis; never discard it. LM Studio
             # answers a request that does not fit the loaded context with
             # "n_keep: 9905 >= n_ctx: 8192" — logging only "HTTP 400" turned a
             # precise, actionable error into a silent empty turn, which the agent
             # then reported to the user as "I cannot draw, the tools are
-            # unavailable". Never discard it again.
+            # unavailable".
             try:
                 body = resp.text[:600]
             except Exception:
@@ -1387,9 +1363,9 @@ def _stream_chat_raw(ctx, payload: dict):
                 except (ValueError, TypeError, json.JSONDecodeError):
                     continue
                 # An error can arrive INSIDE the stream as {"error": ...} with no
-                # "choices" key. That used to fall into the generic `continue` below
-                # and the call returned an empty message — indistinguishable from a
-                # model that simply said nothing.
+                # "choices" key. Left to the generic `continue` below, the call would
+                # return an empty message — indistinguishable from a model that
+                # simply said nothing.
                 if isinstance(chunk, dict) and chunk.get("usage"):
                     usage = chunk["usage"]
                 if isinstance(chunk, dict) and chunk.get("error"):
@@ -1454,14 +1430,14 @@ def _stream_chat_raw(ctx, payload: dict):
                 # which costs seconds instead of minutes. Checked on a bounded tail every
                 # LLM_REPEAT_CHECK_EVERY chars, so the cost does not grow with output size.
                 #
-                # BOTH channels are sampled. `streamed_chars` has always counted
-                # content AND reasoning, but the tail used to be built from
-                # content_parts alone — so a model looping inside its REASONING
-                # channel ticked the checkpoint over and over against an empty tail
-                # and was never caught. That is the house model's channel: Gemma 4
-                # spends most of its budget thinking (which is why max_tokens is
-                # floored to GEMMA_MIN_TOKENS), so the guard was blind exactly where
-                # it was needed. Measured on an identical 47-char loop: a content
+                # BOTH channels are sampled. `streamed_chars` counts content AND
+                # reasoning, so a tail built from content_parts alone would let a
+                # model looping inside its REASONING channel tick the checkpoint
+                # over and over against an empty tail and never be caught. That is
+                # the house model's channel: Gemma 4 spends most of its budget
+                # thinking (which is why max_tokens is
+                # floored to GEMMA_MIN_TOKENS), so a content-only guard is blind exactly
+                # where it is needed. Measured on an identical 47-char loop: a content
                 # loop was cut after 2.4k chars, the same loop in reasoning ran to
                 # 144k and would have continued to the 200k/600s last-resort caps.
                 if (LLM_REPEAT_CHECK_EVERY > 0
@@ -1587,7 +1563,7 @@ def call_llm_simple(
     return result.get("content") or None
 
 
-# The crashes on big images (1400x2100, 1920x1088, live 2026-09-12) were the
+# The crashes on big images (1400x2100, 1920x1088) were the
 # llama.cpp micro-batch: an image's tokens must fit one ubatch, default 512.
 # lmstudio._rest_load sets it to 2048 and Gemma 4 spends at most 1120 tokens
 # on a picture (measured: 1024 px 288, 1280 px 441, 2048 px 1068, 3000 px
@@ -1624,9 +1600,9 @@ def _vision_sized_bytes(image_bytes: bytes) -> tuple:
     """(bytes, mime) bounded to VISION_MAX_SIDE, like _vision_sized for paths.
 
     The chat-turn photo arrives as BYTES through graph.vision_agent_node's
-    1536-px proxy and skipped the 1024 bound that every path-based call gets;
-    a 933x1400 upload crashed the model 4 times out of 4 (live 2026-09-13,
-    "The model has crashed without additional information"), each time costing
+    1536-px proxy and skipped the VISION_MAX_SIDE bound that every path-based call gets;
+    a 933x1400 upload crashed the model 4 times out of 4
+    ("The model has crashed without additional information"), each time costing
     a revive and the turn. Same picture at 682x1024 never did.
     """
     try:
