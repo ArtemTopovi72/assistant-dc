@@ -10,7 +10,6 @@ import logging
 import os
 import re
 import subprocess
-import time
 
 import music
 from config import OUTPUT_DIR
