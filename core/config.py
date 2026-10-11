@@ -619,7 +619,6 @@ RECOVERY_EXTRA_ROUNDS = _env_int("RECOVERY_EXTRA_ROUNDS", 4)
 REPLAN_FAILURE_THRESHOLD = _env_int("REPLAN_FAILURE_THRESHOLD", 3)
 LLM_MAX_RETRIES = 3          # total attempts before giving up on an LLM call
 LLM_RETRY_BASE_DELAY = 0.5   # seconds; doubled each retry (exponential backoff)
-API_MIN_INTERVAL = 1.0       # minimum seconds between outbound API calls
 
 # --- Streaming watchdog: catch a model that GETS STUCK ----------------------
 # Three independent stuck-modes a streaming completion can hit, each with its own
@@ -812,7 +811,6 @@ DR_RERANK_BACKEND = os.getenv("DR_RERANK_BACKEND", "auto")   # auto|cross|dense|
 # Document library reranker (cross-encoder, CPU): hit@1 0.675 -> 0.863 on the
 # 80-question ru eval. Empty string disables it.
 LIBRARY_CROSS_ENCODER = os.getenv("LIBRARY_CROSS_ENCODER", "BAAI/bge-reranker-v2-m3")
-DR_RERANK_MODEL = os.getenv("DR_RERANK_MODEL", "BAAI/bge-reranker-v2-m3")
 DR_RERANK_TOP_K = _env_int("DR_RERANK_TOP_K", 0)            # pages kept for briefing; 0 = keep ALL crawled
 # pages (rerank only REORDERS by relevance, never
 # drops). Was 14 — that silently discarded good
@@ -826,14 +824,12 @@ DR_RERANK_AUTHORITY_WEIGHT = _env_float("DR_RERANK_AUTHORITY_WEIGHT", 0.5)
 # apart from confirmation search; its evidence is tagged and surfaced, not hidden.
 DR_CONTRADICTION_ENABLED = os.getenv("DR_CONTRADICTION_ENABLED", "1") not in ("0", "false", "False")
 DR_CONTRADICTION_QUERIES = _env_int("DR_CONTRADICTION_QUERIES", 4)   # contradiction queries/run
-DR_CONTRADICTION_PER_QUERY = _env_int("DR_CONTRADICTION_PER_QUERY", 4)
 # Entity-driven multi-hop expansion (entities.py): extract named entities from the
 # first-pass briefs, build follow-up queries around the salient ones, search again.
 # Bounded by depth and a visited-set so it never loops.
 DR_MULTIHOP_ENABLED = os.getenv("DR_MULTIHOP_ENABLED", "1") not in ("0", "false", "False")
 DR_MULTIHOP_DEPTH = _env_int("DR_MULTIHOP_DEPTH", 1)         # recursion depth (0 = off)
 DR_MULTIHOP_ENTITIES = _env_int("DR_MULTIHOP_ENTITIES", 4)  # top entities expanded per hop
-DR_MULTIHOP_PER_QUERY = _env_int("DR_MULTIHOP_PER_QUERY", 4)
 # Reflection / error-correction: after the first synthesis-ready brief set, find
 # gaps (weak claims, unexpanded entities, no contradiction evidence) and decide
 # whether a second bounded pass is warranted.
