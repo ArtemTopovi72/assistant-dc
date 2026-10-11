@@ -38,3 +38,5 @@ Failures and fixes (commit `fix(deslop): …`):
 
 ## Local main
 Local `main` had 7 unpushed commits (video continue / plan / close-up inserts, fed9c99..bd36433) on top of 49695cc. They are merged together with `deslop-integration`, and the suite is re-run on the result before the push.
+
+Merged into main as f959410: one conflict in `media/video.py` (`CONTINUE_CTX_PREFIX`), kept main's camera-angle rule. Suite on merged main: 534/535; `test_tg_hardening` ("upgraded hash verifies") failed once under `-j 8` load and passes 176/176 three times alone, the scrypt memory pressure seen before ("page file too small"), not a regression.
