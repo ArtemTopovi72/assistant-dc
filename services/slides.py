@@ -392,7 +392,7 @@ def plan_deck(ctx, topic: str, n_slides: int = 0, out_lang: str = "",
     # because repeating an identical prompt to a model that just failed it mostly
     # fails again.
     attempts = (
-        dict(prompt=_PLAN_PROMPT, temperature=0.4, max_tokens=6000, force_think=False),   # 2026-09-25: no reasoning anywhere
+        dict(prompt=_PLAN_PROMPT, temperature=0.4, max_tokens=6000, force_think=False),
         dict(prompt=_PLAN_PROMPT, temperature=0.7, max_tokens=8000, force_think=False),
         dict(prompt=_PLAN_MINIMAL, temperature=0.3, max_tokens=8000, force_think=False),
     )
@@ -801,12 +801,9 @@ def repair_sources(sources: list, collected: list) -> tuple:
         elif same and key not in seen:
             seen.add(key)
             out.append(s)                   # ambiguous domain: do not guess
-        else:
-            # Nothing was collected on this domain at all, so the address
-            # cannot be checked. Dropped rather than printed: a deck whose
-            # sources slide 404s is worse than one with fewer citations, and
-            # the search results backfill the list below.
-            fixed += 0
+        # Otherwise nothing was collected on this domain, so the address cannot be
+        # checked. Dropped rather than printed: a deck whose sources slide 404s is
+        # worse than one with fewer citations, and the search results backfill the list.
     return out, fixed
 
 
@@ -993,7 +990,6 @@ def normalize_deck(data: dict, topic: str = "", n_slides: int = 0) -> dict:
             # sources slide: cover + ONE content slide + sources was refused
             # downstream as a stub. The sources
             # move into the speaker notes of the last slide instead.
-            closing = 0
             want_content = min(int(n_slides), MAX_SLIDES) - 1
             out["sources_in_notes"] = True
         want_content = max(2, want_content)
@@ -1963,7 +1959,6 @@ def pptx_audit(path: str) -> dict:
         for sh in slide.shapes:
             if getattr(sh, "has_chart", False):
                 charts += 1
-            if getattr(sh, "has_chart", False):
                 has_visual = True
             if sh.shape_type == 13:                      # PICTURE
                 pictures += 1
