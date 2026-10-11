@@ -156,7 +156,6 @@ class ResearchTabMixin:
         """Render the report. Prefer the QWebEngine viewer (typeset math + real
         tables); fall back to Qt's setMarkdown, then plain text."""
         import gui as _g
-        self._last_report_md = markdown_text
         if getattr(self, "research_web", None) is not None:
             try:
                 from PyQt5.QtCore import QUrl
