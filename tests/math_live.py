@@ -9,7 +9,6 @@ import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 import os
-import sys
 import threading
 import logging
 

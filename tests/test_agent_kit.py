@@ -255,11 +255,10 @@ def test_run_code_imports_the_projects_own_modules(ctx, box):
 
 
 def test_host_runner_also_sees_the_project_root(box):
-    import sys as _sys
     import code_runner
     box.write_text("mymod.py", "X = 41\n")
     box.write_text(".agent/probe.py", "import mymod\nprint(mymod.X + 1)\n")
-    res = code_runner._spawn([_sys.executable, "-u", str(box.root / ".agent/probe.py")],
+    res = code_runner._spawn([sys.executable, "-u", str(box.root / ".agent/probe.py")],
                              cwd=box.root, timeout=60)
     assert res.ok and "42" in res.output, res.output
 

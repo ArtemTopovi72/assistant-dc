@@ -16,7 +16,6 @@ try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 import os
 import shutil
-import sys
 import threading
 import time
 

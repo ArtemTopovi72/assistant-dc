@@ -15,7 +15,6 @@ its behavior is covered by the full live run + tests/math_stage_trace.py.
 Run with PYTHONIOENCODING=utf-8:  ./venv/Scripts/python.exe tests/sci_fidelity_audit.py
 """
 import sys, os, io, json, re
-import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))

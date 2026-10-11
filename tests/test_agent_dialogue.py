@@ -39,7 +39,7 @@ def check_lm_studio():
         if not models:
             return None
         return models[0]["id"]
-    except Exception as e:
+    except Exception:
         return None
 
 model_id = check_lm_studio()
@@ -52,7 +52,7 @@ print(f"LM Studio: model '{model_id}' is loaded\n")
 
 # ── test via the graph agent ──────────────────────────────────────────────────
 from graph import build_graph
-from models import Models, Context
+from models import Context
 from pathlib import Path
 import threading
 

@@ -12,11 +12,10 @@ from pathlib import Path
 import audio as A
 
 RESULTS = []
-import os as _os
 def check(name, cond, detail=""):
     RESULTS.append((name, bool(cond)))
     print("[" + ("PASS" if cond else "FAIL") + "] " + name + ("" if cond or not detail else " - " + detail))
-    if not cond and _os.environ.get("PYTEST_CURRENT_TEST"):
+    if not cond and os.environ.get("PYTEST_CURRENT_TEST"):
         raise AssertionError(str(name) + (": " + str(detail) if detail else ""))
 
 _TMP = Path(tempfile.mkdtemp(prefix="audiopure_"))
@@ -81,8 +80,7 @@ def test_ru_ordinal_and_date_to_russian():
 
 
 def test_time_to_russian():
-    import re
-    m = A._TIME_RE.search("14:30")
+    m =A._TIME_RE.search("14:30")
     out = A._time_to_russian(m)
     check("time_to_russian_basic", isinstance(out, str) and out != "")
     m2 = A._TIME_RE.search("14:05")
@@ -106,7 +104,6 @@ def test_number_to_russian_words():
 
 
 def test_num2words_missing():
-    import builtins
     saved = A._num2words
     A._num2words = None
     try:

@@ -18,11 +18,10 @@ import audio as A
 from _patch_base import RebindPatches
 
 RESULTS = []
-import os as _os
 def check(name, cond, detail=""):
     RESULTS.append((name, bool(cond)))
     print("[" + ("PASS" if cond else "FAIL") + "] " + name + ("" if cond or not detail else " - " + detail))
-    if not cond and _os.environ.get("PYTEST_CURRENT_TEST"):
+    if not cond and os.environ.get("PYTEST_CURRENT_TEST"):
         raise AssertionError(str(name) + (": " + str(detail) if detail else ""))
 
 _TMP = Path(tempfile.mkdtemp(prefix="audiovad_"))
@@ -83,7 +82,6 @@ def _make_fake_torch():
 
 def _listener(probs, threshold=0.5, end_silence_s=0.1, min_speech_s=0.05,
              pre_roll_s=0.05, max_utterance_s=10.0):
-    from config import SAMPLE_RATE
     import config
     saved = {k: getattr(config, k) for k in
              ("VAD_THRESHOLD", "VAD_END_SILENCE_S", "VAD_MIN_SPEECH_S",
@@ -216,7 +214,7 @@ def test_vad_run_paused_mid_utterance_drains():
     listener._stop_evt = threading.Event()
     t = threading.Thread(target=listener._run, daemon=True)
     t.start()
-    for i, f in enumerate([np.random.uniform(-0.05, 0.05, listener.FRAME).astype(np.float32) for _ in range(5)]):
+    for f in [np.random.uniform(-0.05, 0.05, listener.FRAME).astype(np.float32) for _ in range(5)]:
         listener._q.put(f.reshape(-1, 1))
     time.sleep(0.1)
     listener._paused.set()  # pause mid-utterance -> should drain+reset on next dequeue

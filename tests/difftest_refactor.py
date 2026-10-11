@@ -47,9 +47,6 @@ import image as M
 OUT = {}
 
 
-_REPO = os.path.dirname(os.path.abspath(__file__))
-
-
 def _scrub(v):
     """Strip checkout- and tempdir-dependent absolute paths so the diff shows
     BEHAVIOUR differences only, not the fact that the two trees live in

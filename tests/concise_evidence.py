@@ -88,7 +88,7 @@ def redact_payload(p):
 
 
 def show(label, no_think, task, with_tools):
-    msg, dt, cap = run_once(no_think, task, with_tools)
+    _, dt, cap = run_once(no_think, task, with_tools)
     payload = cap.get("payload", {})
     resp = cap.get("resp", {}) or {}
     rmsg = (resp.get("choices") or [{}])[0].get("message", {}) if resp else {}

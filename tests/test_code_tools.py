@@ -345,7 +345,7 @@ def test_the_kit_is_pinned_exactly_when_the_folder_has_files(box):
     """The decision itself, not the loop's source and not a stubbed harness --
     a harness that replaces the schema list cannot tell this apart from
     retrieval's send-everything fallback, so it proved nothing."""
-    import graph_personality as P, tool_retrieval as TR
+    import graph_personality as P
 
     class _C:
         sandbox = None
@@ -391,7 +391,6 @@ def test_a_delivered_archive_forces_unpack(box):
     «Сначала я распакую архив ... Начинаю поиск.» and ended the turn with no
     tool call. Every consumer idled; the user waited on a promise."""
     import graph_personality as P
-    import zipfile
     with zipfile.ZipFile(box.root / "DCIM.zip", "w") as z:
         z.writestr("a.txt", "x")
     hint = "найди мост\n[The file 'DCIM.zip' is now in your working folder. Open it yourself with: list_files, unpack_archive, read_file.]"

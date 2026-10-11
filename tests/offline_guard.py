@@ -24,10 +24,6 @@ Import it before the code under test makes its first call::
 Suites that genuinely exercise a live model (anything named ``*_live``,
 ``bench/lmstudio_harness_selftest``, ``test_agent_dialogue``) must NOT use this.
 """
-import logging
-
-logger = logging.getLogger(__name__)
-
 _ORIGINAL = None
 _ORIGINAL_UNLOAD = None
 _ORIGINAL_RELOAD = None
