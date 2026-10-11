@@ -592,7 +592,7 @@ Embody it naturally — don't announce it. It decides your picks and tone; never
 
 def _user_now(tz: str = ""):
     """The USER's wall clock: a Novosibirsk user asked «который у меня час» at
-    03:48 and got the server's 23:48 (live 2026-09-28)."""
+    03:48 and got the server's 23:48."""
     from datetime import datetime
     if tz:
         try:
@@ -605,7 +605,7 @@ def _user_now(tz: str = ""):
 
 def _now_line(tz: str = "") -> str:
     """Local clock with its UTC offset: without it "который час в Токио" came
-    back as an invented 05:14 at 21:31 Tokyo time (live 2026-09-28)."""
+    back as an invented 05:14 at 21:31 Tokyo time."""
     n = _user_now(tz)
     z = n.strftime("%z")
     return f"Local time is {n:%H:%M} (UTC{z[:3]}:{z[3:]})."

@@ -395,7 +395,7 @@ def _handle_remember_fact(ctx, state, args: dict) -> str:
                 "user briefly and plainly that you won't do that, then carry on normally.")
     # Capture the count BEFORE pin_fact so we can tell whether this save pushed
     # the store past PINNED_FACTS_LIMIT and silently evicted the oldest fact —
-    # the confirmation used to say "saved permanently" even when it wasn't.
+    # otherwise the confirmation says "saved permanently" even when it wasn't.
     _limit = getattr(config, "PINNED_FACTS_LIMIT", 40)
     replaced = _superseded_facts(ctx, fact)
     if replaced:

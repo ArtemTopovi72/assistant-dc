@@ -8,7 +8,7 @@ the word cannot hand the program a different one.
 
 Also read here: an explicit length («на 1200 слов», «подробно»), a question
 about the earlier conversation, a child's medicine dose with the weight, and a
-coding ask. Replaces the keyword regexes graph_compose used to carry.
+coding ask.
 """
 import logging
 import os

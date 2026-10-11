@@ -231,7 +231,7 @@ def _cart_load(ctx) -> list:
 
 
 def _cart_save(ctx, items) -> None:
-    """Write-then-replace: a crash mid-write used to leave a torn cart.json,
+    """Write-then-replace: a crash mid-write would leave a torn cart.json,
     which _cart_load reads as empty -- the whole list gone."""
     import json
     path = _cart_file(ctx)

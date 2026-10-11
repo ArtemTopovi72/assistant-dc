@@ -242,7 +242,7 @@ _PROMISE_NOUN = {
 def _tool_said_unsupported(messages) -> bool:
     """The last tool result of the turn says the assistant cannot do this at all
     (an engine that was removed): «попробуй ещё раз» would send the user in
-    circles (live 2026-10-08, «расширь картинку со всех сторон»)."""
+    circles («расширь картинку со всех сторон»)."""
     for m in reversed(list(messages or [])):
         if m.get("role") == "user":
             break

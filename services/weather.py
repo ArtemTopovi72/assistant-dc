@@ -104,7 +104,7 @@ def _nominative(city: str) -> str:
     """«Твери» -> «Тверь», «Нижнем Новгороде» -> «Нижний Новгород».
 
     The geocoder matches name PREFIXES: the inflected «Твери» found Tiberias
-    (Тверия, Israel, +31°) for a user asking about Tver (live 2026-09-27).
+    (Тверия, Israel, +31°) for a user asking about Tver.
     Place names and the adjectives in them go to their dictionary form; any
     other word is kept as typed. "" when nothing changes or no morphology."""
     try:
@@ -233,7 +233,7 @@ _WET_CODES = frozenset((51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 
 
 def umbrella_line(buckets: list, lang: str = "en") -> str:
     """A yes/no for the umbrella: "погода завтра, брать зонт?" got a table and
-    clothing advice but never the answer (live 2026-09-28)."""
+    clothing advice but never the answer."""
     ru = (lang or "").startswith("ru")
     wet = [b for b in buckets if b.get("wet_hours")]
     if not wet:

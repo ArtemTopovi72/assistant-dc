@@ -238,7 +238,7 @@ def _is_photo_intake(ctx, state: AgentState, user_input: str, original_input: st
     """A photo that just arrived with no request attached: no caption at all
     ("image"), or a caption that only names or introduces it («Вот Френк
     Харриган»). Such a turn only needs the vision description turned into
-    "this is X -- what should I do with it?" (live 2026-09-22: the full loop
+    "this is X -- what should I do with it?" (the full loop
     deliberated for over a minute and never answered)."""
     if not state.get("image_data") or not (state.get("vision_summary") or "").strip():
         return False
@@ -250,8 +250,8 @@ def _is_photo_intake(ctx, state: AgentState, user_input: str, original_input: st
 
 def _followup_of_tool_turn(state, text: str, ctx=None) -> bool:
     """A message right after a turn that used a tool, which the model reads as
-    needing a tool too: «а в Нью-Йорке?» after local_time (live 2026-09-28,
-    the fast path guessed the clock). It gets the previous turn's tools."""
+    needing a tool too: «а в Нью-Йорке?» after local_time (the
+    fast path guessed the clock). It gets the previous turn's tools."""
     msgs = list(state.get("messages", []))
     if msgs and msgs[-1].get("role") == "user":
         msgs = msgs[:-1]                     # the current message, if already in

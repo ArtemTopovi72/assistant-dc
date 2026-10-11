@@ -135,8 +135,7 @@ def strip_channel_tokens(text: str) -> str:
     """Remove model thinking blocks and channel/control tokens.
 
     Delegates to utils.strip_control_tokens so there is ONE definition of the
-    grammar: this used to carry its own narrower copy that knew only the
-    `<|channel>thought` spelling, and the two drifted apart.
+    grammar.
     """
     if not text:
         return text
@@ -1079,9 +1078,8 @@ def _try_revive_model(body: str, payload: dict) -> bool:
     global _revive_ok
     # The lock is held for the whole reload: a second caller that hits "No
     # models loaded" while the first is reloading BLOCKS here, then finds a
-    # fresh successful revive and simply retries. It used to return False
-    # inside the cooldown and lose its turn (live, 2026-09-12: the turn right
-    # after a crash always died).
+    # fresh successful revive and simply retries rather than returning False
+    # inside the cooldown and losing its turn.
     with _revive_lock:
         now = time.time()
         if now - _revive_last < LLM_REVIVE_MIN_INTERVAL_S:
@@ -1174,10 +1172,9 @@ def _log_context_hint(body: str, payload: dict) -> None:
     m = _N_CTX_RE.search(body or "")
     if not m:
         # The numberless phrasing ("Context size has been exceeded."). It says
-        # nothing about sizes, so this used to log NOTHING at all -- the one
-        # message whose whole job is to name the number the user has to raise
-        # stayed silent on the phrasing that carries no number. Estimate it
-        # instead: ~3 characters per token is close enough to point at the
+        # nothing about sizes, yet this message's whole job is to name the number
+        # the user has to raise, so it must not stay silent on the phrasing that
+        # carries no number. Estimate it instead: ~3 characters per token is close enough to point at the
         # right order of magnitude, which is all the reader needs.
         if _looks_like_context_overflow(body):
             _chars = len(_json.dumps(payload.get("messages") or [],
@@ -1329,12 +1326,12 @@ def _stream_chat_raw(ctx, payload: dict):
         headers=headers,
     ) as resp:
         if resp.status_code != 200:
-            # The BODY is the diagnosis and used to be thrown away. LM Studio
+            # The BODY is the diagnosis; never discard it. LM Studio
             # answers a request that does not fit the loaded context with
             # "n_keep: 9905 >= n_ctx: 8192" — logging only "HTTP 400" turned a
             # precise, actionable error into a silent empty turn, which the agent
             # then reported to the user as "I cannot draw, the tools are
-            # unavailable". Never discard it again.
+            # unavailable".
             try:
                 body = resp.text[:600]
             except Exception:
@@ -1387,9 +1384,9 @@ def _stream_chat_raw(ctx, payload: dict):
                 except (ValueError, TypeError, json.JSONDecodeError):
                     continue
                 # An error can arrive INSIDE the stream as {"error": ...} with no
-                # "choices" key. That used to fall into the generic `continue` below
-                # and the call returned an empty message — indistinguishable from a
-                # model that simply said nothing.
+                # "choices" key. Left to the generic `continue` below, the call would
+                # return an empty message — indistinguishable from a model that
+                # simply said nothing.
                 if isinstance(chunk, dict) and chunk.get("usage"):
                     usage = chunk["usage"]
                 if isinstance(chunk, dict) and chunk.get("error"):
@@ -1454,14 +1451,13 @@ def _stream_chat_raw(ctx, payload: dict):
                 # which costs seconds instead of minutes. Checked on a bounded tail every
                 # LLM_REPEAT_CHECK_EVERY chars, so the cost does not grow with output size.
                 #
-                # BOTH channels are sampled. `streamed_chars` has always counted
-                # content AND reasoning, but the tail used to be built from
-                # content_parts alone — so a model looping inside its REASONING
-                # channel ticked the checkpoint over and over against an empty tail
-                # and was never caught. That is the house model's channel: Gemma 4
+                # BOTH channels are sampled. `streamed_chars` counts content AND
+                # reasoning, so a tail built from content_parts alone would let a
+                # model looping inside its REASONING channel tick the checkpoint
+                # over and over against an empty tail and never be caught. That is the house model's channel: Gemma 4
                 # spends most of its budget thinking (which is why max_tokens is
-                # floored to GEMMA_MIN_TOKENS), so the guard was blind exactly where
-                # it was needed. Measured on an identical 47-char loop: a content
+                # floored to GEMMA_MIN_TOKENS), so a content-only guard is blind exactly
+                # where it is needed. Measured on an identical 47-char loop: a content
                 # loop was cut after 2.4k chars, the same loop in reasoning ran to
                 # 144k and would have continued to the 200k/600s last-resort caps.
                 if (LLM_REPEAT_CHECK_EVERY > 0
@@ -1625,8 +1621,8 @@ def _vision_sized_bytes(image_bytes: bytes) -> tuple:
 
     The chat-turn photo arrives as BYTES through graph.vision_agent_node's
     1536-px proxy and skipped the 1024 bound that every path-based call gets;
-    a 933x1400 upload crashed the model 4 times out of 4 (live 2026-09-13,
-    "The model has crashed without additional information"), each time costing
+    a 933x1400 upload crashed the model 4 times out of 4
+    ("The model has crashed without additional information"), each time costing
     a revive and the turn. Same picture at 682x1024 never did.
     """
     try:

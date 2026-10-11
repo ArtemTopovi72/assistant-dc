@@ -327,7 +327,7 @@ def review_photo_urls(content: dict) -> list:
 
 def parse_reviews(page: dict, limit: int = 10, sku=None) -> dict:
     """`sku`: keep only reviews of THAT item. Ozon lists the whole family's
-    reviews on every variant's page (live 2026-09-27: a snow blower was judged by
+    reviews on every variant's page (a snow blower was judged by
     its siblings' reviews) -- each review carries its own itemId."""
     w = _widget(page, "webListReviews") or {}
     raw = w.get("reviews") or w.get("items") or []

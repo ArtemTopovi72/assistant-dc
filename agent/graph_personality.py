@@ -4,8 +4,7 @@ Lifted out of graph.py -- 718 of its ~830 seam-blocked lines. personality_node
 runs the fast path, the tool round loop, the fabrication/replan guards and the
 image-tool steering; _fast_path_allowed/_fast_path_reply are its short-circuit;
 _finalize_answer turns whatever the loop ended on into the one answer the user
-gets. Together they were "the only thing left in graph.py", per the comment
-that used to sit where this module's import now does.
+gets.
 
 Four names kept them pinned: `send_to_lm_studio`, `execute_tool`,
 `TOOL_SCHEMAS` and `_TOOL_TRIGGER_RE` are all patched directly ON the graph
@@ -153,7 +152,7 @@ _DELIVERY_CLAIM_RE = re.compile(
 def _inspection_misses_request(request: str, verdict: str, tools_called: set) -> bool:
     """The inspector labels every point PRESENT yet its own description shows the
     request was not met: three cats for «пусть котов будет два», a rider behind
-    the car for «рядом с машиной» (live 2026-10-08) -- both answered «готово».
+    the car for «рядом с машиной» -- both answered «готово».
     Labels are matched by _inspection_contradicts_work; counts and places live
     in the description, which only a reading can judge."""
     if not (set(tools_called or ()) & (_EDIT_TOOLS | {"generate_image"})):
@@ -1752,7 +1751,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             response_message["tool_calls"] = tool_calls
         # A word to the user before the long work starts (see interim.py):
         # the model's own «Сейчас нарисую…» from this round, or a one-line
-        # note naming the work. Used to be silence until the render finished.
+        # note naming the work.
         if tool_calls and not ctx.is_cancelled():
             import interim as _interim
             if _interim.offer(ctx, response_message.get("content") or "",

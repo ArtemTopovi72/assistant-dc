@@ -106,7 +106,7 @@ def translate_node(ctx: Context, state: AgentState) -> AgentState:
 
 def _add_earlier_pictures(ctx, state, summary: str) -> str:
     """«что общего у двух фото?»: the overview covers the current picture only,
-    and the answer was "you sent just one photo" (live 2026-10-08). When the
+    and the answer was "you sent just one photo". When the
     user relates several pictures, the chat's earlier ones are read with the
     same question and put next to it."""
     earlier = [p for p in (getattr(ctx, "image_undo", None) or [])
@@ -274,7 +274,7 @@ def speakable(ctx: Context, text: str) -> str:
 def spoken_text(ctx: Context, text: str) -> str:
     """Everything a reply goes through before a voice says it: retold as speech,
     then numbers, dates and lists spelled for the engine. One function for every
-    path that voices a reply -- the Telegram fallback used to read the raw text."""
+    path that voices a reply."""
     return post_process_answer(speakable(ctx, text))
 
 

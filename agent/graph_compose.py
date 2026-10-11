@@ -221,7 +221,7 @@ def _wants_fresh_picture(ctx, state) -> bool:
     шляпу' / 'draw a hat on it' refers to the existing one. The model's read
     of the turn (agent/intent.py): generate_image wanted and no edit tool --
     'нарисуй набережную Сочи в такую погоду' after a lighthouse was redrawn
-    ON the lighthouse (live 2026-09-13) when this was a verb list."""
+    ON the lighthouse when this was a verb list."""
     from graph_personality import _turn_intent
     from graph_fastpath import _IMAGE_ACTION_TOOLS
     text = state.get("user_input_original") or state.get("user_input") or ""

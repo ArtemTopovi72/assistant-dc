@@ -145,8 +145,8 @@ def log_stage(stage: str) -> None:
 
 def _beat(clean: bool = False) -> None:
     """runtime/heartbeat.json: proof of life every few seconds. A process that
-    vanishes without atexit (a fast-fail abort, a kill -- live 2026-09-27 17:01,
-    nothing in any log) leaves its last beat behind for the next start to report."""
+    vanishes without atexit (a fast-fail abort, a kill -- nothing
+    in any log) leaves its last beat behind for the next start to report."""
     import json
     import os
     try:

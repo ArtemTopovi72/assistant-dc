@@ -189,7 +189,7 @@ def missing_prerequisite(ctx, state, tool: str) -> Optional[str]:
 _MEANINGFUL = re.compile(r"[0-9A-Za-zÀ-ɏЀ-ӿ一-鿿]")
 
 # Values a small model emits when it has nothing to say but the schema demands
-# a string. Each of these used to sail through `min_length=1` and reach the
+# a string. Each of these would sail through `min_length=1` and reach the
 # renderer as an effectively empty positive prompt.
 _PLACEHOLDERS = {
     "", "none", "null", "nil", "n/a", "na", "nan", "empty", "undefined",
@@ -218,9 +218,9 @@ MEANINGFUL_TEXT_FIELDS: dict = {
 # tool_args' Literal, the description prose and this gate must agree; a mode
 # outside this set is silently coerced to None by pydantic, which turns a
 # requested "upscale" into a quality pass that ignores the request.
-# 'enhance'/'upscale'/'restore'/'outpaint' used to be distinct pipelines, all
-# built on the old model checkpoint that was removed from the product along with
-# its files — 'redraw' (FireRed) is the only mode left with an engine behind it.
+# 'enhance'/'upscale'/'restore'/'outpaint' have no engine: the old model
+# checkpoint behind them was removed from the product along with its files —
+# 'redraw' (FireRed) is the only mode with an engine behind it.
 REDRAW_MODES = ("redraw",)
 
 # The reference roles transfer_image understands. An unknown role is dropped

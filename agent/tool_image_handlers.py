@@ -75,8 +75,8 @@ def _absence_read(check: str) -> bool:
 def _note_source(state, source) -> None:
     """Record which picture an editing tool starts from, so the delivery layer
     can register the result as a VERSION of it. A free-text edit ("надень на
-    кота шляпу") used to produce a picture with no parent, and the next edit
-    asked "Which picture?" between the two (live, 2026-09-12, journey 21)."""
+    кота шляпу") would otherwise produce a picture with no parent, and the next
+    edit would ask "Which picture?" between the two."""
     if source:
         state["image_derived_from"] = str(source)
 
@@ -233,8 +233,8 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
         )
 
     # Region-aware: also catches result-style phrasings ("bare neck, no scarf",
-    # "без шарфа") and take-off/сними verbs the plain verb regex used to miss —
-    # those were routed as "change the scarf to ..." and came back recoloured.
+    # "без шарфа") and take-off/сними verbs the plain verb regex misses —
+    # those get routed as "change the scarf to ..." and come back recoloured.
     removal = image_mod._is_removal_of(instructions, region, ctx=ctx)
     # A region that names an ABSENCE ("the area where the vase was") is not a
     # thing to remove: the thing is already gone. Live 2026-09-25 (journey #39)
@@ -758,7 +758,7 @@ def _keep_quoted_names(description: str, state) -> str:
     """A name the user quoted in Cyrillic («Колосок») is lettering, verbatim.
 
     The model wrote 'Kolosok' into its description and the logos came out in
-    Latin letters (live 2026-09-28). A transliteration of the quoted name is
+    Latin letters. A transliteration of the quoted name is
     swapped back; a quoted name missing altogether is stated at the end."""
     import graph_language as _gl
     own = str((state or {}).get("user_input_original") or (state or {}).get("user_input") or "")
@@ -1446,8 +1446,7 @@ def redraw_whole_image(ctx, source: str, instructions: str):
 
     Our own Ideogram picture is re-rendered from its stored boxes; anything
     else (a user's photo) goes through a mask-free FireRed edit. Shared by the
-    redraw_image tool and the GUI Redraw / Style preset buttons, which used to
-    call an old model controlnet graph whose checkpoint no longer exists.
+    redraw_image tool and the GUI Redraw / Style preset buttons.
     """
     new_path = None
     # Which engine ACTUALLY ran, for the audit log.
@@ -1544,10 +1543,9 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
 
     mode = (args.get("mode") or "").strip().lower()
     instructions = (args.get("instructions") or "").strip()
-    # 'enhance'/'upscale'/'restore'/'outpaint' used to be distinct pipelines, all
-    # built on the old model checkpoint. That model was removed from the product
-    # (Ideogram + FireRed only) and its files deleted from disk, so those modes
-    # have no engine left to run on. Every redraw now goes through the same
+    # 'enhance'/'upscale'/'restore'/'outpaint' have no engine left to run on: the
+    # old model checkpoint behind them was removed from the product (Ideogram +
+    # FireRed only) and its files deleted from disk. Every redraw goes through the same
     # FireRed path below; an empty instruction gets a generic quality nudge so a
     # bare "enhance" request still does something instead of a no-op.
     mode = "redraw"
