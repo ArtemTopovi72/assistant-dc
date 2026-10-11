@@ -747,9 +747,10 @@ def fetch_reference_photo(ctx, query: str, dest_path: str, *, tries: int = 10,
         try:
             shutil.copyfile(gray_fallback, dest_path)
             os.remove(gray_fallback)
-        except Exception:
-            pass
-        logger.info("fetch_reference_photo: no colour photo; using grayscale fallback for %r", query)
+        except Exception as exc:
+            logger.warning("fetch_reference_photo: grayscale fallback copy failed for %r: %s", query, exc)
+        else:
+            logger.info("fetch_reference_photo: no colour photo; using grayscale fallback for %r", query)
         return dest_path
     logger.warning("fetch_reference_photo: no candidate with a clear face in %d checked for %r",
                    checked, query)

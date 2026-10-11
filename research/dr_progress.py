@@ -6,9 +6,11 @@ Research tab's progress panel, the Telegram status message). The callback is
 untrusted: an exception from the UI side is swallowed rather than aborting a
 research run that is otherwise going fine.
 """
+import logging
 import time
 from typing import Callable, Optional
 
+logger = logging.getLogger("assistant.research")
 
 # Phase labels surfaced to the GUI progress panel (the spec's example statuses).
 PHASES = ("Expanding queries", "Searching", "Crawling", "Extracting",
@@ -57,10 +59,7 @@ class _Progress:
 
     def snap_formula(self, stage: str, text: str) -> None:
         """Record a stage text snapshot for the formula trace (best-effort)."""
-        try:
-            self.formula_snapshots.append((stage, text or ""))
-        except Exception:
-            pass
+        self.formula_snapshots.append((stage, text or ""))
 
     def bump(self, phase: Optional[str] = None, message: str = "", **delta):
         """ADD to the counters instead of replacing them.
@@ -83,5 +82,5 @@ class _Progress:
         if self._cb is not None:
             try:
                 self._cb(self.phase, dict(self.stats), message)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("progress callback failed: %s", exc)

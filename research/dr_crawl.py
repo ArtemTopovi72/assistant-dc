@@ -443,8 +443,8 @@ def rerank_for_briefing(topic: str, pages: list, profile: dict, prog: _Progress)
     try:
         from rerank import get_reranker
         backend = get_reranker(S.DR_RERANK_BACKEND).backend
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("rerank backend label lookup failed: %s", exc)
     kept = [f"{p['domain']}({p.get('_rerank_relevance', 0):.2f})" for p in ordered[:6]]
     logger.info("RERANK[%s]: %d->%d q=%r kept top: %s",
                 backend, len(pages), len(ordered), rr_query[:70], kept)

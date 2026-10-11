@@ -116,8 +116,8 @@ class ExtractionCache:
             if path.exists() and time.time() - path.stat().st_mtime < self.FAIL_TTL:
                 self.skipped += 1
                 return True
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("cache failed_recently %s: %s", url, exc)
         return False
 
     def mark_failed(self, url: str) -> None:
@@ -132,8 +132,8 @@ class ExtractionCache:
     def invalidate(self, url: str) -> None:
         try:
             (self.dir / f"{_key(url)}.json").unlink(missing_ok=True)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("cache invalidate %s: %s", url, exc)
 
     PRUNE_EVERY = 86400
 
