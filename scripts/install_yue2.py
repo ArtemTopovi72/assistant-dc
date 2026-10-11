@@ -1,4 +1,4 @@
-"""Install YuE2, the song engine, in one command. `setup` leaves it out (owner
+r"""Install YuE2, the song engine, in one command. `setup` leaves it out (owner
 10-03: «делай сам»): its torch/transformers pins clash with the app, so it
 lives in its own venv, and it needs a CUDA card.
 
