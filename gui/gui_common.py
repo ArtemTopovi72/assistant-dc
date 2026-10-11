@@ -24,7 +24,6 @@ import logging
 import os
 import time
 
-import gui_i18n
 import ui_scale
 from ui_scale import px
 from PyQt5.QtCore import QPoint, QRect, QSize, Qt
