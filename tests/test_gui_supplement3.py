@@ -74,8 +74,7 @@ def test_system_info_variants():
 def test_image_viewer_save_fallback():
     p = _png("iv.png")
     dlg = gui.ImageViewerDialog([p])
-    # save where copyfile raises but pixmap save works: point source at a missing file but
-    # keep a valid loaded pixmap, and save to a dir path? Simpler: stub shutil.copyfile to raise.
+    # copyfile raises but the pixmap save still works.
     dest = os.path.join(_TMP, "ivsave.png")
     _QFD.getSaveFileName = staticmethod(lambda *a, **k: (dest, ""))
     orig = gui.shutil.copyfile

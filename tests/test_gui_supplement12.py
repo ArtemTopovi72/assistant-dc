@@ -72,11 +72,11 @@ def test_first_guard_returns():
     o = _noop()
     try:
         w = _win()
-        # _retry_hands: busy -> first guard return (6502->6503)
+        # _retry_hands: busy -> first guard return
         w.worker = object(); w._retry_hands(); w.worker = None
-        # _memory_center_set_profile: empty name -> return (6695->6696)
+        # _memory_center_set_profile: empty name -> return
         w._memory_center_set_profile("")
-        # _queue_move on a NON-pending (running) selected task (5461->5462)
+        # _queue_move on a NON-pending (running) selected task
         w._queue_paused = True
         w._enqueue("t", announce=False)
         w._task_queue[0]["status"] = "running"
@@ -91,7 +91,7 @@ def test_on_vad_utterance_normal_path():
     o = _noop()
     try:
         w = _win()
-        # ultra OFF -> normal RequestWorker path (5758 false -> 5773)
+        # ultra OFF -> normal RequestWorker path
         w.ultra_search_on = False
         w.vad_listener = types.SimpleNamespace(is_healthy=lambda: True, set_paused=lambda p: None)
         w.captured_image = None
@@ -111,7 +111,7 @@ def test_db_clear_purge_raises():
                                            stats=lambda: {}, is_empty=lambda: True, close=lambda: None)
         oq = QMessageBox.question; QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.Yes)
         try:
-            w._db_clear()   # purge_all raises -> "Clear failed" (6084-6085)
+            w._db_clear()   # purge_all raises -> "Clear failed"
             check("db_clear_purge_raises", "Clear failed" in w.db_status.text())
         finally:
             QMessageBox.question = oq
@@ -131,7 +131,7 @@ def test_transfer_plan_viz_clear():
         tab._add_row(_png("tp1.png")); tab._add_row(_png("tp2.png"))
         tab._rows[0]["combo"].setCurrentIndex(0)   # target, no mask
         tab._rows[1]["combo"].setCurrentIndex(2)
-        tab._run("plan")   # plan mode, no target_mask -> viz asset+mask cleared (3867-3871)
+        tab._run("plan")   # plan mode, no target_mask -> viz asset+mask cleared
         check("transfer_plan_viz", tab.worker is not None)
         tab.worker = None
     finally:
@@ -173,7 +173,7 @@ def test_paste_hasimage_fails_then_urls():
 def test_flowwidget_heightforwidth():
     fw = gui._FlowWidget(gui.FlowLayout())
     fw.resize(300, 80)
-    h = fw.heightForWidth(250)   # line 418
+    h = fw.heightForWidth(250)
     check("flow_hfw", isinstance(h, int))
 
 
