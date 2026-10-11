@@ -121,7 +121,6 @@ check("one wrong letter is still the word", D._similarity("POLICE", "POLIGE") >=
 check("nothing read at all scores zero", D._similarity("POLICE", "") == 0.0)
 check("cyrillic survives normalisation", D._similarity("ПОЛИЦИЯ", "полиция") > 0.99)
 
-src = inspect.getsource(D)
 check("the transcription prompt forbids correcting the spelling",
       "Never correct a" in D._TEXT_READ_PROMPT)
 # A prompt that asks for verbatim output must contain nothing quotable: a model
