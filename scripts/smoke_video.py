@@ -64,7 +64,7 @@ def stage_server():
             bad(f"ComfyUI {ver} has no MiniMaxH3 nodes — 0.30.0+ is required. "
                 f"Point COMFY_SRC at the ComfyUI-0.30.0 tree and restart it.")
             return False
-    except Exception:
+    except ValueError:
         pass
 
     missing_nodes = []
