@@ -151,7 +151,10 @@ CAUSE_RULE = (" Show every cause on screen: anything thrown is first held in a v
               "leaves it, and travels in an arc from that hand to where it lands; nothing appears "
               "from nowhere or falls from the sky unless the script says so. Faces and bodies react "
               "to what happens to them: someone being thrown out or hit looks shocked or hurt, "
-              "not happy.")
+              "not happy. Everything moves at real-time speed, never in slow motion. Things "
+              "are continuous: a ball, apple or cork is visible all the way from where it starts "
+              "to where it ends and never pops into or out of existence. Physics stays ordinary: "
+              "liquids pour and splash in normal amounts, small things stay small.")
 
 
 def split_script(description: str, max_seconds: float = 0.0) -> list:
@@ -1480,8 +1483,9 @@ def bridge_script(ctx, parts: list) -> list:
     guide = ("A video script is split into numbered parts rendered one after another; each part "
              "starts exactly where the previous one ended. For every part from 2 on: if its FIRST "
              "action needs a place, object or person that the end of the previous part does not "
-             "leave visible and within reach, write ONE short English sentence of how the person "
-             "gets it first. Things never move by themselves: a person reaches off-frame and "
+             "leave visible and within reach -- or has someone in another place or pose than the "
+             "previous part leaves them (sitting on the floor there, on a windowsill here) -- "
+             "write ONE short English sentence of how they get there or get it first. Things never move by themselves: a person reaches off-frame and "
              "brings the object into the shot with their hands, or walks to the place. E.g. 'He "
              "reaches off-frame to the right, lifts a steaming pot with both hands and sets it on "
              "the counter in front of him.' (the form only -- that pot and counter are never in this "
