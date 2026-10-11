@@ -1,6 +1,6 @@
 """«погода в Твери» must be Tver, not Tiberias. The geocoder matches name
-prefixes, and the inflected «Твери» is a prefix of «Тверия» (Israel, +31°);
-live persona run 2026-09-27. Network stubbed: the fake geocoder behaves like
+prefixes, and the inflected «Твери» is a prefix of «Тверия» (Israel, +31°).
+Network stubbed: the fake geocoder behaves like
 Open-Meteo's prefix match."""
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -29,7 +29,7 @@ assert W.geocode_city("Тверь", "ru")["name"] == "Тверь"
 assert W.geocode_city("Tver", "en") is None          # Latin input untouched by the Russian morphology
 print("PASS weather city case")
 
-# "на выходных" is Sat+Sun (live 2026-09-28). The place and day are the
+# "на выходных" is Sat+Sun. The place and day are the
 # model's read (intent.weather); phrases: bench/intent_song_weather_live.py.
 import datetime as _d
 import intent

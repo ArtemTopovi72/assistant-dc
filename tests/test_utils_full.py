@@ -77,8 +77,8 @@ def test_cleanup_runtime_artifacts():
     n2 = U.cleanup_runtime_artifacts(_TMP / "does_not_exist_dir")
     check("cleanup_missing_dir_zero", n2 == 0)
 
-    # The image pipeline's scratch (never delivered) piled up to 8.9k files:
-    # its markers are swept too; a delivered result is not.
+    # The image pipeline's scratch files (never delivered) are swept too;
+    # a delivered result is not.
     d2 = _TMP / "artifacts2"
     d2.mkdir(exist_ok=True)
     scratch = [d2 / n for n in ("a_INTERMEDIATE_firered_tile_1.png", "_crop_2.png",
@@ -228,7 +228,6 @@ def test_throttle_external_calls():
 
 
 def test_ensure_required_files():
-    # This used to accept either outcome (ran / raised), so it could not fail.
     import config as C
     from pathlib import Path as _P
     saved = (C.WEIGHTS_PATH, C.DC_REF_WAV, C.VOCOS_DIR, C.VOCAB_PATH)

@@ -1,7 +1,6 @@
 """Continuation as a Herrgott chain (H3 Infinite Continuation Suite v1.4): each part keeps
 its full AV latent, the next part copies the previous tail into its own latent under the
-native denoise mask, and the suite's stitch node joins the saved parts. Live 10-07 the chef
-chain had no reset at the seams; the pinned-frames path reset after the pins."""
+native denoise mask, and the suite's stitch node joins the saved parts."""
 import os
 import sys
 
@@ -174,7 +173,7 @@ def test_voices_keep_the_old_path(monkeypatch, tmp_path):
 
 def test_a_prepared_part_calls_no_model(monkeypatch, tmp_path):
     """Inside a chain the card is held and the chat model is out: generate_video must not
-    reach for it (live 10-07: the Context-IR rewrite met an unloaded model every part)."""
+    reach for it (the Context-IR rewrite met an unloaded model every part)."""
     def boom(*a, **k):
         raise AssertionError("model call during a prepared render")
     for name in ("estimate_seconds", "to_context_ir", "mark_speech_stress"):
@@ -187,7 +186,7 @@ def test_a_prepared_part_calls_no_model(monkeypatch, tmp_path):
 
 
 def test_a_chain_part_samples_like_a_plain_clip():
-    """Live 10-07: the chain ran the FL2V turbo LoRA at 6 steps and came back soapy;
+    """The chain ran the FL2V turbo LoRA at 6 steps and came back soapy;
     the plain t2va clip (TaoMate 3-step LoRA) was crisp. Same LoRA, same steps."""
     plain = V.build_workflow("a chef", mode="t2va", width=1344, height=768, frames=226, seed=1,
                              images=[], videos=[], audios=[], steps=V.VIDEO_STEPS, ctx=None)
@@ -199,7 +198,7 @@ def test_a_chain_part_samples_like_a_plain_clip():
 
 
 def test_later_parts_know_the_scene_and_carry_no_example_action():
-    # 10-09: part 2 of «naked women walk past the bag of money at Lakhta» came out as a hand
+    # Part 2 of «naked women walk past the bag of money at Lakhta» came out as a hand
     # putting a tool on a counter and hitting a stone with a mallet -- the prefix's own example.
     assert "counter" not in V.CONTINUE_CTX_PREFIX and "tool" not in V.CONTINUE_CTX_PREFIX
     part = "They walk on toward the water."

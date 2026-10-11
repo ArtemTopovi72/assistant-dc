@@ -21,7 +21,7 @@ out2 = V.mark_speech_stress(ctx, "shouts, <d>[Russian] иди ты</d> and runs"
 assert "<d>[Russian] иди́ ты</d>" in out2, out2
 print("d-tag ok")
 
-# the real RUAccent drops "<", "/" and quotes; the tags must survive anyway (live 10-02: "хуй!d>")
+# the real RUAccent drops "<", "/" and quotes; the tags must survive anyway ("хуй!d>")
 class Lossy(Acc):
     def __call__(self, t):
         return super().__call__(t).replace("<", "").replace("/", "").replace("«", "").replace("»", "")

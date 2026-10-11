@@ -1,4 +1,4 @@
-"""Live 2026-10-01: «два деда дерутся» with two voice samples spoke with neither
+"""«два деда дерутся» with two voice samples spoke with neither
 voice. The samples were 43-51 s (H3 takes 2-15 s, 15 s for all), the turn sent
 9 old chat pictures as references, and a redo reused the last clip, whose own
 soundtrack rides along with it."""

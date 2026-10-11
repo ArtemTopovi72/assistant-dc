@@ -1,6 +1,6 @@
 """The start-up vision self-test: a known picture, a known answer.
 
-2026-09-12: the house model's f16 mmproj was broken -- natural pictures came
+The house model's f16 mmproj was broken -- natural pictures came
 through as "dark silhouettes" while a synthetic red-circle/green-square probe
 still PASSED. So the probe is a crop of our own render (assets/
 vision_selftest.jpg), and the judge is anchored to the two answers measured

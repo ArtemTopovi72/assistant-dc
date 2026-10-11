@@ -21,8 +21,8 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 _DATA = tempfile.mkdtemp(prefix="voice_routing_")
 import tg_bot as T
 
-# The 📋 retelling is a ONE-SHOT model call outside the agent since 1cdadf4
-# (2026-09-14): it never enters the task queue. The suite records that call.
+# The 📋 retelling is a ONE-SHOT model call outside the agent: it never
+# enters the task queue. The suite records that call.
 import llm as _llm_mod, time as _time
 RETOLD = []
 # The intent read is a model call too (_fwdv_intent); the routing below is

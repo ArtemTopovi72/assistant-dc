@@ -29,7 +29,7 @@ def _loudness_spans(monkeypatch, request):
 
 
 def test_voice_spans_beat_loud_music(monkeypatch):
-    """Live 10-03: a YouTube clip's music was the loudest part and the sample
+    """A YouTube clip's music was the loudest part and the sample
     had no words. Where the VAD hears a voice wins over where it is loud."""
     seg = _clip([("s", 12000), ("q", 1000), ("s", 8000)])     # all loud
     monkeypatch.setattr(V, "_voice_spans", lambda seg: [(13000, 15000), (15500, 21000)])

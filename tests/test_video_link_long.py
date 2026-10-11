@@ -1,6 +1,6 @@
 """A long video by link is offered as the portioned job and asked about first
-(live 10-03: an 81-min film got «посмотрю первые 10 минут, пришли файл»;
-owner: «ты ток спроси надо это или нет»)."""
+(an 81-min film must not get «посмотрю первые 10 минут, пришли файл»:
+«ты ток спроси надо это или нет»)."""
 import os, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

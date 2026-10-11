@@ -9,7 +9,7 @@ exercised is the part that decides what gets rendered and what gets delivered:
     errors in the node or renders a shape the model never saw.
   * mode routing — any image (or a reference video/audio) goes through the
     omni-reference checkpoint (Ref2VA). The keyframe checkpoint (FL2VA, modes
-    i2va/flf2va) is disabled: live, 2026-09-19, every job through it on this
+    i2va/flf2va) is disabled: every job through it on this
     deployment hung in KSampler and needed a manual /interrupt after 45-50+
     minutes, 3 times running, while Ref2VA reliably finished in 8-12 minutes.
     See video.pick_mode's docstring.
@@ -116,7 +116,7 @@ print("3. Mode routing — keyframes vs omni-reference")
 print("=" * 70)
 
 check("no input at all -> t2va", V.pick_mode() == "t2va")
-# FL2VA-checkpoint modes (i2va/flf2va) are disabled live, 2026-09-19: every
+# FL2VA-checkpoint modes (i2va/flf2va) are disabled: every
 # real job through that checkpoint on this deployment hung in KSampler and
 # never finished on its own (3/3 required a manual /interrupt after 45-50+
 # minutes), while ref2va reliably finishes in 8-12 minutes. See pick_mode's
@@ -350,7 +350,7 @@ try:
     comfy_client._submit_and_poll = _submit
     out2 = V.generate_video(make_ctx(), "a fox in the grass", seconds=5, aspect="16:9")
     # The DiT is ~19.4 GB; beside a resident chat model it ran 6 GB offloaded
-    # at 190 s/step (live, 2026-09-12). The render gets the whole card.
+    # at 190 s/step. The render gets the whole card.
     check("the video render claims the card EXCLUSIVELY (chat model evicted)",
           _seen_kw.get("exclusive") is True, _seen_kw)
     check("a real file -> status success", out2["status"] == "success", out2)
@@ -499,7 +499,7 @@ print()
 print("=" * 70)
 print("14. A static-camera directive is added unless motion was requested")
 print("=" * 70)
-print("Live, 2026-09-19: 'the video model doesn't preserve the original at all")
+print("Reported: 'the video model doesn't preserve the original at all")
 print("on complex requests, sometimes crops without being asked' -- researched")
 print("against MiniMax H3's own prompt guide: an unstated camera improvises a")
 print("shot on complex prompts; the documented fix is an explicit locked camera.")

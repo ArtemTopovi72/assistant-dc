@@ -1,4 +1,4 @@
-"""The newest msvcp140.dll wins over PyQt5's bundled 14.26 (live 10-03: a friend's
+"""The newest msvcp140.dll wins over PyQt5's bundled 14.26 (a
 clone died in «MSVCP140.dll 14.26 ... 0xc0000005» a minute after start)."""
 import os, sys
 import pytest

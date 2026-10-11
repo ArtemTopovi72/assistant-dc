@@ -1,5 +1,5 @@
 """A clip where people talk asks once: own voice samples or the default voices
-(user 2026-10-01: «не хватает вопроса про подкладывание голосов … и кнопки
+(«не хватает вопроса про подкладывание голосов … и кнопки
 поехать на дефолтных»). The answer reruns the same request."""
 import os, sys, types
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -27,7 +27,7 @@ def test_asks_before_rendering_people_talking():
 
 
 def test_quoted_lines_ask_even_when_the_model_forgot_speakers():
-    # live 10-02: two quoted lines, speakers=0 -> no question, default voices
+    # two quoted lines, speakers=0 -> no question, default voices
     st = {}
     out = H._handle_generate_video(ctx(""), st, {"description": 'He yells "Иди ты!", the other "Сам иди!"',
                                                  "use_current_images": False})

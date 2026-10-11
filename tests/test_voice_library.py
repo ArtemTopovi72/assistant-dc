@@ -68,7 +68,7 @@ def test_unnamed_voices_are_told_apart_by_when_they_came(tmp_path):
 
 
 def test_clip_voice_offers_save_then_manage_rename_and_delete(tmp_path, monkeypatch):
-    """Owner 10-03: a voice sent for a clip can be kept with a name, renamed,
+    """A voice sent for a clip can be kept with a name, renamed,
     deleted, and picked next time without sending it again."""
     bot = _bot()
     bot._dl_bytes = lambda fid: b"RIFFfake"

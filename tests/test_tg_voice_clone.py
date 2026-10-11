@@ -120,7 +120,7 @@ def test_assistant_voice_takes_its_own_sample(monkeypatch, tmp_path):
 
 
 def test_video_link_is_the_sample(monkeypatch, tmp_path):
-    """Owner 10-03: «сделать с голоса ютуба» -- a YouTube link while armed."""
+    """A YouTube link sent while armed is used as the voice sample."""
     import tg_links
     bot = _bot(monkeypatch)
     ref = tmp_path / "ref.wav"; ref.write_bytes(b"RIFF")

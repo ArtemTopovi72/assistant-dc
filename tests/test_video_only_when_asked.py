@@ -1,6 +1,6 @@
 """A clip is made only when the user's own words ask for one.
 
-Live 10-03: «Почему он у тебя не лысый … ты нарисовал какого-то урода, а не
+«Почему он у тебя не лысый … ты нарисовал какого-то урода, а не
 Ленина, ещё и мультяшного» -- a complaint about a picture -- started a video
 («🎬 делаю видео») and burnt the turn's render budget.
 """
@@ -50,7 +50,7 @@ def test_redo_after_a_clip_passes(tmp_path, monkeypatch):
 def test_a_cartoon_style_is_not_an_animation_request():
     """The root of «…ещё и мультяшного» -> 🎬: the video tool said «animation»,
     and «мультяшный» (cartoon) read as animated. Both the tool and the router
-    now say a picture's style is not a video (10-03)."""
+    now say a picture's style is not a video."""
     import intent
     from tool_descriptions import _GENERATE_VIDEO_DESC
     assert "мультяшный" in _GENERATE_VIDEO_DESC and "not a video" in _GENERATE_VIDEO_DESC
@@ -60,7 +60,7 @@ def test_a_cartoon_style_is_not_an_animation_request():
 
 
 def test_a_shot_script_without_the_word_video_is_asked_to_the_model(monkeypatch):
-    """Live 10-06: a scene script («Мужчина берёт банку … говорит … бросает …
+    """A scene script («Мужчина берёт банку … говорит … бросает …
     опрокидывает стеллаж») has no «видео» and was refused. The model now reads it."""
     import intent
     script = ("Мужчина берёт банку, смотрит на неё внимательно. Ухмыляется, смотрит в камеру. "

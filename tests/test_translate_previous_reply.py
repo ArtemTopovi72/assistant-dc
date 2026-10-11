@@ -1,6 +1,6 @@
 """«Translate to Russian» with no text of its own translates the reply above.
 
-Live 10-09 (a forwarded voice retold in English): «Translate to Russian» came
+A forwarded voice retold in English: «Translate to Russian» came
 back as «Переведи на русский» -- the request itself translated. The note that
 points the model at its previous reply rides only a translate request that
 brings no text; «переведи: <текст>» keeps translating its own text.

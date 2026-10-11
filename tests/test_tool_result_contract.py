@@ -1,7 +1,7 @@
 """Regression: execute_tool must ALWAYS return a str, and the graph tool loop must
 never crash on a rogue None/non-str tool result.
 
-BUG (found by the randomized fault-injection campaign): a tool handler returning
+A tool handler returning
 None (e.g. a missing `return` on some code path) propagated up through
 execute_tool and crashed the personality_node loop at `tool_result.lstrip()` with
 `AttributeError: 'NoneType' object has no attribute 'lstrip'`, aborting the entire

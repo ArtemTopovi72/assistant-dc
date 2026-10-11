@@ -1,6 +1,6 @@
 """A picture's caption is part of what the picture says.
 
-Live 16:57: a forwarded portrait with a quote over it («Никогда не спорьте …
+A forwarded portrait with a quote over it («Никогда не спорьте …
 — Марк Твен») was described as «рядом с ним виден текст на кириллице» -- the
 user wanted to discuss the quote and the bot had not read it. The words are
 taken in (what they say, whom they are attributed to), not recited in full.

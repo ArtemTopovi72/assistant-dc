@@ -2,7 +2,7 @@
 false success, never a crash) when its external dependency fails.
 
 Found by dependency fault-injection:
-  BUG #10 — generate_image reported "Image generated and saved: <path>" and set
+  generate_image reported "Image generated and saved: <path>" and set
     state.image_status='success' when the renderer returned a NON-EXISTENT path (a
     stale/bogus path, or a temp file deleted between render and hand-off). It checked
     `if img_path:` (truthy) but never os.path.exists() — unlike every other image
@@ -41,7 +41,7 @@ def _state():
 
 
 def test_generate_image_nonexistent_path_is_failure():
-    """Renderer returns a path that does not exist -> NOT a success (BUG #10)."""
+    """Renderer returns a path that does not exist -> NOT a success."""
     tmod.generate_image_with_refinement = lambda *a, **k: {
         "path": BAD, "score": 7, "attempts": 1, "status": "success", "prompt": "x"}
     tmod.enhance_faces_with_comfy = lambda ctx, p: p
@@ -51,7 +51,7 @@ def test_generate_image_nonexistent_path_is_failure():
     assert st.get("image_status") != "success", f"state still success: {st.get('image_status')!r}"
     assert st.get("image_path") in ("", None) or not os.path.exists(st["image_path"]), \
         "state.image_path points at a non-existent file but was accepted"
-    print("PASS generate_image treats a non-existent render path as failure (BUG #10)")
+    print("PASS generate_image treats a non-existent render path as failure")
 
 
 def test_generate_image_none_path_is_failure():

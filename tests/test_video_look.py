@@ -1,5 +1,5 @@
-"""The bot looks at a video, not only listens (live 2026-09-14 21:23: a
-forwarded round video was «Пересланное голосовое»).
+"""The bot looks at a video, not only listens (a
+forwarded round video was reported as «Пересланное голосовое»).
 
 Pure parts run without ffmpeg's vision; the sheet+vision path uses a fake
 vision so the real extraction/tiling code runs on a real clip.
@@ -42,7 +42,7 @@ def test_look_at_video_builds_a_sheet_and_asks_once(tmp_path):
     # key moments now, not a 5 s grid: one pick in the red part, one in the blue
     assert any(t < 6 for t in r["times"]) and any(t >= 6 for t in r["times"]), r["times"]
     assert Path(r["sheet"]).exists()
-    # Live 2026-10-01: a projector became «красный цилиндр» at sheet size.
+    # A projector became «красный цилиндр» at sheet size.
     # ONE call gets every frame as its own full-size picture, time-labelled.
     assert len(calls) == 1 and "12-second video" in calls[0][1], calls
     sent = calls[0][0]
@@ -63,7 +63,7 @@ def test_wired_into_the_video_paths():
     assert "лампа" not in tg_bot._t("fwd_video_ask", "ru", mins="34 с", seen="0:00 — лампа")
     assert "fwdv:board" in str(tg_bot._fwd_voice_kb("ru", "x", board=True))
     # The 📝 button shows the forwarded transcript verbatim, so the seen line
-    # there is the user's language, not the English scaffold note (live run #1).
+    # there is the user's language, not the English scaffold note.
     assert 'tg_bot._t("fwd_video_seen"' in src and "_video_seen_note(_seen)" in src
     assert tg_bot._t("fwd_video_seen", "ru", seen="0:00 — лампа").startswith("👁 Раскадровка видео:\n0:00")
     # The 📋 retelling of a forwarded video reads the storyboard too.

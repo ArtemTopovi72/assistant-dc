@@ -1,6 +1,6 @@
 """A tool call cut off at the token ceiling must not poison the turn.
 
-Live 2026-09-15 19:11: a 300-line matplotlib script did not fit the 1500-token
+A 300-line matplotlib script did not fit the 1500-token
 loop ceiling, the call arrived with half a JSON string ("Failed to parse tool
 call"), the half-written call stayed in history and LM Studio answered 500 to
 the next nine requests. Now: rounds that may write code get a bigger ceiling,

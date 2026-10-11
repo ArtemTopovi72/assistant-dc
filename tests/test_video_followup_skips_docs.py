@@ -1,7 +1,7 @@
 """A question about a just-forwarded VIDEO must not fall through to document
 retrieval.
 
-Live 2026-09-18 20:14 (chat 100000001): a video was forwarded and summarised,
+A video was forwarded and summarised,
 then "Что ответить?" (no new photo, no image_id, no target_image -- a video
 sheet isn't any of those) fell through the _about_a_picture gate in
 tg_tasks._execute_task and got wrapped into the RAG prompt around 25 passages

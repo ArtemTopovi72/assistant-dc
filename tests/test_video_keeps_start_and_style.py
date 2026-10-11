@@ -1,4 +1,4 @@
-"""Animating a photo keeps its opening shot and its look (owner 10-03): «где
+"""Animating a photo keeps its opening shot and its look: «где
 был реализм там только гипер реализм, где мультяшно там мультяшно… первый
 снимок это и есть стартовый ракурс», a crop or zoom only when asked."""
 import os

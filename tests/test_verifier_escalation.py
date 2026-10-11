@@ -1,4 +1,4 @@
-"""Stage 4: spend test-time compute only where the answer is in doubt.
+"""Spend test-time compute only where the answer is in doubt.
 
 The uncertain moment is precise and cheap to recognise: the model is about to
 assert that a specific edit landed, and nothing in the turn checked whether it
@@ -126,7 +126,7 @@ def test_it_does_not_escalate_twice():
 
 
 # --- a negative inspection is a verdict only about work done this turn ------
-# Journey 31: find_content found the minaret photo, the model asked
+# find_content found the minaret photo, the model asked
 # inspect_image "mosque or minaret?" and "MOSQUE: MISSING" replaced a correct
 # answer with the edit-did-not-land text.
 
@@ -148,7 +148,7 @@ def test_a_positive_inspection_is_never_a_verdict():
         "GLASSES: PRESENT.", {"inpaint_image", "inspect_image"}) is False
 
 
-# Live 2026-09-28: a visibly black cat, inspect said "PARTIAL -- dark
+# A visibly black cat, inspect said "PARTIAL -- dark
 # grey/brown fur textures", and the reply became "the picture stayed as it was".
 def test_partial_is_its_own_verdict():
     assert GP._inspection_contradicts_work(
@@ -182,7 +182,7 @@ def test_no_distortion_answer_is_a_pass():
 
 
 def test_present_that_says_removed_is_a_clean_removal():
-    # live 10-03: «убери кота» -> a clean table, judged «нужного изменения нет»
+    # «убери кота» -> a clean table, judged «нужного изменения нет»
     v = ("A red apple floats above a wooden table. | Cat: PRESENT (The cat is not visible "
          "anywhere in the frame, meaning it has been removed from the scene). | "
          "Empty wooden table: PRESENT.")
@@ -192,7 +192,7 @@ def test_present_that_says_removed_is_a_clean_removal():
 
 
 def test_removal_is_judged_by_the_frame_description():
-    # live 10-03: «Is the tabby cat completely removed?: PRESENT» over a clean table
+    # «Is the tabby cat completely removed?: PRESENT» over a clean table
     tc = {"inpaint_image"}
     v = ("A wooden table occupies the foreground, and a broken window frame looks out onto "
          "a dark scene. |  | Tabby cat: PRESENT | Empty wooden table: PRESENT")

@@ -14,7 +14,7 @@ RESULTS = []
 def table_of(out):
     """The monospace forecast table only, without the advice lines below it.
 
-    Period labels legitimately appear twice in a reply now -- once as a table
+    Period labels legitimately appear twice in a reply -- once as a table
     row, once in the grouped advice under it -- so counting them across the
     whole string measures the wrong thing.
     """
@@ -451,10 +451,10 @@ def test_what_to_wear_periods_for_loc():
 def test_format_forecast_layout():
     """The table has to survive a phone screen, and the tags have to be parsed.
 
-    The first version of this shipped broken in two ways at once: the send site
-    passed no parse_mode, so Telegram printed "<pre>" literally and drew the
-    table in a proportional font; and the conditions description sat in the
-    row, so "сильная гроза с градом" pushed a line to 44 characters and wrapped.
+    Two failure modes are pinned: the send site must pass parse_mode, or
+    Telegram prints "<pre>" literally and draws the table in a proportional
+    font; and the conditions description must stay out of the row, or
+    "сильная гроза с градом" pushes a line to 44 characters and it wraps.
     """
     import datetime as _dt
     d0, d1 = _dt.date(2026, 8, 17), _dt.date(2026, 8, 18)
@@ -536,15 +536,12 @@ def test_format_forecast_layout():
 def test_forecast_is_sent_with_html_parse_mode():
     """The <pre> table is worthless without parse_mode="HTML" at the send site.
 
-    This is a regression guard on _send_weather specifically: it was the ONE
-    send site in the weather flow that omitted parse_mode, which is why the
-    user's first real forecast showed the literal tags.
+    A regression guard on _send_weather specifically: it must pass
+    parse_mode="HTML" at every send site, or the forecast shows literal tags.
 
-    The flow has moved once already (tg_accounts.py -> tg_weather.py), so this
-    globs the tg_* family and locates the method with ast instead of naming a
-    file and matching up to the next "\n    def " -- a terminator that also
-    silently missed a _send_weather that happened to be the LAST method in its
-    class, which it now is.
+    This globs the tg_* family and locates the method with ast rather than
+    naming a file and matching up to the next "\n    def ", a terminator that
+    silently misses a _send_weather that is the LAST method in its class.
     """
     import ast, glob, re
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
