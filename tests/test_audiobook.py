@@ -127,7 +127,14 @@ check("docx is read through library.extract_text", "Салтан" in A.read_book
 from PIL import Image, ImageDraw, ImageFont
 page = Image.new("RGB", (1240, 1754), "white")
 dr = ImageDraw.Draw(page)
-fnt = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", 44)
+for _font in ("C:/Windows/Fonts/arial.ttf", "DejaVuSans.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"):
+    try:
+        fnt = ImageFont.truetype(_font, 44)     # a Cyrillic-capable font, as the scan needs
+        break
+    except OSError:
+        continue
+else:
+    fnt = ImageFont.load_default(44)            # Pillow's bundled font, no system fonts needed
 for k, ln in enumerate(["Глава 1", "", "Три девицы под окном", "Пряли поздно вечерком"]):
     dr.text((100, 120 + k * 90), ln, fill="black", font=fnt)
 pdf = os.path.join(D, "scan.pdf")
