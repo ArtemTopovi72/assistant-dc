@@ -143,9 +143,6 @@ _TRUST_LABEL = {
 }
 
 
-_RANK_TRUST = {v: k for k, v in _TRUST_RANK.items()}
-
-
 _ENCYCLOPEDIC_HOSTS = ("wikipedia.org", "britannica.com", "scholarpedia.org")
 
 
