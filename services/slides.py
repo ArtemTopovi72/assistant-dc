@@ -1959,7 +1959,6 @@ def pptx_audit(path: str) -> dict:
         for sh in slide.shapes:
             if getattr(sh, "has_chart", False):
                 charts += 1
-            if getattr(sh, "has_chart", False):
                 has_visual = True
             if sh.shape_type == 13:                      # PICTURE
                 pictures += 1
