@@ -30,8 +30,7 @@ table("no vocals", music._no_vocals, [("джингл без вокала", True)
       ("instrumental lofi beat", True), ("песня про кота", False), ("рэп без мата", False)])
 table("own form", music._own_form, [("ровно три куплета, без припева", True), ("4 lines only", True),
       ("песня про кота", False), ("весёлая песня на минуту", False)])
-table("camera", lambda d: d != video._lock_framing_unless_requested(d) and False or
-      video._lock_framing_unless_requested(d) == d,
+table("camera", lambda d: video._lock_framing_unless_requested(d) == d,
       [("slow zoom in on the cat's face", True), ("the camera pans left across the street", True),
        ("a cat jumps on the table", False), ("a woman waves and smiles", False)])
 table("side question", lambda t: not steer.eligible(t, False, True),

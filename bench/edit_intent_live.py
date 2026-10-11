@@ -13,7 +13,6 @@ sys.stdout.reconfigure(encoding="utf-8")
 os.environ.pop("F5_TEST_RUN", None)
 import image_router as R
 
-ANY = None
 CASES = [
     # lettering
     ("исправь надписи на корректные", {"text_edit"}), ("надпись неправильная, поправь", {"text_edit"}),

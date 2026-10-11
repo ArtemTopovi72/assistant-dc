@@ -1,4 +1,4 @@
-"""Ten drawing scenarios, scored on the LAYOUT and traced step by step.
+"""Drawing scenarios, scored on the LAYOUT and traced step by step.
 
 The product rule this measures: pictures are Ideogram only. The model plans a
 LAYOUT -- boxes carrying a position and a description -- and every later change

@@ -16,7 +16,7 @@ This run recreates that chat. It is NOT one of the thirty. Run it alone
   venv/Scripts/python.exe -u bench/torture_dcim.py > runtime/torture.log
 """
 from __future__ import annotations
-import os, shutil, sys, time
+import os, shutil, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE)); sys.path.insert(0, HERE)
 import live_journeys as LJ

@@ -124,8 +124,7 @@ CASES = [
          forbid=["generate_image", "create_presentation"]),
 
     # =====================================================================
-    # Stage 6 widening. Everything below was added with the hardening pass:
-    # multi-step chains, a much denser need-tool gate, and more of the
+    # Multi-step chains, a much denser need-tool gate, and more of the
     # near-miss pairs the canary bench probes from the other side.
     # =====================================================================
 

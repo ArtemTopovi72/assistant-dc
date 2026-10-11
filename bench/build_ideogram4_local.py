@@ -17,10 +17,8 @@ the weights in fp8 so the file stays small.
     venv/Scripts/python.exe bench/build_ideogram4_local.py
 """
 import shutil
-import sys
 from pathlib import Path
 
-import torch
 from safetensors import safe_open
 from safetensors.torch import save_file
 

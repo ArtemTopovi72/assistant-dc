@@ -7,9 +7,8 @@ Tests on long sentences; picks and reports the best one.
 Run: .\\venv\\Scripts\\python.exe bench\\ru_stress_libs.py
 """
 import sys, time, unicodedata
-import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception: pass
+except (AttributeError, ValueError, OSError): pass
 
 # ── test sentences ────────────────────────────────────────────────────────────
 SENTENCES = [

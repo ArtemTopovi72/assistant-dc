@@ -35,7 +35,7 @@ import traceback
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-OUT_ROOT = os.path.join(os.environ.get("GPUTEST_OUT", os.path.join(ROOT, "_gputest")))
+OUT_ROOT = os.environ.get("GPUTEST_OUT", os.path.join(ROOT, "_gputest"))
 
 
 def sha(path_or_bytes):

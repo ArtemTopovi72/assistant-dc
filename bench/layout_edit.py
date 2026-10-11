@@ -24,12 +24,12 @@ What it proves, in order:
   5. the edited image carries its own layout, so it can be edited again.
 
 Needs LM Studio. Does NOT need ComfyUI.
-Run: venv/Scripts/python.exe tests/test_layout_edit_live.py
+Run: venv/Scripts/python.exe bench/layout_edit.py
 """
 import os, sys, json, copy, threading, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception: pass
+except (AttributeError, ValueError, OSError): pass
 import logging
 logging.basicConfig(level=logging.WARNING,
                     format="%(levelname)s %(name)s: %(message)s")
@@ -37,8 +37,6 @@ logging.basicConfig(level=logging.WARNING,
 import requests
 import config
 import image as I
-import ideogram as G
-import draw_agent as D
 
 _n = _bad = 0
 

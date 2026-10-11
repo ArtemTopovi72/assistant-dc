@@ -549,7 +549,7 @@ CASES = [
 ]
 
 
-# -- coding-agent tasks (2026-09-23): outline / run_tests / plan / undo ----------
+# -- coding-agent tasks: outline / run_tests / plan / undo ----------
 
 def _buggy_pkg(box: CS.Sandbox) -> str:
     """A small project whose tests fail for one real bug, hidden in a

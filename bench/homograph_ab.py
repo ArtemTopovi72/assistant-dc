@@ -1,6 +1,6 @@
-"""Homograph stress: RUAccent alone vs RUAccent + chat model on the homographs
-(user, 2026-09-28). Each line has one homograph with a known stress; the
-score is how many come out right. Run with LM Studio up and the card free."""
+"""Homograph stress: RUAccent alone vs RUAccent + chat model on the homographs.
+Each line has one homograph with a known stress; the score is how many
+come out right. Run with LM Studio up and the card free."""
 import os, sys, threading, types
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import music

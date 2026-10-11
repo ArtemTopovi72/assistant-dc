@@ -1,5 +1,5 @@
 """Render the same song from two given ABC plans (best vs worst stress score)."""
-import json, os, sys, tempfile, types, threading, shutil
+import json, os, sys, tempfile, types, threading
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import music
 src = json.load(open(sys.argv[1], encoding="utf-8"))

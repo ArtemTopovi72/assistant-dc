@@ -16,9 +16,8 @@ Metrics per query: Recall@10, Precision@10, MRR, latency(ms). Reports per-type
 and overall averages. Uses the prebuilt memory/knowledge_test.db.
 """
 import os, sys, time, statistics
-import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception: pass
+except (AttributeError, ValueError, OSError): pass
 from pathlib import Path
 _ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT))
@@ -47,10 +46,6 @@ all_docs = list(doctext.keys())
 def gt(pred):
     """Ground-truth relevant doc ids: those whose full text satisfies pred()."""
     return {d for d in all_docs if pred(doctext[d])}
-
-
-def has(*subs):
-    return lambda t: all(s in t for s in subs)
 
 
 def any_of(*subs):

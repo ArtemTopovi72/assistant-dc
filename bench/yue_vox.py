@@ -1,5 +1,5 @@
 """Demucs vocal + backing of a rendered song.  venv/Scripts/python.exe bench/yue_vox.py song.wav out_dir"""
-import os, sys
+import sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 for sub in ("", "media", "core"):

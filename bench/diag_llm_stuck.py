@@ -15,12 +15,11 @@ Run: venv/Scripts/python.exe bench/diag_llm_stuck.py     (exit 0 = all stuck-mod
 import os, sys, time, json, threading
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception: pass
+except (AttributeError, ValueError, OSError): pass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import llm
-import config
 from models import Context
 
 # --- tighten the watchdog so the test runs in seconds, not minutes -----------
@@ -38,7 +37,7 @@ def _sse(wfile, obj):
     wfile.write(b"data: " + json.dumps(obj).encode() + b"\n\n"); wfile.flush()
 
 
-def _delta(text=None, tool=None):
+def _delta(text=None):
     d = {}
     if text is not None: d["content"] = text
     return {"choices": [{"index": 0, "delta": d}]}

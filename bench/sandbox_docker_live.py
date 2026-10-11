@@ -23,7 +23,7 @@ import tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception:
+except (AttributeError, ValueError, OSError):
     pass
 
 import code_runner as CR

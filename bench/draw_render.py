@@ -170,9 +170,7 @@ def main():
             print("[load] %-22s %s" % (cid, "; ".join(notes)[:70] or "no repair"))
         return _render(plans, out, args)
 
-
     _graph, ctx, _img = setup()
-    model = args.reload or CFG.MODEL_NAME
 
     # WHICH model answered is part of the result. Phase 2 unloads everything,
     # and LM Studio then just-in-time loads whatever it likes on the next

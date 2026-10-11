@@ -9,7 +9,6 @@ arguments, how many rounds), not the pixels.
 The only live component is LM Studio: the point of the bench is to observe the
 real model making real routing decisions through the real personality_node.
 """
-import time
 
 
 class ToolRecorder:

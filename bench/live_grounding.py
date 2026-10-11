@@ -1,4 +1,4 @@
-"""Live ComfyUI + LM Studio test for the 2026-06-26 image-pipeline changes:
+"""Live ComfyUI + LM Studio test for the region-grounding and orientation path of image.py:
  A) region inventory + grounding (vision),
  B) absent-region short-circuit (NO wasted render),
  C) present-region real edit (full ComfyUI render, dims preserved),
@@ -9,7 +9,7 @@ Usage: venv/Scripts/python.exe bench/live_grounding.py [image] [vision_model]
 import os, sys, time, glob, threading
 from pathlib import Path
 try: sys.stdout.reconfigure(encoding="utf-8")
-except Exception: pass
+except (AttributeError, ValueError, OSError): pass
 _ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT))
 from PIL import Image

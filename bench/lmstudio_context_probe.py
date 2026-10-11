@@ -81,8 +81,8 @@ def main():
                               timeout=10).json().get("data", []):
             if m.get("id") == model:
                 reported = m.get("loaded_context_length")
-    except Exception:
-        pass
+    except Exception as exc:
+        print("      could not read loaded_context_length: %s" % exc)
     print("LM Studio reports loaded_context_length = %s" % reported)
 
     lo, hi = 256, 200_000

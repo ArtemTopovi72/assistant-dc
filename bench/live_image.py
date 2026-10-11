@@ -6,7 +6,7 @@ reach. Run standalone: venv/Scripts/python.exe bench/live_image.py
 import os, sys, time, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception: pass
+except (AttributeError, ValueError, OSError): pass
 import logging; logging.basicConfig(level=logging.WARNING)
 from pathlib import Path
 from PIL import Image
@@ -14,11 +14,10 @@ import image as I
 
 _TMP = Path(tempfile.mkdtemp(prefix="imglive_"))
 RESULTS = []
-import os as _os
 def check(name, cond, detail=""):
     RESULTS.append((name, bool(cond)))
     print("[" + ("PASS" if cond else "FAIL") + "] " + name + ("" if cond or not detail else " - " + detail))
-    if not cond and _os.environ.get("PYTEST_CURRENT_TEST"):
+    if not cond and os.environ.get("PYTEST_CURRENT_TEST"):
         raise AssertionError(str(name) + (": " + str(detail) if detail else ""))
 
 def _png(name, w=512, h=512, col=(90, 130, 170)):
@@ -100,8 +99,7 @@ def test_redraw(src):
 
 def test_inpaint(src):
     ctx = Ctx()
-    from PIL import Image as PILImage
-    mask = PILImage.new("L", (512, 512), 0)
+    mask = Image.new("L", (512, 512), 0)
     # paint a white square region to inpaint
     for y in range(150, 350):
         for x in range(150, 350):
