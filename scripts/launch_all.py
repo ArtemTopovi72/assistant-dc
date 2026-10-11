@@ -60,13 +60,13 @@ def _acquire_singleton_lock() -> bool:
         try:
             _singleton_handle.seek(1)
             _singleton_handle.write(f"{os.getpid():>10}".encode())
-        except Exception:
+        except OSError:
             pass
         return True
     except OSError:
         if _singleton_handle is not None:
             try: _singleton_handle.close()
-            except Exception: pass
+            except OSError: pass
             _singleton_handle = None
         return False
 

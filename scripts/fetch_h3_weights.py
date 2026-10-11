@@ -99,7 +99,7 @@ def main() -> int:
     try:
         import shutil
         free_gb = shutil.disk_usage(COMFY_BASE).free / 1e9
-    except Exception:
+    except OSError:
         pass
     if free_gb and free_gb < need_gb * 1.05:
         print(f"REFUSING: needs ~{human(need_gb)} but only {human(free_gb)} free.")
