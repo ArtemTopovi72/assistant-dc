@@ -71,10 +71,7 @@ def _ctx(**kw):
     c.remember = lambda *a, **k: None
     c.memory_text = lambda *a, **k: "some memory"
     c.last_image_prompt = "prev prompt"
-    # The real context is models.AppContext, and the audio path takes these:
-    # without them transcription died inside its own except with "'Ctx' object
-    # has no attribute 'asr_lock'" and simply returned "", so three worker
-    # tests failed for a reason that had nothing to do with the workers.
+    # The real context is models.AppContext; the audio path needs these locks.
     c.asr_lock = threading.Lock()
     c.tts_lock = threading.Lock()
     for k, v in kw.items():
@@ -88,9 +85,7 @@ def test_model_loader_success_and_failure():
     w = gui.ModelLoader("m", True, "high")
     rec = cap(w, "ready", "failed", "progress")
     ctx = _ctx()
-    # app_runtime, not assistant: ModelLoader imports build_runtime from
-    # app_runtime -- its own comment says "not from assistant: that is the entry
-    # point" -- so faking `assistant` stubbed a module the worker never loads.
+    # app_runtime, not assistant: ModelLoader imports build_runtime from app_runtime.
     with fake_modules(app_runtime={"build_runtime":
             lambda name, no_think, status_cb=None, reasoning_effort="high": (ctx, {"messages": []}, "G")}):
         w.run()
@@ -237,9 +232,8 @@ def test_library_build_worker():
 def test_deep_research_worker():
     restored = {"n": 0}
     # The worker also passes out_lang (the Research tab writes the document in the
-    # language the topic was typed in) and resolves it via dr.lang_of_text. A stub
-    # missing either raises TypeError/AttributeError inside the worker, which it
-    # reports as `failed` — so the suite failed on its own stub, not on the code.
+    # language the topic was typed in) and resolves it via dr.lang_of_text, so the
+    # stub must provide both.
     seen = {}
     dr = {
         "apply_overrides": lambda ov: {"saved": True},
@@ -271,8 +265,7 @@ def test_deep_research_worker():
 def test_transcribe_worker():
     # TranscribeWorker imports transcribe_audio_array from `audio` INSIDE run()
     # (gui_common keeps the module light that way), so `audio` is the only
-    # binding a stub can reach -- patching gui's or gui_workers' copy left the
-    # real ASR path running against a stub context.
+    # binding a stub can reach.
     import audio as _audio
     with fake_modules():
         _audio.transcribe_audio_array = lambda ctx, audio: "hello world"
