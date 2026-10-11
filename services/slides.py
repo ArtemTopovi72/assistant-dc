@@ -990,7 +990,6 @@ def normalize_deck(data: dict, topic: str = "", n_slides: int = 0) -> dict:
             # sources slide: cover + ONE content slide + sources was refused
             # downstream as a stub. The sources
             # move into the speaker notes of the last slide instead.
-            closing = 0
             want_content = min(int(n_slides), MAX_SLIDES) - 1
             out["sources_in_notes"] = True
         want_content = max(2, want_content)
