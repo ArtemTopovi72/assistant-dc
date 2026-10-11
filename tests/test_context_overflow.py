@@ -79,8 +79,10 @@ def test_the_recent_messages_are_never_touched():
             break
     m = p["messages"]
     assert m[0]["role"] == "system", "the persona must survive"
-    assert m[-1]["content"].endswith(llm._TRUNC_NOTE) or m[-1]["content"] == BIG,         "the newest tool result must survive"
-    assert any(x.get("content") == "второй вопрос" for x in m),         "the live question must survive"
+    assert m[-1]["content"].endswith(llm._TRUNC_NOTE) or m[-1]["content"] == BIG, \
+        "the newest tool result must survive"
+    assert any(x.get("content") == "второй вопрос" for x in m), \
+        "the live question must survive"
 
 def test_a_dropped_assistant_turn_takes_its_tool_replies_with_it():
     """A tool result with nothing it answers is a 400, not a repair."""
@@ -111,6 +113,11 @@ def test_shrinking_terminates():
 
 # --- the retry loop actually uses it ---------------------------------------
 
+class _Ctx:
+    def is_cancelled(self): return False
+    def set_stage(self, *a, **k): pass
+
+
 def test_the_retry_loop_shrinks_instead_of_resending(monkeypatch):
     """The measured failure: three identical rejections, then a lost turn."""
     seen = []
@@ -125,11 +132,7 @@ def test_the_retry_loop_shrinks_instead_of_resending(monkeypatch):
     monkeypatch.setattr(llm, "_stream_chat", fake_stream)
     monkeypatch.setattr(llm, "throttle_external_calls", lambda ctx: None)
 
-    class Ctx:
-        def is_cancelled(self): return False
-        def set_stage(self, *a, **k): pass
-
-    out = llm.send_to_lm_studio(Ctx(), _chain(), tools=None)
+    out = llm.send_to_lm_studio(_Ctx(), _chain(), tools=None)
     assert out and out.get("content") == "готово", "the turn must not be lost"
     assert len(seen) == 3
     assert seen[1] < seen[0], f"payload was re-sent unshrunk: {seen}"
@@ -141,12 +144,8 @@ def test_an_unshrinkable_prompt_gives_up_instead_of_looping(monkeypatch):
                         lambda ctx, payload: llm._CTX_OVERFLOW)
     monkeypatch.setattr(llm, "throttle_external_calls", lambda ctx: None)
 
-    class Ctx:
-        def is_cancelled(self): return False
-        def set_stage(self, *a, **k): pass
-
     assert llm.send_to_lm_studio(
-        Ctx(), [{"role": "system", "content": "p"},
+        _Ctx(), [{"role": "system", "content": "p"},
                 {"role": "user", "content": "q"}], tools=None) is None
 
 

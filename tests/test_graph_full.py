@@ -86,16 +86,6 @@ class Tools:
 
 
 import contextlib
-import re as _re
-
-# The short-message fast path (graph.py) answers greetings/quick questions with a
-# single lite call and never enters the tool-round loop. It is a real feature, so
-# tests that are ABOUT the loop must opt out of it explicitly rather than rely on
-# their input happening to look "long enough" — otherwise the fast path silently
-# swallows the first scripted response and every later assertion slides by one.
-# Neutralising the tool-trigger regex is the same switch production uses: any
-# message that looks tool-worthy skips the fast path.
-_ALWAYS_TOOL_TRIGGER = _re.compile("")
 
 
 @contextlib.contextmanager
@@ -345,7 +335,6 @@ def test_tool_none_and_nonstr_result():
 def test_repeat_fail_guard():
     c = _ctx()
     # same failing call 3x -> after 2 the 3rd is short-circuited with the repeat message
-    call = _tc("search", {"query": "x"}, cid="s")
     llm = LLM([_asst("", [_tc("search", {"query": "x"}, cid="s1")]),
                _asst("", [_tc("search", {"query": "x"}, cid="s2")]),
                _asst("", [_tc("search", {"query": "x"}, cid="s3")]),

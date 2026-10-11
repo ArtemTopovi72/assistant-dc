@@ -3,7 +3,6 @@ Regression tests for the still-current fixes.
 Run from project root: .\\venv\\Scripts\\python.exe tests\\test_fixes.py
 """
 import sys
-import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 import os

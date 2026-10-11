@@ -112,8 +112,8 @@ def test_photo_search_skips_hidden_folders(tmp_path):
 def test_working_folder_record_survives_for_the_next_turn(tmp_path):
     """After compaction «сколько мостов нашёл?» must still see the search result:
     the folder keeps a record and the message composer shows it."""
+    import inspect
     import types
-    import tool_code_handlers as H
     import graph_compose as C
     box = types.SimpleNamespace(root=tmp_path)
     assert H.read_record(box) == ""
@@ -124,5 +124,5 @@ def test_working_folder_record_survives_for_the_next_turn(tmp_path):
     ctx = types.SimpleNamespace(sandbox=box)
     assert "found 8 of 173" in C._working_folder_record(ctx)
     assert C._working_folder_record(types.SimpleNamespace()) == ""
-    src = __import__("inspect").getsource(C._compose_user_message)
+    src = inspect.getsource(C._compose_user_message)
     assert "_working_folder_record(ctx)" in src and "never deny" in src

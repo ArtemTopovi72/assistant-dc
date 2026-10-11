@@ -92,7 +92,6 @@ p = capture("qwen3.5-9b-uncensored", prefill="<think></think>")
 check("the Qwen prefill still works for Qwen",
       any("<think>" in (m.get("content") or "") for m in p["messages"]))
 
-print("\nROOM TO FINISH THINKING AND STILL ANSWER")
 print("\nNO THINKING BY DEFAULT")
 p = capture("google/gemma-4-12b-qat", max_tokens=700)
 check("every Gemma call is prefilled with the empty thought block",
@@ -207,7 +206,6 @@ check("Format B still parses", len(tc) == 1 and tc[0]["function"]["name"] == "ca
 tc, _ = L.extract_gemma4_tool_calls('call:search{query:<|"|>x<|"|>}')
 check("Format C still parses", len(tc) == 1 and tc[0]["function"]["name"] == "search", tc)
 
-p = capture("google/gemma-4-12b-qat")
 check("and the detection gate knows the new shape",
       "<tool_call|>" in __import__("inspect").getsource(L.send_to_lm_studio))
 

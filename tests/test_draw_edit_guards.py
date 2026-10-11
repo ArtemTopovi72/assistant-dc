@@ -88,10 +88,7 @@ def test_a_removal_instruction_still_removes():
 
 
 def test_which_instructions_count_as_add_only():
-    for text in ("добавь рыжего кота", "дорисуй лампу", "add a lamp",
-                 "включи в сцену стол"):
-        if text.startswith("включи"):
-            continue                      # not in the vocabulary; see below
+    for text in ("добавь рыжего кота", "дорисуй лампу", "add a lamp"):
         assert DA._additive_only(text), text
     for text in ("убери коробку", "замени кружку на бокал", "remove the dog",
                  "добавь лампу вместо кресла",   # add AND remove: not add-only

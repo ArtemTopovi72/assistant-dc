@@ -273,7 +273,6 @@ def test_query_plan_never_starves():
     check("a working planner keeps its own diverse queries", len(q2) >= 3, q2)
     check("...and its distilled English subject is carried",
           prof2["core_topic"] == "green vs black tea composition", prof2)
-    return True
 
 
 def test_coverage_signals():

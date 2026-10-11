@@ -48,12 +48,7 @@ def _run(tmp_path, script):
           "user_input": "добавь блок в тег мода", "image_data": None, "final_answer": "",
           "session_memory_text": "", "vision_summary": "", "image_path": "",
           "image_score": 0, "image_attempt": 0, "image_status": ""}
-    pass
-    pass
-    try:
-        return graph_mod.build_graph(c).invoke(st)
-    finally:
-        pass
+    return graph_mod.build_graph(c).invoke(st)
 
 
 def _asked_for_delivery(messages):

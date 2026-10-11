@@ -79,7 +79,6 @@ bot._dispatch(text_update(CID, T._b("stop", "ru")))
 check("Stop actually reached the cancel path (event set)", cancel_ev.is_set())
 check("feedback mode was abandoned, not fed the Stop label",
       bot._get_session(CID).reg_state != "feedback", bot._get_session(CID).reg_state)
-saved = getattr(bot._get_session(CID), "_last_feedback", None)
 check("no feedback entry was saved from the Stop label",
       not any("Стоп" in str(p) and "feedback" in str(p).lower() for _, p in sent), sent)
 
@@ -115,7 +114,6 @@ bot._dl_bytes = lambda fid: b"\xff\xd8\xff" + b"0" * 100  # fake jpeg bytes
 bot._dispatch(photo_update(CID))
 check("feedback mode is not left armed forever on a photo",
       True)  # documented behaviour check below is the real assertion
-fb_dir = None
 import glob
 hits = glob.glob(os.path.join(_DATA_DIR, "**", "feedback*"), recursive=True)
 empty_filed = False

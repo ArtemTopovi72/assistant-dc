@@ -19,6 +19,7 @@ import tempfile
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import slides  # noqa: E402
+from pptx import Presentation  # noqa: E402
 
 _fail = 0
 _pass = 0
@@ -183,7 +184,6 @@ written = slides.build_pptx(deck, out, topic="трактор")
 check("the deck was written", bool(written) and os.path.exists(out), written)
 
 if written:
-    from pptx import Presentation
     prs = Presentation(out)
     n_charts = sum(1 for s in prs.slides for sh in s.shapes if sh.has_chart)
     check("the chart is a native pptx chart, not a picture of one", n_charts == 1,
@@ -345,7 +345,7 @@ try:
     check("and the finished deck passes its own audit", a2["ok"], a2)
 
     # A rewrite that comes back THINNER is a regression, not a repair.
-    box, fn = _scripted(RICH.replace('"charts"', '"x"'), THIN)
+    box, fn = _scripted(RICH, THIN)
     _L.call_llm_simple = fn
     deck3 = slides.plan_deck(None, "трактор Кировец")
     check("a thinner rewrite is rejected and the first plan stands",
@@ -476,11 +476,9 @@ head("A WRAPPED BULLET DOES NOT RESTART AT THE MARGIN")
 _dw = slides.normalize_deck({"title": "T", "slides": [
     {"heading": "H", "bullets": ["История началась весной 1961 года во время "
                                  "визита Никиты Хрущева в США"]}]})
-import tempfile as _tf2
-_outw = os.path.join(_tf2.mkdtemp(), "wrap.pptx")
+_outw = os.path.join(tempfile.mkdtemp(), "wrap.pptx")
 slides.build_pptx(_dw, _outw)
-from pptx import Presentation as _P2
-_body = [sh for s in _P2(_outw).slides for sh in s.shapes
+_body = [sh for s in Presentation(_outw).slides for sh in s.shapes
          if sh.has_text_frame and "История" in sh.text_frame.text]
 check("the bullet paragraph exists", len(_body) == 1, len(_body))
 _pPr = _body[0].text_frame.paragraphs[0]._p.find(
@@ -518,11 +516,9 @@ _dense = slides.normalize_deck({"title": "T", "theme": "academic", "slides": [
                {"value": "30-60", "label": "нг/мл при дефиците"}],
      "chart": {"title": "Диапазоны", "kind": "bar",
                "labels": ["норма", "цель"], "values": [20, 60]}}]})
-_od = os.path.join(_tf2.mkdtemp(), "dense.pptx")
+_od = os.path.join(tempfile.mkdtemp(), "dense.pptx")
 slides.build_pptx(_dense, _od, topic="витамин")
-from pptx import Presentation as _P4  # noqa: E402
-from pptx.util import Emu as _Emu  # noqa: E402
-_sl = _P4(_od).slides[1]
+_sl = Presentation(_od).slides[1]
 _texts = [sh for sh in _sl.shapes if sh.has_text_frame and "Диапазон 20-30" in sh.text_frame.text]
 _charts = [sh for sh in _sl.shapes if sh.has_chart]
 check("the bullets are on the slide", len(_texts) == 1, len(_texts))
@@ -551,8 +547,6 @@ head("A LINE CARRIES ITS COLOUR ON THE LINE, NOT THE FILL")
 # Seen on a slide: the bar chart came out in the deck's accent and the line
 # chart in PowerPoint default blue, because both were coloured through the FILL
 # and a line has none.
-from pptx import Presentation as _P3  # noqa: E402
-import tempfile as _tf3  # noqa: E402
 
 
 def _one_chart(kind):
@@ -560,9 +554,9 @@ def _one_chart(kind):
         {"heading": "H", "bullets": ["x"],
          "chart": {"title": "C", "kind": kind, "labels": ["1964", "1975"],
                    "values": [100, 100000]}}]})
-    _o = os.path.join(_tf3.mkdtemp(), "c.pptx")
+    _o = os.path.join(tempfile.mkdtemp(), "c.pptx")
     slides.build_pptx(_d, _o, topic="трактор")
-    _ch = [sh.chart for s in _P3(_o).slides for sh in s.shapes if sh.has_chart][0]
+    _ch = [sh.chart for s in Presentation(_o).slides for sh in s.shapes if sh.has_chart][0]
     return _ch.plots[0].series[0], "%06X" % slides.pick_theme(_d, "трактор")["accent"]
 
 
@@ -593,15 +587,13 @@ check("a bar series is still coloured on its FILL",
 # ── links wear the deck's colour, not Office blue ────────────────────────────
 head("A LINK IS PAINTED BY THE THEME, NOT BY THE RUN")
 
-import tempfile as _tf  # noqa: E402
-from pptx import Presentation as _P  # noqa: E402
 
 _THEME_REL = ("http://schemas.openxmlformats.org/officeDocument/2006/"
               "relationships/theme")
 
 
 def _theme_xml(path):
-    prs = _P(path)
+    prs = Presentation(path)
     part = prs.slide_masters[0].part.part_related_by(_THEME_REL)
     return part.blob.decode("utf-8")
 
@@ -610,7 +602,7 @@ _d = slides.normalize_deck({
     "title": "Кировец", "theme": "energy",
     "sources": [{"title": "Завод", "url": "https://example.org/k700"}],
     "slides": [{"heading": "Выпуск", "bullets": ["пик в 1985 году"]}]})
-_out = os.path.join(_tf.mkdtemp(), "themed.pptx")
+_out = os.path.join(tempfile.mkdtemp(), "themed.pptx")
 slides.build_pptx(_d, _out, topic="трактор")
 _xml = _theme_xml(_out)
 _accent = "%06X" % slides.pick_theme(_d, "трактор")["accent"]
@@ -699,9 +691,8 @@ _bad = slides.normalize_deck({
     "title": "T", "slides": [{"heading": "H", "bullets": ["x"]}]})
 _outb = os.path.join(os.path.dirname(_out), "overlap_probe.pptx")
 slides.build_pptx(_bad, _outb)
-from pptx import Presentation as _P
 from pptx.util import Inches as _I
-_prs = _P(_outb)
+_prs = Presentation(_outb)
 _s = list(_prs.slides)[1]
 _tb = _s.shapes.add_textbox(_I(1.0), _I(3.0), _I(3.0), _I(1.0))
 _tb.text_frame.text = "deliberate collision"
@@ -773,9 +764,8 @@ _ud = slides.normalize_deck({
                                         "values": [42, 55], "unit": "%"}}]})
 _outu = os.path.join(os.path.dirname(_out), "unit.pptx")
 slides.build_pptx(_ud, _outu)
-from pptx import Presentation as _P2
 _titles = [sh.chart.chart_title.text_frame.text
-           for sl in _P2(_outu).slides for sh in sl.shapes
+           for sl in Presentation(_outu).slides for sh in sl.shapes
            if getattr(sh, "has_chart", False)]
 check("the built chart carries its unit", _titles == ["Доля дефицита, %"], _titles)
 
@@ -820,9 +810,8 @@ _ad = slides.normalize_deck({
                           "unit": "ед."}}]})
 _outa = os.path.join(os.path.dirname(_out), "axes.pptx")
 slides.build_pptx(_ad, _outa)
-from pptx import Presentation as _P5
 _ch = None
-for _sl in _P5(_outa).slides:
+for _sl in Presentation(_outa).slides:
     for _sh in _sl.shapes:
         if getattr(_sh, "has_chart", False):
             _ch = _sh.chart
@@ -852,9 +841,8 @@ _ld = slides.normalize_deck({
                           "values": [1200, 3820, 9400], "unit": "шт."}}]})
 _outl = os.path.join(os.path.dirname(_out), "line.pptx")
 slides.build_pptx(_ld, _outl)
-from pptx import Presentation as _P4
 _ser = None
-for _sl in _P4(_outl).slides:
+for _sl in Presentation(_outl).slides:
     for _sh in _sl.shapes:
         if getattr(_sh, "has_chart", False):
             _ser = _sh.chart.plots[0].series[0]
@@ -880,9 +868,8 @@ _pd = slides.normalize_deck({
                           "values": [41, 22, 15, 22], "unit": "%"}}]})
 _outp2 = os.path.join(os.path.dirname(_out), "pie.pptx")
 slides.build_pptx(_pd, _outp2)
-from pptx import Presentation as _P3
 _pie = None
-for _sl in _P3(_outp2).slides:
+for _sl in Presentation(_outp2).slides:
     for _sh in _sl.shapes:
         if getattr(_sh, "has_chart", False):
             _pie = _sh.chart
@@ -992,11 +979,9 @@ _d = slides.normalize_deck({"title": "T", "slides": list(_six), "sources": list(
 check("never fewer than two content slides", len(_d["slides"]) == 2, len(_d["slides"]))
 _d = slides.normalize_deck({"title": "T", "slides": list(_six), "sources": list(_src)}, "T", n_slides=6)
 check("6 slides with sources = cover + 4 + sources", len(_d["slides"]) == 4 and not _d.get("sources_in_notes"), len(_d["slides"]))
-import tempfile as _tf
-_out = os.path.join(_tf.mkdtemp(), "tiny.pptx")
+_out = os.path.join(tempfile.mkdtemp(), "tiny.pptx")
 slides.build_pptx(slides.normalize_deck({"title": "T", "slides": list(_six), "sources": list(_src)}, "T", n_slides=3), _out)
-from pptx import Presentation as _P
-_prs = _P(_out)
+_prs = Presentation(_out)
 check("the tiny deck file has exactly 3 slides", len(_prs.slides) == 3, len(_prs.slides))
 check("its last slide carries the sources in the notes",
       "https://example.com/a" in _prs.slides[2].notes_slide.notes_text_frame.text)

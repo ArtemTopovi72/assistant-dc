@@ -16,7 +16,6 @@ try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
 
-import config
 import deep_research as D
 
 _n = _bad = 0
@@ -68,8 +67,6 @@ check("it forbids emitting an English version alongside",
 
 # ───────────────────────────────────────────────── which calls get the directive
 print("\nTHE DIRECTIVE REACHES THE WRITERS AND ONLY THE WRITERS")
-src = inspect.getsource(D)
-
 
 def fn_src(name):
     return inspect.getsource(getattr(D, name))

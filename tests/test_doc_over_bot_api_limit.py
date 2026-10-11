@@ -60,7 +60,7 @@ check("...and a failed download is still 'could not read'", any("Не удало
 import inspect, tg_dispatch
 check("dispatcher carries file_size on document items", '"file_size": int(doc.get("file_size")' in inspect.getsource(tg_dispatch))
 check("the limit is Telegram's 20 MB on the cloud API", tg_resolve._bot_file_limit() == 20 * 1024 * 1024)
-import config as C, tg_transport
+import tg_transport
 C.TG_API_LOCAL = True
 check("...and 2 GB behind a local Bot API server", tg_resolve._bot_file_limit() == 2000 * 1024 * 1024)
 C.TG_API_LOCAL = False

@@ -28,9 +28,8 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 from pathlib import Path
 
 import numpy as np
-from PyQt5.QtWidgets import QApplication, QMessageBox, QFileDialog, QInputDialog
-from PyQt5.QtGui import QImage, QColor
-from PyQt5.QtCore import QThread, QTimer
+from PyQt5.QtWidgets import QApplication, QMessageBox, QInputDialog
+from PyQt5.QtCore import QThread
 import gui
 import gui_voice_tab
 
@@ -74,12 +73,6 @@ class FakePlayer:
     def play(self, p): self.is_active = True
     def stop(self): self.is_active = False
     def toggle_pause(self): return False
-
-
-def _png(name="a.png", w=32, h=24, col="#336699"):
-    p = os.path.join(_TMP, name)
-    img = QImage(w, h, QImage.Format_RGB32); img.fill(QColor(col)); img.save(p)
-    return p
 
 
 def _fake_ctx():
@@ -190,7 +183,7 @@ def test_hostile_payloads():
                    {"final_answer": "\x00\x01\x02 null bytes"},
                    {"final_answer": chr(0x202e) + "rtl override"},
                    {"research_report": "", "final_answer": None}]
-    for i, f in enumerate(junk_finals):
+    for f in junk_finals:
         w._on_done(f)
     no_slot_errors("on_done_junk")
 

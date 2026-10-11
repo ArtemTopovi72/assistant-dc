@@ -157,7 +157,6 @@ bot._store.put(sess)
 bot.sent.clear()
 bot._send_facts(CID, sess)
 
-total_chars = sum(len(t) for _, t, _ in bot.sent)
 check("the facts were split across more than one message instead of one "
       "blind 4096-char slice",
       len(bot.sent) > 1, len(bot.sent))

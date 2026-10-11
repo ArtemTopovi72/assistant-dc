@@ -17,7 +17,6 @@ import tg_bot as T
 T.redirect_data_dir(_DATA)
 T._DEBOUNCE_FWD_S, T._DEBOUNCE_FWD_MAX_S = 1.5, 3.0   # production waits longer for a typed instruction
 import graph as graph_mod
-import tg_tasks
 
 OK = BAD = 0
 def check(name, cond, extra=""):
@@ -102,8 +101,7 @@ for name, kw in variants.items():
               not ok and any("МБ" in t for _, t in bot.sent[n:]), bot.sent[n:])
     else:
         check(f"the song arrives as {name}: asked for the new words", ok, [t[:60] for _, t in bot.sent[n:]])
-import tg_bot as TB
-TB._fwdv_intent = lambda t: "text"     # what a model may well answer for a lyric
+T._fwdv_intent = lambda t: "text"     # what a model may well answer for a lyric
 LY = "Я иду по улице одна\nНадо мной горит луна\nИ весна, весна, весна\nНе даёт уснуть до дна"
 USRFWD = {"forward_origin": {"type": "user", "sender_user": {"id": 777, "is_bot": False, "first_name": "Друг"}}, "forward_date": 1}
 def arm(**extra):
@@ -134,8 +132,8 @@ for name, kw in {"audio": dict(audio=A), "voice": dict(voice={"file_id": "V", "d
     arm(); GO.clear()
     bot._dispatch(m(**kw))
     ok = wait(lambda: GO, 6)
-    check(f"a second song as {name}: the voice remix starts", ok and GO and GO[0][-1].endswith(("song2.mp3", "song2.ogg", "song2.mp4", "song2.mp3")) or (ok and GO and "song2" in GO[0][-1]), GO)
-    check(f"...and the first song is the voice ({name})", ok and GO and GO[0][2].endswith(("song.mp3", ".mp3")), GO)
+    check(f"a second song as {name}: the voice remix starts", ok and GO and "song2" in GO[0][-1], GO)
+    check(f"...and the first song is the voice ({name})", ok and GO and GO[0][2].endswith(".mp3"), GO)
 # A YouTube link is the song too, then the words as usual.
 import tg_links
 _real_fetch = tg_links.fetch_video

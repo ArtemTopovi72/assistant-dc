@@ -184,16 +184,16 @@ check("a transcript delivered verbatim is remembered too, as a voice message",
 # 4. A follow-up about a video looks at the FRAMES again. The keyframe sheet
 # is the chat's current picture; "дай экспертное мнение" has no question word,
 # but the model reads it as about the video (intent about_picture).
-import graph as _graph, types as _types, os as _os, tempfile as _tempfile, intent as _intent
+import types as _types, intent as _intent
 _intent.STUB = {"дай экспертное мнение": {"about_picture": True},
                 "нарисуй кота": {"needs_tool": True, "wants": ["generate_image"]}}.get
-_vd = _os.path.join(_tempfile.mkdtemp(), "video_ab12cd34"); _os.makedirs(_vd)
-_sheet = _os.path.join(_vd, "sheet.jpg"); open(_sheet, "wb").close()
+_vd = os.path.join(tempfile.mkdtemp(), "video_ab12cd34"); os.makedirs(_vd)
+_sheet = os.path.join(_vd, "sheet.jpg"); open(_sheet, "wb").close()
 _ctx = _types.SimpleNamespace(last_image_path=_sheet)
-check("the video sheet is recognised", _graph.is_video_sheet(_sheet) and not _graph.is_video_sheet(_os.path.join(_vd, "x.jpg")))
+check("the video sheet is recognised", G.is_video_sheet(_sheet) and not G.is_video_sheet(os.path.join(_vd, "x.jpg")))
 check("an opinion asked after a video re-looks at its frames",
-      _graph.needs_relook(_ctx, {"user_input": "дай экспертное мнение"})
-      and not _graph.needs_relook(_ctx, {"user_input": "нарисуй кота"}))
+      G.needs_relook(_ctx, {"user_input": "дай экспертное мнение"})
+      and not G.needs_relook(_ctx, {"user_input": "нарисуй кота"}))
 check("the history frames the video as WATCHED",
       "WATCHED" in hist[0]["content"] and "never say you cannot see" in hist[0]["content"], hist[0]["content"][:120])
 

@@ -77,12 +77,6 @@ def text_update(chat_id, text):
             "from": {"id": chat_id, "language_code": "ru"}, "text": text}}
 
 
-def photo_update(chat_id):
-    return {"message": {"chat": {"id": chat_id, "type": "private"},
-            "from": {"id": chat_id, "language_code": "ru"},
-            "photo": [{"file_id": "p1", "file_size": 10, "width": 10, "height": 10}]}}
-
-
 def wait_for(cond, timeout=5.0):
     deadline = time.time() + timeout
     while time.time() < deadline:
