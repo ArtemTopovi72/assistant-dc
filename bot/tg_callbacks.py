@@ -205,6 +205,19 @@ class CallbackMixin:
                 self._store.put(_sess)
                 self._activity.log(chat_id, "system",
                                    f"[button] resolved by message to {_entry['id']}")
+        elif data.rpartition(":")[0].split(":", 1)[0] in tg_bot._IMAGE_MENU_SLOTS \
+                and tg_bot._IMAGE_ID_RE.fullmatch(data.rpartition(":")[2]):
+            # A preset/custom button under 🎭/🎬 carries its picture too: the session's
+            # one-shot slot was spent by the first press, and the second press in the
+            # same menu said «Этой картинки больше нет».
+            data, _, _sfx = data.rpartition(":")
+            _sess = self._get_session(chat_id)
+            _entry = tg_bot._image_by_id(_sess, _sfx)
+            if not (_entry and os.path.exists(_entry.get("path", ""))):
+                self._send_text(chat_id, tg_bot._t("img_gone", self._lang(_sess)))
+                return data, "", False
+            setattr(_sess, tg_bot._IMAGE_MENU_SLOTS[data.split(":", 1)[0]], _sfx)
+            self._store.put(_sess)
         elif ":" in data:
             _verb, _, _sfx = data.partition(":")
             if _verb in tg_bot._IMAGE_VERBS and tg_bot._IMAGE_ID_RE.fullmatch(_sfx):
@@ -896,10 +909,10 @@ class CallbackMixin:
             row = []
             for key in style_presets.STYLE_PRESET_ORDER[i:i + 2]:
                 row.append({"text": style_presets.preset_label(key, lang),
-                            "callback_data": f"style_preset:{key}"})
+                            "callback_data": tg_bot._with_img(f"style_preset:{key}", target)})
             rows.append(row)
         rows.append([{"text": tg_bot._t("style_custom_btn", lang),
-                      "callback_data": "style_custom"}])
+                      "callback_data": tg_bot._with_img("style_custom", target)}])
         self._send_text(chat_id, tg_bot._t("style_ask_ref", lang),
                         keyboard={"inline_keyboard": rows})
         return

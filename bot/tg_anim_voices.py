@@ -22,13 +22,14 @@ class AnimVoicesMixin:
         os.makedirs(d, exist_ok=True)
         return d
 
-    def _send_animate_presets(self, chat_id: int, lang: str) -> None:
+    def _send_animate_presets(self, chat_id: int, lang: str, img_id: str = "") -> None:
         import animate_presets
         rows = []
         for i in range(0, len(animate_presets.ANIMATE_PRESET_ORDER), 2):
-            rows.append([{"text": animate_presets.preset_label(k, lang), "callback_data": f"animate_preset:{k}"}
+            rows.append([{"text": animate_presets.preset_label(k, lang),
+                          "callback_data": tg_bot._with_img(f"animate_preset:{k}", img_id)}
                          for k in animate_presets.ANIMATE_PRESET_ORDER[i:i + 2]])
-        rows.append([{"text": tg_bot._t("animate_custom_btn", lang), "callback_data": "animate_custom"}])
+        rows.append([{"text": tg_bot._t("animate_custom_btn", lang), "callback_data": tg_bot._with_img("animate_custom", img_id)}])
         rows.append([{"text": tg_bot._t("anv_btn", lang), "callback_data": "anv:yes"}])
         self._send_text(chat_id, tg_bot._t("animate_ask_preset", lang), keyboard={"inline_keyboard": rows})
 
@@ -65,7 +66,7 @@ class AnimVoicesMixin:
         annoyed a kid who just wanted it to wave."""
         sess.anim_voices, sess.anim_voice_state = [], ""
         self._store.put(sess)
-        self._send_animate_presets(chat_id, lang)
+        self._send_animate_presets(chat_id, lang, sess.pending_animate_target)
 
     def _offer_voices(self, chat_id: int, sess, lang: str, request: str, n: int) -> None:
         """generate_video stopped before rendering people who talk: «🎙 Свои
@@ -87,7 +88,7 @@ class AnimVoicesMixin:
             self._enqueue_item(chat_id, {"type": "text", "text": sess.voice_pending})
             return
         self._store.put(sess)
-        self._send_animate_presets(chat_id, lang)
+        self._send_animate_presets(chat_id, lang, sess.pending_animate_target)
 
     def _cb_anim_voices(self, chat_id: int, data: str) -> None:
         sess = self._get_session(chat_id)

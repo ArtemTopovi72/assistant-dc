@@ -270,6 +270,15 @@ _INTERRUPTIBLE_STAGE_KEYWORDS = (
 # stale target to re-point the user's next message. It falls through as an
 # unmatched callback_data instead.
 _IMAGE_ID_RE = re.compile(r"[0-9a-f]{8}")
+# The menus opened from 🎭/🎬: their buttons end in ":<image id>" (_with_img) and
+# the press puts that id into the session slot the handler reads.
+_IMAGE_MENU_SLOTS = {"style_preset": "pending_style_target", "style_custom": "pending_style_target",
+                     "animate_preset": "pending_animate_target",
+                     "animate_custom": "pending_animate_target"}
+
+
+def _with_img(callback: str, img_id: str) -> str:
+    return f"{callback}:{img_id}" if img_id else callback
 
 
 # Where a held transcript's storyboard starts (fwd_video_seen, either language).

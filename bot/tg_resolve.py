@@ -1606,10 +1606,10 @@ class ResolveMixin:
             row = []
             for key in style_presets.STYLE_PRESET_ORDER[i:i + 2]:
                 row.append({"text": style_presets.preset_label(key, lang),
-                            "callback_data": f"style_preset:{key}"})
+                            "callback_data": tg_bot._with_img(f"style_preset:{key}", image_id)})
             rows.append(row)
         rows.append([{"text": tg_bot._t("style_custom_btn", lang),
-                      "callback_data": "style_custom"}])
+                      "callback_data": tg_bot._with_img("style_custom", image_id)}])
         self._send_text(chat_id, tg_bot._t("style_ask_ref", lang),
                         keyboard={"inline_keyboard": rows})
 
