@@ -5,7 +5,9 @@ cot=full makes YuE2 write an ABC score first; the vocal notes of a lyric line
 are its syllables in order. A stressed syllable should sit on a long note or
 a strong beat; when the melody puts a longer/stronger note on an unstressed
 syllable, the singer stresses that one. Measure it per word.
-music._generate_yue2 re-rolls the plan (yue-plan) and keeps the best-scoring one.
+plan_score (ranking re-rolled plans) and repair (long note onto the stressed
+syllable) are experiments that music._generate_yue2 does not use; see the
+Russian-stress note in media/music.py.
 usage: python song_stress.py song.json   (the request json YuE2 leaves next to the song)"""
 import json, re, sys
 
