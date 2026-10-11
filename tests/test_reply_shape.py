@@ -78,13 +78,10 @@ _own = S.shape_search_reply("Официальный сайт: cbr.ru [1]. Мас
 check("a [n] the model wrote is not kept (it pointed at the wrong source)",
       "cbr.ru [1]" not in _own.split("🔗")[0] and "a[1]" in _own, _own)
 
+_sub = S.shape_search_reply("Аргентина (source: wikipedia.org). Ещё (source: made.up) факт. Node (node.js) ок",
+                            ["q"], [{"domain": "ru.wikipedia.org", "title": "ЧМ", "url": "https://ru.wikipedia.org/x"}], "ru")
+check("a (source: domain) mark resolves by subdomain, an unknown one is dropped, (node.js) stays",
+      "[1]" in _sub and "source:" not in _sub and "(node.js)" in _sub, _sub)
+
 print(f"\n{PASSED}/{PASSED + FAILED} checks passed")
 sys.exit(1 if FAILED else 0)
-
-
-def test_subdomain_and_unknown_citations():
-    import tg_reply_shape as _S
-    src = [{"domain": "ru.wikipedia.org", "title": "ЧМ", "url": "https://ru.wikipedia.org/x"}]
-    out = _S.shape_search_reply("Аргентина (source: wikipedia.org). Ещё (source: made.up) факт. Node (node.js) ок",
-                                ["q"], src, "ru")
-    assert "[1]" in out and "source:" not in out and "(node.js)" in out, out

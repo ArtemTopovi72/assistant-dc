@@ -5,6 +5,8 @@ Run: venv/Scripts/python tests/shot_gui_tabs.py <out_dir> [width height]
 """
 import os, sys
 from pathlib import Path
+
+_DEMO_CHAT = 100001   # made-up chat id: the sample messages need a key, not a real user
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 _ROOT = Path(__file__).resolve().parent.parent
@@ -50,10 +52,10 @@ if os.environ.get("SHOT_FILLED"):
                        {"text": "нарисуй закат", "status": "done"}]
     win._refresh_queue_ui()
     tg = win.telegram_tab
-    tg._on_message(7147556811, "А, вот оно что! Через три контакта G R и Y?",
+    tg._on_message(_DEMO_CHAT, "А, вот оно что! Через три контакта G R и Y?",
                    "Понял: GRY — это три отдельных контакта (G, R и Y). Это в корне меняет дело и делает "
                    "схему ещё чётче и понятнее для сборки: G на землю, R через резистор 220 Ом, Y на выход.")
-    tg._on_stage(7147556811, "Рисую картинку", False)
+    tg._on_stage(_DEMO_CHAT, "Рисую картинку", False)
     w = win.weather_tab.table
     rows = [("10.10", "утро", "+9", "82 %", "3 м/с", "☁ облачно"), ("10.10", "день", "+12", "70 %", "4 м/с", "🌦 дождь")]
     from PyQt5.QtWidgets import QTableWidgetItem

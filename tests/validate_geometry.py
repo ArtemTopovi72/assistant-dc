@@ -81,8 +81,6 @@ if __name__ == "__main__":
     jobs = {
         "firered": lambda: img.edit_image_with_firered(
             None, SRC, "Change the background to a wooden bookshelf library. Keep the person exactly the same.", seed=42),
-        "bg_replace": lambda: img.replace_background_with_comfy(
-            None, SRC, "a sunny green park with trees", seed=42),
         "relight": lambda: img.relight_image_with_comfy(
             None, SRC, "warm golden hour sunlight from the left", seed=42),
     }
