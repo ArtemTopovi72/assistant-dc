@@ -58,12 +58,12 @@ from dr_timing import (
 _REEXPORTED_FROM_DR_TIMING = (DEPTHS, _TIMING_SEED, _TIMING_KEEP, _profile_signature,
                               estimate_duration, record_run_duration)
 from dr_math import (
-    _repair_latex_artifacts, audit_math, _MATH_CMDS, _TEX_GLUE, _DOMAIN_RE,
+    _repair_latex_artifacts, audit_math, _TEX_GLUE, _DOMAIN_RE,
 )
 # Re-exported: the pure suite and the live math probes (tests/math_live.py,
 # tests/math_stage_trace.py) call `dr.audit_math` / `DR._repair_latex_artifacts`.
 # Pure functions and constants; nothing here is patched, so no split state.
-_REEXPORTED_FROM_DR_MATH = (_repair_latex_artifacts, audit_math, _MATH_CMDS,
+_REEXPORTED_FROM_DR_MATH = (_repair_latex_artifacts, audit_math,
                             _TEX_GLUE, _DOMAIN_RE)
 from dr_outline import (
     _clean_report_title, _extract_outline_json, _default_outline, _repair_outline_text,
