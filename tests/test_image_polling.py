@@ -1,4 +1,4 @@
-"""Mock-'requests' coverage for image.py's ComfyUI polling loops
+"""Mock-'requests' coverage for comfy_client's ComfyUI polling loops
 (_submit_and_poll / _submit_and_collect). These branches (HTTP errors,
 cancel-mid-poll, connection-error grace period, corrupt-file, errored/empty
 job, timeout) don't need a live GPU -- just controlled fake HTTP responses.
@@ -11,8 +11,7 @@ except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
 from pathlib import Path
 from PIL import Image
-# The ComfyUI polling loop moved out of image.py into comfy_client.py; this
-# suite was always testing the transport, not the image editing around it.
+# This suite tests the transport (comfy_client), not the image editing around it.
 import comfy_client as I
 
 _TMP = Path(tempfile.mkdtemp(prefix="imgpoll_"))
@@ -40,13 +39,12 @@ def _save_real_png(name="out.png"):
 
 def _install(get_seq=None, post=None):
     calls = {"get": 0}
-    # _submit_and_poll now runs a liveness probe first, because a WEDGED ComfyUI
+    # _submit_and_poll runs a liveness probe first, because a WEDGED ComfyUI
     # (accepts the socket, never answers) otherwise costs the full read timeout on
-    # every call -- ~5 min for one draw, reported to the user as mere slowness.
-    # These tests are about the POLL loop, not the probe (tests/test_comfy_wedged.py
-    # owns that), so present a healthy server. Stubbing the function rather than
-    # answering /system_stats through fake_get keeps the job's request sequence AND
-    # the faked time.time() call counts in these tests exactly as they were.
+    # every call. These tests are about the POLL loop, not the probe
+    # (tests/test_comfy_wedged.py owns that), so present a healthy server. Stubbing
+    # the function rather than answering /system_stats through fake_get keeps the
+    # job's request sequence AND the faked time.time() call counts unchanged.
     I.server_healthy = lambda force=False: True
     def fake_post(url, json=None, timeout=None):
         return post
@@ -113,10 +111,8 @@ def test_saved_image_success():
 
 def test_saved_audio_success():
     """Audio-producing jobs (SaveAudio, SaveAudioAdvanced) report their file
-    under an "audio" history key, not "images" -- confirmed live: a real
-    MiniMax Music3 render completed successfully server-side but the client
-    reported "no output" because _poll_history only ever looked at
-    node_out["images"]. Regression for that bug.
+    under an "audio" history key, not "images"; _poll_history must look at both,
+    or a render that succeeded server-side is reported as "no output".
     """
     orig_post, orig_get = I.requests.post, I.requests.get
     try:

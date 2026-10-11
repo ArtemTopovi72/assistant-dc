@@ -1,5 +1,5 @@
 """Boundary-stubbed coverage for generate_image_with_refinement's eval loop: stubs
-build_image_prompt_from_llm / generate_image_with_comfy / evaluate_image so every
+generate_image_with_comfy / evaluate_image so every
 branch (immediate success, first-attempt failure, failure-after-partial, patch
 application, resolution clamping, attempt exhaustion) runs deterministically without
 GPU or LM Studio.
@@ -17,11 +17,10 @@ import image as I
 
 # --- hermetic by default -----------------------------------------------------
 # _item_attributes() asks the LLM to classify a phrase, and the mask pipeline
-# calls it from four places. These suites are named "stub" and are supposed to be
-# offline, but they were reaching a live LM Studio on localhost:1234 — so the
-# result depended on whether a model happened to be loaded, and the same test
-# passed on one machine and failed on another. Pin a deterministic classifier;
-# individual tests override it via _Patches when a scenario needs other values.
+# calls it from four places. These suites are offline, so pin a deterministic
+# classifier (a live LM Studio on localhost:1234 would make results depend on
+# whether a model is loaded); individual tests override it via _Patches when a
+# scenario needs other values.
 _ITEM_ATTRS_DEFAULT = {"worn": False, "small": True, "large": False, "multi": False}
 from _image_patch import Patches as _Patches, broadcast as _broadcast
 _broadcast("_item_attributes",
@@ -95,8 +94,7 @@ def test_refine_loop_applies_patches_then_succeeds(engine="ideogram4"):
     """A retry RE-DRAWS from the patched prompt; it never repaints the previous
     picture. Repainting an Ideogram composition would hand back a picture with
     no layout, so the boxes are gone and every later edit silently drops to a
-    pixel pipeline. (The img2img-through-the old model variant was removed with
-    the old model, 2026-09-23.)
+    pixel pipeline.
     """
     ctx = Ctx()
     _prev_engine = I._config.IMAGE_ENGINE
@@ -117,8 +115,7 @@ def test_refine_loop_applies_patches_then_succeeds(engine="ideogram4"):
             # score > 5: a pure quality defect, so the retry refines THROUGH the
             # previous image. A low score with a prompt_patch means the subject is
             # missing, and that path deliberately regenerates from fresh noise
-            # (covered separately below) — the old fixture used score 4 and so was
-            # asserting img2img on the one branch that must not use it.
+            # (covered separately below).
             return {"verdict": "refine", "score": 7, "prompt_patch": "add detail",
                      "negative_prompt_patch": "low quality", "steps": 12, "cfg": 2.0,
                      "width": 800, "height": 800}

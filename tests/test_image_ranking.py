@@ -1,13 +1,11 @@
 """A bigger picture is not a better picture.
 
-A deck about the Kirovets tractor came back with the FLAG OF KENYA on its cover.
-The search itself was fine — the engine's own top hit was a photograph of the
-tractor — but image_search_urls re-sorted the candidates by PIXEL AREA, and a
-4096x2160 flag is 8.8 megapixels against the right photo's 0.4. No aspect or
-source bonus in that function can survive a 20x multiplier, so relevance was
-thrown away every time a wallpaper appeared anywhere in the results.
+image_search_urls must not re-sort candidates by PIXEL AREA: a 4096x2160 flag
+(8.8 megapixels) would beat the right photo (0.4) by a 20x multiplier that no
+aspect or source bonus can survive, so a deck about a tractor would get a
+wallpaper on its cover.
 
-Relevance is now the spine: the engine's order dominates, the aspect and source
+Relevance is the spine: the engine's order dominates, the aspect and source
 bonuses reorder neighbours, and size is only a floor that keeps thumbnails out.
 
 Offline: the search boundary is replaced, so no network.
@@ -72,10 +70,9 @@ print("=" * 66)
 
 TINY = row("https://x.ru/thumb.jpg", 90, 60)
 got = with_rows([TINY, GOOD], prefer="landscape")
-# Demoted, not deleted: dropping the small ones emptied the list on a result
+# Demoted, not deleted: dropping the small ones would empty the list on a result
 # set of nothing but thumbnails, and a caller that asked for images and got none
-# crashes on urls[0]. An existing suite caught that; my own placeholder check
-# (len >= 0) asserted nothing and hid it.
+# crashes on urls[0].
 check("a thumbnail sinks below a usable candidate the engine ranked lower",
       got and got[0].endswith("kirovets.jpg"), got)
 check("...but it is not thrown away either", any("thumb" in u for u in got), got)
@@ -85,9 +82,7 @@ check("a candidate with no dimensions is kept, since unknown is not small",
           [row("https://x.ru/nodim.jpg", 0, 0), GOOD], prefer="landscape")))
 
 # Everything below the floor must NOT empty the list: a caller that asked for
-# images and got none crashes on urls[0]. The first version of this check
-# asserted len() >= 0 -- which is to say nothing at all -- and an existing
-# suite caught the crash instead.
+# images and got none crashes on urls[0].
 only_tiny = with_rows([TINY, row("https://x.ru/t2.jpg", 80, 80)], prefer="landscape")
 check("when everything is below the floor, the list is not emptied",
       len(only_tiny) == 2, only_tiny)
@@ -131,8 +126,8 @@ check("an agency preview is dropped whatever its size",
 
 STAMPED = row("https://toptexnik.ru/wp-content/uploads/2018/10/9_2.jpg", 1200, 800)
 got = with_rows([STAMPED, GOOD], prefer="landscape")
-# Observed on a slide: this aggregator stamps its own name across the picture in
-# letters the height of the tractor cab. Same family as the agency previews.
+# This aggregator stamps its own name across the picture. Same family as the
+# agency previews.
 check("an aggregator that stamps its own watermark is refused too",
       got == [GOOD["image"]], got)
 
@@ -143,12 +138,9 @@ print("=" * 66)
 print("A PACKSHOT ON WHITE IS NOT A COVER")
 print("=" * 66)
 
-# Measured on the live search: the best hit for "Витамин D капсулы солнце" was
-# an 800x800 photograph of one brand's carton on white. As a deck's full-bleed
-# cover that is an advertisement, and the cover's white text vanishes into it.
-# The signal is the BORDER: a catalogue shot isolates its object and leaves the
-# edges blank. Real hits measured 0.92 for the packshot against 0.00 and 0.01
-# for a tractor in a field and a city street.
+# A photograph of one brand's carton on white makes a bad full-bleed cover: it
+# is an advertisement, and the cover's white text vanishes into it. The signal
+# is the BORDER: a catalogue shot isolates its object and leaves the edges blank.
 import tempfile as _tf
 import numpy as _np
 from PIL import Image as _Im
@@ -172,11 +164,9 @@ check("a photograph that fills the frame is not", not search.looks_like_cutout(_
 check("an unreadable file is not called a cut-out",
       not search.looks_like_cutout("does-not-exist.png"))
 
-# PAPER white is the signal, not brightness. At the first threshold (238) this
-# also refused a snowfield, and that was written up as a known cost -- wrongly.
-# Measured on the same images plus two snow scenes, as the share of the border
-# at >=252 in every channel: packshot 0.91, snow with grain 0.03, snow under
-# flat light 0.00, the two real photographs 0.00. A photograph is never 255.
+# PAPER white is the signal, not brightness: a lower threshold also refuses a
+# snowfield. The measure is the share of the border at >=252 in every channel;
+# a photograph is never 255.
 _rng = _np.random.default_rng(3)
 _snow = _np.clip(246 + _rng.normal(0, 4, (256, 256, 3))
                  + _np.linspace(-6, 6, 256)[:, None, None], 0, 255).astype(_np.uint8)
