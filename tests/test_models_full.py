@@ -295,7 +295,7 @@ def test_load_memory_corrupt_inputs():
     c3 = _ctx()
     c3.load_memory(d)
     check("empty_summary_skipped", len(c3.session_memory) == 0)
-    # session_memory.json is INVALID JSON -> json.load raises -> except branch (242-243)
+    # session_memory.json is INVALID JSON -> json.load raises -> except branch
     d2 = _TMP / "corrupt2"; d2.mkdir(parents=True, exist_ok=True)
     (d2 / "session_memory.json").write_text("{ broken json ]", encoding="utf-8")
     c4 = _ctx()
@@ -338,10 +338,7 @@ if __name__ == "__main__":
             M.time.sleep = _real_sleep
     print("\n" + str(len(fns) - failed) + "/" + str(len(fns)) + " model test functions passed (" +
           str(sum(1 for _, c in RESULTS if c)) + "/" + str(len(RESULTS)) + " checks)")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

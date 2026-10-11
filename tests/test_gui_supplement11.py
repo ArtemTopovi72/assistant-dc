@@ -84,7 +84,7 @@ def _close(w):
 
 
 def test_output_dir_mask_config_fail_and_default_window():
-    # OUTPUT_DIR_GUI_MASK: `import config` fails -> fallback (3294-3295)
+    # OUTPUT_DIR_GUI_MASK: `import config` fails -> fallback
     real = sys.modules.get("config")
     sys.modules["config"] = None
     try:
@@ -92,7 +92,7 @@ def test_output_dir_mask_config_fail_and_default_window():
     finally:
         if real is not None: sys.modules["config"] = real
         else: sys.modules.pop("config", None)
-    # _default_window_size: primaryScreen raises -> except (4441-4442)
+    # _default_window_size: primaryScreen raises -> except
     w = _win()
     realps = QApplication.primaryScreen
     QApplication.primaryScreen = staticmethod(lambda: (_ for _ in ()).throw(RuntimeError("noscreen")))
@@ -119,16 +119,16 @@ def test_queue_and_send_guards():
     o = _noop()
     try:
         w = _win()
-        # _send_text empty (5623)
+        # _send_text empty
         w.input.setText("   "); w._send_text()
-        # _enqueue empty (5443)
+        # _enqueue empty
         w._enqueue("   ", announce=False)
         # _queue_move valid pending swap (5461->5462)
         w._queue_paused = True
         w._enqueue("qa", announce=False); w._enqueue("qb", announce=False)
         w.queue_list.setCurrentRow(0); w._queue_move(1)
         check("queue_move11", [it["text"] for it in w._task_queue][:2] == ["qb", "qa"])
-        # _maybe_drain_queue: running_task not in queue -> ValueError swallowed (5507-5508)
+        # _maybe_drain_queue: running_task not in queue -> ValueError swallowed
         w._running_task = {"text": "ghost", "status": "running"}
         w._running_dispatched = True   # finalization requires a dispatched task
         w._turn_had_error = False
@@ -147,11 +147,11 @@ def test_stop_vad_and_vad_ultra():
     o = _noop()
     try:
         w = _win()
-        # _stop_vad: listener.stop() raises -> except (5716-5717)
+        # _stop_vad: listener.stop() raises -> except
         w.vad_listener = types.SimpleNamespace(stop=lambda: (_ for _ in ()).throw(RuntimeError("x")))
         w._stop_vad("bye")
         check("stop_vad_except", w.vad_listener is None)
-        # _on_vad_utterance ultra path (5758-5773)
+        # _on_vad_utterance ultra path
         w.ultra_search_on = True
         w.vad_listener = types.SimpleNamespace(is_healthy=lambda: True, set_paused=lambda p: None)
         w.captured_image = None
@@ -167,7 +167,7 @@ def test_db_finished_close_except_and_load_except():
     o = _noop()
     try:
         w = _win()
-        # _on_db_finished: library.close raises (6068-6069)
+        # _on_db_finished: library.close raises
         w._library = types.SimpleNamespace(close=lambda: (_ for _ in ()).throw(OSError("x")),
                                            stats=lambda: {})
         w._lib_build_worker = None
@@ -176,7 +176,7 @@ def test_db_finished_close_except_and_load_except():
         # _db_load_existing: documents() raises (5972->5973)
         w._library = types.SimpleNamespace(documents=lambda: (_ for _ in ()).throw(RuntimeError("x")))
         w._db_load_existing()
-        # _db_clear success (6084-6085)
+        # _db_clear success
         w._library = types.SimpleNamespace(purge_all=lambda: 2, stats=lambda: {}, is_empty=lambda: True,
                                            close=lambda: None)
         oq = QMessageBox.question; QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.Yes)
@@ -262,7 +262,7 @@ def test_edit_personality_read_except_and_refresh_importerror():
     import model_selector as ms
     ms.list_models = lambda base: [{"id": "q", "state": "loaded"}]
     ms._index_model_sizes = lambda d: {}; ms._size_gb = lambda a, b: 1.0
-    # _edit_personality: path set, text empty, open() raises -> except pass (954-955)
+    # _edit_personality: path set, text empty, open() raises -> except pass
     ctx = types.SimpleNamespace(model_name="q", no_think=True, response_length="auto",
                                 reasoning_effort="high", custom_ref_wav=None,
                                 custom_personality_path="C:/no/such_p.txt", custom_personality_text="",
@@ -275,7 +275,7 @@ def test_edit_personality_read_except_and_refresh_importerror():
     finally:
         QDialog.exec_ = oe
     dlg.close()
-    # SystemInfoTab.refresh: an optional dep raising ImportError (2157-2158)
+    # SystemInfoTab.refresh: an optional dep raising ImportError
     tab = gui.SystemInfoTab()
     c = types.SimpleNamespace(model_name="m", no_think=False, tts_disabled=False, mic_disabled=False,
                               web_search_enabled=True, custom_personality_path=None,
@@ -295,7 +295,7 @@ def test_edit_personality_read_except_and_refresh_importerror():
 
 
 def test_dark_titlebar_except():
-    # enable_dark_titlebar: winId() raises -> except pass (92-93)
+    # enable_dark_titlebar: winId() raises -> except pass
     w = QWidget()
     w.winId = lambda: (_ for _ in ()).throw(RuntimeError("no winid"))
     gui.enable_dark_titlebar(w)

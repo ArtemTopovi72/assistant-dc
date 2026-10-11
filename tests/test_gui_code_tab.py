@@ -111,14 +111,6 @@ _mime = QMimeData(); _mime.setUrls([QUrl.fromLocalFile(str(_drop_src))])
 from PyQt5.QtCore import Qt as _Qt
 tab.dropEvent(QDropEvent(QPoint(1, 1), _Qt.CopyAction, _mime,
                          _Qt.LeftButton, _Qt.NoModifier))
-def _read(box, rel):
-    """Reading a file that is not there is a FAILED CHECK, not a traceback:
-    a crash here stops every check after it from running at all."""
-    try:
-        return box.read_text(rel)
-    except Exception as exc:
-        return "<%s>" % exc
-
 check("a dropped file lands in the folder",
       _read(CS.sandbox_for(4242), "dropped_in.txt") == "dragged",
       _read(CS.sandbox_for(4242), "dropped_in.txt")[:60])

@@ -70,10 +70,7 @@ if __name__ == "__main__":
             import traceback; traceback.print_exc()
     print(str(len(fns) - failed) + "/" + str(len(fns)) + " supplement11b passed (" +
           str(sum(1 for _, c in RESULTS if c)) + "/" + str(len(RESULTS)) + " checks)")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))

@@ -100,7 +100,7 @@ def test_db_load_existing_documents_loop():
     gui.ModelLoader = type("NoopLoader", (_orig,), {"start": lambda self: None, "run": lambda self: None})
     w = gui.AssistantWindow("m", True, "high")
     gui.ModelLoader = _orig
-    # _get_library returns a lib whose documents() yields entries -> _db_add_list_item loop (5973)
+    # _get_library returns a lib whose documents() yields entries -> _db_add_list_item loop
     f = _png("dld.png")
     w._library = types.SimpleNamespace(
         documents=lambda: [{"path": f, "title": "Doc One"}, {"path": None, "title": "Doc Two"}],
@@ -117,7 +117,7 @@ def test_db_load_existing_documents_loop():
 
 
 def test_transfer_run_gather_fails():
-    # not busy, but _gather returns None (too few rows) -> second return (3857)
+    # not busy, but _gather returns None (too few rows) -> second return
     host = types.SimpleNamespace(ctx=types.SimpleNamespace(reference_images=[], last_image_path=None,
                                  cancel_event=threading.Event()),
                                  images_panel=types.SimpleNamespace(add_image=lambda p: None),
@@ -142,7 +142,7 @@ def test_new_memory_profile_combo_index():
                                   active_memory_dir=d, save_memory=lambda *a, **k: None,
                                   load_memory=lambda *a, **k: None, session_memory=[])
     w.graph = object(); w.base_state = {"messages": []}; w.stack.setCurrentWidget(w.dashboard); w._set_busy(False)
-    # make the new profile appear in the combo so findText>=0 -> setCurrentIndex (6723)
+    # make the new profile appear in the combo so findText>=0 -> setCurrentIndex
     w._list_memory_profiles = lambda: ["default", "ProfNP"]
     _og = QInputDialog.getText
     QInputDialog.getText = staticmethod(lambda *a, **k: ("ProfNP", True))

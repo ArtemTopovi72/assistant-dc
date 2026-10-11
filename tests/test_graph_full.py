@@ -581,7 +581,7 @@ def test_web_search_disabled_drops_tools():
 
 def test_slow_llm_warning():
     c = _ctx()
-    # make the two monotonic() reads straddle a >45s gap -> slow-round warning (429)
+    # make the two monotonic() reads straddle a >45s gap -> slow-round warning
     seq = iter([0.0, 100.0])
     real = G.time.monotonic
     G.time.monotonic = lambda: next(seq, 200.0)
@@ -604,7 +604,7 @@ def test_verbatim_save_short_fact_skipped():
 
 def test_recovery_budget_extension():
     c = _ctx()
-    # every round fails -> at the budget wall, recovery rounds are granted (689-691)
+    # every round fails -> at the budget wall, recovery rounds are granted
     fails = [_asst("", [_tc("search", {"query": f"q{i}"}, cid=f"s{i}")]) for i in range(14)]
     llm = LLM(fails + [_asst("done recovering")])
     tools = Tools({"search": "[TOOL ERROR] nope"})
@@ -643,7 +643,7 @@ def test_compact_fallback_no_prev_summary():
 
 def test_compact_fallback_empty_users_returns_original():
     # fallback where to_summarize has only empty-content user turns AND no prev summary
-    # -> extractive summary is empty -> return messages unchanged (line 133)
+    # -> extractive summary is empty -> return messages unchanged
     c = _ctx(total_user_turns=G.HISTORY_COMPACT_EVERY - 1)
     msgs = [{"role": "system", "content": "sys"}]
     for i in range(4):
@@ -763,10 +763,7 @@ if __name__ == "__main__":
             print("  ERROR in " + fn.__name__ + ": " + type(e).__name__ + ": " + str(e))
     print("\n" + str(len(fns) - failed) + "/" + str(len(fns)) + " graph test functions passed (" +
           str(sum(1 for _, c in RESULTS if c)) + "/" + str(len(RESULTS)) + " checks)")
-    # A failed check() must reach the exit code. This used to be `1 if failed else 0`,
-    # where `failed` counts EXCEPTIONS only -- so every assertion in the file could
-    # print FAIL while the suite still exited 0, invisible to anything judging by
-    # exit code (which is how these suites are judged).
+    # A failed check() must reach the exit code; `failed` counts exceptions only.
     _bad = [r[0] for r in RESULTS if not r[1]]
     if _bad:
         print("FAILED CHECKS: " + ", ".join(map(str, _bad)))
