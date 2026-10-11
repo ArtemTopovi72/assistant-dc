@@ -28,7 +28,7 @@ from types import SimpleNamespace
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
     sys.stdout.reconfigure(encoding="utf-8")
-except Exception:
+except (AttributeError, ValueError, OSError):
     pass
 
 import graph as graph_mod

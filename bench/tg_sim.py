@@ -19,7 +19,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception: pass
+except (AttributeError, ValueError, OSError): pass
 import bench.live_tg_drive as D  # noqa: E402
 
 PORT = int(os.getenv("TG_SIM_PORT", "8765"))

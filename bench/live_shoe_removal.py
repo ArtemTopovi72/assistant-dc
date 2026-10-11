@@ -12,7 +12,7 @@ Requires ComfyUI up (COMFY_URL). LM Studio optional (_item_attributes fail-open)
 import os, sys, time, threading
 import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception: pass
+except (AttributeError, ValueError, OSError): pass
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import image as im

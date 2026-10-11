@@ -32,7 +32,7 @@ PY = sys.executable
 HISTORY = ROOT / "runtime" / "bench_history.jsonl"
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception:
+except (AttributeError, ValueError, OSError):
     pass
 
 

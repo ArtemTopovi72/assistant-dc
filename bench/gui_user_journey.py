@@ -40,7 +40,7 @@ def _up(url, timeout=6):
 import config
 import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception: pass
+except (AttributeError, ValueError, OSError): pass
 
 if not _up(config.COMFY_URL.rstrip("/") + "/system_stats"):
     print(f"CANNOT RUN: ComfyUI is not answering at {config.COMFY_URL}. "

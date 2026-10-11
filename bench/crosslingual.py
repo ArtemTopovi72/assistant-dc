@@ -14,7 +14,7 @@ Usage:
 import os
 import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception: pass
+except (AttributeError, ValueError, OSError): pass
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent

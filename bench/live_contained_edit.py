@@ -7,7 +7,7 @@ Requires ComfyUI :8000 and LM Studio :1234 up. Exit 0 = verified.
 import os, sys, threading
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception: pass
+except (AttributeError, ValueError, OSError): pass
 
 from pathlib import Path
 from PIL import Image

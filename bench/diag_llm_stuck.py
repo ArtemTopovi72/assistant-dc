@@ -15,7 +15,7 @@ Run: venv/Scripts/python.exe bench/diag_llm_stuck.py     (exit 0 = all stuck-mod
 import os, sys, time, json, threading
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception: pass
+except (AttributeError, ValueError, OSError): pass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 

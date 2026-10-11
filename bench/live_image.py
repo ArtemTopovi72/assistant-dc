@@ -6,7 +6,7 @@ reach. Run standalone: venv/Scripts/python.exe bench/live_image.py
 import os, sys, time, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception: pass
+except (AttributeError, ValueError, OSError): pass
 import logging; logging.basicConfig(level=logging.WARNING)
 from pathlib import Path
 from PIL import Image

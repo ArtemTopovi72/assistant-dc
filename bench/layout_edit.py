@@ -29,7 +29,7 @@ Run: venv/Scripts/python.exe tests/test_layout_edit_live.py
 import os, sys, json, copy, threading, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception: pass
+except (AttributeError, ValueError, OSError): pass
 import logging
 logging.basicConfig(level=logging.WARNING,
                     format="%(levelname)s %(name)s: %(message)s")

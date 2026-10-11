@@ -9,7 +9,7 @@ Usage: venv/Scripts/python.exe bench/live_grounding.py [image] [vision_model]
 import os, sys, time, glob, threading
 from pathlib import Path
 try: sys.stdout.reconfigure(encoding="utf-8")
-except Exception: pass
+except (AttributeError, ValueError, OSError): pass
 _ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT))
 from PIL import Image

@@ -16,7 +16,7 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "media"))
 sys.path.insert(0, os.path.join(ROOT, "voice"))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception: pass
+except (AttributeError, ValueError, OSError): pass
 import music
 
 STANZAS = [

@@ -32,7 +32,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != os.path.dirname(os.path.abspath(__file__))]
 sys.path.insert(0, ROOT)
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception: pass
+except (AttributeError, ValueError, OSError): pass
 
 if os.getenv("F5_TEST_RUN"):
     raise SystemExit("live_tg_drive makes real GPU calls; unset F5_TEST_RUN")

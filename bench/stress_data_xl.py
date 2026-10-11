@@ -9,7 +9,7 @@ hiding it. Categories: homographs, hard/OOV words, plus mixed registers
 """
 import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except Exception: pass
+except (AttributeError, ValueError, OSError): pass
 from bench.stress_data import (
     HOMOGRAPHS as _H0, HARD_WORDS as _W0, GENERAL as _G0,
     canonical, base, find_token, n_vowels, is_marked,
