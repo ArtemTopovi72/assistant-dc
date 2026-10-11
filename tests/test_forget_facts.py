@@ -56,7 +56,7 @@ check("no match drops nothing", len(c2.pinned_facts) == 3 and "Nothing matched" 
 import prompts
 check("the system prompt names the tool for 'забудь'", "forget_facts" in prompts.build_system_prompt())
 check("the schema is offered to the model",
-      any(s.get("function", {}).get("name") == "forget_facts" for s in T.tool_schemas(c2)) if hasattr(T, "tool_schemas") else True)
+      any(s.get("function", {}).get("name") == "forget_facts" for s in T.TOOL_SCHEMAS))
 
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)
