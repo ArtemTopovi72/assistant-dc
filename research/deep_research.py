@@ -32,13 +32,10 @@ from dr_urls import (
     _authority_score, _source_rank, _classify_source_type, _domain_allowed,
     _is_safe_public_url, _source_type_allowed, _mutate_query, _cap_per_domain,
     _AUTH_BASE_SCORE, _AUTH_CATEGORY_SCORE, _MID_SCORE, _COMMUNITY_SCORE,
-    _SOURCE_TYPES,
 )
-# Re-exported unchanged so `deep_research._classify_source_type` / `._SOURCE_TYPES`
-# keep resolving on this module after the move to dr_urls (callers and tests
-# reach for them here).
-_REEXPORTED_FROM_DR_URLS = (_classify_source_type, _SOURCE_TYPES,
-                            _COMMUNITY_SCORE)
+# Re-exported unchanged so `deep_research._classify_source_type` keeps resolving
+# on this module after the move to dr_urls (callers and tests reach for it here).
+_REEXPORTED_FROM_DR_URLS = (_classify_source_type, _COMMUNITY_SCORE)
 from dr_lang import DR_LANG_NAMES, _DOC_LABELS, _norm_out_lang, lang_of_text, _lab, _lang_directive
 # Re-exported: gui_workers calls `dr.lang_of_text(topic)` to pick the report
 # language, and the output-language suite reads DR_LANG_NAMES/_DOC_LABELS off
