@@ -389,7 +389,7 @@ def test_json_or_empty():
 
 
 # ── one loader at a time ──────────────────────────────────────────────────────
-# Live, 2026-09-12: a crash revive and the card release's reload ran together;
+# A crash revive and the card release's reload ran together;
 # LM Studio said "2 models match ... Operation canceled", then 500, and four
 # turns died. ensure_exclusive is serialised process-wide.
 def test_ensure_exclusive_is_serialised():

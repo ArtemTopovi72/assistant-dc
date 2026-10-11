@@ -1,6 +1,5 @@
 """A counted subject in a layout edit gets one box per subject.
 
-Live 2026-09-13 (mega journey re-run, step 127; identical in the 12.09 run):
 'пусть котов будет два' became a layout edit that REPLACED the cat box's
 description with "two fluffy gray cats sitting together". The renderer drew
 one merged mass with extra limbs, the critic rejected it twice, the bot

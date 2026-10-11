@@ -329,7 +329,7 @@ def test_seam_blend_tile_normal():
     crop = Image.fromarray(_rand_rgb(80, 80))
     res = Image.fromarray(_rand_rgb(80, 80))
     m = _mask_img(80, 80, box=(15, 15, 60, 60))
-    out = I._seam_blend_tile(crop, res, m)
+    I._seam_blend_tile(crop, res, m)
     check("seam_blend_tile_ran", True)  # either a tile or None, both legit outcomes
 
 def test_seam_blend_tile_shape_mismatch_none():

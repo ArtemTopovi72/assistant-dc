@@ -3,7 +3,7 @@
 Gemma 4's image attention is non-causal: all of a picture's tokens must fit
 ONE llama.cpp ubatch (GGML_ASSERT n_ubatch >= n_tokens). With the default 512
 anything over ~1300 px killed the model, so pictures were cut to 1024 px and
-a projector on wallpaper became «телевизор» (live 2026-10-01). `lms load`
+a projector on wallpaper became «телевизор». `lms load`
 cannot set the ubatch; the REST load does.
 """
 import os, sys

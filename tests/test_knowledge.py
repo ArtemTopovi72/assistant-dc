@@ -256,7 +256,7 @@ def test_ensure_embeddings_progress_and_cancel():
         for i in range(3):
             kb.add_document("doc", f"pc{i}", f"Progress cancel doc {i} text content here.", embed=False)
         seen = []
-        n = kb.ensure_embeddings(batch=1, progress=lambda d, t: seen.append((d, t)))
+        kb.ensure_embeddings(batch=1, progress=lambda d, t: seen.append((d, t)))
         check("ensure_embeddings_progress_called", len(seen) >= 1)
 
         for i in range(3):

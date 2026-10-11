@@ -461,7 +461,7 @@ def test_inpaint_firered_failure_is_not_substituted():
                   _contained_edit_validated=lambda *a, **k: other,
                   # the whole-frame fallback must fail too, and must not reach the
                   # LIVE ComfyUI: unpatched it rendered a real picture, and the
-                  # check flipped with whatever the server returned (2026-09-24)
+                  # check flipped with whatever the server returned
                   edit_image_with_firered=lambda *a, **k: None):
         out = I.inpaint_region_with_comfy(ctx, img, "the hat", "make it red")
         check("inpaint_firered_failure_returns_none", out is None)

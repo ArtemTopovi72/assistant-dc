@@ -1,6 +1,6 @@
 """Lettering that sits ON something stays on it.
 
-Live, 2026-09-12: the planner put "Для гостей театра на Пролетарской" on the
+The planner put "Для гостей театра на Пролетарской" on the
 champagne label, and the read-back loop's single-line rule resized that box to
 0.94 x 0.047 -- a strip across the whole frame -- because 34 characters at the
 glyph floor need 1.6 frames of width. The label floated off its bottle and the
@@ -120,7 +120,7 @@ rep = D.text_report({"elements": [
      "x": 0.3, "y": 0.4, "w": 0.47, "h": 0.24}]})
 check("a three-line box is not flagged as the wrong shape or too small", rep == [], rep)
 
-# -- what the four agent runs of 2026-09-12 taught -----------------------------
+# -- what the four agent runs taught -----------------------------
 import draw_agent as DA
 
 # 1. the critic may not delete the requested lettering, nor what it is on

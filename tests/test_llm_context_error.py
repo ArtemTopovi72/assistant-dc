@@ -189,7 +189,7 @@ try:
         out5 = llm._stream_chat(None, dict(PAYLOAD))
 finally:
     llm.requests.post = _orig_post
-# Since 2026-09-18 a 5xx is the _SERVER_ERROR sentinel: the retry loop mends
+# A 5xx is the _SERVER_ERROR sentinel: the retry loop mends
 # the payload (cut tool calls, then size) and retries; it is never the overflow
 # sentinel, so nothing shrinks a call refused for another reason.
 check("an unrelated 500 is the server-error sentinel, not the overflow one",
