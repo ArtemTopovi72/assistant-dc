@@ -1101,6 +1101,6 @@ def remix_voice(ctx, voice_song: str, melody_song: str) -> str:
     """The voice of `voice_song` sings `melody_song` (its words and melody) over its backing."""
     work = tempfile.mkdtemp(prefix="remix_")
     vox1, _ = _stems(voice_song, work, "a")
-    vox2, back2 = _stems(melody_song, work, "b")
+    _, back2 = _stems(melody_song, work, "b")
     conv = sing_as(ctx, os.path.join(work, "b_vox.wav"), _singer_ref(vox1, work, "a"), os.path.join(work, "conv.wav"))
     return _mix(conv, back2, _out())
