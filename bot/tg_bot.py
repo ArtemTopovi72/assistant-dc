@@ -40,7 +40,6 @@ Extremism filter
 """
 from __future__ import annotations
 
-import abc
 import copy
 import html as _html_mod
 import json
@@ -53,7 +52,6 @@ import threading
 import time
 import uuid
 from collections import deque as _deque
-from dataclasses import field
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -61,10 +59,9 @@ import requests
 
 import config as _config
 
-# tg_bot.py itself no longer makes HTTP calls -- those moved to tg_transport --
-# but suites reach the shared requests module through ``tg_bot.requests`` to swap
-# requests.post. Bind it to keep that seam alive and to stop a linter deleting
-# the import as unused.
+# tg_bot.py makes no HTTP calls itself (tg_transport does), but suites reach the
+# shared requests module through ``tg_bot.requests`` to swap requests.post. Bind
+# it to keep that seam alive and to stop a linter deleting the import as unused.
 _requests_seam = requests
 from tg_accounts import AccountsMixin
 from tg_callbacks import CallbackMixin
@@ -95,7 +92,6 @@ _ALBUM_COLLECT_S    = 2.0      # quiet period after the LAST page of an album
 _ALBUM_MAX_S        = 15.0
 _WORKER_IDLE_S      = 180
 _TYPING_INTERVAL_S  = 4.0
-_POSITION_POLL_S    = 2.5
 # How many tasks may be IN FLIGHT at once (a single consumer would stall the bot
 # for the 40+ seconds of a ComfyUI render or the minutes of a web crawl).
 #
@@ -986,9 +982,6 @@ _HELP_RU = (
 
 def _help_text(lang: str = _DEFAULT_LANG) -> str:
     return _HELP_RU if lang == "ru" else _HELP_EN
-
-
-_HELP_TEXT = _HELP_EN   # kept for callers that predate the language switch
 
 
 # ── text helpers ──────────────────────────────────────────────────────────────
