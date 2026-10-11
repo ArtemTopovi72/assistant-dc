@@ -557,9 +557,9 @@ DEFAULT_PRESET = os.getenv("MUSIC_PRESET", "fast")
 # weight load included), and every real render appends its own.
 ETA_QUOTE_SECONDS = 180          # the length the settings menu quotes for
 _ETA_SEEDS: dict = {             # (asked seconds, wall seconds, steps) from assistant_app.log
-    "fast":    [(180, 255, 30), (180, 347, 30), (180, 321, 30), (180, 336, 30), (180, 572, 30)],   # 09-10 .. 09-14
-    "quality": [(120, 356, 30)],                                               # 09-14 01:45
-    "max":     [(180, 2077, 30), (180, 1911, 30)],                             # 09-14 00:38, 08-21 20:54
+    "fast":    [(180, 255, 30), (180, 347, 30), (180, 321, 30), (180, 336, 30), (180, 572, 30)],
+    "quality": [(120, 356, 30)],
+    "max":     [(180, 2077, 30), (180, 1911, 30)],
 }
 _ETA_FILE = "music_render_times.json"
 # A render is an autoregressive stage (fixed per second of song) plus the DiT
@@ -1801,13 +1801,9 @@ def apply_fade(path: str, fade_out_s: Optional[float] = None,
 def _adopt_output(path: str) -> str:
     """Copy the song out of ComfyUI's output tree into ours.
 
-    The body used to live here, byte-identical to video._adopt_output — and only
-    video's copy carried the explanation of why its filename-collision guard
-    exists, so this one read like padding that could be tidied away. Both now
-    call comfy_client.adopt_output, which owns the logic and the reasoning.
-
-    Kept as a named wrapper rather than inlining the call: it is the seam this
-    module's behaviour is patched at, and it pins the artifact label.
+    comfy_client.adopt_output owns the logic and the reasoning (video does the
+    same). Kept as a named wrapper rather than inlining the call: it is the seam
+    this module's behaviour is patched at, and it pins the artifact label.
 
     OUTPUT_DIR is passed explicitly and read HERE, at call time. The suites
     rebind `music.OUTPUT_DIR` to a temp directory; a delegation that let the
