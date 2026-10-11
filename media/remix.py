@@ -21,7 +21,7 @@ import numpy as np
 
 import cover
 import music
-from config import OUTPUT_DIR, scratch_path, venv_python
+from config import OUTPUT_DIR, venv_python
 
 logger = logging.getLogger("assistant.remix")
 
