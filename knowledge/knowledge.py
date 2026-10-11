@@ -740,7 +740,7 @@ class KnowledgeBase:
     def close(self) -> None:
         try:
             self._conn.close()
-        except Exception:
+        except sqlite3.Error:
             pass
 
 
@@ -752,8 +752,8 @@ def default_kb(db_path: Optional[Path] = None) -> KnowledgeBase:
         import config
         base = getattr(config, "EMBED_BASE", None) or getattr(config, "LM_STUDIO_BASE", base)
         model = getattr(config, "EMBED_MODEL", model)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("config unavailable, using the default embedder settings: %s", exc)
     if db_path is None:
         db_path = Path("memory") / "knowledge.db"
     return KnowledgeBase(db_path, embedder=Embedder(base_url=base, model=model))

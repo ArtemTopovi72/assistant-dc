@@ -279,8 +279,8 @@ class HttpKnowledgeClient:
         if s is not None:
             try:
                 s.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("could not close the HTTP session: %s", exc)
 
     # -- legacy aliases (see knowledge_client) ------------------------------ #
     def build(self, paths, **kw):

@@ -343,7 +343,7 @@ def chunk_text(body: str, limit: int = MAX_CHUNK) -> list:
             pieces.append(cur)
         out += [(p, False) for p in pieces[:-1]] + ([(pieces[-1], True)] if pieces else [])
     merged = []
-    for text, para_end in out:           # a very short piece makes F5 speak the reference's tail (live 10-04): join it to the next
+    for text, para_end in out:           # a very short piece makes F5 speak the reference's tail: join it to the next
         if merged and len(merged[-1][0]) < MIN_PIECE:
             merged[-1] = (merged[-1][0] + " " + text, para_end)
         else:

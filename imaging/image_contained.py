@@ -329,7 +329,7 @@ def edit_region_contained_cropped(
     # ("white summer dress with floral patterns"), with none of the "match
     # the original style" guidance image_grounding._firered_instruction
     # adds for the whole-frame fallback path -- this call never goes
-    # through that function. Live, 2026-09-19: change_clothes on an
+    # through that function. change_clothes on an
     # already-stylized (anime/illustrated) photo came back with a
     # photorealistic garment, because nothing ever told FireRed the rest
     # of the tile it can see was not a photograph. Whole-frame redraws

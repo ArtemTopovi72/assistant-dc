@@ -103,7 +103,7 @@ CAPTION_HEADINGS = ("Global Metadata", "Vocal Details", "Arrangement")
 # 3. Everything in `lyrics` is SUNG. Music3 has no notion of a stage
 #    direction: "(Low bass drone)" on its own line under [intro] is sung as
 #    "low bass drone", a Russian "[Припев]" is an unknown tag and is sung as
-#    a word, "(хором)" after a line is sung too (live 2026-09-18 01:33: «часть
+#    a word, "(хором)" after a line is sung too («часть
 #    слов типа хэви бас пропелась»). The songwriter is told so, and the
 #    normaliser removes what it wrote anyway: whole-line directions that name
 #    a sound or an instrument, performance notes in brackets inside a line,
@@ -252,7 +252,7 @@ GENRES: dict = {
     "metal":      "Hard rock / metal",
     "cinematic":  "Cinematic orchestral / epic soundtrack",
     "lofi":       "Lo-fi hip hop / ambient chill",
-    # 10-09 «добавь больше жанров типо панк рок»
+    # «добавь больше жанров типо панк рок»
     "punk": "Punk rock",
     "poppunk": "Pop punk",
     "postpunk": "Post-punk",
@@ -722,7 +722,7 @@ def engine_available(ctx=None, preset: Optional[str] = None) -> tuple[bool, str]
     checkpoint means a download, not a retry. `preset` is checked rather than
     the default, since the presets do not share weight files.
     """
-    # YuE2 is the one engine since 2026-09-25 (user: Music3 removed). The
+    # YuE2 is the one engine (Music3 removed). The
     # Music3 checks below stay only for MUSIC_ENGINE=music3 with weights restored.
     if MUSIC_ENGINE == "yue2":
         return (True, "") if (yue2_cpp_available() or yue2_available()) else (False, "YuE2 is not installed")
@@ -826,7 +826,7 @@ def build_workflow(lyrics: str, style: str, *, duration_s: int, seed: int,
     # count -- the Turbo LoRA below is distilled for 8 NFE specifically, and
     # sampling it at 20+ steps is out of its trained regime, not just slower.
     # Only when nobody asked for a step count does the fast default apply
-    # (2026-09-20: 25% faster wall-clock on a 60s song, only ~7% on 20s).
+    # (25% faster wall-clock on a 60s song, only ~7% on 20s).
     if steps is None:
         new_id = "lora_" + N_UNET
         for node in wf.values():
@@ -889,7 +889,7 @@ def enforce_vocal(style: str, vocal: str) -> str:
     out = re.sub(r"(?<![A-Za-z])(" + "|".join(table) + r")(?![A-Za-z])",
                  lambda m: table[m.group(1).lower()], style, flags=re.I)
     # Never the other gender's word, not even negated: YuE2 got the tag «no female vocals» and
-    # heard «female» (10-09, the 🎤 Male button «не доезжал»).
+    # heard «female» (the 🎤 Male button «не доезжал»).
     who = "a man's voice" if male else "a woman's voice"
     tag = "male vocal, man's voice" if male else "female vocal, woman's voice"   # short: survives yue2_style's fragment cap
     return tag + ".\n" + out.rstrip() + f"\nThe lead vocal is {who}, as the user chose."
@@ -976,7 +976,7 @@ def _requirements_block(prefs: Optional[dict]) -> str:
 # fast end (3.3, which overran the slot on purpose and relied on the chop +
 # fade) to just under the middle of the measured band: the words run out
 # near the ask and the [outro] lands inside the headroom.
-# YuE2 (the engine since 2026-09-25) re-measured 2026-10-04 with bench/yue2_seconds_per_line.py, one render per
+# YuE2 re-measured with bench/yue2_seconds_per_line.py, one render per
 # size, same style and seed (Russian pop, 100 BPM, female, piano), lines counted with the [outro]:
 #     9 lines -> 60.0 s,  17 -> 109.2 s,  25 -> 147.6 s,  37 -> 200.6 s
 # i.e. song = ~15 s of intro/outro + 5.0-5.5 s per sung line (long songs sing a little faster). The rates above
@@ -1087,7 +1087,7 @@ def build_structured_caption(ctx, topic: str, lang: str, *,
         prefs = {k: v for k, v in (prefs or {}).items() if k != "vocal"} | {"instrumental": True}
     if (prefs or {}).get("instrumental") or _own_form(topic):
         # «ровно три куплета, без припева» came back with a 15-line outro
-        # padding it up to the slot's line count (live 2026-09-29).
+        # padding it up to the slot's line count.
         want_lines = min_lines = 0
     if want_lines:
         # A COUNT, not a duration. The writer has no idea how many seconds a
@@ -1212,7 +1212,7 @@ def build_structured_caption(ctx, topic: str, lang: str, *,
     # unused; the shorter ASK on the last rung gives a model that keeps
     # over-thinking the full brief less to chew on.
     attempts = (
-        dict(prompt=sys_p,       temperature=0.9, max_tokens=12000, force_think=False),   # 2026-09-25: no reasoning anywhere
+        dict(prompt=sys_p,       temperature=0.9, max_tokens=12000, force_think=False),   # no reasoning anywhere
         dict(prompt=sys_p,       temperature=0.7, max_tokens=16000, force_think=False),
         dict(prompt=sys_minimal, temperature=0.5, max_tokens=16000, force_think=False),
     )
@@ -1239,7 +1239,7 @@ def build_structured_caption(ctx, topic: str, lang: str, *,
             # models an unchecked instruction is a suggestion -- the same
             # lesson as the deck planner's bullet floor.
             got_lines = count_sung_lines(lyrics)
-            if max_lines and got_lines > max_lines:      # live 10-04: a 60 s slot came back 134 s of song
+            if max_lines and got_lines > max_lines:      # a 60 s slot came back 134 s of song
                 lyrics = trim_to_lines(lyrics, max_lines)
                 got_lines = count_sung_lines(lyrics)
             if min_lines and got_lines < min_lines:
@@ -1341,7 +1341,7 @@ def yue2_style(style: str, max_chars: int = 300) -> str:
     """Music3's caption -> a short tag list: the short fragments of each sentence."""
     text = re.sub(r"(?i)\b(%s)\s*[:,]?" % "|".join(map(re.escape, CAPTION_HEADINGS)), ". ", style or "")
     # Any other "Label:" the songwriter invents (Basic Attributes:, Application
-    # Scenarios & Imagery:) is a heading too, not a tag (live 2026-09-25).
+    # Scenarios & Imagery:) is a heading too, not a tag.
     text = re.sub(r"(^|[.;,\n])\s*[A-Z][\w&/ -]{2,40}:", ". ", text)
     tags, seen = [], set()
     for frag in re.split(r"[.;,\n]+|\bwith\b|\band\b", text):
@@ -1358,7 +1358,7 @@ YUE2_PYTHON = _config.venv_python(os.path.join(os.path.dirname(os.path.dirname(o
                                                "venv_yue2"))
 YUE2_ODE_STEPS = _cfg_env.env_int("YUE2_ODE_STEPS", 16)
 # Lyric guidance on the semantic stage. The protocol's 1.0 in cot full/melody is NO guidance:
-# 10-07 Cheri Cheri Lady x Govnovoz, Whisper found 1/21 lines sung right at 1.0, 20/21 at 3.0
+# Cheri Cheri Lady x Govnovoz, Whisper found 1/21 lines sung right at 1.0, 20/21 at 3.0
 # on three seeds (1.5: 8-17/21), same render time (outputs/yue_cover/sweep).
 YUE2_CFG = _cfg_env.env_float("YUE2_CFG", 3.0)
 YUE2_TIMEOUT = 1500          # measured 235-810 s for one song; long lyrics run longer
@@ -1437,7 +1437,7 @@ def run_gpu_worker(ctx, python: str, script: str, job: dict, label: str, timeout
                                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             # From launch, not from the call: a second song queued behind the
             # first spent its whole timeout waiting for the card and was killed
-            # 100 s into its own render (live 2026-09-27 17:35).
+            # 100 s into its own render.
             t0 = time.time()
             while proc.poll() is None:
                 if ctx is not None and getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
@@ -1486,7 +1486,7 @@ def yue2_cpp_available() -> bool:
 
 
 # Russian stress: YuE2 sings its learned stress (гнИлое) whatever we send.
-# Tried 2026-09-28, all by ear, none moved it: acute accent, capital vowel,
+# Tried all by ear, none moved it: acute accent, capital vowel,
 # an LLM for homographs (worse), a long note on the stressed syllable, the
 # stressed syllable on the downbeat (ABC edited, yue-plan/"abc" request), and
 # akanye phonetic spelling (the Suno trick). Research: bench/song_stress.py.
@@ -1504,7 +1504,7 @@ _SUNG = r"vocal|vocals|voice|voices|singer|singing|sung|choir|rap|rapping|croon\
 
 
 def yue2_pin(style: str, prefs: Optional[dict]) -> str:
-    """The 🎤 button over YuE2's tag list (10-09 «мужской не доезжал, инструментал со словами»):
+    """The 🎤 button over YuE2's tag list («мужской не доезжал, инструментал со словами»):
     the chosen singer goes first as a plain positive tag and every tag naming the other gender is
     dropped -- a tag model reads «no female vocals» as «female»; an instrumental leads with
     «instrumental» (YuE2 Studio's rule, from the official requests) and loses every vocal tag."""
@@ -1539,7 +1539,7 @@ def yue2_pin(style: str, prefs: Optional[dict]) -> str:
 def yue2_preview(prefs: Optional[dict]) -> str:
     """The tags the song-settings buttons pin in YuE2's card, through the same chain a render
     runs (enforce_pins -> yue2_style -> yue2_pin) minus the songwriter's own tags. The settings
-    menu shows it so «the model ignored my choice» can be checked before a render (10-09)."""
+    menu shows it so «the model ignored my choice» can be checked before a render."""
     return yue2_pin(yue2_style(enforce_pins("", prefs)), prefs)
 
 
@@ -1569,14 +1569,14 @@ def _strip_vocals(path: str) -> None:
         try:
             import mashup_stems
             mashup_stems.release_separator()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("could not release the stem separator: %s", exc)
 
 
 def _generate_yue2(ctx, lyrics: str, style: str, seed: int, prefs: Optional[dict] = None) -> str:
     """One YuE2 render with the card to itself.
 
-    yue2.cpp BF16 first (2026-09-27: user picked it by ear over our PyTorch
+    yue2.cpp BF16 first (user picked it by ear over our PyTorch
     path, 7-21 s faster per song); the PyTorch venv is the fallback.
     """
     cpp = yue2_cpp_available()
@@ -1645,7 +1645,7 @@ def _render_yue2_once(ctx, cpp: bool, job: dict, seed: int) -> str:
     out = job["out"]
     if cpp:
         # 16 ODE steps, not the reference 32: NAR was 50 of 99 s on a 3.6-min
-        # song (bench 2026-10-02, $TEMP/yueab); yue2.cpp's own default is 16.
+        # song ($TEMP/yueab); yue2.cpp's own default is 16.
         job.update({"cot": "full", "lm_seed": int(seed), "steps": YUE2_ODE_STEPS, "cfg_scale": YUE2_CFG})
         env = dict(os.environ)
         env["PATH"] = os.pathsep.join([os.path.dirname(YUE2_CPP_EXE),

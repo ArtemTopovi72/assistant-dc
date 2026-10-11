@@ -144,7 +144,7 @@ def log_edit_decision(*, request: str, classifier: str, tool: str, workflow: str
     """Append one image-edit routing record to a PERSISTENT, app-independent log.
 
     The console logger is the only existing sink and it is not written to disk
-    unless stdout happens to be redirected (it was not during the 2026-06-20
+    unless stdout happens to be redirected (it was not during one
     session, which is why a dress->redraw routing could not be proven after the
     fact). This writes an always-on JSONL trail so every edit's
     REQUEST / CLASSIFIER_DECISION / SELECTED_TOOL / SELECTED_WORKFLOW /
@@ -165,7 +165,7 @@ def log_edit_decision(*, request: str, classifier: str, tool: str, workflow: str
         rec.update(extra)
     try:
         logger.info("EDIT_DECISION %s", json.dumps(rec, ensure_ascii=False))
-    except Exception:
+    except (TypeError, ValueError):
         pass
     try:
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -275,7 +275,7 @@ _GENERATE_FAILURE: dict = {"reason": "server_error"}
 # `generate_image_with_refinement` must NOT judge the same picture a second time
 # with a different rubric and re-draw it from scratch on disagreement.
 #
-# Live 2026-08-05 ("it gets stuck, loads a second model, everything freezes"):
+# Reported as ("it gets stuck, loads a second model, everything freezes"):
 # one "draw me X" ran up to 3 outer attempts, each re-planning the layout and
 # running draw_agent's 2 renders, each render followed by N lettering read-backs
 # on TEXT_READ_MODEL and a critique on the chat model, then ANOTHER eval on the
@@ -289,7 +289,7 @@ _GENERATE_FAILURE: dict = {"reason": "server_error"}
 _ENGINE_JUDGED: dict = {"judged": False, "score": 0, "ok": False, "problems": []}
 # What the read-back loop still saw wrong after the LAST layout edit ([] = clean).
 # The edit used to ship "ВЕ-Ч-ЕР" with three REJECTED verdicts and the tool
-# result said only "Image edited" -- the bot answered "Готово" (live 2026-09-28).
+# result said only "Image edited" -- the bot answered "Готово".
 _LAYOUT_EDIT_PROBLEMS: list = []
 # What the pre-render layout check (draw_preview.preflight) found for the
 # last Ideogram render: {"sketch", "checked", "ok", "problems", "notes", ...}.
@@ -385,7 +385,7 @@ def firered_extra_lora(name: Optional[str], strength: float = 1.0):
 # Edit-on-edit drifts: FireRed was trained on single edits, and by the 4th
 # chained pass colour noise and a drifting face pile up. From the
 # (FIRERED_REBASE_AFTER+1)th edit in a row it edits the ORIGINAL with every
-# instruction so far instead (FireRed findings 10-02). A chain longer than
+# instruction so far instead (FireRed findings). A chain longer than
 # FIRERED_REBASE_MAX starts over from the current picture.
 FIRERED_REBASE_AFTER = 3
 FIRERED_REBASE_MAX = 6
@@ -543,7 +543,7 @@ def _edit_image_with_firered_once(ctx, image_path: str, instruction: str,
         work_megapixels = min(src_mp, FIRERED_MAX_MP) if src_mp else 1.0
     # Never below 1.0 MP. TextEncodeQwenImageEditPlus rescales its reference to
     # ~1 MP on its own; a smaller working latent then disagrees with it and the
-    # edit comes back ZOOMED ~1.4x (A/B 2026-09-24, 960x544 elephant: legs and
+    # edit comes back ZOOMED ~1.4x (960x544 elephant: legs and
     # sand cropped at 0.52 MP, identical framing at 1.0 and at 2.0 MP). The
     # contained path's small tiles went through the same trap before being
     # composited back.
@@ -658,8 +658,8 @@ def _inpaint_region_impl(
         grounded = _ground_region_phrase(ctx, image_path, region_en)
         if grounded == "absent":
             # The inventory is one vision call listing ~12 things; it left out a
-            # plainly visible shoulder bag and the edit was refused (live
-            # 2026-09-28). The segmenter gets the last word before "not there".
+            # plainly visible shoulder bag and the edit was refused.
+            # The segmenter gets the last word before "not there".
             try:
                 _m = _sam3_mask_file(ctx, _upload_image_to_comfy(image_path, COMFY_URL),
                                      region_en, 0)
@@ -731,8 +731,8 @@ def _inpaint_region_impl(
         # ORIGINAL face back so a clothing/object/background edit keeps identity.
         # A style change is the one whole-frame re-render where the face is SUPPOSED
         # to come out redrawn in the target style -- pasting the original photoreal
-        # face back over it is exactly the "intermediate" look complained about live,
-        # 2026-09-19 (see the matching guard in tools._handle_redraw_image).
+        # face back over it is exactly the "intermediate" look complained about
+        # (see the matching guard in tools._handle_redraw_image).
         if (not (region and _is_facial(ctx, region))
                 and classify_edit_intent(prompt) != "style_transfer"):
             out = preserve_identity_face(image_path, out, instructions=f"{region} {prompt}")
@@ -744,6 +744,6 @@ def _inpaint_region_impl(
         try:
             logger.info("EDIT PATH=whole-frame-firered RESULT [BUILD_ID=%s]: out %s | RETURNED PATH=%s",
                         IMAGE_BUILD_ID, _source_dims(out), out)
-        except Exception:
-            pass
+        except Exception as err:
+            logger.debug("could not log the whole-frame FireRed path: %s", err)
     return out

@@ -83,8 +83,8 @@ def server_healthy(force: bool = False) -> bool:
 
 # Why the last submit on THIS thread came back empty, in words a user can be
 # told. Callers used to say only "the render produced no file", and the chat
-# model then invented a cause ("a conflict in the animation algorithms",
-# live 2026-10-03) while the real one sat in the log.
+# model then invented a cause ("a conflict in the animation algorithms")
+# while the real one sat in the log.
 _FAILURE = threading.local()
 
 
@@ -193,7 +193,7 @@ def card_in_use() -> bool:
     CARD_GRACE_S after that -- the turn still has to write its reply about the render.
     Between two parts of a chain ComfyUI's queue is empty for a few seconds, and after
     the last one the model reload takes ~10 s: a deadline asking only server_busy()
-    abandoned a finished chain at both points (10-07)."""
+    abandoned a finished chain at both points."""
     return (_excl_users > 0 or not _excl_free.is_set()
             or time.time() - _excl_released_at < CARD_GRACE_S)
 
@@ -207,8 +207,8 @@ def server_busy() -> bool:
     Conservative on error: an unreachable server is reported NOT busy, so a
     real outage still lets the caller's deadline fire.
 
-    A TIMEOUT is not an outage, though -- it is the opposite signal. Live,
-    2026-09-20: a 41-minute H3 video render (heavy VRAM offload, near-100%
+    A TIMEOUT is not an outage, though -- it is the opposite signal. A
+    41-minute H3 video render (heavy VRAM offload, near-100%
     GPU) had this /queue poll time out ONCE, deep into an otherwise-healthy
     render that finished 40 seconds later; the caller's extend-while-busy
     loop read the exception as "not busy" and abandoned the task 9 seconds
@@ -267,7 +267,7 @@ def _job_still_known(prompt_id: str) -> Optional[bool]:
 def _cancel_job(prompt_id: str) -> None:
     """Stop OUR job on the server, not just our wait for it. A cancelled poll
     used to leave the render running: the chat model came back into a card
-    with 360 MiB free and every next turn hung 5 min (live 2026-09-28).
+    with 360 MiB free and every next turn hung 5 min.
     Interrupt only when ours is the one executing -- never another user's."""
     try:
         q = requests.get(f"{COMFY_URL}/queue", timeout=10).json()
@@ -570,7 +570,7 @@ def _release_card() -> None:
         _notice("render queue empty - bringing %s back" % model)
         # ComfyUI FIRST. It still holds the render's weights, and a chat model
         # loaded into what they leave behind comes up short of the headroom it
-        # had before the render -- on 2026-09-11 it loaded, then crashed on
+        # had before the render -- it loaded, then crashed on
         # the first vision call (a 1728x2304 inspect) and every turn after
         # that was "No models loaded". Same order the claim used, mirrored.
         _free_comfy_models()
@@ -578,7 +578,7 @@ def _release_card() -> None:
         # before the tensors are gone, the same way `lms unload` does on the
         # way in. The model still needs the room it had before the render;
         # loaded a few hundred MB short it comes up, then dies on the first
-        # picture (live, 2026-09-12, journey 3: crash on a vision call two
+        # picture (a crash on a vision call two
         # minutes after the give-back, three turns lost).
         free = _LT.wait_vram_free(RELOAD_LLM_MIN_FREE_MB, timeout=_LT.FREE_GPU_WAIT_S)
         if free is not None and free < RELOAD_LLM_MIN_FREE_MB and RELOAD_VRAM_EXTRA_WAIT_S > 0:
@@ -757,7 +757,7 @@ def _submit_and_poll(ctx, workflow: dict, timeout: int = 1900, label: str = "",
 
     `min_free_mb` — how much free VRAM to insist on before this job's first
     submit, overriding lora_training.FREE_GPU_MIN_MB (16 GB, calibrated only
-    for confirming the chat model has drained). Live, 2026-09-19: H3 video
+    for confirming the chat model has drained). H3 video
     renders that started with 16-17 GB free sometimes took 35-49 minutes
     instead of their usual 8-12, consistent with ComfyUI having to swap the
     unet/CLIP/VAEs in and out of VRAM mid-render rather than holding them all
@@ -769,7 +769,7 @@ def _submit_and_poll(ctx, workflow: dict, timeout: int = 1900, label: str = "",
     _fail("")
     if ctx is not None and getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
         # Stop pressed while the prompt was being planned: claiming the card
-        # would unload the chat model for a job nobody wants (live 2026-09-28).
+        # would unload the chat model for a job nobody wants.
         logger.info("ComfyUI submit skipped: cancelled%s", f" ({label})" if label else "")
         return None
     if not server_healthy():
@@ -1120,8 +1120,8 @@ def adopt_output(path: str, what: str = "file", out_dir=None) -> str:
         logger.warning("could not copy the %s into %s (%s) — using it in place",
                        what, dest_dir, exc)
         return path
-    # Moved, not kept twice: nothing cleans ComfyUI's output tree (since
-    # 2026-09-27 it is ours, runtime/comfy), so every render stayed there too.
+    # Moved, not kept twice: nothing cleans ComfyUI's output tree (it is
+    # ours, runtime/comfy), so every render stayed there too.
     try:
         os.remove(path)
     except OSError:

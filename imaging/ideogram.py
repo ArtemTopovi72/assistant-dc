@@ -4,7 +4,7 @@ Ideogram 4 does NOT take a plain prose prompt. Its text encoder expects a
 *structured JSON caption* that deconstructs the picture into a background plus a
 list of elements, each with an optional bounding box saying WHERE that element
 goes. Feeding it a bare sentence makes the model emit its grey "Image blocked by
-safety filter" card instead of a picture (verified 2026-07-22 — the same request
+safety filter" card instead of a picture (verified — the same request
 as a structured caption rendered correctly).
 
 So this module has two halves:
@@ -58,7 +58,7 @@ class ContentRefused(RuntimeError):
 # card, it is a render that came out black -- see is_black_frame.
 REFUSAL_MEAN_FLOOR = 40.0
 # Below this mean luminance a render is a black frame: the model collapsed
-# (measured 2026-09-14: mean 1-7, std 2-17) rather than drew a dark scene
+# (mean 1-7, std 2-17) rather than drew a dark scene
 # (a real night scene measured mean 25-50 with std 50+ on the same day).
 BLACK_MEAN_CEILING = 12.0
 
@@ -74,12 +74,12 @@ def _frame_stats(path: str) -> tuple:
 def is_refusal_card(path: str) -> bool:
     """Detect the refusal card: a near-flat grey frame with a line of text.
 
-    Measured (2026-07-22): refusal cards land at std≈9-11 with ~5k unique colours;
+    Measured: refusal cards land at std≈9-11 with ~5k unique colours;
     real renders sit at std≈50-70 with 150k+. The gap is wide enough that a plain
     threshold is reliable, and a genuinely flat legitimate image (a solid colour
     study) is not something this engine is asked for.
 
-    Live 2026-09-14: seven renders in a row were reported as refusals and the
+    Seven renders in a row were reported as refusals and the
     user saw «Не получилось нарисовать» for each. None was the card -- every one
     was a BLACK frame (mean 1-7). The card is grey, so the mean is checked too;
     a black frame is a different failure and is handled by is_black_frame.
@@ -321,7 +321,6 @@ def add_polish_pass(workflow: dict, steps: int, polish: int, cfg: float) -> bool
     return True
 
 
-NODE_SAVE = "200"            # SaveImage
 
 
 # ---------------------------------------------------------------------------
@@ -457,7 +456,7 @@ def _ask_planner(ctx, prompt: str, attempts: int = 2) -> Optional[dict]:
         import llm as _llm
         # Only while it thinks: with the default no-think prefill the full
         # prompt answers in 3-5 s and keeps the table under "на столе ваза"
-        # and the style fields the minimal one drops (measured 2026-09-29).
+        # and the style fields the minimal one drops.
         if (_llm._is_gemma4(getattr(ctx, "model_name", "") or "")
                 and not getattr(ctx, "no_think", True)):
             logger.info("Ideogram planner: %s thinks unconditionally — starting at "
@@ -528,7 +527,7 @@ _QUOTED_RE = re.compile(r'"([^"\n]{1,32})"|“([^”\n]{1,32})”|«([^»\n]{1,3
 
 
 # More quoted phrases than this and the text is a QUOTED CONVERSATION, not a
-# lettering request. Live 2026-09-14: a forwarded chat with ten «...» quotes was
+# lettering request. A forwarded chat with ten «...» quotes was
 # handed to the character painter; every quote became a lettering strip, the
 # caption carried thirteen elements, and Ideogram rendered a black frame.
 MAX_REQUESTED_STRINGS = 4
@@ -584,7 +583,7 @@ def ensure_text_elements(layout: dict, prompt: str) -> dict:
         el["text"] = next((s for s in strings if s.lower() == el_text.lower()), el.get("text"))
     # The planner often names the string in an element's desc («DLL files labeled
     # 'MSVCP140.dll'») without a `text` field: that element IS its carrier. Adding
-    # a second one drew the label twice (live 10-03).
+    # a second one drew the label twice.
     for s in strings:
         if any(str(el.get("text") or "").strip().lower() == s.lower() for el in els):
             continue
@@ -788,7 +787,7 @@ def generate(ctx, prompt: str, *, width: int = 1024, height: int = 1024,
     # An explicit steps/cfg means the caller wants the plain, non-distilled
     # model at that exact setting -- ostris/ideogram_4_turbotime_lora is
     # trained for ~2-4 step, near-CFG-free sampling, and only applies as the
-    # default when nobody asked for a specific step/cfg (2026-09-20: 35-40%
+    # default when nobody asked for a specific step/cfg (35-40%
     # faster across 3 varied scenes, no quality loss on lettering or a crowd
     # scene; see IDEOGRAM_TURBO_LORA in config.py for the portrait-glitch fix).
     turbo = IDEOGRAM_TURBO and steps is None and cfg is None
@@ -801,7 +800,7 @@ def generate(ctx, prompt: str, *, width: int = 1024, height: int = 1024,
         attach_turbo_lora(workflow, IDEOGRAM_TURBO_LORA, 1.0)
         if IDEOGRAM_CFG_TURBO == 1.0:
             # cfg 1 needs no unconditional branch: one-model guider, and the
-            # 9 GB uncond model is never loaded. A/B 2026-10-02 (bench/
+            # 9 GB uncond model is never loaded. A/B (bench/
             # ideogram_int8_ab.py app vs turbo4): same pictures, 4-9 s vs 7-13 s.
             g = workflow[NODE_GUIDER]["inputs"]
             model = g["model"]
@@ -814,7 +813,7 @@ def generate(ctx, prompt: str, *, width: int = 1024, height: int = 1024,
         logger.info("Ideogram: turbo LoRA, %d steps @ cfg %.1f", n_steps, IDEOGRAM_CFG_TURBO)
     if not lora_name and is_photo_caption(caption) and IDEOGRAM_PHOTO_LORA:
         # Ideogram's known plastic skin: Lenovo UltraReal on photographs only
-        # (A/B 10-02 runtime/ideogram_int8_ab/skin.jpg: pores and film light,
+        # (A/B runtime/ideogram_int8_ab/skin.jpg: pores and film light,
         # same face, same lettering, same 40 s). A character LoRA keeps its own.
         lora_name, lora_strength = IDEOGRAM_PHOTO_LORA, IDEOGRAM_PHOTO_LORA_STRENGTH
     if lora_name:

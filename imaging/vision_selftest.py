@@ -1,6 +1,6 @@
 """Does the vision model see colours, or a black picture?
 
-2026-09-12: the house model's f16 mmproj (the vision projector LM Studio loads
+The house model's f16 mmproj (the vision projector LM Studio loads
 beside the GGUF) turned out to be broken -- every picture came through as
 "extremely dark", a black cat on a green sofa was "a dark silhouette", Cyrillic
 signs were misread -- and the app grew overrules, OCR fallbacks and blind-
@@ -129,8 +129,8 @@ def run(ctx) -> bool | None:
 def _run_once(ctx) -> bool | None:
     try:
         ctx.last_llm_error = ""
-    except Exception:
-        pass
+    except Exception as err:
+        logger.debug("could not reset ctx.last_llm_error: %s", err)
     try:
         answer = _ask(ctx)
     except Exception as exc:

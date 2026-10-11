@@ -94,7 +94,7 @@ MAX_TEXT_LINES = 3       # a label wraps to two or three lines; past that it is 
 # The per-LINE floor for wrapped text. MIN_TEXT_H (0.08) was measured on one
 # word squeezed into a box; a multi-line label stated line by line in the
 # caption spelled "Для гостей / театра на / Пролетарской" correctly at a line
-# height of ~0.045 in three renders on 2026-09-12 (864x1152). Holding it to
+# height of ~0.045 in three renders (864x1152). Holding it to
 # 0.08 forced the label to 0.58 of the frame and the bottle under it could no
 # longer fit in the picture whole.
 MIN_LINE_H = 0.05

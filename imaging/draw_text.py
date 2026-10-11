@@ -30,7 +30,7 @@ from typing import Optional
 import ideogram
 from text_layout import (MIN_TEXT_H, MIN_LINE_H, CHAR_ASPECT, MAX_TEXT_CHARS,
                          SHAPE_TOLERANCE, TEXT_MATCH_OK,
-                         text_geometry, text_geometry_lines, fit_text_in, lines_of,
+                         text_geometry_lines, fit_text_in, lines_of,
                          _norm_text)
 from utils import safe_json_from_llm
 
@@ -128,7 +128,7 @@ def auto_fix_text(layout: dict) -> tuple:
             # on a shop -- must stay on it. The single-line rule stretched
             # 'Для гостей театра на Пролетарской' (34 chars) to 94% of the
             # frame and the label floated off its bottle as a banner across
-            # the picture (live, 2026-09-12). Wrap it as a printer would; and
+            # the picture. Wrap it as a printer would; and
             # if even wrapped it needs more room than the host has at the
             # glyph floor, the SHOT moves closer -- the host grows around its
             # centre -- rather than the letters shrinking into scribble.
@@ -139,7 +139,7 @@ def auto_fix_text(layout: dict) -> tuple:
             need_w, need_h = w / 0.92, h / 0.6
             if need_w > host["w"] or need_h > host["h"]:
                 # The host must stay WHOLE: a bottle that grows to the frame
-                # edge comes back with its cap cut off (live, 2026-09-12),
+                # edge comes back with its cap cut off,
                 # so it is capped at IN_FRAME of the frame and told so.
                 f = min(max(need_w / host["w"], need_h / host["h"]),
                         IN_FRAME / host["w"], IN_FRAME / host["h"])
@@ -254,7 +254,7 @@ def _give_headroom(layout: dict, host: dict, notes: list) -> None:
 
     A box is a suggestion to the renderer, and a tall object ignores its top:
     a champagne bottle in a 0.62-high box was painted with its neck running
-    off the frame in five renders out of five (2026-09-12). Given the strip
+    off the frame in five renders out of five. Given the strip
     above it as an element of its own -- out-of-focus room, empty air -- the
     same seed drew the bottle whole, cap and all. Added once, only when
     nothing else already owns that strip, and never when the host starts at
@@ -326,14 +326,14 @@ def spell_out(el: dict) -> str:
     if len(lines) == 1 and " " not in text:
         # One word: letter by letter is the one thing that reliably fixes a
         # garbled render (POLICE -> AVCHKE).
-        # The spelling was "В-Е-Ч-Е-Р" and the sign came out "ВЕ-Ч-ЕР"
-        # (live 2026-09-28): the hyphens are painted, so the letters are
+        # The spelling was "В-Е-Ч-Е-Р" and the sign came out "ВЕ-Ч-ЕР":
+        # the hyphens are painted, so the letters are
         # counted and named instead, with separators ruled out explicitly.
         return (f'{surface} (the {len(text)}-letter word “{text}” as one solid word, in '
                 f"clean bold block capitals, every letter correctly formed, the letters set "
                 f"closely side by side)")
     # Several words or lines: hyphenating the letters made the model PAINT the
-    # hyphens ("ПРОЛЕТАР-СК-сой", live 2026-09-12). State the lines instead,
+    # hyphens ("ПРОЛЕТАР-СК-сой"). State the lines instead,
     # each as its own quoted phrase, in order.
     quoted = " / ".join("“%s”" % ln for ln in lines)
     return (f"{surface} (the lettering reads, in {len(lines)} line"
@@ -485,7 +485,7 @@ def read_text(ctx, image_path: str) -> Optional[list]:
     condemn every render that carries lettering.
 
     Runs on config.TEXT_READ_MODEL, not the active chat model: measured
-    2026-07-29 on the same eight test frames, the 9B chat model read a clean
+    on the same eight test frames, the 9B chat model read a clean
     84px "STOP" as "HIT" and scored garbled renders HIGHER than correct ones —
     using it here would redraw good pictures at random. gemma-4-12b transcribed
     all eight exactly (correct 1.00, garbled at most 0.50).
@@ -540,8 +540,7 @@ def _letter_swapped(na: str, nb: str) -> bool:
     """Same length, same words, one or two letters that are not reader
     confusables -- "пятницы" painted as "пятниця". The renderer does this
     (it invents a Cyrillic letter that fits the shape), and at ratio 0.93 the
-    old check called it a match; the poster went out misspelled (live,
-    2026-09-12, journey 25)."""
+    old check called it a match; the poster went out misspelled."""
     if len(na) != len(nb) or na == nb or len(na) < 4:
         return False
     diff = [(x, y) for x, y in zip(na, nb) if x != y]
@@ -571,7 +570,7 @@ def _match_lines(want: str, read: list) -> tuple:
     The reader lists each painted line as its own string, so a three-line
     label comes back as three candidates and none of them alone resembles the
     whole -- 'Пролетарской' scored 0.59 against a label that was printed
-    perfectly (live, 2026-09-12). Each line is matched on its own and the
+    perfectly. Each line is matched on its own and the
     score is the weakest line; one candidate may also carry the whole text.
     """
     lines = lines_of(want)

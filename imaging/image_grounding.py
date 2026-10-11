@@ -181,8 +181,8 @@ def _ground_region_phrase(ctx, image_path: str, region: str) -> str:
         if close:
             logger.info("region grounding: %r -> %r (fuzzy)", region, close[0])
             return close[0]
-    except Exception:
-        pass
+    except Exception as err:
+        logger.debug("fuzzy region match failed: %s", err)
     # Ask the small LLM to map the request onto exactly one visible region (or NONE).
     try:
         sys = ("Map the user's edit target to ONE region from the provided list of "
@@ -213,8 +213,8 @@ def _ground_region_phrase(ctx, image_path: str, region: str) -> str:
         if close:
             logger.info("region grounding: LLM pick %r -> %r (fuzzy)", pick, close[0])
             return close[0]
-    except Exception:
-        pass
+    except Exception as err:
+        logger.debug("fuzzy pick match failed: %s", err)
     return region                          # map returned something off-list; keep original
 
 
@@ -442,7 +442,7 @@ def _is_removal_instruction(text: str) -> bool:
 def _is_removal_of(instructions: str, region: str = "", ctx=None) -> bool:
     """The edit leaves `region` gone -- removed, or described as absent ("bare
     neck, no scarf", "the empty table where the vase was"). Not when it removes
-    something ELSE on the region: live 2026-09-11 'Remove the large black shadow
+    something ELSE on the region: 'Remove the large black shadow
     covering the cat-shaped object' deleted the cat from the layout and the
     agent spent four renders getting it back. The model's read (edit_plan
     removes_region); it replaced a verb regex, an object parser, stem
@@ -533,7 +533,7 @@ def _firered_style_instruction(ctx, instructions: str, image_path: Optional[str]
 
     _firered_instruction names one region and demands everything ELSE stay
     put -- right for a targeted edit, self-contradictory for a style transfer
-    with no region at all. Live bug (2026-09-20): calling it with region=""
+    with no region at all. Calling it with region=""
     produced "Change the it to: X. Keep everything else the same", which read
     as "restyle a subject, preserve the frame" and came back as a cropped,
     partial redraw that dropped the title text and clipped a person out of
@@ -573,7 +573,7 @@ def _firered_style_instruction(ctx, instructions: str, image_path: Optional[str]
             "re-pose, crop, or zoom in on anyone or anything, even to follow "
             "the conventions of the requested style. "
             # This model cannot render legible lettering under a full restyle --
-            # confirmed live 2026-09-20, a restyled poster's background neon
+            # confirmed: a restyled poster's background neon
             # signs came out as illegible mush. Prompting it to "keep the text
             # crisp" does not work (it has no mechanism to render clean glyphs
             # here); the reliable fix is to stop it from ATTEMPTING new words at

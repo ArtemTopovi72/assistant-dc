@@ -79,8 +79,8 @@ def release_separator() -> None:
         import torch
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("could not empty the CUDA cache: %s", exc)
 
 
 def separate(path: str, device: str = "") -> dict:

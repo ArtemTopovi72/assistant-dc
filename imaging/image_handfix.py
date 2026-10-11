@@ -155,8 +155,8 @@ def _handfix_region_fallback(ctx, base_path: str, mg_mask, *, seed: int, timeout
             mgm = (np.asarray(mgm.convert("L")) > 24).astype(np.uint8)
             mgm = cv2.dilate(mgm, np.ones((25, 25), np.uint8)) > 0
             miss = miss & (~mgm)
-        except Exception:
-            pass
+        except Exception as err:
+            logger.debug("could not subtract the MeshGraphormer mask: %s", err)
     if int(miss.sum()) < int(sw * sh * 0.0008):
         logger.info("handfix-fallback: nothing missed (hand already covered by MeshGraphormer)")
         return None

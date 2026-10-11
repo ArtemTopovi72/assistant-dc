@@ -1,6 +1,6 @@
 """Find photos matching a description inside a folder of pictures.
 
-Live 2026-09-14: «найди мост» over a 173-photo DCIM.zip. The agent had
+«найди мост» over a 173-photo DCIM.zip. The agent had
 open_image + inspect_image -- one picture per two tool calls -- so 173 photos
 were 346 calls, far past the round limit. It could not do the task, so it
 narrated a plan instead ("Сначала я распакую архив ... Начинаю поиск.") and
@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 from pathlib import Path
 from typing import Callable, Optional
@@ -49,7 +48,7 @@ def list_photos(folder: Path) -> list[Path]:
         if not (p.is_file() and p.suffix.lower() in IMAGE_SUFFIXES):
             continue
         # Hidden folders hold our own contact sheets and the run_code
-        # scripts' home; live 2026-09-14 a sheet came back as a "bridge".
+        # scripts' home; a sheet once came back as a "bridge".
         if any(part.startswith(".") for part in p.relative_to(folder).parts):
             continue
         out.append(p)
