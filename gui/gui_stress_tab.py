@@ -15,9 +15,6 @@ from PyQt5.QtWidgets import (QAbstractItemView, QHBoxLayout, QHeaderView,
 from ui_scale import px
 from gui_common import MUTED, _section
 
-import logging
-logger = logging.getLogger("assistant.gui")
-
 
 class StressTab(QWidget):
     """Manual per-word stress overrides for TTS edge cases.
