@@ -44,17 +44,6 @@ _IMAGE_ACTION_TOOLS = {"generate_image", "redraw_image", "inpaint_image",
 
 
 
-# Fast-path responses that falsely claim the model cannot create/edit images.
-# These must not be saved to history — they poison future turns by making the
-# model believe it told the user it can't draw, then refusing again.
-# The fast path answered with no tools; if that answer is the model DENYING a
-# capability the agent actually has, throw it away and fall through to the real
-# loop where the tool exists. This was image-only, and the bench caught what
-# that missed: "я текстовый помощник и не могу напрямую создать видеофайл, но
-# вы можете использовать Runway или Pika" (video) and "я не вижу содержимое
-# вашего буфера автоматически" (clipboard) both sailed through as final
-# answers. The rule is capability-agnostic now — a denial about ANY deliverable
-# is a fall-through, because the loop can only do better than a flat refusal.
 # A tool-less reply that CLAIMS a deliverable. "а теперь просто картинку
 # этого же кота" had no draw verb, took the fast path, and the model wrote
 # "Вот ваша картинка с рыжим котом" with nothing attached (live, 2026-09-12,
@@ -111,6 +100,17 @@ _FAST_PATH_ACTION_CLAIM_RE = re.compile(
     re.IGNORECASE | re.MULTILINE)
 
 
+# Fast-path responses that falsely claim the model cannot create/edit images.
+# These must not be saved to history — they poison future turns by making the
+# model believe it told the user it can't draw, then refusing again.
+# The fast path answered with no tools; if that answer is the model DENYING a
+# capability the agent actually has, throw it away and fall through to the real
+# loop where the tool exists. This was image-only, and the bench caught what
+# that missed: "я текстовый помощник и не могу напрямую создать видеофайл, но
+# вы можете использовать Runway или Pika" (video) and "я не вижу содержимое
+# вашего буфера автоматически" (clipboard) both sailed through as final
+# answers. The rule is capability-agnostic now — a denial about ANY deliverable
+# is a fall-through, because the loop can only do better than a flat refusal.
 _FAST_PATH_CAPABILITY_DENIAL_RE = re.compile(
     # Russian: "не могу/не умею/не имею возможности" + any deliverable verb.
     r"не\s+(?:могу|умею|способ\w+|имею\s+возможности)\s+"

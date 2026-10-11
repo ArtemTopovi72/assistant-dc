@@ -427,7 +427,7 @@ def _ru_thousands(answer: str) -> str:
     if _foreign_ratio(answer) < 0.3 or "<pre" in (answer or "") or "```" in (answer or ""):
         return answer
     out = _THOUSANDS_RE.sub(lambda m: m.group(0).replace(",", "\u00a0"), answer)
-    # \u00ab\u043f\u0440\u0438\u043c\u0435\u0440\u043d\u043e 1250000 \u0447\u0435\u043b\u043e\u0432\u0435\u043a\u00bb -- an ungrouped count before a unit (live).
+    # «примерно 1250000 человек» -- an ungrouped count before a unit.
     out = _BARE_BIG_RE.sub(lambda m: f"{int(m.group(1)):,}".replace(",", "\u00a0"), out)
     # «398 765.26 рублей»: the decimal mark is a comma, but only before a
     # unit -- a bare "3.11" may be a version number.
@@ -450,7 +450,7 @@ _BARE_BIG_RE = re.compile(
     r"юан|тенге|км\b|километр|тонн|штук|шт\b|единиц|туристов|посетител|пользовател|экземпляр))")
 
 
-_MONEY_RE = re.compile(r"(?<![\d.,])(\d[\d\u00a0]*)\.(\d{2})(?!\d|\.\d)")   # \u00ab669.00.\u00bb ends a sentence
+_MONEY_RE = re.compile(r"(?<![\d.,])(\d[\d\u00a0]*)\.(\d{2})(?!\d|\.\d)")   # «669.00.» ends a sentence
 
 
 _DECIMAL_UNIT_RE = re.compile(

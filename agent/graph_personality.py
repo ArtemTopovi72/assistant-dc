@@ -105,11 +105,6 @@ _TOOL_ARTIFACT: dict = {
 }
 
 
-# A verification result that says the picture is NOT right. inspect_image
-# reports per element whether it is present, partial, missing or distorted, so
-# a negative verdict is ordinary tool output, not an error -- which is exactly
-# why it needs its own detector: nothing else in the loop treats it as a signal.
-# Handing the user a result, as opposed to claiming to have made one.
 # A picture from earlier turns stays in ctx.last_image_path forever, so an
 # action verb in a reply about something else ("запущу", "сделал" in an AnyDesk
 # chat) forced picture-tool rounds and invented actions. With
@@ -117,13 +112,6 @@ _TOOL_ARTIFACT: dict = {
 _PICTURE_WORD_RE = re.compile(
     r"(?i)картин|фото|изображ|рисун|снимок|снимк|кадр|очк|фон|image|photo|picture|drawing")
 
-# _ACTION_CLAIM_RE only matches first-person verbs ("я нарисовал"), and the
-# false successes measured on the chaos bench were phrased the other way:
-# "Вот ваш рыжий кот в скафандре!", "Вот реальное фото Эйфелевой башни."
-# That is the same lie -- the user is handed something that does not exist --
-# but it slipped past every guard. Kept separate from _ACTION_CLAIM_RE rather
-# than folded into it: this phrasing is innocent in plenty of turns, so it is
-# only consulted where a verification has ALREADY come back negative.
 # A claim that a deliverable EXISTS, as opposed to handing it over or saying
 # you made it. The third phrasing of the same lie, and the one that hid the
 # longest: "Презентация про историю Рима на 8 слайдов готова" with no file
@@ -140,6 +128,14 @@ _PROMISE_CLAIM_RE = re.compile(
 )
 
 
+# Handing the user a result, as opposed to claiming to have made one.
+# _ACTION_CLAIM_RE only matches first-person verbs ("я нарисовал"), and the
+# false successes measured on the chaos bench were phrased the other way:
+# "Вот ваш рыжий кот в скафандре!", "Вот реальное фото Эйфелевой башни."
+# That is the same lie -- the user is handed something that does not exist --
+# but it slipped past every guard. Kept separate from _ACTION_CLAIM_RE rather
+# than folded into it: this phrasing is innocent in plenty of turns, so it is
+# only consulted where a verification has ALREADY come back negative.
 _DELIVERY_CLAIM_RE = re.compile(
     r"\bвот\s+(?:тво[йяё]|ваш\w*|теб[ея]|готов\w+|обновл\w+|нов\w+)"
     r"|\bвот\s+(?:\w+\s+){0,2}(?:фото|фотк\w*|картинк\w*|изображени\w*|видео|результат)"
@@ -241,6 +237,10 @@ def _inspection_contradicts_work(verdict: str, tools_called: set, removal: str =
     return bool(hits)
 
 
+# A verification result that says the picture is NOT right. inspect_image
+# reports per element whether it is present, partial, missing or distorted, so
+# a negative verdict is ordinary tool output, not an error -- which is exactly
+# why it needs its own detector: nothing else in the loop treats it as a signal.
 _VERIFY_NEGATIVE_RE = re.compile(
     r"\bnot\s+present\b|\bmissing\b|\babsent\b|\bnot\s+visible\b|\bpartial\b"
     r"|\bdid\s+not\s+(?:take\s+effect|appear|work)\b|\bunchanged\b"
@@ -345,30 +345,6 @@ def _answer_contradicts_reality(draft: str, verification_negative: bool,
     return bool(_ACTION_CLAIM_RE.search(draft)
                 or _DELIVERY_CLAIM_RE.search(draft)
                 or _PROMISE_CLAIM_RE.search(draft))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # The inline buttons under a picture carry a machine payload that names ONE

@@ -59,12 +59,6 @@ from tool_image_handlers import (
 
 logger = logging.getLogger("assistant.tools")
 
-# An inspect_image check phrased around ABSENCE — i.e. verifying a removal
-# ("is the puddle still visible?", "убрана ли лужа?"). For these the PRESENT/
-# MISSING labels invert (MISSING = success), so the inspection footer must not
-# treat MISSING as a flaw to fix. Covers the removal verbs plus the "still
-# there / remained / no longer / gone" phrasings a verification question uses.
-
 
 @dataclass(frozen=True)
 class ToolSpec:

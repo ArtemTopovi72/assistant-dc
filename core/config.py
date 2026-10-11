@@ -608,7 +608,6 @@ SANDBOX_TOOL_ROUNDS = _env_int("SANDBOX_TOOL_ROUNDS", 16)
 # plainly what it could not fix. Counts generate_image and redraw_image (whole-
 # frame re-renders), not the localized edits the user explicitly asked for.
 IMAGE_MAX_RENDERS_PER_TURN = _env_int("IMAGE_MAX_RENDERS_PER_TURN", 3)
-# (room for search -> generate -> inspect -> inpaint -> inspect)
 # Adaptive recovery budget: when the round budget is about to run out but the agent
 # is actively dealing with a tool FAILURE (a broken path that needs an alternative
 # chain), grant up to this many extra rounds so legitimate recovery isn't truncated.
@@ -1073,7 +1072,6 @@ TG_QUOTA_TASKS         = _env_int("TG_QUOTA_TASKS", 200)
 TG_ETA_TASK_SEC     = _env_int("TG_ETA_TASK_SEC", 45)
 TG_ETA_RESEARCH_SEC = _env_int("TG_ETA_RESEARCH_SEC", 900)
 
-# Login throttling for the logged-out password gate.
 # A self-hosted Bot API server (telegram-bot-api --local) lifts the 20 MB
 # download cap to 2 GB and hands files back as local paths. Point TG_API_BASE
 # at it (e.g. http://127.0.0.1:8081); the default is Telegram's cloud API.
@@ -1087,6 +1085,7 @@ _tg_api_default = ("http://127.0.0.1:%d" % TG_API_PORT
                    if (TG_API_ID and TG_API_HASH) else "https://api.telegram.org")
 TG_API_BASE = (os.getenv("TG_API_BASE", "") or _tg_api_default).rstrip("/")
 TG_API_LOCAL = TG_API_BASE != "https://api.telegram.org"
+# Login throttling for the logged-out password gate.
 TG_LOGIN_MAX_FAILS  = _env_int("TG_LOGIN_MAX_FAILS", 5)
 TG_LOGIN_LOCKOUT_S  = _env_int("TG_LOGIN_LOCKOUT_S", 300)
 # scrypt work factor for stored passwords (2**TG_SCRYPT_N_LOG2 iterations).
@@ -1095,7 +1094,6 @@ TG_SCRYPT_N_LOG2    = _env_int("TG_SCRYPT_N_LOG2", 14)
 # Documents: anything longer than this is INDEXED into the user's library
 # instead of being pasted into the prompt and truncated.
 TG_DOC_INLINE_CHARS = _env_int("TG_DOC_INLINE_CHARS", 6000)
-# Reports longer than this are also delivered as a .md file attachment.
 # Report length above which the research result is delivered as a .md ATTACHMENT.
 # 0 = always. A research run produces a document, and at 6000 a short report was
 # pasted into the chat instead — through the Markdown-to-HTML converter, so the

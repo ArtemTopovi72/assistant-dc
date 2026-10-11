@@ -77,7 +77,6 @@ _STAGES: dict[str, dict[str, str]] = {
     "Generating a video":          {"ru": "Генерирую видео"},
     "Preparing the references":    {"ru": "Готовлю референсы"},
     "Encoding the video":          {"ru": "Кодирую видео"},
-    # image.py
     # tool_image_handlers.py — the layout-first redraw paths
     "Redrawing from the picture's own layout":
                                    {"ru": "Перерисовываю по разметке картинки"},
@@ -140,9 +139,10 @@ _QUEUE = re.compile(r"^Waiting for the model \((?P<n>\d+) ahead\)$")
 # "Ultra: <phase>"  (gui.py Ultra Search)
 _ULTRA = re.compile(r"^Ultra: (?P<phase>.+)$")
 
-# "Removing the lettering (2/2)"  (image_lettering_remove.py, passes > 1)
+# "Looking closer (2/3)"
 _CLOSER = re.compile(r"^Looking closer \((?P<n>\d+)/(?P<of>\d+)\)$")
 
+# "Removing the lettering (2/2)"  (image_lettering_remove.py, passes > 1)
 _LETTERING_PASS = re.compile(r"^Removing the lettering \((?P<n>\d+)/(?P<of>\d+)\)$")
 
 # A long script rendered in parts, each continuing the last (agent/tool_image_handlers).

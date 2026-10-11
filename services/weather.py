@@ -230,10 +230,6 @@ def fetch_current(lat: float, lon: float) -> Optional[dict]:
         return None
 
 
-# Fallback only: used when no LLM advisor is supplied (e.g. LM Studio is
-# unreachable) so the button still answers something useful. The primary path
-# is an LLM call (see tg_accounts._weather_advise), which reasons over the
-# actual conditions instead of picking from a canned table.
 _WET_CODES = frozenset((51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99))
 
 
@@ -248,6 +244,10 @@ def umbrella_line(buckets: list, lang: str = "en") -> str:
     return f"☔ Возьми зонт — дождь: {whens}" if ru else f"☔ Take an umbrella — rain: {whens}"
 
 
+# Fallback only: used when no LLM advisor is supplied (e.g. LM Studio is
+# unreachable) so the button still answers something useful. The primary path
+# is an LLM call (see tg_accounts._weather_advise), which reasons over the
+# actual conditions instead of picking from a canned table.
 def _clothing_advice(temp_c: float, code: int, wind_kmh: float, lang: str) -> str:
     wet = code in _WET_CODES
     snowy = code in (71, 73, 75, 77, 85, 86)

@@ -128,11 +128,6 @@ def _is_redo_request(user_input: str, messages) -> bool:
     return seen >= 2          # the current turn plus at least one earlier
 
 
-# Imperative remember-requests in the user's input ("запомни: ...", "запиши...",
-# "не забудь..."). When one is present and the turn produced an answer without a
-# remember_fact call, the model is claiming to remember while saving nothing —
-# same fabrication class as the image guard above. (The trailing \b keeps the
-# imperative "запомни" from matching the model's own past tense "запомнил".)
 # The 📊 Presentation button's literal prefix. Machine-generated, so matching it
 # is exact rather than a guess about intent.
 _DECK_PREFIX = "create a presentation about:"
@@ -267,11 +262,6 @@ def _honest_failure_line(failed_promises, unsupported: bool = False) -> str:
             f"готовое я не стану.")
 
 
-# The user has been told nothing at all. Measured as the VAGUE bucket on the
-# chaos bench: 12 of 140 runs where a tool had hard-failed and the answer
-# neither claimed success nor admitted the failure -- not a lie, but the user
-# walks away not knowing the thing they asked for was never made. An admission
-# already in the draft must not be doubled, hence the counter-regex.
 # A claim that a FILE now exists, as opposed to a claim about a picture or a
 # number. Measured end to end on the sandbox bench: after editing a modpack the
 # answer was "запаковал всё обратно, ваш обновленный архив готов" while
@@ -292,16 +282,17 @@ _FILE_READY_RE = re.compile(
 
 _ARTIFACT_KEYS = ("document_path", "image_path", "video_path")
 
-# The user's own words asking for a file. Needed only when forwarded material
-# is in the turn: «презентация готова» there is usually the forwarded person's
-# news being retold, not the bot's promise.
-
 _NO_FILE_ANSWER = (
     "Готового файла у меня нет — собрать его я не успел, отдавать пока нечего. "
     "Скажи, продолжить?"
 )
 
 
+# The user has been told nothing at all. Measured as the VAGUE bucket on the
+# chaos bench: 12 of 140 runs where a tool had hard-failed and the answer
+# neither claimed success nor admitted the failure -- not a lie, but the user
+# walks away not knowing the thing they asked for was never made. An admission
+# already in the draft must not be doubled, hence the counter-regex.
 _ADMISSION_RE = re.compile(
     r"не\s+(?:получилось|удалось|смог\w*|вышло)|не\s+сработал"
     r"|ошибк\w*|сбой|не\s+сраб|техническ\w+\s+пробл"
@@ -339,12 +330,6 @@ _NO_CALC_ANSWER = (
 )
 
 
-# Measured on the chaos bench: `img_inpaint [wrong]`, calls=['inpaint_image'].
-# The tool returned a plausible "Edit applied", the model never called
-# inspect_image at all, and answered "Готово! Я добавил ей очки." The guard that
-# believes a negative verdict could not fire -- there was no verdict. The file
-# exists and is delivered, so this is not a failure and must not be reported as
-# one; what is missing is the RIGHT to assert that the specific change landed.
 def _gp_edit_tools():
     """The one definition lives in graph_personality, with the other tool facts.
 
@@ -355,6 +340,12 @@ def _gp_edit_tools():
     return _gp._EDIT_TOOLS
 
 
+# Measured on the chaos bench: `img_inpaint [wrong]`, calls=['inpaint_image'].
+# The tool returned a plausible "Edit applied", the model never called
+# inspect_image at all, and answered "Готово! Я добавил ей очки." The guard that
+# believes a negative verdict could not fire -- there was no verdict. The file
+# exists and is delivered, so this is not a failure and must not be reported as
+# one; what is missing is the RIGHT to assert that the specific change landed.
 _UNVERIFIED_EDIT_ANSWER = (
     "Картинку обновил и прикладываю. Проверить результат я не смог, так что "
     "не берусь утверждать, что вышло именно то, что нужно — посмотри сам, и "

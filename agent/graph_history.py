@@ -26,10 +26,7 @@ def send_to_lm_studio(*a, **kw):
     return _llm.send_to_lm_studio(*a, **kw)
 
 
-# Rolling chat-history compaction. Every HISTORY_COMPACT_EVERY completed user turns
-# the older messages are folded into a single running summary, so the transcript
-# resent to the model each turn stays small (less VRAM/compute, no context bloat).
-HISTORY_COMPACT_EVERY = 3
+HISTORY_COMPACT_EVERY = 3        # completed user turns between compactions
 _HISTORY_KEEP_TURNS = 2          # most-recent user turns kept verbatim
 _HISTORY_SUMMARY_MARKER = "[Conversation summary so far]\n"
 
