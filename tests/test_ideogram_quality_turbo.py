@@ -3,10 +3,8 @@
 Every other tier leaves steps/cfg unset, so ideogram.generate's own gate
 (`turbo = steps is None and cfg is None`) attaches the turbo LoRA at
 IDEOGRAM_STEPS_TURBO/IDEOGRAM_CFG_TURBO. Picking Максимум is the one button
-that asks for the plain model instead, at IDEOGRAM_STEPS/IDEOGRAM_CFG -- the
-same request the user made for music ("режим турбо лоры как и у музыки"),
-exposed the same way ("как кнопку"): by reusing the existing quality picker,
-not a new toggle.
+that asks for the plain model instead, at IDEOGRAM_STEPS/IDEOGRAM_CFG, by
+reusing the existing quality picker rather than a new toggle.
 
 Run: venv/Scripts/python.exe tests/test_ideogram_quality_turbo.py
 """

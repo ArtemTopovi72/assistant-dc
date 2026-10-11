@@ -1,5 +1,5 @@
 """A photographic Ideogram render gets the Lenovo skin LoRA; a drawing or a
-character LoRA does not (Ideogram's plastic skin, A/B 2026-10-02)."""
+character LoRA does not (Ideogram's plastic skin)."""
 import os, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 for d in ("", "core", "imaging", "agent"):

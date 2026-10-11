@@ -1,6 +1,5 @@
-"""A requested label is drawn ONCE (live 10-03: 'MSVCP140.dll' came out twice —
-the planner had it in an element's desc, and ensure_text_elements added a second
-carrier on top)."""
+"""A requested label is drawn ONCE: when the planner already has it in an
+element's desc, ensure_text_elements must not add a second carrier on top."""
 import os, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 for d in ("core", "imaging", "agent"):

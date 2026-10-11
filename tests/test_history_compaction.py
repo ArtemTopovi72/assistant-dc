@@ -1,7 +1,6 @@
-"""Regression + red-team for the rolling history-compaction recovery path
-(graph.compact_history_if_needed). This is the path that keeps long conversations
-from exploding context; branch coverage showed it was previously unexercised by the
-test suite. We verify it does NOT corrupt history:
+"""Red-team for the rolling history-compaction recovery path
+(graph.compact_history_if_needed), which keeps long conversations from exploding
+context. We verify it does NOT corrupt history:
 
   - system prompt (msg 0) is preserved and stays first,
   - the tail (last _HISTORY_KEEP_TURNS user turns) is kept verbatim, in order,
@@ -24,12 +23,8 @@ import graph as gmod
 import llm as _llmmod
 
 # The summariser seam. graph_history.send_to_lm_studio is a one-line indirection
-# that forwards to llm.send_to_lm_studio at CALL time, precisely so a patch works
-# from anywhere -- and its docstring says to patch llm. This suite patched
-# `graph.send_to_lm_studio` instead, which graph_history has not read since the
-# compaction code was lifted out of graph.py: a DEAD SEAM. Every stub below was
-# installed and never called, so the tests were exercising the real
-# llm.send_to_lm_studio -- i.e. reaching for the live LM Studio from a unit test.
+# that forwards to llm.send_to_lm_studio at CALL time, so the stub must be
+# installed on llm; otherwise the real LM Studio would be called from a unit test.
 def _patch_summariser(fn):
     _llmmod.send_to_lm_studio = fn
     gmod.send_to_lm_studio = fn          # kept: some checks still read it off graph
