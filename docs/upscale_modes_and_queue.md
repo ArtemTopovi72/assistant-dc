@@ -1,6 +1,15 @@
 # Explicit upscale modes & the task queue
 
-## Upscale vs Restore — two explicit operations, never auto-switched
+> **Status:** the upscale and restore pipelines described in the first half no longer
+> have a backend. They ran on ESRGAN models that were removed when FireRed became the
+> only edit engine; `imaging/image_router.py` now refuses `upscale`, `restore` and
+> `outpaint` with `reason="unsupported"` (`upscale_image_with_comfy` is no longer
+> defined anywhere; only `bench/live_image.py` still calls it).
+> `_preserve_face_after_upscale` (`imaging/image_identity.py`) survives as a
+> face-paste-back guard for re-rendered output. The task queue half is current
+> (`TaskQueueMixin`, `gui/gui_queue.py`).
+
+## Upscale vs Restore — two explicit operations, never auto-switched (historical design)
 
 These are deliberately kept distinct (the user's expectation differs):
 
@@ -36,7 +45,7 @@ with the face composited.
 
 ## Task queue (GUI)
 
-The single-slot pre-fill was upgraded to a real queue (`AssistantWindow`):
+The GUI task queue (`TaskQueueMixin` in `gui/gui_queue.py`, mixed into `AssistantWindow`):
 
 - **Add tasks** any time — type and press **＋⏳**, or press Enter/Send while busy (busy
   submissions enqueue instead of dropping).

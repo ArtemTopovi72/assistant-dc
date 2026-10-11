@@ -1,10 +1,13 @@
 # Music generation (MiniMax Music 3)
 
-`music.py` mirrors `video.py`'s shape: readiness checks against real weight
-files and a real ComfyUI node, a `build_workflow()` that is pure graph
+`media/music.py` mirrors `media/video.py`'s shape: readiness checks against real
+weight files and a real ComfyUI node, a `build_workflow()` that is pure graph
 construction (testable with no GPU), and `generate_music()` that submits
-through `comfy_client._submit_and_poll` and adopts the result into
+through `imaging/comfy_client._submit_and_poll` and adopts the result into
 `config.OUTPUT_DIR`.
+
+The default song engine is YuE2 (`MUSIC_ENGINE`, see "Installing YuE2" below).
+This page covers the Music3 ComfyUI path, which `MUSIC_ENGINE=music3` selects.
 
 ## Model files
 
@@ -56,7 +59,7 @@ Two bugs were found and fixed while getting this working end-to-end:
    this ComfyUI build. Fixed to check the real name
    (`MiniMaxMusic3TextEncode`) against membership in the **full**
    `/object_info` listing instead.
-2. **`comfy_client.py`'s `_poll_history`** only ever looked for a
+2. **`imaging/comfy_client.py`'s `_poll_history`** only ever looked for a
    `node_out["images"]` key when scanning a completed job's outputs.
    `SaveAudio`/`SaveAudioAdvanced` report their file under `node_out["audio"]`
    — same `{filename, subfolder}` shape, different key — so a genuinely
@@ -70,34 +73,35 @@ Two live end-to-end generations (30s requested each) confirmed the fix:
 an EN and RU song, both real 44.1kHz stereo FLAC output from
 `music.generate_music()` through the actual ComfyUI graph.
 
-Cfg/steps defaults (`MUSIC_CFG=3.0`, `MUSIC_STEPS=30` in `config.py`) are
-untuned placeholders, not confirmed-optimal — Music3 is not CFG-distilled
+Cfg/steps defaults (`MUSIC_CFG=3.0`, `MUSIC_STEPS=20` in `core/config.py`) are
+not tuned beyond one A/B on one seed — Music3 is not CFG-distilled
 the way H3 is (it does take real negative conditioning via
 `ConditioningZeroOut`), so there is room to tune quality/speed further, but
-that is a taste question, not a correctness one.
+that is a taste question, not a correctness one. `build_workflow` also attaches
+the 8-step Turbo LoRA (`MUSIC_STEPS_TURBO=8`, `MUSIC_CFG_TURBO=1.7`) and uses
+those values unless the caller overrides `steps`.
 
 ## Public contract
 
 See `music.py` docstrings. In short:
 
 ```python
-missing_weights() -> list[str]
-engine_available(ctx=None) -> tuple[bool, str]
+missing_weights(preset=None) -> list[str]
+engine_available(ctx=None, preset=None) -> tuple[bool, str]
 normalize_lyrics(text: str) -> str                            # enforces the tag contract
 caption_is_structured(style: str) -> bool                     # the three headings
 build_structured_caption(ctx, topic, lang, *, duration_s=None) -> dict  # {"lyrics", "style"}
-generate_music(ctx, lyrics, style, *, duration_s=60, seed=None) -> str  # path
+generate_music(ctx, lyrics, style, *, duration_s=60, seed=None, preset=None, ...) -> str  # path
 ```
 
 `build_structured_caption` calls the house LLM (`llm.call_llm_simple`,
-the same primitive `tg_accounts._weather_correct_fn` uses) with a prompt
+the same primitive `bot/tg_weather.py: _weather_correct_fn` uses) with a prompt
 that asks for a JSON object `{"lyrics": ..., "style": ...}`. Lyrics are
 written in the requested language (`lang` — `'en'` or `'ru'`); the section
 tags stay in English in both cases, since that is MiniMax's required
 lyric-format vocabulary, not something to localize. The reply is parsed with
-`utils.safe_json_from_llm` (the project's one hardened LLM-JSON parser — see
-`docs/llm-json-extraction` note in memory), falling back to a bare
-`json.loads`.
+`utils.safe_json_from_llm` (the project's one hardened LLM-JSON parser),
+falling back to a bare `json.loads`.
 
 ## The prompt contract
 
@@ -134,7 +138,7 @@ short song regardless of what the render asks for.
 
 The three rungs escalate `max_tokens` (12000 → 16000 → 16000) rather than
 shrinking it. On the house Gemma model there is no reasoning switch at all —
-`llm.py` force-clears `no_think` and the `<think></think>` prefill, since
+`agent/llm.py` force-clears `no_think` and the `<think></think>` prefill, since
 they are Qwen levers Gemma's template treats as literal junk — so the token
 budget is the *only* lever these rungs actually pull there. The previous
 ladder shrank it (6000 → 3500 → 3000) and thereby starved the exact failure
@@ -150,8 +154,7 @@ is a real switch and a large budget simply goes unused.
 
 Two hand-written examples of exactly what `build_structured_caption` should
 produce — one English, one Russian — are in `docs/sample_songs.md`, for
-manual testing against a real ComfyUI once the Music3 node package and
-weights are both confirmed in place.
+manual testing against a real ComfyUI.
 
 ## Installing YuE2 (the default song engine)
 

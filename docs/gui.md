@@ -51,7 +51,6 @@ the next start.
 | **Stress** | Per-word Russian stress overrides for the voice (`+` before the stressed vowel). There is a preview line to hear how a phrase will be stressed. |
 | **Music** | Type a topic and get a generated song (YuE2 on ComfyUI). |
 | **Weather** | A forecast table for a city and a period, with humidity, wind and a what-to-wear tip from the model. |
-| **Mashup** | Put the vocals of one track over the music of another (Demucs stems, tempo and key matching). |
 | **Voice Clone** | Clone a voice from a short sample and speak text with it (F5-TTS). |
 | **Restyle Video** | Redraw a video clip in a new style while keeping its motion (MiniMax H3 + ControlNet). |
 | **Madhouse** | Several AI characters talking to each other, and to you. |

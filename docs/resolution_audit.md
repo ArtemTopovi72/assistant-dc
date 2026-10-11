@@ -3,7 +3,18 @@
 Goal: an edit on a 3243×4864 image must return 3243×4864 — same person, same
 framing — with no hidden downscale and **no blurry low-res regeneration**.
 
-## 1. Resolution flow per pipeline (image.py)
+> **Status:** the audit and the crop-based fix are in the code. `image.py` has since
+> been split into the `imaging/` package, so the `image.py:NNN` anchors below are
+> historical. Current homes: `_enforce_output_size` in `imaging/image_sizing.py`;
+> `edit_region_contained_with_comfy`, `edit_region_contained_cropped` and
+> `CONTAINED_FULLRES_MP` in `imaging/image_contained.py`; `_florence_mask_file` in
+> `imaging/image_masks.py`; `face_box` in `imaging/identity_metrics.py`. FireRed is
+> now the only edit engine. `redraw_image_with_comfy` and
+> `replace_background_with_comfy` no longer exist: the GUI redraw goes through
+> `tool_image_handlers.redraw_whole_image`, and the face-protection gate is
+> `_is_facial` (`imaging/image_grounding.py`) instead of `_FACIAL_FEATURE_RE`.
+
+## 1. Resolution flow per pipeline (originally `image.py`)
 
 Every generation pipeline has a `_enforce_output_size(wf, sw, sh)` guard that
 inserts a lanczos `ImageScale` before every `SaveImage`, so the **saved dimensions**
@@ -81,12 +92,13 @@ Resolution alone is not enough: Florence masks for face-adjacent nouns (esp.
 "hair") bleed onto the forehead/eyes, which silently regenerates the face (first
 15.77 MP run: face became undetectable). The crop path now **subtracts the detected
 face box** (`identity_metrics.face_box`) from the edit mask for any non-facial
-region (`_FACIAL_FEATURE_RE` gates this; "hair"/"hat"/"head" are NOT facial
+region (`_is_facial` gates this; "hair"/"hat"/"head" are NOT facial
 features, so they keep the face protected). Identity is preserved **by
 construction**, taking the 15.77 MP hair edit from face-undetectable → cosine 0.999.
 
 ## Files
-`image.py` (`edit_region_contained_cropped`, `_florence_mask_file`,
-`_inpaint_crop_graph`, `CONTAINED_FULLRES_MP`, `_FACIAL_FEATURE_RE`, Florence-proxy
-+ face protection, routing in `edit_region_contained_with_comfy`) ·
-`identity_metrics.py` (`face_box`) · `tests/validate_hires_contained.py`.
+`imaging/image_contained.py` (`edit_region_contained_cropped`,
+`CONTAINED_FULLRES_MP`, Florence-proxy + face protection, routing in
+`edit_region_contained_with_comfy`) · `imaging/image_masks.py`
+(`_florence_mask_file`) · `imaging/identity_metrics.py` (`face_box`) ·
+`tests/validate_hires_contained.py`.

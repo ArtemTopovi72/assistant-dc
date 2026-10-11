@@ -1,5 +1,10 @@
 # Knowledge & Retrieval Architecture — Discovery + Proposal
 
+This is the discovery record the knowledge layer was built from, kept as written.
+Sizes, the 12 GB / RTX 3060 constraint and the nomic embedding model are the
+snapshot at that time; the implemented layer is in `knowledge_implementation.md`
+and now uses BGE-M3.
+
 Discovery pass over the real project (not assumptions). Conclusion up front:
 **do not add a vector database.** The injected-memory corpus is tiny; the one
 genuinely large text corpus (the research cache) is the only thing that would

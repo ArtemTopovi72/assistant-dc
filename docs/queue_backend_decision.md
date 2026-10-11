@@ -60,7 +60,7 @@ Chat 100 queues 6, chat 200 queues 1, chat 100 queues 6 more.
 
 Both backends lose the popped task: Redis `LPOP`s without an ack, Kafka
 auto-commits. **This is handled a layer up, not in the backend.**
-`TaskQueue._write_inflight()` journals running and pending tasks, and
+`QueueMixin._write_inflight()` (`bot/tg_queue.py`) journals running and pending tasks, and
 `_recover_inflight()` notifies the affected user on restart and offers a retry.
 It correctly treats Redis and Kafka as durable — a task still sitting in the
 queue is popped and run normally by the fresh consumer, so it is not
@@ -94,7 +94,7 @@ tested so that switch stays cheap.
 - **`tgbot_tasks` must stay single-partition.** `KafkaBackend` produces without
   a key, so with the broker default `num.partitions=3` messages scatter and come
   back out of order — pushed `k1,k2`, popped `k2,k1`. `num.partitions=1` is set
-  in `config/kraft/local.properties`.
+  in `config/kraft/local.properties` of the Kafka install (not part of this repo).
 - **Redis must be 6.0.6 or newer.** `RedisBackend`'s pop script uses `LPOS`.
   The common Windows port is Redis 5.0.14, where the client connects and `PING`s
   successfully and then the Lua fails at runtime. The suite asserts the server

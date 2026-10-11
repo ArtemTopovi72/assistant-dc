@@ -195,8 +195,7 @@ class Sandbox:
                         out.append(f"{name}/")
                         walk(p, level + 1)
                     elif depth == 1:
-                        # The one-level listing /files parses
-                        # is "name/".
+                        # The one-level listing (what /files parses) is plain "name/".
                         out.append(f"{name}/")
                     else:
                         try:
@@ -380,11 +379,10 @@ class Sandbox:
 
         The root itself ("", ".", "*", "all") empties the folder through
         reset(): a refusal here let the model report «Я удалил все файлы»
-        over surviving entries. It is
-        the user's own working folder and /reset_sandbox does the same, so
-        the honest tool is one that actually does it. Any other path goes
-        through resolve() so a symlink cannot point the deletion outside.
-        Returns what was removed, for the reply.
+        over surviving entries. It is the user's own working folder and
+        /reset_sandbox does the same, so the honest tool is one that actually
+        does it. Any other path goes through resolve() so a symlink cannot
+        point the deletion outside. Returns what was removed, for the reply.
         """
         import shutil
         rel = (rel or "").strip()
@@ -744,23 +742,6 @@ class Sandbox:
 SANDBOX_BASE = Path(__file__).resolve().parents[1] / "runtime" / "sandboxes"
 
 _KEY_SAFE_RE = re.compile(r"[^A-Za-z0-9_-]")
-
-
-def redirect_sandbox_base(path) -> Path:
-    """Point every sandbox at `path`. For tests, and only for tests.
-
-    tg_bot.redirect_data_dir moves the user database out of the operator's live
-    data, and every suite that builds a bot is required to call it -- but it
-    never covered this tree. A suite that drives a document upload for a user
-    WITH sandbox access therefore wrote a real file into the operator's real
-    sandbox: writing tests/test_tg_sandbox_upload.py left a stray
-    runtime/sandboxes/999877 behind on the first run, which is how this was
-    found. Same discipline, second door.
-    """
-    global SANDBOX_BASE
-    SANDBOX_BASE = Path(path)
-    SANDBOX_BASE.mkdir(parents=True, exist_ok=True)
-    return SANDBOX_BASE
 
 
 def sandbox_key(owner) -> str:

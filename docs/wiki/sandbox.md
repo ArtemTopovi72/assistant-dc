@@ -105,7 +105,7 @@ A script that writes an image is not done when it exits 0: [`sandbox/code_visual
 
 | Path | Role |
 |---|---|
-| [`sandbox/code_sandbox.py`](../../sandbox/code_sandbox.py) | [`Sandbox`](../../Sandbox) class: path containment (`resolve()`), read/write/edit, search, archive unpack/pack, per-owner root (`sandbox_for()`) |
+| [`sandbox/code_sandbox.py`](../../sandbox/code_sandbox.py) | [`Sandbox`](../../sandbox/code_sandbox.py) class: path containment (`resolve()`), read/write/edit, search, archive unpack/pack, per-owner root (`sandbox_for()`) |
 | [`sandbox/code_runner.py`](../../sandbox/code_runner.py) | Backend selection (Docker vs host), `run_python()`, `install()`, process spawning, output clipping, container teardown |
 | [`sandbox/sandbox_access.py`](../../sandbox/sandbox_access.py) | The `off`/`files`/`code`/`host` ladder, stored in a user row's `prefs["sandbox"]` |
 | [`sandbox/code_visual_check.py`](../../sandbox/code_visual_check.py) | Vision-model pass over a script's newest output image |
@@ -134,4 +134,4 @@ A script that writes an image is not done when it exits 0: [`sandbox/code_visual
 
 [`agent/tool_code_handlers.py`](../../agent/tool_code_handlers.py) is the sole caller that turns these primitives into model-facing tools (`read_file`, `write_file`, `edit_file`, `run_code`, `install_packages`, `unpack_archive`, `pack_archive`, `run_tests`, and others): it wraps every `code_sandbox.SandboxError` into a `[TOOL ERROR]` string the model can act on, consults `sandbox_access` before allowing `run_code`/`install_packages`/`run_tests`, and calls `code_visual_check.critique()` after a script writes a new picture.
 
-[`bot/tg_tasks.py`](../../bot/tg_tasks.py) attaches a per-chat [`Sandbox`](../../Sandbox) to the turn's context via `code_sandbox.sandbox_for(chat_id)`. [`scripts/launch_all.py`](../../scripts/launch_all.py) starts the Docker engine and builds the house image on a background thread at app startup, so the first `run_code` call does not pay that cost. [`docker/sandbox/assistant_tools.py`](../../docker/sandbox/assistant_tools.py) ships inside the built image and is imported by scripts the sandbox runs, as well as loaded directly by [`agent/tool_code_handlers.py`](../../agent/tool_code_handlers.py)'s `dedupe_photos` handler outside the container.
+[`bot/tg_tasks.py`](../../bot/tg_tasks.py) attaches a per-chat [`Sandbox`](../../sandbox/code_sandbox.py) to the turn's context via `code_sandbox.sandbox_for(chat_id)`. [`scripts/launch_all.py`](../../scripts/launch_all.py) starts the Docker engine and builds the house image on a background thread at app startup, so the first `run_code` call does not pay that cost. [`docker/sandbox/assistant_tools.py`](../../docker/sandbox/assistant_tools.py) ships inside the built image and is imported by scripts the sandbox runs, as well as loaded directly by [`agent/tool_code_handlers.py`](../../agent/tool_code_handlers.py)'s `dedupe_photos` handler outside the container.
