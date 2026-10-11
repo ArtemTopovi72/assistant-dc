@@ -148,7 +148,8 @@ class ResearchTabMixin:
             try:
                 self.research_web.setHtml("")
             except Exception:
-                pass
+                import gui as _g
+                _g.logger.debug("clearing the web report failed", exc_info=True)
             self.research_web.hide()
 
     def _set_report(self, markdown_text: str):
@@ -172,5 +173,5 @@ class ResearchTabMixin:
                 self.research_view.setMarkdown(markdown_text)
                 return
             except Exception:
-                pass
+                _g.logger.debug("setMarkdown failed; using plain text", exc_info=True)
         self.research_view.setPlainText(markdown_text)

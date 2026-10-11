@@ -75,7 +75,7 @@ class MemoryProfilesMixin:
                 if self.store.create_profile(p):
                     created.append(p)
             except Exception:
-                pass
+                logger.debug("suggested profile %s not created", p, exc_info=True)
         self.refresh_all()
         self._toast(f"Created: {', '.join(created) or 'none (already exist)'}")
 

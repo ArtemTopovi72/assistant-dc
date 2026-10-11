@@ -91,7 +91,7 @@ def enable_dark_titlebar(widget) -> None:
             if dwm.DwmSetWindowAttribute(hwnd, attr, ctypes.byref(val), ctypes.sizeof(val)) == 0:
                 break
     except Exception:
-        pass
+        logger.debug("DWM dark titlebar not applied", exc_info=True)
 
 
 def _make_tab_close_icons():

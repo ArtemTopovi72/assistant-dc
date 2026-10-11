@@ -43,7 +43,7 @@ class VoiceMixin:
                 f.write(enc)
             self._add_user_image(path)
         except Exception:
-            pass
+            logger.warning("camera frame capture failed", exc_info=True)
         self._set_status("📸 Frame captured — now ask your question (type or Talk).")
 
     def _take_captured_image(self):

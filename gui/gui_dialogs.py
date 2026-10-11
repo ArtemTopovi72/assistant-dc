@@ -326,7 +326,7 @@ class MaskCanvas(QWidget):
         finally:
             try:
                 os.unlink(tmp.name)
-            except Exception:
+            except OSError:
                 pass
         return out_path
 

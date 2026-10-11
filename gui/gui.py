@@ -322,7 +322,7 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
             import log_redact
             log_redact.install(self.log_handler)
         except Exception:
-            pass
+            logger.debug("log_redact install failed", exc_info=True)
         # CRASH FIX: datasets/transformers (pulled in by sentence-transformers) call
         # logging.basicConfig(), adding a root StreamHandler to sys.stderr — which is
         # None under pythonw AND cp1251-encoded. A non-ASCII log char (→, Cyrillic)
@@ -959,7 +959,7 @@ def run_gui() -> None:
             import ctypes
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("AssistantDC.Voice.1")
         except Exception:
-            pass
+            logger.debug("could not set the Windows AppUserModelID", exc_info=True)
 
     # High-DPI MUST be enabled before the QApplication is constructed so Qt honours
     # the Windows display-scaling setting (100..300%). PassThrough keeps fractional
@@ -968,7 +968,7 @@ def run_gui() -> None:
         QApplication.setHighDpiScaleFactorRoundingPolicy(
             Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     except Exception:
-        pass
+        logger.debug("High-DPI rounding policy unavailable", exc_info=True)
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
     QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
     # Required for QtWebEngine (the research report viewer) to share the GL context.
@@ -982,7 +982,7 @@ def run_gui() -> None:
         crash_diag.install_qt_message_handler()
         crash_diag.log_stage("run_gui: QApplication about to be constructed")
     except Exception:
-        pass
+        logger.debug("crash_diag setup failed", exc_info=True)
 
     app = QApplication(sys.argv)
     app.setWindowIcon(QIcon(ICON_PATH))

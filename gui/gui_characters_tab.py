@@ -125,7 +125,7 @@ class TrainWorker(QThread):
         if self.proc and self.proc.poll() is None:
             try:
                 self.proc.terminate()
-            except Exception:
+            except OSError:
                 pass
 
 
@@ -155,7 +155,7 @@ class GenerateWorker(QThread):
                     import comfy_client as _cc
                     busy = _cc.recent_gpu_refusal()
                 except Exception:
-                    pass
+                    logger.debug("comfy_client.recent_gpu_refusal unavailable", exc_info=True)
                 self.failed.emit(
                     ('The GPU is busy with «%s» — no drawing until it finishes.' % busy) if busy else
                     'ComfyUI returned no picture — see Log')
@@ -674,7 +674,7 @@ class CharactersTab(QWidget):
             import comfy_client as _cc
             busy = _cc.gpu_holder()
         except Exception:
-            pass
+            logger.debug("comfy_client.gpu_holder unavailable", exc_info=True)
         if busy:
             # Said BEFORE the render rather than after it fails: this tab is
             # where a training run is started, so its own run is the most

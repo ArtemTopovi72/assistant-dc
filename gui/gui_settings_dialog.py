@@ -512,7 +512,7 @@ class SettingsDialog(QDialog):
             try:
                 with open(self.ctx.custom_personality_path, "r", encoding="utf-8") as f:
                     editor.setPlainText(f.read())
-            except Exception:
+            except (OSError, UnicodeDecodeError):
                 pass
         vl.addWidget(editor)
         hint = QLabel("Changes are applied immediately. To save permanently, use Save.")

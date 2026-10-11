@@ -109,7 +109,7 @@ class RedrawWorker(QThread):
                     tool="RedrawWorker", workflow=wf,
                     returned_file=path, source=self.source_path)
             except Exception:
-                pass
+                logger.debug("log_edit_decision failed", exc_info=True)
             self.done.emit(path or "")
         except Exception as exc:
             logger.exception("Redraw failed")
@@ -141,7 +141,7 @@ class FixHandsWorker(QThread):
                     workflow=f"MeshGraphormer/SAM/Florence + {self.engine}",
                     returned_file=path, source=self.source_path)
             except Exception:
-                pass
+                logger.debug("log_edit_decision failed", exc_info=True)
             self.done.emit(path or "")
         except Exception as exc:
             logger.exception("Fix-hands failed")
@@ -179,7 +179,7 @@ class FixArtifactWorker(QThread):
                     workflow=f"contained masked inpaint + {self.engine}",
                     returned_file=path, source=self.source_path)
             except Exception:
-                pass
+                logger.debug("log_edit_decision failed", exc_info=True)
             self.done.emit(path or "")
         except Exception as exc:
             logger.exception("Fix-artifact failed")

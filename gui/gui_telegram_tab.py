@@ -750,7 +750,7 @@ class TelegramTab(QWidget):
                 f"·  backend: {stats.get('backend', '?')}")
             self.queue_lbl.setTextFormat(Qt.RichText)
         except Exception:
-            pass
+            logger.debug("queue stats refresh failed", exc_info=True)
 
     def _restore_backup(self):
         if not self._bot:

@@ -129,7 +129,7 @@ class MemoryCenterTab(_MemoryProfilesMixin, _MemoryMaintenanceMixin, QWidget):
         try:
             self.store.sync_into_ctx(ctx, self._profile())
         except Exception:
-            pass
+            logger.debug("sync_into_ctx failed", exc_info=True)
         self.refresh_all()
 
     # ---- build -------------------------------------------------------------
