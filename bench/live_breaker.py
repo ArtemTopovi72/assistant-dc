@@ -60,7 +60,7 @@ def run(name):
         print("     reply:", ans[:400].replace("\n", " | "))
         mirror(f"❓ {q[:300]}\n\n🤖 ({dt}s) {ans[:3000]}")
     try: bot.stop()
-    except Exception: pass
+    except Exception as e: print("bot.stop failed:", e)
     (D.OUT / "report.json").write_text(json.dumps({"times": S.TIMES, "findings": S.FINDINGS},
                                                   ensure_ascii=False, indent=1), encoding="utf-8")
     print("FINDINGS", S.FINDINGS, "->", D.OUT)

@@ -16,7 +16,6 @@ Metrics per query: Recall@10, Precision@10, MRR, latency(ms). Reports per-type
 and overall averages. Uses the prebuilt memory/knowledge_test.db.
 """
 import os, sys, time, statistics
-import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except (AttributeError, ValueError, OSError): pass
 from pathlib import Path

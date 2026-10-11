@@ -48,7 +48,6 @@ def _up(url, timeout=6):
 
 
 import config
-import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except (AttributeError, ValueError, OSError): pass
 
