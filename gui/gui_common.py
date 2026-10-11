@@ -9,15 +9,13 @@ copy along or reach back into gui.py and rebuild the import cycle just removed.
 Nothing here knows about the assistant, the model, or any tab. It is Qt
 plumbing and colour, which is why it can sit underneath all of them.
 
-Two pieces are worth reading before changing:
+One piece is worth reading before changing:
 
   _scroll_page  A widget's minimum size is the sum of its children's minimums,
                 and every one is px()-scaled — so at 250-300% on a 4K TV a tab's
                 minimum grows past the screen, Qt refuses to shrink below it,
                 and Windows crops the window. Wrapping the page in a scroll area
                 gives Qt a small minimum while the page keeps its natural size.
-
-  _cap_w        The same failure in the width direction.
 
 `logger` is deliberately NOT moved: 33 symbols in gui.py use it, and both
 modules simply take the same "assistant.gui" channel.
@@ -330,20 +328,6 @@ def _card(layout_cls=QVBoxLayout):
     w = QWidget(); w.setObjectName("card")
     lay = layout_cls(w); lay.setContentsMargins(px(14), px(14), px(14), px(14)); lay.setSpacing(px(10))
     return w, lay
-
-
-def _cap_w(n: int, frac: float = 0.30) -> int:
-    """A px()-scaled minimum WIDTH, capped to a fraction of the screen.
-
-    Same failure as the heights (see _scroll_page): three panes each demanding
-    px(360) at UI scale 4 want 4320 px of window, more than the display has, and
-    Qt would rather overflow the screen than go under a layout minimum.
-    """
-    try:
-        avail = QApplication.primaryScreen().availableGeometry().width()
-        return max(px(80), min(px(n), int(avail * frac)))
-    except Exception:
-        return px(n)
 
 
 def _scroll_page(widget: QWidget) -> QWidget:
