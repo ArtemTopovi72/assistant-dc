@@ -104,7 +104,7 @@ from dr_calls import _think_call, _model_context
 # — which is dr_calls' import, so they must patch it THERE. `_think_call` itself is
 # read off this module by those suites, so it stays reachable here.
 _REEXPORTED_FROM_DR_CALLS = (_think_call, _model_context)
-from dr_progress import PHASES, _Progress
+from dr_progress import _Progress
 from dr_policy import (
     _is_practical_request, _apply_scholarly_floor, _apply_trust_floor, _resolve_caps,
     _SCHOLARLY_CATEGORIES, _PRACTICAL_CATEGORIES, _SCHOLARLY_FLOOR_KEEP,
@@ -115,9 +115,8 @@ from dr_policy import (
 # second copy (the DR_* knobs _resolve_caps reads live in dr_settings).
 _REEXPORTED_FROM_DR_POLICY = (_is_practical_request, _apply_trust_floor, _resolve_caps,
                               _SCHOLARLY_CATEGORIES, _PRACTICAL_CATEGORIES)
-# Re-exported: research_api mirrors deep_research.PHASES, and the fetch
-# suite drives `_Progress` through this module.
-_REEXPORTED_FROM_DR_PROGRESS = (PHASES, _Progress)
+# Re-exported: the fetch suite drives `_Progress` through this module.
+_REEXPORTED_FROM_DR_PROGRESS = (_Progress,)
 from dr_relevance import (
     _entity_terms, _term_in, _term_in_any, _relevance_hits, _min_hits, _brief_is_relevant,
     _filter_offtopic_briefs,

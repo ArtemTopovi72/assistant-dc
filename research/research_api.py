@@ -108,7 +108,7 @@ RESEARCH_API_MARKER = "research-service-boundary-v1"
 #: rather than on a literal call expression, which moves when code moves.
 OUT_LANG_FROM_TOPIC_MARKER = "out-lang-derived-from-typed-topic"
 
-#: Phase labels the pipeline emits, in order. Mirrors deep_research.PHASES; the
+#: Phase labels the pipeline emits, in order. Mirrors dr_progress.PHASES; the
 #: GUI's progress strip indexes its stepper by position in this tuple.
 PHASES = ("Expanding queries", "Searching", "Crawling", "Extracting",
           "Deduplicating", "Verifying", "Building report", "Complete")
