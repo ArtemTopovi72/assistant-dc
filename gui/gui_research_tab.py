@@ -71,9 +71,8 @@ class ResearchTabMixin:
         if self._refuse_without_model():
             return
         if self._busy():
-            # This used to return with no trace at all. Deep research is minutes
-            # of work started from a button; a request that vanishes because
-            # something else was running looks like the button is broken.
+            # Deep research is minutes of work started from a button; tell the
+            # user why nothing started instead of silently returning.
             self._add_system('Busy — wait for the current task to finish and start the research again.')
             return
         self.ctx.cancel_event.clear()

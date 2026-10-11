@@ -95,7 +95,6 @@ class RedrawWorker(QThread):
                 # "redraw" and "enhance" (empty instruction) both re-render the
                 # whole picture the same way the redraw_image tool does: our own
                 # Ideogram picture from its boxes, a user's photo through FireRed.
-                # Both used to run the old model graphs whose checkpoint was removed.
                 from tool_image_handlers import redraw_whole_image
                 instructions = self.prompt or (
                     "improve the overall quality: sharpen fine detail, clean up noise "

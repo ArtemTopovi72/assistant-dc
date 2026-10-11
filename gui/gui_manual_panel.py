@@ -255,7 +255,7 @@ class ManualControlMixin:
             "Maximum number of top-level sections the dynamic outline may contain.")
         form.addRow(_sub("Max sections"), self.mc_survey_max_sections)
 
-        # The form is tall (40+ rows) and used to overflow the tab. Put it in a
+        # The form is tall (40+ rows) and would overflow the tab. Put it in a
         # scroll area with a capped height so the panel never pushes the report
         # view off-screen and every control stays reachable by scrolling.
         # Keep the form's background dark like the rest of the panel — once wrapped

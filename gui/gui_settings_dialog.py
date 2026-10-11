@@ -62,8 +62,8 @@ class SettingsDialog(QDialog):
         self._search = _search
 
         # The dialog can be taller than the screen (long model list + many sections),
-        # which used to push the OK/Cancel buttons off the bottom edge so they couldn't
-        # be clicked. Fix: put ALL settings widgets inside an outer scroll area, and
+        # which would push the OK/Cancel buttons off the bottom edge so they couldn't
+        # be clicked. So put ALL settings widgets inside an outer scroll area, and
         # pin the button box BELOW it so it is always visible and clickable.
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -334,10 +334,7 @@ class SettingsDialog(QDialog):
         if not picked and target:
             # STARTUP_MODEL often names a repo that several quants share
             # ("...-balanced" matches both @q5_k_m and the q5_k_p .gguf). The
-            # dialog's own default checked ANY of them, and live 2026-09-22 it
-            # checked q5_k_m while the Telegram bot was mid-answer on q5_k_p:
-            # starting the GUI unloaded the bot's model under it ("Model
-            # unloaded by user or API request") and the photo reply was lost.
+            # dialog must not pick one that unloads a model already in use.
             # Keep whichever matching quant is ALREADY loaded, else the first.
             matches = [rb for rb in self._radios
                        if target.lower() in str(rb.property("model_id") or "").lower()]

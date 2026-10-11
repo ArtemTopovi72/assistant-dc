@@ -69,9 +69,7 @@ def redirect_settings(dir_path) -> None:
 
 
 def _tg_settings() -> QSettings:
-    # A suite that built the main window without redirect_settings() read the
-    # REAL token + autostart and started the live bot for its lifetime: real
-    # users' queued messages were answered from a test run (2026-09-28 23:15).
+    # Tests must not touch the live store.
     # Under a test the live store is unreachable, redirected or not.
     if (not _TG_SETTINGS_DIR and os.environ.get("F5_TEST_RUN")
             and tuple(_TG_SETTINGS_SCOPE) == ("AssistantApp", "TelegramBot")):
@@ -511,10 +509,7 @@ class TelegramTab(QWidget):
             on_user_change=self._sig_user_change.emit,
             silent_mode=self.silent_box.isChecked(),
         )
-        # Only claim the bot is running if it actually started. This used to flip
-        # the whole panel into the running state regardless, so a bad token or a
-        # dropped network left the UI insisting the bot was up: Start greyed out,
-        # Stop live, and every message the user sent silently unanswered.
+        # Only claim the bot is running if it actually started.
         if not self._bot.start():
             self._bot = None
             self.start_btn.setEnabled(True)

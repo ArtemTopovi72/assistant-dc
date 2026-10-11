@@ -355,8 +355,8 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
     def _on_runtime_ready(self, ctx, base_state, graph):
         # This slot runs on the GUI thread via a queued signal right after the model
         # loader thread finishes ("LLM ready" in the log). Each step is fenced so a
-        # failure in one panel cannot escape the slot — an exception escaping here is
-        # exactly what used to abort the process with 0xC0000409. Per-step lifecycle
+        # failure in one panel cannot escape the slot — an exception escaping here
+        # aborts the process. Per-step lifecycle
         # logs pinpoint the offending panel in crash.log / console.
         def _step(name, fn):
             try:
@@ -691,7 +691,7 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
         if self._scan_worker is not None:    # the scan loop polls its own flag, not cancel_event
             self._scan_worker.cancel()
         # Tabs that run long jobs hold their own cancel token (see _ScopedCtx), so
-        # setting the global flag alone no longer reaches them.
+        # setting the global flag alone does not reach them.
         for attr in ("transfer_tab", "storyboard_tab", "code_tab"):
             tab = getattr(self, attr, None)
             cancel = getattr(tab, "cancel", None) if tab is not None else None
@@ -1022,12 +1022,9 @@ def run_gui() -> None:
         logger.info("LIFECYCLE: ASSISTANT_AUTOSTART=1 — skipping the settings "
                     "dialog, starting on the default model")
     elif dlg.exec_() != QDialog.Accepted:
-        # Say so on the way out. Dismissing this dialog exits the process
-        # before the window is ever built and before the bot starts, and it
-        # used to do that in total silence: the log simply stopped after "UI
-        # scale", which is indistinguishable from a hang or a crash. A launch
-        # that quietly does nothing is the hardest kind of failure to explain
-        # half an hour later.
+        # Dismissing this dialog exits the process before the window is built
+        # and before the bot starts; log it so the exit is not mistaken for a
+        # hang or a crash.
         logger.info("LIFECYCLE: settings dialog dismissed — exiting before the "
                     "window was built (the Telegram bot never starts)")
         return
