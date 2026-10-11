@@ -1,4 +1,4 @@
-"""Phase 9 end-to-end validation: rerun the EXACT Di Zenzo investigation that
+"""End-to-end validation: rerun the EXACT Di Zenzo investigation that
 exposed the original weaknesses, at standard depth. Writes the report so it can
 be reviewed against the critique (primary paper, citation lineage, derivations,
 misconceptions, source hierarchy, bibliography).

@@ -1,4 +1,4 @@
-"""Generate one real portrait to drive P3/P4/P5 edit verification."""
+"""Generate one real portrait to drive edit verification."""
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import image
