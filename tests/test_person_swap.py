@@ -115,8 +115,9 @@ for wish, real in (("a real porous kitchen sponge with real eyes", True), ("smok
     t, refs = EDITS[-1] if EDITS else ("", None)
     check(f"wish {wish!r}: the reference goes in as sent" + (", then the photo is made real"
                                                                  if real else ""),
-          (len(EDITS) == 2 and EDITS[0][1] == [SPONGE] and "realistic photograph" in EDITS[1][0])
-          if real else (len(EDITS) == 1 and refs == [SPONGE]), EDITS)
+          (len(EDITS) == 3 and "Remove" in EDITS[0][0] and EDITS[1][1] == [SPONGE]
+           and "realistic photograph" in EDITS[2][0])
+          if real else (len(EDITS) == 2 and "Remove" in EDITS[0][0] and refs == [SPONGE]), EDITS)
 intent.YES_STUB = None
 
 # The agent can do the same: «замени четвёртого на Губку Боба» with the two pictures sent.

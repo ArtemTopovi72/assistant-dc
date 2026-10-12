@@ -103,10 +103,9 @@ def swap(ctx, path: str, box: Box, ref: str, wish: str = "") -> str:
     boxes = people(path)
     n = next((i for i, b in enumerate(boxes, 1) if tuple(b) == tuple(box)), 0)
     target = where(path, box, n, len(boxes)) if n else "the person picked"
-    # One pass on the WHOLE photo, only the picked person's region pasted back. Drawn on
-    # the region alone the newcomer had no people to size itself by and came out a flat
-    # cartoon apart from them; erase-then-insert-then-wish took three passes and the wish
-    # pass turned SpongeBob into a man (live 2026-10-12, «полное говно»).
+    # On the WHOLE photo, only the picked person's region pasted back: drawn on the
+    # region alone the newcomer had no people to size itself by and came out a flat
+    # cartoon apart from them (live 2026-10-12, «полное говно»).
     if wish:
         import image_grounding
         wish = image_grounding._english_instructions(ctx, wish) or wish
@@ -125,12 +124,21 @@ def swap(ctx, path: str, box: Box, ref: str, wish: str = "") -> str:
         real = intent.ask_yes("Does the user want the character turned into a real-life, "
                               "photographed physical version of itself, not kept as drawn?", wish)
     name = who.split(",")[0]
-    figure = name + " from picture 2"
-    instr = ("The man " + side + " is gone; in his place stands " + figure
+    # Erase first, then put in, both on the whole photo: in one pass with picture 2
+    # given, «the man is gone; in his place stands…» kept Yezhov and stood the newcomer
+    # beside him (live via the agent, 2026-10-13).
+    empty = image_mod.edit_image_with_firered(
+        ctx, src, "Remove the man " + side + " completely -- body, head, cap, coat, shadow -- "
+        "and fill the place with what is behind him. Everything else stays exactly as it is.",
+        save_prefix="swap_region")
+    if not empty or not os.path.exists(empty):
+        return ""
+    instr = ("Put " + name + " from picture 2 standing in the empty place " + side
+             + ", beside the others in the same row, as big as they are, full body"
              + (", " + wish.rstrip(".") if wish else "") + ". Photographed for real, part of "
              + look + ": exactly as sharp or soft, grainy and worn as the rest of the photo, "
              "no glow or halo around it.")
-    out = image_mod.edit_image_with_firered(ctx, src, instr, reference_paths=[ref],
+    out = image_mod.edit_image_with_firered(ctx, empty, instr, reference_paths=[ref],
                                             save_prefix="swap_region")
     if not out or not os.path.exists(out):
         return ""

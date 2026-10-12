@@ -598,8 +598,9 @@ def _handle_swap_person(ctx, state, args: dict) -> str:
     ctx.reference_images = (ctx.reference_images or []) + [new_path]
     _remember(ctx, state, "swap", f"Person {n} swapped", {"path": new_path})
     return (f"Swap complete and saved: {new_path}\n"
-            "Call inspect_image to check that the person is replaced and the newcomer "
-            "looks as asked before telling the user it is done.")
+            "Call inspect_image to check it. Do NOT touch it up with inpaint_image or other "
+            "editors: they turned the newcomer into a ghost (2026-10-13). If it is off, call "
+            "swap_person again with a clearer wish, or tell the user what is off.")
 
 
 def _handle_fix_hands(ctx, state, args: dict) -> str:
