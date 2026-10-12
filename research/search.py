@@ -698,6 +698,34 @@ def _is_grayscale(path: str, *, sat_thresh: float = 10.0) -> bool:
         return False
 
 
+# Candidates downloaded before one is chosen: the first that passed the face/colour
+# filters was taken as it came, whoever it showed.
+PICK_FROM = 4
+
+
+def _pick_photo(ctx, query: str, paths: list) -> str:
+    """The candidate that best shows `query`, all of them in ONE vision call (side by
+    side the model compares; one at a time it would call each fine)."""
+    if len(paths) < 2 or ctx is None:
+        return paths[0]
+    try:
+        import re
+        from llm import analyze_image_with_llm
+        ans = analyze_image_with_llm(
+            ctx, temperature=0.0, max_tokens=20,
+            image_paths=[(f"Photo {i}:", p) for i, p in enumerate(paths, 1)],
+            user_text=f"The user wants a real photo of: {query}. Which photo shows exactly "
+                      "that, clearly and best (the right person or thing, sharp, not a "
+                      "collage, a poster or a different person)? Answer with the photo number "
+                      "only.") or ""
+        m = re.search(r"\d+", ans)
+        i = int(m.group()) if m else 1
+        return paths[i - 1] if 1 <= i <= len(paths) else paths[0]
+    except Exception:
+        logger.warning("photo pick failed; the first candidate is used", exc_info=True)
+        return paths[0]
+
+
 def fetch_reference_photo(ctx, query: str, dest_path: str, *, tries: int = 10,
                           require_face: bool = True, prefer_color: bool = True,
                           prefer: str = "portrait") -> Optional[str]:
@@ -715,6 +743,7 @@ def fetch_reference_photo(ctx, query: str, dest_path: str, *, tries: int = 10,
         return None
     checked = 0
     gray_fallback = None                      # first valid-but-grayscale candidate
+    good = []                                 # colour candidates that passed, for the pick
     import shutil
     for u in urls[:tries]:
         if not download_image(ctx, u, dest_path):
@@ -732,7 +761,24 @@ def fetch_reference_photo(ctx, query: str, dest_path: str, *, tries: int = 10,
                     gray_fallback = None
             logger.info("fetch_reference_photo: grayscale candidate held as fallback %r", u[:80])
             continue
-        logger.info("fetch_reference_photo: accepted colour face photo %r -> %s", u[:80], dest_path)
+        keep = f"{dest_path}.cand{len(good)}.jpg"
+        try:
+            shutil.copyfile(dest_path, keep)
+            good.append(keep)
+        except Exception:
+            return dest_path
+        if len(good) >= PICK_FROM or ctx is None:
+            break
+    if good:
+        best = _pick_photo(ctx, query, good)
+        shutil.copyfile(best, dest_path)
+        for g in good:
+            try:
+                os.remove(g)
+            except OSError:
+                pass
+        logger.info("fetch_reference_photo: %d colour candidate(s), picked %s for %r",
+                    len(good), os.path.basename(best), query)
         return dest_path
     if gray_fallback:                          # no colour photo found — use the B&W one
         try:
