@@ -34,7 +34,8 @@ PHOTO_LORA_STRENGTH_3D = _cfg.env_float("FIRERED_PHOTO_LORA_STRENGTH_3D", 0.9)
 NEG_DRAWN = ("photo, photograph, photorealistic, realistic skin texture, skin pores, 3d render, "
              "blurry, low quality, watermark, text, signature")
 NEG_PHOTO = ("cartoon, anime, illustration, drawing, painting, 3d render, cgi, pixar, plastic "
-             "skin, doll, big eyes, cel shading, lineart, blurry, low quality, watermark")
+             "skin, doll, big eyes, cel shading, lineart, body tattoo, chest tattoo, body paint, "
+             "blurry, low quality, watermark")
 NEG_OTHER = "blurry, low quality, watermark, signature"
 
 # The entire image, and everyone at the same size and the same position: a collage
@@ -62,7 +63,10 @@ _EXPAND_SYS = (
 _WHO_PROMPT = (
     "First line: 'MEDIUM: 3D' if this is a 3D render or CGI cartoon, else 'MEDIUM: 2D'. Then "
     "describe this picture for a photographer who must recreate it exactly. For each person or "
-    "character, left to right: gender, approximate age, hair colour and style; everything worn "
+    "character, left to right: gender, approximate age, body build exactly as drawn, "
+    "judged against the drawing rather than an average person: bust size (small, medium, large, "
+    "very large), waist (narrow, average, wide), hips, shoulders; hair colour and "
+    "style; everything worn "
     "on the head (horns, ear-like or wing-like pieces, clips, headbands) with its exact colour "
     "and shape (a thick round horn or a flat thin fin or blade) -- look closely, such pieces are often nearly the colour of the hair; {face}"
     "every garment and costume "
@@ -84,8 +88,9 @@ _WHO_PROMPT = (
 # render a doll on every wording tried: a 3D source is described a second time without.
 _FACE_2D = ("facial hair, glasses, eye colour, the expression and character the face shows "
             "(e.g. cold half-closed eyes, a confident smirk, a raised brow), how mature and hard or "
-            "soft the face is (sharp cheekbones, narrow eyes, thin lips), any face markings, "
-            "tattoos or makeup and where they sit, and the face as it "
+            "soft the face is (sharp cheekbones, narrow eyes, thin lips), whether the face has a "
+            "marking, tattoo or face paint and what it looks like (never say on which side or "
+            "where: picture 1 shows that), and the face as it "
             "would look on a real person (no cartoon sizes like 'large eyes'); ")
 _FACE_3D = "facial hair and glasses (nothing else about the face); "
 
@@ -169,11 +174,14 @@ def build(ctx, instructions: str, image_path: Optional[str] = None) -> tuple:
         who, is_3d = _who(ctx, image_path) if image_path else ("", False)
         lead = f"change the picture 1 to realistic photograph, {who}. " if who else ""
         tail = (" Each person keeps the same gender, age, hair and facial hair, at real-life "
-                "human body proportions (a normal-sized head on a normal adult body), and every "
+                "human head-to-body proportions (a normal-sized head) with the same body build "
+                "as described (bust, waist, hips, limbs as drawn), and every "
                 "garment, armor piece, boot, weapon and prop named above stays, in the same place, "
                 "the same size and the SAME COLOUR (painted dark armor never turns bare silver "
                 "or chrome), as a real costume or prop. Each face keeps the expression and "
-                "character described above, never younger, softer or cuter than drawn.") if who else ""
+                "character described above, never younger, softer or cuter than drawn; any marking "
+                "or line on the face is copied from picture 1 at exactly its spot and side, and "
+                "nothing is drawn on the skin anywhere else.") if who else ""
         return (lead + style + tail + keep, target,
                 PHOTO_LORA_STRENGTH_3D if is_3d else PHOTO_LORA_STRENGTH)
     return style + keep, target, 0.0

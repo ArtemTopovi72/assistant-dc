@@ -72,7 +72,7 @@ STYLE_PRESETS: dict[str, dict] = {
         # field» invented a forest behind a white character sheet (owner, 2026-10-12):
         # materials and the background are named as kept, not re-imagined.
         "prompt": ("Change picture 1 into a real photograph taken with a full-frame DSLR camera: "
-                   "real human beings with natural adult human proportions, realistic faces and "
+                   "real human beings with a natural-sized head and the body build as drawn, realistic faces and "
                    "eyes of normal size, natural skin texture with pores, real hair strands, and "
                    "every costume piece, prop and weapon made real in its own material and its own colour -- "
                    "armor stays rigid armor plates painted the same colour, leather stays leather, "
