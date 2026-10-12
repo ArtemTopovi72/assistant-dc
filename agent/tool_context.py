@@ -19,7 +19,12 @@ def _remember(ctx, state, kind: str, text: str, meta: Optional[dict] = None) -> 
 
 def _set_current_image(ctx, state, path: str, status: str = "ok") -> None:
     """Point ctx/state at the new current image after a successful edit — the
-    three assignments every image handler below makes on success."""
+    three assignments every image handler below makes on success. The picture it
+    replaces is kept as state["edit_before"]: inspect_image shows both, so it judges
+    what changed instead of guessing."""
+    prev = state.get("image_path") or getattr(ctx, "last_image_path", None)
+    if prev and prev != path and not state.get("edit_before"):
+        state["edit_before"] = prev            # the turn's ORIGINAL, not the last pass
     ctx.last_image_path = path
     state["image_path"] = path
     state["image_status"] = status

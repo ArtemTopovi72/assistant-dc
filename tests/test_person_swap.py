@@ -154,5 +154,15 @@ check("...and says so when that person does not exist",
 check("...registered as an agent tool", any(t.name == "swap_person" for t in tools.TOOLS)
       if hasattr(tools, "TOOLS") else "swap_person" in str(vars(tools)))
 
+# After an edit the inspector sees BEFORE and AFTER together: shown the swap alone it
+# said «nothing changed» about a man replaced by a sponge (2026-10-13).
+import llm
+SEEN = []
+llm.analyze_image_with_llm = lambda **k: (SEEN.append(k), "PRESENT: a sponge")[1]
+H._handle_inspect_image(Ctx(), dict(st), {"check": "is the sponge there?"})
+k = SEEN[-1] if SEEN else {}
+check("inspect_image after a swap shows the picture before and after it, in one call",
+      [p for _, p in (k.get("image_paths") or [])] == [PIC, OUT] and "BEFORE" in k.get("user_text", ""), k)
+
 print(f"\n{OK}/{OK + BAD} passed")
 sys.exit(1 if BAD else 0)

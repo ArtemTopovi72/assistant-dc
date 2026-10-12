@@ -100,7 +100,8 @@ def _handle_inspect_image(ctx, state, args: dict) -> str:
         if _before:
             _parts = []
             for _i, _p in enumerate(_before + [source], 1):
-                _sub = _handle_inspect_image(ctx, {**state, "image_path": _p}, {"check": check})
+                _sub = _handle_inspect_image(ctx, {**state, "image_path": _p, "edit_before": None},
+                                            {"check": check})
                 _parts.append(f"Picture {_i} of {len(_before) + 1}"
                               f"{' (the latest)' if _p == source else ''}:{chr(10)}{_sub}")
             return "\n\n".join(_parts)
@@ -116,11 +117,19 @@ def _handle_inspect_image(ctx, state, args: dict) -> str:
     # a picture that was already right (the recolour edit).
     import exposure as _exposure
     _measured = _exposure.evidence(source)
+    # After an edit, BEFORE and AFTER in one call: shown the result alone, the inspector
+    # said «nothing changed, it stayed as it was» about a swap that had replaced a man
+    # with a sponge (live via the debug user, 2026-10-13).
+    _before = state.get("edit_before")
+    _pair = ([("BEFORE the edit:", _before), ("AFTER the edit (judge this one):", source)]
+             if _before and _before != source and os.path.exists(_before) else None)
+    _ask = check + ("\n\nTwo pictures: BEFORE and AFTER the edit. Say first what changed "
+                    "between them, then judge the check on AFTER." if _pair else "")
     result = ""
     for _ in range(2):
         result = analyze_image_with_llm(
-            ctx=ctx, image_path=source,
-            user_text=check + ("\n\n" + _measured if _measured else ""),
+            ctx=ctx, image_path=None if _pair else source, image_paths=_pair,
+            user_text=_ask + ("\n\n" + _measured if _measured else ""),
             system_prompt=IMAGE_INSPECT_PROMPT,
         ) or ""
         if result.strip():
