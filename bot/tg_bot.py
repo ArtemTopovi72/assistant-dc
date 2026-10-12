@@ -219,6 +219,7 @@ _IMAGE_ACTIONS: tuple[tuple[str, str], ...] = (
     ("edit",           "img_edit"),
     ("style",          "img_style"),
     ("animate",        "img_animate"),
+    ("swap_person",    "img_swap_person"),
 )
 
 

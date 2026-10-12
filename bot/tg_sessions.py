@@ -29,6 +29,7 @@ class _Session:
     # a photo, a name, a city…). ✖️ Отмена under the prompt clears all of it
     # (the user must always be able to cancel, in any scenario).
     _WAIT_STR = ("pending_prefix", "pending_instruction", "pending_photo", "pending_style_target", "pending_outfit_target",
+                 "pending_swap_target",
                  "pending_animate_target", "cover_state", "cover_src", "song_draft",
                  # the step-by-step flows too: «Мэшап · трек 1 из 2» had no way out
                  "clone_state", "restyle_state", "continue_state", "book_state", "anim_voice_state", "voice_naming",
@@ -288,6 +289,12 @@ class _Session:
         # photo (caption or not) is the CLOTHING reference, not a new picture to
         # edit; plain text answers through pending_prefix as before.
         self.pending_outfit_target: str = d.get("pending_outfit_target", "")
+        # 🔁 Swap a person: the picture, its people (face boxes, left to right) and,
+        # once a number is pressed, the words for the one picked. The next photo is
+        # who goes in their place.
+        self.pending_swap_target: str = d.get("pending_swap_target", "")
+        self.swap_boxes: list = list(d.get("swap_boxes") or [])
+        self.swap_where: str = d.get("swap_where", "")
         # 🎞 Animate photo pressed with no picture yet: waiting for the next
         # photo/album, which becomes the animation subject. Consumed in
         # tg_resolve.py, which then offers the animate-preset keyboard instead
@@ -340,6 +347,7 @@ class _Session:
             self.pending_photo = ""
             self.pending_style_target = ""
             self.pending_outfit_target = ""
+            self.pending_swap_target = ""
             self.awaiting_animate_photo = False
             self.pending_animate_target = ""
             self.awaiting_style_photo = False
@@ -476,6 +484,9 @@ class _Session:
                 "pending_photo":     self.pending_photo,
                 "pending_style_target": self.pending_style_target,
                 "pending_outfit_target": self.pending_outfit_target,
+                "pending_swap_target": self.pending_swap_target,
+                "swap_boxes":        self.swap_boxes,
+                "swap_where":        self.swap_where,
                 "awaiting_animate_photo": self.awaiting_animate_photo,
                 "pending_animate_target": self.pending_animate_target,
                 "awaiting_style_photo":   self.awaiting_style_photo,

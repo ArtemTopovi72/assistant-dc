@@ -102,6 +102,8 @@ class CallbackMixin:
         if data == "change_clothes": return self._cb_change_clothes(chat_id)
         if data == "remove_object": return self._cb_remove_object(chat_id)
         if data == "style": return self._cb_style_image(chat_id)
+        if data == "swap_person": return self._cb_swap_person(chat_id)
+        if data.startswith("swp:"): return self._cb_swap_pick(chat_id, data)
         if data.startswith("style_preset:"): return self._cb_style_preset(chat_id, data)
         if data == "style_custom": return self._cb_style_custom(chat_id)
         if data == "animate": return self._cb_animate_image(chat_id)
@@ -1048,6 +1050,50 @@ class CallbackMixin:
         self._send_text(chat_id, tg_bot._t("animate_ask_custom", self._lang(sess)),
                         keyboard=self._state_kb(sess))
         return
+
+    def _cb_swap_person(self, chat_id: int) -> None:
+        """🔁 under a picture: the people on it as a numbered collage, one button each;
+        a single person is picked at once."""
+        import person_swap
+        sess = self._get_session(chat_id)
+        lang = self._lang(sess)
+        target = sess.target_image
+        entry = tg_bot._image_by_id(sess, target) if target else None
+        if not entry or not os.path.exists(entry.get("path", "")):
+            self._send_text(chat_id, tg_bot._t("img_gone", lang))
+            return
+        boxes = person_swap.people(entry["path"])
+        if not boxes:
+            self._send_text(chat_id, tg_bot._t("swap_none", lang))
+            return
+        sess.pending_swap_target, sess.swap_boxes, sess.swap_where = target, [list(b) for b in boxes], ""
+        self._store.put(sess)
+        if len(boxes) == 1:
+            return self._cb_swap_pick(chat_id, "swp:1")
+        sheet = person_swap.collage(entry["path"], boxes, os.path.join(
+            os.path.dirname(entry["path"]), f"swap_{target}.jpg"))
+        self._send_photo(chat_id, sheet, keyboard={"inline_keyboard": [[
+            {"text": str(n), "callback_data": f"swp:{n}"} for n in range(1, len(boxes) + 1)]]})
+        self._send_text(chat_id, tg_bot._t("swap_pick", lang), keyboard=self._state_kb(sess))
+
+    def _cb_swap_pick(self, chat_id: int, data: str) -> None:
+        import person_swap
+        sess = self._get_session(chat_id)
+        lang = self._lang(sess)
+        entry = tg_bot._image_by_id(sess, sess.pending_swap_target) if sess.pending_swap_target else None
+        try:
+            n = int(data.split(":", 1)[1])
+            box = sess.swap_boxes[n - 1]
+        except (ValueError, IndexError):
+            entry = None
+        if not entry or not os.path.exists(entry.get("path", "")):
+            sess.pending_swap_target = ""
+            self._store.put(sess)
+            self._send_text(chat_id, tg_bot._t("img_gone", lang))
+            return
+        sess.swap_where = person_swap.where(entry["path"], tuple(box), n, len(sess.swap_boxes))
+        self._store.put(sess)
+        self._send_text(chat_id, tg_bot._t("swap_ask_photo", lang), keyboard=self._state_kb(sess))
 
     def _cb_change_clothes(self, chat_id: int) -> None:
         """👗 pressed under a picture: ask what to change the outfit TO, instead

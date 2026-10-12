@@ -484,8 +484,8 @@ def kb_texts(kb):
 
 for lang, want_cyr in (("ru", True), ("en", False)):
     labels = kb_texts(T._image_kb(lang))
-    # 8: ask, change_clothes, remove_object, remove_text, regenerate, edit, style, animate
-    check(f"the eight image-action buttons exist ({lang})", len(labels) == 8,
+    # 9: ask, change_clothes, remove_object, remove_text, regenerate, edit, style, animate, swap_person
+    check(f"the nine image-action buttons exist ({lang})", len(labels) == 9,
           str(labels))
     check(f"image-action buttons are {'Russian' if want_cyr else 'English'}",
           all(bool(CYR.search(t)) == want_cyr for t in labels), str(labels))

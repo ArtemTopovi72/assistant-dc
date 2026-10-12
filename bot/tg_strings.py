@@ -1274,6 +1274,15 @@ _MSG: dict[str, dict[str, str]] = {
     "img_ask":       {"en": "❓ Ask",           "ru": "❓ Спросить"},
     "img_style":     {"en": "🎭 Style",         "ru": "🎭 Стиль"},
     "img_animate":   {"en": "🎬 Animate",       "ru": "🎬 Анимация"},
+    "img_swap_person": {"en": "🔁 Swap", "ru": "🔁 Замена"},
+    "swap_none":     {"en": "🔁 I see no people on this picture.",
+                      "ru": "🔁 Не вижу на этой картинке людей."},
+    "swap_pick":     {"en": "🔁 Who goes? Press their number.",
+                      "ru": "🔁 Кого заменить? Нажми номер."},
+    "swap_ask_photo": {"en": "🔁 Now send a picture of who goes in their place (a photo, a cartoon, anyone). "
+                               "A caption with wishes is welcome.",
+                       "ru": "🔁 Теперь пришли картинку того, кто встанет на это место (фото, мультяшка, кто угодно). "
+                             "Можно с подписью-пожеланием."},
     "style_ask_ref": {"en": "🎨 Pick a style below, describe your own, or just send "
                             "me a reference photo — the picture whose style "
                             "(lighting, colours, mood) I should copy onto this one.",

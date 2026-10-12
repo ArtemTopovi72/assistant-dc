@@ -262,8 +262,10 @@ bot9b._resolve_and_push(CID + 101, [{"type": "album",
 check("an album resolves to exactly one task", len(bot9b.pushed) == 1,
       f"{len(bot9b.pushed)} tasks")
 if bot9b.pushed:
-    check("with the album caption as the question",
-          bot9b.pushed[0].user_text == "rate these",
+    # the caption is the question; the other pictures are named after it (2026-10-12:
+    # «Stalin + SpongeBob» was answered about Stalin alone)
+    check("with the album caption as the question, every picture counted",
+          bot9b.pushed[0].user_text.startswith("rate these\n[The user sent 3 pictures"),
           repr(bot9b.pushed[0].user_text))
     check("and one image attached, not three",
           bool(bot9b.pushed[0].image_path),
