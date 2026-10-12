@@ -68,6 +68,7 @@ _STAGES: dict[str, dict[str, str]] = {
     "Inserting object":            {"ru": "Добавляю объект"},
     "Looking at the picture":      {"ru": "Рассматриваю картинку"},
     "Transferring between images": {"ru": "Переношу между изображениями"},
+    "Swapping a person": {"ru": "Заменяю человека"},
     "Fixing the hands":            {"ru": "Исправляю руки"},
     "Fixing the flaw":             {"ru": "Исправляю дефект"},
     "Converting the colours":      {"ru": "Меняю цвета"},

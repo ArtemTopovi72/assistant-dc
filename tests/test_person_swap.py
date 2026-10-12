@@ -96,5 +96,54 @@ s = bot._get_session(CID)
 check("the swap is spent: the next photo is an ordinary photo again",
       not s.pending_swap_target and not s.swap_where, (s.pending_swap_target, s.swap_where))
 
+# A cartoon reference forces a cartoon head; asked for a real one, the finished photo gets
+# an Anything2Real pass, the character sent kept (live 2026-10-12).
+import importlib
+import intent
+import image as image_mod
+P = importlib.reload(person_swap)
+P.people = lambda path: [(620, 110, 680, 180)]
+P._who = lambda ctx, ref: "SpongeBob SquarePants, a yellow square sponge."
+EDITS = []
+image_mod.edit_image_with_firered = lambda ctx, p, t, **k: (EDITS.append((t, k.get("reference_paths"))), OUT)[1]
+import image_grounding
+image_grounding._english_instructions = lambda ctx, w: w
+for wish, real in (("a real porous kitchen sponge with real eyes", True), ("smoking a pipe", False)):
+    intent.YES_STUB = lambda q, t, real=real: real
+    EDITS.clear()
+    P.swap(None, PIC, (620, 110, 680, 180), SPONGE, wish)
+    t, refs = EDITS[-1] if EDITS else ("", None)
+    check(f"wish {wish!r}: the reference goes in as sent" + (", then the photo is made real"
+                                                                 if real else ""),
+          (len(EDITS) == 2 and EDITS[0][1] == [SPONGE] and "realistic photograph" in EDITS[1][0])
+          if real else (len(EDITS) == 1 and refs == [SPONGE]), EDITS)
+intent.YES_STUB = None
+
+# The agent can do the same: «замени четвёртого на Губку Боба» with the two pictures sent.
+import tool_image_handlers as H
+import tools
+SW = []
+H_ps = __import__("person_swap")
+H_ps.people = lambda path: [(80, 100, 140, 170), (620, 110, 680, 180)]
+H_ps.swap = lambda ctx, path, box, ref, wish="": (SW.append((path, box, ref, wish)), OUT)[1]
+
+
+class Ctx:
+    reference_images = [SPONGE]
+    last_image_path = PIC
+    def set_stage(self, *a): pass
+    def remember(self, *a): pass
+    def memory_text(self): return ""
+
+
+st = {"image_path": PIC}
+r = H._handle_swap_person(Ctx(), st, {"person": 2, "wish": "в шинели"})
+check("the agent's swap_person swaps the person counted from the left, the other picture going in",
+      SW == [(PIC, (620, 110, 680, 180), SPONGE, "в шинели")] and "complete" in r, (SW, r))
+check("...and says so when that person does not exist",
+      "does not exist" in H._handle_swap_person(Ctx(), st, {"person": 5}))
+check("...registered as an agent tool", any(t.name == "swap_person" for t in tools.TOOLS)
+      if hasattr(tools, "TOOLS") else "swap_person" in str(vars(tools)))
+
 print(f"\n{OK}/{OK + BAD} passed")
 sys.exit(1 if BAD else 0)

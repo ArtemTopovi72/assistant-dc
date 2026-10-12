@@ -83,7 +83,7 @@ RUNAWAY_TOOL_CALLS = 3 * MAX_TOOL_CALLS_PER_ROUND
 _RETRY_ON_FIRST_FAILURE = frozenset({
     "search", "find_photo", "calculate", "read_clipboard", "remember_fact",
     "generate_image", "inpaint_image", "redraw_image", "inspect_image",
-    "transfer_image", "fix_hands", "fix_artifact",
+    "transfer_image", "swap_person", "fix_hands", "fix_artifact",
 })
 
 
@@ -100,6 +100,7 @@ _TOOL_ARTIFACT: dict = {
     "redraw_image": "image_path",
     "inpaint_image": "image_path",
     "transfer_image": "image_path",
+    "swap_person": "image_path",
     "fix_hands": "image_path",
     "fix_artifact": "image_path",
 }
@@ -630,7 +631,7 @@ def _forced_unpack(text: str, turn_tools, already_called, sandbox) -> str:
 # generate_image is deliberately absent: drawing from scratch hands over the
 # picture itself and there is nothing to overclaim, while an edit makes a
 # specific promise -- "я добавил ей очки" -- that is either true or not.
-_EDIT_TOOLS = frozenset({"inpaint_image", "redraw_image", "transfer_image",
+_EDIT_TOOLS = frozenset({"inpaint_image", "redraw_image", "transfer_image", "swap_person",
                          "fix_hands", "fix_artifact"})
 
 

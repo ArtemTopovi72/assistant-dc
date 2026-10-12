@@ -38,7 +38,7 @@ _UNTRUSTED_DATA_TOOLS = {"read_clipboard", "search", "ozon_product", "ozon_revie
 
 
 _IMAGE_ACTION_TOOLS = {"generate_image", "redraw_image", "inpaint_image",
-                       "transfer_image", "fix_hands", "fix_artifact"}
+                       "transfer_image", "swap_person", "fix_hands", "fix_artifact"}
 
 
 
@@ -191,7 +191,7 @@ def _intent_tools(user_input: str):
 # message has no image-creation/editing keywords. Saves ~2000 tokens per call.
 _IMAGE_TOOL_NAMES = frozenset({
     "generate_image", "redraw_image", "inpaint_image", "inspect_image",
-    "transfer_image", "fix_hands", "fix_artifact", "find_photo",
+    "transfer_image", "swap_person", "fix_hands", "fix_artifact", "find_photo",
 })
 
 

@@ -11,6 +11,10 @@ from PIL import Image, ImageDraw, ImageFont
 
 Box = Tuple[int, int, int, int]
 MAX_PEOPLE = 9                  # one row of digit buttons
+# Anything2Real (lrzjason, Qwen-Image-Edit 2511): a drawn reference made a photograph;
+# by prompt alone FireRed gave a 3D toy render (live 2026-10-12). Its card: 0.75-1.
+REAL_LORA = os.path.join("real", "anything2real_2601_A_final_patched.safetensors")
+REAL_LORA_STRENGTH = 1.0
 
 
 def people(path: str) -> List[Box]:
@@ -111,8 +115,18 @@ def swap(ctx, path: str, box: Box, ref: str, wish: str = "") -> str:
     im.resize((int(im.width * k) // 8 * 8, int(im.height * k) // 8 * 8), Image.LANCZOS).save(src)
     # Short, like a hand-written prompt: the long rule lists made it a flat cartoon.
     side = target.split(" of the picture")[0].replace("the person ", "")
-    instr = ("The man " + side + " is gone; in his place stands " + who.split(",")[0]
-             + " from picture 2"
+    # Asked for a real one, the reference itself is made a photograph first and then put
+    # in: a cartoon picture 2 forced a cartoon head whatever the words said, and dropping
+    # the reference lost the character the user sent (live 2026-10-12). The prompt is the
+    # Anything2Real one, without its LoRA.
+    real = False
+    if wish:
+        import intent
+        real = intent.ask_yes("Does the user want the character turned into a real-life, "
+                              "photographed physical version of itself, not kept as drawn?", wish)
+    name = who.split(",")[0]
+    figure = name + " from picture 2"
+    instr = ("The man " + side + " is gone; in his place stands " + figure
              + (", " + wish.rstrip(".") if wish else "") + ". Photographed for real, part of "
              + look + ": exactly as sharp or soft, grainy and worn as the rest of the photo, "
              "no glow or halo around it.")
@@ -120,6 +134,17 @@ def swap(ctx, path: str, box: Box, ref: str, wish: str = "") -> str:
                                             save_prefix="swap_region")
     if not out or not os.path.exists(out):
         return ""
+    # The inserted figure is made real on the finished photo, the way Anything2Real is
+    # meant to be used: made real first, the reference stayed a toy with its caption, and
+    # the insertion drew a cartoon from it anyway (live 2026-10-12).
+    if real:
+        with image_mod.firered_extra_lora(REAL_LORA, REAL_LORA_STRENGTH):
+            photo = image_mod.edit_image_with_firered(
+                ctx, out, "change the picture 1 to realistic photograph, an old " + look.split(" with ")[0].replace("a ", "", 1)
+                + "; the figure " + side + " is " + wish.rstrip(".") + ", made of real materials "
+                "with real eyes; everyone else unchanged", save_prefix="swap_region")
+        if photo and os.path.exists(photo):
+            out = photo
     new = Image.open(out).convert("RGB").resize(im.size, Image.LANCZOS)
     if grey:
         new = new.convert("L").convert("RGB")

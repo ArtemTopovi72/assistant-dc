@@ -226,6 +226,7 @@ _PROMISE_NOUN = {
     "redraw_image": "изменённую картинку",
     "inpaint_image": "изменённую картинку",
     "transfer_image": "изменённую картинку",
+    "swap_person": "изменённую картинку",
     "fix_hands": "исправленную картинку",
     "fix_artifact": "исправленную картинку",
     "generate_video": "видео",
@@ -538,7 +539,7 @@ def _finalize_answer(ctx: Context, state: AgentState, messages: list,
                     or _gp._ACTION_CLAIM_RE.search(final_answer)):
                 logger.warning("Answer claims a result the verifier said is "
                                "not there — replacing")
-                _edits = {"inpaint_image", "redraw_image", "transfer_image", "edit_image"}
+                _edits = {"inpaint_image", "redraw_image", "transfer_image", "swap_person", "edit_image"}
                 _called = set(tools_called_this_turn or ())
                 if "generate_image" in _called and not (_called & _edits):
                     # A fresh picture has no "change" that could be missing:

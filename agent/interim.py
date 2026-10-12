@@ -25,7 +25,7 @@ logger = logging.getLogger("assistant.interim")
 # the model's own sentence is sent.
 _LONG_TOOLS = {
     "generate_image": "🎨", "redraw_image": "🎨", "inpaint_image": "🖌",
-    "transfer_image": "🖌", "upscale_image": "🔍", "fix_hands": "🖌",
+    "transfer_image": "🖌", "swap_person": "🔁", "upscale_image": "🔍", "fix_hands": "🖌",
     "find_photo": "🖼", "find_content": "🖼", "generate_video": "🎬",
     "generate_music": "🎵", "deep_research": "🔬", "create_presentation": "📊",
     "run_code": "💻", "dedupe_photos": "🖼",

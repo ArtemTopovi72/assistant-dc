@@ -51,7 +51,7 @@ _CODE_KIT = ("list_files", "read_file", "open_image", "edit_file", "write_file",
 # the folder (any kit tool already called this turn).
 _LOOK_KIT = ("list_files", "read_file", "open_image", "unpack_archive")
 
-_EDITORS = frozenset({"inpaint_image", "redraw_image", "transfer_image",
+_EDITORS = frozenset({"inpaint_image", "redraw_image", "transfer_image", "swap_person",
                       "fix_hands", "fix_artifact", "generate_image"})
 
 

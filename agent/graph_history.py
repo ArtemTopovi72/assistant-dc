@@ -41,6 +41,7 @@ _OUTCOME_BY_TOOL = {
     "inpaint_image":   ("Готово — отредактированная картинка выше.",
                         "Done — the edited picture is above."),
     "transfer_image":  ("Готово — результат выше.", "Done — the result is above."),
+    "swap_person":     ("Готово — результат выше.", "Done — the result is above."),
     "fix_hands":       ("Готово — руки поправил, картинка выше.",
                         "Done — hands fixed, the picture is above."),
     "fix_artifact":    ("Готово — дефект убрал, картинка выше.",
@@ -105,7 +106,7 @@ def _outcome_sentence(state: dict, tools_called, ru: bool) -> str:
     # edit, an edit beats having merely looked.
     for name in ("create_presentation", "deep_research", "pack_archive",
                  "generate_image", "inpaint_image", "redraw_image",
-                 "transfer_image", "fix_hands", "fix_artifact", "find_photo",
+                 "transfer_image", "swap_person", "fix_hands", "fix_artifact", "find_photo",
                  "edit_file", "write_file", "run_code", "unpack_archive",
                  "read_file", "search_files", "remember_fact"):
         if name not in called:

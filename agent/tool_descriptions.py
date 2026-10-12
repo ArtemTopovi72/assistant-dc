@@ -96,6 +96,16 @@ _TRANSFER_IMAGE_DESC = (
     "in this outfit'. For editing a SINGLE image, use inpaint_image instead."
 )
 
+_SWAP_PERSON_DESC = (
+    "Swap a person on a photo for someone or something else (a friend, a celebrity, a "
+    "cartoon character, SpongeBob), drawn into that spot in the photo's own style -- "
+    "Stalin erasing Yezhov, but funnier. The TARGET is the photo with the people (the "
+    "current image); the REFERENCE is the other loaded picture of who goes in. "
+    "`person` counts the people on the target from the LEFT, 1-based. `wish` carries the "
+    "user's wishes for the newcomer in their words (\"в шинели, злой, настоящая губка\"). "
+    "Use this, not transfer_image, whenever a whole person is to be replaced."
+)
+
 _CALCULATE_DESC = (
     "Evaluate a mathematical expression precisely using Python. "
     "Use for any arithmetic, percentages, conversions, or multi-step calculations "

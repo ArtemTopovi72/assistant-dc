@@ -228,6 +228,14 @@ class InpaintImageArgs(_ToolArgs):
         "the image unchanged."))
 
 
+class SwapPersonArgs(_ToolArgs):
+    person: int = Field(..., ge=1, le=9, description=(
+        "Which person on the target photo to replace, counted from the LEFT, 1-based."))
+    wish: str = Field(default="", description=(
+        "The user's wishes for who goes in, in their words: clothes, mood, size, "
+        "'a real one' -- empty when none."))
+
+
 class TransferImageArgs(_ToolArgs):
     instructions: str = Field(..., min_length=1, description=(
         "What to transfer and where, in plain English referencing the images, e.g. "

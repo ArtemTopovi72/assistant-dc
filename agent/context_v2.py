@@ -76,7 +76,7 @@ _ARTIFACT_RE = re.compile(
 
 _KIND_BY_TOOL = {
     "generate_image": "image", "redraw_image": "image", "inpaint_image": "image",
-    "inspect_image": "image", "transfer_image": "image", "fix_hands": "image",
+    "inspect_image": "image", "transfer_image": "image", "swap_person": "image", "fix_hands": "image",
     "fix_artifact": "image", "find_photo": "image", "generate_video": "image",
     "search": "research", "deep_research": "research", "create_presentation": "research",
     "list_files": "code", "read_file": "code", "write_file": "code", "edit_file": "code",

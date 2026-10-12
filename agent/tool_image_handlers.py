@@ -566,6 +566,42 @@ def _handle_transfer_image(ctx, state, args: dict) -> str:
     )
 
 
+def _handle_swap_person(ctx, state, args: dict) -> str:
+    """🔁 the person `person` (from the left) on the current photo replaced by who is on
+    the other loaded picture -- the same person_swap.swap the 🔁 button runs: one pass
+    on the whole photo, only that person's region pasted back."""
+    import person_swap
+    target = state.get("image_path") or getattr(ctx, "last_image_path", None)
+    if not (target and os.path.exists(target)):
+        return "[TOOL ERROR] swap_person needs the photo with the people loaded first."
+    refs = [p for p in (getattr(ctx, "reference_images", None) or [])
+            if p and os.path.exists(p) and os.path.abspath(p) != os.path.abspath(target)]
+    if not refs:
+        return ("[TOOL ERROR] swap_person needs a second picture: who goes in. Ask the "
+                "user to send it.")
+    boxes = person_swap.people(target)
+    n = int(args.get("person") or 0)
+    if not boxes:
+        return "[TOOL ERROR] No people were found on the photo; nothing to swap."
+    if not 1 <= n <= len(boxes):
+        return (f"[TOOL ERROR] The photo has {len(boxes)} people (counted from the left); "
+                f"person {n} does not exist. Ask the user which one.")
+    ctx.set_stage("Swapping a person")
+    logger.info("Tool: swap_person(target=%s, person=%d/%d, ref=%s, wish=%r)",
+                os.path.basename(target), n, len(boxes), os.path.basename(refs[-1]),
+                (args.get("wish") or "")[:80])
+    new_path = person_swap.swap(ctx, target, boxes[n - 1], refs[-1], args.get("wish") or "")
+    if not new_path or not os.path.exists(new_path):
+        return ("[TOOL ERROR] The swap failed, nothing was changed. Tell the user so; do "
+                "NOT claim it worked.")
+    _set_current_image(ctx, state, new_path)
+    ctx.reference_images = (ctx.reference_images or []) + [new_path]
+    _remember(ctx, state, "swap", f"Person {n} swapped", {"path": new_path})
+    return (f"Swap complete and saved: {new_path}\n"
+            "Call inspect_image to check that the person is replaced and the newcomer "
+            "looks as asked before telling the user it is done.")
+
+
 def _handle_fix_hands(ctx, state, args: dict) -> str:
     """Repair deformed hands/fingers in the current image via the MeshGraphormer
     Hand Refiner (geometry-guided depth-ControlNet inpaint of only the hand)."""
