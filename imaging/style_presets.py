@@ -74,9 +74,9 @@ STYLE_PRESETS: dict[str, dict] = {
         "prompt": ("Change picture 1 into a real photograph taken with a full-frame DSLR camera: "
                    "real human beings with natural adult human proportions, realistic faces and "
                    "eyes of normal size, natural skin texture with pores, real hair strands, and "
-                   "every costume piece, prop and weapon made real in its own material -- armor "
-                   "stays rigid armor plates, leather stays leather, metal stays metal, cloth "
-                   "stays cloth. The background stays what it is: a plain or white background "
+                   "every costume piece, prop and weapon made real in its own material and its own colour -- "
+                   "armor stays rigid armor plates painted the same colour, leather stays leather, "
+                   "cloth stays cloth. The background stays what it is: a plain or white background "
                    "becomes a plain white photo-studio backdrop, not a new place."),
     },
 }

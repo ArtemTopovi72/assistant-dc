@@ -64,12 +64,13 @@ _WHO_PROMPT = (
     "describe this picture for a photographer who must recreate it exactly. For each person or "
     "character, left to right: gender, approximate age, hair colour and style; everything worn "
     "on the head (horns, ear-like or wing-like pieces, clips, headbands) with its exact colour "
-    "and shape -- look closely, such pieces are often nearly the colour of the hair; {face}"
+    "and shape (a thick round horn or a flat thin fin or blade) -- look closely, such pieces are often nearly the colour of the hair; {face}"
     "every garment and costume "
     "piece SEPARATELY with its exact colour, its material (rigid metal armor plates, leather, "
     "cloth, latex), its exact shape and where on the body it sits -- long panels or tails "
-    "hanging from the hips are armor if they have the same plating, edges or spikes as the "
-    "armor, not a cloth skirt; never merge separate pieces into one "
+    "hanging from the hips, and what covers the groin (armored briefs vs cloth "
+    "panties), are armor if they have the same plating, edges or spikes as the armor, not "
+    "cloth; never merge separate pieces into one "
     "'bodysuit' or 'suit' (armour cups on the chest, a hip piece and gauntlets are three pieces "
     "with skin between them); then which body areas are bare skin (e.g. bare midriff from "
     "under the chest pieces down to the hip piece); the footwear with its height (ankle, knee or thigh-high), "
@@ -81,8 +82,11 @@ _WHO_PROMPT = (
 # The face is named for a flat drawing (eye colour, face shape: the owner asked for the
 # face kept closer) but not for a 3D cartoon, whose «round nose, fleshy face» kept the
 # render a doll on every wording tried: a 3D source is described a second time without.
-_FACE_2D = ("facial hair, glasses, eye colour, and the face as it would look on a real person "
-            "(no cartoon sizes like 'large eyes'); ")
+_FACE_2D = ("facial hair, glasses, eye colour, the expression and character the face shows "
+            "(e.g. cold half-closed eyes, a confident smirk, a raised brow), how mature and hard or "
+            "soft the face is (sharp cheekbones, narrow eyes, thin lips), any face markings, "
+            "tattoos or makeup and where they sit, and the face as it "
+            "would look on a real person (no cartoon sizes like 'large eyes'); ")
 _FACE_3D = "facial hair and glasses (nothing else about the face); "
 
 
@@ -104,10 +108,28 @@ def _expand(ctx, words: str) -> tuple:
     return target, (style or words)
 
 
+def _sharp_enough(image_path: str) -> str:
+    """A small sheet's face is ~40 px: the describer read a cold, marked face as «soft,
+    rounded, no markings» and fins as round horns. It reads an enlarged copy."""
+    import tempfile
+    from PIL import Image
+    try:
+        im = Image.open(image_path)
+        k = 1600 / max(im.size)
+        if k <= 1.2:
+            return image_path
+        big = im.convert("RGB").resize((int(im.width * k), int(im.height * k)), Image.LANCZOS)
+        out = os.path.join(tempfile.gettempdir(), "style_who_" + os.path.basename(image_path))
+        big.save(out)
+        return out
+    except Exception:
+        return image_path
+
+
 def _describe(ctx, image_path: str, face: str) -> str:
     from llm import analyze_image_with_llm
     return " ".join((analyze_image_with_llm(
-        ctx=ctx, image_path=image_path, user_text=_WHO_PROMPT.format(face=face),
+        ctx=ctx, image_path=_sharp_enough(image_path), user_text=_WHO_PROMPT.format(face=face),
         system_prompt="You are a precise, literal visual describer.") or "").split())
 
 
@@ -128,7 +150,7 @@ def _who(ctx, image_path: str) -> tuple:
     # pull a face back to the drawing.
     text = re.sub(r"\b(?:very\s+)?(?:large|big|huge|oversized|enormous)\s+((?:\w+\s+)?eyes)\b",
                   r"\1", text, flags=re.I)
-    return text[:900], is_3d
+    return text[:1200], is_3d
 
 
 def build(ctx, instructions: str, image_path: Optional[str] = None) -> tuple:
@@ -148,8 +170,10 @@ def build(ctx, instructions: str, image_path: Optional[str] = None) -> tuple:
         lead = f"change the picture 1 to realistic photograph, {who}. " if who else ""
         tail = (" Each person keeps the same gender, age, hair and facial hair, at real-life "
                 "human body proportions (a normal-sized head on a normal adult body), and every "
-                "garment, armor piece, boot, weapon and prop named above stays, in the same place "
-                "and the same size, as a real costume or prop.") if who else ""
+                "garment, armor piece, boot, weapon and prop named above stays, in the same place, "
+                "the same size and the SAME COLOUR (painted dark armor never turns bare silver "
+                "or chrome), as a real costume or prop. Each face keeps the expression and "
+                "character described above, never younger, softer or cuter than drawn.") if who else ""
         return (lead + style + tail + keep, target,
                 PHOTO_LORA_STRENGTH_3D if is_3d else PHOTO_LORA_STRENGTH)
     return style + keep, target, 0.0
