@@ -144,16 +144,21 @@ def swap(ctx, path: str, box: Box, ref: str, wish: str = "") -> str:
     # a bare sponge on the water the next time, a man left with a sponge on his chest the
     # third (live via the agent, 2026-10-13) -- one take is a coin toss.
     takes = []
-    for _ in range(CANDIDATES):
-        if getattr(ctx, "is_cancelled", lambda: False)():
-            break
-        t = image_mod.edit_image_with_firered(
-            ctx, marked, "Replace the man inside the red box with " + figure + ", standing full "
-            "body and filling the box from its top edge to its bottom edge; nothing of the man "
-            "is left. Then remove the red box completely." + finish,
-            reference_paths=[] if real_look else [ref], save_prefix="swap_region")
-        if t and os.path.exists(t):
-            takes.append(t)
+    # One hold of the card for all the takes: released between them, the chat model was
+    # loaded back and evicted again for nothing (~10 s a take, 2026-10-13). No model call
+    # in here; the pick comes after.
+    import comfy_client
+    with comfy_client.card_session("person swap"):
+        for _ in range(CANDIDATES):
+            if getattr(ctx, "is_cancelled", lambda: False)():
+                break
+            t = image_mod.edit_image_with_firered(
+                ctx, marked, "Replace the man inside the red box with " + figure + ", standing "
+                "full body and filling the box from its top edge to its bottom edge; nothing of "
+                "the man is left. Then remove the red box completely." + finish,
+                reference_paths=[] if real_look else [ref], save_prefix="swap_region")
+            if t and os.path.exists(t):
+                takes.append(t)
     if not takes:
         return ""
     out = _pick(ctx, takes, figure)
