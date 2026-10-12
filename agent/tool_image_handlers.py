@@ -1464,6 +1464,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         f"Mode: {video_mod.MODE_LABELS.get(mode, mode)}; "
         f"{result.get('seconds')}s at {result.get('width')}x{result.get('height')}, "
         f"with generated audio.{used}\n"
+        # The reply told of a grandma's scream from a part the user had dropped
+        # from the plan (live 2026-10-12): the approved parts are what was made.
+        + ("What the clip shows is ONLY these approved plan parts (anything else in the "
+           "request, such as parts the user removed, was NOT made -- never describe it): "
+           + " | ".join(approved) + "\n" if approved else "") +
         "The clip is delivered to the user automatically — just tell them it is ready "
         "in one short sentence. Do NOT call generate_video again for this turn."
     )

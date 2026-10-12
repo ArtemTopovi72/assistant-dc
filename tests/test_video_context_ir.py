@@ -39,11 +39,15 @@ ref_ok = ("subject_definitions:\n<Subject 1> is ...\nsummary:\nx\nretention_anal
           "detailed_description:\n[Shot 1] ...\noverall_soundscape: z\nnon_diegetic_music: N/A")
 seen = {}
 llm.analyze_image_with_llm = lambda ctx, image_path=None, user_text="", system_prompt="", **k: \
-    seen.update(img=image_path, sys=system_prompt[:60]) or ref_ok
+    seen.update(img=image_path, sys=system_prompt[:60], user=user_text) or ref_ok
 out = V.to_context_ir(None, "<Picture 1> walks", mode="ref2va", seconds=5, images=["p.png"])
 check(out.startswith("subject_definitions:"), "Ref2VA six-section rewrite accepted")
 check(seen.get("img") == "p.png", "the rewriter SEES the reference picture")
 check("Full-Reference" in seen.get("sys", ""), "Ref2VA uses the full-reference guide")
+# A plan part naming only the newcomer («a man lunges out of the cabinet») left the
+# grandma of the first frame out, and H3 rendered the room without her (2026-10-12).
+check("every person and animal visible in <Picture 1> is in the shot" in seen.get("user", ""),
+      "whoever is in the first frame stays in the shot")
 llm.analyze_image_with_llm = lambda *a, **k: good          # base fields only
 check(V.to_context_ir(None, "x", mode="ref2va", seconds=5, images=["p.png"]) == "x",
       "a base-mode answer is not accepted for Ref2VA")

@@ -1108,8 +1108,15 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
             "request's own language, never translated, never extended. (2) When the "
             "request names no words, nobody speaks a scripted line -- never invent "
             "dialogue. (3) Voice samples are the voices of the request's speakers, not a "
-            "count of speakers: unused samples stay unused.\n\n"
-            "Request:\n" + description)
+            "count of speakers: unused samples stay unused.\n"
+            # A plan part «a man lunges out of the cabinet» left the grandma who
+            # fills the first frame unnamed, and H3 rendered an empty room
+            # (live 2026-10-12, after the user dropped her part from the plan).
+            + ("CAST RULE -- every person and animal visible in <Picture 1> is in the shot: "
+               "each gets its own <Subject>, stays in frame and keeps reacting to what happens "
+               "(a scream, a flinch, a stare) unless the request says they leave.\n"
+               if images else "") +
+            "\nRequest:\n" + description)
     import llm as _llm
     try:
         if images:
