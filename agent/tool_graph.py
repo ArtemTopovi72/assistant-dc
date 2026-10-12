@@ -357,6 +357,17 @@ def self_edit_of_accepted_render(ctx, state, tool: str, args: dict) -> Optional[
             "if they want a change they will ask for it.")
 
 
+def edit_after_swap(state, tool: str) -> Optional[str]:
+    """A swap_person result is not touched up by the other editors: told in words not
+    to, the model still ran inpaint_image three times on it and turned the newcomer
+    into a ghost (live via the debug user, 2026-10-13)."""
+    if tool in _EDIT_TOOLS | {"transfer_image"} and (state or {}).get("swap_done"):
+        return (f"[TOOL ERROR] {tool} refused: swap_person already made this picture and "
+                "other editors spoil a swap. If it is off, call swap_person again with a "
+                "clearer wish; otherwise deliver it and say what is off.")
+    return None
+
+
 def check_tool_call(ctx, state, tool: str, args: dict) -> Optional[str]:
     """The whole pre-execution gate: preconditions first, then argument meaning.
 
@@ -367,6 +378,7 @@ def check_tool_call(ctx, state, tool: str, args: dict) -> Optional[str]:
     return (picture_question_edit(state, tool)
             or missing_prerequisite(ctx, state, tool)
             or self_edit_of_accepted_render(ctx, state, tool, args)
+            or edit_after_swap(state, tool)
             or invalid_arguments(tool, args))
 
 

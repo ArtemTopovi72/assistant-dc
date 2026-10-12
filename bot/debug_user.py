@@ -21,6 +21,9 @@ import uuid
 ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                     "runtime", "debug_user")
 CHAT_ID = 777000001             # no real Telegram chat has this id
+# Debug users 0..4 are chats CHAT_ID..CHAT_ID+4: several at once show how the queue
+# shares itself out.
+USERS = 5
 _LOCK = threading.Lock()
 _IDS = itertools.count(int(time.time()) % 1_000_000 * 100)
 
@@ -31,7 +34,7 @@ def enabled() -> bool:
 
 def is_debug(chat_id) -> bool:
     try:
-        return int(chat_id) == CHAT_ID
+        return CHAT_ID <= int(chat_id) < CHAT_ID + USERS
     except (TypeError, ValueError):
         return False
 
@@ -75,6 +78,7 @@ def record(url: str, kw: dict):
     payload = {k: (v if isinstance(v, (str, int, float, bool, list, dict, type(None))) else str(v))
                for k, v in dict(payload).items()}
     mid = next(_IDS)
+    chat = int(payload.get("chat_id") or CHAT_ID)
     saved = []
     os.makedirs(os.path.join(ROOT, "out"), exist_ok=True)
     for field, f in (kw.get("files") or {}).items():
@@ -94,9 +98,9 @@ def record(url: str, kw: dict):
             shutil.copy(v.replace("file:///", ""), dst)
             saved.append(dst)
     with _LOCK, open(os.path.join(ROOT, "outbox.jsonl"), "a", encoding="utf-8") as fh:
-        fh.write(json.dumps({"t": time.time(), "method": method, "message_id": mid,
+        fh.write(json.dumps({"t": time.time(), "chat_id": chat, "method": method, "message_id": mid,
                              "payload": payload, "files": saved}, ensure_ascii=False) + "\n")
-    result = {"message_id": mid, "date": int(time.time()), "chat": {"id": CHAT_ID, "type": "private"}}
+    result = {"message_id": mid, "date": int(time.time()), "chat": {"id": chat, "type": "private"}}
     if saved:
         fid = "dbg:" + os.path.basename(saved[0])
         result.update(photo=[{"file_id": fid, "file_unique_id": fid}],
@@ -117,10 +121,11 @@ class _Resp:
 
 
 def ensure_user(store, user_cls) -> None:
-    """The debug user is an approved, ordinary (not admin) user."""
-    if store.get(CHAT_ID) is None:
-        store.put(user_cls(chat_id=CHAT_ID, name="Debug", tg_username="debug_user",
-                           status="approved"))
+    """The debug users are approved, ordinary (not admin) users."""
+    for i in range(USERS):
+        if store.get(CHAT_ID + i) is None:
+            store.put(user_cls(chat_id=CHAT_ID + i, name=f"Debug {i}",
+                               tg_username=f"debug_user_{i}", status="approved"))
 
 
 def loop(bot) -> None:
@@ -155,11 +160,18 @@ def _put(update: dict) -> None:
     os.replace(tmp, os.path.join(box, name))
 
 
-def _msg(**kw) -> dict:
+def _chat(user: int) -> int:
+    if not 0 <= int(user) < USERS:
+        raise ValueError(f"debug user {user}: 0..{USERS - 1}")
+    return CHAT_ID + int(user)
+
+
+def _msg(user: int = 0, **kw) -> dict:
+    cid = _chat(user)
     m = {"message_id": int(time.time() * 1000) % 2_000_000_000, "date": int(time.time()),
-         "chat": {"id": CHAT_ID, "type": "private"},
-         "from": {"id": CHAT_ID, "is_bot": False, "first_name": "Debug", "username": "debug_user",
-                  "language_code": "ru"}}
+         "chat": {"id": cid, "type": "private"},
+         "from": {"id": cid, "is_bot": False, "first_name": f"Debug {user}",
+                  "username": f"debug_user_{user}", "language_code": "ru"}}
     m.update(kw)
     return m
 
@@ -178,12 +190,12 @@ def _photo(path: str) -> list:
     return [{"file_id": fid, "file_unique_id": fid, "width": w, "height": h}]
 
 
-def say(text: str) -> None:
-    _put({"update_id": 0, "message": _msg(text=text)})
+def say(text: str, user: int = 0) -> None:
+    _put({"update_id": 0, "message": _msg(user, text=text)})
 
 
-def photo(path: str, caption: str = "", group: str = "") -> None:
-    m = _msg(photo=_photo(path))
+def photo(path: str, caption: str = "", group: str = "", user: int = 0) -> None:
+    m = _msg(user, photo=_photo(path))
     if caption:
         m["caption"] = caption
     if group:
@@ -191,23 +203,28 @@ def photo(path: str, caption: str = "", group: str = "") -> None:
     _put({"update_id": 0, "message": m})
 
 
-def album(paths: list, caption: str = "") -> None:
+def album(paths: list, caption: str = "", user: int = 0) -> None:
     g = uuid.uuid4().hex[:10]
     for i, p in enumerate(paths):
-        photo(p, caption if i == 0 else "", g)
+        photo(p, caption if i == 0 else "", g, user)
 
 
-def press(data: str) -> None:
+def press(data: str, user: int = 0) -> None:
+    cid = _chat(user)
     _put({"update_id": 0, "callback_query": {
-        "id": uuid.uuid4().hex, "data": data, "from": {"id": CHAT_ID, "username": "debug_user"},
-        "message": _msg(text="")}})
+        "id": uuid.uuid4().hex, "data": data,
+        "from": {"id": cid, "username": f"debug_user_{user}"},
+        "message": _msg(user, text="")}})
 
 
-def outbox(since: float = 0.0) -> list:
+def outbox(since: float = 0.0, user=None) -> list:
+    """What the bot sent since `since`; one debug user's only when `user` is given."""
     if not os.path.exists(OUTBOX):
         return []
+    want = None if user is None else _chat(user)
     with open(OUTBOX, encoding="utf-8") as fh:
-        return [e for e in map(json.loads, fh) if e["t"] >= since]
+        return [e for e in map(json.loads, fh) if e["t"] >= since
+                and (want is None or e.get("chat_id", CHAT_ID) == want)]
 
 
 # ---- the HTTP API: the same user, driven over 127.0.0.1 (the GUI tab, scripts) ----
@@ -234,8 +251,10 @@ def _api_handler():
         def do_GET(self):
             u = urlparse(self.path)
             if u.path == "/messages":
-                since = float((parse_qs(u.query).get("since") or ["0"])[0])
-                return self._send(200, {"chat_id": CHAT_ID, "messages": outbox(since)})
+                q = parse_qs(u.query)
+                since = float((q.get("since") or ["0"])[0])
+                user = int((q.get("user") or ["0"])[0])
+                return self._send(200, {"chat_id": _chat(user), "messages": outbox(since, user)})
             if u.path == "/health":
                 return self._send(200, {"ok": True, "enabled": enabled()})
             self._send(404, {"error": "unknown path"})
@@ -245,14 +264,15 @@ def _api_handler():
                 n = int(self.headers.get("Content-Length") or 0)
                 body = json.loads(self.rfile.read(n) or b"{}")
                 path = urlparse(self.path).path
+                user = int(body.get("user") or 0)
                 if path == "/say":
-                    say(str(body["text"]))
+                    say(str(body["text"]), user)
                 elif path == "/photo":
-                    photo(str(body["path"]), str(body.get("caption") or ""))
+                    photo(str(body["path"]), str(body.get("caption") or ""), "", user)
                 elif path == "/album":
-                    album([str(p) for p in body["paths"]], str(body.get("caption") or ""))
+                    album([str(p) for p in body["paths"]], str(body.get("caption") or ""), user)
                 elif path == "/press":
-                    press(str(body["data"]))
+                    press(str(body["data"]), user)
                 else:
                     return self._send(404, {"error": "unknown path"})
                 self._send(200, {"ok": True, "t": time.time()})

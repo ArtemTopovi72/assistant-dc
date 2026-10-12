@@ -17,13 +17,15 @@ import debug_user as D  # noqa: E402
 
 from debug_user import OUTBOX, say, photo, album, press, outbox  # noqa: E402
 
+USER = 0
+
 
 def wait(since: float, until: str = "", timeout: float = 600, quiet: float = 60) -> list:
     """Answers since `since`, until a `until` method arrives (then `quiet` s more of silence)."""
     end, seen, last = time.time() + timeout, 0, time.time()
     hit = False
     while time.time() < end:
-        evs = outbox(since)
+        evs = outbox(since, USER)
         if len(evs) != seen:
             for e in evs[seen:]:
                 p = e["payload"]
@@ -36,7 +38,7 @@ def wait(since: float, until: str = "", timeout: float = 600, quiet: float = 60)
         if not until and seen and time.time() - last > quiet:
             break
         time.sleep(1)
-    return outbox(since)
+    return outbox(since, USER)
 
 
 if __name__ == "__main__":
@@ -46,16 +48,18 @@ if __name__ == "__main__":
     ap.add_argument("--caption", default="")
     ap.add_argument("--until", default="")
     ap.add_argument("--timeout", type=float, default=600)
+    ap.add_argument("--user", type=int, default=0, help="debug user 0..4 (several = parallel users)")
     a = ap.parse_args()
+    USER = a.user
     if not D.enabled():
         sys.exit("debug user is off: create runtime/debug_user/enabled and keep the app running")
     t0 = time.time()
     if a.cmd == "say":
-        say(" ".join(a.args))
+        say(" ".join(a.args), a.user)
     elif a.cmd == "photo":
-        photo(a.args[0], a.caption)
+        photo(a.args[0], a.caption, "", a.user)
     elif a.cmd == "album":
-        album(a.args, a.caption)
+        album(a.args, a.caption, a.user)
     elif a.cmd == "press":
-        press(a.args[0])
+        press(a.args[0], a.user)
     wait(t0 if a.cmd != "wait" else time.time(), a.until, a.timeout)

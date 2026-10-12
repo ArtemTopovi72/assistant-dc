@@ -4,6 +4,7 @@ Keys are the exact English strings in gui/*.py; %s/%d mark the variable parts.
 A string missing here shows in English and lands in runtime/untranslated_gui.jsonl."""
 
 RU = {
+    'Which debug user you are; open several to write in parallel': 'Каким отладочным юзером ты пишешь; несколько — чтобы писать параллельно',
     'Debug chat': 'Отладочный чат',
     'Debug user on': 'Отладочный юзер включён',
     "Lets the bot read this chat. Its messages queue with everyone's.": 'Бот читает этот чат. Сообщения стоят в общей очереди со всеми.',

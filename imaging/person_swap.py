@@ -11,10 +11,6 @@ from PIL import Image, ImageDraw, ImageFont
 
 Box = Tuple[int, int, int, int]
 MAX_PEOPLE = 9                  # one row of digit buttons
-# Anything2Real (lrzjason, Qwen-Image-Edit 2511): a drawn reference made a photograph;
-# by prompt alone FireRed gave a 3D toy render (live 2026-10-12). Its card: 0.75-1.
-REAL_LORA = os.path.join("real", "anything2real_2601_A_final_patched.safetensors")
-REAL_LORA_STRENGTH = 1.0
 
 
 def people(path: str) -> List[Box]:
@@ -114,10 +110,6 @@ def swap(ctx, path: str, box: Box, ref: str, wish: str = "") -> str:
     im.resize((int(im.width * k) // 8 * 8, int(im.height * k) // 8 * 8), Image.LANCZOS).save(src)
     # Short, like a hand-written prompt: the long rule lists made it a flat cartoon.
     side = target.split(" of the picture")[0].replace("the person ", "")
-    # Asked for a real one, the reference itself is made a photograph first and then put
-    # in: a cartoon picture 2 forced a cartoon head whatever the words said, and dropping
-    # the reference lost the character the user sent (live 2026-10-12). The prompt is the
-    # Anything2Real one, without its LoRA.
     real = False
     if wish:
         import intent
@@ -133,26 +125,23 @@ def swap(ctx, path: str, box: Box, ref: str, wish: str = "") -> str:
         save_prefix="swap_region")
     if not empty or not os.path.exists(empty):
         return ""
-    instr = ("Put " + name + " from picture 2 standing in the empty place " + side
+    # Asked for a real one, the reference is read by the VLM as a real thing and drawn
+    # from those words, picture 2 not given: given, FireRed copied the drawing whatever
+    # the words said -- no greatcoat, no size, a cartoon or a 3D toy even after an
+    # Anything2Real pass (live via the agent, 2026-10-13); from words alone it drew a
+    # real porous sponge in a greatcoat (2026-10-12, «ахуенно»).
+    real_look = _real_look(ctx, ref) if real else ""
+    figure = real_look or name + " from picture 2"
+    instr = ("Put " + figure + " standing in the empty place " + side
              + ", beside the others in the same row, as big as they are, full body"
              + (", " + wish.rstrip(".") if wish else "") + ". Photographed for real, part of "
              + look + ": exactly as sharp or soft, grainy and worn as the rest of the photo, "
              "no glow or halo around it.")
-    out = image_mod.edit_image_with_firered(ctx, empty, instr, reference_paths=[ref],
-                                            save_prefix="swap_region")
+    out = image_mod.edit_image_with_firered(
+        ctx, empty, instr, reference_paths=[] if real_look else [ref],
+        save_prefix="swap_region")
     if not out or not os.path.exists(out):
         return ""
-    # The inserted figure is made real on the finished photo, the way Anything2Real is
-    # meant to be used: made real first, the reference stayed a toy with its caption, and
-    # the insertion drew a cartoon from it anyway (live 2026-10-12).
-    if real:
-        with image_mod.firered_extra_lora(REAL_LORA, REAL_LORA_STRENGTH):
-            photo = image_mod.edit_image_with_firered(
-                ctx, out, "change the picture 1 to realistic photograph, an old " + look.split(" with ")[0].replace("a ", "", 1)
-                + "; the figure " + side + " is " + wish.rstrip(".") + ", made of real materials "
-                "with real eyes; everyone else unchanged", save_prefix="swap_region")
-        if photo and os.path.exists(photo):
-            out = photo
     new = Image.open(out).convert("RGB").resize(im.size, Image.LANCZOS)
     if grey:
         new = new.convert("L").convert("RGB")
@@ -192,6 +181,23 @@ def _who(ctx, ref: str) -> str:
             user_text="Who or what is the main character in this picture? Answer with their name "
                       "if they are a known character or person, then a few words on how they "
                       "look (shape, colours). One short line, nothing else.") or "").split())[:200]
+    except Exception:
+        return ""
+
+
+def _real_look(ctx, ref: str) -> str:
+    """The reference's character as a real thing in a photo, without its name («a giant
+    real kitchen dish sponge, yellow and porous, with big round eyes and buck teeth»):
+    the name alone brings the cartoon back."""
+    try:
+        from llm import analyze_image_with_llm
+        return " ".join((analyze_image_with_llm(
+            ctx, image_path=ref, temperature=0.1,
+            user_text="Describe the main character of this picture as if it were a REAL physical "
+                      "thing photographed in the real world, WITHOUT its name: what real object "
+                      "or creature it would be, its material and texture, colour, shape and its "
+                      "face features. One noun phrase under 30 words, starting with 'a'. Nothing "
+                      "else.") or "").split())[:300]
     except Exception:
         return ""
 

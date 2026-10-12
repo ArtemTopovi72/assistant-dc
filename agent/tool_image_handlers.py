@@ -595,12 +595,12 @@ def _handle_swap_person(ctx, state, args: dict) -> str:
         return ("[TOOL ERROR] The swap failed, nothing was changed. Tell the user so; do "
                 "NOT claim it worked.")
     _set_current_image(ctx, state, new_path)
+    state["swap_done"] = new_path
     ctx.reference_images = (ctx.reference_images or []) + [new_path]
     _remember(ctx, state, "swap", f"Person {n} swapped", {"path": new_path})
     return (f"Swap complete and saved: {new_path}\n"
-            "Call inspect_image to check it. Do NOT touch it up with inpaint_image or other "
-            "editors: they turned the newcomer into a ghost (2026-10-13). If it is off, call "
-            "swap_person again with a clearer wish, or tell the user what is off.")
+            "Call inspect_image to check it. Other editors are locked on it; if it is off, "
+            "call swap_person again with a clearer wish, or tell the user what is off.")
 
 
 def _handle_fix_hands(ctx, state, args: dict) -> str:

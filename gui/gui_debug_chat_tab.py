@@ -11,7 +11,7 @@ import time
 import urllib.request
 
 from PyQt5.QtCore import QThread, Qt, QTimer, QUrl, pyqtSignal
-from PyQt5.QtWidgets import (QCheckBox, QFileDialog, QGridLayout, QHBoxLayout, QLabel,
+from PyQt5.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QGridLayout, QHBoxLayout, QLabel,
                              QLineEdit, QPushButton, QTextBrowser, QVBoxLayout, QWidget)
 
 from ui_scale import px
@@ -45,12 +45,13 @@ class _Poller(QThread):
     def __init__(self):
         super().__init__()
         self.since = time.time() - 3600
+        self.user = 0
         self._stop = False
 
     def run(self):
         while not self._stop:
             try:
-                msgs = _call("/messages?since=%f" % self.since).get("messages") or []
+                msgs = _call("/messages?since=%f&user=%d" % (self.since, self.user)).get("messages") or []
                 self.state.emit(True)
                 if msgs:
                     self.since = max(m["t"] for m in msgs) + 1e-6
@@ -81,6 +82,11 @@ class DebugChatTab(QWidget):
         self.status = QLabel("○ offline")
         self.status.setStyleSheet(f"color:{MUTED};")
         head.addWidget(self.status)
+        self.who = QComboBox()
+        self.who.addItems([f"User {i}" for i in range(5)])
+        self.who.setToolTip("Which debug user you are; open several to write in parallel")
+        self.who.currentIndexChanged.connect(self._switch_user)
+        head.addWidget(self.who)
         self.enable = QCheckBox("Debug user on")
         self.enable.setToolTip("Lets the bot read this chat. Its messages queue with everyone's.")
         self.enable.toggled.connect(self._toggle)
@@ -148,9 +154,14 @@ class DebugChatTab(QWidget):
         elif not on and os.path.exists(flag):
             os.remove(flag)
 
+    def _switch_user(self, i: int):
+        self._poller.user = i
+        self._poller.since = time.time() - 3600
+        self._clear()
+
     def _post(self, path: str, body: dict) -> bool:
         try:
-            _call(path, body)
+            _call(path, dict(body, user=self.who.currentIndex()))
             return True
         except Exception as exc:
             self._add(None, False, f"⚠️ The bot did not take it ({exc}). Is the bot running "
@@ -245,7 +256,7 @@ class DebugChatTab(QWidget):
             align, bg = ("right", _ME_BUBBLE) if m["me"] else ("left", _BOT_BUBBLE)
             parts.append(
                 f'<table width="100%" cellspacing="0" cellpadding="0"><tr><td align="{align}">'
-                f'<table cellpadding="{px(8)}" style="background:{bg};border-radius:{px(10)}px;'
+                f'<table {'width="78%" ' if len(m["text"]) > 60 else ''}cellpadding="{px(8)}" style="background:{bg};border-radius:{px(10)}px;'
                 f'margin:{px(3)}px;"><tr><td style="color:{TEXT};">{imgs}{other}{body}</td></tr>'
                 f'</table></td></tr></table>')
         self.view.setHtml("".join(parts))
