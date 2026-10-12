@@ -17,7 +17,9 @@ def people(path: str) -> List[Box]:
     """The face boxes of the people on the picture, left to right (the order the collage
     numbers them in, so «2» is the second from the left on the picture too)."""
     import identity_metrics
-    boxes = identity_metrics.face_boxes(path, pad=0.0, max_faces=MAX_PEOPLE)
+    # 0.4, not the default 0.6: Molotov in profile under a hat was missed on the Stalin
+    # photo; a stray extra tile in a picker costs nothing, a missing person does.
+    boxes = identity_metrics.face_boxes(path, pad=0.0, max_faces=MAX_PEOPLE, score_threshold=0.4)
     return sorted(boxes, key=lambda b: b[0])
 
 
@@ -61,7 +63,9 @@ def where(path: str, box: Box, n: int, total: int) -> str:
     with Image.open(path) as im:
         W, H = im.size
     x = (box[0] + box[2]) / 2 / W
-    side = "on the left" if x < 0.36 else "on the right" if x > 0.64 else "in the middle"
+    # By rank first: Yezhov, the rightmost of four, has his face at 63% and was «in the middle».
+    side = ("on the far left" if n == 1 and total > 1 else "on the far right" if n == total > 1
+            else "on the left" if x < 0.36 else "on the right" if x > 0.64 else "in the middle")
     nth = {1: "first", 2: "second", 3: "third", 4: "fourth", 5: "fifth"}.get(n, f"{n}th")
     return (f"the person {side} of the picture (the {nth} of the {total} people counted from "
             f"the left; their face is about {round(x * 100)}% from the left edge and "
