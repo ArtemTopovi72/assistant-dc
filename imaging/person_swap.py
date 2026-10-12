@@ -84,6 +84,7 @@ def swap(ctx, path: str, box: Box, ref: str, wish: str = "") -> str:
     # paste area is wider (the changed-pixels mask below keeps the neighbours), or its
     # head was cut off at the region's edge.
     w = (rx1 - rx0) // 3
+    core = (rx0, rx1)
     rx0, rx1 = max(0, rx0 - w), min(im.width, rx1 + w)
     band = max(6, int(min(rx1 - rx0, ry1 - ry0) * 0.06))
     mask = Image.new("L", (rx1 - rx0, ry1 - ry0), 0)
@@ -133,7 +134,13 @@ def swap(ctx, path: str, box: Box, ref: str, wish: str = "") -> str:
     d = np.abs(soft - c[ry0:ry1, rx0:rx1]).max(-1)
     changed = Image.fromarray(((d > 28) * 255).astype(np.uint8)).filter(ImageFilter.MaxFilter(9))
     changed = changed.filter(ImageFilter.MinFilter(5)).filter(ImageFilter.GaussianBlur(3))
-    keep = np.minimum(np.asarray(changed, dtype=np.float32), np.asarray(mask, dtype=np.float32))
+    # ...but the person's own spot is taken whole: where the new figure's grey matched
+    # Yezhov's, his nose and coat edge showed through the changed-pixels mask.
+    own = Image.new("L", mask.size, 0)
+    own.paste(255, (core[0] - rx0 + band, 0, core[1] - rx0 - band, mask.height))
+    own = np.asarray(own.filter(ImageFilter.GaussianBlur(band)), dtype=np.float32)
+    keep = np.minimum(np.maximum(np.asarray(changed, dtype=np.float32), own),
+                      np.asarray(mask, dtype=np.float32))
     im.paste(new, (rx0, ry0), Image.fromarray(keep.astype(np.uint8)))
     res = os.path.join(os.path.dirname(out), "swap_" + os.path.basename(path).rsplit(".", 1)[0] + ".png")
     im.save(res)
