@@ -110,6 +110,16 @@ check("the video is taken: now asks what happens next",
 s_ = bot._get_session(CID)
 check("its tail waits as the reference video", os.path.exists(s_.continue_tail) and os.path.exists(s_.continue_src))
 check("its start frame is the current image", bool(s_.target_image))
+# A second clip (a кружок of «the guy with the glove») is a new person, never a new
+# start: it replaced the grandma's GIF and the continuation lost her (live 2026-10-12).
+_src0 = s_.continue_src
+bot._dispatch(m(video_note={"file_id": "GUY", "duration": 4}))
+check("a second video while waiting for words joins as a new person",
+      wait(lambda: len(bot._get_session(CID).continue_people or []) == 1), bot.sent[-2:])
+s_ = bot._get_session(CID)
+check("...the first clip stays the one continued",
+      s_.continue_src == _src0 and s_.continue_state == "want_text"
+      and os.path.exists(s_.continue_people[0]), (s_.continue_src, s_.continue_people))
 bot._dispatch(m(text="они выходят из комнаты и смеются"))
 check("the text becomes the animate request",
       wait(lambda: any(t.startswith("animate this photo: они выходят") for t in INVOKES), 15), INVOKES[-2:])

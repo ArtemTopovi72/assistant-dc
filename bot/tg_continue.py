@@ -115,12 +115,41 @@ class ContinueMixin:
         self._send_text(chat_id, tg_bot._t("continue_got_person", lang, n=len(people)))
         return True
 
+    def _continue_take_person_clip(self, chat_id: int, sess, lang: str, msg: dict, fid: str) -> bool:
+        people = list(getattr(sess, "continue_people", None) or [])
+        if len(people) >= MAX_PEOPLE:
+            self._send_text(chat_id, tg_bot._t("continue_people_full", lang))
+            return True
+        data = self._dl_bytes(fid)
+        tag = uuid.uuid4().hex[:8]
+        clip = os.path.join(self._continue_dir(chat_id), f"person_{tag}.mp4")
+        path = clip[:-4] + ".jpg"
+        if data:
+            with open(clip, "wb") as fh:
+                fh.write(data)
+        if not (data and seed_frame(clip, path)):
+            self._send_text(chat_id, tg_bot._t("continue_fail_dl", lang))
+            return True
+        people.append(path)
+        sess.continue_people = people
+        self._store.put(sess)
+        caption = (msg.get("caption") or "").strip()
+        if caption:
+            return self._continue_take_text(chat_id, sess, lang, caption)
+        self._send_text(chat_id, tg_bot._t("continue_got_person", lang, n=len(people)))
+        return True
+
     def _continue_take_media(self, chat_id: int, sess, lang: str, msg: dict) -> bool:
         if getattr(sess, "continue_state", "") not in ("want_video", "want_text"):
             return False
         fid = self._video_of(msg)
         if not fid:
             return self._continue_take_person(chat_id, sess, lang, msg)
+        if getattr(sess, "continue_state", "") == "want_text":
+            # The clip is already taken: a second video is a NEW person, its frame the
+            # picture. A кружок of «the guy with the glove» replaced the grandma's GIF and
+            # the continuation went on from the guy, the grandma nowhere (live 2026-10-12).
+            return self._continue_take_person_clip(chat_id, sess, lang, msg, fid)
         data = self._dl_bytes(fid)
         if not data:
             self._send_text(chat_id, tg_bot._t("continue_fail_dl", lang))
