@@ -94,7 +94,6 @@ def mock_env(**over):
         "load_layout_for": lambda p: over.get("layout", None),
         "edit_via_layout": lambda ctx, s, i: over.get("layout_out", out_img),
         "edit_image_with_firered": lambda ctx, s, i: over.get("firered_out", out_img),
-        "_firered_style_instruction": lambda ctx, i, image_path=None: i,
         "generate_person_from_reference": lambda ctx, d, seed=None: over.get("refperson", (None, {})),
         "ReferenceImage": lambda p, role: types.SimpleNamespace(path=p, role=role),
         "_ALL_ROLES": {"object_source", "clothing_source"},

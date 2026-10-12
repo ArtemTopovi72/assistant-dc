@@ -15,9 +15,9 @@ preserve the frame" and came back cropped — the title text and one person
 were gone, and only part of the group was cartoonised. The verifier then
 (correctly) reported the requested change as only partially there.
 
-`_firered_style_instruction` replaces that call for style_transfer: it asks
-to redraw the ENTIRE image and explicitly forbids cropping or removing
-anything, instead of naming an "it" and asking to preserve the rest.
+style_transfer is rendered by image_style.restyle, whose instruction asks to
+restyle the ENTIRE image and explicitly forbids cropping or moving anyone,
+instead of naming an "it" and asking to preserve the rest.
 
 Run: venv/Scripts/python.exe tests/test_style_transfer_whole_image.py
 """
@@ -56,9 +56,12 @@ print("=" * 66)
 print("INSTRUCTION TEXT")
 print("=" * 66)
 
-I._english_instructions = lambda ctx, text: text  # deterministic, no LLM call
+import image_grounding as _IG
+import image_style as _IS
+_IG._english_instructions = lambda ctx, text: text  # deterministic, no LLM call
+_IS._expand = lambda ctx, words: ("drawn", words)   # the chat model's spelling-out, stubbed
 
-instr = I._firered_style_instruction(None, "redraw this as a cartoon")
+instr = _IS.build(None, "redraw this as a cartoon")[0]
 check("does not contain the broken 'Change the it' phrasing",
       "change the it" not in instr.lower(), instr)
 check("tells the model to redraw the ENTIRE image",
@@ -97,31 +100,6 @@ check("router used the whole-image instruction, not the region-templated one",
 check("router's instruction demands the whole image",
       "entire image" in captured.get("instruction", "").lower(),
       captured.get("instruction"))
-
-
-# ── vision-derived layout lock ───────────────────────────────────────────────
-print("=" * 66)
-print("VISION LAYOUT LOCK")
-print("=" * 66)
-
-import llm as _llm
-
-_llm.analyze_image_with_llm = lambda **kw: (
-    "4 people left-to-right; leftmost cropped at the shoulder near the left "
-    "edge, small; a title reads 'Ma' Boyz' near the top.")
-
-instr_with_vision = I._firered_style_instruction(None, "redraw this as a cartoon",
-                                                 image_path=path)
-check("folds the vision-derived layout description into the instruction",
-      "leftmost cropped at the shoulder" in instr_with_vision, instr_with_vision)
-check("still carries the base whole-image demand",
-      "entire image" in instr_with_vision.lower(), instr_with_vision)
-
-_llm.analyze_image_with_llm = lambda **kw: (_ for _ in ()).throw(RuntimeError("vision down"))
-instr_vision_fails = I._firered_style_instruction(None, "redraw this as a cartoon",
-                                                  image_path=path)
-check("falls back to the generic instruction when the vision call raises",
-      "entire image" in instr_vision_fails.lower(), instr_vision_fails)
 
 
 # ── the OTHER entry point: the redraw_image TOOL ─────────────────────────────

@@ -14,8 +14,7 @@ the REAL pipeline would run while the suite still printed PASS.  So they are
 NOT imported -- they are reached through `_image.` below, which defers the
 import to call time and always resolves the CURRENT binding on image.py.
 The same applies to the grounding/sizing helpers (_item_attributes,
-_region_present, _extract_edit_target, _firered_instruction,
-_firered_style_instruction, _source_dims,
+_region_present, _extract_edit_target, _firered_instruction, _source_dims,
 _strip_lead, _REMOVAL_RE), which image.py re-exports and the suites patch there.
 """
 import logging

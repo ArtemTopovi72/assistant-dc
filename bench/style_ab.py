@@ -2,8 +2,8 @@
 
     venv/Scripts/python.exe bench/style_ab.py <variant>[,<variant>] [style,...]
 
-Variants: cur_l8 (production wrapper, Lightning 8 steps cfg 1), new_l8 (new
-style prompts, same sampler), new_f28 (new prompts, no Lightning, 28 steps,
+Variants: new_l8 (the style prompts on the template's Lightning 8 steps cfg 1;
+the old one-word prompts there were the 2026-10-11 baseline), new_f28 (new prompts, no Lightning, 28 steps,
 cfg 4, a per-style negative). Writes runtime/style_ab/<variant>/<style>.png
 plus a sheet per variant.
 """
@@ -24,7 +24,6 @@ os.environ.setdefault("F5_TEST_RUN", "0")
 import image as image_mod  # noqa: E402
 import image_engines  # noqa: E402
 import style_presets  # noqa: E402
-from image_grounding import _firered_style_instruction  # noqa: E402
 
 OUT = os.path.join(ROOT, "runtime", "style_ab")
 PHOTO = os.path.join(ROOT, "tests", "fixtures", "faces3.png")
@@ -67,26 +66,19 @@ def run(variant: str, styles: list) -> None:
     os.makedirs(os.path.join(OUT, variant), exist_ok=True)
     for style in styles:
         src = TOON.get(style, PHOTO)
-        if variant == "cur_l8":
-            if style.startswith("realism"):
-                instr = _firered_style_instruction(_Ctx(), "make it an ultra-realistic photo")
-            else:
-                instr = _firered_style_instruction(_Ctx(), style_presets.preset_prompt(style))
-            wf = _workflow(8, 1.0, True, "")
+        instr, neg = v2.prompt(style), v2.negative(style)
+        if variant.startswith("d") and style in DESC:
+            instr = v2.prompt(style, DESC[style])
+            variant_sampler = variant[1:]
         else:
-            instr, neg = v2.prompt(style), v2.negative(style)
-            if variant.startswith("d") and style in DESC:
-                instr = v2.prompt(style, DESC[style])
-                variant_sampler = variant[1:]
-            else:
-                variant_sampler = variant
-            if variant == "new_l8":
-                wf = _workflow(8, 1.0, True, "")
-            elif variant == "new_f28":
-                wf = _workflow(28, 4.0, False, neg)
-            else:                                   # f16c3 / l8c2: steps, cfg, Lightning on/off
-                m = re.fullmatch(r"([fl])(\d+)c([\d.]+)", variant_sampler)
-                wf = _workflow(int(m[2]), float(m[3]), m[1] == "l", neg)
+            variant_sampler = variant
+        if variant == "new_l8":
+            wf = _workflow(8, 1.0, True, "")
+        elif variant == "new_f28":
+            wf = _workflow(28, 4.0, False, neg)
+        else:                                   # f16c3 / l8c2: steps, cfg, Lightning on/off
+            m = re.fullmatch(r"([fl])(\d+)c([\d.]+)", variant_sampler)
+            wf = _workflow(int(m[2]), float(m[3]), m[1] == "l", neg)
         image_mod._edit_engine_workflow = lambda e, _p=wf: ("firered", _p)
         t = time.time()
         out = image_mod._edit_image_with_firered_once(_Ctx(), src, instr, seed=SEED)
