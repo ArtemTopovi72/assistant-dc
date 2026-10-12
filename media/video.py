@@ -1121,7 +1121,12 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
                "from another picture who comes in or out of somewhere comes WHOLE, walking on "
                "their own feet into full view, face visible, never just an arm or a hand, "
                "unless the request says so; each picture's person keeps its exact look "
-               "(hair, clothes, the colour of gloves) as seen in that picture.\n"
+               "(hair, clothes, the colour of gloves) as seen in that picture. Every picture "
+               "after <Picture 1> is ONLY what a person looks like: never pasted into the shot, "
+               "never part of the composition, its frame, border or background never shown; "
+               "who they are (a man, a guy, a woman) is what the request calls them, not a "
+               "guess from the picture. The shot keeps <Picture 1>'s framing from start to "
+               "end: no cut, no jump to a close-up.\n"
                if images else "") +
             "\nRequest:\n" + description)
     import llm as _llm

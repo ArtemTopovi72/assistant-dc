@@ -130,6 +130,16 @@ class ContinueMixin:
         if not (data and seed_frame(clip, path)):
             self._send_text(chat_id, tg_bot._t("continue_fail_dl", lang))
             return True
+        if msg.get("video_note"):
+            # A кружок frame is a disc with a «TELEGRAM» mark on its rim: given whole, the
+            # video model pasted that disc into the corner of every frame (live 2026-10-12).
+            # The square inside the circle is the person alone.
+            from PIL import Image
+            with Image.open(path) as im:
+                w, h = im.size
+                k = 0.707 / 2
+                box = (int(w * (0.5 - k)), int(h * (0.5 - k)), int(w * (0.5 + k)), int(h * (0.5 + k)))
+                im.convert("RGB").crop(box).save(path, quality=95)
         people.append(path)
         sess.continue_people = people
         self._store.put(sess)
