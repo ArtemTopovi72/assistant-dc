@@ -15,6 +15,7 @@ both land here. Three things make a style land (bench/style_ab.py, 2026-10-11):
 """
 import logging
 import os
+import re
 from typing import Optional
 
 import config as _cfg
@@ -25,7 +26,10 @@ logger = logging.getLogger("assistant.image")
 STYLE_STEPS = _cfg.env_int("FIRERED_STYLE_STEPS", 12)
 STYLE_CFG = _cfg.env_float("FIRERED_STYLE_CFG", 3.0)
 PHOTO_LORA = os.getenv("FIRERED_PHOTO_LORA", "style\\anything2real_2601_A.safetensors")
-PHOTO_LORA_STRENGTH = _cfg.env_float("FIRERED_PHOTO_LORA_STRENGTH", 0.9)
+# A flat drawing keeps its face and armour details at 0.75 (at 0.9 an armoured midriff
+# became one latex suit); a 3D cartoon render stays a doll below 0.9.
+PHOTO_LORA_STRENGTH = _cfg.env_float("FIRERED_PHOTO_LORA_STRENGTH", 0.75)
+PHOTO_LORA_STRENGTH_3D = _cfg.env_float("FIRERED_PHOTO_LORA_STRENGTH_3D", 0.9)
 
 NEG_DRAWN = ("photo, photograph, photorealistic, realistic skin texture, skin pores, 3d render, "
              "blurry, low quality, watermark, text, signature")
@@ -56,13 +60,25 @@ _EXPAND_SYS = (
 # Clothing alone lost a character's scythes and boots and made her armour a cloth top:
 # what each thing is MADE of, what is held or attached, and the background are named.
 _WHO_PROMPT = (
-    "Describe this picture for a photographer who must recreate it exactly. For each person or "
-    "character, left to right, one short phrase: gender, approximate age, hair colour and style, "
-    "facial hair, glasses; every garment and costume piece with its material (rigid metal armor "
-    "plates, leather, cloth, latex); the footwear; and everything held or attached (weapons, "
-    "props, wings, tails) with its shape and size. If the same character is shown twice "
+    "First line: 'MEDIUM: 3D' if this is a 3D render or CGI cartoon, else 'MEDIUM: 2D'. Then "
+    "describe this picture for a photographer who must recreate it exactly. For each person or "
+    "character, left to right: gender, approximate age, hair colour and style; everything worn "
+    "on the head (horns, ear-like or wing-like pieces, clips, headbands) with its exact colour "
+    "and shape -- look closely, such pieces are often nearly the colour of the hair; {face}"
+    "every garment and costume "
+    "piece with its material (rigid metal armor plates, leather, cloth, latex), its exact shape "
+    "and where on the body it sits, and which body areas the costume leaves uncovered (e.g. "
+    "bare midriff between the chest plate and the hip pieces); the footwear; and everything "
+    "held or attached (weapons, props, wings, tails) with its shape and size. If the same "
+    "character is shown twice "
     "(front and back views), say so once. Then the background in a few words (e.g. 'plain "
     "white background'). Join with '; '. Nothing else.")
+# The face is named for a flat drawing (eye colour, face shape: the owner asked for the
+# face kept closer) but not for a 3D cartoon, whose «round nose, fleshy face» kept the
+# render a doll on every wording tried: a 3D source is described a second time without.
+_FACE_2D = ("facial hair, glasses, eye colour, and the face as it would look on a real person "
+            "(no cartoon sizes like 'large eyes'); ")
+_FACE_3D = "facial hair and glasses (nothing else about the face); "
 
 
 def _expand(ctx, words: str) -> tuple:
@@ -83,19 +99,35 @@ def _expand(ctx, words: str) -> tuple:
     return target, (style or words)
 
 
-def _who(ctx, image_path: str) -> str:
+def _describe(ctx, image_path: str, face: str) -> str:
     from llm import analyze_image_with_llm
+    return " ".join((analyze_image_with_llm(
+        ctx=ctx, image_path=image_path, user_text=_WHO_PROMPT.format(face=face),
+        system_prompt="You are a precise, literal visual describer.") or "").split())
+
+
+def _who(ctx, image_path: str) -> tuple:
+    """(description, is_3d) of what is in the picture, for the photo instruction."""
     try:
-        return " ".join((analyze_image_with_llm(
-            ctx=ctx, image_path=image_path, user_text=_WHO_PROMPT,
-            system_prompt="You are a precise, literal visual describer.") or "").split())[:500]
+        text = _describe(ctx, image_path, _FACE_2D)
+        m = re.match(r"\s*MEDIUM:\s*(2D|3D)\W*", text, re.I)
+        is_3d = bool(m and m.group(1).upper() == "3D")
+        if is_3d:
+            text = _describe(ctx, image_path, _FACE_3D)
+            m = re.match(r"\s*MEDIUM:\s*(2D|3D)\W*", text, re.I)
     except Exception:
         logger.exception("style: describing who is in %s failed", image_path)
-        return ""
+        return "", False
+    text = text[m.end():] if m else text
+    # The describer writes «large brown eyes» even when told not to; the words alone
+    # pull a face back to the drawing.
+    text = re.sub(r"\b(?:very\s+)?(?:large|big|huge|oversized|enormous)\s+((?:\w+\s+)?eyes)\b",
+                  r"\1", text, flags=re.I)
+    return text[:900], is_3d
 
 
 def build(ctx, instructions: str, image_path: Optional[str] = None) -> tuple:
-    """(instruction, target) for a restyle request."""
+    """(instruction, target, realism LoRA strength) for a restyle request."""
     import image_grounding
     key = style_presets.preset_for(instructions)
     if key:
@@ -107,21 +139,22 @@ def build(ctx, instructions: str, image_path: Optional[str] = None) -> tuple:
         keeps_clothes = True
     keep = _KEEP.format(clothes="the same clothing " if keeps_clothes else "")
     if target == "photo":
-        who = _who(ctx, image_path) if image_path else ""
+        who, is_3d = _who(ctx, image_path) if image_path else ("", False)
         lead = f"change the picture 1 to realistic photograph, {who}. " if who else ""
         tail = (" Each person keeps the same gender, age, hair and facial hair, at real-life "
                 "human body proportions (a normal-sized head on a normal adult body), and every "
                 "garment, armor piece, boot, weapon and prop named above stays, in the same place "
                 "and the same size, as a real costume or prop.") if who else ""
-        return lead + style + tail + keep, target
-    return style + keep, target
+        return (lead + style + tail + keep, target,
+                PHOTO_LORA_STRENGTH_3D if is_3d else PHOTO_LORA_STRENGTH)
+    return style + keep, target, 0.0
 
 
 def restyle(ctx, image_path: str, instructions: str, *, seed=None, timeout=None):
     """Render the restyle; returns the saved path or None. A request that is not a
     style at all (target "other": relight, season, a filter) is edited as written."""
     import image as image_mod
-    instr, target = build(ctx, instructions, image_path)
+    instr, target, strength = build(ctx, instructions, image_path)
     kw = {k: v for k, v in (("seed", seed), ("timeout", timeout)) if v is not None}
     if target == "other" and not style_presets.preset_for(instructions):
         return image_mod.edit_image_with_firered(ctx, image_path, instructions, **kw)
@@ -130,5 +163,11 @@ def restyle(ctx, image_path: str, instructions: str, *, seed=None, timeout=None)
     with image_mod.firered_sampler(STYLE_STEPS, STYLE_CFG, lightning=False, negative=neg,
                                   upsize=True), \
             image_mod.firered_extra_lora(PHOTO_LORA if target == "photo" else None,
-                                         PHOTO_LORA_STRENGTH):
-        return image_mod.edit_image_with_firered(ctx, image_path, instr, **kw)
+                                         strength):
+        out = image_mod.edit_image_with_firered(ctx, image_path, instr, **kw)
+        if out and target == "photo" and strength >= PHOTO_LORA_STRENGTH_3D:
+            # A 3D cartoon comes out of one pass half-real (a doll's face on a real
+            # body); a second pass over that result finishes it, one pass did not
+            # on any wording tried (bench/style_ab.py, tmp pixar runs 2026-10-12).
+            out = image_mod.edit_image_with_firered(ctx, out, instr, **kw) or out
+        return out

@@ -32,7 +32,7 @@ def _run(monkeypatch, instructions, *, expand=None, who="a man with a black must
     monkeypatch.setattr(I, "firered_extra_lora", lora)
     monkeypatch.setattr(I, "edit_image_with_firered",
                         lambda ctx, path, instr, **kw: seen.setdefault("instr", instr) and "out.png")
-    monkeypatch.setattr(IS, "_who", lambda ctx, path: who)
+    monkeypatch.setattr(IS, "_who", lambda ctx, path: (who, False))
     calls = []
     monkeypatch.setattr(IS, "_expand", lambda ctx, words: calls.append(words) or expand)
     out = IS.restyle(None, "src.png", instructions)
