@@ -1179,6 +1179,7 @@ _MSG: dict[str, dict[str, str]] = {
     "lbl_video_frames": {"en": "🎞 video frames", "ru": "🎞 кадры видео"},
     "fwd_lbl_text":  {"en": "💬 {n}", "ru": "💬 {n}"},
     "fwd_continue": {"en": "▶️ Continue the video", "ru": "▶️ Продолжить видео"},
+    "video_cont_offer": {"en": "🎬 This clip can be continued:", "ru": "🎬 Это видео можно продолжить:"},
     "fwd_pick":     {"en": "🎞 Pick a picture or video", "ru": "🎞 Выбрать фото или видео"},
     "fwd_pick_ask": {"en": "Which one?", "ru": "Какое из них?"},
     "fwd_picked":   {"en": "🖼 {label} is chosen. Say what to do with it.", "ru": "🖼 {label} выбрано. Напиши, что с ним сделать."},

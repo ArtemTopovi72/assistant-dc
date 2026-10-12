@@ -980,6 +980,19 @@ class ResolveMixin:
                             img_bytes = Path(_seen["sheet"]).read_bytes()
                         except Exception:
                             pass
+                    # A clip sent straight to the bot (a GIF most often) got a
+                    # comment and no way to go on from it; only forwarded ones
+                    # carried ▶️ (owner, 2026-10-12).
+                    _vid = uuid.uuid4().hex[:8]
+                    sess.__dict__.setdefault("fwd_media", {})[_vid] = [
+                        {"kind": "video", "file_id": item["file_id"],
+                         "label": tg_bot._t("fwd_lbl_video", lang, n=1)}]
+                    while len(sess.fwd_media) > 8:
+                        sess.fwd_media.pop(next(iter(sess.fwd_media)))
+                    self._store.put(sess)
+                    self._send_text(chat_id, tg_bot._t("video_cont_offer", lang), keyboard={
+                        "inline_keyboard": [[{"text": tg_bot._t("fwd_continue", lang),
+                                              "callback_data": f"fwdv:cont:{_vid}"}]]})
 
             elif t == "fwd_voice":
                 if ctx is None:
