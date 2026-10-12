@@ -192,7 +192,8 @@ def _who(ctx, ref: str) -> str:
 def _real_look(ctx, ref: str) -> str:
     """The reference's character as a real thing in a photo, without its name («a giant
     real kitchen dish sponge, yellow and porous, with big round eyes and buck teeth»):
-    the name alone brings the cartoon back."""
+    the name alone brings the cartoon back. No expression: «wide-mouthed» from the reference
+    beat the user's «angry», and the sponge came out scared (2026-10-13)."""
     try:
         from llm import analyze_image_with_llm
         return " ".join((analyze_image_with_llm(
@@ -200,8 +201,9 @@ def _real_look(ctx, ref: str) -> str:
             user_text="Describe the main character of this picture as if it were a REAL physical "
                       "thing photographed in the real world, WITHOUT its name: what real object "
                       "or creature it would be, its material and texture, colour, shape and its "
-                      "face features. One noun phrase under 30 words, starting with 'a'. Nothing "
-                      "else.") or "").split())[:300]
+                      "face features -- but NOT its expression or mood (no smiling, scared, "
+                      "wide-mouthed): the user's wish sets that. One noun phrase under 30 words, "
+                      "starting with 'a'. Nothing else.") or "").split())[:300]
     except Exception:
         return ""
 

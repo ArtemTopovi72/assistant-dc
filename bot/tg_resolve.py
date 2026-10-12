@@ -1514,32 +1514,53 @@ class ResolveMixin:
         # Log the rest of the album so "the second one"/"the third one" has
         # something to resolve against later, even though only the first
         # photo drives THIS task (a _Task carries a single image_path).
+        # The lettering on a sent photo, read by PaddleOCR and handed over as text: the
+        # vision model saw a Greenfield tea box and missed «ПАШТЕТ» on the poster -- the
+        # whole joke (owner, 2026-10-13).
+        if _photo_upload and img_path and os.path.exists(img_path):
+            try:
+                import ocr_reader
+                _reads = ocr_reader.read(img_path) or []
+                _text = max(_reads, key=len) if _reads else ""
+                if len(_text.strip()) >= 3:
+                    merged = (merged + "\n[Text written on picture 1 (OCR, exact letters): "
+                              + _text.strip()[:600] + "]")
+            except Exception:
+                tg_bot.logger.warning("photo OCR failed", exc_info=True)
         _album_paths = []
         if _album_extra_bytes:
-            _seen_extra = []
             for _i, _extra in enumerate(_album_extra_bytes, start=2):
                 _extra_path = _save_image_bytes(_extra)
                 _album_paths.append(_extra_path)
                 tg_bot._log_image(sess, _extra_path,
                                   label=f"{merged[:70]} (#{_i})", src="user")
-                try:
-                    import llm as _llm
-                    _d = " ".join((_llm.analyze_image_with_llm(
-                        ctx, image_path=_extra_path, temperature=0.1,
-                        user_text="Describe this picture in one sentence.") or "").split())
-                except Exception:
-                    tg_bot.logger.warning("album picture read failed", exc_info=True)
-                    _d = ""
-                _seen_extra.append(f"picture {_i}: {_d or '(could not be read)'}")
             try: self._store.put(sess)
             except Exception:
                 tg_bot.logger.warning("session persist failed", exc_info=True)
+            # The whole album in ONE vision call, each picture labelled: read one by one,
+            # Lucia from GTA 6 on pictures 1 and 3 became «a girl» and «the same girl» at
+            # best, two different people at worst (owner, 2026-10-13) -- and it was a call
+            # per picture.
+            try:
+                import llm as _llm
+                _seen = " ".join((_llm.analyze_image_with_llm(
+                    ctx, temperature=0.1,
+                    image_paths=[(f"Picture {i}:", p) for i, p in
+                                 enumerate([img_path, *_album_paths], start=1) if p],
+                    user_text="These pictures came together in one message. Describe each in "
+                              "one sentence, numbered, and say who or what recurs across them "
+                              "(the same person, character or place on several pictures).")
+                    or "").split())
+            except Exception:
+                tg_bot.logger.warning("album read failed", exc_info=True)
+                _seen = ""
             # Only picture 1 rides on the task; the rest were saved and never mentioned
             # (owner, 2026-10-12: Stalin + SpongeBob in one message, the reply spoke of
-            # Stalin alone). The model hears how many came and what the others show.
+            # Stalin alone). The model hears how many came and what they show together.
             merged = (merged + f"\n[The user sent {1 + len(_album_extra_bytes)} pictures in one "
-                      "message. Picture 1 is the one attached; the others: "
-                      + "; ".join(_seen_extra) + ". Acknowledge every picture, not just the first.]")
+                      "message; picture 1 is the one attached. All of them, seen together: "
+                      + (_seen or "(could not be read)") + " Acknowledge every picture, not just "
+                      "the first.]")
 
         task = tg_bot._Task(
             task_id=str(uuid.uuid4()),

@@ -41,6 +41,17 @@ def available() -> bool:
         return False
 
 
+def _paddle():
+    """(python, worker) of PaddleOCR in venv_paddle, or ("", "") when it is not installed.
+    PP-OCRv5 reads Russian print nearly error-free; EasyOCR stays the fallback."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for exe in (os.path.join(root, "venv_paddle", "Scripts", "python.exe"),
+                os.path.join(root, "venv_paddle", "bin", "python")):
+        if os.path.exists(exe):
+            return exe, os.path.join(root, "scripts", "paddle_ocr_worker.py")
+    return "", ""
+
+
 class _WorkerReader:
     """`readtext` of an EasyOCR reader living in ocr_worker.py's process. Same
     call shape as easyocr.Reader.readtext (path or RGB array), so callers are
@@ -51,9 +62,14 @@ class _WorkerReader:
         import sys
         import json
         self._json = json
-        exe = sys.executable.replace("pythonw.exe", "python.exe")
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        exe, worker = _paddle()
+        if not exe:
+            exe = sys.executable.replace("pythonw.exe", "python.exe")
+            worker = os.path.join(root, "imaging", "ocr_worker.py")
+        self.engine = "paddle" if worker.endswith("paddle_ocr_worker.py") else "easyocr"
         self._p = subprocess.Popen(
-            [exe, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "imaging/ocr_worker.py")],
+            [exe, worker],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
             text=True, encoding="utf-8", creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         first = self._p.stdout.readline()
@@ -107,9 +123,10 @@ def _get():
         if _reader is not None or _failed:
             return _reader
         try:
-            import easyocr  # noqa: F401 -- installed? the worker imports it for real
+            if not _paddle()[0]:
+                import easyocr  # noqa: F401 -- installed? the worker imports it for real
             _reader = _WorkerReader()
-            logger.info("EasyOCR reader ready (ru+en, CPU, own process)")
+            logger.info("%s reader ready (CPU, own process)", _reader.engine)
         except Exception:
             _failed = True
             logger.warning("EasyOCR unavailable -- lettering read-back falls back to "
