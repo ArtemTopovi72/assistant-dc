@@ -384,8 +384,12 @@ class DispatchMixin:
         # An ordinary video (not the round note) rides the same path: it is
         # looked at (frames every 5 s) and listened to.
         video_note = msg.get("video_note") or msg.get("video")
+        # A video or GIF sent with no words is material, like a forwarded one: the same
+        # menu (transcript, summary, storyboard, ▶️ continue) instead of a one-off comment
+        # (owner, 2026-10-12). A кружок is the user talking; words on a clip are the task.
+        _clip_as_material = (not msg.get("video_note") and not (msg.get("caption") or "").strip())
         if video_note:
-            if tg_bot._is_forwarded(msg, self_is_own=False):
+            if _clip_as_material or tg_bot._is_forwarded(msg, self_is_own=False):
                 self._enqueue_item(chat_id, {
                     "type": "fwd_voice", "media": "video",
                     "file_id": video_note["file_id"],
@@ -404,7 +408,7 @@ class DispatchMixin:
             # A video sent as a file (the way a long recording usually arrives).
             # Duration is unknown on the wire: treat it as long -- the offer
             # shows what will happen and the user decides.
-            self._enqueue_item(chat_id, {"type": "fwd_voice" if tg_bot._is_forwarded(msg, self_is_own=False) else "voice",
+            self._enqueue_item(chat_id, {"type": "fwd_voice" if (_clip_as_material or tg_bot._is_forwarded(msg, self_is_own=False)) else "voice",
                 "media": "video", "file_id": _doc["file_id"],
                 # a GIF also arrives as a video/mp4 document, with its real length
                 # on `animation` (without it a 3 s GIF was offered as «16667 мин»)

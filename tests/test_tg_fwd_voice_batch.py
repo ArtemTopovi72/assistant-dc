@@ -372,8 +372,8 @@ bot._look_video = lambda ctx, fid, **kw: {"description": "0:00 — a cat on a so
                                           "sheet": "", "times": [0]}
 bot.sent.clear()
 bot._dispatch(fwd_from(CID_V, "Anna", video_note={"file_id": "c9", "duration": 4}))
-ok = settle(lambda: any("Forwarded video" in t for _, t in bot.sent))
-_ask = next((t for _, t in bot.sent if "Forwarded video" in t), "")
+ok = settle(lambda: any("<b>Video</b>" in t for _, t in bot.sent))
+_ask = next((t for _, t in bot.sent if "<b>Video</b>" in t), "")
 check("the video ask does not dump the storyboard", ok and "cat on a sofa" not in _ask, _ask)
 stop_bot(bot)
 
@@ -416,27 +416,40 @@ check("the pick button lists every piece", len(_mcbs) == 4 and all(c.startswith(
 _press(next(c for c in _mcbs if c.startswith("fwdv:m2")))      # videos 0,1 then pictures 2,3
 check("a picked picture becomes the target of the next words", bool(bot._get_session(CID_POST).target_image), bot.sent)
 
-section("a GIF sent straight to the bot is the chat's video, like a forwarded clip")
-# It got a funny comment and «продолжи» found no video (owner, 2026-10-12:
-# «надо просто реагировать как на дефолтное видео»).
+section("a GIF or video sent straight to the bot gets the forwarded clip's menu")
+# It got a one-off comment and no buttons while a кружок had a whole menu (owner,
+# 2026-10-12: «у кружка куча кнопок а на видео их нет», «и для гиф так же»).
 CID_GIF = 900306
 approve(bot, CID_GIF)
-_gdir = os.path.join(_DATA, "gifsheet"); os.makedirs(_gdir, exist_ok=True)
-_gsheet = os.path.join(_gdir, "sheet.jpg"); open(_gsheet, "wb").write(b"x")
 bot._look_video = lambda ctx, fid, **kw: {"description": "0:00 — a woman reaches into a cupboard",
-                                          "sheet": _gsheet, "times": [0], "duration": 5}
-bot.sent.clear(); _kbs.clear(); INVOKES.clear()
+                                          "sheet": "", "times": [0], "duration": 5}
+for _name, _media in (("GIF", {"animation": {"file_id": "gif1", "duration": 5},
+                               "document": {"file_id": "gif1", "mime_type": "video/mp4"}}),
+                      ("video", {"video": {"file_id": "vid1", "duration": 5}})):
+    bot.sent.clear(); _kbs.clear(); INVOKES.clear()
+    bot._dispatch({"update_id": _next_update_id(),
+                   "message": dict({"message_id": _next_update_id(), "chat": {"id": CID_GIF, "type": "private"},
+                                    "from": {"id": CID_GIF}, "date": int(time.time())}, **_media)})
+    settle(lambda: any(k and "fwdv:cont" in str(k) for k in _kbs), timeout=10)
+    _cbs = [b["callback_data"] for k in _kbs if k and "inline_keyboard" in k
+            for row in k["inline_keyboard"] for b in row]
+    check(f"a {_name} gets transcript, storyboard and continue buttons, not a one-off comment",
+          any(c.startswith("fwdv:cont") for c in _cbs) and any(c.startswith("fwdv:board") for c in _cbs)
+          and not INVOKES, (_cbs, INVOKES))
+_routed = []
+_real_enq = bot._enqueue_item
+bot._enqueue_item = lambda cid, it, *a, **k: _routed.append(it.get("type"))
+bot._dispatch({"update_id": _next_update_id(),
+               "message": {"message_id": _next_update_id(), "chat": {"id": CID_GIF, "type": "private"},
+                           "from": {"id": CID_GIF}, "date": int(time.time()), "caption": "what is she doing?",
+                           "video": {"file_id": "vid2", "duration": 5}}})
 bot._dispatch({"update_id": _next_update_id(),
                "message": {"message_id": _next_update_id(), "chat": {"id": CID_GIF, "type": "private"},
                            "from": {"id": CID_GIF}, "date": int(time.time()),
-                           "animation": {"file_id": "gif1", "duration": 5},
-                           "document": {"file_id": "gif1", "mime_type": "video/mp4"}}})
-settle(lambda: bool(INVOKES), timeout=10)
-_play = bot._get_session(CID_GIF)
-_paths = [e.get("path") if isinstance(e, dict) else getattr(e, "path", "") for e in (_play.image_log or [])]
-check("the GIF's frames are the chat's picture, so «продолжи» finds its clip beside them",
-      any(p and os.path.dirname(p) == _gdir for p in _paths), _paths)
-check("no extra button message", not any("continue" in str(k) for k in _kbs), _kbs)
+                           "video_note": {"file_id": "round1", "duration": 5}}})
+bot._enqueue_item = _real_enq
+check("a video WITH words is the task, a кружок is the user talking: both stay plain turns",
+      _routed == ["voice", "voice"], _routed)
 stop_bot(bot)
 
 print(f"\n{OK}/{OK + BAD} passed")

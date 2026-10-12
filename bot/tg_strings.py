@@ -1149,8 +1149,8 @@ _MSG: dict[str, dict[str, str]] = {
                             "do with it?",
                       "ru": "🎧 <b>Пересланное голосовое</b> · {mins}\nЧто с ним сделать?"},
     # The storyboard is behind its own button (👁), not dumped into the ask.
-    "fwd_video_ask": {"en": "🎥 <b>Forwarded video</b> · {mins}\nWhat should I do with it?",
-                      "ru": "🎥 <b>Пересланное видео</b> · {mins}\nЧто с ним сделать?"},
+    "fwd_video_ask": {"en": "🎥 <b>Video</b> · {mins}\nWhat should I do with it?",
+                      "ru": "🎥 <b>Видео</b> · {mins}\nЧто с ним сделать?"},
     "fwd_batch_ask": {"en": "📨 <b>Forwarded conversation</b> · {parts}{who}\nWhat should I do with it?",
                       "ru": "📨 <b>Пересланная переписка</b> · {parts}{who}\nЧто с ней сделать?"},
     "fwd_batch_who": {"en": "\n👥 {names}", "ru": "\n👥 {names}"},
