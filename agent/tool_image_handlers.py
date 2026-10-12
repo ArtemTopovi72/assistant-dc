@@ -63,8 +63,9 @@ def _absence_read(check: str) -> bool:
         import llm
         ans = llm.call_llm_simple(
             None, "Answer yes or no only.",
-            "Does this check on a picture ask whether something was removed, is gone, or is "
-            "still there? A question about a colour, size or look is no.\n\nCheck: «%s»"
+            "Does this check on a picture verify that something was REMOVED or erased -- "
+            "asking whether it is gone or still left over? Checking that things are kept, "
+            "added, still recognisable, or about a colour, size or look is no.\n\nCheck: «%s»"
             % check[:500], temperature=0.0, max_tokens=5) or ""
         return ans.strip().lower().startswith(("yes", "да"))
     except Exception:
