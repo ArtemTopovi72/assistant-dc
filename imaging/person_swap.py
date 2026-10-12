@@ -86,6 +86,7 @@ def swap(ctx, path: str, box: Box, ref: str, wish: str = "") -> str:
     w = (rx1 - rx0) // 3
     core = (rx0, rx1)
     rx0, rx1 = max(0, rx0 - w), min(im.width, rx1 + w)
+    ry0 = max(0, ry0 - (ry1 - ry0) // 4)
     band = max(6, int(min(rx1 - rx0, ry1 - ry0) * 0.06))
     mask = Image.new("L", (rx1 - rx0, ry1 - ry0), 0)
     # the bottom edge is the picture's own edge when the region reaches it: no fade there
