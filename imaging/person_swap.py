@@ -105,7 +105,7 @@ def swap(ctx, path: str, box: Box, ref: str, wish: str = "") -> str:
     # Short, like a hand-written prompt: the long rule lists made it a flat cartoon.
     side = target.split(" of the picture")[0].replace("the person ", "")
     instr = ("The man " + side + " is gone; in his place stands " + who.split(",")[0]
-             + " exactly as in picture 2 -- the yellow square sponge itself, its own face"
+             + " from picture 2"
              + (", " + wish.rstrip(".") if wish else "") + ". Photographed for real, part of "
              + look + ".")
     out = image_mod.edit_image_with_firered(ctx, src, instr, reference_paths=[ref],
