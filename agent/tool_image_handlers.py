@@ -1348,7 +1348,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         if said:
             try:
                 old = (_llm.call_llm_simple(
-                    ctx, "Copy, word for word, ONLY the part of the user's message that they say "
+                    None, "Copy, word for word, ONLY the part of the user's message that they say "
                     "is ALREADY in the existing video (e.g. the words before «это уже есть на "
                     "видео» / «it is already in the video»). If they say nothing is already "
                     "there, reply NONE. No other words.", said, temperature=0, max_tokens=200)
@@ -1356,6 +1356,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             except Exception:
                 logger.warning("generate_video: reading what is already in the clip failed", exc_info=True)
             old = "" if old.upper().startswith("NONE") else old
+            logger.info("generate_video: already in the clip per the user: %r", old[:200])
 
         def _new(part: str) -> bool:
             seen = re.split(r"\bSounds?:", part)[0].strip()
