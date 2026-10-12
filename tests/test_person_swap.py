@@ -116,8 +116,8 @@ for wish, real in (("a real porous kitchen sponge with real eyes", True), ("smok
     t, refs = EDITS[-1] if EDITS else ("", None)
     check(f"wish {wish!r}: " + ("the reference is read as a real thing and drawn from words"
                                 if real else "the reference goes in as sent"),
-          (len(EDITS) == 2 and "Remove" in EDITS[0][0] and refs == [] and "a real sponge" in t)
-          if real else (len(EDITS) == 2 and "Remove" in EDITS[0][0] and refs == [SPONGE]), EDITS)
+          (len(EDITS) == 1 and "red box with a real sponge" in t and refs == [])
+          if real else (len(EDITS) == 1 and "red box with SpongeBob" in t and refs == [SPONGE]), EDITS)
 intent.YES_STUB = None
 
 # The agent can do the same: «замени четвёртого на Губку Боба» with the two pictures sent.

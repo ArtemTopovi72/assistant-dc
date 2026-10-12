@@ -96,9 +96,6 @@ def swap(ctx, path: str, box: Box, ref: str, wish: str = "") -> str:
     look = ("a black-and-white old photograph with its grain, contrast and softness"
             if grey else "the same photograph, with its light, colours, grain and sharpness")
     who = _who(ctx, ref) or "the character from picture 2"
-    boxes = people(path)
-    n = next((i for i, b in enumerate(boxes, 1) if tuple(b) == tuple(box)), 0)
-    target = where(path, box, n, len(boxes)) if n else "the person picked"
     # On the WHOLE photo, only the picked person's region pasted back: drawn on the
     # region alone the newcomer had no people to size itself by and came out a flat
     # cartoon apart from them (live 2026-10-12, «полное говно»).
@@ -109,39 +106,44 @@ def swap(ctx, path: str, box: Box, ref: str, wish: str = "") -> str:
     src = os.path.join(tempfile.mkdtemp(prefix="swap_"), "photo.png")
     im.resize((int(im.width * k) // 8 * 8, int(im.height * k) // 8 * 8), Image.LANCZOS).save(src)
     # Short, like a hand-written prompt: the long rule lists made it a flat cartoon.
-    side = target.split(" of the picture")[0].replace("the person ", "")
     real = False
     if wish:
         import intent
         real = intent.ask_yes("Does the user want the character turned into a real-life, "
                               "photographed physical version of itself, not kept as drawn?", wish)
     name = who.split(",")[0]
-    # Erase first, then put in, both on the whole photo: in one pass with picture 2
-    # given, «the man is gone; in his place stands…» kept Yezhov and stood the newcomer
-    # beside him (live via the agent, 2026-10-13).
-    empty = image_mod.edit_image_with_firered(
-        ctx, src, "Remove the man " + side + " completely -- body, head, cap, coat, shadow -- "
-        "and fill the place with what is behind him. Everything else stays exactly as it is.",
-        save_prefix="swap_region")
-    if not empty or not os.path.exists(empty):
-        return ""
     # Asked for a real one, the reference is read by the VLM as a real thing and drawn
     # from those words, picture 2 not given: given, FireRed copied the drawing whatever
     # the words said -- no greatcoat, no size, a cartoon or a 3D toy even after an
     # Anything2Real pass (live via the agent, 2026-10-13); from words alone it drew a
     # real porous sponge in a greatcoat (2026-10-12, «ахуенно»).
     real_look = _real_look(ctx, ref) if real else ""
-    figure = real_look or name + " from picture 2"
+    finish = (" Photographed for real, part of " + look + ": exactly as sharp or soft, grainy "
+              "and worn as the rest of the photo, no glow or halo around it.")
+    # The place and the size drawn, not said: a red box round the man, head to the bottom
+    # edge (Qwen-Image-Edit reads a red-marked area -- the community's mask trick). In
+    # words, «where he stood» / «on the same ground» / «beside the man in the middle»
+    # stood it beyond the embankment's railing, small on the railing, or giant-headed;
+    # erased first, the pavement became water (live via the agent, 2026-10-13).
+    marked = os.path.join(os.path.dirname(src), "marked.png")
+    with Image.open(src) as e:
+        e = e.convert("RGB")
+        kx, ky = e.width / im.width, e.height / im.height
+        x0, y0, x1, y1 = box
+        fw, fh = x1 - x0, y1 - y0
+        cx = (x0 + x1) / 2
+        rb = (int((cx - fw * 1.8) * kx), int((y0 - fh * 0.35) * ky),
+              int((cx + fw * 1.8) * kx), e.height - 2)
+        ImageDraw.Draw(e).rectangle(rb, outline=(255, 0, 0), width=max(4, e.width // 250))
+        e.save(marked)
     # The wish right after the figure: last in a long sentence, «in a greatcoat» was
-    # dropped two runs of three (live via the agent, 2026-10-13).
-    instr = ("Put " + figure + (" -- " + wish.rstrip(".") + " --" if wish else "")
-             + " standing on the same ground as the others, in the empty place " + side
-             + ", in the same row, as big as they are, full body. Photographed for real, part of "
-             + look + ": exactly as sharp or soft, grainy and worn as the rest of the photo, "
-             "no glow or halo around it.")
+    # dropped two runs of three.
     out = image_mod.edit_image_with_firered(
-        ctx, empty, instr, reference_paths=[] if real_look else [ref],
-        save_prefix="swap_region")
+        ctx, marked, "Replace the man inside the red box with " + (real_look or name + " from picture 2")
+        + (" (" + wish.rstrip(".") + ")" if wish else "") + ", standing full body and filling "
+        "the box from its top edge to its bottom edge; nothing of the man is left. Then remove "
+        "the red box completely." + finish,
+        reference_paths=[] if real_look else [ref], save_prefix="swap_region")
     if not out or not os.path.exists(out):
         return ""
     new = Image.open(out).convert("RGB").resize(im.size, Image.LANCZOS)
