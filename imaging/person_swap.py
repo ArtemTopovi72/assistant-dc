@@ -101,19 +101,58 @@ def swap(ctx, path: str, box: Box, ref: str, wish: str = "") -> str:
         return ""
     # «as tall as a grown man» grew a man's head on top of SpongeBob: the size is said as
     # the spot to fill, and the character stays wholly itself.
+    # The user's wishes («в шинели и ростом с человека, ехидно улыбается») come first, in
+    # English like the rest; the character's own face is kept whatever it wears.
+    if wish:
+        import image_grounding
+        wish = image_grounding._english_instructions(ctx, wish) or wish
+    blend = (" It blends in seamlessly: rendered as part of " + look
+             + (", fully black-and-white" if grey else "") + ", with the scene's light direction, "
+             "shadows on the ground, depth of field, grain and softness, as if photographed there "
+             "together with the others, not pasted on. Everything else stays exactly as it is.")
+    # No «at the scale of the people beside it»: the region holds none, and FireRed drew one.
     instr = ("Put " + who + " (picture 2) standing in the middle of picture 1, big, filling the "
              "empty spot from the middle of the picture down to its bottom edge, full body, "
              "standing on the ground. It is ONLY that character, wholly as in picture 2: its own "
-             "shape, its own face and features, no human head, body or clothes added. Render it as part of " + look + (", fully black-and-white" if grey else "")
-             + ", lit like the scene, as if they had been photographed there. Everything else "
-             "stays exactly as it is." + (f" The user's wishes: {wish}" if wish else ""))
+             "shape, its own face and features, no human head, body or clothes added." + blend)
     out = image_mod.edit_image_with_firered(ctx, empty, instr, reference_paths=[ref],
                                             save_prefix="swap_region")
     if not out or not os.path.exists(out):
         return ""
+    # Wishes are a third edit of the character already standing there: said in the same
+    # edit, «a person-sized figure in a greatcoat» drew a real man next to a small SpongeBob
+    # twice (live 2026-10-12); an existing figure is changed, not a new one added.
+    # Any «person», «man», «human» in the words turned SpongeBob into a young man even here:
+    # the wish is retold as changes to the character's own body.
+    if wish:
+        name = who.split(",")[0]
+        try:
+            from llm import call_llm_simple
+            told = " ".join((call_llm_simple(
+                None, "Retell this wish as changes to the cartoon character " + name + " itself, "
+                "in English, one sentence: its own body, its own face. Say any size as the "
+                "character's own body stretched taller or bigger (e.g. 'its sponge body stretched "
+                "three times taller'); NEVER use the words person, people, man, human, figure or "
+                "adult. Clothes are worn over its own body. Reply with the sentence only.",
+                wish, max_tokens=120) or "").split())
+        except Exception:
+            told = ""
+        changed = image_mod.edit_image_with_firered(
+            ctx, out, "Change only the cartoon " + who + " in picture 1, keeping it exactly that "
+            "cartoon character from picture 2 -- its own head, face, eyes and colours: "
+            + (told or wish) + " Nothing human about it." + blend,
+            reference_paths=[ref], save_prefix="swap_region")
+        if changed and os.path.exists(changed):
+            out = changed
     new = Image.open(out).convert("RGB").resize(crop.size, Image.LANCZOS)
     if grey:
         new = new.convert("L").convert("RGB")
+    # FireRed brightens what it redraws: the region came back lighter than the photo around
+    # it, a visible patch -- its tone is matched to the crop it replaces.
+    import numpy as np
+    a, c = np.asarray(new, dtype=np.float32), np.asarray(crop, dtype=np.float32)
+    a = (a - a.mean((0, 1))) / (a.std((0, 1)) + 1e-6) * c.std((0, 1)) + c.mean((0, 1))
+    new = Image.fromarray(a.clip(0, 255).astype(np.uint8))
     band = max(6, int(min(crop.size) * 0.06))
     mask = Image.new("L", crop.size, 0)
     # the bottom edge is the picture's own edge when the region reaches it: no fade there
