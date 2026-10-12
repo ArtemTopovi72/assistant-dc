@@ -386,12 +386,14 @@ _SAMPLER = _contextvars.ContextVar("firered_sampler", default=None)
 
 
 @_contextlib.contextmanager
-def firered_sampler(steps: int, cfg: float, *, lightning: bool = True, negative: str = ""):
+def firered_sampler(steps: int, cfg: float, *, lightning: bool = True, negative: str = "",
+                    upsize: bool = False):
     """Every FireRed edit inside the block samples with these settings instead of
     the template's Lightning 8 steps at cfg 1 (image_style: a restyle needs real
-    guidance and a negative, bench/style_ab.py)."""
+    guidance and a negative, bench/style_ab.py). `upsize`: a source smaller than the
+    working resolution comes back at it, same aspect, instead of shrunk to the source."""
     tok = _SAMPLER.set({"steps": int(steps), "cfg": float(cfg), "lightning": lightning,
-                        "negative": negative})
+                        "negative": negative, "upsize": upsize})
     try:
         yield
     finally:
@@ -584,7 +586,12 @@ def _edit_image_with_firered_once(ctx, image_path: str, instruction: str,
     # Geometry guard: rescale the decoded result back to the source canvas so the
     # saved dimensions match the input exactly (node 191 still downscaled internally).
     if dims:
-        _enforce_output_size(workflow, dims[0], dims[1])
+        out_w, out_h = dims
+        if _sm and _sm.get("upsize") and src_mp and src_mp < work_megapixels:
+            # A 736x495 picture restyled at 1 MP and shrunk back came out «мыльный кал».
+            k = (work_megapixels / src_mp) ** 0.5
+            out_w, out_h = int(out_w * k) // 8 * 8, int(out_h * k) // 8 * 8
+        _enforce_output_size(workflow, out_w, out_h)
 
     logger.info("%s edit [BUILD_ID=%s]: input=%s dims=%s (%.2f MP) -> work_MP %.2f (was %s) seed=%d instr=%r",
                 engine, IMAGE_BUILD_ID, os.path.basename(image_path), dims, (src_mp or 0.0),

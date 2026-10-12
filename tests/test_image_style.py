@@ -18,8 +18,9 @@ def _run(monkeypatch, instructions, *, expand=None, who="a man with a black must
     seen = {}
 
     @contextlib.contextmanager
-    def sampler(steps, cfg, *, lightning=True, negative=""):
+    def sampler(steps, cfg, *, lightning=True, negative="", upsize=False):
         seen["sampler"] = (steps, cfg, lightning, negative)
+        seen["upsize"] = upsize
         yield
 
     @contextlib.contextmanager
@@ -44,7 +45,7 @@ def test_a_preset_renders_its_own_text_with_real_guidance(monkeypatch):
     assert seen["instr"].startswith(SP.preset_prompt("anime"))
     steps, cfg, lightning, neg = seen["sampler"]
     assert steps >= 12 and cfg > 1 and lightning is False and "photo" in neg
-    assert seen["lora"] is None
+    assert seen["lora"] is None and seen["upsize"]
 
 
 def test_anime_and_comic_are_different_instructions(monkeypatch):
@@ -80,3 +81,18 @@ def test_a_redraw_that_is_not_a_style_is_edited_as_written(monkeypatch):
     out, seen, calls = _run(monkeypatch, "make it night time",
                             expand=("other", "Turn picture 1 into a night scene."))
     assert calls and seen["instr"] == "make it night time" and "sampler" not in seen
+
+
+def test_a_small_picture_is_restyled_at_working_size_not_shrunk_back(monkeypatch):
+    """A 736x495 picture restyled at 1 MP and shrunk back to 736x495 came out soft."""
+    seen = {}
+    monkeypatch.setattr(I, "_enforce_output_size", lambda wf, w, h: seen.update(w=w, h=h))
+    monkeypatch.setattr(I, "_upload_image_to_comfy", lambda p, u: "x.png")
+    monkeypatch.setattr(I, "_source_dims", lambda p: (736, 495))
+    monkeypatch.setattr(I, "_submit_and_poll", lambda *a, **k: "out.png")
+    monkeypatch.setattr(I.os.path, "exists", lambda p: True)
+    with I.firered_sampler(12, 3.0, lightning=False, upsize=True):
+        I._edit_image_with_firered_once(None, "src.png", "x", seed=1)
+    assert seen["w"] > 1000 and abs(seen["w"] / seen["h"] - 736 / 495) < 0.02, seen
+    I._edit_image_with_firered_once(None, "src.png", "x", seed=1)
+    assert (seen["w"], seen["h"]) == (736, 495)          # a plain edit keeps the source size

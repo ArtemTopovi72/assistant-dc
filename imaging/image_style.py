@@ -120,7 +120,8 @@ def restyle(ctx, image_path: str, instructions: str, *, seed=None, timeout=None)
         return image_mod.edit_image_with_firered(ctx, image_path, instructions, **kw)
     neg = {"drawn": NEG_DRAWN, "photo": NEG_PHOTO}.get(target, NEG_OTHER)
     logger.info("style: target=%s instr=%r", target, instr[:160])
-    with image_mod.firered_sampler(STYLE_STEPS, STYLE_CFG, lightning=False, negative=neg), \
+    with image_mod.firered_sampler(STYLE_STEPS, STYLE_CFG, lightning=False, negative=neg,
+                                  upsize=True), \
             image_mod.firered_extra_lora(PHOTO_LORA if target == "photo" else None,
                                          PHOTO_LORA_STRENGTH):
         return image_mod.edit_image_with_firered(ctx, image_path, instr, **kw)
