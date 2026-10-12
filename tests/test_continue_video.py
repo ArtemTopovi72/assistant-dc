@@ -158,16 +158,26 @@ check("the delivered clip is the joined one (longer than the new part)",
 import intent
 CALLS = []
 V.generate_video = lambda ctx, description, **kw: (CALLS.append(description), fake_gen(ctx, description, **kw))[1]
-intent.YES_STUB = lambda q, text: "screams" in q.split("A planned new part", 1)[1]
+import llm as _llm_c
+_real_simple = _llm_c.call_llm_simple
+_llm_c.call_llm_simple = lambda ctx, system, user, **k: "она орёт" if "ALREADY" in system else ""
+# the repeat question says yes only for the scream; the «does anything happen» question
+# says no only for scenery; the door's sound line repeats the scream and must not count
+intent.YES_STUB = lambda q, text: (("screams" in text) if q.startswith("Already in the existing video")
+                                   else ("camera glides" not in text))
 _script = ("The old woman touches the things in the cabinet, jerks her hand back and screams eh at "
            "the top of her voice, her mouth wide open in shock for a long moment. Then the cabinet "
-           "door slowly swings open, and the young man with a blue glove on his fist steps out of "
-           "the dark, walks up to her and stops right in front of her, staring at her face.")
+           "door slowly swings open with a creak while the young man inside waits in the dark. "
+           "Sound: her scream screams on. The young man with a blue glove on his fist steps out of "
+           "the dark, walks up to her and stops right in front of her, staring at her face. The "
+           "camera glides slowly across the wardrobe and the clothes hanging in it, the light soft.")
 H._handle_generate_video(TCtx(), {"user_input_original": "она орёт, это уже есть на видео, а потом выходит парень"},
                          {"description": _script})
-check("the part already in the clip is not rendered again",
-      CALLS and not any("screams" in d for d in CALLS) and any("glove" in d for d in CALLS), CALLS)
+_all = " ".join(CALLS)
+check("the part already in the clip is not rendered; the door (its sound line echoing the scream) and the guy are",
+      CALLS and "jerks her hand" not in _all and "swings open" in _all and "glove" in _all, CALLS)
 intent.YES_STUB = None
+_llm_c.call_llm_simple = _real_simple
 V.generate_video = fake_gen
 
 # Pinned frames on: the tail is pinned into the new clip's head, not a reference
