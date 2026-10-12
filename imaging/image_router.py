@@ -49,7 +49,6 @@ class _ImageProxy:
 _image = _ImageProxy()
 
 
-
 # Which kind of edit an instruction is, read by the model -- it replaced a
 # table of 17 keyword regexes plus clause splitting on "and"/"then"/commas,
 # each tuned against the last live miss ("prison-style tattoos" sent a forearm
@@ -125,6 +124,7 @@ def _validate(got: dict) -> EditRead:
             if not bad & got.keys():
                 return EditRead()
             got = {k: v for k, v in got.items() if k not in bad}
+
 
 # Suites script their own model replies; under F5_TEST_RUN the read is
 # EDIT_STUB(text) when a suite sets it, else ("subject_edit", []).
