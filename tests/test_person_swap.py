@@ -174,5 +174,15 @@ check("a transfer is compared with its reference in one call and the misses name
 llm.analyze_image_with_llm = lambda *a, **k: "NONE"
 check("...nothing missing says nothing", H._transfer_missing(Ctx(), SPONGE, OUT, "x") == "")
 
+# A chained clip's joins are looked at all together, after the parts are made.
+SEEN.clear()
+llm.analyze_image_with_llm = lambda *a, **k: (SEEN.append(k), "Join 2: the camera jumps closer")[1]
+note = H._check_joins(Ctx(), [("a.jpg", "b.jpg"), ("c.jpg", "d.jpg")])
+check("every join of a chained clip goes in one call, both sides labelled, the rough one named",
+      note == "Join 2: the camera jumps closer" and len(SEEN) == 1
+      and [p for _, p in SEEN[0]["image_paths"]] == ["a.jpg", "b.jpg", "c.jpg", "d.jpg"], (note, SEEN))
+llm.analyze_image_with_llm = lambda *a, **k: "NONE"
+check("...smooth joins say nothing", H._check_joins(Ctx(), [("a.jpg", "b.jpg")]) == "")
+
 print(f"\n{OK}/{OK + BAD} passed")
 sys.exit(1 if BAD else 0)

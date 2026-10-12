@@ -1203,6 +1203,7 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=()) 
     import tg_continue
     import video as video_mod
     work = tempfile.mkdtemp(prefix="vidparts_")
+    joins = []                     # (last frame of the clip so far, first frame of the new part)
     for i, part in enumerate(parts[1:], start=2):
         if getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
             break
@@ -1237,6 +1238,9 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=()) 
         if not (new and os.path.exists(new)):
             logger.warning("video parts: part %d produced no clip (%s)", i, r.get("reason"))
             break
+        first = os.path.join(work, f"first_{i}.jpg")
+        if _first_frame(new, first):
+            joins.append((frame, first))
         # pinned: the new part starts on the frame after the old one ends -- butt-join
         joined = (video_mod.join_pinned(path, new) if pinned
                   else video_mod.join_continuation(path, new))
@@ -1245,7 +1249,43 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=()) 
             break
         path = video_mod._adopt_output(joined)
         logger.info("video parts: %d/%d joined -> %s", i, len(parts), os.path.basename(path))
+    ctx.video_join_note = _check_joins(ctx, joins)
     return path
+
+
+def _first_frame(video: str, out: str) -> bool:
+    try:
+        import cv2
+        cap = cv2.VideoCapture(video)
+        ok, img = cap.read()
+        cap.release()
+        return bool(ok) and bool(cv2.imwrite(out, img))
+    except Exception:
+        return False
+
+
+def _check_joins(ctx, joins: list) -> str:
+    """Every join of a chained clip -- the frame before it and the frame after -- in ONE
+    vision call, after all parts are made (per part, the vision model was loaded back
+    beside H3 between every two parts, ~10 min each). Names the joins where the camera
+    jumps or the person changes: part 2 re-framed and a ghost crossed the fade, and the
+    reply called it seamless (2026-10-12). "" when all are smooth or no model."""
+    if not joins:
+        return ""
+    try:
+        from llm import analyze_image_with_llm
+        pics = []
+        for n, (a, b) in enumerate(joins, 1):
+            pics += [(f"Join {n}, BEFORE:", a), (f"Join {n}, AFTER:", b)]
+        ans = " ".join((analyze_image_with_llm(
+            ctx, temperature=0.0, max_tokens=150, image_paths=pics,
+            user_text="These are the frames on both sides of each join of one continuous "
+                      "video. For each join where the camera framing jumps, the place changes "
+                      "or a person becomes someone else, say which join and what jumps, in a "
+                      "few words. Answer NONE when every join is continuous.") or "").split())
+    except Exception:
+        return ""
+    return "" if not ans or ans.upper().startswith("NONE") else ans[:400]
 
 
 def _handle_generate_video(ctx, state, args: dict) -> str:
@@ -1578,6 +1618,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             logger.warning("continue video: the join failed, delivering the new part alone")
 
     if len(parts) > 1 and not chain_id:
+        ctx.video_join_note = ""
         path = _render_remaining_parts(ctx, path, parts, args, people=people)
         result["seconds"] = video_mod.probe(path).get("seconds") or result.get("seconds")
 
@@ -1600,7 +1641,10 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         # from the plan (live 2026-10-12): the approved parts are what was made.
         + ("What the clip shows is ONLY these approved plan parts (anything else in the "
            "request, such as parts the user removed, was NOT made -- never describe it): "
-           + " | ".join(approved) + "\n" if approved else "") +
+           + " | ".join(approved) + "\n" if approved else "")
+        + ("The joins between the parts were checked: " + ctx.video_join_note + ". Tell the "
+           "user plainly which join is rough; do NOT call the clip seamless.\n"
+           if getattr(ctx, "video_join_note", "") else "") +
         "The clip is delivered to the user automatically — just tell them it is ready "
         "in one short sentence. Do NOT call generate_video again for this turn."
     )
