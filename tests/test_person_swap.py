@@ -73,14 +73,25 @@ s = bot._get_session(CID)
 check("a number picks that person and asks for who goes instead",
       "right" in s.swap_where and "fourth of the 4" in s.swap_where, s.swap_where)
 
+# The swap runs itself, not through the agent: its transfer_image re-rendered and
+# coloured the whole photo, kept the man and answered «done» (live 2026-10-12).
+CALLS = []
+OUT = os.path.join(d, "swapped.png")
+Image.new("RGB", (800, 500), "white").save(OUT)
+person_swap.swap = lambda ctx, path, box, ref, wish="": (CALLS.append((path, box, ref, wish)), OUT)[1]
+bot.photos.clear()
 bot._resolve_and_push(CID, [{"type": "photo", "file_id": "sponge", "caption": "пусть курит"}])
-check("the next photo becomes ONE swap task", len(bot.pushed) == 1, bot.pushed)
-t = bot.pushed[0] if bot.pushed else None
-check("...on the picked picture, the photo as the character to put in",
-      t and t.image_path == PIC and t.style_ref_path and os.path.exists(t.style_ref_path), t and vars(t))
-check("...naming the picked person, the style kept and the caption as wishes",
-      t and t.user_text.startswith("[swap]") and "fourth of the 4" in t.user_text
-      and "own style" in t.user_text and "пусть курит" in t.user_text, t and t.user_text)
+import time
+for _ in range(50):
+    if bot.photos:
+        break
+    time.sleep(0.1)
+check("the next photo swaps directly, no agent task", not bot.pushed and len(CALLS) == 1, (bot.pushed, CALLS))
+c = CALLS[0] if CALLS else None
+check("...the picked person of the picked picture, the photo as who goes in, the caption as wishes",
+      c and c[0] == PIC and c[1] == (620, 110, 680, 180) and os.path.exists(c[2]) and c[3] == "пусть курит", c)
+check("...and the result comes back as a picture with its own buttons",
+      bot.photos and bot.photos[-1][0] == OUT and "swap_person:" in str(bot.photos[-1][1]), bot.photos)
 s = bot._get_session(CID)
 check("the swap is spent: the next photo is an ordinary photo again",
       not s.pending_swap_target and not s.swap_where, (s.pending_swap_target, s.swap_where))

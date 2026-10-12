@@ -1092,6 +1092,7 @@ class CallbackMixin:
             self._send_text(chat_id, tg_bot._t("img_gone", lang))
             return
         sess.swap_where = person_swap.where(entry["path"], tuple(box), n, len(sess.swap_boxes))
+        sess.swap_boxes = [list(box)]           # the one picked; the photo needs only it
         self._store.put(sess)
         self._send_text(chat_id, tg_bot._t("swap_ask_photo", lang), keyboard=self._state_kb(sess))
 

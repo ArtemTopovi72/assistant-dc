@@ -1279,6 +1279,9 @@ _MSG: dict[str, dict[str, str]] = {
                       "ru": "🔁 Не вижу на этой картинке людей."},
     "swap_pick":     {"en": "🔁 Who goes? Press their number.",
                       "ru": "🔁 Кого заменить? Нажми номер."},
+    "swap_working":  {"en": "🔁 Swapping… about two minutes.", "ru": "🔁 Заменяю… около двух минут."},
+    "swap_failed":   {"en": "🔁 The swap did not work out, nothing was changed. Try another picture.",
+                      "ru": "🔁 Замена не получилась, ничего не поменял. Попробуй другую картинку."},
     "swap_ask_photo": {"en": "🔁 Now send a picture of who goes in their place (a photo, a cartoon, anyone). "
                                "A caption with wishes is welcome.",
                        "ru": "🔁 Теперь пришли картинку того, кто встанет на это место (фото, мультяшка, кто угодно). "

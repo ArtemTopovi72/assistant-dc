@@ -210,8 +210,7 @@ class ResolveMixin:
             _ref_item = next((it for it in batch if it.get("type") in ("photo", "album")), None)
             if _ref_item is not None:
                 _wish = " ".join((it.get("caption") or "").strip() for it in batch).strip()
-                self._push_style_transfer_task(chat_id, sess, lang, _ref_item, _arrival_ts,
-                                               swap_wish=_wish)
+                self._run_swap(chat_id, sess, lang, _ref_item, _wish)
                 return
 
         # 🎞 Animate photo (__animate_photo__ direct action) armed
@@ -1644,9 +1643,46 @@ class ResolveMixin:
         self._send_text(chat_id, tg_bot._t("style_ask_ref", lang),
                         keyboard={"inline_keyboard": rows})
 
+    def _run_swap(self, chat_id: int, sess, lang: str, item: dict, wish: str) -> None:
+        """🔁 the photo of who goes in: the picked person's region is redrawn and pasted back
+        (person_swap.swap), on its own thread under the card lock the edit takes itself.
+        Not through the agent: its transfer_image re-rendered and coloured the whole photo,
+        kept the man and answered «done» (live 2026-10-12)."""
+        import threading
+        import person_swap
+        target = tg_bot._image_by_id(sess, sess.pending_swap_target)
+        box = tuple(sess.swap_boxes[0]) if sess.swap_boxes else None
+        sess.pending_swap_target, sess.swap_boxes, sess.swap_where = "", [], ""
+        sess.pending_prefix = ""
+        self._store.put(sess)
+        file_id = (item.get("file_id") if item.get("type") == "photo"
+                   else next(iter(item.get("file_ids") or []), None))
+        data = self._dl_bytes(file_id) if file_id else None
+        if not (target and box and os.path.exists(target.get("path", "")) and data):
+            self._send_text(chat_id, tg_bot._t("img_gone", lang))
+            return
+        ref = _save_image_bytes(data)
+        self._send_text(chat_id, tg_bot._t("swap_working", lang))
+        ctx = self._get_ctx()
+
+        def _go():
+            try:
+                out = person_swap.swap(ctx, target["path"], box, ref, wish)
+            except Exception:
+                tg_bot.logger.exception("person swap failed chat=%s", chat_id)
+                out = ""
+            if not out:
+                self._send_text(chat_id, tg_bot._t("swap_failed", lang))
+                return
+            s2 = self._get_session(chat_id)
+            img_id = tg_bot._log_image(s2, out, label="swap", src="bot")
+            s2.target_image = img_id
+            self._store.put(s2)
+            self._send_photo(chat_id, out, keyboard=tg_bot._image_kb(lang, img_id))
+        threading.Thread(target=_go, name=f"swap-{chat_id}", daemon=True).start()
+
     def _push_style_transfer_task(self, chat_id: int, sess, lang: str,
-                                   item: dict, arrival_ts: float, outfit_wish=None,
-                                   swap_wish=None) -> None:
+                                   item: dict, arrival_ts: float, outfit_wish=None) -> None:
         """Consume the reference photo pending_style_target was waiting for
         and push a dedicated transfer_image task with BOTH images attached.
 
@@ -1674,14 +1710,8 @@ class ResolveMixin:
         # outfit_wish (str, may be "") = the 👗 flow: same two-image transfer, the
         # reference is the clothes and the caption says what else to do.
         outfit = outfit_wish is not None
-        swap = swap_wish is not None
-        target_id = (sess.pending_swap_target if swap else
-                     sess.pending_outfit_target if outfit else sess.pending_style_target)
-        swap_where = sess.swap_where
-        if swap:
-            sess.pending_swap_target, sess.swap_boxes, sess.swap_where = "", [], ""
-            sess.pending_prefix = ""
-        elif outfit:
+        target_id = sess.pending_outfit_target if outfit else sess.pending_style_target
+        if outfit:
             sess.pending_outfit_target = ""
             sess.pending_prefix = ""
         else:
@@ -1699,16 +1729,14 @@ class ResolveMixin:
             self._send_text(chat_id, tg_bot._t("img_gone", lang))
             return
         ref_path = _save_image_bytes(data)
-        tg_bot._log_image(sess, ref_path, label=("swap reference" if swap else "outfit reference"
-                                                 if outfit else "style reference"),
+        tg_bot._log_image(sess, ref_path, label="outfit reference" if outfit else "style reference",
                           src="user")
         self._store.put(sess)
 
         task = tg_bot._Task(
             task_id=str(uuid.uuid4()),
             chat_id=chat_id,
-            user_text=(_swap_text(swap_where, swap_wish) if swap else
-                       _outfit_text(outfit_wish) if outfit else
+            user_text=(_outfit_text(outfit_wish) if outfit else
                 "[style] call transfer_image with instructions=\"Change the visual "
                 "style of the target image to match the reference image: lighting, "
                 "colour palette, contrast, texture, atmosphere and photographic "
@@ -1731,8 +1759,7 @@ class ResolveMixin:
         self._backend.push(task)
         self._write_inflight()
         tg_bot.logger.info("Enqueued task %s chat=%s kind=%s depth=%d",
-                    task.task_id[:8], chat_id, "swap" if swap else "outfit" if outfit else "style",
-                    self._backend.depth())
+                    task.task_id[:8], chat_id, "outfit" if outfit else "style", self._backend.depth())
         try:
             ahead = self._backend.tasks_ahead(task.task_id)
         except Exception:
@@ -1741,21 +1768,6 @@ class ResolveMixin:
             self._send_text(chat_id,
                 tg_bot._t("queue_pos", lang, pos=len(ahead) + 1, eta=tg_bot._fmt_eta(ahead, lang)),
                 parse_mode="HTML")
-
-
-def _swap_text(where: str, wish: str) -> str:
-    """🔁 + a picture of anyone: they take the picked person's place, drawn in the
-    target's own style (a cartoon sponge in a photo becomes a photographed one)."""
-    from prompt_guard import wrap_quoted
-    extra = ("\n" + wrap_quoted("the user's wishes for the swap", wish)) if wish else ""
-    return ("[swap] call transfer_image with instructions=\"Replace " + where + " in the target "
-            "image with the character from the reference image: that character stands exactly "
-            "where the replaced person was, at the same size, in the same pose and doing the same "
-            "thing, and nothing of the replaced person stays. Render the character in the target "
-            "image's own style, lighting, grain and colours, as if they had been there when it "
-            "was made. Everyone and everything else stays exactly as it is.\" using the two "
-            "loaded images (the target to edit is the earlier one, the character to put in is "
-            "the one just sent)." + extra)
 
 
 def _outfit_text(wish: str) -> str:

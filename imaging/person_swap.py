@@ -58,6 +58,93 @@ def collage(path: str, boxes: List[Box], out: str, tile: int = 320) -> str:
     return out
 
 
+def region(size: Tuple[int, int], box: Box) -> Box:
+    """The picked person's own part of the picture: their face box grown to the shoulders
+    and down to the bottom (a standing figure), never the neighbours' middles."""
+    W, H = size
+    x0, y0, x1, y1 = box
+    fw, fh = x1 - x0, y1 - y0
+    cx = (x0 + x1) / 2
+    half = fw * 2.3
+    return (int(max(0, cx - half)), int(max(0, y0 - fh * 1.0)), int(min(W, cx + half)), H)
+
+
+def swap(ctx, path: str, box: Box, ref: str, wish: str = "") -> str:
+    """The person at `box` replaced by the character of `ref`, in the picture's own
+    style; returns the saved picture or "". Through the agent's transfer_image the
+    whole photo was re-rendered and coloured, Yezhov stayed a man in another uniform,
+    and the reply said «done» (live 2026-10-12): here only the person's own region is
+    redrawn and pasted back, so the rest of the photo cannot change."""
+    import tempfile
+    import image as image_mod
+    from PIL import ImageFilter
+    im = Image.open(path).convert("RGB")
+    rx0, ry0, rx1, ry1 = region(im.size, box)
+    crop = im.crop((rx0, ry0, rx1, ry1))
+    k = max(1.0, (1024 * 1024 / (crop.width * crop.height)) ** 0.5)
+    big = crop.resize((int(crop.width * k) // 8 * 8, int(crop.height * k) // 8 * 8), Image.LANCZOS)
+    tmp = tempfile.mkdtemp(prefix="swap_")
+    src = os.path.join(tmp, "region.png")
+    big.save(src)
+    grey = _is_grey(im)
+    look = ("a black-and-white old photograph with its grain, contrast and softness"
+            if grey else "the same photograph, with its light, colours, grain and sharpness")
+    who = _who(ctx, ref) or "the character from picture 2"
+    # Two steps: asked to replace in one go, FireRed kept the man and stuck a small flat
+    # SpongeBob on his coat (live 2026-10-12). First the person goes, then the newcomer
+    # is drawn into the empty spot at a person's size.
+    empty = image_mod.edit_image_with_firered(
+        ctx, src, "Remove the person standing in the middle of the picture completely -- body, "
+        "head, cap, coat, shadow -- and fill the spot with what is behind them, continuing the "
+        "background seamlessly. Everything else stays exactly as it is.", save_prefix="swap_region")
+    if not empty or not os.path.exists(empty):
+        return ""
+    # «as tall as a grown man» grew a man's head on top of SpongeBob: the size is said as
+    # the spot to fill, and the character stays wholly itself.
+    instr = ("Put " + who + " (picture 2) standing in the middle of picture 1, big, filling the "
+             "empty spot from the middle of the picture down to its bottom edge, full body, "
+             "standing on the ground. It is ONLY that character, wholly as in picture 2: its own "
+             "shape, its own face and features, no human head, body or clothes added. Render it as part of " + look + (", fully black-and-white" if grey else "")
+             + ", lit like the scene, as if they had been photographed there. Everything else "
+             "stays exactly as it is." + (f" The user's wishes: {wish}" if wish else ""))
+    out = image_mod.edit_image_with_firered(ctx, empty, instr, reference_paths=[ref],
+                                            save_prefix="swap_region")
+    if not out or not os.path.exists(out):
+        return ""
+    new = Image.open(out).convert("RGB").resize(crop.size, Image.LANCZOS)
+    if grey:
+        new = new.convert("L").convert("RGB")
+    band = max(6, int(min(crop.size) * 0.06))
+    mask = Image.new("L", crop.size, 0)
+    # the bottom edge is the picture's own edge when the region reaches it: no fade there
+    mask.paste(255, (band, band, crop.width - band, crop.height - (0 if ry1 == im.height else band)))
+    im.paste(new, (rx0, ry0), mask.filter(ImageFilter.GaussianBlur(band / 2)))
+    res = os.path.join(os.path.dirname(out), "swap_" + os.path.basename(path).rsplit(".", 1)[0] + ".png")
+    im.save(res)
+    return res
+
+
+def _who(ctx, ref: str) -> str:
+    """The character of the reference in a few words («SpongeBob SquarePants, a yellow
+    square sea sponge with big eyes»): shown only as picture 2, FireRed drew another
+    man in Yezhov's uniform."""
+    try:
+        from llm import analyze_image_with_llm
+        return " ".join((analyze_image_with_llm(
+            ctx, image_path=ref, temperature=0.1,
+            user_text="Who or what is the main character in this picture? Answer with their name "
+                      "if they are a known character or person, then a few words on how they "
+                      "look (shape, colours). One short line, nothing else.") or "").split())[:200]
+    except Exception:
+        return ""
+
+
+def _is_grey(im) -> bool:
+    import numpy as np
+    a = np.asarray(im.resize((128, 128)), dtype=np.int16)
+    return float(np.abs(a[..., 0] - a[..., 1]).mean() + np.abs(a[..., 1] - a[..., 2]).mean()) < 6
+
+
 def where(path: str, box: Box, n: int, total: int) -> str:
     """Words that single out person `n` of `total` for an edit model."""
     with Image.open(path) as im:
