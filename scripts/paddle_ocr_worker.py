@@ -8,10 +8,18 @@ import sys
 
 
 def main() -> None:
+    import os
+    # Memory taken as it is needed, not a pool up front: the card is shared with the chat
+    # model and FireRed.
+    os.environ.setdefault("FLAGS_allocator_strategy", "auto_growth")
     from paddleocr import PaddleOCR
-    # Four threads: on every core it starved the renders and the other users' turns.
-    ocr = PaddleOCR(lang="ru", enable_mkldnn=False, use_doc_orientation_classify=False,
-                    use_doc_unwarping=False, use_textline_orientation=False, cpu_threads=4)
+    kw = dict(lang="ru", enable_mkldnn=False, use_doc_orientation_classify=False,
+              use_doc_unwarping=False, use_textline_orientation=False)
+    try:
+        ocr = PaddleOCR(device="gpu", **kw)
+    except Exception:
+        # Four threads: on every core it starved the renders and the other users' turns.
+        ocr = PaddleOCR(device="cpu", cpu_threads=4, **kw)
     print(json.dumps({"ready": True}), flush=True)
     for line in sys.stdin:
         try:
