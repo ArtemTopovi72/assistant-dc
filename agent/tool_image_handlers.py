@@ -1333,6 +1333,22 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     # blocks"): the first part here, the rest after it below.
     raw = (args.get("description") or "").strip()
     parts = [raw] if args.get("seconds") else video_mod.split_script(raw)
+    if continuing and len(parts) > 1:
+        # «…орёт э, это уже есть на видео, а потом…»: the agent still opened the plan
+        # with the grandma's scream, rendered again for 6 minutes (owner, 2026-10-12).
+        import intent
+        from prompt_guard import user_words
+        said = user_words(str((state or {}).get("user_input_original") or "")).strip()
+        while len(parts) > 1 and said and intent.ask_yes(
+                "A user continues an existing video clip and wrote: {text}\n\nA planned new "
+                "part of the continuation: " + parts[0][:600] + "\n\nDid the user say that what "
+                "this part shows is ALREADY in the existing clip?", said):
+            logger.info("generate_video: part already in the clip, dropped: %s", parts[0][:120])
+            parts = parts[1:]
+        kept = " ".join(parts)
+        if kept != raw:
+            description = description.replace(raw, kept, 1) if raw in description else kept
+            raw = kept
     if len(parts) > 1:
         parts = video_mod.mark_inserts(ctx, parts)
     if len(parts) > 1 and raw in description:

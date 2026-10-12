@@ -153,6 +153,23 @@ H._handle_generate_video(TCtx(), st, {"description": "they leave"})
 check("the delivered clip is the joined one (longer than the new part)",
       st.get("video_path") and V.probe(st["video_path"])["seconds"] > 5.5, st)
 
+# «…орёт э, это уже есть на видео, а потом…»: a plan part the user says is already in
+# the clip is not rendered again (owner, 2026-10-12: 6 minutes for a repeat).
+import intent
+CALLS = []
+V.generate_video = lambda ctx, description, **kw: (CALLS.append(description), fake_gen(ctx, description, **kw))[1]
+intent.YES_STUB = lambda q, text: "screams" in q.split("A planned new part", 1)[1]
+_script = ("The old woman touches the things in the cabinet, jerks her hand back and screams eh at "
+           "the top of her voice, her mouth wide open in shock for a long moment. Then the cabinet "
+           "door slowly swings open, and the young man with a blue glove on his fist steps out of "
+           "the dark, walks up to her and stops right in front of her, staring at her face.")
+H._handle_generate_video(TCtx(), {"user_input_original": "она орёт, это уже есть на видео, а потом выходит парень"},
+                         {"description": _script})
+check("the part already in the clip is not rendered again",
+      CALLS and not any("screams" in d for d in CALLS) and any("glove" in d for d in CALLS), CALLS)
+intent.YES_STUB = None
+V.generate_video = fake_gen
+
 # Pinned frames on: the tail is pinned into the new clip's head, not a reference
 V.motion_context_on = lambda: True
 SEEN.clear()
