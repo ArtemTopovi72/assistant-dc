@@ -56,6 +56,62 @@ def seed_frame(src: str, out_jpg: str) -> bool:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def face_frame(src: str, out_jpg: str, circle: bool = False) -> bool:
+    """The frame of a clip that shows its person best -- the largest, sharpest face over the
+    whole clip -- as out_jpg; `circle` crops a кружок to the square inside its disc first.
+    A person is a look, not a moment: their LAST frame (hand over the mouth, blurred) gave
+    the video model nothing to go on, and a stranger walked out (live 2026-10-12)."""
+    import numpy as np
+    from PIL import Image
+    import identity_metrics
+    import video_look
+    tmp = out_jpg + ".all"
+    os.makedirs(tmp, exist_ok=True)
+    try:
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", src, "-vf", "fps=3", "-q:v", "2",
+                        os.path.join(tmp, "f_%03d.jpg")], capture_output=True, check=True, timeout=120)
+        frames = sorted(os.path.join(tmp, f) for f in os.listdir(tmp) if f.endswith(".jpg"))
+        if not frames:
+            return False
+        scored = []
+        for p in frames:
+            with Image.open(p) as im:
+                im = im.convert("RGB")
+                if circle:
+                    w, h = im.size
+                    k = 0.707 / 2
+                    im = im.crop((int(w * (0.5 - k)), int(h * (0.5 - k)), int(w * (0.5 + k)), int(h * (0.5 + k))))
+                    im.save(p, quality=95)
+            boxes = identity_metrics.face_boxes(p, pad=0.0)
+            if not boxes:
+                continue
+            x0, y0, x1, y1 = boxes[0]
+            g = np.asarray(Image.open(p).convert("L").crop((x0, y0, x1, y1)).resize((160, 160)), dtype=np.float32)
+            scored.append(((x1 - x0) * (y1 - y0) * (1.0 + video_look._sharpness(g)), frames.index(p), p))
+        if not scored:
+            return False
+        scored.sort(reverse=True)
+        best = scored[0]
+        # A second view at least 1.5 s away: a hand over the mouth in one moment is off
+        # it in another, and two angles pin a face that one blurry frame does not.
+        other = next((s for s in scored[1:] if abs(s[1] - best[1]) >= 5), None)
+        if other is None:
+            Image.open(best[2]).convert("RGB").save(out_jpg, quality=95)
+            return True
+        a, b = (Image.open(s[2]).convert("RGB") for s in sorted((best, other), key=lambda s: s[1]))
+        b = b.resize((int(b.width * a.height / b.height), a.height))
+        sheet = Image.new("RGB", (a.width + b.width, a.height))
+        sheet.paste(a, (0, 0))
+        sheet.paste(b, (a.width, 0))
+        sheet.save(out_jpg, quality=95)
+        return True
+    except Exception:
+        return False
+    finally:
+        import shutil
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def cut_tail(src: str, out_mp4: str, seconds: float = TAIL_SECONDS) -> bool:
     """The last `seconds` of the clip, with its sound, as the reference video."""
     try:
@@ -127,19 +183,12 @@ class ContinueMixin:
         if data:
             with open(clip, "wb") as fh:
                 fh.write(data)
-        if not (data and seed_frame(clip, path)):
+        # A кружок frame is a disc with a «TELEGRAM» mark on its rim: given whole, the video
+        # model pasted that disc into the corner of every frame (live 2026-10-12).
+        if not (data and (face_frame(clip, path, circle=bool(msg.get("video_note")))
+                          or seed_frame(clip, path))):
             self._send_text(chat_id, tg_bot._t("continue_fail_dl", lang))
             return True
-        if msg.get("video_note"):
-            # A кружок frame is a disc with a «TELEGRAM» mark on its rim: given whole, the
-            # video model pasted that disc into the corner of every frame (live 2026-10-12).
-            # The square inside the circle is the person alone.
-            from PIL import Image
-            with Image.open(path) as im:
-                w, h = im.size
-                k = 0.707 / 2
-                box = (int(w * (0.5 - k)), int(h * (0.5 - k)), int(w * (0.5 + k)), int(h * (0.5 + k)))
-                im.convert("RGB").crop(box).save(path, quality=95)
         people.append(path)
         sess.continue_people = people
         self._store.put(sess)
