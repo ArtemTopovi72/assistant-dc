@@ -137,6 +137,14 @@ def test_sound_and_light_lines_are_never_a_part_of_their_own():
     assert not any(p.lstrip().startswith("Soundscape") for p in parts)
 
 
+def test_scenery_lines_are_never_a_part_of_their_own():
+    # Live 2026-10-12: «The background shows shelves with a bag…» was a 5-minute part.
+    long_action = " ".join(f"Then the cat does trick number {i} and the dog answers it." for i in range(12))
+    parts = V.split_script(long_action + " The background shows the dark closet with shelves and a bag.")
+    assert len(parts) > 1 and all("shelves" in p for p in parts)
+    assert not any(p.lstrip().startswith("The background") for p in parts)
+
+
 def test_parts_are_about_six_seconds_one_beat_each():
     # Live 2026-10-11: two events in one 10 s clip lost their middle (stones fell from the sky).
     s = ("The imam grabs the dog and throws him out of the door. The dog lands on the street, "

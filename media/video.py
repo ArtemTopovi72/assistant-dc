@@ -136,7 +136,10 @@ def estimate_seconds(description: str, capped: bool = True) -> float:
 
 _LOOK = re.compile(
     r"(?:the\s+)?(?:soundscape|sound(?:track)?|audio|music|ambien\w*|lighting|the lighting|light is|"
-    r"style|the style|look|overall|throughout|color|colour|quality|the camera|camera)\b"
+    r"style|the style|look|overall|throughout|color|colour|quality|the camera|camera|"
+    # «The background shows shelves with a bag…» became a 5-minute part of its own
+    # (live 2026-10-12): scenery takes no screen time either.
+    r"(?:in\s+)?the\s+background|background|setting|scenery|visible|in\s+view)\b"
     r"|(?:the\s+)?(?:lighting|look|tone|mood|atmosphere|palette)\b.{0,40}\b(?:is|remains|stays)\b",
     re.I)
 _SENT = re.compile(r"(?<=[.!?;])\s+|(?<=,)\s+(?=(?:then|after that|afterwards|затем|потом|после этого)\b)", re.I)
