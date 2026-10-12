@@ -8,8 +8,8 @@ import image_style as IS
 
 
 def _built(key):
-    IS._who = lambda ctx, path: ""
-    return IS.build(None, SP.preset_prompt(key))
+    IS._who = lambda ctx, path: ("", False)
+    return IS.build(None, SP.preset_prompt(key))[:2]
 
 
 def test_every_preset_has_a_prompt_and_labels():
