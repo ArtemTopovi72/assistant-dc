@@ -1433,6 +1433,9 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         self._poll_thread = threading.Thread(target=self._poll_loop, daemon=True,
                                              name="tg-poll")
         self._poll_thread.start()
+        import debug_user
+        threading.Thread(target=debug_user.loop, args=(self,), daemon=True,
+                         name="tg-debug-user").start()
 
         # Supervisor: the bot must not go quiet because one thread died. Every
         # loop below already catches per-iteration exceptions, but a hard failure

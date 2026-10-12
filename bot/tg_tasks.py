@@ -1315,6 +1315,12 @@ class TaskRunnerMixin:
         _style_ref = getattr(task, "style_ref_path", "")
         if _style_ref and os.path.exists(_style_ref) and ctx.last_image_path:
             ctx.reference_images = [ctx.last_image_path, _style_ref]
+        _album = [p for p in (getattr(task, "album_paths", None) or []) if p and os.path.exists(p)]
+        # The album's first picture rides as task.image_path and becomes the working
+        # image only later in this function; ctx.last_image_path is still empty here.
+        _first = getattr(task, "image_path", "") or ctx.last_image_path
+        if _album and _first:
+            ctx.reference_images = [_first, *_album]
         # What THIS turn is about, for the next one's "the picture": a photo
         # sent with the message, or the one pointed at; a delivered picture
         # overwrites it below, and a turn with none leaves it empty.

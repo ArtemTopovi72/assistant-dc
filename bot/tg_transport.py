@@ -119,6 +119,9 @@ def _logged_post(url, **kw):
         files = kw.get("files") or {}
         _chatlog.outgoing(url.rsplit("/", 1)[-1],
                           dict(payload, **({"_files": list(files)} if files else {})))
+        import debug_user
+        if debug_user.is_debug(payload.get("chat_id")):
+            return debug_user.record(url, kw)
     return requests.post(url, **kw)
 
 
@@ -159,6 +162,13 @@ class TransportMixin:
     def _dl_bytes_raw(self, file_id: str):
         fp = ""
         try:
+            if str(file_id).startswith("dbg:"):
+                import debug_user
+                fp = debug_user.file_path(file_id)
+                if not fp:
+                    return None, ""
+                with open(fp, "rb") as fh:
+                    return fh.read(), fp
             r  = self._api_get("getFile", {"file_id": file_id})
             fp = (r.get("result") or {}).get("file_path")
             if not fp: return None, ""

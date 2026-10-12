@@ -40,6 +40,9 @@ class _Task:
     # ctx.reference_images from the pair so transfer_image has both to work
     # with -- ordinary tasks never touch this field.
     style_ref_path: str = ""
+    # The other pictures of an album sent with the request: the agent gets them as
+    # images, not only as words (🔁 Stalin + SpongeBob in one message, 2026-10-12).
+    album_paths: list = field(default_factory=list)
     enqueue_ts:  float = field(default_factory=time.time)
     # Set once the reply (text / picture / file) has landed in the chat. What
     # runs after that — history compaction — is housekeeping the user never

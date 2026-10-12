@@ -1514,10 +1514,12 @@ class ResolveMixin:
         # Log the rest of the album so "the second one"/"the third one" has
         # something to resolve against later, even though only the first
         # photo drives THIS task (a _Task carries a single image_path).
+        _album_paths = []
         if _album_extra_bytes:
             _seen_extra = []
             for _i, _extra in enumerate(_album_extra_bytes, start=2):
                 _extra_path = _save_image_bytes(_extra)
+                _album_paths.append(_extra_path)
                 tg_bot._log_image(sess, _extra_path,
                                   label=f"{merged[:70]} (#{_i})", src="user")
                 try:
@@ -1546,6 +1548,7 @@ class ResolveMixin:
             image_path=img_path,
             image_id=pressed_image_id,
             image_is_photo=_photo_upload,
+            album_paths=_album_paths,
             enqueue_ts=_arrival_ts,
             reply_to=getattr(self, "_msg_id", {}).get(chat_id, 0),
         )

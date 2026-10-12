@@ -17,7 +17,7 @@ from ui_scale import px
 GROUPS = (
     ("Creation", ("images", "storyboard", "transfer", "restyle", "music", "voice_clone", "characters")),
     ("Knowledge", ("search", "research", "database", "memory")),
-    ("Bot & services", ("telegram", "admin", "weather", "madhouse")),
+    ("Bot & services", ("telegram", "debug_chat", "admin", "weather", "madhouse")),
     ("System", ("model", "status", "log", "code", "stress")),
 )
 _KEY = Qt.UserRole

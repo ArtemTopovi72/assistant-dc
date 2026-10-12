@@ -4,6 +4,17 @@ Keys are the exact English strings in gui/*.py; %s/%d mark the variable parts.
 A string missing here shows in English and lands in runtime/untranslated_gui.jsonl."""
 
 RU = {
+    'Debug chat': 'Отладочный чат',
+    'Debug user on': 'Отладочный юзер включён',
+    "Lets the bot read this chat. Its messages queue with everyone's.": 'Бот читает этот чат. Сообщения стоят в общей очереди со всеми.',
+    'Clear view': 'Очистить',
+    'You are an ordinary user of the running bot: same queue, same answers, nothing goes to Telegram.': 'Ты обычный пользователь запущенного бота: та же очередь, те же ответы, в Telegram ничего не уходит.',
+    'Send pictures (several = one album); the text goes as the caption': 'Отправить картинки (несколько — одним альбомом); текст уйдёт подписью',
+    'Message': 'Сообщение',
+    'Send': 'Отправить',
+    'Pictures': 'Картинки',
+    '○ offline': '○ не в сети',
+    '● live': '● в сети',
     'Done': 'Готово',
     'user': 'юзер',
     'English': 'English',

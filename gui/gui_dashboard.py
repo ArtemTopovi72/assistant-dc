@@ -329,6 +329,8 @@ class DashboardMixin:
         self.storyboard_tab = StoryboardTab(self)
         self.database_tab = self._build_database_tab()
         self.telegram_tab = TelegramTab(self)
+        from gui_debug_chat_tab import DebugChatTab
+        self.debug_chat_tab = DebugChatTab(self)
         from gui_admin_tab import AdminTab
         from gui_restyle_tab import RestyleTab
         self.restyle_tab = RestyleTab(self)
@@ -360,6 +362,7 @@ class DashboardMixin:
             ("status",   _scroll_page(self.system_info_tab),   "Status"),
             ("log",      _scroll_page(self.terminal),          "Log"),
             ("telegram", _scroll_page(self.telegram_tab),      "Telegram"),
+            ("debug_chat", self.debug_chat_tab,                  "Debug chat"),
             ("admin",    _scroll_page(self.admin_tab),         'Admin'),
             ("code",     _scroll_page(self.code_tab),          "Code"),
             ("characters", _scroll_page(self.characters_tab),  'Characters'),
