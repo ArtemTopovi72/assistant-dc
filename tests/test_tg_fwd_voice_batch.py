@@ -416,28 +416,27 @@ check("the pick button lists every piece", len(_mcbs) == 4 and all(c.startswith(
 _press(next(c for c in _mcbs if c.startswith("fwdv:m2")))      # videos 0,1 then pictures 2,3
 check("a picked picture becomes the target of the next words", bool(bot._get_session(CID_POST).target_image), bot.sent)
 
-section("a GIF sent straight to the bot can be continued, like a forwarded clip")
-# It got a funny comment and no ▶️ (owner, 2026-10-12: «это же гифка почему не дал продолжить»).
+section("a GIF sent straight to the bot is the chat's video, like a forwarded clip")
+# It got a funny comment and «продолжи» found no video (owner, 2026-10-12:
+# «надо просто реагировать как на дефолтное видео»).
 CID_GIF = 900306
 approve(bot, CID_GIF)
+_gdir = os.path.join(_DATA, "gifsheet"); os.makedirs(_gdir, exist_ok=True)
+_gsheet = os.path.join(_gdir, "sheet.jpg"); open(_gsheet, "wb").write(b"x")
 bot._look_video = lambda ctx, fid, **kw: {"description": "0:00 — a woman reaches into a cupboard",
-                                          "sheet": "", "times": [0]}
-_taken = []
-bot._continue_take_media = lambda cid, sess, lang, msg: _taken.append(T.TelegramBot._video_of(msg)) or True
-bot.sent.clear(); _kbs.clear()
+                                          "sheet": _gsheet, "times": [0], "duration": 5}
+bot.sent.clear(); _kbs.clear(); INVOKES.clear()
 bot._dispatch({"update_id": _next_update_id(),
                "message": {"message_id": _next_update_id(), "chat": {"id": CID_GIF, "type": "private"},
                            "from": {"id": CID_GIF}, "date": int(time.time()),
                            "animation": {"file_id": "gif1", "duration": 5},
                            "document": {"file_id": "gif1", "mime_type": "video/mp4"}}})
-settle(lambda: any(k and "fwdv:cont" in str(k) for k in _kbs), timeout=10)
-_cont = next((b["callback_data"] for k in _kbs if k and "inline_keyboard" in k
-              for row in k["inline_keyboard"] for b in row if b["callback_data"].startswith("fwdv:cont")), "")
-check("the GIF gets a ▶️ continue button", bool(_cont), (_kbs, bot.sent))
-if _cont:
-    bot._dispatch_callback({"id": "2", "data": _cont, "message": {"message_id": 6, "chat": {"id": CID_GIF}},
-                            "from": {"id": CID_GIF}})
-check("pressing it hands that very GIF to the continue flow", _taken == ["gif1"], _taken)
+settle(lambda: bool(INVOKES), timeout=10)
+_play = bot._get_session(CID_GIF)
+_paths = [e.get("path") if isinstance(e, dict) else getattr(e, "path", "") for e in (_play.image_log or [])]
+check("the GIF's frames are the chat's picture, so «продолжи» finds its clip beside them",
+      any(p and os.path.dirname(p) == _gdir for p in _paths), _paths)
+check("no extra button message", not any("continue" in str(k) for k in _kbs), _kbs)
 stop_bot(bot)
 
 print(f"\n{OK}/{OK + BAD} passed")
