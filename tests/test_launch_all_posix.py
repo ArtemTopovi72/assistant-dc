@@ -52,7 +52,7 @@ def test_paths_are_native(tmp_path, monkeypatch):
 def test_comfy_source_really_starts(tmp_path, monkeypatch):
     _, marker = _fake_tree(tmp_path)
     m = _load(monkeypatch, tmp_path)
-    assert m._spawn_comfy_source() is True
+    assert m._spawn_comfy_source()
     for _ in range(100):
         if marker.exists() and (tmp_path / "comfyui_launch.log").read_text():
             break

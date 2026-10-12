@@ -226,15 +226,40 @@ def _spawn_comfy_source():
         # cold on a freshly restarted server, so it is not warm-up or fragmentation.
         # If H3 regresses, disable NVIDIA Sysmem Fallback for python
         # (user-side setting) or reserve per model.
-        subprocess.Popen(
+        return subprocess.Popen(
             [COMFY_PY, main_py, "--base-directory", COMFY_BASE_DIR, "--port", COMFY_PORT,
              "--use-ck-attention", "--reserve-vram", "1",
              "--output-directory", str(OUTPUT_DIR_COMFY), "--input-directory", str(INPUT_DIR_COMFY)],
             cwd=COMFY_SRC, env=env,
             stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, **kw)
-        return True
     except Exception:
+        return None
+
+
+def _comfy_process_alive() -> bool:
+    """A ComfyUI main.py for COMFY_PORT is running, listening yet or still loading."""
+    try:
+        import psutil
+    except ImportError:
         return False
+    for p in psutil.process_iter(["cmdline"]):
+        cmd = p.info.get("cmdline") or []
+        if any(c.endswith("main.py") for c in cmd) and COMFY_PORT in cmd:
+            return True
+    return False
+
+
+def _comfy_watchdog(interval=20):
+    """Keeps exactly one ComfyUI alive for the app's lifetime. A killed server stayed
+    down and every video and picture request failed «not running» until someone
+    restarted it by hand (2026-10-12). A server still loading is a live process
+    without the port: it is waited for, never doubled."""
+    while True:
+        time.sleep(interval)
+        if _up(COMFY_URL, timeout=5) or _comfy_process_alive():
+            continue
+        if _spawn_comfy_source():
+            print("launch_all: ComfyUI was down -- restarted", flush=True)
 
 
 def _lock_holder() -> str:
@@ -318,6 +343,8 @@ def main():
         tg_local_api.ensure_server(ROOT)
     except Exception:
         pass
+
+    threading.Thread(target=_comfy_watchdog, name="comfy-watchdog", daemon=True).start()
 
     # 4) launch the assistant GUI (in this process)
     os.environ.setdefault("USE_GUI", "1")
