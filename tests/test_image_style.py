@@ -96,3 +96,14 @@ def test_a_small_picture_is_restyled_at_working_size_not_shrunk_back(monkeypatch
     assert seen["w"] > 1000 and abs(seen["w"] / seen["h"] - 736 / 495) < 0.02, seen
     I._edit_image_with_firered_once(None, "src.png", "x", seed=1)
     assert (seen["w"], seen["h"]) == (736, 495)          # a plain edit keeps the source size
+
+
+def test_realism_keeps_materials_props_and_the_background():
+    """A white character sheet came back in a forest, her plate armour a cloth top,
+    her scythes and boots gone (owner, 2026-10-12): the photo text must not invite
+    fabric or a new place, and the description names materials, props, background."""
+    p = SP.preset_prompt("photo")
+    assert "fabric weave" not in p and "depth of field" not in p
+    assert "armor stays rigid armor" in p and "white photo-studio backdrop" in p
+    for word in ("material", "footwear", "weapons", "background"):
+        assert word in IS._WHO_PROMPT

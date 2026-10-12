@@ -68,11 +68,16 @@ STYLE_PRESETS: dict[str, dict] = {
     },
     "photo": {
         "label_ru": "📷 Реализм", "label_en": "📷 Real photo", "target": "photo",
-        "prompt": ("Change picture 1 into a real photograph taken with a full-frame DSLR camera, "
-                   "as if the scene were shot in real life: real human beings with natural adult "
-                   "human proportions, realistic faces and eyes of normal size, natural skin "
-                   "texture with pores and fine hairs, real hair strands, real fabric weave, real "
-                   "materials, natural photographic lighting and shallow depth of field."),
+        # «real fabric weave» turned plate armour into a cloth top and «shallow depth of
+        # field» invented a forest behind a white character sheet (owner, 2026-10-12):
+        # materials and the background are named as kept, not re-imagined.
+        "prompt": ("Change picture 1 into a real photograph taken with a full-frame DSLR camera: "
+                   "real human beings with natural adult human proportions, realistic faces and "
+                   "eyes of normal size, natural skin texture with pores, real hair strands, and "
+                   "every costume piece, prop and weapon made real in its own material -- armor "
+                   "stays rigid armor plates, leather stays leather, metal stays metal, cloth "
+                   "stays cloth. The background stays what it is: a plain or white background "
+                   "becomes a plain white photo-studio backdrop, not a new place."),
     },
 }
 

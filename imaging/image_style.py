@@ -53,11 +53,16 @@ _EXPAND_SYS = (
     "line work, the shading, how faces and eyes are drawn, the palette and the texture. "
     "Concrete visual traits only, no artist names you are unsure of, no composition changes.")
 
+# Clothing alone lost a character's scythes and boots and made her armour a cloth top:
+# what each thing is MADE of, what is held or attached, and the background are named.
 _WHO_PROMPT = (
-    "For each person or character in this picture, left to right, give one short phrase: "
-    "gender, approximate age, hair colour and style, facial hair, glasses, and clothing. "
-    "Join them with '; '. Nothing else. If there are no people, describe the main subject "
-    "in one short phrase.")
+    "Describe this picture for a photographer who must recreate it exactly. For each person or "
+    "character, left to right, one short phrase: gender, approximate age, hair colour and style, "
+    "facial hair, glasses; every garment and costume piece with its material (rigid metal armor "
+    "plates, leather, cloth, latex); the footwear; and everything held or attached (weapons, "
+    "props, wings, tails) with its shape and size. If the same character is shown twice "
+    "(front and back views), say so once. Then the background in a few words (e.g. 'plain "
+    "white background'). Join with '; '. Nothing else.")
 
 
 def _expand(ctx, words: str) -> tuple:
@@ -105,7 +110,9 @@ def build(ctx, instructions: str, image_path: Optional[str] = None) -> tuple:
         who = _who(ctx, image_path) if image_path else ""
         lead = f"change the picture 1 to realistic photograph, {who}. " if who else ""
         tail = (" Each person keeps the same gender, age, hair and facial hair, at real-life "
-                "human body proportions (a normal-sized head on a normal adult body).") if who else ""
+                "human body proportions (a normal-sized head on a normal adult body), and every "
+                "garment, armor piece, boot, weapon and prop named above stays, in the same place "
+                "and the same size, as a real costume or prop.") if who else ""
         return lead + style + tail + keep, target
     return style + keep, target
 
