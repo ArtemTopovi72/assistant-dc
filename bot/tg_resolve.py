@@ -1520,7 +1520,13 @@ class ResolveMixin:
         if _photo_upload and img_path and os.path.exists(img_path):
             try:
                 import ocr_reader
-                _reads = ocr_reader.read(img_path) or []
+                import threading as _th
+                _box = []
+                _t = _th.Thread(target=lambda: _box.append(ocr_reader.read(img_path) or []),
+                                daemon=True, name=f"ocr-{chat_id}")
+                _t.start()
+                _t.join(20.0)        # past that the message goes without it, never held
+                _reads = _box[0] if _box else []
                 _text = max(_reads, key=len) if _reads else ""
                 if len(_text.strip()) >= 3:
                     merged = (merged + "\n[Text written on picture 1 (OCR, exact letters): "

@@ -11,6 +11,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 Box = Tuple[int, int, int, int]
 MAX_PEOPLE = 9                  # one row of digit buttons
+CANDIDATES = 2                  # takes per swap; the vision model picks the best
 
 
 def people(path: str) -> List[Box]:
@@ -138,14 +139,24 @@ def swap(ctx, path: str, box: Box, ref: str, wish: str = "") -> str:
         e.save(marked)
     # The wish right after the figure: last in a long sentence, «in a greatcoat» was
     # dropped two runs of three.
-    out = image_mod.edit_image_with_firered(
-        ctx, marked, "Replace the man inside the red box with " + (real_look or name + " from picture 2")
-        + (" (" + wish.rstrip(".") + ")" if wish else "") + ", standing full body and filling "
-        "the box from its top edge to its bottom edge; nothing of the man is left. Then remove "
-        "the red box completely." + finish,
-        reference_paths=[] if real_look else [ref], save_prefix="swap_region")
-    if not out or not os.path.exists(out):
+    figure = (real_look or name + " from picture 2") + (" (" + wish.rstrip(".") + ")" if wish else "")
+    # Several takes, the vision model picks one: the same prompt gave a greatcoat once and
+    # a bare sponge on the water the next time, a man left with a sponge on his chest the
+    # third (live via the agent, 2026-10-13) -- one take is a coin toss.
+    takes = []
+    for _ in range(CANDIDATES):
+        if getattr(ctx, "is_cancelled", lambda: False)():
+            break
+        t = image_mod.edit_image_with_firered(
+            ctx, marked, "Replace the man inside the red box with " + figure + ", standing full "
+            "body and filling the box from its top edge to its bottom edge; nothing of the man "
+            "is left. Then remove the red box completely." + finish,
+            reference_paths=[] if real_look else [ref], save_prefix="swap_region")
+        if t and os.path.exists(t):
+            takes.append(t)
+    if not takes:
         return ""
+    out = _pick(ctx, takes, figure)
     new = Image.open(out).convert("RGB").resize(im.size, Image.LANCZOS)
     if grey:
         new = new.convert("L").convert("RGB")
@@ -187,6 +198,28 @@ def _who(ctx, ref: str) -> str:
                       "look (shape, colours). One short line, nothing else.") or "").split())[:200]
     except Exception:
         return ""
+
+
+def _pick(ctx, takes: list, figure: str) -> str:
+    """The take that best shows `figure` in the man's place, all shown in ONE vision call
+    (side by side the judge compares; one by one it rates each the same)."""
+    if len(takes) < 2:
+        return takes[0]
+    try:
+        import re
+        from llm import analyze_image_with_llm
+        ans = analyze_image_with_llm(
+            ctx, temperature=0.0, max_tokens=20,
+            image_paths=[(f"Take {i}:", t) for i, t in enumerate(takes, 1)],
+            user_text="Each take replaced a man on an old photo with " + figure + ". Which take "
+                      "shows it best: that figure, whole and as asked, in the man's place at a "
+                      "person's size, nothing of the man left, looking photographed together "
+                      "with the others? Answer with the take number only.") or ""
+        m = re.search(r"\d+", ans)
+        i = int(m.group()) if m else 1
+        return takes[i - 1] if 1 <= i <= len(takes) else takes[0]
+    except Exception:
+        return takes[0]
 
 
 def _real_look(ctx, ref: str) -> str:

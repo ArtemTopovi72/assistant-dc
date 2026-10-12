@@ -9,8 +9,9 @@ import sys
 
 def main() -> None:
     from paddleocr import PaddleOCR
+    # Four threads: on every core it starved the renders and the other users' turns.
     ocr = PaddleOCR(lang="ru", enable_mkldnn=False, use_doc_orientation_classify=False,
-                    use_doc_unwarping=False, use_textline_orientation=False)
+                    use_doc_unwarping=False, use_textline_orientation=False, cpu_threads=4)
     print(json.dumps({"ready": True}), flush=True)
     for line in sys.stdin:
         try:

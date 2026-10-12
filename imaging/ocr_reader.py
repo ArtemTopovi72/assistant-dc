@@ -150,7 +150,9 @@ def read(image_path: str) -> Optional[list]:
         from PIL import Image
         import numpy as np
         im = Image.open(image_path).convert("RGB")
-        if max(im.size) < 1600:
+        # EasyOCR only: PP-OCRv5 reads both scales alike, and on the doubled poster it
+        # ran minutes on every core and held a user's message (2026-10-13).
+        if max(im.size) < 1600 and getattr(r, "engine", "") != "paddle":
             variants.append(np.asarray(im.resize((im.width * 2, im.height * 2), Image.LANCZOS)))
     except Exception as exc:
         logger.debug("upscaled OCR variant unavailable: %s", exc)
