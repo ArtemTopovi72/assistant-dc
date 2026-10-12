@@ -119,17 +119,21 @@ def _add_earlier_pictures(ctx, state, summary: str) -> str:
                           "they sent together (compare them, what they share, which is "
                           "better, both of them)?", text, default=False):
         return summary
+    # One call with every picture labelled: read one at a time, each answer said "only one
+    # image was provided, there is no second picture" (2026-10-13).
+    cur = getattr(ctx, "last_image_path", None)
+    pics = [(f"Picture {i} (sent earlier):", p) for i, p in enumerate(earlier, 1)]
+    if cur and Path(cur).exists():
+        pics.append((f"Picture {len(pics) + 1} (the latest):", cur))
+    try:
+        got = analyze_image_with_llm(ctx=ctx, image_paths=pics, user_text=text,
+                                     system_prompt=VISION_PROMPT)
+    except Exception:
+        logger.warning("earlier pictures could not be read", exc_info=True)
+        got = ""
     parts = ["Latest picture:\n" + summary]
-    for i, path in enumerate(earlier, 1):
-        try:
-            with open(path, "rb") as fh:
-                got = analyze_image_with_llm(ctx=ctx, image_bytes=downscale_image_bytes(fh.read()),
-                                             user_text=text, system_prompt=VISION_PROMPT)
-        except Exception:
-            logger.warning("earlier picture could not be read", exc_info=True)
-            continue
-        if got:
-            parts.append("Earlier picture %d of %d sent in this chat:" % (i, len(earlier)) + "\n" + got)
+    if got:
+        parts.append("All %d pictures sent in this chat, looked at together:\n%s" % (len(pics), got))
     return "\n\n".join(parts) if len(parts) > 1 else summary
 
 

@@ -24,11 +24,14 @@ def _files(tmp_path):
 
 def test_earlier_picture_is_read_when_the_user_relates_pictures(tmp_path, monkeypatch):
     a, b = _files(tmp_path)
-    monkeypatch.setattr(graph, "analyze_image_with_llm", lambda **k: "a till receipt")
-    monkeypatch.setattr(graph, "downscale_image_bytes", lambda x: x)
+    calls = []
+    monkeypatch.setattr(graph, "analyze_image_with_llm",
+                        lambda **k: (calls.append(k), "a till receipt")[1])
     monkeypatch.setattr(intent, "YES_STUB", lambda q, t: True, raising=False)
     out = graph._add_earlier_pictures(_Ctx([a], b), {"user_input": "что общего у двух фото?"}, "a man")
-    assert "a man" in out and "a till receipt" in out and "Earlier picture 1 of 1" in out
+    assert "a man" in out and "a till receipt" in out
+    # one call seeing both: one at a time, each said "there is no second picture"
+    assert len(calls) == 1 and [p for _, p in calls[0]["image_paths"]] == [a, b]
 
 
 def test_single_picture_question_reads_only_the_current_one(tmp_path, monkeypatch):
