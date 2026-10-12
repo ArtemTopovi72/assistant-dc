@@ -1091,7 +1091,12 @@ class ResolveMixin:
 
             elif t == "photo":
                 data = self._dl_bytes(item["file_id"])
-                if data: img_bytes = data; _photo_upload = True
+                # Several single photos in one batch (forwarded posts, photos sent one by
+                # one) are an album too: each used to overwrite the last, and only one
+                # reached the model.
+                if data and img_bytes is not None:
+                    _album_extra_bytes.append(data)
+                elif data: img_bytes = data; _photo_upload = True
                 cap = (item.get("caption") or "").strip()
                 if cap: texts.append(cap)
                 # no auto-analyze: vision_agent_node will describe the image;
@@ -1530,7 +1535,10 @@ class ResolveMixin:
                 _text = max(_reads, key=len) if _reads else ""
                 if len(_text.strip()) >= 3:
                     merged = (merged + "\n[Text written on picture 1 (OCR, exact letters): "
-                              + _text.strip()[:600] + "]")
+                              + _text.strip()[:600] + ". The lettering is part of what the "
+                              "picture says: compare every word with what is shown -- a word "
+                              "that does not match it (a label naming another thing) is most "
+                              "likely the joke or the point, so name it.]")
             except Exception:
                 tg_bot.logger.warning("photo OCR failed", exc_info=True)
         _album_paths = []
