@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QGridLayout, QHB
                              QLineEdit, QPushButton, QTextBrowser, QVBoxLayout, QWidget)
 
 from ui_scale import px
-from gui_common import ACCENT, BORDER, MUTED, PANEL, PANEL2, TEXT, _section
+from gui_common import open_in_os, ACCENT, BORDER, MUTED, PANEL, PANEL2, TEXT, _section
 
 import logging
 logger = logging.getLogger("assistant.gui")
@@ -293,7 +293,7 @@ class DebugChatTab(QWidget):
 
     def _open(self, url: QUrl):
         try:
-            os.startfile(url.toLocalFile())
+            open_in_os(url.toLocalFile())
         except Exception:
             logger.info("debug chat: cannot open %s", url.toString())
 

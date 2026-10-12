@@ -45,10 +45,10 @@ def _paddle():
     """(python, worker) of PaddleOCR in venv_paddle, or ("", "") when it is not installed.
     PP-OCRv5 reads Russian print nearly error-free; EasyOCR stays the fallback."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    for exe in (os.path.join(root, "venv_paddle", "Scripts", "python.exe"),
-                os.path.join(root, "venv_paddle", "bin", "python")):
-        if os.path.exists(exe):
-            return exe, os.path.join(root, "scripts", "paddle_ocr_worker.py")
+    from config import venv_python
+    exe = venv_python(os.path.join(root, "venv_paddle"))
+    if os.path.exists(exe):
+        return exe, os.path.join(root, "scripts", "paddle_ocr_worker.py")
     return "", ""
 
 
