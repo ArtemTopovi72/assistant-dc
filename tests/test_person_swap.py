@@ -145,6 +145,10 @@ import tool_graph
 check("...and the other editors are locked on its result for the turn",
       st.get("swap_done") == OUT and tool_graph.edit_after_swap(st, "inpaint_image")
       and not tool_graph.edit_after_swap(st, "swap_person"), st)
+SW.clear()
+H._handle_swap_person(Ctx(), st, {"person": 2, "wish": "в шинели до пят"})
+check("...and a second try swaps on the original photo, not on the first result",
+      SW and SW[-1][0] == PIC and SW[-1][2] == SPONGE, SW)
 check("...and says so when that person does not exist",
       "does not exist" in H._handle_swap_person(Ctx(), st, {"person": 5}))
 check("...registered as an agent tool", any(t.name == "swap_person" for t in tools.TOOLS)

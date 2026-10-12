@@ -571,11 +571,15 @@ def _handle_swap_person(ctx, state, args: dict) -> str:
     the other loaded picture -- the same person_swap.swap the 🔁 button runs: one pass
     on the whole photo, only that person's region pasted back."""
     import person_swap
-    target = state.get("image_path") or getattr(ctx, "last_image_path", None)
+    # A second try swaps on the ORIGINAL photo: on the first result the person is gone
+    # and «person 4 of 3» does not exist (live via the debug user, 2026-10-13).
+    target = (state.get("swap_source") or state.get("image_path")
+              or getattr(ctx, "last_image_path", None))
     if not (target and os.path.exists(target)):
         return "[TOOL ERROR] swap_person needs the photo with the people loaded first."
     refs = [p for p in (getattr(ctx, "reference_images", None) or [])
-            if p and os.path.exists(p) and os.path.abspath(p) != os.path.abspath(target)]
+            if p and os.path.exists(p) and os.path.abspath(p) != os.path.abspath(target)
+            and p != state.get("swap_done")]
     if not refs:
         return ("[TOOL ERROR] swap_person needs a second picture: who goes in. Ask the "
                 "user to send it.")
@@ -596,6 +600,7 @@ def _handle_swap_person(ctx, state, args: dict) -> str:
                 "NOT claim it worked.")
     _set_current_image(ctx, state, new_path)
     state["swap_done"] = new_path
+    state["swap_source"] = target
     ctx.reference_images = (ctx.reference_images or []) + [new_path]
     _remember(ctx, state, "swap", f"Person {n} swapped", {"path": new_path})
     return (f"Swap complete and saved: {new_path}\n"

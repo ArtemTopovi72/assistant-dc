@@ -83,7 +83,7 @@ def swap(ctx, path: str, box: Box, ref: str, wish: str = "") -> str:
     # Drawn on the whole photo the newcomer may stand a little aside of the old spot: the
     # paste area is wider (the changed-pixels mask below keeps the neighbours), or its
     # head was cut off at the region's edge.
-    w = (rx1 - rx0) // 3
+    w = rx1 - rx0               # a figure a third wider was cut off at the edge (2026-10-13)
     core = (rx0, rx1)
     rx0, rx1 = max(0, rx0 - w), min(im.width, rx1 + w)
     ry0 = max(0, ry0 - (ry1 - ry0) // 4)
@@ -132,9 +132,11 @@ def swap(ctx, path: str, box: Box, ref: str, wish: str = "") -> str:
     # real porous sponge in a greatcoat (2026-10-12, «ахуенно»).
     real_look = _real_look(ctx, ref) if real else ""
     figure = real_look or name + " from picture 2"
-    instr = ("Put " + figure + " standing in the empty place " + side
-             + ", beside the others in the same row, as big as they are, full body"
-             + (", " + wish.rstrip(".") if wish else "") + ". Photographed for real, part of "
+    # The wish right after the figure: last in a long sentence, «in a greatcoat» was
+    # dropped two runs of three (live via the agent, 2026-10-13).
+    instr = ("Put " + figure + (" -- " + wish.rstrip(".") + " --" if wish else "")
+             + " standing on the same ground as the others, in the empty place " + side
+             + ", in the same row, as big as they are, full body. Photographed for real, part of "
              + look + ": exactly as sharp or soft, grainy and worn as the rest of the photo, "
              "no glow or halo around it.")
     out = image_mod.edit_image_with_firered(
