@@ -123,8 +123,12 @@ def _handle_inspect_image(ctx, state, args: dict) -> str:
     _before = state.get("edit_before")
     _pair = ([("BEFORE the edit:", _before), ("AFTER the edit (judge this one):", source)]
              if _before and _before != source and os.path.exists(_before) else None)
+    # ...and whether the people the edit was not about are still the same people: side
+    # by side a changed face shows, rated alone it passes as «a man».
     _ask = check + ("\n\nTwo pictures: BEFORE and AFTER the edit. Say first what changed "
-                    "between them, then judge the check on AFTER." if _pair else "")
+                    "between them, then whether every person the edit was not about is "
+                    "still the same person (face, features, count), then judge the check "
+                    "on AFTER." if _pair else "")
     result = ""
     for _ in range(2):
         result = analyze_image_with_llm(
