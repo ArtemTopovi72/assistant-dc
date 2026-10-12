@@ -1336,14 +1336,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     if continuing and len(parts) > 1:
         # «…орёт э, это уже есть на видео, а потом…»: the agent still opened the plan
         # with the grandma's scream, rendered again for 6 minutes (owner, 2026-10-12).
-        import intent
         from prompt_guard import user_words
         said = user_words(str((state or {}).get("user_input_original") or "")).strip()
-        # Sentence by sentence, before the script is cut into parts: a part is a few
-        # sentences, and dropping whole parts threw away «he straightens up to his full
-        # height» as a part «with nothing new» while the user asked exactly for that.
-        # Only a repeat of what the user says the clip already shows goes; its sound
-        # line is not read (the scream's echo made the door opening «a repeat»).
+        # Sentences, before the script is cut into parts: a part is a few sentences, and
+        # dropping whole parts threw away «he straightens up to his full height» while the
+        # user asked exactly for that.
         import llm as _llm
         old = ""
         if said:
@@ -1359,21 +1356,30 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             old = "" if old.upper().startswith("NONE") else old
             logger.info("generate_video: already in the clip per the user: %r", old[:200])
 
-        def _repeat(sentence: str) -> bool:
-            seen = re.split(r"\bSounds?:", sentence)[0].strip()
-            return bool(seen) and intent.ask_yes(
-                "Already in the existing video: " + old + "\n\nA sentence of the new part of the "
-                "video: {text}\n\nIs the main visible action of this sentence the same thing that "
-                "is already in the existing video (a repeat)? A sentence where something NEW is "
-                "seen happening (a door opens, an object moves, someone appears) is not a "
-                "repeat.", seen)
         if old:
+            # One call over the numbered sentences, counting the repeats at the START only:
+            # a yes/no per sentence dropped the object pulling back and the guy walking out
+            # as «repeats» on one run and kept them on the next; the count came back the
+            # same three times out of three.
             sentences = re.split(r"(?<=[.!?»])\s+", raw)
-            kept = [x for x in sentences if not _repeat(x)]
-            for x in sentences:
-                if x not in kept:
-                    logger.info("generate_video: already in the clip, dropped: %s", x[:120])
-            if kept and len(kept) < len(sentences):
+            try:
+                n = int(re.search(r"\d+", _llm.call_llm_simple(
+                    None, "You trim a video continuation script. The existing clip already "
+                    "shows: «" + old + "». The numbered sentences below are the script for what "
+                    "comes AFTER the clip. Count how many sentences AT THE START only show what "
+                    "the existing clip already shows (setting the scene, the same action again). "
+                    "Stop counting at the first sentence where anything new happens: an object "
+                    "moves or disappears, a door opens, someone appears. Reply with the number "
+                    "only (0 if the first sentence is already new).",
+                    "\n".join(f"{i}. {x}" for i, x in enumerate(sentences, 1)),
+                    temperature=0, max_tokens=8) or "0").group(0))
+            except Exception:
+                logger.warning("generate_video: counting repeated sentences failed", exc_info=True)
+                n = 0
+            kept = sentences[min(n, len(sentences) - 1):]
+            for x in sentences[:len(sentences) - len(kept)]:
+                logger.info("generate_video: already in the clip, dropped: %s", x[:120])
+            if len(kept) < len(sentences):
                 new_raw = " ".join(kept)
                 description = description.replace(raw, new_raw, 1) if raw in description else new_raw
                 raw = new_raw

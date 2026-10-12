@@ -160,11 +160,9 @@ CALLS = []
 V.generate_video = lambda ctx, description, **kw: (CALLS.append(description), fake_gen(ctx, description, **kw))[1]
 import llm as _llm_c
 _real_simple = _llm_c.call_llm_simple
-_llm_c.call_llm_simple = lambda ctx, system, user, **k: "она орёт" if "ALREADY" in system else ""
-# the repeat question says yes only for the scream; the «does anything happen» question
-# says no only for scenery; the door's sound line repeats the scream and must not count
-intent.YES_STUB = lambda q, text: (("screams" in text) if q.startswith("Already in the existing video")
-                                   else ("camera glides" not in text))
+# what is already there, then how many leading sentences repeat it (one: the scream)
+_llm_c.call_llm_simple = lambda ctx, system, user, **k: (
+    "она орёт" if "ALREADY" in system else "1" if "trim a video" in system else "")
 _script = ("The old woman touches the things in the cabinet, jerks her hand back and screams eh at "
            "the top of her voice, her mouth wide open in shock for a long moment. Then the cabinet "
            "door slowly swings open with a creak while the young man inside waits in the dark. "
