@@ -38,11 +38,13 @@ check(V.to_context_ir(None, "a man", mode="t2va", seconds=5) == "a man", "no ans
 ref_ok = ("subject_definitions:\n<Subject 1> is ...\nsummary:\nx\nretention_analysis:\ny\n"
           "detailed_description:\n[Shot 1] ...\noverall_soundscape: z\nnon_diegetic_music: N/A")
 seen = {}
-llm.analyze_image_with_llm = lambda ctx, image_path=None, user_text="", system_prompt="", **k: \
-    seen.update(img=image_path, sys=system_prompt[:60], user=user_text) or ref_ok
-out = V.to_context_ir(None, "<Picture 1> walks", mode="ref2va", seconds=5, images=["p.png"])
+llm.analyze_image_with_llm = lambda ctx, image_paths=None, user_text="", system_prompt="", **k: \
+    seen.update(img=[p for _, p in image_paths or []], sys=system_prompt[:60], user=user_text) or ref_ok
+out = V.to_context_ir(None, "<Picture 1> walks", mode="ref2va", seconds=5, images=["p.png", "guy.png"])
 check(out.startswith("subject_definitions:"), "Ref2VA six-section rewrite accepted")
-check(seen.get("img") == "p.png", "the rewriter SEES the reference picture")
+# Shown only the first, the writer guessed the newcomer of <Picture 2> («a dark glove» for
+# a light-blue one, only his arm in the shot; 2026-10-12).
+check(seen.get("img") == ["p.png", "guy.png"], "the rewriter SEES every reference picture")
 check("Full-Reference" in seen.get("sys", ""), "Ref2VA uses the full-reference guide")
 # A plan part naming only the newcomer («a man lunges out of the cabinet») left the
 # grandma of the first frame out, and H3 rendered the room without her (2026-10-12).

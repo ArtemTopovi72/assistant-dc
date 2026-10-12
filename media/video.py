@@ -1114,13 +1114,21 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
             # (live 2026-10-12, after the user dropped her part from the plan).
             + ("CAST RULE -- every person and animal visible in <Picture 1> is in the shot: "
                "each gets its own <Subject>, stays in frame and keeps reacting to what happens "
-               "(a scream, a flinch, a stare) unless the request says they leave.\n"
+               "(a scream, a flinch, a stare) unless the request says they leave. A person "
+               "from another picture who comes in or out of somewhere comes WHOLE, walking on "
+               "their own feet into full view, face visible, never just an arm or a hand, "
+               "unless the request says so; each picture's person keeps its exact look "
+               "(hair, clothes, the colour of gloves) as seen in that picture.\n"
                if images else "") +
             "\nRequest:\n" + description)
     import llm as _llm
     try:
         if images:
-            out = _llm.analyze_image_with_llm(ctx, image_path=images[0], user_text=user,
+            # Every picture, in order: shown only <Picture 1>, the writer guessed the
+            # newcomer of <Picture 2> -- a blond guy with a light-blue glove became «a
+            # man with a dark glove», only his arm in the shot (live 2026-10-12).
+            labelled = [(f"<Picture {i}>", p) for i, p in enumerate(images, 1)]
+            out = _llm.analyze_image_with_llm(ctx, image_paths=labelled, user_text=user,
                                               system_prompt=guide, temperature=0.4,
                                               max_tokens=2500)
         else:
