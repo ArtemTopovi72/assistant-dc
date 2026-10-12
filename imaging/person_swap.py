@@ -80,6 +80,11 @@ def swap(ctx, path: str, box: Box, ref: str, wish: str = "") -> str:
     from PIL import ImageFilter
     im = Image.open(path).convert("RGB")
     rx0, ry0, rx1, ry1 = region(im.size, box)
+    # Drawn on the whole photo the newcomer may stand a little aside of the old spot: the
+    # paste area is wider (the changed-pixels mask below keeps the neighbours), or its
+    # head was cut off at the region's edge.
+    w = (rx1 - rx0) // 3
+    rx0, rx1 = max(0, rx0 - w), min(im.width, rx1 + w)
     band = max(6, int(min(rx1 - rx0, ry1 - ry0) * 0.06))
     mask = Image.new("L", (rx1 - rx0, ry1 - ry0), 0)
     # the bottom edge is the picture's own edge when the region reaches it: no fade there
@@ -107,7 +112,8 @@ def swap(ctx, path: str, box: Box, ref: str, wish: str = "") -> str:
     instr = ("The man " + side + " is gone; in his place stands " + who.split(",")[0]
              + " from picture 2"
              + (", " + wish.rstrip(".") if wish else "") + ". Photographed for real, part of "
-             + look + ".")
+             + look + ": exactly as sharp or soft, grainy and worn as the rest of the photo, "
+             "no glow or halo around it.")
     out = image_mod.edit_image_with_firered(ctx, src, instr, reference_paths=[ref],
                                             save_prefix="swap_region")
     if not out or not os.path.exists(out):
@@ -120,8 +126,15 @@ def swap(ctx, path: str, box: Box, ref: str, wish: str = "") -> str:
     import numpy as np
     a, c = np.asarray(new, dtype=np.float32), np.asarray(im, dtype=np.float32)
     a = (a - a.mean((0, 1))) / (a.std((0, 1)) + 1e-6) * c.std((0, 1)) + c.mean((0, 1))
-    new = Image.fromarray(a.clip(0, 255).astype(np.uint8)).crop((rx0, ry0, rx1, ry1))
-    im.paste(new, (rx0, ry0), mask)
+    soft = a[ry0:ry1, rx0:rx1]
+    new = Image.fromarray(soft.clip(0, 255).astype(np.uint8))
+    # Only what actually changed is pasted: the whole region with a feathered rim left a
+    # grey halo round the figure where FireRed re-toned the background.
+    d = np.abs(soft - c[ry0:ry1, rx0:rx1]).max(-1)
+    changed = Image.fromarray(((d > 28) * 255).astype(np.uint8)).filter(ImageFilter.MaxFilter(9))
+    changed = changed.filter(ImageFilter.MinFilter(5)).filter(ImageFilter.GaussianBlur(3))
+    keep = np.minimum(np.asarray(changed, dtype=np.float32), np.asarray(mask, dtype=np.float32))
+    im.paste(new, (rx0, ry0), Image.fromarray(keep.astype(np.uint8)))
     res = os.path.join(os.path.dirname(out), "swap_" + os.path.basename(path).rsplit(".", 1)[0] + ".png")
     im.save(res)
     return res
