@@ -1120,7 +1120,7 @@ def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str) ->
     return last
 
 
-def _render_remaining_parts(ctx, path: str, parts: list, args: dict) -> str:
+def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=()) -> str:
     """Parts 2..n of a long script, each continuing the clip so far from its real
     last frame (its tail as <Video 1>, that frame as <Picture 1>), joined on. A part
     that fails or a cancel stops here: the clip made so far is still delivered."""
@@ -1137,7 +1137,10 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict) -> str:
         if not (tg_continue.seed_frame(path, frame) and tg_continue.cut_tail(path, tail)):
             logger.warning("video parts: could not take the end of part %d", i - 1)
             break
-        pinned = video_mod.motion_context_on()
+        # The new people of a continuation ride on EVERY part: given to part 1 only, the
+        # guy from the user's кружок walked out in part 2 as a stranger (live 2026-10-12).
+        # Pinned frames take no pictures, so with people the reference path is used.
+        pinned = video_mod.motion_context_on() and not people
         if pinned:
             part = video_mod.bridge_part(ctx, frame, part)
         try:
@@ -1147,8 +1150,10 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict) -> str:
                                              context_video=tail,
                                              aspect=args.get("aspect") or "", seed=args.get("seed"))
             else:
-                r = video_mod.generate_video(ctx, video_mod.CONTINUE_PREFIX + part,
-                                             images=[frame], videos=[tail],
+                look = "".join(f" The person of <Picture {k}> looks exactly as in that picture."
+                               for k in range(2, len(people) + 2))
+                r = video_mod.generate_video(ctx, video_mod.CONTINUE_PREFIX + part + look,
+                                             images=[frame, *people], videos=[tail],
                                              aspect=args.get("aspect") or "", seed=args.get("seed"))
         except Exception:
             logger.exception("video parts: part %d crashed", i)
@@ -1243,6 +1248,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     cont_src = getattr(ctx, "continue_src", "") or ""
     continuing = bool(cont_tail and os.path.exists(cont_tail))
     chain_id, chain_idx = "", 0
+    people: list = []
     if continuing:
         videos = [cont_tail]
         ctx.continue_tail = ctx.continue_src = ""          # one clip per request
@@ -1497,7 +1503,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             logger.warning("continue video: the join failed, delivering the new part alone")
 
     if len(parts) > 1 and not chain_id:
-        path = _render_remaining_parts(ctx, path, parts, args)
+        path = _render_remaining_parts(ctx, path, parts, args, people=people)
         result["seconds"] = video_mod.probe(path).get("seconds") or result.get("seconds")
 
     state["video_path"] = path

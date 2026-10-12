@@ -175,6 +175,22 @@ _all = " ".join(CALLS)
 check("the part already in the clip is not rendered; the door (its sound line echoing the scream) and the guy are",
       CALLS and "jerks her hand" not in _all and "swings open" in _all and "glove" in _all, CALLS)
 intent.YES_STUB = None
+
+# A new person rides on EVERY part: given to part 1 only, the guy from the кружок walked
+# out in part 2 as a stranger (live 2026-10-12).
+GUY = os.path.join(_DATA, "guy.jpg")
+Image.new("RGB", (64, 64), "blue").save(GUY)
+IMGS = []
+V.generate_video = lambda ctx, description, **kw: (IMGS.append(list(kw.get("images") or [])),
+                                                   fake_gen(ctx, description, **kw))[1]
+_llm_c.call_llm_simple = lambda *a, **k: "NONE"
+class PCtx(TCtx):
+    def __init__(self):
+        super().__init__(); self.continue_people = [GUY]
+H._handle_generate_video(PCtx(), {}, {"description": _script})
+check("every part of a continuation gets the new person's picture",
+      len(IMGS) > 1 and all(GUY in imgs for imgs in IMGS), IMGS)
+V.generate_video = fake_gen
 _llm_c.call_llm_simple = _real_simple
 V.generate_video = fake_gen
 
