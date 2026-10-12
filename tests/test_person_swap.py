@@ -164,5 +164,15 @@ k = SEEN[-1] if SEEN else {}
 check("inspect_image after a swap shows the picture before and after it, in one call",
       [p for _, p in (k.get("image_paths") or [])] == [PIC, OUT] and "BEFORE" in k.get("user_text", ""), k)
 
+# A transfer's reference and result go in ONE call, what did not come across is named.
+SEEN.clear()
+llm.analyze_image_with_llm = lambda *a, **k: (SEEN.append(k), "the red monogram on the chest")[1]
+miss = H._transfer_missing(Ctx(), SPONGE, OUT, "dress him in this jumper")
+check("a transfer is compared with its reference in one call and the misses named",
+      miss == "the red monogram on the chest"
+      and [p for _, p in SEEN[-1]["image_paths"]] == [SPONGE, OUT], (miss, SEEN))
+llm.analyze_image_with_llm = lambda *a, **k: "NONE"
+check("...nothing missing says nothing", H._transfer_missing(Ctx(), SPONGE, OUT, "x") == "")
+
 print(f"\n{OK}/{OK + BAD} passed")
 sys.exit(1 if BAD else 0)

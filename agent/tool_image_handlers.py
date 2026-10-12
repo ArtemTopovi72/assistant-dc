@@ -572,11 +572,31 @@ def _handle_transfer_image(ctx, state, args: dict) -> str:
     _set_current_image(ctx, state, new_path)
     ctx.reference_images = (ctx.reference_images or []) + [new_path]
     _remember(ctx, state, "transfer", f"Reference transfer: {instructions}", {"path": new_path})
+    missing = _transfer_missing(ctx, references[-1], new_path, instructions)
     return (
         f"Transfer complete and saved: {new_path}\n"
-        "Call inspect_image to verify the transferred element is present and the person's "
+        + (f"Compared with the reference, still missing or wrong: {missing}\n" if missing else "")
+        + "Call inspect_image to verify the transferred element is present and the person's "
         "identity is preserved before telling the user it is done."
     )
+
+
+def _transfer_missing(ctx, ref: str, result: str, instructions: str) -> str:
+    """What of the reference's item did not make it onto the result, the two pictures in
+    ONE vision call: described from the garment alone, the logo and the flag patch of a
+    quarter-zip were lost and nobody compared. "" when nothing is missing or no model."""
+    try:
+        from llm import analyze_image_with_llm
+        ans = " ".join((analyze_image_with_llm(
+            ctx, temperature=0.0, max_tokens=120,
+            image_paths=[("REFERENCE:", ref), ("RESULT:", result)],
+            user_text=f"The edit was: {instructions}. List, in a few words each, the details "
+                      "of the transferred item in REFERENCE (logos, patches, prints, collar, "
+                      "closures, colour, shape) that are missing or wrong in RESULT. Answer "
+                      "NONE when everything came across.") or "").split())
+    except Exception:
+        return ""
+    return "" if not ans or ans.upper().startswith("NONE") else ans[:400]
 
 
 def _handle_swap_person(ctx, state, args: dict) -> str:
