@@ -1339,10 +1339,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         import intent
         from prompt_guard import user_words
         said = user_words(str((state or {}).get("user_input_original") or "")).strip()
-        # Two narrow questions, not one: asked together («anything new the user did not
-        # say is already there?») the model dropped the door opening and the object
-        # pulling back, and kept «the camera moves smoothly» filler. The sound line is cut
-        # off first: the scream's echo in it made the door part «a repeat».
+        # Sentence by sentence, before the script is cut into parts: a part is a few
+        # sentences, and dropping whole parts threw away «he straightens up to his full
+        # height» as a part «with nothing new» while the user asked exactly for that.
+        # Only a repeat of what the user says the clip already shows goes; its sound
+        # line is not read (the scream's echo made the door opening «a repeat»).
         import llm as _llm
         old = ""
         if said:
@@ -1358,28 +1359,25 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             old = "" if old.upper().startswith("NONE") else old
             logger.info("generate_video: already in the clip per the user: %r", old[:200])
 
-        def _new(part: str) -> bool:
-            seen = re.split(r"\bSounds?:", part)[0].strip()
-            if old and intent.ask_yes(
-                    "Already in the existing video: " + old + "\n\nA planned new part of the "
-                    "video: {text}\n\nIs the main visible action of this part the same thing that "
-                    "is already in the existing video (a repeat)? A part where something NEW is "
-                    "seen happening (a door opens, an object moves, someone appears) is not a "
-                    "repeat.", seen):
-                return False
-            return intent.ask_yes(
-                "A part of a video script: {text}\n\nDoes something happen in it -- someone or "
-                "something moves, opens, appears, disappears, enters, leaves, speaks? (Only "
-                "looks, clothes or a camera move = no.)", seen, default=True)
-        fresh = [p for p in parts if _new(p)]
-        for p in parts:
-            if p not in fresh:
-                logger.info("generate_video: part with nothing new, dropped: %s", p[:120])
-        parts = fresh or parts[-1:]
-        kept = " ".join(parts)
-        if kept != raw:
-            description = description.replace(raw, kept, 1) if raw in description else kept
-            raw = kept
+        def _repeat(sentence: str) -> bool:
+            seen = re.split(r"\bSounds?:", sentence)[0].strip()
+            return bool(seen) and intent.ask_yes(
+                "Already in the existing video: " + old + "\n\nA sentence of the new part of the "
+                "video: {text}\n\nIs the main visible action of this sentence the same thing that "
+                "is already in the existing video (a repeat)? A sentence where something NEW is "
+                "seen happening (a door opens, an object moves, someone appears) is not a "
+                "repeat.", seen)
+        if old:
+            sentences = re.split(r"(?<=[.!?»])\s+", raw)
+            kept = [x for x in sentences if not _repeat(x)]
+            for x in sentences:
+                if x not in kept:
+                    logger.info("generate_video: already in the clip, dropped: %s", x[:120])
+            if kept and len(kept) < len(sentences):
+                new_raw = " ".join(kept)
+                description = description.replace(raw, new_raw, 1) if raw in description else new_raw
+                raw = new_raw
+                parts = video_mod.split_script(raw)
     if len(parts) > 1:
         parts = video_mod.mark_inserts(ctx, parts)
     if len(parts) > 1 and raw in description:
