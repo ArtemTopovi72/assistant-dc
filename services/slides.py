@@ -1093,7 +1093,8 @@ def _drop_mismatched_images(ctx, deck: dict, images: dict) -> None:
         import re
         from llm import analyze_image_with_llm
         slides = deck.get("slides") or []
-        labelled = [(f"Slide {k + 1} -- {slides[k].get('title', '')}:", images[k]) for k in keys]
+        labelled = [(f"Slide {k + 1} -- {slides[k].get('heading') or slides[k].get('title', '')}:",
+                     images[k]) for k in keys if k < len(slides)]
         ans = analyze_image_with_llm(
             ctx, temperature=0.0, max_tokens=60, image_paths=labelled,
             user_text="Each picture is an illustration for the slide named above it, in a "

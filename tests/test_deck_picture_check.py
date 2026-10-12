@@ -22,7 +22,7 @@ def check(name, cond, extra=""):
     print(("PASS  " if cond else "FAIL  ") + name + ("" if cond else f"   {extra}"))
 
 
-deck = {"title": "Чай", "slides": [{"title": "История"}, {"title": "Сорта"}, {"title": "Цены"}]}
+deck = {"title": "Чай", "slides": [{"heading": "История"}, {"heading": "Сорта"}, {"heading": "Цены"}]}
 CALLS = []
 llm.analyze_image_with_llm = lambda *a, **k: (CALLS.append(k), "2")[1]
 images = {"cover": "c.jpg", 0: "a.jpg", 1: "b.jpg", 2: "d.jpg"}
