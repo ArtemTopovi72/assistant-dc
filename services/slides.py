@@ -1081,6 +1081,34 @@ _SCENE_WORDS = {
 _IMAGE_QUERY_WORDS = 6
 
 
+def _drop_mismatched_images(ctx, deck: dict, images: dict) -> None:
+    """The deck's web pictures checked against their slides in ONE vision call, each
+    labelled with its slide's title; the ones that do not fit are dropped -- a slide
+    without a picture beats one with a stranger's (searched one at a time, a picture
+    was never looked at at all)."""
+    keys = [k for k in images if k != "cover"]
+    if ctx is None or len(keys) < 2:
+        return
+    try:
+        import re
+        from llm import analyze_image_with_llm
+        slides = deck.get("slides") or []
+        labelled = [(f"Slide {k + 1} -- {slides[k].get('title', '')}:", images[k]) for k in keys]
+        ans = analyze_image_with_llm(
+            ctx, temperature=0.0, max_tokens=60, image_paths=labelled,
+            user_text="Each picture is an illustration for the slide named above it, in a "
+                      "presentation about: " + str(deck.get("title") or "") + ". List the "
+                      "numbers of the slides whose picture does NOT fit its slide (unrelated, "
+                      "a logo, text-only, a collage, a watermark across it). Answer with the "
+                      "numbers only, comma-separated, or NONE.") or ""
+        bad = {int(n) - 1 for n in re.findall(r"\d+", ans)} & set(keys)
+        for k in bad:
+            logger.info("deck: slide %d picture dropped as not fitting", k + 1)
+            images.pop(k, None)
+    except Exception:
+        logger.warning("deck picture check failed; pictures kept", exc_info=True)
+
+
 def _image_query(query: str, subject: str) -> str:
     """A SHORT, subject-led query, because a long one finds stock photography.
 
@@ -1877,6 +1905,7 @@ def make_presentation(ctx, topic: str, out_dir: str, *, n_slides: int = 0,
                 got = None
             if got and os.path.exists(str(got)):
                 images[i] = got
+        _drop_mismatched_images(ctx, deck, images)
 
     stem = _safe_name(deck.get("title") or topic)
     path = os.path.join(out_dir, stem + ".pptx")
