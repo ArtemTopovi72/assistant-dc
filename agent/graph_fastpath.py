@@ -12,7 +12,7 @@ render a short-circuit reply.
 # value at import would freeze the real implementations and make every one of
 # those patches a silent no-op. See graph_personality.py's module docstring.
 """
-from seams import intent_read
+from seams import chat_model, intent_read
 import logging
 import re
 
@@ -369,7 +369,7 @@ def _fast_path_reply(ctx: Context, messages: list, gen: "_GenSettings",
     fast_msgs.extend(pairs)
     fast_msgs.append(lite_user_msg)
     ctx.set_stage("Writing a response")
-    fast_resp = _g.send_to_lm_studio(
+    fast_resp = chat_model(ctx)(
         ctx, fast_msgs,
         tools=[], tool_choice="none",
         temperature=gen.temperature,

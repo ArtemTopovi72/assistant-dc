@@ -28,11 +28,17 @@ def check(name, cond, detail=""):
     assert cond, name + ": " + detail
 
 
+_CHAT = [None]   # the scripted chat model the contexts hand out
+_EXEC = [None]   # the scripted tool runner
+
+
 def _ctx(**kw):
     c = M.Context(models=types.SimpleNamespace(), transcription_cache={},
                   cache_file=_TMP / "c.json", asr_lock=threading.Lock(), tts_lock=threading.Lock())
     c.active_memory_dir = _TMP / "mem"
     c.vision_model = lambda **k: "a photo of a cat"
+    c.chat_model = lambda *a, **k: _CHAT[0](*a, **k)
+    c.run_tool = lambda *a, **k: _EXEC[0](*a, **k)
     for k, v in kw.items():
         setattr(c, k, v)
     return c
@@ -94,7 +100,9 @@ def patched(llm, tools, analyze=None, synth=None, play=None, downscale=None,
             fastpath=True):
     """`fastpath` is kept for callers: the loop is already the default."""
     saved = {}
-    for name, val in [("send_to_lm_studio", llm), ("execute_tool", tools),
+    _CHAT[0] = llm
+    _EXEC[0] = tools
+    for name, val in [
                       # translate node must not hit a live LLM: None -> keep original
                       ("call_llm_simple", lambda *a, **k: None),
                       ("post_process_answer", lambda t: t),
@@ -114,6 +122,7 @@ def patched(llm, tools, analyze=None, synth=None, play=None, downscale=None,
         for name, val in saved.items():
             setattr(G, name, val)
         GL.call_llm_simple = saved_gl
+        _CHAT[0] = _EXEC[0] = None
 
 
 def _run(ctx, llm, tools, state, read=None, **pk):
@@ -173,11 +182,11 @@ def test_compact_with_llm_summary():
         msgs.append({"role": "user", "content": f"u{i}"})
         msgs.append({"role": "assistant", "content": f"a{i}"})
     llm = LLM([_asst("SUMMARY of older turns")])
-    saved = _LLMMOD.send_to_lm_studio; _LLMMOD.send_to_lm_studio = llm
+    _CHAT[0] = llm
     try:
         out = G.compact_history_if_needed(c, msgs)
     finally:
-        _LLMMOD.send_to_lm_studio = saved
+        _CHAT[0] = None
     check("compact_llm_summary", any(m.get("content", "").startswith(G._HISTORY_SUMMARY_MARKER)
                                      for m in out) and len(out) < len(msgs))
 
@@ -191,11 +200,11 @@ def test_compact_prev_summary_and_fallback():
         msgs.append({"role": "user", "content": f"question {i}"})
         msgs.append({"role": "assistant", "content": f"answer {i}"})
     llm = LLM([_asst(""), _asst("")])   # both retries empty -> fallback
-    saved = _LLMMOD.send_to_lm_studio; _LLMMOD.send_to_lm_studio = llm
+    _CHAT[0] = llm
     try:
         out = G.compact_history_if_needed(c, msgs)
     finally:
-        _LLMMOD.send_to_lm_studio = saved
+        _CHAT[0] = None
     summ = [m for m in out if m.get("content", "").startswith(G._HISTORY_SUMMARY_MARKER)]
     check("compact_fallback", summ and "old summary" in summ[0]["content"])
 
@@ -217,11 +226,11 @@ def test_compact_no_head_system():
         msgs.append({"role": "user", "content": f"u{i}"})
         msgs.append({"role": "assistant", "content": f"a{i}"})
     llm = LLM([_asst("summ")])
-    saved = _LLMMOD.send_to_lm_studio; _LLMMOD.send_to_lm_studio = llm
+    _CHAT[0] = llm
     try:
         out = G.compact_history_if_needed(c, msgs)
     finally:
-        _LLMMOD.send_to_lm_studio = saved
+        _CHAT[0] = None
     check("compact_no_head", out[0]["content"].startswith(G._HISTORY_SUMMARY_MARKER))
 
 
@@ -609,11 +618,11 @@ def test_compact_fallback_no_prev_summary():
         msgs.append({"role": "user", "content": f"user line {i}"})
         msgs.append({"role": "assistant", "content": f"a{i}"})
     llm = LLM([_asst(""), _asst("")])   # empty twice -> extractive fallback, no prev summary
-    saved = _LLMMOD.send_to_lm_studio; _LLMMOD.send_to_lm_studio = llm
+    _CHAT[0] = llm
     try:
         out = G.compact_history_if_needed(c, msgs)
     finally:
-        _LLMMOD.send_to_lm_studio = saved
+        _CHAT[0] = None
     summ = [m for m in out if m.get("content", "").startswith(G._HISTORY_SUMMARY_MARKER)]
     check("fallback_no_prev", summ and "user line 0" in summ[0]["content"])
 
@@ -627,11 +636,11 @@ def test_compact_fallback_empty_users_returns_original():
         msgs.append({"role": "user", "content": "   "})       # whitespace-only -> stripped empty
         msgs.append({"role": "assistant", "content": f"a{i}"})
     llm = LLM([_asst(""), _asst("")])
-    saved = _LLMMOD.send_to_lm_studio; _LLMMOD.send_to_lm_studio = llm
+    _CHAT[0] = llm
     try:
         out = G.compact_history_if_needed(c, msgs)
     finally:
-        _LLMMOD.send_to_lm_studio = saved
+        _CHAT[0] = None
     check("fallback_empty_users", out is msgs)   # no summary produced -> original returned
 
 

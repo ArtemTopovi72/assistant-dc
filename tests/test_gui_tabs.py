@@ -5,7 +5,8 @@ monkeypatched; heavy image ops are faked in sys.modules.
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_tabs.py
 """
-import os, sys, types, tempfile, shutil, contextlib
+import os, sys, types, tempfile, shutil, contextlib
+from types import SimpleNamespace as _NS
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("USE_GUI", "0")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -522,7 +523,7 @@ def test_transfer_tab_pull_and_files():
     host.ctx.reference_images = []
     tab._pull_loaded(); check("tt_pull_empty_status", "loaded" in tab.status.text().lower())
     # _add_files stubbed
-    QFileDialog.getOpenFileNames = staticmethod(lambda *a, **k: ([p1, p2], ""))
+    tab.file_dialog = _NS(getOpenFileNames=lambda *a, **k: ([p1, p2], ""))
     tab._add_files(); check("tt_add_files", len(tab._rows) == 2)
 
 
@@ -755,12 +756,12 @@ def test_memory_center_profiles_and_export():
     # export (stub save dialog) — json/md/zip
     for fmt, ext in [("json", ".json"), ("md", ".md"), ("zip", ".zip")]:
         dest = os.path.join(_TMP, f"exp{ext}")
-        QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (dest, ""))
+        tab.file_dialog = _NS(getSaveFileName=lambda *a, **k: (dest, ""))
         tab._export(fmt)
         check(f"mc_export_{fmt}", os.path.exists(dest))
     # import preview declined
     src = os.path.join(_TMP, "exp.zip")
-    QFileDialog.getOpenFileName = staticmethod(lambda *a, **k: (src, ""))
+    tab.file_dialog = _NS(getOpenFileName=lambda *a, **k: (src, ""))
     orig_conf = tab._confirm; tab._confirm = lambda *a, **k: False
     try:
         tab._import()
@@ -768,7 +769,7 @@ def test_memory_center_profiles_and_export():
     finally:
         tab._confirm = orig_conf
     # cancelled export (no path)
-    QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: ("", ""))
+    tab.file_dialog = _NS(getSaveFileName=lambda *a, **k: ("", ""))
     tab._export("json"); check("mc_export_cancel", True)
 
 
@@ -787,9 +788,6 @@ if __name__ == "__main__":
             import traceback; traceback.print_exc()
             print(f"  ERROR in {fn.__name__}: {type(e).__name__}: {e}")
     # restore statics
-    QFileDialog.getOpenFileName = staticmethod(_saved["getOpenFileName"])
-    QFileDialog.getOpenFileNames = staticmethod(_saved["getOpenFileNames"])
-    QFileDialog.getSaveFileName = staticmethod(_saved["getSaveFileName"])
     QInputDialog.getText = staticmethod(_saved["getText"])
     shutil.rmtree(_TMP, ignore_errors=True)
     print(f"\n{len(fns)-failed}/{len(fns)} tab test functions passed "

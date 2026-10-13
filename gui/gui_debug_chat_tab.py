@@ -4,6 +4,7 @@ shows is what a real user gets -- statuses, edits, buttons, pictures -- without 
 phone and without stopping the bot. Everything goes through the debug user's HTTP API
 on 127.0.0.1, the same one scripts use.
 """
+from seams import file_dialog
 import html
 import json
 import os
@@ -202,7 +203,7 @@ class DebugChatTab(QWidget):
             self.input.clear()
 
     def _attach(self):
-        paths, _ = QFileDialog.getOpenFileNames(self, "Pictures", "",
+        paths, _ = file_dialog(self).getOpenFileNames(self, "Pictures", "",
                                                 "Images (*.png *.jpg *.jpeg *.webp)")
         if not paths:
             return

@@ -5,6 +5,7 @@ started for the job). ~15 min for 5 s, so the worker runs on a QThread with its
 own cancel token (_ScopedCtx) -- the main chat's Stop must not kill it and its
 Stop must not kill the chat. The worker never reads a widget.
 """
+from seams import file_dialog
 import os
 import threading
 import logging
@@ -91,7 +92,7 @@ class RestyleTab(QWidget):
         root.addStretch(1)
 
     def _browse(self):
-        path, _ = QFileDialog.getOpenFileName(self, 'Video', "", _FILTER)
+        path, _ = file_dialog(self).getOpenFileName(self, 'Video', "", _FILTER)
         if path:
             self.src_in.setText(path)
 

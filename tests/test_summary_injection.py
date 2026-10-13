@@ -33,12 +33,9 @@ def _history(n=8):
 
 
 def _compact(summary_text):
-    saved = _llmmod.send_to_lm_studio
-    _llmmod.send_to_lm_studio = lambda *a, **k: {"content": summary_text}
-    try:
-        return H.compact_history_if_needed(_ctx(), copy.deepcopy(_history()))
-    finally:
-        _llmmod.send_to_lm_studio = saved
+    c = _ctx()
+    c.chat_model = lambda *a, **k: {"content": summary_text}
+    return H.compact_history_if_needed(c, copy.deepcopy(_history()))
 
 
 def _summary(msgs):

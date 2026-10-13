@@ -29,15 +29,13 @@ def _run(tmp_path, rounds=4):
         if n <= rounds:
             return {"role": "assistant", "content": "", "tool_calls": [_tc(n)]}
         return {"role": "assistant", "content": "Готово."}
-    graph_mod.send_to_lm_studio = send
-    llm_mod.send_to_lm_studio = send
-    saved_exec = graph_mod.execute_tool
-    graph_mod.execute_tool = lambda ctx, name, args, *a, **k: BIG
     _sent.clear()
     c = Context(models=None, transcription_cache={}, cache_file=tmp_path / "c.json",
                 asr_lock=threading.Lock(), tts_lock=threading.Lock(),
                 model_name=MODEL_NAME, no_think=True)
     c.tts_disabled = True; c.gui_mode = True; c.web_search_enabled = True
+    c.chat_model = send
+    c.run_tool = lambda ctx, name, args, *a, **k: BIG
     c.active_memory_dir = tmp_path / "mem"; c.active_memory_dir.mkdir()
     st = {"messages": [{"role": "system", "content": SYSTEM_PROMPT_PERSONALITY}],
           "user_input": "найди что-нибудь", "image_data": None, "final_answer": "",
@@ -46,7 +44,6 @@ def _run(tmp_path, rounds=4):
     try:
         graph_mod.build_graph(c).invoke(st)
     finally:
-        graph_mod.execute_tool = saved_exec
     return list(_sent)
 
 

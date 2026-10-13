@@ -16,6 +16,7 @@ subprocesses, and this project has lost afternoons to Qt slots raising on the
 worker thread -- so nothing here touches a widget from `run()`, and every
 outcome comes back as a signal.
 """
+from seams import file_dialog
 from pathlib import Path
 
 from PyQt5.QtCore import QThread, Qt, pyqtSignal
@@ -328,7 +329,7 @@ class CodeTab(QWidget):
             self.viewer.setPlainText(str(exc))
 
     def _add_files(self):
-        paths, _ = QFileDialog.getOpenFileNames(self, "Add files to the sandbox")
+        paths, _ = file_dialog(self).getOpenFileNames(self, "Add files to the sandbox")
         if paths:
             self._take_files(paths)
 

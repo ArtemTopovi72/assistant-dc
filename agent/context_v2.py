@@ -45,7 +45,7 @@ v2, one idea per mechanism (sources in docs/research_log.md, 2026-09-24):
 Fails open everywhere: any error returns the input list unchanged.
 """
 from __future__ import annotations
-from seams import choice, yes_no
+from seams import chat_model, choice, yes_no
 
 import hashlib
 import json
@@ -444,7 +444,7 @@ def _llm_delta(ctx, state: dict, span_text: str) -> Optional[dict]:
         from utils import safe_json_from_llm
         sys_p = DELTA_PROMPT + (("\n\nExtra rules learned from past failures:\n" + g)
                                 if (g := _guidelines()) else "")
-        resp = llm.send_to_lm_studio(
+        resp = chat_model(ctx)(
             ctx, [{"role": "system", "content": sys_p},
                   {"role": "user", "content": f"CURRENT MEMORY:\n{render(state)}\n\nSPAN:\n{span_text}"}],
             tools=[], tool_choice="none", temperature=0.2, max_tokens=700)

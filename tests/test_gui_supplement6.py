@@ -351,8 +351,6 @@ if __name__ == "__main__":
             failed += 1
             import traceback; traceback.print_exc()
             print(f"  ERROR in {fn.__name__}: {type(e).__name__}: {e}")
-    _QFD.getOpenFileName = staticmethod(_saved["gof"])
-    _QFD.getSaveFileName = staticmethod(_saved["gsf"])
     QInputDialog.getText = staticmethod(_saved["gt"])
     print(f"\n{len(fns)-failed}/{len(fns)} supplement6 functions passed "
           f"({sum(1 for _,c in RESULTS if c)}/{len(RESULTS)} checks)")

@@ -51,8 +51,6 @@ def _send(ctx, messages, tools=None, **k):
     seen_tokens.append((k.get("max_tokens"), sorted((t.get("function") or {}).get("name") for t in (tools or []))))
     return _orig_send(ctx, messages, tools=tools, **k)
 import graph as graph_mod
-graph_mod.send_to_lm_studio = _send
-llm.send_to_lm_studio = _send
 half = '{"code": "import matplotlib.pyplot as plt\\n' + "x = 1\\n" * 400
 def fn(i):
     if i == 1:
@@ -70,7 +68,8 @@ _READ = reads(read=lambda t: {"needs_tool": True, "wants": ["run_code"]} if "pyt
 def _run_with_sandbox(fn, user):
     """H._run with a sandbox on the ctx so the code tools are offered."""
     H._script["fn"] = fn; H._script["n"] = 0
-    c = H._ctx()
+    c = H._ctx(); c.chat_model = _send
+    c.text_model = lambda *a, **k: "Скрипт слишком длинный, запишу его в файл частями."   # the reply-language translation
     c.intent_read = _READ["intent_read"]
     c.sandbox = types.SimpleNamespace(root=Path(tempfile.mkdtemp()), user_id=1)
     c.sandbox_user = None

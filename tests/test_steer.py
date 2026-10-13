@@ -68,7 +68,7 @@ _orig_send = H._send
 def _send(c, messages, tools=None, **k):
     round_inputs.append([m.get("content") or "" for m in messages if m.get("role") == "tool"])
     return _orig_send(c, messages, tools=tools, **k)
-graph_mod.send_to_lm_studio = _send
+ctx.chat_model = _send
 try:
     def fn(i):
         if i == 1:
@@ -83,7 +83,7 @@ try:
     final = g.invoke(st)
 finally:
     object.__setattr__(spec, "handler", orig)
-    graph_mod.send_to_lm_studio = _orig_send
+    ctx.chat_model = None
 check("the next round's tool result carries the user's update",
       len(round_inputs) >= 2 and any("красный" in t for t in round_inputs[1]), round_inputs[1:2])
 check("the work changed: the second draw has the red background", len(seen_prompts) >= 2 and "red" in seen_prompts[1], seen_prompts)
@@ -98,7 +98,7 @@ def _send2(c, messages, tools=None, **k):
     if H._script["n"] == 1:
         c.steer_inbox.put("сделай в стиле аниме")        # typed while round 1 was thinking
     return out
-graph_mod.send_to_lm_studio = _send2
+ctx.chat_model = _send2
 try:
     H._script["fn"] = fn; H._script["n"] = 0
     g = graph_mod.build_graph(ctx)
@@ -106,7 +106,7 @@ try:
     g.invoke(st)
 finally:
     object.__setattr__(spec, "handler", orig)
-    graph_mod.send_to_lm_studio = _orig_send
+    ctx.chat_model = None
 check("the call planned before the wish is skipped; only the re-issued one runs",
       len(seen_prompts) == 1 and "red" in seen_prompts[0], seen_prompts)
 

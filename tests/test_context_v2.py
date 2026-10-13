@@ -24,15 +24,12 @@ class Ctx:
 
 
 def _patch_llm(ctx):
-    import llm
-    orig = llm.send_to_lm_studio
-
     def fake(c, msgs, **kw):
         ctx.calls += 1
         d = ctx.deltas.pop(0) if ctx.deltas else {}
         return {"content": json.dumps(d, ensure_ascii=False)}
-    llm.send_to_lm_studio = fake
-    return lambda: setattr(llm, "send_to_lm_studio", orig)
+    ctx.chat_model = fake
+    return lambda: setattr(ctx, "chat_model", None)
 
 
 def turn(n, pic=None, tool_len=1500):

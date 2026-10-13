@@ -10,6 +10,7 @@ that function by value here would have made the patch a silent no-op -- the stub
 ignored, the real model called, and the suite still green. Going through llm
 means a patch on llm.send_to_lm_studio works from anywhere.
 """
+from seams import chat_model
 import logging
 import os
 import re
@@ -216,7 +217,7 @@ def compact_history_if_needed(ctx, messages):
         # still happens and the context keeps shrinking.
         summary = ""
         for _ in range(2):
-            resp = send_to_lm_studio(
+            resp = chat_model(ctx)(
                 ctx,
                 [{"role": "system", "content": HISTORY_SUMMARY_PROMPT},
                  {"role": "user", "content": payload}],

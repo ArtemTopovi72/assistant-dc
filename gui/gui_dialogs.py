@@ -9,6 +9,7 @@ callers import "the transfer tab" to draw a mask.
 OUTPUT_DIR_GUI_MASK travels with them: it is where the mask editor writes, and
 it means nothing without them.
 """
+from seams import file_dialog
 import os
 import shutil
 import time
@@ -172,7 +173,7 @@ class ImageViewerDialog(QDialog):
             return
         base = os.path.basename(self._path) or "image.png"
         suggested = os.path.join(os.path.expanduser("~"), base)
-        dest, _ = QFileDialog.getSaveFileName(
+        dest, _ = file_dialog(self).getSaveFileName(
             self, "Save a copy of the image", suggested,
             "PNG image (*.png);;JPEG image (*.jpg *.jpeg);;All files (*)")
         if not dest:

@@ -60,7 +60,7 @@ def test_graph_loop_survives_none_tool_result():
         "path": None, "score": 0, "attempts": 1, "status": "fail"}
 
     calls = {"n": 0}
-    real = graph_mod.execute_tool
+    real = tools_mod.execute_tool
     def flaky(ctx, state, name, args):
         calls["n"] += 1
         if calls["n"] == 1:
@@ -75,14 +75,13 @@ def test_graph_loop_survives_none_tool_result():
         {"content": "Готово: 4.", "tool_calls": []},
     ]
     it = iter(seq)
-    orig_send = graph_mod.send_to_lm_studio
-    graph_mod.send_to_lm_studio = lambda *a, **k: next(it, {"content": "ok", "tool_calls": []})
-    graph_mod.execute_tool = flaky
     try:
         c = Context(models=None, transcription_cache={}, cache_file=Path("tests/_c.json"),
                     asr_lock=threading.Lock(), tts_lock=threading.Lock(),
                     model_name=MODEL_NAME, no_think=True)
         c.tts_disabled = True; c.gui_mode = True
+        c.run_tool = flaky
+        c.chat_model = lambda *a, **k: next(it, {"content": "ok", "tool_calls": []})
         c.active_memory_dir = Path(__file__).resolve().parent / "_cmem"
         c.active_memory_dir.mkdir(parents=True, exist_ok=True)
         g = graph_mod.build_graph(c)
@@ -94,8 +93,6 @@ def test_graph_loop_survives_none_tool_result():
         assert isinstance(final.get("final_answer", ""), str)
         print("PASS graph tool loop survives a None tool result (no AttributeError)")
     finally:
-        graph_mod.execute_tool = real
-        graph_mod.send_to_lm_studio = orig_send
 
 
 if __name__ == "__main__":

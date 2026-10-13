@@ -12,8 +12,7 @@ seen = []
 class _Stop(Exception): pass
 def _fake(ctx, msgs, **kw):
     seen.append(msgs[0]["content"]); raise _Stop
-import llm
-llm.send_to_lm_studio = _fake
+_R.text_model = lambda ctx, system, user, **kw: _fake(ctx, [{"content": system}], **kw)
 for topic, capped in (("блюз: ровно три куплета по четыре строки, без припева", False),
                       ("песня про кота", True)):
     seen.clear()

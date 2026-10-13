@@ -6,7 +6,8 @@ assorted AssistantWindow slot branches.
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_supplement5.py
 """
-import os, sys, types, tempfile, threading, contextlib
+import os, sys, types, tempfile, threading, contextlib
+from types import SimpleNamespace as _NS
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("USE_GUI", "0")
 os.environ["GUI_REPORT_HTML"] = "0"
@@ -292,7 +293,7 @@ def test_db_build_and_finished_with_library():
         w._library = types.SimpleNamespace(close=lambda: None)
         w._on_db_finished(); check("db_finished_lib", w._lib_build_worker is None)
         # _db_add_files via stub
-        _QFD.getOpenFileNames = staticmethod(lambda *a, **k: ([f], ""))
+        w.file_dialog = _NS(getOpenFileNames=lambda *a, **k: ([f], ""))
         w._db_add_files(); check("db_add_files", True)
         _close(w)
     finally:
@@ -352,9 +353,6 @@ if __name__ == "__main__":
             failed += 1
             import traceback; traceback.print_exc()
             print(f"  ERROR in {fn.__name__}: {type(e).__name__}: {e}")
-    _QFD.getOpenFileName = staticmethod(_saved["gof"])
-    _QFD.getOpenFileNames = staticmethod(_saved["gofs"])
-    _QFD.getSaveFileName = staticmethod(_saved["gsf"])
     QInputDialog.getText = staticmethod(_saved["gt"])
     print(f"\n{len(fns)-failed}/{len(fns)} supplement5 functions passed "
           f"({sum(1 for _,c in RESULTS if c)}/{len(RESULTS)} checks)")

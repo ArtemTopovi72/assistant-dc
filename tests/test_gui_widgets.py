@@ -8,7 +8,8 @@ exec_) are monkeypatched. No network / no models.
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_widgets.py
 """
-import os, sys, types, logging
+import os, sys, types, logging
+from types import SimpleNamespace as _NS
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("USE_GUI", "0")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -227,13 +228,13 @@ def test_settings_dialog_pickers():
     ctx = _ctx()
     dlg = gui.SettingsDialog("qwen", ctx=ctx)
     vf = _wav("voice.wav")
-    QFileDialog.getOpenFileName = staticmethod(lambda *a, **k: (vf, ""))
+    dlg.file_dialog = _NS(getOpenFileName=lambda *a, **k: (vf, ""))
     dlg._pick_voice(); check("pick_voice", ctx.custom_ref_wav == vf)
     pf = os.path.join(_TMP, "p2.txt"); open(pf, "w", encoding="utf-8").write("char")
-    QFileDialog.getOpenFileName = staticmethod(lambda *a, **k: (pf, ""))
+    dlg.file_dialog = _NS(getOpenFileName=lambda *a, **k: (pf, ""))
     dlg._pick_personality(); check("pick_personality", ctx.custom_personality_text == "char")
     # cancel picker -> no change
-    QFileDialog.getOpenFileName = staticmethod(lambda *a, **k: ("", ""))
+    dlg.file_dialog = _NS(getOpenFileName=lambda *a, **k: ("", ""))
     dlg._pick_voice(); check("pick_voice_cancel_safe", True)
     # edit personality dialog (stub exec_)
     orig_exec = QDialog.exec_
@@ -305,9 +306,9 @@ def test_image_viewer_dialog():
     dlg._fit()
     # save copy (stub file dialog)
     dest = os.path.join(_TMP, "saved.png")
-    QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (dest, ""))
+    dlg.file_dialog = _NS(getSaveFileName=lambda *a, **k: (dest, ""))
     dlg._save_copy(); check("viewer_saved", os.path.exists(dest))
-    QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: ("", ""))
+    dlg.file_dialog = _NS(getSaveFileName=lambda *a, **k: ("", ""))
     dlg._save_copy()   # cancel -> no-op
     # keypress handling
     from PyQt5.QtGui import QKeyEvent

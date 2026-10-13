@@ -15,6 +15,7 @@ the real dialog opens, and `exec_()` enters a nested event loop nothing will
 ever quit -- offscreen included. gui_image_fix.py reaches it the same way for
 the same reason.
 """
+from seams import file_dialog
 import os
 import threading
 from pathlib import Path
@@ -286,7 +287,7 @@ class TransferTab(QWidget):
 
     # ---- image list -------------------------------------------------------- #
     def _add_files(self):
-        paths, _ = QFileDialog.getOpenFileNames(
+        paths, _ = file_dialog(self).getOpenFileNames(
             self, "Add images", "", "Images (*.png *.jpg *.jpeg *.bmp *.webp)")
         for p in paths:
             self._add_row(p)

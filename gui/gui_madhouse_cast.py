@@ -13,6 +13,7 @@ here ends by calling it, and it is what repopulates the list, the grid, the
 MadhouseGrid is resolved through gui_madhouse_tab at CALL time for the reason
 given in gui_madhouse_ui.py.
 """
+from seams import file_dialog
 import json
 import os
 from pathlib import Path
@@ -53,11 +54,11 @@ class MadhouseCastMixin:
         if combo.currentData() != "__browse__":
             return
         if kind == "voice":
-            path, _ = QFileDialog.getOpenFileName(
+            path, _ = file_dialog(self).getOpenFileName(
                 self, "Reference voice", str(self._project_dir()),
                 "Audio (*.wav *.mp3 *.ogg *.m4a *.flac *.aac);;All files (*)")
         else:
-            path, _ = QFileDialog.getOpenFileName(
+            path, _ = file_dialog(self).getOpenFileName(
                 self, "Personality file", str(self._project_dir() / "personalities"),
                 "Text files (*.txt);;All files (*)")
         combo.blockSignals(True)
@@ -107,12 +108,12 @@ class MadhouseCastMixin:
 
     def _add_character_from_files(self):
         """A character is just two files: a personality .txt and a voice clip."""
-        pers, _ = QFileDialog.getOpenFileName(
+        pers, _ = file_dialog(self).getOpenFileName(
             self, "Personality file (character description)",
             str(self._project_dir() / "personalities"), "Text files (*.txt);;All files (*)")
         if not pers:
             return
-        voice, _ = QFileDialog.getOpenFileName(
+        voice, _ = file_dialog(self).getOpenFileName(
             self, "Voice file (leave empty for the default voice)", str(self._project_dir()),
             "Audio (*.wav *.mp3 *.ogg *.m4a *.flac *.aac);;All files (*)")
         name = self.name_in.text().strip() or Path(pers).stem.replace("_", " ").title()
@@ -175,7 +176,7 @@ class MadhouseCastMixin:
     def _save_cast(self):
         if not self.characters:
             return
-        path, _ = QFileDialog.getSaveFileName(
+        path, _ = file_dialog(self).getSaveFileName(
             self, "Save cast", str(self._project_dir() / "personalities" / "madhouse_cast.json"),
             "JSON (*.json)")
         if not path:
@@ -203,7 +204,7 @@ class MadhouseCastMixin:
         return None
 
     def _load_characters(self):
-        path, _ = QFileDialog.getOpenFileName(
+        path, _ = file_dialog(self).getOpenFileName(
             self, "Load characters", "", "Characters (*.json *.txt);;All files (*)")
         if not path:
             return

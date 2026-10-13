@@ -18,7 +18,7 @@ So this module has two halves:
 
 Public entry point: `generate(ctx, prompt, ...) -> saved image path or None`.
 """
-from seams import yes_no
+from seams import chat_model, yes_no
 from seams import dep
 import json
 import logging
@@ -491,7 +491,7 @@ def _ask_planner(ctx, prompt: str, attempts: int = 2) -> Optional[dict]:
             # floor that fixed the research briefs.
             system = _PLANNER_MINIMAL
             kw = {"temperature": 0.0, "max_tokens": 6000, "prefill": None}
-        res = llm.send_to_lm_studio(
+        res = chat_model(ctx)(
             ctx,
             [{"role": "system", "content": system},
              {"role": "user", "content": user}],

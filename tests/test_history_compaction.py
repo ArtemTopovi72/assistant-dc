@@ -25,9 +25,9 @@ import llm as _llmmod
 # The summariser seam. graph_history.send_to_lm_studio is a one-line indirection
 # that forwards to llm.send_to_lm_studio at CALL time, so the stub must be
 # installed on llm; otherwise the real LM Studio would be called from a unit test.
+_CH = [None]   # the chat model the contexts hand out
 def _patch_summariser(fn):
-    _llmmod.send_to_lm_studio = fn
-    gmod.send_to_lm_studio = fn          # kept: some checks still read it off graph
+    _CH[0] = fn
 from graph import (compact_history_if_needed, HISTORY_COMPACT_EVERY,
                    _HISTORY_KEEP_TURNS, _HISTORY_SUMMARY_MARKER)
 from models import Context
@@ -38,6 +38,7 @@ def _ctx():
     c = Context(models=None, transcription_cache={}, cache_file=Path("tests/_hc.json"),
                 asr_lock=threading.Lock(), tts_lock=threading.Lock(),
                 model_name="m", no_think=True)
+    c.chat_model = lambda *a, **k: _CH[0](*a, **k)
     c.total_user_turns = 0
     return c
 

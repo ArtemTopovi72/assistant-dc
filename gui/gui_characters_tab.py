@@ -18,6 +18,7 @@ The training button is honest about a machine where the trainer was never
 installed: it says what is missing instead of starting something that cannot
 run.
 """
+from seams import file_dialog
 import os
 
 from PyQt5.QtCore import Qt, QThread, QTimer, pyqtSignal
@@ -435,7 +436,7 @@ class CharactersTab(QWidget):
             QMessageBox.warning(self, 'Characters',
                                 'This character already exists: ' + slug)
             return
-        folder = QFileDialog.getExistingDirectory(self, 'Photo folder')
+        folder = file_dialog(self).getExistingDirectory(self, 'Photo folder')
         if not folder:
             return
         out = LT.DATASET_ROOT / slug
@@ -448,7 +449,7 @@ class CharactersTab(QWidget):
         rec = self._selected()
         if not rec:
             return
-        folder = QFileDialog.getExistingDirectory(self, 'Photo folder')
+        folder = file_dialog(self).getExistingDirectory(self, 'Photo folder')
         if not folder:
             return
         self._start_dataset(folder, rec.get("dataset_dir")
@@ -621,7 +622,7 @@ class CharactersTab(QWidget):
         if not ok:
             return
         if choice == labels[-1]:
-            picked, _ = QFileDialog.getOpenFileName(
+            picked, _ = file_dialog(self).getOpenFileName(
                 self, 'Which checkpoint to publish',
                 str(LT.TRAIN_ROOT), "LoRA (*.safetensors)")
             if not picked:

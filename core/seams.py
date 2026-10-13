@@ -25,6 +25,24 @@ def chat_model(ctx):
     return llm.send_to_lm_studio
 
 
+def run_tool(ctx):
+    """`execute_tool(ctx, state, tool_name, tool_args) -> str`."""
+    own = getattr(ctx, "run_tool", None)
+    if own is not None:
+        return own
+    import tools
+    return tools.execute_tool
+
+
+def file_dialog(widget):
+    """The `QFileDialog` a window opens: `getOpenFileName(s)`, `getSaveFileName`, `getExistingDirectory`."""
+    own = getattr(widget, "file_dialog", None)
+    if own is not None:
+        return own
+    from PyQt5.QtWidgets import QFileDialog
+    return QFileDialog
+
+
 def vision_model(ctx):
     """`analyze_image_with_llm(ctx, **kw) -> str` (one picture or labelled `image_paths`)."""
     own = getattr(ctx, "vision_model", None)

@@ -11,7 +11,8 @@ Unreachable code, intentionally not covered:
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_supplement10.py
 """
-import os, sys, types, tempfile, threading, contextlib
+import os, sys, types, tempfile, threading, contextlib
+from types import SimpleNamespace as _NS
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("USE_GUI", "0")
 os.environ["GUI_REPORT_HTML"] = "0"
@@ -318,7 +319,7 @@ def test_memory_center_single_guards():
     # _delete_matching with no results
     tab.search_box.setText("zzz-nomatch-xyz"); tab._delete_matching(); tab.search_box.setText("")
     # _import cancelled
-    _QFD.getOpenFileName = staticmethod(lambda *a, **k: ("", ""))
+    tab.file_dialog = _NS(getOpenFileName=lambda *a, **k: ("", ""))
     tab._import()
     # _run_diag with a query — add data first
     store.add("default", "dark theme note", etype="fact", source="manual", importance=70)
@@ -420,8 +421,6 @@ if __name__ == "__main__":
             failed += 1
             import traceback; traceback.print_exc()
             print(f"  ERROR in {fn.__name__}: {type(e).__name__}: {e}")
-    _QFD.getOpenFileName = staticmethod(_saved["gof"])
-    _QFD.getSaveFileName = staticmethod(_saved["gsf"])
     QInputDialog.getText = staticmethod(_saved["gt"])
     print(f"\n{len(fns)-failed}/{len(fns)} supplement10 functions passed "
           f"({sum(1 for _,c in RESULTS if c)}/{len(RESULTS)} checks)")

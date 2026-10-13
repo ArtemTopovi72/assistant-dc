@@ -14,6 +14,7 @@ PictureEditWorker runs a pixel-level edit when no box applies.
 Each takes a _ScopedCtx (gui_common) so the main chat's Stop button cannot
 cancel this tab's work, and vice versa.
 """
+from seams import file_dialog
 import copy
 import json
 import os
@@ -720,7 +721,7 @@ class StoryboardTab(QWidget):
 
     # ---- files -----------------------------------------------------------
     def _save_layout(self):
-        path, _ = QFileDialog.getSaveFileName(self, "Save layout", "layout.json",
+        path, _ = file_dialog(self).getSaveFileName(self, "Save layout", "layout.json",
                                               "JSON (*.json)")
         if not path:
             return
@@ -732,7 +733,7 @@ class StoryboardTab(QWidget):
             self.status.setText(f"Save failed: {exc}")
 
     def _load_layout(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Load layout", "", "JSON (*.json)")
+        path, _ = file_dialog(self).getOpenFileName(self, "Load layout", "", "JSON (*.json)")
         if not path:
             return
         try:

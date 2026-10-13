@@ -8,6 +8,7 @@ path (acronyms spelled, trailing-dot padding, stress). Only layout lives here.
 Two QThreads, one per slow step; neither reads a widget (unhandled slot
 exceptions abort the process with no traceback -- see gui_busy_state).
 """
+from seams import file_dialog
 import os
 
 from PyQt5.QtCore import QThread, pyqtSignal
@@ -136,7 +137,7 @@ class VoiceCloneTab(QWidget):
         return any(w is not None and w.isRunning() for w in (self.prep_worker, self.speak_worker))
 
     def _browse(self):
-        path, _ = QFileDialog.getOpenFileName(self, 'Voice file', "", _MEDIA_FILTER)
+        path, _ = file_dialog(self).getOpenFileName(self, 'Voice file', "", _MEDIA_FILTER)
         if path:
             self.src_in.setText(path)
 

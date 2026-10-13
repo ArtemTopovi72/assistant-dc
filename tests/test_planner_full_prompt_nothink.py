@@ -5,8 +5,11 @@ import _sweep_stub  # the model's narrow reads, stubbed
 import llm, ideogram as G
 
 asked = []
-llm.send_to_lm_studio = lambda ctx, msgs, **k: asked.append(msgs[0]["content"]) or {"content": ""}
-class Ctx: model_name = "gemma4-26b-a4b"; no_think = True
+_CM = [None]   # the chat model the context hands out
+_CM[0] = lambda ctx, msgs, **k: asked.append(msgs[0]["content"]) or {"content": ""}
+class Ctx:
+    model_name = "gemma4-26b-a4b"; no_think = True
+    chat_model = staticmethod(lambda *a, **k: _CM[0](*a, **k))
 G._ask_planner(Ctx(), "ваза на столе")
 # no-think Gemma answers the full prompt in seconds
 assert asked[0] == G._PLANNER_PROMPT, asked[0][:60]
@@ -27,7 +30,7 @@ print("PASS 'логотип' is a lettering cue")
 assert 'medium="flat vector graphic design"' in G._PLANNER_PROMPT
 print("PASS a logo is graphic design")
 users = []
-llm.send_to_lm_studio = lambda ctx, msgs, **k: users.append(msgs[1]["content"]) or {"content": ""}
+_CM[0] = lambda ctx, msgs, **k: users.append(msgs[1]["content"]) or {"content": ""}
 Ctx.no_think, Ctx.reply_lang = True, "ru"
 G._ask_planner(Ctx(), "A wooden sign for a small bakery")
 assert "lettering you make up yourself is in Russian" in users[0], users[0]

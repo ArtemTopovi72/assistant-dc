@@ -4,7 +4,8 @@ the tabs. Targets the partial-branch tail that the earlier suites left half-cove
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_supplement4.py
 """
-import os, sys, types, tempfile, threading
+import os, sys, types, tempfile, threading
+from types import SimpleNamespace as _NS
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("USE_GUI", "0")
 os.environ["GUI_REPORT_HTML"] = "0"
@@ -203,7 +204,7 @@ def test_mc_move_pin_export_diag():
     # _run_diag with empty query
     tab.diag_query.setText(""); tab._run_diag(); check("mc_diag_empty", True)
     # _export cancelled (no path)
-    _QFD.getSaveFileName = staticmethod(lambda *a, **k: ("", ""))
+    tab.file_dialog = _NS(getSaveFileName=lambda *a, **k: ("", ""))
     for fmt in ("json", "md", "zip"): tab._export(fmt)
     check("mc_export_cancel", True)
     # _remove_selected with no selection (StressTab-like) — here _delete_selected no ids
@@ -266,8 +267,6 @@ if __name__ == "__main__":
             failed += 1
             import traceback; traceback.print_exc()
             print(f"  ERROR in {fn.__name__}: {type(e).__name__}: {e}")
-    _QFD.getOpenFileName = staticmethod(_saved["gof"])
-    _QFD.getSaveFileName = staticmethod(_saved["gsf"])
     QInputDialog.getText = staticmethod(_saved["gt"])
     print(f"\n{len(fns)-failed}/{len(fns)} supplement4 functions passed "
           f"({sum(1 for _,c in RESULTS if c)}/{len(RESULTS)} checks)")

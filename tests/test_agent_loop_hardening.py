@@ -38,8 +38,6 @@ def _send(ctx, messages, tools=None, **k):
     return _script["fn"](_script["n"])
 
 
-graph_mod.send_to_lm_studio = _send
-llm_mod.send_to_lm_studio = _send
 
 
 def _msg(content="", tcs=None):
@@ -61,6 +59,7 @@ def _ctx():
     c.tts_disabled = True
     c.gui_mode = True
     c.web_search_enabled = False
+    c.chat_model = _send
     c.active_memory_dir = Path(__file__).resolve().parent / "_hmem"
     c.active_memory_dir.mkdir(parents=True, exist_ok=True)
     return c

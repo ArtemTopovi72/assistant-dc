@@ -32,8 +32,6 @@ def _run(tmp_path, script):
     def send(ctx, messages, tools=None, **k):
         _seen.append([m.get("content") for m in messages if m.get("role") == "user"])
         return script(len(_seen), messages)
-    graph_mod.send_to_lm_studio = send
-    llm_mod.send_to_lm_studio = send
     _seen.clear()
     box = Sandbox(tmp_path / "sbx")
     with zipfile.ZipFile(box.root / "mod.jar", "w") as zf:
@@ -42,6 +40,7 @@ def _run(tmp_path, script):
                 asr_lock=threading.Lock(), tts_lock=threading.Lock(),
                 model_name=MODEL_NAME, no_think=True)
     c.tts_disabled = True; c.gui_mode = True; c.web_search_enabled = False
+    c.chat_model = send
     c.active_memory_dir = tmp_path / "mem"; c.active_memory_dir.mkdir()
     c.sandbox, c.sandbox_user = box, _User()
     st = {"messages": [{"role": "system", "content": SYSTEM_PROMPT_PERSONALITY}],

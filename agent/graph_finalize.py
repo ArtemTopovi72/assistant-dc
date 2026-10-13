@@ -12,7 +12,7 @@ action the agent never took from reaching the user.
 # value at import would freeze the real implementations and make every one of
 # those patches a silent no-op. See graph_personality.py's module docstring.
 """
-from seams import intent_read
+from seams import chat_model, intent_read
 import logging
 import os
 import re
@@ -431,7 +431,7 @@ def _finalize_answer(ctx: Context, state: AgentState, messages: list,
                     "write the reply itself, however short.")}]
                 logger.warning("closing reply was empty — retry %d at %d tokens",
                                _try, _budget)
-            forced = _g.send_to_lm_studio(ctx, _msgs,
+            forced = chat_model(ctx)(ctx, _msgs,
                                        temperature=gen.temperature,
                                        max_tokens=_budget,
                                        prefill=_closing_prefill(ctx, gen.prefill))

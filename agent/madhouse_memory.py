@@ -23,6 +23,7 @@ Headless: no Qt. The store is keyed by the transcript's first line, because
 the tab hands the worker a COPY of its list every turn; clearing the room
 starts a new transcript and so a new, empty memory.
 """
+from seams import chat_model
 import logging
 import threading
 from typing import Dict, List
@@ -100,7 +101,7 @@ def distil(ctx, history: list, *, window: int = WINDOW, batch: int = BATCH) -> "
         import llm
         from utils import safe_json_from_llm
         from prompt_guard import fact_rejection
-        res = llm.send_to_lm_studio(
+        res = chat_model(ctx)(
             ctx, [{"role": "system", "content": _SYSTEM},
                   {"role": "user", "content": convo}],
             tools=[], tool_choice="none", temperature=0.2, max_tokens=600,

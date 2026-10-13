@@ -8,6 +8,7 @@ rest of AssistantWindow except the chat log and the busy gate.
 Needs from the host: _add_assistant, _add_system, _set_busy, _set_status,
 _on_failed and _maybe_drain_queue.
 """
+from seams import file_dialog
 import logging
 import os
 from PyQt5.QtCore import Qt
@@ -139,7 +140,7 @@ class DatabaseTabMixin:
         self.db_file_list.addItem(it)
 
     def _db_add_files(self):
-        paths, _ = QFileDialog.getOpenFileNames(
+        paths, _ = file_dialog(self).getOpenFileNames(
             self, "Add documents to the database", "",
             "Documents (*.txt *.text *.log *.md *.markdown *.pdf *.epub);;All files (*)")
         for p in paths:

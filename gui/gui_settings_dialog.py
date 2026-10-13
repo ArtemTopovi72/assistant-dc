@@ -9,6 +9,7 @@ Both consumers — AssistantWindow and run_gui — are in gui.py, which
 re-exports these two so the suites that patch gui.SettingsDialog keep
 intercepting.
 """
+from seams import file_dialog
 import os
 
 from PyQt5.QtCore import Qt, QTimer
@@ -464,7 +465,7 @@ class SettingsDialog(QDialog):
                 real[0].setChecked(True)
 
     def _pick_voice(self):
-        path, _ = QFileDialog.getOpenFileName(
+        path, _ = file_dialog(self).getOpenFileName(
             self, "Reference voice", "", "Audio (*.wav *.mp3 *.ogg *.m4a *.flac *.aac);;All files (*)")
         if path:
             if self.ctx:
@@ -478,7 +479,7 @@ class SettingsDialog(QDialog):
 
     def _pick_personality(self):
         personalities_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "personalities")
-        path, _ = QFileDialog.getOpenFileName(
+        path, _ = file_dialog(self).getOpenFileName(
             self, "Personality file", personalities_dir, "Text files (*.txt);;All files (*)")
         if path:
             self._load_personality(path)
@@ -534,7 +535,7 @@ class SettingsDialog(QDialog):
         def _save():
             personalities_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "personalities")
             default_path = (self.ctx.custom_personality_path if self.ctx else None) or os.path.join(personalities_dir, "custom.txt")
-            path, _ = QFileDialog.getSaveFileName(dlg, "Save personality", default_path, "Text files (*.txt)")
+            path, _ = file_dialog(dlg).getSaveFileName(dlg, "Save personality", default_path, "Text files (*.txt)")
             if path:
                 try:
                     with open(path, "w", encoding="utf-8") as f:

@@ -18,6 +18,7 @@ Three steps, none of them Telegram-specific:
                            numbers as words, stress marks, the trailing dots
                            that stop F5 eating the end of the phrase.
 """
+from seams import chat_model
 import logging
 import os
 import re
@@ -144,7 +145,7 @@ def polish(ctx, text: str) -> str:
         return text
     try:
         import llm
-        res = llm.send_to_lm_studio(
+        res = chat_model(ctx)(
             ctx, [{"role": "system", "content":
                    "Fix punctuation and capital letters in the user's text so it reads "
                    "naturally aloud: commas, full stops, question marks, dashes. Do NOT "

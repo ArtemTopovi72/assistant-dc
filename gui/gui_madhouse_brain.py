@@ -12,6 +12,7 @@ Both functions are re-exported from gui_madhouse_tab, and MadhouseReplyWorker
 still resolves them through that module's globals -- so a suite that patches
 `gui_madhouse_tab.generate_madhouse_reply` steers the worker exactly as before.
 """
+from seams import chat_model
 import logging
 import random
 import re
@@ -99,7 +100,7 @@ def generate_madhouse_reply(ctx, character: dict, history: list) -> str:
     )
     text = ""
     for i, kwargs in enumerate(attempts, 1):
-        res = llm.send_to_lm_studio(ctx, msgs, tools=[], tool_choice="none",
+        res = chat_model(ctx)(ctx, msgs, tools=[], tool_choice="none",
                                     temperature=0.9, **kwargs)
         text = _text(res)
         if text:
@@ -177,7 +178,7 @@ def choose_next_speaker(ctx, characters, history, last_id, use_router=True, huma
                          + (f"The human in the room is {human_name}.\n\n" if human_name else "")
                          + f"Transcript:\n{convo}\n\nWho speaks next?")},
         ]
-        res = llm.send_to_lm_studio(ctx, msgs, tools=[], tool_choice="none",
+        res = chat_model(ctx)(ctx, msgs, tools=[], tool_choice="none",
                                     temperature=0.3, max_tokens=24,
                                     prefill="<think></think>")
         pick = ((res or {}).get("content") or "").strip()

@@ -9,6 +9,7 @@ each _build_* creates. The compaction worker lifecycle (._compact_worker,
 ._reset_compact_worker) stays with the page that owns it so teardown still has
 exactly one owner.
 """
+from seams import file_dialog
 import json
 from pathlib import Path
 from PyQt5.QtWidgets import (
@@ -205,23 +206,23 @@ class MemoryMaintenanceMixin:
     def _export(self, fmt):
         prof = self._profile()
         if fmt == "json":
-            path, _ = QFileDialog.getSaveFileName(self, "Export JSON", f"{prof}_memory.json", "JSON (*.json)")
+            path, _ = file_dialog(self).getSaveFileName(self, "Export JSON", f"{prof}_memory.json", "JSON (*.json)")
             if path:
                 Path(path).write_text(json.dumps(self.store.export_json([prof]), ensure_ascii=False, indent=2), encoding="utf-8")
                 self.store.log(prof, "exported", {"fmt": "json"}); self.backup_log.appendPlainText(f"Exported JSON → {path}")
         elif fmt == "md":
-            path, _ = QFileDialog.getSaveFileName(self, "Export Markdown", f"{prof}_memory.md", "Markdown (*.md)")
+            path, _ = file_dialog(self).getSaveFileName(self, "Export Markdown", f"{prof}_memory.md", "Markdown (*.md)")
             if path:
                 Path(path).write_text(self.store.export_markdown([prof]), encoding="utf-8")
                 self.store.log(prof, "exported", {"fmt": "md"}); self.backup_log.appendPlainText(f"Exported Markdown → {path}")
         else:
-            path, _ = QFileDialog.getSaveFileName(self, "Export ZIP (all profiles)", "memory_backup.zip", "ZIP (*.zip)")
+            path, _ = file_dialog(self).getSaveFileName(self, "Export ZIP (all profiles)", "memory_backup.zip", "ZIP (*.zip)")
             if path:
                 self.store.export_zip(self.store.profiles(), Path(path))
                 self.backup_log.appendPlainText(f"Exported ALL profiles → {path}")
 
     def _import(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Import backup", "", "Backups (*.json *.zip)")
+        path, _ = file_dialog(self).getOpenFileName(self, "Import backup", "", "Backups (*.json *.zip)")
         if not path:
             return
         try:

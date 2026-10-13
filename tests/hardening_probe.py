@@ -70,16 +70,15 @@ def run_turn(user_input, fail_tools=(), label=""):
             return ("[TOOL ERROR] Image generation failed — the rendering server is "
                     "unavailable (connection refused). The image was NOT created.")
         return real_exec(ctx, state, name, args)
-    graph_mod.execute_tool = patched      # graph imports execute_tool into its namespace
     try:
-        ctx = make_ctx()
+        ctx = make_ctx(); ctx.run_tool = patched
         g = graph_mod.build_graph(ctx)
         state = {"user_input": user_input, "messages": [], "image_data": None}
         t0 = time.perf_counter()
         out = g.invoke(state)
         dt = time.perf_counter() - t0
     finally:
-        graph_mod.execute_tool = real_exec
+        pass
 
     ans = (out.get("final_answer", "") or "").strip()
     return {

@@ -9,7 +9,8 @@ test must not leave folders in it, nor read the user's actual chat files.
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_code_tab.py
 """
-import os, sys, tempfile
+import os, sys, tempfile
+from types import SimpleNamespace as _NS
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("USE_GUI", "0")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -86,7 +87,7 @@ check("clicking a directory explains itself instead of raising",
 # ── adding files goes through the sandbox, not around it ─────────────────────
 src = Path(tempfile.mkdtemp()) / "dropped.txt"
 src.write_text("from the picker", encoding="utf-8")
-CT.QFileDialog.getOpenFileNames = staticmethod(lambda *a, **k: ([str(src)], ""))
+tab.file_dialog = _NS(getOpenFileNames=lambda *a, **k: ([str(src)], ""))
 tab._add_files()
 check("a picked file lands in the folder",
       _read(CS.sandbox_for(4242), "dropped.txt") == "from the picker")
@@ -94,7 +95,7 @@ check("a picked file lands in the folder",
 # The basename is all that is used, so a path from anywhere stays contained.
 outside = Path(tempfile.mkdtemp()) / "escape.txt"
 outside.write_text("x", encoding="utf-8")
-CT.QFileDialog.getOpenFileNames = staticmethod(lambda *a, **k: ([str(outside)], ""))
+tab.file_dialog = _NS(getOpenFileNames=lambda *a, **k: ([str(outside)], ""))
 tab._add_files()
 inside = CS.sandbox_for(4242).root / "escape.txt"
 check("it is written inside the sandbox root", inside.exists())

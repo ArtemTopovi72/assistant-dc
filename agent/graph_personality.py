@@ -32,7 +32,7 @@ patched on `graph`, only read directly (e.g. `graph._intent_tools(...)`,
 `graph._DECK_PREFIX`) or not touched by the suites at all. graph.py
 re-exports it all by name so those direct reads keep resolving.
 """
-from seams import intent_read, yes_no
+from seams import chat_model, run_tool, intent_read, yes_no
 import json
 import logging
 import os
@@ -1262,7 +1262,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
         # (2 m 40 s). One schema + the prefill calls it at once; only
         # when it answers in text instead does the grammar-forced call run.
         _try_auto = _choice == "required" and getattr(ctx, "no_think", True)
-        response_message = _g.send_to_lm_studio(
+        response_message = chat_model(ctx)(
             ctx, _outbound + outbound_extra,
             tools=turn_tools,
             tool_choice="auto" if _try_auto else _choice,
@@ -1277,7 +1277,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             # ~50 tokens, 2/2 (probe 2026-09-27, gemma4-26b).
             logger.info("Round %d: forced %s answered in text -- retrying auto with an order",
                         round_idx, _force)
-            response_message = _g.send_to_lm_studio(
+            response_message = chat_model(ctx)(
                 ctx, _outbound + outbound_extra + [{"role": "user", "content":
                     f"[system] Call the tool `{_force}` now. Do not answer in text."}],
                 tools=turn_tools,
@@ -1289,7 +1289,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
         if _try_auto and not (response_message or {}).get("tool_calls"):
             logger.info("Round %d: forced %s answered in text twice -- retrying with required",
                         round_idx, _force)
-            response_message = _g.send_to_lm_studio(
+            response_message = chat_model(ctx)(
                 ctx, _outbound + outbound_extra,
                 tools=turn_tools,
                 tool_choice=_choice,
@@ -1329,7 +1329,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             if "\n" in _part.rstrip():
                 _part = _part.rstrip()[:_part.rstrip().rfind("\n") + 1]
             _anchor = (_part.rstrip().rsplit("\n", 1)[-1])[-200:]
-            _next = _g.send_to_lm_studio(
+            _next = chat_model(ctx)(
                 ctx, _outbound + [{"role": "assistant", "content": _part},
                                   {"role": "user", "content":
                                    "[system] Your reply was cut off. Continue from the line "
@@ -1619,7 +1619,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                     and "remember_fact" not in tools_called_this_turn):
                 fact = _fact_of_remember_request(user_input)
                 if len(fact) >= 6:
-                    result = _g.execute_tool(ctx, state, "remember_fact",
+                    result = run_tool(ctx)(ctx, state, "remember_fact",
                                           {"fact": fact[:500]})
                     logger.warning("remember_fact never called after correction — "
                                    "saved verbatim: %r (%s)", fact[:80], result[:60])
@@ -1656,7 +1656,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                     and "create_presentation" not in tools_called_this_turn):
                 topic = user_input.strip()[len(_DECK_PREFIX):].strip()
                 if len(topic) >= 3:
-                    result = _g.execute_tool(ctx, state, "create_presentation",
+                    result = run_tool(ctx)(ctx, state, "create_presentation",
                                           {"topic": topic[:300]})
                     logger.warning("create_presentation never called after "
                                    "correction — built it from the topic: %r (%s)",
@@ -1900,7 +1900,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                     "image-editing tool again this turn."
                 )
             else:
-                tool_result = _g.execute_tool(ctx, state, tool_name, tool_args)
+                tool_result = run_tool(ctx)(ctx, state, tool_name, tool_args)
                 # Defense-in-depth: execute_tool guarantees a str, but never let a
                 # rogue None/non-str reach .lstrip() and crash the whole turn.
                 if not isinstance(tool_result, str):

@@ -5,7 +5,8 @@ guard branches.
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_supplement7.py
 """
-import os, sys, types, tempfile, threading, contextlib
+import os, sys, types, tempfile, threading, contextlib
+from types import SimpleNamespace as _NS
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("USE_GUI", "0")
 os.environ["GUI_REPORT_HTML"] = "0"
@@ -272,7 +273,7 @@ def test_save_copy_missing_path_valid_pix():
     dlg = gui.ImageViewerDialog([p])
     dlg._paths = ["C:/no/such_missing.png"]     # path missing but _pix still valid
     dest = os.path.join(_TMP, "sc7out.png")
-    _QFD.getSaveFileName = staticmethod(lambda *a, **k: (dest, ""))
+    dlg.file_dialog = _NS(getSaveFileName=lambda *a, **k: (dest, ""))
     dlg._save_copy()
     check("save_copy_pix_fallback", os.path.exists(dest))
     dlg.close()
@@ -345,8 +346,6 @@ if __name__ == "__main__":
             failed += 1
             import traceback; traceback.print_exc()
             print(f"  ERROR in {fn.__name__}: {type(e).__name__}: {e}")
-    _QFD.getOpenFileName = staticmethod(_saved["gof"])
-    _QFD.getSaveFileName = staticmethod(_saved["gsf"])
     QInputDialog.getText = staticmethod(_saved["gt"])
     print(f"\n{len(fns)-failed}/{len(fns)} supplement7 functions passed "
           f"({sum(1 for _,c in RESULTS if c)}/{len(RESULTS)} checks)")

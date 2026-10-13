@@ -75,12 +75,8 @@ def _drive(model, *, answers):
         import json
         return {"content": json.dumps(reply, ensure_ascii=False)}
 
-    real = llm.send_to_lm_studio
-    llm.send_to_lm_studio = _fake
-    try:
-        out = I._ask_planner(Ctx(model), "draw a poster")
-    finally:
-        llm.send_to_lm_studio = real
+    ctx = Ctx(model); ctx.chat_model = _fake
+    out = I._ask_planner(ctx, "draw a poster")
     return asks, out
 
 
