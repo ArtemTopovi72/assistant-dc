@@ -952,7 +952,7 @@ _FRAMING_LOCK_SUFFIX = (
     "preserve the original framing and composition of the reference exactly.")
 
 
-def _lock_framing_unless_requested(description: str) -> str:
+def _lock_framing_unless_requested(description: str, ctx=None) -> str:
     """Append a static-camera directive unless the request itself asks for motion.
 
     "the video model doesn't preserve the original at all on
@@ -966,10 +966,10 @@ def _lock_framing_unless_requested(description: str) -> str:
     built around a pan is never fought.
     """
     d = (description or "").strip()
-    import intent
-    if not d or intent.ask_yes("A video clip is described as: {text}\n\nDoes the description ask "
-                               "for the camera to move (zoom, pan, dolly, orbit, tilt, tracking or "
-                               "handheld shot)?", d):
+    from seams import yes_no
+    if not d or yes_no(ctx)("A video clip is described as: {text}\n\nDoes the description ask "
+                            "for the camera to move (zoom, pan, dolly, orbit, tilt, tracking or "
+                            "handheld shot)?", d):
         return d
     return d + _FRAMING_LOCK_SUFFIX
 
@@ -991,10 +991,10 @@ _STYLE_LOCK_SUFFIX = (
     "the faces or the scene.")
 
 
-def _asks_new_style(description: str) -> bool:
+def _asks_new_style(description: str, ctx=None) -> bool:
     """«оживи в стиле аниме»: the style lock would fight the request itself."""
-    import intent
-    return intent.ask_yes("A video clip is made from a picture and described as: {text}\n\n"
+    from seams import yes_no
+    return yes_no(ctx)("A video clip is made from a picture and described as: {text}\n\n"
                           "Does the description ask to change the picture's visual style (into "
                           "anime, cartoon, painting, 3D, photoreal, another art style)?", description)
 
@@ -1256,8 +1256,9 @@ def prepare_prompt(ctx, description: str, *, images: Sequence[str] = (), videos:
     generate_video so a chain can prepare all its parts while the chat model is loaded and
     then hold the card through every render (called inside the hold, each call
     met an unloaded model and the parts went out unrewritten)."""
+    eng = _eng(ctx)
     asked = description
-    description = _lock_framing_unless_requested(description)
+    description = _lock_framing_unless_requested(description, ctx)
     mode = pick_mode(images, videos, audios)
     if not seconds:
         seconds = estimate_seconds(asked)
@@ -1265,20 +1266,20 @@ def prepare_prompt(ctx, description: str, *, images: Sequence[str] = (), videos:
     frames = seconds_to_frames(seconds)
     if head:
         frames = snap_frames(frames + MOTION_CONTEXT_FRAMES - 5)
-    if _context_ir_on():
+    if eng._context_ir_on():
         locked = description.endswith(_FRAMING_LOCK_SUFFIX)
-        description = to_context_ir(ctx, description, mode=mode,
+        description = eng.to_context_ir(ctx, description, mode=mode,
                                     seconds=frames_to_seconds(frames), images=images,
                                     n_videos=len(videos), n_audios=len(audios))
         if locked:
             description = _with_lock(description, _FRAMING_LOCK_SUFFIX)
     if 1 <= len(images) <= 2 and not videos:     # a photo to animate, not a set of references
-        restyle = _asks_new_style(asked)
+        restyle = _asks_new_style(asked, ctx)
         description = _with_lock(description, _START_LOCK_SUFFIX)
         if not restyle:
             description = _with_lock(description, _STYLE_LOCK_SUFFIX)
-    if VIDEO_SPEECH_STRESS:
-        description = mark_speech_stress(ctx, description)
+    if eng.VIDEO_SPEECH_STRESS:
+        description = eng.mark_speech_stress(ctx, description)
     return description, seconds
 
 

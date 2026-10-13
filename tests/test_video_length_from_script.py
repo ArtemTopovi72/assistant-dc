@@ -10,7 +10,26 @@ for d in ("", "core", "agent", "media"):
     sys.path.insert(0, os.path.join(ROOT, d))
 os.environ.setdefault("F5_TEST_RUN", "1")
 
+import types  # noqa: E402
+
+import tg_continue  # noqa: E402
+import tool_image_handlers as H  # noqa: E402
 import video as V  # noqa: E402
+from tests.fakes import Over  # noqa: E402
+
+
+class _Ctx:
+    reference_images = []
+    voice_choice = None
+    continue_tail = continue_src = ""
+
+    def __init__(self, **kw):
+        self.__dict__.update(kw)
+
+    def set_stage(self, *_): pass
+    def is_cancelled(self): return False
+    def remember(self, *a): pass
+    def memory_text(self): return ""
 
 BROOM = ("The man puts on a formal suit, takes a broom, and begins sweeping the floor; he sweeps "
          "for several seconds, then stops, looks at the camera, and says \"Ладно извините\". "
@@ -37,25 +56,19 @@ def test_continue_template_does_not_count():
     assert V.estimate_seconds(V.CONTINUE_PREFIX + "he waves.") == V.estimate_seconds("he waves.")
 
 
-def test_generate_video_uses_the_estimate(monkeypatch):
+def test_generate_video_uses_the_estimate():
     seen = {}
-    monkeypatch.setattr(V, "engine_available", lambda ctx: (True, ""))
-    monkeypatch.setattr(V, "_context_ir_on", lambda: False)
-    monkeypatch.setattr(V, "VIDEO_SPEECH_STRESS", False)
 
     def stop(*a, **k):
         seen["frames"] = k.get("frames")
-        raise RuntimeError("stop here")
-    for name in ("_run_t2va", "_render", "_submit_h3", "run_h3"):
-        if hasattr(V, name):
-            monkeypatch.setattr(V, name, stop)
-    real = V.seconds_to_frames
-    monkeypatch.setattr(V, "seconds_to_frames", lambda s: seen.setdefault("secs", s) and real(s))
-    try:
-        V.generate_video(None, BROOM)
-    except Exception:
-        pass
-    assert seen.get("secs", 0) > 9.0, seen
+        raise V.VideoUnavailable("stop here")
+    ctx = types.SimpleNamespace(
+        text_model=lambda *a, **k: "", vision_model=lambda *a, **k: "",
+        yes_no=lambda q, t, default=False, wait=True: default,
+        video_engine=Over(V, engine_available=lambda ctx: (True, ""), _context_ir_on=lambda: False,
+                          VIDEO_SPEECH_STRESS=False, build_workflow=stop))
+    V.generate_video(ctx, BROOM)
+    assert V.frames_to_seconds(seen["frames"]) > 9.0, seen
 
 
 LONG = ("The man puts on a formal suit, takes a broom and begins sweeping the floor. He sweeps for "
@@ -80,40 +93,30 @@ def test_a_short_script_stays_one_part():
 
 # «на 30 секунд» was capped to one 15 s clip and delivered without a word (2026-10-13).
 @pytest.mark.parametrize("extra", [{}, {"seconds": 30}])
-def test_the_parts_are_rendered_as_continuations_and_joined(monkeypatch, tmp_path, extra):
-    import tool_image_handlers as H
-    import tg_continue
-    calls = []
+def test_the_parts_are_rendered_as_continuations_and_joined(tmp_path, extra):
+    calls, joins = [], []
 
     def fake_gen(ctx, description, **kw):
         out = tmp_path / f"part{len(calls) + 1}.mp4"
         out.write_bytes(b"v")
         calls.append((description, kw.get("images"), kw.get("videos")))
         return {"path": str(out), "status": "success", "seconds": 8.0, "width": 768, "height": 1344}
-    monkeypatch.setattr(V, "generate_video", fake_gen)
-    monkeypatch.setattr(V, "engine_available", lambda ctx: (True, ""))
-    monkeypatch.setattr(tg_continue, "seed_frame", lambda src, out: open(out, "wb").write(b"j") > 0)
-    monkeypatch.setattr(tg_continue, "cut_tail", lambda src, out: open(out, "wb").write(b"t") > 0)
-    joins = []
 
     def fake_join(a, b):
         j = tmp_path / f"joined{len(joins)}.mp4"
         j.write_bytes(b"j")
         joins.append((os.path.basename(a), os.path.basename(b)))
         return str(j)
-    monkeypatch.setattr(V, "join_continuation", fake_join)
-    monkeypatch.setattr(V, "_adopt_output", lambda p: p)
-    monkeypatch.setattr(V, "probe", lambda p: {"seconds": 24.0})
-
-    class Ctx:
-        reference_images = []
-        voice_choice = None
-        def set_stage(self, *_): pass
-        def is_cancelled(self): return False
-        def remember(self, *a): pass
-        def memory_text(self): return ""
+    ctx = _Ctx(
+        video_engine=Over(V, generate_video=fake_gen, engine_available=lambda ctx: (True, ""),
+                          herrgott_on=lambda: False, motion_context_on=lambda: False,
+                          mark_inserts=lambda ctx, ps: ps, join_continuation=fake_join,
+                          _adopt_output=lambda p: p, probe=lambda p: {"seconds": 24.0}),
+        clip_tools=Over(tg_continue, seed_frame=lambda src, out: open(out, "wb").write(b"j") > 0,
+                        cut_tail=lambda src, out: open(out, "wb").write(b"t") > 0,
+                        first_frame=lambda src, out: False))
     st = {}
-    out = H._handle_generate_video(Ctx(), st, {"description": LONG, "use_current_images": False, **extra})
+    out = H._handle_generate_video(ctx, st, {"description": LONG, "use_current_images": False, **extra})
     n = len(V.split_script(LONG))
     assert len(calls) == n, calls
     assert not calls[0][0].startswith(V.CONTINUE_PREFIX)
@@ -185,27 +188,15 @@ def test_a_named_length_over_one_clip_reaches_the_handler():
     assert tool_args.GenerateVideoArgs(description="x", seconds=30).seconds == 30
 
 
-def test_a_named_length_condenses_a_script_that_runs_longer(monkeypatch):
+def test_a_named_length_condenses_a_script_that_runs_longer():
     # «на 30 секунд» came out as 11 parts, a minute of video (live 2026-10-13).
-    import tool_image_handlers as H
     asked = []
     short = "He slices the bread. The cat eats a piece."
-    monkeypatch.setattr(V, "condense_script", lambda s, now, fit: asked.append(fit) or short)
-    monkeypatch.setattr(V, "engine_available", lambda ctx: (True, ""))
-    monkeypatch.setattr(V, "mark_inserts", lambda ctx, ps: ps)
     long_ = " ".join(["He slices the bread slowly, piece after piece, then wipes the knife."] * 8)
+    ctx = _Ctx(video_plan_ask=True, yes_no=lambda q, t, default=False, wait=True: True,
+               video_engine=Over(V, engine_available=lambda ctx: (True, ""), mark_inserts=lambda ctx, ps: ps,
+                                 condense_script=lambda s, now, fit, ctx=None: asked.append(fit) or short))
     st = {}
-    monkeypatch.setattr(H, "asks_for_video", lambda ctx, state: True, raising=False)
-
-    class Ctx:
-        reference_images = []
-        voice_choice = None
-        continue_tail = continue_src = ""
-        video_plan_ask = True
-        def set_stage(self, *_): pass
-        def is_cancelled(self): return False
-        def remember(self, *a): pass
-        def memory_text(self): return ""
-    H._handle_generate_video(Ctx(), st, {"description": long_, "seconds": 30, "use_current_images": False})
+    H._handle_generate_video(ctx, st, {"description": long_, "seconds": 30, "use_current_images": False})
     assert asked == [30.0]
     assert not st.get("video_plan") or " ".join(p["text"] for p in st["video_plan"]) == short
