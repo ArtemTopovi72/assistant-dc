@@ -8,6 +8,7 @@ finish(): a one-sentence question gets the Russian IK-3 contour (voice/prosody.p
 Explicit control: ctx.delivery_emotion ("" = plain, None = automatic), ctx.delivery_ik3 (False = off).
 Off switch: EMOTION_DELIVERY=0.  Cloned voices and the standard voice (actor DC) are touched; failures fall back to plain speech.
 """
+from seams import choice
 import logging
 import os
 
@@ -27,8 +28,7 @@ def emotion_of(ctx, text: str) -> str:
         return explicit if explicit in OPTIONS else ""
     if len((text or "").strip()) < MIN_CHARS:
         return ""
-    import intent
-    got = intent.ask_choice(
+    got = choice(ctx)(
         "Which feeling does the speaker voice in this Russian line? Say neutral unless the line clearly shows joy "
         "(delight, excitement, laughter), anger (irritation, shouting, rebuke) or sad (grief, disappointment, longing). {text}",
         text, OPTIONS, default="neutral")

@@ -850,7 +850,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
     # prices and departure times. The category is already classified `local`; it
     # must also pick the report FORM.
     topic = _steer.with_notes(topic, _steer.take(ctx))    # last one before the writing
-    _practical = _is_practical_request(topic, profile)
+    _practical = _is_practical_request(topic, profile, ctx=ctx)
     if _practical:
         logger.info("PRACTICAL intent (category=%r) — writing an actionable options "
                     "list instead of a survey", profile.get("category"))

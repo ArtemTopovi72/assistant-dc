@@ -65,11 +65,14 @@ check("make_presentation refuses to rewrite the file on a failed edit", r["path"
 
 # 3. the tool: edit_previous / the phrasing picks up ctx.last_deck
 # the model's reads are stubbed; the phrases run live in bench/intent_sweep_live.py
-import intent
-intent.CHOICE_STUB = lambda q, t: ("edit" if t.lower().startswith(("добавь", "add")) else "new") if "IN that deck" in q else None
-check("edit phrasing recognised (ru)", tools._edits_deck("добавь слайд про спутники Марса"))
-check("edit phrasing recognised (en)", tools._edits_deck("add a slide about Mars' moons"))
-check("a fresh topic is not an edit", not tools._edits_deck("Mars for schoolchildren"))
+from fakes import reads
+_EDITS = reads(pick=lambda q, t: ("edit" if t.lower().startswith(("добавь", "add")) else "new") if "IN that deck" in q else None,
+               yes=_sweep_stub.yes)
+import types
+_R = types.SimpleNamespace(**_EDITS)
+check("edit phrasing recognised (ru)", tools._edits_deck("добавь слайд про спутники Марса", ctx=_R))
+check("edit phrasing recognised (en)", tools._edits_deck("add a slide about Mars' moons", ctx=_R))
+check("a fresh topic is not an edit", not tools._edits_deck("Mars for schoolchildren", ctx=_R))
 check("edit_previous is a tool argument", "edit_previous" in tool_args.CreatePresentationArgs.model_fields)
 
 seen = {}
@@ -79,6 +82,7 @@ def fake_make(ctx, topic, out_dir, **kw):
 slides.make_presentation = fake_make
 class Ctx:
     last_deck = PREV; web_search_enabled = False
+    choice = staticmethod(_EDITS["choice"]); yes_no = staticmethod(_EDITS["yes_no"])
     def set_stage(self, s): pass
     def remember(self, *a, **k): pass
     def memory_text(self): return ""

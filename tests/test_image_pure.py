@@ -8,7 +8,7 @@ Run: venv/Scripts/python.exe tests/test_image_pure.py
 import os, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import _sweep_stub  # noqa: F401  the model's narrow reads, stubbed
+import _sweep_stub  # the model's narrow reads, stubbed
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
@@ -51,18 +51,18 @@ def test_snap_and_resolution():
 
 
 def test_detect_orientation():
-    check("orient_explicit_land", I.detect_orientation_from_text("a wide landscape banner") == "landscape")
-    check("orient_explicit_port", I.detect_orientation_from_text("vertical portrait phone wallpaper") == "portrait")
-    check("orient_content_port", I.detect_orientation_from_text("a single person standing, headshot") == "portrait")
-    check("orient_content_land", I.detect_orientation_from_text("a city street crowd panorama") == "landscape")
-    check("orient_unknown", I.detect_orientation_from_text("abstract") == "unknown")
-    check("orient_empty", I.detect_orientation_from_text("") == "unknown")
+    check("orient_explicit_land", I.detect_orientation_from_text("a wide landscape banner", ctx=_sweep_stub.reads_ctx()) == "landscape")
+    check("orient_explicit_port", I.detect_orientation_from_text("vertical portrait phone wallpaper", ctx=_sweep_stub.reads_ctx()) == "portrait")
+    check("orient_content_port", I.detect_orientation_from_text("a single person standing, headshot", ctx=_sweep_stub.reads_ctx()) == "portrait")
+    check("orient_content_land", I.detect_orientation_from_text("a city street crowd panorama", ctx=_sweep_stub.reads_ctx()) == "landscape")
+    check("orient_unknown", I.detect_orientation_from_text("abstract", ctx=_sweep_stub.reads_ctx()) == "unknown")
+    check("orient_empty", I.detect_orientation_from_text("", ctx=_sweep_stub.reads_ctx()) == "unknown")
 
 
 def test_fix_image_params():
     # portrait intent with landscape dims -> swapped then normalized
-    check("fix_portrait", I.fix_image_params("", "single person headshot", 960, 544) == (544, 960))
-    check("fix_landscape", I.fix_image_params("", "city panorama", 544, 960) == (960, 544))
+    check("fix_portrait", I.fix_image_params("", "single person headshot", 960, 544, ctx=_sweep_stub.reads_ctx()) == (544, 960))
+    check("fix_landscape", I.fix_image_params("", "city panorama", 544, 960, ctx=_sweep_stub.reads_ctx()) == (960, 544))
 
 
 def test_parse_generation_params():

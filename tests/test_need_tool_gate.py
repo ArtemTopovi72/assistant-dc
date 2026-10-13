@@ -44,11 +44,10 @@ def check(name, ok, detail=""):
 # --- 1. the fast path follows the model's read (agent/intent.py) ----------
 # What a message needs is read by the model, not a keyword allowlist (phrases
 # live in bench/intent_live.py against the real model). Here: the gate obeys it.
-import intent
 from types import SimpleNamespace as _NS
-_fctx = _NS(last_image_path=None, is_cancelled=lambda: False, sandbox=None)
+from fakes import reads
 _READ = {}
-intent.STUB = lambda t: _READ.get(t)
+_fctx = _NS(last_image_path=None, is_cancelled=lambda: False, sandbox=None, **reads(read=lambda t: _READ.get(t)))
 _READ["сделай рилс про кофе"] = {"needs_tool": True, "wants": ["generate_video"]}
 _READ["как дела"] = {"needs_tool": False}
 _READ["забудь всё, что я про себя рассказывал"] = {"needs_tool": True, "wants": ["forget_facts"]}

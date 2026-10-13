@@ -16,8 +16,8 @@ from pathlib import Path
 from PIL import Image
 import image as I
 # the whole-face read is the model's; phrases run live in bench/intent_rest_live.py
-import intent
-intent.YES_STUB = lambda q, t: "whole face or head" in q and t.strip() in ("her face", "the face")
+from fakes import reads
+_FACE = reads(yes=lambda q, t: "whole face or head" in q and t.strip() in ("her face", "the face"))
 
 # --- hermetic by default -----------------------------------------------------
 # _item_attributes() asks the LLM to classify a phrase, and the mask pipeline
@@ -40,10 +40,12 @@ def check(name, cond, detail=""):
         raise AssertionError(str(name) + (": " + str(detail) if detail else ""))
 
 def Ctx():
-    return models.Context(
+    c = models.Context(
         models=None, transcription_cache={}, cache_file=_TMP / "cache.json",
         asr_lock=threading.Lock(), tts_lock=threading.Lock(),
     )
+    c.yes_no = _FACE["yes_no"]
+    return c
 
 def _photo(name="p.png", w=256, h=256, col=(120, 140, 160)):
     p = _TMP / name

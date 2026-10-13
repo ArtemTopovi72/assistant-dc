@@ -16,9 +16,12 @@ os.environ.setdefault("F5_TEST_RUN", "1")
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import tg_tasks as T, intent
+import types
+import tg_tasks as T
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from fakes import reads
 # Whether it asks about the video is the model's read (agent/intent.py).
-intent.STUB = lambda t: None if t == "привет" else {"is_question": True, "about_picture": True}
+_R = types.SimpleNamespace(**reads(read=lambda t: None if t == "привет" else {"is_question": True, "about_picture": True}))
 
 OK = BAD = 0
 def check(name, cond, extra=""):
@@ -40,20 +43,20 @@ FOLLOWUPS = [
 ]
 for t in FOLLOWUPS:
     check("video follow-up bypasses docs: " + t,
-          T._about_the_last_video(VIDEO_SHEET, t))
+          T._about_the_last_video(VIDEO_SHEET, t, ctx=_R))
 
 # Not a question / not video-shaped: no reason to force a bypass.
 check("a bare greeting is not a video follow-up",
-      not T._about_the_last_video(VIDEO_SHEET, "привет"))
+      not T._about_the_last_video(VIDEO_SHEET, "привет", ctx=_R))
 
 # No video on screen at all: never bypasses on this signal alone.
 check("empty last_image_path never bypasses",
-      not T._about_the_last_video("", "Что ответить?"))
+      not T._about_the_last_video("", "Что ответить?", ctx=_R))
 
 # The signal is video-SHEET specific: an ordinary photo upload must not
 # trigger it (that path is already covered by target_image/image_id).
 check("a plain photo upload path does not count as a video",
-      not T._about_the_last_video(PHOTO_UPLOAD, "что думаешь?"))
+      not T._about_the_last_video(PHOTO_UPLOAD, "что думаешь?", ctx=_R))
 
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)

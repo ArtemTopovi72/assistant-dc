@@ -210,7 +210,7 @@ def _undo(ctx, state) -> str:
     """«нет, верни как было» is the previous FILE, not a redraw of it."""
     said = f'{state.get("user_input_original") or ""} {state.get("user_input") or ""}'
     hist = getattr(ctx, "image_undo", None) or []
-    prev = hist[-1] if hist and said.strip() and intent_read(ctx)(ctx, said.strip())["undo"] else ""
+    prev = hist[-1] if hist and said.strip() and intent_read(ctx)(None, said.strip())["undo"] else ""
     if not (prev and os.path.exists(prev)):
         return ""
     ctx.image_undo = hist[:-1]
@@ -312,7 +312,7 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
         _has_layout = bool(image_mod.load_layout_for(source))
         import image_lettering_remove as _lett
         _lettering_out = None
-        if removal and not _has_layout and _lett.is_lettering_removal(region, instructions):
+        if removal and not _has_layout and _lett.is_lettering_removal(region, instructions, ctx=ctx):
             # "Remove all the lettering": the mask is every piece the OCR reads,
             # not the one strip a segmenter finds for a phrase ("INSGATE"
             # survived on the left). A picture with a
@@ -332,7 +332,7 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
             edit_path = "convert_colour"
         elif classify_edit_intent(instructions or "") == "transform":
             import image_router
-            new_path = image_router.transform_image(source, instructions)
+            new_path = image_router.transform_image(source, instructions, ctx=ctx)
             edit_path = "transform"
         elif category in ("text_edit", "text_add") or (_has_layout and category in image_mod._LAYOUT_EDITABLE):
             # A picture WE composed is edited through its boxes, and this branch
@@ -1783,7 +1783,7 @@ def redraw_whole_image(ctx, source: str, instructions: str):
     # undo.
     if (new_path and os.path.exists(new_path)
             and classify_edit_intent(instructions) != "style_transfer"):
-        new_path = image_mod.preserve_identity_face(source, new_path, instructions=instructions)
+        new_path = image_mod.preserve_identity_face(source, new_path, instructions=instructions, ctx=ctx)
     return new_path, engine
 
 
@@ -1827,7 +1827,7 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
         logger.info("Tool: redraw_image -> exact pixel operation: %r", instructions[:80])
         new_path = (convert_colour(source, instructions)
                     if classify_edit_intent(instructions) == "colour_convert"
-                    else image_router.transform_image(source, instructions))
+                    else image_router.transform_image(source, instructions, ctx=ctx))
         if not new_path or not os.path.exists(new_path):
             return ("[TOOL ERROR] The operation failed (a crop to the face needs a "
                     "face the detector can find). Tell the user plainly; do NOT "
@@ -1878,7 +1878,7 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
     from prompt_guard import user_words
     from ideogram_layout import _look
     _said = user_words(str(state.get("user_input_original") or state.get("user_input") or "")).strip()
-    ctx.user_look = _look(_said) if _said else ""
+    ctx.user_look = _look(_said, ctx=ctx) if _said else ""
     try:
         new_path, engine = redraw_whole_image(ctx, source, instructions)
     finally:

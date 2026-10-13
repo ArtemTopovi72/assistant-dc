@@ -32,11 +32,12 @@ print("PASS weather city case")
 # "на выходных" is Sat+Sun. The place and day are the
 # model's read (intent.weather); phrases: bench/intent_song_weather_live.py.
 import datetime as _d
-import intent
+import types
 import tg_weather as TW
-intent.STUB = lambda t: {"weather": {"city": "Питере", "when": "weekend"}}
-_w = TW.weather_request("какая погода в Питере на выходных?", today=_d.date(2026, 9, 28))
-intent.STUB = None
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from fakes import reads
+_R = types.SimpleNamespace(**reads(read=lambda t: {"weather": {"city": "Питере", "when": "weekend"}}))
+_w = TW.weather_request("какая погода в Питере на выходных?", today=_d.date(2026, 9, 28), ctx=_R)
 assert (_w["city"], _w["date"], _w["hours"]) == ("Питере", _d.date(2026, 10, 3), 48), _w
 print("PASS weekend + city")
 PLACES += [("Санкт-Петербург", "Россия"), ("Екатеринбург", "Россия"), ("Питерка", "Россия")]

@@ -184,12 +184,13 @@ check("a transcript delivered verbatim is remembered too, as a voice message",
 # 4. A follow-up about a video looks at the FRAMES again. The keyframe sheet
 # is the chat's current picture; "дай экспертное мнение" has no question word,
 # but the model reads it as about the video (intent about_picture).
-import types as _types, intent as _intent
-_intent.STUB = {"дай экспертное мнение": {"about_picture": True},
-                "нарисуй кота": {"needs_tool": True, "wants": ["generate_image"]}}.get
+import types as _types
+from fakes import reads
+_READ = reads(read={"дай экспертное мнение": {"about_picture": True},
+                    "нарисуй кота": {"needs_tool": True, "wants": ["generate_image"]}}.get)
 _vd = os.path.join(tempfile.mkdtemp(), "video_ab12cd34"); os.makedirs(_vd)
 _sheet = os.path.join(_vd, "sheet.jpg"); open(_sheet, "wb").close()
-_ctx = _types.SimpleNamespace(last_image_path=_sheet)
+_ctx = _types.SimpleNamespace(last_image_path=_sheet, **_READ)
 check("the video sheet is recognised", G.is_video_sheet(_sheet) and not G.is_video_sheet(os.path.join(_vd, "x.jpg")))
 check("an opinion asked after a video re-looks at its frames",
       G.needs_relook(_ctx, {"user_input": "дай экспертное мнение"})

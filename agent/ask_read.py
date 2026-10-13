@@ -10,6 +10,7 @@ Also read here: an explicit length («на 1200 слов», «подробно»
 about the earlier conversation, a child's medicine dose with the weight, and a
 coding ask.
 """
+from seams import yes_no
 import logging
 import os
 import threading
@@ -125,7 +126,7 @@ def _grounded(out: dict, text: str) -> dict:
     return out
 
 
-def read(text: str) -> dict:
+def read(text: str, ctx=None) -> dict:
     text = (text or "").strip()
     if not text:
         return dict(FALLBACK)
@@ -144,8 +145,7 @@ def read(text: str) -> dict:
         # the full read took the preposition in «сколько букв в алфавите» for the
         # letter; a narrow question confirms one is really named
         if out["op"] == "letter_count":
-            import intent
-            if not intent.ask_yes("A user wrote: {text}\n\nDoes the user ask how many times "
+            if not yes_no(ctx)("A user wrote: {text}\n\nDoes the user ask how many times "
                                   "the letter «%s» occurs in the word «%s»?" % (out["letter"], out["word"]),
                                   text):
                 out["op"] = "none"

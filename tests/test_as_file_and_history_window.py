@@ -2,12 +2,13 @@ import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # the model's read is stubbed; the phrases run live in bench/intent_sweep3_live.py
-import intent
+import types
+from fakes import reads
 from tg_dispatch import _asks_as_file
 _FILE = {"пришли эту картинку файлом", "скинь мне эту фотку документом", "пришли файлом", "send it as a file"}
-intent.YES_STUB = lambda q, t: "as a FILE" in q and t in _FILE
+_R = types.SimpleNamespace(**reads(yes=lambda q, t: "as a FILE" in q and t in _FILE))
 for t in _FILE:
-    assert _asks_as_file(t), t
+    assert _asks_as_file(t, ctx=_R), t
 
 import inspect, graph_personality
 assert "max_chars=16000" in inspect.getsource(graph_personality.personality_node)

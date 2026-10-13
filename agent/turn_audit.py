@@ -13,6 +13,7 @@ The claim check generalises the guards that already exist one task at a time
 with side effects must have a successful call of a tool that does that thing.
 """
 from __future__ import annotations
+from seams import intent_read
 
 import json
 import logging
@@ -118,9 +119,8 @@ def correct_claims(answer: str, succeeded: set, has_sandbox: bool) -> tuple:
 
 
 # -- complaints about the previous turn --------------------------------------
-def is_complaint(text: str) -> bool:
-    import intent   # the model's read; a word list took «нет, спасибо» for one
-    return bool((text or "").strip()) and intent.read(None, text[:300])["complaint"]
+def is_complaint(text: str, ctx=None) -> bool:
+    return bool((text or "").strip()) and intent_read(ctx)(None, text[:300])["complaint"]
 
 
 # The previous turn of each conversation, so a complaint can file it.
@@ -139,7 +139,7 @@ def remember_turn(ctx, snapshot: dict) -> None:
 
 def file_complaint(ctx, user_text: str) -> str:
     """If `user_text` complains, save the PREVIOUS turn as failed. Returns the path."""
-    if not is_complaint(user_text):
+    if not is_complaint(user_text, ctx=ctx):
         return ""
     with _LOCK:
         prev = _LAST.pop(_owner(ctx), None)

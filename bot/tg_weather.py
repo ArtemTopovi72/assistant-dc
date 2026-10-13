@@ -17,6 +17,7 @@ tg_bot is imported at the BOTTOM and read as ``tg_bot.<name>`` at call time,
 the same convention the rest of the tg_* family uses.
 """
 from __future__ import annotations
+from seams import intent_read, text_model, yes_no
 
 import _thread
 import datetime as _dt
@@ -52,14 +53,13 @@ def _when(read: dict, today) -> tuple:
     return None, None
 
 
-def _forecast(text: str, previous: str, today, followup: bool = False) -> dict:
+def _forecast(text: str, previous: str, today, followup: bool = False, ctx=None) -> dict:
     """{} or {"city", "date", "hours"} from the model's read (agent/intent.py),
     which tells a forecast question from «погода в игре» or «вообще бывает осенью»."""
     t = (text or "").strip()
     if not t or len(t) > 200:
         return {}
-    import intent
-    w = intent.read(None, t, previous)["weather"]
+    w = intent_read(ctx)(None, t, previous)["weather"]
     # «а какая там погода» names no place: the chat knows it, the shortcut
     # does not -- unless a forecast was just sent, which is the place meant
     if not w or (w.get("by_reference") and not followup):
@@ -72,15 +72,15 @@ def _forecast(text: str, previous: str, today, followup: bool = False) -> dict:
     return {"city": w["city"], "date": date, "hours": hours}
 
 
-def weather_followup(text: str, today=None) -> dict:
+def weather_followup(text: str, today=None, ctx=None) -> dict:
     """A short "а в Сочи?" / "а завтра?" / «Питер» right after a forecast. {} otherwise."""
-    return _forecast(text, "The assistant just sent a weather forecast.", today, followup=True)
+    return _forecast(text, "The assistant just sent a weather forecast.", today, followup=True, ctx=ctx)
 
 
-def weather_request(text: str, today=None) -> dict:
+def weather_request(text: str, today=None, ctx=None) -> dict:
     """{} when this is not a weather question; otherwise
     {"city": str|"", "date": date|None, "hours": int|None}."""
-    return _forecast(text, "", today)
+    return _forecast(text, "", today, ctx=ctx)
 
 
 # The advice call queues for the ONE model slot behind whatever else is running
@@ -116,21 +116,19 @@ def city_tz(city: str) -> str:
         return ""
 
 
-def _city_of_fact(fact: str) -> str:
+def _city_of_fact(fact: str, ctx=None) -> str:
     """The city a saved fact says the user lives in or moved to, in the nominative
     («переехал в Самару» -> «Самара»: the geocoder reads "Самару" as Самар), or ""."""
     fact = (fact or "").strip()
     if not fact:
         return ""
-    import intent
-    if not intent.ask_yes("A saved fact about a user: {text}. Does it say which city the "
-                          "user lives in or moved to?", fact):
+    if not yes_no(ctx)("A saved fact about a user: {text}. Does it say which city the "
+                       "user lives in or moved to?", fact):
         return ""
-    if _os.getenv("F5_TEST_RUN") and not _os.getenv("INTENT_LIVE"):
-        return (intent.CITY_STUB or (lambda t: ""))(fact)
+    if _os.getenv("F5_TEST_RUN") and not _os.getenv("INTENT_LIVE") and getattr(ctx, "text_model", None) is None:
+        return ""
     try:
-        from llm import call_llm_simple
-        c = (call_llm_simple(None, "Answer with the city name only.",
+        c = (text_model(ctx)(None, "Answer with the city name only.",
                              "Fact: «%s». Which city does the user live in now? The name in "
                              "the nominative case, in the same language and alphabet as the "
                              "fact (Самару -> Самара)." % fact[:500],
@@ -172,7 +170,7 @@ class WeatherMixin:
             return ""
         for f in sorted(facts, key=lambda f: (f or {}).get("ts", 0) if isinstance(f, dict) else 0,
                         reverse=True):
-            c = _city_of_fact(f.get("text", "") if isinstance(f, dict) else str(f))
+            c = _city_of_fact(f.get("text", "") if isinstance(f, dict) else str(f), ctx=self.reads)
             if c:
                 return c
         return ""

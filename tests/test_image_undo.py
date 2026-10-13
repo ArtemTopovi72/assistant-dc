@@ -6,8 +6,9 @@ from types import SimpleNamespace
 from PIL import Image
 from models import Context
 import tool_image_handlers as h
-import intent
-intent.STUB = lambda t: {"undo": "верни как было" in t}   # the phrases: bench/removal_intent_live.py
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from fakes import reads
+_UNDO = reads(read=lambda t: {"undo": "верни как было" in t})["intent_read"]   # the phrases: bench/removal_intent_live.py
 
 d = tempfile.mkdtemp()
 a, b = os.path.join(d, "a.png"), os.path.join(d, "b.png")
@@ -15,6 +16,7 @@ Image.new("RGB", (8, 8), "orange").save(a); Image.new("RGB", (8, 8), "black").sa
 ctx = Context(models=SimpleNamespace(), transcription_cache={}, cache_file=Path(d) / "c.json",
               asr_lock=threading.Lock(), tts_lock=threading.Lock(), model_name="m")
 ctx.set_stage = lambda *a, **k: None
+ctx.intent_read = _UNDO
 ctx.last_image_path = a
 ctx.last_image_path = b
 state = {"image_path": b, "user_input": "no, put it back as it was", "user_input_original": "нет, верни как было"}

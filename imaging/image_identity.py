@@ -8,6 +8,7 @@ down.
 
 Extracted from image.py.
 """
+from seams import yes_no
 from config import scratch_path
 import logging
 import os
@@ -104,9 +105,8 @@ def _preserve_face_after_upscale(orig_path: str, upscaled_path: str, *,
 # whole-frame re-render (enhance/redraw) is ALLOWED to alter the face and we must
 # NOT paste the original face back. Everything else (quality passes, clothing,
 # background, hair, scene changes) keeps the original face identity-exact.
-def _changes_face(instructions: str) -> bool:
-    import intent
-    return intent.ask_yes(
+def _changes_face(instructions: str, ctx=None) -> bool:
+    return yes_no(ctx)(
         "A picture of a person is edited with this instruction: {text}\n\nDoes it "
         "DELIBERATELY change the face itself (expression, smile, eyes, lips, makeup, "
         "age, gaze)? Clothes, hair, pose, background or quality are No.", instructions)
@@ -265,7 +265,7 @@ def _identity_lock_face_with_instantid(ctx, orig_path: str, rerendered_path: str
 
 
 def preserve_identity_face(orig_path: str, rerendered_path: str, *,
-                           instructions: str = "") -> str:
+                           instructions: str = "", ctx=None) -> str:
     """Composite the ORIGINAL face back over a WHOLE-FRAME re-render (enhance /
     redraw / img2img), so a quality pass or unrelated edit never silently changes
     the person's face beyond recognition. When the user explicitly asked to change
@@ -279,7 +279,7 @@ def preserve_identity_face(orig_path: str, rerendered_path: str, *,
     failure — never worse than doing nothing."""
     if not rerendered_path or not os.path.exists(rerendered_path):
         return rerendered_path
-    if instructions and _changes_face(instructions):
+    if instructions and _changes_face(instructions, ctx=ctx):
         if not orig_path or not os.path.exists(orig_path):
             return rerendered_path
         try:

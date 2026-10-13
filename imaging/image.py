@@ -768,7 +768,7 @@ def _inpaint_region_impl(
         # (see the matching guard in tools._handle_redraw_image).
         if (not (region and _is_facial(ctx, region))
                 and classify_edit_intent(prompt) != "style_transfer"):
-            out = preserve_identity_face(image_path, out, instructions=f"{region} {prompt}")
+            out = preserve_identity_face(image_path, out, instructions=f"{region} {prompt}", ctx=ctx)
         # The re-render may have RE-COMPOSED the person (moved/resized); pasting the
         # original face back then yields two faces. Reject rather than deliver.
         if out and not _no_new_faces(image_path, out):

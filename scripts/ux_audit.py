@@ -36,8 +36,9 @@ def _ts(s):
     return datetime.strptime(s, "%Y-%m-%d %H:%M:%S")
 
 
-def audit_chat(rows, labels):
-    """rows: parsed jsonl records of ONE chat. Returns [(level, ts, rule, detail)]."""
+def audit_chat(rows, labels, ctx=None):
+    """rows: parsed jsonl records of ONE chat. Returns [(level, ts, rule, detail)].
+    `ctx`: where the model's read of each user line is looked up (core/seams.py)."""
     out = []
     ins = [(r, (r["data"].get("text") or "").strip()) for r in rows
            if r["kind"] == "in" and isinstance(r["data"], dict) and r["data"].get("text")]
@@ -101,11 +102,13 @@ def audit_chat(rows, labels):
     #    English / a translation, or «answer in English from now on».
     if ins and cyr >= max(1, len(ins) // 2):
         import intent        # the model's read of each user line (agent/intent.py)
+        from seams import intent_read
+        read = intent_read(ctx)
         last_in, pinned = "", False
         for r in rows:
             if r in [x for x, _ in ins]:
                 last_in = (r["data"].get("text") or "").strip()
-                _mode = intent.read(None, last_in)["language_mode"] if last_in else ""
+                _mode = read(None, last_in)["language_mode"] if last_in else ""
                 if _mode:
                     pinned = _mode == "en"
                 continue
@@ -114,7 +117,7 @@ def audit_chat(rows, labels):
             t = re.sub(r"<[^>]+>|https?://\S+|```.*?```", "", otext(r), flags=re.S)
             if not (len(re.findall(r"[A-Za-z]{3,}", t)) >= 1 and not re.search("[а-яё]", t, re.I)):
                 continue
-            _r = intent.read(None, last_in) if last_in else intent.FALLBACK
+            _r = read(None, last_in) if last_in else intent.FALLBACK
             if (pinned or not re.search("[а-яё]", last_in, re.I)
                     or _r["reply_language"] == "en" or _r["translate"]):
                 continue

@@ -10,6 +10,7 @@ import inspect
 import intent
 import graph_personality as G
 from types import SimpleNamespace as NS
+from fakes import reads
 
 ctx = NS(last_image_path=None)
 TOOLS = [{"function": {"name": n}} for n in ("calculate", "search", "create_presentation")]
@@ -23,7 +24,7 @@ def stub(t):
                                               "найди фото": "find_photo"}.get(t, "")}
 
 
-intent.STUB = stub
+ctx.intent_read = reads(read=stub)["intent_read"]
 f = lambda t, called=(), tools=TOOLS: G._forced_intent(ctx, {"messages": []}, t, False, tools, called)
 assert f("сделай презентацию") == "create_presentation"
 assert f("раздели чек на троих") == "calculate"
@@ -35,16 +36,14 @@ print("ok must_call is forced only when offered and not yet called")
 
 # The read gets what came with the message: a photo, a pasted table.
 got = {}
-intent.STUB = None
-orig = intent.read
-intent.read = lambda c, t, prev="", att="": got.setdefault("att", att) and intent.FALLBACK
-G._turn_intent(NS(last_image_path="x.png"), {"messages": []}, "сколько я потратил?")
+told = lambda c, t, prev="", att="": got.setdefault("att", att) and intent.FALLBACK
+G._turn_intent(NS(last_image_path="x.png", intent_read=told), {"messages": []}, "сколько я потратил?")
 assert got["att"] == "a photo", got
 got.clear()
 csv = [{"role": "user", "content": "Jan;125400;98300\nFeb;131200;101500\nMar;118900;97800\nApr;142300;110200"}]
+ctx.intent_read = told
 G._turn_intent(ctx, {"messages": csv}, "total profit?")
 assert "numbers" in got["att"], got
-intent.read = orig
 print("ok the read is told about photos and data")
 
 assert "or _forced_intent(" in inspect.getsource(G)

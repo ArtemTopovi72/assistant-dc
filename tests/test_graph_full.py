@@ -90,15 +90,9 @@ import contextlib
 
 @contextlib.contextmanager
 def patched(llm, tools, analyze=None, synth=None, play=None, downscale=None,
-            fastpath=True, read=None):
-    """`read`: the model's read of the message (agent/intent.py) for this run;
-    None -> FALLBACK, the full loop. `fastpath` is kept for callers: the loop
-    is already the default."""
+            fastpath=True):
+    """`fastpath` is kept for callers: the loop is already the default."""
     saved = {}
-    import intent
-    saved_stub = intent.STUB
-    if read is not None:
-        intent.STUB = lambda t: read
     for name, val in [("send_to_lm_studio", llm), ("execute_tool", tools),
                       # translate node must not hit a live LLM: None -> keep original
                       ("call_llm_simple", lambda *a, **k: None),
@@ -119,11 +113,15 @@ def patched(llm, tools, analyze=None, synth=None, play=None, downscale=None,
     finally:
         for name, val in saved.items():
             setattr(G, name, val)
-        intent.STUB = saved_stub
         GL.call_llm_simple = saved_gl
 
 
-def _run(ctx, llm, tools, state, **pk):
+def _run(ctx, llm, tools, state, read=None, **pk):
+    """`read`: the model's read of the message (agent/intent.py) for this run, handed in
+    on the context; None -> FALLBACK, the full loop."""
+    if read is not None:
+        from fakes import reads
+        ctx.intent_read = reads(read=lambda t: read)["intent_read"]
     with patched(llm, tools, **pk):
         g = G.build_graph(ctx)
         return g.invoke(state)

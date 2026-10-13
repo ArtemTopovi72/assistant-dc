@@ -17,15 +17,16 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 _DATA_DIR = tempfile.mkdtemp(prefix="tgtest_inplay_")
 import tg_bot as T
 T.redirect_data_dir(_DATA_DIR)
-import intent   # the model's read of the words (agent/intent.py)
-intent.STUB = {"describe the image": {"is_question": True, "about_picture": True},
-               "now remove all the lettering from the background":
-                   {"needs_tool": True, "wants": ["inpaint_image"]}}.get
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from fakes import reads   # the model's read of the words (agent/intent.py)
+_R = types.SimpleNamespace(**reads(read={"describe the image": {"is_question": True, "about_picture": True},
+                                         "now remove all the lettering from the background":
+                                             {"needs_tool": True, "wants": ["inpaint_image"]}}.get))
 # The dispatch harness from test_tg_image_targeting (that module exits at
 # import, so its helpers are re-bound here by source, not imported).
 _src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_tg_image_targeting.py"), encoding="utf-8").read()
 _helpers = _src.split("bot = make_bot()")[0].split("OK = BAD = 0")[1]
-H = types.ModuleType("H"); H.__dict__.update(dict(sys=sys, os=os, types=types, tempfile=tempfile, T=T))
+H = types.ModuleType("H"); H.__dict__.update(dict(sys=sys, os=os, types=types, tempfile=tempfile, T=T, _R=_R))
 exec(_helpers, H.__dict__)
 
 OK = BAD = 0
@@ -36,6 +37,7 @@ def check(name, cond, extra=""):
 
 print("\n" + "=" * 70); print("PICTURE IN PLAY"); print("=" * 70)
 bot = H.make_bot()
+bot.reads = _R
 s = bot._get_session(H.CID); s.clear_context()
 car, receipt, girl, dress = (H.make_png(n) for n in ("car.png", "receipt.png", "girl.png", "dress.png"))
 id_car = T._log_image(s, car, msg_id=1, label="draw a car", src="bot")

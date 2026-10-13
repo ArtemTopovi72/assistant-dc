@@ -6,6 +6,7 @@ FireRed painted "УРОЖАЙ 2025" for "УРОЖАЙ 2026" in
 typography LoRA. Reseeding cannot beat a prior. Drawn type is never wrong.
 """
 from __future__ import annotations
+from seams import choice
 
 import os
 import time
@@ -25,10 +26,9 @@ def _font(size: int):
     return ImageFont.load_default()
 
 
-def placement(instruction: str) -> str:
+def placement(instruction: str, ctx=None) -> str:
     """top / middle / bottom from the wording; the sky and 'сверху' mean top."""
-    import intent
-    return intent.ask_choice("A user asked to put text on a picture: {text}. Where should "
+    return choice(ctx)("A user asked to put text on a picture: {text}. Where should "
                              "the text go?", instruction or "", ("top", "middle", "bottom"), "top")
 
 

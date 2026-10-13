@@ -23,11 +23,12 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 
 import tg_bot as T
 import tg_songs as S
-import intent   # the model's read of the words (agent/intent.py); phrases: bench/intent_lang_live.py,
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from fakes import reads   # the model's read of the words (agent/intent.py); phrases: bench/intent_lang_live.py,
 # bench/intent_song_weather_live.py
 _MAKE = {"song": "make"}
 _PREV = {"song": "make", "song_uses_previous_text": True}
-intent.STUB = {"колыбельная на английском": {"reply_language": "en", "song": "make"},
+_READ = reads(read={"колыбельная на английском": {"reply_language": "en", "song": "make"},
                "а теперь сочини на него песню, 30 секунд": _PREV, "а теперь сделай из него песню": _PREV,
                "положи это на музыку": _PREV, "а можешь это спеть?": _PREV,
                "сочини песню про кота": _MAKE, "сочини гимн нашего отдела": _MAKE,
@@ -36,7 +37,9 @@ intent.STUB = {"колыбельная на английском": {"reply_langu
                "а теперь то же самое в стиле рок": {"song": "sound"}, "а теперь в стиле рок": {"song": "sound"},
                "а можно версию подлиннее, на 2 минуты": {"song": "words", "song_seconds": 120},
                "минуты на две": {"song_seconds": 120}, "песню на полторы минуты": {"song": "make", "song_seconds": 90},
-               "замени припев на повеселее": {"song": "words"}, "сделай подлиннее": {"song": "words"}}.get
+               "замени припев на повеселее": {"song": "words"}, "сделай подлиннее": {"song": "words"}}.get)
+import types
+_R = types.SimpleNamespace(**_READ)
 import music as M
 
 T.redirect_data_dir(tempfile.mkdtemp(prefix="tg_song_task_"))
@@ -55,11 +58,12 @@ def check(name, cond, extra=""):
 check("payload round-trips", S.parse_song_payload(S.song_payload("про дождь", 30)) == ("про дождь", 30))
 check("no length -> 0", S.parse_song_payload(S.song_payload("про дождь")) == ("про дождь", 0))
 check("ordinary text is not a payload", S.parse_song_payload("сочини песню") == ("", 0))
-check("a payload is not re-detected as a request", S.song_request("[song:30] сочини песню")[0] is False)
+check("a payload is not re-detected as a request", S.song_request("[song:30] сочини песню", ctx=_R)[0] is False)
 
 
 class Ctx:
     model_name = "m"; stage_callback = None
+    intent_read = staticmethod(_READ["intent_read"])
     def __init__(self): self.cancel_event = threading.Event()
     def is_cancelled(self): return self.cancel_event.is_set()
     def set_stage(self, s):
@@ -72,6 +76,7 @@ def make_bot():
     bot._send_text = lambda cid, text, **k: bot.sent.append(text)
     bot._send_audio = lambda cid, path, caption="": (bot.audio.append(path), True)[1]
     bot._user_store.put(T._User(chat_id=5001, name="F", status="approved"))
+    bot.reads = _R
     return bot
 
 
@@ -130,16 +135,16 @@ finally:
 
 # "а теперь сочини на него песню" after the bot wrote four lines: the song
 # must use THOSE lines.
-check("'на него' refers to the previous text", S.refers_to_previous_text("а теперь сочини на него песню, 30 секунд"))
-check("a plain topic does not", not S.refers_to_previous_text("сочини песню про кота"))
+check("'на него' refers to the previous text", S.refers_to_previous_text("а теперь сочини на него песню, 30 секунд", ctx=_R))
+check("a plain topic does not", not S.refers_to_previous_text("сочини песню про кота", ctx=_R))
 check("'из него' / 'положи это на музыку' / 'можешь это спеть' sing the previous text",
-      all(S.song_request(t)[0] and S.refers_to_previous_text(t) for t in
+      all(S.song_request(t, ctx=_R)[0] and S.refers_to_previous_text(t, ctx=_R) for t in
           ("а теперь сделай из него песню", "положи это на музыку", "а можешь это спеть?")))
-check("'как научиться петь' is not a song", not S.song_request("как научиться петь")[0])
+check("'как научиться петь' is not a song", not S.song_request("как научиться петь", ctx=_R)[0])
 check("sung forms are songs: гимн, колыбельная, джингл, частушка",
-      all(S.song_request(t)[0] for t in ("сочини гимн нашего отдела", "сделай колыбельную для сына",
+      all(S.song_request(t, ctx=_R)[0] for t in ("сочини гимн нашего отдела", "сделай колыбельную для сына",
                                          "сделай джингл для кофейни", "напиши частушку про тёщу"))
-      and not S.song_request("расскажи про гимн России")[0])
+      and not S.song_request("расскажи про гимн России", ctx=_R)[0])
 _lyr = "Золотые листья кружат в танце,\nОсень тихо входит в города.\nСерый дождь застыл,\nУлетают птицы навсегда."
 check("four short lines look like lyrics", S.looks_like_lyrics(_lyr))
 check("a paragraph does not", not S.looks_like_lyrics("Это длинный ответ в одну строку про всё на свете и ещё немного, чтобы точно превысить лимит символов на строку и не быть стихами."))
@@ -159,23 +164,23 @@ M.build_structured_caption = lambda ctx, topic, lang, **kw: _seen.update(topic=t
 bot._generate_song(5001, "сделай песню в стиле панк-рок на мои стихи:\n" + S.LYRICS_MARK + _lyr, "ru", 30, ctx=Ctx())
 check("inline lyrics are sung verbatim", "Золотые листья" in _got.get("lyrics", "") and "WRITER" not in _got.get("lyrics", ""), _got)
 check("and the request line reaches the style", "панк-рок" in _seen.get("topic", ""), _seen)
-check("a style wish after a song is a redo", S.song_followup("а теперь то же самое в стиле рок"))
-check("and a longer one keeps its length", S.request_seconds("а можно версию подлиннее, на 2 минуты") == 120)
-check("minutes in words", (S.request_seconds("минуты на две"), S.request_seconds("песню на полторы минуты")) == (120, 90))
+check("a style wish after a song is a redo", S.song_followup("а теперь то же самое в стиле рок", ctx=_R))
+check("and a longer one keeps its length", S.request_seconds("а можно версию подлиннее, на 2 минуты", ctx=_R) == 120)
+check("minutes in words", (S.request_seconds("минуты на две", ctx=_R), S.request_seconds("песню на полторы минуты", ctx=_R)) == (120, 90))
 _langs = []
 M.build_structured_caption = lambda ctx, topic, lang, **kw: _langs.append(lang) or {"lyrics": "WRITER", "style": "pop"}
 bot._generate_song(5001, "колыбельная на английском", "ru", 30, ctx=Ctx())
 check("'на английском' writes English lyrics in a Russian chat", _langs[-1:] == ["en"], _langs)
 M.build_structured_caption = lambda ctx, topic, lang, **kw: _seen.update(topic=topic) or {"lyrics": "WRITER", "style": "pop"}
-check("a picture in a style is not", not S.song_followup("нарисуй кота в стиле аниме"))
+check("a picture in a style is not", not S.song_followup("нарисуй кота в стиле аниме", ctx=_R))
 bot._generate_song(5001, "про дождь", "ru", 30, ctx=Ctx())
 check("a delivered song is remembered for the next message", S.LAST_SONG.get(5001) == "WRITER", S.LAST_SONG)
 import tg_resolve
 _rs = inspect.getsource(tg_resolve)
-check("the router redoes the last song", "_tg_songs.followup_topic(raw, _last_song)" in _rs)
-check("a new sound keeps the words", S.LYRICS_MARK in S.followup_topic("а теперь в стиле рок", "la"))
-check("a new chorus or length rewrites them", S.song_followup("замени припев на повеселее")
-      and not any(S.LYRICS_MARK in S.followup_topic(t, "la") for t in ("замени припев на повеселее", "сделай подлиннее")))
+check("the router redoes the last song", "_tg_songs.followup_topic(raw, _last_song, ctx=self.reads)" in _rs)
+check("a new sound keeps the words", S.LYRICS_MARK in S.followup_topic("а теперь в стиле рок", "la", ctx=_R))
+check("a new chorus or length rewrites them", S.song_followup("замени припев на повеселее", ctx=_R)
+      and not any(S.LYRICS_MARK in S.followup_topic(t, "la", ctx=_R) for t in ("замени припев на повеселее", "сделай подлиннее")))
 check("the router splits typed lyrics off the request", '_head + "\\n" + _tg_songs.LYRICS_MARK + _body' in _rs)
 check("the router carries the previous reply when the request refers to it", "_tg_songs.LYRICS_MARK + _prev" in _rs)
 

@@ -548,7 +548,7 @@ class ResolveMixin:
                     continue
 
                 direct = tg_bot._DIRECT_KB.get(key, "")
-                if not direct and _tg_music.is_reset_phrase(raw):
+                if not direct and _tg_music.is_reset_phrase(raw, ctx=self.reads):
                     direct = "__song_reset__"
                 if direct and direct != "__clone_voice__":
                     self._clone_disarm(sess)
@@ -869,11 +869,11 @@ class ResolveMixin:
                 # the armed capture states -- those already own the text.
                 # Same for a forecast asked in plain words: the weather API
                 # answers it; web search does not.
-                _wx = _tg_weather.weather_request(raw) \
+                _wx = _tg_weather.weather_request(raw, ctx=self.reads) \
                     if not sess.reg_state and not sess.pending_prefix else {}
                 if (not _wx and sess.menu == "weather" and not sess.reg_state
                         and not sess.pending_prefix):
-                    _wx = _tg_weather.weather_followup(raw)   # "а в Сочи?"
+                    _wx = _tg_weather.weather_followup(raw, ctx=self.reads)   # "а в Сочи?"
                 if _wx:
                     # "а в Москве?" after "погода завтра в Париже" means
                     # tomorrow in Moscow, not the next 24 hours.
@@ -901,11 +901,11 @@ class ResolveMixin:
                         hours=_wx["hours"], date=_wx["date"])
                     continue
 
-                _is_song, _secs = _tg_songs.song_request(raw)
+                _is_song, _secs = _tg_songs.song_request(raw, ctx=self.reads)
                 _last_song = _tg_songs.LAST_SONG.pop(chat_id, "")
-                if not _is_song and _last_song and _tg_songs.song_followup(raw):
+                if not _is_song and _last_song and _tg_songs.song_followup(raw, ctx=self.reads):
                     # «а теперь в стиле рок» after a song reached the agent, which has no song tool
-                    _is_song, _secs = True, _tg_songs.request_seconds(raw, after_song=True)
+                    _is_song, _secs = True, _tg_songs.request_seconds(raw, after_song=True, ctx=self.reads)
                 else:
                     _last_song = ""
                 if _is_song and not sess.reg_state and not sess.pending_prefix:
@@ -915,8 +915,8 @@ class ResolveMixin:
                                        (user.name if user else str(chat_id)))
                     _topic = self._as_request(item, raw)    # «спой про это» keeps «это»
                     if _last_song:
-                        _topic = _tg_songs.followup_topic(raw, _last_song)
-                    elif _tg_songs.refers_to_previous_text(raw):
+                        _topic = _tg_songs.followup_topic(raw, _last_song, ctx=self.reads)
+                    elif _tg_songs.refers_to_previous_text(raw, ctx=self.reads):
                         _prev = self._last_bot_text(sess)
                         if _tg_songs.looks_like_lyrics(_prev):
                             _topic = _tg_songs.LYRICS_MARK + _prev
@@ -1450,7 +1450,7 @@ class ResolveMixin:
         if (not img_bytes and not file_in_folder
                 and not getattr(sess, "target_image", "")
                 and merged not in tg_bot._MACHINE_PAYLOADS):
-            _named = tg_bot._ordinal_target(own_words, tg_bot._live_images(sess))
+            _named = tg_bot._ordinal_target(own_words, tg_bot._live_images(sess), ctx=self.reads)
             if _named:
                 sess.target_image = _named
                 try: self._store.put(sess)
@@ -1460,7 +1460,7 @@ class ResolveMixin:
         if (not img_bytes and not file_in_folder and not _new_picture
                 and not getattr(sess, "target_image", "")
                 and merged not in tg_bot._MACHINE_PAYLOADS
-                and tg_bot._needs_image_choice(own_words)):
+                and tg_bot._needs_image_choice(own_words, ctx=self.reads)):
             live = tg_bot._live_images(sess)
             _in_play = getattr(sess, "turn_image", "")
             # A short question typed after a forwarded TEXT is about that text, not about one of the old pictures

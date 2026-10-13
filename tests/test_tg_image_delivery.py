@@ -60,9 +60,12 @@ class _Ctx:
         if self.stage_callback: self.stage_callback(s)
 
 
-def run_turn(final_state, user_text=OUTPAINT, photo_ok=True, lang="ru"):
-    """Run one delivery cycle with a graph that returns `final_state`."""
+def run_turn(final_state, user_text=OUTPAINT, photo_ok=True, lang="ru", reads=None):
+    """Run one delivery cycle with a graph that returns `final_state`; `reads`: the
+    model's reads (tests/fakes.reads) the turn's context carries."""
     ctx = _Ctx()
+    for name, fn in (reads or {}).items():
+        setattr(ctx, name, fn)
     seen = {"text": [], "photo": []}
 
     class _Graph:
@@ -119,16 +122,14 @@ check("a tool-error turn sends no photo", seen["photo"] == [])
 check("and the false claim is corrected", warned(seen), str(seen["text"])[:120])
 
 # A reply that ALREADY admits the failure is not retracted a second time.
-import intent as _intent
-_intent.YES_STUB = lambda q, t: "не удалось" in t.lower()
-try:
-    seen = run_turn({"final_answer": "Не удалось нарисовать сырники, возникла ошибка. Попробовать ещё раз?"})
-    check("a reply that already admits the failure gets no second warning", not warned(seen),
-          str(seen["text"])[:140])
-    seen = run_turn({"final_answer": NARRATION})
-    check("a false success claim is still retracted", warned(seen), str(seen["text"])[:110])
-finally:
-    _intent.YES_STUB = None
+from fakes import reads
+_ADMITS = reads(yes=lambda q, t: "не удалось" in t.lower())
+seen = run_turn({"final_answer": "Не удалось нарисовать сырники, возникла ошибка. Попробовать ещё раз?"},
+                reads=_ADMITS)
+check("a reply that already admits the failure gets no second warning", not warned(seen),
+      str(seen["text"])[:140])
+seen = run_turn({"final_answer": NARRATION}, reads=_ADMITS)
+check("a false success claim is still retracted", warned(seen), str(seen["text"])[:110])
 
 for label, state in {
     "a failed image_status": {"final_answer": NARRATION, "image_path": good,
@@ -376,10 +377,9 @@ check("the user's own upload is never posted back as a result",
 
 # The offer «Сделать что-нибудь с картинкой?» is for a bare comment, not for the
 # answer to a question about the picture («сколько тут итого?»).
-_intent.STUB = lambda t: {"is_question": t.endswith("?")}
-check("a question about the picture gets no offer line", T.TelegramBot._asked_a_question("сколько тут итого?"))
-check("a bare comment still gets it", not T.TelegramBot._asked_a_question("вот фото"))
-_intent.STUB = None
+_Q = types.SimpleNamespace(**reads(read=lambda t: {"is_question": t.endswith("?")}))
+check("a question about the picture gets no offer line", T.TelegramBot._asked_a_question("сколько тут итого?", ctx=_Q))
+check("a bare comment still gets it", not T.TelegramBot._asked_a_question("вот фото", ctx=_Q))
 
 print()
 print(f"{OK} passed, {BAD} failed")

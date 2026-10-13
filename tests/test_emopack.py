@@ -25,7 +25,8 @@ check("unknown emotion = plain", emopack.ref_for(str(ref), "anger") is None)
 check("build is idempotent when a pack exists", emopack.build(str(ref)) is True)
 
 # delivery.pick: the reference follows the line's emotion
-import audio, delivery, intent
+import audio, delivery
+from fakes import reads
 class C: delivery_emotion = None; delivery_ik3 = None
 c = C()
 c.delivery_emotion = "joy"
@@ -33,7 +34,7 @@ check("forced joy picks the pack ref", delivery.pick(c, str(ref), "plain", "Ка
 c.delivery_emotion = ""
 check("forced plain keeps the ref", delivery.pick(c, str(ref), "plain", "x") == (str(ref), "plain"))
 c.delivery_emotion = None
-intent.CHOICE_STUB = lambda q, t: "joy" if "ура" in t.lower() else "neutral"
+c.choice = reads(pick=lambda q, t: "joy" if "ура" in t.lower() else "neutral")["choice"]
 check("auto: model says joy", delivery.pick(c, str(ref), "plain", "Ура, мы победили всех!") == ("a.wav", "ta"))
 check("auto: model says neutral", delivery.pick(c, str(ref), "plain", "Поезд отправляется в девять.") == (str(ref), "plain"))
 check("short line costs no call", delivery.pick(c, str(ref), "plain", "Ура!") == (str(ref), "plain"))

@@ -18,6 +18,7 @@ So this module has two halves:
 
 Public entry point: `generate(ctx, prompt, ...) -> saved image path or None`.
 """
+from seams import yes_no
 from seams import dep
 import json
 import logging
@@ -534,7 +535,7 @@ _QUOTED_RE = re.compile(r'"([^"\n]{1,32})"|“([^”\n]{1,32})”|«([^»\n]{1,3
 MAX_REQUESTED_STRINGS = 4
 
 
-def requested_strings(prompt: str) -> list:
+def requested_strings(prompt: str, ctx=None) -> list:
     """The exact strings the user asked to see IN the picture, in order."""
     p = (prompt or "")
     out = []
@@ -545,8 +546,7 @@ def requested_strings(prompt: str) -> list:
     # A quote only means LETTERING when the sentence says so: "draw a 'cat'"
     # must not have the word cat painted across the picture.
     if out:
-        import intent
-        if not intent.ask_yes("A user asked for this picture: {text}. Does the user ask for "
+        if not yes_no(ctx)("A user asked for this picture: {text}. Does the user ask for "
                               "written words (a sign, a label, a caption, an inscription) to "
                               "appear IN the picture?", p):
             return []
@@ -565,7 +565,7 @@ _SURFACE_WORDS = ("sign", "board", "banner", "poster", "door", "window", "awning
                   "вывеск", "таблич", "двер", "окн", "стен", "плакат", "щит")
 
 
-def ensure_text_elements(layout: dict, prompt: str) -> dict:
+def ensure_text_elements(layout: dict, prompt: str, ctx=None) -> dict:
     """Make sure every string the user asked for is carried by a text element.
 
     The planner is instructed to do this and mostly does not: measured live, a
@@ -575,7 +575,7 @@ def ensure_text_elements(layout: dict, prompt: str) -> dict:
     sized element for it — is what turns the whole lettering path on.
     """
     layout = normalize_layout(layout, prompt)
-    strings = requested_strings(prompt)
+    strings = requested_strings(prompt, ctx=ctx)
     if not strings:
         return layout
     els = layout["elements"]
@@ -638,7 +638,7 @@ def plan_layout(ctx, prompt: str) -> dict:
     """
     look = getattr(ctx, "user_look", "") if ctx is not None else ""
     fallback = lambda: ensure_text_elements(
-        enforce_user_look(apply_style_floor(blank_layout(prompt), prompt), look), prompt)
+        enforce_user_look(apply_style_floor(blank_layout(prompt), prompt, ctx=ctx), look), prompt, ctx=ctx)
     if ctx is None:
         return fallback()
     try:
@@ -653,7 +653,7 @@ def plan_layout(ctx, prompt: str) -> dict:
         # "three tall palm trees" in one box render as one merged mass, as in an edit.
         from draw_agent import split_counted_boxes, merge_text_column   # draw_agent imports this module
         layout, _ = split_counted_boxes(merge_text_column(layout), [])
-        return ensure_text_elements(enforce_user_look(apply_style_floor(layout, prompt), look), prompt)
+        return ensure_text_elements(enforce_user_look(apply_style_floor(layout, prompt, ctx=ctx), look), prompt, ctx=ctx)
     except Exception:
         logger.exception("Ideogram planning failed — using the flat layout")
         return fallback()
@@ -670,7 +670,7 @@ def plan_caption(ctx, prompt: str) -> dict:
     look = getattr(ctx, "user_look", "") if ctx is not None else ""
 
     def fallback():
-        return layout_to_caption(enforce_user_look(apply_style_floor(blank_layout(prompt), prompt), look))
+        return layout_to_caption(enforce_user_look(apply_style_floor(blank_layout(prompt), prompt, ctx=ctx), look), ctx=ctx)
     if ctx is None:
         return fallback()
     try:
@@ -690,8 +690,8 @@ def plan_caption(ctx, prompt: str) -> dict:
         if not layout["elements"]:
             logger.warning("Ideogram planner produced no usable elements — flat caption")
             return fallback()
-        layout = ensure_text_elements(enforce_user_look(apply_style_floor(layout, prompt), look), prompt)
-        return layout_to_caption(layout)
+        layout = ensure_text_elements(enforce_user_look(apply_style_floor(layout, prompt, ctx=ctx), look), prompt, ctx=ctx)
+        return layout_to_caption(layout, ctx=ctx)
     except Exception:
         logger.exception("Ideogram planning failed — using the flat caption")
         return fallback()

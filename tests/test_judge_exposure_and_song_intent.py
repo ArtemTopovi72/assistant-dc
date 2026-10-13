@@ -160,17 +160,18 @@ import tg_songs as S
 
 # What is a song and how long is the model's read (intent.song /
 # song_seconds); the phrases run live in bench/intent_song_weather_live.py.
-import intent
+import types
+from fakes import reads
 READS = {"сочини песню про кота, секунд 30": {"song": "make", "song_seconds": 30},
          "сделай трек на 2 минуты": {"song": "make", "song_seconds": 120},
          "напиши текст песни про кота": {"song": "lyrics"},
          "нарисуй кота": {"wants": ["generate_image"]}}
-intent.STUB = READS.get
-check("song: a read 'make' is a song", S.song_request("сочини песню про кота, секунд 30")[0])
+_R = types.SimpleNamespace(**reads(read=READS.get))
+check("song: a read 'make' is a song", S.song_request("сочини песню про кота, секунд 30", ctx=_R)[0])
 for t in ("напиши текст песни про кота", "нарисуй кота"):
-    check("not a song: " + t, not S.song_request(t)[0], S.song_request(t))
-check("seconds are read", S.song_request("сочини песню про кота, секунд 30")[1] == 30)
-check("minutes are read", S.song_request("сделай трек на 2 минуты")[1] == 120)
+    check("not a song: " + t, not S.song_request(t, ctx=_R)[0], S.song_request(t, ctx=_R))
+check("seconds are read", S.song_request("сочини песню про кота, секунд 30", ctx=_R)[1] == 30)
+check("minutes are read", S.song_request("сделай трек на 2 минуты", ctx=_R)[1] == 120)
 # The engine takes any length inside DURATION_RANGE now (music3-length-is-lyric-
 # volume): a request is clamped to the range, not snapped to a menu step.
 _lo, _hi = S._music_mod.DURATION_RANGE
@@ -194,7 +195,7 @@ bot._resolve_and_enqueue(777001, [{"type": "text", "text": "сочини пес�
     if hasattr(bot, "_resolve_and_enqueue") else None
 import inspect
 src = inspect.getsource(sys.modules["tg_resolve"])
-check("the resolver consults song_request before the agent", "song_request(raw)" in src)
+check("the resolver consults song_request before the agent", "song_request(raw, ctx=self.reads)" in src)
 check("and starts the flow with the snapped length", "snap_duration(_secs)" in src)
 
 # ── 3. weather intent ────────────────────────────────────────────────────────
@@ -208,25 +209,25 @@ _W = {"какая погода в Казани завтра?": {"city": "Каз�
       "погода в субботу": {"city": "", "when": "saturday"},
       "погода на выходных": {"city": "", "when": "weekend"},
       "а послезавтра?": {"city": "", "when": "day_after_tomorrow"}}
-intent.STUB = lambda t: {"weather": _W[t]} if t in _W else {"wants": []}
-w = W.weather_request("какая погода в Казани завтра?", _today)
+_R = types.SimpleNamespace(**reads(read=lambda t: {"weather": _W[t]} if t in _W else {"wants": []}))
+w = W.weather_request("какая погода в Казани завтра?", _today, ctx=_R)
 check("a typed forecast question is recognised", bool(w), w)
 check("the city is lifted from the sentence", w.get("city") == "Казани", w)
 check("'завтра' is tomorrow", w.get("date") == _dt.date(2026, 9, 13), w)
-check("'сейчас' means current conditions", W.weather_request("какая сейчас погода?", _today).get("hours") == 0)
-check("no city -> the remembered one decides", W.weather_request("какая сейчас погода?", _today).get("city") == "")
-check("a weekday is the next one", W.weather_request("погода в субботу", _today).get("date") == _dt.date(2026, 9, 12))
-check("the weekend is 48 hours", W.weather_request("погода на выходных", _today).get("hours") == 48)
+check("'сейчас' means current conditions", W.weather_request("какая сейчас погода?", _today, ctx=_R).get("hours") == 0)
+check("no city -> the remembered one decides", W.weather_request("какая сейчас погода?", _today, ctx=_R).get("city") == "")
+check("a weekday is the next one", W.weather_request("погода в субботу", _today, ctx=_R).get("date") == _dt.date(2026, 9, 12))
+check("the weekend is 48 hours", W.weather_request("погода на выходных", _today, ctx=_R).get("hours") == 48)
 check("'а послезавтра?' moves the date",
-      W.weather_followup("а послезавтра?", _today) == {"city": "", "date": _today + _dt.timedelta(days=2), "hours": None})
-check("no weather read -> not weather", W.weather_request("привет", _today) == {})
-intent.STUB = None
-check("model down -> not weather (the full loop answers)", W.weather_request("какая погода в Казани завтра?", _today) == {})
+      W.weather_followup("а послезавтра?", _today, ctx=_R) == {"city": "", "date": _today + _dt.timedelta(days=2), "hours": None})
+check("no weather read -> not weather", W.weather_request("привет", _today, ctx=_R) == {})
+_R = None
+check("model down -> not weather (the full loop answers)", W.weather_request("какая погода в Казани завтра?", _today, ctx=_R) == {})
 _src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(W.__file__))), "bot/tg_resolve.py"), encoding="utf-8").read()
 check("the router tries the follow-up only inside the weather menu",
-      'sess.menu == "weather"' in _src and "_tg_weather.weather_followup(raw)" in _src)
+      'sess.menu == "weather"' in _src and "_tg_weather.weather_followup(raw, ctx=self.reads)" in _src)
 src = inspect.getsource(sys.modules["tg_resolve"])
-check("the resolver consults weather_request before the agent", "weather_request(raw)" in src)
+check("the resolver consults weather_request before the agent", "weather_request(raw, ctx=self.reads)" in src)
 
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)

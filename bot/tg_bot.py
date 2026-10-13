@@ -39,6 +39,7 @@ Extremism filter
   Any message matching a keyword is refused with a legal notice
 """
 from __future__ import annotations
+from seams import intent_read
 
 import copy
 import html as _html_mod
@@ -654,16 +655,15 @@ from tg_keyboards import (
 # has to catch requests that will otherwise be silently answered about the wrong
 # picture. Anything it misses behaves exactly as before (newest image wins), so a
 # false negative costs nothing new — a false POSITIVE would nag, which is worse.
-def _picture_read(text: str) -> dict:
+def _picture_read(text: str, ctx=None) -> dict:
     """The model's read of the user's words with several pictures in the chat
     (agent/intent.py). It replaced an edit/describe word list and an ordinal
     word list: «предыдущих инцидентах» in a storyboard read as «the previous
     picture», any «нов…» named the newest one."""
-    import intent
-    return intent.read(None, text, "", "several pictures earlier in the chat")
+    return intent_read(ctx)(None, text, "", "several pictures earlier in the chat")
 
 
-def _ordinal_target(text: str, live: list) -> str:
+def _ordinal_target(text: str, live: list, ctx=None) -> str:
     """The id of the register entry a «первая/вторая/последняя картинка»
     names, or "" when the text names none (or the register is too short).
 
@@ -672,7 +672,7 @@ def _ordinal_target(text: str, live: list) -> str:
     """
     if not live or not (text or "").strip():
         return ""
-    n = _picture_read(text)["names_picture"]
+    n = _picture_read(text, ctx=ctx)["names_picture"]
     if not n:
         return ""
     try:
@@ -681,13 +681,13 @@ def _ordinal_target(text: str, live: list) -> str:
         return ""
 
 
-def _needs_image_choice(text: str) -> bool:
+def _needs_image_choice(text: str, ctx=None) -> bool:
     """The words need one picture (a question about it or an edit of it) and
     name none: with several in the chat the bot asks which."""
     t = (text or "").strip()
     if not t:
         return False
-    r = _picture_read(t)
+    r = _picture_read(t, ctx=ctx)
     if r["names_picture"]:
         return False
     from graph_fastpath import _IMAGE_ACTION_TOOLS
@@ -1378,6 +1378,9 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         self.weather = weather
         # The per-task graph builder (graph.build_graph when None).
         self.graph_builder = None
+        # The model's narrow reads of a message (core/seams.py yes_no, intent_read, choice)
+        # the bot's own routing asks before any task runs; None -> agent/intent.py.
+        self.reads = None
         self._task_started: dict[str, float] = {}     # task_id -> monotonic start
         # task_id -> _Task, from the moment it is pushed onto the backend until
         # a consumer actually pops it and moves it into _running_task. With the

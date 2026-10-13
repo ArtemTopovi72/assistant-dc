@@ -13,9 +13,11 @@ except Exception: pass
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import tg_tasks as T
 import tg_sessions as S
-import intent   # the model's read of the words (agent/intent.py); phrases: bench/intent_lang_live.py
-intent.STUB = {"и то же самое по-английски": {"reply_language": "en"},
-               "ответь на этот вопрос по-английски, пожалуйста": {"reply_language": "en"}}.get
+import types
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from fakes import reads   # the model's read of the words (agent/intent.py); phrases: bench/intent_lang_live.py
+_R = types.SimpleNamespace(**reads(read={"и то же самое по-английски": {"reply_language": "en"},
+                                         "ответь на этот вопрос по-английски, пожалуйста": {"reply_language": "en"}}.get))
 
 OK = BAD = 0
 def check(name, cond, extra=""):
@@ -23,7 +25,7 @@ def check(name, cond, extra=""):
     OK += bool(cond); BAD += (not cond)
     print(("PASS  " if cond else "FAIL  ") + name, ("  " + str(extra)) if (extra and not cond) else "")
 
-ms = T._message_script
+ms = lambda t: T._message_script(t, ctx=_R)  # noqa: E731
 check("English question -> en", ms("hi! what's the capital of Australia? one line") == "en")
 check("English draw -> en", ms("draw a lighthouse on a cliff during a storm") == "en")
 check("Russian question -> ru", ms("за сколько дней надо предупредить о выезде?") == "ru")

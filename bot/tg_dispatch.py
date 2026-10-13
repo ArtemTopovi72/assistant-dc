@@ -12,6 +12,7 @@ definition and a single patch point. _IMAGE_DIR is rebound by
 redirect_data_dir(), which a by-value import would not have seen.
 """
 from __future__ import annotations
+from seams import yes_no
 
 import os
 import re
@@ -43,9 +44,8 @@ def _largest_photo(photos) -> Optional[dict]:
 _TYPED_STOP = {"stop", "стоп", "хватит", "отмена", "отмени", "cancel", "остановись"}
 
 
-def _asks_as_file(text: str) -> bool:
-    import intent
-    return intent.ask_yes("A user wrote to a bot that sends pictures: {text}. Is this a "
+def _asks_as_file(text: str, ctx=None) -> bool:
+    return yes_no(ctx)("A user wrote to a bot that sends pictures: {text}. Is this a "
                           "request for the BOT to send its picture as a FILE (a document, "
                           "uncompressed) instead of a photo? The user sharing or talking "
                           "about their own document is No.", text,
@@ -274,7 +274,7 @@ class DispatchMixin:
         # answered with right-click advice.
         # a keyboard label is never that request: «📚 Документы» was read as one and
         # sent the last picture as a file instead of opening the menu
-        if len(text) <= 60 and not _is_button(text) and _asks_as_file(text):
+        if len(text) <= 60 and not _is_button(text) and _asks_as_file(text, ctx=self.reads):
             sess = self._get_session(chat_id)
             rep = (msg.get("reply_to_message") or {}).get("message_id")
             e = tg_bot._image_by_msg(sess, rep) if rep else None

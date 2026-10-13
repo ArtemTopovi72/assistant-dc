@@ -9,14 +9,17 @@ task (task.image_id) is an action, not words.
 import os, sys, inspect
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, d) for d in ("bot", "agent", "core")]
-import graph as G, intent
+import graph as G
+sys.path.insert(0, os.path.join(ROOT, "tests"))
+from fakes import reads
 # the model's read of the words (agent/intent.py)
-intent.STUB = {"убери надпись": {"needs_tool": True, "wants": ["inpaint_image"]}}.get
+_READ = reads(read={"убери надпись": {"needs_tool": True, "wants": ["inpaint_image"]}}.get)
 import tg_tasks, tg_callbacks, tg_bot
 
 
 class Cx:
     last_image_path = __file__          # any existing file
+    intent_read = staticmethod(_READ["intent_read"])
     image_pointed_at = True
 
 

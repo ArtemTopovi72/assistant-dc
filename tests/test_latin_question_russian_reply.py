@@ -2,13 +2,16 @@
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import _sweep_stub  # noqa: F401  the model's narrow reads, stubbed
-import intent
-intent.STUB = lambda t: {"reply_language": "ru"} if "in Russian" in t else None
+import _sweep_stub  # the model's narrow reads, stubbed
+from fakes import reads
 import graph_language as gl
 
 
 class _Ctx:
+    yes_no = staticmethod(_sweep_stub.READS["yes_no"])
+    choice = staticmethod(_sweep_stub.READS["choice"])
+    intent_read = staticmethod(reads(read=lambda t: {"reply_language": "ru"} if "in Russian" in t else None)["intent_read"])
+
     def is_cancelled(self):
         return False
 
@@ -48,7 +51,7 @@ print("PASS money")
 
 calls.clear()
 _de = "Sehr geehrter Herr Iwan Petrowitsch, bitte verschieben Sie das Treffen auf Freitag."
-import intent   # the model's read of the words (agent/intent.py); phrases: bench/intent_lang_live.py
-intent.STUB = lambda t: {"translate": True} if t.startswith("переведи") else None
+# the model's read of the words (agent/intent.py); phrases: bench/intent_lang_live.py
+_Ctx.intent_read = staticmethod(reads(read=lambda t: {"translate": True} if t.startswith("переведи") else None)["intent_read"])
 assert gl._match_reply_language(_Ctx(), _de, "переведи на немецкий: Уважаемый Иван Петрович, прошу перенести встречу") == _de
 print("PASS translate request keeps its target language")

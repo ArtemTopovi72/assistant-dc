@@ -3,11 +3,13 @@ import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import tg_weather as t
 # the model's read of a fact is stubbed; the phrases run live in bench/intent_sweep3_live.py
-import intent
+import types
+from fakes import reads
 _CITIES = {"Пользователь живет в Казани": "Казань", "Пользователь переехал в Самару": "Самара",
            "Пользователь живет в Нижнем Новгороде": "Нижний Новгород"}
-intent.YES_STUB = lambda q, t_: "which city" in q and t_ in _CITIES
-intent.CITY_STUB = lambda f: _CITIES.get(f, "")
+_CTX = types.SimpleNamespace(
+    **reads(yes=lambda q, t_: "which city" in q and t_ in _CITIES),
+    text_model=lambda ctx, system, user, **k: next((c for f, c in _CITIES.items() if f in user), ""))
 
 
 class _S:
@@ -19,6 +21,7 @@ def city(facts):
     o = t.WeatherMixin()
     o._store = type("St", (), {"get": lambda s, c: _S(facts)})()
     o._user_store = type("U", (), {"get": lambda s, c: None})()
+    o.reads = _CTX
     return o._remembered_city(1)
 
 

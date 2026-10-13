@@ -10,10 +10,10 @@ try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # The model's reads are stubbed here; the phrases run live in bench/intent_rest_live.py.
-import intent
-intent.STUB = lambda t: {"is_question": t.rstrip().endswith("?")}
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import steer as S
+from fakes import reads
+R = types.SimpleNamespace(**reads(read=lambda t: {"is_question": t.rstrip().endswith("?")}))
 
 OK = BAD = 0
 def check(name, cond, extra=""):
@@ -22,12 +22,12 @@ def check(name, cond, extra=""):
     print(("PASS  " if cond else "FAIL  ") + name, ("  " + str(extra)) if (extra and not cond) else "")
 
 # --- who steers ------------------------------------------------------------------
-check("a plain text during a task steers", S.eligible("а фон пусть будет красный", False, False))
-check("a photo does not (it is its own request)", not S.eligible("вот", True, False))
-check("a command does not", not S.eligible("/cancel", False, False))
-check("a question during a slow phase is answered on the side", not S.eligible("сколько времени?", False, True))
-check("...but the same question during a fast phase steers", S.eligible("сколько времени?", False, False))
-check("an essay does not", not S.eligible("x" * 500, False, False))
+check("a plain text during a task steers", S.eligible("а фон пусть будет красный", False, False, ctx=R))
+check("a photo does not (it is its own request)", not S.eligible("вот", True, False, ctx=R))
+check("a command does not", not S.eligible("/cancel", False, False, ctx=R))
+check("a question during a slow phase is answered on the side", not S.eligible("сколько времени?", False, True, ctx=R))
+check("...but the same question during a fast phase steers", S.eligible("сколько времени?", False, False, ctx=R))
+check("an essay does not", not S.eligible("x" * 500, False, False, ctx=R))
 check("the RU ack quotes the words", S.ack("фон красный", "ru") == "👌 Учту: «фон красный»")
 check("the EN ack", S.ack("red background", "en").startswith("👌 Noted:"))
 check("a long note is shortened in the ack", len(S.ack("слово " * 40, "ru")) < 100)
@@ -119,6 +119,7 @@ class _Bot:
         self._store = types.SimpleNamespace(put=lambda s: None)
         self._activity = types.SimpleNamespace(log=lambda *a: self.logged.append(a))
         self._user_store = types.SimpleNamespace(get=lambda cid: None)
+    reads = R
     def _get_session(self, cid): return types.SimpleNamespace(lang="ru")
     def _lang(self, sess): return "ru"
     def _send_text(self, cid, text, **k): self.sent.append(text)

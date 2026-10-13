@@ -10,6 +10,7 @@ the hole is repainted by FireRed on the crop; afterwards the OCR reads the resul
 second pass with a wider mask cleans what survived.
 """
 from __future__ import annotations
+from seams import yes_no
 from config import scratch_path, venv_python
 import logging
 import os
@@ -20,10 +21,9 @@ logger = logging.getLogger("assistant.image")
 
 Box = Tuple[int, int, int, int]
 
-def is_lettering_removal(region: str, instructions: str = "") -> bool:
+def is_lettering_removal(region: str, instructions: str = "", ctx=None) -> bool:
     """A removal whose target is the lettering (all of it, or unqualified)."""
-    import intent
-    return intent.ask_yes("The user wants this removed from a picture: {text}\n\nIs it "
+    return yes_no(ctx)("The user wants this removed from a picture: {text}\n\nIs it "
                           "WRITING (lettering, a caption, a logo, a watermark, a sign's words) "
                           "rather than an object, a person or a stain?",
                           f"{region}. {instructions}".strip(" ."))

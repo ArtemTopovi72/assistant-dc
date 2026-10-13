@@ -2,12 +2,13 @@
 import os, sys, tempfile, time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import _sweep_stub  # noqa: F401  the model's narrow reads, stubbed
+import _sweep_stub  # the model's narrow reads, stubbed
 os.environ["F5_TEST_RUN"] = "1"
 import tg_bot as T
 T.redirect_data_dir(tempfile.mkdtemp(prefix="tg_age_"))
 bot = T.TelegramBot("1:TEST", lambda: None, lambda: None, lambda: {}, silent_mode=True)
 bot._send_text = lambda *a, **k: None
+bot.reads = _sweep_stub.reads_ctx()
 bot._user_store.put(T._User(chat_id=7001, name="F", status="approved"))
 class _B:
     def __init__(self): self.pushed = []

@@ -21,7 +21,7 @@ Run: venv/Scripts/python.exe tests/test_ideogram_text_repair.py
 import os, sys, types
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import _sweep_stub  # noqa: F401  the model's narrow reads, stubbed
+import _sweep_stub  # the model's narrow reads, stubbed
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
@@ -182,7 +182,7 @@ def with_llm(reply):
     return _DEPS.llm
 
 CTX = types.SimpleNamespace(is_cancelled=lambda: False, model_name="chat/model", deps=_DEPS)
-_PCTX = types.SimpleNamespace(deps=_DEPS)   # the planner's context
+_PCTX = types.SimpleNamespace(deps=_DEPS, **_sweep_stub.READS)   # the planner's context
 # A real dataclass Context for the proxy tests — a namespace would hide the
 # attribute-forwarding the proxy exists to do.
 import threading
@@ -581,23 +581,23 @@ print("=" * 72)
 # lettering — no sizing, no read-back, no repair. Routing cannot depend on the
 # planner remembering.
 check("a quoted string asked for as a sign is picked up",
-      G.requested_strings('a neon sign above the door reading "CAFE ROSA"') == ["CAFE ROSA"])
+      G.requested_strings('a neon sign above the door reading "CAFE ROSA"', ctx=_sweep_stub.reads_ctx()) == ["CAFE ROSA"])
 check("so is one asked for as a word", G.requested_strings(
-    'a police car with the word "POLICE" on its door') == ["POLICE"])
+    'a police car with the word "POLICE" on its door', ctx=_sweep_stub.reads_ctx()) == ["POLICE"])
 check("russian quotes and cue words work too",
-      G.requested_strings("нарисуй вывеску с надписью «ОТКРЫТО»") == ["ОТКРЫТО"])
+      G.requested_strings("нарисуй вывеску с надписью «ОТКРЫТО»", ctx=_sweep_stub.reads_ctx()) == ["ОТКРЫТО"])
 check("a quote with no lettering cue is NOT painted into the picture",
-      G.requested_strings('draw a "cat" on a sofa') == [])
-check("a plain request has no strings", G.requested_strings("a quiet street at dusk") == [])
+      G.requested_strings('draw a "cat" on a sofa', ctx=_sweep_stub.reads_ctx()) == [])
+check("a plain request has no strings", G.requested_strings("a quiet street at dusk", ctx=_sweep_stub.reads_ctx()) == [])
 check("several strings come back in order", G.requested_strings(
-    'a shop with a sign reading "OPEN" and a banner saying "SALE"') == ["OPEN", "SALE"])
-check("an empty prompt is handled", G.requested_strings("") == [])
+    'a shop with a sign reading "OPEN" and a banner saying "SALE"', ctx=_sweep_stub.reads_ctx()) == ["OPEN", "SALE"])
+check("an empty prompt is handled", G.requested_strings("", ctx=_sweep_stub.reads_ctx()) == [])
 
 _base = G.normalize_layout({"background": "a street at night", "elements": [
     {"desc": "a small corner cafe storefront", "x": .1, "y": .2, "w": .6, "h": .5},
     {"desc": "people at outdoor tables", "x": .1, "y": .6, "w": .8, "h": .3}]})
 _req = 'a neon sign above the door reading "CAFE ROSA"'
-out = G.ensure_text_elements(_base, _req)
+out = G.ensure_text_elements(_base, _req, ctx=_sweep_stub.reads_ctx())
 letter = [e for e in out["elements"] if e["text"]]
 check("the dropped string becomes a text element", len(letter) == 1
       and letter[0]["text"] == "CAFE ROSA", str(letter))
@@ -611,16 +611,16 @@ check("the new box is already the right shape for its string",
 check("and does not create an arrangement problem",
       [p["kind"] for p in D.geometry_report(out)] == [],
       str([p["kind"] for p in D.geometry_report(out)]))
-check("running it twice adds nothing", G.ensure_text_elements(out, _req) == out)
+check("running it twice adds nothing", G.ensure_text_elements(out, _req, ctx=_sweep_stub.reads_ctx()) == out)
 check("a string the planner DID place is left alone",
-      len([e for e in G.ensure_text_elements(out, _req)["elements"] if e["text"]]) == 1)
+      len([e for e in G.ensure_text_elements(out, _req, ctx=_sweep_stub.reads_ctx())["elements"] if e["text"]]) == 1)
 noscene = G.ensure_text_elements(G.normalize_layout(
     {"background": "a field", "elements": [{"desc": "a cow", "x": .1, "y": .1,
-                                            "w": .3, "h": .3}]}), _req)
+                                            "w": .3, "h": .3}]}), _req, ctx=_sweep_stub.reads_ctx())
 check("with no plausible surface the lettering still gets an element of its own",
       any(e["text"] == "CAFE ROSA" for e in noscene["elements"]), str(noscene["elements"]))
 check("a prompt asking for no lettering leaves the layout untouched",
-      G.ensure_text_elements(_base, "a quiet street at dusk") == _base)
+      G.ensure_text_elements(_base, "a quiet street at dusk", ctx=_sweep_stub.reads_ctx()) == _base)
 
 # The backstop has to be on the SUCCESS path, not just the fallback: a planner
 # can answer perfectly well and simply leave `text` out.

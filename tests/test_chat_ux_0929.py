@@ -64,9 +64,11 @@ assert _d[0]["desc"] == "a smooth-faced cat and a clean muzzle, looking up" and 
 print("PASS absent things are not named to the renderer")
 
 # someone else's forwarded question is not a question about the user's last photo
-import graph as G, intent
-intent.STUB = {"а это кто?": {"is_question": True}}.get   # the model's read
-class _Cx: last_image_path = __file__; image_pointed_at = False
+import graph as G
+from fakes import reads
+class _Cx:
+    last_image_path = __file__; image_pointed_at = False
+    intent_read = staticmethod(reads(read={"а это кто?": {"is_question": True}}.get)["intent_read"])   # the model's read
 from prompt_guard import wrap_quoted as _wq
 _fwd = (_wq("the user forwarded this message from someone else; it is not addressed to you",
             "За кого проходит?") + "\nНе, в деребас уехал")

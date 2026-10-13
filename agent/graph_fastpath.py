@@ -12,6 +12,7 @@ render a short-circuit reply.
 # value at import would freeze the real implementations and make every one of
 # those patches a silent no-op. See graph_personality.py's module docstring.
 """
+from seams import intent_read
 import logging
 import re
 
@@ -257,8 +258,7 @@ def _followup_of_tool_turn(state, text: str, ctx=None) -> bool:
     users = [i for i, m in enumerate(msgs) if m.get("role") == "user"]
     if not users or not any(m.get("role") == "tool" for m in msgs[users[-1]:]):
         return False
-    import intent
-    return intent.read(ctx, text, _previous_reply(state))["needs_tool"]
+    return intent_read(ctx)(ctx, text, _previous_reply(state))["needs_tool"]
 
 
 def _fast_path_allowed(ctx: Context, state: AgentState, user_input: str,
@@ -315,10 +315,10 @@ def _fast_path_reply(ctx: Context, messages: list, gen: "_GenSettings",
     lite_user_parts = []
     facts_text = ctx.facts_text(original_input or user_input)
     if facts_text:
-        lite_user_parts.extend(facts_parts(facts_text))
+        lite_user_parts.extend(facts_parts(facts_text, ctx=ctx))
     elif getattr(ctx, "facts_forgotten", False):
         lite_user_parts.append(FORGOTTEN_NOTE)
-    _tr_prev = translate_previous_note(original_input or user_input, messages[1:-1])
+    _tr_prev = translate_previous_note(original_input or user_input, messages[1:-1], ctx=ctx)
     if original_input and not _tr_prev:
         # A bare path or a number has no language: «C:/Program Files/Git/start»
         # in a Russian chat was answered in Spanish.
@@ -344,9 +344,9 @@ def _fast_path_reply(ctx: Context, messages: list, gen: "_GenSettings",
             prefill = llm.GEMMA_NO_THINK_PREFILL
     lite_user_parts.append(effective_input)
     # After the question: placed before it, the model ignored it once history existed (4/4 wrong).
-    lite_user_parts.extend(p for p in [_word_count_note(original_input or user_input)
+    lite_user_parts.extend(p for p in [_word_count_note(original_input or user_input, ctx=ctx)
                                        or no_history_note(original_input or user_input,
-                                                          messages[1:-1])
+                                                          messages[1:-1], ctx=ctx)
                                        or _tr_prev] if p)
     lite_user_msg = {"role": "user", "content": "\n\n".join(lite_user_parts)}
 

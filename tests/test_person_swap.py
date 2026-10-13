@@ -99,7 +99,8 @@ check("the swap is spent: the next photo is an ordinary photo again",
 # A cartoon reference forces a cartoon head: asked for a real one, the reference is read
 # by the VLM as a real thing and drawn from those words (live 2026-10-12/13).
 import importlib
-import intent
+import types
+from fakes import reads
 import image as image_mod
 P = importlib.reload(person_swap)
 P.people = lambda path: [(620, 110, 680, 180)]
@@ -110,15 +111,13 @@ image_mod.edit_image_with_firered = lambda ctx, p, t, **k: (EDITS.append((t, k.g
 import image_grounding
 image_grounding._english_instructions = lambda ctx, w: w
 for wish, real in (("a real porous kitchen sponge with real eyes", True), ("smoking a pipe", False)):
-    intent.YES_STUB = lambda q, t, real=real: real
     EDITS.clear()
-    P.swap(None, PIC, (620, 110, 680, 180), SPONGE, wish)
+    P.swap(types.SimpleNamespace(**reads(yes=lambda q, t, real=real: real)), PIC, (620, 110, 680, 180), SPONGE, wish)
     t, refs = EDITS[-1] if EDITS else ("", None)
     check(f"wish {wish!r}: " + ("the reference is read as a real thing and drawn from words"
                                 if real else "the reference goes in as sent"),
           (len(EDITS) == P.CANDIDATES and "red box with a real sponge" in t and refs == [])
           if real else (len(EDITS) == P.CANDIDATES and "red box with SpongeBob" in t and refs == [SPONGE]), EDITS)
-intent.YES_STUB = None
 
 # The agent can do the same: «замени четвёртого на Губку Боба» with the two pictures sent.
 import tool_image_handlers as H

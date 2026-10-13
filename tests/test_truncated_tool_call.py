@@ -65,12 +65,13 @@ from pathlib import Path
 import sandbox_access as _sa
 _orig_may = _sa.may_run_code
 _sa.may_run_code = lambda u: True
-import intent   # the model reads the request as code to run (agent/intent.py)
-intent.STUB = lambda t: {"needs_tool": True, "wants": ["run_code"]} if "python script" in t else None
+from fakes import reads   # the model reads the request as code to run (agent/intent.py)
+_READ = reads(read=lambda t: {"needs_tool": True, "wants": ["run_code"]} if "python script" in t else None)
 def _run_with_sandbox(fn, user):
     """H._run with a sandbox on the ctx so the code tools are offered."""
     H._script["fn"] = fn; H._script["n"] = 0
     c = H._ctx()
+    c.intent_read = _READ["intent_read"]
     c.sandbox = types.SimpleNamespace(root=Path(tempfile.mkdtemp()), user_id=1)
     c.sandbox_user = None
     g = graph_mod.build_graph(c)

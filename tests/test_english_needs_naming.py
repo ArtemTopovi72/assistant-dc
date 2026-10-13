@@ -11,21 +11,24 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 os.environ.setdefault("F5_TEST_RUN", "1")
 
+import types  # noqa: E402
+
 import graph_language as G  # noqa: E402
+from fakes import reads  # noqa: E402
+
+_EN = types.SimpleNamespace(**reads(read=lambda t: {"reply_language": "en", "language_mode": "en"}))
 
 LENIN = "Кибернетический Ленин дерётся на кулаках с чертями в аду, глаза сияют красным"
 
 
-def test_a_false_read_does_not_switch_to_english(monkeypatch):
-    monkeypatch.setattr(G, "_read", lambda t: {"reply_language": "en", "language_mode": "en"})
-    assert not G.asks_for_english(LENIN)
+def test_a_false_read_does_not_switch_to_english():
+    assert not G.asks_for_english(LENIN, ctx=_EN)
     assert not G.names_english(LENIN)
 
 
-def test_a_real_request_still_does(monkeypatch):
-    monkeypatch.setattr(G, "_read", lambda t: {"reply_language": "en", "language_mode": "en"})
+def test_a_real_request_still_does():
     for t in ("и то же самое по-английски", "ответь на английском", "answer in English please"):
-        assert G.asks_for_english(t), t
+        assert G.asks_for_english(t, ctx=_EN), t
 
 
 def test_the_pin_needs_english_named_too():

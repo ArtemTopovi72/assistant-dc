@@ -6,14 +6,16 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pytest
 import turn_audit as TA
 # the model's read is stubbed; phrases run live in bench/intent_rest_live.py
-import intent
+import types
+from fakes import reads
 _COMPLAINTS = {"нет, не то", "где файл?", "опять не пришло", "я же просил без сахара",
                "нет, не то, я просил электрический"}
-intent.STUB = lambda t: {"complaint": t.strip() in _COMPLAINTS}
+_R = types.SimpleNamespace(**reads(read=lambda t: {"complaint": t.strip() in _COMPLAINTS}))
 
 
 class _Ctx:
     def __init__(self, owner="42"):
+        self.intent_read = _R.intent_read
         self.ozon_owner = owner
         self.model_name = "gemma"
         self.no_think = True
@@ -76,7 +78,7 @@ def test_complaints_are_per_conversation(traces):
     ("нету ли дешевле?", False), ("спасибо, отлично", False),
 ])
 def test_complaint_detection(text, want):
-    assert TA.is_complaint(text) is want
+    assert TA.is_complaint(text, ctx=_R) is want
 
 
 def test_suites_do_not_write_into_the_live_folder(monkeypatch):

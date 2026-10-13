@@ -49,8 +49,9 @@ assert [s["heading"] for s in slides.plan_deck(None, "удали 2-й слайд
 print("PASS a bare delete by position removes that slide")
 
 import tools
-import intent   # the model's read of the words (agent/intent.py); phrases: bench/intent_lang_live.py
-intent.STUB = {"сделай презентацию на английском про Марс": {"reply_language": "en"}}.get
-assert tools._lang_of_original({"user_input_original": "сделай презентацию на английском про Марс"}, "") == "en"
-assert tools._lang_of_original({"user_input_original": "сделай презентацию про Марс"}, "") == "ru"
+import types
+from fakes import reads   # the model's read of the words (agent/intent.py); phrases: bench/intent_lang_live.py
+_R = types.SimpleNamespace(**reads(read={"сделай презентацию на английском про Марс": {"reply_language": "en"}}.get))
+assert tools._lang_of_original({"user_input_original": "сделай презентацию на английском про Марс"}, "", ctx=_R) == "en"
+assert tools._lang_of_original({"user_input_original": "сделай презентацию про Марс"}, "", ctx=_R) == "ru"
 print("PASS a deck asked for in English is written in English")

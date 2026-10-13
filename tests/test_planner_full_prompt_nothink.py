@@ -1,7 +1,7 @@
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import _sweep_stub  # noqa: F401  the model's narrow reads, stubbed
+import _sweep_stub  # the model's narrow reads, stubbed
 import llm, ideogram as G
 
 asked = []
@@ -18,10 +18,10 @@ print("PASS the full planner prompt unless the model is thinking")
 
 _l = G.ensure_text_elements({"background": "white", "elements": [
     {"desc": "logo lettering", "text": "ЗЕРНО", "x": .3, "y": .6, "w": .4, "h": .12}]},
-    "логотип кофейни с надписью 'Зерно'")
+    "логотип кофейни с надписью 'Зерно'", ctx=_sweep_stub.reads_ctx())
 assert _l["elements"][0]["text"] == "Зерно", _l["elements"][0]
 print("PASS requested lettering keeps the user's casing")
-assert G.requested_strings("логотип кофейни 'Зерно' в минималистичном стиле") == ["Зерно"]
+assert G.requested_strings("логотип кофейни 'Зерно' в минималистичном стиле", ctx=_sweep_stub.reads_ctx()) == ["Зерно"]
 print("PASS 'логотип' is a lettering cue")
 # a logo is planned as graphic design, not as macro photography with an 85mm lens
 assert 'medium="flat vector graphic design"' in G._PLANNER_PROMPT

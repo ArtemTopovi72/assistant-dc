@@ -15,6 +15,7 @@ the work. A note the task never got to read (it ended first) is re-queued as
 an ordinary request, so nothing is lost.
 """
 from __future__ import annotations
+from seams import intent_read
 import logging
 import re
 import threading
@@ -53,15 +54,14 @@ class Inbox:
 # minute research must not wait for the research. Everything else steers.
 
 
-def eligible(text: str, has_file: bool, interruptible: bool) -> bool:
+def eligible(text: str, has_file: bool, interruptible: bool, ctx=None) -> bool:
     """Should this arrival steer the running task instead of queueing?"""
     t = (text or "").strip()
     if not t or has_file or len(t) > MAX_NOTE:
         return False
     if t.startswith("/"):
         return False
-    import intent
-    if interruptible and intent.read(None, t)["is_question"]:
+    if interruptible and intent_read(ctx)(None, t)["is_question"]:
         return False
     return True
 

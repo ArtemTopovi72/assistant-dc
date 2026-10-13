@@ -332,9 +332,9 @@ def _look(prompt: str, ctx=None) -> str:
         prompt or "", _LOOKS + ("photo", "none"), "none")
 
 
-def named_style(prompt: str) -> str:
+def named_style(prompt: str, ctx=None) -> str:
     """The drawn/painted look the user actually named, or "" if they named none."""
-    got = _look(prompt)
+    got = _look(prompt, ctx=ctx)
     return got if got in _LOOKS else ""
 
 
@@ -346,12 +346,12 @@ _DEFAULT_PHOTO_STYLE = {
 }
 
 
-def wants_realism(prompt: str) -> bool:
+def wants_realism(prompt: str, ctx=None) -> bool:
     """True when the user asked for a photograph and did NOT ask for a style."""
-    return _look(prompt) == "photo"
+    return _look(prompt, ctx=ctx) == "photo"
 
 
-def apply_style_floor(layout: dict, prompt: str) -> dict:
+def apply_style_floor(layout: dict, prompt: str, ctx=None) -> dict:
     """Never hand Ideogram a caption with no style at all.
 
     An empty style_description is not neutral — it lets the model pick, and what it
@@ -370,7 +370,7 @@ def apply_style_floor(layout: dict, prompt: str) -> dict:
     # The user named a drawn look — supply THAT, not photography. Otherwise a
     # planner failure on "нарисуй карикатуру" would come back as a photograph,
     # which is the same class of bug in the opposite direction.
-    named = _ideogram.named_style(prompt)
+    named = _ideogram.named_style(prompt, ctx=ctx)
     if named:
         layout["art_style"] = named
         layout["medium"] = "illustration"
@@ -389,7 +389,7 @@ def apply_style_floor(layout: dict, prompt: str) -> dict:
     layout["art_style"] = ""          # exclusive with `photo` in build_caption
     logger.warning("Ideogram: caption had no style (%s) — applying the "
                    "photographic default",
-                   "realism requested" if _ideogram.wants_realism(prompt) else "none requested")
+                   "realism requested" if _ideogram.wants_realism(prompt, ctx=ctx) else "none requested")
     return layout
 
 
@@ -647,7 +647,7 @@ def filled_layout(layout: dict, margin: float = 0.02) -> dict:
     return _ideogram.normalize_layout(out)
 
 
-def layout_to_caption(layout: dict) -> dict:
+def layout_to_caption(layout: dict, ctx=None) -> dict:
     """Editable layout -> the structured caption the model is fed."""
     layout = _ideogram.normalize_layout(layout)
     # The style floor belongs HERE, not only in plan_layout. Every render goes
@@ -657,7 +657,7 @@ def layout_to_caption(layout: dict) -> dict:
     # is not neutral, it lets the model pick. Measured on a render: four boxes
     # with no style came back as a collage of cut-out objects on a
     # transparency checkerboard, complete with an invented product packet.
-    layout = apply_style_floor(layout, layout.get("background") or "")
+    layout = apply_style_floor(layout, layout.get("background") or "", ctx=ctx)
     elements = [
         _ideogram.element(el["desc"], _ideogram.bbox(el["x"], el["y"], el["w"], el["h"]), text=el["text"])
         for el in layout["elements"]

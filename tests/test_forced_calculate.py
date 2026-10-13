@@ -14,9 +14,9 @@ import graph_personality as G
 
 # Which messages must be calculated is the model's read (intent.must_call);
 # the phrases, negatives included, run live in bench/intent_force_live.py.
-import intent
-intent.STUB = lambda t: ({"needs_tool": True, "wants": ["calculate"], "must_call": "calculate"}
-                         if "1234" in t else None)
+from fakes import reads
+_READ = reads(read=lambda t: ({"needs_tool": True, "wants": ["calculate"], "must_call": "calculate"}
+                              if "1234" in t else None))
 
 
 # --- the loop actually uses it ---------------------------------------------
@@ -42,6 +42,7 @@ def _rounds_for(text, tool_result="7006652"):
     ])
     tools = _TGF.Tools({"calculate": tool_result})
     ctx = _TGF._ctx()
+    ctx.intent_read = _READ["intent_read"]
     _TGF._run(ctx, llm, tools, {"user_input": text, "messages": []},
               fastpath=False)
     return [(c["kw"].get("tool_choice"),
@@ -64,7 +65,9 @@ def test_forced_call_answered_in_text_is_retried_with_required():
         _TGF._asst("Получилось 7006652."),
     ])
     tools = _TGF.Tools({"calculate": "7006652"})
-    _TGF._run(_TGF._ctx(), llm, tools, {"user_input": "сколько будет 1234 * 5678?", "messages": []},
+    ctx = _TGF._ctx()
+    ctx.intent_read = _READ["intent_read"]
+    _TGF._run(ctx, llm, tools, {"user_input": "сколько будет 1234 * 5678?", "messages": []},
               fastpath=False)
     choices = [c["kw"].get("tool_choice") for c in llm.calls]
     # The retry is "auto with an explicit order" first and `required` only if

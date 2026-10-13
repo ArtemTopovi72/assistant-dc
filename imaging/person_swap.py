@@ -4,6 +4,7 @@ that point an edit at the one picked.
 The owner wanted Stalin's erasing of Yezhov, but funnier: pick a person, send a picture
 of anyone (SpongeBob), get them in that spot in the photo's own style.
 """
+from seams import yes_no
 import os
 from typing import List, Tuple
 
@@ -109,8 +110,7 @@ def swap(ctx, path: str, box: Box, ref: str, wish: str = "") -> str:
     # Short, like a hand-written prompt: the long rule lists made it a flat cartoon.
     real = False
     if wish:
-        import intent
-        real = intent.ask_yes("Does the user want the character turned into a real-life, "
+        real = yes_no(ctx)("Does the user want the character turned into a real-life, "
                               "photographed physical version of itself, not kept as drawn?", wish)
     name = who.split(",")[0]
     # Asked for a real one, the reference is read by the VLM as a real thing and drawn

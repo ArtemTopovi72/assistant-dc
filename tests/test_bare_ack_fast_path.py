@@ -17,13 +17,14 @@ def check(name, cond, extra=""):
     OK += bool(cond); BAD += (not cond)
     print(("PASS  " if cond else "FAIL  ") + name, ("  " + str(extra)) if (extra and not cond) else "")
 
-import intent
+from fakes import reads
 # What is a bare ack is the model's read (bench/intent_live.py has the phrases).
-intent.STUB = lambda t: ({"needs_tool": False, "bare_ack": True} if t in ("👍", "спасибо")
-                         else {"needs_tool": True, "wants": ["redraw_image"]})
+_READS = reads(read=lambda t: ({"needs_tool": False, "bare_ack": True} if t in ("👍", "спасибо")
+                               else {"needs_tool": True, "wants": ["redraw_image"]}))
 
 class _Ctx:
     last_image_path = "C:/pics/ideogram_00599_.png"
+    intent_read = staticmethod(_READS["intent_read"])
     def is_cancelled(self): return False
 F._sandbox_has_files = lambda ctx: False
 ctx = _Ctx()

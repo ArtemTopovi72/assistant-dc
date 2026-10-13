@@ -3,12 +3,14 @@ import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("F5_TEST_RUN", "1")
 import graph_language as GL
-import tg_tasks as T, intent
-intent.STUB = {"translate it into Russian": {"translate": True}}.get   # the model's read
+import tg_tasks as T
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from fakes import reads
 
 
 class _Ctx:
     reply_lang = "en"
+    intent_read = staticmethod(reads(read={"translate it into Russian": {"translate": True}}.get)["intent_read"])   # the model's read
     def is_cancelled(self): return False
 
 

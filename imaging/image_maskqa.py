@@ -9,6 +9,7 @@ Extracted from image.py. MASK_QA_ENABLED is a live switch: read it through this
 module (image_maskqa.MASK_QA_ENABLED), never by value, or patching it moves only
 half the behaviour.
 """
+from seams import yes_no
 from config import scratch_path
 import logging
 import os
@@ -28,13 +29,12 @@ logger = logging.getLogger("assistant.image")
 # whole thing. Sub-features (lips/eyes/nose/cheek...) are deliberately NOT matched
 # here, so they still go through referring segmentation where a precise small mask
 # is what you want.
-def _is_whole_face(phrase: str) -> bool:
+def _is_whole_face(phrase: str, ctx=None) -> bool:
     """The region is a whole face or head -- not one feature of it (eyes, lips)
     and not a person or body that also names the face. Read by the model: the
     old word regex took «the man's body and face» for a face, YuNet masked only
     the face and the man stayed in his chair."""
-    import intent
-    return intent.ask_yes(
+    return yes_no(ctx)(
         "An image region is described as: {text}\n\nIs this region exactly a whole "
         "face or head -- not just one feature of it (eyes, lips, nose), and not a "
         "whole person or body?", phrase)

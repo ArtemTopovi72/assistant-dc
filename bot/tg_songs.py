@@ -12,6 +12,7 @@ Paths are read through ``tg_bot`` at call time (_MASHUP_DIR in particular is
 rebound by redirect_data_dir(), which a by-value import would never see).
 """
 from __future__ import annotations
+from seams import intent_read
 
 import html as _html_mod
 import re as _re
@@ -19,12 +20,11 @@ import re as _re
 import music as _music_mod
 
 
-def _read(text: str, after_song: bool = False) -> dict:
+def _read(text: str, after_song: bool = False, ctx=None) -> dict:
     """The model's read of a chat message (agent/intent.py): song request, seconds,
     «на него», redo, rewrite. A request that names a song and a making verb is the
     song flow, whichever way it arrives; «как научиться петь» is not."""
-    import intent
-    return intent.read(None, text or "", "The assistant just sent a song." if after_song else "")
+    return intent_read(ctx)(None, text or "", "The assistant just sent a song." if after_song else "")
 
 
 # The song runs as a TASK, not on a bare thread: a thread had no status
@@ -39,8 +39,8 @@ _SONG_TASK_RE = _re.compile(r"^\[song(?::(\d+))?\]\s*(.*)$", _re.DOTALL)
 LYRICS_MARK = "[lyrics]"
 
 
-def refers_to_previous_text(text: str) -> bool:
-    return bool((text or "").strip()) and _read(text)["song_uses_previous_text"]
+def refers_to_previous_text(text: str, ctx=None) -> bool:
+    return bool((text or "").strip()) and _read(text, ctx=ctx)["song_uses_previous_text"]
 
 
 def looks_like_lyrics(text: str) -> bool:
@@ -168,39 +168,39 @@ def parse_song_payload(text: str) -> tuple:
 LAST_SONG: dict = {}
 
 
-def song_followup(text: str) -> bool:
+def song_followup(text: str, ctx=None) -> bool:
     """«а теперь то же самое в стиле рок» right after a song: redo it, same words."""
     t = (text or "").strip()
-    return bool(t) and _read(t, after_song=True)["song"] in ("sound", "words")
+    return bool(t) and _read(t, after_song=True, ctx=ctx)["song"] in ("sound", "words")
 
 
-def song_lang(topic: str, lang: str) -> str:
+def song_lang(topic: str, lang: str, ctx=None) -> str:
     """«колыбельная на английском» from a Russian chat was written in Russian."""
     import utils
-    return utils.explicit_lang(topic) or lang
+    return utils.explicit_lang(topic, ctx=ctx) or lang
 
 
-def followup_topic(text: str, last_lyrics: str) -> str:
+def followup_topic(text: str, last_lyrics: str, ctx=None) -> str:
     """The same words sung again for a new sound; rewritten for a change to the words or length."""
-    if _read(text, after_song=True)["song"] == "words":
+    if _read(text, after_song=True, ctx=ctx)["song"] == "words":
         return text + "\nRewrite these lyrics as asked, keep everything else:\n" + last_lyrics
     return text + "\n" + LYRICS_MARK + last_lyrics
 
 
-def song_request(text: str) -> tuple:
+def song_request(text: str, ctx=None) -> tuple:
     """(is a song request, seconds asked for or 0) for a plain chat message."""
     t = (text or "").strip()
     if t.startswith("[song"):
         return False, 0          # already a task payload
     if not t or len(t) > 600:
         return False, 0
-    r = _read(t)
+    r = _read(t, ctx=ctx)
     return (True, r["song_seconds"]) if r["song"] == "make" else (False, 0)
 
 
-def request_seconds(t: str, after_song: bool = False) -> int:
+def request_seconds(t: str, after_song: bool = False, ctx=None) -> int:
     """The length asked for, in seconds; 0 when none (the model's read)."""
-    return _read(t, after_song)["song_seconds"] if (t or "").strip() else 0
+    return _read(t, after_song, ctx=ctx)["song_seconds"] if (t or "").strip() else 0
 
 
 def _polished(ctx, lyrics: str, has_stage: bool = True, singer: str = "") -> str:
@@ -359,7 +359,7 @@ class SongsMixin:
             import steer as _steer
             notes = _steer.take(ctx)
             caption = _music_mod.build_structured_caption(
-                ctx, _steer.with_notes(topic, notes), song_lang(topic, lang), duration_s=duration, prefs=prefs)
+                ctx, _steer.with_notes(topic, notes), song_lang(topic, lang, ctx=ctx), duration_s=duration, prefs=prefs)
             # Last call before the render: a wish that came in while the
             # lyrics were being written rewrites them, the render is minutes.
             late = _steer.take(ctx)
@@ -367,7 +367,7 @@ class SongsMixin:
                 notes += late
                 tg_bot.logger.info("[songs] rewriting for %d late wish(es): %r", len(late), late[0][:80])
                 caption = _music_mod.build_structured_caption(
-                    ctx, _steer.with_notes(topic, notes), song_lang(topic, lang), duration_s=duration, prefs=prefs)
+                    ctx, _steer.with_notes(topic, notes), song_lang(topic, lang, ctx=ctx), duration_s=duration, prefs=prefs)
             if given:                   # their own words stay; wishes steer the sound
                 caption = dict(caption, lyrics=structure_lyrics(ctx, given))
             elif caption.get("lyrics") and not cancelled() and not prefs.get("instrumental"):

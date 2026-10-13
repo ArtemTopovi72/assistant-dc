@@ -23,6 +23,7 @@ EmptyMiniMaxMusic3LatentAudio(seconds=<the encode node's own clamped
 See docs/music_generation.md for the object_info census that confirmed this.
 """
 from __future__ import annotations
+from seams import yes_no
 from seams import dep, text_model
 
 import json
@@ -447,7 +448,7 @@ def choose_auto_params(ctx, topic: str, lang: str, *, genre: bool = False,
     v = str(data.get("vocal", "")).strip().lower()
     if vocal and v in ("female", "male"):
         out["vocal"] = v
-    if vocal and _no_vocals(topic):
+    if vocal and _no_vocals(topic, ctx=ctx):
         out["vocal"] = "instrumental"          # «джингл без вокала» was reported as a male vocal
     try:
         sec = int(data.get("seconds", 0))
@@ -1043,17 +1044,15 @@ def line_budget(duration_s) -> tuple:
     return target, min(lo, target), min(MAX_SUNG_LINES, int(target * 1.3) + 1)   # YuE2 sings every word: a real ceiling
 
 
-def _no_vocals(topic: str) -> bool:
+def _no_vocals(topic: str, ctx=None) -> bool:
     """The song is to have no singing (an instrumental, «без слов»). The model's yes/no."""
-    import intent
-    return intent.ask_yes("A user asked for this song: {text}\n\nDoes the request ask for NO "
+    return yes_no(ctx)("A user asked for this song: {text}\n\nDoes the request ask for NO "
                           "singing -- an instrumental, no vocals, no words?", topic)
 
 
-def _own_form(topic: str) -> bool:
+def _own_form(topic: str, ctx=None) -> bool:
     """The request fixes the song's own shape (exact verse/line counts, no chorus)."""
-    import intent
-    return intent.ask_yes("A user asked for this song: {text}\n\nDoes the request fix the "
+    return yes_no(ctx)("A user asked for this song: {text}\n\nDoes the request fix the "
                           "song's exact structure -- how many verses or lines, or no chorus?", topic)
 
 
@@ -1079,10 +1078,10 @@ def build_structured_caption(ctx, topic: str, lang: str, *,
     lang_name = "Russian" if (lang or "").strip().lower().startswith("ru") else "English"
     length_hint = ""
     want_lines, min_lines, max_lines = line_budget(duration_s)
-    if not (prefs or {}).get("instrumental") and _no_vocals(topic):
+    if not (prefs or {}).get("instrumental") and _no_vocals(topic, ctx=ctx):
         # «эмбиент без слов и без вокала» was sung as «Ммм / Ооо».
         prefs = {k: v for k, v in (prefs or {}).items() if k != "vocal"} | {"instrumental": True}
-    if (prefs or {}).get("instrumental") or _own_form(topic):
+    if (prefs or {}).get("instrumental") or _own_form(topic, ctx=ctx):
         # «ровно три куплета, без припева» came back with a 15-line outro
         # padding it up to the slot's line count.
         want_lines = min_lines = 0

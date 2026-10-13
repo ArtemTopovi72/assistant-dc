@@ -6,6 +6,7 @@ Words and voice colour stay intact (formants are not touched), so unlike activat
 Each preset (semitones): shift of the median, range multiplier around the median, declination within a phrase
 (start -> end), rise over the last 30% of the phrase, tempo multiplier (>1 faster), gain in dB.
 """
+from seams import choice
 import numpy as np
 import parselmouth
 from parselmouth.praat import call
@@ -117,7 +118,6 @@ def question_shape(ctx, wav: str, text: str, dst: str = "") -> str:
     import re
     try:
         import audio
-        import intent
         stressed = audio.preprocess_text_for_synthesis(ctx, text, use_censoring=False, apply_stress=True)
         toks = re.findall(r"[А-Яа-яЁё+]+", stressed)
         words = word_times(ctx, wav)
@@ -125,7 +125,7 @@ def question_shape(ctx, wav: str, text: str, dst: str = "") -> str:
             return wav
         plain = [t.replace("+", "").lower() for t in toks]
         cand = tuple(dict.fromkeys(w for w in plain if len(w) >= 4)) or tuple(plain)
-        pick = intent.ask_choice("Which single word of this Russian question carries its main meaning, the word the "
+        pick = choice(ctx)("Which single word of this Russian question carries its main meaning, the word the "
                                  "speaker stresses with the question tone? {text}", text, cand, default=cand[-1])
         idx = plain.index(pick) if pick in plain else len(plain) - 1
         out = dst or wav

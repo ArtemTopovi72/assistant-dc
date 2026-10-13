@@ -1,3 +1,4 @@
+from seams import intent_read
 import base64
 import copy
 import hashlib
@@ -698,10 +699,9 @@ def safe_json_from_llm(text: str, required_keys: Optional[Sequence[str]] = None
     return best if any(k in best for k in keys) else None
 
 
-def explicit_lang(text: str) -> str:
+def explicit_lang(text: str, ctx=None) -> str:
     """"en"/"ru" when the request names the output language («на английском»),
     else "" -- the model's read (agent/intent.py), not a word list."""
     if not (text or "").strip():
         return ""
-    import intent
-    return intent.read(None, text)["reply_language"]
+    return intent_read(ctx)(None, text)["reply_language"]

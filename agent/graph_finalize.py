@@ -12,6 +12,7 @@ action the agent never took from reaching the user.
 # value at import would freeze the real implementations and make every one of
 # those patches a silent no-op. See graph_personality.py's module docstring.
 """
+from seams import intent_read
 import logging
 import os
 import re
@@ -101,19 +102,18 @@ _ALREADY_DONE_RE = re.compile(
     re.IGNORECASE,
 )
 
-def _user_read(text: str) -> dict:
+def _user_read(text: str, ctx=None) -> dict:
     """The model's read of the user's words (agent/intent.py)."""
-    import intent
-    return intent.read(None, text or "")
+    return intent_read(ctx)(None, text or "")
 
 
 def _norm_request(text: str) -> str:
     return re.sub(r"\W+", " ", (text or "").lower()).strip()
 
 
-def _is_redo_request(user_input: str, messages) -> bool:
+def _is_redo_request(user_input: str, messages, ctx=None) -> bool:
     """The user asked again: read as a redo, or the same text as an earlier turn."""
-    if (user_input or "").strip() and _user_read(user_input)["redo"]:
+    if (user_input or "").strip() and _user_read(user_input, ctx=ctx)["redo"]:
         return True
     cur = _norm_request(user_input)
     if len(cur) < 12:
@@ -556,7 +556,7 @@ def _finalize_answer(ctx: Context, state: AgentState, messages: list,
         from prompt_guard import has_quote, user_words
         _fwd_turn = has_quote(_asked)
         if (_FILE_READY_RE.search(final_answer)
-                and (not _fwd_turn or _user_read(user_words(_asked))["asks_for_file"])
+                and (not _fwd_turn or _user_read(user_words(_asked), ctx=ctx)["asks_for_file"])
                 and not any(str(state.get(k) or "").strip()
                             for k in _ARTIFACT_KEYS)
                 and not _ADMISSION_RE.search(final_answer)):

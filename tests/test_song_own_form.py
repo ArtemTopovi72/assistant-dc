@@ -1,9 +1,11 @@
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # The model's reads are stubbed here; the phrases run live in bench/intent_rest_live.py.
-import intent
-intent.YES_STUB = lambda q, t: (("structure" in q and any(w in t.lower() for w in ("ровно", "без припева", "exactly")))
-                                or ("NO singing" in q and "без вокала" in t))
+import types
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from fakes import reads
+_R = types.SimpleNamespace(**reads(yes=lambda q, t: (("structure" in q and any(w in t.lower() for w in ("ровно", "без припева", "exactly")))
+                                                     or ("NO singing" in q and "без вокала" in t))))
 import music
 
 seen = []
@@ -15,13 +17,13 @@ llm.send_to_lm_studio = _fake
 for topic, capped in (("блюз: ровно три куплета по четыре строки, без припева", False),
                       ("песня про кота", True)):
     seen.clear()
-    try: music.build_structured_caption(None, topic, "ru", duration_s=120)
+    try: music.build_structured_caption(_R, topic, "ru", duration_s=120)
     except Exception: pass
     assert seen and (("LENGTH:" in seen[0]) == capped), topic
 print("PASS the user's own form overrides the line budget")
 
 seen.clear()
-try: music.build_structured_caption(None, "эмбиент для сна, без слов и без вокала", "ru", duration_s=60)
+try: music.build_structured_caption(_R, "эмбиент для сна, без слов и без вокала", "ru", duration_s=60)
 except Exception: pass
 assert "INSTRUMENTAL" in seen[0] and "LENGTH:" not in seen[0]
 print("PASS 'без вокала' in the wish is an instrumental")

@@ -6,13 +6,18 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("F5_TEST_RUN", "1")
 
 import graph
-import intent
+
+
+def _yes(answer):
+    """The model's yes/no, as the context hands it to the code (core/seams.py)."""
+    return lambda q, t, default=False, wait=True: answer(q, t)
 
 
 class _Ctx:
-    def __init__(self, paths, last):
+    def __init__(self, paths, last, yes=lambda q, t: False):
         self.image_undo = paths
         self.last_image_path = last
+        self.yes_no = _yes(yes)
 
 
 def _files(tmp_path):
@@ -27,8 +32,7 @@ def test_earlier_picture_is_read_when_the_user_relates_pictures(tmp_path, monkey
     calls = []
     monkeypatch.setattr(graph, "analyze_image_with_llm",
                         lambda **k: (calls.append(k), "a till receipt")[1])
-    monkeypatch.setattr(intent, "YES_STUB", lambda q, t: True, raising=False)
-    out = graph._add_earlier_pictures(_Ctx([a], b), {"user_input": "что общего у двух фото?"}, "a man")
+    out = graph._add_earlier_pictures(_Ctx([a], b, yes=lambda q, t: True), {"user_input": "что общего у двух фото?"}, "a man")
     assert "a man" in out and "a till receipt" in out
     # one call seeing both: one at a time, each said "there is no second picture"
     assert len(calls) == 1 and [p for _, p in calls[0]["image_paths"]] == [a, b]
@@ -38,16 +42,16 @@ def test_single_picture_question_reads_only_the_current_one(tmp_path, monkeypatc
     a, b = _files(tmp_path)
     calls = []
     monkeypatch.setattr(graph, "analyze_image_with_llm", lambda **k: calls.append(1) or "x")
-    monkeypatch.setattr(intent, "YES_STUB", lambda q, t: False, raising=False)
     out = graph._add_earlier_pictures(_Ctx([a], b), {"user_input": "что на фото?"}, "a man")
     assert out == "a man" and not calls
 
 
-def test_inspection_description_that_misses_the_request_counts_as_negative(monkeypatch):
+def test_inspection_description_that_misses_the_request_counts_as_negative():
+    import types
     import graph_personality as gp
-    monkeypatch.setattr(intent, "YES_STUB", lambda q, t: "three" in t.lower(), raising=False)
+    three = types.SimpleNamespace(yes_no=_yes(lambda q, t: "three" in t.lower()))
     edit = {"inpaint_image"}
-    assert gp._inspection_misses_request("пусть котов будет два", "Three grey cats sit. | Two cats: PRESENT", edit)
-    assert not gp._inspection_misses_request("пусть котов будет два", "Two cats sit.", edit)
+    assert gp._inspection_misses_request("пусть котов будет два", "Three grey cats sit. | Two cats: PRESENT", edit, ctx=three)
+    assert not gp._inspection_misses_request("пусть котов будет два", "Two cats sit.", edit, ctx=three)
     # nothing was made this turn -> no verdict about a requested change
-    assert not gp._inspection_misses_request("пусть котов будет два", "Three grey cats", set())
+    assert not gp._inspection_misses_request("пусть котов будет два", "Three grey cats", set(), ctx=three)

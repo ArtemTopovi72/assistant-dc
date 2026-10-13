@@ -20,20 +20,21 @@ def check(name, cond, extra=""):
 
 # New picture vs a change to the one on screen is the model's read
 # (agent/intent.py `wants`); the phrases run live in bench/intent_picture_live.py.
-import intent
+from fakes import reads
 NEW = {"needs_tool": True, "wants": ["generate_image"]}
 EDIT = {"needs_tool": True, "wants": ["inpaint_image"]}
-intent.STUB = {"нарисуй набережную Сочи в такую погоду": NEW, "сделай слона розовым": EDIT,
-               "нарисуй ей шляпу": {"needs_tool": True, "wants": ["inpaint_image", "generate_image"]},
-               "нарисуй кота": NEW}.get
-_c = types.SimpleNamespace(last_image_path="x.png")
+_READ = reads(read={"нарисуй набережную Сочи в такую погоду": NEW, "сделай слона розовым": EDIT,
+                    "нарисуй ей шляпу": {"needs_tool": True, "wants": ["inpaint_image", "generate_image"]},
+                    "нарисуй кота": NEW}.get)
+_c = types.SimpleNamespace(last_image_path="x.png", **_READ)
 W = lambda o: C._wants_fresh_picture(_c, {"user_input": "x", "user_input_original": o})
 check("a new picture", W("нарисуй набережную Сочи в такую погоду"))
 check("an edit is not", not W("сделай слона розовым"))
 check("drawing ON the picture is an edit", not W("нарисуй ей шляпу"))
 check("no read, no steer", not W("непрочитанное"))
 
-ctx = types.SimpleNamespace(last_image_path="C:/x/lighthouse.png", facts_text=lambda *a, **k: "", memory_text=lambda: "")
+ctx = types.SimpleNamespace(last_image_path="C:/x/lighthouse.png", facts_text=lambda *a, **k: "", memory_text=lambda: "",
+                            **_READ)
 msg, _, _ = C._compose_user_message(ctx, {"user_input": "draw the Sochi embankment in this kind of weather",
                                           "user_input_original": "нарисуй набережную Сочи в такую погоду"})
 check("fresh draw with a picture in the chat gets the generate_image steer", "NEW picture" in msg and "generate_image" in msg)

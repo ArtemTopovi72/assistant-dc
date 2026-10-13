@@ -6,7 +6,12 @@ import os, sys, inspect
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import graph_finalize as F
 import graph_personality as G
-import intent
+import types
+from fakes import reads
+
+
+def _reads(read):
+    return types.SimpleNamespace(**reads(read=read))
 
 _H = [{"role": "user", "content": "Пересобери коллаж, удалив дубликаты"},
       {"role": "assistant", "content": "готово"},
@@ -33,18 +38,18 @@ def test_already_done_phrases():
 
 def test_redo_detection():
     # the model's read (agent/intent.py)
-    intent.STUB = {"заново": {"redo": "same"}, "сделай ещё раз": {"redo": "same"}}.get
-    assert F._is_redo_request("заново", [])
-    assert F._is_redo_request("сделай ещё раз", [])
-    assert F._is_redo_request("Пересобери коллаж, удалив дубликаты", _H)   # same text twice
-    assert not F._is_redo_request("найди мост", [{"role": "user", "content": "найди мост"}])
-    assert not F._is_redo_request("а теперь коллаж", _H)
+    R = _reads({"заново": {"redo": "same"}, "сделай ещё раз": {"redo": "same"}}.get)
+    assert F._is_redo_request("заново", [], ctx=R)
+    assert F._is_redo_request("сделай ещё раз", [], ctx=R)
+    assert F._is_redo_request("Пересобери коллаж, удалив дубликаты", _H, ctx=R)   # same text twice
+    assert not F._is_redo_request("найди мост", [{"role": "user", "content": "найди мост"}], ctx=R)
+    assert not F._is_redo_request("а теперь коллаж", _H, ctx=R)
 
 
 def test_guard_is_wired_into_the_loop():
     src = inspect.getsource(G.personality_node)
     assert "_ALREADY_DONE_RE.search(draft)" in src
-    assert "_is_redo_request(user_input, messages)" in src
+    assert "_is_redo_request(user_input, messages, ctx=ctx)" in src
     assert "dedupe_photos" in src
 
 
@@ -68,20 +73,20 @@ def test_bare_redo_is_pinned_to_the_previous_request():
     """«заново» after the collage ask must not redo the cat edit from six turns
     earlier (redraw_image over a bridge photo)."""
     # the model reads the bare redo (agent/intent.py)
-    intent.STUB = {"заново": {"redo": "same"}, "again": {"redo": "same"}, "ещё раз": {"redo": "same"},
-                   "пересобери коллаж без дубликатов": {"redo": "changed"}}.get
+    R = _reads({"заново": {"redo": "same"}, "again": {"redo": "same"}, "ещё раз": {"redo": "same"},
+                "пересобери коллаж без дубликатов": {"redo": "changed"}}.get)
     h = [{"role": "user", "content": "сделай кота чёрным"}, {"role": "assistant", "content": "не вышло"},
          {"role": "user", "content": "найди все мосты и собери коллаж"}, {"role": "assistant", "content": "вот"}]
-    assert G._previous_request_for_redo("заново", h) == "найди все мосты и собери коллаж"
-    assert G._previous_request_for_redo("again", h) == "найди все мосты и собери коллаж"
+    assert G._previous_request_for_redo("заново", h, ctx=R) == "найди все мосты и собери коллаж"
+    assert G._previous_request_for_redo("again", h, ctx=R) == "найди все мосты и собери коллаж"
     # a chain of redos still points at the real request
     assert G._previous_request_for_redo("ещё раз", h + [{"role": "user", "content": "заново"},
-                                                       {"role": "assistant", "content": "x"}]) == "найди все мосты и собери коллаж"
+                                                       {"role": "assistant", "content": "x"}], ctx=R) == "найди все мосты и собери коллаж"
     # a full request is not a bare redo; nothing before it -> nothing
-    assert G._previous_request_for_redo("пересобери коллаж без дубликатов", h) == ""
-    assert G._previous_request_for_redo("заново", []) == ""
+    assert G._previous_request_for_redo("пересобери коллаж без дубликатов", h, ctx=R) == ""
+    assert G._previous_request_for_redo("заново", [], ctx=R) == ""
     src = inspect.getsource(G.personality_node)
-    assert "_previous_request_for_redo(user_input, clean_history)" in src
+    assert "_previous_request_for_redo(user_input, clean_history, ctx=ctx)" in src
 
 
 def test_collage_claim_needs_a_script_run():
@@ -101,15 +106,15 @@ def test_run_code_is_forced_once_the_photos_are_picked():
     """After find_content + dedupe_photos the model does not choose run_code by
     itself, even after two corrective rounds, so it is forced."""
     # the model's read is stubbed; phrases run live in bench/intent_rest_live.py
-    intent.STUB = lambda t: {"collage": "коллаж" in t.lower(), "dedupe": "дубл" in t.lower()}
+    R = _reads(lambda t: {"collage": "коллаж" in t.lower(), "dedupe": "дубл" in t.lower()})
     offered = [{"function": {"name": n}} for n in ("run_code", "dedupe_photos", "find_content")]
     ask = "найди все мосты, убери дубликаты и собери коллаж"
-    assert G._forced_collage(ask, offered, {"find_content", "dedupe_photos"}) == "run_code"
+    assert G._forced_collage(ask, offered, {"find_content", "dedupe_photos"}, ctx=R) == "run_code"
     # dedupe was asked for and has not run yet: not before it
-    assert G._forced_collage(ask, offered, {"find_content"}) == ""
-    assert G._forced_collage("найди мосты и собери коллаж", offered, {"find_content"}) == "run_code"
+    assert G._forced_collage(ask, offered, {"find_content"}, ctx=R) == ""
+    assert G._forced_collage("найди мосты и собери коллаж", offered, {"find_content"}, ctx=R) == "run_code"
     # already building, no collage asked, run_code not offered
-    assert G._forced_collage(ask, offered, {"find_content", "dedupe_photos", "run_code"}) == ""
-    assert G._forced_collage("найди мост", offered, {"find_content"}) == ""
-    assert G._forced_collage(ask, offered[1:], {"find_content", "dedupe_photos"}) == ""
+    assert G._forced_collage(ask, offered, {"find_content", "dedupe_photos", "run_code"}, ctx=R) == ""
+    assert G._forced_collage("найди мост", offered, {"find_content"}, ctx=R) == ""
+    assert G._forced_collage(ask, offered[1:], {"find_content", "dedupe_photos"}, ctx=R) == ""
     assert "_forced_collage(" in inspect.getsource(G.personality_node)

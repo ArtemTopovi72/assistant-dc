@@ -25,7 +25,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import _sweep_stub  # noqa: F401  the model's narrow reads, stubbed
+import _sweep_stub  # the model's narrow reads, stubbed
+import types
+from fakes import reads
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
@@ -41,9 +43,8 @@ def check(name, cond, extra=""):
 
 
 # A drawing request is the model's read (agent/intent.py `wants`).
-import intent
-intent.STUB = lambda t: ({"needs_tool": True, "wants": ["generate_image"]}
-                         if t.startswith(("нарисуй", "draw")) else None)
+_R = types.SimpleNamespace(**_sweep_stub.READS, **reads(read=lambda t: ({"needs_tool": True, "wants": ["generate_image"]}
+                                                                           if t.startswith(("нарисуй", "draw")) else None)))
 
 print("=" * 70)
 print("1. Quoted lettering survives the trip through English")
@@ -54,7 +55,7 @@ QUOTED = {
     "“Открыто”":          'нарисуй табличку “Открыто” на двери',
 }
 for literal, msg in QUOTED.items():
-    protected, keep = G._protect_literals(msg)
+    protected, keep = G._protect_literals(msg, ctx=_R)
     check(f"{literal}: the literal is replaced by a placeholder",
           literal not in protected and "⟦KEEP0⟧" in protected, protected)
     check(f"{literal}: the placeholder is pure ASCII apart from the brackets",
@@ -73,7 +74,7 @@ print("=" * 70)
 # placeholder the model must either translate the literal (the bug) or return
 # Cyrillic and be rejected (the turn stays Russian).
 msg = 'нарисуй плакат с надписью «Добро пожаловать»'
-protected, keep = G._protect_literals(msg)
+protected, keep = G._protect_literals(msg, ctx=_R)
 english = "draw a poster with the inscription ⟦KEEP0⟧"
 ratio = sum(ch.isascii() for ch in english) / len(english)
 check("a translation carrying the placeholder is >90% ASCII", ratio > 0.9, f"{ratio:.2%}")
@@ -87,7 +88,7 @@ print()
 print("=" * 70)
 print("3. Unquoted lettering, but only on a drawing request")
 print("=" * 70)
-protected, keep = G._protect_literals("нарисуй плакат с надписью Добро пожаловать")
+protected, keep = G._protect_literals("нарисуй плакат с надписью Добро пожаловать", ctx=_R)
 check("an unquoted inscription is protected on a draw request",
       "Добро пожаловать" not in protected and keep, protected)
 check("...and comes back on restore",
@@ -96,7 +97,7 @@ check("...and comes back on restore",
 # The gate that keeps this from firing everywhere.
 for msg in ("убери надпись сверху", "что написано на этой картинке?",
             "переведи надпись на фото"):
-    protected, keep = G._protect_literals(msg)
+    protected, keep = G._protect_literals(msg, ctx=_R)
     check(f"not a draw request, left alone: {msg!r}", not keep, keep)
 
 print()
@@ -148,12 +149,12 @@ print("=" * 70)
 # only ever sees the post-translation prompt, which is why the protection above
 # has to happen first.
 prompt_ru = 'draw a poster with the inscription «Добро пожаловать»'
-got = I.requested_strings(prompt_ru)
+got = I.requested_strings(prompt_ru, ctx=_R)
 check("the Russian literal is extracted as lettering",
       got == ["Добро пожаловать"], got)
 prompt_bad = "draw a poster with the inscription Welcome"
 check("...whereas the translated version yields the English string",
-      I.requested_strings(prompt_bad) == [], I.requested_strings(prompt_bad))
+      I.requested_strings(prompt_bad, ctx=_R) == [], I.requested_strings(prompt_bad, ctx=_R))
 
 print()
 print("=" * 70)
@@ -170,13 +171,13 @@ check("...and says so with a concrete example",
 check("the old unconditional rule is gone",
       "Write every field in English, whatever language the request is in.\n" not in src, "")
 
-_p, _k = G._protect_literals("видео: внук спрашивает 'бабуль, а пирожки скоро?', don't translate")
+_p, _k = G._protect_literals("видео: внук спрашивает 'бабуль, а пирожки скоро?', don't translate", ctx=_R)
 check("single-quoted lines survive translation, apostrophes do not start one",
       list(_k.values()) == ["'бабуль, а пирожки скоро?'"], _k)
 
-_p, _k = G._protect_literals("нарисуй логотип для кофейни Зерно")
+_p, _k = G._protect_literals("нарисуй логотип для кофейни Зерно", ctx=_R)
 check("a brand name after 'логотип' is kept, not transliterated", list(_k.values()) == ["Зерно"], _k)
-check("a city in a plain drawing is still translated", G._protect_literals("нарисуй кота в Москве")[1] == {}, "")
+check("a city in a plain drawing is still translated", G._protect_literals("нарисуй кота в Москве", ctx=_R)[1] == {}, "")
 
 print()
 print(f"{OK}/{OK + BAD} checks passed")

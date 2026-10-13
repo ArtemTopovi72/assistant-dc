@@ -37,14 +37,16 @@ def test_real_requests_and_buttons_pass():
         assert H.asks_for_video(_Ctx(), _st(t)), t
 
 
-def test_redo_after_a_clip_passes(tmp_path, monkeypatch):
+def test_redo_after_a_clip_passes(tmp_path):
     clip = tmp_path / "v.mp4"
     clip.write_bytes(b"x")
     c = _Ctx(); c.last_video_path = str(clip)
     import intent
-    monkeypatch.setattr(intent, "read", lambda ctx, t: {"redo": "same"})
+    redo = lambda ctx, t, *a, **k: dict(intent.FALLBACK, redo="same")  # noqa: E731
+    c.intent_read = redo
     assert H.asks_for_video(c, _st("давай ещё раз"))
-    assert not H.asks_for_video(_Ctx(), _st("давай ещё раз"))     # no clip before: no
+    c = _Ctx(); c.intent_read = redo
+    assert not H.asks_for_video(c, _st("давай ещё раз"))     # no clip before: no
 
 
 def test_a_cartoon_style_is_not_an_animation_request():
@@ -59,16 +61,15 @@ def test_a_cartoon_style_is_not_an_animation_request():
     assert not H._ASKS_VIDEO.search("ты нарисовал какого-то урода а не Ленина ещё и мультяшного")
 
 
-def test_a_shot_script_without_the_word_video_is_asked_to_the_model(monkeypatch):
+def test_a_shot_script_without_the_word_video_is_asked_to_the_model():
     """A scene script («Мужчина берёт банку … говорит … бросает …
     опрокидывает стеллаж») has no «видео» and was refused. The model now reads it."""
-    import intent
     script = ("Мужчина берёт банку, смотрит на неё внимательно. Ухмыляется, смотрит в камеру. "
               "Говорит \"Полная хуета\" и бросает банку на пол. Опрокидывает весь стеллаж.")
     asked = []
-    monkeypatch.setattr(intent, "YES_STUB", lambda q, t: asked.append(t) or "unfolds over time" in q)
-    assert H.asks_for_video(_Ctx(), _st(script))
+    c = _Ctx(); c.yes_no = lambda q, t, default=False, wait=True: asked.append(t) or "unfolds over time" in q
+    assert H.asks_for_video(c, _st(script))
     assert asked and "банку" in asked[0]
-    monkeypatch.setattr(intent, "YES_STUB", lambda q, t: False)
-    assert not H.asks_for_video(_Ctx(), _st(script))
+    c = _Ctx(); c.yes_no = lambda q, t, default=False, wait=True: False
+    assert not H.asks_for_video(c, _st(script))
 

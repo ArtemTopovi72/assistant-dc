@@ -201,9 +201,9 @@ def test_only_file_producing_tools_are_checked():
 # spoke, so none of the guards above could fire. The missing invariant is the
 # bluntest one: if the answer says a file is ready, a file has to exist.
 
-def _fin_file(draft, state=None, called=("edit_file",)):
+def _fin_file(draft, state=None, called=("edit_file",), ctx=None):
     return GF._finalize_answer(
-        _Ctx(), state or {}, [], None,
+        ctx or _Ctx(), state or {}, [], None,
         {"role": "assistant", "content": draft},
         False, set(called), "запакуй обратно", "запакуй обратно",
         failed_promises=set(), verification_negative=False)
@@ -297,10 +297,11 @@ def test_retelling_forwarded_news_of_a_file_is_not_the_bots_promise():
 
 
 def test_a_forwarded_turn_that_asks_for_a_file_is_still_guarded():
-    import intent   # the model reads the user's own words as a file ask
-    intent.STUB = {"сделай по этому презентацию": {"asks_for_file": True}}.get
+    from fakes import reads   # the model reads the user's own words as a file ask
+    c = _Ctx()
+    c.intent_read = reads(read={"сделай по этому презентацию": {"asks_for_file": True}}.get)["intent_read"]
     st = {"user_input": _FWD + "сделай по этому презентацию"}
-    assert _fin_file("Презентация готова, 8 слайдов.", state=st, called=()) == GF._NO_FILE_ANSWER
+    assert _fin_file("Презентация готова, 8 слайдов.", state=st, called=(), ctx=c) == GF._NO_FILE_ANSWER
 
 
 def test_forwarded_numbers_do_not_force_a_tool():

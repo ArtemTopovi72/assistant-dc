@@ -15,6 +15,7 @@ The caps live here rather than in dr_timing because they are computed from the
 DR_* knobs a run reads through dr_settings.view(ctx).
 How LONG each profile takes (the measured ETA) is dr_timing's job.
 """
+from seams import choice
 from dr_settings import view as settings_view
 import logging
 
@@ -53,17 +54,16 @@ _PRACTICAL_CATEGORIES = {"local", "shopping", "travel"}
 # The model's read of the RAW request (the user's own words): the distilled
 # core_topic deliberately strips exactly the verbs that signal intent, so intent
 # must be read before distillation.
-def _ask_kind(topic: str) -> str:
+def _ask_kind(topic: str, ctx=None) -> str:
     """compare | practical | research -- the model's read of the raw request."""
-    import intent
-    return intent.ask_choice(
+    return choice(ctx)(
         "A user asked for research on: {text}\n\nWhich is it? compare = it names two "
         "or more things and asks how they differ; practical = concrete options to act on (links, where to buy "
         "or book, prices, schedules, how to get there); research = an analysis or "
         "explanation.", topic or "", ("compare", "practical", "research"), "research")
 
 
-def _is_practical_request(topic: str, profile: dict) -> bool:
+def _is_practical_request(topic: str, profile: dict, ctx=None) -> bool:
     """True when the user wants bookable/actionable options rather than an analysis.
 
     Deliberately conservative: a scholarly category always wins (a legal or medical
@@ -78,7 +78,7 @@ def _is_practical_request(topic: str, profile: dict) -> bool:
     category = (profile or {}).get("category", "general")
     if category in _SCHOLARLY_CATEGORIES:
         return False
-    kind = _ask_kind(topic)
+    kind = _ask_kind(topic, ctx=ctx)
     if kind == "compare":
         return False
     if category in _PRACTICAL_CATEGORIES:

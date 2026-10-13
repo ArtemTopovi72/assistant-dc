@@ -10,12 +10,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 
-import graph_language as L, intent
+import types
+import graph_language as L
+from fakes import reads
 # Which messages ask for an English reply is the model's read (agent/intent.py);
 # the phrases run live in bench/intent_lang_live.py.
 EN = {"и то же самое по-английски", "переведи это на английский", "ответь на английском",
       "say it in English", "translate that into English"}
-intent.STUB = lambda t: {"reply_language": "en"} if t in EN else None
+_READ = reads(read=lambda t: {"reply_language": "en"} if t in EN else None)
+_R = types.SimpleNamespace(**_READ)
 
 OK = BAD = 0
 def check(name, cond, extra=""):
@@ -24,13 +27,14 @@ def check(name, cond, extra=""):
     print(("PASS  " if cond else "FAIL  ") + name, ("  " + str(extra)) if (extra and not cond) else "")
 
 for q in EN:
-    check("asks for English: " + q, L.asks_for_english(q))
+    check("asks for English: " + q, L.asks_for_english(q, ctx=_R))
 for q in ["как будет по-английски «подоконник»?", "привет", ""]:
-    check("does not: " + q, not L.asks_for_english(q))
+    check("does not: " + q, not L.asks_for_english(q, ctx=_R))
 
 calls = []
 L.call_llm_simple = lambda *a, **k: calls.append(1) or "Спасибо, передам соседям."
 class C:
+    intent_read = staticmethod(_READ["intent_read"])
     def is_cancelled(self): return False
 ans = "Thank you for the information! Understood, I will pass it on to the neighbours."
 out = L._match_reply_language(C(), ans, "и то же самое по-английски")

@@ -1,3 +1,4 @@
+from seams import yes_no
 import logging
 import re
 from typing import Optional
@@ -114,8 +115,7 @@ def _add_earlier_pictures(ctx, state, summary: str) -> str:
     text = state.get("user_input_original") or state.get("user_input") or ""
     if not earlier or not summary or "Failed to analyze" in summary or not text.strip():
         return summary
-    import intent
-    if not intent.ask_yes("The user wrote: {text}. Do they ask about several of the pictures "
+    if not yes_no(ctx)("The user wrote: {text}. Do they ask about several of the pictures "
                           "they sent together (compare them, what they share, which is "
                           "better, both of them)?", text, default=False):
         return summary

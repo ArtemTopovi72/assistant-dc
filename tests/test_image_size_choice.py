@@ -17,7 +17,7 @@ except Exception: pass
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import _sweep_stub  # noqa: F401  the model's narrow reads, stubbed
+import _sweep_stub  # the model's narrow reads, stubbed
 
 import config as C          # noqa: E402
 import image as I           # noqa: E402
@@ -189,21 +189,21 @@ def test_fix_image_params():
     port_w, port_h = C.resolve_image_size("9:16", "high")
 
     # Unpinned: the text still decides orientation (existing behaviour kept).
-    w, h = I.fix_image_params("a wide city panorama", "", port_w, port_h)
+    w, h = I.fix_image_params("a wide city panorama", "", port_w, port_h, ctx=_sweep_stub.reads_ctx())
     check(w > h, f"unpinned landscape text should flip to landscape, got {w}x{h}")
-    w, h = I.fix_image_params("портрет девушки в полный рост", "", land_w, land_h)
+    w, h = I.fix_image_params("портрет девушки в полный рост", "", land_w, land_h, ctx=_sweep_stub.reads_ctx())
     check(h > w, f"unpinned portrait text should flip to portrait, got {w}x{h}")
 
     # Pinned: the user's explicit choice outranks the text heuristic.
-    w, h = I.fix_image_params("a wide city panorama", "", port_w, port_h, pinned=True)
+    w, h = I.fix_image_params("a wide city panorama", "", port_w, port_h, pinned=True, ctx=_sweep_stub.reads_ctx())
     check(h > w, f"pinned portrait must survive landscape wording, got {w}x{h}")
     check((w, h) == (port_w, port_h), f"pinned size was altered: {w}x{h}")
-    w, h = I.fix_image_params("портрет девушки", "", land_w, land_h, pinned=True)
+    w, h = I.fix_image_params("портрет девушки", "", land_w, land_h, pinned=True, ctx=_sweep_stub.reads_ctx())
     check(w > h, f"pinned landscape must survive portrait wording, got {w}x{h}")
 
     # Either way the result stays on the rails and keeps the pixel budget.
     for pinned in (True, False):
-        w, h = I.fix_image_params("city", "", 1900, 1060, pinned=pinned)
+        w, h = I.fix_image_params("city", "", 1900, 1060, pinned=pinned, ctx=_sweep_stub.reads_ctx())
         check(w * h > 1_200_000, f"pinned={pinned}: budget lost ({w}x{h})")
 
 

@@ -124,7 +124,7 @@ src_da = open(os.path.join(os.path.dirname(__file__), "..", "imaging/draw_agent.
 check("image_generate checks the plan right after planning it, before either render path",
       "draw_preview.preflight(ctx, layout, prompt" in src_ig
       and src_ig.index("draw_preview.preflight") < src_ig.index("draw_agent.run(ctx, prompt, layout=layout")
-      and src_ig.index("draw_preview.preflight") < src_ig.index("caption=ideogram.layout_to_caption(layout)"))
+      and src_ig.index("draw_preview.preflight") < src_ig.index("caption=ideogram.layout_to_caption(layout, ctx=ctx)"))
 check("draw_agent.run checks a plan it made itself", "draw_preview.preflight(ctx, layout, request" in src_da)
 import stages
 check("the stage line has a Russian form", stages._STAGES.get("Checking the layout", {}).get("ru"))

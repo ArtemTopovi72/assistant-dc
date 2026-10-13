@@ -269,7 +269,7 @@ def preflight(ctx, layout: dict, request: str, *, width: int = 1024, height: int
         report["problems"] = list(verdict.get("problems") or [])
         if not verdict.get("ops"):
             return layout, report
-        fixed, notes = draw_agent.apply_ops(layout, verdict["ops"])
+        fixed, notes = draw_agent.apply_ops(layout, verdict["ops"], ctx=ctx)
         if not _sane(layout, fixed):
             report["notes"].append("the checker's repair would have gutted the plan — ignored")
             return layout, report

@@ -11,6 +11,7 @@ imported by value: _MEMORY_DIR is rebound by redirect_data_dir(), and the rest
 must keep a single definition so patching tg_bot.X steers this module too.
 """
 from __future__ import annotations
+from seams import intent_read, yes_no
 
 import copy as _copy_mod
 import html as _html_mod
@@ -69,7 +70,7 @@ def _is_button_payload(text: str) -> bool:
     return any(t.startswith(p) for p in tg_bot._PROMPT_KB.values())
 
 
-def _message_script(text: str) -> str:
+def _message_script(text: str, ctx=None) -> str:
     """'en' for a message written wholly in Latin letters, 'ru' for one wholly
     in Cyrillic, '' when it is neither (mixed text, a button payload, an emoji,
     a bare link, a one-word command). At least three words are needed: 'ok' or
@@ -81,7 +82,7 @@ def _message_script(text: str) -> str:
     # the alphabet rule alone would pin it to Russian. An explicit ask for English wins; it is a one-turn
     # request, so the caller's turn_lang is set for this turn only as well.
     from graph_language import asks_for_english as _ask_en
-    if _ask_en(t):
+    if _ask_en(t, ctx=ctx):
         return "en"
     words = _WORD_RE.findall(t)
     if len(words) < 3:
@@ -96,7 +97,7 @@ def _message_script(text: str) -> str:
     return ""
 
 
-def _plainly_not_a_doc_question(text: str) -> bool:
+def _plainly_not_a_doc_question(text: str, ctx=None) -> bool:
     """True when the message is not for document retrieval -- and for a
     message that carries its own material: a pasted press release under
     'сократи до 3 пунктов' was wrapped as a QUESTION to the rental contract,
@@ -116,8 +117,7 @@ def _plainly_not_a_doc_question(text: str) -> bool:
     # machine payloads and bare links/reactions carry no question
     if t.startswith("[") or "://" in t or not any(ch.isalnum() for ch in t):
         return True
-    import intent
-    return not intent.read(None, t, "", "the user's own documents are searchable")["doc_question"]
+    return not intent_read(ctx)(None, t, "", "the user's own documents are searchable")["doc_question"]
 
 
 def _last_video(chat_videos: dict, chat_id: int) -> str:
@@ -134,7 +134,7 @@ def _last_video(chat_videos: dict, chat_id: int) -> str:
         return ""
 
 
-def _about_the_last_video(last_image_path: str, user_input: str) -> bool:
+def _about_the_last_video(last_image_path: str, user_input: str, ctx=None) -> bool:
     """True when `user_input` is plainly a follow-up about the video sheet
     still on screen -- mirrors graph.needs_relook's own video-sheet branch,
     checked here (before ctx.last_image_path is populated) so a question
@@ -147,8 +147,7 @@ def _about_the_last_video(last_image_path: str, user_input: str) -> bool:
     non-terminating generation."""
     if not last_image_path or not _graph.is_video_sheet(last_image_path):
         return False
-    import intent
-    r = intent.read(None, user_input or "", "", "a video")
+    r = intent_read(ctx)(None, user_input or "", "", "a video")
     return bool(r["is_question"] or r["about_picture"])
 
 
@@ -566,19 +565,18 @@ class TaskRunnerMixin:
         is_internal = _is_button_payload(task.user_text)
         _tl = "" if is_internal else _message_script(task.user_text)
         from graph_language import asks_for_english as _ask_en
-        if _tl and not _ask_en(task.user_text):
+        if _tl and not _ask_en(task.user_text, ctx=self.reads):
             sess.turn_lang = _tl          # an explicit "по-английски" is one turn, not a mode
         # «can you answer in English from now on?» sets a pin that outlives the
         # turn (the model's read).
         if not is_internal and (task.user_text or "").strip():
-            import intent
             from graph_language import names_english as _names_en
-            _mode = intent.read(None, task.user_text)["language_mode"]
+            _mode = intent_read(ctx)(None, task.user_text)["language_mode"]
             _lang_pin_after(sess, _mode, _mode == "en" and _names_en(task.user_text), _tl)
         if is_internal:
             _turn_lang = lang
         else:
-            _turn_lang = ("en" if _ask_en(task.user_text)
+            _turn_lang = ("en" if _ask_en(task.user_text, ctx=self.reads)
                           else getattr(sess, "lang_pin", "") or sess.turn_lang)
         if _turn_lang and _turn_lang != lang:
             ctx.reply_lang = _turn_lang
@@ -696,12 +694,11 @@ class TaskRunnerMixin:
             tg_bot.logger.warning("session persist failed", exc_info=True)
 
     @staticmethod
-    def _asked_a_question(text: str) -> bool:
+    def _asked_a_question(text: str, ctx=None) -> bool:
         """The user's own words are a question (the model's read)."""
-        import intent
         from prompt_guard import user_words
         t = user_words(text or "").strip()
-        return bool(t) and intent.read(None, t)["is_question"]
+        return bool(t) and intent_read(ctx)(None, t)["is_question"]
 
     def _try_steer(self, chat_id: int, task) -> bool:
         """A text that arrives while this chat's task is still running goes
@@ -714,7 +711,7 @@ class TaskRunnerMixin:
                        and t.task_id in self._steer_inboxes]
             interruptible = self._chat_interruptible.get(chat_id, False)
             if not running or not _steer.eligible(
-                    task.user_text, bool(task.image_path) or bool(task.image_id), interruptible):
+                    task.user_text, bool(task.image_path) or bool(task.image_id), interruptible, ctx=self.reads):
                 return False
             target = running[-1]
             self._steer_inboxes[target.task_id].put(task.user_text)
@@ -1206,8 +1203,8 @@ class TaskRunnerMixin:
         _about_a_picture = bool(img_bytes or getattr(task, "image_id", "")
                                 or getattr(sess, "target_image", "")
                                 or _about_the_last_video(getattr(sess, "last_image_path", ""),
-                                                          user_input))
-        if sess.use_docs and not _about_a_picture and not _plainly_not_a_doc_question(user_input):
+                                                          user_input, ctx=ctx))
+        if sess.use_docs and not _about_a_picture and not _plainly_not_a_doc_question(user_input, ctx=ctx):
             lib = None
             try:
                 if self._library_path(chat_id).exists():
@@ -1625,7 +1622,7 @@ class TaskRunnerMixin:
                 # Edit buttons under a bare comment read as a mistake: ask first.
                 # ...but not after the answer to a question about the picture
                 # («сколько тут итого?»): the answer was the point, the offer is noise.
-                if reply and not reply_is_failure and not self._asked_a_question(task.user_text):
+                if reply and not reply_is_failure and not self._asked_a_question(task.user_text, ctx=ctx):
                     reply = reply.rstrip() + "\n\n" + tg_bot._t("img_offer", lang)
         try:
             if sess.voice_on and self._tts_enabled_fn() \
@@ -1855,7 +1852,7 @@ class TaskRunnerMixin:
                             delivered = True
                             # the toggle, or "нарисуй ..., пришли файлом" in this very request
                             import tg_dispatch as _tgd
-                            if getattr(sess, "photo_file", False) or _tgd._asks_as_file(task.user_text or ""):
+                            if getattr(sess, "photo_file", False) or _tgd._asks_as_file(task.user_text or "", ctx=ctx):
                                 self._send_document(chat_id, out_img)   # full quality, no JPEG re-encode
                             self._activity.log(chat_id, "system",
                                 f"[image delivery] sent {out_img}", uname)
@@ -1899,8 +1896,7 @@ class TaskRunnerMixin:
             # A reply that already admitted the failure («Не удалось нарисовать…
             # Попробовать ещё раз?») must not be followed by a retraction.
             if owed_image and not delivered and reply:
-                import intent as _intent
-                if _intent.ask_yes("A bot answered a user: {text} -- does that answer already "
+                if yes_no(ctx)("A bot answered a user: {text} -- does that answer already "
                                    "tell the user that the picture could not be made?", reply,
                                    default=False):
                     owed_image = False

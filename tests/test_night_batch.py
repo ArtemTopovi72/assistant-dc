@@ -167,23 +167,24 @@ print("4. FIVE JOKES MEANS FIVE JOKES")
 print("=" * 70)
 
 # the model's count read is stubbed; the phrases run live in bench/intent_sweep_live.py
-import intent as _intent
+import types as _types
+from fakes import reads
 _COUNTS = {"5 анекдотов про Чапаева и Петьку": "5", "five jokes about Chapaev": "5",
            "три рецепта борща": "3", "list 10 models": "10", "give me 2 examples": "2",
            "500 examples": "500"}
-_intent.CHOICE_STUB = lambda q, t: _COUNTS.get(t, "0") if "NUMBER of items" in q else None
+_R = _types.SimpleNamespace(**reads(pick=lambda q, t: _COUNTS.get(t, "0") if "NUMBER of items" in q else None))
 for q, n in (("5 анекдотов про Чапаева и Петьку", 5),
              ("five jokes about Chapaev", 5),
              ("три рецепта борща", 3),
              ("list 10 models", 10),
              ("give me 2 examples", 2)):
-    check(f"'{q[:30]}' is read as an order for {n}", S.wanted_count(q) == n,
-          S.wanted_count(q))
+    check(f"'{q[:30]}' is read as an order for {n}", S.wanted_count(q, ctx=_R) == n,
+          S.wanted_count(q, ctx=_R))
 for q in ("iphone 5 price", "погода в Москве", "what is the capital of Peru",
           "курс доллара"):
     check(f"'{q[:26]}' is NOT mistaken for a counted request",
-          S.wanted_count(q) == 0, S.wanted_count(q))
-check("a silly count is ignored", S.wanted_count("500 examples") == 0)
+          S.wanted_count(q, ctx=_R) == 0, S.wanted_count(q, ctx=_R))
+check("a silly count is ignored", S.wanted_count("500 examples", ctx=_R) == 0)
 
 from prompts import SEARCHER_PROMPT
 check("the prompt no longer hard-caps every answer at 4 sentences",

@@ -23,6 +23,7 @@ otherwise became the answer. See _capture_preamble, which is the one copy of
 all three.
 """
 from __future__ import annotations
+from seams import yes_no
 
 import html as _html_mod
 import time
@@ -195,8 +196,7 @@ class RegistrationMixin:
                     return False
                 # A request («нарисуй кота») is not a name; a single word is taken
                 # as is (nicknames), a phrase is asked of the model.
-                import intent
-                if len(text.split()) >= 2 and not intent.ask_yes(
+                if len(text.split()) >= 2 and not yes_no(self.reads)(
                         "A new user was asked to tell their name and wrote: {text}. Is that a "
                         "person's name or nickname, rather than a request, a question or a "
                         "sentence?", text.strip(), default=True):

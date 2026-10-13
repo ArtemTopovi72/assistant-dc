@@ -17,6 +17,7 @@ The same applies to the grounding/sizing helpers (_item_attributes,
 _region_present, _extract_edit_target, _firered_instruction, _source_dims,
 _strip_lead, _REMOVAL_RE), which image.py re-exports and the suites patch there.
 """
+from seams import choice
 import logging
 import os
 import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
@@ -337,14 +338,13 @@ def convert_colour(image_path: str, instruction: str) -> Optional[str]:
         return None
 
 
-def transform_image(image_path: str, instruction: str) -> Optional[str]:
+def transform_image(image_path: str, instruction: str, ctx=None) -> Optional[str]:
     """Rotate / mirror / crop to the face on the pixels. FireRed redrew the whole
     picture for "rotate the image 90 degrees" and "crop to the face"."""
     from PIL import Image as _PIL, ImageOps as _Ops
     t = instruction or ""
     src = _PIL.open(image_path).convert("RGB")
-    import intent
-    op = intent.ask_choice(
+    op = choice(ctx)(
         "A user asked to transform a picture: {text}. Which? crop = crop to the face; "
         "mirror = flip left-right; flip = turn upside down; rotate_left = rotate "
         "counter-clockwise; rotate_right = rotate clockwise.",
@@ -423,7 +423,7 @@ def add_text_verified(ctx, image_path: str, instruction: str,
     # the misspelt render is not a base to fix, its letters are already wrong.
     try:
         import text_overlay
-        out = text_overlay.overlay(image_path, wanted, where=text_overlay.placement(instruction),
+        out = text_overlay.overlay(image_path, wanted, where=text_overlay.placement(instruction, ctx=ctx),
                                    out_dir=str(OUTPUT_DIR))
     except Exception:
         logger.warning("text overlay fallback failed", exc_info=True)
@@ -513,7 +513,7 @@ def _route_edit_request(
     if category == "colour_convert":
         return category, convert_colour(image_path, text)
     if category == "transform":
-        return category, transform_image(image_path, text)
+        return category, transform_image(image_path, text, ctx=ctx)
 
     if category == "background_replace":
         # FireRed instruction edit. The old path synthesized a new background

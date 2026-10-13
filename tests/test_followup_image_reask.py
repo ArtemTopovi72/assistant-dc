@@ -32,9 +32,11 @@ def check(name, cond, extra=""):
 
 # Whether a message is about the picture on screen is the model's read
 # (agent/intent.py about_picture); the phrases run live in bench/intent_live.py.
-import intent
-intent.STUB = lambda t: ({"is_question": True, "about_picture": True}
-                         if t in ("Что там написано?", "what is written there?") else None)
+import types
+from fakes import reads
+_READ = reads(read=lambda t: ({"is_question": True, "about_picture": True}
+                              if t in ("Что там написано?", "what is written there?") else None))
+_R = types.SimpleNamespace(**_READ)
 
 
 print()
@@ -43,7 +45,7 @@ print("1. tg_bot's ambiguity-gate regex has the same 'written' coverage")
 print("=" * 70)
 
 for t in ("Что там написано?", "what is written there?"):
-    check(f"tg_bot asks which picture for: {t!r}", T._needs_image_choice(t), t)
+    check(f"tg_bot asks which picture for: {t!r}", T._needs_image_choice(t, ctx=_R), t)
 
 
 print()
@@ -71,6 +73,7 @@ G.downscale_image_bytes = lambda b: b  # passthrough, avoid needing a real image
 
 ctx = models.Context(models=None, transcription_cache={}, cache_file=None,
                      asr_lock=threading.Lock(), tts_lock=threading.Lock())
+ctx.intent_read = _READ["intent_read"]
 graph_obj = G.build_graph(ctx)
 vision_node = graph_obj.nodes["vision_agent"]
 

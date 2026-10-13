@@ -18,13 +18,14 @@ def test_looking_closer_is_russian():
 
 def test_as_file_request():
     # the model's read is stubbed; the phrases run live in bench/intent_sweep3_live.py
-    import intent
+    import types
+    from fakes import reads
     yes = ("пришли файлом", "скинь её файлом", "без сжатия", "as a file", "document", "uncompressed")
-    intent.YES_STUB = lambda q, t: "as a FILE" in q and t in yes
+    R = types.SimpleNamespace(**reads(yes=lambda q, t: "as a FILE" in q and t in yes))
     for t in yes:
-        assert tg_dispatch._asks_as_file(t), t
+        assert tg_dispatch._asks_as_file(t, ctx=R), t
     for t in ("нарисуй кота", "вот документ по налогам", "покажи оригинал фото"):
-        assert not tg_dispatch._asks_as_file(t), t
+        assert not tg_dispatch._asks_as_file(t, ctx=R), t
 
 
 def test_help_explains_mic_and_file():

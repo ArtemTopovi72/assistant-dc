@@ -139,7 +139,7 @@ def _ideogram_draw(ctx, prompt: str, *, width: int, height: int,
             # planner call that ideogram.generate would otherwise repeat.
             out = ideogram.generate(ctx, prompt, width=width, height=height,
                                     seed=seed, timeout=timeout,
-                                    caption=ideogram.layout_to_caption(layout),
+                                    caption=ideogram.layout_to_caption(layout, ctx=ctx),
                                     lora_name=lora_name,
                                     lora_strength=lora_strength,
                                     trigger=trigger, steps=steps, cfg=cfg)
@@ -342,7 +342,7 @@ def generate_image_with_refinement(ctx, description: str, steps: Optional[int] =
     elif width is None and height is None:
         final_width, final_height = _image.fix_image_params(
             description, prompt, final_width, final_height,
-            pinned=_image.session_size_pinned(ctx))
+            pinned=_image.session_size_pinned(ctx), ctx=ctx)
 
     negative_prompt = ""
     reason = ""

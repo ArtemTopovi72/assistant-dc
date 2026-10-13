@@ -13,6 +13,7 @@ Neither touches send_to_lm_studio, execute_tool or TOOL_SCHEMAS, which is what
 made them movable: those three are patched on the graph module by the suites,
 so anything calling them has to stay where the patch lands.
 """
+from seams import intent_read, yes_no
 import os
 import re as _re
 from typing import NamedTuple
@@ -38,17 +39,17 @@ class _GenSettings(NamedTuple):
     system_prompt: str
 
 
-def _ask(text: str) -> dict:
+def _ask(text: str, ctx=None) -> dict:
     """The model's read of what the message asks the program to do exactly
     (agent/ask_read.py). Counting, reversing and sorting stay here."""
     import ask_read
-    return ask_read.read(text)
+    return ask_read.read(text, ctx=ctx)
 
 
 # 'о' in «обороноспособность» -> 5 (7), «программирование»
 # reversed -> «еироваиммаргорп», 9 words -> 10. Letters are not tokens.
-def _text_ops_note(text: str) -> str:
-    a = _ask(text)
+def _text_ops_note(text: str, ctx=None) -> str:
+    a = _ask(text, ctx=ctx)
     op = a["op"]
     if op == "letter_count":
         ch, word = a["letter"], a["word"]
@@ -74,10 +75,10 @@ def _text_ops_note(text: str) -> str:
     return ""
 
 
-def _dose_note(text: str) -> str:
+def _dose_note(text: str, ctx=None) -> str:
     """A 14 kg child's paracetamol dose came back as
     «7-14 mg/kg, 100-200 mg» -- the standard single dose is 10-15 mg/kg."""
-    a = _ask(text)
+    a = _ask(text, ctx=ctx)
     if not a["dose"]:
         return ""
     kg = a["weight_kg"]
@@ -91,13 +92,13 @@ def _dose_note(text: str) -> str:
             "package, and tell them to see a doctor for infants or fever lasting over 3 days.]")
 
 
-def _word_count_note(text: str) -> str:
-    ops = _text_ops_note(text)
+def _word_count_note(text: str, ctx=None) -> str:
+    ops = _text_ops_note(text, ctx=ctx)
     if ops:
         return ops
-    a = _ask(text)
+    a = _ask(text, ctx=ctx)
     if a["op"] != "word_occurrences":
-        return _dose_note(text)
+        return _dose_note(text, ctx=ctx)
     word = a["word"].lower()
     # the counted text is what came before the question about it
     cut = (text or "").lower().rfind(word)
@@ -109,32 +110,31 @@ def _word_count_note(text: str) -> str:
             f"the user's message before the question. Use this number.]")
 
 
-def no_history_note(text: str, history) -> str:
+def no_history_note(text: str, history, ctx=None) -> str:
     """After /clear, «о каком городе мы говорили?» got an invented «Санкт-Петербург»."""
     if any(m.get("role") in ("user", "assistant") and m.get("content") for m in history or []):
         return ""
-    if not _ask(text)["earlier_talk"]:
+    if not _ask(text, ctx=ctx)["earlier_talk"]:
         return ""
     return ("[This chat has no earlier messages (it is new or was cleared). Say plainly that "
             "you have nothing earlier to go on; do not invent a past conversation.]")
 
 
-def translate_previous_note(text: str, history) -> str:
+def translate_previous_note(text: str, history, ctx=None) -> str:
     """«Translate to Russian» with no text of its own means the reply above. The
     fast path used to translate the request itself and sent back «Переведи на русский»."""
-    import intent
     if not any(m.get("role") == "assistant" and m.get("content") for m in history or []):
         return ""
-    if not intent.read(None, text)["translate"]:
+    if not intent_read(ctx)(None, text)["translate"]:
         return ""
-    if intent.ask_yes("A user wrote: {text}\n\nBesides the request to translate, does the "
+    if yes_no(ctx)("A user wrote: {text}\n\nBesides the request to translate, does the "
                       "message itself contain the text to be translated?", text, default=True):
         return ""
     return ("[The text to translate is your previous reply above. Output only its full "
             "translation into the language asked for -- not the request itself, no comments.]")
 
 
-def facts_parts(facts_text: str) -> list:
+def facts_parts(facts_text: str, ctx=None) -> list:
     """Saved-facts block for both the fast path and the full loop."""
     parts = ["Saved facts (you remembered these earlier; treat them as known and use "
              "them when relevant; newest are last — if two facts conflict, the later "
@@ -142,8 +142,7 @@ def facts_parts(facts_text: str) -> list:
     # «шоколадный медовик -- в нём точно нет арахиса»: a guarantee nobody can give.
     # After «аллергия на орехи, я вегетарианец» dinner advice was a pasta with
     # «кедровыми орешками» -- the allergy only forbade PROMISING, never SUGGESTING.
-    import intent
-    if intent.ask_yes("Saved facts about a user: {text} -- do they say the user has a food "
+    if yes_no(ctx)("Saved facts about a user: {text} -- do they say the user has a food "
                       "allergy, an intolerance or a diet (vegetarian, no gluten...)?", facts_text):
         parts.append("The user has a food allergy, intolerance or diet. It is a hard limit on "
                      "every food suggestion: never offer a dish or ingredient that contains the "
@@ -158,8 +157,8 @@ def facts_parts(facts_text: str) -> list:
 # An explicit length in the request ("на 1200 слов", "подробно").
 # "инструкция на 1200 слов" hit the 700-token concise ceiling and
 # arrived as 2.5k chars cut mid-word.
-def _asked_tokens(text: str) -> int:
-    a = _ask(text)
+def _asked_tokens(text: str, ctx=None) -> int:
+    a = _ask(text, ctx=ctx)
     if 100 <= a["words_asked"] <= 20000:
         return min(8000, a["words_asked"] * 3 + 300)   # ~2.5 tokens per RU word + markup
     return 2600 if a["detailed"] else 0
@@ -192,7 +191,7 @@ def _generation_settings(ctx: Context, user_text: str = "") -> "_GenSettings":
     # barebones tool args and route poorly ("dumber"). So the loop always gets at
     # least the AUTO budget; only "long" raises it further. Brevity of the final
     # reply is enforced by the system-prompt length directive, not this ceiling.
-    gen_max_tokens = max(gen_max_tokens, _asked_tokens(user_text)) if length != "ultra" else gen_max_tokens
+    gen_max_tokens = max(gen_max_tokens, _asked_tokens(user_text, ctx=ctx)) if length != "ultra" else gen_max_tokens
     auto_floor = 700 if concise else 1500
     loop_max_tokens = max(gen_max_tokens, auto_floor)
     # The load-bearing reasoning suppressor. Measured on the live finetune:
@@ -266,7 +265,7 @@ def _ponytail_block(ctx, text: str) -> str:
     level = (os.getenv("PONYTAIL", "full") or "full").strip().lower()
     if level not in _PONYTAIL_LEVEL or getattr(ctx, "sandbox", None) is None:
         return ""
-    if not _ask(text)["code"]:
+    if not _ask(text, ctx=ctx)["code"]:
         return ""
     return _PONYTAIL_RULES.format(level=level, level_line=_PONYTAIL_LEVEL[level])
 
@@ -302,14 +301,14 @@ def _compose_user_message(ctx: Context, state: AgentState) -> tuple:
 
     # Build user message
     parts = []
-    _cnt = (_word_count_note(state.get("user_input_original") or user_input)
+    _cnt = (_word_count_note(state.get("user_input_original") or user_input, ctx=ctx)
             or no_history_note(state.get("user_input_original") or user_input,
-                               state.get("messages"))
+                               state.get("messages"), ctx=ctx)
             or translate_previous_note(state.get("user_input_original") or user_input,
-                                       (state.get("messages") or [])[:-1]))
+                                       (state.get("messages") or [])[:-1], ctx=ctx))
     facts_text = ctx.facts_text(state.get("user_input_original") or user_input)
     if facts_text:
-        parts.extend(facts_parts(facts_text))
+        parts.extend(facts_parts(facts_text, ctx=ctx))
     elif getattr(ctx, "facts_forgotten", False):
         parts.append(FORGOTTEN_NOTE)
     if memory_text:
@@ -400,7 +399,7 @@ def _compose_user_message(ctx: Context, state: AgentState) -> tuple:
                            "it, using the image description above (one or two sentences, "
                            "the concrete subject/scene, not a generic \"a photo of a "
                            "person\"), then ask what they would like to do with it.]")
-    if _ask(original_input or user_input)["earlier_talk"]:
+    if _ask(original_input or user_input, ctx=ctx)["earlier_talk"]:
         _asked = [str(m.get("content") or "").strip() for m in state.get("messages", [])
                   if m.get("role") == "user"]
         if _asked and _asked[-1] == user_input.strip():

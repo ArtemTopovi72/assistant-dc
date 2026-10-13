@@ -66,10 +66,10 @@ chat = ("Ах, Степан. Ты показал мне «худшую верс�
         "«скинь фото», «Разогрев через Систему», «Риск увольнения», «обсуждение проекта», "
         "«Теневой муж», «Зеркальный удар», «уходи от него ко мне», «Разогрев, а не штурм», "
         "«скину ссылку на тест»")
-check("a quoted conversation yields no lettering", I.requested_strings(chat) == [], I.requested_strings(chat))
+check("a quoted conversation yields no lettering", I.requested_strings(chat, ctx=_sweep_stub.reads_ctx()) == [], I.requested_strings(chat, ctx=_sweep_stub.reads_ctx()))
 check("a real lettering request still does",
-      I.requested_strings('a neon sign reading "CAFE ROSA"') == ["CAFE ROSA"])
-check("...up to the cap", len(I.requested_strings('signs saying "A1", "B2", "C3", "D4"')) == 4)
+      I.requested_strings('a neon sign reading "CAFE ROSA"', ctx=_sweep_stub.reads_ctx()) == ["CAFE ROSA"])
+check("...up to the cap", len(I.requested_strings('signs saying "A1", "B2", "C3", "D4"', ctx=_sweep_stub.reads_ctx())) == 4)
 
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)

@@ -21,12 +21,13 @@ assert "1. (3 ago) capital of France?\n2. (2 ago) and Germany?\n3. (1 ago) 2+2]"
 print("ok2")
 
 # an elliptical follow-up after a tool turn keeps the tools
-import graph_fastpath as F, intent
-intent.STUB = lambda t: {"needs_tool": t != "спасибо"}   # the model's read
+import graph_fastpath as F
+from fakes import reads
+_R = SimpleNamespace(**reads(read=lambda t: {"needs_tool": t != "спасибо"}))   # the model's read
 _h = [{"role": "user", "content": "time in Tokyo?"}, {"role": "assistant", "content": ""},
       {"role": "tool", "content": "00:06"}, {"role": "assistant", "content": "00:06"}]
-assert F._followup_of_tool_turn({"messages": _h + [{"role": "user", "content": "x"}]}, "а в Нью-Йорке?")
-assert F._followup_of_tool_turn({"messages": _h}, "а в Нью-Йорке?")
-assert not F._followup_of_tool_turn({"messages": _h}, "спасибо")
-assert not F._followup_of_tool_turn({"messages": [_h[0], _h[3]]}, "а в Нью-Йорке?")
+assert F._followup_of_tool_turn({"messages": _h + [{"role": "user", "content": "x"}]}, "а в Нью-Йорке?", _R)
+assert F._followup_of_tool_turn({"messages": _h}, "а в Нью-Йорке?", _R)
+assert not F._followup_of_tool_turn({"messages": _h}, "спасибо", _R)
+assert not F._followup_of_tool_turn({"messages": [_h[0], _h[3]]}, "а в Нью-Йорке?", _R)
 print("ok3")

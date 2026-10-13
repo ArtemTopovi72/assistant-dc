@@ -106,7 +106,7 @@ def _contained_region_mask(ctx, image_path: str, region_phrase: str, *,
     # actual face. Sub-features and all non-face regions fall through to segmentation.
     mask = None
     seg_from_text = False   # only text-prompted SAM3/Florence masks get Stage-1 QA
-    if _image._is_whole_face(region_phrase):
+    if _image._is_whole_face(region_phrase, ctx=ctx):
         mask = _image._face_detector_mask(image_path, (sw, sh), pad=0.18)
         if mask is not None:
             logger.info("contained-mask: FACE region via YuNet detector "

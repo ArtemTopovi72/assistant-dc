@@ -32,8 +32,9 @@ T.redirect_data_dir(_DATA_DIR)
 
 # What the words ask of a picture is the model's read (agent/intent.py); the
 # phrases run against the real model in bench/intent_picture_live.py.
-import intent
-intent.STUB = {
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from fakes import reads
+_READ = {
     "describe the image": {"is_question": True, "about_picture": True},
     "describe the first picture": {"is_question": True, "about_picture": True, "names_picture": 1},
     "make the cat from the first picture black": {"needs_tool": True, "wants": ["inpaint_image"],
@@ -42,6 +43,7 @@ intent.STUB = {
     "restore quality": {"needs_tool": True, "wants": ["redraw_image"]},
     "hello, how are you": {"needs_tool": False},
 }.get
+_R = types.SimpleNamespace(**reads(read=_READ))
 
 OK = BAD = 0
 
@@ -87,6 +89,7 @@ def make_bot():
     bot._dl_bytes = lambda fid: b"\x89PNG\r\n\x1a\n" + os.urandom(64)
     u = T._User(chat_id=CID, name="Tester", status="approved")
     bot._user_store.put(u)
+    bot.reads = _R
     return bot
 
 
@@ -573,8 +576,8 @@ check("«последнюю картинку» targets the newest", bot3._get_se
 # 🖼 Create picture: the description is a NEW picture, never «which one?»
 # (a scene with a broken window must not get «Какую картинку? их 12»).
 _scene = "cat sits on the table, the window glass is broken"
-intent.STUB = (lambda t, _o=intent.STUB: {"about_picture": True, "wants": ["inpaint_image"]}
-               if t == _scene else _o(t))
+bot.reads = types.SimpleNamespace(**reads(read=lambda t: {"about_picture": True, "wants": ["inpaint_image"]}
+                                             if t == _scene else _READ(t)))
 seed_two_images(bot)
 bot.pushed.clear(); bot.sent.clear()
 s = bot._get_session(CID); s.pending_prefix = T._PROMPT_KB["gen_image"]; bot._store.put(s)

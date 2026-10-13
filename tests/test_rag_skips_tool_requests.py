@@ -21,30 +21,31 @@ def check(name, cond, extra=""):
 
 # Which messages the documents could answer is the model's read (intent
 # doc_question); the phrases run live in bench/intent_docs_live.py.
-import intent
+import types
+from fakes import reads
 DOCS = {"можно ли с собакой?", "за сколько дней надо предупредить о выезде?"}
-intent.STUB = lambda t: {"doc_question": t in DOCS}
+R = types.SimpleNamespace(**reads(read=lambda t: {"doc_question": t in DOCS}))
 for t in ("[upscale]", "https://ru.wikipedia.org/wiki/Омлет", "👍",
           "сократи до 3 пунктов:\n\nКомпания «Ромашка» объявила о запуске новых электросамокатов.",
           "перескажи: " + "слово " * 70,
           __import__("prompt_guard").wrap_quoted("the user forwarded this message from someone else",
                                                  "Внимание! перекрывают движение"),
           "нарисуй витрину пекарни"):
-    check("bypasses retrieval: " + t[:40], T._plainly_not_a_doc_question(t))
+    check("bypasses retrieval: " + t[:40], T._plainly_not_a_doc_question(t, ctx=R))
 for t in DOCS:
-    check("still retrieves: " + t, not T._plainly_not_a_doc_question(t))
+    check("still retrieves: " + t, not T._plainly_not_a_doc_question(t, ctx=R))
 # sandbox files must be read, not answered from old library fragments
-intent.STUB = lambda t: {"doc_question": True}      # the model would call it a doc question
+R = types.SimpleNamespace(**reads(read=lambda t: {"doc_question": True}))   # the model would call it a doc question
 check("sandbox files are read, not retrieved",
       T._plainly_not_a_doc_question("в чём ошибка?\n"
-                                    "[The file 'a.log', 'b.log' are now in your working folder]"))
-intent.STUB = None
+                                    "[The file 'a.log', 'b.log' are now in your working folder]", ctx=R))
+R = None
 check("no read (model down) bypasses: the plain loop, not a wrong RAG wrap",
-      T._plainly_not_a_doc_question("можно ли с собакой?"))
+      T._plainly_not_a_doc_question("можно ли с собакой?", ctx=R))
 
 src = inspect.getsource(T)
 check("the RAG gate consults the helper",
-      "if sess.use_docs and not _about_a_picture and not _plainly_not_a_doc_question(user_input):" in src)
+      "if sess.use_docs and not _about_a_picture and not _plainly_not_a_doc_question(user_input, ctx=ctx):" in src)
 
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)

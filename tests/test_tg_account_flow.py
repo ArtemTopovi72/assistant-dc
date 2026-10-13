@@ -98,10 +98,11 @@ check("the password message is deleted from the chat", 42 in bot.deleted,
 check("registration state is cleared", bot._get_session(CID).reg_state == "")
 
 # «нарисуй кота» typed to «напиши своё имя» must not become the account's name.
-import intent as _intent
+import types as _types
+from fakes import reads
 CID_REQ = 999604
 bot._user_gate(CID_REQ, msg(CID_REQ, "hi"))
-_intent.YES_STUB = lambda q, t: t != "нарисуй кота"
+bot.reads = _types.SimpleNamespace(**reads(yes=lambda q, t: t != "нарисуй кота"))
 try:
     bot._user_gate(CID_REQ, msg(CID_REQ, "нарисуй кота"))
     check("a request typed as the name is not taken as the name",
@@ -112,7 +113,7 @@ try:
           bot._get_session(CID_REQ).reg_state == "awaiting_password",
           bot._get_session(CID_REQ).reg_state)
 finally:
-    _intent.YES_STUB = None
+    bot.reads = None
 
 # A recognized keyboard-button label is never a real name/password. Reachable
 # even on a genuinely fresh registration via acct_newprofile_yes (an existing

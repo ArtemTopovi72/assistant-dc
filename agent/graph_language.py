@@ -9,6 +9,7 @@ The literal-protection dance is the load-bearing part: a lettering request
 ("draw a sign saying Открыто") must reach the image model with the string
 untranslated, or the picture comes out in the wrong language.
 """
+from seams import intent_read, yes_no
 import logging
 import re
 
@@ -84,7 +85,7 @@ _BRAND_NAME_RE = re.compile(
     r"(?:логотип|вывеск|эмблем|бренд|назван)\w*[^.!?\n⟦]{0,40}?(?<![\w-])([А-ЯЁ][а-яё-]+(?:\s+[А-ЯЁ][а-яё-]+)?)")
 
 
-def _protect_literals(text: str) -> tuple:
+def _protect_literals(text: str, ctx=None) -> tuple:
     """Replace lettering literals with ASCII placeholders. Returns (text, mapping).
 
     Quoted spans first (unambiguous), then an unquoted tail after a lettering cue
@@ -100,7 +101,7 @@ def _protect_literals(text: str) -> tuple:
     out = _QUOTED_LITERAL_RE.sub(_sub, text or "")
 
     from graph_fastpath import _IMAGE_ACTION_TOOLS
-    if set(_read(text)["wants"]) & _IMAGE_ACTION_TOOLS:
+    if set(_read(text, ctx=ctx)["wants"]) & _IMAGE_ACTION_TOOLS:
         def _sub_tail(m):
             lit = m.group("lit").strip()
             # Nothing to protect if the cue was already followed by a placeholder
@@ -146,12 +147,11 @@ _TRANSLATE_OUT_PROMPT = (
 
 
 
-def _read(text: str) -> dict:
+def _read(text: str, ctx=None) -> dict:
     """The model's read of the user's words (agent/intent.py). It replaced
     three word lists: «как будет по-английски «подоконник»?» asks ABOUT an
     English word and got "It is called a windowsill"."""
-    import intent
-    return intent.read(None, text or "")
+    return intent_read(ctx)(None, text or "")
 
 
 # The model's read alone is not enough to switch a Russian chat to English: a
@@ -164,10 +164,10 @@ def names_english(text: str) -> bool:
     return bool(_NAMES_ENGLISH.search(text or ""))
 
 
-def asks_for_english(text: str) -> bool:
+def asks_for_english(text: str, ctx=None) -> bool:
     """Did the user explicitly ask for this turn's reply in English?"""
     return (bool((text or "").strip()) and names_english(text)
-            and _read(text)["reply_language"] == "en")
+            and _read(text, ctx=ctx)["reply_language"] == "en")
 
 
 def _foreign_ratio(s: str) -> float:
@@ -236,7 +236,7 @@ def _match_reply_language(ctx, answer: str, original_input: str) -> str:
     # one Cyrillic turn whose English answer is RIGHT. The guard must not
     # translate it back -- the model has obeyed the user and the pipeline
     # would undo it.
-    _r = _read(original_input)
+    _r = _read(original_input, ctx=ctx)
     if (_r["reply_language"] == "en" and names_english(original_input)) or _r["translate"]:
         return answer
     # «answer in English from now on», then a Russian line: the model follows
@@ -263,7 +263,7 @@ def _match_reply_language(ctx, answer: str, original_input: str) -> str:
     # translation, so the session language won.
     _latin_q = (_foreign_ratio(original_input) < 0.1
                 and len(re.findall(r"[A-Za-z]{2,}", original_input)) >= 3
-                and _read(original_input)["reply_language"] not in ("ru", "russian"))
+                and _read(original_input, ctx=ctx)["reply_language"] not in ("ru", "russian"))
     # A Russian chat with a Latin input is a button payload ("remove all the lettering
     # from the image"): typed English flips reply_lang in tg_tasks. Its English reply
     # went out as is.
@@ -337,7 +337,7 @@ def _translate_to_english(ctx, text: str, context: str = "") -> str:
     # «переведи на английский: <письмо>» -- translating it at the entry hands
     # the model an English letter and it answered «You already translated it
     # perfectly!». The text to translate is the material.
-    if _read(t)["translate"]:
+    if _read(t, ctx=ctx)["translate"]:
         return t
     # A pasted wall of text: the model reads Russian, and translating 7k chars
     # took 70 s and garbled a word count (300 «день» answered as 1000, live).
@@ -345,11 +345,11 @@ def _translate_to_english(ctx, text: str, context: str = "") -> str:
         return t
     try:
         from graph_compose import _word_count_note
-        if _word_count_note(t):
+        if _word_count_note(t, ctx=ctx):
             return t
     except Exception:
         pass
-    protected, keep = _protect_literals(t)
+    protected, keep = _protect_literals(t, ctx=ctx)
     try:
         system = _TRANSLATE_IN_PROMPT
         if context and len(t) < 200:
@@ -375,10 +375,9 @@ def _norm_words(s: str) -> str:
     return " ".join(re.findall(r"\w+", (s or "").lower()))
 
 
-def _asks_to_echo(text: str) -> bool:
+def _asks_to_echo(text: str, ctx=None) -> bool:
     """The user asked for their own words back (repeat, rewrite, correct, say)."""
-    import intent
-    return intent.ask_yes("A user wrote: {text}. Does the user ask to repeat, say, rewrite, "
+    return yes_no(ctx)("A user wrote: {text}. Does the user ask to repeat, say, rewrite, "
                           "correct or proofread a text, so that an answer close to their "
                           "own words is expected?", text)
 
@@ -392,7 +391,7 @@ def _unparrot(ctx, answer: str, original_input: str, history=()) -> str:
     # «мой калькулятор показывает 418» came back with only the number changed.
     if (len(q) < 6 or ctx.is_cancelled()
             or difflib.SequenceMatcher(None, a, q).ratio() < 0.8
-            or _asks_to_echo(original_input)):
+            or _asks_to_echo(original_input, ctx=ctx)):
         return answer
     # Context-free, the retry conceded «я ошибся» to a wrong 418.
     hist = list(history or [])

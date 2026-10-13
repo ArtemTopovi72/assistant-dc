@@ -13,23 +13,25 @@ def check(name, cond, extra=""):
 
 # What the message means is the model's read (agent/intent.py; phrases in
 # bench/intent_live.py). Q = question about it, E = an order to change it.
-import intent
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from fakes import reads
 Q = {"is_question": True, "about_picture": True}
 E = {"needs_tool": True, "wants": ["redraw_image"]}
 READ = {"Что нарисовано?": Q, "какой товар самый дорогой?": {"is_question": True},
         "Нарисуй Степана так": {"needs_tool": True, "wants": ["generate_image"]},
         "можешь сделать ярче?": {**E, "is_question": True}, "убери лужу": E,
         "круто": {"needs_tool": False}, "обсудим цитату": {"about_picture": False}}
-intent.STUB = READ.get
+_READ = reads(read=READ.get)
+_R = types.SimpleNamespace(**_READ)
 for o, exp in [("Что нарисовано?", True), ("какой товар самый дорогой?", True),
                ("Нарисуй Степана так", False), ("можешь сделать ярче?", False),
                ("убери лужу", False), ("круто", False)]:
     check(f"is_picture_question({o!r}) == {exp}",
-          graph.is_picture_question(None, {"user_input": "x", "user_input_original": o}) == exp)
+          graph.is_picture_question(_R, {"user_input": "x", "user_input_original": o}) == exp)
 
 st = lambda o: {"user_input": "x", "user_input_original": o}
 # pointed-at picture: anything but an order is looked at
-ctx = types.SimpleNamespace(last_image_path=__file__, image_pointed_at=True)
+ctx = types.SimpleNamespace(last_image_path=__file__, image_pointed_at=True, **_READ)
 check("a question over a pointed-at picture is looked at", graph.needs_relook(ctx, st("Что нарисовано?")))
 # «обсудим цитату» after ❓ is no question, yet it is about the picture
 check("words that are no question over it are looked at too", graph.needs_relook(ctx, st("обсудим цитату")))
@@ -48,6 +50,7 @@ finally:
 # the steering block speaks of answering, not editing
 class _Ctx:
     last_image_path = "x.png"
+    intent_read = staticmethod(_READ["intent_read"])
     def facts_text(self, query=""): return ""
     def memory_text(self): return ""
     facts_forgotten = False

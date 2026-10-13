@@ -2,9 +2,11 @@
 stubbed for the suites as fixture tables: each fixture phrase -> what the
 model answers. bench/intent_sweep3_live.py runs these questions on the model.
 
-Importing installs the stubs; an earlier stub stays reachable for the
-questions this table does not know."""
-import intent
+A suite hands `reads_ctx()` (or `READS` spread into its own context) to the code under
+test; a question this table does not know answers None (the offline default)."""
+import types
+
+from fakes import reads
 
 REMOVES = {   # (instruction, lettering) -> does the instruction remove it
     ("убери дату", "12 октября"): True, ("удали заголовок", "РОК НОЧЬ"): True,
@@ -26,10 +28,7 @@ ALL_LETTERING = {"убери надпись", "убери все надписи"
 AS_FILE = {"пришли эту картинку файлом", "пришли файлом", "send it as a file"}
 NO_LETTERING = {'draw a "cat" on a sofa'}
 
-_yes0, _choice0 = intent.YES_STUB, intent.CHOICE_STUB
-
-
-def _yes(q, t):
+def yes(q, t):
     if "Does the instruction remove it" in q:
         lettering = q.split("lettering «", 1)[1].split("»", 1)[0] if "lettering «" in q else ""
         return t in ALL_LETTERING or REMOVES.get((t, lettering), False)
@@ -43,10 +42,10 @@ def _yes(q, t):
         return "крайн" in t or "outermost" in t
     if "repeat, say, rewrite" in q:
         return False
-    return _yes0(q, t) if _yes0 else False
+    return False
 
 
-def _choice(q, t):
+def pick(q, t):
     if "transform a picture" in q:
         return TRANSFORM.get(t, "rotate_right")
     if "put text on a picture" in q:
@@ -55,7 +54,12 @@ def _choice(q, t):
         return ORIENT.get(t, "unknown")
     if "What is it about?" in q:
         return KIND.get(t, "code" if "[code]" in t else "image" if "[image]" in t else "chat")
-    return _choice0(q, t) if _choice0 else None
+    return None
 
 
-intent.YES_STUB, intent.CHOICE_STUB = _yes, _choice
+READS = reads(yes=yes, pick=pick)
+
+
+def reads_ctx(**more):
+    """A context carrying this table's reads, plus `more` attributes."""
+    return types.SimpleNamespace(**{**READS, **more})

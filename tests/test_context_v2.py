@@ -126,22 +126,23 @@ def test_section_overflow_is_archived_not_dropped():
 
 def test_cards_select_by_task_kind():
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    import _sweep_stub  # noqa: F401  the model's read of a card's kind
+    import _sweep_stub  # the model's read of a card's kind
     st = C.empty_state()
     C._add(st, "decisions", [f"[code] файл main.py шаг {i} " + "y" * 150 for i in range(12)]
            + ["[image] фон у картинки синий " + "z" * 150])
-    shown = C.select_cards(st, "поменяй фон на картинке", budget=500)
+    shown = C.select_cards(st, "поменяй фон на картинке", budget=500, ctx=_sweep_stub.reads_ctx())
     assert any("фон у картинки" in d for d in shown["decisions"])
     assert len(shown["decisions"]) <= 6
 
 
 def test_extract_now_prefs_and_paths():
     # the model's reads are stubbed; the phrases run live in bench/intent_sweep_live.py
-    import intent
-    intent.YES_STUB = lambda q, t: "standing preference" in q and "всегда" in t
+    import types
+    from fakes import reads
+    prefs = types.SimpleNamespace(**reads(yes=lambda q, t: "standing preference" in q and "всегда" in t))
     got = C.extract_now([{"role": "user", "content": "Я всегда хочу ответы по-русски. Сделай лого."},
                          {"role": "assistant", "content": "", "tool_calls": [{"id": "1", "function": {
-                             "name": "write_file", "arguments": '{"path": "C:/w/app.py"}'}}]}])
+                             "name": "write_file", "arguments": '{"path": "C:/w/app.py"}'}}]}], ctx=prefs)
     assert any("всегда" in p for p in got["prefs"]) and "C:/w/app.py" in got["artifacts"]
 
 

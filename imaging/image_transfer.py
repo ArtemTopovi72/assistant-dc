@@ -11,6 +11,7 @@ edit_region_contained_via_firered) and the telemetry it writes
 through lazy module-level forwarders rather than by-value imports: that both
 breaks the import cycle and keeps them patchable from either side.
 """
+from seams import choice
 from config import scratch_path
 import json
 import logging
@@ -528,7 +529,7 @@ def transfer_with_references(ctx, target_path, references, instruction=None, *,
     # Composite the original face back unless the transfer DELIBERATELY targets the
     # face/head (face/identity/hairstyle reference) or the instruction asks for it.
     if refs[0].effective_role not in (ROLE_FACE, ROLE_IDENTITY, ROLE_HAIR):
-        out = _image.preserve_identity_face(target_path, out, instructions=instr)
+        out = _image.preserve_identity_face(target_path, out, instructions=instr, ctx=ctx)
         if "identity_cosine" in metrics:
             try:
                 import identity_metrics as idm
@@ -642,21 +643,20 @@ def _garment_details(ctx, path: str) -> str:
     return txt
 
 
-def _placement_region_from_instruction(instruction):
+def _placement_region_from_instruction(instruction, ctx=None):
     """Extract the body part / surface a placement instruction names, as a SAM3
     region phrase (e.g. "upper arm"), or None. Lets the contained transfer mask
     WHERE the user said to put the object instead of the role's generic anchor."""
     if not instruction:
         return None
-    import intent
     parts = tuple(dict.fromkeys(_PLACEMENT_PARTS.split("|")))
-    got = intent.ask_choice(
+    got = choice(ctx)(
         "An object is put on a person in a picture: {text}\n\nWhich body part does the "
         "instruction place it on? Answer none when it names no body part.",
         instruction, parts + ("none",), "none")
     if got == "none":
         return None
-    side = intent.ask_choice(
+    side = choice(ctx)(
         "An object is put on a person in a picture: {text}\n\nDoes the instruction say "
         "which side of the " + got + " (upper, lower, left, right)?",
         instruction, ("upper", "lower", "left", "right", "none"), "none")
@@ -687,7 +687,7 @@ def transfer_reference_contained(ctx, target_path, ref, instruction=None, *,
     # arm. But it is best-effort — the named part may not be visible/segmentable in
     # the target (e.g. "forearm" on a chest-up crop), so we keep a fallback chain
     # rather than letting an empty mask fail the whole transfer.
-    placed = None if mask_override else _placement_region_from_instruction(instruction)
+    placed = None if mask_override else _placement_region_from_instruction(instruction, ctx=ctx)
     # Region to mask: the instruction's explicit placement if the user named one,
     # otherwise the role's generic anchor. We do NOT chain placement->role_region:
     # if the user NAMED a location that is not visible/segmentable (e.g. "forearm"

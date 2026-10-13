@@ -18,6 +18,7 @@ topic, chosen pins it. That is the same convention `sess.image_aspect` and
 `sess.dr_depth` already use.
 """
 from __future__ import annotations
+from seams import choice, intent_read
 
 import html as _html_mod
 import logging
@@ -110,13 +111,12 @@ STEPS_HOME = "quality"               # the screen the step count lives on
 # A TYPED «сбрось настройки песни» / "reset song settings". Without this the
 # phrase reached the chat model, which answered «Настройки песни сброшены.»
 # and reset nothing.
-def is_reset_phrase(text: str) -> bool:
-    import intent   # the model's read: song "reset"
+def is_reset_phrase(text: str, ctx=None) -> bool:
     t = (text or "").strip()
     # the per-message read flags it; a narrow question confirms (the read also
     # took «сбрось фильтры» for one)
-    return (bool(t) and len(t) < 80 and intent.read(None, t)["song"] == "reset"
-            and intent.ask_choice("A user wrote: {text}\n\nWhat does the user ask to reset?", t,
+    return (bool(t) and len(t) < 80 and intent_read(ctx)(None, t)["song"] == "reset"
+            and choice(ctx)("A user wrote: {text}\n\nWhat does the user ask to reset?", t,
                                   ("song", "music", "filters", "chat", "other", "nothing"))
             in ("song", "music"))
 

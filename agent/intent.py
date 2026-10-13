@@ -205,12 +205,7 @@ FALLBACK = {"needs_tool": True, "wants": [], "must_call": "", "bare_ack": False,
             "song": "", "song_seconds": 0, "song_uses_previous_text": False, "weather": None, "undo": False,
             "complaint": False, "collage": False, "dedupe": False, "ok": False}
 
-YES_STUB = None   # suites: YES_STUB(question, text) -> bool
 _YES_CACHE: "OrderedDict[tuple, bool]" = OrderedDict()
-
-
-CHOICE_STUB = None   # suites: CHOICE_STUB(question, text) -> option
-CITY_STUB = None     # suites: CITY_STUB(fact) -> city (bot/tg_weather._city_of_fact)
 
 
 def ask_choice(question: str, text: str, options: tuple, default: str = "") -> str:
@@ -222,7 +217,7 @@ def ask_choice(question: str, text: str, options: tuple, default: str = "") -> s
     if not text:
         return default
     if os.getenv("F5_TEST_RUN") and not os.getenv("INTENT_LIVE"):
-        return (CHOICE_STUB(question, text) if CHOICE_STUB else default) or default
+        return default
     key = (question, text[:1500], options)
     with _LOCK:
         if key in _YES_CACHE:
@@ -255,7 +250,7 @@ def ask_yes(question: str, text: str, default: bool = False, wait: bool = True) 
     if not text:
         return default
     if os.getenv("F5_TEST_RUN") and not os.getenv("INTENT_LIVE"):
-        return bool(YES_STUB(question, text)) if YES_STUB else default
+        return default
     key = (question, text[:1500])
     with _LOCK:
         if key in _YES_CACHE:
@@ -286,9 +281,8 @@ def ask_yes(question: str, text: str, default: bool = False, wait: bool = True) 
     return got
 
 # Suites script the model's replies call by call; an extra intent call would
-# eat one. Under F5_TEST_RUN the read is STUB(text) when a suite sets it, else
-# FALLBACK (full loop, nothing forced).
-STUB = None
+# eat one. Under F5_TEST_RUN the read is FALLBACK (full loop, nothing forced); a
+# suite scripts its reads on the context (core/seams.py, tests/fakes.reads).
 
 _MENU = None
 _CACHE: "OrderedDict[tuple, dict]" = OrderedDict()
@@ -316,8 +310,7 @@ def read(ctx, text: str, previous: str = "", attached: str = "") -> dict:
     if not text:
         return dict(FALLBACK)
     if os.getenv("F5_TEST_RUN") and not os.getenv("INTENT_LIVE"):
-        got = STUB(text) if STUB else None
-        return {**FALLBACK, **got, "ok": True} if got else dict(FALLBACK)
+        return dict(FALLBACK)
     key = (text, (previous or "")[:300], attached)
     with _LOCK:
         if key in _CACHE:

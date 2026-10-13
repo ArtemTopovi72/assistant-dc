@@ -8,6 +8,7 @@ values arrive typed ("8" -> 8), and malformed calls turn into a uniform
 [TOOL ERROR] the model can act on. Adding a tool means adding one args model
 and one `ToolSpec`; `TOOL_SCHEMAS` and `execute_tool` both derive from `TOOLS`.
 """
+from seams import choice, yes_no
 from seams import dep
 import logging
 import os
@@ -87,7 +88,7 @@ def _wrap_untrusted(source: str, content: str) -> str:
     )
 
 
-def _lang_of_original(state, fallback_text: str) -> str:
+def _lang_of_original(state, fallback_text: str, ctx=None) -> str:
     """Detect the output language from the user's ORIGINAL, untranslated message
     (falling back to the given text if it's unavailable). `topic`/args here have
     usually already been through the english-first entry translation (see
@@ -99,7 +100,7 @@ def _lang_of_original(state, fallback_text: str) -> str:
     import utils
     _lang_of = getattr(_dr_mod, "lang_of_text", lambda *_a, **_k: "en")
     text = state.get("user_input_original") or fallback_text
-    return utils.explicit_lang(text) or _lang_of(text)
+    return utils.explicit_lang(text, ctx=ctx) or _lang_of(text)
 
 
 def _handle_search(ctx, state, args: dict) -> str:
@@ -188,7 +189,7 @@ def _handle_deep_research(ctx, state, args: dict) -> str:
 
     # The report is a document the USER reads, so it is written in the language they
     # wrote in — not in the pipeline's internal English. See _lang_of_original.
-    out_lang = _lang_of_original(state, topic)
+    out_lang = _lang_of_original(state, topic, ctx=ctx)
 
     result = run_deep_research(ctx, topic, depth=depth, out_lang=out_lang, progress=_cb)
     report = result.get("report") or ""
@@ -613,9 +614,8 @@ def _handle_forget_facts(ctx, state, args: dict) -> str:
 
 # A change to the deck just made, phrased as one: the model may forget the
 # edit_previous flag, so the topic text is checked too.
-def _edits_deck(topic: str) -> bool:
-    import intent
-    return intent.ask_choice(
+def _edits_deck(topic: str, ctx=None) -> bool:
+    return choice(ctx)(
         "A presentation was just made. The user's next request: {text}\n\n"
         "edit = it tells what to change IN that deck (add/remove/rename/rewrite a "
         "slide); new = it names a topic for a presentation.",
@@ -668,17 +668,16 @@ def _handle_create_presentation(ctx, state, args: dict) -> str:
     # "добавь слайд про…" edits the deck just made instead of planning a new
     # one: the previous plan travels on ctx.last_deck (per Telegram session).
     previous = None
-    if args.get("edit_previous") or (getattr(ctx, "last_deck", None) and _edits_deck(topic)):
+    if args.get("edit_previous") or (getattr(ctx, "last_deck", None) and _edits_deck(topic, ctx=ctx)):
         previous = getattr(ctx, "last_deck", None) or None
         if not previous:
             logger.info("create_presentation: edit requested but no previous deck — planning anew")
     ctx.set_stage("Updating the presentation" if previous else "Planning the presentation")
     out_dir = str(image_mod.OUTPUT_DIR)
     # Same english-first pitfall as deep_research above — see _lang_of_original.
-    _deck_lang = _lang_of_original(state, topic)
+    _deck_lang = _lang_of_original(state, topic, ctx=ctx)
     # «с картинкой на каждом слайде» got four pictures: the cap is for decks that did not ask.
-    import intent
-    _every = intent.ask_yes("A user asked for a presentation: {text}. Does the user ask for a "
+    _every = yes_no(ctx)("A user asked for a presentation: {text}. Does the user ask for a "
                             "picture on EVERY slide?",
                             f'{state.get("user_input_original") or ""} {topic}'.strip())
     result = _slides.make_presentation(

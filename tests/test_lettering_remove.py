@@ -13,8 +13,10 @@ try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # The model's reads are stubbed here; the phrases run live in bench/intent_rest_live.py.
-import intent
-intent.YES_STUB = lambda q, t: "WRITING" in q and any(w in t.lower() for w in ("inscription", "надпис", "watermark", "logo", "text", "lettering"))
+import types
+from fakes import reads
+_R = types.SimpleNamespace(**reads(yes=lambda q, t: "WRITING" in q and any(
+    w in t.lower() for w in ("inscription", "надпис", "watermark", "logo", "text", "lettering"))))
 from PIL import Image
 import image_lettering_remove as L
 
@@ -26,11 +28,11 @@ def check(name, cond, extra=""):
 
 # --- the detector ----------------------------------------------------------------
 check("'all inscriptions and logos on the wall' is a lettering removal",
-      L.is_lettering_removal("all inscriptions and logos on the background wall", "a clean dark red wall"))
-check("Russian 'надписи' too", L.is_lettering_removal("надписи", ""))
-check("a watermark too", L.is_lettering_removal("watermark", ""))
-check("a hat is not", not L.is_lettering_removal("hat", "bare head"))
-check("a person is not", not L.is_lettering_removal("man on the left", ""))
+      L.is_lettering_removal("all inscriptions and logos on the background wall", "a clean dark red wall", ctx=_R))
+check("Russian 'надписи' too", L.is_lettering_removal("надписи", "", ctx=_R))
+check("a watermark too", L.is_lettering_removal("watermark", "", ctx=_R))
+check("a hat is not", not L.is_lettering_removal("hat", "bare head", ctx=_R))
+check("a person is not", not L.is_lettering_removal("man on the left", "", ctx=_R))
 
 # --- the mask ----------------------------------------------------------------------------
 d = tempfile.mkdtemp()

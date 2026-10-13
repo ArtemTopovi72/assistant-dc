@@ -45,6 +45,7 @@ v2, one idea per mechanism (sources in docs/research_log.md, 2026-09-24):
 Fails open everywhere: any error returns the input list unchanged.
 """
 from __future__ import annotations
+from seams import choice, yes_no
 
 import hashlib
 import json
@@ -305,17 +306,16 @@ def merge_delta(state: dict, delta: dict) -> dict:
     return state
 
 
-def _is_preference(sent: str) -> bool:
+def _is_preference(sent: str, ctx=None) -> bool:
     """A user sentence that states a standing preference ("always answer short",
     "не присылай голосом"). Read by the model, not a word list."""
-    import intent
-    return intent.ask_yes(
+    return yes_no(ctx)(
         "A user wrote this sentence in a chat with an assistant: {text}\n\nDoes it "
         "state a standing preference or rule for how the assistant should behave from "
         "now on (always/never do something, a liked or disliked way)?", sent)
 
 
-def extract_now(span: List[dict]) -> dict:
+def extract_now(span: List[dict], ctx=None) -> dict:
     """Extraction over what is about to leave the
     window (Remember-When-It-Matters, write-before-compaction): every path/url,
     and every user sentence that states a standing preference. Runs BEFORE the
@@ -330,7 +330,7 @@ def extract_now(span: List[dict]) -> dict:
             arts += artifacts_in(str((tc.get("function") or {}).get("arguments") or ""))
         if m.get("role") == "user":
             for sent in re.split(r"(?<=[.!?\n])\s+", c):
-                if 8 <= len(sent) <= 240 and _is_preference(sent):
+                if 8 <= len(sent) <= 240 and _is_preference(sent, ctx=ctx):
                     prefs.append(sent.strip())
     return {"artifacts": arts, "prefs": prefs}
 
@@ -350,30 +350,29 @@ def _tag(kind: str, items) -> list:
             for x in (items or [])]
 
 
-def _span_kind(msgs: List[dict], text: str) -> str:
+def _span_kind(msgs: List[dict], text: str, ctx=None) -> str:
     """The task kind of a span: the one its tool calls agree on, else the model's read."""
     kinds = {_KIND_BY_TOOL.get(n) for n in _tool_names(msgs).values()} - {None}
-    return kinds.pop() if len(kinds) == 1 else _kind_of(text)
+    return kinds.pop() if len(kinds) == 1 else _kind_of(text, ctx=ctx)
 
 
-def _kind_of(text: str) -> str:
+def _kind_of(text: str, ctx=None) -> str:
     """image | code | research | chat -- what the text is about, the model's read."""
-    import intent
-    return intent.ask_choice(
+    return choice(ctx)(
         "A piece of a chat with an assistant: {text}. What is it about? image = a "
         "picture or a photo; code = program code or files; research = a search, a "
         "study or a presentation; chat = anything else.",
         (text or "")[:1500], ("image", "code", "research", "chat"), "chat")
 
 
-def select_cards(state: dict, query: str, budget: int = CARD_BUDGET) -> dict:
+def select_cards(state: dict, query: str, budget: int = CARD_BUDGET, ctx=None) -> dict:
     """Decision-aware selection: when the memory is too long to send whole, keep
     the goal, every open request, the newest artifacts, and the cards that share
     words or task kind with the request. The rest stays in the stored state."""
     if len(render(state)) <= budget:
         return state
     words = {w for w in re.findall(r"\w{4,}", (query or "").lower())}
-    qk = _kind_of(query)
+    qk = _kind_of(query, ctx=ctx)
 
     def score(card: str) -> float:
         # HyMem isolation: a card tagged with ANOTHER task kind competes only on
@@ -513,14 +512,14 @@ def manage(ctx, messages: List[dict], *, query: str = "", force: bool = False) -
             span, tail = body[:keep_from], body[keep_from:]
             span_text = _render_span(span)
             _add(state, "artifacts", artifacts_in(span_text))
-            kind = _span_kind(span, span_text)
+            kind = _span_kind(span, span_text, ctx=ctx)
             aid = archive_put(json.dumps(span, ensure_ascii=False), kind=kind, label="turns")
-            now = extract_now(span)
+            now = extract_now(span, ctx=ctx)
             _add(state, "artifacts", now["artifacts"])
             _add(state, "prefs", now["prefs"])
             for chunk in _turn_chunks(span):
                 ck_text = _render_span(chunk)
-                ck_kind = _span_kind(chunk, ck_text)
+                ck_kind = _span_kind(chunk, ck_text, ctx=ctx)
                 delta = _llm_delta(ctx, state, ck_text)
                 if delta:
                     for key in ("add_decisions", "add_open"):
@@ -542,7 +541,7 @@ def manage(ctx, messages: List[dict], *, query: str = "", force: bool = False) -
             return messages
         state = _scrub(state)
         shown = select_cards(state, query or next(
-            (m.get("content") for m in reversed(body) if m.get("role") == "user"), "") or "")
+            (m.get("content") for m in reversed(body) if m.get("role") == "user"), "") or "", ctx=ctx)
         n_arch = sum(1 for m in body if is_marker(m.get("content"))) + len(state["folded"])
         rebuilt = ([head] if head else [])
         mem_used = est_tokens(rebuilt + body)

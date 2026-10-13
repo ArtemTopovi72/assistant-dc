@@ -1,4 +1,5 @@
 """Web search tool: ddgs fetch -> dedupe/format -> optional fact distillation."""
+from seams import choice, yes_no
 from seams import dep, text_model
 import re
 import turn_trace
@@ -49,13 +50,12 @@ _OUTBOUND_Q = (
     "history (not of attacks), law texts, shopping for ordinary goods, tech.")
 
 
-def outbound_blocked(query: str) -> bool:
+def outbound_blocked(query: str, ctx=None) -> bool:
     """True when `query` must not go to the web. The model being down blocks
     too: an unchecked query is what this guard exists to stop."""
-    import intent
     # test runs without a stub must still reach their fake ddgs
     offline_test = bool(os.getenv("F5_TEST_RUN")) and not os.getenv("INTENT_LIVE")
-    blocked = intent.ask_yes(_OUTBOUND_Q, query, default=not offline_test)
+    blocked = yes_no(ctx)(_OUTBOUND_Q, query, default=not offline_test)
     if blocked:
         logger.warning("outbound search refused: %r", query[:200])
     return blocked
@@ -152,7 +152,7 @@ def raw_search_results(ctx, query: str, max_results: Optional[int] = None, *,
             from news outlets) instead of the general web index.
     """
     from ddgs import DDGS
-    if outbound_blocked(query):
+    if outbound_blocked(query, ctx=ctx):
         return []
     max_results = max_results or SEARCH_MAX_RESULTS
     tl = SEARCH_TIMELIMIT if timelimit is _UNSET else timelimit
@@ -331,17 +331,16 @@ def search_duckduckgo_and_fetch(ctx, query: str, max_results: Optional[int] = No
     # A counted request needs whole items, and a 500-char snippet cut mid-joke
     # cannot supply one; give the same request more room overall as well.
     total_cap = SEARCH_TOTAL_CHARS + SEARCH_PAGE_CHARS * len(pages)
-    if wanted_count(query):
+    if wanted_count(query, ctx=ctx):
         total_cap = max(SEARCH_TOTAL_CHARS, 12000)
     return truncate_text("\n\n".join(parts), total_cap)
 
 
-def wanted_count(query: str) -> int:
+def wanted_count(query: str, ctx=None) -> int:
     """How many items the user ordered («5 анекдотов», "list ten models"), 0 if
     they did not order a number. Read by the model: a bare "5" in "iphone 5
     price" is a name, not an order for five things."""
-    import intent
-    got = intent.ask_choice(
+    got = choice(ctx)(
         "A web search query: {text}\n\nDoes it order a NUMBER of items (5 jokes, "
         "три рецепта, ten ideas)? Answer that number, or 0 when no count of items "
         "is ordered (a number inside a name or a price is not an order).",
@@ -361,7 +360,7 @@ def distill_search_results(ctx, query: str, raw_results: str) -> str:
     # for "1-4 sentences of distilled facts": five jokes came back as "there is
     # one about an aeroplane and one about a fence". The prompt allows a full
     # list, so the budget has to allow it too, or the answer stops at the token cap.
-    want = wanted_count(query)
+    want = wanted_count(query, ctx=ctx)
     budget = SEARCH_DISTILL_MAX_TOKENS
     if want:
         budget = min(4000, max(SEARCH_DISTILL_MAX_TOKENS, 220 * want + 300))
@@ -421,9 +420,9 @@ def run_web_search(ctx, query: str) -> str:
     # Five jokes cannot be extracted from five 500-character snippets. When the
     # request names a count, widen the FETCH too — the prompt and the token budget
     # are useless if the raw material was never collected.
-    if outbound_blocked(query):
+    if outbound_blocked(query, ctx=ctx):
         return SEARCH_BLOCKED
-    want = wanted_count(query)
+    want = wanted_count(query, ctx=ctx)
     _qs = getattr(ctx, "turn_queries", None)
     if isinstance(_qs, list) and query not in _qs:
         _qs.append(query)
@@ -439,7 +438,7 @@ def run_web_search(ctx, query: str) -> str:
     # either says it is enough or names the ONE query that fills the gap.
     if dep(ctx, "SEARCH_FOLLOWUP_ROUND", SEARCH_FOLLOWUP_ROUND):
         more_q = followup_query(ctx, query, facts if usable else raw)
-        if more_q and not outbound_blocked(more_q):
+        if more_q and not outbound_blocked(more_q, ctx=ctx):
             more = dep(ctx, "search_duckduckgo_and_fetch", search_duckduckgo_and_fetch)(ctx, more_q)
             logger.info("search follow-up round: %r -> %s", more_q,
                         "nothing" if more in (NO_RESULTS, SEARCH_FAILED) else f"{len(more)} chars")
@@ -516,7 +515,7 @@ def image_search_urls(ctx, query: str, *, max_results: int = 12,
     a tall photo cropped into a wide panel loses most of its subject.
     Returns [] on failure."""
     from ddgs import DDGS
-    if outbound_blocked(query):
+    if outbound_blocked(query, ctx=ctx):
         return []
 
     def _do_query():

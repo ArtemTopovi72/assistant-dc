@@ -32,6 +32,7 @@ patched on `graph`, only read directly (e.g. `graph._intent_tools(...)`,
 `graph._DECK_PREFIX`) or not touched by the suites at all. graph.py
 re-exports it all by name so those direct reads keep resolving.
 """
+from seams import intent_read, yes_no
 import json
 import logging
 import os
@@ -146,7 +147,7 @@ _DELIVERY_CLAIM_RE = re.compile(
 )
 
 
-def _inspection_misses_request(request: str, verdict: str, tools_called: set) -> bool:
+def _inspection_misses_request(request: str, verdict: str, tools_called: set, ctx=None) -> bool:
     """The inspector labels every point PRESENT yet its own description shows the
     request was not met: three cats for «пусть котов будет два», a rider behind
     the car for «рядом с машиной» -- both answered «готово».
@@ -156,8 +157,7 @@ def _inspection_misses_request(request: str, verdict: str, tools_called: set) ->
         return False
     if not (request or "").strip() or not (verdict or "").strip():
         return False
-    import intent
-    return intent.ask_yes(
+    return yes_no(ctx)(
         "A user asked for a picture change: «" + request.strip()[:400].replace("{", "(")
         + "». A checker then described the result: {text} -- does that description show "
         "that the request is NOT met (a wrong number of things, the wrong place or "
@@ -427,7 +427,6 @@ def _turn_intent(ctx, state, text: str) -> dict:
     """intent.read of the user's own words this turn (forwarded material and
     RAG passages are not theirs), with the same inputs everywhere in the loop
     so every reader shares ONE model call through intent's cache."""
-    import intent
     from library import RAG_HEAD
     from prompt_guard import user_words
     from graph_fastpath import _previous_reply
@@ -437,7 +436,7 @@ def _turn_intent(ctx, state, text: str) -> dict:
     from graph import is_video_sheet
     if not state.get("image_data") and is_video_sheet(getattr(ctx, "last_image_path", None) or ""):
         att = att.replace("a photo", "a video")
-    return intent.read(ctx, t, _previous_reply(state), att)
+    return intent_read(ctx)(ctx, t, _previous_reply(state), att)
 
 
 def _forced_intent(ctx, state, text: str, has_image: bool, turn_tools, already_called) -> str:
@@ -568,7 +567,7 @@ _ARCHIVE_SUFFIXES = {".zip", ".jar", ".7z", ".rar", ".tar", ".gz", ".tgz", ".bz2
 _FILE_HINT_RE = re.compile(r"\[The file '([^']+)' is now in your working folder")
 
 
-def _forced_collage(text: str, turn_tools, already_called) -> str:
+def _forced_collage(text: str, turn_tools, already_called, ctx=None) -> str:
     """Force run_code once the photos for a collage are picked.
 
     find_content and dedupe_photos ran, then
@@ -577,12 +576,11 @@ def _forced_collage(text: str, turn_tools, already_called) -> str:
     never picks run_code on its own here, so after the picking tools the only
     thing it may do is run the script.
     """
-    import intent
-    if not text or not intent.read(None, text)["collage"]:
+    if not text or not intent_read(ctx)(None, text)["collage"]:
         return ""
     called = set(already_called or ())
     needed = {"find_content"}
-    if intent.read(None, text)["dedupe"]:
+    if intent_read(ctx)(None, text)["dedupe"]:
         needed.add("dedupe_photos")
     if not needed <= called:
         return ""
@@ -782,23 +780,23 @@ def _stub_written_files(messages: list) -> list:
     return out if changed else messages
 
 
-def _previous_request_for_redo(user_input: str, history) -> str:
+def _previous_request_for_redo(user_input: str, history, ctx=None) -> str:
     """For a bare redo («заново», «ещё раз», «again»): the text of the last
     user turn that was itself a real request. "" when this is not a bare
     redo or nothing precedes it."""
-    def _bare(t: str) -> bool:
+    def _bare(t: str, ctx=None) -> bool:
         # «заново», «сделай ещё раз», «again please»: the model reads a bare
         # redo. «пересобери коллаж без дубликатов» carries its own
         # instruction ("changed") and is left alone.
         t = (t or "").strip()
-        return bool(t) and _user_read(t)["redo"] == "same"
-    if not _bare(user_input):
+        return bool(t) and _user_read(t, ctx=ctx)["redo"] == "same"
+    if not _bare(user_input, ctx=ctx):
         return ""
     for m in reversed(history or []):
         if m.get("role") != "user":
             continue
         c = (m.get("content") or "").strip() if isinstance(m.get("content"), str) else ""
-        if not c or _bare(c):
+        if not c or _bare(c, ctx=ctx):
             continue
         return c[:300]
     return ""
@@ -895,7 +893,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
     # after the turn, so persisted history doesn't carry stale memory blocks
     # and duplicated hint text into every future context window.
     user_msg = {"role": "user", "content": user_message_text}
-    _prev = _previous_request_for_redo(user_input, clean_history)
+    _prev = _previous_request_for_redo(user_input, clean_history, ctx=ctx)
     if _prev:
         # A bare «заново» after the collage ask was
         # taken as "redo the cat edit" from six turns earlier and redraw_image
@@ -1212,7 +1210,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                                   getattr(ctx, "sandbox", None))
                   or _forced_unpack(_turn_text, turn_tools, tools_called_this_turn,
                                     getattr(ctx, "sandbox", None))
-                  or _forced_collage(_turn_text, turn_tools, tools_called_this_turn))
+                  or _forced_collage(_turn_text, turn_tools, tools_called_this_turn, ctx=ctx))
         _choice = "auto"
         if _force:
             # A name, or a "a|b" set: "call one of these, nothing else".
@@ -1493,7 +1491,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             # then «Коллаж готов!» -- and the one found photo went out as the
             # collage. A collage exists only if a script built it this turn.
             if (corrective_count < _MAX_CORRECTIVE and draft
-                    and _user_read(original_input or user_input or "")["collage"]
+                    and _user_read(original_input or user_input or "", ctx=ctx)["collage"]
                     and _COLLAGE_DONE_RE.search(draft)
                     and not (tools_called_this_turn & _BUILDER_TOOLS)):
                 corrective_count += 1
@@ -1518,7 +1516,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                          or state.get("image_data")
                          or getattr(ctx, "last_image_path", None))
                     and _ALREADY_DONE_RE.search(draft)
-                    and _is_redo_request(user_input, messages)):
+                    and _is_redo_request(user_input, messages, ctx=ctx)):
                 corrective_count += 1
                 logger.warning("Answer says 'already done' to a repeated request "
                                "— corrective round %d/%d", corrective_count, _MAX_CORRECTIVE)
@@ -2007,7 +2005,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                 verification_negative = _inspection_contradicts_work(
                     tool_result, tools_called_this_turn, removal_turn)
                 if not verification_negative and _inspection_misses_request(
-                        original_input or user_input, tool_result, tools_called_this_turn):
+                        original_input or user_input, tool_result, tools_called_this_turn, ctx=ctx):
                     logger.info("inspection description contradicts the request")
                     verification_negative = True
             is_error = tool_result.lstrip().startswith(("[TOOL ERROR]", "Unknown tool"))

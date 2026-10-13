@@ -17,7 +17,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import _sweep_stub  # noqa: F401  the model's narrow reads, stubbed
+import _sweep_stub  # the model's narrow reads, stubbed
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 
@@ -128,13 +128,13 @@ lay = {"elements": [
     {"desc": "bottle", "text": "", "x": 0.3, "y": 0.1, "w": 0.4, "h": 0.8},
     {"desc": "label", "text": LABEL, "x": 0.35, "y": 0.4, "w": 0.3, "h": 0.2},
     {"desc": "a chair", "text": "", "x": 0.0, "y": 0.5, "w": 0.2, "h": 0.3}]}
-o, n = DA.apply_ops(lay, [{"op": "delete", "target": "the label"}])
+o, n = DA.apply_ops(lay, [{"op": "delete", "target": "the label"}], ctx=_sweep_stub.reads_ctx())
 check("the critic cannot delete the requested lettering", len(o["elements"]) == 3, n)
-o, n = DA.apply_ops(lay, [{"op": "delete", "target": "the bottle"}])
+o, n = DA.apply_ops(lay, [{"op": "delete", "target": "the bottle"}], ctx=_sweep_stub.reads_ctx())
 check("nor the thing it is written on", len(o["elements"]) == 3, n)
-o, n = DA.apply_ops(lay, [{"op": "delete", "target": "the chair"}])
+o, n = DA.apply_ops(lay, [{"op": "delete", "target": "the chair"}], ctx=_sweep_stub.reads_ctx())
 check("anything else it may still delete", len(o["elements"]) == 2, n)
-o, n = DA.apply_ops(lay, [{"op": "delete", "target": "the label"}], instruction="убери надпись")
+o, n = DA.apply_ops(lay, [{"op": "delete", "target": "the label"}], instruction="убери надпись", ctx=_sweep_stub.reads_ctx())
 check("the user's own 'remove the lettering' goes through", len(o["elements"]) == 2, n)
 
 # 2. multi-word lettering is restated line by line, never hyphenated

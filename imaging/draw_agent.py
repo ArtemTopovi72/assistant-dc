@@ -22,6 +22,7 @@ Three things live here:
 
 `run()` ties them together into the loop, reporting every step through `on_event`.
 """
+from seams import yes_no
 from seams import dep
 import copy
 import difflib
@@ -270,31 +271,29 @@ def _box_contains(outer: dict, inner: dict) -> bool:
         return False
 
 
-def _instruction_removes(instruction: str, text: str, desc: str = "") -> bool:
+def _instruction_removes(instruction: str, text: str, desc: str = "", ctx=None) -> bool:
     """Did the USER ask for this lettering to go? The critic's verdicts never
     come through `instruction`, so they never satisfy this. Read by the model:
     «убери второй шаг» takes the label "Text for step two" with it, «убери
     Вику» names the lettering «Вика», «убери среднюю банку» takes the jar's label."""
     if not (instruction or "").strip():
         return False
-    import intent
     what = ("the lettering «%s»" % text) if text else "this lettering"
     if desc:
         what += " (%s)" % desc
-    return intent.ask_yes(
+    return yes_no(ctx)(
         "A user asked to edit a picture: {text}. The picture has " + what + ". Does the "
         "instruction remove it -- by naming its words, the thing it labels or belongs to, "
         "or all the lettering?", instruction)
 
 
-def _swaps_outermost(instruction: str) -> bool:
-    import intent
-    return intent.ask_yes("A user asked to swap things in a picture: {text}. Does the user "
+def _swaps_outermost(instruction: str, ctx=None) -> bool:
+    return yes_no(ctx)("A user asked to swap things in a picture: {text}. Does the user "
                           "mean the two OUTERMOST ones (at both ends of the row)?", instruction)
 
 
 def apply_ops(layout: dict, ops: list, *, additive_only: bool = False,
-              instruction: str = "") -> tuple:
+              instruction: str = "", ctx=None) -> tuple:
     """Apply edit operations to a layout. Returns (new_layout, notes).
 
     `additive_only` refuses the ops that can destroy a box (see
@@ -444,7 +443,7 @@ def apply_ops(layout: dict, ops: list, *, additive_only: bool = False,
                 # to print at all. A user's own instruction to remove it is a
                 # different path (edit_layout with that instruction).
                 _txt = str(els[i].get("text") or "").strip()
-                if _txt and not _instruction_removes(instruction, _txt, els[i].get("desc") or ""):
+                if _txt and not _instruction_removes(instruction, _txt, els[i].get("desc") or "", ctx=ctx):
                     notes.append(f'kept “{_txt[:30]}”: the requested lettering is not '
                                  f"deleted on the critic's say-so")
                     continue
@@ -453,7 +452,7 @@ def apply_ops(layout: dict, ops: list, *, additive_only: bool = False,
                 # render became a crop of a label.
                 _hosted = [t for t in els if str(t.get("text") or "").strip()
                            and _box_contains(els[i], t)]
-                if _hosted and not any(_instruction_removes(instruction, s, els[i].get("desc") or "") for s in
+                if _hosted and not any(_instruction_removes(instruction, s, els[i].get("desc") or "", ctx=ctx) for s in
                                        [str(els[i].get("desc") or "")] + [str(t["text"]) for t in _hosted]):
                     notes.append(f'kept “{str(els[i].get("desc") or "")[:30]}”: it carries '
                                  f"the requested lettering")
@@ -501,7 +500,7 @@ def apply_ops(layout: dict, ops: list, *, additive_only: bool = False,
                 # Done by hand the model moved AND reworded both, swapping them twice.
                 row = sorted((e for e in els if e["w"] < 0.6 and not e.get("text")),
                              key=lambda e: e["x"] + e["w"] / 2)
-                if len(row) >= 2 and _swaps_outermost(instruction):
+                if len(row) >= 2 and _swaps_outermost(instruction, ctx=ctx):
                     # the model picked the ice floe the penguins stand on as an "end" 2 times in 3
                     i, j = els.index(row[0]), els.index(row[-1])
                 else:
@@ -627,7 +626,7 @@ def apply_ops(layout: dict, ops: list, *, additive_only: bool = False,
             notes.append(f"op {op or '?'!r} could not be applied: {exc}")
     # «в центре и больше»: the move's x was for the old size, the grown cat sat at 0.38..0.76.
     mv = [e for e in _els(layout) if id(e) in moved]
-    if len(mv) == 1 and __import__("intent").ask_yes(
+    if len(mv) == 1 and yes_no(ctx)(
             "A user asked to edit a picture: {text}\n\nDoes the instruction put something in "
             "the centre or middle of the picture?",
             instruction or ""):
@@ -807,7 +806,7 @@ _ILLUSTRATION_STYLE = {
 }
 
 
-def unphoto_on_repeat_mismatch(layout: dict, notes: list, request: str = "") -> tuple:
+def unphoto_on_repeat_mismatch(layout: dict, notes: list, request: str = "", ctx=None) -> tuple:
     """Drop the photographic DEFAULT when the underlined attribute still did
     not come through.
 
@@ -825,7 +824,7 @@ def unphoto_on_repeat_mismatch(layout: dict, notes: list, request: str = "") -> 
         return layout, ""
     try:
         import ideogram_layout as _il
-        if _il.wants_realism(request or ""):
+        if _il.wants_realism(request or "", ctx=ctx):
             return layout, ""
     except Exception as exc:
         logger.debug("realism check unavailable, keeping the default: %s", exc)
@@ -865,7 +864,7 @@ def edit_layout(ctx, layout: dict, instruction: str) -> tuple:
             return layout, ["the model proposed no change"]
         layout, notes = apply_ops(layout, ops,
                                   additive_only=_additive_only(instruction),
-                                  instruction=instruction)
+                                  instruction=instruction, ctx=ctx)
         return split_counted_boxes(merge_text_column(layout), notes)
     except Exception as exc:
         logger.exception("layout edit failed")
@@ -1704,7 +1703,7 @@ def run(ctx, request: str = "", *, layout: Optional[dict] = None,
             emit("retext", layout=layout, notes=notes, checks=text_check["checks"])
         applied = []
         if verdict.get("ops"):
-            layout, applied = apply_ops(layout, verdict["ops"])
+            layout, applied = apply_ops(layout, verdict["ops"], ctx=ctx)
             emit("rearranged", layout=layout, notes=applied)
         # The critic judges through a deliberately SHORT prompt (a long one makes
         # it deliberate until the token budget is gone — see `_CRITIQUE_PROMPT`),
@@ -1724,7 +1723,7 @@ def run(ctx, request: str = "", *, layout: Optional[dict] = None,
         # wording, underlines it, and re-rolls the seed instead.
         layout, notes, unmet = insist_on_mismatch(layout, unmet)
         if notes:
-            layout, _restyled = unphoto_on_repeat_mismatch(layout, notes, request)
+            layout, _restyled = unphoto_on_repeat_mismatch(layout, notes, request, ctx=ctx)
             if _restyled:
                 notes.append(_restyled)
             seed = random.randint(1, 999_999_999)

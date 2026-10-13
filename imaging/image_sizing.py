@@ -5,6 +5,7 @@ Extracted from image.py. Everything here is pure/deterministic apart from the
 config lookups, so it is the cheapest layer to test and the one the size-choice
 suites drive directly.
 """
+from seams import choice
 import logging
 import random
 import re
@@ -152,14 +153,13 @@ def parse_generation_params(tag_content: str, *,
     return prompt, steps, cfg, seed, width, height
 
 
-def detect_orientation_from_text(text: str) -> str:
+def detect_orientation_from_text(text: str, ctx=None) -> str:
     """landscape | portrait | unknown for a picture request. Read by the model:
     an explicit ask wins ("landscape photo of a man" is landscape although a
     man leans portrait), else the scene decides (one person standing ->
     portrait, a street or a crowd -> landscape). The word lists this replaced
     scored «пейзаж» and «man» in one pool and fell through to the default."""
-    import intent
-    return intent.ask_choice(
+    return choice(ctx)(
         "A user asked for this picture: {text}. Which frame fits it? An explicit ask "
         "(landscape photo, horizontal, wide, panorama, 16:9 / portrait orientation, "
         "vertical, phone wallpaper, 9:16) wins even over the subject -- \"landscape photo "
@@ -198,7 +198,7 @@ def normalize_resolution(width: int, height: int) -> Tuple[int, int]:
 
 
 def fix_image_params(goal: str, prompt: str, width: int, height: int, *,
-                     pinned: bool = False) -> Tuple[int, int]:
+                     pinned: bool = False, ctx=None) -> Tuple[int, int]:
     """Orient a size from the request text, then put it on the rails.
 
     `pinned` means the user picked the aspect explicitly (Draw ▸ Size). Their
@@ -207,7 +207,7 @@ def fix_image_params(goal: str, prompt: str, width: int, height: int, *,
     """
     if pinned:
         return normalize_resolution(width, height)
-    orientation = detect_orientation_from_text(f"{goal} {prompt}")
+    orientation = detect_orientation_from_text(f"{goal} {prompt}", ctx=ctx)
     if orientation == "portrait" and width > height:
         width, height = height, width
     elif orientation == "landscape" and height > width:

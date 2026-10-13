@@ -5,10 +5,12 @@ stubbed; the settings, capture and reporting are real."""
 import sys, os, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # The model's reads are stubbed here; the phrases run live in bench/intent_rest_live.py.
-import intent
+import types
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from fakes import reads
 _RESETS = {"♻️ сбрось настройки песни", "Сбросить настройки песни", "сброс настроек песни", "reset song settings", "сбрось настройки песни"}
-intent.STUB = lambda t: {"song": "reset"} if t.strip() in _RESETS else None
-intent.CHOICE_STUB = lambda q, t: "song" if t.strip() in _RESETS else "nothing"
+_R = types.SimpleNamespace(**reads(read=lambda t: {"song": "reset"} if t.strip() in _RESETS else None,
+                                    pick=lambda q, t: "song" if t.strip() in _RESETS else "nothing"))
 os.environ.setdefault("F5_TEST_RUN", "1")
 _DATA = tempfile.mkdtemp(prefix="tg_music_custom_")
 import logging; logging.basicConfig(level=logging.CRITICAL)
@@ -39,6 +41,7 @@ def make_bot():
     bot._api_post = lambda *a, **k: {}
     bot._activity.log = lambda *a, **k: None
     bot._user_store.put(T._User(chat_id=CID, name="T", status="approved"))
+    bot.reads = _R
     return bot
 
 
@@ -161,9 +164,9 @@ check("a typed «song for 100 seconds» keeps its number instead of snapping to 
 
 # ── a TYPED «сбрось настройки песни» resets, instead of the model claiming it did
 check("the reset phrase is recognised in RU/EN, genitive included, and only as a whole message",
-      all(TM.is_reset_phrase(t) for t in ("♻️ сбрось настройки песни", "Сбросить настройки песни",
+      all(TM.is_reset_phrase(t, ctx=_R) for t in ("♻️ сбрось настройки песни", "Сбросить настройки песни",
                                            "сброс настроек песни", "reset song settings"))
-      and not any(TM.is_reset_phrase(t) for t in ("напиши песню про сброс настроек", "сбрось", "настройки песни")))
+      and not any(TM.is_reset_phrase(t, ctx=_R) for t in ("напиши песню про сброс настроек", "сбрось", "настройки песни")))
 bot = make_bot(); sess = bot._get_session(CID)
 sess.music_tempo = "bpm:118"; sess.music_steps = "40"; sess.music_genre = "rock"; sess.reg_state = ""; bot._store.put(sess)
 bot._backend = T.InMemoryBackend(); bot._get_ctx = lambda: None

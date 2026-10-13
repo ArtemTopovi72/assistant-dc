@@ -1,7 +1,10 @@
 """The model's read of a picture's LOOK (imaging/ideogram_layout._look), stubbed
 for the suites. LOOKS is the fixture table; bench/look_live.py runs the same
 phrases on the real model."""
-import intent
+import types
+
+import _sweep_stub
+from fakes import reads
 
 LOOKS = {
     "a realistic photo of a tank": "photo", "photorealistic portrait": "photo",
@@ -32,13 +35,15 @@ LOOKS = {
     "draw a blue elephant on a beach": "none",
 }
 
-_prev = intent.CHOICE_STUB
-
-
-def _choice(q, t):
+def pick(q, t):
     if "Which LOOK" in q:
         return LOOKS.get(t.strip(), "none")
-    return _prev(q, t) if _prev else None
+    return _sweep_stub.pick(q, t)
 
 
-intent.CHOICE_STUB = _choice
+READS = reads(yes=_sweep_stub.yes, pick=pick)
+
+
+def reads_ctx(**more):
+    """A context carrying the look table and the sweep table, plus `more` attributes."""
+    return types.SimpleNamespace(**{**READS, **more})

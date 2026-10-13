@@ -16,8 +16,8 @@ import os, sys, json
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import _sweep_stub  # noqa: F401  the model's narrow reads, stubbed
-import _look_stub  # noqa: F401  the picture's look, stubbed
+import _sweep_stub  # the model's narrow reads, stubbed
+import _look_stub  # the picture's look, stubbed
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
@@ -114,20 +114,20 @@ STYLED = ["a cartoon cat", "anime girl in the rain", "an oil painting of a harbo
           "a realistic cartoon"]          # explicit style wins over "realistic"
 
 for p in REALISM:
-    check(f"realism detected: {p[:34]}", I.wants_realism(p))
+    check(f"realism detected: {p[:34]}", I.wants_realism(p, ctx=_look_stub.reads_ctx()))
 for p in STYLED:
-    check(f"explicit style respected: {p[:34]}", not I.wants_realism(p))
+    check(f"explicit style respected: {p[:34]}", not I.wants_realism(p, ctx=_look_stub.reads_ctx()))
 
 # The exact path that produced the cartoon: planner fails -> blank layout.
 lay = I.apply_style_floor(I.blank_layout("a realistic photo of a tank"),
-                          "a realistic photo of a tank")
+                          "a realistic photo of a tank", ctx=_look_stub.reads_ctx())
 check("a failed planner still yields a photographic style",
       lay["medium"] == "photography" and lay["photo"] and lay["aesthetics"],
       json.dumps(lay, ensure_ascii=False)[:200])
 check("the floor leaves art_style empty (it would discard the photo cues)",
       not lay.get("art_style"), repr(lay.get("art_style")))
 
-cap = I.layout_to_caption(lay)
+cap = I.layout_to_caption(lay, ctx=_look_stub.reads_ctx())
 style = cap.get("style_description") or {}
 check("the floor survives into the caption Ideogram is fed",
       style.get("medium") == "photography" and style.get("photo"),
@@ -137,13 +137,13 @@ check("the floor survives into the caption Ideogram is fed",
 styled = I.normalize_layout({"medium": "oil painting", "art_style": "impressionist",
                              "elements": [{"desc": "a harbour"}]}, "an oil painting")
 before = dict(styled)
-after = I.apply_style_floor(styled, "an oil painting of a harbour")
+after = I.apply_style_floor(styled, "an oil painting of a harbour", ctx=_look_stub.reads_ctx())
 check("an existing style is left alone", after["medium"] == before["medium"]
       and after["art_style"] == before["art_style"],
       json.dumps(after, ensure_ascii=False)[:160])
 
 # And it must not force photography onto someone who asked for a cartoon.
-toon = I.apply_style_floor(I.blank_layout("a cartoon cat"), "a cartoon cat")
+toon = I.apply_style_floor(I.blank_layout("a cartoon cat"), "a cartoon cat", ctx=_look_stub.reads_ctx())
 check("a cartoon request is not forced into photography",
       toon["medium"] != "photography", repr(toon["medium"]))
 
@@ -158,7 +158,7 @@ def _styleless(layout):
 NEUTRAL = ("нарисуй машину во дворе", "draw a cat sitting on a fence",
            "картинка: закат над городом", "a police car in a narrow yard")
 for p in NEUTRAL:
-    lay = I.apply_style_floor(I.blank_layout(p), p)
+    lay = I.apply_style_floor(I.blank_layout(p), p, ctx=_look_stub.reads_ctx())
     check(f"a neutral prompt is never styleless: {p[:30]}", not _styleless(lay),
           json.dumps(lay, ensure_ascii=False)[:120])
     check(f"and defaults to photography: {p[:30]}",
@@ -177,16 +177,16 @@ NAMED = {
     "комикс про кота":                   "comic strip",
 }
 for p, want in NAMED.items():
-    lay = I.apply_style_floor(I.blank_layout(p), p)
+    lay = I.apply_style_floor(I.blank_layout(p), p, ctx=_look_stub.reads_ctx())
     check(f"named style survives a planner failure: {p[:28]}",
           lay.get("art_style") == want, repr(lay.get("art_style")))
     check(f"and is not turned into a photograph: {p[:28]}",
           lay.get("medium") != "photography" and not lay.get("photo"),
           repr(lay.get("medium")))
-    check(f"named_style() reads it back: {p[:28]}",
-          I.named_style(p) == want, repr(I.named_style(p)))
+    check(f"named_style(ctx=_look_stub.reads_ctx()) reads it back: {p[:28]}",
+          I.named_style(p, ctx=_look_stub.reads_ctx()) == want, repr(I.named_style(p, ctx=_look_stub.reads_ctx())))
 
-check("a neutral prompt names no style", I.named_style("нарисуй машину") == "")
+check("a neutral prompt names no style", I.named_style("нарисуй машину", ctx=_look_stub.reads_ctx()) == "")
 
 # A style word that is also a NOUN FOR A PROP names no style: "hangs a painting
 # depicting a calm sea" must not make the floor call the whole scene "a painting".
@@ -197,16 +197,16 @@ PROPS = ["On the wall behind the sofa hangs a painting depicting a calm sea.",
          "a girl reading a comic on the sofa",
          "a realistic photo of a wall with a framed painting"]
 for p in PROPS:
-    check(f"a prop is not a style: {p[:34]}", I.named_style(p) == "", repr(I.named_style(p)))
+    check(f"a prop is not a style: {p[:34]}", I.named_style(p, ctx=_look_stub.reads_ctx()) == "", repr(I.named_style(p, ctx=_look_stub.reads_ctx())))
 check("a prop does not cancel a realism request",
-      I.wants_realism("a realistic photo of a wall with a framed painting"))
+      I.wants_realism("a realistic photo of a wall with a framed painting", ctx=_look_stub.reads_ctx()))
 for p, want in {"draw a painting of a harbour": "painting",
                 "a painting of a cat": "painting",
                 "make it look like a sketch": "sketch",
                 "нарисуй кота в стиле живописи": "oil painting",
                 "children's drawing style, a dog": "illustration"}.items():
-    check(f"a style named as a style still counts: {p[:30]}", I.named_style(p) == want, repr(I.named_style(p)))
-check("named_style tolerates None", I.named_style(None) == "")
+    check(f"a style named as a style still counts: {p[:30]}", I.named_style(p, ctx=_look_stub.reads_ctx()) == want, repr(I.named_style(p, ctx=_look_stub.reads_ctx())))
+check("named_style tolerates None", I.named_style(None, ctx=_look_stub.reads_ctx()) == "")
 # A named style has to WIN over a realism word in the same sentence, which is the
 # only way to tell "caricature is in _STYLE_WORDS" from "this prompt happens to
 # contain no realism word at all".
@@ -215,8 +215,8 @@ for p in ("нарисуй карикатуру, реалистично прор�
           "комикс в реалистичном стиле",
           "акварельный рисунок, как в жизни"):
     check(f"a named style beats a realism word: {p[:34]}",
-          not I.wants_realism(p), f"wants_realism={I.wants_realism(p)}")
-    lay = I.apply_style_floor(I.blank_layout(p), p)
+          not I.wants_realism(p, ctx=_look_stub.reads_ctx()), f"wants_realism={I.wants_realism(p, ctx=_look_stub.reads_ctx())}")
+    lay = I.apply_style_floor(I.blank_layout(p), p, ctx=_look_stub.reads_ctx())
     check(f"and the floor keeps it drawn: {p[:34]}",
           lay.get("medium") != "photography", repr(lay.get("medium")))
 
@@ -227,7 +227,7 @@ rich = I.normalize_layout({"medium": "photography", "photo": "85mm lens, f/1.4",
                            "lighting": "golden hour backlight",
                            "elements": [{"desc": "a tank"}]},
                           "a realistic photo of a tank")
-after = I.apply_style_floor(rich, "a realistic photo of a tank")
+after = I.apply_style_floor(rich, "a realistic photo of a tank", ctx=_look_stub.reads_ctx())
 check("the planner's own camera work is not replaced by the default",
       after["photo"] == "85mm lens, f/1.4"
       and after["lighting"] == "golden hour backlight",

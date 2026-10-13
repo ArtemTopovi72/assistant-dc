@@ -126,10 +126,9 @@ bot = make_bot(ctx, Graph())
 # isolation this file exists to check. So the graph handed to make_bot is not
 # the one _execute_task runs; build_graph is stubbed so the checks look at the
 # prompt this fake captures rather than the REAL model's.
-import graph as _graph_mod
-import intent as _intent
-_intent.STUB = lambda t: {"doc_question": "Kessler" in t}
-_graph_mod.build_graph = lambda _ctx: Graph(_ctx)
+from fakes import reads
+ctx.intent_read = reads(read=lambda t: {"doc_question": "Kessler" in t})["intent_read"]
+bot.graph_builder = Graph
 sess = bot._get_session(CID)
 sess.clear_context()
 sess.set_tg_facts([])

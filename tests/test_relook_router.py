@@ -12,12 +12,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 
-import graph as G, models, intent
+import graph as G, models
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from fakes import reads
 # The model reads the words (agent/intent.py); phrases: bench/intent_picture_live.py
-intent.STUB = {"which item is the most expensive?": {"is_question": True},
+_READ = reads(read={"which item is the most expensive?": {"is_question": True},
                "сколько стоит молоко": {"is_question": True},
                "how much is it?": {"is_question": True},
-               "what is written on it?": {"is_question": True, "about_picture": True}}.get
+               "what is written on it?": {"is_question": True, "about_picture": True}}.get)
 
 OK = BAD = 0
 def check(name, cond, extra=""):
@@ -32,7 +34,7 @@ for p in (upload, render):
     open(p, "wb").write(b"\xff\xd8" + b"\0" * 16)
 
 class C: pass
-ctx = C(); ctx.last_image_path = upload
+ctx = C(); ctx.last_image_path = upload; ctx.intent_read = _READ["intent_read"]
 
 check("new photo -> vision_agent", G.entry_router({"image_data": b"x"}, ctx) == "vision_agent")
 check("question about the user's photo -> vision_agent",
@@ -60,6 +62,7 @@ G._translate_to_english = lambda ctx, t: t
 rctx = models.Context(models=None, transcription_cache={}, cache_file=None,
                       asr_lock=threading.Lock(), tts_lock=threading.Lock())
 rctx.last_image_path = upload
+rctx.intent_read = _READ["intent_read"]
 out = G.build_graph(rctx).invoke({"messages": [], "user_input": "which item is the most expensive?"})
 check("wired graph re-looked at the upload on a bare follow-up", calls == ["which item is the most expensive?"], calls)
 check("and carried the fresh look into the turn", out.get("vision_summary") == "milk 89", out.get("vision_summary"))
