@@ -283,3 +283,24 @@ def test_continue_in_words_goes_on_from_the_chats_last_clip(monkeypatch, tmp_pat
     H._handle_generate_video(_Ctx(), {"user_input_original": "сделай видео: кот прыгает"},
                              {"description": "The cat jumps onto the table."})
     assert not calls[0][1].get("chain") or calls[0][1]["chain"][1] == 1   # a new clip stays new
+
+
+def test_an_approved_plan_keeps_the_continuation_prefix_and_the_whole_first_part(monkeypatch, tmp_path):
+    # The approved first part replaced the description whole (prefix gone), and the bridge
+    # then cut the prefix's length off the part: «What happens next: Camera: static…»
+    # (live 2026-10-13).
+    H, calls, stitched, kept = _wire(monkeypatch, tmp_path)
+    monkeypatch.setattr(V, "bridge_script", lambda ctx, ps: ps)
+    monkeypatch.setattr(V, "mark_inserts", lambda ctx, ps: ps)
+    prepped = []
+    monkeypatch.setattr(V, "prepare_prompt", lambda ctx, d, **kw: prepped.append(d) or (d, 6.0))
+    src, tail = tmp_path / "sent_back.mp4", tmp_path / "tail.mp4"
+    src.write_bytes(b"s")
+    tail.write_bytes(b"t")
+    monkeypatch.setattr(V, "chain_of", lambda p: ("h3_continuous/chY", 2) if p == str(src) else ())
+    ctx = _Ctx()
+    ctx.continue_src, ctx.continue_tail = str(src), str(tail)
+    first = "The baker sets the cat down on the floor and it runs off to the door."
+    ctx.video_plan_parts = [first, "The baker waves after it and laughs."]
+    H._handle_generate_video(ctx, {}, {"description": LONG})
+    assert prepped and prepped[0].startswith(V.CONTINUE_CTX_PREFIX + "BRIDGE. " + first), prepped[:1]

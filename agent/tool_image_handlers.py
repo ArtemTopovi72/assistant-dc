@@ -1565,7 +1565,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     approved = [p for p in (getattr(ctx, "video_plan_parts", None) or []) if p]
     ctx.video_plan_parts = []
     if approved:
-        description = (description.replace(raw, approved[0], 1) if raw and raw in description
+        # the first part stands in the description now, not the whole script: looking for
+        # the script dropped the continuation prefix and the Russian-speech rule, and the
+        # bridge then cut the prefix's length off the part itself (live 2026-10-13)
+        cur = parts[0]
+        description = (description.replace(cur, approved[0], 1) if cur and cur in description
                        else approved[0])
         parts = approved
     elif len(parts) > 1 and getattr(ctx, "video_plan_ask", False):
@@ -1579,8 +1583,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 "short line in their language that the plan is below. Do not describe the "
                 "clip, do not call generate_video again this turn.")
     if bridge_first:
-        description = video_mod.CONTINUE_CTX_PREFIX + _bridged(
-            ctx, cont_src, description[len(video_mod.CONTINUE_CTX_PREFIX):])
+        body = description.removeprefix(video_mod.CONTINUE_CTX_PREFIX)
+        description = video_mod.CONTINUE_CTX_PREFIX + _bridged(ctx, cont_src, body)
     # A fresh clip with no voices or reference clips (and at most a start photo) is part 1
     # of a Herrgott chain: its latent is kept, so the parts after it -- or a later
     # ▶️ Continue -- go on from the exact numbers instead of a reset.
