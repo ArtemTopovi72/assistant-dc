@@ -3,7 +3,7 @@
 Armed: the voice sample, then the book, are consumed by the button -- the library is not indexed, nothing
 reaches the agent. Not armed (or after another button): a document goes the ordinary way, untouched.
 The voice is a fake: a tone per letter."""
-import os, sys, time, threading, tempfile, subprocess
+import os, sys, types, time, threading, tempfile, subprocess
 os.environ.setdefault("F5_TEST_RUN", "1")
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
@@ -67,8 +67,7 @@ def fake_speak(ctx, ref, ref_text, text, out_dir):
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i",
                     f"sine=frequency=300:duration={max(0.5, len(text) * 0.06):.2f}", wav], check=True)
     return wav
-voice_clone.prepare_reference = fake_prepare
-voice_clone.speak = fake_speak
+bot.voice_clone = types.SimpleNamespace(prepare_reference=fake_prepare, speak=fake_speak, CloneError=voice_clone.CloneError)
 
 CID = 9_300_099
 bot._user_store.put(T._User(chat_id=CID, name="Bk", status="approved", is_admin=False))

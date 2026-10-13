@@ -15,7 +15,6 @@ import shutil
 import uuid
 
 import audiobook
-import voice_clone
 
 MIN_PASTED_BOOK = 1500                   # a shorter pasted text is not a book: the user is told to send the file
 SPEECH_CHARS_PER_SECOND = 14.0           # measured on the F5 Russian voice, for the «about N min» line
@@ -165,9 +164,9 @@ class AudiobookMixin:
     def _book_prepare(self, chat_id: int, lang: str, src: str) -> None:
         sess = self._get_session(chat_id)
         try:
-            ref, text = voice_clone.prepare_reference(self._get_ctx(), src, self._book_dir(chat_id),
+            ref, text = self.voice_clone.prepare_reference(self._get_ctx(), src, self._book_dir(chat_id),
                                                       lang=(sess.lang or "ru"))
-        except voice_clone.CloneError as exc:
+        except self.voice_clone.CloneError as exc:
             self._send_text(chat_id, tg_bot._t("clone_fail_" + str(exc), lang))
             return
         except Exception:
@@ -228,7 +227,7 @@ class AudiobookMixin:
         os.makedirs(work, exist_ok=True)
 
         def synth(text):
-            return voice_clone.speak(ctx, ref, ref_text, text, work)
+            return self.voice_clone.speak(ctx, ref, ref_text, text, work)
         def verify(text, wav):
             from audio import transcribe_audio_file
             return audiobook.heard_matches(text, transcribe_audio_file(ctx, wav, lang_hint=lang or "ru") or "")

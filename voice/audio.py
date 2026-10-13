@@ -165,12 +165,17 @@ _MONTH_GEN = ("января", "февраля", "марта", "апреля", "�
               "июля", "августа", "сентября", "октября", "ноября", "декабря")
 
 
+def _n2w(num2words=None):
+    """The num2words function: the installed one, the one handed in, or None when `False` says it is missing."""
+    return _num2words if num2words is None else (num2words or None)
+
+
 def _ru_ordinal(n: int, neuter_day: bool, num2words=None) -> Optional[str]:
     """Russian ordinal from num2words, inflected for dates: day of month as
     neuter nominative ('первое', 'третье'), year as genitive masc.
     ('две тысячи двадцать шестого'). Deterministic suffix morphology on the
     masc. nominative that num2words produces."""
-    n2w = num2words or _num2words
+    n2w = _n2w(num2words)
     if n2w is None:
         return None
     try:
@@ -198,39 +203,41 @@ def _date_to_russian(day: int, month: int, year: int) -> Optional[str]:
 _TIME_RE = re.compile(r"\b([01]?\d|2[0-3]):([0-5]\d)\b")
 
 
-def _time_to_russian(match: "re.Match") -> str:
+def _time_to_russian(match: "re.Match", num2words=None) -> str:
     """'14:30' -> 'четырнадцать тридцать', '14:05' -> 'четырнадцать ноль пять'."""
-    if _num2words is None:
+    n2w = _n2w(num2words)
+    if n2w is None:
         return match.group(0)
     h, m = int(match.group(1)), int(match.group(2))
     try:
-        hw = _num2words(h, lang="ru")
+        hw = n2w(h, lang="ru")
         if m == 0:
             mw = "ноль ноль"
         elif m < 10:
-            mw = "ноль " + _num2words(m, lang="ru")
+            mw = "ноль " + n2w(m, lang="ru")
         else:
-            mw = _num2words(m, lang="ru")
+            mw = n2w(m, lang="ru")
         return f"{hw} {mw}"
     except Exception:
         return match.group(0)
 
 
-def _number_to_russian_words(match: "re.Match") -> str:
+def _number_to_russian_words(match: "re.Match", num2words=None) -> str:
     """Convert one numeric token to Russian words for TTS. Decimals use a comma or
     dot; a fractional part of all zeros is voiced as the integer. Falls back to the
     original token if num2words is unavailable or the value can't be parsed."""
     token = match.group(0)
-    if _num2words is None:
+    n2w = _n2w(num2words)
+    if n2w is None:
         return token
     norm = token.replace(",", ".")
     try:
         if "." in norm:
             value = float(norm)
             if value.is_integer():
-                return _num2words(int(value), lang="ru")
-            return _num2words(value, lang="ru")
-        return _num2words(int(norm), lang="ru")
+                return n2w(int(value), lang="ru")
+            return n2w(value, lang="ru")
+        return n2w(int(norm), lang="ru")
     except Exception:
         return token
 

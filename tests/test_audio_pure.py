@@ -104,16 +104,11 @@ def test_number_to_russian_words():
 
 
 def test_num2words_missing():
-    saved = A._num2words
-    A._num2words = None
-    try:
-        check("ru_ordinal_none_when_missing", A._ru_ordinal(1, True) is None)
-        m = A._TIME_RE.search("14:30")
-        check("time_to_russian_none_when_missing", A._time_to_russian(m) == "14:30")
-        m2 = A._NUMBER_RE.search("42")
-        check("number_words_none_when_missing", A._number_to_russian_words(m2) == "42")
-    finally:
-        A._num2words = saved
+    check("ru_ordinal_none_when_missing", A._ru_ordinal(1, True, num2words=False) is None)
+    m = A._TIME_RE.search("14:30")
+    check("time_to_russian_none_when_missing", A._time_to_russian(m, num2words=False) == "14:30")
+    m2 = A._NUMBER_RE.search("42")
+    check("number_words_none_when_missing", A._number_to_russian_words(m2, num2words=False) == "42")
 
 
 def test_post_process_answer():
