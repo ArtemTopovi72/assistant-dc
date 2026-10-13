@@ -185,6 +185,15 @@ check("one chat's clip does not leak into another",
 check("it is separate from the image register (a still is never a clip)",
       "image_log" not in str(type(bot5._chat_videos)))
 
+# After a restart the dict is empty: «продолжи это видео» made a new clip from nothing.
+import tg_tasks
+import tg_artifacts_store
+_clip = os.path.join(tempfile.mkdtemp(), "sent.mp4")
+open(_clip, "wb").write(b"v")
+tg_artifacts_store.log_artifact(333, "video", _clip)
+check("after a restart the chat's last clip comes back from the delivery registry",
+      tg_tasks._last_video({}, 333) == _clip and tg_tasks._last_video({}, 444) == "")
+
 print()
 print(f"{OK}/{OK + BAD} checks passed")
 sys.exit(1 if BAD else 0)

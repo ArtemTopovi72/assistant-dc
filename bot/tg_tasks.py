@@ -120,6 +120,20 @@ def _plainly_not_a_doc_question(text: str) -> bool:
     return not intent.read(None, t, "", "the user's own documents are searchable")["doc_question"]
 
 
+def _last_video(chat_videos: dict, chat_id: int) -> str:
+    """The last clip delivered to the chat. The dict is lost on restart: «продолжи это
+    видео» then made a new clip from nothing without a word (2026-10-13); the delivery
+    registry survives it."""
+    if chat_videos.get(chat_id):
+        return chat_videos[chat_id]
+    try:
+        import tg_artifacts_store
+        return (tg_artifacts_store.recent_artifacts(chat_id, "video", 1) or [{}])[0].get("path", "")
+    except Exception:
+        tg_bot.logger.debug("last video: registry unavailable", exc_info=True)
+        return ""
+
+
 def _about_the_last_video(last_image_path: str, user_input: str) -> bool:
     """True when `user_input` is plainly a follow-up about the video sheet
     still on screen -- mirrors graph.needs_relook's own video-sheet branch,
@@ -1367,7 +1381,7 @@ class TaskRunnerMixin:
         ctx.recent_image_paths = [_one] if (_one and os.path.exists(_one)) else []
 
         # The last clip delivered here, so "use that video" resolves.
-        _lv = self._chat_videos.get(chat_id) or ""
+        _lv = _last_video(self._chat_videos, chat_id)
         ctx.last_video_path = _lv if (_lv and os.path.exists(_lv)) else None
 
         # Output size (Draw ▸ 📐 Size) — same swap, same reason: image.py reads it
