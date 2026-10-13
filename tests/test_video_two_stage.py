@@ -12,12 +12,11 @@ def check(c, m):
     ok.append(bool(c)); print(("ok   " if c else "FAIL ") + m)
 
 
-os.environ.pop("VIDEO_TWO_STAGE", None)
+assert "VIDEO_TWO_STAGE" not in os.environ, "the suite reads the default"
 wf = V.build_workflow("x", mode="t2va", width=1344, height=768, frames=124, seed=5)
 check(not any(n["class_type"] == "MinimaxH3LatentUpscaler3D" for n in wf.values()), "off in suites by default")
 
-os.environ["VIDEO_TWO_STAGE"] = "1"
-wf = V.build_workflow("x", mode="t2va", width=1344, height=768, frames=124, seed=5)
+wf = V.build_workflow("x", mode="t2va", width=1344, height=768, frames=124, seed=5, two_stage=True)
 c = wf[V.N_COND]["inputs"]
 check((c["width"], c["height"]) == (672, 384), f"stage 1 at half size ({c['width']}x{c['height']})")
 kinds = {n["class_type"]: k for k, n in wf.items()}
@@ -32,11 +31,12 @@ check(wf[first_sep]["inputs"]["av_latent"] == [V.N_SAMPLER, 0], "upscale reads s
 check(wf[kinds["MinimaxH3LatentUpscaler3D"]]["inputs"]["mode.scale"] == V.UPSCALE_FACTOR == 1.5, "1.5x, dotted dynamic-combo key")
 check(wf[kinds["RandomNoise"]]["inputs"]["noise_seed"] == 6, "refine noise seeded from the clip seed")
 
-V._upload = lambda p, kind: "k.png"
-wf = V.build_workflow("x", mode="t2va", width=1344, height=768, frames=124, seed=5, images=["a.png"])
+import types
+from tests.fakes import Over
+up = types.SimpleNamespace(video_engine=Over(V, _upload=lambda p, kind: "k.png"))
+wf = V.build_workflow("x", mode="t2va", width=1344, height=768, frames=124, seed=5, images=["a.png"], ctx=up, two_stage=True)
 check("MinimaxH3LatentUpscaler3D" not in {n["class_type"] for n in wf.values()}, "keyframe graph untouched")
 check(wf[V.N_COND]["inputs"]["width"] == 1344, "keyframe graph keeps full size")
-os.environ.pop("VIDEO_TWO_STAGE")
 
 print(f"\n{sum(ok)}/{len(ok)} checks passed")
 sys.exit(0 if all(ok) else 1)

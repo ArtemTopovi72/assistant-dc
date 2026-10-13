@@ -2,11 +2,14 @@
 import os, sys
 R = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(R, d) for d in ("media", "agent", "services", "core", "voice", "")]
+import types
 import video as V
-V._upload = lambda p, kind="image": os.path.basename(p)   # no ComfyUI in tests
+from tests.fakes import Over
+# no ComfyUI in tests: the upload is handed in on the context
+CTX = types.SimpleNamespace(video_engine=Over(V, _upload=lambda p, kind="image": os.path.basename(p)))
 from config import VIDEO_STEPS_REF2VA_VOICES
 wf = V.build_workflow("x", mode="ref2va", width=1344, height=768, frames=121, seed=1,
-                      images=["a.png"], audios=["v1.wav"], steps=VIDEO_STEPS_REF2VA_VOICES)
+                      images=["a.png"], audios=["v1.wav"], steps=VIDEO_STEPS_REF2VA_VOICES, ctx=CTX)
 lora = wf[V.N_LORA]["inputs"]
 assert lora["strength_model"] > 0, lora
 assert "ref2v_turbo_8step" in lora["lora_name"], lora   # v0.1 4-step smeared hands; 8-step v1.0 is native
@@ -23,15 +26,16 @@ print("ok")
 
 # two-stage: half size, the latent upscaled 2x back to the asked size
 wf2 = V.build_workflow("x", mode="ref2va", width=1344, height=768, frames=121, seed=1,
-                       images=["a.png"], audios=["v1.wav"], steps=8, two_stage=True)
+                       images=["a.png"], audios=["v1.wav"], steps=8, two_stage=True, ctx=CTX)
 ups = [n["inputs"] for n in wf2.values() if n["class_type"] == "MinimaxH3LatentUpscaler3D"]
 assert ups and ups[0]["mode.scale"] == 2.0, ups
 assert wf2[V.N_COND]["inputs"]["width"] == 672, wf2[V.N_COND]["inputs"]
 print("two-stage ok")
 
-V.REFINE_STEPS = 4      # VIDEO_REFINE_STEPS: the same sigma tail in 4 even steps
+# VIDEO_REFINE_STEPS=4: the same sigma tail in 4 even steps
 wf4 = V.build_workflow("x", mode="ref2va", width=1344, height=768, frames=121, seed=1,
-                       images=["a.png"], audios=["v1.wav"], steps=12, two_stage=True)
+                       images=["a.png"], audios=["v1.wav"], steps=12, two_stage=True, ctx=CTX,
+                       refine_steps=4)
 sig = [n["inputs"]["sigmas"] for n in wf4.values() if n["class_type"] == "ManualSigmas"]
 assert sig == ["0.6316, 0.4737, 0.3158, 0.1579, 0"], sig
 print("refine steps ok")

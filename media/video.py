@@ -492,7 +492,7 @@ def _two_stage_on() -> bool:
     return not os.getenv("F5_TEST_RUN")
 
 
-def _add_latent_upscale(wf: dict, seed: int, factor: float = 0.0) -> None:
+def _add_latent_upscale(wf: dict, seed: int, factor: float = 0.0, steps: int = 0) -> None:
     """Render at half size, upscale the video latent 2x, refine 2 steps.
 
     Night bench (bench/night_upscale.py, same seed/prompt): t1 149s vs
@@ -516,8 +516,8 @@ def _add_latent_upscale(wf: dict, seed: int, factor: float = 0.0) -> None:
     wf[n["cat"]] = {"class_type": "LTXVConcatAVLatent",
                     "inputs": {"video_latent": [n["ups"], 0], "audio_latent": [n["sep"], 1]}}
     # the refine walks the same tail (0.6316 -> 0) in VIDEO_REFINE_STEPS even steps
-    top = 0.6316
-    sig = ", ".join(f"{top * (1 - i / REFINE_STEPS):.4f}" for i in range(REFINE_STEPS)) + ", 0"
+    top, steps = 0.6316, steps or REFINE_STEPS
+    sig = ", ".join(f"{top * (1 - i / steps):.4f}" for i in range(steps)) + ", 0"
     wf[n["sig"]] = {"class_type": "ManualSigmas", "inputs": {"sigmas": sig}}
     wf[n["noise"]] = {"class_type": "RandomNoise", "inputs": {"noise_seed": int(seed) + 1}}
     smp = wf[N_SAMPLER]["inputs"]
@@ -546,6 +546,7 @@ def build_workflow(prompt: str, *, mode: str, width: int, height: int,
                    audios: Sequence[str] = (),
                    steps: Optional[int] = None,
                    ref_image_size: str = "match", ctx=None, two_stage: Optional[bool] = None,
+                   refine_steps: int = 0,
                    context_video: str = "", context_latent: str = "",
                    save_latent: str = "") -> dict:
     """The ComfyUI API graph for one clip, with every reference already uploaded.
@@ -591,11 +592,11 @@ def build_workflow(prompt: str, *, mode: str, width: int, height: int,
 
     if (_two_stage_on() if two_stage is None else two_stage):
         if mode == "t2va" and not images:
-            _add_latent_upscale(wf, seed)
+            _add_latent_upscale(wf, seed, steps=refine_steps)
         elif mode == "ref2va":
             # Half size, then 2x back to full (the deds fight at 8
             # steps: 267 s vs 348 s single-stage, hands clean at 1344x768).
-            _add_latent_upscale(wf, seed, factor=2.0)
+            _add_latent_upscale(wf, seed, factor=2.0, steps=refine_steps)
 
     if mode == "ref2va":
         cond["ref_image_size"] = ref_image_size
