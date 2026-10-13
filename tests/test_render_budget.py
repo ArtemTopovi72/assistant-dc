@@ -11,7 +11,7 @@ which is exactly what the anti-false-success rules already demand elsewhere.
 
 Run: venv/Scripts/python.exe tests/test_render_budget.py
 """
-import os, sys, tempfile
+import os, sys, types, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
@@ -42,6 +42,8 @@ class Ctx:
         self.last_image_prompt = ""
         self.reference_person_mode = False
         self.web_search_enabled = True
+        self.deps = types.SimpleNamespace(
+            generate_image_with_refinement=lambda *a, **k: _fake_generate(*a, **k))
     def set_stage(self, *a, **k): pass
     def remember(self, *a, **k): pass
     def memory_text(self): return ""
@@ -67,50 +69,45 @@ check("but is not effectively unlimited",
 CAP = config.IMAGE_MAX_RENDERS_PER_TURN
 
 print("\nA TURN SPENDS ITS BUDGET AND THEN STOPS")
-_real = T.generate_image_with_refinement
-T.generate_image_with_refinement = _fake_generate
-try:
-    _drawn.clear()
-    state = {}
-    ctx = Ctx()
-    msgs = []
-    for i in range(CAP + 3):
-        msgs.append(T._handle_generate_image(ctx, state, {"description": f"scene {i}"}))
-    check(f"exactly {CAP} renders happened, not {CAP + 3}", len(_drawn) == CAP,
-          f"{len(_drawn)} renders")
-    check("the first calls succeeded",
-          all(not m.startswith("[TOOL ERROR]") for m in msgs[:CAP]),
-          msgs[0][:90])
-    check("the calls past the cap are refused",
-          all(m.startswith("[TOOL ERROR]") for m in msgs[CAP:]), msgs[CAP][:90])
-    over = msgs[CAP]
-    check("the refusal tells it to deliver what it has",
-          "Deliver the best picture you already have" in over, over)
-    check("and to say what it could not fix, rather than claim success",
-          "could not get right" in over, over)
-    check("and not to render again", "Do NOT render again" in over, over)
+_drawn.clear()
+state = {}
+ctx = Ctx()
+msgs = []
+for i in range(CAP + 3):
+    msgs.append(T._handle_generate_image(ctx, state, {"description": f"scene {i}"}))
+check(f"exactly {CAP} renders happened, not {CAP + 3}", len(_drawn) == CAP,
+      f"{len(_drawn)} renders")
+check("the first calls succeeded",
+      all(not m.startswith("[TOOL ERROR]") for m in msgs[:CAP]),
+      msgs[0][:90])
+check("the calls past the cap are refused",
+      all(m.startswith("[TOOL ERROR]") for m in msgs[CAP:]), msgs[CAP][:90])
+over = msgs[CAP]
+check("the refusal tells it to deliver what it has",
+      "Deliver the best picture you already have" in over, over)
+check("and to say what it could not fix, rather than claim success",
+      "could not get right" in over, over)
+check("and not to render again", "Do NOT render again" in over, over)
 
-    print("\nEACH TURN GETS ITS OWN BUDGET")
-    _drawn.clear()
-    fresh = {}
-    msg = T._handle_generate_image(ctx, fresh, {"description": "a new turn"})
-    check("a new state means a fresh budget",
-          len(_drawn) == 1 and not msg.startswith("[TOOL ERROR]"), msg[:90])
+print("\nEACH TURN GETS ITS OWN BUDGET")
+_drawn.clear()
+fresh = {}
+msg = T._handle_generate_image(ctx, fresh, {"description": "a new turn"})
+check("a new state means a fresh budget",
+      len(_drawn) == 1 and not msg.startswith("[TOOL ERROR]"), msg[:90])
 
-    print("\nTHE COUNTER IS SHARED WITH redraw_image")
-    # The live runaway alternated redraw and generate; a per-tool counter would
-    # have let it spend the budget twice over.
-    _drawn.clear()
-    shared = {}
-    T._handle_generate_image(ctx, shared, {"description": "one"})
-    used_after_generate = shared.get("_renders_used")
-    check("generate_image records against the shared counter",
-          used_after_generate == 1, shared)
-    budget_msg = T._render_budget_exhausted(shared, "redraw_image")
-    check("redraw_image continues the SAME count, it does not start over",
-          shared.get("_renders_used") == 2 and budget_msg is None, shared)
-finally:
-    T.generate_image_with_refinement = _real
+print("\nTHE COUNTER IS SHARED WITH redraw_image")
+# The live runaway alternated redraw and generate; a per-tool counter would
+# have let it spend the budget twice over.
+_drawn.clear()
+shared = {}
+T._handle_generate_image(ctx, shared, {"description": "one"})
+used_after_generate = shared.get("_renders_used")
+check("generate_image records against the shared counter",
+      used_after_generate == 1, shared)
+budget_msg = T._render_budget_exhausted(shared, "redraw_image")
+check("redraw_image continues the SAME count, it does not start over",
+      shared.get("_renders_used") == 2 and budget_msg is None, shared)
 
 print("\nLOCALIZED EDITS ARE NOT CHARGED TO THE BUDGET")
 import inspect

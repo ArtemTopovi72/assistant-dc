@@ -14,7 +14,7 @@ Found by dependency fault-injection:
 
 Run: venv/Scripts/python.exe tests/test_tool_fault_degradation.py
 """
-import os, sys, threading
+import os, sys, types, threading
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
@@ -42,11 +42,11 @@ def _state():
 
 def test_generate_image_nonexistent_path_is_failure():
     """Renderer returns a path that does not exist -> NOT a success."""
-    tmod.generate_image_with_refinement = lambda *a, **k: {
-        "path": BAD, "score": 7, "attempts": 1, "status": "success", "prompt": "x"}
-    tmod.enhance_faces_with_comfy = lambda ctx, p: p
+    ctx = _ctx()
+    ctx.deps = types.SimpleNamespace(generate_image_with_refinement=lambda *a, **k: {
+        "path": BAD, "score": 7, "attempts": 1, "status": "success", "prompt": "x"})
     st = _state()
-    out = tmod.execute_tool(_ctx(), st, "generate_image", {"description": "a cat"})
+    out = tmod.execute_tool(ctx, st, "generate_image", {"description": "a cat"})
     assert out.lstrip().startswith("[TOOL ERROR]"), f"false success on missing file: {out[:80]!r}"
     assert st.get("image_status") != "success", f"state still success: {st.get('image_status')!r}"
     assert st.get("image_path") in ("", None) or not os.path.exists(st["image_path"]), \
@@ -55,10 +55,10 @@ def test_generate_image_nonexistent_path_is_failure():
 
 
 def test_generate_image_none_path_is_failure():
-    tmod.generate_image_with_refinement = lambda *a, **k: {"path": None, "status": "fail"}
-    tmod.enhance_faces_with_comfy = lambda ctx, p: p
+    ctx = _ctx()
+    ctx.deps = types.SimpleNamespace(generate_image_with_refinement=lambda *a, **k: {"path": None, "status": "fail"})
     st = _state()
-    out = tmod.execute_tool(_ctx(), st, "generate_image", {"description": "a cat"})
+    out = tmod.execute_tool(ctx, st, "generate_image", {"description": "a cat"})
     assert out.lstrip().startswith("[TOOL ERROR]") and st.get("image_status") != "success"
     print("PASS generate_image None path is a clean failure")
 

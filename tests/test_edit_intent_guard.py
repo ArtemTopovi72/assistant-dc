@@ -8,7 +8,7 @@ is enforced in the tool layer, where it cannot be talked out of.
 
 Run: venv/Scripts/python.exe tests/test_edit_intent_guard.py
 """
-import os, sys, tempfile, inspect
+import os, sys, types, tempfile, inspect
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
@@ -42,6 +42,8 @@ class Ctx:
         self.last_image_prompt = ""
         self.reference_person_mode = False
         self.web_search_enabled = True
+        self.deps = types.SimpleNamespace(
+            generate_image_with_refinement=lambda *a, **k: _fake_generate(*a, **k))
     def set_stage(self, *a, **k): pass
     def remember(self, *a, **k): pass
     def memory_text(self): return ""
@@ -77,41 +79,36 @@ check("intent is taken from the RAW text, before translation rewrites it",
 
 # ------------------------------------------------------------- the guard
 print("\nAN EDIT TURN IS NOT ANSWERED WITH A NEW PICTURE")
-_real = T.generate_image_with_refinement
-T.generate_image_with_refinement = _fake_generate
-try:
-    _drawn.clear()
-    state = {"edit_intent": True, "image_path": IMG}
-    msg = T._handle_generate_image(Ctx(IMG), state, {"description": "a jar of honey"})
-    check("generate_image refuses", msg.startswith("[TOOL ERROR]"), msg[:100])
-    check("and nothing was drawn", _drawn == [], _drawn)
-    check("it names the tool to use instead", "inpaint_image" in msg, msg)
-    check("it explains that generating would discard the user's picture",
-          "discard" in msg, msg)
-    check("and forbids retrying the same call", "Do not call generate_image again" in msg,
-          msg)
+_drawn.clear()
+state = {"edit_intent": True, "image_path": IMG}
+msg = T._handle_generate_image(Ctx(IMG), state, {"description": "a jar of honey"})
+check("generate_image refuses", msg.startswith("[TOOL ERROR]"), msg[:100])
+check("and nothing was drawn", _drawn == [], _drawn)
+check("it names the tool to use instead", "inpaint_image" in msg, msg)
+check("it explains that generating would discard the user's picture",
+      "discard" in msg, msg)
+check("and forbids retrying the same call", "Do not call generate_image again" in msg,
+      msg)
 
-    # ---- the cases that must STILL draw --------------------------------
-    print("\nBUT AN ORDINARY REQUEST FOR A NEW PICTURE STILL DRAWS")
-    _drawn.clear()
-    state = {"image_path": IMG}          # a picture is loaded, but no edit intent
-    msg = T._handle_generate_image(Ctx(IMG), state, {"description": "a ship in a storm"})
-    check("no edit intent -> the picture is drawn", len(_drawn) == 1, msg[:120])
+# ---- the cases that must STILL draw --------------------------------
+print("\nBUT AN ORDINARY REQUEST FOR A NEW PICTURE STILL DRAWS")
+_drawn.clear()
+state = {"image_path": IMG}          # a picture is loaded, but no edit intent
+msg = T._handle_generate_image(Ctx(IMG), state, {"description": "a ship in a storm"})
+check("no edit intent -> the picture is drawn", len(_drawn) == 1, msg[:120])
 
-    _drawn.clear()
-    state = {"edit_intent": True}        # edit intent but nothing to edit
-    msg = T._handle_generate_image(Ctx(None), state, {"description": "a ship"})
-    check("edit intent with NO working image -> still drawn (nothing to protect)",
-          len(_drawn) == 1, msg[:120])
+_drawn.clear()
+state = {"edit_intent": True}        # edit intent but nothing to edit
+msg = T._handle_generate_image(Ctx(None), state, {"description": "a ship"})
+check("edit intent with NO working image -> still drawn (nothing to protect)",
+      len(_drawn) == 1, msg[:120])
 
-    _drawn.clear()
-    state = {"edit_intent": True, "image_path": os.path.join(TMP, "gone.png")}
-    msg = T._handle_generate_image(Ctx(os.path.join(TMP, "gone.png")), state,
-                                   {"description": "a ship"})
-    check("a stale path that no longer exists does not block drawing",
-          len(_drawn) == 1, msg[:120])
-finally:
-    T.generate_image_with_refinement = _real
+_drawn.clear()
+state = {"edit_intent": True, "image_path": os.path.join(TMP, "gone.png")}
+msg = T._handle_generate_image(Ctx(os.path.join(TMP, "gone.png")), state,
+                               {"description": "a ship"})
+check("a stale path that no longer exists does not block drawing",
+      len(_drawn) == 1, msg[:120])
 
 print(f"\n{_n - _bad}/{_n} checks passed")
 sys.exit(1 if _bad else 0)

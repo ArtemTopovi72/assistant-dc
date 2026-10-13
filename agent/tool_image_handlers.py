@@ -953,7 +953,7 @@ def _handle_generate_image(ctx, state, args: dict) -> str:
     _prev_look = getattr(ctx, "user_look", "")
     ctx.user_look = _user_look(ctx, state)
     try:
-        result = _t.generate_image_with_refinement(
+        result = dep(ctx, "generate_image_with_refinement", _t.generate_image_with_refinement)(
             ctx=ctx, description=description, steps=steps, width=width, height=height, seed=seed,
         )
     finally:

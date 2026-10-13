@@ -13,7 +13,7 @@ substituted, and that an edit is refused here rather than redrawn.
 
 Run: venv/Scripts/python.exe tests/test_strict_ideogram.py
 """
-import os, sys, tempfile
+import os, sys, types, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
@@ -100,13 +100,10 @@ for reason in ("refused", "engine_failed", "server_error"):
         def memory_text(self): return ""
         def is_cancelled(self): return False
 
-    _real = T.generate_image_with_refinement
-    T.generate_image_with_refinement = lambda *a, **kw: {"path": None, "status": "fail",
-                                                        "score": 0, "attempts": 1}
-    try:
-        msg = T._handle_generate_image(_Ctx(), state, {"description": "a cat"})
-    finally:
-        T.generate_image_with_refinement = _real
+    ctx = _Ctx()
+    ctx.deps = types.SimpleNamespace(generate_image_with_refinement=lambda *a, **kw: {
+        "path": None, "status": "fail", "score": 0, "attempts": 1})
+    msg = T._handle_generate_image(ctx, state, {"description": "a cat"})
     msgs[reason] = msg
     check(f"{reason}: flagged as a tool error", msg.startswith("[TOOL ERROR]"), msg[:90])
     check(f"{reason}: the model is told not to claim success",
