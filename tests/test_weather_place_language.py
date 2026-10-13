@@ -48,7 +48,7 @@ loc = W.resolve_city("Сочы", correct_fn=lambda c: "Сочи", lang="ru")
 check("the corrected retry is asked in the same language", seen[-1]["language"] == "ru" and loc["name"] == "Сочи", seen[-1])
 
 src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(W.__file__))), "bot/tg_weather.py"), encoding="utf-8").read()
-check("the bot passes the session language", "resolve_city(city, correct_fn=correct_fn, lang=lang)" in src)
+check("the bot passes the session language", "resolve_city(city, correct_fn=correct_fn, lang=lang," in src)
 
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)

@@ -8,6 +8,7 @@ values arrive typed ("8" -> 8), and malformed calls turn into a uniform
 [TOOL ERROR] the model can act on. Adding a tool means adding one args model
 and one `ToolSpec`; `TOOL_SCHEMAS` and `execute_tool` both derive from `TOOLS`.
 """
+from seams import dep
 import logging
 import os
 
@@ -125,7 +126,7 @@ def _handle_search(ctx, state, args: dict) -> str:
             query = f"{query} {_year}"
     ctx.set_stage("Searching the web")
     logger.info("Tool: search(%s)", query)
-    result = run_web_search(ctx, query)
+    result = dep(ctx, "run_web_search", run_web_search)(ctx, query)
     ctx.remember("search", f"Query: {query}\n{result[:500]}", {"query": query})
     # Don't fence our own status sentinels (no-results / failed / insufficient) —
     # only real external page text should be framed as UNTRUSTED data.
@@ -456,7 +457,8 @@ def _handle_fold_context(ctx, state, args: dict) -> str:
 def _handle_local_time(ctx, state, args: dict) -> str:
     import datetime as _dt
     import zoneinfo
-    import weather as _w
+    import weather
+    _w = dep(ctx, "weather", weather)
     loc = _w.resolve_city(args.get("city") or "", correct_fn=_w.city_correct_fn(ctx), lang="ru")
     if not loc or not loc.get("timezone"):
         return f"[TOOL ERROR] City not found: {args.get('city')!r}. Ask the user which city."
@@ -468,7 +470,8 @@ def _handle_local_time(ctx, state, args: dict) -> str:
 
 def _handle_weather_forecast(ctx, state, args: dict) -> str:
     import datetime as _dt
-    import weather as _w
+    import weather
+    _w = dep(ctx, "weather", weather)
     loc = _w.resolve_city(args.get("city") or "", correct_fn=_w.city_correct_fn(ctx), lang="ru")
     if not loc:
         return f"[TOOL ERROR] City not found: {args.get('city')!r}. Ask the user which city."

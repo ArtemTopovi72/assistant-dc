@@ -1373,6 +1373,9 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         import voice_clone
         self.voice_clone = voice_clone
         self.speech = None
+        # And the forecast with its geocoder.
+        import weather
+        self.weather = weather
         self._task_started: dict[str, float] = {}     # task_id -> monotonic start
         # task_id -> _Task, from the moment it is pushed onto the backend until
         # a consumer actually pops it and moves it into _running_task. With the

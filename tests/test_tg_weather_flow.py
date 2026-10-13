@@ -123,8 +123,7 @@ print("=" * 66)
 # weather.what_to_wear_periods_for_loc() -- both stubbed here so no real
 # network/LLM call happens.
 import weather as _w
-_orig_wtwfl = _w.what_to_wear_periods_for_loc
-_orig_geocode = _w.geocode_city
+from fakes import Over
 
 def _stub_ok(loc, lang="en", hours=None, date=None, advise_fn=None):
     # Mirrors what_to_wear_periods_for_loc's own contract: hours=None (and no
@@ -136,13 +135,12 @@ def _resolves(city, lang="en"):
     return {"lat": 1, "lon": 2, "name": city, "country": ""}
 
 bot.sent.clear()
-_w.what_to_wear_periods_for_loc = _stub_ok
-_w.geocode_city = _resolves
+bot.weather = Over(bot.weather, what_to_wear_periods_for_loc=_stub_ok)
+bot.weather = Over(bot.weather, geocode_city=_resolves)
 try:
     bot._dispatch(cb_update(CID, "wtw_default"))
 finally:
-    _w.what_to_wear_periods_for_loc = _orig_wtwfl
-    _w.geocode_city = _orig_geocode
+    bot.weather = _w
 
 check("default-city button clears reg_state once the city resolves",
       bot._get_session(CID).reg_state == "")
@@ -158,13 +156,12 @@ print("=" * 66)
 
 bot.sent.clear()
 sess = bot._get_session(CID); sess.reg_state = "wtw_city"; bot._store.put(sess)
-_w.what_to_wear_periods_for_loc = _stub_ok
-_w.geocode_city = _resolves
+bot.weather = Over(bot.weather, what_to_wear_periods_for_loc=_stub_ok)
+bot.weather = Over(bot.weather, geocode_city=_resolves)
 try:
     bot._user_gate(CID, msg(CID, "Paris"))
 finally:
-    _w.what_to_wear_periods_for_loc = _orig_wtwfl
-    _w.geocode_city = _orig_geocode
+    bot.weather = _w
 check("typing a resolvable city clears reg_state", bot._get_session(CID).reg_state == "")
 check("it fetches weather for the typed city",
       any("STUB WEATHER FOR Paris" in s for s in bot.sent))
@@ -172,13 +169,12 @@ check("the typed city is remembered as the user's new default",
       bot._user_store.get(CID).prefs.get("city") == "Paris")
 
 bot.sent.clear()
-_w.what_to_wear_periods_for_loc = _stub_ok
-_w.geocode_city = _resolves
+bot.weather = Over(bot.weather, what_to_wear_periods_for_loc=_stub_ok)
+bot.weather = Over(bot.weather, geocode_city=_resolves)
 try:
     bot._dispatch(cb_update(CID, "wtw_default"))
 finally:
-    _w.what_to_wear_periods_for_loc = _orig_wtwfl
-    _w.geocode_city = _orig_geocode
+    bot.weather = _w
 check("the default button now uses the remembered city, not the global fallback",
       any("STUB WEATHER FOR Paris" in s for s in bot.sent))
 
@@ -192,8 +188,7 @@ print("=" * 66)
 # before giving up -- stub geocode_city to fail on the raw input but succeed
 # on the "corrected" one, and stub the LLM call tg_accounts wires in as
 # correct_fn so no real LM Studio call happens.
-import llm as _llm
-_orig_call_llm_simple = _llm.call_llm_simple
+_orig_get_ctx = bot._get_ctx
 
 def _geocode_only_corrected(city, lang="en"):
     return {"lat": 1, "lon": 2, "name": "Saint Petersburg", "country": ""} \
@@ -201,17 +196,13 @@ def _geocode_only_corrected(city, lang="en"):
 
 bot.sent.clear()
 sess = bot._get_session(CID); sess.reg_state = "wtw_city"; bot._store.put(sess)
-_w.what_to_wear_periods_for_loc = _stub_ok
-_w.geocode_city = _geocode_only_corrected
-_llm.call_llm_simple = lambda ctx, sys_p, user_p, **kw: "Saint Petersburg"
-_orig_get_ctx = bot._get_ctx
-bot._get_ctx = lambda: object()   # non-None so tg_accounts builds correct_fn
+bot.weather = Over(bot.weather, what_to_wear_periods_for_loc=_stub_ok)
+bot.weather = Over(bot.weather, geocode_city=_geocode_only_corrected)
+bot._get_ctx = (lambda tm: lambda: types.SimpleNamespace(text_model=tm))(lambda ctx, sys_p, user_p, **kw: "Saint Petersburg")
 try:
     bot._user_gate(CID, msg(CID, "Спб"))
 finally:
-    _w.what_to_wear_periods_for_loc = _orig_wtwfl
-    _w.geocode_city = _orig_geocode
-    _llm.call_llm_simple = _orig_call_llm_simple
+    bot.weather = _w
     bot._get_ctx = _orig_get_ctx
 check("an LLM-corrected city resolves and clears reg_state",
       bot._get_session(CID).reg_state == "",
@@ -245,13 +236,13 @@ bot._backend = types.SimpleNamespace(
     push=lambda t: None, depth=lambda: 0, name=lambda: "stub",
     drop_chat=lambda cid: 0, close=lambda: None)
 sess = bot._get_session(CID); sess.reg_state = "wtw_city"; bot._store.put(sess)
-_w.geocode_city = lambda city, lang="en": None   # unresolvable, even after correction
-_llm.call_llm_simple = lambda ctx, sys_p, user_p, **kw: "Nonexistentville"
+bot.weather = Over(bot.weather, geocode_city=lambda city, lang="en": None)
+bot._get_ctx = (lambda tm: lambda: types.SimpleNamespace(text_model=tm))(lambda ctx, sys_p, user_p, **kw: "Nonexistentville")
 try:
     bot._user_gate(CID, msg(CID, "Спб"))
 finally:
-    _w.geocode_city = _orig_geocode
-    _llm.call_llm_simple = _orig_call_llm_simple
+    bot.weather = _w
+    bot._get_ctx = _orig_get_ctx
 check("a city that fails to geocode does NOT overwrite the remembered default",
       bot._user_store.get(CID).prefs.get("city") == "Paris",
       extra=f"got {bot._user_store.get(CID).prefs.get('city')!r}")
@@ -264,13 +255,12 @@ check("...and the failed attempt was NOT queued as an agent task either",
 # The retry itself must also be tried as a city, not routed to the agent --
 # this is the exact step that broke live: "Питнр" spawned a real task.
 bot.sent.clear()
-_w.what_to_wear_periods_for_loc = _stub_ok
-_w.geocode_city = _resolves
+bot.weather = Over(bot.weather, what_to_wear_periods_for_loc=_stub_ok)
+bot.weather = Over(bot.weather, geocode_city=_resolves)
 try:
     bot._user_gate(CID, msg(CID, "Питер"))
 finally:
-    _w.what_to_wear_periods_for_loc = _orig_wtwfl
-    _w.geocode_city = _orig_geocode
+    bot.weather = _w
 check("the retry after a failure is tried as a second city, not routed to the agent",
       any("STUB WEATHER FOR" in s for s in bot.sent), bot.sent)
 check("a successful retry finally clears reg_state",
@@ -285,13 +275,13 @@ print("=" * 66)
 
 bot.sent.clear()
 sess = bot._get_session(CID); sess.reg_state = ""; bot._store.put(sess)
-_w.geocode_city = lambda city, lang="en": None
-_llm.call_llm_simple = lambda ctx, sys_p, user_p, **kw: ""
+bot.weather = Over(bot.weather, geocode_city=lambda city, lang="en": None)
+bot._get_ctx = (lambda tm: lambda: types.SimpleNamespace(text_model=tm))(lambda ctx, sys_p, user_p, **kw: "")
 try:
     bot._dispatch(cb_update(CID, "wtw_default"))
 finally:
-    _w.geocode_city = _orig_geocode
-    _llm.call_llm_simple = _orig_call_llm_simple
+    bot.weather = _w
+    bot._get_ctx = _orig_get_ctx
 check("a failing default-city lookup leaves wtw_city armed for a retry",
       bot._get_session(CID).reg_state == "wtw_city",
       extra=bot._get_session(CID).reg_state)
@@ -304,13 +294,12 @@ print("=" * 66)
 bot.sent.clear(); bot.sent_kb.clear()
 sess = bot._get_session(CID); sess.reg_state = "wtw_city"; sess.wtw_loc = {}
 bot._store.put(sess)
-_w.what_to_wear_periods_for_loc = _stub_ok
-_w.geocode_city = _resolves
+bot.weather = Over(bot.weather, what_to_wear_periods_for_loc=_stub_ok)
+bot.weather = Over(bot.weather, geocode_city=_resolves)
 try:
     bot._user_gate(CID, msg(CID, "Berlin"))
 finally:
-    _w.what_to_wear_periods_for_loc = _orig_wtwfl
-    _w.geocode_city = _orig_geocode
+    bot.weather = _w
 check("the default 24h forecast is what gets sent",
       any("[24h]" in s for s in bot.sent), bot.sent)
 _kb = bot.sent_kb[-1] or {}
@@ -331,13 +320,12 @@ _geocode_calls = []
 def _resolves_tracked(city):
     _geocode_calls.append(city)
     return {"lat": 1, "lon": 2, "name": city, "country": ""}
-_w.what_to_wear_periods_for_loc = _stub_ok
-_w.geocode_city = _resolves_tracked
+bot.weather = Over(bot.weather, what_to_wear_periods_for_loc=_stub_ok)
+bot.weather = Over(bot.weather, geocode_city=_resolves_tracked)
 try:
     bot._dispatch(cb_update(CID, "wtw_range:48"))
 finally:
-    _w.what_to_wear_periods_for_loc = _orig_wtwfl
-    _w.geocode_city = _orig_geocode
+    bot.weather = _w
 check("the 48h button asks for 48 hours of Berlin (the remembered location)",
       any("STUB WEATHER FOR Berlin [48h]" in s for s in bot.sent), bot.sent)
 check("...without re-geocoding the city at all",
@@ -360,11 +348,11 @@ _seen_dates = []
 def _stub_dated(loc, lang="en", hours=None, date=None, advise_fn=None):
     _seen_dates.append(date)
     return f"STUB WEATHER FOR {loc['name']} [date={date}]"
-_w.what_to_wear_periods_for_loc = _stub_dated
+bot.weather = Over(bot.weather, what_to_wear_periods_for_loc=_stub_dated)
 try:
     bot._user_gate(CID, msg(CID, "tomorrow"))
 finally:
-    _w.what_to_wear_periods_for_loc = _orig_wtwfl
+    bot.weather = _w
 check("'tomorrow' parses to today+1 and drives the forecast",
       _seen_dates == [_dt_mod.date.today() + _dt_mod.timedelta(days=1)], _seen_dates)
 check("a date-based forecast does NOT carry the 48h/pick-a-date buttons",
@@ -462,7 +450,8 @@ print("=" * 66)
 # then confirm the parsed-out dict is keyed exactly like weather.py's own
 # lookup (`f'{date.isoformat()}_{period}'`) expects.
 import datetime as _dtm2, re as _re2
-advisor = bot._weather_periods_advise_fn(object())
+_adv_ctx = types.SimpleNamespace()
+advisor = bot._weather_periods_advise_fn(_adv_ctx)
 _buckets = [
     {"date": _dtm2.date(2026, 8, 15), "period": "afternoon",
      "temp_c": 17.0, "code": 61, "wind_kmh": 10},
@@ -474,11 +463,8 @@ def _echo_llm(ctx, sys_p, user_p, **kw):
     _captured_prompt["text"] = user_p
     keys = _re2.findall(r"^(\S+) \|", user_p, flags=_re2.MULTILINE)
     return "\n".join(f"{k}: some advice for {k}" for k in keys)
-_llm.call_llm_simple = _echo_llm
-try:
-    result = advisor(_buckets, "en")
-finally:
-    _llm.call_llm_simple = _orig_call_llm_simple
+_adv_ctx.text_model = _echo_llm
+result = advisor(_buckets, "en")
 _expected_keys = {f'{b["date"].isoformat()}_{b["period"]}' for b in _buckets}
 check("the prompt's own keys contain no ':' for the parser to trip over",
       all(":" not in k for k in _re2.findall(r"^(\S+) \|", _captured_prompt.get("text", ""),

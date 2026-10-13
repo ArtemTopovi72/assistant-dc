@@ -171,15 +171,16 @@ def geocode_city(city: str, lang: str = "en") -> Optional[dict]:
         return None
 
 
-def resolve_city(city: str, correct_fn=None, lang: str = "en") -> Optional[dict]:
+def resolve_city(city: str, correct_fn=None, lang: str = "en", geocode=None) -> Optional[dict]:
     """geocode_city(city), retrying once with an LLM-corrected spelling if the
     raw input doesn't geocode. Typed city names are often abbreviations,
     informal nicknames, or plain typos ("Спб", "Питнр") that Open-Meteo's
     geocoder won't match -- `correct_fn(city) -> str`, normally an LLM call
     (see tg_accounts._weather_correct_fn), is given a chance to normalize the
-    name before we give up.
+    name before we give up. `geocode` defaults to geocode_city.
     """
-    loc = geocode_city(city, lang)
+    geocode = geocode or geocode_city
+    loc = geocode(city, lang)
     if loc or not correct_fn:
         return loc
     try:
@@ -189,7 +190,7 @@ def resolve_city(city: str, correct_fn=None, lang: str = "en") -> Optional[dict]
         return None
     if not corrected or corrected.strip().lower() == (city or "").strip().lower():
         return None
-    return geocode_city(corrected, lang)
+    return geocode(corrected, lang)
 
 
 def not_found_message(city: str, lang: str) -> str:
@@ -617,7 +618,7 @@ def periods_advise_fn(ctx):
     asking it separately for up to 6 buckets (48h = 2 days x 3 periods) would
     make the button take minutes instead of seconds."""
     def advisor(buckets, lang):
-        import llm as _llm
+        from seams import text_model
         lines_in = []
         for b in buckets:
             # "_" not ":" -- the key itself must not contain the same
@@ -642,8 +643,7 @@ def periods_advise_fn(ctx):
                  "requested language.")
         user_p = ("Language: " + ("Russian" if lang == "ru" else "English")
                   + "\n\n" + "\n".join(lines_in))
-        raw = _llm.call_llm_simple(ctx, sys_p, user_p,
-                                   temperature=0.4, max_tokens=500) or ""
+        raw = text_model(ctx)(ctx, sys_p, user_p, temperature=0.4, max_tokens=500) or ""
         result = {}
         for line in raw.splitlines():
             if ":" not in line:
@@ -663,7 +663,7 @@ def city_correct_fn(ctx):
     (rather than a hand-built alias table) means it isn't limited to a fixed
     list of cities or languages."""
     def corrector(city):
-        import llm as _llm
+        from seams import text_model
         sys_p = ("You correct city names for a weather geocoding API. "
                  "Given a possibly misspelled, abbreviated, or informal "
                  "city name in any language, answer with ONLY the "
@@ -675,8 +675,7 @@ def city_correct_fn(ctx):
         # one-line answer -- the house model (Gemma, reasoning-only, no off
         # switch) has been observed spending its whole budget "thinking" and
         # getting cut off before writing the answer.
-        return _llm.call_llm_simple(ctx, sys_p, f"City: {city}",
-                                    temperature=0.2, max_tokens=200)
+        return text_model(ctx)(ctx, sys_p, f"City: {city}", temperature=0.2, max_tokens=200)
     return corrector
 
 

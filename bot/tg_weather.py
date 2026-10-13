@@ -238,10 +238,10 @@ class WeatherMixin:
     # as methods because this is where the flow reads, and one test drives them
     # from the bot.
     def _weather_periods_advise_fn(self, ctx):
-        return _deadline(_weather_mod.periods_advise_fn(ctx), ADVICE_WAIT_S)
+        return _deadline(self.weather.periods_advise_fn(ctx), ADVICE_WAIT_S)
 
     def _weather_correct_fn(self, ctx):
-        return _weather_mod.city_correct_fn(ctx)
+        return self.weather.city_correct_fn(ctx)
 
     def _send_weather(self, chat_id: int, city: str, lang: str,
                       remember_for: int = 0, hours: int = None, date=None,
@@ -259,7 +259,8 @@ class WeatherMixin:
             # corrected, canonical name (loc["name"]) rather than the raw
             # typo, so future taps of the default-city button use the name
             # that actually geocodes.
-            loc = _weather_mod.resolve_city(city, correct_fn=correct_fn, lang=lang)
+            loc = self.weather.resolve_city(city, correct_fn=correct_fn, lang=lang,
+                                            geocode=self.weather.geocode_city)
             if remember_for and loc:
                 user = self._user_store.get(remember_for)
                 if user:
@@ -276,9 +277,9 @@ class WeatherMixin:
                 self._store.put(sess)
             except Exception:
                 pass
-        reply = (_weather_mod.what_to_wear_periods_for_loc(
+        reply = (self.weather.what_to_wear_periods_for_loc(
                     loc, lang, hours=hours, date=date, advise_fn=advise_fn) if loc
-                else _weather_mod.not_found_message(city, lang))
+                else self.weather.not_found_message(city, lang))
         # The follow-up buttons only make sense under an hours-based (rolling
         # window) forecast -- a date-based one is already a specific answer,
         # and "48 hours from THIS forecast" would be ambiguous once the user

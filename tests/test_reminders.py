@@ -38,48 +38,47 @@ print("ok3")
 
 # local_time: the zone comes from the geocoder, the clock from zoneinfo
 import weather as _W
-_orig = _W.resolve_city
-_W.resolve_city = lambda *a, **k: {"name": "Нью-Йорк", "country": "США", "timezone": "America/New_York"}
-try:
-    r = tools._handle_local_time(None, None, {"city": "Нью-Йорк"})
-    assert "zone America/New_York" in r and ("UTC-0400" in r or "UTC-0500" in r), r
-finally:
-    _W.resolve_city = _orig
+from fakes import Over
+_ny = SimpleNamespace(deps=SimpleNamespace(weather=Over(_W, resolve_city=lambda *a, **k: {
+    "name": "Нью-Йорк", "country": "США", "timezone": "America/New_York"})))
+r = tools._handle_local_time(_ny, None, {"city": "Нью-Йорк"})
+assert "zone America/New_York" in r and ("UTC-0400" in r or "UTC-0500" in r), r
 print("ok4")
 
 # a "last/current" search without a year gets the current year
 import datetime as _dt
 _seen = []
-_orig_ws = tools.run_web_search
-tools.run_web_search = lambda c, q: (_seen.append(q), "Some complete sentence about it.")[1]
+_DEPS = SimpleNamespace()
+_DEPS.run_web_search = lambda c, q: (_seen.append(q), "Some complete sentence about it.")[1]
 try:
-    _c = SimpleNamespace(set_stage=lambda *a: None, remember=lambda *a, **k: None, web_search_enabled=True)
+    _c = SimpleNamespace(set_stage=lambda *a: None, remember=lambda *a, **k: None, web_search_enabled=True,
+                         deps=_DEPS)
     tools._handle_search(_c, {}, {"query": "winner of the last FIFA World Cup"})
     tools._handle_search(_c, {}, {"query": "World Cup 2022 winner"})
     assert _seen == [f"winner of the last FIFA World Cup {_dt.date.today().year}", "World Cup 2022 winner"], _seen
 finally:
-    tools.run_web_search = _orig_ws
+    del _DEPS.run_web_search
 print("ok5")
 
 _seen.clear()
-tools.run_web_search = lambda c, q: (_seen.append(q), "Some complete sentence about it.")[1]
+_DEPS.run_web_search = lambda c, q: (_seen.append(q), "Some complete sentence about it.")[1]
 try:
     tools._handle_search(_c, {"user_input": "who won the last world cup?"}, {"query": "who won the last FIFA World Cup 2022"})
     tools._handle_search(_c, {"user_input": "latest news from 2019"}, {"query": "latest news 2019"})
     _y = str(_dt.date.today().year)
     assert _seen == [f"who won the last FIFA World Cup {_y}", "latest news 2019"], _seen
 finally:
-    tools.run_web_search = _orig_ws
+    del _DEPS.run_web_search
 print("ok6")
 
 _seen.clear()
-tools.run_web_search = lambda c, q: (_seen.append(q), "Some complete sentence about it.")[1]
+_DEPS.run_web_search = lambda c, q: (_seen.append(q), "Some complete sentence about it.")[1]
 try:
     tools._handle_search(_c, {"user_input_original": "кто выиграл последний чемпионат мира?"},
                          {"query": "who won the 2022 FIFA World Cup"})
     assert _seen == [f"who won the {_y} FIFA World Cup"], _seen
 finally:
-    tools.run_web_search = _orig_ws
+    del _DEPS.run_web_search
 print("ok7")
 
 # A daily reminder fires and re-arms for the next day instead of vanishing.
