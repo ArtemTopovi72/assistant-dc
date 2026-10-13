@@ -12,9 +12,33 @@ for d in ("", "core", "agent", "media", "voice", "bot"):
 os.environ.setdefault("F5_TEST_RUN", "1")
 
 import cover  # noqa: E402
-import llm  # noqa: E402
 import music  # noqa: E402
 import remix as R  # noqa: E402
+from fakes import Over  # noqa: E402
+
+
+@pytest.fixture
+def fakes():
+    """Stand-ins a test hands to remix / rvc_voice on its context: {(module, name): value}."""
+    return {}
+
+
+def _W(fakes, ctx=None):
+    """`ctx` (a fresh one when None) carrying `fakes`: the text model, the remix/rvc stages by
+    name, and music/rvc_voice as the real modules with the faked names over them."""
+    import types
+    import rvc_voice
+    ctx = ctx if ctx is not None else types.SimpleNamespace()
+    own = {m: {n: v for (mm, n), v in fakes.items() if mm == m} for m in ("R", "music", "rvc_voice", "llm")}
+    if "call_llm_simple" in own["llm"]:
+        ctx.text_model = own["llm"]["call_llm_simple"]
+    deps = {**own["R"], **own["rvc_voice"], **own["music"]}
+    if own["music"]:
+        deps["music"] = Over(music, **own["music"])
+    if own["rvc_voice"]:
+        deps["rvc_voice"] = Over(rvc_voice, **own["rvc_voice"])
+    ctx.deps = types.SimpleNamespace(**deps)
+    return ctx
 
 ABC = """X:1
 Q:1/4=68
@@ -48,35 +72,35 @@ def test_tempo_and_key_read_from_the_score():
     assert R._score_tempo_key("Q:1/4=120\nK:Bb\n") == "120 bpm, B flat major"
 
 
-def test_layout_places_every_line_on_the_sung_sections(monkeypatch):
-    monkeypatch.setattr(llm, "call_llm_simple", lambda *a, **k: '{"sections": [[1, 2], [5, 6], [3, 4], [5, 6]]}')
-    text = R._layout(None, "ла ла\nли ли\nло ло\nлу лу\nле ле\nлы лы", R._score_parts(ABC))
+def test_layout_places_every_line_on_the_sung_sections(fakes):
+    fakes[("llm", "call_llm_simple")] = lambda *a, **k: '{"sections": [[1, 2], [5, 6], [3, 4], [5, 6]]}'
+    text = R._layout(_W(fakes, None), "ла ла\nли ли\nло ло\nлу лу\nле ле\nлы лы", R._score_parts(ABC))
     assert text.split("\n\n") == ["[Intro]", "[Verse]\nла ла\nли ли", "[Chorus]\nле ле\nлы лы", "[Interlude]",
                                   "[Verse]\nло ло\nлу лу", "[Chorus]\nле ле\nлы лы", "[Outro]"]
 
 
-def test_layout_keeps_a_section_within_its_notes(monkeypatch):
+def test_layout_keeps_a_section_within_its_notes(fakes):
     # 144 syllables on a 44-note chorus come out as mumbling.
-    monkeypatch.setattr(llm, "call_llm_simple", lambda *a, **k: '{"sections": [[1, 2, 3]]}')
-    text = R._layout(None, "ла ла ла ла ла\nли ли ли ли ли\nло ло ло ло ло", [("Chorus", 10)])
+    fakes[("llm", "call_llm_simple")] = lambda *a, **k: '{"sections": [[1, 2, 3]]}'
+    text = R._layout(_W(fakes, None), "ла ла ла ла ла\nли ли ли ли ли\nло ло ло ло ло", [("Chorus", 10)])
     assert text == "[Chorus]\nла ла ла ла ла\nли ли ли ли ли"
 
 
-def test_a_verse_never_resings_another_verse(monkeypatch):
+def test_a_verse_never_resings_another_verse(fakes):
     # the model must not give verse 2 the lines of verse 1 and leave the third verse's lines unsung.
-    monkeypatch.setattr(llm, "call_llm_simple", lambda *a, **k: '{"sections": [[1, 2], [5], [1, 2]]}')
-    text = R._layout(None, "ла ла\nли ли\nло ло\nлу лу\nле ле", [("Verse", 8), ("Chorus", 10), ("Verse", 8)])
+    fakes[("llm", "call_llm_simple")] = lambda *a, **k: '{"sections": [[1, 2], [5], [1, 2]]}'
+    text = R._layout(_W(fakes, None), "ла ла\nли ли\nло ло\nлу лу\nле ле", [("Verse", 8), ("Chorus", 10), ("Verse", 8)])
     assert text == "[Verse]\nла ла\nли ли\n\n[Chorus]\nле ле\n\n[Verse]\nло ло\nлу лу"
 
 
-def test_a_silent_section_is_instrumental(monkeypatch):
-    monkeypatch.setattr(llm, "call_llm_simple", lambda *a, **k: '{"sections": [[1]]}')
-    assert R._layout(None, "ла ла", [("Verse", 2), ("Chorus", 20)]) == "[Interlude]\n\n[Chorus]\nла ла"
+def test_a_silent_section_is_instrumental(fakes):
+    fakes[("llm", "call_llm_simple")] = lambda *a, **k: '{"sections": [[1]]}'
+    assert R._layout(_W(fakes, None), "ла ла", [("Verse", 2), ("Chorus", 20)]) == "[Interlude]\n\n[Chorus]\nла ла"
 
 
-def test_layout_survives_a_broken_plan(monkeypatch):
-    monkeypatch.setattr(llm, "call_llm_simple", lambda *a, **k: '{"sections": [[99]]}')
-    text = R._layout(None, "ла\nли\nло\nлу", [("Verse", 20), ("Chorus", 20)])
+def test_layout_survives_a_broken_plan(fakes):
+    fakes[("llm", "call_llm_simple")] = lambda *a, **k: '{"sections": [[99]]}'
+    text = R._layout(_W(fakes, None), "ла\nли\nло\nлу", [("Verse", 20), ("Chorus", 20)])
     assert text == "[Verse]\nла\nли\n\n[Chorus]\nло\nлу"
 
 
@@ -92,92 +116,90 @@ def _llm(ctx, sys_, user, **k):
     return '{"sections": [[1], [2], [1], [2]]}'
 
 
-def _fake_resing_run(monkeypatch, tmp_path, trained: bool, voice: str = ""):
+def _fake_resing_run(fakes, tmp_path, trained: bool, voice: str = ""):
     """resing up to the voice: stems/score/YuE stubbed, returns the voice calls made."""
-    import rvc_voice
     calls = []
-    monkeypatch.setattr(R, "_stems", lambda song, work, name: (np.zeros(10), np.zeros(10)))
-    monkeypatch.setattr(R, "_score", lambda ctx, wav, work: ABC)
-    monkeypatch.setattr(R, "_sung_words", lambda segs: [{"w": "я", "s": 0, "e": 1}])
-    monkeypatch.setattr(llm, "call_llm_simple", _llm)
-    monkeypatch.setattr(music, "_render_yue2_once", lambda ctx, cpp, job, seed: open(job["out"], "wb").close())
-    monkeypatch.setattr(music, "_valid_audio_file", lambda p: True)
-    monkeypatch.setattr(music, "_master", lambda p, *a, **k: None)
-    monkeypatch.setattr(R, "_singer_ref", lambda vox, work, name: "ref.wav")
-    monkeypatch.setattr(R, "sing_as", lambda ctx, src, ref, out, order=(): (calls.append("zero-shot"), out)[1])
-    monkeypatch.setattr(R, "_voice_keeping_words", lambda ctx, voices, yvox_wav, layout, work, lang, best=False:
+    fakes[("R", "_stems")] = lambda song, work, name: (np.zeros(10), np.zeros(10))
+    fakes[("R", "_score")] = lambda ctx, wav, work: ABC
+    fakes[("R", "_sung_words")] = lambda segs: [{"w": "я", "s": 0, "e": 1}]
+    fakes[("llm", "call_llm_simple")] = _llm
+    fakes[("music", "_render_yue2_once")] = lambda ctx, cpp, job, seed: open(job["out"], "wb").close()
+    fakes[("music", "_valid_audio_file")] = lambda p: True
+    fakes[("music", "_master")] = lambda p, *a, **k: None
+    fakes[("R", "_singer_ref")] = lambda vox, work, name: "ref.wav"
+    fakes[("R", "sing_as")] = lambda ctx, src, ref, out, order=(): (calls.append("zero-shot"), out)[1]
+    fakes[("R", "_voice_keeping_words")] = (lambda ctx, voices, yvox_wav, layout, work, lang, best=False:
                         voices[0][1](os.path.join(str(tmp_path), "v.wav")))
-    monkeypatch.setattr(R, "_mix_vocal", lambda conv, yvox, yback: conv)
-    monkeypatch.setattr(rvc_voice, "available", lambda: True)
-    monkeypatch.setattr(rvc_voice, "model_of", lambda name: ("m.pth", "m.index") if trained or "trained" in calls else None)
-    monkeypatch.setattr(rvc_voice, "convert", lambda ctx, name, src, out: (calls.append("rvc:" + name), out)[1])
-    monkeypatch.setattr(rvc_voice, "train", lambda ctx, name, wav: (calls.append("trained"), ("m.pth", "m.index"))[1])
+    fakes[("R", "_mix_vocal")] = lambda conv, yvox, yback: conv
+    fakes[("rvc_voice", "available")] = lambda: True
+    fakes[("rvc_voice", "model_of")] = lambda name, *a: ("m.pth", "m.index") if trained or "trained" in calls else None
+    fakes[("rvc_voice", "convert")] = lambda ctx, name, src, out: (calls.append("rvc:" + name), out)[1]
+    fakes[("rvc_voice", "train")] = lambda ctx, name, wav: (calls.append("trained"), ("m.pth", "m.index"))[1]
     ctx = type("C", (), {"models": type("M", (), {"whisper": _Whisper()})()})()
     info = {"voice": voice} if voice else {}
-    R.resing(ctx, "song.mp3", "строка раз\nстрока два", info=info)
+    R.resing(_W(fakes, ctx), "song.mp3", "строка раз\nстрока два", info=info)
     return calls, info, ctx
 
 
-def test_a_known_artist_sings_in_their_trained_rvc_voice(monkeypatch, tmp_path):
-    calls, info, _ = _fake_resing_run(monkeypatch, tmp_path, trained=True)
+def test_a_known_artist_sings_in_their_trained_rvc_voice(fakes, tmp_path):
+    calls, info, _ = _fake_resing_run(fakes, tmp_path, trained=True)
     assert calls == ["rvc:mihail_shufutinskiy"] and info["trained"]
 
 
-def test_a_new_artist_gets_zero_shot_first_then_their_rvc_voice(monkeypatch, tmp_path):
+def test_a_new_artist_gets_zero_shot_first_then_their_rvc_voice(fakes, tmp_path):
     # the singer's own voice is trained on the original's vocal stem once per artist,
     # and the cover goes out again in it.
-    calls, info, ctx = _fake_resing_run(monkeypatch, tmp_path, trained=False)
+    calls, info, ctx = _fake_resing_run(fakes, tmp_path, trained=False)
     assert calls == ["zero-shot"] and info["rvc"] == "mihail_shufutinskiy" and not info["trained"]
-    R.resing_rvc(ctx, info)
+    R.resing_rvc(_W(fakes, ctx), info)
     assert calls == ["zero-shot", "trained", "rvc:mihail_shufutinskiy"]
 
 
-def test_the_users_voice_setting_beats_the_artist(monkeypatch, tmp_path):
+def test_the_users_voice_setting_beats_the_artist(fakes, tmp_path):
     # the cover can use the default voice (no RVC) or a picked star voice
-    calls, _, _ = _fake_resing_run(monkeypatch, tmp_path, trained=True, voice="none")
+    calls, _, _ = _fake_resing_run(fakes, tmp_path, trained=True, voice="none")
     assert calls == []                      # YuE2's own vocal, no conversion
-    calls, _, _ = _fake_resing_run(monkeypatch, tmp_path, trained=True, voice="tsoi_hq")
+    calls, _, _ = _fake_resing_run(fakes, tmp_path, trained=True, voice="tsoi_hq")
     assert calls == ["rvc:tsoi_hq"]         # the picked star, not the song's artist
 
 
-def test_star_list_shows_only_trained_voices_once_per_singer(monkeypatch):
+def test_star_list_shows_only_trained_voices_once_per_singer(fakes):
     import rvc_voice
-    monkeypatch.setattr(rvc_voice, "model_of", lambda n: n in ("viktor_tsoy", "tsoi_hq", "shaman") or None)
-    assert rvc_voice.stars() == [("tsoi_hq", "Виктор Цой"), ("shaman", "SHAMAN")]
+    fakes[("rvc_voice", "model_of")] = lambda n, *a: n in ("viktor_tsoy", "tsoi_hq", "shaman") or None
+    assert rvc_voice.stars(trained=fakes[("rvc_voice", "model_of")]) == [("tsoi_hq", "Виктор Цой"), ("shaman", "SHAMAN")]
 
 
-def test_the_artist_gets_the_star_model_when_it_is_trained(monkeypatch):
+def test_the_artist_gets_the_star_model_when_it_is_trained(fakes):
     import rvc_voice
-    monkeypatch.setattr(rvc_voice, "model_of", lambda n: n == "tsoi_hq" or None)
-    assert rvc_voice.best_voice("viktor_tsoy") == "tsoi_hq"
-    assert rvc_voice.best_voice("shaman") == "shaman"
-    monkeypatch.setattr(rvc_voice, "model_of", lambda n: None)
-    assert rvc_voice.best_voice("viktor_tsoy") == "viktor_tsoy"
+    fakes[("rvc_voice", "model_of")] = lambda n, *a: n == "tsoi_hq" or None
+    assert rvc_voice.best_voice("viktor_tsoy", trained=fakes[("rvc_voice", "model_of")]) == "tsoi_hq"
+    assert rvc_voice.best_voice("shaman", trained=fakes[("rvc_voice", "model_of")]) == "shaman"
+    fakes[("rvc_voice", "model_of")] = lambda n, *a: None
+    assert rvc_voice.best_voice("viktor_tsoy", trained=fakes[("rvc_voice", "model_of")]) == "viktor_tsoy"
 
 
-def test_sing_original_as_swaps_only_the_lead(monkeypatch, tmp_path):
+def test_sing_original_as_swaps_only_the_lead(fakes, tmp_path):
     # the song's own lead is converted, the choir stays in the backing, the star's index is on.
-    import rvc_voice, soundfile as sf
+    import soundfile as sf
     lead, choir = str(tmp_path / "lead.wav"), str(tmp_path / "choir.wav")
     sf.write(lead, np.full(R.SR, 0.1, np.float32), R.SR)
     sf.write(choir, np.full(R.SR, 0.2, np.float32), R.SR)
     seen = {}
-    monkeypatch.setattr(R, "_stems", lambda song, work, name: (np.zeros(R.SR), np.full(R.SR, 0.5, np.float32)))
-    monkeypatch.setattr(rvc_voice, "model_of", lambda n: ("m.pth", "m.index"))
-    monkeypatch.setattr(rvc_voice, "split_lead", lambda ctx, wav, work: (lead, choir))
-    monkeypatch.setattr(rvc_voice, "convert", lambda ctx, name, src, out, index_rate=0.0:
+    fakes[("R", "_stems")] = lambda song, work, name: (np.zeros(R.SR), np.full(R.SR, 0.5, np.float32))
+    fakes[("rvc_voice", "model_of")] = lambda n, *a: ("m.pth", "m.index")
+    fakes[("rvc_voice", "split_lead")] = lambda ctx, wav, work: (lead, choir)
+    fakes[("rvc_voice", "convert")] = (lambda ctx, name, src, out, index_rate=0.0:
                         (seen.update(name=name, src=src, idx=index_rate), lead)[1])
-    monkeypatch.setattr(R, "_mix_vocal", lambda conv, v0, back: (seen.update(back=float(back[0])), "out.mp3")[1])
-    assert R.sing_original_as(None, "kukla.mp3", "tsoi_hq") == "out.mp3"
+    fakes[("R", "_mix_vocal")] = lambda conv, v0, back: (seen.update(back=float(back[0])), "out.mp3")[1]
+    assert R.sing_original_as(_W(fakes, None), "kukla.mp3", "tsoi_hq") == "out.mp3"
     assert seen["name"] == "tsoi_hq" and seen["src"] == lead and seen["idx"] > 0
     assert abs(seen["back"] - 0.7) < 1e-3      # backing + choir
 
 
-def test_sing_original_as_needs_a_trained_voice(monkeypatch):
-    import rvc_voice
-    monkeypatch.setattr(rvc_voice, "model_of", lambda n: None)
+def test_sing_original_as_needs_a_trained_voice(fakes):
+    fakes[("rvc_voice", "model_of")] = lambda n, *a: None
     with pytest.raises(cover.CoverFailed):
-        R.sing_original_as(None, "kukla.mp3", "nobody")
+        R.sing_original_as(_W(fakes, None), "kukla.mp3", "nobody")
 
 
 def test_artist_slug_is_ascii():
@@ -186,20 +208,20 @@ def test_artist_slug_is_ascii():
     assert rvc_voice.slug("Modern Talking") == "modern_talking"
 
 
-def test_resing_renders_the_full_score_with_new_words(monkeypatch, tmp_path):
+def test_resing_renders_the_full_score_with_new_words(fakes, tmp_path):
     seen = {}
-    monkeypatch.setattr(R, "_stems", lambda song, work, name: (np.zeros(10), np.zeros(10)))
-    monkeypatch.setattr(R, "_score", lambda ctx, wav, work: ABC)
-    monkeypatch.setattr(R, "_sung_words", lambda segs: [{"w": "я", "s": 0, "e": 1}])
-    monkeypatch.setattr(llm, "call_llm_simple", _llm)
+    fakes[("R", "_stems")] = lambda song, work, name: (np.zeros(10), np.zeros(10))
+    fakes[("R", "_score")] = lambda ctx, wav, work: ABC
+    fakes[("R", "_sung_words")] = lambda segs: [{"w": "я", "s": 0, "e": 1}]
+    fakes[("llm", "call_llm_simple")] = _llm
 
     def render(ctx, cpp, job, seed):
         seen.update(job)
         raise cover.CoverFailed("stop")
-    monkeypatch.setattr(music, "_render_yue2_once", render)
+    fakes[("music", "_render_yue2_once")] = render
     ctx = type("C", (), {"models": type("M", (), {"whisper": _Whisper()})()})()
     with pytest.raises(cover.CoverFailed):
-        R.resing(ctx, "song.mp3", "строка раз\nстрока два")
+        R.resing(_W(fakes, ctx), "song.mp3", "строка раз\nстрока два")
     assert seen["abc"] == ABC
     assert "[Chorus]" in seen["lyrics"] and "строка два" in seen["lyrics"]
     assert "68 bpm, F minor" in seen["style"] and "chanson" in seen["style"]
@@ -210,11 +232,11 @@ def test_resing_needs_words():
         R.resing(None, "song.mp3", "[Verse]\n\n")
 
 
-def test_yue2_renders_with_lyric_guidance(monkeypatch):
+def test_yue2_renders_with_lyric_guidance(fakes):
     # at the protocol's cfg 1.0 (no guidance) Whisper heard 1 of 21 lines; at 3.0, 20 of 21.
     seen = {}
-    monkeypatch.setattr(music, "run_gpu_worker", lambda ctx, py, script, job, *a, **k: (seen.update(job), (True, ""))[1])
-    music._render_yue2_once(None, True, {"out": "x.mp3", "lyrics": "", "style": ""}, 7)
+    fakes[("music", "run_gpu_worker")] = lambda ctx, py, script, job, *a, **k: (seen.update(job), (True, ""))[1]
+    music._render_yue2_once(_W(fakes), True, {"out": "x.mp3", "lyrics": "", "style": ""}, 7)
     assert seen["cfg_scale"] >= 2.0 and seen["cot"] == "full" and seen["lm_seed"] == 7
 
 
@@ -224,21 +246,20 @@ def test_clarity_counts_the_lines_whisper_heard():
     assert R._clarity("Сорок лет, как под наркозом, бу-бу-бу", lyric) == pytest.approx(1 / 3)
 
 
-def _takes_run(monkeypatch, heard_by_take):
+def _takes_run(fakes, heard_by_take):
     """resing with each take's Whisper text given; returns (rendered seeds, the vocal converted)."""
-    import rvc_voice
     seeds, converted = [], []
-    monkeypatch.setattr(R, "_stems", lambda song, work, name: (np.zeros(10), np.zeros(10)))
-    monkeypatch.setattr(R, "_score", lambda ctx, wav, work: ABC)
-    monkeypatch.setattr(R, "_layout", lambda ctx, lyrics, parts, **k: "[Verse]\nсорок лет как под наркозом\nя работал говновозом")
-    monkeypatch.setattr(llm, "call_llm_simple", _llm)
-    monkeypatch.setattr(music, "_render_yue2_once", lambda ctx, cpp, job, seed: (seeds.append(seed), open(job["out"], "wb").close()))
-    monkeypatch.setattr(music, "_valid_audio_file", lambda p: True)
-    monkeypatch.setattr(music, "_master", lambda p, *a, **k: None)
-    monkeypatch.setattr(R, "_mix_vocal", lambda conv, yvox, yback: conv)
-    monkeypatch.setattr(rvc_voice, "available", lambda: True)
-    monkeypatch.setattr(rvc_voice, "model_of", lambda name: ("m.pth", "m.index"))
-    monkeypatch.setattr(rvc_voice, "convert", lambda ctx, name, src, out: (converted.append(os.path.basename(src)), out)[1])
+    fakes[("R", "_stems")] = lambda song, work, name: (np.zeros(10), np.zeros(10))
+    fakes[("R", "_score")] = lambda ctx, wav, work: ABC
+    fakes[("R", "_layout")] = lambda ctx, lyrics, parts, **k: "[Verse]\nсорок лет как под наркозом\nя работал говновозом"
+    fakes[("llm", "call_llm_simple")] = _llm
+    fakes[("music", "_render_yue2_once")] = lambda ctx, cpp, job, seed: (seeds.append(seed), open(job["out"], "wb").close())
+    fakes[("music", "_valid_audio_file")] = lambda p: True
+    fakes[("music", "_master")] = lambda p, *a, **k: None
+    fakes[("R", "_mix_vocal")] = lambda conv, yvox, yback: conv
+    fakes[("rvc_voice", "available")] = lambda: True
+    fakes[("rvc_voice", "model_of")] = lambda name, *a: ("m.pth", "m.index")
+    fakes[("rvc_voice", "convert")] = lambda ctx, name, src, out: (converted.append(os.path.basename(src)), out)[1]
 
     class W:
         def transcribe(self, path, **k):
@@ -248,23 +269,23 @@ def _takes_run(monkeypatch, heard_by_take):
             text = heard_by_take[int(base[1])] if base[0] == "y" else "сорок лет как под наркозом я работал говновозом"
             return [type("S", (), {"words": [type("W", (), {"word": " " + t, "start": i, "end": i + 0.5})()
                                              for i, t in enumerate(text.split())], "text": text})()], None
-    monkeypatch.setattr(R, "_sung_words", lambda segs: [{"w": w.word.strip(), "s": w.start, "e": w.end}
+    fakes[("R", "_sung_words")] = (lambda segs: [{"w": w.word.strip(), "s": w.start, "e": w.end}
                                                          for s in segs for w in s.words])
     ctx = type("C", (), {"models": type("M", (), {"whisper": W()})()})()
-    R.resing(ctx, "song.mp3", "сорок лет как под наркозом\nя работал говновозом")
+    R.resing(_W(fakes, ctx), "song.mp3", "сорок лет как под наркозом\nя работал говновозом")
     return seeds, converted
 
 
-def test_resing_keeps_the_clearest_take(monkeypatch):
+def test_resing_keeps_the_clearest_take(fakes):
     # the same score gives 27..36/42 lines heard depending on the seed.
-    monkeypatch.setattr(R, "RESING_TAKES", 3)
-    seeds, converted = _takes_run(monkeypatch, ["бу-бу-бу", "сорок лет как под наркозом бу", "мама мыла раму"])
+    fakes[("R", "RESING_TAKES")] = 3
+    seeds, converted = _takes_run(fakes, ["бу-бу-бу", "сорок лет как под наркозом бу", "мама мыла раму"])
     assert len(seeds) == 3 and len(set(seeds)) == 3 and converted == ["y1_vox.wav"]
 
 
-def test_resing_stops_at_the_first_clear_take(monkeypatch):
-    monkeypatch.setattr(R, "RESING_TAKES", 3)
-    seeds, converted = _takes_run(monkeypatch, ["сорок лет как под наркозом я работал говновозом", "x", "x"])
+def test_resing_stops_at_the_first_clear_take(fakes):
+    fakes[("R", "RESING_TAKES")] = 3
+    seeds, converted = _takes_run(fakes, ["сорок лет как под наркозом я работал говновозом", "x", "x"])
     assert len(seeds) == 1 and converted == ["y0_vox.wav"]
 
 
@@ -283,7 +304,7 @@ def test_sung_vocal_is_heard_with_vad_and_no_conditioning():
 
 
 
-def test_a_voice_that_loses_the_words_is_not_sent(monkeypatch, tmp_path):
+def test_a_voice_that_loses_the_words_is_not_sent(fakes, tmp_path):
     # a take heard at 97% can come out of SoulX as «Субтитры... ЧИИИИИИ...»: that must not be sent.
     heard = {"seedvc.wav": "бу бу бу", "soulx.wav": "сорок лет как под наркозом я работал говновозом",
              "take.wav": "сорок лет как под наркозом я работал говновозом"}
@@ -293,84 +314,84 @@ def test_a_voice_that_loses_the_words_is_not_sent(monkeypatch, tmp_path):
             text = heard[os.path.basename(path)]
             return [type("S", (), {"words": [type("W", (), {"word": " " + t, "start": i, "end": i + 0.5})()
                                              for i, t in enumerate(text.split())], "text": text})()], None
-    monkeypatch.setattr(R, "_sung_words", lambda segs: [{"w": w.word.strip(), "s": w.start, "e": w.end}
+    fakes[("R", "_sung_words")] = (lambda segs: [{"w": w.word.strip(), "s": w.start, "e": w.end}
                                                          for s in segs for w in s.words])
     ctx = type("C", (), {"models": type("M", (), {"whisper": W()})()})()
     layout = "[Verse]\nсорок лет как под наркозом\nя работал говновозом"
     tried = []
     voices = [(v, lambda o, v=v: (tried.append(v), open(o, "wb").close())) for v in ("seedvc", "soulx")]
-    got = R._voice_keeping_words(ctx, voices, "take.wav", layout, str(tmp_path), "ru")
+    got = R._voice_keeping_words(_W(fakes, ctx), voices, "take.wav", layout, str(tmp_path), "ru")
     assert tried == ["seedvc", "soulx"] and os.path.basename(got) == "soulx.wav"
     heard["soulx.wav"] = "ЧИИИИИИИ"
-    assert R._voice_keeping_words(ctx, voices, "take.wav", layout, str(tmp_path), "ru") == "take.wav"
+    assert R._voice_keeping_words(_W(fakes, ctx), voices, "take.wav", layout, str(tmp_path), "ru") == "take.wav"
     # RVC sings every word a little off -- each line ~0.8 similar, half the lines under
     # _clarity's cliff -- and that singer's voice is what the user wants, not the take's.
     heard["soulx.wav"] = "сарок лет как пад наркозам я рабатал гавновозам"
-    assert os.path.basename(R._voice_keeping_words(ctx, voices, "take.wav", layout, str(tmp_path), "ru")) == "soulx.wav"
+    assert os.path.basename(R._voice_keeping_words(_W(fakes, ctx), voices, "take.wav", layout, str(tmp_path), "ru")) == "soulx.wav"
 
 
-def _lyrics_run(monkeypatch, heard_lines, tidy):
-    monkeypatch.setattr(R, "_stems", lambda song, work, name: (np.zeros(10), np.zeros(10)))
-    monkeypatch.setattr(R, "_hear", lambda wh, path, language=None, vad=True:
+def _lyrics_run(fakes, heard_lines, tidy):
+    fakes[("R", "_stems")] = lambda song, work, name: (np.zeros(10), np.zeros(10))
+    fakes[("R", "_hear")] = (lambda wh, path, language=None, vad=True:
                         [type("S", (), {"text": t})() for t in heard_lines])
-    monkeypatch.setattr(llm, "call_llm_simple", lambda *a, **k: tidy)
-    return R.lyrics_of(type("C", (), {"models": type("M", (), {"whisper": None})()})(), "song2.mp3")
+    fakes[("llm", "call_llm_simple")] = lambda *a, **k: tidy
+    return R.lyrics_of(_W(fakes, type("C", (), {"models": type("M", (), {"whisper": None})()})()), "song2.mp3")
 
 
 HEARD = ["Сорок лет как под наркозом я работал говновозом", "ой ой ой",
          "Субтитры делал DimaTorzok", "не шофером не таксистом а вонючим говночистом"]
 
 
-def test_second_song_words_are_tidied_into_sections(monkeypatch):
+def test_second_song_words_are_tidied_into_sections(fakes):
     # the second song gives the words.
     tidy = ('{"lyrics": "[Verse]\nСорок лет, как под наркозом,\nя работал говновозом, ой-ой-ой,\n'
             'не шофером, не таксистом,\nа вонючим говночистом"}')
-    got = _lyrics_run(monkeypatch, HEARD, tidy)
+    got = _lyrics_run(fakes, HEARD, tidy)
     assert got.startswith("[Verse]") and "говночистом" in got and "DimaTorzok" not in got
 
 
-def test_a_tidy_up_that_rewrites_the_words_is_dropped(monkeypatch):
-    got = _lyrics_run(monkeypatch, HEARD, '{"lyrics": "[Verse]\nЯ люблю тебя жизнь\nи надеюсь что это взаимно"}')
+def test_a_tidy_up_that_rewrites_the_words_is_dropped(fakes):
+    got = _lyrics_run(fakes, HEARD, '{"lyrics": "[Verse]\nЯ люблю тебя жизнь\nи надеюсь что это взаимно"}')
     assert got.splitlines()[0] == HEARD[0] and "DimaTorzok" not in got
 
 
-def test_an_instrumental_second_song_has_no_words(monkeypatch):
+def test_an_instrumental_second_song_has_no_words(fakes):
     with pytest.raises(cover.CoverFailed):
-        _lyrics_run(monkeypatch, ["ла ла"], "{}")
+        _lyrics_run(fakes, ["ла ла"], "{}")
 
 
-def test_rvc_trains_on_the_russian_pretrain_and_converts_without_the_index(monkeypatch, tmp_path):
+def test_rvc_trains_on_the_russian_pretrain_and_converts_without_the_index(fakes, tmp_path):
     # Whisper sweep on Marshal: Snowie 60e kept 0.59 of the lines (stock 200e -- 0.52) in
     # half the time; index 0 / protect 0.33 beat index 0.4 / protect 0.5.
     import rvc_voice
     runs = []
-    monkeypatch.setattr(rvc_voice, "APPLIO", str(tmp_path))
+    fakes[("rvc_voice", "APPLIO")] = str(tmp_path)
     d = tmp_path / "rvc" / "models" / "pretraineds" / "custom"
     d.mkdir(parents=True)
     for f in rvc_voice.PRETRAIN:
         with open(d / f, "wb") as fh:
             fh.truncate(int(2e8))
-    monkeypatch.setattr(rvc_voice, "_run", lambda ctx, args, *a: runs.append(args))
-    monkeypatch.setattr(rvc_voice, "_clean_vocal", lambda ctx, wav, work: wav)
-    monkeypatch.setattr(rvc_voice, "model_of", lambda name: ("m.pth", "m.index"))
+    fakes[("rvc_voice", "_run")] = lambda ctx, args, *a: runs.append(args)
+    fakes[("rvc_voice", "_clean_vocal")] = lambda ctx, wav, work: wav
+    fakes[("rvc_voice", "model_of")] = lambda name, *a: ("m.pth", "m.index")
     wav = tmp_path / "v.wav"
     wav.write_bytes(b"x")
-    rvc_voice.train(None, "artist", str(wav))
+    rvc_voice.train(_W(fakes, None), "artist", str(wav))
     tr = next(a for a in runs if a[0] == "train")
     assert "--custom-pretrained" in tr and tr[tr.index("--g-pretrained-path") + 1].endswith("G_SnowieV3.1_40k.pth")
     assert tr[tr.index("--total-epoch") + 1] == "60"
     out = tmp_path / "o.wav"
     out.write_bytes(b"x")
-    rvc_voice.convert(None, "artist", str(wav), str(out))
+    rvc_voice.convert(_W(fakes, None), "artist", str(wav), str(out))
     inf = runs[-1]
     assert inf[inf.index("--index-rate") + 1] == "0" and inf[inf.index("--protect") + 1] == "0.33"
 
 
-def test_the_singer_is_trained_alone_and_dry(monkeypatch, tmp_path):
+def test_the_singer_is_trained_alone_and_dry(fakes, tmp_path):
     # Snowie on the bare Demucs stem kept 0.62 likeness, on lead-only + dereverbed 0.68.
     import rvc_voice
-    monkeypatch.setattr(rvc_voice, "APPLIO", str(tmp_path))
-    monkeypatch.setattr(rvc_voice, "SEPARATOR", str(tmp_path / "sep.exe"))
+    fakes[("rvc_voice", "APPLIO")] = str(tmp_path)
+    fakes[("rvc_voice", "SEPARATOR")] = str(tmp_path / "sep.exe")
     (tmp_path / "sep.exe").write_bytes(b"")
     models = []
 
@@ -383,14 +404,14 @@ def test_the_singer_is_trained_alone_and_dry(monkeypatch, tmp_path):
             with open(os.path.join(out, f"{stem}_{t}_{model[:8]}.wav"), "w", encoding="utf-8") as f:
                 f.write(t)
         return True, ""
-    monkeypatch.setattr(music, "run_gpu_worker", sep)
+    fakes[("music", "run_gpu_worker")] = sep
     runs = []
-    monkeypatch.setattr(rvc_voice, "_run", lambda ctx, args, *a: runs.append(args))
-    monkeypatch.setattr(rvc_voice, "_pretrain_args", lambda: [])
-    monkeypatch.setattr(rvc_voice, "model_of", lambda name: ("m.pth", "m.index"))
+    fakes[("rvc_voice", "_run")] = lambda ctx, args, *a: runs.append(args)
+    fakes[("rvc_voice", "_pretrain_args")] = lambda *a: []
+    fakes[("rvc_voice", "model_of")] = lambda name, *a: ("m.pth", "m.index")
     wav = tmp_path / "a_vox.wav"
     wav.write_text("stem", encoding="utf-8")
-    rvc_voice.train(None, "artist", str(wav))
+    rvc_voice.train(_W(fakes, None), "artist", str(wav))
     assert models == [rvc_voice.LEAD_MODEL, rvc_voice.DRY_MODEL]
     assert (tmp_path / "datasets" / "artist" / "vocal.wav").read_text(encoding="utf-8") == "(noreverb)"
 
@@ -402,13 +423,13 @@ def test_a_long_training_still_saves_its_last_epoch():
     assert rvc_voice._save_every(300) == 100 and rvc_voice._save_every(250) == 50
 
 
-def test_a_training_that_died_on_its_port_runs_again(monkeypatch, tmp_path):
+def test_a_training_that_died_on_its_port_runs_again(fakes, tmp_path):
     # Applio's random torch.distributed port can fall in Windows' reserved 53091..53790: the
     # run then dies in TCPStore, prints «trained successfully» and leaves no weights.
     import rvc_voice
-    monkeypatch.setattr(rvc_voice, "APPLIO", str(tmp_path))
-    monkeypatch.setattr(rvc_voice, "_clean_vocal", lambda ctx, wav, work: wav)
-    monkeypatch.setattr(rvc_voice, "_pretrain_args", lambda: [])
+    fakes[("rvc_voice", "APPLIO")] = str(tmp_path)
+    fakes[("rvc_voice", "_clean_vocal")] = lambda ctx, wav, work: wav
+    fakes[("rvc_voice", "_pretrain_args")] = lambda *a: []
     trains = []
 
     def run(ctx, args, *a):
@@ -419,14 +440,14 @@ def test_a_training_that_died_on_its_port_runs_again(monkeypatch, tmp_path):
                 d.mkdir(parents=True, exist_ok=True)
                 (d / "artist_60e_900s.pth").write_bytes(b"w")
                 (d / "artist.index").write_bytes(b"i")
-    monkeypatch.setattr(rvc_voice, "_run", run)
+    fakes[("rvc_voice", "_run")] = run
     wav = tmp_path / "v.wav"
     wav.write_bytes(b"x")
-    assert rvc_voice.train(None, "artist", str(wav))[0].endswith("artist_60e_900s.pth")
+    assert rvc_voice.train(_W(fakes, None), "artist", str(wav))[0].endswith("artist_60e_900s.pth")
     assert len(trains) == 2
 
 
-def test_the_singer_is_sung_a_few_times_and_the_closest_kept(monkeypatch, tmp_path):
+def test_the_singer_is_sung_a_few_times_and_the_closest_kept(fakes, tmp_path):
     # one RVC model/settings/take comes out 0.52..0.78 like the lyric over four runs.
     lines = "сорок лет как под наркозом я работал говновозом"
     heard = {"take.wav": lines, "rvc0.wav": "сарак лит как пат наркозам я рабатал гавнавозам",
@@ -437,14 +458,13 @@ def test_the_singer_is_sung_a_few_times_and_the_closest_kept(monkeypatch, tmp_pa
             text = heard[os.path.basename(path)]
             return [type("S", (), {"words": [type("W", (), {"word": " " + t, "start": i, "end": i + 0.5})()
                                              for i, t in enumerate(text.split())], "text": text})()], None
-    monkeypatch.setattr(R, "_sung_words", lambda segs: [{"w": w.word.strip(), "s": w.start, "e": w.end}
+    fakes[("R", "_sung_words")] = (lambda segs: [{"w": w.word.strip(), "s": w.start, "e": w.end}
                                                          for s in segs for w in s.words])
     ctx = type("C", (), {"models": type("M", (), {"whisper": W()})()})()
-    import rvc_voice
     sung = []
-    monkeypatch.setattr(rvc_voice, "convert", lambda ctx, name, src, out: (sung.append(out), open(out, "wb").close()))
-    voices = R._rvc_voices(ctx, "artist", "take.wav")
-    got = R._voice_keeping_words(ctx, voices, "take.wav", "[Verse]\nсорок лет как под наркозом\nя работал говновозом",
+    fakes[("rvc_voice", "convert")] = lambda ctx, name, src, out: (sung.append(out), open(out, "wb").close())
+    voices = R._rvc_voices(_W(fakes, ctx), "artist", "take.wav")
+    got = R._voice_keeping_words(_W(fakes, ctx), voices, "take.wav", "[Verse]\nсорок лет как под наркозом\nя работал говновозом",
                                  str(tmp_path), "ru", best=True)
     assert len(sung) == 3 and os.path.basename(got) == "rvc1.wav"
 
@@ -467,23 +487,23 @@ def test_arrangement_with_foreign_words_or_over_budget_is_refused():
     assert R._arrange_score([["говновоз говновоз говновоз говновоз едет"]], sung, plain, {"говновоз"}) is None
 
 
-def test_spare_notes_are_filled_by_repeating_the_hook(monkeypatch):
+def test_spare_notes_are_filled_by_repeating_the_hook(fakes):
     calls = []
     def fake(ctx, sys_, user, **k):
         calls.append(user)
         if "repeats itself" in user or "Hook" in user or "hook" in user:
             return '{"sections": [["говновоз говновоз говновоз", "много роз"]]}'
         return '{"sections": [[1, 2]]}'
-    monkeypatch.setattr(llm, "call_llm_simple", fake)
-    text = R._layout(None, "говновоз\nмного роз", [("Chorus", 12)], profile=["it sings one key word 3 times in a row"])
+    fakes[("llm", "call_llm_simple")] = fake
+    text = R._layout(_W(fakes, None), "говновоз\nмного роз", [("Chorus", 12)], profile=["it sings one key word 3 times in a row"])
     assert "говновоз говновоз говновоз" in text
     assert any("3 times in a row" in c for c in calls)
 
 
-def test_an_arrangement_that_breaks_the_rules_keeps_the_plain_lines(monkeypatch):
-    monkeypatch.setattr(llm, "call_llm_simple", lambda ctx, s, u, **k:
+def test_an_arrangement_that_breaks_the_rules_keeps_the_plain_lines(fakes):
+    fakes[("llm", "call_llm_simple")] = (lambda ctx, s, u, **k:
                         '{"sections": [["совсем другие слова"]]}' if "hook" in u else '{"sections": [[1]]}')
-    assert R._layout(None, "говновоз едет", [("Chorus", 10)], profile=[]) == "[Chorus]\nговновоз едет"
+    assert R._layout(_W(fakes, None), "говновоз едет", [("Chorus", 10)], profile=[]) == "[Chorus]\nговновоз едет"
 
 
 def test_hook_is_the_most_sung_content_word_not_a_whole_line():
@@ -500,10 +520,10 @@ def test_a_repeat_that_eats_the_meaning_costs_more():
     assert keep < eat
 
 
-def test_glued_lines_are_split_back_into_sung_phrases(monkeypatch):
-    monkeypatch.setattr(llm, "call_llm_simple", lambda ctx, s, u, **k:
+def test_glued_lines_are_split_back_into_sung_phrases(fakes):
+    fakes[("llm", "call_llm_simple")] = (lambda ctx, s, u, **k:
                         '{"sections": [["говновоз едет. Говновоз, говновоз стоит."]]}' if "hook" in u else '{"sections": [[1, 2]]}')
-    assert R._layout(None, "говновоз едет\nговновоз стоит", [("Chorus", 14)], profile=[]) == \
+    assert R._layout(_W(fakes, None), "говновоз едет\nговновоз стоит", [("Chorus", 14)], profile=[]) == \
         "[Chorus]\nговновоз едет.\nГовновоз, говновоз стоит."
 
 
@@ -526,37 +546,36 @@ def test_a_cover_lyric_keeps_the_originals_shape():
     assert R._cover_cost("", o) is None
 
 
-def test_cover_words_picks_the_draft_closest_to_the_shape(monkeypatch):
-    monkeypatch.setattr(R, "lyrics_of", lambda ctx, song: ORIG)
+def test_cover_words_picks_the_draft_closest_to_the_shape(fakes):
+    fakes[("R", "lyrics_of")] = lambda ctx, song: ORIG
     drafts = iter(['{"lyrics": "[Verse]\nсел я на трамвай последний\nдоехал\n[Chorus]\nах трамвайчик\nну и ладно"}',
                    '{"lyrics": "[Verse]\nсел я на трамвай последний\nдоехал прямо до конца\n[Chorus]\nах трамвайчик\nах трамвайчик"}',
                    'not json'])
     seen = []
-    monkeypatch.setattr(llm, "call_llm_simple", lambda ctx, s, u, **k: (seen.append(u), next(drafts))[1])
-    out = R.cover_words(None, "x.mp3", "трамвай")
+    fakes[("llm", "call_llm_simple")] = lambda ctx, s, u, **k: (seen.append(u), next(drafts))[1]
+    out = R.cover_words(_W(fakes, None), "x.mp3", "трамвай")
     assert "доехал прямо до конца" in out
     assert "= line 3" in seen[0] and "трамвай" in seen[0] and "дорог" not in seen[0]   # shape, not words
 
 
-def test_echoed_line_numbers_and_syllable_counts_are_not_sung(monkeypatch):
-    monkeypatch.setattr(R, "lyrics_of", lambda ctx, song: ORIG)
-    monkeypatch.setattr(llm, "call_llm_simple", lambda ctx, s, u, **k:
+def test_echoed_line_numbers_and_syllable_counts_are_not_sung(fakes):
+    fakes[("R", "lyrics_of")] = lambda ctx, song: ORIG
+    fakes[("llm", "call_llm_simple")] = (lambda ctx, s, u, **k:
                         '{"lyrics": "[Verse]\n1. сел я на трамвай последний (8)\n2. доехал прямо до конца (8 syllables)\n'
                         '[Chorus]\n3. ах трамвайчик (4)\n4. ах трамвайчик (4; = line 3)"}')
-    out = R.cover_words(None, "x.mp3", "трамвай")
+    out = R.cover_words(_W(fakes, None), "x.mp3", "трамвай")
     assert "сел я на трамвай последний\nдоехал прямо до конца" in out and "(" not in out and "1." not in out
 
 
-def test_the_file_title_names_the_singer(monkeypatch):
+def test_the_file_title_names_the_singer(fakes):
     seen = []
-    monkeypatch.setattr(llm, "call_llm_simple", lambda ctx, s, u, **k: (seen.append(u), '{"artist": "SHAMAN", "tags": "pop"}')[1])
-    _, artist = R._resing_style(None, "я русский я иду до конца", "120 bpm", "SHAMAN - Я РУССКИЙ")
+    fakes[("llm", "call_llm_simple")] = lambda ctx, s, u, **k: (seen.append(u), '{"artist": "SHAMAN", "tags": "pop"}')[1]
+    _, artist = R._resing_style(_W(fakes, None), "я русский я иду до конца", "120 bpm", "SHAMAN - Я РУССКИЙ")
     assert artist == "SHAMAN" and "File title: SHAMAN - Я РУССКИЙ" in seen[0]
 
 
-def test_a_pinned_checkpoint_beats_the_latest(monkeypatch, tmp_path):
+def test_a_pinned_checkpoint_beats_the_latest(tmp_path):
     import rvc_voice
-    monkeypatch.setattr(rvc_voice, "APPLIO", str(tmp_path))
     d = tmp_path / "logs" / "star"
     d.mkdir(parents=True)
     for i, ep in enumerate((25, 50, 75)):
@@ -564,8 +583,8 @@ def test_a_pinned_checkpoint_beats_the_latest(monkeypatch, tmp_path):
         p.write_bytes(b"x")
         os.utime(p, (1000 + i, 1000 + i))
     (d / "added_star.index").write_bytes(b"x")
-    assert rvc_voice.model_of("star")[0].endswith("star_75e_7500s.pth")
+    assert rvc_voice.model_of("star", str(tmp_path))[0].endswith("star_75e_7500s.pth")
     (d / "best.txt").write_text("star_25e_2500s.pth", encoding="utf-8")
-    assert rvc_voice.model_of("star")[0].endswith("star_25e_2500s.pth")
+    assert rvc_voice.model_of("star", str(tmp_path))[0].endswith("star_25e_2500s.pth")
     (d / "best.txt").write_text("gone.pth", encoding="utf-8")
-    assert rvc_voice.model_of("star")[0].endswith("star_75e_7500s.pth")
+    assert rvc_voice.model_of("star", str(tmp_path))[0].endswith("star_75e_7500s.pth")

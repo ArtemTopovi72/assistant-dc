@@ -23,6 +23,7 @@ EmptyMiniMaxMusic3LatentAudio(seconds=<the encode node's own clamped
 See docs/music_generation.md for the object_info census that confirmed this.
 """
 from __future__ import annotations
+from seams import dep
 
 import json
 import logging
@@ -1649,9 +1650,9 @@ def _render_yue2_once(ctx, cpp: bool, job: dict, seed: int) -> str:
                                        os.path.join(os.environ.get("CUDA_PATH", ""), "bin"), env["PATH"]])
         cmd = [YUE2_CPP_EXE, "--model", YUE2_CPP_MODEL, "--vae", YUE2_CPP_VAE,
                "--request", "{job}", "--out", out]
-        _, tail = run_gpu_worker(ctx, "", "", job, "YuE2", YUE2_TIMEOUT, cmd=cmd, env=env)
+        _, tail = dep(ctx, "run_gpu_worker", run_gpu_worker)(ctx, "", "", job, "YuE2", YUE2_TIMEOUT, cmd=cmd, env=env)
     else:
-        _, tail = run_gpu_worker(ctx, YUE2_PYTHON, "yue2_render.py", job, "YuE2", YUE2_TIMEOUT)
+        _, tail = dep(ctx, "run_gpu_worker", run_gpu_worker)(ctx, YUE2_PYTHON, "yue2_render.py", job, "YuE2", YUE2_TIMEOUT)
     return tail
 
 

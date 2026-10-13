@@ -4,6 +4,7 @@
 vocal stem («МОЛОДЕЦ!!!»); a zero-shot timbre (SoulX / Seed-VC) is only close. Training takes
 ~4 s an epoch on 6 min of vocal, so the first cover of an artist pays it once and the model is
 reused for every later cover of that artist."""
+from seams import dep
 import glob
 import logging
 import os
@@ -74,27 +75,28 @@ ALIASES = {"viktor_tsoy": "tsoi_hq", "viktor_tsoi": "tsoi_hq", "kino": "tsoi_hq"
            "lindemann": "lindemann_hq"}
 
 
-def best_voice(name: str) -> str:
-    """`name`'s star model when one is trained, else `name` itself."""
+def best_voice(name: str, trained=None) -> str:
+    """`name`'s star model when one is trained (`trained(name)`, default model_of), else `name`."""
     star = ALIASES.get(name or "")
-    return star if star and model_of(star) else name
+    return star if star and (trained or model_of)(star) else name
 
 
-def stars(lang: str = "ru") -> list:
-    """[(model name, label)] of the star voices trained here, labelled in `lang`."""
+def stars(lang: str = "ru", trained=None) -> list:
+    """[(model name, label)] of the star voices trained here (`trained(name)`, default
+    model_of), labelled in `lang`."""
     seen, out = set(), []
     for name, label in STARS:
-        if label not in seen and model_of(name):
+        if label not in seen and (trained or model_of)(name):
             seen.add(label)
             out.append((name, label if lang == "ru" else STARS_EN.get(label, label)))
     return out
 
 
-def model_of(name: str):
+def model_of(name: str, home: str = None):
     """(pth, index) of a trained voice, or None. The latest checkpoint, unless best.txt in the
     model's folder names another: the last is not the best (night run, words heard in the
     mix: Tsoi singing «Du hast» 71 % at 25 epochs, 32 % at 75)."""
-    d = os.path.join(APPLIO, "logs", name)
+    d = os.path.join(home or APPLIO, "logs", name)
     pths = sorted(glob.glob(os.path.join(d, f"{name}_*e_*s.pth")), key=os.path.getmtime)
     idx = [p for p in glob.glob(os.path.join(d, "*.index")) if "trained" not in os.path.basename(p)]
     try:
@@ -108,8 +110,9 @@ def model_of(name: str):
 
 def _run(ctx, args: list, label: str, timeout: int) -> str:
     env = {**os.environ, "PYTHONUTF8": "1"}
-    _, tail = music.run_gpu_worker(ctx, PY, "", {}, label, timeout,
-                                   cmd=[PY, os.path.join(APPLIO, "core.py")] + args, env=env, cwd=APPLIO)
+    home = dep(ctx, "APPLIO", APPLIO)
+    _, tail = dep(ctx, "music", music).run_gpu_worker(ctx, PY, "", {}, label, timeout,
+                                                      cmd=[PY, os.path.join(home, "core.py")] + args, env=env, cwd=home)
     return tail
 
 
@@ -121,16 +124,17 @@ DRY_MODEL = "dereverb_mel_band_roformer_anvuew_sdr_19.1729.ckpt"
 def split_lead(ctx, vocal_wav: str, work: str) -> tuple:
     """A vocal stem -> (the lead voice dry, the backing vocals or None): the karaoke model takes
     the lead off the choir, the dereverb model the hall off the lead. Raises when it can't."""
-    if not os.path.isfile(SEPARATOR):
+    separator, home = dep(ctx, "SEPARATOR", SEPARATOR), dep(ctx, "APPLIO", APPLIO)
+    if not os.path.isfile(separator):
         raise RuntimeError("no audio-separator")
-    models = os.path.join(APPLIO, "sep_models")
+    models = os.path.join(home, "sep_models")
     src, backing = vocal_wav, None
     for i, (model, keep) in enumerate(((LEAD_MODEL, "(Vocals)"), (DRY_MODEL, "(noreverb)"))):
         out = os.path.join(work, f"clean{i}")
         os.makedirs(out, exist_ok=True)
-        music.run_gpu_worker(ctx, PY, "", {}, "RVC clean", 900, env={**os.environ, "PYTHONUTF8": "1"},
-                             cmd=[SEPARATOR, src, "-m", model, "--output_dir", out, "--model_file_dir", models,
-                                  "--output_format", "WAV"], cwd=APPLIO)
+        dep(ctx, "music", music).run_gpu_worker(ctx, PY, "", {}, "RVC clean", 900, env={**os.environ, "PYTHONUTF8": "1"},
+                             cmd=[separator, src, "-m", model, "--output_dir", out, "--model_file_dir", models,
+                                  "--output_format", "WAV"], cwd=home)
         wavs = glob.glob(os.path.join(out, "*.wav"))
         got = [f for f in wavs if keep in os.path.basename(f)]
         if not got:
@@ -147,16 +151,16 @@ def _clean_vocal(ctx, vocal_wav: str, work: str) -> str:
     the bare Demucs stem 0.62, on the cleaned one 0.68 -- the model no longer learns the choir
     and the hall as part of the voice. The bare stem when the separator is missing or fails."""
     try:
-        return split_lead(ctx, vocal_wav, work)[0]
+        return dep(ctx, "split_lead", split_lead)(ctx, vocal_wav, work)[0]
     except Exception as exc:
         logger.warning("rvc: vocal cleanup failed (%s), training on the bare stem", exc)
         return vocal_wav
 
 
-def _pretrain_args() -> list:
+def _pretrain_args(home: str = None) -> list:
     """The Russian Snowie pretrain (fetched once into Applio's custom pretraineds); the stock
     one when it can't be had."""
-    d = os.path.join(APPLIO, "rvc", "models", "pretraineds", "custom")
+    d = os.path.join(home or APPLIO, "rvc", "models", "pretraineds", "custom")
     paths = [os.path.join(d, f) for f in PRETRAIN]
     for f, path in zip(PRETRAIN, paths):
         if os.path.isfile(path) and os.path.getsize(path) > 1e8:
@@ -180,29 +184,30 @@ def _save_every(epochs: int) -> int:
 
 def train(ctx, name: str, vocal_wav: str):
     """Train `name` on one vocal stem. Returns (pth, index) or None."""
-    data = os.path.join(APPLIO, "datasets", name)
+    home = dep(ctx, "APPLIO", APPLIO)
+    data = os.path.join(home, "datasets", name)
     os.makedirs(data, exist_ok=True)
-    shutil.copy(_clean_vocal(ctx, vocal_wav, data + "_clean"), os.path.join(data, "vocal.wav"))
+    shutil.copy(dep(ctx, "_clean_vocal", _clean_vocal)(ctx, vocal_wav, data + "_clean"), os.path.join(data, "vocal.wav"))
     sr = "40000"
-    _run(ctx, ["preprocess", "--model-name", name, "--dataset-path", data, "--sample-rate", sr,
+    dep(ctx, "_run", _run)(ctx, ["preprocess", "--model-name", name, "--dataset-path", data, "--sample-rate", sr,
                "--cut-preprocess", "Automatic", "--process-effects"], "RVC prep", 900)
-    _run(ctx, ["extract", "--model-name", name, "--f0-method", "rmvpe", "--sample-rate", sr, "--gpu", "0"],
+    dep(ctx, "_run", _run)(ctx, ["extract", "--model-name", name, "--f0-method", "rmvpe", "--sample-rate", sr, "--gpu", "0"],
          "RVC extract", 900)
     # Applio binds a random port in 20000..55555 for torch.distributed; Windows reserves
     # 53091..53790 and 50000..50059 here, and on those the run dies in TCPStore (the
     # Russian bind error crashed its own decoding) yet still prints «trained successfully».
     # A run that left no weights is run again.
-    pths = lambda: glob.glob(os.path.join(APPLIO, "logs", name, f"{name}_*e_*s.pth"))
+    pths = lambda: glob.glob(os.path.join(home, "logs", name, f"{name}_*e_*s.pth"))
     for _ in range(3):
-        _run(ctx, ["train", "--model-name", name, "--sample-rate", sr, "--total-epoch", str(EPOCHS),
+        dep(ctx, "_run", _run)(ctx, ["train", "--model-name", name, "--sample-rate", sr, "--total-epoch", str(EPOCHS),
                    "--save-every-epoch", str(_save_every(EPOCHS)), "--save-only-latest", "--batch-size", "8",
-                   "--gpu", "0", "--pretrained", *_pretrain_args(), "--index-algorithm", "Auto"],
+                   "--gpu", "0", "--pretrained", *dep(ctx, "_pretrain_args", _pretrain_args)(home), "--index-algorithm", "Auto"],
              "RVC train", TRAIN_TIMEOUT)
         if pths():
             break
         logger.warning("rvc: training %s left no weights, again", name)
-    _run(ctx, ["index", "--model-name", name], "RVC index", 900)
-    got = model_of(name)
+    dep(ctx, "_run", _run)(ctx, ["index", "--model-name", name], "RVC index", 900)
+    got = dep(ctx, "model_of", model_of)(name, home)
     logger.info("rvc: trained %s -> %s", name, got)
     return got
 
@@ -211,8 +216,8 @@ def convert(ctx, name: str, vocal_wav: str, out_wav: str, index_rate: float = 0.
     """`vocal_wav` sung in `name`'s voice. Whisper sweep (share of the lyric's lines heard):
     index 0 / protect 0.33 kept 0.52-0.59, index 0.4 / protect 0.5 -- 0.48, 0.75 -- 0.45, -12 -- 0.31.
     The index pulls the stem's mumble in; the timbre is in the model."""
-    pth, idx = model_of(name)
-    _run(ctx, ["infer", "--input-path", os.path.abspath(vocal_wav), "--output-path", os.path.abspath(out_wav),
+    pth, idx = dep(ctx, "model_of", model_of)(name, dep(ctx, "APPLIO", APPLIO))
+    dep(ctx, "_run", _run)(ctx, ["infer", "--input-path", os.path.abspath(vocal_wav), "--output-path", os.path.abspath(out_wav),
                "--pth-path", pth, "--index-path", idx, "--pitch", "0", "--index-rate", f"{index_rate:g}", "--protect", "0.33",
                "--f0-method", "rmvpe", "--volume-envelope", "1", "--export-format", "WAV"], "RVC", 900)
     if not os.path.isfile(out_wav):

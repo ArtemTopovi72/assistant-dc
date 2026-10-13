@@ -9,6 +9,7 @@ Pipeline: Demucs stems -> (words: Whisper times the original words, TTS speaks o
 spans, pyworld lays the original singer's pitch on them) -> SoulX-Singer-SVC puts the singer's
 timbre on it (Seed-VC if SoulX is not installed) -> mixed over the original backing.
 """
+from seams import dep, text_model
 import itertools
 import json
 import logging
@@ -91,7 +92,7 @@ def _soulx(ctx, source: str, prompt: str, out: str) -> bool:
            "--prompt_wav_path", os.path.join(work, "prm.wav"), "--target_wav_path", os.path.join(work, "src.wav"),
            "--prompt_f0_path", os.path.join(work, "prm_f0.npy"), "--target_f0_path", os.path.join(work, "src_f0.npy"),
            "--save_dir", os.path.join(work, "o"), "--auto_shift", "--pitch_shift", "0", "--n_steps", "32", "--fp16"]
-    music.run_gpu_worker(ctx, SX_PY, "", {}, "SoulX-SVC", 900, cmd=cmd, env={**os.environ, "PYTHONPATH": SX})
+    dep(ctx, "music", music).run_gpu_worker(ctx, SX_PY, "", {}, "SoulX-SVC", 900, cmd=cmd, env={**os.environ, "PYTHONPATH": SX})
     gen = os.path.join(work, "o", "generated.wav")
     if not os.path.isfile(gen):
         return False
@@ -105,7 +106,7 @@ def _seedvc(ctx, source: str, prompt: str, out: str) -> bool:
     jf = os.path.join(tempfile.mkdtemp(prefix="remix_svc_"), "jobs.json")
     with open(jf, "w", encoding="utf-8") as fh:
         json.dump([{"source": source, "target": prompt, "out": out}], fh)
-    music.run_gpu_worker(ctx, SEEDVC_PY, "seedvc_batch.py", {}, "Seed-VC", 900,
+    dep(ctx, "music", music).run_gpu_worker(ctx, SEEDVC_PY, "seedvc_batch.py", {}, "Seed-VC", 900,
                          cmd=[SEEDVC_PY, os.path.join(ROOT, "scripts", "seedvc_batch.py"), jf])
     return os.path.isfile(out)
 
@@ -213,13 +214,12 @@ def _fit_line(ctx, line: str, n: int) -> str:
     unchanged every time, so it is told the count it has and how many to add or cut."""
     if abs(_syl(line) - n) <= 1:
         return line
-    import llm
     best = line
     for _ in range(3):
         have = _syl(best)
         verb = f"add {n - have}" if n > have else f"remove {have - n}"
         try:
-            got = llm.call_llm_simple(
+            got = text_model(ctx)(
                 ctx, "You fit song lyrics to a melody. Syllables are counted as vowels "
                 "(а е ё и о у ы э ю я). Rewrite the line to the asked syllable count by adding or "
                 "dropping small words, repeating a word or cutting a phrase -- same language, same "
@@ -318,8 +318,8 @@ def _speak_on_melody(ctx, vox: np.ndarray, lines: list, work: str, plan: list = 
     sf.write(vp, vox, SR)
     wh = ctx.models.whisper
     if plan is None:
-        segs = _hear(wh, vp)
-        words = _sung_words(segs)
+        segs = dep(ctx, "_hear", _hear)(wh, vp)
+        words = dep(ctx, "_sung_words", _sung_words)(segs)
         if len(words) < 3:
             raise cover.CoverFailed("no_words")
         plan = _plan(_phrases(words), lines)
@@ -334,7 +334,7 @@ def _speak_on_melody(ctx, vox: np.ndarray, lines: list, work: str, plan: list = 
         y, _ = librosa.effects.trim(y, top_db=35)
         tp = os.path.join(work, f"l{i}_t.wav")
         sf.write(tp, y, SR)
-        ts = _hear(wh, tp)
+        ts = dep(ctx, "_hear", _hear)(wh, tp)
         tw = [{"w": x.word.strip(), "s": x.start, "e": x.end} for sg in ts for x in (sg.words or []) if x.word.strip()]
         src = _syl_marks(tw)[:-1] + [len(y) / SR] if tw else [0.0, len(y) / SR]
         t0 = dst[0]
@@ -392,7 +392,7 @@ def resing_available() -> bool:
 def _score(ctx, wav: str, work: str) -> str:
     """The recording's full score (melody + chord symbols + section marks) as ABC."""
     abc = os.path.join(work, "score.abc")
-    music.run_gpu_worker(ctx, "", "", {}, "SheetSage", 600,
+    dep(ctx, "music", music).run_gpu_worker(ctx, "", "", {}, "SheetSage", 600,
                          cmd=[YUE_TRANSCRIBE, "--model", SHEETSAGE, "--audio", wav, "--out", abc])
     if not os.path.isfile(abc):
         raise cover.CoverFailed("render")
@@ -553,7 +553,6 @@ def _arrange(ctx, sung: list, plain: list, profile: list, hook: set, spare: list
     """The plain line placement (`plain`, one list of lines per sung section) re-arranged with
     meaningful repeats. Several drafts, the best by `_arrange_score`; none that keeps the rules
     -> the plain placement."""
-    import llm
     from utils import safe_json_from_llm
     user = ("Sections (syllables the melody holds):\n"
             + "\n".join(f"{i}. {t}: ~{n} notes, lines now {sum(_syl(l) for l in p)} syllables -- {_need(n, p)}:\n   "
@@ -567,7 +566,7 @@ def _arrange(ctx, sung: list, plain: list, profile: list, hook: set, spare: list
     best_cost = 9.0 if best_cost is None else best_cost
     for k in range(max(1, ARRANGE_TRIES)):
         try:
-            raw = llm.call_llm_simple(ctx, _ARRANGE, user, temperature=0.4 + 0.2 * k, max_tokens=1200)
+            raw = text_model(ctx)(ctx, _ARRANGE, user, temperature=0.4 + 0.2 * k, max_tokens=1200)
             got = safe_json_from_llm(raw or "", ["sections"]) or {}
         except Exception as exc:
             logger.warning("resing: arrange failed: %s", exc)
@@ -604,11 +603,10 @@ def _layout(ctx, lyrics: str, parts: list, profile: list = None) -> str:
     with meaningful repeats of the hook (`_arrange`)."""
     lines = [l.strip() for l in (lyrics or "").splitlines() if l.strip() and not re.fullmatch(r"\[.*\]", l.strip())]
     sung = [(t, n) for t, n in parts if t not in _INSTRUMENTAL and n >= _MIN_SUNG]
-    import llm
     from utils import safe_json_from_llm
     got = {}
     try:
-        raw = llm.call_llm_simple(
+        raw = text_model(ctx)(
             ctx, "You lay a song's lyric out on a melody's sections. Each section can carry about the "
             "given number of syllables (one per note) -- never more. Return JSON {\"sections\": "
             "[[line numbers], ...]} with one list per given section in that order. A chorus repeats the "
@@ -682,8 +680,7 @@ def _resing_style(ctx, heard: str, tempo_key: str, title: str = "") -> tuple:
     from utils import safe_json_from_llm
     got = {}
     try:
-        import llm
-        raw = llm.call_llm_simple(
+        raw = text_model(ctx)(
             ctx, "These are sung lines of a song. Return JSON {\"artist\": the lead singer's name if you "
             "recognize the song, else \"\", \"tags\": 8-12 comma-separated music tags: genre, era, lead "
             "vocal (gender, timbre), main instruments, mood}. JSON only.",
@@ -772,30 +769,30 @@ def resing(ctx, song: str, lyrics: str, info: dict = None) -> str:
         raise cover.CoverFailed("no_words")
     work = tempfile.mkdtemp(prefix="resing_")
     logger.info("resing: work %s", work)
-    vox, _ = _stems(song, work, "a")
-    abc = _score(ctx, os.path.join(work, "a_ref.wav"), work)
-    segs = _hear(ctx.models.whisper, os.path.join(work, "a_vox.wav"))
-    heard = " ".join(w["w"] for w in _sung_words(segs))
+    vox, _ = dep(ctx, "_stems", _stems)(song, work, "a")
+    abc = dep(ctx, "_score", _score)(ctx, os.path.join(work, "a_ref.wav"), work)
+    segs = dep(ctx, "_hear", _hear)(ctx.models.whisper, os.path.join(work, "a_vox.wav"))
+    heard = " ".join(w["w"] for w in dep(ctx, "_sung_words", _sung_words)(segs))
     title = str((info or {}).get("title") or "") or _song_title(song)
     style, artist = _resing_style(ctx, heard, _score_tempo_key(abc), title)
-    profile = _repetition_profile([" ".join(w["w"] for w in p) for p in _phrases(_sung_words(segs))])
+    profile = _repetition_profile([" ".join(w["w"] for w in p) for p in _phrases(dep(ctx, "_sung_words", _sung_words)(segs))])
     logger.info("resing: the original repeats itself: %s", profile)
-    layout = _layout(ctx, lyrics, _score_parts(abc), profile=profile)
-    job = {"lyrics": music.yue2_lyrics(layout), "style": music.yue2_language(style, lyrics), "abc": abc}
+    layout = dep(ctx, "_layout", _layout)(ctx, lyrics, _score_parts(abc), profile=profile)
+    job = {"lyrics": dep(ctx, "music", music).yue2_lyrics(layout), "style": dep(ctx, "music", music).yue2_language(style, lyrics), "abc": abc}
     logger.info("resing: artist %r, style %s", artist, job["style"])
     if ctx is not None and hasattr(ctx, "set_stage"):
         ctx.set_stage("Composing a song")
     seed, best = int(time.time()) % 100000, None
-    for take in range(max(1, RESING_TAKES)):
+    for take in range(max(1, dep(ctx, "RESING_TAKES", RESING_TAKES))):
         out = os.path.join(work, f"yue{take}.mp3")
-        music._render_yue2_once(ctx, True, dict(job, out=out), seed + take)
-        if not music._valid_audio_file(out):
+        dep(ctx, "music", music)._render_yue2_once(ctx, True, dict(job, out=out), seed + take)
+        if not dep(ctx, "music", music)._valid_audio_file(out):
             continue
-        music._master(out)
-        yvox, yback = _stems(out, work, f"y{take}")
-        tsegs = _hear(ctx.models.whisper, os.path.join(work, f"y{take}_vox.wav"),
+        dep(ctx, "music", music)._master(out)
+        yvox, yback = dep(ctx, "_stems", _stems)(out, work, f"y{take}")
+        tsegs = dep(ctx, "_hear", _hear)(ctx.models.whisper, os.path.join(work, f"y{take}_vox.wav"),
                       "ru" if re.search("[а-яё]", lyrics, re.I) else None)
-        clear = _clarity(" ".join(w["w"] for w in _sung_words(tsegs)), layout)
+        clear = _clarity(" ".join(w["w"] for w in dep(ctx, "_sung_words", _sung_words)(tsegs)), layout)
         logger.info("resing: take %d heard %.0f%% of the lines", take + 1, clear * 100)
         if best is None or clear > best[0]:
             best = (clear, take, yvox, yback)
@@ -805,11 +802,11 @@ def resing(ctx, song: str, lyrics: str, info: dict = None) -> str:
         raise cover.CoverFailed("render")
     _, take, yvox, yback = best
     yvox_wav = os.path.join(work, f"y{take}_vox.wav")
-    name = rvc_voice.best_voice(rvc_voice.slug(artist)) if rvc_voice.available() else ""
+    name = dep(ctx, "rvc_voice", rvc_voice).best_voice(dep(ctx, "rvc_voice", rvc_voice).slug(artist)) if dep(ctx, "rvc_voice", rvc_voice).available() else ""
     if info is not None:
         info.update({"work": work, "artist": artist, "rvc": name, "yvox": yvox, "yback": yback,
                      "yvox_wav": yvox_wav, "clarity": best[0], "layout": layout,
-                     "trained": bool(name and rvc_voice.model_of(name))})
+                     "trained": bool(name and dep(ctx, "rvc_voice", rvc_voice).model_of(name))})
     lang = "ru" if re.search("[а-яё]", lyrics, re.I) else None
     if info is not None:
         info["lang"] = lang
@@ -818,15 +815,15 @@ def resing(ctx, song: str, lyrics: str, info: dict = None) -> str:
         # the user's setting: YuE2's own voice, no conversion -- the clearest words (GigaAM on
         # the mix: Лесник 71% bare, 30% through the artist's RVC)
         conv = yvox_wav
-    elif chosen and rvc_voice.model_of(chosen):
-        conv = _voice_keeping_words(ctx, _rvc_voices(ctx, chosen, yvox_wav), yvox_wav, layout, work, lang, best=True)
-    elif name and rvc_voice.model_of(name):
-        conv = _voice_keeping_words(ctx, _rvc_voices(ctx, name, yvox_wav), yvox_wav, layout, work, lang, best=True)
+    elif chosen and dep(ctx, "rvc_voice", rvc_voice).model_of(chosen):
+        conv = dep(ctx, "_voice_keeping_words", _voice_keeping_words)(ctx, _rvc_voices(ctx, chosen, yvox_wav), yvox_wav, layout, work, lang, best=True)
+    elif name and dep(ctx, "rvc_voice", rvc_voice).model_of(name):
+        conv = dep(ctx, "_voice_keeping_words", _voice_keeping_words)(ctx, _rvc_voices(ctx, name, yvox_wav), yvox_wav, layout, work, lang, best=True)
     else:
-        ref = _singer_ref(vox, work, "a")
-        voices = [(v, lambda o, v=v: sing_as(ctx, yvox_wav, ref, o, order=(v,))) for v in ("seedvc", "soulx")]
-        conv = _voice_keeping_words(ctx, voices, yvox_wav, layout, work, lang)
-    return _mix_vocal(conv, yvox, yback)
+        ref = dep(ctx, "_singer_ref", _singer_ref)(vox, work, "a")
+        voices = [(v, lambda o, v=v: dep(ctx, "sing_as", sing_as)(ctx, yvox_wav, ref, o, order=(v,))) for v in ("seedvc", "soulx")]
+        conv = dep(ctx, "_voice_keeping_words", _voice_keeping_words)(ctx, voices, yvox_wav, layout, work, lang)
+    return dep(ctx, "_mix_vocal", _mix_vocal)(conv, yvox, yback)
 
 
 # An RVC conversion is a draw too: one model, settings and take came out 0.52..0.78 like the
@@ -837,7 +834,7 @@ RVC_TRIES = int(os.getenv("RVC_TRIES", "3"))
 
 def _rvc_voices(ctx, name: str, src: str) -> list:
     import rvc_voice
-    return [(f"rvc{k}", lambda o: rvc_voice.convert(ctx, name, src, o)) for k in range(RVC_TRIES)]
+    return [(f"rvc{k}", lambda o: dep(ctx, "rvc_voice", rvc_voice).convert(ctx, name, src, o)) for k in range(RVC_TRIES)]
 
 
 def _voice_keeping_words(ctx, voices: list, yvox_wav: str, layout: str, work: str, lang, best=False) -> str:
@@ -847,7 +844,7 @@ def _voice_keeping_words(ctx, voices: list, yvox_wav: str, layout: str, work: st
     got that mush. A conversion heard less than 0.8 as close to the lyric as the take is dropped
     (by _likeness: on _clarity's cliff every RVC voice fell under it and the singer never sang)."""
     def heard(path):
-        return _likeness(" ".join(w["w"] for w in _sung_words(_hear(ctx.models.whisper, path, lang))), layout)
+        return _likeness(" ".join(w["w"] for w in dep(ctx, "_sung_words", _sung_words)(dep(ctx, "_hear", _hear)(ctx.models.whisper, path, lang))), layout)
     take = top = None
     for vname, convert in voices:
         out = os.path.join(work, vname + ".wav")
@@ -882,21 +879,21 @@ def sing_original_as(ctx, song: str, name: str, index_rate: float = None) -> str
     import librosa
     import soundfile as sf
     import rvc_voice
-    if not rvc_voice.model_of(name):
+    if not dep(ctx, "rvc_voice", rvc_voice).model_of(name):
         raise cover.CoverFailed("render")
     work = tempfile.mkdtemp(prefix="star_")
     if ctx is not None and hasattr(ctx, "set_stage"):
         ctx.set_stage("Singing in the chosen voice")
-    _, back = _stems(song, work, "o")
-    lead, choir = rvc_voice.split_lead(ctx, os.path.join(work, "o_vox.wav"), work)
+    _, back = dep(ctx, "_stems", _stems)(song, work, "o")
+    lead, choir = dep(ctx, "rvc_voice", rvc_voice).split_lead(ctx, os.path.join(work, "o_vox.wav"), work)
     if choir:
         bv, _ = librosa.load(choir, sr=SR, mono=True)
         n = min(len(bv), len(back))
         back = back[:n] + bv[:n]
-    conv = rvc_voice.convert(ctx, name, lead, os.path.join(work, "star.wav"),
+    conv = dep(ctx, "rvc_voice", rvc_voice).convert(ctx, name, lead, os.path.join(work, "star.wav"),
                              index_rate=STAR_INDEX_RATE if index_rate is None else index_rate)
     v0, _ = librosa.load(lead, sr=SR, mono=True)
-    return _mix_vocal(conv, v0, back)
+    return dep(ctx, "_mix_vocal", _mix_vocal)(conv, v0, back)
 
 
 def resing_rvc(ctx, info: dict) -> str:
@@ -906,11 +903,11 @@ def resing_rvc(ctx, info: dict) -> str:
     work, name = info["work"], info["rvc"]
     if ctx is not None and hasattr(ctx, "set_stage"):
         ctx.set_stage("Learning the singer's voice")
-    if not rvc_voice.model_of(name) and not rvc_voice.train(ctx, name, os.path.join(work, "a_vox.wav")):
+    if not dep(ctx, "rvc_voice", rvc_voice).model_of(name) and not dep(ctx, "rvc_voice", rvc_voice).train(ctx, name, os.path.join(work, "a_vox.wav")):
         raise cover.CoverFailed("render")
-    conv = _voice_keeping_words(ctx, _rvc_voices(ctx, name, info["yvox_wav"]), info["yvox_wav"], info["layout"],
+    conv = dep(ctx, "_voice_keeping_words", _voice_keeping_words)(ctx, _rvc_voices(ctx, name, info["yvox_wav"]), info["yvox_wav"], info["layout"],
                                 work, info.get("lang"), best=True)
-    return _mix_vocal(conv, info["yvox"], info["yback"])
+    return dep(ctx, "_mix_vocal", _mix_vocal)(conv, info["yvox"], info["yback"])
 
 
 def lyrics_of(ctx, song: str) -> str:
@@ -921,13 +918,13 @@ def lyrics_of(ctx, song: str) -> str:
     dropped for the plain lines."""
     import difflib
     work = tempfile.mkdtemp(prefix="lyrics_")
-    _stems(song, work, "w")
+    dep(ctx, "_stems", _stems)(song, work, "w")
     # An original's stem under a dense mix: with VAD on Whisper kept ~50 of SHAMAN's words and
     # skipped the verses, off it heard 161. Both are heard; the fuller one is kept
     # (credit-line hallucinations are filtered either way).
     heard = []
     for vad in (True, False):
-        heard.append([sg for sg in _hear(ctx.models.whisper, os.path.join(work, "w_vox.wav"), vad=vad)
+        heard.append([sg for sg in dep(ctx, "_hear", _hear)(ctx.models.whisper, os.path.join(work, "w_vox.wav"), vad=vad)
                       if not _HALLUCINATED.search(sg.text or "")])
     segs = max(heard, key=lambda ss: sum(len((sg.text or "").split()) for sg in ss))
     lines = [re.sub(r"\s+", " ", sg.text).strip() for sg in segs if len(_letters(sg.text)) >= 3]
@@ -936,9 +933,8 @@ def lyrics_of(ctx, song: str) -> str:
     raw = "\n".join(lines)
     text = ""
     try:
-        import llm
         from utils import safe_json_from_llm
-        got = safe_json_from_llm(llm.call_llm_simple(
+        got = safe_json_from_llm(text_model(ctx)(
             ctx, "These are a song's lines as speech recognition heard them. Return JSON {\"lyrics\": the "
             "song as lyric lines with section tags [Verse] / [Pre-Chorus] / [Chorus] / [Bridge] / [Outro] "
             "on their own lines}. Keep the words and their order; split run-on lines at the sung phrase; "
@@ -1057,16 +1053,15 @@ def cover_words(ctx, song: str, theme: str, lang: str = "Russian") -> str:
     sections, syllables and map of repeats, a new hook where its hook was (a lyric
     written blind from the theme alone came out a quiet ballad for SHAMAN's «Я русский» anthem).
     Several drafts, the closest to the original's shape kept. Raises cover.CoverFailed."""
-    import llm
     from utils import safe_json_from_llm
-    orig = _sections_of(lyrics_of(ctx, song))
+    orig = _sections_of(dep(ctx, "lyrics_of", lyrics_of)(ctx, song))
     if not orig:
         raise cover.CoverFailed("no_words")
     user = f"Theme of the new words: {theme}\n\nThe original's shape:\n" + "\n".join(_shape_rows(orig))
     best, best_cost = "", None
     for t in range(max(1, COVER_WORD_TRIES)):
         try:
-            raw = llm.call_llm_simple(ctx, _WRITE_OVER.format(lang=lang), user,
+            raw = text_model(ctx)(ctx, _WRITE_OVER.format(lang=lang), user,
                                       temperature=0.7 + 0.1 * t, max_tokens=3000)
             got = safe_json_from_llm(raw or "", ["lyrics"]) or {}
         except Exception as exc:
@@ -1091,16 +1086,16 @@ def remix_words(ctx, song: str, lyrics: str) -> str:
     if not lines:
         raise cover.CoverFailed("no_words")
     work = tempfile.mkdtemp(prefix="remix_")
-    vox, back = _stems(song, work, "a")
+    vox, back = dep(ctx, "_stems", _stems)(song, work, "a")
     speech = _speak_on_melody(ctx, vox, lines, work)
-    conv = sing_as(ctx, speech, _singer_ref(vox, work, "a"), os.path.join(work, "conv.wav"))
+    conv = dep(ctx, "sing_as", sing_as)(ctx, speech, dep(ctx, "_singer_ref", _singer_ref)(vox, work, "a"), os.path.join(work, "conv.wav"))
     return _mix(conv, back, _out())
 
 
 def remix_voice(ctx, voice_song: str, melody_song: str) -> str:
     """The voice of `voice_song` sings `melody_song` (its words and melody) over its backing."""
     work = tempfile.mkdtemp(prefix="remix_")
-    vox1, _ = _stems(voice_song, work, "a")
-    _, back2 = _stems(melody_song, work, "b")
-    conv = sing_as(ctx, os.path.join(work, "b_vox.wav"), _singer_ref(vox1, work, "a"), os.path.join(work, "conv.wav"))
+    vox1, _ = dep(ctx, "_stems", _stems)(voice_song, work, "a")
+    _, back2 = dep(ctx, "_stems", _stems)(melody_song, work, "b")
+    conv = dep(ctx, "sing_as", sing_as)(ctx, os.path.join(work, "b_vox.wav"), dep(ctx, "_singer_ref", _singer_ref)(vox1, work, "a"), os.path.join(work, "conv.wav"))
     return _mix(conv, back2, _out())
