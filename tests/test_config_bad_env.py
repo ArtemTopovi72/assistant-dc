@@ -32,11 +32,9 @@ def test_bad_values_fall_back_to_defaults():
     assert vals == ["7.0", "30", "16", "3", "40960", "0.4", str(2 * 1024 ** 3)], vals
 
 
-def test_env_helpers_trim_and_accept_good_values(monkeypatch):
+def test_env_helpers_trim_and_accept_good_values():
     import config
-    monkeypatch.setenv("X_TEST_INT", " 12 ")
-    monkeypatch.setenv("X_TEST_FLOAT", "2.5")
-    assert config.env_int("X_TEST_INT", 1) == 12
-    assert config.env_float("X_TEST_FLOAT", 1.0) == 2.5
-    monkeypatch.setenv("X_TEST_INT", "1.5")
-    assert config.env_int("X_TEST_INT", 7) == 7
+    env = {"X_TEST_INT": " 12 ", "X_TEST_FLOAT": "2.5"}
+    assert config.env_int("X_TEST_INT", 1, env) == 12
+    assert config.env_float("X_TEST_FLOAT", 1.0, env) == 2.5
+    assert config.env_int("X_TEST_INT", 7, {"X_TEST_INT": "1.5"}) == 7

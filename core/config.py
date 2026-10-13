@@ -39,10 +39,10 @@ def _exempt_loopback_from_proxy() -> None:
 
 _exempt_loopback_from_proxy()
 
-def _env_int(name: str, default: int) -> int:
-    """Read an int from the environment, falling back to default on a bad value
-    so a malformed override never crashes startup at import time."""
-    raw = os.getenv(name)
+def _env_int(name: str, default: int, env=None) -> int:
+    """Read an int from the environment (or `env`, a mapping), falling back to default on a bad
+    value so a malformed override never crashes startup at import time."""
+    raw = (os.environ if env is None else env).get(name)
     if raw is None or raw.strip() == "":
         return default
     try:
@@ -52,8 +52,8 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-def _env_float(name: str, default: float) -> float:
-    raw = os.getenv(name)
+def _env_float(name: str, default: float, env=None) -> float:
+    raw = (os.environ if env is None else env).get(name)
     if raw is None or raw.strip() == "":
         return default
     try:

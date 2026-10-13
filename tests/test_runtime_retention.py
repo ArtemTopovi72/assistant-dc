@@ -41,24 +41,22 @@ def test_old_uploads_are_removed_only_from_our_own_folder(tmp_path):
     assert mine.exists()
 
 
-def test_adopted_clip_is_moved_not_copied(tmp_path, monkeypatch):
+def test_adopted_clip_is_moved_not_copied(tmp_path):
     out = tmp_path / "outputs"
-    monkeypatch.setattr(video, "OUTPUT_DIR", str(out))
     src = tmp_path / "comfy" / "h3_00001_.mp4"
     src.parent.mkdir()
     src.write_bytes(b"clip")
-    dest = video._adopt_output(str(src))
+    dest = video._adopt_output(str(src), str(out))
     assert open(dest, "rb").read() == b"clip"
     assert not src.exists()
     # a second clip with the same ComfyUI counter never overwrites the first
     src.write_bytes(b"clip2")
-    dest2 = video._adopt_output(str(src))
+    dest2 = video._adopt_output(str(src), str(out))
     assert dest2 != dest and open(dest, "rb").read() == b"clip"
 
 
-def test_failed_copy_keeps_the_original(tmp_path, monkeypatch):
-    monkeypatch.setattr(video, "OUTPUT_DIR", str(tmp_path / "file_not_dir"))
+def test_failed_copy_keeps_the_original(tmp_path):
     (tmp_path / "file_not_dir").write_text("x")       # makedirs fails
     src = tmp_path / "c.mp4"
     src.write_bytes(b"clip")
-    assert video._adopt_output(str(src)) == str(src) and src.exists()
+    assert video._adopt_output(str(src), str(tmp_path / "file_not_dir")) == str(src) and src.exists()

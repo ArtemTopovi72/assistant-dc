@@ -40,9 +40,10 @@ def candidates() -> list:
     return [p for p in dict.fromkeys(out) if os.path.isfile(p)]
 
 
-def newest(paths: list) -> str:
-    best = max(paths, key=_version, default="")
-    return best if best and _version(best) else ""
+def newest(paths: list, version=None) -> str:
+    version = version or _version
+    best = max(paths, key=version, default="")
+    return best if best and version(best) else ""
 
 
 def preload_newest_msvcp() -> str:

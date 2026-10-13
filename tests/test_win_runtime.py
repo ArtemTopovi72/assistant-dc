@@ -6,13 +6,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 import win_runtime as W
 
 
-def test_newest_is_picked(monkeypatch):
+def test_newest_is_picked():
     v = {"qt/msvcp140.dll": (14, 26, 28720, 3), "sys/msvcp140.dll": (14, 51, 36247, 0),
          "sk/msvcp140.dll": (14, 44, 35211, 0)}
-    monkeypatch.setattr(W, "_version", lambda p: v.get(p, ()))
-    assert W.newest(list(v)) == "sys/msvcp140.dll"
-    assert W.newest(["qt/msvcp140.dll", "sk/msvcp140.dll"]) == "sk/msvcp140.dll"
-    assert W.newest([]) == ""
+    ver = lambda p: v.get(p, ())
+    assert W.newest(list(v), ver) == "sys/msvcp140.dll"
+    assert W.newest(["qt/msvcp140.dll", "sk/msvcp140.dll"], ver) == "sk/msvcp140.dll"
+    assert W.newest([], ver) == ""
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows only")
