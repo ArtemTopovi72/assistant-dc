@@ -9,7 +9,8 @@ and the default is still English so existing callers are untouched.
 
 Run: venv/Scripts/python.exe tests/test_dr_output_language.py
 """
-import os, sys, re, inspect
+import os
+import types, sys, re, inspect
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -150,24 +151,19 @@ check("an English topic under a Russian UI still yields English",
 # Check the BEHAVIOUR, not the source text: drive the handler and read the
 # out_lang it actually passes to run_deep_research.
 def _out_lang_for(state):
-    import deep_research as _dr
     seen = {}
-    _orig = _dr.run_deep_research
 
     def _spy(ctx, topic, depth="standard", out_lang="en", progress=None):
         seen["out_lang"] = out_lang
         return {"report": "# x\n\ntext", "stats": {}, "sources": []}
 
-    _dr.run_deep_research = _spy
-    try:
-        class _C:
-            def set_stage(self, *a, **k): pass
-            def remember(self, *a, **k): pass
-            def memory_text(self): return ""
-            def is_cancelled(self): return False
-        tools._handle_deep_research(_C(), state, {"topic": state.get("user_input", "x")})
-    finally:
-        _dr.run_deep_research = _orig
+    class _C:
+        deps = types.SimpleNamespace(run_deep_research=_spy)
+        def set_stage(self, *a, **k): pass
+        def remember(self, *a, **k): pass
+        def memory_text(self): return ""
+        def is_cancelled(self): return False
+    tools._handle_deep_research(_C(), state, {"topic": state.get("user_input", "x")})
     return seen.get("out_lang")
 
 

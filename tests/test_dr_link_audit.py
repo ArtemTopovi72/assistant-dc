@@ -218,16 +218,14 @@ from pathlib import Path  # noqa: E402
 import dr_collect as _C  # noqa: E402
 import dr_progress as _P  # noqa: E402
 
-_real_raw = _C.raw_search_results
-_C.raw_search_results = lambda ctx, q, n, **kw: [
+import types  # noqa: E402
+_raw = lambda ctx, q, n, **kw: [
     {"href": _WRAPPED, "title": "Tannin", "body": "tannins in tea"},
     {"href": "https://en.wikipedia.org/wiki/Tannin", "title": "Tannin", "body": "dup"},
 ]
-try:
-    _srcs = _C.collect_sources(None, ["tannin"], 5, _P._Progress(None),
-                               Path(tempfile.mkdtemp()), {"category": "general"})
-finally:
-    _C.raw_search_results = _real_raw
+_srcs = _C.collect_sources(types.SimpleNamespace(is_cancelled=lambda: False, deps=types.SimpleNamespace(raw_search_results=_raw)),
+                           ["tannin"], 5, _P._Progress(None),
+                           Path(tempfile.mkdtemp()), {"category": "general"})
 
 check("the source that reaches the pipeline is the unwrapped page",
       [s["href"] for s in _srcs] == ["https://en.wikipedia.org/wiki/Tannin"], _srcs)

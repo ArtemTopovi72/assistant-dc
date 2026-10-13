@@ -191,7 +191,7 @@ def _handle_deep_research(ctx, state, args: dict) -> str:
     # wrote in — not in the pipeline's internal English. See _lang_of_original.
     out_lang = _lang_of_original(state, topic, ctx=ctx)
 
-    result = run_deep_research(ctx, topic, depth=depth, out_lang=out_lang, progress=_cb)
+    result = dep(ctx, "run_deep_research", run_deep_research)(ctx, topic, depth=depth, out_lang=out_lang, progress=_cb)
     report = result.get("report") or ""
     if not report:
         return ("[TOOL ERROR] Deep research produced no report — no usable sources were "
