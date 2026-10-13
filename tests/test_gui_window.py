@@ -25,6 +25,7 @@ from PyQt5.QtWidgets import (QApplication, QDialog, QInputDialog, QMessageBox)
 from PyQt5.QtGui import QImage, QColor
 from PyQt5.QtCore import Qt, QPoint, QMimeData, QUrl, QEvent
 import gui
+from gui_fakes import NoopLoader
 import gui_workers
 import gui_voice_tab
 
@@ -133,13 +134,9 @@ def _restore_workers():
         setattr(mod, n, base)
 
 
-_orig_loader = gui.ModelLoader
 
 def _win(with_ctx=True):
-    gui.ModelLoader = type("NoopLoader", (_orig_loader,), {"start": lambda self: None,
-                                                           "run": lambda self: None})
-    w = gui.AssistantWindow("qwen3-9b", True, "high")
-    gui.ModelLoader = _orig_loader
+    w = gui.AssistantWindow("qwen3-9b", True, "high", loader=NoopLoader)
     w.player = FakePlayer()
     if with_ctx:
         w.ctx = _fake_ctx()

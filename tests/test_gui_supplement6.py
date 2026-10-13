@@ -23,6 +23,7 @@ from PyQt5.QtGui import QImage, QColor
 from PyQt5.QtCore import Qt, QEvent
 
 import gui
+from gui_fakes import NoopLoader
 from _gui_patch import stub_workers as _stub_workers, restore as _gui_restore
 
 _app = QApplication.instance() or QApplication(sys.argv)
@@ -106,7 +107,6 @@ def test_transfer_worker_crop_and_identity_none():
     check("tw_identity_import_swallowed", len(rec2["done"]) == 1)
 
 
-_orig_loader = gui.ModelLoader
 _WN = ["RequestWorker", "RedrawWorker", "FixHandsWorker", "FixArtifactWorker", "TransferWorker"]
 # The worker classes live in several modules (RequestWorker in gui_workers,
 # TransferWorker in gui_transfer_tab). _gui_patch.stub_workers patches every
@@ -117,9 +117,7 @@ def _restore(o):
     _gui_restore(o)
 
 def _win():
-    gui.ModelLoader = type("NoopLoader", (_orig_loader,), {"start": lambda self: None, "run": lambda self: None})
-    w = gui.AssistantWindow("m", True, "high")
-    gui.ModelLoader = _orig_loader
+    w = gui.AssistantWindow("m", True, "high", loader=NoopLoader)
     d = Path(_TMP) / "wmem6"; d.mkdir(parents=True, exist_ok=True)
     w.ctx = types.SimpleNamespace(cancel_event=threading.Event(), memory_lock=threading.RLock(),
                                   reference_images=[], last_image_path=None, model_name="m",

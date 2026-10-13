@@ -157,7 +157,7 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
     # the queued connection hops it onto the Qt main thread.
     vad_utterance = pyqtSignal(object)
 
-    def __init__(self, model_name, no_think, reasoning_effort="high"):
+    def __init__(self, model_name, no_think, reasoning_effort="high", loader=None):
         super().__init__()
         self._initial_reasoning_effort = reasoning_effort
         self.setWindowTitle("Assistant DC")
@@ -232,7 +232,7 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
         # combo / ctx, which are mutated speculatively) so reselecting the active
         # model is a guaranteed no-op and rapid clicks can't trigger overlapping loads.
         self._active_model_id = model_name
-        self.loader = ModelLoader(model_name, no_think, reasoning_effort)
+        self.loader = (loader or ModelLoader)(model_name, no_think, reasoning_effort)
         self.loader.ready.connect(self._on_runtime_ready)
         self.loader.failed.connect(self._on_load_failed)
         self.loader.progress.connect(self._on_load_progress)

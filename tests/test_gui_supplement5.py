@@ -22,6 +22,7 @@ from PyQt5.QtWidgets import QFileDialog as _QFD
 from PyQt5.QtGui import QImage, QColor
 from PyQt5.QtCore import Qt
 import gui
+from gui_fakes import NoopLoader
 import gui_database_tab
 import gui_workers
 import gui_voice_tab
@@ -107,7 +108,6 @@ def test_transfer_worker_plan_variations():
     check("tw_plan_cancel", len(rec3["done"]) == 1)
 
 
-_orig_loader = gui.ModelLoader
 # (module, name): a worker must be stubbed where its CALLER lives, or the fake
 # is dead and the real worker runs.
 _WNAMES = [(gui_workers, "RequestWorker"), (gui, "RedrawWorker"), (gui, "FixHandsWorker"),
@@ -122,9 +122,7 @@ def _restore(orig):
     for (m, n), b in orig.items(): setattr(m, n, b)
 
 def _win():
-    gui.ModelLoader = type("NoopLoader", (_orig_loader,), {"start": lambda self: None, "run": lambda self: None})
-    w = gui.AssistantWindow("m", True, "high")
-    gui.ModelLoader = _orig_loader
+    w = gui.AssistantWindow("m", True, "high", loader=NoopLoader)
     d = Path(_TMP) / "wmem5"; d.mkdir(parents=True, exist_ok=True)
     w.ctx = types.SimpleNamespace(cancel_event=threading.Event(), memory_lock=threading.RLock(),
                                   reference_images=[], last_image_path=None, model_name="m",

@@ -18,6 +18,7 @@ from pathlib import Path
 
 from PyQt5.QtWidgets import QApplication, QWidget
 import gui
+from gui_fakes import NoopLoader
 
 _app = QApplication.instance() or QApplication(sys.argv)
 _TMP = tempfile.mkdtemp(prefix="guiweb_")
@@ -39,11 +40,8 @@ class StubWebView(QWidget):
         StubWebView.last_html = html
 
 
-_orig_loader = gui.ModelLoader
 def _win():
-    gui.ModelLoader = type("NoopLoader", (_orig_loader,), {"start": lambda self: None, "run": lambda self: None})
-    w = gui.AssistantWindow("m", True, "high")
-    gui.ModelLoader = _orig_loader
+    w = gui.AssistantWindow("m", True, "high", loader=NoopLoader)
     d = Path(_TMP) / "mem"; d.mkdir(parents=True, exist_ok=True)
     w.ctx = types.SimpleNamespace(cancel_event=threading.Event(), memory_lock=threading.RLock(),
                                   reference_images=[], last_image_path=None, model_name="m",

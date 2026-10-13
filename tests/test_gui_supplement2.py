@@ -20,6 +20,7 @@ from PyQt5.QtWidgets import (QApplication, QDialog, QPushButton, QListWidget, QM
                              QInputDialog, QFileDialog)
 from PyQt5.QtGui import QImage, QColor
 import gui
+from gui_fakes import NoopLoader
 from _gui_patch import stub_workers as _stub_workers, restore as _gui_restore
 
 _app = QApplication.instance() or QApplication(sys.argv)
@@ -183,11 +184,8 @@ def test_mc_profiles_and_import():
 
 # ---------------------------------------------------------- AssistantWindow bits
 
-_orig_loader = gui.ModelLoader
 def _win():
-    gui.ModelLoader = type("NoopLoader", (_orig_loader,), {"start": lambda self: None, "run": lambda self: None})
-    w = gui.AssistantWindow("m", True, "high")
-    gui.ModelLoader = _orig_loader
+    w = gui.AssistantWindow("m", True, "high", loader=NoopLoader)
     d = Path(_TMP) / "wmem"; d.mkdir(parents=True, exist_ok=True)
     w.ctx = types.SimpleNamespace(cancel_event=threading.Event(), memory_lock=threading.RLock(),
                                   reference_images=[], last_image_path=None, model_name="m",

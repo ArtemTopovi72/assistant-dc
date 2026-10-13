@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import QApplication, QDialog, QInputDialog, QMessageBox, QW
 from PyQt5.QtWidgets import QFileDialog as _QFD
 from PyQt5.QtGui import QImage, QColor
 import gui
+from gui_fakes import NoopLoader
 from _gui_patch import stub_workers as _stub_workers, restore as _gui_restore
 
 _app = QApplication.instance() or QApplication(sys.argv)
@@ -34,7 +35,6 @@ def check(name, cond, detail=""):
     print(f"[{'PASS' if cond else 'FAIL'}] {name}" + (f" — {detail}" if detail and not cond else ""))
     assert cond, f"{name}: {detail}"
 
-_orig_loader = gui.ModelLoader
 _WN = ["RequestWorker", "RedrawWorker", "FixHandsWorker", "TransferWorker", "CompactMemoryWorker",
        "TranscribeWorker"]
 def _noop():
@@ -43,9 +43,7 @@ def _restore(o):
     _gui_restore(o)
 
 def _win():
-    gui.ModelLoader = type("NoopLoader", (_orig_loader,), {"start": lambda self: None, "run": lambda self: None})
-    w = gui.AssistantWindow("m", True, "high")
-    gui.ModelLoader = _orig_loader
+    w = gui.AssistantWindow("m", True, "high", loader=NoopLoader)
     d = Path(_TMP) / "mem11"; d.mkdir(parents=True, exist_ok=True)
     w.ctx = types.SimpleNamespace(cancel_event=threading.Event(), memory_lock=threading.RLock(),
                                   reference_images=[], last_image_path=None, model_name="m",

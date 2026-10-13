@@ -23,6 +23,7 @@ from PyQt5.QtWidgets import QFileDialog as _QFD
 from PyQt5.QtGui import QImage, QColor, QPixmap
 from PyQt5.QtCore import QPoint
 import gui
+from gui_fakes import NoopLoader
 
 _app = QApplication.instance() or QApplication(sys.argv)
 _TMP = tempfile.mkdtemp(prefix="guisupp3_")
@@ -141,11 +142,8 @@ def test_transfer_small_branches():
     tab2.worker = None
 
 
-_orig_loader = gui.ModelLoader
 def _win():
-    gui.ModelLoader = type("NoopLoader", (_orig_loader,), {"start": lambda self: None, "run": lambda self: None})
-    w = gui.AssistantWindow("m", True, "high")
-    gui.ModelLoader = _orig_loader
+    w = gui.AssistantWindow("m", True, "high", loader=NoopLoader)
     d = Path(_TMP) / "wmem3"; d.mkdir(parents=True, exist_ok=True)
     w.ctx = types.SimpleNamespace(cancel_event=threading.Event(), memory_lock=threading.RLock(),
                                   reference_images=[], last_image_path=None, model_name="m",

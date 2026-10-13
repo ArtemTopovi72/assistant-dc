@@ -36,6 +36,7 @@ crash_diag.install()
 
 import ui_scale
 import gui
+from gui_fakes import NoopLoader
 import memory_center
 
 # Screenshots go to a scratch directory by default so a test pass leaves the
@@ -49,7 +50,6 @@ OUT.mkdir(parents=True, exist_ok=True)
 
 app = QApplication(sys.argv)
 # Don't load real ML models — we only exercise the Memory Center.
-gui.ModelLoader.start = lambda self: None
 
 failures = []
 notes = []
@@ -73,7 +73,7 @@ def seed(store, profile, n_facts, n_session, with_summary):
 
 
 def build_window(store, profile):
-    win = gui.AssistantWindow("audit-model", True)
+    win = gui.AssistantWindow("audit-model", True, loader=NoopLoader)
     win.ctx = type("C", (), {})()
     win.ctx.session_memory = []
     # Mirror the real app: active_memory_dir is a real Path whose .name is the profile.

@@ -31,6 +31,7 @@ import numpy as np
 from PyQt5.QtWidgets import QApplication, QMessageBox, QInputDialog
 from PyQt5.QtCore import QThread
 import gui
+from gui_fakes import NoopLoader
 import gui_voice_tab
 
 _app = QApplication.instance() or QApplication(sys.argv)
@@ -102,15 +103,12 @@ def _fake_ctx():
     return c
 
 
-_orig_loader = gui.ModelLoader
 
 def _win():
-    gui.ModelLoader = type("NoopLoader", (_orig_loader,),
-                           {"start": lambda self: None, "run": lambda self: None})
     try:
-        w = gui.AssistantWindow("qwen3-9b", True, "high")
+        w = gui.AssistantWindow("qwen3-9b", True, "high", loader=NoopLoader)
     finally:
-        gui.ModelLoader = _orig_loader
+        pass
     w.player = FakePlayer()
     w.ctx = _fake_ctx()
     w.graph = types.SimpleNamespace(invoke=lambda s: {"final_answer": "ok", "messages": []})

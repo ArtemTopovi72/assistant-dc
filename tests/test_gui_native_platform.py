@@ -40,6 +40,8 @@ CHILD = textwrap.dedent(r'''
     from PyQt5.QtWidgets import QApplication
     from PyQt5.QtCore import QThread
     import gui
+    sys.path.insert(0, os.path.join(%(root)r, "tests"))
+    from gui_fakes import NoopLoader
 
     app = QApplication.instance() or QApplication(sys.argv)
 
@@ -66,11 +68,8 @@ CHILD = textwrap.dedent(r'''
         c.is_cancelled = lambda: c.cancel_event.is_set()
         return c
 
-    real = gui.ModelLoader
-    gui.ModelLoader = type("NoopLoader", (real,),
-                           {"start": lambda self: None, "run": lambda self: None})
-    w = gui.AssistantWindow("m", True, "high")
-    gui.ModelLoader = real
+
+    w = gui.AssistantWindow("m", True, "high", loader=NoopLoader)
     print("STAGE constructed", flush=True)
 
     class P:

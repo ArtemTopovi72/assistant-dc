@@ -20,6 +20,7 @@ from PyQt5.QtWidgets import QApplication, QDialog, QMessageBox, QWidget, QFileDi
 from PyQt5.QtGui import QImage, QColor, QPixmap
 from PyQt5.QtCore import QEvent, QPoint
 import gui
+from gui_fakes import NoopLoader
 
 _app = QApplication.instance() or QApplication(sys.argv)
 _TMP = tempfile.mkdtemp(prefix="guisupp_")
@@ -189,10 +190,7 @@ def test_memory_center_confirm_and_compaction():
 
 
 def test_chat_double_click_and_clipboard_url():
-    _orig = gui.ModelLoader
-    gui.ModelLoader = type("NoopLoader", (_orig,), {"start": lambda self: None, "run": lambda self: None})
-    w = gui.AssistantWindow("m", True, "high")
-    gui.ModelLoader = _orig
+    w = gui.AssistantWindow("m", True, "high", loader=NoopLoader)
     import threading
     _md = os.path.join(_TMP, "cmem"); os.makedirs(_md, exist_ok=True)
     w.ctx = types.SimpleNamespace(cancel_event=threading.Event(), memory_lock=threading.RLock(),

@@ -21,6 +21,7 @@ from PyQt5.QtWidgets import QApplication, QInputDialog, QMessageBox
 from PyQt5.QtWidgets import QFileDialog as _QFD
 from PyQt5.QtGui import QImage, QColor
 import gui
+from gui_fakes import NoopLoader
 import gui_workers
 import gui_voice_tab
 
@@ -141,11 +142,8 @@ def test_transfer_worker_mask_and_identity_excepts():
 
 # ---- window / tab guard branches --------------------------------------------
 
-_orig_loader = gui.ModelLoader
 def _win():
-    gui.ModelLoader = type("NoopLoader", (_orig_loader,), {"start": lambda self: None, "run": lambda self: None})
-    w = gui.AssistantWindow("m", True, "high")
-    gui.ModelLoader = _orig_loader
+    w = gui.AssistantWindow("m", True, "high", loader=NoopLoader)
     d = Path(_TMP) / "mem7"; d.mkdir(parents=True, exist_ok=True)
     w.ctx = types.SimpleNamespace(cancel_event=threading.Event(), memory_lock=threading.RLock(),
                                   reference_images=[], last_image_path=None, model_name="m",

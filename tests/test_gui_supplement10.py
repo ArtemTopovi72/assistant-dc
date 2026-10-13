@@ -28,6 +28,7 @@ from PyQt5.QtWidgets import QFileDialog as _QFD
 from PyQt5.QtGui import QImage, QColor
 from PyQt5.QtCore import Qt, QEvent, QMimeData, QUrl
 import gui
+from gui_fakes import NoopLoader
 import gui_database_tab
 import gui_workers
 
@@ -66,7 +67,6 @@ def fake_modules(**mods):
             if old is None: sys.modules.pop(name, None)
             else: sys.modules[name] = old
 
-_orig_loader = gui.ModelLoader
 # (module, name): stub a worker where its CALLER lives, not where it is defined.
 _WN = [(gui_workers, "RequestWorker"), (gui, "RedrawWorker"), (gui, "FixHandsWorker"),
        (gui, "FixArtifactWorker"), (gui, "CompactMemoryWorker"),
@@ -80,9 +80,7 @@ def _restore(o):
     for (m, n), b in o.items(): setattr(m, n, b)
 
 def _win():
-    gui.ModelLoader = type("NoopLoader", (_orig_loader,), {"start": lambda self: None, "run": lambda self: None})
-    w = gui.AssistantWindow("m", True, "high")
-    gui.ModelLoader = _orig_loader
+    w = gui.AssistantWindow("m", True, "high", loader=NoopLoader)
     d = Path(_TMP) / "mem10"; d.mkdir(parents=True, exist_ok=True)
     w.ctx = types.SimpleNamespace(cancel_event=threading.Event(), memory_lock=threading.RLock(),
                                   reference_images=[], last_image_path=None, model_name="m",
@@ -146,9 +144,7 @@ def test_native_frame_build_ui():
     real = gui.gui_common.NATIVE_FRAME
     gui.gui_common.NATIVE_FRAME = True
     try:
-        gui.ModelLoader = type("NoopLoader", (_orig_loader,), {"start": lambda self: None, "run": lambda self: None})
-        w = gui.AssistantWindow("m", True, "high")
-        gui.ModelLoader = _orig_loader
+        w = gui.AssistantWindow("m", True, "high", loader=NoopLoader)
         check("native_frame", w.centralWidget() is not None)
         _close(w)
     finally:

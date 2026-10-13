@@ -16,12 +16,12 @@ os.environ.pop("QT_QPA_PLATFORM", None)
 
 from PyQt5.QtWidgets import QApplication
 import ui_scale, gui, memory_center, crash_diag
+from gui_fakes import NoopLoader
 crash_diag.install()
 
 OUT = _ROOT / "docs" / "validation"
 OUT.mkdir(parents=True, exist_ok=True)
 app = QApplication(sys.argv)
-gui.ModelLoader.start = lambda self: None
 
 
 def seed(store, profile, nf, ns):
@@ -45,7 +45,7 @@ def seed(store, profile, nf, ns):
 
 
 def build(store, profile):
-    win = gui.AssistantWindow("shot-model", True)
+    win = gui.AssistantWindow("shot-model", True, loader=NoopLoader)
     win.ctx = type("C", (), {})()
     win.ctx.session_memory = []
     win.ctx.cancel_event = type("E", (), {"set": lambda self: None})()

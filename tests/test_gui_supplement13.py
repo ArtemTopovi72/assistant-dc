@@ -26,6 +26,7 @@ from pathlib import Path
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QImage, QColor
 import gui
+from gui_fakes import NoopLoader
 
 _app = QApplication.instance() or QApplication(sys.argv)
 _TMP = tempfile.mkdtemp(prefix="guisupp13_")
@@ -95,10 +96,7 @@ def test_transfer_run_busy_line():
 
 
 def test_db_load_existing_documents_loop():
-    _orig = gui.ModelLoader
-    gui.ModelLoader = type("NoopLoader", (_orig,), {"start": lambda self: None, "run": lambda self: None})
-    w = gui.AssistantWindow("m", True, "high")
-    gui.ModelLoader = _orig
+    w = gui.AssistantWindow("m", True, "high", loader=NoopLoader)
     # _get_library returns a lib whose documents() yields entries -> _db_add_list_item loop
     f = _png("dld.png")
     w._library = types.SimpleNamespace(
@@ -129,10 +127,7 @@ def test_transfer_run_gather_fails():
 
 def test_new_memory_profile_combo_index():
     from PyQt5.QtWidgets import QInputDialog
-    _orig = gui.ModelLoader
-    gui.ModelLoader = type("NoopLoader", (_orig,), {"start": lambda self: None, "run": lambda self: None})
-    w = gui.AssistantWindow("m", True, "high")
-    gui.ModelLoader = _orig
+    w = gui.AssistantWindow("m", True, "high", loader=NoopLoader)
     d = Path(_TMP) / "npmem"; d.mkdir(parents=True, exist_ok=True)
     w.ctx = types.SimpleNamespace(cancel_event=threading.Event(), memory_lock=threading.RLock(),
                                   reference_images=[], last_image_path=None, model_name="m",

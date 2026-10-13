@@ -16,17 +16,17 @@ os.environ.setdefault("F5_TEST_RUN", "1")
 
 from PyQt5.QtWidgets import QApplication, QTabWidget
 import ui_scale, gui
+from gui_fakes import NoopLoader
 
 out = Path(sys.argv[1] if len(sys.argv) > 1 else "runtime/gui_shots")
 out.mkdir(parents=True, exist_ok=True)
 w, h = (int(sys.argv[2]), int(sys.argv[3])) if len(sys.argv) > 3 else (1600, 950)
 app = QApplication(sys.argv)
-gui.ModelLoader.start = lambda self: None
 import gui_i18n
 gui_i18n.install(os.environ.get("SHOT_LANG", "en"))
 ui_scale._effective = float(os.environ.get("SHOT_SCALE", "1.0")); ui_scale._font_mult = 1.0
 gui.apply_ui_scale(app)
-win = gui.AssistantWindow("shot-model", True)
+win = gui.AssistantWindow("shot-model", True, loader=NoopLoader)
 win.stack.setCurrentWidget(win.dashboard)
 win.resize(w, h); win.show()
 for _ in range(3): app.processEvents()

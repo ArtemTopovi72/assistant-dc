@@ -22,6 +22,7 @@ from PyQt5.QtWidgets import QFileDialog as _QFD
 from PyQt5.QtGui import QImage, QColor
 from PyQt5.QtCore import Qt, QEvent, QMimeData, QUrl
 import gui
+from gui_fakes import NoopLoader
 import gui_workers
 
 _app = QApplication.instance() or QApplication(sys.argv)
@@ -38,11 +39,8 @@ def check(name, cond, detail=""):
     print(f"[{'PASS' if cond else 'FAIL'}] {name}" + (f" — {detail}" if detail and not cond else ""))
     assert cond, f"{name}: {detail}"
 
-_orig_loader = gui.ModelLoader
 def _win():
-    gui.ModelLoader = type("NoopLoader", (_orig_loader,), {"start": lambda self: None, "run": lambda self: None})
-    w = gui.AssistantWindow("m", True, "high")
-    gui.ModelLoader = _orig_loader
+    w = gui.AssistantWindow("m", True, "high", loader=NoopLoader)
     d = Path(_TMP) / "mem8"; d.mkdir(parents=True, exist_ok=True)
     w.ctx = types.SimpleNamespace(cancel_event=threading.Event(), memory_lock=threading.RLock(),
                                   reference_images=[], last_image_path=None, model_name="m",
@@ -148,9 +146,7 @@ def test_init_screen_geometry_except():
     real = QApplication.primaryScreen
     QApplication.primaryScreen = staticmethod(lambda: (_ for _ in ()).throw(RuntimeError("no screen")))
     try:
-        gui.ModelLoader = type("NoopLoader", (_orig_loader,), {"start": lambda self: None, "run": lambda self: None})
-        w = gui.AssistantWindow("m", True, "high")
-        gui.ModelLoader = _orig_loader
+        w = gui.AssistantWindow("m", True, "high", loader=NoopLoader)
         check("init_screen_except", w is not None)
         _close(w)
     finally:

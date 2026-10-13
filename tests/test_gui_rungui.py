@@ -18,6 +18,7 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 
 from PyQt5.QtWidgets import QApplication, QDialog
 import gui
+from gui_fakes import NoopLoader
 
 _app = QApplication.instance() or QApplication(sys.argv)
 
@@ -79,8 +80,6 @@ def test_run_gui_accepted():
         def result_choice(self): return "m", True, "high"
     real_sd = gui.SettingsDialog; gui.SettingsDialog = FS
     # AssistantWindow must not load a real model, and app.exec_ must not block.
-    real_loader = gui.ModelLoader
-    gui.ModelLoader = type("NoopLoader", (real_loader,), {"start": lambda self: None, "run": lambda self: None})
     real_aw = gui.AssistantWindow
     created = {"win": None}
     class FakeWin:
@@ -96,7 +95,7 @@ def test_run_gui_accepted():
         check("run_gui_accepted_built_window", created["win"] is not None)
     finally:
         gui.QApplication = real_qapp; gui.SettingsDialog = real_sd
-        gui.ModelLoader = real_loader; gui.AssistantWindow = real_aw
+        gui.AssistantWindow = real_aw
         _app.exec_ = _real_exec; gui.sys.exit = _real_exit
         if real_cd is not None: sys.modules["crash_diag"] = real_cd
         else: sys.modules.pop("crash_diag", None)
@@ -133,9 +132,6 @@ def test_run_gui_tears_down_before_exit():
         def deleteLater(self): order.append("win.deleteLater")
 
     real_sd = gui.SettingsDialog; gui.SettingsDialog = FS
-    real_loader = gui.ModelLoader
-    gui.ModelLoader = type("NoopLoader", (real_loader,),
-                           {"start": lambda self: None, "run": lambda self: None})
     real_aw = gui.AssistantWindow
     gui.AssistantWindow = FakeWin
     _real_exec, _real_pe = _app.exec_, _app.processEvents
@@ -148,7 +144,7 @@ def test_run_gui_tears_down_before_exit():
         gui.run_gui()
     finally:
         gui.QApplication = real_qapp; gui.SettingsDialog = real_sd
-        gui.ModelLoader = real_loader; gui.AssistantWindow = real_aw
+        gui.AssistantWindow = real_aw
         _app.exec_ = _real_exec; _app.processEvents = _real_pe
         gui.sys.exit = _real_exit
         if real_cd is not None: sys.modules["crash_diag"] = real_cd

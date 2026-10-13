@@ -12,10 +12,10 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication
 import gui
+from gui_fakes import NoopLoader
 import gui_nav
 
 app = QApplication.instance() or QApplication([])
-gui.ModelLoader.start = lambda self: None
 OK = BAD = 0
 
 
@@ -27,7 +27,7 @@ def check(name, cond, extra=""):
         BAD += 1; print("FAIL ", name, " ", str(extra)[:300])
 
 
-win = gui.AssistantWindow("m", True)
+win = gui.AssistantWindow("m", True, loader=NoopLoader)
 nav, tabs = win.workspace_nav, win.tabs
 keys = lambda: [nav.item(i).data(Qt.UserRole) for i in range(nav.count()) if nav.item(i).data(Qt.UserRole)]
 heads = [nav.item(i).text() for i in range(nav.count()) if not nav.item(i).data(Qt.UserRole)]

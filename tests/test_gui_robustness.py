@@ -71,8 +71,7 @@ def _safe_close(w):
 
 def _make_window():
     # stub the loader BEFORE constructing so __init__ doesn't spawn a real load
-    gui.ModelLoader = _NoopLoader
-    w = gui.AssistantWindow("fake-model", True, "high")
+    w = gui.AssistantWindow("fake-model", True, "high", loader=_NoopLoader)
     # attach a runtime by hand (skip the heavy _on_runtime_ready wiring)
     w.ctx = _fake_ctx()
     w.graph = types.SimpleNamespace(invoke=lambda state: {"final_answer": "ok", "messages": []})
