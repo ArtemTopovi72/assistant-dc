@@ -1454,7 +1454,13 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     # continuation from the last frame (the user's idea, 10-06: "split it into 5.2 s
     # blocks"): the first part here, the rest after it below.
     raw = (args.get("description") or "").strip()
-    parts = [raw] if args.get("seconds") else video_mod.split_script(raw)
+    # Over one clip's 15 s the parts follow the script: «на 30 секунд» was capped to one
+    # 15 s clip and delivered without a word (2026-10-13).
+    if args.get("seconds") and float(args["seconds"]) <= 15.0:
+        parts = [raw]
+    else:
+        args.pop("seconds", None)
+        parts = video_mod.split_script(raw)
     if continuing and len(parts) > 1:
         # «…орёт э, это уже есть на видео, а потом…»: the agent still opened the plan
         # with the grandma's scream, rendered again for 6 minutes (owner, 2026-10-12).

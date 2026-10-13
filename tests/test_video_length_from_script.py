@@ -1,6 +1,8 @@
 """A clip with no asked length is as long as its script needs (5.2 s .. the auto cap),
 not always 5.2 s: a multi-action script must not end cut short."""
 import os
+
+import pytest
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -76,7 +78,9 @@ def test_a_short_script_stays_one_part():
     assert V.split_script(short) == [short]
 
 
-def test_the_parts_are_rendered_as_continuations_and_joined(monkeypatch, tmp_path):
+# «на 30 секунд» was capped to one 15 s clip and delivered without a word (2026-10-13).
+@pytest.mark.parametrize("extra", [{}, {"seconds": 30}])
+def test_the_parts_are_rendered_as_continuations_and_joined(monkeypatch, tmp_path, extra):
     import tool_image_handlers as H
     import tg_continue
     calls = []
@@ -109,7 +113,7 @@ def test_the_parts_are_rendered_as_continuations_and_joined(monkeypatch, tmp_pat
         def remember(self, *a): pass
         def memory_text(self): return ""
     st = {}
-    out = H._handle_generate_video(Ctx(), st, {"description": LONG, "use_current_images": False})
+    out = H._handle_generate_video(Ctx(), st, {"description": LONG, "use_current_images": False, **extra})
     n = len(V.split_script(LONG))
     assert len(calls) == n, calls
     assert not calls[0][0].startswith(V.CONTINUE_PREFIX)
