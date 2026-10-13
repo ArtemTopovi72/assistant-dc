@@ -85,12 +85,18 @@ class VideoPlanMixin:
         import video
         script = " ".join(p["text"] for p in sess.video_plan)
         target = max(1, len(sess.video_plan) - 1)
-        out = video.condense_script(script, sum(p["sec"] for p in sess.video_plan),
-                                    target * video.VIDEO_PART_MAX_S)
-        if not out:
+        parts = []
+        # A rewrite the split cuts into as many parts as before condensed nothing: the
+        # button once answered 4 parts with 4 parts (live 2026-10-13). One stricter try.
+        for fit in (target * video.VIDEO_PART_MAX_S, target * video.VIDEO_PART_MAX_S * 0.7):
+            out = video.condense_script(script, sum(p["sec"] for p in sess.video_plan), fit,
+                                        sentences=target, ctx=self.reads)
+            parts = video.split_script(out) if out else []
+            if parts and len(parts) < len(sess.video_plan):
+                break
+        if not parts or len(parts) >= len(sess.video_plan):
             self._send_text(chat_id, tg_bot._t("vp_squeeze_fail", lang))
             return
-        parts = video.split_script(out)
         sess.video_plan = _with_summaries([{"text": p, "sec": video.estimate_seconds(p)} for p in parts], lang)
         self._store.put(sess)
         text, kb = self._video_plan_card(sess, lang)

@@ -137,6 +137,19 @@ def _get():
 def read(image_path: str) -> Optional[list]:
     """Every piece of lettering EasyOCR finds, largest first, plus the pieces
     joined left-to-right as one more candidate. None when it cannot run."""
+    got = _read(image_path)
+    return None if got is None else got[0]
+
+
+def read_pieces(image_path: str) -> Optional[list]:
+    """Each separate piece of lettering once, in reading order (top-to-bottom,
+    left-to-right), never joined: a joined row stitched a speech bubble to a cape
+    label two metres away into a phrase the picture never says (live 2026-10-13)."""
+    got = _read(image_path)
+    return None if got is None else got[1]
+
+
+def _read(image_path: str):
     if os.getenv("F5_TEST_RUN") or not image_path or not os.path.exists(image_path):
         return None
     r = _get()
@@ -164,7 +177,7 @@ def read(image_path: str) -> Optional[list]:
             logger.warning("EasyOCR failed on %s", image_path, exc_info=True)
     if not out:
         return None
-    pieces, _passes = [], []
+    pieces, _passes, boxes = [], [], []
     for chunk in out:
         pass_pieces = []
         for box, text, _conf in chunk:
@@ -174,10 +187,11 @@ def read(image_path: str) -> Optional[list]:
             xs = [p[0] for p in box]; ys = [p[1] for p in box]
             area = (max(xs) - min(xs)) * (max(ys) - min(ys))
             pass_pieces.append((min(ys), min(xs), area, t))
+            boxes.append((min(xs), min(ys), max(xs), max(ys), t)) if chunk is out[0] else None
         pieces.extend(pass_pieces)
         _passes.append(pass_pieces)
     if not pieces:
-        return []
+        return [], []
     seen, by_size = set(), []
     for *_, t in sorted(pieces, key=lambda p: -p[2]):
         if t not in seen:
@@ -189,4 +203,29 @@ def read(image_path: str) -> Optional[list]:
         joined = " ".join(ordered)
         if len(chunk) > 1 and joined not in seen:
             seen.add(joined); by_size.append(joined)
-    return by_size
+    return by_size, _labels(boxes)
+
+
+def _labels(boxes: list) -> list:
+    """Words OCR returned one by one, rejoined into the labels they belong to: a word
+    continues the previous one when it sits on the same line (vertical overlap, a
+    similar height) and starts within about a letter-height of its end. Labels in
+    reading order, each once."""
+    lines = []
+    for x0, y0, x1, y1, t in sorted(boxes, key=lambda b: (b[1], b[0])):
+        h = max(1.0, y1 - y0)
+        for ln in lines:
+            lx0, ly0, lx1, ly1, lt = ln[-1]
+            lh = max(1.0, ly1 - ly0)
+            overlap = min(y1, ly1) - max(y0, ly0)
+            if overlap > 0.5 * min(h, lh) and 0.6 < h / lh < 1.6 and -0.3 * h <= x0 - lx1 <= 1.2 * max(h, lh):
+                ln.append((x0, y0, x1, y1, t))
+                break
+        else:
+            lines.append([(x0, y0, x1, y1, t)])
+    out, once = [], set()
+    for ln in sorted(lines, key=lambda ln: (round(ln[0][1] / 20), ln[0][0])):
+        t = " ".join(w[4] for w in ln)
+        if t.lower() not in once:
+            once.add(t.lower()); out.append(t)
+    return out

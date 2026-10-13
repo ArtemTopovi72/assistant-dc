@@ -1,6 +1,7 @@
 """The model's read of agent/ask_read.py, stubbed for the suites: what each
-fixture phrase asks. The phrases themselves run live in bench/compose_ask_live.py."""
-import ask_read
+fixture phrase asks. The phrases themselves run live in bench/compose_ask_live.py.
+A suite hands `DEPS` (as a context's `deps`) or `CTX` to the code under test."""
+import types
 
 _READS = {
     "сколько букв о в слове 'обороноспособность'?": {"op": "letter_count", "letter": "о", "word": "обороноспособность"},
@@ -29,4 +30,5 @@ def _read(text):
     return _READS.get(text.strip())
 
 
-ask_read.STUB = _read
+DEPS = types.SimpleNamespace(ask_read=_read)
+CTX = types.SimpleNamespace(deps=DEPS)

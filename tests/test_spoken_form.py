@@ -84,5 +84,9 @@ check("and it separates letters from a following number",
       audio.to_spoken_form(None, "ESP32") == "и-эс-пи тридцать два",
       audio.to_spoken_form(None, "ESP32"))
 
+# ── stress marks are not text: «+очень» was voiced as «плюс очень» ───────────
+s = audio.to_spoken_form(None, "Это +очень смешн+ая картинка про Claude")
+check("stress marks never reach the rewrite", "+" not in s and "плюс" not in s and "очень смешная" in s, s)
+
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)

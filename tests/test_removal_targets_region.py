@@ -41,21 +41,23 @@ READS = {("Remove the large black shadow covering the cat", ): {"kind": "object_
          ("remove the puddle", ): {"kind": "object_remove", "target": "the puddle"},
          ("make it cleaner", ): {"kind": "object_remove", "target": ""},
          ("make the shirt blue", ): {"kind": "clothing_edit"}}
-R.EDIT_STUB = lambda t: READS.get((t, ))
-check("a removal kind with a named target is a removal", G._is_removal_instruction("remove the puddle"))
-check("nothing named is a tidy-up, not a removal", not G._is_removal_instruction("make it cleaner"))
-check("an edit is not a removal", not G._is_removal_instruction("make the shirt blue"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from fakes import deps_ctx
+_E = deps_ctx(edit_read=lambda t: READS.get((t, )))
+check("a removal kind with a named target is a removal", G._is_removal_instruction("remove the puddle", ctx=_E))
+check("nothing named is a tidy-up, not a removal", not G._is_removal_instruction("make it cleaner", ctx=_E))
+check("an edit is not a removal", not G._is_removal_instruction("make the shirt blue", ctx=_E))
 
-R.REGION_STUB = lambda i, r: i == "remove the puddle"
-check("removes_region decides _is_removal_of", G._is_removal_of("remove the puddle", "puddle") is True)
+_E = deps_ctx(region_read=lambda i, r: i == "remove the puddle")
+check("removes_region decides _is_removal_of", G._is_removal_of("remove the puddle", "puddle", ctx=_E) is True)
 check("an edit ON the region is not its removal",
-      G._is_removal_of("Remove the large black shadow covering the cat", "cat-shaped object") is False)
-check("no region -> no region removal", G._is_removal_of("remove the puddle", "") is False)
+      G._is_removal_of("Remove the large black shadow covering the cat", "cat-shaped object", ctx=_E) is False)
+check("no region -> no region removal", G._is_removal_of("remove the puddle", "", ctx=_E) is False)
 
 import inspect
-check("the region reaches the read", "removes_region(instructions, region)" in inspect.getsource(G._is_removal_of))
-R.REGION_STUB = None
-check("model down -> not a removal (the region is kept)", G._is_removal_of("remove the puddle", "puddle") is False)
+check("the region reaches the read", "removes_region(instructions, region, ctx=ctx)" in inspect.getsource(G._is_removal_of))
+_E = None
+check("model down -> not a removal (the region is kept)", G._is_removal_of("remove the puddle", "puddle", ctx=_E) is False)
 
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)

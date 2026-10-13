@@ -76,6 +76,23 @@ check("the card names the parts, the clip length and the render time",
 check("...with render, condense, drop-a-part and cancel buttons",
       {"vp:go", "vp:squeeze", "vp:x", "vp:del:0"} <= set(datas), datas)
 
+# 🗜: a rewrite that splits into as many parts as before is no condensing
+asked = []
+bot.reads = SimpleNamespace(text_model=lambda c, sysp, user, **k: (asked.append(user), SCRIPT)[1])
+before = len(bot._get_session(CID).video_plan)
+bot._squeeze_plan(CID, bot._get_session(CID), "ru")
+check("🗜 that does not shorten says so and keeps the plan",
+      len(bot._get_session(CID).video_plan) == before and "Не получилось уплотнить" in sent[-1][0],
+      sent[-1][0])
+check("...after a stricter second try, asked for fewer sentences",
+      len(asked) == 2 and f"at most {before - 1} short sentences" in asked[0], asked[:1])
+bot.reads = SimpleNamespace(text_model=lambda c, sysp, user, **k: "Кот прыгает на стол.")
+bot._squeeze_plan(CID, bot._get_session(CID), "ru")
+check("🗜 that shortens leaves fewer parts", len(bot._get_session(CID).video_plan) < before,
+      len(bot._get_session(CID).video_plan))
+bot.reads = None
+sess = bot._get_session(CID); sess.video_plan = list(plan); bot._store.put(sess)
+
 bot._cb_video_plan(CID, "vp:del:0")
 sess = bot._get_session(CID)
 check("🗑 drops that part", len(sess.video_plan) == len(plan) - 1, len(sess.video_plan))

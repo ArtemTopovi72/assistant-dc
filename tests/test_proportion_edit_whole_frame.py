@@ -4,7 +4,9 @@ unchanged ('fix the head proportions')."""
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import image_router as R
-R.EDIT_STUB = lambda t: {"kind": "subject_edit", "resizes": "proportion" in t or "меньше" in t}   # the read itself: bench/removal_intent_live.py
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from fakes import deps_ctx
+_EDIT = deps_ctx(edit_read=lambda t: {"kind": "subject_edit", "resizes": "proportion" in t or "меньше" in t})   # the read itself: bench/removal_intent_live.py
 
 calls = []
 R._image.load_layout_for = lambda p: None
@@ -16,10 +18,10 @@ R._image._firered_instruction = lambda ctx, region, text, removal=False: "FR: " 
 for text in ("a head with natural and realistic proportions relative to the body",
              "сделай голову меньше"):
     calls.clear()
-    cat, out = R._route_edit_request(None, "in.png", text)
+    cat, out = R._route_edit_request(_EDIT, "in.png", text)
     assert out == "out.png" and calls and calls[0][0] == "whole", (text, cat, calls)
 
 calls.clear()
-R._route_edit_request(None, "in.png", "make his shirt red")
+R._route_edit_request(_EDIT, "in.png", "make his shirt red")
 assert calls and calls[0][0] == "contained", calls   # ordinary edits keep the contained path
 print("PASS proportion edits go whole-frame")

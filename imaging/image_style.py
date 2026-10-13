@@ -108,7 +108,7 @@ def _expand(ctx, words: str) -> tuple:
     target = d.get("target") if d.get("target") in ("drawn", "photo", "other") else ""
     if not target:          # no answer: the edit classifier's word on whether it is a style
         from image_router import classify_edit_intent
-        target = "drawn" if classify_edit_intent(words) == "style_transfer" else "other"
+        target = "drawn" if classify_edit_intent(words, ctx=ctx) == "style_transfer" else "other"
     style = " ".join(str(d.get("style") or "").split())
     return target, (style or words)
 

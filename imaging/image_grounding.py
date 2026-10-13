@@ -426,16 +426,16 @@ def _is_facial(ctx, phrase: str) -> bool:
     return bool((phrase or "").strip()) and _item_attributes(ctx, phrase).get("facial") is True
 
 
-def _is_removal_instruction(text: str) -> bool:
+def _is_removal_instruction(text: str, ctx=None) -> bool:
     """The instruction takes something out of the picture (the model's read,
     image_router.edit_plan: a removal kind, or a removal step). Was a verb regex: «сними» and «take off»
     were removals, «clean up» and «без» were not, each tuned by hand."""
     import image_router
     if not (text or "").strip():
         return False
-    plan = image_router.edit_plan(text)
+    plan = image_router.edit_plan(text, ctx=ctx)
     # a removal kind with nothing named («make it cleaner») is a tidy-up
-    reads = [plan] + [image_router.edit_plan(s) for s in plan["steps"]]
+    reads = [plan] + [image_router.edit_plan(s, ctx=ctx) for s in plan["steps"]]
     return any(r["kind"] in ("object_remove", "person_remove") and r["target"] for r in reads)
 
 
@@ -450,7 +450,7 @@ def _is_removal_of(instructions: str, region: str = "", ctx=None) -> bool:
     import image_router
     if not (instructions or "").strip() or not (region or "").strip():
         return False
-    return image_router.removes_region(instructions, region)
+    return image_router.removes_region(instructions, region, ctx=ctx)
 
 
 # First-word tokens the vision model uses to signal absence of a region. Covers

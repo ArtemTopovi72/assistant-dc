@@ -2,16 +2,17 @@
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import _ask_stub  # noqa: F401  the model's read, stubbed
+import _ask_stub  # the model's read, stubbed
 import graph_compose as g
-assert g._asked_tokens("инструкцию на 1200 слов") >= 3600
-assert g._asked_tokens("расскажи подробно") >= 2600
-assert g._asked_tokens("привет, 2025 год") == 0
+assert g._asked_tokens("инструкцию на 1200 слов", ctx=_ask_stub.CTX) >= 3600
+assert g._asked_tokens("расскажи подробно", ctx=_ask_stub.CTX) >= 2600
+assert g._asked_tokens("привет, 2025 год", ctx=_ask_stub.CTX) == 0
 print("ok")
 
 # "N messages ago" gets a numbered list of the user's earlier messages
 from types import SimpleNamespace
-ctx = SimpleNamespace(facts_text=lambda *_: "", memory_text=lambda: "", custom_personality_text="")
+ctx = SimpleNamespace(facts_text=lambda *_: "", memory_text=lambda: "", custom_personality_text="",
+                      deps=_ask_stub.DEPS)
 st = {"user_input": "what did i ask three messages ago?", "messages": [
     {"role": "user", "content": "capital of France?"}, {"role": "assistant", "content": "Paris"},
     {"role": "user", "content": "and Germany?"}, {"role": "user", "content": "2+2"},

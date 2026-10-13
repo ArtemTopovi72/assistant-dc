@@ -271,7 +271,11 @@ VISION_PROMPT = """You are a precise visual analysis system. You receive an imag
 - Words in the picture (a quote, a caption, a meme, a sign, a label) are part of
   what it says: read them and give their meaning — what the text claims and whom
   it names or is attributed to. Never write only that "there is text" or "Cyrillic
-  text"; never recite a long text word for word unless asked.
+  text"; never recite a long text word for word unless asked. Say what each label
+  is ON (this flag, that army, this cape, that speech bubble): who stands against
+  whom under which banner is often the whole joke.
+- A screenshot's app chrome (an Edit or share button, an upload arrow, a viewer's
+  icons) is not part of the picture: leave it out.
 
 Rules:
 1. At most four sentences

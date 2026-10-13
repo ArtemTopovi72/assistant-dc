@@ -11,6 +11,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 from seams import Over  # noqa: E402,F401
 
 
+def deps_ctx(**deps):
+    """A context that hands the code under test these stand-ins (core/seams.py `dep`)."""
+    import types
+    return types.SimpleNamespace(deps=types.SimpleNamespace(**deps))
+
+
 def reads(read=None, yes=None, pick=None):
     """The model's reads a suite scripts, as the seams core/seams.py looks up on a context:
     `read(text) -> dict | None` (merged over intent.FALLBACK), `yes(question, text) -> bool`,

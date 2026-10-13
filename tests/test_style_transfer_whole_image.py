@@ -29,7 +29,9 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 
 import image as I
 import image_router as R
-R.EDIT_STUB = lambda t: "style_transfer"
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from fakes import deps_ctx
+_EDIT = deps_ctx(edit_read=lambda t: "style_transfer")
 
 OK = BAD = 0
 
@@ -91,7 +93,7 @@ I.edit_image_with_firered = _fake_firered
 R._image.edit_image_with_firered = _fake_firered
 
 path = _img()
-category, out = R.route_edit_request(None, path, "redraw this whole photo as a cartoon")
+category, out = R.route_edit_request(_EDIT, path, "redraw this whole photo as a cartoon")
 check("classified as style_transfer", category == "style_transfer", category)
 check("edit_image_with_firered was called", out == "/tmp/out.png")
 check("router used the whole-image instruction, not the region-templated one",

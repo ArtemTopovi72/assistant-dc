@@ -2,12 +2,12 @@
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import _ask_stub  # noqa: F401  the model's read, stubbed
+import _ask_stub  # the model's read, stubbed
 import graph_compose as G
 
 
-class Box: sandbox = object()
-class NoBox: sandbox = None
+class Box: sandbox = object(); deps = _ask_stub.DEPS
+class NoBox: sandbox = None; deps = _ask_stub.DEPS
 
 
 def test_coding_turn_gets_rules():

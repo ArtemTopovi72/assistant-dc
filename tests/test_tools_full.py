@@ -66,7 +66,7 @@ def mock_env(**over):
         "generate_image_with_comfy": lambda ctx, **k: over.get("enhance_out", out_img),
         "inpaint_region_with_comfy": lambda ctx, s, r, i, removal=False, engine="firered": over.get("inpaint_out", out_img),
         "route_edit_request": lambda ctx, s, syn: ("bg_replace", over.get("route_out", out_img)),
-        "classify_edit_intent": lambda syn: over.get("category", "subject_edit"),
+        "classify_edit_intent": lambda syn, ctx=None: over.get("category", "subject_edit"),
         "upscale_image_with_comfy": lambda ctx, s, scale="4x", protect_face=True: over.get("upscale_out", out_img),
         "restore_image_with_comfy": lambda ctx, s, upscale="2x": over.get("restore_out", out_img),
         "_is_removal_instruction": lambda t: over.get("is_removal", False),
@@ -138,11 +138,10 @@ def test_helpers():
     check("as_int_ok", T._as_int("8") == 8 and T._as_int(8.9) == 8)
     check("as_int_bad", T._as_int("abc") is None)
     check("wrap_untrusted", "UNTRUSTED" in T._wrap_untrusted("SRC", "data"))
-    import tool_image_handlers as _tih   # the read itself: bench/removal_intent_live.py
-    _tih.ABSENCE_STUB = lambda c: "still there" in c
-    check("absence_check", T._is_absence_check("is the puddle still there?")
-          and not T._is_absence_check("is the sky blue?"))
-    _tih.ABSENCE_STUB = None
+    # the read itself: bench/removal_intent_live.py
+    gone = types.SimpleNamespace(deps=types.SimpleNamespace(absence_read=lambda c: "still there" in c))
+    check("absence_check", T._is_absence_check("is the puddle still there?", ctx=gone)
+          and not T._is_absence_check("is the sky blue?", ctx=gone))
     # _exec_summary with heading + truncation
     rep = "# Executive Summary\n" + ("x" * 2000) + "\n# Next"
     s = T._exec_summary(rep, limit=100)
@@ -311,13 +310,12 @@ def test_redraw_image():
     with mock_env(log_edit=lambda **k: (_ for _ in ()).throw(IOError("log"))):
         check("redraw_log_swallow", "redrawn" in T._handle_redraw_image(c, {}, {"mode": "redraw", "instructions": "x"}))
     # extending the canvas is not supported: said plainly, no format substitute offered
-    import image_router as _ir
-    _ir.EDIT_STUB = lambda t: {"kind": "outpaint", "reformats": True}
+    c.deps = types.SimpleNamespace(edit_read=lambda t: {"kind": "outpaint", "reformats": True})
     try:
         with mock_env():
             r = T._handle_redraw_image(c, {}, {"mode": "redraw", "instructions": "extend the picture in all directions"})
     finally:
-        _ir.EDIT_STUB = None
+        del c.deps
     check("redraw_outpaint_unsupported", r.startswith("[TOOL ERROR]") and "outpaint" in r and "NOT offer a different format" in r, r[:120])
 
 
@@ -332,11 +330,10 @@ def test_inspect_image():
     with mock_env(vision="Everything is correct and present"):
         r = T._handle_inspect_image(c, {}, {"check": "all good?"})
         check("inspect_clean_footer", "everything checks out" in r)
-    import tool_image_handlers as _tih
-    _tih.ABSENCE_STUB = lambda ch: "still there" in ch
+    c.deps = types.SimpleNamespace(absence_read=lambda ch: "still there" in ch)
     with mock_env(vision="the puddle is MISSING"):
         r = T._handle_inspect_image(c, {}, {"check": "is the puddle still there?"})
-    _tih.ABSENCE_STUB = None
+    del c.deps
     check("inspect_absence_footer", "REMOVAL check" in r)
     with mock_env(vision=""):
         r = T._handle_inspect_image(c, {}, {"check": "x"})

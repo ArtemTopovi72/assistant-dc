@@ -24,10 +24,11 @@ try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
 
+import types
 import tools as T
 import image as I
 import image_router as _R
-_R.EDIT_STUB = lambda t: {"make it black and white": "colour_convert", "перерисуй в аниме стиле": "style_transfer"}.get(t)
+_EDIT_READ = lambda t: {"make it black and white": "colour_convert", "перерисуй в аниме стиле": "style_transfer"}.get(t)  # noqa: E731
 
 OK = BAD = 0
 def check(name, cond, extra=""):
@@ -46,6 +47,7 @@ def _img(tag):
 class Ctx:
     last_image_path = None
     last_image_prompt = "a red tractor in a field"
+    deps = types.SimpleNamespace(edit_read=_EDIT_READ)
     def set_stage(self, *_a, **_k): pass
     def remember(self, *_a, **_k): pass
     def memory_text(self, *_a, **_k): return ""

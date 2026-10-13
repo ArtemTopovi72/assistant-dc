@@ -17,13 +17,16 @@ import image as I
 import image_router as _R
 # Which kind of edit a phrase is is the model's read (image_router.edit_plan);
 # the phrases run live in bench/edit_intent_live.py. These are its answers.
-_R.EDIT_STUB = {
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from fakes import deps_ctx
+_EDIT_READ = {
     "исправь надписи на корректные": "text_edit", "пусть мужик будет блондин": "face_edit",
     "сделай рубашку зелёной": "clothing_edit", "добавь скамейку": "object_insert",
     "замени фон на пляж": "background_replace", "сделай в стиле аниме": "style_transfer",
     "убери человека справа": "person_remove", "увеличь разрешение": "upscale",
     "убери фон": "background_remove", "восстанови старое фото": "restore", "расширь кадр": "outpaint",
 }.get
+_EDIT = deps_ctx(edit_read=_EDIT_READ)
 
 _n = _bad = 0
 
@@ -69,7 +72,7 @@ fake.run = lambda ctx, req, **kw: (calls.append(("run", req, kw.get("layout"))) 
                                     "layout": kw.get("layout")})
 sys.modules["draw_agent"] = fake
 
-cat, out = I.route_edit_request(None, img, "исправь надписи на корректные")
+cat, out = I.route_edit_request(_EDIT, img, "исправь надписи на корректные")
 check("routed as text_edit", cat == "text_edit", cat)
 check("the drawing agent was asked to edit the boxes",
       any(c[0] == "edit_layout" for c in calls), calls)
@@ -90,7 +93,7 @@ check("and that record still names the original scene",
 plain = os.path.join(tmp, "uploaded_photo.png")
 open(plain, "wb").write(b"a photo the user sent")
 calls.clear()
-cat, out = I.route_edit_request(None, plain, "исправь надписи на корректные")
+cat, out = I.route_edit_request(_EDIT, plain, "исправь надписи на корректные")
 check("still classified as a lettering edit", cat == "text_edit", cat)
 check("but nothing is rendered when there are no boxes to drag", out is None, out)
 check("and the drawing agent is not invoked at all", calls == [], calls)
@@ -170,27 +173,27 @@ for instruction, want_cat in [
 ]:
     calls.clear()
     I.save_layout_for(img, "a police car", LAY, width=1024, height=1024, seed=4242)
-    cat, out = I.route_edit_request(None, img, instruction)
+    cat, out = I.route_edit_request(_EDIT, img, instruction)
     check(f"{instruction!r} -> {want_cat}, drawn from the boxes",
           cat == want_cat and any(c[0] == "run" for c in calls), f"{cat} {calls}")
 
 # Removal is pixel FireRed and never re-renders the layout (user verdict, eraser-and-removal).
 calls.clear()
 I.save_layout_for(img, "a police car", LAY, width=1024, height=1024, seed=4242)
-_cat, _ = I.route_edit_request(None, img, "убери человека справа")
+_cat, _ = I.route_edit_request(_EDIT, img, "убери человека справа")
 check("'убери человека справа' -> person_remove, NOT redrawn from the boxes",
       _cat == "person_remove" and not any(c[0] == "run" for c in calls), f"{_cat} {calls}")
 
 calls.clear()
 I.save_layout_for(img, "a police car", LAY, width=1024, height=1024, seed=4242)
-I.route_edit_request(None, img, "пусть мужик будет блондин")
+I.route_edit_request(_EDIT, img, "пусть мужик будет блондин")
 check("the stored seed is reused, so an edit is not a re-roll",
       any(c[0] == "run" and c[2] == 4242 for c in calls), calls)
 
 print("\nPIXEL OPERATIONS THE BOXES CANNOT EXPRESS STAY WHERE THEY BELONG")
 for instruction in ("увеличь разрешение", "убери фон", "восстанови старое фото",
                     "расширь кадр"):
-    cat = I.classify_edit_intent(instruction)
+    cat = I.classify_edit_intent(instruction, ctx=_EDIT)
     check(f"{instruction!r} ({cat}) is not a layout edit",
           cat not in I._LAYOUT_EDITABLE, cat)
 

@@ -1567,9 +1567,10 @@ INSERT_HEAD = "The camera cuts in close on this moment. "
 INSERT_BACK = "The camera cuts back out to the wider view from before. "
 
 
-def condense_script(script: str, now_s: float, fit_s: float, ctx=None) -> str:
-    """The script rewritten tighter to run about `fit_s`: same people, place, order and
-    quoted lines word for word. "" when the model fails."""
+def condense_script(script: str, now_s: float, fit_s: float, ctx=None, sentences: int = 0) -> str:
+    """The script rewritten tighter to run about `fit_s` (in at most `sentences` sentences,
+    one action each, when given): same people, place, order and quoted lines word for
+    word. "" when the model fails."""
     try:
         out = text_model(ctx)(
             None,
@@ -1577,7 +1578,9 @@ def condense_script(script: str, now_s: float, fit_s: float, ctx=None) -> str:
             "events and every quoted spoken line word for word; cut repeated, minor and "
             "lingering actions and merge small beats. Reply with the condensed script "
             "only, in the script's language, no comments.",
-            f"The script runs about {now_s:.0f} s. Make it fit about {fit_s:.0f} s.\n\n{script}",
+            f"The script runs about {now_s:.0f} s. Make it fit about {fit_s:.0f} s"
+            + (f": at most {sentences} short sentences, one action each" if sentences else "")
+            + f".\n\n{script}",
             temperature=0.3, max_tokens=900) or ""
     except Exception:
         logger.exception("condensing a video script failed")

@@ -35,13 +35,14 @@ _FROM_WEB = (
 
 _CACHE: "OrderedDict[str, str]" = OrderedDict()
 _LOCK = threading.Lock()
-STUB = None          # suites: STUB(text) -> (person, look)
-SEARCH_STUB = None   # suites: SEARCH_STUB(query) -> search text
+# Suites hand in, on the context: person_look(text) -> (person, look), and
+# person_search(query) -> search text.
 
 
-def _ask(text: str) -> tuple:
-    if STUB is not None:
-        return STUB(text)
+def _ask(text: str, ctx=None) -> tuple:
+    own = dep(ctx, "person_look", None)
+    if own is not None:
+        return own(text)
     if os.getenv("F5_TEST_RUN"):
         return "", ""
     from llm import call_llm_simple
@@ -53,8 +54,9 @@ def _ask(text: str) -> tuple:
 
 
 def _search(ctx, query: str) -> str:
-    if SEARCH_STUB is not None:
-        return SEARCH_STUB(query)
+    own = dep(ctx, "person_search", None)
+    if own is not None:
+        return own(query)
     if os.getenv("F5_TEST_RUN") or ctx is None or not getattr(ctx, "web_search_enabled", True):
         return ""
     import search
@@ -77,8 +79,9 @@ def _look_from_web(ctx, person: str) -> str:
         found = _search(ctx, f"{person} appearance face hair beard description")
         if not found.strip():
             return ""
-        if STUB is not None:
-            return STUB("WEB:" + found)[1]
+        own = dep(ctx, "person_look", None)
+        if own is not None:
+            return own("WEB:" + found)[1]
         from llm import call_llm_simple
         return (call_llm_simple(None, _FROM_WEB.format(person=person), found[:4000],
                                 temperature=0.0, max_tokens=160,
@@ -97,7 +100,7 @@ def note(text: str, ctx=None) -> str:
         if text in _CACHE:
             return _CACHE[text]
     try:
-        person, look = _ask(text)
+        person, look = _ask(text, ctx=ctx)
     except Exception:
         logger.warning("person look: model read failed", exc_info=True)
         return ""

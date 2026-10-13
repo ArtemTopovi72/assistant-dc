@@ -1527,18 +1527,19 @@ class ResolveMixin:
                 import ocr_reader
                 import threading as _th
                 _box = []
-                _t = _th.Thread(target=lambda: _box.append(ocr_reader.read(img_path) or []),
+                _t = _th.Thread(target=lambda: _box.append(ocr_reader.read_pieces(img_path) or []),
                                 daemon=True, name=f"ocr-{chat_id}")
                 _t.start()
                 _t.join(20.0)        # past that the message goes without it, never held
-                _reads = _box[0] if _box else []
-                _text = max(_reads, key=len) if _reads else ""
-                if len(_text.strip()) >= 3:
-                    merged = (merged + "\n[Text written on picture 1 (OCR, exact letters): "
-                              + _text.strip()[:600] + ". The lettering is part of what the "
-                              "picture says: compare every word with what is shown -- a word "
-                              "that does not match it (a label naming another thing) is most "
-                              "likely the joke or the point, so name it.]")
+                _pieces = [p.strip() for p in (_box[0] if _box else []) if len(p.strip()) >= 2]
+                _text = " · ".join("«%s»" % p for p in _pieces)[:600]
+                if len("".join(_pieces)) >= 3:
+                    merged = (merged + "\n[Text written on picture 1 (OCR, exact letters; each «…» is a "
+                              "separate label somewhere on the picture, top to bottom -- not one "
+                              "sentence, and OCR may garble a letter): " + _text + ". Say which "
+                              "label is on what (a flag, a cape, a speech bubble). The lettering is "
+                              "part of what the picture says: a label naming another thing than "
+                              "what it is on is most likely the joke or the point, so name it.]")
             except Exception:
                 tg_bot.logger.warning("photo OCR failed", exc_info=True)
         _album_paths = []

@@ -29,7 +29,9 @@ import image_router
 # the phrases run live in bench/intent_rest_live.py. Here: what the read means.
 _ADDS = {"добавь рыжего кота", "дорисуй лампу", "add a lamp", "верни коробку обратно",
          "восстанови кружку", "put the box back", "bring back the cat", "put it back"}
-image_router.EDIT_STUB = lambda t: {"kind": "object_insert"} if t in _ADDS else {"kind": "subject_edit"}
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from fakes import deps_ctx  # noqa: E402
+_EDIT = deps_ctx(edit_read=lambda t: {"kind": "object_insert"} if t in _ADDS else {"kind": "subject_edit"})
 import draw_geometry as DG
 import ideogram as IG
 
@@ -54,7 +56,7 @@ def test_an_add_instruction_may_not_delete_a_box():
     layout, notes = DA.apply_ops(
         _kitchen(),
         [{"op": "delete", "target": "серый кот сидит на полу"}],
-        additive_only=True)
+        additive_only=True, ctx=_EDIT)
     assert "серый кот сидит на полу" in _descs(layout), notes
     assert any("only asked" in n for n in notes), notes
 
@@ -65,7 +67,7 @@ def test_a_replace_under_an_add_instruction_becomes_an_add():
         _kitchen(),
         [{"op": "replace", "target": "синий диван у стены",
           "desc": "a ginger cat sleeping on a blue sofa"}],
-        additive_only=True)
+        additive_only=True, ctx=_EDIT)
     assert "синий диван у стены" in _descs(layout), notes
     assert "a ginger cat sleeping on a blue sofa" in _descs(layout), notes
     assert len(layout["elements"]) == 4, _descs(layout)
@@ -74,7 +76,7 @@ def test_a_replace_under_an_add_instruction_becomes_an_add():
 def test_a_replace_with_nothing_to_add_is_simply_refused():
     layout, notes = DA.apply_ops(
         _kitchen(), [{"op": "replace", "target": "деревянный стол"}],
-        additive_only=True)
+        additive_only=True, ctx=_EDIT)
     assert _descs(layout) == _descs(_kitchen())
     assert any("only asked" in n for n in notes), notes
 
@@ -83,17 +85,17 @@ def test_a_removal_instruction_still_removes():
     """The guard must not fire on the instructions that DO mean removal."""
     layout, _notes = DA.apply_ops(
         _kitchen(), [{"op": "delete", "target": "синий диван у стены"}],
-        additive_only=False)
+        additive_only=False, ctx=_EDIT)
     assert "синий диван у стены" not in _descs(layout)
 
 
 def test_which_instructions_count_as_add_only():
     for text in ("добавь рыжего кота", "дорисуй лампу", "add a lamp"):
-        assert DA._additive_only(text), text
+        assert DA._additive_only(text, ctx=_EDIT), text
     for text in ("убери коробку", "замени кружку на бокал", "remove the dog",
                  "добавь лампу вместо кресла",   # add AND remove: not add-only
                  "передвинь кота на диван"):
-        assert not DA._additive_only(text), text
+        assert not DA._additive_only(text, ctx=_EDIT), text
 
 
 # --- 2. "on the sofa" survives the geometry repair --------------------------
@@ -185,7 +187,7 @@ def test_a_mixed_instruction_is_not_treated_as_add_only():
         [{"op": "delete", "target": "синий диван у стены"},
          {"op": "add", "desc": "деревянная скамейка",
           "x": 0.05, "y": 0.78, "w": 0.25, "h": 0.18}],
-        additive_only=True)
+        additive_only=True, ctx=_EDIT)
     assert "синий диван у стены" not in _descs(layout), notes
     assert "деревянная скамейка" in _descs(layout), notes
     assert not any("only asked" in n for n in notes), notes
@@ -197,7 +199,7 @@ def test_destroying_without_adding_is_still_blocked():
         _kitchen(),
         [{"op": "delete", "target": "серый кот сидит на полу"},
          {"op": "replace", "target": "деревянный стол", "desc": "a marble table"}],
-        additive_only=True)
+        additive_only=True, ctx=_EDIT)
     assert "серый кот сидит на полу" in _descs(layout), notes
     assert "деревянный стол" in _descs(layout), notes
 
@@ -251,7 +253,7 @@ def test_the_background_carries_no_instructions_to_the_renderer():
     cap = IG.layout_to_caption(IG.normalize_layout({
         "background": "уютная кухня",
         "elements": [{"desc": "белая кружка", "x": 0.3, "y": 0.3,
-                      "w": 0.2, "h": 0.2}]}))
+                      "w": 0.2, "h": 0.2}]}), ctx=_EDIT)
     bg = cap["compositional_deconstruction"]["background"]
     assert bg == "уютная кухня", bg
     for banned in ("no letters", "no text", "blank", "logos"):
@@ -347,7 +349,7 @@ def test_an_edited_layout_still_carries_a_style():
     empty is not neutral, it lets the model pick. Measured: four boxes with no
     style came back as a collage of cut-out objects on a transparency
     checkerboard, with an invented product packet in the middle."""
-    cap = IG.layout_to_caption(_kitchen())
+    cap = IG.layout_to_caption(_kitchen(), ctx=_EDIT)
     style = cap.get("style_description") or {}
     assert style, cap
     assert any(str(v).strip() for v in style.values()), style
@@ -359,7 +361,7 @@ def test_a_layout_that_names_its_own_style_keeps_it():
         "art_style": "детская книжная иллюстрация",
         "medium": "illustration",
         "elements": [{"desc": "дом", "x": 0.2, "y": 0.2, "w": 0.4, "h": 0.4}]})
-    style = IG.layout_to_caption(lay).get("style_description") or {}
+    style = IG.layout_to_caption(lay, ctx=_EDIT).get("style_description") or {}
     assert "иллюстрац" in str(style), style
     assert "photography" not in str(style), style
 
@@ -373,10 +375,10 @@ def test_restoring_something_counts_as_adding_it():
     an add has to fire on this wording too."""
     for text in ("верни коробку обратно", "восстанови кружку",
                  "put the box back", "bring back the cat", "put it back"):
-        assert DA._additive_only(text), text
+        assert DA._additive_only(text, ctx=_EDIT), text
     # ...but only when nothing is being taken away in the same breath.
     for text in ("верни коробку вместо кружки", "убери коробку"):
-        assert not DA._additive_only(text), text
+        assert not DA._additive_only(text, ctx=_EDIT), text
 
 
 def test_a_restore_answered_as_a_replace_becomes_an_add():
@@ -390,7 +392,7 @@ def test_a_restore_answered_as_a_replace_becomes_an_add():
     after, notes = DA.apply_ops(
         layout,
         [{"op": "replace", "target": "белая кружка с чаем", "desc": "a cardboard box"}],
-        additive_only=True)
+        additive_only=True, ctx=_EDIT)
     descs = [el["desc"] for el in after["elements"]]
     assert "белая кружка с чаем" in descs, (descs, notes)
     assert "a cardboard box" in descs, (descs, notes)
@@ -413,7 +415,7 @@ def test_a_reword_of_the_thing_that_was_named_is_left_alone():
         layout,
         [{"op": "replace", "target": "синий диван у стены",
           "desc": "зелёный диван у стены"}],
-        additive_only=True, instruction="верни дивану зелёный цвет")
+        additive_only=True, instruction="верни дивану зелёный цвет", ctx=_EDIT)
     descs = [el["desc"] for el in after["elements"]]
     assert descs == ["зелёный диван у стены", "деревянный стол"], (descs, notes)
 
@@ -425,7 +427,7 @@ def test_without_the_instruction_the_guard_still_protects():
         {"desc": "белая кружка", "x": 0.3, "y": 0.3, "w": 0.2, "h": 0.2}]})
     after, _ = DA.apply_ops(
         layout, [{"op": "replace", "target": "белая кружка", "desc": "коробка"}],
-        additive_only=True)
+        additive_only=True, ctx=_EDIT)
     descs = [el["desc"] for el in after["elements"]]
     assert "белая кружка" in descs and "коробка" in descs, descs
 

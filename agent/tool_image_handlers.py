@@ -44,7 +44,7 @@ from seams import dep, intent_read, text_model, vision_model, yes_no
 
 logger = logging.getLogger("assistant.tools")
 
-def _is_absence_check(check: str) -> bool:
+def _is_absence_check(check: str, ctx=None) -> bool:
     """The inspect_image check asks whether something is gone or still there
     (verifying a removal). The model's yes/no; it replaced a word list
     («still», «осталась», «исчез»...). Model down -> False, the plain verdict."""
@@ -52,11 +52,9 @@ def _is_absence_check(check: str) -> bool:
     if not check:
         return False
     if os.getenv("F5_TEST_RUN") and not os.getenv("INTENT_LIVE"):
-        return bool(ABSENCE_STUB and ABSENCE_STUB(check))
+        own = dep(ctx, "absence_read", None)   # suites: absence_read(check) -> bool
+        return bool(own and own(check))
     return _absence_read(check)
-
-
-ABSENCE_STUB = None   # suites: ABSENCE_STUB(check) -> bool
 
 
 @functools.lru_cache(maxsize=256)
@@ -170,7 +168,7 @@ def _handle_inspect_image(ctx, state, args: dict) -> str:
     # (the over-correction the user hit). Detect a removal/absence check and route
     # accordingly, leaving the actual judgement to the model.
     verdict = result.upper()
-    if _is_absence_check(check):
+    if _is_absence_check(check, ctx=ctx):
         footer = (
             "\n\nNext step: this was a REMOVAL check. If the thing you removed is now "
             "gone — or only a faint trace/shadow remains — that is SUCCESS: STOP "
@@ -278,7 +276,7 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
     # «сделай красный круг зелёным» came as region='red circle', instructions='a green
     # circle' and a second, green circle was added next to the red one.
     if (not removal and not manual_whole and region
-            and classify_edit_intent(instructions) == "object_insert"
+            and classify_edit_intent(instructions, ctx=ctx) == "object_insert"
             and yes_no(ctx)(
                 "An image edit names a part of the picture and what to do there:\n{text}\n\n"
                 "Does it ask to ADD a new object while that part stays as it is (not to "
@@ -304,7 +302,7 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
             synth = f"change the background to {instructions}"
         else:
             synth = f"change the {region} to {instructions}"
-        category = classify_edit_intent(synth)
+        category = classify_edit_intent(synth, ctx=ctx)
         ctx.set_stage("Removing from the picture" if removal else "Editing the picture")
         logger.info("Tool: inpaint_image(region=%r, instructions=%r, removal=%s) -> intent=%s, source=%s",
                     region, instructions[:80], removal, category, source)
@@ -330,7 +328,7 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
             # returned a different subject, in colour.
             new_path = image_mod.convert_colour(source, instructions or synth)
             edit_path = "convert_colour"
-        elif classify_edit_intent(instructions or "") == "transform":
+        elif classify_edit_intent(instructions or "", ctx=ctx) == "transform":
             import image_router
             new_path = image_router.transform_image(source, instructions, ctx=ctx)
             edit_path = "transform"
@@ -1782,7 +1780,7 @@ def redraw_whole_image(ctx, source: str, instructions: str):
     # is the entire point of a style request, not an unwanted side effect to
     # undo.
     if (new_path and os.path.exists(new_path)
-            and classify_edit_intent(instructions) != "style_transfer"):
+            and classify_edit_intent(instructions, ctx=ctx) != "style_transfer"):
         new_path = image_mod.preserve_identity_face(source, new_path, instructions=instructions, ctx=ctx)
     return new_path, engine
 
@@ -1820,20 +1818,20 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
     # reported failure while the picture was delivered anyway. Delegating here
     # (not only in route_edit_request) means the deterministic path wins even
     # when the request arrives as a "redraw".
-    if instructions and classify_edit_intent(instructions) in ("colour_convert", "transform"):
+    if instructions and classify_edit_intent(instructions, ctx=ctx) in ("colour_convert", "transform"):
         from image import convert_colour
         import image_router
         ctx.set_stage("Converting the colours")
         logger.info("Tool: redraw_image -> exact pixel operation: %r", instructions[:80])
         new_path = (convert_colour(source, instructions)
-                    if classify_edit_intent(instructions) == "colour_convert"
+                    if classify_edit_intent(instructions, ctx=ctx) == "colour_convert"
                     else image_router.transform_image(source, instructions, ctx=ctx))
         if not new_path or not os.path.exists(new_path):
             return ("[TOOL ERROR] The operation failed (a crop to the face needs a "
                     "face the detector can find). Tell the user plainly; do NOT "
                     "claim the picture was changed.")
         _set_current_image(ctx, state, new_path)
-        if classify_edit_intent(instructions) == "transform":
+        if classify_edit_intent(instructions, ctx=ctx) == "transform":
             return ("[done] The picture was rotated/mirrored/cropped exactly on its "
                     "pixels -- nothing was redrawn. The result is on screen. Briefly "
                     "confirm to the user, in their language.")
@@ -1843,7 +1841,7 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
                 "Briefly confirm to the user, in their language.")
 
     import image_router
-    _plan = image_router.edit_plan(instructions)
+    _plan = image_router.edit_plan(instructions, ctx=ctx)
     if _plan.get("kind") == "outpaint":
         # Said once, plainly: the model was left suggesting other formats and
         # offering to try again.

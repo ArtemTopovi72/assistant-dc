@@ -10,7 +10,7 @@ Also read here: an explicit length («на 1200 слов», «подробно»
 about the earlier conversation, a child's medicine dose with the weight, and a
 coding ask.
 """
-from seams import yes_no
+from seams import dep, yes_no
 import logging
 import os
 import threading
@@ -73,7 +73,6 @@ code: true when they ask to write, fix, test or explain program code.
 Copy letters, words, target and items EXACTLY from the message.
 Reply with the JSON object only."""
 
-STUB = None   # suites: STUB(text) -> partial dict
 _CACHE: "OrderedDict[str, dict]" = OrderedDict()
 _LOCK = threading.Lock()
 
@@ -131,7 +130,8 @@ def read(text: str, ctx=None) -> dict:
     if not text:
         return dict(FALLBACK)
     if os.getenv("F5_TEST_RUN") and not os.getenv("INTENT_LIVE"):
-        got = STUB(text) if STUB else None
+        own = dep(ctx, "ask_read", None)   # suites: ask_read(text) -> partial dict
+        got = own(text) if own else None
         return _grounded({**FALLBACK, **_validate(got).model_dump()}, text) if got else dict(FALLBACK)
     with _LOCK:
         if text in _CACHE:

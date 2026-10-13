@@ -17,7 +17,7 @@ The same applies to the grounding/sizing helpers (_item_attributes,
 _region_present, _extract_edit_target, _firered_instruction, _source_dims,
 _strip_lead, _REMOVAL_RE), which image.py re-exports and the suites patch there.
 """
-from seams import choice
+from seams import choice, dep
 import logging
 import os
 import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
@@ -127,13 +127,12 @@ def _validate(got: dict) -> EditRead:
             got = {k: v for k, v in got.items() if k not in bad}
 
 
-# Suites script their own model replies; under F5_TEST_RUN the read is
-# EDIT_STUB(text) when a suite sets it, else ("subject_edit", []).
-EDIT_STUB = None
+# Suites script their own model replies; under F5_TEST_RUN the read is the
+# context's `edit_read(text)` when a suite hands one in, else ("subject_edit", []).
 _EDIT_CACHE: dict = {}
 
 
-def edit_plan(instruction: str) -> dict:
+def edit_plan(instruction: str, ctx=None) -> dict:
     """{"kind": category slug, "steps": [single edits], "target", "fill",
     "resizes", "reformats"} -- kind "multi_op" when steps has two
     or more. Any
@@ -143,7 +142,8 @@ def edit_plan(instruction: str) -> dict:
     if not text:
         return plain
     if os.getenv("F5_TEST_RUN") and not os.getenv("INTENT_LIVE"):
-        got = EDIT_STUB(text) if EDIT_STUB else None
+        own = dep(ctx, "edit_read", None)
+        got = own(text) if own else None
         if isinstance(got, str):
             got = {"kind": got}
         return {**plain, **(got or {})}
@@ -173,11 +173,10 @@ def edit_plan(instruction: str) -> dict:
     return dict(out)
 
 
-REGION_STUB = None   # suites: REGION_STUB(instructions, region) -> bool
 _REGION_CACHE: dict = {}
 
 
-def removes_region(instructions: str, region: str) -> bool:
+def removes_region(instructions: str, region: str, ctx=None) -> bool:
     """The edit leaves `region` gone -- removed, or described as absent. Its own
     yes/no: folded into edit_plan, the extra fields pulled the kind read off
     (bench/edit_intent_live.py 78 -> 75). Model down -> False, the region kept."""
@@ -185,7 +184,8 @@ def removes_region(instructions: str, region: str) -> bool:
     if not all(key):
         return False
     if os.getenv("F5_TEST_RUN") and not os.getenv("INTENT_LIVE"):
-        return bool(REGION_STUB and REGION_STUB(*key))
+        own = dep(ctx, "region_read", None)   # suites: region_read(instructions, region) -> bool
+        return bool(own and own(*key))
     if key in _REGION_CACHE:
         return _REGION_CACHE[key]
     try:
@@ -211,10 +211,10 @@ def removes_region(instructions: str, region: str) -> bool:
     return got
 
 
-def classify_edit_intent(instruction: str) -> str:
+def classify_edit_intent(instruction: str, ctx=None) -> str:
     """The edit category of a free-text instruction (EDIT_CATEGORIES, or
     "multi_op" for two or more edits of different kinds)."""
-    return edit_plan(instruction)["kind"]
+    return edit_plan(instruction, ctx=ctx)["kind"]
 
 
 _NO_LAYOUT_NOTE = (
@@ -471,7 +471,7 @@ def _route_edit_request(
     Returns (category, output_path | None). `region` is forwarded to object
     insertion when the caller already has an explicit box.
     """
-    category = classify_edit_intent(instruction)
+    category = classify_edit_intent(instruction, ctx=ctx)
     text = (instruction or "").strip()
     logger.info("Router: intent=%s for instruction=%r", category, text[:100])
 
@@ -533,13 +533,13 @@ def _route_edit_request(
                                                         seed=seed, timeout=timeout)
 
     if category == "background_remove":
-        mode = edit_plan(text)["fill"]
+        mode = edit_plan(text, ctx=ctx)["fill"]
         return category, _image.remove_background_with_comfy(ctx, image_path, mode=mode, timeout=timeout)
 
     if category in ("object_remove", "person_remove"):
         _image._REMOVAL_VERIFY["incomplete"] = False
         _image._REMOVAL_VERIFY["target"] = ""
-        target = edit_plan(text)["target"] or ("the person" if category == "person_remove" else "the object")
+        target = edit_plan(text, ctx=ctx)["target"] or ("the person" if category == "person_remove" else "the object")
         # FireRed only: the Big-LaMa fill was removed -- over fur,
         # fabric or hair it left a flat smudge that no check looked at.
         out = _image.remove_object_with_comfy(ctx, image_path, target, seed=seed, timeout=timeout)
@@ -607,7 +607,7 @@ def _route_edit_request(
         # Ground the region in what's actually visible (SAM3/vision inventory) BEFORE
         # redrawing, so we mask a region the segmenter can find rather than burning a
         # full render on a phrase it can't locate.
-        if edit_plan(text)["resizes"]:
+        if edit_plan(text, ctx=ctx)["resizes"]:
             # A size/proportion fix changes the OUTLINE: the new head is bigger or
             # smaller than the mask of the old one, so the contained path's QA
             # rejects it as leaking every time ("fix the head
@@ -702,19 +702,19 @@ def _orchestrate_multi_op(ctx, image_path: str, text: str, *,
 
     Returns the final image path, or the last successful intermediate, or None.
     """
-    clauses = edit_plan(text)["steps"] or [text]
+    clauses = edit_plan(text, ctx=ctx)["steps"] or [text]
 
     # stable ordering: destructive/background first, then edits, then additive/finishing
     _ORDER = {"background_remove": 0, "person_remove": 1, "object_remove": 1,
               "background_replace": 2, "relight": 3, "face_edit": 4, "clothing_edit": 4,
               "product_edit": 4, "subject_edit": 4, "style_transfer": 5,
               "object_insert": 6, "outpaint": 7, "restore": 8, "upscale": 9}
-    ordered = sorted(clauses, key=lambda c: _ORDER.get(classify_edit_intent(c), 4))
+    ordered = sorted(clauses, key=lambda c: _ORDER.get(classify_edit_intent(c, ctx=ctx), 4))
 
     current = image_path
     applied = 0
     for clause in ordered:
-        cat = classify_edit_intent(clause)
+        cat = classify_edit_intent(clause, ctx=ctx)
         if cat == "multi_op":  # avoid infinite recursion on a mis-split clause
             cat = "subject_edit"
         logger.info("Multi-op step %d: %r -> %s", applied + 1, clause[:60], cat)

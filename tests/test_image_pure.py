@@ -145,17 +145,14 @@ def test_log_edit_decision():
 
 def test_classify_edit_intent():
     # Which kind of edit a phrase is: the model's read, bench/edit_intent_live.py.
-    import image_router as R
+    from fakes import deps_ctx
     check("classify_empty", I.classify_edit_intent("") == "subject_edit")
-    R.EDIT_STUB = {"remove the car and change the sky to sunset":
-                   {"kind": "multi_op", "steps": ["remove the car", "change the sky to sunset"]}}.get
-    try:
-        check("classify_passes_the_read", I.classify_edit_intent("remove the car and change the sky to sunset") == "multi_op")
-        check("plan_carries_steps", I.edit_plan("remove the car and change the sky to sunset")["steps"]
-              == ["remove the car", "change the sky to sunset"])
-        check("no_read_is_the_generic_edit", I.classify_edit_intent("make her look happier") == "subject_edit")
-    finally:
-        R.EDIT_STUB = None
+    e = deps_ctx(edit_read={"remove the car and change the sky to sunset":
+                            {"kind": "multi_op", "steps": ["remove the car", "change the sky to sunset"]}}.get)
+    check("classify_passes_the_read", I.classify_edit_intent("remove the car and change the sky to sunset", ctx=e) == "multi_op")
+    check("plan_carries_steps", I.edit_plan("remove the car and change the sky to sunset", ctx=e)["steps"]
+          == ["remove the car", "change the sky to sunset"])
+    check("no_read_is_the_generic_edit", I.classify_edit_intent("make her look happier", ctx=e) == "subject_edit")
     # _strip_lead removes a leading command
     check("strip_lead", I._strip_lead("please remove the hat", r"please remove") == "the hat")
 

@@ -47,9 +47,9 @@ print("ROUTING")
 print("=" * 66)
 
 # Which phrases are a colour conversion is the model's read: bench/edit_intent_live.py.
-I.EDIT_STUB = {"сделай картинку чёрно-белой": "colour_convert"}.get
-import image_router as _RR
-_RR.EDIT_STUB = I.EDIT_STUB
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from fakes import deps_ctx
+_EDIT = deps_ctx(edit_read={"сделай картинку чёрно-белой": "colour_convert"}.get)
 
 # ── the conversion itself ───────────────────────────────────────────────────
 print("=" * 66)
@@ -103,7 +103,7 @@ check("it is dispatched BEFORE the generative branches",
       src_router.index('category == "colour_convert"')
       < src_router.index('category == "background_replace"'))
 
-cat, out = I.route_edit_request(None, src_path, "сделай картинку чёрно-белой")
+cat, out = I.route_edit_request(_EDIT, src_path, "сделай картинку чёрно-белой")
 check("the router returns the converted file", cat == "colour_convert"
       and out and os.path.exists(out), (cat, out))
 check("…and the router's output is grey too", abs(spread(out)) < 0.01, spread(out))

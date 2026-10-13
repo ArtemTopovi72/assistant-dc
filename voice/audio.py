@@ -515,6 +515,10 @@ def to_spoken_form(ctx, text: str) -> str:
     """
     if not needs_spoken_form(text):
         return text
+    # Stress marks ("+очень") reach here when the text was stressed upstream; the model
+    # read the first one as the word «плюс» (live 2026-10-13). They go; stress_plus
+    # marks the rewrite again.
+    text = re.sub(r"\+(?=\w)", "", text)
     key = text.strip()
     with _spoken_cache_lock:
         hit = _spoken_cache.get(key)

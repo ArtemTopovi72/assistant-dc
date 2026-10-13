@@ -5,10 +5,10 @@ from types import SimpleNamespace
 from PIL import Image
 import tool_retrieval, tool_image_handlers as h
 import image_router  # the read itself: bench/removal_intent_live.py
-image_router.EDIT_STUB = lambda t: {"reformats": "horizontal" in t}
+_DEPS = SimpleNamespace(edit_read=lambda t: {"reformats": "horizontal" in t})
 
 img = os.path.join(tempfile.mkdtemp(), "a.png"); Image.new("RGB", (64, 96)).save(img)
-ctx = SimpleNamespace(last_image_path=img, set_stage=lambda *a, **k: None)
+ctx = SimpleNamespace(last_image_path=img, set_stage=lambda *a, **k: None, deps=_DEPS)
 r = h._handle_redraw_image(ctx, {"image_path": img}, {"instructions": "horizontal landscape for YouTube"})
 assert r.startswith("[TOOL ERROR]") and "generate_image" in r, r
 

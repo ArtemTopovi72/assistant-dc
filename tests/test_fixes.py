@@ -18,13 +18,11 @@ from image import _is_removal_instruction
 # Which instructions remove something is the model's read; the phrases run
 # live in bench/removal_intent_live.py.
 def test_removal_classifier():
-    import image_router as _R
-    _R.EDIT_STUB = {"remove the puddle": {"kind": "object_remove", "target": "the puddle"},
-                    "без артефактов": {"kind": "restore"}}.get
-    try:
-        ok = _is_removal_instruction("remove the puddle") and not _is_removal_instruction("без артефактов")
-    finally:
-        _R.EDIT_STUB = None
+    from fakes import deps_ctx
+    edits = deps_ctx(edit_read={"remove the puddle": {"kind": "object_remove", "target": "the puddle"},
+                                "без артефактов": {"kind": "restore"}}.get)
+    ok = (_is_removal_instruction("remove the puddle", ctx=edits)
+          and not _is_removal_instruction("без артефактов", ctx=edits))
     print(("PASS" if ok else "FAIL") + ": removal classifier wiring")
     return ok
 

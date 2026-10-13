@@ -227,7 +227,7 @@ def _op_list(ops) -> list:
 # below turns exactly that kind of replace into an add.
 
 
-def _additive_only(instruction: str) -> bool:
+def _additive_only(instruction: str, ctx=None) -> bool:
     """The instruction asks to ADD something and to remove nothing.
 
     Measured: told "добавь рыжего кота, который спит на диване", the editor
@@ -238,7 +238,7 @@ def _additive_only(instruction: str) -> bool:
     apply, and the note says so rather than the layout quietly losing a box.
     """
     import image_router   # the model's read of the edit: one insert, nothing else
-    plan = image_router.edit_plan(instruction or "")
+    plan = image_router.edit_plan(instruction or "", ctx=ctx)
     return plan["kind"] == "object_insert" and not plan["steps"]
 
 
@@ -863,7 +863,7 @@ def edit_layout(ctx, layout: dict, instruction: str) -> tuple:
         if not ops:
             return layout, ["the model proposed no change"]
         layout, notes = apply_ops(layout, ops,
-                                  additive_only=_additive_only(instruction),
+                                  additive_only=_additive_only(instruction, ctx=ctx),
                                   instruction=instruction, ctx=ctx)
         return split_counted_boxes(merge_text_column(layout), notes)
     except Exception as exc:
