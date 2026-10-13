@@ -1636,7 +1636,7 @@ def run(ctx, request: str = "", *, layout: Optional[dict] = None,
         # OVERRIDES the critic's verdict — and, told about it, the critic can also
         # propose moving or enlarging the sign instead of leaving the repair to
         # geometry alone.
-        text_check = verify_text(ctx, image, layout)
+        text_check = dep(ctx, "verify_text", verify_text)(ctx, image, layout)
         tproblems = text_problems(text_check.get("checks"), text_check.get("stray"))
         verdict = dep(ctx, "critique", critique)(ctx, image, layout, evidence=tproblems)
         if tproblems:

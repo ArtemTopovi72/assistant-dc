@@ -114,19 +114,26 @@ print("A COLLAGE IS REDRAWN ON A FRESH SEED")
 print("=" * 66)
 
 import ideogram as _IG  # noqa: E402
+import types  # noqa: E402
+from fakes import Over  # noqa: E402
+
+# The draw loop's stand-ins, handed in on its context: ideogram's (_GF) over the real
+# module, the loop's own critic / text check (_DF).
+_GF, _DF = {}, {}
+
+
+def _ctx():
+    return types.SimpleNamespace(is_cancelled=lambda: False,
+                                 deps=types.SimpleNamespace(ideogram=Over(_IG, **_GF), **_DF))
 
 GRID = save(collage(), "grid2.png")
 GOOD = save(photo(seed=7), "good.png")
 
 seeds = []
-_real_gen = _IG.generate
-_real_cap = _IG.layout_to_caption
-_real_crit = D.critique
-_real_text = D.verify_text
-_IG.layout_to_caption = lambda layout: {"x": 1}
-D.critique = lambda *a, **k: {"ok": True, "score": 9, "problems": [], "ops": [],
+_GF["layout_to_caption"] = lambda layout: {"x": 1}
+_DF["critique"] = lambda *a, **k: {"ok": True, "score": 9, "problems": [], "ops": [],
                               "source": "stub"}
-D.verify_text = lambda *a, **k: {"checks": []}
+_DF["verify_text"] = lambda *a, **k: {"checks": []}
 
 LAYOUT = {"background": "комната", "elements": [{"desc": "кот", "x": .1, "y": .1,
                                                  "w": .2, "h": .2}]}
@@ -135,8 +142,8 @@ try:
         seeds.append(kw.get("seed"))
         return GRID if len(seeds) == 1 else GOOD
 
-    _IG.generate = _gen_collage_then_good
-    res = D.run(None, layout=dict(LAYOUT), rounds=0)
+    _GF["generate"] = _gen_collage_then_good
+    res = D.run(_ctx(), layout=dict(LAYOUT), rounds=0)
     check("a collage costs a second render", len(seeds) == 2, seeds)
     check("...on a DIFFERENT seed", len(seeds) == 2 and seeds[0] != seeds[1], seeds)
 
@@ -149,13 +156,13 @@ try:
           res.get("image"))
 
     seeds.clear()
-    _IG.generate = lambda ctx, prompt, **kw: (seeds.append(kw.get("seed")) or GOOD)
-    D.run(None, layout=dict(LAYOUT), rounds=0)
+    _GF["generate"] = lambda ctx, prompt, **kw: (seeds.append(kw.get("seed")) or GOOD)
+    D.run(_ctx(), layout=dict(LAYOUT), rounds=0)
     check("a picture that is fine is drawn once", len(seeds) == 1, seeds)
 
     seeds.clear()
-    _IG.generate = lambda ctx, prompt, **kw: (seeds.append(kw.get("seed")) or GRID)
-    res3 = D.run(None, layout=dict(LAYOUT), rounds=0)
+    _GF["generate"] = lambda ctx, prompt, **kw: (seeds.append(kw.get("seed")) or GRID)
+    res3 = D.run(_ctx(), layout=dict(LAYOUT), rounds=0)
     # The full ladder for a SINGLE-element layout: the first draw, the wide
     # redraw, then the stretch-to-frame. The merge rung is skipped -- there is
     # nothing to merge.
@@ -166,8 +173,8 @@ try:
     check("...and still hands back a picture rather than nothing",
           res3.get("image") == GRID, res3.get("image"))
 finally:
-    _IG.generate, _IG.layout_to_caption = _real_gen, _real_cap
-    D.critique, D.verify_text = _real_crit, _real_text
+    _GF.clear()
+    _DF.clear()
 
 print()
 print("=" * 66)
@@ -185,17 +192,17 @@ check("the pixel count is roughly preserved",
 check("a nonsense size does not raise", D._widened(0, 0) == (0, 0))
 
 seeds_wide = []
-_IG.layout_to_caption = lambda layout: {"n": len(layout.get("elements") or [])}
-D.critique = lambda *a, **k: {"ok": True, "score": 9, "problems": [], "ops": [],
+_GF["layout_to_caption"] = lambda layout: {"n": len(layout.get("elements") or [])}
+_DF["critique"] = lambda *a, **k: {"ok": True, "score": 9, "problems": [], "ops": [],
                               "source": "stub"}
-D.verify_text = lambda *a, **k: {"checks": []}
+_DF["verify_text"] = lambda *a, **k: {"checks": []}
 try:
     def _grid_until_wide(ctx, prompt, **kw):
         seeds_wide.append((kw.get("width"), kw.get("height")))
         return GOOD if kw.get("width") != kw.get("height") else GRID
 
-    _IG.generate = _grid_until_wide
-    res_w = D.run(None, layout=dict(LAYOUT), rounds=0, width=1024, height=1024)
+    _GF["generate"] = _grid_until_wide
+    res_w = D.run(_ctx(), layout=dict(LAYOUT), rounds=0, width=1024, height=1024)
     check("the wide redraw is tried straight after the first collage",
           len(seeds_wide) == D.COLLAGE_REROLLS + 2, seeds_wide)
     check("...with no same-geometry redraw in between",
@@ -206,8 +213,8 @@ try:
     check("and the wide picture is what the caller gets", res_w.get("image") == GOOD,
           res_w.get("image"))
 finally:
-    _IG.generate, _IG.layout_to_caption = _real_gen, _real_cap
-    D.critique, D.verify_text = _real_crit, _real_text
+    _GF.clear()
+    _DF.clear()
 
 print()
 print("=" * 66)
@@ -242,14 +249,14 @@ check("an empty layout does not raise",
       _IL0.filled_layout({"background": "к", "elements": []})["elements"] == [])
 
 _seen_caps = []
-_IG.layout_to_caption = lambda layout: {"n": len(layout.get("elements") or []),
+_GF["layout_to_caption"] = lambda layout: {"n": len(layout.get("elements") or []),
                                         "span": round(max(
                                             (e["x"] + e["w"]) for e in layout["elements"]) -
                                             min(e["x"] for e in layout["elements"]), 2)
                                         if layout.get("elements") else 0}
-D.critique = lambda *a, **k: {"ok": True, "score": 9, "problems": [], "ops": [],
+_DF["critique"] = lambda *a, **k: {"ok": True, "score": 9, "problems": [], "ops": [],
                               "source": "stub"}
-D.verify_text = lambda *a, **k: {"checks": []}
+_DF["verify_text"] = lambda *a, **k: {"checks": []}
 try:
     def _cutout_until_filled(ctx, prompt, **kw):
         cap = kw.get("caption") or {}
@@ -257,15 +264,15 @@ try:
         # the stretched layout is the one whose elements span the frame
         return GOOD if cap.get("span", 0) >= 0.9 else GRID
 
-    _IG.generate = _cutout_until_filled
-    _res_f = D.run(None, layout=dict(_narrow), rounds=0, width=1024, height=1024)
+    _GF["generate"] = _cutout_until_filled
+    _res_f = D.run(_ctx(), layout=dict(_narrow), rounds=0, width=1024, height=1024)
     check("the stretch is tried when everything else still looks wrong",
           _res_f.get("image") == GOOD, _res_f.get("image"))
     check("...and it keeps every element rather than merging them",
           _seen_caps[-1]["n"] == 3, _seen_caps[-1])
 finally:
-    _IG.generate, _IG.layout_to_caption = _real_gen, _real_cap
-    D.critique, D.verify_text = _real_crit, _real_text
+    _GF.clear()
+    _DF.clear()
 
 print()
 print("=" * 66)
@@ -298,18 +305,18 @@ check("a single-element layout is left exactly as it was",
       one["elements"][0]["desc"] == "кот", one["elements"])
 
 seeds = []
-_IG.layout_to_caption = lambda layout: {"n": len(layout.get("elements") or [])}
-D.critique = lambda *a, **k: {"ok": True, "score": 9, "problems": [], "ops": [],
+_GF["layout_to_caption"] = lambda layout: {"n": len(layout.get("elements") or [])}
+_DF["critique"] = lambda *a, **k: {"ok": True, "score": 9, "problems": [], "ops": [],
                               "source": "stub"}
-D.verify_text = lambda *a, **k: {"checks": []}
+_DF["verify_text"] = lambda *a, **k: {"checks": []}
 try:
     def _grid_until_merged(ctx, prompt, **kw):
         seeds.append(kw.get("seed"))
         # the merged caption is the one carrying a single element
         return GOOD if (kw.get("caption") or {}).get("n") == 1 else GRID
 
-    _IG.generate = _grid_until_merged
-    res = D.run(None, layout=dict(LAY), rounds=0)
+    _GF["generate"] = _grid_until_merged
+    res = D.run(_ctx(), layout=dict(LAY), rounds=0)
     # first draw + wide + stretch-to-frame + merge, in that order
     check("the merged redraw is the LAST rung, after every cheaper one",
           len(seeds) == D.COLLAGE_REROLLS + 4, seeds)
@@ -329,19 +336,19 @@ try:
             return GOOD
         return GRID
 
-    _IG.generate = _refuse_merge
-    res2 = D.run(None, layout=dict(LAY), rounds=0)
+    _GF["generate"] = _refuse_merge
+    res2 = D.run(_ctx(), layout=dict(LAY), rounds=0)
     check("a refused merge is retried on another seed rather than surfacing",
           res2.get("image") == GOOD, res2.get("image"))
 
     seeds.clear()
-    _IG.generate = lambda ctx, prompt, **kw: (seeds.append(kw.get("seed")) or GRID)
-    res3 = D.run(None, layout=dict(LAY), rounds=0)
+    _GF["generate"] = lambda ctx, prompt, **kw: (seeds.append(kw.get("seed")) or GRID)
+    res3 = D.run(_ctx(), layout=dict(LAY), rounds=0)
     check("if even the merge collages, the caller still gets a picture",
           res3.get("image") == GRID, res3.get("image"))
 finally:
-    _IG.generate, _IG.layout_to_caption = _real_gen, _real_cap
-    D.critique, D.verify_text = _real_crit, _real_text
+    _GF.clear()
+    _DF.clear()
 
 print()
 print("%d passed, %d failed" % (OK, BAD))
