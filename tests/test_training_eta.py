@@ -38,8 +38,6 @@ import lora_training as LT
 _TMP = Path(tempfile.mkdtemp(prefix="eta_"))
 
 
-_REAL_TRAIN_ROOT = LT.TRAIN_ROOT
-
 
 def _run_with_log(text, slug="fake_run"):
     """A run folder holding nothing but a log — progress() reads the disk.
@@ -48,17 +46,10 @@ def _run_with_log(text, slug="fake_run"):
     run_all.py, and a module global left pointing at a temp dir is how a later
     suite reads an empty machine.
     """
-    LT.TRAIN_ROOT = _TMP
     d = _TMP / slug
     d.mkdir(parents=True, exist_ok=True)
     (d / "train.log").write_text(text, encoding="utf-8")
-    orig = LT.is_training
-    LT.is_training = lambda s: True
-    try:
-        return LT.progress(slug)
-    finally:
-        LT.is_training = orig
-        LT.TRAIN_ROOT = _REAL_TRAIN_ROOT
+    return LT.progress(slug, _TMP, training=lambda s: True)
 
 
 BAR = ("fake_run:  10%|9         | 783/8000 [1:52:05<17:35:31,  8.78s/it, "
@@ -113,32 +104,20 @@ def test_a_run_is_not_started_onto_a_full_disk():
     """A trainer that runs out of DISK does not fail loudly: it dies inside a
     checkpoint write, hours in, and leaves a partial .safetensors that the
     resume path picks up as the newest save. One stat call before starting."""
-    orig = LT.MIN_FREE_GB
-    try:
-        LT.MIN_FREE_GB = 0.0
-        check("plenty of room says nothing", LT.disk_warning() == "",
-              LT.disk_warning())
-        LT.MIN_FREE_GB = 10.0 ** 9
-        warn = LT.disk_warning()
-        check("no room says so", bool(warn), warn)
-        check("and it names the actual figure", "ГБ" in warn, warn)
-    finally:
-        LT.MIN_FREE_GB = orig
+    check("plenty of room says nothing", LT.disk_warning(min_gb=0.0) == "",
+          LT.disk_warning(min_gb=0.0))
+    warn = LT.disk_warning(min_gb=10.0 ** 9)
+    check("no room says so", bool(warn), warn)
+    check("and it names the actual figure", "ГБ" in warn, warn)
     # An unreadable drive: Q: does not exist on Windows; elsewhere "Q:/..." is
     # a relative path that resolves to the working directory, so make the
     # stat itself fail the way an unmounted/denied drive does.
-    import shutil as _sh
-    _real_du = _sh.disk_usage
     def _denied(p):
         raise OSError(13, "denied", p)
-    _sh.disk_usage = _denied
-    try:
-        check("an unreadable path is not reported as a full disk",
-              LT.free_gb("Q:/definitely/not/here") == 0.0)
-        check("and an unknown figure does not trigger the warning",
-              LT.disk_warning("Q:/definitely/not/here") == "")
-    finally:
-        _sh.disk_usage = _real_du
+    check("an unreadable path is not reported as a full disk",
+          LT.free_gb("Q:/definitely/not/here", disk_usage=_denied) == 0.0)
+    check("and an unknown figure does not trigger the warning",
+          LT.disk_warning("Q:/definitely/not/here", disk_usage=_denied) == "")
 
     tab = (ROOT / "gui/gui_characters_tab.py").read_text(encoding="utf-8")
     body = tab[tab.index("def _train(self):"):tab.index("def _train_done")]

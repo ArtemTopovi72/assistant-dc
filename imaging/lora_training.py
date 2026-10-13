@@ -408,7 +408,7 @@ def build_config(slug: str, trigger: str, dataset_dir, **over) -> Path:
     return path
 
 
-def log_path(slug: str) -> Path:
+def log_path(slug: str, root=None) -> Path:
     """Where a run's output is teed, whoever started it.
 
     One canonical path so the tab can follow a run it did not launch -- a
@@ -416,7 +416,7 @@ def log_path(slug: str) -> Path:
     is how a user ends up staring at a tab that says nothing while the GPU is
     plainly busy.
     """
-    return TRAIN_ROOT / slug / "train.log"
+    return Path(root or TRAIN_ROOT) / slug / "train.log"
 
 
 _STEP_IN_NAME = re.compile(r"(\d{4,})\.safetensors$", re.I)
@@ -481,7 +481,7 @@ _STEP_IN_BAR = re.compile(r"(\d+)/(\d+)\s*\[")
 _BAR_TIMING = re.compile(r"\[([\d:]+)<([\d:?]+),\s*([\d.]+\s*(?:s/it|it/s))")
 
 
-def run_slugs(slug: str) -> list:
+def run_slugs(slug: str, root=None) -> list:
     """Every run folder belonging to this character, newest activity first.
 
     One character can have several runs: the old-model one under its bare slug,
@@ -491,21 +491,22 @@ def run_slugs(slug: str) -> list:
     as "не активно" while the numbers came from an old model run that finished
     hours earlier.
     """
-    if not TRAIN_ROOT.is_dir():
+    root = Path(root or TRAIN_ROOT)
+    if not root.is_dir():
         return []
-    dirs = [d for d in TRAIN_ROOT.iterdir()
+    dirs = [d for d in root.iterdir()
             if d.is_dir() and (d.name == slug or d.name.startswith(slug + "_"))]
     dirs.sort(key=lambda d: d.stat().st_mtime, reverse=True)
     return [d.name for d in dirs]
 
 
-def configured_steps(slug: str) -> int:
+def configured_steps(slug: str, root=None) -> int:
     """The step count the RUN was configured with, not the one on the form.
 
     Reading the spin box instead is what produced "шаг 2250 из 2000": the run
     had been extended past the number still sitting in the widget.
     """
-    cfg = TRAIN_ROOT / slug / ("%s.yaml" % slug)
+    cfg = Path(root or TRAIN_ROOT) / slug / ("%s.yaml" % slug)
     if not cfg.is_file():
         return 0
     try:
@@ -564,7 +565,7 @@ def human_eta(raw: str) -> str:
     return str(raw)
 
 
-def progress(slug: str) -> dict:
+def progress(slug: str, root=None, training=None) -> dict:
     """What a run has actually produced, read off the disk.
 
     Deliberately NOT read from a live process handle: the source of truth is
@@ -573,9 +574,11 @@ def progress(slug: str) -> dict:
     """
     # Resolve to the run this character is ACTUALLY using: a live one if there
     # is one, otherwise the most recently touched.
-    variants = run_slugs(slug) or [slug]
-    slug = next((v for v in variants if is_training(v)), variants[0])
-    run_dir = TRAIN_ROOT / slug
+    root = Path(root or TRAIN_ROOT)
+    training = training or is_training
+    variants = run_slugs(slug, root) or [slug]
+    slug = next((v for v in variants if training(v)), variants[0])
+    run_dir = root / slug
     ckpts = sorted(run_dir.rglob("*.safetensors"), key=lambda p: p.stat().st_mtime)
     samples = sorted(run_dir.rglob("*.jpg")) + sorted(run_dir.rglob("*.png"))
     step = 0
@@ -584,7 +587,7 @@ def progress(slug: str) -> dict:
         m = _STEP_IN_NAME.search(p.name)
         if m:
             step = max(step, int(m.group(1)))
-    log = log_path(slug)
+    log = log_path(slug, root)
     tail = ""
     live_step = live_total = 0
     if log.is_file():
@@ -614,12 +617,12 @@ def progress(slug: str) -> dict:
                 eta, rate = b.group(2), b.group(3).strip()
         except OSError:
             pass
-    return {"slug": slug, "total": live_total or configured_steps(slug),
+    return {"slug": slug, "total": live_total or configured_steps(slug, root),
             "step": max(step, live_step),
             "checkpoints": len(ckpts), "samples": len(samples),
             "last_sample": str(samples[-1]) if samples else "",
             "tail": tail, "eta": eta, "rate": rate,
-            "running": is_training(slug)}
+            "running": training(slug)}
 
 
 def latest_adapter(slug: str):
@@ -697,7 +700,7 @@ def train_command(cfg_path) -> list:
 MIN_FREE_GB = 6.0
 
 
-def free_gb(path=None) -> float:
+def free_gb(path=None, disk_usage=None) -> float:
     """Free space on the drive the run will write to, in GB (0 if unknown)."""
     import shutil as _sh
     p = Path(path or TRAIN_ROOT)
@@ -705,12 +708,12 @@ def free_gb(path=None) -> float:
     while not p.exists() and p.parent != p:
         p = p.parent
     try:
-        return _sh.disk_usage(str(p)).free / 1024.0 ** 3
+        return (disk_usage or _sh.disk_usage)(str(p)).free / 1024.0 ** 3
     except Exception:
         return 0.0
 
 
-def disk_warning(path=None) -> str:
+def disk_warning(path=None, min_gb=None, disk_usage=None) -> str:
     """A sentence to show before starting a run, or "" when there is room.
 
     A trainer that fills the disk does not fail loudly: it dies somewhere
@@ -718,12 +721,13 @@ def disk_warning(path=None) -> str:
     .safetensors that the resume path will happily pick up as the newest save.
     Checking first costs one stat call.
     """
-    free = free_gb(path)
-    if not free or free >= MIN_FREE_GB:
+    min_gb = MIN_FREE_GB if min_gb is None else min_gb
+    free = free_gb(path, disk_usage)
+    if not free or free >= min_gb:
         return ""
     return ("На диске осталось %.1f ГБ — обучение пишет чекпоинты и кэш "
             "латентов и может упасть на середине. Нужно хотя бы %.0f ГБ."
-            % (free, MIN_FREE_GB))
+            % (free, min_gb))
 
 
 def spawn(cfg_path):
