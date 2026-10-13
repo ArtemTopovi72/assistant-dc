@@ -254,7 +254,7 @@ def test_a_small_flying_thing_gets_a_close_up_and_the_next_part_cuts_back(monkey
     out = V.mark_inserts(None, ["A man twists the cork.", "The cork shoots out.", "Everyone laughs."])
     assert out[0] == "A man twists the cork."
     assert out[1].startswith(V.INSERT_HEAD) and out[2].startswith(V.INSERT_BACK)
-    assert "Close-up:" in V.CONTINUE_CTX_PREFIX
+    assert V.INSERT_HEAD.strip(" .")[:24] in V.CONTINUE_CTX_PREFIX and V.INSERT_BACK[:24] in V.CONTINUE_CTX_PREFIX
 
 
 def test_marking_fails_soft(monkeypatch):
