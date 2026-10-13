@@ -148,6 +148,7 @@ def loop(bot) -> None:
 # ---- the user side: what bench/debug_user.py and the GUI Debug chat send ----
 
 OUTBOX = os.path.join(ROOT, "outbox.jsonl")
+SHOT = os.path.join(ROOT, "gui_shot.png")
 
 
 def _put(update: dict) -> None:
@@ -273,6 +274,11 @@ def _api_handler():
                     album([str(p) for p in body["paths"]], str(body.get("caption") or ""), user)
                 elif path == "/press":
                     press(str(body["data"]), user)
+                elif path == "/shot":
+                    # the Debug chat tab takes it on the GUI thread: shows itself, saves the window
+                    with open(SHOT + ".req", "w", encoding="utf-8") as fh:
+                        fh.write("1")
+                    return self._send(200, {"ok": True, "path": SHOT})
                 else:
                     return self._send(404, {"error": "unknown path"})
                 self._send(200, {"ok": True, "t": time.time()})

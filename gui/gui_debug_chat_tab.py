@@ -11,7 +11,7 @@ import time
 import urllib.request
 
 from PyQt5.QtCore import QThread, Qt, QTimer, QUrl, pyqtSignal
-from PyQt5.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QGridLayout, QHBoxLayout, QLabel,
+from PyQt5.QtWidgets import (QTabWidget, QCheckBox, QComboBox, QFileDialog, QGridLayout, QHBoxLayout, QLabel,
                              QLineEdit, QPushButton, QTextBrowser, QVBoxLayout, QWidget)
 
 from ui_scale import px
@@ -142,6 +142,31 @@ class DebugChatTab(QWidget):
         self._poller.got.connect(self._on_bot)
         self._poller.state.connect(self._on_state)
         self._poller.start()
+        self._shot_timer = QTimer(self)
+        self._shot_timer.timeout.connect(self._take_shot)
+        self._shot_timer.start(1000)
+
+    def _take_shot(self):
+        """POST /shot: this tab brought to the front and the whole window saved, so a
+        debugging session can see the live GUI without a desktop grant."""
+        try:
+            import debug_user
+        except Exception:
+            return
+        if not os.path.exists(debug_user.SHOT + ".req"):
+            return
+        try:
+            os.remove(debug_user.SHOT + ".req")
+        except OSError:
+            return
+        w = self
+        while w is not None:
+            stack = w.parentWidget()
+            tabs = stack.parentWidget() if stack is not None else None
+            if isinstance(tabs, QTabWidget):
+                tabs.setCurrentWidget(w)
+            w = stack
+        QTimer.singleShot(400, lambda: self.window().grab().save(debug_user.SHOT))
 
     # ---- the user side ----
 

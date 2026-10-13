@@ -6,6 +6,7 @@ queue as everyone. Messages go to runtime/debug_user/inbox, answers come from ou
   python bench/debug_user.py photo a.jpg --caption "..."
   python bench/debug_user.py press swap_person:ab12cd34
   python bench/debug_user.py wait --until sendPhoto --timeout 1500
+  python bench/debug_user.py shot          # the live window with the Debug chat tab
 """
 import argparse
 import os
@@ -43,7 +44,7 @@ def wait(since: float, until: str = "", timeout: float = 600, quiet: float = 60)
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["say", "photo", "album", "press", "wait"])
+    ap.add_argument("cmd", choices=["say", "photo", "album", "press", "wait", "shot"])
     ap.add_argument("args", nargs="*")
     ap.add_argument("--caption", default="")
     ap.add_argument("--until", default="")
@@ -54,6 +55,13 @@ if __name__ == "__main__":
     if not D.enabled():
         sys.exit("debug user is off: create runtime/debug_user/enabled and keep the app running")
     t0 = time.time()
+    if a.cmd == "shot":                  # the live window, Debug chat tab in front
+        open(D.SHOT + ".req", "w").write("1")
+        while os.path.exists(D.SHOT + ".req") or not os.path.exists(D.SHOT) or os.path.getmtime(D.SHOT) < t0:
+            if time.time() - t0 > 30:
+                sys.exit("no shot: is the GUI running?")
+            time.sleep(0.5)
+        sys.exit(print(D.SHOT))
     if a.cmd == "say":
         say(" ".join(a.args), a.user)
     elif a.cmd == "photo":
