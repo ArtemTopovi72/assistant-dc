@@ -6,8 +6,7 @@ authority scoring, source-type classification, the SSRF guard
 (`_is_safe_public_url`), and the whitelist/blacklist/per-domain-cap filters.
 
 Nothing here reads a DR_* knob — every setting arrives as an argument — so these
-functions carry no configuration state and `apply_overrides` has nothing to patch
-on this module.
+functions carry no configuration state.
 """
 import ipaddress
 import logging

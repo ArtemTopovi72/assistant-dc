@@ -29,9 +29,7 @@ offline_guard.public_dns()   # the SSRF guard resolves hosts; the public-URL che
 RUN_AS_SCRIPT = True
 
 import deep_research as dr
-import dr_calls
-import dr_collect
-import dr_crawl
+from _dr_ctx import research_ctx
 import research_cache
 import source_adapters as sa
 import rerank
@@ -51,18 +49,15 @@ def _check(cond, msg):
 
 
 class _isolated_dr_dir:
-    """Redirect dr.DR_DIR to a throwaway temp dir for the test body. Without this,
+    """A throwaway runs dir for the test body, handed to the run as DR_DIR. Without it,
     every test that drives the real run_deep_research() (not a mocked stand-in)
     writes a permanent run folder into the user's real memory/research."""
     def __enter__(self):
         import pathlib
-        self._old = dr.DR_DIR
         self._tmp = tempfile.TemporaryDirectory()
-        dr.DR_DIR = pathlib.Path(self._tmp.name)
-        return dr.DR_DIR
+        return pathlib.Path(self._tmp.name)
 
     def __exit__(self, *exc):
-        dr.DR_DIR = self._old
         self._tmp.cleanup()
 
 
@@ -96,17 +91,13 @@ def test_p10_reranker():
     pages = [dict(i, title="t") for i in items]
     class _P:
         def update(self, *a, **k): pass
-    saved = (dr.DR_RERANK_ENABLED, dr.DR_RERANK_TOP_K)
-    try:
-        dr.DR_RERANK_ENABLED, dr.DR_RERANK_TOP_K = True, 2
-        res = dr.rerank_for_briefing(query, [dict(p) for p in pages], {"category": "general"}, _P())
-        _check(len(res) == 2, "stage did not truncate to top_k")
-        _check(all("_rr_text" not in p for p in res), "scratch _rr_text leaked")
-        dr.DR_RERANK_ENABLED = False
-        res2 = dr.rerank_for_briefing(query, [dict(p) for p in pages], {"category": "general"}, _P())
-        _check(len(res2) == 3, "disabled stage must pass through")
-    finally:
-        dr.DR_RERANK_ENABLED, dr.DR_RERANK_TOP_K = saved
+    res = dr.rerank_for_briefing(query, [dict(p) for p in pages], {"category": "general"}, _P(),
+                                 ctx=research_ctx(DR_RERANK_ENABLED=True, DR_RERANK_TOP_K=2))
+    _check(len(res) == 2, "stage did not truncate to top_k")
+    _check(all("_rr_text" not in p for p in res), "scratch _rr_text leaked")
+    res2 = dr.rerank_for_briefing(query, [dict(p) for p in pages], {"category": "general"}, _P(),
+                                  ctx=research_ctx(DR_RERANK_ENABLED=False))
+    _check(len(res2) == 3, "disabled stage must pass through")
     print("PASS: P10 second-stage reranker (relevance + authority fusion + pipeline stage)")
     return True
 
@@ -206,9 +197,7 @@ def test_p14_decision_gate():
 
 # ─────────────── Phase 15 — full pipeline integration (mocked I/O) ─────────────
 def test_p15_pipeline_integration():
-    saved = {n: getattr(dr, n) for n in
-             ("collect_sources", "crawl_pages", "dedupe_pages", "rerank_for_briefing",
-              "brief_source", "synthesize_report", "plan_queries")}
+    P = {}
     search_log = []
 
     def fake_collect(ctx, queries, per_query, prog, run_dir, profile=None):
@@ -231,41 +220,37 @@ def test_p15_pipeline_integration():
     class _Ctx:
         def is_cancelled(self): return False
 
-    try:
-        dr.collect_sources = fake_collect
-        dr.crawl_pages = fake_crawl
-        dr.dedupe_pages = lambda p, c="general": p
-        dr.rerank_for_briefing = lambda t, p, pr, pg: p
-        dr.brief_source = fake_brief
-        dr.synthesize_report = lambda ctx, topic, briefs, prog, **k: "## Executive Summary\nBGE works.\n"
-        dr.plan_queries = lambda ctx, topic, mq: (
-            ["bge reranker quality", "bge benchmark"],
-            {"category": "general", "recency": "any", "timelimit": None, "news": False})
-        with _isolated_dr_dir():
-            res = dr.run_deep_research(_Ctx(), "BGE reranker quality evaluation", depth="quick")
-            rep = res["report"]
-            _check(any(k in q for q in search_log for k in
-                       ("limitation", "criticism", "failure", "negative", "reproducib", "anomal")),
-                   "contradiction pass issued no contradiction queries")
-            _check(any(k in q for q in search_log for k in
-                       ("benchmark results", "documentation", "README", "limitations")),
-                   "multi-hop issued no entity queries")
-            _check("Contradiction Check" in rep, "report missing contradiction section")
-            _check(res["stats"]["decision"] in ("ANSWER", "ASK", "ABSTAIN"), "no gate decision in stats")
-            _check(res["stats"]["graph"]["contradicting_sources"] >= 1, "graph lost contradiction edges")
-            _check("reflection" in res["stats"], "reflection not recorded")
-            _check("clusters" in res["stats"], "hierarchical clustering not recorded in stats")
+    P["collect_sources"] = fake_collect
+    P["crawl_pages"] = fake_crawl
+    P["dedupe_pages"] = lambda p, c="general": p
+    P["rerank_for_briefing"] = lambda t, p, pr, pg, **k: p
+    P["brief_source"] = fake_brief
+    P["synthesize_report"] = lambda ctx, topic, briefs, prog, **k: "## Executive Summary\nBGE works.\n"
+    P["plan_queries"] = lambda ctx, topic, mq: (
+        ["bge reranker quality", "bge benchmark"],
+        {"category": "general", "recency": "any", "timelimit": None, "news": False})
+    with _isolated_dr_dir() as d:
+        res = dr.run_deep_research(research_ctx(_Ctx(), DR_DIR=d, **P), "BGE reranker quality evaluation", depth="quick")
+        rep = res["report"]
+        _check(any(k in q for q in search_log for k in
+                   ("limitation", "criticism", "failure", "negative", "reproducib", "anomal")),
+               "contradiction pass issued no contradiction queries")
+        _check(any(k in q for q in search_log for k in
+                   ("benchmark results", "documentation", "README", "limitations")),
+               "multi-hop issued no entity queries")
+        _check("Contradiction Check" in rep, "report missing contradiction section")
+        _check(res["stats"]["decision"] in ("ANSWER", "ASK", "ABSTAIN"), "no gate decision in stats")
+        _check(res["stats"]["graph"]["contradicting_sources"] >= 1, "graph lost contradiction edges")
+        _check("reflection" in res["stats"], "reflection not recorded")
+        _check("clusters" in res["stats"], "hierarchical clustering not recorded in stats")
 
-            # ABSTAIN path: a single LOW-trust source must not yield a confident answer.
-            dr.brief_source = lambda ctx, topic, page: "SOURCE: LOW\nvague."
-            dr.collect_sources = lambda ctx, q, pq, prog, rd, profile=None: [
-                {"href": "https://x.com/a", "domain": "x.com", "title": "t", "query": (q[0] if q else "")}]
-            res2 = dr.run_deep_research(_Ctx(), "obscure undocumented thing", depth="quick")
-            _check(res2["stats"]["decision"] == "ABSTAIN", "weak evidence should ABSTAIN")
-            _check("Insufficient evidence" in res2["report"], "abstain report missing banner")
-    finally:
-        for n, fn in saved.items():
-            setattr(dr, n, fn)
+        # ABSTAIN path: a single LOW-trust source must not yield a confident answer.
+        P["brief_source"] = lambda ctx, topic, page: "SOURCE: LOW\nvague."
+        P["collect_sources"] = lambda ctx, q, pq, prog, rd, profile=None: [
+            {"href": "https://x.com/a", "domain": "x.com", "title": "t", "query": (q[0] if q else "")}]
+        res2 = dr.run_deep_research(research_ctx(_Ctx(), DR_DIR=d, **P), "obscure undocumented thing", depth="quick")
+        _check(res2["stats"]["decision"] == "ABSTAIN", "weak evidence should ABSTAIN")
+        _check("Insufficient evidence" in res2["report"], "abstain report missing banner")
     print("PASS: P15 pipeline integration (multi-hop + contradiction + gate + graph + abstain)")
     return True
 
@@ -540,18 +525,14 @@ def test_p7_adapter_routing_and_fallback():
     _check(sa.adapter_for("https://vk.com/kctroitsky") is None, "vk wrongly routed")
     # adapter network failure degrades to None, never raises
     import requests
-    orig = requests.get
 
-    def boom(*a, **k):
-        raise requests.RequestException("network down")
-    requests.get = boom
-    try:
-        _check(sa.fetch_via_adapter("https://en.wikipedia.org/wiki/X", "entertainment") is None,
-               "wiki adapter did not fail gracefully")
-        _check(sa.fetch_via_adapter("https://arxiv.org/abs/1", "science") is None,
-               "arxiv adapter did not fail gracefully")
-    finally:
-        requests.get = orig
+    class Down:
+        def get(self, *a, **k):
+            raise requests.RequestException("network down")
+    _check(sa.fetch_via_adapter("https://en.wikipedia.org/wiki/X", "entertainment", http=Down()) is None,
+           "wiki adapter did not fail gracefully")
+    _check(sa.fetch_via_adapter("https://arxiv.org/abs/1", "science", http=Down()) is None,
+           "arxiv adapter did not fail gracefully")
     print("PASS: P7 adapter routing + graceful failure fallback")
     return True
 
@@ -627,31 +608,23 @@ def test_p9c_citation_graph():
          "authorships": [{"author": {"display_name": "T. Brox"}}],
          "primary_location": {"source": {"display_name": "Image and Vision Computing"}}, "doi": None},
     ]}
-    orig = requests.get
-
     class R:
         status_code = 200
         def json(self): return sample
     calls = {"n": 0}
 
-    def fake(*a, **k):
-        calls["n"] += 1
-        return R()
-    requests.get = fake
-    try:
-        brief = cg.citation_lineage_brief("Di Zenzo structure tensor", "x@y.z")
-    finally:
-        requests.get = orig
+    class Http:
+        def get(self, *a, **k):
+            calls["n"] += 1
+            return R()
+    brief = cg.citation_lineage_brief("Di Zenzo structure tensor", "x@y.z", http=Http())
     _check(brief and brief.startswith("SOURCE: PRIMARY"), "citation brief missing PRIMARY tag")
     _check("Di Zenzo" in brief and "cited_by=1200" in brief, "citation counts missing")
     _check("1986" in brief and "seminal" in brief.lower(), "seminal work not identified")
     # network failure degrades to None, never raises
-    def boom(*a, **k): raise requests.RequestException("down")
-    requests.get = boom
-    try:
-        _check(cg.citation_lineage_brief("x", "a@b.c") is None, "no graceful failure")
-    finally:
-        requests.get = orig
+    class Down:
+        def get(self, *a, **k): raise requests.RequestException("down")
+    _check(cg.citation_lineage_brief("x", "a@b.c", http=Down()) is None, "no graceful failure")
     print("PASS: P9c citation-graph lineage (parse + seminal + graceful failure)")
     return True
 
@@ -691,9 +664,7 @@ def test_p21_synthesis_empty_fallback():
     _check("arxiv.org" in body2, "brief-only fallback missing source")
 
     # integration: synthesize_report returns "" -> retry also "" -> digest fallback in report
-    saved = {n: getattr(dr, n) for n in
-             ("collect_sources", "crawl_pages", "dedupe_pages", "rerank_for_briefing",
-              "brief_source", "synthesize_report", "plan_queries")}
+    P = {}
     calls = {"n": 0, "efforts": []}
 
     def empty_synth(ctx, topic, briefs, prog, **k):
@@ -703,33 +674,29 @@ def test_p21_synthesis_empty_fallback():
 
     class _Ctx:
         def is_cancelled(self): return False
-    try:
-        dr.collect_sources = lambda ctx, q, pq, prog, rd, profile=None: [
-            {"href": f"https://s{i}.com/x", "domain": f"s{i}.com", "title": q[0] if q else "t",
-             "query": (q[0] if q else "")} for i in range(3)]
-        dr.crawl_pages = lambda ctx, s, c, prog, rd, prof, cache: [
-            {"url": x["href"], "domain": x["domain"], "title": "BGE-M3 reranker",
-             "text": "BGE-M3 reranker MTEB nDCG benchmark.", "cluster_size": 1,
-             "cluster_domains": [x["domain"]]} for x in s]
-        dr.dedupe_pages = lambda p, c="general": p
-        dr.rerank_for_briefing = lambda t, p, pr, pg: p
-        dr.brief_source = lambda ctx, t, p: "SOURCE: PRIMARY\nBGE-M3 improves retrieval on MTEB."
-        dr.synthesize_report = empty_synth
-        dr.plan_queries = lambda ctx, t, mq: (
-            ["bge-m3 reranker", "bge-m3 mteb"],
-            {"category": "general", "recency": "any", "timelimit": None, "news": False})
-        with _isolated_dr_dir():
-            res = dr.run_deep_research(_Ctx(), "BGE-M3 reranker quality", depth="quick")
-            rep = res["report"]
-            _check(calls["n"] >= 2, f"synthesis retry not attempted (calls={calls['n']})")
-            _check("medium" in calls["efforts"] and "low" in calls["efforts"],
-                   f"effort ladder didn't step down (efforts={calls['efforts']})")
-            _check("no output" not in rep, "dead 'no output' stub still emitted")
-            _check("without model synthesis" in rep, "digest fallback not used")
-            _check("# Source Appendix" in rep or "Source Appendix" in rep, "sources missing from fallback")
-    finally:
-        for n, fn in saved.items():
-            setattr(dr, n, fn)
+    P["collect_sources"] = lambda ctx, q, pq, prog, rd, profile=None: [
+        {"href": f"https://s{i}.com/x", "domain": f"s{i}.com", "title": q[0] if q else "t",
+         "query": (q[0] if q else "")} for i in range(3)]
+    P["crawl_pages"] = lambda ctx, s, c, prog, rd, prof, cache: [
+        {"url": x["href"], "domain": x["domain"], "title": "BGE-M3 reranker",
+         "text": "BGE-M3 reranker MTEB nDCG benchmark.", "cluster_size": 1,
+         "cluster_domains": [x["domain"]]} for x in s]
+    P["dedupe_pages"] = lambda p, c="general": p
+    P["rerank_for_briefing"] = lambda t, p, pr, pg, **k: p
+    P["brief_source"] = lambda ctx, t, p: "SOURCE: PRIMARY\nBGE-M3 improves retrieval on MTEB."
+    P["synthesize_report"] = empty_synth
+    P["plan_queries"] = lambda ctx, t, mq: (
+        ["bge-m3 reranker", "bge-m3 mteb"],
+        {"category": "general", "recency": "any", "timelimit": None, "news": False})
+    with _isolated_dr_dir() as d:
+        res = dr.run_deep_research(research_ctx(_Ctx(), DR_DIR=d, **P), "BGE-M3 reranker quality", depth="quick")
+        rep = res["report"]
+        _check(calls["n"] >= 2, f"synthesis retry not attempted (calls={calls['n']})")
+        _check("medium" in calls["efforts"] and "low" in calls["efforts"],
+               f"effort ladder didn't step down (efforts={calls['efforts']})")
+        _check("no output" not in rep, "dead 'no output' stub still emitted")
+        _check("without model synthesis" in rep, "digest fallback not used")
+        _check("# Source Appendix" in rep or "Source Appendix" in rep, "sources missing from fallback")
     print("PASS: P21 synthesis-empty -> retry -> deterministic cited digest fallback (no dead stub)")
     return True
 
@@ -859,9 +826,7 @@ def test_p19_hierarchical_digest():
 
 # ─────────────────── Phase 20 — hierarchical pipeline integration ──────────────
 def test_p20_hierarchical_pipeline():
-    saved = {n: getattr(dr, n) for n in
-             ("collect_sources", "crawl_pages", "dedupe_pages", "rerank_for_briefing",
-              "brief_source", "synthesize_report", "plan_queries")}
+    P = {}
     search_log, syn_capture = [], {}
 
     def fake_collect(ctx, queries, per_query, prog, run_dir, profile=None):
@@ -891,41 +856,37 @@ def test_p20_hierarchical_pipeline():
     class _Ctx:
         def is_cancelled(self): return False
 
-    try:
-        dr.collect_sources = fake_collect
-        dr.crawl_pages = fake_crawl
-        dr.dedupe_pages = lambda p, c="general": p
-        dr.rerank_for_briefing = lambda t, p, pr, pg: p
-        dr.brief_source = fake_brief
-        dr.synthesize_report = fake_syn
-        dr.plan_queries = lambda ctx, topic, mq: (
-            ["bge-m3 reranker quality", "bge-m3 mteb benchmark"],
-            {"category": "general", "recency": "any", "timelimit": None, "news": False})
-        with _isolated_dr_dir():
-            res = dr.run_deep_research(_Ctx(), "BGE-M3 reranker quality evaluation", depth="standard")
-            stats = res["stats"]
-            # hierarchical stats are recorded
-            _check("clusters" in stats and stats["clusters"]["clusters"] >= 1, "no cluster stats")
-            _check(stats.get("claims_merged", 0) >= 1, "claim-merge did not fire on duplicate claims")
-            # graph-guided deep-dive issued structurally-motivated follow-up queries
-            _check(any("in depth" in q or "analysis" in q or "corroboration" in q
-                       or "consensus" in q for q in search_log),
-                   "graph-guided expansion issued no targeted queries")
-            # the synthesis received the hierarchical thread scaffold
-            _check(syn_capture.get("preamble") and "THREAD STRUCTURE" in syn_capture["preamble"],
-                   "synthesis did not receive cluster digest preamble")
-            # state artifacts written for observability (inside the isolated tempdir).
-            slug = dr._slug("BGE-M3 reranker quality evaluation")
-            runs = sorted(p for p in dr.DR_DIR.glob(f"*_{slug}") if p.is_dir())
-            _check(runs, "no run dir created for this topic")
-            latest = runs[-1]
-            names = {p.name for p in latest.glob("*.json")}
-            _check("graph.json" in names, "graph.json not saved")
-            _check(any("state" in n for n in names) or (latest / "state.json").exists()
-                   or list(latest.glob("state*")), "no state artifacts saved")
-    finally:
-        for n, fn in saved.items():
-            setattr(dr, n, fn)
+    P["collect_sources"] = fake_collect
+    P["crawl_pages"] = fake_crawl
+    P["dedupe_pages"] = lambda p, c="general": p
+    P["rerank_for_briefing"] = lambda t, p, pr, pg, **k: p
+    P["brief_source"] = fake_brief
+    P["synthesize_report"] = fake_syn
+    P["plan_queries"] = lambda ctx, topic, mq: (
+        ["bge-m3 reranker quality", "bge-m3 mteb benchmark"],
+        {"category": "general", "recency": "any", "timelimit": None, "news": False})
+    with _isolated_dr_dir() as d:
+        res = dr.run_deep_research(research_ctx(_Ctx(), DR_DIR=d, **P), "BGE-M3 reranker quality evaluation", depth="standard")
+        stats = res["stats"]
+        # hierarchical stats are recorded
+        _check("clusters" in stats and stats["clusters"]["clusters"] >= 1, "no cluster stats")
+        _check(stats.get("claims_merged", 0) >= 1, "claim-merge did not fire on duplicate claims")
+        # graph-guided deep-dive issued structurally-motivated follow-up queries
+        _check(any("in depth" in q or "analysis" in q or "corroboration" in q
+                   or "consensus" in q for q in search_log),
+               "graph-guided expansion issued no targeted queries")
+        # the synthesis received the hierarchical thread scaffold
+        _check(syn_capture.get("preamble") and "THREAD STRUCTURE" in syn_capture["preamble"],
+               "synthesis did not receive cluster digest preamble")
+        # state artifacts written for observability (inside the isolated tempdir).
+        slug = dr._slug("BGE-M3 reranker quality evaluation")
+        runs = sorted(p for p in d.glob(f"*_{slug}") if p.is_dir())
+        _check(runs, "no run dir created for this topic")
+        latest = runs[-1]
+        names = {p.name for p in latest.glob("*.json")}
+        _check("graph.json" in names, "graph.json not saved")
+        _check(any("state" in n for n in names) or (latest / "state.json").exists()
+               or list(latest.glob("state*")), "no state artifacts saved")
     print("PASS: P20 hierarchical pipeline (cluster stats + claim-merge + graph deep-dive + digest preamble + artifacts)")
     return True
 
@@ -1080,9 +1041,7 @@ def test_p25_eval_scoring():
 def test_p26_reflection_loop_active():
     """Offline: with no contradictions in the first pass, reflection must LAUNCH new
     retrieval cycles (not just record gaps), bounded by max-iterations + budget."""
-    saved = {n: getattr(dr, n) for n in
-             ("collect_sources", "crawl_pages", "dedupe_pages", "rerank_for_briefing",
-              "brief_source", "synthesize_report", "plan_queries")}
+    P = {}
     pass_log = []
 
     def fake_collect(ctx, queries, per_query, prog, run_dir, profile=None):
@@ -1104,36 +1063,32 @@ def test_p26_reflection_loop_active():
     class _Ctx:
         def is_cancelled(self): return False
 
-    try:
-        dr.collect_sources = fake_collect
-        dr.crawl_pages = fake_crawl
-        dr.dedupe_pages = lambda p, c="general": p
-        dr.rerank_for_briefing = lambda t, p, pr, pg: p
-        dr.brief_source = fake_brief
-        dr.synthesize_report = lambda ctx, topic, briefs, prog, **k: "## Summary\nok.\n"
-        dr.plan_queries = lambda ctx, topic, mq: (
-            ["kubernetes vs nomad orchestration", "nomad scheduler design"],
-            {"category": "general", "recency": "any", "timelimit": None, "news": False})
-        with _isolated_dr_dir():
-            res = dr.run_deep_research(_Ctx(), "Kubernetes vs Nomad orchestration tradeoffs",
-                                       depth="standard")
-            iters = res["stats"].get("reflection_iterations", 0)
-            _check(iters >= 1, "reflection loop never launched a new cycle")
-            _check(iters <= dr.DR_REFLECTION_MAX_ITERATIONS,
-                   f"reflection loop exceeded max iterations: {iters}")
-            # the reflection cycles issued NEW retrieval passes beyond the initial + multihop
-            _check(len(pass_log) > 2, "no extra retrieval passes were launched by reflection")
-            # observability: reflection_iteration phase recorded queries on disk
-            slug = dr._slug("Kubernetes vs Nomad orchestration tradeoffs")
-            runs = sorted(p for p in dr.DR_DIR.glob(f"*_{slug}") if p.is_dir())
-            hist = list((runs[-1] / "history").glob("*reflection_iteration*.json"))
-            _check(hist, "no reflection_iteration phase recorded in history")
-            import json as _json
-            rec = _json.load(open(hist[0], encoding="utf-8"))
-            _check(rec.get("queries"), "reflection iteration recorded no queries")
-    finally:
-        for n, fn in saved.items():
-            setattr(dr, n, fn)
+    P["collect_sources"] = fake_collect
+    P["crawl_pages"] = fake_crawl
+    P["dedupe_pages"] = lambda p, c="general": p
+    P["rerank_for_briefing"] = lambda t, p, pr, pg, **k: p
+    P["brief_source"] = fake_brief
+    P["synthesize_report"] = lambda ctx, topic, briefs, prog, **k: "## Summary\nok.\n"
+    P["plan_queries"] = lambda ctx, topic, mq: (
+        ["kubernetes vs nomad orchestration", "nomad scheduler design"],
+        {"category": "general", "recency": "any", "timelimit": None, "news": False})
+    with _isolated_dr_dir() as d:
+        res = dr.run_deep_research(research_ctx(_Ctx(), DR_DIR=d, **P), "Kubernetes vs Nomad orchestration tradeoffs",
+                                   depth="standard")
+        iters = res["stats"].get("reflection_iterations", 0)
+        _check(iters >= 1, "reflection loop never launched a new cycle")
+        _check(iters <= dr.DR_REFLECTION_MAX_ITERATIONS,
+               f"reflection loop exceeded max iterations: {iters}")
+        # the reflection cycles issued NEW retrieval passes beyond the initial + multihop
+        _check(len(pass_log) > 2, "no extra retrieval passes were launched by reflection")
+        # observability: reflection_iteration phase recorded queries on disk
+        slug = dr._slug("Kubernetes vs Nomad orchestration tradeoffs")
+        runs = sorted(p for p in d.glob(f"*_{slug}") if p.is_dir())
+        hist = list((runs[-1] / "history").glob("*reflection_iteration*.json"))
+        _check(hist, "no reflection_iteration phase recorded in history")
+        import json as _json
+        rec = _json.load(open(hist[0], encoding="utf-8"))
+        _check(rec.get("queries"), "reflection iteration recorded no queries")
     print(f"PASS: P26 active reflection loop (launched {iters} cycle(s), bounded, "
           f"new retrieval + recorded queries)")
     return True
@@ -1141,40 +1096,37 @@ def test_p26_reflection_loop_active():
 
 # ─────────────── Phase 27 — manual control (GUI override knobs) ────────────────
 def test_p27_manual_control_overrides():
-    """The GUI's Manual Control panel patches dr.MANUAL_OVERRIDE_SPEC knobs for a
-    single run via apply_overrides/restore_overrides. Every knob must be a real
-    module global (or applying it is a silent no-op), values must round-trip
-    exactly, bad input must fail loud, and a real pipeline run must observe the
-    overridden values."""
+    """The GUI's Manual Control panel lays dr.MANUAL_OVERRIDE_SPEC knobs over one
+    run's settings (dr_settings.overlay on its context). Every knob must be a real
+    setting (or overriding it is a silent no-op), values must come through exactly,
+    bad input must fail loud, and a real pipeline run must observe the overridden
+    values while the defaults stay untouched."""
+    import dr_settings
     for name in dr.MANUAL_OVERRIDE_SPEC:
         _check(hasattr(dr, name), f"manual-control knob {name} is not a real dr global")
 
     before = {n: getattr(dr, n) for n in dr.MANUAL_OVERRIDE_SPEC}
-    saved = dr.apply_overrides({
+    S = dr_settings.overlay({
         "DR_MAX_QUERIES": 3, "DR_MULTIHOP_ENABLED": False, "DR_RERANK_BACKEND": "lexical",
     })
-    _check(dr.DR_MAX_QUERIES == 3 and dr.DR_MULTIHOP_ENABLED is False
-           and dr.DR_RERANK_BACKEND == "lexical", "override did not take effect")
-    dr.restore_overrides(saved)
-    after = {n: getattr(dr, n) for n in dr.MANUAL_OVERRIDE_SPEC}
-    _check(before == after, "restore_overrides left the module in a different state")
+    _check(S.DR_MAX_QUERIES == 3 and S.DR_MULTIHOP_ENABLED is False
+           and S.DR_RERANK_BACKEND == "lexical", "override did not take effect")
+    _check(before == {n: getattr(dr, n) for n in dr.MANUAL_OVERRIDE_SPEC},
+           "an overlay changed the defaults every other run reads")
 
     try:
-        dr.apply_overrides({"DR_MAX_QUERIES": 9999})
+        dr_settings.overlay({"DR_MAX_QUERIES": 9999})
         raise AssertionError("out-of-range override was not rejected")
     except ValueError:
         pass
     try:
-        dr.apply_overrides({"NOT_A_REAL_KNOB": 1})
+        dr_settings.overlay({"NOT_A_REAL_KNOB": 1})
         raise AssertionError("unknown override key was not rejected")
     except KeyError:
         pass
 
-    # a real (mocked-I/O) run actually observes the override: cap queries to 1
-    # and disable multi-hop, then verify no extra entity-driven queries appear.
-    saved2 = {n: getattr(dr, n) for n in
-              ("collect_sources", "crawl_pages", "dedupe_pages", "rerank_for_briefing",
-               "brief_source", "synthesize_report", "plan_queries")}
+    # a real (mocked-I/O) run actually observes the override: disable multi-hop and
+    # the other query-issuing stages, then verify no extra entity-driven queries appear.
     search_log = []
 
     def fake_collect(ctx, queries, per_query, prog, run_dir, profile=None):
@@ -1185,39 +1137,34 @@ def test_p27_manual_control_overrides():
     class _Ctx:
         def is_cancelled(self): return False
 
-    try:
-        dr.collect_sources = fake_collect
-        dr.crawl_pages = lambda ctx, s, c, prog, rd, prof, cache: [
+    P = dict(
+        collect_sources=fake_collect,
+        crawl_pages=lambda ctx, s, c, prog, rd, prof, cache: [
             {"url": x["href"], "domain": x["domain"], "title": x["title"],
              "text": "Manual control test content with enough words to pass the gate.",
-             "cluster_size": 1, "cluster_domains": [x["domain"]]} for x in s]
-        dr.dedupe_pages = lambda p, c="general": p
-        dr.rerank_for_briefing = lambda t, p, pr, pg: p
-        dr.brief_source = lambda ctx, t, p: "SOURCE: SECONDARY\nManual control test claim."
-        dr.synthesize_report = lambda ctx, topic, briefs, prog, **k: "## Summary\nok.\n"
-        dr.plan_queries = lambda ctx, topic, mq: (
+             "cluster_size": 1, "cluster_domains": [x["domain"]]} for x in s],
+        dedupe_pages=lambda p, c="general": p,
+        rerank_for_briefing=lambda t, p, pr, pg, **k: p,
+        brief_source=lambda ctx, t, p: "SOURCE: SECONDARY\nManual control test claim.",
+        synthesize_report=lambda ctx, topic, briefs, prog, **k: "## Summary\nok.\n",
+        plan_queries=lambda ctx, topic, mq: (
             ["manual control test query"],
-            {"category": "general", "recency": "any", "timelimit": None, "news": False})
-        # DR_REPLAN_ENABLED belongs in this list: the coverage/re-plan loop is a
-        # fifth stage that issues queries of its own (one stubbed source makes
-        # coverage "weak", so it broadens), and the check below must not read its
-        # queries as a leak from the four stages that were switched off.
-        ov = dr.apply_overrides({"DR_MULTIHOP_ENABLED": False, "DR_CONTRADICTION_ENABLED": False,
-                                  "DR_REFLECTION_ENABLED": False, "DR_GRAPH_EXPANSION_ENABLED": False,
-                                  "DR_REPLAN_ENABLED": False})
-        try:
-            with _isolated_dr_dir():
-                dr.run_deep_research(_Ctx(), "manual control test query", depth="quick")
-        finally:
-            dr.restore_overrides(ov)
-        _check(search_log == ["manual control test query"],
-               f"disabling multihop/contradiction/reflection still issued extra queries: {search_log}")
-    finally:
-        for n, fn in saved2.items():
-            setattr(dr, n, fn)
-    print("PASS: P27 manual control (knobs are real globals, round-trip, validated, observed live)")
+            {"category": "general", "recency": "any", "timelimit": None, "news": False}))
+    # DR_REPLAN_ENABLED belongs in this list: the coverage/re-plan loop is a
+    # fifth stage that issues queries of its own (one stubbed source makes
+    # coverage "weak", so it broadens), and the check below must not read its
+    # queries as a leak from the four stages that were switched off.
+    ctx = _Ctx()
+    ctx.research_settings = dr_settings.overlay({
+        "DR_MULTIHOP_ENABLED": False, "DR_CONTRADICTION_ENABLED": False,
+        "DR_REFLECTION_ENABLED": False, "DR_GRAPH_EXPANSION_ENABLED": False,
+        "DR_REPLAN_ENABLED": False})
+    with _isolated_dr_dir() as d:
+        dr.run_deep_research(research_ctx(ctx, DR_DIR=d, **P), "manual control test query", depth="quick")
+    _check(search_log == ["manual control test query"],
+           f"disabling multihop/contradiction/reflection still issued extra queries: {search_log}")
+    print("PASS: P27 manual control (knobs are real settings, validated, observed live, defaults kept)")
     return True
-
 
 # ────────────── Phase 28 — source filters, classifier, query mutation ──────────
 def test_p28_source_filters_and_mutation():
@@ -1271,8 +1218,6 @@ def test_p29_exhaustive_collection_loop():
     DR_MAX_SOURCES as a hard ceiling, and the stagnation guard still stops a
     force-exhaustive run when a round truly finds nothing new (bounded, never an
     actual infinite loop)."""
-    saved = {n: getattr(dr, n) for n in
-             ("collect_sources", "plan_queries")}
     counter = {"n": 0}
 
     def fake_plan(ctx, topic, mq):
@@ -1290,71 +1235,60 @@ def test_p29_exhaustive_collection_loop():
                  "domain": f"round{batch['n']}-{i}.example.com", "title": "t", "query": ""}
                 for i in range(2)]
 
-    try:
-        dr.plan_queries = fake_plan
-        dr.collect_sources = fake_collect_growing
-        ov = dr.apply_overrides({
-            "DR_MIN_SOURCES": 9, "DR_MAX_COLLECTION_ROUNDS": 10, "DR_FORCE_EXHAUSTIVE": True,
-        })
-        try:
-            queries, profile = ["seed"], {"category": "general", "recency": "any",
-                                          "timelimit": None, "news": False}
-            sources = fake_collect_growing(None, queries, 6, dr._Progress(None), None, profile)
+    import dr_settings
+    S = dr_settings.overlay({
+        "DR_MIN_SOURCES": 9, "DR_MAX_COLLECTION_ROUNDS": 10, "DR_FORCE_EXHAUSTIVE": True,
+    })
+    queries, profile = ["seed"], {"category": "general", "recency": "any",
+                                  "timelimit": None, "news": False}
+    sources = fake_collect_growing(None, queries, 6, dr._Progress(None), None, profile)
 
-            prog = dr._Progress(None)
-            max_rounds = max(1, dr.DR_MAX_COLLECTION_ROUNDS)
-            for round_n in range(1, max_rounds + 1):
-                if dr.DR_MAX_SOURCES > 0 and len(sources) >= dr.DR_MAX_SOURCES:
-                    break
-                cov = dr.coverage_signals(sources, profile)
-                domains_now = len({dr._domain(s["href"]) for s in sources})
-                targets_unmet = (
-                    (dr.DR_MIN_SOURCES > 0 and len(sources) < dr.DR_MIN_SOURCES) or
-                    (dr.DR_TARGET_SOURCES > 0 and len(sources) < dr.DR_TARGET_SOURCES) or
-                    (dr.DR_MIN_UNIQUE_DOMAINS > 0 and domains_now < dr.DR_MIN_UNIQUE_DOMAINS))
-                if not (cov["weak"] or targets_unmet or dr.DR_FORCE_EXHAUSTIVE):
-                    break
-                # What is under test is the LOOP -- targets, ceiling, stagnation
-                # guard -- not query generation, so the queries are synthetic
-                # (the real _corrective_queries depends on an LLM inventing
-                # something new every round).
-                extra = [f"corrective query round {round_n}"]
-                more = dr.collect_sources(None, extra, 6, prog, None, profile)
-                have = {dr._norm_url(s["href"]) for s in sources}
-                added = [s for s in more if dr._norm_url(s["href"]) not in have]
-                sources.extend(added)
-                queries = queries + extra
-                if not added:
-                    break
-            _check(len(sources) >= 9, f"loop stopped before reaching DR_MIN_SOURCES: {len(sources)}")
-            _check(batch["n"] >= 5, f"too few rounds ran to explain the growth: {batch['n']}")
-        finally:
-            dr.restore_overrides(ov)
+    prog = dr._Progress(None)
+    max_rounds = max(1, S.DR_MAX_COLLECTION_ROUNDS)
+    for round_n in range(1, max_rounds + 1):
+        if S.DR_MAX_SOURCES > 0 and len(sources) >= S.DR_MAX_SOURCES:
+            break
+        cov = dr.coverage_signals(sources, profile)
+        domains_now = len({dr._domain(s["href"]) for s in sources})
+        targets_unmet = (
+            (S.DR_MIN_SOURCES > 0 and len(sources) < S.DR_MIN_SOURCES) or
+            (S.DR_TARGET_SOURCES > 0 and len(sources) < S.DR_TARGET_SOURCES) or
+            (S.DR_MIN_UNIQUE_DOMAINS > 0 and domains_now < S.DR_MIN_UNIQUE_DOMAINS))
+        if not (cov["weak"] or targets_unmet or S.DR_FORCE_EXHAUSTIVE):
+            break
+        # What is under test is the LOOP -- targets, ceiling, stagnation
+        # guard -- not query generation, so the queries are synthetic
+        # (the real _corrective_queries depends on an LLM inventing
+        # something new every round).
+        extra = [f"corrective query round {round_n}"]
+        more = fake_collect_growing(None, extra, 6, prog, None, profile)
+        have = {dr._norm_url(s["href"]) for s in sources}
+        added = [s for s in more if dr._norm_url(s["href"]) not in have]
+        sources.extend(added)
+        queries = queries + extra
+        if not added:
+            break
+    _check(len(sources) >= 9, f"loop stopped before reaching DR_MIN_SOURCES: {len(sources)}")
+    _check(batch["n"] >= 5, f"too few rounds ran to explain the growth: {batch['n']}")
 
-        # ceiling: DR_MAX_SOURCES must cap growth even with force-exhaustive + huge min.
-        batch["n"] = 0
-        ov2 = dr.apply_overrides({
-            "DR_MIN_SOURCES": 50, "DR_MAX_SOURCES": 5, "DR_MAX_COLLECTION_ROUNDS": 20,
-            "DR_FORCE_EXHAUSTIVE": True,
-        })
-        try:
-            sources2 = []
-            profile2 = profile
-            for round_n in range(1, dr.DR_MAX_COLLECTION_ROUNDS + 1):
-                if dr.DR_MAX_SOURCES > 0 and len(sources2) >= dr.DR_MAX_SOURCES:
-                    break
-                more = dr.collect_sources(None, [f"q{round_n}"], 6, dr._Progress(None), None, profile2)
-                have = {dr._norm_url(s["href"]) for s in sources2}
-                added = [s for s in more if dr._norm_url(s["href"]) not in have]
-                if dr.DR_MAX_SOURCES > 0:
-                    added = added[:max(0, dr.DR_MAX_SOURCES - len(sources2))]
-                sources2.extend(added)
-            _check(len(sources2) <= 5, f"DR_MAX_SOURCES ceiling was not enforced: {len(sources2)}")
-        finally:
-            dr.restore_overrides(ov2)
-    finally:
-        for n, fn in saved.items():
-            setattr(dr, n, fn)
+    # ceiling: DR_MAX_SOURCES must cap growth even with force-exhaustive + huge min.
+    batch["n"] = 0
+    S = dr_settings.overlay({
+        "DR_MIN_SOURCES": 50, "DR_MAX_SOURCES": 5, "DR_MAX_COLLECTION_ROUNDS": 20,
+        "DR_FORCE_EXHAUSTIVE": True,
+    })
+    sources2 = []
+    profile2 = profile
+    for round_n in range(1, S.DR_MAX_COLLECTION_ROUNDS + 1):
+        if S.DR_MAX_SOURCES > 0 and len(sources2) >= S.DR_MAX_SOURCES:
+            break
+        more = fake_collect_growing(None, [f"q{round_n}"], 6, dr._Progress(None), None, profile2)
+        have = {dr._norm_url(s["href"]) for s in sources2}
+        added = [s for s in more if dr._norm_url(s["href"]) not in have]
+        if S.DR_MAX_SOURCES > 0:
+            added = added[:max(0, S.DR_MAX_SOURCES - len(sources2))]
+        sources2.extend(added)
+    _check(len(sources2) <= 5, f"DR_MAX_SOURCES ceiling was not enforced: {len(sources2)}")
     print("PASS: P29 exhaustive collection loop (reaches min-sources target, "
           "respects max-sources ceiling, bounded by round cap)")
     return True
@@ -1368,15 +1302,15 @@ def test_p30_verification_knobs():
         _check(name in dr.MANUAL_OVERRIDE_SPEC, f"{name} not exposed as a manual-control knob")
         _check(hasattr(dr, name), f"{name} is not a real dr global")
     before = (dr.DR_GATE_MIN_STRONG, dr.DR_GATE_MIN_CLUSTERS, dr.DR_CLAIM_MERGE_THRESHOLD)
-    saved = dr.apply_overrides({"DR_GATE_MIN_STRONG": 3, "DR_GATE_MIN_CLUSTERS": 4,
-                                 "DR_CLAIM_MERGE_THRESHOLD": 0.3})
-    _check((dr.DR_GATE_MIN_STRONG, dr.DR_GATE_MIN_CLUSTERS, dr.DR_CLAIM_MERGE_THRESHOLD)
+    import dr_settings
+    S = dr_settings.overlay({"DR_GATE_MIN_STRONG": 3, "DR_GATE_MIN_CLUSTERS": 4,
+                             "DR_CLAIM_MERGE_THRESHOLD": 0.3})
+    _check((S.DR_GATE_MIN_STRONG, S.DR_GATE_MIN_CLUSTERS, S.DR_CLAIM_MERGE_THRESHOLD)
            == (3, 4, 0.3), "verification knobs did not apply")
-    dr.restore_overrides(saved)
     _check((dr.DR_GATE_MIN_STRONG, dr.DR_GATE_MIN_CLUSTERS, dr.DR_CLAIM_MERGE_THRESHOLD)
-           == before, "verification knobs did not restore")
+           == before, "an overlay changed the defaults")
     try:
-        dr.apply_overrides({"DR_CLAIM_MERGE_THRESHOLD": 1.5})
+        dr_settings.overlay({"DR_CLAIM_MERGE_THRESHOLD": 1.5})
         raise AssertionError("out-of-range float override was not rejected")
     except ValueError:
         pass
@@ -1384,31 +1318,26 @@ def test_p30_verification_knobs():
     return True
 
 
-# ─────────────── Phase 31 — apply_overrides atomicity (no partial leak) ────────
+# ─────────────── Phase 31 — an invalid batch builds no overlay ────────
 def test_p31_override_atomicity():
-    """A batch override with ANY invalid entry must mutate NOTHING — otherwise a
-    raise mid-loop leaves the module half-applied and, since the caller never
-    receives `saved`, those partial overrides leak permanently into later runs
-    (would have hung/poisoned the GUI worker). Validate-all-then-apply."""
+    """A batch override with ANY invalid entry raises before a run starts, and the
+    defaults every other run reads stay as they were. Validate-all-then-build."""
+    import dr_settings
     before = {n: getattr(dr, n) for n in dr.MANUAL_OVERRIDE_SPEC}
-    # last entry out of range -> the earlier valid ones must NOT stick
     try:
-        dr.apply_overrides({"DR_MAX_QUERIES": 5, "DR_MIN_SOURCES": 30,
-                            "DR_FORCE_EXHAUSTIVE": True, "DR_MAX_PAGES": 99999})
+        dr_settings.overlay({"DR_MAX_QUERIES": 5, "DR_MIN_SOURCES": 30,
+                             "DR_FORCE_EXHAUSTIVE": True, "DR_MAX_PAGES": 99999})
         raise AssertionError("expected ValueError on out-of-range batch")
     except ValueError:
         pass
-    after = {n: getattr(dr, n) for n in dr.MANUAL_OVERRIDE_SPEC}
-    _check(before == after, "partial override leaked after a bad value in the batch")
-    # unknown key mid-batch -> also atomic
     try:
-        dr.apply_overrides({"DR_MAX_QUERIES": 7, "TOTALLY_BOGUS_KNOB": 1})
+        dr_settings.overlay({"DR_MAX_QUERIES": 7, "TOTALLY_BOGUS_KNOB": 1})
         raise AssertionError("expected KeyError on unknown knob")
     except KeyError:
         pass
     _check({n: getattr(dr, n) for n in dr.MANUAL_OVERRIDE_SPEC} == before,
-           "partial override leaked after an unknown key in the batch")
-    print("PASS: P31 apply_overrides atomic (no partial leak on bad value / unknown key)")
+           "a rejected batch changed the defaults")
+    print("PASS: P31 an invalid override batch raises and leaves the defaults alone")
     return True
 
 
@@ -1418,25 +1347,23 @@ def test_p34_rerank_backend_resolution():
     it loads it or degrades to a REPORTED dense/lexical. (b) when the cross-encoder
     can't load, the reranker still scores (lexical) instead of hanging."""
     import rerank
-    saved_tc = rerank.Reranker._try_cross
-    saved_ea = rerank.Reranker._embedder_available
-    try:
-        # cross requested but unavailable → must fall back to lexical, NOT claim cross
-        rerank.Reranker._try_cross = lambda self: False
-        rerank.Reranker._embedder_available = lambda self: False
-        r = rerank.Reranker("cross")
-        _check(r.backend == "lexical", f"explicit cross w/o CE must fall back, got {r.backend!r}")
-        _check(r._ce is None, "no cross-encoder should be loaded on fallback")
-        sc = r.relevance("alpha beta", ["alpha beta gamma here", "completely unrelated zzz"])
-        _check(sc[0] > sc[1], "lexical fallback did not score (would look like a hang)")
 
-        # cross requested AND available → loads _ce and reports cross
-        rerank.Reranker._try_cross = lambda self: (setattr(self, "_ce", object()) or True)
-        r2 = rerank.Reranker("cross")
-        _check(r2.backend == "cross" and r2._ce is not None, "cross not loaded when available")
-    finally:
-        rerank.Reranker._try_cross = saved_tc
-        rerank.Reranker._embedder_available = saved_ea
+    class _NoEmbedder:
+        def available(self): return False
+
+    def _no_ce(*a, **k):
+        raise OSError("no cross-encoder here")
+    # cross requested but unavailable → must fall back to lexical, NOT claim cross
+    r = rerank.Reranker("cross", embedder=_NoEmbedder(), cross_encoder=_no_ce, is_cached=lambda repo: True)
+    _check(r.backend == "lexical", f"explicit cross w/o CE must fall back, got {r.backend!r}")
+    _check(r._ce is None, "no cross-encoder should be loaded on fallback")
+    sc = r.relevance("alpha beta", ["alpha beta gamma here", "completely unrelated zzz"])
+    _check(sc[0] > sc[1], "lexical fallback did not score (would look like a hang)")
+
+    # cross requested AND available → loads _ce and reports cross
+    r2 = rerank.Reranker("cross", embedder=_NoEmbedder(), cross_encoder=lambda *a, **k: object(),
+                         is_cached=lambda repo: True)
+    _check(r2.backend == "cross" and r2._ce is not None, "cross not loaded when available")
     print("PASS: P34 explicit cross loads-or-degrades-loudly (no silent-lexical no-op, no hang)")
     return True
 
@@ -1448,47 +1375,29 @@ def test_p35_cross_encoder_no_download_hang():
     degrades instead of hanging. Opt-in (env) or an already-cached model lets it
     proceed."""
     import rerank
-    saved_allow = rerank._ALLOW_DOWNLOAD
-    saved_cached = rerank._model_is_cached
     ce_constructed = {"n": 0}
 
     class _BoomCE:  # constructing this == "the download/load happened"
         def __init__(self, *a, **k):
             ce_constructed["n"] += 1
 
-    try:
-        import types
-        st = types.ModuleType("sentence_transformers")
-        st.CrossEncoder = _BoomCE
-        saved_mod = sys.modules.get("sentence_transformers")
-        sys.modules["sentence_transformers"] = st
-        try:
-            # NOT cached + NOT allowed → must NOT construct CrossEncoder (no hang)
-            rerank._ALLOW_DOWNLOAD = False
-            rerank._model_is_cached = lambda repo: False
-            r = rerank.Reranker("cross")
-            _check(r._ce is None, "cross-encoder must not load when uncached+disallowed")
-            _check(ce_constructed["n"] == 0, "CrossEncoder was constructed → would download/hang")
-            _check(r.backend in ("dense", "lexical"), f"must degrade, got {r.backend!r}")
+    class _NoEmbedder:
+        def available(self): return False
 
-            # cached → allowed to construct
-            rerank._model_is_cached = lambda repo: True
-            r2 = rerank.Reranker("cross")
-            _check(ce_constructed["n"] == 1 and r2._ce is not None, "cached model should load")
-
-            # uncached but explicit opt-in → allowed to construct
-            rerank._ALLOW_DOWNLOAD = True
-            rerank._model_is_cached = lambda repo: False
-            r3 = rerank.Reranker("cross")
-            _check(ce_constructed["n"] == 2 and r3._ce is not None, "opt-in download should load")
-        finally:
-            if saved_mod is not None:
-                sys.modules["sentence_transformers"] = saved_mod
-            else:
-                sys.modules.pop("sentence_transformers", None)
-    finally:
-        rerank._ALLOW_DOWNLOAD = saved_allow
-        rerank._model_is_cached = saved_cached
+    def make(allow, cached):
+        return rerank.Reranker("cross", embedder=_NoEmbedder(), cross_encoder=_BoomCE,
+                               allow_download=allow, is_cached=lambda repo: cached)
+    # NOT cached + NOT allowed → must NOT construct CrossEncoder (no hang)
+    r = make(False, False)
+    _check(r._ce is None, "cross-encoder must not load when uncached+disallowed")
+    _check(ce_constructed["n"] == 0, "CrossEncoder was constructed → would download/hang")
+    _check(r.backend in ("dense", "lexical"), f"must degrade, got {r.backend!r}")
+    # cached → allowed to construct
+    r2 = make(False, True)
+    _check(ce_constructed["n"] == 1 and r2._ce is not None, "cached model should load")
+    # uncached but explicit opt-in → allowed to construct
+    r3 = make(True, False)
+    _check(ce_constructed["n"] == 2 and r3._ce is not None, "opt-in download should load")
     print("PASS: P35 cross-encoder won't download mid-run unless cached or opted-in (no dead loop)")
     return True
 
@@ -1534,37 +1443,28 @@ def test_p33_parallel_io_and_stage_timing():
     override layer."""
     import threading
     import time as _t
-    from pathlib import Path
 
     # 1) parallel search == serial search (same deduped set, dup URL collapsed).
     HITS = {"qa": [{"title": "A", "href": "https://a.com/1", "body": "", "domain": "a.com"},
                    {"title": "B", "href": "https://b.com/1", "body": "", "domain": "b.com"}],
             "qb": [{"title": "B2", "href": "https://b.com/1", "body": "", "domain": "b.com"},
                    {"title": "C", "href": "https://c.com/1", "body": "", "domain": "c.com"}]}
-    saved_raw = dr_collect.raw_search_results
-    dr_collect.raw_search_results = lambda ctx, q, n, *, timelimit=None, news=False: list(HITS.get(q, []))
-    saved_sc = dr.DR_SEARCH_CONCURRENCY
-    try:
-        with _isolated_dr_dir():
-            rd = Path(dr.DR_DIR)
-            dr.DR_SEARCH_CONCURRENCY = 1
-            ser = dr.collect_sources(None, ["qa", "qb"], 5, dr._Progress(None), rd, {"category": "general"})
-            dr.DR_SEARCH_CONCURRENCY = 4
-            par = dr.collect_sources(None, ["qa", "qb"], 5, dr._Progress(None), rd, {"category": "general"})
-    finally:
-        dr_collect.raw_search_results = saved_raw
-        dr.DR_SEARCH_CONCURRENCY = saved_sc
+    raw = lambda ctx, q, n, *, timelimit=None, news=False: list(HITS.get(q, []))  # noqa: E731
+    with _isolated_dr_dir() as rd:
+        ser = dr.collect_sources(research_ctx(raw_search_results=raw, DR_SEARCH_CONCURRENCY=1),
+                                 ["qa", "qb"], 5, dr._Progress(None), rd, {"category": "general"})
+        par = dr.collect_sources(research_ctx(raw_search_results=raw, DR_SEARCH_CONCURRENCY=4),
+                                 ["qa", "qb"], 5, dr._Progress(None), rd, {"category": "general"})
     _check(sorted(s["href"] for s in ser) == sorted(s["href"] for s in par),
            "parallel search changed the result set")
     _check([s["href"] for s in par].count("https://b.com/1") == 1, "dup URL not deduped under parallel")
 
     # 2) wave crawl — mock the per-URL unit to (a) prove overlap and (b) prove
     #    per-domain politeness. Bypasses the content gate so we test wave logic.
-    saved_acq = dr_crawl._acquire_page
     st = {"now": 0, "max": 0}
     lk = threading.Lock()
 
-    def fake_acq(url, depth, seed, category, use_adapters, cache):
+    def fake_acq(url, depth, seed, category, use_adapters, cache, **k):
         with lk:
             st["now"] += 1
             st["max"] = max(st["max"], st["now"])
@@ -1585,37 +1485,29 @@ def test_p33_parallel_io_and_stage_timing():
                 "page": {"url": url, "domain": dr._domain(url),
                          "title": seed.get("title", ""), "text": "x" * 50}}
 
-    dr_crawl._acquire_page = fake_acq
-    saved_fc = dr.DR_FETCH_CONCURRENCY
+    def crawl_ctx(fc):
+        return research_ctx(_acquire_page=fake_acq, DR_FETCH_CONCURRENCY=fc)
     caps = {"max_pages": 20, "depth": 0, "links_per_page": 0}
-    try:
-        # distinct domains → parallelism should overlap, capped at #domains
-        seeds = [{"href": f"https://d{i % 3}.com/p{i}", "domain": f"d{i % 3}.com",
-                  "title": f"t{i}"} for i in range(6)]
-        with _isolated_dr_dir():
-            rd = Path(dr.DR_DIR)
-            dr.DR_FETCH_CONCURRENCY = 1
-            p_ser = dr.crawl_pages(None, seeds, caps, dr._Progress(None), rd)
-            st["max"] = 0
-            dr.DR_FETCH_CONCURRENCY = 3
-            p_par = dr.crawl_pages(None, seeds, caps, dr._Progress(None), rd)
-        _check({p["url"] for p in p_ser} == {p["url"] for p in p_par}, "parallel crawl changed pages")
-        _check(len(p_par) == 6, f"expected 6 pages, got {len(p_par)}")
-        _check(st["max"] >= 2, f"fetch did not overlap (max inflight={st['max']})")
-        _check(st["max"] <= 3, f"per-domain politeness violated (max inflight={st['max']})")
-
-        # all SAME domain → must never run two in parallel (wave size 1)
-        same = [{"href": f"https://one.com/p{i}", "domain": "one.com", "title": "t"}
-                for i in range(4)]
+    # distinct domains → parallelism should overlap, capped at #domains
+    seeds = [{"href": f"https://d{i % 3}.com/p{i}", "domain": f"d{i % 3}.com",
+              "title": f"t{i}"} for i in range(6)]
+    with _isolated_dr_dir() as rd:
+        p_ser = dr.crawl_pages(crawl_ctx(1), seeds, caps, dr._Progress(None), rd)
         st["max"] = 0
-        with _isolated_dr_dir():
-            dr.DR_FETCH_CONCURRENCY = 3
-            p_same = dr.crawl_pages(None, same, caps, dr._Progress(None), Path(dr.DR_DIR))
-        _check(len(p_same) == 4, "same-domain seeds were dropped (deferral lost URLs)")
-        _check(st["max"] == 1, f"same-domain fetched in parallel — politeness broken (max={st['max']})")
-    finally:
-        dr_crawl._acquire_page = saved_acq
-        dr.DR_FETCH_CONCURRENCY = saved_fc
+        p_par = dr.crawl_pages(crawl_ctx(3), seeds, caps, dr._Progress(None), rd)
+    _check({p["url"] for p in p_ser} == {p["url"] for p in p_par}, "parallel crawl changed pages")
+    _check(len(p_par) == 6, f"expected 6 pages, got {len(p_par)}")
+    _check(st["max"] >= 2, f"fetch did not overlap (max inflight={st['max']})")
+    _check(st["max"] <= 3, f"per-domain politeness violated (max inflight={st['max']})")
+
+    # all SAME domain → must never run two in parallel (wave size 1)
+    same = [{"href": f"https://one.com/p{i}", "domain": "one.com", "title": "t"}
+            for i in range(4)]
+    st["max"] = 0
+    with _isolated_dr_dir() as rd:
+        p_same = dr.crawl_pages(crawl_ctx(3), same, caps, dr._Progress(None), rd)
+    _check(len(p_same) == 4, "same-domain seeds were dropped (deferral lost URLs)")
+    _check(st["max"] == 1, f"same-domain fetched in parallel — politeness broken (max={st['max']})")
 
     # 3) per-stage timing recorded across phase transitions + finalize flush.
     pr = dr._Progress(None)
@@ -1627,14 +1519,12 @@ def test_p33_parallel_io_and_stage_timing():
     _check("Searching" in timings and "Crawling" in timings, f"stage timings missing: {timings}")
     _check(all(v >= 0 for v in timings.values()), f"negative stage time: {timings}")
 
-    # 4) concurrency knobs validate + coerce + restore through the override layer.
-    before = {n: getattr(dr, n) for n in ("DR_SEARCH_CONCURRENCY", "DR_FETCH_CONCURRENCY")}
-    saved = dr.apply_overrides({"DR_SEARCH_CONCURRENCY": 4, "DR_FETCH_CONCURRENCY": 3})
-    _check(dr.DR_SEARCH_CONCURRENCY == 4 and dr.DR_FETCH_CONCURRENCY == 3, "knobs not applied")
-    dr.restore_overrides(saved)
-    _check({n: getattr(dr, n) for n in before} == before, "restore failed")
+    # 4) concurrency knobs validate + coerce through the override layer.
+    import dr_settings
+    S = dr_settings.overlay({"DR_SEARCH_CONCURRENCY": 4, "DR_FETCH_CONCURRENCY": 3})
+    _check(S.DR_SEARCH_CONCURRENCY == 4 and S.DR_FETCH_CONCURRENCY == 3, "knobs not applied")
     try:
-        dr.apply_overrides({"DR_FETCH_CONCURRENCY": 99})
+        dr_settings.overlay({"DR_FETCH_CONCURRENCY": 99})
         raise AssertionError("expected ValueError for out-of-range concurrency")
     except ValueError:
         pass
@@ -1711,50 +1601,46 @@ def test_p37_survey_synthesis():
                     r"$$\lambda = \tfrac12(a+c)$$ The symbol Î» appears garbled.")
         return ""
 
-    saved = dr_calls.call_llm_simple
-    try:
-        dr_calls.call_llm_simple = fake_llm
+    class _Prog:
+        stats = {}
+        def update(self, *a, **k): pass
+        def snap_formula(self, *a, **k): pass
 
-        class _Prog:
-            stats = {}
-            def update(self, *a, **k): pass
-            def snap_formula(self, *a, **k): pass
+    class _Ctx:
+        model_name = "gpt-oss-120b"
+        text_model = staticmethod(fake_llm)
+        def is_cancelled(self): return False
 
-        class _Ctx:
-            model_name = "gpt-oss-120b"
-            def is_cancelled(self): return False
+    briefs = [
+        {"domain": "arxiv.org", "url": "u1", "title": "Di Zenzo color gradient",
+         "brief": "- color gradient tensor", "trust": "PRIMARY", "cluster_size": 1},
+        {"domain": "wikipedia.org", "url": "u2", "title": "Structure tensor",
+         "brief": "- eigen decomposition", "trust": "SECONDARY", "cluster_size": 1},
+    ]
+    doc = dr.synthesize_survey(_Ctx(), "color structure tensor", briefs, _Prog())
+    _check(calls["outline"] == 1, f"outline must be planned exactly once (got {calls['outline']})")
+    _check(calls["sections"] == 3, f"each section its own call (got {calls['sections']})")
+    _check(doc.startswith("# The Color Structure Tensor"), "document missing its own H1 title")
+    _check("## Abstract" in doc, "abstract missing")
+    # the abstract must be SYNTHESIZED prose, not the planner's one-line directive
+    # ("abstract_focus") dumped verbatim.
+    _check(calls.get("abstract") == 1, "abstract must be written in its own call")
+    _check("synthesized abstract summarizes" in doc, "real abstract text missing")
+    _check("Establishes the multichannel tensor." not in doc,
+           "abstract_focus directive leaked verbatim as the abstract")
+    _check("## Table of Contents" in doc, "TOC missing")
+    for h in ("## Introduction", "## Mathematical Foundations", "## Conclusion"):
+        _check(h in doc, f"planned section {h!r} missing from document")
+    _check(r"$$\lambda = \tfrac12(a+c)$$" in doc, "verbatim equation not preserved")
+    _check("Î»" not in doc, "mojibake not repaired in section body")
+    _check("Source A" not in doc and "According to" not in doc,
+           "document leaked source-organized phrasing")
 
-        briefs = [
-            {"domain": "arxiv.org", "url": "u1", "title": "Di Zenzo color gradient",
-             "brief": "- color gradient tensor", "trust": "PRIMARY", "cluster_size": 1},
-            {"domain": "wikipedia.org", "url": "u2", "title": "Structure tensor",
-             "brief": "- eigen decomposition", "trust": "SECONDARY", "cluster_size": 1},
-        ]
-        doc = dr.synthesize_survey(_Ctx(), "color structure tensor", briefs, _Prog())
-        _check(calls["outline"] == 1, f"outline must be planned exactly once (got {calls['outline']})")
-        _check(calls["sections"] == 3, f"each section its own call (got {calls['sections']})")
-        _check(doc.startswith("# The Color Structure Tensor"), "document missing its own H1 title")
-        _check("## Abstract" in doc, "abstract missing")
-        # the abstract must be SYNTHESIZED prose, not the planner's one-line directive
-        # ("abstract_focus") dumped verbatim.
-        _check(calls.get("abstract") == 1, "abstract must be written in its own call")
-        _check("synthesized abstract summarizes" in doc, "real abstract text missing")
-        _check("Establishes the multichannel tensor." not in doc,
-               "abstract_focus directive leaked verbatim as the abstract")
-        _check("## Table of Contents" in doc, "TOC missing")
-        for h in ("## Introduction", "## Mathematical Foundations", "## Conclusion"):
-            _check(h in doc, f"planned section {h!r} missing from document")
-        _check(r"$$\lambda = \tfrac12(a+c)$$" in doc, "verbatim equation not preserved")
-        _check("Î»" not in doc, "mojibake not repaired in section body")
-        _check("Source A" not in doc and "According to" not in doc,
-               "document leaked source-organized phrasing")
-
-        # empty sections -> survey returns "" so caller can fall back
-        dr_calls.call_llm_simple = lambda ctx, s, u, **k: (outline_json if "lead author" in s else "")
-        _check(dr.synthesize_survey(_Ctx(), "t", briefs, _Prog()) == "",
-               "all-empty sections must yield '' (so caller falls back)")
-    finally:
-        dr_calls.call_llm_simple = saved
+    # empty sections -> survey returns "" so caller can fall back
+    empty = _Ctx()
+    empty.text_model = lambda ctx, s, u, **k: (outline_json if "lead author" in s else "")
+    _check(dr.synthesize_survey(empty, "t", briefs, _Prog()) == "",
+           "all-empty sections must yield '' (so caller falls back)")
     print("PASS: P37 survey mode — dynamic outline + section-by-section merged document")
     return True
 
@@ -1765,67 +1651,52 @@ def test_p39_context_aware_sections():
     retry) when a section comes back empty — so a 4096-loaded model still yields a
     real multi-section document instead of empty→digest. Per-section evidence is
     selected by relevance to that section, not one shared blob."""
-    import importlib
-    old = os.environ.get("DR_MODEL_CONTEXT")
-    os.environ["DR_MODEL_CONTEXT"] = "4096"
-    try:
-        import config as _cfg
-        importlib.reload(_cfg)
-        importlib.reload(dr)
-        _check(dr.DR_MODEL_CONTEXT == 4096, "DR_MODEL_CONTEXT not honored")
-        # _select_section_evidence packs to a char budget and is section-relevant
-        briefs = [{"domain": f"d{i}.org", "url": f"u{i}",
-                   "title": ("convergence proof bound" if i < 2 else "application vision cnn"),
-                   "brief": "- detail " * 30,
-                   "trust": "PRIMARY", "cluster_size": 1, "equations": []} for i in range(12)]
-        sec = {"heading": "Convergence Analysis", "subsections": [], "focus": "prove the bound"}
-        ev = dr._select_section_evidence(briefs, sec, 1500)
-        _check(len(ev) <= 1800, "evidence not trimmed to char budget")
-        _check("convergence proof" in ev, "section-relevant brief not prioritized")
+    import requests
 
-        # end-to-end: a stub that returns empty when the prompt exceeds a tight
-        # window must trigger shrink-and-retry and still yield every section.
-        outline_json = ('{"title":"Doc","sections":['
-                        '{"heading":"Intro","subsections":[],"focus":"a"},'
-                        '{"heading":"Convergence Analysis","subsections":[],"focus":"b"}]}')
-        seen = {"max": 0}
+    class _Down:
+        def get(self, *a, **k):
+            raise requests.RequestException("no LM Studio here")
+    # _select_section_evidence packs to a char budget and is section-relevant
+    briefs = [{"domain": f"d{i}.org", "url": f"u{i}",
+               "title": ("convergence proof bound" if i < 2 else "application vision cnn"),
+               "brief": "- detail " * 30,
+               "trust": "PRIMARY", "cluster_size": 1, "equations": []} for i in range(12)]
+    sec = {"heading": "Convergence Analysis", "subsections": [], "focus": "prove the bound"}
+    ev = dr._select_section_evidence(briefs, sec, 1500)
+    _check(len(ev) <= 1800, "evidence not trimmed to char budget")
+    _check("convergence proof" in ev, "section-relevant brief not prioritized")
 
-        def fake(ctx, system, user, **k):
-            if "lead author" in system:
-                return outline_json
-            if "ABSTRACT" in system:       # the dedicated abstract-synthesis call
-                return "A concise synthesized abstract of the document."
-            seen["max"] = max(seen["max"], len(user))
-            if len(user) > 3500:           # simulate n_keep overflow
-                return ""
-            return "## S\n\nReal merged prose about the topic (arxiv.org)."
+    # end-to-end: a stub that returns empty when the prompt exceeds a tight
+    # window must trigger shrink-and-retry and still yield every section.
+    outline_json = ('{"title":"Doc","sections":['
+                    '{"heading":"Intro","subsections":[],"focus":"a"},'
+                    '{"heading":"Convergence Analysis","subsections":[],"focus":"b"}]}')
+    seen = {"max": 0}
 
-        saved = dr_calls.call_llm_simple
-        try:
-            dr_calls.call_llm_simple = fake
+    def fake(ctx, system, user, **k):
+        if "lead author" in system:
+            return outline_json
+        if "ABSTRACT" in system:       # the dedicated abstract-synthesis call
+            return "A concise synthesized abstract of the document."
+        seen["max"] = max(seen["max"], len(user))
+        if len(user) > 3500:           # simulate n_keep overflow
+            return ""
+        return "## S\n\nReal merged prose about the topic (arxiv.org)."
 
-            class _P:
-                stats = {}
-                def update(self, *a, **k): pass
-                def snap_formula(self, *a, **k): pass
+    class _P:
+        stats = {}
+        def update(self, *a, **k): pass
+        def snap_formula(self, *a, **k): pass
 
-            class _C:
-                model_name = "qwen"
-                def is_cancelled(self): return False
+    class _C:
+        # a model name no other suite loads: the detected window is cached per name
+        model_name = "p39-small-context-model"
+        def is_cancelled(self): return False
 
-            doc = dr.synthesize_survey(_C(), "topic", briefs, _P())
-            _check(doc.startswith("# Doc"), "document not assembled under small context")
-            _check(doc.count("## S") == 2, f"both sections must survive shrink-retry (got {doc.count('## S')})")
-        finally:
-            dr_calls.call_llm_simple = saved
-    finally:
-        if old is None:
-            os.environ.pop("DR_MODEL_CONTEXT", None)
-        else:
-            os.environ["DR_MODEL_CONTEXT"] = old
-        import config as _cfg
-        importlib.reload(_cfg)
-        importlib.reload(dr)
+    run = research_ctx(_C(), DR_MODEL_CONTEXT=4096, requests=_Down(), call_llm_simple=fake)
+    doc = dr.synthesize_survey(run, "topic", briefs, _P())
+    _check(doc.startswith("# Doc"), "document not assembled under small context")
+    _check(doc.count("## S") == 2, f"both sections must survive shrink-retry (got {doc.count('## S')})")
     print("PASS: P39 context-aware section sizing + shrink-retry under small context")
     return True
 
@@ -1939,41 +1810,36 @@ def test_p40_query_distillation():
            "парадигму при этом каждый входящий элемент формулы должен быть детально "
            "расписан не просто название а что это такое мне нужна научная работа "
            "которую я дам человеку чтобы он мог докторскую защитить все формулы")
-    saved = dr_calls.call_llm_simple
-    try:
-        # (a) planner returns core_topic + clean queries -> raw essay is NOT a query
-        dr_calls.call_llm_simple = lambda ctx, s, u, **k: (
-            '{"core_topic": "Di Zenzo structure tensor for color images", '
-            '"category": "science", "recency": "any", '
-            '"queries": ["Di Zenzo structure tensor color images", '
-            '"structure tensor eigenvalues edge orientation"]}')
-        qs, prof = dr.plan_queries(None, raw, 8)
-        _check(raw not in qs, "raw verbose request must never be a search query")
-        _check(all(len(q) <= 120 for q in qs), "no query may be a runaway essay")
-        _check(any("structure tensor" in q.lower() for q in qs), "distilled subject missing")
-        _check(prof["category"] == "science", "category from planner lost")
-        # core_topic must be threaded into the profile so relevance-gating / citation
-        # query / title use the clean English subject, not the multilingual essay.
-        _check(prof.get("core_topic") == "Di Zenzo structure tensor for color images",
-               "profile must carry the distilled core_topic")
-        # entity terms derived from core_topic are English (would match crawled pages);
-        # derived from the raw Russian essay they would not.
-        ct_terms = dr._entity_terms(prof["core_topic"])
-        _check(any(t in ("tensor", "structure", "zenzo", "color", "images") for t in ct_terms),
-               "core_topic must yield English relevance terms")
+    # (a) planner returns core_topic + clean queries -> raw essay is NOT a query
+    planner = lambda ctx, s, u, **k: (  # noqa: E731
+        '{"core_topic": "Di Zenzo structure tensor for color images", '
+        '"category": "science", "recency": "any", '
+        '"queries": ["Di Zenzo structure tensor color images", '
+        '"structure tensor eigenvalues edge orientation"]}')
+    qs, prof = dr.plan_queries(research_ctx(call_llm_simple=planner), raw, 8)
+    _check(raw not in qs, "raw verbose request must never be a search query")
+    _check(all(len(q) <= 120 for q in qs), "no query may be a runaway essay")
+    _check(any("structure tensor" in q.lower() for q in qs), "distilled subject missing")
+    _check(prof["category"] == "science", "category from planner lost")
+    # core_topic must be threaded into the profile so relevance-gating / citation
+    # query / title use the clean English subject, not the multilingual essay.
+    _check(prof.get("core_topic") == "Di Zenzo structure tensor for color images",
+           "profile must carry the distilled core_topic")
+    # entity terms derived from core_topic are English (would match crawled pages);
+    # derived from the raw Russian essay they would not.
+    ct_terms = dr._entity_terms(prof["core_topic"])
+    _check(any(t in ("tensor", "structure", "zenzo", "color", "images") for t in ct_terms),
+           "core_topic must yield English relevance terms")
 
-        # (b) LLM gives nothing: fallback must distill the raw topic, not seed it whole
-        dr_calls.call_llm_simple = lambda ctx, s, u, **k: ""
-        qs2, _ = dr.plan_queries(None, raw, 8)
-        _check(raw not in qs2, "empty-LLM fallback must not seed the 532-char essay")
-        _check(all(len(q) <= 130 for q in qs2), "fallback queries must stay short")
+    # (b) LLM gives nothing: fallback must distill the raw topic, not seed it whole
+    silent = lambda ctx, s, u, **k: ""  # noqa: E731
+    qs2, _ = dr.plan_queries(research_ctx(call_llm_simple=silent), raw, 8)
+    _check(raw not in qs2, "empty-LLM fallback must not seed the 532-char essay")
+    _check(all(len(q) <= 130 for q in qs2), "fallback queries must stay short")
 
-        # (c) an already-clean short topic is preserved as a seed
-        dr_calls.call_llm_simple = lambda ctx, s, u, **k: ""
-        qs3, _ = dr.plan_queries(None, "Adam optimizer", 8)
-        _check(any("adam optimizer" in q.lower() for q in qs3), "clean topic must survive")
-    finally:
-        dr_calls.call_llm_simple = saved
+    # (c) an already-clean short topic is preserved as a seed
+    qs3, _ = dr.plan_queries(research_ctx(call_llm_simple=silent), "Adam optimizer", 8)
+    _check(any("adam optimizer" in q.lower() for q in qs3), "clean topic must survive")
     print("PASS: P40 query distillation — verbose request rewritten, never seeded verbatim")
     return True
 

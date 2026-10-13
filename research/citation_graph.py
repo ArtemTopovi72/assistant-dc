@@ -24,12 +24,12 @@ _API = "https://api.openalex.org/works"
 _TIMEOUT = 12
 
 
-def _get(params: dict, mailto: str) -> Optional[dict]:
+def _get(params: dict, mailto: str, http=requests) -> Optional[dict]:
     try:
         params = dict(params)
         if mailto:
             params["mailto"] = mailto
-        r = requests.get(_API, params=params, timeout=_TIMEOUT,
+        r = http.get(_API, params=params, timeout=_TIMEOUT,
                          headers={"User-Agent": "f5-research-bot/1.0"})
         if r.status_code != 200:
             return None
@@ -74,7 +74,7 @@ def _fmt(work: dict) -> str:
 
 
 def citation_lineage_brief(topic: str, mailto: str = "",
-                           max_works: int = 12) -> Optional[str]:
+                           max_works: int = 12, http=requests) -> Optional[str]:
     """Build a citation-lineage brief for a scholarly topic via OpenAlex.
 
     Strategy: (1) most-cited works relevant to the topic = the influential
@@ -85,7 +85,7 @@ def citation_lineage_brief(topic: str, mailto: str = "",
     data = _get({"search": topic, "sort": "cited_by_count:desc",
                  "per_page": max_works,
                  "select": "id,display_name,publication_year,cited_by_count,"
-                           "authorships,primary_location,doi"}, mailto)
+                           "authorships,primary_location,doi"}, mailto, http)
     if not data or not data.get("results"):
         return None
     works = data["results"]
@@ -111,7 +111,7 @@ def citation_lineage_brief(topic: str, mailto: str = "",
             desc = _get({"filter": f"cites:{wid}", "sort": "cited_by_count:desc",
                          "per_page": 8,
                          "select": "display_name,publication_year,cited_by_count,"
-                                   "authorships,primary_location,doi"}, mailto)
+                                   "authorships,primary_location,doi"}, mailto, http)
             if desc and desc.get("results"):
                 hdr = ("Principal descendants (most-cited works citing the seminal work):"
                        if is_seminal else

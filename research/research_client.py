@@ -12,13 +12,8 @@ explicitly switched.
 
 WHY THE LAZY `import deep_research` INSIDE EVERY METHOD
 -------------------------------------------------------
-It is not cosmetic and it is not an import-cycle dodge. Two things depend on it:
+It is not cosmetic and it is not an import-cycle dodge:
 
-  * `tests/test_gui_workers.py` swaps `sys.modules['deep_research']` for a stub
-    defining exactly apply_overrides / restore_overrides / lang_of_text /
-    run_deep_research, then calls DeepResearchWorker.run(). Resolving the module
-    at CALL time keeps that seam alive now that the orchestration has moved out
-    of the worker and into here.
   * `deep_research` is a heavy import (the whole crawl/extract/synthesis stack).
     A module imported at GUI startup should not drag it in.
 
@@ -86,6 +81,15 @@ class InProcessResearchClient:
     """
 
     backend = "inprocess"
+
+    def __init__(self, engine=None):
+        self.engine = engine
+
+    def _dr(self):
+        if self.engine is not None:
+            return self.engine
+        import deep_research
+        return deep_research
     #: The pipeline polls the CALLER's own ctx.cancel_event, so the GUI's Stop
     #: button reaches it with no round-trip and no loss. See research_api.
     cancellation_mode = "shared_event"
@@ -95,7 +99,7 @@ class InProcessResearchClient:
             out_lang: Optional[str] = None,
             overrides: Optional[Dict[str, Any]] = None,
             progress: Optional[Callable[[str, dict, str], None]] = None) -> Dict[str, Any]:
-        import deep_research as dr          # call-time resolution: see module docstring
+        dr = self._dr()                     # call-time resolution: see module docstring
         # research-service-boundary-v1 / out-lang-derived-from-typed-topic:
         # the report is a document the USER reads, so it is written in the
         # language the topic was typed in — not the pipeline's internal English
@@ -123,20 +127,20 @@ class InProcessResearchClient:
 
     # -- estimation / language ---------------------------------------------- #
     def estimate_duration(self, depth: str = "standard") -> Tuple[float, int]:
-        import deep_research as dr
+        dr = self._dr()
         return dr.estimate_duration(depth)
 
     def lang_of_text(self, text: str, default: str = "en") -> str:
-        import deep_research as dr
+        dr = self._dr()
         return dr.lang_of_text(text, default)
 
     # -- knobs -------------------------------------------------------------- #
     def knob_spec(self) -> Dict[str, Any]:
-        import deep_research as dr
+        dr = self._dr()
         return dict(dr.MANUAL_OVERRIDE_SPEC)
 
     def knob_defaults(self) -> Dict[str, Any]:
-        import deep_research as dr
+        dr = self._dr()
         return {name: getattr(dr, name, None) for name in dr.MANUAL_OVERRIDE_SPEC}
 
     # -- cancellation -------------------------------------------------------- #

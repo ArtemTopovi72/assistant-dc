@@ -8,7 +8,6 @@ test. This module reproduces exactly the surface research_client and
 research_service touch, and nothing else:
 
     MANUAL_OVERRIDE_SPEC / the DR_* globals it names
-    apply_overrides / restore_overrides   (same fail-loud validation)
     lang_of_text                          (same Cyrillic-vs-Latin rule)
     estimate_duration
     run_deep_research                     (emits PHASES ticks, polls is_cancelled)
@@ -60,26 +59,6 @@ def _coerce(name, value):
     return str(value)
 
 
-def apply_overrides(overrides: dict) -> dict:
-    """Validate everything first, mutate nothing until all pass — so a bad knob
-    cannot leave the module half-applied. Same contract as the real one."""
-    coerced = {}
-    for name, value in (overrides or {}).items():
-        if name not in MANUAL_OVERRIDE_SPEC:
-            raise KeyError(f"not a manual-control knob: {name}")
-        coerced[name] = _coerce(name, value)
-    saved = {}
-    for name, new_value in coerced.items():
-        saved[name] = globals()[name]
-        globals()[name] = new_value
-    return saved
-
-
-def restore_overrides(saved: dict) -> None:
-    for name, value in (saved or {}).items():
-        globals()[name] = value
-
-
 def lang_of_text(text: str, default: str = "en") -> str:
     if any("Ѐ" <= ch <= "ӿ" for ch in (text or "")):
         return "ru"
@@ -112,10 +91,14 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
         if progress is not None:
             progress(phase, {"sources": i, "pages": i * 2, "findings": i * 3}, f"{phase}…")
         time.sleep(CANCEL_PROBE_TICK_S if topic == "cancel probe" else TICK_S)
+    S = getattr(ctx, "research_settings", None)
+
+    def knob(name):
+        return getattr(S, name) if S is not None else globals()[name]
     return {
         "report": f"# {topic}\n\nlang={out_lang} depth={depth} "
-                  f"queries={DR_MAX_QUERIES} pages={DR_MAX_PAGES} "
-                  f"multihop={DR_MULTIHOP_ENABLED} whitelist={DR_DOMAIN_WHITELIST!r}\n",
+                  f"queries={knob('DR_MAX_QUERIES')} pages={knob('DR_MAX_PAGES')} "
+                  f"multihop={knob('DR_MULTIHOP_ENABLED')} whitelist={knob('DR_DOMAIN_WHITELIST')!r}\n",
         "path": None,          # deliberately None: a real path is host-local and
                                # would legitimately differ between backends.
         "stats": {"sources": len(PHASES), "pages": len(PHASES) * 2,

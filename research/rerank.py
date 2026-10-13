@@ -102,10 +102,14 @@ class Reranker:
     """
 
     def __init__(self, backend: str = "auto", *, embedder=None,
-                 cross_model: str = "BAAI/bge-reranker-v2-m3"):
+                 cross_model: str = "BAAI/bge-reranker-v2-m3",
+                 cross_encoder=None, allow_download=None, is_cached=None):
         self.requested = backend
         self.cross_model = cross_model
         self._embedder = embedder
+        self._cross_encoder = cross_encoder     # the CrossEncoder class; None = sentence_transformers'
+        self._allow_download = _ALLOW_DOWNLOAD if allow_download is None else allow_download
+        self._is_cached = is_cached or _model_is_cached
         self._ce = None                 # lazy CrossEncoder instance
         self.backend = self._resolve(backend)
 
@@ -130,14 +134,16 @@ class Reranker:
         return "lexical"
 
     def _try_cross(self) -> bool:
-        try:
-            from sentence_transformers import CrossEncoder  # noqa: F401
-        except Exception:
-            return False
+        CrossEncoder = self._cross_encoder
+        if CrossEncoder is None:
+            try:
+                from sentence_transformers import CrossEncoder
+            except Exception:
+                return False
         # Don't hang a live run on a 2.3GB download. If the model isn't cached and
         # the user hasn't opted in, degrade cleanly instead of blocking (this was
         # the "infinite reranking / dead loop with no logs").
-        if not _ALLOW_DOWNLOAD and not _model_is_cached(self.cross_model):
+        if not self._allow_download and not self._is_cached(self.cross_model):
             logger.warning(
                 "cross-encoder %s is NOT cached; skipping it to avoid a ~2.3GB "
                 "download mid-run. Falling back to dense/lexical. To use it, pre-fetch "

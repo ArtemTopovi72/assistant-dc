@@ -18,19 +18,6 @@ def check(name, cond, detail=""):
         raise AssertionError(str(name) + (": " + str(detail) if detail else ""))
 
 
-class _Patches:
-    def __init__(self, **kw):
-        self.kw = kw; self.orig = {}
-    def __enter__(self):
-        for k, v in self.kw.items():
-            self.orig[k] = getattr(C, k)
-            setattr(C, k, v)
-        return self
-    def __exit__(self, *a):
-        for k, v in self.orig.items():
-            setattr(C, k, v)
-
-
 class FakeResp:
     def __init__(self, status=200, data=None):
         self.status_code = status
@@ -39,14 +26,24 @@ class FakeResp:
         return self._data
 
 
+def _api(answer):
+    """An OpenAlex stand-in: `answer(params, mailto)` is the JSON, None a failed call."""
+    class Api:
+        def get(self, url, params=None, **k):
+            data = answer({x: v for x, v in (params or {}).items() if x != "mailto"},
+                          (params or {}).get("mailto"))
+            return FakeResp(status=500) if data is None else FakeResp(data=data)
+    return Api()
+
+
 def test_get_stubbed():
-    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: FakeResp(status=200, data={"ok": True}))):
-        out = C._get({"search": "x"}, "me@example.com")
-        check("get_success", out == {"ok": True})
-    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: FakeResp(status=500))):
-        check("get_non200_none", C._get({"search": "x"}, "") is None)
-    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))):
-        check("get_exception_none", C._get({"search": "x"}, "") is None)
+    http = types.SimpleNamespace(get=lambda *a, **k: FakeResp(status=200, data={"ok": True}))
+    out = C._get({"search": "x"}, "me@example.com", http=http)
+    check("get_success", out == {"ok": True})
+    http = types.SimpleNamespace(get=lambda *a, **k: FakeResp(status=500))
+    check("get_non200_none", C._get({"search": "x"}, "", http=http) is None)
+    http = types.SimpleNamespace(get=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    check("get_exception_none", C._get({"search": "x"}, "", http=http) is None)
 
 
 def test_authors():
@@ -92,12 +89,12 @@ def test_citation_lineage_brief_real():
 
 
 def test_citation_lineage_brief_no_results():
-    with _Patches(_get=lambda params, mailto: {"results": []}):
-        check("citation_lineage_empty_results_none", C.citation_lineage_brief("t") is None)
-    with _Patches(_get=lambda params, mailto: None):
-        check("citation_lineage_get_fails_none", C.citation_lineage_brief("t") is None)
-    with _Patches(_get=lambda params, mailto: {}):
-        check("citation_lineage_no_results_key_none", C.citation_lineage_brief("t") is None)
+    http = _api(lambda params, mailto: {"results": []})
+    check("citation_lineage_empty_results_none", C.citation_lineage_brief("t", http=http) is None)
+    http = _api(lambda params, mailto: None)
+    check("citation_lineage_get_fails_none", C.citation_lineage_brief("t", http=http) is None)
+    http = _api(lambda params, mailto: {})
+    check("citation_lineage_no_results_key_none", C.citation_lineage_brief("t", http=http) is None)
 
 
 def test_citation_lineage_brief_stubbed_seminal_path():
@@ -117,11 +114,11 @@ def test_citation_lineage_brief_stubbed_seminal_path():
             {"display_name": "Descendant Work", "publication_year": 1995,
              "cited_by_count": 200, "authorships": [], "primary_location": {}, "doi": ""},
         ]}
-    with _Patches(_get=fake_get):
-        out = C.citation_lineage_brief("test topic", mailto="me@x.com")
-        check("citation_lineage_seminal_labeled", "Likely seminal" in out)
-        check("citation_lineage_descendants_labeled", "Principal descendants" in out)
-        check("citation_lineage_has_both_works", "Old Seminal Work" in out and "Descendant Work" in out)
+    http = _api(fake_get)
+    out = C.citation_lineage_brief("test topic", mailto="me@x.com", http=http)
+    check("citation_lineage_seminal_labeled", "Likely seminal" in out)
+    check("citation_lineage_descendants_labeled", "Principal descendants" in out)
+    check("citation_lineage_has_both_works", "Old Seminal Work" in out and "Descendant Work" in out)
 
 
 def test_citation_lineage_brief_not_seminal_path():
@@ -138,27 +135,27 @@ def test_citation_lineage_brief_not_seminal_path():
             {"display_name": "Related Work", "publication_year": 2018,
              "cited_by_count": 100, "authorships": [], "primary_location": {}, "doi": ""},
         ]}
-    with _Patches(_get=fake_get):
-        out = C.citation_lineage_brief("recent topic")
-        check("citation_lineage_not_seminal_no_seminal_label", "Likely seminal" not in out)
-        check("citation_lineage_related_high_impact_label", "Related high-impact" in out)
+    http = _api(fake_get)
+    out = C.citation_lineage_brief("recent topic", http=http)
+    check("citation_lineage_not_seminal_no_seminal_label", "Likely seminal" not in out)
+    check("citation_lineage_related_high_impact_label", "Related high-impact" in out)
 
 
 def test_citation_lineage_brief_no_dated_works():
-    with _Patches(_get=lambda params, mailto: {"results": [
+    http = _api(lambda params, mailto: {"results": [
             {"display_name": "Undated Work", "cited_by_count": 50, "authorships": [],
-             "primary_location": {}, "doi": ""}]}):
-        out = C.citation_lineage_brief("undated topic")
-        check("citation_lineage_no_dated_works_still_returns", out is not None
-              and "Undated Work" in out)
+             "primary_location": {}, "doi": ""}]})
+    out = C.citation_lineage_brief("undated topic", http=http)
+    check("citation_lineage_no_dated_works_still_returns", out is not None
+          and "Undated Work" in out)
 
 
 def test_citation_lineage_brief_seminal_no_wid():
-    with _Patches(_get=lambda params, mailto: {"results": [
+    http = _api(lambda params, mailto: {"results": [
             {"id": "", "display_name": "No ID Work", "publication_year": 1970,
-             "cited_by_count": 10, "authorships": [], "primary_location": {}, "doi": ""}]}):
-        out = C.citation_lineage_brief("t")
-        check("citation_lineage_no_wid_still_returns", out is not None and "No ID Work" in out)
+             "cited_by_count": 10, "authorships": [], "primary_location": {}, "doi": ""}]})
+    out = C.citation_lineage_brief("t", http=http)
+    check("citation_lineage_no_wid_still_returns", out is not None and "No ID Work" in out)
 
 
 def test_citation_lineage_brief_descendants_empty():
@@ -171,9 +168,9 @@ def test_citation_lineage_brief_descendants_empty():
                  "publication_year": 1980, "cited_by_count": 999, "authorships": [],
                  "primary_location": {}, "doi": ""}]}
         return {"results": []}
-    with _Patches(_get=fake_get):
-        out = C.citation_lineage_brief("t")
-        check("citation_lineage_no_descendants_no_section", "Principal descendants" not in out)
+    http = _api(fake_get)
+    out = C.citation_lineage_brief("t", http=http)
+    check("citation_lineage_no_descendants_no_section", "Principal descendants" not in out)
 
 
 if __name__ == "__main__":

@@ -112,38 +112,31 @@ check("an unknown attribute still raises AttributeError (the proxy does not "
 
 
 # ───────────────────────────────────────── (c) overrides round-trip one home
-print("\nMANUAL OVERRIDES ROUND-TRIP THROUGH THAT ONE HOME")
+print("\nA RUN'S OVERRIDES RIDE ON ITS CONTEXT")
 
+import types
 _before = (S.DR_MAX_PAGES, S.DR_SURVEY_MODE)
-saved = D.apply_overrides({"DR_MAX_PAGES": 5, "DR_SURVEY_MODE": False})
-check("apply_overrides patches dr_settings", S.DR_MAX_PAGES == 5)
-check("and the value is visible on the deep_research surface too",
-      D.DR_MAX_PAGES == 5)
-check("_resolve_caps reads the OVERRIDDEN value, not an import-time snapshot",
-      D._resolve_caps("standard")["max_pages"] == 5,
-      D._resolve_caps("standard"))
-D.restore_overrides(saved)
-check("restore_overrides puts the originals back",
+_run = types.SimpleNamespace(research_settings=S.overlay({"DR_MAX_PAGES": 5, "DR_SURVEY_MODE": False}))
+check("_resolve_caps reads the run's overlay, not an import-time snapshot",
+      D._resolve_caps("standard", ctx=_run)["max_pages"] == 5,
+      D._resolve_caps("standard", ctx=_run))
+check("and the defaults are untouched for every other run",
       (S.DR_MAX_PAGES, S.DR_SURVEY_MODE) == _before,
       (S.DR_MAX_PAGES, S.DR_SURVEY_MODE))
 
 _raised = False
 try:
-    D.apply_overrides({"DR_NOT_A_KNOB": 1})
+    S.overlay({"DR_NOT_A_KNOB": 1})
 except KeyError:
     _raised = True
 check("an unknown knob raises rather than being silently ignored", _raised)
 
-_before_pages = S.DR_MAX_PAGES
 _raised = False
 try:
-    # valid knob first, invalid second — nothing may be applied
-    D.apply_overrides({"DR_MAX_PAGES": 5, "DR_MAX_QUERIES": 9999})
+    S.overlay({"DR_MAX_PAGES": 5, "DR_MAX_QUERIES": 9999})
 except ValueError:
     _raised = True
 check("an out-of-range value raises", _raised)
-check("and nothing was half-applied (validate-all-then-mutate)",
-      S.DR_MAX_PAGES == _before_pages, S.DR_MAX_PAGES)
 
 print(f"\n{_n - _bad}/{_n} checks passed")
 sys.exit(1 if _bad else 0)

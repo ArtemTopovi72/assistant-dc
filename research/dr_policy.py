@@ -12,7 +12,7 @@ fetched or any word is written:
   quick/standard/deep run gets.  `_resolve_caps`.
 
 The caps live here rather than in dr_timing because they are computed from the
-DR_* knobs in dr_settings, which `apply_overrides` swaps out for a single run.
+DR_* knobs a run reads through dr_settings.view(ctx).
 How LONG each profile takes (the measured ETA) is dr_timing's job.
 """
 from dr_settings import view as settings_view
@@ -169,7 +169,7 @@ def _apply_trust_floor(trust: str, url: str, category: str = "general") -> str:
 # Depth profiles.
 #
 # The caps live here, not in dr_timing, because they are computed from the DR_*
-# knobs in dr_settings — the ones `apply_overrides` swaps out for a single run.
+# knobs a run reads through dr_settings.view(ctx).
 # How long each profile takes (the measured ETA) is dr_timing's job.
 # --------------------------------------------------------------------------- #
 

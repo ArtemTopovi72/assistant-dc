@@ -25,8 +25,7 @@ from typing import Callable, Optional
 import dr_settings as S
 from seams import dep
 from prompts import PRACTICAL_GUIDE_PROMPT
-from dr_settings import (MANUAL_OVERRIDE_SPEC, apply_overrides, restore_overrides,
-                         _coerce_override)
+from dr_settings import MANUAL_OVERRIDE_SPEC, _coerce_override
 from research_cache import ExtractionCache
 from citation_graph import citation_lineage_brief
 from dr_urls import (

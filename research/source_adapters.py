@@ -54,9 +54,9 @@ def _adapter_guard(name: str):
     duplicated in each fetch_* function."""
     def deco(fn):
         @functools.wraps(fn)
-        def wrapper(url):
+        def wrapper(url, http=None):
             try:
-                return fn(url)
+                return fn(url, http or requests)
             except Exception as exc:
                 logger.debug("%s adapter failed %s: %s", name, url, exc)
                 return None
@@ -91,7 +91,7 @@ def _wiki_lang_title(url: str):
 
 
 @_adapter_guard("wikipedia")
-def fetch_wikipedia(url: str) -> Optional[dict]:
+def fetch_wikipedia(url: str, http=requests) -> Optional[dict]:
     lang, title = _wiki_lang_title(url)
     if not title:
         return None
@@ -100,7 +100,7 @@ def fetch_wikipedia(url: str) -> Optional[dict]:
         "action": "query", "format": "json", "prop": "extracts",
         "explaintext": "1", "redirects": "1", "titles": title,
     }
-    r = requests.get(api, params=params, headers=_HEADERS, timeout=_TIMEOUT)
+    r = http.get(api, params=params, headers=_HEADERS, timeout=_TIMEOUT)
     if r.status_code != 200:
         # Throttled (429 without a contact) or down: the lead section from the
         # cached summary route is still better than a silent nothing.
@@ -110,7 +110,7 @@ def fetch_wikipedia(url: str) -> Optional[dict]:
             logger.warning("Wikipedia API throttled this client (429): set "
                            "WIKIMEDIA_CONTACT in .env (an e-mail or URL) to get "
                            "full articles; falling back to lead summaries")
-        return _wiki_summary(lang, title, url)
+        return _wiki_summary(lang, title, url, http)
     pages = r.json().get("query", {}).get("pages", {})
     for _, page in pages.items():
         extract = (page.get("extract") or "").strip()
@@ -118,14 +118,14 @@ def fetch_wikipedia(url: str) -> Optional[dict]:
             return {"title": page.get("title", title),
                     "text": extract[:_MAX_TEXT],
                     "domain": _domain(url), "via": "wikipedia-api"}
-    return _wiki_summary(lang, title, url)
+    return _wiki_summary(lang, title, url, http)
 
 
-def _wiki_summary(lang: str, title: str, url: str) -> Optional[dict]:
+def _wiki_summary(lang: str, title: str, url: str, http=requests) -> Optional[dict]:
     """The article's lead section via the REST summary route (served from
     cache, not throttled like the action API)."""
     try:
-        r = requests.get(
+        r = http.get(
             f"https://{lang}.wikipedia.org/api/rest_v1/page/summary/"
             + title.replace(" ", "_"),
             headers=_HEADERS, timeout=_TIMEOUT)
@@ -145,12 +145,12 @@ def _wiki_summary(lang: str, title: str, url: str) -> Optional[dict]:
 # arXiv (Atom API)
 # --------------------------------------------------------------------------- #
 @_adapter_guard("arxiv")
-def fetch_arxiv(url: str) -> Optional[dict]:
+def fetch_arxiv(url: str, http=requests) -> Optional[dict]:
     m = re.search(r"/(?:abs|pdf)/([^?#/]+?)(?:v\d+)?(?:\.pdf)?$", url)
     if not m:
         return None
     arxiv_id = m.group(1)
-    r = requests.get("https://export.arxiv.org/api/query",
+    r = http.get("https://export.arxiv.org/api/query",
                      params={"id_list": arxiv_id, "max_results": 1},
                      headers={"User-Agent": _HEADERS["User-Agent"]},
                      timeout=_TIMEOUT)
@@ -171,12 +171,12 @@ def fetch_arxiv(url: str) -> Optional[dict]:
 # Crossref (DOI metadata + abstract)
 # --------------------------------------------------------------------------- #
 @_adapter_guard("crossref")
-def fetch_crossref(url: str) -> Optional[dict]:
+def fetch_crossref(url: str, http=requests) -> Optional[dict]:
     p = urlparse(url)
     doi = p.path.lstrip("/")
     if not doi:
         return None
-    r = requests.get(f"https://api.crossref.org/works/{doi}",
+    r = http.get(f"https://api.crossref.org/works/{doi}",
                      headers=_HEADERS, timeout=_TIMEOUT)
     if r.status_code != 200:
         return None
@@ -209,7 +209,7 @@ _ADAPTERS = {"wikipedia": fetch_wikipedia, "arxiv": fetch_arxiv,
              "crossref": fetch_crossref}
 
 
-def fetch_via_adapter(url: str, category: str = "general") -> Optional[dict]:
+def fetch_via_adapter(url: str, category: str = "general", http=None) -> Optional[dict]:
     """Try the structured adapter for this URL. Returns a page dict
     {title, text, domain, via} or None (no adapter, or the API failed —
     caller then falls back to normal fetch+extract)."""
@@ -219,4 +219,4 @@ def fetch_via_adapter(url: str, category: str = "general") -> Optional[dict]:
     fn = _ADAPTERS.get(name)
     if not fn:
         return None
-    return fn(url)
+    return fn(url, http)

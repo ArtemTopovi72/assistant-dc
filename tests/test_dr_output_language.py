@@ -202,28 +202,12 @@ class _LangProbeDR:
         return "ru"
 
     @staticmethod
-    def apply_overrides(ov):
-        return {}
-
-    @staticmethod
-    def restore_overrides(saved):
-        return None
-
-    @staticmethod
     def run_deep_research(ctx, topic, depth="standard", out_lang="en", progress=None):
         _seen_lang["out_lang"] = out_lang
         return {"report": "x"}
 
 
-_prev_dr = sys.modules.get("deep_research")
-sys.modules["deep_research"] = _LangProbeDR
-try:
-    research_client.InProcessResearchClient().run(None, "квантовые вычисления")
-finally:
-    if _prev_dr is not None:
-        sys.modules["deep_research"] = _prev_dr
-    else:
-        del sys.modules["deep_research"]
+research_client.InProcessResearchClient(engine=_LangProbeDR).run(None, "квантовые вычисления")
 check("the in-process research client defaults out_lang from the topic",
       _seen_lang.get("out_lang") == "ru", repr(_seen_lang))
 

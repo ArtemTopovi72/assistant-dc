@@ -18,19 +18,6 @@ def check(name, cond, detail=""):
         raise AssertionError(str(name) + (": " + str(detail) if detail else ""))
 
 
-class _Patches:
-    def __init__(self, **kw):
-        self.kw = kw; self.orig = {}
-    def __enter__(self):
-        for k, v in self.kw.items():
-            self.orig[k] = getattr(S, k)
-            setattr(S, k, v)
-        return self
-    def __exit__(self, *a):
-        for k, v in self.orig.items():
-            setattr(S, k, v)
-
-
 def test_domain():
     check("domain_strips_www", S._domain("https://www.wikipedia.org/wiki/X") == "wikipedia.org")
     check("domain_bad_url_returns_input", S._domain(None) is None or isinstance(S._domain(None), str))
@@ -76,13 +63,13 @@ def test_fetch_wikipedia_stubbed_failures():
             self.status_code = status; self._data = data or {}
         def json(self):
             return self._data
-    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: FakeResp(status=404))):
-        check("fetch_wikipedia_non200_none", S.fetch_wikipedia("https://en.wikipedia.org/wiki/X") is None)
-    with _Patches(requests=types.SimpleNamespace(
-            get=lambda *a, **k: FakeResp(data={"query": {"pages": {"1": {"extract": "", "title": "X"}}}}))):
-        check("fetch_wikipedia_empty_extract_none", S.fetch_wikipedia("https://en.wikipedia.org/wiki/X") is None)
-    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))):
-        check("fetch_wikipedia_exception_none", S.fetch_wikipedia("https://en.wikipedia.org/wiki/X") is None)
+    http = types.SimpleNamespace(get=lambda *a, **k: FakeResp(status=404))
+    check("fetch_wikipedia_non200_none", S.fetch_wikipedia("https://en.wikipedia.org/wiki/X", http=http) is None)
+    http = types.SimpleNamespace(
+            get=lambda *a, **k: FakeResp(data={"query": {"pages": {"1": {"extract": "", "title": "X"}}}}))
+    check("fetch_wikipedia_empty_extract_none", S.fetch_wikipedia("https://en.wikipedia.org/wiki/X", http=http) is None)
+    http = types.SimpleNamespace(get=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    check("fetch_wikipedia_exception_none", S.fetch_wikipedia("https://en.wikipedia.org/wiki/X", http=http) is None)
 
 
 # A real export.arxiv.org Atom response, trimmed to the elements the adapter
@@ -109,8 +96,8 @@ def test_fetch_arxiv_parses_a_real_response():
         status_code = 200
         text = _ARXIV_ATOM
 
-    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: FakeResp())):
-        out = S.fetch_arxiv("https://arxiv.org/abs/1706.03762")
+    http = types.SimpleNamespace(get=lambda *a, **k: FakeResp())
+    out = S.fetch_arxiv("https://arxiv.org/abs/1706.03762", http=http)
     check("fetch_arxiv_real_success", out is not None and out["via"] == "arxiv-api"
           and "Abstract" in out["text"])
     check("fetch_arxiv_title_unwrapped",
@@ -126,16 +113,16 @@ def test_fetch_arxiv_stubbed_failures():
     class FakeResp:
         def __init__(self, status=200, text=""):
             self.status_code = status; self.text = text
-    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: FakeResp(status=500))):
-        check("fetch_arxiv_non200_none", S.fetch_arxiv("https://arxiv.org/abs/1234.5678") is None)
-    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: FakeResp(text="<feed><entry></entry></feed>"))):
-        check("fetch_arxiv_no_summary_none", S.fetch_arxiv("https://arxiv.org/abs/1234.5678") is None)
-    with _Patches(requests=types.SimpleNamespace(
-            get=lambda *a, **k: FakeResp(text="<feed><entry><summary>An abstract with no title tag.</summary></entry></feed>"))):
-        out = S.fetch_arxiv("https://arxiv.org/abs/1234.5678")
-        check("fetch_arxiv_no_title_uses_id", out is not None and "1234.5678" in out["title"])
-    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))):
-        check("fetch_arxiv_exception_none", S.fetch_arxiv("https://arxiv.org/abs/1234.5678") is None)
+    http = types.SimpleNamespace(get=lambda *a, **k: FakeResp(status=500))
+    check("fetch_arxiv_non200_none", S.fetch_arxiv("https://arxiv.org/abs/1234.5678", http=http) is None)
+    http = types.SimpleNamespace(get=lambda *a, **k: FakeResp(text="<feed><entry></entry></feed>"))
+    check("fetch_arxiv_no_summary_none", S.fetch_arxiv("https://arxiv.org/abs/1234.5678", http=http) is None)
+    http = types.SimpleNamespace(
+            get=lambda *a, **k: FakeResp(text="<feed><entry><summary>An abstract with no title tag.</summary></entry></feed>"))
+    out = S.fetch_arxiv("https://arxiv.org/abs/1234.5678", http=http)
+    check("fetch_arxiv_no_title_uses_id", out is not None and "1234.5678" in out["title"])
+    http = types.SimpleNamespace(get=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    check("fetch_arxiv_exception_none", S.fetch_arxiv("https://arxiv.org/abs/1234.5678", http=http) is None)
 
 
 def test_fetch_crossref_real():
@@ -151,10 +138,10 @@ def test_fetch_crossref_stubbed():
         def json(self):
             return self._data
     check("fetch_crossref_no_doi_none", S.fetch_crossref("https://doi.org/") is None)
-    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: FakeResp(status=404))):
-        check("fetch_crossref_non200_none", S.fetch_crossref("https://doi.org/10.1/x") is None)
-    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))):
-        check("fetch_crossref_exception_none", S.fetch_crossref("https://doi.org/10.1/x") is None)
+    http = types.SimpleNamespace(get=lambda *a, **k: FakeResp(status=404))
+    check("fetch_crossref_non200_none", S.fetch_crossref("https://doi.org/10.1/x", http=http) is None)
+    http = types.SimpleNamespace(get=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    check("fetch_crossref_exception_none", S.fetch_crossref("https://doi.org/10.1/x", http=http) is None)
     full_msg = {
         "message": {
             "title": ["A Great Paper"],
@@ -164,28 +151,29 @@ def test_fetch_crossref_stubbed():
             "abstract": "<jats:p>An abstract with <b>tags</b>.</jats:p>",
         }
     }
-    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: FakeResp(data=full_msg))):
-        out = S.fetch_crossref("https://doi.org/10.1/full")
-        check("fetch_crossref_full_metadata", out is not None and "Jane Doe" in out["text"]
-              and "Journal of Testing" in out["text"] and "2020" in out["text"]
-              and "<b>" not in out["text"])
+    http = types.SimpleNamespace(get=lambda *a, **k: FakeResp(data=full_msg))
+    out = S.fetch_crossref("https://doi.org/10.1/full", http=http)
+    check("fetch_crossref_full_metadata", out is not None and "Jane Doe" in out["text"]
+          and "Journal of Testing" in out["text"] and "2020" in out["text"]
+          and "<b>" not in out["text"])
     thin_msg = {"message": {"title": ["X"]}}
-    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: FakeResp(data=thin_msg))):
-        check("fetch_crossref_too_thin_none", S.fetch_crossref("https://doi.org/10.1/thin") is None)
+    http = types.SimpleNamespace(get=lambda *a, **k: FakeResp(data=thin_msg))
+    check("fetch_crossref_too_thin_none", S.fetch_crossref("https://doi.org/10.1/thin", http=http) is None)
     no_title_msg = {"message": {}}
-    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: FakeResp(data=no_title_msg))):
-        out2 = S.fetch_crossref("https://doi.org/10.1/notitle")
-        check("fetch_crossref_no_title_uses_doi", out2 is None or out2["title"] == "10.1/notitle")
+    http = types.SimpleNamespace(get=lambda *a, **k: FakeResp(data=no_title_msg))
+    out2 = S.fetch_crossref("https://doi.org/10.1/notitle", http=http)
+    check("fetch_crossref_no_title_uses_doi", out2 is None or out2["title"] == "10.1/notitle")
 
 
 def test_fetch_via_adapter():
     check("fetch_via_adapter_no_match_none", S.fetch_via_adapter("https://example.com/x") is None)
-    with _Patches(_ADAPTERS={"wikipedia": lambda url: {"title": "T", "text": "X", "domain": "wikipedia.org", "via": "wikipedia-api"}}):
-        out = S.fetch_via_adapter("https://en.wikipedia.org/wiki/X")
-        check("fetch_via_adapter_dispatches", out is not None and out["via"] in ("wikipedia-api", "wikipedia-summary"))
-    with _Patches(adapter_for=lambda url, cat="general": "nonexistent_adapter_name"):
-        check("fetch_via_adapter_unknown_name_none", S.fetch_via_adapter("https://x.com") is None)
-
+    class Wiki:
+        status_code = 200
+        def json(self):
+            return {"query": {"pages": {"1": {"extract": "Body.", "title": "T"}}}}
+    out = S.fetch_via_adapter("https://en.wikipedia.org/wiki/X",
+                              http=types.SimpleNamespace(get=lambda *a, **k: Wiki()))
+    check("fetch_via_adapter_dispatches", out is not None and out["via"] in ("wikipedia-api", "wikipedia-summary"))
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

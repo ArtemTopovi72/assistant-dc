@@ -170,24 +170,21 @@ def _run_streaming(args: Dict[str, Any], emit: Callable[[Dict[str, Any]], None])
     emit({"type": "run_id", "run_id": run_id})
     topic = args.get("topic") or ""
     out_lang = args.get("out_lang")
-    saved: Dict[str, Any] = {}
     try:
-        with _RUN_LOCK:                       # module-global knobs: one at a time
+        with _RUN_LOCK:
             if out_lang is None:
                 # research-service-boundary-v1 / out-lang-derived-from-typed-topic
                 out_lang = dr.lang_of_text(topic)
-            try:
-                saved = dr.apply_overrides(args.get("overrides") or {}) \
-                    if args.get("overrides") else {}
-                result = dr.run_deep_research(
-                    ctx, topic, depth=args.get("depth") or "standard",
-                    out_lang=out_lang,
-                    progress=lambda phase, stats, msg: emit(
-                        {"type": "progress", "phase": phase,
-                         "stats": stats, "msg": msg}),
-                )
-            finally:
-                dr.restore_overrides(saved)
+            if args.get("overrides"):
+                import dr_settings
+                ctx.research_settings = dr_settings.overlay(args["overrides"])
+            result = dr.run_deep_research(
+                ctx, topic, depth=args.get("depth") or "standard",
+                out_lang=out_lang,
+                progress=lambda phase, stats, msg: emit(
+                    {"type": "progress", "phase": phase,
+                     "stats": stats, "msg": msg}),
+            )
         emit({"type": "result", "result": result})
     except Exception as exc:
         logger.exception("research service run failed")

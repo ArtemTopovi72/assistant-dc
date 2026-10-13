@@ -11,7 +11,7 @@ DOES, so changing the caps discards history instead of averaging across two
 different pipelines.
 
 The caps themselves live in dr_policy (`_resolve_caps`), computed from the DR_*
-knobs that `apply_overrides` swaps for a single run; `_profile_signature` reads
+knobs a run reads through dr_settings.view(ctx); `_profile_signature` reads
 them through deep_research.
 """
 import json

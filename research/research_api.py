@@ -29,10 +29,9 @@ Derived by grepping the real call sites, not from what looked tidy:
 
   run one research pass
     gui_workers.DeepResearchWorker.run
-        dr.apply_overrides(overrides)
+        ctx.research_settings = dr_settings.overlay(overrides)
         dr.run_deep_research(ctx, topic, depth=, out_lang=dr.lang_of_text(topic),
                              progress=lambda phase, stats, msg: ...)
-        dr.restore_overrides(saved)          # in a finally: never sticky
     tools._handle_deep_research
         run_deep_research(ctx, topic, depth=, out_lang=, progress=_cb)
     tg_tasks
@@ -48,16 +47,11 @@ Derived by grepping the real call sites, not from what looked tidy:
     gui_manual_panel._build_manual_control_panel   deep_research.MANUAL_OVERRIDE_SPEC
     gui_manual_panel._reset_manual_control         the current DR_* module globals
 
-NOTE THAT apply_overrides / restore_overrides ARE **NOT** ON THE BOUNDARY
-------------------------------------------------------------------------
-They are not a service operation; they are the pipeline mutating its OWN module
-globals in place for the duration of one run (dr_settings.apply_overrides swaps
-the DR_* knobs that every pipeline stage reads). Exposing them
-across a boundary would export a race: two concurrent runs in one server process
-would stamp on each other's knobs. The contract therefore takes `overrides` as
-an ARGUMENT TO run(), and the backend owns the save/apply/restore as an
-indivisible part of executing that one run. In-process this is exactly what the
-GUI worker did by hand; out-of-process it is what makes concurrency safe at all.
+NOTE THAT THE KNOBS ARE AN ARGUMENT, NOT AN OPERATION
+---------------------------------------------------
+The contract takes `overrides` as an ARGUMENT TO run(); the backend lays them over
+the defaults on that run's own context (dr_settings.overlay), so two concurrent runs
+never see each other's knobs and nothing global is written.
 
 CANCELLATION — READ THIS BEFORE ADDING A REMOTE BACKEND
 --------------------------------------------------------

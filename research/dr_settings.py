@@ -6,9 +6,9 @@ rather than binding a copy with ``from dr_settings import DR_MAX_PAGES``.
 
 That is not style — it is the whole point. These knobs are MUTABLE at runtime:
 
-* the GUI's "Manual Control" panel calls `apply_overrides` to retune a single
-  run and `restore_overrides` afterwards, and
-* the suites patch them directly (``deep_research.DR_MAX_SOURCES = 3``).
+* the GUI's "Manual Control" panel retunes a single run: `overlay` puts its knobs
+  on that run's context (`ctx.research_settings`), and every module reads them through
+  `view(ctx)`.
 
 A ``from`` import would snapshot the value at import time, so a module holding
 its own copy would quietly keep running on the pre-override number while the
@@ -134,33 +134,8 @@ def _coerce_override(name: str, value):
     return n
 
 
-def apply_overrides(overrides: dict) -> dict:
-    """Patch this module's globals with caller-supplied values for one run.
-    Unknown keys raise (fail loud rather than silently ignoring a typo'd knob).
-    Returns the previous values so the caller can restore them afterward —
-    overrides are per-run, never a permanent config change."""
-    # Validate + coerce EVERYTHING first, mutate nothing until all pass — so an
-    # invalid knob can't leave the module in a half-applied state (which, since
-    # the caller never receives `saved`, would leak permanently into later runs).
-    coerced = {}
-    for name, value in (overrides or {}).items():
-        if name not in MANUAL_OVERRIDE_SPEC:
-            raise KeyError(f"not a manual-control knob: {name}")
-        coerced[name] = _coerce_override(name, value)
-    saved = {}
-    for name, new_value in coerced.items():
-        saved[name] = globals()[name]
-        globals()[name] = new_value
-    return saved
-
-
-def restore_overrides(saved: dict) -> None:
-    for name, value in (saved or {}).items():
-        globals()[name] = value
-
-
 def overlay(overrides: dict):
-    """One run's settings: these knobs over the defaults, validated like apply_overrides,
+    """One run's settings: these knobs over the defaults, validated (an unknown or out-of-range knob raises),
     nothing global written (two runs with different knobs no longer see each other's)."""
     import sys
     from seams import Over

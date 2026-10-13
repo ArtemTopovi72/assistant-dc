@@ -487,33 +487,23 @@ def test_sources_appendix_and_clean_title_and_header():
 
 
 def test_overrides():
-    saved = DR.apply_overrides({"DR_MAX_QUERIES": 7, "DR_MULTIHOP_ENABLED": 1})
-    check("apply_overrides_sets_int", DR.DR_MAX_QUERIES == 7)
-    check("apply_overrides_coerces_bool", DR.DR_MULTIHOP_ENABLED is True)
-    DR.restore_overrides(saved)
-    check("restore_overrides_reverts", DR.DR_MAX_QUERIES == saved["DR_MAX_QUERIES"])
-    try:
-        DR.apply_overrides({"NOT_A_KNOB": 1})
-        check("apply_overrides_unknown_key_raises", False)
-    except KeyError:
-        check("apply_overrides_unknown_key_raises", True)
-    try:
-        DR.apply_overrides({"DR_MAX_QUERIES": 999})
-        check("apply_overrides_out_of_range_raises", False)
-    except ValueError:
-        check("apply_overrides_out_of_range_raises", True)
-    try:
-        DR.apply_overrides({"DR_RERANK_BACKEND": "not_a_choice"})
-        check("apply_overrides_bad_choice_raises", False)
-    except ValueError:
-        check("apply_overrides_bad_choice_raises", True)
-    saved2 = DR.apply_overrides({"DR_DOMAIN_WHITELIST": "arxiv.org"})
-    check("apply_overrides_str_type", DR.DR_DOMAIN_WHITELIST == "arxiv.org")
-    DR.restore_overrides(saved2)
-    saved3 = DR.apply_overrides({"DR_CLAIM_MERGE_THRESHOLD": 0.5})
-    check("apply_overrides_float_type", DR.DR_CLAIM_MERGE_THRESHOLD == 0.5)
-    DR.restore_overrides(saved3)
-    check("restore_overrides_empty_noop", DR.restore_overrides(None) is None)
+    import dr_settings
+    S = dr_settings.overlay({"DR_MAX_QUERIES": 7, "DR_MULTIHOP_ENABLED": 1})
+    check("overlay_sets_int", S.DR_MAX_QUERIES == 7)
+    check("overlay_coerces_bool", S.DR_MULTIHOP_ENABLED is True)
+    check("overlay_falls_through", S.DR_MAX_PAGES == dr_settings.DR_MAX_PAGES)
+    for bad, exc, name in (({"NOT_A_KNOB": 1}, KeyError, "unknown_key"),
+                           ({"DR_MAX_QUERIES": 999}, ValueError, "out_of_range"),
+                           ({"DR_RERANK_BACKEND": "not_a_choice"}, ValueError, "bad_choice")):
+        try:
+            dr_settings.overlay(bad)
+            check(f"overlay_{name}_raises", False)
+        except exc:
+            check(f"overlay_{name}_raises", True)
+    check("overlay_str_type",
+          dr_settings.overlay({"DR_DOMAIN_WHITELIST": "arxiv.org"}).DR_DOMAIN_WHITELIST == "arxiv.org")
+    check("overlay_float_type",
+          dr_settings.overlay({"DR_CLAIM_MERGE_THRESHOLD": 0.5}).DR_CLAIM_MERGE_THRESHOLD == 0.5)
 
 
 def test_model_context_real():
