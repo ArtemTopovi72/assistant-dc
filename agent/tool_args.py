@@ -170,7 +170,7 @@ class GenerateVideoArgs(_ToolArgs):
         if v in (None, "", "null"):
             return None
         try:
-            return max(1.0, min(15.0, float(v)))
+            return max(1.0, min(120.0, float(v)))
         except (TypeError, ValueError):
             return None
 

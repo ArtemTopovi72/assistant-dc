@@ -177,3 +177,9 @@ def test_look_lines_cost_no_part_time():
     assert len(parts) > 1
     assert all(V.estimate_seconds(p) <= V.VIDEO_PART_MAX_S for p in parts), parts
     assert all(not p.startswith("The soundscape") for p in parts), parts
+
+
+def test_a_named_length_over_one_clip_reaches_the_handler():
+    # The validator clamped 30 to 15, so the handler never saw a length to cut into parts.
+    import tool_args
+    assert tool_args.GenerateVideoArgs(description="x", seconds=30).seconds == 30
