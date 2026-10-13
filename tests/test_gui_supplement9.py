@@ -47,22 +47,6 @@ def check(name, cond, detail=""):
     print(f"[{'PASS' if cond else 'FAIL'}] {name}" + (f" — {detail}" if detail and not cond else ""))
     assert cond, f"{name}: {detail}"
 
-@contextlib.contextmanager
-def fake_modules(**mods):
-    saved = {}
-    for name, mod in mods.items():
-        saved[name] = sys.modules.get(name)
-        if mod is None: sys.modules[name] = None
-        else:
-            m = types.ModuleType(name)
-            for k, v in mod.items(): setattr(m, k, v)
-            sys.modules[name] = m
-    try: yield
-    finally:
-        for name, old in saved.items():
-            if old is None: sys.modules.pop(name, None)
-            else: sys.modules[name] = old
-
 # (module, name): stub a worker where its CALLER lives, not where it is defined.
 _WN = [(gui_workers, "RequestWorker"), (gui_database_tab, "ScanWorker"),
        (gui, "FixHandsWorker"), (gui, "RedrawWorker"), (gui, "TransferWorker")]
@@ -107,6 +91,11 @@ def _close(w):
             app.processEvents()
         except Exception:
             pass
+
+
+def _mods(**mods):
+    """Stand-in modules for one worker's or window's imports, handed in as `.modules`."""
+    return {name: types.SimpleNamespace(**names) for name, names in mods.items()}
 
 
 def test_window_guard_returns():
@@ -414,11 +403,11 @@ def test_request_worker_crosslingual_append_lines():
            "build_rag_prompt": lambda l, t, k=None, extra_queries=None: ("AUG " + t, "note")}
     w = gui_workers.RequestWorker(ctx, graph, {"messages": []}, text="q", use_db=True)
     w._translate_query = lambda text, lang: "translated"   # -> extra.append
-    with fake_modules(library=lib, graph={"compact_history_if_needed": lambda c, m: m}):
-        recinfo = []
-        w.info.connect(lambda s: recinfo.append(s))
-        w.done.connect(lambda d: None)
-        w.run()
+    w.modules = _mods(library=lib, graph={"compact_history_if_needed": lambda c, m: m})
+    recinfo = []
+    w.info.connect(lambda s: recinfo.append(s))
+    w.done.connect(lambda d: None)
+    w.run()
     check("crosslingual_append", any("Also searching" in str(i) for i in recinfo))
 
 

@@ -22,6 +22,7 @@ from audio import AudioPlayer
 from ui_scale import px
 from gui_common import MUTED, _FlowWidget, _flow, _section
 import gui_i18n
+from seams import module
 
 import logging
 logger = logging.getLogger("assistant.gui")   # same channel as gui.py
@@ -113,7 +114,7 @@ class MusicWorker(QThread):
 
     def run(self):
         try:
-            import music
+            music = module(self, "music")
             from config import MUSIC_DEFAULT_SECONDS
             duration = self.duration_s
             # Whatever is on Auto, the bot picks itself BEFORE writing (same

@@ -75,7 +75,7 @@ def test_graph_loop_survives_none_tool_result():
         {"content": "Готово: 4.", "tool_calls": []},
     ]
     it = iter(seq)
-    try:
+    if True:
         c = Context(models=None, transcription_cache={}, cache_file=Path("tests/_c.json"),
                     asr_lock=threading.Lock(), tts_lock=threading.Lock(),
                     model_name=MODEL_NAME, no_think=True)
@@ -92,7 +92,6 @@ def test_graph_loop_survives_none_tool_result():
         final = g.invoke(st)  # must NOT raise
         assert isinstance(final.get("final_answer", ""), str)
         print("PASS graph tool loop survives a None tool result (no AttributeError)")
-    finally:
 
 
 if __name__ == "__main__":

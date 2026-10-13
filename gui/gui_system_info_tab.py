@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (QHBoxLayout, QPushButton, QTextEdit,
 from ui_scale import px, scale_style as _ss
 from config import MEMORY_DIR
 from gui_common import _section
+from seams import module
 
 
 # --------------------------------------------------------------------------- #
@@ -89,7 +90,7 @@ class SystemInfoTab(QWidget):
         lines.append("")
         lines.append("─── Tools ───────────────────────────────")
         try:
-            from tools import TOOLS
+            TOOLS = module(self, "tools").TOOLS
             for t in TOOLS:
                 lines.append(f"  ✓  {t.name}")
         except Exception as exc:

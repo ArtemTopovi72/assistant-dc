@@ -41,9 +41,7 @@ def _run(tmp_path, rounds=4):
           "user_input": "найди что-нибудь", "image_data": None, "final_answer": "",
           "session_memory_text": "", "vision_summary": "", "image_path": "",
           "image_score": 0, "image_attempt": 0, "image_status": ""}
-    try:
-        graph_mod.build_graph(c).invoke(st)
-    finally:
+    graph_mod.build_graph(c).invoke(st)
     return list(_sent)
 
 

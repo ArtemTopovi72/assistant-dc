@@ -52,22 +52,6 @@ def check(name, cond, detail=""):
     print(f"[{'PASS' if cond else 'FAIL'}] {name}" + (f" — {detail}" if detail and not cond else ""))
     assert cond, f"{name}: {detail}"
 
-@contextlib.contextmanager
-def fake_modules(**mods):
-    saved = {}
-    for name, mod in mods.items():
-        saved[name] = sys.modules.get(name)
-        if mod is None: sys.modules[name] = None
-        else:
-            m = types.ModuleType(name)
-            for k, v in mod.items(): setattr(m, k, v)
-            sys.modules[name] = m
-    try: yield
-    finally:
-        for name, old in saved.items():
-            if old is None: sys.modules.pop(name, None)
-            else: sys.modules[name] = old
-
 # (module, name): stub a worker where its CALLER lives, not where it is defined.
 _WN = [(gui_workers, "RequestWorker"), (gui, "RedrawWorker"), (gui, "FixHandsWorker"),
        (gui, "FixArtifactWorker"), (gui, "CompactMemoryWorker"),
@@ -101,6 +85,11 @@ def _close(w):
     # CPython gets round to it -- which under pytest is the middle of some
     # later test, and lands as a segfault with no failing check.
     release(w)
+
+
+def _mods(**mods):
+    """Stand-in modules for one worker's or window's imports, handed in as `.modules`."""
+    return {name: types.SimpleNamespace(**names) for name, names in mods.items()}
 
 
 def test_module_level_guards():
@@ -167,8 +156,8 @@ def test_request_worker_crosslingual_except():
     w = gui_workers.RequestWorker(ctx, graph, {"messages": []}, text="q", use_db=True)
     done = []
     w.done.connect(lambda d: done.append(d))
-    with fake_modules(library=lib, graph={"compact_history_if_needed": lambda c, m: m}):
-        w.run()
+    w.modules = _mods(library=lib, graph={"compact_history_if_needed": lambda c, m: m})
+    w.run()
     check("crosslingual_except", len(done) == 1)
 
 
@@ -391,14 +380,9 @@ def test_clear_context_unlink_except():
         # `from utils import safe_json_from_llm` further down the real
         # app_runtime import chain. The real utils stays loaded; only the one
         # attribute is swapped, just below.
-        with fake_modules(app_runtime={"make_base_state":
-                                       lambda: {"messages": [], "_from_fake": True}}):
-            import utils as _u
-            _real = _u.free_process_memory; _u.free_process_memory = lambda: None
-            try:
-                w._clear_context()
-            finally:
-                _u.free_process_memory = _real
+        w.modules = {"app_runtime": types.SimpleNamespace(make_base_state=lambda: {"messages": [], "_from_fake": True}),
+                     "utils": types.SimpleNamespace(free_process_memory=lambda: None)}
+        w._clear_context()
         # The point of the test: summary.json is a DIRECTORY, so unlink raises,
         # and _clear_context must swallow it and carry on.
         check("clear_ctx_unlink_dir_survives", (prof / "summary.json").is_dir())

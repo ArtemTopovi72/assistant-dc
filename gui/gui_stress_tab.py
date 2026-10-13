@@ -11,6 +11,7 @@ from PyQt5.QtWidgets import (QAbstractItemView, QHBoxLayout, QHeaderView,
 
 from ui_scale import px
 from gui_common import MUTED, _section
+from seams import module
 
 
 class StressTab(QWidget):
@@ -141,8 +142,7 @@ class StressTab(QWidget):
         ctx = getattr(self.host, "ctx", None)
         try:
             if ctx is not None and getattr(ctx.models, "accentor_loaded", False):
-                from audio import stress_plus
-                res = stress_plus(ctx, txt)          # full pipeline: auto + overrides
+                res = module(self, "audio").stress_plus(ctx, txt)          # full pipeline: auto + overrides
             else:
                 res = self._ov.apply(txt)            # overrides only (accentor not loaded)
         except Exception as exc:

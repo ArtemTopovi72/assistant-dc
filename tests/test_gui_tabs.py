@@ -36,19 +36,9 @@ def check(name, cond, detail=""):
     assert cond, f"{name}: {detail}"
 
 
-@contextlib.contextmanager
-def fake_modules(**mods):
-    saved = {}
-    for name, mod in mods.items():
-        saved[name] = sys.modules.get(name)
-        m = types.ModuleType(name)
-        for k, v in mod.items(): setattr(m, k, v)
-        sys.modules[name] = m
-    try: yield
-    finally:
-        for name, old in saved.items():
-            if old is None: sys.modules.pop(name, None)
-            else: sys.modules[name] = old
+def _mods(**mods):
+    return {name: types.SimpleNamespace(**names) for name, names in mods.items()}
+
 
 def cap(worker, *signals):
     out = {s: [] for s in signals}
@@ -143,11 +133,11 @@ def test_stress_tab():
     tab._reload(); check("stress_reload", True)
     # preview error path + accentor-loaded path
     host.ctx.models.accentor_loaded = True
-    with fake_modules(audio={"stress_plus": lambda ctx, txt: "зв+онит"}):
-        tab.preview_in.setText("звонит"); tab._preview()
+    tab.modules = _mods(audio={"stress_plus": lambda ctx, txt: "зв+онит"})
+    tab.preview_in.setText("звонит"); tab._preview()
     check("stress_preview_accentor", "+" in tab.preview_out.text())
-    with fake_modules(audio={"stress_plus": lambda ctx, txt: (_ for _ in ()).throw(RuntimeError("boom"))}):
-        tab.preview_in.setText("x"); tab._preview()
+    tab.modules = _mods(audio={"stress_plus": lambda ctx, txt: (_ for _ in ()).throw(RuntimeError("boom"))})
+    tab.preview_in.setText("x"); tab._preview()
     check("stress_preview_error", "error" in tab.preview_out.text())
 
 
@@ -175,7 +165,8 @@ def test_weather_tab():
 
     # The worker does the network + LLM work; drive it synchronously the way the
     # other worker tests in this file do.
-    with fake_modules(weather={
+    wk = gui.WeatherWorker(host.ctx, "Bezhanitsy", "ru", hours=24)
+    wk.modules = _mods(weather={
         "resolve_city": lambda city, correct_fn=None: {
             "lat": 1, "lon": 2, "name": "Bezhanitsy", "country": "Russia"},
         "forecast_data": lambda loc, lang, hours=None, date=None, advise_fn=None: (
@@ -183,10 +174,9 @@ def test_weather_tab():
         "periods_advise_fn": lambda ctx: None,
         "city_correct_fn": lambda ctx: None,
         "not_found_message": _w.not_found_message,
-    }):
-        wk = gui.WeatherWorker(host.ctx, "Bezhanitsy", "ru", hours=24)
-        caps = cap(wk, "done", "failed")
-        wk.run()
+    })
+    caps = cap(wk, "done", "failed")
+    wk.run()
     check("weather_worker_done", len(caps["done"]) == 1, caps)
     tab._on_done(*caps["done"][0])
 
@@ -227,16 +217,16 @@ def test_weather_tab():
 
     # A city that cannot be geocoded comes back as the translated not-found
     # message, and must clear the previous result rather than leave stale rows.
-    with fake_modules(weather={
+    wk2 = gui.WeatherWorker(host.ctx, "Nowhereville", "ru", hours=24)
+    wk2.modules = _mods(weather={
         "resolve_city": lambda city, correct_fn=None: None,
         "forecast_data": lambda *a, **k: ([], {}, ""),
         "periods_advise_fn": lambda ctx: None,
         "city_correct_fn": lambda ctx: None,
         "not_found_message": _w.not_found_message,
-    }):
-        wk2 = gui.WeatherWorker(host.ctx, "Nowhereville", "ru", hours=24)
-        caps2 = cap(wk2, "done", "failed")
-        wk2.run()
+    })
+    caps2 = cap(wk2, "done", "failed")
+    wk2.run()
     tab._on_done(*caps2["done"][0])
     check("weather_unknown_city_message", "Не нашёл" in tab.status.text(),
           tab.status.text())
@@ -246,7 +236,8 @@ def test_weather_tab():
     # No model loaded is not an error: the forecast still renders, on the fixed
     # temperature bands, and the worker must not try to build an LLM hook.
     asked = {"advise": 0, "correct": 0}
-    with fake_modules(weather={
+    wk3 = gui.WeatherWorker(None, "Bezhanitsy", "ru", hours=24)
+    wk3.modules = _mods(weather={
         "resolve_city": lambda city, correct_fn=None: {
             "lat": 1, "lon": 2, "name": "Bezhanitsy", "country": ""},
         "forecast_data": lambda loc, lang, hours=None, date=None, advise_fn=None: (
@@ -254,10 +245,9 @@ def test_weather_tab():
         "periods_advise_fn": lambda ctx: asked.__setitem__("advise", asked["advise"] + 1),
         "city_correct_fn": lambda ctx: asked.__setitem__("correct", asked["correct"] + 1),
         "not_found_message": _w.not_found_message,
-    }):
-        wk3 = gui.WeatherWorker(None, "Bezhanitsy", "ru", hours=24)
-        caps3 = cap(wk3, "done", "failed")
-        wk3.run()
+    })
+    caps3 = cap(wk3, "done", "failed")
+    wk3.run()
     check("weather_no_ctx_still_returns_a_forecast",
           len(caps3["done"]) == 1 and caps3["done"][0][1], caps3)
     check("weather_no_ctx_skips_the_llm_hooks", asked == {"advise": 0, "correct": 0},
@@ -265,16 +255,16 @@ def test_weather_tab():
 
     # A raising lookup surfaces as a status line, never a crash -- run() is on a
     # worker thread, where an escaping exception aborts the process.
-    with fake_modules(weather={
+    wk4 = gui.WeatherWorker(host.ctx, "Bezhanitsy", "ru", hours=24)
+    wk4.modules = _mods(weather={
         "resolve_city": lambda *a, **k: (_ for _ in ()).throw(RuntimeError("network down")),
         "forecast_data": lambda *a, **k: ([], {}, ""),
         "periods_advise_fn": lambda ctx: None,
         "city_correct_fn": lambda ctx: None,
         "not_found_message": _w.not_found_message,
-    }):
-        wk4 = gui.WeatherWorker(host.ctx, "Bezhanitsy", "ru", hours=24)
-        caps4 = cap(wk4, "done", "failed")
-        wk4.run()
+    })
+    caps4 = cap(wk4, "done", "failed")
+    wk4.run()
     check("weather_worker_failure_is_reported_not_raised",
           len(caps4["failed"]) == 1 and not caps4["done"], caps4)
     tab._on_failed(caps4["failed"][0])
@@ -319,13 +309,13 @@ def test_music_tab():
     # the tab's own signal handlers.
     wav_path = os.path.join(_TMP, "song.wav")
     open(wav_path, "wb").close()
-    with fake_modules(music={
+    w = gui.MusicWorker(host.ctx, "a happy tune", "ru")
+    w.modules = _mods(music={
         "build_structured_caption": lambda ctx, topic, lang, **kw: {"lyrics": "la la", "style": "pop"},
         "generate_music": lambda ctx, lyrics, style, **kw: wav_path,
-    }):
-        w = gui.MusicWorker(host.ctx, "a happy tune", "ru")
-        caps = cap(w, "done", "failed")
-        w.run()
+    })
+    caps = cap(w, "done", "failed")
+    w.run()
     check("music_worker_done", len(caps["done"]) == 1 and caps["done"][0][0] == wav_path)
     tab._on_done(*caps["done"][0])
     check("music_status_done", "Done" in tab.status.text())
@@ -334,14 +324,14 @@ def test_music_tab():
     # failure path: MusicUnavailable (or any stub NotImplementedError) surfaces
     # as a status message, not a crash.
     import music as _music_mod
-    with fake_modules(music={
+    w2 = gui.MusicWorker(host.ctx, "a sad tune", "ru")
+    w2.modules = _mods(music={
         "build_structured_caption": lambda ctx, topic, lang, **kw: (_ for _ in ()).throw(
             _music_mod.MusicUnavailable("engine down")),
         "generate_music": lambda *a, **k: "",
-    }):
-        w2 = gui.MusicWorker(host.ctx, "a sad tune", "ru")
-        caps2 = cap(w2, "done", "failed")
-        w2.run()
+    })
+    caps2 = cap(w2, "done", "failed")
+    w2.run()
     check("music_worker_failed", len(caps2["failed"]) == 1)
     tab._on_failed(caps2["failed"][0])
     check("music_status_failed", "unavailable" in tab.status.text().lower())
@@ -400,14 +390,14 @@ def test_music_tab():
 
     # ...and the choices actually reach the generation call.
     seen = {}
-    with fake_modules(music={
+    w3 = gui.MusicWorker(host.ctx, "a tune", "ru", prefs=prefs1, duration_s=dur1)
+    w3.modules = _mods(music={
         "build_structured_caption": lambda ctx, topic, lang, **kw: (
             seen.update(cap_kw=kw), {"lyrics": "la", "style": "pop"})[-1],
         "generate_music": lambda ctx, lyrics, style, **kw: (
             seen.update(gen_kw=kw), wav_path)[-1],
-    }):
-        w3 = gui.MusicWorker(host.ctx, "a tune", "ru", prefs=prefs1, duration_s=dur1)
-        w3.run()
+    })
+    w3.run()
     check("music_prefs_reach_the_songwriter",
           "jazz" in str(seen.get("cap_kw", {}).get("prefs", {})).lower(), seen.get("cap_kw"))
     check("music_duration_reaches_the_songwriter",
@@ -419,12 +409,12 @@ def test_music_tab():
     # engine_available is patched explicitly: unpatched, a healthy machine (ComfyUI
     # up, Music3 weights present) would start a REAL render (minutes of GPU) and
     # never emit "failed".
-    with fake_modules(music={
+    w3 = gui.MusicWorker(host.ctx, "a real stub call", "ru")
+    w3.modules = _mods(music={
         "engine_available": lambda ctx=None, preset=None: (False, "weights not downloaded"),
-    }):
-        w3 = gui.MusicWorker(host.ctx, "a real stub call", "ru")
-        caps3 = cap(w3, "done", "failed")
-        w3.run()
+    })
+    caps3 = cap(w3, "done", "failed")
+    w3.run()
     check("music_unavailable_engine_fails_cleanly", len(caps3["failed"]) == 1, caps3)
     check("music_unavailable_engine_emits_no_done", len(caps3["done"]) == 0, caps3)
 
@@ -444,7 +434,8 @@ def test_music_tab():
     prefs5, dur5, _ = tab._settings()
     check("music_bot_decides_hands_the_worker_no_length", dur5 == 0 and "tempo" not in prefs5, (prefs5, dur5))
     asked = {}
-    with fake_modules(music={
+    w5 = gui.MusicWorker(host.ctx, "a lullaby", "ru", prefs=prefs5, duration_s=dur5)
+    w5.modules = _mods(music={
         "build_structured_caption": lambda ctx, topic, lang, **kw: (
             seen.update(cap_kw=kw), {"lyrics": "la", "style": "pop"})[-1],
         "generate_music": lambda ctx, lyrics, style, **kw: (
@@ -452,10 +443,9 @@ def test_music_tab():
         "choose_auto_params": lambda ctx, topic, lang, fixed=None, **want: (
             asked.update(want=want, fixed=fixed), {"bpm": 92, "seconds": 75, "why": "calm"})[-1],
         "prefs_from": _music_mod.prefs_from,
-    }):
-        w5 = gui.MusicWorker(host.ctx, "a lullaby", "ru", prefs=prefs5, duration_s=dur5)
-        caps5 = cap(w5, "done", "chose")
-        w5.run()
+    })
+    caps5 = cap(w5, "done", "chose")
+    w5.run()
     check("music_worker_asks_the_bot_for_the_blanks_only",
           asked.get("want", {}).get("tempo") is True and asked["want"].get("duration") is True
           and asked["want"].get("genre") is False and "genre" in (asked.get("fixed") or {}), asked)
@@ -555,13 +545,8 @@ def test_transfer_tab_gather_and_run():
         def start(self): started["n"] += 1
     # TransferTab resolves TransferWorker as a global of gui_transfer_tab, so
     # patch it there too or a real transfer would run.
-    import gui_transfer_tab as _TT
-    orig = _TT.TransferWorker
-    _TT.TransferWorker = FakeWorker; gui.TransferWorker = FakeWorker
-    try:
-        tab2._run("plan"); check("tt_run_started", started["n"] == 1)
-    finally:
-        _TT.TransferWorker = orig; gui.TransferWorker = orig
+    tab2.worker_class = FakeWorker
+    tab2._run("plan"); check("tt_run_started", started["n"] == 1)
     # callbacks
     tab2._on_preview({"asset": _png("as.png"), "mask": _png("mk.png")})
     tab2._on_done({"info": "plan text", "output": None})
@@ -586,15 +571,10 @@ def test_transfer_tab_draw_mask_and_masks():
         def exec_(self): return QDialog.Accepted
     # _draw_mask resolves MaskDrawDialog in gui_transfer_tab (imported there from
     # gui_dialogs), so patch it there too.
-    import gui_transfer_tab as _TT2
-    orig = _TT2.MaskDrawDialog
-    _TT2.MaskDrawDialog = FakeDlg; gui.MaskDrawDialog = FakeDlg
-    try:
-        tab._draw_mask(tab._rows[0]["frame"])
-        check("tt_draw_mask", tab._rows[0]["mask"] == maskfile)
-        tab._draw_mask(QWidget())   # unknown frame -> no-op
-    finally:
-        _TT2.MaskDrawDialog = orig; gui.MaskDrawDialog = orig
+    tab.mask_dialog = FakeDlg
+    tab._draw_mask(tab._rows[0]["frame"])
+    check("tt_draw_mask", tab._rows[0]["mask"] == maskfile)
+    tab._draw_mask(QWidget())   # unknown frame -> no-op
     # _owns_mask: a file we wrote to the owned dir
     owned = str(gui.OUTPUT_DIR_GUI_MASK() / "transfer_mask_999.png")
     open(owned, "wb").write(b"\x89PNG")
@@ -639,35 +619,35 @@ def test_transfer_worker_modes():
     # plan mode
     w = gui.TransferWorker(ctx, tgt, [(_png("wr.png"), None)], "put jacket", "plan")
     rec = cap(w, "progress", "preview", "done", "failed")
-    with fake_modules(image=_im_mod()):
-        w.run()
+    w.modules = _mods(image=_im_mod())
+    w.run()
     check("tw_plan_done", len(rec["done"]) == 1 and "Passes" in rec["done"][0]["info"])
     check("tw_plan_preview", len(rec["preview"]) == 1)
     # whole mode
     w2 = gui.TransferWorker(ctx, tgt, [(_png("wr2.png"), None)], "", "whole")
     rec2 = cap(w2, "done", "failed")
-    with fake_modules(image=_im_mod(), identity_metrics={"identity_cosine": lambda a, b: 0.95}):
-        w2.run()
+    w2.modules = _mods(image=_im_mod(), identity_metrics={"identity_cosine": lambda a, b: 0.95})
+    w2.run()
     check("tw_whole_done", rec2["done"] and rec2["done"][0]["output"].endswith("whole_out.png"))
     check("tw_whole_cosine", "cosine" in rec2["done"][0]["info"])
     # contained mode with a source mask (crop branch) + drift warning
     w3 = gui.TransferWorker(ctx, tgt, [(_png("wr3.png"), "clothing_source", _png("srcm.png"))],
                             "x", "contained", target_mask=_png("tm.png"))
     rec3 = cap(w3, "progress", "done", "failed")
-    with fake_modules(image=_im_mod(), identity_metrics={"identity_cosine": lambda a, b: 0.5}):
-        w3.run()
+    w3.modules = _mods(image=_im_mod(), identity_metrics={"identity_cosine": lambda a, b: 0.5})
+    w3.run()
     check("tw_contained_done", rec3["done"] and "DRIFT" in rec3["done"][0]["info"])
     # deliverable None -> failed
     w4 = gui.TransferWorker(ctx, tgt, [(_png("wr4.png"), None)], "x", "contained")
     rec4 = cap(w4, "done", "failed")
-    with fake_modules(image=_im_mod(assert_deliverable=lambda out, where=None, source_path=None: None)):
-        w4.run()
+    w4.modules = _mods(image=_im_mod(assert_deliverable=lambda out, where=None, source_path=None: None))
+    w4.run()
     check("tw_no_deliverable", rec4["failed"] and "no result" in rec4["failed"][0])
     # exception -> failed
     w5 = gui.TransferWorker(ctx, tgt, [(_png("wr5.png"), None)], "x", "contained")
     rec5 = cap(w5, "done", "failed")
-    with fake_modules(image=_im_mod(plan_and_execute_transfer=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("gpu")))):
-        w5.run()
+    w5.modules = _mods(image=_im_mod(plan_and_execute_transfer=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("gpu"))))
+    w5.run()
     check("tw_exception", rec5["failed"] == ["gpu"])
 
 

@@ -15,7 +15,7 @@ the real dialog opens, and `exec_()` enters a nested event loop nothing will
 ever quit -- offscreen included. gui_image_fix.py reaches it the same way for
 the same reason.
 """
-from seams import file_dialog
+from seams import file_dialog, module
 import os
 import threading
 from pathlib import Path
@@ -93,7 +93,7 @@ class TransferWorker(QThread):
 
     def run(self):
         try:
-            import image as im
+            im = module(self, "image")
             refs = []
             for spec in self.refs_spec:
                 p, r = spec[0], spec[1]
@@ -153,7 +153,7 @@ class TransferWorker(QThread):
                 return
             info = ""
             try:
-                import identity_metrics as idm
+                idm = module(self, "identity_metrics")
                 c = idm.identity_cosine(self.target, out)
                 if c is not None:
                     info = f"identity cosine = {c:.3f}" + (
@@ -167,6 +167,8 @@ class TransferWorker(QThread):
 
 
 class TransferTab(QWidget):
+    worker_class = None      # a suite hands its own in; None -> TransferWorker
+    mask_dialog = None       # likewise for the mask painter; None -> gui.MaskDrawDialog
     """Phase 9 — upload images, assign roles visually, run the transfer, view results.
 
     Drives the same backend the agent tool uses (image.plan_and_execute_transfer over
@@ -357,7 +359,7 @@ class TransferTab(QWidget):
         # the module docstring: a by-value binding makes every gui.MaskDrawDialog
         # stub a no-op and hangs the caller in the real modal's event loop.
         import gui as _g
-        dlg = _g.MaskDrawDialog(row["path"], existing_mask=row.get("mask"),
+        dlg = (self.mask_dialog or _g.MaskDrawDialog)(row["path"], existing_mask=row.get("mask"),
                                 parent=self.window(), title=title)
         if dlg.exec_() == QDialog.Accepted:
             row["mask"] = dlg.mask_path
@@ -554,7 +556,7 @@ class TransferTab(QWidget):
                              "whole": "Transferring (whole-frame)…"}[mode])
         for b in (self.style_btn, self.plan_btn, self.run_btn, self.whole_btn):
             b.setEnabled(False)
-        self.worker = TransferWorker(_ScopedCtx(self.ctx, self._cancel),
+        self.worker = (self.worker_class or TransferWorker)(_ScopedCtx(self.ctx, self._cancel),
                                      target, refs, self.instr.text().strip(),
                                      mode, target_mask=target_mask, protect_face=protect_face)
         self.worker.progress.connect(self.status.setText)

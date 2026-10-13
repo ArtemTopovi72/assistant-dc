@@ -42,19 +42,9 @@ def check(name, cond, detail=""):
     print(f"[{'PASS' if cond else 'FAIL'}] {name}" + (f" — {detail}" if detail and not cond else ""))
     assert cond, f"{name}: {detail}"
 
-@contextlib.contextmanager
-def fake_modules(**mods):
-    saved = {}
-    for name, mod in mods.items():
-        saved[name] = sys.modules.get(name)
-        m = types.ModuleType(name)
-        for k, v in mod.items(): setattr(m, k, v)
-        sys.modules[name] = m
-    try: yield
-    finally:
-        for name, old in saved.items():
-            if old is None: sys.modules.pop(name, None)
-            else: sys.modules[name] = old
+def _mods(**mods):
+    return {name: types.SimpleNamespace(**names) for name, names in mods.items()}
+
 
 def cap(worker, *sig):
     out = {s: [] for s in sig}
@@ -89,23 +79,23 @@ def test_transfer_worker_plan_variations():
     # reference carries a source mask but crop returns None -> keeps original path
     w = gui.TransferWorker(ctx, tgt, [(_png("twr.png"), None, _png("srcm.png"))], "x", "plan")
     rec = cap(w, "progress", "preview", "done", "failed")
-    with fake_modules(image=im):
-        w.run()
+    w.modules = _mods(image=im)
+    w.run()
     check("tw_plan_noextract", len(rec["done"]) == 1 and "Passes : 2" in rec["done"][0]["info"])
     # a role WITH a region but upload succeeds and mask built
     im2 = dict(im, _ROLE_TARGET_REGION={"style_reference": "background"},
                _upload_image_to_comfy=lambda t, url: "up", _region_mask_file=lambda *a, **k: "m.png")
     w2 = gui.TransferWorker(ctx, tgt, [(_png("twr2.png"), None)], "x", "plan")
     rec2 = cap(w2, "preview", "done", "failed")
-    with fake_modules(image=im2):
-        w2.run()
+    w2.modules = _mods(image=im2)
+    w2.run()
     check("tw_plan_region", any(p["mask"] == "m.png" for p in rec2["preview"]))
     # cancel mid-plan-loop
     ctx_c = types.SimpleNamespace(is_cancelled=lambda: True)
     w3 = gui.TransferWorker(ctx_c, tgt, [(_png("twr3.png"), None)], "x", "plan")
     rec3 = cap(w3, "done", "failed")
-    with fake_modules(image=im2):
-        w3.run()
+    w3.modules = _mods(image=im2)
+    w3.run()
     check("tw_plan_cancel", len(rec3["done"]) == 1)
 
 

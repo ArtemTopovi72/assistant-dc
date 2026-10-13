@@ -60,6 +60,7 @@ logger = logging.getLogger("assistant.gui")
 # would break those callers for no gain.  # noqa: F401
 import gui_common
 import gui_workers
+from seams import module
 from gui_common import (
     ACCENT2, MUTED, ICON_PATH, _crash_log_stage, enable_dark_titlebar, _make_tab_close_icons,
     build_qss, _esc, _shadow, _card, _section, FlowLayout, _FlowWidget, _flow, _fmt_ts,
@@ -711,8 +712,7 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
         # "remembers" each turn — without resetting it, the next reply replays the
         # old context, ctx.remember() re-saves derivatives of it, and closeEvent
         # persists them again: the cleared "crap" comes back across sessions.
-        from app_runtime import make_base_state
-        self.base_state = make_base_state()
+        self.base_state = module(self, "app_runtime").make_base_state()
         # Drop per-conversation working context too — a full reset means the next
         # turn starts from nothing.
         self.captured_image = None
@@ -724,8 +724,7 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
         # Actually return the freed memory to the OS / CUDA allocator instead of just
         # dropping references — clearing context should lighten the process, not only
         # the screen.
-        from utils import free_process_memory
-        free_process_memory()
+        module(self, "utils").free_process_memory()
         # Wipe the visible session as well: a cleared "memory" that still shows the
         # whole dialog, generated images and the research report on screen is both
         # confusing and an information leak.

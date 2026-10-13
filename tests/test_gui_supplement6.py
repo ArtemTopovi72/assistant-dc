@@ -40,19 +40,9 @@ def check(name, cond, detail=""):
     print(f"[{'PASS' if cond else 'FAIL'}] {name}" + (f" — {detail}" if detail and not cond else ""))
     assert cond, f"{name}: {detail}"
 
-@contextlib.contextmanager
-def fake_modules(**mods):
-    saved = {}
-    for name, mod in mods.items():
-        saved[name] = sys.modules.get(name)
-        m = types.ModuleType(name)
-        for k, v in mod.items(): setattr(m, k, v)
-        sys.modules[name] = m
-    try: yield
-    finally:
-        for name, old in saved.items():
-            if old is None: sys.modules.pop(name, None)
-            else: sys.modules[name] = old
+def _mods(**mods):
+    return {name: types.SimpleNamespace(**names) for name, names in mods.items()}
+
 
 def cap(worker, *sig):
     out = {s: [] for s in sig}
@@ -90,20 +80,20 @@ def test_transfer_worker_crop_and_identity_none():
     # whole mode, source mask -> crop path emits "Using your hand-drawn source region"
     w = gui.TransferWorker(ctx, tgt, [(_png("r6.png"), None, _png("sm6.png"))], "", "whole")
     rec = cap(w, "progress", "done", "failed")
-    with fake_modules(image=_im(), identity_metrics={"identity_cosine": lambda a, b: None}):
-        w.run()
+    w.modules = _mods(image=_im(), identity_metrics={"identity_cosine": lambda a, b: None})
+    w.run()
     check("tw_whole_crop", rec["done"] and rec["done"][0]["info"] == "")   # identity None -> no info
     check("tw_crop_progress", any("hand-drawn" in str(m) for m in rec["progress"]))
     # identity_metrics import raising is swallowed
     w2 = gui.TransferWorker(ctx, tgt, [(_png("r6b.png"), None)], "", "contained")
     rec2 = cap(w2, "done", "failed")
-    with fake_modules(image=_im()):
-        # no identity_metrics module -> ImportError swallowed
-        saved = sys.modules.pop("identity_metrics", None)
-        try:
-            w2.run()
-        finally:
-            if saved is not None: sys.modules["identity_metrics"] = saved
+    w2.modules = _mods(image=_im())
+    # no identity_metrics module -> ImportError swallowed
+    saved = sys.modules.pop("identity_metrics", None)
+    try:
+        w2.run()
+    finally:
+        if saved is not None: sys.modules["identity_metrics"] = saved
     check("tw_identity_import_swallowed", len(rec2["done"]) == 1)
 
 

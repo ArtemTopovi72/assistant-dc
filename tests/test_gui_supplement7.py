@@ -5,7 +5,7 @@ guard branches.
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_supplement7.py
 """
-import os, sys, types, tempfile, threading, contextlib
+import os, sys, types, tempfile, threading, contextlib
 from types import SimpleNamespace as _NS
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("USE_GUI", "0")
@@ -40,22 +40,9 @@ def check(name, cond, detail=""):
     print(f"[{'PASS' if cond else 'FAIL'}] {name}" + (f" — {detail}" if detail and not cond else ""))
     assert cond, f"{name}: {detail}"
 
-@contextlib.contextmanager
-def fake_modules(**mods):
-    saved = {}
-    for name, mod in mods.items():
-        saved[name] = sys.modules.get(name)
-        if mod is None:
-            sys.modules[name] = None
-        else:
-            m = types.ModuleType(name)
-            for k, v in mod.items(): setattr(m, k, v)
-            sys.modules[name] = m
-    try: yield
-    finally:
-        for name, old in saved.items():
-            if old is None: sys.modules.pop(name, None)
-            else: sys.modules[name] = old
+def _mods(**mods):
+    return {name: types.SimpleNamespace(**names) for name, names in mods.items()}
+
 
 def cap(worker, *sig):
     out = {s: [] for s in sig}
@@ -78,13 +65,13 @@ def test_worker_log_excepts():
     ctx = types.SimpleNamespace()
     w = gui.FixHandsWorker(ctx, "src.png", mask_path="m.png")
     rec = cap(w, "done", "failed")
-    with fake_modules(image=_img_ok()):
-        w.run()
+    w.modules = _mods(image=_img_ok())
+    w.run()
     check("fixhands_log_except", rec["done"] and rec["done"][0].endswith("fh.png"))
     w2 = gui.FixArtifactWorker(ctx, "src.png", "m.png", "fix")
     rec2 = cap(w2, "done", "failed")
-    with fake_modules(image=_img_ok()):
-        w2.run()
+    w2.modules = _mods(image=_img_ok())
+    w2.run()
     check("fixartifact_log_except", rec2["done"] and rec2["done"][0].endswith("fa.png"))
 
 
@@ -103,8 +90,8 @@ def test_request_worker_crosslingual_append():
     # _translate_query returns a translation -> extra.append + info.emit("Also searching")
     w._translate_query = lambda text, lang: f"{text}-{lang}"
     rec = cap(w, "info", "done", "failed")
-    with fake_modules(library=lib, graph={"compact_history_if_needed": lambda c, m: m}):
-        w.run()
+    w.modules = _mods(library=lib, graph={"compact_history_if_needed": lambda c, m: m})
+    w.run()
     check("req_crosslingual", any("Also searching" in str(i) for i in rec["info"]))
 
 
@@ -128,16 +115,16 @@ def test_transfer_worker_mask_and_identity_excepts():
     # plan mode: _upload raises -> except at "plan: target mask failed"
     w = gui.TransferWorker(ctx, tgt, [(_png("r7.png"), None)], "x", "plan")
     rec = cap(w, "preview", "done", "failed")
-    with fake_modules(image=im):
-        w.run()
+    w.modules = _mods(image=im)
+    w.run()
     check("tw_mask_except", len(rec["done"]) == 1)
     # contained mode: identity_cosine raises -> except pass
     im2 = dict(im, plan_and_execute_transfer=lambda *a, **k: _png("out7.png"),
                assert_deliverable=lambda out, where=None, source_path=None: out)
     w2 = gui.TransferWorker(ctx, tgt, [(_png("r7b.png"), None)], "x", "contained")
     rec2 = cap(w2, "done", "failed")
-    with fake_modules(image=im2, identity_metrics={"identity_cosine": lambda a, b: (_ for _ in ()).throw(ValueError())}):
-        w2.run()
+    w2.modules = _mods(image=im2, identity_metrics={"identity_cosine": lambda a, b: (_ for _ in ()).throw(ValueError())})
+    w2.run()
     check("tw_identity_except", rec2["done"] and rec2["done"][0]["info"] == "")
 
 
@@ -330,8 +317,8 @@ def test_clear_context_ctx_none_and_systeminfo_tools_error():
                                 custom_personality_text="", custom_ref_wav=None, session_memory=[],
                                 active_memory_dir=Path(_TMP), models=None)
     tab._ctx = ctx; tab._base_url = "x"
-    with fake_modules(tools=None):
-        tab.refresh()
+    tab.modules = {"tools": None}   # no TOOLS table to read
+    tab.refresh()
     check("sysinfo_tools_error", "error loading tools" in tab._text.toPlainText())
 
 

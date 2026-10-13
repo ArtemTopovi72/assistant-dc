@@ -12,7 +12,7 @@ import os
 import re
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BASELINE = 1081
+BASELINE = 1025
 
 _IMPORT = re.compile(r"^\s*import ([\w.]+)(?: as (\w+))?|^\s*from [\w.]+ import (\w+)(?: as (\w+))?", re.M)
 

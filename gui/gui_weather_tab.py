@@ -16,6 +16,7 @@ weather.py, so the two surfaces cannot disagree about the forecast itself.
 import datetime as _dt
 
 import gui_i18n
+from seams import module
 
 from PyQt5.QtCore import QDate, Qt, QThread, pyqtSignal
 from PyQt5.QtWidgets import (QAbstractItemView, QDateEdit, QHBoxLayout,
@@ -51,7 +52,7 @@ class WeatherWorker(QThread):
 
     def run(self):
         try:
-            import weather as _w
+            _w = module(self, "weather")
             advise_fn = correct_fn = None
             if self.ctx is not None:
                 # No ctx means no model loaded: the forecast is still worth
@@ -192,7 +193,7 @@ class WeatherTab(QWidget):
         self.worker.start()
 
     def _on_done(self, loc: dict, buckets: list, advice_map: dict, error: str):
-        import weather as _w
+        _w = module(self, "weather")
         self.table.setRowCount(0)
         self.advice.setText("")
         if error or not buckets:
