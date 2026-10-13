@@ -61,9 +61,11 @@ import models
 ctx = T._scoped_ctx(models.Context.__new__(models.Context))
 check("_scoped_ctx starts an empty register", ctx.turn_queries == [] and ctx.turn_sources == [])
 import search as _search
-_search.raw_search_results = lambda ctx, q, n=None: [
-    {"title": "A", "href": "https://a.com/1", "body": "aaa"}, {"title": "B", "href": "https://b.org/2", "body": "bbb"}]
-_search.SEARCH_DISTILL = False
+import types
+ctx.deps = types.SimpleNamespace(
+    raw_search_results=lambda ctx, q, n=None, **k: [
+        {"title": "A", "href": "https://a.com/1", "body": "aaa"}, {"title": "B", "href": "https://b.org/2", "body": "bbb"}],
+    _read_page=lambda url: "", SEARCH_DISTILL=False, SEARCH_FOLLOWUP_ROUND=False)
 _search.run_web_search(ctx, "test query")
 check("search.py records the query and the pages read",
       ctx.turn_queries == ["test query"] and [s["domain"] for s in ctx.turn_sources] == ["a.com", "b.org"]

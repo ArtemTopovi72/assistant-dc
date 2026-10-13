@@ -1,4 +1,5 @@
 """Web search tool: ddgs fetch -> dedupe/format -> optional fact distillation."""
+from seams import dep, text_model
 import re
 import turn_trace
 import logging
@@ -15,7 +16,6 @@ from config import (
 )
 from prompts import SEARCHER_PROMPT
 from dr_urls import _domain
-from llm import call_llm_simple
 from utils import truncate_text, throttle_external_calls
 
 logger = logging.getLogger("assistant.search")
@@ -159,7 +159,7 @@ def raw_search_results(ctx, query: str, max_results: Optional[int] = None, *,
     region = _region_for(ctx)
 
     def _do_query():
-        with DDGS() as ddgs:
+        with dep(ctx, "DDGS", DDGS)() as ddgs:
             if news:
                 # news() has no `backend` arg and returns dated articles.
                 return list(ddgs.news(
@@ -254,18 +254,18 @@ def best_passages(text: str, query: str, cap: int) -> str:
 
 
 # News asks for the last days; a week-old window drops the evergreen archive pages.
-def _is_news(query: str) -> bool:
-    import intent
-    return intent.ask_yes("A web search query: {text}\n\nDoes it ask for recent news "
-                          "or headlines (what happened lately)?", query)
+def _is_news(query: str, ctx=None) -> bool:
+    from seams import yes_no
+    return yes_no(ctx)("A web search query: {text}\n\nDoes it ask for recent news "
+                       "or headlines (what happened lately)?", query)
 
 
-def _read_pages(urls: list) -> dict:
+def _read_pages(urls: list, read=_read_page) -> dict:
     """{url: text} for the pages that could be read, fetched concurrently."""
     if not urls:
         return {}
     with turn_trace.Pool(max_workers=max(1, min(SEARCH_FETCH_WORKERS, len(urls)))) as ex:
-        return {u: t for u, t in zip(urls, ex.map(_read_page, urls)) if t}
+        return {u: t for u, t in zip(urls, ex.map(read, urls)) if t}
 
 
 def search_duckduckgo_and_fetch(ctx, query: str, max_results: Optional[int] = None) -> str:
@@ -273,10 +273,10 @@ def search_duckduckgo_and_fetch(ctx, query: str, max_results: Optional[int] = No
 
     Returns formatted result text, or the NO_RESULTS / SEARCH_FAILED sentinel.
     """
-    if _is_news(query or ""):
-        results = raw_search_results(ctx, query, max_results, timelimit="w")
+    if _is_news(query or "", ctx):
+        results = dep(ctx, "raw_search_results", raw_search_results)(ctx, query, max_results, timelimit="w")
     else:
-        results = raw_search_results(ctx, query, max_results)
+        results = dep(ctx, "raw_search_results", raw_search_results)(ctx, query, max_results)
     if not results:
         return NO_RESULTS
 
@@ -302,7 +302,7 @@ def search_duckduckgo_and_fetch(ctx, query: str, max_results: Optional[int] = No
     # Some sites refuse a bot (403, JS walls): candidates beyond the top are read
     # in the same parallel wave, and the first SEARCH_READ_PAGES that open win, in
     # rank order, so a refusal costs a source from further down, not a source.
-    read = _read_pages([h for _, h, _ in kept[:SEARCH_READ_PAGES * 2]])
+    read = _read_pages([h for _, h, _ in kept[:SEARCH_READ_PAGES * 2]], dep(ctx, "_read_page", _read_page))
     pages = {}
     for _, h, _ in kept:
         if h in read and len(pages) < SEARCH_READ_PAGES:
@@ -367,7 +367,7 @@ def distill_search_results(ctx, query: str, raw_results: str) -> str:
         budget = min(4000, max(SEARCH_DISTILL_MAX_TOKENS, 220 * want + 300))
         logger.info("search distill: request asks for %d items — budget %d tokens",
                     want, budget)
-    out = call_llm_simple(
+    out = text_model(ctx)(
         ctx, SEARCHER_PROMPT, user_msg,
         temperature=0.2, max_tokens=budget, prefill="<think></think>",
     )
@@ -394,7 +394,7 @@ _FOLLOWUP_PROMPT = (
 def followup_query(ctx, query: str, found: str) -> str:
     """The one extra search the model asks for after reading the first round, or ''."""
     try:
-        out = call_llm_simple(ctx, _FOLLOWUP_PROMPT,
+        out = text_model(ctx)(ctx, _FOLLOWUP_PROMPT,
                               f"Query: {query} | Findings: {found[:6000]}",
                               temperature=0.1, max_tokens=60, prefill="<think></think>")
     except Exception:
@@ -427,28 +427,28 @@ def run_web_search(ctx, query: str) -> str:
     _qs = getattr(ctx, "turn_queries", None)
     if isinstance(_qs, list) and query not in _qs:
         _qs.append(query)
-    raw = search_duckduckgo_and_fetch(
+    raw = dep(ctx, "search_duckduckgo_and_fetch", search_duckduckgo_and_fetch)(
         ctx, query, max_results=max(SEARCH_MAX_RESULTS, want * 2) if want else None)
     if raw in (NO_RESULTS, SEARCH_FAILED):
         return raw
     import injection_scan
     raw = injection_scan.scrub(raw, "web search")      # pages are written by strangers
-    facts = distill_search_results(ctx, query, raw) if SEARCH_DISTILL else ""
+    facts = dep(ctx, "distill_search_results", distill_search_results)(ctx, query, raw) if dep(ctx, "SEARCH_DISTILL", SEARCH_DISTILL) else ""
     usable = facts and "insufficient information" not in facts.lower()
     # One more round, at the model's discretion: it reads what was found and
     # either says it is enough or names the ONE query that fills the gap.
-    if SEARCH_FOLLOWUP_ROUND:
+    if dep(ctx, "SEARCH_FOLLOWUP_ROUND", SEARCH_FOLLOWUP_ROUND):
         more_q = followup_query(ctx, query, facts if usable else raw)
         if more_q and not outbound_blocked(more_q):
-            more = search_duckduckgo_and_fetch(ctx, more_q)
+            more = dep(ctx, "search_duckduckgo_and_fetch", search_duckduckgo_and_fetch)(ctx, more_q)
             logger.info("search follow-up round: %r -> %s", more_q,
                         "nothing" if more in (NO_RESULTS, SEARCH_FAILED) else f"{len(more)} chars")
             if more not in (NO_RESULTS, SEARCH_FAILED):
                 if isinstance(_qs, list) and more_q not in _qs:
                     _qs.append(more_q)
                 raw = raw + "\n\n" + more
-                if SEARCH_DISTILL:
-                    facts = distill_search_results(ctx, query, raw)
+                if dep(ctx, "SEARCH_DISTILL", SEARCH_DISTILL):
+                    facts = dep(ctx, "distill_search_results", distill_search_results)(ctx, query, raw)
                     usable = facts and "insufficient information" not in facts.lower()
     return facts if usable else raw  # nothing usable distilled: the main model reads raw
 
@@ -520,7 +520,7 @@ def image_search_urls(ctx, query: str, *, max_results: int = 12,
         return []
 
     def _do_query():
-        with DDGS() as ddgs:
+        with dep(ctx, "DDGS", DDGS)() as ddgs:
             return list(ddgs.images(
                 query, region=SEARCH_REGION, safesearch=SEARCH_SAFESEARCH,
                 max_results=max_results))
@@ -637,7 +637,7 @@ def download_image(ctx, url: str, dest_path: str, *, timeout: int = 20,
         # Every redirect hop checked: a result URL bouncing to 127.0.0.1 would
         # otherwise hand back a local render (ComfyUI /view) as "the photo".
         from dr_urls import safe_get
-        resp = safe_get(url, headers=headers, timeout=timeout, stream=True)
+        resp = dep(ctx, "safe_get", safe_get)(url, headers=headers, timeout=timeout, stream=True)
         if resp is None or resp.status_code != 200:
             return False
         ctype = (resp.headers.get("Content-Type") or "").lower()
@@ -659,17 +659,18 @@ def download_image(ctx, url: str, dest_path: str, *, timeout: int = 20,
         return False
 
 
-def _has_clear_face(path: str) -> bool:
+def _has_clear_face(path: str, face_box=None) -> bool:
     """True iff a face detector finds a single reasonably-sized face — the gate that
     stops a face-less search hit (a product photo, logo, landscape) from being used
     as a 'person' reference. Fails OPEN (returns True) only if the detector itself is
     unavailable, so the feature still works where face tooling isn't installed."""
+    if face_box is None:
+        try:
+            from identity_metrics import face_box
+        except Exception:
+            return True  # detector unavailable — don't block the feature
     try:
-        import identity_metrics as _idm
-    except Exception:
-        return True  # detector unavailable — don't block the feature
-    try:
-        fb = _idm.face_box(path, pad=0.0)
+        fb = face_box(path, pad=0.0)
         if not fb:
             return False
         from PIL import Image
@@ -737,7 +738,7 @@ def fetch_reference_photo(ctx, query: str, dest_path: str, *, tries: int = 10,
     if no colour candidate is found. Saves the winner to ``dest_path``; returns the
     path or None.
     """
-    urls = image_search_urls(ctx, query, prefer=prefer)
+    urls = dep(ctx, "image_search_urls", image_search_urls)(ctx, query, prefer=prefer)
     if not urls:
         logger.warning("fetch_reference_photo: no image results for %r", query)
         return None
@@ -746,13 +747,13 @@ def fetch_reference_photo(ctx, query: str, dest_path: str, *, tries: int = 10,
     good = []                                 # colour candidates that passed, for the pick
     import shutil
     for u in urls[:tries]:
-        if not download_image(ctx, u, dest_path):
+        if not dep(ctx, "download_image", download_image)(ctx, u, dest_path):
             continue
         checked += 1
-        if require_face and not _has_clear_face(dest_path):
+        if require_face and not dep(ctx, "_has_clear_face", _has_clear_face)(dest_path):
             logger.info("fetch_reference_photo: skipping face-less candidate %r", u[:80])
             continue
-        if prefer_color and _is_grayscale(dest_path):
+        if prefer_color and dep(ctx, "_is_grayscale", _is_grayscale)(dest_path):
             if gray_fallback is None:         # stash the first usable B&W, keep looking for colour
                 gray_fallback = dest_path + ".gray.jpg"
                 try:
