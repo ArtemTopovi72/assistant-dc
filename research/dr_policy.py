@@ -15,9 +15,9 @@ The caps live here rather than in dr_timing because they are computed from the
 DR_* knobs in dr_settings, which `apply_overrides` swaps out for a single run.
 How LONG each profile takes (the measured ETA) is dr_timing's job.
 """
+from dr_settings import view as settings_view
 import logging
 
-import dr_settings as S
 from dr_urls import (_authority_score, _domain, _is_community_host, _is_landing_url,
                      _AUTH_BASE_SCORE, _AUTH_CATEGORY_SCORE, _MID_SCORE)
 
@@ -174,8 +174,9 @@ def _apply_trust_floor(trust: str, url: str, category: str = "general") -> str:
 # --------------------------------------------------------------------------- #
 
 
-def _resolve_caps(depth: str) -> dict:
+def _resolve_caps(depth: str, *, ctx=None) -> dict:
     """Map a depth profile to concrete caps."""
+    S = settings_view(ctx)
     depth = (depth or "standard").lower()
     # `reflect_iters` / `reflect_budget` are what actually separate the three
     # options in WALL-CLOCK terms. A reflection pass re-crawls and re-briefs, and

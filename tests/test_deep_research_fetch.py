@@ -27,7 +27,28 @@ def check(name, cond, detail=""):
 # has to be patched in the module that USES it. `_dr_patch.Patches` finds every
 # home of a name and rebinds all of them (and raises if nothing binds it, so a
 # stale patch can never degrade into a silent real network/LM Studio call).
-from _dr_patch import Patches as _Patches
+# The stand-ins ride on a context handed to each call (tests/_dr_ctx.py), never on the
+# engine's modules: `_Patches` only stacks names for the calls inside it, `_C()` builds it.
+from contextlib import contextmanager
+from _dr_ctx import research_ctx
+
+_STACK = []
+
+
+@contextmanager
+def _Patches(**names):
+    _STACK.append(names)
+    try:
+        yield
+    finally:
+        _STACK.pop()
+
+
+def _C():
+    merged = {}
+    for layer in _STACK:
+        merged.update(layer)
+    return research_ctx(None, **merged)
 
 
 class FakeResp:
@@ -89,19 +110,19 @@ def test_progress_class():
 def test_fetch():
     with _Patches(requests=FakeRequests(FakeResp(200, "<html>hi</html>",
                                                   headers={"content-type": "text/html"}))):
-        out = DR._fetch("https://x.com/a")
+        out = DR._fetch("https://x.com/a", ctx=_C())
         check("fetch_success", out == "<html>hi</html>")
     with _Patches(requests=FakeRequests(FakeResp(404))):
-        check("fetch_non200_none", DR._fetch("https://x.com/a") is None)
+        check("fetch_non200_none", DR._fetch("https://x.com/a", ctx=_C()) is None)
     with _Patches(requests=FakeRequests(FakeResp(200, headers={"content-type": "image/png"}))):
-        check("fetch_binary_content_type_none", DR._fetch("https://x.com/a") is None)
+        check("fetch_binary_content_type_none", DR._fetch("https://x.com/a", ctx=_C()) is None)
     with _Patches(requests=FakeRequests(raises=RuntimeError("boom"))):
-        check("fetch_exception_none", DR._fetch("https://x.com/a") is None)
+        check("fetch_exception_none", DR._fetch("https://x.com/a", ctx=_C()) is None)
     with _Patches(requests=FakeRequests(FakeResp(200, "café", headers={"content-type": "text/html"}, encoding="iso-8859-1"))):
-        out2 = DR._fetch("https://x.com/a")
+        out2 = DR._fetch("https://x.com/a", ctx=_C())
         check("fetch_latin1_encoding_replaced_with_utf8", isinstance(out2, str))
     with _Patches(requests=FakeRequests(FakeResp(200, "no ctype", headers={}))):
-        check("fetch_empty_ctype_allowed", DR._fetch("https://x.com/a") == "no ctype")
+        check("fetch_empty_ctype_allowed", DR._fetch("https://x.com/a", ctx=_C()) == "no ctype")
 
 
 # ---------------- _ar5iv_url / _inline_mathml_as_tex / _fetch_ar5iv ----------------
@@ -119,16 +140,16 @@ def test_ar5iv_url_and_mathml():
 
 
 def test_fetch_ar5iv():
-    check("fetch_ar5iv_no_match_none", DR._fetch_ar5iv("https://example.com/x") is None)
+    check("fetch_ar5iv_no_match_none", DR._fetch_ar5iv("https://example.com/x", ctx=_C()) is None)
     with _Patches(requests=FakeRequests(FakeResp(200, '<math alttext="x">y</math>'))):
-        out = DR._fetch_ar5iv("https://arxiv.org/abs/2301.12345")
+        out = DR._fetch_ar5iv("https://arxiv.org/abs/2301.12345", ctx=_C())
         check("fetch_ar5iv_success", out is not None and "$x$" in out)
     with _Patches(requests=FakeRequests(FakeResp(200, "<html>no math here</html>"))):
-        check("fetch_ar5iv_no_math_none", DR._fetch_ar5iv("https://arxiv.org/abs/2301.12345") is None)
+        check("fetch_ar5iv_no_math_none", DR._fetch_ar5iv("https://arxiv.org/abs/2301.12345", ctx=_C()) is None)
     with _Patches(requests=FakeRequests(FakeResp(404))):
-        check("fetch_ar5iv_non200_none", DR._fetch_ar5iv("https://arxiv.org/abs/2301.12345") is None)
+        check("fetch_ar5iv_non200_none", DR._fetch_ar5iv("https://arxiv.org/abs/2301.12345", ctx=_C()) is None)
     with _Patches(requests=FakeRequests(raises=RuntimeError("boom"))):
-        check("fetch_ar5iv_exception_none", DR._fetch_ar5iv("https://arxiv.org/abs/2301.12345") is None)
+        check("fetch_ar5iv_exception_none", DR._fetch_ar5iv("https://arxiv.org/abs/2301.12345", ctx=_C()) is None)
 
 
 # ---------------- _extract_pdf_text / _looks_like_unmarked_math ----------------
@@ -149,34 +170,34 @@ def test_extract_pdf_text():
 # ---------------- _fetch_page ----------------
 
 def test_fetch_page():
-    check("fetch_page_blocks_unsafe_url", DR._fetch_page("file:///etc/passwd") == (None, None))
+    check("fetch_page_blocks_unsafe_url", DR._fetch_page("file:///etc/passwd", ctx=_C()) == (None, None))
     with _Patches(requests=FakeRequests(FakeResp(200, '<math alttext="z">Z</math>'))):
-        html, pdf = DR._fetch_page("https://arxiv.org/abs/2301.12345")
+        html, pdf = DR._fetch_page("https://arxiv.org/abs/2301.12345", ctx=_C())
         check("fetch_page_ar5iv_path", html is not None and pdf is None)
     with _Patches(requests=FakeRequests(FakeResp(200, "<html>body</html>",
                                                   headers={"content-type": "text/html"}))):
-        html2, pdf2 = DR._fetch_page("https://example.com/a")
+        html2, pdf2 = DR._fetch_page("https://example.com/a", ctx=_C())
         check("fetch_page_html_success", html2 == "<html>body</html>" and pdf2 is None)
     with _Patches(requests=FakeRequests(FakeResp(404))):
-        check("fetch_page_non200", DR._fetch_page("https://example.com/a") == (None, None))
+        check("fetch_page_non200", DR._fetch_page("https://example.com/a", ctx=_C()) == (None, None))
     with _Patches(requests=FakeRequests(FakeResp(200, headers={"content-type": "image/png"}))):
-        check("fetch_page_binary_skip", DR._fetch_page("https://example.com/a") == (None, None))
+        check("fetch_page_binary_skip", DR._fetch_page("https://example.com/a", ctx=_C()) == (None, None))
     with _Patches(requests=FakeRequests(raises=RuntimeError("boom"))):
-        check("fetch_page_exception", DR._fetch_page("https://example.com/a") == (None, None))
+        check("fetch_page_exception", DR._fetch_page("https://example.com/a", ctx=_C()) == (None, None))
     pdf_bytes = b"%PDF-1.4 fake pdf bytes here"
     with _Patches(requests=FakeRequests(FakeResp(200, content=pdf_bytes,
                                                   headers={"content-type": "application/pdf"})),
                   DR_PDF_ENABLED=True):
-        html3, pdf3 = DR._fetch_page("https://example.com/paper.pdf")
+        html3, pdf3 = DR._fetch_page("https://example.com/paper.pdf", ctx=_C())
         check("fetch_page_pdf_enabled_extract_attempted", html3 is None)
     with _Patches(requests=FakeRequests(FakeResp(200, content=pdf_bytes,
                                                   headers={"content-type": "application/pdf"})),
                   DR_PDF_ENABLED=False):
-        check("fetch_page_pdf_disabled_none", DR._fetch_page("https://example.com/paper.pdf") == (None, None))
+        check("fetch_page_pdf_disabled_none", DR._fetch_page("https://example.com/paper.pdf", ctx=_C()) == (None, None))
     with _Patches(requests=FakeRequests(FakeResp(200, content=pdf_bytes,
                                                   headers={"content-type": "text/html"})),
                   DR_PDF_ENABLED=True):
-        html4, pdf4 = DR._fetch_page("https://example.com/sniffed")
+        html4, pdf4 = DR._fetch_page("https://example.com/sniffed", ctx=_C())
         check("fetch_page_pdf_sniffed_by_magic_bytes", html4 is None)
 
 
@@ -210,23 +231,23 @@ def test_acquire_page():
     with _Patches(is_social_url=lambda u: True,
                   fetch_social_posts=lambda u: "some vk posts content here",
                   social_kind=lambda u: "VK"):
-        res = DR._acquire_page("https://vk.com/club1", 0, {"title": ""}, "local", False, None)
+        res = DR._acquire_page("https://vk.com/club1", 0, {"title": ""}, "local", False, None, ctx=_C())
         check("acquire_social_with_posts", res["social"] is True and res["page"] is not None)
     # social path with no posts
     with _Patches(is_social_url=lambda u: True, fetch_social_posts=lambda u: None):
-        res = DR._acquire_page("https://vk.com/club2", 0, {"title": ""}, "local", False, None)
+        res = DR._acquire_page("https://vk.com/club2", 0, {"title": ""}, "local", False, None, ctx=_C())
         check("acquire_social_no_posts", res["social"] is True and res["page"] is None)
     # adapter hit
     long_text = "Real content here. " * 30
     with _Patches(is_social_url=lambda u: False,
                   fetch_via_adapter=lambda url, cat: {"text": long_text, "title": "Adapter Title", "domain": "wiki.org"}):
-        res = DR._acquire_page("https://wiki.org/some-article", 0, {"title": ""}, "general", True, None)
+        res = DR._acquire_page("https://wiki.org/some-article", 0, {"title": ""}, "general", True, None, ctx=_C())
         check("acquire_adapter_hit", res["page"] is not None and res["page"]["title"] == "Adapter Title")
     # adapter returns junk that fails the gate -> falls through to fetch
     with _Patches(is_social_url=lambda u: False,
                   fetch_via_adapter=lambda url, cat: {"text": "hi", "title": "t"},
-                  _fetch_page=lambda url: (None, None)):
-        res = DR._acquire_page("https://wiki.org/y", 0, {"title": ""}, "general", True, None)
+                  _fetch_page=lambda url, **k: (None, None)):
+        res = DR._acquire_page("https://wiki.org/y", 0, {"title": ""}, "general", True, None, ctx=_C())
         check("acquire_adapter_gate_fail_falls_through", res["reason"] == "fetch_failed")
     # cache hit
     class FakeCache:
@@ -235,7 +256,7 @@ def test_acquire_page():
         def put(self, *a, **k):
             pass
     with _Patches(is_social_url=lambda u: False):
-        res = DR._acquire_page("https://example.com/cached-article", 0, {"title": ""}, "general", False, FakeCache())
+        res = DR._acquire_page("https://example.com/cached-article", 0, {"title": ""}, "general", False, FakeCache(), ctx=_C())
         check("acquire_cache_hit", res["page"] is not None and res["page"]["title"] == "Cached Title")
     # cache present but miss/None
     class EmptyCache:
@@ -247,35 +268,35 @@ def test_acquire_page():
             return False
         def mark_failed(self, url):
             pass
-    with _Patches(is_social_url=lambda u: False, _fetch_page=lambda url: (None, None)):
-        res = DR._acquire_page("https://example.com/w", 0, {"title": ""}, "general", False, EmptyCache())
+    with _Patches(is_social_url=lambda u: False, _fetch_page=lambda url, **k: (None, None)):
+        res = DR._acquire_page("https://example.com/w", 0, {"title": ""}, "general", False, EmptyCache(), ctx=_C())
         check("acquire_cache_miss_fetch_fails", res["reason"] == "fetch_failed")
     # live fetch, html success, gate ok
     with _Patches(is_social_url=lambda u: False,
-                  _fetch_page=lambda url: ("<html><body>x</body></html>", None),
+                  _fetch_page=lambda url, **k: ("<html><body>x</body></html>", None),
                   _extract_text=lambda html, url: long_text,
                   _extract_title=lambda html: "Live Title"):
-        res = DR._acquire_page("https://example.com/live", 0, {"title": ""}, "general", False, None)
+        res = DR._acquire_page("https://example.com/live", 0, {"title": ""}, "general", False, None, ctx=_C())
         check("acquire_live_fetch_success", res["page"] is not None and res["page"]["title"] == "Live Title")
     # live fetch pdf branch
     with _Patches(is_social_url=lambda u: False,
-                  _fetch_page=lambda url: (None, long_text),
+                  _fetch_page=lambda url, **k: (None, long_text),
                   _extract_title=lambda html: "unused"):
-        res = DR._acquire_page("https://example.com/paper.pdf", 0, {"title": "Seed Title"}, "general", False, None)
+        res = DR._acquire_page("https://example.com/paper.pdf", 0, {"title": "Seed Title"}, "general", False, None, ctx=_C())
         check("acquire_live_fetch_pdf_branch", res["page"] is not None and res["page"]["title"] == "Seed Title")
     # gate rejects (thin content)
     with _Patches(is_social_url=lambda u: False,
-                  _fetch_page=lambda url: ("<html>x</html>", None),
+                  _fetch_page=lambda url, **k: ("<html>x</html>", None),
                   _extract_text=lambda html, url: "short",
                   _extract_title=lambda html: "T"):
-        res = DR._acquire_page("https://example.com/thin", 0, {"title": ""}, "general", False, None)
+        res = DR._acquire_page("https://example.com/thin", 0, {"title": ""}, "general", False, None, ctx=_C())
         check("acquire_gate_rejects_thin", res["reason"] is not None and res["page"] is None)
     # landing url rejection after successful gate
     with _Patches(is_social_url=lambda u: False,
-                  _fetch_page=lambda url: ("<html>x</html>", None),
+                  _fetch_page=lambda url, **k: ("<html>x</html>", None),
                   _extract_text=lambda html, url: long_text,
                   _extract_title=lambda html: "T"):
-        res = DR._acquire_page("https://example.com/", 0, {"title": ""}, "general", False, None)
+        res = DR._acquire_page("https://example.com/", 0, {"title": ""}, "general", False, None, ctx=_C())
         check("acquire_landing_url_rejected", res["reason"] == DR.GATE_NAV and res["page"] is None)
 
 

@@ -10,6 +10,8 @@ host, and ranks what survives.
 corrective re-plan loop and the decision gate read: is the evidence thin, narrow,
 clustered on one host, or skewed to one language?
 """
+from dr_settings import view as settings_view
+from seams import dep
 import logging
 import turn_trace
 import re
@@ -17,7 +19,6 @@ from concurrent.futures import as_completed
 from pathlib import Path
 from typing import Optional
 
-import dr_settings as S
 from dr_calls import _think_call
 from dr_lang import _LANG_RE_CYR
 from dr_extract import _jaccard
@@ -42,6 +43,7 @@ def plan_queries(ctx, topic: str, max_queries: int) -> tuple:
     Returns ``(queries, profile)`` where profile = {"category", "recency",
     "timelimit", "news"} drives how the ddgs query is issued (general web vs the
     news vertical, and the freshness window)."""
+    S = settings_view(ctx)
     user = (f"Research topic: {topic}\n\n"
             f"Return up to {max_queries} diverse search queries as JSON.")
     # force_think (not prefill): on the reasoning finetune the "<think></think>"
@@ -53,7 +55,7 @@ def plan_queries(ctx, topic: str, max_queries: int) -> tuple:
     # strip leaves "" (verified: 900 -> empty). DR_PLAN_TOKENS is sized well above
     # CoT length; it is deliberately NOT the whole context window, which on a
     # 262k-window model is 260k tokens of rope for a repetition loop to run into.
-    out = _think_call(ctx, QUERY_PLANNER_PROMPT, user,
+    out = dep(ctx, "_think_call", _think_call)(ctx, QUERY_PLANNER_PROMPT, user,
                       max_tokens=S.DR_PLAN_TOKENS, temperature=0.4)
     queries: list = []
     category, recency = "general", "any"
@@ -200,10 +202,11 @@ def _search_one_query(ctx, q: str, per_query: int, timelimit, use_news: bool) ->
     """Search one query (+ optional news vertical) with the zero-hit mutation
     retry. Pure w.r.t. shared state — safe to run on a worker thread. Never
     raises; returns [] on total failure."""
+    S = settings_view(ctx)
     try:
-        hits = raw_search_results(ctx, q, per_query, timelimit=timelimit)
+        hits = dep(ctx, "raw_search_results", raw_search_results)(ctx, q, per_query, timelimit=timelimit)
         if use_news:  # for current-events topics, also pull fresh articles
-            hits += raw_search_results(ctx, q, per_query, timelimit=timelimit, news=True)
+            hits += dep(ctx, "raw_search_results", raw_search_results)(ctx, q, per_query, timelimit=timelimit, news=True)
     except Exception as exc:  # one bad query must not abort the run
         logger.warning("Search failed for %r: %s", q, exc)
         hits = []
@@ -216,7 +219,7 @@ def _search_one_query(ctx, q: str, per_query: int, timelimit, use_news: bool) ->
         if not mutated:
             continue
         try:
-            hits = raw_search_results(ctx, mutated, per_query, timelimit=timelimit)
+            hits = dep(ctx, "raw_search_results", raw_search_results)(ctx, mutated, per_query, timelimit=timelimit)
         except Exception:
             hits = []
         if hits:
@@ -230,6 +233,7 @@ def collect_sources(ctx, queries: list, per_query: int, prog: _Progress,
 
     ``profile`` (from plan_queries) tunes the ddgs call: a recency ``timelimit``
     and, for news topics, an extra pass over the news vertical."""
+    S = settings_view(ctx)
     profile = profile or {}
     timelimit = profile.get("timelimit")
     use_news = bool(profile.get("news"))
@@ -288,16 +292,16 @@ def collect_sources(ctx, queries: list, per_query: int, prog: _Progress,
                     hits = []
                 _ingest(hits, q)
                 prog.update(sources=len(sources))
-                _save_state(run_dir, phase="searching", queries=queries,
+                dep(ctx, "_save_state", _save_state)(run_dir, phase="searching", queries=queries,
                             sources=[s["href"] for s in sources])
     else:
         for i, q in enumerate(queries, 1):
             if ctx is not None and ctx.is_cancelled():
                 break
             prog.update("Searching", f"[{i}/{len(queries)}] {q}")
-            _ingest(_search_one_query(ctx, q, per_query, timelimit, use_news), q)
+            _ingest(dep(ctx, "_search_one_query", _search_one_query)(ctx, q, per_query, timelimit, use_news), q)
             prog.update(sources=len(sources))
-            _save_state(run_dir, phase="searching", queries=queries,
+            dep(ctx, "_save_state", _save_state)(run_dir, phase="searching", queries=queries,
                         sources=[s["href"] for s in sources])
     # Crawl high-authority sources first so the page budget is spent on the most
     # credible material; ordinary sources only fill whatever budget is left.

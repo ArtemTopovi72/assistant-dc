@@ -14,11 +14,12 @@ Both write in the reader's language (`out_lang`): the directive rides on the
 system prompt so it is the model's last word, while searching, crawling and
 briefing stay in English, where the sources are.
 """
+from seams import dep
+from dr_settings import view as settings_view
 import logging
 import re
 from typing import Optional
 
-import dr_settings as S
 from dr_calls import _EFFORT_FROM_CONFIG, _model_context, _think_call
 from dr_brief import _brief_tag, _consolidate_evidence
 from dr_collect import evidence_stats
@@ -98,6 +99,7 @@ def synthesize_report(ctx, topic: str, briefs: list, prog: _Progress,
     or low/medium/high). Default derives it from DR_REASONING_EFFORT. The caller uses
     this to run an effort LADDER: gpt-oss at high effort can spend its whole token
     budget reasoning and emit EMPTY content, so on empty we retry at lower effort."""
+    S = settings_view(ctx)
     combined = _consolidate_evidence(ctx, topic, briefs, prog)
 
     prog.update("Building report", "writing report")
@@ -157,7 +159,7 @@ def synthesize_report(ctx, topic: str, briefs: list, prog: _Progress,
         combined = combined[:ev_budget].rsplit("\n", 1)[0] + "\n…(evidence truncated to fit context)"
     user = (f"Research topic: {topic}\n\n{rule}{extra}\n{scaffold}Per-source briefs:\n{combined}"
             + ld)
-    report = _think_call(ctx, system, user, max_tokens=send_budget, temperature=0.3,
+    report = dep(ctx, "_think_call", _think_call)(ctx, system, user, max_tokens=send_budget, temperature=0.3,
                          effort=effort)
     return (report or "").strip()
 
@@ -195,9 +197,10 @@ def _evidence_landscape(briefs: list, max_titles: Optional[int] = None) -> str:
     return "\n".join(lines)
 
 
-def _normalize_outline(plan: dict, topic: str) -> dict:
+def _normalize_outline(plan: dict, topic: str, *, ctx=None) -> dict:
     """Validate/coerce a planner result into a usable outline (clamp section count,
     drop empty headings, guarantee a title). Falls back to the default skeleton."""
+    S = settings_view(ctx)
     if not isinstance(plan, dict):
         return _default_outline(topic)
     secs_in = plan.get("sections")
@@ -235,6 +238,7 @@ def plan_report_outline(ctx, topic: str, briefs: list, prog: _Progress,
     """Ask the LLM to DESIGN the document's structure from the evidence landscape
     before any prose is written (title + ordered sections + subsections + focus).
     Returns a normalized outline dict; degrades to a generic skeleton on failure."""
+    S = settings_view(ctx)
     prog.update("Building report", "planning document outline")
     landscape = _evidence_landscape(briefs)
     # Keep the planner prompt well inside the window so the model has room to think
@@ -252,11 +256,11 @@ def plan_report_outline(ctx, topic: str, briefs: list, prog: _Progress,
         plan_lang += ("The JSON KEYS (title, sections, heading, focus, subsections, "
                       "abstract_focus) stay EXACTLY as specified, in English. Only "
                       "their VALUES are written in the output language.\n")
-    raw = _think_call(
+    raw = dep(ctx, "_think_call", _think_call)(
         ctx, OUTLINE_PLANNER_PROMPT + plan_lang,
         f"Research topic:\n{topic}\n\nEVIDENCE LANDSCAPE:\n{landscape}" + plan_lang,
         max_tokens=S.DR_PLAN_TOKENS, temperature=0.4)
-    plan = _normalize_outline(_extract_outline_json(raw), topic)
+    plan = _normalize_outline(_extract_outline_json(raw), topic, ctx=ctx)
     logger.info("OUTLINE planned: %d sections — %s", len(plan["sections"]), plan["title"])
     return plan
 
@@ -310,9 +314,10 @@ def synthesize_survey(ctx, topic: str, briefs: list, prog: _Progress,
     returns empty. So evidence is trimmed per section and max_tokens is computed from
     the remaining context; on an empty section we SHRINK evidence and retry, which
     also auto-adapts when the model is loaded with a smaller context than configured."""
+    S = settings_view(ctx)
     if not briefs:
         return ""
-    outline = outline or plan_report_outline(ctx, topic, briefs, prog, out_lang)
+    outline = outline or dep(ctx, "plan_report_outline", plan_report_outline)(ctx, topic, briefs, prog, out_lang)
     # The planner strings (title/headings/focus) can carry mojibake too (e.g. a
     # double-encoded U+202F in the title); repair once so the H1 and TOC aren't garbled.
     _repair_outline_text(outline)
@@ -365,7 +370,7 @@ def synthesize_survey(ctx, topic: str, briefs: list, prog: _Progress,
             prompt_tok = _est_tokens(sec_system) + _est_tokens(user)
             # Hand the model ALL remaining context for think + prose — no length cap.
             max_out = max(1024, ctx_tokens - prompt_tok - 96)
-            body = _think_call(ctx, sec_system, user, max_out,
+            body = dep(ctx, "_think_call", _think_call)(ctx, sec_system, user, max_out,
                                temperature=0.35 + 0.05 * attempt)
             if body:
                 break
@@ -382,7 +387,7 @@ def synthesize_survey(ctx, topic: str, briefs: list, prog: _Progress,
 
     body_text = "\n\n".join(written)
     abstract = _strip_leading_headings(
-        _synthesize_abstract(ctx, outline, body_text, out_lang))
+        dep(ctx, "_synthesize_abstract", _synthesize_abstract)(ctx, outline, body_text, out_lang))
 
     parts = [f"# {outline['title']}", ""]
     if abstract:
@@ -422,7 +427,7 @@ def _synthesize_abstract(ctx, outline: dict, body_text: str,
     overhead = _est_tokens(system) + _est_tokens(user) + 96
     max_out = max(1024, ctx_tokens - overhead)
     try:
-        out = _think_call(ctx, system, user, max_out, temperature=0.3)
+        out = dep(ctx, "_think_call", _think_call)(ctx, system, user, max_out, temperature=0.3)
     except Exception as exc:
         logger.warning("abstract synthesis failed (%s) — using focus line", exc)
         out = ""

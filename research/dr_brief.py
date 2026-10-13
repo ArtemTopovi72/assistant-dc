@@ -11,14 +11,16 @@ Note for suites: the model contact has ONE home, `dr_calls.call_llm_simple`.
 so a test that fakes the brief model patches `dr_calls.call_llm_simple` and the
 fake is in force for every stage — not just whichever one happened to import it.
 """
+from seams import dep
+from dr_settings import view as settings_view
 import logging
 import os
 import re
 from typing import Optional
 
-import dr_settings as S
 import dr_calls
 from dr_calls import _model_context, _think_call
+from seams import text_model
 from dr_math import _repair_latex_artifacts
 from dr_outline import _est_tokens
 from dr_progress import _Progress
@@ -62,6 +64,7 @@ def brief_source(ctx, topic: str, page: dict) -> Optional[str]:
     failure on OUR side and is counted separately -- a report that blames the
     sources for our own outage is worse than no report.
     """
+    S = settings_view(ctx)
     # Cap what the model is asked to read. A reasoning model deliberates in
     # proportion to its input, and this one has no brake (the <think></think>
     # prefill below is dropped for Gemma), so the full 32k page produced 17-20k
@@ -95,7 +98,7 @@ def brief_source(ctx, topic: str, page: dict) -> Optional[str]:
         import copy as _copy
         _c = _copy.copy(ctx)
         _c.model_name = S.DR_BRIEF_MODEL
-    out = dr_calls.call_llm_simple(_c, SOURCE_BRIEF_PROMPT, user,
+    out = text_model(ctx)(_c, SOURCE_BRIEF_PROMPT, user,
                           temperature=0.2, max_tokens=safe, prefill="<think></think>")
     out = (out or "").strip()
     # Two different outcomes must stay distinguishable, so a counter can tell an
@@ -157,6 +160,7 @@ def _consolidate_evidence(ctx, topic: str, briefs: list, prog: _Progress) -> str
     """Tagged briefs joined into one evidence string; if it exceeds one context
     window, compress batch-by-batch first (mechanical, low effort). Shared by both
     the single-pass and the section-by-section survey synthesis paths."""
+    S = settings_view(ctx)
     entries = [_brief_tag(b) for b in briefs]
     combined = "\n\n".join(entries)
     # Only pre-compress when the evidence genuinely won't fit a synthesis call in the
@@ -177,7 +181,7 @@ def _consolidate_evidence(ctx, topic: str, briefs: list, prog: _Progress) -> str
         if ctx is not None and ctx.is_cancelled():
             break
         prog.update("Building report", f"consolidating batch {i}/{len(batches)}")
-        part = _think_call(
+        part = dep(ctx, "_think_call", _think_call)(
             ctx, _CONSOLIDATE_PROMPT,
             f"Topic: {topic}\n\nBriefs:\n" + "\n\n".join(batch),
             max_tokens=S.DR_PLAN_TOKENS,   # consolidation notes; NOT the full window

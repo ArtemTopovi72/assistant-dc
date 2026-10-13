@@ -157,3 +157,22 @@ def apply_overrides(overrides: dict) -> dict:
 def restore_overrides(saved: dict) -> None:
     for name, value in (saved or {}).items():
         globals()[name] = value
+
+
+def overlay(overrides: dict):
+    """One run's settings: these knobs over the defaults, validated like apply_overrides,
+    nothing global written (two runs with different knobs no longer see each other's)."""
+    import sys
+    from seams import Over
+    coerced = {}
+    for name, value in (overrides or {}).items():
+        if name not in MANUAL_OVERRIDE_SPEC:
+            raise KeyError(f"not a manual-control knob: {name}")
+        coerced[name] = _coerce_override(name, value)
+    return Over(sys.modules[__name__], **coerced)
+
+
+def view(ctx):
+    """The settings this run reads: `ctx.research_settings` (an overlay), else the defaults."""
+    import sys
+    return getattr(ctx, "research_settings", None) or sys.modules[__name__]

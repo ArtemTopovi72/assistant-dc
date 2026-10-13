@@ -102,16 +102,24 @@ class InProcessResearchClient:
         # and not any UI toggle. Callers pass out_lang=None to get this.
         if out_lang is None:
             out_lang = dr.lang_of_text(topic)
-        saved: Dict[str, Any] = {}
+        if not overrides:
+            return dr.run_deep_research(ctx, topic, depth=depth, out_lang=out_lang,
+                                        progress=progress)
+        # This run's knobs ride on its context: written over the settings module they
+        # leaked into any other run in flight. An invalid knob raises here, as the run's
+        # failure.
+        import dr_settings
+        own = dr_settings.overlay(overrides)
+        if ctx is None:
+            import types
+            ctx = types.SimpleNamespace(is_cancelled=lambda: False)
+        before = getattr(ctx, "research_settings", None)
+        ctx.research_settings = own
         try:
-            # Inside the try: an invalid knob must surface to the caller as a
-            # failure of the RUN (the GUI un-busies and shows it), never as an
-            # exception that escapes before the finally is armed.
-            saved = dr.apply_overrides(overrides) if overrides else {}
             return dr.run_deep_research(ctx, topic, depth=depth, out_lang=out_lang,
                                         progress=progress)
         finally:
-            dr.restore_overrides(saved)     # per-run, never sticky
+            ctx.research_settings = before
 
     # -- estimation / language ---------------------------------------------- #
     def estimate_duration(self, depth: str = "standard") -> Tuple[float, int]:

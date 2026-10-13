@@ -16,13 +16,14 @@ every stage that talks to a model does so through here (dr_brief calls
 `dr_calls.call_llm_simple` rather than importing its own), so a suite that fakes
 the model patches exactly one name and the fake holds for the whole pipeline.
 """
+from seams import dep
+from dr_settings import view as settings_view
 import logging
 
 import requests
 
-import dr_settings as S
 from dr_outline import _est_tokens
-from llm import call_llm_simple
+from seams import text_model
 
 logger = logging.getLogger("assistant.research")
 
@@ -33,13 +34,14 @@ _EFFORT_FROM_CONFIG = object()  # sentinel: derive effort from DR_REASONING_EFFO
 _VALID_EFFORT = ("low", "medium", "high")
 
 
-def _resolve_effort(effort):
+def _resolve_effort(effort, *, ctx=None):
     """Map the `effort` argument onto llm.call_llm_simple's `reasoning_effort`.
 
     `_EFFORT_FROM_CONFIG` (the default) reads DR_REASONING_EFFORT, where the
     string "auto" means "leave it to ctx / the model default" -> None. An explicit
     low/medium/high is passed straight through; anything else degrades to None
     rather than sending garbage to the backend."""
+    S = settings_view(ctx)
     if effort is _EFFORT_FROM_CONFIG:
         effort = S.DR_REASONING_EFFORT
     if isinstance(effort, str) and effort.lower() in _VALID_EFFORT:
@@ -61,8 +63,8 @@ def _think_call(ctx, system: str, user: str, max_tokens: int,
     prompt_tok = _est_tokens(system) + _est_tokens(user)
     safe = max(256, _model_context(ctx) - prompt_tok - 80)
     budget = min(max_tokens, safe)
-    _effort = _resolve_effort(effort)
-    out = call_llm_simple(ctx, system, user, temperature=temperature,
+    _effort = _resolve_effort(effort, ctx=ctx)
+    out = text_model(ctx)(ctx, system, user, temperature=temperature,
                           max_tokens=budget, force_think=False,   # reasoning off;
                           reasoning_effort=_effort)             # the thinking retry below stays the fallback
     if (out or "").strip():
@@ -98,7 +100,7 @@ def _think_call(ctx, system: str, user: str, max_tokens: int,
         retry_budget = max(512, int(budget * shrink))
         logger.warning("synthesis came back empty (all reasoning, no answer) — "
                        "retry %d at %d tokens", attempt, retry_budget)
-        out = call_llm_simple(ctx, system + nudge, user + nudge,
+        out = text_model(ctx)(ctx, system + nudge, user + nudge,
                               temperature=min(0.9, temperature + 0.1 * attempt),
                               max_tokens=retry_budget, force_think=False,
                               reasoning_effort=_effort)
@@ -117,12 +119,13 @@ def _model_context(ctx) -> int:
     "no limits" real: budgets derive from the true window (e.g. 262144) instead of a
     guessed constant. Cached per model; falls back to DR_MODEL_CONTEXT if the API is
     unavailable or returns nothing usable."""
+    S = settings_view(ctx)
     name = getattr(ctx, "model_name", "") or ""
     if name in _CONTEXT_CACHE:
         return _CONTEXT_CACHE[name]
     detected = 0
     try:
-        r = requests.get(f"{S.LM_STUDIO_BASE}/api/v0/models/{name}", timeout=8)
+        r = dep(ctx, "requests", requests).get(f"{S.LM_STUDIO_BASE}/api/v0/models/{name}", timeout=8)
         if r.status_code == 200:
             d = r.json()
             detected = int(d.get("loaded_context_length")

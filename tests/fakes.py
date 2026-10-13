@@ -4,12 +4,8 @@
 so a suite gets the real `video` module with a fake renderer in one object and nothing
 global changes: the next suite in the same process sees the real module.
 """
+import os
+import sys
 
-
-class Over:
-    def __init__(self, base, **overrides):
-        self._base = base
-        self.__dict__.update(overrides)
-
-    def __getattr__(self, name):
-        return getattr(self._base, name)
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "core"))
+from seams import Over  # noqa: E402,F401

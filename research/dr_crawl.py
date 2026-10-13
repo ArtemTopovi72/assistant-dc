@@ -10,6 +10,8 @@ the expensive brief model is spent on the most relevant pages first.
 Everything here is fault-tolerant by design: one bad source can never abort a
 run, and the run stays cooperatively cancellable throughout.
 """
+from dr_settings import view as settings_view
+from seams import dep
 import logging
 import turn_trace
 import random
@@ -45,13 +47,13 @@ _MAX_HTML_CHARS = 2_000_000
 # --------------------------------------------------------------------------- #
 # Stage 3 — crawling
 # --------------------------------------------------------------------------- #
-def _fetch(url: str) -> Optional[str]:
+def _fetch(url: str, ctx=None) -> Optional[str]:
     """Fetch one URL, returning HTML text or None. Never raises. Streams with a
     hard byte cap so a huge or hostile page can't exhaust memory."""
     resp = None
     try:
         resp = safe_get(
-            url, getter=requests.get, timeout=S.DR_PAGE_TIMEOUT, stream=True,
+            url, getter=dep(ctx, "requests", requests).get, timeout=S.DR_PAGE_TIMEOUT, stream=True,
             headers={"User-Agent": S.DR_USER_AGENT, "Accept-Language": "en,ru;q=0.8"},
         )
         if resp is None:
@@ -86,7 +88,7 @@ def _fetch(url: str) -> Optional[str]:
             resp.close()
 
 
-def _fetch_ar5iv(url: str) -> Optional[str]:
+def _fetch_ar5iv(url: str, ctx=None) -> Optional[str]:
     """Fetch the ar5iv HTML rendering of an arXiv paper with formulas inlined
     as LaTeX. Returns None (caller falls back to PDF) on any failure."""
     ar5iv = _ar5iv_url(url)
@@ -94,7 +96,7 @@ def _fetch_ar5iv(url: str) -> Optional[str]:
         return None
     resp = None
     try:
-        resp = requests.get(
+        resp = dep(ctx, "requests", requests).get(
             ar5iv, timeout=S.DR_PAGE_TIMEOUT, allow_redirects=True,
             headers={"User-Agent": S.DR_USER_AGENT})
         if resp.status_code != 200:
@@ -146,21 +148,22 @@ def _scrub(text: str, url: str) -> str:
         return text
 
 
-def _fetch_page(url: str) -> tuple:
+def _fetch_page(url: str, *, ctx=None) -> tuple:
     """Fetch one URL. Returns (html, pdf_text): exactly one is non-None on
     success, both None on failure. PDFs (scholarly papers, arXiv) are downloaded
     and text-extracted instead of being skipped as 'not HTML'."""
+    S = settings_view(ctx)
     if not _is_safe_public_url(url):
         logger.debug("blocked non-public/unsafe URL: %s", url)
         return None, None
     if "arxiv.org" in url.lower():
-        ar5iv_html = _fetch_ar5iv(url)
+        ar5iv_html = dep(ctx, "_fetch_ar5iv", _fetch_ar5iv)(url, ctx)
         if ar5iv_html is not None:
             return ar5iv_html, None
     resp = None
     try:
         # Every redirect hop re-checked (dr_urls.safe_get), not just the first URL.
-        resp = safe_get(getter=requests.get, url=url, timeout=S.DR_PAGE_TIMEOUT, stream=True,
+        resp = safe_get(getter=dep(ctx, "requests", requests).get, url=url, timeout=S.DR_PAGE_TIMEOUT, stream=True,
             headers={"User-Agent": S.DR_USER_AGENT, "Accept-Language": "en,ru;q=0.8"},
         )
         if resp is None:
@@ -188,7 +191,7 @@ def _fetch_page(url: str) -> tuple:
         if is_pdf:
             if not S.DR_PDF_ENABLED:
                 return None, None
-            return None, _extract_pdf_text(raw)
+            return None, dep(ctx, "_extract_pdf_text", _extract_pdf_text)(raw)
         enc = resp.encoding
         if not enc or enc.lower() in ("iso-8859-1", "latin-1"):
             enc = "utf-8"
@@ -201,7 +204,7 @@ def _fetch_page(url: str) -> tuple:
             resp.close()
 
 
-def _acquire_page(url, depth, seed, category, use_adapters, cache) -> dict:
+def _acquire_page(url, depth, seed, category, use_adapters, cache, *, ctx=None) -> dict:
     """Fetch+extract+gate ONE url. No shared mutable state (besides the file-per-URL
     cache, whose writes are atomic per distinct URL), so it is safe to run on a
     worker thread. Returns {url, depth, page, html, reason, social}: `page` is set
@@ -210,19 +213,19 @@ def _acquire_page(url, depth, seed, category, use_adapters, cache) -> dict:
     res = {"url": url, "depth": depth, "page": None, "html": None,
            "reason": None, "social": False}
     # Social walls (VK/Telegram) need API/server-rendered extraction, not scraping.
-    if is_social_url(url):
+    if dep(ctx, "is_social_url", is_social_url)(url):
         res["social"] = True
-        posts = fetch_social_posts(url)
+        posts = dep(ctx, "fetch_social_posts", fetch_social_posts)(url)
         if posts:
             res["page"] = {"url": url, "domain": _domain(url),
-                           "title": seed.get("title") or f"{social_kind(url)} posts",
+                           "title": seed.get("title") or f"{dep(ctx, "social_kind", social_kind)(url)} posts",
                            "text": posts[:S.DR_PAGE_CHARS]}
         return res
 
     page, html = None, None
     # 1. Structured API adapter (Wikipedia/arXiv/Crossref): clean canonical text.
     if use_adapters:
-        ad = fetch_via_adapter(url, category)
+        ad = dep(ctx, "fetch_via_adapter", fetch_via_adapter)(url, category)
         if ad and ad.get("text"):
             status, _ = classify_extraction(
                 ad["text"], None, ad.get("title") or seed.get("title", ""))
@@ -247,7 +250,7 @@ def _acquire_page(url, depth, seed, category, use_adapters, cache) -> dict:
         if cache is not None and cache.failed_recently(url):
             res["reason"] = "fetch_failed"
             return res
-        html, pdf_text = _fetch_page(url)
+        html, pdf_text = dep(ctx, "_fetch_page", _fetch_page)(url, ctx=ctx)
         if html is None and pdf_text is None:
             res["reason"] = "fetch_failed"
             if cache is not None:
@@ -257,9 +260,9 @@ def _acquire_page(url, depth, seed, category, use_adapters, cache) -> dict:
             text = pdf_text  # html stays None -> no link/social crawl off a PDF
             budget = S.DR_PDF_TEXT_CHARS
         else:
-            text = _extract_text(html, url)
+            text = dep(ctx, "_extract_text", _extract_text)(html, url)
             budget = S.DR_PAGE_CHARS
-        title = seed.get("title") or _extract_title(html)
+        title = seed.get("title") or dep(ctx, "_extract_title", _extract_title)(html)
         status, reason = classify_extraction(text, html, title)
         if status != GATE_OK:
             res["reason"] = reason
@@ -290,6 +293,7 @@ def crawl_pages(ctx, sources: list, caps: dict, prog: _Progress, run_dir: Path,
     network fetch where they apply. Fetches run in bounded waves (one URL per
     domain per wave for politeness) when DR_FETCH_CONCURRENCY > 1; bookkeeping
     (visited/pages/queue/quarantine) stays single-threaded."""
+    S = settings_view(ctx)
     max_pages = caps["max_pages"]
     max_depth = caps["depth"]
     links_per_page = caps["links_per_page"]
@@ -302,6 +306,7 @@ def crawl_pages(ctx, sources: list, caps: dict, prog: _Progress, run_dir: Path,
     quarantine: dict = {}  # reason_code -> count (visible in stats/logs)
 
     conc = max(1, S.DR_FETCH_CONCURRENCY)
+    acquire = dep(ctx, "_acquire_page", _acquire_page)
     while queue and len(pages) < max_pages:
         if ctx is not None and ctx.is_cancelled():
             break
@@ -334,10 +339,10 @@ def crawl_pages(ctx, sources: list, caps: dict, prog: _Progress, run_dir: Path,
         if conc > 1 and len(wave) > 1:
             with turn_trace.Pool(max_workers=len(wave)) as ex:
                 results = list(ex.map(
-                    lambda wd: _acquire_page(wd[0], wd[1], meta.get(wd[0], {}),
-                                             category, use_adapters, cache), wave))
+                    lambda wd: acquire(wd[0], wd[1], meta.get(wd[0], {}),
+                                       category, use_adapters, cache, ctx=ctx), wave))
         else:
-            results = [_acquire_page(u, d, meta.get(u, {}), category, use_adapters, cache)
+            results = [acquire(u, d, meta.get(u, {}), category, use_adapters, cache, ctx=ctx)
                        for u, d in wave]
 
         # Bookkeeping is strictly single-threaded here.
@@ -372,7 +377,7 @@ def crawl_pages(ctx, sources: list, caps: dict, prog: _Progress, run_dir: Path,
                                 and _domain_allowed(link, S.DR_DOMAIN_WHITELIST, S.DR_DOMAIN_BLACKLIST)):
                             queue.append((link, ddepth + 1))
             if len(pages) % 4 == 0:
-                _save_state(run_dir, phase="crawling", pages=[p["url"] for p in pages])
+                dep(ctx, "_save_state", _save_state)(run_dir, phase="crawling", pages=[p["url"] for p in pages])
 
         # Politeness between waves. Add jitter under concurrency to desync from
         # rate limiters; serial behavior (conc==1) is exactly the old fixed delay.
@@ -394,12 +399,13 @@ def crawl_pages(ctx, sources: list, caps: dict, prog: _Progress, run_dir: Path,
 # --------------------------------------------------------------------------- #
 # Second-stage reranking (rerank.py) — pick the strongest evidence to brief
 # --------------------------------------------------------------------------- #
-def rerank_for_briefing(topic: str, pages: list, profile: dict, prog: _Progress) -> list:
+def rerank_for_briefing(topic: str, pages: list, profile: dict, prog: _Progress, *, ctx=None) -> list:
     """Reorder deduped pages by semantic relevance to the topic (fused with the
     existing host-authority score) and keep only the top-K for the briefing/map
     step. This is the explicit reranker stage: the LLM never sees the full raw
     retrieval set, only the best candidates. A pure pass-through when disabled or
     when there are already few pages."""
+    S = settings_view(ctx)
     if not S.DR_RERANK_ENABLED or not pages:
         return pages
     category = profile.get("category", "general")

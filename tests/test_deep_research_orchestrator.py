@@ -11,7 +11,7 @@ mode, replan loop) plus the early-return / empty-topic / no-sources / no-pages /
 no-briefs / cancelled paths.
 Run: venv/Scripts/python.exe tests/test_deep_research_orchestrator.py
 """
-import os, sys, tempfile, threading
+import os, sys, tempfile, threading, types
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
@@ -30,11 +30,21 @@ def check(name, cond, detail=""):
 _TMP = Path(tempfile.mkdtemp(prefix="drorch_"))
 
 
-# The engine is split across deep_research + the dr_* stage modules, so a seam
-# has to be patched in the module that USES it. `_dr_patch.Patches` finds every
-# home of a name and rebinds all of them (and raises if nothing binds it, so a
-# stale patch can never degrade into a silent real network/LM Studio call).
-from _dr_patch import Patches as _Patches
+# The stand-ins ride on the run's context (tests/_dr_ctx.py), never on the engine's
+# modules: `_Patches` here only stacks names for the `_run` inside it.
+from contextlib import contextmanager
+from _dr_ctx import research_ctx
+
+_STACK = []
+
+
+@contextmanager
+def _Patches(**names):
+    _STACK.append(names)
+    try:
+        yield
+    finally:
+        _STACK.pop()
 
 
 class FakeCtx:
@@ -70,20 +80,21 @@ BASE_PATCHES = dict(
     crawl_pages=lambda ctx, sources, caps, prog, run_dir, profile=None, cache=None: [
         {"url": "https://arxiv.org/1", "domain": "arxiv.org", "title": "T", "text": "adam optimizer text", "equations": []}],
     dedupe_pages=lambda pages, cat: pages,
-    rerank_for_briefing=lambda topic, pages, profile, prog: pages,
+    rerank_for_briefing=lambda topic, pages, profile, prog, **k: pages,
     _brief_pages=lambda ctx, topic, pages, profile, run_dir, prog, **kw: (list(BRIEFS), 0),
     synthesize_report=lambda ctx, topic, briefs, prog, **kw: "# Synthesized Report\n\nBody content about Adam.",
     citation_lineage_brief=lambda cite_query, mailto: None,
-    DR_FETCH_DELAY=0, DR_CACHE_ENABLED=False, DR_REPLAN_ENABLED=False, DR_CITATIONS_ENABLED=False,
+    DR_DIR=_TMP, DR_FETCH_DELAY=0, DR_CACHE_ENABLED=False, DR_REPLAN_ENABLED=False, DR_CITATIONS_ENABLED=False,
 )
 
 
 def _run(extra_patches=None, topic="research the adam optimizer", ctx=None):
     patches = dict(BASE_PATCHES)
+    for layer in _STACK:
+        patches.update(layer)
     if extra_patches:
         patches.update(extra_patches)
-    with _Patches(**patches):
-        return DR.run_deep_research(ctx or FakeCtx(), topic, depth="quick")
+    return DR.run_deep_research(research_ctx(ctx or FakeCtx(), **patches), topic, depth="quick")
 
 
 def test_empty_topic():
@@ -168,14 +179,12 @@ def test_decision_gate_asks():
                   DR_HIERARCHICAL_ENABLED=False, DR_COMMUNITIES_ENABLED=False, DR_CLAIM_MERGE_ENABLED=False,
                   DR_GRAPH_EXPANSION_ENABLED=False, DR_DECISION_GATE_ENABLED=True, DR_REFLECTION_ENABLED=False,
                   DR_SURVEY_MODE=False, DR_CITATIONS_ENABLED=False,
-                  _gate=type(sys)("fakegate")):
-        DR._gate.decide = lambda *a, **k: fake_decision
-        DR._gate.assess_ambiguity = lambda *a, **k: {}
-        # gate_banner takes the output language too: the banner sits at the top
-        # of the finished document.
-        DR._gate.gate_banner = lambda d, out_lang="en": "GATE: " + d["decision"]
-        DR._gate.ASK = "ASK"
-        DR._gate.ABSTAIN = "ABSTAIN"
+                  # gate_banner takes the output language too: the banner sits at the top
+                  # of the finished document.
+                  _gate=types.SimpleNamespace(
+                      decide=lambda *a, **k: fake_decision, assess_ambiguity=lambda *a, **k: {},
+                      gate_banner=lambda d, out_lang="en": "GATE: " + d["decision"],
+                      ASK="ASK", ABSTAIN="ABSTAIN")):
         out = _run()
         check("decision_gate_ask_stops_before_synthesis", "clarification" in out["report"].lower())
 

@@ -14,6 +14,7 @@ Reports are returned as Markdown. In the voice assistant the full report is show
 in the GUI Research tab / written to disk; the spoken reply is just a short
 summary (the model never reads a multi-page report aloud).
 """
+from dr_settings import view as settings_view
 import json
 import logging
 import sys
@@ -22,6 +23,7 @@ import types
 from typing import Callable, Optional
 
 import dr_settings as S
+from seams import dep
 from prompts import PRACTICAL_GUIDE_PROMPT
 from dr_settings import (MANUAL_OVERRIDE_SPEC, apply_overrides, restore_overrides,
                          _coerce_override)
@@ -204,6 +206,11 @@ class _SettingsView(types.ModuleType):
 sys.modules[__name__].__class__ = _SettingsView
 
 
+def _stage(ctx, name: str):
+    """The pipeline stage `name`: the real one, or the run's own (`ctx.deps`)."""
+    return dep(ctx, name, globals()[name])
+
+
 def no_briefs_report(topic: str, pages, silent: int) -> str:
     """What to tell the reader when the run produced no briefs at all.
 
@@ -239,7 +246,7 @@ def _brief_pages(ctx, topic, pages, profile, run_dir, prog, *, scholarly, terms,
         if cancelled():
             break
         prog.update("Verifying", f"[{mode} {i}/{len(pages)}] {page['domain']}")
-        brief = brief_source(ctx, topic, page)
+        brief = _stage(ctx, "brief_source")(ctx, topic, page)
         if not brief:
             # "" means the model produced nothing (our failure); None means it
             # read the page and judged it useless (the page's). Counting both as
@@ -300,11 +307,12 @@ def _expansion_pass(ctx, topic, queries, profile, caps, prog, run_dir, cache,
     """One bounded follow-up retrieval pass (multi-hop or contradiction): search the
     given queries, drop already-seen URLs (visited-set loop protection), crawl,
     dedupe, rerank, and brief. Returns new briefs (tagged `mode`). Never raises."""
+    S = settings_view(ctx)
     if not queries or cancelled():
         return []
     try:
         prog.update("Searching", f"{label}: {len(queries)} queries")
-        srcs = collect_sources(ctx, queries, S.DR_RESULTS_PER_QUERY, prog, run_dir, profile)
+        srcs = _stage(ctx, "collect_sources")(ctx, queries, S.DR_RESULTS_PER_QUERY, prog, run_dir, profile)
         srcs = [s for s in srcs if _norm_url(s["href"]) not in visited_urls]
         if not srcs:
             logger.info("%s: no NEW sources after visited-filter", label)
@@ -314,10 +322,10 @@ def _expansion_pass(ctx, topic, queries, profile, caps, prog, run_dir, cache,
         # Keep each follow-up pass cheap relative to the main crawl budget.
         sub_caps = dict(caps)
         sub_caps["max_pages"] = max(4, caps.get("max_pages", S.DR_MAX_PAGES) // 2)
-        pages = crawl_pages(ctx, srcs, sub_caps, prog, run_dir, profile, cache)
-        pages = dedupe_pages(pages, profile.get("category", "general"))
-        pages = rerank_for_briefing(topic, pages, profile, prog)
-        briefs, _ = _brief_pages(ctx, topic, pages, profile, run_dir, prog,
+        pages = _stage(ctx, "crawl_pages")(ctx, srcs, sub_caps, prog, run_dir, profile, cache)
+        pages = _stage(ctx, "dedupe_pages")(pages, profile.get("category", "general"))
+        pages = _stage(ctx, "rerank_for_briefing")(topic, pages, profile, prog, ctx=ctx)
+        briefs, _ = dep(ctx, "_brief_pages", _brief_pages)(ctx, topic, pages, profile, run_dir, prog,
                                  scholarly=scholarly, terms=terms, mode=mode,
                                  cancelled=cancelled)
         logger.info("%s: +%d briefs from %d new sources", label, len(briefs), len(srcs))
@@ -360,10 +368,11 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
     crawling and briefing stay in English regardless — that is where the sources
     are — so a Russian report is still built on the whole English-language web.
     """
+    S = settings_view(ctx)
     topic = (topic or "").strip()
     out_lang = _norm_out_lang(out_lang)
     prog = _Progress(progress)
-    caps = _resolve_caps(depth)
+    caps = _resolve_caps(depth, ctx=ctx)
     run_dir = S.DR_DIR / f"{int(time.time())}_{_slug(topic)}"
     started = time.time()
 
@@ -376,16 +385,16 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
 
     # 1. Expand queries (+ classify topic for ddgs tuning)
     prog.update("Expanding queries", topic)
-    queries, profile = plan_queries(ctx, topic, caps["max_queries"])
+    queries, profile = _stage(ctx, "plan_queries")(ctx, topic, caps["max_queries"])
     prog.update("Expanding queries",
                 f"{len(queries)} queries · {profile['category']}/{profile['recency']}",
                 queries=len(queries))
-    _save_state(run_dir, phase="planning", topic=topic, queries=queries, profile=profile)
+    dep(ctx, "_save_state", _save_state)(run_dir, phase="planning", topic=topic, queries=queries, profile=profile)
     if cancelled():
         return _finish(ctx, run_dir, topic, "", prog, queries, [], started, cancelled=True)
 
     # 2. Collect sources
-    sources = collect_sources(ctx, queries, S.DR_RESULTS_PER_QUERY, prog, run_dir, profile)
+    sources = _stage(ctx, "collect_sources")(ctx, queries, S.DR_RESULTS_PER_QUERY, prog, run_dir, profile)
 
     # 2b. Coverage / diversity check + bounded corrective re-plan loop
     # (extended for manual control). DR_MAX_COLLECTION_ROUNDS=1 (default) reproduces
@@ -420,10 +429,10 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
             logger.info("Coverage round %d/%d (%s) — broadening", round_n, max_rounds, reasons)
             prog.update("Expanding queries",
                         f"round {round_n}/{max_rounds}: broadening — " + "; ".join(reasons))
-            extra = _corrective_queries(ctx, topic, profile, queries, caps["max_queries"])
+            extra = dep(ctx, "_corrective_queries", _corrective_queries)(ctx, topic, profile, queries, caps["max_queries"])
             if not extra:
                 break
-            more = collect_sources(ctx, extra, S.DR_RESULTS_PER_QUERY, prog, run_dir, profile)
+            more = _stage(ctx, "collect_sources")(ctx, extra, S.DR_RESULTS_PER_QUERY, prog, run_dir, profile)
             have = {_norm_url(s["href"]) for s in sources}
             added = [s for s in more if _norm_url(s["href"]) not in have]
             if S.DR_MAX_SOURCES > 0:
@@ -449,12 +458,12 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
 
     # 3. Crawl (with extraction cache + structured adapters)
     cache = ExtractionCache(S.DR_CACHE_DIR, enabled=S.DR_CACHE_ENABLED)
-    pages = crawl_pages(ctx, sources, caps, prog, run_dir, profile, cache)
+    pages = _stage(ctx, "crawl_pages")(ctx, sources, caps, prog, run_dir, profile, cache)
     prog.update("Deduplicating", "collapsing near-duplicate sources")
-    pages = dedupe_pages(pages, profile.get("category", "general"))
+    pages = _stage(ctx, "dedupe_pages")(pages, profile.get("category", "general"))
     import steer as _steer    # a wish typed during the search steers reading and writing
     topic = _steer.with_notes(topic, _steer.take(ctx))
-    pages = rerank_for_briefing(topic, pages, profile, prog)
+    pages = _stage(ctx, "rerank_for_briefing")(topic, pages, profile, prog, ctx=ctx)
     if not pages:
         report = (f"# Research: {_clean_topic}\n\nSources were found but none could be "
                   f"fetched or yielded readable content.")
@@ -493,11 +502,11 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
     if _trace_formulas:
         prog.snap_formula("EXTRACTION", _pages_math)
 
-    briefs, dropped_irrelevant = _brief_pages(
+    briefs, dropped_irrelevant = dep(ctx, "_brief_pages", _brief_pages)(
         ctx, topic, pages, profile, run_dir, prog,
         scholarly=_scholarly, terms=_terms, mode=_contra.MODE_CONFIRM, cancelled=cancelled)
     prog.update(findings=len(briefs))
-    _save_state(run_dir, phase="briefing", findings=len(briefs))
+    dep(ctx, "_save_state", _save_state)(run_dir, phase="briefing", findings=len(briefs))
     if _trace_formulas:
         # BRIEFING stage = brief bodies + the equations we preserved from sources.
         prog.snap_formula("BRIEFING", "\n".join(
@@ -527,7 +536,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
             if not hop_q:
                 break
             prog.update("Searching", f"multi-hop {hop+1}/{S.DR_MULTIHOP_DEPTH}: {len(hop_q)} entity queries")
-            new_briefs = _expansion_pass(
+            new_briefs = dep(ctx, "_expansion_pass", _expansion_pass)(
                 ctx, topic, hop_q, profile, caps, prog, run_dir, cache,
                 visited_urls=visited_urls, scholarly=_scholarly, terms=_terms,
                 mode=_contra.MODE_CONFIRM, label=f"multihop-{hop+1}", cancelled=cancelled)
@@ -550,17 +559,17 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
     if S.DR_HIERARCHICAL_ENABLED and briefs and not cancelled():
         interim_clusters = _cluster.cluster_briefs(
             briefs, threshold=S.DR_CLUSTER_THRESHOLD, major_min_size=S.DR_CLUSTER_MAJOR_MIN)
-        _save_state(run_dir, phase="clustering_interim", clusters=interim_clusters.to_dict())
+        dep(ctx, "_save_state", _save_state)(run_dir, phase="clustering_interim", clusters=interim_clusters.to_dict())
     if (S.DR_GRAPH_EXPANSION_ENABLED and S.DR_HIERARCHICAL_ENABLED and briefs
             and not cancelled()):
         interim_graph = _rgraph.build_graph(briefs)
         gx = _gguided.plan_graph_expansion(
             topic, interim_graph, interim_clusters, contradiction=None,
             visited=visited_queries, max_queries=S.DR_GRAPH_EXPANSION_QUERIES)
-        _save_state(run_dir, phase="graph_expansion_plan", targets=gx)
+        dep(ctx, "_save_state", _save_state)(run_dir, phase="graph_expansion_plan", targets=gx)
         if gx:
             prog.update("Searching", f"graph-guided deep dive: {len(gx)} targets")
-            gx_briefs = _expansion_pass(
+            gx_briefs = dep(ctx, "_expansion_pass", _expansion_pass)(
                 ctx, topic, [g["query"] for g in gx], profile, caps, prog, run_dir, cache,
                 visited_urls=visited_urls, scholarly=_scholarly, terms=_terms,
                 mode=_contra.MODE_CONFIRM, label="graph-deepdive", cancelled=cancelled)
@@ -584,9 +593,9 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
             prioritized = _gguided.cluster_contradiction_targets(
                 topic, _rgraph.build_graph(briefs), interim_clusters,
                 visited=visited_queries, max_queries=S.DR_CONTRADICTION_QUERIES)
-            _save_state(run_dir, phase="contradiction_priority", targets=prioritized)
+            dep(ctx, "_save_state", _save_state)(run_dir, phase="contradiction_priority", targets=prioritized)
             cq = [p["query"] for p in prioritized] + cq  # graph-prioritized first
-        contra_briefs = _expansion_pass(
+        contra_briefs = dep(ctx, "_expansion_pass", _expansion_pass)(
             ctx, topic, cq, profile, caps, prog, run_dir, cache,
             visited_urls=visited_urls, scholarly=_scholarly, terms=_terms,
             mode=_contra.MODE_CONTRADICT, label="contradiction", cancelled=cancelled)
@@ -595,7 +604,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
         prog.update(findings=len(briefs))
     contra_sig = _contra.contradiction_summary(briefs)
     prog.stats["contradictions"] = contra_sig["count"]
-    _save_state(run_dir, phase="contradiction", contradictions=contra_sig)
+    dep(ctx, "_save_state", _save_state)(run_dir, phase="contradiction", contradictions=contra_sig)
 
     if dropped_irrelevant:
         prog.stats["off_topic_dropped"] = dropped_irrelevant
@@ -614,7 +623,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
         cite_query = _citation_query(_search_topic, queries)
         prog.update("Verifying", f"citation graph (OpenAlex): {cite_query}")
         try:
-            cit = citation_lineage_brief(cite_query, S.DR_CITATION_MAILTO)
+            cit = dep(ctx, "citation_lineage_brief", citation_lineage_brief)(cite_query, S.DR_CITATION_MAILTO)
         except Exception as exc:
             logger.warning("citation enrichment failed: %s", exc)
             cit = None
@@ -647,7 +656,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
             briefs, threshold=S.DR_CLAIM_MERGE_THRESHOLD)
         if merge_log:
             prog.stats["claims_merged"] = len(merge_log)
-            _save_state(run_dir, phase="claim_merge", merges=merge_log)
+            dep(ctx, "_save_state", _save_state)(run_dir, phase="claim_merge", merges=merge_log)
 
     # 4d. Provenance graph (spec C+G): entity↔source↔claim with supported_by /
     # refuted_by edges. Built now so the reflection loop + gate can read structure;
@@ -662,10 +671,10 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
         prog.stats["contradictions"] = contra_sig["count"]
         confirm_b, _ = _contra.partition_evidence(briefs)
         stats4 = evidence_stats(confirm_b)
-        amb = _gate.assess_ambiguity(topic, has_entities=entset.total() > 0)
+        amb = dep(ctx, "_gate", _gate).assess_ambiguity(topic, has_entities=entset.total() > 0)
         cov = coverage_signals([{"domain": b["domain"], "href": b["url"], "query": ""}
                                 for b in confirm_b], profile)
-        dec = _gate.decide(stats4, cov, contra_sig, ambiguity=amb,
+        dec = dep(ctx, "_gate", _gate).decide(stats4, cov, contra_sig, ambiguity=amb,
                            min_strong=S.DR_GATE_MIN_STRONG, min_clusters=S.DR_GATE_MIN_CLUSTERS)
         refl = _reflect(topic, briefs, entset, contra_sig, dec) if S.DR_REFLECTION_ENABLED else {}
         return dec, refl
@@ -673,11 +682,11 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
     # 4e+4f. Decision gate (spec D) + reflection gaps (spec C) on the first pass.
     decision, reflection = _gate_and_reflect()
     prog.stats["decision"] = decision["decision"]
-    _save_state(run_dir, phase="decision_gate", decision=decision)
-    logger.info("DECISION GATE: %s", _gate.gate_banner(decision))
+    dep(ctx, "_save_state", _save_state)(run_dir, phase="decision_gate", decision=decision)
+    logger.info("DECISION GATE: %s", dep(ctx, "_gate", _gate).gate_banner(decision))
     if reflection:
         prog.stats["reflection"] = reflection
-        _save_state(run_dir, phase="reflection", reflection=reflection)
+        dep(ctx, "_save_state", _save_state)(run_dir, phase="reflection", reflection=reflection)
 
     # 4f2. ACTIVE reflection loop (spec C): turn the recorded gaps (weak/unsupported
     # claims, unresolved contradictions, thin clusters, missing entities) into NEW
@@ -702,20 +711,20 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
             visited=visited_queries,
             max_queries=min(refl_budget, S.DR_GRAPH_EXPANSION_QUERIES))
         rq = [p["query"] for p in plan][:refl_budget]
-        _save_state(run_dir, phase="reflection_iteration", iteration=refl_iter,
+        dep(ctx, "_save_state", _save_state)(run_dir, phase="reflection_iteration", iteration=refl_iter,
                     gaps=reflection.get("gaps", []), targets=plan, queries=rq)
         if not rq:
             logger.info("reflection loop: no NEW targets — stopping (loop guard)")
             break
         prog.update("Searching", f"reflection cycle {refl_iter}: {len(rq)} gap-closing queries")
-        new_briefs = _expansion_pass(
+        new_briefs = dep(ctx, "_expansion_pass", _expansion_pass)(
             ctx, topic, rq, profile, caps, prog, run_dir, cache,
             visited_urls=visited_urls, scholarly=_scholarly, terms=_terms,
             mode=_contra.MODE_CONFIRM, label=f"reflection-{refl_iter}", cancelled=cancelled)
         refl_budget -= len(rq)
         if not new_briefs:
             logger.info("reflection loop: cycle %d added 0 briefs — stopping", refl_iter)
-            _save_state(run_dir, phase="reflection_result", iteration=refl_iter, added=0)
+            dep(ctx, "_save_state", _save_state)(run_dir, phase="reflection_result", iteration=refl_iter, added=0)
             break
         briefs.extend(new_briefs)
         for nb in new_briefs:
@@ -723,7 +732,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
         prog.update(findings=len(briefs))
         graph = _rgraph.build_graph(briefs)              # UPDATED graph
         decision, reflection = _gate_and_reflect()       # UPDATED decision + gaps
-        _save_state(run_dir, phase="reflection_result", iteration=refl_iter,
+        dep(ctx, "_save_state", _save_state)(run_dir, phase="reflection_result", iteration=refl_iter,
                     added=len(new_briefs), total_findings=len(briefs),
                     decision=decision, reflection=reflection)
         logger.info("reflection cycle %d: +%d briefs, decision=%s, remaining gaps=%d",
@@ -770,7 +779,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
                 encoding="utf-8")
         except Exception as exc:
             logger.debug("clusters.json save failed: %s", exc)
-        _save_state(run_dir, phase="clustering_final",
+        dep(ctx, "_save_state", _save_state)(run_dir, phase="clustering_final",
                     clusters=final_clusters.to_dict(), digests=cluster_digests)
 
     # 4d3. Recursive hierarchy (spec A): root → cluster → subcluster → … saved to
@@ -788,7 +797,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
                 encoding="utf-8")
         except Exception as exc:
             logger.debug("hierarchy.json save failed: %s", exc)
-        _save_state(run_dir, phase="hierarchy", stats=hierarchy.stats())
+        dep(ctx, "_save_state", _save_state)(run_dir, phase="hierarchy", stats=hierarchy.stats())
         if hierarchy.levels() >= 3:                       # use the tree only when it has depth
             tree_preamble = _hierarchy.render_tree_preamble(hierarchy)
 
@@ -804,13 +813,13 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
                 json.dumps(comm, ensure_ascii=False, indent=2), encoding="utf-8")
         except Exception as exc:
             logger.debug("communities.json save failed: %s", exc)
-        _save_state(run_dir, phase="communities", stats=comm["stats"],
+        dep(ctx, "_save_state", _save_state)(run_dir, phase="communities", stats=comm["stats"],
                     vs_clusters=comm.get("vs_clusters"))
 
     if S.DR_DECISION_GATE_ENABLED and decision["decision"] in (_gate.ASK, _gate.ABSTAIN):
         # Do not fabricate a confident answer. Surface the decision + whatever weak
         # evidence exists, plus the source appendix, and stop before synthesis.
-        banner = _gate.gate_banner(decision, out_lang)
+        banner = dep(ctx, "_gate", _gate).gate_banner(decision, out_lang)
         body = (f"# {_lab(out_lang, 'research')}: {_clean_topic}\n\n> {banner}\n\n"
                 + (f"**{_lab(out_lang, 'why')}:** " + "; ".join(decision["reasons"]) + "\n\n"
                    if decision["reasons"] else "")
@@ -848,7 +857,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
                     "list instead of a survey", profile.get("category"))
         prog.update("Building report", "listing bookable options")
         try:
-            report = _think_call(
+            report = dep(ctx, "_think_call", _think_call)(
                 ctx, PRACTICAL_GUIDE_PROMPT + _lang_directive(out_lang),
                 f"User request: {topic}\n\nPer-source briefs:\n"
                 + _consolidate_evidence(ctx, topic, briefs, prog)
@@ -889,7 +898,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
         # pages). It writes its OWN title + abstract + TOC, so the run header is
         # NOT prepended in this path. Falls through to single-pass on empty.
         try:
-            survey = synthesize_survey(ctx, topic, briefs, prog,
+            survey = dep(ctx, "synthesize_survey", synthesize_survey)(ctx, topic, briefs, prog,
                                        section_tokens=caps.get("report_tokens"),
                                        out_lang=out_lang)
         except Exception as exc:
@@ -901,7 +910,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
             sec = _citation_section_from_brief(cit_body, _terms)
             if sec:
                 body = body.rstrip() + "\n\n" + sec + "\n"
-        gate_line = f"\n> {_gate.gate_banner(decision, out_lang)}\n" if S.DR_DECISION_GATE_ENABLED else ""
+        gate_line = f"\n> {dep(ctx, "_gate", _gate).gate_banner(decision, out_lang)}\n" if S.DR_DECISION_GATE_ENABLED else ""
         report = (f"{body}\n{gate_line}\n"
                   f"{_contradiction_note(contra_sig, out_lang)}")
         # Survey mode writes its own title, abstract and contents, so the run
@@ -915,7 +924,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
         report = _append_once(report, _sources_appendix(briefs, out_lang))
 
     if report is None:
-        report = synthesize_report(ctx, topic, briefs, prog,
+        report = _stage(ctx, "synthesize_report")(ctx, topic, briefs, prog,
                                    max_tokens=caps.get("report_tokens"),
                                    sections=sections, preamble=preamble,
                                    out_lang=out_lang)
@@ -932,7 +941,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
             logger.warning("synthesis empty — retrying at %s effort on the strongest %d briefs",
                            rung, len(strong))
             prog.update("Building report", f"retrying synthesis at {rung} reasoning effort")
-            report = synthesize_report(ctx, topic, strong, prog,
+            report = _stage(ctx, "synthesize_report")(ctx, topic, strong, prog,
                                        max_tokens=caps.get("report_tokens"), sections=None,
                                        preamble=preamble, out_lang=out_lang,
                                        effort=rung)
@@ -954,7 +963,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
             report = _postprocess_report(report)
         gate_line = ""
         if S.DR_DECISION_GATE_ENABLED:
-            gate_line = f"\n> {_gate.gate_banner(decision, out_lang)}\n"
+            gate_line = f"\n> {dep(ctx, "_gate", _gate).gate_banner(decision, out_lang)}\n"
         report = (f"{header}{gate_line}\n{report}\n"
                   f"{_contradiction_note(contra_sig, out_lang)}")
         report = _append_once(report, _sources_appendix(briefs, out_lang))
@@ -964,7 +973,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
         # the per-source briefs, so deliver a deterministic, evidence-bound summary
         # built from those (every point cited to its source/thread).
         logger.warning("synthesis empty after retry — emitting deterministic digest fallback")
-        gate_line = f"\n> {_gate.gate_banner(decision, out_lang)}\n" if S.DR_DECISION_GATE_ENABLED else ""
+        gate_line = f"\n> {dep(ctx, "_gate", _gate).gate_banner(decision, out_lang)}\n" if S.DR_DECISION_GATE_ENABLED else ""
         report = (f"{header}{gate_line}\n"
                   + _deterministic_digest_report(topic, cluster_digests, briefs)
                   + _contradiction_note(contra_sig, out_lang))
