@@ -33,7 +33,8 @@ win_runtime.preload_newest_msvcp()   # before PyQt5 brings its old 14.26 (core/w
 # automatically (by Windows itself) on a crash or kill, so there is no stale-
 # lock state to clean up -- unlike a plain "lock file exists" check, which a
 # process that died without deleting it would leave permanently jammed.
-_SINGLETON_LOCK_PATH = os.path.join(ROOT, ".assistant_singleton.lock")
+# Override: a process stuck in a kernel call cannot be killed and keeps the lock until reboot.
+_SINGLETON_LOCK_PATH = os.getenv("ASSISTANT_LOCK_PATH") or os.path.join(ROOT, ".assistant_singleton.lock")
 _singleton_handle = None  # kept open for the process lifetime; GC would drop the lock
 
 
