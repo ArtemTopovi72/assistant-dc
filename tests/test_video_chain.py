@@ -262,3 +262,24 @@ def test_marking_fails_soft(monkeypatch):
     monkeypatch.setattr(llm, "call_llm_simple", lambda *a, **k: "no json here")
     parts = ["a", "b"]
     assert V.mark_inserts(None, parts) == parts
+
+
+def test_continue_in_words_goes_on_from_the_chats_last_clip(monkeypatch, tmp_path):
+    # «продолжи это видео» typed, no ▶️: a new clip from nothing, another style (live 2026-10-13).
+    H, calls, stitched, kept = _wire(monkeypatch, tmp_path)
+    import intent
+    last = tmp_path / "delivered.mp4"
+    last.write_bytes(b"s")
+    monkeypatch.setattr(V, "chain_of", lambda p: ("h3_continuous/chZ", 4) if p == str(last) else ())
+    monkeypatch.setattr(intent, "YES_STUB", lambda q, t: "continue" in q, raising=False)
+    ctx = _Ctx()
+    ctx.last_video_path = str(last)
+    H._handle_generate_video(ctx, {"user_input_original": "продолжи это видео: кот прыгает"},
+                             {"description": "The cat jumps onto the table."})
+    (d, kw), = calls
+    assert kw["chain"] == ("h3_continuous/chZ", 5) and kw["size_from"] == str(last)
+    monkeypatch.setattr(intent, "YES_STUB", lambda q, t: False, raising=False)
+    calls.clear()
+    H._handle_generate_video(_Ctx(), {"user_input_original": "сделай видео: кот прыгает"},
+                             {"description": "The cat jumps onto the table."})
+    assert not calls[0][1].get("chain") or calls[0][1]["chain"][1] == 1   # a new clip stays new

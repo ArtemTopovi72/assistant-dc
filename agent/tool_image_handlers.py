@@ -1365,6 +1365,24 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                     images = [seed if q == p else q for q in images]
                 break
 
+    # «продолжи это видео» in words: made a new clip from nothing, another style even
+    # (live 2026-10-13) -- only the ▶️ button set the clip up. The chat's last clip here.
+    lv = getattr(ctx, "last_video_path", None)
+    if not getattr(ctx, "continue_tail", "") and lv and os.path.exists(lv):
+        import intent
+        said = str((state or {}).get("user_input_original") or (state or {}).get("user_input") or "")
+        if said and intent.ask_yes(
+                "The user wrote: {text}. Do they ask to continue or extend the video already in "
+                "this chat -- what happens next in it -- rather than a new clip?", said, default=False):
+            import tempfile
+            import tg_continue
+            d = tempfile.mkdtemp(prefix="contlast_")
+            seed, tail = os.path.join(d, "seed.jpg"), os.path.join(d, "tail.mp4")
+            if tg_continue.seed_frame(lv, seed) and tg_continue.cut_tail(lv, tail):
+                logger.info("generate_video: continuing the chat's last clip %s", os.path.basename(lv))
+                ctx.continue_tail, ctx.continue_src = tail, lv
+                images = [seed]
+
     # ▶️ Continue video (tg_continue): the clip's tail is the reference -- its motion, faces and
     # its own sound -- and the new part is joined to the original afterwards.
     cont_tail = getattr(ctx, "continue_tail", "") or ""
