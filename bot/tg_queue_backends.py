@@ -280,9 +280,11 @@ class RedisBackend(_Backend):
     return nil
     """
 
-    def __init__(self, url: str) -> None:
-        import redis as _redis
-        self._r = _redis.from_url(url, decode_responses=False)
+    def __init__(self, url: str, client=None) -> None:
+        if client is None:
+            import redis as _redis
+            client = _redis.from_url(url, decode_responses=False)
+        self._r = client
         self._r.ping()
         self._push_sha = self._r.register_script(self._PUSH_LUA)
         self._pop_sha  = self._r.register_script(self._POP_LUA)

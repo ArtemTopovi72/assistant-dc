@@ -15,14 +15,10 @@ import tg_queue_backends as B
 
 
 @pytest.fixture
-def redis_backend(monkeypatch):
+def redis_backend():
     fakeredis = pytest.importorskip("fakeredis")
     pytest.importorskip("lupa")          # the backend's push/pop are Lua scripts
-    import redis
-    server = fakeredis.FakeServer()
-    monkeypatch.setattr(redis, "from_url",
-                        lambda url, **k: fakeredis.FakeRedis(server=server, **k))
-    return B.RedisBackend("redis://fake")
+    return B.RedisBackend("redis://fake", client=fakeredis.FakeRedis(server=fakeredis.FakeServer()))
 
 
 def _t(i, chat=1):

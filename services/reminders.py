@@ -27,6 +27,7 @@ MAX_PER_OWNER = 20
 # (~49.7 days): a Timer for "через 2 года" raised OverflowError on its own
 # thread and the reminder silently never fired.
 _MAX_TIMER_S = 86400.0
+_TIMER = threading.Timer           # register(timer=...) swaps it for a suite
 
 
 def _save() -> None:
@@ -70,17 +71,18 @@ def _fire(rid: str) -> None:
 
 def _arm(rid: str) -> None:
     wait = min(_MAX_TIMER_S, max(0.0, _ITEMS[rid]["due"] - time.time()))
-    t = threading.Timer(wait, _fire, (rid,))
+    t = _TIMER(wait, _fire, (rid,))
     t.daemon = True
     _TIMERS[rid] = t
     t.start()
 
 
-def register(sender, path) -> int:
+def register(sender, path, max_timer_s: float = 86400.0, timer=None) -> int:
     """Called once by the bot at start. Returns how many reminders were re-armed."""
-    global _SENDER, _PATH
+    global _SENDER, _PATH, _MAX_TIMER_S, _TIMER
     with _LOCK:
         _SENDER, _PATH = sender, Path(path)
+        _MAX_TIMER_S, _TIMER = max_timer_s, timer or threading.Timer
         try:
             loaded = json.loads(_PATH.read_text(encoding="utf-8")) if _PATH.exists() else {}
         except Exception:

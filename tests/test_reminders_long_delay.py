@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import reminders
 
 
-def test_far_reminder_waits_in_capped_steps_and_still_fires(monkeypatch):
+def test_far_reminder_waits_in_capped_steps_and_still_fires():
     waits = []
     real_timer = threading.Timer
 
@@ -22,11 +22,10 @@ def test_far_reminder_waits_in_capped_steps_and_still_fires(monkeypatch):
         waits.append(interval)
         return real_timer(interval, fn, args)
 
-    monkeypatch.setattr(reminders.threading, "Timer", spy_timer)
-    monkeypatch.setattr(reminders, "_MAX_TIMER_S", 0.2)
     got = []
     d = tempfile.mkdtemp()
-    reminders.register(lambda cid, t: got.append(t), os.path.join(d, "r.json"))
+    reminders.register(lambda cid, t: got.append(t), os.path.join(d, "r.json"),
+                       max_timer_s=0.2, timer=spy_timer)
     try:
         # Due well past the 1 s firing slack, so even a late first wake on a
         # loaded runner (CI: one 0.2 s wait, then fired) must re-arm.
