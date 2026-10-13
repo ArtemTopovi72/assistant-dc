@@ -24,7 +24,7 @@ import logging
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 try:
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+    sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")

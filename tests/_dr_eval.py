@@ -8,7 +8,7 @@ query plan, crawl counts) to tests/_dr_eval.log for inspection.
 import sys, os, io, json, time, threading, logging
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pathlib import Path
 from models import Context
