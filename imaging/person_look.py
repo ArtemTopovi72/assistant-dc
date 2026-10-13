@@ -8,7 +8,7 @@ that plans the picture names the person; their looks are read from the web
 the description.
 """
 from __future__ import annotations
-from seams import dep
+from seams import dep, text_model
 
 import logging
 import os
@@ -47,7 +47,7 @@ def _ask(text: str, ctx=None) -> tuple:
         return "", ""
     from llm import call_llm_simple
     from utils import safe_json_from_llm
-    out = call_llm_simple(None, _SYSTEM, "Request: " + text[:1500], temperature=0.0,
+    out = text_model(ctx)(None, _SYSTEM, "Request: " + text[:1500], temperature=0.0,
                           max_tokens=200, prefill="<think></think>")
     data = safe_json_from_llm(out or "", ["person", "look"]) or {}
     return str(data.get("person") or "").strip(), str(data.get("look") or "").strip()
@@ -83,7 +83,7 @@ def _look_from_web(ctx, person: str) -> str:
         if own is not None:
             return own("WEB:" + found)[1]
         from llm import call_llm_simple
-        return (call_llm_simple(None, _FROM_WEB.format(person=person), found[:4000],
+        return (text_model(ctx)(None, _FROM_WEB.format(person=person), found[:4000],
                                 temperature=0.0, max_tokens=160,
                                 prefill="<think></think>") or "").strip()
     except Exception:

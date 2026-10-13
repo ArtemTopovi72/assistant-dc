@@ -11,7 +11,7 @@ written from the overview plus the parts. Costs a few vision calls; only
 runs when the source has enough pixels to zoom into.
 """
 from __future__ import annotations
-from seams import vision_model
+from seams import vision_model, text_model
 import io
 import logging
 from typing import List, Optional, Tuple
@@ -134,7 +134,7 @@ def look_closely(ctx, image_bytes: bytes, question: str, overview: str) -> Optio
     try:
         if ctx is not None:
             ctx.set_stage("Looking at the image")
-        merged = _llm.call_llm_simple(ctx, MERGE_PROMPT, user, temperature=0.2,
+        merged = text_model(ctx)(ctx, MERGE_PROMPT, user, temperature=0.2,
                                       max_tokens=700, prefill="<think></think>") or ""
     except Exception:
         logger.warning("close look: merge failed", exc_info=True)

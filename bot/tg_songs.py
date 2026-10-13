@@ -12,7 +12,7 @@ Paths are read through ``tg_bot`` at call time (_MASHUP_DIR in particular is
 rebound by redirect_data_dir(), which a by-value import would never see).
 """
 from __future__ import annotations
-from seams import intent_read
+from seams import intent_read, text_model
 
 import html as _html_mod
 import re as _re
@@ -139,7 +139,7 @@ def structure_lyrics(ctx, given: str) -> str:
         return tag_lyrics(given)
     try:
         import llm
-        out = llm.call_llm_simple(ctx, _STRUCTURE_SYS, given, temperature=0.1,
+        out = text_model(ctx)(ctx, _STRUCTURE_SYS, given, temperature=0.1,
                                   max_tokens=min(4000, 200 + len(given)))
     except Exception:
         tg_bot.logger.warning("[songs] lyric layout call failed", exc_info=True)

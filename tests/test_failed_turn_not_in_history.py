@@ -59,10 +59,8 @@ class StubGraph:
         msgs.append({"role": "assistant", "content": f"echo: {text}"})
         return {"final_answer": f"echo: {text}", "messages": msgs}
 
-
-graph_mod.build_graph = lambda ctx: StubGraph(ctx)
-
 bot = T.TelegramBot("123:TEST", lambda: CTX, lambda: object(), lambda: {"messages": []}, silent_mode=True)
+bot.graph_builder = lambda ctx: StubGraph(ctx)
 bot._backend = T.InMemoryBackend()
 bot.sent = []
 bot._send_text = lambda cid, t, **kw: (bot.sent.append((cid, t)), 1)[1]

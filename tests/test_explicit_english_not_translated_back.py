@@ -31,9 +31,11 @@ for q in EN:
 for q in ["как будет по-английски «подоконник»?", "привет", ""]:
     check("does not: " + q, not L.asks_for_english(q, ctx=_R))
 
+_TXT = [None]   # the text model the context hands out
 calls = []
-L.call_llm_simple = lambda *a, **k: calls.append(1) or "Спасибо, передам соседям."
+_TXT[0] = lambda *a, **k: calls.append(1) or "Спасибо, передам соседям."
 class C:
+    text_model = property(lambda self: _TXT[0])
     intent_read = staticmethod(_READ["intent_read"])
     def is_cancelled(self): return False
 ans = "Thank you for the information! Understood, I will pass it on to the neighbours."

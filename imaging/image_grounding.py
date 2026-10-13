@@ -8,7 +8,7 @@ regions/instructions, item attribute classification and the edit-prompt refiner.
 Extracted from image.py. This layer talks to the LLM/VLM but never to ComfyUI,
 so it sits below the mask and edit pipelines and can be imported by both.
 """
-from seams import vision_model
+from seams import vision_model, text_model
 import logging
 import os
 import re
@@ -191,7 +191,7 @@ def _ground_region_phrase(ctx, image_path: str, region: str) -> str:
                "item EXACTLY as written, or the word NONE if the target is not in "
                "the list at all. One word/phrase only, no punctuation, no prose.")
         ask = f"Edit target: {region}\nVisible regions: {', '.join(inv)}"
-        resp = (call_llm_simple(ctx, sys, ask, max_tokens=16, temperature=0.0,
+        resp = (text_model(ctx)(ctx, sys, ask, max_tokens=16, temperature=0.0,
                                 prefill="<think></think>") or "").strip().lower()
     except Exception as exc:
         logger.warning("region grounding map failed: %s", exc)
@@ -239,7 +239,7 @@ def _extract_edit_target(ctx, instruction: str, image_path: Optional[str] = None
                 f"{', '.join(inventory)}")
         logger.info("edit-target grounding: inventory=%s", inventory)
     try:
-        resp = call_llm_simple(ctx, _EDIT_TARGET_PROMPT, user,
+        resp = text_model(ctx)(ctx, _EDIT_TARGET_PROMPT, user,
                                max_tokens=120, temperature=0.0, prefill="<think></think>")
         data = safe_json_from_llm(resp) if resp else None
     except Exception as exc:
@@ -300,7 +300,7 @@ def _english_region(ctx, region: str) -> str:
     if r.isascii() and len(r.split()) <= 2:
         return r.lower()
     try:
-        resp = call_llm_simple(ctx, _REGION_TRANSLATE_PROMPT, r,
+        resp = text_model(ctx)(ctx, _REGION_TRANSLATE_PROMPT, r,
                                max_tokens=16, temperature=0.0, prefill="<think></think>")
         first = (resp or "").strip().splitlines()[0] if (resp or "").strip() else ""
         word = "".join(c for c in first if c.isascii() and (c.isalpha() or c == " ")).strip().lower()
@@ -328,7 +328,7 @@ def _english_instructions(ctx, text: str) -> str:
     if not t or t.isascii():
         return t
     try:
-        resp = call_llm_simple(ctx, _INSTR_TRANSLATE_PROMPT, t,
+        resp = text_model(ctx)(ctx, _INSTR_TRANSLATE_PROMPT, t,
                                max_tokens=60, temperature=0.0, prefill="<think></think>")
         first = (resp or "").strip().splitlines()[0].strip()
         if first and first.isascii():
@@ -390,7 +390,7 @@ def _item_attributes(ctx, phrase: str) -> dict:
     if key in _item_attr_cache:
         return _derived(_item_attr_cache[key])
     try:
-        resp = call_llm_simple(ctx, _ITEM_ATTR_PROMPT, phrase.strip(),
+        resp = text_model(ctx)(ctx, _ITEM_ATTR_PROMPT, phrase.strip(),
                                max_tokens=120, temperature=0.0, prefill="<think></think>")
         # Was a NON-greedy first-{...}: a leading "{}" in the reply, or a nested
         # object, won over the real answer and every attribute silently fell back
@@ -541,7 +541,7 @@ def _refine_edit_prompts(ctx, region: str, instructions: str, *,
         return _EDIT_PROMPT_CACHE["value"]
     try:
         user = f"REGION: {region or 'the image'} || CHANGE: {instructions}"
-        resp = call_llm_simple(ctx, EDIT_PROMPT_REFINER, user,
+        resp = text_model(ctx)(ctx, EDIT_PROMPT_REFINER, user,
                                max_tokens=220, temperature=0.0,
                                prefill="<think></think>")
         # Was first-{ to last-}: trailing prose containing a brace made the whole

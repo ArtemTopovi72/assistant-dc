@@ -10,7 +10,7 @@ Also read here: an explicit length («на 1200 слов», «подробно»
 about the earlier conversation, a child's medicine dose with the weight, and a
 coding ask.
 """
-from seams import dep, yes_no
+from seams import dep, yes_no, text_model
 import logging
 import os
 import threading
@@ -139,7 +139,7 @@ def read(text: str, ctx=None) -> dict:
     try:
         import llm
         from utils import safe_json_from_llm
-        raw = llm.call_llm_simple(None, SYSTEM, "Message (do NOT answer it):\n«%s»" % text[:4000],
+        raw = text_model(ctx)(None, SYSTEM, "Message (do NOT answer it):\n«%s»" % text[:4000],
                                   temperature=0.0, max_tokens=400) or ""
         out = _grounded(_validate(safe_json_from_llm(raw, FIELDS)).model_dump(), text)
         # the full read took the preposition in «сколько букв в алфавите» for the

@@ -66,7 +66,8 @@ def test_english_region_translate_real_llm():
 def test_english_region_llm_exception_fallback():
     ctx = Ctx()
     def boom(*a, **k): raise RuntimeError("lm down")
-    with _Patches(call_llm_simple=boom):
+    ctx.text_model = boom
+    with _Patches():
         out = I._english_region(ctx, "платье красное сегодня")
         check("eregion_exception_fallback", isinstance(out, str))
 
@@ -89,7 +90,8 @@ def test_english_instructions_translate_real_llm():
 def test_english_instructions_exception_fallback():
     ctx = Ctx()
     def boom(*a, **k): raise RuntimeError("lm down")
-    with _Patches(call_llm_simple=boom):
+    ctx.text_model = boom
+    with _Patches():
         out = I._english_instructions(ctx, "сделай платье синим")
         check("einstr_exception_fallback_returns_original", out == "сделай платье синим")
 
@@ -148,16 +150,16 @@ def test_ground_region_already_present():
 def test_ground_region_llm_maps_to_absent():
     ctx = Ctx()
     img = _photo("gr3.png")
-    with _Patches(_image_region_inventory=lambda ctx, p: ["shirt", "background"],
-                  call_llm_simple=lambda *a, **k: "NONE"):
+    ctx.text_model = lambda *a, **k: "NONE"
+    with _Patches(_image_region_inventory=lambda ctx, p: ["shirt", "background"]):
         out = I._ground_region_phrase(ctx, img, "spaceship")
         check("ground_absent", out == "absent")
 
 def test_ground_region_llm_maps_to_item():
     ctx = Ctx()
     img = _photo("gr4.png")
-    with _Patches(_image_region_inventory=lambda ctx, p: ["shirt", "background"],
-                  call_llm_simple=lambda *a, **k: "shirt"):
+    ctx.text_model = lambda *a, **k: "shirt"
+    with _Patches(_image_region_inventory=lambda ctx, p: ["shirt", "background"]):
         out = I._ground_region_phrase(ctx, img, "clothing")
         check("ground_maps_to_item", out == "shirt")
 
@@ -165,14 +167,16 @@ def test_ground_region_llm_exception():
     ctx = Ctx()
     img = _photo("gr5.png")
     def boom(*a, **k): raise RuntimeError("down")
-    with _Patches(_image_region_inventory=lambda ctx, p: ["shirt"], call_llm_simple=boom):
+    ctx.text_model = boom
+    with _Patches(_image_region_inventory=lambda ctx, p: ["shirt"]):
         out = I._ground_region_phrase(ctx, img, "clothing")
         check("ground_exception_keeps_original", out == "clothing")
 
 def test_ground_region_llm_offlist_keeps_original():
     ctx = Ctx()
     img = _photo("gr6.png")
-    with _Patches(_image_region_inventory=lambda ctx, p: ["shirt"], call_llm_simple=lambda *a, **k: "banana"):
+    ctx.text_model = lambda *a, **k: "banana"
+    with _Patches(_image_region_inventory=lambda ctx, p: ["shirt"]):
         out = I._ground_region_phrase(ctx, img, "clothing")
         check("ground_offlist_keeps_original", out == "clothing")
 
@@ -187,42 +191,43 @@ def test_extract_edit_target_empty():
 def test_extract_edit_target_llm_exception():
     ctx = Ctx()
     def boom(*a, **k): raise RuntimeError("down")
-    with _Patches(call_llm_simple=boom):
+    ctx.text_model = boom
+    with _Patches():
         r, res, dn = I._extract_edit_target(ctx, "change the hat")
         check("extract_exception_none_region", r is None)
 
 def test_extract_edit_target_whole_image():
     ctx = Ctx()
-    with _Patches(call_llm_simple=lambda *a, **k: '{"region": "whole", "result": "x", "scope": "tweak"}',
-                  safe_json_from_llm=lambda resp: {"region": "whole", "result": "x", "scope": "tweak"}):
+    ctx.text_model = lambda *a, **k: '{"region": "whole", "result": "x", "scope": "tweak"}'
+    with _Patches(safe_json_from_llm=lambda resp: {"region": "whole", "result": "x", "scope": "tweak"}):
         r, res, dn = I._extract_edit_target(ctx, "enhance everything")
         check("extract_whole_none", r is None)
 
 def test_extract_edit_target_absent():
     ctx = Ctx()
-    with _Patches(call_llm_simple=lambda *a, **k: "x",
-                  safe_json_from_llm=lambda resp: {"region": "absent", "result": "a hat", "scope": "tweak"}):
+    ctx.text_model = lambda *a, **k: "x"
+    with _Patches(safe_json_from_llm=lambda resp: {"region": "absent", "result": "a hat", "scope": "tweak"}):
         r, res, dn = I._extract_edit_target(ctx, "add a hat")
         check("extract_absent", r == "absent" and res == "a hat")
 
 def test_extract_edit_target_success_tweak():
     ctx = Ctx()
-    with _Patches(call_llm_simple=lambda *a, **k: "x",
-                  safe_json_from_llm=lambda resp: {"region": "hat", "result": "a red hat", "scope": "tweak"}):
+    ctx.text_model = lambda *a, **k: "x"
+    with _Patches(safe_json_from_llm=lambda resp: {"region": "hat", "result": "a red hat", "scope": "tweak"}):
         r, res, dn = I._extract_edit_target(ctx, "change the hat to red")
         check("extract_tweak_denoise", r == "hat" and dn == 0.6)
 
 def test_extract_edit_target_success_replace():
     ctx = Ctx()
-    with _Patches(call_llm_simple=lambda *a, **k: "x",
-                  safe_json_from_llm=lambda resp: {"region": "hat", "result": "", "scope": "replace"}):
+    ctx.text_model = lambda *a, **k: "x"
+    with _Patches(safe_json_from_llm=lambda resp: {"region": "hat", "result": "", "scope": "replace"}):
         r, res, dn = I._extract_edit_target(ctx, "change the hat entirely")
         check("extract_replace_denoise", r == "hat" and dn == 0.9 and res == "change the hat entirely")
 
 def test_extract_edit_target_bad_json():
     ctx = Ctx()
-    with _Patches(call_llm_simple=lambda *a, **k: "not json",
-                  safe_json_from_llm=lambda resp: None):
+    ctx.text_model = lambda *a, **k: "not json"
+    with _Patches(safe_json_from_llm=lambda resp: None):
         r, res, dn = I._extract_edit_target(ctx, "change the hat")
         check("extract_bad_json_none", r is None)
 

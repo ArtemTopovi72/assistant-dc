@@ -8,7 +8,7 @@ values arrive typed ("8" -> 8), and malformed calls turn into a uniform
 [TOOL ERROR] the model can act on. Adding a tool means adding one args model
 and one `ToolSpec`; `TOOL_SCHEMAS` and `execute_tool` both derive from `TOOLS`.
 """
-from seams import choice, yes_no
+from seams import choice, yes_no, text_model
 from seams import dep
 import logging
 import os
@@ -435,7 +435,7 @@ def _superseded_facts(ctx, fact: str) -> list:
               "or 'none'.")
     body = "\n".join(f"{i}. {t}" for i, t in enumerate(cands, 1)) + f"\nNEW: {fact}"
     try:
-        out = call_llm_simple(ctx, prompt, body, max_tokens=20, temperature=0.0,
+        out = text_model(ctx)(ctx, prompt, body, max_tokens=20, temperature=0.0,
                               prefill="<think></think>") or ""
     except Exception:
         return []

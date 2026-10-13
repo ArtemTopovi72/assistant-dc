@@ -583,15 +583,11 @@ class _FakeCtx:
     def set_stage(self, s): pass
 
 
-import graph as _graph_mod
-_orig_build_graph = _graph_mod.build_graph
-_graph_mod.build_graph = lambda ctx: _RaisingGraph()
+bot.graph_builder = lambda ctx: _RaisingGraph()
 bot._get_ctx = lambda: _FakeCtx()
 bot._get_graph = lambda: _RaisingGraph()
-try:
-    bot._execute_task(task_a)
-finally:
-    _graph_mod.build_graph = _orig_build_graph
+bot._execute_task(task_a)
+bot.graph_builder = None
 
 check("A's own failure sets the retry pointer to A's OWN id",
       bot._get_session(CID).last_task_id == task_a.task_id,

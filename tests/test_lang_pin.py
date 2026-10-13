@@ -8,13 +8,17 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from fakes import reads
 
 
+_TXT = [None]   # the text model the context hands out
+
+
 class _Ctx:
+    text_model = property(lambda self: _TXT[0])
     reply_lang = "en"
     intent_read = staticmethod(reads(read={"translate it into Russian": {"translate": True}}.get)["intent_read"])   # the model's read
     def is_cancelled(self): return False
 
 
-GL.call_llm_simple = lambda *a, **k: "Try The Silk Roads by Peter Frankopan."
+_TXT[0] = lambda *a, **k: "Try The Silk Roads by Peter Frankopan."
 ru = "Тогда прочитай «Шелковые пути» Питера Франкопана, это масштабный эпос."
 assert GL._match_reply_language(_Ctx(), ru, "а еще одну?").startswith("Try")
 assert GL._match_reply_language(_Ctx(), ru, "translate it into Russian") == ru
@@ -28,7 +32,7 @@ assert "{lang}" in GL._TRANSLATE_OUT_PROMPT
 assert GL._english_words("Was ist die Hauptstadt in Deutschland? Qual é a capital do Brasil?") == 0
 assert GL._english_words("what's the capital of Peru?") >= 2
 calls = []
-GL.call_llm_simple = lambda ctx, sysp, *a, **k: calls.append(sysp) or (
+_TXT[0] = lambda ctx, sysp, *a, **k: calls.append(sysp) or (
     "Spanish" if sysp == GL._LANG_DETECT_PROMPT else "Madrid tiene unos 3,3 millones de habitantes.")
 class _Es(_Ctx): reply_lang = "en"
 assert GL._match_reply_language(_Es(), "Madrid has approximately 3.3 million inhabitants.",
@@ -52,7 +56,7 @@ assert GL._ru_thousands("Население Казани составляет п
 assert GL._ru_thousands("индекс 420111 Казань") == "индекс 420111 Казань"
 print("PASS bare big numbers grouped")
 _calls = []
-GL.call_llm_simple = lambda ctx, sysp, *a, **k: _calls.append(sysp) or "Я проверил ещё раз: 17 × 24 = 408."
+_TXT[0] = lambda ctx, sysp, *a, **k: _calls.append(sysp) or "Я проверил ещё раз: 17 × 24 = 408."
 _q = "я уверен, проверь ещё раз, мой калькулятор показывает 418"
 assert GL._unparrot(_Ctx(), "Я уверен, проверь ещё раз, мой калькулятор показывает 408.", _q).startswith("Я проверил")
 assert "408" in _calls[-1]

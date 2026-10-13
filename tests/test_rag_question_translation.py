@@ -1,6 +1,7 @@
 """A document-backed turn: the entry translator must translate the user's
 QUESTION only, never the RAG wrapper around it (translating the whole wrapper
 would turn it into an answer and the question would vanish)."""
+import types
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("F5_TEST_RUN", "1")
@@ -13,10 +14,10 @@ def check(name, cond, extra=""):
     else: FAILED += 1; print("FAIL ", name, extra)
 
 seen = []
-GL.call_llm_simple = lambda ctx, sysp, text, **kw: (seen.append(text), "What is drawn here?")[-1]
 wrapper = (library.RAG_HEAD + " rules...\n=== Retrieved passages ===\nlots of English text\n"
            "=== End passages ===" + library.RAG_QUESTION_SEAM + "Что здесь нарисовано?")
-out = GL._translate_to_english(object(), wrapper)
+out = GL._translate_to_english(types.SimpleNamespace(
+    text_model=lambda ctx, sysp, text, **kw: (seen.append(text), "What is drawn here?")[-1]), wrapper)
 check("only the question tail went to the translator", seen == ["Что здесь нарисовано?"], seen)
 check("the wrapper is kept and the tail replaced",
       out.startswith(library.RAG_HEAD) and out.endswith(library.RAG_QUESTION_SEAM + "What is drawn here?"), out[-60:])

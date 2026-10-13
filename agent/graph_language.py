@@ -9,7 +9,7 @@ The literal-protection dance is the load-bearing part: a lettering request
 ("draw a sign saying Открыто") must reach the image model with the string
 untranslated, or the picture comes out in the wrong language.
 """
-from seams import intent_read, yes_no
+from seams import intent_read, yes_no, text_model
 import logging
 import re
 
@@ -248,7 +248,7 @@ def _match_reply_language(ctx, answer: str, original_input: str) -> str:
             and len(answer.strip()) >= 20 and _foreign_ratio(original_input) >= 0.3
             and not re.search(r"russian|русск", original_input, re.I)):
         try:
-            out = (call_llm_simple(
+            out = (text_model(ctx)(
                 ctx, "Translate the assistant's reply below into natural English. "
                      "Titles and names in English form. Output only the translation.",
                 answer, max_tokens=max(400, len(answer)), temperature=0.0,
@@ -286,11 +286,11 @@ def _match_reply_language(ctx, answer: str, original_input: str) -> str:
         if not _latin_q:
             lang = "Ukrainian" if re.search(r"[іїєґІЇЄҐ]", original_input) else "Russian"
         else:
-            lang = (call_llm_simple(ctx, _LANG_DETECT_PROMPT, original_input, max_tokens=8,
+            lang = (text_model(ctx)(ctx, _LANG_DETECT_PROMPT, original_input, max_tokens=8,
                                     temperature=0.0, prefill="<think></think>") or "").strip(" .\n")
         if not re.fullmatch(r"[A-Za-z]{3,20}", lang):
             return answer
-        out = call_llm_simple(
+        out = text_model(ctx)(
             ctx, _TRANSLATE_OUT_PROMPT.format(lang=lang), answer,
             max_tokens=max(400, len(answer)), temperature=0.0,
             prefill="<think></think>")
@@ -355,7 +355,7 @@ def _translate_to_english(ctx, text: str, context: str = "") -> str:
         if context and len(t) < 200:
             system += ("\n\nFor sense only (do NOT translate or include it): the assistant's "
                        "previous reply was: " + context.replace("\n", " "))
-        resp = call_llm_simple(ctx, system, protected,
+        resp = text_model(ctx)(ctx, system, protected,
                                max_tokens=max(200, len(t)), temperature=0.0,
                                prefill="<think></think>")
         out = (resp or "").strip()
@@ -399,7 +399,7 @@ def _unparrot(ctx, answer: str, original_input: str, history=()) -> str:
     prev = next((str(m.get("content") or "") for m in reversed(hist[:last_user])
                  if m.get("role") == "assistant" and m.get("content")), "")
     try:
-        out = (call_llm_simple(
+        out = (text_model(ctx)(
             ctx, "You are a friendly conversational assistant. The user said the "
                  "message below. Respond to it -- do NOT repeat or quote it back. "
                  "Reply in the language of the message, one or two sentences. "

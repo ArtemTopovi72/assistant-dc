@@ -12,7 +12,7 @@ Pictures are optional and never block the deck: each slide may name an image
 query, the caller supplies whatever it managed to fetch or draw, and a slide with
 no picture simply lays out as text.
 """
-from seams import vision_model
+from seams import vision_model, text_model
 import logging
 import os
 import re
@@ -302,7 +302,7 @@ def _edit_deck(ctx, previous: dict, change: str, out_lang: str) -> dict:
         ask += _lang_directive(out_lang)
     data = None
     for temp in (0.3, 0.6):
-        raw = call_llm_simple(ctx, _EDIT_PROMPT, ask, temperature=temp,
+        raw = text_model(ctx)(ctx, _EDIT_PROMPT, ask, temperature=temp,
                               max_tokens=8000, force_think=False, json_schema=DECK_SCHEMA) or ""
         got = safe_json_from_llm(raw, required_keys=("slides",))
         if isinstance(got, dict) and got.get("slides"):
@@ -399,7 +399,7 @@ def plan_deck(ctx, topic: str, n_slides: int = 0, out_lang: str = "",
     )
     data = None
     for i, cfg in enumerate(attempts, start=1):
-        raw = call_llm_simple(ctx, cfg["prompt"], ask,
+        raw = text_model(ctx)(ctx, cfg["prompt"], ask,
                               temperature=cfg["temperature"],
                               max_tokens=cfg["max_tokens"],
                               force_think=cfg["force_think"], json_schema=DECK_SCHEMA) or ""
@@ -433,7 +433,7 @@ def plan_deck(ctx, topic: str, n_slides: int = 0, out_lang: str = "",
         except Exception:
             payload = ""
         if payload:
-            raw = call_llm_simple(ctx, _REPAIR_PROMPT,
+            raw = text_model(ctx)(ctx, _REPAIR_PROMPT,
                                   (facts and ("Research notes:\n" + facts + "\n\n") or "")
                                   + "Deck to rewrite:\n" + payload,
                                   temperature=0.5, max_tokens=8000,
@@ -857,7 +857,7 @@ def _drop_unsupported_claims(ctx, deck: dict, facts: str) -> None:
     notes = [ln for ln in facts.splitlines() if ln.strip()]
     texts = notes + claims
     if any(not t.isascii() for t in texts):
-        raw = call_llm_simple(ctx, "Translate each string of the JSON list into English, literally. "
+        raw = text_model(ctx)(ctx, "Translate each string of the JSON list into English, literally. "
                                    "Write money as $N billion / $N million. Answer with the JSON "
                                    "list only, same length.",
                               json.dumps(texts, ensure_ascii=False), temperature=0.0,

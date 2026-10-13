@@ -13,7 +13,7 @@ both land here. Three things make a style land (bench/style_ab.py, 2026-10-11):
     picture: without the description an anime schoolgirl came back a young man and
     a Pixar baker lost his mustache; without the LoRA he stayed a 3D doll.
 """
-from seams import vision_model
+from seams import vision_model, text_model
 import logging
 import os
 import re
@@ -101,7 +101,7 @@ def _expand(ctx, words: str) -> tuple:
     import llm
     from utils import safe_json_from_llm
     try:
-        raw = llm.call_llm_simple(ctx, _EXPAND_SYS, words, temperature=0.2, max_tokens=400) or ""
+        raw = text_model(ctx)(ctx, _EXPAND_SYS, words, temperature=0.2, max_tokens=400) or ""
         d = safe_json_from_llm(raw, ["target", "style"]) or {}
     except Exception:
         logger.exception("style: expanding %r failed", words[:80])

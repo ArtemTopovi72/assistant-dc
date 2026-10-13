@@ -11,7 +11,7 @@ edit_region_contained_via_firered) and the telemetry it writes
 through lazy module-level forwarders rather than by-value imports: that both
 breaks the import cycle and keeps them patchable from either side.
 """
-from seams import choice, vision_model
+from seams import choice, vision_model, text_model
 from config import scratch_path
 import json
 import logging
@@ -77,7 +77,7 @@ def _split_person_and_scene(ctx, description: str):
             "doing/where, in English, or empty>\"}. is_real_person is true ONLY for a real, "
             "nameable individual (actor, musician, politician, athlete) — false for a generic "
             "subject (a cat, a woman, a knight) or a fictional character. No extra text.")
-    out = call_llm_simple(ctx, sysp, f"Request: {description}", temperature=0.0,
+    out = text_model(ctx)(ctx, sysp, f"Request: {description}", temperature=0.0,
                           max_tokens=200, prefill="<think></think>")
     data = safe_json_from_llm(out or "") or {}
     person = (data.get("person") or "").strip()

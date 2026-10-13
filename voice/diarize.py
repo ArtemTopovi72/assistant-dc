@@ -8,6 +8,7 @@ transcript comes back as "Спикер 1: ... / Спикер 2: ...".
 Every failure returns None and the caller keeps its plain transcript: a
 missing venv, a single speaker, a clip too short to be a conversation.
 """
+from seams import text_model
 import json
 import logging
 import os
@@ -115,7 +116,7 @@ def name_speakers(ctx, transcript: str, lang: str = "ru") -> str:
     try:
         import llm as _llm
         from utils import safe_json_from_llm
-        raw = _llm.call_llm_simple(
+        raw = text_model(ctx)(
             ctx, 'Name the speakers of a transcript. Answer ONLY JSON {"1": "name or empty", ...}. '
                  "A name counts ONLY if it is spoken in the text itself (someone addresses or introduces them); "
                  "otherwise empty. Never guess.", transcript[:6000],

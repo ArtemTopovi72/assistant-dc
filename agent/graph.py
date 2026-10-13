@@ -1,4 +1,4 @@
-from seams import yes_no, vision_model
+from seams import yes_no, vision_model, text_model
 import logging
 import re
 from typing import Optional
@@ -256,7 +256,7 @@ def speakable(ctx: Context, text: str) -> str:
     if not TTS_SPEECH_ADAPT or not _WRITTEN_RE.search(text or ""):
         return text
     try:
-        out = (call_llm_simple(ctx, SPEECH_ADAPT_PROMPT, text, temperature=0.3,
+        out = (text_model(ctx)(ctx, SPEECH_ADAPT_PROMPT, text, temperature=0.3,
                                max_tokens=min(3000, len(text) + 300),
                                prefill="<think></think>") or "").strip()
     except Exception:

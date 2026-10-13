@@ -102,15 +102,13 @@ class StubGraph:
 
 def _stub_build_graph(ctx):
     return StubGraph(ctx)
-
-
-graph_mod.build_graph = _stub_build_graph
 SHARED_CTX = FakeCtx()
 
 
 def make_bot(n_consumers=2):
     bot = T.TelegramBot("123:TEST", lambda: SHARED_CTX, lambda: object(),
                         lambda: {"messages": []}, silent_mode=True)
+    bot.graph_builder = _stub_build_graph
     bot._backend = T.InMemoryBackend()
     bot.sent = []
     bot._send_text = lambda cid, t, **kw: (bot.sent.append((cid, t)), 1)[1]

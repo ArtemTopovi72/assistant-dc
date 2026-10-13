@@ -40,10 +40,10 @@ class StubGraph:
     def invoke(self, base):
         INVOKES.append(base.get("user_input", ""))
         return {"final_answer": "echo", "messages": base.get("messages", [])}
-graph_mod.build_graph = lambda ctx: StubGraph(ctx)
 SHARED = FakeCtx()
 
 bot = T.TelegramBot("123:TEST", lambda: SHARED, lambda: object(), lambda: {"messages": []}, silent_mode=True)
+bot.graph_builder = lambda ctx: StubGraph(ctx)
 bot._backend = T.InMemoryBackend(); bot.sent = []
 bot._send_text = lambda cid, t, **kw: (bot.sent.append((cid, t)), 1)[1]
 bot._send_get_id = lambda cid, t, **kw: (bot.sent.append((cid, t)), len(bot.sent))[1]

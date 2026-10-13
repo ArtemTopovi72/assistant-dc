@@ -104,15 +104,10 @@ def fake_build_graph(ctx):
     return Graph(ctx)
 
 
-import graph as graph_mod
-_real_build = graph_mod.build_graph
-graph_mod.build_graph = fake_build_graph
-try:
-    bot = make_bot(built_with, PREBUILT)
-    task = T._Task(task_id="t1", chat_id=CID, user_text="запомни: меня зовут Артём")
-    bot._execute_task(task)
-finally:
-    graph_mod.build_graph = _real_build
+bot = make_bot(built_with, PREBUILT)
+bot.graph_builder = fake_build_graph
+task = T._Task(task_id="t1", chat_id=CID, user_text="запомни: меня зовут Артём")
+bot._execute_task(task)
 
 check("a graph was rebuilt for the task", len(built_with) == 1, built_with)
 # remember_fact persists via ctx.save_memory(ctx.active_memory_dir); inheriting
@@ -135,15 +130,13 @@ check("the fact IS persisted on the session (🧠 My facts can see it)",
 
 # a broken build must not take the turn down
 print()
-graph_mod.build_graph = lambda ctx: (_ for _ in ()).throw(RuntimeError("boom"))
 try:
     bot2 = make_bot([], PREBUILT)
+    bot2.graph_builder = lambda ctx: (_ for _ in ()).throw(RuntimeError("boom"))
     bot2._execute_task(T._Task(task_id="t2", chat_id=CID, user_text="привет"))
     check("a failed rebuild falls back instead of failing the turn", True)
 except Exception as exc:
     check("a failed rebuild falls back instead of failing the turn", False, exc)
-finally:
-    graph_mod.build_graph = _real_build
 
 # ── 2. Stop must suppress delivery of the task that was running ─────────────
 print("=" * 66)

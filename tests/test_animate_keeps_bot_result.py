@@ -55,9 +55,9 @@ class StubGraph:
 
 
 def test_animating_a_bot_result_does_not_delete_it():
-    graph_mod.build_graph = lambda ctx: StubGraph(ctx)
     bot = T.TelegramBot("123:TEST", lambda: FakeCtx(), lambda: object(), lambda: {"messages": []},
                         silent_mode=True)
+    bot.graph_builder = lambda ctx: StubGraph(ctx)
     bot._backend = T.InMemoryBackend()
     bot._send_text = lambda *a, **kw: 1
     bot._send_get_id = lambda *a, **kw: 1

@@ -46,8 +46,8 @@ print("PASS menu tail")
 # a button payload in a Russian chat gets its English reply translated
 class C:
     reply_lang = "ru"
+    text_model = staticmethod(lambda ctx, sys_, txt, **k: "Не получилось убрать надпись полностью.")
     def is_cancelled(self): return False
-GL.call_llm_simple = lambda ctx, sys_, txt, **k: "Не получилось убрать надпись полностью."
 out = GL._match_reply_language(C(), "Failed to completely remove the text from the image, sorry.",
                                "remove all the lettering from the image")
 print("lang:", out)
@@ -90,8 +90,8 @@ class _FC:
     def save_memory(self, d): pass
     active_memory_dir = ""
 _asked = []
-_llm.call_llm_simple = lambda ctx, p, body, **k: _asked.append(body) or ("1" if "NEW: Собаку пользователя зовут Бобик" in body else "none")
 c = _FC()
+c.text_model = lambda ctx, p, body, **k: _asked.append(body) or ("1" if "NEW: Собаку пользователя зовут Бобик" in body else "none")
 for f in ("Собаку пользователя зовут Жужа", "Любимый цвет пользователя — бирюзовый"):
     TL._handle_remember_fact(c, {}, {"fact": f})
 r = TL._handle_remember_fact(c, {}, {"fact": "Собаку пользователя зовут Бобик"})

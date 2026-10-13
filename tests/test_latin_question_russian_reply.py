@@ -7,7 +7,11 @@ from fakes import reads
 import graph_language as gl
 
 
+_TXT = [None]   # the text model the context hands out
+
+
 class _Ctx:
+    text_model = property(lambda self: _TXT[0])
     yes_no = staticmethod(_sweep_stub.READS["yes_no"])
     choice = staticmethod(_sweep_stub.READS["choice"])
     intent_read = staticmethod(reads(read=lambda t: {"reply_language": "ru"} if "in Russian" in t else None)["intent_read"])
@@ -17,7 +21,7 @@ class _Ctx:
 
 
 calls = []
-gl.call_llm_simple = lambda ctx, sysp, *a, **k: (calls.append(1), "German" if sysp == gl._LANG_DETECT_PROMPT
+_TXT[0] = lambda ctx, sysp, *a, **k: (calls.append(1), "German" if sysp == gl._LANG_DETECT_PROMPT
                                                  else "Es ist jetzt 18:37 in Berlin.")[1]
 out = gl._match_reply_language(_Ctx(), "Сейчас в Берлине 18:37, понедельник.", "Wie spät ist es jetzt in Berlin?")
 assert out.startswith("Es ist"), out
@@ -29,7 +33,7 @@ assert out == "Кот"
 print("PASS test_latin_question_russian_reply")
 
 # An answer that only echoes the user's message is regenerated.
-gl.call_llm_simple = lambda *a, **k: "Звучит разумно! О чём поговорим?"
+_TXT[0] = lambda *a, **k: "Звучит разумно! О чём поговорим?"
 q = "Я следую общим принципам полезности, стабильности и контекста диалога."
 assert gl._unparrot(_Ctx(), q, q).startswith("Звучит")
 assert gl._unparrot(_Ctx(), "Да.", "да") == "Да."

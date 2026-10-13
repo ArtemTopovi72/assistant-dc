@@ -20,7 +20,7 @@ picks -- or, for "a picnic set", first turns the occasion into a list.
 Everything Ozon returns is third-party text: prompts treat it as data.
 """
 from __future__ import annotations
-from seams import vision_model
+from seams import vision_model, text_model
 
 import logging
 import re
@@ -52,7 +52,7 @@ def _llm_json(ctx, system: str, user: str, keys, max_tokens: int = 1200):
     prefill = llm.GEMMA_NO_THINK_PREFILL if llm._is_gemma4(getattr(ctx, "model_name", "") or
                                                            llm.MODEL_NAME) else None
     for _ in range(2):
-        raw = call_llm_simple(ctx, system, user, temperature=0.2, max_tokens=max_tokens,
+        raw = text_model(ctx)(ctx, system, user, temperature=0.2, max_tokens=max_tokens,
                               prefill=prefill) or ""
         data = safe_json_from_llm(raw, required_keys=keys)
         if isinstance(data, dict):

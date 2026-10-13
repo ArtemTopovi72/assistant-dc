@@ -1,3 +1,4 @@
+from seams import text_model
 import hashlib
 import logging
 import os
@@ -529,7 +530,7 @@ def to_spoken_form(ctx, text: str) -> str:
     try:
         if ctx is not None and (getattr(ctx, "model_name", "") or "").strip():
             import llm
-            reply = llm.call_llm_simple(
+            reply = text_model(ctx)(
                 ctx, _SPOKEN_SYSTEM, text, temperature=0.0,
                 max_tokens=max(64, len(text) * 2))
             reply = (reply or "").strip().strip('"')

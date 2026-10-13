@@ -96,9 +96,6 @@ def _stub_build_graph(ctx):
     return StubGraph(ctx)
 
 
-graph_mod.build_graph = _stub_build_graph
-
-
 def make_bot(n_consumers=2):
     bot = T.TelegramBot("123:TEST", lambda: SHARED_CTX, lambda: object(),
                         lambda: {"messages": []}, silent_mode=True,
@@ -106,6 +103,7 @@ def make_bot(n_consumers=2):
                         # With it on, the echo reply cold-imports f5_tts/torch
                         # (~10s+) before the text goes out -- flaky vs settle().
                         tts_enabled_fn=lambda: False)
+    bot.graph_builder = _stub_build_graph
     bot._backend = T.InMemoryBackend()
     bot.sent = []
     bot._send_text = lambda cid, t, **kw: (bot.sent.append((cid, t, kw.get("keyboard"))), 1)[1]

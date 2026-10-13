@@ -17,7 +17,7 @@ The same applies to the grounding/sizing helpers (_item_attributes,
 _region_present, _extract_edit_target, _firered_instruction, _source_dims,
 _strip_lead, _REMOVAL_RE), which image.py re-exports and the suites patch there.
 """
-from seams import choice, dep
+from seams import choice, dep, text_model
 import logging
 import os
 import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
@@ -154,7 +154,7 @@ def edit_plan(instruction: str, ctx=None) -> dict:
         import llm
         from utils import safe_json_from_llm
         kinds = "\n".join(f"  {k} -- {d}" for k, d in EDIT_CATEGORIES.items())
-        raw = llm.call_llm_simple(
+        raw = text_model(ctx)(
             None, _EDIT_SYSTEM.format(kinds=kinds),
             "Instruction to sort (do NOT carry it out):\n«%s»\n\nReply with the JSON object only."
             % text[:1500], temperature=0.0, max_tokens=300) or ""
@@ -190,7 +190,7 @@ def removes_region(instructions: str, region: str, ctx=None) -> bool:
         return _REGION_CACHE[key]
     try:
         import llm
-        ans = llm.call_llm_simple(
+        ans = text_model(ctx)(
             None, "Answer yes or no only.",
             "An image editor gets an edit for one region of a picture.\n"
             "Region: «%s»\nEdit: «%s»\n\n"

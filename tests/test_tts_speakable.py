@@ -27,29 +27,33 @@ def check(name, cond, extra=""):
     bad += not cond
 
 
+from types import SimpleNamespace as NS
+_T = [None]   # the text model the context hands out
+K = NS(text_model=lambda *a, **k: _T[0](*a, **k))
+
 written = "Итог: да, можно. Условие — температура не выше 40 °C."
-G.call_llm_simple = fake("Итог такой: да, можно, если температура не выше 40 °C.")
-out = G.speakable(None, written)
+_T[0] = fake("Итог такой: да, можно, если температура не выше 40 °C.")
+out = G.speakable(K, written)
 check("a written answer is rewritten for the voice", out.startswith("Итог такой"), out)
 check("...with reasoning switched off", calls[-1][2].get("prefill") == "<think></think>", calls[-1][2])
 
-G.call_llm_simple = fake("Итог такой: да, можно, если не слишком жарко.")
-check("a rewrite that drops a number is rejected", G.speakable(None, written) == written)
+_T[0] = fake("Итог такой: да, можно, если не слишком жарко.")
+check("a rewrite that drops a number is rejected", G.speakable(K, written) == written)
 
-G.call_llm_simple = fake("")
-check("an empty rewrite falls back to the text", G.speakable(None, written) == written)
+_T[0] = fake("")
+check("an empty rewrite falls back to the text", G.speakable(K, written) == written)
 
 calls.clear()
 check("plain speech is not sent to the model",
-      G.speakable(None, "Да, конечно, приходи вечером") == "Да, конечно, приходи вечером" and not calls)
+      G.speakable(K, "Да, конечно, приходи вечером") == "Да, конечно, приходи вечером" and not calls)
 
-G.call_llm_simple = fake("Добавь count = 0 перед циклом, ссылка в сообщении.")
-out = G.speakable(None, "Решение → добавить `count = 0` перед циклом. https://x.ru/a1")
+_T[0] = fake("Добавь count = 0 перед циклом, ссылка в сообщении.")
+out = G.speakable(K, "Решение → добавить `count = 0` перед циклом. https://x.ru/a1")
 check("backticks dropped, the URL's digits are not demanded", out == "Добавь count = 0 перед циклом, ссылка в сообщении.", out)
-G.call_llm_simple = fake("Нужны, во-первых, паспорт, во-вторых, билеты на 14:30.")
-out = G.speakable(None, "Нужно:\n1. Паспорт\n2. Билеты на 14:30")
+_T[0] = fake("Нужны, во-первых, паспорт, во-вторых, билеты на 14:30.")
+out = G.speakable(K, "Нужно:\n1. Паспорт\n2. Билеты на 14:30")
 check("list numbering is not a number to keep", out.startswith("Нужны, во-первых"), out)
-G.call_llm_simple = fake("Для начала мониторинг, затем база знаний, ну и контракты, и 90% успеха.")
-out = G.speakable(None, "План:\n**1. Мониторинг**\n### 2. База знаний\n**3. Контракты**\n90% успеха")
+_T[0] = fake("Для начала мониторинг, затем база знаний, ну и контракты, и 90% успеха.")
+out = G.speakable(K, "План:\n**1. Мониторинг**\n### 2. База знаний\n**3. Контракты**\n90% успеха")
 check("bold or heading numbering is not a number to keep", out.startswith("Для начала"), out)
 sys.exit(1 if bad else 0)

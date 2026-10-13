@@ -117,6 +117,7 @@ SHARED_CTX = FakeCtx()
 def make_bot(n_consumers=3):
     bot = T.TelegramBot("123:TEST", lambda: SHARED_CTX, lambda: object(),
                         lambda: {"messages": []}, silent_mode=True)
+    bot.graph_builder = _stub_build_graph
     bot._backend = T.InMemoryBackend()
     bot.sent = []
     bot._send_text = lambda cid, t, **kw: (bot.sent.append((cid, t, kw.get("keyboard"))), 1)[1]
@@ -216,10 +217,6 @@ def seed_pics(bot, cid, n, tag=""):
         ids.append(sess.image_log[-1]["id"])
     bot._store.put(sess)
     return ids
-
-
-graph_mod.build_graph = _stub_build_graph
-print("graph.build_graph stubbed for cross-chat isolation run")
 
 CID_A, CID_B, CID_C = 900100, 900101, 900102
 

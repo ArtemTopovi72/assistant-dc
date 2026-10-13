@@ -35,6 +35,7 @@ On any failure it returns FALLBACK: needs_tool True, no picks, nothing forced
 bench/intent_live.py checks it against the real model.
 """
 from __future__ import annotations
+from seams import text_model
 
 import logging
 import os
@@ -328,7 +329,7 @@ def read(ctx, text: str, previous: str = "", attached: str = "") -> dict:
         import llm
         from utils import safe_json_from_llm
         names, menu = _menu()
-        raw = llm.call_llm_simple(ctx, SYSTEM.format(menu=menu), user,
+        raw = text_model(ctx)(ctx, SYSTEM.format(menu=menu), user,
                                   temperature=0.0, max_tokens=300) or ""
         got = _validate(safe_json_from_llm(raw, FIELDS))
         out = got.model_dump()
