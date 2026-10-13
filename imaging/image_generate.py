@@ -211,12 +211,10 @@ def generate_image_with_comfy(
     else:
         ideo_steps, ideo_cfg = None, None
     try:
-        result = _ideogram_draw(ctx, prompt, width=width, height=height,
-                                seed=seed, timeout=timeout,
-                                lora_name=lora_name,
-                                lora_strength=lora_strength,
-                                trigger=trigger,
-                                steps=ideo_steps, cfg=ideo_cfg)
+        result = dep(ctx, "_ideogram_draw", _ideogram_draw)(
+            ctx, prompt, width=width, height=height, seed=seed, timeout=timeout,
+            lora_name=lora_name, lora_strength=lora_strength, trigger=trigger,
+            steps=ideo_steps, cfg=ideo_cfg)
     except ideogram.ContentRefused as exc:
         logger.error("Ideogram 4 refused the prompt: %s", exc)
         _image._GENERATE_FAILURE["reason"] = "refused"

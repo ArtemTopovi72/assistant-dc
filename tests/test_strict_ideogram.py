@@ -55,15 +55,14 @@ def _fake_oldmodel(*a, **kw):
 
 
 print("\nA FAILED IDEOGRAM RENDER IS NOT SUBSTITUTED WITH THE OLD MODEL")
-_prev_engine = I._config.IMAGE_ENGINE
-_prev_draw = IG._ideogram_draw
-_prev_submit = I._submit_and_poll
-I._config.IMAGE_ENGINE = "ideogram4"
-IG._ideogram_draw = lambda *a, **kw: None          # the render failed
-I._submit_and_poll = _fake_oldmodel
+
+def _ctx(draw):
+    return types.SimpleNamespace(deps=types.SimpleNamespace(_ideogram_draw=draw))
+
+
 
 _oldmodel_calls.clear()
-out = I.generate_image_with_comfy(None, "a police car", width=512, height=512)
+out = I.generate_image_with_comfy(_ctx(lambda *a, **kw: None), "a police car", width=512, height=512)   # the render failed
 check("nothing is returned", out is None, out)
 check("and the old model was never asked to draw it", _oldmodel_calls == [], _oldmodel_calls)
 check("the reason says the engine failed",
@@ -77,9 +76,8 @@ def _refuse(*a, **kw):
     raise G.ContentRefused("declined")
 
 
-IG._ideogram_draw = _refuse
 _oldmodel_calls.clear()
-out = I.generate_image_with_comfy(None, "something declined", width=512, height=512)
+out = I.generate_image_with_comfy(_ctx(_refuse), "something declined", width=512, height=512)
 check("nothing is returned", out is None, out)
 check("the old model is not used to route around the refusal", _oldmodel_calls == [], _oldmodel_calls)
 check("the reason says refused", I._GENERATE_FAILURE.get("reason") == "refused",
@@ -124,17 +122,12 @@ print("\nAN EDIT IS NOT THIS FUNCTION'S JOB")
 photo = os.path.join(TMP, "photo.png")
 open(photo, "wb").write(b"a photo")
 _oldmodel_calls.clear()
-IG._ideogram_draw = lambda *a, **kw: (_ for _ in ()).throw(AssertionError("drew"))
-out = I.generate_image_with_comfy(None, "make it brighter", width=512, height=512,
+out = I.generate_image_with_comfy(_ctx(lambda *a, **kw: (_ for _ in ()).throw(AssertionError("drew"))), "make it brighter", width=512, height=512,
                                   previous_image_path=photo)
 check("nothing is returned for an edit", out is None, out)
 check("nothing was submitted to ComfyUI", _oldmodel_calls == [], _oldmodel_calls)
 check("the reason is reported", I._GENERATE_FAILURE.get("reason") == "engine_failed",
       I._GENERATE_FAILURE)
-
-I._config.IMAGE_ENGINE = _prev_engine
-IG._ideogram_draw = _prev_draw
-I._submit_and_poll = _prev_submit
 
 print(f"\n{_n - _bad}/{_n} checks passed")
 sys.exit(1 if _bad else 0)

@@ -20,6 +20,7 @@ import os
 import sys
 import tempfile
 import threading
+import types
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -28,10 +29,6 @@ except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
 
 import image as I
-# _ideogram_draw is a bare local name inside image_generate, so image's copy
-# is NOT the one generate_image_with_comfy calls (same trap documented in
-# test_strict_ideogram.py) -- it must be patched on THIS module.
-import image_generate as IG
 import models
 
 _TMP = Path(tempfile.mkdtemp(prefix="charengine_"))
@@ -69,28 +66,6 @@ def _minimal_workflow():
     }
 
 
-class _Patches:
-    """Same helper as test_image_workflow_craft.py -- patches image.py
-    attributes (and IMAGE_ENGINE, which lives on config) for one call."""
-    def __init__(self, **kw):
-        self.kw = kw; self.orig = {}; self.engine = None
-
-    def __enter__(self):
-        if "IMAGE_ENGINE" in self.kw:
-            self.engine = getattr(I._config, "IMAGE_ENGINE", "oldmodel")
-            I._config.IMAGE_ENGINE = self.kw.pop("IMAGE_ENGINE")
-        for k, v in self.kw.items():
-            self.orig[k] = getattr(I, k)
-            setattr(I, k, v)
-        return self
-
-    def __exit__(self, *a):
-        for k, v in self.orig.items():
-            setattr(I, k, v)
-        if self.engine is not None:
-            I._config.IMAGE_ENGINE = self.engine
-
-
 def _photo(name="out.png"):
     from PIL import Image as PILImage
     p = _TMP / name
@@ -110,16 +85,11 @@ def test_a_character_render_reaches_ideogram_with_its_adapter():
         seen["prompt"] = prompt
         return "C:/fake/ideogram_out.png"
 
-    _orig_draw = IG._ideogram_draw
-    IG._ideogram_draw = _spy_ideogram
-    try:
-        with _Patches(IMAGE_ENGINE="ideogram4"):
-            out = I.generate_image_with_comfy(
-                ctx, "neurostepan, standing outdoors", steps=4,
-                lora_name="neurostepan_ideo.safetensors", lora_strength=1.5,
-                trigger="neurostepan")
-    finally:
-        IG._ideogram_draw = _orig_draw
+    ctx.deps = types.SimpleNamespace(_ideogram_draw=_spy_ideogram)
+    out = I.generate_image_with_comfy(
+        ctx, "neurostepan, standing outdoors", steps=4,
+        lora_name="neurostepan_ideo.safetensors", lora_strength=1.5,
+        trigger="neurostepan")
 
     check("a picture came back", out is not None, out)
     check("the character was routed to Ideogram", bool(seen), seen)
@@ -141,13 +111,8 @@ def test_without_a_lora_the_ideogram_default_still_applies():
         called["ideogram"] = True
         return "C:/fake/ideogram_out.png"
 
-    _orig_draw = IG._ideogram_draw
-    IG._ideogram_draw = _spy_ideogram
-    try:
-        with _Patches(IMAGE_ENGINE="ideogram4"):
-            I.generate_image_with_comfy(ctx, "a cat", steps=4)
-    finally:
-        IG._ideogram_draw = _orig_draw
+    ctx.deps = types.SimpleNamespace(_ideogram_draw=_spy_ideogram)
+    I.generate_image_with_comfy(ctx, "a cat", steps=4)
     check("an ordinary render still uses the configured default engine",
           called["ideogram"] is True)
 
