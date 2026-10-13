@@ -1471,8 +1471,17 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     if args.get("seconds") and float(args["seconds"]) <= 15.0:
         parts = [raw]
     else:
-        args.pop("seconds", None)
+        want = float(args.pop("seconds", 0) or 0)
         parts = video_mod.split_script(raw)
+        have = sum(video_mod.estimate_seconds(p) for p in parts)
+        if want and have > want * 1.3:
+            # «на 30 секунд» came out as 11 parts, a minute (live 2026-10-13)
+            tight = video_mod.condense_script(raw, have, want)
+            if tight:
+                logger.info("generate_video: script condensed from ~%.0f s to fit %.0f s", have, want)
+                description = description.replace(raw, tight, 1) if raw in description else description
+                raw = tight
+                parts = video_mod.split_script(raw)
     if continuing and len(parts) > 1:
         # «…орёт э, это уже есть на видео, а потом…»: the agent still opened the plan
         # with the grandma's scream, rendered again for 6 minutes (owner, 2026-10-12).

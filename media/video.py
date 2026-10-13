@@ -1547,6 +1547,25 @@ INSERT_HEAD = "Close-up: "
 INSERT_BACK = "Back to the wider view from before the close-up. "
 
 
+def condense_script(script: str, now_s: float, fit_s: float) -> str:
+    """The script rewritten tighter to run about `fit_s`: same people, place, order and
+    quoted lines word for word. "" when the model fails."""
+    import llm as _llm
+    try:
+        out = _llm.call_llm_simple(
+            None,
+            "You condense a video shot script. Keep the same people, place, order of "
+            "events and every quoted spoken line word for word; cut repeated, minor and "
+            "lingering actions and merge small beats. Reply with the condensed script "
+            "only, in the script's language, no comments.",
+            f"The script runs about {now_s:.0f} s. Make it fit about {fit_s:.0f} s.\n\n{script}",
+            temperature=0.3, max_tokens=900) or ""
+    except Exception:
+        logger.exception("condensing a video script failed")
+        return ""
+    return " ".join(out.split()).strip()
+
+
 def mark_inserts(ctx, parts: list) -> list:
     """Parts whose main beat is a SMALL thing in flight or falling (a cork, an apple, a
     stone, a ball far away) become a close-up insert, and the part after one cuts back

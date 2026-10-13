@@ -183,3 +183,29 @@ def test_a_named_length_over_one_clip_reaches_the_handler():
     # The validator clamped 30 to 15, so the handler never saw a length to cut into parts.
     import tool_args
     assert tool_args.GenerateVideoArgs(description="x", seconds=30).seconds == 30
+
+
+def test_a_named_length_condenses_a_script_that_runs_longer(monkeypatch):
+    # «на 30 секунд» came out as 11 parts, a minute of video (live 2026-10-13).
+    import tool_image_handlers as H
+    asked = []
+    short = "He slices the bread. The cat eats a piece."
+    monkeypatch.setattr(V, "condense_script", lambda s, now, fit: asked.append(fit) or short)
+    monkeypatch.setattr(V, "engine_available", lambda ctx: (True, ""))
+    monkeypatch.setattr(V, "mark_inserts", lambda ctx, ps: ps)
+    long_ = " ".join(["He slices the bread slowly, piece after piece, then wipes the knife."] * 8)
+    st = {}
+    monkeypatch.setattr(H, "asks_for_video", lambda ctx, state: True, raising=False)
+
+    class Ctx:
+        reference_images = []
+        voice_choice = None
+        continue_tail = continue_src = ""
+        video_plan_ask = True
+        def set_stage(self, *_): pass
+        def is_cancelled(self): return False
+        def remember(self, *a): pass
+        def memory_text(self): return ""
+    H._handle_generate_video(Ctx(), st, {"description": long_, "seconds": 30, "use_current_images": False})
+    assert asked == [30.0]
+    assert not st.get("video_plan") or " ".join(p["text"] for p in st["video_plan"]) == short

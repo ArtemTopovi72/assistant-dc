@@ -82,25 +82,11 @@ class VideoPlanMixin:
 
     def _squeeze_plan(self, chat_id: int, sess, lang: str) -> None:
         """The model rewrites the script tighter; the parts are re-cut from it."""
-        import llm
         import video
         script = " ".join(p["text"] for p in sess.video_plan)
         target = max(1, len(sess.video_plan) - 1)
-        top = video.VIDEO_PART_MAX_S
-        try:
-            out = llm.call_llm_simple(
-                None,
-                "You condense a video shot script. Keep the same people, place, order of "
-                "events and every quoted spoken line word for word; cut repeated, minor and "
-                "lingering actions and merge small beats. Reply with the condensed script "
-                "only, in the script's language, no comments.",
-                f"The script runs about {sum(p['sec'] for p in sess.video_plan):.0f} s. "
-                f"Make it fit about {target * top:.0f} s.\n\n{script}",
-                temperature=0.3, max_tokens=900) or ""
-        except Exception:
-            tg_bot.logger.exception("video plan: condensing failed chat=%s", chat_id)
-            out = ""
-        out = " ".join(out.split()).strip()
+        out = video.condense_script(script, sum(p["sec"] for p in sess.video_plan),
+                                    target * video.VIDEO_PART_MAX_S)
         if not out:
             self._send_text(chat_id, tg_bot._t("vp_squeeze_fail", lang))
             return
