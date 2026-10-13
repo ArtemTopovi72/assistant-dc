@@ -15,17 +15,13 @@ os.environ.setdefault("F5_TEST_RUN", "1")
 import library as L  # noqa: E402
 
 
-def test_reranker_loads_on_first_retrieve_only(tmp_path, monkeypatch):
-    import config
-    monkeypatch.delenv("F5_TEST_RUN", raising=False)
-    monkeypatch.setattr(config, "LIBRARY_CROSS_ENCODER", "some/reranker", raising=False)
+def test_reranker_loads_on_first_retrieve_only(tmp_path):
     loads = []
-    monkeypatch.setattr(L, "load_cross_encoder", lambda name: loads.append(name) or None)
-    lib = L.Library(tmp_path / "lib.db")
+    lib = L.Library(tmp_path / "lib.db", ce_model="some/reranker",
+                    ce_loader=lambda name: loads.append(name) or None)
     lib.documents()
     lib.stats()
     assert loads == []                                  # nothing at open / listing
-    monkeypatch.setenv("F5_TEST_RUN", "1")
     lib.retrieve("anything")
     lib.retrieve("again")
     assert loads == ["some/reranker"]                   # once, when needed
