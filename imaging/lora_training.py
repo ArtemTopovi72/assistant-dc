@@ -261,13 +261,13 @@ def wait_vram_free(min_free_mb: int, timeout: float = 25.0, poll: float = 0.5, c
     return last
 
 
-def _lms_base() -> str:
+def _lms_base(base=None) -> str:
     """The server root, WITHOUT /v1: lmstudio.py appends /api/v0/... to it.
     The old default here was ".../v1", so every give-back after a render polled
     /v1/api/v0/models (LM Studio: "Unexpected endpoint", once a second), never saw
     the model, and reported the restore as failed."""
     import config
-    return config.LM_STUDIO_BASE.rstrip("/").removesuffix("/v1")
+    return (base or config.LM_STUDIO_BASE).rstrip("/").removesuffix("/v1")
 
 
 def loaded_llm_id() -> str:
@@ -288,13 +288,14 @@ def loaded_llm_id() -> str:
     return chat[0] if chat else ""
 
 
-def reload_llm(model_id: str, log=None) -> bool:
+def reload_llm(model_id: str, log=None, ensure=None, base=None) -> bool:
     """Bring the chat model back after a training run. Best effort."""
     if not model_id:
         return False
     try:
-        from lmstudio import ensure_exclusive
-        ok, msg = ensure_exclusive(_lms_base(), model_id)
+        if ensure is None:
+            from lmstudio import ensure_exclusive as ensure
+        ok, msg = ensure(_lms_base(base), model_id)
     except Exception as exc:
         ok, msg = False, str(exc)
     if log:

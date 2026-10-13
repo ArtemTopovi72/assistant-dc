@@ -58,7 +58,7 @@ ACCENT = "#2b6cf0"; ACCENT2 = "#00d3a7"; REC = "#e23b3b"
 TEXT = "#e8e9ee"; MUTED = "#8b8fa3"; BORDER = "#2c2e3a"
 
 
-def open_in_os(path) -> None:
+def open_in_os(path, desktop=None) -> None:
     """Open a file or folder with the desktop's own handler. Raises on failure.
 
     os.startfile exists only on Windows: the folder buttons that called it
@@ -69,8 +69,9 @@ def open_in_os(path) -> None:
         os.startfile(str(path))                       # noqa: S606 - the user's own file
         return
     from PyQt5.QtCore import QUrl
-    from PyQt5.QtGui import QDesktopServices
-    if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(path))):
+    if desktop is None:
+        from PyQt5.QtGui import QDesktopServices as desktop
+    if not desktop.openUrl(QUrl.fromLocalFile(str(path))):
         raise OSError(f"no application to open {path}")
 
 

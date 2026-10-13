@@ -32,7 +32,7 @@ patched on `graph`, only read directly (e.g. `graph._intent_tools(...)`,
 `graph._DECK_PREFIX`) or not touched by the suites at all. graph.py
 re-exports it all by name so those direct reads keep resolving.
 """
-from seams import chat_model, run_tool, intent_read, yes_no
+from seams import chat_model, dep, run_tool, intent_read, yes_no
 import json
 import logging
 import os
@@ -1062,7 +1062,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
     # the next two model requests, then shrunk to a 1 KB excerpt (a result from
     # round r is packed at the start of r+3). On by default since the A/B
     # (sandbox_e2e, 2026-09-24): 13/13 both ways, 86 vs 93 model calls, -8% prompt.
-    obs_pack = os.getenv("OBS_PACK", "1") == "1"
+    obs_pack = dep(ctx, "obs_pack", os.getenv("OBS_PACK", "1") == "1")
     observations: list = []    # (message, round it arrived in)
     packed: set = set()
     while round_idx + 1 < budget:

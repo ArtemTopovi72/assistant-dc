@@ -18,15 +18,13 @@ import gui_common  # noqa: E402
 
 
 @pytest.mark.skipif(sys.platform.startswith("win"), reason="the non-Windows branch")
-def test_uses_the_desktop_handler(tmp_path, monkeypatch):
-    from PyQt5.QtGui import QDesktopServices
+def test_uses_the_desktop_handler(tmp_path):
+    import types
     seen = []
-    monkeypatch.setattr(QDesktopServices, "openUrl", staticmethod(lambda url: seen.append(url) or True))
-    gui_common.open_in_os(tmp_path)
+    gui_common.open_in_os(tmp_path, desktop=types.SimpleNamespace(openUrl=lambda url: seen.append(url) or True))
     assert seen and seen[0].toLocalFile() == str(tmp_path)
-    monkeypatch.setattr(QDesktopServices, "openUrl", staticmethod(lambda url: False))
     with pytest.raises(OSError):
-        gui_common.open_in_os(tmp_path)
+        gui_common.open_in_os(tmp_path, desktop=types.SimpleNamespace(openUrl=lambda url: False))
 
 
 def test_no_bare_startfile_left_in_the_gui():

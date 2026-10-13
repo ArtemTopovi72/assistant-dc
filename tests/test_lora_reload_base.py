@@ -14,15 +14,13 @@ import lmstudio
 import lora_training as LT
 
 
-def test_base_has_no_v1(monkeypatch):
+def test_base_has_no_v1():
     for b in ("http://127.0.0.1:1234", "http://127.0.0.1:1234/", "http://127.0.0.1:1234/v1"):
-        monkeypatch.setattr(config, "LM_STUDIO_BASE", b)
-        assert LT._lms_base() == "http://127.0.0.1:1234"
+        assert LT._lms_base(b) == "http://127.0.0.1:1234"
 
 
-def test_reload_llm_passes_the_root(monkeypatch):
+def test_reload_llm_passes_the_root():
     seen = {}
-    monkeypatch.setattr(lmstudio, "ensure_exclusive", lambda base, m: (seen.update(base=base), (True, ""))[1])
-    monkeypatch.setattr(config, "LM_STUDIO_BASE", "http://127.0.0.1:1234")
-    assert LT.reload_llm("m") is True
+    ensure = lambda base, m: (seen.update(base=base), (True, ""))[1]
+    assert LT.reload_llm("m", ensure=ensure, base="http://127.0.0.1:1234/v1") is True
     assert not seen["base"].endswith("/v1")
