@@ -26,6 +26,7 @@ Callers supply `validate` when "a usable result" is not an image — video.py
 passes its own, because ComfyUI reports a saved mp4 under the same history
 "images" key that SaveImage uses.
 """
+from seams import dep
 import json
 import logging
 import os
@@ -772,18 +773,18 @@ def _submit_and_poll(ctx, workflow: dict, timeout: int = 1900, label: str = "",
         # would unload the chat model for a job nobody wants.
         logger.info("ComfyUI submit skipped: cancelled%s", f" ({label})" if label else "")
         return None
-    if not server_healthy():
+    if not dep(ctx, "server_healthy", server_healthy)():
         logger.error("ComfyUI is not answering — abandoning submit%s",
                      f" ({label})" if label else "")
         _fail("ComfyUI is not running or not answering at " + COMFY_URL)
         return None
-    busy = gpu_holder()
+    busy = dep(ctx, "gpu_holder", gpu_holder)()
     if busy:
         # Do not queue behind it and do not fight it: a whole-card job runs for
         # hours, and every caller here has a timeout measured in minutes.
         logger.error("GPU held by %r — refusing this ComfyUI job%s", busy,
                      f" ({label})" if label else "")
-        LAST_GPU_REFUSAL.update({"label": busy, "at": time.time()})
+        LAST_GPU_REFUSAL.update({"label": busy, "at": dep(ctx, "time", time).time()})
         _fail(f"the GPU is busy with {busy}")
         return None
     with _gpu_slot(exclusive=exclusive, label=label, min_free_mb=min_free_mb):
@@ -846,9 +847,9 @@ def _submit_and_poll_locked(ctx, workflow: dict, timeout: int, label: str,
     if on_progress is not None:
         progress = _ComfyProgress(client_id, on_progress, holder).start()
     try:
-        throttle_external_calls(ctx)
-        _apply_model_fallbacks(workflow)
-        resp = requests.post(f"{COMFY_URL}/prompt",
+        dep(ctx, "throttle_external_calls", throttle_external_calls)(ctx)
+        dep(ctx, "_apply_model_fallbacks", _apply_model_fallbacks)(workflow)
+        resp = dep(ctx, "requests", requests).post(f"{COMFY_URL}/prompt",
                              json={"prompt": workflow, "client_id": client_id},
                              timeout=_COMFY_SUBMIT_TIMEOUT)
         if resp.status_code != 200:
@@ -885,7 +886,7 @@ def _submit_and_poll_locked(ctx, workflow: dict, timeout: int, label: str,
 
 
 def _poll_history(ctx, prompt_id, timeout, label, validate=None):
-    start = time.time()
+    start = dep(ctx, "time", time).time()
     delay = 1.0
     # If ComfyUI dies mid-job the poll keeps failing — by connection-refusal if the
     # process is gone, by read timeout if it is wedged; without this a dead server
@@ -897,18 +898,18 @@ def _poll_history(ctx, prompt_id, timeout, label, validate=None):
     # restarted mid-render, queue cleared) will never complete — stop polling after
     # a few consecutive confirmations instead of waiting out the full timeout.
     queue_absent = 0
-    while time.time() - start < timeout:
+    while dep(ctx, "time", time).time() - start < timeout:
         if ctx is not None and getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
             logger.info("ComfyUI poll cancelled by user%s", f" ({label})" if label else "")
-            _cancel_job(prompt_id)
+            dep(ctx, "_cancel_job", _cancel_job)(prompt_id)
             return None
         try:
-            hist_resp = requests.get(f"{COMFY_URL}/history/{prompt_id}", timeout=30)
+            hist_resp = dep(ctx, "requests", requests).get(f"{COMFY_URL}/history/{prompt_id}", timeout=30)
             conn_down_since = None  # reachable again — reset the outage timer
             if hist_resp.status_code == 200:
                 history = hist_resp.json()
-                if prompt_id not in history and time.time() - start > 10:
-                    known = _job_still_known(prompt_id)
+                if prompt_id not in history and dep(ctx, "time", time).time() - start > 10:
+                    known = dep(ctx, "_job_still_known", _job_still_known)(prompt_id)
                     if known is False:
                         queue_absent += 1
                         if queue_absent >= 3:
@@ -986,7 +987,7 @@ def _poll_history(ctx, prompt_id, timeout, label, validate=None):
             # subclass ConnectionError, so a WEDGED server (socket accepted, no
             # answer) used to skip this grace entirely and be retried until the
             # full wall-clock `timeout` ran out.
-            now = time.time()
+            now = dep(ctx, "time", time).time()
             if conn_down_since is None:
                 conn_down_since = now
             elif now - conn_down_since > CONN_FAIL_GRACE:
@@ -998,13 +999,13 @@ def _poll_history(ctx, prompt_id, timeout, label, validate=None):
         except Exception as exc:
             logger.error("ComfyUI polling error: %s", exc)
 
-        time.sleep(delay)
+        dep(ctx, "time", time).sleep(delay)
         delay = min(delay * 1.5, 5.0)
 
     logger.error("ComfyUI timeout after %d seconds", timeout)
     # Abandoned is not stopped: left running it keeps the card, and the next
     # job (or the chat model reloading) waits behind a render nobody will read.
-    _cancel_job(prompt_id)
+    dep(ctx, "_cancel_job", _cancel_job)(prompt_id)
     _fail(f"the render did not finish within {timeout} s")
     return None
 
@@ -1017,7 +1018,7 @@ def _submit_and_collect(ctx, workflow: dict, timeout: int = 1900,
     Returns None on HTTP/job error or timeout. ``timeout`` is clamped to
     config.COMFY_JOB_TIMEOUT like _submit_and_poll."""
     timeout = min(timeout, COMFY_JOB_TIMEOUT)
-    if not server_healthy():
+    if not dep(ctx, "server_healthy", server_healthy)():
         logger.error("ComfyUI is not answering — abandoning submit%s",
                      f" ({label})" if label else "")
         return None
@@ -1028,9 +1029,9 @@ def _submit_and_collect(ctx, workflow: dict, timeout: int = 1900,
 def _submit_and_collect_locked(ctx, workflow: dict, timeout: int,
                                label: str) -> Optional[dict]:
     try:
-        throttle_external_calls(ctx)
-        _apply_model_fallbacks(workflow)
-        resp = requests.post(f"{COMFY_URL}/prompt", json={"prompt": workflow},
+        dep(ctx, "throttle_external_calls", throttle_external_calls)(ctx)
+        dep(ctx, "_apply_model_fallbacks", _apply_model_fallbacks)(workflow)
+        resp = dep(ctx, "requests", requests).post(f"{COMFY_URL}/prompt", json={"prompt": workflow},
                              timeout=_COMFY_SUBMIT_TIMEOUT)
         if resp.status_code != 200:
             logger.error("ComfyUI HTTP %d: %s", resp.status_code, _format_comfy_error(resp))
@@ -1044,12 +1045,12 @@ def _submit_and_collect_locked(ctx, workflow: dict, timeout: int,
         return None
 
     logger.info("ComfyUI job started (ID: %s%s)", prompt_id, f", {label}" if label else "")
-    start, delay = time.time(), 1.0
-    while time.time() - start < timeout:
+    start, delay = dep(ctx, "time", time).time(), 1.0
+    while dep(ctx, "time", time).time() - start < timeout:
         if ctx is not None and getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
             return None
         try:
-            hist = requests.get(f"{COMFY_URL}/history/{prompt_id}", timeout=30)
+            hist = dep(ctx, "requests", requests).get(f"{COMFY_URL}/history/{prompt_id}", timeout=30)
             if hist.status_code == 200 and prompt_id in hist.json():
                 job = hist.json()[prompt_id]
                 outputs = job.get("outputs") or {}
@@ -1073,7 +1074,7 @@ def _submit_and_collect_locked(ctx, workflow: dict, timeout: int,
                     return None
         except Exception as exc:
             logger.error("ComfyUI collect polling error: %s", exc)
-        time.sleep(delay)
+        dep(ctx, "time", time).sleep(delay)
         delay = min(delay * 1.5, 5.0)
     logger.error("ComfyUI collect timeout after %d seconds", timeout)
     return None
