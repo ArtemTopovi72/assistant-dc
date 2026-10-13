@@ -23,7 +23,7 @@ from PyQt5.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QFrame, QGri
 
 from ui_scale import px, scale_style as _ss
 from gui_common import (BG, MUTED, _FlowWidget, _card, _fit_dialog, _flow,
-                        _fmt_bytes, _fmt_ts, _section)
+                        _fmt_bytes, _fmt_ts, _section, worker_module)
 
 import logging
 logger = logging.getLogger("assistant.gui")   # same channel as gui.py
@@ -39,9 +39,10 @@ class CompactMemoryWorker(QThread):
 
     def run(self):
         try:
-            from prompts import COMPACT_MEMORY_PROMPT
-            from llm import send_to_lm_studio
-            from utils import strip_think_tags, strip_reasoning_leak
+            COMPACT_MEMORY_PROMPT = worker_module(self, "prompts").COMPACT_MEMORY_PROMPT
+            send_to_lm_studio = worker_module(self, "llm").send_to_lm_studio
+            utils = worker_module(self, "utils")
+            strip_think_tags, strip_reasoning_leak = utils.strip_think_tags, utils.strip_reasoning_leak
             memory_text = self.ctx.memory_text(limit=50)
             if not memory_text:
                 self.done.emit("")

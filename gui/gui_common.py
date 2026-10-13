@@ -570,6 +570,16 @@ def _fmt_bytes(n: int) -> str:
 from PyQt5.QtCore import QThread, pyqtSignal
 
 
+def worker_module(worker, name: str):
+    """`name` for a worker's run(): the stand-in in `worker.modules` when one was handed in,
+    else the module itself (imported here, at call time: run() is the slow path)."""
+    own = getattr(worker, "modules", None) or {}
+    if name in own:
+        return own[name]
+    import importlib
+    return importlib.import_module(name)
+
+
 class TranscribeWorker(QThread):
     """Transcribe one audio utterance WITHOUT invoking the agent.
 
@@ -586,9 +596,8 @@ class TranscribeWorker(QThread):
 
     def run(self):
         try:
-            from audio import transcribe_audio_array
             self.ctx.set_stage("Transcribing")
-            text = transcribe_audio_array(self.ctx, self.audio)
+            text = worker_module(self, "audio").transcribe_audio_array(self.ctx, self.audio)
             if text:
                 self.recognized.emit(text)
             else:

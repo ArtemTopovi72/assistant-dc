@@ -10,16 +10,13 @@ the running product changes unless it is explicitly switched.
     KNOWLEDGE_BACKEND=http                  -> HttpKnowledgeClient
     KNOWLEDGE_SERVICE_URL=http://127.0.0.1:8790   (http backend only)
 
-WHY THE LAZY `import library` INSIDE EVERY CONSTRUCTOR
-------------------------------------------------------
-It is not cosmetic and it is not an import-cycle dodge. The GUI and worker
-suites stub the document layer by swapping sys.modules['library'] for a module
-that defines only the handful of names the real code path touches. Resolving
-`library` at CALL time keeps that seam alive now that the caller has moved into
-this module, and calling exactly the same entry points with exactly the same
-argument shapes (positional db_path; build() without source_ids/titles when
-they are None; corpus_scripts() with no argument; all_chunks(paths) positional)
-keeps those stubs valid. Do not "tidy" these call shapes.
+THE `library` ARGUMENT
+----------------------
+Every entry point takes the document layer as `library=` (default: `import library`
+at call time, which also keeps the heavy import off the GUI's startup). A suite hands
+in a stand-in that defines only the names the real code path touches, so the call
+shapes matter: positional db_path; build() without source_ids/titles when they are
+None; corpus_scripts() with no argument; all_chunks(paths) positional.
 
 The in-process client also keeps the legacy method names `build`, `retrieve`
 and `retrieve_multi` as aliases of `ingest`, `search` and `search_multi`. That
@@ -50,7 +47,15 @@ def backend_name() -> str:
     return "http" if v in ("http", "https", "remote", "service") else "inprocess"
 
 
-def open_library(db_path: Optional[str] = None, *, default: bool = False) -> KnowledgeClient:
+def _library(library):
+    if library is not None:
+        return library
+    import library as _lib
+    return _lib
+
+
+def open_library(db_path: Optional[str] = None, *, default: bool = False,
+                 library=None) -> KnowledgeClient:
     """Open a knowledge client for one thread and one operation.
 
     db_path: the index file. None means "this process's default library".
@@ -64,7 +69,7 @@ def open_library(db_path: Optional[str] = None, *, default: bool = False) -> Kno
     if backend_name() == "http":
         from knowledge_service import HttpKnowledgeClient   # local import: stdlib-only module
         return HttpKnowledgeClient(os.environ.get(ENV_URL) or DEFAULT_URL, db_path=db_path)
-    return InProcessKnowledgeClient(db_path, default=default)
+    return InProcessKnowledgeClient(db_path, default=default, library=library)
 
 
 # --------------------------------------------------------------------------- #
@@ -81,8 +86,8 @@ class InProcessKnowledgeClient:
 
     backend = "inprocess"
 
-    def __init__(self, db_path: Optional[str] = None, *, default: bool = False):
-        import library                       # call-time resolution: see module docstring
+    def __init__(self, db_path: Optional[str] = None, *, default: bool = False, library=None):
+        library = _library(library)
         if db_path is None:
             self._lib = library.default_library() if default else library.Library()
         else:
@@ -158,26 +163,23 @@ class InProcessKnowledgeClient:
 # Client-side helpers (documented in knowledge_api as NOT crossing the boundary)
 # --------------------------------------------------------------------------- #
 def build_rag_prompt(client, question: str, k: Optional[int] = None,
-                     extra_queries: Optional[List[str]] = None):
+                     extra_queries: Optional[List[str]] = None, library=None):
     """Retrieve for `question` through `client` and assemble the RAG prompt.
 
     Pure assembly over boundary results — no storage access of its own — so it
-    is identical for every backend. Delegates to library.build_rag_prompt at
-    call time so the module stub used by the worker suites still applies.
+    is identical for every backend. Delegates to library.build_rag_prompt.
     """
-    import library
-    return library.build_rag_prompt(client, question, k=k, extra_queries=extra_queries)
+    return _library(library).build_rag_prompt(client, question, k=k, extra_queries=extra_queries)
 
 
-def cross_lingual_targets(client, text: str) -> List[str]:
+def cross_lingual_targets(client, text: str, library=None) -> List[str]:
     """Languages to also search in, given the scripts present in this corpus."""
-    import library
-    return library.cross_lingual_targets(text, client.corpus_scripts())
+    return _library(library).cross_lingual_targets(text, client.corpus_scripts())
 
 
-def map_reduce_scan(chunks, question, map_fn, reduce_fn, *, progress=None, cancel=None):
+def map_reduce_scan(chunks, question, map_fn, reduce_fn, *, progress=None, cancel=None,
+                    library=None):
     """Whole-book scan. Client-side by necessity: map_fn/reduce_fn are LLM
     callbacks and the LLM lives with the caller, not with the index."""
-    import library
-    return library.map_reduce_scan(chunks, question, map_fn, reduce_fn,
+    return _library(library).map_reduce_scan(chunks, question, map_fn, reduce_fn,
                                    progress=progress, cancel=cancel)

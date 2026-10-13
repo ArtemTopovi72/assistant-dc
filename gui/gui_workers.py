@@ -20,7 +20,7 @@ import copy
 
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 
-from audio import transcribe_audio_array
+from gui_common import worker_module
 
 import logging
 logger = logging.getLogger("assistant.gui")
@@ -41,8 +41,8 @@ class ModelLoader(QThread):
 
     def run(self):
         try:
-            from app_runtime import build_runtime   # not from assistant: that is the entry point
-            ctx, base_state, graph = build_runtime(
+            # app_runtime, not assistant: that is the entry point
+            ctx, base_state, graph = worker_module(self, "app_runtime").build_runtime(
                 self.model_name, self.no_think, status_cb=self.progress.emit,
                 reasoning_effort=self.reasoning_effort)
             ctx.gui_mode = True
@@ -62,8 +62,7 @@ class ModelSwitchWorker(QThread):
 
     def run(self):
         try:
-            from lmstudio import ensure_exclusive
-            ok, msg = ensure_exclusive(self.base_url, self.model_id)
+            ok, msg = worker_module(self, "lmstudio").ensure_exclusive(self.base_url, self.model_id)
             self.done.emit(ok, msg)
         except Exception as exc:
             logger.exception("Model switch failed")
@@ -83,18 +82,17 @@ class RedrawWorker(QThread):
 
     def run(self):
         try:
-            import image as _image
+            _image = worker_module(self, "image")
             if self.mode == "inpaint":
-                from image import inpaint_region_with_comfy
                 # Region instruction edit via FireRed.
-                path = inpaint_region_with_comfy(
+                path = _image.inpaint_region_with_comfy(
                     self.ctx, self.source_path, self.region, self.prompt, engine=self.engine)
                 wf = f"contained-{self.engine} (GUI Redraw btn, region given)"
             else:
                 # "redraw" and "enhance" (empty instruction) both re-render the
                 # whole picture the same way the redraw_image tool does: our own
                 # Ideogram picture from its boxes, a user's photo through FireRed.
-                from tool_image_handlers import redraw_whole_image
+                redraw_whole_image = worker_module(self, "tool_image_handlers").redraw_whole_image
                 instructions = self.prompt or (
                     "improve the overall quality: sharpen fine detail, clean up noise "
                     "and artifacts")
@@ -129,7 +127,7 @@ class FixHandsWorker(QThread):
 
     def run(self):
         try:
-            import image as _image
+            _image = worker_module(self, "image")
             path = _image.fix_hands(self.ctx, self.source_path,
                                     mask_override=self.mask_path, engine=self.engine)
             try:
@@ -165,7 +163,7 @@ class FixArtifactWorker(QThread):
 
     def run(self):
         try:
-            import image as _image
+            _image = worker_module(self, "image")
             path = _image.edit_region_contained_via_firered(
                 self.ctx, self.source_path, "selected area", self.instruction,
                 mask_override=self.mask_path, protect_face=self.protect_face,
@@ -205,8 +203,8 @@ class LibraryBuildWorker(QThread):
 
     def run(self):
         try:
-            import knowledge_client
-            lib = knowledge_client.open_library(self.db_path)
+            lib = worker_module(self, "knowledge_client").open_library(
+                self.db_path, library=getattr(self, "modules", {}).get("library"))
             try:
                 stats = lib.ingest(
                     self.paths,
@@ -288,7 +286,7 @@ class RequestWorker(QThread):
             text = self.text
             if text is None and self.audio is not None:
                 self.ctx.set_stage("Transcribing")
-                text = transcribe_audio_array(self.ctx, self.audio)
+                text = worker_module(self, "audio").transcribe_audio_array(self.ctx, self.audio)
                 if not text:
                     self.failed.emit("Didn't catch that — try again.")
                     return
@@ -303,16 +301,17 @@ class RequestWorker(QThread):
             send_text = text
             if self.use_db:
                 try:
-                    import knowledge_client
+                    knowledge_client = worker_module(self, "knowledge_client")
+                    library = getattr(self, "modules", {}).get("library")
                     self.ctx.set_stage("Searching documents")
-                    lib = knowledge_client.open_library()   # own connection on this thread
+                    lib = knowledge_client.open_library(library=library)   # own connection on this thread
                     try:
                         # Cross-lingual: if the corpus is in a different script than the
                         # question (e.g. Russian book, English question), translate the
                         # query into the corpus language(s) and retrieve over all variants.
                         extra = []
                         try:
-                            targets = knowledge_client.cross_lingual_targets(lib, text)
+                            targets = knowledge_client.cross_lingual_targets(lib, text, library=library)
                             for lang in targets[:2]:
                                 tq = self._translate_query(text, lang)
                                 if tq:
@@ -322,7 +321,7 @@ class RequestWorker(QThread):
                         except Exception:
                             logger.exception("cross-lingual query expansion failed")
                         send_text, note = knowledge_client.build_rag_prompt(
-                            lib, text, k=self.db_k, extra_queries=extra)
+                            lib, text, k=self.db_k, extra_queries=extra, library=library)
                     finally:
                         lib.close()
                     if note:
@@ -350,8 +349,7 @@ class RequestWorker(QThread):
             # Every few turns, fold older history into a running summary so the next
             # turn doesn't resend (or reprocess) the whole transcript. Off the UI
             # thread already (this is the worker), so the extra LLM call is fine.
-            from graph import compact_history_if_needed
-            self.base_state["messages"] = compact_history_if_needed(self.ctx, msgs)
+            self.base_state["messages"] = worker_module(self, "graph").compact_history_if_needed(self.ctx, msgs)
             self.done.emit(dict(final))
         except Exception as exc:
             logger.exception("Request failed")
@@ -361,7 +359,7 @@ class RequestWorker(QThread):
         """Translate a search query into `lang` for cross-lingual retrieval. Returns the
         translation or None. Uses the loaded chat model; never raises into the turn."""
         try:
-            import llm
+            llm = worker_module(self, "llm")
             import re as _re
             msgs = [{"role": "system",
                      "content": f"Translate the user's search query into {lang}. "
@@ -395,7 +393,7 @@ class ScanWorker(QThread):
         self._cancel = True
 
     def _llm(self, system, user, *, max_tokens, temperature):
-        import llm
+        llm = worker_module(self, "llm")
         import re as _re
         r = llm.send_to_lm_studio(
             self.ctx, [{"role": "system", "content": system},
@@ -407,8 +405,9 @@ class ScanWorker(QThread):
 
     def run(self):
         try:
-            import knowledge_client
-            lib = knowledge_client.open_library()
+            knowledge_client = worker_module(self, "knowledge_client")
+            library = getattr(self, "modules", {}).get("library")
+            lib = knowledge_client.open_library(library=library)
             try:
                 chunks = lib.all_chunks(self.paths)
             finally:
@@ -442,7 +441,7 @@ class ScanWorker(QThread):
             answer = knowledge_client.map_reduce_scan(
                 chunks, self.question, mapf, reducef,
                 progress=lambda i, n: self.progress.emit(i, n),
-                cancel=lambda: self._cancel)
+                cancel=lambda: self._cancel, library=library)
             if self._cancel:
                 self.failed.emit("Scan cancelled.")
                 return

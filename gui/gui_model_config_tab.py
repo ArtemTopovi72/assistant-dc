@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel,
                              QWidget)
 
 from ui_scale import px, scale_style as _ss
-from gui_common import BORDER, MUTED, _section
+from gui_common import BORDER, MUTED, _section, worker_module
 
 import logging
 logger = logging.getLogger("assistant.gui")
@@ -40,8 +40,7 @@ class ReloadModelWorker(QThread):
 
     def run(self):
         try:
-            from lmstudio import reload_model_full
-            result = reload_model_full(
+            result = worker_module(self, "lmstudio").reload_model_full(
                 self.base_url, self.model_id,
                 self.context_length, self.gpu_pct,
                 self.kv_quant, self.flash_attn,
