@@ -1433,7 +1433,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         # no voice question). Spoken lines in quotes are a fact, not a guess.
         speakers = min(len(re.findall(r'«[^»]{2,}»|"[^"]{2,}"|“[^”]{2,}”',
                                       args.get("description") or "")), video_mod.MAX_REF_AUDIOS)
-    if (speakers and not anim and not args.get("use_my_voice")
+    # a continuation speaks with the clip's own voices: its tail is the reference
+    if (speakers and not anim and not continuing and not args.get("use_my_voice")
             and getattr(ctx, "voice_choice", None) == ""):
         # Asked once per clip, whatever led here (🎬 Animate, a chat request):
         # the bot puts «🎙 Свои голоса» / «▶️ Стандартные» under this reply

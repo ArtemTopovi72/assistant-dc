@@ -8,10 +8,18 @@ import tool_image_handlers as H
 import video as V
 import tools as T
 
-V.engine_available = lambda ctx: (True, "")
-T._render_budget_exhausted = lambda *a, **k: None
+import pytest
+
 made = []
-V.generate_video = lambda ctx, d, **k: made.append((d, k.get("audios"))) or {"status": "cancelled"}
+
+
+@pytest.fixture(autouse=True)
+def _render_stub(monkeypatch):
+    # fixture-scoped: patched at import, the stub leaked into every suite run after this one
+    monkeypatch.setattr(V, "engine_available", lambda ctx: (True, ""))
+    monkeypatch.setattr(T, "_render_budget_exhausted", lambda *a, **k: None)
+    monkeypatch.setattr(V, "generate_video",
+                        lambda ctx, d, **k: made.append((d, k.get("audios"))) or {"status": "cancelled"})
 
 
 def ctx(choice, voices=()):
@@ -72,3 +80,15 @@ def test_buttons_rerun_the_request():
     bot._cb_anim_voices(5, "anv:default")
     assert queued[-1]["text"] == "сделай видео где мы болтаем"
     assert bot._get_session(5).voice_choice == "default"
+
+
+def test_a_continuation_speaks_with_the_clips_own_voices(tmp_path):
+    # its tail is the reference, voices included: asking again stalled «продолжи это видео»
+    tail, src = tmp_path / "tail.mp4", tmp_path / "clip.mp4"
+    tail.write_bytes(b"t")
+    src.write_bytes(b"s")
+    c = ctx("")
+    c.continue_tail, c.continue_src, c.continue_people = str(tail), str(src), []
+    st = {}
+    H._handle_generate_video(c, st, {"description": 'He says "Пока!" and waves', "speakers": 1})
+    assert "ask_voices" not in st
