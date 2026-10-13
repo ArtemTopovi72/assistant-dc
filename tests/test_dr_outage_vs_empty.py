@@ -84,17 +84,15 @@ check("...and still produces no brief", _b == [], _b)
 # ...and the distinction is made by brief_source itself, not by the caller
 # guessing. Asserted on behaviour: a docstring check would pass on a function
 # that returns the wrong thing.
+import types  # noqa: E402
+
 import dr_brief as _DB  # noqa: E402
-import dr_calls as _DC  # noqa: E402
+
 
 def _brief_with(answer):
-    real = _DC.call_llm_simple
-    _DC.call_llm_simple = lambda *a, **k: answer
-    try:
-        return _DB.brief_source(None, "чай", {"domain": "tea.ru", "title": "t",
-                                              "text": "чай"})
-    finally:
-        _DC.call_llm_simple = real
+    # the model is handed in on the context: nothing written over dr_calls
+    ctx = types.SimpleNamespace(text_model=lambda *a, **k: answer)
+    return _DB.brief_source(ctx, "чай", {"domain": "tea.ru", "title": "t", "text": "чай"})
 
 check("a model that says nothing yields the empty string",
       _brief_with("") == "", repr(_brief_with("")))

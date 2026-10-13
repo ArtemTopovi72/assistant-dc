@@ -22,9 +22,8 @@ independently:
      attempts instead of three, and the caller's existing "practical synthesis
      failed — falling back" path kicks in sooner.
 
-No real LM Studio/GPU call is made — `dr_calls.call_llm_simple` (the engine's
-one model contact) is monkeypatched to simulate the "pure reasoning, no answer"
-failure.
+No real LM Studio/GPU call is made — the engine's one model contact is handed in on
+the context (`text_model`) to simulate the "pure reasoning, no answer" failure.
 
 Run: venv/Scripts/python.exe tests/test_dr_synthesis_classification.py
 """
@@ -44,7 +43,9 @@ def _kind(q, t):
         return "compare"
     return "practical" if any(w in t for w in ("buy", "book", "find me", "deals")) else "research"
 intent.CHOICE_STUB = _kind
-import dr_calls
+import types
+
+import dr_calls  # noqa: F401
 
 _n = _bad = 0
 
@@ -131,22 +132,18 @@ def _fake_empty(ctx, system, user, temperature=0.3, max_tokens=100, force_think=
     return ""
 
 
-_orig = dr_calls.call_llm_simple
-dr_calls.call_llm_simple = _fake_empty
-try:
-    _calls.clear()
-    out = D._think_call(None, "SYSTEM", "USER", 1000, retries=1)
-    check("retries=1 gives up after 2 attempts, not 3",
-          len(_calls) == 2, f"got {len(_calls)} calls: {_calls}")
-    check("a fully-exhausted call returns empty (not a crash)", out == "")
+_ctx = types.SimpleNamespace(text_model=_fake_empty)      # the model, handed in
+_calls.clear()
+out = D._think_call(_ctx, "SYSTEM", "USER", 1000, retries=1)
+check("retries=1 gives up after 2 attempts, not 3",
+      len(_calls) == 2, f"got {len(_calls)} calls: {_calls}")
+check("a fully-exhausted call returns empty (not a crash)", out == "")
 
-    _calls.clear()
-    out = D._think_call(None, "SYSTEM", "USER", 1000)
-    check("default retries=2 preserves the old 3-attempt behaviour for other "
-          "callers (unrelated to this fix)",
-          len(_calls) == 3, f"got {len(_calls)} calls: {_calls}")
-finally:
-    dr_calls.call_llm_simple = _orig
+_calls.clear()
+out = D._think_call(_ctx, "SYSTEM", "USER", 1000)
+check("default retries=2 preserves the old 3-attempt behaviour for other "
+      "callers (unrelated to this fix)",
+      len(_calls) == 3, f"got {len(_calls)} calls: {_calls}")
 
 # ──────────────────────────────────────── (e) survey-mode invariant untouched
 print("\nEXISTING SURVEY-MODE GATE IS UNTOUCHED")

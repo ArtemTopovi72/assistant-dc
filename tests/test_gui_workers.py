@@ -230,33 +230,29 @@ def test_library_build_worker():
 # ---------------------------------------------------------- DeepResearchWorker
 
 def test_deep_research_worker():
-    restored = {"n": 0}
-    # The worker also passes out_lang (the Research tab writes the document in the
-    # language the topic was typed in) and resolves it via dr.lang_of_text, so the
-    # stub must provide both.
+    # The worker hands the run, its knobs and progress to the research client it was given;
+    # out_lang stays None so the client derives it from the typed topic.
     seen = {}
-    dr = {
-        "apply_overrides": lambda ov: {"saved": True},
-        "restore_overrides": lambda s: restored.__setitem__("n", restored["n"] + 1),
-        "lang_of_text": lambda t: "ru",
-        "run_deep_research": lambda ctx, topic, depth="standard", progress=None,
-                                    out_lang="en": (
-            seen.__setitem__("out_lang", out_lang)
-            or progress("search", {"hits": 3}, "searching") or {"report": "done"}),
-    }
-    w = gui.DeepResearchWorker(_ctx(), "quantum", overrides={"DR_MAX": 5})
+
+    class Client:
+        def run(self, ctx, topic, depth="standard", overrides=None, progress=None, out_lang=None):
+            seen.update(overrides=overrides, out_lang=out_lang)
+            progress("search", {"hits": 3}, "searching")
+            return {"report": "done"}
+
+    w = gui.DeepResearchWorker(_ctx(), "quantum", overrides={"DR_MAX": 5}, research=Client())
     rec = cap(w, "progress", "done", "failed")
-    with fake_modules(deep_research=dr):
-        w.run()
-    check("dr_done", rec["done"] == [{"report": "done"}] and restored["n"] == 1)
-    check("dr_out_lang", seen.get("out_lang") == "ru")
+    w.run()
+    check("dr_done", rec["done"] == [{"report": "done"}] and seen["overrides"] == {"DR_MAX": 5})
+    check("dr_out_lang", seen.get("out_lang") is None)
     check("dr_progress", rec["progress"] == [("search", {"hits": 3}, "searching")])
-    # no overrides path + failure, finally still restores
-    w2 = gui.DeepResearchWorker(_ctx(), "x")
+
+    class Boom:
+        def run(self, *a, **k):
+            raise RuntimeError("dr boom")
+    w2 = gui.DeepResearchWorker(_ctx(), "x", research=Boom())
     rec2 = cap(w2, "done", "failed")
-    dr2 = dict(dr, run_deep_research=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("dr boom")))
-    with fake_modules(deep_research=dr2):
-        w2.run()
+    w2.run()
     check("dr_failed", rec2["failed"] == ["dr boom"])
 
 

@@ -226,10 +226,11 @@ class DeepResearchWorker(QThread):
     done = pyqtSignal(dict)
     failed = pyqtSignal(str)
 
-    def __init__(self, ctx, topic, depth="standard", overrides=None):
+    def __init__(self, ctx, topic, depth="standard", overrides=None, research=None):
         super().__init__()
         self.ctx, self.topic, self.depth = ctx, topic, depth
         self.overrides = overrides or {}
+        self.research = research
 
     def run(self):
         # Goes through the research service boundary (research_api.py /
@@ -241,7 +242,7 @@ class DeepResearchWorker(QThread):
         # English paper) — see research_api.OUT_LANG_FROM_TOPIC_MARKER.
         try:
             import research_client
-            result = research_client.open_research().run(
+            result = (self.research or research_client.open_research()).run(
                 self.ctx, self.topic, depth=self.depth, overrides=self.overrides,
                 progress=lambda phase, stats, msg: self.progress.emit(phase, stats, msg),
             )
