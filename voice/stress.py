@@ -21,6 +21,8 @@ import re
 import logging
 import threading
 import time
+
+from seams import module
 from functools import lru_cache
 
 logger = logging.getLogger(__name__)
@@ -103,7 +105,8 @@ class BilingualAccentor:
 
     def __init__(self, *, ru_model="turbo3.1", ru_workdir=None, device="cpu",
                  en_model="charsiu/g2p_multilingual_byT5_small_100",
-                 enable_english=True):
+                 enable_english=True, modules=None):
+        self.modules = modules           # stand-ins for ruaccent / transformers (suites)
         self.ru_model_size = ru_model
         self.ru_workdir = ru_workdir
         self.device = device
@@ -140,7 +143,7 @@ class BilingualAccentor:
 
     def _load_ru(self):
         if self._ru is None:
-            from ruaccent.ruaccent import RUAccent
+            RUAccent = module(self.modules, "ruaccent.ruaccent").RUAccent
             import pathlib
             ru = RUAccent()
             wd = str(self.ru_workdir) if self.ru_workdir else None
@@ -207,7 +210,8 @@ class BilingualAccentor:
                 if self._en_failed_at and time.monotonic() - self._en_failed_at < LOAD_RETRY_S:
                     raise RuntimeError("CharsiuG2P failed to load recently; not retrying yet")
                 try:
-                    from transformers import T5ForConditionalGeneration, AutoTokenizer
+                    _tf = module(self.modules, "transformers")
+                    T5ForConditionalGeneration, AutoTokenizer = _tf.T5ForConditionalGeneration, _tf.AutoTokenizer
                     tok = AutoTokenizer.from_pretrained("google/byt5-small")
                     model = T5ForConditionalGeneration.from_pretrained(self.en_model_name)
                     model.to(self.device).eval()

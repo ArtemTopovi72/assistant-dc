@@ -29,11 +29,10 @@ def _broken_module(name, attr, counter):
     return m
 
 
-def test_english_loader_tried_once(monkeypatch):
+def test_english_loader_tried_once():
     calls = []
-    monkeypatch.setitem(sys.modules, "transformers",
-                        _broken_module("transformers", ["AutoTokenizer", "T5ForConditionalGeneration"], calls))
-    acc = stress.BilingualAccentor(enable_english=True)
+    mods = {"transformers": _broken_module("transformers", ["AutoTokenizer", "T5ForConditionalGeneration"], calls)}
+    acc = stress.BilingualAccentor(enable_english=True, modules=mods)
     text = "hello wonderful world, testing english words"
     assert acc._accent_english(text) == text           # unchanged, not crashed
     assert acc._accent_english(text) == text
@@ -44,7 +43,7 @@ def test_english_loader_tried_once(monkeypatch):
     assert len(calls) == 2
 
 
-def test_russian_loader_tried_once(monkeypatch):
+def test_russian_loader_tried_once():
     calls = []
     pkg = types.ModuleType("ruaccent")
     sub = types.ModuleType("ruaccent.ruaccent")
@@ -54,9 +53,7 @@ def test_russian_loader_tried_once(monkeypatch):
             calls.append(1)
             raise OSError("hub unreachable")
     sub.RUAccent = RUAccent
-    monkeypatch.setitem(sys.modules, "ruaccent", pkg)
-    monkeypatch.setitem(sys.modules, "ruaccent.ruaccent", sub)
-    acc = stress.BilingualAccentor(enable_english=False)
+    acc = stress.BilingualAccentor(enable_english=False, modules={"ruaccent": pkg, "ruaccent.ruaccent": sub})
     for _ in range(3):
         assert acc("привет мир") == "привет мир"
     assert len(calls) == 1
