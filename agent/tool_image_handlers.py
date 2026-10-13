@@ -1293,7 +1293,9 @@ def _check_joins(ctx, joins: list) -> str:
                       "or a person becomes someone else, say which join and what jumps, in a "
                       "few words. Answer NONE when every join is continuous.") or "").split())
     except Exception:
+        logger.warning("video joins: the check failed", exc_info=True)
         return ""
+    logger.info("video joins: %d checked -> %s", len(joins), ans[:200] or "no answer")
     return "" if not ans or ans.upper().startswith("NONE") else ans[:400]
 
 
