@@ -1176,8 +1176,12 @@ def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str, st
     made before the card was taken: nothing in here calls a model. `start` is the first part's link
     (a continued chain goes on from its own last link). Returns the last link made; a failure or a
     cancel stops there and the parts so far are still joined and delivered."""
+    import tempfile
+    import tg_continue
     import video as video_mod
     last, prev = start, first
+    work = tempfile.mkdtemp(prefix="chainjoins_")
+    ctx.chain_joins = []           # frames on both sides of each join, looked at once the card is free
     for i, part in enumerate(parts[1:], start=2):
         if getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
             break
@@ -1193,6 +1197,9 @@ def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str, st
         if not (new and os.path.exists(new)):
             logger.warning("video chain: part %d produced no clip (%s)", i, r.get("reason"))
             break
+        before, after = os.path.join(work, f"end_{i}.jpg"), os.path.join(work, f"start_{i}.jpg")
+        if tg_continue.seed_frame(prev, before) and _first_frame(new, after):
+            ctx.chain_joins.append((before, after))
         last, prev = start + i - 1, new
     return last
 
@@ -1624,6 +1631,9 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             video_mod.remember_chain(path, chain_id, chain_idx)
             if len(parts) > 1:
                 result["seconds"] = video_mod.probe(path).get("seconds") or result.get("seconds")
+    ctx.video_join_note = ""
+    if chain_id and len(parts) > 1:
+        ctx.video_join_note = _check_joins(ctx, getattr(ctx, "chain_joins", None) or [])
     if not chain_id and continuing and cont_src and os.path.exists(cont_src):
         joined = (video_mod.join_pinned(cont_src, path) if pinned_tail
                   else video_mod.join_continuation(cont_src, path))
@@ -1633,7 +1643,6 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             logger.warning("continue video: the join failed, delivering the new part alone")
 
     if len(parts) > 1 and not chain_id:
-        ctx.video_join_note = ""
         path = _render_remaining_parts(ctx, path, parts, args, people=people)
         result["seconds"] = video_mod.probe(path).get("seconds") or result.get("seconds")
 

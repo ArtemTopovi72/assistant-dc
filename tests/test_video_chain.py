@@ -161,6 +161,23 @@ def test_continue_on_a_chain_clip_goes_on_from_its_latent(monkeypatch, tmp_path)
     assert stitched == [("h3_continuous/chY", 3)] and kept[-1][1:] == ("h3_continuous/chY", 3)
 
 
+def test_the_joins_of_a_chain_are_looked_at_once_after_the_card_is_free(monkeypatch, tmp_path):
+    # The joins check lived only on the old join path; the live chain path never ran it.
+    H, calls, stitched, kept = _wire(monkeypatch, tmp_path)
+    monkeypatch.setattr(V, "bridge_script", lambda ctx, ps: ps)
+    monkeypatch.setattr(V, "mark_inserts", lambda ctx, ps: ps)
+    monkeypatch.setattr(H, "_first_frame", lambda v, out: open(out, "wb").write(b"f") > 0)
+    import comfy_client
+    import llm
+    seen = []
+    monkeypatch.setattr(llm, "analyze_image_with_llm", lambda *a, **k: (
+        seen.append((len(k["image_paths"]), comfy_client._excl_users)), "Join 2: the cat vanishes")[1])
+    out = H._handle_generate_video(_Ctx(), {}, {"description": LONG, "use_current_images": False})
+    n = len(V.split_script(LONG))
+    assert seen == [(2 * (n - 1), 0)], seen     # one call, the chain's card session closed
+    assert "Join 2: the cat vanishes" in out and "do NOT call the clip seamless" in out
+
+
 def test_a_long_continuation_of_a_chain_clip_is_still_cut_into_parts(monkeypatch, tmp_path):
     # Bridged before the cut, the script was no longer found in the description and
     # «продолжение на 30 секунд» went out as one 15 s part (live 2026-10-13).
