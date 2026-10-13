@@ -22,6 +22,8 @@ from gui_common import MUTED, _fmt_bytes, _fmt_ts, _section, open_in_os
 
 
 class MemoryMaintenanceMixin:
+    opener = None      # a suite hands its own folder opener in; None -> open_in_os
+
     """The compaction / timeline / diagnostics / backup pages."""
 
     # ---- Compaction (review before commit) --------------------------------
@@ -250,6 +252,6 @@ class MemoryMaintenanceMixin:
         d = self.store.profile_dir(self._profile())
         d.mkdir(parents=True, exist_ok=True)
         try:
-            open_in_os(d)
+            (self.opener or open_in_os)(d)
         except Exception as e:
             self._toast(f"Could not open folder: {e}")

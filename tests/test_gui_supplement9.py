@@ -142,14 +142,12 @@ def test_capture_frame_write_fail_and_reset_layout():
     w = _win()
     # _capture_frame with a frame but write fails (OUTPUT_DIR -> a file)
     w.current_frame = np.zeros((8, 8, 3), dtype=np.uint8)
-    real_out = config.OUTPUT_DIR
-    badfile = Path(_TMP) / "outfile"; badfile.write_bytes(b"x")
-    config.OUTPUT_DIR = badfile   # OUTPUT_DIR/name -> open() fails (parent is a file)
-    try:
-        w._capture_frame()     # write raises -> except pass; captured_image still set
-        check("capture_write_fail", w.captured_image is not None)
-    finally:
-        config.OUTPUT_DIR = real_out
+    def _add_image_fails(path):
+        os.remove(path)          # the capture file the test must not leave behind
+        raise OSError("disk full")
+    w._add_user_image = _add_image_fails
+    w._capture_frame()     # the save raises -> except pass; captured_image still set
+    check("capture_write_fail", w.captured_image is not None)
     # _reset_layout settings.remove raises
     class BadS:
         def remove(self, *a): raise RuntimeError("x")
@@ -231,17 +229,13 @@ def test_viewer_escape_and_reset_report_web_except():
     check("viewer_escape", True)
     dlg.close()
     # _reset_report_view web setHtml raising
-    real_view, real_en = gui._QWebEngineView, gui._REPORT_HTML_ENABLED
     class StubWV(QWidget):
         def setHtml(self, *a, **k): raise RuntimeError("boom")
-    gui._QWebEngineView = StubWV; gui._REPORT_HTML_ENABLED = True
-    try:
-        w = _win()
-        w._reset_report_view()   # research_web.setHtml raises -> except pass
-        check("reset_report_web_except", True)
-        _close(w)
-    finally:
-        gui._QWebEngineView = real_view; gui._REPORT_HTML_ENABLED = real_en
+    w = _win()
+    w.research_web = StubWV()
+    w._reset_report_view()   # research_web.setHtml raises -> except pass
+    check("reset_report_web_except", True)
+    _close(w)
 
 
 def test_misc_small_guards():
@@ -290,13 +284,10 @@ def test_memory_center_small_guards():
     tab.store.sync_into_ctx = lambda ctx, prof: (_ for _ in ()).throw(RuntimeError("sync"))
     tab._after_mutation()
     # _open_folder startfile raising
-    import gui_memory_maint as _gmm
-    real = _gmm.open_in_os
-    _gmm.open_in_os = lambda p: (_ for _ in ()).throw(OSError("no shell"))
-    try:
-        tab._open_folder()
-    finally:
-        _gmm.open_in_os = real
+    def _no_shell(p):
+        raise OSError("no shell")
+    tab.opener = _no_shell
+    tab._open_folder()
     # refresh_all sub-refresh raising -> except
     tab._refresh_timeline = lambda: (_ for _ in ()).throw(RuntimeError("boom"))
     tab.refresh_all()
@@ -326,14 +317,11 @@ def test_transfer_small_guards():
     tab2._style_row({"frame": None}, True)
     # _drop_mask_file os.remove raising
     owned = str(gui.OUTPUT_DIR_GUI_MASK() / "transfer_mask_del.png")
-    open(owned, "wb").write(b"x")
+    if os.path.isfile(owned): os.remove(owned)
+    os.makedirs(owned, exist_ok=True)       # a directory under the file's name: os.remove refuses it
     row = {"mask": owned}
-    real_rm = os.remove
-    os.remove = lambda p: (_ for _ in ()).throw(OSError("locked"))
-    try:
-        tab2._drop_mask_file(row)
-    finally:
-        os.remove = real_rm
+    tab2._drop_mask_file(row)
+    os.rmdir(owned)
     check("transfer_small_guards", True)
 
 
@@ -342,16 +330,13 @@ def test_run_gui_defensive_excepts():
     # re-polishes every live widget. The ten tests above leave a pile of them
     # behind, and Qt walking one whose C++ side is already gone takes the
     # process down with an access violation. What is under test is run_gui's
-    # defensive excepts, not restyling, so the restyle is stubbed out for the call.
-    real_apply = gui.apply_ui_scale
-    gui.apply_ui_scale = lambda app: None
-    # crash_diag stub whose install RAISES -> covers the crash_diag except
-    fc = types.ModuleType("crash_diag")
-    fc.install = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("cd"))
-    fc.install_qt_message_handler = lambda *a, **k: None
-    fc.log_stage = lambda *a, **k: None
-    real_cd = sys.modules.get("crash_diag"); sys.modules["crash_diag"] = fc
+    # defensive excepts, not restyling, so the restyle is left out of the call.
+    def _raising_install(*a, **k):
+        raise RuntimeError("cd")
+    fc = types.SimpleNamespace(install=_raising_install, install_qt_message_handler=lambda *a, **k: None,
+                               log_stage=lambda *a, **k: None)
     real_qapp = gui.QApplication
+
     class QAppProxy:
         def __call__(self, *a, **k): return _app
         def __getattr__(self, n):
@@ -359,19 +344,14 @@ def test_run_gui_defensive_excepts():
                 def boom(*a, **k): raise RuntimeError("hidpi")
                 return boom
             return getattr(real_qapp, n)
-    gui.QApplication = QAppProxy()
-    # ctypes.windll.shell32 call raising -> shell32 except
-    import ctypes as _ct
-    real_windll = getattr(_ct, "windll", None)
+
     class BadShell:
         def SetCurrentProcessExplicitAppUserModelID(self, *a): raise RuntimeError("shell")
+
     class BadWinDLL:
         shell32 = BadShell()
         def __getattr__(self, n): raise RuntimeError("x")
-    try:
-        _ct.windll = BadWinDLL()
-    except Exception:
-        pass
+
     class FS:
         def __init__(self, *a, **k): pass
         def setWindowIcon(self, *a): pass
@@ -379,16 +359,11 @@ def test_run_gui_defensive_excepts():
         def apply_ui_scale_setting(self): return False
         def apply_language_setting(self): return False
         def result_choice(self): return "m", True, "high"
-    real_sd = gui.SettingsDialog; gui.SettingsDialog = FS
-    try:
-        gui.run_gui()
-        check("run_gui_excepts", True)
-    finally:
-        gui.QApplication = real_qapp; gui.SettingsDialog = real_sd
-        gui.apply_ui_scale = real_apply
-        if real_windll is not None: _ct.windll = real_windll
-        if real_cd is not None: sys.modules["crash_diag"] = real_cd
-        else: sys.modules.pop("crash_diag", None)
+    env = types.SimpleNamespace(deps=types.SimpleNamespace(
+        apply_ui_scale=lambda app: None, crash_diag=fc, QApplication=QAppProxy(),
+        ctypes=types.SimpleNamespace(windll=BadWinDLL()), platform="win32", SettingsDialog=FS))
+    gui.run_gui(env)
+    check("run_gui_excepts", True)
 
 
 def test_request_worker_crosslingual_append_lines():

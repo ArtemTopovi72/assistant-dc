@@ -74,13 +74,14 @@ def open_in_os(path) -> None:
         raise OSError(f"no application to open {path}")
 
 
-def enable_dark_titlebar(widget) -> None:
+def enable_dark_titlebar(widget, ctypes=None) -> None:
     """Make a top-level window's NATIVE Windows title bar dark (the main window is
     frameless, but QDialogs — Settings, mask editor, message boxes — use the OS frame,
     whose default white bar clashes with the dark theme). Uses the DWM immersive-dark
     attribute (20 on Win10 2004+, 19 on older builds). No-op off Windows / on failure."""
     try:
-        import ctypes
+        if ctypes is None:
+            import ctypes
         hwnd = int(widget.winId())
         val = ctypes.c_int(1)
         dwm = ctypes.windll.dwmapi
@@ -91,7 +92,7 @@ def enable_dark_titlebar(widget) -> None:
         logger.debug("DWM dark titlebar not applied", exc_info=True)
 
 
-def _make_tab_close_icons():
+def _make_tab_close_icons(makedirs=os.makedirs):
     """Draw clean ✕ glyphs for the tab close-buttons so Qt doesn't fall back to its
     default (a bright white/box pixmap that looks like an artifact on the dark theme).
     Returns {normal, hover} forward-slashed paths usable directly in QSS url(...).
@@ -105,7 +106,7 @@ def _make_tab_close_icons():
     s = max(10, ui_scale.px(12))
     out = {}
     try:
-        os.makedirs(assets, exist_ok=True)
+        makedirs(assets, exist_ok=True)
         for name, col in (("_tabclose.png", MUTED), ("_tabclose_hover.png", "#ffffff")):
             img = QImage(s, s, QImage.Format_ARGB32)
             img.fill(QColor(0, 0, 0, 0))
@@ -144,7 +145,7 @@ def _make_tab_close_icons():
     return out
 
 
-def build_qss() -> str:
+def build_qss(icons=None) -> str:
     """Build the application stylesheet at the current UI scale.
 
     Every px literal is multiplied by the effective scale (DPI is handled
@@ -154,7 +155,7 @@ def build_qss() -> str:
     """
     p = ui_scale.px
     fp = ui_scale.fpx   # font sizes also honour the separate Font Scale setting
-    _ic = _make_tab_close_icons()
+    _ic = _make_tab_close_icons() if icons is None else icons
     if _ic:
         close_css = (
             f'QTabBar::close-button {{ image: url("{_ic["_tabclose"]}"); '

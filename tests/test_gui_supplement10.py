@@ -94,12 +94,7 @@ def _mods(**mods):
 
 def test_module_level_guards():
     # build_qss with empty icon dict -> the no-icons css branch
-    real = gui._make_tab_close_icons
-    gui._make_tab_close_icons = lambda: {}
-    try:
-        s = gui.build_qss(); check("build_qss_noicons", isinstance(s, str))
-    finally:
-        gui._make_tab_close_icons = real
+    s = gui.build_qss(icons={}); check("build_qss_noicons", isinstance(s, str))
     # _wav_envelope with stereo data -> mean over channels
     import soundfile as sf
     p = os.path.join(_TMP, "stereo.wav")
@@ -108,12 +103,9 @@ def test_module_level_guards():
     sf.write(p, stereo, sr)
     env = gui._wav_envelope(p); check("wav_stereo", isinstance(env, list) and len(env) > 0)
     # _make_tab_close_icons save-failure branch: QImage.save raising via bad assets dir
-    real_makedirs = os.makedirs
-    os.makedirs = lambda *a, **k: (_ for _ in ()).throw(OSError("ro"))
-    try:
-        out = gui._make_tab_close_icons(); check("tabicons_except", out == {})
-    finally:
-        os.makedirs = real_makedirs
+    def _ro(*a, **k):
+        raise OSError("ro")
+    out = gui._make_tab_close_icons(makedirs=_ro); check("tabicons_except", out == {})
     # enable_dark_titlebar: attr 20 fails, attr 19 succeeds (loop second iter)
     import ctypes as _ct
     class Dwm:
@@ -121,24 +113,17 @@ def test_module_level_guards():
         def DwmSetWindowAttribute(self, hwnd, attr, ref, size):
             return 0 if attr == 19 else 1   # 20 fails, 19 succeeds
     class WinDLL: dwmapi = Dwm()
-    realw = getattr(_ct, "windll", None)
-    _ct.windll = WinDLL()
-    try:
-        wdg = QWidget(); wdg.show(); gui.enable_dark_titlebar(wdg); release(wdg)
-        check("dark_titlebar_attr19", True)
-    finally:
-        if realw is not None: _ct.windll = realw
+    fake_ct = types.SimpleNamespace(windll=WinDLL(), c_int=_ct.c_int, byref=_ct.byref, sizeof=_ct.sizeof)
+    wdg = QWidget(); wdg.show(); gui.enable_dark_titlebar(wdg, fake_ct); release(wdg)
+    check("dark_titlebar_attr19", True)
 
 
 def test_native_frame_build_ui():
-    real = gui.gui_common.NATIVE_FRAME
-    gui.gui_common.NATIVE_FRAME = True
-    try:
-        w = gui.AssistantWindow("m", True, "high", loader=NoopLoader)
-        check("native_frame", w.centralWidget() is not None)
-        _close(w)
-    finally:
-        gui.gui_common.NATIVE_FRAME = real
+    class Native(gui.AssistantWindow):
+        native_frame = True
+    w = Native("m", True, "high", loader=NoopLoader)
+    check("native_frame", w.centralWidget() is not None)
+    _close(w)
 
 
 def test_request_worker_crosslingual_except():
@@ -162,16 +147,14 @@ def test_request_worker_crosslingual_except():
 
 
 def test_run_gui_platform_and_no_webengine():
-    import sys as _sys
-    fc = types.ModuleType("crash_diag")
-    fc.install = lambda *a, **k: None; fc.install_qt_message_handler = lambda *a, **k: None
-    fc.log_stage = lambda *a, **k: None
-    real_cd = _sys.modules.get("crash_diag"); _sys.modules["crash_diag"] = fc
+    fc = types.SimpleNamespace(install=lambda *a, **k: None, install_qt_message_handler=lambda *a, **k: None,
+                               log_stage=lambda *a, **k: None)
     real_qapp = gui.QApplication
+
     class QAppProxy:
         def __call__(self, *a, **k): return _app
         def __getattr__(self, n): return getattr(real_qapp, n)
-    gui.QApplication = QAppProxy()
+
     class FS:
         def __init__(self, *a, **k): pass
         def setWindowIcon(self, *a): pass
@@ -179,19 +162,12 @@ def test_run_gui_platform_and_no_webengine():
         def apply_ui_scale_setting(self): return False
         def apply_language_setting(self): return False
         def result_choice(self): return "m", True, "high"
-    real_sd = gui.SettingsDialog; gui.SettingsDialog = FS
-    real_plat = gui.sys.platform
-    real_view = gui._QWebEngineView
-    try:
-        gui.sys.platform = "linux"          # skip win block
-        gui._QWebEngineView = None          # skip share-GL attr
-        gui.run_gui()
-        check("run_gui_linux_noweb", True)
-    finally:
-        gui.sys.platform = real_plat; gui._QWebEngineView = real_view
-        gui.QApplication = real_qapp; gui.SettingsDialog = real_sd
-        if real_cd is not None: _sys.modules["crash_diag"] = real_cd
-        else: _sys.modules.pop("crash_diag", None)
+    env = types.SimpleNamespace(deps=types.SimpleNamespace(
+        crash_diag=fc, QApplication=QAppProxy(), SettingsDialog=FS,
+        platform="linux",            # skip the win block
+        QWebEngineView=False))       # skip the share-GL attr
+    gui.run_gui(env)
+    check("run_gui_linux_noweb", True)
 
 
 def test_window_single_guards():

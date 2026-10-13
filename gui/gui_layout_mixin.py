@@ -27,6 +27,11 @@ logger = logging.getLogger("assistant")
 
 
 class LayoutMixin:
+    native_frame = None      # a suite pins the OS frame on or off; None -> gui_common.NATIVE_FRAME
+
+    def _native_frame(self):
+        return gui_common.NATIVE_FRAME if self.native_frame is None else self.native_frame
+
     """Titlebar, screen clamping, tab show/hide and layout presets."""
 
     def _build_titlebar(self):
@@ -148,7 +153,7 @@ class LayoutMixin:
             w, h = self._default_window_size()
             self.resize(w, h)
             self._clamp_to_screen()
-        elif gui_common.NATIVE_FRAME:
+        elif self._native_frame():
             self.showMaximized(); self._max_btn.setText("❐")
         else:
             # Frameless: fill the WORK AREA by hand. showMaximized() on a frameless

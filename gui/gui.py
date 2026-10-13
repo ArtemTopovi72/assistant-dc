@@ -60,7 +60,7 @@ logger = logging.getLogger("assistant.gui")
 # would break those callers for no gain.  # noqa: F401
 import gui_common
 import gui_workers
-from seams import module
+from seams import dep, module
 from gui_common import (
     ACCENT2, MUTED, ICON_PATH, _crash_log_stage, enable_dark_titlebar, _make_tab_close_icons,
     build_qss, _esc, _shadow, _card, _section, FlowLayout, _FlowWidget, _flow, _fmt_ts,
@@ -248,7 +248,7 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
         self.stack.addWidget(self.dashboard)
         self.stack.setCurrentWidget(self.loading_page)
 
-        if gui_common.NATIVE_FRAME:
+        if self._native_frame():
             self.setCentralWidget(self.stack)
         else:
             self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
@@ -936,11 +936,17 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
         event.accept()
 
 
-def run_gui() -> None:
+def run_gui(env=None) -> None:
+    """The app bootstrap. `env.deps` (optional) stands in for the machine it touches:
+    platform, ctypes, QApplication, QWebEngineView (False = none), crash_diag,
+    apply_ui_scale, SettingsDialog, AssistantWindow, exit."""
+    Q = dep(env, "QApplication", QApplication)
     # Make Windows show our taskbar icon (and group) instead of the python icon.
-    if sys.platform.startswith("win"):
+    if dep(env, "platform", sys.platform).startswith("win"):
         try:
-            import ctypes
+            ctypes = dep(env, "ctypes", None)
+            if ctypes is None:
+                import ctypes
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("AssistantDC.Voice.1")
         except Exception:
             logger.debug("could not set the Windows AppUserModelID", exc_info=True)
@@ -949,26 +955,28 @@ def run_gui() -> None:
     # the Windows display-scaling setting (100..300%). PassThrough keeps fractional
     # ratios (e.g. 150% -> 1.5) instead of rounding them to integers.
     try:
-        QApplication.setHighDpiScaleFactorRoundingPolicy(
+        Q.setHighDpiScaleFactorRoundingPolicy(
             Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     except Exception:
         logger.debug("High-DPI rounding policy unavailable", exc_info=True)
-    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
-    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+    Q.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+    Q.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
     # Required for QtWebEngine (the research report viewer) to share the GL context.
-    if _QWebEngineView is not None:
-        QApplication.setAttribute(Qt.AA_ShareOpenGLContexts, True)
+    if dep(env, "QWebEngineView", _QWebEngineView) not in (None, False):
+        Q.setAttribute(Qt.AA_ShareOpenGLContexts, True)
 
     # Route Qt's own warnings/fatals into the log + crash.log now that Qt is import-ready.
     try:
-        import crash_diag
+        crash_diag = dep(env, "crash_diag", None)
+        if crash_diag is None:
+            import crash_diag
         crash_diag.install()  # idempotent — ensures the excepthook is active even if run_gui is entered directly
         crash_diag.install_qt_message_handler()
         crash_diag.log_stage("run_gui: QApplication about to be constructed")
     except Exception:
         logger.debug("crash_diag setup failed", exc_info=True)
 
-    app = QApplication(sys.argv)
+    app = Q(sys.argv)
     app.setWindowIcon(QIcon(ICON_PATH))
     # Darken the native title bar of every dialog/message box the app shows.
     app._dark_titlebar_filter = _DarkTitleBarFilter()
@@ -982,14 +990,14 @@ def run_gui() -> None:
     logger.info("UI scale: mode=%s tv=%s auto=%.2f effective=%.2f",
                 ui_scale.scale_mode(), ui_scale.tv_mode(),
                 ui_scale.auto_value(), ui_scale.effective())
-    apply_ui_scale(app)
+    dep(env, "apply_ui_scale", apply_ui_scale)(app)
 
     # config.STARTUP_MODEL, not MODEL_NAME: this is the model an UNATTENDED
     # launch lands on, and both ways of getting there -- the countdown inside
     # the dialog and ASSISTANT_AUTOSTART skipping it -- must agree, or the same
     # unattended restart would run a different model depending on which of the
     # two happened to fire.
-    dlg = SettingsDialog(getattr(config, "STARTUP_MODEL", MODEL_NAME) or MODEL_NAME)
+    dlg = dep(env, "SettingsDialog", SettingsDialog)(getattr(config, "STARTUP_MODEL", MODEL_NAME) or MODEL_NAME)
     dlg.setWindowIcon(QIcon(ICON_PATH))
     # ASSISTANT_AUTOSTART=1 skips the modal picker and starts on the saved
     # default model. The picker is a MODAL dialog, so with nobody at the
@@ -1026,7 +1034,7 @@ def run_gui() -> None:
         logger.info("LIFECYCLE: starting with NO model loaded by user choice")
         model_name = ""
 
-    win = AssistantWindow(model_name, no_think, effort)
+    win = dep(env, "AssistantWindow", AssistantWindow)(model_name, no_think, effort)
     win.show()
     rc = app.exec_()
     # The event loop returning is the app closing, and it was silent: the only
@@ -1052,4 +1060,4 @@ def run_gui() -> None:
     except Exception:
         logger.exception("teardown after exec_ failed")
     del win, dlg
-    sys.exit(rc)
+    dep(env, "exit", sys.exit)(rc)
