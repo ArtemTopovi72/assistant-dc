@@ -40,7 +40,7 @@ from image import (
 )
 from tool_context import _remember, _set_current_image
 
-from seams import intent_read, vision_model, yes_no
+from seams import dep, intent_read, text_model, vision_model, yes_no
 
 logger = logging.getLogger("assistant.tools")
 
@@ -459,7 +459,7 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
                                  else f"{base_prompt}, ({region}: {instructions})")
     state["image_path"] = new_path
     state["image_status"] = "ok"
-    _remember(ctx, state, "inpaint", f"Edited {region}: {instructions}", {"path": new_path})
+    dep(ctx, "_remember", _remember)(ctx, state, "inpaint", f"Edited {region}: {instructions}", {"path": new_path})
     # Post-edit efficacy: if the removal pipeline's own "is it still there?" check
     # confirmed the target is STILL visible, hand the agent an HONEST failure signal
     # rather than a success message — the model must NOT narrate a fabricated
@@ -572,7 +572,7 @@ def _handle_transfer_image(ctx, state, args: dict) -> str:
                 "result. Tell the user the transfer failed; do NOT claim it worked.")
     _set_current_image(ctx, state, new_path)
     ctx.reference_images = (ctx.reference_images or []) + [new_path]
-    _remember(ctx, state, "transfer", f"Reference transfer: {instructions}", {"path": new_path})
+    dep(ctx, "_remember", _remember)(ctx, state, "transfer", f"Reference transfer: {instructions}", {"path": new_path})
     missing = _transfer_missing(ctx, references[-1], new_path, instructions)
     return (
         f"Transfer complete and saved: {new_path}\n"
@@ -636,7 +636,7 @@ def _handle_swap_person(ctx, state, args: dict) -> str:
     state["swap_done"] = new_path
     state["swap_source"] = target
     ctx.reference_images = (ctx.reference_images or []) + [new_path]
-    _remember(ctx, state, "swap", f"Person {n} swapped", {"path": new_path})
+    dep(ctx, "_remember", _remember)(ctx, state, "swap", f"Person {n} swapped", {"path": new_path})
     return (f"Swap complete and saved: {new_path}\n"
             "Call inspect_image to check it. Other editors are locked on it; if it is off, "
             "call swap_person again with a clearer wish, or tell the user what is off.")
@@ -677,7 +677,7 @@ def _handle_fix_hands(ctx, state, args: dict) -> str:
                 "or try inpaint_image on the specific hand region.")
 
     _set_current_image(ctx, state, new_path)
-    _remember(ctx, state, "fix_hands", "Repaired the hands/fingers", {"path": new_path})
+    dep(ctx, "_remember", _remember)(ctx, state, "fix_hands", "Repaired the hands/fingers", {"path": new_path})
     return (
         f"Hands repaired and saved: {new_path}\n"
         "Call inspect_image to verify the hand now has five natural fingers and no "
@@ -738,7 +738,7 @@ def _handle_fix_artifact(ctx, state, args: dict) -> str:
     _set_current_image(ctx, state, new_path)
     # Avoid a double article ("the the smear") when the region phrase already leads with one.
     region_disp = region if region.lower().startswith(("the ", "a ", "an ")) else f"the {region}"
-    _remember(ctx, state, "fix_artifact", f"Repaired {region_disp}", {"path": new_path})
+    dep(ctx, "_remember", _remember)(ctx, state, "fix_artifact", f"Repaired {region_disp}", {"path": new_path})
     return (
         f"Repaired {region_disp} and saved: {new_path}\n"
         "Call inspect_image to verify the flaw is gone and nothing else changed before "
@@ -781,7 +781,7 @@ def _handle_find_photo(ctx, state, args: dict) -> str:
     ctx.reference_images = (ctx.reference_images or []) + [photo]
     state["image_path"] = photo
     state["image_status"] = "success"
-    _remember(ctx, state, "find_photo", f"Posted a web photo for: {query}", {"path": photo})
+    dep(ctx, "_remember", _remember)(ctx, state, "find_photo", f"Posted a web photo for: {query}", {"path": photo})
     logger.info("Tool: find_photo(%r) -> %s", query[:60], os.path.basename(photo))
     return (
         f"Found a photo for '{query}' and posted it to the chat as the current working image: {photo}\n"
@@ -909,7 +909,7 @@ def _handle_generate_image(ctx, state, args: dict) -> str:
             "for this turn."
         )
 
-    _over = _t._render_budget_exhausted(state, "generate_image")
+    _over = dep(ctx, "_render_budget_exhausted", _t._render_budget_exhausted)(state, "generate_image")
     if _over:
         return _over
 
@@ -939,7 +939,7 @@ def _handle_generate_image(ctx, state, args: dict) -> str:
             ctx.last_render_path = ref_out          # rendered, not merely loaded
             ctx.last_render_status = "success"
             ctx.last_image_prompt = description
-            _remember(ctx, state, "generate", f"Reference-person image: {description}", {"path": ref_out})
+            dep(ctx, "_remember", _remember)(ctx, state, "generate", f"Reference-person image: {description}", {"path": ref_out})
             who = info.get("person") if isinstance(info, dict) else "the person"
             return (
                 f"Image generated using a real reference photo of {who}: {ref_out}\n"
@@ -988,7 +988,7 @@ def _handle_generate_image(ctx, state, args: dict) -> str:
         ctx.last_render_path = img_path
         ctx.last_render_status = status
         ctx.last_image_prompt = result.get("prompt", description)
-        _remember(ctx, state, "generate", f"Image for task: {description}", {"path": img_path})
+        dep(ctx, "_remember", _remember)(ctx, state, "generate", f"Image for task: {description}", {"path": img_path})
         quality_note = " (base quality — refinement unavailable)" if status == "partial" else ""
         # An ACCEPTED render is final for this turn. The renderer has already
         # judged it with the same vision model the agent would use; a second
@@ -1315,7 +1315,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             and not re.search(r'[«"“]|<d>', description)):
         description += video_mod.RU_SPEECH
     description += video_mod.CAUSE_RULE
-    if not asks_for_video(ctx, state):
+    if not dep(ctx, "asks_for_video", asks_for_video)(ctx, state):
         logger.warning("generate_video refused: the user did not ask for a video")
         return ("[TOOL ERROR] The user did not ask for a video in this message, so no "
                 "clip is made. Answer what they actually said: a complaint about a "
@@ -1335,7 +1335,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         )
 
     # A clip costs the whole turn: minutes of GPU, not seconds.
-    _over = _t._render_budget_exhausted(
+    _over = dep(ctx, "_render_budget_exhausted", _t._render_budget_exhausted)(
         state, "generate_video",
         cost=max(1, int(getattr(config, "IMAGE_MAX_RENDERS_PER_TURN", 3) or 3)))
     if _over:
@@ -1343,7 +1343,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
 
     images, videos = [], []
     if args.get("use_current_images", True):
-        images = _current_image_paths(ctx, state)
+        images = dep(ctx, "_current_image_paths", _current_image_paths)(ctx, state)
         # More than H3 can take: keep the most RECENT, which is what the user is
         # most likely talking about.
         if len(images) > video_mod.MAX_REF_IMAGES:
@@ -1511,11 +1511,10 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         # Sentences, before the script is cut into parts: a part is a few sentences, and
         # dropping whole parts threw away «he straightens up to his full height» while the
         # user asked exactly for that.
-        import llm as _llm
         old = ""
         if said:
             try:
-                old = (_llm.call_llm_simple(
+                old = (text_model(ctx)(
                     None, "Copy, word for word, ONLY the part of the user's message that they say "
                     "is ALREADY in the existing video (e.g. the words before «это уже есть на "
                     "видео» / «it is already in the video»). If they say nothing is already "
@@ -1533,7 +1532,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             # same three times out of three.
             sentences = re.split(r"(?<=[.!?»])\s+", raw)
             try:
-                n = int(re.search(r"\d+", _llm.call_llm_simple(
+                n = int(re.search(r"\d+", text_model(ctx)(
                     None, "You trim a video continuation script. The existing clip already "
                     "shows: «" + old + "». The numbered sentences below are the script for what "
                     "comes AFTER the clip. Count how many sentences AT THE START only show what "
@@ -1685,7 +1684,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     state["video_seconds"] = result.get("seconds")
     ctx.last_video_path = path
     ctx.last_video_prompt = description
-    _remember(ctx, state, "video", f"Video for: {description}", {"path": path})
+    dep(ctx, "_remember", _remember)(ctx, state, "video", f"Video for: {description}", {"path": path})
 
     used = ""
     if tags:
@@ -1801,7 +1800,7 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
     if _undone:
         return _undone
 
-    _over = _t._render_budget_exhausted(state, "redraw_image")
+    _over = dep(ctx, "_render_budget_exhausted", _t._render_budget_exhausted)(state, "redraw_image")
     if _over:
         return _over
 
@@ -1909,7 +1908,7 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
     # instructions: it describes the picture's subject, and a later redraw needs it.
     state["image_path"] = new_path
     state["image_status"] = "ok"
-    _remember(ctx, state, "redraw", f"Image {verb}" + (f": {instructions}" if instructions else ""),
+    dep(ctx, "_remember", _remember)(ctx, state, "redraw", f"Image {verb}" + (f": {instructions}" if instructions else ""),
               {"path": new_path})
     result = f"Image {verb} and saved: {new_path}"
     if mode == "redraw" and instructions:

@@ -633,7 +633,7 @@ class TaskRunnerMixin:
         # Rebuilding costs ~17 ms against a multi-second turn.
         try:
             from graph import build_graph as _build_graph
-            graph = _build_graph(ctx)
+            graph = (self.graph_builder or _build_graph)(ctx)
         except Exception:
             tg_bot.logger.exception("could not build a task-scoped graph — falling back "
                              "to the shared one (facts/images may cross chats)")

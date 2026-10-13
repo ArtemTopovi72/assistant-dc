@@ -1376,6 +1376,8 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         # And the forecast with its geocoder.
         import weather
         self.weather = weather
+        # The per-task graph builder (graph.build_graph when None).
+        self.graph_builder = None
         self._task_started: dict[str, float] = {}     # task_id -> monotonic start
         # task_id -> _Task, from the moment it is pushed onto the backend until
         # a consumer actually pops it and moves it into _running_task. With the

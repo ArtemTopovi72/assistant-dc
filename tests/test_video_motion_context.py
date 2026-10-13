@@ -5,7 +5,10 @@ import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ["F5_TEST_RUN"] = "1"
 
+import types
+
 import video as V
+from fakes import Over
 
 ok = []
 
@@ -14,11 +17,12 @@ def check(c, m):
     ok.append(bool(c)); print(("ok   " if c else "FAIL ") + m)
 
 
-V._upload = lambda p, kind="image": os.path.basename(p)
+# the uploads are faked on the engine the graph builder is handed
+UP = types.SimpleNamespace(video_engine=Over(V, _upload=lambda p, kind="image": os.path.basename(p)))
 
 for two in (False, True):
     wf = V.build_workflow("next", mode="ref2va", width=1344, height=768, frames=124, seed=7,
-                          images=["seed.jpg"], two_stage=two, context_video="tail.mp4")
+                          images=["seed.jpg"], two_stage=two, context_video="tail.mp4", ctx=UP)
     by = {v["class_type"]: k for k, v in wf.items()}
     mc = by.get("MiniMaxH3MotionContext")
     check(mc is not None, f"two_stage={two}: a Motion Context node is added")
@@ -43,7 +47,7 @@ for two in (False, True):
 
 # latent pins: sliced from the previous part's saved latent, no pixels re-encoded
 wf = V.build_workflow("next", mode="t2va", width=768, height=1024, frames=124, seed=7,
-                      two_stage=False, context_latent="prev.safetensors", save_latent="c7")
+                      two_stage=False, context_latent="prev.safetensors", save_latent="c7", ctx=UP)
 by = {v["class_type"]: k for k, v in wf.items()}
 i = wf[by["MiniMaxH3MotionContext"]]["inputs"]
 ld = i.get("context_latent", [None])[0]
@@ -57,7 +61,7 @@ check(sv.get("latent") == [V.N_SAMPLER, 0] and sv.get("filename_prefix") == "h3_
 check(V.latent_file("c7").endswith("h3_context" + os.sep + "c7_00001.safetensors"), "latent_file path")
 
 wf = V.build_workflow("x", mode="ref2va", width=1344, height=768, frames=124, seed=7,
-                      images=["seed.jpg"], two_stage=False)
+                      images=["seed.jpg"], two_stage=False, ctx=UP)
 check(not any(v["class_type"] == "MiniMaxH3MotionContext" for v in wf.values()),
       "no context video, no Motion Context node")
 
@@ -67,15 +71,14 @@ check(V.estimate_seconds(V.CONTINUE_CTX_PREFIX + line) == V.estimate_seconds(lin
 
 # a continuation with no picture keeps the previous clip's portrait shape, not 16:9
 seen = {}
-V.engine_available = lambda ctx=None: (True, "")
-V.probe = lambda p: {"width": 768, "height": 1024, "seconds": 2.5, "has_audio": True}
-V._context_ir_on = lambda: False
-V.build_workflow = lambda *a, **k: seen.update(k) or {}
-V._normalize_save_node = lambda wf: wf
 import comfy_client
-comfy_client._submit_and_poll = lambda *a, **k: None
-comfy_client.last_failure = lambda: "x"
-V.generate_video(None, V.CONTINUE_CTX_PREFIX + line, context_video="tail.mp4", seed=5)
+eng = Over(V, engine_available=lambda ctx=None: (True, ""),
+           probe=lambda p: {"width": 768, "height": 1024, "seconds": 2.5, "has_audio": True},
+           _context_ir_on=lambda: False, build_workflow=lambda *a, **k: seen.update(k) or {},
+           _normalize_save_node=lambda wf: wf,
+           comfy_client=Over(comfy_client, _submit_and_poll=lambda *a, **k: None, last_failure=lambda: "x"))
+V.generate_video(types.SimpleNamespace(video_engine=eng), V.CONTINUE_CTX_PREFIX + line,
+                 context_video="tail.mp4", seed=5)
 check((seen.get("width"), seen.get("height")) == V.fit_canvas(768, 1024),
       f"continuation canvas follows the clip: {seen.get('width')}x{seen.get('height')}")
 check(seen.get("mode") == "t2va" and seen.get("context_video") == "tail.mp4",
@@ -86,7 +89,7 @@ check(V.motion_context_on() is False, "off unless VIDEO_MOTION_CONTEXT=1 (it res
 
 # join_pinned: the old clip loses exactly the pinned head, the new one is kept whole
 import subprocess, tempfile
-real_probe = __import__("importlib").reload(V).probe
+real_probe = V.probe
 d = tempfile.mkdtemp()
 def clip(name, sec, color):
     p = os.path.join(d, name)
@@ -99,20 +102,19 @@ got = real_probe(j)["seconds"] if j else 0
 check(j and abs(got - (5 - 22 / 24)) < 0.1, f"joined length = old - 22 frames + new ({got})")
 
 # bridge_part: the next part starts from where the last one ended, lines kept verbatim
-import llm
 frame = os.path.join(d, "f.jpg")
 open(frame, "wb").write(b"x")
 part = "He sweeps the carrots into a steaming pot and says «Соли маловато»"
-llm.analyze_image_with_llm = lambda ctx, **k: ('{"missing": ["pot"], "bridge": '
-                                                 '"He turns to the stove where a pot steams."}')
-out = V.bridge_part(None, frame, part)
+def sees(look):
+    return types.SimpleNamespace(vision_model=look)
+out = V.bridge_part(sees(lambda ctx, **k: ('{"missing": ["pot"], "bridge": '
+                                           '"He turns to the stove where a pot steams."}')), frame, part)
 check(out.startswith("He turns to the stove where a pot steams. Then he sweeps") and part[1:] in out,
       f"the bridge goes first, the part stays word for word: {out}")
-llm.analyze_image_with_llm = lambda ctx, **k: '{"missing": [], "bridge": ""}'
-check(V.bridge_part(None, frame, part) == part, "nothing missing, nothing added")
+check(V.bridge_part(sees(lambda ctx, **k: '{"missing": [], "bridge": ""}'), frame, part) == part,
+      "nothing missing, nothing added")
 def boom(ctx, **k): raise RuntimeError("down")
-llm.analyze_image_with_llm = boom
-check(V.bridge_part(None, frame, part) == part, "a failed rewrite keeps the part")
+check(V.bridge_part(sees(boom), frame, part) == part, "a failed rewrite keeps the part")
 
 print(f"\n{sum(ok)}/{len(ok)}")
 sys.exit(0 if all(ok) else 1)

@@ -14,7 +14,6 @@ _DATA = tempfile.mkdtemp(prefix="contvid_")
 import logging; logging.basicConfig(level=logging.CRITICAL)
 import tg_bot as T
 T.redirect_data_dir(_DATA)
-import graph as graph_mod
 
 OK = BAD = 0
 def check(name, cond, extra=""):
@@ -73,9 +72,9 @@ class StubGraph:
     def invoke(self, base):
         INVOKES.append(base.get("user_input", ""))
         return {"final_answer": "echo", "messages": base.get("messages", [])}
-graph_mod.build_graph = lambda ctx: StubGraph(ctx)
 SHARED = FakeCtx()
 bot = T.TelegramBot("123:TEST", lambda: SHARED, lambda: object(), lambda: {"messages": []}, silent_mode=True)
+bot.graph_builder = lambda ctx: StubGraph(ctx)
 bot._backend = T.InMemoryBackend(); bot.sent = []
 bot._send_text = lambda cid, t, **kw: (bot.sent.append((cid, t)), 1)[1]
 bot._send_get_id = lambda cid, t, **kw: (bot.sent.append((cid, t)), len(bot.sent))[1]
@@ -127,21 +126,30 @@ check("the state is cleared", bot._get_session(CID).continue_state == "")
 
 # ---- the tool: the tail becomes <Video 1>, the result is the joined clip ----
 import tool_image_handlers as H
-import tools as _T
+import types
+from fakes import Over
+# What the handler is handed on each TCtx: the video engine's fakes (_E), the handlers'
+# own helpers (_DEPS) and the text model (_TM[0], None = the real one).
+_E, _DEPS, _TM = {}, {}, [None]
 SEEN = {}
 def fake_gen(ctx, description, **kw):
     SEEN.update(description=description, **kw)
     return {"path": NEW, "status": "success", "seconds": 3.0, "width": 320, "height": 240}
-V.generate_video = fake_gen
-V.engine_available = lambda ctx=None: (True, "")
-V.motion_context_on = lambda: False             # the reference-tail path first
-H.asks_for_video = lambda ctx, state: True
-_T._render_budget_exhausted = lambda *a, **k: None
-H._current_image_paths = lambda ctx, state: [frame]
-H._remember = lambda *a, **k: None
+_E["generate_video"] = fake_gen
+_E["engine_available"] = lambda ctx=None: (True, "")
+_E["motion_context_on"] = lambda: False             # the reference-tail path first
+_DEPS["asks_for_video"] = lambda ctx, state: True
+_DEPS["_render_budget_exhausted"] = lambda *a, **k: None
+_DEPS["_current_image_paths"] = lambda ctx, state: [frame]
+_DEPS["_remember"] = lambda *a, **k: None
 class TCtx:
     anim_voices = []; voice_choice = "default"; voice_ref = ""
-    def __init__(self): self.continue_tail = tail; self.continue_src = CLIP
+    def __init__(self):
+        self.continue_tail = tail; self.continue_src = CLIP
+        # the suite's stand-ins, as they are when the context is made
+        self.video_engine = Over(V, **_E)
+        self.deps = types.SimpleNamespace(**_DEPS)
+        self.text_model = _TM[0]
     def set_stage(self, *a): pass
 out = H._handle_generate_video(TCtx(), {}, {"description": "they leave the room laughing"})
 check("generate_video gets the tail as its reference video", SEEN.get("videos") == [tail], SEEN.get("videos"))
@@ -155,13 +163,10 @@ check("the delivered clip is the joined one (longer than the new part)",
 
 # «…орёт э, это уже есть на видео, а потом…»: a plan part the user says is already in
 # the clip is not rendered again (owner, 2026-10-12: 6 minutes for a repeat).
-import intent
 CALLS = []
-V.generate_video = lambda ctx, description, **kw: (CALLS.append(description), fake_gen(ctx, description, **kw))[1]
-import llm as _llm_c
-_real_simple = _llm_c.call_llm_simple
+_E["generate_video"] = lambda ctx, description, **kw: (CALLS.append(description), fake_gen(ctx, description, **kw))[1]
 # what is already there, then how many leading sentences repeat it (one: the scream)
-_llm_c.call_llm_simple = lambda ctx, system, user, **k: (
+_TM[0] = lambda ctx, system, user, **k: (
     "она орёт" if "ALREADY" in system else "1" if "trim a video" in system else "")
 _script = ("The old woman touches the things in the cabinet, jerks her hand back and screams eh at "
            "the top of her voice, her mouth wide open in shock for a long moment. Then the cabinet "
@@ -174,28 +179,27 @@ H._handle_generate_video(TCtx(), {"user_input_original": "она орёт, эт�
 _all = " ".join(CALLS)
 check("the part already in the clip is not rendered; the door (its sound line echoing the scream) and the guy are",
       CALLS and "jerks her hand" not in _all and "swings open" in _all and "glove" in _all, CALLS)
-intent.YES_STUB = None
 
 # A new person rides on EVERY part: given to part 1 only, the guy from the кружок walked
 # out in part 2 as a stranger (live 2026-10-12).
 GUY = os.path.join(_DATA, "guy.jpg")
 Image.new("RGB", (64, 64), "blue").save(GUY)
 IMGS = []
-V.generate_video = lambda ctx, description, **kw: (IMGS.append(list(kw.get("images") or [])),
+_E["generate_video"] = lambda ctx, description, **kw: (IMGS.append(list(kw.get("images") or [])),
                                                    fake_gen(ctx, description, **kw))[1]
-_llm_c.call_llm_simple = lambda *a, **k: "NONE"
+_TM[0] = lambda *a, **k: "NONE"
 class PCtx(TCtx):
     def __init__(self):
         super().__init__(); self.continue_people = [GUY]
 H._handle_generate_video(PCtx(), {}, {"description": _script})
 check("every part of a continuation gets the new person's picture",
       len(IMGS) > 1 and all(GUY in imgs for imgs in IMGS), IMGS)
-V.generate_video = fake_gen
-_llm_c.call_llm_simple = _real_simple
-V.generate_video = fake_gen
+_E["generate_video"] = fake_gen
+_TM[0] = None
+_E["generate_video"] = fake_gen
 
 # Pinned frames on: the tail is pinned into the new clip's head, not a reference
-V.motion_context_on = lambda: True
+_E["motion_context_on"] = lambda: True
 SEEN.clear()
 H._handle_generate_video(TCtx(), {}, {"description": "they leave the room laughing"})
 check("pinned: the tail goes in as context_video", SEEN.get("context_video") == tail, SEEN)

@@ -1,6 +1,8 @@
 """▶️ Continue video with a NEW person from a photo: the photo sent after the clip is
 <Picture 2> (the start frame stays <Picture 1>); before, it replaced the start frame."""
 import os
+
+import pytest
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -10,6 +12,28 @@ os.environ.setdefault("F5_TEST_RUN", "1")
 
 import tg_continue  # noqa: E402
 import video as V  # noqa: E402
+
+@pytest.fixture
+def fakes():
+    """Stand-ins a test hands the video handler on its context: {(kind, name): value}."""
+    return {}
+
+
+def _W(fakes, ctx):
+    """`ctx` carrying `fakes`: video -> video_engine, tg_continue -> clip_tools,
+    intent.ask_yes -> yes_no, the handlers' own helpers -> deps."""
+    import types
+    import tg_continue as _tc
+    import video as _video
+    from fakes import Over
+    own = {m: {n: v for (mm, n), v in fakes.items() if mm == m} for m in ("video", "handlers", "clips", "intent")}
+    ctx.video_engine = Over(_video, **own["video"])
+    ctx.clip_tools = Over(_tc, **own["clips"])
+    if "ask_yes" in own["intent"]:
+        ctx.yes_no = own["intent"]["ask_yes"]
+    ctx.deps = types.SimpleNamespace(**own["handlers"])
+    return ctx
+
 
 
 class Sess:
@@ -78,7 +102,7 @@ def test_a_photo_before_the_clip_is_not_taken(tmp_path):
     assert not b._continue_take_media(1, s, "ru", _photo())
 
 
-def test_the_generator_gets_the_start_frame_then_the_people(monkeypatch, tmp_path):
+def test_the_generator_gets_the_start_frame_then_the_people(fakes, tmp_path):
     import tool_image_handlers as H
     seed, person, tail = (tmp_path / "seed.jpg"), (tmp_path / "person.jpg"), (tmp_path / "tail.mp4")
     for p in (seed, person, tail):
@@ -90,11 +114,11 @@ def test_the_generator_gets_the_start_frame_then_the_people(monkeypatch, tmp_pat
         out = tmp_path / "new.mp4"
         out.write_bytes(b"v")
         return {"path": str(out), "status": "success", "seconds": 5.2, "width": 768, "height": 1344}
-    monkeypatch.setattr(V, "generate_video", fake_gen)
-    monkeypatch.setattr(V, "engine_available", lambda ctx: (True, ""))
-    monkeypatch.setattr(V, "join_continuation", lambda a, b: b)
-    monkeypatch.setattr(V, "_adopt_output", lambda p, *a: p)
-    monkeypatch.setattr(H, "_current_image_paths", lambda ctx, state: [str(seed)])
+    fakes[("video", "generate_video")] = fake_gen
+    fakes[("video", "engine_available")] = lambda ctx: (True, "")
+    fakes[("video", "join_continuation")] = lambda a, b: b
+    fakes[("video", "_adopt_output")] = lambda p, *a: p
+    fakes[("handlers", "_current_image_paths")] = lambda ctx, state: [str(seed)]
 
     class Ctx:
         reference_images = []
@@ -105,7 +129,7 @@ def test_the_generator_gets_the_start_frame_then_the_people(monkeypatch, tmp_pat
         def is_cancelled(self): return False
         def remember(self, *a): pass
         def memory_text(self): return ""
-    H._handle_generate_video(Ctx(), {}, {"description": "a woman walks in and says «Привет»"})
+    H._handle_generate_video(_W(fakes, Ctx()), {}, {"description": "a woman walks in and says «Привет»"})
     assert seen["images"] == [str(seed), str(person)], seen.get("images")
     assert seen["videos"] == [str(tail)]
     assert "<Picture 2>" in seen["description"] and "NEW PEOPLE" in seen["description"]
@@ -134,16 +158,16 @@ def test_a_plan_waiting_for_the_user_is_not_a_failed_render():
     assert G._detect_silent_failure("generate_video", ask, {"ask_voices": 2}) == ask
 
 
-def test_a_plan_keeps_the_clip_and_the_new_person_for_the_approved_run(monkeypatch, tmp_path):
+def test_a_plan_keeps_the_clip_and_the_new_person_for_the_approved_run(fakes, tmp_path):
     # The plan-only turn must not consume the clip and the new person: the approved ▶ run needs both.
     import tool_image_handlers as H
     seed, person, tail = (tmp_path / "seed.jpg"), (tmp_path / "cat.jpg"), (tmp_path / "tail.mp4")
     for p in (seed, person, tail):
         p.write_bytes(b"x")
-    monkeypatch.setattr(V, "generate_video", lambda *a, **k: (_ for _ in ()).throw(AssertionError("rendered")))
-    monkeypatch.setattr(V, "engine_available", lambda ctx: (True, ""))
-    monkeypatch.setattr(V, "split_script", lambda text: ["part one " + text, "part two"])
-    monkeypatch.setattr(H, "_current_image_paths", lambda ctx, state: [str(seed)])
+    fakes[("video", "generate_video")] = lambda *a, **k: (_ for _ in ()).throw(AssertionError("rendered"))
+    fakes[("video", "engine_available")] = lambda ctx: (True, "")
+    fakes[("video", "split_script")] = lambda text: ["part one " + text, "part two"]
+    fakes[("handlers", "_current_image_paths")] = lambda ctx, state: [str(seed)]
 
     class Ctx:
         reference_images = []
@@ -156,7 +180,7 @@ def test_a_plan_keeps_the_clip_and_the_new_person_for_the_approved_run(monkeypat
         def remember(self, *a): pass
         def memory_text(self): return ""
     ctx, state = Ctx(), {}
-    out = H._handle_generate_video(ctx, state, {"description": "a cat walks in and plays with the dog"})
+    out = H._handle_generate_video(_W(fakes, ctx), state, {"description": "a cat walks in and plays with the dog"})
     assert "[NOT MADE YET]" in str(out) and state.get("video_plan")
     assert ctx.continue_tail == str(tail) and ctx.continue_people == [str(person)]
 
@@ -167,22 +191,21 @@ def test_the_newcomer_walks_into_the_existing_frame():
     assert "no pan" in c and "steps into the frame" in c and "nobody hits" in c
 
 
-def test_an_approved_plan_or_a_continue_click_is_already_a_request_for_video(monkeypatch):
+def test_an_approved_plan_or_a_continue_click_is_already_a_request_for_video(fakes):
     # Live 2026-10-11: the ▶ rerun was re-judged, the model said "not a video", it was refused.
     import tool_image_handlers as H
-    import intent
-    monkeypatch.setattr(intent, "ask_yes", lambda *a, **k: False)
+    fakes[("intent", "ask_yes")] = lambda *a, **k: False
     state = {"user_input": "Сделай продолжение как имам выкидывает его из мечети"}
 
     class Ctx:
         last_video_path = None
         video_plan_parts, continue_tail = [], ""
     c = Ctx()
-    assert not H.asks_for_video(c, state)
+    assert not H.asks_for_video(_W(fakes, c), state)
     c.video_plan_parts = ["part one"]
-    assert H.asks_for_video(c, state)
+    assert H.asks_for_video(_W(fakes, c), state)
     c.video_plan_parts, c.continue_tail = [], "tail.mp4"
-    assert H.asks_for_video(c, state)
+    assert H.asks_for_video(_W(fakes, c), state)
 
 
 def _video_ctx(**kw):
@@ -202,46 +225,46 @@ def _video_ctx(**kw):
     return c
 
 
-def _fake_render(monkeypatch, seen, tmp_path):
+def _fake_render(fakes, seen, tmp_path):
     def fake_gen(ctx, description, **kw):
         seen.update(kw, description=description)
         out = tmp_path / "new.mp4"
         out.write_bytes(b"v")
         return {"path": str(out), "status": "success", "seconds": 5.2, "width": 768, "height": 768}
-    monkeypatch.setattr(V, "generate_video", fake_gen)
-    monkeypatch.setattr(V, "engine_available", lambda ctx: (True, ""))
-    monkeypatch.setattr(V, "join_continuation", lambda a, b: b)
-    monkeypatch.setattr(V, "_adopt_output", lambda p, *a: p)
+    fakes[("video", "generate_video")] = fake_gen
+    fakes[("video", "engine_available")] = lambda ctx: (True, "")
+    fakes[("video", "join_continuation")] = lambda a, b: b
+    fakes[("video", "_adopt_output")] = lambda p, *a: p
 
 
-def test_a_video_asked_on_a_forwarded_clips_sheet_continues_that_clip(monkeypatch, tmp_path):
+def test_a_video_asked_on_a_forwarded_clips_sheet_continues_that_clip(fakes, tmp_path):
     # Live 2026-10-11: «сделай продолжение…» typed under a forward animated the frame grid.
     import tool_image_handlers as H
     import video_look
     sheet = tmp_path / "sheet.jpg"
     sheet.write_bytes(b"x")
     (tmp_path / video_look.CONTINUE_CLIP).write_bytes(b"clip")
-    monkeypatch.setattr(tg_continue, "seed_frame", lambda src, out: open(out, "wb").write(b"s") > 0)
-    monkeypatch.setattr(tg_continue, "cut_tail", lambda src, out: open(out, "wb").write(b"t") > 0)
-    monkeypatch.setattr(H, "_current_image_paths", lambda ctx, state: [str(sheet)])
+    fakes[("clips", "seed_frame")] = lambda src, out: open(out, "wb").write(b"s") > 0
+    fakes[("clips", "cut_tail")] = lambda src, out: open(out, "wb").write(b"t") > 0
+    fakes[("handlers", "_current_image_paths")] = lambda ctx, state: [str(sheet)]
     seen = {}
-    _fake_render(monkeypatch, seen, tmp_path)
-    H._handle_generate_video(_video_ctx(), {}, {"description": "the imam throws him out of the mosque"})
+    _fake_render(fakes, seen, tmp_path)
+    H._handle_generate_video(_W(fakes, _video_ctx()), {}, {"description": "the imam throws him out of the mosque"})
     assert seen["videos"] and seen["videos"][0].endswith("_tail.mp4")
     assert seen["images"] and seen["images"][0].endswith("_seed.jpg")
 
 
-def test_a_russian_chat_gets_russian_speech(monkeypatch, tmp_path):
+def test_a_russian_chat_gets_russian_speech(fakes, tmp_path):
     # Live 2026-10-11: the clip's writer invented "Get out!" in English.
     import tool_image_handlers as H
-    monkeypatch.setattr(H, "asks_for_video", lambda ctx, state: True)
-    monkeypatch.setattr(H, "_current_image_paths", lambda ctx, state: [])
+    fakes[("handlers", "asks_for_video")] = lambda ctx, state: True
+    fakes[("handlers", "_current_image_paths")] = lambda ctx, state: []
     seen = {}
-    _fake_render(monkeypatch, seen, tmp_path)
-    H._handle_generate_video(_video_ctx(), {"user_input_original": "имам выгоняет его"},
+    _fake_render(fakes, seen, tmp_path)
+    H._handle_generate_video(_W(fakes, _video_ctx()), {"user_input_original": "имам выгоняет его"},
                              {"description": "an angry imam shouts and throws him out"})
     assert "in Russian" in seen["description"]
     seen.clear()
-    H._handle_generate_video(_video_ctx(), {"user_input_original": "пусть скажет «Hello»"},
+    H._handle_generate_video(_W(fakes, _video_ctx()), {"user_input_original": "пусть скажет «Hello»"},
                              {"description": 'he says "Hello"'})
     assert "in Russian" not in seen["description"]
