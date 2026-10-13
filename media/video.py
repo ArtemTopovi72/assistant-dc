@@ -160,7 +160,8 @@ CAUSE_RULE = (" Show every cause on screen: anything thrown is first held in a v
               "not happy. Everything moves at real-time speed, never in slow motion. Things "
               "are continuous: a ball, apple or cork is visible all the way from where it starts "
               "to where it ends and never pops into or out of existence. Physics stays ordinary: "
-              "liquids pour and splash in normal amounts, small things stay small.")
+              "liquids pour and splash in normal amounts, small things stay small. No captions, "
+              "subtitles or other on-screen text unless the script asks for lettering.")
 
 
 def split_script(description: str, max_seconds: float = 0.0) -> list:
@@ -1543,8 +1544,10 @@ def bridge_script(ctx, parts: list) -> list:
     return out
 
 
-INSERT_HEAD = "Close-up: "
-INSERT_BACK = "Back to the wider view from before the close-up. "
+# Camera directions in prose: as labels («Close-up:», «Back to the wider view.») they came
+# out as burned-in captions (live 2026-10-13).
+INSERT_HEAD = "The camera cuts in close on this moment. "
+INSERT_BACK = "The camera cuts back out to the wider view from before. "
 
 
 def condense_script(script: str, now_s: float, fit_s: float) -> str:
