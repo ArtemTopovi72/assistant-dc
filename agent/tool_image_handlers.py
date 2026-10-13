@@ -1268,7 +1268,7 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=()) 
         if not joined:
             logger.warning("video parts: joining part %d failed", i)
             break
-        path = video_mod._adopt_output(joined)
+        path = video_mod._adopt_output(joined, video_mod.OUTPUT_DIR)
         logger.info("video parts: %d/%d joined -> %s", i, len(parts), os.path.basename(path))
     ctx.video_join_note = _check_joins(ctx, joins)
     return path
@@ -1672,7 +1672,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         joined = (video_mod.join_pinned(cont_src, path) if pinned_tail
                   else video_mod.join_continuation(cont_src, path))
         if joined:
-            path = video_mod._adopt_output(joined)       # the whole thing: original + what comes next
+            path = video_mod._adopt_output(joined, video_mod.OUTPUT_DIR)       # the whole thing: original + what comes next
         else:
             logger.warning("continue video: the join failed, delivering the new part alone")
 

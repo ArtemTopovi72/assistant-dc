@@ -93,7 +93,7 @@ def test_the_generator_gets_the_start_frame_then_the_people(monkeypatch, tmp_pat
     monkeypatch.setattr(V, "generate_video", fake_gen)
     monkeypatch.setattr(V, "engine_available", lambda ctx: (True, ""))
     monkeypatch.setattr(V, "join_continuation", lambda a, b: b)
-    monkeypatch.setattr(V, "_adopt_output", lambda p: p)
+    monkeypatch.setattr(V, "_adopt_output", lambda p, *a: p)
     monkeypatch.setattr(H, "_current_image_paths", lambda ctx, state: [str(seed)])
 
     class Ctx:
@@ -211,7 +211,7 @@ def _fake_render(monkeypatch, seen, tmp_path):
     monkeypatch.setattr(V, "generate_video", fake_gen)
     monkeypatch.setattr(V, "engine_available", lambda ctx: (True, ""))
     monkeypatch.setattr(V, "join_continuation", lambda a, b: b)
-    monkeypatch.setattr(V, "_adopt_output", lambda p: p)
+    monkeypatch.setattr(V, "_adopt_output", lambda p, *a: p)
 
 
 def test_a_video_asked_on_a_forwarded_clips_sheet_continues_that_clip(monkeypatch, tmp_path):

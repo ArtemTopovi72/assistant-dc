@@ -367,12 +367,13 @@ def engine_available(ctx=None) -> tuple[bool, str]:
     """
     if getattr(_config, "VIDEO_ENGINE", "") != "minimax_h3":
         return False, f"VIDEO_ENGINE is {getattr(_config, 'VIDEO_ENGINE', '')!r}, not minimax_h3"
-    miss = missing_weights()
+    eng = _eng(ctx)
+    miss = eng.missing_weights()
     if miss:
         return False, ("the H3 weights are not downloaded yet (missing: "
                        + ", ".join(miss[:3]) + (" …" if len(miss) > 3 else "")
                        + ") — run scripts/fetch_h3_weights.py")
-    has = _server_has_h3_nodes()
+    has = eng._server_has_h3_nodes()
     if has is None:
         # Down is not "too old" (the agent once told the user video
         # "is not set up yet" while ComfyUI was merely not running).
@@ -831,18 +832,19 @@ def stitch_chain(ctx, chain: str, last: int) -> Optional[str]:
     if last <= 1:
         return None
     start = time.time()
+    eng = _eng(ctx)
     # The node writes the file itself and reports nothing to /history, so the poll
     # comes back empty by design: the file is found by its prefix instead.
-    comfy_client._submit_and_poll(ctx, build_chain_stitch(chain, last), timeout=VIDEO_JOB_TIMEOUT,
+    eng.comfy_client._submit_and_poll(ctx, build_chain_stitch(chain, last), timeout=VIDEO_JOB_TIMEOUT,
                                   label="H3 chain join", validate=_valid_video_file,
                                   job_timeout=VIDEO_JOB_TIMEOUT, exclusive=True)
     name = chain.rsplit("/", 1)[-1] + "_joined"
-    got = [p for p in (OUTPUT_DIR_COMFY / "video").glob(name + "*.mp4") if p.stat().st_mtime >= start - 1]
+    got = [p for p in (Path(eng.OUTPUT_DIR_COMFY) / "video").glob(name + "*.mp4") if p.stat().st_mtime >= start - 1]
     if not got:
         logger.error("chain join produced no file for %s", chain)
         return None
     path = str(max(got, key=lambda p: p.stat().st_mtime))
-    return _adopt_output(path) if _valid_video_file(path) else None
+    return eng._adopt_output(path, eng.OUTPUT_DIR) if _valid_video_file(path) else None
 
 
 def _chains(eng) -> Path:
@@ -1366,7 +1368,7 @@ def generate_video(ctx, description: str, *,
                                 save_latent=tag)
         if ctx is not None and hasattr(ctx, "set_stage"):
             ctx.set_stage("Generating a video")
-        wf = _normalize_save_node(wf)
+        wf = eng._normalize_save_node(wf)
     except VideoUnavailable as exc:
         _VIDEO_FAILURE.update({"reason": "unavailable", "detail": str(exc)})
         logger.error("could not build the video graph: %s", exc)
@@ -1394,7 +1396,7 @@ def generate_video(ctx, description: str, *,
         _VIDEO_FAILURE.update({"reason": "server_error", "detail": why})
         return {"path": None, "status": "fail", "reason": why}
 
-    final = eng._adopt_output(out)
+    final = eng._adopt_output(out, eng.OUTPUT_DIR)
     if ctx is not None:
         ctx.last_video_path = final
         ctx.last_video_prompt = description
@@ -1405,11 +1407,10 @@ def generate_video(ctx, description: str, *,
             "status": "success"}
 
 
-def _adopt_output(path: str) -> str:
-    """Move the clip out of ComfyUI's output tree into ours (see
-    comfy_client.adopt_output). OUTPUT_DIR is passed at call time: it is the
-    global the suites rebind."""
-    return comfy_client.adopt_output(path, "clip", OUTPUT_DIR)
+def _adopt_output(path: str, out_dir=None) -> str:
+    """Move the clip out of ComfyUI's output tree into `out_dir` (default OUTPUT_DIR; see
+    comfy_client.adopt_output)."""
+    return comfy_client.adopt_output(path, "clip", out_dir or OUTPUT_DIR)
 
 
 # --------------------------------------------------------------------------- #

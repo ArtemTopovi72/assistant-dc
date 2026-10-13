@@ -111,7 +111,7 @@ def test_the_parts_are_rendered_as_continuations_and_joined(tmp_path, extra):
         video_engine=Over(V, generate_video=fake_gen, engine_available=lambda ctx: (True, ""),
                           herrgott_on=lambda: False, motion_context_on=lambda: False,
                           mark_inserts=lambda ctx, ps: ps, join_continuation=fake_join,
-                          _adopt_output=lambda p: p, probe=lambda p: {"seconds": 24.0}),
+                          _adopt_output=lambda p, *a: p, probe=lambda p: {"seconds": 24.0}),
         clip_tools=Over(tg_continue, seed_frame=lambda src, out: open(out, "wb").write(b"j") > 0,
                         cut_tail=lambda src, out: open(out, "wb").write(b"t") > 0,
                         first_frame=lambda src, out: False))

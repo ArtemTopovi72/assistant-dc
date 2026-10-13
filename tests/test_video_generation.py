@@ -28,8 +28,8 @@ import threading
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # The model's reads are stubbed here; the phrases run live in bench/intent_rest_live.py.
-import intent
-intent.YES_STUB = lambda q, t: "camera to move" in q and any(w in t.lower() for w in ("zoom", "pan"))
+def _yes(q, t, default=False, wait=True):
+    return "camera to move" in q and any(w in t.lower() for w in ("zoom", "pan"))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 os.environ.setdefault("F5_TEST_RUN", "1")
@@ -53,7 +53,10 @@ _TMP = tempfile.mkdtemp(prefix="video_gen_test_")
 # (_adopt_output). Left alone, this suite drops fixture clips into the user's real
 # runtime/ directory alongside genuine renders — a test must not litter the
 # output the app delivers from.
-V.OUTPUT_DIR = _TMP
+from fakes import Over
+# What the suite hands the video engine on every context: the real module with these over
+# it (the temp output dir, and whatever a section fakes).
+_E = {"OUTPUT_DIR": _TMP}
 def _fake_img(tag):
     p = os.path.join(_TMP, f"{tag}.png")
     with open(p, "wb") as fh:
@@ -71,8 +74,11 @@ def _fake_aud(tag):
     return p
 
 def make_ctx():
-    return models.Context(models=None, transcription_cache={}, cache_file=None,
-                          asr_lock=threading.Lock(), tts_lock=threading.Lock())
+    ctx = models.Context(models=None, transcription_cache={}, cache_file=None,
+                         asr_lock=threading.Lock(), tts_lock=threading.Lock())
+    ctx.video_engine = Over(V, **_E)
+    ctx.yes_no = _yes
+    return ctx
 
 
 print("=" * 70)
@@ -156,10 +162,10 @@ print("5. The built graph wires the right nodes for each mode")
 print("=" * 70)
 
 _uploaded = []
-V._upload = lambda p, kind="image": (_uploaded.append((p, kind)) or os.path.basename(p))
+_E["_upload"] = lambda p, kind="image": (_uploaded.append((p, kind)) or os.path.basename(p))
 
 wf = V.build_workflow("a fox in the grass", mode="t2va", width=1344, height=768,
-                      frames=124, seed=42)
+                      frames=124, seed=42, ctx=make_ctx())
 check("t2va uses the keyframe conditioning node",
       wf[V.N_COND]["class_type"] == "MiniMaxH3ImageToVideo", wf[V.N_COND]["class_type"])
 check("...and attaches no keyframes",
@@ -183,7 +189,7 @@ check("the muxer runs at 24fps with the generated audio",
 _uploaded.clear()
 i1, i2 = _fake_img("k1"), _fake_img("k2")
 wf2 = V.build_workflow("walk", mode="flf2va", width=768, height=768, frames=124,
-                       seed=1, images=[i1, i2])
+                       seed=1, images=[i1, i2], ctx=make_ctx())
 check("flf2va attaches BOTH keyframes",
       "first_frame" in wf2[V.N_COND]["inputs"] and "last_frame" in wf2[V.N_COND]["inputs"],
       list(wf2[V.N_COND]["inputs"]))
@@ -197,7 +203,7 @@ imgs = [_fake_img(f"r{i}") for i in range(3)]
 vid = _fake_vid("refclip")
 wf3 = V.build_workflow("<Picture 1> enters the room from <Video 1>", mode="ref2va",
                        width=1344, height=768, frames=124, seed=7,
-                       images=imgs, videos=[vid])
+                       images=imgs, videos=[vid], ctx=make_ctx())
 check("ref2va uses the omni-reference conditioning node",
       wf3[V.N_COND]["class_type"] == "MiniMaxH3ReferenceToVideo")
 ci = wf3[V.N_COND]["inputs"]
@@ -261,7 +267,7 @@ check("every node reference points at a node that exists",
 _uploaded.clear()
 wf3a = V.build_workflow("speak like <Audio 1>", mode="ref2va", width=768, height=768,
                         frames=124, seed=3, images=[_fake_img("a1")],
-                        audios=[_fake_aud("voice")])
+                        audios=[_fake_aud("voice")], ctx=make_ctx())
 cia = wf3a[V.N_COND]["inputs"]
 check("standalone reference audio is ref_audios.ref_audio_0",
       "ref_audios.ref_audio_0" in cia, list(cia))
@@ -280,7 +286,7 @@ print("=" * 70)
 _uploaded.clear()
 many = [_fake_img(f"m{i}") for i in range(15)]
 wf4 = V.build_workflow("crowd", mode="ref2va", width=768, height=768, frames=124,
-                       seed=1, images=many)
+                       seed=1, images=many, ctx=make_ctx())
 # NB "ref_image_size" is a plain SETTING that also starts with "ref_image" —
 # count only dotted, numbered slots, or the setting inflates the total. The
 # dotted prefix happens to separate them cleanly, but anything that
@@ -304,41 +310,39 @@ print("=" * 70)
 print("7. Nothing is promised when the engine is not available")
 print("=" * 70)
 
-_real_missing = V.missing_weights
-V.missing_weights = lambda: ["models/unet/MiniMax-H3-FL2VA-Q4_K_M.gguf"]
+_E["missing_weights"] = lambda: ["models/unet/MiniMax-H3-FL2VA-Q4_K_M.gguf"]
 try:
-    ok, why = V.engine_available(None)
+    ok, why = V.engine_available(make_ctx())
     check("engine_available is False when weights are missing", not ok)
     check("...and says so in terms a user can act on", "download" in why.lower(), why)
     out = V.generate_video(make_ctx(), "a fox")
     check("generate_video refuses rather than pretending", out["status"] == "fail", out)
     check("...and returns no path", out.get("path") is None, out)
 finally:
-    V.missing_weights = _real_missing
+    _E.pop("missing_weights", None)
 
-V.missing_weights = lambda: []
-V._server_has_h3_nodes = lambda: False
+_E["missing_weights"] = lambda: []
+_E["_server_has_h3_nodes"] = lambda: False
 try:
-    ok, why = V.engine_available(None)
+    ok, why = V.engine_available(make_ctx())
     check("engine_available is False when ComfyUI lacks the H3 nodes", not ok)
     check("...and names the version needed", "0.30" in why, why)
-    V._server_has_h3_nodes = lambda: None      # down, not too old
-    ok, why = V.engine_available(None)
+    _E["_server_has_h3_nodes"] = lambda: None
+    ok, why = V.engine_available(make_ctx())
     check("a ComfyUI that does not answer is reported as not running", not ok and "not running" in why, why)
 finally:
-    V.missing_weights = _real_missing
+    _E.pop("missing_weights", None)
 
 print()
 print("=" * 70)
 print("8. A render that produces no file is reported as a failure, not a success")
 print("=" * 70)
 
-V.missing_weights = lambda: []
-V._server_has_h3_nodes = lambda: True
-V._normalize_save_node = lambda wf: wf
-_real_submit = comfy_client._submit_and_poll
+_E["missing_weights"] = lambda: []
+_E["_server_has_h3_nodes"] = lambda: True
+_E["_normalize_save_node"] = lambda wf: wf
 try:
-    comfy_client._submit_and_poll = lambda *a, **k: None
+    _E["comfy_client"] = Over(comfy_client, _submit_and_poll=lambda *a, **k: None)
     out = V.generate_video(make_ctx(), "a fox in the grass")
     check("no file -> status fail", out["status"] == "fail", out)
     check("...and path is None", out.get("path") is None, out)
@@ -347,7 +351,7 @@ try:
     _seen_kw = {}
     def _submit(*a, **k):
         _seen_kw.update(k); return made
-    comfy_client._submit_and_poll = _submit
+    _E["comfy_client"] = Over(comfy_client, _submit_and_poll=_submit)
     out2 = V.generate_video(make_ctx(), "a fox in the grass", seconds=5, aspect="16:9")
     # The DiT is ~19.4 GB; beside a resident chat model it ran 6 GB offloaded
     # at 190 s/step. The render gets the whole card.
@@ -365,8 +369,8 @@ try:
     check("ctx.last_video_path is set so 'that video' resolves later",
           bool(getattr(ctx, "last_video_path", None)))
 finally:
-    comfy_client._submit_and_poll = _real_submit
-    V.missing_weights = _real_missing
+    _E.pop("comfy_client", None)
+    _E.pop("missing_weights", None)
 
 print()
 print("=" * 70)
@@ -400,15 +404,14 @@ check("its description teaches the four modes",
       all(s in desc for s in ("text only", "ONE image", "TWO images", "reference")))
 check("...and warns that it is slow", "SLOW" in desc or "minutes" in desc)
 
-_real_avail = V.engine_available
 try:
-    V.engine_available = lambda ctx=None: (False, "the H3 weights are not downloaded yet")
+    _E["engine_available"] = lambda ctx=None: (False, "the H3 weights are not downloaded yet")
     msg = T._BY_NAME["generate_video"].handler(make_ctx(), {}, {"description": "a fox"})
     check("an unavailable engine yields a [TOOL ERROR]", msg.startswith("[TOOL ERROR]"), msg[:80])
     check("...that forbids claiming a video was made",
           "not claim" in msg.lower() or "no clip" in msg.lower(), msg[:160])
 finally:
-    V.engine_available = _real_avail
+    _E.pop("engine_available", None)
 
 st = {}
 msg2 = T._BY_NAME["generate_video"].handler(make_ctx(), st, {"description": ""})
@@ -504,26 +507,25 @@ print("against MiniMax H3's own prompt guide: an unstated camera improvises a")
 print("shot on complex prompts; the documented fix is an explicit locked camera.")
 
 check("no motion words -> the lock is appended",
-      "no camera movement" in V._lock_framing_unless_requested("a fox in the grass"))
+      "no camera movement" in V._lock_framing_unless_requested("a fox in the grass", make_ctx()))
 check("'zoom in' -> left alone, the user's own motion request is not fought",
-      V._lock_framing_unless_requested("slow zoom in on her face")
+      V._lock_framing_unless_requested("slow zoom in on her face", make_ctx())
       == "slow zoom in on her face")
 check("'pan across' -> left alone",
-      V._lock_framing_unless_requested("the camera pans across the room")
+      V._lock_framing_unless_requested("the camera pans across the room", make_ctx())
       == "the camera pans across the room")
 check("empty description -> stays empty (generate_video's own empty-check catches it)",
-      V._lock_framing_unless_requested("") == "")
+      V._lock_framing_unless_requested("", make_ctx()) == "")
 
-V.missing_weights = lambda: []
-V._server_has_h3_nodes = lambda: True
-V._normalize_save_node = lambda wf: wf
-_real_submit2 = comfy_client._submit_and_poll
+_E["missing_weights"] = lambda: []
+_E["_server_has_h3_nodes"] = lambda: True
+_E["_normalize_save_node"] = lambda wf: wf
 try:
     _seen_wf = {}
     def _capture(ctx, wf, **k):
         _seen_wf["wf"] = wf
         return _fake_vid("locked")
-    comfy_client._submit_and_poll = _capture
+    _E["comfy_client"] = Over(comfy_client, _submit_and_poll=_capture)
     V.generate_video(make_ctx(), "the girl waves and smiles")
     prompt_sent = _seen_wf["wf"][V.N_COND]["inputs"]["prompt"]
     check("the actual workflow prompt carries the lock",
@@ -537,11 +539,11 @@ try:
     check("an explicit zoom request reaches the node untouched",
           prompt_sent2 == "the camera slowly zooms in on her face", prompt_sent2)
 finally:
-    comfy_client._submit_and_poll = _real_submit2
-    V.missing_weights = _real_missing
+    _E.pop("comfy_client", None)
+    _E.pop("missing_weights", None)
 
-_wf3 = V.build_workflow("a cat", mode="t2va", width=512, height=288, frames=25, seed=1, steps=3)
-_wf4 = V.build_workflow("a cat", mode="t2va", width=512, height=288, frames=25, seed=1, steps=4)
+_wf3 = V.build_workflow("a cat", mode="t2va", width=512, height=288, frames=25, seed=1, steps=3, ctx=make_ctx())
+_wf4 = V.build_workflow("a cat", mode="t2va", width=512, height=288, frames=25, seed=1, steps=4, ctx=make_ctx())
 check("t2va at 3 steps runs the TaoMate 3-step LoRA at full strength",
       "taomate" in _wf3[V.N_LORA]["inputs"]["lora_name"] and _wf3[V.N_LORA]["inputs"]["strength_model"] == 1.0,
       _wf3[V.N_LORA]["inputs"])
