@@ -70,15 +70,12 @@ class _FakeLT:
         return _FakeLT.free_readings.pop(0) if _FakeLT.free_readings else min_free_mb
 
 
-sys.modules["lora_training"] = _FakeLT
+CTX = types.SimpleNamespace(deps=types.SimpleNamespace(lora_training=_FakeLT))   # the card claim reads its machine off the context
 
 
 def reset():
     calls.clear()
-    CC._excl_users = 0
-    CC._excl_model = ""
-    CC._excl_label = ""
-    CC._excl_free.set()
+    CC.reset_card_state()
     _FakeLT.raise_on_free = False
 
 
@@ -98,7 +95,7 @@ check("_submit_and_poll defaults to sharing the card",
 
 # ── the exclusive slot evicts, then restores ─────────────────────────────────
 reset()
-with CC._gpu_slot(exclusive=True, label="Music3"):
+with CC._gpu_slot(ctx=CTX, exclusive=True, label="Music3"):
     check("the card reports what it is busy with",
           CC.card_is_exclusive() == "Music3", CC.card_is_exclusive())
     check("and a chat turn can see it must wait",
@@ -119,7 +116,7 @@ done = []
 
 def job(n):
     started.wait(5)
-    with CC._gpu_slot(exclusive=True, label="pic %d" % n):
+    with CC._gpu_slot(ctx=CTX, exclusive=True, label="pic %d" % n):
         time.sleep(0.15)
     done.append(n)
 
@@ -135,8 +132,8 @@ check("all three renders ran", sorted(done) == [0, 1, 2], done)
 
 # ── nesting must not double-claim ────────────────────────────────────────────
 reset()
-with CC._gpu_slot(exclusive=True, label="outer"):
-    with CC._gpu_slot(exclusive=True, label="inner"):
+with CC._gpu_slot(ctx=CTX, exclusive=True, label="outer"):
+    with CC._gpu_slot(ctx=CTX, exclusive=True, label="inner"):
         pass
     check("an inner slot does not release the card early",
           calls == ["free"], calls)
@@ -147,7 +144,7 @@ check("the card is released once the outer slot exits",
 reset()
 _FakeLT.raise_on_free = True
 ran = False
-with CC._gpu_slot(exclusive=True, label="Music3"):
+with CC._gpu_slot(ctx=CTX, exclusive=True, label="Music3"):
     ran = True
 check("a failed eviction still lets the render proceed", ran)
 check("and does not leave a phantom model to 'restore'",
@@ -156,14 +153,11 @@ check("nor leaves chat turns waiting forever", CC._excl_free.is_set(), calls)
 
 # ── the switch ───────────────────────────────────────────────────────────────
 reset()
-_saved = CC.COMFY_EVICT_LLM
-try:
-    CC.COMFY_EVICT_LLM = False
-    with CC._gpu_slot(exclusive=True, label="Music3"):
-        pass
-    check("COMFY_EVICT_LLM=0 leaves the card shared", calls == [], calls)
-finally:
-    CC.COMFY_EVICT_LLM = _saved
+CTX.deps.COMFY_EVICT_LLM = False
+with CC._gpu_slot(ctx=CTX, exclusive=True, label="Music3"):
+    pass
+check("COMFY_EVICT_LLM=0 leaves the card shared", calls == [], calls)
+del CTX.deps.COMFY_EVICT_LLM
 
 # ── the two call sites that opt in ───────────────────────────────────────────
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -194,7 +188,7 @@ ctx = types.SimpleNamespace(set_stage=seen_stages.append)
 llm._wait_for_free_card(ctx)
 check("a shared card is not waited on", seen_stages == [], seen_stages)
 
-CC._claim_card("Music3")
+CC._claim_card("Music3", ctx=CTX)
 waited = []
 
 
@@ -209,14 +203,14 @@ time.sleep(0.25)
 check("the turn is still waiting while the render runs", not waited)
 check("and the user is told why, not left staring at nothing",
       seen_stages == ["Waiting for the graphics card"], seen_stages)
-CC._release_card()
+CC._release_card(CTX)
 th.join(10)
 check("the turn resumes once the model is back", len(waited) == 1, waited)
 
 # The thread holding the render slot must never wait for itself.
 reset()
 seen_stages.clear()
-with CC._gpu_slot(exclusive=True, label="Music3"):
+with CC._gpu_slot(ctx=CTX, exclusive=True, label="Music3"):
     _t0 = time.time()
     llm._wait_for_free_card(ctx)
     check("the rendering thread does not wait for itself",
@@ -239,12 +233,12 @@ order = []
 
 
 def fake_submit(*a, **kw):
-    with CC._gpu_slot(exclusive=kw.get("exclusive", False), label="ideogram4"):
+    with CC._gpu_slot(ctx=CTX, exclusive=kw.get("exclusive", False), label="ideogram4"):
         order.append("render")
     return "pic.png"
 
 
-with CC.card_session("drawing"):
+with CC.card_session("drawing", ctx=CTX):
     fake_submit(exclusive=True)
     fake_submit(exclusive=True)
     fake_submit(exclusive=True)
@@ -273,21 +267,18 @@ check("only the collage repair chain is wrapped, never the critic loop",
 # A suite that drives the render path with a stubbed ComfyUI must not reach
 # `lms unload --all` for real and take the machine's chat model down.
 reset()
-_real_lt = sys.modules.pop("lora_training", None)
 os.environ["F5_TEST_RUN"] = "1"
 try:
-    import lora_training as _real_module   # the real one, back in sys.modules
-    with CC._gpu_slot(exclusive=True, label="Music3"):
+    with CC._gpu_slot(exclusive=True, label="Music3"):   # no stub on the context: the real machine
         pass
     check("under F5_TEST_RUN the real model is left alone", calls == [], calls)
 finally:
     os.environ.pop("F5_TEST_RUN", None)
-    sys.modules["lora_training"] = _FakeLT
 
 reset()
 os.environ["F5_TEST_RUN"] = "1"
 try:
-    with CC._gpu_slot(exclusive=True, label="Music3"):
+    with CC._gpu_slot(ctx=CTX, exclusive=True, label="Music3"):
         pass
     check("but a suite that stubs it still exercises the mechanism",
           calls == ["free", "reload:chat-model-26b"], calls)
@@ -301,11 +292,10 @@ finally:
 # turn after is "No models loaded".
 reset()
 freed = []
-_orig_free = CC._free_comfy_models
-CC._free_comfy_models = lambda: (freed.append("comfy"), calls.append("comfy-free"))
+CTX.deps._free_comfy_models = lambda: (freed.append("comfy"), calls.append("comfy-free"))
 _FakeLT.record_wait = True
 try:
-    with CC._gpu_slot(exclusive=True, label="Music3"):
+    with CC._gpu_slot(ctx=CTX, exclusive=True, label="Music3"):
         pass
     check("ComfyUI is asked to drop its models BEFORE the chat model reloads",
           calls == ["free", "comfy-free", "wait-vram:%d" % CC.RELOAD_LLM_MIN_FREE_MB,
@@ -316,24 +306,24 @@ finally:
     # Keep the network out of the rest of the file: the real /free call to a
     # ComfyUI that is not running costs ~2 s of refused connects on Windows and
     # broke the timing check below.
-    CC._free_comfy_models = lambda: None
+    CTX.deps._free_comfy_models = lambda: None
     _FakeLT.record_wait = False
 
 # -- a card ComfyUI has not vacated in time gets a second /free and a longer
 #    wait before the model squeezes in (otherwise it spills into shared RAM and
 #    the reload crawls at 90 % for minutes)
 reset()
-CC._free_comfy_models = lambda: calls.append("comfy-free")
+CTX.deps._free_comfy_models = lambda: calls.append("comfy-free")
 _FakeLT.record_wait = True
 _FakeLT.free_readings = [6000, CC.RELOAD_LLM_MIN_FREE_MB + 500]
 try:
-    with CC._gpu_slot(exclusive=True, label="Picture"):
+    with CC._gpu_slot(ctx=CTX, exclusive=True, label="Picture"):
         pass
     w = "wait-vram:%d" % CC.RELOAD_LLM_MIN_FREE_MB
     check("a short card is freed again and waited on before the reload",
           calls == ["free", "comfy-free", w, "comfy-free", w, "reload:chat-model-26b"], calls)
 finally:
-    CC._free_comfy_models = lambda: None
+    CTX.deps._free_comfy_models = lambda: None
     _FakeLT.record_wait = False
     _FakeLT.free_readings = []
 
@@ -348,56 +338,52 @@ class _FakeLMS:
         return True, "ok"
 
 
-_saved_lms = sys.modules.get("lmstudio")
-sys.modules["lmstudio"] = _FakeLMS
+RV = types.SimpleNamespace(deps=types.SimpleNamespace(ensure_exclusive=_FakeLMS.ensure_exclusive,
+                                                      model_served=lambda m: True))
 try:
-    llm._revive_last = 0.0
+    llm._set_revive_state(0.0, False)
     check("an unrelated 400 does not trigger a reload",
-          llm._try_revive_model("n_keep: 9905 >= n_ctx: 8192", {"model": "m"}) is False
+          llm._try_revive_model("n_keep: 9905 >= n_ctx: 8192", {"model": "m"}, ctx=RV) is False
           and revived == [], revived)
     check("'No models loaded' brings the model back",
           llm._try_revive_model('{"message": "No models loaded. Please load a model"}',
-                                {"model": "chat-model-26b"}) is True
+                                {"model": "chat-model-26b"}, ctx=RV) is True
           and revived == ["chat-model-26b"], revived)
     check("a crash report inside the rate limit rides the fresh revive: retry, no reload",
           llm._try_revive_model("The model has crashed without additional information",
-                                {"model": "chat-model-26b"}) is True,
+                                {"model": "chat-model-26b"}, ctx=RV) is True,
           revived)
     check("but not twice within the rate limit -- no reload storm on a model "
           "that crashes on load", revived == ["chat-model-26b"], revived)
-    llm._revive_ok = False   # as if that revive had FAILED
+    llm._set_revive_state(llm._revive_last, False)   # as if that revive had FAILED
     check("a failed revive inside the rate limit means: do not retry",
-          llm._try_revive_model("No models loaded", {"model": "chat-model-26b"}) is False
+          llm._try_revive_model("No models loaded", {"model": "chat-model-26b"}, ctx=RV) is False
           and revived == ["chat-model-26b"], revived)
-    llm._revive_last = 0.0
+    llm._set_revive_state(0.0, llm._revive_ok)
     check("after the interval it is allowed again",
-          llm._try_revive_model("No models loaded", {"model": "chat-model-26b"}) is True
+          llm._try_revive_model("No models loaded", {"model": "chat-model-26b"}, ctx=RV) is True
           and revived == ["chat-model-26b"] * 2, revived)
     src_llm = read("agent/llm.py")
     check("both error sites in the stream path call the revive",
           src_llm.count("_try_revive_model(") >= 3, src_llm.count("_try_revive_model("))
     # -- while a render holds the card the model is not "gone", it is lent ----
     reset()
-    llm._revive_last = 0.0
+    llm._set_revive_state(0.0, llm._revive_ok)
     revived.clear()
-    CC._excl_model, CC._excl_label = "chat-model-26b", "ideogram4"
-    CC._excl_free.clear()
+    CC._claim_card("ideogram4", ctx=CTX)          # a render holds the card
     check("no revive while a render holds the card (the release brings it back)",
-          llm._try_revive_model("Model unloaded.", {"model": "chat-model-26b"}) is False
+          llm._try_revive_model("Model unloaded.", {"model": "chat-model-26b"}, ctx=RV) is False
           and revived == [], revived)
     reset()
 finally:
-    if _saved_lms is not None:
-        sys.modules["lmstudio"] = _saved_lms
-    else:
-        sys.modules.pop("lmstudio", None)
+    reset()
 
 # -- a claim lets the streams that are open finish before unloading ----------
 # When two users draw at once, the first claim must not unload the model while
 # the second user's planner is still streaming: the revive would load it back
 # into the render's card and everything would crawl.
 reset()
-CC.LLM_INFLIGHT_WAIT_S = 5
+CTX.deps.LLM_INFLIGHT_WAIT_S = 5
 order = []
 llm._inflight_enter()                     # a stream is open on another thread
 
@@ -410,17 +396,17 @@ def _finish_stream():
 
 threading.Thread(target=_finish_stream, daemon=True).start()
 t0 = time.time()
-with CC._gpu_slot(exclusive=True, label="ideogram4"):
+with CC._gpu_slot(ctx=CTX, exclusive=True, label="ideogram4"):
     order.append("free at %.1f" % (time.time() - t0))
 check("the claim waited for the open stream", order and order[0] == "stream done", order)
 check("and then freed the card", calls[:1] == ["free"], calls)
 check("the wait was the stream's length, not the timeout", time.time() - t0 < 3, order)
 reset()
-CC.LLM_INFLIGHT_WAIT_S = 1
+CTX.deps.LLM_INFLIGHT_WAIT_S = 1
 llm._inflight_enter()
 t0 = time.time()
 try:
-    with CC._gpu_slot(exclusive=True, label="ideogram4"):
+    with CC._gpu_slot(ctx=CTX, exclusive=True, label="ideogram4"):
         pass
     check("a stream that never ends is not waited on forever", 0.9 < time.time() - t0 < 3
           and calls[:1] == ["free"], (time.time() - t0, calls))

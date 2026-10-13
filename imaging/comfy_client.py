@@ -486,7 +486,7 @@ def wait_for_card(timeout: float = 600.0) -> bool:
     return _excl_free.wait(timeout)
 
 
-def _claim_card(label: str, min_free_mb: int = None) -> None:
+def _claim_card(label: str, min_free_mb: int = None, ctx=None) -> None:
     global _excl_users, _excl_model, _excl_label
     with _EXCL_LOCK:
         _excl_users += 1
@@ -494,18 +494,19 @@ def _claim_card(label: str, min_free_mb: int = None) -> None:
             _excl_label = label or _excl_label
             return
         _excl_label = label
-        if not COMFY_EVICT_LLM:
+        if not dep(ctx, "COMFY_EVICT_LLM", COMFY_EVICT_LLM):
             return
         # A test run must never unload the operator's live model. Suites that
         # drive the render path with a stubbed ComfyUI would otherwise reach
         # `lms unload --all` for real -- which is how this guard came to exist.
         # A suite testing THIS mechanism stubs lora_training and is unaffected.
-        _lt = sys.modules.get("lora_training")
-        _stubbed = _lt is not None and getattr(_lt, "__file__", None) is None
-        if os.getenv("F5_TEST_RUN") and not _stubbed:
+        _lt = dep(ctx, "lora_training", None)
+        if os.getenv("F5_TEST_RUN") and _lt is None:
             return
         try:
-            import lora_training as _LT
+            if _lt is None:
+                import lora_training as _lt
+            _LT = _lt
             model = _LT.loaded_llm_id()
             if not model:
                 return
@@ -517,9 +518,10 @@ def _claim_card(label: str, min_free_mb: int = None) -> None:
             _excl_model = model             # from here on, new LLM calls wait
             try:
                 import llm as _llm
-                if _llm.inflight() and not _llm.wait_no_inflight(LLM_INFLIGHT_WAIT_S):
+                wait_s = dep(ctx, "LLM_INFLIGHT_WAIT_S", LLM_INFLIGHT_WAIT_S)
+                if _llm.inflight() and not _llm.wait_no_inflight(wait_s):
                     logger.warning("an LLM stream is still open after %ds - "
-                                   "freeing the card anyway", LLM_INFLIGHT_WAIT_S)
+                                   "freeing the card anyway", wait_s)
             except Exception:
                 logger.exception("could not wait for open LLM streams")
             _LT.free_gpu(log=logger.info, min_free_mb=min_free_mb)
@@ -555,7 +557,15 @@ RELOAD_LLM_MIN_FREE_MB = _cfg_env.env_int("RELOAD_LLM_MIN_FREE_MB", 19000)
 RELOAD_VRAM_EXTRA_WAIT_S = _cfg_env.env_float("RELOAD_VRAM_EXTRA_WAIT_S", 90)
 
 
-def _release_card() -> None:
+def reset_card_state() -> None:
+    """No claim held, nothing unloaded, chat turns not waiting."""
+    global _excl_users, _excl_model, _excl_label
+    with _EXCL_LOCK:
+        _excl_users, _excl_model, _excl_label = 0, "", ""
+    _excl_free.set()
+
+
+def _release_card(ctx=None) -> None:
     global _excl_users, _excl_model, _excl_label
     with _EXCL_LOCK:
         _excl_users = max(0, _excl_users - 1)
@@ -567,14 +577,17 @@ def _release_card() -> None:
         _mark_released()
         return
     try:
-        import lora_training as _LT
+        _LT = dep(ctx, "lora_training", None)
+        if _LT is None:
+            import lora_training as _LT
         _notice("render queue empty - bringing %s back" % model)
         # ComfyUI FIRST. It still holds the render's weights, and a chat model
         # loaded into what they leave behind comes up short of the headroom it
         # had before the render -- it loaded, then crashed on
         # the first vision call (a 1728x2304 inspect) and every turn after
         # that was "No models loaded". Same order the claim used, mirrored.
-        _free_comfy_models()
+        free_comfy = dep(ctx, "_free_comfy_models", _free_comfy_models)
+        free_comfy()
         # And WAIT for the driver to have that memory back: /free returns
         # before the tensors are gone, the same way `lms unload` does on the
         # way in. The model still needs the room it had before the render;
@@ -587,7 +600,7 @@ def _release_card() -> None:
             # slow /free): ask again and give it longer before squeezing in.
             _notice("waiting for ComfyUI to free the card (%d MiB free, %d needed)"
                     % (free, RELOAD_LLM_MIN_FREE_MB))
-            _free_comfy_models()
+            free_comfy()
             free = _LT.wait_vram_free(RELOAD_LLM_MIN_FREE_MB, timeout=RELOAD_VRAM_EXTRA_WAIT_S)
             if free is not None and free < RELOAD_LLM_MIN_FREE_MB:
                 logger.warning("reloading %s with only %d MiB free (%d wanted): it may spill "
@@ -617,17 +630,18 @@ class card_session:
     """
     _local = threading.local()
 
-    def __init__(self, label: str = ""):
+    def __init__(self, label: str = "", ctx=None):
         self.label = label
+        self.ctx = ctx
 
     def __enter__(self):
-        _claim_card(self.label)
+        _claim_card(self.label, ctx=self.ctx)
         card_session._local.held = getattr(card_session._local, "held", 0) + 1
         return self
 
     def __exit__(self, *exc):
         card_session._local.held = getattr(card_session._local, "held", 1) - 1
-        _release_card()
+        _release_card(self.ctx)
         return False
 
 
@@ -649,7 +663,8 @@ class _gpu_slot:
     """
     _local = threading.local()
 
-    def __init__(self, exclusive: bool = False, label: str = "", min_free_mb: int = None):
+    def __init__(self, exclusive: bool = False, label: str = "", min_free_mb: int = None, ctx=None):
+        self.ctx = ctx
         self.exclusive = bool(exclusive)
         self.label = label
         self.min_free_mb = min_free_mb
@@ -661,7 +676,7 @@ class _gpu_slot:
         # claimed and the model is not reloaded in the gap between two renders.
         self._claimed = self.exclusive and self._acquired
         if self._claimed:
-            _claim_card(self.label, min_free_mb=self.min_free_mb)
+            _claim_card(self.label, min_free_mb=self.min_free_mb, ctx=self.ctx)
         if self._acquired:
             _GPU_SEM.acquire()
         self._local.depth = depth + 1
@@ -672,7 +687,7 @@ class _gpu_slot:
         if self._acquired:
             _GPU_SEM.release()
         if self._claimed:
-            _release_card()
+            _release_card(self.ctx)
         return False
 
 

@@ -3,48 +3,50 @@
 A healthy but not launched Docker Desktop must not read as "Docker не запущен".
 """
 import os, sys
+from types import SimpleNamespace as NS
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import code_runner as R
 
+_FLAG = 0x08000000
 
-def test_already_up_spawns_nothing(monkeypatch):
-    monkeypatch.setattr(R, "docker_available", lambda timeout=12: True)
+
+def _machine(spawned, up, binary=None, clock=None):
+    """A context whose Docker, process spawner and clock are the test's."""
+    sp = NS(Popen=lambda args, **k: spawned.append((args, k)), DEVNULL=-3,
+            DETACHED_PROCESS=0x8, CREATE_NO_WINDOW=_FLAG)
+    return NS(deps=NS(docker_available=up, desktop_binary=lambda: binary, subprocess=sp,
+                      time=clock or NS(sleep=lambda s: None, monotonic=lambda: 0.0)))
+
+
+def test_already_up_spawns_nothing():
     spawned = []
-    monkeypatch.setattr(R.subprocess, "Popen", lambda *a, **k: spawned.append(a))
-    assert R.ensure_docker() is True and spawned == []
+    assert R.ensure_docker(ctx=_machine(spawned, lambda timeout=12: True)) is True and spawned == []
 
 
-def test_not_installed_is_false_without_spawning(monkeypatch):
-    monkeypatch.setattr(R, "docker_available", lambda timeout=12: False)
-    monkeypatch.setattr(R, "desktop_binary", lambda: None)
+def test_not_installed_is_false_without_spawning():
     spawned = []
-    monkeypatch.setattr(R.subprocess, "Popen", lambda *a, **k: spawned.append(a))
-    assert R.ensure_docker() is False and spawned == []
+    assert R.ensure_docker(ctx=_machine(spawned, lambda timeout=12: False)) is False and spawned == []
 
 
-def test_spawns_desktop_hidden_and_waits_for_the_engine(monkeypatch):
+def test_spawns_desktop_hidden_and_waits_for_the_engine():
     answers = iter([False, False, True])
-    monkeypatch.setattr(R, "docker_available", lambda timeout=12: next(answers))
-    monkeypatch.setattr(R, "desktop_binary", lambda: r"C:\x\Docker Desktop.exe")
-    monkeypatch.setattr(R.time, "sleep", lambda s: None)
     spawned = []
-    monkeypatch.setattr(R.subprocess, "Popen", lambda args, **k: spawned.append((args, k)))
-    assert R.ensure_docker(wait_s=30) is True
+    ctx = _machine(spawned, lambda timeout=12: next(answers), binary=r"C:\x\Docker Desktop.exe")
+    assert R.ensure_docker(wait_s=30, ctx=ctx) is True
     (args, kw), = spawned
     assert args == [r"C:\x\Docker Desktop.exe"]
-    assert kw["creationflags"] & getattr(R.subprocess, "CREATE_NO_WINDOW", 0) == getattr(R.subprocess, "CREATE_NO_WINDOW", 0)
+    assert kw["creationflags"] & _FLAG == _FLAG
 
 
-def test_gives_up_after_the_deadline(monkeypatch):
-    monkeypatch.setattr(R, "docker_available", lambda timeout=12: False)
-    monkeypatch.setattr(R, "desktop_binary", lambda: r"C:\x\Docker Desktop.exe")
-    monkeypatch.setattr(R.subprocess, "Popen", lambda *a, **k: None)
-    monkeypatch.setattr(R.time, "sleep", lambda s: None)
+def test_gives_up_after_the_deadline():
     t = [0.0]
+
     def mono():
-        t[0] += 5.0; return t[0]
-    monkeypatch.setattr(R.time, "monotonic", mono)
-    assert R.ensure_docker(wait_s=20) is False
+        t[0] += 5.0
+        return t[0]
+    ctx = _machine([], lambda timeout=12: False, binary=r"C:\x\Docker Desktop.exe",
+                   clock=NS(sleep=lambda s: None, monotonic=mono))
+    assert R.ensure_docker(wait_s=20, ctx=ctx) is False
 
 
 def test_run_python_waits_for_a_booting_engine():

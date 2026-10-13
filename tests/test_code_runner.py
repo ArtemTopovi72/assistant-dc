@@ -12,6 +12,8 @@ way, because the code keeps working perfectly right up until it matters.
 """
 import sys, os, time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import types
+
 import pytest
 import code_runner as R
 from code_sandbox import Sandbox
@@ -23,22 +25,22 @@ def box(tmp_path):
 
 
 @pytest.fixture
-def no_docker(monkeypatch):
-    monkeypatch.setattr(R, "docker_available", lambda *a, **k: False)
-    # ...and no engine to start either (ensure_docker would otherwise really
+def no_docker():
+    # No engine, and none to start either (ensure_docker would otherwise really
     # launch Docker Desktop and wait a minute for it).
-    monkeypatch.setattr(R, "desktop_binary", lambda: None)
+    return types.SimpleNamespace(deps=types.SimpleNamespace(
+        docker_available=lambda *a, **k: False, desktop_binary=lambda: None))
 
 
 # --- the rule that matters: never silently degrade -------------------------
 
 def test_without_isolation_code_does_not_run(box, no_docker):
-    res = R.run_python(box, "print('hi')")
+    res = R.run_python(box, "print('hi')", ctx=no_docker)
     assert not res.ok
     assert "unavailable" in res.output.lower()
 
 
-def test_the_refusal_does_not_execute_anything(box, no_docker, monkeypatch):
+def test_the_refusal_does_not_execute_anything(box, no_docker):
     """The script is written down for inspection, but nothing spawns."""
     called = []
 
@@ -46,13 +48,13 @@ def test_the_refusal_does_not_execute_anything(box, no_docker, monkeypatch):
         called.append(a)
         return R.RunResult(True, 0, "", 0.0)
 
-    monkeypatch.setattr(R, "_spawn", fake)
-    R.run_python(box, "import os; os.remove('x')")
+    no_docker.deps._spawn = fake
+    R.run_python(box, "import os; os.remove('x')", ctx=no_docker)
     assert not called, "a subprocess was started with no isolated backend"
 
 
 def test_host_execution_needs_an_explicit_decision(box, no_docker):
-    res = R.run_python(box, "print('allowed')", allow_host=True)
+    res = R.run_python(box, "print('allowed')", allow_host=True, ctx=no_docker)
     assert res.ok, res.output
     assert "allowed" in res.output
     assert "UNISOLATED" in res.backend, "an unisolated run must say so"
@@ -62,7 +64,7 @@ def test_host_execution_needs_an_explicit_decision(box, no_docker):
 
 def test_an_endless_loop_is_killed(box, no_docker):
     t0 = time.monotonic()
-    res = R.run_python(box, "while True:\n    pass\n", timeout=3, allow_host=True)
+    res = R.run_python(box, "while True:\n    pass\n", timeout=3, allow_host=True, ctx=no_docker)
     assert not res.ok
     assert "killed after" in res.output
     assert time.monotonic() - t0 < 30, "the deadline did not hold"
@@ -71,13 +73,13 @@ def test_an_endless_loop_is_killed(box, no_docker):
 def test_waiting_on_input_fails_instead_of_hanging(box, no_docker):
     """stdin is /dev/null, so input() raises immediately rather than blocking
     the bot until the timeout."""
-    res = R.run_python(box, "input()", timeout=20, allow_host=True)
+    res = R.run_python(box, "input()", timeout=20, allow_host=True, ctx=no_docker)
     assert not res.ok
     assert "killed after" not in res.output, "it blocked instead of failing fast"
 
 
 def test_runaway_output_is_clipped(box, no_docker):
-    res = R.run_python(box, "print('x' * 200000)", timeout=30, allow_host=True)
+    res = R.run_python(box, "print('x' * 200000)", timeout=30, allow_host=True, ctx=no_docker)
     assert len(res.output) < R.MAX_OUTPUT_CHARS + 500, len(res.output)
     assert "chars cut" in res.output
 
@@ -121,7 +123,7 @@ def test_a_timeout_kills_grandchildren_too(box, no_docker, tmp_path):
             "    pathlib.Path(r\"%s\").write_text(str(time.time())); time.sleep(0.2)'])\n"
             "while True: time.sleep(1)\n" % marker)
     t0 = time.monotonic()
-    res = R.run_python(box, code, timeout=3, allow_host=True)
+    res = R.run_python(box, code, timeout=3, allow_host=True, ctx=no_docker)
     assert not res.ok and "killed after" in res.output
     assert time.monotonic() - t0 < 15
     time.sleep(1.0)
@@ -131,15 +133,15 @@ def test_a_timeout_kills_grandchildren_too(box, no_docker, tmp_path):
     assert before == after, "the grandchild is still running after the deadline"
 
 
-def test_the_timeout_is_capped(box, no_docker, monkeypatch):
+def test_the_timeout_is_capped(box, no_docker):
     seen = {}
 
     def fake(cmd, cwd, timeout):
         seen["t"] = timeout
         return R.RunResult(True, 0, "", 0.0)
 
-    monkeypatch.setattr(R, "_spawn", fake)
-    R.run_python(box, "print(1)", timeout=99999, allow_host=True)
+    no_docker.deps._spawn = fake
+    R.run_python(box, "print(1)", timeout=99999, allow_host=True, ctx=no_docker)
     assert seen["t"] == R.MAX_TIMEOUT
 
 
@@ -148,11 +150,11 @@ def test_the_timeout_is_capped(box, no_docker, monkeypatch):
 def test_option_shaped_packages_are_refused(box, no_docker):
     """`--target /elsewhere` and `--index-url http://…` are how a package list
     turns into an arbitrary pip invocation."""
-    res = R.install(box, ["requests", "--target", "C:/Windows"])
+    res = R.install(box, ["requests", "--target", "C:/Windows"], ctx=no_docker)
     assert not res.ok and "option-shaped" in res.output
 
 
-def test_installing_never_touches_the_project_environment(box, no_docker, monkeypatch):
+def test_installing_never_touches_the_project_environment(box, no_docker):
     """The project pins a CUDA torch build; a pip run that resolves torch into
     the project venv replaces it with the CPU wheel."""
     seen = {}
@@ -161,8 +163,8 @@ def test_installing_never_touches_the_project_environment(box, no_docker, monkey
         seen["cmd"] = cmd
         return R.RunResult(True, 0, "", 0.0)
 
-    monkeypatch.setattr(R, "_spawn", fake)
-    R.install(box, ["requests"], allow_host=True)
+    no_docker.deps._spawn = fake
+    R.install(box, ["requests"], allow_host=True, ctx=no_docker)
     cmd = seen["cmd"]
     assert "--target" in cmd
     target = cmd[cmd.index("--target") + 1]
@@ -179,9 +181,8 @@ def _argv_for(box, monkeypatch, network=False):
         seen["cmd"] = cmd
         return R.RunResult(True, 0, "", 0.0)
 
-    monkeypatch.setattr(R, "docker_binary", lambda: "docker")
-    monkeypatch.setattr(R, "_spawn", fake)
-    R._run_in_container(box, ["python", "-u", "x.py"], 30, network=network)
+    ctx = types.SimpleNamespace(deps=types.SimpleNamespace(docker_binary=lambda: "docker", _spawn=fake))
+    R._run_in_container(box, ["python", "-u", "x.py"], 30, network=network, ctx=ctx)
     return seen["cmd"]
 
 
@@ -223,11 +224,10 @@ def test_installing_is_the_only_thing_that_gets_the_network(box, monkeypatch):
     assert plain[plain.index("--network") + 1] == "none"
 
 
-def test_a_stopped_engine_is_not_mistaken_for_a_missing_one(monkeypatch):
+def test_a_stopped_engine_is_not_mistaken_for_a_missing_one():
     """Docker Desktop leaves the binary on disk with the daemon down; in that
     state `--version` succeeds and every run fails."""
-    monkeypatch.setattr(R, "docker_binary", lambda: "docker")
-    monkeypatch.setattr(R, "docker_available", lambda *a, **k: False)
-    backend, why = R.backend_status()
+    backend, why = R.backend_status(types.SimpleNamespace(deps=types.SimpleNamespace(
+        docker_binary=lambda: "docker", docker_available=lambda *a, **k: False)))
     assert backend == ""
     assert "not running" in why

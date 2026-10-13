@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from prompt_guard import fact_rejection
+from seams import dep
 from typing import Any, Callable, Deque, List, Optional, TypedDict
 
 from config import (
@@ -21,7 +22,7 @@ from config import (
 logger = logging.getLogger("assistant.models")
 
 
-def _atomic_write_json(path: Path, data) -> None:
+def _atomic_write_json(path: Path, data, ctx=None) -> None:
     """Write JSON via a PRIVATE temp file + os.replace. The temp name includes
     pid+tid: with a fixed name, two app instances sharing one profile truncate
     each other's temp mid-write and a half-written file can get renamed into
@@ -34,16 +35,16 @@ def _atomic_write_json(path: Path, data) -> None:
     try:
         for attempt in range(3):
             try:
-                os.replace(tmp, path)
+                dep(ctx, "replace", os.replace)(tmp, path)
                 return
             except PermissionError:
                 if attempt == 2:
                     raise
-                time.sleep(0.01 * (attempt + 1))
+                dep(ctx, "sleep", time.sleep)(0.01 * (attempt + 1))
     finally:
         if tmp.exists():
             try:
-                tmp.unlink()
+                dep(ctx, "unlink", Path.unlink)(tmp)
             except OSError:
                 pass
 
@@ -57,17 +58,21 @@ class Models:
     accentor_loaded: bool
 
     @classmethod
-    def load(cls, whisper: bool = True) -> "Models":
+    def load(cls, whisper: bool = True, ctx=None) -> "Models":
         from f5_tts.infer.utils_infer import load_model, load_vocoder
         from f5_tts.model import DiT
+        DiT = dep(ctx, "DiT", DiT)
         from config import (
             WHISPER_DEVICE, WHISPER_COMPUTE_TYPE, DEVICE,
             WEIGHTS_PATH, VOCAB_PATH,
         )
+        load_model, load_vocoder = dep(ctx, "load_model", load_model), dep(ctx, "load_vocoder", load_vocoder)
+        WEIGHTS_PATH = dep(ctx, "WEIGHTS_PATH", WEIGHTS_PATH)
 
         # whisper=False: the Skyrim voice server transcribes with GigaAM only.
         if whisper:
             from faster_whisper import WhisperModel
+            WhisperModel = dep(ctx, "WhisperModel", WhisperModel)
             logger.info("Loading Whisper model...")
             # turbo in int8_float16: 1.0 GB of VRAM vs 3.8 GB for large-v3, 2x faster,
             # same text on RU voice notes and better English language detection.
@@ -97,6 +102,7 @@ class Models:
         # replies, images, research). synth_single_segment returns None when
         # tts_model is None, which every caller already treats as "no audio".
         from config import VOCOS_DIR
+        VOCOS_DIR = dep(ctx, "VOCOS_DIR", VOCOS_DIR)
         vocoder = tts_model = None
         if not (Path(WEIGHTS_PATH).exists() and (Path(VOCOS_DIR) / "config.yaml").exists()):
             logger.warning("F5-TTS weights or vocoder missing (%s, %s) -- voice output is off",
@@ -132,6 +138,7 @@ class Models:
             # load lazily on first use, so model startup stays fast. The callable
             # carries no apostrophes, so the downstream _apos_to_plus() is a no-op.
             from stress import BilingualAccentor
+            BilingualAccentor = dep(ctx, "BilingualAccentor", BilingualAccentor)
             from config import (RUACCENT_MODEL, RUACCENT_DEVICE, RUACCENT_WORKDIR,
                                 STRESS_ENGLISH, CHARSIU_G2P_MODEL)
             accentor = BilingualAccentor(

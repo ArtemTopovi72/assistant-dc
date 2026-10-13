@@ -35,6 +35,7 @@ costing it the GPU stack.
 """
 from __future__ import annotations
 
+from seams import dep
 import logging
 import os
 import re
@@ -148,7 +149,7 @@ def desktop_binary() -> str | None:
     return None
 
 
-def ensure_docker(wait_s: float = 90.0, log=None) -> bool:
+def ensure_docker(wait_s: float = 90.0, log=None, ctx=None) -> bool:
     """Start Docker Desktop if the engine is down; True when it answers.
 
     Without this the bot reports "Docker не запущен" when Docker Desktop is
@@ -160,27 +161,28 @@ def ensure_docker(wait_s: float = 90.0, log=None) -> bool:
     engine never answers within `wait_s`, this returns False and run_code
     keeps its honest "engine is not running" error.
     """
-    if docker_available(timeout=6):
+    up = dep(ctx, "docker_available", docker_available)
+    sp, clock = dep(ctx, "subprocess", subprocess), dep(ctx, "time", time)
+    if up(timeout=6):
         return True
-    exe = desktop_binary()
+    exe = dep(ctx, "desktop_binary", desktop_binary)()
     if not exe:
         if log: log("Docker Desktop is not installed; code execution stays off")
         return False
     try:
-        flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NO_WINDOW", 0)
-        subprocess.Popen([exe], creationflags=flags, close_fds=True,
-                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL)
+        flags = getattr(sp, "DETACHED_PROCESS", 0) | getattr(sp, "CREATE_NO_WINDOW", 0)
+        sp.Popen([exe], creationflags=flags, close_fds=True,
+                 stdin=sp.DEVNULL, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
     except Exception as exc:
         if log: log(f"Docker Desktop could not be started: {exc}")
         return False
     if log: log("Docker Desktop started; waiting for the engine")
-    deadline = time.monotonic() + wait_s
-    while time.monotonic() < deadline:
-        if docker_available(timeout=6):
+    deadline = clock.monotonic() + wait_s
+    while clock.monotonic() < deadline:
+        if up(timeout=6):
             if log: log("Docker engine is up")
             return True
-        time.sleep(3)
+        clock.sleep(3)
     if log: log(f"Docker engine did not answer within {wait_s:.0f}s")
     return False
 
@@ -269,12 +271,12 @@ def ensure_image(log=None, timeout: int = 1800) -> bool:
         return ok
 
 
-def backend_status() -> tuple[str, str]:
+def backend_status(ctx=None) -> tuple[str, str]:
     """(backend, human explanation) — for the admin panel and the tool errors."""
-    if docker_available():
+    if dep(ctx, "docker_available", docker_available)():
         return "docker", (f"Isolated: {CONTAINER_IMAGE}, no network, read-only "
                           f"root, {CONTAINER_MEMORY} RAM, {CONTAINER_PIDS} pids.")
-    if docker_binary():
+    if dep(ctx, "docker_binary", docker_binary)():
         return "", ("Docker is installed but the engine is not running. Start "
                     "Docker Desktop; code execution stays off until it answers.")
     return "", ("No isolated backend available. Start Docker Desktop, "
@@ -284,7 +286,7 @@ def backend_status() -> tuple[str, str]:
 # -- public API -------------------------------------------------------------
 
 def run_python(sandbox, code: str, timeout: int = DEFAULT_TIMEOUT,
-               allow_host: bool = False) -> RunResult:
+               allow_host: bool = False, ctx=None) -> RunResult:
     """Write the script into the sandbox and run it under the best backend.
 
     `allow_host` is the administrator's explicit decision, not a fallback this
@@ -301,7 +303,7 @@ def run_python(sandbox, code: str, timeout: int = DEFAULT_TIMEOUT,
     # The engine may still be booting (launch_all spawns Docker Desktop and
     # does not wait); a request that lands in that window waits here instead
     # of failing with "engine is not running" on the user's first script.
-    if docker_available() or ensure_docker(wait_s=60):
+    if dep(ctx, "docker_available", docker_available)() or ensure_docker(wait_s=60, ctx=ctx):
         ensure_image()
         # A HOME the script can write. The root filesystem is read-only, so any
         # library that keeps a dotfile fails on first use: matplotlib prints
@@ -311,16 +313,16 @@ def run_python(sandbox, code: str, timeout: int = DEFAULT_TIMEOUT,
         # have. Pointed at the sandbox, which is the one writable mount.
         (sandbox.root / AGENT_DIR / "home").mkdir(parents=True, exist_ok=True)
         res = _run_in_container(sandbox, ["python", "-u", rel], timeout,
-                                network=False,
+                                network=False, ctx=ctx,
                                 env={"HOME": f"/work/{AGENT_DIR}/home",
                                      "XDG_CACHE_HOME": f"/work/{AGENT_DIR}/home/.cache",
                                      "MPLCONFIGDIR": f"/work/{AGENT_DIR}/home/.mpl"})
     elif allow_host:
-        res = _spawn([sys.executable, "-u", str(sandbox.root / rel)],
+        res = dep(ctx, "_spawn", _spawn)([sys.executable, "-u", str(sandbox.root / rel)],
                      cwd=sandbox.root, timeout=timeout)
         res.backend = "host (UNISOLATED)"
     else:
-        _, why = backend_status()
+        _, why = backend_status(ctx)
         return RunResult(False, -1,
                          f"Code execution is unavailable: {why}", 0.0, script=rel)
     res.script = rel
@@ -358,7 +360,7 @@ def run_python(sandbox, code: str, timeout: int = DEFAULT_TIMEOUT,
 
 
 def install(sandbox, packages, timeout: int = 300,
-            allow_host: bool = False) -> RunResult:
+            allow_host: bool = False, ctx=None) -> RunResult:
     """pip install into the SANDBOX's venv.
 
     This is the one operation that needs the network, so it is the one run with
@@ -375,7 +377,7 @@ def install(sandbox, packages, timeout: int = 300,
         return RunResult(False, -1,
                          f"Refusing option-shaped arguments: {bad}. Package "
                          f"names only.", 0.0)
-    if docker_available() or ensure_docker(wait_s=60):
+    if dep(ctx, "docker_available", docker_available)() or ensure_docker(wait_s=60, ctx=ctx):
         # pip unpacks into TMPDIR, and the container's /tmp is a 64 MB tmpfs --
         # which is RAM, and nowhere near enough. Measured: `install_packages
         # matplotlib` died with "[Errno 28] No space left on device" after
@@ -392,15 +394,15 @@ def install(sandbox, packages, timeout: int = 300,
             sandbox,
             ["python", "-m", "pip", "install", "--no-input",
              "--target", f"{AGENT_DIR}/site-packages", *names],
-            timeout, network=True,
+            timeout, network=True, ctx=ctx,
             env={"TMPDIR": f"/work/{AGENT_DIR}/tmp",
                  "PIP_CACHE_DIR": f"/work/{AGENT_DIR}/tmp/pipcache"})
     if not allow_host:
-        _, why = backend_status()
+        _, why = backend_status(ctx)
         return RunResult(False, -1, f"Installing is unavailable: {why}", 0.0)
     target = sandbox.root / AGENT_DIR / "site-packages"
     target.mkdir(parents=True, exist_ok=True)
-    res = _spawn([sys.executable, "-m", "pip", "install", "--no-input",
+    res = dep(ctx, "_spawn", _spawn)([sys.executable, "-m", "pip", "install", "--no-input",
                   "--target", str(target), *names],
                  cwd=sandbox.root, timeout=timeout)
     res.backend = "host (UNISOLATED)"
@@ -424,8 +426,8 @@ def _missing_module(output: str) -> str:
 # -- backends ---------------------------------------------------------------
 
 def _run_in_container(sandbox, argv, timeout: int, *, network: bool,
-                      env: dict | None = None) -> RunResult:
-    exe = docker_binary()
+                      env: dict | None = None, ctx=None) -> RunResult:
+    exe = dep(ctx, "docker_binary", docker_binary)()
     root = str(sandbox.root)
     # Named, so a timeout can stop the CONTAINER. Killing the docker client
     # (all _kill_tree reaches) leaves a `--rm` container running: three
@@ -460,7 +462,7 @@ def _run_in_container(sandbox, argv, timeout: int, *, network: bool,
     cmd += [
         CONTAINER_IMAGE, *argv,
     ]
-    res = _spawn(cmd, cwd=sandbox.root, timeout=timeout)
+    res = dep(ctx, "_spawn", _spawn)(cmd, cwd=sandbox.root, timeout=timeout)
     if not res.ok:
         # Harmless when the container already exited (--rm removed it).
         try:

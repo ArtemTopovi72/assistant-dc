@@ -1,4 +1,4 @@
-from seams import text_model
+from seams import dep, text_model
 import hashlib
 import logging
 import os
@@ -1085,7 +1085,7 @@ def _whisper_transcribe(ctx, audio_source, engine: str = "auto",
     the shared ASR lock and join the segments into one string. Shared by the
     array and file entry points below so the transcribe call/args can't drift
     between them."""
-    if engine != "whisper" and _use_gigaam():
+    if engine != "whisper" and dep(ctx, "_use_gigaam", _use_gigaam)():
         try:
             text = _gigaam_transcribe(ctx, audio_source)
             if text:

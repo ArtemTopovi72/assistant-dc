@@ -1024,6 +1024,12 @@ _revive_ok = False
 LLM_REVIVE_MIN_INTERVAL_S = 60.0
 
 
+def _set_revive_state(last: float, ok: bool) -> None:
+    """When the model was last revived and whether that worked (the cooldown's memory)."""
+    global _revive_last, _revive_ok
+    _revive_last, _revive_ok = last, ok
+
+
 def _try_revive_model(body: str, payload: dict, ctx=None) -> bool:
     """Bring the chat model back after LM Studio lost it, and say whether to retry.
 
@@ -1047,7 +1053,7 @@ def _try_revive_model(body: str, payload: dict, ctx=None) -> bool:
             logger.info("model is unloaded for a render (%s) - not reviving, waiting",
                         _cc.card_is_exclusive())
             return False
-        if not _cc._excl_free.is_set():
+        if not dep(ctx, "card_free", _cc._excl_free.is_set)():
             # A render is handing the card back and is already reloading the
             # model; a second load raced it (5-min hang).
             logger.info("render is giving the card back - waiting for its reload")
@@ -1069,7 +1075,7 @@ def _try_revive_model(body: str, payload: dict, ctx=None) -> bool:
             # photo tripped llama.cpp's n_ubatch assert twice in 20 s) is a
             # new incident -- the cached "ok" would let every turn for the
             # next minute die on "No models loaded".
-            if not (_revive_ok and not _model_served(model)):
+            if not (_revive_ok and not dep(ctx, "model_served", _model_served)(model)):
                 return bool(_revive_ok)
             logger.warning("model %s died again inside the revive cooldown - reviving", model)
         _revive_last = now

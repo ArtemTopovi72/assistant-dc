@@ -23,26 +23,8 @@ def check(name, cond, detail=""):
     assert cond, name + ": " + detail
 
 
-@contextlib.contextmanager
-def fake_modules(**mods):
-    saved = {}
-    for name, mod in mods.items():
-        saved[name] = sys.modules.get(name)
-        if mod is None:
-            sys.modules[name] = None
-        else:
-            m = types.ModuleType(name)
-            for k, v in mod.items():
-                setattr(m, k, v)
-            sys.modules[name] = m
-    try:
-        yield
-    finally:
-        for name, old in saved.items():
-            if old is None:
-                sys.modules.pop(name, None)
-            else:
-                sys.modules[name] = old
+def _deps(**kw):
+    return types.SimpleNamespace(deps=types.SimpleNamespace(**kw))
 
 
 def _ctx(**kw):
@@ -75,27 +57,19 @@ def test_atomic_write_retry_then_success():
         if calls["n"] == 1:
             raise PermissionError("locked")   # first attempt fails -> retry
         return real(src, dst)
-    os.replace = flaky
-    M.time.sleep = lambda *_a, **_k: None
-    try:
-        M._atomic_write_json(p, {"b": 2})
-        check("atomic_retry", p.exists() and calls["n"] == 2)
-    finally:
-        os.replace = real
+    M._atomic_write_json(p, {"b": 2}, ctx=_deps(replace=flaky, sleep=lambda *_a, **_k: None))
+    check("atomic_retry", p.exists() and calls["n"] == 2)
 
 
 def test_atomic_write_permission_all_attempts_raise():
     p = _TMP / "aw3.json"
-    real = os.replace
-    os.replace = lambda s, d: (_ for _ in ()).throw(PermissionError("always"))
-    M.time.sleep = lambda *_a, **_k: None
     raised = False
     try:
-        M._atomic_write_json(p, {"c": 3})
+        M._atomic_write_json(p, {"c": 3}, ctx=_deps(
+            replace=lambda s, d: (_ for _ in ()).throw(PermissionError("always")),
+            sleep=lambda *_a, **_k: None))
     except PermissionError:
         raised = True
-    finally:
-        os.replace = real
     check("atomic_all_fail_raises", raised)
     # the tmp file must have been cleaned up in the finally block
     leftover = list(_TMP.glob("aw3.json.*.tmp"))
@@ -104,23 +78,17 @@ def test_atomic_write_permission_all_attempts_raise():
 
 def test_atomic_write_tmp_unlink_oserror_swallowed():
     p = _TMP / "aw4.json"
-    real_replace = os.replace
-    os.replace = lambda s, d: (_ for _ in ()).throw(PermissionError("x"))
-    M.time.sleep = lambda *_a, **_k: None
-    # The finally block calls tmp.unlink() (Path.unlink): make it raise OSError -> swallowed.
-    import pathlib
-    real_path_unlink = pathlib.Path.unlink
-    pathlib.Path.unlink = lambda self, *a, **k: (_ for _ in ()).throw(OSError("cannot"))
+    # The finally block calls tmp.unlink(): make it raise OSError -> swallowed.
     raised = False
     try:
-        M._atomic_write_json(p, {"d": 4})
+        M._atomic_write_json(p, {"d": 4}, ctx=_deps(
+            replace=lambda s, d: (_ for _ in ()).throw(PermissionError("x")),
+            sleep=lambda *_a, **_k: None,
+            unlink=lambda self, *a, **k: (_ for _ in ()).throw(OSError("cannot"))))
     except PermissionError:
         raised = True   # the replace error still propagates
     except OSError:
         raised = "wrong"
-    finally:
-        os.replace = real_replace
-        pathlib.Path.unlink = real_path_unlink
     check("atomic_unlink_oserror_swallowed", raised is True)
 
 
@@ -141,31 +109,25 @@ def test_models_load_success_and_accentor_fail():
 
     # success path incl. accentor loaded. The voice files must EXIST for the
     # loaders to be called at all (a missing one means "voice off").
-    import config as _C
     _d = Path(tempfile.mkdtemp())
     (_d / "w.safetensors").write_bytes(b"x")
     (_d / "vocos").mkdir(); (_d / "vocos" / "config.yaml").write_text("x")
-    _saved = (_C.WEIGHTS_PATH, _C.VOCOS_DIR)
-    _C.WEIGHTS_PATH, _C.VOCOS_DIR = _d / "w.safetensors", _d / "vocos"
-    fw, uinfer, f5model, stress = stub_env(True)
-    try:
-        with fake_modules(faster_whisper=fw):
-            # f5_tts.infer.utils_infer and f5_tts.model are dotted; inject directly
-            with fake_modules(**{"f5_tts.infer.utils_infer": uinfer, "f5_tts.model": f5model, "stress": stress}):
-                # the intermediate packages must exist for `from f5_tts.infer.utils_infer import ...`
-                with fake_modules(**{"f5_tts": {}, "f5_tts.infer": {}}):
-                    m = M.Models.load()
-    finally:
-        _C.WEIGHTS_PATH, _C.VOCOS_DIR = _saved
+
+    def env(accentor_ok):
+        if accentor_ok:
+            class BA:
+                def __init__(self, **kw): pass
+        else:
+            def BA(**kw): raise RuntimeError("no accentor")
+        return _deps(WEIGHTS_PATH=_d / "w.safetensors", VOCOS_DIR=_d / "vocos",
+                     WhisperModel=lambda *a, **k: "WHISPER", load_model=lambda *a, **k: "TTS",
+                     load_vocoder=lambda *a, **k: "VOCODER", DiT=object, BilingualAccentor=BA)
+    m = M.Models.load(ctx=env(True))
     check("load_success", m.whisper == "WHISPER" and m.tts_model == "TTS"
           and m.vocoder == "VOCODER" and m.accentor_loaded is True)
 
     # accentor-failure branch
-    fw, uinfer, f5model, stress = stub_env(False)
-    with fake_modules(faster_whisper=fw):
-        with fake_modules(**{"f5_tts.infer.utils_infer": uinfer, "f5_tts.model": f5model, "stress": stress}):
-            with fake_modules(**{"f5_tts": {}, "f5_tts.infer": {}}):
-                m2 = M.Models.load()
+    m2 = M.Models.load(ctx=env(False))
     check("load_accentor_fail", m2.accentor is None and m2.accentor_loaded is False
           and m2.whisper == "WHISPER")
 
@@ -312,8 +274,6 @@ def test_save_memory_error_swallowed_and_cache():
 
 
 if __name__ == "__main__":
-    _real_replace = os.replace
-    _real_sleep = M.time.sleep
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0
     for fn in fns:
@@ -323,9 +283,6 @@ if __name__ == "__main__":
             failed += 1
             import traceback; traceback.print_exc()
             print("  ERROR in " + fn.__name__ + ": " + type(e).__name__ + ": " + str(e))
-        finally:
-            os.replace = _real_replace
-            M.time.sleep = _real_sleep
     print("\n" + str(len(fns) - failed) + "/" + str(len(fns)) + " model test functions passed (" +
           str(sum(1 for _, c in RESULTS if c)) + "/" + str(len(RESULTS)) + " checks)")
     # A failed check() must reach the exit code; `failed` counts exceptions only.
