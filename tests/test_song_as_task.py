@@ -41,6 +41,7 @@ _READ = reads(read={"колыбельная на английском": {"reply_
 import types
 _R = types.SimpleNamespace(**_READ)
 import music as M
+from seams import Over
 
 T.redirect_data_dir(tempfile.mkdtemp(prefix="tg_song_task_"))
 
@@ -77,14 +78,15 @@ def make_bot():
     bot._send_audio = lambda cid, path, caption="": (bot.audio.append(path), True)[1]
     bot._user_store.put(T._User(chat_id=5001, name="F", status="approved"))
     bot.reads = _R
+    bot.music = _MU
     return bot
 
 
-_engine, _cap, _gen = M.engine_available, M.build_structured_caption, M.generate_music
-M.engine_available = lambda ctx=None, preset=None: (True, "")
-M.build_structured_caption = lambda ctx, topic, lang, **kw: {"lyrics": "la la", "style": "pop"}
-M.generate_music = lambda ctx, lyrics, style, **kw: "/tmp/song.wav"
-try:
+_MU = Over(M)      # the engine this suite's bots render with; each case re-answers what it needs
+_MU.engine_available = lambda ctx=None, preset=None: (True, "")
+_MU.build_structured_caption = lambda ctx, topic, lang, **kw: {"lyrics": "la la", "style": "pop"}
+_MU.generate_music = lambda ctx, lyrics, style, **kw: "/tmp/song.wav"
+if True:
     # 1. a typed request is enqueued as a task
     bot = make_bot()
     enq = []
@@ -107,11 +109,11 @@ try:
     def _writer_interrupted(ctx_, topic, lang, **kw):
         ctx.cancel_event.set()
         raise M.SongwritingFailed("interrupted")
-    M.build_structured_caption = _writer_interrupted
+    _MU.build_structured_caption = _writer_interrupted
     sent = bot._generate_song(5001, "про дождь", "ru", 30, ctx=ctx)
     check("a cancelled write delivers nothing", sent is False and bot.audio == [])
     check("and does not blame the writer", not any("Не получилось" in t or "lyrics" in t for t in bot.sent), bot.sent)
-    M.build_structured_caption = lambda ctx, topic, lang, **kw: {"lyrics": "la la", "style": "pop"}
+    _MU.build_structured_caption = lambda ctx, topic, lang, **kw: {"lyrics": "la la", "style": "pop"}
 
     # 4. Stop between the write and the render: no render, nothing delivered
     bot = make_bot()
@@ -120,8 +122,8 @@ try:
     def _cap_then_stop(ctx_, topic, lang, **kw):
         ctx.cancel_event.set()
         return {"lyrics": "la", "style": "pop"}
-    M.build_structured_caption = _cap_then_stop
-    M.generate_music = lambda *a, **k: rendered.append(1) or "/tmp/song.wav"
+    _MU.build_structured_caption = _cap_then_stop
+    _MU.generate_music = lambda *a, **k: rendered.append(1) or "/tmp/song.wav"
     sent = bot._generate_song(5001, "про дождь", "ru", 30, ctx=ctx)
     check("Stop before the render skips it", sent is False and rendered == [] and bot.audio == [])
 
@@ -130,8 +132,6 @@ try:
     src = inspect.getsource(tg_tasks)
     check("_run_task_inner handles the song payload", "parse_song_payload(task.user_text)" in src)
     check("under the task's cancel and stage", "ctx.stage_callback = _song_stage" in src)
-finally:
-    M.engine_available, M.build_structured_caption, M.generate_music = _engine, _cap, _gen
 
 # "а теперь сочини на него песню" after the bot wrote four lines: the song
 # must use THOSE lines.
@@ -151,16 +151,16 @@ check("a paragraph does not", not S.looks_like_lyrics("Это длинный о�
 check("tagged lyrics keep every line", all(ln in S.tag_lyrics(_lyr) for ln in _lyr.splitlines()) and "[verse]" in S.tag_lyrics(_lyr))
 # The engine check hits the live ComfyUI (node list); offline it must be stubbed
 # again or the song is refused before the lyrics are even looked at.
-M.engine_available = lambda ctx=None, preset=None: (True, "")
-M.build_structured_caption = lambda ctx, topic, lang, **kw: {"lyrics": "WRITER", "style": "pop"}
+_MU.engine_available = lambda ctx=None, preset=None: (True, "")
+_MU.build_structured_caption = lambda ctx, topic, lang, **kw: {"lyrics": "WRITER", "style": "pop"}
 _got = {}
-M.generate_music = lambda ctx, lyrics, style, **kw: _got.update(lyrics=lyrics) or "/tmp/song.wav"
+_MU.generate_music = lambda ctx, lyrics, style, **kw: _got.update(lyrics=lyrics) or "/tmp/song.wav"
 bot = make_bot()
 bot._generate_song(5001, S.LYRICS_MARK + _lyr, "ru", 30, ctx=Ctx())
 check("the given lyrics reach the renderer, not the writer's", "Золотые листья" in _got.get("lyrics", "") and "WRITER" not in _got.get("lyrics", ""), _got)
 # The words typed under the request itself: those are sung, the request line steers the sound.
 _seen = {}
-M.build_structured_caption = lambda ctx, topic, lang, **kw: _seen.update(topic=topic) or {"lyrics": "WRITER", "style": "pop"}
+_MU.build_structured_caption = lambda ctx, topic, lang, **kw: _seen.update(topic=topic) or {"lyrics": "WRITER", "style": "pop"}
 bot._generate_song(5001, "сделай песню в стиле панк-рок на мои стихи:\n" + S.LYRICS_MARK + _lyr, "ru", 30, ctx=Ctx())
 check("inline lyrics are sung verbatim", "Золотые листья" in _got.get("lyrics", "") and "WRITER" not in _got.get("lyrics", ""), _got)
 check("and the request line reaches the style", "панк-рок" in _seen.get("topic", ""), _seen)
@@ -168,10 +168,10 @@ check("a style wish after a song is a redo", S.song_followup("а теперь т
 check("and a longer one keeps its length", S.request_seconds("а можно версию подлиннее, на 2 минуты", ctx=_R) == 120)
 check("minutes in words", (S.request_seconds("минуты на две", ctx=_R), S.request_seconds("песню на полторы минуты", ctx=_R)) == (120, 90))
 _langs = []
-M.build_structured_caption = lambda ctx, topic, lang, **kw: _langs.append(lang) or {"lyrics": "WRITER", "style": "pop"}
+_MU.build_structured_caption = lambda ctx, topic, lang, **kw: _langs.append(lang) or {"lyrics": "WRITER", "style": "pop"}
 bot._generate_song(5001, "колыбельная на английском", "ru", 30, ctx=Ctx())
 check("'на английском' writes English lyrics in a Russian chat", _langs[-1:] == ["en"], _langs)
-M.build_structured_caption = lambda ctx, topic, lang, **kw: _seen.update(topic=topic) or {"lyrics": "WRITER", "style": "pop"}
+_MU.build_structured_caption = lambda ctx, topic, lang, **kw: _seen.update(topic=topic) or {"lyrics": "WRITER", "style": "pop"}
 check("a picture in a style is not", not S.song_followup("нарисуй кота в стиле аниме", ctx=_R))
 bot._generate_song(5001, "про дождь", "ru", 30, ctx=Ctx())
 check("a delivered song is remembered for the next message", S.LAST_SONG.get(5001) == "WRITER", S.LAST_SONG)

@@ -290,6 +290,7 @@ class SongsMixin:
         cancelled = lambda: bool(ctx is not None and getattr(ctx, "is_cancelled", None)
                                  and ctx.is_cancelled())
         _has_stage = ctx is not None and hasattr(ctx, "set_stage")
+        music = self.music or _music_mod        # a suite hands its own engine in; nothing global is rebound
         try:
             # Ask FIRST, so "isn't set up yet" is only ever said when that is
             # actually true. generate_music also raises MusicUnavailable for a
@@ -305,7 +306,7 @@ class SongsMixin:
             # session actually gets the turbo LoRA build_workflow gates on
             # `steps is None` -- see resolve_steps_for_generate's docstring.
             steps = _tg_music.resolve_steps_for_generate(_sess0)
-            ok_engine, why = _music_mod.engine_available(ctx, preset)
+            ok_engine, why = music.engine_available(ctx, preset)
             if not ok_engine:
                 tg_bot.logger.warning("[songs] engine unavailable for chat %s: %s",
                                       chat_id, why)
@@ -328,7 +329,7 @@ class SongsMixin:
             if any(auto.values()):
                 if _has_stage:
                     ctx.set_stage("Choosing the sound")
-                chosen = _music_mod.choose_auto_params(
+                chosen = music.choose_auto_params(
                     ctx, topic, lang, genre=auto["genre"], tempo=auto["tempo"],
                     vocal=auto["vocal"], duration=auto["duration"],
                     fixed=dict(prefs, **({"seconds": duration} if duration else {})))
@@ -358,7 +359,7 @@ class SongsMixin:
                     topic += ". The author's notes on the sound: " + _notes
             import steer as _steer
             notes = _steer.take(ctx)
-            caption = _music_mod.build_structured_caption(
+            caption = music.build_structured_caption(
                 ctx, _steer.with_notes(topic, notes), song_lang(topic, lang, ctx=ctx), duration_s=duration, prefs=prefs)
             # Last call before the render: a wish that came in while the
             # lyrics were being written rewrites them, the render is minutes.
@@ -366,7 +367,7 @@ class SongsMixin:
             if late and not cancelled():
                 notes += late
                 tg_bot.logger.info("[songs] rewriting for %d late wish(es): %r", len(late), late[0][:80])
-                caption = _music_mod.build_structured_caption(
+                caption = music.build_structured_caption(
                     ctx, _steer.with_notes(topic, notes), song_lang(topic, lang, ctx=ctx), duration_s=duration, prefs=prefs)
             if given:                   # their own words stay; wishes steer the sound
                 caption = dict(caption, lyrics=structure_lyrics(ctx, given))
@@ -380,7 +381,7 @@ class SongsMixin:
                 caption = dict(caption, lyrics=_music_mod.trim_to_lines(_words, _cap) if _cap else _words)
             if cancelled():
                 return False
-            wav_path = _music_mod.generate_music(
+            wav_path = music.generate_music(
                 ctx, caption.get("lyrics", ""), caption.get("style", ""),
                 duration_s=duration, preset=preset, steps=steps, prefs=prefs)
             if cancelled():

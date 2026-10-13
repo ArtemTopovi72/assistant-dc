@@ -13,6 +13,7 @@ except Exception: pass
 import tg_bot as T
 import tg_songs as tg_songs_mod
 import music as M
+from seams import Over
 
 _DATA_DIR = tempfile.mkdtemp(prefix="tgtest_creativity_")
 T.redirect_data_dir(_DATA_DIR)
@@ -134,15 +135,13 @@ check("...and puts the session in the music tier",
       bot._get_session(CID).menu == "cr_music")
 check("...and sends a topic prompt", any("🎵" in s for s in bot.sent[-1:]), bot.sent[-1:])
 
-_orig_caption = M.build_structured_caption
-_orig_generate = M.generate_music
-_orig_engine = M.engine_available
+def _engine(ok=True, why=""):
+    return lambda ctx=None, preset=None: (ok, why)
+
 
 # engine_available reaches the FILESYSTEM (weights) and the NETWORK (ComfyUI's
 # /object_info) -- stubbed here so this suite stays offline and deterministic
 # regardless of what is installed or running on the machine.
-M.engine_available = lambda ctx=None, preset=None: (True, "")
-
 def _stub_caption(ctx, topic, lang, **kw):
     return {"lyrics": f"lyrics about {topic}", "style": "pop"}
 
@@ -150,13 +149,9 @@ def _stub_generate(ctx, lyrics, style, *, duration_s=60, seed=None, preset=None,
     return "/tmp/fake_song.wav"
 
 bot.sent.clear(); bot.audio_sent.clear()
-M.build_structured_caption = _stub_caption
-M.generate_music = _stub_generate
-try:
-    bot._user_gate(CID, msg(CID, "a birthday song for my sister"))
-finally:
-    M.build_structured_caption = _orig_caption
-    M.generate_music = _orig_generate
+bot.music = Over(M, engine_available=_engine(), build_structured_caption=_stub_caption,
+                 generate_music=_stub_generate)
+bot._user_gate(CID, msg(CID, "a birthday song for my sister"))
 
 check("a topic triggers generation and delivers audio",
       len(bot.audio_sent) == 1, bot.audio_sent)
@@ -177,11 +172,8 @@ print("=" * 66)
 # 1) engine genuinely unavailable -> "isn't set up yet" (the only truthful use)
 sess = bot._get_session(CID); sess.reg_state = "song_topic"; bot._store.put(sess)
 bot.sent.clear(); bot.audio_sent.clear()
-M.engine_available = lambda ctx=None, preset=None: (False, "the Music3 weights are not downloaded yet")
-try:
-    bot._user_gate(CID, msg(CID, "another topic"))
-finally:
-    M.engine_available = lambda ctx=None, preset=None: (True, "")
+bot.music = Over(M, engine_available=_engine(False, "the Music3 weights are not downloaded yet"))
+bot._user_gate(CID, msg(CID, "another topic"))
 
 check("a missing engine delivers no audio", bot.audio_sent == [])
 check("...and says exactly 'isn't set up yet'",
@@ -196,11 +188,8 @@ bot.sent.clear(); bot.audio_sent.clear()
 def _raises_songwriting(ctx, topic, lang, **kw):
     raise M.SongwritingFailed("no usable lyrics/style pair")
 
-M.build_structured_caption = _raises_songwriting
-try:
-    bot._user_gate(CID, msg(CID, "another topic"))
-finally:
-    M.build_structured_caption = _orig_caption
+bot.music = Over(M, engine_available=_engine(), build_structured_caption=_raises_songwriting)
+bot._user_gate(CID, msg(CID, "another topic"))
 
 check("a writer failure delivers no audio", bot.audio_sent == [])
 check("...and does NOT claim the engine is unconfigured",
@@ -217,13 +206,9 @@ bot.sent.clear(); bot.audio_sent.clear()
 def _raises_render(ctx, lyrics, style, *, duration_s=60, seed=None, preset=None):
     raise M.MusicUnavailable("the render produced no file")
 
-M.build_structured_caption = _stub_caption
-M.generate_music = _raises_render
-try:
-    bot._user_gate(CID, msg(CID, "another topic"))
-finally:
-    M.build_structured_caption = _orig_caption
-    M.generate_music = _orig_generate
+bot.music = Over(M, engine_available=_engine(), build_structured_caption=_stub_caption,
+                 generate_music=_raises_render)
+bot._user_gate(CID, msg(CID, "another topic"))
 
 check("a failed render delivers no audio", bot.audio_sent == [])
 check("...and does NOT claim the engine is unconfigured either",
@@ -241,11 +226,8 @@ bot.sent.clear(); bot.audio_sent.clear()
 def _raises_generic(ctx, topic, lang, **kw):
     raise RuntimeError("comfyui down")
 
-M.build_structured_caption = _raises_generic
-try:
-    bot._user_gate(CID, msg(CID, "yet another topic"))
-finally:
-    M.build_structured_caption = _orig_caption
+bot.music = Over(M, engine_available=_engine(), build_structured_caption=_raises_generic)
+bot._user_gate(CID, msg(CID, "yet another topic"))
 
 check("a generic exception does not deliver audio", bot.audio_sent == [])
 check("...and sends a translated error, not raising out of _user_gate",
@@ -276,8 +258,6 @@ sess = bot._get_session(CID); sess.reg_state = "song_topic"; bot._store.put(sess
 bot._dispatch(cb_update(CID, "acct_lang"))
 check("an unrelated inline button abandons song_topic too",
       bot._get_session(CID).reg_state == "")
-
-M.engine_available = _orig_engine   # leave the module as we found it
 
 print()
 print(f"{OK} passed, {BAD} failed")

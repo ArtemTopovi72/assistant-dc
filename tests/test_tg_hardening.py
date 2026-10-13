@@ -142,8 +142,7 @@ check("user is told why", "already waiting" in texts(bot).lower(), texts(bot)[-2
 bot._backend = T.InMemoryBackend()
 fresh_session(bot)
 import config as _cfg
-_saved = _cfg.TG_QUOTA_DEEP_RESEARCH
-_cfg.TG_QUOTA_DEEP_RESEARCH = 1
+bot.settings["TG_QUOTA_DEEP_RESEARCH"] = 1
 try:
     # clear today's counters for a deterministic run
     with bot._user_store._conn() as conn:
@@ -160,7 +159,7 @@ try:
     check("other task kinds unaffected by the research quota",
           bot._backend.depth() == 2, bot._backend.depth())
 finally:
-    _cfg.TG_QUOTA_DEEP_RESEARCH = _saved
+    bot.settings.pop("TG_QUOTA_DEEP_RESEARCH")
 
 # admins bypass both
 bot._backend = T.InMemoryBackend()
@@ -200,26 +199,18 @@ check("empty stored hash fails closed", not T._verify_password("x", CID, "")[0])
 _salt = b"0123456789abcdef"
 _v2 = "v2$" + _salt.hex() + "$" + hashlib.scrypt(b"pw", salt=_salt, n=2 ** 14, r=8, p=1,
                                              dklen=32, maxmem=256 * 1024 * 1024).hex()
-_saved_cost = getattr(_cfg, "TG_SCRYPT_N_LOG2", None)
-_cfg.TG_SCRYPT_N_LOG2 = 15
-try:
-    ok, up = T._verify_password("pw", CID, _v2)
+if True:
+    ok, up = T._verify_password("pw", CID, _v2, 15)
     check("a v2 hash still verifies after the cost is raised", ok)
     check("...and is re-hashed at the new cost", up.startswith("v3$15$"), up[:10])
     check("a wrong password on a v2 hash still fails", not T._verify_password("no", CID, _v2)[0])
-    h15 = T._hash_password("pw", CID)
-    _cfg.TG_SCRYPT_N_LOG2 = 14
-    ok, up = T._verify_password("pw", CID, h15)
+    h15 = T._hash_password("pw", CID, 15)
+    ok, up = T._verify_password("pw", CID, h15, 14)
     check("a v3 hash verifies at its own recorded cost", ok and up.startswith("v3$14$"), up[:10])
     check("a v3 hash at the current cost needs no upgrade",
-          T._verify_password("pw", CID, up) == (True, ""))
+          T._verify_password("pw", CID, up, 14) == (True, ""))
     check("a v3 hash with an absurd cost fails closed",
           not T._verify_password("pw", CID, "v3$40$00$00")[0])
-finally:
-    if _saved_cost is None:
-        del _cfg.TG_SCRYPT_N_LOG2
-    else:
-        _cfg.TG_SCRYPT_N_LOG2 = _saved_cost
 
 # throttle: repeated wrong passwords lock the chat, correct one is then refused
 bot = make_bot()
@@ -624,8 +615,7 @@ bot._index_document = lambda cid, sess, path, fname, **kw: indexed.append(fname)
 
 small = "short note"
 big = "x " * 20000
-_orig_extract = T._extract_doc
-T._extract_doc = lambda path, fname: (big if "big" in fname else small)
+bot.extract_doc = lambda path, fname: (big if "big" in fname else small)
 try:
     bot._resolve_and_push(CID, [{"type": "document", "file_id": "d1",
                                  "filename": "big.pdf", "caption": ""}])
@@ -650,7 +640,7 @@ try:
     check("inline document text is no longer truncated at 8k",
           "short note" in bot._backend.service_order()[0].user_text)
 finally:
-    T._extract_doc = _orig_extract
+    bot.extract_doc = None
 
 # toggling document search
 bot.sent.clear()
@@ -686,8 +676,7 @@ dead.start()
 dead.join()
 bot._consumers = [dead]
 bot._poll_thread = dead
-_sv = _cfg.TG_WATCHDOG_S
-_cfg.TG_WATCHDOG_S = 5          # clamped to a 5s floor inside the loop
+bot.settings["TG_WATCHDOG_S"] = 5          # clamped to a 5s floor inside the loop
 try:
     bot._poll_loop = lambda: None
     bot._consumer_loop = lambda: None
@@ -701,7 +690,7 @@ try:
     check("watchdog restarted the dead consumer",
           bot._consumers[0] is not dead, bot._consumers)
 finally:
-    _cfg.TG_WATCHDOG_S = _sv
+    bot.settings.pop("TG_WATCHDOG_S")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -988,13 +977,12 @@ bot._workers[CID] = threading.current_thread()
 _served = []
 _saved_resolve = bot._resolve_and_push
 bot._resolve_and_push = lambda cid, batch: _served.extend(batch)
-_saved_idle = T._WORKER_IDLE_S
-T._WORKER_IDLE_S = 0.01
+bot.settings["_WORKER_IDLE_S"] = 0.01
 try:
     _t = threading.Thread(target=bot._debounce_loop, args=(CID,), daemon=True)
     _t.start(); _t.join(5.0)
 finally:
-    T._WORKER_IDLE_S = _saved_idle
+    bot.settings.pop("_WORKER_IDLE_S")
     bot._resolve_and_push = _saved_resolve
 check("an item already queued at idle-timeout is still served",
       [b.get("text") for b in _served] == ["raced in"], str(_served))

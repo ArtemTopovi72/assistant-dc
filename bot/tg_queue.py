@@ -95,7 +95,7 @@ class QueueMixin:
 
     def _watchdog_loop(self):
         """Keep the poll and consumer threads alive, and unstick hung tasks."""
-        interval = max(5, tg_bot._cfg_int("TG_WATCHDOG_S", 15))
+        interval = max(5, tg_bot._cfg_int("TG_WATCHDOG_S", 15, self.settings))
         task_max = max(60, tg_bot._cfg_int("TG_TASK_MAX_S", 3600))
         while self._running:
             time.sleep(interval)
@@ -427,7 +427,7 @@ class QueueMixin:
     def _debounce_loop(self, chat_id: int):
         q = self._queues[chat_id]
         while True:
-            try: first = q.get(timeout=tg_bot._WORKER_IDLE_S)
+            try: first = q.get(timeout=self.settings.get("_WORKER_IDLE_S", tg_bot._WORKER_IDLE_S))
             except _pyqueue.Empty:
                 with self._mgmt_lock:
                     if not q.empty():

@@ -1209,7 +1209,7 @@ class ResolveMixin:
                             suffix=Path(fname).suffix, delete=False) as fh:
                         fh.write(data); tmp = fh.name
                     try:
-                        doc_text = tg_bot._extract_doc(tmp, fname)
+                        doc_text = (self.extract_doc or tg_bot._extract_doc)(tmp, fname)
                         # A book pasted into the prompt would be truncated and the
                         # rest silently thrown away, so anything substantial goes
                         # into the user's own hybrid index and questions are
@@ -1422,7 +1422,7 @@ class ResolveMixin:
         if not is_admin:
             used = self._user_store.usage_today(chat_id)
             for check in ({kind} | {tg_bot.KIND_TASK}):
-                limit = tg_bot._quota_limit(check)
+                limit = tg_bot._quota_limit(check, self.settings)
                 if limit > 0 and used.get(check, 0) >= limit:
                     self._send_text(chat_id,
                         tg_bot._t("quota_hit", lang, kind=check.replace("_", " "),
@@ -1741,7 +1741,7 @@ class ResolveMixin:
         if not (user and user.is_admin):
             used = self._user_store.usage_today(chat_id)
             for check in (tg_bot.KIND_IMAGE, tg_bot.KIND_TASK):
-                limit = tg_bot._quota_limit(check)
+                limit = tg_bot._quota_limit(check, self.settings)
                 if limit > 0 and used.get(check, 0) >= limit:
                     self._send_text(chat_id, tg_bot._t("quota_hit", lang, kind=check,
                                     used=used.get(check, 0), limit=limit),

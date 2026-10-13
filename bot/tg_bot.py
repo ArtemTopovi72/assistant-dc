@@ -1381,6 +1381,10 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         # The model's narrow reads of a message (core/seams.py yes_no, intent_read, choice)
         # the bot's own routing asks before any task runs; None -> agent/intent.py.
         self.reads = None
+        self.music = None
+        # Per-bot overrides of config.py's TG_* knobs and the worker idle time; a suite's own.
+        self.settings = {}
+        self.extract_doc = None      # (path, filename) -> text; None -> _extract_doc
         # Every Bot API call goes through this (requests); a suite hands in its own.
         import requests
         self.http = requests

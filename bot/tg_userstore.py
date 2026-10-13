@@ -56,15 +56,15 @@ def _scrypt(password: str, salt: bytes, n_log2: int) -> bytes:
                           dklen=32, maxmem=2 * 128 * 8 * 2 ** n_log2 + (32 << 20))
 
 
-def _hash_password(password: str, chat_id: int) -> str:
+def _hash_password(password: str, chat_id: int, cost: int = 0) -> str:
     # v3 records the cost: v2 did not, so raising TG_SCRYPT_N_LOG2 made every
     # existing password fail to verify (it was checked at the NEW cost).
-    n_log2 = _n_log2()
+    n_log2 = cost or _n_log2()
     salt = os.urandom(16)
     return f"v3${n_log2}${salt.hex()}${_scrypt(password, salt, n_log2).hex()}"
 
 
-def _verify_password(password: str, chat_id: int, stored: str) -> tuple:
+def _verify_password(password: str, chat_id: int, stored: str, cost: int = 0) -> tuple:
     """Return (ok, upgraded_hash). upgraded_hash is non-empty when the stored hash
     used an older scheme or another cost and should be replaced with the returned one."""
     stored = (stored or "").strip()
@@ -81,8 +81,8 @@ def _verify_password(password: str, chat_id: int, stored: str) -> tuple:
         except Exception as exc:
             logger.warning("password verify error: %s", exc)
             return False, ""
-        if ok and n_log2 != _n_log2():
-            return True, _hash_password(password, chat_id)
+        if ok and n_log2 != (cost or _n_log2()):
+            return True, _hash_password(password, chat_id, cost)
         return ok, ""
     if stored.startswith("v2$"):
         # No cost on record: made at whatever TG_SCRYPT_N_LOG2 was then, which
@@ -90,9 +90,9 @@ def _verify_password(password: str, chat_id: int, stored: str) -> tuple:
         try:
             _, salt_hex, want_hex = stored.split("$", 2)
             salt = bytes.fromhex(salt_hex)
-            for n_log2 in dict.fromkeys((_n_log2(), 14)):
+            for n_log2 in dict.fromkeys((cost or _n_log2(), 14)):
                 if hmac.compare_digest(_scrypt(password, salt, n_log2).hex(), want_hex):
-                    return True, _hash_password(password, chat_id)
+                    return True, _hash_password(password, chat_id, cost)
             return False, ""
         except Exception as exc:
             logger.warning("password verify error: %s", exc)
@@ -100,7 +100,7 @@ def _verify_password(password: str, chat_id: int, stored: str) -> tuple:
     if _LEGACY_HASH_RE.match(stored):
         legacy = hashlib.sha256((password + str(chat_id)).encode()).hexdigest()
         if hmac.compare_digest(legacy, stored):
-            return True, _hash_password(password, chat_id)
+            return True, _hash_password(password, chat_id, cost)
         return False, ""
     return False, ""
 

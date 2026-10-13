@@ -61,18 +61,21 @@ def _kind_label(kind: str, lang: str = _DEFAULT_LANG) -> str:
         if kind in (KIND_TASK, KIND_IMAGE, KIND_RESEARCH) else kind.replace("_", " ")
 
 
-def _quota_limit(kind: str) -> int:
+def _quota_limit(kind: str, over=None) -> int:
+    """`over`: a bot's own settings (`bot.settings`) answering before config.py."""
     try:
         return int({
-            KIND_RESEARCH: getattr(_config, "TG_QUOTA_DEEP_RESEARCH", 5),
-            KIND_IMAGE:    getattr(_config, "TG_QUOTA_IMAGE", 40),
-            KIND_TASK:     getattr(_config, "TG_QUOTA_TASKS", 200),
+            KIND_RESEARCH: _cfg_int("TG_QUOTA_DEEP_RESEARCH", 5, over),
+            KIND_IMAGE:    _cfg_int("TG_QUOTA_IMAGE", 40, over),
+            KIND_TASK:     _cfg_int("TG_QUOTA_TASKS", 200, over),
         }.get(kind, 0))
     except Exception:
         return 0
 
 
-def _cfg_int(name: str, default: int) -> int:
+def _cfg_int(name: str, default: int, over=None) -> int:
+    if over and name in over:
+        return int(over[name])
     try:
         return int(getattr(_config, name, default))
     except Exception:
