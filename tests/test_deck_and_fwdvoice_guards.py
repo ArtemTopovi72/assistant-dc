@@ -24,6 +24,10 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 
 _DATA = tempfile.mkdtemp(prefix="tg_deckguard_")
 import tg_bot as T
+import types as _types
+_T = [None]   # the text model the context hands out
+TXT = _types.SimpleNamespace(text_model=lambda *a, **k: _T[0](*a, **k))
+
 T.redirect_data_dir(_DATA)
 import graph as G
 import graph_personality as GP
@@ -163,7 +167,8 @@ check("every button the keyboard offers is a choice _do_fwd_voice accepts",
 # otherwise a follow-up has no trace of the video.
 import llm as _llm
 bot = make_bot()
-_llm.call_llm_simple = lambda ctx, sysm, user, **kw: "Основная тема: оценка ремонта кухни.\nЧто требуется:\n- дать экспертное мнение"
+_T[0] = lambda ctx, sysm, user, **kw: "Основная тема: оценка ремонта кухни.\nЧто требуется:\n- дать экспертное мнение"
+bot._get_ctx = lambda: TXT
 VIDEO_SAID = "оцени косяки на стенах\n\n👁 Раскадровка видео:\n0:09 — плакат на стене"
 _s = bot._get_session(CID); _s.set_history([]); bot._store.put(_s)   # earlier sections wrote here too
 bot._retell_transcript(CID, VIDEO_SAID, "ru", True)

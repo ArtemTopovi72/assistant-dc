@@ -18,6 +18,10 @@ import tg_bot as T
 T.redirect_data_dir(_DATA)
 import tg_music as TM
 import music as M
+import types as _types
+_T = [None]   # the text model the context hands out
+TXT = _types.SimpleNamespace(text_model=lambda *a, **k: _T[0](*a, **k))
+
 import config as C
 import tg_songs as TS
 M.MUSIC_ENGINE = "music3"   # this suite covers the Music3 knobs (length is a Music3 promise)
@@ -179,22 +183,22 @@ check("every field is back on Auto, the ♻️ line is said and the menu redrawn
 
 # ── the bot's own picks and the report ───────────────────────────────────────
 import llm as _llm
-_llm.call_llm_simple = lambda ctx, sysm, user, **kw: (
+_T[0] = lambda ctx, sysm, user, **kw: (
     '{"genre": "synth", "bpm": 118, "vocal": "female", "seconds": 90, "why": "Тема про ночной город просит неон."}')
-picked = M.choose_auto_params(None, "ночной город", "ru", genre=True, tempo=True, vocal=True, duration=True)
+picked = M.choose_auto_params(TXT, "ночной город", "ru", genre=True, tempo=True, vocal=True, duration=True)
 check("choose_auto_params validates every field",
       picked == {"genre": "synth", "bpm": 118, "vocal": "female", "seconds": 90,
                  "why": "Тема про ночной город просит неон."}, picked)
 check("only the fields asked for come back",
-      set(M.choose_auto_params(None, "x", "ru", tempo=True)) == {"bpm", "why"})
-_llm.call_llm_simple = lambda ctx, sysm, user, **kw: '{"genre": "polka", "bpm": 900, "seconds": 5}'
+      set(M.choose_auto_params(TXT, "x", "ru", tempo=True)) == {"bpm", "why"})
+_T[0] = lambda ctx, sysm, user, **kw: '{"genre": "polka", "bpm": 900, "seconds": 5}'
 # A too-short length is the nearest one the engine can make («джингл на 15 секунд»).
 check("junk from the model is dropped, not stored",
-      M.choose_auto_params(None, "x", "ru", genre=True, tempo=True, duration=True) == {"seconds": 20, "why": ""})
-check("nothing on Auto -> no call at all", M.choose_auto_params(None, "x", "ru") == {})
+      M.choose_auto_params(TXT, "x", "ru", genre=True, tempo=True, duration=True) == {"seconds": 20, "why": ""})
+check("nothing on Auto -> no call at all", M.choose_auto_params(TXT, "x", "ru") == {})
 asked = {}
-_llm.call_llm_simple = lambda ctx, sysm, user, **kw: (asked.__setitem__("user", user), '{"bpm": 92, "why": "ok"}')[1]
-M.choose_auto_params(None, "дорога домой", "ru", tempo=True, fixed={"genre": "Country", "vocal": "FEMALE vocal", "seconds": 100})
+_T[0] = lambda ctx, sysm, user, **kw: (asked.__setitem__("user", user), '{"bpm": 92, "why": "ok"}')[1]
+M.choose_auto_params(TXT, "дорога домой", "ru", tempo=True, fixed={"genre": "Country", "vocal": "FEMALE vocal", "seconds": 100})
 check("what the user DID choose goes into the ask as fixed conditions, not guessed blind",
       "Already fixed by the user" in asked["user"] and "genre: Country" in asked["user"]
       and "vocal: FEMALE vocal" in asked["user"] and "seconds: 100" in asked["user"], asked)
@@ -207,7 +211,7 @@ check("the report names each pick and the reason",
 bot = make_bot(); sess = bot._get_session(CID)
 sess.music_duration = "auto"; sess.music_tempo = ""; bot._store.put(sess)   # the typed BPM above is this chat's
 seen = {}
-_llm.call_llm_simple = lambda ctx, sysm, user, **kw: (
+_T[0] = lambda ctx, sysm, user, **kw: (
     '{"genre": "pop", "bpm": 104, "vocal": "male", "seconds": 60, "why": "Лёгкая тема."}')
 M.engine_available = lambda ctx, preset=None: (True, "")
 def _cap(ctx, topic, lang, duration_s=None, prefs=None):
@@ -215,7 +219,7 @@ def _cap(ctx, topic, lang, duration_s=None, prefs=None):
     return {"lyrics": "[verse]\nla", "style": "pop"}
 M.build_structured_caption = _cap
 M.generate_music = lambda ctx, lyrics, style, duration_s=60, preset=None, **kw: (seen.__setitem__("render", duration_s), seen.__setitem__("steps", kw.get("steps")), "x.wav")[2]
-bot._get_ctx = lambda: None
+bot._get_ctx = lambda: TXT
 bot._generate_song(CID, "про лето", "ru")
 check("the picks reach the brief as requirements and the length comes from the bot",
       seen.get("duration") == 60 and seen["prefs"].get("tempo") == "exactly 104 BPM"
@@ -230,9 +234,9 @@ check("the song is delivered, then the «бот выбрал сам» line",
 bot = make_bot(); sess = bot._get_session(CID)
 sess.music_genre = "rock"; sess.music_duration = "100"; sess.music_tempo = ""; sess.music_steps = "40"; bot._store.put(sess)
 asked_e2e = {}
-_llm.call_llm_simple = lambda ctx, sysm, user, **kw: (asked_e2e.__setitem__("user", user),
+_T[0] = lambda ctx, sysm, user, **kw: (asked_e2e.__setitem__("user", user),
     '{"bpm": 104, "vocal": "male", "why": "Лёгкая тема."}')[1]
-bot._get_ctx = lambda: None
+bot._get_ctx = lambda: TXT
 bot._generate_song(CID, "про лето", "ru")
 check("a chosen step count reaches the render", seen.get("steps") == 40, seen.get("steps"))
 check("a chosen genre and a typed length are kept; only tempo and vocal are the bot's",

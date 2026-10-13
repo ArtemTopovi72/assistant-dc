@@ -21,6 +21,10 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 import tg_bot as T
 import tg_music as TM
 import music as M
+import types as _types
+_T = [None]   # the text model the context hands out
+TXT = _types.SimpleNamespace(text_model=lambda *a, **k: _T[0](*a, **k))
+
 
 _DATA_DIR = tempfile.mkdtemp(prefix="tgtest_musicset_")
 T.redirect_data_dir(_DATA_DIR)
@@ -244,17 +248,15 @@ check("resolve_duration returns the chosen length", TM.resolve_duration(s) == 18
 
 captured = []
 import llm as L
-_real = L.call_llm_simple
-L.call_llm_simple = lambda ctx, sys_p, user_p, **kw: (
+_T[0] = lambda ctx, sys_p, user_p, **kw: (
     captured.append(sys_p),
     json.dumps({"lyrics": "[verse]\nx",
                 "style": "Global Metadata: x Vocal Details: y Arrangement: z"}))[-1]
 try:
-    M.build_structured_caption(None, "a rainy evening", "ru",
+    M.build_structured_caption(TXT, "a rainy evening", "ru",
                                duration_s=180, prefs=prefs)
 finally:
-    L.call_llm_simple = _real
-
+    _T[0] = None
 sys_p = captured[0]
 check("the prompt carries a HARD REQUIREMENTS block", "HARD REQUIREMENTS" in sys_p)
 check("...naming the chosen genre", "jazz" in sys_p.lower(), sys_p[-500:])
@@ -265,14 +267,14 @@ check("...and the requested duration", "180" in sys_p, sys_p[-600:])
 # No settings chosen -> no requirements block at all. An unset setting must
 # not silently become an instruction.
 captured.clear()
-L.call_llm_simple = lambda ctx, sys_p, user_p, **kw: (
+_T[0] = lambda ctx, sys_p, user_p, **kw: (
     captured.append(sys_p),
     json.dumps({"lyrics": "[verse]\nx",
                 "style": "Global Metadata: x Vocal Details: y Arrangement: z"}))[-1]
 try:
-    M.build_structured_caption(None, "a rainy evening", "ru", prefs={})
+    M.build_structured_caption(TXT, "a rainy evening", "ru", prefs={})
 finally:
-    L.call_llm_simple = _real
+    _T[0] = None
 check("no chosen settings -> no requirements block",
       "HARD REQUIREMENTS" not in captured[0])
 
@@ -292,14 +294,14 @@ check("prefs_of flags it distinctly, not as a 'vocal'",
       iprefs.get("instrumental") is True and "vocal" not in iprefs, iprefs)
 
 captured.clear()
-L.call_llm_simple = lambda ctx, sys_p, user_p, **kw: (
+_T[0] = lambda ctx, sys_p, user_p, **kw: (
     captured.append(sys_p),
     json.dumps({"lyrics": "[verse]\n[chorus]",
                 "style": "Global Metadata: x Vocal Details: y Arrangement: z"}))[-1]
 try:
-    M.build_structured_caption(None, "a rainy evening", "ru", prefs=iprefs)
+    M.build_structured_caption(TXT, "a rainy evening", "ru", prefs=iprefs)
 finally:
-    L.call_llm_simple = _real
+    _T[0] = None
 check("the prompt declares it INSTRUMENTAL", "INSTRUMENTAL" in captured[0])
 check("...asks for the lead instrument to be named",
       "lead melodic line" in captured[0], captured[0][-400:])

@@ -4,6 +4,14 @@ import os, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("F5_TEST_RUN", "1")
 import slides
+import types as _types
+_T = [None]   # the text model the context hands out
+_G = [lambda ctx, q: ("", [])]   # the web search it hands out
+_S = [None]
+TXT = _types.SimpleNamespace(text_model=lambda *a, **k: _T[0](*a, **k),
+                             deps=_types.SimpleNamespace(gather_facts=lambda *a, **k: _G[0](*a, **k),
+                                                         support=lambda *a, **k: _S[0](*a, **k)))
+
 from pptx import Presentation
 
 deck = slides.normalize_deck({"title": "iPhone vs Galaxy", "theme": "tech", "slides": [
@@ -44,13 +52,12 @@ assert [s["value"] for s in _d["slides"][0]["stats"]] == ["1,8 млн"], _d
 print("ok figures from no note are dropped")
 # The figure is in the notes, the sentence is not: MiniCheck's verdict drops it.
 import fact_check, llm as _llm
-_fs, _cl = fact_check.support, _llm.call_llm_simple
-fact_check.support = lambda claims, notes: [0.9 if "2023" in c and notes == "Revenue 2023" else 0.02 for c in claims]
-_llm.call_llm_simple = lambda ctx, s, u, **k: '["Revenue 2023", "Revenue was 96.8 billion in 2023", "Revenue was 96.8 billion in 2021"]'
+_S[0] = lambda claims, notes: [0.9 if "2023" in c and notes == "Revenue 2023" else 0.02 for c in claims]
+_T[0] = lambda ctx, s, u, **k: '["Revenue 2023", "Revenue was 96.8 billion in 2023", "Revenue was 96.8 billion in 2021"]'
 try:
     _d = {"slides": [{"heading": "T", "bullets": ["Выручка 96,8 млрд в 2023", "Выручка 96,8 млрд в 2021", "Три модели"]}]}
-    slides._drop_unsupported_claims(None, _d, "Выручка 2023")
+    slides._drop_unsupported_claims(TXT, _d, "Выручка 2023")
     assert _d["slides"][0]["bullets"] == ["Выручка 96,8 млрд в 2023", "Три модели"], _d
 finally:
-    fact_check.support, _llm.call_llm_simple = _fs, _cl
+    pass
 print("ok a misattributed figure is dropped")

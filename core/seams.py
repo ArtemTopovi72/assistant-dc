@@ -16,6 +16,15 @@ def text_model(ctx):
     return llm.call_llm_simple
 
 
+def chat_model(ctx):
+    """`send_to_lm_studio(ctx, messages, tools=..., tool_choice=..., **kw) -> message dict`."""
+    own = getattr(ctx, "chat_model", None)
+    if own is not None:
+        return own
+    import llm
+    return llm.send_to_lm_studio
+
+
 def vision_model(ctx):
     """`analyze_image_with_llm(ctx, **kw) -> str` (one picture or labelled `image_paths`)."""
     own = getattr(ctx, "vision_model", None)

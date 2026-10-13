@@ -104,7 +104,9 @@ print()
 print("=" * 70)
 print("4. The whole translate step, driven end to end")
 print("=" * 70)
-class _Ctx: pass
+_T = [None]   # the text model the context hands out
+class _Ctx:
+    text_model = property(lambda self: _T[0])
 
 # NOTE: patch the LLM at its own module (llm.call_llm_simple), not at whichever
 # module happens to call it. The translate/reply-match functions moved from
@@ -117,13 +119,11 @@ def _fake_llm(ctx, system, user, **kw):
     _calls.append(user)
     # A cooperative model: translates the prose, copies the placeholder through.
     return user.replace("нарисуй плакат с надписью", "draw a poster with the inscription")
-
-_real = _LLMMOD.call_llm_simple
-_LLMMOD.call_llm_simple = _fake_llm
+_T[0] = _fake_llm
 try:
     out = G._translate_to_english(_Ctx(), 'нарисуй плакат с надписью «Добро пожаловать»')
 finally:
-    _LLMMOD.call_llm_simple = _real
+    _T[0] = None
 
 check("the model never saw the Cyrillic literal",
       _calls and "Добро пожаловать" not in _calls[0], _calls)
@@ -133,11 +133,11 @@ check("the instruction itself is English", "draw a poster" in out, out)
 
 # An English turn must not be touched at all.
 _calls.clear()
-_LLMMOD.call_llm_simple = _fake_llm
+_T[0] = _fake_llm
 try:
     same = G._translate_to_english(_Ctx(), 'draw a poster reading "Welcome"')
 finally:
-    _LLMMOD.call_llm_simple = _real
+    _T[0] = None
 check("an ASCII turn short-circuits with no LLM call", not _calls, _calls)
 check("...and is returned unchanged", same == 'draw a poster reading "Welcome"', same)
 

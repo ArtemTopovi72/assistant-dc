@@ -11,7 +11,7 @@ imported by value: _MEMORY_DIR is rebound by redirect_data_dir(), and the rest
 must keep a single definition so patching tg_bot.X steers this module too.
 """
 from __future__ import annotations
-from seams import intent_read, vision_model, yes_no
+from seams import intent_read, text_model, vision_model, yes_no
 
 import copy as _copy_mod
 import html as _html_mod
@@ -459,7 +459,7 @@ class TaskRunnerMixin:
         out = ""
         try:
             import llm as _llm
-            out = (_llm.call_llm_simple(self._get_ctx(), system, said, temperature=0.3,
+            out = (text_model(self._get_ctx())(self._get_ctx(), system, said, temperature=0.3,
                                         max_tokens=900, prefill="<think></think>") or "").strip()
         except Exception:
             tg_bot.logger.exception("fwd retell failed chat=%s", chat_id)

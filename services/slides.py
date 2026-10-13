@@ -12,7 +12,7 @@ Pictures are optional and never block the deck: each slide may name an image
 query, the caller supplies whatever it managed to fetch or draw, and a slide with
 no picture simply lays out as text.
 """
-from seams import vision_model, text_model
+from seams import dep, vision_model, text_model
 import logging
 import os
 import re
@@ -288,7 +288,7 @@ def _edit_deck(ctx, previous: dict, change: str, out_lang: str) -> dict:
     # A reorder/delete needs no research: searching «поменяй местами 2 и 3
     # слайд» only brought junk sources, whose closing slide then ate a content one.
     facts, web_sources = (("", []) if _STRUCTURAL_EDIT_RE.search(change or "")
-                          else gather_facts(ctx, change))
+                          else dep(ctx, "gather_facts", gather_facts)(ctx, change))
     ask = "Current deck:\n" + _json.dumps(base, ensure_ascii=False)[:12000]
     ask += "\n\nChange request: " + (change or "").strip()
     if facts:
@@ -358,7 +358,7 @@ def plan_deck(ctx, topic: str, n_slides: int = 0, out_lang: str = "",
         return _edit_deck(ctx, previous, topic, out_lang)
     ask = (topic or "").strip()
     own = _own_data(topic)
-    facts, web_sources = ("", []) if own else gather_facts(ctx, topic)
+    facts, web_sources = ("", []) if own else dep(ctx, "gather_facts", gather_facts)(ctx, topic)
     if own:
         ask += ("\n\nThese are the user's own figures. Use exactly these numbers "
                 "and no others; a chart plots them.")
@@ -882,7 +882,7 @@ def _drop_unsupported_claims(ctx, deck: dict, facts: str) -> None:
         k = next((k for k in known if n and _close(n[0], k)), None)
         return f"{k:g}" if k is not None else m.group(0)
     claims = [re.sub(r"\d[\d,]*(?:\.\d+)?", exact, c) for c in claims]
-    scores = fact_check.support(claims, facts)
+    scores = dep(ctx, "support", fact_check.support)(claims, facts)
     if not scores:
         return
     logger.info("deck claims checked: %s", [(round(p, 2), c) for p, c in zip(scores, claims)])

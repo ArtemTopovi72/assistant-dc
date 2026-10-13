@@ -21,6 +21,10 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 
 _DATA_DIR = tempfile.mkdtemp(prefix="tgtest_night_")
 import tg_bot as T
+import types as _types
+_T = [None]   # the text model the context hands out
+TXT = _types.SimpleNamespace(text_model=lambda *a, **k: _T[0](*a, **k))
+
 from pathlib import Path as _Path
 _ROOT = _Path(__file__).resolve().parents[1]
 
@@ -31,7 +35,7 @@ RETOLD = []
 def _fake_retell(ctx, system, said, **k):
     RETOLD.append(said)
     return "Кратко: " + said[:40]
-_llm_mod.call_llm_simple = _fake_retell
+_T[0] = _fake_retell
 def retold_after(n_prev, timeout=4.0):
     """The transcripts retold since RETOLD had n_prev entries (thread joined)."""
     t0 = _time.time()
@@ -60,7 +64,7 @@ CID = 999931
 
 
 def make_bot():
-    bot = T.TelegramBot("123:TEST", lambda: object(), lambda: object(),
+    bot = T.TelegramBot("123:TEST", lambda: TXT, lambda: object(),
                         lambda: {}, silent_mode=True)
     bot.sent = []; bot.pushed = []; bot.docs = []
     bot._send_text = lambda cid, text, **kw: (
@@ -227,7 +231,7 @@ check("an ordinary message is not a forward",
 
 bot.sent.clear(); bot.pushed.clear()
 bot._transcribe = lambda ctx, fid, media="voice", **kw: "тут длинный монолог про доставку в четверг"
-bot._get_ctx = lambda: object()
+bot._get_ctx = lambda: TXT
 bot._resolve_and_push(CID, [{"type": "fwd_voice", "file_id": "V1",
                              "seconds": 95, "caption": ""}])
 s = bot._get_session(CID)

@@ -13,6 +13,14 @@ try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 
 import slides
+import types as _types
+_T = [None]   # the text model the context hands out
+_G = [lambda ctx, q: ("", [])]   # the web search it hands out
+_S = [None]
+TXT = _types.SimpleNamespace(text_model=lambda *a, **k: _T[0](*a, **k),
+                             deps=_types.SimpleNamespace(gather_facts=lambda *a, **k: _G[0](*a, **k),
+                                                         support=lambda *a, **k: _S[0](*a, **k)))
+
 import tools
 import tool_args
 import tg_sessions
@@ -41,11 +49,11 @@ def fake_llm(ctx, system, user, **kw):
     return json.dumps(deck, ensure_ascii=False)
 
 import llm as _llm
-_llm.call_llm_simple = fake_llm
-slides.gather_facts = lambda ctx, topic: ("", [])
+_T[0] = fake_llm
+_G[0] = lambda ctx, topic: ("", [])
 
 # 1. the planner path: an edit keeps what it was not asked to touch
-got = slides.plan_deck(None, "add a slide about the moons of Mars", previous=PREV)
+got = slides.plan_deck(TXT, "add a slide about the moons of Mars", previous=PREV)
 check("the edit prompt was used", any("You edit an existing" in s for s, _ in calls))
 check("the change request and the current deck reach the model",
       any("Change request: add a slide" in u and '"Где Марс"' in u for _, u in calls))
@@ -57,10 +65,10 @@ check("sources survive", any("nasa" in s["url"] for s in got.get("sources", []))
 check("edited flag set", got.get("edited") is True)
 
 # 2. a planner that answers nothing leaves the previous deck untouched, flagged
-_llm.call_llm_simple = lambda *a, **k: ""
-got2 = slides.plan_deck(None, "remove the second slide", previous=PREV)
+_T[0] = lambda *a, **k: ""
+got2 = slides.plan_deck(TXT, "remove the second slide", previous=PREV)
 check("no answer → previous deck kept and edit_failed", got2.get("edit_failed") and len(got2["slides"]) == 3)
-r = slides.make_presentation(None, "remove the second slide", tempfile.mkdtemp(), previous=PREV)
+r = slides.make_presentation(TXT, "remove the second slide", tempfile.mkdtemp(), previous=PREV)
 check("make_presentation refuses to rewrite the file on a failed edit", r["path"] == "" and "could not be applied" in r["error"], r)
 
 # 3. the tool: edit_previous / the phrasing picks up ctx.last_deck

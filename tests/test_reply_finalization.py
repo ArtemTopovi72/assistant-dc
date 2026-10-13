@@ -89,7 +89,9 @@ print("=" * 70)
 print("THE LANGUAGE DRIFT")
 print("=" * 70)
 
+_T = [None]   # the text model the context hands out
 class _Ctx:
+    text_model = property(lambda self: _T[0])
     def __init__(self): self.cancelled = False
     def is_cancelled(self): return self.cancelled
 
@@ -104,9 +106,7 @@ calls = []
 def _fake_llm(ctx, system, user, **kw):
     calls.append((system, user, kw))
     return RU_A
-
-_real = _LLMMOD.call_llm_simple
-_LLMMOD.call_llm_simple = _fake_llm
+_T[0] = _fake_llm
 try:
     calls.clear()
     out = G._match_reply_language(_Ctx(), ONCE, RU_Q)
@@ -137,16 +137,16 @@ try:
     # back must never cost the user their answer.
     for name, ret in {"returns None": None, "returns empty": "   ",
                       "echoes the English back": ONCE}.items():
-        _LLMMOD.call_llm_simple = lambda *a, **k: ret
+        _T[0] = lambda *a, **k: ret
         check(f"fails open when the translator {name}",
               G._match_reply_language(_Ctx(), ONCE, RU_Q) == ONCE)
 
     def _boom(*a, **k): raise RuntimeError("backend down")
-    _LLMMOD.call_llm_simple = _boom
+    _T[0] = _boom
     check("fails open when the translator raises",
           G._match_reply_language(_Ctx(), ONCE, RU_Q) == ONCE)
 finally:
-    _LLMMOD.call_llm_simple = _real
+    _T[0] = None
 
 # A mixed answer (Russian prose, English names/links) is already correct and must
 # not be re-translated — that would mangle the names.

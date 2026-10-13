@@ -19,6 +19,12 @@ import tempfile
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import slides  # noqa: E402
+import types as _types
+_T = [None]   # the text model the context hands out
+_G = [lambda ctx, q: ("", [])]   # the web search it hands out
+TXT = _types.SimpleNamespace(text_model=lambda *a, **k: _T[0](*a, **k),
+                             deps=_types.SimpleNamespace(gather_facts=lambda *a, **k: _G[0](*a, **k)))
+
 from pptx import Presentation  # noqa: E402
 
 _fail = 0
@@ -315,9 +321,8 @@ RICH = _json.dumps({"title": "T", "slides": [
      "stats": [{"value": "1962", "label": "start"},
                {"value": "220 hp", "label": "power"}]}]})
 
-_real_gather, _real_llm = slides.gather_facts, _L.call_llm_simple
 # Both boundaries replaced: this suite never opens a socket.
-slides.gather_facts = lambda ctx, topic: (
+_G[0] = lambda ctx, topic: (
     "- note: output rose to 12100 units by 1985; built from 1962, 220 hp; 9400 units in 1975",
     [{"title": "a", "url": "https://example.org/a"},
      {"title": "b", "url": "https://example.org/b"}])
@@ -334,8 +339,8 @@ def _scripted(*replies):
 
 try:
     box, fn = _scripted(THIN, RICH)
-    _L.call_llm_simple = fn
-    deck2 = slides.plan_deck(None, "трактор Кировец")
+    _T[0] = fn
+    deck2 = slides.plan_deck(TXT, "трактор Кировец")
     a2 = slides.deck_facts_audit(deck2)
     check("a deck of headings costs exactly one extra call", box["n"] == 2, box["n"])
     check("the rewrite is kept", a2["charts"] == 1 and a2["slides_with_figures"] == 2, a2)
@@ -346,8 +351,8 @@ try:
 
     # A rewrite that comes back THINNER is a regression, not a repair.
     box, fn = _scripted(RICH, THIN)
-    _L.call_llm_simple = fn
-    deck3 = slides.plan_deck(None, "трактор Кировец")
+    _T[0] = fn
+    deck3 = slides.plan_deck(TXT, "трактор Кировец")
     check("a thinner rewrite is rejected and the first plan stands",
           slides.deck_facts_audit(deck3)["slides_with_figures"] == 2,
           slides.deck_facts_audit(deck3))
@@ -356,12 +361,12 @@ try:
     box, fn = _scripted(_json.dumps({**_json.loads(RICH), "sources": [
         {"title": "a", "url": "https://example.org/a"},
         {"title": "b", "url": "https://example.org/b"}]}))
-    _L.call_llm_simple = fn
-    slides.plan_deck(None, "трактор Кировец")
+    _T[0] = fn
+    slides.plan_deck(TXT, "трактор Кировец")
     check("a deck that already has figures, a chart and links costs one call",
           box["n"] == 1, box["n"])
 finally:
-    slides.gather_facts, _L.call_llm_simple = _real_gather, _real_llm
+    _T[0] = None
 
 # ── a deck nobody planned is not a deck ──────────────────────────────────────
 head("A PLANNER THAT NEVER ANSWERED MUST NOT YIELD A PRESENTATION")
@@ -370,15 +375,13 @@ head("A PLANNER THAT NEVER ANSWERED MUST NOT YIELD A PRESENTATION")
 # an EMPTY error string, so the caller announced a finished presentation. The
 # file was a cover, one slide whose only text was the topic, and a sources
 # list.
-_real_llm2 = _L.call_llm_simple
-_real_gather2 = slides.gather_facts
-slides.gather_facts = lambda ctx, topic: ("", [])
-_L.call_llm_simple = lambda *a, **k: ""
+_G[0] = lambda ctx, topic: ("", [])
+_T[0] = lambda *a, **k: ""
 try:
-    _dead = slides.plan_deck(None, "История трактора Кировец", 6)
+    _dead = slides.plan_deck(TXT, "История трактора Кировец", 6)
     check("the failure is remembered on the deck", _dead.get("planner_failed") is True,
           _dead.get("planner_failed"))
-    _res = slides.make_presentation(None, "История трактора Кировец",
+    _res = slides.make_presentation(TXT, "История трактора Кировец",
                                     tempfile.mkdtemp(), n_slides=6)
     check("no path is handed back", _res.get("path") == "", _res.get("path"))
     check("and the error says why", "planner" in (_res.get("error") or ""),
@@ -386,19 +389,17 @@ try:
     check("no images were fetched for a deck that does not exist",
           _res.get("images") == {}, _res.get("images"))
 finally:
-    _L.call_llm_simple = _real_llm2
-    slides.gather_facts = _real_gather2
+    _T[0] = None
 
 # A deck the planner DID write is never marked failed, even a short one.
 _box3, _fn3 = _scripted(_json.dumps({"title": "T", "slides": [
     {"heading": "One", "bullets": ["built from 1962"]}]}))
-slides.gather_facts = lambda ctx, topic: ("", [])
-_L.call_llm_simple = _fn3
+_G[0] = lambda ctx, topic: ("", [])
+_T[0] = _fn3
 try:
-    _one = slides.plan_deck(None, "тема", 2)
+    _one = slides.plan_deck(TXT, "тема", 2)
 finally:
-    _L.call_llm_simple = _real_llm2
-    slides.gather_facts = _real_gather2
+    _T[0] = None
 check("a one-slide deck the planner really wrote is NOT called a failure",
       _one.get("planner_failed") is False, _one.get("planner_failed"))
 

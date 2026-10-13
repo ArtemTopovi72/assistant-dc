@@ -74,14 +74,11 @@ def test_own_lyrics_layout_is_verbatim_or_nothing():
     import tg_songs, llm, music
     g = "(Интро: тяжелый рифф)\nраз два три\nчетыре пять\nраз два три\nчетыре пять"
     assert "тяжелый рифф" in tg_songs.author_notes(g)
-    orig = llm.call_llm_simple
-    try:
-        llm.call_llm_simple = lambda *a, **k: "[verse]\nраз два три\nчетыре пять\n[chorus]\nраз два три\nчетыре пять"
-        assert "[chorus]" in tg_songs.structure_lyrics(object(), g)
-        llm.call_llm_simple = lambda *a, **k: "[verse]\nраз два ТРИ\nчетыре шесть"
-        assert "четыре шесть" not in tg_songs.structure_lyrics(object(), g)
-    finally:
-        llm.call_llm_simple = orig
+    from types import SimpleNamespace as NS
+    said = NS(text_model=lambda *a, **k: "[verse]\nраз два три\nчетыре пять\n[chorus]\nраз два три\nчетыре пять")
+    assert "[chorus]" in tg_songs.structure_lyrics(said, g)
+    drifted = NS(text_model=lambda *a, **k: "[verse]\nраз два ТРИ\nчетыре шесть")
+    assert "четыре шесть" not in tg_songs.structure_lyrics(drifted, g)
     labelled = "Куплет 1:\nа б\nБридж (резко):\nв г\nVerse 2:\nд е"
     n = music.normalize_lyrics(tg_songs.tag_lyrics(labelled))
     assert n.split("\n") == ["[verse 1]", "а б", "[bridge]", "в г", "[verse 2]", "д е"]

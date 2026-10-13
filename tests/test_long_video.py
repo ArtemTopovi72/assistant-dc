@@ -12,6 +12,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _DATA = tempfile.mkdtemp(prefix="tg_long_video_")
 import logging; logging.basicConfig(level=logging.CRITICAL)
 import tg_bot as T
+import types as _types
+_T = [None]   # the text model the context hands out
+TXT = _types.SimpleNamespace(text_model=lambda *a, **k: _T[0](*a, **k))
+
 T.redirect_data_dir(_DATA)
 import tg_video as V
 import video_look as VL
@@ -85,7 +89,7 @@ subprocess.run(["ffmpeg", "-y", "-loglevel", "error",
 bot = make_bot(); sess = bot._get_session(CID)
 sess.video_chunk = "2"; sess.video_frames = "6"; sess.video_out = "both"; bot._store.put(sess)  # 150 s -> 2 portions
 bot._dl_bytes = lambda fid: clip.read_bytes()
-bot._get_ctx = lambda: None
+bot._get_ctx = lambda: TXT
 asr_calls, look_calls, retell_calls = [], [], []
 import audio as _audio, llm as _llm
 _audio.transcribe_audio_file = lambda ctx, p, lang_hint="ru": asr_calls.append(p) or "речь части"
@@ -96,7 +100,7 @@ def _fake_look(ctx, path, **kw):
     r["description"] = "\n".join(f"{VL._stamp(t)} — кадр" for t in r["times"])
     return r
 VL.look_at_video = _fake_look
-_llm.call_llm_simple = lambda ctx, sysm, user, **kw: retell_calls.append(user) or "пересказ части"
+_T[0] = lambda ctx, sysm, user, **kw: retell_calls.append(user) or "пересказ части"
 # look_at_video's close-up pass is a LIVE vision call (48 requests, 2.5 min) --
 # it must never reach the operator's LM Studio from a suite.
 import vision_close as _vclose
@@ -132,10 +136,10 @@ check("a detailed run still saves its notes, so ❓ works after it too",
 # 10-09: 11 portions x storyboard + retelling + sheet buried the chat
 bot = make_bot(); sess = bot._get_session(CID)
 sess.video_chunk = "2"; sess.video_frames = "6"; sess.video_out = ""; bot._store.put(sess)
-bot._dl_bytes = lambda fid: clip.read_bytes(); bot._get_ctx = lambda: None
+bot._dl_bytes = lambda fid: clip.read_bytes(); bot._get_ctx = lambda: TXT
 _audio.transcribe_audio_file = lambda ctx, p, lang_hint="ru": "речь части"
 calls = []
-_llm.call_llm_simple = lambda ctx, sysm, user, **kw: calls.append((sysm, user)) or (
+_T[0] = lambda ctx, sysm, user, **kw: calls.append((sysm, user)) or (
     "Основная тема: ремонт.\nКлючевые моменты:\n• 0:10 — плата" if "WHOLE" in sysm else
     "0:10 — ответ по видео" if "QUESTION" in user else "пересказ части")
 stop = threading.Event(); bot._lv_jobs()[CID] = stop
@@ -168,7 +172,7 @@ check("the question is answered from the saved notes, no re-watch",
 # ── ❓ before the job: the job answers the question instead of retelling ─────
 bot = make_bot(); sess = bot._get_session(CID)
 sess.video_chunk = "2"; sess.video_frames = "6"; bot._store.put(sess)
-bot._dl_bytes = lambda fid: clip.read_bytes(); bot._get_ctx = lambda: None
+bot._dl_bytes = lambda fid: clip.read_bytes(); bot._get_ctx = lambda: TXT
 bot._long_video_offer(CID, sess, "ru", {"file_id": "F1", "seconds": 150})
 job = bot._get_session(CID).long_video["id"]
 bot._cb_long_video(CID, f"lv:ask:{job}")
@@ -185,7 +189,7 @@ check("material_text keeps every storyboard and trims transcripts to the budget"
 # ── Stop between portions ────────────────────────────────────────────────────
 bot = make_bot(); sess = bot._get_session(CID)
 sess.video_chunk = "2"; sess.video_frames = "6"; sess.video_out = "both"; bot._store.put(sess)
-bot._dl_bytes = lambda fid: clip.read_bytes(); bot._get_ctx = lambda: None
+bot._dl_bytes = lambda fid: clip.read_bytes(); bot._get_ctx = lambda: TXT
 stop = threading.Event(); bot._lv_jobs()[CID] = stop
 _audio.transcribe_audio_file = lambda ctx, p, lang_hint="ru": (stop.set(), "речь")[1]   # Stop during part 1
 bot._long_video_job(CID, {"id": "j2", "file_id": "F1", "seconds": 150}, stop)

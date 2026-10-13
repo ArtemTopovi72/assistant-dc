@@ -22,6 +22,10 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import music as M  # noqa: E402
+import types as _types
+_T = [None]   # the text model the context hands out
+TXT = _types.SimpleNamespace(text_model=lambda *a, **k: _T[0](*a, **k))
+
 
 OK = BAD = 0
 
@@ -122,15 +126,11 @@ def _fake(ctx, sys_p, user_p, **kw):
     return ('{"lyrics": "[verse]\\n' + lines.replace("\n", "\\n")
             + '\\n[outro]\\nконец", "style": "Global Metadata\\nx\\n'
               'Vocal Details\\nfemale\\nArrangement\\nguitar"}')
-
-
-_real = L.call_llm_simple
-L.call_llm_simple = _fake
+_T[0] = _fake
 try:
-    got = M.build_structured_caption(None, "про кота", "ru", duration_s=180)
+    got = M.build_structured_caption(TXT, "про кота", "ru", duration_s=180)
 finally:
-    L.call_llm_simple = _real
-
+    _T[0] = None
 check("the prompt names the line count", str(t180) in seen.get("sys", ""),
       seen.get("sys", "")[-300:])
 check("the prompt no longer asks for 'roughly N seconds'",
@@ -157,12 +157,11 @@ def _short_then_long(ctx, sys_p, user_p, **kw):
               'Vocal Details\\nfemale\\nArrangement\\nguitar"}')
 
 
-L.call_llm_simple = _short_then_long
+_T[0] = _short_then_long
 try:
-    got2 = M.build_structured_caption(None, "про кота", "ru", duration_s=180)
+    got2 = M.build_structured_caption(TXT, "про кота", "ru", duration_s=180)
 finally:
-    L.call_llm_simple = _real
-
+    _T[0] = None
 check("a lyric that would end the song early costs another attempt",
       calls["n"] == 2, calls["n"])
 check("the retry tells the model what was wrong",
@@ -183,11 +182,11 @@ def _always_short(ctx, sys_p, user_p, **kw):
             'Arrangement\\nguitar"}')
 
 
-L.call_llm_simple = _always_short
+_T[0] = _always_short
 try:
-    M.build_structured_caption(None, "про кота", "ru")
+    M.build_structured_caption(TXT, "про кота", "ru")
 finally:
-    L.call_llm_simple = _real
+    _T[0] = None
 check("with no duration asked, a short lyric is not second-guessed",
       calls2["n"] == 1, calls2["n"])
 

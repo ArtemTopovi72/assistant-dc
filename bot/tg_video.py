@@ -16,6 +16,7 @@ that STATES the current value, redrawn in place on every tap.
 from __future__ import annotations
 
 import html as _html_mod
+from seams import text_model
 import json
 import re
 import logging
@@ -316,7 +317,7 @@ class LongVideoMixin:
         import tg_bot
         self._api_post("sendChatAction", {"chat_id": chat_id, "action": "typing"})
         try:
-            answer = (_llm.call_llm_simple(self._get_ctx(), _ANSWER_SYSTEM + _lang_line(lang),
+            answer = (text_model(self._get_ctx())(self._get_ctx(), _ANSWER_SYSTEM + _lang_line(lang),
                                            "QUESTION: " + question + "\n\nNOTES:\n" + material_text(parts),
                                            temperature=0.2, max_tokens=900, prefill="<think></think>") or "").strip()
         except Exception:
@@ -336,7 +337,7 @@ class LongVideoMixin:
         notes = "\n\n".join(f"=== {p['a']}-{p['b']} ===\n" + (p.get("note") or p.get("board") or "")
                              for p in parts)
         try:
-            tale = (_llm.call_llm_simple(self._get_ctx(), _OVERVIEW_SYSTEM + _lang_line(lang) + "\n"
+            tale = (text_model(self._get_ctx())(self._get_ctx(), _OVERVIEW_SYSTEM + _lang_line(lang) + "\n"
                                          + _structure_rules(lang, timecoded=True, ask=False), notes[:24000],
                                          temperature=0.3, max_tokens=1100, prefill="<think></think>") or "").strip()
         except Exception:
@@ -454,7 +455,7 @@ class LongVideoMixin:
                     if board:
                         payload += "STORYBOARD:\n" + board
                     try:
-                        tale = (_llm.call_llm_simple(ctx, _RETELL_SYSTEM + _lang_line(lang) + "\n"
+                        tale = (text_model(ctx)(ctx, _RETELL_SYSTEM + _lang_line(lang) + "\n"
                                                      + _structure_rules(lang, timecoded=True, ask=False), payload,
                                                      temperature=0.3, max_tokens=700,
                                                      prefill="<think></think>") or "").strip()
