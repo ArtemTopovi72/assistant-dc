@@ -67,15 +67,9 @@ def _with_face_box(box):
     face_boxes (every face). Stubbing only one silently sends the other to the
     real YuNet detector, which finds nothing in these synthetic swatches — the
     test then passes/fails for the wrong reason."""
-    orig_mod = sys.modules.get("identity_metrics")
-    sys.modules["identity_metrics"] = types.SimpleNamespace(
+    return {"identity_metrics": types.SimpleNamespace(
         face_box=lambda path, pad=0.0: box,
-        face_boxes=lambda path, pad=0.0, **kw: ([box] if box else []))
-    return orig_mod
-
-def _restore_idm(orig_mod):
-    if orig_mod is not None: sys.modules["identity_metrics"] = orig_mod
-    else: sys.modules.pop("identity_metrics", None)
+        face_boxes=lambda path, pad=0.0, **kw: ([box] if box else []))}
 
 
 # ---------------- edit_region_contained_cropped ----------------
@@ -119,15 +113,12 @@ def test_cropped_face_protection_empties_mask():
     ctx = Ctx()
     img = _photo("c5.png", w=100, h=100)
     maskfile = _mask_file("c5_mask.png", w=100, h=100, box=(20, 20, 60, 60))
-    orig_mod = _with_face_box((0, 0, 100, 100))  # covers everything -> mask emptied
-    try:
-        with _Patches(_upload_image_to_comfy=lambda *a, **k: "u.png",
-                      _region_mask_file=lambda *a, **k: maskfile):
-            out = I.edit_region_contained_cropped(ctx, img, "hairstyle", "blonde hair",
-                                                   protect_face=True)
-            check("cropped_face_protect_empties_none", out is None)
-    finally:
-        _restore_idm(orig_mod)
+    ctx.modules = _with_face_box((0, 0, 100, 100))
+    with _Patches(_upload_image_to_comfy=lambda *a, **k: "u.png",
+                  _region_mask_file=lambda *a, **k: maskfile):
+        out = I.edit_region_contained_cropped(ctx, img, "hairstyle", "blonde hair",
+                                               protect_face=True)
+        check("cropped_face_protect_empties_none", out is None)
 
 def test_cropped_facial_feature_skips_protection():
     ctx = Ctx()
@@ -233,89 +224,61 @@ def test_cropped_composite_exception():
 # ---------------- _preserve_face_after_upscale ----------------
 
 def test_preserve_face_no_face():
-    orig_mod = _with_face_box(None)
-    try:
-        img = _photo("pf1.png"); up = _photo("pf1_up.png", w=400, h=400)
-        out = I._preserve_face_after_upscale(img, up)
-        check("preserve_face_no_face_unchanged", out == up)
-    finally:
-        _restore_idm(orig_mod)
+    idm = _with_face_box(None)
+    img = _photo("pf1.png"); up = _photo("pf1_up.png", w=400, h=400)
+    out = I._preserve_face_after_upscale(img, up, modules=idm)
+    check("preserve_face_no_face_unchanged", out == up)
 
 def test_preserve_face_success():
-    orig_mod = _with_face_box((40, 40, 120, 120))
-    try:
-        img = _photo("pf2.png", w=200, h=200); up = _photo("pf2_up.png", w=400, h=400)
-        out = I._preserve_face_after_upscale(img, up)
-        check("preserve_face_success", out != up and Path(out).exists())
-    finally:
-        _restore_idm(orig_mod)
+    idm = _with_face_box((40, 40, 120, 120))
+    img = _photo("pf2.png", w=200, h=200); up = _photo("pf2_up.png", w=400, h=400)
+    out = I._preserve_face_after_upscale(img, up, modules=idm)
+    check("preserve_face_success", out != up and Path(out).exists())
 
 def test_preserve_face_blend_partial():
-    orig_mod = _with_face_box((40, 40, 120, 120))
-    try:
-        img = _photo("pf3.png", w=200, h=200); up = _photo("pf3_up.png", w=400, h=400)
-        out = I._preserve_face_after_upscale(img, up, blend=0.5)
-        check("preserve_face_blend_partial", out != up and Path(out).exists())
-    finally:
-        _restore_idm(orig_mod)
+    idm = _with_face_box((40, 40, 120, 120))
+    img = _photo("pf3.png", w=200, h=200); up = _photo("pf3_up.png", w=400, h=400)
+    out = I._preserve_face_after_upscale(img, up, blend=0.5, modules=idm)
+    check("preserve_face_blend_partial", out != up and Path(out).exists())
 
 def test_preserve_face_import_fails():
-    orig_mod = sys.modules.get("identity_metrics")
-    sys.modules["identity_metrics"] = None  # forces ImportError on `import identity_metrics`
-    try:
-        img = _photo("pf4.png"); up = _photo("pf4_up.png")
-        out = I._preserve_face_after_upscale(img, up)
-        check("preserve_face_import_fail_unchanged", out == up)
-    finally:
-        _restore_idm(orig_mod)
+    idm = {"identity_metrics": None}
+    img = _photo("pf4.png"); up = _photo("pf4_up.png")
+    out = I._preserve_face_after_upscale(img, up, modules=idm)
+    check("preserve_face_import_fail_unchanged", out == up)
 
 def test_preserve_face_bad_orig_path():
-    orig_mod = _with_face_box((10, 10, 50, 50))
-    try:
-        up = _photo("pf5_up.png")
-        out = I._preserve_face_after_upscale("Z:/no_such.png", up)
-        check("preserve_face_bad_orig_unchanged", out == up)
-    finally:
-        _restore_idm(orig_mod)
+    idm = _with_face_box((10, 10, 50, 50))
+    up = _photo("pf5_up.png")
+    out = I._preserve_face_after_upscale("Z:/no_such.png", up, modules=idm)
+    check("preserve_face_bad_orig_unchanged", out == up)
 
 
 # ---------------- _composite_reference_head ----------------
 
 def test_composite_head_no_face():
-    orig_mod = _with_face_box(None)
-    try:
-        photo = _photo("ch1.png"); render = _photo("ch1_render.png")
-        out = I._composite_reference_head(photo, render)
-        check("composite_head_no_face_unchanged", out == render)
-    finally:
-        _restore_idm(orig_mod)
+    idm = _with_face_box(None)
+    photo = _photo("ch1.png"); render = _photo("ch1_render.png")
+    out = I._composite_reference_head(photo, render, modules=idm)
+    check("composite_head_no_face_unchanged", out == render)
 
 def test_composite_head_success():
-    orig_mod = _with_face_box((30, 30, 90, 90))
-    try:
-        photo = _photo("ch2.png", w=150, h=150); render = _photo("ch2_render.png", w=150, h=150)
-        out = I._composite_reference_head(photo, render)
-        check("composite_head_success", out != render and Path(out).exists())
-    finally:
-        _restore_idm(orig_mod)
+    idm = _with_face_box((30, 30, 90, 90))
+    photo = _photo("ch2.png", w=150, h=150); render = _photo("ch2_render.png", w=150, h=150)
+    out = I._composite_reference_head(photo, render, modules=idm)
+    check("composite_head_success", out != render and Path(out).exists())
 
 def test_composite_head_size_mismatch_resize():
-    orig_mod = _with_face_box((20, 20, 60, 60))
-    try:
-        photo = _photo("ch3.png", w=150, h=150); render = _photo("ch3_render.png", w=80, h=80)
-        out = I._composite_reference_head(photo, render)
-        check("composite_head_resize", out != render and Path(out).exists())
-    finally:
-        _restore_idm(orig_mod)
+    idm = _with_face_box((20, 20, 60, 60))
+    photo = _photo("ch3.png", w=150, h=150); render = _photo("ch3_render.png", w=80, h=80)
+    out = I._composite_reference_head(photo, render, modules=idm)
+    check("composite_head_resize", out != render and Path(out).exists())
 
 def test_composite_head_bad_photo():
-    orig_mod = _with_face_box((10, 10, 40, 40))
-    try:
-        render = _photo("ch4_render.png")
-        out = I._composite_reference_head("Z:/no.png", render)
-        check("composite_head_bad_photo_unchanged", out == render)
-    finally:
-        _restore_idm(orig_mod)
+    idm = _with_face_box((10, 10, 40, 40))
+    render = _photo("ch4_render.png")
+    out = I._composite_reference_head("Z:/no.png", render, modules=idm)
+    check("composite_head_bad_photo_unchanged", out == render)
 
 
 if __name__ == "__main__":

@@ -26,6 +26,7 @@ must be bound at def time. It is imported from image_engines, its DEFINING
 module, not from image.py.
 """
 from config import scratch_path
+from seams import module
 import logging
 import os
 import random
@@ -218,7 +219,7 @@ def edit_region_contained_cropped(
     _face_frac = None
     if protect_face and not _image._is_facial(ctx, region_phrase):
         try:
-            import identity_metrics as _idm
+            _idm = module(ctx, "identity_metrics")
             from PIL import ImageDraw
             fb = _idm.face_box(image_path, pad=0.12)
             if fb:

@@ -9,7 +9,7 @@ Extracted from image.py. MASK_QA_ENABLED is a live switch: read it through this
 module (image_maskqa.MASK_QA_ENABLED), never by value, or patching it moves only
 half the behaviour.
 """
-from seams import yes_no, vision_model
+from seams import module, yes_no, vision_model
 from config import scratch_path
 import logging
 import os
@@ -55,7 +55,7 @@ def _mask_face_fraction(mask_l, face_box) -> Optional[float]:
         return None
 
 
-def _face_detector_mask(image_path: str, size, pad: float = 0.18):
+def _face_detector_mask(image_path: str, size, pad: float = 0.18, modules=None):
     """Soft face mask from the YuNet detector: an ellipse over the largest detected
     face (corners of the box trimmed so background isn't dragged in). Returns a
     full-size 'L' mask, or None if detection is unavailable / no face found.
@@ -63,7 +63,7 @@ def _face_detector_mask(image_path: str, size, pad: float = 0.18):
     This is the reliable replacement for text-segmenting the word "face" — the
     detector localizes the actual face instead of a random fragment."""
     try:
-        import identity_metrics as _idm
+        _idm = module(modules, "identity_metrics")
         fb = _idm.face_box(image_path, pad=pad)
     except Exception as exc:
         logger.warning("face-mask: detector unavailable (%s)", exc)

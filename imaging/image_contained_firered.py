@@ -27,6 +27,7 @@ import time
 from typing import Optional
 
 from config import COMFY_URL, OUTPUT_DIR
+from seams import module
 from image_engines import DEFAULT_EDIT_ENGINE
 import image_maskqa                # MASK_QA_ENABLED is read live, never by value
 
@@ -78,7 +79,7 @@ def _contained_region_mask(ctx, image_path: str, region_phrase: str, *,
         # re-rendered. Off by default so deliberate face tattoos still work.
         if protect_face:
             try:
-                import identity_metrics as _idm
+                _idm = module(ctx, "identity_metrics")
                 fb = _idm.face_box(image_path, pad=0.10)
                 if fb:
                     ImageDraw.Draw(mask).rectangle(fb, fill=0)
@@ -174,7 +175,7 @@ def _contained_region_mask(ctx, image_path: str, region_phrase: str, *,
 
         if not _image._is_facial(ctx, region_phrase):
             try:
-                import identity_metrics as _idm
+                _idm = module(ctx, "identity_metrics")
                 fb = _idm.face_box(image_path, pad=0.12)
                 if fb:
                     _face_frac = _image._mask_face_fraction(mask, fb)

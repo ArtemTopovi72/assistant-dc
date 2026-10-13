@@ -87,13 +87,8 @@ def test_transfer_worker_crop_and_identity_none():
     # identity_metrics import raising is swallowed
     w2 = gui.TransferWorker(ctx, tgt, [(_png("r6b.png"), None)], "", "contained")
     rec2 = cap(w2, "done", "failed")
-    w2.modules = _mods(image=_im())
-    # no identity_metrics module -> ImportError swallowed
-    saved = sys.modules.pop("identity_metrics", None)
-    try:
-        w2.run()
-    finally:
-        if saved is not None: sys.modules["identity_metrics"] = saved
+    w2.modules = {**_mods(image=_im()), "identity_metrics": None}   # no identity_metrics -> ImportError swallowed
+    w2.run()
     check("tw_identity_import_swallowed", len(rec2["done"]) == 1)
 
 

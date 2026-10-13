@@ -11,7 +11,7 @@ edit_region_contained_via_firered) and the telemetry it writes
 through lazy module-level forwarders rather than by-value imports: that both
 breaks the import cycle and keeps them patchable from either side.
 """
-from seams import choice, vision_model, text_model
+from seams import choice, module, vision_model, text_model
 from config import scratch_path
 import json
 import logging
@@ -86,7 +86,7 @@ def _split_person_and_scene(ctx, description: str):
     return person, is_real, scene
 
 
-def _composite_reference_head(photo_path: str, render_path: str):
+def _composite_reference_head(photo_path: str, render_path: str, modules=None):
     """Paste the real person's HEAD (face + hair) from the reference ``photo`` back
     over the FireRed ``render`` through a feathered head-shaped mask.
 
@@ -98,7 +98,7 @@ def _composite_reference_head(photo_path: str, render_path: str):
     """
     try:
         from PIL import Image, ImageDraw, ImageFilter
-        import identity_metrics as _idm
+        _idm = module(modules, "identity_metrics")
         photo = Image.open(photo_path).convert("RGB")
         render = Image.open(render_path).convert("RGB")
         if render.size != photo.size:

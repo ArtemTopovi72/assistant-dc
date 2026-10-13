@@ -8,7 +8,7 @@ down.
 
 Extracted from image.py.
 """
-from seams import yes_no
+from seams import module, yes_no
 from config import scratch_path
 import logging
 import os
@@ -25,7 +25,7 @@ logger = logging.getLogger("assistant.image")
 
 
 def _preserve_face_after_upscale(orig_path: str, upscaled_path: str, *,
-                                 blend: float = 1.0) -> str:
+                                 blend: float = 1.0, modules=None) -> str:
     """Protect the ORIGINAL face from the super-resolver.
 
     RealESRGAN (and SR nets generally) hallucinate/sharpen facial features into a
@@ -41,7 +41,7 @@ def _preserve_face_after_upscale(orig_path: str, upscaled_path: str, *,
     of the ESRGAN face back in for extra crispness at some identity risk.
     """
     try:
-        import identity_metrics as _idm
+        _idm = module(modules, "identity_metrics")
         from PIL import Image, ImageDraw, ImageFilter
     except Exception:
         return upscaled_path

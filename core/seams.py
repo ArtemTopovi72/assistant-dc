@@ -109,13 +109,17 @@ def dep(ctx, name: str, default):
 
 def module(owner, name: str):
     """The module `name`, unless `owner` (a context, or a widget -- its parents are asked
-    too) carries its own in `owner.modules`: a suite hands in a stand-in for one import."""
+    too) carries its own in `owner.modules`: a suite hands in a stand-in for one import.
+    `owner` may also be that dict itself, and a `None` entry stands for a module that is
+    not installed (the import raises)."""
     w = owner
     while w is not None:
-        own = getattr(w, "modules", None)
+        own = w if isinstance(w, dict) else getattr(w, "modules", None)
         if own is not None and name in own:
+            if own[name] is None:
+                raise ImportError(name)
             return own[name]
-        up = getattr(w, "parent", None)
+        up = None if isinstance(w, dict) else getattr(w, "parent", None)
         w = up() if callable(up) else None
     import importlib
     return importlib.import_module(name)

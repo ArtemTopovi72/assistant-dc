@@ -113,30 +113,20 @@ def test_manual_mask_protect_face():
     img = _photo("m4.png")
     mask = _mask_file("m4_mask.png", box=(0, 0, 256, 256))  # full frame
     fake_idm = types.SimpleNamespace(face_box=lambda path, pad=0.10: (100, 100, 150, 150))
-    orig_mod = sys.modules.get("identity_metrics")
-    sys.modules["identity_metrics"] = fake_idm
-    try:
-        out = I._contained_region_mask(ctx, img, "hat", grow=6, seed=1, timeout=60, mask_override=mask,
-                                        protect_face=True)
-        check("manual_mask_protect_face_still_ok", out is not None)
-    finally:
-        if orig_mod is not None: sys.modules["identity_metrics"] = orig_mod
-        else: sys.modules.pop("identity_metrics", None)
+    ctx.modules = {"identity_metrics": fake_idm}
+    out = I._contained_region_mask(ctx, img, "hat", grow=6, seed=1, timeout=60, mask_override=mask,
+                                    protect_face=True)
+    check("manual_mask_protect_face_still_ok", out is not None)
 
 def test_manual_mask_protect_face_empties_mask():
     ctx = Ctx()
     img = _photo("m5.png", w=100, h=100)
     mask = _mask_file("m5_mask.png", w=100, h=100, box=(40, 40, 60, 60))  # small mask inside face box
     fake_idm = types.SimpleNamespace(face_box=lambda path, pad=0.10: (0, 0, 100, 100))  # covers everything
-    orig_mod = sys.modules.get("identity_metrics")
-    sys.modules["identity_metrics"] = fake_idm
-    try:
-        out = I._contained_region_mask(ctx, img, "hat", grow=6, seed=1, timeout=60, mask_override=mask,
-                                        protect_face=True)
-        check("manual_mask_protect_face_empties_none", out is None)
-    finally:
-        if orig_mod is not None: sys.modules["identity_metrics"] = orig_mod
-        else: sys.modules.pop("identity_metrics", None)
+    ctx.modules = {"identity_metrics": fake_idm}
+    out = I._contained_region_mask(ctx, img, "hat", grow=6, seed=1, timeout=60, mask_override=mask,
+                                    protect_face=True)
+    check("manual_mask_protect_face_empties_none", out is None)
 
 def test_whole_face_detector_hit():
     ctx = Ctx()

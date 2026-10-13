@@ -258,35 +258,17 @@ def test_vlm_qa_verdict_exception():
 
 def test_face_detector_mask_no_face():
     fake_idm = types.SimpleNamespace(face_box=lambda path, pad=0.0: None)
-    orig = sys.modules.get("identity_metrics")
-    sys.modules["identity_metrics"] = fake_idm
-    try:
-        out = I._face_detector_mask(_photo("fd1.png"), (64, 64))
-        check("face_detector_no_face_none", out is None)
-    finally:
-        if orig is not None: sys.modules["identity_metrics"] = orig
-        else: sys.modules.pop("identity_metrics", None)
+    out = I._face_detector_mask(_photo("fd1.png"), (64, 64), modules={"identity_metrics": fake_idm})
+    check("face_detector_no_face_none", out is None)
 
 def test_face_detector_mask_found():
     fake_idm = types.SimpleNamespace(face_box=lambda path, pad=0.0: (10, 10, 40, 40))
-    orig = sys.modules.get("identity_metrics")
-    sys.modules["identity_metrics"] = fake_idm
-    try:
-        out = I._face_detector_mask(_photo("fd2.png"), (64, 64))
-        check("face_detector_found", out is not None and out.size == (64, 64))
-    finally:
-        if orig is not None: sys.modules["identity_metrics"] = orig
-        else: sys.modules.pop("identity_metrics", None)
+    out = I._face_detector_mask(_photo("fd2.png"), (64, 64), modules={"identity_metrics": fake_idm})
+    check("face_detector_found", out is not None and out.size == (64, 64))
 
 def test_face_detector_mask_unavailable():
-    orig = sys.modules.get("identity_metrics")
-    sys.modules["identity_metrics"] = None
-    try:
-        out = I._face_detector_mask(_photo("fd3.png"), (64, 64))
-        check("face_detector_unavailable_none", out is None)
-    finally:
-        if orig is not None: sys.modules["identity_metrics"] = orig
-        else: sys.modules.pop("identity_metrics", None)
+    out = I._face_detector_mask(_photo("fd3.png"), (64, 64), modules={"identity_metrics": None})
+    check("face_detector_unavailable_none", out is None)
 
 
 if __name__ == "__main__":
