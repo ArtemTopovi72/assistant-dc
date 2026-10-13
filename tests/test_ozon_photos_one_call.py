@@ -12,12 +12,10 @@ def _jpg():
     b = io.BytesIO(); Image.new("RGB", (50, 50), (200, 0, 0)).save(b, "JPEG"); return b.getvalue()
 
 
-def test_one_vision_call(monkeypatch):
-    import dr_urls, llm
-    monkeypatch.setattr(dr_urls, "safe_get", lambda url, **k: types.SimpleNamespace(
-        content=_jpg(), raise_for_status=lambda: None))
+def test_one_vision_call():
     calls = []
-    ctx = types.SimpleNamespace(set_stage=lambda s: None,
+    got = types.SimpleNamespace(content=_jpg(), raise_for_status=lambda: None)
+    ctx = types.SimpleNamespace(set_stage=lambda s: None, deps=types.SimpleNamespace(safe_get=lambda url, **k: got),
                                 vision_model=lambda **k: calls.append(k) or "tile 1: a red mug")
     out = H._look_at_photos(ctx, {"name": "mug", "images": [f"https://x/{i}.jpg" for i in range(5)]})
     assert len(calls) == 1 and calls[0]["image_path"], calls

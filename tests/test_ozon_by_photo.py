@@ -4,16 +4,20 @@ import os, sys, types
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import ozon_client as O
 import ozon_shopper as S
+from seams import Over
 
 
-def test_photo_item_searches_by_the_photo_and_keeps_the_budget(monkeypatch):
+def test_photo_item_searches_by_the_photo_and_keeps_the_budget():
     calls = []
-    monkeypatch.setattr(O, "image_search_path", lambda p: calls.append(p) or "/search-by-image?image_id=1")
-    monkeypatch.setattr(O, "search_by_image", lambda path, limit, page=1: [
-        {"sku": f"{page}a", "name": "Чайник стеклянный", "price": 1500},
-        {"sku": f"{page}b", "name": "Чайник стеклянный", "price": 9000}])
-    monkeypatch.setattr(O, "search", lambda *a, **k: (_ for _ in ()).throw(AssertionError("text search")))
-    out = S.gather({"need": "чайник", "queries": [], "image": "x.jpg", "max_price": 3000})
+    ozon = Over(
+        O,
+        image_search_path=lambda p: calls.append(p) or "/search-by-image?image_id=1",
+        search_by_image=lambda path, limit, page=1: [
+            {"sku": f"{page}a", "name": "Чайник стеклянный", "price": 1500},
+            {"sku": f"{page}b", "name": "Чайник стеклянный", "price": 9000}],
+        search=lambda *a, **k: (_ for _ in ()).throw(AssertionError("text search")))
+    out = S.gather({"need": "чайник", "queries": [], "image": "x.jpg", "max_price": 3000},
+                   types.SimpleNamespace(deps=types.SimpleNamespace(ozon=ozon)))
     assert calls == ["x.jpg"]                         # uploaded once, pages reuse it
     assert out and all(x["price"] <= 3000 for x in out)
 

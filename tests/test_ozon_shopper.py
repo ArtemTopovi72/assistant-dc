@@ -7,6 +7,7 @@ import pytest
 import ozon_client as O
 import ozon_shopper as S
 import tools as T
+from seams import Over
 
 
 def item(sku, name, price, rating=4.7, reviews=100):
@@ -21,10 +22,11 @@ CATALOG = {
 }
 
 
+_WORLD = {}     # the stand-ins of the running test: Ozon, the text model, the photo fetch, the users folder
+
+
 @pytest.fixture
-def world(monkeypatch, tmp_path):
-    import tool_ozon_handlers as H
-    monkeypatch.setattr(H, "USERS_DIR", str(tmp_path / "users"))
+def world(tmp_path):
     calls = {"search": [], "llm": [], "vision": [], "decide_input": []}
     script = {}
 
@@ -60,27 +62,27 @@ def world(monkeypatch, tmp_path):
         calls["vision"].append(k["user_text"][:40])
         return script.get("vision", "YES, it is.")
 
-    import llm as L, requests
-    monkeypatch.setattr(O, "search", search)
-    monkeypatch.setattr(O, "search_filters", lambda q: script.get("filters", []))
-    monkeypatch.setattr(O, "details", details)
-    monkeypatch.setattr(O, "reviews", reviews)
-    monkeypatch.setattr(L, "call_llm_simple", llm)
     _VIS[0] = vision
-    monkeypatch.setattr(requests, "get", lambda url, **k: types.SimpleNamespace(
-        content=b"j", raise_for_status=lambda: None))
-    import dr_urls                       # the photo hosts need not resolve offline
-    monkeypatch.setattr(dr_urls, "safe_get", lambda url, **k: requests.get(url, **k))
-    return calls, script
+    _WORLD.clear()
+    _WORLD.update(
+        text_model=llm, users_dir=str(tmp_path / "users"),
+        ozon=Over(O, search=search, search_filters=lambda q, **k: script.get("filters", []),
+                  details=details, reviews=reviews),
+        # the photo hosts need not resolve offline
+        safe_get=lambda url, **k: types.SimpleNamespace(content=b"j", raise_for_status=lambda: None))
+    yield calls, script
+    _WORLD.clear()
 
 
 _VIS = [None]   # the vision model the test contexts hand out
 
 
 def _ctx(owner="77"):
+    deps = {k: _WORLD[k] for k in ("ozon", "safe_get", "users_dir") if k in _WORLD}
     return types.SimpleNamespace(set_stage=lambda *a, **k: None, cancel_event=threading.Event(),
                                  ozon_owner=owner, turn_products=[],
-                                 vision_model=lambda *a, **k: _VIS[0](*a, **k))
+                                 vision_model=lambda *a, **k: _VIS[0](*a, **k),
+                                 text_model=_WORLD.get("text_model"), deps=types.SimpleNamespace(**deps))
 
 
 def test_basket_plans_every_item_and_fills_the_cart(world):
@@ -201,9 +203,10 @@ def test_promo_filters_are_not_questions():
     assert [f["title"] for f in O.parse_filters(page)] == ["Самоходный"]
 
 
-def test_cart_save_is_atomic_and_load_tolerates_junk(monkeypatch, tmp_path):
+def test_cart_save_is_atomic_and_load_tolerates_junk(tmp_path):
     import tool_ozon_handlers as H
-    monkeypatch.setattr(H, "USERS_DIR", str(tmp_path / "users"))
+    _WORLD.clear()
+    _WORLD["users_dir"] = str(tmp_path / "users")
     ctx = _ctx("91")
     H._cart_save(ctx, [{"sku": "1", "name": "чай", "qty": 2}])
     assert H._cart_load(ctx) == [{"sku": "1", "name": "чай", "qty": 2}]
@@ -215,12 +218,12 @@ def test_cart_save_is_atomic_and_load_tolerates_junk(monkeypatch, tmp_path):
     assert H._cart_load(ctx) == [{"sku": "2"}]
 
 
-def test_buyer_photo_fetch_refuses_local_addresses(monkeypatch):
+def test_buyer_photo_fetch_refuses_local_addresses():
     """_see must not fetch a URL scraped from the page with plain requests.get:
-    a redirect or a crafted link to 127.0.0.1 would reach ComfyUI / LM Studio."""
-    import llm as L, requests
-    fetched = []
-    monkeypatch.setattr(requests, "get", lambda url, **k: fetched.append(url))
-    _VIS[0] = lambda **k: "seen"
+    a redirect or a crafted link to 127.0.0.1 would reach ComfyUI / LM Studio.
+    The real safe_get answers None, so vision is never asked."""
+    _WORLD.clear()
+    seen = []
+    _VIS[0] = lambda **k: seen.append(k) or "seen"
     assert S._see(_ctx(), "http://127.0.0.1:8000/view?filename=x.png", "q") == ""
-    assert fetched == []
+    assert seen == []

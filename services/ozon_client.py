@@ -32,6 +32,7 @@ import os
 import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 import queue
 import re
+import sys
 import threading
 import time
 import urllib.parse
@@ -60,6 +61,22 @@ SORTS = {"popular": "", "price": "price", "price_desc": "price_desc",
          "rating": "rating", "new": "new", "discount": "discount"}
 
 _BLOCK_RE = re.compile(r"нет соединения|доступ ограничен|antibot|ограничен", re.I)
+
+
+def _me(gw):
+    """The module itself, or the stand-in a suite hands in (`Over(ozon_client, fetch_page=...)`)."""
+    return gw if gw is not None else sys.modules[__name__]
+
+
+def call(ctx, name: str, *a, **k):
+    """`ozon_client.<name>(...)`, as a context asks for it: `ctx.deps.ozon` swaps the whole
+    client for a suite, `ctx.deps.ozon_gw` swaps single steps (fetch_page, parse_search...)
+    of the real functions."""
+    from seams import dep
+    gw = dep(ctx, "ozon_gw", None)
+    if gw is not None:
+        k["gw"] = gw
+    return getattr(dep(ctx, "ozon", sys.modules[__name__]), name)(*a, **k)
 
 
 class OzonError(Exception):
@@ -389,8 +406,9 @@ def parse_filters(page: dict, max_values: int = 8) -> list:
     return out
 
 
-def search_filters(query: str) -> list:
-    return parse_filters(fetch_page(search_path(query)))
+def search_filters(query: str, gw=None) -> list:
+    g = _me(gw)
+    return g.parse_filters(g.fetch_page(search_path(query)))
 
 
 def resolve_short(url: str) -> str:
@@ -405,8 +423,9 @@ def resolve_short(url: str) -> str:
     return path if path.endswith("/") else path + "/"
 
 
-def product_path(product: str) -> str:
+def product_path(product: str, gw=None) -> str:
     """sku ("1185261285"), full url, or slug -> "/product/.../"."""
+    g = _me(gw)
     p = str(product or "").strip()
     if not p:
         raise OzonError("product is required: a link, an SKU number or a product slug")
@@ -415,7 +434,7 @@ def product_path(product: str) -> str:
     if re.match(r"^https?://", p):
         path = urllib.parse.urlparse(p).path
         if path.startswith("/t/"):         # a share link: only the site knows the card
-            path = resolve_short(p)
+            path = g.resolve_short(p)
         return path if path.endswith("/") else path + "/"
     if p.startswith("/product/"):
         return p if p.endswith("/") else p + "/"
@@ -776,14 +795,15 @@ def confirm_age(path: str) -> None:
         b.reset()
 
 
-def _search_page(path: str, query: str) -> dict:
-    page = fetch_page(path)
-    if _age_gated(page) and _birthdate():
+def _search_page(path: str, query: str, gw=None) -> dict:
+    g = _me(gw)
+    page = g.fetch_page(path)
+    if _age_gated(page) and g._birthdate():
         with _AGE_LOCK:                    # parallel wordings: confirm once
-            page = fetch_page(path)
+            page = g.fetch_page(path)
             if _age_gated(page):
-                confirm_age(path)
-                page = fetch_page(path)
+                g.confirm_age(path)
+                page = g.fetch_page(path)
     if _age_gated(page):
         raise OzonAgeGate(f"'{query}' is an 18+ category: Ozon hides it until the age is confirmed")
     return page
@@ -814,73 +834,78 @@ def image_search_path(image_path: str) -> str:
     return _BROWSER.fetch(upload)
 
 
-def search_by_image(results_path: str, limit: int = 10, page: int = 1) -> list:
+def search_by_image(results_path: str, limit: int = 10, page: int = 1, gw=None) -> list:
     """Photo results come in likeness order only: a sorting= turns them into the
     whole catalogue by price/rating. The priority is the
     shopper's to apply."""
+    g = _me(gw)
     url = results_path
     if page and int(page) > 1:
         url += "&page=%d" % int(page)
-    data = _search_page(url, "photo")
-    LAST_LOCATION["text"] = parse_location(data)
-    return parse_search(data, 60)[:limit]
+    data = g._search_page(url, "photo", gw)
+    LAST_LOCATION["text"] = g.parse_location(data)
+    return g.parse_search(data, 60)[:limit]
 
 
 def search(query: str, sort: str = "popular", price_min=None, price_max=None,
-           limit: int = 10, max_delivery_days=None, page: int = 1) -> list:
+           limit: int = 10, max_delivery_days=None, page: int = 1, gw=None) -> list:
+    g = _me(gw)
     if sort == "price":
         # Ozon's own price sort floats every 98 ₽ spare part to the top. Take the
         # relevance ranking instead, drop parts/accessories, then order by price.
-        page = _search_page(search_path(query, "popular", price_min, price_max, page), query)
-        LAST_LOCATION["text"] = parse_location(page)
-        items = parse_search(page, 60)
-        items = sorted((x for x in items if not is_accessory(x.get("name"), query)),
+        page = g._search_page(search_path(query, "popular", price_min, price_max, page), query, gw)
+        LAST_LOCATION["text"] = g.parse_location(page)
+        items = g.parse_search(page, 60)
+        items = sorted((x for x in items if not g.is_accessory(x.get("name"), query)),
                        key=lambda x: x["price"])
     else:
-        page = _search_page(search_path(query, sort, price_min, price_max, page), query)
-        LAST_LOCATION["text"] = parse_location(page)
-        items = parse_search(page, 60)
+        page = g._search_page(search_path(query, sort, price_min, price_max, page), query, gw)
+        LAST_LOCATION["text"] = g.parse_location(page)
+        items = g.parse_search(page, 60)
     if max_delivery_days is not None:
         items = [x for x in items
-                 if (delivery_days(x.get("delivery")) is not None
-                     and delivery_days(x.get("delivery")) <= int(max_delivery_days))]
+                 if (g.delivery_days(x.get("delivery")) is not None
+                     and g.delivery_days(x.get("delivery")) <= int(max_delivery_days))]
     return items[:limit]
 
 
-def details(product: str) -> dict:
-    path = product_path(product)
-    base = fetch_page(path)
+def details(product: str, gw=None) -> dict:
+    g = _me(gw)
+    path = g.product_path(product, gw)
+    base = g.fetch_page(path)
     try:
-        page2 = fetch_page(path + "?layout_container=pdpPage2column&layout_page_index=2")
+        page2 = g.fetch_page(path + "?layout_container=pdpPage2column&layout_page_index=2")
     except OzonError:
         page2 = {}
-    return parse_details(base, page2)
+    return g.parse_details(base, page2)
 
 
-def reviews(product: str, limit: int = 10, pages: int = 4) -> dict:
+def reviews(product: str, limit: int = 10, pages: int = 4, gw=None) -> dict:
     """Reviews of this exact item only, walking up to `pages` pages to fill `limit`.
     rating/total_reviews stay the family's (that is all Ozon shows);
     own_only=True tells the reader the listed ones are this variant's."""
-    path = product_path(product) + "reviews/"
+    g = _me(gw)
+    path = g.product_path(product, gw) + "reviews/"
     sku = sku_from_url(path)
-    r = parse_reviews(fetch_page(path), limit, sku)
+    r = g.parse_reviews(g.fetch_page(path), limit, sku)
     got, n = r["reviews"], 1
     while len(got) < limit and r.get("next") and n < pages:
-        r2 = parse_reviews(fetch_page(path + r["next"]), limit - len(got), sku)
+        r2 = g.parse_reviews(g.fetch_page(path + r["next"]), limit - len(got), sku)
         got += r2["reviews"]; r["next"] = r2.get("next"); n += 1
     r["reviews"], r["own_only"] = got, bool(sku)
     return r
 
 
-def worst_reviews(product: str, limit: int = 15, pages: int = 1) -> list:
+def worst_reviews(product: str, limit: int = 15, pages: int = 1, gw=None) -> list:
     """The lowest-scored reviews of the whole card (every variant). The newest
     page of a well-rated item is all praise: «а что про протечку?» was answered
     «никто не жалуется» while the 1-3★ pages held exactly that (2026-10-11)."""
-    base = product_path(product) + "reviews/"
-    r = parse_reviews(fetch_page(base + "?sort=score_asc"), limit, None)
+    g = _me(gw)
+    base = g.product_path(product, gw) + "reviews/"
+    r = g.parse_reviews(g.fetch_page(base + "?sort=score_asc"), limit, None)
     got, n = r["reviews"], 1
     while len(got) < limit and r.get("next") and n < pages:
-        r = parse_reviews(fetch_page(base + r["next"]), limit - len(got), None)
+        r = g.parse_reviews(g.fetch_page(base + r["next"]), limit - len(got), None)
         got += r["reviews"]; n += 1
     return got
 
@@ -905,14 +930,15 @@ def parse_location(page: dict) -> str:
     return ""
 
 
-def current_location() -> str:
-    return parse_location(fetch_page("/"))
+def current_location(gw=None) -> str:
+    g = _me(gw)
+    return g.parse_location(g.fetch_page("/"))
 
 
-def geocode(place: str):
+def geocode(place: str, get=None):
     """(lat, lon, label) for a city or street address, via OpenStreetMap."""
     import requests
-    r = requests.get("https://nominatim.openstreetmap.org/search",
+    r = (get or requests.get)("https://nominatim.openstreetmap.org/search",
                      params={"q": place, "format": "json", "limit": 1, "countrycodes": "ru",
                              "accept-language": "ru"},
                      headers={"User-Agent": "f5-assistant-ozon/1.0"}, timeout=20)
@@ -929,11 +955,12 @@ def _map_objects(page: dict) -> list:
             .get("mapObjects") or [])
 
 
-def nearest_point(lat: float, lon: float) -> str | None:
+def nearest_point(lat: float, lon: float, gw=None) -> str | None:
     """Pickup point id nearest to (lat, lon); clusters are opened until a pin shows."""
+    g = _me(gw)
     path = f"/modal/commonDelivery?glr=t&lat={lat:.6f}&long={lon:.6f}&pid=4&pv=2&tab=pp"
     for _ in range(4):
-        objs = _map_objects(fetch_page(path))
+        objs = g._map_objects(g.fetch_page(path))
         if not objs:
             return None
         dist = lambda o: ((o["coordinates"]["latitude"] - lat) ** 2
@@ -947,10 +974,11 @@ def nearest_point(lat: float, lon: float) -> str | None:
     return None
 
 
-def set_pickup_point(place: str) -> dict:
+def set_pickup_point(place: str, gw=None) -> dict:
     """Make the pickup point nearest to `place` the delivery location."""
-    lat, lon, label = geocode(place)
-    pp = nearest_point(lat, lon)
+    g = _me(gw)
+    lat, lon, label = g.geocode(place)
+    pp = g.nearest_point(lat, lon, gw)
     if not pp:
         raise OzonError(f"Ozon has no pickup point near '{place}'")
 
@@ -965,7 +993,7 @@ def set_pickup_point(place: str) -> dict:
     _BROWSER.fetch(click)
     for b in _BROWSERS[1:]:
         b.reset()
-    where = current_location()
+    where = g.current_location(gw)
     if "Пункт" not in where and "ул" not in where:
         raise OzonError(f"Ozon did not accept the pickup point (header still says '{where}')")
     return {"point_id": pp, "location": where, "searched": label}

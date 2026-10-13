@@ -7,12 +7,13 @@ text, so the reviews and the card are marked untrusted for the injection guard
 (see graph_fastpath._UNTRUSTED_DATA_TOOLS).
 """
 from __future__ import annotations
-from seams import vision_model
+from seams import dep, vision_model
 
 import logging
 import os
 
 import ozon_client as _oz
+
 
 logger = logging.getLogger("assistant.tools.ozon")
 
@@ -39,7 +40,7 @@ def _owner_key(ctx) -> str:
 
 def _user_dir(ctx) -> str:
     key = _owner_key(ctx) or "_desktop"
-    d = os.path.join(USERS_DIR, key)
+    d = os.path.join(dep(ctx, "users_dir", USERS_DIR), key)
     os.makedirs(d, exist_ok=True)
     return d
 
@@ -84,7 +85,7 @@ def _handle_ozon_search(ctx, state, args: dict) -> str:
     except Exception:
         logger.debug("set_stage failed", exc_info=True)
     try:
-        items = _oz.search(q, args.get("sort") or "popular", args.get("price_min"),
+        items = _oz.call(ctx, "search", q, args.get("sort") or "popular", args.get("price_min"),
                            args.get("price_max"), int(args.get("limit") or 10),
                            args.get("max_delivery_days"))
     except Exception as exc:
@@ -141,7 +142,7 @@ def _handle_ozon_product(ctx, state, args: dict) -> str:
     except Exception:
         logger.debug("set_stage failed", exc_info=True)
     try:
-        d = _oz.details(p)
+        d = _oz.call(ctx, "details", p)
     except Exception as exc:
         logger.warning("ozon_product(%s) failed: %s", p, exc)
         return _fail(exc)
@@ -189,7 +190,7 @@ def _look_at_photos(ctx, d: dict, question=None) -> str:
     paths = []
     for i, url in enumerate((d.get("images") or [])[:_LOOK_MAX], 1):
         try:
-            r = safe_get(url, timeout=20, headers={"User-Agent": "Mozilla/5.0"})
+            r = dep(ctx, "safe_get", safe_get)(url, timeout=20, headers={"User-Agent": "Mozilla/5.0"})
             if r is None:
                 raise ValueError("unsafe image URL")
             r.raise_for_status()
@@ -273,7 +274,7 @@ def _handle_ozon_cart(ctx, state, args: dict) -> str:
         if not p:
             return "[TOOL ERROR] product is required to add."
         try:
-            d = _oz.details(p)
+            d = _oz.call(ctx, "details", p)
         except Exception as exc:
             return _fail(exc)
         qty = int(args.get("qty") or 1)
@@ -299,8 +300,8 @@ def _handle_ozon_set_location(ctx, state, args: dict) -> str:
         logger.debug("set_stage failed", exc_info=True)
     try:
         if not place:
-            return "Current Ozon delivery location: " + (_oz.current_location() or "unknown")
-        r = _oz.set_pickup_point(place)
+            return "Current Ozon delivery location: " + (_oz.call(ctx, "current_location") or "unknown")
+        r = _oz.call(ctx, "set_pickup_point", place)
     except Exception as exc:
         logger.warning("ozon_set_location(%s) failed: %s", place, exc)
         return _fail(exc)
@@ -393,14 +394,14 @@ def _handle_ozon_reviews(ctx, state, args: dict) -> str:
     except Exception:
         logger.debug("set_stage failed", exc_info=True)
     try:
-        r = _oz.reviews(p, int(args.get("limit") or 15))
+        r = _oz.call(ctx, "reviews", p, int(args.get("limit") or 15))
     except Exception as exc:
         logger.warning("ozon_reviews(%s) failed: %s", p, exc)
         return _fail(exc)
     topic = (args.get("topic") or "").strip().lower()
     stems = [w[:max(3, min(5, len(w) - 1))] for w in _re.findall(r"\w{3,}", topic)]
     try:
-        worst = [x for x in (_oz.worst_reviews(p, 200, 8) if stems else _oz.worst_reviews(p))
+        worst = [x for x in (_oz.call(ctx, "worst_reviews", p, 200, 8) if stems else _oz.call(ctx, "worst_reviews", p))
                  if (x.get("score") or 5) <= 3]
     except Exception as exc:
         logger.warning("ozon_reviews(%s) worst page failed: %s", p, exc)

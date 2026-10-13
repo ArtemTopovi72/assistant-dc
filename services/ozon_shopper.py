@@ -20,7 +20,7 @@ picks -- or, for "a picnic set", first turns the occasion into a list.
 Everything Ozon returns is third-party text: prompts treat it as data.
 """
 from __future__ import annotations
-from seams import vision_model, text_model
+from seams import dep, vision_model, text_model
 
 import logging
 import re
@@ -118,12 +118,12 @@ def plan(ctx, request: str) -> dict:
 
 # ── gather + screen ─────────────────────────────────────────────────────────────
 
-def _photo_jobs(item: dict) -> list:
-    path = _oz.image_search_path(item["image"])
+def _photo_jobs(item: dict, ctx=None) -> list:
+    path = _oz.call(ctx, "image_search_path", item["image"])
     return [(path, "popular", n) for n in range(1, SEARCH_PAGES + 2)]
 
 
-def gather(item: dict) -> list:
+def gather(item: dict, ctx=None) -> list:
     # Two result pages per wording, and a by-rating pass for the first one:
     # page one alone is what the user called "буквально первые в выдаче".
     # All pages are fetched in parallel (ozon_client.OZON_WORKERS browsers).
@@ -132,14 +132,14 @@ def gather(item: dict) -> list:
                 [("rating", 1)] if q == item["queries"][0] else [])]
 
     if item.get("image"):
-        jobs = _photo_jobs(item)
+        jobs = _photo_jobs(item, ctx)
 
     def one(job):
         q, sort, page = job
         try:
             if item.get("image"):
-                return _oz.search_by_image(q, PER_QUERY, page=page)
-            return _oz.search(q, sort, None, item.get("max_price"), PER_QUERY, page=page)
+                return _oz.call(ctx, "search_by_image", q, PER_QUERY, page=page)
+            return _oz.call(ctx, "search", q, sort, None, item.get("max_price"), PER_QUERY, page=page)
         except (_oz.OzonBlocked, _oz.OzonAgeGate):
             raise
         except Exception as exc:
@@ -214,10 +214,10 @@ def screen(ctx, item: dict, cands: list, strategy: str = "balanced") -> tuple:
 
 # ── inspect + decide ────────────────────────────────────────────────────────────
 
-def inspect(x: dict) -> dict:
+def inspect(x: dict, ctx=None) -> dict:
     d = dict(x)
     try:
-        card = _oz.details(x["sku"])
+        card = _oz.call(ctx, "details", x["sku"])
         d.update({k: card.get(k) for k in ("price", "available", "seller", "characteristics",
                                             "description", "images", "rating", "reviews")
                   if card.get(k) not in (None, "", [], {})})
@@ -226,7 +226,7 @@ def inspect(x: dict) -> dict:
     except Exception as exc:
         logger.warning("card %s failed: %s", x["sku"], exc)
     try:
-        r = _oz.reviews(x["sku"], REVIEWS_READ)
+        r = _oz.call(ctx, "reviews", x["sku"], REVIEWS_READ)
         d["review_texts"] = r.get("reviews") or []
     except _oz.OzonBlocked:
         raise
@@ -376,7 +376,7 @@ def _see(ctx, url: str, question: str) -> str:
     try:
         # Scraped from the page, so not ours to trust: every hop is checked, as in
         # tool_ozon_handlers._look_at_photos (a redirect to 127.0.0.1 reached ComfyUI).
-        r = safe_get(url, timeout=20, headers={"User-Agent": "Mozilla/5.0"})
+        r = dep(ctx, "safe_get", safe_get)(url, timeout=20, headers={"User-Agent": "Mozilla/5.0"})
         if r is None:
             raise ValueError("unsafe image URL")
         r.raise_for_status()
@@ -430,7 +430,7 @@ def look(ctx, d: dict, need: str) -> dict:
 def shop_item(ctx, item: dict, label: str = "", strategy: str = "balanced") -> dict:
     _stage(ctx, f"Ozon: searching {label}{item['need']}")
     try:
-        cands = gather(item)
+        cands = gather(item, ctx)
     except _oz.OzonAgeGate:
         # one gated wording means an 18+ need: the other wordings' hits are look-alikes
         return {"item": item, "candidates": 0, "choice": None, "others": [], "decision": None,
@@ -443,7 +443,7 @@ def shop_item(ctx, item: dict, label: str = "", strategy: str = "balanced") -> d
     if not finalists:
         return res
     _stage(ctx, f"Ozon: reading cards and reviews for {item['need']}")
-    finalists = _oz.pmap(inspect, finalists)
+    finalists = _oz.pmap(lambda d: inspect(d, ctx), finalists)
     _stage(ctx, f"Ozon: checking what the web says about {item['need']}")
     for d in finalists:
         d["web"] = web_reputation(ctx, d)
@@ -537,7 +537,7 @@ def clarify(ctx, request: str) -> list:
     if p["mode"] != "one":
         return []
     try:
-        filters = _oz.search_filters(p["items"][0]["queries"][0])
+        filters = _oz.call(ctx, "search_filters", p["items"][0]["queries"][0])
     except _oz.OzonBlocked:
         raise
     except Exception as exc:
