@@ -707,7 +707,10 @@ def _detect_silent_failure(tool_name: str, result: str, state: AgentState) -> st
     # A multi-part video waits for the user's OK on the plan card: no clip yet is the
     # answer, not a failure. Read as a failure it was retried ~20 times
     # and the turn ended in "не получилось".
-    if result.lstrip().startswith("[NOT MADE YET]") and state.get("video_plan"):
+    # The voice question is the same kind of wait: read as a failure, the turn said the
+    # clip had failed and no voice buttons came (live 2026-10-13).
+    if result.lstrip().startswith("[NOT MADE YET]") and (state.get("video_plan")
+                                                         or state.get("ask_voices")):
         return result
     key = _TOOL_ARTIFACT.get(tool_name)
     if key and not str(state.get(key) or "").strip():

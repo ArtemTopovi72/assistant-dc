@@ -129,6 +129,9 @@ def test_a_plan_waiting_for_the_user_is_not_a_failed_render():
     msg = "[NOT MADE YET] The script needs several parts, and the user approves the plan first"
     assert G._detect_silent_failure("generate_video", msg, {"video_plan": [{"text": "a"}]}) == msg
     assert G._detect_silent_failure("generate_video", "done", {}).startswith("[TOOL ERROR]")
+    # the voice question waits the same way (read as a failure: no buttons, «не получилось»)
+    ask = "[NOT MADE YET] Before rendering, the user chooses the voices."
+    assert G._detect_silent_failure("generate_video", ask, {"ask_voices": 2}) == ask
 
 
 def test_a_plan_keeps_the_clip_and_the_new_person_for_the_approved_run(monkeypatch, tmp_path):
