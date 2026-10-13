@@ -12,14 +12,14 @@ import os
 import re
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BASELINE = 1766
+BASELINE = 1726
 
 _IMPORT = re.compile(r"^\s*import ([\w.]+)(?: as (\w+))?|^\s*from [\w.]+ import (\w+)(?: as (\w+))?", re.M)
 
 
 # The other ways a suite writes over what every later suite imports: a module swapped in
-# sys.modules, a bare setattr( (on a module, as the helpers do), the rebinding helpers.
-_OTHER = re.compile(r"sys\.modules\[[^]]+\] = |monkeypatch\.setitem\(sys\.modules|^\s*setattr\("
+# sys.modules, setattr( on an imported module, the rebinding helpers.
+_OTHER = re.compile(r"sys\.modules\[[^]]+\] = |monkeypatch\.setitem\(sys\.modules"
                     r"|\b(?:RebindPatches|_dr_patch|fake_modules|setattr_saved)\(")
 
 
@@ -36,9 +36,12 @@ def module_patches() -> list:
             names.add(m.group(2) or (m.group(1) or "").split(".")[0] or m.group(4) or m.group(3))
         names.discard(None)
         assign = re.compile(r"^\s*(%s)\.\w+(?:\.\w+)* = " % "|".join(map(re.escape, names))) if names else None
+        # setattr on an imported module (a loop over a test's own objects is not one)
+        bare = re.compile(r"^\s*setattr\((%s)[,.]" % "|".join(map(re.escape, names))) if names else None
         for i, line in enumerate(src.splitlines(), 1):
             if ("monkeypatch.setattr(" in line or "monkeypatch.setenv(" in line
-                    or (assign and assign.match(line)) or _OTHER.search(line)):
+                    or (assign and assign.match(line)) or (bare and bare.match(line))
+                    or _OTHER.search(line)):
                 out.append((f"{os.path.basename(path)}:{i}", line.strip()))
     return out
 
