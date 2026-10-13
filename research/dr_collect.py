@@ -186,7 +186,7 @@ def _corrective_queries(ctx, topic: str, profile: dict, existing: list,
              ("local", "entertainment", "people") else "an entity-free angle. ")
     hint += "Do NOT repeat these earlier queries: " + "; ".join(existing[:8]) + "]"
     try:
-        extra, _ = plan_queries(ctx, hint, max_queries)
+        extra, _ = dep(ctx, "plan_queries", plan_queries)(ctx, hint, max_queries)
     except Exception as exc:
         logger.warning("corrective re-plan failed: %s", exc)
         return []
@@ -277,7 +277,7 @@ def collect_sources(ctx, queries: list, per_query: int, prog: _Progress,
         # ingested on THIS thread as futures complete — dedup stays single-threaded.
         done_n = 0
         with turn_trace.Pool(max_workers=conc) as ex:
-            futs = {ex.submit(_search_one_query, ctx, q, per_query, timelimit, use_news): q
+            futs = {ex.submit(dep(ctx, "_search_one_query", _search_one_query), ctx, q, per_query, timelimit, use_news): q
                     for q in queries}
             for fut in as_completed(futs):
                 if ctx is not None and ctx.is_cancelled():

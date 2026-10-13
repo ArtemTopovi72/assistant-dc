@@ -29,7 +29,7 @@ _TMP = Path(tempfile.mkdtemp(prefix="drsynth_"))
 # has to be patched in the module that USES it. `_dr_patch.Patches` finds every
 # home of a name and rebinds all of them (and raises if nothing binds it, so a
 # stale patch can never degrade into a silent real network/LM Studio call).
-from _dr_patch import Patches as _Patches
+from _dr_ctx import Patches as _Patches, C as _C, W as _W
 
 
 class FakeCtx:
@@ -54,31 +54,31 @@ def test_crawl_pages_basic():
     sources = [{"href": "https://a.com/1"}, {"href": "https://b.com/1"}]
     caps = {"max_pages": 5, "depth": 0, "links_per_page": 3}
 
-    def fake_acquire(url, depth, seed, category, use_adapters, cache):
+    def fake_acquire(url, depth, seed, category, use_adapters, cache, **k):
         return {"url": url, "depth": depth, "page": _page(url, url.split("//")[1].split("/")[0]),
                 "html": None, "reason": None, "social": False}
 
     with _Patches(_acquire_page=fake_acquire, DR_FETCH_DELAY=0, DR_FETCH_CONCURRENCY=1,
                   _save_state=lambda *a, **k: None):
-        pages = DR.crawl_pages(FakeCtx(), sources, caps, prog, _TMP)
+        pages = DR.crawl_pages(_W(FakeCtx()), sources, caps, prog, _TMP)
         check("crawl_pages_serial_success", len(pages) == 2)
 
     with _Patches(_acquire_page=fake_acquire, DR_FETCH_DELAY=0, DR_FETCH_CONCURRENCY=4,
                   _save_state=lambda *a, **k: None):
-        pages = DR.crawl_pages(FakeCtx(), sources, caps, prog, _TMP)
+        pages = DR.crawl_pages(_W(FakeCtx()), sources, caps, prog, _TMP)
         check("crawl_pages_parallel_success", len(pages) == 2)
 
-    def fake_acquire_fail(url, depth, seed, category, use_adapters, cache):
+    def fake_acquire_fail(url, depth, seed, category, use_adapters, cache, **k):
         return {"url": url, "depth": depth, "page": None, "html": None,
                 "reason": "fetch_failed", "social": False}
     with _Patches(_acquire_page=fake_acquire_fail, DR_FETCH_DELAY=0, DR_FETCH_CONCURRENCY=1,
                   _save_state=lambda *a, **k: None):
-        pages = DR.crawl_pages(FakeCtx(), sources, caps, prog, _TMP)
+        pages = DR.crawl_pages(_W(FakeCtx()), sources, caps, prog, _TMP)
         check("crawl_pages_quarantines_failures", pages == [] and prog.stats.get("quarantined"))
 
     with _Patches(_acquire_page=fake_acquire, DR_FETCH_DELAY=0, DR_FETCH_CONCURRENCY=1,
                   _save_state=lambda *a, **k: None):
-        pages = DR.crawl_pages(FakeCtx(cancelled=True), sources, caps, prog, _TMP)
+        pages = DR.crawl_pages(_W(FakeCtx(cancelled=True)), sources, caps, prog, _TMP)
         check("crawl_pages_cancelled_stops_early", pages == [])
 
     # Same-domain sources trigger the wave-deferred path.
@@ -86,26 +86,26 @@ def test_crawl_pages_basic():
                         {"href": "https://c.com/3"}]
     with _Patches(_acquire_page=fake_acquire, DR_FETCH_DELAY=0, DR_FETCH_CONCURRENCY=2,
                   _save_state=lambda *a, **k: None):
-        pages = DR.crawl_pages(FakeCtx(), same_dom_sources, {"max_pages": 5, "depth": 0, "links_per_page": 3},
+        pages = DR.crawl_pages(_W(FakeCtx()), same_dom_sources, {"max_pages": 5, "depth": 0, "links_per_page": 3},
                                prog, _TMP)
         check("crawl_pages_same_domain_deferred", len(pages) == 3)
 
     # html + link-following branch: page has html with social/normal links.
     html_page_html = ('<html><body><a href="https://vk.com/club1">vk</a>'
                        '<a href="/next-article">next</a></body></html>')
-    def fake_acquire_html(url, depth, seed, category, use_adapters, cache):
+    def fake_acquire_html(url, depth, seed, category, use_adapters, cache, **k):
         return {"url": url, "depth": depth, "page": _page(url, "d.com"),
                 "html": html_page_html, "reason": None, "social": False}
     with _Patches(_acquire_page=fake_acquire_html, DR_FETCH_DELAY=0, DR_FETCH_CONCURRENCY=1,
                   _save_state=lambda *a, **k: None):
-        pages = DR.crawl_pages(FakeCtx(), [{"href": "https://d.com/start"}],
+        pages = DR.crawl_pages(_W(FakeCtx()), [{"href": "https://d.com/start"}],
                                {"max_pages": 1, "depth": 1, "links_per_page": 3}, prog, _TMP)
         check("crawl_pages_html_link_following_ran", len(pages) == 1)
 
     # positive fetch delay branch
     with _Patches(_acquire_page=fake_acquire, DR_FETCH_DELAY=0.001, DR_FETCH_CONCURRENCY=1,
                   _save_state=lambda *a, **k: None):
-        pages = DR.crawl_pages(FakeCtx(), sources, caps, prog, _TMP)
+        pages = DR.crawl_pages(_W(FakeCtx()), sources, caps, prog, _TMP)
         check("crawl_pages_fetch_delay_branch", len(pages) == 2)
 
 
@@ -113,17 +113,17 @@ def test_crawl_pages_basic():
 
 def test_brief_source():
     with _Patches(call_llm_simple=lambda ctx, sys_, usr, temperature=0.2, max_tokens=0, prefill=None: "SOURCE: PRIMARY\nSome useful facts here."):
-        out = DR.brief_source(FakeCtx(), "topic", _page())
+        out = DR.brief_source(_W(FakeCtx()), "topic", _page())
         check("brief_source_success", "PRIMARY" in out)
     with _Patches(call_llm_simple=lambda *a, **k: "NO USEFUL CONTENT"):
-        check("brief_source_no_useful_content_none", DR.brief_source(FakeCtx(), "topic", _page()) is None)
+        check("brief_source_no_useful_content_none", DR.brief_source(_W(FakeCtx()), "topic", _page()) is None)
     with _Patches(call_llm_simple=lambda *a, **k: "   "):
         # A blank answer produces NO BRIEF but is distinguishable from a
         # rejection: "" means the model said nothing (our failure), None means it
         # read the page and judged it useless (the page's). Conflating them would
         # report an outage to the reader as "the pages contained no facts
         # relevant to the topic".
-        blank = DR.brief_source(FakeCtx(), "topic", _page())
+        blank = DR.brief_source(_W(FakeCtx()), "topic", _page())
         check("brief_source_blank_yields_no_brief", not blank)
         check("brief_source_blank_is_not_a_rejection", blank is not None, repr(blank))
 
@@ -137,7 +137,7 @@ def test_brief_reads_the_part_about_the_topic():
                 + "Perovskite solar cells reached 26.1 percent efficiency in 2024. " + "Footer. " * 200)
     with _Patches(call_llm_simple=lambda ctx, s, u, **k: (seen.append(u), "SOURCE: PRIMARY\nfacts")[1],
                   _think_call=lambda ctx, s, u, *a, **k: (seen.append(u), "SOURCE: PRIMARY\nfacts")[1]):
-        DR.brief_source(FakeCtx(), "perovskite solar cell efficiency", page)
+        DR.brief_source(_W(FakeCtx()), "perovskite solar cell efficiency", page)
     check("brief_input_holds_the_topic_sentence", seen and "26.1 percent" in seen[-1], (seen or [""])[-1][-300:])
 
 # ---------------- rerank_for_briefing ----------------
@@ -146,8 +146,8 @@ def test_rerank_for_briefing():
     prog = DR._Progress(None)
     pages = [_page("https://a.com/1", "a.com"), _page("https://b.com/1", "b.com")]
     with _Patches(DR_RERANK_ENABLED=False):
-        check("rerank_disabled_passthrough", DR.rerank_for_briefing("t", pages, {}, prog) == pages)
-    check("rerank_empty_pages_passthrough", DR.rerank_for_briefing("t", [], {"category": "general"}, prog) == [])
+        check("rerank_disabled_passthrough", DR.rerank_for_briefing("t", pages, {}, prog, ctx=_C()) == pages)
+    check("rerank_empty_pages_passthrough", DR.rerank_for_briefing("t", [], {"category": "general"}, prog, ctx=_C()) == [])
 
     fake_rerank_mod = type(sys)("rerank")
     def fake_rerank_pages(topic, pages, top_k=0, text_key="", authority_fn=None, authority_weight=0, backend="auto"):
@@ -162,11 +162,11 @@ def test_rerank_for_briefing():
     sys.modules["rerank"] = fake_rerank_mod
     try:
         with _Patches(DR_RERANK_ENABLED=True, DR_RERANK_TOP_K=1, DR_RERANK_AUTHORITY_WEIGHT=0.3):
-            out = DR.rerank_for_briefing("t", pages, {"category": "general"}, prog)
+            out = DR.rerank_for_briefing("t", pages, {"category": "general"}, prog, ctx=_C())
             check("rerank_enabled_top_k", len(out) == 1)
         with _Patches(DR_RERANK_ENABLED=True, DR_RERANK_TOP_K=0, DR_RERANK_AUTHORITY_WEIGHT=0):
             # top_k becomes len(pages), and since len<=top_k and weight==0 -> passthrough branch
-            out2 = DR.rerank_for_briefing("t", pages, {"category": "general"}, prog)
+            out2 = DR.rerank_for_briefing("t", pages, {"category": "general"}, prog, ctx=_C())
             check("rerank_passthrough_when_nothing_to_drop", out2 == pages)
     finally:
         del sys.modules["rerank"]
@@ -183,7 +183,7 @@ def test_rerank_for_briefing():
     builtins.__import__ = fail_import
     try:
         with _Patches(DR_RERANK_ENABLED=True, DR_RERANK_TOP_K=1, DR_RERANK_AUTHORITY_WEIGHT=0.3):
-            out3 = DR.rerank_for_briefing("t", pages, {"category": "general"}, prog)
+            out3 = DR.rerank_for_briefing("t", pages, {"category": "general"}, prog, ctx=_C())
             check("rerank_import_failure_keeps_order", out3 == pages)
     finally:
         builtins.__import__ = real_import
@@ -196,14 +196,14 @@ def test_synthesize_report():
               "brief": "some facts", "trust": "PRIMARY", "authority": 0.9, "cluster_size": 1}]
     prog = DR._Progress(None)
     with _Patches(_think_call=lambda ctx, sysp, usr, max_tokens, temperature=0.3, **_kw: "# Report\nBody text here."):
-        out = DR.synthesize_report(FakeCtx(), "quantum tunneling", briefs, prog)
+        out = DR.synthesize_report(_W(FakeCtx()), "quantum tunneling", briefs, prog)
         check("synthesize_report_basic", "Report" in out)
     with _Patches(_think_call=lambda *a, **k: "# Report body"):
-        out2 = DR.synthesize_report(FakeCtx(), "quantum tunneling", briefs, prog,
+        out2 = DR.synthesize_report(_W(FakeCtx()), "quantum tunneling", briefs, prog,
                                     sections=["Citation Lineage", "Method Comparison"])
         check("synthesize_report_with_sections", "Report" in out2)
     with _Patches(_think_call=lambda *a, **k: "# Report body"):
-        out3 = DR.synthesize_report(FakeCtx(), "the di zenzo structure tensor explained", briefs, prog)
+        out3 = DR.synthesize_report(_W(FakeCtx()), "the di zenzo structure tensor explained", briefs, prog)
         check("synthesize_report_di_zenzo_math_note", "Report" in out3)
 
 
@@ -222,17 +222,17 @@ def test_evidence_landscape():
 
 def test_synthesize_abstract():
     outline = {"title": "T", "abstract_focus": "the focus line"}
-    check("abstract_empty_body_returns_focus", DR._synthesize_abstract(FakeCtx(), outline, "") == "the focus line")
+    check("abstract_empty_body_returns_focus", DR._synthesize_abstract(_W(FakeCtx()), outline, "") == "the focus line")
     with _Patches(_think_call=lambda ctx, s, u, mo, temperature=0.3: "A full abstract about the topic."):
-        out = DR._synthesize_abstract(FakeCtx(), outline, "some body text " * 20)
+        out = DR._synthesize_abstract(_W(FakeCtx()), outline, "some body text " * 20)
         check("abstract_success", "abstract" in out.lower())
     def raiser(*a, **k):
         raise RuntimeError("boom")
     with _Patches(_think_call=raiser):
-        out2 = DR._synthesize_abstract(FakeCtx(), outline, "some body text " * 20)
+        out2 = DR._synthesize_abstract(_W(FakeCtx()), outline, "some body text " * 20)
         check("abstract_exception_falls_back_to_focus", out2 == "the focus line")
     with _Patches(_think_call=lambda *a, **k: "   "):
-        out3 = DR._synthesize_abstract(FakeCtx(), outline, "some body text " * 20)
+        out3 = DR._synthesize_abstract(_W(FakeCtx()), outline, "some body text " * 20)
         check("abstract_blank_falls_back_to_focus", out3 == "the focus line")
 
 
@@ -276,15 +276,15 @@ def test_brief_pages():
     pages = [_page("https://arxiv.org/1", "arxiv.org", "Adam Optimizer"),
              _page("https://randomblog.com/2", "randomblog.com", "Unrelated")]
     with _Patches(brief_source=lambda ctx, topic, page: "SOURCE: SECONDARY\nfacts about " + page["title"]):
-        briefs, dropped = DR._brief_pages(FakeCtx(), "adam optimizer", pages, {"category": "science"},
+        briefs, dropped = DR._brief_pages(_W(FakeCtx()), "adam optimizer", pages, {"category": "science"},
                                           _TMP, prog, scholarly=True, terms=["adam"])
         check("brief_pages_relevance_filters", len(briefs) == 1 and dropped == 1)
     with _Patches(brief_source=lambda ctx, topic, page: None):
-        briefs2, _ = DR._brief_pages(FakeCtx(), "t", pages, {"category": "general"}, _TMP, prog,
+        briefs2, _ = DR._brief_pages(_W(FakeCtx()), "t", pages, {"category": "general"}, _TMP, prog,
                                      scholarly=False, terms=[])
         check("brief_pages_no_brief_skipped", briefs2 == [])
     with _Patches(brief_source=lambda ctx, topic, page: "SOURCE: PRIMARY\nfacts"):
-        briefs3, _ = DR._brief_pages(FakeCtx(cancelled=True), "t", pages, {"category": "general"}, _TMP, prog,
+        briefs3, _ = DR._brief_pages(_W(FakeCtx(cancelled=True)), "t", pages, {"category": "general"}, _TMP, prog,
                                      scholarly=False, terms=[], cancelled=lambda: True)
         check("brief_pages_cancelled_stops_immediately", briefs3 == [])
 
@@ -294,10 +294,10 @@ def test_brief_pages():
 def test_expansion_pass():
     prog = DR._Progress(None)
     check("expansion_pass_no_queries_empty", DR._expansion_pass(
-        FakeCtx(), "t", [], {"category": "general"}, {"max_pages": 4}, prog, _TMP, None,
+        _W(FakeCtx()), "t", [], {"category": "general"}, {"max_pages": 4}, prog, _TMP, None,
         visited_urls=set(), scholarly=False, terms=[], mode="multihop", label="multihop", cancelled=lambda: False) == [])
     check("expansion_pass_cancelled_empty", DR._expansion_pass(
-        FakeCtx(), "t", ["q"], {"category": "general"}, {"max_pages": 4}, prog, _TMP, None,
+        _W(FakeCtx()), "t", ["q"], {"category": "general"}, {"max_pages": 4}, prog, _TMP, None,
         visited_urls=set(), scholarly=False, terms=[], mode="multihop", label="multihop", cancelled=lambda: True) == [])
 
     with _Patches(collect_sources=lambda *a, **k: [{"href": "https://a.com/1"}],
@@ -305,13 +305,13 @@ def test_expansion_pass():
                   dedupe_pages=lambda pages, cat: pages,
                   rerank_for_briefing=lambda *a, **k: [_page()],
                   _brief_pages=lambda *a, **k: ([{"brief": "x"}], 0)):
-        out = DR._expansion_pass(FakeCtx(), "t", ["q"], {"category": "general"}, {"max_pages": 4}, prog,
+        out = DR._expansion_pass(_W(FakeCtx()), "t", ["q"], {"category": "general"}, {"max_pages": 4}, prog,
                                  _TMP, None, visited_urls=set(), scholarly=False, terms=[],
                                  mode="multihop", label="multihop", cancelled=lambda: False)
         check("expansion_pass_success", len(out) == 1)
 
     with _Patches(collect_sources=lambda *a, **k: [{"href": "https://seen.com/1"}]):
-        out2 = DR._expansion_pass(FakeCtx(), "t", ["q"], {"category": "general"}, {"max_pages": 4}, prog,
+        out2 = DR._expansion_pass(_W(FakeCtx()), "t", ["q"], {"category": "general"}, {"max_pages": 4}, prog,
                                   _TMP, None, visited_urls={"https://seen.com/1"}, scholarly=False, terms=[],
                                   mode="multihop", label="multihop", cancelled=lambda: False)
         check("expansion_pass_all_visited_empty", out2 == [])
@@ -319,7 +319,7 @@ def test_expansion_pass():
     def raiser(*a, **k):
         raise RuntimeError("boom")
     with _Patches(collect_sources=raiser):
-        out3 = DR._expansion_pass(FakeCtx(), "t", ["q"], {"category": "general"}, {"max_pages": 4}, prog,
+        out3 = DR._expansion_pass(_W(FakeCtx()), "t", ["q"], {"category": "general"}, {"max_pages": 4}, prog,
                                   _TMP, None, visited_urls=set(), scholarly=False, terms=[],
                                   mode="multihop", label="multihop", cancelled=lambda: False)
         check("expansion_pass_exception_returns_empty", out3 == [])

@@ -29,7 +29,7 @@ _TMP = Path(tempfile.mkdtemp(prefix="drsearch_"))
 # has to be patched in the module that USES it. `_dr_patch.Patches` finds every
 # home of a name and rebinds all of them (and raises if nothing binds it, so a
 # stale patch can never degrade into a silent real network/LM Studio call).
-from _dr_patch import Patches as _Patches
+from _dr_ctx import Patches as _Patches, C as _C, W as _W
 
 
 class FakeCtx:
@@ -47,19 +47,19 @@ def h(url, title="T"):
 
 def test_search_one_query():
     with _Patches(raw_search_results=lambda ctx, q, n, timelimit=None, news=False: [h("https://a.com/1")]):
-        out = DR._search_one_query(FakeCtx(), "q", 5, None, False)
+        out = DR._search_one_query(_W(FakeCtx()), "q", 5, None, False)
         check("search_one_success", out == [h("https://a.com/1")])
 
     def raiser(ctx, q, n, timelimit=None, news=False):
         raise RuntimeError("boom")
     with _Patches(raw_search_results=raiser):
-        out = DR._search_one_query(FakeCtx(), "q", 5, None, False)
+        out = DR._search_one_query(_W(FakeCtx()), "q", 5, None, False)
         check("search_one_exception_then_mutation_exhausted_empty", out == [])
 
     def news_adder(ctx, q, n, timelimit=None, news=False):
         return [h(f"https://news.com/{1 if news else 0}")]
     with _Patches(raw_search_results=news_adder):
-        out = DR._search_one_query(FakeCtx(), "q", 5, None, True)
+        out = DR._search_one_query(_W(FakeCtx()), "q", 5, None, True)
         check("search_one_news_appended", len(out) == 2)
 
     # zero-hit then mutation recovers
@@ -70,14 +70,14 @@ def test_search_one_query():
             return []
         return [h("https://recovered.com/1")]
     with _Patches(raw_search_results=zero_then_hit, DR_QUERY_MUTATION_ATTEMPTS=2):
-        out = DR._search_one_query(FakeCtx(), "foo bar baz", 5, None, False)
+        out = DR._search_one_query(_W(FakeCtx()), "foo bar baz", 5, None, False)
         check("search_one_mutation_recovers", out == [h("https://recovered.com/1")])
 
     # zero-hit, mutation attempt returns None (attempt exceeds strategies) -> loop continues/exits
     def always_empty(ctx, q, n, timelimit=None, news=False):
         return []
     with _Patches(raw_search_results=always_empty, DR_QUERY_MUTATION_ATTEMPTS=5):
-        out = DR._search_one_query(FakeCtx(), "x", 5, None, False)
+        out = DR._search_one_query(_W(FakeCtx()), "x", 5, None, False)
         check("search_one_mutation_exhausted", out == [])
 
     # mutated search itself raises -> caught, hits stays []
@@ -86,7 +86,7 @@ def test_search_one_query():
             return []
         raise RuntimeError("mutated call failed")
     with _Patches(raw_search_results=first_empty_then_raise, DR_QUERY_MUTATION_ATTEMPTS=1):
-        out = DR._search_one_query(FakeCtx(), "foo bar baz", 5, None, False)
+        out = DR._search_one_query(_W(FakeCtx()), "foo bar baz", 5, None, False)
         check("search_one_mutated_call_raises", out == [])
 
 
@@ -98,29 +98,29 @@ def test_collect_sources_serial():
             h("https://arxiv.org/1")]  # dup dropped
     with _Patches(_search_one_query=lambda ctx, q, n, tl, un: hits, DR_SEARCH_CONCURRENCY=1,
                   _save_state=lambda *a, **k: None):
-        out = DR.collect_sources(FakeCtx(), ["q1"], 5, prog, _TMP, {"category": "science"})
+        out = DR.collect_sources(_W(FakeCtx()), ["q1"], 5, prog, _TMP, {"category": "science"})
         check("collect_sources_dedupes_and_drops_junk", len(out) == 1 and out[0]["href"] == "https://arxiv.org/1")
 
     with _Patches(_search_one_query=lambda ctx, q, n, tl, un: [], DR_SEARCH_CONCURRENCY=1,
                   _save_state=lambda *a, **k: None):
         check("collect_sources_cancelled_short_circuits",
-              DR.collect_sources(FakeCtx(cancelled=True), ["q1", "q2"], 5, prog, _TMP) == [])
+              DR.collect_sources(_W(FakeCtx(cancelled=True)), ["q1", "q2"], 5, prog, _TMP) == [])
 
     with _Patches(_search_one_query=lambda ctx, q, n, tl, un: [h("https://blocked.com/x")],
                   DR_SEARCH_CONCURRENCY=1, _save_state=lambda *a, **k: None,
                   DR_DOMAIN_BLACKLIST="blocked.com"):
-        out = DR.collect_sources(FakeCtx(), ["q1"], 5, prog, _TMP)
+        out = DR.collect_sources(_W(FakeCtx()), ["q1"], 5, prog, _TMP)
         check("collect_sources_domain_blacklist", out == [])
 
     with _Patches(_search_one_query=lambda ctx, q, n, tl, un: [h("https://reddit.com/r/x")],
                   DR_SEARCH_CONCURRENCY=1, _save_state=lambda *a, **k: None,
                   DR_SOURCE_TYPES_EXCLUDE="forum"):
-        out = DR.collect_sources(FakeCtx(), ["q1"], 5, prog, _TMP)
+        out = DR.collect_sources(_W(FakeCtx()), ["q1"], 5, prog, _TMP)
         check("collect_sources_source_type_excluded", out == [])
 
     with _Patches(_search_one_query=lambda ctx, q, n, tl, un: [h(f"https://x{i}.com/a") for i in range(5)],
                   DR_SEARCH_CONCURRENCY=1, _save_state=lambda *a, **k: None, DR_MAX_SOURCES=2):
-        out = DR.collect_sources(FakeCtx(), ["q1"], 5, prog, _TMP)
+        out = DR.collect_sources(_W(FakeCtx()), ["q1"], 5, prog, _TMP)
         check("collect_sources_max_sources_cap", len(out) == 2)
 
 
@@ -130,19 +130,19 @@ def test_collect_sources_parallel():
         return [h(f"https://arxiv.org/{q}")]
     with _Patches(_search_one_query=fake_search, DR_SEARCH_CONCURRENCY=4,
                   _save_state=lambda *a, **k: None):
-        out = DR.collect_sources(FakeCtx(), ["q1", "q2", "q3"], 5, prog, _TMP, {"category": "science"})
+        out = DR.collect_sources(_W(FakeCtx()), ["q1", "q2", "q3"], 5, prog, _TMP, {"category": "science"})
         check("collect_sources_parallel_gathers_all", len(out) == 3)
 
     def raising_search(ctx, q, n, tl, un):
         raise RuntimeError("boom")
     with _Patches(_search_one_query=raising_search, DR_SEARCH_CONCURRENCY=4,
                   _save_state=lambda *a, **k: None):
-        out = DR.collect_sources(FakeCtx(), ["q1", "q2"], 5, prog, _TMP)
+        out = DR.collect_sources(_W(FakeCtx()), ["q1", "q2"], 5, prog, _TMP)
         check("collect_sources_parallel_future_exception_swallowed", out == [])
 
     with _Patches(_search_one_query=fake_search, DR_SEARCH_CONCURRENCY=4,
                   _save_state=lambda *a, **k: None):
-        out = DR.collect_sources(FakeCtx(cancelled=True), ["q1", "q2"], 5, prog, _TMP)
+        out = DR.collect_sources(_W(FakeCtx(cancelled=True)), ["q1", "q2"], 5, prog, _TMP)
         check("collect_sources_parallel_cancel_breaks_early", isinstance(out, list))
 
 
@@ -152,7 +152,7 @@ def test_plan_queries_llm_json():
     payload = '{"queries": ["query one", "query two"], "category": "science", ' \
               '"recency": "any", "core_topic": "quantum tunneling"}'
     with _Patches(_think_call=lambda ctx, sys_, usr, max_tokens, temperature=0.3: payload):
-        queries, profile = DR.plan_queries(FakeCtx(), "Explain quantum tunneling in depth", 5)
+        queries, profile = DR.plan_queries(_W(FakeCtx()), "Explain quantum tunneling in depth", 5)
         check("plan_queries_json_used", "quantum tunneling" in queries[0])
         check("plan_queries_category_set", profile["category"] == "science")
         check("plan_queries_timeless_forces_any", profile["recency"] == "any")
@@ -160,7 +160,7 @@ def test_plan_queries_llm_json():
 
 def test_plan_queries_heuristic_fallback():
     with _Patches(_think_call=lambda *a, **k: "not json at all garbage"):
-        queries, profile = DR.plan_queries(FakeCtx(), "some short raw topic", 5)
+        queries, profile = DR.plan_queries(_W(FakeCtx()), "some short raw topic", 5)
         check("plan_queries_heuristic_expansion", len(queries) >= 3)
         check("plan_queries_default_category", profile["category"] == "general")
 
@@ -168,16 +168,16 @@ def test_plan_queries_heuristic_fallback():
 def test_plan_queries_recency_floor_and_news():
     payload = '{"queries": ["a job posting query"], "category": "jobs", "recency": "any"}'
     with _Patches(_think_call=lambda *a, **k: payload):
-        queries, profile = DR.plan_queries(FakeCtx(), "find a job posting", 5)
+        queries, profile = DR.plan_queries(_W(FakeCtx()), "find a job posting", 5)
         check("plan_queries_recency_floor_clamped", profile["recency"] == "month")
     payload2 = '{"queries": ["breaking news today"], "category": "news", "recency": "year"}'
     with _Patches(_think_call=lambda *a, **k: payload2):
-        queries2, profile2 = DR.plan_queries(FakeCtx(), "breaking news today", 5)
+        queries2, profile2 = DR.plan_queries(_W(FakeCtx()), "breaking news today", 5)
         check("plan_queries_news_true", profile2["news"] is True)
         check("plan_queries_recency_floor_news", profile2["recency"] == "week")
     payload3 = '{"queries": ["x"], "category": "general", "recency": "bogus_value"}'
     with _Patches(_think_call=lambda *a, **k: payload3):
-        _, profile3 = DR.plan_queries(FakeCtx(), "x topic", 5)
+        _, profile3 = DR.plan_queries(_W(FakeCtx()), "x topic", 5)
         check("plan_queries_invalid_recency_defaults_any", profile3["recency"] == "any")
 
 
@@ -185,7 +185,7 @@ def test_plan_queries_long_multiline_topic_uses_first_line():
     payload = '{"queries": [], "category": "general", "recency": "any"}'
     with _Patches(_think_call=lambda *a, **k: payload):
         long_topic = "Please investigate: quantum tunneling deeply\nwith lots more detail " + "x" * 200
-        queries, profile = DR.plan_queries(FakeCtx(), long_topic, 5)
+        queries, profile = DR.plan_queries(_W(FakeCtx()), long_topic, 5)
         check("plan_queries_distills_first_line", "quantum tunneling deeply" in profile["core_topic"])
 
 
@@ -193,16 +193,16 @@ def test_plan_queries_long_multiline_topic_uses_first_line():
 
 def test_corrective_queries():
     with _Patches(plan_queries=lambda ctx, hint, mx: (["new broader query", "another one"], {})):
-        out = DR._corrective_queries(FakeCtx(), "topic", {"category": "science"},
+        out = DR._corrective_queries(_W(FakeCtx()), "topic", {"category": "science"},
                                      ["old query"], 5)
         check("corrective_queries_returns_fresh", "new broader query" in out)
 
     with _Patches(plan_queries=lambda ctx, hint, mx: (_ for _ in ()).throw(RuntimeError("boom"))):
-        out = DR._corrective_queries(FakeCtx(), "topic", {"category": "general"}, ["old"], 5)
+        out = DR._corrective_queries(_W(FakeCtx()), "topic", {"category": "general"}, ["old"], 5)
         check("corrective_queries_exception_returns_empty", out == [])
 
     with _Patches(plan_queries=lambda ctx, hint, mx: (["old query", "topic"], {})):
-        out = DR._corrective_queries(FakeCtx(), "topic", {"category": "local"}, ["old query"], 5)
+        out = DR._corrective_queries(_W(FakeCtx()), "topic", {"category": "local"}, ["old query"], 5)
         check("corrective_queries_dedupes_against_existing_and_topic", out == [])
 
 

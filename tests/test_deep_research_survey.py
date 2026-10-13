@@ -35,7 +35,7 @@ import dr_calls
 # has to be patched in the module that USES it. `_dr_patch.Patches` finds every
 # home of a name and rebinds all of them (and raises if nothing binds it, so a
 # stale patch can never degrade into a silent real network/LM Studio call).
-from _dr_patch import Patches as _Patches
+from _dr_ctx import Patches as _Patches, C as _C, W as _W
 
 
 class FakeCtx:
@@ -65,7 +65,7 @@ OUTLINE = {
 
 
 def test_synthesize_survey_empty_briefs():
-    check("survey_empty_briefs_empty_string", DR.synthesize_survey(FakeCtx(), "t", [], DR._Progress(None)) == "")
+    check("survey_empty_briefs_empty_string", DR.synthesize_survey(_W(FakeCtx()), "t", [], DR._Progress(None)) == "")
 
 
 def test_synthesize_survey_full_success():
@@ -74,7 +74,7 @@ def test_synthesize_survey_full_success():
                   _think_call=lambda ctx, s, u, mo, temperature=0.35: "## Section body content here.",
                   _synthesize_abstract=lambda ctx, outline, body,
                                               out_lang="en": "An abstract."):
-        out = DR.synthesize_survey(FakeCtx(), "t", BRIEFS, prog)
+        out = DR.synthesize_survey(_W(FakeCtx()), "t", BRIEFS, prog)
         check("survey_full_success_has_title", "Test Survey" in out)
         check("survey_full_success_has_abstract", "An abstract." in out)
         check("survey_full_success_has_sections", "Section body" in out)
@@ -91,7 +91,7 @@ def test_synthesize_survey_cancelled_midway():
         return "## body"
     with _Patches(plan_report_outline=lambda *a, **k: OUTLINE, _think_call=think,
                   _synthesize_abstract=lambda *a, **k: "abstract"):
-        out = DR.synthesize_survey(ctx, "t", BRIEFS, prog)
+        out = DR.synthesize_survey(_W(ctx), "t", BRIEFS, prog)
         check("survey_cancelled_still_returns_partial", "Test Survey" in out)
 
 
@@ -104,7 +104,7 @@ def test_synthesize_survey_shrink_retry_then_success():
     with _Patches(plan_report_outline=lambda *a, **k: {"title": "T", "abstract_focus": "",
                                                        "sections": [{"heading": "H", "subsections": [], "focus": "f"}]},
                   _think_call=think, _synthesize_abstract=lambda *a, **k: ""):
-        out = DR.synthesize_survey(FakeCtx(), "t", BRIEFS, prog)
+        out = DR.synthesize_survey(_W(FakeCtx()), "t", BRIEFS, prog)
         check("survey_shrink_retry_eventually_succeeds", "eventually written" in out)
 
 
@@ -113,7 +113,7 @@ def test_synthesize_survey_all_sections_empty():
     with _Patches(plan_report_outline=lambda *a, **k: OUTLINE,
                   _think_call=lambda *a, **k: "",
                   _synthesize_abstract=lambda *a, **k: ""):
-        out = DR.synthesize_survey(FakeCtx(), "t", BRIEFS, prog)
+        out = DR.synthesize_survey(_W(FakeCtx()), "t", BRIEFS, prog)
         check("survey_all_empty_returns_empty", out == "")
 
 
@@ -123,7 +123,7 @@ def test_synthesize_survey_body_without_heading_marker():
                                                        "sections": [{"heading": "MyHeading", "subsections": [], "focus": "f"}]},
                   _think_call=lambda *a, **k: "plain prose with no markdown heading",
                   _synthesize_abstract=lambda *a, **k: ""):
-        out = DR.synthesize_survey(FakeCtx(), "t", BRIEFS, prog)
+        out = DR.synthesize_survey(_W(FakeCtx()), "t", BRIEFS, prog)
         check("survey_body_gets_heading_prepended", "## MyHeading" in out)
 
 
@@ -177,11 +177,11 @@ def test_fetch_page_more_branches():
         def __init__(self, resp): self._resp = resp
         def get(self, *a, **k): return self._resp
     with _Patches(requests=FakeReq(FakeResp(200, b"plain text, no content-type", headers={}))):
-        html, pdf = DR._fetch_page("https://example.com/no-ctype-real-article")
+        html, pdf = DR._fetch_page("https://example.com/no-ctype-real-article", ctx=_C())
         check("fetch_page_no_ctype_allowed", html is not None)
     with _Patches(requests=FakeReq(FakeResp(200, b"<html>iso text</html>",
                                              headers={"content-type": "text/html"}, encoding="iso-8859-1"))):
-        html2, pdf2 = DR._fetch_page("https://example.com/iso-encoded-real-article")
+        html2, pdf2 = DR._fetch_page("https://example.com/iso-encoded-real-article", ctx=_C())
         check("fetch_page_iso_encoding_replaced", isinstance(html2, str))
 
 
@@ -198,10 +198,10 @@ def test_fetch_more_branches():
         def __init__(self, resp): self._resp = resp
         def get(self, *a, **k): return self._resp
     with _Patches(requests=FakeReq(FakeResp(b""))):
-        check("fetch_empty_chunks_skipped", DR._fetch("https://example.com/empty") == "")
+        check("fetch_empty_chunks_skipped", DR._fetch("https://example.com/empty", ctx=_C()) == "")
     big = b"x" * (DR._MAX_HTML_CHARS + 1000)
     with _Patches(requests=FakeReq(FakeResp(big))):
-        out = DR._fetch("https://example.com/huge")
+        out = DR._fetch("https://example.com/huge", ctx=_C())
         check("fetch_caps_at_max_chars", len(out) <= DR._MAX_HTML_CHARS)
 
 
@@ -237,13 +237,13 @@ def test_model_context_live_detect_path():
         def get(self, *a, **k):
             return FakeResp()
     with _Patches(requests=FakeReq()):
-        val = DR._model_context(FakeCtx2())
+        val = DR._model_context(_W(FakeCtx2()))
         check("model_context_live_detected", val == 8192)
 
 
 def test_think_call_clamps():
     with _Patches(call_llm_simple=lambda ctx, s, u, temperature=0.3, max_tokens=0, force_think=True, **_kw: f"got:{max_tokens}"):
-        out = DR._think_call(FakeCtx(), "sys", "user", max_tokens=999999999)
+        out = DR._think_call(_W(FakeCtx()), "sys", "user", max_tokens=999999999)
         check("think_call_clamps_to_safe_budget", "got:" in out)
 
 
@@ -251,7 +251,7 @@ def test_consolidate_evidence_batches():
     prog = DR._Progress(None)
     many_briefs = [dict(BRIEFS[0], url=f"https://arxiv.org/{i}", brief="x" * 500) for i in range(50)]
     with _Patches(_think_call=lambda ctx, s, u, max_tokens, temperature=0.2: "consolidated notes"):
-        out = DR._consolidate_evidence(FakeCtx(), "t", many_briefs, prog)
+        out = DR._consolidate_evidence(_W(FakeCtx()), "t", many_briefs, prog)
         check("consolidate_evidence_batches_when_too_big", isinstance(out, str))
 
 
@@ -266,7 +266,7 @@ def test_plan_report_outline_trims_landscape():
     prog = DR._Progress(None)
     briefs = [dict(BRIEFS[0], title=f"Title number {i}", url=f"https://arxiv.org/{i}") for i in range(200)]
     with _Patches(_think_call=lambda ctx, s, u, max_tokens, temperature=0.4: '{"title": "T", "sections": []}'):
-        out = DR.plan_report_outline(FakeCtx(), "t", briefs, prog)
+        out = DR.plan_report_outline(_W(FakeCtx()), "t", briefs, prog)
         check("plan_report_outline_ran_with_large_landscape", isinstance(out, dict))
 
 
@@ -325,9 +325,9 @@ def test_social_outlinks_none_seen_dedup():
 def test_acquire_page_no_adapter_hit_no_cache_falls_to_fetch():
     with _Patches(is_social_url=lambda u: False,
                   fetch_via_adapter=lambda url, cat: None,
-                  _fetch_page=lambda url: (None, None)):
+                  _fetch_page=lambda url, **k: (None, None)):
         res = DR._acquire_page("https://example.com/no-adapter-real-article", 0, {"title": ""},
-                               "general", True, None)
+                               "general", True, None, ctx=_C())
         check("acquire_page_adapter_miss_falls_through", res["reason"] == "fetch_failed")
 
 
@@ -337,13 +337,13 @@ def test_crawl_pages_wave_empty_continue_and_link_filters():
     # but we can force the "not wave" continue by having a domain-dup only source
     # combined with fetch_delay=0 concurrency 1 and links filtered by blacklist.
     html_with_links = '<html><body><a href="/blocked-path">x</a></body></html>'
-    def fake_acquire(url, depth, seed, category, use_adapters, cache):
+    def fake_acquire(url, depth, seed, category, use_adapters, cache, **k):
         return {"url": url, "depth": depth,
                 "page": {"url": url, "domain": "d.com", "title": "T", "text": "txt", "cluster_size": 1, "cluster_domains": ["d.com"]},
                 "html": html_with_links, "reason": None, "social": False}
     with _Patches(_acquire_page=fake_acquire, DR_FETCH_DELAY=0, DR_FETCH_CONCURRENCY=1,
                   _save_state=lambda *a, **k: None, DR_DOMAIN_BLACKLIST="d.com"):
-        pages = DR.crawl_pages(FakeCtx(), [{"href": "https://d.com/start"}],
+        pages = DR.crawl_pages(_W(FakeCtx()), [{"href": "https://d.com/start"}],
                                {"max_pages": 5, "depth": 2, "links_per_page": 3}, prog, _TMP)
         check("crawl_pages_link_blacklist_filters_followups", len(pages) == 1)
 
@@ -352,7 +352,7 @@ def test_finish_math_audit_and_formula_trace():
     prog = DR._Progress(None)
     prog.snap_formula("EXTRACTION", "some $x^2$ text")
     briefs = [dict(BRIEFS[0])]
-    out = DR._finish(FakeCtx(), _TMP / "finishrun", "t", "# Report\n\nBody $y^2$ text.",
+    out = DR._finish(_W(FakeCtx()), _TMP / "finishrun", "t", "# Report\n\nBody $y^2$ text.",
                      prog, ["q"], briefs, time.time(), cancelled=False)
     check("finish_writes_report_with_math_audit", out["path"] is not None)
     check("finish_stats_has_math_audit", "math_audit" in prog.stats)
@@ -373,7 +373,7 @@ def test_rerank_authority_only_reorders():
     sys.modules["rerank"] = fake_rerank_mod
     try:
         with _Patches(DR_RERANK_ENABLED=True, DR_RERANK_TOP_K=2, DR_RERANK_AUTHORITY_WEIGHT=1.0):
-            out = DR.rerank_for_briefing("t", pages, {"category": "science"}, prog)
+            out = DR.rerank_for_briefing("t", pages, {"category": "science"}, prog, ctx=_C())
             check("rerank_authority_reorders", out[0]["domain"] == "arxiv.org")
     finally:
         del sys.modules["rerank"]
@@ -383,7 +383,7 @@ def test_synthesize_report_evidence_truncated():
     prog = DR._Progress(None)
     huge_briefs = [dict(BRIEFS[0], url=f"https://arxiv.org/{i}", brief="x" * 5000) for i in range(50)]
     with _Patches(_think_call=lambda ctx, s, u, max_tokens, temperature=0.3, **_kw: "# Report\nshort body"):
-        out = DR.synthesize_report(FakeCtx(), "t", huge_briefs, prog)
+        out = DR.synthesize_report(_W(FakeCtx()), "t", huge_briefs, prog)
         check("synthesize_report_handles_huge_evidence", "Report" in out)
 
 

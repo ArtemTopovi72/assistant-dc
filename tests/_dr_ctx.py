@@ -49,3 +49,38 @@ def research_ctx(ctx=None, **names):
         old = vars(getattr(ctx, "deps", None) or types.SimpleNamespace())
         ctx.deps = types.SimpleNamespace(**{**old, **deps})
     return ctx
+
+
+# `with Patches(name=fake): f(..., ctx=C())` / `g(W(ctx), ...)`: the names a block
+# stacks go on the context its calls get; nothing outside the test changes.
+_STACK = []
+
+
+class Patches:
+    def __init__(self, **names):
+        self.names = names
+
+    def __enter__(self):
+        _STACK.append(self.names)
+        return self
+
+    def __exit__(self, *exc):
+        _STACK.pop()
+        return False
+
+
+def _merged() -> dict:
+    out = {}
+    for layer in _STACK:
+        out.update(layer)
+    return out
+
+
+def C():
+    """A fresh context with the stacked stand-ins."""
+    return research_ctx(None, **_merged())
+
+
+def W(ctx):
+    """`ctx` itself, with the stacked stand-ins on it."""
+    return research_ctx(ctx, **_merged()) if _STACK else ctx
