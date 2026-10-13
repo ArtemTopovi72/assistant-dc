@@ -265,13 +265,9 @@ def test_tick_runs_a_turn_and_posts_the_chosen_speaker():
     tab = _tab()
     _cast(tab, "Alice", "Bob")
     tab._auto = True                       # _tick returns early otherwise
-    orig = MT.MadhouseReplyWorker
-    MT.MadhouseReplyWorker = _InstantReplyWorker
-    try:
-        tab._tick(tab._run_id)
-    finally:
-        MT.MadhouseReplyWorker = orig
-        tab._auto = False
+    tab.reply_worker_cls = _InstantReplyWorker
+    tab._tick(tab._run_id)
+    tab._auto = False
     check("turn_posted_a_line", len(tab.messages) == 1)
     speaker = tab.messages[0]["name"]
     check("turn_speaker_in_cast", speaker in ("Alice", "Bob"), speaker)
@@ -288,8 +284,7 @@ def test_no_new_line_while_the_last_one_is_still_being_spoken():
     tab = _tab()
     _cast(tab, "Alice", "Bob")
     tab._auto = True
-    orig = MT.MadhouseReplyWorker
-    MT.MadhouseReplyWorker = _InstantReplyWorker
+    tab.reply_worker_cls = _InstantReplyWorker
     try:
         tab._speech_q.append((None, "still queued"))
         tab._tick(tab._run_id)
@@ -298,7 +293,6 @@ def test_no_new_line_while_the_last_one_is_still_being_spoken():
         tab._tick(tab._run_id)
         check("turn_runs_once_the_room_is_quiet", len(tab.messages) == 1)
     finally:
-        MT.MadhouseReplyWorker = orig
         tab._auto = False
     tab.shutdown()
 
@@ -315,13 +309,9 @@ def test_tick_hands_the_worker_a_scoped_ctx_not_the_hosts():
     tab = _tab(ctx)
     _cast(tab, "Alice", "Bob")
     tab._auto = True
-    orig = MT.MadhouseReplyWorker
-    MT.MadhouseReplyWorker = _InstantReplyWorker
-    try:
-        tab._tick(tab._run_id)
-    finally:
-        MT.MadhouseReplyWorker = orig
-        tab._auto = False
+    tab.reply_worker_cls = _InstantReplyWorker
+    tab._tick(tab._run_id)
+    tab._auto = False
     seen = _InstantReplyWorker.LAST["ctx"]
     check("scoped_not_host_ctx", seen is not ctx)
     check("scoped_uses_room_token", seen.cancel_event is tab._room_cancel)
@@ -336,12 +326,8 @@ def test_stale_tick_from_a_stopped_run_is_a_no_op():
     tab._auto = True
     stale = tab._run_id
     tab._stop_auto()                       # bumps _run_id, clears _auto
-    orig = MT.MadhouseReplyWorker
-    MT.MadhouseReplyWorker = _InstantReplyWorker
-    try:
-        tab._tick(stale)
-    finally:
-        MT.MadhouseReplyWorker = orig
+    tab.reply_worker_cls = _InstantReplyWorker
+    tab._tick(stale)
     check("stale_tick_posted_nothing", tab.messages == [])
     check("stop_set_room_cancel", tab._room_cancel.is_set())
     tab.shutdown()
@@ -373,22 +359,14 @@ def test_direct_address_beats_everything():
     hist = [{"character_id": "a", "name": "Alice", "text": "Carol, what do you think?"}]
     # ctx=None would already skip the router; pass one and assert the name still
     # wins WITHOUT any model call (a fake llm that raises proves it never ran).
-    fake_llm = types.ModuleType("llm")
     def _boom(*a, **k):
         raise AssertionError("the router was called even though a name was addressed")
-    fake_llm.send_to_lm_studio = _boom
-    old = sys.modules.get("llm")
-    sys.modules["llm"] = fake_llm
-    try:
-        for _ in range(8):                 # the fallback is random; addressing is not
-            who = MB.choose_next_speaker(types.SimpleNamespace(), cast, hist, "a",
-                                         use_router=True)
-            check_once = who["name"] == "Carol"
-            if not check_once:
-                break
-    finally:
-        if old is None: sys.modules.pop("llm", None)
-        else: sys.modules["llm"] = old
+    for _ in range(8):                 # the fallback is random; addressing is not
+        who = MB.choose_next_speaker(types.SimpleNamespace(chat_model=_boom), cast, hist, "a",
+                                     use_router=True)
+        check_once = who["name"] == "Carol"
+        if not check_once:
+            break
     check("addressed_always_answers", check_once)
 
 
@@ -396,25 +374,17 @@ def test_router_pick_is_honoured_and_unknown_names_fall_back():
     cast = [{"id": "a", "name": "Alice", "prompt": ""},
             {"id": "b", "name": "Bob", "prompt": ""}]
     hist = [{"character_id": "a", "name": "Alice", "text": "so anyway"}]
-    fake_llm = types.ModuleType("llm")
-    fake_llm.send_to_lm_studio = lambda *a, **k: {"content": "Bob"}
-    old = sys.modules.get("llm")
-    sys.modules["llm"] = fake_llm
-    try:
-        who = MB.choose_next_speaker(types.SimpleNamespace(), cast, hist, "a")
-        check("router_pick_honoured", who["name"] == "Bob")
-        # An unrecognisable answer must not raise and must still return someone.
-        fake_llm.send_to_lm_studio = lambda *a, **k: {"content": "Zaphod"}
-        who = MB.choose_next_speaker(types.SimpleNamespace(), cast, hist, "a")
-        check("router_unknown_falls_back", who in cast)
-        # A raising router is caught and falls back, never propagates into the slot.
-        def _raise(*a, **k): raise RuntimeError("LM Studio is down")
-        fake_llm.send_to_lm_studio = _raise
-        who = MB.choose_next_speaker(types.SimpleNamespace(), cast, hist, "a")
-        check("router_exception_falls_back", who in cast)
-    finally:
-        if old is None: sys.modules.pop("llm", None)
-        else: sys.modules["llm"] = old
+    def _ctx(model):
+        return types.SimpleNamespace(chat_model=model)
+    who = MB.choose_next_speaker(_ctx(lambda *a, **k: {"content": "Bob"}), cast, hist, "a")
+    check("router_pick_honoured", who["name"] == "Bob")
+    # An unrecognisable answer must not raise and must still return someone.
+    who = MB.choose_next_speaker(_ctx(lambda *a, **k: {"content": "Zaphod"}), cast, hist, "a")
+    check("router_unknown_falls_back", who in cast)
+    # A raising router is caught and falls back, never propagates into the slot.
+    def _raise(*a, **k): raise RuntimeError("LM Studio is down")
+    who = MB.choose_next_speaker(_ctx(_raise), cast, hist, "a")
+    check("router_exception_falls_back", who in cast)
 
 
 def test_speaker_never_repeats_when_someone_else_can_go():

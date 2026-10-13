@@ -126,6 +126,7 @@ class MadhouseTab(MadhouseUIMixin, MadhouseCastMixin, QWidget):
     the tab's own AudioPlayer, so it never fights the main chat's playback.
     """
 
+    reply_worker_cls = MadhouseReplyWorker      # a suite swaps it on the instance
     USER_ID = "__you__"
 
     def __init__(self, host):
@@ -309,7 +310,7 @@ class MadhouseTab(MadhouseUIMixin, MadhouseCastMixin, QWidget):
         if ctx is not None:
             ctx = _ScopedCtx(ctx, self._room_cancel)   # immune to the main chat's Stop
         last_id = self.messages[-1]["character_id"] if self.messages else None
-        self.reply_worker = MadhouseReplyWorker(
+        self.reply_worker = self.reply_worker_cls(
             ctx, list(self.characters), list(self.messages), last_id,
             self.router_box.isChecked(), self.user["name"])
         self.reply_worker.done.connect(self._on_reply)
