@@ -8,7 +8,18 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ["F5_TEST_RUN"] = "1"
 from PIL import Image
+import types
 import image_objects as O
+
+
+def _ctx(**deps):
+    return types.SimpleNamespace(deps=types.SimpleNamespace(**deps))
+
+
+def _boom(what):
+    def f(*a, **k):
+        raise AssertionError(what)
+    return f
 
 
 def _img(tmp_path):
@@ -17,42 +28,38 @@ def _img(tmp_path):
     return str(p)
 
 
-def test_objectclear_result_is_used(tmp_path, monkeypatch):
-    monkeypatch.setattr(O, "_remove_via_objectclear", lambda *a, **k: "oc.png")
-    monkeypatch.setattr(O._image, "edit_region_contained_cropped",
-                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("FireRed ran")))
-    assert O.remove_object_with_comfy(None, _img(tmp_path), "vase") == "oc.png"
+def test_objectclear_result_is_used(tmp_path):
+    ctx = _ctx(_remove_via_objectclear=lambda *a, **k: "oc.png",
+               edit_region_contained_cropped=_boom("FireRed ran"))
+    assert O.remove_object_with_comfy(ctx, _img(tmp_path), "vase") == "oc.png"
 
 
-def test_no_firered_fallback(tmp_path, monkeypatch):
+def test_no_firered_fallback(tmp_path):
     # no FireRed fallback: it leaves a cat-shaped halo
-    monkeypatch.setattr(O, "_remove_via_objectclear", lambda *a, **k: None)
-    monkeypatch.setattr(O._image, "edit_region_contained_cropped", lambda *a, **k: "fr.png")
-    assert O.remove_object_with_comfy(None, _img(tmp_path), "vase") is None
+    ctx = _ctx(_remove_via_objectclear=lambda *a, **k: None,
+               edit_region_contained_cropped=lambda *a, **k: "fr.png")
+    assert O.remove_object_with_comfy(ctx, _img(tmp_path), "vase") is None
 
 
-def test_fill_hint_goes_straight_to_firered(tmp_path, monkeypatch):
-    monkeypatch.setattr(O, "_remove_via_objectclear",
-                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("ObjectClear ran")))
-    monkeypatch.setattr(O._image, "edit_region_contained_cropped", lambda *a, **k: "fr.png")
-    assert O.remove_object_with_comfy(None, _img(tmp_path), "vase", fill_hint="a lamp") == "fr.png"
+def test_fill_hint_goes_straight_to_firered(tmp_path):
+    ctx = _ctx(_remove_via_objectclear=_boom("ObjectClear ran"),
+               edit_region_contained_cropped=lambda *a, **k: "fr.png")
+    assert O.remove_object_with_comfy(ctx, _img(tmp_path), "vase", fill_hint="a lamp") == "fr.png"
 
 
-def test_objectclear_mask_skips_vlm_cutout_judge(tmp_path, monkeypatch):
+def test_objectclear_mask_skips_vlm_cutout_judge(tmp_path):
     # the VLM cutout judge must not reject a clean mask (the removal would fall to
     # FireRed and leave a halo); the ObjectClear fill is judged by the smear check
-    import image_contained_firered as CF
     seen = {}
-    monkeypatch.setattr(CF, "_contained_region_mask", lambda *a, **k: seen.update(k) or None)
-    O._remove_via_objectclear(None, _img(tmp_path), "cat", seed=1, timeout=5)
+    ctx = _ctx(_contained_region_mask=lambda *a, **k: seen.update(k) or None)
+    O._remove_via_objectclear(ctx, _img(tmp_path), "cat", seed=1, timeout=5)
     assert seen.get("stage1_qa") is False
 
 
-def test_firered_instruction_has_one_article(tmp_path, monkeypatch):
+def test_firered_instruction_has_one_article(tmp_path):
     seen = []
-    monkeypatch.setattr(O._image, "edit_region_contained_cropped",
-                        lambda ctx, p, phrase, instr, **k: seen.append(instr) or "fr.png")
-    O.remove_object_with_comfy(None, _img(tmp_path), "the cat", fill_hint="a lamp")
+    ctx = _ctx(edit_region_contained_cropped=lambda ctx, p, phrase, instr, **k: seen.append(instr) or "fr.png")
+    O.remove_object_with_comfy(ctx, _img(tmp_path), "the cat", fill_hint="a lamp")
     assert "the the" not in seen[0] and "the cat" in seen[0], seen
 
 
@@ -64,20 +71,18 @@ def test_mask_takes_the_shadow_below():
     assert box[3] >= 165 and box[1] == 20 and box[0] == 40, box
 
 
-def test_mask_over_the_cap_is_not_filled(tmp_path, monkeypatch):
+def test_mask_over_the_cap_is_not_filled(tmp_path):
     # a leftover-logo mask covering 53% of the picture must not be filled (ObjectClear
     # would rewrite the whole wall and the person)
-    import image_contained_firered as CF
-    import image_lettering_remove as LR
     src = _img(tmp_path)
     big = Image.new("L", (64, 64), 0)
     big.paste(255, (0, 0, 64, 34))                       # 53% of the picture
     small = Image.new("L", (64, 64), 0)
     small.paste(255, (0, 0, 16, 16))                     # 6%
     filled = []
-    monkeypatch.setattr(LR, "_fill_objectclear", lambda *a, **k: filled.append(1) or "oc.png")
-    monkeypatch.setattr(CF, "_contained_region_mask", lambda *a, **k: (None, big, (0, 0, 64, 34)))
-    assert O._remove_via_objectclear(None, src, "logo", seed=1, timeout=5, max_cover=0.2) is None
+    ctx = _ctx(_fill_objectclear=lambda *a, **k: filled.append(1) or "oc.png",
+               _contained_region_mask=lambda *a, **k: (None, big, (0, 0, 64, 34)))
+    assert O._remove_via_objectclear(ctx, src, "logo", seed=1, timeout=5, max_cover=0.2) is None
     assert not filled
-    monkeypatch.setattr(CF, "_contained_region_mask", lambda *a, **k: (None, small, (0, 0, 16, 16)))
-    assert O._remove_via_objectclear(None, src, "logo", seed=1, timeout=5, max_cover=0.2) == "oc.png"
+    ctx.deps._contained_region_mask = lambda *a, **k: (None, small, (0, 0, 16, 16))
+    assert O._remove_via_objectclear(ctx, src, "logo", seed=1, timeout=5, max_cover=0.2) == "oc.png"

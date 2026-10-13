@@ -16,6 +16,7 @@ run while the suite still printed PASS. They are reached through `_image.`
 below, which defers to call time and resolves the CURRENT binding on image.py.
 """
 from config import scratch_path
+from seams import dep
 import logging
 import os
 import time
@@ -100,7 +101,7 @@ def _remove_via_objectclear(ctx, image_path: str, target_phrase: str, *, seed: i
     try:
         import image_contained_firered as _cf
         import image_lettering_remove as _lr
-        got = _cf._contained_region_mask(ctx, image_path, target_phrase, grow=18, seed=seed,
+        got = dep(ctx, "_contained_region_mask", _cf._contained_region_mask)(ctx, image_path, target_phrase, grow=18, seed=seed,
                                          timeout=timeout, protect_face=False,
                                          # the VLM cutout judge rejected a clean cat mask twice
                                          # and the removal fell to FireRed, which
@@ -121,7 +122,7 @@ def _remove_via_objectclear(ctx, image_path: str, target_phrase: str, *, seed: i
         mask = _with_contact_shadow(mask)
         mask_path = str(scratch_path(_image.OUTPUT_DIR, f"_INTERMEDIATE_remove_mask_{int(time.time() * 1000)}.png"))
         mask.save(mask_path)
-        out = _lr._fill_objectclear(ctx, image_path, mask_path, 18)
+        out = dep(ctx, "_fill_objectclear", _lr._fill_objectclear)(ctx, image_path, mask_path, 18)
         # no smear gate here: a clean fill of a plain table measured 0.475 against
         # a busy window ring (gate 0.6), and with no fallback a rejection is only a
         # failure; the gate stays for lettering
@@ -168,8 +169,8 @@ def remove_object_with_comfy(
     # faster, 58-89 s vs 90-97 s, and preferred by eye). A fill hint
     # ("put a lamp there") needs an instruction model, so that stays on FireRed.
     if not (fill_hint or "").strip() and os.getenv("OBJECT_REMOVE_ENGINE", "objectclear") == "objectclear":
-        out = _remove_via_objectclear(ctx, image_path, target_phrase, seed=seed, timeout=timeout,
-                                      max_cover=max_cover)
+        out = dep(ctx, "_remove_via_objectclear", _remove_via_objectclear)(
+            ctx, image_path, target_phrase, seed=seed, timeout=timeout, max_cover=max_cover)
         # no FireRed fallback: it re-lit the table and left a cat-shaped halo
         # (owner: «убери запасной FireRed»); FireRed only draws a fill_hint
         if not out:
@@ -188,7 +189,7 @@ def remove_object_with_comfy(
                     f"whatever is behind it so it looks like the {target_phrase} was "
                     f"never there. Photorealistic, seamless, keep everything else identical.")
     with _image.firered_extra_lora(_image.REMOVAL_LORA, _image.REMOVAL_LORA_STRENGTH):
-        contained = _image.edit_region_contained_cropped(
+        contained = dep(ctx, "edit_region_contained_cropped", _image.edit_region_contained_cropped)(
             ctx, image_path, target_phrase, rm_instr,
             grow=18, seed=seed, timeout=timeout, engine="firered", protect_face=False,
             removal=True)

@@ -1729,12 +1729,12 @@ def redraw_whole_image(ctx, source: str, instructions: str):
     new_path = None
     # Which engine ACTUALLY ran, for the audit log.
     engine = ""
-    if image_mod.load_layout_for(source):
+    if dep(ctx, "load_layout_for", image_mod.load_layout_for)(source):
         ctx.set_stage("Redrawing from the picture's own layout")
         logger.info("Tool: redraw_image -> layout edit (Ideogram boxes): %r",
                     instructions[:80])
         try:
-            new_path = image_mod.edit_via_layout(ctx, source, instructions)
+            new_path = dep(ctx, "edit_via_layout", image_mod.edit_via_layout)(ctx, source, instructions)
             engine = "edit_via_layout (Ideogram boxes, re-rendered from the stored layout)"
         except Exception:
             logger.exception("layout redraw failed for %s", source)
@@ -1764,7 +1764,7 @@ def redraw_whole_image(ctx, source: str, instructions: str):
         logger.info("Tool: redraw_image -> mask-free FireRed whole-image edit: %r",
                     instructions[:80])
         try:
-            new_path = image_style.restyle(ctx, source, instructions)
+            new_path = dep(ctx, "restyle", image_style.restyle)(ctx, source, instructions)
             engine = "edit_image_with_firered (whole frame, NO mask)"
         except Exception:
             logger.exception("FireRed redraw failed for %s", source)
@@ -1795,7 +1795,8 @@ def redraw_whole_image(ctx, source: str, instructions: str):
     # undo.
     if (new_path and os.path.exists(new_path)
             and classify_edit_intent(instructions, ctx=ctx) != "style_transfer"):
-        new_path = image_mod.preserve_identity_face(source, new_path, instructions=instructions, ctx=ctx)
+        new_path = dep(ctx, "preserve_identity_face", image_mod.preserve_identity_face)(
+            source, new_path, instructions=instructions, ctx=ctx)
     return new_path, engine
 
 
@@ -1837,7 +1838,7 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
         import image_router
         ctx.set_stage("Converting the colours")
         logger.info("Tool: redraw_image -> exact pixel operation: %r", instructions[:80])
-        new_path = (convert_colour(source, instructions)
+        new_path = (dep(ctx, "convert_colour", convert_colour)(source, instructions)
                     if classify_edit_intent(instructions, ctx=ctx) == "colour_convert"
                     else image_router.transform_image(source, instructions, ctx=ctx))
         if not new_path or not os.path.exists(new_path):
@@ -1901,7 +1902,7 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
         state["image_path"] = new_path
 
     try:
-        image_mod.log_edit_decision(
+        dep(ctx, "log_edit_decision", image_mod.log_edit_decision)(
             request=f"instructions={instructions!r}",
             classifier=f"mode={mode}", tool="redraw_image",
             workflow=engine or "redraw: no engine produced a file",

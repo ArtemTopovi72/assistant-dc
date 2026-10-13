@@ -37,37 +37,35 @@ def _upstream(path: Path) -> list:
 
 
 @pytest.fixture
-def base(tmp_path, monkeypatch):
-    b = tmp_path / "ComfyUI"
-    monkeypatch.setenv("COMFY_BASE_DIR", str(b))
-    return b
+def base(tmp_path):
+    return tmp_path / "ComfyUI"
 
 
-def test_nodes_are_pinned_and_rerun_is_a_no_op(tmp_path, base, monkeypatch):
+def test_nodes_are_pinned_and_rerun_is_a_no_op(tmp_path, base):
     up = tmp_path / "up"
     old, new = _upstream(up)
-    monkeypatch.setattr(C, "NODES", [("NodeA", up.as_uri(), old)])
-    st, detail = C.install_nodes("uv", lambda *_: None)
+    nodes = [("NodeA", up.as_uri(), old)]
+    st, detail = C.install_nodes("uv", lambda *_: None, base, nodes)
     d = base / "custom_nodes" / "NodeA"
     assert st == "ok", detail
     assert _git("rev-parse", "HEAD", cwd=d) == old      # the pin, not upstream's tip
-    st, detail = C.install_nodes("uv", lambda *_: None)
+    st, detail = C.install_nodes("uv", lambda *_: None, base, nodes)
     assert st == "ok" and "added" not in detail
     # a new pin moves an existing checkout
-    monkeypatch.setattr(C, "NODES", [("NodeA", up.as_uri(), new)])
-    assert C.install_nodes("uv", lambda *_: None)[0] == "ok"
+    nodes = [("NodeA", up.as_uri(), new)]
+    assert C.install_nodes("uv", lambda *_: None, base, nodes)[0] == "ok"
     assert _git("rev-parse", "HEAD", cwd=d) == new
 
 
-def test_local_edits_are_never_overwritten(tmp_path, base, monkeypatch):
+def test_local_edits_are_never_overwritten(tmp_path, base):
     up = tmp_path / "up"
     old, new = _upstream(up)
-    monkeypatch.setattr(C, "NODES", [("NodeA", up.as_uri(), old)])
-    C.install_nodes("uv", lambda *_: None)
+    nodes = [("NodeA", up.as_uri(), old)]
+    C.install_nodes("uv", lambda *_: None, base, nodes)
     d = base / "custom_nodes" / "NodeA"
     (d / "f.txt").write_text("mine")
-    monkeypatch.setattr(C, "NODES", [("NodeA", up.as_uri(), new)])
-    st, detail = C.install_nodes("uv", lambda *_: None)
+    nodes = [("NodeA", up.as_uri(), new)]
+    st, detail = C.install_nodes("uv", lambda *_: None, base, nodes)
     assert st == "warn" and "local changes" in detail
     assert (d / "f.txt").read_text() == "mine"
 
@@ -77,21 +75,21 @@ def test_staged_file_is_not_installed(base):
     stage = base / "models" / ".download" / "sub"
     stage.mkdir(parents=True)
     (stage / name).write_bytes(b"x")
-    assert any(m[2] == name for m in C.missing_models())
+    assert any(m[2] == name for m in C.missing_models(base=base))
     real = base / "models" / C.MODELS[0][1]
     real.mkdir(parents=True)
     (real / name).write_bytes(b"x")
-    assert not any(m[2] == name for m in C.missing_models())
+    assert not any(m[2] == name for m in C.missing_models(base=base))
 
 
 def test_empty_file_counts_as_missing(base):
     sub, name = C.MODELS[0][1], C.MODELS[0][2]
     (base / "models" / sub).mkdir(parents=True)
     (base / "models" / sub / name).write_bytes(b"")
-    assert any(m[2] == name for m in C.missing_models())
+    assert any(m[2] == name for m in C.missing_models(base=base))
 
 
-def _fake_hub(monkeypatch, files: dict, fail_repos=()):
+def _fake_hub(files: dict, fail_repos=()):
     hub = types.ModuleType("huggingface_hub")
 
     def list_repo_files(repo):
@@ -106,39 +104,38 @@ def _fake_hub(monkeypatch, files: dict, fail_repos=()):
         return str(p)
     hub.list_repo_files = list_repo_files
     hub.hf_hub_download = hf_hub_download
-    monkeypatch.setitem(sys.modules, "huggingface_hub", hub)
-    monkeypatch.setattr(C, "_LISTINGS", {})
+    return hub
 
 
-def test_download_falls_through_repos_and_lands_in_place(base, monkeypatch):
+def test_download_falls_through_repos_and_lands_in_place(base):
     m = ("image", "vae", "a.safetensors", ["dead/repo", "good/repo"], ["a_alt.safetensors"], 0.001)
-    monkeypatch.setattr(C, "MODELS", [m])
-    _fake_hub(monkeypatch, {"good/repo": ["split_files/vae/a_alt.safetensors"]},
+    catalog = [m]
+    hub = _fake_hub({"good/repo": ["split_files/vae/a_alt.safetensors"]},
               fail_repos={"dead/repo"})
-    st, detail = C.download_models(("image",), lambda *_: None)
+    st, detail = C.download_models(("image",), lambda *_: None, base, catalog, hub)
     assert st == "ok", detail
     assert (base / "models" / "vae" / "a.safetensors").read_bytes() == b"weights"
-    assert C.missing_models(("image",)) == []
-    assert C.download_models(("image",), lambda *_: None)[0] == "ok"   # rerun: nothing to do
+    assert C.missing_models(("image",), base, catalog) == []
+    assert C.download_models(("image",), lambda *_: None, base, catalog, hub)[0] == "ok"   # rerun: nothing to do
 
 
-def test_unfindable_file_is_a_warning_not_a_crash(base, monkeypatch):
+def test_unfindable_file_is_a_warning_not_a_crash(base):
     m = ("music", "x", "nowhere.safetensors", ["r/r"], [], 0.001)
-    monkeypatch.setattr(C, "MODELS", [m])
-    _fake_hub(monkeypatch, {"r/r": ["other.bin"]})
-    st, detail = C.download_models(("music",), lambda *_: None)
+    catalog = [m]
+    hub = _fake_hub({"r/r": ["other.bin"]})
+    st, detail = C.download_models(("music",), lambda *_: None, base, catalog, hub)
     assert st == "warn" and "nowhere.safetensors" in detail
 
 
-def test_not_enough_disk_is_reported_before_downloading(base, monkeypatch):
+def test_not_enough_disk_is_reported_before_downloading(base):
     m = ("video", "x", "huge.safetensors", ["r/r"], [], 10 ** 6)
-    monkeypatch.setattr(C, "MODELS", [m])
-    _fake_hub(monkeypatch, {})
-    st, detail = C.download_models(("video",), lambda *_: None)
+    catalog = [m]
+    hub = _fake_hub({})
+    st, detail = C.download_models(("video",), lambda *_: None, base, catalog, hub)
     assert st == "warn" and "GB" in detail and "--media" in detail
     assert not (base / "models" / "x").exists()
 
 
-def test_media_filter(base, monkeypatch):
-    monkeypatch.setattr(C, "MODELS", [("image", "a", "i", [], [], 1), ("video", "b", "v", [], [], 1)])
-    assert [m[2] for m in C.missing_models(("video",))] == ["v"]
+def test_media_filter(base):
+    catalog = [("image", "a", "i", [], [], 1), ("video", "b", "v", [], [], 1)]
+    assert [m[2] for m in C.missing_models(("video",), base, catalog)] == ["v"]

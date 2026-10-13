@@ -91,7 +91,9 @@ MODELS = [
 MEDIA = ("image", "music", "video")
 
 
-def comfy_base() -> Path:
+def comfy_base(base=None) -> Path:
+    if base is not None:
+        return Path(base)
     return Path(os.getenv("COMFY_BASE_DIR") or Path.home() / "Documents" / "ComfyUI")
 
 
@@ -184,13 +186,14 @@ def _pin(repo_dir: Path, sha: str, log) -> str:
     return ""
 
 
-def install_nodes(uv: str, log) -> tuple[str, str]:
-    base = comfy_base()
+def install_nodes(uv: str, log, base=None, nodes=None) -> tuple[str, str]:
+    base = comfy_base(base)
+    nodes = NODES if nodes is None else nodes
     nodes_dir = base / "custom_nodes"
     nodes_dir.mkdir(parents=True, exist_ok=True)
     existing = {d.name.lower(): d for d in nodes_dir.iterdir() if d.is_dir()}
     notes, left = [], []
-    for name, url, sha in NODES:
+    for name, url, sha in nodes:
         d = existing.get(name.lower())
         if d is None:
             d = nodes_dir / name
@@ -202,7 +205,7 @@ def install_nodes(uv: str, log) -> tuple[str, str]:
             left.append(f"{d.name} ({why})")
     py = tree_python(base / f"ComfyUI-{COMFY_VERSION}")
     if py:
-        for name, _url, _sha in NODES:
+        for name, _url, _sha in nodes:
             req = (existing.get(name.lower()) or nodes_dir / name) / "requirements.txt"
             if req.exists():
                 _run([uv, "pip", "install", "--python", py, "-r", req], log)
@@ -226,31 +229,29 @@ def _present(models_dir: Path, name: str) -> Path | None:
     return None
 
 
-_LISTINGS: dict = {}
-
-
-def _find(repo: str, names: list) -> str | None:
-    from huggingface_hub import list_repo_files
-    if repo not in _LISTINGS:
-        _LISTINGS[repo] = list_repo_files(repo)
+def _find(repo: str, names: list, hub, listings: dict) -> str | None:
+    if repo not in listings:
+        listings[repo] = hub.list_repo_files(repo)
     for n in names:
-        for f in _LISTINGS[repo]:
+        for f in listings[repo]:
             if f == n or f.endswith("/" + n):
                 return f
     return None
 
 
-def missing_models(media=MEDIA) -> list:
-    models = comfy_base() / "models"
-    return [m for m in MODELS if m[0] in media and not _present(models, m[2])]
+def missing_models(media=MEDIA, base=None, catalog=None) -> list:
+    models = comfy_base(base) / "models"
+    return [m for m in (MODELS if catalog is None else catalog) if m[0] in media and not _present(models, m[2])]
 
 
-def download_models(media, log) -> tuple[str, str]:
+def download_models(media, log, base=None, catalog=None, hub=None) -> tuple[str, str]:
     """Fetch the graphs' model files that are not there yet. -> (status, detail)."""
     os.environ.setdefault("HF_HUB_DISABLE_XET", "1")   # xet hung on "reconstructing" here
-    from huggingface_hub import hf_hub_download
-    base = comfy_base()
-    todo = missing_models(media)
+    if hub is None:
+        import huggingface_hub as hub
+    listings: dict = {}
+    base = comfy_base(base)
+    todo = missing_models(media, base, catalog)
     if not todo:
         return "ok", f"all model files present ({', '.join(media)})"
     need = sum(m[5] for m in todo)
@@ -268,11 +269,11 @@ def download_models(media, log) -> tuple[str, str]:
         got = None
         for repo in repos:
             try:
-                path = _find(repo, [name, *alts])
+                path = _find(repo, [name, *alts], hub, listings)
                 if not path:
                     continue
                 log(f"  [{i}/{len(todo)}] {repo}/{path} (~{gb:g} GB)")
-                got = Path(hf_hub_download(repo_id=repo, filename=path, local_dir=str(stage)))
+                got = Path(hub.hf_hub_download(repo_id=repo, filename=path, local_dir=str(stage)))
                 break
             except Exception as exc:
                 log(f"    {repo}: {type(exc).__name__}: {str(exc)[:160]}")

@@ -724,7 +724,7 @@ def engine_available(ctx=None, preset: Optional[str] = None) -> tuple[bool, str]
     # YuE2 is the one engine (Music3 removed). The
     # Music3 checks below stay only for MUSIC_ENGINE=music3 with weights restored.
     if dep(ctx, "MUSIC_ENGINE", MUSIC_ENGINE) == "yue2":
-        return (True, "") if (yue2_cpp_available() or yue2_available()) else (False, "YuE2 is not installed")
+        return (True, "") if (dep(ctx, "yue2_cpp_available", yue2_cpp_available)() or dep(ctx, "yue2_available", yue2_available)()) else (False, "YuE2 is not installed")
     miss = dep(ctx, "missing_weights", missing_weights)(preset)
     if miss:
         return False, ("the Music3 weights are not downloaded yet (missing: "
@@ -1575,20 +1575,20 @@ def _generate_yue2(ctx, lyrics: str, style: str, seed: int, prefs: Optional[dict
     yue2.cpp BF16 first (user picked it by ear over our PyTorch
     path, 7-21 s faster per song); the PyTorch venv is the fallback.
     """
-    cpp = yue2_cpp_available()
-    if not cpp and not yue2_available():
+    cpp = dep(ctx, "yue2_cpp_available", yue2_cpp_available)()
+    if not cpp and not dep(ctx, "yue2_available", yue2_available)():
         _MUSIC_FAILURE.update({"reason": "unavailable", "detail": "YuE2 is not installed"})
         raise MusicUnavailable("YuE2 is not installed")
     ext = "mp3" if cpp else "flac"
     out = str(Path(dep(ctx, "OUTPUT_DIR", OUTPUT_DIR)) / f"song_yue2_{int(time.time() * 1000)}.{ext}")
     words = "" if (prefs or {}).get("instrumental") else lyrics
     job = {"lyrics": yue2_lyrics(lyrics) if words else "[instrumental]",
-           "style": yue2_pin(yue2_language(yue2_tags(ctx, yue2_style(style)), words), prefs),
+           "style": yue2_pin(yue2_language(dep(ctx, "yue2_tags", yue2_tags)(ctx, yue2_style(style)), words), prefs),
            "seed": int(seed), "out": out}
     logger.info("YuE2 (%s): seed %d, style: %s", "cpp bf16" if cpp else "torch", seed, job["style"])
     t0 = time.time()
     for attempt in (1, 2):
-        tail = _render_yue2_once(ctx, cpp, job, seed)
+        tail = dep(ctx, "_render_yue2_once", _render_yue2_once)(ctx, cpp, job, seed)
         # The token budget (24576) ran out before the end: the song stops
         # mid-line. Rendering the same words again repeats it (the plan is the
         # same), so the retry sings one section less.
@@ -1600,11 +1600,11 @@ def _generate_yue2(ctx, lyrics: str, style: str, seed: int, prefs: Optional[dict
             break
         logger.warning("YuE2: truncated, rendering again without the last section")
         job["lyrics"] = shorter
-    if not _valid_audio_file(out):
+    if not dep(ctx, "_valid_audio_file", _valid_audio_file)(out):
         logger.error("YuE2 produced no file: %s", tail[-800:])
         _MUSIC_FAILURE.update({"reason": "server_error", "detail": "YuE2 produced no file"})
         raise MusicUnavailable("YuE2 produced no file")
-    _master(out)
+    dep(ctx, "_master", _master)(out)
     logger.info("YuE2: %s in %.0fs", os.path.basename(out), time.time() - t0)
     return out
 
@@ -1674,11 +1674,11 @@ def generate_music(ctx, lyrics: str, style: str, *, duration_s: int = 60,
             raise MusicUnavailable("no lyrics or style were given")
         if ctx is not None and hasattr(ctx, "set_stage"):
             ctx.set_stage("Composing a song")
-        final = _generate_yue2(ctx, lyrics, style,
+        final = dep(ctx, "_generate_yue2", _generate_yue2)(ctx, lyrics, style,
                                seed if seed and int(seed) > 0 else random.randint(1, 2**31 - 1), prefs=prefs)
         if (prefs or {}).get("instrumental"):
             _strip_vocals(final, ctx=ctx)
-        apply_fade(final)
+        dep(ctx, "apply_fade", apply_fade)(final)
         if ctx is not None:
             ctx.last_music_path = final
         return final

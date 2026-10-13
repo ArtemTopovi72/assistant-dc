@@ -20,7 +20,7 @@ No live LM Studio / ComfyUI / GPU: every boundary is intercepted.
 
 Run: venv/Scripts/python.exe tests/test_ideogram_single_judge.py
 """
-import os, sys, tempfile, threading
+import os, sys, tempfile, threading, types
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -49,9 +49,11 @@ def _fake_png(tag):
     return p
 
 
-def make_ctx():
-    return models.Context(models=None, transcription_cache={}, cache_file=None,
-                          asr_lock=threading.Lock(), tts_lock=threading.Lock())
+def make_ctx(**deps):
+    c = models.Context(models=None, transcription_cache={}, cache_file=None,
+                       asr_lock=threading.Lock(), tts_lock=threading.Lock())
+    c.deps = types.SimpleNamespace(**deps)       # this suite's renderer and judge
+    return c
 
 
 print("=" * 70)
@@ -67,19 +69,13 @@ def _fake_comfy(ctx, prompt, **kw):
     I._ENGINE_JUDGED.update({"judged": True, "score": 9, "ok": True, "problems": []})
     return _fake_png(f"r{len(_rendered)}")
 
-_real_comfy = IG.generate_image_with_comfy
-_real_eval = IG.evaluate_image
 _eval_calls = []
-IG.generate_image_with_comfy = _fake_comfy
-IG.evaluate_image = lambda *a, **k: (_eval_calls.append(1) or
-                                    {"verdict": "refine", "score": 3, "reason": "x",
-                                     "prompt_patch": "more cats"})
+_refine = lambda *a, **k: (_eval_calls.append(1) or
+                           {"verdict": "refine", "score": 3, "reason": "x", "prompt_patch": "more cats"})
 
-_real_engine = C.IMAGE_ENGINE
-try:
-    C.IMAGE_ENGINE = "ideogram4"
+if True:
     I._ENGINE_JUDGED.update({"judged": False, "score": 0, "ok": False, "problems": []})
-    ctx = make_ctx()
+    ctx = make_ctx(generate_image_with_comfy=_fake_comfy, evaluate_image=_refine)
     out = IG.generate_image_with_refinement(ctx, "нарисуй командную строку")
 
     check("the user's own words went straight to the renderer (plan_layout's input)",
@@ -107,8 +103,7 @@ try:
         I._ENGINE_JUDGED.update({"judged": True, "score": 5, "ok": False,
                                  "problems": ["the sign reads AVCHKE"]})
         return _fake_png(f"u{len(_rendered)}")
-    IG.generate_image_with_comfy = _fake_comfy_unhappy
-    out2 = IG.generate_image_with_refinement(make_ctx(), "a police car")
+    out2 = IG.generate_image_with_refinement(make_ctx(generate_image_with_comfy=_fake_comfy_unhappy, evaluate_image=_refine), "a police car")
     check("status is partial when the engine ran out of repair rounds",
           out2.get("status") == "partial", out2)
     check("the engine's problems are reported, not swallowed",
@@ -126,18 +121,11 @@ try:
         _rendered.append(prompt)
         I._ENGINE_JUDGED.update({"judged": False, "score": 0, "ok": False, "problems": []})
         return _fake_png(f"p{len(_rendered)}")
-    IG.generate_image_with_comfy = _fake_comfy_unjudged
-    IG.evaluate_image = lambda *a, **k: (_eval_calls.append(1) or
-                                        {"verdict": "success", "score": 9, "reason": ""})
-    out3 = IG.generate_image_with_refinement(make_ctx(), "a plain landscape")
+    _ok = lambda *a, **k: (_eval_calls.append(1) or {"verdict": "success", "score": 9, "reason": ""})
+    out3 = IG.generate_image_with_refinement(make_ctx(generate_image_with_comfy=_fake_comfy_unjudged, evaluate_image=_ok), "a plain landscape")
     check("the eval pass still runs when the engine did not judge",
           len(_eval_calls) == 1, _eval_calls)
     check("...and its verdict is what gets reported", out3.get("score") == 9, out3)
-
-finally:
-    C.IMAGE_ENGINE = _real_engine
-    IG.generate_image_with_comfy = _real_comfy
-    IG.evaluate_image = _real_eval
 
 print()
 print("=" * 70)
@@ -164,13 +152,9 @@ _c.model_name = "google/gemma-4-26b-a4b-qat"
 check("draw_agent._reader hands back the SAME ctx — no model swap per read",
       draw_agent._reader(_c) is _c)
 
-_prev = C.TEXT_READ_MODEL
-try:
-    C.TEXT_READ_MODEL = "some/other-model"
-    check("...but naming one explicitly still switches the reader (still supported)",
-          draw_agent._reader(_c) is not _c)
-finally:
-    C.TEXT_READ_MODEL = _prev
+_named = make_ctx(TEXT_READ_MODEL="some/other-model")
+check("...but naming one explicitly still switches the reader (still supported)",
+      draw_agent._reader(_named) is not _named)
 
 print()
 print(f"{OK}/{OK + BAD} checks passed")

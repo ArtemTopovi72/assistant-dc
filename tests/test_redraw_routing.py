@@ -47,7 +47,11 @@ def _img(tag):
 class Ctx:
     last_image_path = None
     last_image_prompt = "a red tractor in a field"
-    deps = types.SimpleNamespace(edit_read=_EDIT_READ)
+
+    def __init__(self, **engines):
+        # every engine and the render budget are this run's own, read off the context
+        self.deps = types.SimpleNamespace(edit_read=_EDIT_READ,
+                                          _render_budget_exhausted=lambda *a, **kw: None, **engines)
     def set_stage(self, *_a, **_k): pass
     def remember(self, *_a, **_k): pass
     def memory_text(self, *_a, **_k): return ""
@@ -65,33 +69,22 @@ def _stub(name, result):
     return fn
 
 
-def _run(source, instructions, *, layout, layout_result="/out/layout.png",
-         firered_result="/out/firered.png"):
+def _out(name):
+    """A finished picture on disk: the delivery gate checks the file is really there."""
+    return _img(name) if name else None
+
+
+def _run(source, instructions, *, layout, layout_result="layout", firered_result="firered"):
     """Drive the real _handle_redraw_image with every engine stubbed."""
     _reset()
-    saved = {}
-    for mod, name, val in (
-            (I, "load_layout_for", (lambda p: {"layout": {"elements": []}}) if layout
-                                   else (lambda p: None)),
-            (I, "edit_via_layout", _stub("layout", layout_result)),
-            (I, "edit_image_with_firered", _stub("firered", firered_result)),
-            (I, "preserve_identity_face",
-             lambda src, new, **kw: (CALLS.append("preserve_identity_face"), new)[1]),
-            (I, "log_edit_decision", lambda **kw: None)):
-        saved[(mod, name)] = getattr(mod, name)
-        setattr(mod, name, val)
-    saved[(T, "_render_budget_exhausted")] = T._render_budget_exhausted
-    T._render_budget_exhausted = lambda *a, **kw: None
-    saved[(os.path, "exists")] = os.path.exists
-    os.path.exists = lambda p: True
-    try:
-        state = {"image_path": source}
-        msg = T._handle_redraw_image(Ctx(), state, {"mode": "redraw",
-                                                    "instructions": instructions})
-        return list(CALLS), state.get("image_path"), msg
-    finally:
-        for (mod, name), val in saved.items():
-            setattr(mod, name, val)
+    ctx = Ctx(load_layout_for=(lambda p: {"layout": {"elements": []}}) if layout else (lambda p: None),
+              edit_via_layout=_stub("layout", _out(layout_result)),
+              restyle=_stub("firered", _out(firered_result)),
+              preserve_identity_face=lambda src, new, **kw: (CALLS.append("preserve_identity_face"), new)[1],
+              log_edit_decision=lambda **kw: None)
+    state = {"image_path": source}
+    msg = T._handle_redraw_image(ctx, state, {"mode": "redraw", "instructions": instructions})
+    return list(CALLS), state.get("image_path"), msg
 
 
 print("=" * 70)
@@ -100,7 +93,7 @@ print("=" * 70)
 calls, out, msg = _run(_img("ideo"), "сделай небо закатным", layout=True)
 check("edit_via_layout was used", calls and calls[0] == "layout", calls)
 check("FireRed was NOT reached either", "firered" not in calls, calls)
-check("the layout result became the current image", out == "/out/layout.png", out)
+check("the layout result became the current image", os.path.basename(out or "") == "layout.png", out)
 
 print()
 print("=" * 70)
@@ -109,7 +102,7 @@ print("=" * 70)
 calls, out, msg = _run(_img("user"), "make it winter", layout=False)
 check("FireRed was used", "firered" in calls, calls)
 check("the layout path was not attempted", "layout" not in calls, calls)
-check("the FireRed result became the current image", out == "/out/firered.png", out)
+check("the FireRed result became the current image", os.path.basename(out or "") == "firered.png", out)
 
 print()
 print("=" * 70)
@@ -120,7 +113,7 @@ print("=" * 70)
 calls, out, _ = _run(_img("ideo2"), "make it winter", layout=True, layout_result=None)
 check("a failed layout edit falls through to FireRed",
       calls == ["layout", "firered", "preserve_identity_face"], calls)
-check("...and returns the FireRed result", out == "/out/firered.png", out)
+check("...and returns the FireRed result", os.path.basename(out or "") == "firered.png", out)
 
 # No layout AND FireRed fails too: there is no third engine left — the tool must
 # report failure, not silently deliver nothing.
@@ -146,26 +139,14 @@ print("=" * 70)
 _logged = []
 def _run_logging(source, instructions, *, layout):
     _logged.clear()
-    saved = {}
-    for mod, name, val in (
-            (I, "load_layout_for", (lambda p: {"layout": {}}) if layout else (lambda p: None)),
-            (I, "edit_via_layout", _stub("layout", "/out/layout.png")),
-            (I, "edit_image_with_firered", _stub("firered", "/out/firered.png")),
-            (I, "preserve_identity_face", lambda src, new, **kw: new),
-            (I, "log_edit_decision", lambda **kw: _logged.append(kw))):
-        saved[(I, name)] = getattr(I, name)
-        setattr(I, name, val)
-    saved[(T, "_render_budget_exhausted")] = T._render_budget_exhausted
-    T._render_budget_exhausted = lambda *a, **kw: None
-    saved[(os.path, "exists")] = os.path.exists
-    os.path.exists = lambda p: True
-    try:
-        T._handle_redraw_image(Ctx(), {"image_path": source},
-                               {"mode": "redraw", "instructions": instructions})
-        return (_logged[0].get("workflow") if _logged else "")
-    finally:
-        for (mod, name), val in saved.items():
-            setattr(mod, name, val)
+    ctx = Ctx(load_layout_for=(lambda p: {"layout": {}}) if layout else (lambda p: None),
+              edit_via_layout=_stub("layout", _out("layout")),
+              restyle=_stub("firered", _out("firered")),
+              preserve_identity_face=lambda src, new, **kw: new,
+              log_edit_decision=lambda **kw: _logged.append(kw))
+    T._handle_redraw_image(ctx, {"image_path": source},
+                           {"mode": "redraw", "instructions": instructions})
+    return (_logged[0].get("workflow") if _logged else "")
 
 wf = _run_logging(_img("l1"), "make it blue", layout=True)
 check("a layout edit is logged as the layout path", "edit_via_layout" in wf, wf)
@@ -186,22 +167,11 @@ print("4. The other modes are untouched")
 print("=" * 70)
 # colour_convert must stay deterministic no matter which tool is asked.
 _reset()
-_saved_cc = I.convert_colour
-_saved_budget = T._render_budget_exhausted
-_saved_exists = os.path.exists
-I.convert_colour = _stub("colour", "/out/bw.png")
-T._render_budget_exhausted = lambda *a, **kw: None
-os.path.exists = lambda p: True
-try:
-    state = {"image_path": _img("cc")}
-    T._handle_redraw_image(Ctx(), state, {"mode": "redraw",
-                                          "instructions": "make it black and white"})
-    check("a colour conversion still short-circuits to the exact path",
-          CALLS == ["colour"], CALLS)
-finally:
-    I.convert_colour = _saved_cc
-    T._render_budget_exhausted = _saved_budget
-    os.path.exists = _saved_exists
+state = {"image_path": _img("cc")}
+T._handle_redraw_image(Ctx(convert_colour=_stub("colour", _out("bw"))), state,
+                       {"mode": "redraw", "instructions": "make it black and white"})
+check("a colour conversion still short-circuits to the exact path",
+      CALLS == ["colour"], CALLS)
 
 print()
 print("=" * 70)
@@ -210,7 +180,7 @@ print("=" * 70)
 # Every edit handler (inpaint, transfer, fix_hands, fix_artifact, redraw) runs
 # its result through assert_deliverable, so an engine returning a scratch path
 # such as "_INTERMEDIATE_tile_firered_00001_.png" is caught.
-_leak_path = "/out/_INTERMEDIATE_tile_firered_00001_.png"
+_leak_path = os.path.join(TMP, "_INTERMEDIATE_tile_firered_00001_.png")
 calls, out, msg = _run(_img("leak"), "make it winter", layout=False,
                        firered_result=_leak_path)
 check("the intermediate tile was rejected, not delivered", out != _leak_path, out)
@@ -229,7 +199,7 @@ calls, out, _ = _run(_img("anime"), "перерисуй в аниме стиле
 check("FireRed still runs the style edit", "firered" in calls, calls)
 check("preserve_identity_face is skipped for a style change",
       "preserve_identity_face" not in calls, calls)
-check("the FireRed result is returned untouched", out == "/out/firered.png", out)
+check("the FireRed result is returned untouched", os.path.basename(out or "") == "firered.png", out)
 
 # An ordinary (non-style) redraw must keep the existing face-safety net.
 calls, out, _ = _run(_img("hat"), "add a red hat", layout=False)

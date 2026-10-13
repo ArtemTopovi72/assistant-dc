@@ -362,7 +362,7 @@ def generate_image_with_refinement(ctx, description: str, steps: Optional[int] =
         # Every attempt re-draws through Ideogram with the judge's patched
         # prompt; there is no img2img "repaint the previous picture" engine any
         # more (it was the old model), and it lost the layout anyway.
-        img_path = generate_image_with_comfy(
+        img_path = dep(ctx, "generate_image_with_comfy", generate_image_with_comfy)(
             ctx=ctx,
             prompt=prompt,
             negative_prompt=negative_prompt,
@@ -406,7 +406,7 @@ def generate_image_with_refinement(ctx, description: str, steps: Optional[int] =
             }
 
         # Evaluate
-        eval_data = evaluate_image(
+        eval_data = dep(ctx, "evaluate_image", evaluate_image)(
             ctx, img_path, description, prompt, negative_prompt,
             final_steps, cfg, final_width, final_height,
         )

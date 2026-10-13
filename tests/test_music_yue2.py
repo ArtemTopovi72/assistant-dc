@@ -19,21 +19,25 @@ def test_style_is_a_short_tag_list():
     assert "Global Metadata" not in got and len(got) <= 300
 
 
-def test_default_engine_is_yue2(monkeypatch):
-    monkeypatch.setattr(M, "yue2_available", lambda: True)
-    assert M.MUSIC_ENGINE == "yue2" and M.engine_available() == (True, "")
+def _deps(**kw):
+    return types.SimpleNamespace(deps=types.SimpleNamespace(**kw))
+
+
+def test_default_engine_is_yue2():
     calls = []
-    monkeypatch.setattr(M, "_generate_yue2", lambda ctx, l, s, seed, prefs=None: calls.append(s) or __file__)
-    monkeypatch.setattr(M, "apply_fade", lambda p: False)
-    assert M.generate_music(None, "[verse]\nраз", "pop") == __file__ and calls == ["pop"]
+    ctx = _deps(yue2_available=lambda: True, yue2_cpp_available=lambda: False,
+                _generate_yue2=lambda ctx, l, s, seed, prefs=None: calls.append(s) or __file__,
+                apply_fade=lambda p: False)
+    assert M.MUSIC_ENGINE == "yue2" and M.engine_available(ctx) == (True, "")
+    assert M.generate_music(ctx, "[verse]\nраз", "pop") == __file__ and calls == ["pop"]
 
 
-def test_cpp_render_uses_16_ode_steps(monkeypatch):
+def test_cpp_render_uses_16_ode_steps():
     jobs = []
-    monkeypatch.setattr(M, "yue2_cpp_available", lambda: True)
-    monkeypatch.setattr(M, "run_gpu_worker", lambda ctx, py, sc, job, *a, **k: jobs.append(job) or (True, ""))
-    monkeypatch.setattr(M, "_valid_audio_file", lambda p: True)
-    M._generate_yue2(None, "[verse]\nраз", "pop", 5)
+    ctx = _deps(yue2_cpp_available=lambda: True,
+                run_gpu_worker=lambda ctx, py, sc, job, *a, **k: jobs.append(job) or (True, ""),
+                _valid_audio_file=lambda p: True, _master=lambda *a, **k: None)
+    M._generate_yue2(ctx, "[verse]\nраз", "pop", 5)
     assert jobs[0]["steps"] == 16
 
 
@@ -69,16 +73,14 @@ def test_the_vocal_button_reaches_yue2_as_a_positive_tag():
     assert got.split(", ")[0] == "female vocal" and "man" not in got.replace("woman", "")
 
 
-def test_an_instrumental_has_no_vocal_tags_and_no_words(monkeypatch):
+def test_an_instrumental_has_no_vocal_tags_and_no_words():
     p = M.prefs_from(vocal="instrumental")
     assert M.yue2_pin("Pop, Russian vocal, airy female vocal, synth", p) == "instrumental, Pop, synth"
     seen = {}
-    monkeypatch.setattr(M, "yue2_cpp_available", lambda: True)
-    monkeypatch.setattr(M, "yue2_tags", lambda ctx, s: s)
-    monkeypatch.setattr(M, "_render_yue2_once", lambda ctx, cpp, job, seed: (seen.update(job), "")[1])
-    monkeypatch.setattr(M, "_valid_audio_file", lambda p: True)
-    monkeypatch.setattr(M, "_master", lambda *a, **k: None)
-    M._generate_yue2(None, "[verse]\nслова песни", "Pop, synth", 1, prefs=p)
+    ctx = _deps(yue2_cpp_available=lambda: True, yue2_tags=lambda ctx, s: s,
+                _render_yue2_once=lambda ctx, cpp, job, seed: (seen.update(job), "")[1],
+                _valid_audio_file=lambda p: True, _master=lambda *a, **k: None)
+    M._generate_yue2(ctx, "[verse]\nслова песни", "Pop, synth", 1, prefs=p)
     assert seen["lyrics"] == "[instrumental]" and seen["style"].startswith("instrumental")
 
 
