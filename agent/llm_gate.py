@@ -123,10 +123,10 @@ def _alive(pid: int) -> bool:
         return True
 
 
-def _tickets_ahead(mine: Path) -> int:
+def _tickets_ahead(mine: Path, gate_dir: Path = None) -> int:
     """Live tickets that sort before `mine`; dead owners' tickets are removed."""
     ahead = 0
-    for t in GATE_DIR.glob("t_*"):
+    for t in (gate_dir or GATE_DIR).glob("t_*"):
         if t.name >= mine.name:
             continue
         try:
@@ -142,19 +142,21 @@ def _tickets_ahead(mine: Path) -> int:
 
 
 @contextlib.contextmanager
-def slot(ctx=None):
-    """Hold one model slot for the duration of the block."""
-    if not enabled():
+def slot(ctx=None, gate_dir=None, n_slots=None, on=None):
+    """Hold one model slot for the duration of the block. The folder, the slot count and the
+    on/off switch default to the environment; a suite hands in its own."""
+    if not (enabled() if on is None else on):
         yield
         return
-    GATE_DIR.mkdir(parents=True, exist_ok=True)
-    n = slots()
+    gate = Path(gate_dir) if gate_dir else GATE_DIR
+    gate.mkdir(parents=True, exist_ok=True)
+    n = n_slots or slots()
     prio = min(9, max(0, priority(ctx)))
     with _seq_lock:
         _seq[0] += 1
         seq = _seq[0]
     # Name sorts by priority, then arrival: t_<prio>_<ns>_<pid>_<seq>
-    ticket = GATE_DIR / f"t_{prio}_{time.time_ns():020d}_{os.getpid()}_{seq}"
+    ticket = gate / f"t_{prio}_{time.time_ns():020d}_{os.getpid()}_{seq}"
     ticket.touch()
     held = None
     last_ahead = -1
@@ -163,10 +165,10 @@ def slot(ctx=None):
         while True:
             if ctx is not None and getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
                 raise Cancelled()
-            ahead = _tickets_ahead(ticket)
+            ahead = _tickets_ahead(ticket, gate)
             if ahead < n:
                 for i in range(n):
-                    fh = open(GATE_DIR / f"slot{i}.lock", "a+b")
+                    fh = open(gate / f"slot{i}.lock", "a+b")
                     if _try_lock(fh):
                         held = fh
                         break
