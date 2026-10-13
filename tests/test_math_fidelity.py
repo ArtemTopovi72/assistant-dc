@@ -403,16 +403,14 @@ def test_equations_survive_page_truncation():
     # End-to-end through _brief_pages with a stubbed LLM (offline): a page whose
     # text is truncated but which carries pre-extracted equations must surface the
     # deep equation on its brief, and thus in the report section.
-    saved = dr.brief_source
-    dr.brief_source = lambda ctx, topic, page: "SOURCE: PRIMARY\n- LoRA adds low-rank update."
-    try:
-        page = {"url": "https://arxiv.org/abs/2106.09685", "domain": "arxiv.org",
-                "title": "LoRA", "text": truncated, "equations": full_eqs}
-        briefs, _ = dr._brief_pages(
-            None, "LoRA", [page], {"category": "scholarly"}, None,
-            _MiniProg(), scholarly=False, terms=[])
-    finally:
-        dr.brief_source = saved
+    import types
+    ctx = types.SimpleNamespace(deps=types.SimpleNamespace(
+        brief_source=lambda ctx, topic, page: "SOURCE: PRIMARY\n- LoRA adds low-rank update."))
+    page = {"url": "https://arxiv.org/abs/2106.09685", "domain": "arxiv.org",
+            "title": "LoRA", "text": truncated, "equations": full_eqs}
+    briefs, _ = dr._brief_pages(
+        ctx, "LoRA", [page], {"category": "scholarly"}, None,
+        _MiniProg(), scholarly=False, terms=[])
     _check(briefs and any(r"\Delta Wx" in e for e in briefs[0].get("equations", [])),
            f"deep equation lost despite pre-extraction: {briefs and briefs[0].get('equations')}")
     sec = dr._build_equations_section(briefs)

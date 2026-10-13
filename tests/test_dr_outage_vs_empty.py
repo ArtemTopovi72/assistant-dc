@@ -15,6 +15,7 @@ Offline: the briefing boundary is replaced, nothing reaches a model.
 import os
 import sys
 import tempfile
+import types
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -46,14 +47,10 @@ PAGES = [{"domain": "tea.ru", "url": "https://tea.ru/a", "title": "Чай",
 def run_briefs(answer):
     """Drive _brief_pages with a briefer that answers however the test says."""
     prog = dr_progress._Progress(None)
-    real = D.brief_source
-    D.brief_source = lambda ctx, topic, page: answer(page)
-    try:
-        briefs, dropped = D._brief_pages(
-            None, "чай", list(PAGES), {"category": "general"}, tempfile.mkdtemp(),
-            prog, scholarly=False, terms=[], mode="confirm")
-    finally:
-        D.brief_source = real
+    ctx = types.SimpleNamespace(deps=types.SimpleNamespace(brief_source=lambda ctx, topic, page: answer(page)))
+    briefs, dropped = D._brief_pages(
+        ctx, "чай", list(PAGES), {"category": "general"}, tempfile.mkdtemp(),
+        prog, scholarly=False, terms=[], mode="confirm")
     return briefs, dropped, prog
 
 
