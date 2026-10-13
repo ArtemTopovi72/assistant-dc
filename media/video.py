@@ -35,6 +35,7 @@ import json
 import logging
 import math
 import os
+import sys
 import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 import random
 import re
@@ -42,6 +43,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+from pathlib import Path
 from typing import Callable, Optional, Sequence
 
 import config as _config
@@ -55,6 +57,8 @@ from config import (
     VIDEO_STEPS, VIDEO_STEPS_REF2VA, VIDEO_STEPS_REF2VA_VOICES, VIDEO_SPEECH_STRESS, VIDEO_T2VA_LORA_3STEP, VIDEO_CFG, VIDEO_SHIFT_VIDEO, VIDEO_SHIFT_AUDIO,
     VIDEO_JOB_TIMEOUT, OUTPUT_DIR_COMFY,
 )
+
+from seams import text_model, vision_model
 
 logger = logging.getLogger("assistant.video")
 
@@ -333,6 +337,13 @@ REQUIRED_FILES = {
     "vae": ["minimax_h3_video_vae_fp16.safetensors",
             "minimax_h3_audio_vae_fp32.safetensors"],
 }
+
+
+def _eng(ctx):
+    """This module, or the engine a context brought (`ctx.video_engine`: a suite's fake
+    renderer over the real module). Calls that reach ComfyUI, the disk registry or the
+    render go through it, so nothing has to be written over this module from outside."""
+    return getattr(ctx, "video_engine", None) or sys.modules[__name__]
 
 
 def missing_weights() -> list[str]:
@@ -615,14 +626,14 @@ def build_workflow(prompt: str, *, mode: str, width: int, height: int,
         # (ref_video_audio_N belongs to ref_video_N), so the families stay aligned.
         node_id = str(max(int(k) for k in wf) + 1)
         for i, p in enumerate(list(images)[:MAX_REF_IMAGES]):
-            name = _upload(p, "image")
+            name = _eng(ctx)._upload(p, "image")
             if not name:
                 raise VideoUnavailable(f"could not upload reference image {p}")
             wf[node_id] = {"class_type": "LoadImage", "inputs": {"image": name}}
             cond[f"ref_images.ref_image_{i}"] = [node_id, 0]
             node_id = str(int(node_id) + 1)
         for i, p in enumerate(list(videos)[:MAX_REF_VIDEOS]):
-            name = _upload(p, "video")
+            name = _eng(ctx)._upload(p, "video")
             if not name:
                 raise VideoUnavailable(f"could not upload reference video {p}")
             # LoadVideo yields a VIDEO; the node wants frames, so split it.
@@ -635,7 +646,7 @@ def build_workflow(prompt: str, *, mode: str, width: int, height: int,
             cond[f"ref_video_audios.ref_video_audio_{i}"] = [node_id, 1]        # its sound
             node_id = str(int(node_id) + 1)
         for i, p in enumerate(list(audios)[:MAX_REF_AUDIOS]):
-            name = _upload(p, "audio")
+            name = _eng(ctx)._upload(p, "audio")
             if not name:
                 raise VideoUnavailable(f"could not upload reference audio {p}")
             wf[node_id] = {"class_type": "LoadAudio", "inputs": {"audio": name}}
@@ -647,14 +658,14 @@ def build_workflow(prompt: str, *, mode: str, width: int, height: int,
         # images do not go down the reference path.
         node_id = str(max(int(k) for k in wf) + 1)
         for slot, p in zip(("first_frame", "last_frame"), list(images)[:2]):
-            name = _upload(p, "image")
+            name = _eng(ctx)._upload(p, "image")
             if not name:
                 raise VideoUnavailable(f"could not upload keyframe {p}")
             wf[node_id] = {"class_type": "LoadImage", "inputs": {"image": name}}
             cond[slot] = [node_id, 0]
             node_id = str(int(node_id) + 1)
     if context_video or context_latent:
-        _add_motion_context(wf, context_video, context_latent)
+        _add_motion_context(wf, context_video, context_latent, ctx)
     if save_latent:
         _add_latent_save(wf, save_latent)
     _apply_overrides(wf)
@@ -680,7 +691,7 @@ def motion_context_on() -> bool:
     return bool(_server_has_node("MiniMaxH3MotionContext"))
 
 
-def _add_motion_context(wf: dict, context_video: str = "", context_latent: str = "") -> None:
+def _add_motion_context(wf: dict, context_video: str = "", context_latent: str = "", ctx=None) -> None:
     """Pin the end of the previous clip. From its saved first-pass LATENT when there is one
     (the node author's way: the same numbers the model made, no decode/encode, sound
     included), else from its decoded frames and sound."""
@@ -693,7 +704,7 @@ def _add_motion_context(wf: dict, context_video: str = "", context_latent: str =
                    "inputs": {"latent_path": context_latent, "clip_index": 1}}   # 0 = load nothing (first clip)
         inputs["context_latent"] = [src, 0]
     else:
-        name = _upload(context_video, "video")
+        name = _eng(ctx)._upload(context_video, "video")
         if not name:
             raise VideoUnavailable(f"could not upload the clip to continue {context_video}")
         comp = str(base + 3)
@@ -750,7 +761,7 @@ def new_chain() -> str:
 
 
 def build_chain_part(prompt: str, *, chain: str, idx: int, width: int, height: int,
-                     seconds: float, seed: int, first_frame: str = "") -> dict:
+                     seconds: float, seed: int, first_frame: str = "", ctx=None) -> dict:
     """Part `idx` of `chain`: 1 starts it (optionally from a photo), 2+ continue the
     saved latent of part idx-1. Saves its own latent + handover, returns the full clip."""
     base = _load_workflow("t2va")
@@ -763,7 +774,7 @@ def build_chain_part(prompt: str, *, chain: str, idx: int, width: int, height: i
     if idx <= 1:
         wf["cond"] = {"class_type": "H3ContinuousStartV14", "inputs": common}
         if first_frame:
-            name = _upload(first_frame, "image")
+            name = _eng(ctx)._upload(first_frame, "image")
             if not name:
                 raise VideoUnavailable(f"could not upload the start frame {first_frame}")
             wf["first"] = {"class_type": "LoadImage", "inputs": {"image": name}}
@@ -833,40 +844,45 @@ def stitch_chain(ctx, chain: str, last: int) -> Optional[str]:
     return _adopt_output(path) if _valid_video_file(path) else None
 
 
-_CHAINS = OUTPUT_DIR_COMFY / CHAIN_DIR / "chains.json"
+def _chains(eng) -> Path:
+    return Path(eng.OUTPUT_DIR_COMFY) / CHAIN_DIR / "chains.json"
 
 
-def _clip_print(path: str) -> dict:
+def _clip_print(path: str, eng=None) -> dict:
     import hashlib
-    p = probe(path)
+    p = (eng or sys.modules[__name__]).probe(path)
     with open(path, "rb") as fh:
         sha = hashlib.sha1(fh.read()).hexdigest()
     return {"sha1": sha, "seconds": round(p.get("seconds") or 0.0, 2), "w": p.get("width"), "h": p.get("height")}
 
 
-def remember_chain(path: str, chain: str, idx: int) -> None:
+def remember_chain(path: str, chain: str, idx: int, ctx=None) -> None:
     """A delivered clip is part `idx` of `chain`: ▶️ Continue on it goes on from that latent."""
+    eng = _eng(ctx)
+    reg_path = _chains(eng)
     try:
-        reg = json.loads(_CHAINS.read_text(encoding="utf-8")) if _CHAINS.exists() else []
+        reg = json.loads(reg_path.read_text(encoding="utf-8")) if reg_path.exists() else []
         reg = [r for r in reg if r.get("chain") != chain][-199:]
-        reg.append(dict(_clip_print(path), chain=chain, idx=int(idx)))
-        _CHAINS.parent.mkdir(parents=True, exist_ok=True)
-        _CHAINS.write_text(json.dumps(reg), encoding="utf-8")
+        reg.append(dict(_clip_print(path, eng), chain=chain, idx=int(idx)))
+        reg_path.parent.mkdir(parents=True, exist_ok=True)
+        reg_path.write_text(json.dumps(reg), encoding="utf-8")
     except Exception:
         logger.warning("could not remember chain %s", chain, exc_info=True)
 
 
-def chain_of(path: str) -> tuple:
+def chain_of(path: str, ctx=None) -> tuple:
     """(chain, last idx) for a clip this bot made as a chain, else (). Telegram hands a sent
     file back byte for byte; a re-encoded copy matches on length and size instead."""
+    eng = _eng(ctx)
+    reg_path = _chains(eng)
     try:
-        if not (path and _CHAINS.exists()):
+        if not (path and reg_path.exists()):
             return ()
-        me = _clip_print(path)
-        for r in reversed(json.loads(_CHAINS.read_text(encoding="utf-8"))):
+        me = _clip_print(path, eng)
+        for r in reversed(json.loads(reg_path.read_text(encoding="utf-8"))):
             same = r["sha1"] == me["sha1"] or (
                 abs(r["seconds"] - me["seconds"]) < 0.08 and (r["w"], r["h"]) == (me["w"], me["h"]))
-            if same and os.path.isdir(OUTPUT_DIR_COMFY / r["chain"]):
+            if same and os.path.isdir(Path(eng.OUTPUT_DIR_COMFY) / r["chain"]):
                 return r["chain"], int(r["idx"])
     except Exception:
         logger.warning("chain lookup failed for %s", path, exc_info=True)
@@ -1130,18 +1146,17 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
                "end: no cut, no jump to a close-up.\n"
                if images else "") +
             "\nRequest:\n" + description)
-    import llm as _llm
     try:
         if images:
             # Every picture, in order: shown only <Picture 1>, the writer guessed the
             # newcomer of <Picture 2> -- a blond guy with a light-blue glove became «a
             # man with a dark glove», only his arm in the shot (live 2026-10-12).
             labelled = [(f"<Picture {i}>", p) for i, p in enumerate(images, 1)]
-            out = _llm.analyze_image_with_llm(ctx, image_paths=labelled, user_text=user,
+            out = vision_model(ctx)(ctx, image_paths=labelled, user_text=user,
                                               system_prompt=guide, temperature=0.4,
                                               max_tokens=2500)
         else:
-            out = _llm.call_llm_simple(ctx, guide, user, temperature=0.4, max_tokens=2500)
+            out = text_model(ctx)(ctx, guide, user, temperature=0.4, max_tokens=2500)
     except Exception as exc:
         logger.warning("Context-IR rewrite failed: %s", exc)
         return description
@@ -1288,7 +1303,8 @@ def generate_video(ctx, description: str, *,
     """
     _VIDEO_FAILURE.update({"reason": "server_error", "detail": ""})
 
-    ok, why = engine_available(ctx)
+    eng = _eng(ctx)
+    ok, why = eng.engine_available(ctx)
     if not ok:
         _VIDEO_FAILURE.update({"reason": "unavailable", "detail": why})
         logger.error("video engine unavailable: %s", why)
@@ -1311,7 +1327,7 @@ def generate_video(ctx, description: str, *,
     if steps is None:
         steps = (VIDEO_STEPS_REF2VA_VOICES if audios else VIDEO_STEPS_REF2VA) if mode == "ref2va" else VIDEO_STEPS
     if not prepared:
-        description, seconds = prepare_prompt(ctx, description, images=images, videos=videos,
+        description, seconds = eng.prepare_prompt(ctx, description, images=images, videos=videos,
                                               audios=audios, seconds=seconds,
                                               head=bool(context_video or context_latent))
     frames = seconds_to_frames(seconds)
@@ -1320,7 +1336,7 @@ def generate_video(ctx, description: str, *,
         frames = snap_frames(frames + MOTION_CONTEXT_FRAMES - 5)
     src_size = _image_size(images[0]) if images else None
     if (context_video or size_from) and not src_size:   # a continuation keeps the clip's own shape
-        p = probe(size_from or context_video)
+        p = eng.probe(size_from or context_video)
         src_size = (p["width"], p["height"]) if p.get("width") else None
     width, height = resolve_size(aspect, src_size)
     if seed is None or int(seed) < 1:
@@ -1337,11 +1353,11 @@ def generate_video(ctx, description: str, *,
     try:
         if chain:
             # Net new seconds: the protected head of a continuation comes on top.
-            wf = build_chain_part(description, chain=chain[0], idx=int(chain[1]), width=width,
+            wf = eng.build_chain_part(description, chain=chain[0], idx=int(chain[1]), width=width,
                                   height=height, seconds=frames_to_seconds(frames), seed=seed,
-                                  first_frame=images[0] if images and int(chain[1]) <= 1 else "")
+                                  first_frame=images[0] if images and int(chain[1]) <= 1 else "", ctx=ctx)
         else:
-            wf = build_workflow(description, mode=mode, width=width, height=height,
+            wf = eng.build_workflow(description, mode=mode, width=width, height=height,
                                 frames=frames, seed=seed, images=images, videos=videos,
                                 audios=audios, steps=steps, ctx=ctx,
                                 context_video=context_video, context_latent=context_latent,
@@ -1360,7 +1376,7 @@ def generate_video(ctx, description: str, *,
     # offloaded to RAM and a 5-second clip took 25 minutes at 190 s/step.
     # The chat turn that followed fought the render for the card and timed
     # out three times.
-    out = comfy_client._submit_and_poll(ctx, wf, timeout=VIDEO_JOB_TIMEOUT,
+    out = eng.comfy_client._submit_and_poll(ctx, wf, timeout=VIDEO_JOB_TIMEOUT,
                                         label=f"H3 {mode}", on_progress=on_progress,
                                         validate=_valid_video_file,
                                         job_timeout=VIDEO_JOB_TIMEOUT,
@@ -1372,11 +1388,11 @@ def generate_video(ctx, description: str, *,
             return {"path": None, "status": "cancelled", "reason": "cancelled"}
         # The real cause, not a blank: with only "no file" the chat model made
         # one up for the user.
-        why = comfy_client.last_failure() or "the render produced no file"
+        why = eng.comfy_client.last_failure() or "the render produced no file"
         _VIDEO_FAILURE.update({"reason": "server_error", "detail": why})
         return {"path": None, "status": "fail", "reason": why}
 
-    final = _adopt_output(out)
+    final = eng._adopt_output(out)
     if ctx is not None:
         ctx.last_video_path = final
         ctx.last_video_prompt = description
@@ -1485,10 +1501,9 @@ def bridge_part(ctx, last_frame: str, part: str) -> str:
              "door at the left.' -- only that movement, never the action itself; the examples show "
              "the form only, their pot and door are never in this video. Reply as JSON only: "
              '{"missing": ["..."], "bridge": "sentence, or empty when nothing is missing"}')
-    import llm as _llm
     from utils import safe_json_from_llm
     try:
-        raw = _llm.analyze_image_with_llm(ctx, image_path=last_frame, user_text="Next part: " + part,
+        raw = vision_model(ctx)(ctx, image_path=last_frame, user_text="Next part: " + part,
                                           system_prompt=guide, temperature=0.2, max_tokens=400)
     except Exception as exc:
         logger.warning("bridge_part failed: %s", exc)
@@ -1523,11 +1538,10 @@ def bridge_script(ctx, parts: list) -> list:
              "video). Only that movement, never the action itself; empty "
              "when nothing is missing. Reply as JSON only: "
              '{"bridges": ["sentence or empty for part 2", "... for part 3", ...]}')
-    import llm as _llm
     from utils import safe_json_from_llm
     listing = "\n".join(f"{i}. {p}" for i, p in enumerate(parts, start=1))
     try:
-        raw = _llm.call_llm_simple(ctx, guide, listing, temperature=0.2, max_tokens=600)
+        raw = text_model(ctx)(ctx, guide, listing, temperature=0.2, max_tokens=600)
     except Exception as exc:
         logger.warning("bridge_script failed: %s", exc)
         return list(parts)
@@ -1550,12 +1564,11 @@ INSERT_HEAD = "The camera cuts in close on this moment. "
 INSERT_BACK = "The camera cuts back out to the wider view from before. "
 
 
-def condense_script(script: str, now_s: float, fit_s: float) -> str:
+def condense_script(script: str, now_s: float, fit_s: float, ctx=None) -> str:
     """The script rewritten tighter to run about `fit_s`: same people, place, order and
     quoted lines word for word. "" when the model fails."""
-    import llm as _llm
     try:
-        out = _llm.call_llm_simple(
+        out = text_model(ctx)(
             None,
             "You condense a video shot script. Keep the same people, place, order of "
             "events and every quoted spoken line word for word; cut repeated, minor and "
@@ -1582,11 +1595,10 @@ def mark_inserts(ctx, parts: list) -> list:
              "from afar) flying through the air, falling or hitting something -- the moment a "
              "wide shot would lose. Not parts where a person or animal is the main action. "
              'Reply as JSON only: {"close": [part numbers]} -- an empty list is a fine answer.')
-    import llm as _llm
     from utils import safe_json_from_llm
     listing = "\n".join(f"{i}. {p}" for i, p in enumerate(parts, start=1))
     try:
-        raw = _llm.call_llm_simple(ctx, guide, listing, temperature=0.1, max_tokens=120)
+        raw = text_model(ctx)(ctx, guide, listing, temperature=0.1, max_tokens=120)
         got = (safe_json_from_llm(raw or "", ["close"]) or {}).get("close") or []
         close = {int(x) for x in got if str(x).strip().isdigit() and 1 <= int(x) <= len(parts)}
     except Exception as exc:

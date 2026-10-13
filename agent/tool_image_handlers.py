@@ -40,6 +40,8 @@ from image import (
 )
 from tool_context import _remember, _set_current_image
 
+from seams import intent_read, vision_model, yes_no
+
 logger = logging.getLogger("assistant.tools")
 
 def _is_absence_check(check: str) -> bool:
@@ -107,7 +109,7 @@ def _handle_inspect_image(ctx, state, args: dict) -> str:
                               f"{' (the latest)' if _p == source else ''}:{chr(10)}{_sub}")
             return "\n\n".join(_parts)
 
-    from llm import analyze_image_with_llm
+    analyze_image_with_llm = vision_model(ctx)
     from prompts import IMAGE_INSPECT_PROMPT
     # NO prefill. A closed-<think> prefill makes these fine-tunes return EMPTY for a
     # vision task (verified live — same bug that broke evaluate_image). Vision is also
@@ -208,8 +210,7 @@ def _undo(ctx, state) -> str:
     """«нет, верни как было» is the previous FILE, not a redraw of it."""
     said = f'{state.get("user_input_original") or ""} {state.get("user_input") or ""}'
     hist = getattr(ctx, "image_undo", None) or []
-    import intent
-    prev = hist[-1] if hist and said.strip() and intent.read(ctx, said.strip())["undo"] else ""
+    prev = hist[-1] if hist and said.strip() and intent_read(ctx)(ctx, said.strip())["undo"] else ""
     if not (prev and os.path.exists(prev)):
         return ""
     ctx.image_undo = hist[:-1]
@@ -276,10 +277,9 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
     # The instructions alone read as an insert when they name the result:
     # «сделай красный круг зелёным» came as region='red circle', instructions='a green
     # circle' and a second, green circle was added next to the red one.
-    import intent as _intent
     if (not removal and not manual_whole and region
             and classify_edit_intent(instructions) == "object_insert"
-            and _intent.ask_yes(
+            and yes_no(ctx)(
                 "An image edit names a part of the picture and what to do there:\n{text}\n\n"
                 "Does it ask to ADD a new object while that part stays as it is (not to "
                 "turn that part itself into something else, recolour or replace it)?",
@@ -587,7 +587,7 @@ def _transfer_missing(ctx, ref: str, result: str, instructions: str) -> str:
     ONE vision call: described from the garment alone, the logo and the flag patch of a
     quarter-zip were lost and nobody compared. "" when nothing is missing or no model."""
     try:
-        from llm import analyze_image_with_llm
+        analyze_image_with_llm = vision_model(ctx)
         ans = " ".join((analyze_image_with_llm(
             ctx, temperature=0.0, max_tokens=120,
             image_paths=[("REFERENCE:", ref), ("RESULT:", result)],
@@ -852,7 +852,7 @@ def _keep_quoted_names(description: str, state) -> str:
     return description
 
 
-def _user_look(state) -> str:
+def _user_look(ctx, state) -> str:
     """The look THIS message asks for: a drawn look, "photo", "none", or "" when
     there are no user words to read (a direct call). Only this message: «нарисуй
     кота в стиле аниме», then «нарисуй собаку» drew the dog in anime too
@@ -864,12 +864,11 @@ def _user_look(state) -> str:
     text = user_words(str(st.get("user_input_original") or st.get("user_input") or "")).strip()
     if not text:
         return ""
-    got = _look(text)
+    got = _look(text, ctx)
     if got != "none":
         return got
     try:
-        import intent
-        redo = intent.read(None, text)["redo"] in ("same", "changed")
+        redo = intent_read(ctx)(None, text)["redo"] in ("same", "changed")
     except Exception:
         redo = False
     if redo:
@@ -877,7 +876,7 @@ def _user_look(state) -> str:
             if isinstance(m, dict) and m.get("role") == "user" and isinstance(m.get("content"), str):
                 t = user_words(m["content"]).strip()
                 if t and t != text:
-                    return _look(t)
+                    return _look(t, ctx)
     return "none"
 
 
@@ -954,7 +953,7 @@ def _handle_generate_image(ctx, state, args: dict) -> str:
     # ideogram_layout.enforce_user_look): read from their own words, this turn
     # first, then the last two requests («ещё раз» after «в стиле аниме»).
     _prev_look = getattr(ctx, "user_look", "")
-    ctx.user_look = _user_look(state)
+    ctx.user_look = _user_look(ctx, state)
     try:
         result = _t.generate_image_with_refinement(
             ctx=ctx, description=description, steps=steps, width=width, height=height, seed=seed,
@@ -1144,28 +1143,41 @@ def asks_for_video(ctx, state) -> bool:
     # Live 2026-10-11 the ▶ rerun was re-asked here, the model said no, the turn failed.
     if getattr(ctx, "video_plan_parts", None) or getattr(ctx, "continue_tail", ""):
         return True
-    import intent
     last = getattr(ctx, "last_video_path", None)
     if last and os.path.exists(last):
         try:
-            if intent.read(None, said)["redo"] in ("same", "changed"):
+            if intent_read(ctx)(None, said)["redo"] in ("same", "changed"):
                 return True
         except Exception:
             pass
     # A shot script with no word «видео» is still a clip. «Мужчина берёт
     # банку … говорит "Полная хуета" … бросает банку … опрокидывает стеллаж» was
     # refused here. The model reads it; a complaint about a picture stays a no.
-    return intent.ask_yes(
+    return yes_no(ctx)(
         "A user wrote: {text}\n\nIs this a request for a video clip: a scene that unfolds "
         "over time (people act one after another, move, speak lines), not a single still "
         "picture, a complaint about a picture, or a question?", said)
 
 
+
+def _video(ctx):
+    """The video engine for this turn: `ctx.video_engine` when one was handed in (a suite's
+    fake renderer), the `video` module otherwise. Handlers never reach the module directly,
+    so a fake never has to be written over the module for everyone else."""
+    import video
+    return getattr(ctx, "video_engine", None) or video
+
+
+def _clips(ctx):
+    """Frame and tail cutting of delivered clips: `ctx.clip_tools`, else `tg_continue`."""
+    import tg_continue
+    return getattr(ctx, "clip_tools", None) or tg_continue
+
 def _bridged(ctx, clip: str, part: str) -> str:
     """`part` led by the move that brings in what it needs and the clip's last frame lacks."""
     import tempfile
-    import tg_continue
-    import video as video_mod
+    tg_continue = _clips(ctx)
+    video_mod = _video(ctx)
     frame = os.path.join(tempfile.mkdtemp(prefix="vidbridge_"), "last.jpg")
     return video_mod.bridge_part(ctx, frame, part) if tg_continue.seed_frame(clip, frame) else part
 
@@ -1177,8 +1189,8 @@ def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str, st
     (a continued chain goes on from its own last link). Returns the last link made; a failure or a
     cancel stops there and the parts so far are still joined and delivered."""
     import tempfile
-    import tg_continue
-    import video as video_mod
+    tg_continue = _clips(ctx)
+    video_mod = _video(ctx)
     last, prev = start, first
     work = tempfile.mkdtemp(prefix="chainjoins_")
     ctx.chain_joins = []           # frames on both sides of each join, looked at once the card is free
@@ -1198,7 +1210,7 @@ def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str, st
             logger.warning("video chain: part %d produced no clip (%s)", i, r.get("reason"))
             break
         before, after = os.path.join(work, f"end_{i}.jpg"), os.path.join(work, f"start_{i}.jpg")
-        if tg_continue.seed_frame(prev, before) and _first_frame(new, after):
+        if tg_continue.seed_frame(prev, before) and tg_continue.first_frame(new, after):
             ctx.chain_joins.append((before, after))
         last, prev = start + i - 1, new
     return last
@@ -1209,8 +1221,8 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=()) 
     last frame (its tail as <Video 1>, that frame as <Picture 1>), joined on. A part
     that fails or a cancel stops here: the clip made so far is still delivered."""
     import tempfile
-    import tg_continue
-    import video as video_mod
+    tg_continue = _clips(ctx)
+    video_mod = _video(ctx)
     work = tempfile.mkdtemp(prefix="vidparts_")
     joins = []                     # (last frame of the clip so far, first frame of the new part)
     for i, part in enumerate(parts[1:], start=2):
@@ -1248,7 +1260,7 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=()) 
             logger.warning("video parts: part %d produced no clip (%s)", i, r.get("reason"))
             break
         first = os.path.join(work, f"first_{i}.jpg")
-        if _first_frame(new, first):
+        if tg_continue.first_frame(new, first):
             joins.append((frame, first))
         # pinned: the new part starts on the frame after the old one ends -- butt-join
         joined = (video_mod.join_pinned(path, new) if pinned
@@ -1262,17 +1274,6 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=()) 
     return path
 
 
-def _first_frame(video: str, out: str) -> bool:
-    try:
-        import cv2
-        cap = cv2.VideoCapture(video)
-        ok, img = cap.read()
-        cap.release()
-        return bool(ok) and bool(cv2.imwrite(out, img))
-    except Exception:
-        return False
-
-
 def _check_joins(ctx, joins: list) -> str:
     """Every join of a chained clip -- the frame before it and the frame after -- in ONE
     vision call, after all parts are made (per part, the vision model was loaded back
@@ -1282,7 +1283,7 @@ def _check_joins(ctx, joins: list) -> str:
     if not joins:
         return ""
     try:
-        from llm import analyze_image_with_llm
+        analyze_image_with_llm = vision_model(ctx)
         pics = []
         for n, (a, b) in enumerate(joins, 1):
             pics += [(f"Join {n}, BEFORE:", a), (f"Join {n}, AFTER:", b)]
@@ -1301,7 +1302,7 @@ def _check_joins(ctx, joins: list) -> str:
 
 def _handle_generate_video(ctx, state, args: dict) -> str:
     import tools as _t   # the render seam is owned by tools; read it at CALL time
-    import video as video_mod
+    video_mod = _video(ctx)
 
     description = (args.get("description") or "").strip()
     if not description:
@@ -1360,7 +1361,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         for p in images:
             clip = os.path.join(os.path.dirname(p), video_look.CONTINUE_CLIP)
             if os.path.basename(p).startswith("sheet") and os.path.exists(clip):
-                import tg_continue
+                tg_continue = _clips(ctx)
                 seed, tail = clip[:-4] + "_seed.jpg", clip[:-4] + "_tail.mp4"
                 if tg_continue.seed_frame(clip, seed) and tg_continue.cut_tail(clip, tail):
                     ctx.continue_tail, ctx.continue_src = tail, clip
@@ -1371,13 +1372,12 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     # (live 2026-10-13) -- only the ▶️ button set the clip up. The chat's last clip here.
     lv = getattr(ctx, "last_video_path", None)
     if not getattr(ctx, "continue_tail", "") and lv and os.path.exists(lv):
-        import intent
         said = str((state or {}).get("user_input_original") or (state or {}).get("user_input") or "")
-        if said and intent.ask_yes(
+        if said and yes_no(ctx)(
                 "The user wrote: {text}. Do they ask to continue or extend the video already in "
                 "this chat -- what happens next in it -- rather than a new clip?", said, default=False):
             import tempfile
-            import tg_continue
+            tg_continue = _clips(ctx)
             d = tempfile.mkdtemp(prefix="contlast_")
             seed, tail = os.path.join(d, "seed.jpg"), os.path.join(d, "tail.mp4")
             if tg_continue.seed_frame(lv, seed) and tg_continue.cut_tail(lv, tail):
@@ -1401,7 +1401,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         ctx.continue_people = []
         # A clip this bot made as a Herrgott chain goes on from its own saved latent
         # (no reference, no re-encode); new people from photos still need the reference path.
-        prior = video_mod.chain_of(cont_src) if (not people and video_mod.herrgott_on()) else ()
+        prior = video_mod.chain_of(cont_src, ctx) if (not people and video_mod.herrgott_on()) else ()
         if prior:
             chain_id, chain_idx = prior[0], prior[1] + 1
             videos, images = [], []
@@ -1497,7 +1497,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         have = sum(video_mod.estimate_seconds(p) for p in parts)
         if want and have > want * 1.3:
             # «на 30 секунд» came out as 11 parts, a minute (live 2026-10-13)
-            tight = video_mod.condense_script(raw, have, want)
+            tight = video_mod.condense_script(raw, have, want, ctx)
             if tight:
                 logger.info("generate_video: script condensed from ~%.0f s to fit %.0f s", have, want)
                 description = description.replace(raw, tight, 1) if raw in description else description
@@ -1662,7 +1662,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                     path = joined
                 else:
                     logger.warning("video chain: the join failed, delivering the last part alone")
-            video_mod.remember_chain(path, chain_id, chain_idx)
+            video_mod.remember_chain(path, chain_id, chain_idx, ctx)
             if len(parts) > 1:
                 result["seconds"] = video_mod.probe(path).get("seconds") or result.get("seconds")
     ctx.video_join_note = ""

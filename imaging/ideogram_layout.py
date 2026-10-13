@@ -313,13 +313,13 @@ _LOOKS = ("caricature", "cartoon", "anime", "comic strip", "watercolour",
           "oil painting", "pixel art", "3d render", "sketch", "illustration", "painting")
 
 
-def _look(prompt: str) -> str:
+def _look(prompt: str, ctx=None) -> str:
     """The look the user asked the picture to have: one of _LOOKS, "photo", or
     "none". Read by the model: a painting HANGING on the wall in the scene is
     not a request for a painted picture (the render came back
     as a framed canvas), and word lists could not tell the two apart."""
-    import intent
-    return intent.ask_choice(
+    from seams import choice
+    return choice(ctx)(
         "A user asked for this picture: {text}. Which LOOK does the user ask the whole "
         "picture to have? caricature = карикатура / шарж; cartoon = мультик, мультяшный; "
         "anime = аниме; comic strip = комикс (even a realistic one); watercolour = "

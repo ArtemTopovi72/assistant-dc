@@ -1,25 +1,36 @@
 """Continuation as a Herrgott chain (H3 Infinite Continuation Suite v1.4): each part keeps
 its full AV latent, the next part copies the previous tail into its own latent under the
-native denoise mask, and the suite's stitch node joins the saved parts."""
+native denoise mask, and the suite's stitch node joins the saved parts.
+
+The renderer, the clip tools and the models are handed in on the context
+(`video_engine`, `clip_tools`, `text_model`, ...): nothing is written over a module."""
 import os
 import sys
+import types
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 for d in ("", "core", "agent", "media", "bot"):
     sys.path.insert(0, os.path.join(ROOT, d))
 os.environ.setdefault("F5_TEST_RUN", "1")
 
+import comfy_client  # noqa: E402
+import tg_continue  # noqa: E402
+import tool_image_handlers as H  # noqa: E402
 import video as V  # noqa: E402
+from tests.fakes import Over  # noqa: E402
 
 
 def _by(wf, cls):
     return [k for k, v in wf.items() if v["class_type"] == cls]
 
 
-def test_part_one_starts_the_chain_and_keeps_its_latent(monkeypatch):
-    monkeypatch.setattr(V, "_upload", lambda p, kind="image": "start.png")
+def _uploads(name):
+    return types.SimpleNamespace(video_engine=Over(V, _upload=lambda p, kind="image": name))
+
+
+def test_part_one_starts_the_chain_and_keeps_its_latent():
     wf = V.build_chain_part("a chef chops", chain="h3_continuous/chX", idx=1, width=768, height=1024,
-                            seconds=6.0, seed=5, first_frame="photo.jpg")
+                            seconds=6.0, seed=5, first_frame="photo.jpg", ctx=_uploads("start.png"))
     st = wf[_by(wf, "H3ContinuousStartV14")[0]]["inputs"]
     assert st["prompt"] == "a chef chops" and (st["width"], st["height"]) == (768, 1024)
     assert wf[st["first_frame"][0]]["inputs"]["image"] == "start.png"
@@ -50,20 +61,21 @@ def test_stitch_joins_the_whole_chain():
     assert s["latent_prefix"] == "h3_continuous/chX/clip" and (s["first_clip"], s["last_clip"]) == (1, 3)
 
 
-def test_a_clip_is_found_again_by_its_bytes(monkeypatch, tmp_path):
-    monkeypatch.setattr(V, "_CHAINS", tmp_path / "chains.json")
-    monkeypatch.setattr(V, "OUTPUT_DIR_COMFY", tmp_path)
+def test_a_clip_is_found_again_by_its_bytes(tmp_path):
     (tmp_path / "h3_continuous" / "chX").mkdir(parents=True)
-    monkeypatch.setattr(V, "probe", lambda p: {"seconds": 6.5, "width": 768, "height": 1024})
+    seconds = {"s": 6.5}
+    ctx = types.SimpleNamespace(video_engine=Over(
+        V, OUTPUT_DIR_COMFY=tmp_path,
+        probe=lambda p: {"seconds": seconds["s"], "width": 768, "height": 1024}))
     a = tmp_path / "a.mp4"
     a.write_bytes(b"clip a")
-    V.remember_chain(str(a), "h3_continuous/chX", 2)
+    V.remember_chain(str(a), "h3_continuous/chX", 2, ctx)
     back, other = tmp_path / "from_tg.mp4", tmp_path / "b.mp4"
     back.write_bytes(b"clip a")
     other.write_bytes(b"clip b")
-    monkeypatch.setattr(V, "probe", lambda p: {"seconds": 9.0, "width": 768, "height": 1024})
-    assert V.chain_of(str(back)) == ("h3_continuous/chX", 2)
-    assert V.chain_of(str(other)) == ()
+    seconds["s"] = 9.0                       # a different length: only the bytes can match
+    assert V.chain_of(str(back), ctx) == ("h3_continuous/chX", 2)
+    assert V.chain_of(str(other), ctx) == ()
 
 
 class _Ctx:
@@ -81,35 +93,54 @@ def _old_join(*a):
     raise AssertionError("a chain is joined by the stitch node, not the old join")
 
 
-def _wire(monkeypatch, tmp_path):
-    import tool_image_handlers as H
-    import tg_continue
-    calls, stitched, kept = [], [], []
+class _Rig:
+    """A fake renderer and clip tools for the handler; `ctx()` hands them in."""
 
-    import comfy_client
+    def __init__(self, tmp_path, chains=None, **engine):
+        self.calls, self.stitched, self.kept = [], [], []
+        chains = chains or {}
 
-    def fake_gen(ctx, description, **kw):
-        out = tmp_path / f"part{len(calls) + 1}.mp4"
-        out.write_bytes(b"v")
-        calls.append((description, dict(kw, card=comfy_client.card_in_use())))
-        return {"path": str(out), "status": "success", "seconds": 6.0}
-    monkeypatch.setattr(V, "generate_video", fake_gen)
-    monkeypatch.setattr(V, "engine_available", lambda ctx: (True, ""))
-    monkeypatch.setattr(V, "herrgott_on", lambda: True)
-    monkeypatch.setattr(V, "motion_context_on", lambda: False)
-    monkeypatch.setattr(V, "bridge_part", lambda ctx, f, part: "BRIDGE. " + part)
-    monkeypatch.setattr(V, "prepare_prompt",
-                        lambda ctx, d, **kw: calls.append(("PREP", {"card": comfy_client.card_in_use()}))
-                        or (d, 6.0))
-    monkeypatch.setattr(tg_continue, "seed_frame", lambda src, out: open(out, "wb").write(b"j") > 0)
-    monkeypatch.setattr(tg_continue, "cut_tail", lambda src, out: open(out, "wb").write(b"t") > 0)
-    monkeypatch.setattr(V, "stitch_chain",
-                        lambda ctx, ch, n: stitched.append((ch, n)) or str(tmp_path / "joined.mp4"))
-    monkeypatch.setattr(V, "remember_chain", lambda p, ch, n: kept.append((os.path.basename(p), ch, n)))
-    monkeypatch.setattr(V, "probe", lambda p: {"seconds": 18.0})
-    monkeypatch.setattr(V, "join_continuation", _old_join)
-    monkeypatch.setattr(V, "join_pinned", _old_join)
-    return H, calls, stitched, kept
+        def gen(ctx, description, **kw):
+            out = tmp_path / f"part{len(self.calls) + 1}.mp4"
+            out.write_bytes(b"v")
+            self.calls.append((description, dict(kw, card=comfy_client.card_in_use())))
+            return {"path": str(out), "status": "success", "seconds": 6.0}
+
+        def prep(ctx, d, **kw):
+            self.calls.append(("PREP", {"card": comfy_client.card_in_use()}))
+            return d, 6.0
+
+        self.engine = Over(V, **{
+            "generate_video": gen,
+            "engine_available": lambda ctx: (True, ""),
+            "herrgott_on": lambda: True,
+            "motion_context_on": lambda: False,
+            "bridge_part": lambda ctx, f, part: "BRIDGE. " + part,
+            "bridge_script": lambda ctx, ps: ps,
+            "mark_inserts": lambda ctx, ps: ps,
+            "prepare_prompt": prep,
+            "stitch_chain": lambda ctx, ch, n: self.stitched.append((ch, n)) or str(tmp_path / "joined.mp4"),
+            "remember_chain": lambda p, ch, n, ctx=None: self.kept.append((os.path.basename(p), ch, n)),
+            "chain_of": lambda p, ctx=None: chains.get(p, ()),
+            "probe": lambda p: {"seconds": 18.0},
+            "join_continuation": _old_join,
+            "join_pinned": _old_join,
+            **engine})
+        self.clips = Over(tg_continue,
+                          seed_frame=lambda src, out: open(out, "wb").write(b"j") > 0,
+                          cut_tail=lambda src, out: open(out, "wb").write(b"t") > 0,
+                          first_frame=lambda src, out: False)
+
+    def ctx(self, **kw):
+        c = _Ctx()
+        c.video_engine, c.clip_tools = self.engine, self.clips
+        c.yes_no = lambda q, t, default=False, wait=True: default
+        for k, v in kw.items():
+            setattr(c, k, v)
+        return c
+
+    def renders(self):
+        return [(d, kw) for d, kw in self.calls if d != "PREP"]
 
 
 LONG = ("The man puts on a formal suit, takes a broom and begins sweeping the floor. He sweeps for "
@@ -118,17 +149,17 @@ LONG = ("The man puts on a formal suit, takes a broom and begins sweeping the fl
         "and falls. He gets up, laughs and says «Ну и денёк».")
 
 
-def test_a_long_script_is_one_chain_stitched_once(monkeypatch, tmp_path):
-    H, calls, stitched, kept = _wire(monkeypatch, tmp_path)
-    asked = []
-    monkeypatch.setattr(V, "bridge_script",
-                        lambda ctx, ps: asked.append(len(calls)) or [ps[0]] + ["BRIDGE. " + p for p in ps[1:]])
+def _no_vision(*a, **k):
+    raise AssertionError("no model call between the parts of a chain (it reloads the LLM)")
 
-    def no_vision(*a):
-        raise AssertionError("no model call between the parts of a chain (it reloads the LLM)")
-    monkeypatch.setattr(V, "bridge_part", no_vision)
+
+def test_a_long_script_is_one_chain_stitched_once(tmp_path):
+    asked = []
+    rig = _Rig(tmp_path, bridge_part=_no_vision,
+               bridge_script=lambda ctx, ps: asked.append(len(rig.calls)) or [ps[0]] + ["BRIDGE. " + p for p in ps[1:]])
     st = {}
-    H._handle_generate_video(_Ctx(), st, {"description": LONG, "use_current_images": False})
+    H._handle_generate_video(rig.ctx(), st, {"description": LONG, "use_current_images": False})
+    calls = rig.calls
     n = len(V.split_script(LONG))
     preps = [kw for d, kw in calls if d == "PREP"]
     assert len(preps) == n and calls[:n] == [("PREP", {"card": False})] * n   # all prepared first, model loaded
@@ -139,88 +170,77 @@ def test_a_long_script_is_one_chain_stitched_once(monkeypatch, tmp_path):
     assert [kw["chain"][1] for _, kw in calls] == list(range(1, n + 1))
     assert all(d.startswith(V.CONTINUE_CTX_PREFIX + "BRIDGE. ") for d, _ in calls[1:]), calls
     assert not calls[0][0].startswith(V.CONTINUE_CTX_PREFIX)
-    assert stitched == [(chains.pop(), n)] and st["video_path"].endswith("joined.mp4")
-    assert kept and kept[-1][2] == n
+    assert rig.stitched == [(chains.pop(), n)] and st["video_path"].endswith("joined.mp4")
+    assert rig.kept and rig.kept[-1][2] == n
     assert asked == [0]                                  # bridges written once, before any render
     assert all(kw["card"] for _, kw in calls)            # the card held through the whole chain
 
 
-def test_continue_on_a_chain_clip_goes_on_from_its_latent(monkeypatch, tmp_path):
-    H, calls, stitched, kept = _wire(monkeypatch, tmp_path)
+def _continued(tmp_path, rig_kw=None, **ctx_kw):
     src, tail = tmp_path / "sent_back.mp4", tmp_path / "tail.mp4"
     src.write_bytes(b"s")
     tail.write_bytes(b"t")
-    monkeypatch.setattr(V, "chain_of", lambda p: ("h3_continuous/chY", 2) if p == str(src) else ())
-    ctx = _Ctx()
-    ctx.continue_src, ctx.continue_tail = str(src), str(tail)
+    rig = _Rig(tmp_path, chains={str(src): ("h3_continuous/chY", 2)}, **(rig_kw or {}))
+    return rig, rig.ctx(continue_src=str(src), continue_tail=str(tail), **ctx_kw), src
+
+
+def test_continue_on_a_chain_clip_goes_on_from_its_latent(tmp_path):
+    rig, ctx, src = _continued(tmp_path)
     H._handle_generate_video(ctx, {}, {"description": "He smiles and says «Готово»."})
-    (d, kw), = calls
+    (d, kw), = rig.calls
     assert kw["chain"] == ("h3_continuous/chY", 3) and kw["size_from"] == str(src)
     assert not kw.get("videos") and not kw.get("images") and not kw.get("context_video")
     assert d.startswith(V.CONTINUE_CTX_PREFIX + "BRIDGE. ")
-    assert stitched == [("h3_continuous/chY", 3)] and kept[-1][1:] == ("h3_continuous/chY", 3)
+    assert rig.stitched == [("h3_continuous/chY", 3)] and rig.kept[-1][1:] == ("h3_continuous/chY", 3)
 
 
-def test_the_joins_of_a_chain_are_looked_at_once_after_the_card_is_free(monkeypatch, tmp_path):
+def test_the_joins_of_a_chain_are_looked_at_once_after_the_card_is_free(tmp_path):
     # The joins check lived only on the old join path; the live chain path never ran it.
-    H, calls, stitched, kept = _wire(monkeypatch, tmp_path)
-    monkeypatch.setattr(V, "bridge_script", lambda ctx, ps: ps)
-    monkeypatch.setattr(V, "mark_inserts", lambda ctx, ps: ps)
-    monkeypatch.setattr(H, "_first_frame", lambda v, out: open(out, "wb").write(b"f") > 0)
-    import comfy_client
-    import llm
+    rig = _Rig(tmp_path)
+    rig.clips = Over(rig.clips, first_frame=lambda src, out: open(out, "wb").write(b"f") > 0)
     seen = []
-    monkeypatch.setattr(llm, "analyze_image_with_llm", lambda *a, **k: (
+    ctx = rig.ctx(vision_model=lambda *a, **k: (
         seen.append((len(k["image_paths"]), comfy_client._excl_users)), "Join 2: the cat vanishes")[1])
-    out = H._handle_generate_video(_Ctx(), {}, {"description": LONG, "use_current_images": False})
+    out = H._handle_generate_video(ctx, {}, {"description": LONG, "use_current_images": False})
     n = len(V.split_script(LONG))
     assert seen == [(2 * (n - 1), 0)], seen     # one call, the chain's card session closed
     assert "Join 2: the cat vanishes" in out and "do NOT call the clip seamless" in out
 
 
-def test_a_long_continuation_of_a_chain_clip_is_still_cut_into_parts(monkeypatch, tmp_path):
+def test_a_long_continuation_of_a_chain_clip_is_still_cut_into_parts(tmp_path):
     # Bridged before the cut, the script was no longer found in the description and
     # «продолжение на 30 секунд» went out as one 15 s part (live 2026-10-13).
-    H, calls, stitched, kept = _wire(monkeypatch, tmp_path)
-    monkeypatch.setattr(V, "bridge_script", lambda ctx, ps: ps)
-    monkeypatch.setattr(V, "mark_inserts", lambda ctx, ps: ps)
-    src, tail = tmp_path / "sent_back.mp4", tmp_path / "tail.mp4"
-    src.write_bytes(b"s")
-    tail.write_bytes(b"t")
-    monkeypatch.setattr(V, "chain_of", lambda p: ("h3_continuous/chY", 2) if p == str(src) else ())
-    ctx = _Ctx()
-    ctx.continue_src, ctx.continue_tail = str(src), str(tail)
+    rig, ctx, _ = _continued(tmp_path)
     H._handle_generate_video(ctx, {}, {"description": LONG, "seconds": 30})
-    renders = [(d, kw) for d, kw in calls if d != "PREP"]
+    renders = rig.renders()
     n = len(V.split_script(LONG))
     assert n > 1 and len(renders) == n, renders
     assert renders[0][0].startswith(V.CONTINUE_CTX_PREFIX + "BRIDGE. ")
     # the new links follow the clip's own: restarting at 2 overwrote its links
     assert [kw["chain"][1] for _, kw in renders] == list(range(3, 3 + n))
-    assert stitched == [("h3_continuous/chY", 2 + n)]
+    assert rig.stitched == [("h3_continuous/chY", 2 + n)]
 
 
-def test_voices_keep_the_old_path(monkeypatch, tmp_path):
-    H, calls, stitched, kept = _wire(monkeypatch, tmp_path)
-    ctx = _Ctx()
+def test_voices_keep_the_old_path(tmp_path):
+    rig = _Rig(tmp_path)
     voice = tmp_path / "v.wav"
     voice.write_bytes(b"w")
-    ctx.anim_voices = [str(voice)]
-    H._handle_generate_video(ctx, {}, {"description": "He says «Привет».", "use_current_images": False})
-    assert calls and not calls[0][1].get("chain") and not stitched
+    H._handle_generate_video(rig.ctx(anim_voices=[str(voice)]), {},
+                             {"description": "He says «Привет».", "use_current_images": False})
+    assert rig.calls and not rig.calls[0][1].get("chain") and not rig.stitched
 
 
-def test_a_prepared_part_calls_no_model(monkeypatch, tmp_path):
+def test_a_prepared_part_calls_no_model():
     """Inside a chain the card is held and the chat model is out: generate_video must not
     reach for it (the Context-IR rewrite met an unloaded model every part)."""
     def boom(*a, **k):
         raise AssertionError("model call during a prepared render")
-    for name in ("estimate_seconds", "to_context_ir", "mark_speech_stress"):
-        monkeypatch.setattr(V, name, boom)
-    monkeypatch.setattr(V, "engine_available", lambda ctx: (True, ""))
-    monkeypatch.setattr(V, "_context_ir_on", lambda: True)
-    monkeypatch.setattr(V, "build_chain_part", lambda *a, **k: (_ for _ in ()).throw(V.VideoUnavailable("stop")))
-    r = V.generate_video(None, "ready prompt", seconds=6.0, prepared=True, chain=("h3_continuous/chZ", 2))
+
+    def stop(*a, **k):
+        raise V.VideoUnavailable("stop")
+    ctx = types.SimpleNamespace(text_model=boom, vision_model=boom, video_engine=Over(
+        V, engine_available=lambda ctx: (True, ""), prepare_prompt=boom, build_chain_part=stop))
+    r = V.generate_video(ctx, "ready prompt", seconds=6.0, prepared=True, chain=("h3_continuous/chZ", 2))
     assert r["reason"] == "stop"
 
 
@@ -247,60 +267,45 @@ def test_later_parts_know_the_scene_and_carry_no_example_action():
     assert V.with_scene(part, "") == part
 
 
-def test_a_small_flying_thing_gets_a_close_up_and_the_next_part_cuts_back(monkeypatch):
+def test_a_small_flying_thing_gets_a_close_up_and_the_next_part_cuts_back():
     # Live 2026-10-11: on a wide shot the cork never left the bottle and the apple fell unseen.
-    import llm
-    monkeypatch.setattr(llm, "call_llm_simple", lambda *a, **k: '{"close": [2]}')
-    out = V.mark_inserts(None, ["A man twists the cork.", "The cork shoots out.", "Everyone laughs."])
+    ctx = types.SimpleNamespace(text_model=lambda *a, **k: '{"close": [2]}')
+    out = V.mark_inserts(ctx, ["A man twists the cork.", "The cork shoots out.", "Everyone laughs."])
     assert out[0] == "A man twists the cork."
     assert out[1].startswith(V.INSERT_HEAD) and out[2].startswith(V.INSERT_BACK)
     assert V.INSERT_HEAD.strip(" .")[:24] in V.CONTINUE_CTX_PREFIX and V.INSERT_BACK[:24] in V.CONTINUE_CTX_PREFIX
 
 
-def test_marking_fails_soft(monkeypatch):
-    import llm
-    monkeypatch.setattr(llm, "call_llm_simple", lambda *a, **k: "no json here")
+def test_marking_fails_soft():
     parts = ["a", "b"]
-    assert V.mark_inserts(None, parts) == parts
+    assert V.mark_inserts(types.SimpleNamespace(text_model=lambda *a, **k: "no json here"), parts) == parts
 
 
-def test_continue_in_words_goes_on_from_the_chats_last_clip(monkeypatch, tmp_path):
+def test_continue_in_words_goes_on_from_the_chats_last_clip(tmp_path):
     # «продолжи это видео» typed, no ▶️: a new clip from nothing, another style (live 2026-10-13).
-    H, calls, stitched, kept = _wire(monkeypatch, tmp_path)
-    import intent
     last = tmp_path / "delivered.mp4"
     last.write_bytes(b"s")
-    monkeypatch.setattr(V, "chain_of", lambda p: ("h3_continuous/chZ", 4) if p == str(last) else ())
-    monkeypatch.setattr(intent, "YES_STUB", lambda q, t: "continue" in q, raising=False)
-    ctx = _Ctx()
-    ctx.last_video_path = str(last)
+    rig = _Rig(tmp_path, chains={str(last): ("h3_continuous/chZ", 4)})
+    ctx = rig.ctx(last_video_path=str(last), yes_no=lambda q, t, default=False, wait=True: "continue" in q)
     H._handle_generate_video(ctx, {"user_input_original": "продолжи это видео: кот прыгает"},
                              {"description": "The cat jumps onto the table."})
-    (d, kw), = calls
+    (d, kw), = rig.calls
     assert kw["chain"] == ("h3_continuous/chZ", 5) and kw["size_from"] == str(last)
-    monkeypatch.setattr(intent, "YES_STUB", lambda q, t: False, raising=False)
-    calls.clear()
-    H._handle_generate_video(_Ctx(), {"user_input_original": "сделай видео: кот прыгает"},
+    rig.calls.clear()
+    H._handle_generate_video(rig.ctx(last_video_path=str(last)),
+                             {"user_input_original": "сделай видео: кот прыгает"},
                              {"description": "The cat jumps onto the table."})
-    assert not calls[0][1].get("chain") or calls[0][1]["chain"][1] == 1   # a new clip stays new
+    assert not rig.calls[0][1].get("chain") or rig.calls[0][1]["chain"][1] == 1   # a new clip stays new
 
 
-def test_an_approved_plan_keeps_the_continuation_prefix_and_the_whole_first_part(monkeypatch, tmp_path):
+def test_an_approved_plan_keeps_the_continuation_prefix_and_the_whole_first_part(tmp_path):
     # The approved first part replaced the description whole (prefix gone), and the bridge
     # then cut the prefix's length off the part: «What happens next: Camera: static…»
     # (live 2026-10-13).
-    H, calls, stitched, kept = _wire(monkeypatch, tmp_path)
-    monkeypatch.setattr(V, "bridge_script", lambda ctx, ps: ps)
-    monkeypatch.setattr(V, "mark_inserts", lambda ctx, ps: ps)
     prepped = []
-    monkeypatch.setattr(V, "prepare_prompt", lambda ctx, d, **kw: prepped.append(d) or (d, 6.0))
-    src, tail = tmp_path / "sent_back.mp4", tmp_path / "tail.mp4"
-    src.write_bytes(b"s")
-    tail.write_bytes(b"t")
-    monkeypatch.setattr(V, "chain_of", lambda p: ("h3_continuous/chY", 2) if p == str(src) else ())
-    ctx = _Ctx()
-    ctx.continue_src, ctx.continue_tail = str(src), str(tail)
     first = "The baker sets the cat down on the floor and it runs off to the door."
-    ctx.video_plan_parts = [first, "The baker waves after it and laughs."]
+    rig, ctx, _ = _continued(
+        tmp_path, rig_kw={"prepare_prompt": lambda ctx, d, **kw: prepped.append(d) or (d, 6.0)},
+        video_plan_parts=[first, "The baker waves after it and laughs."])
     H._handle_generate_video(ctx, {}, {"description": LONG})
     assert prepped and prepped[0].startswith(V.CONTINUE_CTX_PREFIX + "BRIDGE. " + first), prepped[:1]

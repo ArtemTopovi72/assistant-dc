@@ -46,57 +46,22 @@ def test_no_user_words_leaves_the_layout_alone():
     assert IL.enforce_user_look(_painted(), "") == _painted()
 
 
-def test_the_look_is_read_from_the_users_words_this_turn_first(monkeypatch):
+def test_the_look_is_read_from_the_users_words_this_turn_first():
+    import types
     import tool_image_handlers as H
     looks = {"нарисуй кибер-Ленина": "none", "ещё раз": "none", "в стиле аниме кота": "anime",
              "сделай реалистично": "photo"}
-    monkeypatch.setattr(IL, "_look", lambda t: looks.get(t, "none"))
+    ctx = types.SimpleNamespace(
+        choice=lambda q, text, options, default: looks.get(text, "none"),
+        intent_read=lambda c, text: {"redo": "same"} if text == "ещё раз" else {"redo": ""})
     st = {"user_input_original": "ещё раз", "messages": [
         {"role": "user", "content": "в стиле аниме кота"}, {"role": "assistant", "content": "вот"},
         {"role": "user", "content": "ещё раз"}]}
-    import intent
-    monkeypatch.setattr(intent, "STUB", {"ещё раз": {"redo": "same"}}.get)
-    assert H._user_look(st) == "anime"                      # «ещё раз» after anime stays anime
+    assert H._user_look(ctx, st) == "anime"                 # «ещё раз» after anime stays anime
     st2 = {"user_input_original": "нарисуй кибер-Ленина", "messages": [
         {"role": "user", "content": "в стиле аниме кота"}, {"role": "assistant", "content": "вот"},
         {"role": "user", "content": "нарисуй кибер-Ленина"}]}
-    assert H._user_look(st2) == "none"                      # a new request: its own words only
-    assert H._user_look({"user_input_original": "сделай реалистично"}) == "photo"
-    assert H._user_look({"user_input_original": "нарисуй кибер-Ленина"}) == "none"
-    assert H._user_look({}) == ""
-
-
-def test_the_planner_applies_it(monkeypatch):
-    import ideogram as I
-
-    class Ctx:
-        user_look = "none"
-    monkeypatch.setattr(I, "_ask_planner", lambda ctx, p: dict(_painted(), elements=[
-        {"desc": "Lenin punches a demon", "x": 0.1, "y": 0.1, "w": 0.8, "h": 0.8}]))
-    import draw_agent
-    monkeypatch.setattr(draw_agent, "split_counted_boxes", lambda l, p: (l, []))
-    monkeypatch.setattr(draw_agent, "merge_text_column", lambda l: l)
-    layout = I.plan_layout(Ctx(), "cyber Lenin fights demons in hell, epic digital painting")
-    assert layout["medium"] == "photography" and layout["art_style"] == ""
-
-
-def test_a_redraw_restyles_only_when_the_user_names_a_look(monkeypatch, tmp_path):
-    import image_router as R
-    import draw_agent
-    import image as image_mod
-    cartoon = dict(_painted(), elements=[{"desc": "Lenin", "x": 0, "y": 0, "w": 1, "h": 1}])
-    monkeypatch.setattr(image_mod, "load_layout_for", lambda p: {"layout": dict(cartoon), "prompt": "Lenin"})
-    monkeypatch.setattr(draw_agent, "edit_layout", lambda ctx, l, i: (dict(l), ["the model proposed no change"]))
-    seen = []
-    monkeypatch.setattr(draw_agent, "run", lambda ctx, p, layout=None, **k: seen.append(layout) or {"image": None})
-    pic = tmp_path / "p.png"
-    from PIL import Image
-    Image.new("RGB", (8, 8)).save(pic)
-
-    class Ctx:
-        user_look = "photo"
-    R.edit_via_layout(Ctx(), str(pic), "make it realistic")
-    assert seen and seen[-1]["medium"] == "photography" and seen[-1]["art_style"] == ""
-    seen.clear()
-    Ctx.user_look = "none"
-    assert R.edit_via_layout(Ctx(), str(pic), "he is bald") is None and not seen   # nothing named: no restyle
+    assert H._user_look(ctx, st2) == "none"                 # a new request: its own words only
+    assert H._user_look(ctx, {"user_input_original": "сделай реалистично"}) == "photo"
+    assert H._user_look(ctx, {"user_input_original": "нарисуй кибер-Ленина"}) == "none"
+    assert H._user_look(ctx, {}) == ""

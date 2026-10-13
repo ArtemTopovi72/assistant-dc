@@ -112,6 +112,18 @@ def face_frame(src: str, out_jpg: str, circle: bool = False) -> bool:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def first_frame(src: str, out_jpg: str) -> bool:
+    """The clip's first frame as a picture (the other side of a join from seed_frame)."""
+    try:
+        import cv2
+        cap = cv2.VideoCapture(src)
+        ok, img = cap.read()
+        cap.release()
+        return bool(ok) and bool(cv2.imwrite(out_jpg, img))
+    except Exception:
+        return False
+
+
 def cut_tail(src: str, out_mp4: str, seconds: float = TAIL_SECONDS) -> bool:
     """The last `seconds` of the clip, with its sound, as the reference video."""
     try:

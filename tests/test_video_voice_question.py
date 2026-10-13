@@ -6,25 +6,16 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("F5_TEST_RUN", "1")
 import tool_image_handlers as H
 import video as V
-import tools as T
-
-import pytest
+from tests.fakes import Over
 
 made = []
-
-
-@pytest.fixture(autouse=True)
-def _render_stub(monkeypatch):
-    # fixture-scoped: patched at import, the stub leaked into every suite run after this one
-    monkeypatch.setattr(V, "engine_available", lambda ctx: (True, ""))
-    monkeypatch.setattr(T, "_render_budget_exhausted", lambda *a, **k: None)
-    monkeypatch.setattr(V, "generate_video",
-                        lambda ctx, d, **k: made.append((d, k.get("audios"))) or {"status": "cancelled"})
+ENGINE = Over(V, engine_available=lambda ctx: (True, ""),
+              generate_video=lambda ctx, d, **k: made.append((d, k.get("audios"))) or {"status": "cancelled"})
 
 
 def ctx(choice, voices=()):
     return types.SimpleNamespace(voice_choice=choice, anim_voices=list(voices), set_stage=lambda s: None,
-                                 last_image_path=None, last_video_path=None)
+                                 last_image_path=None, last_video_path=None, video_engine=ENGINE)
 
 
 def test_asks_before_rendering_people_talking():
@@ -59,7 +50,7 @@ def test_own_voices_map_left_to_right(tmp_path):
 
 
 def test_scenery_and_other_hosts_never_ask():
-    for c, sp in ((ctx(""), 0), (types.SimpleNamespace(set_stage=lambda s: None, anim_voices=[],
+    for c, sp in ((ctx(""), 0), (types.SimpleNamespace(set_stage=lambda s: None, anim_voices=[], video_engine=ENGINE,
                                                         last_image_path=None, last_video_path=None), 2)):
         st = {}
         H._handle_generate_video(c, st, {"description": "rain", "speakers": sp, "use_current_images": False})
