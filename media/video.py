@@ -1336,7 +1336,7 @@ def generate_video(ctx, description: str, *,
     if context_video or context_latent:
         # the pinned head is rendered too, then trimmed: the clip grows by it
         frames = snap_frames(frames + MOTION_CONTEXT_FRAMES - 5)
-    src_size = _image_size(images[0]) if images else None
+    src_size = eng._image_size(images[0]) if images else None
     if (context_video or size_from) and not src_size:   # a continuation keeps the clip's own shape
         p = eng.probe(size_from or context_video)
         src_size = (p["width"], p["height"]) if p.get("width") else None

@@ -397,7 +397,7 @@ class LongVideoMixin:
                 # a link: the whole film, no 10-minute cap (ponytail: held in RAM
                 # once, ~1 GB for 90 min at 720p; stream to disk if films grow)
                 import tg_links
-                data = tg_links.fetch_video(spec["url"], max_seconds=6 * 3600).get("data")
+                data = self.links.fetch_video(spec["url"], max_seconds=6 * 3600).get("data")
             else:
                 data = self._dl_bytes(spec["file_id"])
             if not data:

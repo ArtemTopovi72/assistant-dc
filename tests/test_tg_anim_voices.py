@@ -5,6 +5,7 @@ import tg_bot as T
 T.redirect_data_dir(tempfile.mkdtemp(prefix="tgtest_anv_"))
 import tool_image_handlers as H
 import video as V
+from tests.fakes import Over
 
 CID = 999099
 
@@ -58,45 +59,44 @@ def test_no_skips_to_presets():
     assert not bot._anim_voice_take_media(CID, bot._get_session(CID), "ru", {"voice": {"file_id": "x"}})
 
 
-def _run_tool(monkeypatch, ctx, args):
+def _engine(seen):
+    return Over(V, engine_available=lambda ctx: (True, ""),
+                generate_video=lambda ctx, d, **kw: seen.update(desc=d, **kw) or {"path": None, "status": "fail"})
+
+
+def _run_tool(ctx, args):
     seen = {}
-    monkeypatch.setattr(V, "engine_available", lambda ctx: (True, ""))
-    monkeypatch.setattr(V, "generate_video",
-                        lambda ctx, d, **kw: seen.update(desc=d, **kw) or {"path": None, "status": "fail"})
-    import tools
-    monkeypatch.setattr(tools, "_render_budget_exhausted", lambda *a, **k: None)
+    ctx.video_engine = _engine(seen)
     H._handle_generate_video(ctx, {}, args)
     return seen
 
 
-def test_tool_uses_collected_voices_once(monkeypatch, tmp_path):
+def test_tool_uses_collected_voices_once(tmp_path):
     a, b = tmp_path / "v1.ogg", tmp_path / "v2.ogg"
     a.write_bytes(b"x"); b.write_bytes(b"x")
     ctx = types.SimpleNamespace(anim_voices=[str(a), str(b)], voice_ref="", set_stage=lambda s: None)
-    seen = _run_tool(monkeypatch, ctx, {"description": "two people talk", "use_current_images": False})
+    seen = _run_tool(ctx, {"description": "two people talk", "use_current_images": False})
     assert seen["audios"] == [str(a), str(b)] and "<Audio 2>" in seen["desc"]
     assert ctx.anim_voices == []
 
 
-def test_empty_slot_keeps_its_person_default(monkeypatch, tmp_path):
+def test_empty_slot_keeps_its_person_default(tmp_path):
     b = tmp_path / "v2.ogg"
     b.write_bytes(b"x")
     ctx = types.SimpleNamespace(anim_voices=["", str(b)], voice_ref="", set_stage=lambda s: None)
-    seen = _run_tool(monkeypatch, ctx, {"description": "two people talk", "use_current_images": False})
+    seen = _run_tool(ctx, {"description": "two people talk", "use_current_images": False})
     assert seen["audios"] == [str(b)] and "second from the left person speaks with the voice of <Audio 1>" in seen["desc"]
 
 
-def test_my_voice_needs_a_clone(monkeypatch, tmp_path):
+def test_my_voice_needs_a_clone(tmp_path):
     ctx = types.SimpleNamespace(anim_voices=[], voice_ref="", set_stage=lambda s: None)
-    monkeypatch.setattr(V, "engine_available", lambda ctx: (True, ""))
-    import tools
-    monkeypatch.setattr(tools, "_render_budget_exhausted", lambda *a, **k: None)
+    ctx.video_engine = _engine({})
     out = H._handle_generate_video(ctx, {}, {"description": "я говорю привет", "use_my_voice": True,
                                              "use_current_images": False})
     assert "Клон голоса" in out
     ref = tmp_path / "me.wav"; ref.write_bytes(b"x")
     ctx.voice_ref = str(ref)
-    seen = _run_tool(monkeypatch, ctx, {"description": "я говорю привет", "use_my_voice": True,
+    seen = _run_tool(ctx, {"description": "я говорю привет", "use_my_voice": True,
                                         "use_current_images": False})
     assert seen["audios"] == [str(ref)] and "<Audio 1>" in seen["desc"]
 
@@ -110,14 +110,14 @@ def test_menu_button_ends_collection():
     assert bot._get_session(CID).anim_voice_state == ""
 
 
-def test_video_link_is_a_voice_sample(monkeypatch):
+def test_video_link_is_a_voice_sample():
     import tg_links
     bot = _bot()
     bot._animate_ask_voices(CID, bot._get_session(CID), "ru")
     bot._cb_anim_voices(CID, "anv:yes")
     bot._cb_anim_voices(CID, "anv:slot:0")
     bot._run_busy = lambda chat_id, fn, *a, **k: fn(*a)           # the job inline
-    monkeypatch.setattr(tg_links, "fetch_video", lambda url, *a, **k: {"data": b"\x00" * 600})
+    bot.links = Over(tg_links, fetch_video=lambda url, *a, **k: {"data": b"\x00" * 600})
     s = bot._get_session(CID)
     assert bot._anim_voice_take_link(CID, s, "ru", "https://www.youtube.com/watch?v=UhPKSA2UhnU")
     assert bot._get_session(CID).anim_voices[0]

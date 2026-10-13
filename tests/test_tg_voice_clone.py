@@ -1,22 +1,19 @@
 """🎙 Clone voice in Telegram, on the REAL bot object with the network stubbed."""
-import os, sys, tempfile, threading, types
+import os, sys, tempfile, types
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import tg_bot as T
 T.redirect_data_dir(tempfile.mkdtemp(prefix="tgtest_clone_"))
 import tg_voice_clone as TV
 import voice_clone as V
+from tests.fakes import Over
 
 CID = 999077
 
 
-class _Sync:
-    def __init__(self, target, args=(), daemon=None, name=None): self.t, self.a = target, args
-    def start(self): self.t(*self.a)
-
-
-def _bot(monkeypatch):
-    monkeypatch.setattr(threading, "Thread", _Sync)
+def _bot(**clone):
     bot = T.TelegramBot("123:TEST", lambda: object(), lambda: object(), lambda: {}, silent_mode=True)
+    bot._run_busy = lambda cid, fn, *a, **k: fn(*a)          # the job inline
+    bot.voice_clone = Over(V, **clone)
     bot.sent, bot.pushed, bot.voices = [], [], []
     bot._send_text = lambda cid, text, **kw: bot.sent.append(text) or 1
     bot._send_get_id = lambda cid, text, **kw: (bot.sent.append(text), 1)[1]
@@ -35,15 +32,15 @@ def _press_clone(bot):
     bot._resolve_and_push(CID, [{"type": "text", "text": __import__("tg_strings")._BTN["clone_btn"]["ru"]}])
 
 
-def test_full_flow_media_then_every_text_is_voiced(monkeypatch, tmp_path):
-    bot = _bot(monkeypatch)
+def test_full_flow_media_then_every_text_is_voiced(tmp_path):
+    bot = _bot()
     ref = tmp_path / "ref.wav"; ref.write_bytes(b"RIFF")
-    monkeypatch.setattr(V, "prepare_reference", lambda ctx, src, d, lang="ru": (str(ref), "привет это я"))
+    bot.voice_clone = Over(bot.voice_clone, prepare_reference=lambda ctx, src, d, lang="ru": (str(ref), "привет это я"))
     said = []
-    monkeypatch.setattr(V, "polish", lambda ctx, t: t.capitalize() + ".")
+    bot.voice_clone = Over(bot.voice_clone, polish=lambda ctx, t: t.capitalize() + ".")
     def fake_speak(ctx, r, rt, text, d):
         said.append((r, rt, text)); p = os.path.join(d, "o.wav"); open(p, "wb").write(b"x"); return p
-    monkeypatch.setattr(V, "speak", fake_speak)
+    bot.voice_clone = Over(bot.voice_clone, speak=fake_speak)
 
     _press_clone(bot)
     assert bot._get_session(CID).clone_state == "want_audio"
@@ -58,25 +55,24 @@ def test_full_flow_media_then_every_text_is_voiced(monkeypatch, tmp_path):
     assert not bot.pushed                                  # never reached the agent
 
 
-def test_any_button_leaves_the_flow(monkeypatch):
-    bot = _bot(monkeypatch)
+def test_any_button_leaves_the_flow():
+    bot = _bot()
     _press_clone(bot)
     bot._resolve_and_push(CID, [{"type": "text", "text": __import__("tg_strings")._BTN["back"]["ru"]}])
     assert bot._get_session(CID).clone_state == ""
 
 
-def test_text_while_waiting_for_audio_goes_to_the_agent(monkeypatch):
-    bot = _bot(monkeypatch)
+def test_text_while_waiting_for_audio_goes_to_the_agent():
+    bot = _bot()
     _press_clone(bot)
-    monkeypatch.setattr(V, "speak", lambda *a, **k: (_ for _ in ()).throw(AssertionError("voiced")))
+    bot.voice_clone = Over(bot.voice_clone, speak=lambda *a, **k: (_ for _ in ()).throw(AssertionError("voiced")))
     bot._resolve_and_push(CID, [{"type": "text", "text": "напиши стих про осень"}])
     assert not bot.voices and bot._get_session(CID).clone_state == "want_audio"
 
 
-def test_bad_sample_explains_and_stays_armed(monkeypatch):
-    bot = _bot(monkeypatch)
-    monkeypatch.setattr(V, "prepare_reference",
-                        lambda *a, **k: (_ for _ in ()).throw(V.CloneError("no_words")))
+def test_bad_sample_explains_and_stays_armed():
+    bot = _bot()
+    bot.voice_clone = Over(bot.voice_clone, prepare_reference=lambda *a, **k: (_ for _ in ()).throw(V.CloneError("no_words")))
     _press_clone(bot)
     bot._clone_take_media(CID, bot._get_session(CID), "ru", {"voice": {"file_id": "v"}})
     assert T._t("clone_fail_no_words", "ru") in bot.sent
@@ -91,13 +87,13 @@ def test_media_kinds():
     assert m({"photo": [{"file_id": "p"}]}) is None
 
 
-def test_assistant_voice_takes_its_own_sample(monkeypatch, tmp_path):
+def test_assistant_voice_takes_its_own_sample(tmp_path):
     """🗣 is its own setting: its clip becomes the assistant's voice; 🎙 clone stays separate."""
     import audio
-    bot = _bot(monkeypatch)
+    bot = _bot()
     press = lambda: bot._resolve_and_push(CID, [{"type": "text", "text": __import__("tg_strings")._BTN["my_voice"]["ru"]}])
     ref = tmp_path / "asst.wav"; ref.write_bytes(b"RIFF")
-    monkeypatch.setattr(V, "prepare_reference", lambda ctx, src, d, lang="ru": (str(ref), "это я"))
+    bot.voice_clone = Over(bot.voice_clone, prepare_reference=lambda ctx, src, d, lang="ru": (str(ref), "это я"))
     s = bot._get_session(CID); s.clone_ref, s.assistant_ref, s.voice_on = "other.wav", "", False; bot._store.put(s)
     press()                                                # arms: asks for a sample
     assert bot._get_session(CID).clone_state == "want_assistant" and "Пришли" in bot.sent[-1]
@@ -108,8 +104,7 @@ def test_assistant_voice_takes_its_own_sample(monkeypatch, tmp_path):
     bot._cb_my_voice(CID, "myv:on")
     assert bot._get_session(CID).voice_on
     seen = []
-    monkeypatch.setattr(audio, "synth_single_segment",
-                        lambda ctx, i, actor, text, **k: seen.append((actor, ctx.custom_ref_wav, ctx.custom_ref_text)))
+    bot.speech = Over(audio, synth_single_segment=lambda ctx, i, actor, text, **k: seen.append((actor, ctx.custom_ref_wav, ctx.custom_ref_text)))
     bot._send_voice(object(), CID, "привет")
     assert seen == [("clone", str(ref), "это я")]
     bot._cb_my_voice(CID, "myv:reset")
@@ -119,16 +114,14 @@ def test_assistant_voice_takes_its_own_sample(monkeypatch, tmp_path):
     assert bot._get_session(CID).assistant_ref == str(ref) and bot._get_session(CID).clone_state == "want_assistant"
 
 
-def test_video_link_is_the_sample(monkeypatch, tmp_path):
+def test_video_link_is_the_sample(tmp_path):
     """A YouTube link sent while armed is used as the voice sample."""
     import tg_links
-    bot = _bot(monkeypatch)
+    bot = _bot()
     ref = tmp_path / "ref.wav"; ref.write_bytes(b"RIFF")
     got = []
-    monkeypatch.setattr(V, "prepare_reference",
-                        lambda ctx, src, d, lang="ru": got.append(open(src, "rb").read()) or (str(ref), "привет это я"))
-    monkeypatch.setattr(tg_links, "fetch_video",
-                        lambda url: {"data": b"MP4DATA", "seconds": 30, "title": "t"})
+    bot.voice_clone = Over(bot.voice_clone, prepare_reference=lambda ctx, src, d, lang="ru": got.append(open(src, "rb").read()) or (str(ref), "привет это я"))
+    bot.links = Over(tg_links, fetch_video=lambda url: {"data": b"MP4DATA", "seconds": 30, "title": "t"})
     _press_clone(bot)
     bot._resolve_and_push(CID, [{"type": "text", "text": "https://youtube.com/shorts/5uI-Dae7-qs"}])
     s = bot._get_session(CID)

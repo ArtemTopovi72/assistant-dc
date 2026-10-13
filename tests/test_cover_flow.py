@@ -136,10 +136,10 @@ for name, kw in {"audio": dict(audio=A), "voice": dict(voice={"file_id": "V", "d
     check(f"...and the first song is the voice ({name})", ok and GO and GO[0][2].endswith(".mp3"), GO)
 # A YouTube link is the song too, then the words as usual.
 import tg_links
-_real_fetch = tg_links.fetch_video
+from tests.fakes import Over
 _real_busy = bot._run_busy
 bot._run_busy = lambda cid, fn, *a: fn(*a)
-tg_links.fetch_video = lambda url, *a, **k: {"data": b"MP4", "seconds": 200, "title": "t"}
+bot.links = Over(tg_links, fetch_video=lambda url, *a, **k: {"data": b"MP4", "seconds": 200, "title": "t"})
 s_ = bot._get_session(CID); s_.cover_state = "want_audio"; s_.cover_src = ""; bot._store.put(s_)
 n = len(bot.sent)
 bot._dispatch(m(text="https://www.youtube.com/watch?v=dQw4w9WgXcQ"))
@@ -150,13 +150,13 @@ bot._run_busy = lambda cid, fn, *a: GO.append(a)
 bot._dispatch(m(text="Новые слова про ютуб\nhttps://youtu.be/xyz в куплете"))
 check("...then a lyric that quotes a link is still the lyric", wait(lambda: GO, 5), GO)
 bot._run_busy = lambda cid, fn, *a: fn(*a)
-tg_links.fetch_video = lambda url, *a, **k: {"too_long": True, "seconds": 3600, "title": "t"}
+bot.links = Over(tg_links, fetch_video=lambda url, *a, **k: {"too_long": True, "seconds": 3600, "title": "t"})
 s_ = bot._get_session(CID); s_.cover_state = "want_audio"; bot._store.put(s_)
 n = len(bot.sent)
 bot._dispatch(m(text="https://youtu.be/long"))
 check("an hour-long video is named as too long", wait(lambda: any("60 мин" in t for _, t in bot.sent[n:]), 5),
       [t[:60] for _, t in bot.sent[n:]])
-tg_links.fetch_video = _real_fetch
+bot.links = tg_links
 bot._run_busy = _real_busy
 
 # _cover_render with a second song: the bar-aligned mashup goes out first, then the voice remix;

@@ -75,7 +75,7 @@ class CoverMixin:
         self._send_text(chat_id, tg_bot._t("cover_link_fetch", lang))
 
         def job():
-            vid = tg_links.fetch_video(url)
+            vid = self.links.fetch_video(url)
             if vid.get("too_long"):
                 self._send_text(chat_id, tg_bot._t("cover_link_long", lang,
                                                    mins=max(1, int(vid.get("seconds", 0)) // 60),

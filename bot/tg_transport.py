@@ -708,7 +708,7 @@ class TransportMixin:
         reply."""
         ogg_path = None
         try:
-            from audio import synth_single_segment
+            synth_single_segment = (self.speech or __import__("audio")).synth_single_segment
             from graph import spoken_text
             text = spoken_text(ctx, text)
             sess = self._get_session(chat_id)

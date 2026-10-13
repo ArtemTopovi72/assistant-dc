@@ -89,7 +89,7 @@ class VoiceCloneMixin:
         self._send_text(chat_id, tg_bot._t("clone_working", lang))
 
         def job():
-            vid = tg_links.fetch_video(url)
+            vid = self.links.fetch_video(url)
             if not vid.get("data"):
                 self._send_text(chat_id, tg_bot._t("clone_fail_no_audio", lang))
                 return
@@ -111,9 +111,9 @@ class VoiceCloneMixin:
             out_dir = os.path.join(out_dir, "assistant")
             os.makedirs(out_dir, exist_ok=True)
         try:
-            ref, text = voice_clone.prepare_reference(ctx, src, out_dir,
+            ref, text = self.voice_clone.prepare_reference(ctx, src, out_dir,
                                                       lang=(sess.lang or "ru"))
-        except voice_clone.CloneError as exc:
+        except self.voice_clone.CloneError as exc:
             self._send_text(chat_id, tg_bot._t("clone_fail_" + str(exc), lang))
             return
         except Exception:
@@ -159,8 +159,8 @@ class VoiceCloneMixin:
         self._api_post("sendChatAction", {"chat_id": chat_id, "action": "record_voice"})
         wav = None
         try:
-            clean = voice_clone.polish(ctx, text)
-            wav = voice_clone.speak(ctx, ref, ref_text, clean, self._clone_dir(chat_id))
+            clean = self.voice_clone.polish(ctx, text)
+            wav = self.voice_clone.speak(ctx, ref, ref_text, clean, self._clone_dir(chat_id))
             if not wav or not self._send_voice_from_wav(chat_id, wav):
                 self._send_text(chat_id, tg_bot._t("clone_fail_synth", lang))
         except Exception:

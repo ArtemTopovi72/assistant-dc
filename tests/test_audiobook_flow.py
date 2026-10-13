@@ -168,7 +168,8 @@ check("and the job file is gone afterwards", wait(lambda: not os.path.exists(os.
 
 # a YouTube link as the narrator's sample (it used to be retold as a video instead)
 import tg_links
-tg_links.fetch_video = lambda url, *a, **k: {"data": open(SAMPLE, "rb").read(), "seconds": 12, "title": "t", "description": ""}
+from tests.fakes import Over
+bot.links = Over(tg_links, fetch_video=lambda url, *a, **k: {"data": open(SAMPLE, "rb").read(), "seconds": 12, "title": "t", "description": ""})
 before = len(INVOKES)
 bot._dispatch(m(text="📚 Аудиокнига"))
 check("the button is armed again for a new narrator", wait(lambda: st() == "want_voice", 10), st())

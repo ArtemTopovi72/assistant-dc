@@ -83,7 +83,7 @@ class ResolveMixin:
         (ears + eyes), any other page is read (tg_links). True: a long video was
         offered as the portioned job, which answers the message."""
         _vu = _tg_links.video_url(text)
-        _vid = _tg_links.fetch_video(_vu) if _vu and ctx is not None else {}
+        _vid = self.links.fetch_video(_vu) if _vu and ctx is not None else {}
         if _vid.get("data"):
             # A video link is watched like a sent video: ears + eyes.
             self._api_post("sendChatAction", {"chat_id": chat_id, "action": "typing"})

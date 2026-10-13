@@ -153,7 +153,7 @@ class AnimVoicesMixin:
         self._send_text(chat_id, tg_bot._t("clone_working", lang))
 
         def job():
-            vid = tg_links.fetch_video(url)
+            vid = self.links.fetch_video(url)
             if not vid.get("data"):
                 self._send_text(chat_id, tg_bot._t("anv_fail", lang))
                 return

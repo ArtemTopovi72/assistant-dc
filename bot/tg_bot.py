@@ -1364,6 +1364,15 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         # image register; kept separate because a video is never a working IMAGE and
         # letting the two share a slot is how a still ends up sent for a clip.
         self._chat_videos: dict[int, str] = {}
+        # Fetching what a link points at (tg_links): an attribute, so a suite hands its
+        # own fetcher to one bot instead of writing over the module for every bot.
+        import tg_links
+        self.links = tg_links
+        # The same for the voice engines: the clone module, and speech synthesis (`audio`,
+        # loaded on first use: it pulls torch in).
+        import voice_clone
+        self.voice_clone = voice_clone
+        self.speech = None
         self._task_started: dict[str, float] = {}     # task_id -> monotonic start
         # task_id -> _Task, from the moment it is pushed onto the backend until
         # a consumer actually pops it and moves it into _running_task. With the
