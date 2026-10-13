@@ -36,6 +36,7 @@ keeps the best by the same checks (over-generate and rank, PoeLM), then
 polishes it.
 """
 from __future__ import annotations
+from seams import dep, text_model
 
 import logging
 import os
@@ -75,7 +76,6 @@ _VOWEL_MERGE = str.maketrans("ёэяюы", "оеаии")
 
 
 # ── stress ───────────────────────────────────────────────────────────────────
-ACCENT_STUB = None          # suites: ACCENT_STUB(line) -> the line with «+» marks
 _ACC = None
 _ACC_LOCK = threading.Lock()
 _PLUS_WORD = re.compile(r"[A-Za-zА-Яа-яЁё+]+(?:-[A-Za-zА-Яа-яЁё+]+)*")
@@ -104,9 +104,10 @@ def _accentor(ctx):
 def _accent_line(ctx, line: str, words: list) -> list:
     """The line's words with «+» before the stressed vowel, accented as a whole
     line so a homograph (замо́к / за́мок) is read in its context; [] when the
-    stress is unknown."""
-    if ACCENT_STUB is not None:
-        out = ACCENT_STUB(line)
+    stress is unknown. A context's `accent(line)` stand-in answers instead of the accentor."""
+    own = dep(ctx, "accent", None)
+    if own is not None:
+        out = own(line)
     else:
         if os.getenv("F5_TEST_RUN") or not words:
             return []
@@ -473,24 +474,24 @@ def describe(issue: dict, lang: str = "en") -> str:
 
 
 # ── the model ────────────────────────────────────────────────────────────────
-LLM_STUB = None             # suites: LLM_STUB(role, system, user) -> str
 MIN_P = float(os.getenv("LYRICS_MIN_P", "0.05") or 0)
 _CREATIVE = ("draft", "revise", "lines")
 
 
 def _call(ctx, role: str, system: str, user: str, *, temperature: float, max_tokens: int,
           schema=None) -> str:
-    if LLM_STUB is not None:
-        return LLM_STUB(role, system, user)
+    """One model call for `role`; a context's `lyrics_llm(role, system, user)` answers instead."""
+    own = dep(ctx, "lyrics_llm", None)
+    if own is not None:
+        return own(role, system, user)
     if os.getenv("F5_TEST_RUN"):
         return ""                      # suites that do not stub it: no model call
-    from llm import call_llm_simple
     kw = {"json_schema": schema} if schema else {}
     if role in _CREATIVE and MIN_P:
         # min-p keeps high temperature coherent and off the cliché tokens
         # (Nguyen et al. 2024, arxiv 2407.01082)
         kw["sampling"] = {"min_p": MIN_P}
-    return call_llm_simple(ctx, system, user, temperature=temperature, max_tokens=max_tokens,
+    return text_model(ctx)(ctx, system, user, temperature=temperature, max_tokens=max_tokens,
                            prefill="<think></think>", **kw) or ""
 
 
@@ -627,7 +628,7 @@ def write(ctx, topic: str, lang: str, on_round=None, singer: str = "") -> dict:
     two is steadier than its 0-10 scores), then the polish loop."""
     the_plan = plan(ctx, topic, lang)
     scored = []
-    for _ in range(DRAFTS):
+    for _ in range(dep(ctx, "DRAFTS", DRAFTS)):
         if ctx is not None and getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
             break
         d = draft(ctx, topic, lang, the_plan, singer)

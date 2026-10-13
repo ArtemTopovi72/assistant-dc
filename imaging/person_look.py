@@ -8,6 +8,7 @@ that plans the picture names the person; their looks are read from the web
 the description.
 """
 from __future__ import annotations
+from seams import dep
 
 import logging
 import os
@@ -62,7 +63,7 @@ def _search(ctx, query: str) -> str:
     kept = {k: list(getattr(ctx, k)) for k in ("turn_queries", "turn_sources")
             if isinstance(getattr(ctx, k, None), list)}
     try:
-        txt = search.run_web_search(ctx, query) or ""
+        txt = dep(ctx, "run_web_search", search.run_web_search)(ctx, query) or ""
     finally:
         for k, v in kept.items():
             getattr(ctx, k)[:] = v

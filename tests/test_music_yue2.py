@@ -1,5 +1,6 @@
 """YuE2 is the default engine; its lyric and style inputs follow the model card."""
 import os, sys
+import types
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ["F5_TEST_RUN"] = "1"
 import music as M
@@ -39,19 +40,17 @@ def test_cpp_render_uses_16_ode_steps(monkeypatch):
 _SCENIC = "75 BPM, Lo-fi hip hop, male vocal, minor key, lonely, dimly lit apartment at dusk, study music"
 
 
-def test_style_cleanup_drops_scenery_keeps_tempo_and_vocal(monkeypatch):
-    import lyrics_craft
-    monkeypatch.setattr(lyrics_craft, "LLM_STUB",
-                        lambda r, s, u: '{"tags": ["75 BPM", "Lo-fi hip hop", "male vocal", "minor key", "lonely"]}')
-    assert M.yue2_tags(None, _SCENIC) == "75 BPM, Lo-fi hip hop, male vocal, minor key, lonely"
+def test_style_cleanup_drops_scenery_keeps_tempo_and_vocal():
+    ctx = types.SimpleNamespace(deps=types.SimpleNamespace(
+        lyrics_llm=lambda r, s, u: '{"tags": ["75 BPM", "Lo-fi hip hop", "male vocal", "minor key", "lonely"]}'))
+    assert M.yue2_tags(ctx, _SCENIC) == "75 BPM, Lo-fi hip hop, male vocal, minor key, lonely"
 
 
-def test_style_cleanup_refuses_an_answer_that_lost_bpm_or_vocal(monkeypatch):
-    import lyrics_craft
-    monkeypatch.setattr(lyrics_craft, "LLM_STUB", lambda r, s, u: '{"tags": ["Lo-fi hip hop", "lonely", "ambient"]}')
-    assert M.yue2_tags(None, _SCENIC) == _SCENIC
-    monkeypatch.setattr(lyrics_craft, "LLM_STUB", lambda r, s, u: "nonsense")
-    assert M.yue2_tags(None, _SCENIC) == _SCENIC
+def test_style_cleanup_refuses_an_answer_that_lost_bpm_or_vocal():
+    def said(answer):
+        return types.SimpleNamespace(deps=types.SimpleNamespace(lyrics_llm=lambda r, s, u: answer))
+    assert M.yue2_tags(said('{"tags": ["Lo-fi hip hop", "lonely", "ambient"]}'), _SCENIC) == _SCENIC
+    assert M.yue2_tags(said("nonsense"), _SCENIC) == _SCENIC
 
 
 def test_russian_lyrics_name_the_language_in_the_style():

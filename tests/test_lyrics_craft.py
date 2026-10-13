@@ -14,6 +14,34 @@ sys.path.insert(0, ROOT)
 os.environ.setdefault("F5_TEST_RUN", "1")
 
 import lyrics_craft as L  # noqa: E402
+import types  # noqa: E402
+
+import pytest  # noqa: E402
+
+# What a test hands the lyric code: `lyrics_llm(role, system, user)`, `accent(line)`,
+# `DRAFTS`, `text_model`, `run_web_search` -- on the context of every call (_C).
+_F = {}
+
+
+@pytest.fixture(autouse=True)
+def _fresh():
+    _F.clear()
+    yield
+    _F.clear()
+
+
+class _Ctx:
+    def is_cancelled(self):
+        ev = getattr(self, "cancel_event", None)
+        return bool(ev is not None and ev.is_set())
+
+
+def _C(base=None):
+    ctx = base if base is not None else _Ctx()
+    if "text_model" in _F:
+        ctx.text_model = _F["text_model"]
+    ctx.deps = types.SimpleNamespace(**{k: v for k, v in _F.items() if k != "text_model"})
+    return ctx
 
 GOOD = """[verse]
 Над городом гаснет закат
@@ -29,7 +57,7 @@ LAZY = """[verse]
 
 
 def _kinds(text, **kw):
-    return [i["kind"] for i in L.analyse(text)["issues"]]
+    return [i["kind"] for i in L.analyse(text, _C())["issues"]]
 
 
 def test_real_rhymes_pass_lazy_ones_are_named():
@@ -40,7 +68,7 @@ def test_real_rhymes_pass_lazy_ones_are_named():
 
 def test_a_non_rhyme_is_named_and_a_true_one_is_not():
     bad = "Мой полковник\nСмотрит в ИИ\nБелый подоконник\nПесни мои"
-    issues = L.analyse(bad)["issues"]
+    issues = L.analyse(bad, _C())["issues"]
     assert [i["kind"] for i in issues] == ["no_rhyme"] and issues[0]["words"] == ("ИИ", "мои")
 
 
@@ -53,8 +81,8 @@ def test_stress_decides_the_rhyme_and_the_rhythm(monkeypatch):
         "Ждёт хозяйку за туманом": "Жд+ёт хоз+яйку з+а тум+аном",
         "Одинокий старый рог": "Один+окий ст+арый р+ог",
     }
-    monkeypatch.setattr(L, "ACCENT_STUB", lambda line: marks[line])
-    res = L.analyse("\n".join(marks))
+    _F["accent"] = lambda line: marks[line]
+    res = L.analyse("\n".join(marks), _C())
     kinds = [i["kind"] for i in res["issues"]]
     assert res["stressed"] and "no_rhyme" in kinds      # за́мок / тума́ном
     assert not any(i["kind"] == "no_rhyme" and 4 in i["lines"] for i in res["issues"])  # дорог/рог
@@ -72,8 +100,8 @@ def test_polish_revises_until_clean_and_keeps_the_best(monkeypatch):
                 assert "3: И ждал, когда придёт рассвет" in user and "one word inside the other" in user
             return GOOD.replace("вновь", "снова").replace("любовь", "основу")  # still imperfect
         return ""
-    monkeypatch.setattr(L, "LLM_STUB", llm)
-    res = L.polish(None, LAZY, rounds=2)
+    _F["lyrics_llm"] = llm
+    res = L.polish(_C(), LAZY, rounds=2)
     assert res["original"] == LAZY.strip()
     assert res["text"] != LAZY.strip() and res["rounds"] >= 1
     assert calls.count("revise") >= 1
@@ -84,8 +112,8 @@ def test_a_worse_or_broken_rewrite_never_replaces_the_lyric(monkeypatch):
         if role == "critic":
             return '{"score": 8, "problems": ["line 2 is vague"]}'
         return "ок"                                   # a broken rewrite
-    monkeypatch.setattr(L, "LLM_STUB", llm)
-    res = L.polish(None, GOOD, rounds=3)
+    _F["lyrics_llm"] = llm
+    res = L.polish(_C(), GOOD, rounds=3)
     assert res["text"] == GOOD.strip()
 
 
@@ -94,8 +122,8 @@ def test_the_singer_gender_reaches_the_lyric_prompts(monkeypatch):
     assert "WOMAN" not in L.singer_rule("a MALE lead vocal")
     assert "duet" in L.singer_rule("duet") and L.singer_rule("") == ""
     seen = []
-    monkeypatch.setattr(L, "LLM_STUB", lambda role, system, user: (seen.append(system), "")[1])
-    L.draft(None, "дорога домой", "Russian", singer="a MALE lead vocal")
+    _F["lyrics_llm"] = lambda role, system, user: (seen.append(system), "")[1]
+    L.draft(_C(), "дорога домой", "Russian", singer="a MALE lead vocal")
     assert any("The singer is a MAN" in s for s in seen)
 
 
@@ -111,6 +139,7 @@ def _bot():
     b._send_get_id = lambda cid, text, parse_mode=None, keyboard=None: b.sent.append(
         (text, parse_mode, keyboard)) or 1
     b._api_post = lambda *a, **k: {}
+    b._get_ctx = _C
     b.queued = []
     b._enqueue_item = lambda cid, item: b.queued.append(item)
     return b
@@ -133,7 +162,7 @@ def test_improve_answers_in_two_messages_and_can_be_sung(monkeypatch):
         if role == "notes":
             return "• строка 3: свет/рассвет → закат/горят — однокоренная рифма"
         return ""
-    monkeypatch.setattr(L, "LLM_STUB", llm)
+    _F["lyrics_llm"] = llm
     bot = _bot()
     sess = bot._get_session(5); sess.lang = "ru"; bot._store.put(sess)
     bot._start_lyrics_flow(5, bot._get_session(5), "ru", "improve")
@@ -157,7 +186,7 @@ def test_write_takes_a_theme(monkeypatch):
         if role == "critic":
             return '{"score": 9, "problems": []}'
         return GOOD
-    monkeypatch.setattr(L, "LLM_STUB", llm)
+    _F["lyrics_llm"] = llm
     bot = _bot()
     bot._start_lyrics_flow(6, bot._get_session(6), "ru", "write")
     assert bot._lyrics_take_text(6, bot._get_session(6), "ru", "город ночью")
@@ -167,7 +196,7 @@ def test_write_takes_a_theme(monkeypatch):
 def test_text_goes_to_the_lyrics_flow_through_the_resolver(monkeypatch):
     seen = []
     bot = _bot()
-    monkeypatch.setattr(bot, "_lyrics_run", lambda ctx, cid, lang, mode, text: seen.append((mode, text)))
+    bot._lyrics_run = (lambda ctx, cid, lang, mode, text: seen.append((mode, text)))
     s = bot._get_session(7); s.lyrics_state = "improve"; s.reg_state = ""; bot._store.put(s)
     bot._resolve_and_push(7, [{"type": "text", "text": LAZY}])
     assert seen == [("improve", LAZY.strip())]
@@ -183,7 +212,7 @@ def test_what_is_left_is_shown_in_the_users_language(monkeypatch):
             assert "Write the problems in Russian" in system
             return '{"score": 6, "problems": ["строка 2 непонятна"]}'
         return "ок"                                    # no usable rewrite: the lazy rhyme stays
-    monkeypatch.setattr(L, "LLM_STUB", llm)
+    _F["lyrics_llm"] = llm
     bot = _bot()
     assert bot._lyrics_take_text(8, _armed(bot, 8), "ru", LAZY)
     notes = bot.sent[-2][0]
@@ -209,12 +238,12 @@ def test_song_form_is_checked():
 [chorus]
 Мы будем гореть до конца
 Пока не наступит пора"""
-    kinds = [i["kind"] for i in L.analyse(song)["issues"]]
+    kinds = [i["kind"] for i in L.analyse(song, _C())["issues"]]
     assert "verse_shape" in kinds            # verse 2 is far longer than verse 1
     assert "chorus_drift" in kinds           # «до утра» became «до конца»
     assert "end_repeat" in kinds             # «закат» closes lines in both verses
     long_hook = "[chorus]\n" + "\n".join(["раз два три четыре пять шесть семь восемь девять десять одиннадцать"] * 2)
-    assert "hook_long" in [i["kind"] for i in L.analyse(long_hook)["issues"]]
+    assert "hook_long" in [i["kind"] for i in L.analyse(long_hook, _C())["issues"]]
 
 
 def test_write_plans_then_keeps_the_best_of_several_drafts(monkeypatch):
@@ -231,9 +260,9 @@ def test_write_plans_then_keeps_the_best_of_several_drafts(monkeypatch):
         if role == "critic":
             return '{"score": 8, "problems": []}'
         return ""
-    monkeypatch.setattr(L, "LLM_STUB", llm)
-    monkeypatch.setattr(L, "DRAFTS", 3)
-    res = L.write(None, "город ночью", "Russian")
+    _F["lyrics_llm"] = llm
+    _F["DRAFTS"] = 3
+    res = L.write(_C(), "город ночью", "Russian")
     assert seen[0] == "plan" and seen.count("draft") == 3
     assert res["original"] == GOOD.strip()   # the best draft is the one polished
 
@@ -241,7 +270,7 @@ def test_write_plans_then_keeps_the_best_of_several_drafts(monkeypatch):
 def test_a_long_lyric_cut_into_pieces_is_one_text(monkeypatch):
     seen = []
     bot = _bot()
-    monkeypatch.setattr(bot, "_lyrics_run", lambda ctx, cid, lang, mode, text: seen.append(text))
+    bot._lyrics_run = (lambda ctx, cid, lang, mode, text: seen.append(text))
     s = bot._get_session(12); s.lyrics_state = "improve"; s.reg_state = ""; bot._store.put(s)
     bot._resolve_and_push(12, [{"type": "text", "text": "первая часть"},
                                {"type": "text", "text": "вторая часть"}])
@@ -260,14 +289,14 @@ def test_song_words_the_bot_wrote_are_polished_before_singing(monkeypatch):
 
         def is_cancelled(self):
             return False
-    monkeypatch.setattr(L, "LLM_STUB", lambda role, s, u: '{"score": 9, "problems": []}' if role == "critic"
+    _F["lyrics_llm"] = (lambda role, s, u: '{"score": 9, "problems": []}' if role == "critic"
                         else "[verse]\n" + GOOD.split("\n", 1)[1])
     c = Ctx()
-    out = tg_songs._polished(c, LAZY)
+    out = tg_songs._polished(_C(c), LAZY)
     assert "закат" in out and "Polishing the lyrics" in c.stages
-    monkeypatch.setattr(L, "LLM_STUB", lambda role, s, u: '{"score": 9, "problems": []}' if role == "critic"
+    _F["lyrics_llm"] = (lambda role, s, u: '{"score": 9, "problems": []}' if role == "critic"
                         else "без тегов вообще\nи всё")
-    assert tg_songs._polished(c, LAZY) == LAZY            # lost its [tags]: the draft is sung
+    assert tg_songs._polished(_C(c), LAZY) == LAZY            # lost its [tags]: the draft is sung
 
 
 def test_ready_words_polish_then_sing(monkeypatch):
@@ -277,7 +306,7 @@ def test_ready_words_polish_then_sing(monkeypatch):
         if role == "notes":
             return "• строка 3: свет/рассвет → закат/горят"
         return GOOD
-    monkeypatch.setattr(L, "LLM_STUB", llm)
+    _F["lyrics_llm"] = llm
     bot = _bot()
     s = bot._get_session(13); s.song_draft = LAZY; s.lang = "ru"; bot._store.put(s)
     bot._cb_song_lyrics(13, "song_lyr:polish")
@@ -297,14 +326,14 @@ def test_the_ready_words_question_offers_keep_or_polish():
 def test_a_rich_rhyme_scores_above_a_plain_one():
     plain = "Ночью вышла луна\nНа пороге стена\nОгонёк у окна\nТишина и весна"
     rich = "Ночью вышла луна\nЗазвенела струна\nНа пороге стена\nОпустела страна"
-    a, b = L.analyse(plain), L.analyse(rich)
+    a, b = L.analyse(plain, _C()), L.analyse(rich, _C())
     assert b["rich"] > a["rich"] and b["score"] >= a["score"]
 
 
 def test_a_line_too_long_to_sing_is_named():
     text = ("[verse]\nМы шли по улицам ночного города и говорили обо всём на свете\n"
             "Огни горели\nИ ветер пел\nНо мы не знали")
-    issues = L.analyse(text)["issues"]
+    issues = L.analyse(text, _C())["issues"]
     long = [i for i in issues if i["kind"] == "long_line"]
     assert long and long[0]["lines"] == (2,)
     assert "одна строка — одна фраза" in L.describe(long[0], "ru")
@@ -319,13 +348,13 @@ def test_two_close_drafts_meet_head_to_head_asked_both_ways(monkeypatch):
             # GOOD wins in both orders
             return "B" if "B:\n" + GOOD in user else "A"
         return ""
-    monkeypatch.setattr(L, "LLM_STUB", llm)
-    assert L.compare(None, "т", LAZY, GOOD) == GOOD
+    _F["lyrics_llm"] = llm
+    assert L.compare(_C(), "т", LAZY, GOOD) == GOOD
     assert seen.count("judge") == 2
 
     # a judge that just likes position A: the checks' pick stays
-    monkeypatch.setattr(L, "LLM_STUB", lambda role, s, u: "A")
-    assert L.compare(None, "т", LAZY, GOOD) == LAZY
+    _F["lyrics_llm"] = lambda role, s, u: "A"
+    assert L.compare(_C(), "т", LAZY, GOOD) == LAZY
 
 
 def test_a_non_rhyming_line_is_mended_alone_from_versions(monkeypatch):
@@ -337,32 +366,31 @@ def test_a_non_rhyming_line_is_mended_alone_from_versions(monkeypatch):
             asked.append((system, user))
             return "1. Сердце в огне\n2. Ветер был сильный\n3. Вновь пришёл обман"  # only 3 rhymes
         return ""
-    monkeypatch.setattr(L, "LLM_STUB", llm)
-    out = L.fix_rhymes(None, text, L.analyse(text), "Russian")
+    _F["lyrics_llm"] = llm
+    out = L.fix_rhymes(_C(), text, L.analyse(text, _C()), "Russian")
     lines = out.splitlines()
     assert asked and "«туман»" in asked[0][0] and ">>> Ветер был сильный" in asked[0][1]
     assert lines[2] == "Вновь пришёл обман"
     assert lines[:2] + lines[3:] == text.splitlines()[:2] + text.splitlines()[3:]  # the rest stays
-    assert not L.analyse(out)["issues"]
+    assert not L.analyse(out, _C())["issues"]
 
 
 def test_creative_calls_ask_for_min_p(monkeypatch):
-    import llm as LLM
     got = {}
     monkeypatch.delenv("F5_TEST_RUN", raising=False)
-    monkeypatch.setattr(LLM, "call_llm_simple", lambda *a, **k: got.update(k) or "x")
-    L._call(None, "draft", "s", "u", temperature=0.9, max_tokens=10)
+    _F["text_model"] = lambda *a, **k: got.update(k) or "x"
+    L._call(_C(), "draft", "s", "u", temperature=0.9, max_tokens=10)
     assert got.get("sampling") == {"min_p": L.MIN_P}
     got.clear()
-    L._call(None, "critic", "s", "u", temperature=0.0, max_tokens=10)
+    L._call(_C(), "critic", "s", "u", temperature=0.0, max_tokens=10)
     assert "sampling" not in got
 
 
 def test_a_two_syllable_rhyme_counts_more():
     one = "Мне не нужна дорога\nЯ помню всё до слова\nСтою я у порога\nИ жду тебя я снова"
     two = "Мне не нужна дорога\nЯ помню всё до слова\nВ глазах твоих тревога\nИ жду тебя я снова"
-    a, b = L.analyse(one), L.analyse(two)
-    assert L._deep(L._row(None, 1, "дорога"), L._row(None, 3, "порога"))
+    a, b = L.analyse(one, _C()), L.analyse(two, _C())
+    assert L._deep(L._row(_C(), 1, "дорога"), L._row(_C(), 3, "порога"))
     assert a["rich"] >= b["rich"]
 
 
@@ -370,21 +398,21 @@ def test_yo_words_rhyme_with_the_accentor_on(monkeypatch):
     """RUAccent leaves ё unmarked: «огнём / куём» was read as no rhyme."""
     marks = {"Это сбруя — контроль над безумным огнём": "Это сбр+уя контр+оль над без+умным огнём",
              "Мы структуру и рамки для мысли куём": "Мы стр+уктуру и р+амки для м+ысли куём"}
-    monkeypatch.setattr(L, "ACCENT_STUB", lambda line: marks[line])
-    res = L.analyse("\n".join(marks))
+    _F["accent"] = lambda line: marks[line]
+    res = L.analyse("\n".join(marks), _C())
     assert res["stressed"] and not [i for i in res["issues"] if i["kind"] == "no_rhyme"]
 
 
 def test_a_latin_word_in_a_russian_song_is_named():
     t = "Чтобы хаос в агента послушного стал\nHarness держит её, чтоб поток не пропал"
-    issues = [i for i in L.analyse(t)["issues"] if i["kind"] == "foreign"]
+    issues = [i for i in L.analyse(t, _C())["issues"] if i["kind"] == "foreign"]
     assert issues and issues[0]["lines"] == (2,) and "Harness" in L.describe(issues[0], "ru")
 
 
 def test_an_unchanged_lyric_with_problems_left_is_not_called_good(monkeypatch):
     bot = _bot()
     res = {"text": LAZY.strip(), "original": LAZY.strip(), "score": 4.6, "rounds": 3,
-           "left_rules": L.analyse(LAZY)["issues"], "left_sense": []}
+           "left_rules": L.analyse(LAZY, _C())["issues"], "left_sense": []}
     bot._lyrics_show(5, "ru", "improve", res, [])
     head = bot.sent[0][0]
     assert "Править нечего" not in head and "не вышла лучше" in head
@@ -409,8 +437,8 @@ def test_back_under_a_result_keeps_it_and_removes_only_the_buttons():
 def test_a_restored_yo_keeps_the_lines_stress(monkeypatch):
     """RUAccent restores ё («все» -> «всё»): the strict word match threw the
     whole line's stress away."""
-    monkeypatch.setattr(L, "ACCENT_STUB", lambda line: "Мы вс+ё отд+али")
-    assert L._accent_line(None, "Мы все отдали", ["Мы", "все", "отдали"]) == ["Мы", "вс+ё", "отд+али"]
+    _F["accent"] = lambda line: "Мы вс+ё отд+али"
+    assert L._accent_line(_C(), "Мы все отдали", ["Мы", "все", "отдали"]) == ["Мы", "вс+ё", "отд+али"]
 
 
 CHORUS3 = """[chorus]
@@ -423,34 +451,31 @@ CHORUS3 = """[chorus]
 
 
 def test_a_repeated_chorus_is_judged_once():
-    issues = [i for i in L.analyse(CHORUS3)["issues"] if i["kind"] == "no_rhyme"]
+    issues = [i for i in L.analyse(CHORUS3, _C())["issues"] if i["kind"] == "no_rhyme"]
     assert len(issues) == 1 and issues[0]["lines"] == (2, 3)
 
 
 def test_a_mended_chorus_line_is_mended_in_every_repeat(monkeypatch):
-    monkeypatch.setattr(L, "LLM_STUB", lambda role, s, u: "Мы куём её в каждом окне" if role == "lines" else "")
-    out = L.fix_rhymes(None, CHORUS3, L.analyse(CHORUS3), "Russian")
+    _F["lyrics_llm"] = lambda role, s, u: "Мы куём её в каждом окне" if role == "lines" else ""
+    out = L.fix_rhymes(_C(), CHORUS3, L.analyse(CHORUS3, _C()), "Russian")
     assert out.count("Мы куём её в каждом окне") == 2 and "снова и вновь" not in out
 
 
 def test_a_cyrillic_verdict_is_read(monkeypatch):
-    monkeypatch.setattr(L, "LLM_STUB", lambda role, s, u: "В")
-    assert L._verdict(None, "т", "a", "b") == "B"
+    _F["lyrics_llm"] = lambda role, s, u: "В"
+    assert L._verdict(_C(), "т", "a", "b") == "B"
 
 
 def test_the_person_lookup_does_not_show_up_as_a_search_in_the_reply(monkeypatch):
-    import types
     import person_look as P
-    import search
     monkeypatch.delenv("F5_TEST_RUN", raising=False)
-    monkeypatch.setattr(P, "SEARCH_STUB", None)
     ctx = types.SimpleNamespace(web_search_enabled=True, turn_queries=["кто такой Ленин"], turn_sources=[])
 
     def run(c, q):
         c.turn_queries.append(q); c.turn_sources.append({"url": "x"})
         return "bald, goatee"
-    monkeypatch.setattr(search, "run_web_search", run)
-    assert P._search(ctx, "Lenin appearance") == "bald, goatee"
+    _F["run_web_search"] = run
+    assert P._search(_C(ctx), "Lenin appearance") == "bald, goatee"
     assert ctx.turn_queries == ["кто такой Ленин"] and ctx.turn_sources == []
 
 
@@ -465,8 +490,8 @@ def test_long_lyrics_work_has_a_cancel_and_stops_on_it(monkeypatch):
         if role == "draft":
             seen["job"].set()                         # ⛔ pressed while drafting
         return GOOD if role == "draft" else '{"score": 9, "problems": []}'
-    monkeypatch.setattr(L, "LLM_STUB", llm)
-    monkeypatch.setattr(L, "DRAFTS", 3)
+    _F["lyrics_llm"] = llm
+    _F["DRAFTS"] = 3
     real = bot._run_busy
 
     def run_busy(cid, fn, *a):
