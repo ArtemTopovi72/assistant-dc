@@ -468,8 +468,8 @@ class Context:
         if query:
             # Just-in-time: only the facts this message needs (memory_select).
             import memory_select
-            if memory_select.enabled():
-                facts = memory_select.select(facts, query)
+            if dep(self, "jit_facts", memory_select.enabled)():
+                facts = memory_select.select(facts, query, embed=dep(self, "embed", None))
         return "\n".join(f"- {t}" for t in facts if t)
 
 

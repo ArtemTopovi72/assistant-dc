@@ -1,22 +1,25 @@
+import types
 import image as I
 import image_router as R
 
 
-def test_removal_carries_layout(tmp_path, monkeypatch):
+def test_removal_carries_layout(tmp_path):
     src, out = tmp_path / "a.png", tmp_path / "b.png"
     src.write_bytes(b"x"); out.write_bytes(b"x")
     I.save_layout_for(str(src), "p", {"elements": [1]}, width=10, height=10, seed=3)
-    monkeypatch.setattr(R, "_route_edit_request", lambda *a, **k: ("object_remove", str(out)))
-    assert R.route_edit_request(None, str(src), "remove the dog") == ("object_remove", str(out))
+    ctx = types.SimpleNamespace(deps=types.SimpleNamespace(
+        _route_edit_request=lambda *a, **k: ("object_remove", str(out))))
+    assert R.route_edit_request(ctx, str(src), "remove the dog") == ("object_remove", str(out))
     assert I.load_layout_for(str(out))["seed"] == 3
 
 
-def test_repaint_does_not_carry(tmp_path, monkeypatch):
+def test_repaint_does_not_carry(tmp_path):
     src, out = tmp_path / "a.png", tmp_path / "b.png"
     src.write_bytes(b"x"); out.write_bytes(b"x")
     I.save_layout_for(str(src), "p", {"elements": [1]}, width=10, height=10)
-    monkeypatch.setattr(R, "_route_edit_request", lambda *a, **k: ("style_transfer", str(out)))
-    R.route_edit_request(None, str(src), "make it anime")
+    ctx = types.SimpleNamespace(deps=types.SimpleNamespace(
+        _route_edit_request=lambda *a, **k: ("style_transfer", str(out))))
+    R.route_edit_request(ctx, str(src), "make it anime")
     assert I.load_layout_for(str(out)) is None
 
 

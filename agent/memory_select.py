@@ -48,7 +48,7 @@ def _embed(texts: Sequence[str]):
 
 
 def select(facts: List[str], query: str, *, k: int = None, newest: int = None,
-           floor: float = None, keep_all_upto: int = None) -> List[str]:
+           floor: float = None, keep_all_upto: int = None, embed=None) -> List[str]:
     k = _cfg("JIT_FACTS_K", 6) if k is None else k
     newest = _cfg("JIT_FACTS_NEWEST", 2) if newest is None else newest
     floor = _cfg("JIT_FACTS_FLOOR", 0.35) if floor is None else floor
@@ -58,11 +58,11 @@ def select(facts: List[str], query: str, *, k: int = None, newest: int = None,
     try:
         missing = [f for f in dict.fromkeys(facts) if f not in _CACHE]
         if missing:
-            vecs = _embed(missing)
+            vecs = (embed or _embed)(missing)
             if not vecs:
                 return list(facts)
             _CACHE.update(zip(missing, vecs))
-        q = _embed([query])
+        q = (embed or _embed)([query])
         if not q:
             return list(facts)
         q = q[0]

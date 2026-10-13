@@ -1,6 +1,6 @@
 """The vision self-test heals itself: a stray f16 projector beside the BF16
 is moved aside, the model reloaded, and the picture asked again."""
-import os, sys
+import os, sys, types
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import vision_selftest as V
 
@@ -20,15 +20,15 @@ def test_stray_f16_projector_is_moved_aside_only_beside_a_bf16(tmp_path):
     assert V.quarantine_f16_projectors(str(tmp_path))[0].endswith(".broken-f16.bak2")
 
 
-def test_blind_answer_heals_once_and_asks_again(monkeypatch):
+def test_blind_answer_heals_once_and_asks_again():
     answers = iter(["There is no animal in this picture, and the sofa is black.",
                     "Yes, a black cat on a green sofa."])
     calls = []
-    monkeypatch.delenv("F5_TEST_RUN", raising=False)
-    monkeypatch.setattr(V, "_ask", lambda ctx: next(answers))
-    monkeypatch.setattr(V, "quarantine_f16_projectors", lambda *a: calls.append("q") or [])
-    monkeypatch.setattr(V, "_reload_house_model", lambda ctx: calls.append("reload") or True)
-    monkeypatch.setitem(V._HEALED, "done", False)
-    assert V.run(object()) is True
+    healed = {"done": False}
+    ctx = types.SimpleNamespace(deps=types.SimpleNamespace(
+        live=True, healed=healed, _ask=lambda ctx: next(answers),
+        quarantine_f16_projectors=lambda *a: calls.append("q") or [],
+        _reload_house_model=lambda ctx: calls.append("reload") or True))
+    assert V.run(ctx) is True
     assert calls == ["q", "q", "reload"]
-    assert V.run.__doc__ and V._HEALED["done"]
+    assert V.run.__doc__ and healed["done"]

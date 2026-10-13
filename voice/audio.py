@@ -165,15 +165,16 @@ _MONTH_GEN = ("января", "февраля", "марта", "апреля", "�
               "июля", "августа", "сентября", "октября", "ноября", "декабря")
 
 
-def _ru_ordinal(n: int, neuter_day: bool) -> Optional[str]:
+def _ru_ordinal(n: int, neuter_day: bool, num2words=None) -> Optional[str]:
     """Russian ordinal from num2words, inflected for dates: day of month as
     neuter nominative ('первое', 'третье'), year as genitive masc.
     ('две тысячи двадцать шестого'). Deterministic suffix morphology on the
     masc. nominative that num2words produces."""
-    if _num2words is None:
+    n2w = num2words or _num2words
+    if n2w is None:
         return None
     try:
-        ord_masc = _num2words(n, lang="ru", to="ordinal")
+        ord_masc = n2w(n, lang="ru", to="ordinal")
     except Exception:
         return None
     if ord_masc.endswith("ий"):                  # 'третий' -> 'третье'/'третьего'
@@ -696,18 +697,19 @@ class MicRecorder:
 # --- Hands-free VAD listening (GUI auto-voice mode) --------------------------
 
 _SILERO_LOCK = threading.Lock()
-_SILERO_MODEL = None
+_SILERO = {}
 
 
-def _load_silero_vad_model():
+def _load_silero_vad_model(loader=None, store=None):
     """Lazy singleton for the Silero VAD model (tiny, runs on CPU)."""
-    global _SILERO_MODEL
+    store = _SILERO if store is None else store
     with _SILERO_LOCK:
-        if _SILERO_MODEL is None:
-            from silero_vad import load_silero_vad
-            _SILERO_MODEL = load_silero_vad()
+        if "model" not in store:
+            if loader is None:
+                from silero_vad import load_silero_vad as loader
+            store["model"] = loader()
             logger.info("Silero VAD model loaded")
-        return _SILERO_MODEL
+        return store["model"]
 
 
 class VadListener:
@@ -724,9 +726,13 @@ class VadListener:
 
     FRAME = 512  # samples @ 16 kHz = 32 ms — the window Silero VAD requires
 
-    def __init__(self, on_utterance, fs: int = SAMPLE_RATE, gain_db: float = 0.0, device=None):
-        from config import (VAD_THRESHOLD, VAD_END_SILENCE_S, VAD_MIN_SPEECH_S,
-                            VAD_PRE_ROLL_S, VAD_MAX_UTTERANCE_S)
+    def __init__(self, on_utterance, fs: int = SAMPLE_RATE, gain_db: float = 0.0, device=None, ctx=None):
+        cfg = dep(ctx, "vad_config", config)
+        VAD_THRESHOLD, VAD_END_SILENCE_S, VAD_MIN_SPEECH_S, VAD_PRE_ROLL_S, VAD_MAX_UTTERANCE_S = (
+            cfg.VAD_THRESHOLD, cfg.VAD_END_SILENCE_S, cfg.VAD_MIN_SPEECH_S,
+            cfg.VAD_PRE_ROLL_S, cfg.VAD_MAX_UTTERANCE_S)
+        self._sd = dep(ctx, "sd", sd)
+        self._load_model = dep(ctx, "load_vad_model", _load_silero_vad_model)
         if fs != 16000:
             raise ValueError("VadListener requires 16 kHz audio (Silero VAD constraint)")
         self.on_utterance = on_utterance
@@ -757,7 +763,7 @@ class VadListener:
         return self._level
 
     def start(self) -> None:
-        self._model = _load_silero_vad_model()
+        self._model = self._load_model()
 
         def callback(indata, frames, time_info, status):
             if status:
@@ -771,7 +777,7 @@ class VadListener:
             else:
                 self._level = 0.0
 
-        self._stream = sd.InputStream(samplerate=self.fs, channels=1, dtype="float32",
+        self._stream = self._sd.InputStream(samplerate=self.fs, channels=1, dtype="float32",
                                       blocksize=self.FRAME, callback=callback,
                                       device=self._device)
         self._stream.start()
@@ -845,7 +851,7 @@ class VadListener:
                     prob = float(self._model(torch.from_numpy(frame).unsqueeze(0), self.fs).item())
             except Exception as exc:
                 logger.error("VAD inference failed: %s", exc)
-                sd.sleep(500)
+                self._sd.sleep(500)
                 continue
             if not self._speaking:
                 self._pre_roll.append(frame)
@@ -890,16 +896,18 @@ def safe_normalize_segment(seg: AudioSegment, target_dBFS: float = TARGET_DBFS) 
         return seg
 
 
-def record_audio_until_enter(fs: int = SAMPLE_RATE, gain_db: float = 0.0) -> np.ndarray:
+def record_audio_until_enter(fs: int = SAMPLE_RATE, gain_db: float = 0.0, ctx=None) -> np.ndarray:
     """Record microphone input between two ENTER presses.
 
     Args:
         fs: Sample rate in Hz.
         gain_db: Optional pre-amplification in dB (0 = no gain).
     """
+    mic = dep(ctx, "sd", sd)
+    ask = dep(ctx, "input", input)
     logger.info("Press ENTER to START recording")
     try:
-        input()
+        ask()
     except EOFError:
         return np.array([], dtype=np.float32)
 
@@ -917,14 +925,14 @@ def record_audio_until_enter(fs: int = SAMPLE_RATE, gain_db: float = 0.0) -> np.
                 chunk = np.clip(chunk * gain_linear, -1.0, 1.0)
             q.put(chunk)
 
-    stream = sd.InputStream(samplerate=fs, channels=1, dtype="float32", callback=callback)
+    stream = mic.InputStream(samplerate=fs, channels=1, dtype="float32", callback=callback)
     try:
         stream.start()
         logger.info("Recording started... press ENTER to stop")
 
         def wait_stop():
             try:
-                input()
+                ask()
             except EOFError:
                 pass
             stop_event.set()

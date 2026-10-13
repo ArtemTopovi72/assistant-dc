@@ -30,8 +30,7 @@ def test_same_basename_different_files_get_different_names(tmp_path):
     assert C.upload_name(a) == na               # stable for the same file
 
 
-def test_both_upload_paths_send_the_unique_name(tmp_path, monkeypatch):
-    import requests
+def test_both_upload_paths_send_the_unique_name(tmp_path):
     import video
     a, b = _two_sheets(tmp_path)
     sent = []
@@ -45,9 +44,7 @@ def test_both_upload_paths_send_the_unique_name(tmp_path, monkeypatch):
     def post(url, files=None, **kw):
         sent.append(files["image"][0])
         return R()
-    monkeypatch.setattr(requests, "post", post)
-    monkeypatch.setattr(C.requests, "post", post, raising=False)
-    names = [C._upload_image_to_comfy(a, "http://x"), C._upload_image_to_comfy(b, "http://x"),
-             video._upload(a, "image"), video._upload(b, "image")]
+    names = [C._upload_image_to_comfy(a, "http://x", post), C._upload_image_to_comfy(b, "http://x", post),
+             video._upload(a, "image", post), video._upload(b, "image", post)]
     assert sent == [C.upload_name(a), C.upload_name(b)] * 2
     assert names == sent

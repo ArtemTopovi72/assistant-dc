@@ -69,6 +69,8 @@ class Sandbox:
     against an unresolved root would reject every legitimate path.
     """
 
+    max_unpack_bytes = MAX_UNPACK_BYTES
+
     def __init__(self, root: str | os.PathLike):
         self.root = Path(root).expanduser().resolve()
         self.root.mkdir(parents=True, exist_ok=True)
@@ -595,11 +597,11 @@ class Sandbox:
         if not zipfile.is_zipfile(src):
             return self._unpack_other(src, archive_rel, dest, dest_rel)
         written = 0
-        budget = [MAX_UNPACK_BYTES]
+        budget = [self.max_unpack_bytes]
         with zipfile.ZipFile(src) as zf:
             members = [i for i in zf.infolist() if not i.is_dir()]
             declared = sum(i.file_size for i in members)
-            if len(members) > MAX_UNPACK_FILES or declared > MAX_UNPACK_BYTES:
+            if len(members) > MAX_UNPACK_FILES or declared > self.max_unpack_bytes:
                 raise SandboxError(self._too_big(archive_rel, len(members), declared))
             for info in members:
                 # resolve() raises on anything that leaves the tree.
@@ -612,10 +614,9 @@ class Sandbox:
                 written += 1
         return f"{self.relative(dest)} ({written} files)"
 
-    @staticmethod
-    def _too_big(archive_rel: str, files: int, size: int) -> str:
+    def _too_big(self, archive_rel: str, files: int, size: int) -> str:
         return (f"'{archive_rel}' unpacks to {size} bytes in {files} files, over the "
-                f"{MAX_UNPACK_BYTES}-byte / {MAX_UNPACK_FILES}-file limit for one "
+                f"{self.max_unpack_bytes}-byte / {MAX_UNPACK_FILES}-file limit for one "
                 f"unpack. It is too large (or a decompression bomb) -- tell the user.")
 
     @staticmethod
@@ -627,8 +628,8 @@ class Sandbox:
             budget[0] -= len(chunk)
             if budget[0] < 0:
                 raise SandboxError(
-                    f"'{archive_rel}' unpacks to more than {MAX_UNPACK_BYTES} bytes, "
-                    f"the limit for one unpack. It is too large (or a decompression "
+                    f"'{archive_rel}' unpacks to more than the byte "
+                    f"limit for one unpack. It is too large (or a decompression "
                     f"bomb) -- tell the user.")
             dst.write(chunk)
 
@@ -661,9 +662,9 @@ class Sandbox:
             declared = sum(int(getattr(i, "file_size", 0) or 0) for i in listed)
         except Exception:
             listed, declared = [], 0     # unlistable: extract_archive says why
-        if len(listed) > MAX_UNPACK_FILES or declared > MAX_UNPACK_BYTES:
+        if len(listed) > MAX_UNPACK_FILES or declared > self.max_unpack_bytes:
             raise SandboxError(self._too_big(archive_rel, len(listed), declared))
-        budget = [MAX_UNPACK_BYTES]
+        budget = [self.max_unpack_bytes]
         with tempfile.TemporaryDirectory(prefix="unpack_") as tmp:
             try:
                 py7zz.extract_archive(str(src), tmp)

@@ -27,13 +27,13 @@ import image_grounding
 logger = logging.getLogger("assistant.image")
 
 
-def _face_box_of(crop, tag: str, idm):
+def _face_box_of(crop, tag: str, idm, out_dir=None):
     """face_box of an in-memory crop. The scratch file is per call: with one
     fixed name, two edits running at once (the bot has several workers) read
     each other's crop, and a face box from the wrong picture let the mask
     take in a face. Removed afterwards."""
     import uuid
-    tmp = scratch_path(OUTPUT_DIR, f"{tag}_{uuid.uuid4().hex[:8]}.png")
+    tmp = scratch_path(out_dir or OUTPUT_DIR, f"{tag}_{uuid.uuid4().hex[:8]}.png")
     try:
         crop.save(tmp)
         return idm.face_box(str(tmp), pad=0.15)

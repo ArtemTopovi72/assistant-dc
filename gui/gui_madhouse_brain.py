@@ -12,7 +12,7 @@ Both functions are re-exported from gui_madhouse_tab, and MadhouseReplyWorker
 still resolves them through that module's globals -- so a suite that patches
 `gui_madhouse_tab.generate_madhouse_reply` steers the worker exactly as before.
 """
-from seams import chat_model
+from seams import chat_model, dep
 import logging
 import random
 import re
@@ -66,7 +66,7 @@ def generate_madhouse_reply(ctx, character: dict, history: list) -> str:
     import os
     if os.getenv("MADHOUSE_SPEAKER_MEMORY", "1") != "0":
         import madhouse_memory
-        room = madhouse_memory.distil(ctx, history, window=12)
+        room = dep(ctx, "distil", madhouse_memory.distil)(ctx, history, window=12)
         block = madhouse_memory.prompt_block(
             room, character["name"], others + ([human] if human else []))
         if block:

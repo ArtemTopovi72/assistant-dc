@@ -10,7 +10,7 @@ rejection from any other empty result and shrinks the payload before resending:
     the same oversized payload;
   * the hint log names a size even when the rejection carries no numbers.
 """
-import sys, os, copy
+import sys, os, copy, types
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import llm
 
@@ -114,11 +114,13 @@ def test_shrinking_terminates():
 # --- the retry loop actually uses it ---------------------------------------
 
 class _Ctx:
+    def __init__(self, **deps):
+        self.deps = types.SimpleNamespace(throttle_external_calls=lambda ctx: None, **deps)
     def is_cancelled(self): return False
     def set_stage(self, *a, **k): pass
 
 
-def test_the_retry_loop_shrinks_instead_of_resending(monkeypatch):
+def test_the_retry_loop_shrinks_instead_of_resending():
     """The measured failure: three identical rejections, then a lost turn."""
     seen = []
 
@@ -129,23 +131,16 @@ def test_the_retry_loop_shrinks_instead_of_resending(monkeypatch):
             return llm._CTX_OVERFLOW
         return {"role": "assistant", "content": "готово"}
 
-    monkeypatch.setattr(llm, "_stream_chat", fake_stream)
-    monkeypatch.setattr(llm, "throttle_external_calls", lambda ctx: None)
-
-    out = llm.send_to_lm_studio(_Ctx(), _chain(), tools=None)
+    out = llm.send_to_lm_studio(_Ctx(_stream_chat=fake_stream), _chain(), tools=None)
     assert out and out.get("content") == "готово", "the turn must not be lost"
     assert len(seen) == 3
     assert seen[1] < seen[0], f"payload was re-sent unshrunk: {seen}"
     assert seen[2] < seen[1], f"payload stopped shrinking: {seen}"
 
 
-def test_an_unshrinkable_prompt_gives_up_instead_of_looping(monkeypatch):
-    monkeypatch.setattr(llm, "_stream_chat",
-                        lambda ctx, payload: llm._CTX_OVERFLOW)
-    monkeypatch.setattr(llm, "throttle_external_calls", lambda ctx: None)
-
+def test_an_unshrinkable_prompt_gives_up_instead_of_looping():
     assert llm.send_to_lm_studio(
-        _Ctx(), [{"role": "system", "content": "p"},
+        _Ctx(_stream_chat=lambda ctx, payload: llm._CTX_OVERFLOW), [{"role": "system", "content": "p"},
                 {"role": "user", "content": "q"}], tools=None) is None
 
 
@@ -163,26 +158,27 @@ class _Resp:
     def close(self): pass
 
 
-def test_an_http_context_rejection_returns_the_overflow_signal(monkeypatch):
-    monkeypatch.setattr(llm.requests, "post",
-                        lambda *a, **k: _Resp(400, "Context size has been exceeded."))
-    assert llm._stream_chat(None, {"messages": [], "model": "m"}) is llm._CTX_OVERFLOW
+def _posting(post):
+    return _Ctx(requests=types.SimpleNamespace(post=post))
 
 
-def test_an_unrelated_http_error_returns_the_server_error_sentinel(monkeypatch):
+def test_an_http_context_rejection_returns_the_overflow_signal():
+    ctx = _posting(lambda *a, **k: _Resp(400, "Context size has been exceeded."))
+    assert llm._stream_chat(ctx, {"messages": [], "model": "m"}) is llm._CTX_OVERFLOW
+
+
+def test_an_unrelated_http_error_returns_the_server_error_sentinel():
     """Only a context rejection may trigger trimming. A bare 5xx is the
     _SERVER_ERROR sentinel (not None, not the context-overflow signal)."""
-    monkeypatch.setattr(llm.requests, "post",
-                        lambda *a, **k: _Resp(500, "Internal Server Error"))
-    out = llm._stream_chat(None, {"messages": [], "model": "m"})
+    ctx = _posting(lambda *a, **k: _Resp(500, "Internal Server Error"))
+    out = llm._stream_chat(ctx, {"messages": [], "model": "m"})
     assert out is llm._SERVER_ERROR and out is not llm._CTX_OVERFLOW
 
 
-def test_an_in_stream_context_error_returns_the_overflow_signal(monkeypatch):
+def test_an_in_stream_context_error_returns_the_overflow_signal():
     body = b'data: {"error": {"message": "Context size has been exceeded."}}'
-    monkeypatch.setattr(llm.requests, "post",
-                        lambda *a, **k: _Resp(200, "", [body]))
-    assert llm._stream_chat(None, {"messages": [], "model": "m"}) is llm._CTX_OVERFLOW
+    ctx = _posting(lambda *a, **k: _Resp(200, "", [body]))
+    assert llm._stream_chat(ctx, {"messages": [], "model": "m"}) is llm._CTX_OVERFLOW
 
 
 def test_the_numberless_rejection_still_names_a_size(caplog):

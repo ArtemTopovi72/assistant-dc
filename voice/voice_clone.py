@@ -18,7 +18,7 @@ Three steps, none of them Telegram-specific:
                            numbers as words, stress marks, the trailing dots
                            that stop F5 eating the end of the phrase.
 """
-from seams import chat_model
+from seams import chat_model, dep
 import logging
 import os
 import re
@@ -62,7 +62,7 @@ def _voice_spans(seg):
         return None
 
 
-def pick_speech(seg, *, min_ms: int = TARGET_MIN_MS, max_ms: int = TARGET_MAX_MS):
+def pick_speech(seg, *, min_ms: int = TARGET_MIN_MS, max_ms: int = TARGET_MAX_MS, voice_spans=None):
     """The best 6-11 s of speech: consecutive non-silent chunks, densest first.
 
     A voice note usually opens with a breath and trails off; a video has music
@@ -70,7 +70,7 @@ def pick_speech(seg, *, min_ms: int = TARGET_MIN_MS, max_ms: int = TARGET_MAX_MS
     window that packs the most speech into <= max_ms wins, and it is cut on
     those pauses so it never ends mid-word.
     """
-    spans = _voice_spans(seg)
+    spans = (voice_spans or _voice_spans)(seg)
     if spans is None:
         from pydub import silence
         thresh = max(seg.dBFS - 16, -50) if seg.dBFS != float("-inf") else -50
@@ -194,4 +194,4 @@ def speak(ctx, ref_wav: str, ref_text: str, text: str, out_dir: str, cfg: float 
     os.makedirs(out_dir, exist_ok=True)
     stem = os.path.join(out_dir, f"clone_out_{uuid.uuid4().hex[:8]}.wav")
     cc = _CloneCtx(ctx, ref_wav, ref_text, cfg, speed_mul, emotion or None, ik3)   # None = decided per line
-    return audio.synth_single_segment(cc, 0, "clone", text, out_stem=stem)
+    return dep(ctx, "synth_single_segment", audio.synth_single_segment)(cc, 0, "clone", text, out_stem=stem)

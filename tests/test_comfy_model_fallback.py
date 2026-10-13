@@ -20,39 +20,34 @@ def _wf():
             "3": {"class_type": "VAELoader", "inputs": {"vae_name": "flux2-vae.safetensors"}}}
 
 
-def _serve(monkeypatch, names):
-    CC._AVAILABLE.clear()
-    monkeypatch.setattr(CC, "_available_models", lambda c, f: set(names))
+def _serve(names):
+    return lambda c, f: set(names)
 
 
-def test_missing_int8_uses_fp8(monkeypatch):
-    _serve(monkeypatch, ["ideogram4_fp8_scaled.safetensors",
-                         "ideogram4_unconditional_fp8_scaled.safetensors"])
-    wf = CC._apply_model_fallbacks(_wf())
+def test_missing_int8_uses_fp8():
+    served = _serve(["ideogram4_fp8_scaled.safetensors",
+                     "ideogram4_unconditional_fp8_scaled.safetensors"])
+    wf = CC._apply_model_fallbacks(_wf(), served)
     assert wf["1"]["inputs"]["unet_name"] == "ideogram4_fp8_scaled.safetensors"
     assert wf["2"]["inputs"]["unet_name"] == "ideogram4_unconditional_fp8_scaled.safetensors"
     assert wf["3"]["inputs"]["vae_name"] == "flux2-vae.safetensors"
 
 
-def test_present_int8_is_kept(monkeypatch):
-    _serve(monkeypatch, ["ig4-int8mixedrow_simple.safetensors", "ideogram4_fp8_scaled.safetensors",
-                         "ig4_uncond-int8mixedrow_simple.safetensors"])
-    wf = CC._apply_model_fallbacks(_wf())
+def test_present_int8_is_kept():
+    served = _serve(["ig4-int8mixedrow_simple.safetensors", "ideogram4_fp8_scaled.safetensors",
+                     "ig4_uncond-int8mixedrow_simple.safetensors"])
+    wf = CC._apply_model_fallbacks(_wf(), served)
     assert wf["1"]["inputs"]["unet_name"] == "ig4-int8mixedrow_simple.safetensors"
 
 
-def test_unknown_server_list_changes_nothing(monkeypatch):
-    CC._AVAILABLE.clear()
-    monkeypatch.setattr(CC, "_available_models", lambda c, f: None)
-    assert CC._apply_model_fallbacks(_wf()) == _wf()
+def test_unknown_server_list_changes_nothing():
+    assert CC._apply_model_fallbacks(_wf(), lambda c, f: None) == _wf()
 
 
-def test_object_info_parsing(monkeypatch):
-    CC._AVAILABLE.clear()
+def test_object_info_parsing():
 
     class R:
         def json(self):
             return {"UNETLoader": {"input": {"required": {
                 "unet_name": [["a.safetensors", "b.safetensors"], {}]}}}}
-    monkeypatch.setattr(CC.requests, "get", lambda *a, **k: R())
-    assert CC._available_models("UNETLoader", "unet_name") == {"a.safetensors", "b.safetensors"}
+    assert CC._available_models("UNETLoader", "unet_name", get=lambda *a, **k: R(), cache={}) == {"a.safetensors", "b.safetensors"}

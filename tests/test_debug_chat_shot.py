@@ -12,29 +12,37 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT] + [os.path.join(ROOT, d) for d in ("gui", "bot", "agent", "core")]
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PyQt5.QtCore import QObject, pyqtSignal  # noqa: E402
 from PyQt5.QtWidgets import QApplication, QLabel, QTabWidget  # noqa: E402
 
 
-def test_a_shot_request_shows_the_tab_and_saves_the_window(tmp_path, monkeypatch):
-    import debug_user
+class _Quiet(QObject):
+    """No live API in a suite: a poller that never polls."""
+    got = pyqtSignal(list)
+    state = pyqtSignal(bool)
+
+    def start(self):
+        pass
+
+
+def test_a_shot_request_shows_the_tab_and_saves_the_window(tmp_path):
     import gui_debug_chat_tab as G
-    monkeypatch.setattr(debug_user, "SHOT", str(tmp_path / "shot.png"))
-    monkeypatch.setattr(G._Poller, "run", lambda self: None)       # no live API in a suite
+    SHOT = str(tmp_path / "shot.png")
     app = QApplication.instance() or QApplication([])
     outer, inner = QTabWidget(), QTabWidget()
-    tab = G.DebugChatTab()
+    tab = G.DebugChatTab(poller=_Quiet(), shot=SHOT)
     inner.addTab(QLabel("telegram"), "Telegram")
     inner.addTab(tab, "Debug chat")
     outer.addTab(QLabel("chat"), "Chat")
     outer.addTab(inner, "Workspace")
     outer.resize(800, 600)
     outer.show()
-    open(debug_user.SHOT + ".req", "w").write("1")
+    open(SHOT + ".req", "w").write("1")
     end = time.time() + 5
-    while time.time() < end and not os.path.exists(debug_user.SHOT):
+    while time.time() < end and not os.path.exists(SHOT):
         app.processEvents()
         time.sleep(0.05)
     assert outer.currentWidget() is inner and inner.currentWidget() is tab
-    assert os.path.getsize(debug_user.SHOT) > 0 and not os.path.exists(debug_user.SHOT + ".req")
+    assert os.path.getsize(SHOT) > 0 and not os.path.exists(SHOT + ".req")
     tab._shot_timer.stop()
     outer.close()

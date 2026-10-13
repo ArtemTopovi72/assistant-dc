@@ -15,7 +15,7 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 from pathlib import Path
 import numpy as np
 import audio as A
-from _patch_base import RebindPatches
+
 
 RESULTS = []
 def check(name, cond, detail=""):
@@ -27,11 +27,8 @@ def check(name, cond, detail=""):
 _TMP = Path(tempfile.mkdtemp(prefix="audiovad_"))
 
 
-class _Patches(RebindPatches):
-    def _apply(self, name, value):
-        old = getattr(A, name)
-        setattr(A, name, value)
-        return [(A, old)]
+def _ctx(**deps):
+    return types.SimpleNamespace(deps=types.SimpleNamespace(**deps))
 
 
 class FakeStream:
@@ -81,20 +78,13 @@ def _make_fake_torch():
 
 
 def _listener(probs, threshold=0.5, end_silence_s=0.1, min_speech_s=0.05,
-             pre_roll_s=0.05, max_utterance_s=10.0):
-    import config
-    saved = {k: getattr(config, k) for k in
-             ("VAD_THRESHOLD", "VAD_END_SILENCE_S", "VAD_MIN_SPEECH_S",
-              "VAD_PRE_ROLL_S", "VAD_MAX_UTTERANCE_S")}
-    config.VAD_THRESHOLD = threshold
-    config.VAD_END_SILENCE_S = end_silence_s
-    config.VAD_MIN_SPEECH_S = min_speech_s
-    config.VAD_PRE_ROLL_S = pre_roll_s
-    config.VAD_MAX_UTTERANCE_S = max_utterance_s
+             pre_roll_s=0.05, max_utterance_s=10.0, **deps):
+    cfg = types.SimpleNamespace(VAD_THRESHOLD=threshold, VAD_END_SILENCE_S=end_silence_s,
+                                VAD_MIN_SPEECH_S=min_speech_s, VAD_PRE_ROLL_S=pre_roll_s,
+                                VAD_MAX_UTTERANCE_S=max_utterance_s)
     utterances = []
-    listener = A.VadListener(lambda u: utterances.append(u), fs=16000)
-    for k, v in saved.items():
-        setattr(config, k, v)
+    listener = A.VadListener(lambda u: utterances.append(u), fs=16000,
+                             ctx=_ctx(vad_config=cfg, **deps))
     return listener, utterances
 
 
@@ -133,21 +123,20 @@ def test_vad_listener_construct_wrong_rate():
 
 def test_vad_listener_start_stop_and_health():
     FakeStream.instances.clear()
-    with _Patches(sd=FakeSd(), _load_silero_vad_model=lambda: FakeVadModel([0.0])):
-        listener, _utt = _listener([0.0])
-        check("vad_listener_unhealthy_before_start", not listener.is_healthy())
-        listener.start()
-        check("vad_listener_healthy_after_start", listener.is_healthy())
-        listener.set_paused(True)
-        check("vad_listener_level_reflects_pause_next_callback", True)
-        stream = FakeStream.instances[-1]
-        stream.callback(np.zeros((512, 1), dtype=np.float32), 512, None, "overflow")
-        check("vad_listener_paused_level_zero", listener.level() == 0.0)
-        listener.set_paused(False)
-        stream.callback(np.ones((512, 1), dtype=np.float32) * 0.2, 512, None, None)
-        check("vad_listener_level_updates_unpaused", listener.level() > 0)
-        listener.stop()
-        check("vad_listener_unhealthy_after_stop", not listener.is_healthy())
+    listener, _utt = _listener([0.0], sd=FakeSd(), load_vad_model=lambda: FakeVadModel([0.0]))
+    check("vad_listener_unhealthy_before_start", not listener.is_healthy())
+    listener.start()
+    check("vad_listener_healthy_after_start", listener.is_healthy())
+    listener.set_paused(True)
+    check("vad_listener_level_reflects_pause_next_callback", True)
+    stream = FakeStream.instances[-1]
+    stream.callback(np.zeros((512, 1), dtype=np.float32), 512, None, "overflow")
+    check("vad_listener_paused_level_zero", listener.level() == 0.0)
+    listener.set_paused(False)
+    stream.callback(np.ones((512, 1), dtype=np.float32) * 0.2, 512, None, None)
+    check("vad_listener_level_updates_unpaused", listener.level() > 0)
+    listener.stop()
+    check("vad_listener_unhealthy_after_stop", not listener.is_healthy())
 
 
 def test_vad_listener_is_healthy_stream_exception():
@@ -188,7 +177,7 @@ def test_vad_run_max_utterance_triggers_finish():
 
 
 def test_vad_run_inference_exception_recovers():
-    listener, utterances = _listener([0.0]*5)
+    listener, utterances = _listener([0.0]*5, sd=FakeSd())
 
     class RaisingModel:
         def __init__(self):
@@ -201,10 +190,9 @@ def test_vad_run_inference_exception_recovers():
         def reset_states(self):
             pass
 
-    with _Patches(sd=FakeSd()):
-        frames = [np.random.uniform(-0.05, 0.05, listener.FRAME).astype(np.float32) for _ in range(5)]
-        _feed(listener, RaisingModel(), frames)
-        check("vad_run_inference_exception_recovers", True)
+    frames = [np.random.uniform(-0.05, 0.05, listener.FRAME).astype(np.float32) for _ in range(5)]
+    _feed(listener, RaisingModel(), frames)
+    check("vad_run_inference_exception_recovers", True)
 
 
 def test_vad_run_paused_mid_utterance_drains():
@@ -239,18 +227,11 @@ def test_vad_run_partial_frame_skipped():
 
 
 def test_load_silero_vad_model_singleton():
-    A._SILERO_MODEL = None
-    fake_silero = types.ModuleType("silero_vad")
     sentinel = object()
-    fake_silero.load_silero_vad = lambda: sentinel
-    sys.modules["silero_vad"] = fake_silero
-    try:
-        m1 = A._load_silero_vad_model()
-        m2 = A._load_silero_vad_model()
-        check("load_silero_vad_singleton", m1 is sentinel and m2 is sentinel)
-    finally:
-        A._SILERO_MODEL = None
-        del sys.modules["silero_vad"]
+    store = {}
+    m1 = A._load_silero_vad_model(lambda: sentinel, store)
+    m2 = A._load_silero_vad_model(lambda: object(), store)
+    check("load_silero_vad_singleton", m1 is sentinel and m2 is sentinel)
 
 
 def test_resolve_ref_audio_conversion():
@@ -282,51 +263,38 @@ def test_resolve_ref_audio_conversion_failure():
 
 
 def test_record_audio_until_enter_low_energy_warning():
-    with _Patches(sd=FakeSd()):
-        real_input = builtins.input
-        calls = {"n": 0}
-        def fake_input():
-            calls["n"] += 1
-            return ""
-        builtins.input = fake_input
-        try:
-            def driver():
-                time.sleep(0.05)
-                stream = FakeStream.instances[-1] if FakeStream.instances else None
-                if stream:
-                    stream.callback(np.zeros((50, 1), dtype=np.float32), 50, None, None)
-                time.sleep(0.05)
-                if stream:
-                    stream.active = False
-            FakeStream.instances.clear()
-            threading.Thread(target=driver, daemon=True).start()
-            out = A.record_audio_until_enter(gain_db=6.0)
-            check("record_low_energy_path_ran", isinstance(out, np.ndarray))
-        finally:
-            builtins.input = real_input
+    calls = {"n": 0}
+
+    def fake_input():
+        calls["n"] += 1
+        return ""
+
+    def driver():
+        time.sleep(0.05)
+        stream = FakeStream.instances[-1] if FakeStream.instances else None
+        if stream:
+            stream.callback(np.zeros((50, 1), dtype=np.float32), 50, None, None)
+        time.sleep(0.05)
+        if stream:
+            stream.active = False
+    FakeStream.instances.clear()
+    threading.Thread(target=driver, daemon=True).start()
+    out = A.record_audio_until_enter(gain_db=6.0, ctx=_ctx(sd=FakeSd(), input=fake_input))
+    check("record_low_energy_path_ran", isinstance(out, np.ndarray))
 
 
 def test_ru_ordinal_iy_ending():
-    saved = A._num2words
-    A._num2words = lambda n, lang="ru", to="ordinal": "третий"
-    try:
-        out = A._ru_ordinal(3, neuter_day=True)
-        check("ru_ordinal_iy_ending_day", out == "третье")
-        out2 = A._ru_ordinal(3, neuter_day=False)
-        check("ru_ordinal_iy_ending_year", out2 == "третьего")
-    finally:
-        A._num2words = saved
+    n2w = lambda n, lang="ru", to="ordinal": "третий"
+    out = A._ru_ordinal(3, neuter_day=True, num2words=n2w)
+    check("ru_ordinal_iy_ending_day", out == "третье")
+    out2 = A._ru_ordinal(3, neuter_day=False, num2words=n2w)
+    check("ru_ordinal_iy_ending_year", out2 == "третьего")
 
 
 def test_ru_ordinal_num2words_exception():
-    saved = A._num2words
     def raiser(n, lang="ru", to="ordinal"):
         raise RuntimeError("boom")
-    A._num2words = raiser
-    try:
-        check("ru_ordinal_exception_none", A._ru_ordinal(1, True) is None)
-    finally:
-        A._num2words = saved
+    check("ru_ordinal_exception_none", A._ru_ordinal(1, True, num2words=raiser) is None)
 
 
 if __name__ == "__main__":

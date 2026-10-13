@@ -460,9 +460,9 @@ def test_list_does_not_descend_a_linked_dir(box, tmp_path):
 
 # --- unpack size gate ---------------------------------------------------------
 
-def test_unpack_refuses_a_decompression_bomb(box, monkeypatch):
+def test_unpack_refuses_a_decompression_bomb(box):
     import code_sandbox
-    monkeypatch.setattr(code_sandbox, "MAX_UNPACK_BYTES", 100_000)
+    box.max_unpack_bytes = 100_000
     zp = box.root / "bomb.zip"
     with zipfile.ZipFile(zp, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("zeros.bin", b"\0" * 1_000_000)     # ~1 KB compressed
@@ -472,12 +472,11 @@ def test_unpack_refuses_a_decompression_bomb(box, monkeypatch):
     assert not left.exists() or left.stat().st_size <= 100_000
 
 
-def test_copy_is_counted_whatever_the_header_claims(monkeypatch):
+def test_copy_is_counted_whatever_the_header_claims():
     """The declared file_size is the archive's own claim; the copy is counted."""
     import io
     import code_sandbox
-    monkeypatch.setattr(code_sandbox, "MAX_UNPACK_BYTES", 3 * 1024 * 1024)
-    budget = [code_sandbox.MAX_UNPACK_BYTES]
+    budget = [3 * 1024 * 1024]
     with pytest.raises(SandboxError, match="limit"):
         Sandbox._copy_capped(io.BytesIO(b"\0" * (5 * 1024 * 1024)), io.BytesIO(),
                              budget, "x.zip")

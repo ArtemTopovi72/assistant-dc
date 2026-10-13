@@ -13,15 +13,13 @@ os.environ.setdefault("F5_TEST_RUN", "1")
 import code_runner as R  # noqa: E402
 
 
-def test_secrets_are_stripped_but_the_rest_is_kept(tmp_path, monkeypatch):
-    monkeypatch.setenv("VK_TOKEN", "vk-secret")
-    monkeypatch.setenv("TG_API_HASH", "hash-secret")
-    monkeypatch.setenv("OPENAI_API_KEY", "key-secret")
-    monkeypatch.setenv("HARMLESS_SETTING", "kept")
+def test_secrets_are_stripped_but_the_rest_is_kept(tmp_path):
+    environ = {**os.environ, "VK_TOKEN": "vk-secret", "TG_API_HASH": "hash-secret",
+               "OPENAI_API_KEY": "key-secret", "HARMLESS_SETTING": "kept"}
     res = R._spawn([sys.executable, "-c",
                     "import os; print(sorted(k for k in os.environ if 'SECRET' in os.environ[k]"
                     " or k == 'HARMLESS_SETTING'))"],
-                   cwd=tmp_path, timeout=30)
+                   cwd=tmp_path, timeout=30, environ=environ)
     assert res.ok, res.output
     assert "HARMLESS_SETTING" in res.output
     assert "VK_TOKEN" not in res.output and "TG_API_HASH" not in res.output

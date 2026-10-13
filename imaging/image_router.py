@@ -443,7 +443,7 @@ _LAYOUT_SURVIVES = frozenset({"object_remove", "person_remove"})
 
 
 def route_edit_request(ctx, image_path: str, instruction: str, **kw) -> tuple:
-    category, out = _route_edit_request(ctx, image_path, instruction, **kw)
+    category, out = dep(ctx, "_route_edit_request", _route_edit_request)(ctx, image_path, instruction, **kw)
     if out and category in _LAYOUT_SURVIVES and not _image.load_layout_for(out):
         rec = _image.load_layout_for(image_path)
         if rec:

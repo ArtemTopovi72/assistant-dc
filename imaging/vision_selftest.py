@@ -12,7 +12,7 @@ Runs once at start-up, off the main thread, and only logs; a failure must
 not stop the app from coming up. Skipped under F5_TEST_RUN.
 """
 from __future__ import annotations
-from seams import vision_model
+from seams import dep, vision_model
 
 import logging
 import os
@@ -110,17 +110,19 @@ def run(ctx) -> bool | None:
     """Ask; on a blind answer, move a stray f16 projector aside, reload the
     model and ask again (once per process). True/False for a verdict, None
     when the call did not happen."""
-    if os.getenv("F5_TEST_RUN"):
+    if os.getenv("F5_TEST_RUN") and not dep(ctx, "live", False):
         return None
+    quarantine = dep(ctx, "quarantine_f16_projectors", quarantine_f16_projectors)
+    healed = dep(ctx, "healed", _HEALED)
     try:
-        quarantine_f16_projectors()
+        quarantine()
     except Exception as exc:
         logger.warning("projector check failed: %s", exc)
     ok = _run_once(ctx)
-    if ok is False and not _HEALED["done"]:
-        _HEALED["done"] = True
-        quarantine_f16_projectors()
-        if _reload_house_model(ctx):
+    if ok is False and not healed["done"]:
+        healed["done"] = True
+        quarantine()
+        if dep(ctx, "_reload_house_model", _reload_house_model)(ctx):
             ok = _run_once(ctx)
             logger.warning("vision self-heal: after reload the model %s",
                            "SEES again" if ok else "is STILL blind")
@@ -133,7 +135,7 @@ def _run_once(ctx) -> bool | None:
     except Exception as err:
         logger.debug("could not reset ctx.last_llm_error: %s", err)
     try:
-        answer = _ask(ctx)
+        answer = dep(ctx, "_ask", _ask)(ctx)
     except Exception as exc:
         logger.warning("vision self-test could not run: %s", exc)
         return None

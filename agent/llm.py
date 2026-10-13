@@ -543,7 +543,7 @@ def send_to_lm_studio(
     spends its token budget on the OUTPUT instead of burning it all on the analysis
     channel and returning empty content.
     """
-    _wait_for_free_card(ctx)
+    dep(ctx, "_wait_for_free_card", _wait_for_free_card)(ctx)
     model_name = getattr(ctx, "model_name", "") or MODEL_NAME
     # Reasoning is OFF for every call, here, in the one function every model
     # call goes through -- not per caller, not by the thinking switch, not by
@@ -701,7 +701,7 @@ def send_to_lm_studio(
             # Re-checked per attempt: a render may have claimed the card
             # between two attempts, and the retry must wait like a fresh call.
             if attempt:
-                _wait_for_free_card(ctx)
+                dep(ctx, "_wait_for_free_card", _wait_for_free_card)(ctx)
             _inflight_enter()
             try:
                 message = dep(ctx, "_stream_chat", _stream_chat)(ctx, payload)

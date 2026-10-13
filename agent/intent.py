@@ -35,7 +35,7 @@ On any failure it returns FALLBACK: needs_tool True, no picks, nothing forced
 bench/intent_live.py checks it against the real model.
 """
 from __future__ import annotations
-from seams import text_model
+from seams import dep, text_model
 
 import logging
 import os
@@ -242,7 +242,7 @@ def ask_choice(question: str, text: str, options: tuple, default: str = "") -> s
     return got
 
 
-def ask_yes(question: str, text: str, default: bool = False, wait: bool = True) -> bool:
+def ask_yes(question: str, text: str, default: bool = False, wait: bool = True, ctx=None) -> bool:
     """One narrow yes/no about `text`, for checks that live inside one flow
     (a song topic, a video description, an edit instruction) rather than in
     the per-message read. Cached; model down -> `default`. `wait=False`: a render
@@ -250,7 +250,7 @@ def ask_yes(question: str, text: str, default: bool = False, wait: bool = True) 
     text = (text or "").strip()
     if not text:
         return default
-    if os.getenv("F5_TEST_RUN") and not os.getenv("INTENT_LIVE"):
+    if os.getenv("F5_TEST_RUN") and not (os.getenv("INTENT_LIVE") or dep(ctx, "live", False)):
         return default
     key = (question, text[:1500])
     with _LOCK:
@@ -259,13 +259,13 @@ def ask_yes(question: str, text: str, default: bool = False, wait: bool = True) 
     if not wait:
         try:
             import comfy_client
-            if comfy_client.card_in_use():
+            if dep(ctx, "card_in_use", comfy_client.card_in_use)():
                 return default
         except Exception:
             pass
     try:
         import llm
-        ans = llm.call_llm_simple(None, "Answer yes or no only.",
+        ans = dep(ctx, "call_llm_simple", llm.call_llm_simple)(None, "Answer yes or no only.",
                                   # the question names the text in its own words: a bare
                                   # "Text:" label was read as the answer («the cat» ->
                                   # is it lettering? Yes)

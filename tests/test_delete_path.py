@@ -3,7 +3,7 @@
 The only other way to clean up the working folder is run_code, which a
 FILES-level user does not have.
 """
-import os, sys
+import os, sys, types
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pytest
 from code_sandbox import Sandbox, SandboxError
@@ -88,38 +88,37 @@ def test_it_is_in_the_kit_and_registered():
 
 # --- a script that writes a picture delivers it ------------------------------
 
-def _run_code_with(box, monkeypatch, writer):
+def _run_code_with(box, writer):
     import code_runner as R, sandbox_access as A
     from tg_userstore import _User
     class _Res:
         ok = True; code = 0; output = "done"; seconds = 0.1; backend = "fake"
         def as_tool_result(self): return "exit=0 in 0.1s\ndone"
-    def fake_run(sb, code, timeout=0, allow_host=False):
+    def fake_run(sb, code, timeout=0, allow_host=False, ctx=None):
         writer(); return _Res()
-    monkeypatch.setattr(R, "run_python", fake_run)
     user = _User(chat_id=1, name="u", status="approved"); user.prefs["sandbox"] = A.CODE
-    class _C: sandbox = box; sandbox_user = user
+    class _C: sandbox = box; sandbox_user = user; deps = types.SimpleNamespace(run_python=fake_run)
     state = {"image_path": str(box.root / "DCIM_unpacked" / "a" / "1.jpg")}
     out = H._handle_run_code(_C(), state, {"code": "x"})
     return out, state
 
 
-def test_a_picture_written_by_the_script_becomes_current(box, monkeypatch):
+def test_a_picture_written_by_the_script_becomes_current(box):
     def w(): (box.root / "out_collage.png").write_bytes(b"png")
-    out, state = _run_code_with(box, monkeypatch, w)
+    out, state = _run_code_with(box, w)
     assert state["image_path"].endswith("out_collage.png") and state["image_status"] == "ok"
     assert "will be sent to the user" in out
 
 
-def test_untouched_pictures_do_not_steal_the_current_one(box, monkeypatch):
-    out, state = _run_code_with(box, monkeypatch, lambda: None)
+def test_untouched_pictures_do_not_steal_the_current_one(box):
+    out, state = _run_code_with(box, lambda: None)
     assert state["image_path"].endswith("1.jpg") and "image_status" not in state
 
 
-def test_hidden_folders_are_not_deliverables(box, monkeypatch):
+def test_hidden_folders_are_not_deliverables(box):
     def w():
         (box.root / ".contact_sheets").mkdir(); (box.root / ".contact_sheets" / "s.jpg").write_bytes(b"x")
-    out, state = _run_code_with(box, monkeypatch, w)
+    out, state = _run_code_with(box, w)
     assert state["image_path"].endswith("1.jpg")
 
 

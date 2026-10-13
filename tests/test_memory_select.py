@@ -19,36 +19,33 @@ def setup_function(_):
     M._CACHE.clear()
 
 
-def test_small_store_goes_whole(monkeypatch):
-    monkeypatch.setattr(M, "_embed", lambda t: (_ for _ in ()).throw(AssertionError("no call")))
-    assert M.select(FACTS[:5], "кот") == FACTS[:5]
+def test_small_store_goes_whole():
+    def never(t):
+        raise AssertionError("no call")
+    assert M.select(FACTS[:5], "кот", embed=never) == FACTS[:5]
 
 
-def test_relevant_plus_newest_in_original_order(monkeypatch):
-    monkeypatch.setattr(M, "_embed", _fake)
-    got = M.select(FACTS, "что с моим котом?", k=2, newest=1, floor=0.3)
+def test_relevant_plus_newest_in_original_order():
+    got = M.select(FACTS, "что с моим котом?", k=2, newest=1, floor=0.3, embed=_fake)
     assert "У меня кот Барсик" in got and "Кот любит рыбу" in got
     assert got[-1] == FACTS[-1]                          # newest kept, order kept
     assert "Живу в городе Москва" not in got
     assert got == [f for f in FACTS if f in got]
 
 
-def test_no_embedder_keeps_everything(monkeypatch):
-    monkeypatch.setattr(M, "_embed", lambda t: None)
-    assert M.select(FACTS, "кот") == FACTS
+def test_no_embedder_keeps_everything():
+    assert M.select(FACTS, "кот", embed=lambda t: None) == FACTS
 
 
-def test_embedder_crash_keeps_everything(monkeypatch):
+def test_embedder_crash_keeps_everything():
     def boom(t): raise RuntimeError("lm studio down")
-    monkeypatch.setattr(M, "_embed", boom)
-    assert M.select(FACTS, "кот") == FACTS
+    assert M.select(FACTS, "кот", embed=boom) == FACTS
 
 
-def test_ctx_facts_text_uses_selection(monkeypatch):
-    import models
-    monkeypatch.setenv("JIT_FACTS", "1")
-    monkeypatch.setattr(M, "_embed", _fake)
+def test_ctx_facts_text_uses_selection():
+    import models, types
     ctx = models.Context.__new__(models.Context)
+    ctx.deps = types.SimpleNamespace(jit_facts=lambda: True, embed=_fake)
     import threading
     ctx.memory_lock = threading.Lock()
     ctx.pinned_facts = [{"text": f} for f in FACTS]

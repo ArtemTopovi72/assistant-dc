@@ -66,9 +66,10 @@ class _Poller(QThread):
 
 
 class DebugChatTab(QWidget):
-    def __init__(self, host=None):
+    def __init__(self, host=None, poller=None, shot=None):
         super().__init__()
         self.host = host
+        self.shot = shot
         self._msgs = []                  # [{"id", "me", "text", "html", "files"}], in order
         self._by_id = {}
         self._reply_kb = []
@@ -139,7 +140,7 @@ class DebugChatTab(QWidget):
         except Exception:
             pass
 
-        self._poller = _Poller()
+        self._poller = poller or _Poller()
         self._poller.got.connect(self._on_bot)
         self._poller.state.connect(self._on_state)
         self._poller.start()
@@ -154,10 +155,11 @@ class DebugChatTab(QWidget):
             import debug_user
         except Exception:
             return
-        if not os.path.exists(debug_user.SHOT + ".req"):
+        shot = self.shot or debug_user.SHOT
+        if not os.path.exists(shot + ".req"):
             return
         try:
-            os.remove(debug_user.SHOT + ".req")
+            os.remove(shot + ".req")
         except OSError:
             return
         w = self
@@ -167,7 +169,7 @@ class DebugChatTab(QWidget):
             if isinstance(tabs, QTabWidget):
                 tabs.setCurrentWidget(w)
             w = stack
-        QTimer.singleShot(400, lambda: self.window().grab().save(debug_user.SHOT))
+        QTimer.singleShot(400, lambda: self.window().grab().save(shot))
 
     # ---- the user side ----
 

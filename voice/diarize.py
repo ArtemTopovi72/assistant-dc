@@ -8,7 +8,7 @@ transcript comes back as "Спикер 1: ... / Спикер 2: ...".
 Every failure returns None and the caller keeps its plain transcript: a
 missing venv, a single speaker, a clip too short to be a conversation.
 """
-from seams import text_model
+from seams import dep, text_model
 import json
 import logging
 import os
@@ -66,7 +66,7 @@ def label_order(ts: List[dict]) -> dict:
 
 def speaker_transcript(ctx, wav: str, lang: str = "ru", asr_lang: str = "") -> Optional[str]:
     """Labelled transcript, or None when this is not a multi-speaker clip."""
-    if not enabled():
+    if not dep(ctx, "enabled", enabled)():
         return None
     import soundfile as sf
     try:
@@ -77,12 +77,13 @@ def speaker_transcript(ctx, wav: str, lang: str = "ru", asr_lang: str = "") -> O
         x = x.mean(axis=1)
     if len(x) / sr < MIN_SECONDS:
         return None
-    segs = segments(wav)
+    segs = dep(ctx, "segments", segments)(wav)
     ts = turns(segs or [])
     names = label_order(ts)
     if len(names) < 2:
         return None
     from audio import transcribe_audio_file
+    transcribe_audio_file = dep(ctx, "transcribe_audio_file", transcribe_audio_file)
     label = LABEL.get(lang, LABEL["en"])
     lines = []
     for t in ts:

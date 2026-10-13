@@ -19,6 +19,7 @@ import re
 
 from code_sandbox import SandboxError
 import code_runner as _runner
+from seams import dep
 import sandbox_access as _access
 
 logger = logging.getLogger("assistant.tools.code")
@@ -761,10 +762,11 @@ def _handle_run_code(ctx, state, args: dict) -> str:
         return (f"[TOOL ERROR] NOT run: this script rewrites {hijacked} whole, and "
                 f"{hijacked} {_REWRITE_REFUSED_TAIL}")
     before = _pictures_in(box)
-    res = _runner.run_python(
+    res = dep(ctx, "run_python", _runner.run_python)(
         box, args.get("code") or "",
         timeout=args.get("timeout") or _runner.DEFAULT_TIMEOUT,
         allow_host=_access.allow_host_execution(getattr(ctx, "sandbox_user", None)),
+        ctx=ctx,
     )
     if not res.ok:
         # A failed run is a real result the model must reason about, not a
@@ -1089,12 +1091,12 @@ def _handle_run_tests(ctx, state, args: dict) -> str:
               "try:\n    import pytest\nexcept ImportError:\n    sys.exit(97)\n"
               f"sys.exit(pytest.main({argv!r}))\n")
     timeout = args.get("timeout") or 300
-    res = _runner.run_python(box, script, timeout=timeout, allow_host=host)
+    res = _runner.run_python(box, script, timeout=timeout, allow_host=host, ctx=ctx)
     if res.code == 97:
         inst = _runner.install(box, ["pytest"], allow_host=host)
         if not inst.ok:
             return f"[TOOL ERROR] pytest is missing and could not be installed: {inst.as_tool_result()}"
-        res = _runner.run_python(box, script, timeout=timeout, allow_host=host)
+        res = _runner.run_python(box, script, timeout=timeout, allow_host=host, ctx=ctx)
     out = res.output or ""
     if res.code == 5:
         return ("[TOOL ERROR] No tests were found under '" + target + "'. pytest "

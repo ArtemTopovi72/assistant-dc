@@ -10,7 +10,7 @@ tool to call; that is measured on the routing bench. What is measured HERE is
 that the tools do what their descriptions promise, and that a user without the
 grant cannot reach them.
 """
-import sys, os, json, zipfile
+import sys, os, json, types, zipfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pytest
 
@@ -145,12 +145,11 @@ def test_a_user_with_no_level_at_all_cannot_run_code(box):
     assert out.startswith("[TOOL ERROR]")
 
 
-def test_code_execution_without_isolation_is_refused_not_silently_run(box, monkeypatch):
+def test_code_execution_without_isolation_is_refused_not_silently_run(box):
     """The rule from code_runner, checked at the tool boundary too."""
-    import code_runner as R
-    monkeypatch.setattr(R, "docker_available", lambda *a, **k: False)
-    monkeypatch.setattr(R, "desktop_binary", lambda: None)
-    out = _call(_Ctx(box, _User(A.CODE)), "run_code", code="print('hi')")
+    ctx = _Ctx(box, _User(A.CODE))
+    ctx.deps = types.SimpleNamespace(docker_available=lambda *a, **k: False, desktop_binary=lambda: None)
+    out = _call(ctx, "run_code", code="print('hi')")
     assert out.startswith("[TOOL ERROR]") and "unavailable" in out.lower()
 
 

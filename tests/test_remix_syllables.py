@@ -56,18 +56,18 @@ def test_whisper_hallucinations_on_the_backing_take_no_line():
     assert all("Thank" not in " ".join(x["w"] for x in w) for w, _ in plan)
 
 
-def test_a_line_is_fitted_to_the_phrase_syllables(monkeypatch):
-    import llm
+def test_a_line_is_fitted_to_the_phrase_syllables():
+    import types
     asked = []
 
     def fake(ctx, sp, um, **kw):
         asked.append(um)
         return "ехал по дороге говновоз" if len(asked) > 1 else "ехал говновоз"
-    monkeypatch.setattr(llm, "call_llm_simple", fake)
+    ctx = types.SimpleNamespace(text_model=fake)
     assert R._syl("ехал по дороге говновоз") == 9
-    assert R._fit_line(None, "едет говновоз", 9) == "ехал по дороге говновоз"
+    assert R._fit_line(ctx, "едет говновоз", 9) == "ехал по дороге говновоз"
     assert "add 4" in asked[0] and len(asked) == 2      # told what it has and what to change
-    assert R._fit_line(None, "ехал по дороге говновоз", 10) == "ехал по дороге говновоз"   # ±1 is fine
+    assert R._fit_line(ctx, "ехал по дороге говновоз", 10) == "ехал по дороге говновоз"   # ±1 is fine
 
 
 def test_a_held_syllable_stops_where_the_singer_stopped():

@@ -451,10 +451,10 @@ def _load_workflow(mode: str) -> dict:
         return json.load(fh)
 
 
-def _upload(path: str, kind: str = "image") -> Optional[str]:
+def _upload(path: str, kind: str = "image", post=None) -> Optional[str]:
     """Put a local file where ComfyUI's LoadImage/LoadVideo can see it."""
     if kind == "image":
-        return comfy_client._upload_image_to_comfy(path, COMFY_URL)
+        return comfy_client._upload_image_to_comfy(path, COMFY_URL, post)
     # Videos and audio go through the same /upload/image endpoint (ComfyUI stores
     # them all in input/); only the mime differs.
     try:
@@ -465,7 +465,7 @@ def _upload(path: str, kind: str = "image") -> Optional[str]:
                 "flac": "audio/flac", "m4a": "audio/mp4"}.get(ext.lstrip("."),
                                                               "application/octet-stream")
         with open(path, "rb") as fh:
-            r = requests.post(f"{COMFY_URL}/upload/image",
+            r = (post or requests.post)(f"{COMFY_URL}/upload/image",
                               files={"image": (comfy_client.upload_name(path), fh, mime)},
                               data={"type": "input", "overwrite": "true"}, timeout=120)
         if r.status_code == 200:

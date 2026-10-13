@@ -18,8 +18,7 @@ from PIL import Image  # noqa: E402
 import image_masks as M  # noqa: E402
 
 
-def test_concurrent_face_checks_each_read_their_own_crop(tmp_path, monkeypatch):
-    monkeypatch.setattr(M, "OUTPUT_DIR", tmp_path)
+def test_concurrent_face_checks_each_read_their_own_crop(tmp_path):
     both_saved = threading.Barrier(2)
 
     class Idm:
@@ -31,7 +30,7 @@ def test_concurrent_face_checks_each_read_their_own_crop(tmp_path, monkeypatch):
     seen = {}
 
     def job(colour):
-        seen[colour] = M._face_box_of(Image.new("RGB", (8, 8), colour), "_pair_facechk", Idm)
+        seen[colour] = M._face_box_of(Image.new("RGB", (8, 8), colour), "_pair_facechk", Idm, tmp_path)
 
     a = threading.Thread(target=job, args=((255, 0, 0),))
     b = threading.Thread(target=job, args=((0, 0, 255),))

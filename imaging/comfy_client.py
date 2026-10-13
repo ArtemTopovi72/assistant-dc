@@ -153,7 +153,7 @@ def upload_name(path: str) -> str:
     return f"{stem[:60]}_{hashlib.sha1(key.encode('utf-8', 'replace')).hexdigest()[:10]}{ext}"
 
 
-def _upload_image_to_comfy(image_path: str, comfy_url: str) -> Optional[str]:
+def _upload_image_to_comfy(image_path: str, comfy_url: str, post=None) -> Optional[str]:
     """Upload an image file to ComfyUI's /upload/image endpoint.
     Returns the server-side filename on success, None on failure.
     """
@@ -161,7 +161,7 @@ def _upload_image_to_comfy(image_path: str, comfy_url: str) -> Optional[str]:
         ext = os.path.splitext(image_path)[1].lower()
         mime = "image/jpeg" if ext in (".jpg", ".jpeg") else "image/png"
         with open(image_path, "rb") as f:
-            resp = requests.post(
+            resp = (post or requests.post)(
                 f"{comfy_url}/upload/image",
                 files={"image": (upload_name(image_path), f, mime)},
                 data={"type": "input", "overwrite": "true"},
@@ -819,21 +819,22 @@ MODEL_FALLBACKS = {
 _AVAILABLE: dict = {}          # (class, input) -> (time, set of names)
 
 
-def _available_models(node_class: str, field: str) -> Optional[set]:
-    hit = _AVAILABLE.get((node_class, field))
+def _available_models(node_class: str, field: str, get=None, cache=None) -> Optional[set]:
+    cache = _AVAILABLE if cache is None else cache
+    hit = cache.get((node_class, field))
     if hit and time.time() - hit[0] < 60:
         return hit[1]
     try:
-        r = requests.get(f"{COMFY_URL}/object_info/{node_class}", timeout=10)
+        r = (get or requests.get)(f"{COMFY_URL}/object_info/{node_class}", timeout=10)
         spec = r.json()[node_class]["input"]["required"][field]
         names = set(spec[0] if isinstance(spec[0], list) else spec[1].get("options", []))
     except Exception:
         return None
-    _AVAILABLE[(node_class, field)] = (time.time(), names)
+    cache[(node_class, field)] = (time.time(), names)
     return names
 
 
-def _apply_model_fallbacks(workflow: dict) -> dict:
+def _apply_model_fallbacks(workflow: dict, available=None) -> dict:
     """Swap a model file the server lacks for its published stand-in."""
     for node in (workflow or {}).values():
         if not isinstance(node, dict):
@@ -842,7 +843,7 @@ def _apply_model_fallbacks(workflow: dict) -> dict:
             want = (node.get("inputs") or {}).get(field)
             if node.get("class_type") != cls or want not in subs:
                 continue
-            have = _available_models(cls, field)
+            have = (available or _available_models)(cls, field)
             if have is not None and want not in have and subs[want] in have:
                 logger.info("ComfyUI has no %s -- using %s", want, subs[want])
                 node["inputs"][field] = subs[want]
