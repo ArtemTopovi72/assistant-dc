@@ -161,6 +161,28 @@ def test_continue_on_a_chain_clip_goes_on_from_its_latent(monkeypatch, tmp_path)
     assert stitched == [("h3_continuous/chY", 3)] and kept[-1][1:] == ("h3_continuous/chY", 3)
 
 
+def test_a_long_continuation_of_a_chain_clip_is_still_cut_into_parts(monkeypatch, tmp_path):
+    # Bridged before the cut, the script was no longer found in the description and
+    # «продолжение на 30 секунд» went out as one 15 s part (live 2026-10-13).
+    H, calls, stitched, kept = _wire(monkeypatch, tmp_path)
+    monkeypatch.setattr(V, "bridge_script", lambda ctx, ps: ps)
+    monkeypatch.setattr(V, "mark_inserts", lambda ctx, ps: ps)
+    src, tail = tmp_path / "sent_back.mp4", tmp_path / "tail.mp4"
+    src.write_bytes(b"s")
+    tail.write_bytes(b"t")
+    monkeypatch.setattr(V, "chain_of", lambda p: ("h3_continuous/chY", 2) if p == str(src) else ())
+    ctx = _Ctx()
+    ctx.continue_src, ctx.continue_tail = str(src), str(tail)
+    H._handle_generate_video(ctx, {}, {"description": LONG, "seconds": 30})
+    renders = [(d, kw) for d, kw in calls if d != "PREP"]
+    n = len(V.split_script(LONG))
+    assert n > 1 and len(renders) == n, renders
+    assert renders[0][0].startswith(V.CONTINUE_CTX_PREFIX + "BRIDGE. ")
+    # the new links follow the clip's own: restarting at 2 overwrote its links
+    assert [kw["chain"][1] for _, kw in renders] == list(range(3, 3 + n))
+    assert stitched == [("h3_continuous/chY", 2 + n)]
+
+
 def test_voices_keep_the_old_path(monkeypatch, tmp_path):
     H, calls, stitched, kept = _wire(monkeypatch, tmp_path)
     ctx = _Ctx()

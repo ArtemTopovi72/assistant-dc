@@ -1170,13 +1170,14 @@ def _bridged(ctx, clip: str, part: str) -> str:
     return video_mod.bridge_part(ctx, frame, part) if tg_continue.seed_frame(clip, frame) else part
 
 
-def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str) -> int:
+def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str, start: int = 1) -> int:
     """Parts 2..n of a long script as the next links of `chain` (each continues the
     previous part's saved latent). `parts` are ALL the parts as (prompt, seconds) from video.prepare_prompt,
-    made before the card was taken: nothing in here calls a model. Returns the last part made; a failure or a cancel
-    stops there and the parts so far are still joined and delivered."""
+    made before the card was taken: nothing in here calls a model. `start` is the first part's link
+    (a continued chain goes on from its own last link). Returns the last link made; a failure or a
+    cancel stops there and the parts so far are still joined and delivered."""
     import video as video_mod
-    last, prev = 1, first
+    last, prev = start, first
     for i, part in enumerate(parts[1:], start=2):
         if getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
             break
@@ -1184,7 +1185,7 @@ def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str) ->
         try:
             r = video_mod.generate_video(ctx, part[0], seconds=part[1], prepared=True,
                                          aspect=args.get("aspect") or "", seed=args.get("seed"),
-                                         chain=(chain, i), size_from=prev)
+                                         chain=(chain, start + i - 1), size_from=prev)
         except Exception:
             logger.exception("video chain: part %d crashed", i)
             break
@@ -1192,7 +1193,7 @@ def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str) ->
         if not (new and os.path.exists(new)):
             logger.warning("video chain: part %d produced no clip (%s)", i, r.get("reason"))
             break
-        last, prev = i, new
+        last, prev = start + i - 1, new
     return last
 
 
@@ -1365,6 +1366,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     continuing = bool(cont_tail and os.path.exists(cont_tail))
     chain_id, chain_idx = "", 0
     people: list = []
+    bridge_first = False
     if continuing:
         videos = [cont_tail]
         ctx.continue_tail = ctx.continue_src = ""          # one clip per request
@@ -1376,7 +1378,10 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         if prior:
             chain_id, chain_idx = prior[0], prior[1] + 1
             videos, images = [], []
-            description = video_mod.CONTINUE_CTX_PREFIX + _bridged(ctx, cont_src, description)
+            # bridged after the script is cut into parts: bridged here, the script was
+            # no longer found in it and «на 30 секунд» went out as one 15 s part (2026-10-13)
+            bridge_first = True
+            description = video_mod.CONTINUE_CTX_PREFIX + description
         # Pinned frames (same as the parts of a long script): faster and seamless, but they
         # take no pictures -- new people from photos still need the reference path.
         elif not people and video_mod.motion_context_on():
@@ -1537,6 +1542,9 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 "plan first: it is shown under your message with buttons. Reply with ONE "
                 "short line in their language that the plan is below. Do not describe the "
                 "clip, do not call generate_video again this turn.")
+    if bridge_first:
+        description = video_mod.CONTINUE_CTX_PREFIX + _bridged(
+            ctx, cont_src, description[len(video_mod.CONTINUE_CTX_PREFIX):])
     # A fresh clip with no voices or reference clips (and at most a start photo) is part 1
     # of a Herrgott chain: its latent is kept, so the parts after it -- or a later
     # ▶️ Continue -- go on from the exact numbers instead of a reset.
@@ -1606,7 +1614,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
 
         if chain_id:
             if len(parts) > 1:
-                chain_idx = _render_chain_parts(ctx, path, prepped, args, chain_id)
+                chain_idx = _render_chain_parts(ctx, path, prepped, args, chain_id, chain_idx)
             if chain_idx > 1:
                 joined = video_mod.stitch_chain(ctx, chain_id, chain_idx)
                 if joined:
