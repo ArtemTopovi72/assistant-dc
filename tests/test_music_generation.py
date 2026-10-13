@@ -29,8 +29,9 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 
 import config as C
 import music as M
-M.MUSIC_ENGINE = "music3"   # these checks cover the dormant Music3 path; YuE2 is the default
 import models
+import comfy_client as _cc
+from fakes import Over
 
 OK = BAD = 0
 def check(name, cond, extra=""):
@@ -40,7 +41,9 @@ def check(name, cond, extra=""):
 
 
 _TMP = tempfile.mkdtemp(prefix="music_gen_test_")
-M.OUTPUT_DIR = _TMP
+# What the suite hands music on every context: these checks cover the dormant Music3 path
+# (YuE2 is the default) and write into a temp dir, never the user's output tree.
+_F = {"MUSIC_ENGINE": "music3", "OUTPUT_DIR": _TMP}
 
 
 def _fake_audio(tag="song"):
@@ -51,8 +54,16 @@ def _fake_audio(tag="song"):
 
 
 def make_ctx():
-    return models.Context(models=None, transcription_cache={}, cache_file=None,
-                          asr_lock=threading.Lock(), tts_lock=threading.Lock())
+    import types
+    ctx = models.Context(models=None, transcription_cache={}, cache_file=None,
+                         asr_lock=threading.Lock(), tts_lock=threading.Lock())
+    deps = {k: v for k, v in _F.items() if k not in ("text_model", "_submit_and_poll")}
+    if "_submit_and_poll" in _F:
+        deps["comfy_client"] = Over(_cc, _submit_and_poll=_F["_submit_and_poll"])
+    if "text_model" in _F:
+        ctx.text_model = _F["text_model"]
+    ctx.deps = types.SimpleNamespace(**deps)
+    return ctx
 
 
 print("=" * 70)
@@ -72,11 +83,9 @@ print("=" * 70)
 print("2. Weight presence")
 print("=" * 70)
 
-_real_models_dir = M._models_dir
 _wdir = tempfile.mkdtemp(prefix="music_weights_test_")
-M._models_dir = lambda: _wdir
 try:
-    miss = M.missing_weights()
+    miss = M.missing_weights(home=_wdir)
     check("all three required files are reported missing on a bare dir",
           len(miss) == 3, miss)
     check("the missing paths name the right subfolders", all(
@@ -90,9 +99,9 @@ try:
         for n in names:
             open(os.path.join(d, n), "wb").close()
     check("nothing is missing once all three files exist",
-          M.missing_weights() == [], M.missing_weights())
+          M.missing_weights(home=_wdir) == [], M.missing_weights(home=_wdir))
 finally:
-    M._models_dir = _real_models_dir
+    pass
 
 print()
 print("=" * 70)
@@ -100,27 +109,27 @@ print("3. engine_available refuses honestly")
 print("=" * 70)
 
 _real_missing = M.missing_weights
-M.missing_weights = lambda preset=None: ["models/diffusion_models/minimax_music3_dit_fp32.safetensors"]
+_F["missing_weights"] = lambda preset=None: ["models/diffusion_models/minimax_music3_dit_fp32.safetensors"]
 try:
-    ok, why = M.engine_available(None)
+    ok, why = M.engine_available(make_ctx())
     check("engine_available is False when weights are missing", not ok)
     check("...and names a missing file", "minimax_music3" in why, why)
 finally:
-    M.missing_weights = _real_missing
+    _F.pop("missing_weights", None)
 
-M.missing_weights = lambda preset=None: []
-M._server_has_music3_nodes = lambda: False
+_F["missing_weights"] = lambda preset=None: []
+_F["_server_has_music3_nodes"] = lambda: False
 try:
-    ok, why = M.engine_available(None)
+    ok, why = M.engine_available(make_ctx())
     check("engine_available is False when ComfyUI lacks the Music3 node", not ok)
     check("...and points at the docs for what's uncertain",
           "docs/music_generation.md" in why, why)
 finally:
-    M.missing_weights = _real_missing
+    _F.pop("missing_weights", None)
 
-M.missing_weights = lambda preset=None: []
-M._server_has_music3_nodes = lambda: True
-ok, why = M.engine_available(None)
+_F["missing_weights"] = lambda preset=None: []
+_F["_server_has_music3_nodes"] = lambda: True
+ok, why = M.engine_available(make_ctx())
 check("engine_available is True once weights and the node are both present",
       ok and why == "", (ok, why))
 
@@ -325,10 +334,8 @@ for _p in M.WEIGHT_PRESETS:
 # ready, and reporting the default's readiness would promise an unrenderable song.
 # Section 3 left missing_weights stubbed to [] without restoring it, so the real
 # one is put back explicitly here rather than silently measuring the stub.
-M.missing_weights = _real_missing
-_rmd = M._models_dir
 _pdir = tempfile.mkdtemp(prefix="music_preset_test_")
-M._models_dir = lambda: _pdir
+_F["missing_weights"] = lambda preset=None: M.missing_weights(preset, _pdir)
 try:
     for sub, n in zip(("diffusion_models", "text_encoders", "vae"),
                       M.preset_files("fast")):
@@ -336,17 +343,17 @@ try:
         os.makedirs(d, exist_ok=True)
         open(os.path.join(d, n), "wb").close()
     check("'fast' reads ready when only its own files are present",
-          M.missing_weights("fast") == [], M.missing_weights("fast"))
+          M.missing_weights("fast", _pdir) == [], M.missing_weights("fast", _pdir))
     check("...while 'max' correctly reports its own files missing",
-          len(M.missing_weights("max")) > 0, M.missing_weights("max"))
-    _ok_max, _why_max = M.engine_available(None, "max")
+          len(M.missing_weights("max", _pdir)) > 0, M.missing_weights("max", _pdir))
+    _ok_max, _why_max = M.engine_available(make_ctx(), "max")
     check("engine_available('max') refuses when max's weights are absent",
           not _ok_max, (_ok_max, _why_max))
-    M._server_has_music3_nodes = lambda: True
+    _F["_server_has_music3_nodes"] = lambda: True
     check("engine_available('fast') accepts at the same moment",
-          M.engine_available(None, "fast")[0] is True)
+          M.engine_available(make_ctx(), "fast")[0] is True)
 finally:
-    M._models_dir = _rmd
+    _F.pop("missing_weights", None)
 
 print()
 print("=" * 70)
@@ -429,14 +436,14 @@ else:
 import llm as _L_outro
 _orig_outro = _L_outro.call_llm_simple
 _calls_o = []
-_L_outro.call_llm_simple = lambda ctx, sys_p, user_p, **kw: (
+_F["text_model"] = lambda ctx, sys_p, user_p, **kw: (
     _calls_o.append(sys_p),
     json.dumps({"lyrics": "[verse]\nx\n[outro]\ny",
                 "style": "Global Metadata: a Vocal Details: b Arrangement: c"}))[-1]
 try:
     M.build_structured_caption(make_ctx(), "topic", "en", duration_s=60)
 finally:
-    _L_outro.call_llm_simple = _orig_outro
+    _F.pop("text_model", None)
 check("the prompt demands an [outro] that resolves the song",
       "[outro]" in _calls_o[0] and "resolves" in _calls_o[0], _calls_o[0][:300])
 check("...and warns that overshooting the slot gets the song cut off",
@@ -465,7 +472,7 @@ def _fake_llm_en(ctx, sys_p, user_p, **kw):
     })
 
 _real_call = L.call_llm_simple
-L.call_llm_simple = _fake_llm_en
+_F["text_model"] = _fake_llm_en
 try:
     out = M.build_structured_caption(make_ctx(), "a song about building things", "en")
     check("exactly one LLM call was made", len(_calls) == 1, len(_calls))
@@ -481,7 +488,7 @@ try:
           s in out["style"] for s in ("Global Metadata", "Vocal Details", "Arrangement")),
           out["style"])
 finally:
-    L.call_llm_simple = _real_call
+    _F.pop("text_model", None)
 
 _calls.clear()
 def _fake_llm_ru(ctx, sys_p, user_p, **kw):
@@ -492,7 +499,7 @@ def _fake_llm_ru(ctx, sys_p, user_p, **kw):
                  "Arrangement: guitar and drums.",
     })
 
-L.call_llm_simple = _fake_llm_ru
+_F["text_model"] = _fake_llm_ru
 try:
     out_ru = M.build_structured_caption(make_ctx(), "песня о творчестве", "ru")
     check("Russian is named in the system prompt for a 'ru' request",
@@ -502,14 +509,14 @@ try:
     check("the lyric words themselves are Russian, not English",
           "Строим" in out_ru["lyrics"], out_ru["lyrics"])
 finally:
-    L.call_llm_simple = _real_call
+    _F.pop("text_model", None)
 
 print()
 print("=" * 70)
 print("6. build_structured_caption refuses on an unparseable / empty reply")
 print("=" * 70)
 
-L.call_llm_simple = lambda *a, **k: "not json at all, sorry"
+_F["text_model"] = lambda *a, **k: "not json at all, sorry"
 try:
     try:
         M.build_structured_caption(make_ctx(), "topic", "en")
@@ -517,9 +524,9 @@ try:
     except M.SongwritingFailed:
         check("garbage LLM output raises SongwritingFailed", True)
 finally:
-    L.call_llm_simple = _real_call
+    _F.pop("text_model", None)
 
-L.call_llm_simple = lambda *a, **k: json.dumps({"lyrics": "", "style": ""})
+_F["text_model"] = lambda *a, **k: json.dumps({"lyrics": "", "style": ""})
 try:
     try:
         M.build_structured_caption(make_ctx(), "topic", "en")
@@ -527,7 +534,7 @@ try:
     except M.SongwritingFailed:
         check("an empty lyrics/style pair raises SongwritingFailed", True)
 finally:
-    L.call_llm_simple = _real_call
+    _F.pop("text_model", None)
 
 # A writer failure must NOT masquerade as "the engine isn't installed" (that
 # would send the user off to check a healthy installation).
@@ -555,7 +562,7 @@ def _fake_ladder(ctx, sys_p, user_p, **kw):
     return json.dumps({"lyrics": "[Verse]\nline\n[Chorus]\nhook",
                        "style": "Global Metadata / Vocal Details / Arrangement"})
 
-L.call_llm_simple = _fake_ladder
+_F["text_model"] = _fake_ladder
 try:
     out = M.build_structured_caption(make_ctx(), "topic", "en")
     check("an early empty reply does not end the attempt -- it escalates",
@@ -570,10 +577,10 @@ try:
     check("the first rung's budget is far above the 2000 that failed live",
           _calls[0].get("max_tokens", 0) >= 5000, _calls[0])
 finally:
-    L.call_llm_simple = _real_call
+    _F.pop("text_model", None)
 
 _calls.clear()
-L.call_llm_simple = lambda *a, **k: _calls.append(k) or ""
+_F["text_model"] = lambda *a, **k: _calls.append(k) or ""
 try:
     try:
         M.build_structured_caption(make_ctx(), "topic", "en")
@@ -581,7 +588,7 @@ try:
         pass
     check("every rung is tried before giving up", len(_calls) == 3, len(_calls))
 finally:
-    L.call_llm_simple = _real_call
+    _F.pop("text_model", None)
 
 print()
 print("=" * 70)
@@ -604,17 +611,17 @@ def _flat_then_structured(ctx, sys_p, user_p, **kw):
                        "style": "Global Metadata: pop. Vocal Details: female. "
                                 "Arrangement: guitar."})
 
-L.call_llm_simple = _flat_then_structured
+_F["text_model"] = _flat_then_structured
 try:
     out = M.build_structured_caption(make_ctx(), "topic", "en")
     check("a flat caption on rung 1 spends another rung", len(_calls) == 2, len(_calls))
     check("...and the structured caption is what comes back",
           M.caption_is_structured(out["style"]), out["style"])
 finally:
-    L.call_llm_simple = _real_call
+    _F.pop("text_model", None)
 
 _calls.clear()
-L.call_llm_simple = lambda *a, **k: _calls.append(k) or json.dumps(
+_F["text_model"] = lambda *a, **k: _calls.append(k) or json.dumps(
     {"lyrics": "[verse]\nline", "style": "just a flat sentence"})
 try:
     out = M.build_structured_caption(make_ctx(), "topic", "en")
@@ -623,14 +630,14 @@ try:
     check("...after spending the whole ladder trying for structure",
           len(_calls) == 3, len(_calls))
 finally:
-    L.call_llm_simple = _real_call
+    _F.pop("text_model", None)
 
 print()
 print("=" * 70)
 print("7. Nothing is promised when the engine is not available")
 print("=" * 70)
 
-M.missing_weights = lambda preset=None: ["models/diffusion_models/minimax_music3_dit_fp32.safetensors"]
+_F["missing_weights"] = lambda preset=None: ["models/diffusion_models/minimax_music3_dit_fp32.safetensors"]
 try:
     try:
         M.generate_music(make_ctx(), "[Verse]\nhi", "pop")
@@ -640,19 +647,18 @@ try:
         check("...and the reason mentions the missing weights",
               "music3" in str(exc).lower(), str(exc))
 finally:
-    M.missing_weights = _real_missing
+    _F.pop("missing_weights", None)
 
 print()
 print("=" * 70)
 print("8. A render that produces no file raises, and a real file is adopted")
 print("=" * 70)
 
-M.missing_weights = lambda preset=None: []
-M._server_has_music3_nodes = lambda: True
-import comfy_client as _cc
+_F["missing_weights"] = lambda preset=None: []
+_F["_server_has_music3_nodes"] = lambda: True
 _real_submit = _cc._submit_and_poll
 try:
-    _cc._submit_and_poll = lambda *a, **k: None
+    _F["_submit_and_poll"] = lambda *a, **k: None
     try:
         M.generate_music(make_ctx(), "[Verse]\nhi", "pop")
         check("no file -> MusicUnavailable", False)
@@ -660,7 +666,7 @@ try:
         check("no file -> MusicUnavailable", True)
 
     made = _fake_audio("result")
-    _cc._submit_and_poll = lambda *a, **k: made
+    _F["_submit_and_poll"] = lambda *a, **k: made
     path = M.generate_music(make_ctx(), "[Verse]\nhi", "pop", duration_s=45, seed=7)
     check("a real file -> a path is returned", bool(path) and os.path.exists(path), path)
     check("the file was adopted into OUTPUT_DIR",
@@ -671,24 +677,24 @@ try:
     check("ctx.last_music_path is set so 'that song' can resolve later",
           bool(getattr(ctx, "last_music_path", None)))
 finally:
-    _cc._submit_and_poll = _real_submit
-    M.missing_weights = _real_missing
+    _F.pop("_submit_and_poll", None)
+    _F.pop("missing_weights", None)
 
 print()
 print("=" * 70)
 print("9. Duration is clamped to the configured range")
 print("=" * 70)
 
-_cc._submit_and_poll = lambda *a, **k: _fake_audio("dur")
-M.missing_weights = lambda preset=None: []
-M._server_has_music3_nodes = lambda: True
+_F["_submit_and_poll"] = lambda *a, **k: _fake_audio("dur")
+_F["missing_weights"] = lambda preset=None: []
+_F["_server_has_music3_nodes"] = lambda: True
 try:
     seen = {}
     _orig_build = M.build_workflow
     def _spy(lyrics, style, *, duration_s, seed, steps=None, preset=None):
         seen["duration_s"] = duration_s
         return _orig_build(lyrics, style, duration_s=duration_s, seed=seed, steps=steps)
-    M.build_workflow = _spy
+    _F["build_workflow"] = _spy
     M.generate_music(make_ctx(), "[Verse]\nhi", "pop", duration_s=C.MUSIC_MAX_SECONDS + 999)
     check("an over-long request is clamped to MUSIC_MAX_SECONDS, then given the render headroom",
           seen["duration_s"] == M.render_ceiling(C.MUSIC_MAX_SECONDS), seen)
@@ -699,9 +705,9 @@ try:
     check("a non-positive request does not crash and stays positive",
           seen["duration_s"] >= 1, seen)
 finally:
-    M.build_workflow = _orig_build
-    _cc._submit_and_poll = _real_submit
-    M.missing_weights = _real_missing
+    _F.pop("build_workflow", None)
+    _F.pop("_submit_and_poll", None)
+    _F.pop("missing_weights", None)
 
 print()
 print(f"{OK}/{OK + BAD} checks passed")

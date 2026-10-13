@@ -23,7 +23,7 @@ EmptyMiniMaxMusic3LatentAudio(seconds=<the encode node's own clamped
 See docs/music_generation.md for the object_info census that confirmed this.
 """
 from __future__ import annotations
-from seams import dep
+from seams import dep, text_model
 
 import json
 import logging
@@ -405,7 +405,6 @@ def choose_auto_params(ctx, topic: str, lang: str, *, genre: bool = False,
                             ("seconds", duration)) if on]
     if not want:
         return {}
-    import llm as _llm
     import utils as _utils
     lang_word = "Russian" if (lang or "").lower().startswith("ru") else "English"
     spec = {
@@ -426,7 +425,7 @@ def choose_auto_params(ctx, topic: str, lang: str, *, genre: bool = False,
     if given:
         user_p += chr(10) + f"Already fixed by the user (do not change, pick the rest to fit these): {given}"
     try:
-        raw = _llm.call_llm_simple(ctx, sys_p, user_p, temperature=0.4,
+        raw = text_model(ctx)(ctx, sys_p, user_p, temperature=0.4,
                                    max_tokens=200, prefill="<think></think>")
         data = _utils.safe_json_from_llm(raw or "") or {}
     except Exception:
@@ -580,15 +579,15 @@ def _steps_factor(preset: str, steps: int) -> float:
 _ETA_LOCK = threading.Lock()
 
 
-def _eta_path():
-    return Path(OUTPUT_DIR) / _ETA_FILE
+def _eta_path(out_dir=None):
+    return Path(out_dir or OUTPUT_DIR) / _ETA_FILE
 
 
-def _eta_runs() -> dict:
+def _eta_runs(out_dir=None) -> dict:
     """{preset: [(asked, wall), ...]} -- the seeds plus what was recorded."""
     runs = {k: list(v) for k, v in _ETA_SEEDS.items()}
     try:
-        with open(_eta_path(), "r", encoding="utf-8") as fh:
+        with open(_eta_path(out_dir), "r", encoding="utf-8") as fh:
             rows = json.load(fh)
     except Exception:
         return runs
@@ -601,13 +600,14 @@ def _eta_runs() -> dict:
     return runs
 
 
-def record_render_time(preset: str, asked_s: int, wall_s: float, steps: int = _STEPS_REF) -> None:
+def record_render_time(preset: str, asked_s: int, wall_s: float, steps: int = _STEPS_REF,
+                       out_dir=None) -> None:
     """Append one completed render (only whole, successful ones are called in)."""
     if not preset or asked_s <= 0 or wall_s <= 0:
         return
     try:
         with _ETA_LOCK:     # two songs finishing together must not drop a row
-            path = _eta_path()
+            path = _eta_path(out_dir)
             rows = []
             try:
                 with open(path, "r", encoding="utf-8") as fh:
@@ -691,7 +691,7 @@ REQUIRED_FILES = {
 }
 
 
-def missing_weights(preset: Optional[str] = None) -> list[str]:
+def missing_weights(preset: Optional[str] = None, home: Optional[str] = None) -> list[str]:
     """Which model files this preset needs but does not have (empty = ready).
 
     Preset-aware because the presets do not share files: "max" can be a 28GB
@@ -700,7 +700,7 @@ def missing_weights(preset: Optional[str] = None) -> list[str]:
     that cannot be rendered.
     """
     dit, clip, vae = preset_files(preset)
-    base = os.path.join(_models_dir(), "models")
+    base = os.path.join(home or _models_dir(), "models")
     out = []
     for sub, n in (("diffusion_models", dit), ("text_encoders", clip), ("vae", vae)):
         if not os.path.exists(os.path.join(base, sub, n)):
@@ -722,14 +722,14 @@ def engine_available(ctx=None, preset: Optional[str] = None) -> tuple[bool, str]
     """
     # YuE2 is the one engine (Music3 removed). The
     # Music3 checks below stay only for MUSIC_ENGINE=music3 with weights restored.
-    if MUSIC_ENGINE == "yue2":
+    if dep(ctx, "MUSIC_ENGINE", MUSIC_ENGINE) == "yue2":
         return (True, "") if (yue2_cpp_available() or yue2_available()) else (False, "YuE2 is not installed")
-    miss = missing_weights(preset)
+    miss = dep(ctx, "missing_weights", missing_weights)(preset)
     if miss:
         return False, ("the Music3 weights are not downloaded yet (missing: "
                        + ", ".join(miss[:3]) + (" …" if len(miss) > 3 else "")
                        + ")")
-    if not _server_has_music3_nodes():
+    if not dep(ctx, "_server_has_music3_nodes", _server_has_music3_nodes)():
         return False, ("this ComfyUI does not have the MiniMax Music3 node — "
                        "see docs/music_generation.md for the node package this "
                        "needs")
@@ -1075,7 +1075,6 @@ def build_structured_caption(ctx, topic: str, lang: str, *,
     is an upper bound: Music3 stops when the words run out, so short lyrics
     make a short song no matter what duration the render asks for.
     """
-    import llm as _llm
 
     lang_name = "Russian" if (lang or "").strip().lower().startswith("ru") else "English"
     length_hint = ""
@@ -1215,7 +1214,7 @@ def build_structured_caption(ctx, topic: str, lang: str, *,
         dict(prompt=sys_minimal, temperature=0.5, max_tokens=16000, force_think=False),
     )
     for i, cfg in enumerate(attempts, start=1):
-        raw = _llm.call_llm_simple(ctx, cfg["prompt"], user_p,
+        raw = text_model(ctx)(ctx, cfg["prompt"], user_p,
                                    temperature=cfg["temperature"],
                                    max_tokens=cfg["max_tokens"],
                                    force_think=cfg["force_think"]) or ""
@@ -1582,7 +1581,7 @@ def _generate_yue2(ctx, lyrics: str, style: str, seed: int, prefs: Optional[dict
         _MUSIC_FAILURE.update({"reason": "unavailable", "detail": "YuE2 is not installed"})
         raise MusicUnavailable("YuE2 is not installed")
     ext = "mp3" if cpp else "flac"
-    out = str(OUTPUT_DIR / f"song_yue2_{int(time.time() * 1000)}.{ext}")
+    out = str(Path(dep(ctx, "OUTPUT_DIR", OUTPUT_DIR)) / f"song_yue2_{int(time.time() * 1000)}.{ext}")
     words = "" if (prefs or {}).get("instrumental") else lyrics
     job = {"lyrics": yue2_lyrics(lyrics) if words else "[instrumental]",
            "style": yue2_pin(yue2_language(yue2_tags(ctx, yue2_style(style)), words), prefs),
@@ -1670,7 +1669,7 @@ def generate_music(ctx, lyrics: str, style: str, *, duration_s: int = 60,
     """
     _MUSIC_FAILURE.update({"reason": "server_error", "detail": ""})
 
-    if (engine or MUSIC_ENGINE) == "yue2":
+    if (engine or dep(ctx, "MUSIC_ENGINE", MUSIC_ENGINE)) == "yue2":
         if not (lyrics or "").strip() and not (style or "").strip():
             _MUSIC_FAILURE.update({"reason": "empty_prompt", "detail": "no lyrics or style were given"})
             raise MusicUnavailable("no lyrics or style were given")
@@ -1711,11 +1710,12 @@ def generate_music(ctx, lyrics: str, style: str, *, duration_s: int = 60,
     if ctx is not None and hasattr(ctx, "set_stage"):
         ctx.set_stage("Composing a song")
 
-    wf = build_workflow(lyrics, style, duration_s=ceiling_s, seed=seed,
-                        preset=preset, steps=steps)
+    wf = dep(ctx, "build_workflow", build_workflow)(lyrics, style, duration_s=ceiling_s, seed=seed,
+                                                    preset=preset, steps=steps)
 
     _t_render = time.time()
-    out = comfy_client._submit_and_poll(ctx, wf, timeout=MUSIC_JOB_TIMEOUT,
+    comfy = dep(ctx, "comfy_client", comfy_client)
+    out = comfy._submit_and_poll(ctx, wf, timeout=MUSIC_JOB_TIMEOUT,
                                         label="Music3", on_progress=on_progress,
                                         validate=_valid_audio_file, exclusive=True,
                                         job_timeout=MUSIC_JOB_TIMEOUT)
@@ -1726,18 +1726,19 @@ def generate_music(ctx, lyrics: str, style: str, *, duration_s: int = 60,
         # and corrupt eta_seconds()'s rate history with an 8-step render's
         # wall time mislabeled as a 20-step one.
         _actual_steps = int(wf[N_SAMPLER]["inputs"]["steps"])
-        record_render_time(_p, duration_s, time.time() - _t_render, _actual_steps)
+        record_render_time(_p, duration_s, time.time() - _t_render, _actual_steps,
+                           out_dir=dep(ctx, "OUTPUT_DIR", OUTPUT_DIR))
     if not out:
         if ctx is not None and getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
             _MUSIC_FAILURE.update({"reason": "cancelled", "detail": "cancelled"})
             raise MusicUnavailable("cancelled")
         # ComfyUI's own reason when it gave one (same gap video had: with only
         # "no file" the chat model invented a cause for the user).
-        why = comfy_client.last_failure() or "the render produced no file"
+        why = comfy.last_failure() or "the render produced no file"
         _MUSIC_FAILURE.update({"reason": "server_error", "detail": why})
         raise MusicUnavailable(why)
 
-    final = _adopt_output(out)
+    final = _adopt_output(out, dep(ctx, "OUTPUT_DIR", OUTPUT_DIR))
     # Faded AFTER adopting: the taper is written to OUR copy.
     apply_fade(final)
     if ctx is not None:
@@ -1799,17 +1800,7 @@ def apply_fade(path: str, fade_out_s: Optional[float] = None,
         return False
 
 
-def _adopt_output(path: str) -> str:
-    """Copy the song out of ComfyUI's output tree into ours.
-
-    comfy_client.adopt_output owns the logic and the reasoning (video does the
-    same). Kept as a named wrapper rather than inlining the call: it is the seam
-    this module's behaviour is patched at, and it pins the artifact label.
-
-    OUTPUT_DIR is passed explicitly and read HERE, at call time. The suites
-    rebind `music.OUTPUT_DIR` to a temp directory; a delegation that let the
-    helper read its own copy instead ignored that and wrote fixture songs into
-    the user's real output tree (caught by test_music_generation's "the file was
-    adopted into OUTPUT_DIR" check).
-    """
-    return comfy_client.adopt_output(path, "song", OUTPUT_DIR)
+def _adopt_output(path: str, out_dir=None) -> str:
+    """Copy the song out of ComfyUI's output tree into ours (`out_dir`, default OUTPUT_DIR).
+    comfy_client.adopt_output owns the logic and the reasoning (video does the same)."""
+    return comfy_client.adopt_output(path, "song", out_dir or OUTPUT_DIR)

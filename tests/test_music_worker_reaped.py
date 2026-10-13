@@ -50,18 +50,17 @@ def test_timeout_kills_and_reports():
     assert ok is False and time.time() - t0 < 10
 
 
-def test_render_time_log_survives_corruption(tmp_path, monkeypatch):
-    monkeypatch.setattr(music, "_eta_path", lambda: tmp_path / "eta.json")
-    (tmp_path / "eta.json").write_text('[{"preset": "a", "asked": 60, "wa')   # torn write
-    music.record_render_time("a", 60, 120.0)
-    music.record_render_time("a", 30, 50.0)
+def test_render_time_log_survives_corruption(tmp_path):
+    (tmp_path / music._ETA_FILE).write_text('[{"preset": "a", "asked": 60, "wa')   # torn write
+    music.record_render_time("a", 60, 120.0, out_dir=tmp_path)
+    music.record_render_time("a", 30, 50.0, out_dir=tmp_path)
     import json
-    rows = json.loads((tmp_path / "eta.json").read_text())
+    rows = json.loads((tmp_path / music._ETA_FILE).read_text())
     assert [r["wall"] for r in rows] == [120.0, 50.0]
     # one malformed row does not hide the rows after it
     rows.insert(0, {"preset": "a"})
-    (tmp_path / "eta.json").write_text(json.dumps(rows))
-    got = music._eta_runs().get("a", [])
+    (tmp_path / music._ETA_FILE).write_text(json.dumps(rows))
+    got = music._eta_runs(tmp_path).get("a", [])
     assert (60, 120.0, music._STEPS_REF) in got and (30, 50.0, music._STEPS_REF) in got
 
 
