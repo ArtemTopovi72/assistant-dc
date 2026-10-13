@@ -528,12 +528,19 @@ class MemoryStore:
 
     # ---- overview / diagnostics -------------------------------------------
     def _dir_size(self, profile: str) -> int:
-        total = 0
-        d = self.profile_dir(profile)
-        if d.exists():
-            for p in d.rglob("*"):
-                if p.is_file():
-                    total += p.stat().st_size
+        # scandir: on Windows the size comes with the listing. rglob + stat per file ran
+        # ~75 files/s here and the GUI hung at start on research's 20k files (2026-10-13).
+        total, stack = 0, [str(self.profile_dir(profile))]
+        while stack:
+            try:
+                with os.scandir(stack.pop()) as it:
+                    for e in it:
+                        if e.is_dir(follow_symlinks=False):
+                            stack.append(e.path)
+                        elif e.is_file(follow_symlinks=False):
+                            total += e.stat(follow_symlinks=False).st_size
+            except OSError:
+                continue
         return total
 
     def overview(self, profile: str) -> dict:
