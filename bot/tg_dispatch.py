@@ -48,7 +48,10 @@ def _asks_as_file(text: str) -> bool:
     return intent.ask_yes("A user wrote to a bot that sends pictures: {text}. Is this a "
                           "request for the BOT to send its picture as a FILE (a document, "
                           "uncompressed) instead of a photo? The user sharing or talking "
-                          "about their own document is No.", text)
+                          "about their own document is No.", text,
+                          # the receiving thread: waiting on a render's card here held every
+                          # chat's message unqueued for the whole render (2026-10-13)
+                          wait=False)
 
 
 def _fwd_author_of(msg: dict) -> str:
