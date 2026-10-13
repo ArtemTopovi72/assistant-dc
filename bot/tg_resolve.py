@@ -10,6 +10,7 @@ module at call time, never imported by value. _IMAGE_DIR in particular is
 rebound by redirect_data_dir(), which a by-value import would never see."""
 from __future__ import annotations
 
+from seams import vision_model
 import html as _html_mod
 import os
 import re
@@ -1558,7 +1559,7 @@ class ResolveMixin:
             # per picture.
             try:
                 import llm as _llm
-                _seen = " ".join((_llm.analyze_image_with_llm(
+                _seen = " ".join((vision_model(ctx)(
                     ctx, temperature=0.1,
                     image_paths=[(f"Picture {i}:", p) for i, p in
                                  enumerate([img_path, *_album_paths], start=1) if p],

@@ -43,22 +43,30 @@ LAY = {"background": "a street", "elements": [
     {"desc": "a wooden sign above the door", "text": "У ОЛЬГИ", "x": 0.2, "y": 0.05, "w": 0.6, "h": 0.15}]}
 
 
+_VIS = [None]   # the vision model the context hands out
+
+
 class Ctx:
+    vision_model = property(lambda self: _VIS[0])
+
+    @property
+    def deps(self):
+        # draw_text.read_text reads the vision model off ctx.deps.llm
+        import types
+        from seams import Over
+        return types.SimpleNamespace(llm=Over(llm, analyze_image_with_llm=_VIS[0]))
     model_name = "test"; no_think = False; reasoning_effort = "high"
     def is_cancelled(self): return False
     def set_stage(self, *_): pass
 
 
 vision_calls = []
-_real = llm.analyze_image_with_llm
-
-
 def vision(ctx, image_path=None, user_text="", system_prompt="", **kw):
     vision_calls.append(user_text)
     return '{"strings": ["УАЗЬЛ"]}'
 
 
-llm.analyze_image_with_llm = vision
+_VIS[0] = vision
 _ocr_real = O.read
 try:
     # 1. OCR confirms -> no vision call at all
@@ -93,19 +101,19 @@ try:
     # 5. no OCR at all -> vision decides
     O.read = lambda p: None
     vision_calls.clear()
-    llm.analyze_image_with_llm = lambda ctx, **kw: '{"strings": ["У ОЛЬГИ"]}'
+    _VIS[0] = lambda ctx, **kw: '{"strings": ["У ОЛЬГИ"]}'
     r = D.verify_text(Ctx(), img, LAY)
     check("without OCR the vision reading decides", r["ok"] and r["checks"][0].get("reader") == "vision", r)
-    llm.analyze_image_with_llm = vision
+    _VIS[0] = vision
 
     # 6. nothing readable anywhere is a failure, not a pass
     O.read = lambda p: []
-    llm.analyze_image_with_llm = lambda ctx, **kw: '{"strings": []}'
+    _VIS[0] = lambda ctx, **kw: '{"strings": []}'
     r = D.verify_text(Ctx(), img, LAY)
     check("lettering that never appeared is a failure", not r["ok"], r)
 finally:
     O.read = _ocr_real
-    llm.analyze_image_with_llm = _real
+    _VIS[0] = None
 
 # -- a 3-letter host noun attaches ---------------------------------------------
 sign = {"desc": "a sign board on the roof of the car", "text": "POLICE"}

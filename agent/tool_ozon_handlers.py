@@ -7,6 +7,7 @@ text, so the reviews and the card are marked untrusted for the injection guard
 (see graph_fastpath._UNTRUSTED_DATA_TOOLS).
 """
 from __future__ import annotations
+from seams import vision_model
 
 import logging
 import os
@@ -200,7 +201,7 @@ def _look_at_photos(ctx, d: dict, question=None) -> str:
     if paths:
         try:
             sheet = make_sheet(paths, tmp / "sheet.jpg")
-            text = analyze_image_with_llm(
+            text = vision_model(ctx)(
                 ctx=ctx, image_path=str(sheet),
                 user_text=ask + " The photos are numbered tiles of one product card; "
                                 "describe them together, cite a tile by its number.",

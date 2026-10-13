@@ -11,7 +11,7 @@ imported by value: _MEMORY_DIR is rebound by redirect_data_dir(), and the rest
 must keep a single definition so patching tg_bot.X steers this module too.
 """
 from __future__ import annotations
-from seams import intent_read, yes_no
+from seams import intent_read, vision_model, yes_no
 
 import copy as _copy_mod
 import html as _html_mod
@@ -332,7 +332,7 @@ class TaskRunnerMixin:
                     media_list.append({"kind": "photo", "file_id": fid, "label": label})
                     try:
                         data = self._dl_bytes(fid)
-                        seen_pic = " ".join((_llm.analyze_image_with_llm(
+                        seen_pic = " ".join((vision_model(ctx)(
                             ctx, image_bytes=data, temperature=0.1,
                             user_text="Describe this picture in one or two sentences, in " + ("Russian" if (sess.lang or "ru") == "ru" else "English") + ".") or "").split()) if data else ""
                     except Exception:

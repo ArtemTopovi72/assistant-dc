@@ -128,7 +128,11 @@ H_ps.people = lambda path: [(80, 100, 140, 170), (620, 110, 680, 180)]
 H_ps.swap = lambda ctx, path, box, ref, wish="": (SW.append((path, box, ref, wish)), OUT)[1]
 
 
+_VIS = [None]   # the vision model the context hands out
+
+
 class Ctx:
+    vision_model = property(lambda self: _VIS[0])
     reference_images = [SPONGE]
     last_image_path = PIC
     def set_stage(self, *a): pass
@@ -157,7 +161,7 @@ check("...registered as an agent tool", any(t.name == "swap_person" for t in too
 # said «nothing changed» about a man replaced by a sponge (2026-10-13).
 import llm
 SEEN = []
-llm.analyze_image_with_llm = lambda **k: (SEEN.append(k), "PRESENT: a sponge")[1]
+_VIS[0] = lambda **k: (SEEN.append(k), "PRESENT: a sponge")[1]
 H._handle_inspect_image(Ctx(), dict(st), {"check": "is the sponge there?"})
 k = SEEN[-1] if SEEN else {}
 check("inspect_image after a swap shows the picture before and after it, in one call",
@@ -165,22 +169,22 @@ check("inspect_image after a swap shows the picture before and after it, in one 
 
 # A transfer's reference and result go in ONE call, what did not come across is named.
 SEEN.clear()
-llm.analyze_image_with_llm = lambda *a, **k: (SEEN.append(k), "the red monogram on the chest")[1]
+_VIS[0] = lambda *a, **k: (SEEN.append(k), "the red monogram on the chest")[1]
 miss = H._transfer_missing(Ctx(), SPONGE, OUT, "dress him in this jumper")
 check("a transfer is compared with its reference in one call and the misses named",
       miss == "the red monogram on the chest"
       and [p for _, p in SEEN[-1]["image_paths"]] == [SPONGE, OUT], (miss, SEEN))
-llm.analyze_image_with_llm = lambda *a, **k: "NONE"
+_VIS[0] = lambda *a, **k: "NONE"
 check("...nothing missing says nothing", H._transfer_missing(Ctx(), SPONGE, OUT, "x") == "")
 
 # A chained clip's joins are looked at all together, after the parts are made.
 SEEN.clear()
-llm.analyze_image_with_llm = lambda *a, **k: (SEEN.append(k), "Join 2: the camera jumps closer")[1]
+_VIS[0] = lambda *a, **k: (SEEN.append(k), "Join 2: the camera jumps closer")[1]
 note = H._check_joins(Ctx(), [("a.jpg", "b.jpg"), ("c.jpg", "d.jpg")])
 check("every join of a chained clip goes in one call, both sides labelled, the rough one named",
       note == "Join 2: the camera jumps closer" and len(SEEN) == 1
       and [p for _, p in SEEN[0]["image_paths"]] == ["a.jpg", "b.jpg", "c.jpg", "d.jpg"], (note, SEEN))
-llm.analyze_image_with_llm = lambda *a, **k: "NONE"
+_VIS[0] = lambda *a, **k: "NONE"
 check("...smooth joins say nothing", H._check_joins(Ctx(), [("a.jpg", "b.jpg")]) == "")
 
 print(f"\n{OK}/{OK + BAD} passed")

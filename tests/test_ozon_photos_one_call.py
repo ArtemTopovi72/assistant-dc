@@ -17,9 +17,8 @@ def test_one_vision_call(monkeypatch):
     monkeypatch.setattr(dr_urls, "safe_get", lambda url, **k: types.SimpleNamespace(
         content=_jpg(), raise_for_status=lambda: None))
     calls = []
-    monkeypatch.setattr(llm, "analyze_image_with_llm",
-                        lambda **k: calls.append(k) or "tile 1: a red mug")
-    ctx = types.SimpleNamespace(set_stage=lambda s: None)
+    ctx = types.SimpleNamespace(set_stage=lambda s: None,
+                                vision_model=lambda **k: calls.append(k) or "tile 1: a red mug")
     out = H._look_at_photos(ctx, {"name": "mug", "images": [f"https://x/{i}.jpg" for i in range(5)]})
     assert len(calls) == 1 and calls[0]["image_path"], calls
     assert "red mug" in out

@@ -66,7 +66,7 @@ def world(monkeypatch, tmp_path):
     monkeypatch.setattr(O, "details", details)
     monkeypatch.setattr(O, "reviews", reviews)
     monkeypatch.setattr(L, "call_llm_simple", llm)
-    monkeypatch.setattr(L, "analyze_image_with_llm", vision)
+    _VIS[0] = vision
     monkeypatch.setattr(requests, "get", lambda url, **k: types.SimpleNamespace(
         content=b"j", raise_for_status=lambda: None))
     import dr_urls                       # the photo hosts need not resolve offline
@@ -74,9 +74,13 @@ def world(monkeypatch, tmp_path):
     return calls, script
 
 
+_VIS = [None]   # the vision model the test contexts hand out
+
+
 def _ctx(owner="77"):
     return types.SimpleNamespace(set_stage=lambda *a, **k: None, cancel_event=threading.Event(),
-                                 ozon_owner=owner, turn_products=[])
+                                 ozon_owner=owner, turn_products=[],
+                                 vision_model=lambda *a, **k: _VIS[0](*a, **k))
 
 
 def test_basket_plans_every_item_and_fills_the_cart(world):
@@ -99,8 +103,7 @@ def test_photo_that_shows_something_else_hands_the_win_to_the_next(world):
     _, script = world
     script["plan"] = {"mode": "one", "items": [{"need": "скатерть", "queries": ["скатерть"]}]}
     answers = iter(["NO, this is a grille.", "YES"])
-    import llm as L
-    L.analyze_image_with_llm = lambda **k: next(answers)
+    _VIS[0] = lambda **k: next(answers)
     out = T.execute_tool(_ctx(), {}, "ozon_shop", {"request": "скатерть"})
     assert "CHOICE: Скатерть непромокаемая" in out, out
     assert "rejected 'Скатерть для пикника 150x150': its photo shows something else" in out
@@ -168,8 +171,7 @@ def test_vision_is_told_the_listing_title(world):
     _, script = world
     script["plan"] = {"mode": "one", "items": [{"need": "скатерть", "queries": ["скатерть"]}]}
     seen = []
-    import llm as L
-    L.analyze_image_with_llm = lambda **k: seen.append(k["user_text"]) or "YES"
+    _VIS[0] = lambda **k: seen.append(k["user_text"]) or "YES"
     T.execute_tool(_ctx(), {}, "ozon_shop", {"request": "скатерть"})
     assert any("Listing: 'Скатерть для пикника 150x150'" in s for s in seen)
     assert all("still count as YES" in s for s in seen if s.startswith("Listing:"))
@@ -219,6 +221,6 @@ def test_buyer_photo_fetch_refuses_local_addresses(monkeypatch):
     import llm as L, requests
     fetched = []
     monkeypatch.setattr(requests, "get", lambda url, **k: fetched.append(url))
-    monkeypatch.setattr(L, "analyze_image_with_llm", lambda **k: "seen")
+    _VIS[0] = lambda **k: "seen"
     assert S._see(_ctx(), "http://127.0.0.1:8000/view?filename=x.png", "q") == ""
     assert fetched == []

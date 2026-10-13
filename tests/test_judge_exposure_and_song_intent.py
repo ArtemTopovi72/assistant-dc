@@ -17,6 +17,7 @@ Run: venv/Scripts/python.exe tests/test_judge_exposure_and_song_intent.py
 import os
 import sys
 import tempfile
+import types
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -77,8 +78,19 @@ class _Ctx:
     def is_cancelled(self): return False
     def set_stage(self, *_): pass
 
+    # The judge reads the vision model off the context; draw_agent reads it off ctx.deps.llm.
+    @property
+    def vision_model(self):
+        return _VISION[0]
 
-_orig = I.analyze_image_with_llm
+    @property
+    def deps(self):
+        import llm
+        from seams import Over
+        return types.SimpleNamespace(llm=Over(llm, analyze_image_with_llm=_VISION[0]))
+
+
+_VISION = [None]
 _calls = []
 
 
@@ -89,7 +101,7 @@ def _fake(ctx, image_path=None, user_text="", system_prompt="", **kw):
             '"negative_prompt_patch": "silhouette", "steps": 0, "cfg": 0, "width": 0, "height": 0}')
 
 
-I.analyze_image_with_llm = _fake
+_VISION[0] = _fake
 try:
     r = G.evaluate_image(_Ctx(), bright, "a ginger cat", "a ginger cat", "", 8, 1.0, 64, 64)
     check("darkness-only refine on a lit picture is overruled", r.get("verdict") == "success", r)
@@ -101,7 +113,7 @@ try:
     check("the same complaint about a genuinely dark picture stands", r2.get("verdict") == "refine", r2)
     check("and no exposure evidence was claimed for it", not any("Measured exposure" in c for c in _calls))
 finally:
-    I.analyze_image_with_llm = _orig
+    _VISION[0] = None
 
 # draw_agent's critic shares the measurement
 import draw_agent as DA
@@ -111,8 +123,6 @@ check("but not on a dark picture",
       len(DA._drop_unfounded(dark, ["the scene is extremely dark"])) == 1)
 
 # the layout critic: a blind verdict is discarded, taste is not a problem
-import llm as _llm
-_real_vision = _llm.analyze_image_with_llm
 LAY = {"background": "a street", "elements": [
     {"desc": "a cafe", "text": "", "x": 0.1, "y": 0.2, "w": 0.8, "h": 0.7},
     {"desc": "a sign", "text": "У ОЛЬГИ", "x": 0.2, "y": 0.05, "w": 0.6, "h": 0.15}]}
@@ -120,7 +130,7 @@ LAY = {"background": "a street", "elements": [
 
 def _critic_says(problems, ok=False, score=2):
     import json as _j
-    _llm.analyze_image_with_llm = lambda ctx, **kw: _j.dumps(
+    _VISION[0] = lambda ctx, **kw: _j.dumps(
         {"ok": ok, "score": score, "problems": problems, "ops": []})
 
 
@@ -153,7 +163,7 @@ try:
     _critic_says(["The windowsill is too large and covers more than the bottom 25% of the frame"])
     check("size taste is still taste", DA.critique(_Ctx(), bright, LAY)["ok"])
 finally:
-    _llm.analyze_image_with_llm = _real_vision
+    _VISION[0] = None
 
 # ── 2. song intent ───────────────────────────────────────────────────────────
 import tg_songs as S

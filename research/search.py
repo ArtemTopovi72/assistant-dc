@@ -1,5 +1,5 @@
 """Web search tool: ddgs fetch -> dedupe/format -> optional fact distillation."""
-from seams import choice, yes_no
+from seams import choice, yes_no, vision_model
 from seams import dep, text_model
 import re
 import turn_trace
@@ -711,7 +711,7 @@ def _pick_photo(ctx, query: str, paths: list) -> str:
     try:
         import re
         from llm import analyze_image_with_llm
-        ans = analyze_image_with_llm(
+        ans = vision_model(ctx)(
             ctx, temperature=0.0, max_tokens=20,
             image_paths=[(f"Photo {i}:", p) for i, p in enumerate(paths, 1)],
             user_text=f"The user wants a real photo of: {query}. Which photo shows exactly "

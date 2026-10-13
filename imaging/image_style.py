@@ -13,6 +13,7 @@ both land here. Three things make a style land (bench/style_ab.py, 2026-10-11):
     picture: without the description an anime schoolgirl came back a young man and
     a Pixar baker lost his mustache; without the LoRA he stayed a 3D doll.
 """
+from seams import vision_model
 import logging
 import os
 import re
@@ -133,7 +134,7 @@ def _sharp_enough(image_path: str) -> str:
 
 def _describe(ctx, image_path: str, face: str) -> str:
     from llm import analyze_image_with_llm
-    return " ".join((analyze_image_with_llm(
+    return " ".join((vision_model(ctx)(
         ctx=ctx, image_path=_sharp_enough(image_path), user_text=_WHO_PROMPT.format(face=face),
         system_prompt="You are a precise, literal visual describer.") or "").split())
 

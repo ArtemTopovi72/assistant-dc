@@ -20,6 +20,7 @@ picks -- or, for "a picnic set", first turns the occasion into a list.
 Everything Ozon returns is third-party text: prompts treat it as data.
 """
 from __future__ import annotations
+from seams import vision_model
 
 import logging
 import re
@@ -379,7 +380,7 @@ def _see(ctx, url: str, question: str) -> str:
         if r is None:
             raise ValueError("unsafe image URL")
         r.raise_for_status()
-        return (analyze_image_with_llm(ctx=ctx, image_bytes=r.content, user_text=question,
+        return (vision_model(ctx)(ctx=ctx, image_bytes=r.content, user_text=question,
                                        system_prompt="You check product photos for a buyer.",
                                        max_tokens=160) or "").strip()
     except Exception as exc:
@@ -560,7 +561,7 @@ def shop_photo(ctx, request: str, image_path: str, strategy: str = "balanced") -
     words only add wishes (budget, size, colour) and the priority."""
     from llm import analyze_image_with_llm
     _stage(ctx, "Ozon: looking at your photo")
-    seen = (analyze_image_with_llm(
+    seen = (vision_model(ctx)(
         ctx=ctx, image_path=image_path, max_tokens=60,
         system_prompt="You name products for a shopper.",
         user_text="Name the product in this picture the way a shop listing would, "

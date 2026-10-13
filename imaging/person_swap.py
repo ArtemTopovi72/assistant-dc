@@ -4,7 +4,7 @@ that point an edit at the one picked.
 The owner wanted Stalin's erasing of Yezhov, but funnier: pick a person, send a picture
 of anyone (SpongeBob), get them in that spot in the photo's own style.
 """
-from seams import yes_no
+from seams import yes_no, vision_model
 import os
 from typing import List, Tuple
 
@@ -196,7 +196,7 @@ def _who(ctx, ref: str) -> str:
     man in Yezhov's uniform."""
     try:
         from llm import analyze_image_with_llm
-        return " ".join((analyze_image_with_llm(
+        return " ".join((vision_model(ctx)(
             ctx, image_path=ref, temperature=0.1,
             user_text="Who or what is the main character in this picture? Answer with their name "
                       "if they are a known character or person, then a few words on how they "
@@ -213,7 +213,7 @@ def _pick(ctx, takes: list, figure: str) -> str:
     try:
         import re
         from llm import analyze_image_with_llm
-        ans = analyze_image_with_llm(
+        ans = vision_model(ctx)(
             ctx, temperature=0.0, max_tokens=20,
             image_paths=[(f"Take {i}:", t) for i, t in enumerate(takes, 1)],
             user_text="Each take replaced a man on an old photo with " + figure + ". Which take "
@@ -234,7 +234,7 @@ def _real_look(ctx, ref: str) -> str:
     beat the user's «angry», and the sponge came out scared (2026-10-13)."""
     try:
         from llm import analyze_image_with_llm
-        return " ".join((analyze_image_with_llm(
+        return " ".join((vision_model(ctx)(
             ctx, image_path=ref, temperature=0.1,
             user_text="Describe the main character of this picture as if it were a REAL physical "
                       "thing photographed in the real world, WITHOUT its name: what real object "

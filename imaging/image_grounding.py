@@ -8,6 +8,7 @@ regions/instructions, item attribute classification and the edit-prompt refiner.
 Extracted from image.py. This layer talks to the LLM/VLM but never to ComfyUI,
 so it sits below the mask and edit pipelines and can be imported by both.
 """
+from seams import vision_model
 import logging
 import os
 import re
@@ -75,7 +76,7 @@ def _image_region_inventory(ctx, image_path: str) -> list:
         # for a VISION task (verified live — the same bug that broke evaluate_image
         # and inspect_image). An empty response here silently disables region
         # grounding and pushes edits onto the whole-frame fallback.
-        resp = analyze_image_with_llm(
+        resp = vision_model(ctx)(
             ctx=ctx, image_path=image_path, user_text="List the editable regions.",
             system_prompt=_REGION_INVENTORY_PROMPT, max_tokens=80)
     except Exception as exc:
@@ -471,7 +472,7 @@ def _region_present(ctx, image_path: str, region: str) -> Optional[bool]:
         # NO prefill: a closed-<think> prefill returns EMPTY on vision tasks with
         # these fine-tunes (verified live), which turned every presence check into
         # an "unclear" fail-open and ran the heavy detailer blind.
-        resp = analyze_image_with_llm(
+        resp = vision_model(ctx)(
             ctx=ctx, image_path=image_path,
             user_text=(
                 f"Check one thing: is there a {region} visible in the image?\n"

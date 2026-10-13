@@ -70,7 +70,11 @@ def section(t):
 INVOKES = []
 
 
+_VIS = [None]   # the vision model the context hands out
+
+
 class FakeCtx:
+    vision_model = property(lambda self: _VIS[0])
     def __init__(self):
         self.session_memory = []
         self.pinned_facts = []
@@ -386,7 +390,7 @@ _heard.update({"p1": "no words", "p2": "no words either"})
 bot._dl_bytes = lambda fid: b"x"
 _kbs = []
 bot._send_text = lambda cid, t, **kw: (bot.sent.append((cid, t)), _kbs.append(kw.get("keyboard")), 1)[2]
-_llm0.analyze_image_with_llm = lambda ctx, **kw: "a tattoo that looks like mold"
+_VIS[0] = lambda ctx, **kw: "a tattoo that looks like mold"
 bot.sent.clear(); INVOKES.clear()
 bot._dispatch(fwd_from(CID_POST, "Dvach", caption="a post about tattoos", video={"file_id": "p1", "duration": 5}))
 bot._dispatch(fwd_from(CID_POST, "Dvach", video={"file_id": "p2", "duration": 5}))

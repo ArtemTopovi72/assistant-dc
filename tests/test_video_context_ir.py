@@ -1,5 +1,6 @@
 """H3 Context-IR prompt rewrite: accepted only with the required fields, fields
 separated by blank lines, on by default in the app and off inside suites."""
+from types import SimpleNamespace as NS
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ["F5_TEST_RUN"] = "1"
@@ -38,9 +39,9 @@ check(V.to_context_ir(None, "a man", mode="t2va", seconds=5) == "a man", "no ans
 ref_ok = ("subject_definitions:\n<Subject 1> is ...\nsummary:\nx\nretention_analysis:\ny\n"
           "detailed_description:\n[Shot 1] ...\noverall_soundscape: z\nnon_diegetic_music: N/A")
 seen = {}
-llm.analyze_image_with_llm = lambda ctx, image_paths=None, user_text="", system_prompt="", **k: \
-    seen.update(img=[p for _, p in image_paths or []], sys=system_prompt[:60], user=user_text) or ref_ok
-out = V.to_context_ir(None, "<Picture 1> walks", mode="ref2va", seconds=5, images=["p.png", "guy.png"])
+look = NS(vision_model=lambda ctx, image_paths=None, user_text="", system_prompt="", **k:
+         seen.update(img=[p for _, p in image_paths or []], sys=system_prompt[:60], user=user_text) or ref_ok)
+out = V.to_context_ir(look, "<Picture 1> walks", mode="ref2va", seconds=5, images=["p.png", "guy.png"])
 check(out.startswith("subject_definitions:"), "Ref2VA six-section rewrite accepted")
 # Shown only the first, the writer guessed the newcomer of <Picture 2> («a dark glove» for
 # a light-blue one, only his arm in the shot; 2026-10-12).
@@ -50,8 +51,7 @@ check("Full-Reference" in seen.get("sys", ""), "Ref2VA uses the full-reference g
 # grandma of the first frame out, and H3 rendered the room without her (2026-10-12).
 check("every person and animal visible in <Picture 1> is in the shot" in seen.get("user", ""),
       "whoever is in the first frame stays in the shot")
-llm.analyze_image_with_llm = lambda *a, **k: good          # base fields only
-check(V.to_context_ir(None, "x", mode="ref2va", seconds=5, images=["p.png"]) == "x",
+check(V.to_context_ir(NS(vision_model=lambda *a, **k: good), "x", mode="ref2va", seconds=5, images=["p.png"]) == "x",
       "a base-mode answer is not accepted for Ref2VA")
 
 print(f"\n{sum(ok)}/{len(ok)} checks passed")

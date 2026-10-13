@@ -16,6 +16,7 @@ Numbers over the whole DCIM.zip on the 3090: ~12 photos per sheet, ~6 s per
 sheet, ~3 s per verification -- a 173-photo folder in under two minutes.
 """
 from __future__ import annotations
+from seams import vision_model
 
 import json
 import logging
@@ -100,7 +101,7 @@ def find_in_photos(ctx, folder: Path, query: str, *, work_dir: Optional[Path] = 
     """Return {"matches": [paths], "scanned": n, "sheets": k, "candidates": m}."""
     if vision is None:
         import llm as _llm
-        vision = lambda path, question, system: _llm.analyze_image_with_llm(   # noqa: E731
+        vision = lambda path, question, system: vision_model(ctx)(   # noqa: E731
             ctx, image_path=str(path), user_text=question, system_prompt=system,
             temperature=0.0, max_tokens=120)
     photos = list_photos(Path(folder))

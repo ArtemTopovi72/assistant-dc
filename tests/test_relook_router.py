@@ -54,7 +54,6 @@ check("no ctx at all is safe", G.entry_router({"user_input": "what?"}) == "perso
 
 # The wired graph actually reaches the re-look branch.
 calls = []
-G.analyze_image_with_llm = lambda ctx, image_bytes, user_text, system_prompt: calls.append(user_text) or "milk 89"
 G.downscale_image_bytes = lambda b: b
 G.personality_node = lambda ctx, s: dict(s, final_answer="ok")
 G.tts_node = lambda ctx, s: s
@@ -63,6 +62,7 @@ rctx = models.Context(models=None, transcription_cache={}, cache_file=None,
                       asr_lock=threading.Lock(), tts_lock=threading.Lock())
 rctx.last_image_path = upload
 rctx.intent_read = _READ["intent_read"]
+rctx.vision_model = lambda ctx, image_bytes, user_text, system_prompt: calls.append(user_text) or "milk 89"
 out = G.build_graph(rctx).invoke({"messages": [], "user_input": "which item is the most expensive?"})
 check("wired graph re-looked at the upload on a bare follow-up", calls == ["which item is the most expensive?"], calls)
 check("and carried the fresh look into the turn", out.get("vision_summary") == "milk 89", out.get("vision_summary"))

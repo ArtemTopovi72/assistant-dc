@@ -36,20 +36,24 @@ parts = V.tiles_of(png(1600, 1200))
 check("the parts are JPEGs of the crops", len(parts) == 4 and all(d[:2] == b"\xff\xd8" for _, d in parts))
 
 # --- the close look ------------------------------------------------------------
+_VIS = [None]   # the vision model the context hands out
+
+
 class _Ctx:
+    vision_model = property(lambda self: _VIS[0])
     def __init__(self): self.stages = []; self.cancelled = False
     def set_stage(self, s): self.stages.append(s)
     def is_cancelled(self): return self.cancelled
 
 seen = []
-_orig_a, _orig_s = llm.analyze_image_with_llm, llm.call_llm_simple
+_orig_s = llm.call_llm_simple
 def _fake_look(ctx, image_path=None, image_bytes=None, user_text="", system_prompt="", **k):
     seen.append(user_text)
     return "a name plate reading 'A. Petrov'" if "top-left" in user_text else "nothing small here"
 def _fake_merge(ctx, system, user, **k):
     seen.append(("merge", user))
     return "Совещание; на табличке слева написано «A. Petrov»."
-llm.analyze_image_with_llm = _fake_look
+_VIS[0] = _fake_look
 llm.call_llm_simple = _fake_merge
 try:
     c = _Ctx()
@@ -62,10 +66,10 @@ try:
     check("a small picture -> None, the overview stands", V.look_closely(c, png(500, 400), "q", "ov") is None)
     c2 = _Ctx(); c2.cancelled = True
     check("a cancelled turn stops before the parts", V.look_closely(c2, png(1600, 1200), "q", "ov") is None)
-    llm.analyze_image_with_llm = lambda *a, **k: None
+    _VIS[0] = lambda *a, **k: None
     check("no notes at all -> None", V.look_closely(_Ctx(), png(1600, 1200), "q", "ov") is None)
 finally:
-    llm.analyze_image_with_llm, llm.call_llm_simple = _orig_a, _orig_s
+    llm.call_llm_simple = _orig_s
 
 # --- the wiring -----------------------------------------------------------------
 import graph as G

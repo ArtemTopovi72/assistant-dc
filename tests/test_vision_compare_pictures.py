@@ -14,7 +14,8 @@ def _yes(answer):
 
 
 class _Ctx:
-    def __init__(self, paths, last, yes=lambda q, t: False):
+    def __init__(self, paths, last, yes=lambda q, t: False, look=None):
+        self.vision_model = look
         self.image_undo = paths
         self.last_image_path = last
         self.yes_no = _yes(yes)
@@ -30,9 +31,8 @@ def _files(tmp_path):
 def test_earlier_picture_is_read_when_the_user_relates_pictures(tmp_path, monkeypatch):
     a, b = _files(tmp_path)
     calls = []
-    monkeypatch.setattr(graph, "analyze_image_with_llm",
-                        lambda **k: (calls.append(k), "a till receipt")[1])
-    out = graph._add_earlier_pictures(_Ctx([a], b, yes=lambda q, t: True), {"user_input": "что общего у двух фото?"}, "a man")
+    look = lambda **k: (calls.append(k), "a till receipt")[1]
+    out = graph._add_earlier_pictures(_Ctx([a], b, yes=lambda q, t: True, look=look), {"user_input": "что общего у двух фото?"}, "a man")
     assert "a man" in out and "a till receipt" in out
     # one call seeing both: one at a time, each said "there is no second picture"
     assert len(calls) == 1 and [p for _, p in calls[0]["image_paths"]] == [a, b]
@@ -41,8 +41,7 @@ def test_earlier_picture_is_read_when_the_user_relates_pictures(tmp_path, monkey
 def test_single_picture_question_reads_only_the_current_one(tmp_path, monkeypatch):
     a, b = _files(tmp_path)
     calls = []
-    monkeypatch.setattr(graph, "analyze_image_with_llm", lambda **k: calls.append(1) or "x")
-    out = graph._add_earlier_pictures(_Ctx([a], b), {"user_input": "что на фото?"}, "a man")
+    out = graph._add_earlier_pictures(_Ctx([a], b, look=lambda **k: calls.append(1) or "x"), {"user_input": "что на фото?"}, "a man")
     assert out == "a man" and not calls
 
 

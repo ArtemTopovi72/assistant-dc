@@ -20,6 +20,7 @@ far away / tiny / huge). Taste is not on the list.
 Entry point: preflight(ctx, layout, request, ...) -> (layout, report).
 """
 from __future__ import annotations
+from seams import vision_model
 
 import logging
 import os
@@ -195,7 +196,7 @@ def ask(ctx, sketch_path: str, layout: dict, request: str) -> dict:
                               "glance would miss):\n" + _tile_notes)
         except Exception:
             logger.warning("preflight: close look on the sketch failed", exc_info=True)
-        raw = llm.analyze_image_with_llm(
+        raw = vision_model(ctx)(
             reader, image_path=sketch_path,
             user_text=user_text,
             system_prompt=PREFLIGHT_PROMPT, temperature=0.1, max_tokens=2500)

@@ -11,6 +11,7 @@ written from the overview plus the parts. Costs a few vision calls; only
 runs when the source has enough pixels to zoom into.
 """
 from __future__ import annotations
+from seams import vision_model
 import io
 import logging
 from typing import List, Optional, Tuple
@@ -104,7 +105,7 @@ def tile_notes(ctx, image_bytes: bytes, *, label: str = "the picture") -> str:
                 return ""
             ctx.set_stage(f"Looking closer ({i}/{len(parts)})")
         try:
-            got = _llm.analyze_image_with_llm(
+            got = vision_model(ctx)(
                 ctx, image_bytes=data,
                 user_text=f"Part {i} of {len(parts)}: the {name} of {label}, zoomed in.",
                 system_prompt=TILE_PROMPT, temperature=0.1, max_tokens=350) or ""

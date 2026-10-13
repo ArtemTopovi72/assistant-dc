@@ -12,6 +12,7 @@ Pictures are optional and never block the deck: each slide may name an image
 query, the caller supplies whatever it managed to fetch or draw, and a slide with
 no picture simply lays out as text.
 """
+from seams import vision_model
 import logging
 import os
 import re
@@ -1095,7 +1096,7 @@ def _drop_mismatched_images(ctx, deck: dict, images: dict) -> None:
         slides = deck.get("slides") or []
         labelled = [(f"Slide {k + 1} -- {slides[k].get('heading') or slides[k].get('title', '')}:",
                      images[k]) for k in keys if k < len(slides)]
-        ans = analyze_image_with_llm(
+        ans = vision_model(ctx)(
             ctx, temperature=0.0, max_tokens=60, image_paths=labelled,
             user_text="Each picture is an illustration for the slide named above it, in a "
                       "presentation about: " + str(deck.get("title") or "") + ". List the "

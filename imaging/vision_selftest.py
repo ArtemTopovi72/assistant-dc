@@ -12,6 +12,7 @@ Runs once at start-up, off the main thread, and only logs; a failure must
 not stop the app from coming up. Skipped under F5_TEST_RUN.
 """
 from __future__ import annotations
+from seams import vision_model
 
 import logging
 import os
@@ -100,7 +101,7 @@ def _reload_house_model(ctx) -> bool:
 
 def _ask(ctx) -> str:
     from llm import analyze_image_with_llm
-    return analyze_image_with_llm(ctx=ctx, image_path=PROBE_IMAGE, user_text=QUESTION,
+    return vision_model(ctx)(ctx=ctx, image_path=PROBE_IMAGE, user_text=QUESTION,
                                   system_prompt="You describe pictures accurately.",
                                   max_tokens=600) or ""  # QAT reasons first: 80 left no answer
 

@@ -10,7 +10,7 @@ the hole is repainted by FireRed on the crop; afterwards the OCR reads the resul
 second pass with a wider mask cleans what survived.
 """
 from __future__ import annotations
-from seams import yes_no
+from seams import yes_no, vision_model
 from config import scratch_path, venv_python
 import logging
 import os
@@ -291,7 +291,7 @@ def vision_leftover(ctx, image_path: str) -> str:
     """A logo or icon the OCR cannot read, named by the vision model ('' = clean)."""
     try:
         import llm as _llm
-        got = (_llm.analyze_image_with_llm(
+        got = (vision_model(ctx)(
             ctx, image_path=image_path, user_text="Anything left?",
             system_prompt=LEFTOVER_PROMPT, temperature=0.1, max_tokens=40) or "").strip()
     except Exception:

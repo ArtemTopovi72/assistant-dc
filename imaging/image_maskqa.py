@@ -9,7 +9,7 @@ Extracted from image.py. MASK_QA_ENABLED is a live switch: read it through this
 module (image_maskqa.MASK_QA_ENABLED), never by value, or patching it moves only
 half the behaviour.
 """
-from seams import yes_no
+from seams import yes_no, vision_model
 from config import scratch_path
 import logging
 import os
@@ -240,7 +240,7 @@ def _vlm_qa_verdict(ctx, png_path, question: str, labels):
         # NO prefill: a closed-<think> prefill returns EMPTY on vision tasks with
         # these fine-tunes (verified live) — an empty verdict here made the QA gate
         # silently fail open on every check.
-        resp = analyze_image_with_llm(
+        resp = vision_model(ctx)(
             ctx=ctx, image_path=png_path, user_text="Give your one-word verdict.",
             system_prompt=sys_prompt, max_tokens=24)
     except Exception as exc:

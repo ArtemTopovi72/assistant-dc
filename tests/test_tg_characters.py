@@ -262,9 +262,8 @@ def test_reference_description_folds_into_the_scene():
     bot = _bot()
     bot._dl_bytes = lambda fid: b"img" + fid.encode()
     seen = []
-    _llm.analyze_image_with_llm = lambda ctx, image_bytes=None, user_text="", system_prompt="", **k: (
-        seen.append(system_prompt), "shirtless, flexing one arm, white wall, 80s film look")[-1]
-    ctx = _types.SimpleNamespace(set_stage=lambda s: None)
+    ctx = _types.SimpleNamespace(set_stage=lambda s: None, vision_model=lambda ctx, image_bytes=None, user_text="", system_prompt="", **k: (
+        seen.append(system_prompt), "shirtless, flexing one arm, white wall, 80s film look")[-1])
     look = TC.CharactersMixin._describe_character_references(bot, ctx, ["a", "b"])
     check("every reference is read", len(seen) == 2 and "Do NOT describe who the person is" in seen[0], seen)
     check("the fragments are joined", look.count("flexing") == 2, look)

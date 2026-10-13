@@ -24,7 +24,7 @@ The config defaults below are the exception: they are DEFAULT ARGUMENT values
 and must bind at def time, so they are imported from config -- their DEFINING
 module -- not from image.py.
 """
-from seams import dep
+from seams import dep, vision_model
 import logging
 import random
 from typing import Optional
@@ -267,7 +267,7 @@ def evaluate_image(ctx, img_path: str, goal: str, current_prompt: str,
     # unavailable when a non-multimodal chat model holds the VRAM. Try twice.
     response = ""
     for _ in range(2):
-        response = _image.analyze_image_with_llm(
+        response = vision_model(ctx)(
             ctx=ctx,
             image_path=img_path,
             user_text=eval_prompt,

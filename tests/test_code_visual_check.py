@@ -23,30 +23,30 @@ def check(name, cond, extra=""):
     print(("PASS  " if cond else "FAIL  ") + name, ("  " + str(extra)) if (extra and not cond) else "")
 
 # --- the critic's verdict ---------------------------------------------------------
-_orig = llm.analyze_image_with_llm
+import types
 seen = {}
 def _fake(ctx, image_path=None, image_bytes=None, user_text="", system_prompt="", **k):
     seen["user"] = user_text; seen["system"] = system_prompt
     return _fake.answer
-llm.analyze_image_with_llm = _fake
+LOOK = types.SimpleNamespace(vision_model=_fake)
 try:
     _fake.answer = "OK"
-    check("OK -> no defects", C.critique(None, "x.png", "flowchart") == "")
+    check("OK -> no defects", C.critique(LOOK, "x.png", "flowchart") == "")
     _fake.answer = "OK."
-    check("'OK.' -> no defects", C.critique(None, "x.png", "flowchart") == "")
+    check("'OK.' -> no defects", C.critique(LOOK, "x.png", "flowchart") == "")
     _fake.answer = "- An arrow runs straight through every box and its text.\n- The NO branches are floating lines."
-    d = C.critique(None, "x.png", "нарисуй блок-схему")
+    d = C.critique(LOOK, "x.png", "нарисуй блок-схему")
     check("defects come back as short lines", d.startswith("An arrow runs") and "NO branches" in d, d)
     check("the request is shown to the judge", "нарисуй блок-схему" in seen["user"])
     check("the judge is told to look for geometric defects only, not taste",
           "THROUGH a box" in seen["system"] and "Do NOT judge style" in seen["system"])
     _fake.answer = ""
-    check("an empty answer passes (no vote)", C.critique(None, "x.png", "q") == "")
+    check("an empty answer passes (no vote)", C.critique(LOOK, "x.png", "q") == "")
     def _boom(*a, **k): raise RuntimeError("vision down")
-    llm.analyze_image_with_llm = _boom
-    check("a failing vision call passes silently", C.critique(None, "x.png", "q") == "")
+    check("a failing vision call passes silently",
+          C.critique(types.SimpleNamespace(vision_model=_boom), "x.png", "q") == "")
 finally:
-    llm.analyze_image_with_llm = _orig
+    pass
 n = C.note_for("An arrow through the boxes.")
 check("the note asks for a fix via edit_file and graphviz", "VISUAL CHECK" in n and "edit_file" in n and "graphviz" in n)
 

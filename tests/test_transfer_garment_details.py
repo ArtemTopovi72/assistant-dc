@@ -38,11 +38,11 @@ def test_clothing_instruction_carries_garment_details(tmp_path, monkeypatch):
 
 
 def test_garment_details_empty_when_vision_fails(tmp_path, monkeypatch):
-    import llm
+    import types
     p = tmp_path / "g.jpg"; p.write_bytes(b"G" * 10)
     T._GARMENT_CACHE.clear()
     def boom(**kw):
         raise RuntimeError("vision down")
-    monkeypatch.setattr(llm, "analyze_image_with_llm", boom)
-    assert T._garment_details(None, str(p)) == ""
-    assert T._garment_details(None, str(tmp_path / "missing.jpg")) == ""
+    down = types.SimpleNamespace(vision_model=boom)
+    assert T._garment_details(down, str(p)) == ""
+    assert T._garment_details(down, str(tmp_path / "missing.jpg")) == ""

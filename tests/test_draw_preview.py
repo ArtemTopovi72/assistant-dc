@@ -42,7 +42,11 @@ px = im.getpixel((int(0.85 * im.width), int(0.3 * im.height)))
 check("boxes are tinted, not opaque (the ground shows through)", all(c > 120 for c in px), px)
 
 
+_VIS = [None]   # the vision model the context hands out
+
+
 class _Ctx:
+    vision_model = property(lambda self: _VIS[0])
     model_name = "chat"
     stages = []
     def set_stage(self, s): self.stages.append(s)
@@ -58,7 +62,7 @@ check("without a context the plan passes through untouched", rep["source"] == "s
 calls = []
 def _seq(*answers):
     it = iter(answers)
-    llm.analyze_image_with_llm = lambda ctx, image_path=None, user_text="", system_prompt="", **kw: (
+    _VIS[0] = lambda ctx, image_path=None, user_text="", system_prompt="", **kw: (
         calls.append((image_path, user_text, system_prompt)), next(it))[-1]
 _seq('{"ok": false, "problems": ["the cat is not on the sofa"], '
      '"ops": [{"op": "move", "target": "the black cat", "x": 0.4, "y": 0.5}]}',
@@ -100,7 +104,7 @@ calls.clear(); _seq("I cannot see the image.")
 out, rep = P.preflight(ctx, LAY, REQ)
 check("no JSON -> unavailable, plan unchanged", rep["source"] == "unavailable" and not rep["checked"]
       and out["elements"][1]["x"] == 0.75)
-llm.analyze_image_with_llm = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom"))
+_VIS[0] = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom"))
 out, rep = P.preflight(ctx, LAY, REQ)
 check("a vision exception -> unavailable, plan unchanged", rep["source"] == "unavailable"
       and out["elements"][1]["x"] == 0.75)

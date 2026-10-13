@@ -12,6 +12,7 @@ model describes what happens across the sheet in order. The sheet stays on
 disk so a follow-up («что там на 20-й секунде?») has a picture to point at.
 """
 from __future__ import annotations
+from seams import vision_model
 
 import logging
 import math
@@ -271,7 +272,7 @@ def look_at_video(ctx, path: str, *, every: float = EVERY_SECONDS,
     not in the words."""
     if vision is None:
         import llm as _llm
-        vision = lambda frames, question, system: _llm.analyze_image_with_llm(  # noqa: E731
+        vision = lambda frames, question, system: vision_model(ctx)(  # noqa: E731
             ctx, image_paths=frames, user_text=question, system_prompt=system,
             temperature=0.1, max_tokens=900)
     dur = duration_seconds(path)

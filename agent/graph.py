@@ -1,4 +1,4 @@
-from seams import yes_no
+from seams import yes_no, vision_model
 import logging
 import re
 from typing import Optional
@@ -126,7 +126,7 @@ def _add_earlier_pictures(ctx, state, summary: str) -> str:
     if cur and Path(cur).exists():
         pics.append((f"Picture {len(pics) + 1} (the latest):", cur))
     try:
-        got = analyze_image_with_llm(ctx=ctx, image_paths=pics, user_text=text,
+        got = vision_model(ctx)(ctx=ctx, image_paths=pics, user_text=text,
                                      system_prompt=VISION_PROMPT)
     except Exception:
         logger.warning("earlier pictures could not be read", exc_info=True)
@@ -158,7 +158,7 @@ def vision_agent_node(ctx: Context, state: AgentState) -> AgentState:
                                  "user sent. Look at the frames closely for what the request "
                                  "needs (surfaces, joints, defects, details), citing timestamps. "
                                  "Request: " + user_text)
-                response = analyze_image_with_llm(
+                response = vision_model(ctx)(
                     ctx=ctx, image_bytes=proxy_bytes,
                     user_text=user_text, system_prompt=VISION_PROMPT)
                 _pq = is_picture_question(ctx, state)
@@ -217,7 +217,7 @@ def vision_agent_node(ctx: Context, state: AgentState) -> AgentState:
         logger.warning("Could not persist sent image as working image: %s", exc)
 
     ctx.set_stage("Looking at the image")
-    response = analyze_image_with_llm(
+    response = vision_model(ctx)(
         ctx=ctx,
         image_bytes=proxy_bytes,  # analysis uses the proxy, not the original
         user_text=state.get("user_input", ""),

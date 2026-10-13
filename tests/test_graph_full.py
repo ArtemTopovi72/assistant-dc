@@ -32,6 +32,7 @@ def _ctx(**kw):
     c = M.Context(models=types.SimpleNamespace(), transcription_cache={},
                   cache_file=_TMP / "c.json", asr_lock=threading.Lock(), tts_lock=threading.Lock())
     c.active_memory_dir = _TMP / "mem"
+    c.vision_model = lambda **k: "a photo of a cat"
     for k, v in kw.items():
         setattr(c, k, v)
     return c
@@ -96,7 +97,6 @@ def patched(llm, tools, analyze=None, synth=None, play=None, downscale=None,
     for name, val in [("send_to_lm_studio", llm), ("execute_tool", tools),
                       # translate node must not hit a live LLM: None -> keep original
                       ("call_llm_simple", lambda *a, **k: None),
-                      ("analyze_image_with_llm", analyze or (lambda **k: "a photo of a cat")),
                       ("post_process_answer", lambda t: t),
                       ("stress_plus", lambda ctx, t: t),
                       ("synth_single_segment", synth or (lambda **k: str(_TMP / "reply.wav"))),
@@ -469,35 +469,32 @@ def test_vision_node_formats_and_persist():
     from PIL import Image
     def png_bytes():
         b = io.BytesIO(); Image.new("RGB", (8, 8), "red").save(b, "PNG"); return b.getvalue()
-    c = _ctx()
+    c = _ctx(vision_model=lambda **k: "a red square")
     llm = LLM([_asst("looks good")])
     out = _run(c, llm, Tools(), {"messages": [], "user_input": "что тут",
-                                 "image_data": png_bytes()},
-               analyze=lambda **k: "a red square")
+                                 "image_data": png_bytes()})
     check("vision_summary", out.get("vision_summary") == "a red square")
     check("vision_last_prompt", c.last_image_prompt == "a red square")
     check("vision_working_image", c.last_image_path and os.path.exists(c.last_image_path))
 
 
 def test_vision_analyze_failure_and_bad_format():
-    c = _ctx()
+    c = _ctx(vision_model=lambda **k: None)
     # analyze returns None -> "Failed to analyze image." and last_image_prompt NOT set
     llm = LLM([_asst("ok")])
-    out = _run(c, llm, Tools(), {"messages": [], "user_input": "x", "image_data": b"not-an-image"},
-               analyze=lambda **k: None)
+    out = _run(c, llm, Tools(), {"messages": [], "user_input": "x", "image_data": b"not-an-image"})
     check("vision_failed", out["vision_summary"] == "Failed to analyze image.")
     check("vision_no_prompt_on_fail", c.last_image_prompt == "")
 
 
 def test_vision_persist_exception():
-    c = _ctx()
+    c = _ctx(vision_model=lambda **k: "desc")
     llm = LLM([_asst("ok")])
     # make OUTPUT_DIR.mkdir raise via patching graph.OUTPUT_DIR to a broken object
     real = G.OUTPUT_DIR
     G.OUTPUT_DIR = types.SimpleNamespace(mkdir=lambda *a, **k: (_ for _ in ()).throw(OSError("ro")))
     try:
-        out = _run(c, llm, Tools(), {"messages": [], "user_input": "x", "image_data": b"\xff\xd8\xff\xe0"},
-                   analyze=lambda **k: "desc")
+        out = _run(c, llm, Tools(), {"messages": [], "user_input": "x", "image_data": b"\xff\xd8\xff\xe0"})
         check("vision_persist_except", out.get("vision_summary") == "desc")
     finally:
         G.OUTPUT_DIR = real

@@ -11,7 +11,7 @@ edit_region_contained_via_firered) and the telemetry it writes
 through lazy module-level forwarders rather than by-value imports: that both
 breaks the import cycle and keeps them patchable from either side.
 """
-from seams import choice
+from seams import choice, vision_model
 from config import scratch_path
 import json
 import logging
@@ -625,7 +625,7 @@ def _garment_details(ctx, path: str) -> str:
         return _GARMENT_CACHE[key]
     try:
         from llm import analyze_image_with_llm
-        txt = analyze_image_with_llm(
+        txt = vision_model(ctx)(
             ctx=ctx, image_path=path,
             user_text="Describe this garment in ONE line for a tailor who must copy it exactly.",
             system_prompt=("Describe only the garment: its type, colour, collar or neckline, "

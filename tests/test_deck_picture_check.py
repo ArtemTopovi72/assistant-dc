@@ -4,6 +4,7 @@ never looked at, and a stranger's photo could illustrate a slide.
 
 Run: venv/Scripts/python.exe tests/test_deck_picture_check.py
 """
+from types import SimpleNamespace as NS
 import os
 import sys
 
@@ -24,17 +25,15 @@ def check(name, cond, extra=""):
 
 deck = {"title": "Чай", "slides": [{"heading": "История"}, {"heading": "Сорта"}, {"heading": "Цены"}]}
 CALLS = []
-llm.analyze_image_with_llm = lambda *a, **k: (CALLS.append(k), "2")[1]
 images = {"cover": "c.jpg", 0: "a.jpg", 1: "b.jpg", 2: "d.jpg"}
-slides._drop_mismatched_images(object(), deck, images)
+slides._drop_mismatched_images(NS(vision_model=lambda *a, **k: (CALLS.append(k), "2")[1]), deck, images)
 check("the slide pictures go in one call, each labelled with its slide",
       len(CALLS) == 1 and [lab for lab, _ in CALLS[0]["image_paths"]][1].startswith("Slide 2 -- Сорта"), CALLS)
 check("...the one named as not fitting is dropped, the rest and the cover kept",
       images == {"cover": "c.jpg", 0: "a.jpg", 2: "d.jpg"}, images)
 
-llm.analyze_image_with_llm = lambda *a, **k: "NONE"
 images = {0: "a.jpg", 1: "b.jpg"}
-slides._drop_mismatched_images(object(), deck, images)
+slides._drop_mismatched_images(NS(vision_model=lambda *a, **k: "NONE"), deck, images)
 check("NONE keeps every picture", images == {0: "a.jpg", 1: "b.jpg"}, images)
 
 print(f"\n{OK}/{OK + BAD} passed")

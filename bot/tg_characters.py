@@ -18,6 +18,7 @@ Three decisions worth stating:
     round trip is tens of seconds, and every other chat's updates queue behind
     this one.
 """
+from seams import vision_model
 import html as _html_mod
 import logging
 import threading
@@ -139,7 +140,7 @@ class CharactersMixin:
                     continue
                 if ctx is not None:
                     ctx.set_stage("Looking at the image")
-                out = _llm.analyze_image_with_llm(
+                out = vision_model(ctx)(
                     ctx, image_bytes=data, user_text="Describe the reference.",
                     system_prompt=_REF_PROMPT, temperature=0.1) or ""
                 out = " ".join(out.split())

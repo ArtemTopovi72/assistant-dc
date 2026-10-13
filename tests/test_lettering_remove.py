@@ -62,7 +62,11 @@ def _fill(ctx, cur, mask, grow):
     calls.append((grow, "firered"))
     out = os.path.join(d, f"out{len(calls)}.png"); Image.new("RGB", (400, 300)).save(out); return out
 L._fill_firered = _fill
+_VIS = [None]   # the vision model the context hands out
+
+
 class _Ctx:
+    vision_model = property(lambda self: _VIS[0])
     def __init__(self): self.stages = []
     def set_stage(self, s): self.stages.append(s)
     def is_cancelled(self): return False
@@ -84,20 +88,20 @@ finally:
 
 # --- the logo pass ----------------------------------------------------------------------------
 import llm, image_objects
-_o_an, _o_lama, _o_rl = llm.analyze_image_with_llm, image_objects.remove_object_with_comfy, L.remove_lettering
+_o_lama, _o_rl = image_objects.remove_object_with_comfy, L.remove_lettering
 L.remove_lettering = lambda ctx, p, **k: "ocr_out.png"
 image_objects.remove_object_with_comfy = lambda ctx, p, phrase, **k: calls.append(("firered", p, phrase)) or "logo_out.png"
 try:
-    llm.analyze_image_with_llm = lambda *a, **k: "NONE"
+    _VIS[0] = lambda *a, **k: "NONE"
     calls.clear()
     check("vision says NONE -> the OCR result stands", L.remove_lettering_and_logos(_Ctx(), src) == "ocr_out.png" and not calls)
-    llm.analyze_image_with_llm = lambda *a, **k: "audible logo top right"
+    _VIS[0] = lambda *a, **k: "audible logo top right"
     check("a logo the vision model names gets one segmenter pass on the OCR result",
           L.remove_lettering_and_logos(_Ctx(), src) == "logo_out.png" and calls == [("firered", "ocr_out.png", "audible logo top right")], calls)
-    llm.analyze_image_with_llm = lambda *a, **k: "There is a lot of decorative text and logos and many things on the wall behind"
+    _VIS[0] = lambda *a, **k: "There is a lot of decorative text and logos and many things on the wall behind"
     check("a rambling answer is not a phrase -> no pass", L.vision_leftover(_Ctx(), src) == "")
 finally:
-    llm.analyze_image_with_llm, image_objects.remove_object_with_comfy, L.remove_lettering = _o_an, _o_lama, _o_rl
+    image_objects.remove_object_with_comfy, L.remove_lettering = _o_lama, _o_rl
 
 src_h = open("agent/tool_image_handlers.py", encoding="utf-8").read()
 check("inpaint_image routes a lettering removal here before the router",

@@ -3,6 +3,7 @@ face/colour filters was taken as it came, whoever it showed (2026-10-13).
 
 Run: venv/Scripts/python.exe tests/test_photo_pick.py
 """
+from types import SimpleNamespace as NS
 import os
 import sys
 import tempfile
@@ -31,14 +32,13 @@ for i, c in enumerate(("red", "green", "blue")):
     paths.append(p)
 
 CALLS = []
-llm.analyze_image_with_llm = lambda *a, **k: (CALLS.append(k), "Photo 3")[1]
-got = search._pick_photo(object(), "Lucia GTA 6", paths)
+got = search._pick_photo(NS(vision_model=lambda *a, **k: (CALLS.append(k), "Photo 3")[1]), "Lucia GTA 6", paths)
 check("all candidates go to the vision model in one call, labelled",
       len(CALLS) == 1 and [p for _, p in CALLS[0]["image_paths"]] == paths, CALLS)
 check("...and the one it names is taken", got == paths[2], got)
 
-llm.analyze_image_with_llm = lambda *a, **k: "no idea"
-check("an answer without a number keeps the first", search._pick_photo(object(), "x", paths) == paths[0])
+check("an answer without a number keeps the first",
+      search._pick_photo(NS(vision_model=lambda *a, **k: "no idea"), "x", paths) == paths[0])
 check("no ctx (no model) keeps the first without a call", search._pick_photo(None, "x", paths) == paths[0])
 
 print(f"\n{OK}/{OK + BAD} passed")

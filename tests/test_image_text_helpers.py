@@ -103,9 +103,9 @@ def test_inventory_missing_file():
 def test_inventory_stubbed_llm():
     ctx = Ctx()
     img = _photo("inv1.png")
-    with _Patches(analyze_image_with_llm=lambda **k: "hat, shirt, background"):
-        out = I._image_region_inventory(ctx, img)
-        check("inventory_parses_list", out == ["hat", "shirt", "background"], out)
+    ctx.vision_model = lambda **k: "hat, shirt, background"
+    out = I._image_region_inventory(ctx, img)
+    check("inventory_parses_list", out == ["hat", "shirt", "background"], out)
 
 def test_inventory_cache_hit():
     ctx = Ctx()
@@ -114,18 +114,18 @@ def test_inventory_cache_hit():
     def fake_analyze(**k):
         calls["n"] += 1
         return "table, wall"
-    with _Patches(analyze_image_with_llm=fake_analyze):
-        I._image_region_inventory(ctx, img)
-        I._image_region_inventory(ctx, img)  # second call should hit cache
-        check("inventory_cache_hit_one_call", calls["n"] == 1, calls["n"])
+    ctx.vision_model = fake_analyze
+    I._image_region_inventory(ctx, img)
+    I._image_region_inventory(ctx, img)  # second call should hit cache
+    check("inventory_cache_hit_one_call", calls["n"] == 1, calls["n"])
 
 def test_inventory_llm_exception():
     ctx = Ctx()
     img = _photo("inv3.png")
     def boom(**k): raise RuntimeError("down")
-    with _Patches(analyze_image_with_llm=boom):
-        out = I._image_region_inventory(ctx, img)
-        check("inventory_exception_empty", out == [])
+    ctx.vision_model = boom
+    out = I._image_region_inventory(ctx, img)
+    check("inventory_exception_empty", out == [])
 
 def test_ground_region_empty():
     ctx = Ctx()
@@ -231,22 +231,22 @@ def test_extract_edit_target_bad_json():
 
 def test_vlm_qa_verdict_match():
     ctx = Ctx()
-    with _Patches(analyze_image_with_llm=lambda **k: "CORRECT, looks good"):
-        v = I._vlm_qa_verdict(ctx, _photo("qa1.png"), "is it correct?", ["CORRECT", "WRONG"])
-        check("vlm_qa_match", v == "CORRECT", v)
+    ctx.vision_model = lambda **k: "CORRECT, looks good"
+    v = I._vlm_qa_verdict(ctx, _photo("qa1.png"), "is it correct?", ["CORRECT", "WRONG"])
+    check("vlm_qa_match", v == "CORRECT", v)
 
 def test_vlm_qa_verdict_no_match():
     ctx = Ctx()
-    with _Patches(analyze_image_with_llm=lambda **k: "not sure, unclear"):
-        v = I._vlm_qa_verdict(ctx, _photo("qa2.png"), "is it correct?", ["CORRECT", "WRONG"])
-        check("vlm_qa_no_match_empty", v == "" or v is None, v)
+    ctx.vision_model = lambda **k: "not sure, unclear"
+    v = I._vlm_qa_verdict(ctx, _photo("qa2.png"), "is it correct?", ["CORRECT", "WRONG"])
+    check("vlm_qa_no_match_empty", v == "" or v is None, v)
 
 def test_vlm_qa_verdict_exception():
     ctx = Ctx()
     def boom(**k): raise RuntimeError("down")
-    with _Patches(analyze_image_with_llm=boom):
-        v = I._vlm_qa_verdict(ctx, _photo("qa3.png"), "is it correct?", ["CORRECT", "WRONG"])
-        check("vlm_qa_exception_falls_open", v == "" or v is None)
+    ctx.vision_model = boom
+    v = I._vlm_qa_verdict(ctx, _photo("qa3.png"), "is it correct?", ["CORRECT", "WRONG"])
+    check("vlm_qa_exception_falls_open", v == "" or v is None)
 
 
 # ---------------- _face_detector_mask ----------------

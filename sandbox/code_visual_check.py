@@ -12,6 +12,7 @@ to answer OK unless a defect is plainly visible: the draw critic's habit of
 inventing problems is known, so only the literal, geometric kind counts.
 """
 from __future__ import annotations
+from seams import vision_model
 import logging
 
 logger = logging.getLogger("assistant.tools")
@@ -32,7 +33,7 @@ def critique(ctx, image_path: str, request: str) -> str:
     """'' when the picture passes (or the check cannot run), else the defects."""
     try:
         import llm as _llm
-        got = _llm.analyze_image_with_llm(
+        got = vision_model(ctx)(
             ctx, image_path=image_path,
             user_text=f"The user's request was: {(request or '').strip()[:400] or '(unknown)'}",
             system_prompt=SYSTEM, temperature=0.1, max_tokens=250) or ""
