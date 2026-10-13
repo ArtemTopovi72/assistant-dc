@@ -1,3 +1,4 @@
+from seams import dep
 import json
 import os
 import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
@@ -686,7 +687,7 @@ def send_to_lm_studio(
                 if _set_stage is not None:
                     _set_stage(f"Retrying the model call ({attempt + 1}/{LLM_MAX_RETRIES})")
             try:
-                throttle_external_calls(ctx)
+                dep(ctx, "throttle_external_calls", throttle_external_calls)(ctx)
             except Exception as exc:
                 # This runs BEFORE any request leaves the process, so a failure
                 # here is a defect on our side (a context missing api_lock /
@@ -703,7 +704,7 @@ def send_to_lm_studio(
                 _wait_for_free_card(ctx)
             _inflight_enter()
             try:
-                message = _stream_chat(ctx, payload)
+                message = dep(ctx, "_stream_chat", _stream_chat)(ctx, payload)
             finally:
                 _inflight_exit()
             if message is _CANCELLED:
@@ -846,7 +847,7 @@ def send_to_lm_studio(
             return None
 
         if attempt < LLM_MAX_RETRIES - 1:
-            time.sleep(LLM_RETRY_BASE_DELAY * (2 ** attempt))
+            dep(ctx, "time", time).sleep(LLM_RETRY_BASE_DELAY * (2 ** attempt))
 
     return None
 
@@ -1288,7 +1289,7 @@ def _stream_chat_raw(ctx, payload: dict):
     loop_sigs = {"content": "", "reasoning": ""}
     finish_reason = ""
     usage: dict = {}
-    _started = time.perf_counter()
+    _started = dep(ctx, "time", time).perf_counter()
 
     headers = {"Accept": "text/event-stream"}
 
@@ -1296,8 +1297,9 @@ def _stream_chat_raw(ctx, payload: dict):
     # server stops emitting tokens for this long mid-stream, requests raises (retriable)
     # instead of the old ~32-minute hang. The wall-clock + char caps below stop a model
     # that keeps trickling/looping tokens forever (where the read timeout never fires).
-    deadline = time.monotonic() + LLM_STREAM_MAX_SECONDS
-    with requests.post(
+    max_chars = dep(ctx, "LLM_STREAM_MAX_CHARS", LLM_STREAM_MAX_CHARS)
+    deadline = dep(ctx, "time", time).monotonic() + LLM_STREAM_MAX_SECONDS
+    with dep(ctx, "requests", requests).post(
         LM_STUDIO_URL,
         json=payload,
         timeout=(LLM_CONNECT_TIMEOUT, LLM_STREAM_STALL_TIMEOUT),
@@ -1334,7 +1336,7 @@ def _stream_chat_raw(ctx, payload: dict):
                 # Wall-clock guard: a model stuck in a token loop streams forever — the
                 # per-read stall timeout never fires because bytes keep arriving. Cut it off
                 # and keep whatever was produced so the turn still completes.
-                if time.monotonic() > deadline:
+                if dep(ctx, "time", time).monotonic() > deadline:
                     logger.warning("LM Studio stream exceeded %.0fs wall-clock cap — aborting "
                                    "(model likely stuck); using %d chars so far",
                                    LLM_STREAM_MAX_SECONDS, streamed_chars)
@@ -1417,9 +1419,9 @@ def _stream_chat_raw(ctx, payload: dict):
                 # Runaway guard: a degenerate repetition loop ("the the the…") streams fast,
                 # so neither the read-stall nor wall-clock guard may trip in time. Cap total
                 # streamed characters and stop reading — the accumulated text is returned.
-                if streamed_chars > LLM_STREAM_MAX_CHARS:
+                if streamed_chars > max_chars:
                     logger.warning("LM Studio stream exceeded %d-char cap — aborting (model "
-                                   "appears stuck in a generation loop)", LLM_STREAM_MAX_CHARS)
+                                   "appears stuck in a generation loop)", max_chars)
                     resp.close()
                     break
 
@@ -1515,7 +1517,7 @@ def _stream_chat_raw(ctx, payload: dict):
         _sys = next((m.get("content") for m in payload.get("messages") or []
                      if m.get("role") == "system"), "") or ""
         turn_trace.llm(_sys if isinstance(_sys, str) else str(_sys), usage,
-                       time.perf_counter() - _started, finish_reason, streamed_chars,
+                       dep(ctx, "time", time).perf_counter() - _started, finish_reason, streamed_chars,
                        messages=payload.get("messages"), reply=message)
     except Exception:
         pass
@@ -1547,7 +1549,7 @@ def call_llm_simple(
         messages.extend(history)
     messages.append({"role": "user", "content": user_message})
 
-    result = send_to_lm_studio(
+    result = dep(ctx, "send_to_lm_studio", send_to_lm_studio)(
         ctx,
         messages,
         temperature=temperature,
@@ -1649,7 +1651,7 @@ def analyze_image_with_llm(
         content = []
         for label, p in image_paths:
             try:
-                url = file_to_data_url(_vision_sized(p))
+                url = dep(ctx, "file_to_data_url", file_to_data_url)(_vision_sized(p))
             except Exception as exc:
                 logger.warning("analyze_image_with_llm: could not read image %r: %s", p, exc)
                 continue
@@ -1671,10 +1673,10 @@ def analyze_image_with_llm(
     # image as "no image to analyze" and return None — the documented contract.
     try:
         if image_path is not None:
-            data_url = file_to_data_url(_vision_sized(image_path))
+            data_url = dep(ctx, "file_to_data_url", file_to_data_url)(_vision_sized(image_path))
         else:
             sized, mime = _vision_sized_bytes(image_bytes or b"")
-            data_url = image_bytes_to_data_url(sized, mime_type=mime)
+            data_url = dep(ctx, "image_bytes_to_data_url", image_bytes_to_data_url)(sized, mime_type=mime)
     except Exception as exc:
         logger.warning("analyze_image_with_llm: could not read image %r: %s",
                        image_path or "<bytes>", exc)
@@ -1706,7 +1708,7 @@ def _vision_call(ctx, system_prompt, content, temperature, max_tokens, prefill):
     # the caller's fail-safe handle a persistent miss.
     content_out = None
     for _ in range(2):
-        result = send_to_lm_studio(
+        result = dep(ctx, "send_to_lm_studio", send_to_lm_studio)(
             ctx, messages, temperature=temperature, max_tokens=max_tokens,
             prefill=prefill,
         )

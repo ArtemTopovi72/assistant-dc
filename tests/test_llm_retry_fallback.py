@@ -1,8 +1,8 @@
 """Regression + fault-injection for the LLM transport layer (llm.py).
 
 The retry/fallback logic and the streaming assembler are reachable with NO live
-LM Studio: we monkeypatch `_stream_chat` (for the retry loop) and `requests.post`
-(for the SSE assembler) with fakes that reproduce every failure mode:
+LM Studio: the context hands in `_stream_chat` (for the retry loop) and `requests`
+(for the SSE assembler) as fakes that reproduce every failure mode:
 
   * transient None message -> retry -> exhaustion returns None
   * exception on every attempt -> exhaustion returns None
@@ -26,10 +26,25 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 import requests
 import llm as L
 
-_REAL_STREAM = L._stream_chat   # capture before the retry tests monkeypatch it
-_REAL_SEND = L.send_to_lm_studio
-import requests as _rq
-_REAL_POST = _rq.post
+import time
+import types
+from fakes import Over
+
+_REAL_STREAM = L._stream_chat
+# The suite's stand-ins: every Ctx carries them as `deps`, llm reads them through
+# dep(ctx, ...); `_T` holds the faked clock calls.
+_D = types.SimpleNamespace()
+_T = {}
+
+
+def _clock(**fakes):
+    _T.update(fakes)
+    _D.time = Over(time, **_T)
+
+
+def _unclock(name):
+    _T.pop(name, None)
+    _D.time = Over(time, **_T)
 
 
 class Ctx:
@@ -38,13 +53,14 @@ class Ctx:
         self.no_think = no_think
         self.reasoning_effort = "high"
         self._cancel = cancel
+        self.deps = _D
     def is_cancelled(self):
         return self._cancel
 
 
 def _no_sleep(monkey=True):
-    L.time.sleep = lambda *_a, **_k: None
-    L.throttle_external_calls = lambda *_a, **_k: None
+    _clock(sleep=lambda *_a, **_k: None)
+    _D.throttle_external_calls = lambda *_a, **_k: None
 
 
 # ---------------------------------------------------------------- retry loop
@@ -55,7 +71,7 @@ def test_none_message_exhausts_to_none():
     def fake_stream(ctx, payload):
         calls["n"] += 1
         return None
-    L._stream_chat = fake_stream
+    _D._stream_chat = fake_stream
     out = L.send_to_lm_studio(Ctx(), [{"role": "user", "content": "hi"}])
     assert out is None, f"expected None, got {out!r}"
     assert calls["n"] == L.LLM_MAX_RETRIES, f"retry count {calls['n']} != {L.LLM_MAX_RETRIES}"
@@ -68,7 +84,7 @@ def test_exception_every_attempt_returns_none():
     def boom(ctx, payload):
         calls["n"] += 1
         raise RuntimeError("connection reset")
-    L._stream_chat = boom
+    _D._stream_chat = boom
     out = L.send_to_lm_studio(Ctx(), [{"role": "user", "content": "hi"}])
     assert out is None and calls["n"] == L.LLM_MAX_RETRIES
     print("PASS exception on every attempt returns None after full retries")
@@ -80,7 +96,7 @@ def test_cancel_sentinel_returns_none_no_retry():
     def cancelled(ctx, payload):
         calls["n"] += 1
         return L._CANCELLED
-    L._stream_chat = cancelled
+    _D._stream_chat = cancelled
     out = L.send_to_lm_studio(Ctx(), [{"role": "user", "content": "hi"}])
     assert out is None and calls["n"] == 1, f"cancel should not retry (n={calls['n']})"
     print("PASS _CANCELLED sentinel returns None without retrying")
@@ -94,7 +110,7 @@ def test_cancel_flag_between_attempts_stops_retry():
         calls["n"] += 1
         ctx._cancel = True          # user cancels after the 1st failed attempt
         raise RuntimeError("net down")
-    L._stream_chat = fail_then_cancel
+    _D._stream_chat = fail_then_cancel
     out = L.send_to_lm_studio(ctx, [{"role": "user", "content": "hi"}])
     assert out is None and calls["n"] == 1, f"cancel flag must stop retry (n={calls['n']})"
     print("PASS cancellation flag between attempts stops the retry loop")
@@ -102,7 +118,7 @@ def test_cancel_flag_between_attempts_stops_retry():
 
 def test_empty_content_recovered_from_reasoning_qwen():
     _no_sleep()
-    L._stream_chat = lambda c, p: {"role": "assistant", "content": "",
+    _D._stream_chat = lambda c, p: {"role": "assistant", "content": "",
                                    "reasoning_content": "the answer is 42"}
     out = L.send_to_lm_studio(Ctx(model_name="qwen3.5-9b"), [{"role": "user", "content": "x"}])
     assert out and out["content"] == "the answer is 42", f"reasoning recovery failed: {out!r}"
@@ -119,7 +135,7 @@ def test_tool_markup_in_reasoning_is_NOT_executed():
     own parser refuses to read tool tags before </think> for this exact reason.
     """
     _no_sleep()
-    L._stream_chat = lambda c, p: {
+    _D._stream_chat = lambda c, p: {
         "role": "assistant", "content": "",
         "reasoning_content": 'Maybe I should call:search{query:<|"|>weather<|"|>} '
                              'but the user already told me, so no.'}
@@ -134,7 +150,7 @@ def test_tool_markup_in_real_content_still_executes():
     """The guard must not disarm the fallback on its actual job: the same markup
     arriving in `content` is a real call and still has to run."""
     _no_sleep()
-    L._stream_chat = lambda c, p: {
+    _D._stream_chat = lambda c, p: {
         "role": "assistant",
         "content": 'call:search{query:<|"|>weather<|"|>}',
         "reasoning_content": "some thinking"}
@@ -146,7 +162,7 @@ def test_tool_markup_in_real_content_still_executes():
 
 def test_empty_content_NOT_recovered_for_gpt_oss():
     _no_sleep()
-    L._stream_chat = lambda c, p: {"role": "assistant", "content": "",
+    _D._stream_chat = lambda c, p: {"role": "assistant", "content": "",
                                    "reasoning_content": "internal harmony analysis"}
     out = L.send_to_lm_studio(Ctx(model_name="gpt-oss-20b"), [{"role": "user", "content": "x"}])
     assert out is not None and out["content"] == "", \
@@ -161,7 +177,7 @@ def test_prefill_appended_for_qwen_not_oss():
         seen["msgs"] = payload["messages"]
         seen["payload"] = payload
         return {"role": "assistant", "content": "ok"}
-    L._stream_chat = cap
+    _D._stream_chat = cap
     L.send_to_lm_studio(Ctx(model_name="qwen3.5-9b"), [{"role": "user", "content": "x"}],
                         prefill="<think></think>")
     assert seen["msgs"][-1] == {"role": "assistant", "content": "<think></think>"}, \
@@ -179,7 +195,7 @@ def test_prefill_appended_for_qwen_not_oss():
 def test_no_think_marker_applied():
     _no_sleep()
     seen = {}
-    L._stream_chat = lambda c, p: (seen.setdefault("msgs", p["messages"]),
+    _D._stream_chat = lambda c, p: (seen.setdefault("msgs", p["messages"]),
                                    {"role": "assistant", "content": "ok"})[1]
     L.send_to_lm_studio(Ctx(model_name="qwen3.5-9b", no_think=True),
                         [{"role": "system", "content": "You are X."},
@@ -214,12 +230,12 @@ def _sse(obj):
 
 
 def test_stream_http_error_returns_none():
-    requests.post = lambda url, **kw: FakeResp([], status=503)
+    _D.requests = types.SimpleNamespace(post=lambda url, **kw: FakeResp([], status=503))
     msg = _REAL_STREAM(Ctx(), {"messages": []})
     # A 5xx is the _SERVER_ERROR sentinel so the retry loop can
     # mend the payload before trying again; a 4xx stays a plain None.
     assert msg is L._SERVER_ERROR, f"HTTP 503 must return _SERVER_ERROR, got {msg!r}"
-    requests.post = lambda url, **kw: FakeResp([], status=400)
+    _D.requests = types.SimpleNamespace(post=lambda url, **kw: FakeResp([], status=400))
     assert _REAL_STREAM(Ctx(), {"messages": []}) is None, "HTTP 400 must return None"
     print("PASS _stream_chat returns None on non-200")
 
@@ -235,7 +251,7 @@ def test_stream_assembles_content_and_tool_calls():
         b": keep-alive",
         b"data: [DONE]",
     ]
-    requests.post = lambda url, **kw: FakeResp(lines)
+    _D.requests = types.SimpleNamespace(post=lambda url, **kw: FakeResp(lines))
     msg = _REAL_STREAM(Ctx(), {"messages": []})
     assert msg["content"] == "Hello", f"content assembly wrong: {msg!r}"
     assert msg["tool_calls"][0]["id"] == "call_1"
@@ -245,16 +261,15 @@ def test_stream_assembles_content_and_tool_calls():
 
 
 def test_stream_char_cap_keeps_partial():
-    old = L.LLM_STREAM_MAX_CHARS
-    L.LLM_STREAM_MAX_CHARS = 5
+    _D.LLM_STREAM_MAX_CHARS = 5
     try:
         lines = [_sse({"choices": [{"delta": {"content": "abcdefghij"}}]}),
                  _sse({"choices": [{"delta": {"content": "MORE"}}]})]
-        requests.post = lambda url, **kw: FakeResp(lines)
+        _D.requests = types.SimpleNamespace(post=lambda url, **kw: FakeResp(lines))
         msg = _REAL_STREAM(Ctx(), {"messages": []})
         assert msg["content"] == "abcdefghij", f"char-cap must keep first chunk: {msg!r}"
     finally:
-        L.LLM_STREAM_MAX_CHARS = old
+        _D.__dict__.pop("LLM_STREAM_MAX_CHARS", None)
     print("PASS char cap aborts but keeps partial output")
 
 
@@ -262,7 +277,7 @@ def test_stream_cancel_mid_stream_returns_sentinel():
     ctx = Ctx()
     lines = [_sse({"choices": [{"delta": {"content": "x"}}]}) for _ in range(5)]
     ctx._cancel = True
-    requests.post = lambda url, **kw: FakeResp(lines)
+    _D.requests = types.SimpleNamespace(post=lambda url, **kw: FakeResp(lines))
     msg = _REAL_STREAM(ctx, {"messages": []})
     assert msg is L._CANCELLED, f"cancel mid-stream must return sentinel, got {msg!r}"
     print("PASS cancellation mid-stream returns _CANCELLED")
@@ -273,7 +288,7 @@ def test_stream_timeout_with_partial_is_kept():
         def iter_lines(self, decode_unicode=False):
             yield _sse({"choices": [{"delta": {"content": "partial"}}]})
             raise requests.exceptions.Timeout("read timed out")
-    requests.post = lambda url, **kw: TimeoutResp([])
+    _D.requests = types.SimpleNamespace(post=lambda url, **kw: TimeoutResp([]))
     msg = _REAL_STREAM(Ctx(), {"messages": []})
     assert msg is not None and msg["content"] == "partial", \
         f"partial output must be kept on mid-stream timeout: {msg!r}"
@@ -285,7 +300,7 @@ def test_stream_timeout_with_nothing_reraises():
         def iter_lines(self, decode_unicode=False):
             raise requests.exceptions.ConnectionError("dropped")
             yield  # pragma: no cover
-    requests.post = lambda url, **kw: DeadResp([])
+    _D.requests = types.SimpleNamespace(post=lambda url, **kw: DeadResp([]))
     raised = False
     try:
         _REAL_STREAM(Ctx(), {"messages": []})
@@ -301,7 +316,7 @@ def test_payload_tools_and_force_think():
     def cap(ctx, payload):
         seen["p"] = payload
         return {"role": "assistant", "content": "ok"}
-    L._stream_chat = cap
+    _D._stream_chat = cap
     tools = [{"type": "function", "function": {"name": "calc", "parameters": {}}}]
     L.send_to_lm_studio(Ctx(model_name="qwen3.5-9b"), [{"role": "user", "content": "x"}],
                         tools=tools, tool_choice="required")
@@ -317,28 +332,27 @@ def test_payload_tools_and_force_think():
 
 def test_stream_wall_clock_cap_keeps_partial(monkeypatch=None):
     # Force the wall-clock deadline to trip immediately after the first chunk.
-    real_mono = L.time.monotonic
     seq = iter([0.0, 0.0, 10_000.0, 10_000.0, 10_000.0])
-    L.time.monotonic = lambda: next(seq, 10_000.0)
+    _clock(monotonic=lambda: next(seq, 10_000.0))
     try:
         lines = [_sse({"choices": [{"delta": {"content": "kept"}}]}),
                  _sse({"choices": [{"delta": {"content": "dropped"}}]})]
-        requests.post = lambda url, **kw: FakeResp(lines)
+        _D.requests = types.SimpleNamespace(post=lambda url, **kw: FakeResp(lines))
         msg = _REAL_STREAM(Ctx(), {"messages": []})
     finally:
-        L.time.monotonic = real_mono
+        _unclock("monotonic")
     assert msg["content"] == "kept", f"wall-clock cap must keep the pre-deadline chunk: {msg!r}"
     print("PASS wall-clock cap aborts but keeps partial output")
 
 
 def test_call_llm_simple_none_and_content():
     _no_sleep()
-    L.send_to_lm_studio = lambda *a, **k: None
+    _D.send_to_lm_studio = lambda *a, **k: None
     assert L.call_llm_simple(Ctx(), "sys", "hi") is None
-    L.send_to_lm_studio = lambda *a, **k: {"role": "assistant", "content": "answer"}
+    _D.send_to_lm_studio = lambda *a, **k: {"role": "assistant", "content": "answer"}
     assert L.call_llm_simple(Ctx(), "sys", "hi", history=[{"role": "user", "content": "q"}]) == "answer"
     # empty content coerces to None (falsy -> None)
-    L.send_to_lm_studio = lambda *a, **k: {"role": "assistant", "content": ""}
+    _D.send_to_lm_studio = lambda *a, **k: {"role": "assistant", "content": ""}
     assert L.call_llm_simple(Ctx(), "sys", "hi") is None
     print("PASS call_llm_simple maps None/empty->None and returns content")
 
@@ -349,20 +363,19 @@ def test_analyze_image_retries_once_on_empty():
     # -- the regression guard for BUG #12, "a missing image must not reach the
     # model" -- was handed a data URL for a file that does not exist, so the
     # guard it exists to protect was never exercised and the test failed.
-    _orig_durl = L.file_to_data_url
-    L.file_to_data_url = lambda p: "data:image/png;base64,AAAA"
+    _D.file_to_data_url = lambda p: "data:image/png;base64,AAAA"
     calls = {"n": 0}
     def flaky(ctx, messages, **k):
         calls["n"] += 1
         return {"content": ""} if calls["n"] == 1 else {"content": "a dog"}
-    L.send_to_lm_studio = flaky
+    _D.send_to_lm_studio = flaky
     try:
         out = L.analyze_image_with_llm(Ctx(), image_path="x.png", user_text="what?")
         assert out == "a dog" and calls["n"] == 2, f"empty-retry failed: {out!r} n={calls['n']}"
         # no image at all -> None, no call
         assert L.analyze_image_with_llm(Ctx()) is None
     finally:
-        L.file_to_data_url = _orig_durl
+        _D.__dict__.pop("file_to_data_url", None)
     print("PASS analyze_image_with_llm retries once on empty, None with no image")
 
 
@@ -376,29 +389,25 @@ def test_analyze_image_missing_path_returns_none_no_crash():
     def must_not_reach(*a, **k):
         called["n"] += 1
         return {"content": "should never get here"}
-    L.send_to_lm_studio = must_not_reach
+    _D.send_to_lm_studio = must_not_reach
     out = L.analyze_image_with_llm(Ctx(), image_path="C:/no/such/file_zzz.png", user_text="x")
     assert out is None, f"missing path must return None, got {out!r}"
     assert called["n"] == 0, "must not even reach the LLM with an unreadable image"
     # unreadable bytes path (a directory-as-bytes can't happen, but a broken encoder can);
     # simulate by making the data-url builder raise
-    import utils
-    orig = utils.file_to_data_url
-    utils.file_to_data_url = lambda p: (_ for _ in ()).throw(OSError("permission denied"))
-    L.file_to_data_url = utils.file_to_data_url
+    _D.file_to_data_url = lambda p: (_ for _ in ()).throw(OSError("permission denied"))
     try:
         out2 = L.analyze_image_with_llm(Ctx(), image_path="x.png", user_text="y")
         assert out2 is None, f"OSError on read must return None, got {out2!r}"
     finally:
-        utils.file_to_data_url = orig
-        L.file_to_data_url = orig
+        _D.__dict__.pop("file_to_data_url", None)
     print("PASS analyze_image_with_llm returns None (no crash) on missing/unreadable image (BUG #12)")
 
 
 def test_analyze_image_persistent_empty_returns_none():
     _no_sleep()
-    L.image_bytes_to_data_url = lambda b, mime_type="image/jpeg": "data:image/jpeg;base64,AAAA"
-    L.send_to_lm_studio = lambda *a, **k: {"content": ""}
+    _D.image_bytes_to_data_url = lambda b, mime_type="image/jpeg": "data:image/jpeg;base64,AAAA"
+    _D.send_to_lm_studio = lambda *a, **k: {"content": ""}
     out = L.analyze_image_with_llm(Ctx(), image_bytes=b"\x89PNG", user_text="")
     # It returns "" (not None) here — unlike call_llm_simple which coerces to None.
     # VERIFIED non-defect: all 6 call sites (graph.py:236, tools.py:502, image.py
@@ -413,8 +422,7 @@ if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
         # restore module globals so tests can't leak monkeypatches into each other
-        L._stream_chat = _REAL_STREAM
-        L.send_to_lm_studio = _REAL_SEND
-        requests.post = _REAL_POST
+        _D.__dict__.clear()
+        _T.clear()
         fn()
     print(f"\ndone ({len(fns)} tests)")
