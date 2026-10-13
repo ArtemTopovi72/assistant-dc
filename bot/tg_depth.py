@@ -82,7 +82,7 @@ def _cfg_int(name: str, default: int, over=None) -> int:
         return default
 
 
-def _fmt_eta(tasks: list, lang: str = _DEFAULT_LANG) -> str:
+def _fmt_eta(tasks: list, lang: str = _DEFAULT_LANG, depth_eta_seconds=None) -> str:
     """Turn the tasks ahead of you into a human wait estimate.
 
     A deep research is two orders of magnitude slower than an ordinary turn, so a
@@ -96,7 +96,7 @@ def _fmt_eta(tasks: list, lang: str = _DEFAULT_LANG) -> str:
     # is read because config.py bakes TG_ETA_RESEARCH_SEC to a nonzero default
     # (900), which would make "unset" and "explicitly 900" indistinguishable.
     _eta_override = os.environ.get("TG_ETA_RESEARCH_SEC", "").strip()
-    per_res = int(_eta_override) if _eta_override.isdigit() else int(_tb._depth_eta_seconds())
+    per_res = int(_eta_override) if _eta_override.isdigit() else int((depth_eta_seconds or _tb._depth_eta_seconds)())
     per_res = max(1, per_res)
     secs = sum(per_res if _classify_task(getattr(t, "user_text", "")) == KIND_RESEARCH
                else per_task for t in tasks)
@@ -136,11 +136,11 @@ def _config_default_depth() -> str:
     return d if d in _DEPTHS else "standard"
 
 
-def _depth_eta(depth: str = "standard") -> tuple:
+def _depth_eta(depth: str = "standard", estimate=None) -> tuple:
     """(seconds, n_samples). n_samples 0 = a seed, not a measurement."""
     try:
         import deep_research as _dr
-        return _dr.estimate_duration(depth)
+        return (estimate or _dr.estimate_duration)(depth)
     except Exception:
         logger.debug("no research timing available", exc_info=True)
         return 0.0, 0
@@ -155,8 +155,8 @@ def _depth_name(depth: str, lang: str) -> str:
     return _t("d_" + depth, lang)
 
 
-def _depth_eta_text(depth: str, lang: str) -> str:
-    secs, _n = _depth_eta(depth)
+def _depth_eta_text(depth: str, lang: str, estimate=None) -> str:
+    secs, _n = _depth_eta(depth, estimate)
     return _fmt_secs(secs, lang) if secs else "?"
 
 

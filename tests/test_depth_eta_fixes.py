@@ -61,23 +61,17 @@ class _FakeTask:
 
 # A wildly different value than the 900s floor proves the measured path, not
 # the fallback, was used.
-_orig_estimate = T._depth_eta_seconds
-T._depth_eta_seconds = lambda depth="standard": 12345.0
-try:
-    eta_text = T._fmt_eta([_FakeTask("do a deep research on: x")], "en")
-finally:
-    T._depth_eta_seconds = _orig_estimate
+_measured = lambda depth="standard": 12345.0
+eta_text = T._fmt_eta([_FakeTask("do a deep research on: x")], "en", depth_eta_seconds=_measured)
 
 check("the queue ETA used the measured 12345s (3.4h), not the flat 900s (15min)",
       "3.4" in eta_text or "h" in eta_text, eta_text)
 
 # An explicit env override still wins.
 os.environ["TG_ETA_RESEARCH_SEC"] = "42"
-T._depth_eta_seconds = lambda depth="standard": 12345.0
 try:
-    eta_text2 = T._fmt_eta([_FakeTask("do a deep research on: x")], "en")
+    eta_text2 = T._fmt_eta([_FakeTask("do a deep research on: x")], "en", depth_eta_seconds=_measured)
 finally:
-    T._depth_eta_seconds = _orig_estimate
     os.environ.pop("TG_ETA_RESEARCH_SEC", None)
 check("an explicit env override (42s) still wins over the measured value",
       "42" in eta_text2 or "s" in eta_text2, eta_text2)
@@ -92,31 +86,24 @@ print("=" * 70)
 # than driving the whole async debounce/consumer/graph pipeline, which needs a
 # real model/graph to complete a turn.
 import deep_research as D
-_orig_dur = D.estimate_duration
 
-D.estimate_duration = lambda depth="standard": (900.0, 0)   # force a 0-sample seed
-try:
-    depth = "standard"
-    lang = "en"
-    _dr_secs, _dr_n = T._depth_eta(depth)
-    _dr_provenance = (T._t("depth_eta_measured", lang, n=_dr_n) if _dr_n
-                      else T._t("depth_eta_guess", lang))
-    msg = (T._t("dr_started", lang, name=T._depth_name(depth, lang),
-                eta=T._depth_eta_text(depth, lang))
-           + "\n" + _dr_provenance)
-finally:
-    D.estimate_duration = _orig_dur
+seed = lambda depth="standard": (900.0, 0)   # force a 0-sample seed
+depth = "standard"
+lang = "en"
+_dr_secs, _dr_n = T._depth_eta(depth, seed)
+_dr_provenance = (T._t("depth_eta_measured", lang, n=_dr_n) if _dr_n
+                  else T._t("depth_eta_guess", lang))
+msg = (T._t("dr_started", lang, name=T._depth_name(depth, lang),
+            eta=T._depth_eta_text(depth, lang, seed))
+       + "\n" + _dr_provenance)
 
 check("the 0-sample case discloses it's a rough estimate, not a fact",
       "rough" in msg.lower() or "estimate" in msg.lower(), msg)
 
-D.estimate_duration = lambda depth="standard": (1800.0, 7)   # a real measurement
-try:
-    _dr_secs, _dr_n = T._depth_eta(depth)
-    _dr_provenance2 = (T._t("depth_eta_measured", lang, n=_dr_n) if _dr_n
-                       else T._t("depth_eta_guess", lang))
-finally:
-    D.estimate_duration = _orig_dur
+measurement = lambda depth="standard": (1800.0, 7)   # a real measurement
+_dr_secs, _dr_n = T._depth_eta(depth, measurement)
+_dr_provenance2 = (T._t("depth_eta_measured", lang, n=_dr_n) if _dr_n
+                   else T._t("depth_eta_guess", lang))
 check("a real 7-sample measurement is disclosed as measured, with the count",
       "7" in _dr_provenance2 and "median" in _dr_provenance2.lower(),
       _dr_provenance2)
