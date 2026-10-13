@@ -19,10 +19,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
-import requests
 import llm as L
-
-_REAL_POST = requests.post
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from fakes import posting
 
 
 class Ctx:
@@ -109,8 +108,7 @@ def test_decode_line_none_and_str_and_bytes():
 
 def test_stream_empty_stream_exits_loop_normally():
     # 228->313: iterator yields nothing -> loop body never runs, falls to message build.
-    requests.post = lambda url, **kw: FakeResp([])
-    msg = L._stream_chat(Ctx(), {"messages": []})
+    msg = L._stream_chat(posting(lambda url, **kw: FakeResp([]), Ctx()), {"messages": []})
     # Anchored to the CONTRACT, not the exact key set: the message also carries
     # finish_reason (and may gain other diagnostics), which says nothing about
     # whether an empty stream produced an empty assistant message.
@@ -131,8 +129,7 @@ def test_stream_skips_blank_whitespace_noise_lines():
         _sse({"choices": [{"delta": {"content": "ok"}}]}),
         b"data: [DONE]",
     ]
-    requests.post = lambda url, **kw: FakeResp(lines)
-    msg = L._stream_chat(Ctx(), {"messages": []})
+    msg = L._stream_chat(posting(lambda url, **kw: FakeResp(lines), Ctx()), {"messages": []})
     assert msg["content"] == "ok", f"noise must be skipped, content kept: {msg!r}"
     assert "tool_calls" not in msg
     print("PASS blank / whitespace / comment / non-data / bad-JSON lines are all skipped")
@@ -146,8 +143,7 @@ def test_stream_reasoning_content_accumulated_and_attached():
         _sse({"choices": [{"delta": {"content": "answer"}}]}),
         b"data: [DONE]",
     ]
-    requests.post = lambda url, **kw: FakeResp(lines)
-    msg = L._stream_chat(Ctx(), {"messages": []})
+    msg = L._stream_chat(posting(lambda url, **kw: FakeResp(lines), Ctx()), {"messages": []})
     assert msg["content"] == "answer"
     assert msg["reasoning_content"] == "think harder", f"reasoning not assembled: {msg!r}"
     print("PASS reasoning_content deltas accumulate and attach to the message")
@@ -162,8 +158,7 @@ def test_stream_two_tool_calls_in_one_delta_loop_back():
         ]}}]}),
         b"data: [DONE]",
     ]
-    requests.post = lambda url, **kw: FakeResp(lines)
-    msg = L._stream_chat(Ctx(), {"messages": []})
+    msg = L._stream_chat(posting(lambda url, **kw: FakeResp(lines), Ctx()), {"messages": []})
     names = [tc["function"]["name"] for tc in msg["tool_calls"]]
     assert names == ["a", "b"], f"both tool_calls in one delta must be captured: {msg!r}"
     print("PASS two tool_calls in a single delta iterate the accumulation loop")
@@ -175,8 +170,7 @@ def test_stream_tool_call_without_name_or_args_slot_created_only():
         _sse({"choices": [{"delta": {"tool_calls": [{"index": 0}]}}]}),
         b"data: [DONE]",
     ]
-    requests.post = lambda url, **kw: FakeResp(lines)
-    msg = L._stream_chat(Ctx(), {"messages": []})
+    msg = L._stream_chat(posting(lambda url, **kw: FakeResp(lines), Ctx()), {"messages": []})
     assert msg["tool_calls"][0]["function"] == {"name": "", "arguments": ""}
     assert msg["tool_calls"][0]["id"] is None
     print("PASS tool_call delta with no id/name/args creates an empty slot")
@@ -185,6 +179,5 @@ def test_stream_tool_call_without_name_or_args_slot_created_only():
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
-        requests.post = _REAL_POST
         fn()
     print(f"\ndone ({len(fns)} tests)")

@@ -6,6 +6,7 @@ KV cache quantization and Flash Attention have no CLI flags — they are collect
 in the config and either sent via the HTTP API (if available) or returned as
 manual instructions for the user.
 """
+from seams import dep
 import logging
 import os
 import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
@@ -89,7 +90,7 @@ def _parse_virtual_yaml(yaml_path: Path) -> dict:
     return out
 
 
-def _base_to_raw_key(base_url: str, base_rel: str):
+def _base_to_raw_key(base_url: str, base_rel: str, ctx=None):
     """Map a virtual's `base:` gguf path to LM Studio's raw loadable key.
 
     `base_rel` is like 'Pub/Folder/Folder-Q8_0.gguf'. LM Studio keys raw GGUFs as
@@ -107,7 +108,7 @@ def _base_to_raw_key(base_url: str, base_rel: str):
 
     # Confirm against the live catalog: prefer an id that matches our derivation,
     # else any non-loaded raw id whose folder name matches (quant differences).
-    ids = [m.get("id", "") for m in fetch_models(base_url)]
+    ids = [m.get("id", "") for m in dep(ctx, "fetch_models", fetch_models)(base_url, ctx=ctx)]
     if derived in ids:
         return derived, quant
     folder_lc = parent.lower()
@@ -121,7 +122,7 @@ def _base_to_raw_key(base_url: str, base_rel: str):
     return derived, quant
 
 
-def resolve_virtual_model(base_url: str, model_id: str):
+def resolve_virtual_model(base_url: str, model_id: str, ctx=None):
     """If `model_id` is a virtual (model.yaml) that LM Studio cannot load
     programmatically, resolve it to the raw base GGUF key.
 
@@ -129,15 +130,15 @@ def resolve_virtual_model(base_url: str, model_id: str):
     `no_think` is True when the virtual requested thinking-off (so the caller must
     apply the runtime no-think prefill, the base GGUF having no such setting).
     Returns (None, False) when `model_id` is not a resolvable virtual."""
-    yaml_path = _virtual_yaml_path(model_id)
+    yaml_path = dep(ctx, "_virtual_yaml_path", _virtual_yaml_path)(model_id)
     if not yaml_path:
         return None, False
     try:
-        info = _parse_virtual_yaml(yaml_path)
+        info = dep(ctx, "_parse_virtual_yaml", _parse_virtual_yaml)(yaml_path)
     except Exception as exc:
         logger.warning("virtual-resolve: cannot parse %s: %s", yaml_path, exc)
         return None, False
-    raw_key, _quant = _base_to_raw_key(base_url, info.get("base", ""))
+    raw_key, _quant = dep(ctx, "_base_to_raw_key", _base_to_raw_key)(base_url, info.get("base", ""), ctx=ctx)
     if not raw_key:
         logger.warning("virtual-resolve: could not map base %r to a raw key",
                        info.get("base"))
@@ -156,19 +157,19 @@ def virtual_requires_no_think(model_id: str) -> bool:
     return bool(_RESOLVED_VIRTUAL_NO_THINK.get(model_id, False))
 
 
-def effective_model_id(base_url: str, model_id: str) -> str:
+def effective_model_id(base_url: str, model_id: str, ctx=None) -> str:
     """The id LM Studio will actually load for `model_id`: the raw base key if it
     is an unloadable virtual, else `model_id` unchanged. Lets callers compare
     against `loaded_model_ids()` without a phantom-reload loop."""
-    raw_key, _ = resolve_virtual_model(base_url, model_id)
+    raw_key, _ = dep(ctx, "resolve_virtual_model", resolve_virtual_model)(base_url, model_id, ctx=ctx)
     return raw_key or model_id
 
 
 # ── model info ───────────────────────────────────────────────────────────────
 
-def fetch_models(base_url: str) -> list:
+def fetch_models(base_url: str, ctx=None) -> list:
     try:
-        r = requests.get(f"{base_url}/api/v0/models", timeout=_T_LIST)
+        r = dep(ctx, "requests", requests).get(f"{base_url}/api/v0/models", timeout=_T_LIST)
         r.raise_for_status()
         return r.json().get("data", [])
     except Exception as exc:
@@ -176,27 +177,27 @@ def fetch_models(base_url: str) -> list:
         return []
 
 
-def fetch_model(base_url: str, model_id: str) -> dict:
+def fetch_model(base_url: str, model_id: str, ctx=None) -> dict:
     try:
-        r = requests.get(f"{base_url}/api/v0/models/{model_id}", timeout=_T_LIST)
+        r = dep(ctx, "requests", requests).get(f"{base_url}/api/v0/models/{model_id}", timeout=_T_LIST)
         if r.ok:
             data = r.json()
             if not data.get("error"):
                 return data
     except Exception:
         logger.debug("could not fetch model %s directly", model_id, exc_info=True)
-    for m in fetch_models(base_url):
+    for m in dep(ctx, "fetch_models", fetch_models)(base_url, ctx=ctx):
         if m.get("id") == model_id:
             return m
     return {}
 
 
-def loaded_model_ids(base_url: str) -> list:
+def loaded_model_ids(base_url: str, ctx=None) -> list:
     """Ids of every model LM Studio currently has loaded in memory."""
-    return [m.get("id") for m in fetch_models(base_url) if m.get("state") == "loaded"]
+    return [m.get("id") for m in dep(ctx, "fetch_models", fetch_models)(base_url, ctx=ctx) if m.get("state") == "loaded"]
 
 
-def loaded_context_length(base_url: str, model_id: str) -> int:
+def loaded_context_length(base_url: str, model_id: str, ctx=None) -> int:
     """Tokens of context the model is CURRENTLY loaded with (0 if unknown).
 
     Not cosmetic: the agent's system prompt plus the tool schemas needs roughly
@@ -204,7 +205,7 @@ def loaded_context_length(base_url: str, model_id: str) -> int:
     "n_keep >= n_ctx". Nothing else in the stack notices — the calls come back
     empty and the agent tells the user its tools are unavailable.
     """
-    for m in fetch_models(base_url):
+    for m in dep(ctx, "fetch_models", fetch_models)(base_url, ctx=ctx):
         if m.get("id") == model_id and m.get("state") == "loaded":
             try:
                 return int(m.get("loaded_context_length") or 0)
@@ -216,7 +217,7 @@ def loaded_context_length(base_url: str, model_id: str) -> int:
 _REAL_SUBPROCESS_RUN = subprocess.run
 
 
-def _would_reach_the_real_cli() -> bool:
+def _would_reach_the_real_cli(ctx=None) -> bool:
     """True when a CLI call from here would actually shell out for real.
 
     A suite that patches `lmstudio.subprocess` is exercising the CLI logic
@@ -225,10 +226,10 @@ def _would_reach_the_real_cli() -> bool:
     whether the real subprocess is still in place, not whether we are in a
     test.
     """
-    return getattr(subprocess, "run", None) is _REAL_SUBPROCESS_RUN
+    return getattr(dep(ctx, "subprocess", subprocess), "run", None) is _REAL_SUBPROCESS_RUN
 
 
-def _refuse_under_tests(what: str) -> Optional[tuple]:
+def _refuse_under_tests(what: str, ctx=None) -> Optional[tuple]:
     """Block model management inside a test run, and say why.
 
     tests/run_all.py sets F5_TEST_RUN. One suite drove the context-overflow
@@ -242,7 +243,7 @@ def _refuse_under_tests(what: str) -> Optional[tuple]:
     """
     if not os.getenv("F5_TEST_RUN"):
         return None
-    if not _would_reach_the_real_cli():
+    if not _would_reach_the_real_cli(ctx=ctx):
         return None                 # subprocess is patched; nothing can escape
     msg = (f"refusing to {what} during a test run (F5_TEST_RUN is set): this "
            f"would move the operator's real model. Patch the boundary you meant "
@@ -251,14 +252,14 @@ def _refuse_under_tests(what: str) -> Optional[tuple]:
     return False, msg
 
 
-def _lms_unload_all() -> tuple:
+def _lms_unload_all(ctx=None) -> tuple:
     """Run `lms unload --all`. Returns (ok, message). Shared by every CLI path
     that needs to free VRAM before loading a model."""
-    blocked = _refuse_under_tests("unload every model")
+    blocked = _refuse_under_tests("unload every model", ctx=ctx)
     if blocked:
         return blocked
     try:
-        r = subprocess.run(
+        r = dep(ctx, "subprocess", subprocess).run(
             ["lms", "unload", "--all"],
             capture_output=True, text=True, timeout=60,
         )
@@ -280,7 +281,7 @@ def load_model_exclusive(
     base_url: str,
     model_id: str,
     context_length: int = 0,
-    gpu_offload_pct: int = -1,
+    gpu_offload_pct: int = -1, ctx=None,
 ) -> tuple:
     """Unload ALL loaded models, then load `model_id` so it is the only one in VRAM.
 
@@ -288,11 +289,11 @@ def load_model_exclusive(
     (the "phantom") instead of relying on LM Studio's JIT load, which leaves the
     old model resident. Returns (ok: bool, message: str).
     """
-    ok, msg = _lms_unload_all()
+    ok, msg = dep(ctx, "_lms_unload_all", _lms_unload_all)(ctx=ctx)
     if not ok:
         return False, msg
 
-    time.sleep(1)  # let VRAM actually free before the load
+    dep(ctx, "time", time).sleep(1)  # let VRAM actually free before the load
 
     # Try the requested id first (a future LM Studio may load virtuals via CLI),
     # then, if that fails and it is a virtual, fall back to its resolved base key.
@@ -300,14 +301,14 @@ def load_model_exclusive(
     # return pathNotFound), so this fallback is what makes a NO-THINK virtual
     # usable from the app — see resolve_virtual_model().
     candidates = [model_id]
-    raw_key, _no_think = resolve_virtual_model(base_url, model_id)
+    raw_key, _no_think = dep(ctx, "resolve_virtual_model", resolve_virtual_model)(base_url, model_id, ctx=ctx)
     if raw_key and raw_key != model_id:
         candidates.append(raw_key)
 
     last_err = ""
     for idx, cand in enumerate(candidates):
         if gpu_offload_pct < 0:
-            ok, last_err = _rest_load(base_url, cand, context_length)
+            ok, last_err = dep(ctx, "_rest_load", _rest_load)(base_url, cand, context_length, ctx=ctx)
             if ok:
                 return True, last_err
             if isinstance(last_err, _StillLoading):
@@ -318,7 +319,7 @@ def load_model_exclusive(
                 # "<id>:2" phantom drop_phantoms has to clean up after.
                 logger.warning("REST load of %r still in progress (%s); waiting for it "
                                "instead of loading a second copy", cand, last_err)
-                if _wait_served(base_url, cand, timeout=_T_RELOAD):
+                if dep(ctx, "_wait_served", _wait_served)(base_url, cand, timeout=_T_RELOAD, ctx=ctx):
                     return True, f"loaded {cand} (slow load finished)"
                 return False, (f"{cand!r} did not finish loading within "
                                f"{_T_RELOAD + LOAD_SERVED_WAIT_S:.0f}s -- check LM Studio "
@@ -331,8 +332,8 @@ def load_model_exclusive(
         if gpu_offload_pct >= 0:
             cmd += ["--gpu", _gpu_arg(gpu_offload_pct)]
         try:
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=_T_RELOAD)
-            if r.returncode == 0 and not _wait_served(base_url, cand):
+            r = dep(ctx, "subprocess", subprocess).run(cmd, capture_output=True, text=True, timeout=_T_RELOAD)
+            if r.returncode == 0 and not dep(ctx, "_wait_served", _wait_served)(base_url, cand, ctx=ctx):
                 # The model crashed, `lms load` exited 0 in
                 # nine seconds, and the server then answered "Model reloaded."
                 # followed by "No models loaded" for the next minute. The
@@ -346,7 +347,7 @@ def load_model_exclusive(
                 if cand != model_id:
                     note = (f"✓ Loaded base GGUF '{cand}' for virtual '{model_id}' "
                             f"(LM Studio cannot load virtuals directly). "
-                            f"Runtime no-think {'ON' if virtual_requires_no_think(model_id) else 'as set'}.")
+                            f"Runtime no-think {'ON' if dep(ctx, "virtual_requires_no_think", virtual_requires_no_think)(model_id) else 'as set'}.")
                     logger.info(note)
                     return True, note
                 return True, (r.stdout or "OK").strip()
@@ -374,9 +375,9 @@ class _StillLoading(str):
     """A _rest_load failure that means "accepted, not finished yet"."""
 
 
-def _rest_load(base_url: str, model: str, context_length: int = 0) -> tuple:
+def _rest_load(base_url: str, model: str, context_length: int = 0, ctx=None) -> tuple:
     try:
-        r = requests.post(base_url.rstrip("/") + "/api/v1/models/load", json={
+        r = dep(ctx, "requests", requests).post(base_url.rstrip("/") + "/api/v1/models/load", json={
             "model": model,
             "context_length": context_length if context_length and context_length > 0 else MIN_CONTEXT_TOKENS,
             "parallel": DEFAULT_PARALLEL,
@@ -385,7 +386,7 @@ def _rest_load(base_url: str, model: str, context_length: int = 0) -> tuple:
         body = r.json() if r.content else {}
         if r.status_code != 200 or body.get("status") != "loaded":
             return False, str(body.get("error") or body or r.status_code)[:300]
-        if not _wait_served(base_url, model):
+        if not dep(ctx, "_wait_served", _wait_served)(base_url, model, ctx=ctx):
             return False, _StillLoading(f"{model!r} loaded but is not being served yet")
         cfg = body.get("load_config") or {}
         return True, (f"loaded {model} ctx={cfg.get('context_length')} "
@@ -400,18 +401,18 @@ def _rest_load(base_url: str, model: str, context_length: int = 0) -> tuple:
 LOAD_SERVED_WAIT_S = 30.0
 
 
-def _wait_served(base_url: str, model_id: str, timeout: float = None) -> bool:
+def _wait_served(base_url: str, model_id: str, timeout: float = None, ctx=None) -> bool:
     """True once LM Studio lists `model_id` as loaded, polling up to `timeout`."""
-    deadline = time.monotonic() + (LOAD_SERVED_WAIT_S if timeout is None else timeout)
+    deadline = dep(ctx, "time", time).monotonic() + (dep(ctx, "LOAD_SERVED_WAIT_S", LOAD_SERVED_WAIT_S) if timeout is None else timeout)
     while True:
         try:
-            if model_id in loaded_model_ids(base_url):
+            if model_id in dep(ctx, "loaded_model_ids", loaded_model_ids)(base_url, ctx=ctx):
                 return True
         except Exception:
             pass
-        if time.monotonic() >= deadline:
+        if dep(ctx, "time", time).monotonic() >= deadline:
             return False
-        time.sleep(1.0)
+        dep(ctx, "time", time).sleep(1.0)
 
 
 # One loader at a time, process-wide. A crash revive from
@@ -427,7 +428,7 @@ def ensure_exclusive(
     base_url: str,
     model_id: str,
     context_length: int = 0,
-    gpu_offload_pct: int = -1,
+    gpu_offload_pct: int = -1, ctx=None,
 ) -> tuple:
     """Make `model_id` the single loaded model. No-op if it already is.
 
@@ -445,28 +446,28 @@ def ensure_exclusive(
             return res
     with _ENSURE_LOCK:
         llama_backend.stop()        # an LM Studio model needs the card back
-        res = _ensure_exclusive_locked(base_url, model_id, context_length, gpu_offload_pct)
+        res = dep(ctx, "_ensure_exclusive_locked", _ensure_exclusive_locked)(base_url, model_id, context_length, gpu_offload_pct, ctx=ctx)
         # A real (re)load follows `lms unload --all` -- in free_gpu before a
         # render, or in load_model_exclusive itself -- which took BGE-M3 out
         # too, and the knowledge base then silently fell back to keywords.
         # Also on "already loaded": after an app restart the chat model survives
         # while BGE-M3 does not (night 2026-09-24). ensure_embedder throttles itself.
         if res[0]:
-            drop_phantoms(model_id)
+            dep(ctx, "drop_phantoms", drop_phantoms)(model_id, ctx=ctx)
             llama_backend.ensure_embedder()
         return res
 
 
-def drop_phantoms(model_id: str) -> list:
+def drop_phantoms(model_id: str, ctx=None) -> list:
     """Unload every "<id>:N" copy beside the real instance. A request that lands
     while the loader has the model unloaded makes LM Studio JIT-load its own
     copy, and the loader's copy then arrives as a second one (an
     app restart mid-revive left two 18 GB instances). Returns what it unloaded."""
     gone = []
-    for ident in loaded_instances(model_id):
+    for ident in dep(ctx, "loaded_instances", loaded_instances)(model_id, ctx=ctx):
         if ":" in ident and ident.rsplit(":", 1)[1].isdigit():
             try:
-                r = subprocess.run(["lms", "unload", ident], capture_output=True, text=True, timeout=60)
+                r = dep(ctx, "subprocess", subprocess).run(["lms", "unload", ident], capture_output=True, text=True, timeout=60)
                 if r.returncode == 0:
                     gone.append(ident)
                     logger.warning("unloaded phantom instance %s", ident)
@@ -475,11 +476,11 @@ def drop_phantoms(model_id: str) -> list:
     return gone
 
 
-def _ensure_exclusive_locked(base_url, model_id, context_length=0, gpu_offload_pct=-1) -> tuple:
-    loaded = loaded_model_ids(base_url)
+def _ensure_exclusive_locked(base_url, model_id, context_length=0, gpu_offload_pct=-1, ctx=None) -> tuple:
+    loaded = dep(ctx, "loaded_model_ids", loaded_model_ids)(base_url, ctx=ctx)
     # A virtual that LM Studio can't load programmatically is served under its base
     # raw key, so compare against the EFFECTIVE id to avoid a phantom-reload loop.
-    target = effective_model_id(base_url, model_id)
+    target = dep(ctx, "effective_model_id", effective_model_id)(base_url, model_id, ctx=ctx)
     # Membership, not exact list equality: an embedding/reranker model (e.g.
     # EMBED_MODEL served through the same LM Studio instance) is routinely
     # ALSO resident alongside the chat model, so `loaded` legitimately has more
@@ -496,7 +497,7 @@ def _ensure_exclusive_locked(base_url, model_id, context_length=0, gpu_offload_p
         # schemas, and the only symptom the user sees is the assistant claiming its
         # tools are unavailable. Reload rather than accept it.
         want = context_length or MIN_CONTEXT_TOKENS
-        have = loaded_context_length(base_url, active)
+        have = dep(ctx, "loaded_context_length", loaded_context_length)(base_url, active, ctx=ctx)
         # NOT a parallelism problem — that was measured and disproved: ONE
         # instance at 32768 with PARALLEL 4 serves two concurrent tool-bearing
         # requests fine. The context is per-instance, not divided between slots.
@@ -505,9 +506,9 @@ def _ensure_exclusive_locked(base_url, model_id, context_length=0, gpu_offload_p
                 "%s is loaded with only %d tokens of context; the agent's prompt "
                 "plus tool schemas needs ~%d. Reloading it at %d.",
                 active, have, want, want)
-            return load_model_exclusive(base_url, model_id, want, gpu_offload_pct)
+            return dep(ctx, "load_model_exclusive", load_model_exclusive)(base_url, model_id, want, gpu_offload_pct, ctx=ctx)
         return True, "already loaded"
-    return load_model_exclusive(base_url, model_id, context_length, gpu_offload_pct)
+    return dep(ctx, "load_model_exclusive", load_model_exclusive)(base_url, model_id, context_length, gpu_offload_pct, ctx=ctx)
 
 
 # ── CLI reload (context length + GPU offload) ─────────────────────────────────
@@ -520,7 +521,7 @@ def _gpu_arg(pct: int) -> str:
     return f"{pct / 100:.2f}"
 
 
-def loaded_instances(model_id: str = "") -> list:
+def loaded_instances(model_id: str = "", ctx=None) -> list:
     """Identifiers of every resident instance of `model_id`.
 
     LM Studio JIT-loads a SECOND copy ("<id>:2") at the model's default context
@@ -531,7 +532,7 @@ def loaded_instances(model_id: str = "") -> list:
     """
     out = []
     try:
-        r = subprocess.run(["lms", "ps"], capture_output=True, text=True,
+        r = dep(ctx, "subprocess", subprocess).run(["lms", "ps"], capture_output=True, text=True,
                            timeout=30)
         if r.returncode != 0:
             return out
@@ -545,7 +546,7 @@ def loaded_instances(model_id: str = "") -> list:
     return out
 
 
-def loaded_parallel(model_id: str = "") -> int:
+def loaded_parallel(model_id: str = "", ctx=None) -> int:
     """How many predictions the loaded model may run at once (1 if unknown).
 
     Diagnostic only. The obvious theory — that the context is divided between
@@ -556,7 +557,7 @@ def loaded_parallel(model_id: str = "") -> int:
     instance at the default 8192 (see `loaded_instances`).
     """
     try:
-        r = subprocess.run(["lms", "ps"], capture_output=True, text=True,
+        r = dep(ctx, "subprocess", subprocess).run(["lms", "ps"], capture_output=True, text=True,
                            timeout=30)
         if r.returncode != 0:
             return 1
@@ -577,7 +578,7 @@ def loaded_parallel(model_id: str = "") -> int:
 
 
 def reload_via_cli(model_id: str, context_length: int, gpu_offload_pct: int,
-                   parallel: int = 0) -> tuple:
+                   parallel: int = 0, ctx=None) -> tuple:
     """Use lms CLI: unload --all, then load with -c and --gpu.
     Returns (ok: bool, message: str).
 
@@ -587,15 +588,15 @@ def reload_via_cli(model_id: str, context_length: int, gpu_offload_pct: int,
     # Only guard the path that would really run: a suite that patched the unload
     # helper is testing this function's own logic, and the unload it "performs"
     # goes nowhere.
-    if _lms_unload_all is _REAL_UNLOAD_ALL:
-        blocked = _refuse_under_tests("reload the model via the CLI")
+    if dep(ctx, "_lms_unload_all", _lms_unload_all) is _REAL_UNLOAD_ALL:
+        blocked = _refuse_under_tests("reload the model via the CLI", ctx=ctx)
         if blocked:
             return blocked
-    ok, msg = _lms_unload_all()
+    ok, msg = dep(ctx, "_lms_unload_all", _lms_unload_all)(ctx=ctx)
     if not ok:
         return False, msg
 
-    time.sleep(1)  # brief pause between unload and load
+    dep(ctx, "time", time).sleep(1)  # brief pause between unload and load
 
     cmd = [
         "lms", "load", model_id,
@@ -605,7 +606,7 @@ def reload_via_cli(model_id: str, context_length: int, gpu_offload_pct: int,
     ]
     cmd += ["--parallel", str(int(parallel or DEFAULT_PARALLEL))]
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=_T_RELOAD)
+        r = dep(ctx, "subprocess", subprocess).run(cmd, capture_output=True, text=True, timeout=_T_RELOAD)
         if r.returncode == 0:
             return True, (r.stdout or "OK").strip()
         err = (r.stderr or r.stdout).strip()
@@ -634,7 +635,7 @@ _HEAL_COOLDOWN_S = _cfg_env.env_float("LM_HEAL_COOLDOWN_S", 90)
 _HEAL_MAX_ATTEMPTS = _cfg_env.env_int("LM_HEAL_MAX_ATTEMPTS", 5)
 
 
-def heal_context(model_id: str, needed_tokens: int) -> tuple:
+def heal_context(model_id: str, needed_tokens: int, ctx=None) -> tuple:
     """Reload `model_id` big enough to fit `needed_tokens`. (ok, message).
 
     Returns (False, reason) without touching anything if this exact repair has
@@ -660,19 +661,19 @@ def heal_context(model_id: str, needed_tokens: int) -> tuple:
     # is actually broken, but never more often than _HEAL_COOLDOWN_S and never
     # more than _HEAL_MAX_ATTEMPTS times per process, so a genuinely impossible
     # request cannot spin the GPU in a reload loop.
-    now = time.monotonic()
+    now = dep(ctx, "time", time).monotonic()
     with _heal_lock:
         last = _heal_state.get(model_id, (0.0, 0))
         since, attempts = now - last[0], last[1]
-        if last[0] and since < _HEAL_COOLDOWN_S:
+        if last[0] and since < dep(ctx, "_HEAL_COOLDOWN_S", _HEAL_COOLDOWN_S):
             return False, (f"a reload of {model_id} was attempted {since:.0f}s ago "
                            f"— waiting out the cooldown")
-        if attempts >= _HEAL_MAX_ATTEMPTS:
+        if attempts >= dep(ctx, "_HEAL_MAX_ATTEMPTS", _HEAL_MAX_ATTEMPTS):
             return False, (f"{model_id} has already been reloaded "
                            f"{attempts} times in this process — not trying again")
         _heal_state[model_id] = (now, attempts + 1)
 
-    extra = loaded_instances(model_id)
+    extra = dep(ctx, "loaded_instances", loaded_instances)(model_id, ctx=ctx)
     if len(extra) > 1:
         logger.warning("%d instances of %s are resident (%s) — requests land on "
                        "whichever, so an 8192 phantom breaks calls at random",
@@ -681,7 +682,7 @@ def heal_context(model_id: str, needed_tokens: int) -> tuple:
                    "tokens (attempt %d/%d)",
                    model_id, want, attempts + 1, _HEAL_MAX_ATTEMPTS)
     # reload_via_cli unloads EVERYTHING first, which is what clears the phantom.
-    ok, msg = reload_via_cli(model_id, want, -1)
+    ok, msg = dep(ctx, "reload_via_cli", reload_via_cli)(model_id, want, -1, ctx=ctx)
     if ok:
         logger.warning("Reloaded %s at %d tokens; retrying the call", model_id, want)
     else:
@@ -691,10 +692,10 @@ def heal_context(model_id: str, needed_tokens: int) -> tuple:
 
 # ── HTTP API reload (all fields, newer LM Studio versions) ────────────────────
 
-def _http_reload(base_url: str, model_id: str, config: dict) -> tuple:
+def _http_reload(base_url: str, model_id: str, config: dict, ctx=None) -> tuple:
     """Try HTTP POST /api/v0/models/{id}/load. Returns (ok, msg)."""
     try:
-        r = requests.post(
+        r = dep(ctx, "requests", requests).post(
             f"{base_url}/api/v0/models/{model_id}/load",
             json={"config": config},
             timeout=_T_RELOAD,
@@ -725,7 +726,7 @@ def reload_model_full(
     context_length: int,
     gpu_offload_pct: int,
     kv_quant: str,       # "auto" | "f16" | "q8_0" | "q4_0"
-    flash_attn: bool,
+    flash_attn: bool, ctx=None,
 ) -> ReloadResult:
     """
     Reload strategy:
@@ -738,13 +739,13 @@ def reload_model_full(
     needs_manual = _manual_fields(kv_quant, flash_attn)
 
     # ── attempt 1: lms CLI ──
-    cli_ok, cli_msg = reload_via_cli(model_id, context_length, gpu_offload_pct)
+    cli_ok, cli_msg = dep(ctx, "reload_via_cli", reload_via_cli)(model_id, context_length, gpu_offload_pct, ctx=ctx)
 
     if cli_ok:
         # Some lms versions return before the model is fully resident; wait so the
         # caller's refresh reads the real loaded_context_length, not a transient null.
-        wait_for_loaded(base_url, model_id, timeout=120.0)
-        actual = fetch_model(base_url, model_id).get("loaded_context_length")
+        dep(ctx, "wait_for_loaded", wait_for_loaded)(base_url, model_id, timeout=120.0, ctx=ctx)
+        actual = dep(ctx, "fetch_model", fetch_model)(base_url, model_id, ctx=ctx).get("loaded_context_length")
         if actual and int(actual) != int(context_length):
             cli_msg = (f"{cli_msg}\n⚠ Запрошено {context_length:,} токенов, "
                        f"но модель загрузилась с {int(actual):,} (возможно, ограничено моделью).")
@@ -756,7 +757,7 @@ def reload_model_full(
         if kv_quant != "auto":
             cfg["kvCacheQuantization"] = kv_quant
         cfg["flashAttention"] = flash_attn
-        http_ok, http_msg = _http_reload(base_url, model_id, cfg)
+        http_ok, http_msg = dep(ctx, "_http_reload", _http_reload)(base_url, model_id, cfg, ctx=ctx)
         if http_ok:
             return ReloadResult(True, "✓ Перезагружено (CLI + HTTP API).")
         # HTTP failed — model is loaded via CLI but without kv/fa
@@ -769,7 +770,7 @@ def reload_model_full(
 
     # ── attempt 2: HTTP API for everything ──
     cfg = build_config(context_length, kv_quant, gpu_offload_pct, flash_attn)
-    http_ok, http_msg = _http_reload(base_url, model_id, cfg)
+    http_ok, http_msg = dep(ctx, "_http_reload", _http_reload)(base_url, model_id, cfg, ctx=ctx)
     if http_ok:
         return ReloadResult(True, "✓ Перезагружено через HTTP API.")
 
@@ -824,13 +825,13 @@ def supported_fields(compatibility_type: str) -> set:
     return {"contextLength"}      # mlx, and anything unknown
 
 
-def wait_for_loaded(base_url: str, model_id: str, timeout: float = 120.0) -> bool:
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        m = fetch_model(base_url, model_id)
+def wait_for_loaded(base_url: str, model_id: str, timeout: float = 120.0, ctx=None) -> bool:
+    deadline = dep(ctx, "time", time).time() + timeout
+    while dep(ctx, "time", time).time() < deadline:
+        m = dep(ctx, "fetch_model", fetch_model)(base_url, model_id, ctx=ctx)
         if m.get("state") == "loaded":
             return True
-        time.sleep(2)
+        dep(ctx, "time", time).sleep(2)
     return False
 
 

@@ -17,6 +17,7 @@ except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
 
 import lmstudio as L
+from types import SimpleNamespace as NS
 
 OK = BAD = 0
 
@@ -33,22 +34,21 @@ MODEL = "test/model"
 reloads = []
 
 
-def fake_reload(model_id, ctx, gpu, parallel=0):
-    reloads.append((model_id, ctx, parallel))
+def fake_reload(model_id, tokens, gpu, parallel=0, ctx=None):
+    reloads.append((model_id, tokens, parallel))
     return True, "ok"
 
 
 def reset(cooldown=0.0, attempts=5):
+    """A fresh latch, and the context that hands heal_context a fake CLI reload and
+    the limits under test."""
+    global C
     reloads.clear()
     L._heal_state.clear()
-    L._HEAL_COOLDOWN_S = cooldown
-    L._HEAL_MAX_ATTEMPTS = attempts
+    C = NS(deps=NS(_HEAL_COOLDOWN_S=cooldown, _HEAL_MAX_ATTEMPTS=attempts,
+                   reload_via_cli=fake_reload,
+                   loaded_instances=lambda m="", ctx=None: [MODEL, MODEL + ":2"]))
 
-
-_real_reload = L.reload_via_cli
-_real_inst = L.loaded_instances
-L.reload_via_cli = fake_reload
-L.loaded_instances = lambda m="": [MODEL, MODEL + ":2"]
 
 try:
     # ── the fault comes back: a second heal at the SAME size must still run ──
@@ -56,8 +56,8 @@ try:
     print("THE HEAL MUST NOT LATCH OFF")
     print("=" * 66)
     reset(cooldown=0.0)
-    ok1, _ = L.heal_context(MODEL, 11073)
-    ok2, _ = L.heal_context(MODEL, 11073)      # the phantom reappeared
+    ok1, _ = L.heal_context(MODEL, 11073, ctx=C)
+    ok2, _ = L.heal_context(MODEL, 11073, ctx=C)      # the phantom reappeared
     check("the first repair runs", ok1)
     check("a LATER repair at the same size runs too", ok2)
     check("both reloads actually happened", len(reloads) == 2, reloads)
@@ -67,15 +67,15 @@ try:
     print("…AND MUST NOT SPIN")
     print("=" * 66)
     reset(cooldown=600.0)
-    ok1, _ = L.heal_context(MODEL, 11073)
-    ok2, msg = L.heal_context(MODEL, 11073)
+    ok1, _ = L.heal_context(MODEL, 11073, ctx=C)
+    ok2, msg = L.heal_context(MODEL, 11073, ctx=C)
     check("a repair inside the cooldown is refused", ok1 and not ok2, msg)
     check("only one reload was issued", len(reloads) == 1, reloads)
     check("the refusal explains the cooldown", "cooldown" in msg.lower(), msg)
 
     reset(cooldown=0.0, attempts=3)
     for _ in range(5):
-        L.heal_context(MODEL, 11073)
+        L.heal_context(MODEL, 11073, ctx=C)
     check("a permanently broken server stops after the attempt cap",
           len(reloads) == 3, reloads)
 
@@ -84,34 +84,27 @@ try:
     print("WHAT IT ASKS FOR")
     print("=" * 66)
     reset(cooldown=0.0)
-    L.loaded_parallel = lambda m="": 4
-    L.heal_context(MODEL, 11073)
-    model, ctx, parallel = reloads[0]
-    check("it asks for at least the needed tokens", ctx >= 11073 + 2048, ctx)
+    L.heal_context(MODEL, 11073, ctx=C)
+    model, tokens, parallel = reloads[0]
+    check("it asks for at least the needed tokens", tokens >= 11073 + 2048, tokens)
     check("it does NOT multiply the context by the parallel slot count",
-          ctx <= 65536, ctx)
+          tokens <= 65536, tokens)
     check("it reloads the model that failed", model == MODEL, model)
 
     # a bigger requirement must not be blocked by a smaller earlier repair
     reset(cooldown=0.0)
-    L.heal_context(MODEL, 11073)
-    L.heal_context(MODEL, 60000)
+    L.heal_context(MODEL, 11073, ctx=C)
+    L.heal_context(MODEL, 60000, ctx=C)
     check("a much larger requirement is honoured", len(reloads) == 2, reloads)
     check("…and asks for more than the first", reloads[1][1] > reloads[0][1],
           reloads)
 finally:
-    L.reload_via_cli = _real_reload
-    L.loaded_instances = _real_inst
-    L._HEAL_COOLDOWN_S = 90.0
-    L._HEAL_MAX_ATTEMPTS = 5
     L._heal_state.clear()
 
 # ── the phantom detector itself ─────────────────────────────────────────────
 print("=" * 66)
 print("PHANTOM DETECTION")
 print("=" * 66)
-import subprocess as _sp
-_real_run = _sp.run
 PS = ("IDENTIFIER                    MODEL      STATUS  SIZE     CONTEXT  PARALLEL\n"
       "test/model                    test/model IDLE    15.63 GB 8192     4\n"
       "test/model:2                  test/model IDLE    15.63 GB 32768    4\n")
@@ -123,15 +116,12 @@ class _R:
     stderr = ""
 
 
-_sp.run = lambda *a, **k: _R()
-try:
-    inst = L.loaded_instances("test/model")
-    check("both resident instances are seen",
-          set(inst) == {"test/model", "test/model:2"}, inst)
-    check("the parallel column is read", L.loaded_parallel("test/model") == 4,
-          L.loaded_parallel("test/model"))
-finally:
-    _sp.run = _real_run
+P = NS(deps=NS(subprocess=NS(run=lambda *a, **k: _R())))
+inst = L.loaded_instances("test/model", ctx=P)
+check("both resident instances are seen",
+      set(inst) == {"test/model", "test/model:2"}, inst)
+check("the parallel column is read", L.loaded_parallel("test/model", ctx=P) == 4,
+      L.loaded_parallel("test/model", ctx=P))
 
 print(f"\n{OK}/{OK + BAD} checks passed")
 sys.exit(1 if BAD else 0)

@@ -70,16 +70,16 @@ print("=" * 66)
 print("A WEDGED SERVER IS DETECTED, AND FAST")
 print("=" * 66)
 
-_real_get, _real_post = C.requests.get, C.requests.post
+import types
 wedged = WedgedServer()
-C.requests.get = wedged
+WEDGED = types.SimpleNamespace(get=wedged, post=wedged)   # the server, as the client is handed it
 reset_health()
 try:
     t0 = time.time()
-    healthy = C.server_healthy()
+    healthy = C.server_healthy(http=WEDGED)
     elapsed = time.time() - t0
 finally:
-    C.requests.get = _real_get
+    pass
 
 check("server_healthy() reports a wedged server as unhealthy", healthy is False)
 check("...and does so promptly, not after the submit read timeout",
@@ -90,18 +90,17 @@ print("=" * 66)
 print("THE PROBE IS CACHED (a job makes many calls)")
 print("=" * 66)
 
-C.requests.get = wedged
 reset_health()
 try:
-    C.server_healthy()
+    C.server_healthy(http=WEDGED)
     after_first = wedged.calls
     for _ in range(5):
-        C.server_healthy()
+        C.server_healthy(http=WEDGED)
     after_more = wedged.calls
-    forced = C.server_healthy(force=True)
+    forced = C.server_healthy(force=True, http=WEDGED)
     after_forced = wedged.calls
 finally:
-    C.requests.get = _real_get
+    pass
 
 check("five further probes inside the TTL cost zero extra requests",
       after_more == after_first, f"{after_first} -> {after_more}")
@@ -118,20 +117,16 @@ class _CountingSlot:
     def __enter__(self): slot_taken["n"] += 1; return self
     def __exit__(self, *a): return False
 
-_real_slot = C._gpu_slot
-C._gpu_slot = lambda *a, **kw: _CountingSlot()
-C.requests.get = wedged
-C.requests.post = wedged
+_W = types.SimpleNamespace(deps=types.SimpleNamespace(requests=WEDGED, _gpu_slot=lambda *a, **kw: _CountingSlot()))
 reset_health()
 try:
     t0 = time.time()
-    result = C._submit_and_poll(None, {"1": {}}, timeout=1900, label="draw")
+    result = C._submit_and_poll(_W, {"1": {}}, timeout=1900, label="draw")
     elapsed = time.time() - t0
     reset_health()
-    result2 = C._submit_and_collect(None, {"1": {}}, timeout=1900, label="draw")
+    result2 = C._submit_and_collect(_W, {"1": {}}, timeout=1900, label="draw")
 finally:
-    C.requests.get, C.requests.post = _real_get, _real_post
-    C._gpu_slot = _real_slot
+    pass
 
 check("_submit_and_poll returns None against a wedged server", result is None)
 check("_submit_and_collect returns None too", result2 is None)

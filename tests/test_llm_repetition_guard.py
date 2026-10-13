@@ -65,12 +65,8 @@ class _FakeResp:
 def _stream(channel, chunks):
     """Run _stream_chat against a fake stream; return (chunks_read, message)."""
     counter = {"n": 0}
-    orig = llm.requests.post
-    llm.requests.post = lambda *a, **k: _FakeResp(channel, chunks, counter)
-    try:
-        msg = llm._stream_chat(None, {"messages": []})
-    finally:
-        llm.requests.post = orig
+    from fakes import posting
+    msg = llm._stream_chat(posting(lambda *a, **k: _FakeResp(channel, chunks, counter)), {"messages": []})
     return counter["n"], msg
 
 

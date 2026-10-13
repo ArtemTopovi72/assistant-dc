@@ -105,8 +105,9 @@ def _fit_markup(markup):
         return markup
 
 
-def _logged_post(url, **kw):
-    """requests.post, with the message copied into the chat's full transcript."""
+def _logged_post(url, http=None, **kw):
+    """`http.post` (requests unless the bot hands in another), with the message copied
+    into the chat's full transcript."""
     payload = kw.get("json") if kw.get("json") is not None else kw.get("data")
     if isinstance(payload, dict) and payload.get("reply_markup"):
         payload["reply_markup"] = _fit_markup(payload["reply_markup"])
@@ -122,7 +123,7 @@ def _logged_post(url, **kw):
         import debug_user
         if debug_user.is_debug(payload.get("chat_id")):
             return debug_user.record(url, kw)
-    return requests.post(url, **kw)
+    return (http or requests).post(url, **kw)
 
 
 import config as _config
@@ -177,7 +178,7 @@ class TransportMixin:
             if os.path.isabs(fp) and os.path.exists(fp):
                 with open(fp, "rb") as fh:
                     return fh.read(), fp
-            r2 = requests.get(
+            r2 = self.http.get(
                 f"{_config.TG_API_BASE}/file/bot{self.token}/{fp}",
                 timeout=tg_bot._DOWNLOAD_TIMEOUT)
             return (r2.content if r2.status_code == 200 else None), fp
@@ -306,7 +307,7 @@ class TransportMixin:
             tries += 1
             try:
                 if by_uri:
-                    r = _logged_post(f"{self._api}/sendDocument",
+                    r = _logged_post(http=self.http, url=f"{self._api}/sendDocument",
                                       data={**data, "document": Path(path).resolve().as_uri()},
                                       timeout=600)
                     if r.status_code == 400 and _uri_not_readable(r.text):
@@ -321,7 +322,7 @@ class TransportMixin:
                         continue
                 else:
                     with open(path, "rb") as fh:
-                        r = _logged_post(f"{self._api}/sendDocument",
+                        r = _logged_post(http=self.http, url=f"{self._api}/sendDocument",
                                           data=data, files={"document": fh}, timeout=600)
                 if r.status_code == 200:
                     self._log_artifact(chat_id, "document", _orig, caption)
@@ -367,7 +368,7 @@ class TransportMixin:
             tries += 1
             try:
                 with open(path, "rb") as fh:
-                    r = _logged_post(f"{self._api}/sendAudio",
+                    r = _logged_post(http=self.http, url=f"{self._api}/sendAudio",
                                       data=data, files={"audio": fh}, timeout=180)
                 if r.status_code == 200:
                     self._log_artifact(chat_id, "music", _orig, caption)
@@ -455,7 +456,7 @@ class TransportMixin:
                         tfh = open(thumb_path, "rb")
                         fhs.append(tfh)
                         files["thumbnail"] = tfh
-                    r = _logged_post(f"{self._api}/sendVideo", data=data,
+                    r = _logged_post(http=self.http, url=f"{self._api}/sendVideo", data=data,
                                       files=files, timeout=600)
                     if r.status_code == 200:
                         # Log the ORIGINAL render, not send_path: a re-encoded
@@ -601,7 +602,7 @@ class TransportMixin:
         for attempt in range(tg_bot._API_RETRIES):
             try:
                 with open(send_path, "rb") as fh:
-                    r = _logged_post(f"{self._api}/sendPhoto",
+                    r = _logged_post(http=self.http, url=f"{self._api}/sendPhoto",
                                       data=data, files={"photo": fh}, timeout=120)
                 if r.status_code == 200:
                     # Remember WHICH message this picture became: a Telegram reply
@@ -624,7 +625,7 @@ class TransportMixin:
         tg_bot.logger.warning("sendPhoto failed; falling back to sendDocument for %s", path)
         try:
             with open(path, "rb") as fh:
-                r = _logged_post(f"{self._api}/sendDocument",
+                r = _logged_post(http=self.http, url=f"{self._api}/sendDocument",
                                   data=data, files={"document": fh}, timeout=180)
             if r.status_code == 200:
                 tg_bot.logger.info("sendDocument fallback succeeded for %s", path)
@@ -675,7 +676,7 @@ class TransportMixin:
             for attempt in range(tg_bot._API_RETRIES):
                 try:
                     with open(ogg_path, "rb") as fh:
-                        r = _logged_post(f"{self._api}/sendVoice",
+                        r = _logged_post(http=self.http, url=f"{self._api}/sendVoice",
                                           data=data,
                                           files={"voice": ("voice.ogg", fh, "audio/ogg")},
                                           timeout=120)
@@ -754,7 +755,7 @@ class TransportMixin:
             for attempt in range(tg_bot._API_RETRIES):
                 try:
                     with open(ogg_path, "rb") as fh:
-                        r = _logged_post(
+                        r = _logged_post(http=self.http, url=
                             f"{self._api}/sendVoice",
                             data={"chat_id": chat_id},
                             files={"voice": ("voice.ogg", fh, "audio/ogg")},
@@ -785,7 +786,7 @@ class TransportMixin:
         url = f"{self._api}/{method}"
         for attempt in range(tg_bot._API_RETRIES):
             try:
-                r = _logged_post(url, json=payload or {},
+                r = _logged_post(http=self.http, url=url, json=payload or {},
                                   timeout=tg_bot._API_TIMEOUT, **kw)
                 body = r.json()
                 if r.status_code == 429:
@@ -802,7 +803,7 @@ class TransportMixin:
         url = f"{self._api}/{method}"
         for attempt in range(tg_bot._API_RETRIES):
             try:
-                r = requests.get(url, params=params or {}, timeout=tg_bot._API_TIMEOUT)
+                r = self.http.get(url, params=params or {}, timeout=tg_bot._API_TIMEOUT)
                 if r.status_code == 429:
                     body = r.json()
                     retry_after = (body.get("parameters") or {}).get("retry_after", 30)

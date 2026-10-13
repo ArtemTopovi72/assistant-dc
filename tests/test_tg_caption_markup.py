@@ -128,7 +128,7 @@ print("=" * 70)
 print("5. A rejected caption never costs the user the FILE")
 print("=" * 70)
 # Drive the real _send_document against a fake Telegram that rejects any HTML
-# caption. Nothing here touches the network: only requests.post is replaced.
+# caption. Nothing here touches the network: the bot is handed a fake http client.
 
 class _FakeTG:
     def __init__(self, limit_reject=True):
@@ -146,15 +146,13 @@ bot._api = "http://127.0.0.1:0/botTEST"
 doc = os.path.join(tempfile.mkdtemp(prefix="capdoc_"), "report.md")
 open(doc, "w", encoding="utf-8").write("# report\n")
 
-_real_post = T.requests.post
 fake = _FakeTG()
-T.requests.post = fake.post
+bot.http = fake
 _real_sleep = T.time.sleep
 T.time.sleep = lambda *_a, **_k: None
 try:
     sent = bot._send_document(123, doc, caption="<b>Отчёт</b> " + "x" * 2000)
 finally:
-    T.requests.post = _real_post
     T.time.sleep = _real_sleep
 
 check("the document was delivered despite the caption rejection", sent, sent)
@@ -184,12 +182,11 @@ for label, sender, kwargs in (
         ("sendDocument", lambda **kw: bot._send_document(123, doc, **kw), {}),
 ):
     accept = _FakeTG(limit_reject=False)          # accept everything: inspect the body
-    T.requests.post = accept.post
+    bot.http = accept
     T.time.sleep = lambda *_a, **_k: None
     try:
         sender(caption=hostile, **kwargs)
     finally:
-        T.requests.post = _real_post
         T.time.sleep = _real_sleep
     wire = (accept.calls[0].get("caption") or "") if accept.calls else ""
     check(f"{label}: caption within the limit", len(wire) <= LIMIT, len(wire))
@@ -208,12 +205,11 @@ class _Blocked(_FakeTG):
         return _R(403, "Forbidden: bot was blocked by the user")
 
 blocked = _Blocked()
-T.requests.post = blocked.post
+bot.http = blocked
 T.time.sleep = lambda *_a, **_k: None
 try:
     sent2 = bot._send_document(123, doc, caption="<b>hi</b>")
 finally:
-    T.requests.post = _real_post
     T.time.sleep = _real_sleep
 check("a blocked bot is reported as failure", not sent2, sent2)
 check("...and it stopped at the normal retry budget",

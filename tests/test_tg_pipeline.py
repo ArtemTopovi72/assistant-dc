@@ -455,36 +455,33 @@ def _poll_once(b):
 class _R:
     def __init__(self, payload): self._p = payload
     def json(self): return self._p
-import requests as _rq
-_real_get = _rq.get
-_rq.get = lambda url, **k: (calls.append(k.get("params")),
-                            _R({"ok": True, "result": [{"update_id": 41}, {"update_id": 42}]}))[1]
-try:
-    got = _poll_once(bot17)
-finally:
-    _rq.get = _real_get
+import types as _types
+
+
+def _telegram(reply):
+    """The Bot API as the bot's own http client sees it: every getUpdates answers `reply`."""
+    return _types.SimpleNamespace(get=lambda url, **k: (calls.append(k.get("params")), _R(reply))[1])
+
+
+bot17.http = _telegram({"ok": True, "result": [{"update_id": 41}, {"update_id": 42}]})
+got = _poll_once(bot17)
 check("every update in the batch is returned", len(got) == 2)
 check("the offset advances past the last update", bot17._offset == 43,
       str(bot17._offset))
 check("the offset is persisted immediately", bot17._load_offset() == 43,
       str(bot17._load_offset()))
 
-_rq.get = lambda url, **k: _R({"ok": True, "result": []})
-try:
-    _poll_once(bot17)
-finally:
-    _rq.get = _real_get
+bot17.http = _telegram({"ok": True, "result": []})
+_poll_once(bot17)
 check("an empty poll does not rewind the offset", bot17._offset == 43)
 
 # 409 (second instance) / 401 come back instantly: [] here was a tight loop
 # the watchdog read as healthy. It must raise so the poll loop backs off.
-_rq.get = lambda url, **k: _R({"ok": False, "error_code": 409, "description": "Conflict"})
+bot17.http = _telegram({"ok": False, "error_code": 409, "description": "Conflict"})
 try:
     _poll_once(bot17); _raised = False
 except RuntimeError:
     _raised = True
-finally:
-    _rq.get = _real_get
 check("a not-ok getUpdates raises (poll loop backs off)", _raised)
 check("and does not move the offset", bot17._offset == 43)
 

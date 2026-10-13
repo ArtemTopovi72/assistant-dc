@@ -15,12 +15,13 @@ print("PASS reply mode")
 
 # every send inside a task is a reply to the request
 sent = []
-tg_transport.requests.post = lambda url, **kw: sent.append((url, kw)) or type("R", (), {"json": lambda self: {}, "status_code": 200})()
+_tg = __import__("types").SimpleNamespace(
+    post=lambda url, **kw: sent.append((url, kw)) or type("R", (), {"json": lambda self: {}, "status_code": 200})())
 with tg_transport.replying_to(5, 77):
-    tg_transport._logged_post("x/sendMessage", json={"chat_id": 5, "text": "hi"})
-    tg_transport._logged_post("x/sendVoice", data={"chat_id": 5}, files={})
-    tg_transport._logged_post("x/sendMessage", json={"chat_id": 6, "text": "other chat"})
-tg_transport._logged_post("x/sendMessage", json={"chat_id": 5, "text": "after"})
+    tg_transport._logged_post(http=_tg, url="x/sendMessage", json={"chat_id": 5, "text": "hi"})
+    tg_transport._logged_post(http=_tg, url="x/sendVoice", data={"chat_id": 5}, files={})
+    tg_transport._logged_post(http=_tg, url="x/sendMessage", json={"chat_id": 6, "text": "other chat"})
+tg_transport._logged_post(http=_tg, url="x/sendMessage", json={"chat_id": 5, "text": "after"})
 rp = [kw.get("json", kw.get("data")).get("reply_parameters") for _, kw in sent]
 assert rp[0]["message_id"] == 77 and json.loads(rp[1])["message_id"] == 77 and rp[2] is None and rp[3] is None, rp
 print("PASS replies threaded")

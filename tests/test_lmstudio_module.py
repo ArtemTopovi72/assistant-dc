@@ -6,7 +6,7 @@ loaded_model_ids — safe, no state change) and stubs `subprocess.run` for every
 those are never executed for real).
 Run: venv/Scripts/python.exe tests/test_lmstudio_module.py
 """
-import os, sys, tempfile, types
+import inspect, os, sys, tempfile, types
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
@@ -26,17 +26,27 @@ def check(name, cond, detail=""):
 _TMP = Path(tempfile.mkdtemp(prefix="lmstudio_"))
 
 
+def _refused(*a, **k):
+    import requests
+    raise requests.exceptions.ConnectionError("no network in this suite")
+
+
+# "http://x" went to DNS, which can hang for a minute.
+_NO_NETWORK = types.SimpleNamespace(get=_refused, post=_refused)
+
+
 class _Patches:
+    """A context handing lmstudio its dependencies; fakes written without a ctx
+    parameter are wrapped so the ctx= lmstudio passes on is dropped."""
     def __init__(self, **kw):
-        self.kw = kw; self.orig = {}
+        def bare(v):
+            return (lambda *a, ctx=None, **k: v(*a, **k)) if inspect.isfunction(v) else v
+        kw.setdefault("requests", _NO_NETWORK)
+        self.deps = types.SimpleNamespace(**{k: bare(v) for k, v in kw.items()})
     def __enter__(self):
-        for k, v in self.kw.items():
-            self.orig[k] = getattr(L, k)
-            setattr(L, k, v)
         return self
     def __exit__(self, *a):
-        for k, v in self.orig.items():
-            setattr(L, k, v)
+        pass
 
 
 class FakeRun:
@@ -103,18 +113,18 @@ def test_virtual_yaml_path_and_parse():
 
 
 def test_base_to_raw_key():
-    with _Patches(fetch_models=lambda base_url: [{"id": "folder@q8_0"}, {"id": "other@q4_0"}]):
-        key, quant = L._base_to_raw_key("http://x", "Pub/Folder/Folder-Q8_0.gguf")
+    with _Patches(fetch_models=lambda base_url: [{"id": "folder@q8_0"}, {"id": "other@q4_0"}]) as _c:
+        key, quant = L._base_to_raw_key("http://x", "Pub/Folder/Folder-Q8_0.gguf", ctx=_c)
         check("base_to_raw_key_derived_match", key == "folder@q8_0" and quant == "q8_0")
-    with _Patches(fetch_models=lambda base_url: [{"id": "folder@q4_k_m"}]):
-        key2, quant2 = L._base_to_raw_key("http://x", "Pub/Folder/Folder-Q8_0.gguf")
+    with _Patches(fetch_models=lambda base_url: [{"id": "folder@q4_k_m"}]) as _c:
+        key2, quant2 = L._base_to_raw_key("http://x", "Pub/Folder/Folder-Q8_0.gguf", ctx=_c)
         check("base_to_raw_key_catalog_fallback_match", key2 == "folder@q4_k_m")
-    with _Patches(fetch_models=lambda base_url: []):
-        key3, quant3 = L._base_to_raw_key("http://x", "Pub/Folder/Folder-Q8_0.gguf")
+    with _Patches(fetch_models=lambda base_url: []) as _c:
+        key3, quant3 = L._base_to_raw_key("http://x", "Pub/Folder/Folder-Q8_0.gguf", ctx=_c)
         check("base_to_raw_key_no_catalog_uses_derivation", key3 == "folder@q8_0")
     check("base_to_raw_key_empty_base_none", L._base_to_raw_key("http://x", "") == (None, None))
-    with _Patches(fetch_models=lambda base_url: []):
-        key4, quant4 = L._base_to_raw_key("http://x", "Pub/NoQuantFolder/NoQuantFolder.gguf")
+    with _Patches(fetch_models=lambda base_url: []) as _c:
+        key4, quant4 = L._base_to_raw_key("http://x", "Pub/NoQuantFolder/NoQuantFolder.gguf", ctx=_c)
         check("base_to_raw_key_no_quant_suffix", quant4 == "" and key4 == "noquantfolder")
 
 
@@ -124,27 +134,27 @@ def test_resolve_virtual_model():
 
     with _Patches(_virtual_yaml_path=lambda mid: _TMP / "model.yaml",
                   _parse_virtual_yaml=lambda p: {"base": "Pub/F/F-Q8_0.gguf", "reasoning": False, "enable_thinking": None},
-                  fetch_models=lambda base_url: [{"id": "f@q8_0"}]):
-        raw, no_think = L.resolve_virtual_model("http://x", "Pub/Virtual")
+                  fetch_models=lambda base_url: [{"id": "f@q8_0"}]) as _c:
+        raw, no_think = L.resolve_virtual_model("http://x", "Pub/Virtual", ctx=_c)
         check("resolve_virtual_success", raw == "f@q8_0" and no_think is True)
         check("virtual_requires_no_think_true", L.virtual_requires_no_think("Pub/Virtual"))
 
     with _Patches(_virtual_yaml_path=lambda mid: _TMP / "model.yaml",
-                  _parse_virtual_yaml=lambda p: (_ for _ in ()).throw(RuntimeError("boom"))):
-        check("resolve_virtual_parse_exception_none", L.resolve_virtual_model("http://x", "Pub/Virtual2") == (None, False))
+                  _parse_virtual_yaml=lambda p: (_ for _ in ()).throw(RuntimeError("boom"))) as _c:
+        check("resolve_virtual_parse_exception_none", L.resolve_virtual_model("http://x", "Pub/Virtual2", ctx=_c) == (None, False))
 
     with _Patches(_virtual_yaml_path=lambda mid: _TMP / "model.yaml",
-                  _parse_virtual_yaml=lambda p: {"base": "", "reasoning": None, "enable_thinking": None}):
-        check("resolve_virtual_no_raw_key_none", L.resolve_virtual_model("http://x", "Pub/Virtual3") == (None, False))
+                  _parse_virtual_yaml=lambda p: {"base": "", "reasoning": None, "enable_thinking": None}) as _c:
+        check("resolve_virtual_no_raw_key_none", L.resolve_virtual_model("http://x", "Pub/Virtual3", ctx=_c) == (None, False))
 
     check("virtual_requires_no_think_unknown_false", not L.virtual_requires_no_think("never-resolved"))
 
 
 def test_effective_model_id():
-    with _Patches(resolve_virtual_model=lambda base_url, mid: ("raw@q8", True)):
-        check("effective_model_id_uses_raw", L.effective_model_id("http://x", "virt") == "raw@q8")
-    with _Patches(resolve_virtual_model=lambda base_url, mid: (None, False)):
-        check("effective_model_id_passthrough", L.effective_model_id("http://x", "plain") == "plain")
+    with _Patches(resolve_virtual_model=lambda base_url, mid: ("raw@q8", True)) as _c:
+        check("effective_model_id_uses_raw", L.effective_model_id("http://x", "virt", ctx=_c) == "raw@q8")
+    with _Patches(resolve_virtual_model=lambda base_url, mid: (None, False)) as _c:
+        check("effective_model_id_passthrough", L.effective_model_id("http://x", "plain", ctx=_c) == "plain")
 
 
 def test_fetch_models_real_and_failure():
@@ -165,9 +175,10 @@ def test_fetch_model_real_and_fallback():
     out2 = L.fetch_model(LM_STUDIO_BASE, "definitely-nonexistent-model-xyz")
     check("fetch_model_not_found_empty", out2 == {})
 
-    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))):
-        with _Patches(fetch_models=lambda base_url: [{"id": "m1"}]):
-            out3 = L.fetch_model("http://x", "m1")
+    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom"))),
+                  fetch_models=lambda base_url: [{"id": "m1"}]) as _c:
+        if True:
+            out3 = L.fetch_model("http://x", "m1", ctx=_c)
             check("fetch_model_http_fails_falls_back_to_list", out3 == {"id": "m1"})
 
 
@@ -177,23 +188,23 @@ def test_loaded_model_ids_real():
 
 
 def test_lms_unload_all():
-    with _Patches(subprocess=FakeSubprocess(FakeRun(returncode=0))):
-        ok, msg = L._lms_unload_all()
+    with _Patches(subprocess=FakeSubprocess(FakeRun(returncode=0))) as _c:
+        ok, msg = L._lms_unload_all(ctx=_c)
         check("lms_unload_all_success", ok is True)
-    with _Patches(subprocess=FakeSubprocess(FakeRun(returncode=1, stderr="failed"))):
-        ok2, msg2 = L._lms_unload_all()
+    with _Patches(subprocess=FakeSubprocess(FakeRun(returncode=1, stderr="failed"))) as _c:
+        ok2, msg2 = L._lms_unload_all(ctx=_c)
         check("lms_unload_all_failure", ok2 is False and "failed" in msg2)
-    with _Patches(subprocess=FakeSubprocess(FakeRun(raises=FileNotFoundError()))):
-        ok3, msg3 = L._lms_unload_all()
+    with _Patches(subprocess=FakeSubprocess(FakeRun(raises=FileNotFoundError()))) as _c:
+        ok3, msg3 = L._lms_unload_all(ctx=_c)
         check("lms_unload_all_not_found", ok3 is False)
-    with _Patches(subprocess=FakeSubprocess(FakeRun(raises=RuntimeError("boom")))):
-        ok4, msg4 = L._lms_unload_all()
+    with _Patches(subprocess=FakeSubprocess(FakeRun(raises=RuntimeError("boom")))) as _c:
+        ok4, msg4 = L._lms_unload_all(ctx=_c)
         check("lms_unload_all_generic_exception", ok4 is False and "boom" in msg4)
 
 
 def test_load_model_exclusive():
-    with _Patches(subprocess=FakeSubprocess(FakeRun(returncode=1, stderr="unload fail"))):
-        ok, msg = L.load_model_exclusive("http://x", "m1")
+    with _Patches(subprocess=FakeSubprocess(FakeRun(returncode=1, stderr="unload fail"))) as _c:
+        ok, msg = L.load_model_exclusive("http://x", "m1", ctx=_c)
         check("load_model_exclusive_unload_fails", ok is False)
 
     # exit 0 alone is no longer success: the loader confirms the model is
@@ -201,15 +212,15 @@ def test_load_model_exclusive():
     with _Patches(_lms_unload_all=lambda: (True, "ok"),
                   resolve_virtual_model=lambda base_url, mid: (None, False),
                   _wait_served=lambda base_url, mid, timeout=None: True,
-                  subprocess=FakeSubprocess(FakeRun(returncode=0, stdout="loaded"))):
-        ok2, msg2 = L.load_model_exclusive("http://x", "m1", context_length=4096, gpu_offload_pct=50)
+                  subprocess=FakeSubprocess(FakeRun(returncode=0, stdout="loaded"))) as _c:
+        ok2, msg2 = L.load_model_exclusive("http://x", "m1", context_length=4096, gpu_offload_pct=50, ctx=_c)
         check("load_model_exclusive_success", ok2 is True)
 
     with _Patches(_lms_unload_all=lambda: (True, "ok"),
                   resolve_virtual_model=lambda base_url, mid: ("raw@q8", True),
-                  subprocess=FakeSubprocess(FakeRun(returncode=1, stderr="fail"))):
+                  subprocess=FakeSubprocess(FakeRun(returncode=1, stderr="fail"))) as _c:
         # both candidates fail
-        ok3, msg3 = L.load_model_exclusive("http://x", "virt")
+        ok3, msg3 = L.load_model_exclusive("http://x", "virt", ctx=_c)
         check("load_model_exclusive_both_candidates_fail", ok3 is False)
 
     calls = {"n": 0}
@@ -221,33 +232,33 @@ def test_load_model_exclusive():
     with _Patches(_lms_unload_all=lambda: (True, "ok"),
                   resolve_virtual_model=lambda base_url, mid: ("raw@q8", True),
                   _wait_served=lambda base_url, mid, timeout=None: True,
-                  subprocess=types.SimpleNamespace(run=scripted_run)):
-        ok4, msg4 = L.load_model_exclusive("http://x", "virt")
+                  subprocess=types.SimpleNamespace(run=scripted_run)) as _c:
+        ok4, msg4 = L.load_model_exclusive("http://x", "virt", ctx=_c)
         check("load_model_exclusive_fallback_candidate_succeeds", ok4 is True and "virt" in msg4)
 
     import subprocess as _sp
     with _Patches(_lms_unload_all=lambda: (True, "ok"),
                   resolve_virtual_model=lambda base_url, mid: (None, False),
-                  subprocess=FakeSubprocess(FakeRun(raises=_sp.TimeoutExpired(cmd="lms", timeout=1)))):
-        ok5, msg5 = L.load_model_exclusive("http://x", "m1")
+                  subprocess=FakeSubprocess(FakeRun(raises=_sp.TimeoutExpired(cmd="lms", timeout=1)))) as _c:
+        ok5, msg5 = L.load_model_exclusive("http://x", "m1", ctx=_c)
         check("load_model_exclusive_timeout", ok5 is False and "Timeout" in msg5)
 
     with _Patches(_lms_unload_all=lambda: (True, "ok"),
                   resolve_virtual_model=lambda base_url, mid: (None, False),
-                  subprocess=FakeSubprocess(FakeRun(raises=RuntimeError("weird")))):
-        ok6, msg6 = L.load_model_exclusive("http://x", "m1")
+                  subprocess=FakeSubprocess(FakeRun(raises=RuntimeError("weird")))) as _c:
+        ok6, msg6 = L.load_model_exclusive("http://x", "m1", ctx=_c)
         check("load_model_exclusive_generic_exception", ok6 is False)
 
 
 def test_ensure_exclusive():
     with _Patches(loaded_model_ids=lambda base_url: ["m1"],
-                  effective_model_id=lambda base_url, mid: "m1"):
-        ok, msg = L.ensure_exclusive("http://x", "m1")
+                  effective_model_id=lambda base_url, mid: "m1") as _c:
+        ok, msg = L.ensure_exclusive("http://x", "m1", ctx=_c)
         check("ensure_exclusive_already_loaded", ok is True and msg == "already loaded")
     with _Patches(loaded_model_ids=lambda base_url: ["m1"],
                   effective_model_id=lambda base_url, mid: "m2",
-                  load_model_exclusive=lambda *a, **k: (True, "loaded fresh")):
-        ok2, msg2 = L.ensure_exclusive("http://x", "m2")
+                  load_model_exclusive=lambda *a, **k: (True, "loaded fresh")) as _c:
+        ok2, msg2 = L.ensure_exclusive("http://x", "m2", ctx=_c)
         check("ensure_exclusive_loads_when_different", ok2 is True and msg2 == "loaded fresh")
     # An embedding/reranker model (EMBED_MODEL, served through the same LM
     # Studio instance) is routinely ALSO resident alongside the chat model --
@@ -256,8 +267,8 @@ def test_ensure_exclusive():
     # be recognized as a no-op instead of unloading everything and reloading.
     with _Patches(loaded_model_ids=lambda base_url: ["m1", "text-embedding-bge-m3"],
                   effective_model_id=lambda base_url, mid: "m1",
-                  load_model_exclusive=lambda *a, **k: (True, "should not be called")):
-        ok3, msg3 = L.ensure_exclusive("http://x", "m1")
+                  load_model_exclusive=lambda *a, **k: (True, "should not be called")) as _c:
+        ok3, msg3 = L.ensure_exclusive("http://x", "m1", ctx=_c)
         check("ensure_exclusive_already_loaded_alongside_other_model",
               ok3 is True and msg3 == "already loaded")
 
@@ -270,25 +281,25 @@ def test_gpu_arg():
 
 
 def test_reload_via_cli():
-    with _Patches(_lms_unload_all=lambda: (False, "unload failed")):
-        ok, msg = L.reload_via_cli("m1", 4096, 50)
+    with _Patches(_lms_unload_all=lambda: (False, "unload failed")) as _c:
+        ok, msg = L.reload_via_cli("m1", 4096, 50, ctx=_c)
         check("reload_via_cli_unload_fails", ok is False and msg == "unload failed")
     with _Patches(_lms_unload_all=lambda: (True, "ok"),
-                  subprocess=FakeSubprocess(FakeRun(returncode=0, stdout="loaded"))):
-        ok2, msg2 = L.reload_via_cli("m1", 4096, 50)
+                  subprocess=FakeSubprocess(FakeRun(returncode=0, stdout="loaded"))) as _c:
+        ok2, msg2 = L.reload_via_cli("m1", 4096, 50, ctx=_c)
         check("reload_via_cli_success", ok2 is True)
     with _Patches(_lms_unload_all=lambda: (True, "ok"),
-                  subprocess=FakeSubprocess(FakeRun(returncode=1, stderr="load fail"))):
-        ok3, msg3 = L.reload_via_cli("m1", 4096, 50)
+                  subprocess=FakeSubprocess(FakeRun(returncode=1, stderr="load fail"))) as _c:
+        ok3, msg3 = L.reload_via_cli("m1", 4096, 50, ctx=_c)
         check("reload_via_cli_load_fails", ok3 is False)
     import subprocess as _sp
     with _Patches(_lms_unload_all=lambda: (True, "ok"),
-                  subprocess=FakeSubprocess(FakeRun(raises=_sp.TimeoutExpired(cmd="lms", timeout=1)))):
-        ok4, msg4 = L.reload_via_cli("m1", 4096, 50)
+                  subprocess=FakeSubprocess(FakeRun(raises=_sp.TimeoutExpired(cmd="lms", timeout=1)))) as _c:
+        ok4, msg4 = L.reload_via_cli("m1", 4096, 50, ctx=_c)
         check("reload_via_cli_timeout", ok4 is False and "Timeout" in msg4)
     with _Patches(_lms_unload_all=lambda: (True, "ok"),
-                  subprocess=FakeSubprocess(FakeRun(raises=RuntimeError("weird")))):
-        ok5, msg5 = L.reload_via_cli("m1", 4096, 50)
+                  subprocess=FakeSubprocess(FakeRun(raises=RuntimeError("weird")))) as _c:
+        ok5, msg5 = L.reload_via_cli("m1", 4096, 50, ctx=_c)
         check("reload_via_cli_generic_exception", ok5 is False)
 
 
@@ -299,55 +310,55 @@ def test_http_reload():
             self._body = body or {}
         def json(self):
             return self._body
-    with _Patches(requests=types.SimpleNamespace(post=lambda *a, **k: FakeResp(ok=True))):
-        ok, msg = L._http_reload("http://x", "m1", {})
+    with _Patches(requests=types.SimpleNamespace(post=lambda *a, **k: FakeResp(ok=True))) as _c:
+        ok, msg = L._http_reload("http://x", "m1", {}, ctx=_c)
         check("http_reload_success", ok is True and msg == "OK")
-    with _Patches(requests=types.SimpleNamespace(post=lambda *a, **k: FakeResp(ok=False, status=500))):
-        ok2, msg2 = L._http_reload("http://x", "m1", {})
+    with _Patches(requests=types.SimpleNamespace(post=lambda *a, **k: FakeResp(ok=False, status=500))) as _c:
+        ok2, msg2 = L._http_reload("http://x", "m1", {}, ctx=_c)
         check("http_reload_http_error", ok2 is False and "500" in msg2)
-    with _Patches(requests=types.SimpleNamespace(post=lambda *a, **k: FakeResp(ok=True, body={"error": "bad config"}))):
-        ok3, msg3 = L._http_reload("http://x", "m1", {})
+    with _Patches(requests=types.SimpleNamespace(post=lambda *a, **k: FakeResp(ok=True, body={"error": "bad config"}))) as _c:
+        ok3, msg3 = L._http_reload("http://x", "m1", {}, ctx=_c)
         check("http_reload_body_error", ok3 is False and msg3 == "bad config")
-    with _Patches(requests=types.SimpleNamespace(post=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))):
-        ok4, msg4 = L._http_reload("http://x", "m1", {})
+    with _Patches(requests=types.SimpleNamespace(post=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))) as _c:
+        ok4, msg4 = L._http_reload("http://x", "m1", {}, ctx=_c)
         check("http_reload_exception", ok4 is False and "boom" in msg4)
 
 
 def test_reload_model_full():
     with _Patches(reload_via_cli=lambda *a, **k: (True, "cli ok"),
                   wait_for_loaded=lambda *a, **k: True,
-                  fetch_model=lambda *a, **k: {"loaded_context_length": 4096}):
-        out = L.reload_model_full("http://x", "m1", 4096, 50, "auto", False)
+                  fetch_model=lambda *a, **k: {"loaded_context_length": 4096}) as _c:
+        out = L.reload_model_full("http://x", "m1", 4096, 50, "auto", False, ctx=_c)
         check("reload_full_cli_success_no_manual", out.ok is True and "lms CLI" in out.message)
 
     with _Patches(reload_via_cli=lambda *a, **k: (True, "cli ok"),
                   wait_for_loaded=lambda *a, **k: True,
-                  fetch_model=lambda *a, **k: {"loaded_context_length": 2048}):
-        out2 = L.reload_model_full("http://x", "m1", 4096, 50, "auto", False)
+                  fetch_model=lambda *a, **k: {"loaded_context_length": 2048}) as _c:
+        out2 = L.reload_model_full("http://x", "m1", 4096, 50, "auto", False, ctx=_c)
         check("reload_full_cli_context_mismatch_warns", "ограничено" in out2.message)
 
     with _Patches(reload_via_cli=lambda *a, **k: (True, "cli ok"),
                   wait_for_loaded=lambda *a, **k: True,
                   fetch_model=lambda *a, **k: {"loaded_context_length": 4096},
-                  _http_reload=lambda *a, **k: (True, "http ok")):
-        out3 = L.reload_model_full("http://x", "m1", 4096, 50, "q8_0", True)
+                  _http_reload=lambda *a, **k: (True, "http ok")) as _c:
+        out3 = L.reload_model_full("http://x", "m1", 4096, 50, "q8_0", True, ctx=_c)
         check("reload_full_cli_plus_http_success", out3.ok is True and "HTTP API" in out3.message)
 
     with _Patches(reload_via_cli=lambda *a, **k: (True, "cli ok"),
                   wait_for_loaded=lambda *a, **k: True,
                   fetch_model=lambda *a, **k: {"loaded_context_length": 4096},
-                  _http_reload=lambda *a, **k: (False, "http fail")):
-        out4 = L.reload_model_full("http://x", "m1", 4096, 50, "q8_0", True)
+                  _http_reload=lambda *a, **k: (False, "http fail")) as _c:
+        out4 = L.reload_model_full("http://x", "m1", 4096, 50, "q8_0", True, ctx=_c)
         check("reload_full_cli_ok_http_fails_manual", out4.ok is True and out4.manual_settings != "")
 
     with _Patches(reload_via_cli=lambda *a, **k: (False, "cli fail"),
-                  _http_reload=lambda *a, **k: (True, "http ok")):
-        out5 = L.reload_model_full("http://x", "m1", 4096, 50, "auto", False)
+                  _http_reload=lambda *a, **k: (True, "http ok")) as _c:
+        out5 = L.reload_model_full("http://x", "m1", 4096, 50, "auto", False, ctx=_c)
         check("reload_full_cli_fails_http_succeeds", out5.ok is True and "HTTP API" in out5.message)
 
     with _Patches(reload_via_cli=lambda *a, **k: (False, "cli fail"),
-                  _http_reload=lambda *a, **k: (False, "http fail")):
-        out6 = L.reload_model_full("http://x", "m1", 4096, 50, "q8_0", True)
+                  _http_reload=lambda *a, **k: (False, "http fail")) as _c:
+        out6 = L.reload_model_full("http://x", "m1", 4096, 50, "q8_0", True, ctx=_c)
         check("reload_full_both_fail", out6.ok is False and out6.manual_settings != "")
 
 
@@ -372,11 +383,11 @@ def test_build_config_and_supported_fields():
 
 
 def test_wait_for_loaded():
-    with _Patches(fetch_model=lambda *a, **k: {"state": "loaded"}):
-        check("wait_for_loaded_immediate_true", L.wait_for_loaded("http://x", "m1", timeout=5))
+    with _Patches(fetch_model=lambda *a, **k: {"state": "loaded"}) as _c:
+        check("wait_for_loaded_immediate_true", L.wait_for_loaded("http://x", "m1", timeout=5, ctx=_c))
     with _Patches(fetch_model=lambda *a, **k: {"state": "unloading"}, time=types.SimpleNamespace(
-            time=lambda: 0, sleep=lambda s: None)):
-        check("wait_for_loaded_timeout_false", not L.wait_for_loaded("http://x", "m1", timeout=-1))
+            time=lambda: 0, sleep=lambda s: None)) as _c:
+        check("wait_for_loaded_timeout_false", not L.wait_for_loaded("http://x", "m1", timeout=-1, ctx=_c))
 
 
 def test_json_or_empty():
@@ -396,15 +407,11 @@ def test_ensure_exclusive_is_serialised():
     import threading, time as _t
     import lmstudio as L
     order = []
-    real = L._ensure_exclusive_locked
     def slow(*a, **k):
         order.append("in"); _t.sleep(0.3); order.append("out"); return True, "ok"
-    L._ensure_exclusive_locked = slow
-    try:
-        ts = [threading.Thread(target=L.ensure_exclusive, args=("http://x", "m")) for _ in range(3)]
-        [t.start() for t in ts]; [t.join() for t in ts]
-    finally:
-        L._ensure_exclusive_locked = real
+    c = _Patches(_ensure_exclusive_locked=slow)
+    ts = [threading.Thread(target=L.ensure_exclusive, args=("http://x", "m"), kwargs={"ctx": c}) for _ in range(3)]
+    [t.start() for t in ts]; [t.join() for t in ts]
     check("ensure_exclusive_serialised", order == ["in", "out"] * 3, order)
 
 

@@ -11,6 +11,18 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 from seams import Over  # noqa: E402,F401
 
 
+def posting(post, ctx=None):
+    """`ctx` (a bare namespace when None) handing the code under test an http client whose
+    `post` is `post`; everything else on it is the real requests."""
+    import types
+    import requests
+    ctx = ctx if ctx is not None else types.SimpleNamespace()
+    deps = getattr(ctx, "deps", None) or types.SimpleNamespace()
+    deps.requests = Over(requests, post=post)
+    ctx.deps = deps
+    return ctx
+
+
 def deps_ctx(**deps):
     """A context that hands the code under test these stand-ins (core/seams.py `dep`)."""
     import types

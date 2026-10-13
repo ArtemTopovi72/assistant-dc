@@ -41,7 +41,7 @@ class _Resp:
 
 
 def _no_server_checks(fakes):
-    fakes["server_healthy"] = (lambda: True)
+    fakes["server_healthy"] = (lambda **k: True)
     fakes["gpu_holder"] = (lambda: "")
     fakes["_apply_model_fallbacks"] = (lambda wf: wf)
     fakes["throttle_external_calls"] = (lambda ctx: None)
@@ -72,14 +72,14 @@ def test_execution_error_is_the_reason(fakes):
 
 
 def test_server_down_is_the_reason(fakes):
-    fakes["server_healthy"] = (lambda: False)
+    fakes["server_healthy"] = (lambda **k: False)
     assert CC._submit_and_poll(_W(fakes), {}, timeout=5) is None
     assert "not running" in CC.last_failure()
 
 
 def test_a_new_submit_clears_the_old_reason(fakes):
     CC._fail("old")
-    fakes["server_healthy"] = (lambda: False)
+    fakes["server_healthy"] = (lambda **k: False)
     CC._submit_and_poll(_W(fakes), {}, timeout=5)
     assert "old" not in CC.last_failure()
 

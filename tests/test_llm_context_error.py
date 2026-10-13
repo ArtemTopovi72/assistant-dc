@@ -106,13 +106,9 @@ class _Resp:
     def close(self): pass
 
 
-_orig_post = llm.requests.post
-llm.requests.post = lambda *a, **k: _Resp()
-try:
-    with _Capture() as cap3:
-        out = llm._stream_chat(None, dict(PAYLOAD))
-finally:
-    llm.requests.post = _orig_post
+from fakes import posting  # noqa: E402
+with _Capture() as cap3:
+    out = llm._stream_chat(posting(lambda *a, **k: _Resp()), dict(PAYLOAD))
 
 # NOT None: ERR above is a context-overflow message, and _stream_chat answers
 # those with the _CTX_OVERFLOW sentinel on purpose, so the caller can shrink the
@@ -135,12 +131,8 @@ class _StreamResp:
     def close(self): pass
 
 
-llm.requests.post = lambda *a, **k: _StreamResp()
-try:
-    with _Capture() as cap4:
-        out4 = llm._stream_chat(None, dict(PAYLOAD))
-finally:
-    llm.requests.post = _orig_post
+with _Capture() as cap4:
+    out4 = llm._stream_chat(posting(lambda *a, **k: _StreamResp()), dict(PAYLOAD))
 
 check("a streamed overflow error returns the sentinel, not an empty message",
       out4 is llm._CTX_OVERFLOW, repr(out4))
@@ -160,11 +152,7 @@ class _OkResp:
     def close(self): pass
 
 
-llm.requests.post = lambda *a, **k: _OkResp()
-try:
-    out5 = llm._stream_chat(None, dict(PAYLOAD))
-finally:
-    llm.requests.post = _orig_post
+out5 = llm._stream_chat(posting(lambda *a, **k: _OkResp()), dict(PAYLOAD))
 
 check("a normal stream still returns its content",
       isinstance(out5, dict) and out5.get("content") == "hello world", repr(out5))
@@ -183,12 +171,8 @@ class _OtherResp:
     def close(self): pass
 
 
-llm.requests.post = lambda *a, **k: _OtherResp()
-try:
-    with _Capture():
-        out5 = llm._stream_chat(None, dict(PAYLOAD))
-finally:
-    llm.requests.post = _orig_post
+with _Capture():
+    out5 = llm._stream_chat(posting(lambda *a, **k: _OtherResp()), dict(PAYLOAD))
 # A 5xx is the _SERVER_ERROR sentinel: the retry loop mends
 # the payload (cut tool calls, then size) and retries; it is never the overflow
 # sentinel, so nothing shrinks a call refused for another reason.

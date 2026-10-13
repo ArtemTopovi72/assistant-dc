@@ -241,7 +241,7 @@ class LibraryMixin:
 
         def _probe(url: str, timeout: float = 3.0) -> str:
             try:
-                r = requests.get(url, timeout=timeout)
+                r = self.http.get(url, timeout=timeout)
                 return "🟢" if r.status_code < 500 else f"🟡 HTTP {r.status_code}"
             except Exception:
                 return "🔴"

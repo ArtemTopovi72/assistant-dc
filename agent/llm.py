@@ -1024,7 +1024,7 @@ _revive_ok = False
 LLM_REVIVE_MIN_INTERVAL_S = 60.0
 
 
-def _try_revive_model(body: str, payload: dict) -> bool:
+def _try_revive_model(body: str, payload: dict, ctx=None) -> bool:
     """Bring the chat model back after LM Studio lost it, and say whether to retry.
 
     On 2026-09-11 the model crashed mid-session (a vision call on a 1728x2304
@@ -1040,7 +1040,7 @@ def _try_revive_model(body: str, payload: dict) -> bool:
         return False
     try:
         import comfy_client as _cc
-        if _cc.card_is_exclusive():
+        if dep(ctx, "card_is_exclusive", _cc.card_is_exclusive)():
             # Not gone -- lent to a render, which brings it back when the
             # queue drains. Loading it now would put 20 GB into the render's
             # card; the caller's retry waits for the card instead.
@@ -1077,7 +1077,7 @@ def _try_revive_model(body: str, payload: dict) -> bool:
         try:
             import lmstudio as _lms
             logger.warning("LM Studio has no model loaded - bringing %s back", model)
-            ok, msg = _lms.ensure_exclusive(LM_STUDIO_BASE, model)
+            ok, msg = dep(ctx, "ensure_exclusive", _lms.ensure_exclusive)(LM_STUDIO_BASE, model)
             # lms prints a TUI spinner (ESC sequences + braille) into its
             # output; keep only the last meaningful line for the log.
             msg_txt = _re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]|[⠀-⣿]", "", str(msg))
@@ -1320,7 +1320,7 @@ def _stream_chat_raw(ctx, payload: dict):
             logger.error("LM Studio HTTP %d: %s", resp.status_code, body)
             _log_context_hint(body, payload)
             _try_heal_context(body, payload)
-            _try_revive_model(body, payload)
+            _try_revive_model(body, payload, ctx=ctx)
             if _looks_like_context_overflow(body):
                 return _CTX_OVERFLOW
             if _NO_VISION_RE.search(body):
@@ -1377,7 +1377,7 @@ def _stream_chat_raw(ctx, payload: dict):
                     # Fix it and let the caller's retry loop take another run at it,
                     # rather than failing the user's turn over a reloadable server.
                     _try_heal_context(str(err), payload)
-                    _try_revive_model(str(err), payload)
+                    _try_revive_model(str(err), payload, ctx=ctx)
                     if _MODEL_CRASHED.search(str(err)):
                         _halve_payload_images(payload)
                     if (_GRAMMAR_REJECT_RE.search(str(err))

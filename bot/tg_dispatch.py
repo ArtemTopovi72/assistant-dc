@@ -21,7 +21,6 @@ import time
 import uuid
 from typing import Optional
 
-import requests
 
 
 def _largest_photo(photos) -> Optional[dict]:
@@ -121,7 +120,7 @@ class DispatchMixin:
             self._save_offset(self._offset)
 
     def _fetch_updates(self) -> list:
-        r = requests.get(f"{self._api}/getUpdates",
+        r = self.http.get(f"{self._api}/getUpdates",
                          params={"offset": self._offset, "timeout": tg_bot._POLL_TIMEOUT},
                          timeout=tg_bot._POLL_TIMEOUT + 5)
         body = r.json()

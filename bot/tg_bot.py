@@ -1381,6 +1381,9 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         # The model's narrow reads of a message (core/seams.py yes_no, intent_read, choice)
         # the bot's own routing asks before any task runs; None -> agent/intent.py.
         self.reads = None
+        # Every Bot API call goes through this (requests); a suite hands in its own.
+        import requests
+        self.http = requests
         self._task_started: dict[str, float] = {}     # task_id -> monotonic start
         # task_id -> _Task, from the moment it is pushed onto the backend until
         # a consumer actually pops it and moves it into _running_task. With the

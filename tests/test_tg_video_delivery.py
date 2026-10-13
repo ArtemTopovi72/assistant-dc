@@ -19,6 +19,7 @@ Run: venv/Scripts/python.exe tests/test_tg_video_delivery.py
 import os
 import sys
 import tempfile
+import types
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -72,7 +73,7 @@ def _fake_post(url, data=None, files=None, timeout=None):
     return _Resp(200)
 
 
-T.requests.post = _fake_post
+bot.http = types.SimpleNamespace(post=_fake_post)
 # no ffmpeg in the test env: keep the real file, no poster
 import video as _V
 _V.fit_for_telegram = lambda p, max_bytes=None, ctx=None: p
@@ -99,9 +100,9 @@ print("2. A rejected upload falls back to a document, then reports failure")
 print("=" * 70)
 
 posted.clear()
-T.requests.post = lambda url, **kw: (posted.append((url.rsplit("/", 1)[-1], None))
-                                     or _Resp(413, "file is too big"))
 bot2, _ = make_bot()
+bot2.http = types.SimpleNamespace(post=lambda url, **kw: (posted.append((url.rsplit("/", 1)[-1], None))
+                                                          or _Resp(413, "file is too big")))
 _docs = []
 bot2._send_document = lambda cid, p, cap="": (_docs.append(p) or True)
 ok2 = bot2._send_video(1, _fake_clip("big"))

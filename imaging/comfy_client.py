@@ -63,7 +63,7 @@ _HEALTH_TTL = 15.0
 _health = {"ok": None, "at": 0.0}
 
 
-def server_healthy(force: bool = False) -> bool:
+def server_healthy(force: bool = False, http=None) -> bool:
     """True if ComfyUI answers /system_stats within a few seconds.
 
     Deliberately NOT a bare connect check: a wedged server passes that and then
@@ -73,7 +73,7 @@ def server_healthy(force: bool = False) -> bool:
     if not force and _health["ok"] is not None and now - _health["at"] < _HEALTH_TTL:
         return _health["ok"]
     try:
-        ok = requests.get(f"{COMFY_URL}/system_stats",
+        ok = (http or requests).get(f"{COMFY_URL}/system_stats",
                           timeout=_HEALTH_TIMEOUT).status_code == 200
     except Exception as exc:
         logger.warning("ComfyUI health probe failed: %s", exc)
@@ -188,7 +188,7 @@ def _mark_released() -> None:
     _excl_released_at = time.time()
 
 
-def card_in_use() -> bool:
+def card_in_use(grace: float = None) -> bool:
     """True while a render here holds the card (one submit, or a card_session such as a
     whole video chain), while the chat model is being brought back after it, and for
     CARD_GRACE_S after that -- the turn still has to write its reply about the render.
@@ -196,10 +196,10 @@ def card_in_use() -> bool:
     the last one the model reload takes ~10 s: a deadline asking only server_busy()
     abandoned a finished chain at both points."""
     return (_excl_users > 0 or not _excl_free.is_set()
-            or time.time() - _excl_released_at < CARD_GRACE_S)
+            or time.time() - _excl_released_at < (CARD_GRACE_S if grace is None else grace))
 
 
-def server_busy() -> bool:
+def server_busy(http=None) -> bool:
     """True if ComfyUI has anything running or queued right now.
 
     Used to tell "our task is stuck" apart from "our task is waiting its turn
@@ -219,7 +219,7 @@ def server_busy() -> bool:
     genuine connection failure (refused/DNS/reset) means it might be down.
     """
     try:
-        q = requests.get(f"{COMFY_URL}/queue", timeout=(3, 5)).json()
+        q = (http or requests).get(f"{COMFY_URL}/queue", timeout=(3, 5)).json()
         return bool(q.get("queue_running") or q.get("queue_pending"))
     except requests.exceptions.Timeout:
         return True
@@ -773,7 +773,7 @@ def _submit_and_poll(ctx, workflow: dict, timeout: int = 1900, label: str = "",
         # would unload the chat model for a job nobody wants.
         logger.info("ComfyUI submit skipped: cancelled%s", f" ({label})" if label else "")
         return None
-    if not dep(ctx, "server_healthy", server_healthy)():
+    if not dep(ctx, "server_healthy", server_healthy)(http=dep(ctx, "requests", requests)):
         logger.error("ComfyUI is not answering — abandoning submit%s",
                      f" ({label})" if label else "")
         _fail("ComfyUI is not running or not answering at " + COMFY_URL)
@@ -787,7 +787,7 @@ def _submit_and_poll(ctx, workflow: dict, timeout: int = 1900, label: str = "",
         LAST_GPU_REFUSAL.update({"label": busy, "at": dep(ctx, "time", time).time()})
         _fail(f"the GPU is busy with {busy}")
         return None
-    with _gpu_slot(exclusive=exclusive, label=label, min_free_mb=min_free_mb):
+    with dep(ctx, "_gpu_slot", _gpu_slot)(exclusive=exclusive, label=label, min_free_mb=min_free_mb):
         return _submit_and_poll_locked(ctx, workflow, timeout, label, on_progress, validate)
 
 
@@ -1018,11 +1018,11 @@ def _submit_and_collect(ctx, workflow: dict, timeout: int = 1900,
     Returns None on HTTP/job error or timeout. ``timeout`` is clamped to
     config.COMFY_JOB_TIMEOUT like _submit_and_poll."""
     timeout = min(timeout, COMFY_JOB_TIMEOUT)
-    if not dep(ctx, "server_healthy", server_healthy)():
+    if not dep(ctx, "server_healthy", server_healthy)(http=dep(ctx, "requests", requests)):
         logger.error("ComfyUI is not answering — abandoning submit%s",
                      f" ({label})" if label else "")
         return None
-    with _gpu_slot():
+    with dep(ctx, "_gpu_slot", _gpu_slot)():
         return _submit_and_collect_locked(ctx, workflow, timeout, label)
 
 

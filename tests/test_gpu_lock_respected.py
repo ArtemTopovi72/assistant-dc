@@ -90,16 +90,12 @@ def test_a_submit_is_refused_without_touching_the_server():
     """Refused BEFORE the semaphore and before /prompt: the point is not to
     load a model on top of the trainer at all."""
     calls = {"post": 0, "health": 0}
-    orig_health = comfy_client.server_healthy
-    orig_post = comfy_client.requests.post
-    comfy_client.server_healthy = lambda *a, **k: (calls.__setitem__("health", calls["health"] + 1), True)[1]
-    comfy_client.requests.post = lambda *a, **k: calls.__setitem__("post", calls["post"] + 1)
-    try:
-        with _Holder("Ideogram 4 training"):
-            out = comfy_client._submit_and_poll(None, {"1": {}}, timeout=5)
-    finally:
-        comfy_client.server_healthy = orig_health
-        comfy_client.requests.post = orig_post
+    import types
+    server = types.SimpleNamespace(deps=types.SimpleNamespace(
+        server_healthy=lambda *a, **k: (calls.__setitem__("health", calls["health"] + 1), True)[1],
+        requests=types.SimpleNamespace(post=lambda *a, **k: calls.__setitem__("post", calls["post"] + 1))))
+    with _Holder("Ideogram 4 training"):
+        out = comfy_client._submit_and_poll(server, {"1": {}}, timeout=5)
     check("nothing came back", out is None)
     check("and nothing was submitted to ComfyUI", calls["post"] == 0, calls)
 

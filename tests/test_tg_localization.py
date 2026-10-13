@@ -400,13 +400,10 @@ russian("account page", bot._send_account_menu, CID,
         bot._user_store.get(CID), bot._get_session(CID))
 
 # The status page probes two HTTP services; keep it offline and instant.
-import requests as _rq
-_real_get = _rq.get
-_rq.get = lambda *a, **k: (_ for _ in ()).throw(OSError("offline"))
-try:
-    russian("status page", bot._send_status, CID, bot._get_session(CID))
-finally:
-    _rq.get = _real_get
+import types as _types
+_online = bot.http
+bot.http = _types.SimpleNamespace(get=lambda *a, **k: (_ for _ in ()).throw(OSError("offline")))
+russian("status page", bot._send_status, CID, bot._get_session(CID))
 
 adm = T._User(chat_id=CID, name="Артём", status="approved", is_admin=True)
 bot._user_store.put(adm)
@@ -424,7 +421,6 @@ def contains(name, fn, args, keys):
     missing = [k for k in keys if k not in txt]
     check(name, not missing, f"missing {missing} in {txt[:100]!r}")
 
-_rq.get = lambda *a, **k: (_ for _ in ()).throw(OSError("offline"))
 try:
     contains("status page uses the translated header and quota names",
              bot._send_status, (CID, bot._get_session(CID)),
@@ -433,7 +429,7 @@ try:
               T._kind_label(T.KIND_RESEARCH, "ru"),
               T._kind_label(T.KIND_IMAGE, "ru")])
 finally:
-    _rq.get = _real_get
+    pass
 
 contains("admin panel uses the translated header and sections",
          bot._send_admin_panel, (CID,),
@@ -452,11 +448,8 @@ contains("usage stats use the translated header and quota names",
 
 # The raw DB/quota keys must never reach a user in either language.
 bot.sent.clear()
-_rq.get = lambda *a, **k: (_ for _ in ()).throw(OSError("offline"))
-try:
-    bot._send_status(CID, bot._get_session(CID))
-finally:
-    _rq.get = _real_get
+bot._send_status(CID, bot._get_session(CID))
+bot.http = _online
 bot._send_account_menu(CID, bot._user_store.get(CID), bot._get_session(CID))
 page = " ".join(t for _c, t in bot.sent)
 leaked = [k for k in ("deep_research", "deep research", "approved", "pending")

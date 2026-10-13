@@ -10,6 +10,7 @@ import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "agent"))
 import lmstudio as L
 import llm
+from types import SimpleNamespace as NS
 
 sent = []
 class R:
@@ -17,12 +18,13 @@ class R:
     content = b"x"
     def json(self):
         return {"status": "loaded", "load_config": {"physical_batch_size": 2048}}
-L.requests.post = lambda url, json=None, timeout=None: (sent.append((url, json)), R())[1]
-L._lms_unload_all = lambda: (True, "")
-L._wait_served = lambda *a, **k: True
-L.time.sleep = lambda *a: None
-L.subprocess.run = lambda *a, **k: (_ for _ in ()).throw(AssertionError("lms load used"))
-ok, msg = L.load_model_exclusive("http://x:1", "gemma4-26b")
+ctx = NS(deps=NS(
+    requests=NS(post=lambda url, json=None, timeout=None: (sent.append((url, json)), R())[1]),
+    _lms_unload_all=lambda ctx=None: (True, ""),
+    _wait_served=lambda *a, **k: True,
+    time=NS(sleep=lambda *a: None, time=__import__("time").time, monotonic=__import__("time").monotonic),
+    subprocess=NS(run=lambda *a, **k: (_ for _ in ()).throw(AssertionError("lms load used")))))
+ok, msg = L.load_model_exclusive("http://x:1", "gemma4-26b", ctx=ctx)
 assert ok and sent and sent[0][0].endswith("/api/v1/models/load"), (ok, msg, sent)
 p = sent[0][1]
 assert p["physical_batch_size"] >= 1120, p     # Gemma 4's largest image

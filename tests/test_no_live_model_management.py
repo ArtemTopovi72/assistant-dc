@@ -68,7 +68,7 @@ finally:
 # touching the machine, and must keep working: the guard must not refuse
 # before the patch can matter.
 os.environ["F5_TEST_RUN"] = "1"
-_real_sp = L.subprocess
+import types as _t
 try:
     class _FakeSP:
         @staticmethod
@@ -77,13 +77,12 @@ try:
                 returncode = 0
                 stdout = stderr = ""
             return R()
-    L.subprocess = _FakeSP
-    check("a patched subprocess is let through, since nothing can escape it",
-          L._refuse_under_tests("x") is None)
+    _fc = _t.SimpleNamespace(deps=_t.SimpleNamespace(subprocess=_FakeSP))
+    check("a handed-in subprocess is let through, since nothing can escape it",
+          L._refuse_under_tests("x", ctx=_fc) is None)
     check("...and the unload helper actually runs its own logic",
-          L._lms_unload_all() == (True, "ok"), L._lms_unload_all())
+          L._lms_unload_all(ctx=_fc) == (True, "ok"), L._lms_unload_all(ctx=_fc))
 finally:
-    L.subprocess = _real_sp
     if _had is None:
         os.environ.pop("F5_TEST_RUN", None)
 

@@ -110,35 +110,35 @@ print("=" * 70)
 # server_busy() is conservative on purpose: if ComfyUI cannot be reached at all,
 # reporting it busy would extend every task to the ceiling during an outage.
 
-_real_get = comfy_client.requests.get
+import types as _types
 class _Down:
     def __call__(self, *a, **k):
         raise comfy_client.requests.exceptions.ConnectionError("refused")
-comfy_client.requests.get = _Down()
+_http = _types.SimpleNamespace(get=_Down())
 try:
-    check("an unreachable ComfyUI reports NOT busy", comfy_client.server_busy() is False)
+    check("an unreachable ComfyUI reports NOT busy", comfy_client.server_busy(_http) is False)
 finally:
-    comfy_client.requests.get = _real_get
+    pass
 
 class _Resp:
     def __init__(self, d): self._d = d
     def json(self): return self._d
-comfy_client.requests.get = lambda *a, **k: _Resp({"queue_running": [], "queue_pending": []})
+_http = _types.SimpleNamespace(get=lambda *a, **k: _Resp({"queue_running": [], "queue_pending": []}))
 try:
-    check("an idle queue reports NOT busy", comfy_client.server_busy() is False)
+    check("an idle queue reports NOT busy", comfy_client.server_busy(_http) is False)
 finally:
-    comfy_client.requests.get = _real_get
-comfy_client.requests.get = lambda *a, **k: _Resp({"queue_running": [["x"]], "queue_pending": []})
+    pass
+_http = _types.SimpleNamespace(get=lambda *a, **k: _Resp({"queue_running": [["x"]], "queue_pending": []}))
 try:
-    check("a running job reports busy", comfy_client.server_busy() is True)
+    check("a running job reports busy", comfy_client.server_busy(_http) is True)
 finally:
-    comfy_client.requests.get = _real_get
-comfy_client.requests.get = lambda *a, **k: _Resp({"queue_running": [], "queue_pending": [["y"]]})
+    pass
+_http = _types.SimpleNamespace(get=lambda *a, **k: _Resp({"queue_running": [], "queue_pending": [["y"]]}))
 try:
     check("a QUEUED job also counts as busy (our turn has not come)",
-          comfy_client.server_busy() is True)
+          comfy_client.server_busy(_http) is True)
 finally:
-    comfy_client.requests.get = _real_get
+    pass
 
 print()
 print("=" * 70)
@@ -155,12 +155,12 @@ print("=" * 70)
 class _Timeout:
     def __call__(self, *a, **k):
         raise comfy_client.requests.exceptions.Timeout("read timed out")
-comfy_client.requests.get = _Timeout()
+_http = _types.SimpleNamespace(get=_Timeout())
 try:
     check("a TIMEOUT (server saturated, not down) reports BUSY",
-          comfy_client.server_busy() is True)
+          comfy_client.server_busy(_http) is True)
 finally:
-    comfy_client.requests.get = _real_get
+    pass
 
 print()
 print("=" * 70)
@@ -169,7 +169,7 @@ print("=" * 70)
 # Between two parts of a multi-part video chain ComfyUI's queue is empty for a
 # moment, and the deadline must not read that as idle. A render pipeline
 # holding the card is not a hung call.
-comfy_client.requests.get = lambda *a, **k: _Resp({"queue_running": [], "queue_pending": []})
+_http = _types.SimpleNamespace(get=lambda *a, **k: _Resp({"queue_running": [], "queue_pending": []}))
 try:
     check("no card held: card_in_use is False", comfy_client.card_in_use() is False)
     with comfy_client.card_session("video chain"):
@@ -177,14 +177,9 @@ try:
               comfy_client.card_in_use() is True)
     check("right after it the turn still has its reply to write (grace)",
           comfy_client.card_in_use() is True)
-    _g = comfy_client.CARD_GRACE_S
-    comfy_client.CARD_GRACE_S = 0.0
-    try:
-        check("...and free once the grace is over", comfy_client.card_in_use() is False)
-    finally:
-        comfy_client.CARD_GRACE_S = _g
+    check("...and free once the grace is over", comfy_client.card_in_use(grace=0.0) is False)
 finally:
-    comfy_client.requests.get = _real_get
+    pass
 
 print()
 print("=" * 70)

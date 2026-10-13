@@ -92,13 +92,13 @@ def no_model_management():
     _ORIGINAL_UNLOAD = _lms._lms_unload_all
     _ORIGINAL_RELOAD = _lms.reload_via_cli
 
-    def _no_unload():
+    def _no_unload(ctx=None):
         raise LiveModelTouched(
             "a test tried to run `lms unload --all` on the real LM Studio. "
             "Patch the boundary you meant to exercise (llm._try_heal_context or "
             "lmstudio.reload_via_cli) instead of letting it reach the CLI.")
 
-    def _no_reload(model_id, context_length, gpu_offload_pct, parallel=0):
+    def _no_reload(model_id, context_length, gpu_offload_pct, parallel=0, ctx=None):
         raise LiveModelTouched(
             "a test tried to reload the real LM Studio model (%r at %s tokens)."
             % (model_id, context_length))
