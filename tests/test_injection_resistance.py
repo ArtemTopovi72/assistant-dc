@@ -39,18 +39,15 @@ def test_untrusted_framing_deterministic():
         assert needle in wrapped, f"framing lost the marker: {needle!r}"
 
     # read_clipboard handler wraps real clipboard content
-    class _Ctx:
-        pass
-    # monkeypatch subprocess so we don't touch the real clipboard
-    import subprocess
-    orig = subprocess.run
+    import types
+
     class R:  # fake CompletedProcess
         stdout = payload
-    subprocess.run = lambda *a, **k: R()
-    try:
-        out = tools_mod._handle_read_clipboard(_Ctx(), {}, {})
-    finally:
-        subprocess.run = orig
+
+    # a fake clipboard reader, so the real clipboard is never touched
+    class _Ctx:
+        deps = types.SimpleNamespace(subprocess=types.SimpleNamespace(run=lambda *a, **k: R()))
+    out = tools_mod._handle_read_clipboard(_Ctx(), {}, {})
     assert "BEGIN UNTRUSTED" in out and payload in out, "read_clipboard did not fence content"
     print("PASS untrusted framing is applied deterministically (clipboard + wrapper)")
 

@@ -64,14 +64,11 @@ def test_generate_image_none_path_is_failure():
 
 
 def test_read_clipboard_failure_is_tagged():
-    import subprocess
-    orig = subprocess.run
+    import types
     def boom(*a, **k): raise RuntimeError("powershell missing")
-    subprocess.run = boom
-    try:
-        out = tmod.execute_tool(_ctx(), _state(), "read_clipboard", {})
-    finally:
-        subprocess.run = orig
+    c = _ctx()
+    c.deps = types.SimpleNamespace(subprocess=types.SimpleNamespace(run=boom))
+    out = tmod.execute_tool(c, _state(), "read_clipboard", {})
     assert out.lstrip().startswith("[TOOL ERROR]"), f"clipboard failure not tagged: {out[:80]!r}"
     print("PASS read_clipboard failure is [TOOL ERROR]-tagged")
 

@@ -58,7 +58,7 @@ from config import (
     VIDEO_JOB_TIMEOUT, OUTPUT_DIR_COMFY,
 )
 
-from seams import text_model, vision_model
+from seams import dep, text_model, vision_model
 
 logger = logging.getLogger("assistant.video")
 
@@ -1770,9 +1770,9 @@ def _discard(tmp: Optional[str]) -> None:
         pass
 
 
-def make_thumbnail(path: str) -> Optional[str]:
+def make_thumbnail(path: str, ctx=None) -> Optional[str]:
     """A first-frame JPEG, for chat clients that want a poster image."""
-    ff = shutil.which("ffmpeg")
+    ff = dep(ctx, "shutil", shutil).which("ffmpeg")
     if not ff:
         return None
     tmp = None
@@ -1780,7 +1780,7 @@ def make_thumbnail(path: str) -> Optional[str]:
         fh = tempfile.NamedTemporaryFile(prefix="vidthumb_", suffix=".jpg", delete=False)
         fh.close()
         tmp = fh.name
-        subprocess.run([ff, "-y", "-v", "error", "-i", path, "-frames:v", "1",
+        dep(ctx, "subprocess", subprocess).run([ff, "-y", "-v", "error", "-i", path, "-frames:v", "1",
                         "-q:v", "3", tmp], capture_output=True, timeout=120)
         if os.path.getsize(tmp) > 0:
             return tmp
@@ -1806,7 +1806,7 @@ def fit_for_telegram(path: str, max_bytes: Optional[int] = None, ctx=None) -> st
             return path
     except OSError:
         return path
-    ff = shutil.which("ffmpeg")
+    ff = dep(ctx, "shutil", shutil).which("ffmpeg")
     if not ff:
         logger.warning("clip is over the Telegram limit and ffmpeg is not available")
         return path
@@ -1823,7 +1823,7 @@ def fit_for_telegram(path: str, max_bytes: Optional[int] = None, ctx=None) -> st
         fh = tempfile.NamedTemporaryFile(prefix="vidtg_", suffix=".mp4", delete=False)
         fh.close()
         tmp = fh.name
-        subprocess.run([ff, "-y", "-v", "error", "-i", path,
+        dep(ctx, "subprocess", subprocess).run([ff, "-y", "-v", "error", "-i", path,
                         "-c:v", "libx264", "-b:v", f"{target_kbps}k",
                         "-preset", "medium", "-pix_fmt", "yuv420p",
                         "-c:a", "aac", "-b:a", "128k", tmp],

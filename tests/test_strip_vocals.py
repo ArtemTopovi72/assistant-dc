@@ -33,9 +33,8 @@ fake.SAMPLE_RATE = 44100
 fake.release_separator = lambda: None
 fake.backing_of = lambda st: st["back"]
 sys.modules["mashup_stems"] = fake
-import subprocess  # noqa: E402
-_run = subprocess.run
-subprocess.run = lambda cmd, **k: (calls.append(cmd), open(cmd[-1], "wb").close())[0]
+FF = types.SimpleNamespace(deps=types.SimpleNamespace(subprocess=types.SimpleNamespace(
+    run=lambda cmd, **k: (calls.append(cmd), open(cmd[-1], "wb").close())[0])))
 warned = []
 music.logger.warning = lambda *a, **k: warned.append(a[0])
 
@@ -45,17 +44,16 @@ open(path, "wb").close()
 back = np.full((1000, 2), 0.2, dtype=np.float32)
 
 fake.separate = lambda p: {"vocals": np.full((1000, 2), 0.3, dtype=np.float32), "back": back}
-music._strip_vocals(path)
+music._strip_vocals(path, ctx=FF)
 check("a loud vocal stem on an instrumental is removed (ffmpeg re-encodes the backing)", len(calls) == 1, calls)
 check("...without the «could not strip» failure", not warned, warned)
 
 calls.clear()
 warned.clear()
 fake.separate = lambda p: {"vocals": np.full((1000, 2), 0.001, dtype=np.float32), "back": back}
-music._strip_vocals(path)
+music._strip_vocals(path, ctx=FF)
 check("a near-silent vocal stem leaves the take as rendered", not calls and not warned, (calls, warned))
 
-subprocess.run = _run
 print(f"\n{OK}/{OK + BAD} checks passed")
 if __name__ == "__main__":
     sys.exit(0 if BAD == 0 else 1)

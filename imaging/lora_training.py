@@ -28,6 +28,7 @@ import re
 import time
 import subprocess
 import urllib.request
+from seams import dep
 from pathlib import Path
 
 logger = logging.getLogger("assistant.lora")
@@ -194,7 +195,7 @@ def gpu_free_mb():
         return None
 
 
-def free_gpu(log=None, min_free_mb: int = None) -> None:
+def free_gpu(log=None, min_free_mb: int = None, ctx=None) -> None:
     """Evict LM Studio and ComfyUI so training (or a render) has the card
     to itself.
 
@@ -209,7 +210,7 @@ def free_gpu(log=None, min_free_mb: int = None) -> None:
         if log:
             log(m)
     try:
-        subprocess.run(["lms", "unload", "--all"], capture_output=True,
+        dep(ctx, "subprocess", subprocess).run(["lms", "unload", "--all"], capture_output=True,
                        text=True, timeout=60, shell=(os.name == "nt"))
         say("LM Studio: выгружено")
     except Exception as exc:
@@ -225,7 +226,7 @@ def free_gpu(log=None, min_free_mb: int = None) -> None:
         req = urllib.request.Request(
             url, data=json.dumps({"unload_models": True, "free_memory": True}).encode(),
             headers={"Content-Type": "application/json"})
-        urllib.request.urlopen(req, timeout=30).read()
+        dep(ctx, "urlopen", urllib.request.urlopen)(req, timeout=30).read()
         say("ComfyUI: выгружено")
     except Exception as exc:
         say("ComfyUI не отвечает (%s) — продолжаю" % exc)
@@ -233,7 +234,7 @@ def free_gpu(log=None, min_free_mb: int = None) -> None:
     # started 0.2 s later loaded its weights beside the not-yet-released chat
     # model and ran 296 s instead of 48 s (the
     # 6x tax of sharing the card). Wait for the free counter to say so.
-    freed = wait_vram_free(min_free_mb or FREE_GPU_MIN_MB, timeout=FREE_GPU_WAIT_S)
+    freed = dep(ctx, "wait_vram_free", wait_vram_free)(min_free_mb or FREE_GPU_MIN_MB, timeout=FREE_GPU_WAIT_S)
     if freed is not None:
         say("VRAM свободно: %d MiB" % freed)
 
@@ -244,15 +245,16 @@ FREE_GPU_MIN_MB = _cfg_env.env_int("FREE_GPU_MIN_MB", 16000)
 FREE_GPU_WAIT_S = _cfg_env.env_float("FREE_GPU_WAIT_S", 25)
 
 
-def wait_vram_free(min_free_mb: int, timeout: float = 25.0, poll: float = 0.5):
+def wait_vram_free(min_free_mb: int, timeout: float = 25.0, poll: float = 0.5, ctx=None):
     """Poll nvidia-smi until at least `min_free_mb` MiB is free or `timeout`
     passes. Returns the last free reading, or None when nvidia-smi is silent
     (a machine without it must not be held up)."""
     deadline = time.monotonic() + timeout
-    last = gpu_free_mb()
+    free_mb = dep(ctx, "gpu_free_mb", gpu_free_mb)
+    last = free_mb()
     while last is not None and last < min_free_mb and time.monotonic() < deadline:
         time.sleep(poll)
-        last = gpu_free_mb()
+        last = free_mb()
     if last is not None and last < min_free_mb:
         logging.getLogger("assistant.lora").warning(
             "VRAM still only %d MiB free after %.0fs — rendering anyway", last, timeout)

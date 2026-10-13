@@ -20,6 +20,7 @@ import os
 import sys
 import glob
 import tempfile
+import types
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -50,8 +51,13 @@ def _make_file(path, size):
 WORK = tempfile.mkdtemp(prefix="viddeliv_")
 SRC = _make_file(os.path.join(WORK, "render.mp4"), 4096)
 
-_real_run, _real_which = V.subprocess.run, V.shutil.which
-V.shutil.which = lambda name: "ffmpeg-stub"          # never touches real ffmpeg
+_STUB_FF = types.SimpleNamespace(which=lambda name: "ffmpeg-stub")   # never touches real ffmpeg
+
+
+def _ff(run):
+    """A context handing video.py a stub ffmpeg whose run is `run`."""
+    return types.SimpleNamespace(deps=types.SimpleNamespace(
+        shutil=_STUB_FF, subprocess=types.SimpleNamespace(run=run)))
 
 
 class _Run:
@@ -74,22 +80,22 @@ try:
     print("=" * 70)
 
     before = _scratch("vidthumb_")
-    V.subprocess.run = _Run(write_bytes=0)            # ffmpeg wrote an empty file
-    got = V.make_thumbnail(SRC)
+    _r = _Run(write_bytes=0)
+    got = V.make_thumbnail(SRC, ctx=_ff(_r))
     leaked = _scratch("vidthumb_") - before
     check("returns None when the frame is empty", got is None, got)
     check("no scratch thumbnail is left behind", not leaked, sorted(leaked))
 
     before = _scratch("vidthumb_")
-    V.subprocess.run = _Run(raise_exc=RuntimeError("ffmpeg exploded"))
-    got = V.make_thumbnail(SRC)
+    _r = _Run(raise_exc=RuntimeError("ffmpeg exploded"))
+    got = V.make_thumbnail(SRC, ctx=_ff(_r))
     leaked = _scratch("vidthumb_") - before
     check("returns None when ffmpeg raises", got is None, got)
     check("no scratch thumbnail after an exception", not leaked, sorted(leaked))
 
     before = _scratch("vidthumb_")
-    V.subprocess.run = _Run(write_bytes=256)          # the good path
-    got = V.make_thumbnail(SRC)
+    _r = _Run(write_bytes=256)
+    got = V.make_thumbnail(SRC, ctx=_ff(_r))
     check("a real thumbnail IS returned", bool(got) and os.path.exists(got), got)
     check("...and it is the file the caller must clean up",
           got in (_scratch("vidthumb_") - before), got)
@@ -105,23 +111,23 @@ try:
     BIG = _make_file(os.path.join(WORK, "big.mp4"), CAP * 4)
 
     before = _scratch("vidtg_")
-    V.subprocess.run = _Run(write_bytes=CAP * 3)      # smaller, but still over
-    out = V.fit_for_telegram(BIG, max_bytes=CAP)
+    _r = _Run(write_bytes=CAP * 3)
+    out = V.fit_for_telegram(BIG, max_bytes=CAP, ctx=_ff(_r))
     leaked = _scratch("vidtg_") - before
     check("falls back to the ORIGINAL when the re-encode does not fit",
           out == BIG, out)
     check("the over-cap re-encode is not stranded", not leaked, sorted(leaked))
 
     before = _scratch("vidtg_")
-    V.subprocess.run = _Run(raise_exc=RuntimeError("encoder died"))
-    out = V.fit_for_telegram(BIG, max_bytes=CAP)
+    _r = _Run(raise_exc=RuntimeError("encoder died"))
+    out = V.fit_for_telegram(BIG, max_bytes=CAP, ctx=_ff(_r))
     leaked = _scratch("vidtg_") - before
     check("falls back to the ORIGINAL when ffmpeg raises", out == BIG, out)
     check("nothing stranded after an exception", not leaked, sorted(leaked))
 
     before = _scratch("vidtg_")
-    V.subprocess.run = _Run(write_bytes=CAP // 2)     # the good path
-    out = V.fit_for_telegram(BIG, max_bytes=CAP)
+    _r = _Run(write_bytes=CAP // 2)
+    out = V.fit_for_telegram(BIG, max_bytes=CAP, ctx=_ff(_r))
     check("a fitting re-encode IS returned", out != BIG and os.path.exists(out), out)
     check("...and it is the temp file the caller deletes",
           out in (_scratch("vidtg_") - before), out)
@@ -135,8 +141,8 @@ try:
     print("3. An under-cap clip is passed straight through, untouched")
     print("=" * 70)
     before = _scratch("vidtg_")
-    V.subprocess.run = _Run(write_bytes=10)
-    out = V.fit_for_telegram(SRC, max_bytes=CAP * 100)
+    _r = _Run(write_bytes=10)
+    out = V.fit_for_telegram(SRC, max_bytes=CAP * 100, ctx=_ff(_r))
     check("returns the same path", out == SRC, out)
     check("no re-encode was created", not (_scratch("vidtg_") - before))
 
@@ -181,7 +187,7 @@ try:
         V.OUTPUT_DIR = _real_outdir
 
 finally:
-    V.subprocess.run, V.shutil.which = _real_run, _real_which
+    pass
 
 print()
 print(f"{OK}/{OK + BAD} checks passed")

@@ -1539,7 +1539,7 @@ def yue2_preview(prefs: Optional[dict]) -> str:
     return yue2_pin(yue2_style(enforce_pins("", prefs)), prefs)
 
 
-def _strip_vocals(path: str) -> None:
+def _strip_vocals(path: str, ctx=None) -> None:
     """In place: an instrumental that came out sung anyway keeps only its backing (Demucs).
     A take whose vocal stem is near silence is left as it rendered."""
     try:
@@ -1554,7 +1554,7 @@ def _strip_vocals(path: str) -> None:
         tmp = path + ".inst.wav"
         sf.write(tmp, back, mashup_stems.SAMPLE_RATE)
         import subprocess
-        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", tmp, path + ".inst" + os.path.splitext(path)[1]],
+        dep(ctx, "subprocess", subprocess).run(["ffmpeg", "-loglevel", "error", "-y", "-i", tmp, path + ".inst" + os.path.splitext(path)[1]],
                        check=True)
         os.replace(path + ".inst" + os.path.splitext(path)[1], path)
         os.remove(tmp)
@@ -1677,7 +1677,7 @@ def generate_music(ctx, lyrics: str, style: str, *, duration_s: int = 60,
         final = _generate_yue2(ctx, lyrics, style,
                                seed if seed and int(seed) > 0 else random.randint(1, 2**31 - 1), prefs=prefs)
         if (prefs or {}).get("instrumental"):
-            _strip_vocals(final)
+            _strip_vocals(final, ctx=ctx)
         apply_fade(final)
         if ctx is not None:
             ctx.last_music_path = final

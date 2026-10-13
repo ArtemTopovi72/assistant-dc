@@ -349,7 +349,7 @@ def _handle_read_clipboard(ctx, state, args: dict) -> str:
     try:
         # Force PowerShell to emit UTF-8 and decode as UTF-8 — the default locale
         # codepage (cp1251 on this box) mangles Cyrillic/non-ASCII clipboard text.
-        result = subprocess.run(
+        result = dep(ctx, "subprocess", subprocess).run(
             ["powershell", "-NoProfile", "-NonInteractive", "-Command",
              "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; Get-Clipboard"],
             capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
