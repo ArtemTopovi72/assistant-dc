@@ -45,7 +45,34 @@ logger = logging.getLogger("assistant")
 # encoding="utf-8", errors="replace" for the same reason the crash fix above
 # exists: a non-ASCII log char must never be able to take the process down.
 from logging.handlers import RotatingFileHandler
-_file_handler = RotatingFileHandler(
+
+
+class _CopyTruncateHandler(RotatingFileHandler):
+    """Rotates by copying the file aside and truncating it in place. Windows cannot
+    rename a file another process holds open (the GUI, a bench script, debug_user all
+    log here): the rename failed on every record and the log froze at 2 MB for hours
+    (2026-10-13)."""
+
+    def doRollover(self):
+        import shutil
+        if self.stream:
+            self.stream.flush()
+        try:
+            for i in range(self.backupCount - 1, 0, -1):
+                src, dst = f"{self.baseFilename}.{i}", f"{self.baseFilename}.{i + 1}"
+                if os.path.exists(src):
+                    shutil.copyfile(src, dst)
+            if self.backupCount > 0:
+                shutil.copyfile(self.baseFilename, self.baseFilename + ".1")
+            with open(self.baseFilename, "r+", encoding="utf-8") as f:
+                f.truncate(0)
+        except OSError:
+            pass                      # a log that grows past its cap beats a log that stops
+        if self.stream:
+            self.stream.seek(0, os.SEEK_END)
+
+
+_file_handler = _CopyTruncateHandler(
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assistant_app.log"),
     maxBytes=2_000_000, backupCount=3, encoding="utf-8", errors="replace")
 _file_handler.setLevel(logging.INFO)
