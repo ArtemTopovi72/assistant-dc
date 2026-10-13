@@ -28,6 +28,5 @@ def test_safety_and_policy_lines_always_stay():
         assert section in out
 
 
-def test_it_can_be_switched_off(monkeypatch):
-    monkeypatch.setenv("PROMPT_SCOPE", "0")
-    assert PS.scope(S, [], KNOWN) == S
+def test_it_can_be_switched_off():
+    assert PS.scope(S, [], KNOWN, on=False) == S

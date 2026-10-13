@@ -94,9 +94,8 @@ def test_no_evidence_means_the_core_set():
     assert set(_sel("")) == set(R._CORE)
 
 
-def test_send_all_can_be_restored(monkeypatch):
-    monkeypatch.setenv("TOOLS_NOMATCH", "all")
-    assert _sel("в каком году высадились на Луну") == _names(ALL)
+def test_send_all_can_be_restored():
+    assert _sel("в каком году высадились на Луну", send_all=True) == _names(ALL)
 
 
 def test_a_picture_in_the_chat_pins_the_edit_tools():

@@ -39,9 +39,9 @@ def _mentions(line: str, known: set) -> set:
     return found
 
 
-def scope(system: str, tool_names, known) -> str:
+def scope(system: str, tool_names, known, on=None) -> str:
     """`system` with the [Tools] lines for absent tools removed."""
-    if not enabled() or not system or "[Tools]" not in system:
+    if not (enabled() if on is None else on) or not system or "[Tools]" not in system:
         return system
     present, known = set(tool_names or ()), set(known or ())
     start = system.index("[Tools]")

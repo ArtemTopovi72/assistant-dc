@@ -109,17 +109,17 @@ def _embed_pick(text, schemas, k=None, floor=None):
         return set()
 
 
-def select_tools(text, schemas, *, always=(), limit=12, wants=None):
+def select_tools(text, schemas, *, always=(), limit=12, wants=None, send_all=None):
     """Retrieval (see _select_tools), then a STABLE order: the core tools first,
     always in the same order, the per-turn picks after them. The tool block sits
     right after the system prompt, so a block that starts the same way every turn
     lets the server reuse the cached prefix instead of recomputing the history."""
-    out = _select_tools(text, schemas, always=always, limit=limit, wants=wants)
+    out = _select_tools(text, schemas, always=always, limit=limit, wants=wants, send_all=send_all)
     rank = {n: i for i, n in enumerate(_CORE)}
     return sorted(out, key=lambda s: rank.get(_name(s), len(rank)))   # stable sort keeps the rest in order
 
 
-def _select_tools(text, schemas, *, always=(), limit=12, wants=None):
+def _select_tools(text, schemas, *, always=(), limit=12, wants=None, send_all=None):
     """Narrow `schemas` to what this turn plausibly needs.
 
     `always` are names that must survive whatever the cues say -- the caller
@@ -129,6 +129,8 @@ def _select_tools(text, schemas, *, always=(), limit=12, wants=None):
     Returns the full list unchanged when nothing matches: no evidence is a
     reason to send everything, not a reason to guess.
     """
+    if send_all is None:
+        send_all = os.getenv("TOOLS_NOMATCH", "core").strip().lower() == "all"
     text = text or ""
     # The tools the model's read of the message picked (agent/intent.py);
     # None when that read failed -- then no evidence, the core set below.
@@ -147,7 +149,7 @@ def _select_tools(text, schemas, *, always=(), limit=12, wants=None):
         # a working folder), ~4-10k tokens of tools for a greeting. With no
         # cue the core set plus the pinned tools is sent; TOOLS_NOMATCH=all
         # restores the old send-everything fallback for A/B runs.
-        if os.getenv("TOOLS_NOMATCH", "core").strip().lower() == "all":
+        if send_all:
             return list(schemas)
         keep |= set(_CORE)
         if keep & set(_CODE_KIT) - set(_LOOK_KIT):
@@ -199,7 +201,7 @@ def _select_tools(text, schemas, *, always=(), limit=12, wants=None):
         keep.add(n)
 
     out = [s for s in schemas if _name(s) in keep]
-    if out or os.getenv("TOOLS_NOMATCH", "core").strip().lower() == "all":
+    if out or send_all:
         return out or list(schemas)
     # What matched is not offered here (an image editor with no picture, code
     # tools with no working folder): the core set, not everything.
