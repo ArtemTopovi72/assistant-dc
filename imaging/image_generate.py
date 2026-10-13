@@ -24,6 +24,7 @@ The config defaults below are the exception: they are DEFAULT ARGUMENT values
 and must bind at def time, so they are imported from config -- their DEFINING
 module -- not from image.py.
 """
+from seams import dep
 import logging
 import random
 from typing import Optional
@@ -72,7 +73,8 @@ def _ideogram_draw(ctx, prompt: str, *, width: int, height: int,
     asked for and calls it correct.
     """
     import ideogram
-    rounds = max(0, int(getattr(_config, "IDEOGRAM_TEXT_ROUNDS", 1) or 0))
+    ideogram = dep(ctx, "ideogram", ideogram)
+    rounds = max(0, int(dep(ctx, "IDEOGRAM_TEXT_ROUNDS", getattr(_config, "IDEOGRAM_TEXT_ROUNDS", 1)) or 0))
     # The layout is planned ALWAYS, not only when the lettering loop is enabled.
     # IDEOGRAM_TEXT_ROUNDS=0 used to skip this whole block and submit through
     # `ideogram.generate`, which plans its own caption and throws it away — so no
@@ -103,6 +105,7 @@ def _ideogram_draw(ctx, prompt: str, *, width: int, height: int,
         if rounds and any(str(el.get("text") or "").strip()
                           for el in (layout.get("elements") or [])):
             import draw_agent
+            draw_agent = dep(ctx, "draw_agent", draw_agent)
             logger.info("Ideogram: the scene carries lettering — drawing through "
                         "the read-back loop (%d repair round(s))", rounds)
             res = draw_agent.run(ctx, prompt, layout=layout, width=width,

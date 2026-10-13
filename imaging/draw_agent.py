@@ -22,6 +22,7 @@ Three things live here:
 
 `run()` ties them together into the loop, reporting every step through `on_event`.
 """
+from seams import dep
 import copy
 import difflib
 import json
@@ -835,14 +836,14 @@ def unphoto_on_repeat_mismatch(layout: dict, notes: list, request: str = "") -> 
 def edit_layout(ctx, layout: dict, instruction: str) -> tuple:
     """Apply a natural-language edit to `layout`. Returns (layout, notes)."""
     instruction = (instruction or "").strip()
-    layout = ideogram.normalize_layout(layout)
+    layout = dep(ctx, "ideogram", ideogram).normalize_layout(layout)
     if not instruction:
         return layout, ["empty instruction"]
     if ctx is None:
         return layout, ["no model available for editing"]
     try:
         import llm
-        res = llm.send_to_lm_studio(
+        res = dep(ctx, "llm", llm).send_to_lm_studio(
             ctx,
             [{"role": "system", "content": _EDIT_PROMPT},
              {"role": "user", "content": json.dumps(_for_model(layout), ensure_ascii=False)
@@ -1011,7 +1012,7 @@ def split_edit(ctx, instruction: str) -> dict:
         return fallback
     try:
         import llm
-        res = llm.send_to_lm_studio(
+        res = dep(ctx, "llm", llm).send_to_lm_studio(
             ctx,
             [{"role": "system", "content": _SPLIT_PROMPT},
              {"role": "user", "content": instruction}],
@@ -1261,8 +1262,8 @@ def render_without_collage(ctx, layout, *, width: int, height: int, seed: int,
     # model back; it must never be moved inside.
     with comfy_client.card_session("drawing"):
         for _reroll in range(COLLAGE_REROLLS + 1):
-            image = ideogram.generate(ctx, "", width=width, height=height, seed=seed,
-                                      caption=ideogram.layout_to_caption(layout),
+            image = dep(ctx, "ideogram", ideogram).generate(ctx, "", width=width, height=height, seed=seed,
+                                      caption=dep(ctx, "ideogram", ideogram).layout_to_caption(layout),
                                       steps=steps, cfg=cfg, on_progress=on_progress)
             if not image or _reroll >= COLLAGE_REROLLS or not looks_like_collage(image):
                 break
@@ -1275,10 +1276,10 @@ def render_without_collage(ctx, layout, *, width: int, height: int, seed: int,
             if ww:
                 _say("still a collage — redrawing wider, where a 2x2 grid does not fit")
                 try:
-                    alt = ideogram.generate(
+                    alt = dep(ctx, "ideogram", ideogram).generate(
                         ctx, "", width=ww, height=wh,
                         seed=random.randint(1, 999_999_999),
-                        caption=ideogram.layout_to_caption(layout),
+                        caption=dep(ctx, "ideogram", ideogram).layout_to_caption(layout),
                         steps=steps, cfg=cfg, on_progress=on_progress)
                 except ideogram.ContentRefused:
                     logger.info("wide redraw refused; falling through")
@@ -1295,14 +1296,14 @@ def render_without_collage(ctx, layout, *, width: int, height: int, seed: int,
             # than with the room. Stretching the same arrangement to the frame edges
             # fixed it at a fixed seed with nothing else changed. Tried before the
             # merge because it keeps the arrangement; the merge throws it away.
-            filled = ideogram.filled_layout(layout)
+            filled = dep(ctx, "ideogram", ideogram).filled_layout(layout)
             if filled.get("elements") != layout.get("elements"):
                 _say("still not one picture — stretching the boxes to fill the frame")
                 try:
-                    alt = ideogram.generate(
+                    alt = dep(ctx, "ideogram", ideogram).generate(
                         ctx, "", width=width, height=height,
                         seed=random.randint(1, 999_999_999),
-                        caption=ideogram.layout_to_caption(filled),
+                        caption=dep(ctx, "ideogram", ideogram).layout_to_caption(filled),
                         steps=steps, cfg=cfg, on_progress=on_progress)
                 except ideogram.ContentRefused:
                     logger.info("filled redraw refused; falling through")
@@ -1314,16 +1315,16 @@ def render_without_collage(ctx, layout, *, width: int, height: int, seed: int,
                     image = alt
 
         if image and looks_like_collage(image):
-            merged = ideogram.merged_layout(layout)
+            merged = dep(ctx, "ideogram", ideogram).merged_layout(layout)
             if merged.get("elements") != layout.get("elements"):
                 _say("still a collage — redrawing the scene as one picture instead "
                      "of separate boxes")
                 for _ in range(2):
                     try:
-                        alt = ideogram.generate(
+                        alt = dep(ctx, "ideogram", ideogram).generate(
                             ctx, "", width=width, height=height,
                             seed=random.randint(1, 999_999_999),
-                            caption=ideogram.layout_to_caption(merged),
+                            caption=dep(ctx, "ideogram", ideogram).layout_to_caption(merged),
                             steps=steps, cfg=cfg, on_progress=on_progress)
                     except ideogram.ContentRefused:
                         # The merged caption draws the safety card on some seeds.
@@ -1403,8 +1404,8 @@ def critique(ctx, image_path: str, layout: dict, evidence: Optional[list] = None
     reads the word it expects, which is the whole reason `verify_text` exists), so
     without being told it would approve a garbled sign and propose no repair for it.
     """
-    layout = ideogram.normalize_layout(layout)
-    if image_path and ideogram.is_refusal_card(image_path):
+    layout = dep(ctx, "ideogram", ideogram).normalize_layout(layout)
+    if image_path and dep(ctx, "ideogram", ideogram).is_refusal_card(image_path):
         return {"ok": False, "score": 0, "source": "refusal",
                 "problems": ["the model returned its safety card instead of a picture"],
                 "ops": []}
@@ -1424,7 +1425,7 @@ def critique(ctx, image_path: str, layout: dict, evidence: Optional[list] = None
         # Same reader model as the transcription: on every live render measured
         # the chat model answered this with no JSON at all, so the
         # critic reported "unavailable" and had no vote on any real picture.
-        raw = llm.analyze_image_with_llm(
+        raw = dep(ctx, "llm", llm).analyze_image_with_llm(
             _reader(ctx), image_path=image_path,
             user_text="The layout this picture was drawn from:\n" + _regions(layout)
                       + ("\n\nAlready established about this picture:\n"
@@ -1551,7 +1552,7 @@ def run(ctx, request: str = "", *, layout: Optional[dict] = None,
 
     if layout is None:
         emit("stage", text="planning the layout")
-        layout = ideogram.plan_layout(ctx, request)
+        layout = dep(ctx, "ideogram", ideogram).plan_layout(ctx, request)
         # Planned here, so checked here (image_generate checks its own plan
         # before handing it in): the boxes as a sketch, in front of the
         # vision model, next to the request -- see draw_preview.
@@ -1559,7 +1560,7 @@ def run(ctx, request: str = "", *, layout: Optional[dict] = None,
         import draw_preview
         layout, _pre = draw_preview.preflight(ctx, layout, request, width=width,
                                               height=height, emit=emit)
-    layout = ideogram.normalize_layout(layout, request)
+    layout = dep(ctx, "ideogram", ideogram).normalize_layout(layout, request)
     if instruction:
         emit("stage", text=f"editing: {instruction}")
         layout, notes = edit_layout(ctx, layout, instruction)
@@ -1637,7 +1638,7 @@ def run(ctx, request: str = "", *, layout: Optional[dict] = None,
         # geometry alone.
         text_check = verify_text(ctx, image, layout)
         tproblems = text_problems(text_check.get("checks"), text_check.get("stray"))
-        verdict = critique(ctx, image, layout, evidence=tproblems)
+        verdict = dep(ctx, "critique", critique)(ctx, image, layout, evidence=tproblems)
         if tproblems:
             verdict = dict(verdict)
             verdict["ok"] = False

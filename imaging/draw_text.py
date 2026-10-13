@@ -20,6 +20,7 @@ patching `draw_agent.<name>` still redirects the loop, as before. Calls *between
 the functions in this file resolve in this module -- patch `draw_text.<name>` to
 reach those.
 """
+from seams import dep
 import copy
 import difflib
 import logging
@@ -429,7 +430,7 @@ class _ReaderCtx:
 def _reader(ctx):
     """The context the transcription runs under — see config.TEXT_READ_MODEL."""
     import config
-    name = str(getattr(config, "TEXT_READ_MODEL", "") or "").strip()
+    name = str(dep(ctx, "TEXT_READ_MODEL", getattr(config, "TEXT_READ_MODEL", "")) or "").strip()
     if not name or name == getattr(ctx, "model_name", ""):
         return ctx
     return _ReaderCtx(ctx, name)
@@ -494,6 +495,7 @@ def read_text(ctx, image_path: str) -> Optional[list]:
         return None
     try:
         import llm
+        llm = dep(ctx, "llm", llm)
         ctx = _reader(ctx)
         # No <think></think> prefill on vision calls — it breaks them (see
         # docs/vision_pipeline_forensics.md).
@@ -620,7 +622,7 @@ def verify_text(ctx, image_path: str, layout: dict) -> dict:
     sources = set()
     for i, el in wanted:
         want = str(el["text"]).strip()
-        read, region = None, _crop_for_read(image_path, el)
+        read, region = None, dep(ctx, "_crop_for_read", _crop_for_read)(image_path, el)
         best, best_score, src = "", 0.0, ""
         if region:
             try:
@@ -693,7 +695,7 @@ def stray_text(ctx, image_path: str, layout: dict, wanted: list) -> list:
         if key in seen_hosts:
             continue
         seen_hosts.add(key)
-        region = _crop_for_read(image_path, host)
+        region = dep(ctx, "_crop_for_read", _crop_for_read)(image_path, host)
         if not region:
             continue
         try:

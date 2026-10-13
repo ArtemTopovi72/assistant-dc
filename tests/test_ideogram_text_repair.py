@@ -31,9 +31,6 @@ import re
 import json
 
 import draw_agent as D
-# verify_text calls _crop_for_read through draw_text's globals, so patch the
-# module that owns the function, not draw_agent.
-import draw_text as DT
 import ideogram as G
 import image as I           # imported BEFORE llm is stubbed — image imports from it
 import config as C
@@ -150,12 +147,42 @@ class _LLM(types.ModuleType):
             raise self.reply
         return {"content": self.reply}
 
-def with_llm(reply):
-    sys.modules["llm"] = _LLM(reply)
-    return sys.modules["llm"]
+from fakes import Over
 
-_saved_llm = sys.modules.get("llm")
-CTX = types.SimpleNamespace(is_cancelled=lambda: False, model_name="chat/model")
+# What the suite hands the draw loop: every context below carries it as `deps`.
+# `_G` / `_D` collect the faked ideogram / draw_agent names.
+_DEPS = types.SimpleNamespace()
+_G, _D = {}, {}
+
+
+def fake(**names):
+    """Fake ideogram (G_name) / draw_agent (D_name) functions or any other dep."""
+    for k, v in names.items():
+        if k.startswith("G_"):
+            _G[k[2:]] = v
+        elif k.startswith("D_"):
+            _D[k[2:]] = v
+        else:
+            setattr(_DEPS, k, v)
+    _DEPS.ideogram = Over(G, **_G)
+    _DEPS.draw_agent = Over(D, **_D)
+
+
+def unfake():
+    llm = getattr(_DEPS, "llm", None)
+    _DEPS.__dict__.clear()
+    _G.clear()
+    _D.clear()
+    if llm is not None:
+        _DEPS.llm = llm
+
+
+def with_llm(reply):
+    _DEPS.llm = _LLM(reply)
+    return _DEPS.llm
+
+CTX = types.SimpleNamespace(is_cancelled=lambda: False, model_name="chat/model", deps=_DEPS)
+_PCTX = types.SimpleNamespace(deps=_DEPS)   # the planner's context
 # A real dataclass Context for the proxy tests — a namespace would hide the
 # attribute-forwarding the proxy exists to do.
 import threading
@@ -164,6 +191,7 @@ from models import Context
 CTX_REAL = Context(models=None, transcription_cache={}, cache_file=Path("tests/_x.json"),
                    asr_lock=threading.Lock(), tts_lock=threading.Lock(),
                    model_name="chat/model")
+CTX_REAL.deps = _DEPS
 try:
     with_llm('{"strings": ["AVCHKE", "911"]}')
     check("read_text returns the strings the model transcribed",
@@ -186,9 +214,8 @@ try:
     # The transcription must NOT run on the chat model: a small chat model misreads
     # clean lettering, so the correct and garbled score distributions overlap and
     # good pictures would be redrawn at random.
-    _rounds_model = C.TEXT_READ_MODEL
     try:
-        C.TEXT_READ_MODEL = "reader/model"
+        fake(TEXT_READ_MODEL="reader/model")
         seen = {}
         m = with_llm('{"strings": ["OPEN"]}')
         m.analyze_image_with_llm = lambda ctx, **kw: (
@@ -203,14 +230,14 @@ try:
               CTX_REAL.last_api_call_time == 12345.0)
         check("and every other attribute is the real one",
               proxy.api_lock is CTX_REAL.api_lock)
-        C.TEXT_READ_MODEL = ""
+        fake(TEXT_READ_MODEL="")
         check("an empty setting uses the chat model, no proxy",
               D._reader(CTX_REAL) is CTX_REAL)
-        C.TEXT_READ_MODEL = CTX_REAL.model_name
+        fake(TEXT_READ_MODEL=CTX_REAL.model_name)
         check("and so does naming the model that is already loaded",
               D._reader(CTX_REAL) is CTX_REAL)
     finally:
-        C.TEXT_READ_MODEL = _rounds_model
+        unfake()
 
     print()
     print("=" * 72)
@@ -251,7 +278,7 @@ try:
         {"background": "a field", "elements": [{"desc": "a cow", "x": .1, "y": .1,
                                                 "w": .3, "h": .3}]}))
     check("a picture with no lettering skips the vision call entirely",
-          v["source"] == "no_text" and sys.modules["llm"].calls == [], str(v))
+          v["source"] == "no_text" and _DEPS.llm.calls == [], str(v))
 
     # Reading the WHOLE picture does not survive a real render: the reader can
     # enumerate partially visible strings until it hits the token limit before
@@ -289,16 +316,15 @@ try:
 
     # ...and when the crop cannot be read, the whole picture is still tried once.
     m = with_llm('{"strings": ["POLICE"]}')
-    _real_crop = DT._crop_for_read
     try:
-        DT._crop_for_read = lambda p, b: None
+        fake(_crop_for_read=lambda p, b: None)
         v = D.verify_text(CTX, big, layout(extra=[{"desc": "a sign", "text": "STOP",
                                                    "x": .1, "y": .05, "w": .3, "h": .1}]))
         check("a failed crop falls back to reading the whole picture, once for all "
               "elements", len(m.calls) == 1 and m.calls[0]["image_path"] == big,
               f"{len(m.calls)} call(s)")
     finally:
-        DT._crop_for_read = _real_crop
+        unfake()
 
     print()
     print("=" * 72)
@@ -377,19 +403,18 @@ try:
         renders.append(G.caption_to_layout(kw["caption"]))
         return f"/tmp/render{len(renders)}.png"
 
-    _real_gen, _real_crit = G.generate, D.critique
     try:
-        G.generate = fake_generate
+        fake(G_generate=fake_generate)
         # The critic is HAPPY every time — that is the real bug. Only the
         # transcription can tell the two renders apart.
-        D.critique = lambda ctx, img, lay, evidence=None: {"ok": True, "score": 9, "problems": [],
-                                            "ops": [], "source": "vision"}
-        sys.modules["llm"] = _LLM(None)
-        sys.modules["llm"].analyze_image_with_llm = lambda ctx, **kw: json.dumps(
+        fake(critique=lambda ctx, img, lay, evidence=None: {"ok": True, "score": 9, "problems": [],
+                                            "ops": [], "source": "vision"})
+        _DEPS.llm = _LLM(None)
+        _DEPS.llm.analyze_image_with_llm = lambda ctx, **kw: json.dumps(
             {"strings": [reads[min(len(renders), len(reads)) - 1]]})
         res = D.run(CTX, "a police car", layout=layout(), rounds=1)
     finally:
-        G.generate, D.critique = _real_gen, _real_crit
+        unfake()
 
     check("a garbled first render is redrawn even though the critic approved it",
           len(renders) == 2, f"{len(renders)} render(s)")
@@ -410,13 +435,13 @@ try:
     # ...and the layout that was never garbled must not be redrawn for nothing.
     renders.clear()
     try:
-        G.generate = fake_generate
-        D.critique = lambda ctx, img, lay, evidence=None: {"ok": True, "score": 9, "problems": [],
-                                            "ops": [], "source": "vision"}
+        fake(G_generate=fake_generate)
+        fake(critique=lambda ctx, img, lay, evidence=None: {"ok": True, "score": 9, "problems": [],
+                                            "ops": [], "source": "vision"})
         with_llm('{"strings": ["POLICE"]}')
         res = D.run(CTX, "a police car", layout=layout(), rounds=2)
     finally:
-        G.generate, D.critique = _real_gen, _real_crit
+        unfake()
     check("a correct render is not redrawn", len(renders) == 1, f"{len(renders)}")
     check("the first render already had a properly shaped box (fixed before drawing)",
           D.text_report(renders[0]) == [], str(D.text_report(renders[0])))
@@ -426,15 +451,15 @@ try:
     # the next attempt the very geometry that garbled the word in the first place.
     renders.clear()
     try:
-        G.generate = fake_generate
-        D.critique = lambda ctx, img, lay, evidence=None: {
+        fake(G_generate=fake_generate)
+        fake(critique=lambda ctx, img, lay, evidence=None: {
             "ok": False, "score": 4, "problems": ["the lettering is squeezed"],
             "ops": [{"op": "resize", "target": "the door of the car",
-                     "w": 0.06, "h": 0.04}], "source": "vision"}
+                     "w": 0.06, "h": 0.04}], "source": "vision"})
         with_llm('{"strings": ["AVCHKE"]}')
         D.run(CTX, "a police car", layout=layout(), rounds=1)
     finally:
-        G.generate, D.critique = _real_gen, _real_crit
+        unfake()
     check("a critic op cannot shrink a lettering box back below what its string needs",
           len(renders) == 2 and D.text_report(renders[1]) == [],
           str(D.text_report(renders[1]) if len(renders) > 1 else renders))
@@ -442,13 +467,13 @@ try:
     # A vision outage must not turn every lettered picture into three renders.
     renders.clear()
     try:
-        G.generate = fake_generate
-        D.critique = lambda ctx, img, lay, evidence=None: {"ok": True, "score": 9, "problems": [],
-                                            "ops": [], "source": "vision"}
+        fake(G_generate=fake_generate)
+        fake(critique=lambda ctx, img, lay, evidence=None: {"ok": True, "score": 9, "problems": [],
+                                            "ops": [], "source": "vision"})
         with_llm(RuntimeError("vision is down"))
         res = D.run(CTX, "a police car", layout=layout(), rounds=2)
     finally:
-        G.generate, D.critique = _real_gen, _real_crit
+        unfake()
     check("a read-back outage costs one render, not the whole budget",
           len(renders) == 1 and res["text"]["source"] == "unavailable", f"{len(renders)}")
 
@@ -471,12 +496,11 @@ try:
         calls["caption"] = kw.get("caption")
         return "/tmp/single.png"
 
-    _real_plan, _rounds, _real_run = G.plan_layout, C.IDEOGRAM_TEXT_ROUNDS, D.run
     try:
-        D.run, G.generate = fake_run, fake_gen2
-        C.IDEOGRAM_TEXT_ROUNDS = 1
+        fake(D_run=fake_run, G_generate=fake_gen2)
+        fake(IDEOGRAM_TEXT_ROUNDS=1)
 
-        G.plan_layout = lambda ctx, p: layout()
+        fake(G_plan_layout=lambda ctx, p: layout())
         out = I._ideogram_draw(CTX, "a police car", width=1024, height=1024,
                                seed=1, timeout=60)
         check("a scene with lettering is drawn through the read-back loop",
@@ -484,9 +508,9 @@ try:
               str(calls))
 
         calls.update(run=0, gen=0)
-        G.plan_layout = lambda ctx, p: G.normalize_layout(
+        fake(G_plan_layout=lambda ctx, p: G.normalize_layout(
             {"background": "a field", "elements": [{"desc": "a cow", "x": .1, "y": .1,
-                                                    "w": .3, "h": .3}]})
+                                                    "w": .3, "h": .3}]}))
         out = I._ideogram_draw(CTX, "a cow", width=1024, height=1024, seed=1, timeout=60)
         check("a scene with no lettering is a single submit, as before",
               out == "/tmp/single.png" and calls["run"] == 0 and calls["gen"] == 1,
@@ -497,8 +521,8 @@ try:
                   == "a cow", str(calls["caption"]))
 
         calls.update(run=0, gen=0)
-        C.IDEOGRAM_TEXT_ROUNDS = 0
-        G.plan_layout = lambda ctx, p: layout()
+        fake(IDEOGRAM_TEXT_ROUNDS=0)
+        fake(G_plan_layout=lambda ctx, p: layout())
         out = I._ideogram_draw(CTX, "a police car", width=1024, height=1024,
                                seed=1, timeout=60)
         check("the check can be turned off entirely",
@@ -506,19 +530,19 @@ try:
               str(calls))
 
         calls.update(run=0, gen=0)
-        C.IDEOGRAM_TEXT_ROUNDS = 1
+        fake(IDEOGRAM_TEXT_ROUNDS=1)
         def boom(ctx, p): raise RuntimeError("planner exploded")
-        G.plan_layout = boom
+        fake(G_plan_layout=boom)
         out = I._ideogram_draw(CTX, "a police car", width=1024, height=1024,
                                seed=1, timeout=60)
         check("a failure anywhere in the new path still returns a picture",
               out == "/tmp/single.png" and calls["gen"] == 1, str(calls))
 
         calls.update(run=0, gen=0)
-        G.plan_layout = lambda ctx, p: layout()
-        D.run = lambda ctx, request="", **kw: {"image": None, "stopped": "refused",
+        fake(G_plan_layout=lambda ctx, p: layout())
+        fake(D_run=lambda ctx, request="", **kw: {"image": None, "stopped": "refused",
                                                "problems": ["declined"], "history": [],
-                                               "layout": kw.get("layout")}
+                                               "layout": kw.get("layout")})
         try:
             I._ideogram_draw(CTX, "x", width=64, height=64, seed=1, timeout=60)
             refused = False
@@ -526,13 +550,9 @@ try:
             refused = True
         check("a refusal is raised, not silently redrawn on another engine", refused)
     finally:
-        G.plan_layout, C.IDEOGRAM_TEXT_ROUNDS = _real_plan, _rounds
-        G.generate, D.run = _real_gen, _real_run
+        unfake()
 finally:
-    if _saved_llm is not None:
-        sys.modules["llm"] = _saved_llm
-    else:
-        sys.modules.pop("llm", None)
+    unfake()
 
 
 print()
@@ -604,24 +624,23 @@ check("a prompt asking for no lettering leaves the layout untouched",
 
 # The backstop has to be on the SUCCESS path, not just the fallback: a planner
 # can answer perfectly well and simply leave `text` out.
-_real_ask = G._ask_planner
 try:
-    G._ask_planner = lambda ctx, prompt, attempts=2: {
+    fake(_ask_planner=lambda ctx, prompt, attempts=2: {
         "background": "a street at night", "medium": "photography",
         "aesthetics": "moody", "lighting": "neon",
         "elements": [{"desc": "a corner cafe storefront", "x": .1, "y": .2,
-                      "w": .6, "h": .5}]}
-    planned = G.plan_layout(object(), _req)
+                      "w": .6, "h": .5}]})
+    planned = G.plan_layout(_PCTX, _req)
     check("a planner that answers well but forgets the lettering is corrected",
           any(e["text"] == "CAFE ROSA" for e in planned["elements"]),
           str(planned["elements"]))
-    G._ask_planner = lambda ctx, prompt, attempts=2: None
-    fell_back = G.plan_layout(object(), _req)
+    fake(_ask_planner=lambda ctx, prompt, attempts=2: None)
+    fell_back = G.plan_layout(_PCTX, _req)
     check("and so is the fallback layout",
           any(e["text"] == "CAFE ROSA" for e in fell_back["elements"]),
           str(fell_back["elements"]))
 finally:
-    G._ask_planner = _real_ask
+    unfake()
 
 cap = G.build_caption("a street", [G.element("a sign", G.bbox(.1, .1, .3, .1),
                                              text="OPEN")], art_style="cartoon",
@@ -630,14 +649,13 @@ check("a text element is typed as text",
       cap["compositional_deconstruction"]["elements"][0]["type"] == "text")
 check("the caption carries the literal string",
       cap["compositional_deconstruction"]["elements"][0]["text"] == "OPEN")
-_real_ask2 = G._ask_planner
-G._ask_planner = lambda ctx, prompt, attempts=2: {
+fake(_ask_planner=lambda ctx, prompt, attempts=2: {
     "background": "a person", "art_style": "caricature", "medium": "",
-    "elements": [{"desc": "a person", "x": .1, "y": .1, "w": .6, "h": .6}]}
+    "elements": [{"desc": "a person", "x": .1, "y": .1, "w": .6, "h": .6}]})
 try:
-    cap_style = G.plan_caption(object(), "draw a caricature of a person")
+    cap_style = G.plan_caption(_PCTX, "draw a caricature of a person")
 finally:
-    G._ask_planner = _real_ask2
+    unfake()
 # A behavior check, not a literal source-text scan: plan_caption routes through
 # layout_to_caption, so the check proves the OUTCOME rather than grepping source.
 check("plan_caption no longer drops art_style (a caricature was captioned as a photo)",

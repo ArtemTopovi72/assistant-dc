@@ -18,6 +18,7 @@ So this module has two halves:
 
 Public entry point: `generate(ctx, prompt, ...) -> saved image path or None`.
 """
+from seams import dep
 import json
 import logging
 import random
@@ -641,7 +642,7 @@ def plan_layout(ctx, prompt: str) -> dict:
     if ctx is None:
         return fallback()
     try:
-        data = _ask_planner(ctx, prompt)
+        data = dep(ctx, "_ask_planner", _ask_planner)(ctx, prompt)
         if not isinstance(data, dict):
             logger.warning("Ideogram planner returned no JSON — using the flat layout")
             return fallback()
@@ -673,7 +674,7 @@ def plan_caption(ctx, prompt: str) -> dict:
     if ctx is None:
         return fallback()
     try:
-        data = _ask_planner(ctx, prompt)
+        data = dep(ctx, "_ask_planner", _ask_planner)(ctx, prompt)
         if not isinstance(data, dict):
             logger.warning("Ideogram planner returned no JSON — using the flat caption")
             return fallback()
