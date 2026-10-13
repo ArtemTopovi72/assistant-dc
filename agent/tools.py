@@ -646,15 +646,16 @@ def _handle_create_presentation(ctx, state, args: dict) -> str:
     import search as _search
 
     fetched: list = []
+    out_root = dep(ctx, "output_dir", image_mod.OUTPUT_DIR)
 
     def _fetch(query: str):
         # require_face=False: a deck illustration is a place/object far more often
         # than a person, and a face gate would reject most of them.
         import time
         ts = int(time.time() * 1000)
-        dest = os.path.join(str(image_mod.OUTPUT_DIR), f"slide_{ts}.jpg")
+        dest = os.path.join(str(out_root), f"slide_{ts}.jpg")
         try:
-            image_mod.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+            out_root.mkdir(parents=True, exist_ok=True)
         except Exception:
             logger.debug("could not create the output folder", exc_info=True)
         # Slide artwork, not a face reference: a portrait cropped into a wide
@@ -673,14 +674,14 @@ def _handle_create_presentation(ctx, state, args: dict) -> str:
         if not previous:
             logger.info("create_presentation: edit requested but no previous deck — planning anew")
     ctx.set_stage("Updating the presentation" if previous else "Planning the presentation")
-    out_dir = str(image_mod.OUTPUT_DIR)
+    out_dir = str(out_root)
     # Same english-first pitfall as deep_research above — see _lang_of_original.
     _deck_lang = _lang_of_original(state, topic, ctx=ctx)
     # «с картинкой на каждом слайде» got four pictures: the cap is for decks that did not ask.
     _every = yes_no(ctx)("A user asked for a presentation: {text}. Does the user ask for a "
                             "picture on EVERY slide?",
                             f'{state.get("user_input_original") or ""} {topic}'.strip())
-    result = _slides.make_presentation(
+    result = dep(ctx, "make_presentation", _slides.make_presentation)(
         ctx, topic, out_dir, n_slides=n,
         image_fetcher=_fetch if want_images else None, out_lang=_deck_lang,
         previous=previous, max_images=_slides.MAX_SLIDES if _every else 4)

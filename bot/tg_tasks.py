@@ -11,7 +11,7 @@ imported by value: _MEMORY_DIR is rebound by redirect_data_dir(), and the rest
 must keep a single definition so patching tg_bot.X steers this module too.
 """
 from __future__ import annotations
-from seams import intent_read, text_model, vision_model, yes_no
+from seams import dep, intent_read, text_model, vision_model, yes_no
 
 import copy as _copy_mod
 import html as _html_mod
@@ -983,7 +983,8 @@ class TaskRunnerMixin:
                 # in-graph tool-calling path (tools.py's deep_research handler),
                 # which never passes a UI-lang fallback either.
                 _out_lang = _dr.lang_of_text(topic)
-                result = _dr.run_deep_research(ctx, topic, out_lang=_out_lang, depth=depth,
+                result = dep(ctx, "run_deep_research", _dr.run_deep_research)(
+                    ctx, topic, out_lang=_out_lang, depth=depth,
                     progress=lambda phase, stats, msg: _dr_stage(phase))
             except Exception as exc:
                 tg_bot.logger.exception("Telegram deep research failed chat=%s", chat_id)

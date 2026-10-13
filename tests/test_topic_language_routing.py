@@ -21,7 +21,7 @@ monkeypatched.
 
 Run: venv/Scripts/python.exe tests/test_topic_language_routing.py
 """
-import os, sys, tempfile
+import os, sys, tempfile, types
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -83,17 +83,14 @@ def run_bypass(bot, chat_id, ui_lang, topic_text):
     bot._store.put(sess)
 
     captured = {}
-    _orig = D.run_deep_research
     def _fake(ctx, topic, out_lang="en", **kw):
         captured["out_lang"] = out_lang
         return {"report": "stub", "reply": "stub", "stats": {"findings": 0}}
-    D.run_deep_research = _fake
-    try:
-        task = T._Task(task_id=f"t-{chat_id}", chat_id=chat_id,
-                       user_text=f"do a deep research on: {topic_text}")
-        bot._run_task_inner(task, sess, u, u.name, ui_lang, _FakeCtx(), None)
-    finally:
-        D.run_deep_research = _orig
+    task = T._Task(task_id=f"t-{chat_id}", chat_id=chat_id,
+                   user_text=f"do a deep research on: {topic_text}")
+    fake_ctx = _FakeCtx()
+    fake_ctx.deps = types.SimpleNamespace(run_deep_research=_fake)
+    bot._run_task_inner(task, sess, u, u.name, ui_lang, fake_ctx, None)
     return captured.get("out_lang")
 
 
@@ -138,31 +135,25 @@ def _fake_llm(ctx, system_prompt, user_msg, **kw):
     _seen_prompts.append(user_msg)
     return '{"title": "T", "slides": [{"heading":"H","bullets":["b"]}]}'
 
-import llm as _llm_mod
-_orig_call = _llm_mod.call_llm_simple
-try:
-    # plan_deck imports call_llm_simple locally from `llm` — patch the module.
-    _llm_mod.call_llm_simple = _fake_llm
-    _seen_prompts.clear()
-    S.plan_deck(None, "История Транссибирской магистрали", out_lang="ru")
-    check("a Russian-language deck request carries the OUTPUT LANGUAGE directive",
-          _seen_prompts and "OUTPUT LANGUAGE" in _seen_prompts[0]
-          and "Russian" in _seen_prompts[0],
-          _seen_prompts[0] if _seen_prompts else None)
+_deck_ctx = types.SimpleNamespace(text_model=_fake_llm)
+_seen_prompts.clear()
+S.plan_deck(_deck_ctx, "История Транссибирской магистрали", out_lang="ru")
+check("a Russian-language deck request carries the OUTPUT LANGUAGE directive",
+      _seen_prompts and "OUTPUT LANGUAGE" in _seen_prompts[0]
+      and "Russian" in _seen_prompts[0],
+      _seen_prompts[0] if _seen_prompts else None)
 
-    _seen_prompts.clear()
-    S.plan_deck(None, "History of the Trans-Siberian Railway", out_lang="en")
-    check("out_lang='en' adds NO directive (English is the silent default)",
-          _seen_prompts and "OUTPUT LANGUAGE" not in _seen_prompts[0],
-          _seen_prompts[0] if _seen_prompts else None)
+_seen_prompts.clear()
+S.plan_deck(_deck_ctx, "History of the Trans-Siberian Railway", out_lang="en")
+check("out_lang='en' adds NO directive (English is the silent default)",
+      _seen_prompts and "OUTPUT LANGUAGE" not in _seen_prompts[0],
+      _seen_prompts[0] if _seen_prompts else None)
 
-    _seen_prompts.clear()
-    S.plan_deck(None, "История Транссибирской магистрали")
-    check("out_lang omitted entirely -> no directive (backward compatible)",
-          _seen_prompts and "OUTPUT LANGUAGE" not in _seen_prompts[0],
-          _seen_prompts[0] if _seen_prompts else None)
-finally:
-    _llm_mod.call_llm_simple = _orig_call
+_seen_prompts.clear()
+S.plan_deck(_deck_ctx, "История Транссибирской магистрали")
+check("out_lang omitted entirely -> no directive (backward compatible)",
+      _seen_prompts and "OUTPUT LANGUAGE" not in _seen_prompts[0],
+      _seen_prompts[0] if _seen_prompts else None)
 
 
 print()
@@ -180,31 +171,22 @@ def _fake_make_presentation(ctx, topic, out_dir, *, n_slides=0, image_fetcher=No
     return {"path": "/tmp/fake.pptx",
             "deck": {"title": topic, "slides": [{"heading": "a"}, {"heading": "b"}]}}
 
-class _FakeImageMod:
-    OUTPUT_DIR = type("P", (), {"mkdir": staticmethod(lambda *a, **k: None),
-                                "__str__": lambda self: "/tmp"})()
+_FAKE_OUTPUT_DIR = type("P", (), {"mkdir": staticmethod(lambda *a, **k: None),
+                                  "__str__": lambda self: "/tmp"})()
 
 class _FakeCtx2:
     web_search_enabled = False
+    deps = types.SimpleNamespace(make_presentation=_fake_make_presentation, output_dir=_FAKE_OUTPUT_DIR)
     def set_stage(self, s): pass
     def remember(self, *a, **k): pass
     def memory_text(self): return ""
 
-_orig_slides_mp = S.make_presentation
-S.make_presentation = _fake_make_presentation
-_orig_image_mod = getattr(T_mod, "image_mod", None)
-T_mod.image_mod = _FakeImageMod
-try:
-    state = {"user_input_original": "сделай презентацию про историю железных дорог"}
-    ctx = _FakeCtx2()
-    args = {"topic": "the history of railways", "illustrate": False}  # already-translated topic
-    T_mod._handle_create_presentation(ctx, state, args)
-    check("the deck language is detected from user_input_original (ru), not the English topic arg",
-          _captured_out_lang.get("out_lang") == "ru", _captured_out_lang)
-finally:
-    S.make_presentation = _orig_slides_mp
-    if _orig_image_mod is not None:
-        T_mod.image_mod = _orig_image_mod
+state = {"user_input_original": "сделай презентацию про историю железных дорог"}
+ctx = _FakeCtx2()
+args = {"topic": "the history of railways", "illustrate": False}  # already-translated topic
+T_mod._handle_create_presentation(ctx, state, args)
+check("the deck language is detected from user_input_original (ru), not the English topic arg",
+      _captured_out_lang.get("out_lang") == "ru", _captured_out_lang)
 
 
 print()
