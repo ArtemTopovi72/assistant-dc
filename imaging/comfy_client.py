@@ -972,8 +972,11 @@ def _poll_history(ctx, prompt_id, timeout, label, validate=None):
                             and m[0] in ("execution_error", "execution_interrupted")
                         ]
                         _why = "; ".join(str(p) for p in err_parts) or "unknown error"
-                        logger.error("ComfyUI job %s with no output: %s",
-                                     "errored" if errored else "completed", _why)
+                        # completed-and-empty is the H3 chain join's normal answer: its node
+                        # writes the file itself and reports nothing to /history
+                        logger.log(logging.ERROR if errored else logging.WARNING,
+                                   "ComfyUI job %s with no output: %s",
+                                   "errored" if errored else "completed", _why)
                         _fail(f"ComfyUI failed during the render: {_why}" if errored
                               else "ComfyUI finished the job without saving a file")
                         return None
