@@ -39,7 +39,10 @@ MERGE_PROMPT = (
     "notes (text, numbers, small objects) when they are relevant. Do not list "
     "the parts by position; merge them into one description. Up to eight "
     "sentences, plain text, no markdown. Never invent what neither source "
-    "mentions.")
+    "mentions. Lettering is read twice: by the notes and, when the question "
+    "carries one, by an OCR reading. Where they differ by a letter or two, quote "
+    "the reading that makes a real word in that sentence (OCR «МЫ ЭТО», a note "
+    "«мы эло»: it says «мы это»); never build the point on a misread word.")
 
 
 def tile_boxes(w: int, h: int) -> List[Tuple[str, Tuple[int, int, int, int]]]:

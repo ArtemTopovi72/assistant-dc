@@ -1369,7 +1369,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     # «продолжи это видео» in words: made a new clip from nothing, another style even
     # (live 2026-10-13) -- only the ▶️ button set the clip up. The chat's last clip here.
     lv = getattr(ctx, "last_video_path", None)
-    if not getattr(ctx, "continue_tail", "") and lv and os.path.exists(lv):
+    # A picture sent after the clip is what «оживи» is about: a fresh meme was read as
+    # «continue the old clip» and its plan went on from an unrelated video (live 2026-10-13).
+    newer_pic = lv and os.path.exists(lv) and any(
+        os.path.exists(p) and os.path.getmtime(p) > os.path.getmtime(lv) for p in (images or []))
+    if not getattr(ctx, "continue_tail", "") and lv and os.path.exists(lv) and not newer_pic:
         said = str((state or {}).get("user_input_original") or (state or {}).get("user_input") or "")
         if said and yes_no(ctx)(
                 "The user wrote: {text}. Do they ask to continue or extend the video already in "
@@ -1485,6 +1489,16 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     # continuation from the last frame (the user's idea, 10-06: "split it into 5.2 s
     # blocks"): the first part here, the rest after it below.
     raw = (args.get("description") or "").strip()
+    _said = str((state or {}).get("user_input_original") or (state or {}).get("user_input") or "")
+    if images and not continuing and not args.get("seconds") and not yes_no(ctx)(
+            "The user asked to animate a picture: {text}. Do they say WHAT should happen in "
+            "the clip (an action, a movement, a line), rather than leaving it to the bot "
+            "(«на своё усмотрение», just «оживи»)?", _said, default=True):
+        acted = video_mod.action_script(raw, ctx)
+        if acted:
+            logger.info("generate_video: script as action from the first frame: %s", acted[:300])
+            description = description.replace(raw, acted, 1) if raw in description else acted
+            raw = acted
     # Over one clip's 15 s the parts follow the script: «на 30 секунд» was capped to one
     # 15 s clip and delivered without a word (2026-10-13).
     if args.get("seconds") and float(args["seconds"]) <= 15.0:

@@ -298,6 +298,21 @@ def test_continue_in_words_goes_on_from_the_chats_last_clip(tmp_path):
     assert not rig.calls[0][1].get("chain") or rig.calls[0][1]["chain"][1] == 1   # a new clip stays new
 
 
+def test_a_picture_sent_after_the_clip_is_animated_not_the_clip_continued(tmp_path):
+    # «оживи на своё усмотрение» under a fresh meme went on from an old clip (live 2026-10-13).
+    last = tmp_path / "delivered.mp4"
+    last.write_bytes(b"s")
+    pic = tmp_path / "meme.jpg"
+    pic.write_bytes(b"j")
+    os.utime(last, (1000, 1000))
+    rig = _Rig(tmp_path, chains={str(last): ("h3_continuous/chZ", 4)})
+    ctx = rig.ctx(last_video_path=str(last), yes_no=lambda q, t, default=False, wait=True: True,
+                  deps=types.SimpleNamespace(_current_image_paths=lambda c, s: [str(pic)]))
+    H._handle_generate_video(ctx, {"user_input_original": "оживи на своё усмотрение"},
+                             {"description": "The cats charge."})
+    assert not rig.calls[0][1].get("chain") or rig.calls[0][1]["chain"][1] == 1
+
+
 def test_an_approved_plan_keeps_the_continuation_prefix_and_the_whole_first_part(tmp_path):
     # The approved first part replaced the description whole (prefix gone), and the bridge
     # then cut the prefix's length off the part: «What happens next: Camera: static…»
@@ -309,3 +324,16 @@ def test_an_approved_plan_keeps_the_continuation_prefix_and_the_whole_first_part
         video_plan_parts=[first, "The baker waves after it and laughs."])
     H._handle_generate_video(ctx, {}, {"description": LONG})
     assert prepped and prepped[0].startswith(V.CONTINUE_CTX_PREFIX + "BRIDGE. " + first), prepped[:1]
+
+
+def test_a_picture_script_is_rewritten_as_an_event_never_as_one_still_line():
+    # One sentence back («The camera pans across the army») made one part: no plan, and a
+    # render started with nothing happening (live 2026-10-13).
+    one = types.SimpleNamespace(text_model=lambda *a, **k: "The camera pans across the army. Sound: wind.")
+    assert V.action_script("Cats stand. A flag waves. Sound: wind.", one) == ""
+    told = []
+    event = ("The cats charge. The armies clash. One cat tears the enemy flag down. "
+             "Sound: battle cries.")
+    ok = types.SimpleNamespace(text_model=lambda c, sysp, user, **k: told.append(sysp) or event)
+    assert V.action_script("Cats stand. A flag waves.", ok) == event
+    assert "FIRST FRAME" in told[0] and "invent the obvious one" in told[0]

@@ -1588,6 +1588,38 @@ def condense_script(script: str, now_s: float, fit_s: float, ctx=None, sentences
     return " ".join(out.split()).strip()
 
 
+def action_script(script: str, ctx=None) -> str:
+    """With a picture as the first frame, the script as only what HAPPENS from it: the
+    agent re-described the frame («three cats in capes stand», «the flag waves») and each
+    such sentence became a still part (live 2026-10-13, 2 plans of 3). "" when the model
+    fails or answers with nothing usable."""
+    try:
+        out = text_model(ctx)(
+            None,
+            "A picture is the FIRST FRAME of a video clip; the script below was written for "
+            "it. Rewrite the script as what HAPPENS from that frame on: ONE event played out "
+            "in 3 to 5 sentences, each sentence one visible action by the characters that "
+            "moves the event forward, in order (e.g. the cat army charges across the field, "
+            "the two armies crash together, one cat leaps onto the enemy's flag and tears it "
+            "down, the cats cheer). If the script only describes the scene and has no event, "
+            "invent the obvious one for these characters from what the script says is in "
+            "the picture (opposing armies fight; a waiter drops the tray). Never a sentence "
+            "that only says what is in the frame or how it looks (who stands where, what is "
+            "written on what, a flag waving, light flickering, the camera panning). Keep "
+            "quoted spoken lines word for word and add none the script does not have; end "
+            "with one 'Sound: …' line. English. "
+            "Reply with the script only.",
+            script, temperature=0.2, max_tokens=500) or ""
+    except Exception:
+        logger.exception("rewriting a video script as action failed")
+        return ""
+    out = " ".join(out.split()).strip()
+    # One sentence back («The camera pans across the army») made one part: no plan, a
+    # render started at once with nothing happening in it (live 2026-10-13).
+    actions = [s for s in re.split(r"(?<=[.!?])\s+", out) if s and not s.lower().startswith("sound")]
+    return out if len(actions) >= 3 and len(out) <= 2 * len(script) + 300 else ""
+
+
 def mark_inserts(ctx, parts: list) -> list:
     """Parts whose main beat is a SMALL thing in flight or falling (a cork, an apple, a
     stone, a ball far away) become a close-up insert, and the part after one cuts back
