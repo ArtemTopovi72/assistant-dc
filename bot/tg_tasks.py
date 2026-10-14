@@ -203,7 +203,12 @@ def retell_system(lang: str, is_video: bool) -> str:
                 "a voice message. A video whose transcript is «(без слов)» / «(no speech)» is "
                 "retold from the storyboard alone: what is shown, in order. Never "
                 "ask for a transcript or say one is missing -- there is nothing more "
-                "to send. " + _CONVO_RULE + _lang_line + "\n"
+                "to send. A line «Подпись отправителя» / «Sender's caption» is how the sender "
+                "framed the clip. A caption that does not match the picture means a joke or a "
+                "meme: say so, say in one sentence what is actually shown, and if you do not "
+                "recognise the reference say that plainly. Never retell a meme as a literal "
+                "documentary scene (a caption about AI over girls hauling sand is a joke, not a "
+                "construction site). " + _CONVO_RULE + _lang_line + "\n"
                 + _tg_video._structure_rules(lang, timecoded=False))
     return ("You summarize forwarded voice messages from their transcript: the "
             "key points and anything asked of the listener. " + _CONVO_RULE + _lang_line + "\n"
@@ -1982,7 +1987,7 @@ class TaskRunnerMixin:
                 tg_bot.logger.warning("session persist failed", exc_info=True)
 
     def _look_video(self, ctx, file_id: str, data: bytes | None = None, lang: str = "ru",
-                    transcript: str = "") -> dict:
+                    transcript: str = "", caption: str = "") -> dict:
         """See the picture of a video message: frames every 5 s on one sheet,
         one vision call, so a forwarded round video is seen as well as
         listened to. Returns video_look's dict; description "" on any
@@ -1997,7 +2002,7 @@ class TaskRunnerMixin:
             import video_look
             work = Path(tg_bot._IMAGE_DIR) / f"video_{uuid.uuid4().hex[:8]}"
             seen = video_look.look_at_video(ctx, src_file, work_dir=work, lang=lang,
-                                            transcript=transcript)
+                                            transcript=transcript, caption=caption)
             # The clip stays beside its frame sheet: «сделай продолжение» typed under a
             # forwarded video continues THIS clip (video_look.CONTINUE_CLIP), not a still of its sheet.
             if seen.get("sheet") and os.path.exists(seen["sheet"]):

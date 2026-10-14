@@ -1015,7 +1015,7 @@ class ResolveMixin:
                                         lang_hint=(sess.lang or "ru"), data=_data,
                                         speakers=True)
                 _seen = (self._look_video(ctx, item["file_id"], data=_data, lang=(sess.lang or "ru"),
-                                          transcript=said or "")
+                                          transcript=said or "", caption=item.get("caption") or "")
                          if _media == "video" else {})
                 if _seen.get("description"):
                     # A forwarded VIDEO is listened to AND looked at: the
@@ -1023,6 +1023,13 @@ class ResolveMixin:
                     # In the user's language: the 📝 button shows this text as is.
                     said = ((said or "") + "\n\n" + tg_bot._t("fwd_video_seen", lang,
                                                            seen=_seen["description"].strip())).strip()
+                _companion = (item.get("companion") or "").strip()
+                _asked = (getattr(self, "fwdv_intent", None) or tg_bot._fwdv_intent)(item.get("caption") or _companion)
+                _cap = (item.get("caption") or "").strip()
+                if _cap and not _asked and _media == "video" and said:
+                    # A caption that is not an order is how the sender framed the clip
+                    # (a meme's setup): the retelling reads picture and words against it.
+                    said = tg_bot._t("fwd_video_caption", lang, caption=_cap) + "\n\n" + said
                 if not said:
                     self._send_text(chat_id, tg_bot._t("fwd_voice_none", lang),
                                     keyboard=self._main_menu_kb(sess, lang)); return
@@ -1038,8 +1045,6 @@ class ResolveMixin:
                 self._store.put(sess)
                 # If they already said what they want ("перескажи", "расшифруй"),
                 # do it instead of asking again.
-                _companion = (item.get("companion") or "").strip()
-                _asked = (getattr(self, "fwdv_intent", None) or tg_bot._fwdv_intent)(item.get("caption") or _companion)
                 if _asked:
                     self._do_fwd_voice(chat_id, _asked, said[:20000])
                     return

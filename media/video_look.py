@@ -260,7 +260,7 @@ def combine_sheets(parts: list, out_path: Path, width: int = 960) -> Path:
 def look_at_video(ctx, path: str, *, every: float = EVERY_SECONDS,
                   max_frames: int = MAX_FRAMES, work_dir: Optional[Path] = None,
                   vision: Optional[Callable] = None, lang: str = "ru",
-                  transcript: str = "", offset: float = 0.0) -> dict:
+                  transcript: str = "", offset: float = 0.0, caption: str = "") -> dict:
     """Return {"duration", "times", "sheet", "description"}; description is ""
     when nothing could be seen (no frames, vision down).
 
@@ -308,6 +308,10 @@ def look_at_video(ctx, path: str, *, every: float = EVERY_SECONDS,
               "to add things that are not in the frames -- if the frames show none "
               "of what is said, describe only what they show:\n«"
               + transcript.strip()[:1500] + "»")
+    if (caption or "").strip():
+        q += ("\n\nThe sender's caption over this video: «" + caption.strip()[:300] + "». It is the "
+              "setup of the joke when the picture does not match it: say what the frames show, "
+              "quote any text on them, and do not describe the scene as if it were serious.")
     try:
         desc = (vision([(f"Frame {_stamp(t + offset)}:", str(p)) for t, p in frames], q, _SHEET_SYSTEM + _LANG_LINE.get(lang, _LANG_LINE["en"])) or "").strip()
     except Exception:
