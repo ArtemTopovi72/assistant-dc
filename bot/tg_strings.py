@@ -896,31 +896,33 @@ _MSG: dict[str, dict[str, str]] = {
                       "ru": "Сколько минут видео в одной порции."},
     "vs_pick_frames": {"en": "Key frames picked per portion (where the picture changed, the sharpest one).",
                        "ru": "Сколько ключевых кадров на порцию (где картинка изменилась, берётся самый резкий)."},
-    "vs_pick_out": {"en": "«Summary + questions»: one retelling at the end, then ask what you want. "
-                          "The others send every portion as it is ready.",
-                    "ru": "«Кратко + вопросы»: один пересказ в конце, дальше спрашиваешь, что интересно. "
-                          "Остальные присылают каждую порцию, как только готова."},
+    "vs_pick_out": {"en": "«One summary»: a single retelling of the whole video at the end (you can ask "
+                          "questions about it afterwards). The others send every part as it is ready.",
+                    "ru": "«Один пересказ»: в конце приходит один пересказ всего видео (потом можно задать "
+                          "вопросы). Остальные присылают каждую часть, как только она готова."},
     "vs_pick_long": {"en": "A video at least this long is taken apart by portions; shorter ones are "
                            "watched in one go.",
                      "ru": "Видео от этой длины разбирается по частям; короче — смотрится целиком."},
     "vs_min": {"en": "{n} min", "ru": "{n} мин"},
     "vs_frames_n": {"en": "{n}", "ru": "{n}"},
-    "vs_out_brief": {"en": "summary + questions", "ru": "кратко + вопросы"},
-    "vs_out_both": {"en": "storyboard + retelling", "ru": "раскадровка + пересказ"},
-    "vs_out_board": {"en": "storyboard", "ru": "раскадровка"},
-    "vs_out_retell": {"en": "retelling", "ru": "пересказ"},
+    "vs_out_brief": {"en": "one summary of the whole video", "ru": "один пересказ всего видео"},
+    "vs_out_both": {"en": "each part: storyboard + retelling", "ru": "каждая часть: раскадровка + пересказ"},
+    "vs_out_board": {"en": "each part: storyboard", "ru": "каждая часть: раскадровка"},
+    "vs_out_retell": {"en": "each part: retelling", "ru": "каждая часть: пересказ"},
     "vs_reset": {"en": "♻️ Defaults", "ru": "♻️ По умолчанию"},
     "vs_back": {"en": "↩ Back", "ru": "↩ Назад"},
     "vs_was_reset": {"en": "↩️ Video settings are back to defaults.", "ru": "↩️ Настройки видео сброшены."},
-    "lv_offer": {"en": "🎬 <b>Long video</b> · {mins} min\nI will take it apart portion by portion "
-                       "({setup}). Start?",
-                 "ru": "🎬 <b>Длинное видео</b> · {mins} мин\nРазберу по частям ({setup}). Поехали?"},
-    "lv_go": {"en": "▶️ Go", "ru": "▶️ Поехали"},
-    "lv_ask": {"en": "❓ Ask about it", "ru": "❓ Спросить про видео"},
+    "lv_offer": {"en": "🎬 <b>Long video</b> · {mins} min\nI watch it in {parts} steps of {chunk} min, "
+                       "so it takes a while. What do you want?",
+                 "ru": "🎬 <b>Длинное видео</b> · {mins} мин\nСмотрю его за {parts} шагов по {chunk} мин — "
+                       "это небыстро. Что нужно?"},
+    "lv_go": {"en": "📝 Retell the whole video", "ru": "📝 Пересказ всего видео"},
+    "lv_each": {"en": "📜 Part by part", "ru": "📜 По частям"},
+    "lv_ask": {"en": "❓ Ask a question about it", "ru": "❓ Задать вопрос по видео"},
     "lv_ask_prompt": {"en": "❓ What do you want to know about this video? Write the question — "
                             "I will answer with timecodes.",
                       "ru": "❓ Что тебя интересует в этом видео? Напиши вопрос — отвечу с таймкодами."},
-    "lv_more": {"en": "❓ Ask about the video", "ru": "❓ Спросить про видео"},
+    "lv_more": {"en": "❓ Ask a question about it", "ru": "❓ Задать вопрос по видео"},
     "lv_parts": {"en": "📜 Every part in detail", "ru": "📜 Подробно по частям"},
     "lv_progress": {"en": "⏳ Watching the video ({total}): part {n} of {of}…",
                     "ru": "⏳ Смотрю видео ({total}): часть {n} из {of}…"},

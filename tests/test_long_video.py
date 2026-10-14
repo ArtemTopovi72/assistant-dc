@@ -68,10 +68,10 @@ bot = make_bot(); sess = bot._get_session(CID)
 check("a 90 s note is short, a 3-minute video is long", not V.is_long(sess, 90) and V.is_long(sess, 180))
 bot._long_video_offer(CID, sess, "ru", {"file_id": "F1", "seconds": 1800, "caption": ""})
 t, kb = bot.sent[-1]
-check("the offer names the length and the setup", "30 мин" in t and "Порция" in t, t)
+check("the offer names the length and the number of steps", "30 мин" in t and "6 шагов" in t, t)
 data = [b["callback_data"] for r in kb["inline_keyboard"] for b in r]
-check("the offer has ▶️ / ❓ / ⚙️ / ✖", any(d.startswith("lv:go:") for d in data)
-      and any(d.startswith("lv:ask:") for d in data)
+check("the offer has whole / by parts / ask / ⚙️ / ✖", any(d.startswith("lv:go:") for d in data)
+      and any(d.startswith("lv:each:") for d in data) and any(d.startswith("lv:ask:") for d in data)
       and "video:menu" in data and any(d.startswith("lv:skip:") for d in data), data)
 job_id = bot._get_session(CID).long_video["id"]
 bot._cb_long_video(CID, "lv:go:stale")

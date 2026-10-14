@@ -107,6 +107,7 @@ def summary(sess, lang: str = _DEFAULT_LANG) -> str:
 def _ask_kb(lang: str, job_id: str) -> dict:
     return {"inline_keyboard": [
         [{"text": _t("lv_go", lang), "callback_data": "lv:go:" + job_id}],
+        [{"text": _t("lv_each", lang), "callback_data": "lv:each:" + job_id}],
         [{"text": _t("lv_ask", lang), "callback_data": "lv:ask:" + job_id}],
         [{"text": _t("lv_settings", lang), "callback_data": "video:menu"},
          {"text": _t("lv_skip", lang), "callback_data": "lv:skip:" + job_id}],
@@ -265,7 +266,9 @@ class LongVideoMixin:
                            "caption": item.get("caption") or ""}
         self._store.put(sess)
         mins = max(1, round(sess.long_video["seconds"] / 60))
-        self._send_text(chat_id, _t("lv_offer", lang, mins=mins, setup=summary(sess, lang)),
+        chunk = chunk_seconds(sess)
+        self._send_text(chat_id, _t("lv_offer", lang, mins=mins, chunk=chunk // 60,
+                                    parts=max(1, -(-sess.long_video["seconds"] // chunk))),
                         parse_mode="HTML", keyboard=_ask_kb(lang, job_id))
         self._activity.log(chat_id, "system", f"[long video] offered {mins} min, job {job_id}")
 
@@ -291,7 +294,11 @@ class LongVideoMixin:
             # the next message is the question; the video stays pending until it comes
             sess.reg_state = "lv_question:" + job_id; self._store.put(sess)
             self._send_text(chat_id, _t("lv_ask_prompt", lang)); return
-        if action != "go":
+        if action == "go":       # one retelling of the whole video, whatever the settings say
+            pending["out"] = "brief"
+        elif action == "each":   # every part as it is ready; a part-wise setting is kept as it is
+            pending["out"] = output_mode(sess) if output_mode(sess) != "brief" else "retell"
+        else:
             return
         self._long_video_start(chat_id, sess, lang, pending)
 
@@ -393,7 +400,7 @@ class LongVideoMixin:
         transcribe_audio_file = module(self, "audio").transcribe_audio_file
         sess = self._get_session(chat_id)
         lang = self._lang(sess)
-        chunk = chunk_seconds(sess); nframes = frames_per_chunk(sess); mode = output_mode(sess)
+        chunk = chunk_seconds(sess); nframes = frames_per_chunk(sess); mode = spec.get("out") or output_mode(sess)
         question = (spec.get("question") or "").strip()
         quiet = bool(question) or mode == "brief"        # nothing per portion, one answer at the end
         material: list = []
