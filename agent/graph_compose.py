@@ -39,6 +39,12 @@ class _GenSettings(NamedTuple):
     system_prompt: str
 
 
+def _has_no_words(text: str) -> bool:
+    """True for a message made of paths, links and ids only."""
+    rest = _re.sub(r"https?://\S+|(?:[A-Za-z]:)?[\\/][^\s]*|\S+\.\w{1,5}\b", " ", text or "")
+    return bool((text or "").strip()) and not _re.search(r"[A-Za-zА-Яа-яЁё]{2,}", rest)
+
+
 def _ask(text: str, ctx=None) -> dict:
     """The model's read of what the message asks the program to do exactly
     (agent/ask_read.py). Counting, reversing and sorting stay here."""
@@ -386,6 +392,14 @@ def _compose_user_message(ctx: Context, state: AgentState) -> tuple:
             f"your final reply to the user in the same language as their original "
             f"message: «{original_input}»]"
         )
+    elif _has_no_words(user_input):
+        # A bare path, link or id carries no language of its own, and ASCII skips the
+        # translate step above, so the reply came back English in a Russian chat.
+        _lang = next((m["content"][:200] for m in reversed(state.get("messages", []))
+                      if m.get("role") == "user" and _re.search(r"[а-яё]", str(m.get("content") or ""), _re.I)), "")
+        if _lang:
+            parts.append("[The message is only a path, link or identifier. Write your reply in the same "
+                         f"language as the user's earlier messages in this chat, e.g.: «{_lang}»]")
     # "image" is the neutral placeholder set when a photo arrives with no caption.
     # Replace it with a clear instruction so the model acknowledges receipt properly.
     effective_input = user_input
