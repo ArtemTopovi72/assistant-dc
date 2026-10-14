@@ -27,7 +27,6 @@ import sandbox_access as A
 import code_sandbox as CS
 from pathlib import Path
 
-CS.SANDBOX_BASE = Path(tempfile.mkdtemp(prefix="tgtest_sbxdl_root_"))
 
 OK = BAD = 0
 def check(name, cond, extra=""):
@@ -133,36 +132,32 @@ class _R:
     def __init__(self, code, text=""): self.status_code, self.text = code, text
     def json(self): return {"ok": self.status_code == 200, "description": self.text}
 
-real_local = C.TG_API_LOCAL
 bot2 = T.TelegramBot("123:TEST", lambda: None, lambda: None, lambda: {}, silent_mode=True)
 f = Path(tempfile.mkdtemp()) / "DCIM.zip"
 f.write_bytes(b"PK\x03\x04" + b"0" * 1024)
-try:
-    C.TG_API_LOCAL = True
-    bot2.http = types.SimpleNamespace(post=lambda url, data=None, files=None, **kw: (
-        posted.append({"data": dict(data or {}), "files": bool(files)}) or _R(200)))
-    ok = bot2._send_document(CID, str(f))
-    check("local server: the file goes out", ok)
-    check("by file:// URI, with no upload",
-          posted and posted[0]["data"].get("document", "").startswith("file:") and not posted[0]["files"],
-          posted)
+bot2.tg_api_local = True
+bot2.http = types.SimpleNamespace(post=lambda url, data=None, files=None, **kw: (
+    posted.append({"data": dict(data or {}), "files": bool(files)}) or _R(200)))
+ok = bot2._send_document(CID, str(f))
+check("local server: the file goes out", ok)
+check("by file:// URI, with no upload",
+      posted and posted[0]["data"].get("document", "").startswith("file:") and not posted[0]["files"],
+      posted)
 
-    posted.clear()
-    seq = iter([_R(400, "Bad Request: wrong file identifier/HTTP URL specified"), _R(200)])
-    bot2.http = types.SimpleNamespace(post=lambda url, data=None, files=None, **kw: (
-        posted.append({"data": dict(data or {}), "files": bool(files)}) or next(seq)))
-    ok = bot2._send_document(CID, str(f))
-    check("a refused URI falls back to the upload", ok and len(posted) == 2
-          and posted[1]["files"] and "document" not in posted[1]["data"], posted)
+posted.clear()
+seq = iter([_R(400, "Bad Request: wrong file identifier/HTTP URL specified"), _R(200)])
+bot2.http = types.SimpleNamespace(post=lambda url, data=None, files=None, **kw: (
+    posted.append({"data": dict(data or {}), "files": bool(files)}) or next(seq)))
+ok = bot2._send_document(CID, str(f))
+check("a refused URI falls back to the upload", ok and len(posted) == 2
+      and posted[1]["files"] and "document" not in posted[1]["data"], posted)
 
-    posted.clear()
-    C.TG_API_LOCAL = False
-    bot2.http = types.SimpleNamespace(post=lambda url, data=None, files=None, **kw: (
-        posted.append({"data": dict(data or {}), "files": bool(files)}) or _R(200)))
-    bot2._send_document(CID, str(f))
-    check("the cloud API still gets an upload", posted and posted[0]["files"], posted)
-finally:
-    C.TG_API_LOCAL = real_local
+posted.clear()
+bot2.tg_api_local = False
+bot2.http = types.SimpleNamespace(post=lambda url, data=None, files=None, **kw: (
+    posted.append({"data": dict(data or {}), "files": bool(files)}) or _R(200)))
+bot2._send_document(CID, str(f))
+check("the cloud API still gets an upload", posted and posted[0]["files"], posted)
 
 print(f"\n{OK}/{OK + BAD} checks passed")
 sys.exit(0 if BAD == 0 else 1)

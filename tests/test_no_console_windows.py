@@ -22,28 +22,24 @@ check("DETACHED_PROCESS (GUI apps from launch_all) is left alone", not N.wants_h
 check("an explicit STARTUPINFO is left alone", not N.wants_hiding({"startupinfo": object()}))
 
 seen = {}
+
+
+class _Popen:
+    """Stands in for subprocess.Popen: the hook is installed on it, the real one is left alone."""
+    def __init__(self, *a, **k): seen.update(k)
+
+
 orig = subprocess.Popen.__init__
 if sys.platform != "win32":
     # creationflags is Windows-only: POSIX Popen raises ValueError on it, so
     # the hook must never be installed here, forced or not.
-    N._installed = False
     check("off Windows install() is a no-op even when forced",
-          N.install(force=True) is False and subprocess.Popen.__init__ is orig)
-    N._installed = False
+          N.install(force=True, popen=_Popen) is False and _Popen.__init__ is not N and not N._hooked)
 else:
-    N._installed = False
-    N.install(force=True)
-    try:
-        # call the patched __init__ with a stub that records kwargs
-        def rec(self, *a, **k): seen.update(k)
-        patched = subprocess.Popen.__init__
-        N_orig = patched.__closure__[0].cell_contents
-        patched.__closure__[0].cell_contents = rec
-        patched(object(), ["lms", "ps"], capture_output=True)
-        patched.__closure__[0].cell_contents = N_orig
-    finally:
-        subprocess.Popen.__init__ = orig
-        N._installed = False
+    N.install(force=True, popen=_Popen)
+    _Popen(["lms", "ps"], capture_output=True)
+    check("a second install on the same class changes nothing", N.install(force=True, popen=_Popen))
+    check("the real Popen was left alone", subprocess.Popen.__init__ is orig)
     check("the installed hook adds CREATE_NO_WINDOW", seen.get("creationflags", 0) & 0x08000000, seen)
 check("assistant.main installs it before Qt", "no_console_windows.install()" in open("core/assistant.py", encoding="utf-8").read())
 

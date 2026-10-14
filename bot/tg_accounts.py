@@ -23,6 +23,7 @@ from __future__ import annotations
 import html as _html_mod
 import time
 from pathlib import Path
+from seams import module
 
 
 class AccountsMixin:
@@ -345,8 +346,8 @@ class AccountsMixin:
         """
         left = "осталось ~" if lang == "ru" else "left ~"
         try:
-            import characters as _C
-            import lora_training as LT
+            _C = module(self, "characters")
+            LT = module(self, "lora_training")
             latest = None
             for rec in _C.list_characters():
                 p = LT.progress(rec["slug"])

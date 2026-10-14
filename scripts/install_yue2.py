@@ -20,6 +20,7 @@ import os
 import shutil
 import subprocess
 import sys
+import types
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -31,8 +32,8 @@ TORCH = "torch==2.10.0"
 REPOS = {"YuE2-3B": "m-a-p/YuE2-3B", "YuE2-Vae": "m-a-p/YuE2-Vae"}
 
 
-def venv_python() -> str:
-    return os.path.join(VENV, *(("Scripts", "python.exe") if os.name == "nt" else ("bin", "python")))
+def venv_python(w=None) -> str:
+    return os.path.join((w or REAL).VENV, *(("Scripts", "python.exe") if os.name == "nt" else ("bin", "python")))
 
 
 def has_weights(folder: str) -> bool:
@@ -53,78 +54,88 @@ def _uv() -> str:
     return ""
 
 
-def base_python(given: str) -> list:
+def base_python(given: str, w=None) -> list:
     """How the venv is made: --python, else uv with Python 3.12 (YuE2's own),
     else a system 3.12."""
+    uv = (w or REAL).uv
     if given:
         return given.split() + ["-m", "venv"]
-    if _uv():
-        return [_uv(), "venv", "--seed", "-p", "3.12"]
+    if uv():
+        return [uv(), "venv", "--seed", "-p", "3.12"]
     if os.name == "nt" and shutil.which("py"):
         return ["py", "-3.12", "-m", "venv"]
     return [shutil.which("python3.12") or sys.executable, "-m", "venv"]
 
 
-def run(cmd: list) -> None:
+def run(cmd: list, w=None) -> None:
     print("  $ " + " ".join(cmd), flush=True)
-    subprocess.check_call(cmd)
+    (w or REAL).subprocess.check_call(cmd)
 
 
-def make_venv(python: list) -> None:
-    if os.path.isfile(venv_python()):
+def make_venv(python: list, w=None) -> None:
+    w = w or REAL
+    if os.path.isfile(venv_python(w)):
         print("venv_yue2: already there")
         return
     print("venv_yue2: creating")
-    run(python + [VENV])
-    run([venv_python(), "-m", "pip", "install", "--upgrade", "pip"])
+    run(python + [w.VENV], w)
+    run([venv_python(w), "-m", "pip", "install", "--upgrade", "pip"], w)
 
 
-def installed() -> bool:
-    return subprocess.call([venv_python(), "-c", "import yue2, torch; assert torch.cuda.is_available()"],
+def installed(w=None) -> bool:
+    w = w or REAL
+    return w.subprocess.call([venv_python(w), "-c", "import yue2, torch; assert torch.cuda.is_available()"],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
 
 
-def install_packages(cuda: str) -> None:
-    if installed():
+def install_packages(cuda: str, w=None) -> None:
+    w = w or REAL
+    if installed(w):
         print("yue2-infer: already installed, CUDA torch")
         return
     # torch first from the CUDA index: otherwise the resolver takes PyPI's CPU wheel on Windows
-    run([venv_python(), "-m", "pip", "install", TORCH,
-         "--index-url", f"https://download.pytorch.org/whl/{cuda}"])
-    run([venv_python(), "-m", "pip", "install", YUE2_PKG])
+    run([venv_python(w), "-m", "pip", "install", TORCH,
+         "--index-url", f"https://download.pytorch.org/whl/{cuda}"], w)
+    run([venv_python(w), "-m", "pip", "install", YUE2_PKG], w)
 
 
-def download_models() -> None:
+def download_models(w=None) -> None:
+    w = w or REAL
     for name, repo in REPOS.items():
-        dest = os.path.join(MODELS, name)
+        dest = os.path.join(w.MODELS, name)
         if has_weights(dest):
             print(f"{name}: already there")
             continue
         print(f"{name}: downloading {repo}")
         os.makedirs(dest, exist_ok=True)
-        run([venv_python(), "-c",
+        run([venv_python(w), "-c",
              "import sys; from huggingface_hub import snapshot_download; "
-             "snapshot_download(repo_id=sys.argv[1], local_dir=sys.argv[2])", repo, dest])
+             "snapshot_download(repo_id=sys.argv[1], local_dir=sys.argv[2])", repo, dest], w)
         if not has_weights(dest):
             raise SystemExit(f"{name}: the download finished but {dest} has no config.json + *.safetensors")
 
 
-def main(argv=None) -> int:
+def main(argv=None, w=None) -> int:
+    w = w or REAL
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--python", default="", help='interpreter for the venv, e.g. "py -3.12"')
     ap.add_argument("--cuda", default="cu128", help="torch CUDA build: cu126, cu128 (default), cu130")
     ap.add_argument("--no-models", action="store_true", help="do not download the weights")
     args = ap.parse_args(argv)
-    make_venv(base_python(args.python))
-    install_packages(args.cuda)
+    make_venv(base_python(args.python, w), w)
+    install_packages(args.cuda, w)
     if not args.no_models:
-        download_models()
-    if not installed():
+        download_models(w)
+    if not installed(w):
         print("\nyue2 is installed but torch sees no CUDA card: try another --cuda build.")
         return 1
     print("\nYuE2 is ready. Restart the assistant: 🎵 songs are on.")
     print("Optional, 2x faster: flash-attn in venv_yue2 (scripts/yue2_fa2.py picks it up).")
     return 0
+
+
+# the machine this run touches; a suite hands main() its own instead
+REAL = types.SimpleNamespace(VENV=VENV, MODELS=MODELS, subprocess=subprocess, uv=_uv)
 
 
 if __name__ == "__main__":

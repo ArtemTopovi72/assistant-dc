@@ -148,12 +148,8 @@ open(doc, "w", encoding="utf-8").write("# report\n")
 
 fake = _FakeTG()
 bot.http = fake
-_real_sleep = T.time.sleep
-T.time.sleep = lambda *_a, **_k: None
-try:
-    sent = bot._send_document(123, doc, caption="<b>Отчёт</b> " + "x" * 2000)
-finally:
-    T.time.sleep = _real_sleep
+bot.sleep = lambda *_a, **_k: None
+sent = bot._send_document(123, doc, caption="<b>Отчёт</b> " + "x" * 2000)
 
 check("the document was delivered despite the caption rejection", sent, sent)
 check("it retried with the markup stripped",
@@ -183,11 +179,7 @@ for label, sender, kwargs in (
 ):
     accept = _FakeTG(limit_reject=False)          # accept everything: inspect the body
     bot.http = accept
-    T.time.sleep = lambda *_a, **_k: None
-    try:
-        sender(caption=hostile, **kwargs)
-    finally:
-        T.time.sleep = _real_sleep
+    sender(caption=hostile, **kwargs)
     wire = (accept.calls[0].get("caption") or "") if accept.calls else ""
     check(f"{label}: caption within the limit", len(wire) <= LIMIT, len(wire))
     check(f"{label}: caption on the wire is not cut mid-tag",
@@ -206,11 +198,7 @@ class _Blocked(_FakeTG):
 
 blocked = _Blocked()
 bot.http = blocked
-T.time.sleep = lambda *_a, **_k: None
-try:
-    sent2 = bot._send_document(123, doc, caption="<b>hi</b>")
-finally:
-    T.time.sleep = _real_sleep
+sent2 = bot._send_document(123, doc, caption="<b>hi</b>")
 check("a blocked bot is reported as failure", not sent2, sent2)
 check("...and it stopped at the normal retry budget",
       len(blocked.calls) == T._API_RETRIES, len(blocked.calls))

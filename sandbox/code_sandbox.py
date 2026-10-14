@@ -740,7 +740,7 @@ class Sandbox:
 # -- one sandbox per user ---------------------------------------------------
 # Everything lives under runtime/, which is already on the never-commit list, so
 # a user's files cannot reach the repository by accident.
-SANDBOX_BASE = Path(__file__).resolve().parents[1] / "runtime" / "sandboxes"
+SANDBOX_BASE = Path(os.getenv("ASSISTANT_SANDBOX_BASE") or Path(__file__).resolve().parents[1] / "runtime" / "sandboxes")
 
 _KEY_SAFE_RE = re.compile(r"[^A-Za-z0-9_-]")
 

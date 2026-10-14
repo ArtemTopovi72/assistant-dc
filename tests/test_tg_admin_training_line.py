@@ -29,6 +29,8 @@ import characters as C
 C.redirect_store(os.path.join(tempfile.mkdtemp(prefix="tgtest_admstore_"),
                               "characters.json"))
 import lora_training as LT
+import sys as _s; _s.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from fakes import Over
 
 RESULTS = []
 
@@ -41,9 +43,14 @@ def check(name, cond, detail=""):
         raise AssertionError(str(name) + (": " + str(detail) if detail else ""))
 
 
+_MODS = {}      # the modules the next _bot() reads its training state through
+
+
 def _bot():
-    return T.TelegramBot("123:TEST", lambda: None, lambda: None,
-                         lambda: {}, silent_mode=True)
+    bot = T.TelegramBot("123:TEST", lambda: None, lambda: None,
+                        lambda: {}, silent_mode=True)
+    bot.modules = dict(_MODS)
+    return bot
 
 
 def _progress(running=True, **kw):
@@ -55,17 +62,17 @@ def _progress(running=True, **kw):
 
 
 class _Patch:
-    def __init__(self, prog):
-        self.prog = prog
+    """The training state the bot under test sees: a progress read, a character list."""
+    def __init__(self, prog, **lt):
+        self.prog, self.lt = prog, lt
 
     def __enter__(self):
-        self.orig_p, self.orig_c = LT.progress, C.list_characters
-        LT.progress = lambda slug: self.prog
-        C.list_characters = lambda: [{"slug": "neurostepan", "name": "Степан"}]
+        _MODS["lora_training"] = Over(LT, progress=lambda slug: self.prog, **self.lt)
+        _MODS["characters"] = Over(C, list_characters=lambda: [{"slug": "neurostepan", "name": "Степан"}])
         return self
 
     def __exit__(self, *a):
-        LT.progress, C.list_characters = self.orig_p, self.orig_c
+        _MODS.clear()
 
 
 def test_a_live_run_is_reported_with_everything_worth_knowing():
@@ -105,13 +112,8 @@ def test_a_run_that_is_over_says_HOW_it_ended():
     old_log = os.path.join(tempfile.mkdtemp(prefix="tgtest_oldlog_"), "train.log")
     open(old_log, "w").close()
     os.utime(old_log, (time.time() - 20 * 86400,) * 2)
-    orig_lp = LT.log_path
-    LT.log_path = lambda slug: __import__("pathlib").Path(old_log)
-    try:
-        with _Patch(_progress(running=False, step=1071)):
-            line = _bot()._training_line("ru")
-    finally:
-        LT.log_path = orig_lp
+    with _Patch(_progress(running=False, step=1071), log_path=lambda slug: __import__("pathlib").Path(old_log)):
+        line = _bot()._training_line("ru")
     check("a run stopped weeks ago is not reported", "ОСТАНОВЛЕНО" not in line, line)
 
     with _Patch(_progress(running=False, step=0)):
@@ -137,12 +139,9 @@ def test_a_run_with_no_estimate_yet_still_reports():
 
 def test_a_broken_read_cannot_take_the_panel_down():
     """Everything here is read off the disk while a run is writing to it."""
-    orig = LT.progress
-    LT.progress = lambda slug: (_ for _ in ()).throw(OSError("half-written log"))
-    try:
+    with _Patch(None):
+        _MODS["lora_training"] = Over(LT, progress=lambda slug: (_ for _ in ()).throw(OSError("half-written log")))
         line = _bot()._training_line("ru")
-    finally:
-        LT.progress = orig
     check("it degrades to the idle line rather than raising",
           isinstance(line, str) and line.strip(), line)
 

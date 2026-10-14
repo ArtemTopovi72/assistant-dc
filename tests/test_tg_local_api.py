@@ -21,13 +21,14 @@ def check(name, cond, extra=""):
     print(("PASS  " if cond else "FAIL  ") + name, ("  " + str(extra)) if (extra and not cond) else "")
 
 # credentials switch the base to the local server; without them nothing changes
-saved = (C.TG_API_ID, C.TG_API_HASH, C.TG_API_BASE, C.TG_API_LOCAL)
-C.TG_API_ID, C.TG_API_HASH, C.TG_API_LOCAL = "", "", False
-check("without credentials the local server is disabled", not L.enabled())
-check("...and ensure_server is a no-op", L.ensure_server() is False)
-C.TG_API_ID, C.TG_API_HASH = "123", "a" * 32
-C.TG_API_BASE, C.TG_API_LOCAL = "http://127.0.0.1:8081", True
-check("with credentials it is enabled", L.enabled())
+import types
+S = types.SimpleNamespace(TG_API_ID="", TG_API_HASH="", TG_API_LOCAL=False, TG_API_BASE="https://api.telegram.org",
+                        TG_API_PORT=C.TG_API_PORT, TG_API_EXE=C.TG_API_EXE)   # the settings this run reads
+check("without credentials the local server is disabled", not L.enabled(S))
+check("...and ensure_server is a no-op", L.ensure_server(cfg=S) is False)
+S.TG_API_ID, S.TG_API_HASH = "123", "a" * 32
+S.TG_API_BASE, S.TG_API_LOCAL = "http://127.0.0.1:8081", True
+check("with credentials it is enabled", L.enabled(S))
 
 class _R:
     def __init__(s, code, body): s.status_code, s.text, s._b = code, str(body), body
@@ -42,11 +43,10 @@ class _Http:
 # already accepted locally: no logOut
 h = _Http([200])
 check("a token the local server accepts needs no logOut",
-      L.ensure_bot_logged_in("1:T", http=h) and not any(c[0] == "post" for c in h.calls), h.calls)
+      L.ensure_bot_logged_in("1:T", http=h, cfg=S) and not any(c[0] == "post" for c in h.calls), h.calls)
 # 401 locally -> one cloud logOut -> accepted
-L.time.sleep = lambda *_: None
 h = _Http([401, 200])
-ok = L.ensure_bot_logged_in("1:T", http=h)
+ok = L.ensure_bot_logged_in("1:T", http=h, cfg=S, sleep=lambda *_: None)
 posts = [u for m, u in h.calls if m == "post"]
 check("401 locally triggers exactly one cloud logOut", ok and posts == ["https://api.telegram.org/bot1:T/logOut"], h.calls)
 check("...and local getMe goes to TG_API_BASE", h.calls[0][1].startswith("http://127.0.0.1:8081/bot1:T/getMe"), h.calls)
@@ -63,8 +63,8 @@ check("the server command runs --local with the credentials", "--local" in inspe
 
 # credentials typed into the GUI override .env and flip the base
 os.environ.pop("TG_API_BASE", None)
-check("GUI credentials enable the local server", L.apply_credentials("77", "b" * 32) and C.TG_API_LOCAL and "8081" in C.TG_API_BASE)
-check("clearing them returns to the cloud", not L.apply_credentials("", "") and not C.TG_API_LOCAL)
+check("GUI credentials enable the local server", L.apply_credentials("77", "b" * 32, S) and S.TG_API_LOCAL and "8081" in S.TG_API_BASE)
+check("clearing them returns to the cloud", not L.apply_credentials("", "", S) and not S.TG_API_LOCAL)
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 import gui_telegram_tab as G
 gsrc = inspect.getsource(G)
@@ -84,20 +84,15 @@ else:
     _exe = os.path.join(_tmp, "fake.sh")
     open(_exe, "w").write(f'#!/bin/sh\necho "$@" > "{_flag}"\n')
     os.chmod(_exe, 0o755)
-_saved_exe, _saved_up = C.TG_API_EXE, L.server_up
-C.TG_API_ID, C.TG_API_HASH, C.TG_API_LOCAL = "123", "a" * 32, True
-C.TG_API_BASE = "http://127.0.0.1:8081"
-C.TG_API_EXE = _exe
+S.TG_API_ID, S.TG_API_HASH, S.TG_API_LOCAL = "123", "a" * 32, True
+S.TG_API_BASE = "http://127.0.0.1:8081"
+S.TG_API_EXE = _exe
 # non-empty, not just present: cmd creates the redirect target before it writes, and under
 # a loaded full run the check read an empty file ("--local" missing)
-L.server_up = lambda *a, **k: os.path.exists(_flag) and os.path.getsize(_flag) > 0
-L.time.sleep = _time.sleep
-check("ensure_server starts the executable", L.ensure_server(root=_tmp, wait_s=10), _flag)
+_up = lambda *a, **k: os.path.exists(_flag) and os.path.getsize(_flag) > 0
+check("ensure_server starts the executable", L.ensure_server(root=_tmp, wait_s=10, cfg=S, up=_up), _flag)
 check("...with --local and the credentials", os.path.exists(_flag) and "--local" in open(_flag).read())
 check("...listening on loopback only, not the LAN",
       os.path.exists(_flag) and "--http-ip-address 127.0.0.1" in open(_flag).read())
-C.TG_API_EXE, L.server_up = _saved_exe, _saved_up
-
-C.TG_API_ID, C.TG_API_HASH, C.TG_API_BASE, C.TG_API_LOCAL = saved
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)

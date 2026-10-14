@@ -9,7 +9,7 @@ test must not leave folders in it, nor read the user's actual chat files.
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_code_tab.py
 """
-import os, sys, tempfile
+import os, sys, tempfile
 from types import SimpleNamespace as _NS
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("USE_GUI", "0")
@@ -19,8 +19,9 @@ except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
 
 from pathlib import Path
+os.environ["ASSISTANT_SANDBOX_BASE"] = tempfile.mkdtemp(prefix="codetab_root_")   # read at import
 import code_sandbox as CS
-CS.SANDBOX_BASE = Path(tempfile.mkdtemp(prefix="codetab_root_"))
+
 
 import gui_code_tab as CT
 import sandbox_access as A

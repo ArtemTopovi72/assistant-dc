@@ -27,32 +27,34 @@ _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
 _NEW_GROUP = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
 
 
-def apply_credentials(api_id: str, api_hash: str) -> bool:
+def apply_credentials(api_id: str, api_hash: str, cfg=None) -> bool:
     """Take credentials from the GUI (saved in QSettings like the token).
 
     They override .env for this process; with both present TG_API_BASE moves
     to the local server, with either missing it goes back to the cloud unless
     TG_API_BASE was set explicitly in the environment.
     """
+    cfg = cfg or _config
     api_id, api_hash = (api_id or "").strip(), (api_hash or "").strip()
-    _config.TG_API_ID, _config.TG_API_HASH = api_id, api_hash
+    cfg.TG_API_ID, cfg.TG_API_HASH = api_id, api_hash
     if not os.getenv("TG_API_BASE"):
-        _config.TG_API_BASE = ("http://127.0.0.1:%d" % _config.TG_API_PORT
-                               if (api_id and api_hash) else "https://api.telegram.org")
-        _config.TG_API_LOCAL = _config.TG_API_BASE != "https://api.telegram.org"
-    return enabled()
+        cfg.TG_API_BASE = ("http://127.0.0.1:%d" % cfg.TG_API_PORT
+                           if (api_id and api_hash) else "https://api.telegram.org")
+        cfg.TG_API_LOCAL = cfg.TG_API_BASE != "https://api.telegram.org"
+    return enabled(cfg)
 
 
-def enabled() -> bool:
-    return bool(_config.TG_API_LOCAL and _config.TG_API_ID and _config.TG_API_HASH)
+def enabled(cfg=None) -> bool:
+    cfg = cfg or _config
+    return bool(cfg.TG_API_LOCAL and cfg.TG_API_ID and cfg.TG_API_HASH)
 
 
-def server_up(timeout: float = 1.5) -> bool:
+def server_up(timeout: float = 1.5, cfg=None) -> bool:
     """The local server answers on its port (any HTTP status counts)."""
     import urllib.request
     import urllib.error
     try:
-        urllib.request.urlopen(_config.TG_API_BASE + "/", timeout=timeout)
+        urllib.request.urlopen((cfg or _config).TG_API_BASE + "/", timeout=timeout)
         return True
     except urllib.error.HTTPError:
         return True
@@ -60,13 +62,15 @@ def server_up(timeout: float = 1.5) -> bool:
         return False
 
 
-def ensure_server(root: str | None = None, wait_s: float = 20.0) -> bool:
+def ensure_server(root: str | None = None, wait_s: float = 20.0, cfg=None, up=None) -> bool:
     """Start telegram-bot-api --local unless it is already answering."""
-    if not enabled():
+    cfg = cfg or _config
+    up = up or (lambda: server_up(cfg=cfg))
+    if not enabled(cfg):
         return False
-    if server_up():
+    if up():
         return True
-    exe = _config.TG_API_EXE
+    exe = cfg.TG_API_EXE
     if not os.path.exists(exe):
         logger.error("TG_API_ID/HASH are set but %s is missing — run "
                      "scripts\\build_telegram_bot_api.cmd; staying on the cloud API", exe)
@@ -79,14 +83,14 @@ def ensure_server(root: str | None = None, wait_s: float = 20.0) -> bool:
         log = open(log_path, "a", encoding="utf-8", errors="replace")
     except Exception:
         log = subprocess.DEVNULL
-    args = [exe, "--local", "--api-id", str(_config.TG_API_ID),
-            "--api-hash", str(_config.TG_API_HASH),
-            "--http-port", str(_config.TG_API_PORT),
+    args = [exe, "--local", "--api-id", str(cfg.TG_API_ID),
+            "--api-hash", str(cfg.TG_API_HASH),
+            "--http-port", str(cfg.TG_API_PORT),
             "--dir", work, "--temp-dir", os.path.join(work, "tmp"),
             "--max-connections", "10", "--verbosity", "1"]
     # Its default is every interface: the LAN could reach it (and Windows
     # raised a firewall prompt). Only this machine talks to a loopback base.
-    if urllib.parse.urlparse(_config.TG_API_BASE).hostname in ("127.0.0.1", "localhost"):
+    if urllib.parse.urlparse(cfg.TG_API_BASE).hostname in ("127.0.0.1", "localhost"):
         args += ["--http-ip-address", "127.0.0.1"]
     try:
         if os.name == "nt":
@@ -106,16 +110,16 @@ def ensure_server(root: str | None = None, wait_s: float = 20.0) -> bool:
             log.close()         # the server holds its own handle
     deadline = time.time() + wait_s
     while time.time() < deadline:
-        if server_up():
+        if up():
             logger.info("telegram-bot-api --local is up on %s (files up to 2 GB)",
-                        _config.TG_API_BASE)
+                        cfg.TG_API_BASE)
             return True
         time.sleep(0.5)
     logger.error("telegram-bot-api did not answer within %.0fs — see %s", wait_s, log_path)
     return False
 
 
-def ensure_bot_logged_in(token: str, http=None) -> bool:
+def ensure_bot_logged_in(token: str, http=None, cfg=None, sleep=None) -> bool:
     """Make the local server accept `token`.
 
     A token still logged in on api.telegram.org gets 401 Unauthorized from a
@@ -125,9 +129,11 @@ def ensure_bot_logged_in(token: str, http=None) -> bool:
     """
     import requests as _rq
     http = http or _rq
-    if not (enabled() and token):
+    cfg = cfg or _config
+    sleep = sleep or time.sleep
+    if not (enabled(cfg) and token):
         return False
-    local = f"{_config.TG_API_BASE}/bot{token}/getMe"
+    local = f"{cfg.TG_API_BASE}/bot{token}/getMe"
     try:
         r = http.get(local, timeout=10)
         if r.status_code == 200 and (r.json() or {}).get("ok"):
@@ -146,7 +152,7 @@ def ensure_bot_logged_in(token: str, http=None) -> bool:
         logger.error("cloud logOut failed (Telegram unreachable?): %s", exc)
         return False
     for _ in range(6):
-        time.sleep(2)
+        sleep(2)
         try:
             r = http.get(local, timeout=10)
             if r.status_code == 200 and (r.json() or {}).get("ok"):

@@ -291,6 +291,10 @@ class TransportMixin:
             who = ""
         return nice_names.named_path(chat_id, path, who)
 
+    def _sleep(self, seconds):
+        """The wait between retries; a suite's bot carries its own `sleep` and never waits."""
+        return (getattr(self, "sleep", None) or time.sleep)(seconds)
+
     def _send_document(self, chat_id, path: str, caption: str = "") -> bool:
         """Send a file. Used for reports too long to read as chat messages."""
         _orig, path = path, self._archive(chat_id, path)   # the log keeps the original
@@ -301,7 +305,8 @@ class TransportMixin:
         # The self-hosted server runs with --local, so it reads the file from
         # disk by URI: no multipart upload (a 117 MB zip took minutes and hit
         # the 180 s timeout) and the 2 GB limit instead of the cloud's 50 MB.
-        by_uri = bool(getattr(_config, "TG_API_LOCAL", False))
+        by_uri = bool(getattr(self, "tg_api_local", None) if getattr(self, "tg_api_local", None) is not None
+                      else getattr(_config, "TG_API_LOCAL", False))
         tries, degraded = 0, False
         while tries < tg_bot._API_RETRIES:
             tries += 1
@@ -343,7 +348,7 @@ class TransportMixin:
             except Exception as exc:
                 tg_bot.logger.warning("sendDocument attempt %d error: %s", tries, exc)
             if tries < tg_bot._API_RETRIES:
-                time.sleep(1.5 ** (tries - 1))
+                self._sleep(1.5 ** (tries - 1))
         return False
 
     def _send_audio(self, chat_id, path: str, caption: str = "") -> bool:
@@ -386,7 +391,7 @@ class TransportMixin:
             except Exception as exc:
                 tg_bot.logger.warning("sendAudio attempt %d error: %s", tries, exc)
             if tries < tg_bot._API_RETRIES:
-                time.sleep(1.5 ** (tries - 1))
+                self._sleep(1.5 ** (tries - 1))
         return False
 
     def _send_video(self, chat_id, path: str, caption: str = "",
@@ -487,7 +492,7 @@ class TransportMixin:
                         except Exception:
                             pass
                 if tries < tg_bot._API_RETRIES:
-                    time.sleep(1.5 ** (tries - 1))
+                    self._sleep(1.5 ** (tries - 1))
 
             tg_bot.logger.warning("[video delivery] sendVideo failed; falling back to "
                            "sendDocument for %s", send_path)
@@ -619,7 +624,7 @@ class TransportMixin:
             except Exception as exc:
                 tg_bot.logger.warning("sendPhoto attempt %d error: %s", attempt, exc)
             if attempt < tg_bot._API_RETRIES - 1:
-                time.sleep(1.5 ** attempt)
+                self._sleep(1.5 ** attempt)
 
         # --- fallback: sendDocument (50 MB limit, no compression) ---
         tg_bot.logger.warning("sendPhoto failed; falling back to sendDocument for %s", path)
@@ -689,7 +694,7 @@ class TransportMixin:
                 except Exception as exc:
                     tg_bot.logger.warning("sendVoice attempt %d error: %s", attempt, exc)
                 if attempt < tg_bot._API_RETRIES - 1:
-                    time.sleep(1.5 ** attempt)
+                    self._sleep(1.5 ** attempt)
             tg_bot.logger.error("voice_from_wav: sendVoice failed after %d attempts", tg_bot._API_RETRIES)
             return False
         except Exception:
@@ -768,7 +773,7 @@ class TransportMixin:
                 except Exception as exc:
                     tg_bot.logger.warning("sendVoice attempt %d error: %s", attempt, exc)
                 if attempt < tg_bot._API_RETRIES - 1:
-                    time.sleep(1.5 ** attempt)
+                    self._sleep(1.5 ** attempt)
             tg_bot.logger.error("sendVoice: failed after %d attempts for chat=%s",
                          tg_bot._API_RETRIES, chat_id)
             return False
@@ -792,10 +797,10 @@ class TransportMixin:
                 if r.status_code == 429:
                     retry_after = (body.get("parameters") or {}).get("retry_after", 30)
                     tg_bot.logger.warning("API %s 429 rate-limit; sleeping %ss", method, retry_after)
-                    time.sleep(retry_after); continue
+                    self._sleep(retry_after); continue
                 return body
             except Exception as exc:
-                if attempt < tg_bot._API_RETRIES - 1: time.sleep(1.5 ** attempt)
+                if attempt < tg_bot._API_RETRIES - 1: self._sleep(1.5 ** attempt)
                 else: tg_bot.logger.warning("API %s failed: %s", method, exc)
         return {}
 
@@ -808,10 +813,10 @@ class TransportMixin:
                     body = r.json()
                     retry_after = (body.get("parameters") or {}).get("retry_after", 30)
                     tg_bot.logger.warning("API GET %s 429; sleeping %ss", method, retry_after)
-                    time.sleep(retry_after); continue
+                    self._sleep(retry_after); continue
                 return r.json()
             except Exception as exc:
-                if attempt < tg_bot._API_RETRIES - 1: time.sleep(1.5 ** attempt)
+                if attempt < tg_bot._API_RETRIES - 1: self._sleep(1.5 ** attempt)
                 else: tg_bot.logger.warning("API GET %s failed: %s", method, exc)
         return {}
 

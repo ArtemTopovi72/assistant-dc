@@ -41,7 +41,6 @@ import sandbox_access as SA
 
 # redirect_data_dir moves the user DB, but NOT the sandbox tree. Without this
 # the uploads below land in the operator's real runtime/sandboxes.
-CS.SANDBOX_BASE = Path(tempfile.mkdtemp(prefix="tgtest_sbxroot_"))
 
 RESULTS = []
 

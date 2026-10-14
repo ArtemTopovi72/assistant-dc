@@ -21,16 +21,15 @@ def _load(name):
     return mod
 
 
-def test_config_step_creates_env_once_and_never_overwrites(monkeypatch, tmp_path):
+def test_config_step_creates_env_once_and_never_overwrites(tmp_path):
     setup = _load("setup")
     (tmp_path / ".env.example").write_text("A=1\nB=2\n", encoding="utf-8")
-    monkeypatch.setattr(setup, "ROOT", tmp_path)
     setup.STEPS.clear()
-    setup.s_config(SimpleNamespace())
+    setup.s_config(SimpleNamespace(root=tmp_path))
     assert (tmp_path / ".env").read_text(encoding="utf-8") == "A=1\nB=2\n"
 
     (tmp_path / ".env").write_text("A=mine\n", encoding="utf-8")
-    setup.s_config(SimpleNamespace())
+    setup.s_config(SimpleNamespace(root=tmp_path))
     assert (tmp_path / ".env").read_text(encoding="utf-8") == "A=mine\n"
     _, status, detail = setup.STEPS[-1]
     assert status == "ok" and "kept" in detail and "B" in detail, detail
@@ -73,21 +72,19 @@ def test_deb_package_names():
     assert setup._deb_package("libGL.so.1") == "libgl1"
 
 
-def test_qt_libs_step_reports_what_to_install(monkeypatch):
+def test_qt_libs_step_reports_what_to_install():
     setup = _load("setup")
     if setup.IS_WIN:
         return
     setup.STEPS.clear()
-    monkeypatch.setattr(setup, "_qt_missing_libs", lambda: ["libxcb-icccm.so.4"])
-    monkeypatch.setattr(setup, "_apt_install", lambda pkgs, args: False)
-    setup.s_qt_libs(SimpleNamespace(no_install=True))
+    setup.s_qt_libs(SimpleNamespace(no_install=True, qt_missing_libs=lambda: ["libxcb-icccm.so.4"],
+                                    apt_install=lambda pkgs, args: False))
     _, status, detail = setup.STEPS[-1]
     assert status == "warn" and "apt install libxcb-icccm4" in detail, detail
     # once installed the step re-checks and passes
     left = [["libxcb-icccm.so.4"], []]
-    monkeypatch.setattr(setup, "_qt_missing_libs", lambda: left.pop(0))
-    monkeypatch.setattr(setup, "_apt_install", lambda pkgs, args: True)
-    setup.s_qt_libs(SimpleNamespace(no_install=False))
+    setup.s_qt_libs(SimpleNamespace(no_install=False, qt_missing_libs=lambda: left.pop(0),
+                                    apt_install=lambda pkgs, args: True))
     assert setup.STEPS[-1][1] == "ok"
 
 
@@ -96,34 +93,26 @@ def test_apt_is_never_run_with_no_install():
     assert setup._apt_install(["ffmpeg"], SimpleNamespace(no_install=True)) is False
 
 
-def test_voice_hint_names_the_setup_for_downloadable_parts(tmp_path, monkeypatch):
+def test_voice_hint_names_the_setup_for_downloadable_parts(tmp_path):
     hc = _load("healthcheck")
-    import config
-    monkeypatch.setattr(config, "WEIGHTS_PATH", tmp_path / "none.safetensors")
-    monkeypatch.setattr(config, "VOCOS_DIR", tmp_path / "vocos")
     ref = tmp_path / "ref.wav"
     ref.write_bytes(b"RIFF")
-    monkeypatch.setattr(config, "DC_REF_WAV", ref)
-    r = hc.check_voice()
+    cfg = SimpleNamespace(WEIGHTS_PATH=tmp_path / "none.safetensors", VOCOS_DIR=tmp_path / "vocos", DC_REF_WAV=ref)
+    r = hc.check_voice(cfg)
     text = " ".join(str(x) for x in vars(r).values()) if hasattr(r, "__dict__") else str(r)
     assert "setup script again" in text and "ASSISTANT_REF_WAV" not in text, text
     ref.unlink()
-    r = hc.check_voice()
+    r = hc.check_voice(cfg)
     text = " ".join(str(x) for x in vars(r).values()) if hasattr(r, "__dict__") else str(r)
     assert "ASSISTANT_REF_WAV" in text, text
 
 
-def test_docker_hint_on_linux_names_the_group_or_the_service(monkeypatch):
+def test_docker_hint_on_linux_names_the_group_or_the_service():
     hc = _load("healthcheck")
-    import code_runner
-    monkeypatch.setattr(hc.os, "name", "posix")
-    monkeypatch.setattr(code_runner, "docker_available", lambda timeout=0: False)
-    monkeypatch.setattr(code_runner, "docker_binary", lambda: "/usr/bin/docker")
-    monkeypatch.setattr(hc, "_docker_info_error", lambda exe: (
+    cr = SimpleNamespace(docker_available=lambda timeout=0: False, docker_binary=lambda: "/usr/bin/docker")
+    r = hc.check_docker(cr, "posix", lambda exe: (
         "permission denied while trying to connect to the Docker daemon socket"))
-    r = hc.check_docker()
     assert "usermod -aG docker" in str(vars(r)), vars(r)
-    monkeypatch.setattr(hc, "_docker_info_error", lambda exe: (
+    r = hc.check_docker(cr, "posix", lambda exe: (
         "Cannot connect to the Docker daemon. Is the docker daemon running?"))
-    r = hc.check_docker()
     assert "systemctl" in str(vars(r)) and "Docker Desktop" not in str(vars(r)), vars(r)

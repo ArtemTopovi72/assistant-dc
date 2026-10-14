@@ -18,7 +18,7 @@ The training button is honest about a machine where the trainer was never
 installed: it says what is missing instead of starting something that cannot
 run.
 """
-from seams import file_dialog
+from seams import file_dialog, module, widget_part
 import os
 
 from PyQt5.QtCore import Qt, QThread, QTimer, pyqtSignal
@@ -351,7 +351,7 @@ class CharactersTab(QWidget):
             self.prog_lbl.setText("")
             self.sample_lbl.clear()
             return
-        p = LT.progress(rec["slug"])
+        p = module(self, "lora_training").progress(rec["slug"])
         # The run's OWN step count, not the spin box: the widget still holds
         # whatever was last typed, which is how a run extended to 4250 reported
         # "шаг 2250 из 2000".
@@ -527,7 +527,7 @@ class CharactersTab(QWidget):
         w.start()
 
     def _train_done(self, slug, code):
-        adapter = LT.latest_adapter(slug)
+        adapter = module(self, "lora_training").latest_adapter(slug)
         if code == 0 and adapter:
             C.upsert(slug, status="ready", lora_file=str(adapter))
             self._say('Training finished. Adapter: %s' % adapter)
@@ -574,10 +574,11 @@ class CharactersTab(QWidget):
         # only WITHIN a run: a global sort by step interleaves the runs, and
         # since every run counts from zero the list then reads as one sequence
         # with repeats, which is worse than no grouping at all.
-        runs = [r for r in (LT.run_slugs(slug) or [slug])][:3]
+        _lt = module(self, "lora_training")
+        runs = [r for r in (_lt.run_slugs(slug) or [slug])][:3]
         rows, run_of = [], {}
         for run in runs:
-            got = [(st, p) for st, p in LT.list_checkpoints(run, limit=10)
+            got = [(st, p) for st, p in _lt.list_checkpoints(run, limit=10)
                    if st is not None]
             got.sort(key=lambda r: r[0], reverse=True)
             for step, path in got:
@@ -614,7 +615,7 @@ class CharactersTab(QWidget):
             paths.append(path)
         labels.append('Choose a file manually…')
 
-        choice, ok = QInputDialog.getItem(
+        choice, ok = widget_part(self, "QInputDialog", QInputDialog).getItem(
             self, 'Which checkpoint to publish',
             'Adapter for «%s» (last %d saves):'
             % (rec.get("name") or slug, len(paths)),
@@ -672,8 +673,7 @@ class CharactersTab(QWidget):
             return
         busy = None
         try:
-            import comfy_client as _cc
-            busy = _cc.gpu_holder()
+            busy = module(self, "comfy_client").gpu_holder()
         except Exception:
             logger.debug("comfy_client.gpu_holder unavailable", exc_info=True)
         if busy:
@@ -722,7 +722,7 @@ class CharactersTab(QWidget):
             return
         self._evicted_llm = ""
         self._say('Bringing the model back %s…' % mid)
-        LT.reload_llm(mid, self._say)
+        module(self, "lora_training").reload_llm(mid, self._say)
 
     def _finish(self):
         self.worker = None

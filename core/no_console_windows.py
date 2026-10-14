@@ -19,7 +19,7 @@ import sys
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
 _NEW_CONSOLE = getattr(subprocess, "CREATE_NEW_CONSOLE", 0x00000010)
 _DETACHED = getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
-_installed = False
+_hooked: set = set()      # the Popen classes already carrying the hook
 
 
 def _has_console() -> bool:
@@ -40,26 +40,26 @@ def wants_hiding(kwargs: dict) -> bool:
     return True
 
 
-def install(force: bool = False) -> bool:
+def install(force: bool = False, popen=None) -> bool:
     """Make CREATE_NO_WINDOW the default for subprocess.Popen. Idempotent.
 
     Only under Windows with no console attached (pythonw) unless `force`;
     a console run keeps its children's output visible.
     """
-    global _installed
-    if _installed:
+    popen = popen or subprocess.Popen
+    if popen in _hooked:
         return True
     if sys.platform != "win32":
         return False
     if not force and _has_console():
         return False
-    orig_init = subprocess.Popen.__init__
+    orig_init = popen.__init__
 
     def _init(self, *args, **kwargs):
         if wants_hiding(kwargs):
             kwargs["creationflags"] = int(kwargs.get("creationflags", 0) or 0) | _NO_WINDOW
         return orig_init(self, *args, **kwargs)
 
-    subprocess.Popen.__init__ = _init
-    _installed = True
+    popen.__init__ = _init
+    _hooked.add(popen)
     return True

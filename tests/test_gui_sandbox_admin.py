@@ -28,7 +28,6 @@ T.redirect_data_dir(tempfile.mkdtemp(prefix="guitest_sbx_data_"))
 
 import code_sandbox as CS
 from pathlib import Path
-CS.SANDBOX_BASE = Path(tempfile.mkdtemp(prefix="guitest_sbx_root_"))
 
 import sandbox_access as A
 from PyQt5.QtWidgets import QApplication, QMessageBox

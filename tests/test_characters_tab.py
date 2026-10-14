@@ -8,6 +8,7 @@ import os
 import sys
 from pathlib import Path
 
+import types
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -16,6 +17,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt5.QtWidgets import QApplication      # noqa: E402
 
 import characters as C                        # noqa: E402
+from fakes import Over                         # noqa: E402
 import qt_teardown as QT                      # noqa: E402
 
 
@@ -87,11 +89,11 @@ def test_the_evicted_chat_model_comes_back_on_every_exit(tab, monkeypatch):
     nothing on screen saying why the whole app went mute."""
     import lora_training as LT
     restored = []
-    monkeypatch.setattr(LT, "reload_llm", lambda mid, log=None: restored.append(mid))
+    tab.modules = {"lora_training": Over(LT, reload_llm=lambda mid, log=None: restored.append(mid))}
     for exit_path in ("ok", "bad_code", "raised"):
         tab._evicted_llm = "some-chat-model"
         if exit_path == "ok":
-            monkeypatch.setattr(LT, "latest_adapter", lambda slug: None)
+            tab.modules["lora_training"] = Over(tab.modules["lora_training"], latest_adapter=lambda slug: None)
             tab._train_done("hero", 0)
         elif exit_path == "bad_code":
             tab._train_done("hero", 1)
@@ -104,7 +106,7 @@ def test_the_evicted_chat_model_comes_back_on_every_exit(tab, monkeypatch):
 def test_nothing_is_reloaded_when_nothing_was_evicted(tab, monkeypatch):
     import lora_training as LT
     called = []
-    monkeypatch.setattr(LT, "reload_llm", lambda mid, log=None: called.append(mid))
+    tab.modules = {"lora_training": Over(LT, reload_llm=lambda mid, log=None: called.append(mid))}
     tab._evicted_llm = ""
     tab._restore_llm()
     assert called == []
@@ -118,7 +120,7 @@ def test_a_render_that_cannot_work_says_why_rather_than_starting(tab, tmp_path,
     which is the likeliest of the four here, since this is the tab the run is
     started from."""
     said = []
-    monkeypatch.setattr(tab, "_say", lambda m: said.append(m))
+    tab._say = lambda m: said.append(m)
 
     tab.table.clearSelection()
     tab._generate()
@@ -154,7 +156,7 @@ def test_a_render_that_cannot_work_says_why_rather_than_starting(tab, tmp_path,
     # A model is loaded, but a whole-card job owns the GPU.
     tab.host.ctx = types.SimpleNamespace(model_name="house-model")
     import comfy_client
-    monkeypatch.setattr(comfy_client, "gpu_holder", lambda: "Ideogram 4 training")
+    tab.modules = {"comfy_client": Over(comfy_client, gpu_holder=lambda: "Ideogram 4 training")}
     tab._generate()
     assert "Ideogram 4 training" in said[-1], said[-1]
     assert tab.worker is None, "started a render on a card held by a trainer"
@@ -178,7 +180,7 @@ def test_the_tab_distinguishes_finished_from_killed(tab, monkeypatch):
         return base
 
     def _text(**kw):
-        monkeypatch.setattr(LT, "progress", lambda slug: _p(**kw))
+        tab.modules = {"lora_training": Over(LT, progress=lambda slug: _p(**kw))}
         tab._refresh_progress()
         return tab.prog_lbl.text()
 
@@ -205,10 +207,10 @@ def test_a_finished_run_is_not_reported_as_live(tab, monkeypatch):
     import lora_training as LT
     C.upsert("hero3", name="Герой", trigger="hero3")
     tab.refresh(); tab.table.selectRow(0)
-    monkeypatch.setattr(LT, "progress", lambda slug: {
+    tab.modules = {"lora_training": Over(LT, progress=lambda slug: {
         "slug": slug, "total": 8000, "step": 783, "checkpoints": 3,
         "samples": 0, "last_sample": "", "tail": "", "eta": "17:35:31",
-        "rate": "8.78s/it", "running": False})
+        "rate": "8.78s/it", "running": False})}
     tab._refresh_progress()
     text = tab.prog_lbl.text()
     # Not "не активно" any more -- a run stopped at 783 of 8000 was killed, and
@@ -241,14 +243,12 @@ def test_the_publish_picker_can_reach_every_run_of_a_character(tab, tmp_path,
             f.write_bytes(b"x" * 16)
             made[run].append((step, f))
 
-    monkeypatch.setattr(LT, "run_slugs", lambda slug: list(made))
-    monkeypatch.setattr(LT, "list_checkpoints",
-                        lambda run, limit=10: list(reversed(made.get(run, []))))
+    tab.modules = {"lora_training": Over(LT, run_slugs=lambda slug: list(made),
+                                         list_checkpoints=lambda run, limit=10: list(reversed(made.get(run, []))))}
 
     shown = {}
-    monkeypatch.setattr(QInputDialog, "getItem",
-                        staticmethod(lambda *a, **k: (shown.setdefault("items", a[3])
-                                                      and None, ("", False))[1]))
+    tab.parts = {"QInputDialog": types.SimpleNamespace(getItem=lambda *a, **k: (shown.setdefault("items", a[3])
+                                                                         and None, ("", False))[1])}
     tab._publish()
     items = shown.get("items") or []
     assert items, "the picker offered nothing"
@@ -265,7 +265,7 @@ def test_the_publish_picker_can_reach_every_run_of_a_character(tab, tmp_path,
 
 def test_publish_with_nothing_selected_says_so(tab, monkeypatch):
     said = []
-    monkeypatch.setattr(tab, "_say", lambda m: said.append(m))
+    tab._say = lambda m: said.append(m)
     tab.table.clearSelection()
     tab._publish()
     assert said and "pick a character" in said[-1].lower(), said

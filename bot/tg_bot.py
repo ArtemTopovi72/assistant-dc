@@ -175,6 +175,8 @@ def redirect_data_dir(directory) -> None:
         _dr_timing.redirect_timings(d / "research")
     except Exception:
         pass
+    import code_sandbox as _code_sandbox   # the users' sandboxes are shared state too
+    _code_sandbox.SANDBOX_BASE = d / "sandboxes"
 
 
 def _delete_chat_facts_file(chat_id: int) -> None:

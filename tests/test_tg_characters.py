@@ -235,8 +235,8 @@ def test_photos_in_character_mode_are_references_not_silence():
     the caption as the scene and the photos as references."""
     import time as _t
     import tg_characters as TC
-    TC._REF_QUIET_S = 0.3
     bot = _bot()
+    bot.ref_quiet_s = 0.3
     C.upsert("hero", name="Герой", status="ready",
              lora_file=_adapter(), tg_enabled=True)
     bot._pick_character(CID, _sess(bot), "ru", "hero")
@@ -277,7 +277,6 @@ def test_delivered_render_carries_the_image_keyboard_and_msg_id():
     resolved nothing. Drives the REAL _render_character (only the GPU call
     is stubbed), unlike the other tests here which replace _render_character
     itself and so never touch this delivery code at all."""
-    import image_generate as G
     bot = _bot()
     C.upsert("hero", name="Герой", trigger="hero", status="ready",
              lora_file=_adapter(), tg_enabled=True)
@@ -290,8 +289,7 @@ def test_delivered_render_carries_the_image_keyboard_and_msg_id():
         bot._last_photo_msg_id = 4242
         return True
     bot._send_photo = _fake_send_photo
-    orig_render = G.generate_image_with_comfy
-    G.generate_image_with_comfy = lambda ctx, prompt, **k: out_path
+    bot.render_image = lambda ctx, prompt, **k: out_path
     import tg_characters as TC
     try:
         # _bot() replaces the INSTANCE attribute _render_character with a
@@ -299,7 +297,7 @@ def test_delivered_render_carries_the_image_keyboard_and_msg_id():
         # real method under test, unbound, exactly as tg_bot dispatches it.
         TC.CharactersMixin._render_character(bot, CID, rec, "на крыше", "ru")
     finally:
-        G.generate_image_with_comfy = orig_render
+        pass
 
     check("the picture was sent", len(calls) == 1, calls)
     if calls:
@@ -322,20 +320,18 @@ def test_delivered_render_becomes_the_current_picture_for_follow_ups():
     sess.last_image_path -- if this was never set, the
     next turn thinks there is no current picture at all and asks the user
     to upload a photo, even though one was just delivered with a keyboard."""
-    import image_generate as G
     bot = _bot()
     C.upsert("hero", name="Герой", trigger="hero", status="ready",
              lora_file=_adapter(), tg_enabled=True)
     rec = C.get("hero")
     out_path = _adapter("rendered3.png")
     bot._send_photo = lambda cid, path, **k: True
-    orig_render = G.generate_image_with_comfy
-    G.generate_image_with_comfy = lambda ctx, prompt, **k: out_path
+    bot.render_image = lambda ctx, prompt, **k: out_path
     import tg_characters as TC
     try:
         TC.CharactersMixin._render_character(bot, CID, rec, "на крыше", "ru")
     finally:
-        G.generate_image_with_comfy = orig_render
+        pass
     sess = _sess(bot)
     check("sess.last_image_path points at the delivered render",
           sess.last_image_path == out_path, sess.last_image_path)
@@ -346,21 +342,19 @@ def test_delivered_render_becomes_the_current_picture_for_follow_ups():
 def test_a_failed_send_is_reported_not_silent():
     """The old code ignored _send_photo's return value entirely; a failed
     send looked exactly like a successful one from the caller's side."""
-    import image_generate as G
     bot = _bot()
     C.upsert("hero", name="Герой", trigger="hero", status="ready",
              lora_file=_adapter(), tg_enabled=True)
     rec = C.get("hero")
     out_path = _adapter("rendered2.png")
     bot._send_photo = lambda cid, path, **k: False       # Telegram rejected it
-    orig_render = G.generate_image_with_comfy
-    G.generate_image_with_comfy = lambda ctx, prompt, **k: out_path
+    bot.render_image = lambda ctx, prompt, **k: out_path
     import tg_characters as TC
     try:
         bot.sent.clear()
         TC.CharactersMixin._render_character(bot, CID, rec, "на крыше", "ru")
     finally:
-        G.generate_image_with_comfy = orig_render
+        pass
     check("the user is told the render failed, not left guessing",
           bool(_texts(bot)), _texts(bot))
 

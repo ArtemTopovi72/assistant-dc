@@ -284,7 +284,7 @@ def _lock_holder() -> str:
         return ""
 
 
-def main():
+def main(assistant=None):
     # 0) refuse to run alongside an already-running instance (see the
     #    single-instance guard above for why this matters).
     if not _acquire_singleton_lock():
@@ -349,7 +349,8 @@ def main():
 
     # 4) launch the assistant GUI (in this process)
     os.environ.setdefault("USE_GUI", "1")
-    import assistant
+    if assistant is None:
+        import assistant
     assistant.main()
 
 

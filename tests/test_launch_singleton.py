@@ -127,11 +127,7 @@ mod6._spawn_comfy_source = lambda: False
 class _FakeAssistant:
     @staticmethod
     def main(): started["assistant"] = True
-sys.modules["assistant"] = _FakeAssistant
-try:
-    mod6.main()
-finally:
-    sys.modules.pop("assistant", None)
+mod6.main(_FakeAssistant)
 check("main() did not spawn ComfyUI/LM Studio when the lock was already held",
       started["comfy"] is False)
 check("main() did not start the assistant GUI when the lock was already held",

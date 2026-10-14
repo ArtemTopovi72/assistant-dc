@@ -290,7 +290,8 @@ def s_browser(args):
 
 def s_config(args):
     step("7. config")
-    env, example = ROOT / ".env", ROOT / ".env.example"
+    root = getattr(args, "root", None) or ROOT
+    env, example = root / ".env", root / ".env.example"
     if env.exists():
         have = set(re.findall(r"^\s*([A-Z0-9_]+)\s*=", env.read_text(encoding="utf-8", errors="replace"), re.M))
         new = [k for k in re.findall(r"^\s*([A-Z0-9_]+)\s*=", example.read_text(encoding="utf-8"), re.M)
@@ -302,7 +303,7 @@ def s_config(args):
         shutil.copyfile(example, env)
         record("config", "ok", "created .env from .env.example (edit it to change settings)")
     for d in ("runtime", "models"):
-        (ROOT / d).mkdir(exist_ok=True)
+        (root / d).mkdir(exist_ok=True)
 
 
 # -- 7b. Linux system libraries ----------------------------------------------------
@@ -352,11 +353,13 @@ def s_qt_libs(args):
     if IS_WIN or sys.platform == "darwin":
         return
     step("7b. window libraries (Linux)")
-    missing = _qt_missing_libs()
+    qt_missing = getattr(args, "qt_missing_libs", None) or _qt_missing_libs
+    apt = getattr(args, "apt_install", None) or _apt_install
+    missing = qt_missing()
     if missing:
         pkgs = sorted({_deb_package(m) for m in missing})
-        if _apt_install(pkgs, args):
-            missing = _qt_missing_libs()
+        if apt(pkgs, args):
+            missing = qt_missing()
         if missing:
             record("qt-libs", "warn", "the app window cannot open (Qt's xcb plugin lacks "
                    f"{', '.join(missing)}): sudo apt install {' '.join(pkgs)}  "

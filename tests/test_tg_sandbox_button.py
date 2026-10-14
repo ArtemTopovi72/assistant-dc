@@ -18,7 +18,6 @@ T.redirect_data_dir(tempfile.mkdtemp(prefix="tgtest_sbxbtn_"))
 
 import code_sandbox as CS
 from pathlib import Path
-CS.SANDBOX_BASE = Path(tempfile.mkdtemp(prefix="tgtest_sbxbtn_root_"))
 
 import sandbox_access as A
 import tg_keyboards as K

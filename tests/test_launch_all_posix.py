@@ -9,6 +9,7 @@ import importlib.util
 import os
 import sys
 import time
+from unittest import mock
 
 import pytest
 
@@ -17,14 +18,14 @@ pytestmark = pytest.mark.skipif(os.name == "nt", reason="POSIX spawn path")
 
 
 def _load(monkeypatch, base):
-    monkeypatch.setenv("COMFY_BASE_DIR", str(base))
-    monkeypatch.delenv("COMFY_SRC", raising=False)
-    monkeypatch.delenv("COMFY_PY", raising=False)
-    monkeypatch.delenv("COMFY_LOG", raising=False)
-    spec = importlib.util.spec_from_file_location(
-        "launch_all_posix", os.path.join(ROOT, "scripts", "launch_all.py"))
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+    # the script reads these once, at import: the environment is its input, scoped to the load
+    with mock.patch.dict(os.environ, {"COMFY_BASE_DIR": str(base)}):
+        for k in ("COMFY_SRC", "COMFY_PY", "COMFY_LOG"):
+            os.environ.pop(k, None)
+        spec = importlib.util.spec_from_file_location(
+            "launch_all_posix", os.path.join(ROOT, "scripts", "launch_all.py"))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
     return mod
 
 

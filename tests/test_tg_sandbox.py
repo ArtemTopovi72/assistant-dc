@@ -32,8 +32,8 @@ from pathlib import Path
 
 # Sandboxes go somewhere disposable too: the real base is under runtime/ and a
 # test must not leave chat folders in it.
-_SBX_BASE = Path(tempfile.mkdtemp(prefix="tgtest_sbxroot_"))
-CS.SANDBOX_BASE = _SBX_BASE
+_SBX_BASE = Path(CS.SANDBOX_BASE)   # redirect_data_dir put it under the data dir
+
 
 OK = BAD = 0
 def check(name, cond, extra=""):

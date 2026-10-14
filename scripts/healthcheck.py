@@ -135,8 +135,9 @@ def check_ffmpeg():
         return Result("ffmpeg", FAIL, f"{exe}: {exc}", "reinstall ffmpeg")
 
 
-def check_voice():
-    import config
+def check_voice(config=None):
+    if config is None:
+        import config
     missing = []
     if not config.WEIGHTS_PATH.exists():
         missing.append(f"F5-TTS weights ({config.WEIGHTS_PATH.name})")
@@ -232,19 +233,22 @@ def check_songs():
                   f"{py} scripts/install_yue2.py (a second run skips what is done)")
 
 
-def check_docker():
+def check_docker(code_runner=None, os_name=None, docker_info_error=None):
+    os_name = os_name or os.name
+    docker_info_error = docker_info_error or _docker_info_error
     try:
-        import code_runner
+        if code_runner is None:
+            import code_runner
         if code_runner.docker_available(timeout=8):
             return Result("docker", OK, "engine up (run_code is isolated)")
         exe = code_runner.docker_binary()
         if exe:
-            if os.name == "nt":
+            if os_name == "nt":
                 return Result("docker", WARN, "installed, engine not running -- run_code off",
                               "start Docker Desktop (the launcher does it)")
             # Linux: the launcher cannot start a root daemon, and a user outside
             # the docker group sees a running engine as "not running".
-            err = _docker_info_error(exe)
+            err = docker_info_error(exe)
             if "permission denied" in err.lower():
                 return Result("docker", WARN, "engine running but not usable by this user -- run_code off",
                               "sudo usermod -aG docker $USER, then log out and back in")
@@ -253,7 +257,7 @@ def check_docker():
     except Exception as exc:
         return Result("docker", WARN, f"check failed: {exc}")
     return Result("docker", WARN, "not installed -- run_code (code execution) off",
-                  "optional: install Docker Desktop" if os.name == "nt"
+                  "optional: install Docker Desktop" if os_name == "nt"
                   else "optional: install Docker Engine (https://docs.docker.com/engine/install/)")
 
 

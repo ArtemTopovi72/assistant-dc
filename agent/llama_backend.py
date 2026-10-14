@@ -14,6 +14,7 @@ import os
 import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 import subprocess
 import time
+from seams import dep
 import urllib.request
 from pathlib import Path
 
@@ -45,8 +46,8 @@ def handles(model_id: str) -> bool:
     return (model_id or "") in MODELS
 
 
-def base_url() -> str:
-    return f"http://127.0.0.1:{PORT}"
+def base_url(port=PORT) -> str:
+    return f"http://127.0.0.1:{port}"
 
 
 def served_ids() -> list:
@@ -97,39 +98,42 @@ def stop() -> bool:
     return bool(pids)
 
 
-def start(model_id: str, timeout: float = 240.0) -> tuple:
+def start(model_id: str, timeout: float = 240.0, ctx=None) -> tuple:
     """Serve `model_id`. No-op if it already is. Returns (ok, message)."""
-    spec = MODELS.get(model_id)
+    models, server_exe, port, log_path = (dep(ctx, "MODELS", MODELS), dep(ctx, "SERVER_EXE", SERVER_EXE),
+                                          dep(ctx, "PORT", PORT), dep(ctx, "_LOG", _LOG))
+    sub = dep(ctx, "subprocess", subprocess)
+    spec = models.get(model_id)
     if not spec:
         return False, f"{model_id} is not a llama-server model"
-    if model_id in served_ids():
+    if model_id in dep(ctx, "served_ids", served_ids)():
         return True, "already loaded"
-    if _under_tests():
+    if dep(ctx, "_under_tests", _under_tests)():
         return False, "refused under tests"
-    stop()
-    if not Path(SERVER_EXE).exists() or not Path(spec["gguf"]).exists():
-        return False, f"missing {SERVER_EXE} or {spec['gguf']}"
+    dep(ctx, "stop", stop)()
+    if not Path(server_exe).exists() or not Path(spec["gguf"]).exists():
+        return False, f"missing {server_exe} or {spec['gguf']}"
     env = dict(os.environ)
     env["PATH"] = CUDA_BIN + os.pathsep + env.get("PATH", "")
-    args = [SERVER_EXE, "-m", str(spec["gguf"]), "-ngl", "99", "-c", str(spec["ctx"]),
-            "-np", "1", "--jinja", "--host", "127.0.0.1", "--port", str(PORT), "-a", model_id]
+    args = [server_exe, "-m", str(spec["gguf"]), "-ngl", "99", "-c", str(spec["ctx"]),
+            "-np", "1", "--jinja", "--host", "127.0.0.1", "--port", str(port), "-a", model_id]
     if spec.get("mmproj") and Path(spec["mmproj"]).exists():
         args += ["--mmproj", str(spec["mmproj"])]
-    _LOG.parent.mkdir(parents=True, exist_ok=True)
-    with open(_LOG, "ab") as log:     # the child keeps its own handle
-        proc = subprocess.Popen(args, env=env, stdout=log, stderr=log,
-                                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(log_path, "ab") as log:     # the child keeps its own handle
+        proc = sub.Popen(args, env=env, stdout=log, stderr=log,
+                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     t0 = time.time()
     while time.time() - t0 < timeout:
         try:
-            with urllib.request.urlopen(base_url() + "/health", timeout=3) as r:
+            with urllib.request.urlopen(base_url(port) + "/health", timeout=3) as r:
                 if r.status == 200:
                     logger.info("llama-server serving %s (%.0fs)", model_id, time.time() - t0)
                     return True, "loaded"
         except Exception:
             pass
         if proc.poll() is not None:
-            return False, f"llama-server exited; see {_LOG}"
+            return False, f"llama-server exited; see {log_path}"
         time.sleep(1.0)
     # Not left loading in the background: it would hold the card while the
     # caller falls back, and the next start() could not tell it was ours.

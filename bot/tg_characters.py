@@ -110,7 +110,7 @@ class CharactersMixin:
 
         def _fire():
             import time as _t
-            _t.sleep(_REF_QUIET_S)
+            _t.sleep(getattr(self, "ref_quiet_s", None) or _REF_QUIET_S)
             if self._char_ref_gen.get(chat_id) != my_gen:
                 return                    # another page arrived; its timer fires
             s2 = self._get_session(chat_id)
@@ -249,7 +249,7 @@ class CharactersMixin:
                 # rather than through the tool handler that normally does.
                 if ctx is not None:
                     ctx.set_stage("Drawing a picture")
-                path = G.generate_image_with_comfy(
+                path = (getattr(self, "render_image", None) or G.generate_image_with_comfy)(
                     ctx, prompt,
                     lora_name=os.path.basename(rec.get("lora_file") or ""),
                     lora_strength=float(rec.get("strength") or 1.5),
