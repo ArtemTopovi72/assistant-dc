@@ -18,6 +18,8 @@ import time
 
 from PyQt5.QtCore import QThread
 
+from seams import widget_part
+
 logger = logging.getLogger("assistant.gui")
 
 
@@ -89,7 +91,7 @@ class BusyStateMixin:
         the chat permanently, and there is no done-handler to trust here.
         """
         import config as _cfg
-        if not getattr(_cfg, "GUI_SERIALIZE_GPU_JOBS", True):
+        if not widget_part(self, "GUI_SERIALIZE_GPU_JOBS", getattr(_cfg, "GUI_SERIALIZE_GPU_JOBS", True)):
             return False
         for host in self._thread_hosts():
             if host is self:

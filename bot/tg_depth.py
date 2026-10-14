@@ -160,7 +160,7 @@ def _depth_eta_text(depth: str, lang: str, estimate=None) -> str:
     return _fmt_secs(secs, lang) if secs else "?"
 
 
-def _depth_menu_kb(sess, lang: str = _DEFAULT_LANG) -> dict:
+def _depth_menu_kb(sess, lang: str = _DEFAULT_LANG, estimate=None) -> dict:
     """One row per depth, each carrying its own estimate, with the ✅ on the
     active one — the keyboard states the current setting and its cost together,
     which is the whole point of asking before a 40-minute wait."""
@@ -169,7 +169,7 @@ def _depth_menu_kb(sess, lang: str = _DEFAULT_LANG) -> dict:
     for d in _DEPTHS:
         rows.append([{
             "text": ("✅ " if cur == d else "") + f"{_depth_name(d, lang)} · "
-                    f"~{_depth_eta_text(d, lang)}",
+                    f"~{_depth_eta_text(d, lang, estimate)}",
             "callback_data": "depth:" + d,
                     }])
     rows.append(_nav_back_row(lang))

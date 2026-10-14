@@ -53,8 +53,7 @@ L.loaded_model_ids = lambda b: list(served)
 calls = []
 L.ensure_exclusive = lambda base, model: calls.append(model) or (True, "ok")
 comfy_client.card_is_exclusive = lambda: ""
-llm.LLM_REVIVE_MIN_INTERVAL_S = 60.0
-llm._revive_last = 0.0; llm._revive_ok = False
+llm._set_revive_state(0.0, False)
 
 check("first crash: revived", llm._try_revive_model("model has crashed", {"model": "gemma"}) is True and calls == ["gemma"])
 check("inside the cooldown with the model served: cached ok, no reload",
@@ -64,7 +63,7 @@ check("inside the cooldown but the model is GONE again: reload",
       llm._try_revive_model("Model reloaded.", {"model": "gemma"}) is True and calls == ["gemma", "gemma"], calls)
 # A model that fails to load stays rate-limited (no reload storm).
 L.ensure_exclusive = lambda base, model: calls.append(model) or (False, "not being served")
-llm._revive_last = 0.0
+llm._set_revive_state(0.0, False)
 check("a failed revive is reported", llm._try_revive_model("No models loaded", {"model": "gemma"}) is False)
 n = len(calls)
 check("...and the next call inside the cooldown does NOT reload again",

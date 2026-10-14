@@ -38,16 +38,27 @@ import atexit
 import datetime as _dt
 import faulthandler
 import logging
+import os
 import sys
 import threading
 import traceback
 from pathlib import Path
 
+from seams import module
+
 logger = logging.getLogger("assistant.crash")
 
-_CRASH_LOG = Path(__file__).resolve().parents[1] / "crash.log"
-_installed = False
+_ROOT = Path(__file__).resolve().parents[1]
+_STATE = {"installed": False}
 _fault_fp = None  # keep the file handle alive for faulthandler
+
+
+def _crash_log() -> Path:
+    return Path(os.getenv("ASSISTANT_CRASH_LOG") or _ROOT / "crash.log")
+
+
+def _heartbeat() -> Path:
+    return Path(os.getenv("ASSISTANT_HEARTBEAT") or _ROOT / "runtime" / "heartbeat.json")
 
 
 def _stamp() -> str:
@@ -62,13 +73,13 @@ def _write_crash_log(header: str, body: str) -> None:
             header, body = redact(header), redact(body)
         except Exception:
             pass
-        with _CRASH_LOG.open("a", encoding="utf-8") as fp:
+        with _crash_log().open("a", encoding="utf-8") as fp:
             fp.write(f"\n{'=' * 70}\n{_stamp()}  {header}\n{'=' * 70}\n{body}\n")
     except Exception:
         pass
 
 
-def _excepthook(exc_type, exc_value, exc_tb) -> None:
+def _excepthook(exc_type, exc_value, exc_tb, default=None) -> None:
     """Replacement sys.excepthook.
 
     Logging (and *returning*) here is what prevents PyQt5 from following an
@@ -77,7 +88,7 @@ def _excepthook(exc_type, exc_value, exc_tb) -> None:
     """
     if issubclass(exc_type, KeyboardInterrupt):
         # Preserve normal Ctrl-C behaviour.
-        sys.__excepthook__(exc_type, exc_value, exc_tb)
+        (default or sys.__excepthook__)(exc_type, exc_value, exc_tb)
         return
     tb = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
     logger.error("UNHANDLED EXCEPTION (suppressed app abort)\n%s", tb)
@@ -93,7 +104,7 @@ def _thread_excepthook(args) -> None:
     _write_crash_log(f"THREAD EXCEPTION ({name}): {args.exc_type.__name__}: {args.exc_value}", tb)
 
 
-def install_qt_message_handler() -> None:
+def install_qt_message_handler(modules=None) -> None:
     """Route Qt's own warnings/fatals through logging + crash.log.
 
     A ``QtFatalMsg`` is logged with a Python stack before Qt aborts, so even a
@@ -101,7 +112,7 @@ def install_qt_message_handler() -> None:
     Qt import is available; safe to skip if PyQt isn't importable.
     """
     try:
-        from PyQt5 import QtCore
+        QtCore = module(modules or {}, "PyQt5.QtCore")
     except Exception:
         return
 
@@ -130,7 +141,6 @@ def install_qt_message_handler() -> None:
         pass
 
 
-_HEARTBEAT = Path(__file__).resolve().parents[1] / "runtime" / "heartbeat.json"
 _last_stage = ""
 
 
@@ -157,15 +167,16 @@ def _beat(clean: bool = False) -> None:
             rss, threads = round(p.memory_info().rss / 2**20), p.num_threads()
         except Exception:
             pass
-        _HEARTBEAT.parent.mkdir(parents=True, exist_ok=True)
-        tmp = _HEARTBEAT.with_suffix(f".{os.getpid()}.tmp")   # launcher + app both beat
+        hb = _heartbeat()
+        hb.parent.mkdir(parents=True, exist_ok=True)
+        tmp = hb.with_suffix(f".{os.getpid()}.tmp")   # launcher + app both beat
         tmp.write_text(json.dumps({"pid": os.getpid(), "t": _stamp(), "stage": _last_stage,
                                    "rss_mb": rss, "threads": threads, "clean_exit": clean,
                                    "live_threads": sorted(t.name for t in threading.enumerate())[:40]},
                                   ensure_ascii=False), encoding="utf-8")
         for _ in range(3):              # Windows: replace fails while a reader holds it
             try:
-                os.replace(tmp, _HEARTBEAT)
+                os.replace(tmp, hb)
                 break
             except PermissionError:
                 import time; time.sleep(0.2)
@@ -177,7 +188,7 @@ def _report_previous_death() -> None:
     import json
     import os
     try:
-        prev = json.loads(_HEARTBEAT.read_text(encoding="utf-8"))
+        prev = json.loads(_heartbeat().read_text(encoding="utf-8"))
     except Exception:
         return
     if prev.get("clean_exit") or prev.get("pid") == os.getpid():
@@ -202,16 +213,17 @@ def _heartbeat_loop() -> None:
         time.sleep(5)
 
 
-def install() -> None:
+def install(state=None, sys_mod=sys, threading_mod=threading) -> None:
     """Enable faulthandler + global exception hooks. Idempotent."""
-    global _installed, _fault_fp
-    if _installed:
+    global _fault_fp
+    state = _STATE if state is None else state
+    if state["installed"]:
         return
-    _installed = True
+    state["installed"] = True
 
     # faulthandler → its own file so a true native fault still dumps a C stack.
     try:
-        _fault_fp = (Path(__file__).resolve().parents[1] / "faulthandler.log").open("a", encoding="utf-8")
+        _fault_fp = Path(os.getenv("ASSISTANT_FAULT_LOG") or _ROOT / "faulthandler.log").open("a", encoding="utf-8")
         _fault_fp.write(f"\n--- faulthandler session {_stamp()} ---\n")
         _fault_fp.flush()
         faulthandler.enable(file=_fault_fp, all_threads=True)
@@ -221,9 +233,9 @@ def install() -> None:
         except Exception:
             pass
 
-    sys.excepthook = _excepthook
+    sys_mod.excepthook = _excepthook
     try:
-        threading.excepthook = _thread_excepthook  # py3.8+
+        threading_mod.excepthook = _thread_excepthook  # py3.8+
     except Exception:
         pass
 

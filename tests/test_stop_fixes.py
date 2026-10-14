@@ -75,11 +75,8 @@ class FakeCtx:
 # ══════════════════════════════════════════════════════════════════════════
 section("1. WATCHDOG cancels the runaway task's OWN event, not the shared ctx")
 
-import config as _cfg
-_orig_watchdog_s = getattr(_cfg, "TG_WATCHDOG_S", 15)
-_cfg.TG_WATCHDOG_S = 5   # the loop enforces a floor of 5s anyway; speed up the test
-
 bot = make_bot()
+bot.settings = {"TG_WATCHDOG_S": 5}   # the loop enforces a floor of 5s anyway; speed up the test
 shared = FakeCtx()
 bot._get_ctx = lambda: shared
 own_ev = threading.Event()
@@ -104,7 +101,6 @@ while time.time() < deadline and not own_ev.is_set():
 bot._running = False
 _stop_dummy.set()
 wd.join(timeout=2)
-_cfg.TG_WATCHDOG_S = _orig_watchdog_s
 
 check("the runaway task's OWN cancel event was set", own_ev.is_set())
 check("the SHARED desktop ctx was NOT touched (nothing else was aborted)",
@@ -230,7 +226,7 @@ fake_dr.run_deep_research = _fake_run
 # the same attribute or that call raises AttributeError before ever reaching
 # the cancellation behavior this section actually tests.
 fake_dr.lang_of_text = lambda text, default="en": default
-sys.modules["deep_research"] = fake_dr
+bot.modules = {"deep_research": fake_dr}
 
 task = T._Task(task_id="dr1", chat_id=CID, user_text="do a deep research on: widgets")
 bot._execute_task(task)

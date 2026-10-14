@@ -5,7 +5,6 @@ import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ["F5_TEST_RUN"] = "1"
 
-import llm
 import video as V
 
 ok = []
@@ -26,15 +25,15 @@ os.environ["F5_TEST_RUN"] = "1"
 
 good = ("integrated_multimodal_description: [Shot 1] Live-action, a man...\n"
         "overall_soundscape: birds.\nnon_diegetic_music: N/A")
-llm.call_llm_simple = lambda *a, **k: good
-out = V.to_context_ir(None, "a man", mode="t2va", seconds=5.17)
+_say = NS(text_model=lambda *a, **k: good)
+out = V.to_context_ir(_say, "a man", mode="t2va", seconds=5.17)
 check(out.startswith("integrated_multimodal_description:"), "a well-formed rewrite is used")
 check("\n\noverall_soundscape:" in out and "\n\nnon_diegetic_music:" in out, "fields separated by a blank line")
 
-llm.call_llm_simple = lambda *a, **k: "Sure! Here is a great video idea about a man."
-check(V.to_context_ir(None, "a man", mode="t2va", seconds=5) == "a man", "chatter is rejected, plain prompt kept")
-llm.call_llm_simple = lambda *a, **k: None
-check(V.to_context_ir(None, "a man", mode="t2va", seconds=5) == "a man", "no answer -> plain prompt kept")
+_say.text_model = lambda *a, **k: "Sure! Here is a great video idea about a man."
+check(V.to_context_ir(_say, "a man", mode="t2va", seconds=5) == "a man", "chatter is rejected, plain prompt kept")
+_say.text_model = lambda *a, **k: None
+check(V.to_context_ir(_say, "a man", mode="t2va", seconds=5) == "a man", "no answer -> plain prompt kept")
 
 ref_ok = ("subject_definitions:\n<Subject 1> is ...\nsummary:\nx\nretention_analysis:\ny\n"
           "detailed_description:\n[Shot 1] ...\noverall_soundscape: z\nnon_diegetic_music: N/A")

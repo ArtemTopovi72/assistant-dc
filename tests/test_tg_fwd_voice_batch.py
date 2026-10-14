@@ -38,13 +38,8 @@ T.redirect_data_dir(_DATA)
 import graph as graph_mod
 # The intent read is a model call (_fwdv_intent); its own quality is checked
 # live by bench/fwdv_intent_live.py -- here only the routing it drives.
-import llm as _llm0
-_real_simple0 = _llm0.call_llm_simple
-def _intent_or_real(ctx, system, user, *a, **k):
-    if system == T._FWDV_SYSTEM:
-        return '{"label": "%s"}' % ("sum" if user.strip().lower() in ("перескажи", "who drives? в двух словах суть") else "other")
-    return _real_simple0(ctx, system, user, *a, **k)
-_llm0.call_llm_simple = _intent_or_real
+def _fwdv_stub(text):
+    return "sum" if text.strip().lower() in ("перескажи", "who drives? в двух словах суть") else ""
 
 OK = BAD = 0
 FAILURES = []
@@ -109,6 +104,7 @@ def make_bot(n_consumers=2):
     bot = T.TelegramBot("123:TEST", lambda: SHARED_CTX, lambda: object(),
                         lambda: {"messages": []}, silent_mode=True)
     bot.graph_builder = _stub_build_graph
+    bot.fwdv_intent = _fwdv_stub
     bot._backend = T.InMemoryBackend()
     bot.sent = []
     bot._send_text = lambda cid, t, **kw: (bot.sent.append((cid, t)), 1)[1]
@@ -267,17 +263,14 @@ check("text-then-forward: one turn with the transcript and the words",
 # an explicit intent word still takes the transcript/summary shortcut
 # The retelling is a one-shot llm.call_llm_simple outside the agent (see
 # _retell_transcript), so it is stubbed here.
-import llm as _llm_mod
-_real_simple = _llm_mod.call_llm_simple
-_llm_mod.call_llm_simple = lambda ctx, system, *a, **k: (
-    '{"label": "sum"}' if system == T._FWDV_SYSTEM else "Summary: stub retelling")
+SHARED_CTX.text_model = lambda ctx, system, *a, **k: "Summary: stub retelling"
 try:
     bot.sent.clear(); INVOKES.clear()
     bot._dispatch(msg_update(CID_TF, "перескажи"))
     bot._dispatch(fwd_voice_update(CID_TF, "voicefid7"))
     ok = settle(lambda: any("Summary" in t for _, t in bot.sent), timeout=6)
 finally:
-    _llm_mod.call_llm_simple = _real_simple
+    del SHARED_CTX.text_model
 check("text-then-forward: an intent word ('перескажи') still runs the shortcut, not a graph turn",
       ok and not INVOKES, (bot.sent, INVOKES))
 stop_bot(bot)

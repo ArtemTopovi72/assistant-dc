@@ -3,12 +3,21 @@ import io
 import logging
 import os
 import sys
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 os.environ.setdefault("F5_TEST_RUN", "1")
 
 import log_redact  # noqa: E402
+
+
+def _env(request, **kw):
+    """Env vars the code reads at call time, undone when the test ends."""
+    patcher = mock.patch.dict(os.environ, kw)
+    patcher.start()
+    request.addfinalizer(patcher.stop)
+
 
 TOKEN = "123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw"
 
@@ -57,15 +66,15 @@ def test_the_app_log_handlers_carry_it():
         os.path.join(ROOT, "gui", "gui.py"), encoding="utf-8").read()
 
 
-def test_crash_log_is_redacted(tmp_path, monkeypatch):
+def test_crash_log_is_redacted(tmp_path, request):
     import crash_diag
-    monkeypatch.setattr(crash_diag, "_CRASH_LOG", tmp_path / "crash.log")
+    _env(request, ASSISTANT_CRASH_LOG=str(tmp_path / "crash.log"))
     crash_diag._write_crash_log("UNCAUGHT", f"ConnectionError: /bot{TOKEN}/getUpdates")
     text = (tmp_path / "crash.log").read_text(encoding="utf-8")
     assert TOKEN.split(":")[1] not in text and "getUpdates" in text
 
 
-def test_turn_trace_and_chatlog_files_are_redacted(tmp_path, monkeypatch):
+def test_turn_trace_and_chatlog_files_are_redacted(tmp_path, request):
     """Both keep their own copy of the log lines of a turn, outside the file
     handler's filter: a token in a warning landed in turns/ and chat_logs/."""
     import tempfile
@@ -73,8 +82,7 @@ def test_turn_trace_and_chatlog_files_are_redacted(tmp_path, monkeypatch):
     import chatlog
     import turn_trace
     T.redirect_data_dir(tempfile.mkdtemp())
-    monkeypatch.setenv("TURNS_DIR", str(tmp_path))
-    monkeypatch.setattr(turn_trace, "TURNS_DIR", tmp_path)
+    _env(request, TURNS_DIR=str(tmp_path))
     chatlog.install()
     lg = logging.getLogger("assistant.tg_redact_case")
     lg.setLevel(logging.INFO)

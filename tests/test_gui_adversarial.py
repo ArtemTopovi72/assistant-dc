@@ -353,18 +353,16 @@ def test_chat_turn_waits_for_a_running_tab_job():
           "a stale worker reference blocks every future message")
 
     # And the escape hatch must actually disable the gate.
-    import config as _cfg
     live = _Sleeper(20.0)
     w.transfer_tab.worker = live
     live.start()
     time.sleep(0.2)
-    _prev = getattr(_cfg, "GUI_SERIALIZE_GPU_JOBS", True)
     try:
-        _cfg.GUI_SERIALIZE_GPU_JOBS = False
+        w.parts = {"GUI_SERIALIZE_GPU_JOBS": False}
         check("serialization_can_be_turned_off", not w._busy(),
               "GUI_SERIALIZE_GPU_JOBS=0 did not re-allow the overlap")
     finally:
-        _cfg.GUI_SERIALIZE_GPU_JOBS = _prev
+        w.parts = {}
         live.cancel(); live.wait(4000)
         w.transfer_tab.worker = None
 
@@ -650,8 +648,7 @@ def test_new_profile_keeps_combo_in_sync():
     w.ctx.active_memory_dir = root / "default"
     w.ctx.active_memory_dir.mkdir(parents=True, exist_ok=True)
     (w.ctx.active_memory_dir / "session_memory.json").write_text("[]", encoding="utf-8")
-    orig_dir = gui.MEMORY_DIR
-    gui.MEMORY_DIR = root
+    w.parts = {"MEMORY_DIR": root}
     orig_get = QInputDialog.getText
     QInputDialog.getText = staticmethod(lambda *a, **k: ("fresh_profile", True))
     try:
@@ -665,7 +662,7 @@ def test_new_profile_keeps_combo_in_sync():
         check("new_profile_listed", "fresh_profile" in w._list_memory_profiles())
     finally:
         QInputDialog.getText = orig_get
-        gui.MEMORY_DIR = orig_dir
+        w.parts = {}
     no_slot_errors("new_profile")
     _teardown(w)
 

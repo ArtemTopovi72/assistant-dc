@@ -5,7 +5,7 @@ synth_single_segment, play_audio_file, AudioPlayer. Stubs sounddevice
 inference so every branch runs deterministically without a real mic/speaker/GPU.
 Run: venv/Scripts/python.exe tests/test_audio_device.py
 """
-import os, sys, tempfile, threading, time, builtins, types
+import os, sys, tempfile, threading, time, builtins, types, contextlib
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
@@ -13,7 +13,6 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 from pathlib import Path
 import numpy as np
 import audio as A
-from _patch_base import RebindPatches
 
 RESULTS = []
 def check(name, cond, detail=""):
@@ -25,11 +24,8 @@ def check(name, cond, detail=""):
 _TMP = Path(tempfile.mkdtemp(prefix="audiodev_"))
 
 
-class _Patches(RebindPatches):
-    def _apply(self, name, value):
-        old = getattr(A, name)
-        setattr(A, name, value)
-        return [(A, old)]
+def _dc(**deps):
+    return types.SimpleNamespace(deps=types.SimpleNamespace(**deps))
 
 
 class FakeStream:
@@ -112,8 +108,8 @@ class FakeCtx:
 
 def test_mic_recorder():
     FakeStream.instances.clear()
-    with _Patches(sd=FakeSd()):
-        rec = A.MicRecorder(fs=16000, gain_db=6.0)
+    with contextlib.nullcontext(_dc(sd=FakeSd())) as _c:
+        rec = A.MicRecorder(fs=16000, gain_db=6.0, ctx=_c)
         rec.start()
         stream = FakeStream.instances[-1]
         check("mic_recorder_started", stream.started)
@@ -123,13 +119,13 @@ def test_mic_recorder():
         check("mic_recorder_stop_returns_audio", out.size == 10)
         check("mic_recorder_level_reset", rec.level() == 0.0)
 
-    with _Patches(sd=FakeSd()):
-        rec2 = A.MicRecorder()
+    with contextlib.nullcontext(_dc(sd=FakeSd())) as _c:
+        rec2 = A.MicRecorder(ctx=_c)
         out2 = rec2.stop()  # never started -> no stream
         check("mic_recorder_stop_without_start", out2.size == 0)
 
-    with _Patches(sd=FakeSd()):
-        rec3 = A.MicRecorder(gain_db=6.0)
+    with contextlib.nullcontext(_dc(sd=FakeSd())) as _c:
+        rec3 = A.MicRecorder(gain_db=6.0, ctx=_c)
         rec3.start()
         stream3 = FakeStream.instances[-1]
         stream3.callback(np.zeros((5, 1), dtype=np.float32), 5, None, "overflow")  # status branch
@@ -140,11 +136,11 @@ def test_mic_recorder():
 # ---------------- record_audio_until_enter ----------------
 
 def test_record_audio_until_enter_eof():
-    with _Patches(sd=FakeSd()):
+    with contextlib.nullcontext(_dc(sd=FakeSd())) as _c:
         real_input = builtins.input
         builtins.input = lambda: (_ for _ in ()).throw(EOFError())
         try:
-            out = A.record_audio_until_enter()
+            out = A.record_audio_until_enter(ctx=_c)
             check("record_until_enter_eof_empty", out.size == 0)
         finally:
             builtins.input = real_input
@@ -156,7 +152,7 @@ def test_record_audio_until_enter_full_cycle():
     def fake_input():
         call_n["n"] += 1
         return ""
-    with _Patches(sd=FakeSd()):
+    with contextlib.nullcontext(_dc(sd=FakeSd())) as _c:
         real_input = builtins.input
         builtins.input = fake_input
         try:
@@ -167,7 +163,7 @@ def test_record_audio_until_enter_full_cycle():
                 time.sleep(0.05)
                 stream.active = False
             threading.Thread(target=driver, daemon=True).start()
-            out = A.record_audio_until_enter(gain_db=3.0)
+            out = A.record_audio_until_enter(gain_db=3.0, ctx=_c)
             check("record_until_enter_full_cycle", isinstance(out, np.ndarray))
         finally:
             builtins.input = real_input
@@ -218,12 +214,8 @@ def test_synth_single_segment():
         wav = np.zeros(1600, dtype=np.float32)
         return wav, 16000, None
 
-    fake_f5 = types.ModuleType("f5_tts.infer.utils_infer")
-    fake_f5.infer_process = fake_infer_process
-    fake_f5.preprocess_ref_audio_text = lambda ref, txt: (ref, txt)
-    sys.modules["f5_tts.infer.utils_infer"] = fake_f5
-    sys.modules.setdefault("f5_tts", types.ModuleType("f5_tts"))
-    sys.modules.setdefault("f5_tts.infer", types.ModuleType("f5_tts.infer"))
+    D = types.SimpleNamespace(infer_process=fake_infer_process,
+                              preprocess_ref_audio_text=lambda ref, txt: (ref, txt))
 
     ref_wav = _TMP / "ref.wav"
     import soundfile as sf
@@ -234,6 +226,7 @@ def test_synth_single_segment():
             self.models = types.SimpleNamespace(tts_model=object(), vocoder=object(),  # stand-ins; infer_process is faked
                                                 accentor_loaded=False, accentor=lambda t: t)
             self.tts_lock = threading.Lock()
+            self.deps = D
             self.custom_ref_wav = None
             # synth_single_segment transcribes the reference clip, which needs
             # these three. Without them it raised AttributeError, audio.py
@@ -244,37 +237,44 @@ def test_synth_single_segment():
             self.cache_file = _TMP / "synth_cache.json"
             self.asr_lock = threading.Lock()
 
-    with _Patches(get_actor_ref_and_speed=lambda actor: (str(ref_wav), "", 1.0)):
+    D.get_actor_ref_and_speed = lambda actor, ref=None: (str(ref_wav), "", 1.0)
+    if True:
         out = A.synth_single_segment(Ctx2(), 0, "DC", "hello world")
         check("synth_single_segment_success", out is not None and Path(out).exists())
 
-    with _Patches(get_actor_ref_and_speed=lambda actor: (None, "", 1.0),
-                  resolve_ref_audio=lambda p: None):
+    D.get_actor_ref_and_speed = lambda actor, ref=None: (None, "", 1.0)
+    D.resolve_ref_audio = lambda p: None
+    if True:
         out2 = A.synth_single_segment(Ctx2(), 0, "DC", "hello world")
         check("synth_single_segment_no_ref_audio", out2 is None)
 
-    with _Patches(get_actor_ref_and_speed=lambda actor: (str(ref_wav), "", 1.0)):
+    D.get_actor_ref_and_speed = lambda actor, ref=None: (str(ref_wav), "", 1.0)
+    if True:
         out3 = A.synth_single_segment(Ctx2(), 0, "DC", "   ")
         check("synth_single_segment_empty_text_none", out3 is None)
 
     def fake_infer_none(*a, **k):
         return None, None, None
-    fake_f5.infer_process = fake_infer_none
-    with _Patches(get_actor_ref_and_speed=lambda actor: (str(ref_wav), "", 1.0)):
+    D.infer_process = fake_infer_none
+    D.get_actor_ref_and_speed = lambda actor, ref=None: (str(ref_wav), "", 1.0)
+    if True:
         out4 = A.synth_single_segment(Ctx2(), 0, "DC", "hello")
         check("synth_single_segment_none_wav", out4 is None)
 
     def fake_infer_raises(*a, **k):
         raise RuntimeError("tts boom")
-    fake_f5.infer_process = fake_infer_raises
-    with _Patches(get_actor_ref_and_speed=lambda actor: (str(ref_wav), "", 1.0)):
+    D.infer_process = fake_infer_raises
+    D.get_actor_ref_and_speed = lambda actor, ref=None: (str(ref_wav), "", 1.0)
+    if True:
         out5 = A.synth_single_segment(Ctx2(), 0, "DC", "hello")
         check("synth_single_segment_exception_none", out5 is None)
 
-    fake_f5.infer_process = fake_infer_process
+    D.infer_process = fake_infer_process
     ctx_custom = Ctx2()
     ctx_custom.custom_ref_wav = str(ref_wav)
-    with _Patches():
+    del D.resolve_ref_audio
+    D.get_actor_ref_and_speed = lambda actor, ref=None: (str(ref_wav), "", 1.0)
+    if True:
         out6 = A.synth_single_segment(ctx_custom, 1, "DC", "hello", out_stem=str(_TMP / "custom_stem"))
         check("synth_single_segment_custom_ref_and_stem", out6 is not None)
 
@@ -282,38 +282,19 @@ def test_synth_single_segment():
 # ---------------- play_audio_file ----------------
 
 def test_play_audio_file():
-    with _Patches(sys=types.SimpleNamespace(platform="win32")):
-        called = {}
-        real_startfile = getattr(os, "startfile", None)
-        os.startfile = lambda p: called.setdefault("path", p)
-        try:
-            A.play_audio_file(str(_TMP / "x.wav"))
-            check("play_audio_file_windows", called.get("path") == str(_TMP / "x.wav"))
-        finally:
-            if real_startfile is not None:
-                os.startfile = real_startfile
-            else:
-                del os.startfile
+    called = {}
+    A.play_audio_file(str(_TMP / "x.wav"), _dc(platform="win32", startfile=lambda p: called.setdefault("path", p)))
+    check("play_audio_file_windows", called.get("path") == str(_TMP / "x.wav"))
 
-    with _Patches(sys=types.SimpleNamespace(platform="darwin")):
-        with _Patches(subprocess=types.SimpleNamespace(Popen=lambda args: None)):
-            A.play_audio_file(str(_TMP / "x.wav"))
-            check("play_audio_file_darwin_noraise", True)
+    for plat in ("darwin", "linux"):
+        spawned = []
+        A.play_audio_file(str(_TMP / "x.wav"), _dc(platform=plat, Popen=spawned.append))
+        check("play_audio_file_%s_noraise" % plat, len(spawned) == 1)
 
-    with _Patches(sys=types.SimpleNamespace(platform="linux")):
-        with _Patches(subprocess=types.SimpleNamespace(Popen=lambda args: None)):
-            A.play_audio_file(str(_TMP / "x.wav"))
-            check("play_audio_file_linux_noraise", True)
-
-    with _Patches(sys=types.SimpleNamespace(platform="win32")):
-        def raiser(p):
-            raise RuntimeError("open failed")
-        os.startfile = raiser
-        try:
-            A.play_audio_file(str(_TMP / "x.wav"))
-            check("play_audio_file_exception_swallowed", True)
-        finally:
-            del os.startfile
+    def raiser(p):
+        raise RuntimeError("open failed")
+    A.play_audio_file(str(_TMP / "x.wav"), _dc(platform="win32", startfile=raiser))
+    check("play_audio_file_exception_swallowed", True)
 
 
 # ---------------- AudioPlayer ----------------
@@ -324,8 +305,8 @@ def test_audio_player():
     sf.write(wav_path, np.random.uniform(-0.1, 0.1, 3200).astype(np.float32), 16000)
 
     FakeStream.instances.clear()
-    with _Patches(sd=FakeSd()):
-        p = A.AudioPlayer()
+    with contextlib.nullcontext(_dc(sd=FakeSd())) as _c:
+        p = A.AudioPlayer(_c)
         p.play(str(wav_path))
         check("audio_player_stream_started", FakeStream.instances[-1].started)
         stream = FakeStream.instances[-1]
@@ -343,8 +324,8 @@ def test_audio_player():
         check("audio_player_stopped", stream.closed)
         check("audio_player_not_active_after_stop", not p.is_active)
 
-    with _Patches(sd=FakeSd()):
-        p2 = A.AudioPlayer()
+    with contextlib.nullcontext(_dc(sd=FakeSd())) as _c:
+        p2 = A.AudioPlayer(_c)
         check("audio_player_toggle_pause_no_stream", p2.toggle_pause() is False)
         p2.play(str(_TMP / "does-not-exist.wav"))
         check("audio_player_play_missing_file_noop", p2._stream is None)
@@ -352,14 +333,14 @@ def test_audio_player():
     class RaisingStream(FakeStream):
         def __init__(self, *a, **k):
             raise RuntimeError("stream open failed")
-    with _Patches(sd=type("S", (), {"InputStream": RaisingStream, "OutputStream": RaisingStream})()):
-        p3 = A.AudioPlayer()
+    with contextlib.nullcontext(_dc(sd=type("S", (), {"InputStream": RaisingStream, "OutputStream": RaisingStream})())) as _c:
+        p3 = A.AudioPlayer(_c)
         p3.play(str(wav_path))
         check("audio_player_stream_start_exception_handled", p3._stream is None)
 
     FakeStream.instances.clear()
-    with _Patches(sd=FakeSd()):
-        p4 = A.AudioPlayer()
+    with contextlib.nullcontext(_dc(sd=FakeSd())) as _c:
+        p4 = A.AudioPlayer(_c)
         p4.play(str(wav_path))
         stream4 = FakeStream.instances[-1]
         # drive to near-end so `n < frames` triggers CallbackStop
@@ -374,7 +355,7 @@ def test_audio_player():
         # mono 1-D data reshape branch: write a raw mono file via a different rate
         mono_path = _TMP / "mono.wav"
         sf.write(mono_path, np.zeros(1600, dtype=np.float32), 16000)
-        p5 = A.AudioPlayer()
+        p5 = A.AudioPlayer(_c)
         p5.play(str(mono_path))
         check("audio_player_mono_reshape", FakeStream.instances[-1].started)
         p5.stop()

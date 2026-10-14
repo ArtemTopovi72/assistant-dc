@@ -11,7 +11,7 @@ imported by value: _MEMORY_DIR is rebound by redirect_data_dir(), and the rest
 must keep a single definition so patching tg_bot.X steers this module too.
 """
 from __future__ import annotations
-from seams import dep, intent_read, text_model, vision_model, yes_no
+from seams import dep, intent_read, module, text_model, vision_model, yes_no
 
 import copy as _copy_mod
 import html as _html_mod
@@ -965,7 +965,7 @@ class TaskRunnerMixin:
 
             result: dict = {}
             try:
-                import deep_research as _dr
+                _dr = module(self, "deep_research")
                 # The pipeline searches and briefs in English (that is where the
                 # sources are) but the DOCUMENT must come back in the language the
                 # TOPIC was actually written in — not the session's RU/EN UI
@@ -1434,7 +1434,7 @@ class TaskRunnerMixin:
         # render server is genuinely working, up to the hard per-task ceiling.
         # An unreachable ComfyUI reports NOT busy, so a real outage still fires
         # the deadline instead of hanging until the ceiling.
-        _invoke_timeout = max(5, tg_bot._cfg_int("TG_INVOKE_TIMEOUT_S", 1800))
+        _invoke_timeout = max(5, tg_bot._cfg_int("TG_INVOKE_TIMEOUT_S", 1800, getattr(self, "cfg", None)))
         _hard_ceiling = max(_invoke_timeout,
                             tg_bot._cfg_int("TG_TASK_MAX_S", 3600))
         # Coarse in production (a 1800s base needs no finer grain); scales down
@@ -1451,7 +1451,7 @@ class TaskRunnerMixin:
                 break
             if _waited >= _invoke_timeout:
                 try:
-                    import comfy_client as _comfy_mod
+                    _comfy_mod = module(self, "comfy_client")
                     if not (_comfy_mod.card_in_use() or _comfy_mod.server_busy()):
                         break
                 except Exception:

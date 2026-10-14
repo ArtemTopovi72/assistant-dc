@@ -14,6 +14,7 @@ import contextlib
 import contextvars
 import json
 import os
+from seams import module
 import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 import subprocess
 import time
@@ -414,7 +415,7 @@ class TransportMixin:
             tg_bot.logger.error("[video delivery] no file to send: %r", path)
             return False
 
-        import video as _vid
+        _vid = module(self, "video")
         send_path = path
         try:
             send_path = _vid.fit_for_telegram(path, ctx=ctx)

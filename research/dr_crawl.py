@@ -11,7 +11,7 @@ Everything here is fault-tolerant by design: one bad source can never abort a
 run, and the run stays cooperatively cancellable throughout.
 """
 from dr_settings import view as settings_view
-from seams import dep
+from seams import dep, module
 import logging
 import turn_trace
 import random
@@ -414,7 +414,7 @@ def rerank_for_briefing(topic: str, pages: list, profile: dict, prog: _Progress,
     if len(pages) <= top_k and S.DR_RERANK_AUTHORITY_WEIGHT == 0:
         return pages  # nothing to drop and relevance-only order isn't requested
     try:
-        from rerank import rerank_pages
+        rerank_pages = module(ctx, "rerank").rerank_pages
     except Exception as exc:
         logger.warning("reranker unavailable (%s); keeping authority order", exc)
         return pages
@@ -442,8 +442,7 @@ def rerank_for_briefing(topic: str, pages: list, profile: dict, prog: _Progress,
         p.pop("_rr_text", None)
     backend = "?"
     try:
-        from rerank import get_reranker
-        backend = get_reranker(S.DR_RERANK_BACKEND).backend
+        backend = module(ctx, "rerank").get_reranker(S.DR_RERANK_BACKEND).backend
     except Exception as exc:
         logger.debug("rerank backend label lookup failed: %s", exc)
     kept = [f"{p['domain']}({p.get('_rerank_relevance', 0):.2f})" for p in ordered[:6]]

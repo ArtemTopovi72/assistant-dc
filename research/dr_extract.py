@@ -16,6 +16,7 @@ import re
 from typing import Optional
 from urllib.parse import urljoin
 
+from seams import module
 from social import is_social_url
 from dr_urls import _authority_score, _domain, _norm_url
 
@@ -179,7 +180,7 @@ def _looks_like_unmarked_math(text: str) -> bool:
     return hits >= 3
 
 
-def _fix_mojibake(text: Optional[str]) -> Optional[str]:
+def _fix_mojibake(text: Optional[str], modules=None) -> Optional[str]:
     """Repair encoding mojibake (UTF-8 decoded as latin-1/cp1252: 'Î»'→'λ', 'â'→'—',
     'Ã©'→'é'). Pages mis-declare their charset, so math/Greek/punctuation arrives
     garbled and poisons briefs + synthesis. ftfy is the canonical fixer; no-op if
@@ -187,20 +188,18 @@ def _fix_mojibake(text: Optional[str]) -> Optional[str]:
     if not text:
         return text
     try:
-        import ftfy
-        return ftfy.fix_text(text)
+        return module(modules or {}, "ftfy").fix_text(text)
     except Exception:
         return text
 
 
-def _extract_text(html: str, url: str) -> Optional[str]:
+def _extract_text(html: str, url: str, modules=None) -> Optional[str]:
     try:
-        import trafilatura
-        text = trafilatura.extract(
+        text = module(modules or {}, "trafilatura").extract(
             html, include_comments=False, include_tables=True,
             favor_recall=True, url=url,
         )
-        return _fix_mojibake(text.strip()) if text else None
+        return _fix_mojibake(text.strip(), modules) if text else None
     except Exception as exc:
         logger.debug("extract failed %s: %s", url, exc)
         return None

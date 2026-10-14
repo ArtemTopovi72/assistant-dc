@@ -33,6 +33,7 @@ from PyQt5.QtWidgets import (QCheckBox, QHBoxLayout, QHeaderView, QInputDialog,
                              QSizePolicy, QTableWidget, QTableWidgetItem,
                              QVBoxLayout, QWidget)
 
+from seams import widget_part
 from ui_scale import pt, px
 from gui_common import (ACCENT2, BG, MUTED, PANEL2, TEXT, _FlowWidget,
                         _ScopedCtx, _flow, _section)
@@ -610,7 +611,7 @@ class TelegramTab(QWidget):
             return
         level = self.sbx_combo.currentText()
         if level == "host":
-            ok = QMessageBox.warning(
+            ok = widget_part(self, "warning", QMessageBox.warning)(
                 self, "Unisolated execution",
                 f"Give {cid} UNISOLATED code execution?\n\n"
                 f"At this level, whenever the container engine is not running, "
@@ -638,7 +639,7 @@ class TelegramTab(QWidget):
         if cid is None:
             self.sbx_status_lbl.setText("Select a user row first.")
             return
-        if QMessageBox.question(
+        if widget_part(self, "question", QMessageBox.question)(
                 self, "Reset working folder",
                 f"Delete everything in {cid}'s working folder?\n"
                 f"Their uploads and any work in progress go with it.",

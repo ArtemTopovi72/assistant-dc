@@ -9,6 +9,8 @@ from __future__ import annotations
 import logging
 import re
 
+from seams import module
+
 logger = logging.getLogger("assistant.tg_links")
 
 _URL_RE = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
@@ -78,12 +80,12 @@ def fetch_video(url: str, max_seconds: int = VIDEO_MAX_SECONDS) -> dict:
     return {}
 
 
-def read_link(url: str) -> dict:
+def read_link(url: str, modules=None) -> dict:
     """{"title", "text"} for a public page, or {} when it cannot be read.
     Goes through the research crawler's fetch+extract path (adapters for
     Wikipedia/arXiv, PDF text, the content gate)."""
     try:
-        import dr_crawl
+        dr_crawl = module(modules or {}, "dr_crawl")
         res = dr_crawl._acquire_page(url, 0, {"title": "", "href": url}, "general", True, None)
         page = (res or {}).get("page") or {}
         if page.get("text"):
@@ -159,7 +161,7 @@ def _fit(body: str, question: str, limit: int) -> str:
 _OZON_PRODUCT_RE = re.compile(r"^https?://(?:[\w-]+\.)*ozon\.ru/(?:product|t)/", re.IGNORECASE)
 
 
-def link_context(text: str, limit: int = LINK_TEXT_CHARS, url: str = "") -> str:
+def link_context(text: str, limit: int = LINK_TEXT_CHARS, url: str = "", modules=None) -> str:
     """Scaffolding for the model: the text of the first readable link in
     `text`, or "" when there is none / it cannot be read."""
     for url in ([url] if url else urls_in(text)[:2]):
@@ -170,7 +172,7 @@ def link_context(text: str, limit: int = LINK_TEXT_CHARS, url: str = "") -> str:
                     f"what buyers say). If the user only sent the link, tell them briefly what the "
                     f"product is, its price and what buyers say. This is a shopping question: do not "
                     f"make a video, a picture or a file.]")
-        page = read_link(url)
+        page = read_link(url, modules)
         if page:
             body = _fit(re.sub(r"\n{3,}", "\n\n", page["text"]).strip(), text, limit)
             title = (page.get("title") or "").strip()

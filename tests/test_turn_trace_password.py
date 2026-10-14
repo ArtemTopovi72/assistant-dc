@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import sys
+from unittest import mock
 import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -17,12 +18,18 @@ sys.path.insert(0, ROOT)
 os.environ.setdefault("F5_TEST_RUN", "1")
 
 
-def test_password_turn_is_written_without_the_password(monkeypatch, tmp_path):
+def _env(request, **kw):
+    """Env vars the code reads at call time, undone when the test ends."""
+    patcher = mock.patch.dict(os.environ, kw)
+    patcher.start()
+    request.addfinalizer(patcher.stop)
+
+
+def test_password_turn_is_written_without_the_password(request, tmp_path):
     import tg_bot as T
     import turn_trace
     T.redirect_data_dir(tempfile.mkdtemp())
-    monkeypatch.setenv("TURNS_DIR", str(tmp_path))
-    monkeypatch.setattr(turn_trace, "TURNS_DIR", tmp_path)
+    _env(request, TURNS_DIR=str(tmp_path))
     bot = T.TelegramBot("1:T", lambda: object(), lambda: object(), lambda: {}, silent_mode=True)
 
     def dispatch(upd):

@@ -87,17 +87,14 @@ seen = {}
 def fake_make(ctx, topic, out_dir, **kw):
     seen.update(kw); seen["topic"] = topic
     return {"path": os.path.join(out_dir, "x.pptx"), "deck": dict(PREV, edited=True), "images": {}, "error": ""}
-slides.make_presentation = fake_make
 class Ctx:
     last_deck = PREV; web_search_enabled = False
+    deps = types.SimpleNamespace(make_presentation=fake_make, output_dir=tempfile.mkdtemp())
     choice = staticmethod(_EDITS["choice"]); yes_no = staticmethod(_EDITS["yes_no"])
     def set_stage(self, s): pass
     def remember(self, *a, **k): pass
     def memory_text(self): return ""
     def is_cancelled(self): return False
-import image as _image
-_image.OUTPUT_DIR = tempfile.mkdtemp()
-tools.image_mod.OUTPUT_DIR = _image.OUTPUT_DIR
 st = {}
 out = tools._handle_create_presentation(Ctx(), st, {"topic": "add a slide about the moons", "edit_previous": True, "illustrate": False})
 check("the handler passes the previous deck to the planner", seen.get("previous") is PREV, list(seen))

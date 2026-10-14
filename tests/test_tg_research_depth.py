@@ -102,7 +102,7 @@ print("=" * 66)
 
 # Isolate the timing store: the real one is the user's own history.
 _TIMING_BACKUP = DT._TIMING_FILE
-DT._TIMING_FILE = __import__("pathlib").Path(_DATA_DIR) / "_timings.json"
+DT.redirect_timings(_DATA_DIR)
 
 for d in D.DEPTHS:
     secs, n = D.estimate_duration(d)
@@ -263,7 +263,7 @@ print("THE CHOICE REACHES THE RESEARCH RUN")
 print("=" * 66)
 
 bot_src = _bot_source()
-m = re.search(r"_dr\.run_deep_research\((.{0,160})", bot_src, re.S)
+m = re.search(r"_dr\.run_deep_research\)\((.{0,160})", bot_src, re.S)
 check("the bot passes the chosen depth to run_deep_research",
       m is not None and "depth=depth" in m.group(1),
       m.group(1) if m else "call not found")
@@ -277,7 +277,7 @@ check("the user is told the expected wait when the run STARTS",
 # constant.
 eta_src = inspect.getsource(T._fmt_eta)
 check("the queue ETA uses the measured research duration too",
-      "_depth_eta_seconds()" in eta_src, eta_src)
+      "_depth_eta_seconds)()" in eta_src, eta_src)
 check("an explicit TG_ETA_RESEARCH_SEC still overrides it",
       'TG_ETA_RESEARCH_SEC' in eta_src)
 
@@ -291,15 +291,16 @@ check("a zero duration does not render as negative or blank",
       T._fmt_secs(0, "en") == "0 s")
 
 # If deep_research cannot be consulted at all, the UI must not invent a number.
-_saved = D.estimate_duration
+def _boom(*_a, **_k):
+    raise RuntimeError("boom")
+
+
 try:
-    D.estimate_duration = lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("boom"))
     check("an unavailable estimator shows '?', never a made-up time",
-          T._depth_eta_text("standard", "en") == "?", T._depth_eta_text("standard", "en"))
+          T._depth_eta_text("standard", "en", _boom) == "?", T._depth_eta_text("standard", "en", _boom))
     check("and the picker still renders instead of raising",
-          len(inline_labels(T._depth_menu_kb(bot._get_session(CID), "en"))) == 3)
+          len(inline_labels(T._depth_menu_kb(bot._get_session(CID), "en", _boom))) == 3)
 finally:
-    D.estimate_duration = _saved
     DT._TIMING_FILE = _TIMING_BACKUP
 
 print(f"\n{OK} passed, {BAD} failed")

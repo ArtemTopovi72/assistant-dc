@@ -33,7 +33,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-TURNS_DIR = Path(os.getenv("TURNS_DIR", Path(__file__).resolve().parents[1] / "runtime" / "turns"))
+def _turns_dir() -> Path:
+    return Path(os.getenv("TURNS_DIR") or Path(__file__).resolve().parents[1] / "runtime" / "turns")
 KEEP_DAYS = _cfg_env.env_int("TURNS_KEEP_DAYS", 14)
 
 _cur: contextvars.ContextVar = contextvars.ContextVar("turn_trace", default=None)
@@ -167,7 +168,7 @@ def _content(c):
 
 def _save_media(data: bytes, ext: str) -> str:
     try:
-        d = TURNS_DIR / "media"
+        d = _turns_dir() / "media"
         d.mkdir(parents=True, exist_ok=True)
         p = d / (hashlib.sha1(data).hexdigest()[:16] + ext)
         if not p.exists():
@@ -237,16 +238,17 @@ def _write(t) -> str:
         out = {k: v for k, v in t.items() if not k.startswith("_")}
         if (idle and not t.get("_keep_idle", True)) or not _enabled():
             return ""
-        TURNS_DIR.mkdir(parents=True, exist_ok=True)
-        path = TURNS_DIR / f"{time.strftime('%Y-%m-%d')}.jsonl"
+        turns = _turns_dir()
+        turns.mkdir(parents=True, exist_ok=True)
+        path = turns / f"{time.strftime('%Y-%m-%d')}.jsonl"
         with _write_lock:
             with open(path, "a", encoding="utf-8") as fh:
                 fh.write(json.dumps(out, ensure_ascii=False) + "\n")
-            for old in sorted(TURNS_DIR.glob("*.jsonl"))[:-KEEP_DAYS]:
+            for old in sorted(turns.glob("*.jsonl"))[:-KEEP_DAYS]:
                 try: old.unlink()
                 except OSError: pass
             cutoff = time.time() - KEEP_DAYS * 86400
-            for old in (TURNS_DIR / "media").glob("*"):
+            for old in (turns / "media").glob("*"):
                 try:
                     if old.stat().st_mtime < cutoff: old.unlink()
                 except OSError: pass

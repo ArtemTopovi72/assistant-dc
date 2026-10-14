@@ -93,7 +93,7 @@ check("revoking works", not A.may_use_files(store.get(11)))
 
 # ── host needs a confirmation, and a refusal must not grant ──────────────────
 _answers = {"value": QMessageBox.Cancel}
-TT.QMessageBox.warning = staticmethod(lambda *a, **k: _answers["value"])
+tab.parts = {"warning": lambda *a, **k: _answers["value"]}
 
 tab.sbx_combo.setCurrentText("host")
 tab._apply_sandbox_level()
@@ -114,11 +114,11 @@ check("the other user is untouched",
 # ── resetting a folder ───────────────────────────────────────────────────────
 box = CS.sandbox_for(11)
 box.write_text("junk/a.txt", "x")
-TT.QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.Cancel)
+tab.parts = {"question": lambda *a, **k: QMessageBox.Cancel}
 tab._reset_sandbox_selected()
 check("cancelling the reset keeps the files", box.list_dir("."))
 
-TT.QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.Yes)
+tab.parts = {"question": lambda *a, **k: QMessageBox.Yes}
 tab._reset_sandbox_selected()
 check("confirming the reset empties the folder", not box.list_dir("."))
 check("resetting does not change their access",

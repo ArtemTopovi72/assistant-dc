@@ -33,19 +33,16 @@ def test_short_sample_is_untouched(tmp_path):
 
 
 def test_voices_drop_the_previous_clip(tmp_path):
-    import tool_image_handlers as H, tools as T
-    V.engine_available = lambda ctx: (True, "")
-    T._render_budget_exhausted = lambda *a, **k: None
+    import tool_image_handlers as H
+    from fakes import Over
     seen = []
-    orig = V.generate_video
-    V.generate_video = lambda ctx, d, **k: seen.append(k) or {"status": "cancelled"}
-    try:
-        clip, voice = tmp_path / "old.mp4", tmp_path / "v.wav"
-        clip.write_bytes(b"x"); voice.write_bytes(b"x")
-        ctx = types.SimpleNamespace(voice_choice="own", anim_voices=[str(voice)], set_stage=lambda s: None,
-                                    last_image_path=None, last_video_path=str(clip))
-        H._handle_generate_video(ctx, {}, {"description": "two men talk", "speakers": 2,
-                                           "use_current_images": False, "use_current_video": True})
-        assert seen[-1]["videos"] == [] and seen[-1]["audios"] == [str(voice)]
-    finally:
-        V.generate_video = orig
+    engine = Over(V, engine_available=lambda ctx: (True, ""),
+                  generate_video=lambda ctx, d, **k: seen.append(k) or {"status": "cancelled"})
+    clip, voice = tmp_path / "old.mp4", tmp_path / "v.wav"
+    clip.write_bytes(b"x"); voice.write_bytes(b"x")
+    ctx = types.SimpleNamespace(voice_choice="own", anim_voices=[str(voice)], set_stage=lambda s: None,
+                                last_image_path=None, last_video_path=str(clip), video_engine=engine,
+                                deps=types.SimpleNamespace(_render_budget_exhausted=lambda *a, **k: None))
+    H._handle_generate_video(ctx, {}, {"description": "two men talk", "speakers": 2,
+                                       "use_current_images": False, "use_current_video": True})
+    assert seen[-1]["videos"] == [] and seen[-1]["audios"] == [str(voice)]

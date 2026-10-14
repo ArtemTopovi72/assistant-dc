@@ -12,6 +12,7 @@ try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
 from pathlib import Path
+from unittest import mock
 import crash_diag as CD
 
 RESULTS = []
@@ -25,17 +26,11 @@ def check(name, cond, detail=""):
 _TMP = Path(tempfile.mkdtemp(prefix="crashdiag_"))
 
 
-class _Patches:
-    def __init__(self, **kw):
-        self.kw = kw; self.orig = {}
-    def __enter__(self):
-        for k, v in self.kw.items():
-            self.orig[k] = getattr(CD, k)
-            setattr(CD, k, v)
-        return self
-    def __exit__(self, *a):
-        for k, v in self.orig.items():
-            setattr(CD, k, v)
+def _Patches(**kw):
+    """The log, heartbeat and faulthandler paths are env-driven, read at call time."""
+    names = {"_CRASH_LOG": "ASSISTANT_CRASH_LOG", "_HEARTBEAT": "ASSISTANT_HEARTBEAT",
+             "_FAULT_LOG": "ASSISTANT_FAULT_LOG"}
+    return mock.patch.dict(os.environ, {names[k]: str(v) for k, v in kw.items() if k in names})
 
 
 def test_stamp():
@@ -50,26 +45,21 @@ def test_write_crash_log():
         content = (_TMP / "crash1.log").read_text(encoding="utf-8")
         check("write_crash_log_has_header_and_body", "HEADER" in content and "body text" in content)
 
-    with _Patches(_CRASH_LOG=Path(str(_TMP) + "\x00bad_path" ) / "crash.log"):
+    with _Patches(_CRASH_LOG=_TMP / "crash1.log" / "under_a_file.log"):
         CD._write_crash_log("H", "B")
         check("write_crash_log_exception_swallowed", True)
 
 
 def test_excepthook_keyboard_interrupt():
     called = {}
-    orig = sys.__excepthook__
     def fake_default(t, v, tb):
         called["hit"] = True
-    sys.__excepthook__ = fake_default
     try:
-        try:
-            raise KeyboardInterrupt()
-        except KeyboardInterrupt:
-            exc_type, exc_value, exc_tb = sys.exc_info()
-        CD._excepthook(exc_type, exc_value, exc_tb)
-        check("excepthook_keyboard_interrupt_delegates", called.get("hit") is True)
-    finally:
-        sys.__excepthook__ = orig
+        raise KeyboardInterrupt()
+    except KeyboardInterrupt:
+        exc_type, exc_value, exc_tb = sys.exc_info()
+    CD._excepthook(exc_type, exc_value, exc_tb, fake_default)
+    check("excepthook_keyboard_interrupt_delegates", called.get("hit") is True)
 
 
 def test_excepthook_normal_exception():
@@ -141,18 +131,8 @@ def test_install_qt_message_handler_real():
 
 
 def test_install_qt_message_handler_no_pyqt():
-    import builtins
-    real_import = builtins.__import__
-    def fail_pyqt(name, *a, **k):
-        if name == "PyQt5":
-            raise ImportError("no PyQt5")
-        return real_import(name, *a, **k)
-    builtins.__import__ = fail_pyqt
-    try:
-        CD.install_qt_message_handler()
-        check("install_qt_message_handler_no_pyqt_noraise", True)
-    finally:
-        builtins.__import__ = real_import
+    CD.install_qt_message_handler({"PyQt5.QtCore": None})
+    check("install_qt_message_handler_no_pyqt_noraise", True)
 
 
 def test_a_live_instance_is_not_reported_as_dead():
@@ -172,39 +152,29 @@ def test_a_live_instance_is_not_reported_as_dead():
         other.kill()
 
 
+def _hooks():
+    return (types.SimpleNamespace(excepthook=None), types.SimpleNamespace(excepthook=None), {"installed": False})
+
+
 def test_install_idempotent():
-    with _Patches(_installed=False, _CRASH_LOG=_TMP / "install_crash.log"):
-        orig_excepthook = sys.excepthook
-        orig_thread_excepthook = threading.excepthook
-        try:
-            CD.install()
-            check("install_sets_excepthook", sys.excepthook is CD._excepthook)
-            check("install_marks_installed", CD._installed is True)
-            hook_after_first = sys.excepthook
-            CD.install()  # idempotent no-op path
-            check("install_idempotent_noop", sys.excepthook is hook_after_first)
-        finally:
-            sys.excepthook = orig_excepthook
-            threading.excepthook = orig_thread_excepthook
-            CD._installed = False
+    s_mod, t_mod, state = _hooks()
+    with _Patches(_CRASH_LOG=_TMP / "install_crash.log", _HEARTBEAT=_TMP / "hb_install.json",
+                  _FAULT_LOG=_TMP / "fault1.log"):
+        CD.install(state, s_mod, t_mod)
+        check("install_sets_excepthook", s_mod.excepthook is CD._excepthook)
+        check("install_marks_installed", state["installed"] is True)
+        hook_after_first = s_mod.excepthook
+        s_mod.excepthook = None
+        CD.install(state, s_mod, t_mod)  # idempotent no-op path
+        check("install_idempotent_noop", s_mod.excepthook is None and hook_after_first is CD._excepthook)
 
 
 def test_install_faulthandler_failure_fallback():
-    with _Patches(_installed=False, _CRASH_LOG=_TMP / "install_crash2.log"):
-        orig_excepthook = sys.excepthook
-        orig_open = Path.open
-        def raising_open(self, *a, **k):
-            if self.name == "faulthandler.log":
-                raise OSError("cannot open")
-            return orig_open(self, *a, **k)
-        Path.open = raising_open
-        try:
-            CD.install()
-            check("install_faulthandler_open_failure_falls_back", CD._installed is True)
-        finally:
-            Path.open = orig_open
-            sys.excepthook = orig_excepthook
-            CD._installed = False
+    s_mod, t_mod, state = _hooks()
+    with _Patches(_CRASH_LOG=_TMP / "install_crash2.log", _HEARTBEAT=_TMP / "hb_install2.json",
+                  _FAULT_LOG=_TMP):               # a directory cannot be opened for append
+        CD.install(state, s_mod, t_mod)
+        check("install_faulthandler_open_failure_falls_back", state["installed"] is True)
 
 
 if __name__ == "__main__":

@@ -658,8 +658,9 @@ class MicRecorder:
     loop (e.g. camera mode) can start/stop it on key presses while staying live.
     """
 
-    def __init__(self, fs: int = SAMPLE_RATE, gain_db: float = 0.0):
+    def __init__(self, fs: int = SAMPLE_RATE, gain_db: float = 0.0, ctx=None):
         self.fs = fs
+        self._sd = dep(ctx, "sd", sd)
         self._gain = _gain_linear(gain_db)
         self._q: queue.Queue[np.ndarray] = queue.Queue()
         self._stream: Optional[sd.InputStream] = None
@@ -681,7 +682,7 @@ class MicRecorder:
             self._level = _chunk_rms(chunk)
             self._q.put(chunk)
 
-        self._stream = sd.InputStream(samplerate=self.fs, channels=1, dtype="float32", callback=callback)
+        self._stream = self._sd.InputStream(samplerate=self.fs, channels=1, dtype="float32", callback=callback)
         self._stream.start()
 
     def stop(self) -> np.ndarray:
@@ -1140,7 +1141,9 @@ def detect_media_language(ctx, path: str, min_prob: float = 0.5) -> str:
     if forced:
         return forced
     try:
-        from faster_whisper import decode_audio
+        decode_audio = dep(ctx, "decode_audio", None)
+        if decode_audio is None:
+            from faster_whisper import decode_audio
         wav = decode_audio(path, sampling_rate=16000)
         with ctx.asr_lock:
             lang, prob, _ = ctx.models.whisper.detect_language(
@@ -1308,9 +1311,12 @@ def synth_single_segment(
     models = getattr(ctx, "models", None)
     if models is not None and getattr(models, "tts_model", True) is None:
         return None                      # voice output is off (no weights/vocoder)
-    from f5_tts.infer.utils_infer import infer_process, preprocess_ref_audio_text
-    infer_process = dep(ctx, "infer_process", infer_process)
-    preprocess_ref_audio_text = dep(ctx, "preprocess_ref_audio_text", preprocess_ref_audio_text)
+    infer_process = dep(ctx, "infer_process", None)
+    preprocess_ref_audio_text = dep(ctx, "preprocess_ref_audio_text", None)
+    if infer_process is None or preprocess_ref_audio_text is None:
+        from f5_tts.infer.utils_infer import infer_process as _ip, preprocess_ref_audio_text as _pr
+        infer_process = infer_process or _ip
+        preprocess_ref_audio_text = preprocess_ref_audio_text or _pr
     try:
         processed_text = preprocess_text_for_synthesis(
             ctx, raw_text, use_censoring=use_censoring, apply_stress=apply_stress,
@@ -1318,7 +1324,7 @@ def synth_single_segment(
         if not processed_text:
             return None
 
-        ref_wav, ref_text, actor_speed = get_actor_ref_and_speed(actor, dep(ctx, "DC_REF_WAV", DC_REF_WAV))
+        ref_wav, ref_text, actor_speed = dep(ctx, "get_actor_ref_and_speed", get_actor_ref_and_speed)(actor, dep(ctx, "DC_REF_WAV", DC_REF_WAV))
         custom = getattr(ctx, "custom_ref_wav", None)
         if custom:
             # A caller that already knows the transcript says so. The
@@ -1328,7 +1334,7 @@ def synth_single_segment(
             ref_text = str(getattr(ctx, "custom_ref_text", "") or "")
         import delivery
         ref_wav, ref_text = delivery.pick(ctx, ref_wav, ref_text, raw_text)       # emotional reference of this voice
-        ref_wav = resolve_ref_audio(ref_wav)  # accept any audio format
+        ref_wav = dep(ctx, "resolve_ref_audio", resolve_ref_audio)(ref_wav)  # accept any audio format
         if ref_wav is not None:
             # BEFORE the transcript is taken, or the transcript describes audio
             # F5 will not hear.
@@ -1387,14 +1393,16 @@ def synth_single_segment(
         safe_empty_cuda_cache()
 
 
-def play_audio_file(result_path: str) -> None:
+def play_audio_file(result_path: str, ctx=None) -> None:
+    platform = dep(ctx, "platform", sys.platform)
+    popen = dep(ctx, "Popen", subprocess.Popen)
     try:
-        if sys.platform.startswith("win"):
-            os.startfile(result_path)
-        elif sys.platform == "darwin":
-            subprocess.Popen(["open", result_path])
+        if platform.startswith("win"):
+            dep(ctx, "startfile", getattr(os, "startfile", None))(result_path)
+        elif platform == "darwin":
+            popen(["open", result_path])
         else:
-            subprocess.Popen(["xdg-open", result_path])
+            popen(["xdg-open", result_path])
         import time
         time.sleep(0.5)
     except Exception as exc:
@@ -1408,7 +1416,8 @@ class AudioPlayer:
     spoken reply can be paused and resumed mid-sentence.
     """
 
-    def __init__(self):
+    def __init__(self, ctx=None):
+        self._sd = dep(ctx, "sd", sd)
         self._stream = None
         self._data = None
         self._pos = 0
@@ -1438,14 +1447,14 @@ class AudioPlayer:
             outdata[:n] = chunk
             if n < frames:
                 outdata[n:] = 0
-                raise sd.CallbackStop()
+                raise self._sd.CallbackStop()
 
         with self._lock:
             self._data = data
             self._pos = 0
             self._paused = False
         try:
-            self._stream = sd.OutputStream(
+            self._stream = self._sd.OutputStream(
                 samplerate=int(sr), channels=channels, dtype="float32",
                 callback=callback, finished_callback=self._on_finished,
             )

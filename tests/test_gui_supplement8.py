@@ -68,18 +68,11 @@ def test_enable_dark_titlebar_dwm():
         def DwmSetWindowAttribute(self, hwnd, attr, ref, size): return 0   # success -> break
     class FakeWindll:
         dwmapi = FakeDwm()
-    real = getattr(_ct, "windll", None)     # Windows-only attribute
-    try:
-        _ct.windll = FakeWindll()
-        w = QWidget(); w.show()
-        gui.enable_dark_titlebar(w)
-        check("dark_titlebar_dwm", True)
-        w.close()
-    finally:
-        if real is None:
-            del _ct.windll
-        else:
-            _ct.windll = real
+    fake = types.SimpleNamespace(c_int=_ct.c_int, byref=_ct.byref, sizeof=_ct.sizeof, windll=FakeWindll())
+    w = QWidget(); w.show()
+    gui.enable_dark_titlebar(w, fake)
+    check("dark_titlebar_dwm", True)
+    w.close()
 
 
 def test_dark_filter_except():
@@ -288,16 +281,10 @@ def test_small_tab_guards():
 
 def test_toggle_usedb_isempty_raises():
     w = _win()
-    import library
-    real = library.default_library
-    library.default_library = lambda: types.SimpleNamespace(
+    w._library = types.SimpleNamespace(
         is_empty=lambda: (_ for _ in ()).throw(RuntimeError("db err")), close=lambda: None)
-    w._library = None
-    try:
-        w._toggle_usedb()   # is_empty raises -> except empty=False
-        check("usedb_isempty_except", w.usedb_on)
-    finally:
-        library.default_library = real
+    w._toggle_usedb()   # is_empty raises -> except empty=False
+    check("usedb_isempty_except", w.usedb_on)
     w._toggle_usedb()
     _close(w)
 

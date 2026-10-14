@@ -25,10 +25,7 @@ check("400 body recognised as no-vision", bool(llm._NO_VISION_RE.search(body)))
 check("llama.cpp wording recognised", bool(llm._NO_VISION_RE.search("image input is not supported - hint: ...")))
 check("ordinary 400 not matched", not llm._NO_VISION_RE.search('{"error":"n_keep: 9905 >= n_ctx: 8192"}'))
 
-ctx = types.SimpleNamespace(model_name="muse-glimmer-30b")
 reloads = []
-orig_ask, orig_reload, orig_q = v._ask, v._reload_house_model, v.quarantine_f16_projectors
-v.quarantine_f16_projectors = lambda *a, **k: []   # never touch the real models dir
 
 
 def fake_ask(c):
@@ -36,17 +33,14 @@ def fake_ask(c):
     return ""
 
 
-v._ask = fake_ask
-v._reload_house_model = lambda c: reloads.append(1) or True
-os.environ.pop("F5_TEST_RUN", None)
-try:
-    r = v._run_once(ctx)
-    check("self-test returns None (no verdict), not False", r is None)
-    v._HEALED["done"] = False
-    v.run(ctx)
-    check("no reload for a text-only model", not reloads)
-finally:
-    v._ask, v._reload_house_model, v.quarantine_f16_projectors = orig_ask, orig_reload, orig_q
+# quarantine stand-in: never touch the real models dir
+ctx = types.SimpleNamespace(model_name="muse-glimmer-30b", deps=types.SimpleNamespace(
+    live=True, quarantine_f16_projectors=lambda *a, **k: [], _ask=fake_ask,
+    _reload_house_model=lambda c: reloads.append(1) or True, healed={"done": False}))
+r = v._run_once(ctx)
+check("self-test returns None (no verdict), not False", r is None)
+v.run(ctx)
+check("no reload for a text-only model", not reloads)
 
 # --- forced tool call rejected by the grammar on Gemma's <|channel> token ---
 import json, requests

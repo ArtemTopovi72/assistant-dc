@@ -24,24 +24,19 @@ def check(name, cond, extra=""):
     BAD += 0 if cond else 1
 
 
-def ctx_with(lang, prob):
+def ctx_with(lang, prob, pin=""):
     w = types.SimpleNamespace(detect_language=lambda wav, **kw: (lang, prob, []))
-    return types.SimpleNamespace(asr_lock=threading.Lock(), models=types.SimpleNamespace(whisper=w))
+    deps = types.SimpleNamespace(decode_audio=lambda path, sampling_rate=16000: np.zeros(16000, dtype=np.float32),
+                                 WHISPER_LANGUAGE=pin)
+    return types.SimpleNamespace(asr_lock=threading.Lock(), models=types.SimpleNamespace(whisper=w), deps=deps)
 
 
-import faster_whisper
-_real_decode, _real_pin = faster_whisper.decode_audio, A.WHISPER_LANGUAGE
-faster_whisper.decode_audio = lambda path, sampling_rate=16000: np.zeros(16000, dtype=np.float32)
-A.WHISPER_LANGUAGE = None
-try:
-    check("a confident English clip is English", A.detect_media_language(ctx_with("en", 0.7), "x.mp4") == "en")
-    check("an unsure guess gives no hint", A.detect_media_language(ctx_with("en", 0.3), "x.mp4") == "")
-    boom = types.SimpleNamespace(asr_lock=threading.Lock(), models=None)
-    check("a failure gives no hint, not an exception", A.detect_media_language(boom, "x.mp4") == "")
-    A.WHISPER_LANGUAGE = "ru"
-    check("a pinned WHISPER_LANGUAGE wins", A.detect_media_language(ctx_with("en", 0.99), "x.mp4") == "ru")
-finally:
-    faster_whisper.decode_audio, A.WHISPER_LANGUAGE = _real_decode, _real_pin
+check("a confident English clip is English", A.detect_media_language(ctx_with("en", 0.7), "x.mp4") == "en")
+check("an unsure guess gives no hint", A.detect_media_language(ctx_with("en", 0.3), "x.mp4") == "")
+boom = ctx_with("en", 0.7)
+boom.models = None
+check("a failure gives no hint, not an exception", A.detect_media_language(boom, "x.mp4") == "")
+check("a pinned WHISPER_LANGUAGE wins", A.detect_media_language(ctx_with("en", 0.99, "ru"), "x.mp4") == "ru")
 
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 src = open(os.path.join(root, "bot/tg_tasks.py"), encoding="utf-8").read()

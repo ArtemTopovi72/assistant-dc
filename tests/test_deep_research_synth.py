@@ -159,34 +159,22 @@ def test_rerank_for_briefing():
     class FakeReranker:
         backend = "fake"
     fake_rerank_mod.get_reranker = lambda backend: FakeReranker()
-    sys.modules["rerank"] = fake_rerank_mod
-    try:
-        with _Patches(DR_RERANK_ENABLED=True, DR_RERANK_TOP_K=1, DR_RERANK_AUTHORITY_WEIGHT=0.3):
-            out = DR.rerank_for_briefing("t", pages, {"category": "general"}, prog, ctx=_C())
-            check("rerank_enabled_top_k", len(out) == 1)
-        with _Patches(DR_RERANK_ENABLED=True, DR_RERANK_TOP_K=0, DR_RERANK_AUTHORITY_WEIGHT=0):
-            # top_k becomes len(pages), and since len<=top_k and weight==0 -> passthrough branch
-            out2 = DR.rerank_for_briefing("t", pages, {"category": "general"}, prog, ctx=_C())
-            check("rerank_passthrough_when_nothing_to_drop", out2 == pages)
-    finally:
-        del sys.modules["rerank"]
+    def _cm(mod):
+        c = _C()
+        c.modules = {"rerank": mod}
+        return c
+    with _Patches(DR_RERANK_ENABLED=True, DR_RERANK_TOP_K=1, DR_RERANK_AUTHORITY_WEIGHT=0.3):
+        out = DR.rerank_for_briefing("t", pages, {"category": "general"}, prog, ctx=_cm(fake_rerank_mod))
+        check("rerank_enabled_top_k", len(out) == 1)
+    with _Patches(DR_RERANK_ENABLED=True, DR_RERANK_TOP_K=0, DR_RERANK_AUTHORITY_WEIGHT=0):
+        # top_k becomes len(pages), and since len<=top_k and weight==0 -> passthrough branch
+        out2 = DR.rerank_for_briefing("t", pages, {"category": "general"}, prog, ctx=_cm(fake_rerank_mod))
+        check("rerank_passthrough_when_nothing_to_drop", out2 == pages)
 
     # reranker import fails -> warns and keeps authority order
-    if "rerank" in sys.modules:
-        del sys.modules["rerank"]
-    import builtins
-    real_import = builtins.__import__
-    def fail_import(name, *a, **k):
-        if name == "rerank":
-            raise ImportError("no rerank module")
-        return real_import(name, *a, **k)
-    builtins.__import__ = fail_import
-    try:
-        with _Patches(DR_RERANK_ENABLED=True, DR_RERANK_TOP_K=1, DR_RERANK_AUTHORITY_WEIGHT=0.3):
-            out3 = DR.rerank_for_briefing("t", pages, {"category": "general"}, prog, ctx=_C())
-            check("rerank_import_failure_keeps_order", out3 == pages)
-    finally:
-        builtins.__import__ = real_import
+    with _Patches(DR_RERANK_ENABLED=True, DR_RERANK_TOP_K=1, DR_RERANK_AUTHORITY_WEIGHT=0.3):
+        out3 = DR.rerank_for_briefing("t", pages, {"category": "general"}, prog, ctx=_cm(None))
+        check("rerank_import_failure_keeps_order", out3 == pages)
 
 
 # ---------------- synthesize_report ----------------

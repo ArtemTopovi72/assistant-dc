@@ -30,8 +30,8 @@ class MemoryProfileMixin:
         """
         import gui as _g
         profiles = {"default"}
-        if _g.MEMORY_DIR.exists():
-            for d in _g.MEMORY_DIR.iterdir():
+        if widget_part(self, "MEMORY_DIR", _g.MEMORY_DIR).exists():
+            for d in widget_part(self, "MEMORY_DIR", _g.MEMORY_DIR).iterdir():
                 if d.is_dir() and not d.name.startswith("."):
                     profiles.add(d.name)
         return sorted(profiles)
@@ -64,7 +64,7 @@ class MemoryProfileMixin:
             self.mem_combo.blockSignals(False)
             return
         self.ctx.save_memory(self.ctx.active_memory_dir)
-        new_dir = _g.MEMORY_DIR / profile_name
+        new_dir = widget_part(self, "MEMORY_DIR", _g.MEMORY_DIR) / profile_name
         new_dir.mkdir(parents=True, exist_ok=True)
         self.ctx.active_memory_dir = new_dir
         with self.ctx.memory_lock:
@@ -93,7 +93,7 @@ class MemoryProfileMixin:
         if self.ctx is None:
             self._add_system("Load the model first, then switch the active profile.")
             return
-        (_g.MEMORY_DIR / profile_name).mkdir(parents=True, exist_ok=True)
+        (widget_part(self, "MEMORY_DIR", _g.MEMORY_DIR) / profile_name).mkdir(parents=True, exist_ok=True)
         self._refresh_mem_combo()
         idx = self.mem_combo.findText(profile_name)
         if idx >= 0:
@@ -111,7 +111,7 @@ class MemoryProfileMixin:
         name = _re.sub(r"[^a-zA-Z0-9_\-]", "", name.strip().replace(" ", "_"))
         if not name:
             return
-        (_g.MEMORY_DIR / name).mkdir(parents=True, exist_ok=True)
+        (widget_part(self, "MEMORY_DIR", _g.MEMORY_DIR) / name).mkdir(parents=True, exist_ok=True)
         self._refresh_mem_combo()
         # Switch to the new profile
         self.mem_combo.blockSignals(True)
@@ -157,7 +157,7 @@ class MemoryProfileMixin:
             return
         import json as _json
         import time as _time
-        profile_dir = self.ctx.active_memory_dir if self.ctx else _g.MEMORY_DIR / "default"
+        profile_dir = self.ctx.active_memory_dir if self.ctx else widget_part(self, "MEMORY_DIR", _g.MEMORY_DIR) / "default"
         try:
             profile_dir.mkdir(parents=True, exist_ok=True)
             summary_file = profile_dir / "summary.json"

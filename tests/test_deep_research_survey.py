@@ -206,17 +206,7 @@ def test_fetch_more_branches():
 
 
 def test_fix_mojibake_ftfy_missing():
-    import builtins
-    real_import = builtins.__import__
-    def fail_ftfy(name, *a, **k):
-        if name == "ftfy":
-            raise ImportError("no ftfy")
-        return real_import(name, *a, **k)
-    builtins.__import__ = fail_ftfy
-    try:
-        check("fix_mojibake_ftfy_missing_noop", DR._fix_mojibake("some text") == "some text")
-    finally:
-        builtins.__import__ = real_import
+    check("fix_mojibake_ftfy_missing_noop", DR._fix_mojibake("some text", {"ftfy": None}) == "some text")
 
 
 def test_domain_norm_landing_exception_paths():
@@ -368,13 +358,11 @@ def test_rerank_authority_only_reorders():
         return out[:top_k]
     fake_rerank_mod.rerank_pages = fake_rerank_pages
     fake_rerank_mod.get_reranker = lambda backend: type("R", (), {"backend": "fake"})()
-    sys.modules["rerank"] = fake_rerank_mod
-    try:
-        with _Patches(DR_RERANK_ENABLED=True, DR_RERANK_TOP_K=2, DR_RERANK_AUTHORITY_WEIGHT=1.0):
-            out = DR.rerank_for_briefing("t", pages, {"category": "science"}, prog, ctx=_C())
-            check("rerank_authority_reorders", out[0]["domain"] == "arxiv.org")
-    finally:
-        del sys.modules["rerank"]
+    with _Patches(DR_RERANK_ENABLED=True, DR_RERANK_TOP_K=2, DR_RERANK_AUTHORITY_WEIGHT=1.0):
+        c = _C()
+        c.modules = {"rerank": fake_rerank_mod}
+        out = DR.rerank_for_briefing("t", pages, {"category": "science"}, prog, ctx=c)
+        check("rerank_authority_reorders", out[0]["domain"] == "arxiv.org")
 
 
 def test_synthesize_report_evidence_truncated():
@@ -386,17 +374,8 @@ def test_synthesize_report_evidence_truncated():
 
 
 def test_extract_text_exception():
-    import builtins
-    real_import = builtins.__import__
-    def fail_trafilatura(name, *a, **k):
-        if name == "trafilatura":
-            raise ImportError("no trafilatura")
-        return real_import(name, *a, **k)
-    builtins.__import__ = fail_trafilatura
-    try:
-        check("extract_text_import_failure_none", DR._extract_text("<html>x</html>", "https://x.com") is None)
-    finally:
-        builtins.__import__ = real_import
+    check("extract_text_import_failure_none",
+          DR._extract_text("<html>x</html>", "https://x.com", {"trafilatura": None}) is None)
 
 
 def test_extract_links_non_http_and_exception():

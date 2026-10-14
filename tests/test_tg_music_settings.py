@@ -328,17 +328,16 @@ print("8. Generation uses the chosen duration and prefs end to end")
 print("=" * 70)
 
 seen = {}
-_oc, _og, _oe = (M.build_structured_caption, M.generate_music, M.engine_available)
-M.engine_available = lambda ctx=None, preset=None: (True, "")
-M.build_structured_caption = lambda ctx, topic, lang, **kw: (
-    seen.update(caption_kw=kw), {"lyrics": "[verse]\nx", "style": "pop"})[-1]
-M.generate_music = lambda ctx, lyrics, style, **kw: (
-    seen.update(gen_kw=kw), "/tmp/song.wav")[-1]
+from fakes import Over
+bot.music = Over(M, engine_available=lambda ctx=None, preset=None: (True, ""),
+                 build_structured_caption=lambda ctx, topic, lang, **kw: (
+                     seen.update(caption_kw=kw), {"lyrics": "[verse]\nx", "style": "pop"})[-1],
+                 generate_music=lambda ctx, lyrics, style, **kw: (seen.update(gen_kw=kw), "/tmp/song.wav")[-1])
 bot.audio_sent.clear()
 try:
     bot._user_gate(CID, msg(CID, "a song about rain"))
 finally:
-    M.build_structured_caption, M.generate_music, M.engine_available = _oc, _og, _oe
+    bot.music = M
 
 check("a song was delivered", len(bot.audio_sent) == 1, bot.audio_sent)
 check("the songwriter got the chosen duration",

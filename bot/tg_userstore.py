@@ -222,10 +222,12 @@ class _UserStore:
 
     def __init__(self, db_path: Path,
                  backup_dir: Path | None = None,
-                 legacy_json: Path | None = None):
+                 legacy_json: Path | None = None,
+                 connect=None):
         # Resolved at call time, not bound as a default at def time, so that
         # redirect_data_dir() can point a test run away from the live files.
         self._db   = db_path
+        self._connect = connect or sqlite3.connect
         self._bdir = backup_dir if backup_dir is not None else _USERS_BACKUP_DIR
         legacy_json = legacy_json if legacy_json is not None else _USERS_FILE_JSON
         self._lock = threading.Lock()
@@ -241,8 +243,8 @@ class _UserStore:
         `with sqlite3.connect(...)` commits but does not close: every call left
         an open handle to tg_users.db until garbage collection, and one kept
         alive by a traceback or a cycle held the file locked on Windows."""
-        conn = sqlite3.connect(str(self._db), check_same_thread=False,
-                               timeout=10)
+        conn = self._connect(str(self._db), check_same_thread=False,
+                             timeout=10)
         try:
             conn.row_factory = sqlite3.Row
             conn.execute("PRAGMA journal_mode=WAL")
@@ -434,8 +436,8 @@ class _UserStore:
             # sqlite3.connect backup API is the correct way to copy a live WAL db
             # closing(): a failed backup must not leave the handles open -- on
             # Windows they lock the live DB and the half-written snapshot.
-            with closing(sqlite3.connect(str(self._db))) as src_conn, \
-                    closing(sqlite3.connect(str(dst))) as dst_conn:
+            with closing(self._connect(str(self._db))) as src_conn, \
+                    closing(self._connect(str(dst))) as dst_conn:
                 src_conn.backup(dst_conn, pages=64)
             self._prune_backups()
         except Exception as exc:
@@ -458,8 +460,8 @@ class _UserStore:
             return False
         with self._lock:
             try:
-                with closing(sqlite3.connect(str(backup_path))) as src, \
-                        closing(sqlite3.connect(str(self._db))) as dst:
+                with closing(self._connect(str(backup_path))) as src, \
+                        closing(self._connect(str(self._db))) as dst:
                     src.backup(dst, pages=64)
                 logger.info("UserStore restored from %s", backup_path)
                 return True

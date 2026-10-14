@@ -89,8 +89,9 @@ def _content_key(path: str) -> str:
 
 
 class _ArtifactStore:
-    def __init__(self, path):
+    def __init__(self, path, connect=None):
         self._path = str(path)
+        self._connect = connect or sqlite3.connect
         self._lock = threading.Lock()
         self._init_db()
 
@@ -98,7 +99,7 @@ class _ArtifactStore:
     def _conn(self):
         """A transaction on its own connection, closed afterwards (a bare
         `with conn:` commits but leaves the handle open until GC)."""
-        conn = sqlite3.connect(self._path, check_same_thread=False, timeout=10)
+        conn = self._connect(self._path, check_same_thread=False, timeout=10)
         try:
             conn.row_factory = sqlite3.Row
             conn.execute("PRAGMA journal_mode=WAL")

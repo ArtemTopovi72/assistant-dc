@@ -33,23 +33,20 @@ check("no url, no context", L.link_context("привет, как дела?") == 
 fake = types.SimpleNamespace(
     _acquire_page=lambda url, depth, seed, cat, ad, cache: {"page": {"title": "Омлет", "text": "Омлет — блюдо из яиц.\n\n\n\nЖарят на сковороде." * 3}},
     _fetch_page=lambda url: (None, None), _extract_text=lambda h, u: "", _extract_title=lambda h: "")
-sys.modules["dr_crawl"] = fake
-c = L.link_context("https://ru.wikipedia.org/wiki/Омлет")
+c = L.link_context("https://ru.wikipedia.org/wiki/Омлет", modules={"dr_crawl": fake})
 check("the page text is attached with its title", "title: Омлет" in c and "блюдо из яиц" in c, c[:200])
 check("blank runs are collapsed", "\n\n\n" not in c)
-check("the text is capped", len(L.link_context("https://x/y", limit=50)) < 400)
+check("the text is capped", len(L.link_context("https://x/y", limit=50, modules={"dr_crawl": fake})) < 400)
 
 fake2 = types.SimpleNamespace(
     _acquire_page=lambda *a: {"page": None, "reason": "landing"},
     _fetch_page=lambda url: ("<html><title>T</title><body>thin page</body></html>", None),
     _extract_text=lambda h, u: "thin page", _extract_title=lambda h: "T")
-sys.modules["dr_crawl"] = fake2
-check("a page the research gate refuses is still read for chat", "thin page" in L.link_context("https://x/y"))
+check("a page the research gate refuses is still read for chat", "thin page" in L.link_context("https://x/y", modules={"dr_crawl": fake2}))
 
 fake3 = types.SimpleNamespace(_acquire_page=lambda *a: (_ for _ in ()).throw(RuntimeError("down")),
                               _fetch_page=lambda url: (None, None), _extract_text=lambda h, u: "", _extract_title=lambda h: "")
-sys.modules["dr_crawl"] = fake3
-check("a fetch failure yields nothing, never raises", L.link_context("https://x/y") == "")
+check("a fetch failure yields nothing, never raises", L.link_context("https://x/y", modules={"dr_crawl": fake3}) == "")
 
 # An Ozon product link goes to the ozon_product tool: the crawler is not asked, and the
 # model is told it is a shopping question (a bare link once became a video plan).
@@ -62,7 +59,7 @@ check("an Ozon link is never sent to the page crawler",
 check("a follow-up about an earlier Ozon link says so",
       "linked earlier" in L.link_context("а отзывы какие?", url=_OZ))
 check("ozon.ru is matched, an ozon-looking foreign host is not",
-      L.link_context("https://notozon.ru/product/1") == "" and L.link_context("https://ozon.ru.evil.example/product/1") == "")
+      L.link_context("https://notozon.ru/product/1", modules={"dr_crawl": fake3}) == "" and L.link_context("https://ozon.ru.evil.example/product/1", modules={"dr_crawl": fake3}) == "")
 
 src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(L.__file__))), "bot/tg_resolve.py"), encoding="utf-8").read()
 check("the resolver attaches the page as scaffolding", "_tg_links.link_context(text)" in src and "self._read_links(" in src and "scaffold.append(_lc)" in src)

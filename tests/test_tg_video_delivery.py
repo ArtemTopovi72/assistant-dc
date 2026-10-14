@@ -76,10 +76,11 @@ def _fake_post(url, data=None, files=None, timeout=None):
 bot.http = types.SimpleNamespace(post=_fake_post)
 # no ffmpeg in the test env: keep the real file, no poster
 import video as _V
-_V.fit_for_telegram = lambda p, max_bytes=None, ctx=None: p
-_V.make_thumbnail = lambda p: None
-_V.probe = lambda p: {"seconds": 5.2, "width": 1344, "height": 768,
-                      "has_audio": True, "bytes": os.path.getsize(p)}
+from fakes import Over
+bot.modules = {"video": Over(_V, fit_for_telegram=lambda p, max_bytes=None, ctx=None: p,
+                             make_thumbnail=lambda p: None,
+                             probe=lambda p: {"seconds": 5.2, "width": 1344, "height": 768,
+                                              "has_audio": True, "bytes": os.path.getsize(p)})}
 
 clip = _fake_clip("good")
 ok = bot._send_video(4242, clip, caption="done")
