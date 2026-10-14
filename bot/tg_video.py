@@ -27,7 +27,7 @@ import turn_trace
 import uuid
 from pathlib import Path
 
-from tg_strings import _DEFAULT_LANG, _nav_back_row, _t
+from tg_strings import _DEFAULT_LANG, _b, _nav_back_row, _t
 
 logger = logging.getLogger("assistant.tg_video")
 
@@ -116,7 +116,7 @@ def _ask_kb(lang: str, job_id: str) -> dict:
 
 def _run_kb(lang: str, job_id: str) -> dict:
     """Under the progress message while the job runs: the way out, in reach."""
-    return {"inline_keyboard": [[{"text": _t("stop", lang), "callback_data": "lv:stop:" + job_id}]]}
+    return {"inline_keyboard": [[{"text": _b("stop", lang), "callback_data": "lv:stop:" + job_id}]]}
 
 
 def _after_kb(lang: str, job_id: str) -> dict:
