@@ -46,6 +46,8 @@ class CallbackMixin:
         if data.startswith("adm:") and chat_id:
             # Answered inside, with a toast («⛔ Останавливаю»); presser-gated there.
             return self._cb_admin_panel(chat_id, cb, data)
+        if data.startswith("fb:") and chat_id:
+            return self._cb_feedback(cb, msg, chat_id, data)
         self._api_post("answerCallbackQuery", {"callback_query_id": cb_id})
         if not chat_id: return
         # Private chats only, as for messages (tg_dispatch): in a group anyone
@@ -135,6 +137,26 @@ class CallbackMixin:
         self._send_text(chat_id, tg_bot._t("cancelled", lang),
                         keyboard=self._main_menu_kb(sess, lang))
         self._activity.log(chat_id, "system", "[wait] cancelled by button")
+
+    def _cb_feedback(self, cb: dict, msg: dict, chat_id: int, data: str) -> None:
+        """👍/👎 press: toggle the presser's vote, tick the button, toast. The vote is
+        the presser's own (cb["from"]), and nothing else in the bot reads it."""
+        import tg_feedback
+        toast = ""
+        try:
+            _, rid, side = data.split(":", 2)
+            voter = (cb.get("from") or {}).get("id") or chat_id
+            res = tg_feedback.store().vote(rid, voter, 1 if side == "u" else -1)
+            if res:
+                toast = {1: "👍", -1: "👎", 0: "↩️"}[res["mine"]]
+                rows = (msg.get("reply_markup") or {}).get("inline_keyboard") or []
+                rows = [r for r in rows if not any(str(b.get("callback_data", "")).startswith("fb:") for b in r)]
+                kb = {"inline_keyboard": rows + tg_feedback.keyboard(rid, res)["inline_keyboard"]}
+                self._api_post("editMessageReplyMarkup", {
+                    "chat_id": chat_id, "message_id": msg.get("message_id"), "reply_markup": kb})
+        except Exception:
+            toast = ""
+        self._api_post("answerCallbackQuery", {"callback_query_id": cb.get("id", ""), "text": toast})
 
     def _cb_abandon_capture(self, chat_id: int) -> None:
         # 📝 Feedback / ✏️ Change name / 🔑 Change password arm sess.reg_state

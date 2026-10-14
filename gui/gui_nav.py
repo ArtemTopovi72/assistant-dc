@@ -18,7 +18,7 @@ GROUPS = (
     ("Creation", ("images", "storyboard", "transfer", "restyle", "music", "voice_clone", "characters")),
     ("Knowledge", ("search", "research", "database", "memory")),
     ("Bot & services", ("telegram", "debug_chat", "admin", "weather", "madhouse")),
-    ("System", ("model", "status", "log", "code", "stress")),
+    ("System", ("model", "status", "feedback", "log", "code", "stress")),
 )
 _KEY = Qt.UserRole
 

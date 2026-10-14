@@ -216,6 +216,23 @@ def retell_system(lang: str, is_video: bool) -> str:
 
 
 class TaskRunnerMixin:
+    def _feedback_kb(self, kb, chat_id, user_text, reply, ctx):
+        """`kb` with the 👍/👎 row under it. Feedback is only recorded, never fed back
+        into the bot; if recording fails the answer still goes out as it was.
+        A reply keyboard is left alone (it stays on screen by itself) and the row
+        goes out alone: the two kinds cannot share a message."""
+        try:
+            import config as _cfg
+            import tg_feedback
+            kind = "search" if getattr(ctx, "turn_queries", None) else "chat"
+            rid = tg_feedback.store().record_reply(
+                chat_id, user_text, reply, kind=kind, model=_cfg.MODEL_NAME)
+            inline = kb if kb and "inline_keyboard" in kb else None
+            return tg_feedback.with_feedback(inline, rid)
+        except Exception:
+            tg_bot.logger.exception("feedback row failed chat=%s", chat_id)
+            return kb
+
     def _do_fwd_voice(self, chat_id: int, what: str, said: str) -> None:
         """Deliver a forwarded voice note as transcript / summary / both.
 
@@ -1689,6 +1706,8 @@ class TaskRunnerMixin:
                 chunks = tg_bot._split_html(reply_html)
                 for i, chunk in enumerate(chunks):
                     kb = main_kb if i == len(chunks) - 1 else None
+                    if kb is not None and not reply_is_failure:
+                        kb = self._feedback_kb(kb, chat_id, task.user_text, reply, ctx)
                     self._send_text(chat_id, chunk, parse_mode="HTML", keyboard=kb)
             self._on_message(chat_id, task.user_text, reply)
             self._activity.log(chat_id, "bot_reply", reply, uname)

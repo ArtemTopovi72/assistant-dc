@@ -149,3 +149,5 @@ mantella/
 # runtime logs never belong in the repo (edit_routing.jsonl leaked user prompts)
 **/edit_routing.jsonl
 venv_qwen/
+tg_feedback.db
+tg_feedback.db-*

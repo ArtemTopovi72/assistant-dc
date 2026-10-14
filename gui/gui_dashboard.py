@@ -30,6 +30,7 @@ from gui_weather_tab import WeatherTab
 from gui_storyboard_tab import StoryboardTab
 from gui_stress_tab import StressTab
 from gui_system_info_tab import SystemInfoTab
+from gui_feedback_tab import FeedbackTab
 from gui_telegram_tab import TelegramTab
 from gui_code_tab import CodeTab
 from gui_characters_tab import CharactersTab
@@ -318,6 +319,7 @@ class DashboardMixin:
         self.terminal.setPlaceholderText("The assistant's working log appears here: every step of a request, as it runs.")
         self.model_config_tab = ModelConfigTab()
         self.system_info_tab = SystemInfoTab()
+        self.feedback_tab = FeedbackTab()
         self.memory_center_tab = MemoryCenterTab(self)
         self.transfer_tab = TransferTab(self)
         self.stress_tab = StressTab(self)
@@ -360,6 +362,7 @@ class DashboardMixin:
             ("memory",   _scroll_page(self.memory_center_tab), "Memory"),
             ("model",    _scroll_page(self.model_config_tab),  "Model"),
             ("status",   _scroll_page(self.system_info_tab),   "Status"),
+            ("feedback", _scroll_page(self.feedback_tab),      "Feedback"),
             ("log",      _scroll_page(self.terminal),          "Log"),
             ("telegram", _scroll_page(self.telegram_tab),      "Telegram"),
             ("debug_chat", self.debug_chat_tab,                  "Debug chat"),
