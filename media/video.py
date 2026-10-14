@@ -1070,6 +1070,15 @@ def mark_speech_stress(ctx, prompt: str) -> str:
     return _RU_LINE.sub(one, prompt)
 
 
+def _lost_lines(description: str, prompt: str) -> list:
+    """The request's quoted spoken lines that `prompt` does not carry, word for word."""
+    def flat(t):
+        return re.sub(r"[\W_]+", " ", t.lower().replace("́", "")).strip()
+    have = flat(prompt)
+    lines = [next(g for g in m.groups() if g is not None).strip() for m in _QUOTED.finditer(description or "")]
+    return [x for x in lines if flat(x) and flat(x) not in have]
+
+
 def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
                   images: Sequence[str] = (), n_videos: int = 0, n_audios: int = 0) -> str:
     """Rewrite a free-text request into H3's own prompt structure.
@@ -1149,25 +1158,45 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
                "end: no cut, no jump to a close-up.\n"
                if images else "") +
             "\nRequest:\n" + description)
-    try:
+    def ask(user):
         if images:
             # Every picture, in order: shown only <Picture 1>, the writer guessed the
             # newcomer of <Picture 2> -- a blond guy with a light-blue glove became «a
             # man with a dark glove», only his arm in the shot (live 2026-10-12).
             labelled = [(f"<Picture {i}>", p) for i, p in enumerate(images, 1)]
-            out = vision_model(ctx)(ctx, image_paths=labelled, user_text=user,
-                                              system_prompt=guide, temperature=0.4,
-                                              max_tokens=2500)
-        else:
-            out = text_model(ctx)(ctx, guide, user, temperature=0.4, max_tokens=2500)
+            return vision_model(ctx)(ctx, image_paths=labelled, user_text=user,
+                                     system_prompt=guide, temperature=0.4, max_tokens=2500)
+        return text_model(ctx)(ctx, guide, user, temperature=0.4, max_tokens=2500)
+
+    def clean(raw):
+        return (raw or "").strip().strip("`").strip()
+    try:
+        out = clean(ask(user))
+        # The rewriter drops spoken lines it finds awkward: a man's «эта залупа слишком
+        # тяжёлая» never reached H3, the clip was silent (live 2026-10-15). Once more
+        # naming the lines; if still missing, they are put in below.
+        lost = _lost_lines(description, out)
+        if lost and out:
+            out = clean(ask(user + "\n\nYour last answer left out these spoken lines. Put each "
+                            "into the shot where it is said, character for character, in "
+                            "quotation marks:\n" + "\n".join(f'"{x}"' for x in lost))) or out
     except Exception as exc:
         logger.warning("Context-IR rewrite failed: %s", exc)
         return description
-    out = (out or "").strip().strip("`").strip()
     need = _CIR_REF_FIELDS if ref else _CIR_FIELDS[:1]
     if not out or not all(f in out for f in need) or "non_diegetic_music" not in out:
         logger.info("Context-IR rewrite rejected (missing fields); keeping the plain prompt")
         return description
+    lost = _lost_lines(description, out)
+    if lost:
+        logger.info("Context-IR rewrite lost %d spoken line(s); put back", len(lost))
+        said = " ".join(f'He says: "{x}".' for x in lost)
+        field = "detailed_description:" if ref else "integrated_multimodal_description:"
+        end = re.search(r"\n+(?=overall_soundscape:)", out)
+        if field in out and end:
+            out = out[:end.start()] + " " + said + out[end.start():]
+        else:
+            out = out + "\n" + said
     # The guide's cut time is "At 00:03.500"; the model also wrote "At 04.00".
     out = re.sub(r"\bAt (\d{1,2})\.(\d{1,3})\b(?!:)",
                  lambda m: f"At 00:{int(m.group(1)):02d}.{m.group(2).ljust(3, '0')}", out)
