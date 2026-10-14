@@ -195,5 +195,20 @@ check("Stop ends the job between portions", "Остановлено после" 
 check("_stop_and_report reaches a running job",
       (bot._lv_jobs().__setitem__(CID, threading.Event()) or bot._long_video_stop(CID)) is True)
 
+# ── ⛔ Стоп right under the progress message ──────────────────────────────────
+bot.sent.clear()
+stop = threading.Event(); bot._lv_jobs()[CID] = stop
+bot.modules = {"video_look": VLO, "audio": AU}; ASR[0] = lambda ctx, p, lang_hint="ru": "речь"
+bot._long_video_job(CID, {"id": "j3", "file_id": "F1", "seconds": 150}, stop)
+btns = [b["callback_data"] for t, kb in bot.sent if kb for row in kb.get("inline_keyboard", []) for b in row]
+check("the running job shows a ⛔ button", "lv:stop:j3" in btns, btns)
+bot.sent.clear()
+ev = threading.Event(); bot._lv_jobs()[CID] = ev
+bot._cb_long_video(CID, "lv:stop:j3")
+check("pressing ⛔ stops the running job and says so", ev.is_set() and "Останавливаю" in texts(bot), texts(bot))
+bot._lv_jobs().pop(CID, None); bot.sent.clear()
+bot._cb_long_video(CID, "lv:stop:j3")
+check("⛔ with nothing running says so", "ничего не выполняется" in texts(bot), texts(bot))
+
 print(f"\n{PASSED}/{PASSED + FAILED} checks passed")
 sys.exit(1 if FAILED else 0)

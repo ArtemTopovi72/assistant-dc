@@ -113,6 +113,11 @@ def _ask_kb(lang: str, job_id: str) -> dict:
     ]}
 
 
+def _run_kb(lang: str, job_id: str) -> dict:
+    """Under the progress message while the job runs: the way out, in reach."""
+    return {"inline_keyboard": [[{"text": _t("stop", lang), "callback_data": "lv:stop:" + job_id}]]}
+
+
 def _after_kb(lang: str, job_id: str) -> dict:
     """Under a finished video: ask about it, or open every portion."""
     return {"inline_keyboard": [
@@ -271,6 +276,10 @@ class LongVideoMixin:
         action, job_id = (parts[1] if len(parts) > 1 else ""), (parts[2] if len(parts) > 2 else "")
         if action in ("more", "parts"):
             return self._long_video_after(chat_id, sess, lang, action, job_id)
+        if action == "stop":
+            self._send_text(chat_id, _t("stopping", lang, extra="") if self._long_video_stop(chat_id)
+                            else _t("stop_idle", lang))
+            return
         pending = getattr(sess, "long_video", None) or {}
         if not pending or pending.get("id") != job_id:
             self._send_text(chat_id, _t("lv_gone", lang)); return
@@ -388,7 +397,7 @@ class LongVideoMixin:
         question = (spec.get("question") or "").strip()
         quiet = bool(question) or mode == "brief"        # nothing per portion, one answer at the end
         material: list = []
-        status_id = None
+        status_id = live_id = None
         work = Path(tg_bot._IMAGE_DIR) / f"longvideo_{spec['id']}"
         work.mkdir(parents=True, exist_ok=True)
         src = str(work / "src.mp4")
@@ -408,10 +417,13 @@ class LongVideoMixin:
             total = video_look.duration_seconds(src) or float(spec.get("seconds") or 0)
             n_parts = max(1, int((total + chunk - 1) // chunk))
             if quiet:
-                status_id = self._send_get_id(chat_id, _t("lv_progress", lang, n=1, of=n_parts, total=_stamp(total)))
+                status_id = self._send_get_id(chat_id, _t("lv_progress", lang, n=1, of=n_parts, total=_stamp(total)),
+                                              keyboard=_run_kb(lang, spec["id"]))
+                live_id = status_id
             else:
-                self._send_text(chat_id, _t("lv_start", lang, parts=n_parts, mins=chunk // 60,
-                                            total=_stamp(total)))
+                live_id = self._send_get_id(
+                    chat_id, _t("lv_start", lang, parts=n_parts, mins=chunk // 60, total=_stamp(total)),
+                    keyboard=_run_kb(lang, spec["id"]))
             ctx = self._get_ctx()
             # The film's language, once for all portions -- not the chat's.
             from audio import detect_media_language
@@ -426,7 +438,8 @@ class LongVideoMixin:
                 self._api_post("sendChatAction", {"chat_id": chat_id, "action": "typing"})
                 if status_id and k:
                     self._edit_text(chat_id, status_id, _t("lv_progress", lang, n=k + 1, of=n_parts,
-                                                           total=_stamp(total)))
+                                                           total=_stamp(total)),
+                                    keyboard=_run_kb(lang, spec["id"]))
                 if not cut_portion(src, t0, length, part):
                     self._send_text(chat_id, _t("lv_part_failed", lang, n=k + 1)); continue
                 said = ""
@@ -494,6 +507,12 @@ class LongVideoMixin:
             self._send_text(chat_id, _t("lv_failed", lang), keyboard=self._main_menu_kb(sess, lang))
         finally:
             self._lv_jobs().pop(chat_id, None)
+            if live_id:                    # the progress message keeps its text, loses its ⛔ button
+                try:
+                    self._api_post("editMessageReplyMarkup", {"chat_id": chat_id, "message_id": live_id,
+                                                              "reply_markup": {"inline_keyboard": []}})
+                except Exception:
+                    logger.debug("progress message cleanup failed", exc_info=True)
             try:
                 if os.path.exists(src):
                     os.unlink(src)
