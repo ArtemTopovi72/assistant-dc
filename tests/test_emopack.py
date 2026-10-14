@@ -44,10 +44,12 @@ del os.environ["EMOTION_DELIVERY"]
 
 # speak() hands explicit controls to the synthesiser through the ctx
 seen = {}
-audio.synth_single_segment = lambda cc, i, a, t, out_stem=None: seen.update(e=cc.delivery_emotion, k=cc.delivery_ik3, r=cc.custom_ref_wav) or "x.wav"
-voice_clone.speak(object(), str(ref), "plain", "привет", str(tmp), emotion="anger", ik3=False)
+import types
+sctx = types.SimpleNamespace(deps=types.SimpleNamespace(
+    synth_single_segment=lambda cc, i, a, t, out_stem=None: seen.update(e=cc.delivery_emotion, k=cc.delivery_ik3, r=cc.custom_ref_wav) or "x.wav"))
+voice_clone.speak(sctx, str(ref), "plain", "привет", str(tmp), emotion="anger", ik3=False)
 check("speak passes emotion/ik3", seen == {"e": "anger", "k": False, "r": str(ref)})
-voice_clone.speak(object(), str(ref), "plain", "привет", str(tmp))
+voice_clone.speak(sctx, str(ref), "plain", "привет", str(tmp))
 check("speak default = decide per line", seen["e"] is None and seen["k"] is None)
 
 import prosody
@@ -55,7 +57,7 @@ check("one_question yes", prosody.one_question("Ты придёшь?"))
 check("not a question", not prosody.one_question("Ты придёшь."))
 check("two sentences are not one question", not prosody.one_question("Привет. Ты придёшь?"))
 calls = []
-prosody.question_shape = lambda cx, w, t, d="": calls.append(t) or w
+c.deps = types.SimpleNamespace(question_shape=lambda cx, w, t, d="": calls.append(t) or w)
 check("finish: one question -> IK-3", delivery.finish(c, "w.wav", "Ты придёшь?") == "w.wav" and calls == ["Ты придёшь?"])
 delivery.finish(c, "w.wav", "Ты придёшь.")
 check("finish: statement untouched", calls == ["Ты придёшь?"])

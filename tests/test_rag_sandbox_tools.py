@@ -26,14 +26,14 @@ class _User:
 
 
 @pytest.fixture(autouse=True)
-def _isolated_library_dir(tmp_path_factory, monkeypatch):
+def _isolated_library_dir(tmp_path_factory):
     """Every test in this module gets its own tg_bot._LIBRARY_DIR -- otherwise
     a rag_add here would write into the LIVE tg_libraries/ folder (see
     tg_bot.redirect_data_dir's own docstring)."""
     import tg_bot
     d = tmp_path_factory.mktemp("libdir")
-    monkeypatch.setattr(tg_bot, "_LIBRARY_DIR", d)
-    yield d
+    tg_bot.redirect_data_dir(d)
+    yield d / "tg_libraries"
 
 
 @pytest.fixture

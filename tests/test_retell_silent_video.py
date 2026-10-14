@@ -37,15 +37,16 @@ def check(name, cond, extra=""):
 # writes «(без слов)» (Whisper may hear «Oh» in 7 silent seconds).
 import audio  # noqa: E402
 _heard = {"text": "Oh"}
-audio.transcribe_audio_file = lambda *a, **k: _heard["text"]
-audio.detect_media_language = lambda *a, **k: "en"
+import types
+ctx = types.SimpleNamespace(deps=types.SimpleNamespace(
+    transcribe_audio_file=lambda *a, **k: _heard["text"], detect_media_language=lambda *a, **k: "en"))
 runner = tg_tasks.TaskRunnerMixin()
 runner._dl_bytes = lambda fid: b"not really an mp4"
-check("a stray «Oh» in a video is no speech", runner._transcribe(None, "f", "video") == "")
+check("a stray «Oh» in a video is no speech", runner._transcribe(ctx, "f", "video") == "")
 _heard["text"] = "смотри, я купил новый телевизор"
-check("a video with real speech keeps it", runner._transcribe(None, "f", "video") == _heard["text"])
+check("a video with real speech keeps it", runner._transcribe(ctx, "f", "video") == _heard["text"])
 _heard["text"] = "Да"
-check("a voice note's one word is real speech", runner._transcribe(None, "f", "voice") == "Да")
+check("a voice note's one word is real speech", runner._transcribe(ctx, "f", "voice") == "Да")
 check("the retelling prompt reads the composer's no-speech marker",
       "(без слов)" in tg_tasks.retell_system("ru", True))
 SAID = "(без слов)\n\n" + BOARD

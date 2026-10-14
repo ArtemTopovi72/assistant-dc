@@ -26,7 +26,7 @@ Callers supply `validate` when "a usable result" is not an image — video.py
 passes its own, because ComfyUI reports a saved mp4 under the same history
 "images" key that SaveImage uses.
 """
-from seams import dep
+from seams import dep, module
 import json
 import logging
 import os
@@ -297,7 +297,8 @@ class _ComfyProgress:
     render still runs and polls exactly as before — only the counter goes quiet.
     """
 
-    def __init__(self, client_id: str, callback, prompt_id_holder):
+    def __init__(self, client_id: str, callback, prompt_id_holder, modules=None):
+        self.modules = modules or {}
         self.client_id = client_id
         self.callback = callback
         self.holder = prompt_id_holder      # {"id": ...}, filled in after /prompt
@@ -316,7 +317,7 @@ class _ComfyProgress:
         return self
 
     def _run(self):
-        import websocket
+        websocket = module(self, "websocket")
         url = COMFY_URL.replace("https://", "wss://").replace("http://", "ws://")
         try:
             ws = websocket.create_connection(f"{url}/ws?clientId={self.client_id}",

@@ -40,7 +40,7 @@ check("a pinned WHISPER_LANGUAGE wins", A.detect_media_language(ctx_with("en", 0
 
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 src = open(os.path.join(root, "bot/tg_tasks.py"), encoding="utf-8").read()
-check("tg_tasks detects the language of a video", 'if media == "video"' in src and "detect_media_language(ctx, src)" in src)
+check("tg_tasks detects the language of a video", 'if media == "video"' in src and "\"detect_media_language\", detect_media_language)(ctx, src)" in src)
 check("diarized turns use the clip's language, labels the chat's", "asr_lang=lang_hint" in src and "lang=label_lang" in src)
 check("long-video portions use one detected language",
       "lang_hint=asr_lang" in open(os.path.join(root, "bot/tg_video.py"), encoding="utf-8").read())

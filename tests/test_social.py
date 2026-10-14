@@ -3,7 +3,7 @@ channel fetch (auth-free, safe), and stubbed VK API paths (no VK_TOKEN
 configured in this environment, so VK is exercised via stubs, not live calls).
 Run: venv/Scripts/python.exe tests/test_social.py
 """
-import os, sys, types
+import contextlib, os, sys, types
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
@@ -18,17 +18,9 @@ def check(name, cond, detail=""):
         raise AssertionError(str(name) + (": " + str(detail) if detail else ""))
 
 
-class _Patches:
-    def __init__(self, **kw):
-        self.kw = kw; self.orig = {}
-    def __enter__(self):
-        for k, v in self.kw.items():
-            self.orig[k] = getattr(SO, k)
-            setattr(SO, k, v)
-        return self
-    def __exit__(self, *a):
-        for k, v in self.orig.items():
-            setattr(SO, k, v)
+def _Patches(**kw):
+    """A context whose deps carry the fakes: handed to the call, nothing global written."""
+    return contextlib.nullcontext(types.SimpleNamespace(deps=types.SimpleNamespace(**kw)))
 
 
 def test_host_and_social_kind():
@@ -66,37 +58,37 @@ def test_extract_telegram_posts_stubbed():
     class FakeResp:
         def __init__(self, status=200, text=""):
             self.status_code = status; self.text = text
-    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: FakeResp(status=404))):
-        check("telegram_non200_none", SO.extract_telegram_posts("https://t.me/somechannel") is None)
+    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: FakeResp(status=404))) as c:
+        check("telegram_non200_none", SO.extract_telegram_posts("https://t.me/somechannel", ctx=c) is None)
     empty_html = "<html><body>no messages here</body></html>"
-    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: FakeResp(text=empty_html))):
-        check("telegram_no_message_nodes_none", SO.extract_telegram_posts("https://t.me/somechannel") is None)
+    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: FakeResp(text=empty_html))) as c:
+        check("telegram_no_message_nodes_none", SO.extract_telegram_posts("https://t.me/somechannel", ctx=c) is None)
     html_with_posts = (
         '<html><body>'
         '<div class="tgme_widget_message_text">First post</div>'
         '<div class="tgme_widget_message_text">Second post</div>'
         '</body></html>')
-    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: FakeResp(text=html_with_posts))):
-        out = SO.extract_telegram_posts("https://t.me/somechannel", limit=5)
+    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: FakeResp(text=html_with_posts))) as c:
+        out = SO.extract_telegram_posts("https://t.me/somechannel", limit=5, ctx=c)
         check("telegram_stubbed_posts_newest_first", out is not None and out.index("Second post") < out.index("First post"))
-    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))):
-        check("telegram_exception_none", SO.extract_telegram_posts("https://t.me/somechannel") is None)
+    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))) as c:
+        check("telegram_exception_none", SO.extract_telegram_posts("https://t.me/somechannel", ctx=c) is None)
     blank_posts_html = '<html><body><div class="tgme_widget_message_text">   </div></body></html>'
-    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: FakeResp(text=blank_posts_html))):
-        check("telegram_blank_text_nodes_none", SO.extract_telegram_posts("https://t.me/somechannel") is None)
+    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: FakeResp(text=blank_posts_html))) as c:
+        check("telegram_blank_text_nodes_none", SO.extract_telegram_posts("https://t.me/somechannel", ctx=c) is None)
 
 
 def test_vk_call():
     class FakeResp:
         def __init__(self, data): self._data = data
         def json(self): return self._data
-    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: FakeResp({"response": {"ok": True}}))):
-        out = SO._vk_call("test.method")
+    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: FakeResp({"response": {"ok": True}}))) as c:
+        out = SO._vk_call("test.method", ctx=c)
         check("vk_call_success", out == {"ok": True})
-    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: FakeResp({"error": {"error_msg": "bad"}}))):
-        check("vk_call_api_error_none", SO._vk_call("test.method") is None)
-    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))):
-        check("vk_call_exception_none", SO._vk_call("test.method") is None)
+    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: FakeResp({"error": {"error_msg": "bad"}}))) as c:
+        check("vk_call_api_error_none", SO._vk_call("test.method", ctx=c) is None)
+    with _Patches(requests=types.SimpleNamespace(get=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))) as c:
+        check("vk_call_exception_none", SO._vk_call("test.method", ctx=c) is None)
 
 
 def test_vk_owner_id():
@@ -104,47 +96,47 @@ def test_vk_owner_id():
     check("vk_owner_id_club_numeric", SO._vk_owner_id("https://vk.com/club12345") == -12345)
     check("vk_owner_id_public_numeric", SO._vk_owner_id("https://vk.com/public999") == -999)
     check("vk_owner_id_event_numeric", SO._vk_owner_id("https://vk.com/event42") == -42)
-    with _Patches(_vk_call=lambda method, **p: {"object_id": 555, "type": "group"}):
-        check("vk_owner_id_resolved_group_negative", SO._vk_owner_id("https://vk.com/somescreen") == -555)
-    with _Patches(_vk_call=lambda method, **p: {"object_id": 777, "type": "user"}):
-        check("vk_owner_id_resolved_user_positive", SO._vk_owner_id("https://vk.com/someuser") == 777)
-    with _Patches(_vk_call=lambda method, **p: None):
-        check("vk_owner_id_resolve_fails_none", SO._vk_owner_id("https://vk.com/unresolvable") is None)
-    with _Patches(_vk_call=lambda method, **p: {"no_object_id": True}):
-        check("vk_owner_id_no_object_id_key_none", SO._vk_owner_id("https://vk.com/weird") is None)
+    with _Patches(_vk_call=lambda method, **p: {"object_id": 555, "type": "group"}) as c:
+        check("vk_owner_id_resolved_group_negative", SO._vk_owner_id("https://vk.com/somescreen", ctx=c) == -555)
+    with _Patches(_vk_call=lambda method, **p: {"object_id": 777, "type": "user"}) as c:
+        check("vk_owner_id_resolved_user_positive", SO._vk_owner_id("https://vk.com/someuser", ctx=c) == 777)
+    with _Patches(_vk_call=lambda method, **p: None) as c:
+        check("vk_owner_id_resolve_fails_none", SO._vk_owner_id("https://vk.com/unresolvable", ctx=c) is None)
+    with _Patches(_vk_call=lambda method, **p: {"no_object_id": True}) as c:
+        check("vk_owner_id_no_object_id_key_none", SO._vk_owner_id("https://vk.com/weird", ctx=c) is None)
 
 
 def test_extract_vk_posts():
-    with _Patches(VK_TOKEN=""):
-        check("vk_posts_no_token_none", SO.extract_vk_posts("https://vk.com/club1") is None)
-    with _Patches(VK_TOKEN="fake-token", _vk_owner_id=lambda url: None):
-        check("vk_posts_no_owner_none", SO.extract_vk_posts("https://vk.com/club1") is None)
+    with _Patches(VK_TOKEN="") as c:
+        check("vk_posts_no_token_none", SO.extract_vk_posts("https://vk.com/club1", ctx=c) is None)
+    with _Patches(VK_TOKEN="fake-token", _vk_owner_id=lambda url: None) as c:
+        check("vk_posts_no_owner_none", SO.extract_vk_posts("https://vk.com/club1", ctx=c) is None)
     with _Patches(VK_TOKEN="fake-token", _vk_owner_id=lambda url: -1,
-                  _vk_call=lambda method, **p: None):
-        check("vk_posts_wall_get_fails_none", SO.extract_vk_posts("https://vk.com/club1") is None)
+                  _vk_call=lambda method, **p: None) as c:
+        check("vk_posts_wall_get_fails_none", SO.extract_vk_posts("https://vk.com/club1", ctx=c) is None)
     with _Patches(VK_TOKEN="fake-token", _vk_owner_id=lambda url: -1,
-                  _vk_call=lambda method, **p: {"items": []}):
-        check("vk_posts_no_items_none", SO.extract_vk_posts("https://vk.com/club1") is None)
+                  _vk_call=lambda method, **p: {"items": []}) as c:
+        check("vk_posts_no_items_none", SO.extract_vk_posts("https://vk.com/club1", ctx=c) is None)
     with _Patches(VK_TOKEN="fake-token", _vk_owner_id=lambda url: -1,
-                  _vk_call=lambda method, **p: {"items": [{"text": "hello"}, {"text": ""}]}):
-        out = SO.extract_vk_posts("https://vk.com/club1")
+                  _vk_call=lambda method, **p: {"items": [{"text": "hello"}, {"text": ""}]}) as c:
+        out = SO.extract_vk_posts("https://vk.com/club1", ctx=c)
         check("vk_posts_basic_success", out is not None and "hello" in out)
     with _Patches(VK_TOKEN="fake-token", _vk_owner_id=lambda url: -1,
                   _vk_call=lambda method, **p: {"items": [
-                      {"text": "", "copy_history": [{"text": "reposted content"}]}]}):
-        out2 = SO.extract_vk_posts("https://vk.com/club1")
+                      {"text": "", "copy_history": [{"text": "reposted content"}]}]}) as c:
+        out2 = SO.extract_vk_posts("https://vk.com/club1", ctx=c)
         check("vk_posts_repost_uses_original_text", out2 is not None and "reposted content" in out2)
     with _Patches(VK_TOKEN="fake-token", _vk_owner_id=lambda url: -1,
-                  _vk_call=lambda method, **p: {"items": [{"text": ""}]}):
-        check("vk_posts_all_blank_none", SO.extract_vk_posts("https://vk.com/club1") is None)
+                  _vk_call=lambda method, **p: {"items": [{"text": ""}]}) as c:
+        check("vk_posts_all_blank_none", SO.extract_vk_posts("https://vk.com/club1", ctx=c) is None)
 
 
 def test_fetch_social_posts_dispatch():
-    with _Patches(extract_telegram_posts=lambda url, limit: "telegram result"):
-        check("fetch_social_posts_dispatches_telegram", SO.fetch_social_posts("https://t.me/x") == "telegram result")
-    with _Patches(extract_vk_posts=lambda url, limit: "vk result"):
-        check("fetch_social_posts_dispatches_vk", SO.fetch_social_posts("https://vk.com/x") == "vk result")
-    check("fetch_social_posts_non_social_none", SO.fetch_social_posts("https://example.com") is None)
+    with _Patches(extract_telegram_posts=lambda url, limit: "telegram result") as c:
+        check("fetch_social_posts_dispatches_telegram", SO.fetch_social_posts("https://t.me/x", ctx=c) == "telegram result")
+    with _Patches(extract_vk_posts=lambda url, limit: "vk result") as c:
+        check("fetch_social_posts_dispatches_vk", SO.fetch_social_posts("https://vk.com/x", ctx=c) == "vk result")
+    check("fetch_social_posts_non_social_none", SO.fetch_social_posts("https://example.com", ctx=c) is None)
 
 
 if __name__ == "__main__":

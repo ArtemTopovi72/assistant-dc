@@ -30,19 +30,16 @@ class _FakeYDL:
 
 
 def test_fetch_video_downloads_and_caps_length():
-    sys.modules["yt_dlp"] = types.SimpleNamespace(YoutubeDL=_FakeYDL)
-    try:
-        r = L.fetch_video("https://youtu.be/v?d=55")
-        assert r == {"data": b"MP4", "seconds": 55, "title": "t", "description": "d"}, r
-        r = L.fetch_video("https://youtu.be/v?d=4000")
-        assert r == {"too_long": True, "seconds": 4000, "title": "t"}, r
-        # every YouTube link died on "Sign in to confirm you're not a bot";
-        # the mweb client with a node-solved JS challenge still downloads
-        o = SEEN[-1]
-        assert "mweb" in o["extractor_args"]["youtube"]["player_client"], o
-        assert "node" in o["js_runtimes"], o
-    finally:
-        del sys.modules["yt_dlp"]
+    mods = {"yt_dlp": types.SimpleNamespace(YoutubeDL=_FakeYDL)}
+    r = L.fetch_video("https://youtu.be/v?d=55", modules=mods)
+    assert r == {"data": b"MP4", "seconds": 55, "title": "t", "description": "d"}, r
+    r = L.fetch_video("https://youtu.be/v?d=4000", modules=mods)
+    assert r == {"too_long": True, "seconds": 4000, "title": "t"}, r
+    # every YouTube link died on "Sign in to confirm you're not a bot";
+    # the mweb client with a node-solved JS challenge still downloads
+    o = SEEN[-1]
+    assert "mweb" in o["extractor_args"]["youtube"]["player_client"], o
+    assert "node" in o["js_runtimes"], o
 
 
 if __name__ == "__main__":

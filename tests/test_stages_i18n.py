@@ -251,20 +251,15 @@ def drive_research(lang, phases):
     # sys.modules, so it needs the attribute too or that call raises before
     # ever reaching the stage-translation behavior this test actually checks.
     fake_dr.lang_of_text = lambda text, default="en": default
-    real = sys.modules.get("deep_research")
-    sys.modules["deep_research"] = fake_dr
+    bot.modules = {"deep_research": fake_dr}
 
     bot._user_store.put(T._User(chat_id=CID, name="U", status="approved"))
     sess = bot._get_session(CID); sess.lang = lang; sess.voice_on = False
     bot._store.put(sess)
     task = T._Task(task_id="dr", chat_id=CID,
                    user_text="do a deep research on: термоядерный синтез")
-    try:
-        bot._run_task_inner(task, bot._get_session(CID),
-                            bot._user_store.get(CID), "U", lang, ctx, None)
-    finally:
-        if real is not None: sys.modules["deep_research"] = real
-        else: sys.modules.pop("deep_research", None)
+    bot._run_task_inner(task, bot._get_session(CID),
+                        bot._user_store.get(CID), "U", lang, ctx, None)
     return seen
 
 

@@ -16,20 +16,17 @@ bot._activity.log = lambda *a, **k: None
 CID = 7101
 bot._user_store.put(T._User(chat_id=CID, name="L", status="approved"))
 URL = "https://youtu.be/film"
-_real = L.fetch_video
 calls = []
-L.fetch_video = lambda u, max_seconds=L.VIDEO_MAX_SECONDS: (
-    calls.append(max_seconds) or {"too_long": True, "seconds": 81 * 60, "title": "Üç Kağıtçı"})
-try:
-    sess = bot._get_session(CID)
-    handled = bot._read_links(object(), sess, CID, None, "глянь " + URL, [])
-    assert handled is True
-    text, kb = sent[-1]
-    assert "81" in text, text
-    datas = [b["callback_data"] for row in kb["inline_keyboard"] for b in row]
-    assert any(d.startswith("lv:go:") for d in datas) and any(d.startswith("lv:skip:") for d in datas), datas
-    lv = bot._get_session(CID).long_video
-    assert lv and lv["url"] == URL, lv
-finally:
-    L.fetch_video = _real
+from seams import Over
+bot.links = Over(L, fetch_video=lambda u, max_seconds=L.VIDEO_MAX_SECONDS: (
+    calls.append(max_seconds) or {"too_long": True, "seconds": 81 * 60, "title": "Üç Kağıtçı"}))
+sess = bot._get_session(CID)
+handled = bot._read_links(object(), sess, CID, None, "глянь " + URL, [])
+assert handled is True
+text, kb = sent[-1]
+assert "81" in text, text
+datas = [b["callback_data"] for row in kb["inline_keyboard"] for b in row]
+assert any(d.startswith("lv:go:") for d in datas) and any(d.startswith("lv:skip:") for d in datas), datas
+lv = bot._get_session(CID).long_video
+assert lv and lv["url"] == URL, lv
 print("PASS")

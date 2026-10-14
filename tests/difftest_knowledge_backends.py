@@ -160,7 +160,8 @@ def main():
         # ---- in-process side -------------------------------------------- #
         os.environ.pop("KNOWLEDGE_BACKEND", None)
         import config
-        config.EMBED_BASE = DEAD_EMBED          # deterministic FTS-only, offline
+        from unittest import mock
+        mock.patch.object(config, 'EMBED_BASE', DEAD_EMBED).start()   # deterministic FTS-only, offline
         import knowledge_client
         check("default backend is in-process", knowledge_client.backend_name() == "inprocess")
         ip = knowledge_client.open_library(os.path.join(root, "inproc.db"))

@@ -67,13 +67,14 @@ def test_unnamed_voices_are_told_apart_by_when_they_came(tmp_path):
     assert L.vl_label(v, "ru") == "голос от " + time.strftime("%d.%m %H:%M", time.localtime(1760000000))
 
 
-def test_clip_voice_offers_save_then_manage_rename_and_delete(tmp_path, monkeypatch):
+def test_clip_voice_offers_save_then_manage_rename_and_delete(tmp_path):
     """A voice sent for a clip can be kept with a name, renamed,
     deleted, and picked next time without sending it again."""
     bot = _bot()
     bot._dl_bytes = lambda fid: b"RIFFfake"
     import cover
-    monkeypatch.setattr(cover, "to_wav", lambda src, dst: src)
+    from seams import Over
+    bot.modules = {"cover": Over(cover, to_wav=lambda src, dst: src)}
     sess = bot._get_session(11)
     sess.anim_voice_state = "collect"; bot._store.put(sess)
     assert bot._anim_voice_take_media(11, sess, "ru", {"voice": {"file_id": "F1"}})

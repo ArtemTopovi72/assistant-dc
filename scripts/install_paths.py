@@ -23,7 +23,7 @@ def _site_dir():
     return sysconfig.get_paths()["purelib"]
 
 
-def ensure(write_venv: bool = True):
+def ensure(write_venv: bool = True, site_dir=None):
     """Current process gets the folders now; the venv gets them for every later process."""
     for d in reversed(source_dirs()):
         if d not in sys.path:
@@ -32,7 +32,7 @@ def ensure(write_venv: bool = True):
     # site.getsitepackages()[-1], which is site-packages on Windows but on a
     # Debian-built Python names a dist-packages folder that does not even
     # exist -- the write failed silently and nothing could `import config`.
-    target = os.path.join(_site_dir(), "assistant_dc.pth")
+    target = os.path.join(site_dir or _site_dir(), "assistant_dc.pth")
     # Importing launch_all (tests do, from any checkout) must not repoint the
     # shared venv at itself (a clone's suite run would, and the main
     # checkout's tests then import the clone's stale code).

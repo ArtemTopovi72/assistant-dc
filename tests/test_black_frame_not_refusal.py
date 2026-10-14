@@ -49,14 +49,11 @@ calls = []
 def fake_submit(ctx, workflow, **kw):
     calls.append(workflow[I.NODE_NOISE]["inputs"]["noise_seed"])
     return black if len(calls) == 1 else day
-orig = comfy_client._submit_and_poll
-comfy_client._submit_and_poll = fake_submit
-try:
-    cap = {"high_level_description": "x", "style_description": "photo",
-           "compositional_deconstruction": {"background": "b", "elements": []}}
-    out = I.generate(None, "a cat", caption=cap, seed=7)
-finally:
-    comfy_client._submit_and_poll = orig
+import types
+cap = {"high_level_description": "x", "style_description": "photo",
+       "compositional_deconstruction": {"background": "b", "elements": []}}
+out = I.generate(types.SimpleNamespace(deps=types.SimpleNamespace(_submit_and_poll=fake_submit)),
+                 "a cat", caption=cap, seed=7)
 check("a black frame is re-rolled once", len(calls) == 2, calls)
 check("...on a different seed", len(set(calls)) == 2, calls)
 check("...and the second render is delivered", out == day, out)

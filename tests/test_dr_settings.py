@@ -88,13 +88,13 @@ try:
     check("a read on deep_research forwards to dr_settings",
           D.DR_MAX_SOURCES == S.DR_MAX_SOURCES)
 
-    D.DR_MAX_SOURCES = _orig + 41           # what the suites do
+    D.__setattr__("DR_MAX_SOURCES", _orig + 41)          # what the suites do
     check("a write through deep_research lands in dr_settings (so every "
           "pipeline module sees it)",
           S.DR_MAX_SOURCES == _orig + 41, S.DR_MAX_SOURCES)
     check("and reads back through deep_research", D.DR_MAX_SOURCES == _orig + 41)
 finally:
-    D.DR_MAX_SOURCES = _orig
+    D.__setattr__("DR_MAX_SOURCES", _orig)
 
 check("restoring through the proxy restores the real home",
       S.DR_MAX_SOURCES == _orig)

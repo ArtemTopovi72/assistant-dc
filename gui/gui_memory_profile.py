@@ -104,8 +104,8 @@ class MemoryProfileMixin:
         if self.ctx is None:
             return
         import re as _re
-        name, ok = QInputDialog.getText(self, "New Memory Profile",
-                                        "Profile name (letters, numbers, underscores):")
+        name, ok = widget_part(self, "getText", QInputDialog.getText)(
+            self, "New Memory Profile", "Profile name (letters, numbers, underscores):")
         if not ok or not name.strip():
             return
         name = _re.sub(r"[^a-zA-Z0-9_\-]", "", name.strip().replace(" ", "_"))

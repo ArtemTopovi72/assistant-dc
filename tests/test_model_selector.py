@@ -22,16 +22,14 @@ _TMP = Path(tempfile.mkdtemp(prefix="modelsel_"))
 
 
 class _Patches:
+    """The fakes, as a context's deps: handed to the call, nothing global written."""
     def __init__(self, **kw):
-        self.kw = kw; self.orig = {}
+        self.ctx = types.SimpleNamespace(deps=types.SimpleNamespace(**kw))
     def __enter__(self):
-        for k, v in self.kw.items():
-            self.orig[k] = getattr(M, k)
-            setattr(M, k, v)
-        return self
+        _Patches.cur = self.ctx
+        return self.ctx
     def __exit__(self, *a):
-        for k, v in self.orig.items():
-            setattr(M, k, v)
+        return False
 
 
 class FakeResp:
@@ -159,7 +157,7 @@ def test_list_models_native_api():
                 {"id": "embed-model", "type": "embeddings"},
                 {"id": "vlm-model", "type": "vlm"},
             ]))):
-        out = M.list_models("http://x")
+        out = M.list_models("http://x", ctx=_Patches.cur)
         check("list_models_native_filters_embed", all("embed" not in m["id"] for m in out))
         check("list_models_native_keeps_llm_vlm", len(out) == 2)
 
@@ -170,7 +168,7 @@ def test_list_models_native_fails_falls_back():
             raise RuntimeError("native down")
         return FakeResp(data=[{"id": "fallback-model"}])
     with _Patches(_disk_models=lambda: [], requests=types.SimpleNamespace(get=fake_get)):
-        out = M.list_models("http://x")
+        out = M.list_models("http://x", ctx=_Patches.cur)
         check("list_models_falls_back_to_v1", out == [{"id": "fallback-model"}])
 
 
@@ -185,7 +183,7 @@ def test_the_picker_shows_models_that_are_installed_but_not_loaded():
                   requests=types.SimpleNamespace(
                       get=lambda url, timeout=10: FakeResp(
                           data=[{"id": "served-model"}]))):
-        ids = [m["id"] for m in M.list_models("http://x")]
+        ids = [m["id"] for m in M.list_models("http://x", ctx=_Patches.cur)]
     check("picker_includes_the_unloaded_model", "disk-only-model" in ids, ids)
     check("picker_does_not_duplicate_the_served_one",
           ids.count("served-model") == 1, ids)
@@ -196,13 +194,13 @@ def test_an_unreachable_server_still_lists_what_is_installed():
                   requests=types.SimpleNamespace(
                       get=lambda url, timeout=10:
                           (_ for _ in ()).throw(RuntimeError("boom")))):
-        ids = [m["id"] for m in M.list_models("http://x")]
+        ids = [m["id"] for m in M.list_models("http://x", ctx=_Patches.cur)]
     check("offline_picker_is_not_empty", ids == ["disk-only-model"], ids)
 
 def test_list_models_both_fail():
     with _Patches(_disk_models=lambda: [], requests=types.SimpleNamespace(
             get=lambda url, timeout=10: (_ for _ in ()).throw(RuntimeError("boom")))):
-        out = M.list_models("http://x")
+        out = M.list_models("http://x", ctx=_Patches.cur)
         check("list_models_both_fail_empty", out == [])
 
 
@@ -212,7 +210,7 @@ def test_list_models_native_empty_falls_through():
             return FakeResp(data=[{"id": "embed-only", "type": "embeddings"}])  # filtered to empty
         return FakeResp(data=[{"id": "v1-model"}])
     with _Patches(_disk_models=lambda: [], requests=types.SimpleNamespace(get=fake_get)):
-        out = M.list_models("http://x")
+        out = M.list_models("http://x", ctx=_Patches.cur)
         check("list_models_native_empty_after_filter_falls_through", out == [{"id": "v1-model"}])
 
 
@@ -220,69 +218,49 @@ def test_list_models_native_raises_status():
     with _Patches(_disk_models=lambda: [], requests=types.SimpleNamespace(
             get=lambda url, timeout=10: FakeResp(ok=False))):
         # both native (raises via raise_for_status) and v1 (also raises) -> empty
-        out = M.list_models("http://x")
+        out = M.list_models("http://x", ctx=_Patches.cur)
         check("list_models_native_and_v1_error_status_empty", out == [])
 
 
 def test_choose_model_interactive_no_models():
     with _Patches(list_models=lambda base_url: []):
-        model, no_think = M.choose_model_interactive("http://x", "default-model")
+        model, no_think = M.choose_model_interactive("http://x", "default-model", ctx=_Patches.cur)
         check("choose_model_no_models_uses_default", model == "default-model" and no_think is True)
 
 
 def test_choose_model_interactive_enter_defaults():
-    real_input = builtins.input
     inputs = iter(["", "n"])
-    builtins.input = lambda prompt="": next(inputs)
-    try:
-        with _Patches(list_models=lambda base_url: [{"id": "model-a", "state": "loaded"},
-                                                     {"id": "model-b"}],
-                      _index_model_sizes=lambda d: {"by_key": {}, "by_repo": {}}):
-            model, no_think = M.choose_model_interactive("http://x", "model-b")
-            check("choose_model_enter_picks_default", model == "model-b")
-            check("choose_model_no_think_default_true_on_n", no_think is True)
-    finally:
-        builtins.input = real_input
+    with _Patches(input=lambda prompt="": next(inputs), list_models=lambda base_url: [{"id": "model-a", "state": "loaded"},
+                                                 {"id": "model-b"}],
+                  _index_model_sizes=lambda d: {"by_key": {}, "by_repo": {}}):
+        model, no_think = M.choose_model_interactive("http://x", "model-b", ctx=_Patches.cur)
+        check("choose_model_enter_picks_default", model == "model-b")
+        check("choose_model_no_think_default_true_on_n", no_think is True)
 
 
 def test_choose_model_interactive_numeric_selection():
-    real_input = builtins.input
     inputs = iter(["2", "y"])
-    builtins.input = lambda prompt="": next(inputs)
-    try:
-        with _Patches(list_models=lambda base_url: [{"id": "model-a"}, {"id": "model-b"}],
-                      _index_model_sizes=lambda d: {"by_key": {}, "by_repo": {"model-b": 4_000_000_000}}):
-            model, no_think = M.choose_model_interactive("http://x", "model-a")
-            check("choose_model_numeric_selection", model == "model-b")
-            check("choose_model_no_think_false_on_y", no_think is False)
-    finally:
-        builtins.input = real_input
+    with _Patches(input=lambda prompt="": next(inputs), list_models=lambda base_url: [{"id": "model-a"}, {"id": "model-b"}],
+                  _index_model_sizes=lambda d: {"by_key": {}, "by_repo": {"model-b": 4_000_000_000}}):
+        model, no_think = M.choose_model_interactive("http://x", "model-a", ctx=_Patches.cur)
+        check("choose_model_numeric_selection", model == "model-b")
+        check("choose_model_no_think_false_on_y", no_think is False)
 
 
 def test_choose_model_interactive_invalid_then_valid():
-    real_input = builtins.input
     inputs = iter(["99", "abc", "1", "no"])
-    builtins.input = lambda prompt="": next(inputs)
-    try:
-        with _Patches(list_models=lambda base_url: [{"id": "model-a"}, {"id": "model-b"}],
-                      _index_model_sizes=lambda d: {"by_key": {}, "by_repo": {}}):
-            model, _ = M.choose_model_interactive("http://x", "model-x")
-            check("choose_model_invalid_retries_then_picks", model == "model-a")
-    finally:
-        builtins.input = real_input
+    with _Patches(input=lambda prompt="": next(inputs), list_models=lambda base_url: [{"id": "model-a"}, {"id": "model-b"}],
+                  _index_model_sizes=lambda d: {"by_key": {}, "by_repo": {}}):
+        model, _ = M.choose_model_interactive("http://x", "model-x", ctx=_Patches.cur)
+        check("choose_model_invalid_retries_then_picks", model == "model-a")
 
 
 def test_choose_model_interactive_default_not_in_list():
-    real_input = builtins.input
     inputs = iter(["", "y"])
-    builtins.input = lambda prompt="": next(inputs)
-    try:
-        with _Patches(list_models=lambda base_url: [{"id": "model-a"}, {"id": "model-b"}],
-                      _index_model_sizes=lambda d: {"by_key": {}, "by_repo": {}}):
-            model, _ = M.choose_model_interactive("http://x", "nonexistent-default")
-            check("choose_model_default_not_in_list_uses_first", model == "model-a")
-    finally:
-        builtins.input = real_input
+    with _Patches(input=lambda prompt="": next(inputs), list_models=lambda base_url: [{"id": "model-a"}, {"id": "model-b"}],
+                  _index_model_sizes=lambda d: {"by_key": {}, "by_repo": {}}):
+        model, _ = M.choose_model_interactive("http://x", "nonexistent-default", ctx=_Patches.cur)
+        check("choose_model_default_not_in_list_uses_first", model == "model-a")
 
 
 if __name__ == "__main__":

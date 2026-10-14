@@ -12,6 +12,7 @@ The mixin expects from the host class: `_add_system`, `_busy`,
 AssistantWindow.__init__.
 """
 import gui_i18n
+from seams import widget_part
 from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import (
     QHBoxLayout, QLabel, QListWidget, QPushButton, QVBoxLayout, QWidget,
@@ -250,7 +251,7 @@ class TaskQueueMixin:
         self._turn_cancelled = False
         self._refresh_queue_ui()
         # Defer one event-loop tick so the just-finished worker is fully torn down.
-        QTimer.singleShot(0, lambda t=nxt["text"]: self._dispatch_queued(t))
+        widget_part(self, "singleShot", QTimer.singleShot)(0, lambda t=nxt["text"]: self._dispatch_queued(t))
 
     def _dispatch_queued(self, text):
         """Run a queued task. Separate from _dispatch_user_text so the queue can

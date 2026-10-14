@@ -158,24 +158,20 @@ for outcome in ("ok", "not_found", "not_pending"):
 # the actual ban_user call instead of hanging/crashing on a real modal in
 # offscreen mode.
 from PyQt5.QtWidgets import QMessageBox as _QMB
-_orig_question = _QMB.question
-_QMB.question = staticmethod(lambda *a, **k: _QMB.Yes)
-try:
-    for outcome in ("ok", "not_found", "not_banned_already"):
-        bot = _FakeBot(ban_outcome=outcome)
-        tab = _tab_with_one_row(bot)
-        try:
-            tab._ban_selected()
-            crashed = False
-        except Exception as e:
-            crashed = True
-            detail = repr(e)
-        check(f"_ban_selected does not crash on ban_user -> {outcome!r}",
-              not crashed, detail if crashed else "")
-        check(f"_ban_selected passes allow_from_any_status=True (outcome {outcome!r})",
-              bot.ban_calls == [(42, True)], bot.ban_calls)
-finally:
-    _QMB.question = _orig_question
+for outcome in ("ok", "not_found", "not_banned_already"):
+    bot = _FakeBot(ban_outcome=outcome)
+    tab = _tab_with_one_row(bot)
+    tab.parts = {"question": lambda *a, **k: _QMB.Yes}
+    try:
+        tab._ban_selected()
+        crashed = False
+    except Exception as e:
+        crashed = True
+        detail = repr(e)
+    check(f"_ban_selected does not crash on ban_user -> {outcome!r}",
+          not crashed, detail if crashed else "")
+    check(f"_ban_selected passes allow_from_any_status=True (outcome {outcome!r})",
+          bot.ban_calls == [(42, True)], bot.ban_calls)
 
 print("=" * 70)
 print("REAL BOT: override actually lifts a banned/rejected status")

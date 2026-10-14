@@ -138,15 +138,13 @@ def _close(w):
 def test_layout_menu_with_presets():
     w = _win()
     # save two presets so the Load/Delete submenus are built
-    QInputDialog.getText = staticmethod(lambda *a, **k: ("p1", True))
+    w.parts = {"getText": lambda *a, **k: ("p1", True), "menu_exec": lambda *a, **k: None}
     w._save_preset()
-    QInputDialog.getText = staticmethod(lambda *a, **k: ("p2", True))
+    w.parts["getText"] = lambda *a, **k: ("p2", True)
     w._save_preset()
-    om = gui.QMenu.exec_; gui.QMenu.exec_ = lambda self, *a, **k: None
     try:
         w._open_layout_menu(); check("layout_menu_presets", "p1" in w._preset_names())
     finally:
-        gui.QMenu.exec_ = om
         w._delete_preset("p1"); w._delete_preset("p2")
     _close(w)
 

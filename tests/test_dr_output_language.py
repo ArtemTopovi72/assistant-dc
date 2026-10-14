@@ -136,7 +136,7 @@ import tools, gui, tg_bot
 import tg_tasks
 bot_src = inspect.getsource(tg_bot) + inspect.getsource(tg_tasks)
 # Match the CALL, not the comment above it that also names run_deep_research().
-m = re.search(r"_dr\.run_deep_research\((.{0,120})", bot_src, re.S)
+m = re.search(r"_dr\.run_deep_research\)?\((.{0,120})", bot_src, re.S)
 # The bot must derive the document language from the TOPIC, not from the
 # session's RU/EN UI toggle.
 check("the Telegram bot derives the document language from the topic",

@@ -26,8 +26,7 @@ def check(name, cond, extra=""):
     else:    BAD += 1; print(f"FAIL  {name}" + (f"   ({extra})" if extra else ""))
 
 _tmp = tempfile.mkdtemp(prefix="artifacts_test_")
-A._ARTIFACTS_DB = os.path.join(_tmp, "tg_artifacts.db")
-A._instance = None   # force a fresh _ArtifactStore bound to the redirected path
+A.redirect_store(os.path.join(_tmp, "tg_artifacts.db"))
 
 
 def _mkfile(name: str, data: bytes = b"x") -> str:

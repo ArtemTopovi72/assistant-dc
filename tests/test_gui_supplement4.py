@@ -181,11 +181,8 @@ def test_mc_move_pin_export_diag():
     tab, store, e, sm = _mc()
     # _move_menu with a selection + profiles -> builds actions (stub QMenu.exec_) + _do_move
     tab._sel = e
-    om = gui.QMenu.exec_; gui.QMenu.exec_ = lambda self, *a, **k: None
-    try:
-        tab._move_menu(); check("mc_move_menu", True)
-    finally:
-        gui.QMenu.exec_ = om
+    tab.parts = {"menu_exec": lambda *a, **k: None}
+    tab._move_menu(); check("mc_move_menu", True)
     tab._do_move("other"); check("mc_do_move", True)
     # _toggle_pin on a SUMMARY entry -> early return (no change)
     tab._sel = sm

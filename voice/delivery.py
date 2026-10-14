@@ -8,7 +8,7 @@ finish(): a one-sentence question gets the Russian IK-3 contour (voice/prosody.p
 Explicit control: ctx.delivery_emotion ("" = plain, None = automatic), ctx.delivery_ik3 (False = off).
 Off switch: EMOTION_DELIVERY=0.  Cloned voices and the standard voice (actor DC) are touched; failures fall back to plain speech.
 """
-from seams import choice
+from seams import choice, dep
 import logging
 import os
 
@@ -59,7 +59,7 @@ def finish(ctx, wav: str, text: str) -> str:
     try:
         import prosody
         if getattr(ctx, "delivery_ik3", None) or prosody.one_question(text):
-            return prosody.question_shape(ctx, wav, text)
+            return dep(ctx, "question_shape", prosody.question_shape)(ctx, wav, text)
     except Exception:                                            # noqa: BLE001
         logger.warning("delivery.finish failed", exc_info=True)
     return wav

@@ -119,12 +119,12 @@ check("a dropped file lands in the folder",
 
 
 # ── reset asks first ─────────────────────────────────────────────────────────
-CT.QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.Cancel)
+tab.parts = {"question": lambda *a, **k: QMessageBox.Cancel}
 tab._reset()
 check("cancelling the reset keeps the files",
       CS.sandbox_for(4242).list_dir("."))
 
-CT.QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.Yes)
+tab.parts = {"question": lambda *a, **k: QMessageBox.Yes}
 tab._reset()
 check("confirming empties the folder", not CS.sandbox_for(4242).list_dir("."))
 check("and only that folder", CS.sandbox_for(4242).root.exists())

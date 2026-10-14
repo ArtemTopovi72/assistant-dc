@@ -145,7 +145,7 @@ check("a refusal explains itself instead of reporting a server error",
 # reaches it was disabled. The note must be what a text_edit failure RETURNS.
 _after = src.split('elif category == "text_edit":', 1)
 check("the note is returned from the text_edit failure branch itself",
-      len(_after) == 2 and "return image_mod._NO_LAYOUT_NOTE" in
+      len(_after) == 2 and "return _image(ctx)._NO_LAYOUT_NOTE" in
       _after[1].split("else:")[0], "the branch no longer reaches the note")
 check("the refusal tells the model not to reach for another edit tool",
       "Do not call another edit tool." in I._NO_LAYOUT_NOTE)

@@ -138,13 +138,10 @@ def test_new_memory_profile_combo_index():
     w.graph = object(); w.base_state = {"messages": []}; w.stack.setCurrentWidget(w.dashboard); w._set_busy(False)
     # make the new profile appear in the combo so findText>=0 -> setCurrentIndex
     w._list_memory_profiles = lambda: ["default", "ProfNP"]
-    _og = QInputDialog.getText
-    QInputDialog.getText = staticmethod(lambda *a, **k: ("ProfNP", True))
-    try:
-        w._new_memory_profile()
-        check("new_profile_combo_idx", w.mem_combo.findText("ProfNP") >= 0)
-    finally:
-        QInputDialog.getText = _og
+    w.parts = {"getText": lambda *a, **k: ("ProfNP", True)}
+    w._new_memory_profile()
+    check("new_profile_combo_idx", w.mem_combo.findText("ProfNP") >= 0)
+    w.parts = {}
     for a in ("worker", "compact_worker", "redraw_worker", "model_switch_worker", "research_worker",
               "_lib_build_worker", "_scan_worker", "transcribe_worker", "recorder", "cap", "vad_listener"):
         setattr(w, a, None)

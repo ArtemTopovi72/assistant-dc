@@ -21,12 +21,12 @@ class Bot:
     replaces the download and the upload, not a URL-taking _api_post."""
     def __init__(self, photo_ok=True):
         self.calls, self.photo_ok = [], photo_ok
-        C._photo_bytes = lambda url: b"jpeg:" + url.encode()
+        self.deps = types.SimpleNamespace(_photo_bytes=lambda url: b"jpeg:" + url.encode(), _upload=self._up)
 
-        def _up(bot, chat_id, img, cap, kb_json):
-            bot.calls.append(("sendPhoto", {"photo": img, "caption": cap, "reply_markup": kb_json}))
-            return bot.photo_ok
-        C._upload = _up
+    @staticmethod
+    def _up(bot, chat_id, img, cap, kb_json):
+        bot.calls.append(("sendPhoto", {"photo": img, "caption": cap, "reply_markup": kb_json}))
+        return bot.photo_ok
 
     def _send_text(self, chat_id, text, parse_mode=None, keyboard=None):
         self.calls.append(("sendMessage", {"text": text, "reply_markup": keyboard}))

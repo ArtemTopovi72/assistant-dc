@@ -6,7 +6,7 @@ KV cache quantization and Flash Attention have no CLI flags — they are collect
 in the config and either sent via the HTTP API (if available) or returned as
 manual instructions for the user.
 """
-from seams import dep
+from seams import dep, module
 import logging
 import os
 import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
@@ -56,7 +56,7 @@ def _virtual_yaml_path(model_id: str):
     return p if p.exists() else None
 
 
-def _parse_virtual_yaml(yaml_path: Path) -> dict:
+def _parse_virtual_yaml(yaml_path: Path, modules=None) -> dict:
     """Parse the few fields we need from a virtual model.yaml.
 
     Returns {'base': <relative gguf path>, 'reasoning': bool, 'enable_thinking': bool}.
@@ -65,7 +65,7 @@ def _parse_virtual_yaml(yaml_path: Path) -> dict:
     out = {"base": "", "reasoning": None, "enable_thinking": None}
     text = yaml_path.read_text(encoding="utf-8")
     try:
-        import yaml  # type: ignore
+        yaml = module(modules or {}, "yaml")
         data = yaml.safe_load(text) or {}
         out["base"] = (data.get("base") or "").strip()
         mo = data.get("metadataOverrides") or {}

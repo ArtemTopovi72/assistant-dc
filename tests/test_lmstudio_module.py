@@ -92,19 +92,9 @@ def test_virtual_yaml_path_and_parse():
     check("parse_virtual_yaml_enable_thinking_false", out["enable_thinking"] is False)
 
     # force the fallback line-parser path by making PyYAML import fail
-    import builtins
-    real_import = builtins.__import__
-    def fail_yaml(name, *a, **k):
-        if name == "yaml":
-            raise ImportError("no yaml")
-        return real_import(name, *a, **k)
-    builtins.__import__ = fail_yaml
-    try:
-        out2 = L._parse_virtual_yaml(yaml_path)
-        check("parse_virtual_yaml_fallback_parser_base", out2["base"] == "Pub/Folder/Folder-Q8_0.gguf")
-        check("parse_virtual_yaml_fallback_parser_reasoning", out2["reasoning"] is False)
-    finally:
-        builtins.__import__ = real_import
+    out2 = L._parse_virtual_yaml(yaml_path, modules={"yaml": None})
+    check("parse_virtual_yaml_fallback_parser_base", out2["base"] == "Pub/Folder/Folder-Q8_0.gguf")
+    check("parse_virtual_yaml_fallback_parser_reasoning", out2["reasoning"] is False)
 
     minimal_yaml = _TMP / "minimal.yaml"
     minimal_yaml.write_text("base: X/Y/Y-Q4_0.gguf\n", encoding="utf-8")

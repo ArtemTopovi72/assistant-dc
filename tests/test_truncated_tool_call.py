@@ -61,8 +61,6 @@ def fn(i):
 import types, tempfile
 from pathlib import Path
 import sandbox_access as _sa
-_orig_may = _sa.may_run_code
-_sa.may_run_code = lambda u: True
 from fakes import reads   # the model reads the request as code to run (agent/intent.py)
 _READ = reads(read=lambda t: {"needs_tool": True, "wants": ["run_code"]} if "python script" in t else None)
 def _run_with_sandbox(fn, user):
@@ -73,13 +71,11 @@ def _run_with_sandbox(fn, user):
     c.intent_read = _READ["intent_read"]
     c.sandbox = types.SimpleNamespace(root=Path(tempfile.mkdtemp()), user_id=1)
     c.sandbox_user = None
+    c.deps = types.SimpleNamespace(may_run_code=lambda u: True)
     g = graph_mod.build_graph(c)
     st = H._base_state(); st["user_input"] = user
     return c, g.invoke(st)
-try:
-    _, final = _run_with_sandbox(fn, user="make a proper flowchart with a python script and send it")
-finally:
-    _sa.may_run_code = _orig_may
+_, final = _run_with_sandbox(fn, user="make a proper flowchart with a python script and send it")
 msgs = final["messages"]
 tool_msgs = [m for m in msgs if m.get("role") == "tool"]
 check("the cut call is answered with how to write long code in parts",

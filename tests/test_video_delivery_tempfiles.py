@@ -155,36 +155,31 @@ try:
     # already stored. A render is minutes of GPU — it must not be destroyed.
     COMFY_OUT = tempfile.mkdtemp(prefix="comfyout_")
     KEEP = tempfile.mkdtemp(prefix="ourout_")
-    _real_outdir = V.OUTPUT_DIR
-    V.OUTPUT_DIR = KEEP
-    try:
-        first = _make_file(os.path.join(COMFY_OUT, "h3_00001_.mp4"), 111)
-        a = V._adopt_output(first)
-        check("the first clip is adopted", os.path.exists(a) and a.startswith(KEEP), a)
+    first = _make_file(os.path.join(COMFY_OUT, "h3_00001_.mp4"), 111)
+    a = V._adopt_output(first, KEEP)
+    check("the first clip is adopted", os.path.exists(a) and a.startswith(KEEP), a)
 
-        second = _make_file(os.path.join(COMFY_OUT, "h3_00001_.mp4"), 222)
-        b = V._adopt_output(second)
-        check("a same-named second clip gets its own path", b != a, (a, b))
-        check("...and both survive", os.path.exists(a) and os.path.exists(b), (a, b))
-        check("the FIRST clip's bytes were not overwritten",
-              os.path.getsize(a) == 111, os.path.getsize(a))
-        check("the second clip has the new bytes", os.path.getsize(b) == 222,
-              os.path.getsize(b))
+    second = _make_file(os.path.join(COMFY_OUT, "h3_00001_.mp4"), 222)
+    b = V._adopt_output(second, KEEP)
+    check("a same-named second clip gets its own path", b != a, (a, b))
+    check("...and both survive", os.path.exists(a) and os.path.exists(b), (a, b))
+    check("the FIRST clip's bytes were not overwritten",
+          os.path.getsize(a) == 111, os.path.getsize(a))
+    check("the second clip has the new bytes", os.path.getsize(b) == 222,
+          os.path.getsize(b))
 
-        third = _make_file(os.path.join(COMFY_OUT, "h3_00001_.mp4"), 333)
-        c = V._adopt_output(third)
-        check("a third collision keeps counting", c not in (a, b) and os.path.exists(c), c)
-        check("...with all three intact",
-              [os.path.getsize(p) for p in (a, b, c)] == [111, 222, 333],
-              [os.path.getsize(p) for p in (a, b, c)])
+    third = _make_file(os.path.join(COMFY_OUT, "h3_00001_.mp4"), 333)
+    c = V._adopt_output(third, KEEP)
+    check("a third collision keeps counting", c not in (a, b) and os.path.exists(c), c)
+    check("...with all three intact",
+          [os.path.getsize(p) for p in (a, b, c)] == [111, 222, 333],
+          [os.path.getsize(p) for p in (a, b, c)])
 
-        # A clip already inside our own directory must be used in place, not
-        # duplicated on every call.
-        inplace = _make_file(os.path.join(KEEP, "already_here.mp4"), 44)
-        check("a clip already in OUTPUT_DIR is returned as-is",
-              V._adopt_output(inplace) == inplace)
-    finally:
-        V.OUTPUT_DIR = _real_outdir
+    # A clip already inside our own directory must be used in place, not
+    # duplicated on every call.
+    inplace = _make_file(os.path.join(KEEP, "already_here.mp4"), 44)
+    check("a clip already in OUTPUT_DIR is returned as-is",
+          V._adopt_output(inplace, KEEP) == inplace)
 
 finally:
     pass

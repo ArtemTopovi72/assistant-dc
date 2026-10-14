@@ -2,6 +2,7 @@
 are kept for triage, complaints file the previous turn, tests never write
 into the live folder."""
 import os, sys, json
+from unittest import mock
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pytest
 import turn_audit as TA
@@ -22,9 +23,10 @@ class _Ctx:
 
 
 @pytest.fixture
-def traces(tmp_path, monkeypatch):
-    monkeypatch.setattr(TA, "TRACE_DIR", tmp_path)
-    monkeypatch.setenv("FAILED_TURNS_DIR", str(tmp_path))
+def traces(tmp_path, request):
+    patcher = mock.patch.dict(os.environ, {"FAILED_TURNS_DIR": str(tmp_path)})
+    patcher.start()
+    request.addfinalizer(patcher.stop)
     TA._LAST.clear()
     return tmp_path
 

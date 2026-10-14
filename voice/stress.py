@@ -167,6 +167,7 @@ class BilingualAccentor:
 
     _silero = None
     _silero_failed_at = 0.0
+    silero = None           # an accentor handed to one instance (a suite's stand-in); None = the shared, lazily loaded one
 
     def _silero_homographs(self, ru, out: str) -> str:
         """On a homograph (замо́к/за́мок, мука́/му́ка) silero-stress reads the
@@ -175,7 +176,7 @@ class BilingualAccentor:
         a homograph takes silero's stress, when silero picks one of its forms.
         Bench: 20/25 RUAccent, 21/25 silero, see the test."""
         try:
-            if BilingualAccentor._silero is None:
+            if self.silero is None and BilingualAccentor._silero is None:
                 if (BilingualAccentor._silero_failed_at
                         and time.monotonic() - BilingualAccentor._silero_failed_at < LOAD_RETRY_S):
                     return out
@@ -185,7 +186,7 @@ class BilingualAccentor:
                 except Exception:
                     BilingualAccentor._silero_failed_at = time.monotonic()
                     raise
-            sil = BilingualAccentor._silero(out.replace("+", ""))
+            sil = (self.silero or BilingualAccentor._silero)(out.replace("+", ""))
         except Exception as exc:
             logger.debug("silero-stress unavailable: %s", exc)
             return out

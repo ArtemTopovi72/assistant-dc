@@ -73,7 +73,7 @@ check("an unreadable path is passed through rather than raising",
 import inspect
 src = inspect.getsource(audio.synth_single_segment)
 check("the reference is trimmed BEFORE it is transcribed",
-      src.index("trim_ref_to_cap(") < src.index("transcribe_audio_file("), src)
+      src.index("trim_ref_to_cap(") < src.index("\"transcribe_audio_file\""), src)
 
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)

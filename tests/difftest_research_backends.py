@@ -133,7 +133,8 @@ def main():
 
     # The in-process side runs the same stand-in the service will be given.
     import importlib
-    sys.modules["deep_research"] = importlib.import_module(FAKE_DR)
+    from unittest import mock
+    mock.patch.dict(sys.modules, {"deep_research": importlib.import_module(FAKE_DR)}).start()
 
     port = free_port()
     url = f"http://127.0.0.1:{port}"

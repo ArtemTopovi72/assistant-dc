@@ -416,7 +416,7 @@ check("inflight is back to zero", llm.inflight() == 0)
 check("a call made during the wait sees the card as claimed",
       "_excl_model = model" in read("imaging/comfy_client.py").split("wait_no_inflight")[0].split("_claim_card")[-1])
 check("every attempt of a call re-checks the card",
-      "if attempt:\n                _wait_for_free_card(ctx)" in read("agent/llm.py"))
+      "if attempt:\n                dep(ctx, \"_wait_for_free_card\", _wait_for_free_card)(ctx)" in read("agent/llm.py"))
 reset()
 
 

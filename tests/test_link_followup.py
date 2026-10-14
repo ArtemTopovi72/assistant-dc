@@ -2,8 +2,12 @@ import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import tg_links
 
-tg_links.read_link = lambda url: {"title": "Казань", "text": "шапка\n" * 2000 + "Город был основан в 1005 году."}
-ctx = tg_links.link_context("а когда основан город?", url="https://ru.wikipedia.org/wiki/Казань")
+import types
+_crawl = types.SimpleNamespace(
+    _acquire_page=lambda *a: {"page": {"title": "Казань", "text": "шапка\n" * 2000 + "Город был основан в 1005 году."}},
+    _fetch_page=lambda u: ("", None))
+ctx = tg_links.link_context("а когда основан город?", url="https://ru.wikipedia.org/wiki/Казань",
+                            modules={"dr_crawl": _crawl})
 assert "1005" in ctx and "linked earlier" in ctx, ctx[:200]
 import inspect, tg_resolve
 assert "url=sess.last_link" in inspect.getsource(tg_resolve)

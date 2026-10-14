@@ -23,7 +23,8 @@ def _spy(url, *a, **kw):
         try: _CAP["r"] = r.json()
         except Exception: _CAP["r"] = None
     return r
-llm_mod.requests.post = _spy
+from unittest import mock
+mock.patch.object(llm_mod.requests, 'post', _spy).start()
 
 class C:
     def __init__(s, nt): s.model_name=MODEL_NAME; s.no_think=nt; s.api_lock=threading.Lock(); s.last_api_call_time=0.0; s.api_min_interval=0.2

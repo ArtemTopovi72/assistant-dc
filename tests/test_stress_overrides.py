@@ -155,7 +155,6 @@ def test_stress_overrides_apply():
 
 
 def test_get_overrides_singleton():
-    SOV._INSTANCE = None
     inst1 = SOV.get_overrides()
     inst2 = SOV.get_overrides()
     check("get_overrides_singleton_same_instance", inst1 is inst2)

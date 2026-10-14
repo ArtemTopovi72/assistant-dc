@@ -152,6 +152,9 @@ class QueueMixin:
             except Exception:
                 tg_bot.logger.exception("watchdog iteration failed")
 
+    def _inflight_path(self):
+        return tg_bot._INFLIGHT_FILE
+
     def _write_inflight(self) -> None:
         """Persist the set of tasks currently executing OR merely queued.
 
@@ -173,7 +176,7 @@ class QueueMixin:
             # Ordered: the snapshot is taken under the lock but written after it,
             # so an older snapshot could land last and bring back a finished task
             # (a crash then told its user it was "interrupted").
-            path = tg_bot._INFLIGHT_FILE
+            path = self._inflight_path()
             with _INFLIGHT_IO:
                 if seq < _INFLIGHT_SEQ[1]:
                     return

@@ -62,7 +62,7 @@ check("the corrective tells the model an outline is not a file",
       "An outline in chat is not a file" in src or
       "outline in chat is not a file" in src)
 check("there is a last resort that builds it from the topic",
-      'execute_tool(ctx, state, "create_presentation"' in src)
+      'run_tool(ctx)(ctx, state, "create_presentation"' in src)
 check("the guard sits with the other fabrication guards",
       src.index("deck_corrective_sent") > src.index("memory_corrective_sent"))
 

@@ -112,18 +112,18 @@ def test_download_falls_through_repos_and_lands_in_place(base):
     catalog = [m]
     hub = _fake_hub({"good/repo": ["split_files/vae/a_alt.safetensors"]},
               fail_repos={"dead/repo"})
-    st, detail = C.download_models(("image",), lambda *_: None, base, catalog, hub)
+    st, detail = C.download_models(("image",), lambda *_: None, base, catalog, hub, free_gb=500)
     assert st == "ok", detail
     assert (base / "models" / "vae" / "a.safetensors").read_bytes() == b"weights"
     assert C.missing_models(("image",), base, catalog) == []
-    assert C.download_models(("image",), lambda *_: None, base, catalog, hub)[0] == "ok"   # rerun: nothing to do
+    assert C.download_models(("image",), lambda *_: None, base, catalog, hub, free_gb=500)[0] == "ok"   # rerun: nothing to do
 
 
 def test_unfindable_file_is_a_warning_not_a_crash(base):
     m = ("music", "x", "nowhere.safetensors", ["r/r"], [], 0.001)
     catalog = [m]
     hub = _fake_hub({"r/r": ["other.bin"]})
-    st, detail = C.download_models(("music",), lambda *_: None, base, catalog, hub)
+    st, detail = C.download_models(("music",), lambda *_: None, base, catalog, hub, free_gb=500)
     assert st == "warn" and "nowhere.safetensors" in detail
 
 
@@ -131,7 +131,7 @@ def test_not_enough_disk_is_reported_before_downloading(base):
     m = ("video", "x", "huge.safetensors", ["r/r"], [], 10 ** 6)
     catalog = [m]
     hub = _fake_hub({})
-    st, detail = C.download_models(("video",), lambda *_: None, base, catalog, hub)
+    st, detail = C.download_models(("video",), lambda *_: None, base, catalog, hub, free_gb=500)
     assert st == "warn" and "GB" in detail and "--media" in detail
     assert not (base / "models" / "x").exists()
 

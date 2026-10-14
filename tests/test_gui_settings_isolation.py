@@ -44,9 +44,9 @@ def check(name, cond, detail=""):
     else:    BAD += 1; print(f"FAIL  {name}   {detail}")
 
 
-def _live_fingerprint():
+def _live_fingerprint(scope=None):
     """Hash of the real store's telegram keys. Never print the values."""
-    s = QSettings(*gui._TG_SETTINGS_SCOPE)
+    s = QSettings(*(scope or gui._TG_SETTINGS_SCOPE))
     blob = "|".join(f"{k}={s.value(k)!r}" for k in sorted(s.allKeys())
                     if k.startswith("telegram/"))
     return hashlib.sha256(blob.encode("utf-8", "replace")).hexdigest()
@@ -84,12 +84,8 @@ _SENTINEL = "999999:TEST-ONLY-NOT-A-REAL-TOKEN"
 tab = gui.TelegramTab(_Host())
 tab.token_in.setText(_SENTINEL)
 tab.admin_ids_in.setText("424242")
-_real = T.TelegramBot
-T.TelegramBot = _FakeBot
-try:
-    tab._start()
-finally:
-    T.TelegramBot = _real
+tab.parts = {"TelegramBot": _FakeBot}
+tab._start()
 
 check("the live store is byte-identical after a redirected _start()",
       _live_fingerprint() == before)
@@ -128,32 +124,23 @@ gui.redirect_settings(_DIR)
 # drive DOES move the fingerprint. This is the old, broken behaviour reproduced
 # in a sandbox — the real registry is never involved.
 _real_scope = gui._TG_SETTINGS_SCOPE
-# The scope lives in gui_telegram_tab, and _tg_settings() reads it THERE.
-# Assigning gui._TG_SETTINGS_SCOPE would rebind only this module's copy and
-# leave the real ("AssistantApp", "TelegramBot") scope live — i.e. the very
-# token-clobbering this suite exists to prevent.
-import gui_telegram_tab as _TGT
-_TGT._TG_SETTINGS_SCOPE = ("AssistantAppTESTSCOPE", "TelegramBotTEST")
-gui._TG_SETTINGS_SCOPE = ("AssistantAppTESTSCOPE", "TelegramBotTEST")
-gui.redirect_settings(None)
+# The scope lives in gui_telegram_tab, and _tg_settings() reads it THERE; only
+# redirect_settings(scope=) moves the one that counts.
+_SCRATCH = ("AssistantAppTESTSCOPE", "TelegramBotTEST")
+gui.redirect_settings(None, scope=_SCRATCH)
 try:
-    _sandbox_before = _live_fingerprint()
+    _sandbox_before = _live_fingerprint(_SCRATCH)
     t3 = gui.TelegramTab(_Host())
     t3.token_in.setText("111111:SANDBOX")
-    T.TelegramBot = _FakeBot
-    try:
-        t3._start()
-    finally:
-        T.TelegramBot = _real
+    t3.parts = {"TelegramBot": _FakeBot}
+    t3._start()
     t3._settings.sync()
     check("without the redirect the same drive DOES rewrite the store "
           "(so the guard above is real)",
-          _live_fingerprint() != _sandbox_before)
-    QSettings(*gui._TG_SETTINGS_SCOPE).clear()
+          _live_fingerprint(_SCRATCH) != _sandbox_before)
+    QSettings(*_SCRATCH).clear()
 finally:
-    _TGT._TG_SETTINGS_SCOPE = _real_scope
-    gui._TG_SETTINGS_SCOPE = _real_scope
-    gui.redirect_settings(_DIR)
+    gui.redirect_settings(_DIR, scope=_real_scope)
 
 
 print()
@@ -195,6 +182,7 @@ check("every TelegramTab suite redirects settings BEFORE building the tab",
 # QSettings("AssistantApp", ...) back into __init__ would defeat every check
 # above, and the AST scan would keep passing.
 # TelegramTab lives in gui_telegram_tab.py, so read ITS source.
+import gui_telegram_tab as _TGT
 src = Path(_TGT.__file__).read_text(encoding="utf-8", errors="replace")
 init_src = src.split("class TelegramTab", 1)[1].split("\n    def _build_ui", 1)[0]
 check("TelegramTab.__init__ uses the _tg_settings() factory",

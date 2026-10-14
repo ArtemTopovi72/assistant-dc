@@ -37,7 +37,8 @@ def _spy_post(url, *a, **kw):
         try: _CAP["resp"] = resp.json()
         except Exception: _CAP["resp"] = None
     return resp
-llm_mod.requests.post = _spy_post
+from unittest import mock
+mock.patch.object(llm_mod.requests, 'post', _spy_post).start()
 
 
 class MiniCtx:

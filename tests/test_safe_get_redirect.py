@@ -12,8 +12,8 @@ def get(url, **k):
     calls.append(url)
     return R("http://127.0.0.1:8000/view") if "evil" in url else R()
 
-dr_urls._is_safe_public_url = lambda u: "127.0.0.1" not in u
-assert dr_urls.safe_get("https://evil.example/a", getter=get) is None
+safe = lambda u: "127.0.0.1" not in u
+assert dr_urls.safe_get("https://evil.example/a", getter=get, is_safe=safe) is None
 assert calls == ["https://evil.example/a"], calls
-assert dr_urls.safe_get("https://ok.example/", getter=get) is not None
+assert dr_urls.safe_get("https://ok.example/", getter=get, is_safe=safe) is not None
 print("PASS safe_get redirect")

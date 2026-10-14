@@ -30,7 +30,7 @@ import lora_training as LT
 _STORE_DIR = tempfile.mkdtemp(prefix="tgtest_loracollect_store_")
 C.redirect_store(os.path.join(_STORE_DIR, "characters.json"))
 _DATASET_ROOT = tempfile.mkdtemp(prefix="tgtest_loracollect_ds_")
-LT.DATASET_ROOT = __import__("pathlib").Path(_DATASET_ROOT)
+LT.redirect_dataset_root(_DATASET_ROOT)
 
 RESULTS = []
 

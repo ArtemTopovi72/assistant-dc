@@ -9,7 +9,7 @@ dicts (as facts.json load does) and memory_text has a defensive isinstance guard
 
 Run: venv/Scripts/python.exe tests/test_memory_persistence_fault.py
 """
-import os, sys, threading, json, tempfile
+import types, os, sys, threading, json, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
@@ -78,12 +78,9 @@ def test_atomic_write_survives_replace_permissionerror():
         if calls["n"] < 3:               # fail twice, succeed on the 3rd (retry path)
             raise PermissionError("WinError 32: file in use")
         return real_replace(src, dst)
-    os.replace = flaky_replace
-    try:
-        _atomic_write_json(d / "x.json", {"a": 1})
-        assert json.loads((d / "x.json").read_text(encoding="utf-8")) == {"a": 1}
-    finally:
-        os.replace = real_replace
+    ctx = types.SimpleNamespace(deps=types.SimpleNamespace(replace=flaky_replace))
+    _atomic_write_json(d / "x.json", {"a": 1}, ctx=ctx)
+    assert json.loads((d / "x.json").read_text(encoding="utf-8")) == {"a": 1}
     assert calls["n"] == 3, f"retry path not exercised ({calls['n']})"
     # no temp files left behind
     assert not list(d.glob("*.tmp")), "atomic write left a temp file behind"

@@ -34,15 +34,18 @@ import config
 
 import image as image_mod
 import tool_graph
-from image import (
-    _INPAINT_FAILURE, classify_edit_intent,
-    inpaint_region_with_comfy, route_edit_request,
-)
 from tool_context import _remember, _set_current_image
 
 from seams import dep, module, intent_read, text_model, vision_model, yes_no
 
 logger = logging.getLogger("assistant.tools")
+
+
+def _image(ctx):
+    """The image engine for this turn: `ctx.image_engine` when one was handed in (a suite's
+    stand-in renderer), the `image` module otherwise."""
+    return getattr(ctx, "image_engine", None) or image_mod
+
 
 def _is_absence_check(check: str, ctx=None) -> bool:
     """The inspect_image check asks whether something is gone or still there
@@ -248,12 +251,12 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
     # Region-aware: also catches result-style phrasings ("bare neck, no scarf",
     # "без шарфа") and take-off/сними verbs the plain verb regex misses —
     # those get routed as "change the scarf to ..." and come back recoloured.
-    removal = image_mod._is_removal_of(instructions, region, ctx=ctx)
+    removal = _image(ctx)._is_removal_of(instructions, region, ctx=ctx)
     # A region that names an ABSENCE ("the area where the vase was") is not a
     # thing to remove: the thing is already gone. The
     # model re-ran a removal on that phrase after a good one; grounding
     # picked a patch of wall and the delivered picture got a pasted light square.
-    if removal and image_mod._item_attributes(ctx, region).get("former_place") is True:
+    if removal and _image(ctx)._item_attributes(ctx, region).get("former_place") is True:
         return ("[TOOL ERROR] region names where something WAS, so it is already removed. "
                 "Do not remove again: look at the current picture (inspect_image) and "
                 "answer the user.")
@@ -261,8 +264,8 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
     # don't run the post-removal check (whole-frame mode, contained non-route edits)
     # can't inherit it and falsely report failure on a successful edit.
     if hasattr(image_mod, "_REMOVAL_VERIFY"):
-        image_mod._REMOVAL_VERIFY["incomplete"] = False
-        image_mod._REMOVAL_VERIFY["target"] = ""
+        _image(ctx)._REMOVAL_VERIFY["incomplete"] = False
+        _image(ctx)._REMOVAL_VERIFY["target"] = ""
 
     # Short-circuit for additive instructions: "add/insert/place X in/above/through
     # the Y" with an explicit region Y. Building synth = "change the sky to fried
@@ -276,7 +279,7 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
     # «сделай красный круг зелёным» came as region='red circle', instructions='a green
     # circle' and a second, green circle was added next to the red one.
     if (not removal and not manual_whole and region
-            and classify_edit_intent(instructions, ctx=ctx) == "object_insert"
+            and _image(ctx).classify_edit_intent(instructions, ctx=ctx) == "object_insert"
             and yes_no(ctx)(
                 "An image edit names a part of the picture and what to do there:\n{text}\n\n"
                 "Does it ask to ADD a new object while that part stays as it is (not to "
@@ -287,7 +290,7 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
                     "anchor=%r instructions=%r source=%s", region, instructions[:80], source)
         synth = (instructions if region.lower() in instructions.lower()
                  else f"{instructions} ({region})")
-        category, new_path = route_edit_request(ctx, source, synth)
+        category, new_path = _image(ctx).route_edit_request(ctx, source, synth)
         edit_path = f"route_edit_request:{category}:additive"
         # skip the rest of the routing block; fall through to delivery section
     else:
@@ -302,12 +305,12 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
             synth = f"change the background to {instructions}"
         else:
             synth = f"change the {region} to {instructions}"
-        category = classify_edit_intent(synth, ctx=ctx)
+        category = _image(ctx).classify_edit_intent(synth, ctx=ctx)
         ctx.set_stage("Removing from the picture" if removal else "Editing the picture")
         logger.info("Tool: inpaint_image(region=%r, instructions=%r, removal=%s) -> intent=%s, source=%s",
                     region, instructions[:80], removal, category, source)
 
-        _has_layout = bool(image_mod.load_layout_for(source))
+        _has_layout = bool(_image(ctx).load_layout_for(source))
         import image_lettering_remove as _lett
         _lettering_out = None
         if removal and not _has_layout and _lett.is_lettering_removal(region, instructions, ctx=ctx):
@@ -326,13 +329,13 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
             # and nothing to re-imagine. Handled before every generative branch
             # below, including the layout one: re-rendering a picture to grey
             # returned a different subject, in colour.
-            new_path = image_mod.convert_colour(source, instructions or synth)
+            new_path = _image(ctx).convert_colour(source, instructions or synth)
             edit_path = "convert_colour"
-        elif classify_edit_intent(instructions or "", ctx=ctx) == "transform":
+        elif _image(ctx).classify_edit_intent(instructions or "", ctx=ctx) == "transform":
             import image_router
             new_path = image_router.transform_image(source, instructions, ctx=ctx)
             edit_path = "transform"
-        elif category in ("text_edit", "text_add") or (_has_layout and category in image_mod._LAYOUT_EDITABLE):
+        elif category in ("text_edit", "text_add") or (_has_layout and category in _image(ctx)._LAYOUT_EDITABLE):
             # A picture WE composed is edited through its boxes, and this branch
             # runs BEFORE the FireRed category list and before whole-frame mode.
             # Both of those repaint pixels, and repainting re-imagines whatever it
@@ -341,13 +344,13 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
             # for and redraws the scene from the same seed. The whole-frame toggle
             # is deliberately overridden — it chooses between renderers, and the
             # question here is not which renderer.
-            _cat, new_path = route_edit_request(ctx, source, synth)
+            _cat, new_path = _image(ctx).route_edit_request(ctx, source, synth)
             edit_path = f"route_edit_request:{_cat}"
         elif manual_whole:
             # GUI "Whole frame" switch ON: bypass the category router and every masked
             # pipeline; the whole image goes through the FireRed instruction edit.
             edit_path = "inpaint_region_with_comfy:whole-frame-mode"
-            new_path = inpaint_region_with_comfy(ctx, source, region, instructions,
+            new_path = _image(ctx).inpaint_region_with_comfy(ctx, source, region, instructions,
                                                  removal=removal, engine=engine)
         elif category == "style_transfer":
             # A style change (anime/cartoon/oil painting/...) applies to the WHOLE
@@ -360,15 +363,15 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
             # empty region here forces the whole-frame branch inside
             # inpaint_region_with_comfy (no segmentation, no crop, no composite).
             edit_path = "inpaint_region_with_comfy:style-whole-frame"
-            new_path = inpaint_region_with_comfy(ctx, source, "", instructions,
+            new_path = _image(ctx).inpaint_region_with_comfy(ctx, source, "", instructions,
                                                  removal=removal, engine=engine)
         elif category in ("subject_edit", "face_edit", "clothing_edit", "product_edit",
                           "multi_op"):
             edit_path = "inpaint_region_with_comfy"
-            new_path = inpaint_region_with_comfy(ctx, source, region, instructions,
+            new_path = _image(ctx).inpaint_region_with_comfy(ctx, source, region, instructions,
                                                  removal=removal, engine=engine)
         else:
-            _cat, new_path = route_edit_request(ctx, source, synth)
+            _cat, new_path = _image(ctx).route_edit_request(ctx, source, synth)
             edit_path = f"route_edit_request:{_cat}"
 
     # AGENT/UI BOUNDARY: this is the exact object handed back to the agent and then
@@ -377,7 +380,7 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
     # cropped working artifact can never be surfaced as a final result.
     logger.info("Tool: inpaint_image DELIVERY [BUILD_ID=%s] edit_path=%s source=%s -> returned=%s",
                 getattr(image_mod, "IMAGE_BUILD_ID", "?"), edit_path, source, new_path)
-    image_mod.log_edit_decision(
+    _image(ctx).log_edit_decision(
         request=f"region={region!r} instructions={instructions!r}",
         classifier=category, tool=f"inpaint_image -> {edit_path}",
         workflow=("contained-firered / firered fallback"
@@ -385,10 +388,10 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
                   else "route_edit_request specialized pipeline"),
         returned_file=new_path, source=source,
         extra={"removal": removal})
-    new_path = image_mod.assert_deliverable(new_path, where="tools._handle_inpaint_image",
+    new_path = _image(ctx).assert_deliverable(new_path, where="tools._handle_inpaint_image",
                                             source_path=source)
     if not new_path or not os.path.exists(new_path):
-        failure = _INPAINT_FAILURE.get("reason", "server_error")
+        failure = _image(ctx)._INPAINT_FAILURE.get("reason", "server_error")
         if failure == "unsupported":
             detail = (
                 f"'{category}' is not something this assistant can do any more: "
@@ -440,7 +443,7 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
             # words in it cannot be corrected by any tool we have. Say so; the
             # alternative the model would otherwise reach for (re-render the frame)
             # is precisely what produces new garbled letters and a false success.
-            return image_mod._NO_LAYOUT_NOTE
+            return _image(ctx)._NO_LAYOUT_NOTE
         else:
             detail = "the ComfyUI server failed to process the request"
         return (
@@ -474,7 +477,7 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
     verb = f"removed the {region}" if removal else f"{region} → {instructions}"
     _probs = list(getattr(image_mod, "_LAYOUT_EDIT_PROBLEMS", []) or [])
     if _probs:
-        image_mod._LAYOUT_EDIT_PROBLEMS.clear()     # reported once, for this edit
+        _image(ctx)._LAYOUT_EDIT_PROBLEMS.clear()     # reported once, for this edit
         return (
             f"Image edited ({verb}) and saved: {new_path}\n"
             "[LETTERING CHECK FAILED] The text reader still sees problems in the new "
@@ -555,16 +558,16 @@ def _handle_transfer_image(ctx, state, args: dict) -> str:
     refs = []
     for i, p in enumerate(references):
         role = None
-        if i < len(roles) and roles[i] in image_mod._ALL_ROLES:
+        if i < len(roles) and roles[i] in _image(ctx)._ALL_ROLES:
             role = roles[i]
-        refs.append(image_mod.ReferenceImage(p, role))
+        refs.append(_image(ctx).ReferenceImage(p, role))
 
     ctx.set_stage("Transferring between images")
     logger.info("Tool: transfer_image(target=%s, refs=%d, roles=%r, instr=%r)",
                 os.path.basename(target), len(refs), roles, instructions[:80])
-    new_path = dep(ctx, "plan_and_execute_transfer", image_mod.plan_and_execute_transfer)(
+    new_path = dep(ctx, "plan_and_execute_transfer", _image(ctx).plan_and_execute_transfer)(
         ctx, target, refs, instructions)
-    new_path = image_mod.assert_deliverable(new_path, where="tools._handle_transfer_image",
+    new_path = _image(ctx).assert_deliverable(new_path, where="tools._handle_transfer_image",
                                             source_path=target)
     if not new_path or not os.path.exists(new_path):
         return ("[TOOL ERROR] Could not complete the transfer — the editor returned no "
@@ -654,7 +657,7 @@ def _handle_fix_hands(ctx, state, args: dict) -> str:
     ctx.set_stage("Fixing the hands")
     logger.info("Tool: fix_hands(source=%s, engine=%s)", source, engine)
     try:
-        new_path = image_mod.fix_hands(ctx, source, engine=engine)
+        new_path = _image(ctx).fix_hands(ctx, source, engine=engine)
     except Exception as exc:
         logger.exception("fix_hands raised")
         return (f"[TOOL ERROR] The hand-repair pipeline failed with an internal error: {exc}. "
@@ -662,12 +665,12 @@ def _handle_fix_hands(ctx, state, args: dict) -> str:
 
     logger.info("Tool: fix_hands DELIVERY [BUILD_ID=%s] source=%s -> returned=%s",
                 getattr(image_mod, "IMAGE_BUILD_ID", "?"), source, new_path)
-    image_mod.log_edit_decision(
+    _image(ctx).log_edit_decision(
         request="fix hands/fingers", classifier="hand_repair",
         tool="fix_hands -> MeshGraphormer Hand Refiner",
         workflow="meshgraphormer depth-controlnet masked inpaint",
         returned_file=new_path, source=source, extra={})
-    new_path = image_mod.assert_deliverable(new_path, where="tools._handle_fix_hands",
+    new_path = _image(ctx).assert_deliverable(new_path, where="tools._handle_fix_hands",
                                             source_path=source)
     if not new_path or not os.path.exists(new_path):
         return ("[TOOL ERROR] Could not fix the hands — the refiner returned no result "
@@ -712,7 +715,7 @@ def _handle_fix_artifact(ctx, state, args: dict) -> str:
     logger.info("Tool: fix_artifact(region=%r, issue=%r, engine=%s) source=%s",
                 region, issue[:80], engine, source)
     try:
-        new_path = image_mod.edit_region_contained_via_firered(
+        new_path = _image(ctx).edit_region_contained_via_firered(
             ctx, source, region, instruction, protect_face=True, engine=engine)
     except Exception as exc:
         logger.exception("fix_artifact raised")
@@ -721,12 +724,12 @@ def _handle_fix_artifact(ctx, state, args: dict) -> str:
 
     logger.info("Tool: fix_artifact DELIVERY [BUILD_ID=%s] source=%s -> returned=%s",
                 getattr(image_mod, "IMAGE_BUILD_ID", "?"), source, new_path)
-    image_mod.log_edit_decision(
+    _image(ctx).log_edit_decision(
         request=f"fix artifact region={region!r} issue={issue!r}",
         classifier="artifact_repair", tool=f"fix_artifact -> {engine}",
         workflow="contained masked inpaint (Florence/SAM region + FireRed)",
         returned_file=new_path, source=source, extra={"engine": engine})
-    new_path = image_mod.assert_deliverable(new_path, where="tools._handle_fix_artifact",
+    new_path = _image(ctx).assert_deliverable(new_path, where="tools._handle_fix_artifact",
                                             source_path=source)
     if not new_path or not os.path.exists(new_path):
         return ("[TOOL ERROR] Could not fix that area — the region may not have been located, "
@@ -765,12 +768,12 @@ def _handle_find_photo(ctx, state, args: dict) -> str:
     ctx.set_stage("Finding a photo online")
     import time
     ts = int(time.time() * 1000)
-    dest = os.path.join(str(image_mod.OUTPUT_DIR), f"webphoto_{ts}.jpg")
+    dest = os.path.join(str(_image(ctx).OUTPUT_DIR), f"webphoto_{ts}.jpg")
     try:
-        image_mod.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        _image(ctx).OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     except Exception:
         logger.debug("could not create the output folder", exc_info=True)
-    photo = _search.fetch_reference_photo(ctx, query, dest, require_face=want_face)
+    photo = dep(ctx, "fetch_reference_photo", _search.fetch_reference_photo)(ctx, query, dest, require_face=want_face)
     if not photo or not os.path.exists(photo):
         return (f"[TOOL ERROR] Could not find a usable {'photo with a clear face' if want_face else 'photo'} "
                 f"for '{query}'. Tell the user no suitable photo was found; do NOT claim one was posted.")
@@ -926,7 +929,7 @@ def _handle_generate_image(ctx, state, args: dict) -> str:
     if getattr(ctx, "reference_person_mode", False) and getattr(ctx, "web_search_enabled", True):
         try:
             ctx.set_stage("Finding a reference photo")
-            ref_out, info = image_mod.generate_person_from_reference(ctx, description, seed=seed)
+            ref_out, info = _image(ctx).generate_person_from_reference(ctx, description, seed=seed)
         except Exception as exc:
             logger.warning("reference-person mode errored (%s); using text2image", exc)
             ref_out, info = None, "exception"
@@ -1029,7 +1032,7 @@ def _handle_generate_image(ctx, state, args: dict) -> str:
     gpu = _gpu_busy_error("Image generation")
     if gpu:
         return gpu
-    reason = image_mod._GENERATE_FAILURE.get("reason", "server_error")
+    reason = _image(ctx)._GENERATE_FAILURE.get("reason", "server_error")
     if reason == "refused":
         detail = ("the drawing model DECLINED this prompt — it returned its safety card "
                   "instead of a picture. Retrying the same words will be declined again. "
@@ -1730,12 +1733,12 @@ def redraw_whole_image(ctx, source: str, instructions: str):
     new_path = None
     # Which engine ACTUALLY ran, for the audit log.
     engine = ""
-    if dep(ctx, "load_layout_for", image_mod.load_layout_for)(source):
+    if dep(ctx, "load_layout_for", _image(ctx).load_layout_for)(source):
         ctx.set_stage("Redrawing from the picture's own layout")
         logger.info("Tool: redraw_image -> layout edit (Ideogram boxes): %r",
                     instructions[:80])
         try:
-            new_path = dep(ctx, "edit_via_layout", image_mod.edit_via_layout)(ctx, source, instructions)
+            new_path = dep(ctx, "edit_via_layout", _image(ctx).edit_via_layout)(ctx, source, instructions)
             engine = "edit_via_layout (Ideogram boxes, re-rendered from the stored layout)"
         except Exception:
             logger.exception("layout redraw failed for %s", source)
@@ -1778,7 +1781,7 @@ def redraw_whole_image(ctx, source: str, instructions: str):
     # fall through several engines (layout edit, whole-frame FireRed, the old model
     # controlnet, img2img) and any one of them returning a stale or scratch path
     # had nothing to catch it.
-    new_path = dep(ctx, "assert_deliverable", image_mod.assert_deliverable)(
+    new_path = dep(ctx, "assert_deliverable", _image(ctx).assert_deliverable)(
         new_path, where="tools._handle_redraw_image", source_path=source)
 
     # Whole-frame re-renders (redraw/enhance) repaint the FACE too — at low res this
@@ -1795,8 +1798,8 @@ def redraw_whole_image(ctx, source: str, instructions: str):
     # is the entire point of a style request, not an unwanted side effect to
     # undo.
     if (new_path and os.path.exists(new_path)
-            and classify_edit_intent(instructions, ctx=ctx) != "style_transfer"):
-        new_path = dep(ctx, "preserve_identity_face", image_mod.preserve_identity_face)(
+            and _image(ctx).classify_edit_intent(instructions, ctx=ctx) != "style_transfer"):
+        new_path = dep(ctx, "preserve_identity_face", _image(ctx).preserve_identity_face)(
             source, new_path, instructions=instructions, ctx=ctx)
     return new_path, engine
 
@@ -1835,20 +1838,20 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
     # reported failure while the picture was delivered anyway. Delegating here
     # (not only in route_edit_request) means the deterministic path wins even
     # when the request arrives as a "redraw".
-    if instructions and classify_edit_intent(instructions, ctx=ctx) in ("colour_convert", "transform"):
+    if instructions and _image(ctx).classify_edit_intent(instructions, ctx=ctx) in ("colour_convert", "transform"):
         from image import convert_colour
         import image_router
         ctx.set_stage("Converting the colours")
         logger.info("Tool: redraw_image -> exact pixel operation: %r", instructions[:80])
         new_path = (dep(ctx, "convert_colour", convert_colour)(source, instructions)
-                    if classify_edit_intent(instructions, ctx=ctx) == "colour_convert"
+                    if _image(ctx).classify_edit_intent(instructions, ctx=ctx) == "colour_convert"
                     else image_router.transform_image(source, instructions, ctx=ctx))
         if not new_path or not exists(new_path):
             return ("[TOOL ERROR] The operation failed (a crop to the face needs a "
                     "face the detector can find). Tell the user plainly; do NOT "
                     "claim the picture was changed.")
         _set_current_image(ctx, state, new_path)
-        if classify_edit_intent(instructions, ctx=ctx) == "transform":
+        if _image(ctx).classify_edit_intent(instructions, ctx=ctx) == "transform":
             return ("[done] The picture was rotated/mirrored/cropped exactly on its "
                     "pixels -- nothing was redrawn. The result is on screen. Briefly "
                     "confirm to the user, in their language.")
@@ -1904,7 +1907,7 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
         state["image_path"] = new_path
 
     try:
-        dep(ctx, "log_edit_decision", image_mod.log_edit_decision)(
+        dep(ctx, "log_edit_decision", _image(ctx).log_edit_decision)(
             request=f"instructions={instructions!r}",
             classifier=f"mode={mode}", tool="redraw_image",
             workflow=engine or "redraw: no engine produced a file",

@@ -45,17 +45,11 @@ def test_dark_titlebar_filter():
     # _DarkTitleBarFilter lives in gui_chrome.py and calls enable_dark_titlebar
     # as a global of THAT module (it comes from gui_common). Patch it there too:
     # the real one calls DWM ctypes and is unsafe offscreen.
-    import gui_chrome as _CHR
-    orig = _CHR.enable_dark_titlebar
-    _fake = lambda obj: calls.__setitem__("n", calls["n"] + 1)
-    _CHR.enable_dark_titlebar = gui.enable_dark_titlebar = _fake
-    try:
-        ev = QEvent(QEvent.Show)
-        filt.eventFilter(w, ev)              # first Show on a window -> darken + record hwnd
-        filt.eventFilter(w, ev)              # second time: hwnd already in _seen -> skipped
-        filt.eventFilter(w, QEvent(QEvent.Resize))   # non-Show -> ignored
-    finally:
-        _CHR.enable_dark_titlebar = gui.enable_dark_titlebar = orig
+    filt = gui._DarkTitleBarFilter(enable=lambda obj: calls.__setitem__("n", calls["n"] + 1))
+    ev = QEvent(QEvent.Show)
+    filt.eventFilter(w, ev)              # first Show on a window -> darken + record hwnd
+    filt.eventFilter(w, ev)              # second time: hwnd already in _seen -> skipped
+    filt.eventFilter(w, QEvent(QEvent.Resize))   # non-Show -> ignored
     check("dark_titlebar_filter", calls["n"] == 1)
     w.close()
 

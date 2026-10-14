@@ -187,15 +187,11 @@ print("=" * 70)
 print("MUTATION: BREAK EACH RULE, THE SUITE MUST NOTICE")
 print("=" * 70)
 
-_saved_hex = I.hex_palette
-try:
-    I.hex_palette = lambda c, limit: [str(x) for x in (c or [])][:limit]  # no normalising
-    bad = I.build_caption("bg", [I.element("x")], aesthetics="a", lighting="b",
-                          photo="c", medium="photograph", palette=["#1b1b2f"])
-    check("un-normalised hex would be caught",
-          bad["style_description"]["color_palette"] != ["#1B1B2F"])
-finally:
-    I.hex_palette = _saved_hex
+bad = I.build_caption("bg", [I.element("x")], aesthetics="a", lighting="b",
+                      photo="c", medium="photograph", palette=["#1b1b2f"],
+                      hex_palette=lambda c, limit: [str(x) for x in (c or [])][:limit])  # no normalising
+check("un-normalised hex would be caught",
+      bad["style_description"]["color_palette"] != ["#1B1B2F"])
 
 check("and normalisation is restored",
       I.build_caption("bg", [I.element("x")], palette=["#1b1b2f"])

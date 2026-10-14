@@ -30,12 +30,11 @@ RETOLD = []
 # The model's own reading is checked live: bench/fwdv_intent_live.py.
 _INTENT = {"перескажи": "sum", "перескажи кратко": "sum", "расшифруй": "text",
            "и то, и другое": "both", "расшифруй и перескажи": "both"}
-def _fake_retell(ctx, system, said, **k):
-    if system == T._FWDV_SYSTEM:
-        return '{"label": "%s"}' % _INTENT.get(said.strip().lower(), "other")
+def _fwdv_intent(text):
+    return _INTENT.get(text.strip().lower(), "other")
+def _retell(ctx, system, said, **k):
     RETOLD.append(said)
     return "Кратко: " + said[:40]
-_llm_mod.call_llm_simple = _fake_retell
 def retold_after(n_prev, timeout=4.0):
     """The transcripts retold since RETOLD had n_prev entries (thread joined)."""
     t0 = _time.time()
@@ -67,7 +66,8 @@ def make_bot(transcript="нарисуй рыжего кота"):
     bot._api_get = lambda *a, **k: {}
     bot._activity.log = lambda *a, **k: None
     bot._transcribe = lambda ctx, fid, media="voice", **kw: transcript
-    bot._get_ctx = lambda: types.SimpleNamespace()
+    bot._get_ctx = lambda: types.SimpleNamespace(text_model=_retell)
+    bot.fwdv_intent = _fwdv_intent
     # The real dispatch endpoint: _resolve_and_push ends at _backend.push(task).
     bot._backend = types.SimpleNamespace(
         push=lambda task: bot.pushed.append(task), depth=lambda: 0,
@@ -120,7 +120,9 @@ print("=" * 70)
 
 for text, want in [("перескажи", "sum"), ("расшифруй и перескажи", "both"),
                    ("", ""), ("А если бы тебя добавили? что бы сказали твои друзья?", "")]:
-    got = T._fwdv_intent(text)
+    from unittest import mock
+    with mock.patch.object(_llm_mod, "call_llm_simple", lambda ctx, system, said, **k: '{"label": "%s"}' % _INTENT.get(said.strip().lower(), "other")):
+        got = T._fwdv_intent(text)
     check(f"{text!r} -> {want!r}", got == want, f"got {got!r}")
 
 # ═════════════════════════════════════════ C. the caption is honoured, not ignored

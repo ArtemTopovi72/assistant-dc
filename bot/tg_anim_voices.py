@@ -11,6 +11,7 @@ anim_voices [path | ""] by slot.
 """
 import html
 import os
+from seams import module
 
 
 MAX = 3
@@ -170,7 +171,7 @@ class AnimVoicesMixin:
         with open(path, "wb") as fh:
             fh.write(data)
         try:                                     # a round video / voice note -> the sound alone
-            import cover
+            cover = module(self, "cover")
             path = cover.to_wav(path, os.path.splitext(path)[0] + ".wav")
         except Exception:
             pass                                 # the video model's loader still reads most containers

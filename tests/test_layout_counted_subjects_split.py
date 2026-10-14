@@ -60,13 +60,10 @@ check("the edit prompt tells the model to add a box, not write a count",
       "Every countable subject gets its OWN box" in D._EDIT_PROMPT)
 
 import ideogram as I
-_ask = I._ask_planner
-I._ask_planner = lambda ctx, prompt: {"background": "beach", "elements": [
-    {"desc": "three tall palm trees", "x": 0, "y": .1, "w": .4, "h": .7}]}
-try:
-    _pl = I.plan_layout(object(), "пляж, три пальмы")
-finally:
-    I._ask_planner = _ask
+import types as _types
+_pl = I.plan_layout(_types.SimpleNamespace(deps=_types.SimpleNamespace(
+    _ask_planner=lambda ctx, prompt: {"background": "beach", "elements": [
+        {"desc": "three tall palm trees", "x": 0, "y": .1, "w": .4, "h": .7}]})), "пляж, три пальмы")
 check("the first plan is split too, not only an edit",
       [e["desc"] for e in _pl["elements"]].count("tall palm tree") == 3, _pl["elements"])
 

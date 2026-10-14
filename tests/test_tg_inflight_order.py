@@ -17,7 +17,7 @@ sys.path.insert(0, ROOT)
 os.environ.setdefault("F5_TEST_RUN", "1")
 
 
-def test_a_stale_snapshot_does_not_overwrite_a_newer_one(monkeypatch):
+def test_a_stale_snapshot_does_not_overwrite_a_newer_one():
     import tg_bot as T
     import tg_queue as Q
     T.redirect_data_dir(tempfile.mkdtemp())
@@ -26,15 +26,12 @@ def test_a_stale_snapshot_does_not_overwrite_a_newer_one(monkeypatch):
     # Thread A stalls between its snapshot and its write: the moment it reads
     # the journal path. Everyone else goes straight through.
     in_gap, go_on = threading.Event(), threading.Event()
-    real = T
-
-    class Stalling(types.ModuleType):
-        def __getattr__(self, name):
-            if name == "_INFLIGHT_FILE" and threading.current_thread().name == "A":
-                in_gap.set()
-                go_on.wait(10)
-            return getattr(real, name)
-    monkeypatch.setattr(Q, "tg_bot", Stalling("tg_bot"))
+    def stalling_path():
+        if threading.current_thread().name == "A":
+            in_gap.set()
+            go_on.wait(10)
+        return T._INFLIGHT_FILE
+    bot._inflight_path = stalling_path
 
     bot._running_task[1] = [T._Task(task_id="done", chat_id=1, user_text="old")]
     a = threading.Thread(target=bot._write_inflight, name="A")

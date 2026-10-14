@@ -62,8 +62,6 @@ print("=" * 66)
 print("BACKEND SELECTION -- NO NETWORK, ALWAYS RUNS")
 print("=" * 66)
 
-_realK, _realR = B.KafkaBackend, B.RedisBackend
-
 class _FakeOK:
     def __init__(self, *a, **k): self.args = a
     def name(self): return type(self).__name__
@@ -75,40 +73,40 @@ class _Boom:
 
 try:
     with _EnvGuard():
-        B.KafkaBackend, B.RedisBackend = _FakeKafkaOK, _FakeRedisOK
-        b = B._make_backend()
+        kw = dict(kafka=_FakeKafkaOK, redis=_FakeRedisOK)
+        b = B._make_backend(**kw)
         check("no env set -> InMemoryBackend", isinstance(b, B.InMemoryBackend), type(b).__name__)
         b.close()
 
         os.environ["REDIS_URL"] = "redis://127.0.0.1:6379/0"
-        b = B._make_backend()
+        b = B._make_backend(**kw)
         check("REDIS_URL alone -> Redis", isinstance(b, _FakeRedisOK), type(b).__name__)
         b.close()
 
         os.environ["KAFKA_BROKERS"] = "127.0.0.1:9092"
-        b = B._make_backend()
+        b = B._make_backend(**kw)
         check("both set -> Kafka wins (documented precedence)",
               isinstance(b, _FakeKafkaOK), type(b).__name__)
         b.close()
 
-        B.KafkaBackend = _Boom
-        b = B._make_backend()
+        kw["kafka"] = _Boom
+        b = B._make_backend(**kw)
         check("Kafka unreachable -> falls through to Redis",
               isinstance(b, _FakeRedisOK), type(b).__name__)
         b.close()
 
-        B.RedisBackend = _Boom
-        b = B._make_backend()
+        kw["redis"] = _Boom
+        b = B._make_backend(**kw)
         check("both unreachable -> InMemory, never an exception",
               isinstance(b, B.InMemoryBackend), type(b).__name__)
         b.close()
 
         os.environ.pop("KAFKA_BROKERS")
-        b = B._make_backend()
+        b = B._make_backend(**kw)
         check("Redis set but down -> InMemory", isinstance(b, B.InMemoryBackend), type(b).__name__)
         b.close()
 finally:
-    B.KafkaBackend, B.RedisBackend = _realK, _realR
+    pass
 
 print()
 print("=" * 66)

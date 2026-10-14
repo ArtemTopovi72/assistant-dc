@@ -181,13 +181,9 @@ def test_face_guard_no_face_passthrough():
     op = os.path.join(d, "o.png"); Image.fromarray(bg).save(op)
     up = os.path.join(d, "u.png"); Image.fromarray(bg).resize((W * 2, H * 2)).save(up)
     import identity_metrics as idm
-    saved = idm.face_box
-    try:
-        idm.face_box = lambda *a, **k: None     # force "no face"
-        out = IM._preserve_face_after_upscale(op, up)
-        _check("face_guard: no face -> returns ESRGAN result unchanged", out == up)
-    finally:
-        idm.face_box = saved
+    from seams import Over
+    out = IM._preserve_face_after_upscale(op, up, modules={"identity_metrics": Over(idm, face_boxes=lambda *a, **k: [])})  # force "no face"
+    _check("face_guard: no face -> returns ESRGAN result unchanged", out == up)
 
 
 def main():

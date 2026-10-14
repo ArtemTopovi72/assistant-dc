@@ -32,11 +32,16 @@ fake = types.ModuleType("mashup_stems")
 fake.SAMPLE_RATE = 44100
 fake.release_separator = lambda: None
 fake.backing_of = lambda st: st["back"]
-sys.modules["mashup_stems"] = fake
 FF = types.SimpleNamespace(deps=types.SimpleNamespace(subprocess=types.SimpleNamespace(
     run=lambda cmd, **k: (calls.append(cmd), open(cmd[-1], "wb").close())[0])))
+FF.modules = {"mashup_stems": fake}
 warned = []
-music.logger.warning = lambda *a, **k: warned.append(a[0])
+import logging
+class _Catch(logging.Handler):
+    def emit(self, rec):
+        if rec.levelno >= logging.WARNING:
+            warned.append(rec.getMessage())
+music.logger.addHandler(_Catch())
 
 d = tempfile.mkdtemp(prefix="stripvox_")
 path = os.path.join(d, "song.mp3")

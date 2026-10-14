@@ -10,6 +10,7 @@ The render (video_control.restyle, ~15 min for 5 s) runs as a queued task, so it
 gets the status line, ⛔ Stop and the admin console like every other long job.
 """
 import os
+from seams import dep
 
 
 PAYLOAD = "[restyle] "
@@ -85,7 +86,7 @@ class RestyleMixin:
                 en = graph_language._translate_to_english(ctx, prompt) or prompt
             except Exception:
                 pass
-            out = video_control.restyle(ctx, src, en)
+            out = dep(ctx, "restyle", video_control.restyle)(ctx, src, en)
         except Exception:
             tg_bot.logger.exception("[restyle] failed for chat %s", chat_id)
             out = None

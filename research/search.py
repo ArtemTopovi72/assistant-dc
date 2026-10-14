@@ -524,7 +524,7 @@ def image_search_urls(ctx, query: str, *, max_results: int = 12,
                 query, region=SEARCH_REGION, safesearch=SEARCH_SAFESEARCH,
                 max_results=max_results))
 
-    rows = _ddgs_retry(ctx, _do_query, "Image search error")
+    rows = dep(ctx, "_ddgs_retry", _ddgs_retry)(ctx, _do_query, "Image search error")
 
     # Ranking by PIXEL AREA threw the search engine's relevance away. Measured:
     # for "Кировец soviet agricultural tractor field" the engine's own top hit is

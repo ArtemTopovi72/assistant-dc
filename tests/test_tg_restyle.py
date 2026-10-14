@@ -43,21 +43,21 @@ def test_menu_button_disarms():
     assert bot._get_session(CID).restyle_state == ""
 
 
-def test_run_restyle_delivers(monkeypatch):
+def test_run_restyle_delivers():
     bot = _bot()
     s = bot._get_session(CID)
     s.restyle_src = os.path.join(bot._restyle_dir(CID), "source.mp4")
     open(s.restyle_src, "wb").write(b"x"); bot._store.put(s)
     seen = []
-    monkeypatch.setattr(VC, "restyle", lambda ctx, src, prompt: seen.append(prompt) or "out.mp4")
-    ctx = types.SimpleNamespace(is_cancelled=lambda: False)
+    ctx = types.SimpleNamespace(is_cancelled=lambda: False, deps=types.SimpleNamespace(
+        restyle=lambda ctx, src, prompt: seen.append(prompt) or "out.mp4"))
     assert bot._run_restyle(CID, "ru", "anime", ctx)
     assert seen == ["anime"] and bot.videos == [("out.mp4", "🎨 Перерисовал")]
 
 
-def test_control_server_swaps_and_restores_url(monkeypatch):
-    monkeypatch.setattr(VC, "_up", lambda url: True)      # already running: nothing started
+def test_control_server_swaps_and_restores_url():
+    up = types.SimpleNamespace(deps=types.SimpleNamespace(_up=lambda url: True))      # already running: nothing started
     old = comfy_client.COMFY_URL
-    with VC.on_control_server():
+    with VC.on_control_server(up):
         assert comfy_client.COMFY_URL == video.COMFY_URL == VC.QI21_URL
     assert comfy_client.COMFY_URL == old and video.COMFY_URL == old

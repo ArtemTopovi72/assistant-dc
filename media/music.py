@@ -24,7 +24,7 @@ See docs/music_generation.md for the object_info census that confirmed this.
 """
 from __future__ import annotations
 from seams import yes_no
-from seams import dep, text_model
+from seams import dep, module, text_model
 
 import json
 import logging
@@ -1429,7 +1429,7 @@ def run_gpu_worker(ctx, python: str, script: str, job: dict, label: str, timeout
     try:
         with comfy_client._gpu_slot(exclusive=True, label=label), open(log_path, "wb") as log:
             argv = [a.replace("{job}", f.name) for a in cmd] if cmd else [python, os.path.join(root, "scripts", script), f.name]
-            proc = subprocess.Popen(argv, cwd=cwd or root, env=env, stdout=log, stderr=subprocess.STDOUT,
+            proc = dep(ctx, "Popen", subprocess.Popen)(argv, cwd=cwd or root, env=env, stdout=log, stderr=subprocess.STDOUT,
                                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             # From launch, not from the call: a second song queued behind the
             # first spent its whole timeout waiting for the card and was killed
@@ -1543,7 +1543,7 @@ def _strip_vocals(path: str, ctx=None) -> None:
     """In place: an instrumental that came out sung anyway keeps only its backing (Demucs).
     A take whose vocal stem is near silence is left as it rendered."""
     try:
-        import mashup_stems
+        mashup_stems = module(ctx, "mashup_stems")
         import numpy as np
         import soundfile as sf
         st = mashup_stems.separate(path)
@@ -1563,8 +1563,7 @@ def _strip_vocals(path: str, ctx=None) -> None:
         logger.warning("YuE2: could not strip the vocal off an instrumental", exc_info=True)
     finally:
         try:
-            import mashup_stems
-            mashup_stems.release_separator()
+            module(ctx, "mashup_stems").release_separator()
         except Exception as exc:
             logger.debug("could not release the stem separator: %s", exc)
 

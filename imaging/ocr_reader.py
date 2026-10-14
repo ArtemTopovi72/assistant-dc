@@ -57,7 +57,7 @@ class _WorkerReader:
     call shape as easyocr.Reader.readtext (path or RGB array), so callers are
     unchanged. Started once, model kept loaded; restarted if it dies."""
 
-    def __init__(self):
+    def __init__(self, popen=None):
         import subprocess
         import sys
         import json
@@ -68,7 +68,7 @@ class _WorkerReader:
             exe = sys.executable.replace("pythonw.exe", "python.exe")
             worker = os.path.join(root, "imaging", "ocr_worker.py")
         self.engine = "paddle" if worker.endswith("paddle_ocr_worker.py") else "easyocr"
-        self._p = subprocess.Popen(
+        self._p = (popen or subprocess.Popen)(
             [exe, worker],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
             text=True, encoding="utf-8", creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))

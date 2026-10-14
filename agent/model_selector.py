@@ -13,6 +13,8 @@ from typing import List, Optional, Tuple
 
 import requests
 
+from seams import dep
+
 logger = logging.getLogger("assistant.model_selector")
 
 # Model ids that are not chat LLMs (won't appear in the picker).
@@ -172,16 +174,16 @@ def _disk_models() -> List[dict]:
     return got
 
 
-def _merge_disk(models: List[dict]) -> List[dict]:
+def _merge_disk(models: List[dict], ctx=None) -> List[dict]:
     """API models first (they carry the load state), then whatever else is on
     disk. Never drops an API entry: the server is the authority on state."""
     seen = {m.get("id", "") for m in models}
-    extra = [m for m in _disk_models()
+    extra = [m for m in dep(ctx, "_disk_models", _disk_models)()
              if m["id"] not in seen and not _is_non_llm(m)]
     return list(models) + extra
 
 
-def list_models(base_url: str) -> List[dict]:
+def list_models(base_url: str, ctx=None) -> List[dict]:
     """Return available chat models, preferring the native API (has load state).
 
     Each dict has at least an ``id``; native API also provides ``state`` and
@@ -189,7 +191,7 @@ def list_models(base_url: str) -> List[dict]:
     """
     # Native API exposes state + type; fall back to OpenAI-compatible endpoint.
     try:
-        r = requests.get(f"{base_url}/api/v0/models", timeout=10)
+        r = dep(ctx, "requests", requests).get(f"{base_url}/api/v0/models", timeout=10)
         r.raise_for_status()
         data = r.json().get("data", [])
         models = [
@@ -197,27 +199,27 @@ def list_models(base_url: str) -> List[dict]:
             if m.get("type") in (None, "llm", "vlm") and not _is_non_llm(m)
         ]
         if models:
-            return _merge_disk(models)
+            return _merge_disk(models, ctx)
     except Exception as exc:
         logger.debug("Native /api/v0/models failed, falling back: %s", exc)
 
     try:
-        r = requests.get(f"{base_url}/v1/models", timeout=10)
+        r = dep(ctx, "requests", requests).get(f"{base_url}/v1/models", timeout=10)
         r.raise_for_status()
         return _merge_disk(
-            [m for m in r.json().get("data", []) if not _is_non_llm(m)])
+            [m for m in r.json().get("data", []) if not _is_non_llm(m)], ctx)
     except Exception as exc:
         logger.error("Could not list models from %s: %s", base_url, exc)
-        return _disk_models()
+        return dep(ctx, "_disk_models", _disk_models)()
 
 
-def choose_model_interactive(base_url: str, default_model: str) -> Tuple[str, bool]:
+def choose_model_interactive(base_url: str, default_model: str, ctx=None) -> Tuple[str, bool]:
     """Show a numbered menu and return ``(model_id, no_think)``.
 
     Falls back to ``(default_model, True)`` if the server is unreachable or the
     user just presses Enter.
     """
-    models = list_models(base_url)
+    models = dep(ctx, "list_models", list_models)(base_url)
     if not models:
         print(f"⚠️  Could not reach LM Studio at {base_url}. Using default: {default_model}")
         return default_model, True
@@ -226,7 +228,7 @@ def choose_model_interactive(base_url: str, default_model: str) -> Tuple[str, bo
     ids = [m.get("id", "") for m in models]
     default_idx = ids.index(default_model) + 1 if default_model in ids else 1
 
-    sizes = _index_model_sizes(_MODELS_DIR)
+    sizes = dep(ctx, "_index_model_sizes", _index_model_sizes)(_MODELS_DIR)
     print("\n" + "=" * 68)
     print("Available models (● loaded / ○ on disk):")
     for i, m in enumerate(models, 1):
@@ -239,7 +241,7 @@ def choose_model_interactive(base_url: str, default_model: str) -> Tuple[str, bo
 
     chosen_id = models[default_idx - 1]["id"]
     while True:
-        raw = input(f"Select model [1-{len(models)}] (Enter = {chosen_id}): ").strip()
+        raw = dep(ctx, "input", input)(f"Select model [1-{len(models)}] (Enter = {chosen_id}): ").strip()
         if not raw:
             break
         if raw.isdigit() and 1 <= int(raw) <= len(models):
@@ -247,7 +249,7 @@ def choose_model_interactive(base_url: str, default_model: str) -> Tuple[str, bo
             break
         print("  Invalid choice, try again.")
 
-    answer = input("Enable thinking/reasoning? (y/N): ").strip().lower()
+    answer = dep(ctx, "input", input)("Enable thinking/reasoning? (y/N): ").strip().lower()
     no_think = answer not in ("y", "yes")
 
     print(f"→ Using '{chosen_id}' with thinking {'OFF' if no_think else 'ON'}\n")

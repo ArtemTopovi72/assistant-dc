@@ -55,21 +55,13 @@ class FakeWS:
 def drive(frames, prompt_id="p1"):
     """Run the real message loop over `frames`; return the (value, max) calls."""
     got = []
-    prog = I._ComfyProgress("cid", lambda v, m: got.append((v, m)), {"id": prompt_id})
+    import types
+    stub = types.ModuleType("websocket")
+    prog = I._ComfyProgress("cid", lambda v, m: got.append((v, m)), {"id": prompt_id}, modules={"websocket": stub})
 
     fake = FakeWS([json.dumps(f) if isinstance(f, dict) else f for f in frames])
-    import types
-    real_ws_mod = sys.modules.get("websocket")
-    stub = types.ModuleType("websocket")
     stub.create_connection = lambda *a, **k: fake
-    sys.modules["websocket"] = stub
-    try:
-        prog._run()
-    finally:
-        if real_ws_mod is not None:
-            sys.modules["websocket"] = real_ws_mod
-        else:
-            sys.modules.pop("websocket", None)
+    prog._run()
     return got
 
 

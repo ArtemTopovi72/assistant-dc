@@ -4,6 +4,7 @@ On Stop the worker is kill()ed and then waited for, so the GPU slot is released
 only once the process has exited and freed its VRAM (and no zombie is left on POSIX).
 """
 import os
+import types
 import sys
 import threading
 import time
@@ -34,8 +35,8 @@ def test_cancel_reaps_before_returning(monkeypatch):
         def __init__(self, *a, **k):
             super().__init__(*a, **k)
             seen["p"] = self
-    monkeypatch.setattr(subprocess, "Popen", P)
     ctx = _Ctx()
+    ctx.deps = types.SimpleNamespace(Popen=P)
     threading.Timer(1.0, ctx.cancel.set).start()
     with pytest.raises(music.MusicUnavailable):
         music.run_gpu_worker(ctx, sys.executable, "", {}, "t", timeout=60,

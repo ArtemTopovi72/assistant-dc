@@ -2044,7 +2044,7 @@ class TaskRunnerMixin:
                 # The clip's own language, not the chat's (an English video in a
                 # Russian chat was forced to Russian on a <85% guess).
                 from audio import detect_media_language
-                lang_hint = detect_media_language(ctx, src) or lang_hint
+                lang_hint = dep(ctx, "detect_media_language", detect_media_language)(ctx, src) or lang_hint
             heard = ""
             if speakers:
                 # Several people on one forwarded clip: label who said what.
@@ -2057,7 +2057,7 @@ class TaskRunnerMixin:
                 # The session language is the best guess for a short, mumbled
                 # clip; the house default is Russian.
                 heard = fix_voice_imperative(
-                    transcribe_audio_file(ctx, src, lang_hint=lang_hint or "ru") or "")
+                    dep(ctx, "transcribe_audio_file", transcribe_audio_file)(ctx, src, lang_hint=lang_hint or "ru") or "")
             # A video with a stray word or two is a silent video: ASR hears «Oh»
             # in 7 s of room noise, and the retelling would then ask for a
             # transcript. Decided here, once, for every reader -- they

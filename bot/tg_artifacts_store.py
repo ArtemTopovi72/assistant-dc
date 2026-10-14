@@ -261,3 +261,10 @@ def artifact_by_content(chat_id: int, path: str) -> Optional[dict]:
 
 def sweep_missing(chat_id: Optional[int] = None) -> int:
     return _store().sweep_missing(chat_id)
+
+
+def redirect_store(path) -> None:
+    """Point the process-wide store at `path` (a suite's own database)."""
+    global _ARTIFACTS_DB, _instance
+    with _instance_lock:
+        _ARTIFACTS_DB, _instance = Path(path), None

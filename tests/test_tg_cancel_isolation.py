@@ -139,13 +139,9 @@ class _FakeBot:
     def get_users(self): return []
     def get_queue_stats(self): return {}
 
-_real = _T.TelegramBot
-_T.TelegramBot = _FakeBot
-try:
-    tab.token_in.setText("123:ABC")
-    tab._start()
-finally:
-    _T.TelegramBot = _real
+tab.parts = {"TelegramBot": _FakeBot}
+tab.token_in.setText("123:ABC")
+tab._start()
 
 check("the bot was constructed", "get_ctx" in captured, str(sorted(captured)))
 if "get_ctx" in captured:

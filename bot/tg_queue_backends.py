@@ -492,7 +492,7 @@ def force_inmemory() -> None:
     _FORCE_INMEMORY = True
 
 
-def _make_backend() -> _Backend:
+def _make_backend(kafka=None, redis=None) -> _Backend:
     if _FORCE_INMEMORY:
         b = InMemoryBackend()
         logger.info("Queue backend: InMemory (redirected for a test)")
@@ -500,14 +500,14 @@ def _make_backend() -> _Backend:
     kafka_url = os.getenv("KAFKA_BROKERS", "").strip()
     if kafka_url:
         try:
-            b = KafkaBackend(kafka_url)
+            b = (kafka or KafkaBackend)(kafka_url)
             logger.info("Queue backend: %s", b.name()); return b
         except Exception as exc:
             logger.warning("Kafka unavailable (%s), trying Redis…", exc)
     redis_url = os.getenv("REDIS_URL", "").strip()
     if redis_url:
         try:
-            b = RedisBackend(redis_url)
+            b = (redis or RedisBackend)(redis_url)
             logger.info("Queue backend: %s", b.name()); return b
         except Exception as exc:
             logger.warning("Redis unavailable (%s), falling back to in-memory.", exc)

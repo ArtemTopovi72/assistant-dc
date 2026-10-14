@@ -12,7 +12,7 @@ import os
 import re
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BASELINE = 129
+BASELINE = 0
 
 _IMPORT = re.compile(r"^\s*import ([\w.]+)(?: as (\w+))?|^\s*from [\w.]+ import (\w+)(?: as (\w+))?", re.M)
 
@@ -23,12 +23,16 @@ _OTHER = re.compile(r"sys\.modules\[[^]]+\] = |monkeypatch\.setitem\(sys\.module
                     r"|\b(?:RebindPatches|_dr_patch|fake_modules|setattr_saved)\(")
 
 
+# The process-wide guards (socket block, offline LLM, public DNS) patch globals by definition.
+_GUARDS = {"conftest.py", "offline_guard.py"}
+
+
 def module_patches() -> list:
     """(file:line, text) of every monkeypatch.setattr / setenv, every `mod.attr = ...` on a
     name the file imported, and every _OTHER write."""
     out = []
     for path in sorted(glob.glob(os.path.join(ROOT, "tests", "*.py"))):
-        if os.path.basename(path) == os.path.basename(__file__):
+        if os.path.basename(path) in _GUARDS or os.path.basename(path) == os.path.basename(__file__):
             continue
         src = open(path, encoding="utf-8").read()
         names = set()

@@ -72,7 +72,7 @@ shots = [
     ("real_mc_narrow", 1.0, 620, 1000),   # stress: reflow + column hiding
 ]
 for label, eff, ww, hh in shots:
-    ui_scale._effective = eff; ui_scale._font_mult = 1.0
+    ui_scale.force(effective=eff, font_mult=1.0)
     gui.apply_ui_scale(app)
     win, mc = build(store, "default")
     win.resize(min(ww, 3600), min(hh, 2000))

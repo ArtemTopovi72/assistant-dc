@@ -347,7 +347,7 @@ class LayoutMixin:
             return []
 
     def _save_preset(self):
-        name, ok = QInputDialog.getText(self, "Save layout preset", "Preset name:")
+        name, ok = widget_part(self, "getText", QInputDialog.getText)(self, "Save layout preset", "Preset name:")
         if not ok or not name.strip():
             return
         name = name.strip()
@@ -403,4 +403,5 @@ class LayoutMixin:
         menu.addAction("Save preset…", self._save_preset)
         menu.addSeparator()
         menu.addAction("Reset to default layout", self._reset_layout)
-        menu.exec_(self.layout_btn.mapToGlobal(QPoint(0, self.layout_btn.height())))
+        widget_part(self, "menu_exec", lambda m, pos: m.exec_(pos))(
+            menu, self.layout_btn.mapToGlobal(QPoint(0, self.layout_btn.height())))

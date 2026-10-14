@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import html
 import logging
+from seams import dep
 import re
 
 logger = logging.getLogger("assistant.tg.cards")
@@ -143,10 +144,10 @@ def send_cards(bot, chat_id, reply: str, products: list, lang: str = "ru") -> in
     for i, p in enumerate(pick(reply, products), 1):
         cap, kb = caption(i, p, lang), keyboard(p, lang)
         ok = False
-        img = _photo_bytes(p["image"]) if p.get("image") else None
+        img = dep(bot, "_photo_bytes", _photo_bytes)(p["image"]) if p.get("image") else None
         if img:
             try:
-                ok = _upload(bot, chat_id, img, cap, json.dumps(kb))
+                ok = dep(bot, "_upload", _upload)(bot, chat_id, img, cap, json.dumps(kb))
                 if not ok:
                     logger.warning("card photo for %s refused by Telegram", p.get("sku"))
             except Exception as exc:

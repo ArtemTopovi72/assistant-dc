@@ -108,7 +108,7 @@ _tmp = tempfile.mkdtemp(prefix="dr_timing_")
 # Must be a Path: record_run_duration uses .parent/.with_suffix/.replace, and a
 # str fails into its deliberate "never break a run over telemetry" catch-all.
 from pathlib import Path as _Path
-DT._TIMING_FILE = _Path(_tmp) / "_timings.json"
+DT.redirect_timings(_tmp)
 try:
     for v in (1200.0, 1400.0, 1300.0):
         D.record_run_duration("quick", v)
@@ -165,7 +165,7 @@ try:
     check("the signature changes when the caps change",
           len(D._profile_signature()) >= 8 and isinstance(D._profile_signature(), str))
 finally:
-    DT._TIMING_FILE = _saved
+    DT.redirect_timings(_saved.parent)
 
 check("an unknown depth still estimates rather than raising",
       D.estimate_duration("nope")[0] > 0)

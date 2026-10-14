@@ -56,13 +56,17 @@ _TG_SETTINGS_SCOPE = ("AssistantApp", "TelegramBot")
 _TG_SETTINGS_DIR: str | None = None
 
 
-def redirect_settings(dir_path) -> None:
+def redirect_settings(dir_path, scope=None) -> None:
     """Point the Telegram panel at a throwaway INI file instead of the real store.
 
-    Pass None to restore the live scope.
+    Pass None to restore the live scope. `scope` names another (org, app) registry
+    scope to read -- a suite's scratch one, to prove the redirect is what protects the
+    real store; None keeps the current.
     """
-    global _TG_SETTINGS_DIR
+    global _TG_SETTINGS_DIR, _TG_SETTINGS_SCOPE
     _TG_SETTINGS_DIR = str(dir_path) if dir_path else None
+    if scope is not None:
+        _TG_SETTINGS_SCOPE = tuple(scope)
 
 
 def _tg_settings() -> QSettings:
@@ -492,6 +496,7 @@ class TelegramTab(QWidget):
             logger.warning("local Bot API credentials not applied: %s", exc)
 
         from tg_bot import TelegramBot
+        TelegramBot = widget_part(self, "TelegramBot", TelegramBot)
         self._bot = TelegramBot(
             token=token,
             get_ctx=self._bot_ctx,
@@ -571,7 +576,7 @@ class TelegramTab(QWidget):
         cid = self._selected_chat_id()
         if cid is None:
             QMessageBox.information(self, "No selection", "Select a user row first."); return
-        reply = QMessageBox.question(self, "Confirm ban",
+        reply = widget_part(self, "question", QMessageBox.question)(self, "Confirm ban",
             f"Ban user {cid}? They will no longer be able to use the bot.",
             QMessageBox.Yes | QMessageBox.No)
         if reply == QMessageBox.Yes:

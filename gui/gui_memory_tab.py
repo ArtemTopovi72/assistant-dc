@@ -15,6 +15,7 @@ from pathlib import Path
 
 from PyQt5.QtCore import QEvent, QThread, Qt, pyqtSignal
 from PyQt5.QtGui import QCursor
+from seams import widget_part
 from PyQt5.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QFrame, QGridLayout,
                              QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
                              QListWidgetItem, QMenu, QMessageBox, QPlainTextEdit,
@@ -503,7 +504,7 @@ class MemoryCenterTab(_MemoryProfilesMixin, _MemoryMaintenanceMixin, QWidget):
             if p == self._profile():
                 continue
             menu.addAction(p, lambda _=False, dst=p: self._do_move(dst))
-        menu.exec_(QCursor.pos())
+        widget_part(self, "menu_exec", lambda m, pos: m.exec_(pos))(menu, QCursor.pos())
 
     def _do_move(self, dst):
         self.store.move(self._profile(), self._sel.id, dst)

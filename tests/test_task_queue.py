@@ -60,8 +60,8 @@ def build_shim():
 
 
 def main():
-    QTimer.singleShot = staticmethod(lambda ms, fn: fn())  # synchronous for the test
     s = build_shim()
+    s.parts = {"singleShot": lambda ms, fn: fn()}  # synchronous for the test
 
     def finish(error=False):
         s._turn_had_error = error

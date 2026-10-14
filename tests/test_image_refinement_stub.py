@@ -94,8 +94,6 @@ def test_refine_loop_applies_patches_then_succeeds(engine="ideogram4"):
     pixel pipeline.
     """
     ctx = Ctx()
-    _prev_engine = I._config.IMAGE_ENGINE
-    I._config.IMAGE_ENGINE = engine
     img_a = _photo(f"s4a_{engine}.png"); img_b = _photo(f"s4b_{engine}.png")
     calls = {"n": 0}
     def gen(**k):
@@ -121,7 +119,6 @@ def test_refine_loop_applies_patches_then_succeeds(engine="ideogram4"):
                   generate_image_with_comfy=gen, evaluate_image=ev):
         out = I.generate_image_with_refinement(ctx, "a cat")
         check("refine_loop_eventually_succeeds", out["status"] == "success" and out["path"] == img_b, out)
-    I._config.IMAGE_ENGINE = _prev_engine
 
 
 def test_refine_missing_subject_regenerates_from_noise():

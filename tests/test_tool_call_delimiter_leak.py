@@ -139,11 +139,10 @@ import re as _re
 _OLD_GRAMMAR = _re.compile(r"<\|[a-z_]{1,24}\|?>+|<[a-z_]{1,24}\|>", _re.IGNORECASE)
 _NEVER = _re.compile(r"(?!x)x")
 
-_saved_re, _saved_bare = U._CONTROL_TOKEN_RE, L._G4_BARE_RE
-try:
-    # Mutant 1 — grammar only. Format C is a SECOND, independent layer, so the
-    # call must still go through: losing the wrapper is survivable now.
-    U._CONTROL_TOKEN_RE = _OLD_GRAMMAR
+from unittest import mock
+# Mutant 1 — grammar only. Format C is a SECOND, independent layer, so the
+# call must still go through: losing the wrapper is survivable now.
+with mock.patch.object(U, "_CONTROL_TOKEN_RE", _OLD_GRAMMAR):
     rescued, _ = calls_of(WRAPPED)
     check("old grammar alone: the bare-body parser rescues the call",
           rescued and rescued[0][0] == "search", str(rescued))
@@ -152,16 +151,14 @@ try:
           == 'call:search{query:' + Q + 'who is Evgeniy Prigozhin' + Q + '}',
           repr(U.strip_think_tags(WRAPPED)))
 
-    # Mutant 2 — BOTH layers removed, which is the shipped-before state. Two
-    # redundant guards hide each other: mutating either one alone proves nothing.
-    L._G4_BARE_RE = _NEVER
+# Mutant 2 — BOTH layers removed, which is the shipped-before state. Two
+# redundant guards hide each other: mutating either one alone proves nothing.
+with mock.patch.object(U, "_CONTROL_TOKEN_RE", _OLD_GRAMMAR), mock.patch.object(L, "_G4_BARE_RE", _NEVER):
     broke, leftover = calls_of(WRAPPED)
     check("both layers off: the call is destroyed (the suite sees the real bug)",
           not broke, str(broke))
     check("both layers off: the raw body would be sent to the user",
           leftover.startswith("call:search{"), repr(leftover))
-finally:
-    U._CONTROL_TOKEN_RE, L._G4_BARE_RE = _saved_re, _saved_bare
 
 check("the grammar is restored after the mutation",
       "<|tool_call>" in U.strip_think_tags(WRAPPED))

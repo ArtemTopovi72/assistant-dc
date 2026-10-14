@@ -33,7 +33,6 @@ def test_a_worker_that_never_reports_ready_is_killed(tmp_path, monkeypatch):
         def __init__(self, args, **k):
             super().__init__([sys.executable, str(fake)], **k)
             seen["p"] = self
-    monkeypatch.setattr(subprocess, "Popen", P)
     with pytest.raises(RuntimeError, match="did not start"):
-        O._WorkerReader()
+        O._WorkerReader(popen=P)
     assert seen["p"].returncode is not None        # killed and reaped

@@ -1069,7 +1069,7 @@ def _try_revive_model(body: str, payload: dict, ctx=None) -> bool:
     # inside the cooldown and losing its turn.
     with _revive_lock:
         now = time.time()
-        if now - _revive_last < LLM_REVIVE_MIN_INTERVAL_S:
+        if now - _revive_last < dep(ctx, "revive_min_interval_s", LLM_REVIVE_MIN_INTERVAL_S):
             # The cooldown is for a model that dies ON LOAD. One that loaded
             # fine and was then killed by a request (a tall
             # photo tripped llama.cpp's n_ubatch assert twice in 20 s) is a

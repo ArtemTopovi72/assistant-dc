@@ -30,9 +30,10 @@ class _DarkTitleBarFilter(QObject):
     title bar. Catches every QDialog / QMessageBox / QInputDialog without touching each
     call site. Each HWND is handled once."""
 
-    def __init__(self):
+    def __init__(self, enable=None):
         super().__init__()
         self._seen = set()
+        self._enable = enable or enable_dark_titlebar
 
     def eventFilter(self, obj, event):
         if event.type() == QEvent.Show and isinstance(obj, QWidget) and obj.isWindow():
@@ -40,7 +41,7 @@ class _DarkTitleBarFilter(QObject):
                 wid = int(obj.winId())
                 if wid not in self._seen:
                     self._seen.add(wid)
-                    enable_dark_titlebar(obj)
+                    self._enable(obj)
             except Exception:
                 logger.debug("dark titlebar not applied", exc_info=True)
         return False

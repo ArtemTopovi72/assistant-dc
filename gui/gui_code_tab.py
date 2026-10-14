@@ -16,7 +16,7 @@ subprocesses, and this project has lost afternoons to Qt slots raising on the
 worker thread -- so nothing here touches a widget from `run()`, and every
 outcome comes back as a signal.
 """
-from seams import file_dialog
+from seams import file_dialog, widget_part
 from pathlib import Path
 
 from PyQt5.QtCore import QThread, Qt, pyqtSignal
@@ -354,7 +354,7 @@ class CodeTab(QWidget):
 
     def _reset(self):
         who = self.who.currentText() or DESKTOP_KEY
-        if QMessageBox.question(
+        if widget_part(self, "question", QMessageBox.question)(
                 self, "Reset the sandbox",
                 f"Delete everything in the “{who}” folder? This cannot be undone.",
                 QMessageBox.Yes | QMessageBox.Cancel,

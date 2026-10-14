@@ -108,7 +108,7 @@ def main():
     check("the lettering loop is disabled for a character render",
           "if lora_name:\n        rounds = 0" in src)
     check("a character render reaches Ideogram with its adapter",
-          "lora_name=lora_name," in src and "result = _ideogram_draw(" in src)
+          "lora_name=lora_name," in src and "result = dep(ctx, \"_ideogram_draw\", _ideogram_draw)(" in src)
 
     print(chr(10) + "%d checks, %d failed" % (len(RAN), len(FAILED)))
     return 1 if FAILED else 0

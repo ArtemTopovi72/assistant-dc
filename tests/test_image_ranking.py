@@ -37,12 +37,9 @@ def row(url, w, h, page=""):
 
 
 def with_rows(rows, **kw):
-    real = search._ddgs_retry
-    search._ddgs_retry = lambda ctx, fn, label: rows
-    try:
-        return search.image_search_urls(None, "кировец трактор", **kw)
-    finally:
-        search._ddgs_retry = real
+    import types
+    ctx = types.SimpleNamespace(deps=types.SimpleNamespace(_ddgs_retry=lambda ctx, fn, label: rows))
+    return search.image_search_urls(ctx, "кировец трактор", **kw)
 
 
 print("=" * 66)

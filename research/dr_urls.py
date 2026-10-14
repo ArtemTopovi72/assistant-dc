@@ -374,7 +374,7 @@ def _is_safe_public_url(url: str) -> bool:
     return True
 
 
-def safe_get(url: str, max_redirects: int = 5, getter=None, **kw):
+def safe_get(url: str, max_redirects: int = 5, getter=None, is_safe=None, **kw):
     """requests.get that checks EVERY hop with _is_safe_public_url.
 
     requests' own allow_redirects=True only let the first URL be checked: a
@@ -386,7 +386,7 @@ def safe_get(url: str, max_redirects: int = 5, getter=None, **kw):
     from urllib.parse import urljoin
     kw["allow_redirects"] = False
     for _ in range(max_redirects + 1):
-        if not _is_safe_public_url(url):
+        if not (is_safe or _is_safe_public_url)(url):
             logger.debug("blocked non-public/unsafe URL: %s", url)
             return None
         resp = (getter or requests.get)(url, **kw)

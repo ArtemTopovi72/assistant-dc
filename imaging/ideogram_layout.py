@@ -126,7 +126,7 @@ def photo_in_words(photo: str) -> str:
 def build_caption(background: str, elements: list, *, high_level: str = "",
                   aesthetics: str = "", lighting: str = "", photo: str = "",
                   medium: str = "", art_style: str = "",
-                  palette: Optional[list] = None) -> dict:
+                  palette: Optional[list] = None, hex_palette=None) -> dict:
     """Assemble the caption dict. Key order matters to the model's verifier, so
     build it explicitly instead of merging dicts.
 
@@ -139,7 +139,7 @@ def build_caption(background: str, elements: list, *, high_level: str = "",
     photo = photo_in_words(photo)
     if high_level.strip():
         caption["high_level_description"] = high_level.strip()
-    pal = _ideogram.hex_palette(palette, 16)
+    pal = (hex_palette or _ideogram.hex_palette)(palette, 16)
     if pal or any(s.strip() for s in (aesthetics, lighting, photo, medium, art_style)):
         style = {"aesthetics": aesthetics, "lighting": lighting}
         if art_style.strip():                       # art_style and photo are exclusive

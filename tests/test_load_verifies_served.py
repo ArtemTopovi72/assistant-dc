@@ -54,10 +54,9 @@ check("a model that appears on the third poll counts", L._wait_served("http://x"
 
 # The revive path does not cache a false "ok".
 import llm
-llm.LLM_REVIVE_MIN_INTERVAL_S = 0
-llm._revive_last = 0.0
+llm._set_revive_state(0.0, False)
 calls = []
-rctx = NS(deps=NS(ensure_exclusive=lambda base, model: calls.append(model) or (False, "not being served"),
+rctx = NS(deps=NS(revive_min_interval_s=0, ensure_exclusive=lambda base, model: calls.append(model) or (False, "not being served"),
                   card_is_exclusive=lambda: ""))
 got = llm._try_revive_model("No models loaded", {"model": "gemma"}, ctx=rctx)
 check("a revive whose load never served is reported as failed", got is False and calls == ["gemma"], (got, calls))

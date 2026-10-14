@@ -244,7 +244,7 @@ def missing_models(media=MEDIA, base=None, catalog=None) -> list:
     return [m for m in (MODELS if catalog is None else catalog) if m[0] in media and not _present(models, m[2])]
 
 
-def download_models(media, log, base=None, catalog=None, hub=None) -> tuple[str, str]:
+def download_models(media, log, base=None, catalog=None, hub=None, free_gb=None) -> tuple[str, str]:
     """Fetch the graphs' model files that are not there yet. -> (status, detail)."""
     os.environ.setdefault("HF_HUB_DISABLE_XET", "1")   # xet hung on "reconstructing" here
     if hub is None:
@@ -256,7 +256,7 @@ def download_models(media, log, base=None, catalog=None, hub=None) -> tuple[str,
         return "ok", f"all model files present ({', '.join(media)})"
     need = sum(m[5] for m in todo)
     base.mkdir(parents=True, exist_ok=True)
-    free = shutil.disk_usage(base).free / 1024 ** 3
+    free = free_gb if free_gb is not None else shutil.disk_usage(base).free / 1024 ** 3
     if free < need + 10:
         return "warn", (f"need ~{need:.0f} GB for {len(todo)} model files but only {free:.0f} GB "
                         f"free at {base}; free space or set COMFY_BASE_DIR to a bigger disk, "

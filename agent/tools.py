@@ -9,7 +9,7 @@ values arrive typed ("8" -> 8), and malformed calls turn into a uniform
 and one `ToolSpec`; `TOOL_SCHEMAS` and `execute_tool` both derive from `TOOLS`.
 """
 from seams import choice, yes_no, text_model
-from seams import dep
+from seams import dep, module
 import logging
 import os
 
@@ -96,7 +96,7 @@ def _lang_of_original(state, fallback_text: str, ctx=None) -> str:
     when the user asked in Russian. Resolved off the module, not imported by
     name: callers (and tests) may hand us a deep_research stub, and a missing
     helper must cost the language hint, not the whole call."""
-    import deep_research as _dr_mod
+    _dr_mod = module(ctx, "deep_research")
     import utils
     _lang_of = getattr(_dr_mod, "lang_of_text", lambda *_a, **_k: "en")
     text = state.get("user_input_original") or fallback_text
@@ -138,7 +138,8 @@ def _handle_search(ctx, state, args: dict) -> str:
     # Silent-payload guard: block success-shaped-but-unusable results (empty,
     # garbled, truncated) so the model can't relay/complete junk, and append a
     # skeptic banner to the rest (see payload_guard / PlanBench-XL findings).
-    from payload_guard import assess_payload, SKEPTIC_BANNER
+    _pg = module(ctx, "payload_guard")
+    assess_payload, SKEPTIC_BANNER = _pg.assess_payload, _pg.SKEPTIC_BANNER
     v = assess_payload(query, result)
     if not v.usable:
         logger.info("Search payload guard blocked result (%s)", v.status)
@@ -181,7 +182,7 @@ def _handle_deep_research(ctx, state, args: dict) -> str:
         depth = "standard"
 
     logger.info("Tool: deep_research(topic=%r, depth=%s)", topic[:80], depth)
-    from deep_research import run_deep_research
+    run_deep_research = module(ctx, "deep_research").run_deep_research
 
     def _cb(phase, stats, msg):
         ctx.set_stage(f"{phase} · {stats['sources']} src / {stats['pages']} pg / "
@@ -206,7 +207,7 @@ def _handle_deep_research(ctx, state, args: dict) -> str:
     # Silent-payload guard: a report that is present but structurally unusable
     # (empty/garbled/truncated summary) is downgraded to an honest failure so the
     # model can't relay junk as findings (see payload_guard / PlanBench-XL).
-    from payload_guard import assess_payload
+    assess_payload = module(ctx, "payload_guard").assess_payload
     summary = _exec_summary(report)
     v = assess_payload(topic, summary)
     if not v.usable:
@@ -660,7 +661,7 @@ def _handle_create_presentation(ctx, state, args: dict) -> str:
             logger.debug("could not create the output folder", exc_info=True)
         # Slide artwork, not a face reference: a portrait cropped into a wide
         # panel loses most of its subject.
-        got = _search.fetch_reference_photo(ctx, query, dest, require_face=False,
+        got = dep(ctx, "fetch_reference_photo", _search.fetch_reference_photo)(ctx, query, dest, require_face=False,
                                             prefer="landscape")
         if got:
             fetched.append(got)

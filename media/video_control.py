@@ -16,6 +16,7 @@ preprocessor pack and are passed in as an already-processed control clip
 (kind="raw").
 """
 import contextlib
+from seams import dep
 import logging
 import os
 import random
@@ -65,7 +66,7 @@ def on_control_server(ctx=None, start_timeout: int = 300):
     import time
     with _swap_lock:
         proc = None
-        if not _up(QI21_URL):
+        if not dep(ctx, "_up", _up)(QI21_URL):
             if ctx is not None and hasattr(ctx, "set_stage"):
                 ctx.set_stage("Starting the video engine")
             try:   # the live server's models out of VRAM first

@@ -39,6 +39,14 @@ LORA_OUT_DIR = Path(os.getenv(
     "COMFY_LORA_DIR", os.path.expanduser("~/Documents/ComfyUI/models/loras")))
 DATASET_ROOT = _ROOT / "runtime" / "lora_datasets"
 TRAIN_ROOT = _ROOT / "runtime" / "lora_training"
+
+
+def redirect_dataset_root(path) -> None:
+    """Collect datasets under `path` (a suite's scratch folder)."""
+    global DATASET_ROOT
+    DATASET_ROOT = Path(path)
+
+
 # Ostris AI Toolkit, cloned and installed by the operator into its own venv.
 TOOLKIT_DIR = Path(os.getenv("LORA_TOOLKIT_DIR", str(_ROOT / "tools" / "ai-toolkit")))
 

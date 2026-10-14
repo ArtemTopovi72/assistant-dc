@@ -32,11 +32,37 @@ def check(name, cond, detail=""):
     assert cond, name + ": " + detail
 
 
+# One set of stand-ins every _ctx() carries by reference; mock_env fills it for the
+# length of a `with` and empties it after, so a context built before the block
+# (the usual shape here) still sees the fakes and nothing global is written.
+import image as _real_image
+_ENG = types.SimpleNamespace()
+_DEPS = types.SimpleNamespace()
+_MODS = {}
+_VIS = {"fn": None}
+
+
+def _vision(**k):
+    if _VIS["fn"] is not None:
+        return _VIS["fn"](**k)
+    import llm
+    return llm.analyze_image_with_llm(**k)
+
+
+class _Engine:
+    """`image` with the active mock_env's functions answering first."""
+    def __getattr__(self, name):
+        if name in vars(_ENG):
+            return getattr(_ENG, name)
+        return getattr(_real_image, name)
+
+
 def _ctx(**kw):
     c = M.Context(models=types.SimpleNamespace(), transcription_cache={}, cache_file=_TMP / "c.json",
                   asr_lock=threading.Lock(), tts_lock=threading.Lock())
     c.active_memory_dir = _TMP / "mem"
     c.web_search_enabled = True
+    c.image_engine, c.deps, c.modules, c.vision_model = _Engine(), _DEPS, _MODS, _vision
     for k, v in kw.items():
         setattr(c, k, v)
     return c
@@ -49,18 +75,16 @@ class _PG:  # payload-guard verdict
 
 @contextlib.contextmanager
 def mock_env(**over):
-    """Patch tools/module boundaries. `over` overrides specific attrs."""
-    saved = {}
-    def setattr_saved(obj, name, val, key):
-        saved[key] = (obj, name, getattr(obj, name, None), hasattr(obj, name))
-        setattr(obj, name, val)
-
+    """Fill the shared stand-ins. `over` overrides specific results."""
     out_img = _img("mock_out.png")
-    # tools module-level image funcs
-    tset = {
+    deps = {
         "run_web_search": lambda ctx, q: over.get("search_result", "web page text about " + q),
         "generate_image_with_refinement": lambda **k: over.get("gen_result",
             {"path": out_img, "score": 8, "attempts": 1, "status": "success", "prompt": "p"}),
+        "restyle": lambda ctx, s, i: over.get("firered_out", out_img),
+        "fetch_reference_photo": lambda ctx, q, dest, require_face=True, **_k: over.get("photo", out_img),
+    }
+    eng = {
         "enhance_faces_with_comfy": lambda ctx, p: p,
         "redraw_image_with_comfy": lambda ctx, s, i: over.get("redraw_out", out_img),
         "generate_image_with_comfy": lambda ctx, **k: over.get("enhance_out", out_img),
@@ -71,26 +95,12 @@ def mock_env(**over):
         "restore_image_with_comfy": lambda ctx, s, upscale="2x": over.get("restore_out", out_img),
         "_is_removal_instruction": lambda t: over.get("is_removal", False),
         "_INPAINT_FAILURE": over.get("inpaint_failure", {}),
-    }
-    # Apply to EVERY module that binds the name, not just `tools`: the image
-    # editing handlers live in tool_image_handlers and import these from
-    # `image` by value, so a patch on T alone would not reach them.
-    import tool_image_handlers as _tih
-    _holders = (T, _tih)
-    for k, v in tset.items():
-        for _mod in _holders:
-            if hasattr(_mod, k):
-                setattr_saved(_mod, k, v, _mod.__name__ + "." + k)
-    # image_mod attribute funcs
-    im = T.image_mod
-    imset = {
         "plan_and_execute_transfer": lambda ctx, t, r, i: over.get("transfer_out", out_img),
         "assert_deliverable": lambda p, where=None, source_path=None: over.get("deliverable", p),
         "log_edit_decision": over.get("log_edit", lambda **k: None),
         "fix_hands": lambda ctx, s, engine="firered": over.get("fixhands_out", out_img),
         "edit_region_contained_via_firered": lambda ctx, s, r, i, protect_face=True, engine="firered": over.get("fixart_out", out_img),
         "preserve_identity_face": lambda s, n, instructions="", ctx=None: n,
-        "enhance_faces_with_comfy": lambda ctx, p: p,
         "load_layout_for": lambda p: over.get("layout", None),
         "edit_via_layout": lambda ctx, s, i: over.get("layout_out", out_img),
         "edit_image_with_firered": lambda ctx, s, i: over.get("firered_out", out_img),
@@ -101,9 +111,6 @@ def mock_env(**over):
         "_is_removal_of": lambda i, r="", ctx=None: over.get("is_removal", False),
         "OUTPUT_DIR": _TMP,
     }
-    for k, v in imset.items():
-        setattr_saved(im, k, v, "im." + k)
-    # injected modules
     fake_pg = types.ModuleType("payload_guard")
     fake_pg.assess_payload = lambda q, r: over.get("payload", _PG())
     fake_pg.SKEPTIC_BANNER = "\n[verify]"
@@ -111,24 +118,17 @@ def mock_env(**over):
     fake_dr.run_deep_research = lambda ctx, topic, depth="standard", progress=None, **_kw: over.get("dr_result",
         {"report": "# Executive Summary\nfindings here\n", "path": "r.md",
          "stats": {"sources": 5, "pages": 10, "findings": 3}, "cancelled": False})
-    import llm as _llm
-    saved["llm.analyze"] = (_llm, "analyze_image_with_llm", _llm.analyze_image_with_llm, True)
-    _llm.analyze_image_with_llm = lambda **k: over.get("vision", "PRESENT: everything looks good")
-    import search as _search
-    saved["search.fetch"] = (_search, "fetch_reference_photo", _search.fetch_reference_photo, True)
-    _search.fetch_reference_photo = lambda ctx, q, dest, require_face=True: over.get("photo", out_img)
-    import sys as _sys
-    saved_pg = _sys.modules.get("payload_guard"); saved_dr = _sys.modules.get("deep_research")
-    _sys.modules["payload_guard"] = fake_pg; _sys.modules["deep_research"] = fake_dr
+    vars(_DEPS).update(deps)
+    vars(_ENG).update(eng)
+    _MODS.update(payload_guard=fake_pg, deep_research=fake_dr)
+    _VIS["fn"] = lambda **k: over.get("vision", "PRESENT: everything looks good")
     try:
         yield out_img
     finally:
-        for obj, name, old, had in saved.values():
-            if had: setattr(obj, name, old)
-        if saved_pg is not None: _sys.modules["payload_guard"] = saved_pg
-        else: _sys.modules.pop("payload_guard", None)
-        if saved_dr is not None: _sys.modules["deep_research"] = saved_dr
-        else: _sys.modules.pop("deep_research", None)
+        vars(_DEPS).clear()
+        vars(_ENG).clear()
+        _MODS.clear()
+        _VIS["fn"] = None
 
 
 # ------------------------------------------------------------------ helpers
@@ -225,17 +225,14 @@ def test_calculate():
 
 def test_clipboard_and_remember():
     c = _ctx()
-    import subprocess
-    real = subprocess.run
-    subprocess.run = lambda *a, **k: types.SimpleNamespace(stdout="copied text")
-    try:
-        check("clip_text", "UNTRUSTED" in T._handle_read_clipboard(c, {}, {}))
-        subprocess.run = lambda *a, **k: types.SimpleNamespace(stdout="   ")
-        check("clip_empty", "пуст" in T._handle_read_clipboard(c, {}, {}))
-        subprocess.run = lambda *a, **k: (_ for _ in ()).throw(OSError("no ps"))
-        check("clip_error", T._handle_read_clipboard(c, {}, {}).startswith("[TOOL ERROR]"))
-    finally:
-        subprocess.run = real
+    def _run(fn):
+        c.deps = types.SimpleNamespace(subprocess=types.SimpleNamespace(run=fn))
+    _run(lambda *a, **k: types.SimpleNamespace(stdout="copied text"))
+    check("clip_text", "UNTRUSTED" in T._handle_read_clipboard(c, {}, {}))
+    _run(lambda *a, **k: types.SimpleNamespace(stdout="   "))
+    check("clip_empty", "пуст" in T._handle_read_clipboard(c, {}, {}))
+    _run(lambda *a, **k: (_ for _ in ()).throw(OSError("no ps")))
+    check("clip_error", T._handle_read_clipboard(c, {}, {}).startswith("[TOOL ERROR]"))
     # remember
     c2 = _ctx()
     check("remember_empty", T._handle_remember_fact(c2, {}, {"fact": ""}).startswith("[TOOL ERROR]"))
@@ -275,7 +272,7 @@ def test_generate_image():
     # reference-person exception -> fallthrough to text2image
     with mock_env(refperson=None) as out:
         def boom(ctx, d, seed=None): raise RuntimeError("refp fail")
-        T.image_mod.generate_person_from_reference = boom
+        vars(_ENG)["generate_person_from_reference"] = boom
         r = T._handle_generate_image(_ctx(reference_person_mode=True), {}, {"description": "x"})
         check("gen_refperson_exc", "Image generated and saved" in r)
     # reference-person returns no image -> fallthrough
@@ -349,9 +346,8 @@ def test_inspect_image():
     c2 = _ctx(last_image_path=lit)
     seen = {}
     with mock_env(vision="The image is extremely dark and underexposed. Cat: MISSING. Sofa: MISSING."):
-        import llm as _llm
-        _orig = _llm.analyze_image_with_llm
-        _llm.analyze_image_with_llm = lambda **k: seen.update(k) or _orig(**k)
+        _orig = _VIS["fn"]
+        _VIS["fn"] = lambda **k: seen.update(k) or _orig(**k)
         r = T._handle_inspect_image(c2, {}, {"check": "is the cat black?"})
         check("inspect_blind_is_a_pass", "everything checks out" in r and "MISSING" not in r, r[:200])
         check("inspect_gets_measured_exposure", "Measured exposure" in seen.get("user_text", ""), seen.get("user_text", "")[:120])
@@ -368,17 +364,16 @@ def test_inspect_image_compares_earlier_pictures():
     c = _ctx(last_image_path=_img("cmp_new.png"))
     c.image_undo = [old]
     seen = []
-    import llm as _llm
     with mock_env(vision="Everything is correct and present"):
-        _orig = _llm.analyze_image_with_llm
-        _llm.analyze_image_with_llm = lambda **k: seen.append(k.get("image_path")) or _orig(**k)
+        _orig = _VIS["fn"]
+        _VIS["fn"] = lambda **k: seen.append(k.get("image_path")) or _orig(**k)
         try:
             r = T._handle_inspect_image(c, {}, {"check": "what do they share?", "earlier": 1})
             one = len(seen)
             seen.clear()
             T._handle_inspect_image(c, {}, {"check": "what do they share?"})
         finally:
-            _llm.analyze_image_with_llm = _orig
+            _VIS["fn"] = _orig
     check("inspect_compare_reads_both", one == 2 and "Picture 1 of 2" in r and "(the latest)" in r, r[:200])
     check("inspect_default_reads_one", len(seen) == 1)
 
@@ -444,7 +439,7 @@ def test_fix_hands():
         check("fixhands_noresult", T._handle_fix_hands(c, {}, {}).startswith("[TOOL ERROR]"))
     # fix_hands raises
     with mock_env():
-        T.image_mod.fix_hands = lambda ctx, s, engine="firered": (_ for _ in ()).throw(RuntimeError("boom"))
+        vars(_ENG)["fix_hands"] = lambda ctx, s, engine="firered": (_ for _ in ()).throw(RuntimeError("boom"))
         check("fixhands_raise", T._handle_fix_hands(c, {}, {}).startswith("[TOOL ERROR]"))
 
 
@@ -459,7 +454,7 @@ def test_fix_artifact():
     with mock_env(deliverable=None):
         check("fixart_noresult", T._handle_fix_artifact(c, {}, {"region": "x"}).startswith("[TOOL ERROR]"))
     with mock_env():
-        T.image_mod.edit_region_contained_via_firered = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom"))
+        vars(_ENG)["edit_region_contained_via_firered"] = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom"))
         check("fixart_raise", T._handle_fix_artifact(c, {}, {"region": "x"}).startswith("[TOOL ERROR]"))
 
 
@@ -513,8 +508,7 @@ def test_remaining_branches():
             progress("Searching", {"sources": 3, "pages": 5, "findings": 2}, "msg")
         return {"report": "# Executive Summary\nx\n", "path": "r.md", "stats": {}, "cancelled": False}
     with mock_env(dr_result=None):
-        import sys as _s
-        _s.modules["deep_research"].run_deep_research = dr_with_progress
+        _MODS["deep_research"] = types.SimpleNamespace(run_deep_research=dr_with_progress)
         T._handle_deep_research(c, {}, {"topic": "x"})
         check("dr_progress_cb", True)
     # a Pow with a small constant exponent passes the guard and evaluates
@@ -534,7 +528,7 @@ def test_remaining_branches():
         check("fixart_engine_bad", "Repaired" in T._handle_fix_artifact(_ctx(last_image_path=_img("a.png")), {}, {"region": "x", "engine": "bogus"}))
     # find_photo where OUTPUT_DIR.mkdir raises (swallowed)
     with mock_env():
-        T.image_mod.OUTPUT_DIR = types.SimpleNamespace(mkdir=lambda *a, **k: (_ for _ in ()).throw(OSError("ro")))
+        vars(_ENG)["OUTPUT_DIR"] = types.SimpleNamespace(mkdir=lambda *a, **k: (_ for _ in ()).throw(OSError("ro")))
         r = T._handle_find_photo(_ctx(), {}, {"query": "x"})
         check("findphoto_mkdir_except", "posted it to the chat" in r or r.startswith("[TOOL ERROR]"))
 

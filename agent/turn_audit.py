@@ -28,6 +28,12 @@ logger = logging.getLogger(__name__)
 
 TRACE_DIR = Path(os.getenv("FAILED_TURNS_DIR",
                            Path(__file__).resolve().parents[1] / "runtime" / "failed_turns"))
+
+
+def _trace_dir() -> Path:
+    return Path(os.getenv("FAILED_TURNS_DIR") or TRACE_DIR)
+
+
 # Keep the folder bounded: oldest traces go first.
 MAX_TRACES = _cfg_env.env_int("FAILED_TURNS_MAX", 500)
 
@@ -203,14 +209,14 @@ def _write(snap: dict) -> str:
     if not _enabled():
         return ""
     try:
-        TRACE_DIR.mkdir(parents=True, exist_ok=True)
+        _trace_dir().mkdir(parents=True, exist_ok=True)
         tag = "-".join(snap.get("reasons") or ["unknown"])[:60]
-        path = TRACE_DIR / f"{time.strftime('%Y%m%d_%H%M%S')}_{os.getpid()}_{tag}.json"
+        path = _trace_dir() / f"{time.strftime('%Y%m%d_%H%M%S')}_{os.getpid()}_{tag}.json"
         n = 1
         while path.exists():
             path = path.with_name(f"{path.stem}_{n}.json"); n += 1
         path.write_text(json.dumps(snap, ensure_ascii=False, indent=1), encoding="utf-8")
-        old = sorted(TRACE_DIR.glob("*.json"))
+        old = sorted(_trace_dir().glob("*.json"))
         for f in old[:max(0, len(old) - MAX_TRACES)]:
             try: f.unlink()
             except OSError: pass

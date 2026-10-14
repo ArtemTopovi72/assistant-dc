@@ -19,6 +19,7 @@ from urllib.parse import urlparse
 
 import requests
 
+from seams import dep
 from config import (
     VK_TOKEN, VK_API_VERSION, SOCIAL_POSTS_LIMIT, DR_PAGE_TIMEOUT,
 )
@@ -66,13 +67,13 @@ def _tg_channel(url: str) -> str:
     return parts[0] if parts else ""
 
 
-def extract_telegram_posts(url: str, limit: int = SOCIAL_POSTS_LIMIT) -> str | None:
+def extract_telegram_posts(url: str, limit: int = SOCIAL_POSTS_LIMIT, ctx=None) -> str | None:
     channel = _tg_channel(url)
     if not channel or channel in ("joinchat", "+", "addstickers", "proxy"):
         return None
     try:
         from bs4 import BeautifulSoup
-        r = requests.get(f"https://t.me/s/{channel}",
+        r = dep(ctx, "requests", requests).get(f"https://t.me/s/{channel}",
                          headers={"User-Agent": _MOBILE_UA, "Accept-Language": "ru,en"},
                          timeout=DR_PAGE_TIMEOUT)
         if r.status_code != 200:
@@ -100,11 +101,11 @@ def extract_telegram_posts(url: str, limit: int = SOCIAL_POSTS_LIMIT) -> str | N
 # --------------------------------------------------------------------------- #
 # VK — via the official API (needs VK_TOKEN)
 # --------------------------------------------------------------------------- #
-def _vk_call(method: str, **params) -> dict | None:
-    params["access_token"] = VK_TOKEN
+def _vk_call(method: str, ctx=None, **params) -> dict | None:
+    params["access_token"] = dep(ctx, "VK_TOKEN", VK_TOKEN)
     params["v"] = VK_API_VERSION
     try:
-        r = requests.get(f"https://api.vk.com/method/{method}", params=params,
+        r = dep(ctx, "requests", requests).get(f"https://api.vk.com/method/{method}", params=params,
                          timeout=DR_PAGE_TIMEOUT)
         data = r.json()
         if "error" in data:
@@ -117,7 +118,7 @@ def _vk_call(method: str, **params) -> dict | None:
         return None
 
 
-def _vk_owner_id(url: str) -> int | None:
+def _vk_owner_id(url: str, ctx=None) -> int | None:
     """Resolve a VK group URL to a negative owner_id for wall.get."""
     path = urlparse(url).path.strip("/")
     screen = path.split("/")[0] if path else ""
@@ -126,21 +127,21 @@ def _vk_owner_id(url: str) -> int | None:
     m = re.fullmatch(r"(?:club|public|event)(\d+)", screen)
     if m:
         return -int(m.group(1))
-    resolved = _vk_call("utils.resolveScreenName", screen_name=screen)
+    resolved = dep(ctx, "_vk_call", _vk_call)("utils.resolveScreenName", ctx=ctx, screen_name=screen)
     if not resolved or "object_id" not in resolved:
         return None
     oid = int(resolved["object_id"])
     return -oid if resolved.get("type") in ("group", "page", "event") else oid
 
 
-def extract_vk_posts(url: str, limit: int = SOCIAL_POSTS_LIMIT) -> str | None:
-    if not VK_TOKEN:
+def extract_vk_posts(url: str, limit: int = SOCIAL_POSTS_LIMIT, ctx=None) -> str | None:
+    if not dep(ctx, "VK_TOKEN", VK_TOKEN):
         logger.info("VK wall %s skipped — no VK_TOKEN configured", url)
         return None
-    owner = _vk_owner_id(url)
+    owner = dep(ctx, "_vk_owner_id", _vk_owner_id)(url)
     if owner is None:
         return None
-    resp = _vk_call("wall.get", owner_id=owner, count=limit, extended=0)
+    resp = dep(ctx, "_vk_call", _vk_call)("wall.get", ctx=ctx, owner_id=owner, count=limit, extended=0)
     if not resp or not resp.get("items"):
         return None
     posts = []
@@ -159,11 +160,11 @@ def extract_vk_posts(url: str, limit: int = SOCIAL_POSTS_LIMIT) -> str | None:
 # --------------------------------------------------------------------------- #
 # Unified entry
 # --------------------------------------------------------------------------- #
-def fetch_social_posts(url: str, limit: int = SOCIAL_POSTS_LIMIT) -> str | None:
+def fetch_social_posts(url: str, limit: int = SOCIAL_POSTS_LIMIT, ctx=None) -> str | None:
     """Return a text digest of recent posts for a VK/Telegram URL, or None."""
     kind = social_kind(url)
     if kind == "telegram":
-        return extract_telegram_posts(url, limit)
+        return dep(ctx, "extract_telegram_posts", extract_telegram_posts)(url, limit)
     if kind == "vk":
-        return extract_vk_posts(url, limit)
+        return dep(ctx, "extract_vk_posts", extract_vk_posts)(url, limit)
     return None

@@ -39,13 +39,13 @@ def video_url(text: str) -> str:
     return next((u for u in urls_in(text) if _VIDEO_RE.match(u)), "")
 
 
-def fetch_video(url: str, max_seconds: int = VIDEO_MAX_SECONDS) -> dict:
+def fetch_video(url: str, max_seconds: int = VIDEO_MAX_SECONDS, modules=None) -> dict:
     """{"data": mp4 bytes, "seconds", "title", "description"} for a public video up to
     `max_seconds`, {"too_long": True, "seconds", "title"} past it, {} when it
     cannot be downloaded. 720p is plenty for frames and speech."""
     import os, tempfile
     try:
-        import yt_dlp
+        yt_dlp = module(modules or {}, "yt_dlp")
         with tempfile.TemporaryDirectory(prefix="ytdl_") as d:
             opts = {"quiet": True, "no_warnings": True, "noprogress": True, "noplaylist": True,
                     # YouTube serves picture and sound as separate streams

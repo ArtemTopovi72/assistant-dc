@@ -205,12 +205,8 @@ def drive_panel(start_result):
         def get_queue_stats(self): return {}
         def stop(self): pass
 
-    real = T.TelegramBot
-    T.TelegramBot = _FakeBot
-    try:
-        tab._start()
-    finally:
-        T.TelegramBot = real
+    tab.parts = {"TelegramBot": _FakeBot}
+    tab._start()
     return tab
 
 

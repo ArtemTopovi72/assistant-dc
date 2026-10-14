@@ -551,7 +551,7 @@ class DispatchMixin:
             elif e["timer"] is not None:
                 e["timer"].cancel()
             e["photos"].append({"file_id": file_id, "caption": caption})
-            wait = max(0.05, min(tg_bot._ALBUM_COLLECT_S, e["t0"] + tg_bot._ALBUM_MAX_S - time.monotonic()))
+            wait = max(0.05, min(getattr(self, "album_collect_s", None) or tg_bot._ALBUM_COLLECT_S, e["t0"] + tg_bot._ALBUM_MAX_S - time.monotonic()))
             t = threading.Timer(wait, self._flush_album, (group_id,))
             t.daemon = True; t.start(); e["timer"] = t
 

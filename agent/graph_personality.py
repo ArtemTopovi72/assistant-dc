@@ -1095,7 +1095,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
         if getattr(ctx, "sandbox", None) is None:
             from tool_code_handlers import CODE_TOOL_NAMES
             _drop |= set(CODE_TOOL_NAMES)
-        elif not _sandbox_access.may_run_code(getattr(ctx, "sandbox_user", None)):
+        elif not dep(ctx, "may_run_code", _sandbox_access.may_run_code)(getattr(ctx, "sandbox_user", None)):
             # Files but no execution. Withholding the schema is better than
             # letting the model call it and be refused: a tool it cannot see is
             # one it cannot promise the user.
@@ -1452,7 +1452,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             # result, fix -- before anything is called done. One round only,
             # and an honest "I could not get it to run" is an allowed answer.
             if (corrective_count < _MAX_CORRECTIVE and draft and unverified_code
-                    and _sandbox_access.may_run_code(getattr(ctx, "sandbox_user", None))):
+                    and dep(ctx, "may_run_code", _sandbox_access.may_run_code)(getattr(ctx, "sandbox_user", None))):
                 corrective_count += 1
                 logger.warning("Answer after editing %s with no run since — "
                                "corrective round %d/%d", unverified_code,

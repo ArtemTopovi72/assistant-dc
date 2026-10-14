@@ -749,7 +749,7 @@ def _handle_pack_archive(ctx, state, args: dict) -> str:
 @_guard
 def _handle_run_code(ctx, state, args: dict) -> str:
     box = _box(ctx)
-    if not _access.may_run_code(getattr(ctx, "sandbox_user", None)):
+    if not dep(ctx, "may_run_code", _access.may_run_code)(getattr(ctx, "sandbox_user", None)):
         return ("[TOOL ERROR] This account may keep and edit files but not run "
                 "code. Do the work with the file tools, or tell the user an "
                 "administrator has to raise their sandbox level.")
@@ -864,7 +864,7 @@ def _deliver_new_pictures(box, state, before: dict, ctx) -> str:
 @_guard
 def _handle_install_packages(ctx, state, args: dict) -> str:
     box = _box(ctx)
-    if not _access.may_run_code(getattr(ctx, "sandbox_user", None)):
+    if not dep(ctx, "may_run_code", _access.may_run_code)(getattr(ctx, "sandbox_user", None)):
         return ("[TOOL ERROR] This account may not install packages. Ask the "
                 "user to have an administrator raise their sandbox level.")
     pkgs = args.get("packages") or []
@@ -1074,7 +1074,7 @@ def _test_digest(output: str) -> str:
 def _handle_run_tests(ctx, state, args: dict) -> str:
     box = _box(ctx)
     user = getattr(ctx, "sandbox_user", None)
-    if not _access.may_run_code(user):
+    if not dep(ctx, "may_run_code", _access.may_run_code)(user):
         return ("[TOOL ERROR] This account may keep and edit files but not run "
                 "code, so tests cannot be run here.")
     host = _access.allow_host_execution(user)

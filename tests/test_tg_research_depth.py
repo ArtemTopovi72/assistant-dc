@@ -301,7 +301,7 @@ try:
     check("and the picker still renders instead of raising",
           len(inline_labels(T._depth_menu_kb(bot._get_session(CID), "en", _boom))) == 3)
 finally:
-    DT._TIMING_FILE = _TIMING_BACKUP
+    DT.redirect_timings(_TIMING_BACKUP.parent)
 
 print(f"\n{OK} passed, {BAD} failed")
 sys.exit(1 if BAD else 0)
