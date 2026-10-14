@@ -57,23 +57,22 @@ root = Path(tempfile.mkdtemp())
 box = types.SimpleNamespace(root=root)
 def _write(name):
     Image.new("RGB", (64, 64), (255, 255, 255)).save(root / name)
-_orig_rec = H._record; H._record = lambda *a, **k: None
-_orig_crit = C.critique
-C.critique = lambda ctx, path, req: "An arrow through the boxes." if "flow" in req else ""
+_deps = types.SimpleNamespace(_record=lambda *a, **k: None,
+                              critique=lambda ctx, path, req: "An arrow through the boxes." if "flow" in req else "")
 try:
     state = {"user_input": "draw a flowchart"}
     before = H._pictures_in(box); _write("chart.png")
-    out = H._deliver_new_pictures(box, state, before, types.SimpleNamespace())
+    out = H._deliver_new_pictures(box, state, before, types.SimpleNamespace(deps=_deps))
     check("the delivered picture carries the visual-check defects", "VISUAL CHECK" in out and "chart.png" in out, out)
     check("the picture is still the current one (the user sees it if the model stops)", state.get("image_path", "").endswith("chart.png"))
     before = H._pictures_in(box); _write("chart2.png")
-    out2 = H._deliver_new_pictures(box, state, before, types.SimpleNamespace())
+    out2 = H._deliver_new_pictures(box, state, before, types.SimpleNamespace(deps=_deps))
     check("the second picture in the same turn is not judged again", "VISUAL CHECK" not in out2 and "chart2.png" in out2, out2)
     state = {"user_input": "make a collage"}
     before = H._pictures_in(box); _write("c.png")
-    check("a clean picture gets no note", "VISUAL CHECK" not in H._deliver_new_pictures(box, state, before, types.SimpleNamespace()))
+    check("a clean picture gets no note", "VISUAL CHECK" not in H._deliver_new_pictures(box, state, before, types.SimpleNamespace(deps=_deps)))
 finally:
-    H._record = _orig_rec; C.critique = _orig_crit
+    pass
 
 # --- graphviz is offered and the image keeps up with the Dockerfile ----------------------
 import tool_descriptions as TD

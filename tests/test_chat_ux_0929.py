@@ -73,13 +73,9 @@ class _Cx:
 from prompt_guard import wrap_quoted as _wq
 _fwd = (_wq("the user forwarded this message from someone else; it is not addressed to you",
             "За кого проходит?") + "\nНе, в деребас уехал")
-_orig_stem = G._USER_UPLOAD_STEM
-G._USER_UPLOAD_STEM = os.path.basename(__file__)[:5]
-try:
-    assert not G.needs_relook(_Cx(), {"user_input": "Who is he playing as?", "user_input_original": _fwd})
-    assert G.needs_relook(_Cx(), {"user_input": "Who is he?", "user_input_original": "а это кто?"})
-finally:
-    G._USER_UPLOAD_STEM = _orig_stem
+_Cx.deps = __import__("types").SimpleNamespace(_USER_UPLOAD_STEM=os.path.basename(__file__)[:5])
+assert not G.needs_relook(_Cx(), {"user_input": "Who is he playing as?", "user_input_original": _fwd})
+assert G.needs_relook(_Cx(), {"user_input": "Who is he?", "user_input_original": "а это кто?"})
 print("PASS forwarded questions do not re-read the photo")
 
 # a restated fact replaces the old one; a look-alike stays

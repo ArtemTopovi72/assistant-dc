@@ -293,14 +293,12 @@ def test_dedupe_pages_single_page_noop():
 
 
 def test_normalize_outline_hits_max_sections_break():
-    saved = DR.DR_SURVEY_MAX_SECTIONS
-    DR.DR_SURVEY_MAX_SECTIONS = 2
-    try:
-        plan = {"sections": [{"heading": f"H{i}", "subsections": [], "focus": ""} for i in range(5)]}
-        out = DR._normalize_outline(plan, "t")
-        check("normalize_outline_caps_at_max_sections", len(out["sections"]) == 2)
-    finally:
-        DR.DR_SURVEY_MAX_SECTIONS = saved
+    import types, dr_settings
+    from seams import Over
+    two = types.SimpleNamespace(research_settings=Over(dr_settings, DR_SURVEY_MAX_SECTIONS=2))
+    plan = {"sections": [{"heading": f"H{i}", "subsections": [], "focus": ""} for i in range(5)]}
+    out = DR._normalize_outline(plan, "t", ctx=two)
+    check("normalize_outline_caps_at_max_sections", len(out["sections"]) == 2)
 
 
 def test_coerce_override_str_type_none_value():

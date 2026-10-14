@@ -259,9 +259,6 @@ print("=" * 66)
 print("THE PLANNER RETRIES INSTEAD OF ACCEPTING A FRAGMENT")
 print("=" * 66)
 
-_real_llm = sys.modules.get("llm")
-
-
 class _FakeLLM:
     """Stands in for llm.send_to_lm_studio so the retry can be driven exactly."""
     def __init__(self, replies):
@@ -273,14 +270,8 @@ class _FakeLLM:
 
 
 def _with_llm(fake, fn):
-    sys.modules["llm"] = fake
-    try:
-        return fn()
-    finally:
-        if _real_llm is not None:
-            sys.modules["llm"] = _real_llm
-        else:
-            sys.modules.pop("llm", None)
+    """`fn(ctx)` with a context whose chat model is the fake."""
+    return fn(__import__("types").SimpleNamespace(chat_model=fake.send_to_lm_studio))
 
 
 GOOD = ('{"high_level_description": "a tank", "medium": "photography",'
@@ -289,7 +280,7 @@ GOOD = ('{"high_level_description": "a tank", "medium": "photography",'
 FRAGMENT = '{"desc": "a fluffy ginger cat", "x": 0.3, "y": 0.3, "w": 0.4, "h": 0.6}'
 
 fake = _FakeLLM([FRAGMENT, GOOD])
-got = _with_llm(fake, lambda: I._ask_planner(object(), "a realistic photo of a tank"))
+got = _with_llm(fake, lambda c: I._ask_planner(c, "a realistic photo of a tank"))
 check("a fragment reply is rejected and the planner is asked again",
       fake.calls == 2, f"called {fake.calls}x")
 check("the retry's good answer is the one used",
@@ -297,12 +288,12 @@ check("the retry's good answer is the one used",
       json.dumps(got, ensure_ascii=False)[:140])
 
 fake = _FakeLLM([GOOD, GOOD])
-_with_llm(fake, lambda: I._ask_planner(object(), "a realistic photo of a tank"))
+_with_llm(fake, lambda c: I._ask_planner(c, "a realistic photo of a tank"))
 check("a good first answer costs only one call", fake.calls == 1,
       f"called {fake.calls}x")
 
 fake = _FakeLLM([FRAGMENT, FRAGMENT])
-got = _with_llm(fake, lambda: I.plan_layout(object(), "a realistic photo of a tank"))
+got = _with_llm(fake, lambda c: I.plan_layout(c, "a realistic photo of a tank"))
 check("two bad answers fall back rather than using a fragment",
       got["medium"] == "photography" and got["elements"],
       json.dumps(got, ensure_ascii=False)[:180])

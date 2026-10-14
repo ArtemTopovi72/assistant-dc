@@ -100,6 +100,7 @@ def _ideogram_draw(ctx, prompt: str, *, width: int, height: int,
         # when the prompt said ON it, is moved in the boxes now, not after
         # a 90-second render the critic then rejects (draw_preview).
         import draw_preview
+        draw_preview = dep(ctx, "draw_preview", draw_preview)
         layout, _pre = draw_preview.preflight(ctx, layout, prompt, width=width, height=height)
         _image._LAST_PREFLIGHT.clear(); _image._LAST_PREFLIGHT.update(_pre)
         if rounds and any(str(el.get("text") or "").strip()

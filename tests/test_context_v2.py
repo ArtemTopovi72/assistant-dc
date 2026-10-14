@@ -4,6 +4,7 @@ import json
 import os
 import sys
 import tempfile
+import types
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ["CTX_ARCHIVE_DIR"] = tempfile.mkdtemp()
@@ -19,6 +20,7 @@ class Ctx:
         self.calls = 0
         self.ctx_fold_request = ""
         self.total_user_turns = 0
+        self.deps = types.SimpleNamespace()
 
     def set_stage(self, *_): pass
 
@@ -52,11 +54,8 @@ def test_below_budget_nothing_changes():
 def test_masking_keeps_pairs_and_paths_and_recall():
     msgs = [SYS] + turn(1) + turn(2) + turn(3) + turn(4)
     os.environ["CONTEXT_COMPACT_AT"] = "9"        # masking only
-    C.COMPACT_AT = 9.0
-    try:
-        out = C.manage(Ctx(), msgs)
-    finally:
-        C.COMPACT_AT = 0.65
+    ctx = Ctx(); ctx.deps.COMPACT_AT = 9.0
+    out = C.manage(ctx, msgs)
     tools = [m for m in out if m.get("role") == "tool"]
     assert C.is_marker(tools[0]["content"]) and "pic_1.png" in tools[0]["content"]
     assert not C.is_marker(tools[-1]["content"])  # the last two turns stay verbatim

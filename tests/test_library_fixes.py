@@ -23,11 +23,14 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tg_bot as T
 
 DATA = tempfile.mkdtemp(prefix="libfix_test_")
 T.redirect_data_dir(DATA)
 
+import library
+from fakes import Over
 import knowledge  # noqa: E402  (after redirect_data_dir)
 
 
@@ -44,8 +47,6 @@ class _StubEmbedder:
     def embed_one(self, text, **k):
         return None
 
-
-knowledge.Embedder = _StubEmbedder
 
 OK = BAD = 0
 
@@ -64,6 +65,7 @@ def make_bot():
     bot = T.TelegramBot("123:TEST", lambda: None, lambda: None, lambda: {},
                         silent_mode=True)
     bot.posts = []
+    bot.modules = {"library": Over(library, Library=lambda *a, **k: library.Library(*a, embedder=_StubEmbedder(), **k))}
 
     def _api_post(method, p=None, **k):
         bot.posts.append((method, p or {}))
@@ -280,7 +282,7 @@ check("two.txt: reported count is its OWN chunks, not one.txt's total",
 print("=" * 70); print("7. library.py Library.build source_ids/titles override")
 import library
 DB = str(pathlib.Path(tempfile.mkdtemp(prefix="libfix_lib_")) / "t.db")
-lib3 = library.Library(DB)
+lib3 = library.Library(DB, embedder=_StubEmbedder())
 stageA = tempfile.mkdtemp(prefix="libfix_stageA_")
 stageB = tempfile.mkdtemp(prefix="libfix_stageB_")
 pA = str(pathlib.Path(stageA) / "safe_name.txt")

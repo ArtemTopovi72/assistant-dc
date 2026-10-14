@@ -45,7 +45,7 @@ v2, one idea per mechanism (sources in docs/research_log.md, 2026-09-24):
 Fails open everywhere: any error returns the input list unchanged.
 """
 from __future__ import annotations
-from seams import chat_model, choice, yes_no
+from seams import chat_model, choice, dep, yes_no
 
 import hashlib
 import json
@@ -507,7 +507,7 @@ def manage(ctx, messages: List[dict], *, query: str = "", force: bool = False) -
         _add(state, "artifacts", arts)
 
         compacted = False
-        if (force or fold_req or est_tokens(([head] if head else []) + body) >= COMPACT_AT * budget) \
+        if (force or fold_req or est_tokens(([head] if head else []) + body) >= dep(ctx, "COMPACT_AT", COMPACT_AT) * budget) \
                 and keep_from > 0:
             span, tail = body[:keep_from], body[keep_from:]
             span_text = _render_span(span)

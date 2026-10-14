@@ -31,11 +31,11 @@ class FakeWhisper:
         return [types.SimpleNamespace(text=text)], info
 
 class Ctx:
+    forced = None
     def __init__(self, w):
         self.models = types.SimpleNamespace(whisper=w); self.asr_lock = threading.Lock()
+        self.deps = types.SimpleNamespace(_use_gigaam=lambda: False, WHISPER_LANGUAGE=self.forced)
 
-A.WHISPER_LANGUAGE = None
-A._use_gigaam = lambda: False
 
 calls.clear()
 t = A._whisper_transcribe(Ctx(FakeWhisper("fr", 0.69)), "x.wav", lang_hint="ru")
@@ -54,10 +54,10 @@ t = A._whisper_transcribe(Ctx(FakeWhisper("fr", 0.3)), "x.wav")
 check("no hint → no re-read", calls == [None], calls)
 
 calls.clear()
-A.WHISPER_LANGUAGE = "en"
+Ctx.forced = "en"
 t = A._whisper_transcribe(Ctx(FakeWhisper("fr", 0.3)), "x.wav", lang_hint="ru")
 check("a forced WHISPER_LANGUAGE is never second-guessed", calls == ["en"], calls)
-A.WHISPER_LANGUAGE = None
+Ctx.forced = None
 
 check("the threshold is a real bar, not a token", 0.7 <= A.ASR_LANG_CONFIDENCE <= 0.95, A.ASR_LANG_CONFIDENCE)
 

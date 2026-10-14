@@ -114,12 +114,13 @@ class Embedder:
 
     def __init__(self, base_url: str = "",
                  model: str = "",
-                 enabled: bool = True, timeout: float = 30.0):
+                 enabled: bool = True, timeout: float = 30.0, http=_requests):
         base_url = base_url or EMBED_BASE_DEFAULT
         model = model or EMBED_MODEL_DEFAULT
         self.base_url = base_url.rstrip("/")
         self.model = model
-        self.enabled = enabled and _requests is not None
+        self.http = http
+        self.enabled = enabled and http is not None
         self.timeout = timeout
         self.dim: Optional[int] = None
         self._avail: Optional[bool] = None
@@ -144,7 +145,7 @@ class Embedder:
             return None
         try:
             self.calls += 1
-            r = _requests.post(
+            r = self.http.post(
                 f"{self.base_url}/v1/embeddings",
                 json={"model": self.model, "input": list(texts)},
                 timeout=self.timeout,
@@ -169,16 +170,16 @@ class Embedder:
 # --------------------------------------------------------------------------- #
 # BLOB (de)serialization
 # --------------------------------------------------------------------------- #
-def _vec_to_blob(vec: Sequence[float]) -> bytes:
-    if _np is not None:
-        return _np.asarray(vec, dtype="<f4").tobytes()
+def _vec_to_blob(vec: Sequence[float], np=_np) -> bytes:
+    if np is not None:
+        return np.asarray(vec, dtype="<f4").tobytes()
     return struct.pack(_FLOAT_FMT % len(vec), *vec)
 
 
-def _blob_to_list(blob: bytes) -> List[float]:
+def _blob_to_list(blob: bytes, np=_np) -> List[float]:
     n = len(blob) // 4
-    if _np is not None:
-        return _np.frombuffer(blob, dtype="<f4").tolist()
+    if np is not None:
+        return np.frombuffer(blob, dtype="<f4").tolist()
     return list(struct.unpack(_FLOAT_FMT % n, blob))
 
 
@@ -242,7 +243,8 @@ def _hash(text: str) -> str:
 # --------------------------------------------------------------------------- #
 class KnowledgeBase:
     def __init__(self, db_path: Path | str, embedder: Optional[Embedder] = None,
-                 embed_dim: int = EMBED_DIM_DEFAULT):
+                 embed_dim: int = EMBED_DIM_DEFAULT, np=_np):
+        self.np = np
         self.path = Path(db_path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.embedder = embedder if embedder is not None else Embedder()
@@ -410,7 +412,7 @@ class KnowledgeBase:
             for r, v in zip(sub, vecs):
                 self._conn.execute(
                     "UPDATE chunks SET embedding=?, embed_model=? WHERE id=?",
-                    (_vec_to_blob(v), self.embedder.model, r["id"]))
+                    (_vec_to_blob(v, np=self.np), self.embedder.model, r["id"]))
                 done += 1
             self._conn.commit()
             if progress is not None:
@@ -571,12 +573,12 @@ class KnowledgeBase:
         ids = [r["id"] for r in rows]
         if not ids:
             return [], None
-        if _np is not None:
-            mat = _np.stack([_np.frombuffer(r["embedding"], dtype="<f4") for r in rows])
-            norms = _np.linalg.norm(mat, axis=1, keepdims=True)
+        if self.np is not None:
+            mat = self.np.stack([self.np.frombuffer(r["embedding"], dtype="<f4") for r in rows])
+            norms = self.np.linalg.norm(mat, axis=1, keepdims=True)
             norms[norms == 0] = 1.0
             return ids, mat / norms
-        return ids, [_blob_to_list(r["embedding"]) for r in rows]
+        return ids, [_blob_to_list(r["embedding"], np=self.np) for r in rows]
 
     def search_semantic(self, query: str, k: int = 10) -> List[Tuple[int, float]]:
         """Return [(chunk_id, cosine)] best-first, or [] if embeddings unavailable."""
@@ -588,11 +590,11 @@ class KnowledgeBase:
         ids, mat = self._all_embeddings(dim=len(qv[0]))
         if not ids:
             return []
-        if _np is not None:
-            q = _np.asarray(qv[0], dtype="<f4")
-            qn = q / (_np.linalg.norm(q) or 1.0)
+        if self.np is not None:
+            q = self.np.asarray(qv[0], dtype="<f4")
+            qn = q / (self.np.linalg.norm(q) or 1.0)
             sims = mat @ qn
-            order = _np.argsort(-sims)[:k]
+            order = self.np.argsort(-sims)[:k]
             return [(ids[i], float(sims[i])) for i in order]
         # pure-python fallback
         q = qv[0]

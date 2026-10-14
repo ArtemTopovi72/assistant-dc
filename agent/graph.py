@@ -1,4 +1,4 @@
-from seams import yes_no, vision_model, text_model
+from seams import dep, module, yes_no, vision_model, text_model
 import logging
 import re
 from typing import Optional
@@ -95,9 +95,9 @@ def translate_node(ctx: Context, state: AgentState) -> AgentState:
     _prev = next((str(m.get("content") or "") for m in reversed(state.get("messages") or [])
                   if m.get("role") == "assistant" and m.get("content")), "")
     try:
-        english = _translate_to_english(ctx, original, context=_prev[-400:])
-    except TypeError:                     # a patched translator without `context`
-        english = _translate_to_english(ctx, original)
+        english = dep(ctx, "_translate_to_english", _translate_to_english)(ctx, original, context=_prev[-400:])
+    except TypeError:                     # a stand-in translator without `context`
+        english = dep(ctx, "_translate_to_english", _translate_to_english)(ctx, original)
     # Set even when untranslated: an Italian line left as-is had no original,
     # and the reply-language guard skipped its English answer.
     state["user_input_original"] = original
@@ -150,7 +150,7 @@ def vision_agent_node(ctx: Context, state: AgentState) -> AgentState:
             try:
                 with open(last_path, "rb") as fh:
                     current_bytes = fh.read()
-                proxy_bytes = downscale_image_bytes(current_bytes)
+                proxy_bytes = dep(ctx, "downscale_image_bytes", downscale_image_bytes)(current_bytes)
                 ctx.set_stage("Looking at the video again" if is_video_sheet(last_path)
                               else "Looking at the image")
                 if is_video_sheet(last_path):
@@ -183,7 +183,7 @@ def vision_agent_node(ctx: Context, state: AgentState) -> AgentState:
     # any downstream grounding/detection/captioning. The vision model gains
     # nothing from full res and full-res would bloat the payload. The proxy is
     # NEVER the edit source.
-    proxy_bytes = downscale_image_bytes(original_bytes)
+    proxy_bytes = dep(ctx, "downscale_image_bytes", downscale_image_bytes)(original_bytes)
     state["image_data"] = proxy_bytes
 
     # WORKING / EDIT IMAGE = the ORIGINAL upload at full native resolution,
@@ -344,8 +344,7 @@ def _close_look(ctx, image_bytes: bytes, question: str, overview: str) -> str:
     (vision_close.look_closely); the overview alone when there is nothing
     to zoom into or the close look fails."""
     try:
-        import vision_close
-        closer = vision_close.look_closely(ctx, image_bytes, question, overview)
+        closer = module(ctx, "vision_close").look_closely(ctx, image_bytes, question, overview)
     except Exception:
         logger.warning("close look failed; the overview stands", exc_info=True)
         closer = None
@@ -419,7 +418,7 @@ def needs_relook(ctx: Optional[Context], state: AgentState) -> bool:
     # Any question about a photo the user sent or a video they sent: a receipt
     # read once, then "which item is the most expensive?".
     return bool(r["is_question"]) and (is_video_sheet(last_path)
-                                      or Path(last_path).name.startswith(_USER_UPLOAD_STEM))
+                                      or Path(last_path).name.startswith(dep(ctx, "_USER_UPLOAD_STEM", _USER_UPLOAD_STEM)))
 
 
 def entry_router(state: AgentState, ctx: Optional[Context] = None) -> str:
@@ -438,14 +437,13 @@ def build_graph(ctx: Context):
     in the node functions above.
 
     Each node is bound to `ctx` here rather than captured, and looked up on this
-    MODULE at call time, so a suite that patches e.g. graph.personality_node
-    after build_graph has already run still sees its patch take effect.
+    MODULE at call time; a suite's stand-in node rides on `ctx.deps`.
     """
     workflow = StateGraph(AgentState)
-    workflow.add_node("translate", lambda s: translate_node(ctx, s))
-    workflow.add_node("vision_agent", lambda s: vision_agent_node(ctx, s))
-    workflow.add_node("personality", lambda s: personality_node(ctx, s))
-    workflow.add_node("tts", lambda s: tts_node(ctx, s))
+    workflow.add_node("translate", lambda s: dep(ctx, "translate_node", translate_node)(ctx, s))
+    workflow.add_node("vision_agent", lambda s: dep(ctx, "vision_agent_node", vision_agent_node)(ctx, s))
+    workflow.add_node("personality", lambda s: dep(ctx, "personality_node", personality_node)(ctx, s))
+    workflow.add_node("tts", lambda s: dep(ctx, "tts_node", tts_node)(ctx, s))
 
     workflow.add_edge(START, "translate")
     workflow.add_conditional_edges(

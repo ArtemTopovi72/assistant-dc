@@ -836,7 +836,7 @@ def _deliver_new_pictures(box, state, before: dict, ctx) -> str:
         return ""
     new.sort(key=lambda p: after[p])
     newest = new[-1]
-    _record(box, "run_code", "a script wrote " + ", ".join(_rel(box, p) for p in new[-4:]))
+    dep(ctx, "_record", _record)(box, "run_code", "a script wrote " + ", ".join(_rel(box, p) for p in new[-4:]))
     state["image_path"] = str(newest)
     state["image_status"] = "ok"
     try:
@@ -852,7 +852,7 @@ def _deliver_new_pictures(box, state, before: dict, ctx) -> str:
         state["_visual_checked"] = True
         try:
             import code_visual_check as _cvc
-            defects = _cvc.critique(ctx, str(newest), state.get("user_input", ""))
+            defects = dep(ctx, "critique", _cvc.critique)(ctx, str(newest), state.get("user_input", ""))
         except Exception:
             defects = ""
         if defects:

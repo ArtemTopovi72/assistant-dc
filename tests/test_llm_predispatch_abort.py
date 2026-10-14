@@ -40,16 +40,11 @@ class Ctx:
 
 
 def run(monkey_throttle, monkey_stream):
-    orig_t, orig_s = llm.throttle_external_calls, llm._stream_chat
-    orig_delay = llm.LLM_RETRY_BASE_DELAY
-    llm.throttle_external_calls = monkey_throttle
-    llm._stream_chat = monkey_stream
-    llm.LLM_RETRY_BASE_DELAY = 0.0          # keep the test fast
-    try:
-        return llm.send_to_lm_studio(Ctx(), [{"role": "user", "content": "hi"}])
-    finally:
-        llm.throttle_external_calls, llm._stream_chat = orig_t, orig_s
-        llm.LLM_RETRY_BASE_DELAY = orig_delay
+    import types
+    c = Ctx()
+    c.deps = types.SimpleNamespace(throttle_external_calls=monkey_throttle, _stream_chat=monkey_stream,
+                                   LLM_RETRY_BASE_DELAY=0.0)       # keep the test fast
+    return llm.send_to_lm_studio(c, [{"role": "user", "content": "hi"}])
 
 
 # ── 1. pre-dispatch failure: exactly ONE attempt, no stream call ─────────────

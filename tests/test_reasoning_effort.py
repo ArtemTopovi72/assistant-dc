@@ -47,17 +47,13 @@ def _capture_payload(model_name, no_think, effort):
         cap.update(payload)
         return {"content": "ok"}
 
-    saved_stream, saved_throttle = llm._stream_chat, llm.throttle_external_calls
-    llm._stream_chat = fake_stream
-    llm.throttle_external_calls = lambda ctx: None
-    try:
-        ctx = SimpleNamespace(model_name=model_name, no_think=no_think,
-                              reasoning_effort=effort, is_cancelled=lambda: False,
-                              cancel_event=None, api_lock=threading.Lock(),
-                              last_api_call_time=0.0, api_min_interval=0.0)
-        llm.send_to_lm_studio(ctx, [{"role": "user", "content": "hi"}])
-    finally:
-        llm._stream_chat, llm.throttle_external_calls = saved_stream, saved_throttle
+    ctx = SimpleNamespace(model_name=model_name, no_think=no_think,
+                          reasoning_effort=effort, is_cancelled=lambda: False,
+                          cancel_event=None, api_lock=threading.Lock(),
+                          last_api_call_time=0.0, api_min_interval=0.0,
+                          deps=SimpleNamespace(_stream_chat=fake_stream,
+                                               throttle_external_calls=lambda ctx: None))
+    llm.send_to_lm_studio(ctx, [{"role": "user", "content": "hi"}])
     return cap
 
 
@@ -84,18 +80,14 @@ def _run_with_message(model_name, msg, prefill=None, reasoning_effort=None):
         cap["payload"] = payload
         return dict(msg)
 
-    saved_stream, saved_throttle = llm._stream_chat, llm.throttle_external_calls
-    llm._stream_chat = fake_stream
-    llm.throttle_external_calls = lambda ctx: None
-    try:
-        ctx = SimpleNamespace(model_name=model_name, no_think=False,
-                              reasoning_effort="high", is_cancelled=lambda: False,
-                              cancel_event=None, api_lock=threading.Lock(),
-                              last_api_call_time=0.0, api_min_interval=0.0)
-        out = llm.send_to_lm_studio(ctx, [{"role": "user", "content": "hi"}],
-                                    prefill=prefill, reasoning_effort=reasoning_effort)
-    finally:
-        llm._stream_chat, llm.throttle_external_calls = saved_stream, saved_throttle
+    ctx = SimpleNamespace(model_name=model_name, no_think=False,
+                          reasoning_effort="high", is_cancelled=lambda: False,
+                          cancel_event=None, api_lock=threading.Lock(),
+                          last_api_call_time=0.0, api_min_interval=0.0,
+                          deps=SimpleNamespace(_stream_chat=fake_stream,
+                                               throttle_external_calls=lambda ctx: None))
+    out = llm.send_to_lm_studio(ctx, [{"role": "user", "content": "hi"}],
+                                prefill=prefill, reasoning_effort=reasoning_effort)
     return out, cap.get("payload", {})
 
 

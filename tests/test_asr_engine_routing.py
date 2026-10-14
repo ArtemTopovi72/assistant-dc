@@ -41,9 +41,7 @@ _saved = (C.ASR_ENGINE, A.WHISPER_LANGUAGE)
 
 
 def route(engine, language):
-    C.ASR_ENGINE = engine
-    A.WHISPER_LANGUAGE = language
-    return A._use_gigaam()
+    return A._use_gigaam(mode=engine, language=language)
 
 
 # ── the shipped default ──────────────────────────────────────────────────────
@@ -65,8 +63,6 @@ check("explicit gigaam is honoured with no language pinned",
       route("gigaam", None) is True)
 check("a junk setting falls back to the safe branch",
       route("nonsense", None) is False)
-
-C.ASR_ENGINE, A.WHISPER_LANGUAGE = _saved
 
 # ── the forced path, which is what protects the references ───────────────────
 import inspect
@@ -102,28 +98,22 @@ check("an empty array returns nothing",
       A._gigaam_transcribe(ctx, np.zeros(0, dtype=np.float32)) == "")
 
 # ── a failure must fall through, not take the turn down ──────────────────────
-_real = A._gigaam_transcribe
-try:
-    def boom(ctx, src):
-        raise RuntimeError("onnxruntime is unhappy")
-    A._gigaam_transcribe = boom
-    C.ASR_ENGINE = "gigaam"
-    seen = {}
+def boom(ctx, src):
+    raise RuntimeError("onnxruntime is unhappy")
+seen = {}
 
-    class _W:
-        def transcribe(self, source, **kw):
-            seen["used"] = True
-            seg = types.SimpleNamespace(text="из виспера")
-            return [seg], types.SimpleNamespace(language="ru", language_probability=1.0)
+class _W:
+    def transcribe(self, source, **kw):
+        seen["used"] = True
+        seg = types.SimpleNamespace(text="из виспера")
+        return [seg], types.SimpleNamespace(language="ru", language_probability=1.0)
 
-    ctx2 = types.SimpleNamespace(asr_lock=__import__("threading").Lock(),
-                                 models=types.SimpleNamespace(whisper=_W()))
-    out = A._whisper_transcribe(ctx2, np.zeros(16000, dtype=np.float32))
-    check("a GigaAM crash falls back to Whisper instead of losing the turn",
-          seen.get("used") and out == "из виспера", (seen, out))
-finally:
-    A._gigaam_transcribe = _real
-    C.ASR_ENGINE = _saved[0]
+ctx2 = types.SimpleNamespace(asr_lock=__import__("threading").Lock(),
+                             models=types.SimpleNamespace(whisper=_W()),
+                             deps=types.SimpleNamespace(_gigaam_transcribe=boom, _use_gigaam=lambda: True))
+out = A._whisper_transcribe(ctx2, np.zeros(16000, dtype=np.float32))
+check("a GigaAM crash falls back to Whisper instead of losing the turn",
+      seen.get("used") and out == "из виспера", (seen, out))
 
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)

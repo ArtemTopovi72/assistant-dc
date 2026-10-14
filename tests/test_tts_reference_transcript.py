@@ -19,6 +19,7 @@ re-transcribing the same reference every turn.
 Run: venv/Scripts/python.exe tests/test_tts_reference_transcript.py
 """
 import os
+import types
 import sys
 import threading
 
@@ -55,8 +56,8 @@ print("=" * 70)
 # fills the transcript in, the guard below simply stops being needed.
 # The actor's own clip is a real voice and not in git; f5_tts's sample stands in.
 import f5_tts
-A.DC_REF_WAV = os.path.join(list(f5_tts.__path__)[0], "infer", "examples", "basic", "basic_ref_en.wav")
-_wav, _text, _speed = A.get_actor_ref_and_speed(C.ASSISTANT_ACTOR)
+_REF = os.path.join(list(f5_tts.__path__)[0], "infer", "examples", "basic", "basic_ref_en.wav")
+_wav, _text, _speed = A.get_actor_ref_and_speed(C.ASSISTANT_ACTOR, _REF)
 check("the assistant actor has no configured ref_text", _text == "",
       repr(_text))
 check("and it does have a reference wav", bool(_wav), _wav)
@@ -83,20 +84,14 @@ def _fake_infer(*a, **k):
     import numpy as np
     return np.zeros(2400, dtype="float32"), 24000, None
 
-import f5_tts.infer.utils_infer as U
-_saved = (A.transcribe_audio_file, U.preprocess_ref_audio_text, U.infer_process)
-A.transcribe_audio_file = _fake_transcribe
-U.preprocess_ref_audio_text = _fake_preprocess
-U.infer_process = _fake_infer
-try:
-    ctx = _Ctx()
-    class _M: tts_model = object(); vocoder = object()   # None now means "voice off"
-    ctx.models = _M()
-    out = A.synth_single_segment(
-        ctx=ctx, idx=-1, actor=C.ASSISTANT_ACTOR, raw_text="привет",
-        out_stem=None, use_censoring=False, apply_stress=False)
-finally:
-    A.transcribe_audio_file, U.preprocess_ref_audio_text, U.infer_process = _saved
+ctx = _Ctx()
+ctx.deps = types.SimpleNamespace(transcribe_audio_file=_fake_transcribe, preprocess_ref_audio_text=_fake_preprocess,
+                                 infer_process=_fake_infer, DC_REF_WAV=_REF)
+class _M: tts_model = object(); vocoder = object()   # None now means "voice off"
+ctx.models = _M()
+out = A.synth_single_segment(
+    ctx=ctx, idx=-1, actor=C.ASSISTANT_ACTOR, raw_text="привет",
+    out_stem=None, use_censoring=False, apply_stress=False)
 
 # A reference clip is NOT known to be Russian -- the Mantella speaker library
 # is read in English -- so this one call must never be routed to the

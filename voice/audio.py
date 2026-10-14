@@ -595,9 +595,9 @@ def preprocess_text_for_synthesis(
     return text
 
 
-def get_actor_ref_and_speed(actor_name: str) -> Tuple[Optional[str], str, float]:
+def get_actor_ref_and_speed(actor_name: str, dc_ref_wav=DC_REF_WAV) -> Tuple[Optional[str], str, float]:
     actors = {
-        "DC": (str(DC_REF_WAV), "", 1.0),
+        "DC": (str(dc_ref_wav), "", 1.0),
     }
     if actor_name not in actors:
         return None, "", DEFAULT_ACTOR_SPEED
@@ -977,9 +977,9 @@ def record_audio_until_enter(fs: int = SAMPLE_RATE, gain_db: float = 0.0, ctx=No
     return audio
 
 
-def _log_detected_language(info) -> None:
+def _log_detected_language(info, forced=WHISPER_LANGUAGE) -> None:
     """Surface Whisper's auto-detected language (only meaningful when not forced)."""
-    if WHISPER_LANGUAGE is not None:
+    if forced is not None:
         return
     lang = getattr(info, "language", None)
     if lang:
@@ -991,7 +991,7 @@ _giga_model = None
 _giga_lock = threading.Lock()
 
 
-def _use_gigaam() -> bool:
+def _use_gigaam(mode=None, language=WHISPER_LANGUAGE) -> bool:
     """Is the Russian-only engine safe to use for this installation?
 
     Only when the language is pinned to Russian. GigaAM does not detect or
@@ -999,12 +999,12 @@ def _use_gigaam() -> bool:
     and this same function transcribes the F5 reference clips, which are
     English. An unset WHISPER_LANGUAGE means "detect it", and only Whisper can.
     """
-    mode = str(getattr(config, "ASR_ENGINE", "auto") or "auto").lower()
+    mode = str(mode or getattr(config, "ASR_ENGINE", "auto") or "auto").lower()
     if mode == "whisper":
         return False
     if mode == "gigaam":
         return True
-    return (WHISPER_LANGUAGE or "").lower().startswith("ru")
+    return (language or "").lower().startswith("ru")
 
 
 def _gigaam():
@@ -1100,9 +1100,10 @@ def _whisper_transcribe(ctx, audio_source, engine: str = "auto",
     the shared ASR lock and join the segments into one string. Shared by the
     array and file entry points below so the transcribe call/args can't drift
     between them."""
+    forced = dep(ctx, "WHISPER_LANGUAGE", WHISPER_LANGUAGE)
     if engine != "whisper" and dep(ctx, "_use_gigaam", _use_gigaam)():
         try:
-            text = _gigaam_transcribe(ctx, audio_source)
+            text = dep(ctx, "_gigaam_transcribe", _gigaam_transcribe)(ctx, audio_source)
             if text:
                 return text
             logger.info("GigaAM returned nothing - falling through to Whisper")
@@ -1112,11 +1113,11 @@ def _whisper_transcribe(ctx, audio_source, engine: str = "auto",
         raise RuntimeError("speech recognition is off (Whisper model not loaded)")
     with ctx.asr_lock:
         segments, info = ctx.models.whisper.transcribe(
-            audio_source, language=WHISPER_LANGUAGE, beam_size=5, vad_filter=True,
+            audio_source, language=forced, beam_size=5, vad_filter=True,
         )
         text = " ".join(seg.text for seg in segments).strip()
-    _log_detected_language(info)
-    if _doubtful_language(info, lang_hint):
+    _log_detected_language(info, forced)
+    if _doubtful_language(info, lang_hint, forced):
         logger.info("ASR: language guess %s (%.0f%%) is doubtful — re-reading as %s",
                     getattr(info, "language", "?"),
                     (getattr(info, "language_probability", 0.0) or 0.0) * 100, lang_hint)
@@ -1135,8 +1136,9 @@ def detect_media_language(ctx, path: str, min_prob: float = 0.5) -> str:
     language as the hint would re-read an English clip as Russian whenever Whisper
     is below ASR_LANG_CONFIDENCE. Detected ONCE over several windows of the whole
     file, so short diarized turns and video portions inherit a stable answer."""
-    if WHISPER_LANGUAGE:
-        return WHISPER_LANGUAGE
+    forced = dep(ctx, "WHISPER_LANGUAGE", WHISPER_LANGUAGE)
+    if forced:
+        return forced
     try:
         from faster_whisper import decode_audio
         wav = decode_audio(path, sampling_rate=16000)
@@ -1150,10 +1152,10 @@ def detect_media_language(ctx, path: str, min_prob: float = 0.5) -> str:
         return ""
 
 
-def _doubtful_language(info, lang_hint: str) -> bool:
+def _doubtful_language(info, lang_hint: str, forced=WHISPER_LANGUAGE) -> bool:
     """True when auto-detection was unsure AND disagrees with the language the
     user is known to speak. A forced WHISPER_LANGUAGE never gets here."""
-    if WHISPER_LANGUAGE or not lang_hint:
+    if forced or not lang_hint:
         return False
     lang = getattr(info, "language", None)
     prob = getattr(info, "language_probability", None)
@@ -1307,6 +1309,8 @@ def synth_single_segment(
     if models is not None and getattr(models, "tts_model", True) is None:
         return None                      # voice output is off (no weights/vocoder)
     from f5_tts.infer.utils_infer import infer_process, preprocess_ref_audio_text
+    infer_process = dep(ctx, "infer_process", infer_process)
+    preprocess_ref_audio_text = dep(ctx, "preprocess_ref_audio_text", preprocess_ref_audio_text)
     try:
         processed_text = preprocess_text_for_synthesis(
             ctx, raw_text, use_censoring=use_censoring, apply_stress=apply_stress,
@@ -1314,7 +1318,7 @@ def synth_single_segment(
         if not processed_text:
             return None
 
-        ref_wav, ref_text, actor_speed = get_actor_ref_and_speed(actor)
+        ref_wav, ref_text, actor_speed = get_actor_ref_and_speed(actor, dep(ctx, "DC_REF_WAV", DC_REF_WAV))
         custom = getattr(ctx, "custom_ref_wav", None)
         if custom:
             # A caller that already knows the transcript says so. The
@@ -1343,7 +1347,7 @@ def synth_single_segment(
         # such coupling, and its result is cached in transcriptions.json, so this
         # also stops re-transcribing the same reference on every turn.
         if not ref_text:
-            ref_text = transcribe_audio_file(ctx, ref_wav, engine="whisper") or ""
+            ref_text = dep(ctx, "transcribe_audio_file", transcribe_audio_file)(ctx, ref_wav, engine="whisper") or ""
         ref_file, ref_text_proc = preprocess_ref_audio_text(ref_wav, ref_text)
 
         with ctx.tts_lock:

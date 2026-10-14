@@ -10,7 +10,7 @@ module at call time, never imported by value. _IMAGE_DIR in particular is
 rebound by redirect_data_dir(), which a by-value import would never see."""
 from __future__ import annotations
 
-from seams import vision_model
+from seams import vision_model, module
 import html as _html_mod
 import os
 import re
@@ -23,9 +23,11 @@ from typing import Optional
 
 # Telegram's cloud Bot API serves files up to 20 MB; a self-hosted
 # telegram-bot-api (config.TG_API_BASE) goes up to 2 GB.
-def _bot_file_limit() -> int:
-    import config as _config
-    return (2000 if getattr(_config, "TG_API_LOCAL", False) else 20) * 1024 * 1024
+def _bot_file_limit(local=None) -> int:
+    if local is None:
+        import config as _config
+        local = getattr(_config, "TG_API_LOCAL", False)
+    return (2000 if local else 20) * 1024 * 1024
 
 
 def _save_image_bytes(data: bytes) -> str:
@@ -1131,11 +1133,11 @@ class ResolveMixin:
                 # Bot API getFile stops at 20 MB: name the limit before trying
                 # instead of answering "Could not read X".
                 _size = int(item.get("file_size") or 0)
-                if _size > _bot_file_limit():
+                if _size > _bot_file_limit(getattr(self, "tg_api_local", None)):
                     self._send_text(chat_id,
                         tg_bot._t("doc_too_big", lang, name=_html_mod.escape(fname),
                                   mb=f"{_size / (1024 * 1024):.0f}",
-                                  limit=f"{_bot_file_limit() // (1024 * 1024)}"),
+                                  limit=f"{_bot_file_limit(getattr(self, "tg_api_local", None)) // (1024 * 1024)}"),
                         parse_mode="HTML",
                         keyboard=self._main_menu_kb(sess, lang))
                     self._activity.log(chat_id, "system",
@@ -1689,7 +1691,7 @@ class ResolveMixin:
         Not through the agent: its transfer_image re-rendered and coloured the whole photo,
         kept the man and answered «done» (live 2026-10-12)."""
         import threading
-        import person_swap
+        person_swap = module(self, "person_swap")
         target = tg_bot._image_by_id(sess, sess.pending_swap_target)
         box = tuple(sess.swap_boxes[0]) if sess.swap_boxes else None
         sess.pending_swap_target, sess.swap_boxes, sess.swap_where = "", [], ""

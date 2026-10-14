@@ -55,16 +55,11 @@ def fake_render(*a, ctx=None, prompt=None, negative_prompt=None, steps=None,
     _render_calls.append({"width": width, "height": height})
     return None   # stop after the first attempt; we only need the call args
 
-# Patch image_generate, not image: generate_image_with_refinement lives in
-# image_generate.py and calls its own module globals, so replacing image's
-# re-exported names would leave the REAL renderer in place.
-import image_generate as IG
-_orig_render = IG.generate_image_with_comfy
-IG.generate_image_with_comfy = fake_render
-try:
-    I.generate_image_with_refinement(ctx, "a scene", width=1920, height=1080)
-finally:
-    IG.generate_image_with_comfy = _orig_render
+# The render stand-in rides on the context: generate_image_with_refinement asks it for
+# generate_image_with_comfy.
+import types
+ctx.deps = types.SimpleNamespace(generate_image_with_comfy=fake_render)
+I.generate_image_with_refinement(ctx, "a scene", width=1920, height=1080)
 
 check("generate_image_with_comfy was actually called", len(_render_calls) == 1,
       _render_calls)

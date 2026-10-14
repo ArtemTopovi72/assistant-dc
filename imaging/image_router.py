@@ -257,10 +257,12 @@ def edit_via_layout(ctx, image_path: str, instruction: str,
     refusal for lettering, where nothing else can do the job; for other edits the
     caller falls back to the pixel pipelines, which is correct for a photo.
     """
-    rec = _image.load_layout_for(image_path)
+    _img = dep(ctx, "image", _image)
+    rec = _img.load_layout_for(image_path)
     if not rec:
         return None
     import draw_agent
+    draw_agent = dep(ctx, "draw_agent", draw_agent)
     from PIL import Image as _PILImage
     try:
         with _PILImage.open(image_path) as im:
@@ -292,10 +294,10 @@ def edit_via_layout(ctx, image_path: str, instruction: str,
     res = draw_agent.run(ctx, rec.get("prompt") or instruction, layout=layout,
                          width=width, height=height, seed=use_seed, rounds=rounds)
     out = res.get("image")
-    _image._LAYOUT_EDIT_PROBLEMS[:] = ([] if res.get("stopped") == "ok"
+    _img._LAYOUT_EDIT_PROBLEMS[:] = ([] if res.get("stopped") == "ok"
                                        else [str(p) for p in (res.get("problems") or [])][:3])
     if out:
-        _image.save_layout_for(out, rec.get("prompt") or instruction,
+        _img.save_layout_for(out, rec.get("prompt") or instruction,
                         res.get("layout") or layout, width=width, height=height,
                         seed=res.get("seed", use_seed))
     # The re-render was judged and the edit is NOT in it ("the elephant is
@@ -307,7 +309,7 @@ def edit_via_layout(ctx, image_path: str, instruction: str,
         logger.warning("layout edit %r re-rendered but the critic still sees %s -- "
                        "falling back to the pixel pipeline",
                        instruction[:50], res.get("problems")[:2])
-        _image._LAYOUT_EDIT_PROBLEMS.clear()   # this render is not the one delivered
+        _img._LAYOUT_EDIT_PROBLEMS.clear()   # this render is not the one delivered
         return None
     return out
 
@@ -360,7 +362,7 @@ def transform_image(image_path: str, instruction: str, ctx=None) -> Optional[str
     else:
         deg = int((re.search(r"(\d{2,3})", t) or [0, "90"])[1])
         out = src.rotate(deg if op == "rotate_left" else -deg, expand=True)
-    final = OUTPUT_DIR / f"transform_{int(time.time() * 1000)}.png"
+    final = dep(ctx, "OUTPUT_DIR", OUTPUT_DIR) / f"transform_{int(time.time() * 1000)}.png"
     final.parent.mkdir(parents=True, exist_ok=True)
     out.save(final)
     return str(final)
@@ -387,6 +389,7 @@ def add_text_verified(ctx, image_path: str, instruction: str,
     came back "2025" on four variants in a row. Delivering that is a false
     success; the OCR read-back is what turns it into a retry.
     """
+    _img = dep(ctx, "image", _image)
     wanted = [w.strip() for w in _QUOTED_RE.findall(instruction or "") if w.strip()]
     if not wanted:
         # "add the text SALE on the window": the agent's args often drop the quotes.
@@ -402,10 +405,10 @@ def add_text_verified(ctx, image_path: str, instruction: str,
     best, best_score = "", -1.0
     base = seed if seed and seed > 0 else random.randint(1, 2**31 - 1)
     for k in range(max(1, TEXT_ADD_TRIES)):
-        out = _image.edit_image_with_firered(ctx, image_path, instr, seed=base + k * 7919)
+        out = _img.edit_image_with_firered(ctx, image_path, instr, seed=base + k * 7919)
         if not out:
             continue
-        reads = ocr_reader.read(out)
+        reads = dep(ctx, "ocr_read", ocr_reader.read)(out)
         if reads is None:             # no OCR on this machine: cannot verify, deliver
             return out, "", " / ".join(wanted)
         score, reading = 2.0, ""
@@ -424,7 +427,7 @@ def add_text_verified(ctx, image_path: str, instruction: str,
     try:
         import text_overlay
         out = text_overlay.overlay(image_path, wanted, where=text_overlay.placement(instruction, ctx=ctx),
-                                   out_dir=str(OUTPUT_DIR))
+                                   out_dir=str(dep(ctx, "OUTPUT_DIR", OUTPUT_DIR)))
     except Exception:
         logger.warning("text overlay fallback failed", exc_info=True)
         out = None
@@ -443,19 +446,21 @@ _LAYOUT_SURVIVES = frozenset({"object_remove", "person_remove"})
 
 
 def route_edit_request(ctx, image_path: str, instruction: str, **kw) -> tuple:
+    _img = dep(ctx, "image", _image)
     category, out = dep(ctx, "_route_edit_request", _route_edit_request)(ctx, image_path, instruction, **kw)
-    if out and category in _LAYOUT_SURVIVES and not _image.load_layout_for(out):
-        rec = _image.load_layout_for(image_path)
+    if out and category in _LAYOUT_SURVIVES and not _img.load_layout_for(out):
+        rec = _img.load_layout_for(image_path)
         if rec:
             layout = rec["layout"]
             # The removal was done on the pixels; the record must lose the box
             # too, or the next box edit redraws the removed thing.
             try:
                 import draw_agent
+                draw_agent = dep(ctx, "draw_agent", draw_agent)
                 layout, _notes = draw_agent.edit_layout(ctx, layout, instruction)
             except Exception:
                 logger.warning("removal: could not drop the box from the layout", exc_info=True)
-            _image.save_layout_for(out, rec.get("prompt") or "", layout,
+            _img.save_layout_for(out, rec.get("prompt") or "", layout,
                                    width=rec.get("width") or 0, height=rec.get("height") or 0,
                                    seed=rec.get("seed"))
     return category, out
@@ -471,6 +476,7 @@ def _route_edit_request(
     Returns (category, output_path | None). `region` is forwarded to object
     insertion when the caller already has an explicit box.
     """
+    _img = dep(ctx, "image", _image)
     category = classify_edit_intent(instruction, ctx=ctx)
     text = (instruction or "").strip()
     logger.info("Router: intent=%s for instruction=%r", category, text[:100])
@@ -485,7 +491,7 @@ def _route_edit_request(
     # the original (scene intact) is the good one. The box is dropped from the
     # record in route_edit_request.
     if (category in _LAYOUT_EDITABLE and category not in _LAYOUT_SURVIVES
-            and _image.load_layout_for(image_path)):
+            and _img.load_layout_for(image_path)):
         out = edit_via_layout(ctx, image_path, text, seed=seed,
                               fallback_on_problems=(category != "text_edit"))
         if out:
@@ -519,7 +525,7 @@ def _route_edit_request(
         # FireRed instruction edit. The old path synthesized a new background
         # with the old model and composited the matted subject over it; the old model was
         # removed from the product.
-        bg = _image._strip_lead(text, r"^.*?\bbackground\b\s*(?:to|into|with|as|:)?")
+        bg = _img._strip_lead(text, r"^.*?\bbackground\b\s*(?:to|into|with|as|:)?")
         bg = bg or text
         instr = (f"Replace the background with {bg}. Keep every person and object in "
                  "the foreground exactly as they are: same face, pose, clothing, size "
@@ -529,25 +535,25 @@ def _route_edit_request(
             # "make the background blurry" read as "Replace the background with blurry."
             instr = (f"{text.rstrip('. ')}. Keep every person and object in the foreground "
                      "exactly as they are: same face, pose, clothing, size and position.")
-        return category, _image.edit_image_with_firered(ctx, image_path, instr,
+        return category, _img.edit_image_with_firered(ctx, image_path, instr,
                                                         seed=seed, timeout=timeout)
 
     if category == "background_remove":
         mode = edit_plan(text, ctx=ctx)["fill"]
-        return category, _image.remove_background_with_comfy(ctx, image_path, mode=mode, timeout=timeout)
+        return category, _img.remove_background_with_comfy(ctx, image_path, mode=mode, timeout=timeout)
 
     if category in ("object_remove", "person_remove"):
-        _image._REMOVAL_VERIFY["incomplete"] = False
-        _image._REMOVAL_VERIFY["target"] = ""
+        _img._REMOVAL_VERIFY["incomplete"] = False
+        _img._REMOVAL_VERIFY["target"] = ""
         target = edit_plan(text, ctx=ctx)["target"] or ("the person" if category == "person_remove" else "the object")
         # FireRed only: the Big-LaMa fill was removed -- over fur,
         # fabric or hair it left a flat smudge that no check looked at.
-        out = _image.remove_object_with_comfy(ctx, image_path, target, seed=seed, timeout=timeout)
+        out = _img.remove_object_with_comfy(ctx, image_path, target, seed=seed, timeout=timeout)
         # Post-removal verification (fail-open: None/uncertain = accept). A recolor
         # or partial fill passes every geometric QA gate -- only an "is it still
         # there?" check catches it.
         if out and category == "object_remove":
-            still = _image._region_present(ctx, out, target)
+            still = _img._region_present(ctx, out, target)
             if still is True:
                 # Generative removal is STOCHASTIC: the same tile that fails with
                 # one seed (shoes rendered translucent instead of removed) succeeds
@@ -556,9 +562,9 @@ def _route_edit_request(
                 logger.warning("removal: %r still visible after generative removal — "
                                "retrying once with a fresh seed", target[:60])
                 retry_seed = random.randint(1, 999_999_999)
-                out3 = _image.remove_object_with_comfy(ctx, image_path, target,
+                out3 = _img.remove_object_with_comfy(ctx, image_path, target,
                                                 seed=retry_seed, timeout=timeout)
-                if out3 and _image._region_present(ctx, out3, target) is not True:
+                if out3 and _img._region_present(ctx, out3, target) is not True:
                     logger.info("removal: fresh-seed retry succeeded for %r", target[:60])
                     out = out3
                 else:
@@ -567,19 +573,19 @@ def _route_edit_request(
                     logger.warning("removal: %r STILL visible after fresh-seed retry — "
                                    "flagging removal_incomplete so the agent can't claim "
                                    "success", target[:60])
-                    _image._REMOVAL_VERIFY["incomplete"] = True
-                    _image._REMOVAL_VERIFY["target"] = target
+                    _img._REMOVAL_VERIFY["incomplete"] = True
+                    _img._REMOVAL_VERIFY["target"] = target
         return category, out
 
     if category == "object_insert":
         # FireRed adds the object by instruction and places it itself; the old
         # masked old-model insert needed a box and painted a patch into it.
-        obj = _image._strip_lead(text, r"^(?:please\s+)?(?:add|insert|put|place|include|draw\s+in|добавь|вставь|помести|нарисуй)\b")
+        obj = _img._strip_lead(text, r"^(?:please\s+)?(?:add|insert|put|place|include|draw\s+in|добавь|вставь|помести|нарисуй)\b")
         obj = obj or text
         instr = (f"Add {obj}. It must look like a natural part of the scene, with "
                  "matching lighting, perspective and style. Keep everything else in "
                  "the image exactly the same.")
-        return category, _image.edit_image_with_firered(ctx, image_path, instr,
+        return category, _img.edit_image_with_firered(ctx, image_path, instr,
                                                         seed=seed, timeout=timeout)
 
     if category in ("upscale", "restore", "outpaint"):
@@ -588,16 +594,16 @@ def _route_edit_request(
         # with a reason the tool layer turns into an honest answer instead of
         # letting the request fall through to a whole-frame re-render.
         logger.info("Router: %s is not supported any more (FireRed-only product)", category)
-        _image._INPAINT_FAILURE["reason"] = "unsupported"
+        _img._INPAINT_FAILURE["reason"] = "unsupported"
         return category, None
 
     if category == "multi_op":
         return category, _orchestrate_multi_op(ctx, image_path, text, seed=seed, timeout=timeout)
 
     if category == "relight":
-        prompt = _image._strip_lead(text, r"^.*?\b(?:relight|re-?light|light(?:ing)?|освещени)\b\s*(?:the\s+\w+\s*)?(?:to|with|as|like|:)?")
+        prompt = _img._strip_lead(text, r"^.*?\b(?:relight|re-?light|light(?:ing)?|освещени)\b\s*(?:the\s+\w+\s*)?(?:to|with|as|like|:)?")
         prompt = prompt or text
-        return category, _image.relight_image_with_comfy(ctx, image_path, prompt, seed=seed, timeout=timeout)
+        return category, _img.relight_image_with_comfy(ctx, image_path, prompt, seed=seed, timeout=timeout)
 
     # Localized generative edits (face/clothing/product/subject): prefer the
     # CONTAINED path (mask -> inpaint -> composite-back) so only the named region
@@ -617,9 +623,9 @@ def _route_edit_request(
             instr = (f"Correct the proportions: {text}. Keep the same person, face, "
                      "clothing, pose, framing and background; change only the size "
                      "and proportions that were asked about.")
-            return category, _image.edit_image_with_firered(ctx, image_path, instr,
+            return category, _img.edit_image_with_firered(ctx, image_path, instr,
                                                             seed=seed, timeout=timeout)
-        region, result_prompt, denoise = _image._extract_edit_target(ctx, text, image_path=image_path)
+        region, result_prompt, denoise = _img._extract_edit_target(ctx, text, image_path=image_path)
         if region == "absent":
             # The thing to change isn't in the frame. Redrawing whole-frame would
             # invent it and wreck the rest; report instead of producing a bad image.
@@ -631,7 +637,7 @@ def _route_edit_request(
             # writes to the region. The masked-fill engines once chosen here
             # (the old model, BrushNet, FLUX.1-Fill) were removed from the product.
             engine = "firered"
-            out = _contained_edit_validated(
+            out = dep(ctx, "_contained_edit_validated", _contained_edit_validated)(
                 ctx, image_path, region, result_prompt, denoise=denoise,
                 seed=seed, timeout=timeout, engine=engine)
             if out:
@@ -651,8 +657,8 @@ def _route_edit_request(
     if category == "style_transfer":
         import image_style
         return category, image_style.restyle(ctx, image_path, text, seed=seed, timeout=timeout)
-    instr = _image._firered_instruction(ctx, "", text, removal=False)
-    return category, _image.edit_image_with_firered(ctx, image_path, instr, seed=seed, timeout=timeout)
+    instr = _img._firered_instruction(ctx, "", text, removal=False)
+    return category, _img.edit_image_with_firered(ctx, image_path, instr, seed=seed, timeout=timeout)
 
 
 def _contained_edit_validated(ctx, image_path, region, result_prompt, *,
@@ -664,12 +670,13 @@ def _contained_edit_validated(ctx, image_path, region, result_prompt, *,
     the caller can fall back. Gate is skipped when face-id tooling is unavailable or
     the edit target IS the face. Returns a validated path or None.
     """
-    edits_face = _image._item_attributes(ctx, region).get("head") is True
+    _img = dep(ctx, "image", _image)
+    edits_face = _img._item_attributes(ctx, region).get("head") is True
     attempts = [(denoise, 12), (min(denoise, 0.55), 6)]   # retry tighter on failure
     for i, (dn, grow) in enumerate(attempts):
         if ctx is not None and getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
             return None
-        out = _image.edit_region_contained_with_comfy(
+        out = _img.edit_region_contained_with_comfy(
             ctx, image_path, region, result_prompt, denoise=dn, grow=grow,
             seed=seed, timeout=timeout, engine=engine)
         if not out:
@@ -702,6 +709,7 @@ def _orchestrate_multi_op(ctx, image_path: str, text: str, *,
 
     Returns the final image path, or the last successful intermediate, or None.
     """
+    _img = dep(ctx, "image", _image)
     clauses = edit_plan(text, ctx=ctx)["steps"] or [text]
 
     # stable ordering: destructive/background first, then edits, then additive/finishing
@@ -719,7 +727,7 @@ def _orchestrate_multi_op(ctx, image_path: str, text: str, *,
             cat = "subject_edit"
         logger.info("Multi-op step %d: %r -> %s", applied + 1, clause[:60], cat)
         try:
-            _c, out = route_edit_request(ctx, current, clause, seed=seed, timeout=timeout)
+            _c, out = dep(ctx, "route_edit_request", route_edit_request)(ctx, current, clause, seed=seed, timeout=timeout)
         except Exception as exc:
             logger.warning("Multi-op step failed (%s): %s", clause[:40], exc)
             out = None
@@ -733,8 +741,8 @@ def _orchestrate_multi_op(ctx, image_path: str, text: str, *,
     # a chain should preserve the original dimensions end-to-end (no compounding
     # downscale — RC-5). Verify and, if a step still drifted, restore the canvas.
     if applied and current and current != image_path:
-        src = _image._source_dims(image_path)
-        out = _image._source_dims(current)
+        src = _img._source_dims(image_path)
+        out = _img._source_dims(current)
         if src and out and src != out:
             logger.warning("Multi-op geometry drift %s -> %s; restoring to source", src, out)
             try:

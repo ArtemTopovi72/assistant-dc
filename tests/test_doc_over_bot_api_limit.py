@@ -23,10 +23,10 @@ def check(name, cond, extra=""):
 # .env may configure the local Bot API (2 GB); this half of the suite is about
 # the CLOUD limit and pins it.
 import config as C
-C.TG_API_LOCAL = False
 
 bot = T.TelegramBot("123:TEST", lambda: None, lambda: None, lambda: {}, silent_mode=True)
 bot.posts = []
+bot.tg_api_local = False    # .env may point at the local Bot API (2 GB); this half is the cloud limit
 bot._api_post = lambda m, p=None, **k: (bot.posts.append((m, p or {})), {"ok": True, "result": {"message_id": 1}})[1]
 bot._api_get = lambda *a, **k: {}
 bot._activity.log = lambda *a, **k: None
@@ -59,11 +59,9 @@ check("...and a failed download is still 'could not read'", any("Не удало
 # the dispatcher passes file_size through
 import inspect, tg_dispatch
 check("dispatcher carries file_size on document items", '"file_size": int(doc.get("file_size")' in inspect.getsource(tg_dispatch))
-check("the limit is Telegram's 20 MB on the cloud API", tg_resolve._bot_file_limit() == 20 * 1024 * 1024)
+check("the limit is Telegram's 20 MB on the cloud API", tg_resolve._bot_file_limit(local=False) == 20 * 1024 * 1024)
 import tg_transport
-C.TG_API_LOCAL = True
-check("...and 2 GB behind a local Bot API server", tg_resolve._bot_file_limit() == 2000 * 1024 * 1024)
-C.TG_API_LOCAL = False
+check("...and 2 GB behind a local Bot API server", tg_resolve._bot_file_limit(local=True) == 2000 * 1024 * 1024)
 src = inspect.getsource(tg_transport.TransportMixin._dl_bytes_raw)
 check("the transport uses TG_API_BASE, not a hardcoded host", "api.telegram.org" not in src and "TG_API_BASE" in src)
 check("a local-mode absolute file_path is read from disk", "os.path.isabs(fp)" in src)

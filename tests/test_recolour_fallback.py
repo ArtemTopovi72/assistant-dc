@@ -29,28 +29,25 @@ check("a messy background is still taste", not rx.search("the background of the 
 check("an overlap remark is still taste", not rx.search("The palm tree and elephant overlap significantly"))
 
 # --- the fallback ---------------------------------------------------------------------
+import image as _IM
+from fakes import Over, deps_ctx
 calls = []
-_orig_load, _orig_save = R._image.load_layout_for, R._image.save_layout_for
-R._image.load_layout_for = lambda p: {"layout": {"elements": []}, "prompt": "a blue elephant", "seed": 7, "width": 960, "height": 544}
-R._image.save_layout_for = lambda *a, **k: calls.append("saved")
-_orig_edit, _orig_run = D.edit_layout, D.run
-D.edit_layout = lambda ctx, layout, instr: ({"elements": [{"description": "a pink elephant"}]}, ["replaced blue with pink"])
 def _run(ctx, req, **k):
     calls.append("run")
     return {"image": "re-rendered.png", "layout": k.get("layout"), "seed": 7, "problems": _run.problems}
-D.run = _run
-try:
-    _run.problems = ["The elephant is not pink as requested"]
-    out = R.edit_via_layout(None, "missing.png", "make the elephant pink", fallback_on_problems=True)
-    check("a re-render the critic still faults yields None -> pixel pipeline", out is None and "run" in calls, (out, calls))
-    check("...the re-rendered picture keeps its layout record", "saved" in calls)
-    check("without the flag (lettering) the picture is returned",
-          R.edit_via_layout(None, "missing.png", "make the elephant pink") == "re-rendered.png")
-    _run.problems = []
-    check("a clean re-render is returned", R.edit_via_layout(None, "missing.png", "make it pink", fallback_on_problems=True) == "re-rendered.png")
-finally:
-    R._image.load_layout_for, R._image.save_layout_for = _orig_load, _orig_save
-    D.edit_layout, D.run = _orig_edit, _orig_run
+CTX = deps_ctx(
+    image=Over(_IM, load_layout_for=lambda p: {"layout": {"elements": []}, "prompt": "a blue elephant", "seed": 7, "width": 960, "height": 544},
+               save_layout_for=lambda *a, **k: calls.append("saved")),
+    draw_agent=Over(D, edit_layout=lambda ctx, layout, instr: ({"elements": [{"description": "a pink elephant"}]}, ["replaced blue with pink"]),
+                    run=_run))
+_run.problems = ["The elephant is not pink as requested"]
+out = R.edit_via_layout(CTX, "missing.png", "make the elephant pink", fallback_on_problems=True)
+check("a re-render the critic still faults yields None -> pixel pipeline", out is None and "run" in calls, (out, calls))
+check("...the re-rendered picture keeps its layout record", "saved" in calls)
+check("without the flag (lettering) the picture is returned",
+      R.edit_via_layout(CTX, "missing.png", "make the elephant pink") == "re-rendered.png")
+_run.problems = []
+check("a clean re-render is returned", R.edit_via_layout(CTX, "missing.png", "make it pink", fallback_on_problems=True) == "re-rendered.png")
 
 src = open(R.__file__, encoding="utf-8").read()
 check("route_edit_request asks for the fallback for everything but lettering",

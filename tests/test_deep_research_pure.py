@@ -162,12 +162,10 @@ def test_resolve_caps():
     check("caps_deep", d["depth"] >= 1)
     check("caps_standard_default", s["report_tokens"] == DR.DR_REPORT_TOKENS_STANDARD)
     check("caps_unknown_defaults_standard", DR._resolve_caps("bogus")["report_tokens"] == DR.DR_REPORT_TOKENS_STANDARD)
-    saved = DR.DR_REPORT_TOKENS_OVERRIDE
-    DR.DR_REPORT_TOKENS_OVERRIDE = 555
-    try:
-        check("caps_override_wins", DR._resolve_caps("standard")["report_tokens"] == 555)
-    finally:
-        DR.DR_REPORT_TOKENS_OVERRIDE = saved
+    import types, dr_settings
+    from seams import Over
+    pinned = types.SimpleNamespace(research_settings=Over(dr_settings, DR_REPORT_TOKENS_OVERRIDE=555))
+    check("caps_override_wins", DR._resolve_caps("standard", ctx=pinned)["report_tokens"] == 555)
 
 
 def test_topic_first_line_and_citation_query():
@@ -229,34 +227,24 @@ def test_query_plan_never_starves():
     """
     import dr_collect as C
     topic = "Чем отличается зелёный чай от чёрного по составу и воздействию"
-    real = C._think_call
-    C._think_call = lambda *a, **k: ""            # the planner says nothing
-    try:
-        q, prof = C.plan_queries(None, topic, 8)
-    finally:
-        C._think_call = real
+    import types
+    def planner(reply):
+        return types.SimpleNamespace(deps=types.SimpleNamespace(_think_call=lambda *a, **k: reply))
+    q, prof = C.plan_queries(planner(""), topic, 8)     # the planner says nothing
     check("a dead planner still yields several queries", len(q) >= 3, q)
     check("...all distinct", len({x.lower() for x in q}) == len(q), q)
     check("...and the topic itself is one of them",
           any(x.strip() == topic for x in q), q)
 
     # The ceiling still wins over the floor.
-    C._think_call = lambda *a, **k: ""
-    try:
-        q1, _ = C.plan_queries(None, topic, 1)
-    finally:
-        C._think_call = real
+    q1, _ = C.plan_queries(planner(""), topic, 1)
     check("a max of one is still honoured", len(q1) == 1, q1)
 
     # The floor must not undo the distillation: a search engine cannot match an
     # essay, and topping up with "<532-char request> benchmark comparison" was
     # exactly what an existing check caught.
     long_topic = ("Напиши мне подробнейший обзор по теме " + "структурный тензор " * 12)
-    C._think_call = lambda *a, **k: ""
-    try:
-        q3, _ = C.plan_queries(None, long_topic, 8)
-    finally:
-        C._think_call = real
+    q3, _ = C.plan_queries(planner(""), long_topic, 8)
     check("the floor never adds a runaway query",
           all(len(x) <= C.MAX_QUERY_CHARS for x in q3), [len(x) for x in q3])
 
@@ -265,11 +253,7 @@ def test_query_plan_never_starves():
             '"black tea theaflavins oxidation", "tea caffeine comparison study"], '
             '"category": "general", "recency": "any", '
             '"core_topic": "green vs black tea composition"}')
-    C._think_call = lambda *a, **k: good
-    try:
-        q2, prof2 = C.plan_queries(None, topic, 8)
-    finally:
-        C._think_call = real
+    q2, prof2 = C.plan_queries(planner(good), topic, 8)
     check("a working planner keeps its own diverse queries", len(q2) >= 3, q2)
     check("...and its distilled English subject is carried",
           prof2["core_topic"] == "green vs black tea composition", prof2)

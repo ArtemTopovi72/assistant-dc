@@ -6,6 +6,7 @@ expensive?" must re-look at the receipt, not answer "I need to see the receipt".
 the working image is a user upload, so the re-look branch is reachable in the
 wired graph (the re-look gate does not require the question to NAME the picture).
 """
+import types
 import os, sys, tempfile, threading
 os.environ.setdefault("F5_TEST_RUN", "1")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -54,12 +55,11 @@ check("no ctx at all is safe", G.entry_router({"user_input": "what?"}) == "perso
 
 # The wired graph actually reaches the re-look branch.
 calls = []
-G.downscale_image_bytes = lambda b: b
-G.personality_node = lambda ctx, s: dict(s, final_answer="ok")
-G.tts_node = lambda ctx, s: s
-G._translate_to_english = lambda ctx, t: t
 rctx = models.Context(models=None, transcription_cache={}, cache_file=None,
                       asr_lock=threading.Lock(), tts_lock=threading.Lock())
+rctx.deps = types.SimpleNamespace(downscale_image_bytes=lambda b: b,
+                                  personality_node=lambda ctx, s: dict(s, final_answer="ok"),
+                                  tts_node=lambda ctx, s: s, _translate_to_english=lambda ctx, t: t)
 rctx.last_image_path = upload
 rctx.intent_read = _READ["intent_read"]
 rctx.vision_model = lambda ctx, image_bytes, user_text, system_prompt: calls.append(user_text) or "milk 89"

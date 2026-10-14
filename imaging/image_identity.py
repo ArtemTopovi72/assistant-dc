@@ -83,7 +83,7 @@ def _preserve_face_after_upscale(orig_path: str, upscaled_path: str, *,
             crop_face = face_src.crop(box)
             mcrop_hard = mask.crop(box).point(lambda p: 255 if p > 24 else 0)
             try:
-                merged = _blend_region(crop_bg, crop_face, mcrop_hard)
+                merged = module(modules, "compositing")._blend_region(crop_bg, crop_face, mcrop_hard)
             except Exception as exc:
                 # One difficult face must not cost the others their protection.
                 logger.warning("upscale: face blend failed for %s (%s) — pasting flat",

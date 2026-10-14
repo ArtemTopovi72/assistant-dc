@@ -24,6 +24,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import draw_agent as DA
+import types
+from seams import Over
 import image_router
 # Add-only is the model's read of the edit (edit_plan: one object_insert);
 # the phrases run live in bench/intent_rest_live.py. Here: what the read means.
@@ -301,7 +303,7 @@ def test_no_attempts_at_all_is_not_a_crash():
     assert DA._best_attempt(None) is None
 
 
-def test_run_hands_back_the_best_attempt(monkeypatch):
+def test_run_hands_back_the_best_attempt():
     """Driven through run() itself: the scoring function being right is not the
     same as the loop USING it, and the loop is what the user sees."""
     seq = ["one.png", "two.png", "three.png"]
@@ -314,29 +316,29 @@ def test_run_hands_back_the_best_attempt(monkeypatch):
         drawn.append(len(drawn))
         return seq[len(drawn) - 1]
 
-    monkeypatch.setattr(DA.ideogram, "generate", _gen)
-    monkeypatch.setattr(DA, "critique",
-                        lambda *a, **k: dict(verdicts[len(drawn) - 1]))
-    monkeypatch.setattr(DA, "verify_text", lambda *a, **k: {"checks": [], "failures": []})
-    monkeypatch.setattr(DA, "text_problems", lambda *a, **k: [])
-    monkeypatch.setattr(DA, "edit_layout", lambda ctx, lay, ins: (lay, ["noted"]))
+    ctx = types.SimpleNamespace(deps=types.SimpleNamespace(
+        ideogram=Over(DA.ideogram, generate=_gen),
+        critique=lambda *a, **k: dict(verdicts[len(drawn) - 1]),
+        verify_text=lambda *a, **k: {"checks": [], "failures": []},
+        text_problems=lambda *a, **k: [],
+        edit_layout=lambda ctx, lay, ins: (lay, ["noted"])))
 
-    out = DA.run(None, layout=_kitchen(), rounds=2)
+    out = DA.run(ctx, layout=_kitchen(), rounds=2)
     assert len(drawn) == 3, drawn
     assert out["image"] == "two.png", out["image"]
     assert "best" in out["stopped"], out["stopped"]
 
 
-def test_run_still_stops_the_moment_the_critic_is_happy(monkeypatch):
+def test_run_still_stops_the_moment_the_critic_is_happy():
     """The best-of rule must not turn an early success into extra renders."""
     drawn = []
-    monkeypatch.setattr(DA.ideogram, "generate",
-                        lambda ctx, prompt, **kw: (drawn.append(1), "ok.png")[1])
-    monkeypatch.setattr(DA, "critique", lambda *a, **k: {"ok": True, "problems": []})
-    monkeypatch.setattr(DA, "verify_text", lambda *a, **k: {"checks": [], "failures": []})
-    monkeypatch.setattr(DA, "text_problems", lambda *a, **k: [])
+    ctx = types.SimpleNamespace(deps=types.SimpleNamespace(
+        ideogram=Over(DA.ideogram, generate=lambda ctx, prompt, **kw: (drawn.append(1), "ok.png")[1]),
+        critique=lambda *a, **k: {"ok": True, "problems": []},
+        verify_text=lambda *a, **k: {"checks": [], "failures": []},
+        text_problems=lambda *a, **k: []))
 
-    out = DA.run(None, layout=_kitchen(), rounds=3)
+    out = DA.run(ctx, layout=_kitchen(), rounds=3)
     assert len(drawn) == 1, drawn
     assert out["stopped"] == "ok", out["stopped"]
 

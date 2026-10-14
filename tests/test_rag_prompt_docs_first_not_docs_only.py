@@ -22,7 +22,6 @@ class _StubEmbedder:
     def available(self, recheck=30.0): return False
     def embed(self, texts, **k): return [None] * len(texts)
     def embed_one(self, text, **k): return None
-knowledge.Embedder = _StubEmbedder
 import library
 
 OK = BAD = 0
@@ -35,7 +34,7 @@ d = pathlib.Path(DATA)
 contract = d / "dogovor.txt"
 contract.write_text("ДОГОВОР АРЕНДЫ. Срок аренды 12 месяцев. О выезде уведомить за 30 дней. "
                     "Залог возвращается в течение 10 дней после выезда.", encoding="utf-8")
-lib = library.Library(d / "lib.db")
+lib = library.Library(d / "lib.db", embedder=_StubEmbedder())
 lib.build([str(contract)])
 
 q = "сколько дней до нового года?"

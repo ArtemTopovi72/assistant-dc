@@ -21,6 +21,7 @@ from pathlib import Path
 import requests
 
 import library
+from seams import module
 
 
 class LibraryMixin:
@@ -39,7 +40,8 @@ class LibraryMixin:
         in-process (library.Library), so the per-chat index file is unchanged.
         """
         import knowledge_client
-        return knowledge_client.open_library(self._library_path(chat_id))
+        return knowledge_client.open_library(self._library_path(chat_id),
+                                             library=module(self, "library"))
 
     def _library_stats(self, chat_id: int) -> dict:
         path = self._library_path(chat_id)

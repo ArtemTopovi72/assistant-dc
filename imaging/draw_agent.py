@@ -1562,7 +1562,7 @@ def run(ctx, request: str = "", *, layout: Optional[dict] = None,
     layout = dep(ctx, "ideogram", ideogram).normalize_layout(layout, request)
     if instruction:
         emit("stage", text=f"editing: {instruction}")
-        layout, notes = edit_layout(ctx, layout, instruction)
+        layout, notes = dep(ctx, "edit_layout", edit_layout)(ctx, layout, instruction)
         emit("edited", layout=layout, notes=notes)
 
     if auto_fix:
@@ -1604,7 +1604,7 @@ def run(ctx, request: str = "", *, layout: Optional[dict] = None,
             # nothing in it worth keeping stable. Re-roll the seed and draw the
             # same layout again. Bounded, because a layout that collages on
             # every seed needs the caller told, not the card burned.
-            image = render_without_collage(
+            image = dep(ctx, "render_without_collage", render_without_collage)(
                 ctx, layout, width=width, height=height, seed=seed,
                 steps=steps, cfg=cfg, on_progress=on_progress, emit=emit)
         except ideogram.ContentRefused as exc:
@@ -1636,7 +1636,7 @@ def run(ctx, request: str = "", *, layout: Optional[dict] = None,
         # propose moving or enlarging the sign instead of leaving the repair to
         # geometry alone.
         text_check = dep(ctx, "verify_text", verify_text)(ctx, image, layout)
-        tproblems = text_problems(text_check.get("checks"), text_check.get("stray"))
+        tproblems = dep(ctx, "text_problems", text_problems)(text_check.get("checks"), text_check.get("stray"))
         verdict = dep(ctx, "critique", critique)(ctx, image, layout, evidence=tproblems)
         if tproblems:
             verdict = dict(verdict)
@@ -1730,7 +1730,7 @@ def run(ctx, request: str = "", *, layout: Optional[dict] = None,
             notes.append(f"new seed {seed}")
             emit("rearranged", layout=layout, notes=notes)
         if unmet and not landed:
-            layout, notes = edit_layout(
+            layout, notes = dep(ctx, "edit_layout", edit_layout)(
                 ctx, layout,
                 "The picture came back with these problems: " + "; ".join(unmet)
                 + ". Change the layout so the NEXT render fixes them. Keep what every "

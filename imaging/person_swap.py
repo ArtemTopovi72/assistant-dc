@@ -4,7 +4,7 @@ that point an edit at the one picked.
 The owner wanted Stalin's erasing of Yezhov, but funnier: pick a person, send a picture
 of anyone (SpongeBob), get them in that spot in the photo's own style.
 """
-from seams import yes_no, vision_model
+from seams import yes_no, vision_model, dep
 import os
 from typing import List, Tuple
 
@@ -78,7 +78,8 @@ def swap(ctx, path: str, box: Box, ref: str, wish: str = "") -> str:
     and the reply said «done» (live 2026-10-12): here only the person's own region is
     redrawn and pasted back, so the rest of the photo cannot change."""
     import tempfile
-    import image as image_mod
+    import image as _image
+    image_mod = dep(ctx, "image", _image)
     from PIL import ImageFilter
     im = Image.open(path).convert("RGB")
     rx0, ry0, rx1, ry1 = region(im.size, box)
@@ -97,13 +98,13 @@ def swap(ctx, path: str, box: Box, ref: str, wish: str = "") -> str:
     grey = _is_grey(im)
     look = ("a black-and-white old photograph with its grain, contrast and softness"
             if grey else "the same photograph, with its light, colours, grain and sharpness")
-    who = _who(ctx, ref) or "the character from picture 2"
+    who = dep(ctx, "_who", _who)(ctx, ref) or "the character from picture 2"
     # On the WHOLE photo, only the picked person's region pasted back: drawn on the
     # region alone the newcomer had no people to size itself by and came out a flat
     # cartoon apart from them (live 2026-10-12, «полное говно»).
     if wish:
         import image_grounding
-        wish = image_grounding._english_instructions(ctx, wish) or wish
+        wish = dep(ctx, "_english_instructions", image_grounding._english_instructions)(ctx, wish) or wish
     k = (1.4e6 / (im.width * im.height)) ** 0.5
     src = os.path.join(tempfile.mkdtemp(prefix="swap_"), "photo.png")
     im.resize((int(im.width * k) // 8 * 8, int(im.height * k) // 8 * 8), Image.LANCZOS).save(src)
@@ -118,7 +119,7 @@ def swap(ctx, path: str, box: Box, ref: str, wish: str = "") -> str:
     # the words said -- no greatcoat, no size, a cartoon or a 3D toy even after an
     # Anything2Real pass (live via the agent, 2026-10-13); from words alone it drew a
     # real porous sponge in a greatcoat (2026-10-12, «ахуенно»).
-    real_look = _real_look(ctx, ref) if real else ""
+    real_look = dep(ctx, "_real_look", _real_look)(ctx, ref) if real else ""
     finish = (" Photographed for real, part of " + look + ": exactly as sharp or soft, grainy "
               "and worn as the rest of the photo, no glow or halo around it.")
     # The place and the size drawn, not said: a red box round the man, head to the bottom

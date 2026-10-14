@@ -10,7 +10,7 @@ the hole is repainted by FireRed on the crop; afterwards the OCR reads the resul
 second pass with a wider mask cleans what survived.
 """
 from __future__ import annotations
-from seams import yes_no, vision_model
+from seams import yes_no, vision_model, dep
 from config import scratch_path, venv_python
 import logging
 import os
@@ -233,14 +233,15 @@ def remove_lettering(ctx, image_path: str, *, grow: int = 10, passes: int = 2,
     """Every piece of lettering the OCR reads is masked and FireRed-filled;
     a second pass with a wider mask cleans what the OCR still reads."""
     import image as _image
-    boxes = ocr_boxes(image_path)
+    _ocr = dep(ctx, "ocr_boxes", ocr_boxes)
+    boxes = _ocr(image_path)
     if boxes is None:
         logger.warning("lettering-remove: OCR unavailable -- nothing to mask")
         return None
     if not boxes:
         logger.info("lettering-remove: the OCR reads no lettering in %s", image_path)
         return None
-    protect = _faces(image_path)
+    protect = dep(ctx, "_faces", _faces)(image_path)
     current = image_path
     pad = 6
     for p in range(1, passes + 1):
@@ -258,9 +259,9 @@ def remove_lettering(ctx, image_path: str, *, grow: int = 10, passes: int = 2,
             ctx.set_stage("Removing the lettering" + (f" ({p}/{passes})" if passes > 1 else ""))
         logger.info("lettering-remove pass %d: %d box(es), pad=%d grow=%d", p, used, pad, grow)
         out = (_fill_objectclear(ctx, current, mask_path, grow)
-               or _fill_firered(ctx, current, mask_path, grow))
+               or dep(ctx, "_fill_firered", _fill_firered)(ctx, current, mask_path, grow))
         if out:
-            sr = smear_ratio(out, boxes)
+            sr = dep(ctx, "smear_ratio", smear_ratio)(out, boxes)
             if sr < SMEAR_RATIO:
                 logger.warning("lettering-remove: fill is a smear (%.2f < %.2f) -- rejected",
                                sr, SMEAR_RATIO)
@@ -268,7 +269,7 @@ def remove_lettering(ctx, image_path: str, *, grow: int = 10, passes: int = 2,
         if not out:
             return current if current != image_path else None
         current = out
-        left = ocr_boxes(current) or []
+        left = _ocr(current) or []
         if not left:
             logger.info("lettering-remove: the OCR reads nothing after pass %d", p)
             return current
@@ -307,7 +308,7 @@ def remove_lettering_and_logos(ctx, image_path: str, **kw) -> Optional[str]:
     """OCR-masked removal, then ONE segmenter pass for a logo/icon the vision
     model still sees (the audible icon beside the head survived the OCR pass
     on the red-carpet asset: it is a picture, not letters)."""
-    out = remove_lettering(ctx, image_path, **kw)
+    out = dep(ctx, "remove_lettering", remove_lettering)(ctx, image_path, **kw)
     base = out or image_path
     if ctx is None or (ctx.is_cancelled() if hasattr(ctx, "is_cancelled") else False):
         return out
@@ -320,7 +321,7 @@ def remove_lettering_and_logos(ctx, image_path: str, **kw) -> Optional[str]:
         ctx.set_stage("Removing the lettering (logo)")
         # a leftover logo is a small thing: a mask over a fifth of the picture is the
         # wall or the person, and filling it rewrites them
-        more = image_objects.remove_object_with_comfy(ctx, base, phrase, max_cover=0.2)
+        more = dep(ctx, "remove_object_with_comfy", image_objects.remove_object_with_comfy)(ctx, base, phrase, max_cover=0.2)
     except Exception:
         logger.warning("lettering-remove: logo pass failed", exc_info=True)
         more = None

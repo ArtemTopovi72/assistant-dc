@@ -440,7 +440,8 @@ class Library:
     so committed documents are visible to the reader connection.
     """
 
-    def __init__(self, db_path: Optional[Path] = None, ce_model: Optional[str] = None, ce_loader=None):
+    def __init__(self, db_path: Optional[Path] = None, ce_model: Optional[str] = None, ce_loader=None,
+                 embedder=None):
         base = knowledge.EMBED_BASE_DEFAULT
         model = knowledge.EMBED_MODEL_DEFAULT
         explicit_ce = ce_model
@@ -456,7 +457,7 @@ class Library:
             logger.debug("config unavailable, using the default embedder settings: %s", exc)
         self.kb = knowledge.KnowledgeBase(
             db_path or DEFAULT_DB,
-            embedder=knowledge.Embedder(base_url=base, model=model))
+            embedder=embedder if embedder is not None else knowledge.Embedder(base_url=base, model=model))
         # Loaded on the first search that reranks, not here: the GUI opens its
         # Library on the UI thread at startup to list documents, and loading
         # here froze the window for the whole reranker download (minutes on a

@@ -40,7 +40,7 @@ from image import (
 )
 from tool_context import _remember, _set_current_image
 
-from seams import dep, intent_read, text_model, vision_model, yes_no
+from seams import dep, module, intent_read, text_model, vision_model, yes_no
 
 logger = logging.getLogger("assistant.tools")
 
@@ -603,7 +603,7 @@ def _handle_swap_person(ctx, state, args: dict) -> str:
     """🔁 the person `person` (from the left) on the current photo replaced by who is on
     the other loaded picture -- the same person_swap.swap the 🔁 button runs: one pass
     on the whole photo, only that person's region pasted back."""
-    import person_swap
+    person_swap = module(ctx, "person_swap")
     # A second try swaps on the ORIGINAL photo: on the first result the person is gone
     # and «person 4 of 3» does not exist (live via the debug user, 2026-10-13).
     target = (state.get("swap_source") or state.get("image_path")

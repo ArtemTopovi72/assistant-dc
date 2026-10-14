@@ -72,14 +72,9 @@ def test_vec_blob_roundtrip():
     blob = K._vec_to_blob(vec)
     out = K._blob_to_list(blob)
     check("vec_blob_roundtrip_numpy", all(abs(a - b) < 1e-5 for a, b in zip(vec, out)))
-    saved_np = K._np
-    K._np = None
-    try:
-        blob2 = K._vec_to_blob(vec)
-        out2 = K._blob_to_list(blob2)
-        check("vec_blob_roundtrip_no_numpy", all(abs(a - b) < 1e-5 for a, b in zip(vec, out2)))
-    finally:
-        K._np = saved_np
+    blob2 = K._vec_to_blob(vec, np=None)
+    out2 = K._blob_to_list(blob2, np=None)
+    check("vec_blob_roundtrip_no_numpy", all(abs(a - b) < 1e-5 for a, b in zip(vec, out2)))
 
 
 def test_chunk_text():
@@ -129,13 +124,8 @@ def test_embedder_disabled():
 
 
 def test_embedder_no_requests():
-    saved = K._requests
-    K._requests = None
-    try:
-        e = K.Embedder()
-        check("embedder_no_requests_disabled", not e.enabled)
-    finally:
-        K._requests = saved
+    e = K.Embedder(http=None)
+    check("embedder_no_requests_disabled", not e.enabled)
 
 
 def test_embedder_empty_texts():
@@ -150,15 +140,10 @@ def test_embedder_http_failure():
     class FakeReq:
         def post(self, *a, **k):
             return FakeResp()
-    saved = K._requests
-    K._requests = FakeReq()
-    try:
-        e = K.Embedder()
-        out = e.embed(["hello"])
-        check("embedder_http_failure_none", out is None)
-        check("embedder_failure_count_incremented", e.failures == 1)
-    finally:
-        K._requests = saved
+    e = K.Embedder(http=FakeReq())
+    out = e.embed(["hello"])
+    check("embedder_http_failure_none", out is None)
+    check("embedder_failure_count_incremented", e.failures == 1)
 
 
 def test_embedder_mismatched_vector_count():
@@ -169,14 +154,9 @@ def test_embedder_mismatched_vector_count():
     class FakeReq:
         def post(self, *a, **k):
             return FakeResp()
-    saved = K._requests
-    K._requests = FakeReq()
-    try:
-        e = K.Embedder()
-        out = e.embed(["hello", "world"])  # 2 texts, 1 vector back
-        check("embedder_mismatched_count_none", out is None)
-    finally:
-        K._requests = saved
+    e = K.Embedder(http=FakeReq())
+    out = e.embed(["hello", "world"])  # 2 texts, 1 vector back
+    check("embedder_mismatched_count_none", out is None)
 
 
 def test_embedder_real_available_and_embed():
@@ -392,15 +372,11 @@ def test_all_embeddings_pure_python_fallback():
     kb = _kb("db13.sqlite", embedder=_StubEmbedder())
     try:
         kb.add_document("doc", "s1", "The quick brown fox and other animals in the forest.")
-        saved_np = K._np
-        K._np = None
-        try:
-            ids, mat = kb._all_embeddings()
-            check("all_embeddings_pure_python_fallback", len(ids) >= 1 and isinstance(mat, list))
-            sem = kb.search_semantic("fox forest animals")
-            check("search_semantic_pure_python_fallback", isinstance(sem, list))
-        finally:
-            K._np = saved_np
+        kb.np = None
+        ids, mat = kb._all_embeddings()
+        check("all_embeddings_pure_python_fallback", len(ids) >= 1 and isinstance(mat, list))
+        sem = kb.search_semantic("fox forest animals")
+        check("search_semantic_pure_python_fallback", isinstance(sem, list))
     finally:
         kb.close()
 

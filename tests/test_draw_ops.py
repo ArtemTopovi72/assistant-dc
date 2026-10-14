@@ -24,6 +24,7 @@ import inspect
 import json
 
 import draw_agent as D
+from seams import Over
 import ideogram as G
 
 OK = BAD = 0
@@ -251,193 +252,181 @@ class _LLM(types.ModuleType):
 
 
 def with_llm(reply):
-    sys.modules["llm"] = _LLM(reply)
-    return sys.modules["llm"]
+    CTX.deps.llm = _LLM(reply)
+    return CTX.deps.llm
 
 
-_saved_llm = sys.modules.get("llm")
-CTX = types.SimpleNamespace(is_cancelled=lambda: False, model_name="chat/model")
-try:
-    stub = with_llm('{"ok": false, "score": 4, "problems": ["the sign is unreadable"],'
-                    ' "ops": [{"op": "resize", "target": "the sign board", "scale": 1.5}]}')
-    verdict = D.critique(CTX, "x.png", lay, evidence=[
-        "the lettering should read “POLICE” but the picture shows “AVCHKE”"])
-    sent = stub.calls[0]["user_text"]
-    check("the read-back finding reaches the critic", "AVCHKE" in sent, sent[-200:])
-    check("the critic can then answer with a repair",
-          verdict["ops"] and verdict["ops"][0]["op"] == "resize", str(verdict))
-    check("and its verdict is still parsed", verdict["ok"] is False
-          and verdict["source"] == "vision", str(verdict))
+CTX = types.SimpleNamespace(is_cancelled=lambda: False, model_name="chat/model",
+                            deps=types.SimpleNamespace())
+stub = with_llm('{"ok": false, "score": 4, "problems": ["the sign is unreadable"],'
+                ' "ops": [{"op": "resize", "target": "the sign board", "scale": 1.5}]}')
+verdict = D.critique(CTX, "x.png", lay, evidence=[
+    "the lettering should read “POLICE” but the picture shows “AVCHKE”"])
+sent = stub.calls[0]["user_text"]
+check("the read-back finding reaches the critic", "AVCHKE" in sent, sent[-200:])
+check("the critic can then answer with a repair",
+      verdict["ops"] and verdict["ops"][0]["op"] == "resize", str(verdict))
+check("and its verdict is still parsed", verdict["ok"] is False
+      and verdict["source"] == "vision", str(verdict))
 
-    stub = with_llm('{"ok": true, "score": 9, "problems": [], "ops": []}')
-    D.critique(CTX, "x.png", lay)
-    check("with nothing established, no evidence section is invented",
-          "Already established" not in stub.calls[0]["user_text"])
-    check("evidence is optional — the old two-argument call still works",
-          D.critique(CTX, "x.png", lay)["ok"] is True)
+stub = with_llm('{"ok": true, "score": 9, "problems": [], "ops": []}')
+D.critique(CTX, "x.png", lay)
+check("with nothing established, no evidence section is invented",
+      "Already established" not in stub.calls[0]["user_text"])
+check("evidence is optional — the old two-argument call still works",
+      D.critique(CTX, "x.png", lay)["ok"] is True)
 
-    print()
-    print("=" * 72)
-    print("A REVISION FROM THE USER")
-    print("=" * 72)
+print()
+print("=" * 72)
+print("A REVISION FROM THE USER")
+print("=" * 72)
 
-    with_llm('{"ops": [{"op": "move", "target": "the sign board", "x": 0.6, "y": 0.05},'
-             ' {"op": "delete", "target": "the plane tree"},'
-             ' {"op": "add", "desc": "a wooden bench", "x": 0.05, "y": 0.78,'
-             ' "w": 0.25, "h": 0.18}]}')
-    edited, notes = D.edit_layout(CTX, lay, "sign top right, lose the tree, add a bench")
-    check("one instruction can move, delete and add in a single edit",
-          len(edited["elements"]) == 3
-          and abs(edited["elements"][1]["x"] - 0.6) < 1e-6
-          and edited["elements"][2]["desc"] == "a wooden bench", str(notes))
-    with_llm('{"op": "delete", "target": "the plane tree"}')
-    check("a lone op answered unwrapped is still applied",
-          len(D.edit_layout(CTX, lay, "lose the tree")[0]["elements"]) == 2)
-    with_llm("I would rather not.")
-    check("an answer with no operations leaves the layout untouched",
-          D.edit_layout(CTX, lay, "do something")[0]["elements"] == lay["elements"])
+with_llm('{"ops": [{"op": "move", "target": "the sign board", "x": 0.6, "y": 0.05},'
+         ' {"op": "delete", "target": "the plane tree"},'
+         ' {"op": "add", "desc": "a wooden bench", "x": 0.05, "y": 0.78,'
+         ' "w": 0.25, "h": 0.18}]}')
+edited, notes = D.edit_layout(CTX, lay, "sign top right, lose the tree, add a bench")
+check("one instruction can move, delete and add in a single edit",
+      len(edited["elements"]) == 3
+      and abs(edited["elements"][1]["x"] - 0.6) < 1e-6
+      and edited["elements"][2]["desc"] == "a wooden bench", str(notes))
+with_llm('{"op": "delete", "target": "the plane tree"}')
+check("a lone op answered unwrapped is still applied",
+      len(D.edit_layout(CTX, lay, "lose the tree")[0]["elements"]) == 2)
+with_llm("I would rather not.")
+check("an answer with no operations leaves the layout untouched",
+      D.edit_layout(CTX, lay, "do something")[0]["elements"] == lay["elements"])
 
-    print()
-    print("=" * 72)
-    print("THE ADJUSTMENTS REACH THE NEXT RENDER")
-    print("=" * 72)
+print()
+print("=" * 72)
+print("THE ADJUSTMENTS REACH THE NEXT RENDER")
+print("=" * 72)
 
-    renders, told, mods = [], [], []
+renders, told, mods = [], [], []
 
-    def fake_generate(ctx, prompt, **kw):
-        renders.append(G.caption_to_layout(kw["caption"]))
-        return f"/tmp/render{len(renders)}.png"
+def fake_generate(ctx, prompt, **kw):
+    renders.append(G.caption_to_layout(kw["caption"]))
+    return f"/tmp/render{len(renders)}.png"
 
-    _real_gen, _real_crit = G.generate, D.critique
+def run_ctx(critique, mod):
+    return types.SimpleNamespace(
+        is_cancelled=lambda: False, model_name="chat/model",
+        deps=types.SimpleNamespace(ideogram=Over(G, generate=fake_generate),
+                                   critique=critique, llm=mod))
 
-    def run_with(critic_ops, reads, rounds=1, start=None):
-        renders.clear(); told.clear(); mods.clear()
-        try:
-            G.generate = fake_generate
-            D.critique = lambda ctx, img, lay, evidence=None: (
-                told.append(list(evidence or [])),
-                # a real critic told about a finding tends to repeat it back
-                {"ok": not critic_ops, "score": 5, "problems": list(evidence or []),
-                 "ops": list(critic_ops), "source": "vision"})[1]
-            mod = _LLM(None)
-            mod.analyze_image_with_llm = lambda ctx, **kw: json.dumps(
-                {"strings": [reads[min(len(renders), len(reads)) - 1]]})
-            sys.modules["llm"] = mod
-            mods.append(mod)      # so a test can see whether the editor was called
-            return D.run(CTX, "a police car", layout=start or scene(CAR, SIGN, TREE),
-                         rounds=rounds)
-        finally:
-            G.generate, D.critique = _real_gen, _real_crit
+def run_with(critic_ops, reads, rounds=1, start=None):
+    renders.clear(); told.clear(); mods.clear()
+    crit = lambda ctx, img, lay, evidence=None: (
+        told.append(list(evidence or [])),
+        # a real critic told about a finding tends to repeat it back
+        {"ok": not critic_ops, "score": 5, "problems": list(evidence or []),
+         "ops": list(critic_ops), "source": "vision"})[1]
+    mod = _LLM(None)
+    mod.analyze_image_with_llm = lambda ctx, **kw: json.dumps(
+        {"strings": [reads[min(len(renders), len(reads)) - 1]]})
+    mods.append(mod)      # so a test can see whether the editor was called
+    return D.run(run_ctx(crit, mod), "a police car", layout=start or scene(CAR, SIGN, TREE),
+                 rounds=rounds)
 
-    # A move stays ON the host (the car): lettering is clamped to what it is
-    # written on, so the move is within the car's box.
-    res = run_with([{"op": "move", "target": "the sign board", "x": 0.10, "y": 0.40},
-                    {"op": "replace", "target": "the patrol car",
-                     "desc": "a dark blue estate car, side view"},
-                    {"op": "add", "desc": "a wooden bench", "x": 0.05, "y": 0.78,
-                     "w": 0.25, "h": 0.18}],
-                   ["AVCHKE", "POLICE"])
-    check("the picture is redrawn once the agent has adjustments to make",
-          len(renders) == 2, f"{len(renders)} render(s)")
-    second = renders[1] if len(renders) > 1 else {"elements": []}
-    descs = [e["desc"] for e in second["elements"]]
-    check("a move the agent asked for reaches the canvas",
-          any(abs(e["x"] - 0.10) < 0.03 and abs(e["y"] - 0.40) < 0.03
-              for e in second["elements"] if e.get("text")),
-          str([(e.get("text"), round(e["x"], 2), round(e["y"], 2))
-               for e in second["elements"]]))
-    check("so does a reworded description", any("estate car" in d for d in descs), str(descs))
-    check("and so does a whole new box", any("bench" in d for d in descs), str(descs))
-    check("the enlarged lettering box survives the other fixers",
-          D.text_report(second) == [], str(D.text_report(second)))
-    res = run_with([], ["AVCHKE", "POLICE"])
-    check("garbled lettering alone still triggers a redraw", len(renders) == 2,
-          f"{len(renders)}")
-    check("but it is repaired geometrically, not talked over with the editor — "
-          "that repair is deterministic and owns the box",
-          mods and not any("Instruction:" in str(c.get("messages"))
-                           for c in mods[0].calls), str(mods[0].calls)[:200])
-    first = res["history"][0]["verdict"]["problems"]
-    check("the loop hands the read-back finding to the critic before it judges, so "
-          "the critic can propose a repair for it",
-          told and any("AVCHKE" in p for p in told[0]), str(told[:1]))
-    check("and the finding still reaches the user's report",
-          any("AVCHKE" in p for p in first), str(first))
-    check("and the finding is reported once, not twice",
-          sum("AVCHKE" in p for p in first) == 1, str(first))
+# A move stays ON the host (the car): lettering is clamped to what it is
+# written on, so the move is within the car's box.
+res = run_with([{"op": "move", "target": "the sign board", "x": 0.10, "y": 0.40},
+                {"op": "replace", "target": "the patrol car",
+                 "desc": "a dark blue estate car, side view"},
+                {"op": "add", "desc": "a wooden bench", "x": 0.05, "y": 0.78,
+                 "w": 0.25, "h": 0.18}],
+               ["AVCHKE", "POLICE"])
+check("the picture is redrawn once the agent has adjustments to make",
+      len(renders) == 2, f"{len(renders)} render(s)")
+second = renders[1] if len(renders) > 1 else {"elements": []}
+descs = [e["desc"] for e in second["elements"]]
+check("a move the agent asked for reaches the canvas",
+      any(abs(e["x"] - 0.10) < 0.03 and abs(e["y"] - 0.40) < 0.03
+          for e in second["elements"] if e.get("text")),
+      str([(e.get("text"), round(e["x"], 2), round(e["y"], 2))
+           for e in second["elements"]]))
+check("so does a reworded description", any("estate car" in d for d in descs), str(descs))
+check("and so does a whole new box", any("bench" in d for d in descs), str(descs))
+check("the enlarged lettering box survives the other fixers",
+      D.text_report(second) == [], str(D.text_report(second)))
+res = run_with([], ["AVCHKE", "POLICE"])
+check("garbled lettering alone still triggers a redraw", len(renders) == 2,
+      f"{len(renders)}")
+check("but it is repaired geometrically, not talked over with the editor — "
+      "that repair is deterministic and owns the box",
+      mods and not any("Instruction:" in str(c.get("messages"))
+                       for c in mods[0].calls), str(mods[0].calls)[:200])
+first = res["history"][0]["verdict"]["problems"]
+check("the loop hands the read-back finding to the critic before it judges, so "
+      "the critic can propose a repair for it",
+      told and any("AVCHKE" in p for p in told[0]), str(told[:1]))
+check("and the finding still reaches the user's report",
+      any("AVCHKE" in p for p in first), str(first))
+check("and the finding is reported once, not twice",
+      sum("AVCHKE" in p for p in first) == 1, str(first))
 
-    # The critic reworded the very box whose lettering came out wrong. Its wording
-    # must be kept AND the letter-by-letter spelling put back — otherwise the
-    # rewrite silently cancels the one repair that is known to work.
-    res = run_with([{"op": "delete", "target": "the plane tree"},
-                    {"op": "replace", "target": "the sign board",
-                     "desc": "a large white sign board with room around it"}],
-                   ["AVCHKE", "POLICE"])
-    second = renders[1] if len(renders) > 1 else {"elements": []}
-    sign = next((e for e in second["elements"] if e.get("text")), {})
-    check("the box the agent deleted is gone from the next render",
-          not any("plane tree" in e["desc"] for e in second["elements"]),
-          str([e["desc"] for e in second["elements"]]))
-    check("its rewording of the garbled box is kept",
-          "large white sign board" in sign.get("desc", ""), sign.get("desc", ""))
-    check("and the spelling is restated inside it",
-          "“POLICE”" in sign.get("desc", ""), sign.get("desc", ""))
-    check("re-spelling follows the STRING, not a stale index — the innocent box "
-          "keeps its own description",
-          all("“POLICE”" not in e["desc"] for e in second["elements"] if not e.get("text")),
-          str([e["desc"] for e in second["elements"]]))
+# The critic reworded the very box whose lettering came out wrong. Its wording
+# must be kept AND the letter-by-letter spelling put back — otherwise the
+# rewrite silently cancels the one repair that is known to work.
+res = run_with([{"op": "delete", "target": "the plane tree"},
+                {"op": "replace", "target": "the sign board",
+                 "desc": "a large white sign board with room around it"}],
+               ["AVCHKE", "POLICE"])
+second = renders[1] if len(renders) > 1 else {"elements": []}
+sign = next((e for e in second["elements"] if e.get("text")), {})
+check("the box the agent deleted is gone from the next render",
+      not any("plane tree" in e["desc"] for e in second["elements"]),
+      str([e["desc"] for e in second["elements"]]))
+check("its rewording of the garbled box is kept",
+      "large white sign board" in sign.get("desc", ""), sign.get("desc", ""))
+check("and the spelling is restated inside it",
+      "“POLICE”" in sign.get("desc", ""), sign.get("desc", ""))
+check("re-spelling follows the STRING, not a stale index — the innocent box "
+      "keeps its own description",
+      all("“POLICE”" not in e["desc"] for e in second["elements"] if not e.get("text")),
+      str([e["desc"] for e in second["elements"]]))
 
-    # The critic judges through a deliberately short prompt, so it often states a
-    # problem and proposes nothing usable for it — a target it names in its own
-    # words, or no ops at all. That complaint must still become a rearrangement,
-    # not the same picture drawn again on a new seed.
-    def run_complaining(problems, critic_ops, editor_reply):
-        renders.clear(); told.clear()
-        try:
-            G.generate = fake_generate
-            D.critique = lambda ctx, img, lay, evidence=None: {
-                "ok": False, "score": 3, "problems": list(problems),
-                "ops": list(critic_ops), "source": "vision"}
-            mod = _LLM(editor_reply)
-            mod.analyze_image_with_llm = lambda ctx, **kw: json.dumps({"strings": ["POLICE"]})
-            sys.modules["llm"] = mod
-            return D.run(CTX, "a police car", layout=scene(CAR, SIGN, TREE), rounds=1), mod
-        finally:
-            G.generate, D.critique = _real_gen, _real_crit
+# The critic judges through a deliberately short prompt, so it often states a
+# problem and proposes nothing usable for it — a target it names in its own
+# words, or no ops at all. That complaint must still become a rearrangement,
+# not the same picture drawn again on a new seed.
+def run_complaining(problems, critic_ops, editor_reply):
+    renders.clear(); told.clear()
+    crit = lambda ctx, img, lay, evidence=None: {
+        "ok": False, "score": 3, "problems": list(problems),
+        "ops": list(critic_ops), "source": "vision"}
+    mod = _LLM(editor_reply)
+    mod.analyze_image_with_llm = lambda ctx, **kw: json.dumps({"strings": ["POLICE"]})
+    return D.run(run_ctx(crit, mod), "a police car", layout=scene(CAR, SIGN, TREE), rounds=1), mod
 
-    editor = ('{"ops": [{"op": "delete", "target": "the plane tree"},'
-              ' {"op": "add", "desc": "a red bicycle", "x": 0.7, "y": 0.6,'
-              ' "w": 0.25, "h": 0.3}]}')
-    res, mod = run_complaining(["the bicycle is missing and the tree is in the way"],
-                               [], editor)
-    second = renders[1] if len(renders) > 1 else {"elements": []}
-    descs = [e["desc"] for e in second["elements"]]
-    check("a complaint with no operations is handed to the editor",
-          any("Instruction:" in str(c.get("messages")) for c in mod.calls), str(mod.calls)[:200])
-    check("and the editor's rearrangement reaches the canvas",
-          any("bicycle" in d for d in descs) and not any("plane tree" in d for d in descs),
-          str(descs))
+editor = ('{"ops": [{"op": "delete", "target": "the plane tree"},'
+          ' {"op": "add", "desc": "a red bicycle", "x": 0.7, "y": 0.6,'
+          ' "w": 0.25, "h": 0.3}]}')
+res, mod = run_complaining(["the bicycle is missing and the tree is in the way"],
+                           [], editor)
+second = renders[1] if len(renders) > 1 else {"elements": []}
+descs = [e["desc"] for e in second["elements"]]
+check("a complaint with no operations is handed to the editor",
+      any("Instruction:" in str(c.get("messages")) for c in mod.calls), str(mod.calls)[:200])
+check("and the editor's rearrangement reaches the canvas",
+      any("bicycle" in d for d in descs) and not any("plane tree" in d for d in descs),
+      str(descs))
 
-    res, mod = run_complaining(["the sky is empty"],
-                               [{"op": "add", "desc": "a flock of birds",
-                                 "x": 0.3, "y": 0.05, "w": 0.3, "h": 0.2}], editor)
-    descs = [e["desc"] for e in (renders[1] if len(renders) > 1 else {"elements": []})["elements"]]
-    check("but a critic whose own op landed is not second-guessed by the editor",
-          any("birds" in d for d in descs) and any("plane tree" in d for d in descs),
-          str(descs))
+res, mod = run_complaining(["the sky is empty"],
+                           [{"op": "add", "desc": "a flock of birds",
+                             "x": 0.3, "y": 0.05, "w": 0.3, "h": 0.2}], editor)
+descs = [e["desc"] for e in (renders[1] if len(renders) > 1 else {"elements": []})["elements"]]
+check("but a critic whose own op landed is not second-guessed by the editor",
+      any("birds" in d for d in descs) and any("plane tree" in d for d in descs),
+      str(descs))
 
-    res, mod = run_complaining([], [], editor)
-    check("and a critic with nothing to say does not summon the editor either",
-          not any("Instruction:" in str(c.get("messages")) for c in mod.calls))
+res, mod = run_complaining([], [], editor)
+check("and a critic with nothing to say does not summon the editor either",
+      not any("Instruction:" in str(c.get("messages")) for c in mod.calls))
 
-    res = run_with([], ["POLICE"], rounds=2)
-    check("a picture the agent has no complaint about is not redrawn", len(renders) == 1,
-          f"{len(renders)}")
-finally:
-    if _saved_llm is not None:
-        sys.modules["llm"] = _saved_llm
-    else:
-        sys.modules.pop("llm", None)
+res = run_with([], ["POLICE"], rounds=2)
+check("a picture the agent has no complaint about is not redrawn", len(renders) == 1,
+      f"{len(renders)}")
 
 print()
 print("=" * 72)

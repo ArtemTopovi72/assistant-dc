@@ -62,11 +62,14 @@ class _FakeResp:
         yield b"data: [DONE]"
 
 
-def _stream(channel, chunks):
+def _stream(channel, chunks, **deps):
     """Run _stream_chat against a fake stream; return (chunks_read, message)."""
     counter = {"n": 0}
     from fakes import posting
-    msg = llm._stream_chat(posting(lambda *a, **k: _FakeResp(channel, chunks, counter)), {"messages": []})
+    ctx = posting(lambda *a, **k: _FakeResp(channel, chunks, counter))
+    for k, v in deps.items():
+        setattr(ctx.deps, k, v)
+    msg = llm._stream_chat(ctx, {"messages": []})
     return counter["n"], msg
 
 
@@ -129,7 +132,6 @@ def test_clean_content_does_not_reset_a_reasoning_loop():
     # Per-channel signatures: the two-strike rule must be tracked per channel, or
     # a stream that emits a little clean content alongside looping reasoning
     # would keep clearing the strike and never abort.
-    orig = llm.requests.post
     counter = {"n": 0}
 
     class _Mixed(_FakeResp):
@@ -142,23 +144,15 @@ def test_clean_content_does_not_reset_a_reasoning_loop():
                 yield ("data: " + json.dumps({"choices": [{"delta": delta}]})).encode()
             yield b"data: [DONE]"
 
-    llm.requests.post = lambda *a, **k: _Mixed("content", [], counter)
-    try:
-        llm._stream_chat(None, {"messages": []})
-    finally:
-        llm.requests.post = orig
+    from fakes import posting
+    llm._stream_chat(posting(lambda *a, **k: _Mixed("content", [], counter)), {"messages": []})
     check("mixed_stream_still_aborts_on_reasoning_loop", counter["n"] < N_CHUNKS,
           f"read {counter['n']}/{N_CHUNKS}")
 
 
 def test_guard_can_be_disabled():
     # LLM_REPEAT_CHECK_EVERY=0 documents "turns the guard off entirely".
-    orig = llm.LLM_REPEAT_CHECK_EVERY
-    llm.LLM_REPEAT_CHECK_EVERY = 0
-    try:
-        read, _ = _stream("reasoning_content", [LOOP] * 300)
-    finally:
-        llm.LLM_REPEAT_CHECK_EVERY = orig
+    read, _ = _stream("reasoning_content", [LOOP] * 300, LLM_REPEAT_CHECK_EVERY=0)
     check("check_every_zero_disables_the_guard", read == 300, f"read {read}/300")
 
 

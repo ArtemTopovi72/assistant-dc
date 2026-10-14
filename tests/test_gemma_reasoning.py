@@ -17,7 +17,7 @@ except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
 import llm as L
 
-_REAL_STREAM = L._stream_chat
+import types
 _n = _bad = 0
 
 
@@ -45,14 +45,10 @@ def capture(model, **kw):
     def fake(ctx, payload):
         seen.update(payload)
         return {"role": "assistant", "content": "ok"}
-    L._stream_chat = fake
-    L.time.sleep = lambda *a, **k: None
-    L.throttle_external_calls = lambda *a, **k: None
-    try:
-        L.send_to_lm_studio(Ctx(model, kw.pop("no_think", True)),
-                            [{"role": "user", "content": "x"}], **kw)
-    finally:
-        L._stream_chat = _REAL_STREAM
+    c = Ctx(model, kw.pop("no_think", True))
+    c.deps = types.SimpleNamespace(_stream_chat=fake, time=types.SimpleNamespace(sleep=lambda *a, **k: None),
+                                   throttle_external_calls=lambda *a, **k: None)
+    L.send_to_lm_studio(c, [{"role": "user", "content": "x"}], **kw)
     return seen
 
 

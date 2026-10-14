@@ -41,13 +41,11 @@ SCRIPT = ("Мужчина берёт чайник, ставит его на пл
           "Затем он ставит чашку, вытирает руки полотенцем и уходит из кадра.")
 
 # ── the tool stops on a plan instead of rendering ─────────────────────────────
-H.asks_for_video = lambda ctx, state: True
-video.engine_available = lambda ctx: (True, "")
-import tools as _t  # noqa: E402
-_t._render_budget_exhausted = lambda *a, **k: None
+from fakes import Over  # noqa: E402
 rendered = []
-video.generate_video = lambda *a, **k: rendered.append(a) or {}
-ctx = SimpleNamespace(video_plan_ask=True, video_plan_parts=[], set_stage=lambda s: None,
+_VID = Over(video, engine_available=lambda ctx: (True, ""), generate_video=lambda *a, **k: rendered.append(a) or {})
+_DEPS = SimpleNamespace(asks_for_video=lambda ctx, state: True, _render_budget_exhausted=lambda *a, **k: None)
+ctx = SimpleNamespace(deps=_DEPS, video_engine=_VID, video_plan_ask=True, video_plan_parts=[], set_stage=lambda s: None,
                       continue_tail="", anim_voices=[], voice_choice="default")
 state = {}
 out = H._handle_generate_video(ctx, state, {"description": SCRIPT, "use_current_images": False})
@@ -104,7 +102,7 @@ check("...with the approved parts saved for that run", sess.video_plan_ok == [p[
       sess.video_plan_ok)
 
 # ── the rerun renders exactly the approved parts ─────────────────────────────
-ctx2 = SimpleNamespace(video_plan_ask=True, video_plan_parts=list(sess.video_plan_ok),
+ctx2 = SimpleNamespace(deps=_DEPS, video_engine=_VID, video_plan_ask=True, video_plan_parts=list(sess.video_plan_ok),
                        set_stage=lambda s: None, continue_tail="", anim_voices=[], voice_choice="default")
 state2 = {}
 try:

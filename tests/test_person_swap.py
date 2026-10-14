@@ -54,8 +54,9 @@ PIC, SPONGE = os.path.join(d, "four.jpg"), os.path.join(d, "sponge.jpg")
 Image.new("RGB", (800, 500), "grey").save(PIC)
 Image.new("RGB", (300, 300), "yellow").save(SPONGE)
 # four men left to right; the detector is a model, the flow around it is what is tested
-person_swap.people = lambda path: [(80, 100, 140, 170), (260, 90, 320, 160),
-                                   (440, 95, 500, 165), (620, 110, 680, 180)]
+from fakes import Over
+bot.modules = {"person_swap": Over(person_swap, people=lambda path: [(80, 100, 140, 170), (260, 90, 320, 160),
+                                                                  (440, 95, 500, 165), (620, 110, 680, 180)])}
 
 sess = bot._get_session(CID)
 img_id = T._log_image(sess, PIC, label="stalin", src="user")
@@ -78,7 +79,7 @@ check("a number picks that person and asks for who goes instead",
 CALLS = []
 OUT = os.path.join(d, "swapped.png")
 Image.new("RGB", (800, 500), "white").save(OUT)
-person_swap.swap = lambda ctx, path, box, ref, wish="": (CALLS.append((path, box, ref, wish)), OUT)[1]
+bot.modules["person_swap"].swap = lambda ctx, path, box, ref, wish="": (CALLS.append((path, box, ref, wish)), OUT)[1]
 bot.photos.clear()
 bot._resolve_and_push(CID, [{"type": "photo", "file_id": "sponge", "caption": "пусть курит"}])
 import time
@@ -102,17 +103,16 @@ import importlib
 import types
 from fakes import reads
 import image as image_mod
-P = importlib.reload(person_swap)
-P.people = lambda path: [(620, 110, 680, 180)]
-P._who = lambda ctx, ref: "SpongeBob SquarePants, a yellow square sponge."
-P._real_look = lambda ctx, ref: "a real sponge, yellow and porous"
+P = person_swap
 EDITS = []
-image_mod.edit_image_with_firered = lambda ctx, p, t, **k: (EDITS.append((t, k.get("reference_paths"))), OUT)[1]
-import image_grounding
-image_grounding._english_instructions = lambda ctx, w: w
+_SW = types.SimpleNamespace(
+    _who=lambda ctx, ref: "SpongeBob SquarePants, a yellow square sponge.",
+    _real_look=lambda ctx, ref: "a real sponge, yellow and porous",
+    _english_instructions=lambda ctx, w: w,
+    image=Over(image_mod, edit_image_with_firered=lambda ctx, p, t, **k: (EDITS.append((t, k.get("reference_paths"))), OUT)[1]))
 for wish, real in (("a real porous kitchen sponge with real eyes", True), ("smoking a pipe", False)):
     EDITS.clear()
-    P.swap(types.SimpleNamespace(**reads(yes=lambda q, t, real=real: real)), PIC, (620, 110, 680, 180), SPONGE, wish)
+    P.swap(types.SimpleNamespace(deps=_SW, **reads(yes=lambda q, t, real=real: real)), PIC, (620, 110, 680, 180), SPONGE, wish)
     t, refs = EDITS[-1] if EDITS else ("", None)
     check(f"wish {wish!r}: " + ("the reference is read as a real thing and drawn from words"
                                 if real else "the reference goes in as sent"),
@@ -123,15 +123,15 @@ for wish, real in (("a real porous kitchen sponge with real eyes", True), ("smok
 import tool_image_handlers as H
 import tools
 SW = []
-H_ps = __import__("person_swap")
-H_ps.people = lambda path: [(80, 100, 140, 170), (620, 110, 680, 180)]
-H_ps.swap = lambda ctx, path, box, ref, wish="": (SW.append((path, box, ref, wish)), OUT)[1]
+H_ps = Over(person_swap, people=lambda path: [(80, 100, 140, 170), (620, 110, 680, 180)],
+            swap=lambda ctx, path, box, ref, wish="": (SW.append((path, box, ref, wish)), OUT)[1])
 
 
 _VIS = [None]   # the vision model the context hands out
 
 
 class Ctx:
+    modules = {"person_swap": H_ps}
     vision_model = property(lambda self: _VIS[0])
     reference_images = [SPONGE]
     last_image_path = PIC

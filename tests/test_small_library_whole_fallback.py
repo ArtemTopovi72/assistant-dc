@@ -20,7 +20,6 @@ class _StubEmbedder:
     def available(self, recheck=30.0): return False
     def embed(self, texts, **k): return [None] * len(texts)
     def embed_one(self, text, **k): return None
-knowledge.Embedder = _StubEmbedder
 import library
 
 OK = BAD = 0
@@ -34,7 +33,7 @@ contract = d / "dogovor.txt"
 contract.write_text("ДОГОВОР АРЕНДЫ. Срок аренды 12 месяцев. Содержание домашних животных "
                     "допускается только с письменного согласия арендодателя. О выезде "
                     "уведомить за 30 дней.", encoding="utf-8")
-lib = library.Library(d / "lib.db")
+lib = library.Library(d / "lib.db", embedder=_StubEmbedder())
 lib.build([str(contract)])
 
 prompt, info = library.build_rag_prompt(lib, "можно ли с собакой?")

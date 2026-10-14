@@ -37,6 +37,7 @@ def layout(text="только до пятницы"):
 
 
 class _CTX:
+    deps = types.SimpleNamespace()
     def is_cancelled(self): return False
 
 
@@ -49,21 +50,14 @@ def fake_render(ctx, lay, *, width, height, seed, on_progress=None, emit=None, *
     return f"/tmp/render{len(renders_seed)}.png"
 
 
-_real_render, _real_crit = D.render_without_collage, D.critique
-_real_llm = sys.modules.get("llm")
-try:
-    D.render_without_collage = fake_render
-    D.critique = lambda ctx, img, lay, evidence=None: {"ok": True, "score": 9, "problems": [],
-                                                        "ops": [], "source": "vision"}
-    fake_llm = types.SimpleNamespace(
+_CTX.deps = types.SimpleNamespace(
+    render_without_collage=fake_render,
+    critique=lambda ctx, img, lay, evidence=None: {"ok": True, "score": 9, "problems": [],
+                                                    "ops": [], "source": "vision"},
+    llm=types.SimpleNamespace(
         analyze_image_with_llm=lambda ctx, **kw: json.dumps(
-            {"strings": [reads[min(len(renders_seed), len(reads)) - 1]]}))
-    sys.modules["llm"] = fake_llm
-    res = D.run(_CTX(), "a poster", layout=layout(), rounds=2, seed=42)
-finally:
-    D.render_without_collage, D.critique = _real_render, _real_crit
-    if _real_llm is not None:
-        sys.modules["llm"] = _real_llm
+            {"strings": [reads[min(len(renders_seed), len(reads)) - 1]]})))
+res = D.run(_CTX(), "a poster", layout=layout(), rounds=2, seed=42)
 
 check("three attempts were made (garbled, garbled, fixed)", len(renders_seed) == 3, renders_seed)
 check("the FIRST repair (geometry only) keeps the same seed",

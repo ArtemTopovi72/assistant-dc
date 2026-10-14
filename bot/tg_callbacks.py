@@ -34,6 +34,7 @@ import uuid
 
 import config as _config
 import style_presets
+from seams import module
 
 
 class CallbackMixin:
@@ -1054,7 +1055,7 @@ class CallbackMixin:
     def _cb_swap_person(self, chat_id: int) -> None:
         """🔁 under a picture: the people on it as a numbered collage, one button each;
         a single person is picked at once."""
-        import person_swap
+        person_swap = module(self, "person_swap")
         sess = self._get_session(chat_id)
         lang = self._lang(sess)
         target = sess.target_image
@@ -1077,7 +1078,7 @@ class CallbackMixin:
         self._send_text(chat_id, tg_bot._t("swap_pick", lang), keyboard=self._state_kb(sess))
 
     def _cb_swap_pick(self, chat_id: int, data: str) -> None:
-        import person_swap
+        person_swap = module(self, "person_swap")
         sess = self._get_session(chat_id)
         lang = self._lang(sess)
         entry = tg_bot._image_by_id(sess, sess.pending_swap_target) if sess.pending_swap_target else None

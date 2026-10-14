@@ -847,7 +847,7 @@ def send_to_lm_studio(
             return None
 
         if attempt < LLM_MAX_RETRIES - 1:
-            dep(ctx, "time", time).sleep(LLM_RETRY_BASE_DELAY * (2 ** attempt))
+            dep(ctx, "time", time).sleep(dep(ctx, "LLM_RETRY_BASE_DELAY", LLM_RETRY_BASE_DELAY) * (2 ** attempt))
 
     return None
 
@@ -1448,8 +1448,9 @@ def _stream_chat_raw(ctx, payload: dict):
                 # where it is needed. Measured on an identical 47-char loop: a content
                 # loop was cut after 2.4k chars, the same loop in reasoning ran to
                 # 144k and would have continued to the 200k/600s last-resort caps.
-                if (LLM_REPEAT_CHECK_EVERY > 0
-                        and streamed_chars - last_repeat_check >= LLM_REPEAT_CHECK_EVERY):
+                _every = dep(ctx, "LLM_REPEAT_CHECK_EVERY", LLM_REPEAT_CHECK_EVERY)
+                if (_every > 0
+                        and streamed_chars - last_repeat_check >= _every):
                     last_repeat_check = streamed_chars
                     _looping = ""
                     for _chan, _parts in (("content", content_parts),

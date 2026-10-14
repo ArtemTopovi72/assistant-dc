@@ -53,45 +53,40 @@ check("no OCR under the test flag -> None (nothing masked blind)", L.ocr_boxes(s
 # --- the passes ----------------------------------------------------------------------------
 import image as I
 calls = []
-_o_boxes, _o_fill, _o_faces, _o_smear = L.ocr_boxes, L._fill_firered, L._faces, L.smear_ratio
 reads = iter([boxes, [(0, 20, 150, 60)], []])
-L.ocr_boxes = lambda p: next(reads)
-L._faces = lambda p: []
-L.smear_ratio = lambda p, b, **k: 1.0
+_D = types.SimpleNamespace(ocr_boxes=lambda p: next(reads), _faces=lambda p: [],
+                          smear_ratio=lambda p, b, **k: 1.0)
 def _fill(ctx, cur, mask, grow):
     calls.append((grow, "firered"))
     out = os.path.join(d, f"out{len(calls)}.png"); Image.new("RGB", (400, 300)).save(out); return out
-L._fill_firered = _fill
+_D._fill_firered = _fill
 _VIS = [None]   # the vision model the context hands out
 
 
 class _Ctx:
     vision_model = property(lambda self: _VIS[0])
+    deps = _D
     def __init__(self): self.stages = []
     def set_stage(self, s): self.stages.append(s)
     def is_cancelled(self): return False
-try:
-    c = _Ctx()
-    out = L.remove_lettering(c, src)
-    check("two FireRed passes: the second with a wider mask, until the OCR reads nothing",
-          len(calls) == 2 and calls[0][0] < calls[1][0], calls)
-    check("the result is the last pass", out and out.endswith("out2.png"), out)
-    check("the user sees the stage", any("Removing the lettering" in s for s in c.stages))
-    calls.clear(); reads = iter([[]])
-    check("no lettering read -> None (nothing to do)", L.remove_lettering(c, src) is None and not calls)
-    reads = iter([None])
-    check("OCR unavailable -> None", L.remove_lettering(c, src) is None)
-    calls.clear(); reads = iter([boxes]); L.smear_ratio = lambda p, b, **k: 0.4
-    check("a smeared fill is refused, never shipped", L.remove_lettering(c, src) is None and len(calls) == 1)
-finally:
-    L.ocr_boxes, L._fill_firered, L._faces, L.smear_ratio = _o_boxes, _o_fill, _o_faces, _o_smear
+c = _Ctx()
+out = L.remove_lettering(c, src)
+check("two FireRed passes: the second with a wider mask, until the OCR reads nothing",
+      len(calls) == 2 and calls[0][0] < calls[1][0], calls)
+check("the result is the last pass", out and out.endswith("out2.png"), out)
+check("the user sees the stage", any("Removing the lettering" in s for s in c.stages))
+calls.clear(); reads = iter([[]])
+check("no lettering read -> None (nothing to do)", L.remove_lettering(c, src) is None and not calls)
+reads = iter([None])
+check("OCR unavailable -> None", L.remove_lettering(c, src) is None)
+calls.clear(); reads = iter([boxes]); _D.smear_ratio = lambda p, b, **k: 0.4
+check("a smeared fill is refused, never shipped", L.remove_lettering(c, src) is None and len(calls) == 1)
 
 # --- the logo pass ----------------------------------------------------------------------------
 import llm, image_objects
-_o_lama, _o_rl = image_objects.remove_object_with_comfy, L.remove_lettering
-L.remove_lettering = lambda ctx, p, **k: "ocr_out.png"
-image_objects.remove_object_with_comfy = lambda ctx, p, phrase, **k: calls.append(("firered", p, phrase)) or "logo_out.png"
-try:
+_D.remove_lettering = lambda ctx, p, **k: "ocr_out.png"
+_D.remove_object_with_comfy = lambda ctx, p, phrase, **k: calls.append(("firered", p, phrase)) or "logo_out.png"
+if True:
     _VIS[0] = lambda *a, **k: "NONE"
     calls.clear()
     check("vision says NONE -> the OCR result stands", L.remove_lettering_and_logos(_Ctx(), src) == "ocr_out.png" and not calls)
@@ -100,8 +95,6 @@ try:
           L.remove_lettering_and_logos(_Ctx(), src) == "logo_out.png" and calls == [("firered", "ocr_out.png", "audible logo top right")], calls)
     _VIS[0] = lambda *a, **k: "There is a lot of decorative text and logos and many things on the wall behind"
     check("a rambling answer is not a phrase -> no pass", L.vision_leftover(_Ctx(), src) == "")
-finally:
-    image_objects.remove_object_with_comfy, L.remove_lettering = _o_lama, _o_rl
 
 src_h = open("agent/tool_image_handlers.py", encoding="utf-8").read()
 check("inpaint_image routes a lettering removal here before the router",

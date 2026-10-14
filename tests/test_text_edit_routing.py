@@ -70,7 +70,7 @@ fake.edit_layout = lambda ctx, lay, instr: (calls.append(("edit_layout", instr))
 fake.run = lambda ctx, req, **kw: (calls.append(("run", req, kw.get("layout"))) or
                                    {"image": os.path.join(tmp, "fixed.png"),
                                     "layout": kw.get("layout")})
-sys.modules["draw_agent"] = fake
+_EDIT.deps.draw_agent = fake
 
 cat, out = I.route_edit_request(_EDIT, img, "исправь надписи на корректные")
 check("routed as text_edit", cat == "text_edit", cat)
@@ -109,25 +109,22 @@ fake_ideo.ContentRefused = type("ContentRefused", (Exception,), {})
 fake_ideo.plan_layout = lambda ctx, prompt: LAY
 fake_ideo.layout_to_caption = lambda lay: "caption"
 fake_ideo.generate = lambda *a, **k: drawn
-sys.modules["ideogram"] = fake_ideo
+_DRAW = deps_ctx(ideogram=fake_ideo, draw_agent=fake, IDEOGRAM_TEXT_ROUNDS=1)
 # The plan is sketch-checked before the render (draw_preview.preflight) and
 # that needs the real ideogram module; here the plan passes through untouched.
 fake_pre = types.ModuleType("draw_preview")
 fake_pre.preflight = lambda ctx, layout, prompt, **kw: (layout, {})
-sys.modules["draw_preview"] = fake_pre
+_DRAW.deps.draw_preview = fake_pre
 fake.run = lambda ctx, req, **kw: {"image": drawn, "layout": kw.get("layout")}
-_prev_engine = getattr(I._config, "IDEOGRAM_TEXT_ROUNDS", 1)
-I._config.IDEOGRAM_TEXT_ROUNDS = 1
 try:
     os.remove(drawn + ".layout.json")
 except OSError:
     pass
-res = I._ideogram_draw(None, "a police car", width=1024, height=1024, seed=1, timeout=60)
+res = I._ideogram_draw(_DRAW, "a police car", width=1024, height=1024, seed=1, timeout=60)
 check("the render came back", res == drawn, res)
 rec2 = I.load_layout_for(drawn)
 check("and its layout was recorded, so lettering stays fixable",
       isinstance(rec2, dict) and rec2.get("layout") is not None, repr(rec2)[:120])
-I._config.IDEOGRAM_TEXT_ROUNDS = _prev_engine
 
 print("\nTHE TOOL LAYER KEEPS IT OFF FIRERED")
 import inspect

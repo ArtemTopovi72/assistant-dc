@@ -51,21 +51,18 @@ _seg = next(ast.get_source_segment(SRC, n) for n in ast.walk(_tree)
 import lmstudio
 
 
-def _diagnose(models, ctx_len, model_name="house-model"):
+def _diagnose(models, ctx_len, model_name="house-model", fetch=None):
     """Run the real method body against a stubbed LM Studio."""
+    from seams import module, Over
     ns = {"LM_STUDIO_BASE": "http://127.0.0.1:1234/v1",
-          "logger": logging.getLogger("t")}
+          "logger": logging.getLogger("t"), "module": module}
     exec("import textwrap\n" + _seg.replace("    def ", "def ", 1)
          .replace("\n    ", "\n"), ns)
     fn = ns["_empty_turn_diagnosis"]
-    orig_fm, orig_cl = lmstudio.fetch_models, lmstudio.loaded_context_length
-    lmstudio.fetch_models = lambda base: models
-    lmstudio.loaded_context_length = lambda base, mid: ctx_len
-    try:
-        return fn(types.SimpleNamespace(
-            ctx=types.SimpleNamespace(model_name=model_name)))
-    finally:
-        lmstudio.fetch_models, lmstudio.loaded_context_length = orig_fm, orig_cl
+    lms = Over(lmstudio, fetch_models=fetch or (lambda base: models),
+               loaded_context_length=lambda base, mid: ctx_len)
+    return fn(types.SimpleNamespace(
+        ctx=types.SimpleNamespace(model_name=model_name), modules={"lmstudio": lms}))
 
 
 LOADED = [{"id": "house-model", "state": "loaded"}]
@@ -119,12 +116,7 @@ def test_the_four_messages_are_actually_different():
 def test_a_broken_probe_falls_back_instead_of_raising():
     """This runs inside a Qt slot: an exception here is a native crash with no
     traceback, not an error message."""
-    orig = lmstudio.fetch_models
-    lmstudio.fetch_models = lambda base: (_ for _ in ()).throw(RuntimeError("boom"))
-    try:
-        msg = _diagnose(LOADED, 32768)
-    finally:
-        lmstudio.fetch_models = orig
+    msg = _diagnose(LOADED, 32768, fetch=lambda base: (_ for _ in ()).throw(RuntimeError("boom")))
     check("it returned a string rather than raising", isinstance(msg, str) and msg, msg)
 
 
