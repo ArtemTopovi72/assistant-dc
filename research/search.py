@@ -50,12 +50,31 @@ _OUTBOUND_Q = (
     "history (not of attacks), law texts, shopping for ordinary goods, tech.")
 
 
+def _memo(ctx, key, compute):
+    """Within one chat turn the same query is classified once: a search asked the model
+    the same two questions up to five times (92 s turn, 2026-10-14). Without a per-turn
+    register on the context (bare/legacy contexts) nothing is remembered."""
+    tq = getattr(ctx, "turn_queries", None)
+    if not isinstance(tq, list):
+        return compute()
+    box = getattr(ctx, "_search_memo", None)
+    if box is None or box[0] is not tq:
+        box = (tq, {})
+        try:
+            ctx._search_memo = box
+        except Exception:
+            return compute()
+    if key not in box[1]:
+        box[1][key] = compute()
+    return box[1][key]
+
+
 def outbound_blocked(query: str, ctx=None) -> bool:
     """True when `query` must not go to the web. The model being down blocks
     too: an unchecked query is what this guard exists to stop."""
     # test runs without a stub must still reach their fake ddgs
     offline_test = bool(os.getenv("F5_TEST_RUN")) and not os.getenv("INTENT_LIVE")
-    blocked = yes_no(ctx)(_OUTBOUND_Q, query, default=not offline_test)
+    blocked = _memo(ctx, ("out", query), lambda: yes_no(ctx)(_OUTBOUND_Q, query, default=not offline_test))
     if blocked:
         logger.warning("outbound search refused: %r", query[:200])
     return blocked
@@ -340,11 +359,11 @@ def wanted_count(query: str, ctx=None) -> int:
     """How many items the user ordered («5 анекдотов», "list ten models"), 0 if
     they did not order a number. Read by the model: a bare "5" in "iphone 5
     price" is a name, not an order for five things."""
-    got = choice(ctx)(
+    got = _memo(ctx, ("count", query), lambda: choice(ctx)(
         "A web search query: {text}\n\nDoes it order a NUMBER of items (5 jokes, "
         "три рецепта, ten ideas)? Answer that number, or 0 when no count of items "
         "is ordered (a number inside a name or a price is not an order).",
-        query or "", tuple(str(k) for k in range(0, 21)), "0")
+        query or "", tuple(str(k) for k in range(0, 21)), "0"))
     n = int(got)
     return n if 2 <= n <= 20 else 0
 
