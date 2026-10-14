@@ -17,6 +17,7 @@ from seams import vision_model
 import logging
 import math
 import os
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -190,6 +191,29 @@ def _stamp(t: float) -> str:
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
 
 
+_LINE_STAMP = re.compile(r"^(\W*)(?:(\d+):)?(\d{1,2}):(\d{2})(?!\d)")
+
+
+def absolute_stamps(desc: str, times: list[float], offset: float) -> str:
+    """Put the real timestamp at the head of every storyboard line. With a transcript in
+    the prompt the model sometimes counts from the portion's start (0:05 for 6:05); the
+    frame the line means is the one nearest to what it wrote, read either way."""
+    if not offset or not times:
+        return desc
+    out = []
+    for line in (desc or "").splitlines():
+        m = _LINE_STAMP.match(line)
+        if m:
+            h, mi, sec = int(m.group(2) or 0), int(m.group(3)), int(m.group(4))
+            said = h * 3600 + mi * 60 + sec
+            best = min(((abs(t - said), t) for t in times), default=None)
+            best_rel = min(((abs(t - (said + offset)), t) for t in times), default=None)
+            t = (best_rel if best_rel[0] < best[0] else best)[1]
+            line = m.group(1) + _stamp(t) + line[m.end():]
+        out.append(line)
+    return "\n".join(out)
+
+
 def make_sheet(frames: list[tuple[float, Path]], out_path: Path, offset: float = 0.0) -> Path:
     """`offset`: seconds to add to every label -- a portion of a long video
     is labelled with its ABSOLUTE position in the whole video."""
@@ -319,5 +343,6 @@ def look_at_video(ctx, path: str, *, every: float = EVERY_SECONDS,
         desc = ""
     logger.info("video_look: %s %.0fs -> %d frames (%s) at %s; %s", os.path.basename(path), dur,
                 len(frames), how, [_stamp(t) for t, _ in frames], desc[:120].replace("\n", " "))
-    return {"duration": dur, "times": [t + offset for t, _ in frames], "sheet": str(sheet),
-            "description": desc}
+    times = [t + offset for t, _ in frames]
+    return {"duration": dur, "times": times, "sheet": str(sheet),
+            "description": absolute_stamps(desc, times, offset)}

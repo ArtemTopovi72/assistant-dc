@@ -841,21 +841,15 @@ def _drop_ungrounded_figures(deck: dict, facts: str) -> None:
             s["stats"] = [st for st in s["stats"] if grounded(str(st.get("value", "")), small=True)]
 
 
-def _drop_unsupported_claims(ctx, deck: dict, facts: str) -> None:
-    """The number is in the notes but the sentence around it is not («выручка 96,8 млрд
-    в 2021» from a 2023 figure): MiniCheck reads each figure bullet against the notes."""
+def claim_support(ctx, claims: list, facts: str):
+    """MiniCheck's P(supported) per claim against `facts`, or None when it cannot run.
+
+    MiniCheck reads English only: Russian notes against English claims scored an
+    invented «merged with Uber» 0.7. Both sides go through the same translation."""
     import fact_check
     import json
-    from llm import call_llm_simple
-    refs = [(s, b) for s in deck.get("slides") or [] for b in s.get("bullets") or []
-            if re.search(r"\d{2}", b)]
-    if not refs:
-        return
-    claims = [b for _, b in refs]
-    # MiniCheck reads English only: Russian notes against English claims scored an
-    # invented «merged with Uber» 0.7. Both sides go through the same translation.
     notes = [ln for ln in facts.splitlines() if ln.strip()]
-    texts = notes + claims
+    texts = notes + list(claims)
     if any(not t.isascii() for t in texts):
         raw = text_model(ctx)(ctx, "Translate each string of the JSON list into English, literally. "
                                    "Write money as $N billion / $N million. Answer with the JSON "
@@ -870,7 +864,7 @@ def _drop_unsupported_claims(ctx, deck: dict, facts: str) -> None:
         except ValueError:
             en = None
         if not (isinstance(en, list) and len(en) == len(texts)):
-            return
+            return None
         en = [str(x) for x in en]
         facts, claims = "\n".join(en[:len(notes)]), en[len(notes):]
     # The checker is literal: "about 1.8 million" against the notes' 1.81 scored 0.10,
@@ -883,9 +877,21 @@ def _drop_unsupported_claims(ctx, deck: dict, facts: str) -> None:
         return f"{k:g}" if k is not None else m.group(0)
     claims = [re.sub(r"\d[\d,]*(?:\.\d+)?", exact, c) for c in claims]
     scores = dep(ctx, "support", fact_check.support)(claims, facts)
+    if scores:
+        logger.info("claims checked: %s", [(round(p, 2), c) for p, c in zip(scores, claims)])
+    return scores or None
+
+
+def _drop_unsupported_claims(ctx, deck: dict, facts: str) -> None:
+    """The number is in the notes but the sentence around it is not («выручка 96,8 млрд
+    в 2021» from a 2023 figure): MiniCheck reads each figure bullet against the notes."""
+    refs = [(s, b) for s in deck.get("slides") or [] for b in s.get("bullets") or []
+            if re.search(r"\d{2}", b)]
+    if not refs:
+        return
+    scores = claim_support(ctx, [b for _, b in refs], facts)
     if not scores:
         return
-    logger.info("deck claims checked: %s", [(round(p, 2), c) for p, c in zip(scores, claims)])
     for (s, b), p in zip(refs, scores):
         # Measured: invented facts 0.01-0.04, true ones with the notes' figures 0.11+;
         # a paraphrase the 770M checker misses sits just above. Only the clear misses go.

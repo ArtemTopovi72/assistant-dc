@@ -177,7 +177,8 @@ _RETELL_SYSTEM = (
     "You retell one PORTION of a long video. You get the TRANSCRIPT of what is "
     "said in it and a STORYBOARD of what is shown (one line per timecode; the "
     "timecodes are absolute positions in the whole video). Tie the words to what "
-    "is visible; keep only what is informative. ")
+    "is visible; keep only what is informative. If a PREVIOUS PART note is given it is context "
+    "only, so a thread that continues stays one thread; never retell it again. ")
 
 
 _OVERVIEW_SYSTEM = (
@@ -241,6 +242,39 @@ def render_retelling(text: str, title: str) -> str:
         line = re.sub(r"^[-*·]\s+", "• ", line)
         out.append(_html_mod.escape(line))
     return "\n".join(out).strip()
+
+
+_CHECK_MIN = 0.08       # MiniCheck: invented 0.01-0.04, true figures 0.11+ (services/slides.py)
+
+
+def _carry(prev: str) -> str:
+    """The tail of the previous portion's retelling, for the next one to start from."""
+    lines = [ln.strip() for ln in (prev or "").splitlines() if ln.strip()]
+    return "\n".join(lines[-3:])[-400:]
+
+
+def drop_unsupported_lines(ctx, tale: str, said: str, board: str) -> str:
+    """Lines of a retelling that carry a figure or a quoted name which the portion's
+    transcript and storyboard do not support. The same literal MiniCheck gate as the
+    deck bullets; a line without a figure or a quote is not checked (a paraphrase
+    scores low there for no reason) and the checker being absent leaves it whole."""
+    lines = (tale or "").splitlines()
+    idx = [i for i, ln in enumerate(lines) if re.search(r"\d{2}|«[^»]+»", re.sub(r"^\W*\d{1,2}:\d{2}(:\d{2})?", "", ln))]
+    if not idx:
+        return tale
+    facts = "\n".join([x.strip() for x in re.split(r"(?<=[.!?])\s+", said or "") if x.strip()]
+                       + [x for x in (board or "").splitlines() if x.strip()])
+    try:
+        scores = module(ctx, "slides").claim_support(ctx, [lines[i] for i in idx], facts)
+    except Exception:
+        logger.warning("retell check failed", exc_info=True)
+        return tale
+    if not scores:
+        return tale
+    bad = {i for i, p in zip(idx, scores) if p < _CHECK_MIN}
+    if bad:
+        logger.info("retell: dropped %d line(s) the portion does not support: %r", len(bad), [lines[i] for i in sorted(bad)])
+    return "\n".join(ln for i, ln in enumerate(lines) if i not in bad)
 
 
 def _save_material(work: Path, parts: list) -> None:
@@ -475,6 +509,9 @@ class LongVideoMixin:
                     if stop.is_set():
                         break
                     payload = ""
+                    carry = _carry(material[-1]["note"]) if material else ""
+                    if carry:
+                        payload += "PREVIOUS PART ENDED (context only):\n" + carry + "\n\n"
                     if said:
                         payload += "TRANSCRIPT:\n" + said + "\n\n"
                     if board:
@@ -486,6 +523,8 @@ class LongVideoMixin:
                                                      prefill="<think></think>") or "").strip()
                     except Exception:
                         logger.exception("portion %d: retell failed", k + 1); tale = ""
+                    if tale:
+                        tale = drop_unsupported_lines(ctx, tale, said, board)
                     if tale and not quiet:
                         prefix = head + "\n" if mode == "retell" else ""
                         for chunk_txt in tg_bot._split_html(prefix + render_retelling(tale, _t("lv_retell", lang))):

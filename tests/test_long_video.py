@@ -210,5 +210,25 @@ bot._lv_jobs().pop(CID, None); bot.sent.clear()
 bot._cb_long_video(CID, "lv:stop:j3")
 check("⛔ with nothing running says so", "ничего не выполняется" in texts(bot), texts(bot))
 
+# ── the retelling check: a figure the portion does not support is dropped ──────
+import tg_video as V2
+_seen = {}
+class _Slides:
+    @staticmethod
+    def claim_support(ctx, claims, facts):
+        _seen["claims"], _seen["facts"] = claims, facts
+        return [0.02 if "999" in c else 0.9 for c in claims]
+_ctx = _types.SimpleNamespace(modules={"slides": _Slides})
+_tale = "Суть: обзор железа\n• 0:17 — Блок питания: мощность 1000 Вт\n• 1:02 — Видеокарта: 999 ГБ памяти\n• 2:00 — Сборка корпуса без цифр"
+_out = V2.drop_unsupported_lines(_ctx, _tale, "Блок питания на 1000 Вт. Дальше видеокарта.", "0:17 блок питания CORSAIR")
+check("a line with a figure the portion does not support is dropped", "999" not in _out and "1000" in _out, _out)
+check("only lines with a figure or a quote are sent to the checker", len(_seen["claims"]) == 2, _seen)
+check("the transcript is split into sentences, the storyboard lines follow",
+      _seen["facts"].splitlines()[:2] == ["Блок питания на 1000 Вт.", "Дальше видеокарта."], _seen["facts"])
+check("a timecode alone is not a figure", V2.drop_unsupported_lines(_ctx, "• 0:17 — Заставка", "x", "y") == "• 0:17 — Заставка")
+_Slides.claim_support = staticmethod(lambda ctx, c, f: None)
+check("no checker, no change", V2.drop_unsupported_lines(_ctx, _tale, "a", "b") == _tale)
+check("the carry is the last lines of the previous retelling", V2._carry("a\n\nb\nc\nd\ne") == "c\nd\ne" and V2._carry("") == "")
+
 print(f"\n{PASSED}/{PASSED + FAILED} checks passed")
 sys.exit(1 if FAILED else 0)

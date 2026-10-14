@@ -48,6 +48,14 @@ def test_look_at_video_builds_a_sheet_and_asks_once(tmp_path):
     assert all(lbl.startswith("Frame ") and "frame_" in p for lbl, p in sent), sent
 
 
+def test_portion_stamps_are_absolute_even_when_the_model_counts_from_zero():
+    times = [365.0, 373.0, 390.0]
+    desc = "0:05 — a\n0:13 — b\n6:30 — c\nИтог: x"
+    got = V.absolute_stamps(desc, times, 360).splitlines()
+    assert got == ["6:05 — a", "6:13 — b", "6:30 — c", "Итог: x"], got
+    assert V.absolute_stamps(desc, [5.0, 13.0], 0) == desc
+
+
 def test_wired_into_the_video_paths():
     import tg_resolve, tg_tasks, tg_dispatch, tg_bot
     assert hasattr(tg_tasks.TaskRunnerMixin, "_look_video")
@@ -75,5 +83,6 @@ if __name__ == "__main__":
     import tempfile
     test_sample_times_every_5s_capped()
     test_look_at_video_builds_a_sheet_and_asks_once(Path(tempfile.mkdtemp()))
+    test_portion_stamps_are_absolute_even_when_the_model_counts_from_zero()
     test_wired_into_the_video_paths()
-    print("3/3 passed")
+    print("4/4 passed")
