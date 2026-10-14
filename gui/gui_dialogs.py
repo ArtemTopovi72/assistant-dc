@@ -9,7 +9,7 @@ callers import "the transfer tab" to draw a mask.
 OUTPUT_DIR_GUI_MASK travels with them: it is where the mask editor writes, and
 it means nothing without them.
 """
-from seams import file_dialog, widget_part
+from seams import file_dialog, module, widget_part
 import os
 import shutil
 import time
@@ -180,7 +180,7 @@ class ImageViewerDialog(QDialog):
             return
         try:
             if os.path.exists(self._path):
-                shutil.copyfile(self._path, dest)
+                (getattr(self, "copyfile", None) or shutil.copyfile)(self._path, dest)
             else:
                 self._pix.save(dest)
         except Exception:
@@ -305,7 +305,7 @@ class MaskCanvas(QWidget):
         p.end()
 
     # -- export ------------------------------------------------------------- #
-    def export_mask(self, out_path):
+    def export_mask(self, out_path, unlink=os.unlink):
         """Write an L-mode mask at SOURCE resolution: white where painted. Returns
         the path, or None if nothing was drawn."""
         from PIL import Image
@@ -326,7 +326,7 @@ class MaskCanvas(QWidget):
             mask.save(out_path)
         finally:
             try:
-                os.unlink(tmp.name)
+                unlink(tmp.name)
             except OSError:
                 pass
         return out_path
@@ -396,9 +396,9 @@ class MaskDrawDialog(QDialog):
         self.accept()
 
 
-def OUTPUT_DIR_GUI_MASK():
+def OUTPUT_DIR_GUI_MASK(modules=None):
     try:
-        import config as _cfg
+        _cfg = module(modules or {}, "config")
         d = Path(getattr(_cfg, "OUTPUT_DIR", "outputs")) / "masks"
     except Exception:
         d = Path("outputs") / "masks"

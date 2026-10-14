@@ -130,7 +130,7 @@ class DropPasteMixin:
             self.ctx.reference_images = (refs + [path])[-8:]
         try:
             from PIL import Image
-            im = Image.open(path).convert("RGB")
+            im = widget_part(self, "image_open", Image.open)(path).convert("RGB")
             buf = io.BytesIO()
             im.save(buf, format="JPEG", quality=92)
             self.captured_image = buf.getvalue()  # attached to the next message for vision
@@ -275,8 +275,7 @@ class DropPasteMixin:
 
     def _drop_pdf_file(self, path: str):
         try:
-            from pypdf import PdfReader
-            reader = PdfReader(path)
+            reader = module(self, "pypdf").PdfReader(path)
             pages = [p.extract_text() or "" for p in reader.pages]
             content = "\n\n".join(pages)
         except ImportError:

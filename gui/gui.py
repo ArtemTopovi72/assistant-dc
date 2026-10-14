@@ -605,7 +605,7 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
                 and final.get("image_status") in ("success", "partial", "ok")):
             # Final UI gate: never surface a cropped intermediate working tile.
             import image as _img
-            if _img.is_intermediate_artifact(img):
+            if widget_part(self, "is_intermediate_artifact", _img.is_intermediate_artifact)(img):
                 logger.error("UI DELIVERY REJECTED: intermediate tile reached _on_done: %s", img)
                 self._add_system('Internal error: the editor returned an intermediate fragment, not the finished image. The result is not shown.')
             else:

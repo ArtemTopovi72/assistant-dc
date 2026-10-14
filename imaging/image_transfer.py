@@ -11,7 +11,7 @@ edit_region_contained_via_firered) and the telemetry it writes
 through lazy module-level forwarders rather than by-value imports: that both
 breaks the import cycle and keeps them patchable from either side.
 """
-from seams import choice, module, vision_model, text_model
+from seams import choice, dep, module, vision_model, text_model
 from config import scratch_path
 import json
 import logging
@@ -330,10 +330,10 @@ def extract_reference_asset(ctx, ref, *, grow=4, timeout=900):
         return ref
     phrase = ref.extract_phrase or {ROLE_CLOTHING: "clothing", ROLE_HAIR: "hair"}.get(ref.role, "object")
     try:
-        uploaded = _image._upload_image_to_comfy(ref.path, COMFY_URL)
+        uploaded = dep(ctx, "_upload_image_to_comfy", _image._upload_image_to_comfy)(ref.path, COMFY_URL)
         if not uploaded:
             return ref
-        mask_path = _image._region_mask_file(ctx, uploaded, phrase, grow, seed=1, timeout=timeout)
+        mask_path = dep(ctx, "_region_mask_file", _image._region_mask_file)(ctx, uploaded, phrase, grow, seed=1, timeout=timeout)
         if not mask_path or not os.path.exists(mask_path):
             logger.warning("extract: no mask for %r in %s", phrase, os.path.basename(ref.path))
             return ref
@@ -438,12 +438,12 @@ def transfer_with_references(ctx, target_path, references, instruction=None, *,
     # model is conditioned on the cut-out thing, not the whole reference photo.
     for r in refs:
         if r.is_extractable() and not r.extracted_asset_path:
-            _image.extract_reference_asset(ctx, r)
+            dep(ctx, "extract_reference_asset", _image.extract_reference_asset)(ctx, r)
 
     instr = (instruction or "").strip() or _image._reference_instruction(refs[0].effective_role, len(refs))
 
-    up_target = _image._upload_image_to_comfy(target_path, COMFY_URL)
-    up_refs = [_image._upload_image_to_comfy(r.effective_path(), COMFY_URL) for r in refs]
+    up_target = dep(ctx, "_upload_image_to_comfy", _image._upload_image_to_comfy)(target_path, COMFY_URL)
+    up_refs = [dep(ctx, "_upload_image_to_comfy", _image._upload_image_to_comfy)(r.effective_path(), COMFY_URL) for r in refs]
     if not up_target or not all(up_refs):
         logger.error("transfer: upload failed (target=%s refs=%s)", up_target, up_refs)
         return None
@@ -702,10 +702,10 @@ def transfer_reference_contained(ctx, target_path, ref, instruction=None, *,
     else:
         region_candidates = [role_region] if role_region else []
     if not region_candidates and not mask_override:
-        return _image.transfer_with_references(ctx, target_path, [ref], instruction,
+        return dep(ctx, "transfer_with_references", _image.transfer_with_references)(ctx, target_path, [ref], instruction,
                                         seed=seed, timeout=timeout)
     if ref.is_extractable() and not ref.extracted_asset_path:
-        _image.extract_reference_asset(ctx, ref)
+        dep(ctx, "extract_reference_asset", _image.extract_reference_asset)(ctx, ref)
     ref_clause = "image 2"
     if role == ROLE_CLOTHING:
         # FireRed knows "image 2", not "the reference image", and copies only what
@@ -735,7 +735,7 @@ def transfer_reference_contained(ctx, target_path, ref, instruction=None, *,
     out = None
     attempts = region_candidates if region_candidates else ["manual region"]
     for ridx, region in enumerate(attempts):
-        out = edit_region_contained_via_firered(
+        out = dep(ctx, "edit_region_contained_via_firered", edit_region_contained_via_firered)(
             ctx, target_path, region, instr, seed=seed, timeout=timeout,
             reference_paths=[ref.effective_path()], mask_override=mask_override,
             protect_face=pf)
@@ -747,7 +747,7 @@ def transfer_reference_contained(ctx, target_path, ref, instruction=None, *,
     if not out and not mask_override:
         logger.warning("transfer(contained): all regions %s failed — falling back to whole-frame pass",
                        attempts)
-        out = _image.transfer_with_references(ctx, target_path, [ref], instruction,
+        out = dep(ctx, "transfer_with_references", _image.transfer_with_references)(ctx, target_path, [ref], instruction,
                                        seed=seed, timeout=timeout)
     try:
         metrics = {}

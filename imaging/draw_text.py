@@ -629,7 +629,7 @@ def verify_text(ctx, image_path: str, layout: dict) -> dict:
                 # OCR first: deterministic, and right where the vision model
                 # is deterministically wrong ("У ОЛЬГИ" -> "УАЗЬЛ", 4/4). When
                 # it confirms the words there is nothing left to ask.
-                ocr = _ocr.read(region)
+                ocr = dep(ctx, "ocr_read", _ocr.read)(region)
                 if ocr is not None:
                     saw_any = True
                     best, best_score = _match_lines(want, ocr)
@@ -701,7 +701,7 @@ def stray_text(ctx, image_path: str, layout: dict, wanted: list) -> list:
         try:
             # OCR when it can run: it does not invent lettering, and the
             # vision model does. The vision model is the fallback only.
-            read = _ocr.read(region)
+            read = dep(ctx, "ocr_read", _ocr.read)(region)
             if read is None:
                 read = read_text(ctx, region)
         finally:

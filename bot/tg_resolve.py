@@ -322,7 +322,7 @@ class ResolveMixin:
                 _said = self._fwd_batch(chat_id, _fwd_items, ask=not _words)
                 if not _said or not _words:
                     return
-                _asked = tg_bot._fwdv_intent(" ".join(_words))
+                _asked = (getattr(self, "fwdv_intent", None) or tg_bot._fwdv_intent)(" ".join(_words))
                 if _asked:
                     self._do_fwd_voice(chat_id, _asked, _said)
                     return
@@ -462,7 +462,7 @@ class ResolveMixin:
                 if (getattr(sess, "fwd_transcript", "")
                         and not getattr(sess, "fwd_own", "")
                         and not getattr(sess, "fwd_transcript_done", False)):
-                    _asked = tg_bot._fwdv_intent(raw)
+                    _asked = (getattr(self, "fwdv_intent", None) or tg_bot._fwdv_intent)(raw)
                     if _asked:
                         self._do_fwd_voice(chat_id, _asked, sess.fwd_transcript)
                         return
@@ -1039,7 +1039,7 @@ class ResolveMixin:
                 # If they already said what they want ("перескажи", "расшифруй"),
                 # do it instead of asking again.
                 _companion = (item.get("companion") or "").strip()
-                _asked = tg_bot._fwdv_intent(item.get("caption") or _companion)
+                _asked = (getattr(self, "fwdv_intent", None) or tg_bot._fwdv_intent)(item.get("caption") or _companion)
                 if _asked:
                     self._do_fwd_voice(chat_id, _asked, said[:20000])
                     return

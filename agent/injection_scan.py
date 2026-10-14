@@ -56,13 +56,14 @@ def scores(chunks: list) -> list:
     return out
 
 
-def _chunks(text: str) -> list:
+def _chunks(text: str, size: int = None) -> list:
     """Paragraph-aligned pieces of about CHUNK characters."""
+    size = size or CHUNK
     pieces, cur = [], ""
     for para in re.split(r"(?<=\n)\n+", text):
-        while len(para) > CHUNK * 2:                      # one endless line: cut it
-            pieces.append(para[:CHUNK]); para = para[CHUNK:]
-        if cur and len(cur) + len(para) > CHUNK:
+        while len(para) > size * 2:                      # one endless line: cut it
+            pieces.append(para[:size]); para = para[size:]
+        if cur and len(cur) + len(para) > size:
             pieces.append(cur); cur = ""
         cur += para
     if cur:
@@ -70,13 +71,13 @@ def _chunks(text: str) -> list:
     return pieces
 
 
-def scrub(text: str, source: str = "") -> str:
+def scrub(text: str, source: str = "", scorer=None, chunk: int = None) -> str:
     """`text` with every flagged chunk replaced by a marker."""
     if not text or len(text.strip()) < 20:
         return text
     try:
-        ch = _chunks(text)
-        sc = scores(ch)
+        ch = _chunks(text, chunk)
+        sc = (scorer or scores)(ch)
         if not sc:
             return text
         bad = [i for i, s in enumerate(sc) if s >= THRESHOLD]

@@ -53,8 +53,11 @@ bot._running = True
 thr = threading.Thread(target=bot._consumer_loop, daemon=True); thr.start()
 
 
-import cover, remix
-cover.available = lambda: True; remix.available = lambda: True
+import cover, remix, mashup_auto, mashup_stems, rvc_voice
+from fakes import Over
+RM = Over(remix, available=lambda: True); MA = Over(mashup_auto); MS = Over(mashup_stems, release_separator=lambda: None)
+RV = Over(rvc_voice)
+bot.modules = {'remix': RM, 'mashup_auto': MA, 'mashup_stems': MS, 'rvc_voice': RV}
 CID = 9_300_077
 bot._user_store.put(T._User(chat_id=CID, name="Cv", status="approved", is_admin=False))
 sess = bot._get_session(CID); sess.clear_context(); sess.lang = "ru"; sess.lang_chosen = True; sess.reg_state = ""; bot._store.put(sess)
@@ -101,7 +104,7 @@ for name, kw in variants.items():
               not ok and any("МБ" in t for _, t in bot.sent[n:]), bot.sent[n:])
     else:
         check(f"the song arrives as {name}: asked for the new words", ok, [t[:60] for _, t in bot.sent[n:]])
-T._fwdv_intent = lambda t: "text"     # what a model may well answer for a lyric
+bot.fwdv_intent = lambda t: "text"     # what a model may well answer for a lyric
 LY = "Я иду по улице одна\nНадо мной горит луна\nИ весна, весна, весна\nНе даёт уснуть до дна"
 USRFWD = {"forward_origin": {"type": "user", "sender_user": {"id": 777, "is_bot": False, "first_name": "Друг"}}, "forward_date": 1}
 def arm(**extra):
@@ -161,43 +164,41 @@ bot._run_busy = _real_busy
 
 # _cover_render with a second song: the bar-aligned mashup goes out first, then the voice remix;
 # a failed mashup never costs the remix.
-import mashup_auto, mashup_stems
-mashup_stems.release_separator = lambda: None
 AUD = []
 bot._send_audio = lambda cid, path, cap="", **k: (AUD.append((path, cap)), True)[1]
-mashup_auto.make = lambda ctx, a, b, *x: f"mash:{os.path.basename(a)}+{os.path.basename(b)}"
-remix.remix_voice = lambda ctx, a, b: "voice.mp3"
-remix.resing_available = lambda: False
+MA.make = lambda ctx, a, b, *x: f"mash:{os.path.basename(a)}+{os.path.basename(b)}"
+RM.remix_voice = lambda ctx, a, b: "voice.mp3"
+RM.resing_available = lambda: False
 bot._cover_render(CID, "ru", "/x/song.mp3", "", "/x/song2.mp3")
 check("second song: the mashup (song 1 vocal over song 2) goes first, then the voice remix",
       [p for p, _ in AUD] == ["mash:song.mp3+song2.mp3", "voice.mp3"] and "Мэшап" in AUD[0][1], AUD)
 AUD.clear()
 def _boom(*a): raise RuntimeError("demucs died")
-mashup_auto.make = _boom
+MA.make = _boom
 bot._cover_render(CID, "ru", "/x/song.mp3", "", "/x/song2.mp3")
 check("a failed mashup still sends the voice remix", [p for p, _ in AUD] == ["voice.mp3"], AUD)
 # With YuE2 the second song gives the WORDS and the first sings them on its own melody
 # (after the quick mashup).
 AUD.clear()
-mashup_auto.make = lambda ctx, a, b, *x: "mash.mp3"
-remix.resing_available = lambda: True
-remix.lyrics_of = lambda ctx, song: "слова из " + os.path.basename(song)
+MA.make = lambda ctx, a, b, *x: "mash.mp3"
+RM.resing_available = lambda: True
+RM.lyrics_of = lambda ctx, song: "слова из " + os.path.basename(song)
 SUNG = []
 def _resing2(ctx, a, l, info=None):
     SUNG.append((os.path.basename(a), l))
     info.update({"rvc": "artist", "trained": True})
     return "resing2.mp3"
-remix.resing = _resing2
+RM.resing = _resing2
 bot._cover_render(CID, "ru", "/x/song.mp3", "", "/x/song2.mp3")
 check("two songs: mashup, then song 1 re-sung with song 2's words",
       [p for p, _ in AUD] == ["mash.mp3", "resing2.mp3"] and SUNG == [("song.mp3", "слова из song2.mp3")], (AUD, SUNG))
-AUD.clear(); remix.remix_words = lambda ctx, a, l: "words.mp3"; mashup_auto.make = lambda *a: "mash.mp3"
-remix.resing = lambda ctx, a, l, info=None: "resing.mp3"
-remix.resing_available = lambda: False
+AUD.clear(); RM.remix_words = lambda ctx, a, l: "words.mp3"; MA.make = lambda *a: "mash.mp3"
+RM.resing = lambda ctx, a, l, info=None: "resing.mp3"
+RM.resing_available = lambda: False
 bot._cover_render(CID, "ru", "/x/song.mp3", "новые слова", "")
 check("new words without YuE2: the syllable remix, no mashup", [p for p, _ in AUD] == ["words.mp3"], AUD)
 # New words are re-sung on the original's score, not squeezed into its syllables.
-AUD.clear(); remix.resing_available = lambda: True
+AUD.clear(); RM.resing_available = lambda: True
 bot._cover_render(CID, "ru", "/x/song.mp3", "новые слова", "")
 check("new words with YuE2: the song is re-sung", [p for p, _ in AUD] == ["resing.mp3"], AUD)
 # A new artist's first cover goes out in a zero-shot timbre, then again in their own RVC
@@ -206,8 +207,8 @@ AUD.clear()
 def _resing_new(ctx, a, l, info=None):
     info.update({"rvc": "artist", "trained": False})
     return "resing.mp3"
-remix.resing = _resing_new
-remix.resing_rvc = lambda ctx, info: "resing_rvc.mp3"
+RM.resing = _resing_new
+RM.resing_rvc = lambda ctx, info: "resing_rvc.mp3"
 bot._cover_render(CID, "ru", "/x/song.mp3", "новые слова", "")
 check("new artist: zero-shot cover first, then the same cover in the trained RVC voice",
       [p for p, _ in AUD] == ["resing.mp3", "resing_rvc.mp3"], AUD)
@@ -215,15 +216,14 @@ AUD.clear()
 def _resing_known(ctx, a, l, info=None):
     info.update({"rvc": "artist", "trained": True})
     return "resing.mp3"
-remix.resing = _resing_known
+RM.resing = _resing_known
 bot._cover_render(CID, "ru", "/x/song.mp3", "новые слова", "")
 check("known artist: one cover, already in their voice", [p for p, _ in AUD] == ["resing.mp3"], AUD)
 
 # The voice picker under «Песню получил» -- original singer (auto) / no swap / a star;
 # the choice is kept on the session and goes into the render; a picked voice is the only pass.
-import rvc_voice
-rvc_voice.available = lambda: True
-rvc_voice.stars = lambda *a, **k: [("tsoi_hq", "Виктор Цой")]
+RV.available = lambda: True
+RV.stars = lambda *a, **k: [("tsoi_hq", "Виктор Цой")]
 _s = bot._get_session(CID); _s.cover_voice = ""
 kb = bot._cover_voice_kb(_s, "ru")["inline_keyboard"]
 check("voice picker: auto (ticked), no swap, the trained stars",
@@ -240,7 +240,7 @@ AUD.clear(); GOT = {}
 def _resing_pick(ctx, a, l, info=None):
     GOT.update(info); info.update({"rvc": "artist", "trained": False})
     return "resing.mp3"
-remix.resing = _resing_pick
+RM.resing = _resing_pick
 bot._cover_render(CID, "ru", "/x/song.mp3", "новые слова", "")
 check("the picked voice goes into the render and no second RVC pass follows",
       GOT.get("voice") == "tsoi_hq" and [p for p, _ in AUD] == ["resing.mp3"], (GOT, AUD))
@@ -251,7 +251,7 @@ bot._store.put(_s)
 kb = bot._cover_voice_kb(_s, "ru")["inline_keyboard"]
 check("a star while the song waits: the «sing it as is» button", kb[-1][0]["callback_data"] == "cvv:go", kb)
 STAR = []
-remix.sing_original_as = lambda ctx, src, name: (STAR.append((os.path.basename(src), name)), "star.mp3")[1]
+RM.sing_original_as = lambda ctx, src, name: (STAR.append((os.path.basename(src), name)), "star.mp3")[1]
 _real_busy2 = bot._run_busy
 bot._run_busy = lambda cid, fn, *a: fn(*a)
 AUD.clear()

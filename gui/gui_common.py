@@ -28,7 +28,7 @@ import ui_scale
 from ui_scale import px
 from PyQt5.QtCore import QPoint, QRect, QSize, Qt
 from PyQt5.QtGui import QColor, QImage, QPainter, QPen
-from seams import widget_part
+from seams import module, widget_part
 from PyQt5.QtWidgets import (QAbstractScrollArea, QApplication, QFrame,
                              QGraphicsDropShadowEffect, QLabel, QLayout,
                              QScrollArea, QSizePolicy, QVBoxLayout, QWidget)
@@ -36,11 +36,10 @@ from PyQt5.QtWidgets import (QAbstractScrollArea, QApplication, QFrame,
 logger = logging.getLogger("assistant.gui")   # same channel as gui.py
 
 
-def _crash_log_stage(stage: str) -> None:
+def _crash_log_stage(stage: str, modules=None) -> None:
     """Thin wrapper around crash_diag.log_stage that never raises if it's missing."""
     try:
-        import crash_diag
-        crash_diag.log_stage(stage)
+        module(modules or {}, "crash_diag").log_stage(stage)
     except Exception:
         logger.info("LIFECYCLE: %s", stage)
 

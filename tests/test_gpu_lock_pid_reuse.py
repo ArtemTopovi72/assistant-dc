@@ -40,9 +40,8 @@ def check(name, cond, detail=""):
         raise AssertionError(str(name) + (": " + str(detail) if detail else ""))
 
 
+os.environ["ASSISTANT_GPU_LOCK"] = str(Path(tempfile.mkdtemp(prefix="gpulock_")) / "gpu.lock")
 import gpu_lock
-
-gpu_lock.LOCK_PATH = Path(tempfile.mkdtemp(prefix="gpulock_")) / "gpu.lock"
 
 
 class _FakePsutil:
@@ -65,15 +64,11 @@ class _Psutil:
         self.orig = None
 
     def __enter__(self):
-        self.orig = sys.modules.get("psutil")
-        sys.modules["psutil"] = self.fake
+        gpu_lock.PARTS["psutil"] = self.fake
         return self
 
     def __exit__(self, *a):
-        if self.orig is None:
-            sys.modules.pop("psutil", None)
-        else:
-            sys.modules["psutil"] = self.orig
+        gpu_lock.PARTS.pop("psutil", None)
 
 
 OTHER = 424242          # never this process

@@ -29,32 +29,20 @@ def test_free_process_memory():
     import sys as _sys, types
     fake_torch = types.SimpleNamespace(cuda=types.SimpleNamespace(
         is_available=lambda: True, empty_cache=lambda: None, ipc_collect=lambda: None))
-    _sys.modules["torch"] = fake_torch
-    try:
-        U.free_process_memory()
-        check("free_process_memory_with_fake_cuda", True)
-    finally:
-        del _sys.modules["torch"]
+    U.free_process_memory({"torch": fake_torch})
+    check("free_process_memory_with_fake_cuda", True)
 
     fake_image = types.SimpleNamespace(_INVENTORY_CACHE={"a": 1})
-    _sys.modules["image"] = fake_image
-    try:
-        U.free_process_memory()
-        check("free_process_memory_clears_image_cache", fake_image._INVENTORY_CACHE == {})
-    finally:
-        del _sys.modules["image"]
+    U.free_process_memory({"image": fake_image})
+    check("free_process_memory_clears_image_cache", fake_image._INVENTORY_CACHE == {})
 
     class BadTorch:
         class cuda:
             @staticmethod
             def is_available():
                 raise RuntimeError("boom")
-    _sys.modules["torch"] = BadTorch()
-    try:
-        U.free_process_memory()
-        check("free_process_memory_cuda_exception_swallowed", True)
-    finally:
-        del _sys.modules["torch"]
+    U.free_process_memory({"torch": BadTorch()})
+    check("free_process_memory_cuda_exception_swallowed", True)
 
 
 def test_cleanup_runtime_artifacts():
@@ -229,24 +217,23 @@ def test_throttle_external_calls():
 def test_ensure_required_files():
     import config as C
     from pathlib import Path as _P
-    saved = (C.WEIGHTS_PATH, C.DC_REF_WAV, C.VOCOS_DIR, C.VOCAB_PATH)
+    from fakes import Over
     try:
         # Missing VOICE files: the app still starts, and is told what is missing.
-        C.WEIGHTS_PATH = _P("/no/such/model.safetensors")
-        C.DC_REF_WAV = _P("/no/such/voice.wav")
-        C.VOCOS_DIR = _P("/no/such/vocos")
-        missing = U.ensure_required_files()
+        cfg = Over(C, WEIGHTS_PATH=_P("/no/such/model.safetensors"), DC_REF_WAV=_P("/no/such/voice.wav"),
+                   VOCOS_DIR=_P("/no/such/vocos"))
+        missing = U.ensure_required_files(cfg)
         check("voice_files_missing_is_not_fatal", len(missing) == 3, str(missing))
         # A file that ships WITH the repo missing is a broken checkout: fatal.
-        C.VOCAB_PATH = _P("/no/such/vocab.txt")
+        cfg = Over(cfg, VOCAB_PATH=_P("/no/such/vocab.txt"))
         try:
-            U.ensure_required_files(); raised = ""
+            U.ensure_required_files(cfg); raised = ""
         except FileNotFoundError as e:
             raised = str(e)
         check("repo_file_missing_is_fatal", "Missing required files" in raised and "vocab" in raised,
               raised)
     finally:
-        C.WEIGHTS_PATH, C.DC_REF_WAV, C.VOCOS_DIR, C.VOCAB_PATH = saved
+        pass
 
 
 def test_truncate_text():

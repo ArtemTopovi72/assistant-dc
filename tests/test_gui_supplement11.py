@@ -66,13 +66,7 @@ def _close(w):
 
 def test_output_dir_mask_config_fail_and_default_window():
     # OUTPUT_DIR_GUI_MASK: `import config` fails -> fallback
-    real = sys.modules.get("config")
-    sys.modules["config"] = None
-    try:
-        p = gui.OUTPUT_DIR_GUI_MASK(); check("mask_dir_fallback", p.name == "masks")
-    finally:
-        if real is not None: sys.modules["config"] = real
-        else: sys.modules.pop("config", None)
+    p = gui.OUTPUT_DIR_GUI_MASK({"config": None}); check("mask_dir_fallback", p.name == "masks")
     # _default_window_size: primaryScreen raises -> except
     w = _win()
     w.parts = {"primaryScreen": lambda: (_ for _ in ()).throw(RuntimeError("noscreen"))}
@@ -86,13 +80,8 @@ def test_output_dir_mask_config_fail_and_default_window():
 def test_export_mask_unlink_except():
     mc = gui.MaskCanvas(_png("em11.png"), max_side=48)
     mc.stroke_at(10, 10)
-    real = os.unlink
-    os.unlink = lambda p: (_ for _ in ()).throw(OSError("busy"))
-    try:
-        out = mc.export_mask(os.path.join(_TMP, "emout.png"))
-        check("export_mask_unlink_except", out is not None)
-    finally:
-        os.unlink = real
+    out = mc.export_mask(os.path.join(_TMP, "emout.png"), unlink=lambda p: (_ for _ in ()).throw(OSError("busy")))
+    check("export_mask_unlink_except", out is not None)
 
 
 def test_queue_and_send_guards():
@@ -180,15 +169,14 @@ def test_drop_pdf_truncation():
         class PdfReader:
             def __init__(self, p): self.pages = [Page()]
         fake.PdfReader = PdfReader
-        real = sys.modules.get("pypdf"); sys.modules["pypdf"] = fake
+        w.modules = {"pypdf": fake}
         try:
             pf = os.path.join(_TMP, "big.pdf"); open(pf, "wb").write(b"%PDF")
             w._drop_pdf_file(pf)   # truncated=True
             check("drop_pdf_trunc", w.worker is not None)
             w._worker_finished()
         finally:
-            if real is not None: sys.modules["pypdf"] = real
-            else: sys.modules.pop("pypdf", None)
+            w.modules = {}
         _close(w)
     finally:
         _restore(o)

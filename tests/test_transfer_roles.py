@@ -26,10 +26,13 @@ import sys
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 import tempfile
+import types
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from PIL import Image
 import image as im
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from fakes import deps_ctx
 
 
 def _check(cond, msg):
@@ -127,40 +130,38 @@ def test_routing_contained_vs_wholeframe():
     """Item 9/10 — localizable roles go through the CONTAINED renderer; global roles
     fall back to WHOLE-FRAME; a manual mask forces the contained path for ANY role."""
     calls = {"contained": [], "whole": []}
-    saved = (im.edit_region_contained_via_firered, im.transfer_with_references,
-             im.extract_reference_asset)
     try:
-        im.edit_region_contained_via_firered = (
-            lambda ctx, tgt, region, instr, **k: calls["contained"].append(
-                {"region": region, "protect_face": k.get("protect_face"),
-                 "mask": k.get("mask_override")}) or "out.png")
-        im.transfer_with_references = (
-            lambda ctx, tgt, refs, instr=None, **k: calls["whole"].append(
-                refs[0].effective_role) or "out.png")
-        im.extract_reference_asset = lambda ctx, ref, **k: ref
+        ctx = deps_ctx(
+            edit_region_contained_via_firered=(
+                lambda ctx, tgt, region, instr, **k: calls["contained"].append(
+                    {"region": region, "protect_face": k.get("protect_face"),
+                     "mask": k.get("mask_override")}) or "out.png"),
+            transfer_with_references=(
+                lambda ctx, tgt, refs, instr=None, **k: calls["whole"].append(
+                    refs[0].effective_role) or "out.png"),
+            extract_reference_asset=lambda ctx, ref, **k: ref)
 
         tgt = _img("t.png")
         # localizable -> contained
         for r in _LOCALIZABLE:
             calls["contained"].clear(); calls["whole"].clear()
-            im.transfer_reference_contained(None, tgt, im.ReferenceImage(_img("r.png"), role=r))
+            im.transfer_reference_contained(ctx, tgt, im.ReferenceImage(_img("r.png"), role=r))
             _check(len(calls["contained"]) == 1 and not calls["whole"],
                    f"{r} did not route to contained path")
         # global -> whole-frame (no mask)
         for r in _GLOBAL:
             calls["contained"].clear(); calls["whole"].clear()
-            im.transfer_reference_contained(None, tgt, im.ReferenceImage(_img("r.png"), role=r))
+            im.transfer_reference_contained(ctx, tgt, im.ReferenceImage(_img("r.png"), role=r))
             _check(len(calls["whole"]) == 1 and not calls["contained"],
                    f"{r} did not fall back to whole-frame")
         # global + manual mask -> contained (item 10: mask works for any role)
         calls["contained"].clear(); calls["whole"].clear()
-        im.transfer_reference_contained(None, tgt, im.ReferenceImage(_img("r.png"), role=im.ROLE_POSE),
+        im.transfer_reference_contained(ctx, tgt, im.ReferenceImage(_img("r.png"), role=im.ROLE_POSE),
                                         mask_override=_img("m.png"))
         _check(len(calls["contained"]) == 1 and not calls["whole"],
                "manual mask did not force contained path for a global role")
     finally:
-        (im.edit_region_contained_via_firered, im.transfer_with_references,
-         im.extract_reference_asset) = saved
+        pass
     print("PASS: routing — localizable→contained, global→whole-frame, mask→contained(any role)")
     return True
 
@@ -169,20 +170,20 @@ def test_face_role_protect_face_off():
     """Item 6/wrong-person — the face role must reach the face: protect_face is forced
     OFF for ROLE_FACE but honored for other roles."""
     captured = []
-    saved = (im.edit_region_contained_via_firered, im.extract_reference_asset)
     try:
-        im.edit_region_contained_via_firered = (
-            lambda ctx, tgt, region, instr, **k: captured.append(k.get("protect_face")) or "o.png")
-        im.extract_reference_asset = lambda ctx, ref, **k: ref
+        ctx = deps_ctx(
+            edit_region_contained_via_firered=(
+                lambda ctx, tgt, region, instr, **k: captured.append(k.get("protect_face")) or "o.png"),
+            extract_reference_asset=lambda ctx, ref, **k: ref)
         tgt = _img("t.png")
-        im.transfer_reference_contained(None, tgt, im.ReferenceImage(_img("r.png"), role=im.ROLE_FACE),
+        im.transfer_reference_contained(ctx, tgt, im.ReferenceImage(_img("r.png"), role=im.ROLE_FACE),
                                         protect_face=True)
         _check(captured[-1] is False, "face role must force protect_face OFF")
-        im.transfer_reference_contained(None, tgt, im.ReferenceImage(_img("r.png"), role=im.ROLE_CLOTHING),
+        im.transfer_reference_contained(ctx, tgt, im.ReferenceImage(_img("r.png"), role=im.ROLE_CLOTHING),
                                         protect_face=True)
         _check(captured[-1] is True, "clothing role must keep protect_face ON when requested")
     finally:
-        (im.edit_region_contained_via_firered, im.extract_reference_asset) = saved
+        pass
     print("PASS: face role forces protect_face OFF; other roles honor it (no wrong-face guard clash)")
     return True
 
@@ -250,14 +251,13 @@ def test_preview_plan_reports_roles():
     import gui
     _APP = QApplication.instance() or QApplication(sys.argv)
 
-    saved = (im.extract_reference_asset, im._upload_image_to_comfy, im._region_mask_file)
     captured = {}
     try:
-        im.extract_reference_asset = lambda ctx, ref, **k: ref
-        im._upload_image_to_comfy = lambda *a, **k: None     # skip masks (network)
-        im._region_mask_file = lambda *a, **k: None
-
         class _Ctx:
+            deps = types.SimpleNamespace(
+                extract_reference_asset=lambda ctx, ref, **k: ref,
+                _upload_image_to_comfy=lambda *a, **k: None,     # skip masks (network)
+                _region_mask_file=lambda *a, **k: None)
             def is_cancelled(self): return False
         # 3 refs (scene, clothing, face) -> 2 passes (≤2 grouped per pass)
         refs = [im.ReferenceImage(_img("rs.png"), role=im.ROLE_SCENE),
@@ -273,7 +273,7 @@ def test_preview_plan_reports_roles():
                f"plan info missing role interpretation: {info!r}")
         _check("Pass 1" in info and "Pass 2" in info, "plan did not enumerate passes")
     finally:
-        (im.extract_reference_asset, im._upload_image_to_comfy, im._region_mask_file) = saved
+        pass
     print("PASS: Preview-Plan reports per-pass role interpretation (clothing + face)")
     return True
 

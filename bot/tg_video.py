@@ -16,7 +16,7 @@ that STATES the current value, redrawn in place on every tap.
 from __future__ import annotations
 
 import html as _html_mod
-from seams import text_model
+from seams import module, text_model
 import json
 import re
 import logging
@@ -292,7 +292,7 @@ class LongVideoMixin:
         sess.long_video = None; self._store.put(sess)
         stop = threading.Event()
         self._lv_jobs()[chat_id] = stop
-        turn_trace.spawn(self._long_video_job, chat_id, pending, stop, name=f"long-video-{chat_id}")
+        (getattr(self, "spawn", None) or turn_trace.spawn)(self._long_video_job, chat_id, pending, stop, name=f"long-video-{chat_id}")
 
     def _long_video_question(self, chat_id: int, sess, lang: str, state: str, text: str) -> None:
         """The message an armed «lv_question:<id>» / «lv_more:<id>» was waiting for. Before the
@@ -309,7 +309,7 @@ class LongVideoMixin:
             mat = json.loads(_material_path(tg_bot._IMAGE_DIR, job_id).read_text(encoding="utf-8"))
         except (OSError, ValueError):
             self._send_text(chat_id, _t("lv_gone", lang)); return
-        turn_trace.spawn(self._long_video_answer, chat_id, lang, job_id, mat.get("parts") or [], text,
+        (getattr(self, "spawn", None) or turn_trace.spawn)(self._long_video_answer, chat_id, lang, job_id, mat.get("parts") or [], text,
                          name=f"long-video-q-{chat_id}")
 
     def _long_video_answer(self, chat_id: int, lang: str, job_id: str, parts: list, question: str) -> None:
@@ -379,9 +379,9 @@ class LongVideoMixin:
 
     def _long_video_job(self, chat_id: int, spec: dict, stop: threading.Event) -> None:
         import tg_bot
-        import video_look
+        video_look = module(self, "video_look")
         import llm as _llm
-        from audio import transcribe_audio_file
+        transcribe_audio_file = module(self, "audio").transcribe_audio_file
         sess = self._get_session(chat_id)
         lang = self._lang(sess)
         chunk = chunk_seconds(sess); nframes = frames_per_chunk(sess); mode = output_mode(sess)

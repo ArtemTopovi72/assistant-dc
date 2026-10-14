@@ -62,9 +62,9 @@ _font_mult = 1.0       # font-only multiplier (font_scale)
 # --------------------------------------------------------------------------- #
 # Persistence
 # --------------------------------------------------------------------------- #
-def load() -> None:
+def load(path=None) -> None:
     try:
-        data = json.loads(_SETTINGS_FILE.read_text(encoding="utf-8"))
+        data = json.loads((path or _SETTINGS_FILE).read_text(encoding="utf-8"))
         if isinstance(data, dict):
             if data.get("scale_mode"):
                 _state["scale_mode"] = str(data["scale_mode"])
@@ -85,9 +85,9 @@ def load() -> None:
         logger.warning("ui_scale: could not load settings: %s", exc)
 
 
-def save() -> None:
+def save(path=None) -> None:
     try:
-        _SETTINGS_FILE.write_text(json.dumps(_state, indent=2), encoding="utf-8")
+        (path or _SETTINGS_FILE).write_text(json.dumps(_state, indent=2), encoding="utf-8")
     except Exception as exc:
         logger.warning("ui_scale: could not save settings: %s", exc)
 
@@ -143,6 +143,14 @@ def apply_screen(screen) -> None:
     global _auto
     _auto = auto_factor(screen) if screen is not None else 1.0
     _recompute()
+
+
+def force(auto=None, effective=None, font_mult=None) -> None:
+    """Pin the resolved scales (a suite's starting point), bypassing screen and settings."""
+    global _auto, _effective, _font_mult
+    _auto = _auto if auto is None else auto
+    _effective = _effective if effective is None else effective
+    _font_mult = _font_mult if font_mult is None else font_mult
 
 
 def _recompute() -> None:

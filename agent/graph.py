@@ -203,8 +203,9 @@ def vision_agent_node(ctx: Context, state: AgentState) -> AgentState:
     except Exception:
         pass
     try:
-        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        work_path = OUTPUT_DIR / f"_working_input_{int(time.time() * 1000)}.{ext}"
+        _out_dir = dep(ctx, "OUTPUT_DIR", OUTPUT_DIR)
+        _out_dir.mkdir(parents=True, exist_ok=True)
+        work_path = _out_dir / f"_working_input_{int(time.time() * 1000)}.{ext}"
         with open(work_path, "wb") as fh:
             fh.write(original_bytes)  # full-resolution original, byte-for-byte
         ctx.last_image_path = str(work_path)
@@ -279,7 +280,7 @@ def spoken_text(ctx: Context, text: str) -> str:
     """Everything a reply goes through before a voice says it: retold as speech,
     then numbers, dates and lists spelled for the engine. One function for every
     path that voices a reply."""
-    return post_process_answer(speakable(ctx, text))
+    return dep(ctx, "post_process_answer", post_process_answer)(speakable(ctx, text))
 
 
 def tts_node(ctx: Context, state: AgentState) -> AgentState:
@@ -298,11 +299,11 @@ def tts_node(ctx: Context, state: AgentState) -> AgentState:
         # Stress here, but DON'T pad here: synth_single_segment ->
         # preprocess_text_for_synthesis appends TTS_END_PADDING exactly once for
         # every synthesis path. Padding here too would double it (path-dependent).
-        stressed = stress_plus(ctx, clean).rstrip()
-        temp_wav = OUTPUT_DIR / f"_assistant_reply_{int(time.time() * 1000)}.wav"
+        stressed = dep(ctx, "stress_plus", stress_plus)(ctx, clean).rstrip()
+        temp_wav = dep(ctx, "OUTPUT_DIR", OUTPUT_DIR) / f"_assistant_reply_{int(time.time() * 1000)}.wav"
         out_stem = str(temp_wav.with_suffix(""))
 
-        result_path = synth_single_segment(
+        result_path = dep(ctx, "synth_single_segment", synth_single_segment)(
             ctx=ctx,
             idx=-1,
             actor=ASSISTANT_ACTOR,
@@ -315,7 +316,7 @@ def tts_node(ctx: Context, state: AgentState) -> AgentState:
         if result_path and Path(result_path).exists():
             state["tts_path"] = result_path
             if not getattr(ctx, "gui_mode", False):
-                play_audio_file(result_path)  # GUI plays it inline instead
+                dep(ctx, "play_audio_file", play_audio_file)(result_path)  # GUI plays it inline instead
         else:
             logger.warning("Speech synthesis failed")
     except Exception:

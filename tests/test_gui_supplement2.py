@@ -161,13 +161,9 @@ def test_mc_profiles_and_import():
     tab._prof_delete(); check("mc_prof_delete", "extra" not in store.profiles())
     tab._prof_suggested(); check("mc_prof_suggested", True)
     # _open_folder hands the profile folder to the desktop (stubbed: no real window)
-    import gui_memory_maint as _gmm
-    real, opened = _gmm.open_in_os, []
-    _gmm.open_in_os = opened.append
-    try:
-        tab._open_folder(); check("mc_open_folder", len(opened) == 1 and os.path.isdir(opened[0]), opened)
-    finally:
-        _gmm.open_in_os = real
+    opened = []
+    tab.opener = opened.append
+    tab._open_folder(); check("mc_open_folder", len(opened) == 1 and os.path.isdir(opened[0]), opened)
     # _import: export a backup first, then import it (confirm yes)
     zp = os.path.join(_TMP, "bk.zip")
     store.export_zip(store.profiles(), Path(zp))
@@ -241,20 +237,19 @@ def test_drop_pdf_and_fix_artifact():
         class PdfReader:
             def __init__(self, path): self.pages = [_Page(), _Page()]
         fake_pdf.PdfReader = PdfReader
-        realmod = sys.modules.get("pypdf"); sys.modules["pypdf"] = fake_pdf
+        w.modules = {"pypdf": fake_pdf}
         try:
             pf = os.path.join(_TMP, "d.pdf"); open(pf, "wb").write(b"%PDF-1.4")
             w._drop_pdf_file(pf); check("drop_pdf", w.worker is not None)
             w._worker_finished()
         finally:
-            if realmod is not None: sys.modules["pypdf"] = realmod
-            else: sys.modules.pop("pypdf", None)
+            w.modules = {}
         # pypdf ImportError branch
-        sys.modules["pypdf"] = None  # forces ImportError on `from pypdf import PdfReader`
+        w.modules = {"pypdf": None}  # forces ImportError
         try:
             w._drop_pdf_file(pf); check("drop_pdf_noimport", True)
         finally:
-            sys.modules.pop("pypdf", None)
+            w.modules = {}
         # _fix_artifact: mask dialog accepted but nothing painted -> "nothing selected"
         src = _png("fa.png"); w.ctx.last_image_path = src
         class MaskNoDraw:

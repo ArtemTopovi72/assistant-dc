@@ -14,7 +14,7 @@ from typing import List, Optional, Sequence
 logger = logging.getLogger("assistant.utils")
 
 
-def free_process_memory() -> None:
+def free_process_memory(loaded=None) -> None:
     """Release process memory held by our own Python side. Used by clear-context so
     wiping the conversation actually returns RAM/VRAM instead of just dropping
     references. Best-effort: runs a GC pass, empties the Torch CUDA allocator cache
@@ -22,16 +22,17 @@ def free_process_memory() -> None:
     weights live in a separate process and are not touched here."""
     import gc
     import sys
+    loaded = sys.modules if loaded is None else loaded
     gc.collect()
     try:
-        torch = sys.modules.get("torch")
+        torch = loaded.get("torch")
         if torch is not None and torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.ipc_collect()
     except Exception as exc:
         logger.debug("CUDA cache clear skipped: %s", exc)
     try:
-        image_mod = sys.modules.get("image")
+        image_mod = loaded.get("image")
         if image_mod is not None:
             for cache_name in ("_INVENTORY_CACHE",):
                 cache = getattr(image_mod, cache_name, None)
@@ -482,7 +483,7 @@ def throttle_external_calls(ctx) -> None:
         ctx.last_api_call_time = time.time()
 
 
-def ensure_required_files() -> list:
+def ensure_required_files(cfg=None) -> list:
     """Check the files the app needs. Returns what voice output is missing.
 
     Only files that ship WITH the repo are fatal (their absence means a broken
@@ -491,8 +492,11 @@ def ensure_required_files() -> list:
     (a friend's clone died on it twice). Without them the
     assistant starts with voice output off and says so; everything else works.
     """
-    from config import (WEIGHTS_PATH, VOCAB_PATH, DC_REF_WAV, WORKFLOW_FIRERED_EDIT_PATH,
-                        OUTPUT_DIR, VOCOS_DIR)
+    import config
+    cfg = cfg or config
+    WEIGHTS_PATH, VOCAB_PATH, DC_REF_WAV = cfg.WEIGHTS_PATH, cfg.VOCAB_PATH, cfg.DC_REF_WAV
+    WORKFLOW_FIRERED_EDIT_PATH, OUTPUT_DIR, VOCOS_DIR = (
+        cfg.WORKFLOW_FIRERED_EDIT_PATH, cfg.OUTPUT_DIR, cfg.VOCOS_DIR)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     broken = [f"{label}: {path}" for path, label in (
         (VOCAB_PATH, "vocab"), (WORKFLOW_FIRERED_EDIT_PATH, "workflow"))

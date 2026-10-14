@@ -5,7 +5,7 @@ scale_style scaling primitives. Pure logic + real filesystem, a lightweight
 fake screen object stands in for QScreen (no real display needed).
 Run: venv/Scripts/python.exe tests/test_ui_scale.py
 """
-import os, sys, tempfile, json
+import os, sys, tempfile, json, contextlib
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
@@ -21,19 +21,6 @@ def check(name, cond, detail=""):
         raise AssertionError(str(name) + (": " + str(detail) if detail else ""))
 
 _TMP = Path(tempfile.mkdtemp(prefix="uiscale_"))
-
-
-class _Patches:
-    def __init__(self, **kw):
-        self.kw = kw; self.orig = {}
-    def __enter__(self):
-        for k, v in self.kw.items():
-            self.orig[k] = getattr(UI, k)
-            setattr(UI, k, v)
-        return self
-    def __exit__(self, *a):
-        for k, v in self.orig.items():
-            setattr(UI, k, v)
 
 
 class FakeRect:
@@ -73,15 +60,13 @@ def _reset_state():
     UI._state["scale_mode"] = "auto"
     UI._state["density"] = "comfortable"
     UI._state["font_scale"] = 1.0
-    UI._auto = 1.0
-    UI._effective = 1.0
-    UI._font_mult = 1.0
+    UI.force(1.0, 1.0, 1.0)
 
 
 def test_load_missing_file():
     _reset_state()
-    with _Patches(_SETTINGS_FILE=_TMP / "nope.json"):
-        UI.load()
+    with contextlib.nullcontext(_TMP / "nope.json") as _f:
+        UI.load(_f)
         check("load_missing_file_defaults", UI._state["scale_mode"] == "auto")
 
 
@@ -89,8 +74,8 @@ def test_load_valid_file():
     _reset_state()
     p = _TMP / "valid.json"
     p.write_text(json.dumps({"scale_mode": "150", "density": "tv", "font_scale": 1.25}), encoding="utf-8")
-    with _Patches(_SETTINGS_FILE=p):
-        UI.load()
+    with contextlib.nullcontext(p) as _f:
+        UI.load(_f)
         check("load_valid_scale_mode", UI._state["scale_mode"] == "150")
         check("load_valid_density", UI._state["density"] == "tv")
         check("load_valid_font_scale", UI._state["font_scale"] == 1.25)
@@ -100,8 +85,8 @@ def test_load_migrates_tv_mode_boolean():
     _reset_state()
     p = _TMP / "legacy.json"
     p.write_text(json.dumps({"tv_mode": True}), encoding="utf-8")
-    with _Patches(_SETTINGS_FILE=p):
-        UI.load()
+    with contextlib.nullcontext(p) as _f:
+        UI.load(_f)
         check("load_migrates_tv_mode_bool", UI._state["density"] == "tv")
 
 
@@ -109,8 +94,8 @@ def test_load_invalid_density_ignored():
     _reset_state()
     p = _TMP / "baddensity.json"
     p.write_text(json.dumps({"density": "not_a_real_density"}), encoding="utf-8")
-    with _Patches(_SETTINGS_FILE=p):
-        UI.load()
+    with contextlib.nullcontext(p) as _f:
+        UI.load(_f)
         check("load_invalid_density_defaults", UI._state["density"] == "comfortable")
 
 
@@ -118,8 +103,8 @@ def test_load_bad_font_scale():
     _reset_state()
     p = _TMP / "badfont.json"
     p.write_text(json.dumps({"font_scale": "not_a_number"}), encoding="utf-8")
-    with _Patches(_SETTINGS_FILE=p):
-        UI.load()
+    with contextlib.nullcontext(p) as _f:
+        UI.load(_f)
         check("load_bad_font_scale_defaults", UI._state["font_scale"] == 1.0)
 
 
@@ -127,8 +112,8 @@ def test_load_corrupt_json():
     _reset_state()
     p = _TMP / "corrupt.json"
     p.write_text("not json{{{", encoding="utf-8")
-    with _Patches(_SETTINGS_FILE=p):
-        UI.load()
+    with contextlib.nullcontext(p) as _f:
+        UI.load(_f)
         check("load_corrupt_json_no_raise_defaults", UI._state["scale_mode"] == "auto")
 
 
@@ -136,22 +121,22 @@ def test_load_non_dict():
     _reset_state()
     p = _TMP / "nondict.json"
     p.write_text(json.dumps([1, 2, 3]), encoding="utf-8")
-    with _Patches(_SETTINGS_FILE=p):
-        UI.load()
+    with contextlib.nullcontext(p) as _f:
+        UI.load(_f)
         check("load_non_dict_no_raise", UI._state["scale_mode"] == "auto")
 
 
 def test_save():
     _reset_state()
     p = _TMP / "save.json"
-    with _Patches(_SETTINGS_FILE=p):
-        UI.save()
+    with contextlib.nullcontext(p) as _f:
+        UI.save(_f)
         check("save_writes_file", p.exists())
         data = json.loads(p.read_text(encoding="utf-8"))
         check("save_content_correct", data["scale_mode"] == "auto")
 
-    with _Patches(_SETTINGS_FILE=Path(str(_TMP) + "\x00bad") / "x.json"):
-        UI.save()
+    with contextlib.nullcontext(Path(str(_TMP) + "\x00bad") / "x.json") as _f:
+        UI.save(_f)
         check("save_exception_swallowed", True)
 
 
@@ -217,7 +202,7 @@ def test_apply_screen():
 
 def test_recompute_modes():
     _reset_state()
-    UI._auto = 1.5
+    UI.force(auto=1.5)
     UI._state["scale_mode"] = "auto"
     UI._recompute()
     check("recompute_auto_mode", UI._effective == 1.5)
@@ -292,8 +277,7 @@ def test_mode_combo_index_roundtrip():
 
 def test_scaling_primitives():
     _reset_state()
-    UI._effective = 2.0
-    UI._font_mult = 1.5
+    UI.force(effective=2.0, font_mult=1.5)
     check("px_scales", UI.px(10) == 20)
     check("px_min_1", UI.px(0) == 1)
     check("fpx_scales_by_effective_and_font", UI.fpx(10) == 30)

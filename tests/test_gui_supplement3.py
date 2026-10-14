@@ -78,13 +78,9 @@ def test_image_viewer_save_fallback():
     # copyfile raises but the pixmap save still works.
     dest = os.path.join(_TMP, "ivsave.png")
     dlg.file_dialog = _NS(getSaveFileName=lambda *a, **k: (dest, ""))
-    orig = gui.shutil.copyfile
-    gui.shutil.copyfile = lambda a, b: (_ for _ in ()).throw(OSError("copy fail"))
-    try:
-        dlg._save_copy()   # copyfile raises -> falls back to self._pix.save
-        check("iv_save_fallback", os.path.exists(dest))
-    finally:
-        gui.shutil.copyfile = orig
+    dlg.copyfile = lambda a, b: (_ for _ in ()).throw(OSError("copy fail"))
+    dlg._save_copy()   # copyfile raises -> falls back to self._pix.save
+    check("iv_save_fallback", os.path.exists(dest))
     # missing source + null pix -> early return
     dlg2 = gui.ImageViewerDialog(["C:/no/such_zzz.png"])
     dlg2._save_copy(); check("iv_save_missing", True)
@@ -213,27 +209,15 @@ def test_window_apply_tab_and_show():
     # _show_tab for an unknown key -> no-op
     w._show_tab("nope", True); check("show_unknown", True)
     # _toggle_usedb empty-db branch
-    import library
-    real = library.default_library
-    library.default_library = lambda: types.SimpleNamespace(is_empty=lambda: True, close=lambda: None)
-    w._library = None
-    try:
-        w._toggle_usedb(); check("usedb_empty", w.usedb_on and "empty" in w.statusBar().currentMessage().lower())
-    finally:
-        library.default_library = real
+    w._library = types.SimpleNamespace(is_empty=lambda: True, close=lambda: None)
+    w._toggle_usedb(); check("usedb_empty", w.usedb_on and "empty" in w.statusBar().currentMessage().lower())
     w._toggle_usedb()
     _close(w)
 
 
 def test_helpers_edge():
     # _crash_log_stage when crash_diag import fails
-    real = sys.modules.get("crash_diag")
-    sys.modules["crash_diag"] = None   # ImportError inside
-    try:
-        gui._crash_log_stage("x"); check("crash_stage_fallback", True)
-    finally:
-        if real is not None: sys.modules["crash_diag"] = real
-        else: sys.modules.pop("crash_diag", None)
+    gui._crash_log_stage("x", {"crash_diag": None}); check("crash_stage_fallback", True)   # ImportError inside
     # OUTPUT_DIR_GUI_MASK config-missing fallback
     p = gui.OUTPUT_DIR_GUI_MASK(); check("output_mask_dir", p.exists())
 

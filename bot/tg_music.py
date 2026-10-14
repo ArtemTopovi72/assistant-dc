@@ -18,7 +18,7 @@ topic, chosen pins it. That is the same convention `sess.image_aspect` and
 `sess.dr_depth` already use.
 """
 from __future__ import annotations
-from seams import choice, intent_read
+from seams import choice, intent_read, module
 
 import html as _html_mod
 import logging
@@ -49,12 +49,15 @@ FIELDS: tuple = ("genre", "tempo", "vocal", "voice", "duration") + (
     ("quality",) if _music.MUSIC_ENGINE != "yue2" else ())
 
 
+PARTS = {}      # stand-ins for `rvc_voice` (a suite fills it)
+
+
 def voices(lang: str = "ru") -> dict:
     """🎙 Own voice: {"auto": off} + the trained star voices (rvc_voice.stars()). A song
     rendered by the engine gets its lead re-sung in the chosen star's voice."""
     out = {"auto": ""}
     try:
-        import rvc_voice
+        rvc_voice = module(PARTS, "rvc_voice")
         if rvc_voice.available():
             out.update(rvc_voice.stars(lang))
     except Exception:

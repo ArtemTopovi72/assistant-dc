@@ -54,7 +54,7 @@ class Ctx:
         # draw_text.read_text reads the vision model off ctx.deps.llm
         import types
         from seams import Over
-        return types.SimpleNamespace(llm=Over(llm, analyze_image_with_llm=_VIS[0]))
+        return types.SimpleNamespace(llm=Over(llm, analyze_image_with_llm=_VIS[0]), ocr_read=lambda p: _OCR[0](p))
     model_name = "test"; no_think = False; reasoning_effort = "high"
     def is_cancelled(self): return False
     def set_stage(self, *_): pass
@@ -67,10 +67,11 @@ def vision(ctx, image_path=None, user_text="", system_prompt="", **kw):
 
 
 _VIS[0] = vision
+_OCR = [O.read]
 _ocr_real = O.read
 try:
     # 1. OCR confirms -> no vision call at all
-    O.read = lambda p: ["У ОЛЬГИ"]
+    _OCR[0] = lambda p: ["У ОЛЬГИ"]
     vision_calls.clear()
     r = D.verify_text(Ctx(), img, LAY)
     check("OCR confirms the lettering", r["ok"] and r["checks"][0]["ok"], r)
@@ -79,27 +80,27 @@ try:
     check("source says ocr", r["source"] == "ocr", r["source"])
 
     # 2. OCR pieces joined count as one candidate
-    O.read = lambda p: ["У", "ОЛЬГИ"]
+    _OCR[0] = lambda p: ["У", "ОЛЬГИ"]
     vision_calls.clear()
     r = D.verify_text(Ctx(), img, LAY)
     check("split pieces are matched joined", r["ok"], r["checks"])
 
     # 3. OCR one letter off at 2x beats the vision model's fantasy
-    O.read = lambda p: ["ОАЬГИ", "УОХЬГИ"]
+    _OCR[0] = lambda p: ["ОАЬГИ", "УОХЬГИ"]
     vision_calls.clear()
     r = D.verify_text(Ctx(), img, LAY)
     check("a near read passes on the best OCR candidate", r["ok"], r["checks"])
     check("vision was not needed", not vision_calls)
 
     # 4. OCR reads garbage -> vision is asked, and the better reading counts
-    O.read = lambda p: ["XXXX"]
+    _OCR[0] = lambda p: ["XXXX"]
     vision_calls.clear()
     r = D.verify_text(Ctx(), img, LAY)
     check("when OCR fails the vision model is asked", len(vision_calls) >= 1)
     check("and a garbled render is still a failure", not r["ok"] and r["failures"] == [1], r)
 
     # 5. no OCR at all -> vision decides
-    O.read = lambda p: None
+    _OCR[0] = lambda p: None
     vision_calls.clear()
     _VIS[0] = lambda ctx, **kw: '{"strings": ["У ОЛЬГИ"]}'
     r = D.verify_text(Ctx(), img, LAY)
@@ -107,12 +108,12 @@ try:
     _VIS[0] = vision
 
     # 6. nothing readable anywhere is a failure, not a pass
-    O.read = lambda p: []
+    _OCR[0] = lambda p: []
     _VIS[0] = lambda ctx, **kw: '{"strings": []}'
     r = D.verify_text(Ctx(), img, LAY)
     check("lettering that never appeared is a failure", not r["ok"], r)
 finally:
-    O.read = _ocr_real
+    _OCR[0] = _ocr_real
     _VIS[0] = None
 
 # -- a 3-letter host noun attaches ---------------------------------------------

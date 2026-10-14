@@ -395,9 +395,7 @@ def test_recording_and_vad():
 
 def test_on_done_variants():
     w = _win()
-    import image as _img
-    orig = _img.is_intermediate_artifact
-    _img.is_intermediate_artifact = lambda p: "_INTERMEDIATE_" in os.path.basename(p)
+    w.parts = {"is_intermediate_artifact": lambda p: "_INTERMEDIATE_" in os.path.basename(p)}
     try:
         w._on_done({"final_answer": "the answer"})
         check("done_answer", "the answer" in w.chat.toPlainText())
@@ -425,7 +423,7 @@ def test_on_done_variants():
         w._on_done({"final_answer": "y", "tts_path": tts})
         check("done_tts_played", w.player.is_active)
     finally:
-        _img.is_intermediate_artifact = orig
+        w.parts = {}
     _close(w)
 
 
@@ -515,7 +513,7 @@ def test_cancel_and_clear_context():
     import sys as _sys
     fake_asst = types.ModuleType("app_runtime")
     fake_asst.make_base_state = lambda: {"messages": []}
-    real = _sys.modules.get("app_runtime"); _sys.modules["app_runtime"] = fake_asst
+    w.modules = {"app_runtime": fake_asst}
     try:
         w._clear_context()
         check("context_cleared", w.chat.toPlainText().strip() != "" and w.ctx.last_image_path is None)
@@ -524,8 +522,7 @@ def test_cancel_and_clear_context():
         check("clear_ctx_busy", "wait for" in w.chat.toPlainText().lower())
         w.worker = None
     finally:
-        if real is not None: _sys.modules["assistant"] = real
-        else: _sys.modules.pop("assistant", None)
+        w.modules = {}
     _close(w)
 
 
@@ -629,15 +626,14 @@ def test_redraw_fixhands_artifact():
         # FireRed is the only edit engine: the toggle is gone
         check("no_engine_toggle", not hasattr(w, "_toggle_handfix_engine"))
         # redraw done variants
-        import image as _img; oi = _img.is_intermediate_artifact
-        _img.is_intermediate_artifact = lambda p: "_INTERMEDIATE_" in p
+        w.parts = {"is_intermediate_artifact": lambda p: "_INTERMEDIATE_" in p}
         try:
             w._on_redraw_done(_png("ok.png")); check("redraw_done_ok", w.ctx.last_image_path.endswith("ok.png"))
             w._on_redraw_done("/no/such.png")
             w._on_redraw_done(_png("_INTERMEDIATE_x.png"))
             w._on_redraw_failed("gpu oom")
         finally:
-            _img.is_intermediate_artifact = oi
+            w.parts = {}
         _close(w)
     finally:
         _restore_workers()

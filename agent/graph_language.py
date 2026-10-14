@@ -9,7 +9,7 @@ The literal-protection dance is the load-bearing part: a lettering request
 ("draw a sign saying Открыто") must reach the image model with the string
 untranslated, or the picture comes out in the wrong language.
 """
-from seams import intent_read, yes_no, text_model
+from seams import dep, intent_read, yes_no, text_model
 import logging
 import re
 
@@ -25,7 +25,7 @@ def call_llm_simple(*a, **kw):
     ignored, the real call runs, and the suite still prints PASS. Going through
     the module means patching llm.call_llm_simple works from anywhere, and
     patching this name works too."""
-    return _llm.call_llm_simple(*a, **kw)
+    return dep(a[0] if a else None, "call_llm_simple", _llm.call_llm_simple)(*a, **kw)
 
 
 logger = logging.getLogger("assistant.graph")

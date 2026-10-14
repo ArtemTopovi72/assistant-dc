@@ -16,6 +16,7 @@ If validation fails the node is marked failed and the previous current is kept.
 from __future__ import annotations
 import logging
 import os
+from seams import module
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -64,8 +65,10 @@ class EditNode:
 class EditSession:
     """A chain of edits over one source image, each validated, state-preserving."""
 
-    def __init__(self, source_path: str):
+    def __init__(self, source_path: str, modules=None, exists=os.path.exists):
         self.source_path = source_path
+        self.modules = modules or {}      # stand-ins for `image` / `identity_metrics`
+        self.exists = exists
         self.nodes: List[EditNode] = [
             EditNode(op="source", instruction="", image_path=source_path,
                      locked=[], editable=[], parent=-1, validation={}, ok=True)
@@ -90,7 +93,7 @@ class EditSession:
         out = {"identity_cosine": None, "face_change": None, "overall_change": None,
                "ok": True, "reason": ""}
         try:
-            import identity_metrics as idm
+            idm = module(self, "identity_metrics")
             out["identity_cosine"] = idm.identity_cosine(before_path, after_path)
             out["face_change"] = idm.face_region_change(before_path, after_path)
             ch = idm.changed_fraction(before_path, after_path)
@@ -109,10 +112,10 @@ class EditSession:
     def apply_edit(self, instruction: str, *, seed: Optional[int] = None,
                    timeout: int = 1900) -> EditNode:
         """Route an edit on the CURRENT image, validate, and append a node."""
-        import image as img
+        img = module(self, "image")
         before = self.current_path
         category, out = img.route_edit_request(None, before, instruction, seed=seed, timeout=timeout)
-        if not out or not os.path.exists(out):
+        if not out or not self.exists(out):
             node = EditNode(op=category, instruction=instruction, image_path=before,
                             parent=self.nodes.index(self.current), ok=False,
                             validation={"reason": "no output"})

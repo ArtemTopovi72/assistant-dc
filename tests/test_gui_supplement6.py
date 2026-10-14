@@ -171,7 +171,7 @@ def test_edit_personality_save_failure():
                                 mic_disabled=False, tts_disabled=False)
     dlg = gui.SettingsDialog("q", ctx=ctx, modules={"model_selector": ms})
     # Save-to-file where the write fails -> hint shows "Save failed"
-    _QFD.getSaveFileName = staticmethod(lambda *a, **k: (os.path.join(_TMP, "x.txt"), ""))
+    dlg.file_dialog = types.SimpleNamespace(getSaveFileName=lambda *a, **k: (os.path.join(_TMP, "x.txt"), ""))
     real_open = open
     import builtins
     def bad_open(p, *a, **k):
@@ -184,13 +184,9 @@ def test_edit_personality_save_failure():
         for b in self.findChildren(QPushButton):
             if b.text() == "Save to file": b.click()
         return QDialog.Rejected   # save failed -> dialog not accepted
-    oo = builtins.open; builtins.open = bad_open
-    oe = QDialog.exec_; QDialog.exec_ = do_exec
-    try:
-        dlg._edit_personality()
-        check("edit_pers_save_fail", True)
-    finally:
-        builtins.open = oo; QDialog.exec_ = oe
+    dlg.parts = {"open": bad_open, "exec_dialog": lambda d: do_exec(d)}
+    dlg._edit_personality()
+    check("edit_pers_save_fail", True)
     dlg.close()
 
 
@@ -244,15 +240,9 @@ def test_fix_dialog_exception_and_auto():
 
 def test_toggle_usedb_nonempty_and_mc_setprofile():
     w = _win()
-    import library
-    real = library.default_library
-    library.default_library = lambda: types.SimpleNamespace(is_empty=lambda: False, close=lambda: None)
-    w._library = None
-    try:
-        w._toggle_usedb()
-        check("usedb_nonempty", w.usedb_on and "documents" in w.statusBar().currentMessage().lower())
-    finally:
-        library.default_library = real
+    w._library = types.SimpleNamespace(is_empty=lambda: False, close=lambda: None)
+    w._toggle_usedb()
+    check("usedb_nonempty", w.usedb_on and "documents" in w.statusBar().currentMessage().lower())
     w._toggle_usedb()
     _close(w)
 
@@ -280,14 +270,10 @@ def test_load_image_pil_exception_and_manual_toggle():
     w = _win()
     img = _png("pil.png")
     # make PIL.Image.open raise so the encode-for-vision except branch runs
-    import PIL.Image as PImage
-    real = PImage.open
-    PImage.open = lambda *a, **k: (_ for _ in ()).throw(OSError("bad img"))
-    try:
-        w._load_image_file_as_working(img)
-        check("load_pil_exc", w.captured_image is None)
-    finally:
-        PImage.open = real
+    w.parts = {"image_open": lambda *a, **k: (_ for _ in ()).throw(OSError("bad img"))}
+    w._load_image_file_as_working(img)
+    check("load_pil_exc", w.captured_image is None)
+    w.parts = {}
     # Manual Control expand toggle (mc_toggle.toggled -> _toggle_body)
     w.mc_toggle.setChecked(True)
     w.mc_toggle.setChecked(False)

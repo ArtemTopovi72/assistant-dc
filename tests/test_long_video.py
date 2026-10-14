@@ -92,20 +92,18 @@ bot._dl_bytes = lambda fid: clip.read_bytes()
 bot._get_ctx = lambda: TXT
 asr_calls, look_calls, retell_calls = [], [], []
 import audio as _audio, llm as _llm
-_audio.transcribe_audio_file = lambda ctx, p, lang_hint="ru": asr_calls.append(p) or "речь части"
+from tests.fakes import Over
+ASR = [lambda ctx, p, lang_hint="ru": asr_calls.append(p) or "речь части"]
+AU = Over(_audio, transcribe_audio_file=lambda ctx, p, lang_hint="ru": ASR[0](ctx, p, lang_hint))
 _orig_look = VL.look_at_video
 def _fake_look(ctx, path, **kw):
     look_calls.append(kw.get("offset"))
     r = _orig_look(ctx, path, vision=lambda *a: "x — кадр", **kw)
     r["description"] = "\n".join(f"{VL._stamp(t)} — кадр" for t in r["times"])
     return r
-VL.look_at_video = _fake_look
+VLO = Over(VL, look_at_video=_fake_look)
+bot.modules = {"video_look": VLO, "audio": AU}
 _T[0] = lambda ctx, sysm, user, **kw: retell_calls.append(user) or "пересказ части"
-# look_at_video's close-up pass is a LIVE vision call (48 requests, 2.5 min) --
-# it must never reach the operator's LM Studio from a suite.
-import vision_close as _vclose
-_vclose.tile_notes = lambda *a, **k: ""
-T._IMAGE_DIR = str(tmp)
 stop = threading.Event()
 bot._lv_jobs()[CID] = stop
 bot._long_video_job(CID, {"id": "j1", "file_id": "F1", "seconds": 150}, stop)
@@ -130,14 +128,14 @@ check("render_retelling: bold title + bold labels + bullets, markdown stars gone
       and "<b>Что требуется:</b>" in html and "**" not in html, html)
 
 check("a detailed run still saves its notes, so ❓ works after it too",
-      (tmp / "longvideo_j1" / "material.json").exists())
+      (Path(T._IMAGE_DIR) / "longvideo_j1" / "material.json").exists())
 
 # ── brief (the default): nothing per portion, one retelling, then questions ──
 # 10-09: 11 portions x storyboard + retelling + sheet buried the chat
 bot = make_bot(); sess = bot._get_session(CID)
 sess.video_chunk = "2"; sess.video_frames = "6"; sess.video_out = ""; bot._store.put(sess)
 bot._dl_bytes = lambda fid: clip.read_bytes(); bot._get_ctx = lambda: TXT
-_audio.transcribe_audio_file = lambda ctx, p, lang_hint="ru": "речь части"
+bot.modules = {"video_look": VLO, "audio": AU}; ASR[0] = lambda ctx, p, lang_hint="ru": "речь части"
 calls = []
 _T[0] = lambda ctx, sysm, user, **kw: calls.append((sysm, user)) or (
     "Основная тема: ремонт.\nКлючевые моменты:\n• 0:10 — плата" if "WHOLE" in sysm else
@@ -161,8 +159,7 @@ bot.sent.clear()
 bot._cb_long_video(CID, "lv:more:b1")
 check("❓ arms the next message as the question", bot._get_session(CID).reg_state == "lv_more:b1"
       and "Что тебя интересует" in texts(bot), texts(bot))
-import turn_trace as _tt
-_tt.spawn = lambda fn, *a, **k: fn(*a)
+bot.spawn = lambda fn, *a, **k: fn(*a)
 bot.sent.clear(); calls.clear()
 bot._user_gate(CID, {"text": "какая частота на осциллографе?", "from": {}})
 check("the question is answered from the saved notes, no re-watch",
@@ -191,7 +188,7 @@ bot = make_bot(); sess = bot._get_session(CID)
 sess.video_chunk = "2"; sess.video_frames = "6"; sess.video_out = "both"; bot._store.put(sess)
 bot._dl_bytes = lambda fid: clip.read_bytes(); bot._get_ctx = lambda: TXT
 stop = threading.Event(); bot._lv_jobs()[CID] = stop
-_audio.transcribe_audio_file = lambda ctx, p, lang_hint="ru": (stop.set(), "речь")[1]   # Stop during part 1
+bot.modules = {"video_look": VLO, "audio": AU}; ASR[0] = lambda ctx, p, lang_hint="ru": (stop.set(), "речь")[1]   # Stop during part 1
 bot._long_video_job(CID, {"id": "j2", "file_id": "F1", "seconds": 150}, stop)
 out = texts(bot)
 check("Stop ends the job between portions", "Остановлено после" in out and "Часть 2/2" not in out, out)

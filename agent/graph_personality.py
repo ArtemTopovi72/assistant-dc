@@ -1237,7 +1237,8 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             _steer.drain_into(ctx, messages)
         except Exception:
             logger.debug("steer drain failed", exc_info=True)
-        _llm_t0 = time.monotonic()
+        _monotonic = dep(ctx, "monotonic", time.monotonic)
+        _llm_t0 = _monotonic()
         _loop_tokens = gen.loop_max_tokens
         if any((t.get("function") or {}).get("name") in _BUILDER_TOOLS
                for t in (turn_tools or [])):
@@ -1300,7 +1301,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
         # One-shot: a forced follow-up applies to the call that was just made
         # and must not leak into the next round.
         force_next_tool = None
-        _llm_dt = time.monotonic() - _llm_t0
+        _llm_dt = _monotonic() - _llm_t0
         # Per-round watchdog log: makes a slow/stuck round visible in the log instead
         # of an opaque silence. The LLM call itself is now bounded (stall/wall-clock/
         # char caps in llm._stream_chat), so a long dt here means the model was slow

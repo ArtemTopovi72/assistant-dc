@@ -9,7 +9,7 @@ Both consumers — AssistantWindow and run_gui — are in gui.py, which
 re-exports these two so the suites that patch gui.SettingsDialog keep
 intercepting.
 """
-from seams import file_dialog, module
+from seams import file_dialog, module, widget_part
 import os
 
 from PyQt5.QtCore import Qt, QTimer
@@ -536,10 +536,10 @@ class SettingsDialog(QDialog):
         def _save():
             personalities_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "personalities")
             default_path = (self.ctx.custom_personality_path if self.ctx else None) or os.path.join(personalities_dir, "custom.txt")
-            path, _ = file_dialog(dlg).getSaveFileName(dlg, "Save personality", default_path, "Text files (*.txt)")
+            path, _ = file_dialog(self).getSaveFileName(dlg, "Save personality", default_path, "Text files (*.txt)")
             if path:
                 try:
-                    with open(path, "w", encoding="utf-8") as f:
+                    with widget_part(self, "open", open)(path, "w", encoding="utf-8") as f:
                         f.write(editor.toPlainText())
                 except Exception as exc:
                     hint.setText(f"Save failed: {exc}")
@@ -555,7 +555,7 @@ class SettingsDialog(QDialog):
         save_btn.clicked.connect(_save)
         apply_btn.clicked.connect(_apply)
         cancel_btn.clicked.connect(dlg.reject)
-        dlg.exec_()
+        widget_part(self, "exec_dialog", lambda d: d.exec_())(dlg)
 
     def _reset_personality(self):
         if self.ctx:

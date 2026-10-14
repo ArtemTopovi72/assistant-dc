@@ -249,7 +249,7 @@ class ImageFixMixin:
 
     def _on_redraw_done(self, path: str):
         import image as _img
-        if path and _img.is_intermediate_artifact(path):
+        if path and widget_part(self, "is_intermediate_artifact", _img.is_intermediate_artifact)(path):
             # Same gate as _on_done: a cropped working tile must never be delivered.
             logger.error("UI DELIVERY REJECTED: intermediate tile reached _on_redraw_done: %s", path)
             self._add_system('Internal error: the editor returned an intermediate fragment, not the finished image. The result is not shown.')

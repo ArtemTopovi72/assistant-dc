@@ -38,35 +38,33 @@ import comfy_client
 import config
 import gpu_lock
 
-# The gate ignores the lock under F5_TEST_RUN unless the lock PATH has been
-# redirected -- otherwise every suite that stubs ComfyUI and drives
+# The gate ignores the lock under F5_TEST_RUN unless a suite hands in its own
+# `gpu_owner` -- otherwise every suite that stubs ComfyUI and drives
 # _submit_and_poll would pass or fail depending on whether a training run
 # happened to be going on the machine. This suite is testing the mechanism, so
-# it redirects.
-gpu_lock.LOCK_PATH = Path(tempfile.mkdtemp(prefix="gpulockchk_")) / "gpu.lock"
+# it hands one in.
 
 
 class _Holder:
     """Pretend a foreign process holds the card, without starting one."""
     def __init__(self, label="a training run"):
+        import types
         self.label = label
-        self.orig = None
+        self.ctx = types.SimpleNamespace(deps=types.SimpleNamespace(gpu_owner=lambda: (999999, self.label)))
 
     def __enter__(self):
-        self.orig = gpu_lock.owner
-        gpu_lock.owner = lambda: (999999, self.label)
         return self
 
     def __exit__(self, *a):
-        gpu_lock.owner = self.orig
+        pass
 
 
 def test_gpu_holder_reads_the_lock():
     check("a free card reports no holder", comfy_client.gpu_holder() in (None, )
           or isinstance(comfy_client.gpu_holder(), str))
-    with _Holder("Ideogram 4 training"):
+    with _Holder("Ideogram 4 training") as h:
         check("a held card reports the label",
-              comfy_client.gpu_holder() == "Ideogram 4 training")
+              comfy_client.gpu_holder(h.ctx) == "Ideogram 4 training")
     check("the label does not linger once the lock is gone",
           comfy_client.gpu_holder() is None
           or comfy_client.gpu_holder() != "Ideogram 4 training"
@@ -76,14 +74,10 @@ def test_gpu_holder_reads_the_lock():
 def test_the_check_can_be_switched_off():
     """The escape hatch matters: the lock is advisory, and a user who knows the
     holder is finished must not be locked out of their own app."""
-    orig = getattr(config, "COMFY_RESPECT_GPU_LOCK", True)
-    try:
-        config.COMFY_RESPECT_GPU_LOCK = False
-        with _Holder():
-            check("COMFY_RESPECT_GPU_LOCK=0 draws anyway",
-                  comfy_client.gpu_holder() is None)
-    finally:
-        config.COMFY_RESPECT_GPU_LOCK = orig
+    with _Holder() as h:
+        h.ctx.deps.COMFY_RESPECT_GPU_LOCK = False
+        check("COMFY_RESPECT_GPU_LOCK=0 draws anyway",
+              comfy_client.gpu_holder(h.ctx) is None)
 
 
 def test_a_submit_is_refused_without_touching_the_server():
@@ -94,7 +88,8 @@ def test_a_submit_is_refused_without_touching_the_server():
     server = types.SimpleNamespace(deps=types.SimpleNamespace(
         server_healthy=lambda *a, **k: (calls.__setitem__("health", calls["health"] + 1), True)[1],
         requests=types.SimpleNamespace(post=lambda *a, **k: calls.__setitem__("post", calls["post"] + 1))))
-    with _Holder("Ideogram 4 training"):
+    with _Holder("Ideogram 4 training") as h:
+        server.deps.gpu_owner = h.ctx.deps.gpu_owner
         out = comfy_client._submit_and_poll(server, {"1": {}}, timeout=5)
     check("nothing came back", out is None)
     check("and nothing was submitted to ComfyUI", calls["post"] == 0, calls)

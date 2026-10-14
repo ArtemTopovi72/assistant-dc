@@ -97,11 +97,11 @@ import contextlib
 
 @contextlib.contextmanager
 def patched(llm, tools, analyze=None, synth=None, play=None, downscale=None,
-            fastpath=True):
+            fastpath=True, ctx=None, **more):
     """`fastpath` is kept for callers: the loop is already the default."""
-    saved = {}
     _CHAT[0] = llm
     _EXEC[0] = tools
+    deps = types.SimpleNamespace(**more)
     for name, val in [
                       # translate node must not hit a live LLM: None -> keep original
                       ("call_llm_simple", lambda *a, **k: None),
@@ -110,18 +110,16 @@ def patched(llm, tools, analyze=None, synth=None, play=None, downscale=None,
                       ("synth_single_segment", synth or (lambda **k: str(_TMP / "reply.wav"))),
                       ("play_audio_file", play or (lambda p: None)),
                       ("downscale_image_bytes", downscale or (lambda b: b))]:
-        saved[name] = getattr(G, name); setattr(G, name, val)
+        setattr(deps, name, val)
     # The translator lives in graph_language and calls ITS OWN wrapper, so the
     # graph.call_llm_simple stub above never reaches it; without this the suite
     # quietly talks to the live LM Studio (and hangs when the card is busy).
-    import graph_language as GL
-    saved_gl = GL.call_llm_simple; GL.call_llm_simple = lambda *a, **k: None
+    deps.call_llm_simple = lambda *a, **k: None
+    if ctx is not None:
+        ctx.deps = deps
     try:
         yield
     finally:
-        for name, val in saved.items():
-            setattr(G, name, val)
-        GL.call_llm_simple = saved_gl
         _CHAT[0] = _EXEC[0] = None
 
 
@@ -131,7 +129,7 @@ def _run(ctx, llm, tools, state, read=None, **pk):
     if read is not None:
         from fakes import reads
         ctx.intent_read = reads(read=lambda t: read)["intent_read"]
-    with patched(llm, tools, **pk):
+    with patched(llm, tools, ctx=ctx, **pk):
         g = G.build_graph(ctx)
         return g.invoke(state)
 
@@ -500,13 +498,9 @@ def test_vision_persist_exception():
     c = _ctx(vision_model=lambda **k: "desc")
     llm = LLM([_asst("ok")])
     # make OUTPUT_DIR.mkdir raise via patching graph.OUTPUT_DIR to a broken object
-    real = G.OUTPUT_DIR
-    G.OUTPUT_DIR = types.SimpleNamespace(mkdir=lambda *a, **k: (_ for _ in ()).throw(OSError("ro")))
-    try:
-        out = _run(c, llm, Tools(), {"messages": [], "user_input": "x", "image_data": b"\xff\xd8\xff\xe0"})
-        check("vision_persist_except", out.get("vision_summary") == "desc")
-    finally:
-        G.OUTPUT_DIR = real
+    ro = types.SimpleNamespace(mkdir=lambda *a, **k: (_ for _ in ()).throw(OSError("ro")))
+    out = _run(c, llm, Tools(), {"messages": [], "user_input": "x", "image_data": b"\xff\xd8\xff\xe0"}, OUTPUT_DIR=ro)
+    check("vision_persist_except", out.get("vision_summary") == "desc")
 
 
 # ---------------------------------------------------- tts node
@@ -569,14 +563,9 @@ def test_slow_llm_warning():
     c = _ctx()
     # make the two monotonic() reads straddle a >45s gap -> slow-round warning
     seq = iter([0.0, 100.0])
-    real = G.time.monotonic
-    G.time.monotonic = lambda: next(seq, 200.0)
-    try:
-        llm = LLM([_asst("slow answer")])
-        out = _run(c, llm, Tools(), {"messages": [], "user_input": "x"})
-        check("slow_warning", out["final_answer"] == "slow answer")
-    finally:
-        G.time.monotonic = real
+    llm = LLM([_asst("slow answer")])
+    out = _run(c, llm, Tools(), {"messages": [], "user_input": "x"}, monotonic=lambda: next(seq, 200.0))
+    check("slow_warning", out["final_answer"] == "slow answer")
 
 
 def test_verbatim_save_short_fact_skipped():

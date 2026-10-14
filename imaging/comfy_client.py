@@ -710,14 +710,7 @@ def recent_gpu_refusal(within: float = 180.0):
     return LAST_GPU_REFUSAL["label"]
 
 
-try:                       # captured at import, before any suite redirects it
-    import gpu_lock as _gpu_lock_mod
-    _REAL_LOCK_PATH = _gpu_lock_mod.LOCK_PATH
-except Exception:
-    _REAL_LOCK_PATH = None
-
-
-def gpu_holder():
+def gpu_holder(ctx=None):
     """The label of a FOREIGN whole-card job holding the GPU, or None.
 
     gpu_lock has existed since a second trainer was launched on top of a live
@@ -731,18 +724,22 @@ def gpu_holder():
     """
     try:
         import config as _cfg
-        if not getattr(_cfg, "COMFY_RESPECT_GPU_LOCK", True):
+        if not dep(ctx, "COMFY_RESPECT_GPU_LOCK", getattr(_cfg, "COMFY_RESPECT_GPU_LOCK", True)):
             return None
         import gpu_lock
         # A test run must not read the operator's live card. Suites that stub
         # ComfyUI and drive _submit_and_poll would otherwise pass or fail
         # depending on whether a training run happened to be going -- which is
         # exactly what happened the first time this gate landed. A suite that
-        # REDIRECTS the lock path is testing this mechanism on purpose, so it
-        # is let through; the same convention as lmstudio._refuse_under_tests.
-        if os.getenv("F5_TEST_RUN") and gpu_lock.LOCK_PATH == _REAL_LOCK_PATH:
-            return None
-        held = gpu_lock.owner()
+        # REDIRECTS the lock path (ASSISTANT_GPU_LOCK) or hands its own `gpu_owner`
+        # in is testing this mechanism on purpose, so it is let through; the same
+        # convention as lmstudio._refuse_under_tests.
+        owner = dep(ctx, "gpu_owner", None)
+        if owner is None:
+            if os.getenv("F5_TEST_RUN") and not os.getenv("ASSISTANT_GPU_LOCK"):
+                return None
+            owner = gpu_lock.owner
+        held = owner()
     except Exception:
         return None
     return held[1] if held else None
@@ -793,7 +790,8 @@ def _submit_and_poll(ctx, workflow: dict, timeout: int = 1900, label: str = "",
                      f" ({label})" if label else "")
         _fail("ComfyUI is not running or not answering at " + COMFY_URL)
         return None
-    busy = dep(ctx, "gpu_holder", gpu_holder)()
+    _holder = dep(ctx, "gpu_holder", None)
+    busy = _holder() if _holder else gpu_holder(ctx)
     if busy:
         # Do not queue behind it and do not fight it: a whole-card job runs for
         # hours, and every caller here has a timeout measured in minutes.

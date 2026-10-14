@@ -90,8 +90,7 @@ def build_window(store, profile):
 # --------------------------------------------------------------------------- #
 # 1. FUNCTIONAL — drive the real handlers (scale 1.0, small dataset)
 # --------------------------------------------------------------------------- #
-ui_scale._effective = 1.0
-ui_scale._font_mult = 1.0
+ui_scale.force(effective=1.0, font_mult=1.0)
 gui.apply_ui_scale(app)
 
 tmp = Path(tempfile.mkdtemp())
@@ -207,8 +206,7 @@ SCALES = [
 
 
 def render_and_check(label, eff, store, profile, shot=True):
-    ui_scale._effective = eff
-    ui_scale._font_mult = 1.0
+    ui_scale.force(effective=eff, font_mult=1.0)
     gui.apply_ui_scale(app)
     win, mc = build_window(store, profile)
     # size the window roughly to the target panel
@@ -248,7 +246,7 @@ for label, eff in SCALES:
 # content states at 1.0
 empty = Path(tempfile.mkdtemp())
 estore = memory_center.MemoryStore(root=empty); estore.create_profile("default")
-ui_scale._effective = 1.0; ui_scale._font_mult = 1.0; gui.apply_ui_scale(app)
+ui_scale.force(effective=1.0, font_mult=1.0); gui.apply_ui_scale(app)
 win, mc = build_window(estore, "default"); win.resize(1840, 1010); win.show(); app.processEvents()
 mc.subtabs.setCurrentIndex(1); app.processEvents()
 check(mc.table.rowCount() == 0, "empty set: table renders with 0 rows (no crash)")

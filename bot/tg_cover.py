@@ -13,7 +13,7 @@ The slow parts (demucs, TTS, SoulX-SVC) run off the poll thread (media/remix.py)
 import os
 
 import cover
-import remix
+from seams import module
 
 
 class CoverMixin:
@@ -24,7 +24,7 @@ class CoverMixin:
         return d
 
     def _start_cover_flow(self, chat_id: int, sess, lang: str) -> None:
-        if not remix.available():
+        if not module(self, "remix").available():
             self._send_text(chat_id, tg_bot._t("cover_fail_off", lang))
             return
         sess.cover_state = "want_audio"
@@ -104,7 +104,7 @@ class CoverMixin:
 
     def _cover_voice_kb(self, sess, lang: str) -> dict:
         """Whose voice sings the cover; the ✅ marks the kept choice."""
-        import rvc_voice
+        rvc_voice = module(self, "rvc_voice")
         cur = getattr(sess, "cover_voice", "") or ""
         opts = [("auto", tg_bot._t("cover_voice_auto", lang)), ("none", tg_bot._t("cover_voice_none", lang))]
         opts += list(rvc_voice.stars(lang)) if rvc_voice.available() else []
@@ -117,7 +117,7 @@ class CoverMixin:
         return {"inline_keyboard": rows}
 
     def _cb_cover_voice(self, chat_id: int, msg: dict, data: str) -> None:
-        import rvc_voice
+        rvc_voice = module(self, "rvc_voice")
         sess = self._get_session(chat_id)
         lang = self._lang(sess)
         v = data.split(":", 1)[1]
@@ -164,6 +164,7 @@ class CoverMixin:
 
     def _cover_render(self, chat_id: int, lang: str, src: str, lyrics: str, song2: str) -> None:
         ctx = self._get_ctx()
+        remix = module(self, "remix")
         try:
             if song2:
                 self._mashup_first(chat_id, lang, ctx, src, song2)
@@ -192,12 +193,12 @@ class CoverMixin:
             tg_bot.logger.exception("[remix] failed for chat %s", chat_id)
             self._send_text(chat_id, tg_bot._t("cover_fail_render", lang))
         finally:
-            import mashup_stems
-            mashup_stems.release_separator()      # Demucs holds VRAM the next render needs
+            module(self, "mashup_stems").release_separator()      # Demucs holds VRAM the next render needs
 
 
     def _cover_star(self, chat_id: int, lang: str, src: str, voice: str) -> None:
         ctx = self._get_ctx()
+        remix = module(self, "remix")
         try:
             if not self._send_audio(chat_id, remix.sing_original_as(ctx, src, voice), tg_bot._t("cover_done", lang)):
                 self._send_text(chat_id, tg_bot._t("cover_fail_render", lang))
@@ -207,15 +208,13 @@ class CoverMixin:
             tg_bot.logger.exception("[remix] star voice failed for chat %s", chat_id)
             self._send_text(chat_id, tg_bot._t("cover_fail_render", lang))
         finally:
-            import mashup_stems
-            mashup_stems.release_separator()
+            module(self, "mashup_stems").release_separator()
 
     def _mashup_first(self, chat_id: int, lang: str, ctx, src: str, song2: str) -> None:
         """The classic mashup (song 1's vocal over song 2's backing, bar-aligned and in key)
         goes out first: it takes ~30 s, the voice swap after it several minutes."""
         try:
-            import mashup_auto
-            self._send_audio(chat_id, mashup_auto.make(ctx, src, song2), tg_bot._t("mashup_done", lang))
+            self._send_audio(chat_id, module(self, "mashup_auto").make(ctx, src, song2), tg_bot._t("mashup_done", lang))
         except Exception:
             tg_bot.logger.exception("[mashup] failed for chat %s", chat_id)
 

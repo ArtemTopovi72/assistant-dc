@@ -7,11 +7,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # The model's reads are stubbed here; the phrases run live in bench/intent_rest_live.py.
 import types
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from fakes import reads
+from fakes import reads, Over
 _RESETS = {"♻️ сбрось настройки песни", "Сбросить настройки песни", "сброс настроек песни", "reset song settings", "сбрось настройки песни"}
 _R = types.SimpleNamespace(**reads(read=lambda t: {"song": "reset"} if t.strip() in _RESETS else None,
                                     pick=lambda q, t: "song" if t.strip() in _RESETS else "nothing"))
 os.environ.setdefault("F5_TEST_RUN", "1")
+os.environ["MUSIC_ENGINE"] = "music3"   # this suite covers the Music3 knobs (length is a Music3 promise)
+os.environ["ASSISTANT_OUTPUT_DIR"] = tempfile.mkdtemp(prefix="music_eta_")   # never touch the live ETA file
 _DATA = tempfile.mkdtemp(prefix="tg_music_custom_")
 import logging; logging.basicConfig(level=logging.CRITICAL)
 import tg_bot as T
@@ -23,8 +25,8 @@ _T = [None]   # the text model the context hands out
 TXT = _types.SimpleNamespace(text_model=lambda *a, **k: _T[0](*a, **k))
 
 import config as C
+ENGINE = {}
 import tg_songs as TS
-M.MUSIC_ENGINE = "music3"   # this suite covers the Music3 knobs (length is a Music3 promise)
 
 CID = 515151
 PASSED = FAILED = 0
@@ -46,6 +48,7 @@ def make_bot():
     bot._activity.log = lambda *a, **k: None
     bot._user_store.put(T._User(chat_id=CID, name="T", status="approved"))
     bot.reads = _R
+    bot.music = Over(M, **ENGINE)
     return bot
 
 
@@ -61,7 +64,6 @@ check("a pinned BPM becomes an exact tempo requirement",
 check("render_ceiling gives the ask headroom for the outro",
       M.render_ceiling(100) == 130 and M.render_ceiling(180) <= C.MUSIC_CEILING_SECONDS)
 
-M.OUTPUT_DIR = tempfile.mkdtemp(prefix="music_eta_")   # never touch the live file
 check("the quality ETA is measured for a 180-second song, not the old 30-second figure",
       M.ETA_QUOTE_SECONDS == 180 and 300 <= M.eta_seconds("fast", steps=30) <= 450
       and M.eta_seconds("max", steps=30) > 1500 and M.eta_label(336, "ru") == "~6 мин" and M.eta_label(45, "ru") == "~45 с")
@@ -213,13 +215,14 @@ sess.music_duration = "auto"; sess.music_tempo = ""; bot._store.put(sess)   # th
 seen = {}
 _T[0] = lambda ctx, sysm, user, **kw: (
     '{"genre": "pop", "bpm": 104, "vocal": "male", "seconds": 60, "why": "Лёгкая тема."}')
-M.engine_available = lambda ctx, preset=None: (True, "")
+ENGINE.update(engine_available=lambda ctx, preset=None: (True, ""))
 def _cap(ctx, topic, lang, duration_s=None, prefs=None):
     seen["duration"] = duration_s; seen["prefs"] = dict(prefs or {})
     return {"lyrics": "[verse]\nla", "style": "pop"}
-M.build_structured_caption = _cap
-M.generate_music = lambda ctx, lyrics, style, duration_s=60, preset=None, **kw: (seen.__setitem__("render", duration_s), seen.__setitem__("steps", kw.get("steps")), "x.wav")[2]
+ENGINE["build_structured_caption"] = _cap
+ENGINE["generate_music"] = lambda ctx, lyrics, style, duration_s=60, preset=None, **kw: (seen.__setitem__("render", duration_s), seen.__setitem__("steps", kw.get("steps")), "x.wav")[2]
 bot._get_ctx = lambda: TXT
+bot.music = Over(M, **ENGINE)
 bot._generate_song(CID, "про лето", "ru")
 check("the picks reach the brief as requirements and the length comes from the bot",
       seen.get("duration") == 60 and seen["prefs"].get("tempo") == "exactly 104 BPM"
@@ -263,8 +266,8 @@ check("no duet button: the model cannot place who sings where", "duet" not in M.
 
 # 🎙 Own voice in the song settings: off or one of the trained stars
 import rvc_voice
-rvc_voice.available = lambda: True
-rvc_voice.stars = lambda *a, **k: [("tsoi_hq", "Виктор Цой"), ("lindemann_hq", "Тиль Линдеманн")]
+TM.PARTS["rvc_voice"] = Over(rvc_voice, available=lambda: True,
+                              stars=lambda *a, **k: [("tsoi_hq", "Виктор Цой"), ("lindemann_hq", "Тиль Линдеманн")])
 bot = make_bot(); sess = bot._get_session(CID)
 check("the menu has «Свой голос: Выкл»", any(t.startswith("🎙 Свой голос: Выкл") for t in kb_texts(TM._music_menu_kb(sess, "ru"))))
 check("the picker: off, then the trained stars",

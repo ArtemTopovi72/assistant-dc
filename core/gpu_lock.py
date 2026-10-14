@@ -20,15 +20,18 @@ import os
 import time
 from pathlib import Path
 
+from seams import module
+
 logger = logging.getLogger(__name__)
 
-LOCK_PATH = Path(__file__).resolve().parents[1] / "runtime" / "gpu.lock"
+LOCK_PATH = Path(os.getenv("ASSISTANT_GPU_LOCK") or Path(__file__).resolve().parents[1] / "runtime" / "gpu.lock")
+PARTS = {}      # stand-in for `psutil` (a suite fills it)
 
 
 def _create_time(pid: int):
     """When that pid's process started, or None if we cannot tell."""
     try:
-        import psutil
+        psutil = module(PARTS, "psutil")
         return float(psutil.Process(pid).create_time())
     except Exception:
         return None
@@ -49,7 +52,7 @@ def _alive(pid: int, born: float = 0.0) -> bool:
     number, however alive it is.
     """
     try:
-        import psutil
+        psutil = module(PARTS, "psutil")
         if not psutil.pid_exists(pid):
             return False
         if born:

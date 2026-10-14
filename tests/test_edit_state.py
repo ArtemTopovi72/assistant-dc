@@ -34,24 +34,26 @@ def fake_upscale(ctx, image_path, *, scale="4x", timeout=1900):
     calls["upscale_in"].append(image_path)
     return str(_ROOT / "upscaled.png")
 
-img.route_edit_request = fake_route
-img.upscale_image_with_comfy = fake_upscale
+sys.path.insert(0, str(_ROOT / 'tests'))
+from fakes import Over
+IMG = Over(img, route_edit_request=fake_route, upscale_image_with_comfy=fake_upscale)
 
 # identity metric stub: controllable per-call
 _idstate = {"cos": 0.99, "face": 0.02, "overall": 0.2}
-idm.identity_cosine = lambda a, b: _idstate["cos"]
-idm.face_region_change = lambda a, b: _idstate["face"]
-idm.changed_fraction = lambda a, b, **k: {"overall": _idstate["overall"]}
+IDM = Over(idm, identity_cosine=lambda a, b: _idstate["cos"],
+           face_region_change=lambda a, b: _idstate["face"],
+           changed_fraction=lambda a, b, **k: {"overall": _idstate["overall"]})
 
 # make os.path.exists(edited/upscaled) return True for our fake paths
 import os
 _real_exists = os.path.exists
-os.path.exists = lambda p: True if ("edited_" in str(p) or "upscaled" in str(p) or "source" in str(p)) else _real_exists(p)
+_exists = lambda p: True if ("edited_" in str(p) or "upscaled" in str(p) or "source" in str(p)) else _real_exists(p)
+_MODS = {"image": IMG, "identity_metrics": IDM}
 
 SRC = str(_ROOT / "source.png")
 
 # --- 1. state preservation across a chain -------------------------------- #
-s = edit_state.EditSession(SRC)
+s = edit_state.EditSession(SRC, _MODS, _exists)
 _idstate.update(cos=0.98, face=0.03)           # clothing edit keeps identity
 n1 = s.apply_edit("make the jacket red")        # clothing_edit
 check(n1.ok, "clothing edit accepted (identity held)")
@@ -65,14 +67,14 @@ check(calls["route_in"][-1] != SRC, "edit #2 did NOT regenerate from source")
 check(s.current.image_path == n2.image_path, "current state advanced to the second result")
 
 # --- 2. face-locked op that loses identity is rejected -------------------- #
-s2 = edit_state.EditSession(SRC)
+s2 = edit_state.EditSession(SRC, _MODS, _exists)
 _idstate.update(cos=0.10, face=0.8)             # clothing edit but identity collapsed
 bad = s2.apply_edit("change the jacket")        # clothing_edit -> face must be kept
 check(not bad.ok, "clothing edit with collapsed identity is marked FAILED")
 check(s2.current_path == SRC, "failed edit does NOT become current (state preserved)")
 
 # --- 3. face_edit legitimately changes identity, still accepted ----------- #
-s3 = edit_state.EditSession(SRC)
+s3 = edit_state.EditSession(SRC, _MODS, _exists)
 _idstate.update(cos=0.20, face=0.6)             # identity 'change' expected for face_edit
 fe = s3.apply_edit("retouch the face")          # face_edit -> expect_identity_change
 check(fe.ok, "face_edit accepted despite identity change (lock policy allows it)")
@@ -85,6 +87,5 @@ check("face" in edit_state.LOCK_POLICY["clothing_edit"]["locked"],
 check("identity" in edit_state.LOCK_POLICY["upscale"]["locked"],
       "upscale locks identity/geometry/composition")
 
-os.path.exists = _real_exists
 print(f"\nRESULT: {'ALL PASS' if not fails else str(len(fails))+' FAILED'}")
 sys.exit(1 if fails else 0)
