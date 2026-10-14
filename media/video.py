@@ -763,9 +763,11 @@ def new_chain() -> str:
 
 
 def build_chain_part(prompt: str, *, chain: str, idx: int, width: int, height: int,
-                     seconds: float, seed: int, first_frame: str = "", ctx=None) -> dict:
+                     seconds: float, seed: int, first_frame: str = "", reference: str = "", ctx=None) -> dict:
     """Part `idx` of `chain`: 1 starts it (optionally from a photo), 2+ continue the
-    saved latent of part idx-1. Saves its own latent + handover, returns the full clip."""
+    saved latent of part idx-1 and, given `reference`, see the hero's picture as <Picture 1>
+    (latent alone let the man change from part to part). Saves its own latent + handover,
+    returns the full clip."""
     base = _load_workflow("t2va")
     wf = {k: base[k] for k in (N_UNET, N_SHIFT, N_CLIP, N_VAE_VIDEO, N_VAE_AUDIO, N_LORA)}
     wf[N_SHIFT]["inputs"].update(shift_video=float(VIDEO_SHIFT_VIDEO), shift_audio=float(VIDEO_SHIFT_AUDIO))
@@ -786,6 +788,12 @@ def build_chain_part(prompt: str, *, chain: str, idx: int, width: int, height: i
         wf["cond"] = {"class_type": "H3ContinuousContinueV14", "inputs": dict(
             common, previous_latent=["prev", 0], handover=["prev", 3], masked_context_frames=HERRGOTT_CONTEXT,
             audio_feather_ticks=0, duration_mode="Net New Content", audio_tail_carryover="Full Previous Tail")}
+        if reference:
+            name = _eng(ctx)._upload(reference, "image")
+            if not name:
+                raise VideoUnavailable(f"could not upload the reference {reference}")
+            wf["ref"] = {"class_type": "LoadImage", "inputs": {"image": name}}
+            wf["cond"]["inputs"]["qwen_reference_1"] = ["ref", 0]
     wf.update({
         "neg": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["cond", 0]}},
         N_SAMPLER: {"class_type": "KSampler", "inputs": {
@@ -1141,6 +1149,16 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
             "request names no words, nobody speaks a scripted line -- never invent "
             "dialogue. (3) Voice samples are the voices of the request's speakers, not a "
             "count of speakers: unused samples stay unused.\n"
+            # Sparks, embers and «graceful cinematic ballet» rode every part and part 5 was pure
+            # effects; a fast pan with large amplitude and 4 hands in one shot (live 2026-10-15).
+            "PLAIN RULES -- (1) Add no sparks, embers, dust, smoke, mist, particles, glow, "
+            "moonlight or mood words (cinematic, graceful, ballet, epic, dreamy, magical) that "
+            "the request does not name. (2) One visible action per shot and at most ONE camera "
+            "move, slow; otherwise a static camera. (3) A person has exactly two hands and "
+            "holds one thing at a time; never describe a held object floating or flying "
+            "unless the request says it is thrown. (4) No on-screen text, captions or "
+            "subtitles. (5) A moment without speech is described by what is heard in the "
+            "room (footsteps, breath, fabric), never left silent.\n"
             # A plan part «a man lunges out of the cabinet» left the grandma who
             # fills the first frame unnamed, and H3 rendered an empty room
             # (live 2026-10-12, after the user dropped her part from the plan).
@@ -1324,8 +1342,9 @@ def generate_video(ctx, description: str, *,
                    on_progress: Optional[Callable] = None,
                    context_video: str = "", context_latent: str = "",
                    save_latent: bool = False, chain: tuple = (), size_from: str = "",
-                   prepared: bool = False) -> dict:
-    """Render one clip. `chain` = (chain, idx): part idx of a Herrgott chain (see
+                   prepared: bool = False, reference: str = "") -> dict:
+    """Render one clip. `reference`: the hero's picture a chain part 2+ keeps in view.
+    `chain` = (chain, idx): part idx of a Herrgott chain (see
     build_chain_part) -- 1 starts it from `images[0]` if given, 2+ continue it;
     `size_from`: a clip whose shape this one keeps; `prepared`: `description` and `seconds`
     already came from prepare_prompt (no model call here). `context_video`: a clip whose end this one continues (pinned
@@ -1388,7 +1407,8 @@ def generate_video(ctx, description: str, *,
             # Net new seconds: the protected head of a continuation comes on top.
             wf = eng.build_chain_part(description, chain=chain[0], idx=int(chain[1]), width=width,
                                   height=height, seconds=frames_to_seconds(frames), seed=seed,
-                                  first_frame=images[0] if images and int(chain[1]) <= 1 else "", ctx=ctx)
+                                  first_frame=images[0] if images and int(chain[1]) <= 1 else "",
+                                  reference=reference if os.path.exists(reference or "") else "", ctx=ctx)
         else:
             wf = eng.build_workflow(description, mode=mode, width=width, height=height,
                                 frames=frames, seed=seed, images=images, videos=videos,

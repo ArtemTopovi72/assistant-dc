@@ -244,6 +244,16 @@ def test_a_prepared_part_calls_no_model():
     assert r["reason"] == "stop"
 
 
+def test_later_parts_see_the_hero_reference():
+    """Parts 2-5 of the BAR clip ran with no picture and each had another man."""
+    ctx = types.SimpleNamespace(video_engine=Over(V, _upload=lambda p, k="image": "hero.jpg"))
+    kw = dict(chain="h3_continuous/chX", width=768, height=1024, seconds=6.0, seed=1, ctx=ctx)
+    wf = V.build_chain_part("he stirs", idx=3, reference="hero.jpg", **kw)
+    assert wf["cond"]["inputs"]["qwen_reference_1"] == ["ref", 0]
+    assert wf["ref"]["inputs"]["image"] == "hero.jpg"
+    assert "qwen_reference_1" not in V.build_chain_part("he stirs", idx=3, **kw)["cond"]["inputs"]
+
+
 def test_a_chain_part_samples_like_a_plain_clip():
     """The chain ran the FL2V turbo LoRA at 6 steps and came back soapy;
     the plain t2va clip (TaoMate 3-step LoRA) was crisp. Same LoRA, same steps."""
