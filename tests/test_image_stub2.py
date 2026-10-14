@@ -23,7 +23,6 @@ from _image_patch import Patches as _Patches
 # passed on one machine and failed on another. Pin a deterministic classifier;
 # individual tests override it via _Patches when a scenario needs other values.
 _ITEM_ATTRS_DEFAULT = {"worn": False, "small": True, "large": False, "multi": False}
-I._item_attributes = lambda ctx, phrase, _d=_ITEM_ATTRS_DEFAULT: dict(_d)
 import models
 
 _TMP = Path(tempfile.mkdtemp(prefix="imgstub2_"))
@@ -36,10 +35,12 @@ def check(name, cond, detail=""):
         raise AssertionError(str(name) + (": " + str(detail) if detail else ""))
 
 def Ctx():
-    return models.Context(
+    c = models.Context(
         models=None, transcription_cache={}, cache_file=_TMP / "cache.json",
         asr_lock=threading.Lock(), tts_lock=threading.Lock(),
     )
+    c.deps = types.SimpleNamespace(_item_attributes=lambda ctx, phrase, _d=_ITEM_ATTRS_DEFAULT: dict(_d))
+    return c
 
 def _photo(name="p.png", w=200, h=200, col=(120, 140, 160)):
     p = _TMP / name

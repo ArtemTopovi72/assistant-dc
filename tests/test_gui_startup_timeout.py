@@ -26,6 +26,7 @@ from PyQt5.QtCore import Qt, QEvent, QPointF
 
 import config
 import gui_settings_dialog as GSD
+from seams import Over
 
 _app = QApplication.instance() or QApplication(sys.argv)
 
@@ -43,34 +44,21 @@ _MODELS = [{"id": "google/gemma-4-26b-a4b-qat", "state": "loaded"},
            {"id": "some/other-model", "state": "not-loaded"}]
 
 
-class _FakeSelector:
-    """model_selector is imported INSIDE _populate_models, so it is stubbed in
-    sys.modules rather than patched as an attribute."""
-    def __init__(self, models):
-        self.models = models
-
-    def __enter__(self):
-        self._saved = sys.modules.get("model_selector")
-        m = types.ModuleType("model_selector")
-        m.list_models = lambda base: self.models
-        m._index_model_sizes = lambda d: {}
-        m._size_gb = lambda mid, sizes: 7.5
-        m._MODELS_DIR = "."
-        sys.modules["model_selector"] = m
-        return self
-
-    def __exit__(self, *a):
-        if self._saved is None:
-            sys.modules.pop("model_selector", None)
-        else:
-            sys.modules["model_selector"] = self._saved
+def _selector(models):
+    """model_selector is looked up inside _populate_models (seams.module), so the
+    dialog is handed this stand-in through modules=."""
+    m = types.ModuleType("model_selector")
+    m.list_models = lambda base: models
+    m._index_model_sizes = lambda d: {}
+    m._size_gb = lambda mid, sizes: 7.5
+    m._MODELS_DIR = "."
+    return m
 
 
 def _dialog(models=_MODELS, timeout=30, startup="google/gemma-4-12b-qat"):
-    config.STARTUP_DIALOG_TIMEOUT_S = timeout
-    config.STARTUP_MODEL = startup
-    with _FakeSelector(models):
-        return GSD.SettingsDialog(config.MODEL_NAME)
+    cfg = Over(config, STARTUP_DIALOG_TIMEOUT_S=timeout, STARTUP_MODEL=startup)
+    return GSD.SettingsDialog(config.MODEL_NAME,
+                              modules={"model_selector": _selector(models), "config": cfg})
 
 
 def test_countdown_arms_and_shows():

@@ -6,7 +6,8 @@ assorted AssistantWindow slot branches.
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_supplement5.py
 """
-import os, sys, types, tempfile, threading, contextlib
+import os, sys, types, tempfile, threading, contextlib
+
 from types import SimpleNamespace as _NS
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("USE_GUI", "0")
@@ -24,6 +25,7 @@ from PyQt5.QtGui import QImage, QColor
 from PyQt5.QtCore import Qt
 import gui
 from gui_fakes import NoopLoader
+from seams import Over
 import gui_database_tab
 import gui_workers
 import gui_voice_tab
@@ -159,11 +161,11 @@ def test_toggle_vad_paths():
     class BadVad:
         def __init__(self, *a, **k): pass
         def start(self): raise RuntimeError("no mic device")
-    ov = gui_voice_tab.VadListener; gui_voice_tab.VadListener = BadVad
+    w.parts = {"VadListener": BadVad}
     try:
         w._toggle_vad(); check("vad_start_error", w.vad_listener is None and "VAD" in w.chat.toPlainText())
     finally:
-        gui_voice_tab.VadListener = ov
+        w.parts = {}
     # graph None -> guard
     w.graph = None; w._toggle_vad(); check("vad_no_graph", w.vad_listener is None)
     _close(w)
@@ -173,8 +175,8 @@ def test_open_settings_accepted_scalechange():
     orig = _noop()
     try:
         w = _win()
-        import lmstudio; lmstudio.fetch_model = lambda url, mid: {"id": mid, "state": "loaded",
-                                                                 "compatibility_type": "gguf"}
+        import lmstudio; w.modules = {"lmstudio": Over(lmstudio, fetch_model=lambda url, mid: {"id": mid, "state": "loaded",
+                                                                 "compatibility_type": "gguf"})}
         class FS:
             # The real dialog carries the "do not load a model" sentinel and
             # _open_settings compares against it, so the stub needs it too.
@@ -190,13 +192,13 @@ def test_open_settings_accepted_scalechange():
             def apply_ui_scale_setting(self): return True          # scale changed -> hint
             def apply_language_setting(self): return False
             def apply_settings(self): w.ctx.tts_disabled = True; w.ctx.response_length = "short"
-        o = gui.SettingsDialog; gui.SettingsDialog = FS
+        w.parts = {"SettingsDialog": FS}
         try:
             w._open_settings()
             check("settings_scale_hint", "UI scale updated" in w.chat.toPlainText())
             check("settings_length_synced", w.length_combo.currentIndex() == w._LEN_VALUES.index("short"))
         finally:
-            gui.SettingsDialog = o
+            w.parts = {}
         _close(w)
     finally:
         _restore(orig)
@@ -207,7 +209,6 @@ def test_language_change_switches_in_place():
     import gui_i18n
     orig = _noop()
     switched = []
-    s0 = gui_i18n.set_language
     try:
         w = _win()
         class FS:
@@ -220,16 +221,14 @@ def test_language_change_switches_in_place():
             def apply_ui_scale_setting(self): return False
             def apply_language_setting(self): return True
             def apply_settings(self): pass
-        o = gui.SettingsDialog; gui.SettingsDialog = FS
-        gui_i18n.set_language = switched.append
+        w.parts = {"SettingsDialog": FS, "set_language": switched.append}
         try:
             w._open_settings()
             check("language_switches_without_restart", len(switched) == 1, switched)
         finally:
-            gui.SettingsDialog = o
+            w.parts = {}
         _close(w)
     finally:
-        gui_i18n.set_language = s0
         _restore(orig)
 
 
@@ -242,7 +241,7 @@ def test_fix_artifact_success_and_hands():
             mask_path = _png("gm.png"); protect_face = True
             def __init__(self, *a, **k): pass
             def exec_(self): return QDialog.Accepted
-        om = gui.MaskDrawDialog; gui.MaskDrawDialog = GoodMask
+        w.parts = {"MaskDrawDialog": GoodMask}
         try:
             QInputDialog.getText = staticmethod(lambda *a, **k: ("smooth it", True))
             w._fix_artifact_last_image(); check("fixartifact_ok", w.redraw_worker is not None); w._on_redraw_finished()
@@ -252,7 +251,7 @@ def test_fix_artifact_success_and_hands():
             # fix hands with mask accepted
             w._fix_hands_last_image(); check("fixhands_mask", w.redraw_worker is not None); w._on_redraw_finished()
         finally:
-            gui.MaskDrawDialog = om
+            w.parts = {}
         _close(w)
     finally:
         _restore(orig)
@@ -261,7 +260,7 @@ def test_fix_artifact_success_and_hands():
 def test_load_image_vision_warning_and_dedup():
     w = _win()
     import lmstudio
-    lmstudio.fetch_model = lambda url, mid: {"type": "llm", "capabilities": []}   # no vision
+    w.modules = {"lmstudio": Over(lmstudio, fetch_model=lambda url, mid: {"type": "llm", "capabilities": []})}   # no vision
     w._vision_cap_cache = {}
     img = _png("li.png")
     w.ctx.reference_images = [img, _png("old1.png"), _png("old2.png")]

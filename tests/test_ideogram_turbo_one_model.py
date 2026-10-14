@@ -4,14 +4,13 @@ An explicit cfg keeps the dual-model guider."""
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import ideogram as I
-import comfy_client as C
+from fakes import deps_ctx
 
 seen = []
-C._submit_and_poll = lambda ctx, wf, **k: seen.append(wf) or None
-I.IDEOGRAM_CFG_TURBO = 1.0
-I.IDEOGRAM_TURBO = True   # opt-in
+CTX = deps_ctx(_submit_and_poll=lambda ctx, wf, **k: seen.append(wf) or None,
+               IDEOGRAM_CFG_TURBO=1.0, IDEOGRAM_TURBO=True)    # opt-in
 try:
-    I.generate(None, "a cat on a sofa")
+    I.generate(CTX, "a cat on a sofa")
 except Exception:
     pass
 wf = seen[-1]
@@ -22,7 +21,7 @@ assert src in wf and wf[src]["class_type"] == "ModelSamplingAuraFlow", src
 print("ok turbo cfg 1: one-model guider, no uncond model")
 
 try:
-    I.generate(None, "a cat on a sofa", steps=20, cfg=7)
+    I.generate(CTX, "a cat on a sofa", steps=20, cfg=7)
 except Exception:
     pass
 wf = seen[-1]
@@ -30,10 +29,10 @@ assert wf["182"]["class_type"] == "DualModelGuider" and "181" in wf, wf["182"]
 print("ok an explicit cfg keeps the dual-model guider")
 
 # Default (turbo off): the full int8 run, dual-model guider, no turbo LoRA.
-I.IDEOGRAM_TURBO = False
+CTX = deps_ctx(_submit_and_poll=lambda ctx, wf, **k: seen.append(wf) or None, IDEOGRAM_TURBO=False)
 seen.clear()
 try:
-    I.generate(None, "a cat on a sofa")
+    I.generate(CTX, "a cat on a sofa")
 except Exception:
     pass
 wf = seen[-1]

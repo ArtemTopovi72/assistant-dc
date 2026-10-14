@@ -4,7 +4,8 @@ the tabs. Targets the partial-branch tail that the earlier suites left half-cove
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_supplement4.py
 """
-import os, sys, types, tempfile, threading
+import os, sys, types, tempfile, threading
+
 from types import SimpleNamespace as _NS
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("USE_GUI", "0")
@@ -138,11 +139,8 @@ def test_open_settings_rejected():
         def raise_(self): pass
         def activateWindow(self): pass
         def exec_(self): return QDialog.Rejected
-    o = gui.SettingsDialog; gui.SettingsDialog = FakeDlg
-    try:
-        w._open_settings(); check("settings_rejected", w.model_switch_worker is None)
-    finally:
-        gui.SettingsDialog = o
+    w.parts = {"SettingsDialog": FakeDlg}
+    w._open_settings(); check("settings_rejected", w.model_switch_worker is None)
     _close(w)
 
 
@@ -237,11 +235,11 @@ def test_transfer_draw_mask_target_and_preview():
         def raise_(self): pass
         def activateWindow(self): pass
         def exec_(self): return QDialog.Accepted
-    om = gui.MaskDrawDialog; gui.MaskDrawDialog = FakeMask
+    tab.mask_dialog = FakeMask
     try:
         tab._draw_mask(tab._rows[0]["frame"]); check("tt_draw_target", tab._rows[0]["mask"] is not None)
     finally:
-        gui.MaskDrawDialog = om
+        tab.mask_dialog = None
     # _on_preview with only asset, then only mask
     tab._on_preview({"asset": _png("as4.png")})
     tab._on_preview({"mask": _png("mk4.png")})

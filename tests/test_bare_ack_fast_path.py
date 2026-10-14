@@ -26,7 +26,6 @@ class _Ctx:
     last_image_path = "C:/pics/ideogram_00599_.png"
     intent_read = staticmethod(_READS["intent_read"])
     def is_cancelled(self): return False
-F._sandbox_has_files = lambda ctx: False
 ctx = _Ctx()
 check("'👍' with a picture in the chat takes the fast path",
       F._fast_path_allowed(ctx, {"image_data": None}, "👍", "👍"))

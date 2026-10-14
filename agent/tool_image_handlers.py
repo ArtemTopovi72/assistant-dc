@@ -562,7 +562,8 @@ def _handle_transfer_image(ctx, state, args: dict) -> str:
     ctx.set_stage("Transferring between images")
     logger.info("Tool: transfer_image(target=%s, refs=%d, roles=%r, instr=%r)",
                 os.path.basename(target), len(refs), roles, instructions[:80])
-    new_path = image_mod.plan_and_execute_transfer(ctx, target, refs, instructions)
+    new_path = dep(ctx, "plan_and_execute_transfer", image_mod.plan_and_execute_transfer)(
+        ctx, target, refs, instructions)
     new_path = image_mod.assert_deliverable(new_path, where="tools._handle_transfer_image",
                                             source_path=target)
     if not new_path or not os.path.exists(new_path):
@@ -1777,8 +1778,8 @@ def redraw_whole_image(ctx, source: str, instructions: str):
     # fall through several engines (layout edit, whole-frame FireRed, the old model
     # controlnet, img2img) and any one of them returning a stale or scratch path
     # had nothing to catch it.
-    new_path = image_mod.assert_deliverable(new_path, where="tools._handle_redraw_image",
-                                            source_path=source)
+    new_path = dep(ctx, "assert_deliverable", image_mod.assert_deliverable)(
+        new_path, where="tools._handle_redraw_image", source_path=source)
 
     # Whole-frame re-renders (redraw/enhance) repaint the FACE too — at low res this
     # makes the person unrecognizable ("enhancing changed the face"). Composite the
@@ -1802,9 +1803,10 @@ def redraw_whole_image(ctx, source: str, instructions: str):
 
 def _handle_redraw_image(ctx, state, args: dict) -> str:
     import tools as _t   # the render seam is owned by tools; read it at CALL time
+    exists = dep(ctx, "exists", os.path.exists)
     source = state.get("image_path") or getattr(ctx, "last_image_path", None)
     _note_source(state, source)
-    if not source or not os.path.exists(source):
+    if not source or not exists(source):
         return (
             "[TOOL ERROR] No image to redraw — generate an image first with generate_image, "
             "then call redraw_image. Tell the user there is no picture to work on yet."
@@ -1841,7 +1843,7 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
         new_path = (dep(ctx, "convert_colour", convert_colour)(source, instructions)
                     if classify_edit_intent(instructions, ctx=ctx) == "colour_convert"
                     else image_router.transform_image(source, instructions, ctx=ctx))
-        if not new_path or not os.path.exists(new_path):
+        if not new_path or not exists(new_path):
             return ("[TOOL ERROR] The operation failed (a crop to the face needs a "
                     "face the detector can find). Tell the user plainly; do NOT "
                     "claim the picture was changed.")
@@ -1897,7 +1899,7 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
     finally:
         ctx.user_look = _prev_look
     verb = "redrawn"
-    if new_path and os.path.exists(new_path):
+    if new_path and exists(new_path):
         ctx.last_image_path = new_path
         state["image_path"] = new_path
 
@@ -1909,7 +1911,7 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
             returned_file=new_path, source=source)
     except Exception:
         logger.debug("could not log the redraw decision", exc_info=True)
-    if not new_path or not os.path.exists(new_path):
+    if not new_path or not exists(new_path):
         return (
             "[TOOL ERROR] Could not redraw the image — "
             "the ComfyUI server returned no result. Tell the user the redraw failed; "

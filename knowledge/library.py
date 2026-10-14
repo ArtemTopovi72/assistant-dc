@@ -440,9 +440,10 @@ class Library:
     so committed documents are visible to the reader connection.
     """
 
-    def __init__(self, db_path: Optional[Path] = None):
+    def __init__(self, db_path: Optional[Path] = None, ce_model: Optional[str] = None, ce_loader=None):
         base = knowledge.EMBED_BASE_DEFAULT
         model = knowledge.EMBED_MODEL_DEFAULT
+        explicit_ce = ce_model
         ce_model = ""
         try:
             import config
@@ -460,13 +461,14 @@ class Library:
         # Library on the UI thread at startup to list documents, and loading
         # here froze the window for the whole reranker download (minutes on a
         # first start, ~30 s of retries offline) for a tab that never reranks.
-        self._ce_model = ce_model
+        self._ce_model = ce_model if explicit_ce is None else explicit_ce
+        self._ce_loader = ce_loader or load_cross_encoder
 
     @property
     def _cross_encoder(self):
         if "_ce" not in self.__dict__:
             name = self.__dict__.get("_ce_model", "")
-            self.__dict__["_ce"] = load_cross_encoder(name) if name else None
+            self.__dict__["_ce"] = self._ce_loader(name) if name else None
         return self.__dict__["_ce"]
 
     @_cross_encoder.setter

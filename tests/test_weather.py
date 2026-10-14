@@ -372,32 +372,17 @@ def test_what_to_wear_periods_for_loc():
                               "temp_c": 15.0, "code": 0, "wind_kmh": 5})
         return {"utc_offset_seconds": 0, "points": points}
 
-    class _FrozenDatetime(_dt.datetime):
-        @classmethod
-        def utcnow(cls):
-            return _dt.datetime(2026, 8, 15, 9, 0)
-
-    # date.today() has to be frozen as well, not just utcnow(). The fixture
-    # generates hours from a hardcoded 2026-08-15, but
-    # what_to_wear_periods_for_loc sizes its fetch with
-    # `(date - date.today()).days + 2` -- against the REAL today. Once the
-    # calendar moved past 2026-08-15 that window stopped covering the date the
-    # date-based checks below ask for, and they began failing for reasons that
-    # had nothing to do with the code under test.
-    class _FrozenDate(_dt.date):
-        @classmethod
-        def today(cls):
-            return _dt.date(2026, 8, 15)
+    # The clock is frozen on both counts: the fixture's hours start at 2026-08-15, and
+    # the fetch is sized with `(date - today).days` -- against the REAL today it stopped
+    # covering the date the checks below ask for once the calendar moved past it.
+    class _Frozen:
+        today = staticmethod(lambda: _dt.date(2026, 8, 15))
+        utcnow = staticmethod(lambda: _dt.datetime(2026, 8, 15, 9, 0))
 
     with _Patches(fetch_hourly=fake_hourly):
-        _orig_dt, _orig_date = W._dt.datetime, W._dt.date
-        W._dt.datetime, W._dt.date = _FrozenDatetime, _FrozenDate
-        try:
-            out = W.what_to_wear_periods_for_loc(loc, "en", hours=24)
-            out_date = W.what_to_wear_periods_for_loc(
-                loc, "en", date=_dt.date(2026, 8, 20))
-        finally:
-            W._dt.datetime, W._dt.date = _orig_dt, _orig_date
+        out = W.what_to_wear_periods_for_loc(loc, "en", hours=24, clock=_Frozen)
+        out_date = W.what_to_wear_periods_for_loc(
+            loc, "en", date=_dt.date(2026, 8, 20), clock=_Frozen)
         check("header names the place and the window",
               "Testville" in out and "24h" in out)
         check("all three periods appear for a full 24h window starting at 09:00",
@@ -430,16 +415,11 @@ def test_what_to_wear_periods_for_loc():
 
     # advise_fn covering multiple buckets in one call.
     with _Patches(fetch_hourly=fake_hourly):
-        _orig_dt = W._dt.datetime
-        W._dt.datetime = _FrozenDatetime
         seen_buckets = []
         def advisor(buckets, lang):
             seen_buckets.append(len(buckets))
             return {f'{b["date"].isoformat()}_{b["period"]}': "a raincoat" for b in buckets}
-        try:
-            out = W.what_to_wear_periods_for_loc(loc, "en", hours=24, advise_fn=advisor)
-        finally:
-            W._dt.datetime = _orig_dt
+        out = W.what_to_wear_periods_for_loc(loc, "en", hours=24, advise_fn=advisor, clock=_Frozen)
         check("advise_fn is called exactly ONCE covering every bucket, not once per bucket",
               seen_buckets == [seen_buckets[0]] and len(seen_buckets) == 1)
         check("advise_fn's answer is used verbatim", "a raincoat" in out, out)

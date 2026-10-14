@@ -23,6 +23,7 @@ from PyQt5.QtGui import QImage, QColor
 from PyQt5.QtCore import Qt, QEvent, QMimeData, QUrl
 import gui
 from gui_fakes import NoopLoader
+import fakes
 import gui_workers
 
 _app = QApplication.instance() or QApplication(sys.argv)
@@ -92,16 +93,14 @@ def test_dark_filter_except():
 
 
 def test_edit_personality_read_file():
-    import model_selector as ms
-    ms.list_models = lambda base: [{"id": "q", "state": "loaded"}]
-    ms._index_model_sizes = lambda d: {}; ms._size_gb = lambda a, b: 1.0
+    ms = fakes.model_selector([{"id": "q", "state": "loaded"}], gb=1.0)
     pf = os.path.join(_TMP, "pchar.txt"); open(pf, "w", encoding="utf-8").write("pirate soul")
     ctx = types.SimpleNamespace(model_name="q", no_think=True, response_length="auto",
                                 reasoning_effort="high", custom_ref_wav=None,
                                 custom_personality_path=pf, custom_personality_text="",  # empty text, path set
                                 web_search_enabled=True, reference_person_mode=False,
                                 mic_disabled=False, tts_disabled=False)
-    dlg = gui.SettingsDialog("q", ctx=ctx)
+    dlg = gui.SettingsDialog("q", ctx=ctx, modules={"model_selector": ms})
     oe = QDialog.exec_; QDialog.exec_ = lambda self: 0    # open + read path into editor, then close
     try:
         dlg._edit_personality(); check("edit_pers_read", True)
@@ -111,10 +110,10 @@ def test_edit_personality_read_file():
 
 
 def test_route_dropped_pdf_and_unmatched():
-    orig = {"RequestWorker": gui_workers.RequestWorker}
-    gui_workers.RequestWorker = type("RW", (orig["RequestWorker"],), {"start": lambda self: None})
+    RW = type("RW", (gui_workers.RequestWorker,), {"start": lambda self: None})
     try:
         w = _win()
+        w.parts = {"RequestWorker": RW}
         # a .pdf url -> _drop_pdf_file branch (returns True)
         pf = os.path.join(_TMP, "r.pdf"); open(pf, "wb").write(b"%PDF-1.4")
         md = QMimeData(); md.setUrls([QUrl.fromLocalFile(pf)])
@@ -125,7 +124,7 @@ def test_route_dropped_pdf_and_unmatched():
         check("route_unmatched", w._route_dropped_mime(md2) is False)
         _close(w)
     finally:
-        gui_workers.RequestWorker = orig["RequestWorker"]
+        pass
 
 
 def test_set_report_markdown_fallback():
@@ -143,14 +142,10 @@ def test_set_report_markdown_fallback():
 
 def test_init_screen_geometry_except():
     # primaryScreen().availableGeometry() raising during __init__ -> except pass
-    real = QApplication.primaryScreen
-    QApplication.primaryScreen = staticmethod(lambda: (_ for _ in ()).throw(RuntimeError("no screen")))
-    try:
-        w = gui.AssistantWindow("m", True, "high", loader=NoopLoader)
-        check("init_screen_except", w is not None)
-        _close(w)
-    finally:
-        QApplication.primaryScreen = real
+    w = gui.AssistantWindow("m", True, "high", loader=NoopLoader,
+                            parts={"primaryScreen": lambda: (_ for _ in ()).throw(RuntimeError("no screen"))})
+    check("init_screen_except", w is not None)
+    _close(w)
 
 
 def test_flowlayout_parent_margins():

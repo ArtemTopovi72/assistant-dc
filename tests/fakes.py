@@ -23,6 +23,15 @@ def posting(post, ctx=None):
     return ctx
 
 
+def model_selector(models, gb=3.0):
+    """The model_selector a SettingsDialog lists models from (`modules={"model_selector": ...}`):
+    the real module answering `models` with every file `gb` GB. Set `.list_models` on it to
+    change the list between populates."""
+    import model_selector as real
+    return Over(real, list_models=lambda base: models,
+                _index_model_sizes=lambda d: {}, _size_gb=lambda mid, sizes: gb)
+
+
 def deps_ctx(**deps):
     """A context that hands the code under test these stand-ins (core/seams.py `dep`)."""
     import types

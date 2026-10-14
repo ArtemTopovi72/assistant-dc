@@ -21,6 +21,7 @@ from PyQt5.QtGui import QImage, QColor, QPixmap
 from PyQt5.QtCore import QEvent, QPoint
 import gui
 from gui_fakes import NoopLoader
+import fakes
 
 _app = QApplication.instance() or QApplication(sys.argv)
 _TMP = tempfile.mkdtemp(prefix="guisupp_")
@@ -76,20 +77,14 @@ def test_stage_indicator_paint_and_spin():
     check("stage_spun", True)
 
 
-def _stub_models(models):
-    import model_selector as ms
-    ms.list_models = lambda base: models
-    ms._index_model_sizes = lambda d: {}
-    ms._size_gb = lambda mid, sizes: 3.0
-
 def test_edit_personality_apply_and_save():
-    _stub_models([{"id": "qwen", "state": "loaded"}])
+    ms = fakes.model_selector([{"id": "qwen", "state": "loaded"}])
     ctx = types.SimpleNamespace(model_name="qwen", no_think=True, response_length="auto",
                                 reasoning_effort="high", custom_ref_wav=None,
                                 custom_personality_path=None, custom_personality_text="",
                                 web_search_enabled=True, reference_person_mode=False,
                                 mic_disabled=False, tts_disabled=False)
-    dlg = gui.SettingsDialog("qwen", ctx=ctx)
+    dlg = gui.SettingsDialog("qwen", ctx=ctx, modules={"model_selector": ms})
 
     # Drive _edit_personality but auto-click "Apply (this session)" by patching exec_
     # to invoke the inner dialog's Apply button before returning.
@@ -164,7 +159,7 @@ def test_memory_center_confirm_and_compaction():
     import gui_memory_tab as _mt
     class FakeCompact(_mt.CompactMemoryWorker):
         def start(self): pass
-    oc = _mt.CompactMemoryWorker; _mt.CompactMemoryWorker = FakeCompact
+    tab.parts = {"CompactMemoryWorker": FakeCompact}
     try:
         tab._gen_compaction()
         check("gen_compaction_started", tab._compact_worker is not None)
@@ -177,7 +172,7 @@ def test_memory_center_confirm_and_compaction():
         tab._approve_compaction()
         check("approve_compaction", True)
     finally:
-        _mt.CompactMemoryWorker = oc
+        tab.parts = {}
     # _gen_compaction when profile != active -> info dialog (patch QMessageBox.information)
     oi = QMessageBox.information
     QMessageBox.information = staticmethod(lambda *a, **k: None)
@@ -205,9 +200,7 @@ def test_chat_double_click_and_clipboard_url():
     opened = {"n": 0}
     # eventFilter lives in gui_dropzone and reaches the viewer through the
     # gui_dialogs MODULE, so patch it at its own home.
-    import gui_dialogs
-    orig_show = gui_dialogs.show_image_viewer
-    gui_dialogs.show_image_viewer = lambda *a, **k: opened.__setitem__("n", opened["n"] + 1)
+    w.parts = {"show_image_viewer": lambda *a, **k: opened.__setitem__("n", opened["n"] + 1)}
     # patch _image_url_at to return a url so the double-click branch runs
     w._image_url_at = lambda pos: "file:///" + img.replace("\\", "/")
     try:
@@ -220,7 +213,7 @@ def test_chat_double_click_and_clipboard_url():
         handled2 = w.eventFilter(w.chat.viewport(), ev)
         check("chat_dblclick_error_swallowed", handled2 is True)
     finally:
-        gui_dialogs.show_image_viewer = orig_show
+        w.parts = {}
     # clipboard paste via URL (no image, but an image-file url)
     from PyQt5.QtCore import QMimeData, QUrl
     md = QMimeData(); md.setUrls([QUrl.fromLocalFile(img)])

@@ -24,6 +24,7 @@ from PyQt5.QtCore import Qt, QEvent
 
 import gui
 from gui_fakes import NoopLoader
+import fakes
 from _gui_patch import stub_workers as _stub_workers, restore as _gui_restore
 
 _app = QApplication.instance() or QApplication(sys.argv)
@@ -162,15 +163,13 @@ def test_prof_delete_active_guard():
 
 
 def test_edit_personality_save_failure():
-    import model_selector as ms
-    ms.list_models = lambda base: [{"id": "q", "state": "loaded"}]
-    ms._index_model_sizes = lambda d: {}; ms._size_gb = lambda a, b: 1.0
+    ms = fakes.model_selector([{"id": "q", "state": "loaded"}], gb=1.0)
     ctx = types.SimpleNamespace(model_name="q", no_think=True, response_length="auto",
                                 reasoning_effort="high", custom_ref_wav=None,
                                 custom_personality_path=None, custom_personality_text="prev",
                                 web_search_enabled=True, reference_person_mode=False,
                                 mic_disabled=False, tts_disabled=False)
-    dlg = gui.SettingsDialog("q", ctx=ctx)
+    dlg = gui.SettingsDialog("q", ctx=ctx, modules={"model_selector": ms})
     # Save-to-file where the write fails -> hint shows "Save failed"
     _QFD.getSaveFileName = staticmethod(lambda *a, **k: (os.path.join(_TMP, "x.txt"), ""))
     real_open = open
@@ -221,23 +220,23 @@ def test_fix_dialog_exception_and_auto():
         # fix hands: mask dialog raises -> logged, falls to auto (mask None)
         class BoomMask:
             def __init__(self, *a, **k): raise RuntimeError("dialog broke")
-        om = gui.MaskDrawDialog; gui.MaskDrawDialog = BoomMask
+        w.parts = {"MaskDrawDialog": BoomMask}
         try:
             w._fix_hands_last_image(); check("fixhands_dialog_exc", w.redraw_worker is not None); w._on_redraw_finished()
         finally:
-            gui.MaskDrawDialog = om
+            w.parts = {}
         # fix hands: dialog Cancelled -> auto-detect (mask None)
         class CancelMask:
             def __init__(self, *a, **k): pass
             def exec_(self): return QDialog.Rejected
-        gui.MaskDrawDialog = CancelMask
+        w.parts = {"MaskDrawDialog": CancelMask}
         try:
             w._fix_hands_last_image(); check("fixhands_auto", w.redraw_worker is not None); w._on_redraw_finished()
             # fix artifact: dialog raises -> abort (return)
-            gui.MaskDrawDialog = BoomMask
+            w.parts = {"MaskDrawDialog": BoomMask}
             w._fix_artifact_last_image(); check("fixartifact_dialog_exc", w.redraw_worker is None)
         finally:
-            gui.MaskDrawDialog = om
+            w.parts = {}
         _close(w)
     finally:
         _restore(o)

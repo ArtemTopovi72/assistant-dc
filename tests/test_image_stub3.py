@@ -23,7 +23,6 @@ from _image_patch import Patches as _Patches
 # passed on one machine and failed on another. Pin a deterministic classifier;
 # individual tests override it via _Patches when a scenario needs other values.
 _ITEM_ATTRS_DEFAULT = {"worn": False, "small": True, "large": False, "multi": False}
-I._item_attributes = lambda ctx, phrase, _d=_ITEM_ATTRS_DEFAULT: dict(_d)
 
 # _refine_edit_prompts was the SECOND live caller, and it was missed when the
 # guard above was added: inpaint_region_with_comfy reaches it on every edit, so
@@ -34,7 +33,6 @@ I._item_attributes = lambda ctx, phrase, _d=_ITEM_ATTRS_DEFAULT: dict(_d)
 def _refine_offline(ctx, region, instructions, *, removal=False):
     return (I._firered_instruction(ctx, region, instructions, removal),
             I._english_instructions(ctx, instructions) or instructions)
-I._refine_edit_prompts = _refine_offline
 import models
 
 _TMP = Path(tempfile.mkdtemp(prefix="imgstub3_"))
@@ -46,10 +44,13 @@ def check(name, cond, detail=""):
         raise AssertionError(str(name) + (": " + str(detail) if detail else ""))
 
 def Ctx():
-    return models.Context(
+    c = models.Context(
         models=None, transcription_cache={}, cache_file=_TMP / "cache.json",
         asr_lock=threading.Lock(), tts_lock=threading.Lock(),
     )
+    c.deps = types.SimpleNamespace(_item_attributes=lambda ctx, phrase, _d=_ITEM_ATTRS_DEFAULT: dict(_d),
+                                   _refine_edit_prompts=_refine_offline)
+    return c
 
 def _photo(name="p.png", w=120, h=120, col=(120, 140, 160)):
     p = _TMP / name
@@ -151,15 +152,10 @@ def test_gen_person_no_photo():
     fake_search = types.SimpleNamespace(
         fetch_reference_photo=lambda ctx, q, p: None,
         run_web_search=lambda ctx, q: "", NO_RESULTS="NO_RESULTS", SEARCH_FAILED="SEARCH_FAILED")
-    orig = sys.modules.get("search")
-    sys.modules["search"] = fake_search
-    try:
-        with _Patches(_split_person_and_scene=lambda ctx, d: ("Some Person", True, "at the beach")):
-            out, reason = I.generate_person_from_reference(ctx, "Some Person at the beach")
-            check("gen_person_no_photo_none", out is None and reason == "no_reference_photo")
-    finally:
-        if orig is not None: sys.modules["search"] = orig
-        else: sys.modules.pop("search", None)
+    ctx.modules = {"search": fake_search}
+    with _Patches(_split_person_and_scene=lambda ctx, d: ("Some Person", True, "at the beach")):
+        out, reason = I.generate_person_from_reference(ctx, "Some Person at the beach")
+        check("gen_person_no_photo_none", out is None and reason == "no_reference_photo")
 
 def test_gen_person_render_fails():
     ctx = Ctx()
@@ -168,16 +164,11 @@ def test_gen_person_render_fails():
         fetch_reference_photo=lambda ctx, q, p: photo,
         run_web_search=lambda ctx, q: "brown hair, green eyes",
         NO_RESULTS="NO_RESULTS", SEARCH_FAILED="SEARCH_FAILED")
-    orig = sys.modules.get("search")
-    sys.modules["search"] = fake_search
-    try:
-        with _Patches(_split_person_and_scene=lambda ctx, d: ("Some Person", True, "at the beach"),
-                      edit_image_with_firered=lambda *a, **k: None):
-            out, reason = I.generate_person_from_reference(ctx, "Some Person at the beach")
-            check("gen_person_render_fail_none", out is None and reason == "render_failed")
-    finally:
-        if orig is not None: sys.modules["search"] = orig
-        else: sys.modules.pop("search", None)
+    ctx.modules = {"search": fake_search}
+    with _Patches(_split_person_and_scene=lambda ctx, d: ("Some Person", True, "at the beach"),
+                  edit_image_with_firered=lambda *a, **k: None):
+        out, reason = I.generate_person_from_reference(ctx, "Some Person at the beach")
+        check("gen_person_render_fail_none", out is None and reason == "render_failed")
 
 def test_gen_person_success():
     ctx = Ctx()
@@ -187,18 +178,13 @@ def test_gen_person_success():
         fetch_reference_photo=lambda ctx, q, p: photo,
         run_web_search=lambda ctx, q: (_ for _ in ()).throw(RuntimeError("search down")),
         NO_RESULTS="NO_RESULTS", SEARCH_FAILED="SEARCH_FAILED")
-    orig = sys.modules.get("search")
-    sys.modules["search"] = fake_search
-    try:
-        with _Patches(_split_person_and_scene=lambda ctx, d: ("Some Person", True, ""),
-                      edit_image_with_firered=lambda *a, **k: render,
-                      _composite_reference_head=lambda p, r: r):
-            out, info = I.generate_person_from_reference(ctx, "Some Person")
-            check("gen_person_success", out == render and info["person"] == "Some Person", info)
-            check("gen_person_appearance_search_exc_handled", info["appearance_used"] is False)
-    finally:
-        if orig is not None: sys.modules["search"] = orig
-        else: sys.modules.pop("search", None)
+    ctx.modules = {"search": fake_search}
+    with _Patches(_split_person_and_scene=lambda ctx, d: ("Some Person", True, ""),
+                  edit_image_with_firered=lambda *a, **k: render,
+                  _composite_reference_head=lambda p, r: r):
+        out, info = I.generate_person_from_reference(ctx, "Some Person")
+        check("gen_person_success", out == render and info["person"] == "Some Person", info)
+        check("gen_person_appearance_search_exc_handled", info["appearance_used"] is False)
 
 
 # ---------------- edit_region_contained_via_firered ----------------

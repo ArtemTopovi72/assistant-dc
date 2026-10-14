@@ -123,3 +123,16 @@ def module(owner, name: str):
         w = up() if callable(up) else None
     import importlib
     return importlib.import_module(name)
+
+
+def widget_part(owner, name: str, default):
+    """`default`, unless `owner` (a widget -- its parents are asked too) carries its own
+    `name` in `owner.parts`: a suite hands in a stand-in dialog or worker for one window."""
+    w = owner
+    while w is not None:
+        own = getattr(w, "parts", None)
+        if isinstance(own, dict) and own.get(name) is not None:
+            return own[name]
+        up = getattr(w, "parent", None)
+        w = up() if callable(up) else None
+    return default

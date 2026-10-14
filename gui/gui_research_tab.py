@@ -13,6 +13,7 @@ module that owns it, never by value across a split).
 The progress STRIP (phase stepper, stat chips, log bar) has no such
 binding and already lives in gui_research_progress.py.
 """
+from seams import widget_part
 from PyQt5.QtWidgets import QLabel, QProgressBar, QTextEdit, QVBoxLayout, QWidget
 
 from gui_common import MUTED
@@ -51,9 +52,10 @@ class ResearchTabMixin:
         # Rich report viewer: typeset math + tables via QWebEngine when available.
         # Falls back to the QTextEdit above if WebEngine isn't installed.
         self.research_web = None
-        if _g._QWebEngineView is not None and _g._REPORT_HTML_ENABLED:
+        view_cls = widget_part(self, "QWebEngineView", _g._QWebEngineView)
+        if view_cls is not None and widget_part(self, "REPORT_HTML_ENABLED", _g._REPORT_HTML_ENABLED):
             try:
-                self.research_web = _g._QWebEngineView()
+                self.research_web = view_cls()
                 self.research_web.hide()
                 lay.addWidget(self.research_web, 1)
             except Exception as exc:

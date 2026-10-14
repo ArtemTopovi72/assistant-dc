@@ -24,15 +24,16 @@ class _R:
     def json(self):
         name = {"ru": "Сочи"}.get(self.lang, "Sochi")
         return {"results": [{"latitude": 43.6, "longitude": 39.7, "name": name, "country": "Russia"}]}
-W.requests.get = lambda url, params=None, timeout=None: (seen.append(params), _R(params.get("language")))[1]
+import types
+HTTP = types.SimpleNamespace(get=lambda url, params=None, timeout=None: (seen.append(params), _R(params.get("language")))[1])
 
-loc = W.geocode_city("Сочи", "ru")
+loc = W.geocode_city("Сочи", "ru", http=HTTP)
 check("the geocoder is asked in the user's language", seen[-1]["language"] == "ru", seen[-1])
 check("...and the card gets the local name", loc["name"] == "Сочи", loc)
-check("English stays the default", W.geocode_city("Sochi")["name"] == "Sochi" and seen[-1]["language"] == "en")
-check("a long locale code is trimmed", W.geocode_city("Сочи", "ru-RU") and seen[-1]["language"] == "ru")
+check("English stays the default", W.geocode_city("Sochi", http=HTTP)["name"] == "Sochi" and seen[-1]["language"] == "en")
+check("a long locale code is trimmed", W.geocode_city("Сочи", "ru-RU", http=HTTP) and seen[-1]["language"] == "ru")
 
-loc = W.resolve_city("Сочи", lang="ru")
+loc = W.resolve_city("Сочи", lang="ru", http=HTTP)
 check("resolve_city passes the language through", seen[-1]["language"] == "ru" and loc["name"] == "Сочи")
 
 # The spelling-correction retry keeps the language too.
@@ -43,8 +44,8 @@ calls = {"n": 0}
 def _get(url, params=None, timeout=None):
     calls["n"] += 1; seen.append(params)
     return _None() if calls["n"] == 1 else _R(params.get("language"))
-W.requests.get = _get
-loc = W.resolve_city("Сочы", correct_fn=lambda c: "Сочи", lang="ru")
+HTTP = types.SimpleNamespace(get=_get)
+loc = W.resolve_city("Сочы", correct_fn=lambda c: "Сочи", lang="ru", http=HTTP)
 check("the corrected retry is asked in the same language", seen[-1]["language"] == "ru" and loc["name"] == "Сочи", seen[-1])
 
 src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(W.__file__))), "bot/tg_weather.py"), encoding="utf-8").read()

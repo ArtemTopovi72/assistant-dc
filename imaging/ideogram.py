@@ -791,15 +791,16 @@ def generate(ctx, prompt: str, *, width: int = 1024, height: int = 1024,
     # default when nobody asked for a specific step/cfg (35-40%
     # faster across 3 varied scenes, no quality loss on lettering or a crowd
     # scene; see IDEOGRAM_TURBO_LORA in config.py for the portrait-glitch fix).
-    turbo = IDEOGRAM_TURBO and steps is None and cfg is None
+    cfg_turbo = dep(ctx, "IDEOGRAM_CFG_TURBO", IDEOGRAM_CFG_TURBO)
+    turbo = dep(ctx, "IDEOGRAM_TURBO", IDEOGRAM_TURBO) and steps is None and cfg is None
     n_steps = IDEOGRAM_STEPS_TURBO if turbo else max(1, min(int(steps or IDEOGRAM_STEPS), 100))
     workflow[NODE_SCHEDULER]["inputs"]["steps"] = n_steps
     workflow[NODE_GUIDER]["inputs"]["cfg"] = (
-        IDEOGRAM_CFG_TURBO if turbo else max(0.0, min(float(cfg or IDEOGRAM_CFG), 30.0)))
+        cfg_turbo if turbo else max(0.0, min(float(cfg or IDEOGRAM_CFG), 30.0)))
     workflow[NODE_SHIFT]["inputs"]["shift"] = float(IDEOGRAM_SHIFT)
     if turbo:
         attach_turbo_lora(workflow, IDEOGRAM_TURBO_LORA, 1.0)
-        if IDEOGRAM_CFG_TURBO == 1.0:
+        if cfg_turbo == 1.0:
             # cfg 1 needs no unconditional branch: one-model guider, and the
             # 9 GB uncond model is never loaded. A/B (bench/
             # ideogram_int8_ab.py app vs turbo4): same pictures, 4-9 s vs 7-13 s.
@@ -811,7 +812,7 @@ def generate(ctx, prompt: str, *, width: int = 1024, height: int = 1024,
                 "cfg": 1.0, "model": model, "positive": g["positive"], "negative": g["positive"]}}
             for k in ("181", "184", "159"):
                 workflow.pop(k, None)
-        logger.info("Ideogram: turbo LoRA, %d steps @ cfg %.1f", n_steps, IDEOGRAM_CFG_TURBO)
+        logger.info("Ideogram: turbo LoRA, %d steps @ cfg %.1f", n_steps, cfg_turbo)
     if not lora_name and is_photo_caption(caption) and IDEOGRAM_PHOTO_LORA:
         # Ideogram's known plastic skin: Lenovo UltraReal on photographs only
         # (A/B runtime/ideogram_int8_ab/skin.jpg: pores and film light,
@@ -832,13 +833,14 @@ def generate(ctx, prompt: str, *, width: int = 1024, height: int = 1024,
                     float(cfg or IDEOGRAM_CFG), int(IDEOGRAM_POLISH_STEPS),
                     float(IDEOGRAM_POLISH_CFG))
 
+    submit = dep(ctx, "_submit_and_poll", comfy_client._submit_and_poll)
     # Called through the module rather than bound with `from ... import` so there
     # is exactly ONE place to intercept the render: patching comfy_client is seen
     # by every caller. A bound name would have to be patched per module.
     # exclusive: the caption is already planned by the time we get here, so this
     # job needs nothing but the GPU -- and Ideogram is the largest model set we
     # load, the one that suffers most from sharing the card with the chat model.
-    result = comfy_client._submit_and_poll(ctx, workflow, timeout=timeout,
+    result = submit(ctx, workflow, timeout=timeout,
                                            label="ideogram4",
                                            on_progress=on_progress,
                                            exclusive=True)
@@ -849,7 +851,7 @@ def generate(ctx, prompt: str, *, width: int = 1024, height: int = 1024,
         workflow[NODE_NOISE]["inputs"]["noise_seed"] = random.randint(1, 999_999_999)
         logger.warning("Ideogram: black frame — re-rolling once on seed %d",
                        workflow[NODE_NOISE]["inputs"]["noise_seed"])
-        retry = comfy_client._submit_and_poll(ctx, workflow, timeout=timeout,
+        retry = submit(ctx, workflow, timeout=timeout,
                                               label="ideogram4",
                                               on_progress=on_progress,
                                               exclusive=True)

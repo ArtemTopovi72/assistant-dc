@@ -40,8 +40,8 @@ class StubWebView(QWidget):
         StubWebView.last_html = html
 
 
-def _win():
-    w = gui.AssistantWindow("m", True, "high", loader=NoopLoader)
+def _win(parts=None):
+    w = gui.AssistantWindow("m", True, "high", loader=NoopLoader, parts=parts)
     d = Path(_TMP) / "mem"; d.mkdir(parents=True, exist_ok=True)
     w.ctx = types.SimpleNamespace(cancel_event=threading.Event(), memory_lock=threading.RLock(),
                                   reference_images=[], last_image_path=None, model_name="m",
@@ -63,12 +63,10 @@ def _close(w):
 
 def test_webengine_report_paths():
     # enable the web report path with our stub view (created during __init__)
-    real_view, real_enabled = gui._QWebEngineView, gui._REPORT_HTML_ENABLED
-    gui._QWebEngineView = StubWebView
-    gui._REPORT_HTML_ENABLED = True
+    web = {"QWebEngineView": StubWebView, "REPORT_HTML_ENABLED": True}
     StubWebView.raise_on_sethtml = False
     try:
-        w = _win()
+        w = _win(web)
         check("web_created", w.research_web is not None)
         # _set_report web path: renders HTML into the stub, hides the text view
         w._set_report("# Report\n\n$x^2$\n\n| a | b |\n|---|---|\n| 1 | 2 |")
@@ -82,15 +80,13 @@ def test_webengine_report_paths():
         check("web_research_done", True)
         _close(w)
     finally:
-        gui._QWebEngineView = real_view; gui._REPORT_HTML_ENABLED = real_enabled
+        pass
 
 
 def test_webengine_sethtml_fallback():
-    real_view, real_enabled = gui._QWebEngineView, gui._REPORT_HTML_ENABLED
-    gui._QWebEngineView = StubWebView
-    gui._REPORT_HTML_ENABLED = True
+    web = {"QWebEngineView": StubWebView, "REPORT_HTML_ENABLED": True}
     try:
-        w = _win()
+        w = _win(web)
         # setHtml raises -> _set_report falls back to markdown/plain view
         StubWebView.raise_on_sethtml = True
         w._set_report("# Fallback\ntext")
@@ -99,25 +95,23 @@ def test_webengine_sethtml_fallback():
         StubWebView.raise_on_sethtml = False
         _close(w)
     finally:
-        gui._QWebEngineView = real_view; gui._REPORT_HTML_ENABLED = real_enabled
+        pass
 
 
 def test_webengine_construction_failure():
     # _build_research_tab: QWebEngineView() raises -> except logs, research_web stays None
-    real_view, real_enabled = gui._QWebEngineView, gui._REPORT_HTML_ENABLED
     class BoomView(QWidget):
         def __init__(self, *a, **k): raise RuntimeError("no GL context")
-    gui._QWebEngineView = BoomView
-    gui._REPORT_HTML_ENABLED = True
+    web = {"QWebEngineView": BoomView, "REPORT_HTML_ENABLED": True}
     try:
-        w = _win()
+        w = _win(web)
         check("web_construct_fail_none", w.research_web is None)
         # _set_report with research_web None -> markdown/plain path
         w._set_report("# NoWeb\ntext")
         check("web_none_markdown", w.research_view.toPlainText() != "")
         _close(w)
     finally:
-        gui._QWebEngineView = real_view; gui._REPORT_HTML_ENABLED = real_enabled
+        pass
 
 
 if __name__ == "__main__":

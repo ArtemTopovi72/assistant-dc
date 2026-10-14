@@ -60,7 +60,7 @@ logger = logging.getLogger("assistant.gui")
 # would break those callers for no gain.  # noqa: F401
 import gui_common
 import gui_workers
-from seams import dep, module
+from seams import dep, module, widget_part
 from gui_common import (
     ACCENT2, MUTED, ICON_PATH, _crash_log_stage, enable_dark_titlebar, _make_tab_close_icons,
     build_qss, _esc, _shadow, _card, _section, FlowLayout, _FlowWidget, _flow, _fmt_ts,
@@ -158,8 +158,9 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
     # the queued connection hops it onto the Qt main thread.
     vad_utterance = pyqtSignal(object)
 
-    def __init__(self, model_name, no_think, reasoning_effort="high", loader=None):
+    def __init__(self, model_name, no_think, reasoning_effort="high", loader=None, parts=None):
         super().__init__()
+        self.parts = parts or {}     # stand-in workers / dialogs / screen (seams.widget_part)
         self._initial_reasoning_effort = reasoning_effort
         self.setWindowTitle("Assistant DC")
         self.setWindowIcon(QIcon(ICON_PATH))
@@ -512,7 +513,7 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
             self._start_scan(text)
             return
         image = self._take_captured_image()  # attach an explicitly captured frame, if any
-        self._start_worker(gui_workers.RequestWorker(self.ctx, self.graph, self.base_state,
+        self._start_worker(widget_part(self, "RequestWorker", gui_workers.RequestWorker)(self.ctx, self.graph, self.base_state,
                                          text=text, image=image, use_db=self.usedb_on,
                                          db_k=self._db_k()))
 
@@ -550,7 +551,8 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
         """
         fallback = ('The model did not answer. Check that LM Studio is running and the model is loaded (Model tab), then try again.')
         try:
-            from lmstudio import fetch_models, loaded_context_length
+            lms = module(self, "lmstudio")
+            fetch_models, loaded_context_length = lms.fetch_models, lms.loaded_context_length
             models = fetch_models(LM_STUDIO_BASE)
             if not models:
                 return ('LM Studio is not answering at ' + str(LM_STUDIO_BASE) +
@@ -738,22 +740,21 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
 
     # ---- settings ----
     def _open_settings(self):
-        dlg = SettingsDialog(MODEL_NAME, ctx=self.ctx, parent=self)
+        dlg = widget_part(self, "SettingsDialog", SettingsDialog)(MODEL_NAME, ctx=self.ctx, parent=self)
         dlg.raise_()
         dlg.activateWindow()
         if dlg.exec_() == QDialog.Accepted:
             mid, no_think, effort = dlg.result_choice()
             scale_changed = dlg.apply_ui_scale_setting()
             if dlg.apply_language_setting():
-                gui_i18n.set_language(ui_scale.language())   # the whole window, in place
+                widget_part(self, "set_language", gui_i18n.set_language)(ui_scale.language())   # the whole window, in place
             if mid == gui_settings_dialog.NO_MODEL:
                 # "Do not load a model": the card is wanted for something else
                 # (a LoRA training run needs ~18 of 24 GB, and a 19 GB chat
                 # model beside it does not fit). Everything already resident is
                 # evicted; the chosen model is left untouched so the next
                 # deliberate pick still knows what it was.
-                import lora_training as _LT   # local: gui must not pay for it at import
-                _LT.free_gpu(log=self._add_system)
+                module(self, "lora_training").free_gpu(log=self._add_system)   # imported here: gui must not pay for it at import
                 # Record the state, do not just free the memory. Without this
                 # ctx.model_name still named the evicted model, so every gate in
                 # the app believed a model was loaded and messages went on being

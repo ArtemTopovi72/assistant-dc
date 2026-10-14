@@ -8,6 +8,7 @@ import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from PIL import Image
 import image as _image
+from fakes import deps_ctx
 
 _seen = {}
 
@@ -15,13 +16,9 @@ _seen = {}
 def _run(tmp_path, size, **kw):
     p = tmp_path / "src.png"
     Image.new("RGB", size, "gray").save(p)
-    saved = (_image._submit_and_poll, _image._upload_image_to_comfy)
-    _image._upload_image_to_comfy = lambda *a, **k: "src.png"
-    _image._submit_and_poll = lambda ctx, wf, **k: _seen.update(mp=wf["191"]["inputs"]["megapixels"]) or None
-    try:
-        _image.edit_image_with_firered(None, str(p), "make it pink", seed=1, **kw)
-    finally:
-        _image._submit_and_poll, _image._upload_image_to_comfy = saved
+    ctx = deps_ctx(_upload_image_to_comfy=lambda *a, **k: "src.png",
+                   _submit_and_poll=lambda ctx, wf, **k: _seen.update(mp=wf["191"]["inputs"]["megapixels"]) or None)
+    _image.edit_image_with_firered(ctx, str(p), "make it pink", seed=1, **kw)
     return _seen["mp"]
 
 

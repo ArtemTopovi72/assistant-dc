@@ -93,7 +93,6 @@ def test_liveness_survives_a_silent_download_phase(tmp_path, monkeypatch):
     writes nothing to the log for many minutes. A freshness-only check called
     that healthy run dead, so liveness follows the PROCESS."""
     import lora_training as LT
-    monkeypatch.setattr(LT, "TRAIN_ROOT", tmp_path)
     (tmp_path / "hero").mkdir()
     old_log = tmp_path / "hero" / "train.log"
     old_log.write_text("Loading transformer", encoding="utf-8")
@@ -106,5 +105,4 @@ def test_liveness_survives_a_silent_download_phase(tmp_path, monkeypatch):
             self.info = {"cmdline": line.split()}
     fake = type("psutil", (), {"process_iter": staticmethod(
         lambda attrs=None: [_P("python run.py runtime/lora_training/hero/hero.yaml")])})
-    monkeypatch.setitem(__import__("sys").modules, "psutil", fake)
-    assert LT.is_training("hero") is True, "a downloading run must not read as dead"
+    assert LT.is_training("hero", root=tmp_path, modules={"psutil": fake}) is True, "a downloading run must not read as dead"

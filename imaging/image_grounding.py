@@ -8,7 +8,7 @@ regions/instructions, item attribute classification and the edit-prompt refiner.
 Extracted from image.py. This layer talks to the LLM/VLM but never to ComfyUI,
 so it sits below the mask and edit pipelines and can be imported by both.
 """
-from seams import vision_model, text_model
+from seams import vision_model, text_model, dep
 import logging
 import os
 import re
@@ -382,6 +382,9 @@ def _item_attributes(ctx, phrase: str) -> dict:
     itself) and "head" (face, hair or head) derived from it
     — None means "could
     not classify" and consumers must treat it as unknown/neutral."""
+    own = dep(ctx, "_item_attributes", None)
+    if own is not None:
+        return own(ctx, phrase)
     key = (phrase or "").strip().casefold()
     out = {"worn": None, "small": None, "large": None, "multi": None, "part": None,
            "former_place": None}
@@ -534,6 +537,9 @@ def _refine_edit_prompts(ctx, region: str, instructions: str, *,
     from the fill prompt. Falls back to the deterministic templates whenever the
     LLM is unavailable or returns anything malformed — never raises, never
     blocks the edit. Returns (instruction, fill_prompt)."""
+    own = dep(ctx, "_refine_edit_prompts", None)
+    if own is not None:
+        return own(ctx, region, instructions, removal=removal)
     fallback_instr = _firered_instruction(ctx, region, instructions, removal)
     fallback_fill = _english_instructions(ctx, instructions) or instructions
     key = (region, instructions, removal)

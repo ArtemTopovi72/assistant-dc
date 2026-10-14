@@ -16,6 +16,7 @@ import config as _config
 from prompts import VISION_EVAL_PROMPT
 from llm import call_llm_simple, analyze_image_with_llm
 from utils import safe_json_from_llm
+from seams import dep
 # Pixel-level seam suppression, extracted to compositing.py. Re-imported here
 # because several edit pipelines below drive it directly.
 from compositing import (_feathered_alpha, _odd, _align_result_tile,
@@ -456,7 +457,7 @@ def edit_image_with_firered(ctx, image_path: str, instruction: str, **kw) -> Opt
         instr = "; then ".join(chain + [instruction])
         logger.info("firered: edit %d in a row -> from the original with all %d instructions",
                     len(chain) + 1, len(chain) + 1)
-    out = _edit_image_with_firered_once(ctx, src, instr, **kw)
+    out = dep(ctx, "firered_once", _edit_image_with_firered_once)(ctx, src, instr, **kw)
     if out and whole:
         lin[os.path.abspath(out)] = {"root": os.path.abspath(root), "chain": chain + [instruction]}
         try:
@@ -488,7 +489,7 @@ def _edit_image_with_firered_once(ctx, image_path: str, instruction: str,
     sized to the input (capped at ``FIRERED_MAX_MP``) so a large tile is no longer
     crushed to the template's 1.0 MP default — the cause of the cartoon softness.
     """
-    if not image_path or not os.path.exists(image_path):
+    if not image_path or not dep(ctx, "exists", os.path.exists)(image_path):
         logger.error("firered: source image not found: %s", image_path)
         return None
     if not (instruction or "").strip():
@@ -497,7 +498,7 @@ def _edit_image_with_firered_once(ctx, image_path: str, instruction: str,
     if seed is None or seed < 1:
         seed = random.randint(1, 999_999_999)
 
-    uploaded = _upload_image_to_comfy(image_path, COMFY_URL)
+    uploaded = dep(ctx, "_upload_image_to_comfy", _upload_image_to_comfy)(image_path, COMFY_URL)
     if not uploaded:
         logger.error("firered: image upload to ComfyUI failed")
         return None
@@ -521,7 +522,8 @@ def _edit_image_with_firered_once(ctx, image_path: str, instruction: str,
 
     # Optional reference images -> Qwen image2/image3 (multi-image conditioning).
     for i, rp in enumerate((reference_paths or [])[:2]):
-        up_ref = _upload_image_to_comfy(rp, COMFY_URL) if rp and os.path.exists(rp) else None
+        up_ref = (dep(ctx, "_upload_image_to_comfy", _upload_image_to_comfy)(rp, COMFY_URL)
+                  if rp and dep(ctx, "exists", os.path.exists)(rp) else None)
         if not up_ref:
             logger.warning("firered: reference %d upload failed (%s) — skipped", i, rp)
             continue
@@ -565,7 +567,7 @@ def _edit_image_with_firered_once(ctx, image_path: str, instruction: str,
 
     # Working-resolution: size node 191 to the input (capped) instead of the flat
     # 1.0 MP template default, so a large tile keeps detail (no cartoon crush).
-    dims = _source_dims(image_path)
+    dims = dep(ctx, "_source_dims", _source_dims)(image_path)
     src_mp = (dims[0] * dims[1] / 1_000_000.0) if dims else None
     if work_megapixels is None:
         work_megapixels = min(src_mp, FIRERED_MAX_MP) if src_mp else 1.0
@@ -591,12 +593,12 @@ def _edit_image_with_firered_once(ctx, image_path: str, instruction: str,
             # A 736x495 picture restyled at 1 MP and shrunk back came out «мыльный кал».
             k = (work_megapixels / src_mp) ** 0.5
             out_w, out_h = int(out_w * k) // 8 * 8, int(out_h * k) // 8 * 8
-        _enforce_output_size(workflow, out_w, out_h)
+        dep(ctx, "_enforce_output_size", _enforce_output_size)(workflow, out_w, out_h)
 
     logger.info("%s edit [BUILD_ID=%s]: input=%s dims=%s (%.2f MP) -> work_MP %.2f (was %s) seed=%d instr=%r",
                 engine, IMAGE_BUILD_ID, os.path.basename(image_path), dims, (src_mp or 0.0),
                 work_megapixels, prev_mp, seed, instruction[:80])
-    return _submit_and_poll(ctx, workflow, timeout=timeout,
+    return dep(ctx, "_submit_and_poll", _submit_and_poll)(ctx, workflow, timeout=timeout,
                             label=f"{engine} edit seed={seed}", exclusive=True)
 
 

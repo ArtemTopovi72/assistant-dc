@@ -13,7 +13,7 @@ both land here. Three things make a style land (bench/style_ab.py, 2026-10-11):
     picture: without the description an anime schoolgirl came back a young man and
     a Pixar baker lost his mustache; without the LoRA he stayed a 3D doll.
 """
-from seams import vision_model, text_model
+from seams import vision_model, text_model, dep
 import logging
 import os
 import re
@@ -167,12 +167,12 @@ def build(ctx, instructions: str, image_path: Optional[str] = None) -> tuple:
         p = style_presets.STYLE_PRESETS[key]
         target, style, keeps_clothes = p["target"], p["prompt"], p.get("keeps_clothes", True)
     else:
-        words = image_grounding._english_instructions(ctx, instructions) or instructions
-        target, style = _expand(ctx, words)
+        words = dep(ctx, "_english_instructions", image_grounding._english_instructions)(ctx, instructions) or instructions
+        target, style = dep(ctx, "_expand", _expand)(ctx, words)
         keeps_clothes = True
     keep = _KEEP.format(clothes="the same clothing " if keeps_clothes else "")
     if target == "photo":
-        who, is_3d = _who(ctx, image_path) if image_path else ("", False)
+        who, is_3d = dep(ctx, "_who", _who)(ctx, image_path) if image_path else ("", False)
         lead = f"change the picture 1 to realistic photograph, {who}. " if who else ""
         tail = (" Each person keeps the same gender, age, hair and facial hair, at real-life "
                 "human head-to-body proportions (a normal-sized head) with the same body build "
@@ -192,6 +192,7 @@ def restyle(ctx, image_path: str, instructions: str, *, seed=None, timeout=None)
     """Render the restyle; returns the saved path or None. A request that is not a
     style at all (target "other": relight, season, a filter) is edited as written."""
     import image as image_mod
+    image_mod = dep(ctx, "image", image_mod)
     instr, target, strength = build(ctx, instructions, image_path)
     kw = {k: v for k, v in (("seed", seed), ("timeout", timeout)) if v is not None}
     if target == "other" and not style_presets.preset_for(instructions):

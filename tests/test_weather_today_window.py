@@ -18,12 +18,11 @@ def fetch(lat, lon, days=3):
     return None if days > 16 else {"utc_offset_seconds": off, "points": pts}   # Open-Meteo caps at 16
 
 
-W.fetch_hourly = fetch
 bad = 0
-b, _, err = W.forecast_data({"lat": 0, "lon": 0, "name": "X"}, "ru", date=local.date())
+b, _, err = W.forecast_data({"lat": 0, "lon": 0, "name": "X"}, "ru", date=local.date(), fetch=fetch)
 ok = not err and b and b[0]["temp_c"] >= 18         # temp_c == hour: nothing from before 18:00
 print(("PASS" if ok else "FAIL") + "  today at 18:00 starts at 18:00", b[:1]); bad += not ok
-b2, _, err2 = W.forecast_data({"lat": 0, "lon": 0, "name": "X"}, "ru", date=local.date() + dt.timedelta(days=30))
+b2, _, err2 = W.forecast_data({"lat": 0, "lon": 0, "name": "X"}, "ru", date=local.date() + dt.timedelta(days=30), fetch=fetch)
 ok = not b2 and err2 == W.no_forecast_message("ru")
 print(("PASS" if ok else "FAIL") + "  30 days out says 'too far', not 'service down'"); bad += not ok
 sys.exit(1 if bad else 0)

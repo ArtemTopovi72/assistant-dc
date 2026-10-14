@@ -24,6 +24,7 @@ import config
 from config import MIC_GAIN_DB, SAMPLE_RATE
 from gui_common import ACCENT, MUTED, PANEL2, TranscribeWorker, build_qss
 import gui_workers
+from seams import widget_part
 
 logger = logging.getLogger("assistant")
 
@@ -66,7 +67,7 @@ class VoiceMixin:
             # recording" but took the stop branch on the next click, and _vad_tick
             # saw a live recorder and kept VAD permanently deaf.
             try:
-                rec = MicRecorder(fs=SAMPLE_RATE, gain_db=MIC_GAIN_DB)
+                rec = widget_part(self, "MicRecorder", MicRecorder)(fs=SAMPLE_RATE, gain_db=MIC_GAIN_DB)
                 rec.start()
             except Exception as exc:
                 logger.exception("Microphone start failed")
@@ -96,7 +97,7 @@ class VoiceMixin:
             if len(audio) < SAMPLE_RATE * 0.5:
                 self.pending_image = None; self._set_status("Too short — try again."); return
             image, self.pending_image = self.pending_image, None
-            self._start_worker(gui_workers.RequestWorker(self.ctx, self.graph, self.base_state,
+            self._start_worker(widget_part(self, "RequestWorker", gui_workers.RequestWorker)(self.ctx, self.graph, self.base_state,
                                              audio=audio, image=image, use_db=self.usedb_on,
                                              db_k=self._db_k()))
 
@@ -123,7 +124,7 @@ class VoiceMixin:
             self._set_status("Microphone is disabled in Settings — enable it to use VAD mode.")
             return
         try:
-            listener = VadListener(on_utterance=self.vad_utterance.emit, gain_db=MIC_GAIN_DB)
+            listener = widget_part(self, "VadListener", VadListener)(on_utterance=self.vad_utterance.emit, gain_db=MIC_GAIN_DB)
             listener.start()
         except Exception as exc:
             logger.exception("VAD start failed")
@@ -198,7 +199,7 @@ class VoiceMixin:
             self.stage.set_stage("Transcribing")
             w.start()
             return
-        self._start_worker(gui_workers.RequestWorker(self.ctx, self.graph, self.base_state,
+        self._start_worker(widget_part(self, "RequestWorker", gui_workers.RequestWorker)(self.ctx, self.graph, self.base_state,
                                          audio=audio, image=image, use_db=self.usedb_on,
                                          db_k=self._db_k()))
 
@@ -237,7 +238,7 @@ class VoiceMixin:
 
     def _toggle_camera(self):
         if self.cap is None:
-            self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+            self.cap = widget_part(self, "VideoCapture", cv2.VideoCapture)(0, cv2.CAP_DSHOW)
             if not self.cap.isOpened():
                 self.cap = None; self._set_status("Camera not available."); return
             self.camera_label.show(); self.cam_btn.setText("📷  Camera: on"); self.cam_timer.start(30)

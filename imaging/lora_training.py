@@ -28,7 +28,7 @@ import re
 import time
 import subprocess
 import urllib.request
-from seams import dep
+from seams import dep, module
 from pathlib import Path
 
 logger = logging.getLogger("assistant.lora")
@@ -423,7 +423,7 @@ def log_path(slug: str, root=None) -> Path:
 _STEP_IN_NAME = re.compile(r"(\d{4,})\.safetensors$", re.I)
 
 
-def is_training(slug: str) -> bool:
+def is_training(slug: str, root=None, modules=None) -> bool:
     """Is a trainer process for this character actually alive?
 
     Log freshness alone is not enough, and the difference is not academic: the
@@ -438,9 +438,9 @@ def is_training(slug: str) -> bool:
     # never matches and every live run looks dead.
     cfg_name = (slug + ".yaml").lower()
     try:
-        import psutil
+        psutil = module(modules or {}, "psutil")
     except Exception:
-        log = log_path(slug)
+        log = log_path(slug, root)
         return log.is_file() and (time.time() - log.stat().st_mtime) < 180
     # Match ARGUMENTS, not substrings of the whole command line. Searching the
     # joined line matches any process that merely MENTIONS these names --

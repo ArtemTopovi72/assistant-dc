@@ -15,6 +15,7 @@ import logging
 
 from PyQt5.QtCore import QByteArray, QPoint, Qt
 from PyQt5.QtGui import QIcon
+from seams import widget_part
 from PyQt5.QtWidgets import (
     QApplication, QHBoxLayout, QInputDialog, QLabel, QMenu, QPushButton, QWidget,
 )
@@ -103,9 +104,9 @@ class LayoutMixin:
             scr = wh.screen() if wh is not None else None
             if scr is None:
                 scr = QApplication.screenAt(self.frameGeometry().center())
-            return (scr or QApplication.primaryScreen()).availableGeometry()
+            return (scr or widget_part(self, "primaryScreen", QApplication.primaryScreen)()).availableGeometry()
         except Exception:
-            return QApplication.primaryScreen().availableGeometry()
+            return widget_part(self, "primaryScreen", QApplication.primaryScreen)().availableGeometry()
 
     def _clamp_to_screen(self):
         """Keep the window inside the screen's work area.
@@ -177,7 +178,7 @@ class LayoutMixin:
     def _default_window_size(self):
         w, h = px(1180), px(760)
         try:
-            avail = QApplication.primaryScreen().availableGeometry()
+            avail = widget_part(self, "primaryScreen", QApplication.primaryScreen)().availableGeometry()
             w = min(w, int(avail.width() * 0.96))
             h = min(h, int(avail.height() * 0.94))
         except Exception:

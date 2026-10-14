@@ -15,7 +15,7 @@ the real dialog opens, and `exec_()` enters a nested event loop nothing will
 ever quit -- offscreen included. gui_image_fix.py reaches it the same way for
 the same reason.
 """
-from seams import file_dialog, module
+from seams import file_dialog, module, widget_part
 import os
 import threading
 from pathlib import Path
@@ -258,7 +258,7 @@ class TransferTab(QWidget):
             lbl.setStyleSheet(f"border:1px solid {BORDER}; border-radius:6px;")
             lbl.setCursor(Qt.PointingHandCursor)
             lbl._fullpath = None
-            lbl.mouseDoubleClickEvent = (lambda e, l=lbl: l._fullpath and show_image_viewer(
+            lbl.mouseDoubleClickEvent = (lambda e, l=lbl: l._fullpath and widget_part(self, "show_image_viewer", show_image_viewer)(
                 [l._fullpath], 0, self.window()))
             viz.addWidget(cap, 0, col); viz.addWidget(lbl, 1, col)
             self._viz[key] = lbl

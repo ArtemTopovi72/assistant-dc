@@ -12,7 +12,8 @@ sent = []
 def fake_run(ctx, workflow, *a, **k):
     sent.append(workflow)
     raise RuntimeError("stop")
-I.comfy_client._submit_and_poll = fake_run
+from fakes import deps_ctx
+CTX = deps_ctx(_submit_and_poll=fake_run)
 
 photo = build_caption("pier", [element("old fisherman", [100, 200, 900, 800])], photo="85mm portrait")
 drawn = build_caption("pier", [element("old fisherman", [100, 200, 900, 800])], art_style="watercolor")
@@ -21,7 +22,7 @@ assert I.is_photo_caption(photo) and not I.is_photo_caption(drawn)
 def loras(caption, **kw):
     sent.clear()
     try:
-        I.generate(None, "x", caption=caption, **kw)
+        I.generate(CTX, "x", caption=caption, **kw)
     except Exception:
         pass
     wf = sent[-1] if sent else {}

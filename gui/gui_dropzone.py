@@ -16,6 +16,7 @@ import logging
 import os
 from prompt_guard import wrap_document
 import time
+from seams import module, widget_part
 
 from PyQt5.QtCore import QEvent, Qt, QTimer
 from PyQt5.QtGui import QImage, QKeySequence, QPixmap
@@ -96,8 +97,7 @@ class DropPasteMixin:
             return cache[mid]
         has = True
         try:
-            from lmstudio import fetch_model
-            info = fetch_model(LM_STUDIO_BASE, mid)
+            info = module(self, "lmstudio").fetch_model(LM_STUDIO_BASE, mid)
             # LM Studio flags vision models by type "vlm". The `capabilities` list is
             # always just ["tool_use"] and NEVER contains "vision", so a string check
             # there marks every model as blind. Trust `type`; only declare "no vision"
@@ -215,7 +215,7 @@ class DropPasteMixin:
                         return True
                     if os.path.exists(local):
                         QTimer.singleShot(
-                            0, lambda p=local: _dialogs.show_image_viewer(p, parent=self))
+                            0, lambda p=local: widget_part(self, "show_image_viewer", _dialogs.show_image_viewer)(p, parent=self))
                     else:
                         # show_image_viewer silently no-ops on a missing path — tell
                         # the user why nothing opened instead of appearing broken.
@@ -270,7 +270,7 @@ class DropPasteMixin:
             content = content[:self._DROP_CHARS] + '\n…(file truncated)'
         name = os.path.basename(path)
         self._add_user(f"[File: {name}]" + (' (truncated)' if truncated else ""))
-        self._start_worker(gui_workers.RequestWorker(self.ctx, self.graph, self.base_state,
+        self._start_worker(widget_part(self, "RequestWorker", gui_workers.RequestWorker)(self.ctx, self.graph, self.base_state,
                                          text=wrap_document(name, content)))
 
     def _drop_pdf_file(self, path: str):
@@ -290,5 +290,5 @@ class DropPasteMixin:
             content = content[:self._DROP_CHARS] + '\n…(document truncated)'
         name = os.path.basename(path)
         self._add_user(f"[PDF: {name}]" + (' (truncated)' if truncated else ""))
-        self._start_worker(gui_workers.RequestWorker(self.ctx, self.graph, self.base_state,
+        self._start_worker(widget_part(self, "RequestWorker", gui_workers.RequestWorker)(self.ctx, self.graph, self.base_state,
                                          text=wrap_document(name, content)))

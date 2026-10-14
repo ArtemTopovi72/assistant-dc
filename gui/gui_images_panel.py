@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import QLabel, QScrollArea, QVBoxLayout, QWidget
 from ui_scale import scale_style as _ss
 from gui_common import BG, MUTED
 from gui_dialogs import show_image_viewer
+from seams import widget_part
 
 
 # --------------------------------------------------------------------------- #
@@ -83,7 +84,7 @@ class ImagesPanel(QScrollArea):
             idx = self._thumbs.index(thumb)
         except ValueError:
             idx = 0
-        show_image_viewer(paths, idx, self.window())
+        widget_part(self, "show_image_viewer", show_image_viewer)(paths, idx, self.window())
 
     def resizeEvent(self, e):
         super().resizeEvent(e)

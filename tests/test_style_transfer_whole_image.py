@@ -30,8 +30,7 @@ import logging; logging.basicConfig(level=logging.CRITICAL)
 import image as I
 import image_router as R
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from fakes import deps_ctx
-_EDIT = deps_ctx(edit_read=lambda t: "style_transfer")
+from fakes import Over, deps_ctx
 
 OK = BAD = 0
 
@@ -58,12 +57,12 @@ print("=" * 66)
 print("INSTRUCTION TEXT")
 print("=" * 66)
 
-import image_grounding as _IG
 import image_style as _IS
-_IG._english_instructions = lambda ctx, text: text  # deterministic, no LLM call
-_IS._expand = lambda ctx, words: ("drawn", words)   # the chat model's spelling-out, stubbed
+_DEPS = dict(_english_instructions=lambda ctx, text: text,       # deterministic, no LLM call
+             _expand=lambda ctx, words: ("drawn", words))        # the chat model's spelling-out, stubbed
+_BUILD = deps_ctx(**_DEPS)
 
-instr = _IS.build(None, "redraw this as a cartoon")[0]
+instr = _IS.build(_BUILD, "redraw this as a cartoon")[0]
 check("does not contain the broken 'Change the it' phrasing",
       "change the it" not in instr.lower(), instr)
 check("tells the model to redraw the ENTIRE image",
@@ -89,8 +88,7 @@ def _fake_firered(ctx, image_path, instruction, *, seed=None, timeout=1900):
     return "/tmp/out.png"
 
 
-I.edit_image_with_firered = _fake_firered
-R._image.edit_image_with_firered = _fake_firered
+_EDIT = deps_ctx(edit_read=lambda t: "style_transfer", image=Over(I, edit_image_with_firered=_fake_firered), **_DEPS)
 
 path = _img()
 category, out = R.route_edit_request(_EDIT, path, "redraw this whole photo as a cartoon")
@@ -125,37 +123,19 @@ class _Ctx:
     def memory_text(self, *a, **kw): return ""
 
 
-saved_exists = os.path.exists
-os.path.exists = lambda p: True
-saved_deliverable = I.assert_deliverable
-I.assert_deliverable = lambda p, **kw: p
-saved_layout = I.load_layout_for
-I.load_layout_for = lambda p: None
-saved_preserve = I.preserve_identity_face
-I.preserve_identity_face = lambda src, new, **kw: new
-saved_budget = None
-try:
-    import tools as _T
-    saved_budget = _T._render_budget_exhausted
-    _T._render_budget_exhausted = lambda *a, **kw: None
-except Exception:
-    pass
+ctx = _Ctx()
+ctx.deps = deps_ctx(exists=lambda p: True, assert_deliverable=lambda p, **kw: p, load_layout_for=lambda p: None,
+                    preserve_identity_face=lambda src, new, **kw: new, _render_budget_exhausted=lambda *a, **kw: None,
+                    image=Over(I, edit_image_with_firered=_fake_firered), **_DEPS).deps
 
 captured.clear()
 state = {"image_path": path}
 TIH._handle_redraw_image(
-    _Ctx(), state,
+    ctx, state,
     {"mode": "redraw",
      "instructions": "convert to anime art style, cel-shaded, keep the exact "
                      "same pose, camera framing, outfit and background -- "
                      "change only the art style"})
-
-os.path.exists = saved_exists
-I.assert_deliverable = saved_deliverable
-I.load_layout_for = saved_layout
-I.preserve_identity_face = saved_preserve
-if saved_budget is not None:
-    _T._render_budget_exhausted = saved_budget
 
 check("redraw_image also used the whole-image instruction, not the agent's raw text",
       "entire image" in captured.get("instruction", "").lower(),

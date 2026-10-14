@@ -5,11 +5,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import style_presets as SP
 import graph_personality as P
 import image_style as IS
+from fakes import deps_ctx
 
 
 def _built(key):
-    IS._who = lambda ctx, path: ("", False)
-    return IS.build(None, SP.preset_prompt(key))[:2]
+    return IS.build(deps_ctx(_who=lambda ctx, path: ("", False)), SP.preset_prompt(key))[:2]
 
 
 def test_every_preset_has_a_prompt_and_labels():

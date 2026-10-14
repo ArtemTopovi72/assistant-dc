@@ -132,7 +132,7 @@ _ALIASES = {"питер": "Санкт-Петербург", "спб": "Санкт
             "калининград": "Калининград", "челяб": "Челябинск", "ростов": "Ростов-на-Дону"}
 
 
-def geocode_city(city: str, lang: str = "en") -> Optional[dict]:
+def geocode_city(city: str, lang: str = "en", http=None) -> Optional[dict]:
     """Return {"lat", "lon", "name", "country"} for the best match, or None.
 
     `lang` picks the language of the returned NAME. Open-Meteo answers in the
@@ -145,7 +145,7 @@ def geocode_city(city: str, lang: str = "en") -> Optional[dict]:
     if re.search("[а-яё]", city, re.I):
         nom = _nominative(city)
         if nom:
-            found = geocode_city(nom, lang)
+            found = geocode_city(nom, lang, http)
             if found:
                 return found
     # The language also steers MATCHING: "New York" asked in Russian found
@@ -154,7 +154,7 @@ def geocode_city(city: str, lang: str = "en") -> Optional[dict]:
     if not re.search("[а-яё]", city, re.I):
         lang = "en"
     try:
-        r = requests.get(_GEOCODE_URL,
+        r = (http or requests).get(_GEOCODE_URL,
                          params={"name": city, "count": 1,
                                  "language": (lang or "en")[:2].lower()},
                          timeout=_TIMEOUT)
@@ -171,7 +171,7 @@ def geocode_city(city: str, lang: str = "en") -> Optional[dict]:
         return None
 
 
-def resolve_city(city: str, correct_fn=None, lang: str = "en", geocode=None) -> Optional[dict]:
+def resolve_city(city: str, correct_fn=None, lang: str = "en", geocode=None, http=None) -> Optional[dict]:
     """geocode_city(city), retrying once with an LLM-corrected spelling if the
     raw input doesn't geocode. Typed city names are often abbreviations,
     informal nicknames, or plain typos ("Спб", "Питнр") that Open-Meteo's
@@ -179,7 +179,7 @@ def resolve_city(city: str, correct_fn=None, lang: str = "en", geocode=None) -> 
     (see tg_accounts._weather_correct_fn), is given a chance to normalize the
     name before we give up. `geocode` defaults to geocode_city.
     """
-    geocode = geocode or geocode_city
+    geocode = geocode or (geocode_city if http is None else (lambda c, lg: geocode_city(c, lg, http)))
     loc = geocode(city, lang)
     if loc or not correct_fn:
         return loc
@@ -540,8 +540,19 @@ def _forecast_header(place: str, lang: str, hours: Optional[int], date) -> str:
     return f"📍 {place} — next {h}h"
 
 
+class _Clock:
+    """The wall clock `forecast_data` reads; a suite hands in a frozen one."""
+    @staticmethod
+    def today():
+        return _dt.date.today()
+
+    @staticmethod
+    def utcnow():
+        return _dt.datetime.utcnow()
+
+
 def forecast_data(loc: dict, lang: str = "en", hours: Optional[int] = None,
-                  date=None, advise_fn=None) -> tuple:
+                  date=None, advise_fn=None, fetch=None, clock=_Clock) -> tuple:
     """(buckets, advice_map, error) — the DATA behind a periods forecast.
 
     Split out of what_to_wear_periods_for_loc so a surface that draws its own
@@ -556,17 +567,17 @@ def forecast_data(loc: dict, lang: str = "en", hours: Optional[int] = None,
     """
     days_needed = 3
     if date is not None:
-        days_needed = max(1, (date - _dt.date.today()).days + 1 + max(1, -(-int(hours or 24) // 24)))
+        days_needed = max(1, (date - clock.today()).days + 1 + max(1, -(-int(hours or 24) // 24)))
         if days_needed > 16:
             # Open-Meteo rejects forecast_days > 16, which read as "service is
             # unavailable" instead of "no forecast that far out".
             return [], {}, no_forecast_message(lang)
     elif hours:
         days_needed = max(2, -(-int(hours) // 24) + 1)
-    hourly = fetch_hourly(loc["lat"], loc["lon"], days=days_needed)
+    hourly = (fetch or fetch_hourly)(loc["lat"], loc["lon"], days=days_needed)
     if not hourly:
         return [], {}, _unavailable_message(lang)
-    local_now = _dt.datetime.utcnow() + _dt.timedelta(seconds=hourly["utc_offset_seconds"])
+    local_now = clock.utcnow() + _dt.timedelta(seconds=hourly["utc_offset_seconds"])
     if date is not None:
         start_dt = _dt.datetime.combine(date, _dt.time(0, 0))
         # date + hours = a window of that many hours from the date ("на выходных")
@@ -703,7 +714,7 @@ def group_advice(buckets: list, advice_map: dict, lang: str = "en") -> list:
 
 def what_to_wear_periods_for_loc(loc: dict, lang: str = "en",
                                  hours: Optional[int] = None, date=None,
-                                 advise_fn=None) -> str:
+                                 advise_fn=None, fetch=None, clock=_Clock) -> str:
     """Forecast already resolved to a location, broken into morning/
     afternoon/evening buckets, rendered for a chat message.
 
@@ -724,7 +735,8 @@ def what_to_wear_periods_for_loc(loc: dict, lang: str = "en",
     temperature-band table per-bucket if omitted, raising, or missing a key.
     """
     buckets, advice_map, error = forecast_data(loc, lang, hours=hours,
-                                               date=date, advise_fn=advise_fn)
+                                               date=date, advise_fn=advise_fn,
+                                               fetch=fetch, clock=clock)
     if error:
         return error
     header = _forecast_header(loc["name"], lang, hours, date)

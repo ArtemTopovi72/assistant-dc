@@ -142,18 +142,13 @@ def test_robust_region_alpha_cv2_path():
     out = I._robust_region_alpha(m)
     check("rra_cv2_path", out.mode == "L" and out.size == (96, 96))
 
+NO_CV2 = {"cv2": None}     # an import of cv2 raises, as on a machine without it
+
+
 def test_robust_region_alpha_cv2_missing_fallback():
     m = _mask_img(64, 64, box=(10, 10, 50, 50))
-    orig_cv2 = sys.modules.get("cv2")
-    sys.modules["cv2"] = None  # force ImportError on `import cv2`
-    try:
-        out = I._robust_region_alpha(m)
-        check("rra_fallback_no_cv2", out.size == (64, 64))
-    finally:
-        if orig_cv2 is not None:
-            sys.modules["cv2"] = orig_cv2
-        else:
-            sys.modules.pop("cv2", None)
+    out = I._robust_region_alpha(m, modules=NO_CV2)
+    check("rra_fallback_no_cv2", out.size == (64, 64))
 
 
 # ---------------- _band_masks / _is_continuation ----------------
@@ -171,14 +166,8 @@ def test_band_masks_empty():
 
 def test_band_masks_cv2_missing():
     m = (np.asarray(_mask_img(64, 64, box=(10, 10, 40, 40))) > 0).astype(np.uint8) * 255
-    orig_cv2 = sys.modules.get("cv2")
-    sys.modules["cv2"] = None
-    try:
-        ring_in, ring_out = _CMP._band_masks(m, 6)
-        check("band_masks_cv2_missing_fallback", ring_in.sum() > 0)
-    finally:
-        if orig_cv2 is not None: sys.modules["cv2"] = orig_cv2
-        else: sys.modules.pop("cv2", None)
+    ring_in, ring_out = _CMP._band_masks(m, 6, modules=NO_CV2)
+    check("band_masks_cv2_missing_fallback", ring_in.sum() > 0)
 
 def test_is_continuation_true_and_false():
     bg = _rand_rgb(64, 64)
@@ -215,14 +204,8 @@ def test_color_harmonize_tiny_rings_unchanged():
 def test_color_harmonize_cv2_missing():
     bg = _rand_rgb(64, 64); patch = _rand_rgb(64, 64)
     m = (np.asarray(_mask_img(64, 64, box=(10, 10, 40, 40))) > 0).astype(np.uint8) * 255
-    orig_cv2 = sys.modules.get("cv2")
-    sys.modules["cv2"] = None
-    try:
-        out = _CMP._color_harmonize(bg, patch, m)
-        check("harmonize_cv2_missing_unchanged", np.array_equal(out, patch))
-    finally:
-        if orig_cv2 is not None: sys.modules["cv2"] = orig_cv2
-        else: sys.modules.pop("cv2", None)
+    out = _CMP._color_harmonize(bg, patch, m, modules=NO_CV2)
+    check("harmonize_cv2_missing_unchanged", np.array_equal(out, patch))
 
 
 # ---------------- _seamless_clone_arr ----------------
@@ -246,13 +229,7 @@ def test_seamless_clone_full_mask_none():
 def test_seamless_clone_cv2_missing_none():
     bg = _rand_rgb(64, 64); patch = _rand_rgb(64, 64)
     m = (np.asarray(_mask_img(64, 64, box=(10, 10, 40, 40))) > 0).astype(np.uint8) * 255
-    orig_cv2 = sys.modules.get("cv2")
-    sys.modules["cv2"] = None
-    try:
-        check("seamless_clone_no_cv2_none", I._seamless_clone_arr(bg, patch, m) is None)
-    finally:
-        if orig_cv2 is not None: sys.modules["cv2"] = orig_cv2
-        else: sys.modules.pop("cv2", None)
+    check("seamless_clone_no_cv2_none", I._seamless_clone_arr(bg, patch, m, modules=NO_CV2) is None)
 
 
 # ---------------- _laplacian_blend ----------------
@@ -272,14 +249,8 @@ def test_laplacian_blend_small_region_geo_cap():
 def test_laplacian_blend_cv2_missing_fallback():
     bg = _rand_rgb(64, 64); patch = _rand_rgb(64, 64)
     alpha = (np.asarray(_mask_img(64, 64, box=(10, 10, 40, 40))).astype(np.float32)) / 255.0
-    orig_cv2 = sys.modules.get("cv2")
-    sys.modules["cv2"] = None
-    try:
-        out = _CMP._laplacian_blend(bg, patch, alpha)
-        check("laplacian_fallback_shape", out.shape == bg.shape)
-    finally:
-        if orig_cv2 is not None: sys.modules["cv2"] = orig_cv2
-        else: sys.modules.pop("cv2", None)
+    out = _CMP._laplacian_blend(bg, patch, alpha, modules=NO_CV2)
+    check("laplacian_fallback_shape", out.shape == bg.shape)
 
 
 # ---------------- _blend_region ----------------

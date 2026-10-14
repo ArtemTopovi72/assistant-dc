@@ -5,7 +5,8 @@ workers), _drop_pdf_file (mocked pypdf) and _fix_artifact edge branches.
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_supplement2.py
 """
-import os, sys, types, tempfile, threading
+import os, sys, types, tempfile, threading
+
 from types import SimpleNamespace as _NS
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("USE_GUI", "0")
@@ -260,20 +261,20 @@ def test_drop_pdf_and_fix_artifact():
             mask_path = None; protect_face = True
             def __init__(self, *a, **k): pass
             def exec_(self): return QDialog.Accepted
-        om = gui.MaskDrawDialog; gui.MaskDrawDialog = MaskNoDraw
+        w.parts = {"MaskDrawDialog": MaskNoDraw}
         try:
             w._fix_artifact_last_image(); check("fixartifact_nomask", "Nothing selected" in w.chat.toPlainText())
         finally:
-            gui.MaskDrawDialog = om
+            w.parts = {}
         # _fix_artifact: dialog cancelled
         class MaskCancel:
             def __init__(self, *a, **k): pass
             def exec_(self): return QDialog.Rejected
-        gui.MaskDrawDialog = MaskCancel
+        w.parts = {"MaskDrawDialog": MaskCancel}
         try:
             w._fix_artifact_last_image(); check("fixartifact_cancel", True)
         finally:
-            gui.MaskDrawDialog = om
+            w.parts = {}
         _close(w)
     finally:
         _gui_restore(orig)

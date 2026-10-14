@@ -12,6 +12,7 @@ research tab, graph.py's personality_node, gui_image_fix.py's worker seams):
 reach a dependency through the module that owns it, never by value across
 a split.
 """
+from seams import widget_part
 from PyQt5.QtWidgets import QInputDialog
 
 
@@ -141,7 +142,7 @@ class MemoryProfileMixin:
             return
         self._add_system("Compacting memory…")
         self.compact_btn.setEnabled(False)
-        self.compact_worker = _g.CompactMemoryWorker(self.ctx)
+        self.compact_worker = widget_part(self, "CompactMemoryWorker", _g.CompactMemoryWorker)(self.ctx)
         self.compact_worker.done.connect(self._on_compact_done)
         self.compact_worker.failed.connect(self._on_compact_failed)
         self.compact_worker.finished.connect(self._on_compact_worker_finished)

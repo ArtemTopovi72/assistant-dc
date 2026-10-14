@@ -4,7 +4,6 @@ import image_router
 
 # The reads themselves (removes_region, former_place) run live in
 # bench/removal_intent_live.py. Here: the wiring.
-H.image_mod._item_attributes = lambda ctx, ph: {"former_place": " where " in ph}
 
 
 def _call(region, instructions):
@@ -12,7 +11,8 @@ def _call(region, instructions):
     try:
         ctx = types.SimpleNamespace(last_image_path=p, image_edit_engine="auto",
                                     set_stage=lambda *a, **k: None,
-                                    deps=types.SimpleNamespace(region_read=lambda i, r: True))
+                                    deps=types.SimpleNamespace(region_read=lambda i, r: True,
+                                                       _item_attributes=lambda ctx, ph: {"former_place": " where " in ph}))
         return H._handle_inpaint_image(ctx, {"image_path": p},
                                        {"region": region, "instructions": instructions})
     finally:

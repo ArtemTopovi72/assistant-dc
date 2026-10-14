@@ -26,6 +26,7 @@ from PyQt5.QtGui import QImage, QColor
 from PyQt5.QtCore import Qt, QPoint, QMimeData, QUrl, QEvent
 import gui
 from gui_fakes import NoopLoader
+from seams import Over
 import gui_workers
 import gui_voice_tab
 
@@ -230,8 +231,8 @@ def test_manual_control_panel():
 
 def test_runtime_ready_and_chip():
     w = _win(with_ctx=False)
-    import lmstudio; lmstudio.fetch_model = lambda url, mid: {"id": mid, "state": "loaded",
-                                                             "compatibility_type": "gguf"}
+    import lmstudio; w.modules = {"lmstudio": Over(lmstudio, fetch_model=lambda url, mid: {"id": mid, "state": "loaded",
+                                                             "compatibility_type": "gguf"})}
     ctx = _fake_ctx()
     w._on_runtime_ready(ctx, {"messages": []}, types.SimpleNamespace(invoke=lambda s: {}))
     check("runtime_ctx_set", w.ctx is ctx and w.graph is not None)
@@ -283,17 +284,13 @@ def test_capture_and_camera():
     w._capture_frame(); check("capture_ok", w.captured_image is not None)
     check("take_captured", w._take_captured_image() is not None and w.captured_image is None)
     # camera toggle with fake cv2.VideoCapture
-    orig_vc = gui.cv2.VideoCapture
-    gui.cv2.VideoCapture = lambda *a, **k: FakeCap()
-    try:
-        w._toggle_camera(); check("cam_on", w.cap is not None)
-        w._update_camera()
-        w._toggle_camera(); check("cam_off", w.cap is None)
-        # camera not available
-        gui.cv2.VideoCapture = lambda *a, **k: type("C", (), {"isOpened": lambda s: False})()
-        w._toggle_camera(); check("cam_unavailable", w.cap is None)
-    finally:
-        gui.cv2.VideoCapture = orig_vc
+    w.parts = {"VideoCapture": lambda *a, **k: FakeCap()}
+    w._toggle_camera(); check("cam_on", w.cap is not None)
+    w._update_camera()
+    w._toggle_camera(); check("cam_off", w.cap is None)
+    # camera not available
+    w.parts = {"VideoCapture": lambda *a, **k: type("C", (), {"isOpened": lambda s: False})()}
+    w._toggle_camera(); check("cam_unavailable", w.cap is None)
     _close(w)
 
 
@@ -363,10 +360,9 @@ def test_sending_paths():
 
 def test_recording_and_vad():
     _install_noop_workers()
-    orig_rec, orig_vad = gui_voice_tab.MicRecorder, gui_voice_tab.VadListener
-    gui_voice_tab.MicRecorder = FakeRecorder; gui_voice_tab.VadListener = FakeVad
     try:
         w = _win()
+        w.parts = {"MicRecorder": FakeRecorder, "VadListener": FakeVad}
         # recording start/stop
         w._toggle_recording(); check("rec_started", w.recorder is not None)
         w._pump_mic_level()
@@ -394,7 +390,6 @@ def test_recording_and_vad():
         w._vad_tick(); check("vad_unhealthy_stop", w.vad_listener is None)
         _close(w)
     finally:
-        gui_voice_tab.MicRecorder = orig_rec; gui_voice_tab.VadListener = orig_vad
         _restore_workers()
 
 
@@ -538,8 +533,8 @@ def test_settings_and_model_switch():
     _install_noop_workers()
     try:
         w = _win()
-        import lmstudio; lmstudio.fetch_model = lambda url, mid: {"id": mid, "state": "loaded",
-                                                                 "compatibility_type": "gguf", "type": "vlm"}
+        import lmstudio; w.modules = {"lmstudio": Over(lmstudio, fetch_model=lambda url, mid: {"id": mid, "state": "loaded",
+                                                                 "compatibility_type": "gguf", "type": "vlm"})}
         # settings dialog accepted, same model -> no switch
         class FakeDlg:
             # The real dialog carries the "do not load a model" sentinel as a
@@ -558,7 +553,7 @@ def test_settings_and_model_switch():
             def apply_ui_scale_setting(self): return False
             def apply_language_setting(self): return False
             def apply_settings(self): pass
-        orig = gui.SettingsDialog; gui.SettingsDialog = FakeDlg
+        w.parts = {"SettingsDialog": FakeDlg}
         try:
             w._open_settings(); check("settings_same_model", w.model_switch_worker is None)
             # different model -> triggers switch
@@ -572,18 +567,15 @@ def test_settings_and_model_switch():
             FakeDlg.result_choice = lambda self: (FakeDlg.NO_MODEL, True, "high")
             import lora_training as _LT
             _freed = {"n": 0}
-            _of = _LT.free_gpu; _LT.free_gpu = lambda **k: _freed.__setitem__("n", 1)
-            try:
-                w._open_settings()
-            finally:
-                _LT.free_gpu = _of
+            w.modules["lora_training"] = Over(_LT, free_gpu=lambda **k: _freed.__setitem__("n", 1))
+            w._open_settings()
             check("settings_no_model_frees", _freed["n"] == 1)
             check("settings_no_model_recorded", w.ctx.model_name == ""
                   and w._active_model_id == "")
             check("settings_no_model_starts_nothing", w.model_switch_worker is None)
             w.ctx.model_name = "qwen3-9b"; w._active_model_id = "qwen3-9b"
         finally:
-            gui.SettingsDialog = orig
+            w.parts = {}
         # switch callbacks
         w._on_model_switch_done(True, "ok")
         w._on_model_switch_done(False, "lms missing")
@@ -622,7 +614,7 @@ def test_redraw_fixhands_artifact():
             def raise_(self): pass
             def activateWindow(self): pass
             def exec_(self): return QDialog.Accepted
-        om = gui.MaskDrawDialog; gui.MaskDrawDialog = FakeMask
+        w.parts = {"MaskDrawDialog": FakeMask}
         try:
             w._fix_hands_last_image(); check("fixhands_started", w.redraw_worker is not None)
             w._on_redraw_finished()
@@ -633,7 +625,7 @@ def test_redraw_fixhands_artifact():
             w._fix_artifact_last_image(); check("fixartifact_started", w.redraw_worker is not None)
             w._on_redraw_finished()
         finally:
-            gui.MaskDrawDialog = om
+            w.parts = {}
         # FireRed is the only edit engine: the toggle is gone
         check("no_engine_toggle", not hasattr(w, "_toggle_handfix_engine"))
         # redraw done variants
@@ -725,13 +717,13 @@ def test_drag_drop_and_paste():
         check("clipboard_paste", True)
         # model_has_vision variants
         import lmstudio
-        lmstudio.fetch_model = lambda url, mid: {"type": "vlm"}
+        w.modules = {"lmstudio": Over(lmstudio, fetch_model=lambda url, mid: {"type": "vlm"})}
         w._vision_cap_cache = {}
         check("vision_vlm", w._model_has_vision())
-        lmstudio.fetch_model = lambda url, mid: {"type": "llm", "capabilities": []}
+        w.modules = {"lmstudio": Over(lmstudio, fetch_model=lambda url, mid: {"type": "llm", "capabilities": []})}
         w._vision_cap_cache = {}
         check("vision_llm_no", not w._model_has_vision())
-        lmstudio.fetch_model = lambda url, mid: (_ for _ in ()).throw(OSError())
+        w.modules = {"lmstudio": Over(lmstudio, fetch_model=lambda url, mid: (_ for _ in ()).throw(OSError()))}
         w._vision_cap_cache = {}
         check("vision_err_true", w._model_has_vision())
         # load bad image

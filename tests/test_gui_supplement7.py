@@ -23,6 +23,7 @@ from PyQt5.QtWidgets import QFileDialog as _QFD
 from PyQt5.QtGui import QImage, QColor
 import gui
 from gui_fakes import NoopLoader
+from seams import Over
 import gui_workers
 import gui_voice_tab
 
@@ -169,21 +170,17 @@ def test_start_model_switch_in_progress():
 
 
 def test_toggle_recording_short_audio():
-    orig = gui_voice_tab.MicRecorder
     class ShortRec:
         def __init__(self, *a, **k): pass
         def start(self): pass
         def stop(self): return np.zeros(10, dtype=np.float32)   # < 0.5s
         def level(self): return 0.1
-    gui_voice_tab.MicRecorder = ShortRec
-    try:
-        w = _win()
-        w._toggle_recording()                 # start
-        w._toggle_recording()                 # stop -> too short branch
-        check("rec_too_short", w.recorder is None)
-        _close(w)
-    finally:
-        gui_voice_tab.MicRecorder = orig
+    w = _win()
+    w.parts = {"MicRecorder": ShortRec}
+    w._toggle_recording()                 # start
+    w._toggle_recording()                 # stop -> too short branch
+    check("rec_too_short", w.recorder is None)
+    _close(w)
 
 
 def test_on_vad_utterance_guards():
@@ -268,8 +265,8 @@ def test_save_copy_missing_path_valid_pix():
 
 def test_runtime_ready_step_and_final_except():
     w = _win()
-    import lmstudio; lmstudio.fetch_model = lambda url, mid: {"id": mid, "state": "loaded",
-                                                             "compatibility_type": "gguf"}
+    import lmstudio; w.modules = {"lmstudio": Over(lmstudio, fetch_model=lambda url, mid: {"id": mid, "state": "loaded",
+                                                             "compatibility_type": "gguf"})}
     ctx = types.SimpleNamespace(cancel_event=threading.Event(), memory_lock=threading.RLock(),
                                 model_name="m", no_think=True, mic_disabled=False, tts_disabled=False,
                                 reasoning_effort="high", response_length="auto",
@@ -286,10 +283,10 @@ def test_runtime_ready_step_and_final_except():
 
 def test_db_build_guards():
     import gui_database_tab
-    o = {n: getattr(gui_database_tab, n) for n in ("LibraryBuildWorker",)}
-    gui_database_tab.LibraryBuildWorker = type("LBW", (o["LibraryBuildWorker"],), {"start": lambda self: None})
+    LBW = type("LBW", (gui_database_tab.LibraryBuildWorker,), {"start": lambda self: None})
     try:
         w = _win()
+        w.parts = {"LibraryBuildWorker": LBW}
         # already running -> early return
         w._lib_build_worker = object()
         w._db_build(); check("db_build_running", w._lib_build_worker is not None)
@@ -302,7 +299,7 @@ def test_db_build_guards():
         w._lib_build_worker = None
         _close(w)
     finally:
-        gui_database_tab.LibraryBuildWorker = o["LibraryBuildWorker"]
+        pass
 
 
 def test_clear_context_ctx_none_and_systeminfo_tools_error():

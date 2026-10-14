@@ -19,6 +19,7 @@ from PyQt5.QtWidgets import QFileDialog as _QFD
 from PyQt5.QtGui import QImage, QColor
 import gui
 from gui_fakes import NoopLoader
+import fakes
 from _gui_patch import stub_workers as _stub_workers, restore as _gui_restore
 
 _app = QApplication.instance() or QApplication(sys.argv)
@@ -74,12 +75,11 @@ def test_output_dir_mask_config_fail_and_default_window():
         else: sys.modules.pop("config", None)
     # _default_window_size: primaryScreen raises -> except
     w = _win()
-    realps = QApplication.primaryScreen
-    QApplication.primaryScreen = staticmethod(lambda: (_ for _ in ()).throw(RuntimeError("noscreen")))
+    w.parts = {"primaryScreen": lambda: (_ for _ in ()).throw(RuntimeError("noscreen"))}
     try:
         wh = w._default_window_size(); check("default_win_except", wh[0] > 0)
     finally:
-        QApplication.primaryScreen = realps
+        w.parts = {}
     _close(w)
 
 
@@ -239,16 +239,14 @@ def test_gen_compaction_no_sources_and_run_diag():
 
 
 def test_edit_personality_read_except_and_refresh_importerror():
-    import model_selector as ms
-    ms.list_models = lambda base: [{"id": "q", "state": "loaded"}]
-    ms._index_model_sizes = lambda d: {}; ms._size_gb = lambda a, b: 1.0
+    ms = fakes.model_selector([{"id": "q", "state": "loaded"}], gb=1.0)
     # _edit_personality: path set, text empty, open() raises -> except pass
     ctx = types.SimpleNamespace(model_name="q", no_think=True, response_length="auto",
                                 reasoning_effort="high", custom_ref_wav=None,
                                 custom_personality_path="C:/no/such_p.txt", custom_personality_text="",
                                 web_search_enabled=True, reference_person_mode=False,
                                 mic_disabled=False, tts_disabled=False)
-    dlg = gui.SettingsDialog("q", ctx=ctx)
+    dlg = gui.SettingsDialog("q", ctx=ctx, modules={"model_selector": ms})
     oe = QDialog.exec_; QDialog.exec_ = lambda self: 0
     try:
         dlg._edit_personality(); check("edit_pers_read_except", True)

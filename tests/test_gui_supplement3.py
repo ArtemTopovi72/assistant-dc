@@ -6,7 +6,8 @@ AssistantWindow slots.
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_supplement3.py
 """
-import os, sys, types, tempfile, threading
+import os, sys, types, tempfile, threading
+
 from types import SimpleNamespace as _NS
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("USE_GUI", "0")
@@ -25,6 +26,7 @@ from PyQt5.QtGui import QImage, QColor, QPixmap
 from PyQt5.QtCore import QPoint
 import gui
 from gui_fakes import NoopLoader
+import fakes
 
 _app = QApplication.instance() or QApplication(sys.argv)
 _TMP = tempfile.mkdtemp(prefix="guisupp3_")
@@ -42,17 +44,14 @@ def check(name, cond, detail=""):
 
 
 def test_settings_populate_and_edit_cancel():
-    import model_selector as ms
-    ms._index_model_sizes = lambda d: {}
-    ms._size_gb = lambda mid, sizes: 2.0
     # models present incl. a loaded one, none matching current -> first auto-checked
-    ms.list_models = lambda base: [{"id": "a", "state": "loaded"}, {"id": "b", "state": "idle"}]
+    ms = fakes.model_selector([{"id": "a", "state": "loaded"}, {"id": "b", "state": "idle"}], gb=2.0)
     ctx = types.SimpleNamespace(model_name="zzz-not-listed", no_think=False, response_length="auto",
                                 reasoning_effort="high", custom_ref_wav=_png("ref.wav"),
                                 custom_personality_path=_png("p.txt"), custom_personality_text="",
                                 web_search_enabled=True, reference_person_mode=True,
                                 mic_disabled=True, tts_disabled=True)
-    dlg = gui.SettingsDialog("a", ctx=ctx)
+    dlg = gui.SettingsDialog("a", ctx=ctx, modules={"model_selector": ms})
     check("populate_autocheck", dlg._radio_group.checkedButton() is not None)
     # re-populate (clears existing radios -> deleteLater loop) with empty list -> placeholder
     ms.list_models = lambda base: []

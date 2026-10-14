@@ -9,7 +9,7 @@ Both consumers — AssistantWindow and run_gui — are in gui.py, which
 re-exports these two so the suites that patch gui.SettingsDialog keep
 intercepting.
 """
-from seams import file_dialog
+from seams import file_dialog, module
 import os
 
 from PyQt5.QtCore import Qt, QTimer
@@ -22,10 +22,8 @@ from PyQt5.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox,
 
 import ui_scale
 from ui_scale import pt, px, scale_style as _ss
-# Imported as a MODULE, not by value: STARTUP_MODEL and the timeout are read at
-# COUNTDOWN time so a test (or an env change between launches) can set them on
-# config and have this dialog follow, which a by-value copy would not.
-import config as _config
+# config is read as a MODULE at COUNTDOWN time (seams.module), not copied by value:
+# an env change between launches, or the modules= a suite hands in, is followed.
 from config import LM_STUDIO_BASE, MODEL_NAME
 from gui_common import MUTED, REC, _fit_dialog, _section, build_qss
 from gui_i18n import tr
@@ -52,8 +50,9 @@ NO_MODEL = "__no_model__"
 class SettingsDialog(QDialog):
     """Model + thinking always; voice + search settings when a ctx is given."""
 
-    def __init__(self, default_model: str, ctx=None, parent=None):
+    def __init__(self, default_model: str, ctx=None, parent=None, modules=None):
         super().__init__(parent)
+        self.modules = modules      # stand-ins for model_selector / config (seams.module)
         self.ctx = ctx
         self._default_model = default_model
         self.setWindowTitle("Settings")
@@ -293,7 +292,7 @@ class SettingsDialog(QDialog):
         key or click cancels it -- being yanked out of a deliberate choice
         halfway through would be worse than the problem being fixed.
         """
-        self._auto_left = int(getattr(_config, "STARTUP_DIALOG_TIMEOUT_S", 30) or 0)
+        self._auto_left = int(getattr(module(self, "config"), "STARTUP_DIALOG_TIMEOUT_S", 30) or 0)
         self._auto_timer = None
         if self._auto_left <= 0:
             return
@@ -320,7 +319,7 @@ class SettingsDialog(QDialog):
             self._autostart_paint()
             return
         self._cancel_autostart()
-        target = getattr(_config, "STARTUP_MODEL", "") or ""
+        target = getattr(module(self, "config"), "STARTUP_MODEL", "") or ""
         # Select the fallback model if LM Studio is actually serving it. If it
         # is not, whatever _populate_models already checked is left alone and
         # accepted -- starting on a model that is not there would fail every
@@ -353,7 +352,7 @@ class SettingsDialog(QDialog):
                            target, picked)
         logger.info("LIFECYCLE: startup dialog timed out after %ss — starting "
                     "unattended on %s",
-                    getattr(_config, "STARTUP_DIALOG_TIMEOUT_S", 30), picked)
+                    getattr(module(self, "config"), "STARTUP_DIALOG_TIMEOUT_S", 30), picked)
         self.accept()
 
     # Any interaction at all means a person is choosing; the countdown must not
@@ -376,7 +375,9 @@ class SettingsDialog(QDialog):
     NO_MODEL = NO_MODEL
 
     def _populate_models(self):
-        from model_selector import list_models, _index_model_sizes, _size_gb, _MODELS_DIR
+        ms = module(self, "model_selector")
+        list_models, _index_model_sizes, _size_gb, _MODELS_DIR = (
+            ms.list_models, ms._index_model_sizes, ms._size_gb, ms._MODELS_DIR)
         # clear existing radios / placeholder
         for b in self._radios:
             self._radio_group.removeButton(b)

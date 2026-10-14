@@ -55,10 +55,6 @@ def test_graph_loop_survives_none_tool_result():
     from models import Context
     from prompts import SYSTEM_PROMPT_PERSONALITY
     from config import MODEL_NAME
-    # stub image ops so no ComfyUI
-    tools_mod.generate_image_with_refinement = lambda *a, **k: {
-        "path": None, "score": 0, "attempts": 1, "status": "fail"}
-
     calls = {"n": 0}
     real = tools_mod.execute_tool
     def flaky(ctx, state, name, args):

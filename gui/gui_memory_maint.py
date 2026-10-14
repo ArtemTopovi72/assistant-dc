@@ -9,7 +9,7 @@ each _build_* creates. The compaction worker lifecycle (._compact_worker,
 ._reset_compact_worker) stays with the page that owns it so teardown still has
 exactly one owner.
 """
-from seams import file_dialog
+from seams import file_dialog, widget_part
 import json
 from pathlib import Path
 from PyQt5.QtWidgets import (
@@ -79,7 +79,7 @@ class MemoryMaintenanceMixin:
         # mixin, so a top-level import here would be a cycle. Going through the
         # module also guarantees ONE worker class object, never a second copy.
         import gui_memory_tab as _tab
-        self._compact_worker = _tab.CompactMemoryWorker(self.host.ctx)
+        self._compact_worker = widget_part(self, "CompactMemoryWorker", _tab.CompactMemoryWorker)(self.host.ctx)
         self._compact_worker.done.connect(self._on_preview_ready)
         self._compact_worker.failed.connect(lambda m: (self._toast(f"Compaction failed: {m}"),
                                                        self._reset_compact_worker()))

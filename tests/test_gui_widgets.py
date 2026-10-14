@@ -8,7 +8,8 @@ exec_) are monkeypatched. No network / no models.
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_widgets.py
 """
-import os, sys, types, logging
+import os, sys, types, logging
+
 from types import SimpleNamespace as _NS
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("USE_GUI", "0")
@@ -21,6 +22,8 @@ from PyQt5.QtWidgets import QApplication, QFileDialog, QWidget, QLabel, QDialog
 from PyQt5.QtGui import QImage, QColor
 from PyQt5.QtCore import Qt, QRect, QSize
 import gui
+import fakes
+from seams import Over
 
 _app = QApplication.instance() or QApplication(sys.argv)
 _TMP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_guiwidgets")
@@ -173,18 +176,10 @@ def test_qt_log_handler():
 
 # --------------------------------------------------------------- SettingsDialog
 
-def _stub_model_selector(models):
-    import model_selector as ms
-    ms.list_models = lambda base: models
-    ms._index_model_sizes = lambda d: {}
-    ms._size_gb = lambda mid, sizes: 4.2
-    return ms
-
-
 def test_settings_dialog_full():
-    _stub_model_selector([{"id": "qwen", "state": "loaded"}, {"id": "gpt-oss-20b", "state": "unloaded"}])
+    ms = fakes.model_selector([{"id": "qwen", "state": "loaded"}, {"id": "gpt-oss-20b", "state": "unloaded"}], gb=4.2)
     ctx = _ctx()
-    dlg = gui.SettingsDialog("qwen", ctx=ctx)
+    dlg = gui.SettingsDialog("qwen", ctx=ctx, modules={"model_selector": ms})
     # result_choice picks the checked radio
     mid, no_think, effort = dlg.result_choice()
     check("settings_result_choice", mid == "qwen" and no_think is True and effort == "high")
@@ -214,8 +209,8 @@ def test_settings_dialog_full():
 
 
 def test_settings_dialog_no_ctx_and_empty_models():
-    _stub_model_selector([])
-    dlg = gui.SettingsDialog("fallback-model", ctx=None)
+    ms = fakes.model_selector([], gb=4.2)
+    dlg = gui.SettingsDialog("fallback-model", ctx=None, modules={"model_selector": ms})
     mid, no_think, effort = dlg.result_choice()   # no radios -> fallback
     check("settings_no_ctx_fallback", mid == gui.MODEL_NAME or mid == "fallback-model")
     dlg.apply_settings()   # ctx is None -> early return
@@ -224,9 +219,9 @@ def test_settings_dialog_no_ctx_and_empty_models():
 
 
 def test_settings_dialog_pickers():
-    _stub_model_selector([{"id": "qwen", "state": "loaded"}])
+    ms = fakes.model_selector([{"id": "qwen", "state": "loaded"}], gb=4.2)
     ctx = _ctx()
-    dlg = gui.SettingsDialog("qwen", ctx=ctx)
+    dlg = gui.SettingsDialog("qwen", ctx=ctx, modules={"model_selector": ms})
     vf = _wav("voice.wav")
     dlg.file_dialog = _NS(getOpenFileName=lambda *a, **k: (vf, ""))
     dlg._pick_voice(); check("pick_voice", ctx.custom_ref_wav == vf)
@@ -255,10 +250,10 @@ def test_model_config_tab():
     tab.refresh(); check("mct_refresh_noop", True)
     # set_context + populate with fetch_model stub
     import lmstudio
-    lmstudio.fetch_model = lambda url, mid: {
+    tab.modules = {"lmstudio": Over(lmstudio, fetch_model=lambda url, mid: {
         "id": "qwen", "state": "loaded", "max_context_length": 32768,
         "loaded_context_length": 8192, "arch": "qwen", "compatibility_type": "gguf",
-        "quantization": "Q4", "capabilities": ["tools", "vision"]}
+        "quantization": "Q4", "capabilities": ["tools", "vision"]})}
     tab.set_context("http://x", "qwen")
     check("mct_populated", "qwen" in tab._model_lbl.text())
     check("mct_gguf_apply_enabled", tab._apply_btn.isEnabled())
@@ -275,17 +270,11 @@ def test_model_config_tab():
         def __init__(self, *a, **k): pass
         def __getattr__(self, n): return types.SimpleNamespace(connect=lambda *a, **k: None)
         def start(self): started["n"] += 1
-    # ModelConfigTab resolves ReloadModelWorker in gui_model_config_tab, so patch
-    # it there too.
-    import gui_model_config_tab as _MC
-    orig = _MC.ReloadModelWorker
-    _MC.ReloadModelWorker = gui.ReloadModelWorker = FakeWorker
-    try:
-        tab._compat_type = "gguf"; tab._apply()
-        check("mct_apply_started", started["n"] == 1)
-        tab._apply()   # worker already running -> early return
-    finally:
-        _MC.ReloadModelWorker = gui.ReloadModelWorker = orig
+    tab.parts = {"ReloadModelWorker": FakeWorker}
+    tab._compat_type = "gguf"; tab._apply()
+    check("mct_apply_started", started["n"] == 1)
+    tab._apply()   # worker already running -> early return
+    tab.parts = {}
     # reload done callbacks
     tab._reload_worker = object()
     tab._on_reload_done(True, "ok done", "manual text")
@@ -325,27 +314,21 @@ def test_image_viewer_dialog():
 
 
 def test_show_image_viewer():
-    # show_image_viewer resolves ImageViewerDialog as a global of gui_dialogs,
-    # so patch it there too.
-    import gui_dialogs as _DLG
-    orig = _DLG.ImageViewerDialog
+    # the dialog class is the one the parent widget hands in (seams.widget_part)
     opened = {"n": 0}
     class Fake:
         def __init__(self, *a, **k): opened["n"] += 1
         def exec_(self): pass
-    _DLG.ImageViewerDialog = Fake; gui.ImageViewerDialog = Fake
-    try:
-        gui.show_image_viewer(_png("s1.png"))
-        check("show_viewer_single", opened["n"] == 1)
-        gui.show_image_viewer([])            # empty -> no-op
-        gui.show_image_viewer("C:/no/x.png") # missing -> filtered to empty
-        check("show_viewer_empty_safe", opened["n"] == 1)
-        # construction raising is swallowed
-        gui.ImageViewerDialog = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom"))
-        gui.show_image_viewer(_png("s2.png"))
-        check("show_viewer_exc_swallowed", True)
-    finally:
-        _DLG.ImageViewerDialog = orig; gui.ImageViewerDialog = orig
+    host = QWidget(); host.parts = {"ImageViewerDialog": Fake}
+    gui.show_image_viewer(_png("s1.png"), parent=host)
+    check("show_viewer_single", opened["n"] == 1)
+    gui.show_image_viewer([], parent=host)            # empty -> no-op
+    gui.show_image_viewer("C:/no/x.png", parent=host) # missing -> filtered to empty
+    check("show_viewer_empty_safe", opened["n"] == 1)
+    # construction raising is swallowed
+    host.parts = {"ImageViewerDialog": lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom"))}
+    gui.show_image_viewer(_png("s2.png"), parent=host)
+    check("show_viewer_exc_swallowed", True)
 
 
 def test_images_panel():
@@ -356,27 +339,20 @@ def test_images_panel():
     check("panel_ignores_bad", len(panel._thumbs) == 2)
     panel._avail_width()
     # open_viewer
-    # Patch the name in the module that CALLS it: ImagesPanel imports
-    # show_image_viewer by value from gui_dialogs.
-    import gui_images_panel as _panel_mod
-    orig = _panel_mod.show_image_viewer; calls = []
-    _panel_mod.show_image_viewer = lambda paths, idx, parent: calls.append((paths, idx))
-    try:
-        panel.open_viewer(panel._thumbs[0])
-        check("panel_open_viewer", len(calls) == 1)
-        panel.open_viewer(QLabel())   # not in list -> idx 0
-        check("panel_open_viewer_missing", calls[-1][1] == 0)
-    finally:
-        _panel_mod.show_image_viewer = orig
+    calls = []
+    panel.parts = {"show_image_viewer": lambda paths, idx, parent: calls.append((paths, idx))}
+    panel.open_viewer(panel._thumbs[0])
+    check("panel_open_viewer", len(calls) == 1)
+    panel.open_viewer(QLabel())   # not in list -> idx 0
+    check("panel_open_viewer_missing", calls[-1][1] == 0)
     panel.clear_images(); check("panel_cleared", panel._thumbs == [] and panel._placeholder is not None)
     # thumb double-click
     panel.add_image(_png("g3.png"))
     th = panel._thumbs[0]
     # Same as open_viewer above: mouseDoubleClickEvent -> open_viewer -> the
     # show_image_viewer bound in gui_images_panel, not gui's.
-    _panel_mod.show_image_viewer = lambda *a, **k: None
+    panel.parts = {"show_image_viewer": lambda *a, **k: None}
     th.mouseDoubleClickEvent(None)
-    _panel_mod.show_image_viewer = orig
     check("thumb_dblclick_safe", True)
 
 

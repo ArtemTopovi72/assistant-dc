@@ -68,7 +68,6 @@ def _fake_analyze(ctx, image_bytes, user_text, system_prompt):
     _calls.append(getattr(ctx, "last_image_path", None))
     return f"description of {os.path.basename(getattr(ctx, 'last_image_path', ''))}"
 
-G.downscale_image_bytes = lambda b: b  # passthrough, avoid needing a real image
 
 ctx = models.Context(models=None, transcription_cache={}, cache_file=None,
                      asr_lock=threading.Lock(), tts_lock=threading.Lock())

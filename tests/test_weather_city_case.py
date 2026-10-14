@@ -22,11 +22,12 @@ def fake_get(url, params=None, **k):
               for n, c in PLACES if n.lower().startswith(q.lower())])
 
 
-W.requests.get = fake_get
-assert W.geocode_city("Твери", "ru")["name"] == "Тверь", asked
-assert W.geocode_city("Нижнем Новгороде", "ru")["name"] == "Нижний Новгород", asked
-assert W.geocode_city("Тверь", "ru")["name"] == "Тверь"
-assert W.geocode_city("Tver", "en") is None          # Latin input untouched by the Russian morphology
+import types
+HTTP = types.SimpleNamespace(get=fake_get)
+assert W.geocode_city("Твери", "ru", http=HTTP)["name"] == "Тверь", asked
+assert W.geocode_city("Нижнем Новгороде", "ru", http=HTTP)["name"] == "Нижний Новгород", asked
+assert W.geocode_city("Тверь", "ru", http=HTTP)["name"] == "Тверь"
+assert W.geocode_city("Tver", "en", http=HTTP) is None          # Latin input untouched by the Russian morphology
 print("PASS weather city case")
 
 # "на выходных" is Sat+Sun. The place and day are the
@@ -41,7 +42,7 @@ _w = TW.weather_request("какая погода в Питере на выход
 assert (_w["city"], _w["date"], _w["hours"]) == ("Питере", _d.date(2026, 10, 3), 48), _w
 print("PASS weekend + city")
 PLACES += [("Санкт-Петербург", "Россия"), ("Екатеринбург", "Россия"), ("Питерка", "Россия")]
-assert W.geocode_city("Питере", "ru")["name"] == "Санкт-Петербург", asked
-assert W.geocode_city("Екб", "ru")["name"] == "Екатеринбург", asked
+assert W.geocode_city("Питере", "ru", http=HTTP)["name"] == "Санкт-Петербург", asked
+assert W.geocode_city("Екб", "ru", http=HTTP)["name"] == "Екатеринбург", asked
 print("PASS aliases")
 

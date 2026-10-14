@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import image as I
 import image_style as IS
 import style_presets as SP
+from fakes import Over, deps_ctx
 
 
 def _run(monkeypatch, instructions, *, expand=None, who="a man with a black mustache"):
@@ -28,14 +29,13 @@ def _run(monkeypatch, instructions, *, expand=None, who="a man with a black must
         seen["lora"] = name
         yield
 
-    monkeypatch.setattr(I, "firered_sampler", sampler)
-    monkeypatch.setattr(I, "firered_extra_lora", lora)
-    monkeypatch.setattr(I, "edit_image_with_firered",
-                        lambda ctx, path, instr, **kw: seen.setdefault("instr", instr) and "out.png")
-    monkeypatch.setattr(IS, "_who", lambda ctx, path: (who, False))
     calls = []
-    monkeypatch.setattr(IS, "_expand", lambda ctx, words: calls.append(words) or expand)
-    out = IS.restyle(None, "src.png", instructions)
+    ctx = deps_ctx(
+        image=Over(I, firered_sampler=sampler, firered_extra_lora=lora,
+                   edit_image_with_firered=lambda ctx, path, instr, **kw: seen.setdefault("instr", instr) and "out.png"),
+        _who=lambda ctx, path: (who, False),
+        _expand=lambda ctx, words: calls.append(words) or expand)
+    out = IS.restyle(ctx, "src.png", instructions)
     return out, seen, calls
 
 
@@ -86,15 +86,13 @@ def test_a_redraw_that_is_not_a_style_is_edited_as_written(monkeypatch):
 def test_a_small_picture_is_restyled_at_working_size_not_shrunk_back(monkeypatch):
     """A 736x495 picture restyled at 1 MP and shrunk back to 736x495 came out soft."""
     seen = {}
-    monkeypatch.setattr(I, "_enforce_output_size", lambda wf, w, h: seen.update(w=w, h=h))
-    monkeypatch.setattr(I, "_upload_image_to_comfy", lambda p, u: "x.png")
-    monkeypatch.setattr(I, "_source_dims", lambda p: (736, 495))
-    monkeypatch.setattr(I, "_submit_and_poll", lambda *a, **k: "out.png")
-    monkeypatch.setattr(I.os.path, "exists", lambda p: True)
+    ctx = deps_ctx(_enforce_output_size=lambda wf, w, h: seen.update(w=w, h=h),
+                   _upload_image_to_comfy=lambda p, u: "x.png", _source_dims=lambda p: (736, 495),
+                   _submit_and_poll=lambda *a, **k: "out.png", exists=lambda p: True)
     with I.firered_sampler(12, 3.0, lightning=False, upsize=True):
-        I._edit_image_with_firered_once(None, "src.png", "x", seed=1)
+        I._edit_image_with_firered_once(ctx, "src.png", "x", seed=1)
     assert seen["w"] > 1000 and abs(seen["w"] / seen["h"] - 736 / 495) < 0.02, seen
-    I._edit_image_with_firered_once(None, "src.png", "x", seed=1)
+    I._edit_image_with_firered_once(ctx, "src.png", "x", seed=1)
     assert (seen["w"], seen["h"]) == (736, 495)          # a plain edit keeps the source size
 
 

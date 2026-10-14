@@ -9,7 +9,7 @@ callers import "the transfer tab" to draw a mask.
 OUTPUT_DIR_GUI_MASK travels with them: it is where the mask editor writes, and
 it means nothing without them.
 """
-from seams import file_dialog
+from seams import file_dialog, widget_part
 import os
 import shutil
 import time
@@ -201,7 +201,7 @@ def show_image_viewer(paths, index: int = 0, parent=None):
     # exception fast-fails the whole process — never let viewer construction or a
     # bad image take the app down.
     try:
-        ImageViewerDialog(paths, index, parent).exec_()
+        widget_part(parent, "ImageViewerDialog", ImageViewerDialog)(paths, index, parent).exec_()
     except Exception:
         logger.exception("Image viewer failed to open for %r", paths[index])
 

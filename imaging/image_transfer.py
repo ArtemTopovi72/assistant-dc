@@ -140,7 +140,7 @@ def generate_person_from_reference(ctx, description: str, *,
     Returns (path, info) on success or (None, reason). The caller (generate_image
     handler) falls back to plain text2image when this returns None.
     """
-    import search as _search
+    _search = module(ctx, "search")
     person, is_real, scene = _image._split_person_and_scene(ctx, description)
     if not is_real:
         return None, "not_a_real_named_person"

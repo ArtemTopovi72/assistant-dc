@@ -28,6 +28,7 @@ import ui_scale
 from ui_scale import px
 from PyQt5.QtCore import QPoint, QRect, QSize, Qt
 from PyQt5.QtGui import QColor, QImage, QPainter, QPen
+from seams import widget_part
 from PyQt5.QtWidgets import (QAbstractScrollArea, QApplication, QFrame,
                              QGraphicsDropShadowEffect, QLabel, QLayout,
                              QScrollArea, QSizePolicy, QVBoxLayout, QWidget)
@@ -526,7 +527,7 @@ def _fit_dialog(dlg, w: int, h: int) -> None:
     excludes the taskbar) and centre what is left.
     """
     try:
-        avail = QApplication.primaryScreen().availableGeometry()
+        avail = widget_part(dlg, "primaryScreen", QApplication.primaryScreen)().availableGeometry()
         w = min(w, int(avail.width() * 0.96))
         h = min(h, int(avail.height() * 0.92))
         dlg.setMaximumSize(avail.width(), avail.height())

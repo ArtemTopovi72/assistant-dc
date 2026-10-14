@@ -16,17 +16,18 @@ def once(ctx, src, instr, **kw):
     out = os.path.join(tmp, f"r{n[0]}.png")
     open(out, "wb").write(b"x")
     return out
-I._edit_image_with_firered_once = once
+from fakes import deps_ctx
+ctx = deps_ctx(firered_once=once)
 
 orig = os.path.join(tmp, "orig.png"); open(orig, "wb").write(b"x")
 cur = orig
 for i, ins in enumerate(["blue shirt", "winter", "no hat", "add a dog"]):
-    cur = I.edit_image_with_firered(None, cur, ins)
+    cur = I.edit_image_with_firered(ctx, cur, ins)
 assert calls[2] == ("r2.png", "no hat"), calls
 assert calls[3] == ("orig.png", "blue shirt; then winter; then no hat; then add a dog"), calls[3]
 print("ok the 4th edit in a row starts from the original with all instructions")
 
 calls.clear()
-I.edit_image_with_firered(None, cur, "red sky", save_prefix="tile")
+I.edit_image_with_firered(ctx, cur, "red sky", save_prefix="tile")
 assert calls[0][0] == os.path.basename(cur) and calls[0][1] == "red sky", calls
 print("ok a contained tile edit is never rebased")

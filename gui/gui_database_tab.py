@@ -8,7 +8,7 @@ rest of AssistantWindow except the chat log and the busy gate.
 Needs from the host: _add_assistant, _add_system, _set_busy, _set_status,
 _on_failed and _maybe_drain_queue.
 """
-from seams import file_dialog
+from seams import file_dialog, widget_part
 import logging
 import os
 from PyQt5.QtCore import Qt
@@ -177,7 +177,7 @@ class DatabaseTabMixin:
         self.db_progress.setRange(0, 0)   # indeterminate until the first progress tick
         self.db_progress.show()
         self.db_status.setText("Building… extracting and indexing documents.")
-        w = LibraryBuildWorker(paths)
+        w = widget_part(self, "LibraryBuildWorker", LibraryBuildWorker)(paths)
         w.progress.connect(self._on_db_progress)
         w.done.connect(self._on_db_built)
         w.failed.connect(self._on_db_failed)

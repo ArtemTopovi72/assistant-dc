@@ -488,10 +488,9 @@ def test_model_reload_and_chat_turn_are_mutually_exclusive():
     # Subclass the real worker so its pyqtSignals exist; only start() is neutered.
     # ModelConfigTab resolves ReloadModelWorker in gui_model_config_tab, so
     # gui's copy alone does not intercept.
-    import gui_model_config_tab as _MC
-    _MC.ReloadModelWorker = gui.ReloadModelWorker = type("NoopReload", (real,),
+    w.parts = {"ReloadModelWorker": type("NoopReload", (real,),
                                  {"start": lambda self: started.append(1),
-                                  "run": lambda self: None})
+                                  "run": lambda self: None})}
     try:
         # 1) Apply must be refused while a turn is in flight.
         w.worker = object()
@@ -520,7 +519,7 @@ def test_model_reload_and_chat_turn_are_mutually_exclusive():
         tab._on_worker_done()
         check("gate_released_after_reload", not w._busy())
     finally:
-        _MC.ReloadModelWorker = gui.ReloadModelWorker = real
+        w.parts = {}
         tab._reload_worker = None
     no_slot_errors("model_reload_gate")
     _teardown(w)
@@ -532,7 +531,6 @@ def test_failed_mic_start_does_not_wedge_talk_or_vad():
     and keeps _vad_tick pausing the listener forever."""
     w = _win()
     w.ctx.mic_disabled = False
-    real = gui_voice_tab.MicRecorder
 
     class Exploding:
         def __init__(self, *a, **k): pass
@@ -540,13 +538,13 @@ def test_failed_mic_start_does_not_wedge_talk_or_vad():
         def stop(self): return np.zeros(0, dtype=np.float32)
         def level(self): return 0.0
 
-    gui_voice_tab.MicRecorder = Exploding
+    w.parts = {"MicRecorder": Exploding}
     try:
         w._toggle_recording()
     except Exception:
         SLOT_ERRORS.append(traceback.format_exc())
     finally:
-        gui_voice_tab.MicRecorder = real
+        w.parts = {}
     check("no_stale_recorder_after_failed_start", w.recorder is None,
           "a half-started recorder stayed on self.recorder")
     check("talk_button_not_stuck", "Stop" not in w.talk_btn.text(), w.talk_btn.text())
@@ -558,7 +556,7 @@ def test_failed_mic_start_does_not_wedge_talk_or_vad():
         def stop(self): raise OSError("device disappeared")
         def level(self): return 0.1
 
-    gui_voice_tab.MicRecorder = DiesOnStop
+    w.parts = {"MicRecorder": DiesOnStop}
     try:
         w._toggle_recording()          # start (ok)
         check("recording_started", w.recorder is not None)
@@ -566,7 +564,7 @@ def test_failed_mic_start_does_not_wedge_talk_or_vad():
     except Exception:
         SLOT_ERRORS.append(traceback.format_exc())
     finally:
-        gui_voice_tab.MicRecorder = real
+        w.parts = {}
     check("recorder_released_after_failed_stop", w.recorder is None)
     check("talk_button_released", "Stop" not in w.talk_btn.text(), w.talk_btn.text())
     no_slot_errors("mic_failures")

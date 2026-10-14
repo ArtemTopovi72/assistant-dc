@@ -25,6 +25,7 @@ composite anything.
 """
 from typing import Optional
 import logging
+from seams import module
 
 logger = logging.getLogger("assistant.image")   # same channel as image.py
 
@@ -163,7 +164,7 @@ def _align_result_tile(crop, res, mcrop, *, min_shift: float = 0.4,
 def _robust_region_alpha(mcrop, *, dilate_frac: float = 0.035,
                          feather_frac: float = 0.06,
                          min_feather: int = 2, max_feather: int = 600,
-                         img_min: Optional[int] = None):
+                         img_min: Optional[int] = None, modules=None):
     """Resolution-adaptive composite alpha for pasting an edited tile back over the
     original — blends cleanly from ~1 MP to ~20 MP with NO per-size retuning.
 
@@ -208,7 +209,7 @@ def _robust_region_alpha(mcrop, *, dilate_frac: float = 0.035,
         feather = max(min_feather, min(int(round(feather_frac * region)), max_feather))
     total = dilate + feather
     try:
-        import cv2
+        cv2 = module(modules or {}, "cv2")
         # Dilate the mask by `total` px via the OUTSIDE distance transform (fast, no
         # huge structuring kernel): pixels within `total` of the mask become the
         # core+ring write zone.
@@ -241,13 +242,13 @@ def _robust_region_alpha(mcrop, *, dilate_frac: float = 0.035,
 # --------------------------------------------------------------------------- #
 
 
-def _band_masks(m_uint8, width):
+def _band_masks(m_uint8, width, modules=None):
     """Inside/outside boundary rings of a binary mask, `width` px each, via cv2
     morphology. Returns (ring_in_bool, ring_out_bool). Falls back to the whole
     interior/exterior if cv2 is missing."""
     binm = (m_uint8 > 0)
     try:
-        import cv2
+        cv2 = module(modules or {}, "cv2")
         k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * width + 1, 2 * width + 1))
         mu = binm.astype("uint8")
         eroded = cv2.erode(mu, k) > 0
@@ -288,7 +289,7 @@ def _is_continuation(bg, patch, m_uint8, *, ring=6, dE_thresh=22.0):
 
 
 def _color_harmonize(bg, patch, m_uint8, *, strength=1.0, ring=6,
-                     max_shift=(12.0, 10.0, 10.0)):
+                     max_shift=(12.0, 10.0, 10.0), modules=None):
     """Reinhard-style mean/std colour transfer in LAB, referenced to the ORIGINAL's
     outside boundary ring, applied to the patch BEFORE Poisson so the solver has less
     low-frequency work to do (and so any global colour cast is removed up front).
@@ -298,12 +299,12 @@ def _color_harmonize(bg, patch, m_uint8, *, strength=1.0, ring=6,
     patch array (uint8 RGB), or the patch unchanged on failure."""
     import numpy as np
     try:
-        import cv2
+        cv2 = module(modules or {}, "cv2")
         lab_bg = cv2.cvtColor(bg, cv2.COLOR_RGB2LAB).astype(np.float32)
         lab_pt = cv2.cvtColor(patch, cv2.COLOR_RGB2LAB).astype(np.float32)
     except Exception:
         return patch
-    ring_in, ring_out = _band_masks(m_uint8, ring)
+    ring_in, ring_out = _band_masks(m_uint8, ring, modules)
     binm = (m_uint8 > 0)
     if ring_in.sum() < 4 or ring_out.sum() < 4 or binm.sum() == 0:
         return patch
@@ -312,7 +313,7 @@ def _color_harmonize(bg, patch, m_uint8, *, strength=1.0, ring=6,
     # (no interior wash) while the boundary tone still matches. For a true continuation,
     # the gated Poisson stage propagates the boundary correction the rest of the way in.
     try:
-        import cv2
+        cv2 = module(modules or {}, "cv2")
         dist_in = cv2.distanceTransform(binm.astype(np.uint8), cv2.DIST_L2, 5)
         reach = max(6.0, 0.25 * float(dist_in.max()))
         wfield = np.clip(1.0 - dist_in / reach, 0.0, 1.0)
@@ -334,7 +335,7 @@ def _color_harmonize(bg, patch, m_uint8, *, strength=1.0, ring=6,
         out[:, :, c] += delta * wfield
     out = np.clip(out, 0, 255).astype(np.uint8)
     try:
-        import cv2
+        cv2 = module(modules or {}, "cv2")
         out_rgb = cv2.cvtColor(out, cv2.COLOR_LAB2RGB)
         # Restore outside-mask pixels byte-exact: the RGB->LAB->RGB round-trip is lossy
         # (8-bit quantization), so even a zero correction would otherwise perturb the
@@ -345,13 +346,13 @@ def _color_harmonize(bg, patch, m_uint8, *, strength=1.0, ring=6,
         return patch
 
 
-def _seamless_clone_arr(bg, patch, m_uint8):
+def _seamless_clone_arr(bg, patch, m_uint8, modules=None):
     """Array Poisson blend (NORMAL_CLONE): membrane-levels the patch's low frequencies
     to the bg at the mask boundary while preserving the patch's gradients. RGB in/out,
     or None if unavailable/unsafe. Shared by the tile compositor and the benchmark."""
     import numpy as np
     try:
-        import cv2
+        cv2 = module(modules or {}, "cv2")
     except Exception:
         return None
     try:
@@ -372,7 +373,7 @@ def _seamless_clone_arr(bg, patch, m_uint8):
         return None
 
 
-def _laplacian_blend(bg, patch, alpha, *, levels=5):
+def _laplacian_blend(bg, patch, alpha, *, levels=5, modules=None):
     """Multi-band (Laplacian-pyramid) blend of ``patch`` into ``bg`` across a soft
     ``alpha`` (HxW float 0..1). Each spatial-frequency band is blended with the
     correspondingly-downsampled alpha, so LOW frequencies cross over the boundary
@@ -381,7 +382,7 @@ def _laplacian_blend(bg, patch, alpha, *, levels=5):
     RGB uint8 in/out; falls back to a straight alpha lerp if cv2 is missing."""
     import numpy as np
     try:
-        import cv2
+        cv2 = module(modules or {}, "cv2")
     except Exception:
         a = alpha[..., None]
         return np.clip(patch * a + bg * (1 - a), 0, 255).astype(np.uint8)

@@ -30,6 +30,7 @@ from PyQt5.QtCore import QThread, QTimer, pyqtSignal
 from PyQt5.QtWidgets import QWidget
 
 from audio import AudioPlayer, MicRecorder
+from seams import widget_part
 from config import MIC_GAIN_DB, OUTPUT_DIR
 from gui_common import (TranscribeWorker, _ScopedCtx)
 
@@ -368,7 +369,7 @@ class MadhouseTab(MadhouseUIMixin, MadhouseCastMixin, QWidget):
             return
         if self.recorder is None:
             try:
-                self.recorder = MicRecorder(gain_db=MIC_GAIN_DB)
+                self.recorder = widget_part(self, "MicRecorder", MicRecorder)(gain_db=MIC_GAIN_DB)
                 self.recorder.start()
             except Exception as exc:
                 self.recorder = None

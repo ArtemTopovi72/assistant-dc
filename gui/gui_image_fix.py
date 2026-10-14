@@ -17,6 +17,7 @@ import os
 
 from PyQt5.QtWidgets import QDialog, QInputDialog
 
+from seams import widget_part
 import style_presets as _style_presets
 
 logger = logging.getLogger("assistant.gui")
@@ -148,7 +149,7 @@ class ImageFixMixin:
         # auto path (MeshGraphormer + SAM/Florence).
         mask_path = None
         try:
-            dlg = _g.MaskDrawDialog(source, parent=self,
+            dlg = widget_part(self, "MaskDrawDialog", _g.MaskDrawDialog)(source, parent=self,
                                     title="Draw over the hand to fix (or Cancel for auto-detect)")
             if dlg.exec_() == QDialog.Accepted:
                 mask_path = dlg.mask_path
@@ -183,7 +184,7 @@ class ImageFixMixin:
         # must point at the artifact. Cancelling or drawing nothing aborts.
         mask_path, protect_face = None, True
         try:
-            dlg = _g.MaskDrawDialog(source, parent=self,
+            dlg = widget_part(self, "MaskDrawDialog", _g.MaskDrawDialog)(source, parent=self,
                                     title="Paint over the artifact / awkward area to fix")
             if dlg.exec_() != QDialog.Accepted:
                 return

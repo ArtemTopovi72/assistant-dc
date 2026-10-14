@@ -16,6 +16,7 @@ from PyQt5.QtWidgets import (QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel,
 
 from ui_scale import px, scale_style as _ss
 from gui_common import BORDER, MUTED, _section, worker_module
+from seams import module, widget_part
 
 import logging
 logger = logging.getLogger("assistant.gui")
@@ -187,8 +188,7 @@ class ModelConfigTab(QWidget):
     def refresh(self):
         if not self._base_url or not self._model_id:
             return
-        from lmstudio import fetch_model
-        info = fetch_model(self._base_url, self._model_id)
+        info = module(self, "lmstudio").fetch_model(self._base_url, self._model_id)
         self._populate(info)
 
     def _populate(self, info: dict):
@@ -288,7 +288,7 @@ class ModelConfigTab(QWidget):
         self._manual_box.hide()
 
         gguf = self._compat_type.lower() == "gguf"
-        self._reload_worker = ReloadModelWorker(
+        self._reload_worker = widget_part(self, "ReloadModelWorker", ReloadModelWorker)(
             self._base_url, self._model_id,
             context_length=self._ctx_spin.value(),
             gpu_pct=self._gpu_spin.value() if gguf else 100,
