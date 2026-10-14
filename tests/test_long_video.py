@@ -49,9 +49,9 @@ def texts(bot): return "\n".join(t for t, _ in bot.sent)
 # ── settings ─────────────────────────────────────────────────────────────────
 bot = make_bot()
 sess = bot._get_session(CID)
-check("defaults: 5-minute portions, 12 frames, brief (one retelling + questions), long from 2 min",
+check("defaults: 5-minute portions, 40 frames, brief (one retelling + questions), long from 2 min",
       (V.chunk_seconds(sess), V.frames_per_chunk(sess), V.output_mode(sess), V.long_threshold(sess))
-      == (300, 12, "brief", 120))
+      == (300, 40, "brief", 120))
 kb = V._video_menu_kb(sess, "ru")
 check("the menu states every value", all(":" in r[0]["text"] for r in kb["inline_keyboard"][:4]), kb)
 bot._cb_video_settings(CID, {"message_id": 7}, "video:set:chunk:10")

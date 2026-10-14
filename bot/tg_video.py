@@ -34,13 +34,13 @@ logger = logging.getLogger("assistant.tg_video")
 # ── settings ─────────────────────────────────────────────────────────────────
 FIELDS: tuple = ("chunk", "frames", "out", "long")
 CHUNKS = ("2", "5", "10")            # minutes per portion
-FRAMES = ("6", "12", "20")           # key frames per portion
+FRAMES = ("6", "12", "20", "40")     # key frames per portion; bench: ~8 per minute keeps 0.9+ of the facts, 12 per 5 min only 0.4
 # «brief»: one retelling of the whole video at the end and questions on demand -- per-portion
 # storyboards (11 parts x 15 lines + a sheet each) bury the chat; the others stay for
 # whoever wants every part
 OUTS = ("brief", "both", "board", "retell")   # what each portion delivers
 LONGS = ("1", "2", "5")              # a video longer than this (minutes) is "long"
-DEFAULTS = {"chunk": "5", "frames": "12", "out": "brief", "long": "2"}
+DEFAULTS = {"chunk": "5", "frames": "40", "out": "brief", "long": "2"}
 _TABLE = {"chunk": CHUNKS, "frames": FRAMES, "out": OUTS, "long": LONGS}
 
 
@@ -183,7 +183,9 @@ _RETELL_SYSTEM = (
 _OVERVIEW_SYSTEM = (
     "You retell a WHOLE long video from the retellings of its portions, in order (the "
     "timecodes are absolute positions in the video). Merge them into one retelling: the "
-    "thread through the whole video and its turning points, not a list of the portions. ")
+    "thread through the whole video and its turning points, not a list of the portions. "
+    "Keep the concrete names, numbers and figures the portions give. You are handed EVERYTHING there "
+    "is: never ask for more parts or more material; if only one portion is given, retell that one. ")
 
 _ANSWER_SYSTEM = (
     "You answer the user's question about a long video from its notes: for every portion, its "
@@ -353,9 +355,12 @@ class LongVideoMixin:
         notes = "\n\n".join(f"=== {p['a']}-{p['b']} ===\n" + (p.get("note") or p.get("board") or "")
                              for p in parts)
         try:
-            tale = (text_model(self._get_ctx())(self._get_ctx(), _OVERVIEW_SYSTEM + _lang_line(lang) + "\n"
-                                         + _structure_rules(lang, timecoded=True, ask=False), notes[:24000],
-                                         temperature=0.3, max_tokens=1100, prefill="<think></think>") or "").strip()
+            if len(parts) == 1 and parts[0].get("note"):
+                tale = parts[0]["note"]      # one portion IS the whole video; merging it again loses its figures
+            else:
+                tale = (text_model(self._get_ctx())(self._get_ctx(), _OVERVIEW_SYSTEM + _lang_line(lang) + "\n"
+                                             + _structure_rules(lang, timecoded=True, ask=False), notes[:24000],
+                                             temperature=0.3, max_tokens=1100, prefill="<think></think>") or "").strip()
         except Exception:
             logger.exception("long video: overview failed"); tale = ""
         if not tale:
