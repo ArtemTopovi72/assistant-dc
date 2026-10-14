@@ -1167,8 +1167,19 @@ _MSG: dict[str, dict[str, str]] = {
     "vp_title":   {"en": "🎬 <b>Video plan: {n} parts</b> · clip ≈{clip} s · render ≈{mins} min\n",
                    "ru": "🎬 <b>План видео: частей {n}</b> · ролик ≈{clip} с · рендер ≈{mins} мин\n"},
     "vp_part":    {"en": "<b>{i}.</b> {sec} s — {text}", "ru": "<b>{i}.</b> {sec} с — {text}"},
-    "vp_hint":    {"en": "\n🗑 drops a part, 🗜 condenses the script into fewer parts.",
-                   "ru": "\n🗑 — убрать часть, 🗜 — уплотнить сценарий в меньше частей."},
+    "vp_hint":    {"en": "\n✏️ edits a part, ➕ adds one, 🗑 drops one, 🗜 condenses the script into fewer parts.",
+                   "ru": "\n✏️ — править часть, ➕ — добавить, 🗑 — убрать, 🗜 — уплотнить сценарий в меньше частей."},
+    "vp_add":     {"en": "➕ Add a part", "ru": "➕ Добавить часть"},
+    "vp_add_ask": {"en": "➕ Send what should happen in the new part (it goes to the end). Any language; "
+                         "words in quotes are spoken exactly as written.",
+                   "ru": "➕ Пришли, что должно происходить в новой части (встанет в конец). Можно по-русски; "
+                         "слова в кавычках прозвучат ровно как написаны."},
+    "vp_edit_ask": {"en": "✏️ Part {i}: {text}\nSend the new text for it, or what to change. Any language; "
+                          "words in quotes are spoken exactly as written.",
+                    "ru": "✏️ Часть {i}: {text}\nПришли новый текст для неё или что поправить. Можно по-русски; "
+                          "слова в кавычках прозвучат ровно как написаны."},
+    "vp_edit_fail": {"en": "Could not read that — the plan above stays.",
+                     "ru": "Не получилось разобрать — план выше остаётся."},
     "vp_go":      {"en": "▶ Render (~{mins} min)", "ru": "▶ Рендерить (~{mins} мин)"},
     "vp_squeeze": {"en": "🗜 Condense", "ru": "🗜 Уплотнить"},
     "vp_cancel":  {"en": "✖ Cancel", "ru": "✖ Отмена"},

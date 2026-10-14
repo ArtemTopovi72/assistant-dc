@@ -32,13 +32,18 @@ def _summaries(texts: list, lang: str) -> list:
     from utils import safe_json_from_llm
     name = {"ru": "Russian"}.get(lang, lang)
     try:
+        # «говорит по-русски» stood where the user's own words belonged, and a sound
+        # line riding every part («пульс искр наполняет сцену») became a part of its own.
         raw = llm.call_llm_simple(
             None,
             f"Retell each numbered video shot description in {name} as ONE short line "
-            "(at most 12 words): who does what. No camera, sound or lighting details. "
+            "(at most 14 words): who does what on screen. A line in double quotes is spoken "
+            "aloud: copy it into your line in quotes, character for character, never "
+            "paraphrased or replaced by 'says something'. Leave out camera, sound, music, "
+            "light and particle effects (sparks, smoke, embers) unless they are the action. "
             'Reply with JSON only: {"lines": ["...", "..."]}, one line per shot, same order.',
             "\n".join(f"{i}. {t}" for i, t in enumerate(texts, 1)),
-            temperature=0.2, max_tokens=120 + 60 * len(texts)) or ""
+            temperature=0.2, max_tokens=200 + 90 * len(texts)) or ""
         lines = (safe_json_from_llm(raw, ["lines"]) or {}).get("lines") or []
     except Exception:
         tg_bot.logger.exception("video plan: summaries failed")
@@ -65,6 +70,9 @@ class VideoPlanMixin:
                                    text=html.escape(_cut(p.get("say") or p.get("text", "")))))
         lines.append(tg_bot._t("vp_hint", lang))
         rows = [[{"text": tg_bot._t("vp_go", lang, mins=_mins(render)), "callback_data": "vp:go"}]]
+        edits = [{"text": f"✏️ {i}", "callback_data": f"vp:edit:{i - 1}"} for i in range(1, len(plan) + 1)]
+        rows += [edits[k:k + 5] for k in range(0, len(edits), 5)]
+        rows.append([{"text": tg_bot._t("vp_add", lang), "callback_data": "vp:add"}])
         if len(plan) > 1:
             dels = [{"text": f"🗑 {i}", "callback_data": f"vp:del:{i - 1}"} for i in range(1, len(plan) + 1)]
             rows += [dels[k:k + 5] for k in range(0, len(dels), 5)]
@@ -102,6 +110,52 @@ class VideoPlanMixin:
         text, kb = self._video_plan_card(sess, lang)
         self._send_text(chat_id, text, parse_mode="HTML", keyboard=kb)
 
+    def _edit_plan_part(self, chat_id: int, sess, lang: str, state: str, text: str) -> None:
+        """The message an armed «vp_edit:<i>» / «vp_add» was waiting for. The user writes in
+        their language; the part is the English script the video model reads, with every
+        quoted spoken line left exactly as written."""
+        import llm
+        import video
+        i = int(state.partition(":")[2]) if state.startswith("vp_edit:") else -1
+        if not sess.video_plan or not sess.video_plan_request:
+            self._send_text(chat_id, tg_bot._t("vp_gone", lang))
+            return
+        current = sess.video_plan[i]["text"] if 0 <= i < len(sess.video_plan) else ""
+        try:
+            out = llm.call_llm_simple(
+                None,
+                "You write one part of a video script for a video model. Input: CURRENT PART "
+                "(empty when a part is being added) and the USER MESSAGE, in any language, "
+                "usually Russian. If the message describes what should happen, that is the new "
+                "part. If it is an instruction to change the current part (add, remove, make "
+                "it different), apply it to the current part and keep the rest. Output the part "
+                "in English: 1-4 short sentences, each one visible action, who does what. Every "
+                "spoken line stays in double quotes, in its own language, character for character "
+                "as the user wrote it -- never translated, shortened or fixed; a spoken line of "
+                "the current part stays unless the user changes it. If the user says someone "
+                "speaks but gives no words, do not invent any. No camera, sound or music "
+                "directions unless asked. Reply with the part only.",
+                f"CURRENT PART:\n{current}\n\nUSER MESSAGE:\n{text}",
+                temperature=0.2, max_tokens=400) or ""
+        except Exception:
+            tg_bot.logger.exception("video plan: part rewrite failed")
+            out = ""
+        out = " ".join(out.replace("```", "").split()).strip()
+        if not out:
+            self._send_text(chat_id, tg_bot._t("vp_edit_fail", lang))
+            return
+        lost = video._lost_lines(text, out)
+        if lost:
+            out += " " + " ".join(f'He says: "{x}".' for x in lost)
+        parts = video.split_script(out) or [out]
+        new = [{"text": p, "sec": video.estimate_seconds(p)} for p in parts]
+        new = _with_summaries(new, lang)
+        plan = sess.video_plan
+        sess.video_plan = (plan[:i] + new + plan[i + 1:]) if 0 <= i < len(plan) else plan + new
+        self._store.put(sess)
+        card, kb = self._video_plan_card(sess, lang)
+        self._send_text(chat_id, card, parse_mode="HTML", keyboard=kb)
+
     def _cb_video_plan(self, chat_id: int, data: str) -> None:
         sess = self._get_session(chat_id)
         lang = self._lang(sess)
@@ -122,6 +176,24 @@ class VideoPlanMixin:
         if data == "vp:squeeze":
             self._send_text(chat_id, tg_bot._t("vp_squeezing", lang))
             self._run_busy(chat_id, self._squeeze_plan, chat_id, sess, lang)
+            return
+        if data == "vp:add":
+            sess.reg_state = "vp_add"
+            self._store.put(sess)
+            self._send_text(chat_id, tg_bot._t("vp_add_ask", lang))
+            return
+        if data.startswith("vp:edit:"):
+            try:
+                i = int(data.rsplit(":", 1)[1])
+            except ValueError:
+                return
+            if 0 <= i < len(sess.video_plan):
+                sess.reg_state = f"vp_edit:{i}"
+                self._store.put(sess)
+                p = sess.video_plan[i]
+                self._send_text(chat_id, tg_bot._t("vp_edit_ask", lang, i=i + 1,
+                                                   text=html.escape(_cut(p.get("say") or p["text"], 200))),
+                                parse_mode="HTML")
             return
         if data.startswith("vp:del:"):
             try:
