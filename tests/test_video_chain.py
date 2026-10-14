@@ -254,6 +254,21 @@ def test_later_parts_see_the_hero_reference():
     assert "qwen_reference_1" not in V.build_chain_part("he stirs", idx=3, **kw)["cond"]["inputs"]
 
 
+def test_a_spoken_line_stays_in_the_first_part_that_has_it():
+    parts = ['He lifts the rifle and says «эта штука тяжёлая».',
+             'He lowers it slowly, and says «эта штука тяжёлая».', 'He sighs.']
+    out = V.dedupe_quotes(parts)
+    assert out[0] == parts[0] and "тяжёлая" not in out[1] and out[1].startswith("He lowers it"), out
+    only = ['He says «да».', 'He says «да».']
+    assert V.dedupe_quotes(only)[1] == only[1]       # nothing else to render: kept
+
+
+def test_the_speech_check_wants_the_lines_in_the_sound():
+    assert V.heard_lines(["эта штука слишком тяжёлая"], "ну эта штука слишком тяжелая блин")
+    assert not V.heard_lines(["эта штука слишком тяжёлая"], "раз вас сына угут двойные")
+    assert V.quoted_lines('He says «ладно, пойдёт» and nods.') == ["ладно, пойдёт"]
+
+
 def test_a_chain_part_samples_like_a_plain_clip():
     """The chain ran the FL2V turbo LoRA at 6 steps and came back soapy;
     the plain t2va clip (TaoMate 3-step LoRA) was crisp. Same LoRA, same steps."""

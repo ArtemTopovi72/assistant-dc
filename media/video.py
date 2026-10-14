@@ -1087,6 +1087,48 @@ def _lost_lines(description: str, prompt: str) -> list:
     return [x for x in lines if flat(x) and flat(x) not in have]
 
 
+def _flat_line(t: str) -> str:
+    return re.sub(r"[\W_]+", " ", (t or "").lower().replace("́", "")).strip()
+
+
+_SAYS = r"(?:,?\s*(?:and\s+|then\s+)?(?:says?|saying|shouts?|whispers?|mutters?|exclaims?)\s*:?\s*)?"
+
+
+def dedupe_quotes(parts: list) -> list:
+    """A spoken line stays in the FIRST part that has it: the bridge and the split put the
+    same «…» into parts 2 and 3 and the man said it twice (live 2026-10-15). The later
+    copy's «says» is cut out; a part that would be left with nothing keeps it."""
+    seen, out = set(), []
+    for p in parts:
+        new = p
+        for m in list(_QUOTED.finditer(p)):
+            key = _flat_line(next(g for g in m.groups() if g is not None))
+            if not key:
+                continue
+            if key in seen:
+                new = re.sub(_SAYS + re.escape(m.group(0)) + r"\.?", "", new, count=1)
+            seen.add(key)
+        new = re.sub(r"\s+([,.])", r"\1", " ".join(new.split())).strip(" ,")
+        out.append(new if len(new) >= 15 else p)
+    return out
+
+
+def heard_lines(expected: Sequence[str], heard: str) -> bool:
+    """True when `heard` (an ASR transcript of the clip) carries most words of every line
+    in `expected`: H3 mumbled a part with no line to speak (live 2026-10-15)."""
+    got = set(_flat_line(heard).split())
+    for line in expected:
+        words = _flat_line(line).split()
+        if words and sum(w in got for w in words) < 0.6 * len(words):
+            return False
+    return True
+
+
+def quoted_lines(text: str) -> list:
+    return [x for x in (next(g for g in m.groups() if g is not None).strip()
+                        for m in _QUOTED.finditer(text or "")) if _flat_line(x)]
+
+
 def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
                   images: Sequence[str] = (), n_videos: int = 0, n_audios: int = 0) -> str:
     """Rewrite a free-text request into H3's own prompt structure.

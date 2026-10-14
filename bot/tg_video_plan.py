@@ -11,6 +11,7 @@ Session: video_plan [{text, sec}], video_plan_request, video_plan_ok [texts].
 """
 import html
 import math
+import re
 
 
 def _cut(text: str, n: int = 90) -> str:
@@ -48,7 +49,7 @@ def _summaries(texts: list, lang: str) -> list:
     except Exception:
         tg_bot.logger.exception("video plan: summaries failed")
         lines = []
-    lines = [str(x).strip() for x in lines]
+    lines = [re.sub(r"^\d+[.)]\s*", "", str(x).strip()) for x in lines]
     return lines if len(lines) == len(texts) and all(lines) else [""] * len(texts)
 
 

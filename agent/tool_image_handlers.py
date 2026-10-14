@@ -1184,6 +1184,24 @@ def _bridged(ctx, clip: str, part: str) -> str:
     return video_mod.bridge_part(ctx, frame, part) if tg_continue.seed_frame(clip, frame) else part
 
 
+def _speech_ok(ctx, clip: str, lines: list) -> bool:
+    """Whisper hears `lines` in the clip's own sound. A broken check passes: it must never
+    block a render."""
+    import subprocess
+    import tempfile
+    try:
+        from audio import transcribe_audio_file
+        wav = os.path.join(tempfile.mkdtemp(prefix="vidsay_"), "a.wav")
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", clip, "-vn", "-ac", "1", "-ar", "16000", wav],
+                       capture_output=True, check=True, timeout=60)
+        heard = transcribe_audio_file(ctx, wav, lang_hint="ru") or ""
+        logger.info("video chain: heard %r for %s", heard[:160], lines)
+        return _video(ctx).heard_lines(lines, heard)
+    except Exception:
+        logger.warning("video chain: the speech check failed", exc_info=True)
+        return True
+
+
 def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str, start: int = 1) -> int:
     """Parts 2..n of a long script as the next links of `chain` (each continues the
     previous part's saved latent). `parts` are ALL the parts as (prompt, seconds) from video.prepare_prompt,
@@ -1209,14 +1227,23 @@ def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str, st
         if getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
             break
         ctx.set_stage(f"Generating a video ({i}/{len(parts)})")
-        try:
-            r = video_mod.generate_video(ctx, video_mod._with_lock(part[0], same) if ref else part[0],
-                                         seconds=part[1], prepared=True,
-                                         aspect=args.get("aspect") or "", seed=args.get("seed"),
-                                         chain=(chain, start + i - 1), size_from=prev,
-                                         reference=ref)
-        except Exception:
-            logger.exception("video chain: part %d crashed", i)
+        said = video_mod.quoted_lines(part[0])
+        r, crashed = {}, False
+        for attempt in (1, 2):
+            try:
+                r = video_mod.generate_video(ctx, video_mod._with_lock(part[0], same) if ref else part[0],
+                                             seconds=part[1], prepared=True,
+                                             aspect=args.get("aspect") or "", seed=args.get("seed"),
+                                             chain=(chain, start + i - 1), size_from=prev,
+                                             reference=ref)
+            except Exception:
+                logger.exception("video chain: part %d crashed", i)
+                crashed = True
+                break
+            if attempt == 2 or not said or not r.get("path") or _speech_ok(ctx, r["path"], said):
+                break
+            logger.warning("video chain: part %d did not say %s; once more with a new seed", i, said)
+        if crashed:
             break
         new = r.get("path")
         if not (new and os.path.exists(new)):
@@ -1581,7 +1608,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 raw = new_raw
                 parts = video_mod.split_script(raw)
     if len(parts) > 1:
-        parts = video_mod.mark_inserts(ctx, parts)
+        parts = video_mod.dedupe_quotes(video_mod.mark_inserts(ctx, parts))
     if len(parts) > 1 and raw in description:
         description = description.replace(raw, parts[0], 1)
         logger.info("generate_video: the script needs %d parts: %s", len(parts),
