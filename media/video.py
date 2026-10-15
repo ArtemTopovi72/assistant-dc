@@ -1131,7 +1131,8 @@ def heard_lines(expected: Sequence[str], heard: str) -> bool:
 
 def quoted_lines(text: str) -> list:
     return [x for x in (next(g for g in m.groups() if g is not None).strip()
-                        for m in _QUOTED.finditer(text or "")) if _flat_line(x)]
+                        for m in _QUOTED.finditer(text or ""))
+            if _flat_line(x) and not x.startswith("The camera cuts")]  # the chain prefix quotes its own cut cues
 
 
 def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
