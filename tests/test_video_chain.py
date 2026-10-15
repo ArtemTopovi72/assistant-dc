@@ -34,6 +34,8 @@ def test_part_one_starts_the_chain_and_keeps_its_latent():
     st = wf[_by(wf, "H3ContinuousStartV14")[0]]["inputs"]
     assert st["prompt"] == "a chef chops" and (st["width"], st["height"]) == (768, 1024)
     assert wf[st["first_frame"][0]]["inputs"]["image"] == "start.png"
+    # the Ref2VA-style prompt names <Picture 1>; without it the model drew its own over the photo
+    assert st["qwen_reference_1"] == st["first_frame"]
     keep = wf[_by(wf, "H3ContinuousSaveLatent")[0]]["inputs"]
     assert keep["filename_prefix"] == "h3_continuous/chX/clip" and keep["clip_index"] == 1
     assert keep["latent"] == [V.N_SAMPLER, 0] and "head_context_frames" not in keep

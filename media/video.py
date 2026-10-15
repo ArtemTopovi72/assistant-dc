@@ -788,6 +788,10 @@ def build_chain_part(prompt: str, *, chain: str, idx: int, width: int, height: i
                 raise VideoUnavailable(f"could not upload the start frame {first_frame}")
             wf["first"] = {"class_type": "LoadImage", "inputs": {"image": name}}
             common["first_frame"] = ["first", 0]
+            # The prompt is written for Ref2VA and leans on <Picture 1>; given only a first
+            # frame, the model drew its own «pictures» over the photo -- anime faces, silver
+            # flowers, water drops (live 2026-10-15). The photo is that picture too.
+            common["qwen_reference_1"] = ["first", 0]
     else:
         wf["prev"] = {"class_type": "H3ContinuousLoadLatent", "inputs": {"latent_path": chain, "clip_index": idx - 1}}
         wf["cond"] = {"class_type": "H3ContinuousContinueV14", "inputs": dict(
