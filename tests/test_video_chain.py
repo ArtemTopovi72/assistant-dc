@@ -328,7 +328,9 @@ def test_a_small_flying_thing_gets_a_close_up_and_the_next_part_cuts_back():
     out = V.mark_inserts(ctx, ["A man twists the cork.", "The cork shoots out.", "Everyone laughs."])
     assert out[0] == "A man twists the cork."
     assert out[1].startswith(V.INSERT_HEAD) and out[2].startswith(V.INSERT_BACK)
-    assert V.INSERT_HEAD.strip(" .")[:24] in V.CONTINUE_CTX_PREFIX and V.INSERT_BACK[:24] in V.CONTINUE_CTX_PREFIX
+    # the prefix names both cuts, in words nobody can mistake for a spoken line (no quotes)
+    assert "a cut in close" in V.CONTINUE_CTX_PREFIX and "a cut back out" in V.CONTINUE_CTX_PREFIX
+    assert "\"The camera cuts" not in V.CONTINUE_CTX_PREFIX
 
 
 def test_marking_fails_soft():
