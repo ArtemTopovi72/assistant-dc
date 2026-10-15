@@ -150,6 +150,26 @@ def test_all_optional_features_enabled():
         check("all_features_has_path", out["path"] is not None)
 
 
+def test_a_practical_ask_runs_no_contradiction_pass():
+    """«Подбери камеру…»: a practical report shows no contradictions, yet the pass searched
+    «ip67 criticism OR limitations OR disputed» and fed a novel and the Oregon boundary
+    dispute to the writer. A research ask still gets the pass."""
+    for kind, want in (("practical", False), ("research", True)):
+        labels = []
+        ctx = FakeCtx()
+        ctx.choice = lambda q, t, options, default="", kind=kind: kind
+        with _Patches(DR_REPLAN_ENABLED=False, DR_MULTIHOP_ENABLED=False, DR_CONTRADICTION_ENABLED=True,
+                      DR_CONTRADICTION_QUERIES=2, DR_HIERARCHICAL_ENABLED=False, DR_COMMUNITIES_ENABLED=False,
+                      DR_CLAIM_MERGE_ENABLED=False, DR_GRAPH_EXPANSION_ENABLED=False,
+                      DR_DECISION_GATE_ENABLED=False, DR_REFLECTION_ENABLED=False, DR_SURVEY_MODE=False,
+                      plan_queries=lambda c, t, mx: (["camera query"], {"category": "product", "recency": "any",
+                                                                         "core_topic": "machine vision camera"}),
+                      _expansion_pass=lambda *a, **k: labels.append(k.get("label")) or []):
+            _run(ctx=ctx)
+        check(f"{kind} ask -> contradiction pass {'runs' if want else 'skipped'}",
+              ("contradiction" in labels) == want, labels)
+
+
 def test_survey_mode():
     with _Patches(DR_REPLAN_ENABLED=False, DR_MULTIHOP_ENABLED=False, DR_CONTRADICTION_ENABLED=False,
                   DR_HIERARCHICAL_ENABLED=False, DR_COMMUNITIES_ENABLED=False, DR_CLAIM_MERGE_ENABLED=False,

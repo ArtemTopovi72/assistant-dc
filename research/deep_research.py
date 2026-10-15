@@ -581,7 +581,12 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
     # the provisional findings, now PRIORITIZED by graph/cluster importance: major
     # threads and high-centrality entities are challenged first. Briefs tagged
     # `contradict` and surfaced apart.
-    if S.DR_CONTRADICTION_ENABLED and briefs and not cancelled():
+    # A practical ask never shows contradictions (no gate banner, no contradiction note),
+    # yet the pass still fed its pages to the writer: for a camera spec request it
+    # searched «ip67 criticism OR limitations OR disputed» and brought back AI-limits
+    # essays, a novel and the Oregon boundary dispute (live 2026-10-16).
+    if (S.DR_CONTRADICTION_ENABLED and briefs and not cancelled()
+            and not _is_practical_request(topic, profile, ctx=ctx)):
         # _search_topic (the distilled core_topic), NOT the raw request — the
         # templates append English angle words, so a conversational topic makes the
         # engine match on "limitations"/"benchmark" alone and returns unrelated pages.
