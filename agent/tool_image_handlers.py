@@ -1235,8 +1235,8 @@ def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str, st
             # The part keeps the camera unless it opens on a cut; drawn flowers that cover
             # the frame then show at its edges (live 2026-10-15: leaves came in at part 2).
             still = video_mod.INSERT_HEAD.strip() not in part[0] and video_mod.INSERT_BACK.strip() not in part[0]
-            drift = video_mod.overlay_drift(r["path"]) if still else None
             drawn = video_mod.drawn_over(r["path"])
+            drift = video_mod.overlay_drift(r["path"]) if still and drawn is None else None
             if (drift is not None and drift > video_mod.OVERLAY_DRIFT_MAX) or \
                     (drawn is not None and drawn > video_mod.DRAWN_OVER_MAX):
                 logger.warning("video chain: part %d is covered over (edge drift %s, drawn over %s); "
@@ -1712,8 +1712,10 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 )
                 p = result.get("path")
                 look = watch and p and os.path.exists(p)
-                drift = video_mod.overlay_drift(p) if look else None
                 drawn = video_mod.drawn_over(p, images[0]) if look else None
+                # The edge drift also fires on a camera that pulls back (103, 81 with CLIP at 0.0,
+                # s91 2026-10-16): only a fallback when CLIP cannot read the clip.
+                drift = video_mod.overlay_drift(p) if look and drawn is None else None
                 if attempt == 3 or ((drift is None or drift <= video_mod.OVERLAY_DRIFT_MAX)
                                     and (drawn is None or drawn <= video_mod.DRAWN_OVER_MAX)):
                     break
