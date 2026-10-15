@@ -1161,6 +1161,45 @@ def overlay_drift(path: str) -> Optional[float]:
     return max(float(np.abs(x - f[0])[edge].mean()) for x in f[1:])
 
 
+# Light cartoon birds over a hazy sky moved the edges by 24 -- under OVERLAY_DRIFT_MAX -- and
+# went out (s177, 2026-10-15). CLIP on the CPU (the card is the chain's) tells a drawing pasted
+# over a photo: covered frames 0.99-1.00, clean ones <=0.2; a photo of real daisies is itself
+# ~0.95, so a frame counts only when it is that much more «drawn over» than the source.
+DRAWN_OVER_MAX = 0.3
+_CLIP = []
+
+
+def drawn_over(path: str, source: str = "") -> Optional[float]:
+    """Share of the clip's frames (1 fps) that look like drawings, stickers, flowers, birds or
+    anime faces pasted over the photo, against `source` (the picture the clip starts from;
+    default its own first frame). None when unread."""
+    import io
+    try:
+        from PIL import Image
+        raw = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", path, "-vf", "fps=1,scale=336:-2",
+                              "-f", "image2pipe", "-vcodec", "png", "-"],
+                             capture_output=True, check=True, timeout=120).stdout
+        frames = [Image.open(io.BytesIO(b"\x89PNG" + c)).convert("RGB") for c in raw.split(b"\x89PNG")[1:]]
+        if len(frames) < 2:
+            return None
+        src = Image.open(source).convert("RGB") if source and os.path.exists(source) else frames[0]
+        import torch
+        if not _CLIP:
+            from transformers import CLIPModel, CLIPProcessor
+            name = "openai/clip-vit-large-patch14"
+            _CLIP[:] = [CLIPModel.from_pretrained(name).eval(), CLIPProcessor.from_pretrained(name)]
+        model, proc = _CLIP
+        texts = ["a real photograph", "a real photograph with cartoon drawings, stickers, flowers, "
+                 "birds or anime faces pasted over it"]
+        with torch.no_grad():
+            p = model(**proc(text=texts, images=[src] + frames, return_tensors="pt", padding=True)
+                      ).logits_per_image.softmax(-1)[:, 1].tolist()
+    except Exception:
+        logger.warning("drawn_over: could not read %s", path, exc_info=True)
+        return None
+    return sum(x - p[0] > 0.5 for x in p[1:]) / (len(p) - 1)
+
+
 def quoted_lines(text: str) -> list:
     return [x for x in (next(g for g in m.groups() if g is not None).strip()
                         for m in _QUOTED.finditer(_SCENE_NOTE_RE.sub("", text or "")))
@@ -1645,6 +1684,14 @@ CONTINUE_CTX_PREFIX = (
 # part after the first now carries the scene so far, as a note it must not replay.
 _SCENE_NOTE = " (The scene so far, for reference only -- do not replay it: {})"
 _SCENE_NOTE_RE = re.compile(r" \(The scene so far, for reference only -- do not replay it: .*\)\s*$", re.S)
+
+
+def voices_of(prompt: str) -> str:
+    """The voice wording of a written H3 prompt («<Subject 1> (S1) whispers in a woman's low
+    voice»), its spoken lines left out: each part is written on its own, and a hiker seen from
+    behind whispered as a woman in part 1 and spoke as a man in part 2 (live 2026-10-15)."""
+    said = re.sub(r",?\s*<d>.*?</d>", ".", prompt or "", flags=re.S)
+    return " ".join(s.strip() for s in _SENT.split(said) if re.search(r"\bvoice\b", s, re.I))[:300]
 
 
 def with_scene(part: str, scene: str) -> str:

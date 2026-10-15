@@ -406,3 +406,39 @@ def test_a_clip_covered_over_at_its_edges_is_told_from_a_still_one(tmp_path):
                     "-pix_fmt", "yuv420p", covered], check=True)
     assert V.overlay_drift(still) <= V.OVERLAY_DRIFT_MAX < V.overlay_drift(covered)
     assert V.overlay_drift(str(tmp_path / "missing.mp4")) is None
+
+
+def test_later_parts_are_told_the_voices_part_one_chose():
+    """Each part is written on its own: a hiker seen from behind whispered as a woman in part 1
+    and spoke as a man in part 2. The voice wording carries over; the spoken words do not."""
+    p1 = ("[Shot 1] The hiker stands still. <Subject 1> (S1) whispers in a woman's low, breathy voice, "
+          "<d>[Russian] Наконец-то я здесь.</d> The wind whistles. A distant male voice calls out, "
+          "<d>[Russian] Не забудь вернуться!</d> Camera: static.")
+    v = V.voices_of(p1)
+    assert "a woman's low, breathy voice" in v and "distant male voice" in v
+    assert "Наконец" not in v and "wind" not in v
+    assert V.voices_of("A man walks. Camera: static.") == ""
+
+
+def test_light_drawings_over_a_photo_are_told_against_the_source(tmp_path, monkeypatch):
+    """Pale cartoon birds over a hazy sky barely moved the edges (24 < 35) and went out; a
+    photo of real daisies reads as «drawn over» itself, so only a rise above the source counts."""
+    import subprocess
+    import torch
+    clip = str(tmp_path / "c.mp4")
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=teal:s=320x180:d=4",
+                    "-pix_fmt", "yuv420p", clip], check=True)
+    scores = []
+
+    class Out:
+        def __init__(self, n):
+            p = torch.tensor(scores[:n]).clamp(1e-4, 1 - 1e-4)
+            self.logits_per_image = torch.stack([torch.log(1 - p), torch.log(p)], 1)
+
+    monkeypatch.setattr(V, "_CLIP", [lambda **k: Out(len(k["images"])),
+                                      lambda images, **k: {"images": images}])
+    scores[:] = [0.1, 0.1, 0.99, 1.0, 0.99]           # a clean photo, then birds from the 2nd second
+    assert V.drawn_over(clip) > V.DRAWN_OVER_MAX
+    scores[:] = [0.95, 0.96, 0.95, 0.97, 0.94]        # real daisies all along
+    assert V.drawn_over(clip) <= V.DRAWN_OVER_MAX
+    assert V.drawn_over(str(tmp_path / "missing.mp4")) is None

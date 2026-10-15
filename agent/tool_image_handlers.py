@@ -1236,9 +1236,11 @@ def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str, st
             # the frame then show at its edges (live 2026-10-15: leaves came in at part 2).
             still = video_mod.INSERT_HEAD.strip() not in part[0] and video_mod.INSERT_BACK.strip() not in part[0]
             drift = video_mod.overlay_drift(r["path"]) if still else None
-            if drift is not None and drift > video_mod.OVERLAY_DRIFT_MAX:
-                logger.warning("video chain: part %d is covered over (edge drift %.0f); once more "
-                               "with a new seed", i, drift)
+            drawn = video_mod.drawn_over(r["path"])
+            if (drift is not None and drift > video_mod.OVERLAY_DRIFT_MAX) or \
+                    (drawn is not None and drawn > video_mod.DRAWN_OVER_MAX):
+                logger.warning("video chain: part %d is covered over (edge drift %s, drawn over %s); "
+                               "once more with a new seed", i, drift, drawn)
                 continue
             if not said or _speech_ok(ctx, r["path"], said):
                 break
@@ -1670,8 +1672,10 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     prepped = []
     if chain_id and len(parts) > 1:
         prepped = [video_mod.prepare_prompt(ctx, description, images=images)]
+        voices = video_mod.voices_of(prepped[0][0])
+        voices = f"Voices so far, the same if they speak again: {voices} " if voices else ""
         prepped += [video_mod.prepare_prompt(
-            ctx, video_mod.CONTINUE_CTX_PREFIX + video_mod.with_scene(p, " ".join(parts[:i])))
+            ctx, video_mod.CONTINUE_CTX_PREFIX + video_mod.with_scene(p, voices + " ".join(parts[:i])))
             for i, p in enumerate(parts[1:], start=1)]
     mode = video_mod.pick_mode(images, videos, audios)
     tags = video_mod.reference_tags(len(images) if mode == "ref2va" else 0, len(videos), len(audios))
@@ -1707,11 +1711,14 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                     size_from=cont_src if chain_id and continuing else "",
                 )
                 p = result.get("path")
-                drift = video_mod.overlay_drift(p) if watch and p and os.path.exists(p) else None
-                if drift is None or drift <= video_mod.OVERLAY_DRIFT_MAX or attempt == 3:
+                look = watch and p and os.path.exists(p)
+                drift = video_mod.overlay_drift(p) if look else None
+                drawn = video_mod.drawn_over(p, images[0]) if look else None
+                if attempt == 3 or ((drift is None or drift <= video_mod.OVERLAY_DRIFT_MAX)
+                                    and (drawn is None or drawn <= video_mod.DRAWN_OVER_MAX)):
                     break
-                logger.warning("video chain: part 1 is covered over (edge drift %.0f); once more "
-                               "with a new seed", drift)
+                logger.warning("video chain: part 1 is covered over (edge drift %s, drawn over %s); "
+                               "once more with a new seed", drift, drawn)
         except Exception as exc:
             logger.exception("generate_video crashed")
             return (f"[TOOL ERROR] Video generation failed: {exc}. Tell the user the "
