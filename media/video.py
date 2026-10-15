@@ -1376,11 +1376,13 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
         from seams import yes_no
         try:
             broken = yes_no(ctx)(
-                "This prompt is the NEXT part of one continuous shot: it must open on the same "
-                "framing the clip already ends on.\n\n{text}\n\nDoes it open on a new "
-                "framing or shot size (e.g. 'a medium shot frames…', 'a close-up of…'), cut "
-                "to another shot, or have someone who is already in the scene enter, run in "
-                "or appear again?", out)
+                # Asked in the abstract («does it open on a new framing…»), Gemma said no to
+                # all 4 broken parts; named signs split 7 of 7 (tmp probe, 2026-10-16).
+                "A video prompt for the next part of a clip that is already playing:\n\n{text}\n\n"
+                "Does its first sentence name a shot size or framing of its own -- 'a medium shot "
+                "frames…', 'a wide shot…', 'a close-up of…' -- or does someone walk, run or come "
+                "into the shot, or does it name more people ('two travelers') than one "
+                "continuing scene would have?", out)
         except Exception:
             broken = False
         if broken:
