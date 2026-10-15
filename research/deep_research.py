@@ -24,7 +24,7 @@ from typing import Callable, Optional
 
 import dr_settings as S
 from seams import dep
-from prompts import PRACTICAL_GUIDE_PROMPT
+from prompts import PRACTICAL_GUIDE_PROMPT, SELECTION_REPORT_PROMPT
 from dr_settings import MANUAL_OVERRIDE_SPEC, _coerce_override
 from research_cache import ExtractionCache
 from citation_graph import citation_lineage_brief
@@ -107,7 +107,7 @@ from dr_calls import _think_call, _model_context
 _REEXPORTED_FROM_DR_CALLS = (_think_call, _model_context)
 from dr_progress import _Progress
 from dr_policy import (
-    _is_practical_request, _apply_scholarly_floor, _apply_trust_floor, _resolve_caps,
+    _is_practical_request, _is_selection_request, _apply_scholarly_floor, _apply_trust_floor, _resolve_caps,
     _SCHOLARLY_CATEGORIES, _PRACTICAL_CATEGORIES, _SCHOLARLY_FLOOR_KEEP,
 )
 # Re-exported: dr_timing imports `_resolve_caps` from here, and the quality /
@@ -125,7 +125,7 @@ from dr_relevance import (
 _REEXPORTED_FROM_DR_RELEVANCE = (_entity_terms, _brief_is_relevant,
                                  _filter_offtopic_briefs)
 from dr_collect import (
-    plan_queries, collect_sources, coverage_signals, evidence_stats,
+    plan_queries, selection_queries, collect_sources, coverage_signals, evidence_stats,
     diversify_queries, _corrective_queries, _search_one_query, _citation_query,
     _topic_first_line, _query_lang,
 )
@@ -385,6 +385,14 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
     # 1. Expand queries (+ classify topic for ddgs tuning)
     prog.update("Expanding queries", topic)
     queries, profile = _stage(ctx, "plan_queries")(ctx, topic, caps["max_queries"])
+    _select = _is_selection_request(topic, profile, ctx=ctx)
+    if _select:
+        # A spec list is answered by catalog pages of any age: «product» kept a 1-year
+        # window, and the 2019 5GigE IMX255 cameras that meet the specs never came up.
+        profile.update(recency="any", timelimit=None, news=False)
+        sel = dep(ctx, "selection_queries", selection_queries)(ctx, topic)
+        queries = list(dict.fromkeys(sel + queries))[:max(caps["max_queries"], len(sel))]
+        logger.info("SELECTION intent: %d requirement-driven queries lead the plan", len(sel))
     prog.update("Expanding queries",
                 f"{len(queries)} queries · {profile['category']}/{profile['recency']}",
                 queries=len(queries))
@@ -585,8 +593,9 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
     # yet the pass still fed its pages to the writer: for a camera spec request it
     # searched «ip67 criticism OR limitations OR disputed» and brought back AI-limits
     # essays, a novel and the Oregon boundary dispute (live 2026-10-16).
-    if (S.DR_CONTRADICTION_ENABLED and briefs and not cancelled()
-            and not _is_practical_request(topic, profile, ctx=ctx)):
+    _contra_ran = bool(S.DR_CONTRADICTION_ENABLED and briefs and not cancelled()
+                       and not _select and not _is_practical_request(topic, profile, ctx=ctx))
+    if _contra_ran:
         # _search_topic (the distilled core_topic), NOT the raw request — the
         # templates append English angle words, so a conversational topic makes the
         # engine match on "limitations"/"benchmark" alone and returns unrelated pages.
@@ -829,7 +838,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
                    if decision["reasons"] else "")
                 + (f"**{_lab(out_lang, 'clarify')}:** {decision['clarifying_question']}\n\n"
                    if decision.get("clarifying_question") else "")
-                + _contradiction_note(contra_sig, out_lang)
+                + _contradiction_note(contra_sig if _contra_ran else {}, out_lang)
                 )
         # On THIS path the document is `body` — `report` does not exist yet.
         body = _append_once(body, _sources_appendix(briefs, out_lang))
@@ -855,8 +864,26 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
     # prices and departure times. The category is already classified `local`; it
     # must also pick the report FORM.
     topic = _steer.with_notes(topic, _steer.take(ctx))    # last one before the writing
-    _practical = _is_practical_request(topic, profile, ctx=ctx)
-    if _practical:
+    _practical = _select or _is_practical_request(topic, profile, ctx=ctx)
+    if _select:
+        logger.info("SELECTION intent — writing a requirements x candidates matrix")
+        prog.update("Building report", "matching candidates to the requirements")
+        try:
+            report = dep(ctx, "_think_call", _think_call)(
+                ctx, SELECTION_REPORT_PROMPT + _lang_directive(out_lang),
+                f"User request: {topic}\n\nPer-source briefs:\n"
+                + _consolidate_evidence(ctx, topic, briefs, prog)
+                + _lang_directive(out_lang),
+                min(S.DR_SECTION_TOKEN_CEILING, caps.get("report_tokens") or 6000) * 2,
+                temperature=0.2, retries=1)
+            report = (report or "").strip() or None
+            if report:
+                report, _link_stats = audit_report_links(report, briefs, out_lang)
+                report = _append_once(report + "\n\n", _sources_appendix(briefs, out_lang))
+        except Exception as exc:
+            logger.warning("selection synthesis failed (%s) — falling back", exc)
+            report = None
+    elif _practical:
         logger.info("PRACTICAL intent (category=%r) — writing an actionable options "
                     "list instead of a survey", profile.get("category"))
         prog.update("Building report", "listing bookable options")
@@ -916,7 +943,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
                 body = body.rstrip() + "\n\n" + sec + "\n"
         gate_line = f"\n> {dep(ctx, "_gate", _gate).gate_banner(decision, out_lang)}\n" if S.DR_DECISION_GATE_ENABLED else ""
         report = (f"{body}\n{gate_line}\n"
-                  f"{_contradiction_note(contra_sig, out_lang)}")
+                  f"{_contradiction_note(contra_sig if _contra_ran else {}, out_lang)}")
         # Survey mode writes its own title, abstract and contents, so the run
         # header is not prepended here -- which left the PRIMARY product with no
         # provenance at all. Measured live: a 34,000-character document that
@@ -969,7 +996,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
         if S.DR_DECISION_GATE_ENABLED:
             gate_line = f"\n> {dep(ctx, "_gate", _gate).gate_banner(decision, out_lang)}\n"
         report = (f"{header}{gate_line}\n{report}\n"
-                  f"{_contradiction_note(contra_sig, out_lang)}")
+                  f"{_contradiction_note(contra_sig if _contra_ran else {}, out_lang)}")
         report = _append_once(report, _sources_appendix(briefs, out_lang))
     else:
         # Last-resort fallback: the LLM reduce produced nothing twice. Do NOT emit a
@@ -980,7 +1007,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
         gate_line = f"\n> {dep(ctx, "_gate", _gate).gate_banner(decision, out_lang)}\n" if S.DR_DECISION_GATE_ENABLED else ""
         report = (f"{header}{gate_line}\n"
                   + _deterministic_digest_report(topic, cluster_digests, briefs)
-                  + _contradiction_note(contra_sig, out_lang))
+                  + _contradiction_note(contra_sig if _contra_ran else {}, out_lang))
         report = _append_once(report, _sources_appendix(briefs, out_lang))
 
     if _trace_formulas:

@@ -170,6 +170,44 @@ def test_a_practical_ask_runs_no_contradiction_pass():
               ("contradiction" in labels) == want, labels)
 
 
+def test_a_spec_selection_is_answered_as_a_candidate_matrix():
+    """«Подбери камеру: 8.3 Мп, 25 fps, Ethernet…» came back as an «Industry 4.0» review with
+    no model meeting the specs. A select ask leads with requirement-driven queries, drops the
+    1-year window, runs no contradiction pass and is written as requirements x candidates."""
+    seen = {"labels": [], "systems": [], "queries": [], "timelimit": "unset"}
+    ctx = FakeCtx()
+    ctx.choice = lambda q, t, options, default="": "select"
+
+    def think(c, system, user, *a, **k):
+        seen["systems"].append(system)
+        return "## Требования\n| a | b |\n## Кандидаты\n| [Cam](https://arxiv.org/1) |"
+
+    def collect(c, queries, per_q, prog, run_dir, profile=None):
+        seen["queries"], seen["timelimit"] = list(queries), (profile or {}).get("timelimit")
+        return [{"href": "https://arxiv.org/1", "domain": "arxiv.org", "query": "q"}]
+
+    with _Patches(DR_REPLAN_ENABLED=False, DR_MULTIHOP_ENABLED=False, DR_CONTRADICTION_ENABLED=True,
+                  DR_CONTRADICTION_QUERIES=2, DR_HIERARCHICAL_ENABLED=False, DR_COMMUNITIES_ENABLED=False,
+                  DR_CLAIM_MERGE_ENABLED=False, DR_GRAPH_EXPANSION_ENABLED=False,
+                  DR_DECISION_GATE_ENABLED=False, DR_REFLECTION_ENABLED=False, DR_SURVEY_MODE=True,
+                  plan_queries=lambda c, t, mx: (["generic camera query"], {
+                      "category": "product", "recency": "year", "timelimit": "y", "news": False,
+                      "core_topic": "machine vision camera"}),
+                  selection_queries=lambda c, t: ["Sony IMX255 5GigE camera"],
+                  collect_sources=collect, _think_call=think,
+                  _expansion_pass=lambda *a, **k: seen["labels"].append(k.get("label")) or []):
+        out = _run(ctx=ctx, topic="Подбери камеру: 8.3 Мп, 25 fps, Ethernet, глобальный затвор")
+    check("selection: requirement queries lead the plan", seen["queries"][:1] == ["Sony IMX255 5GigE camera"],
+          seen["queries"])
+    check("selection: no recency window", seen["timelimit"] is None, seen["timelimit"])
+    check("selection: no contradiction pass", "contradiction" not in seen["labels"], seen["labels"])
+    check("selection: no claim that a disconfirmation pass ran",
+          "disconfirmation" not in out["report"] and "опровержение" not in out["report"], out["report"][-400:])
+    check("selection: written with the selection prompt",
+          any("SELECTION request" in s for s in seen["systems"]) and "## Кандидаты" in out["report"],
+          out["report"][:1500])
+
+
 def test_survey_mode():
     with _Patches(DR_REPLAN_ENABLED=False, DR_MULTIHOP_ENABLED=False, DR_CONTRADICTION_ENABLED=False,
                   DR_HIERARCHICAL_ENABLED=False, DR_COMMUNITIES_ENABLED=False, DR_CLAIM_MERGE_ENABLED=False,

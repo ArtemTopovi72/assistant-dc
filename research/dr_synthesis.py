@@ -450,8 +450,11 @@ def _postprocess_report(md: str, drop_substrs: tuple = ()) -> str:
             # normalize identically (the model titles dups this way to satisfy a
             # "make it a dedicated section" instruction while also keeping X inline).
             title = re.sub(r"\s*\([^)]*\)\s*$", "", title)
-            norm = re.sub(r"[^a-z0-9]+", " ", title.lower()).strip()
-            if norm in seen or any(d in norm for d in drop_substrs):
+            # [\W_] keeps Cyrillic: with [^a-z0-9] every Russian heading normalized to ""
+            # and all but the first were dropped as duplicates (a selection report lost
+            # «## Кандидаты» and everything after it, 2026-10-16).
+            norm = re.sub(r"[\W_]+", " ", title.lower()).strip()
+            if (norm and norm in seen) or any(d in norm for d in drop_substrs):
                 skipping = True
                 continue
             seen.add(norm)

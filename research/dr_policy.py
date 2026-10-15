@@ -58,9 +58,20 @@ def _ask_kind(topic: str, ctx=None) -> str:
     """compare | practical | research -- the model's read of the raw request."""
     return choice(ctx)(
         "A user asked for research on: {text}\n\nWhich is it? compare = it names two "
-        "or more things and asks how they differ; practical = concrete options to act on (links, where to buy "
+        "or more things and asks how they differ; select = it lists required "
+        "specifications and wants the product models that meet them (\"pick a camera: 8 MP, "
+        "25 fps, Ethernet\"); practical = concrete options to act on (links, where to buy "
         "or book, prices, schedules, how to get there); research = an analysis or "
-        "explanation.", topic or "", ("compare", "practical", "research"), "research")
+        "explanation.", topic or "", ("compare", "select", "practical", "research"), "research")
+
+
+def _is_selection_request(topic: str, profile: dict, ctx=None) -> bool:
+    """True when the user lists specs and wants the models that meet them: a matrix of
+    candidates against each requirement, not a survey (a camera spec list came back as
+    an «Industry 4.0» review with no model meeting the specs, 2026-10-16)."""
+    if (profile or {}).get("category", "general") in _SCHOLARLY_CATEGORIES:
+        return False
+    return _ask_kind(topic, ctx=ctx) == "select"
 
 
 def _is_practical_request(topic: str, profile: dict, ctx=None) -> bool:

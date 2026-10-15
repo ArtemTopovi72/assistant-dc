@@ -403,6 +403,10 @@ def test_postprocess_report():
     check("postprocess_keeps_unique", "Unique" in out)
     dropped = DR._postprocess_report("# DropMe\nbad\n\n# Keep\ngood", drop_substrs=("dropme",))
     check("postprocess_drops_substr_matched_section", "DropMe" not in dropped and "Keep" in dropped)
+    # Cyrillic headings once all normalized to "" and every one after the first was cut.
+    ru = DR._postprocess_report("## Требования\nа\n\n## Кандидаты\nб\n\n## Рекомендация\nв\n\n## Кандидаты\nдубль")
+    check("postprocess_keeps_distinct_russian_sections",
+          all(h in ru for h in ("Требования", "Кандидаты", "Рекомендация")) and "дубль" not in ru, ru)
 
 
 def test_parse_cite_entry_and_citation_section():

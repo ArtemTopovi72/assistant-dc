@@ -213,6 +213,48 @@ FORBIDDEN in this answer: abstract, table of contents, taxonomy, "Introduction",
 Write in the SAME LANGUAGE as the user's request."""
 
 
+SELECTION_QUERY_PROMPT = """You plan web searches for a SELECTION request: the user lists required specifications and wants the concrete product models that meet them.
+
+Think like an engineer who knows the market:
+1. Read every requirement. Decide which are hard numbers (resolution, rate, size, power) and which are ambiguous words (name each plausible reading).
+2. Work out what the hard numbers force. Compute any bandwidth, power or size they imply and which interface or class of part can carry it (e.g. 3840x2160 x 25 fps x 8 bit is ~1.7 Gbit/s, more than 1 Gigabit Ethernet carries, so 2.5/5/10GigE or on-board compression).
+3. Name the COMPONENTS that can meet the hard numbers (for a camera: the image sensors by part number, e.g. "Sony IMX255", "Gpixel GMAX2509"; for a laptop: the CPU/GPU parts) — those names find the products.
+
+Then write search queries in English that find:
+- the components that meet the hard numbers, by part number;
+- product models built on each component, per major vendor, with the interface the numbers require (vendor + component + interface, e.g. "LUCID Atlas IMX255 5GigE");
+- each ambiguous requirement under each reading, in the market's own words (e.g. "machine vision camera on-camera H.265 compression");
+- datasheets ("<model> datasheet pdf") and distributor catalogs that list specs in tables;
+- the near misses worth ruling out (a product that meets most specs but fails one).
+
+Return ONLY JSON: {"queries": ["...", ...]} with up to {n} queries, most specific first. No prose."""
+
+
+SELECTION_REPORT_PROMPT = """You are an applications engineer answering a SELECTION request: the user listed required specifications and wants the product models that meet them. Answer ONLY from the per-source briefs (each tagged with its source domain); never add a model, a number or a URL that is not in them.
+
+Write, in this order and nothing else:
+
+## Требования / Requirements
+A table: each requirement as the user wrote it · how you read it (for an ambiguous one, every plausible reading and which one the answer follows) · hard or soft.
+
+## Что из этого следует / What the numbers force
+2-5 bullets: the computed constraint (bandwidth, power, size) with the arithmetic, and which interfaces or component classes it rules in or out. Name the components (e.g. sensors by part number) that can meet the hard numbers, from the briefs.
+
+## Кандидаты / Candidates
+A markdown table, best first. Columns: model (as a link to the exact page from the briefs) · vendor · the component · one column per requirement with the value from the source and ✅ meets / ❌ fails / ❓ not stated · price if stated. Put every model the briefs give that meets the hard numbers or misses by one. A model meeting all requirements goes first; if none meets all, say so above the table in one sentence.
+
+## Отсеяно / Ruled out
+Models that look close but fail a hard requirement, one line each: model — which requirement fails and the value that fails it (e.g. "Basler a2A3840-13gc — rolling shutter, 13 fps").
+
+## Рекомендация / Recommendation
+By scenario (e.g. "need on-camera compression" / "compression can run on the PC" / "lowest budget"): the model to pick and why, in 1-2 lines each.
+
+## Уточнить / To confirm
+What the user must confirm with the vendor or clarify (the ambiguous readings, specs the sources disagree on).
+
+Rules: every model is a link whose URL appears verbatim in the briefs — never invent, shorten or reconstruct one. Numbers exactly as the source gives them; if two sources disagree, show both. No abstract, no introduction, no market overview, no history, no "Industry 4.0". Write in the SAME LANGUAGE as the user's request."""
+
+
 SURVEY_SECTION_PROMPT = """You are a domain expert writing ONE section of a scientific review article. You are writing a single coherent scholarly work, not a summary of web pages.
 
 You are given: the document TITLE, the FULL OUTLINE (so you know what every other section covers and can write transitions and avoid repetition), the SPECIFIC SECTION you must write now, and the EVIDENCE (per-source briefs, each tagged with a source domain and a trust tier PRIMARY / SECONDARY / COMMUNITY / LOW, sometimes `copies=N` = N mirrors of one source).

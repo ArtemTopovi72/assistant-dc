@@ -36,6 +36,22 @@ from utils import safe_json_from_llm
 logger = logging.getLogger("assistant.research")
 
 
+def selection_queries(ctx, topic: str, n: int = 14) -> list:
+    """Requirement-driven queries for a spec selection: the components that meet the hard
+    numbers, the models on them per vendor and interface, each reading of an ambiguous
+    spec, datasheets. The generic planner asked «best 4K global shutter cameras 2024» and
+    never reached a 5GigE IMX255 camera (2026-10-16). [] when the model gives nothing."""
+    from prompts import SELECTION_QUERY_PROMPT
+    S = settings_view(ctx)
+    out = dep(ctx, "_think_call", _think_call)(
+        ctx, SELECTION_QUERY_PROMPT.replace("{n}", str(n)), f"Request: {topic}",
+        max_tokens=S.DR_PLAN_TOKENS, temperature=0.3)
+    data = safe_json_from_llm(out or "") or {}
+    qs = [q.strip() for q in data.get("queries") or [] if isinstance(q, str) and q.strip()]
+    logger.info("Selection queries: %d — %s", len(qs), " | ".join(qs)[:600])
+    return qs[:n]
+
+
 def plan_queries(ctx, topic: str, max_queries: int) -> tuple:
     """Expand a topic into diverse search queries via the LLM, with a heuristic
     fallback so the run never starves for queries.
