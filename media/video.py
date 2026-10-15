@@ -54,7 +54,7 @@ from config import (
     COMFY_URL, OUTPUT_DIR, WORKFLOW_VIDEO_PATH, WORKFLOW_VIDEO_REF_PATH,
     VIDEO_FPS, VIDEO_DEFAULT_FRAMES, VIDEO_MAX_FRAMES, VIDEO_MAX_FRAMES_AUTO,
     VIDEO_SHORT_EDGE, VIDEO_MAX_PIXELS, VIDEO_CANVAS_MULTIPLE,
-    VIDEO_STEPS, VIDEO_STEPS_REF2VA, VIDEO_STEPS_REF2VA_VOICES, VIDEO_SPEECH_STRESS, VIDEO_T2VA_LORA_3STEP, VIDEO_CFG, VIDEO_SHIFT_VIDEO, VIDEO_SHIFT_AUDIO,
+    VIDEO_STEPS, VIDEO_STEPS_REF2VA, VIDEO_STEPS_REF2VA_VOICES, VIDEO_SPEECH_STRESS, VIDEO_T2VA_LORA_3STEP, VIDEO_FL2VA_LORA_3STEP, VIDEO_CFG, VIDEO_SHIFT_VIDEO, VIDEO_SHIFT_AUDIO,
     VIDEO_JOB_TIMEOUT, OUTPUT_DIR_COMFY,
 )
 
@@ -582,7 +582,8 @@ def build_workflow(prompt: str, *, mode: str, width: int, height: int,
     # Both graphs now carry a 4-step turbo LoRA (t2va: FL2V v1.2, ref2va: Ref2V v0.1).
     # t2va at 3 steps swaps in the TaoMate 3-step LoRA (distilled for 3 NFE).
     if N_LORA in wf and mode == "t2va" and smp["steps"] == 3 and VIDEO_T2VA_LORA_3STEP:
-        wf[N_LORA]["inputs"]["lora_name"] = VIDEO_T2VA_LORA_3STEP
+        wf[N_LORA]["inputs"]["lora_name"] = ((VIDEO_FL2VA_LORA_3STEP or VIDEO_T2VA_LORA_3STEP)
+                                             if images or videos else VIDEO_T2VA_LORA_3STEP)
     # A turbo LoRA stays on ABOVE 4 steps (community range 6-8 sharpens it);
     # zeroed there, the bare model at cfg 1 turned a fist into mush.
     elif N_LORA in wf and smp["steps"] < 4:
@@ -773,7 +774,9 @@ def build_chain_part(prompt: str, *, chain: str, idx: int, width: int, height: i
     wf = {k: base[k] for k in (N_UNET, N_SHIFT, N_CLIP, N_VAE_VIDEO, N_VAE_AUDIO, N_LORA)}
     wf[N_SHIFT]["inputs"].update(shift_video=float(VIDEO_SHIFT_VIDEO), shift_audio=float(VIDEO_SHIFT_AUDIO))
     if HERRGOTT_STEPS == 3 and VIDEO_T2VA_LORA_3STEP:
-        wf[N_LORA]["inputs"]["lora_name"] = VIDEO_T2VA_LORA_3STEP
+        # every part past the first leans on the previous part's frames, and the first
+        # usually on a photo: the frame-conditioned adapter (config.VIDEO_FL2VA_LORA_3STEP)
+        wf[N_LORA]["inputs"]["lora_name"] = VIDEO_FL2VA_LORA_3STEP or VIDEO_T2VA_LORA_3STEP
     common = {"clip": [N_CLIP, 0], "vae": [N_VAE_VIDEO, 0], "prompt": prompt, "width": int(width),
               "height": int(height), "duration": float(seconds), "ref_image_size": "match"}
     if idx <= 1:

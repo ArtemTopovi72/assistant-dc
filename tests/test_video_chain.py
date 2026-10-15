@@ -289,16 +289,19 @@ def test_the_judge_rewrites_bad_parts_and_never_a_quoted_line():
     assert V.validate_script(ctx2, quoted) == quoted
 
 
-def test_a_chain_part_samples_like_a_plain_clip():
-    """The chain ran the FL2V turbo LoRA at 6 steps and came back soapy;
-    the plain t2va clip (TaoMate 3-step LoRA) was crisp. Same LoRA, same steps."""
+def test_a_chain_part_runs_taomates_frame_adapter_at_its_three_steps():
+    """FL2V Turbo at 6 steps came back soapy, so the chain took TaoMate's 3 steps -- but its
+    text-to-video adapter, fed frames, drew flowers, anime faces and captions over them
+    (2026-10-15). TaoMate's FL2VA adapter: as sharp, made for frames."""
     plain = V.build_workflow("a chef", mode="t2va", width=1344, height=768, frames=226, seed=1,
                              images=[], videos=[], audios=[], steps=V.VIDEO_STEPS, ctx=None)
+    assert plain[V.N_LORA]["inputs"]["lora_name"] == V.VIDEO_T2VA_LORA_3STEP     # text only: T2AV
     for idx in (1, 2):
         part = V.build_chain_part("a chef", chain="h3_continuous/chX", idx=idx, width=1344,
                                   height=768, seconds=9.4, seed=1)
-        assert part[V.N_LORA]["inputs"] == plain[V.N_LORA]["inputs"]
-        assert part[V.N_SAMPLER]["inputs"]["steps"] == plain[V.N_SAMPLER]["inputs"]["steps"]
+        assert part[V.N_LORA]["inputs"]["lora_name"] == V.VIDEO_FL2VA_LORA_3STEP
+        assert "fl2va" in V.VIDEO_FL2VA_LORA_3STEP
+        assert part[V.N_SAMPLER]["inputs"]["steps"] == plain[V.N_SAMPLER]["inputs"]["steps"] == 3
 
 
 def test_later_parts_know_the_scene_and_carry_no_example_action():

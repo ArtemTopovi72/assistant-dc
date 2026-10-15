@@ -410,6 +410,11 @@ VIDEO_STEPS = _env_int("VIDEO_STEPS", 3)
 # FL2V LoRA on t1/t2, 127-129 s vs 131-153 s). Ref2VA stays on its 4-step LoRA:
 # the one tao3 ref2va render burned a subtitle into the frame.
 VIDEO_T2VA_LORA_3STEP = os.getenv("VIDEO_T2VA_LORA_3STEP", "night\\taomate_h3_3step_comfyui_bf16.safetensors")
+# The T2AV adapter above, given a start frame or a previous part, draws flowers, anime
+# faces and captions over the picture (WanGP issue 2320; here 10-15, every seed). TaoMate's
+# own FL2VA adapter (released 10-15, converted by scripts/convert_taomate_lora.py) is made
+# for frames: the same graph came out clean on two seeds, as sharp, still 3 steps.
+VIDEO_FL2VA_LORA_3STEP = os.getenv("VIDEO_FL2VA_LORA_3STEP", "night\\taomate_h3_fl2va_3step_comfyui_bf16.safetensors")
 # Ref2VA runs the official LightX2V/ModelTC step-distilled Turbo LoRA (see
 # workflow_video_h3_ref.json's LoraLoaderModelOnly node): the checkpoint is
 # distilled specifically for 4 NFE, so it must be sampled at 4 steps, not the
