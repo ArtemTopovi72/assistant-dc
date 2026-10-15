@@ -1575,7 +1575,8 @@ _SCENE_NOTE_RE = re.compile(r" \(The scene so far, for reference only -- do not 
 
 def with_scene(part: str, scene: str) -> str:
     """`part` of a long script with what the earlier parts showed (who, where), as a note."""
-    scene = " ".join((scene or "").split())
+    # Earlier spoken lines in the note were spoken again by the next part (live 2026-10-15).
+    scene = " ".join(_QUOTED.sub("(a spoken line)", scene or "").split())
     return part + _SCENE_NOTE.format(scene[:700]) if scene else part
 
 
