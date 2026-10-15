@@ -76,6 +76,14 @@ first = V.to_context_ir(NS(text_model=lambda *a, **k: reframed,
                            yes_no=lambda q, text, **k: asked.append(text) or True),
                         "He drinks.", mode="t2va", seconds=5)
 check("a medium shot frames" in first and not asked, "a first part keeps its framing, nothing is asked")
+# A part with no words came back with «A distant man's voice calls: <d>[English] Hello!</d>».
+hello = ("integrated_multimodal_description: [Shot 1] Live-action, the hiker stands. He says "
+         "<d>[Russian] Наконе́ц-то я здесь.</d> A distant man's voice calls: <d>[English] Hello!</d>\n"
+         "overall_soundscape: wind.\nnon_diegetic_music: N/A")
+out = V.to_context_ir(NS(text_model=lambda *a, **k: hello), 'The hiker says "Наконец-то я здесь".',
+                      mode="t2va", seconds=5)
+check("Hello" not in out and "Наконе́ц-то я здесь" in out and "a wordless call" in out,
+      "a spoken line the request never quoted is made wordless; the quoted one stays")
 check(V.to_context_ir(NS(vision_model=lambda *a, **k: good), "x", mode="ref2va", seconds=5, images=["p.png"]) == "x",
       "a base-mode answer is not accepted for Ref2VA")
 

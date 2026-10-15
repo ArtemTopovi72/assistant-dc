@@ -1091,8 +1091,18 @@ def _lost_lines(description: str, prompt: str) -> list:
     return [x for x in lines if flat(x) and flat(x) not in have]
 
 
+_SPOKEN = re.compile(r"<d>(?:\s*\[[^\]]*\])?\s*(.*?)</d>", re.S)
+
+
+def _made_up_lines(description: str, prompt: str) -> list:
+    """`prompt`'s spoken <d> lines that the request never quoted."""
+    have = " ".join(_flat_line(x) for x in quoted_lines(description))
+    return [m.group(0) for m in _SPOKEN.finditer(prompt or "")
+            if _flat_line(m.group(1)) and _flat_line(m.group(1)) not in have]
+
+
 def _flat_line(t: str) -> str:
-    return re.sub(r"[\W_]+", " ", (t or "").lower().replace("́", "")).strip()
+    return re.sub(r"[\W_]+", " ", (t or "").lower().replace("́", "").replace("ё", "е")).strip()
 
 
 _SAYS = r"(?:,?\s*(?:and\s+|then\s+)?(?:says?|saying|shouts?|whispers?|mutters?|exclaims?)\s*:?\s*)?"
@@ -1349,6 +1359,13 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
             out = out[:end.start()] + " " + said + out[end.start():]
         else:
             out = out + "\n" + said
+    # Told rule (6), a part with no words still came back with «A distant man's voice calls:
+    # <d>[English] Hello!</d>» (live 2026-10-15): a line nobody wrote is a wordless call.
+    made_up = _made_up_lines(description, out)
+    if made_up:
+        logger.info("Context-IR rewrite made up %d spoken line(s); made wordless", len(made_up))
+        for x in made_up:
+            out = out.replace(x, "a wordless call, no words")
     # The guide's cut time is "At 00:03.500"; the model also wrote "At 04.00".
     out = re.sub(r"\bAt (\d{1,2})\.(\d{1,3})\b(?!:)",
                  lambda m: f"At 00:{int(m.group(1)):02d}.{m.group(2).ljust(3, '0')}", out)
