@@ -400,3 +400,16 @@ def test_translation_gloss_after_a_quote_is_cut():
     """The gloss «Море...» (The sea...) was spoken in English: only the quote may stay."""
     out = V.strip_translations(['He says «Море забирает печали» (The sea takes sorrows). Then "Идём" (Let us go) he adds.'])
     assert out == ['He says «Море забирает печали». Then "Идём" he adds.']
+
+
+def test_a_clip_covered_over_at_its_edges_is_told_from_a_still_one(tmp_path):
+    """Drawn flowers over a locked-off lake shot: the frame edges change wholesale."""
+    import subprocess
+    still, covered = str(tmp_path / "still.mp4"), str(tmp_path / "covered.mp4")
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=teal:s=320x180:d=3",
+                    "-pix_fmt", "yuv420p", still], check=True)
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=teal:s=320x180:d=3",
+                    "-vf", "drawbox=x=0:y=0:w=320:h=60:color=white:t=fill:enable='gte(t,1)'",
+                    "-pix_fmt", "yuv420p", covered], check=True)
+    assert V.overlay_drift(still) <= V.OVERLAY_DRIFT_MAX < V.overlay_drift(covered)
+    assert V.overlay_drift(str(tmp_path / "missing.mp4")) is None

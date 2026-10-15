@@ -1671,18 +1671,31 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         hold.enter_context(comfy_client.card_session("video chain"))
     with hold:
         ctx.set_stage("Generating a video")
+        first_prompt = prepped[0][0] if prepped else description
+        # A static shot opening a chain on a photo: H3 sometimes covers it with drawn flowers
+        # or anime faces, and every later part inherits them from the latent. Caught here by
+        # the frame edges, redrawn with another seed.
+        watch = bool(chain_id and images and not continuing
+                     and video_mod._FRAMING_LOCK_SUFFIX in first_prompt)
         try:
-            result = video_mod.generate_video(
-                ctx, prepped[0][0] if prepped else description,
-                images=images, videos=videos, audios=audios,
-                seconds=prepped[0][1] if prepped else (args.get("seconds") or 0.0),
-                prepared=bool(prepped),
-                aspect=args.get("aspect") or "",
-                seed=args.get("seed"),
-                context_video=pinned_tail,
-                chain=(chain_id, chain_idx) if chain_id else (),
-                size_from=cont_src if chain_id and continuing else "",
-            )
+            for attempt in (1, 2, 3):
+                result = video_mod.generate_video(
+                    ctx, first_prompt,
+                    images=images, videos=videos, audios=audios,
+                    seconds=prepped[0][1] if prepped else (args.get("seconds") or 0.0),
+                    prepared=bool(prepped),
+                    aspect=args.get("aspect") or "",
+                    seed=args.get("seed") if attempt == 1 else None,
+                    context_video=pinned_tail,
+                    chain=(chain_id, chain_idx) if chain_id else (),
+                    size_from=cont_src if chain_id and continuing else "",
+                )
+                p = result.get("path")
+                drift = video_mod.overlay_drift(p) if watch and p and os.path.exists(p) else None
+                if drift is None or drift <= video_mod.OVERLAY_DRIFT_MAX or attempt == 3:
+                    break
+                logger.warning("video chain: part 1 is covered over (edge drift %.0f); once more "
+                               "with a new seed", drift)
         except Exception as exc:
             logger.exception("generate_video crashed")
             return (f"[TOOL ERROR] Video generation failed: {exc}. Tell the user the "

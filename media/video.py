@@ -1138,6 +1138,30 @@ def heard_lines(expected: Sequence[str], heard: str) -> bool:
     return True
 
 
+OVERLAY_DRIFT_MAX = 35.0
+
+
+def overlay_drift(path: str) -> Optional[float]:
+    """How far a static clip's frames stray from its first one outside the centre where the
+    person moves (mean grey-level difference, worst frame). H3 sometimes covers a photo it
+    animates with drawn flowers, anime faces or drops; with the camera locked the edges of the
+    frame then change wholesale. 10-15 measured: clean ~16, covered 49-94. None when unread."""
+    import numpy as np
+    w, h = 160, 90
+    try:
+        raw = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", path, "-vf", f"fps=2,scale={w}:{h}",
+                              "-f", "rawvideo", "-pix_fmt", "gray", "-"],
+                             capture_output=True, check=True, timeout=120).stdout
+        f = np.frombuffer(raw, np.uint8).reshape(-1, h, w).astype(np.float32)
+    except Exception:
+        return None
+    if len(f) < 2:
+        return None
+    edge = np.ones((h, w), bool)
+    edge[h // 4:, w // 4: 3 * w // 4] = False
+    return max(float(np.abs(x - f[0])[edge].mean()) for x in f[1:])
+
+
 def quoted_lines(text: str) -> list:
     return [x for x in (next(g for g in m.groups() if g is not None).strip()
                         for m in _QUOTED.finditer(_SCENE_NOTE_RE.sub("", text or "")))
