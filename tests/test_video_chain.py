@@ -292,8 +292,7 @@ def test_the_models_tempo_sets_a_parts_seconds_but_never_under_its_speech():
     parts = ["He nods.", "He says «это очень длинная фраза из девяти слов вот так вот».", "She leaves."]
     ctx = types.SimpleNamespace(text_model=lambda c, s, u, **k: '{"seconds": [3, 3, 7]}')
     V.time_parts(ctx, parts)
-    assert V.estimate_seconds(parts[0]) == 3.0
-    assert V.estimate_seconds(parts[2]) == V.PART_MAX_S              # 7 asked: the 3-step LoRA holds ~5 s
+    assert V.estimate_seconds(parts[0]) == 3.0 and V.estimate_seconds(parts[2]) == 7.0
     assert V.estimate_seconds(parts[1]) >= 1.0 + 9 / 2.5          # 4.6 -> 5.0, not the model's 3
     assert V.estimate_seconds(V.CONTINUE_CTX_PREFIX + V.with_scene(parts[0], "a room")) == 3.0
     V.time_parts(types.SimpleNamespace(text_model=lambda c, s, u, **k: "garbage"), ["He runs."])
