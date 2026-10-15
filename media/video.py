@@ -1241,7 +1241,13 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
             "room (footsteps, breath, fabric), never left silent. (6) Only the lines quoted in "
             "the request are spoken, word for word and in their own language; someone who "
             "shouts, calls or says something with no quoted words makes a wordless sound "
-            "(a shout, a gasp), never a line you make up.\n"
+            "(a shout, a gasp), never a line you make up. (7) When the request says the shot "
+            "continues, write ONE shot: it opens on exactly the framing the clip ends on -- "
+            "never a new framing such as 'a wide shot frames…' -- and any change of view is "
+            "one continuous camera move in real time (it turns, pans or walks with them), "
+            "never a cut and never a second [Shot]. (8) Only the people the request names are "
+            "in the shot; someone already in the scene never enters, runs in or appears "
+            "again, and no extra figures are added.\n"
             # A plan part «a man lunges out of the cabinet» left the grandma who
             # fills the first frame unnamed, and H3 rendered an empty room
             # (live 2026-10-12, after the user dropped her part from the plan).

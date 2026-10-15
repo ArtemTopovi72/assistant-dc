@@ -52,6 +52,10 @@ check("every person and animal visible in <Picture 1> is in the shot" in seen.ge
       "whoever is in the first frame stays in the shot")
 # «He turns and shouts» with no words came back as <d>[English] Look at that!</d> (2026-10-15).
 check("never a line you make up" in seen.get("user", ""), "the writer adds no spoken line of its own")
+# Part 2 of the beach clip opened on «a wide shot frames two tiny figures» (a jump cut) and
+# added «a third figure runs through the mist» -- the girl of part 1, running past again.
+check("never a cut and never a second [Shot]" in seen.get("user", ""), "a continued shot is one shot, moved in real time")
+check("never enters, runs in or appears" in seen.get("user", ""), "nobody already in the scene comes in again")
 check(V.to_context_ir(NS(vision_model=lambda *a, **k: good), "x", mode="ref2va", seconds=5, images=["p.png"]) == "x",
       "a base-mode answer is not accepted for Ref2VA")
 
