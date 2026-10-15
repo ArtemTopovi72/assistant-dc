@@ -752,6 +752,7 @@ def latent_file(tag: str) -> str:
 # v1.2 turbo LoRA at 6 steps and came back soapy where plain clips were crisp.
 HERRGOTT_STEPS = int(os.getenv("VIDEO_HERRGOTT_STEPS", str(VIDEO_STEPS)))
 HERRGOTT_CONTEXT = "39"                                           # protected frames, the suite's default
+FIRST_PART_MAX_S = 5.2                                            # a chain opening on a photo; see build_chain_part
 CHAIN_DIR = "h3_continuous"
 
 
@@ -783,6 +784,9 @@ def build_chain_part(prompt: str, *, chain: str, idx: int, width: int, height: i
     if idx <= 1:
         wf["cond"] = {"class_type": "H3ContinuousStartV14", "inputs": common}
         if first_frame:
+            # 10-15, same graph and photo: 7.29 s came out covered in drawn flowers / anime
+            # faces over the photo, 5.17 s clean, whatever the seed or the prompt's locks.
+            common["duration"] = min(float(seconds), FIRST_PART_MAX_S)
             name = _eng(ctx)._upload(first_frame, "image")
             if not name:
                 raise VideoUnavailable(f"could not upload the start frame {first_frame}")
