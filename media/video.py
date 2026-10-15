@@ -1231,6 +1231,8 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
             "count of speakers: unused samples stay unused.\n"
             # Sparks, embers and «graceful cinematic ballet» rode every part and part 5 was pure
             # effects; a fast pan with large amplitude and 4 hands in one shot (live 2026-10-15).
+            # (9): a traveler seen from behind, «whispers in a low tone», spoke part 1 in a
+            # woman's whisper (F0 ~220 Hz) and part 2 as a man (live 2026-10-15).
             "PLAIN RULES -- (1) Add no sparks, embers, dust, smoke, mist, particles, glow, "
             "moonlight or mood words (cinematic, graceful, ballet, epic, dreamy, magical) that "
             "the request does not name. (2) One visible action per shot and at most ONE camera "
@@ -1247,7 +1249,11 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
             "one continuous camera move in real time (it turns, pans or walks with them), "
             "never a cut and never a second [Shot]. (8) Only the people the request names are "
             "in the shot; someone already in the scene never enters, runs in or appears "
-            "again, and no extra figures are added.\n"
+            "again, and no extra figures are added. (9) Every spoken line names the speaker's "
+            "sex in its voice -- 'a man's low voice', 'a woman's soft voice', 'a boy's voice' -- "
+            "taken from the picture, or from the request's words (he/she, the gender of a "
+            "Russian noun) when the picture does not show it; a speaker is never just 'they' or "
+            "'the traveler', and keeps that same voice in every part.\n"
             # A plan part «a man lunges out of the cabinet» left the grandma who
             # fills the first frame unnamed, and H3 rendered an empty room
             # (live 2026-10-12, after the user dropped her part from the plan).

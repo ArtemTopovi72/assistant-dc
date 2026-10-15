@@ -56,6 +56,10 @@ check("never a line you make up" in seen.get("user", ""), "the writer adds no sp
 # added «a third figure runs through the mist» -- the girl of part 1, running past again.
 check("never a cut and never a second [Shot]" in seen.get("user", ""), "a continued shot is one shot, moved in real time")
 check("never enters, runs in or appears" in seen.get("user", ""), "nobody already in the scene comes in again")
+# A traveler seen from behind, «whispers in a low tone», spoke in a woman's whisper in part 1
+# and as a man in part 2 (2026-10-15).
+check("names the speaker's sex in its voice" in seen.get("user", "")
+      and "same voice in every part" in seen.get("user", ""), "a voice is a man's or a woman's, kept across parts")
 # Told in words, the writer still opened part 2 with «a medium shot frames a traveler»: a jump.
 reframed = ("integrated_multimodal_description: [Shot 1] Live-action, a medium shot frames a traveler. "
             "The camera holds a static shot as he drinks.\noverall_soundscape: wind.\nnon_diegetic_music: N/A")
