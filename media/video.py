@@ -1853,16 +1853,21 @@ def validate_script(ctx, parts: list, rounds: int = 2) -> list:
 
 _TEMPO = ("You time the parts of a video script. Each numbered part is rendered as its own clip "
           "and must run exactly as long as its action needs: no dead air at the end, no cut "
-          "mid-motion. Give each part its seconds, from 3 to 8, in steps of 0.5. Tempo, by "
+          "mid-motion. Give each part its seconds, from 3 to 5, in steps of 0.5. Tempo, by "
           "example (the examples show the pace only; their words are never part of this script): "
           "'He nods.' 3. 'She turns her head to the door.' 3. 'He picks the cup up from the "
           "table.' 4. 'He walks three steps to the window and looks out.' 5. 'He picks up the cup "
           "and says «горячо, как в аду».' 5 (a spoken line takes its words at about 2.5 per "
-          "second, plus about a second of action around it). 'She crosses the whole room, opens "
-          "the door and steps out.' 7. 'He lifts the rifle to his shoulder, aims at the door and "
-          "holds his breath.' 6. A beat that must be SEEN land (a throw, a fall, a hit) gets a "
-          "second more; a plain gesture never more than 4. Reply as JSON only: "
+          "second, plus about a second of action around it). 'He lifts the rifle to his "
+          "shoulder and aims at the door.' 5. A beat that must be SEEN land (a throw, a fall, a "
+          "hit) gets half a second more; a plain gesture never more than 4. Reply as JSON only: "
           '{"seconds": [4, 3.5, ...]} -- one number per part, same order.')
+
+
+# The 3-step TaoMate LoRA is distilled on single ~5 s clips (its ComfyUI port has no
+# streaming runtime); 6-8 s parts came out covered in drawn flowers, anime faces and gulls
+# (live 2026-10-15; same graph 5.17 s clean, 7.29 s covered).
+PART_MAX_S = 5.0
 
 
 def time_parts(ctx, parts: list) -> None:
@@ -1886,7 +1891,7 @@ def time_parts(ctx, parts: list) -> None:
     for p, s in zip(parts, secs):
         words = sum(len(x.split()) for x in quoted_lines(p))
         need = 1.0 + words / 2.5
-        _SECONDS[p.strip()] = round(min(8.0, max(3.0, s, need)) * 2) / 2
+        _SECONDS[p.strip()] = round(min(PART_MAX_S, max(3.0, s, need)) * 2) / 2
     logger.info("time_parts: %s", [_SECONDS[p.strip()] for p in parts])
 
 
