@@ -1240,7 +1240,17 @@ def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str, st
                 logger.exception("video chain: part %d crashed", i)
                 crashed = True
                 break
-            if attempt == 2 or not said or not r.get("path") or _speech_ok(ctx, r["path"], said):
+            if attempt == 2 or not r.get("path"):
+                break
+            # The part keeps the camera unless it opens on a cut; drawn flowers that cover
+            # the frame then show at its edges (live 2026-10-15: leaves came in at part 2).
+            still = video_mod.INSERT_HEAD.strip() not in part[0] and video_mod.INSERT_BACK.strip() not in part[0]
+            drift = video_mod.overlay_drift(r["path"]) if still else None
+            if drift is not None and drift > video_mod.OVERLAY_DRIFT_MAX:
+                logger.warning("video chain: part %d is covered over (edge drift %.0f); once more "
+                               "with a new seed", i, drift)
+                continue
+            if not said or _speech_ok(ctx, r["path"], said):
                 break
             logger.warning("video chain: part %d did not say %s; once more with a new seed", i, said)
         if crashed:
