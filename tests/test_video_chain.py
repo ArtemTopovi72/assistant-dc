@@ -288,6 +288,17 @@ def test_the_judge_rewrites_bad_parts_and_never_a_quoted_line():
     assert V.validate_script(ctx2, quoted) == quoted
 
 
+def test_the_models_tempo_sets_a_parts_seconds_but_never_under_its_speech():
+    parts = ["He nods.", "He says «это очень длинная фраза из девяти слов вот так вот».", "She leaves."]
+    ctx = types.SimpleNamespace(text_model=lambda c, s, u, **k: '{"seconds": [3, 3, 7]}')
+    V.time_parts(ctx, parts)
+    assert V.estimate_seconds(parts[0]) == 3.0 and V.estimate_seconds(parts[2]) == 7.0
+    assert V.estimate_seconds(parts[1]) >= 1.0 + 9 / 2.5          # 4.6 -> 5.0, not the model's 3
+    assert V.estimate_seconds(V.CONTINUE_CTX_PREFIX + V.with_scene(parts[0], "a room")) == 3.0
+    V.time_parts(types.SimpleNamespace(text_model=lambda c, s, u, **k: "garbage"), ["He runs."])
+    assert V.estimate_seconds("He runs.") >= 5.0                    # failed: the word count rules
+
+
 def test_a_chain_part_samples_like_a_plain_clip():
     """The chain ran the FL2V turbo LoRA at 6 steps and came back soapy;
     the plain t2va clip (TaoMate 3-step LoRA) was crisp. Same LoRA, same steps."""

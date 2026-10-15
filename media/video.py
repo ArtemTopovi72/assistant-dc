@@ -111,6 +111,9 @@ _HOLD = re.compile(r"\b(?:for (?:a few|several|some|\d+) seconds?|for a while|"
                    r"несколько секунд|какое-то время)\b", re.I)
 
 
+_SECONDS: dict = {}      # part text -> seconds, set by time_parts (the part's own wording is the key)
+
+
 def estimate_seconds(description: str, capped: bool = True) -> float:
     """How long the scripted clip needs to play out, when nobody said a length.
 
@@ -126,6 +129,8 @@ def estimate_seconds(description: str, capped: bool = True) -> float:
     text = _SCENE_NOTE_RE.sub("", text)                    # nor the scene-so-far note
     for rule in (CAUSE_RULE, RU_SPEECH):                    # nor the rules every clip carries
         text = text.replace(rule, "")
+    if text.strip() in _SECONDS:                            # the model's own read of the part's tempo
+        return _SECONDS[text.strip()]
     # Sound/light/camera lines ride every part (split_script) and take no screen time;
     # counted as beats, five of them pushed every part of a 5-part plan to the 10.1 s cap.
     text = " ".join(s for s in _SENT.split(text) if s and not _LOOK.match(s.strip()))
@@ -1647,7 +1652,9 @@ def bridge_script(ctx, parts: list) -> list:
         b = str(b or "").strip()
         if b and len(b) <= 300 and not part.startswith((INSERT_HEAD, INSERT_BACK)):
             logger.info("bridge_script: %s", b)
-            part = b[:1].upper() + b[1:].rstrip(".") + ". Then " + part[:1].lower() + part[1:]
+            old, part = part, b[:1].upper() + b[1:].rstrip(".") + ". Then " + part[:1].lower() + part[1:]
+            if old.strip() in _SECONDS:                  # the bridging move takes a second more
+                _SECONDS[part.strip()] = min(8.0, _SECONDS[old.strip()] + 1.0)
         out.append(part)
     return out
 
@@ -1800,6 +1807,45 @@ def validate_script(ctx, parts: list, rounds: int = 2) -> list:
                 logger.info("validate_script: part %d (%s): %s -> %s", n, why, before[:80], new[:80])
                 parts[n - 1] = new
     return parts
+
+
+_TEMPO = ("You time the parts of a video script. Each numbered part is rendered as its own clip "
+          "and must run exactly as long as its action needs: no dead air at the end, no cut "
+          "mid-motion. Give each part its seconds, from 3 to 8, in steps of 0.5. Tempo, by "
+          "example (the examples show the pace only; their words are never part of this script): "
+          "'He nods.' 3. 'She turns her head to the door.' 3. 'He picks the cup up from the "
+          "table.' 4. 'He walks three steps to the window and looks out.' 5. 'He picks up the cup "
+          "and says «горячо, как в аду».' 5 (a spoken line takes its words at about 2.5 per "
+          "second, plus about a second of action around it). 'She crosses the whole room, opens "
+          "the door and steps out.' 7. 'He lifts the rifle to his shoulder, aims at the door and "
+          "holds his breath.' 6. A beat that must be SEEN land (a throw, a fall, a hit) gets a "
+          "second more; a plain gesture never more than 4. Reply as JSON only: "
+          '{"seconds": [4, 3.5, ...]} -- one number per part, same order.')
+
+
+def time_parts(ctx, parts: list) -> None:
+    """The seconds of each part as the model judges its tempo, not as words counted:
+    a 2.3-words-per-second sum made a nod and a sentence the same 5.2 s (user, 2026-10-15).
+    Registered by the part's own text for estimate_seconds; never shorter than its spoken
+    lines need. Any failure leaves the counting estimate in charge."""
+    from utils import safe_json_from_llm
+    try:
+        got = (safe_json_from_llm(text_model(ctx)(
+            ctx, _TEMPO, "\n".join(f"{i}. {p}" for i, p in enumerate(parts, 1)),
+            temperature=0.1, max_tokens=200) or "", ["seconds"]) or {}).get("seconds") or []
+        secs = [float(x) for x in got]
+    except Exception as exc:
+        logger.warning("time_parts failed: %s", exc)
+        return
+    if len(secs) != len(parts):
+        return
+    if len(_SECONDS) > 500:
+        _SECONDS.clear()
+    for p, s in zip(parts, secs):
+        words = sum(len(x.split()) for x in quoted_lines(p))
+        need = 1.0 + words / 2.5
+        _SECONDS[p.strip()] = round(min(8.0, max(3.0, s, need)) * 2) / 2
+    logger.info("time_parts: %s", [_SECONDS[p.strip()] for p in parts])
 
 
 def new_people_clause(first: int, n: int) -> str:
