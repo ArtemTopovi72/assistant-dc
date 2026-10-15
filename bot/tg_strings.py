@@ -1206,6 +1206,7 @@ _MSG: dict[str, dict[str, str]] = {
                     "ru": "✍️ Напиши, что сделать с пересланным — например «какой срок он назвал?» или «составь ответ»."},
     "fwd_video_seen": {"en": "👁 Storyboard of the video:\n{seen}", "ru": "👁 Раскадровка видео:\n{seen}"},
     "fwd_video_caption": {"en": "Sender's caption: «{caption}»", "ru": "Подпись отправителя: «{caption}»"},
+    "fwd_video_heard": {"en": "🎙 Said in the video (speech transcript):\n{heard}", "ru": "🎙 Сказано в видео (расшифровка речи):\n{heard}"},
     "fwd_video_work": {"en": "🎥 Watching and listening…", "ru": "🎥 Смотрю и слушаю…"},
     "fwd_voice_text": {"en": "📝 Transcript", "ru": "📝 Расшифровка"},
     "fwd_voice_sum":  {"en": "📋 Summary", "ru": "📋 Краткое содержание"},

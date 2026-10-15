@@ -31,3 +31,12 @@ def test_the_vision_pass_sees_the_caption(tmp_path):
                              vision=lambda frames, q, system: asked.append(q) or "x",
                              caption="Когда начальство внедрило ИИ")
     assert asked and "Когда начальство внедрило ИИ" in asked[0]
+
+
+def test_the_speech_is_labelled_so_it_is_not_taken_for_the_caption():
+    # A 5 s clip of a speech came back as «the sender's caption says…»: the bare transcript
+    # beside a labelled caption was read as the caption (2026-10-15).
+    heard = tg_bot._t("fwd_video_heard", "ru", heard="Разрешено всё")
+    assert "Сказано в видео" in heard and "Разрешено всё" in heard
+    sys_ru = tg_tasks.retell_system("ru", True)
+    assert "Сказано в видео" in sys_ru and "never a caption" in sys_ru

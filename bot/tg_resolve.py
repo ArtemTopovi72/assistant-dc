@@ -1021,7 +1021,10 @@ class ResolveMixin:
                     # A forwarded VIDEO is listened to AND looked at: the
                     # transcript the buttons act on carries what was seen.
                     # In the user's language: the 📝 button shows this text as is.
-                    said = ((said or "") + "\n\n" + tg_bot._t("fwd_video_seen", lang,
+                    # The speech is labelled like the caption and the storyboard: bare, the
+                    # retelling took Putin's own words for the sender's caption (2026-10-15).
+                    heard = tg_bot._t("fwd_video_heard", lang, heard=said.strip()) if (said or "").strip() else ""
+                    said = (heard + "\n\n" + tg_bot._t("fwd_video_seen", lang,
                                                            seen=_seen["description"].strip())).strip()
                 _companion = (item.get("companion") or "").strip()
                 _asked = (getattr(self, "fwdv_intent", None) or tg_bot._fwdv_intent)(item.get("caption") or _companion)
