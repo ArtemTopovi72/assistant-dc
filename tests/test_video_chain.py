@@ -299,16 +299,15 @@ def test_the_models_tempo_sets_a_parts_seconds_but_never_under_its_speech():
     assert V.estimate_seconds("He runs.") >= 5.0                    # failed: the word count rules
 
 
-def test_a_chain_part_samples_like_a_plain_clip():
-    """The chain ran the FL2V turbo LoRA at 6 steps and came back soapy;
-    the plain t2va clip (TaoMate 3-step LoRA) was crisp. Same LoRA, same steps."""
-    plain = V.build_workflow("a chef", mode="t2va", width=1344, height=768, frames=226, seed=1,
-                             images=[], videos=[], audios=[], steps=V.VIDEO_STEPS, ctx=None)
+def test_a_chain_part_runs_the_frame_conditioned_lora_at_its_own_steps():
+    """TaoMate (a text-to-video adapter) fed a start frame drew flowers and anime faces over
+    it; FL2V Turbo is made for frames, and distilled for 4 steps (at 6 it came back soapy)."""
     for idx in (1, 2):
         part = V.build_chain_part("a chef", chain="h3_continuous/chX", idx=idx, width=1344,
                                   height=768, seconds=9.4, seed=1)
-        assert part[V.N_LORA]["inputs"] == plain[V.N_LORA]["inputs"]
-        assert part[V.N_SAMPLER]["inputs"]["steps"] == plain[V.N_SAMPLER]["inputs"]["steps"]
+        assert "fl2v_turbo_4step" in part[V.N_LORA]["inputs"]["lora_name"]
+        assert "taomate" not in part[V.N_LORA]["inputs"]["lora_name"]
+        assert part[V.N_SAMPLER]["inputs"]["steps"] == 4
 
 
 def test_later_parts_know_the_scene_and_carry_no_example_action():

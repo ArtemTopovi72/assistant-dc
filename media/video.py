@@ -750,7 +750,11 @@ def latent_file(tag: str) -> str:
 # Each chain owns a folder: LoadLatent picks the newest file with the slot number in it.
 # Same steps and LoRA as a plain clip (TaoMate 3-step). The chain once ran the FL2V
 # v1.2 turbo LoRA at 6 steps and came back soapy where plain clips were crisp.
-HERRGOTT_STEPS = int(os.getenv("VIDEO_HERRGOTT_STEPS", str(VIDEO_STEPS)))
+# Chains run the graph's own FL2V Turbo 4-step LoRA, not the 3-step TaoMate one: TaoMate is
+# a text-to-video adapter, and fed a start frame or a previous part it covers the picture in
+# drawn flowers, anime faces and captions (WanGP issue 2320; here 10-15: the same graph at
+# 7.29 s was covered on every seed with TaoMate, clean on two seeds with FL2V at 4 steps).
+HERRGOTT_STEPS = int(os.getenv("VIDEO_HERRGOTT_STEPS", "4"))
 HERRGOTT_CONTEXT = "39"                                           # protected frames, the suite's default
 CHAIN_DIR = "h3_continuous"
 
