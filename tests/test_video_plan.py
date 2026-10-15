@@ -12,6 +12,7 @@ import tempfile
 from types import SimpleNamespace
 
 os.environ.setdefault("F5_TEST_RUN", "1")
+os.environ.setdefault("VIDEO_AUTO_MAX_PARTS", "99")   # long chains are tested here; the 2-part cap has its own test
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception:

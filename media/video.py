@@ -153,6 +153,7 @@ _SENT = re.compile(r"(?<=[.!?;])\s+|(?<=,)\s+(?=(?:then|after that|afterwards|з
 # into 10 s lost their middle: stones "fell from the sky" with no hand throwing them
 # (live 2026-10-11); one beat per ~6 s part, each going on from the last frame.
 VIDEO_PART_MAX_S = float(os.environ.get("VIDEO_PART_MAX_S", "6.0"))
+AUTO_MAX_PARTS = int(os.environ.get("VIDEO_AUTO_MAX_PARTS", "2"))   # a script with no length named
 
 RU_SPEECH = " Anyone who says something out loud says it in Russian."
 

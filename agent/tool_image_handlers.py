@@ -1557,6 +1557,23 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 description = description.replace(raw, tight, 1) if raw in description else description
                 raw = tight
                 parts = video_mod.split_script(raw)
+        if not want and len(parts) > video_mod.AUTO_MAX_PARTS:
+            # A script the bot wrote itself ran 5-8 parts, ~25 min of render, and the
+            # longer it ran the more nonsense it held (owner, 2026-10-15): one or two
+            # episodes, the rest is the user's ▶️ Continue.
+            fit = video_mod.AUTO_MAX_PARTS * 5.2
+            tight = video_mod.condense_script(raw, have, fit, ctx, sentences=2 * video_mod.AUTO_MAX_PARTS)
+            if tight:
+                description = description.replace(raw, tight, 1) if raw in description else description
+                raw = tight
+                parts = video_mod.split_script(raw)
+            if len(parts) > video_mod.AUTO_MAX_PARTS:
+                parts = parts[:video_mod.AUTO_MAX_PARTS]
+                cut = " ".join(parts)
+                description = description.replace(raw, cut, 1) if raw in description else description
+                raw = cut
+            logger.info("generate_video: script kept to %d part(s) (%s)", len(parts),
+                        "condensed" if tight else "cut")
     if continuing and len(parts) > 1:
         # «…орёт э, это уже есть на видео, а потом…»: the agent still opened the plan
         # with the grandma's scream, rendered again for 6 minutes (owner, 2026-10-12).

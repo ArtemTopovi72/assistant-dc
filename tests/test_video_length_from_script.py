@@ -9,6 +9,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 for d in ("", "core", "agent", "media"):
     sys.path.insert(0, os.path.join(ROOT, d))
 os.environ.setdefault("F5_TEST_RUN", "1")
+os.environ.setdefault("VIDEO_AUTO_MAX_PARTS", "99")   # long chains are tested here; the 2-part cap has its own test
 
 import types  # noqa: E402
 
