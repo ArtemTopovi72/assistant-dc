@@ -1131,7 +1131,7 @@ def heard_lines(expected: Sequence[str], heard: str) -> bool:
 
 def quoted_lines(text: str) -> list:
     return [x for x in (next(g for g in m.groups() if g is not None).strip()
-                        for m in _QUOTED.finditer(text or ""))
+                        for m in _QUOTED.finditer(_SCENE_NOTE_RE.sub("", text or "")))
             if _flat_line(x) and not x.startswith("The camera cuts")]  # the chain prefix quotes its own cut cues
 
 
