@@ -1099,6 +1099,15 @@ def _flat_line(t: str) -> str:
 _SAYS = r"(?:,?\s*(?:and\s+|then\s+)?(?:says?|saying|shouts?|whispers?|mutters?|exclaims?)\s*:?\s*)?"
 
 
+_TRANSLATION = re.compile(r'([»"”])\s*\([^()]*\)')
+
+
+def strip_translations(parts: list) -> list:
+    """«Русская реплика» (English gloss) -> «Русская реплика»: the prompt rewriter took the
+    gloss for the line and the man said it in English (live 2026-10-15)."""
+    return [_TRANSLATION.sub(r"\1", p) for p in parts]
+
+
 def dedupe_quotes(parts: list) -> list:
     """A spoken line stays in the FIRST part that has it: the bridge and the split put the
     same «…» into parts 2 and 3 and the man said it twice (live 2026-10-15). The later

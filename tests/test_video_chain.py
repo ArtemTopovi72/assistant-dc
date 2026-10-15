@@ -392,3 +392,9 @@ def test_a_picture_script_is_rewritten_as_an_event_never_as_one_still_line():
     ok = types.SimpleNamespace(text_model=lambda c, sysp, user, **k: told.append(sysp) or event)
     assert V.action_script("Cats stand. A flag waves.", ok) == event
     assert "FIRST FRAME" in told[0] and "invent the obvious one" in told[0]
+
+
+def test_translation_gloss_after_a_quote_is_cut():
+    """The gloss «Море...» (The sea...) was spoken in English: only the quote may stay."""
+    out = V.strip_translations(['He says «Море забирает печали» (The sea takes sorrows). Then "Идём" (Let us go) he adds.'])
+    assert out == ['He says «Море забирает печали». Then "Идём" he adds.']
