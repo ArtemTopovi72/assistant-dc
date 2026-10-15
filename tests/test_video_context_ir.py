@@ -59,13 +59,19 @@ check("never enters, runs in or appears" in seen.get("user", ""), "nobody alread
 # Told in words, the writer still opened part 2 with «a medium shot frames a traveler»: a jump.
 reframed = ("integrated_multimodal_description: [Shot 1] Live-action, a medium shot frames a traveler. "
             "The camera holds a static shot as he drinks.\noverall_soundscape: wind.\nnon_diegetic_music: N/A")
-cont = V.to_context_ir(NS(text_model=lambda *a, **k: reframed),
+fixed = reframed.replace("a medium shot frames a traveler", "the traveler, framed as the clip ends,")
+answers = iter([reframed, fixed])
+asked = []
+cont = V.to_context_ir(NS(text_model=lambda *a, **k: next(answers),
+                          yes_no=lambda q, text, **k: asked.append(text) or "a medium shot frames" in text),
                        V.CONTINUE_CTX_PREFIX + "He drinks.", mode="t2va", seconds=5)
-check("a medium shot frames" not in cont and "the same shot continues on a traveler" in cont,
-      "a continued part never opens on a new framing")
-check("holds a static shot" in cont, "a camera line that is not a new framing stays")
-first = V.to_context_ir(NS(text_model=lambda *a, **k: reframed), "He drinks.", mode="t2va", seconds=5)
-check("a medium shot frames" in first, "a first part keeps its framing")
+check(asked and cont.startswith("integrated_multimodal_description: [Shot 1] Live-action, the traveler, framed"),
+      "a continued part the model reads as a new framing is rewritten once")
+asked.clear()
+first = V.to_context_ir(NS(text_model=lambda *a, **k: reframed,
+                           yes_no=lambda q, text, **k: asked.append(text) or True),
+                        "He drinks.", mode="t2va", seconds=5)
+check("a medium shot frames" in first and not asked, "a first part keeps its framing, nothing is asked")
 check(V.to_context_ir(NS(vision_model=lambda *a, **k: good), "x", mode="ref2va", seconds=5, images=["p.png"]) == "x",
       "a base-mode answer is not accepted for Ref2VA")
 

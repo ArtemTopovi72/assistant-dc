@@ -1167,12 +1167,6 @@ def quoted_lines(text: str) -> list:
             if _flat_line(x) and not x.startswith("The camera cuts")]  # the chain prefix quotes its own cut cues
 
 
-_NEW_FRAMING = re.compile(
-    r"\b(?:a|an|the)\s+(?:(?:extreme|very|tight|slow|static|locked-off|handheld|wide|medium|"
-    r"close|close-up|full|long|establishing|over-the-shoulder)[\s-]+){1,3}shot\s+"
-    r"(?:frames|shows|of|captures|opens on|reveals)", re.I)
-
-
 def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
                   images: Sequence[str] = (), n_videos: int = 0, n_audios: int = 0) -> str:
     """Rewrite a free-text request into H3's own prompt structure.
@@ -1314,9 +1308,29 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
     out = re.sub(r"\bAt (\d{1,2})\.(\d{1,3})\b(?!:)",
                  lambda m: f"At 00:{int(m.group(1)):02d}.{m.group(2).ljust(3, '0')}", out)
     if "The shot continues with no cut" in description:
-        # Told in words (rule 7), the writer still opened part 2 with «a medium shot frames
-        # a traveler» and H3 jumped from a far figure to his face (live 2026-10-15).
-        out = _NEW_FRAMING.sub("the same shot continues on", out)
+        # Told in words (rules 7-8), the writer still opened part 2 with «a medium shot frames
+        # a traveler»; the join crossfaded a far figure into his face (live 2026-10-15).
+        # Read back by the model, rewritten once when it breaks the continued shot.
+        from seams import yes_no
+        try:
+            broken = yes_no(ctx)(
+                "This prompt is the NEXT part of one continuous shot: it must open on the same "
+                "framing the clip already ends on.\n\n{text}\n\nDoes it open on a new "
+                "framing or shot size (e.g. 'a medium shot frames…', 'a close-up of…'), cut "
+                "to another shot, or have someone who is already in the scene enter, run in "
+                "or appear again?", out)
+        except Exception:
+            broken = False
+        if broken:
+            logger.info("Context-IR: the continued part broke the shot; rewritten once")
+            again = clean(ask(user + "\n\nYour last answer opened on a new framing, cut, or brought "
+                              "someone in again. Rewrite it as ONE continuous shot that opens on "
+                              "the framing the clip ends on; any change of view is a camera move "
+                              "in real time; nobody already in the scene enters again."))
+            if again and all(f in again for f in need) and "non_diegetic_music" in again \
+                    and not _lost_lines(description, again):
+                out = re.sub(r"\bAt (\d{1,2})\.(\d{1,3})\b(?!:)",
+                             lambda m: f"At 00:{int(m.group(1)):02d}.{m.group(2).ljust(3, '0')}", again)
     # The guide separates the fields with one blank line; the model often
     # writes them back to back.
     return re.sub(r"\n+(?=(?:overall_soundscape|non_diegetic_music|summary|retention_analysis|"
