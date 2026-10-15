@@ -1167,6 +1167,12 @@ def quoted_lines(text: str) -> list:
             if _flat_line(x) and not x.startswith("The camera cuts")]  # the chain prefix quotes its own cut cues
 
 
+_NEW_FRAMING = re.compile(
+    r"\b(?:a|an|the)\s+(?:(?:extreme|very|tight|slow|static|locked-off|handheld|wide|medium|"
+    r"close|close-up|full|long|establishing|over-the-shoulder)[\s-]+){1,3}shot\s+"
+    r"(?:frames|shows|of|captures|opens on|reveals)", re.I)
+
+
 def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
                   images: Sequence[str] = (), n_videos: int = 0, n_audios: int = 0) -> str:
     """Rewrite a free-text request into H3's own prompt structure.
@@ -1307,6 +1313,10 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
     # The guide's cut time is "At 00:03.500"; the model also wrote "At 04.00".
     out = re.sub(r"\bAt (\d{1,2})\.(\d{1,3})\b(?!:)",
                  lambda m: f"At 00:{int(m.group(1)):02d}.{m.group(2).ljust(3, '0')}", out)
+    if "The shot continues with no cut" in description:
+        # Told in words (rule 7), the writer still opened part 2 with «a medium shot frames
+        # a traveler» and H3 jumped from a far figure to his face (live 2026-10-15).
+        out = _NEW_FRAMING.sub("the same shot continues on", out)
     # The guide separates the fields with one blank line; the model often
     # writes them back to back.
     return re.sub(r"\n+(?=(?:overall_soundscape|non_diegetic_music|summary|retention_analysis|"

@@ -56,6 +56,16 @@ check("never a line you make up" in seen.get("user", ""), "the writer adds no sp
 # added «a third figure runs through the mist» -- the girl of part 1, running past again.
 check("never a cut and never a second [Shot]" in seen.get("user", ""), "a continued shot is one shot, moved in real time")
 check("never enters, runs in or appears" in seen.get("user", ""), "nobody already in the scene comes in again")
+# Told in words, the writer still opened part 2 with «a medium shot frames a traveler»: a jump.
+reframed = ("integrated_multimodal_description: [Shot 1] Live-action, a medium shot frames a traveler. "
+            "The camera holds a static shot as he drinks.\noverall_soundscape: wind.\nnon_diegetic_music: N/A")
+cont = V.to_context_ir(NS(text_model=lambda *a, **k: reframed),
+                       V.CONTINUE_CTX_PREFIX + "He drinks.", mode="t2va", seconds=5)
+check("a medium shot frames" not in cont and "the same shot continues on a traveler" in cont,
+      "a continued part never opens on a new framing")
+check("holds a static shot" in cont, "a camera line that is not a new framing stays")
+first = V.to_context_ir(NS(text_model=lambda *a, **k: reframed), "He drinks.", mode="t2va", seconds=5)
+check("a medium shot frames" in first, "a first part keeps its framing")
 check(V.to_context_ir(NS(vision_model=lambda *a, **k: good), "x", mode="ref2va", seconds=5, images=["p.png"]) == "x",
       "a base-mode answer is not accepted for Ref2VA")
 
