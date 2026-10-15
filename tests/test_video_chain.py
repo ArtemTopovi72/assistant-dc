@@ -269,6 +269,25 @@ def test_the_speech_check_wants_the_lines_in_the_sound():
     assert V.quoted_lines('He says «ладно, пойдёт» and nods.') == ["ладно, пойдёт"]
 
 
+def test_the_judge_rewrites_bad_parts_and_never_a_quoted_line():
+    parts = ['The man says «ну и тяжесть» and lifts the rifle.', "Sparks swirl in the dark.", "He sighs."]
+    asked = []
+
+    def model(ctx, system, user, **k):
+        asked.append(system[:20])
+        if system.startswith("You are a strict"):
+            return '{"bad": [{"part": 2, "why": "only sparks"}]}' if len(asked) == 1 else '{"bad": []}'
+        return "He lowers the rifle slowly and rests it on the table."
+    ctx = types.SimpleNamespace(text_model=model)
+    out = V.validate_script(ctx, parts)
+    assert out[0] == parts[0] and out[2] == parts[2] and out[1].startswith("He lowers"), out
+    # a rewrite that drops the quote is thrown away
+    quoted = ['He says «да».']
+    ctx2 = types.SimpleNamespace(text_model=lambda c, s, u, **k: (
+        '{"bad": [{"part": 1, "why": "x"}]}' if s.startswith("You are a strict") else "He nods at the door."))
+    assert V.validate_script(ctx2, quoted) == quoted
+
+
 def test_a_chain_part_samples_like_a_plain_clip():
     """The chain ran the FL2V turbo LoRA at 6 steps and came back soapy;
     the plain t2va clip (TaoMate 3-step LoRA) was crisp. Same LoRA, same steps."""

@@ -1745,6 +1745,63 @@ def mark_inserts(ctx, parts: list) -> list:
     return out
 
 
+_JUDGE = ("You are a strict editor of a video script split into numbered parts; each part is "
+          "rendered as its own clip by a video model that draws exactly what is written. A part "
+          "is BAD when: (a) it holds more than one distinct visible action or more than one "
+          "camera move; (b) nobody does anything visible (only effects, light, mood, camera); "
+          "(c) it repeats what an earlier part already showed; (d) it asks for something the "
+          "model draws badly or impossibly: a held object flying or floating by itself, extra "
+          "limbs, many small items at once, text on screen, a person in two places; (e) it "
+          "uses filler (sparks, embers, glow, dust, particles, 'cinematic', 'graceful', "
+          "'epic') that carries no action; (f) it contradicts the part before it (another "
+          "place, another outfit, an object that was put away and is in hand again). Spoken "
+          "lines in quotes are fine and never a reason. Reply as JSON only: "
+          '{"bad": [{"part": 2, "why": "short reason"}]} -- an empty list when all are fine.')
+
+
+def validate_script(ctx, parts: list, rounds: int = 2) -> list:
+    """`parts` judged by the model and the bad ones rewritten, up to `rounds` times. A
+    script from the agent arrived with a part of pure sparks, a held rifle flying and two
+    parts saying the same line (live 2026-10-15). Quoted lines are never touched: a rewrite
+    that drops one is thrown away. Any failure keeps the parts as they were."""
+    from utils import safe_json_from_llm
+    parts = list(parts)
+    for _ in range(rounds):
+        listing = "\n".join(f"{i}. {p}" for i, p in enumerate(parts, 1))
+        try:
+            got = (safe_json_from_llm(text_model(ctx)(ctx, _JUDGE, listing, temperature=0.1,
+                                                      max_tokens=500) or "", ["bad"]) or {}).get("bad") or []
+            bad = {int(b["part"]): str(b.get("why") or "") for b in got
+                   if str(b.get("part", "")).isdigit() and 1 <= int(b["part"]) <= len(parts)}
+        except Exception as exc:
+            logger.warning("validate_script: the judge failed: %s", exc)
+            return parts
+        if not bad:
+            return parts
+        for n, why in sorted(bad.items()):
+            before = parts[n - 1]
+            if before.startswith((INSERT_HEAD, INSERT_BACK)):    # its camera cut is deliberate
+                continue
+            try:
+                new = " ".join((text_model(ctx)(
+                    ctx,
+                    "Rewrite ONE part of a video script so it is a single clear visible action by "
+                    "the people in it, concrete and physical, in English. Fix the problem named. "
+                    "Keep every quoted spoken line character for character, in its language. Add no "
+                    "sparks, glow, mood words or camera work. The part before and after it are given "
+                    "only for continuity: do not repeat them. Reply with the rewritten part only.",
+                    f"PROBLEM: {why}\nBEFORE: {parts[n - 2] if n > 1 else '-'}\nPART: {before}\n"
+                    f"AFTER: {parts[n] if n < len(parts) else '-'}",
+                    temperature=0.3, max_tokens=250) or "").split())
+            except Exception as exc:
+                logger.warning("validate_script: rewrite of part %d failed: %s", n, exc)
+                continue
+            if len(new) >= 15 and not _lost_lines(before, new):
+                logger.info("validate_script: part %d (%s): %s -> %s", n, why, before[:80], new[:80])
+                parts[n - 1] = new
+    return parts
+
+
 def new_people_clause(first: int, n: int) -> str:
     """The continuation brings in people who are not in <Video 1>, one per picture
     from <Picture first>: each enters the shot and keeps that picture's face, hair,
