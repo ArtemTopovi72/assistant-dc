@@ -50,6 +50,8 @@ check("Full-Reference" in seen.get("sys", ""), "Ref2VA uses the full-reference g
 # grandma of the first frame out, and H3 rendered the room without her (2026-10-12).
 check("every person and animal visible in <Picture 1> is in the shot" in seen.get("user", ""),
       "whoever is in the first frame stays in the shot")
+# «He turns and shouts» with no words came back as <d>[English] Look at that!</d> (2026-10-15).
+check("never a line you make up" in seen.get("user", ""), "the writer adds no spoken line of its own")
 check(V.to_context_ir(NS(vision_model=lambda *a, **k: good), "x", mode="ref2va", seconds=5, images=["p.png"]) == "x",
       "a base-mode answer is not accepted for Ref2VA")
 

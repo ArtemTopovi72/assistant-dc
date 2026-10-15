@@ -1243,7 +1243,10 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
             "holds one thing at a time; never describe a held object floating or flying "
             "unless the request says it is thrown. (4) No on-screen text, captions or "
             "subtitles. (5) A moment without speech is described by what is heard in the "
-            "room (footsteps, breath, fabric), never left silent.\n"
+            "room (footsteps, breath, fabric), never left silent. (6) Only the lines quoted in "
+            "the request are spoken, word for word and in their own language; someone who "
+            "shouts, calls or says something with no quoted words makes a wordless sound "
+            "(a shout, a gasp), never a line you make up.\n"
             # A plan part «a man lunges out of the cabinet» left the grandma who
             # fills the first frame unnamed, and H3 rendered an empty room
             # (live 2026-10-12, after the user dropped her part from the plan).
