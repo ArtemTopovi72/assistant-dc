@@ -1004,12 +1004,11 @@ _START_LOCK_SUFFIX = (
     "framing, crop, zoom and angle; any camera move or reframing happens only later in the "
     "clip and only when asked for above.")
 _STYLE_LOCK_SUFFIX = (
-    " Keep the look of <Picture 1> unchanged from the first frame to the last: the same "
-    "medium, the same rendering and the same level of realism as the reference itself; "
-    "nothing in the scene changes its look, and nothing is added that is not in the scene.")
-# 10-15: the lock named its styles («a cartoon, anime, painting or 3D render ... never restyle
-# the faces»): photos of a man seen from behind came out with drawn anime faces floating over
-# the lake and the beach. Naming the styles put them into the clip.
+    " Keep the reference's visual style unchanged from "
+    "the first frame to the last: a photograph stays a photograph (hyper-realistic, "
+    "true-to-life detail, real skin and materials), a cartoon, anime, painting or 3D render "
+    "stays in exactly that style; never switch between realistic and drawn, never restyle "
+    "the faces or the scene.")
 
 
 def _asks_new_style(description: str, ctx=None) -> bool:

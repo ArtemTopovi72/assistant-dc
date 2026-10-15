@@ -400,13 +400,3 @@ def test_translation_gloss_after_a_quote_is_cut():
     """The gloss «Море...» (The sea...) was spoken in English: only the quote may stay."""
     out = V.strip_translations(['He says «Море забирает печали» (The sea takes sorrows). Then "Идём" (Let us go) he adds.'])
     assert out == ['He says «Море забирает печали». Then "Идём" he adds.']
-
-
-def test_a_hero_seen_from_behind_gets_no_reference_picture():
-    """«exactly his face» with a faceless back view painted faces all over the clip."""
-    from unittest.mock import patch
-    import tool_image_handlers as H
-    with patch("identity_metrics.face_count", return_value=0):
-        assert H._face_count("x.jpg") == 0
-    with patch("identity_metrics.face_count", side_effect=RuntimeError):
-        assert H._face_count("x.jpg") is None

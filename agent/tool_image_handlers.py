@@ -1202,15 +1202,6 @@ def _speech_ok(ctx, clip: str, lines: list) -> bool:
         return True
 
 
-def _face_count(path: str):
-    """Faces YuNet finds in `path`; None when the detector can't tell (the reference then stays)."""
-    try:
-        import identity_metrics
-        return identity_metrics.face_count(path, score_threshold=0.6)
-    except Exception:
-        return None
-
-
 def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str, start: int = 1) -> int:
     """Parts 2..n of a long script as the next links of `chain` (each continues the
     previous part's saved latent). `parts` are ALL the parts as (prompt, seconds) from video.prepare_prompt,
@@ -1228,11 +1219,6 @@ def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str, st
     # same for every part, is the hero's reference; the clause tells the model what it is for.
     ref = os.path.join(work, "hero.jpg")
     if not tg_continue.seed_frame(first, ref):
-        ref = ""
-    elif _face_count(ref) == 0:
-        # A man seen from behind has no face to keep, and «exactly his face» made the model
-        # paint faces all over the frame (live 2026-10-15); the latent carries him alone.
-        logger.info("video chain: no face in part 1, parts go on without the hero's picture")
         ref = ""
     same = (" The person shown in <Picture 1> is the same person as in the part before: exactly "
             "his face, hair, build and clothes. Only the person is taken from that picture, never "
