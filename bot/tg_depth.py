@@ -172,6 +172,9 @@ def _depth_menu_kb(sess, lang: str = _DEFAULT_LANG, estimate=None) -> dict:
                     f"~{_depth_eta_text(d, lang, estimate)}",
             "callback_data": "depth:" + d,
                     }])
+    pdf = getattr(sess, "dr_format", "") == "pdf"
+    rows.append([{"text": ("" if pdf else "✅ ") + _t("drfmt_md", lang), "callback_data": "drfmt:md"},
+                 {"text": ("✅ " if pdf else "") + _t("drfmt_pdf", lang), "callback_data": "drfmt:pdf"}])
     rows.append(_nav_back_row(lang))
     return {"inline_keyboard": rows}
 

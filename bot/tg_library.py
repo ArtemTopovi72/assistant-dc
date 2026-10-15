@@ -303,6 +303,13 @@ class LibraryMixin:
             path = Path(tmpdir) / f"{safe}.md"
             path.write_text(f"# {topic}\n\n{report}\n", encoding="utf-8")
             caption = tg_bot._t("dr_file_cap", lang, n=len(report))
+            if getattr(self._get_session(chat_id), "dr_format", "") == "pdf":
+                import dr_pdf
+                pdf = path.with_suffix(".pdf")
+                if dr_pdf.md_to_pdf(path.read_text(encoding="utf-8"), str(pdf), topic) \
+                        and self._send_document(chat_id, str(pdf), caption):
+                    return True
+                tg_bot.logger.warning("report PDF not delivered chat=%s; sending the Markdown", chat_id)
             if self._send_document(chat_id, str(path), caption):
                 return True
             tg_bot.logger.warning("report file delivery failed chat=%s", chat_id)

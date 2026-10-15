@@ -86,11 +86,13 @@ def make_bot():
 def inline_labels(kb):
     if not isinstance(kb, dict) or "inline_keyboard" not in kb:
         return []
-    return [b["text"] for row in kb["inline_keyboard"] for b in row if b.get("callback_data") != "nav:back"]
+    return [b["text"] for row in kb["inline_keyboard"] for b in row
+            if b.get("callback_data", "").startswith("depth:")]
 
 
 def inline_data(kb):
-    return [b["callback_data"] for row in kb["inline_keyboard"] for b in row if b["callback_data"] != "nav:back"]
+    return [b["callback_data"] for row in kb["inline_keyboard"] for b in row
+            if b["callback_data"].startswith("depth:")]
 
 
 bot = make_bot()
@@ -294,6 +296,20 @@ check("a zero duration does not render as negative or blank",
 def _boom(*_a, **_k):
     raise RuntimeError("boom")
 
+
+# The report's format sits next to the depth: Markdown unless PDF is picked, one ✅.
+_s = bot._get_session(CID)
+_s.dr_format = ""
+_fmt = [b for row in T._depth_menu_kb(_s, "ru")["inline_keyboard"] for b in row
+        if b["callback_data"].startswith("drfmt:")]
+check("the format row offers MD and PDF, MD marked by default",
+      [b["callback_data"] for b in _fmt] == ["drfmt:md", "drfmt:pdf"] and _fmt[0]["text"].startswith("✅")
+      and not _fmt[1]["text"].startswith("✅"), [b["text"] for b in _fmt])
+_s.dr_format = "pdf"
+_fmt = [b for row in T._depth_menu_kb(_s, "ru")["inline_keyboard"] for b in row
+        if b["callback_data"].startswith("drfmt:")]
+check("PDF picked moves the ✅", _fmt[1]["text"].startswith("✅") and not _fmt[0]["text"].startswith("✅"))
+_s.dr_format = ""
 
 try:
     check("an unavailable estimator shows '?', never a made-up time",

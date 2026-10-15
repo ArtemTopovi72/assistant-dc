@@ -88,6 +88,7 @@ class CallbackMixin:
         if data.startswith("video:"): return self._cb_video_settings(chat_id, msg, data)
         if data.startswith("lv:"): return self._cb_long_video(chat_id, data)
         if data.startswith("depth:"): return self._cb_research_depth(chat_id, msg, data)
+        if data.startswith("drfmt:"): return self._cb_research_format(chat_id, msg, data)
         if data.startswith("char:"): return self._cb_pick_character(chat_id, data)
         if data == "lora_collect:start": return self._cb_start_lora_collect(chat_id)
         if data in ("facts_clear", "facts_clear_confirm", "facts_clear_cancel"):
@@ -586,6 +587,16 @@ class CallbackMixin:
         sess = self._get_session(chat_id)
         self._pick_character(chat_id, sess, self._lang(sess),
                              data.split(":", 1)[1].strip())
+
+    def _cb_research_format(self, chat_id: int, msg: dict, data: str) -> None:
+        sess = self._get_session(chat_id)
+        lang = self._lang(sess)
+        sess.dr_format = "pdf" if data == "drfmt:pdf" else ""
+        self._store.put(sess)
+        msg_id = msg.get("message_id")
+        if msg_id:
+            self._edit_text(chat_id, msg_id, tg_bot._depth_menu_text(sess, lang),
+                            parse_mode="HTML", keyboard=tg_bot._depth_menu_kb(sess, lang))
 
     def _cb_research_depth(self, chat_id: int, msg: dict, data: str) -> None:
         sess = self._get_session(chat_id)

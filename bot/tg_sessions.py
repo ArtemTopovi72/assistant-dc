@@ -235,6 +235,8 @@ class _Session:
         # "not chosen" and resolves to DR_DEFAULT_DEPTH — the difference matters
         # only for the ✅ in the picker, since both behave the same.
         self.dr_depth: str = d.get("dr_depth", "")
+        # The report file, chosen next to the depth: "" = Markdown, "pdf" = PDF.
+        self.dr_format: str = d.get("dr_format", "")
         # Song settings, chosen in Creativity ▸ 🎛 Song settings. Empty means
         # "not chosen" -> the songwriter picks what suits the topic; a chosen
         # value becomes an EXPLICIT REQUIREMENT in the caption brief, which is
@@ -466,6 +468,7 @@ class _Session:
                 "image_aspect":      self.image_aspect,
                 "image_quality":     self.image_quality,
                 "dr_depth":          self.dr_depth,
+                "dr_format":         self.dr_format,
                 "music_genre":       self.music_genre,
                 "music_tempo":       self.music_tempo,
                 "music_vocal":       self.music_vocal,

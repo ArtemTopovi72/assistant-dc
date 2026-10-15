@@ -114,5 +114,26 @@ for topic in ("", "///", "a" * 300, "C:\\evil\\..\\path", "тема: с? *зна
           and not any(c in name for c in '\\/:*?"<>|'),
           name)
 
+# ── 6. PDF picked in the depth menu: the PDF goes out, the .md only if it fails ──
+print("\n" + "=" * 70)
+print("6. A PDF WHEN PDF IS PICKED, THE MARKDOWN WHEN IT CANNOT BE BUILT")
+print("=" * 70)
+import dr_pdf  # noqa: E402
+_real_pdf = dr_pdf.md_to_pdf
+for builds, want in ((True, ".pdf"), (False, ".md")):
+    b = make_bot(upload_ok=True)
+    s = b._get_session(CID)
+    s.dr_format = "pdf"
+    b._store.put(s)
+    b.docs = []
+    b._send_document = lambda cid, path, caption="", b=b: (b.docs.append(path), True)[1]
+    dr_pdf.md_to_pdf = lambda md, out, title="", ok=builds: (ok and open(out, "wb").write(b"%PDF-1.4"), ok)[1]
+    b._send_report_file(CID, "Тема", REPORT, "h", "ru")
+    check(f"PDF {'built' if builds else 'failed'} -> one {want} sent",
+          len(b.docs) == 1 and b.docs[0].endswith(want), b.docs)
+    s.dr_format = ""
+    b._store.put(s)
+dr_pdf.md_to_pdf = _real_pdf
+
 print(f"\n{OK} passed, {BAD} failed")
 sys.exit(1 if BAD else 0)

@@ -1114,6 +1114,8 @@ _MSG: dict[str, dict[str, str]] = {
     "d_quick":      {"en": "⚡ Quick", "ru": "⚡ Быстро"},
     "d_standard":   {"en": "⚖️ Standard", "ru": "⚖️ Стандарт"},
     "d_deep":       {"en": "🔬 Deep", "ru": "🔬 Глубоко"},
+    "drfmt_md":     {"en": "📄 Report: MD", "ru": "📄 Отчёт: MD"},
+    "drfmt_pdf":    {"en": "📕 Report: PDF", "ru": "📕 Отчёт: PDF"},
     "depth_hint":   {"en": "Quick reads fewer sources and answers sooner; Deep crawls "
                            "further and writes a longer paper. You can press ⛔ Stop at "
                            "any point.",
