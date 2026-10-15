@@ -1214,15 +1214,6 @@ def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str, st
     last, prev = start, first
     work = tempfile.mkdtemp(prefix="chainjoins_")
     ctx.chain_joins = []           # frames on both sides of each join, looked at once the card is free
-    # The latent carries the scene but not the face: parts 2-5 of the BAR clip ran with no
-    # picture and every part had another man (live 2026-10-15). One frame of part 1, the
-    # same for every part, is the hero's reference; the clause tells the model what it is for.
-    ref = os.path.join(work, "hero.jpg")
-    if not tg_continue.seed_frame(first, ref):
-        ref = ""
-    same = (" The person shown in <Picture 1> is the same person as in the part before: exactly "
-            "his face, hair, build and clothes. Only the person is taken from that picture, never "
-            "its frame, text or background. He has exactly two hands and holds one thing at a time.")
     for i, part in enumerate(parts[1:], start=2):
         if getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
             break
@@ -1231,11 +1222,10 @@ def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str, st
         r, crashed = {}, False
         for attempt in (1, 2):
             try:
-                r = video_mod.generate_video(ctx, video_mod._with_lock(part[0], same) if ref else part[0],
+                r = video_mod.generate_video(ctx, part[0],
                                              seconds=part[1], prepared=True,
                                              aspect=args.get("aspect") or "", seed=args.get("seed"),
-                                             chain=(chain, start + i - 1), size_from=prev,
-                                             reference=ref)
+                                             chain=(chain, start + i - 1), size_from=prev)
             except Exception:
                 logger.exception("video chain: part %d crashed", i)
                 crashed = True
