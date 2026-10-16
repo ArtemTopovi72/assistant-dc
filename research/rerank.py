@@ -191,6 +191,10 @@ class Reranker:
         raises; falls back to lexical if the chosen backend fails at call time."""
         if not texts:
             return []
+        # tokenizers rejects a str holding a lone surrogate ("TextInputSequence
+        # must be str") and the whole batch fell back to lexical scoring.
+        query = (query or "").encode("utf-8", "replace").decode("utf-8")
+        texts = [t.encode("utf-8", "replace").decode("utf-8") for t in texts]
         try:
             if self.backend == "cross" and self._ce is not None:
                 return self._relevance_cross(query, texts)

@@ -1305,6 +1305,11 @@ def _stream_chat_raw(ctx, payload: dict):
     # that keeps trickling/looping tokens forever (where the read timeout never fires).
     max_chars = dep(ctx, "LLM_STREAM_MAX_CHARS", LLM_STREAM_MAX_CHARS)
     deadline = dep(ctx, "time", time).monotonic() + LLM_STREAM_MAX_SECONDS
+    # A lone surrogate in a crawled page made LM Studio's JSON parser reject the
+    # whole request (400 three times, the page's brief lost); it becomes "?".
+    if "messages" in payload:
+        payload["messages"] = json.loads(json.dumps(payload["messages"], ensure_ascii=False)
+                                         .encode("utf-8", "replace").decode("utf-8"))
     with dep(ctx, "requests", requests).post(
         LM_STUDIO_URL,
         json=payload,
