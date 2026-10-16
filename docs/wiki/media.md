@@ -163,7 +163,10 @@ The clip's own speech is the reference F5 clones from, but a direct clone copied
 
 ### Video look (vision)
 
-`video_look.look_at_video` gives the vision model something to look at, not only transcribed speech. `dense_pass` grabs the whole clip at low resolution and `key_times` turns a frame-to-frame change score plus a sharpness score into one timestamp per shot (the sharpest frame of each shot, never the blurred boundary frame itself), falling back to `sample_times`'s fixed interval if the dense pass fails. `make_sheet` tiles the chosen frames with timestamp labels into a contact sheet kept on disk for follow-up questions, but every frame is also sent to the vision model at full size in one call, since a shrunk tile loses detail a full frame keeps. A known transcript of what is said is passed alongside the frames so named objects settle what a small frame cannot, never to add anything the frames do not show.
+`video_look.look_at_video` gives the vision model something to look at, not only transcribed speech. `dense_pass` grabs the whole clip at low resolution and `key_times` turns a frame-to-frame change score plus a sharpness score into one timestamp per shot (the sharpest frame of each shot, never the blurred boundary frame itself), falling back to `sample_times`'s fixed interval if the dense pass fails. `make_sheet` tiles the chosen frames with timestamp labels into a contact sheet kept on disk for follow-up questions, but every frame is also sent to the vision model at full size in one call, since a shrunk tile loses detail a full frame keeps. A known transcript of what is said is passed alongside the frames so named objects settle what a small frame cannot, never to add anything the frames do not show. The speech also names actions: «он чуть лапу свою не съел» is a dog gnawing its paw. Short clips are read for what happens, not as a list of poses:
+- the dense pass runs faster on them (`dense_fps`: 6 fps up to 20 s, 4 fps up to 60 s), so each window has sharp candidates;
+- two picks inside one second get sub-second labels («0:02.3»);
+- a smeared frame is described as fast movement.
 
 ## Where it lives
 

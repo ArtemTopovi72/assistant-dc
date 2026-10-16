@@ -195,7 +195,7 @@ on tag boundaries (`_split_html`) rather than character counts, because Telegram
 message whose markup is malformed and a rejected *edit* deletes the status message the user
 was reading. [`bot/tg_transport.py`](../../bot/tg_transport.py) owns the retrying HTTP calls to `api.telegram.org`,
 keyboard-row width fitting (`fit_rows`), and the photo/video/document/voice send paths with
-their parse-mode fallbacks. `TelegramBot` itself ([`bot/tg_bot.py`](../../bot/tg_bot.py)) is a single class built
+their parse-mode fallbacks. Every delivered result can be rated. Each media sender takes a `feedback` kind, `image`, `video`, `music`, `document`, `research` or `voice`, and `""` opts out. Once Telegram accepts the message, `_attach_feedback` files it in [`bot/tg_feedback.py`](../../bot/tg_feedback.py) with what the task was asked, and edits the 👍/👎 row under the message's own inline buttons. Text answers and retellings take the row through `TaskRunnerMixin._feedback_kb`. The Feedback tab ([`gui/gui_feedback_tab.py`](../../gui/gui_feedback_tab.py)) charts each kind. `TelegramBot` itself ([`bot/tg_bot.py`](../../bot/tg_bot.py)) is a single class built
 from every mixin in this domain (`AdminMixin`, `CallbackMixin`, `CommandsMixin`,
 `DispatchMixin`, `QueueMixin`, `RegistrationMixin`, `ResolveMixin`, `TaskRunnerMixin`,
 `TransportMixin`, plus one mixin per Creativity-menu flow), the split across files is a
