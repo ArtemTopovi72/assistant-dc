@@ -235,7 +235,9 @@ class InpaintImageArgs(_ToolArgs):
         "or positional phrases — not just simple nouns. Good examples: 'glasses', "
         "'the mug', 'cat tail', 'puddle below the jar', 'left hand', 'blue shirt', "
         "'background behind the person'. It edits that thing and leaves the rest of "
-        "the image unchanged."))
+        "the image unchanged. For a removal, name the things that go away, never the "
+        "surface they lie on: 'dumbbells and wires', not 'floor with dumbbells and wires' "
+        "(that masks and repaints the whole floor)."))
 
 
 class SwapPersonArgs(_ToolArgs):
