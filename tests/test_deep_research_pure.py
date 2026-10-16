@@ -668,6 +668,27 @@ def test_lone_math_symbols_print_as_signs():
     check("symbols: real formulas are left alone", dr_pdf.plain_symbols(r"$x^2$") == r"$x^2$")
 
 
+def test_selection_searches_makers_and_readings():
+    """«Emergent IMX255 camera» and «Teledyne FLIR Oryx IMX255» found the HT-8000 and the
+    Oryx 89S6 the component grid never reached; «H.265 compression camera 10GigE» found the
+    AEOLUS that encodes on board."""
+    import json
+    import dr_collect
+    from _dr_ctx import research_ctx
+    analysis = {"probe_core": "global shutter color camera", "forced_interfaces": ["5GigE", "10GigE"],
+                "ambiguous": [{"requirement": "Ethernet", "readings": ["GigE Vision (1 Gbps)"]},
+                              {"requirement": "Перекодирование", "readings": ["On-camera H.265 compression"]}]}
+    check("readings: each non-interface reading with the widest interface",
+          dr_collect._reading_probes(analysis) == ["On-camera H.265 compression camera 10GigE"],
+          dr_collect._reading_probes(analysis))
+    briefs = [{"title": "Atlas", "brief": "- ATP089S-C (LUCID): Sony IMX255 · 58 fps"}]
+    ctx = research_ctx(_think_call=lambda *a, **k: json.dumps(
+        {"components": ["IMX255"], "missing_makers": ["Emergent Vision 10GigE", "Teledyne FLIR Oryx 8.9MP"]}))
+    qs = dr_collect.selection_followups(ctx, "camera", briefs, analysis, set())
+    check("followups: each missing maker with the qualifying part",
+          "Emergent IMX255 camera" in qs and "Teledyne FLIR Oryx IMX255 camera" in qs, qs)
+
+
 def test_english_query_is_not_searched_as_russia():
     """ru-ru for an English camera query returned Russian resellers instead of the makers."""
     import types

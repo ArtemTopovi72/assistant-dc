@@ -82,6 +82,30 @@ def _format_probes(analysis: dict, cap: int = 6) -> list:
     return list(dict.fromkeys(out))[:cap]
 
 
+_IFACE_WORDS = re.compile(r"(?i)gig|ethernet|gbps|base-?t|usb|coaxpress|camera ?link")
+
+
+def _reading_probes(analysis: dict, cap: int = 3) -> list:
+    """Each reading of an ambiguous requirement as «<reading> <product> <widest forced
+    interface>»: «H.265 compression camera 10GigE» reached the Emergent AEOLUS, the only
+    camera that encodes on board, which no run had found from «on-camera re-encoding»."""
+    noun = (str(analysis.get("probe_core") or "camera").split() or ["camera"])[-1]
+    ifaces = [i for i in analysis.get("forced_interfaces") or []
+              if isinstance(i, str) and not _PLAIN_GIGABIT.match(i.strip())]
+    # Interface readings are the forced-interface grid's job («GigE Vision 1 Gbps camera
+    # 10GigE» is noise).
+    readings = [[r for r in amb.get("readings") or [] if isinstance(r, str) and r.strip()
+                 and not _IFACE_WORDS.search(r)]
+                for amb in analysis.get("ambiguous") or [] if isinstance(amb, dict)]
+    out = []
+    for i in range(max(map(len, readings), default=0)):     # every requirement's first reading first
+        for rs in readings:
+            if i < len(rs):
+                words = re.sub(r"[()/,]", " ", rs[i]).split()[:5]
+                out.append(" ".join(words + [noun] + ifaces[-1:]))
+    return list(dict.fromkeys(out))[:cap]
+
+
 def selection_queries(ctx, topic: str, n: int = 14, sink: Optional[dict] = None) -> list:
     """Requirement-driven queries for a spec selection: the components that meet the hard
     numbers, the models on them per vendor and interface, each reading of an ambiguous
@@ -124,7 +148,7 @@ def selection_queries(ctx, topic: str, n: int = 14, sink: Optional[dict] = None)
     # The probes are product-level and land on vendor 10GigE pages; the planner rewrote them
     # into «8.3MP … 5GigE» which only an exact-number listing matches (0/6 targets).
     out_qs, seen = [], set()
-    for q in probes[:6] + qs:
+    for q in probes[:6] + _reading_probes(analysis) + qs:
         if q.lower() not in seen:
             seen.add(q.lower()); out_qs.append(q)
     return out_qs[:n]
@@ -152,8 +176,20 @@ def _parts_at_formats(lines: list, analysis: Optional[dict]) -> list:
     return [t for t, _ in sorted(count.items(), key=lambda kv: -kv[1])]
 
 
+def _maker_name(s: str) -> str:
+    """«Teledyne FLIR Blackfly S 8.3MP GigE» -> «Teledyne FLIR Blackfly S»: the words before
+    the first one carrying a number or a spec word."""
+    words = []
+    for w in s.split():
+        if re.search(r"\d", w) or w.lower() in {"gige", "global", "color", "colour", "4k",
+                                                  "camera", "cameras", "machine", "vision"}:
+            break
+        words.append(w)
+    return " ".join(words[:4])
+
+
 def selection_followups(ctx, topic: str, briefs: list, analysis: Optional[dict],
-                        searched: set, n: int = 10) -> list:
+                        searched: set, n: int = 18) -> list:
     """Second-round queries for a spec selection, from what the first round READ. The
     sensor that decides the answer (IMX255) was never in a search snippet, only on the
     pages; the entity multi-hop searched «Teledyne» and «Ethernet» and added 0 briefs."""
@@ -194,7 +230,11 @@ def selection_followups(ctx, topic: str, briefs: list, analysis: Optional[dict],
     # Emergent HE-8000 and Oryx 89S6 pages, «IMX255 global shutter color camera 10GigE» not.
     noun = core.split()[-1] if core.split() else "camera"
     grid = [f"{c} {noun} {i}" for c in comps[:4] for i in ifaces or [""]]
-    qs = [q for q in dict.fromkeys(grid + qs) if q.lower() not in searched][:n]
+    # «Emergent IMX255 camera» found the HT-8000/HE-8000 and «Teledyne FLIR Oryx IMX255» the
+    # ORX-10G-89S6C, makers the component grid alone never reached.
+    makers = [_maker_name(m) for m in data.get("missing_makers") or [] if isinstance(m, str)]
+    by_maker = [f"{m} {c} {noun}" for c in comps[:2] for m in dict.fromkeys(filter(None, makers))][:8]
+    qs = [q for q in dict.fromkeys(grid[:8] + by_maker + grid[8:] + qs) if q.lower() not in searched][:n]
     logger.info("Selection follow-up: components %s | missing makers %s | %d queries — %s",
                 data.get("components"), data.get("missing_makers"), len(qs), " | ".join(qs)[:700])
     return qs

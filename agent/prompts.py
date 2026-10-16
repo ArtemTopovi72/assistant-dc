@@ -113,6 +113,7 @@ SELECTION_BRIEF_ADDENDUM = """
 
 SELECTION MODE — the topic lists required specifications and the report must match product models against them. This OVERRIDES the 3-8 bullet limit:
 - One bullet PER PRODUCT MODEL the page gives, up to 20: "- <exact model name> (<maker>): <every spec the page states that bears on the requirements, each as name value unit, e.g. sensor Sony IMX255 · 4096x2160 · 8.9 MP · 58 fps · global shutter · color · 5GigE · PoE · H.265 · price 1234 USD>". Keep the model name exactly as written.
+- Always carry, when the page states them: the output pixel formats (e.g. BayerRG8, RGB8, YUV422 — an RGB output means the camera debayers on board) and every compression or encoding feature (JPEG, H.264/H.265, lossless compression, «Compression Beyond»); these decide an ambiguous «re-encoding» requirement.
 - A spec the page does not state is left out, never guessed. A model the page only names in passing still gets a bullet with what is stated.
 - After the model bullets, at most 3 bullets of facts that decide the requirements (an interface's real bandwidth, which sensors are global shutter, what a compression feature actually is)."""
 
@@ -276,7 +277,7 @@ A table: each requirement as the user wrote it · how you read it (for an ambigu
 2-5 bullets: the computed constraint (bandwidth, power, size) with the arithmetic, and which interfaces or component classes it rules in or out. Name the components (e.g. sensors by part number) that can meet the hard numbers, from the briefs.
 
 ## Кандидаты / Candidates
-A markdown table, best first. Columns: model (as a link to the exact page from the briefs) · vendor · the component · one column per requirement with the value from the source and ✅ meets / ❌ fails / ❓ not stated · price if stated. Put every model the briefs give that meets the hard requirements or fails exactly ONE of them; a model failing two or more belongs in Ruled out, never here. A model meeting all requirements goes first; if none meets all, say so above the table in one sentence.
+A markdown table, best first. Columns: model (as a link to the exact page from the briefs) · vendor · the component · one column per requirement with the value from the source and ✅ meets / ❌ fails / ❓ not stated · price if stated. Put every model the briefs give that meets the hard requirements or fails exactly ONE of them; a model failing two or more belongs in Ruled out, never here. A model meeting all requirements goes first; if none meets all, say so above the table in one sentence. An ambiguous requirement is judged under EVERY reading, and the cell says which one the mark rests on (e.g. «✅ RGB8 — debayer on camera», «✅ H.265 on board», «❌ raw Bayer only»); ❓ only when the briefs say nothing under any reading.
 
 ## Отсеяно / Ruled out
 Models that look close but fail a hard requirement, one line each: model — which requirement fails and the value that fails it (e.g. "Basler a2A3840-13gc — rolling shutter, 13 fps").
