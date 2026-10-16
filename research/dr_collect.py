@@ -216,6 +216,38 @@ def _parts_at_formats(lines: list, analysis: Optional[dict]) -> list:
     return [t for t, _ in sorted(count.items(), key=lambda kv: -kv[1])]
 
 
+_READING_MARK = re.compile(r"\b(?:H\.?26[45]|HEVC|M?JPEG|AV1)\b", re.I)
+
+
+def _reading_models(lines: list, analysis: Optional[dict]) -> list:
+    """«<model> <maker> datasheet» for models a brief names beside a feature from an
+    ambiguous requirement's reading (H.265, JPEG) but without a near format: the one
+    camera that encodes H.265 on board, Emergent's AEOLUS, came only as «AEOLUS
+    (Emergent): H.265 compression camera» on a news page, with nothing to judge it by."""
+    marks = {m.upper() for amb in (analysis or {}).get("ambiguous") or [] if isinstance(amb, dict)
+             for r in amb.get("readings") or [] if isinstance(r, str)
+             for m in _READING_MARK.findall(r) if not _IFACE_WORDS.search(m)}
+    pats = _format_patterns(analysis)
+    bullet = re.compile(r"^[-*•]\s*([^:()]{2,60}?)\s*\(([^()]{2,40})\)\s*:(.*)")
+    # A maker that already ships a near-format camera goes first: Emergent before an IP-cam shop.
+    # the first brief line carries «<page title>: - »
+    lines = ["- " + ln.split(": - ", 1)[1] if ": - " in ln and not ln.lstrip().startswith(("-", "*", "•"))
+             else ln for ln in lines]
+    known = {m.group(2).strip().split()[0].lower() for ln in lines
+             for m in [bullet.match(ln.strip())] if m and any(p.search(ln) for p in pats)}
+    out = []
+    for ln in lines:
+        s = ln.strip()
+        m = bullet.match(s)
+        if not m or any(p.search(s) for p in pats):
+            continue
+        name, maker, rest = m.group(1).strip(), m.group(2).strip(), m.group(3).upper()
+        if marks and any(k in rest for k in marks):
+            q = f"{name} {maker} datasheet" if maker.lower() not in name.lower() else f"{name} datasheet"
+            out.append((maker.split()[0].lower() not in known, q))
+    return list(dict.fromkeys(q for _, q in sorted(out, key=lambda x: x[0])))
+
+
 def _maker_name(s: str) -> str:
     """«Teledyne FLIR Blackfly S 8.3MP GigE» -> «Teledyne FLIR Blackfly S»: the words before
     the first one carrying a number or a spec word."""
@@ -279,7 +311,8 @@ def selection_followups(ctx, topic: str, briefs: list, analysis: Optional[dict],
     parts_up = {c.upper().replace("-", "") for c in comps}
     prices = [f"{m} price" for m in _models_at_formats(lines, analysis)
               if "/" not in m and m.upper().replace("-", "") not in parts_up][:4]
-    qs = [q for q in dict.fromkeys(grid[:12] + by_maker + prices + grid[12:] + qs)
+    specs = _reading_models(lines, analysis)[:3]
+    qs = [q for q in dict.fromkeys(grid[:12] + by_maker + specs + prices + grid[12:] + qs)
           if q.lower() not in searched][:n]
     logger.info("Selection follow-up: components %s | missing makers %s | %d queries — %s",
                 data.get("components"), data.get("missing_makers"), len(qs), " | ".join(qs)[:700])

@@ -699,6 +699,27 @@ def test_models_the_draft_left_out_are_named_to_the_check():
           [ln.split(" (")[0] for ln in out] == ["- pvCam-Ax5G-IMX255"], out)
 
 
+def test_followups_look_up_a_model_named_only_for_an_ambiguous_feature():
+    """Emergent's AEOLUS, the one camera that encodes H.265 on board, came only as «AEOLUS
+    (Emergent): H.265 compression camera» on a news page: nothing to judge it by, and no
+    round searched its specs."""
+    import json
+    import dr_collect
+    from _dr_ctx import research_ctx
+    briefs = [{"title": "News", "brief": "- AEOLUS (Emergent): H.265 compression camera\n"
+                                         "- HE-8000-S (Emergent): IMX255 · 4096 x 2160 · 10GigE"},
+              {"title": "Shop", "brief": "- C8C (Ezviz): H.265 · 1080p · Wi-Fi"}]
+    ctx = research_ctx(_think_call=lambda *a, **k: json.dumps({"components": []}))
+    analysis = {"probe_core": "camera", "forced_interfaces": ["10GigE"],
+                "near_formats": ["4096x2160 (8.9 MP)"],
+                "ambiguous": [{"requirement": "re-encoding", "readings": ["On-camera H.265 compression"]}]}
+    qs = dr_collect.selection_followups(ctx, "camera", briefs, analysis, set())
+    check("followups: the feature-only model's specs are looked up, its maker's first",
+          "AEOLUS Emergent datasheet" in qs and qs.index("AEOLUS Emergent datasheet")
+          < qs.index("C8C Ezviz datasheet") if "C8C Ezviz datasheet" in qs else "AEOLUS Emergent datasheet" in qs, qs)
+    check("followups: a model printing a near format needs no lookup", not any("HE-8000-S" in q and "datasheet" in q for q in qs), qs)
+
+
 def test_followups_keep_a_named_part_below_the_frequency_cut():
     """IMX255 was named by the model and printed on the pages, but below the 24 most
     frequent part numbers, and the grid dropped it (run 12)."""
