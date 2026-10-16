@@ -695,8 +695,7 @@ def test_a_russian_report_gets_a_noun_phrase_title():
     import deep_research as DR
     from _dr_ctx import research_ctx
     ctx = research_ctx(_think_call=lambda c, system, user, *a, **k:
-                       "«Подбор цифровой видеокамеры машинного зрения»
-" if "noun phrase" in system else "")
+                       "«Подбор цифровой видеокамеры машинного зрения»\n" if "noun phrase" in system else "")
     check("title: the model's noun phrase, quotes stripped",
           DR._document_title(ctx, "Подбери камеру: 8.3 Мп", "ru") == "Подбор цифровой видеокамеры машинного зрения")
     check("title: English reports keep their own path", DR._document_title(ctx, "pick a camera", "en") is None)
