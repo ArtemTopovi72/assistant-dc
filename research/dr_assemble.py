@@ -413,6 +413,15 @@ def drop_false_none_claim(report: str) -> tuple:
     return "\n".join(ln for i, ln in enumerate(lines) if i not in set(above)), True
 
 
+_BOTH_COLORS = re.compile(r"❓\s*((?:Mono(?:chrome)?\s*/\s*Colou?r|Colou?r\s*/\s*Mono(?:chrome)?)\b)", re.I)
+
+
+def mono_color_is_color(report: str) -> str:
+    """«Mono / Color» stated for a model means a color variant ships. Told so, the verify
+    pass still left «❓ Mono / Color» on three of run 23's eight cameras."""
+    return _BOTH_COLORS.sub(r"✅ \1", report)
+
+
 _NUM = re.compile(r"\d+(?:[.,]\d+)?")
 
 

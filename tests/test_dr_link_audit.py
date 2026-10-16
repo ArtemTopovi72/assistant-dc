@@ -338,5 +338,10 @@ order = [ln.split("]")[0][3:] for ln in rank_by_closeness(_K).split("\n") if ln.
 check("an 8.9 MP camera ranks above a 19.6 MP one for an 8.3 MP spec, a ❌ row goes last",
       order == ["HR-8000-S", "TRT089S", "ATL196S", "TRI089S"], order)
 
+from dr_assemble import mono_color_is_color  # noqa: E402
+check("«❓ Mono / Color» is a color camera", mono_color_is_color("| ❓ Mono / Color | ❓ Mono/Color |")
+      == "| ✅ Mono / Color | ✅ Mono/Color |")
+check("«❓ не указано» stays unknown", mono_color_is_color("| ❓ не указано |") == "| ❓ не указано |")
+
 print("%d passed, %d failed" % (OK, BAD))
 sys.exit(1 if BAD else 0)
