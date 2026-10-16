@@ -93,7 +93,7 @@ def selection_queries(ctx, topic: str, n: int = 14, sink: Optional[dict] = None)
                                         max_tokens=S.DR_PLAN_TOKENS, temperature=0.2) or "") or {}
     if sink is not None:
         sink["selection_analysis"] = {k: analysis.get(k) for k in (
-            "hard", "derived", "ambiguous", "probe_core", "forced_interfaces")}
+            "hard", "derived", "ambiguous", "near_formats", "probe_core", "forced_interfaces")}
     snippets = []
     probes = _format_probes(analysis) + [q for q in analysis.get("component_queries") or []
                                          if isinstance(q, str)][:6]
@@ -126,6 +126,28 @@ def selection_queries(ctx, topic: str, n: int = 14, sink: Optional[dict] = None)
     return out_qs[:n]
 
 
+_PLAIN_GIGABIT = re.compile(r"(?i)^(1\s*)?(gige|gbe|gigabit ethernet|1000base-t)( vision)?$")
+
+
+def _parts_at_formats(lines: list, analysis: Optional[dict]) -> list:
+    """Part numbers on lines that also print one of the analysis's near formats
+    («4096 x 2160», «8.9 MP»), most such lines first."""
+    pats = []
+    for f in (analysis or {}).get("near_formats") or []:
+        if not isinstance(f, str):
+            continue
+        for w, h in re.findall(r"(\d{3,5})\s*[x×*]\s*(\d{3,5})", f):
+            pats.append(re.compile(rf"\b{w}\s*[x×*]\s*{h}\b"))
+        for mp in re.findall(r"(\d+(?:\.\d)?)\s*MP", f, re.I):
+            pats.append(re.compile(rf"\b{re.escape(mp)}\s*-?\s*(?:MP|megapixel)", re.I))
+    count = {}
+    for ln in lines:
+        if any(p.search(ln) for p in pats):
+            for tok in {t.upper().replace("-", "") for t in _PART_NO.findall(ln)}:
+                count[tok] = count.get(tok, 0) + 1
+    return [t for t, _ in sorted(count.items(), key=lambda kv: -kv[1])]
+
+
 def selection_followups(ctx, topic: str, briefs: list, analysis: Optional[dict],
                         searched: set, n: int = 10) -> list:
     """Second-round queries for a spec selection, from what the first round READ. The
@@ -151,12 +173,18 @@ def selection_followups(ctx, topic: str, briefs: list, analysis: Optional[dict],
     # Asked for «component x interface» the model wrote «IMX267 machine vision camera
     # datasheet» and left the 10GigE cameras unsearched; the grid is built here.
     core = str((analysis or {}).get("probe_core") or "camera").strip()
-    ifaces = [i for i in (analysis or {}).get("forced_interfaces") or [] if isinstance(i, str)][-3:]
+    # «GigE Vision» came back as a forced interface for a stream the analysis itself put
+    # at 1.66 Gbit/s; plain gigabit is the one interface such a spec rules out.
+    ifaces = [i for i in (analysis or {}).get("forced_interfaces") or []
+              if isinstance(i, str) and not _PLAIN_GIGABIT.match(i.strip())][-3:]
     seen_parts = {p for p, _, _ in parts}
     comps = list(dict.fromkeys(
-        m.group(0).upper() for c in data.get("components") or [] if isinstance(c, str)
-        for m in [_PART_NO.search(c)] if m and m.group(0).upper().replace("-", "") in seen_parts))
-    grid = [f"{c} {core} {i}" for c in comps[:3] for i in ifaces or [""]]
+        [m.group(0).upper() for c in data.get("components") or [] if isinstance(c, str)
+         for m in [_PART_NO.search(c)] if m and m.group(0).upper().replace("-", "") in seen_parts]
+        # The model picked IMX267/IMX545/IMX542 from memory while the pages put IMX255
+        # beside «4096 x 2160»; a part the pages print next to a near format is searched.
+        + _parts_at_formats(lines, analysis)[:2]))
+    grid = [f"{c} {core} {i}" for c in comps[:4] for i in ifaces or [""]]
     qs = [q for q in dict.fromkeys(grid + qs) if q.lower() not in searched][:n]
     logger.info("Selection follow-up: components %s | missing makers %s | %d queries — %s",
                 data.get("components"), data.get("missing_makers"), len(qs), " | ".join(qs)[:700])

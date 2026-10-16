@@ -285,6 +285,26 @@ def _brief_pages(ctx, topic, pages, profile, run_dir, prog, *, scholarly, terms,
     return briefs, dropped
 
 
+def _model_catalog(briefs: list, cap: int = 150) -> str:
+    """One line per product model the select briefs list, each with the page it came
+    from; the first line wins for a model named on several pages."""
+    from dr_collect import _PART_NO
+    out, seen = [], set()
+    for b in briefs:
+        url = b.get("url") or ""
+        for ln in (b.get("brief") or "").splitlines():
+            ln = ln.strip()
+            m = _PART_NO.search(ln)
+            if not ln.startswith(("-", "*", "•")) or not m:
+                continue
+            key = ln.lstrip("-*• ").split(":")[0].strip().lower()[:60]
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(f"{ln[:260]} — {url}")
+    return "\n".join(out[:cap])
+
+
 def hop_anchor(profile: dict, topic: str) -> str:
     """The topical anchor a follow-up query is built around.
 
@@ -907,6 +927,11 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
                    f"numbers force», correct them if a source disagrees):\n"
                    f"{json.dumps(profile['selection_analysis'], ensure_ascii=False)}\n\n"
                    if profile.get("selection_analysis") else "")
+                # From 100 briefs the writer kept five rows and dropped the IMX255 cameras
+                # it had read; every model line is put in front of it, each with its page.
+                + "EVERY MODEL THE PAGES STATE (judge each one; a row for every model that "
+                  "meets the hard requirements or fails exactly one):\n"
+                + _model_catalog(briefs) + "\n\n"
                 + "Per-source briefs:\n" + evidence + _lang_directive(out_lang),
                 sel_tokens, temperature=0.2, retries=1)
             report = (report or "").strip() or None

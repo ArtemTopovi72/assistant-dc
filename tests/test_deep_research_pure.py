@@ -595,6 +595,35 @@ def test_a_selection_reads_the_hit_naming_its_part_first():
           srcs and "ht-8000" in srcs[0]["href"], [s["href"] for s in srcs])
 
 
+def test_followups_search_the_part_printed_beside_a_near_format():
+    """The model picked IMX267/IMX545/IMX542 from memory while the pages printed IMX255
+    beside «4096 x 2160»; and it listed «GigE Vision» for a 1.66 Gbit/s stream."""
+    import json
+    import dr_collect
+    from _dr_ctx import research_ctx
+    briefs = [{"title": "Atlas", "brief": "- ATP089S-C (LUCID): sensor Sony IMX255 · 4096 x 2160 · 58 fps"},
+              {"title": "Shop", "brief": "- MV-CA050 (Hik): sensor IMX264 · 2448x2048 · 23 fps"}]
+    ctx = research_ctx(_think_call=lambda *a, **k: json.dumps({"components": ["IMX545"], "queries": []}))
+    analysis = {"probe_core": "color camera", "forced_interfaces": ["GigE Vision", "10GigE"],
+                "near_formats": ["3840x2160 (8.3 MP)", "4096x2160 (8.9 MP)"]}
+    qs = dr_collect.selection_followups(ctx, "camera", briefs, analysis, set())
+    check("followups: the part beside a near format is gridded", "IMX255 color camera 10GigE" in qs, qs)
+    check("followups: a part beside no near format is not", not any("IMX264" in q for q in qs), qs)
+    check("followups: plain gigabit is never a forced interface", not any("GigE Vision" in q for q in qs), qs)
+
+
+def test_model_catalog_lists_every_model_once_with_its_page():
+    """From 100 briefs the writer kept five rows and dropped the IMX255 cameras it had
+    read; the catalog it is handed names each model once, with the page."""
+    import deep_research as DR
+    briefs = [{"url": "https://a.example/atlas", "brief": "- ATP089S-C (LUCID): IMX255 · 58 fps\n- prose with no part"},
+              {"url": "https://b.example/shop", "brief": "* ATP089S-C (LUCID): IMX255 · 58 fps\n- GV-7090WP-C (IDS): 10GigE"}]
+    cat = DR._model_catalog(briefs).splitlines()
+    check("catalog: each model once", len(cat) == 2, cat)
+    check("catalog: with the page it came from", cat[0].endswith("https://a.example/atlas")
+          and cat[1].endswith("https://b.example/shop"), cat)
+
+
 def test_english_query_is_not_searched_as_russia():
     """ru-ru for an English camera query returned Russian resellers instead of the makers."""
     import types
