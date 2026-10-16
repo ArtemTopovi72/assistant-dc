@@ -48,10 +48,6 @@ with ctx.tts_lock:
     M.wake_tts(ctx.models)
 check("a reply mid-render puts F5 back first", next(tts.parameters()).device.type == "cuda")
 
-M.park_voice(ctx)
-M.wake_voice(ctx)
-check("give-back restores both", wh.model.model_is_loaded
-      and next(voc.parameters()).device.type == "cuda")
 
 with ctx.tts_lock:
     M.park_voice(ctx, wait_s=0.1)

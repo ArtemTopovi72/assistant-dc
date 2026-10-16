@@ -236,17 +236,6 @@ def wake_tts(models) -> None:
             models.vocoder.to(DEVICE)
 
 
-def wake_voice(ctx=None) -> None:
-    """Bring Whisper and F5 back once the render has given the card back."""
-    ctx = ctx or LIVE_CTX
-    m = getattr(ctx, "models", None)
-    if m is None:
-        return
-    if m.whisper is not None and hasattr(m.whisper, "wake"):
-        with ctx.asr_lock:
-            m.whisper.wake()
-    with ctx.tts_lock:
-        wake_tts(m)
 
 
 @dataclass
