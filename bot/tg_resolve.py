@@ -1435,7 +1435,7 @@ class ResolveMixin:
                 limit = tg_bot._quota_limit(check, self.settings)
                 if limit > 0 and used.get(check, 0) >= limit:
                     self._send_text(chat_id,
-                        tg_bot._t("quota_hit", lang, kind=check.replace("_", " "),
+                        tg_bot._t("quota_hit", lang, kind=tg_bot._kind_label(check, lang),
                            used=used.get(check, 0), limit=limit),
                         parse_mode="HTML",
                         keyboard=self._main_menu_kb(sess, lang))
@@ -1753,7 +1753,7 @@ class ResolveMixin:
             for check in (tg_bot.KIND_IMAGE, tg_bot.KIND_TASK):
                 limit = tg_bot._quota_limit(check, self.settings)
                 if limit > 0 and used.get(check, 0) >= limit:
-                    self._send_text(chat_id, tg_bot._t("quota_hit", lang, kind=check,
+                    self._send_text(chat_id, tg_bot._t("quota_hit", lang, kind=tg_bot._kind_label(check, lang),
                                     used=used.get(check, 0), limit=limit),
                                     parse_mode="HTML", keyboard=self._main_menu_kb(sess, lang))
                     return
