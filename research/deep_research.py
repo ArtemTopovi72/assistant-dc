@@ -994,7 +994,9 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
         else:
             report = _postprocess_report(report)
         gate_line = ""
-        if S.DR_DECISION_GATE_ENABLED:
+        # A candidate matrix carries its own ✅/❌/❓ per spec; a run-wide «confidence: high»
+        # above it read as a verdict on every row (camera selection, 2026-10-16).
+        if S.DR_DECISION_GATE_ENABLED and not _practical:
             gate_line = f"\n> {dep(ctx, "_gate", _gate).gate_banner(decision, out_lang)}\n"
         report = (f"{header}{gate_line}\n{report}\n"
                   f"{_contradiction_note(contra_sig if _contra_ran else {}, out_lang)}")

@@ -189,7 +189,7 @@ def test_a_spec_selection_is_answered_as_a_candidate_matrix():
     with _Patches(DR_REPLAN_ENABLED=False, DR_MULTIHOP_ENABLED=False, DR_CONTRADICTION_ENABLED=True,
                   DR_CONTRADICTION_QUERIES=2, DR_HIERARCHICAL_ENABLED=False, DR_COMMUNITIES_ENABLED=False,
                   DR_CLAIM_MERGE_ENABLED=False, DR_GRAPH_EXPANSION_ENABLED=False,
-                  DR_DECISION_GATE_ENABLED=False, DR_REFLECTION_ENABLED=False, DR_SURVEY_MODE=True,
+                  DR_DECISION_GATE_ENABLED=True, DR_REFLECTION_ENABLED=False, DR_SURVEY_MODE=True,
                   plan_queries=lambda c, t, mx: (["generic camera query"], {
                       "category": "product", "recency": "year", "timelimit": "y", "news": False,
                       "core_topic": "machine vision camera"}),
@@ -206,6 +206,8 @@ def test_a_spec_selection_is_answered_as_a_candidate_matrix():
     check("selection: written with the selection prompt",
           any("SELECTION request" in s for s in seen["systems"]) and "## Кандидаты" in out["report"],
           out["report"][:1500])
+    check("selection: no run-wide confidence banner over the matrix",
+          "\n> " not in out["report"].split("## Требования")[0], out["report"][:600])
 
 
 def test_survey_mode():
