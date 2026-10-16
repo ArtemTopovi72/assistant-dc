@@ -237,5 +237,29 @@ check("...so every later host decision sees the encyclopaedia",
       _srcs and _U._domain(_srcs[0]["href"]) == "en.wikipedia.org", _srcs)
 
 
+print()
+print("=" * 66)
+print("A MADE-UP PATH IS REPAIRED TO THE PAGE THAT NAMES THE MODEL")
+print("=" * 66)
+# A camera matrix linked «Atlas 5GigE IP67» to an invented thinklucid path; thinklucid had two
+# pages, so the domain repair gave up and the row lost its link while the visratek page for
+# exactly that camera was in the briefs.
+_CAMS = [
+    {"url": "https://www.visratek.com/en/product/lucid/atlas-5gige-ip67-8-9-mp-color-imx255/",
+     "domain": "visratek.com", "title": "Atlas 5GigE IP67 8.9 MP Color (IMX255)"},
+    {"url": "https://www.visratek.com/en/product/lucid/triton-8-9-mp-color-imx267/",
+     "domain": "visratek.com", "title": "Triton 8.9 MP Color (IMX267)"},
+    {"url": "https://thinklucid.com/product/phoenix-8-9-mp-imx267/", "domain": "thinklucid.com",
+     "title": "Phoenix 8.9 MP Camera (Sony IMX267)"},
+    {"url": "https://thinklucid.com/triton2-gige-machine-vision/", "domain": "thinklucid.com",
+     "title": "Triton2 2.5GigE"},
+]
+out, st = audit_report_links("[Atlas 5GigE IP67](https://thinklucid.com/product/atlas-ip67/)", _CAMS, "ru")
+check("the model's name finds its page on another domain", "atlas-5gige-ip67-8-9-mp-color-imx255" in out, out)
+out, st = audit_report_links("[Phoenix 8.9 MP](https://thinklucid.com/phoenix)", _CAMS, "ru")
+check("and on the same domain among several", "phoenix-8-9-mp-imx267" in out and st["repaired"] == 1, out)
+out, st = audit_report_links("[Basler ace](https://thinklucid.com/made-up)", _CAMS, "ru")
+check("a name no page carries is still dropped", "](" not in out and st["stripped"] == 1, out)
+
 print("%d passed, %d failed" % (OK, BAD))
 sys.exit(1 if BAD else 0)

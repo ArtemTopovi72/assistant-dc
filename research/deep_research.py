@@ -24,7 +24,7 @@ from typing import Callable, Optional
 
 import dr_settings as S
 from seams import dep
-from prompts import PRACTICAL_GUIDE_PROMPT, SELECTION_REPORT_PROMPT
+from prompts import PRACTICAL_GUIDE_PROMPT, SELECTION_REPORT_PROMPT, SELECTION_VERIFY_PROMPT
 from dr_settings import MANUAL_OVERRIDE_SPEC, _coerce_override
 from research_cache import ExtractionCache
 from citation_graph import citation_lineage_brief
@@ -391,7 +391,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
         # A spec list is answered by catalog pages of any age: «product» kept a 1-year
         # window, and the 2019 5GigE IMX255 cameras that meet the specs never came up.
         profile.update(recency="any", timelimit=None, news=False, select=True)
-        sel = dep(ctx, "selection_queries", selection_queries)(ctx, topic)
+        sel = dep(ctx, "selection_queries", selection_queries)(ctx, topic, sink=profile)
         queries = list(dict.fromkeys(sel + queries))[:max(caps["max_queries"], len(sel))]
         logger.info("SELECTION intent: %d requirement-driven queries lead the plan", len(sel))
     prog.update("Expanding queries",
@@ -870,17 +870,41 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
         logger.info("SELECTION intent — writing a requirements x candidates matrix")
         prog.update("Building report", "matching candidates to the requirements")
         try:
+            evidence = _consolidate_evidence(ctx, topic, briefs, prog)
+            sel_tokens = min(S.DR_SECTION_TOKEN_CEILING, caps.get("report_tokens") or 6000) * 2
             report = dep(ctx, "_think_call", _think_call)(
                 ctx, SELECTION_REPORT_PROMPT + _lang_directive(out_lang),
-                f"User request: {topic}\n\nPer-source briefs:\n"
-                + _consolidate_evidence(ctx, topic, briefs, prog)
-                + _lang_directive(out_lang),
-                min(S.DR_SECTION_TOKEN_CEILING, caps.get("report_tokens") or 6000) * 2,
-                temperature=0.2, retries=1)
+                f"User request: {topic}\n\n"
+                # The arithmetic was done before the search; written from the briefs alone
+                # the section gave B = W x H x bits x FPS with no number in it.
+                + (f"ENGINEERING ANALYSIS made before the search (put its numbers in «What the "
+                   f"numbers force», correct them if a source disagrees):\n"
+                   f"{json.dumps(profile['selection_analysis'], ensure_ascii=False)}\n\n"
+                   if profile.get("selection_analysis") else "")
+                + "Per-source briefs:\n" + evidence + _lang_directive(out_lang),
+                sel_tokens, temperature=0.2, retries=1)
             report = (report or "").strip() or None
             if report:
+                prog.update("Building report", "checking every verdict against its source")
+                checked = (dep(ctx, "_think_call", _think_call)(
+                    ctx, SELECTION_VERIFY_PROMPT + _lang_directive(out_lang),
+                    f"User request: {topic}\n\nDRAFT:\n{report}\n\nPer-source briefs:\n{evidence}",
+                    sel_tokens, temperature=0.1, retries=1) or "").strip()
+                # A rewrite that lost sections or half the text is a failed check, not a fix.
+                if (checked.count("\n## ") >= report.count("\n## ") - 1
+                        and len(checked) >= 0.6 * len(report)):
+                    report = checked
+                else:
+                    logger.warning("selection verify pass dropped content (%d -> %d chars) — "
+                                   "keeping the draft", len(report), len(checked))
+            if report:
                 report, _link_stats = audit_report_links(report, briefs, out_lang)
-                report = _append_once(report + "\n\n", _sources_appendix(briefs, out_lang))
+                # Every page read used to be listed: USB night-vision webcams and a search
+                # ad under a camera matrix. The appendix is what the matrix rests on.
+                low = report.lower()
+                cited = [b for b in briefs if (b.get("url") or "\0") in report
+                         or (b.get("domain") or "\0").lower() in low] or briefs
+                report = _append_once(report + "\n\n", _sources_appendix(cited, out_lang))
         except Exception as exc:
             logger.warning("selection synthesis failed (%s) — falling back", exc)
             report = None

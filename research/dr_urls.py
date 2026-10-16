@@ -198,9 +198,13 @@ _CATEGORY_AUTHORITY = {
 }
 
 
+_AD_CLICK = re.compile(r"^https?://(?:www\.)?(?:bing\.com/aclick|duckduckgo\.com/y\.js)", re.I)
+
+
 def _is_junk_source(url: str) -> bool:
+    # A search ad came back as a hit and was cited as a «secondary» source (bing aclick).
     host = _domain(url)
-    return any(s in host for s in _JUNK_HOST_SUBSTR)
+    return any(s in host for s in _JUNK_HOST_SUBSTR) or bool(_AD_CLICK.match(url or ""))
 
 
 # --------------------------------------------------------------------------- #

@@ -290,6 +290,18 @@ What the user must confirm with the vendor or clarify (the ambiguous readings, s
 Rules: every model is a link whose URL appears verbatim in the briefs — never invent, shorten or reconstruct one. Numbers exactly as the source gives them; if two sources disagree, show both. No abstract, no introduction, no market overview, no history, no "Industry 4.0". Write in the SAME LANGUAGE as the user's request."""
 
 
+SELECTION_VERIFY_PROMPT = """You check a DRAFT selection report (requirements x candidate models) against the per-source briefs it was written from. The draft model guesses: it marked a camera «Color ✅» from a page about its monochrome twin.
+
+For every candidate row:
+- find the brief of the page the row links to, and any other brief that names that EXACT model;
+- keep a ✅ or ❌ only when a brief states that value FOR THAT MODEL. A sibling variant (mono vs color, another resolution, another interface) does not prove it; a sensor's maximum does not prove the camera's. Otherwise make the cell ❓ with «не указано» / «not stated»;
+- where a brief gives a different value, write the brief's value and re-judge the cell;
+- a row whose model fails a hard requirement moves to the ruled-out section with the value that fails it;
+- re-check the sentence above the table (does any model meet everything?) and the recommendation against the corrected rows.
+Never add a model, a link or a number that is not in the briefs; never drop a link the draft has.
+
+Return the WHOLE corrected report: same sections, same order, same language, same links. Nothing else — no notes about what you changed."""
+
 SURVEY_SECTION_PROMPT = """You are a domain expert writing ONE section of a scientific review article. You are writing a single coherent scholarly work, not a summary of web pages.
 
 You are given: the document TITLE, the FULL OUTLINE (so you know what every other section covers and can write transitions and avoid repetition), the SPECIFIC SECTION you must write now, and the EVIDENCE (per-source briefs, each tagged with a source domain and a trust tier PRIMARY / SECONDARY / COMMUNITY / LOW, sometimes `copies=N` = N mirrors of one source).

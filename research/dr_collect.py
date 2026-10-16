@@ -63,16 +63,21 @@ def _format_probes(analysis: dict, cap: int = 6) -> list:
     def strs(key):
         return [v.strip() for v in analysis.get(key) or [] if isinstance(v, str) and v.strip()]
     core = str(analysis.get("probe_core") or analysis.get("product") or "").strip()
-    forms = []
-    for f in strs("near_formats")[1:4] or strs("near_formats")[:2]:
+    forms, mps = [], set()
+    for f in strs("near_formats")[1:] or strs("near_formats")[:1]:
         res, _, mp = f.partition("(")
-        forms += [x.strip(" )") for x in (res, mp) if x.strip(" )")]
-    out = [f"{form} {core} {iface}".strip() for iface in strs("forced_interfaces")[:2] or [""]
-           for form in forms]
+        mp = mp.strip(" )")
+        if mp in mps:
+            continue        # 4096x2160 and 4096x2176 are one 8.9 MP class; one form of it
+        mps.add(mp)
+        forms += [x for x in (res.strip(), mp) if x]
+    ifaces = strs("forced_interfaces")[-3:] or [""]     # widest last: 2.5GigE found no 4K GS
+    per = max(1, cap // len(ifaces))
+    out = [f"{form} {core} {iface}".strip() for iface in ifaces for form in forms[:per]]
     return list(dict.fromkeys(out))[:cap]
 
 
-def selection_queries(ctx, topic: str, n: int = 14) -> list:
+def selection_queries(ctx, topic: str, n: int = 14, sink: Optional[dict] = None) -> list:
     """Requirement-driven queries for a spec selection: the components that meet the hard
     numbers, the models on them per vendor and interface, each reading of an ambiguous
     spec, datasheets. The generic planner asked «best 4K global shutter cameras 2024» and
@@ -86,6 +91,8 @@ def selection_queries(ctx, topic: str, n: int = 14) -> list:
     # engineering first, then snippets that NAME the parts, then the targeted queries.
     analysis = safe_json_from_llm(think(ctx, SELECTION_ANALYSIS_PROMPT, f"Request: {topic}",
                                         max_tokens=S.DR_PLAN_TOKENS, temperature=0.2) or "") or {}
+    if sink is not None:
+        sink["selection_analysis"] = {k: analysis.get(k) for k in ("hard", "derived", "ambiguous")}
     snippets = []
     probes = _format_probes(analysis) + [q for q in analysis.get("component_queries") or []
                                          if isinstance(q, str)][:6]

@@ -180,6 +180,7 @@ def test_a_spec_selection_is_answered_as_a_candidate_matrix():
 
     def think(c, system, user, *a, **k):
         seen["systems"].append(system)
+        seen.setdefault("users", []).append(user)
         return "## Требования\n| a | b |\n## Кандидаты\n| [Cam](https://arxiv.org/1) |"
 
     def collect(c, queries, per_q, prog, run_dir, profile=None):
@@ -193,7 +194,7 @@ def test_a_spec_selection_is_answered_as_a_candidate_matrix():
                   plan_queries=lambda c, t, mx: (["generic camera query"], {
                       "category": "product", "recency": "year", "timelimit": "y", "news": False,
                       "core_topic": "machine vision camera"}),
-                  selection_queries=lambda c, t: ["Sony IMX255 5GigE camera"],
+                  selection_queries=lambda c, t, sink=None: (sink or {}).update(selection_analysis={"derived": ["4096x2160 x 25 x 8 bit = 1.77 Gbit/s"]}) or ["Sony IMX255 5GigE camera"],
                   collect_sources=collect, _think_call=think,
                   _expansion_pass=lambda *a, **k: seen["labels"].append(k.get("label")) or []):
         out = _run(ctx=ctx, topic="Подбери камеру: 8.3 Мп, 25 fps, Ethernet, глобальный затвор")
@@ -206,6 +207,10 @@ def test_a_spec_selection_is_answered_as_a_candidate_matrix():
     check("selection: written with the selection prompt",
           any("SELECTION request" in s for s in seen["systems"]) and "## Кандидаты" in out["report"],
           out["report"][:1500])
+    check("selection: every verdict is re-checked against the briefs",
+          any("DRAFT selection report" in s for s in seen["systems"]), len(seen["systems"]))
+    check("selection: the pre-search arithmetic reaches the writer",
+          any("1.77 Gbit/s" in u for u in seen.get("users", [])), seen.get("users", [""])[-1][:300])
     check("selection: no run-wide confidence banner over the matrix",
           "\n> " not in out["report"].split("## Требования")[0], out["report"][:600])
 

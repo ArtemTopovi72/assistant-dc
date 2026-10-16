@@ -196,6 +196,32 @@ def strip_empty_fields(report: str) -> tuple:
     return "\n".join(out_lines), removed
 
 
+def _name_tokens(s: str) -> set:
+    return {t for t in re.findall(r"[a-z0-9]+(?:[.-][a-z0-9]+)*", s.lower().replace("_", "-"))
+            if len(t) >= 3 or any(c.isdigit() for c in t)} - {"www", "com", "https", "http", "html", "product", "products"}
+
+
+def _page_named(text: str, url: str, briefs: list) -> Optional[str]:
+    """The one collected page whose URL or title names what the link names. A selection
+    report linked «Atlas 5GigE IP67» to a thinklucid path it made up; thinklucid had two
+    collected pages, so the domain repair gave up, while the visratek page
+    «atlas-5gige-ip67-8-9-mp-color-imx255» was the model's own evidence for that row."""
+    want = _name_tokens(text) | {t for t in _name_tokens(url.split("//", 1)[-1].split("/", 1)[-1])
+                                 if any(c.isdigit() for c in t)}
+    if not want:
+        return None
+    scored = []
+    for b in briefs or []:
+        u = (b.get("url") or "").strip()
+        if u:
+            have = _name_tokens(u.replace("-", " ") + " " + (b.get("title") or ""))
+            scored.append((len(want & have), u))
+    scored.sort(key=lambda x: -x[0])
+    if scored and scored[0][0] >= 2 and (len(scored) == 1 or scored[0][0] > scored[1][0]):
+        return scored[0][1]
+    return None
+
+
 def audit_report_links(report: str, briefs: list, out_lang: str = "en") -> tuple:
     """Every link in the report must be a URL we actually collected.
 
@@ -238,6 +264,10 @@ def audit_report_links(report: str, briefs: list, out_lang: str = "en") -> tuple
         if len(same) == 1:
             stats["repaired"] += 1
             return "[%s](%s)" % (text, next(iter(same)))
+        named = _page_named(text, url, briefs)
+        if named:
+            stats["repaired"] += 1
+            return "[%s](%s)" % (text, named)
         stats["stripped"] += 1
         return "%s (%s)" % (text, _LINK_UNVERIFIED[lang])
 
