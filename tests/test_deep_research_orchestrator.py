@@ -194,7 +194,7 @@ def test_a_spec_selection_is_answered_as_a_candidate_matrix():
                   plan_queries=lambda c, t, mx: (["generic camera query"], {
                       "category": "product", "recency": "year", "timelimit": "y", "news": False,
                       "core_topic": "machine vision camera"}),
-                  selection_queries=lambda c, t, sink=None: (sink or {}).update(selection_analysis={"derived": ["4096x2160 x 25 x 8 bit = 1.77 Gbit/s"]}) or ["Sony IMX255 5GigE camera"],
+                  selection_queries=lambda c, t, n=14, sink=None: (sink or {}).update(selection_analysis={"derived": ["4096x2160 x 25 x 8 bit = 1.77 Gbit/s"]}) or ["Sony IMX255 5GigE camera"],
                   collect_sources=collect, _think_call=think,
                   _expansion_pass=lambda *a, **k: seen["labels"].append(k.get("label")) or []):
         out = _run(ctx=ctx, topic="Подбери камеру: 8.3 Мп, 25 fps, Ethernet, глобальный затвор")

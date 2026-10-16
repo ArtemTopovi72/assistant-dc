@@ -391,8 +391,12 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
         # A spec list is answered by catalog pages of any age: «product» kept a 1-year
         # window, and the 2019 5GigE IMX255 cameras that meet the specs never came up.
         profile.update(recency="any", timelimit=None, news=False, select=True)
-        sel = dep(ctx, "selection_queries", selection_queries)(ctx, topic, sink=profile)
-        queries = list(dict.fromkeys(sel + queries))[:max(caps["max_queries"], len(sel))]
+        # Recall is the product here: at the generic caps (12 queries, 40 pages) a deep run
+        # finished in 10 of its 60 minutes and never reached the 10GigE cameras.
+        sel = dep(ctx, "selection_queries", selection_queries)(
+            ctx, topic, n=caps["max_queries"] + 8, sink=profile)
+        caps["max_pages"] = caps["max_pages"] * 3 // 2
+        queries = list(dict.fromkeys(sel + queries))[:max(caps["max_queries"], len(sel) + 2)]
         logger.info("SELECTION intent: %d requirement-driven queries lead the plan", len(sel))
     prog.update("Expanding queries",
                 f"{len(queries)} queries · {profile['category']}/{profile['recency']}",
