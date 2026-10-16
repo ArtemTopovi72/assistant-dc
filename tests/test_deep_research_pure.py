@@ -684,6 +684,21 @@ def test_model_catalog_puts_near_format_models_first_and_skips_facts():
     check("catalog: a fact bullet is not a model", not any("Sensor is" in ln for ln in cat), cat)
 
 
+def test_models_the_draft_left_out_are_named_to_the_check():
+    """Handed the whole catalog, run 24's writer dropped the pvCam and the Oryx; the verify
+    pass is told which near-format models on a forced interface the draft never names."""
+    import deep_research as DR
+    catalog = ("- pvCam-Ax5G-IMX255 (Phil): 5GigE · 4112x2176 · 68fps — https://p\n"
+               "- HE-8000-S (Emergent): 10GigE · 4096 x 2160 · 110 fps — https://e\n"
+               "- BFS-U3-89S6C-C (FLIR): USB3 · 4096x2160 · 42 fps — https://f\n"
+               "- CAM2 (Shop): 5GigE · 1920x1080 — https://s")
+    out = DR.models_left_out("| [HE 8000-S](https://e) | ✅ |", catalog,
+                             {"near_formats": ["4096x2160 (8.9 MP)", "4112x2176 (8.9 MP)"],
+                              "forced_interfaces": ["GigE Vision", "5GigE", "10GigE"]})
+    check("left out: only the near-format model on a forced interface the draft lacks",
+          [ln.split(" (")[0] for ln in out] == ["- pvCam-Ax5G-IMX255"], out)
+
+
 def test_followups_keep_a_named_part_below_the_frequency_cut():
     """IMX255 was named by the model and printed on the pages, but below the 24 most
     frequent part numbers, and the grid dropped it (run 12)."""

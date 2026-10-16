@@ -334,6 +334,25 @@ def _model_catalog(briefs: list, cap: int = 150, analysis: dict = None) -> str:
     return "\n".join(out[:cap])
 
 
+def models_left_out(report: str, catalog: str, analysis: dict = None) -> list:
+    """Catalog lines printing a near format whose model the draft never names. Handed the
+    whole catalog, run 24's writer still dropped the pvCam and the Oryx ORX-10GS-89S6C."""
+    from dr_collect import _format_patterns, _PLAIN_GIGABIT
+    pats = _format_patterns(analysis)
+    # Only models on an interface the spec forces: 35 near-format lines were mostly USB3.
+    ifaces = [re.sub(r"[\s-]", "", i).lower() for i in (analysis or {}).get("forced_interfaces") or []
+              if isinstance(i, str) and i.strip() and not _PLAIN_GIGABIT.match(i.strip())]
+    flat = re.sub(r"[\s-]", "", report).lower()
+    out = []
+    for ln in catalog.splitlines():
+        name = ln.lstrip("-*• ").split(" (")[0].strip()
+        squeezed = re.sub(r"[\s-]", "", ln).lower()
+        if (name and any(p.search(ln) for p in pats) and re.sub(r"[\s-]", "", name).lower() not in flat
+                and (not ifaces or any(i in squeezed for i in ifaces))):
+            out.append(ln)
+    return out[:15]
+
+
 # «- ATP089S-CC (LUCID): …» is a model line; «- Sensor is a 1-inch Sony IMX255» is a fact.
 _MODEL_BULLET = re.compile(r"^[-*•]\s*[^:()]{2,80}\((?:[^()]|\([^()]*\)){2,60}\)\s*:")
 
@@ -993,10 +1012,18 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
             if report:
                 report = rank_by_closeness(report)
                 prog.update("Building report", "checking every verdict against its source")
+                left_out = models_left_out(report, catalog, profile.get("selection_analysis"))
+                if left_out:
+                    logger.info("selection draft left out %d near-format models: %s", len(left_out),
+                                "; ".join(ln.split(" (")[0] for ln in left_out)[:400])
                 checked = (dep(ctx, "_think_call", _think_call)(
                     ctx, SELECTION_VERIFY_PROMPT + _lang_directive(out_lang),
                     f"User request: {topic}\n\nDRAFT:\n{report}\n\nEVERY MODEL THE PAGES STATE:\n"
-                    f"{catalog}\n\nPer-source briefs:\n"
+                    f"{catalog}\n\n"
+                    + ("MODELS THE DRAFT LEFT OUT (each prints a near format): put each in the "
+                       "candidates table or the ruled-out list:\n" + "\n".join(left_out) + "\n\n"
+                       if left_out else "")
+                    + "Per-source briefs:\n"
                     f"{evidence[:max(2000, budget - len(catalog) - len(report) - 4000)]}",
                     sel_tokens, temperature=0.1, retries=1) or "").strip()
                 # A rewrite that lost sections or half the text is a failed check, not a fix.
