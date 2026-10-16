@@ -284,7 +284,7 @@ A markdown table, best first — best means closest to the numbers the user wrot
 Models that look close but fail a hard requirement, one line each: model — which requirement fails and the value that fails it (e.g. "Basler a2A3840-13gc — rolling shutter, 13 fps").
 
 ## Рекомендация / Recommendation
-By scenario (e.g. "need on-camera compression" / "compression can run on the PC" / "lowest budget"): the model to pick and why, in 1-2 lines each.
+First line: the best match — the first candidate that meets every hard requirement, closest to the stated numbers — and why. Then by scenario (e.g. "need on-camera compression" / "compression can run on the PC" / "lowest budget" / "headroom for more fps"): the model to pick and why, in 1-2 lines each. A model failing a requirement is never recommended.
 
 ## Уточнить / To confirm
 What the user must confirm with the vendor or clarify (the ambiguous readings, specs the sources disagree on).
@@ -312,7 +312,7 @@ For every candidate row:
 - keep a ✅ or ❌ only when a brief states that value FOR THAT MODEL. A sibling variant (mono vs color, another resolution, another interface) does not prove it, but «Mono / Color» stated for the model itself means it ships in color: Color ✅, never «Monochrome»; a sensor's maximum does not prove the camera's. Otherwise make the cell ❓ with «не указано» / «not stated»;
 - where a brief gives a different value, write the brief's value and re-judge the cell;
 - a row whose model fails two or more hard requirements moves to the ruled-out section with the values that fail them;
-- re-check the sentence above the table (does any model meet everything?) against the corrected rows, and rewrite the components bullet of «What the numbers force» and the recommendation FROM the corrected table: each scenario names the candidate that serves it best: closest to the numbers the user stated (they are targets, not floors), so the table's first row unless the scenario itself needs more; the vendor page as evidence; never a ruled-out model.
+- re-check the sentence above the table (does any model meet everything?) against the corrected rows, and rewrite the components bullet of «What the numbers force» and the recommendation FROM the corrected table: each scenario names the candidate that serves it best: closest to the numbers the user stated (they are targets, not floors), so the table's first row unless the scenario itself needs more; the vendor page as evidence; never a ruled-out model, never one with a ❌. The first recommendation line is the best match: the first row with no ❌.
 Never add a model, a link or a number that is not in the briefs; never drop a link the draft has.
 
 Return the WHOLE corrected report: same sections, same order, same language, same links. Nothing else — no notes about what you changed."""
