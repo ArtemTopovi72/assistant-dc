@@ -304,7 +304,7 @@ class LibraryMixin:
             path.write_text(f"# {topic}\n\n{report}\n", encoding="utf-8")
             caption = tg_bot._t("dr_file_cap", lang, n=len(report))
             if getattr(self._get_session(chat_id), "dr_format", "") == "pdf":
-                import dr_pdf
+                dr_pdf = module(self, "dr_pdf")
                 pdf = path.with_suffix(".pdf")
                 if dr_pdf.md_to_pdf(path.read_text(encoding="utf-8"), str(pdf), topic) \
                         and self._send_document(chat_id, str(pdf), caption):

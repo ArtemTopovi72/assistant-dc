@@ -11,6 +11,7 @@ exists and losing it would be worse than the noise.
 Run: venv/Scripts/python.exe tests/test_report_is_markdown_file.py
 """
 import os, sys, tempfile
+from types import SimpleNamespace as NS
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
@@ -118,8 +119,6 @@ for topic in ("", "///", "a" * 300, "C:\\evil\\..\\path", "тема: с? *зна
 print("\n" + "=" * 70)
 print("6. A PDF WHEN PDF IS PICKED, THE MARKDOWN WHEN IT CANNOT BE BUILT")
 print("=" * 70)
-import dr_pdf  # noqa: E402
-_real_pdf = dr_pdf.md_to_pdf
 for builds, want in ((True, ".pdf"), (False, ".md")):
     b = make_bot(upload_ok=True)
     s = b._get_session(CID)
@@ -127,13 +126,13 @@ for builds, want in ((True, ".pdf"), (False, ".md")):
     b._store.put(s)
     b.docs = []
     b._send_document = lambda cid, path, caption="", b=b: (b.docs.append(path), True)[1]
-    dr_pdf.md_to_pdf = lambda md, out, title="", ok=builds: (ok and open(out, "wb").write(b"%PDF-1.4"), ok)[1]
+    b.modules = {"dr_pdf": NS(md_to_pdf=lambda md, out, title="", ok=builds:
+                              (ok and open(out, "wb").write(b"%PDF-1.4"), ok)[1])}
     b._send_report_file(CID, "Тема", REPORT, "h", "ru")
     check(f"PDF {'built' if builds else 'failed'} -> one {want} sent",
           len(b.docs) == 1 and b.docs[0].endswith(want), b.docs)
     s.dr_format = ""
     b._store.put(s)
-dr_pdf.md_to_pdf = _real_pdf
 
 print(f"\n{OK} passed, {BAD} failed")
 sys.exit(1 if BAD else 0)
