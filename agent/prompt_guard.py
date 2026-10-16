@@ -173,6 +173,12 @@ QUOTE_OPEN = "<<<QUOTED MESSAGE"
 QUOTE_CLOSE = "<<<END OF QUOTED MESSAGE>>>"
 _QUOTE_BLOCK = re.compile(re.escape(QUOTE_OPEN) + r".*?(?:" + re.escape(QUOTE_CLOSE) + r"|\Z)", re.S)
 
+# What OCR read on a sent photo, appended to the turn (tg_resolve). Not the user's
+# words: replayed by ▶ Render, its «picture 1» named the chat's FIRST picture and
+# the clip animated a hiker from the day before instead of the cat just sent.
+OCR_NOTE_HEAD = "[Text written on picture 1 (OCR, exact letters;"
+_OCR_NOTE = re.compile(re.escape(OCR_NOTE_HEAD) + r".*?so name it\.\]", re.S)
+
 
 def wrap_quoted(note: str, text: str) -> str:
     return f"{QUOTE_OPEN} -- {note}>>>\n{defang(text)}\n{QUOTE_CLOSE}"
@@ -198,4 +204,4 @@ def user_words(text: str) -> str:
     removed. Every decision about what the user asked for (which picture,
     which tool, whether a file was requested) reads this, never the
     assembled turn text."""
-    return " ".join(_QUOTE_BLOCK.sub(" ", strip_documents(text)).split())
+    return " ".join(_OCR_NOTE.sub(" ", _QUOTE_BLOCK.sub(" ", strip_documents(text))).split())

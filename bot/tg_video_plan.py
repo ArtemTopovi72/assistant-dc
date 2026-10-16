@@ -85,6 +85,7 @@ class VideoPlanMixin:
         sess.video_plan = _with_summaries(
             [{"text": str(p.get("text", "")), "sec": float(p.get("sec") or 0)} for p in plan], lang, self)
         sess.video_plan_request, sess.video_plan_ok = request, []
+        sess.video_plan_image = getattr(sess, "turn_image", "") or ""
         self._store.put(sess)
         text, kb = self._video_plan_card(sess, lang)
         self._send_text(chat_id, text, parse_mode="HTML", keyboard=kb)
@@ -172,7 +173,10 @@ class VideoPlanMixin:
         if data == "vp:go":
             sess.video_plan_ok = [p["text"] for p in sess.video_plan]
             self._store.put(sess)
-            self._enqueue_item(chat_id, {"type": "text", "text": sess.video_plan_request})
+            item = {"type": "text", "text": sess.video_plan_request}
+            if getattr(sess, "video_plan_image", ""):
+                item["image_id"] = sess.video_plan_image
+            self._enqueue_item(chat_id, item)
             return
         if data == "vp:squeeze":
             self._send_text(chat_id, tg_bot._t("vp_squeezing", lang))

@@ -206,6 +206,8 @@ class _Session:
         self.video_plan: list = list(d.get("video_plan") or [])
         self.video_plan_request: str = d.get("video_plan_request", "")
         self.video_plan_ok: list = list(d.get("video_plan_ok") or [])
+        # the picture the plan was made from: ▶ Render animates it, not whatever came later
+        self.video_plan_image: str = d.get("video_plan_image", "")
         # 📚 the voice library (tg_voice_library) and the voice waiting for a name
         self.voices: list = list(d.get("voices") or [])
         self.voice_naming: str = d.get("voice_naming", "")
@@ -378,6 +380,7 @@ class _Session:
             self.voice_pending = ""
             self.voice_choice = ""
             self.video_plan, self.video_plan_request, self.video_plan_ok = [], "", []
+            self.video_plan_image = ""
             self.voice_naming = ""
             self.lyrics_state = ""
             self.song_draft = ""
@@ -452,6 +455,7 @@ class _Session:
                 "video_plan":          self.video_plan,
                 "video_plan_request":  self.video_plan_request,
                 "video_plan_ok":       self.video_plan_ok,
+                "video_plan_image":    self.video_plan_image,
                 "voices":              self.voices,
                 "voice_naming":        self.voice_naming,
                 "voice_choice":        self.voice_choice,

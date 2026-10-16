@@ -65,6 +65,7 @@ CID = 9_300_888
 bot._user_store.put(T._User(chat_id=CID, name="V", status="approved", is_admin=False))
 sess = bot._get_session(CID)
 sess.lang = "ru"
+sess.turn_image = "cat01"
 bot._store.put(sess)
 
 bot._offer_video_plan(CID, sess, "ru", "сними видео: " + SCRIPT, plan)
@@ -129,6 +130,9 @@ sess = bot._get_session(CID); sess.video_plan = list(plan[1:]); sess.reg_state =
 bot._cb_video_plan(CID, "vp:go")
 sess = bot._get_session(CID)
 check("▶ reruns the same request", queued and queued[-1]["text"] == "сними видео: " + SCRIPT, queued)
+check("...on the picture the plan was made from, whatever was sent since: a replay "
+      "once animated the chat's first picture (a hiker from the day before)",
+      queued[-1].get("image_id") == "cat01", queued[-1])
 check("...with the approved parts saved for that run", sess.video_plan_ok == [p["text"] for p in plan[1:]],
       sess.video_plan_ok)
 

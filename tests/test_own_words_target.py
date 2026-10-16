@@ -34,6 +34,13 @@ assert tg_bot._ordinal_target(user_words(tg_bot._FWD_TEXT_FRAME.format(text=said
 assert user_words(wrap_quoted("the user is replying to this message", "первая картинка")
                   + "\nну как?") == "ну как?"
 assert user_words("глянь " + wrap_document("a.txt", "вторая картинка")) == "глянь"
+# nor what OCR read on the photo: replayed by ▶ Render, its «picture 1» once named the
+# chat's first picture and the clip animated an old photo instead of the one just sent
+from prompt_guard import OCR_NOTE_HEAD
+_ocr = ("оживи фото: кот зевает\n" + OCR_NOTE_HEAD + " each «…» is a separate label: «Lenovo]». "
+        "The lettering is part of what the picture says, so name it.]")
+assert user_words(_ocr) == "оживи фото: кот зевает", user_words(_ocr)
+assert OCR_NOTE_HEAD in inspect.getsource(tg_resolve) or "OCR_NOTE_HEAD" in inspect.getsource(tg_resolve)
 # one implementation: every reader goes through it
 assert "_ordinal_target(own_words" in inspect.getsource(tg_resolve)
 assert "user_words(merged)" in inspect.getsource(tg_resolve)

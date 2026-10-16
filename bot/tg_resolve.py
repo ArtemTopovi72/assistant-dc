@@ -1545,7 +1545,8 @@ class ResolveMixin:
                 _pieces = [p.strip() for p in (_box[0] if _box else []) if len(p.strip()) >= 2]
                 _text = " · ".join("«%s»" % p for p in _pieces)[:600]
                 if len("".join(_pieces)) >= 3:
-                    merged = (merged + "\n[Text written on picture 1 (OCR, exact letters; each «…» is a "
+                    from prompt_guard import OCR_NOTE_HEAD
+                    merged = (merged + "\n" + OCR_NOTE_HEAD + " each «…» is a "
                               "separate label somewhere on the picture, top to bottom -- not one "
                               "sentence, and OCR may garble a letter): " + _text + ". Say which "
                               "label is on what (a flag, a cape, a speech bubble). The lettering is "
