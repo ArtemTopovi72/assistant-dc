@@ -1357,6 +1357,8 @@ def synth_single_segment(
         ref_file, ref_text_proc = preprocess_ref_audio_text(ref_wav, ref_text)
 
         with ctx.tts_lock:
+            from models import wake_tts
+            wake_tts(ctx.models)
             # 16, not 24: f5_tts.model.cfm's EPSS table (Empirically Pruned Step
             # Sampling) only has hand-tuned non-uniform timesteps for
             # {5,6,7,10,12,16} -- 24 isn't one of them, so it silently falls back

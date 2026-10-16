@@ -82,13 +82,13 @@ class Models:
             # downloads the model from Hugging Face, and an offline machine
             # (or a blocked hub) must still open the app for text chat.
             try:
-                whisper = WhisperModel(
+                whisper = _ParkableWhisper(WhisperModel(
                     getattr(_cfg, "WHISPER_MODEL", "large-v3-turbo"),
                     device=WHISPER_DEVICE,
                     compute_type=WHISPER_COMPUTE_TYPE,
                     cpu_threads=16,
                     num_workers=4,
-                )
+                ))
             except Exception as exc:
                 logger.warning("Whisper not loaded (%s) -- speech recognition is off; "
                                "it loads on the next start once the model can be downloaded",
@@ -160,6 +160,93 @@ class Models:
             accentor=accentor,
             accentor_loaded=accentor_loaded,
         )
+
+
+class _ParkableWhisper:
+    """WhisperModel that can leave the card while a render owns it.
+
+    Parked weights wait in RAM (ctranslate2 unload_model(to_cpu=True)); the next
+    transcribe brings them back, so a voice note during a render still works.
+    """
+
+    def __init__(self, model):
+        self._m = model
+
+    def __getattr__(self, name):
+        return getattr(self._m, name)
+
+    def park(self) -> None:
+        if self._m.model.model_is_loaded:
+            self._m.model.unload_model(to_cpu=True)
+
+    def wake(self) -> None:
+        if not self._m.model.model_is_loaded:
+            self._m.model.load_model()
+
+    def transcribe(self, *a, **kw):
+        self.wake()
+        return self._m.transcribe(*a, **kw)
+
+    def detect_language(self, *a, **kw):
+        self.wake()
+        return self._m.detect_language(*a, **kw)
+
+
+# The app's one Context, registered by app_runtime: free_gpu() runs from render
+# paths that have no ctx, and parking must take the same ASR/TTS locks the
+# speech paths hold so weights never move mid-inference.
+LIVE_CTX = None
+# Busy speech is not worth stalling a render for; it stays on the card.
+VOICE_PARK_WAIT_S = 30
+
+
+def park_voice(ctx=None, wait_s: float = None) -> bool:
+    """Move Whisper and F5 off the card (to RAM) for a render. True if parked."""
+    ctx = ctx or LIVE_CTX
+    wait_s = VOICE_PARK_WAIT_S if wait_s is None else wait_s
+    m = getattr(ctx, "models", None)
+    if m is None:
+        return False
+    parked = False
+    if m.whisper is not None and hasattr(m.whisper, "park") and ctx.asr_lock.acquire(timeout=wait_s):
+        try:
+            m.whisper.park()
+            parked = True
+        finally:
+            ctx.asr_lock.release()
+    if hasattr(m.tts_model, "to") and ctx.tts_lock.acquire(timeout=wait_s):
+        try:
+            m.tts_model.to("cpu")
+            if m.vocoder is not None:
+                m.vocoder.to("cpu")
+            parked = True
+        finally:
+            ctx.tts_lock.release()
+    return parked
+
+
+def wake_tts(models) -> None:
+    """Put a parked F5 back on the card. The caller holds tts_lock."""
+    if not hasattr(getattr(models, "tts_model", None), "parameters"):
+        return
+    from config import DEVICE
+    if next(models.tts_model.parameters()).device.type != str(DEVICE).split(":")[0]:
+        models.tts_model.to(DEVICE)
+        if models.vocoder is not None:
+            models.vocoder.to(DEVICE)
+
+
+def wake_voice(ctx=None) -> None:
+    """Bring Whisper and F5 back once the render has given the card back."""
+    ctx = ctx or LIVE_CTX
+    m = getattr(ctx, "models", None)
+    if m is None:
+        return
+    if m.whisper is not None and hasattr(m.whisper, "wake"):
+        with ctx.asr_lock:
+            m.whisper.wake()
+    with ctx.tts_lock:
+        wake_tts(m)
 
 
 @dataclass

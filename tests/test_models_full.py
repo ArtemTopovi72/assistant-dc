@@ -123,13 +123,13 @@ def test_models_load_success_and_accentor_fail():
                      WhisperModel=lambda *a, **k: "WHISPER", load_model=lambda *a, **k: "TTS",
                      load_vocoder=lambda *a, **k: "VOCODER", DiT=object, BilingualAccentor=BA)
     m = M.Models.load(ctx=env(True))
-    check("load_success", m.whisper == "WHISPER" and m.tts_model == "TTS"
+    check("load_success", m.whisper._m == "WHISPER" and m.tts_model == "TTS"
           and m.vocoder == "VOCODER" and m.accentor_loaded is True)
 
     # accentor-failure branch
     m2 = M.Models.load(ctx=env(False))
     check("load_accentor_fail", m2.accentor is None and m2.accentor_loaded is False
-          and m2.whisper == "WHISPER")
+          and m2.whisper._m == "WHISPER")
 
 
 # ---------------------------------------------------------- Context methods

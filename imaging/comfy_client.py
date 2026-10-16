@@ -610,6 +610,11 @@ def _release_card(ctx=None) -> None:
         _LT.reload_llm(model, log=logger.info)
     except Exception:
         logger.exception("could not bring the chat model back")
+    try:
+        import models as _models
+        _models.wake_voice()
+    except Exception:
+        logger.exception("could not bring the voice models back")
     finally:
         _excl_free.set()
         _mark_released()

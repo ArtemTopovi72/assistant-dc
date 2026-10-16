@@ -238,13 +238,20 @@ def free_gpu(log=None, min_free_mb: int = None, ctx=None) -> None:
         say("ComfyUI: выгружено")
     except Exception as exc:
         say("ComfyUI не отвечает (%s) — продолжаю" % exc)
-    # Our own process held 4.3 GB beside the render: the research reranker and the
-    # torch allocator's cached blocks from earlier peaks. Whisper and F5 stay loaded.
+    # Our own process held 4.3 GB beside the render: the research reranker, Whisper,
+    # F5 and the torch allocator's cached blocks from earlier peaks. With the chat
+    # model gone nobody answers by voice, so speech waits in RAM until the give-back.
     try:
         import rerank
         rerank.release_gpu()
     except Exception:
         pass
+    try:
+        import models as _models
+        if _models.park_voice():
+            say("Whisper/F5: в RAM")
+    except Exception:
+        logging.getLogger("assistant.lora").warning("voice models not parked", exc_info=True)
     try:
         from utils import safe_empty_cuda_cache
         safe_empty_cuda_cache()

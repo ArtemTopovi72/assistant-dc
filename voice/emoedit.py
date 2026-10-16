@@ -31,6 +31,8 @@ def _cond(model, wav_path, device):
 @torch.inference_mode()
 def edit(ctx, rs_wav, rs_text, rt_wav, rt_text, gen_text, strength=1.0, steps=10, cfg=2.0, sway=-1.0, seed=0,
          speed=1.0, tau_skip=0):
+    from models import wake_tts
+    wake_tts(ctx.models)
     model, vocoder = ctx.models.tts_model, ctx.models.vocoder
     dev = next(model.parameters()).device
     dt_ = next(model.parameters()).dtype

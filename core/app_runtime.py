@@ -114,6 +114,8 @@ def build_runtime(model_name: str, no_think: bool, status_cb=None,
         no_think=no_think,
         reasoning_effort=reasoning_effort,
     )
+    import models as _models_mod
+    _models_mod.LIVE_CTX = ctx
     # Seed the opt-in reference-person image mode from its config default (env override).
     try:
         from config import REFERENCE_PERSON_MODE
