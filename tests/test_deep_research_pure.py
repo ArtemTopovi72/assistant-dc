@@ -520,13 +520,14 @@ def test_selection_probes_use_near_formats_and_survive_the_planner():
             return json.dumps(analysis)
         return json.dumps({"components": ["IMX255"], "queries": ["8.3 MP global shutter camera"]})
     ctx = research_ctx(_think_call=think,
-                       raw_search_results=lambda c, q, n, **k: asked.append(q) or [
+                       raw_search_results=lambda c, q, n, **k: asked.append((q, k.get("backend"))) or [
                            {"title": "Atlas ATP089S IMX255", "body": "4096x2160 5GigE"}])
     qs = dr_collect.selection_queries(ctx, "Подбери камеру: 8.3 Мп, 4K, 25 fps")
     check("selection probes: near format x forced interface searched first",
-          asked[:2] == ["4096x2160 global shutter color camera 5GigE",
-                        "8.9 MP global shutter color camera 5GigE"], asked)
-    check("selection probes: never the literal hard number", not any("8.3" in q for q in asked[:4]), asked)
+          [q for q, _ in asked][::2][:2] == ["4096x2160 global shutter color camera 5GigE",
+                                             "8.9 MP global shutter color camera 5GigE"], asked)
+    check("selection probes: each on both engines", [b for _, b in asked[:2]] == ["google", "bing"], asked)
+    check("selection probes: never the literal hard number", not any("8.3" in q for q, _ in asked[:8]), asked)
     check("selection probes: kept ahead of the planner's own queries",
           qs[0].startswith("4096x2160") and "8.3 MP global shutter camera" in qs, qs)
 

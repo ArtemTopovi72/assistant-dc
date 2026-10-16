@@ -272,5 +272,24 @@ _CAMS.append({"url": "https://www.1stvision.com/cameras/models/IDS-Imaging/GV-70
 out, st = audit_report_links("[GV-7090WP-C-HQ](https://en.ids-imaging.com/gv-7090wp.html)", _CAMS, "ru")
 check("a hyphenated part number matches its URL's pieces", "GV-7090WP-M/C" in out, out)
 
+print()
+print("=" * 66)
+print("A CANDIDATE FAILING TWO REQUIREMENTS IS RULED OUT")
+print("=" * 66)
+from dr_assemble import demote_failing_rows  # noqa: E402
+_M = ("## Кандидаты\n\n| Модель | 8.3 Мп | 4K | fps |\n| :--- | :--- | :--- | :--- |\n"
+      "| [ATP089S](https://a/1) | ✅ 8.9 MP | ✅ 4096x2160 | ✅ 58 |\n"
+      "| [ATX081S](https://a/2) | ❌ 8.1 MP | ❌ 2840x2840 | ✅ 136 |\n"
+      "| [TRI089S](https://a/3) | ✅ 8.9 MP | ✅ 4096x2160 | ❌ 12.5 |\n\n"
+      "## Отсеяно\n\n*   [MV-CH089](https://a/4) — 13 fps\n\n## Рекомендация\n\nx\n")
+out, n = demote_failing_rows(_M)
+cand = out.split("## Отсеяно")[0]
+check("the two-fail row leaves the candidates", "ATX081S" not in cand and n == 1, out)
+check("and is ruled out with the values that fail", "ATX081S](https://a/2) — 8.3 Мп: 8.1 MP; 4K: 2840x2840"
+      in out.split("## Отсеяно")[1], out)
+check("a one-fail row stays a candidate", "TRI089S" in cand, out)
+check("the existing ruled-out lines and later sections survive",
+      "MV-CH089" in out and "## Рекомендация" in out, out)
+
 print("%d passed, %d failed" % (OK, BAD))
 sys.exit(1 if BAD else 0)

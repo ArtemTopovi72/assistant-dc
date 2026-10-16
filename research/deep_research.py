@@ -163,7 +163,7 @@ _REEXPORTED_FROM_DR_SYNTHESIS = (synthesize_report, synthesize_survey,
                                  _normalize_outline, _postprocess_report)
 from dr_assemble import (
     _report_header, _sources_appendix, _contradiction_note, _append_once,
-    provenance_footer, audit_report_links, strip_empty_fields,
+    provenance_footer, audit_report_links, demote_failing_rows, strip_empty_fields,
     _citation_section_from_brief, _parse_cite_entry, _deterministic_digest_report,
     _build_equations_section,
 )
@@ -949,6 +949,9 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
                     logger.warning("selection verify pass dropped content (%d -> %d chars) — "
                                    "keeping the draft", len(report), len(checked))
             if report:
+                report, _moved = demote_failing_rows(report)
+                if _moved:
+                    logger.info("selection matrix: %d rows failing 2+ requirements ruled out", _moved)
                 report, _link_stats = audit_report_links(report, briefs, out_lang)
                 # Every page read used to be listed: USB night-vision webcams and a search
                 # ad under a camera matrix. The appendix is what the matrix rests on.

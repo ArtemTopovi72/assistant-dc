@@ -295,6 +295,42 @@ def audit_report_links(report: str, briefs: list, out_lang: str = "en") -> tuple
     return _MD_BROKEN_LINK.sub(_fix_broken, report), stats
 
 
+def demote_failing_rows(report: str) -> tuple:
+    """Move candidate rows that fail two or more requirements to the ruled-out list.
+
+    Told in both the writing and the checking prompt, the model still kept two 8.1 MP
+    2840x2840 cameras (❌ 8.3 MP, ❌ 4K) as candidates with a footnote saying the rule
+    allowed it. Returns (report, moved)."""
+    lines = report.split("\n")
+    cand = next((i for i, ln in enumerate(lines)
+                 if re.match(r"##\s*(Кандидаты|Candidates)", ln.strip(), re.I)), None)
+    out_at = next((i for i, ln in enumerate(lines)
+                   if re.match(r"##\s*(Отсеяно|Ruled out)", ln.strip(), re.I)), None)
+    if cand is None or out_at is None or out_at < cand:
+        return report, 0
+    header, moved, keep = None, [], []
+    for i in range(cand + 1, out_at):
+        ln = lines[i]
+        if not ln.lstrip().startswith("|"):
+            keep.append(ln)
+            continue
+        cells = [c.strip() for c in ln.strip().strip("|").split("|")]
+        if header is None:
+            header = cells
+        elif ln.count("❌") >= 2 and not set("".join(cells)) <= set(":- "):
+            fails = [f"{h}: {c.replace('❌', '').strip()}"
+                     for h, c in zip(header, cells) if "❌" in c]
+            moved.append(f"*   {cells[0]} — " + "; ".join(fails))
+            continue
+        keep.append(ln)
+    if not moved:
+        return report, 0
+    tail = lines[out_at + 1:]
+    while tail and not tail[0].strip():
+        tail = tail[1:]
+    return "\n".join(lines[:cand + 1] + keep + [lines[out_at], ""] + moved + tail), len(moved)
+
+
 def _sources_appendix(briefs: list, out_lang: str = "en") -> str:
     """Source appendix grouped by trust tier (most → least authoritative), then
     by domain, so the reader sees at a glance what the report actually rests on."""

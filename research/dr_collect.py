@@ -98,10 +98,9 @@ def selection_queries(ctx, topic: str, n: int = 14, sink: Optional[dict] = None)
     probes = _format_probes(analysis) + [q for q in analysis.get("component_queries") or []
                                          if isinstance(q, str)][:6]
     for q in probes:
-        try:
-            hits = dep(ctx, "raw_search_results", raw_search_results)(ctx, q, 8, timelimit=None)
-        except Exception:
-            hits = []
+        # Both engines, as for the run's own queries: on «auto» run 9's probes never
+        # printed IMX255 and the second round had no way to find it.
+        hits = _search_one_query(ctx, q, 8, None, False, ("google", "bing"))
         snippets += [f"- {h.get('title', '')}: {h.get('body', '')}"[:300] for h in hits]
     parts = _part_numbers(snippets)
     logger.info("Selection analysis: %s | %d component snippets | parts seen: %s",
