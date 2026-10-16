@@ -295,6 +295,34 @@ def audit_report_links(report: str, briefs: list, out_lang: str = "en") -> tuple
     return _MD_BROKEN_LINK.sub(_fix_broken, report), stats
 
 
+_EMPTY_CELL = re.compile(r"^(?:—|-|–|n/?a|)$", re.I)
+
+
+def drop_empty_columns(report: str) -> str:
+    """Remove a table column that no row fills: every matrix shipped a «Цена» column of
+    dashes, which reads as a field the report forgot rather than a fact it lacked. A
+    requirement column of «❓ не указано» stays: that gap is the answer."""
+    lines = report.split("\n")
+    i = 0
+    while i < len(lines):
+        if not lines[i].lstrip().startswith("|"):
+            i += 1
+            continue
+        j = i
+        while j < len(lines) and lines[j].lstrip().startswith("|"):
+            j += 1
+        rows = [[c.strip() for c in ln.strip().strip("|").split("|")] for ln in lines[i:j]]
+        width = len(rows[0])
+        if j - i >= 3 and all(len(r) == width for r in rows):
+            body = rows[2:]
+            keep = [k for k in range(width)
+                    if any(not _EMPTY_CELL.match(r[k].strip(" *")) for r in body)]
+            if 0 < len(keep) < width:
+                lines[i:j] = ["| " + " | ".join(r[k] for k in keep) + " |" for r in rows]
+        i = j
+    return "\n".join(lines)
+
+
 def demote_failing_rows(report: str) -> tuple:
     """Move candidate rows that fail two or more requirements to the ruled-out list.
 

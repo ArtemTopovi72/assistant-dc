@@ -701,6 +701,17 @@ def test_a_russian_report_gets_a_noun_phrase_title():
     check("title: English reports keep their own path", DR._document_title(ctx, "pick a camera", "en") is None)
 
 
+def test_followups_look_up_prices_of_fitting_models():
+    """Every matrix shipped an empty «Цена» column; the second round searches the price of
+    each model the pages print at a near format without one."""
+    import dr_collect
+    lines = ["- ATP089S-CC (LUCID): Sony IMX255 · 4096x2160 · 58 fps",
+             "- GV-7090WP-C (IDS): 4096 x 2160 · price 3450 EUR",
+             "- MV-CA050 (Hik): 2448x2048"]
+    got = dr_collect._models_at_formats(lines, {"near_formats": ["4096x2160 (8.9 MP)"]})
+    check("prices: a fitting model without a price is looked up", got == ["ATP089S-CC"], got)
+
+
 def test_english_query_is_not_searched_as_russia():
     """ru-ru for an English camera query returned Russian resellers instead of the makers."""
     import types

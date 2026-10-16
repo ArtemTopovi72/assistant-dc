@@ -157,9 +157,22 @@ def selection_queries(ctx, topic: str, n: int = 14, sink: Optional[dict] = None)
 _PLAIN_GIGABIT = re.compile(r"(?i)^(1\s*)?(gige|gbe|gigabit ethernet|1000base-t)( vision)?$")
 
 
-def _parts_at_formats(lines: list, analysis: Optional[dict]) -> list:
-    """Part numbers on lines that also print one of the analysis's near formats
-    («4096 x 2160», «8.9 MP»), most such lines first."""
+def _models_at_formats(lines: list, analysis: Optional[dict]) -> list:
+    """Model names of the brief bullets («- ATP089S-CC (LUCID): …») that print a near
+    format and no price; every matrix came back with an empty «Цена» column."""
+    pats = _format_patterns(analysis)
+    out = []
+    for ln in lines:
+        s = ln.strip()
+        if (s.startswith(("-", "*", "•")) and any(p.search(s) for p in pats)
+                and not re.search(r"(?i)price|цена|\$\s?\d|€\s?\d|\d\s?(usd|eur|руб)", s)):
+            name = re.split(r"\s\(|:", s.lstrip("-*• "), maxsplit=1)[0].strip()
+            if _PART_NO.search(name) and len(name) <= 60:
+                out.append(name)
+    return list(dict.fromkeys(out))
+
+
+def _format_patterns(analysis: Optional[dict]) -> list:
     pats = []
     for f in (analysis or {}).get("near_formats") or []:
         if not isinstance(f, str):
@@ -168,6 +181,13 @@ def _parts_at_formats(lines: list, analysis: Optional[dict]) -> list:
             pats.append(re.compile(rf"\b{w}\s*[x×*]\s*{h}\b"))
         for mp in re.findall(r"(\d+(?:\.\d)?)\s*MP", f, re.I):
             pats.append(re.compile(rf"\b{re.escape(mp)}\s*-?\s*(?:MP|megapixel)", re.I))
+    return pats
+
+
+def _parts_at_formats(lines: list, analysis: Optional[dict]) -> list:
+    """Part numbers on lines that also print one of the analysis's near formats
+    («4096 x 2160», «8.9 MP»), most such lines first."""
+    pats = _format_patterns(analysis)
     count = {}
     for ln in lines:
         if any(p.search(ln) for p in pats):
@@ -234,7 +254,9 @@ def selection_followups(ctx, topic: str, briefs: list, analysis: Optional[dict],
     # ORX-10G-89S6C, makers the component grid alone never reached.
     makers = [_maker_name(m) for m in data.get("missing_makers") or [] if isinstance(m, str)]
     by_maker = [f"{m} {c} {noun}" for c in comps[:2] for m in dict.fromkeys(filter(None, makers))][:8]
-    qs = [q for q in dict.fromkeys(grid[:8] + by_maker + grid[8:] + qs) if q.lower() not in searched][:n]
+    prices = [f"{m} price" for m in _models_at_formats(lines, analysis)[:4]]
+    qs = [q for q in dict.fromkeys(grid[:8] + by_maker + prices + grid[8:] + qs)
+          if q.lower() not in searched][:n]
     logger.info("Selection follow-up: components %s | missing makers %s | %d queries — %s",
                 data.get("components"), data.get("missing_makers"), len(qs), " | ".join(qs)[:700])
     return qs

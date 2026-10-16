@@ -304,5 +304,14 @@ check("the six sections in either language pass",
       selection_form_missing("## Требования / Requirements\n## What the numbers force\n## Кандидаты\n"
                              "## Ruled out\n## Рекомендация\n## Уточнить\n") == [])
 
+from dr_assemble import drop_empty_columns  # noqa: E402
+_T = ("| Модель | Перекодирование | Цена |\n| :--- | :--- | :--- |\n"
+      "| A | ❓ не указано | — |\n| B | ❓ не указано | — |\n")
+out = drop_empty_columns(_T)
+check("a column of dashes in every row is dropped", "Цена" not in out and out.count("|") == 12, out)
+check("a requirement column of «not stated» stays", "Перекодирование" in out and "не указано" in out, out)
+check("a column with one value stays",
+      "Цена" in drop_empty_columns(_T.replace("| B | ❓ не указано | — |", "| B | ❓ не указано | 1200 USD |")))
+
 print("%d passed, %d failed" % (OK, BAD))
 sys.exit(1 if BAD else 0)
