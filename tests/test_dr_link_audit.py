@@ -267,5 +267,10 @@ check("a link with a space or an ellipsis in it never ships as a dead link",
 out, st = audit_report_links("[Atlas 5GigE IP67](https://thinklucid.com/atlas ip67...)", _CAMS, "ru")
 check("and is repaired when a page names the model", "atlas-5gige-ip67" in out, out)
 
+_CAMS.append({"url": "https://www.1stvision.com/cameras/models/IDS-Imaging/GV-7090WP-M/C",
+              "domain": "1stvision.com", "title": "IDS GV-7090WP-M/C"})
+out, st = audit_report_links("[GV-7090WP-C-HQ](https://en.ids-imaging.com/gv-7090wp.html)", _CAMS, "ru")
+check("a hyphenated part number matches its URL's pieces", "GV-7090WP-M/C" in out, out)
+
 print("%d passed, %d failed" % (OK, BAD))
 sys.exit(1 if BAD else 0)

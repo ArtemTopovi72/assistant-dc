@@ -276,7 +276,7 @@ A table: each requirement as the user wrote it · how you read it (for an ambigu
 2-5 bullets: the computed constraint (bandwidth, power, size) with the arithmetic, and which interfaces or component classes it rules in or out. Name the components (e.g. sensors by part number) that can meet the hard numbers, from the briefs.
 
 ## Кандидаты / Candidates
-A markdown table, best first. Columns: model (as a link to the exact page from the briefs) · vendor · the component · one column per requirement with the value from the source and ✅ meets / ❌ fails / ❓ not stated · price if stated. Put every model the briefs give that meets the hard numbers or misses by one. A model meeting all requirements goes first; if none meets all, say so above the table in one sentence.
+A markdown table, best first. Columns: model (as a link to the exact page from the briefs) · vendor · the component · one column per requirement with the value from the source and ✅ meets / ❌ fails / ❓ not stated · price if stated. Put every model the briefs give that meets the hard requirements or fails exactly ONE of them; a model failing two or more belongs in Ruled out, never here. A model meeting all requirements goes first; if none meets all, say so above the table in one sentence.
 
 ## Отсеяно / Ruled out
 Models that look close but fail a hard requirement, one line each: model — which requirement fails and the value that fails it (e.g. "Basler a2A3840-13gc — rolling shutter, 13 fps").
@@ -309,7 +309,7 @@ For every candidate row:
 - find the brief of the page the row links to, and any other brief that names that EXACT model;
 - keep a ✅ or ❌ only when a brief states that value FOR THAT MODEL. A sibling variant (mono vs color, another resolution, another interface) does not prove it; a sensor's maximum does not prove the camera's. Otherwise make the cell ❓ with «не указано» / «not stated»;
 - where a brief gives a different value, write the brief's value and re-judge the cell;
-- a row whose model fails a hard requirement moves to the ruled-out section with the value that fails it;
+- a row whose model fails two or more hard requirements moves to the ruled-out section with the values that fail them;
 - re-check the sentence above the table (does any model meet everything?) and the recommendation against the corrected rows.
 Never add a model, a link or a number that is not in the briefs; never drop a link the draft has.
 

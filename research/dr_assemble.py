@@ -198,8 +198,10 @@ def strip_empty_fields(report: str) -> tuple:
 
 
 def _name_tokens(s: str) -> set:
-    return {t for t in re.findall(r"[a-z0-9]+(?:[.-][a-z0-9]+)*", s.lower().replace("_", "-"))
-            if len(t) >= 3 or any(c.isdigit() for c in t)} - {"www", "com", "https", "http", "html", "product", "products"}
+    # Split on every separator: «GV-7090WP-C-HQ» in the text is gv/7090wp/hq in its URL.
+    return {t for t in re.findall(r"[a-z0-9]+", s.lower())
+            if len(t) >= 3 or (len(t) == 2 and any(c.isdigit() for c in t))} - {
+        "www", "com", "https", "http", "html", "product", "products"}
 
 
 def _page_named(text: str, url: str, briefs: list) -> Optional[str]:
@@ -211,14 +213,19 @@ def _page_named(text: str, url: str, briefs: list) -> Optional[str]:
                                  if any(c.isdigit() for c in t)}
     if not want:
         return None
-    scored = []
-    for b in briefs or []:
-        u = (b.get("url") or "").strip()
-        if u:
-            have = _name_tokens(u.replace("-", " ") + " " + (b.get("title") or ""))
-            scored.append((len(want & have), u))
-    scored.sort(key=lambda x: -x[0])
-    if scored and scored[0][0] >= 2 and (len(scored) == 1 or scored[0][0] > scored[1][0]):
+    pages = [(u, _name_tokens(u + " " + (b.get("title") or "")))
+             for b in briefs or [] for u in [(b.get("url") or "").strip()] if u]
+    df = {}
+    for _, have in pages:
+        for t in have & want:
+            df[t] = df.get(t, 0) + 1
+    # A word on one page names it; one on every page («lucid», «camera») does not; a
+    # part number («7090wp») counts double.
+    weight = {t: (2.0 if re.search(r"\d", t) and re.search(r"[a-z]", t) else 1.0) / n
+              for t, n in df.items()}
+    scored = sorted(((sum(weight[t] for t in have & want), u) for u, have in pages),
+                    key=lambda x: -x[0])
+    if scored and scored[0][0] >= 1.0 and (len(scored) == 1 or scored[0][0] > 1.5 * scored[1][0]):
         return scored[0][1]
     return None
 
