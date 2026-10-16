@@ -389,6 +389,29 @@ def promote_passing_rows(report: str) -> tuple:
     return "\n".join(out[:at] + rows + out[at:]), len(rows)
 
 
+def drop_false_none_claim(report: str) -> tuple:
+    """The line above the candidates table exists only to say no model meets everything.
+    Run 18 wrote it over seven rows without a single ❌. Dropped when a row fails nothing.
+    Returns (report, dropped)."""
+    lines = report.split("\n")
+    cs = next((i for i, ln in enumerate(lines) if re.match(r"##\s*(Кандидаты|Candidates)", ln.strip(), re.I)), None)
+    if cs is None:
+        return report, False
+    tab = next((i for i in range(cs + 1, len(lines))
+                if lines[i].lstrip().startswith("|") or lines[i].startswith("## ")), None)
+    if tab is None or not lines[tab].lstrip().startswith("|"):
+        return report, False
+    rows = []
+    for ln in lines[tab + 2:]:
+        if not ln.lstrip().startswith("|"):
+            break
+        rows.append(ln)
+    above = [i for i in range(cs + 1, tab) if lines[i].strip()]
+    if not above or not any("❌" not in r for r in rows):
+        return report, False
+    return "\n".join(ln for i, ln in enumerate(lines) if i not in set(above)), True
+
+
 _SELECTION_SECTIONS = (("Требования", "Requirements"), ("Что из этого следует", "What the numbers force"),
                        ("Кандидаты", "Candidates"), ("Отсеяно", "Ruled out"),
                        ("Рекомендация", "Recommendation"), ("Уточнить", "To confirm"))
@@ -412,7 +435,10 @@ def _gost_entries(by_tier: dict) -> list:
     for tier in _TRUST_ORDER:
         for b in sorted(by_tier.get(tier) or [], key=lambda b: (b.get("domain") or "", b["url"])):
             n += 1
-            title = re.sub(r"\s+", " ", (b.get("title") or "").strip()).rstrip(" .…") or b["url"]
+            title = re.sub(r"\s+", " ", (b.get("title") or "").strip())
+            if len(title) > 100:     # a search engine glued several results' titles: «…CameraTriton10 8.1 MP…»
+                title = re.split(r"(?<=[a-zа-я])(?=[A-ZА-Я][a-zа-я0-9])", title)[0]
+            title = title.rstrip(" .…") or b["url"]
             out.append(f"{n}. {title}. — Текст : электронный // {b.get('domain') or ''}. — "
                        f"URL: {b['url']} (дата обращения: {today}).")
     return out

@@ -313,5 +313,20 @@ check("a requirement column of «not stated» stays", "Перекодирова�
 check("a column with one value stays",
       "Цена" in drop_empty_columns(_T.replace("| B | ❓ не указано | — |", "| B | ❓ не указано | 1200 USD |")))
 
+from dr_assemble import drop_false_none_claim, _gost_entries  # noqa: E402
+_N = ("## Кандидаты\n\nНи одна модель не соответствует всем жестким требованиям.\n\n"
+      "| Модель | 8.3 Мп | Перекодирование |\n| :--- | :--- | :--- |\n"
+      "| [TRT089S](https://a/1) | ✅ 8.9 MP | ❓ не указано |\n\n## Отсеяно\n\nx\n")
+out, dropped = drop_false_none_claim(_N)
+check("«none meets all» over a row that fails nothing is dropped",
+      dropped and "Ни одна" not in out and "TRT089S" in out and "## Отсеяно" in out, out)
+check("and kept when every row fails something",
+      not drop_false_none_claim(_N.replace("✅ 8.9 MP", "❌ 8.1 MP"))[1])
+_g = _gost_entries({"PRIMARY": [{"url": "https://x/1", "domain": "x", "title":
+      "Atlas10 8.1 MP Model (Sony IMX536) - 10GigE RDMA CameraTriton10 8.1 MP (Sony IMX536), "
+      "10GigE RDMA IP67 CameraFXO 10GigE - Allied Vision"}]})[0]
+check("titles a search engine glued together keep only the first",
+      _g.startswith("1. Atlas10 8.1 MP Model (Sony IMX536) - 10GigE RDMA Camera. —"), _g)
+
 print("%d passed, %d failed" % (OK, BAD))
 sys.exit(1 if BAD else 0)

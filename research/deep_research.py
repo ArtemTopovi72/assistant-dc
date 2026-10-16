@@ -164,7 +164,7 @@ _REEXPORTED_FROM_DR_SYNTHESIS = (synthesize_report, synthesize_survey,
 from dr_assemble import (
     _report_header, _sources_appendix, _contradiction_note, _append_once,
     provenance_footer, audit_report_links, demote_failing_rows, promote_passing_rows,
-    selection_form_missing, drop_empty_columns, strip_empty_fields,
+    selection_form_missing, drop_empty_columns, drop_false_none_claim, strip_empty_fields,
     _citation_section_from_brief, _parse_cite_entry, _deterministic_digest_report,
     _build_equations_section,
 )
@@ -997,6 +997,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
                 report = drop_empty_columns(plain_symbols(report))
                 report, _moved = demote_failing_rows(report)
                 report, _back = promote_passing_rows(report)
+                report, _ = drop_false_none_claim(report)
                 if _moved or _back:
                     logger.info("selection matrix: %d rows failing 2+ requirements ruled out, "
                                 "%d passing rows put back", _moved, _back)

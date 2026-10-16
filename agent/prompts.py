@@ -311,7 +311,7 @@ For every candidate row:
 - keep a ✅ or ❌ only when a brief states that value FOR THAT MODEL. A sibling variant (mono vs color, another resolution, another interface) does not prove it; a sensor's maximum does not prove the camera's. Otherwise make the cell ❓ with «не указано» / «not stated»;
 - where a brief gives a different value, write the brief's value and re-judge the cell;
 - a row whose model fails two or more hard requirements moves to the ruled-out section with the values that fail them;
-- re-check the sentence above the table (does any model meet everything?) against the corrected rows, and rewrite the components bullet of «What the numbers force» and the recommendation FROM the corrected table: each scenario names the candidate that serves it best (most headroom on the hard numbers, the vendor page as evidence), never a ruled-out model and never skipping a stronger candidate.
+- re-check the sentence above the table (does any model meet everything?) against the corrected rows, and rewrite the components bullet of «What the numbers force» and the recommendation FROM the corrected table: each scenario names the candidate that serves it best: closest to the numbers the user stated (they are targets, not floors), so the table's first row unless the scenario itself needs more; the vendor page as evidence; never a ruled-out model.
 Never add a model, a link or a number that is not in the briefs; never drop a link the draft has.
 
 Return the WHOLE corrected report: same sections, same order, same language, same links. Nothing else — no notes about what you changed."""
