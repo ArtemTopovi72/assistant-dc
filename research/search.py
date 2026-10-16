@@ -159,7 +159,7 @@ def _region_for(ctx, query: str = "") -> str:
 
 
 def raw_search_results(ctx, query: str, max_results: Optional[int] = None, *,
-                       timelimit=_UNSET, news: bool = False) -> list:
+                       timelimit=_UNSET, news: bool = False, backend: Optional[str] = None) -> list:
     """Run a web search and return structured hits (no formatting, no distill).
 
     Each hit is a dict: {"title", "href", "body", "domain"}. Returns [] on failure
@@ -196,7 +196,7 @@ def raw_search_results(ctx, query: str, max_results: Optional[int] = None, *,
                 region=region,
                 safesearch=SEARCH_SAFESEARCH,
                 timelimit=tl,
-                backend=SEARCH_BACKEND,
+                backend=backend or SEARCH_BACKEND,
                 max_results=max_results,
             ))
 

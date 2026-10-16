@@ -325,13 +325,25 @@ def _corrective_queries(ctx, topic: str, profile: dict, existing: list,
 # --------------------------------------------------------------------------- #
 # Stage 2 — broad source collection
 # --------------------------------------------------------------------------- #
-def _search_one_query(ctx, q: str, per_query: int, timelimit, use_news: bool) -> list:
+def _search_one_query(ctx, q: str, per_query: int, timelimit, use_news: bool,
+                      backends: tuple = ()) -> list:
     """Search one query (+ optional news vertical) with the zero-hit mutation
     retry. Pure w.r.t. shared state — safe to run on a worker thread. Never
-    raises; returns [] on total failure."""
+    raises; returns [] on total failure. ``backends``: search each and keep the
+    union — for a camera spec google and bing each returned a different half of
+    the reference models, and «auto» picked one of them at random per run."""
     S = settings_view(ctx)
     try:
-        hits = dep(ctx, "raw_search_results", raw_search_results)(ctx, q, per_query, timelimit=timelimit)
+        if backends:
+            hits = []
+            for be in backends:
+                try:
+                    hits += dep(ctx, "raw_search_results", raw_search_results)(
+                        ctx, q, per_query, timelimit=timelimit, backend=be)
+                except Exception as exc:
+                    logger.info("Search %s failed for %r: %s", be, q, exc)
+        else:
+            hits = dep(ctx, "raw_search_results", raw_search_results)(ctx, q, per_query, timelimit=timelimit)
         if use_news:  # for current-events topics, also pull fresh articles
             hits += dep(ctx, "raw_search_results", raw_search_results)(ctx, q, per_query, timelimit=timelimit, news=True)
     except Exception as exc:  # one bad query must not abort the run
@@ -365,6 +377,7 @@ def collect_sources(ctx, queries: list, per_query: int, prog: _Progress,
     timelimit = profile.get("timelimit")
     use_news = bool(profile.get("news"))
     category = profile.get("category", "general")
+    extra = ((("google", "bing"),) if profile.get("select") else ())
 
     seen, sources = set(), []
     dropped = 0
@@ -404,7 +417,7 @@ def collect_sources(ctx, queries: list, per_query: int, prog: _Progress,
         # ingested on THIS thread as futures complete — dedup stays single-threaded.
         done_n = 0
         with turn_trace.Pool(max_workers=conc) as ex:
-            futs = {ex.submit(dep(ctx, "_search_one_query", _search_one_query), ctx, q, per_query, timelimit, use_news): q
+            futs = {ex.submit(dep(ctx, "_search_one_query", _search_one_query), ctx, q, per_query, timelimit, use_news, *extra): q
                     for q in queries}
             for fut in as_completed(futs):
                 if ctx is not None and ctx.is_cancelled():
@@ -426,7 +439,7 @@ def collect_sources(ctx, queries: list, per_query: int, prog: _Progress,
             if ctx is not None and ctx.is_cancelled():
                 break
             prog.update("Searching", f"[{i}/{len(queries)}] {q}")
-            _ingest(dep(ctx, "_search_one_query", _search_one_query)(ctx, q, per_query, timelimit, use_news), q)
+            _ingest(dep(ctx, "_search_one_query", _search_one_query)(ctx, q, per_query, timelimit, use_news, *extra), q)
             prog.update(sources=len(sources))
             dep(ctx, "_save_state", _save_state)(run_dir, phase="searching", queries=queries,
                         sources=[s["href"] for s in sources])

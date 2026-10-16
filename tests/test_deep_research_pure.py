@@ -552,6 +552,29 @@ def test_selection_followups_grid_the_components_the_pages_name():
     check("followups: the model's own queries kept after the grid", "IMX255 datasheet" in qs, qs)
 
 
+def test_a_selection_searches_two_engines_and_keeps_both():
+    """«auto» picked one engine per run: google returned the LUCID/IDS cameras for one query
+    and bing the Emergent/Oryx ones for another, so recall swung run to run."""
+    import tempfile, types
+    from pathlib import Path
+    import dr_collect, dr_progress
+    from _dr_ctx import research_ctx
+    calls = []
+
+    def raw(c, q, n, timelimit=None, backend=None, **k):
+        calls.append(backend)
+        return [{"href": f"https://{backend or 'auto'}.example/{q}", "title": q, "body": ""}]
+    ctx = research_ctx(raw_search_results=raw, DR_SEARCH_CONCURRENCY=1)
+    srcs = dr_collect.collect_sources(ctx, ["imx255 10gige"], 6, dr_progress._Progress(None),
+                                      Path(tempfile.mkdtemp()), {"select": True})
+    check("select: both engines searched", sorted(calls) == ["bing", "google"], calls)
+    check("select: the union is kept", len(srcs) == 2, srcs)
+    calls.clear()
+    dr_collect.collect_sources(ctx, ["tea tannins"], 6, dr_progress._Progress(None),
+                               Path(tempfile.mkdtemp()), {"category": "general"})
+    check("other runs: one search on the configured engine", calls == [None], calls)
+
+
 def test_english_query_is_not_searched_as_russia():
     """ru-ru for an English camera query returned Russian resellers instead of the makers."""
     import types
