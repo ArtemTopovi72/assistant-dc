@@ -114,6 +114,7 @@ SELECTION_BRIEF_ADDENDUM = """
 SELECTION MODE — the topic lists required specifications and the report must match product models against them. This OVERRIDES the 3-8 bullet limit:
 - One bullet PER PRODUCT MODEL the page gives, up to 20: "- <exact model name> (<maker>): <every spec the page states that bears on the requirements, each as name value unit, e.g. sensor Sony IMX255 · 4096x2160 · 8.9 MP · 58 fps · global shutter · color · 5GigE · PoE · H.265 · price 1234 USD>". Keep the model name exactly as written.
 - Always carry, when the page states them: the output pixel formats (e.g. BayerRG8, RGB8, YUV422 — an RGB output means the camera debayers on board) and every compression or encoding feature (JPEG, H.264/H.265, lossless compression, «Compression Beyond»); these decide an ambiguous «re-encoding» requirement.
+- Always carry the price when the page states one, with its currency, as «price 2860 EUR» — a shop's «Regular price / Sale price» line is the price. A shop page gave €2.860 and the brief dropped it, so the report's price column came out empty.
 - A spec the page does not state is left out, never guessed. A model the page only names in passing still gets a bullet with what is stated.
 - After the model bullets, at most 3 bullets of facts that decide the requirements (an interface's real bandwidth, which sensors are global shutter, what a compression feature actually is)."""
 
