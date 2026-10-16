@@ -213,6 +213,19 @@ FORBIDDEN in this answer: abstract, table of contents, taxonomy, "Introduction",
 Write in the SAME LANGUAGE as the user's request."""
 
 
+SELECTION_ANALYSIS_PROMPT = """You analyse a SELECTION request: the user lists required specifications and wants the product models that meet them. Do the engineering before anyone searches.
+
+Return ONLY JSON:
+{"product": "what is being chosen, in English, 2-5 words",
+ "hard": ["each hard numeric/boolean requirement, normalized, e.g. '3840x2160 (8.3 MP)', '>= 25 fps at full resolution', 'global shutter', 'color'"],
+ "derived": ["each constraint the numbers force, WITH the arithmetic, e.g. '3840x2160 x 25 fps x 8 bit = 1.66 Gbit/s > 1GigE (~0.94 Gbit/s usable) -> needs 2.5/5/10GigE or on-camera compression'"],
+ "ambiguous": [{"requirement": "as written", "readings": ["each plausible technical reading"]}],
+ "component_kind": "the part that decides the hard specs (e.g. 'image sensor', 'CPU', 'GPU', 'panel'), or ''",
+ "component_queries": ["4-6 SHORT English searches whose results NAME such parts by part number: half on the part itself ('4096x2160 global shutter sensor'), half on the PRODUCT with the hard numbers and the interface they force ('4096x2160 global shutter color camera 10GigE', '4K global shutter camera 5GigE') — product listings put the part number in their titles"],
+ "vendors": ["8-12 makers of this kind of product that matter for these specs"]}
+No prose."""
+
+
 SELECTION_QUERY_PROMPT = """You plan web searches for a SELECTION request: the user lists required specifications and wants the concrete product models that meet them.
 
 Think like an engineer who knows the market:
@@ -220,14 +233,19 @@ Think like an engineer who knows the market:
 2. Work out what the hard numbers force. Compute any bandwidth, power or size they imply and which interface or class of part can carry it (e.g. 3840x2160 x 25 fps x 8 bit is ~1.7 Gbit/s, more than 1 Gigabit Ethernet carries, so 2.5/5/10GigE or on-board compression).
 3. Name the COMPONENTS that can meet the hard numbers (for a camera: the image sensors by part number, e.g. "Sony IMX255", "Gpixel GMAX2509"; for a laptop: the CPU/GPU parts) — those names find the products.
 
-Then write search queries in English that find:
+You are given an ENGINEERING ANALYSIS of the request and SEARCH SNIPPETS that name candidate components. Use the component part numbers that the snippets show meet the hard numbers — not ones you remember that do not (a 5 MP sensor never meets an 8 MP requirement).
+
+Then write SHORT search queries in English (3-7 words, no quotes, no OR) that find:
 - the components that meet the hard numbers, by part number;
 - product models built on each component, per major vendor, with the interface the numbers require (vendor + component + interface, e.g. "LUCID Atlas IMX255 5GigE");
 - each ambiguous requirement under each reading, in the market's own words (e.g. "machine vision camera on-camera H.265 compression");
 - datasheets ("<model> datasheet pdf") and distributor catalogs that list specs in tables;
 - the near misses worth ruling out (a product that meets most specs but fails one).
 
-Return ONLY JSON: {"queries": ["...", ...]} with up to {n} queries, most specific first. No prose."""
+Return ONLY JSON:
+{"components": ["EVERY part number in the snippets that meets the hard numbers (often 4-8), plus ones you are sure of; never drop one the snippets show"],
+ "queries": ["up to {n} queries, most specific first"]}
+At least half the queries name a component: "<component> camera <required interface>" (e.g. "IMX255 5GigE color camera", "XGS8000 10GigE camera") and "<vendor> <component>" for the vendors most likely to build it. No prose."""
 
 
 SELECTION_REPORT_PROMPT = """You are an applications engineer answering a SELECTION request: the user listed required specifications and wants the product models that meet them. Answer ONLY from the per-source briefs (each tagged with its source domain); never add a model, a number or a URL that is not in them.

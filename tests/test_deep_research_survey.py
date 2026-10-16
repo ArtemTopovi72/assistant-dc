@@ -313,7 +313,7 @@ def test_social_outlinks_none_seen_dedup():
 def test_acquire_page_no_adapter_hit_no_cache_falls_to_fetch():
     with _Patches(is_social_url=lambda u: False,
                   fetch_via_adapter=lambda url, cat: None,
-                  _fetch_page=lambda url, **k: (None, None)):
+                  _fetch_page=lambda url, **k: (None, None), _fetch_rendered=lambda url, **k: None):
         res = DR._acquire_page("https://example.com/no-adapter-real-article", 0, {"title": ""},
                                "general", True, None, ctx=_C())
         check("acquire_page_adapter_miss_falls_through", res["reason"] == "fetch_failed")

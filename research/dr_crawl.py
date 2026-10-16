@@ -25,7 +25,7 @@ import requests
 
 import dr_settings as S
 import formula_audit as _formula_audit
-from dr_extract import (GATE_NAV, GATE_OK, classify_extraction, _ar5iv_url,
+from dr_extract import (GATE_CHALLENGE, GATE_NAV, GATE_OK, GATE_SHELL, classify_extraction, _ar5iv_url,
                         _extract_links, _extract_text, _extract_title,
                         _inline_mathml_as_tex, _looks_like_unmarked_math,
                         _social_outlinks)
@@ -204,6 +204,66 @@ def _fetch_page(url: str, *, ctx=None) -> tuple:
             resp.close()
 
 
+import threading as _threading
+
+# Vendor and distributor pages answer a plain request with 403, a bot check or an empty
+# JS shell: 20 of 65 pages of a camera selection run were lost that way (2026-10-16). A
+# real browser renders them; two at a time, every request (redirects and sub-resources
+# too) checked like the plain fetch, so the browser cannot be steered to an inner host.
+_RENDER_SLOTS = _threading.BoundedSemaphore(2)
+_RENDER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+              "Chrome/131.0.0.0 Safari/537.36")
+
+
+def _literal_inner_host(url: str) -> bool:
+    import ipaddress
+    from urllib.parse import urlsplit
+    host = (urlsplit(url).hostname or "").strip("[]").lower()
+    if host in ("localhost", "") or host.endswith((".local", ".internal", ".localhost")):
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return not ip.is_global
+
+
+def _render_route(route) -> None:
+    # The DNS-resolving check on every sub-resource took a vendor page past the 20 s
+    # timeout (3 s without it): documents get the full check, the rest a literal one.
+    req = route.request
+    if req.resource_type in ("image", "media", "font"):
+        return route.abort()
+    if req.resource_type == "document":
+        ok = _is_safe_public_url(req.url)
+    else:
+        ok = req.url.startswith(("http://", "https://")) and not _literal_inner_host(req.url)
+    return route.continue_() if ok else route.abort()
+
+
+def _fetch_rendered(url: str, *, ctx=None) -> Optional[str]:
+    if not _is_safe_public_url(url):
+        return None
+    with _RENDER_SLOTS:
+        try:
+            from playwright.sync_api import sync_playwright
+            with sync_playwright() as pw:
+                browser = pw.chromium.launch(headless=True)
+                try:
+                    page = browser.new_page(user_agent=_RENDER_UA, locale="en-US")
+                    page.route("**/*", _render_route)
+                    page.goto(url, wait_until="domcontentloaded", timeout=20000)
+                    page.wait_for_timeout(1500)
+                    if not _is_safe_public_url(page.url):
+                        return None
+                    return page.content()[:_MAX_HTML_CHARS]
+                finally:
+                    browser.close()
+        except Exception as exc:
+            logger.debug("rendered fetch failed %s: %s", url, exc)
+            return None
+
+
 def _acquire_page(url, depth, seed, category, use_adapters, cache, *, ctx=None) -> dict:
     """Fetch+extract+gate ONE url. No shared mutable state (besides the file-per-URL
     cache, whose writes are atomic per distinct URL), so it is safe to run on a
@@ -251,11 +311,15 @@ def _acquire_page(url, depth, seed, category, use_adapters, cache, *, ctx=None) 
             res["reason"] = "fetch_failed"
             return res
         html, pdf_text = dep(ctx, "_fetch_page", _fetch_page)(url, ctx=ctx)
+        rendered = False
         if html is None and pdf_text is None:
-            res["reason"] = "fetch_failed"
-            if cache is not None:
-                cache.mark_failed(url)
-            return res
+            html = dep(ctx, "_fetch_rendered", _fetch_rendered)(url, ctx=ctx)
+            rendered = html is not None
+            if html is None:
+                res["reason"] = "fetch_failed"
+                if cache is not None:
+                    cache.mark_failed(url)
+                return res
         if pdf_text is not None:
             text = pdf_text  # html stays None -> no link/social crawl off a PDF
             budget = S.DR_PDF_TEXT_CHARS
@@ -264,6 +328,13 @@ def _acquire_page(url, depth, seed, category, use_adapters, cache, *, ctx=None) 
             budget = S.DR_PAGE_CHARS
         title = seed.get("title") or dep(ctx, "_extract_title", _extract_title)(html)
         status, reason = classify_extraction(text, html, title)
+        if status in (GATE_CHALLENGE, GATE_SHELL) and pdf_text is None and not rendered:
+            again = dep(ctx, "_fetch_rendered", _fetch_rendered)(url, ctx=ctx)
+            if again is not None:
+                html = again
+                text = dep(ctx, "_extract_text", _extract_text)(html, url)
+                status, reason = classify_extraction(text, html, title)
+                logger.info("rendered fetch %s -> %s", url, status)
         if status != GATE_OK:
             res["reason"] = reason
             logger.debug("gate %s -> %s", reason, url)

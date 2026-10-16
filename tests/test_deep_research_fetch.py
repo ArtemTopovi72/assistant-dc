@@ -246,7 +246,7 @@ def test_acquire_page():
     # adapter returns junk that fails the gate -> falls through to fetch
     with _Patches(is_social_url=lambda u: False,
                   fetch_via_adapter=lambda url, cat: {"text": "hi", "title": "t"},
-                  _fetch_page=lambda url, **k: (None, None)):
+                  _fetch_page=lambda url, **k: (None, None), _fetch_rendered=lambda url, **k: None):
         res = DR._acquire_page("https://wiki.org/y", 0, {"title": ""}, "general", True, None, ctx=_C())
         check("acquire_adapter_gate_fail_falls_through", res["reason"] == "fetch_failed")
     # cache hit
@@ -268,7 +268,7 @@ def test_acquire_page():
             return False
         def mark_failed(self, url):
             pass
-    with _Patches(is_social_url=lambda u: False, _fetch_page=lambda url, **k: (None, None)):
+    with _Patches(is_social_url=lambda u: False, _fetch_page=lambda url, **k: (None, None), _fetch_rendered=lambda url, **k: None):
         res = DR._acquire_page("https://example.com/w", 0, {"title": ""}, "general", False, EmptyCache(), ctx=_C())
         check("acquire_cache_miss_fetch_fails", res["reason"] == "fetch_failed")
     # live fetch, html success, gate ok
@@ -298,6 +298,49 @@ def test_acquire_page():
                   _extract_title=lambda html: "T"):
         res = DR._acquire_page("https://example.com/", 0, {"title": ""}, "general", False, None, ctx=_C())
         check("acquire_landing_url_rejected", res["reason"] == DR.GATE_NAV and res["page"] is None)
+
+
+def test_blocked_vendor_pages_are_rendered_and_spec_sheets_kept():
+    """A camera selection run lost 20 of 65 pages to 403/bot checks and 14 to the menu test:
+    a blocked page is opened in a browser, a spec sheet is a data page, not navigation."""
+    import dr_crawl, dr_extract, threading, time
+    spec = ("Atlas ATL089S-CC\nSensor Sony IMX255\nResolution 4096 x 2160 px, 8.9 MP\nFrame rate 58 fps\n"
+            "Interface 5GigE PoE\nPower 7 W\nPixel 3.45 um\nBit depth 12 bit\nWeight 200 g\nMount C, 60 mm\n"
+            "Operating temperature 0 to 50 °C\nShutter Global\nColor Bayer RG\nDimensions 60 x 60 x 77.5 mm")
+    check("spec_sheet_is_not_navigation", dr_extract.classify_extraction(spec, None, "Atlas 8.9 MP")[0] == DR.GATE_OK)
+    check("a_menu_is_still_navigation",
+          dr_extract.classify_extraction("Home\nProducts\nCameras\nAbout\nContact\n" * 6, None, "x")[0] == DR.GATE_NAV)
+    rendered = []
+    with _Patches(is_social_url=lambda u: False, _fetch_page=lambda url, **k: (None, None),
+                  _fetch_rendered=lambda url, **k: rendered.append(url) or "<html>ok</html>",
+                  _extract_text=lambda html, url: spec, _extract_title=lambda html: "Atlas"):
+        res = DR._acquire_page("https://thinklucid.com/product/atlas", 0, {"title": ""}, "product", False, None, ctx=_C())
+    check("a_failed_fetch_is_rendered_in_a_browser", res["page"] is not None and rendered, res["reason"])
+    texts = iter(["Checking your browser before accessing. Cloudflare.", spec])
+    with _Patches(is_social_url=lambda u: False, _fetch_page=lambda url, **k: ("<html>cf</html>", None),
+                  _fetch_rendered=lambda url, **k: "<html>real</html>",
+                  _extract_text=lambda html, url: next(texts), _extract_title=lambda html: "Atlas"):
+        res = DR._acquire_page("https://thinklucid.com/product/atlas", 0, {"title": ""}, "product", False, None, ctx=_C())
+    check("a_bot_check_page_is_rendered_again", res["page"] is not None and "IMX255" in res["page"]["text"], res["reason"])
+    check("inner_hosts_are_refused_to_the_browser",
+          dr_crawl._literal_inner_host("http://127.0.0.1:8000/") and dr_crawl._literal_inner_host("http://10.1.2.3/x")
+          and not dr_crawl._literal_inner_host("https://cdn.example.com/a.js")
+          and dr_crawl._fetch_rendered("http://127.0.0.1:8000/") is None)
+    inside, worst = [0], [0]
+
+    class _Slow:
+        @staticmethod
+        def extract(html, **k):
+            inside[0] += 1
+            worst[0] = max(worst[0], inside[0])
+            time.sleep(0.05)
+            inside[0] -= 1
+            return "text"
+    ts = [threading.Thread(target=dr_extract._extract_text, args=("<html/>", "u", {"trafilatura": _Slow}))
+          for _ in range(4)]
+    [t.start() for t in ts]
+    [t.join() for t in ts]
+    check("html_is_parsed_one_page_at_a_time", worst[0] == 1, worst[0])
 
 
 if __name__ == "__main__":

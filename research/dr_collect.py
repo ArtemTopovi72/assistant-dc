@@ -41,14 +41,32 @@ def selection_queries(ctx, topic: str, n: int = 14) -> list:
     numbers, the models on them per vendor and interface, each reading of an ambiguous
     spec, datasheets. The generic planner asked «best 4K global shutter cameras 2024» and
     never reached a 5GigE IMX255 camera (2026-10-16). [] when the model gives nothing."""
-    from prompts import SELECTION_QUERY_PROMPT
+    import json
+    from prompts import SELECTION_ANALYSIS_PROMPT, SELECTION_QUERY_PROMPT
     S = settings_view(ctx)
-    out = dep(ctx, "_think_call", _think_call)(
-        ctx, SELECTION_QUERY_PROMPT.replace("{n}", str(n)), f"Request: {topic}",
-        max_tokens=S.DR_PLAN_TOKENS, temperature=0.3)
+    think = dep(ctx, "_think_call", _think_call)
+    # One prompt alone neither did the bandwidth sum nor knew which sensors are 4K global
+    # shutter: it searched IMX250/IMX264 (5 MP) over plain GigE (2026-10-16). So: the
+    # engineering first, then snippets that NAME the parts, then the targeted queries.
+    analysis = safe_json_from_llm(think(ctx, SELECTION_ANALYSIS_PROMPT, f"Request: {topic}",
+                                        max_tokens=S.DR_PLAN_TOKENS, temperature=0.2) or "") or {}
+    snippets = []
+    for q in [q for q in analysis.get("component_queries") or [] if isinstance(q, str)][:6]:
+        try:
+            hits = dep(ctx, "raw_search_results", raw_search_results)(ctx, q, 8, timelimit=None)
+        except Exception:
+            hits = []
+        snippets += [f"- {h.get('title', '')}: {h.get('body', '')}"[:300] for h in hits]
+    logger.info("Selection analysis: %s | %d component snippets",
+                json.dumps(analysis, ensure_ascii=False)[:700], len(snippets))
+    user = (f"Request: {topic}\n\nENGINEERING ANALYSIS:\n{json.dumps(analysis, ensure_ascii=False)}"
+            f"\n\nSEARCH SNIPPETS naming components:\n" + "\n".join(snippets[:48]))
+    out = think(ctx, SELECTION_QUERY_PROMPT.replace("{n}", str(n)), user,
+                max_tokens=S.DR_PLAN_TOKENS, temperature=0.3)
     data = safe_json_from_llm(out or "") or {}
     qs = [q.strip() for q in data.get("queries") or [] if isinstance(q, str) and q.strip()]
-    logger.info("Selection queries: %d — %s", len(qs), " | ".join(qs)[:600])
+    logger.info("Selection components: %s", ", ".join(map(str, data.get("components") or []))[:400])
+    logger.info("Selection queries: %d — %s", len(qs), " | ".join(qs)[:900])
     return qs[:n]
 
 

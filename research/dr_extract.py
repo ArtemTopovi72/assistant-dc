@@ -82,6 +82,15 @@ _GATE_SHELL_HTML_MIN = 60_000
 _GATE_SHELL_TEXT_MAX = 220
 
 
+# A spec sheet or catalog page is mostly «8.9 MP · 58 fps · 5GigE · 7 W» with almost no
+# sentence periods, so the menu test below quarantined camera product pages as navigation
+# (14 of 65 on a camera selection run, 2026-10-16). Numbers with units mark a data page.
+_SPEC_TOKEN = re.compile(
+    r"\b\d+(?:[.,]\d+)?\s?(?:mp|мп|fps|к/с|px|mm|мм|µm|um|мкм|gbit|gb|mb|ghz|mhz|hz|гц|db|дб|"
+    r"w|вт|v|в|ma|ms|мс|µs|kg|кг|g|г|°c|nm|нм|bit|бит|gige|inch|дюйм)(?![^\W\d_])", re.I)
+_SPEC_PAGE_MIN_TOKENS = 8
+
+
 # Anti-bot / interstitial / placeholder fingerprints (substring match, lowercased).
 _CHALLENGE_MARKERS = (
     "captcha", "are you a robot", "are you human", "checking your browser",
@@ -116,7 +125,8 @@ def classify_extraction(text: Optional[str], html: Optional[str] = None,
     if t and any(m in t for m in _NAV_TITLE_MARKERS):
         return GATE_NAV, GATE_NAV
     periods = body.count(". ") + body.count(".\n") + body.count("? ") + body.count("! ")
-    if n < 2500 and periods < max(2, n // 500):
+    if (n < 2500 and periods < max(2, n // 500)
+            and len(_SPEC_TOKEN.findall(body)) < _SPEC_PAGE_MIN_TOKENS):
         return GATE_NAV, GATE_NAV
     # Plain too-thin content.
     if n < _GATE_MIN_CHARS:
@@ -193,12 +203,21 @@ def _fix_mojibake(text: Optional[str], modules=None) -> Optional[str]:
         return text
 
 
+import threading as _threading
+
+# Two crawl workers inside trafilatura at once (prune_unwanted_nodes and readability's
+# _tostring) died with an access violation in lxml's etree.pyd and took the whole app
+# down mid-run (2026-10-16). The fetches stay parallel; the parsing goes one at a time.
+_TRAFILATURA_LOCK = _threading.Lock()
+
+
 def _extract_text(html: str, url: str, modules=None) -> Optional[str]:
     try:
-        text = module(modules or {}, "trafilatura").extract(
-            html, include_comments=False, include_tables=True,
-            favor_recall=True, url=url,
-        )
+        with _TRAFILATURA_LOCK:
+            text = module(modules or {}, "trafilatura").extract(
+                html, include_comments=False, include_tables=True,
+                favor_recall=True, url=url,
+            )
         return _fix_mojibake(text.strip(), modules) if text else None
     except Exception as exc:
         logger.debug("extract failed %s: %s", url, exc)
