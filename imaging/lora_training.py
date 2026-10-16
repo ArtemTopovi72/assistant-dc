@@ -238,6 +238,18 @@ def free_gpu(log=None, min_free_mb: int = None, ctx=None) -> None:
         say("ComfyUI: выгружено")
     except Exception as exc:
         say("ComfyUI не отвечает (%s) — продолжаю" % exc)
+    # Our own process held 4.3 GB beside the render: the research reranker and the
+    # torch allocator's cached blocks from earlier peaks. Whisper and F5 stay loaded.
+    try:
+        import rerank
+        rerank.release_gpu()
+    except Exception:
+        pass
+    try:
+        from utils import safe_empty_cuda_cache
+        safe_empty_cuda_cache()
+    except Exception:
+        pass
     # `lms unload` returns before the driver has the memory back. A render
     # started 0.2 s later loaded its weights beside the not-yet-released chat
     # model and ran 296 s instead of 48 s (the
