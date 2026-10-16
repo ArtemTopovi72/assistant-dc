@@ -102,7 +102,7 @@ class _KindChart(QWidget):
     """One row per kind of answer: a bar as long as its share of the answers, split
     into 👍 (green), 👎 (red) and not rated (grey), with the votes and % satisfied."""
 
-    ROW = 26
+    ROW = 30
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -121,17 +121,26 @@ class _KindChart(QWidget):
             p.setPen(QColor(MUTED))
             p.drawText(self.rect(), Qt.AlignCenter, "No answers yet")
             return
+        font = QFont(p.font())
+        font.setPixelSize(px(13))
+        p.setFont(font)
+        fm = p.fontMetrics()
         row, w = px(self.ROW), self.width()
-        name_w, stat_w = px(150), px(170)
+        stats = [f"👍 {k['up']}  👎 {k['down']}  · {k['replies']} · 100%" for k in self._kinds]
+        name_w = max(fm.horizontalAdvance(kind_label(k["kind"])) for k in self._kinds) + px(12)
+        stat_w = max(fm.horizontalAdvance(s) for s in stats) + px(12)
         bar_x, bar_w = name_w + px(8), max(px(40), w - name_w - stat_w - px(24))
-        peak = max(k["replies"] for k in self._kinds) or 1
         for i, k in enumerate(self._kinds):
             y = px(4) + i * row
             p.setPen(QColor(TEXT))
             p.drawText(QRectF(px(8), y, name_w, row), Qt.AlignVCenter | Qt.AlignLeft, kind_label(k["kind"]))
-            full = bar_w * k["replies"] / peak
-            up_w = full * k["up"] / max(k["replies"], 1)
-            dn_w = full * k["down"] / max(k["replies"], 1)
+            # Each bar is its own kind's answers: a kind with three answers is as readable
+            # as chat with three hundred (scaled to the busiest, it was a hairline).
+            full = bar_w
+            n = max(k["replies"], 1)
+            up_w = full * k["up"] / n if k["up"] else 0
+            dn_w = full * k["down"] / n if k["down"] else 0
+            up_w, dn_w = (max(up_w, px(3)) if up_w else 0), (max(dn_w, px(3)) if dn_w else 0)
             top, hgt = y + row * 0.25, row * 0.5
             p.fillRect(QRectF(bar_x, top, full, hgt), QColor(BORDER))
             p.fillRect(QRectF(bar_x, top, up_w, hgt), QColor(ACCENT2))
