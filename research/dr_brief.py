@@ -56,7 +56,7 @@ def _parse_trust(brief: str) -> tuple:
     return tier, body
 
 
-def brief_source(ctx, topic: str, page: dict, select: bool = False) -> Optional[str]:
+def brief_source(ctx, topic: str, page: dict, select: bool = False, focus: str = "") -> Optional[str]:
     """Extract grounded facts from one page.
 
     Returns the brief, or None when the model read the page and found nothing
@@ -78,7 +78,9 @@ def brief_source(ctx, topic: str, page: dict, select: bool = False) -> Optional[
         # not the page's first 4000 -- a page is fetched up to 32000 and its
         # head is menus and lede as often as not (search.best_passages).
         from search import best_passages
-        _text = best_passages(_text, f"{topic} {page.get('title', '')}", S.DR_BRIEF_INPUT_CHARS)
+        # `focus` is a selection's near formats: ranked by the Russian request alone, the
+        # 6.8k-char Atlas table lost exactly its ATP089S/ATL089S rows (8.9 MP, 4096 x 2160).
+        _text = best_passages(_text, f"{topic} {page.get('title', '')} {focus}", S.DR_BRIEF_INPUT_CHARS)
         logger.debug("brief input trimmed %d -> %d chars for %s",
                      len(page.get("text") or ""), len(_text), page.get("domain"))
     user = (f"Research topic: {topic}\n\nSource domain: {page['domain']}\n"

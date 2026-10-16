@@ -613,6 +613,52 @@ def test_followups_search_the_part_printed_beside_a_near_format():
     check("followups: plain gigabit is never a forced interface", not any("GigE Vision" in q for q in qs), qs)
 
 
+def test_followups_grid_sensors_not_their_grades_or_the_camera_names():
+    """Run 20 read IMX255 only beside GV-7090 variants, printed as IMX255LQR and IMX255LLR,
+    and the grid's slots went to IMX305 and IMX305LQR — the HR-8000, Kaya and pvCam
+    cameras on IMX255 were never searched."""
+    import json
+    import dr_collect
+    from _dr_ctx import research_ctx
+    briefs = [{"title": "IDS", "brief": "- GV-7090WP-C-HQ (IDS): Sony IMX255LQR · 4112 x 2176 · YUV422 · 10GigE\n"
+                                        "- GV-7090WP-M-GL (IDS): Sony IMX255LLR · 4112 x 2176 · 10GigE"},
+              {"title": "Shop", "brief": "- E3ISPM (Touptek): IMX305LQR · 4096x2160 · USB3"}]
+    ctx = research_ctx(_think_call=lambda *a, **k: json.dumps({"components": ["IMX305", "IMX305LQR"]}))
+    analysis = {"probe_core": "color camera", "forced_interfaces": ["10GigE"],
+                "near_formats": ["4096x2160 (8.9 MP)", "4112x2176 (8.9 MP)"]}
+    qs = dr_collect.selection_followups(ctx, "camera", briefs, analysis, set())
+    grid = [q for q in qs if q.endswith("camera 10GigE")]
+    check("grid: a sensor's grades are one sensor", "IMX305LQR camera 10GigE" not in grid
+          and "IMX255 camera 10GigE" in grid, grid)
+    check("grid: the camera on the line and a pixel format are not components",
+          not any(t in q for q in grid for t in ("GV7090", "YUV422")), grid)
+
+
+def test_a_selection_brief_reads_the_table_rows_at_the_near_formats():
+    """The 6.8k-char Atlas 5GigE table was cut to 4000 chars by overlap with the Russian
+    request and lost exactly its ATP089S/ATL089S rows (8.9 MP, 4096 x 2160 px)."""
+    import deep_research as DR
+    import types
+    from search import best_passages
+    from _dr_ctx import research_ctx
+    rows = "\n".join(f"| ATL{i:03d}S | {i} MP | 1936 x 1464 px | 173 fps | Sony IMX421 | Global | 5GigE |"
+                     for i in range(60))
+    text = rows + "\n| ATP089S | 8.9 MP | 4096 x 2160 px | 58.5 fps | Sony IMX255 | Global | 5GigE |"
+    seen = {}
+
+    def brief(ctx, topic, page, select=False, focus=""):
+        seen["focus"] = focus
+        return None
+    ctx = research_ctx(brief_source=brief)
+    profile = {"select": True, "selection_analysis": {"near_formats": ["4096x2160 (8.9 MP)"],
+                                                      "forced_interfaces": ["5GigE"]}}
+    DR._brief_pages(ctx, "Подбери камеру", [{"domain": "a", "title": "Atlas", "text": text}], profile,
+                    None, types.SimpleNamespace(update=lambda *a: None), scholarly=False, terms=[])
+    check("brief focus: the near format as words the ranker matches", "4096 2160" in seen.get("focus", ""), seen)
+    check("brief focus: the row at that format survives the cut",
+          "ATP089S" in best_passages(text, "Подбери камеру Atlas " + seen.get("focus", ""), 1500))
+
+
 def test_model_catalog_lists_every_model_once_with_its_page():
     """From 100 briefs the writer kept five rows and dropped the IMX255 cameras it had
     read; the catalog it is handed names each model once, with the page."""

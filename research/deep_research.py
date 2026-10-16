@@ -17,6 +17,7 @@ summary (the model never reads a multi-page report aloud).
 from dr_settings import view as settings_view
 import json
 import logging
+import re
 import sys
 import time
 import types
@@ -242,12 +243,16 @@ def _brief_pages(ctx, topic, pages, profile, run_dir, prog, *, scholarly, terms,
     # A page the briefer never answered about is NOT a page without facts. Counted
     # separately so the caller can tell the two apart -- see the zero-brief branch.
     silent = 0
+    sel = profile.get("selection_analysis") or {}
+    # «4096x2160» is one word to the passage ranker, which matches the page's «4096 x 2160 px» by word.
+    focus = re.sub(r"(\d)\s*[x×*]\s*(\d)", r"\1 \2", " ".join(
+        str(v) for k in ("near_formats", "forced_interfaces") for v in sel.get(k) or []))
     for i, page in enumerate(pages, 1):
         if cancelled():
             break
         prog.update("Verifying", f"[{mode} {i}/{len(pages)}] {page['domain']}")
         brief = _stage(ctx, "brief_source")(ctx, topic, page,
-                                            **({"select": True} if profile.get("select") else {}))
+                                            **({"select": True, "focus": focus} if profile.get("select") else {}))
         if not brief:
             # "" means the model produced nothing (our failure); None means it
             # read the page and judged it useless (the page's). Counting both as
