@@ -11,6 +11,7 @@ All of it is assembled from data, never generated, and all of it is written in
 the reader's language.
 """
 import logging
+import math
 import re
 from typing import Optional
 
@@ -410,6 +411,48 @@ def drop_false_none_claim(report: str) -> tuple:
     if not above or not any("❌" not in r for r in rows):
         return report, False
     return "\n".join(ln for i, ln in enumerate(lines) if i not in set(above)), True
+
+
+_NUM = re.compile(r"\d+(?:[.,]\d+)?")
+
+
+def rank_by_closeness(report: str) -> str:
+    """Candidates sorted by ❌ count, then by distance to the stated numbers. Told that a
+    stated resolution is a target, the writer still put a 19.6 MP camera above three
+    8.9 MP ones for an 8.3 MP spec. A column whose header carries a number is a target
+    (log distance, rounded so near-equal rows keep the writer's order); «≥ 25 fps» is a
+    floor and costs nothing above it; a header number a cell is ten times off («4K» vs
+    4096x2160) is a label, not a target."""
+    lines = report.split("\n")
+    cs = next((i for i, ln in enumerate(lines) if re.match(r"##\s*(Кандидаты|Candidates)", ln.strip(), re.I)), None)
+    if cs is None:
+        return report
+    head = next((i for i in range(cs + 1, len(lines))
+                 if lines[i].lstrip().startswith("|") or lines[i].startswith("## ")), None)
+    if head is None or not lines[head].lstrip().startswith("|"):
+        return report
+    end = head + 2
+    while end < len(lines) and lines[end].lstrip().startswith("|"):
+        end += 1
+    rows = lines[head + 2:end]
+    cols = [c.strip() for c in lines[head].strip().strip("|").split("|")]
+    targets = {}
+    for j, c in enumerate(cols):
+        m = _NUM.search(c)
+        if m and not c.startswith(("≥", ">=")):
+            targets[j] = float(m.group().replace(",", "."))
+
+    def cost(row):
+        cells = [c.strip() for c in row.strip().strip("|").split("|")]
+        d = 0.0
+        for j, t in targets.items():
+            m = _NUM.search(cells[j]) if j < len(cells) else None
+            v = float(m.group().replace(",", ".")) if m else 0
+            if t > 0 and v > 0 and 0.1 < v / t < 10:
+                d += abs(math.log(v / t))
+        return (row.count("❌"), round(d, 1))
+    ranked = sorted(rows, key=cost)
+    return "\n".join(lines[:head + 2] + ranked + lines[end:])
 
 
 _SELECTION_SECTIONS = (("Требования", "Requirements"), ("Что из этого следует", "What the numbers force"),

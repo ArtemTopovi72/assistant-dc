@@ -328,5 +328,15 @@ _g = _gost_entries({"PRIMARY": [{"url": "https://x/1", "domain": "x", "title":
 check("titles a search engine glued together keep only the first",
       _g.startswith("1. Atlas10 8.1 MP Model (Sony IMX536) - 10GigE RDMA Camera. —"), _g)
 
+from dr_assemble import rank_by_closeness  # noqa: E402
+_K = ("## Кандидаты\n\n| Модель | 8.3 Мп | 4K | ≥ 25 fps |\n| :--- | :--- | :--- | :--- |\n"
+      "| [ATL196S](https://a/1) | ✅ 19.6 MP | ✅ 4416x4428 | ✅ 27.9 fps |\n"
+      "| [TRI089S](https://a/2) | ✅ 8.9 MP | ✅ 4096x2160 | ❌ 13.7 fps |\n"
+      "| [HR-8000-S](https://a/3) | ✅ 8.9 MP | ✅ 4096x2160 | ✅ 110 fps |\n"
+      "| [TRT089S](https://a/4) | ✅ 8.9 MP | ✅ 4096x2160 | ✅ 31.2 fps |\n\n## Отсеяно\n\nx\n")
+order = [ln.split("]")[0][3:] for ln in rank_by_closeness(_K).split("\n") if ln.startswith("| [")]
+check("an 8.9 MP camera ranks above a 19.6 MP one for an 8.3 MP spec, a ❌ row goes last",
+      order == ["HR-8000-S", "TRT089S", "ATL196S", "TRI089S"], order)
+
 print("%d passed, %d failed" % (OK, BAD))
 sys.exit(1 if BAD else 0)
