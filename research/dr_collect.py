@@ -445,7 +445,17 @@ def collect_sources(ctx, queries: list, per_query: int, prog: _Progress,
                         sources=[s["href"] for s in sources])
     # Crawl high-authority sources first so the page budget is spent on the most
     # credible material; ordinary sources only fill whatever budget is left.
-    sources.sort(key=lambda s: _source_rank(s["href"], category))
+    if profile.get("select"):
+        # The page budget went to shops listing 5 MP cameras while the Emergent HT-8000-S
+        # page that «IMX255 … 10GigE» found sat unread: a hit naming its query's part
+        # number is read first.
+        def _names_part(s):
+            parts = {t.upper() for t in _PART_NO.findall(s.get("query") or "")}
+            blob = f"{s.get('title', '')} {s.get('href', '')} {s.get('body', '')}".upper()
+            return -sum(1 for t in parts if t in blob)
+        sources.sort(key=lambda s: (_names_part(s), _source_rank(s["href"], category)))
+    else:
+        sources.sort(key=lambda s: _source_rank(s["href"], category))
     sources = _apply_scholarly_floor(sources, category)
     sources = _cap_per_domain(sources, S.DR_MAX_PAGES_PER_DOMAIN)
     if S.DR_MAX_SOURCES > 0:

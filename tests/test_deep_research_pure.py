@@ -575,6 +575,26 @@ def test_a_selection_searches_two_engines_and_keeps_both():
     check("other runs: one search on the configured engine", calls == [None], calls)
 
 
+def test_a_selection_reads_the_hit_naming_its_part_first():
+    """The page budget went to shops with 5 MP cameras; the HT-8000-S page that
+    «IMX255 color camera 10GigE» found was never read."""
+    import tempfile
+    from pathlib import Path
+    import dr_collect, dr_progress
+    from _dr_ctx import research_ctx
+
+    def raw(c, q, n, timelimit=None, backend=None, **k):
+        if backend != "google":
+            return []
+        return [{"href": "https://shop.example/cameras-5mp", "title": "Global shutter cameras", "body": "5 MP"},
+                {"href": "https://emergent.example/ht-8000-s", "title": "HT-8000-S", "body": "Sony IMX255 10GigE"}]
+    ctx = research_ctx(raw_search_results=raw, DR_SEARCH_CONCURRENCY=1)
+    srcs = dr_collect.collect_sources(ctx, ["IMX255 color camera 10GigE"], 6, dr_progress._Progress(None),
+                                      Path(tempfile.mkdtemp()), {"select": True})
+    check("select: the hit naming the query's part is crawled first",
+          srcs and "ht-8000" in srcs[0]["href"], [s["href"] for s in srcs])
+
+
 def test_english_query_is_not_searched_as_russia():
     """ru-ru for an English camera query returned Russian resellers instead of the makers."""
     import types

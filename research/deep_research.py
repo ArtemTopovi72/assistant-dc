@@ -541,9 +541,11 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
         if not fq:
             break
         visited_queries.update(q.lower() for q in fq)
+        # Not a follow-up's half budget: these rounds reach the cameras the first one
+        # could not name.
         new_briefs = dep(ctx, "_expansion_pass", _expansion_pass)(
-            ctx, topic, fq, profile, caps, prog, run_dir, cache,
-            visited_urls=visited_urls, scholarly=_scholarly, terms=_terms,
+            ctx, topic, fq, profile, dict(caps, max_pages=caps["max_pages"] * 2), prog, run_dir,
+            cache, visited_urls=visited_urls, scholarly=_scholarly, terms=_terms,
             mode=_contra.MODE_CONFIRM, label=f"selection-{hop + 1}", cancelled=cancelled)
         if not new_briefs:
             break
