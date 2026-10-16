@@ -245,7 +245,8 @@ def _brief_pages(ctx, topic, pages, profile, run_dir, prog, *, scholarly, terms,
         if cancelled():
             break
         prog.update("Verifying", f"[{mode} {i}/{len(pages)}] {page['domain']}")
-        brief = _stage(ctx, "brief_source")(ctx, topic, page)
+        brief = _stage(ctx, "brief_source")(ctx, topic, page,
+                                            **({"select": True} if profile.get("select") else {}))
         if not brief:
             # "" means the model produced nothing (our failure); None means it
             # read the page and judged it useless (the page's). Counting both as
@@ -389,7 +390,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
     if _select:
         # A spec list is answered by catalog pages of any age: «product» kept a 1-year
         # window, and the 2019 5GigE IMX255 cameras that meet the specs never came up.
-        profile.update(recency="any", timelimit=None, news=False)
+        profile.update(recency="any", timelimit=None, news=False, select=True)
         sel = dep(ctx, "selection_queries", selection_queries)(ctx, topic)
         queries = list(dict.fromkeys(sel + queries))[:max(caps["max_queries"], len(sel))]
         logger.info("SELECTION intent: %d requirement-driven queries lead the plan", len(sel))

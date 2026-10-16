@@ -36,6 +36,42 @@ from utils import safe_json_from_llm
 logger = logging.getLogger("assistant.research")
 
 
+_PART_NO = re.compile(r"\b[A-Za-z]{2,5}-?\d{3,5}[A-Za-z]{0,3}\b")
+
+
+def _part_numbers(snippets: list, top: int = 14) -> list:
+    """Part-number-shaped tokens in the snippets, most frequent first, with one line of
+    context each: [(token, count, line)]. Left to itself the planner named sensors it
+    half-remembered (5 MP ones for an 8 MP spec) and missed the IMX255 the results showed;
+    a query naming IMX255 is what reaches the 5/10GigE cameras built on it."""
+    seen = {}
+    for s in snippets:
+        for tok in _PART_NO.findall(s):
+            key = tok.upper().replace("-", "")
+            if not re.search(r"\d{3}", key) or re.fullmatch(r"[A-Z]{1,2}\d{4}", key):
+                continue        # years and plain dates ("Jan2024", "Q2026") name no part
+            cnt, line = seen.get(key, (0, s))
+            seen[key] = (cnt + 1, line)
+    ranked = sorted(seen.items(), key=lambda kv: -kv[1][0])[:top]
+    return [(k, c, line[:200]) for k, (c, line) in ranked]
+
+
+def _format_probes(analysis: dict, cap: int = 6) -> list:
+    """Near format x forced interface x product: «4096x2160 color camera 5GigE» reached the
+    LUCID ATP089S and «8.9 MP … 10GigE» the Emergent HE-8000, while every query the model
+    phrased itself kept the literal «8.3 MP», which only the rolling-shutter 4K parts ship."""
+    def strs(key):
+        return [v.strip() for v in analysis.get(key) or [] if isinstance(v, str) and v.strip()]
+    core = str(analysis.get("probe_core") or analysis.get("product") or "").strip()
+    forms = []
+    for f in strs("near_formats")[1:4] or strs("near_formats")[:2]:
+        res, _, mp = f.partition("(")
+        forms += [x.strip(" )") for x in (res, mp) if x.strip(" )")]
+    out = [f"{form} {core} {iface}".strip() for iface in strs("forced_interfaces")[:2] or [""]
+           for form in forms]
+    return list(dict.fromkeys(out))[:cap]
+
+
 def selection_queries(ctx, topic: str, n: int = 14) -> list:
     """Requirement-driven queries for a spec selection: the components that meet the hard
     numbers, the models on them per vendor and interface, each reading of an ambiguous
@@ -51,23 +87,35 @@ def selection_queries(ctx, topic: str, n: int = 14) -> list:
     analysis = safe_json_from_llm(think(ctx, SELECTION_ANALYSIS_PROMPT, f"Request: {topic}",
                                         max_tokens=S.DR_PLAN_TOKENS, temperature=0.2) or "") or {}
     snippets = []
-    for q in [q for q in analysis.get("component_queries") or [] if isinstance(q, str)][:6]:
+    probes = _format_probes(analysis) + [q for q in analysis.get("component_queries") or []
+                                         if isinstance(q, str)][:6]
+    for q in probes:
         try:
             hits = dep(ctx, "raw_search_results", raw_search_results)(ctx, q, 8, timelimit=None)
         except Exception:
             hits = []
         snippets += [f"- {h.get('title', '')}: {h.get('body', '')}"[:300] for h in hits]
-    logger.info("Selection analysis: %s | %d component snippets",
-                json.dumps(analysis, ensure_ascii=False)[:700], len(snippets))
+    parts = _part_numbers(snippets)
+    logger.info("Selection analysis: %s | %d component snippets | parts seen: %s",
+                json.dumps(analysis, ensure_ascii=False)[:700], len(snippets),
+                ", ".join(f"{p}×{c}" for p, c, _ in parts))
     user = (f"Request: {topic}\n\nENGINEERING ANALYSIS:\n{json.dumps(analysis, ensure_ascii=False)}"
-            f"\n\nSEARCH SNIPPETS naming components:\n" + "\n".join(snippets[:48]))
+            "\n\nPART NUMBERS SEEN in the snippets (count, one line each) — judge each against "
+            "the hard numbers:\n" + "\n".join(f"{p} ×{c}: {line}" for p, c, line in parts)
+            + "\n\nSEARCH SNIPPETS naming components:\n" + "\n".join(snippets[:60]))
     out = think(ctx, SELECTION_QUERY_PROMPT.replace("{n}", str(n)), user,
                 max_tokens=S.DR_PLAN_TOKENS, temperature=0.3)
     data = safe_json_from_llm(out or "") or {}
     qs = [q.strip() for q in data.get("queries") or [] if isinstance(q, str) and q.strip()]
     logger.info("Selection components: %s", ", ".join(map(str, data.get("components") or []))[:400])
     logger.info("Selection queries: %d — %s", len(qs), " | ".join(qs)[:900])
-    return qs[:n]
+    # The probes are product-level and land on vendor 10GigE pages; the planner rewrote them
+    # into «8.3MP … 5GigE» which only an exact-number listing matches (0/6 targets).
+    out_qs, seen = [], set()
+    for q in probes[:6] + qs:
+        if q.lower() not in seen:
+            seen.add(q.lower()); out_qs.append(q)
+    return out_qs[:n]
 
 
 def plan_queries(ctx, topic: str, max_queries: int) -> tuple:

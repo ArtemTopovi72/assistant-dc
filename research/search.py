@@ -146,13 +146,16 @@ def _ddgs_retry(ctx, do_query, error_label: str) -> list:
     return out
 
 
-def _region_for(ctx) -> str:
+def _region_for(ctx, query: str = "") -> str:
     """A Russian speaker asking about «Эрмитаж» got the Norfolk, Virginia
     museum from a worldwide English search. An explicit
-    SEARCH_REGION setting wins; the worldwide default follows the reader."""
+    SEARCH_REGION setting wins; the worldwide default follows the reader, but only
+    for a query in Cyrillic: an English Deep Research query run as ru-ru answered a
+    camera spec with Russian resellers in place of the makers' pages."""
     if SEARCH_REGION != "wt-wt":
         return SEARCH_REGION
-    return "ru-ru" if str(getattr(ctx, "reply_lang", "") or "").startswith("ru") else SEARCH_REGION
+    ru = str(getattr(ctx, "reply_lang", "") or "").startswith("ru")
+    return "ru-ru" if ru and (not query or re.search("[а-яё]", query, re.I)) else SEARCH_REGION
 
 
 def raw_search_results(ctx, query: str, max_results: Optional[int] = None, *,
@@ -175,7 +178,7 @@ def raw_search_results(ctx, query: str, max_results: Optional[int] = None, *,
         return []
     max_results = max_results or SEARCH_MAX_RESULTS
     tl = SEARCH_TIMELIMIT if timelimit is _UNSET else timelimit
-    region = _region_for(ctx)
+    region = _region_for(ctx, query)
 
     def _do_query():
         with dep(ctx, "DDGS", DDGS)() as ddgs:

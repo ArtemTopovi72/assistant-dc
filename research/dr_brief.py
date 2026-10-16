@@ -24,7 +24,7 @@ from seams import text_model
 from dr_math import _repair_latex_artifacts
 from dr_outline import _est_tokens
 from dr_progress import _Progress
-from prompts import SOURCE_BRIEF_PROMPT
+from prompts import SOURCE_BRIEF_PROMPT, SELECTION_BRIEF_ADDENDUM
 
 logger = logging.getLogger("assistant.research")
 
@@ -56,7 +56,7 @@ def _parse_trust(brief: str) -> tuple:
     return tier, body
 
 
-def brief_source(ctx, topic: str, page: dict) -> Optional[str]:
+def brief_source(ctx, topic: str, page: dict, select: bool = False) -> Optional[str]:
     """Extract grounded facts from one page.
 
     Returns the brief, or None when the model read the page and found nothing
@@ -98,7 +98,7 @@ def brief_source(ctx, topic: str, page: dict) -> Optional[str]:
         import copy as _copy
         _c = _copy.copy(ctx)
         _c.model_name = S.DR_BRIEF_MODEL
-    out = text_model(ctx)(_c, SOURCE_BRIEF_PROMPT, user,
+    out = text_model(ctx)(_c, SOURCE_BRIEF_PROMPT + (SELECTION_BRIEF_ADDENDUM if select else ""), user,
                           temperature=0.2, max_tokens=safe, prefill="<think></think>")
     out = (out or "").strip()
     # Two different outcomes must stay distinguishable, so a counter can tell an

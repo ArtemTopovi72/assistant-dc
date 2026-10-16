@@ -503,6 +503,43 @@ def test_model_context_real():
     check("model_context_cached", DR._model_context(FakeCtx()) == val)
 
 
+def test_selection_probes_use_near_formats_and_survive_the_planner():
+    """Every query the model phrased kept the literal «8.3 MP» — only rolling-shutter 4K parts
+    ship at it — and found 0 of 6 reference cameras; «4096x2160 … 5GigE» reached them. The
+    probes are built from the analysis, run first, and stay in the plan."""
+    import json, types
+    import dr_collect
+    from _dr_ctx import research_ctx
+    analysis = {"probe_core": "global shutter color camera", "forced_interfaces": ["5GigE", "10GigE"],
+                "near_formats": ["3840x2160 (8.3 MP)", "4096x2160 (8.9 MP)"],
+                "component_queries": ["4K global shutter sensor"]}
+    asked = []
+
+    def think(c, system, user, *a, **k):
+        if "SELECTION request" in system and "ENGINEERING" not in user:
+            return json.dumps(analysis)
+        return json.dumps({"components": ["IMX255"], "queries": ["8.3 MP global shutter camera"]})
+    ctx = research_ctx(_think_call=think,
+                       raw_search_results=lambda c, q, n, **k: asked.append(q) or [
+                           {"title": "Atlas ATP089S IMX255", "body": "4096x2160 5GigE"}])
+    qs = dr_collect.selection_queries(ctx, "Подбери камеру: 8.3 Мп, 4K, 25 fps")
+    check("selection probes: near format x forced interface searched first",
+          asked[:2] == ["4096x2160 global shutter color camera 5GigE",
+                        "8.9 MP global shutter color camera 5GigE"], asked)
+    check("selection probes: never the literal hard number", not any("8.3" in q for q in asked[:4]), asked)
+    check("selection probes: kept ahead of the planner's own queries",
+          qs[0].startswith("4096x2160") and "8.3 MP global shutter camera" in qs, qs)
+
+
+def test_english_query_is_not_searched_as_russia():
+    """ru-ru for an English camera query returned Russian resellers instead of the makers."""
+    import types
+    import search
+    ru = types.SimpleNamespace(reply_lang="ru")
+    check("region: English query worldwide", search._region_for(ru, "IMX255 10GigE camera") == "wt-wt")
+    check("region: Cyrillic query stays Russian", search._region_for(ru, "Эрмитаж часы работы") == "ru-ru")
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0
