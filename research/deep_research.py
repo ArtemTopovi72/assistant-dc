@@ -912,6 +912,11 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
         return _finish(ctx, run_dir, topic, body, prog, queries, briefs, started,
                        cancelled=cancelled())
 
+    try:
+        from rerank import release_gpu
+        release_gpu()
+    except Exception as exc:
+        logger.debug("reranker release skipped: %s", exc)
     # 5. Synthesize (reduce). Only ask for the Citation Lineage section if we
     # actually injected OpenAlex data — otherwise the model fabricates "(OpenAlex)".
     sections = requested_sections(topic)

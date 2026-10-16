@@ -157,6 +157,10 @@ class Reranker:
                         self.cross_model, _RERANK_DEVICE)
             t0 = time.time()
             self._ce = CrossEncoder(self.cross_model, device=_RERANK_DEVICE)
+            if str(_RERANK_DEVICE).startswith("cuda") and hasattr(getattr(self._ce, "model", None), "half"):
+                # fp32 held 2.3 GB beside a 26B LLM that was already spilling; BAAI ships
+                # bge-reranker-v2-m3 for fp16 use.
+                self._ce.model.half()
             logger.info("cross-encoder ready in %.1fs (device=%s)", time.time() - t0, _RERANK_DEVICE)
             return True
         except Exception as exc:
@@ -296,6 +300,25 @@ class Reranker:
 
 # Module-level convenience: one reranker per process (cross-encoder load is heavy).
 _DEFAULT: Optional[Reranker] = None
+
+
+def release_gpu() -> None:
+    """Drop the process reranker and its CUDA memory; the next rerank loads it again.
+    Kept resident through the report writing, its 2.3 GB pushed 2.8 GB of the 26B LLM
+    out of VRAM into shared memory and the matrix crawled out token by token."""
+    global _DEFAULT
+    if _DEFAULT is None:
+        return
+    _DEFAULT = None
+    import gc
+    gc.collect()
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
+    logger.info("reranker released before writing; its VRAM goes back to the LLM")
 
 
 def get_reranker(backend: str = "auto", *, embedder=None,
