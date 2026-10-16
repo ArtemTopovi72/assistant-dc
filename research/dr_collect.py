@@ -78,7 +78,11 @@ def _format_probes(analysis: dict, cap: int = 6) -> list:
         forms += [x for x in (res.strip(), mp) if x]
     ifaces = strs("forced_interfaces")[-3:] or [""]     # widest last: 2.5GigE found no 4K GS
     per = max(1, cap // len(ifaces))
-    out = [f"{form} {core} {iface}".strip() for iface in ifaces for form in forms[:per]]
+    # The qualifiers narrowed the results to 1GigE cameras (run 22: no IMX255 anywhere);
+    # «4096 x 2160 5GigE camera», spaced as data sheets print it, named IMX255 on 4 of 4.
+    noun = core.split()[-1] if core.split() else ""
+    out = [f"{re.sub(r'(?<=\d)x(?=\d)', ' x ', form)} {iface} {noun}".strip()
+           for iface in ifaces for form in forms[:per]]
     return list(dict.fromkeys(out))[:cap]
 
 

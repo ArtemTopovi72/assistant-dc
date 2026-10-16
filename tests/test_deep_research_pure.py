@@ -506,7 +506,9 @@ def test_model_context_real():
 def test_selection_probes_use_near_formats_and_survive_the_planner():
     """Every query the model phrased kept the literal «8.3 MP» — only rolling-shutter 4K parts
     ship at it — and found 0 of 6 reference cameras; «4096x2160 … 5GigE» reached them. The
-    probes are built from the analysis, run first, and stay in the plan."""
+    probes are built from the analysis, run first, and stay in the plan. Run 22's
+    «4096x2160 global shutter color camera 5GigE» found only 1GigE IMX267 cameras; the
+    bare «4096 x 2160 5GigE camera» named IMX255 on 4 of 4 tries."""
     import json, types
     import dr_collect
     from _dr_ctx import research_ctx
@@ -524,12 +526,11 @@ def test_selection_probes_use_near_formats_and_survive_the_planner():
                            {"title": "Atlas ATP089S IMX255", "body": "4096x2160 5GigE"}])
     qs = dr_collect.selection_queries(ctx, "Подбери камеру: 8.3 Мп, 4K, 25 fps")
     check("selection probes: near format x forced interface searched first",
-          [q for q, _ in asked][::3][:2] == ["4096x2160 global shutter color camera 5GigE",
-                                             "8.9 MP global shutter color camera 5GigE"], asked)
+          [q for q, _ in asked][::3][:2] == ["4096 x 2160 5GigE camera", "8.9 MP 5GigE camera"], asked)
     check("selection probes: each on every engine", [b for _, b in asked[:3]] == ["google", "bing", "yahoo"], asked)
     check("selection probes: never the literal hard number", not any("8.3" in q for q, _ in asked[:8]), asked)
     check("selection probes: kept ahead of the planner's own queries",
-          qs[0].startswith("4096x2160") and "8.3 MP global shutter camera" in qs, qs)
+          qs[0].startswith("4096 x 2160") and "8.3 MP global shutter camera" in qs, qs)
 
 
 def test_selection_followups_grid_the_components_the_pages_name():
@@ -669,6 +670,18 @@ def test_model_catalog_lists_every_model_once_with_its_page():
     check("catalog: each model once", len(cat) == 2, cat)
     check("catalog: with the page it came from", cat[0].endswith("https://a.example/atlas")
           and cat[1].endswith("https://b.example/shop"), cat)
+
+
+def test_model_catalog_puts_near_format_models_first_and_skips_facts():
+    """Cut at 150 lines in crawl order, run 22's catalog lost the HE-8000-S and ATP089S
+    behind 2 MP cameras and fact bullets; the writer never saw them."""
+    import deep_research as DR
+    briefs = [{"url": f"https://s/{i}", "brief": f"- CAM{i:03d}X (Shop): IMX{100 + i} · 1920 x 1080 · 2 MP\n"
+                                                 f"- Sensor is a Sony IMX{100 + i}"} for i in range(5)]
+    briefs.append({"url": "https://e/hr", "brief": "- HE-8000-S (Emergent): IMX255 · 4096 x 2160 · 8.9MP"})
+    cat = DR._model_catalog(briefs, cap=3, analysis={"near_formats": ["4096x2160 (8.9 MP)"]}).splitlines()
+    check("catalog: the near-format model survives the cap", cat[0].startswith("- HE-8000-S"), cat)
+    check("catalog: a fact bullet is not a model", not any("Sensor is" in ln for ln in cat), cat)
 
 
 def test_followups_keep_a_named_part_below_the_frequency_cut():

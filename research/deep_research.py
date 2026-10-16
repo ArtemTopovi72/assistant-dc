@@ -310,24 +310,32 @@ def _document_title(ctx, topic: str, out_lang: str) -> Optional[str]:
     return t if 3 <= len(t) <= 120 else None
 
 
-def _model_catalog(briefs: list, cap: int = 150) -> str:
+def _model_catalog(briefs: list, cap: int = 150, analysis: dict = None) -> str:
     """One line per product model the select briefs list, each with the page it came
-    from; the first line wins for a model named on several pages."""
-    from dr_collect import _PART_NO
+    from; the first line wins for a model named on several pages. Models printing a near
+    format come first: cut at 150 in crawl order, run 22's catalog lost the HE-8000-S and
+    the ATP089S behind fact bullets and 2 MP cameras, and the writer never saw them."""
+    from dr_collect import _PART_NO, _format_patterns
+    pats = _format_patterns(analysis)
     out, seen = [], set()
     for b in briefs:
         url = b.get("url") or ""
         for ln in (b.get("brief") or "").splitlines():
             ln = ln.strip()
             m = _PART_NO.search(ln)
-            if not ln.startswith(("-", "*", "•")) or not m:
+            if not ln.startswith(("-", "*", "•")) or not m or not _MODEL_BULLET.match(ln):
                 continue
             key = ln.lstrip("-*• ").split(":")[0].strip().lower()[:60]
             if key in seen:
                 continue
             seen.add(key)
             out.append(f"{ln[:260]} — {url}")
+    out.sort(key=lambda ln: not any(p.search(ln) for p in pats))
     return "\n".join(out[:cap])
+
+
+# «- ATP089S-CC (LUCID): …» is a model line; «- Sensor is a 1-inch Sony IMX255» is a fact.
+_MODEL_BULLET = re.compile(r"^[-*•]\s*[^:()]{2,80}\((?:[^()]|\([^()]*\)){2,60}\)\s*:")
 
 
 def hop_anchor(profile: dict, topic: str) -> str:
@@ -952,7 +960,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
             # Prompt + answer must fit the loaded window: 150 model lines on top of the
             # briefs made a 46k-token request for 40960 and the run fell back (run 11).
             budget = max(8000, (_model_context(ctx) - sel_tokens - 1500) * 3)
-            catalog = _model_catalog(briefs)
+            catalog = _model_catalog(briefs, analysis=profile.get("selection_analysis"))
             evidence = evidence[:max(2000, budget - len(catalog) - 4000)]
             sel_user = (
                 f"User request: {topic}\n\n"
