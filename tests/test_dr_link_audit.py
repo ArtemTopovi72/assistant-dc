@@ -261,5 +261,11 @@ check("and on the same domain among several", "phoenix-8-9-mp-imx267" in out and
 out, st = audit_report_links("[Basler ace](https://thinklucid.com/made-up)", _CAMS, "ru")
 check("a name no page carries is still dropped", "](" not in out and st["stripped"] == 1, out)
 
+out, st = audit_report_links("[SONICAM13M-3E](https://cont contrastech.com/SONICAM13M-3E_high...)", _CAMS, "ru")
+check("a link with a space or an ellipsis in it never ships as a dead link",
+      "](" not in out and "прямой ссылки" in out and st["stripped"] == 1, out)
+out, st = audit_report_links("[Atlas 5GigE IP67](https://thinklucid.com/atlas ip67...)", _CAMS, "ru")
+check("and is repaired when a page names the model", "atlas-5gige-ip67" in out, out)
+
 print("%d passed, %d failed" % (OK, BAD))
 sys.exit(1 if BAD else 0)

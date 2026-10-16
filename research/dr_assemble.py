@@ -119,6 +119,7 @@ def _append_once(report: str, block: str) -> str:
 
 
 _MD_LINK = re.compile(r"\[([^\]\n]+)\]\((https?://[^)\s]+)\)")
+_MD_BROKEN_LINK = re.compile(r"\[([^\]\n]+)\]\((https?://[^)\n]*(?:\s|…|\.\.\.)[^)\n]*)\)")
 
 _LINK_UNVERIFIED = {
     "ru": "прямой ссылки в источниках нет",
@@ -271,7 +272,20 @@ def audit_report_links(report: str, briefs: list, out_lang: str = "en") -> tuple
         stats["stripped"] += 1
         return "%s (%s)" % (text, _LINK_UNVERIFIED[lang])
 
-    return _MD_LINK.sub(_fix, report), stats
+    def _fix_broken(m):
+        # «[SONICAM13M-3E](https://cont contrastech.com/SONICAM…)»: a space or an ellipsis
+        # inside the parentheses, so _MD_LINK never saw it and it shipped as a dead link.
+        text = m.group(1)
+        stats["checked"] += 1
+        named = _page_named(text, m.group(2).replace(" ", ""), briefs)
+        if named:
+            stats["repaired"] += 1
+            return "[%s](%s)" % (text, named)
+        stats["stripped"] += 1
+        return "%s (%s)" % (text, _LINK_UNVERIFIED[lang])
+
+    report = _MD_LINK.sub(_fix, report)
+    return _MD_BROKEN_LINK.sub(_fix_broken, report), stats
 
 
 def _sources_appendix(briefs: list, out_lang: str = "en") -> str:

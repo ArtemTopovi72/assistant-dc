@@ -125,7 +125,7 @@ from dr_relevance import (
 _REEXPORTED_FROM_DR_RELEVANCE = (_entity_terms, _brief_is_relevant,
                                  _filter_offtopic_briefs)
 from dr_collect import (
-    plan_queries, selection_queries, collect_sources, coverage_signals, evidence_stats,
+    plan_queries, selection_queries, selection_followups, collect_sources, coverage_signals, evidence_stats,
     diversify_queries, _corrective_queries, _search_one_query, _citation_query,
     _topic_first_line, _query_lang,
 )
@@ -530,7 +530,27 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
     # the shared visited-URL set so it can never loop.
     entset = _entities.extract_from_briefs(briefs) if briefs else _entities.EntitySet()
     visited_queries = {q.lower() for q in queries}
-    if S.DR_MULTIHOP_ENABLED and S.DR_MULTIHOP_DEPTH > 0 and briefs and not cancelled():
+    # A selection steers its own second rounds from the components and makers the pages
+    # name; the entity hop, graph deep-dives and gap reflection searched «Teledyne»,
+    # «Ethernet» and a shop's create-account page for a camera spec.
+    for hop in range(2 if _select and briefs else 0):
+        if cancelled():
+            break
+        fq = dep(ctx, "selection_followups", selection_followups)(
+            ctx, topic, briefs, profile.get("selection_analysis"), visited_queries)
+        if not fq:
+            break
+        visited_queries.update(q.lower() for q in fq)
+        new_briefs = dep(ctx, "_expansion_pass", _expansion_pass)(
+            ctx, topic, fq, profile, caps, prog, run_dir, cache,
+            visited_urls=visited_urls, scholarly=_scholarly, terms=_terms,
+            mode=_contra.MODE_CONFIRM, label=f"selection-{hop + 1}", cancelled=cancelled)
+        if not new_briefs:
+            break
+        briefs.extend(new_briefs)
+        prog.update(findings=len(briefs))
+    if (S.DR_MULTIHOP_ENABLED and S.DR_MULTIHOP_DEPTH > 0 and briefs and not cancelled()
+            and not _select):
         hop_target = briefs
         for hop in range(S.DR_MULTIHOP_DEPTH):
             hop_es = _entities.extract_from_briefs(hop_target)
@@ -572,7 +592,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
         interim_clusters = _cluster.cluster_briefs(
             briefs, threshold=S.DR_CLUSTER_THRESHOLD, major_min_size=S.DR_CLUSTER_MAJOR_MIN)
         dep(ctx, "_save_state", _save_state)(run_dir, phase="clustering_interim", clusters=interim_clusters.to_dict())
-    if (S.DR_GRAPH_EXPANSION_ENABLED and S.DR_HIERARCHICAL_ENABLED and briefs
+    if (S.DR_GRAPH_EXPANSION_ENABLED and S.DR_HIERARCHICAL_ENABLED and briefs and not _select
             and not cancelled()):
         interim_graph = _rgraph.build_graph(briefs)
         gx = _gguided.plan_graph_expansion(
@@ -718,7 +738,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
     refl_iter = 0
     if S.DR_REFLECTION_ENABLED and refl_max <= 0 and reflection.get("needs_second_pass"):
         logger.info("reflection skipped at depth=%s (single-pass by design)", depth)
-    while (S.DR_REFLECTION_ENABLED and reflection.get("needs_second_pass")
+    while (S.DR_REFLECTION_ENABLED and reflection.get("needs_second_pass") and not _select
            and refl_iter < refl_max and refl_budget > 0
            and not cancelled()):
         refl_iter += 1

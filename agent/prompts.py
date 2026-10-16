@@ -290,6 +290,19 @@ What the user must confirm with the vendor or clarify (the ambiguous readings, s
 Rules: every model is a link whose URL appears verbatim in the briefs — never invent, shorten or reconstruct one. Numbers exactly as the source gives them; if two sources disagree, show both. No abstract, no introduction, no market overview, no history, no "Industry 4.0". Write in the SAME LANGUAGE as the user's request."""
 
 
+SELECTION_FOLLOWUP_PROMPT = """You steer the SECOND search round of a SELECTION request: the user listed required specifications and wants every product model that meets them. The first round read some pages; you get the request, the engineering analysis, the models already found, and the part numbers (components) the pages name with a line of context.
+
+Decide:
+1. Which components the pages show meet the hard numbers (e.g. a sensor at the required resolution with the required shutter). Judge from the context lines, not memory.
+2. Which makers of this product likely build on those components but have NO model in the found list yet.
+
+Then write up to {n} SHORT English queries (3-7 words, no quotes, no OR):
+- each qualifying component with each interface the analysis forces (e.g. "IMX255 color camera 10GigE", "IMX255 5GigE camera");
+- each missing maker's product line with the component or the near format (e.g. "Emergent HT 10GigE IMX255", "Teledyne FLIR Oryx 10GigE 8.9 MP");
+- the model numbers the pages mention but no page describes, with "datasheet";
+- each ambiguous requirement's reading still unanswered, in the market's words (e.g. "machine vision camera on-camera H.265 compression GigE").
+Never repeat a query from the ALREADY SEARCHED list. Return ONLY JSON: {"components": [...], "missing_makers": [...], "queries": [...]}"""
+
 SELECTION_VERIFY_PROMPT = """You check a DRAFT selection report (requirements x candidate models) against the per-source briefs it was written from. The draft model guesses: it marked a camera «Color ✅» from a page about its monochrome twin.
 
 For every candidate row:

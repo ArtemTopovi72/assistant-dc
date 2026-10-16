@@ -125,6 +125,34 @@ def selection_queries(ctx, topic: str, n: int = 14, sink: Optional[dict] = None)
     return out_qs[:n]
 
 
+def selection_followups(ctx, topic: str, briefs: list, analysis: Optional[dict],
+                        searched: set, n: int = 10) -> list:
+    """Second-round queries for a spec selection, from what the first round READ. The
+    sensor that decides the answer (IMX255) was never in a search snippet, only on the
+    pages; the entity multi-hop searched «Teledyne» and «Ethernet» and added 0 briefs."""
+    import json
+    from prompts import SELECTION_FOLLOWUP_PROMPT
+    S = settings_view(ctx)
+    texts = [f"{b.get('title', '')}: {b.get('brief', '')}" for b in briefs]
+    lines = [ln for t in texts for ln in t.splitlines() if ln.strip()]
+    parts = _part_numbers(lines, top=24)
+    found = [ln.strip()[:160] for ln in lines if ln.lstrip().startswith(("-", "*", "•"))][:40]
+    user = (f"Request: {topic}\n\nENGINEERING ANALYSIS:\n{json.dumps(analysis or {}, ensure_ascii=False)}"
+            "\n\nMODELS ALREADY FOUND (brief lines):\n" + "\n".join(found)
+            + "\n\nPART NUMBERS ON THE PAGES (count, context):\n"
+            + "\n".join(f"{p} ×{c}: {line}" for p, c, line in parts)
+            + "\n\nALREADY SEARCHED:\n" + "\n".join(sorted(searched)[:60]))
+    out = dep(ctx, "_think_call", _think_call)(
+        ctx, SELECTION_FOLLOWUP_PROMPT.replace("{n}", str(n)), user,
+        max_tokens=S.DR_PLAN_TOKENS, temperature=0.3)
+    data = safe_json_from_llm(out or "") or {}
+    qs = [q.strip() for q in data.get("queries") or [] if isinstance(q, str) and q.strip()]
+    qs = [q for q in dict.fromkeys(qs) if q.lower() not in searched][:n]
+    logger.info("Selection follow-up: components %s | missing makers %s | %d queries — %s",
+                data.get("components"), data.get("missing_makers"), len(qs), " | ".join(qs)[:700])
+    return qs
+
+
 def plan_queries(ctx, topic: str, max_queries: int) -> tuple:
     """Expand a topic into diverse search queries via the LLM, with a heuristic
     fallback so the run never starves for queries.

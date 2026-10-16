@@ -187,14 +187,15 @@ def test_a_spec_selection_is_answered_as_a_candidate_matrix():
         seen["queries"], seen["timelimit"] = list(queries), (profile or {}).get("timelimit")
         return [{"href": "https://arxiv.org/1", "domain": "arxiv.org", "query": "q"}]
 
-    with _Patches(DR_REPLAN_ENABLED=False, DR_MULTIHOP_ENABLED=False, DR_CONTRADICTION_ENABLED=True,
+    with _Patches(DR_REPLAN_ENABLED=False, DR_CONTRADICTION_ENABLED=True,
                   DR_CONTRADICTION_QUERIES=2, DR_HIERARCHICAL_ENABLED=False, DR_COMMUNITIES_ENABLED=False,
-                  DR_CLAIM_MERGE_ENABLED=False, DR_GRAPH_EXPANSION_ENABLED=False,
+                  DR_CLAIM_MERGE_ENABLED=False, DR_GRAPH_EXPANSION_ENABLED=False, DR_MULTIHOP_ENABLED=True,
                   DR_DECISION_GATE_ENABLED=True, DR_REFLECTION_ENABLED=False, DR_SURVEY_MODE=True,
                   plan_queries=lambda c, t, mx: (["generic camera query"], {
                       "category": "product", "recency": "year", "timelimit": "y", "news": False,
                       "core_topic": "machine vision camera"}),
                   selection_queries=lambda c, t, n=14, sink=None: (sink or {}).update(selection_analysis={"derived": ["4096x2160 x 25 x 8 bit = 1.77 Gbit/s"]}) or ["Sony IMX255 5GigE camera"],
+                  selection_followups=lambda c, t, b, a, searched: ["IMX255 color camera 10GigE"],
                   collect_sources=collect, _think_call=think,
                   _expansion_pass=lambda *a, **k: seen["labels"].append(k.get("label")) or []):
         out = _run(ctx=ctx, topic="Подбери камеру: 8.3 Мп, 25 fps, Ethernet, глобальный затвор")
@@ -202,6 +203,9 @@ def test_a_spec_selection_is_answered_as_a_candidate_matrix():
           seen["queries"])
     check("selection: no recency window", seen["timelimit"] is None, seen["timelimit"])
     check("selection: no contradiction pass", "contradiction" not in seen["labels"], seen["labels"])
+    check("selection: a second round steered by the components the pages name, no entity hop",
+          "selection-1" in seen["labels"] and not any("multihop" in str(x) for x in seen["labels"]),
+          seen["labels"])
     check("selection: no claim that a disconfirmation pass ran",
           "disconfirmation" not in out["report"] and "опровержение" not in out["report"], out["report"][-400:])
     check("selection: written with the selection prompt",
