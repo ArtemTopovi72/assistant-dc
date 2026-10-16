@@ -36,6 +36,11 @@ from utils import safe_json_from_llm
 logger = logging.getLogger("assistant.research")
 
 
+# The same query on the same engine changed its answer within an hour (google returned
+# the IDS/LUCID 10GigE pages, then a Chinese shop list); a selection keeps the union.
+SELECT_ENGINES = ("google", "bing", "yahoo")
+
+
 _PART_NO = re.compile(r"\b[A-Za-z]{2,5}-?\d{3,5}[A-Za-z]{0,3}\b")
 
 
@@ -100,7 +105,7 @@ def selection_queries(ctx, topic: str, n: int = 14, sink: Optional[dict] = None)
     for q in probes:
         # Both engines, as for the run's own queries: on «auto» run 9's probes never
         # printed IMX255 and the second round had no way to find it.
-        hits = _search_one_query(ctx, q, 8, None, False, ("google", "bing"))
+        hits = _search_one_query(ctx, q, 8, None, False, SELECT_ENGINES)
         snippets += [f"- {h.get('title', '')}: {h.get('body', '')}"[:300] for h in hits]
     parts = _part_numbers(snippets)
     logger.info("Selection analysis: %s | %d component snippets | parts seen: %s",
@@ -409,7 +414,7 @@ def collect_sources(ctx, queries: list, per_query: int, prog: _Progress,
     timelimit = profile.get("timelimit")
     use_news = bool(profile.get("news"))
     category = profile.get("category", "general")
-    extra = ((("google", "bing"),) if profile.get("select") else ())
+    extra = ((SELECT_ENGINES,) if profile.get("select") else ())
 
     seen, sources = set(), []
     dropped = 0

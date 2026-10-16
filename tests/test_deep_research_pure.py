@@ -524,9 +524,9 @@ def test_selection_probes_use_near_formats_and_survive_the_planner():
                            {"title": "Atlas ATP089S IMX255", "body": "4096x2160 5GigE"}])
     qs = dr_collect.selection_queries(ctx, "Подбери камеру: 8.3 Мп, 4K, 25 fps")
     check("selection probes: near format x forced interface searched first",
-          [q for q, _ in asked][::2][:2] == ["4096x2160 global shutter color camera 5GigE",
+          [q for q, _ in asked][::3][:2] == ["4096x2160 global shutter color camera 5GigE",
                                              "8.9 MP global shutter color camera 5GigE"], asked)
-    check("selection probes: each on both engines", [b for _, b in asked[:2]] == ["google", "bing"], asked)
+    check("selection probes: each on every engine", [b for _, b in asked[:3]] == ["google", "bing", "yahoo"], asked)
     check("selection probes: never the literal hard number", not any("8.3" in q for q, _ in asked[:8]), asked)
     check("selection probes: kept ahead of the planner's own queries",
           qs[0].startswith("4096x2160") and "8.3 MP global shutter camera" in qs, qs)
@@ -568,8 +568,8 @@ def test_a_selection_searches_two_engines_and_keeps_both():
     ctx = research_ctx(raw_search_results=raw, DR_SEARCH_CONCURRENCY=1)
     srcs = dr_collect.collect_sources(ctx, ["imx255 10gige"], 6, dr_progress._Progress(None),
                                       Path(tempfile.mkdtemp()), {"select": True})
-    check("select: both engines searched", sorted(calls) == ["bing", "google"], calls)
-    check("select: the union is kept", len(srcs) == 2, srcs)
+    check("select: every engine searched", sorted(calls) == ["bing", "google", "yahoo"], calls)
+    check("select: the union is kept", len(srcs) == 3, srcs)
     calls.clear()
     dr_collect.collect_sources(ctx, ["tea tannins"], 6, dr_progress._Progress(None),
                                Path(tempfile.mkdtemp()), {"category": "general"})
