@@ -416,10 +416,15 @@ def drop_false_none_claim(report: str) -> tuple:
 _BOTH_COLORS = re.compile(r"❓\s*((?:Mono(?:chrome)?\s*/\s*Colou?r|Colou?r\s*/\s*Mono(?:chrome)?)\b)", re.I)
 
 
+_PASS_UNSTATED = re.compile(r"[✅❌]\s*(не указано|not stated)", re.I)
+
+
 def mono_color_is_color(report: str) -> str:
     """«Mono / Color» stated for a model means a color variant ships. Told so, the verify
-    pass still left «❓ Mono / Color» on three of run 23's eight cameras."""
-    return _BOTH_COLORS.sub(r"✅ \1", report)
+    pass still left «❓ Mono / Color» on three of run 23's eight cameras. And a mark on a
+    value nobody stated is unknown: run 25 wrote «✅ не указано» for a block camera's
+    shutter and then recommended it as the best match."""
+    return _PASS_UNSTATED.sub(r"❓ \1", _BOTH_COLORS.sub(r"✅ \1", report))
 
 
 _NUM = re.compile(r"\d+(?:[.,]\d+)?")

@@ -342,6 +342,8 @@ from dr_assemble import mono_color_is_color  # noqa: E402
 check("«❓ Mono / Color» is a color camera", mono_color_is_color("| ❓ Mono / Color | ❓ Mono/Color |")
       == "| ✅ Mono / Color | ✅ Mono/Color |")
 check("«❓ не указано» stays unknown", mono_color_is_color("| ❓ не указано |") == "| ❓ не указано |")
+check("«✅ не указано» is unknown, not a pass", mono_color_is_color("| ✅ не указано | ✅ Global |")
+      == "| ❓ не указано | ✅ Global |")
 
 print("%d passed, %d failed" % (OK, BAD))
 sys.exit(1 if BAD else 0)

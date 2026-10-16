@@ -1010,7 +1010,8 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
                 if again and len(selection_form_missing(again)) < len(missing):
                     report = again
             if report:
-                report = rank_by_closeness(report)
+                # Before the check too, so it rewrites the recommendation from the fixed marks.
+                report = rank_by_closeness(mono_color_is_color(report))
                 prog.update("Building report", "checking every verdict against its source")
                 left_out = models_left_out(report, catalog, profile.get("selection_analysis"))
                 if left_out:
