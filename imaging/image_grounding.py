@@ -349,7 +349,7 @@ _ITEM_ATTR_PROMPT = (
     "You classify an object mentioned in a photo-editing request. Reply with ONLY a "
     'JSON object, no other text: {"worn": true|false, "small": true|false, '
     '"large": true|false, "multi": true|false, "part": "face|hair_or_head|other", '
-    '"former_place": true|false}.\n'
+    '"former_place": true|false, "whole_body": true|false}.\n'
     "worn: the object is worn on or attached to a person's body (clothing, footwear, "
     "headwear, eyewear, jewelry, accessories, facial hair, tattoos, makeup, ...) so "
     "removing it exposes occluded body parts underneath. Free-standing objects, "
@@ -368,7 +368,9 @@ _ITEM_ATTR_PROMPT = (
     "nose, cheeks, chin, skin, beard, moustache, makeup, expression, smile); "
     "\"hair_or_head\" for hair, a hairstyle, the head, ears; \"other\" otherwise.\n"
     "former_place: the phrase names the place where something USED to be, not a thing "
-    "(\"the area where the vase was\", \"место, где стояла ваза\")."
+    "(\"the area where the vase was\", \"место, где стояла ваза\").\n"
+    "whole_body: a worn thing that covers the body from the neck down (full armor, a "
+    "dress, a coat, a jumpsuit, a costume, the outfit); shoes, a hat or a shirt are not."
 )
 
 
@@ -387,7 +389,7 @@ def _item_attributes(ctx, phrase: str) -> dict:
         return own(ctx, phrase)
     key = (phrase or "").strip().casefold()
     out = {"worn": None, "small": None, "large": None, "multi": None, "part": None,
-           "former_place": None}
+           "former_place": None, "whole_body": None}
     if not key:
         return out
     if key in _item_attr_cache:

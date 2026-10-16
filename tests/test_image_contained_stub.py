@@ -190,6 +190,24 @@ def test_text_seg_stage0_qa_pass():
         out = I._contained_region_mask(ctx, img, "her hat", grow=6, seed=1, timeout=60)
         check("text_seg_stage0_pass", out is not None)
 
+def test_whole_body_garment_reaching_the_face_is_kept():
+    # Full plate armor's mask covers the face box by its collar: rejected as "the
+    # whole person", the fallback recoloured both girls. Shoes doing that still are.
+    img = _photo("wb.png")
+    body = _mask_file("wb_mask.png", box=(60, 20, 200, 250))
+    fake_idm = types.SimpleNamespace(face_box=lambda path, pad=0.12: (110, 30, 150, 70))
+    for phrase, attrs, want in (("the armor", {"worn": True, "whole_body": True}, True),
+                                ("her shoes", {"worn": True, "whole_body": False}, False)):
+        ctx = Ctx()
+        ctx.modules = {"identity_metrics": fake_idm}
+        with _Patches(_upload_image_to_comfy=lambda *a, **k: "u.png",
+                      _region_mask_file=lambda *a, **k: body,
+                      _item_attributes=lambda c, p, _a=attrs: {**_ITEM_ATTRS_DEFAULT, "small": False, **_a},
+                      MASK_QA_ENABLED=False):
+            out = I._contained_region_mask(ctx, img, phrase, grow=6, seed=1, timeout=60)
+        check(f"face-reaching mask for {phrase!r} {'kept' if want else 'rejected'}",
+              (out is not None) == want, out)
+
 def test_text_seg_stage0_qa_fail_then_retry_then_reject():
     ctx = Ctx()
     img = _photo("ts2.png")

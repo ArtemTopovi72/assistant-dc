@@ -235,7 +235,11 @@ def edit_region_contained_cropped(
     # requested object ("remove her shoes" -> whole-woman silhouette -> full
     # re-render that changed the dress and kept the shoes). Works with the LLM
     # size prior down (its exact failure window: LM Studio evicted by ComfyUI).
-    if _face_frac is not None and _face_frac > 0.65:
+    # A garment from the neck down (full armor, a dress) reaches the face box by its
+    # collar; the face box is subtracted anyway (see image_contained_firered).
+    if (_face_frac is not None and _face_frac > 0.65
+            and not all(_image._item_attributes(ctx, region_phrase).get(k) is True
+                        for k in ("whole_body", "worn"))):
         logger.warning("cropped-contained: mask covers %.0f%% of the face box for "
                        "non-face region %r — segmenter grabbed the person, rejecting",
                        _face_frac * 100, region_phrase)

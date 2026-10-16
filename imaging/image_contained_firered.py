@@ -222,7 +222,12 @@ def _contained_region_mask(ctx, image_path: str, region_phrase: str, *,
         # instead of the requested object ("remove her shoes" -> whole-woman
         # silhouette -> full re-render). Independent of the LLM size prior, so it
         # still fires when LM Studio is evicted by ComfyUI (its failure window).
-        if ok and _face_frac is not None and _face_frac > 0.65:
+        # A garment from the neck down (the armor of a girl in full plate) reaches into
+        # the face box by its collar and shoulders: its correct mask was rejected as
+        # the whole person, and the fallback recoloured BOTH girls. The face box is
+        # subtracted from the mask anyway.
+        if (ok and _face_frac is not None and _face_frac > 0.65
+                and not (_attrs.get("whole_body") is True and _attrs.get("worn") is True)):
             ok, qreason = False, "grabbed_person"
             qstats = {**qstats, "face_frac": round(_face_frac, 3)}
         if not ok:

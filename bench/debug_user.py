@@ -5,6 +5,7 @@ queue as everyone. Messages go to runtime/debug_user/inbox, answers come from ou
   python bench/debug_user.py album a.jpg b.jpg --caption "замени четвёртого на губку"
   python bench/debug_user.py photo a.jpg --caption "..."
   python bench/debug_user.py press swap_person:ab12cd34
+  python bench/debug_user.py voice note.ogg          # also: audio, document, video, video_note
   python bench/debug_user.py wait --until sendPhoto --timeout 1500
   python bench/debug_user.py shot          # the live window with the Debug chat tab
 """
@@ -16,7 +17,7 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "bot"))
 import debug_user as D  # noqa: E402
 
-from debug_user import OUTBOX, say, photo, album, press, outbox  # noqa: E402
+from debug_user import OUTBOX, say, photo, album, press, media, outbox  # noqa: E402
 
 USER = 0
 
@@ -44,7 +45,8 @@ def wait(since: float, until: str = "", timeout: float = 600, quiet: float = 60)
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["say", "photo", "album", "press", "wait", "shot"])
+    ap.add_argument("cmd", choices=["say", "photo", "album", "press", "wait", "shot",
+                                       "voice", "audio", "document", "video", "video_note"])
     ap.add_argument("args", nargs="*")
     ap.add_argument("--caption", default="")
     ap.add_argument("--until", default="")
@@ -70,4 +72,6 @@ if __name__ == "__main__":
         album(a.args, a.caption, a.user)
     elif a.cmd == "press":
         press(a.args[0], a.user)
+    elif a.cmd in ("voice", "audio", "document", "video", "video_note"):
+        media(a.cmd, a.args[0], a.caption, a.user)
     wait(t0 if a.cmd != "wait" else time.time(), a.until, a.timeout)

@@ -204,6 +204,37 @@ def photo(path: str, caption: str = "", group: str = "", user: int = 0) -> None:
     _put({"update_id": 0, "message": m})
 
 
+def media(kind: str, path: str, caption: str = "", user: int = 0) -> None:
+    """A voice note, audio, document, video or video note (кружок), as Telegram shapes it."""
+    import mimetypes
+    import subprocess
+    fid = _file(path)
+    obj = {"file_id": fid, "file_unique_id": fid, "file_size": os.path.getsize(path)}
+    if kind != "document":
+        try:
+            out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                                  "stream=width,height:format=duration", "-of", "json", path],
+                                 capture_output=True, text=True, timeout=30).stdout
+            info = json.loads(out or "{}")
+        except Exception:
+            info = {}
+        obj["duration"] = int(float((info.get("format") or {}).get("duration") or 0) + 0.5)
+        vs = (info.get("streams") or [{}])[0]
+        if kind == "video":
+            obj.update(width=vs.get("width", 0), height=vs.get("height", 0))
+        if kind == "video_note":
+            obj["length"] = vs.get("width", 0)
+    if kind in ("audio", "document", "video"):
+        obj["file_name"] = os.path.basename(path)
+        obj["mime_type"] = mimetypes.guess_type(path)[0] or "application/octet-stream"
+    if kind == "voice":
+        obj["mime_type"] = "audio/ogg"
+    m = _msg(user, **{kind: obj})
+    if caption and kind != "video_note":
+        m["caption"] = caption
+    _put({"update_id": 0, "message": m})
+
+
 def album(paths: list, caption: str = "", user: int = 0) -> None:
     g = uuid.uuid4().hex[:10]
     for i, p in enumerate(paths):
