@@ -521,5 +521,11 @@ def rerank_for_briefing(topic: str, pages: list, profile: dict, prog: _Progress,
     kept = [f"{p['domain']}({p.get('_rerank_relevance', 0):.2f})" for p in ordered[:6]]
     logger.info("RERANK[%s]: %d->%d q=%r kept top: %s",
                 backend, len(pages), len(ordered), rr_query[:70], kept)
+    # Resident between the hops, the reranker and torch's cache (4 GB with Whisper and
+    # F5) pushed 1.06 GB of the LLM into shared memory mid-run; reloading costs seconds.
+    try:
+        module(ctx, "rerank").release_gpu()
+    except Exception as exc:
+        logger.debug("reranker release failed: %s", exc)
     prog.update("Deduplicating", f"kept top {len(ordered)} by relevance [{backend}]")
     return ordered
