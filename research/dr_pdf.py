@@ -24,12 +24,25 @@ blockquote { border-left: 3px solid #ccc; margin: 6pt 0; padding-left: 8pt; colo
 """
 
 
+_SYMBOLS = {"ge": "≥", "geq": "≥", "le": "≤", "leq": "≤", "approx": "≈", "times": "×",
+            "sim": "~", "pm": "±", "to": "→", "rightarrow": "→"}
+
+
+def plain_symbols(text: str) -> str:
+    """«$\\ge$ 25 fps» and «$\\approx$ 1.66 Gbit/s» came out raw in a table header and a
+    bullet; a lone symbol in dollars is the Unicode sign."""
+    import re
+    return re.sub(r"\$\s*\\(\w+)\s*\$",
+                  lambda m: _SYMBOLS.get(m.group(1), m.group(0)), text or "")
+
+
 def md_to_pdf(markdown_text: str, out_path: str, title: str = "") -> bool:
     """Write `markdown_text` to `out_path` as a PDF. False on any failure (the caller
     then sends the Markdown file instead)."""
     try:
         import markdown
         from playwright.sync_api import sync_playwright
+        markdown_text = plain_symbols(markdown_text)
         body = markdown.markdown(markdown_text or "", extensions=["tables", "fenced_code", "sane_lists"])
         # An 11-column candidate matrix on portrait A4 broke «pvCam-Ax5G-IMX255-8.9MP-02»
         # into five lines and «8.9 MP» into three; a wide table gets a landscape page.

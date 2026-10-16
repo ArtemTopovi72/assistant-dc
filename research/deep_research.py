@@ -968,6 +968,8 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
                     logger.warning("selection verify pass dropped content (%d -> %d chars) — "
                                    "keeping the draft", len(report), len(checked))
             if report:
+                from dr_pdf import plain_symbols
+                report = plain_symbols(report)
                 report, _moved = demote_failing_rows(report)
                 report, _back = promote_passing_rows(report)
                 if _moved or _back:

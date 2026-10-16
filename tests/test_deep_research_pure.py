@@ -660,6 +660,14 @@ def test_russian_sources_follow_gost_and_titles_cut_at_the_subject():
           == "Подбери цифровую видеокамеру машинного зрения, соответствующую требованиям")
 
 
+def test_lone_math_symbols_print_as_signs():
+    """«$\\ge$ 25 fps» was printed raw in the matrix header of the PDF."""
+    import dr_pdf
+    check("symbols: ≥ and ≈ replace their TeX", dr_pdf.plain_symbols(r"| $\ge$ 25 fps | $\approx$ 1.66 |")
+          == "| ≥ 25 fps | ≈ 1.66 |")
+    check("symbols: real formulas are left alone", dr_pdf.plain_symbols(r"$x^2$") == r"$x^2$")
+
+
 def test_english_query_is_not_searched_as_russia():
     """ru-ru for an English camera query returned Russian resellers instead of the makers."""
     import types
