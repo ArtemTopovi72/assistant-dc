@@ -97,7 +97,6 @@ sess = bot._get_session(CID)
 check("🗑 drops that part", len(sess.video_plan) == len(plan) - 1, len(sess.video_plan))
 
 # ✏️ / ➕: the next message, in the user's language, becomes the part; quoted words stay as typed
-import llm  # noqa: E402
 _seen = []
 
 
@@ -108,8 +107,7 @@ def _fake_llm(ctx_, system, user, **k):
     return "The man lifts the rifle and nods."       # the writer lost the quoted line
 
 
-_llm0 = llm.call_llm_simple
-llm.call_llm_simple = _fake_llm
+bot.text_model = _fake_llm
 n0 = len(bot._get_session(CID).video_plan)
 bot._cb_video_plan(CID, "vp:edit:1")
 check("✏️ arms the capture of the next message", bot._get_session(CID).reg_state == "vp_edit:1",
@@ -125,7 +123,7 @@ check("...the new part goes to the end", len(bot._get_session(CID).video_plan) =
 check("...and the rewrite sees the user's message", "потом он улыбается" in _seen[-2][1], _seen[-2:])
 check("the plan summary keeps spoken lines verbatim", "character for character" in
       [s for s, _ in _seen if "numbered video shot" in s][-1])
-llm.call_llm_simple = _llm0
+bot.text_model = None
 sess = bot._get_session(CID); sess.video_plan = list(plan[1:]); sess.reg_state = ""; bot._store.put(sess)
 
 bot._cb_video_plan(CID, "vp:go")

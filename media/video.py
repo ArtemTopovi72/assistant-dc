@@ -1179,7 +1179,7 @@ DRAWN_OVER_MAX = 0.3
 _CLIP = []
 
 
-def drawn_over(path: str, source: str = "") -> Optional[float]:
+def drawn_over(path: str, source: str = "", clip=None) -> Optional[float]:
     """Share of the clip's frames (1 fps) that look like drawings, stickers, flowers, birds or
     anime faces pasted over the photo, against `source` (the picture the clip starts from;
     default its own first frame). None when unread."""
@@ -1194,11 +1194,11 @@ def drawn_over(path: str, source: str = "") -> Optional[float]:
             return None
         src = Image.open(source).convert("RGB") if source and os.path.exists(source) else frames[0]
         import torch
-        if not _CLIP:
+        if clip is None and not _CLIP:
             from transformers import CLIPModel, CLIPProcessor
             name = "openai/clip-vit-large-patch14"
             _CLIP[:] = [CLIPModel.from_pretrained(name).eval(), CLIPProcessor.from_pretrained(name)]
-        model, proc = _CLIP
+        model, proc = clip or _CLIP
         texts = ["a real photograph", "a real photograph with cartoon drawings, stickers, flowers, "
                  "birds or anime faces pasted over it"]
         with torch.no_grad():

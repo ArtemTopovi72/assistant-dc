@@ -420,7 +420,7 @@ def test_later_parts_are_told_the_voices_part_one_chose():
     assert V.voices_of("A man walks. Camera: static.") == ""
 
 
-def test_light_drawings_over_a_photo_are_told_against_the_source(tmp_path, monkeypatch):
+def test_light_drawings_over_a_photo_are_told_against_the_source(tmp_path):
     """Pale cartoon birds over a hazy sky barely moved the edges (24 < 35) and went out; a
     photo of real daisies reads as «drawn over» itself, so only a rise above the source counts."""
     import subprocess
@@ -435,10 +435,9 @@ def test_light_drawings_over_a_photo_are_told_against_the_source(tmp_path, monke
             p = torch.tensor(scores[:n]).clamp(1e-4, 1 - 1e-4)
             self.logits_per_image = torch.stack([torch.log(1 - p), torch.log(p)], 1)
 
-    monkeypatch.setattr(V, "_CLIP", [lambda **k: Out(len(k["images"])),
-                                      lambda images, **k: {"images": images}])
+    fake = [lambda **k: Out(len(k["images"])), lambda images, **k: {"images": images}]
     scores[:] = [0.1, 0.1, 0.99, 1.0, 0.99]           # a clean photo, then birds from the 2nd second
-    assert V.drawn_over(clip) > V.DRAWN_OVER_MAX
+    assert V.drawn_over(clip, clip=fake) > V.DRAWN_OVER_MAX
     scores[:] = [0.95, 0.96, 0.95, 0.97, 0.94]        # real daisies all along
-    assert V.drawn_over(clip) <= V.DRAWN_OVER_MAX
-    assert V.drawn_over(str(tmp_path / "missing.mp4")) is None
+    assert V.drawn_over(clip, clip=fake) <= V.DRAWN_OVER_MAX
+    assert V.drawn_over(str(tmp_path / "missing.mp4"), clip=fake) is None

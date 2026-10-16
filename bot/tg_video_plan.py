@@ -23,19 +23,19 @@ def _mins(seconds: float) -> int:
     return max(1, math.ceil(seconds / 60.0))
 
 
-def _summaries(texts: list, lang: str) -> list:
+def _summaries(texts: list, lang: str, owner=None) -> list:
     """One short line per part in the chat's language: the parts themselves are the
     English prompts the video model reads, which the chat should not see as is.
     Any failure: the prompts, cut short."""
     if not texts or lang == "en":
         return [""] * len(texts)
-    import llm
+    from seams import text_model
     from utils import safe_json_from_llm
     name = {"ru": "Russian"}.get(lang, lang)
     try:
         # «говорит по-русски» stood where the user's own words belonged, and a sound
         # line riding every part («пульс искр наполняет сцену») became a part of its own.
-        raw = llm.call_llm_simple(
+        raw = text_model(owner)(
             None,
             f"Retell each numbered video shot description in {name} as ONE short line "
             "(at most 14 words): who does what on screen. A line in double quotes is spoken "
@@ -53,8 +53,8 @@ def _summaries(texts: list, lang: str) -> list:
     return lines if len(lines) == len(texts) and all(lines) else [""] * len(texts)
 
 
-def _with_summaries(plan: list, lang: str) -> list:
-    for p, say in zip(plan, _summaries([p["text"] for p in plan], lang)):
+def _with_summaries(plan: list, lang: str, owner=None) -> list:
+    for p, say in zip(plan, _summaries([p["text"] for p in plan], lang, owner)):
         p["say"] = say
     return plan
 
@@ -83,7 +83,7 @@ class VideoPlanMixin:
 
     def _offer_video_plan(self, chat_id: int, sess, lang: str, request: str, plan: list) -> None:
         sess.video_plan = _with_summaries(
-            [{"text": str(p.get("text", "")), "sec": float(p.get("sec") or 0)} for p in plan], lang)
+            [{"text": str(p.get("text", "")), "sec": float(p.get("sec") or 0)} for p in plan], lang, self)
         sess.video_plan_request, sess.video_plan_ok = request, []
         self._store.put(sess)
         text, kb = self._video_plan_card(sess, lang)
@@ -106,7 +106,7 @@ class VideoPlanMixin:
         if not parts or len(parts) >= len(sess.video_plan):
             self._send_text(chat_id, tg_bot._t("vp_squeeze_fail", lang))
             return
-        sess.video_plan = _with_summaries([{"text": p, "sec": video.estimate_seconds(p)} for p in parts], lang)
+        sess.video_plan = _with_summaries([{"text": p, "sec": video.estimate_seconds(p)} for p in parts], lang, self)
         self._store.put(sess)
         text, kb = self._video_plan_card(sess, lang)
         self._send_text(chat_id, text, parse_mode="HTML", keyboard=kb)
@@ -115,15 +115,15 @@ class VideoPlanMixin:
         """The message an armed «vp_edit:<i>» / «vp_add» was waiting for. The user writes in
         their language; the part is the English script the video model reads, with every
         quoted spoken line left exactly as written."""
-        import llm
         import video
+        from seams import text_model
         i = int(state.partition(":")[2]) if state.startswith("vp_edit:") else -1
         if not sess.video_plan or not sess.video_plan_request:
             self._send_text(chat_id, tg_bot._t("vp_gone", lang))
             return
         current = sess.video_plan[i]["text"] if 0 <= i < len(sess.video_plan) else ""
         try:
-            out = llm.call_llm_simple(
+            out = text_model(self)(
                 None,
                 "You write one part of a video script for a video model. Input: CURRENT PART "
                 "(empty when a part is being added) and the USER MESSAGE, in any language, "
@@ -150,7 +150,7 @@ class VideoPlanMixin:
             out += " " + " ".join(f'He says: "{x}".' for x in lost)
         parts = video.split_script(out) or [out]
         new = [{"text": p, "sec": video.estimate_seconds(p)} for p in parts]
-        new = _with_summaries(new, lang)
+        new = _with_summaries(new, lang, self)
         plan = sess.video_plan
         sess.video_plan = (plan[:i] + new + plan[i + 1:]) if 0 <= i < len(plan) else plan + new
         self._store.put(sess)
