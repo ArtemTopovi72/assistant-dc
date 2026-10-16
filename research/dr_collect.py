@@ -184,15 +184,31 @@ def _format_patterns(analysis: Optional[dict]) -> list:
     return pats
 
 
+_PIXEL_FORMAT = re.compile(r"(YUV|YCBCR|RGB|BGR|RGBA|BGRA|BAYER\w*|MONO|RG|GR|GB|BG)\d+")
+
+
+def _base_part(tok: str) -> str:
+    """IMX255LQR / IMX255LLR -> IMX255: the grade suffix names the same sensor."""
+    return re.sub(r"(\d{3,5})[A-Z]{1,3}$", r"\1", tok)
+
+
 def _parts_at_formats(lines: list, analysis: Optional[dict]) -> list:
-    """Part numbers on lines that also print one of the analysis's near formats
-    («4096 x 2160», «8.9 MP»), most such lines first."""
+    """Components on lines that also print one of the analysis's near formats
+    («4096 x 2160», «8.9 MP»), most such lines first. A component is a part number that
+    is not the line's own model name: run 20 read IMX255 only beside GV-7090 variants,
+    split as IMX255LQR / IMX255LLR, and gave the grid slots to IMX305 and IMX305LQR."""
     pats = _format_patterns(analysis)
     count = {}
     for ln in lines:
-        if any(p.search(ln) for p in pats):
-            for tok in {t.upper().replace("-", "") for t in _PART_NO.findall(ln)}:
-                count[tok] = count.get(tok, 0) + 1
+        if not any(p.search(ln) for p in pats):
+            continue
+        bullet = ln.split(": - ", 1)[-1]        # the first brief line carries «<page title>: - »
+        name = re.split(r"\s\(|:", bullet.strip().lstrip("-*• "), maxsplit=1)[0].upper().replace("-", "")
+        for tok in {t.upper().replace("-", "") for t in _PART_NO.findall(ln)}:
+            if tok in name or _PIXEL_FORMAT.fullmatch(tok):
+                continue
+            base = _base_part(tok)
+            count[base] = count.get(base, 0) + 1
     return [t for t, _ in sorted(count.items(), key=lambda kv: -kv[1])]
 
 
@@ -241,11 +257,12 @@ def selection_followups(ctx, topic: str, briefs: list, analysis: Optional[dict],
     # named by the model, printed on the pages, and dropped as below the cut (run 12).
     seen_parts = {p for p, _, _ in _part_numbers(lines, top=100000)}
     comps = list(dict.fromkeys(
-        [m.group(0).upper() for c in data.get("components") or [] if isinstance(c, str)
+        [_base_part(m.group(0).upper().replace("-", "")) for c in data.get("components") or []
+         if isinstance(c, str)
          for m in [_PART_NO.search(c)] if m and m.group(0).upper().replace("-", "") in seen_parts]
         # The model picked IMX267/IMX545/IMX542 from memory while the pages put IMX255
         # beside «4096 x 2160»; a part the pages print next to a near format is searched.
-        + _parts_at_formats(lines, analysis)[:2]))
+        + _parts_at_formats(lines, analysis)[:4]))
     # The part already implies what the core qualifies: «IMX255 camera 10GigE» reached the
     # Emergent HE-8000 and Oryx 89S6 pages, «IMX255 global shutter color camera 10GigE» not.
     noun = core.split()[-1] if core.split() else "camera"
