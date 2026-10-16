@@ -641,6 +641,25 @@ def test_followups_keep_a_named_part_below_the_frequency_cut():
           "IMX255 camera 10GigE" in qs, qs)
 
 
+def test_russian_sources_follow_gost_and_titles_cut_at_the_subject():
+    """A Russian reader asked for the source list «по ГОСТу»: the tier list ran domains and
+    pages into one paragraph. And the H1 was «… требованиям: 1. 8.3 Мп; 2.…»."""
+    import re
+    import deep_research as DR
+    briefs = [{"trust": "SECONDARY", "domain": "b.example", "title": "Atlas ATP089S-CC…", "url": "https://b.example/2"},
+              {"trust": "PRIMARY", "domain": "a.example", "title": "IDS GV-7090WP", "url": "https://a.example/1"}]
+    appx = DR._sources_appendix(briefs, "ru")
+    rows = [ln for ln in appx.splitlines() if re.match(r"\d+\. ", ln)]
+    check("gost: one numbered entry per source, primary first",
+          len(rows) == 2 and rows[0].startswith("1. IDS GV-7090WP. — Текст : электронный // a.example. — URL: https://a.example/1 (дата обращения: "),
+          rows)
+    check("gost: a trailing ellipsis is not doubled into the entry", rows[1].startswith("2. Atlas ATP089S-CC. — "), rows)
+    check("title: a long request is cut at its subject, not mid-list",
+          DR._clean_report_title("Подбери цифровую видеокамеру машинного зрения, соответствующую требованиям: "
+                                 "1. 8.3 Мп; 2. 4K; 3. 25 кадров в секунду (25 fps); 4. Поддержка Ethernet")
+          == "Подбери цифровую видеокамеру машинного зрения, соответствующую требованиям")
+
+
 def test_english_query_is_not_searched_as_russia():
     """ru-ru for an English camera query returned Russian resellers instead of the makers."""
     import types

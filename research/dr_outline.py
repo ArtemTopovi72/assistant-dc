@@ -132,4 +132,12 @@ def _clean_report_title(topic: str, max_len: int = 90) -> str:
     else:
         title = re.sub(r"\s+", " ", t)
     title = title.strip()
-    return (title[:max_len].rstrip() + "…") if len(title) > max_len else title
+    if len(title) <= max_len:
+        return title
+    # «Подбери цифровую видеокамеру…, соответствующую требованиям: 1. 8.3 Мп; 2.…» was cut
+    # mid-list; the clause before the first colon or full stop is the subject.
+    head = re.split(r"[:.?!;]\s", title + " ", maxsplit=1)[0].strip()
+    if 15 <= len(head) <= max_len:
+        return head
+    cut = title[:max_len].rsplit(" ", 1)[0].rstrip(" ,;:")
+    return cut + "…"

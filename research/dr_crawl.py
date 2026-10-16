@@ -326,7 +326,9 @@ def _acquire_page(url, depth, seed, category, use_adapters, cache, *, ctx=None) 
         else:
             text = dep(ctx, "_extract_text", _extract_text)(html, url)
             budget = S.DR_PAGE_CHARS
-        title = seed.get("title") or dep(ctx, "_extract_title", _extract_title)(html)
+        # The page's own <title> first: search titles came back glued from several hits
+        # («Triton2 Line Scan … Vieworks … Amazon.com: HTENG …») and were cited as one.
+        title = (dep(ctx, "_extract_title", _extract_title)(html) if html else "") or seed.get("title")
         status, reason = classify_extraction(text, html, title)
         if status in (GATE_CHALLENGE, GATE_SHELL) and pdf_text is None and not rendered:
             again = dep(ctx, "_fetch_rendered", _fetch_rendered)(url, ctx=ctx)

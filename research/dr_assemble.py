@@ -374,6 +374,22 @@ def selection_form_missing(report: str) -> list:
             if not any(ru.lower() in h or en.lower() in h for h in heads)]
 
 
+def _gost_entries(by_tier: dict) -> list:
+    """One numbered list, ГОСТ Р 7.0.100-2018 for an online resource:
+    «Заглавие. — Текст : электронный // Сайт. — URL: … (дата обращения: ДД.ММ.ГГГГ).»
+    Most authoritative first; a Russian reader asked for this form over the tier list."""
+    from datetime import date
+    today = date.today().strftime("%d.%m.%Y")
+    out, n = [], 0
+    for tier in _TRUST_ORDER:
+        for b in sorted(by_tier.get(tier) or [], key=lambda b: (b.get("domain") or "", b["url"])):
+            n += 1
+            title = re.sub(r"\s+", " ", (b.get("title") or "").strip()).rstrip(" .…") or b["url"]
+            out.append(f"{n}. {title}. — Текст : электронный // {b.get('domain') or ''}. — "
+                       f"URL: {b['url']} (дата обращения: {today}).")
+    return out
+
+
 def _sources_appendix(briefs: list, out_lang: str = "en") -> str:
     """Source appendix grouped by trust tier (most → least authoritative), then
     by domain, so the reader sees at a glance what the report actually rests on."""
@@ -382,20 +398,24 @@ def _sources_appendix(briefs: list, out_lang: str = "en") -> str:
         by_tier.setdefault(b.get("trust", "COMMUNITY"), []).append(b)
 
     lines = ["", f"# {_lab(out_lang, 'appendix')}", ""]
+    if _norm_out_lang(out_lang) == "ru":
+        return "\n".join(lines + _gost_entries(by_tier)) + "\n"
     for tier in _TRUST_ORDER:
         bucket = by_tier.get(tier)
         if not bucket:
             continue
-        lines.append(f"## {_TRUST_LABEL[tier]} — {len(bucket)}")
+        lines += [f"## {_TRUST_LABEL[tier]} — {len(bucket)}", ""]
         by_dom: dict = {}
         for b in bucket:
             by_dom.setdefault(b["domain"], []).append(b)
+        # Blank lines around each list: without them the PDF's Markdown ran a domain and
+        # its pages together into one paragraph.
         for dom in sorted(by_dom):
-            lines.append(f"**{dom}**")
+            lines += [f"**{dom}**", ""]
             for b in by_dom[dom]:
                 title = b.get("title") or b["url"]
                 lines.append(f"- {title} — {b['url']}")
-        lines.append("")
+            lines.append("")
     return "\n".join(lines)
 
 
