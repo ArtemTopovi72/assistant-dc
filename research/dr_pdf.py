@@ -11,6 +11,8 @@ _CSS = """
 body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; color: #111; }
 h1 { font-size: 18pt; margin: 0 0 10pt; } h2 { font-size: 14pt; margin: 16pt 0 6pt; }
 h3 { font-size: 12pt; margin: 12pt 0 4pt; }
+h1, h2, h3 { break-after: avoid-page; page-break-after: avoid; }
+li, p { orphans: 3; widows: 3; }
 table { border-collapse: collapse; width: 100%; margin: 8pt 0; font-size: 9pt; }
 th, td { border: 1px solid #bbb; padding: 3pt 5pt; vertical-align: top; text-align: left; }
 th { background: #f0f0f0; } tr { page-break-inside: avoid; }

@@ -689,6 +689,19 @@ def test_selection_searches_makers_and_readings():
           "Emergent IMX255 camera" in qs and "Teledyne FLIR Oryx IMX255 camera" in qs, qs)
 
 
+def test_a_russian_report_gets_a_noun_phrase_title():
+    """«Подбери цифровую видеокамеру…» headed the report — an order; the reader asked for
+    «Подбор…». The title is asked for as a noun phrase; English keeps the distilled topic."""
+    import deep_research as DR
+    from _dr_ctx import research_ctx
+    ctx = research_ctx(_think_call=lambda c, system, user, *a, **k:
+                       "«Подбор цифровой видеокамеры машинного зрения»
+" if "noun phrase" in system else "")
+    check("title: the model's noun phrase, quotes stripped",
+          DR._document_title(ctx, "Подбери камеру: 8.3 Мп", "ru") == "Подбор цифровой видеокамеры машинного зрения")
+    check("title: English reports keep their own path", DR._document_title(ctx, "pick a camera", "en") is None)
+
+
 def test_english_query_is_not_searched_as_russia():
     """ru-ru for an English camera query returned Russian resellers instead of the makers."""
     import types

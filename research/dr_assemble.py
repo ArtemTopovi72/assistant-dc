@@ -420,7 +420,8 @@ def _sources_appendix(briefs: list, out_lang: str = "en") -> str:
 
 
 def _report_header(topic: str, briefs: list, stats: dict, depth: str,
-                   core_topic: Optional[str] = None, out_lang: str = "en") -> str:
+                   core_topic: Optional[str] = None, out_lang: str = "en",
+                   title: Optional[str] = None) -> str:
     """Front-matter block prepended to every report: title, run metadata, and a
     one-line source-quality breakdown so credibility is visible up top."""
     from datetime import date
@@ -440,7 +441,9 @@ def _report_header(topic: str, briefs: list, stats: dict, depth: str,
     # report was headed "# Comparison of K-700 and K-744 Kirovets tractors" above
     # an otherwise Russian text. The user's own wording is already in the right
     # language and is a perfectly good title.
-    if _norm_out_lang(out_lang) != "en" and (topic or "").strip():
+    if title:
+        pass
+    elif _norm_out_lang(out_lang) != "en" and (topic or "").strip():
         title = _clean_report_title(topic)
     else:
         title = _clean_report_title(core_topic or topic)

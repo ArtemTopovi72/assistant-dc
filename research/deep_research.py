@@ -286,6 +286,25 @@ def _brief_pages(ctx, topic, pages, profile, run_dir, prog, *, scholarly, terms,
     return briefs, dropped
 
 
+def _document_title(ctx, topic: str, out_lang: str) -> Optional[str]:
+    """A noun-phrase title in the document's language. The user's own words headed a
+    Russian report as «Подбери цифровую видеокамеру…» — an order, not a title; the reader
+    asked for «Подбор цифровой видеокамеры…». None (the cleaned request) on any failure."""
+    if _norm_out_lang(out_lang) == "en" or not (topic or "").strip():
+        return None
+    try:
+        out = dep(ctx, "_think_call", _think_call)(
+            ctx, "Turn the request into the title of the document that answers it: a noun "
+                 "phrase, never an imperative («Подбор камеры…», not «Подбери камеру…»), at most "
+                 "12 words, in the request's language, no quotes. Return only the title."
+                 + _lang_directive(out_lang),
+            topic[:600], 400, temperature=0.2, retries=1) or ""
+    except Exception:
+        return None
+    t = out.strip().splitlines()[0].strip(" «»\"'#*") if out.strip() else ""
+    return t if 3 <= len(t) <= 120 else None
+
+
 def _model_catalog(briefs: list, cap: int = 150) -> str:
     """One line per product model the select briefs list, each with the page it came
     from; the first line wins for a model named on several pages."""
@@ -899,7 +918,8 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
     if not have_citations and "Citation Lineage" in sections:
         sections.remove("Citation Lineage")
     header = _report_header(topic, briefs, prog.stats, depth,
-                            core_topic=_search_topic, out_lang=out_lang)
+                            core_topic=_search_topic, out_lang=out_lang,
+                            title=_document_title(ctx, topic, out_lang))
     # Prefer the recursive-hierarchy scaffold when the tree has real depth (≥3
     # levels); otherwise fall back to the flat per-cluster digest preamble.
     preamble = tree_preamble or (
