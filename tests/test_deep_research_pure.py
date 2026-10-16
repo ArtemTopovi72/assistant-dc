@@ -625,6 +625,22 @@ def test_model_catalog_lists_every_model_once_with_its_page():
           and cat[1].endswith("https://b.example/shop"), cat)
 
 
+def test_followups_keep_a_named_part_below_the_frequency_cut():
+    """IMX255 was named by the model and printed on the pages, but below the 24 most
+    frequent part numbers, and the grid dropped it (run 12)."""
+    import json
+    import dr_collect
+    from _dr_ctx import research_ctx
+    briefs = [{"title": f"Shop {i}", "brief": f"- CAM{i:03d}X (Shop): sensor IMX{100 + i} · 2 MP"}
+              for i in range(30) for _ in range(2)]
+    briefs.append({"title": "Atlas", "brief": "- ATP089S-C (LUCID): sensor Sony IMX255 · 58 fps"})
+    ctx = research_ctx(_think_call=lambda *a, **k: json.dumps({"components": ["IMX255 10GigE camera"]}))
+    qs = dr_collect.selection_followups(ctx, "camera", briefs,
+                                        {"probe_core": "color camera", "forced_interfaces": ["10GigE"]}, set())
+    check("followups: a named part on the pages is searched however rare",
+          "IMX255 color camera 10GigE" in qs, qs)
+
+
 def test_english_query_is_not_searched_as_russia():
     """ru-ru for an English camera query returned Russian resellers instead of the makers."""
     import types

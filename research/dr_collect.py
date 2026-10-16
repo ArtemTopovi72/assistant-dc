@@ -176,7 +176,9 @@ def selection_followups(ctx, topic: str, briefs: list, analysis: Optional[dict],
     # at 1.66 Gbit/s; plain gigabit is the one interface such a spec rules out.
     ifaces = [i for i in (analysis or {}).get("forced_interfaces") or []
               if isinstance(i, str) and not _PLAIN_GIGABIT.match(i.strip())][-3:]
-    seen_parts = {p for p, _, _ in parts}
+    # Every part on the pages, not the 24 most frequent shown to the model: IMX255 was
+    # named by the model, printed on the pages, and dropped as below the cut (run 12).
+    seen_parts = {p for p, _, _ in _part_numbers(lines, top=100000)}
     comps = list(dict.fromkeys(
         [m.group(0).upper() for c in data.get("components") or [] if isinstance(c, str)
          for m in [_PART_NO.search(c)] if m and m.group(0).upper().replace("-", "") in seen_parts]
