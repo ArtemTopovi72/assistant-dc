@@ -48,6 +48,14 @@ def test_look_at_video_builds_a_sheet_and_asks_once(tmp_path):
     assert all(lbl.startswith("Frame ") and "frame_" in p for lbl, p in sent), sent
 
 
+def test_a_short_clip_is_sampled_densely_and_labels_stay_distinct():
+    """A 7 s кружок at 2 fps had two candidates a second, both smeared while the dog
+    jumped; two picks inside one second were both labelled «0:02»."""
+    assert V.dense_fps(7) > V.dense_fps(45) > V.dense_fps(600) == V.DENSE_FPS
+    assert V._stamp(2.04, True) != V._stamp(2.8, True) and V._stamp(2.8) == "0:02"
+    assert V._stamp(65.3, True) == "1:05.3"
+
+
 def test_portion_stamps_are_absolute_even_when_the_model_counts_from_zero():
     times = [365.0, 373.0, 390.0]
     desc = "0:05 — a\n0:13 — b\n6:30 — c\nИтог: x"
@@ -83,6 +91,7 @@ if __name__ == "__main__":
     import tempfile
     test_sample_times_every_5s_capped()
     test_look_at_video_builds_a_sheet_and_asks_once(Path(tempfile.mkdtemp()))
+    test_a_short_clip_is_sampled_densely_and_labels_stay_distinct()
     test_portion_stamps_are_absolute_even_when_the_model_counts_from_zero()
     test_wired_into_the_video_paths()
-    print("4/4 passed")
+    print("5/5 passed")

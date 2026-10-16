@@ -42,9 +42,15 @@ _SHEET_SYSTEM = (
     "came back as «текст на русском языке» twice and the joke was lost). "
     "The overall sentence says what the text and pictures mean together.\n"
     "Use every timestamp given, in order, and no others. Be "
-    "concrete: name things, not impressions. When a frame repeats the previous "
+    "concrete: name things, not impressions. Say what the people or animals DO -- "
+    "the action, not only the pose: chewing its paw, licking, jumping at the camera, "
+    "waving. A home video is about that moment, and a frame-by-frame list of poses "
+    "missed it (live 2026-10-16: a dog gnawing its own paw came back as «сидит и "
+    "смотрит в сторону»). A smeared frame is fast movement, never «a blurry spot»: say "
+    "what moves and how, from the frames around it and the speech. When a frame repeats the previous "
     "one, say so in a few words. After the lines add ONE sentence starting with "
-    "the overall label given below that says what the whole video is about. Name "
+    "the overall label given below that says what the whole video is about -- what "
+    "happens in it, and what is funny or striking when it is a moment. Name "
     "things for what they are, not by shape or colour. Do not invent sound or speech -- you only see the picture.")
 
 def duration_seconds(path: str) -> float:
@@ -100,6 +106,14 @@ def extract_frames(path: str, times: list[float], out_dir: Path) -> list[tuple[f
 # frame is the one worth looking at -- the face, then the step with «67» on
 # it, never the smear in between.
 DENSE_FPS = 2
+# A short clip is one moment: more candidates per window, so the pick is a sharp frame
+# of the action and not the smear of it (a 7 s кружок at 2 fps had two frames a second,
+# both blurred while the dog jumped).
+SHORT_CLIP_FPS = ((20, 6), (60, 4))
+
+
+def dense_fps(duration: float) -> float:
+    return next((fps for limit, fps in SHORT_CLIP_FPS if 0 < duration <= limit), DENSE_FPS)
 SHOT_CHANGE = 18.0      # mean |Δ| on 0..255 gray at 96 px wide; a pan/cut is far above
 MIN_SHOT_SECONDS = 1.0  # shorter spikes are shake, not a new shot
 
@@ -186,9 +200,12 @@ def key_times(frames: list, max_frames: int = MAX_FRAMES, change: float = SHOT_C
     return sorted(round(t, 2) for t in picks)
 
 
-def _stamp(t: float) -> str:
-    t = int(t); h, r = divmod(t, 3600); m, s = divmod(r, 60)
-    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+def _stamp(t: float, tenths: bool = False) -> str:
+    """«0:07»; with `tenths` «0:02.3», so two picks inside one second of a short clip
+    are not both labelled «0:02»."""
+    whole = int(t); h, r = divmod(whole, 3600); m, s = divmod(r, 60)
+    out = f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+    return out + (f".{min(9, int(round((t - whole) * 10)))}" if tenths else "")
 
 
 _LINE_STAMP = re.compile(r"^(\W*)(?:(\d+):)?(\d{1,2}):(\d{2})(?!\d)")
@@ -214,7 +231,8 @@ def absolute_stamps(desc: str, times: list[float], offset: float) -> str:
     return "\n".join(out)
 
 
-def make_sheet(frames: list[tuple[float, Path]], out_path: Path, offset: float = 0.0) -> Path:
+def make_sheet(frames: list[tuple[float, Path]], out_path: Path, offset: float = 0.0,
+               tenths: bool = False) -> Path:
     """`offset`: seconds to add to every label -- a portion of a long video
     is labelled with its ABSOLUTE position in the whole video."""
     from PIL import Image, ImageDraw, ImageFont, ImageOps
@@ -236,7 +254,7 @@ def make_sheet(frames: list[tuple[float, Path]], out_path: Path, offset: float =
         x = (i % cols) * CELL + 4
         y = (i // cols) * CELL + 4
         sheet.paste(im, (x, y))
-        label = _stamp(t + offset)
+        label = _stamp(t + offset, tenths)
         draw.rectangle((x, y, x + 24 + 20 * len(label), y + 44), fill=(255, 210, 0))
         draw.text((x + 6, y + 2), label, fill=(0, 0, 0), font=font)
     sheet.save(out_path, "JPEG", quality=88)
@@ -302,7 +320,7 @@ def look_at_video(ctx, path: str, *, every: float = EVERY_SECONDS,
     dur = duration_seconds(path)
     work_dir = Path(work_dir or tempfile.mkdtemp(prefix="video_look_"))
     try:
-        times = key_times(dense_pass(path, work_dir / "dense"), max_frames)
+        times = key_times(dense_pass(path, work_dir / "dense", fps=dense_fps(dur)), max_frames)
         how = "key moments"
     except Exception:
         logger.warning("video_look: dense pass failed, falling back to every %ss", every, exc_info=True)
@@ -312,7 +330,8 @@ def look_at_video(ctx, path: str, *, every: float = EVERY_SECONDS,
     if not frames:
         logger.warning("video_look: no frames from %s (%.1fs)", os.path.basename(path), dur)
         return {"duration": dur, "times": [], "sheet": "", "description": ""}
-    sheet = make_sheet(frames, work_dir / "sheet.jpg", offset=offset)
+    tenths = len({_stamp(t + offset) for t, _ in frames}) < len(frames)
+    sheet = make_sheet(frames, work_dir / "sheet.jpg", offset=offset, tenths=tenths)
     # Every frame goes to the model as its OWN picture, in one call, each
     # labelled with its time. The sheet gave a frame ~CELL px and was shrunk
     # again (a projector became «красный цилиндрический
@@ -324,20 +343,22 @@ def look_at_video(ctx, path: str, *, every: float = EVERY_SECONDS,
           f"These are {len(frames)} frames from a {dur:.0f}-second video -- the ")
          + f"sharpest frame of each moment where the picture changed ({how}), each "
          f"shown above with its timestamp: "
-         + ", ".join(_stamp(t + offset) for t, _ in frames)
+         + ", ".join(_stamp(t + offset, tenths) for t, _ in frames)
          + ". Give the storyboard, one line per timestamp, then the overall sentence.")
     if (transcript or "").strip():
         q += ("\n\nWhat the speaker SAYS in this video. Use it to NAME the things "
-              "you see (a thing on a stand the speaker calls a lamp is a lamp), never "
-              "to add things that are not in the frames -- if the frames show none "
-              "of what is said, describe only what they show:\n«"
+              "you see (a thing on a stand the speaker calls a lamp is a lamp) and to READ "
+              "what is happening: when the speaker says what someone does («он чуть лапу "
+              "свою не съел»: the dog gnaws its paw), find it in the frames and say it on "
+              "the lines where it shows. Never add things that are not in the frames -- if "
+              "the frames show none of what is said, describe only what they show:\n«"
               + transcript.strip()[:1500] + "»")
     if (caption or "").strip():
         q += ("\n\nThe sender's caption over this video: «" + caption.strip()[:300] + "». It is the "
               "setup of the joke when the picture does not match it: say what the frames show, "
               "quote any text on them, and do not describe the scene as if it were serious.")
     try:
-        desc = (vision([(f"Frame {_stamp(t + offset)}:", str(p)) for t, p in frames], q, _SHEET_SYSTEM + _LANG_LINE.get(lang, _LANG_LINE["en"])) or "").strip()
+        desc = (vision([(f"Frame {_stamp(t + offset, tenths)}:", str(p)) for t, p in frames], q, _SHEET_SYSTEM + _LANG_LINE.get(lang, _LANG_LINE["en"])) or "").strip()
     except Exception:
         logger.exception("video_look: vision failed")
         desc = ""

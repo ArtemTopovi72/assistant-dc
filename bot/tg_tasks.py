@@ -210,7 +210,11 @@ def retell_system(lang: str, is_video: bool) -> str:
                 "meme: say so, say in one sentence what is actually shown, and if you do not "
                 "recognise the reference say that plainly. Never retell a meme as a literal "
                 "documentary scene (a caption about AI over girls hauling sand is a joke, not a "
-                "construction site). " + _CONVO_RULE + _lang_line + "\n"
+                "construction site). A short home clip of a pet or a person is about the "
+                "moment itself: say what they do (the dog gnaws its own paw, then jumps at the "
+                "camera) -- that is the point, not the camera blur. Never invent how the author "
+                "feels or reacts (laughing, puzzled) unless it is said or shown. "
+                + _CONVO_RULE + _lang_line + "\n"
                 + _tg_video._structure_rules(lang, timecoded=False))
     return ("You summarize forwarded voice messages from their transcript: the "
             "key points and anything asked of the listener. " + _CONVO_RULE + _lang_line + "\n"

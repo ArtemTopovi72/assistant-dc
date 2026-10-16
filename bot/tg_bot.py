@@ -287,7 +287,7 @@ def _with_img(callback: str, img_id: str) -> str:
 
 # Where a held transcript's storyboard starts (fwd_video_seen, either language).
 _BOARD_SPLIT = re.compile(r"\n*👁 (?:Storyboard of the video|Раскадровка видео):\n")
-_BOARD_TIME = re.compile(r"^(\d+:\d\d(?::\d\d)?)")
+_BOARD_TIME = re.compile(r"^(\d+:\d\d(?::\d\d)?(?:\.\d)?)")
 
 
 def _split_board(said: str) -> tuple:
