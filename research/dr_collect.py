@@ -185,7 +185,10 @@ def selection_followups(ctx, topic: str, briefs: list, analysis: Optional[dict],
         # The model picked IMX267/IMX545/IMX542 from memory while the pages put IMX255
         # beside «4096 x 2160»; a part the pages print next to a near format is searched.
         + _parts_at_formats(lines, analysis)[:2]))
-    grid = [f"{c} {core} {i}" for c in comps[:4] for i in ifaces or [""]]
+    # The part already implies what the core qualifies: «IMX255 camera 10GigE» reached the
+    # Emergent HE-8000 and Oryx 89S6 pages, «IMX255 global shutter color camera 10GigE» not.
+    noun = core.split()[-1] if core.split() else "camera"
+    grid = [f"{c} {noun} {i}" for c in comps[:4] for i in ifaces or [""]]
     qs = [q for q in dict.fromkeys(grid + qs) if q.lower() not in searched][:n]
     logger.info("Selection follow-up: components %s | missing makers %s | %d queries — %s",
                 data.get("components"), data.get("missing_makers"), len(qs), " | ".join(qs)[:700])

@@ -547,8 +547,8 @@ def test_selection_followups_grid_the_components_the_pages_name():
         ctx, "camera 8.3 MP", briefs,
         {"probe_core": "global shutter color camera", "forced_interfaces": ["5GigE", "10GigE"]}, set())
     check("followups: component x each forced interface first",
-          qs[:2] == ["IMX255 global shutter color camera 5GigE",
-                     "IMX255 global shutter color camera 10GigE"], qs)
+          qs[:2] == ["IMX255 camera 5GigE",
+                     "IMX255 camera 10GigE"], qs)
     check("followups: a component no page names is not searched", not any("IMX999" in q for q in qs), qs)
     check("followups: the model's own queries kept after the grid", "IMX255 datasheet" in qs, qs)
 
@@ -608,7 +608,7 @@ def test_followups_search_the_part_printed_beside_a_near_format():
     analysis = {"probe_core": "color camera", "forced_interfaces": ["GigE Vision", "10GigE"],
                 "near_formats": ["3840x2160 (8.3 MP)", "4096x2160 (8.9 MP)"]}
     qs = dr_collect.selection_followups(ctx, "camera", briefs, analysis, set())
-    check("followups: the part beside a near format is gridded", "IMX255 color camera 10GigE" in qs, qs)
+    check("followups: the part beside a near format is gridded", "IMX255 camera 10GigE" in qs, qs)
     check("followups: a part beside no near format is not", not any("IMX264" in q for q in qs), qs)
     check("followups: plain gigabit is never a forced interface", not any("GigE Vision" in q for q in qs), qs)
 
@@ -638,7 +638,7 @@ def test_followups_keep_a_named_part_below_the_frequency_cut():
     qs = dr_collect.selection_followups(ctx, "camera", briefs,
                                         {"probe_core": "color camera", "forced_interfaces": ["10GigE"]}, set())
     check("followups: a named part on the pages is searched however rare",
-          "IMX255 color camera 10GigE" in qs, qs)
+          "IMX255 camera 10GigE" in qs, qs)
 
 
 def test_english_query_is_not_searched_as_russia():
