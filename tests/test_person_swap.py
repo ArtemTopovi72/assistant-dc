@@ -41,7 +41,7 @@ CID = 999877
 bot = T.TelegramBot("123:TEST", lambda: None, lambda: None, lambda: {}, silent_mode=True)
 bot.sent, bot.pushed, bot.photos = [], [], []
 bot._send_text = lambda cid, text, **k: (bot.sent.append((cid, text, k.get("keyboard"))), 1)[1]
-bot._send_photo = lambda cid, path, keyboard=None: (bot.photos.append((path, keyboard)), True)[1]
+bot._send_photo = lambda cid, path, keyboard=None, feedback="image": (bot.photos.append((path, keyboard)), True)[1]
 bot._activity.log = lambda *a, **k: None
 bot._api_post = lambda *a, **k: {}
 bot._dl_bytes = lambda fid: open(SPONGE, "rb").read()

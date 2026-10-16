@@ -125,7 +125,7 @@ class VoiceLibraryMixin:
         if act == "name":
             return self._vl_ask_name(chat_id, sess, lang, vid)
         if act == "play":
-            if not self._send_audio(chat_id, v["ref"], vl_label(v, lang)):
+            if not self._send_audio(chat_id, v["ref"], vl_label(v, lang), feedback=""):
                 self._send_text(chat_id, tg_bot._t("vl_gone", lang))
             return
         if act == "drop":

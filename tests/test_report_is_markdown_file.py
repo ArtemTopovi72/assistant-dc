@@ -44,7 +44,7 @@ def make_bot(upload_ok=True):
     bot._send_text = lambda cid, text, **kw: (bot.sent.append(text), 1)[1]
     bot._send_get_id = lambda cid, text, **kw: bot._send_text(cid, text, **kw)
 
-    def _doc(cid, path, caption=""):
+    def _doc(cid, path, caption="", feedback="document"):
         bot.docs.append((path, open(path, encoding="utf-8").read()))
         return upload_ok
 
@@ -125,7 +125,7 @@ for builds, want in ((True, ".pdf"), (False, ".md")):
     s.dr_format = "pdf"
     b._store.put(s)
     b.docs = []
-    b._send_document = lambda cid, path, caption="", b=b: (b.docs.append(path), True)[1]
+    b._send_document = lambda cid, path, caption="", b=b, feedback="document": (b.docs.append(path), True)[1]
     b.modules = {"dr_pdf": NS(md_to_pdf=lambda md, out, title="", ok=builds:
                               (ok and open(out, "wb").write(b"%PDF-1.4"), ok)[1])}
     b._send_report_file(CID, "Тема", REPORT, "h", "ru")

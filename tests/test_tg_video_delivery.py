@@ -105,7 +105,7 @@ bot2, _ = make_bot()
 bot2.http = types.SimpleNamespace(post=lambda url, **kw: (posted.append((url.rsplit("/", 1)[-1], None))
                                                           or _Resp(413, "file is too big")))
 _docs = []
-bot2._send_document = lambda cid, p, cap="": (_docs.append(p) or True)
+bot2._send_document = lambda cid, p, cap="", feedback="": (_docs.append(p) or True)
 ok2 = bot2._send_video(1, _fake_clip("big"))
 check("an oversize upload is not retried against sendVideo",
       sum(1 for m, _ in posted if m == "sendVideo") == 1, posted)
@@ -114,7 +114,7 @@ check("and that counts as delivered", ok2 is True)
 
 posted.clear()
 bot3, _ = make_bot()
-bot3._send_document = lambda cid, p, cap="": False
+bot3._send_document = lambda cid, p, cap="", feedback="": False
 ok3 = bot3._send_video(1, _fake_clip("hopeless"))
 check("when BOTH sendVideo and sendDocument fail, delivery reports False",
       ok3 is False)

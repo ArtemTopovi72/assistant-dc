@@ -280,7 +280,7 @@ class DispatchMixin:
             if not e:                  # no reply: only a picture from the last hour
                 last = (getattr(sess, "image_log", None) or [None])[-1]
                 e = last if last and time.time() - float(last.get("ts") or 0) < 3600 else None
-            if e and os.path.exists(e.get("path", "")) and self._send_document(chat_id, e["path"]):
+            if e and os.path.exists(e.get("path", "")) and self._send_document(chat_id, e["path"], feedback=""):
                 return
             # A reply to the user's OWN photo: it is not in image_log under that message id.
             _ph = (msg.get("reply_to_message") or {}).get("photo") or []
@@ -289,7 +289,7 @@ class DispatchMixin:
                 tg_bot._IMAGE_DIR.mkdir(parents=True, exist_ok=True)
                 _p = tg_bot._IMAGE_DIR / f"tg_{int(time.time() * 1000)}.jpg"
                 _p.write_bytes(_data)
-                if self._send_document(chat_id, str(_p)):
+                if self._send_document(chat_id, str(_p), feedback=""):
                     return
         # ── "this one" ────────────────────────────────────────────────────────
         # A Telegram REPLY is the user pointing at something. Nothing read it

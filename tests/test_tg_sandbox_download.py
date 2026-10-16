@@ -41,7 +41,7 @@ def rec(method, payload=None, **kw):
     sent.append((method, payload or {}))
     return {"ok": True, "result": {"message_id": 500 + len(sent)}}
 bot._api_post = rec
-bot._send_document = lambda chat_id, path, caption="": docs.append(path) or True
+bot._send_document = lambda chat_id, path, caption="", feedback="": docs.append(path) or True
 
 CID = 4242
 u = T._User(chat_id=CID, name="t", status="approved")

@@ -307,10 +307,10 @@ class LibraryMixin:
                 dr_pdf = module(self, "dr_pdf")
                 pdf = path.with_suffix(".pdf")
                 if dr_pdf.md_to_pdf(path.read_text(encoding="utf-8"), str(pdf), topic) \
-                        and self._send_document(chat_id, str(pdf), caption):
+                        and self._send_document(chat_id, str(pdf), caption, feedback="research"):
                     return True
                 tg_bot.logger.warning("report PDF not delivered chat=%s; sending the Markdown", chat_id)
-            if self._send_document(chat_id, str(path), caption):
+            if self._send_document(chat_id, str(path), caption, feedback="research"):
                 return True
             tg_bot.logger.warning("report file delivery failed chat=%s", chat_id)
         except Exception:

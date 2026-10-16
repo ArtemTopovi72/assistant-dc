@@ -55,7 +55,7 @@ bot._api_post = lambda *a, **k: {}; bot._api_get = lambda *a, **k: {}
 bot._activity.log = lambda *a, **k: None
 bot._index_document = lambda *a, **k: INDEXED.append(a)
 CAPS = []
-bot._send_voice_from_wav = lambda cid, wav, keyboard=None, caption="": (VOICES.append(wav), CAPS.append(caption), True)[1]
+bot._send_voice_from_wav = lambda cid, wav, keyboard=None, caption="", feedback="", said="": (VOICES.append(wav), CAPS.append(caption), True)[1]
 bot._running = True
 threading.Thread(target=bot._consumer_loop, daemon=True).start()
 

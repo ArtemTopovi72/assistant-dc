@@ -363,7 +363,7 @@ class CommandsMixin:
             self._send_text(chat_id, tg_bot._t("sbx_stale", lang))
             return
         self._api_post("sendChatAction", {"chat_id": chat_id, "action": "upload_document"})
-        if not self._send_document(chat_id, str(full)):
+        if not self._send_document(chat_id, str(full), feedback=""):
             self._send_text(chat_id, tg_bot._t("sbx_send_fail", lang,
                                                name=_html_mod.escape(rel.rsplit("/", 1)[-1])))
 
@@ -408,7 +408,7 @@ class CommandsMixin:
             self._send_sandbox_listing(chat_id, sess, lang, box, listing["where"])
             return
         self._api_post("sendChatAction", {"chat_id": chat_id, "action": "upload_document"})
-        if not self._send_document(chat_id, str(full)):
+        if not self._send_document(chat_id, str(full), feedback=""):
             self._send_text(chat_id, tg_bot._t("sbx_send_fail", lang, name=name))
 
 

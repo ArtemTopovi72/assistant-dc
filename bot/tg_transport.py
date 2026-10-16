@@ -28,6 +28,8 @@ import chatlog as _chatlog
 # A context variable (like chatlog and turn_trace), so work spawned for a task
 # still replies to the message that asked for it.
 _REPLY: contextvars.ContextVar = contextvars.ContextVar("tg_reply_to", default=None)
+# What the task was asked, for the feedback row a delivered result gets.
+_ASKED: contextvars.ContextVar = contextvars.ContextVar("tg_asked", default="")
 
 _EXIT_WORDS = ("cancel", "back", "close", "menu", "stop", "abort", "no")
 _EXIT_MARKS = ("↩", "✖", "❌", "⛔", "🔙", "⬅")
@@ -42,13 +44,15 @@ def _is_exit(btn: dict) -> bool:
 
 
 @contextlib.contextmanager
-def replying_to(chat_id, msg_id):
+def replying_to(chat_id, msg_id, asked: str = ""):
     """Everything a task sends is threaded to the message that asked for it."""
     token = _REPLY.set((chat_id, msg_id) if msg_id else None)
+    asked_token = _ASKED.set(asked or "")
     try:
         yield
     finally:
         _REPLY.reset(token)
+        _ASKED.reset(asked_token)
 
 
 # Display width of a row of buttons, in characters (an emoji counts two).
@@ -140,6 +144,30 @@ def _uri_not_readable(body: str) -> bool:
 
 
 class TransportMixin:
+    def _attach_feedback(self, chat_id, resp, kind: str, label: str = "", keyboard=None) -> None:
+        """👍/👎 under a result Telegram just accepted: a picture, a clip, a song, a file,
+        a spoken answer. Only text answers had the row, so a voice reply or a render
+        could not be rated at all. The row is added by editing the delivered message,
+        under its own inline buttons; recording or editing failing never touches the
+        delivery itself."""
+        if not kind:
+            return
+        try:
+            import config as _cfgm
+            import tg_feedback
+            mid = tg_bot._msg_id_of(resp)
+            if not mid:
+                return
+            asked = _ASKED.get() or getattr(self._get_session(chat_id), "last_task_text", "") or ""
+            rid = tg_feedback.store().record_reply(chat_id, asked, label or kind, kind=kind,
+                                                  model=getattr(_cfgm, "MODEL_NAME", ""))
+            inline = keyboard if isinstance(keyboard, dict) and "inline_keyboard" in keyboard else None
+            self._api_post("editMessageReplyMarkup", {
+                "chat_id": chat_id, "message_id": mid,
+                "reply_markup": json.dumps(tg_feedback.with_feedback(inline, rid))})
+        except Exception:
+            tg_bot.logger.exception("feedback row failed chat=%s kind=%s", chat_id, kind)
+
     def _log_artifact(self, chat_id, kind: str, path: str, label: str = "") -> None:
         """Best-effort durable record of a file just handed to a real chat.
 
@@ -296,8 +324,10 @@ class TransportMixin:
         """The wait between retries; a suite's bot carries its own `sleep` and never waits."""
         return (getattr(self, "sleep", None) or time.sleep)(seconds)
 
-    def _send_document(self, chat_id, path: str, caption: str = "") -> bool:
-        """Send a file. Used for reports too long to read as chat messages."""
+    def _send_document(self, chat_id, path: str, caption: str = "", feedback: str = "document") -> bool:
+        """Send a file. Used for reports too long to read as chat messages.
+        `feedback`: the kind its 👍/👎 row is filed under, "" for none (a file the
+        user asked to download back is not an answer to rate)."""
         _orig, path = path, self._archive(chat_id, path)   # the log keeps the original
         data: dict = {"chat_id": chat_id}
         if caption:
@@ -332,6 +362,7 @@ class TransportMixin:
                                           data=data, files={"document": fh}, timeout=600)
                 if r.status_code == 200:
                     self._log_artifact(chat_id, "document", _orig, caption)
+                    self._attach_feedback(chat_id, r, feedback, caption or Path(_orig).name)
                     return True
                 tg_bot.logger.warning("sendDocument HTTP %s attempt %d: %s",
                                r.status_code, tries, r.text[:200])
@@ -352,7 +383,7 @@ class TransportMixin:
                 self._sleep(1.5 ** (tries - 1))
         return False
 
-    def _send_audio(self, chat_id, path: str, caption: str = "") -> bool:
+    def _send_audio(self, chat_id, path: str, caption: str = "", feedback: str = "music") -> bool:
         """Send a generated song as a playable Telegram audio file.
 
         Mirrors _send_document's plain retry loop rather than _send_video's
@@ -378,6 +409,7 @@ class TransportMixin:
                                       data=data, files={"audio": fh}, timeout=180)
                 if r.status_code == 200:
                     self._log_artifact(chat_id, "music", _orig, caption)
+                    self._attach_feedback(chat_id, r, feedback, caption or Path(_orig).name)
                     return True
                 tg_bot.logger.warning("sendAudio HTTP %s attempt %d: %s",
                                r.status_code, tries, r.text[:200])
@@ -396,7 +428,7 @@ class TransportMixin:
         return False
 
     def _send_video(self, chat_id, path: str, caption: str = "",
-                    keyboard=None, ctx=None) -> bool:
+                    keyboard=None, ctx=None, feedback: str = "video") -> bool:
         """Send a generated clip as a playable Telegram video.
 
         Returns True only if Telegram actually accepted it. That matters more here
@@ -469,6 +501,7 @@ class TransportMixin:
                         # Telegram-fit copy is a scratch file, deleted in the
                         # `finally` below.
                         self._log_artifact(chat_id, "video", path, caption)
+                        self._attach_feedback(chat_id, r, feedback, caption or Path(path).name, keyboard)
                         return True
                     tg_bot.logger.warning("sendVideo HTTP %s attempt %d: %s",
                                    r.status_code, tries, r.text[:200])
@@ -497,7 +530,7 @@ class TransportMixin:
 
             tg_bot.logger.warning("[video delivery] sendVideo failed; falling back to "
                            "sendDocument for %s", send_path)
-            if self._send_document(chat_id, send_path, caption):
+            if self._send_document(chat_id, send_path, caption, feedback=feedback):
                 return True
             tg_bot.logger.error("[video delivery] sendVideo+sendDocument both failed: %s",
                          send_path)
@@ -542,7 +575,7 @@ class TransportMixin:
         except Exception as exc:
             tg_bot.logger.debug("could not scrub secret message %s: %s", mid, exc)
 
-    def _send_photo(self, chat_id, path, keyboard=None) -> bool:
+    def _send_photo(self, chat_id, path, keyboard=None, feedback: str = "image") -> bool:
         """Send an image as a Telegram photo.
 
         Telegram sendPhoto rejects files > 10 MB or larger than 10000px on a
@@ -597,13 +630,13 @@ class TransportMixin:
             data["reply_markup"] = json.dumps(keyboard)
 
         try:
-            return self._send_photo_file(chat_id, path, send_path, data)
+            return self._send_photo_file(chat_id, path, send_path, data, feedback=feedback, keyboard=keyboard)
         finally:
             if tmp_path:                # the shrunk copy, sent or not
                 try: os.unlink(tmp_path)
                 except Exception: pass
 
-    def _send_photo_file(self, chat_id, path, send_path, data) -> bool:
+    def _send_photo_file(self, chat_id, path, send_path, data, feedback: str = "", keyboard=None) -> bool:
         # --- primary: sendPhoto ---
         for attempt in range(tg_bot._API_RETRIES):
             try:
@@ -615,6 +648,7 @@ class TransportMixin:
                     # carries the message id, and that is what turns "this one" into
                     # a file path instead of a guess.
                     self._last_photo_msg_id = tg_bot._msg_id_of(r)
+                    self._attach_feedback(chat_id, r, feedback, Path(path).name, keyboard)
                     return True
                 tg_bot.logger.warning("sendPhoto HTTP %s attempt %d: %s",
                                r.status_code, attempt, r.text[:200])
@@ -636,6 +670,7 @@ class TransportMixin:
             if r.status_code == 200:
                 tg_bot.logger.info("sendDocument fallback succeeded for %s", path)
                 self._last_photo_msg_id = tg_bot._msg_id_of(r)
+                self._attach_feedback(chat_id, r, feedback, Path(path).name, keyboard)
                 return True
             tg_bot.logger.error("sendDocument fallback HTTP %s: %s", r.status_code, r.text[:200])
         except Exception as exc:
@@ -643,7 +678,8 @@ class TransportMixin:
         return False
 
     def _send_voice_from_wav(self, chat_id: int, wav_path: str,
-                             keyboard=None, caption: str = "") -> bool:
+                             keyboard=None, caption: str = "", feedback: str = "",
+                             said: str = "") -> bool:
         """Convert an existing WAV to OGG/Opus and send as a Telegram voice note.
 
         Attaches *keyboard* (reply_markup) to the voice message when provided,
@@ -677,6 +713,10 @@ class TransportMixin:
                 data["duration"] = int(round(_sf.info(wav_path).duration))
             except Exception:
                 pass
+            if feedback and keyboard and "inline_keyboard" not in keyboard:
+                # A reply keyboard stays on screen by itself, and a message carrying
+                # one cannot take the inline 👍/👎 row afterwards.
+                keyboard = None
             if keyboard:
                 data["reply_markup"] = json.dumps(keyboard)
             for attempt in range(tg_bot._API_RETRIES):
@@ -687,6 +727,7 @@ class TransportMixin:
                                           files={"voice": ("voice.ogg", fh, "audio/ogg")},
                                           timeout=120)
                     if r.status_code == 200:
+                        self._attach_feedback(chat_id, r, feedback, said or caption or "voice", keyboard)
                         return True
                     tg_bot.logger.warning("sendVoice HTTP %s attempt %d: %s",
                                    r.status_code, attempt, r.text[:300])

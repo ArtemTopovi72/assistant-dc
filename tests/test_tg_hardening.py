@@ -51,7 +51,7 @@ def make_bot():
     bot.docs = []
     bot._send_text = lambda cid, text, **kw: bot.sent.append((cid, text, kw)) or 1
     bot._send_get_id = lambda cid, text, **kw: (bot.sent.append((cid, text, kw)), 1)[1]
-    bot._send_document = lambda cid, path, caption="": bot.docs.append((cid, path)) or True
+    bot._send_document = lambda cid, path, caption="", feedback="": bot.docs.append((cid, path)) or True
     bot._api_post = lambda *a, **k: {}
     bot._api_get = lambda *a, **k: {}
     bot._activity.log = lambda *a, **k: None

@@ -23,7 +23,7 @@ def _bot(**clone):
                                          name=lambda: "stub")
     bot._activity.log = lambda *a, **k: None
     bot._dl_bytes = lambda fid: b"OggS" + b"0" * 2000
-    bot._send_voice_from_wav = lambda cid, wav, keyboard=None: bot.voices.append(wav) or True
+    bot._send_voice_from_wav = lambda cid, wav, keyboard=None, feedback="", **k: bot.voices.append(wav) or True
     s = bot._get_session(CID); s.clear_context(); s.lang = "ru"; bot._store.put(s)
     return bot
 

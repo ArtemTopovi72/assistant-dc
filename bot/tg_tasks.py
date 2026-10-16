@@ -218,7 +218,7 @@ def retell_system(lang: str, is_video: bool) -> str:
 
 
 class TaskRunnerMixin:
-    def _feedback_kb(self, kb, chat_id, user_text, reply, ctx):
+    def _feedback_kb(self, kb, chat_id, user_text, reply, ctx, kind: str = ""):
         """`kb` with the 👍/👎 row under it. Feedback is only recorded, never fed back
         into the bot; if recording fails the answer still goes out as it was.
         A reply keyboard is left alone (it stays on screen by itself) and the row
@@ -226,7 +226,7 @@ class TaskRunnerMixin:
         try:
             import config as _cfg
             import tg_feedback
-            kind = "search" if getattr(ctx, "turn_queries", None) else "chat"
+            kind = kind or ("search" if getattr(ctx, "turn_queries", None) else "chat")
             rid = tg_feedback.store().record_reply(
                 chat_id, user_text, reply, kind=kind, model=_cfg.MODEL_NAME)
             inline = kb if kb and "inline_keyboard" in kb else None
@@ -495,8 +495,12 @@ class TaskRunnerMixin:
         title = tg_bot._t("retell_title_video" if is_video else "retell_title_voice", lang)
         chunks = tg_bot._split_html(_tg_video.render_retelling(out, title))
         for n, chunk in enumerate(chunks):
-            self._send_text(chat_id, chunk, parse_mode="HTML",
-                            keyboard=self._main_menu_kb(sess, lang) if n == len(chunks) - 1 else None)
+            kb = None
+            if n == len(chunks) - 1:
+                kb = self._feedback_kb(self._main_menu_kb(sess, lang), chat_id,
+                                       "[forwarded video]" if is_video else "[forwarded voice]",
+                                       out, None, kind="retell")
+            self._send_text(chat_id, chunk, parse_mode="HTML", keyboard=kb)
         self._activity.log(chat_id, "assistant", out[:500])
         self._commit_media_turn(chat_id, said, out, is_video)
 
@@ -681,7 +685,7 @@ class TaskRunnerMixin:
         _trace = turn_trace.start(chat=chat_id, task=task.task_id[:8], user=uname,
                                   text=(task.user_text or "")[:1500])
         try:
-            with _chatlog.bind(chat_id), tg_transport.replying_to(chat_id, task.reply_to):
+            with _chatlog.bind(chat_id), tg_transport.replying_to(chat_id, task.reply_to, asked=task.user_text):
                 self._run_task_inner(task, sess, user, uname, lang, ctx, graph)
             _outcome = "cancelled" if task.task_id in self._cancelled else "done"
         finally:
@@ -1654,8 +1658,11 @@ class TaskRunnerMixin:
                     and reply and not empty_reply:
                 tts_wav = final.get("tts_path", "")
                 if tts_wav and os.path.exists(tts_wav):
+                    # Voice only: the text (and its 👍/👎) is skipped, so the voice carries the row.
                     voice_sent = self._send_voice_from_wav(
-                        chat_id, tts_wav, keyboard=main_kb if sess.reply_mode == "voice" else None)
+                        chat_id, tts_wav, keyboard=main_kb if sess.reply_mode == "voice" else None,
+                        feedback="voice" if sess.reply_mode == "voice" and not reply_is_failure else "",
+                        said=reply)
                     if voice_sent:
                         self._activity.log(chat_id, "system",
                             "[voice] sent from graph tts_path", uname)
@@ -1707,8 +1714,10 @@ class TaskRunnerMixin:
                 reply_html = self._sandbox_linkify(chat_id, reply_html)
                 chunks = tg_bot._split_html(reply_html)
                 for i, chunk in enumerate(chunks):
-                    kb = main_kb if i == len(chunks) - 1 else None
-                    if kb is not None and not reply_is_failure:
+                    last = i == len(chunks) - 1
+                    kb = main_kb if last else None
+                    # Voice-only already carried the row on the voice note.
+                    if last and not reply_is_failure and not (voice_sent and sess.reply_mode == "voice"):
                         kb = self._feedback_kb(kb, chat_id, task.user_text, reply, ctx)
                     self._send_text(chat_id, chunk, parse_mode="HTML", keyboard=kb)
             self._on_message(chat_id, task.user_text, reply)
@@ -1880,7 +1889,7 @@ class TaskRunnerMixin:
                             # the toggle, or "нарисуй ..., пришли файлом" in this very request
                             import tg_dispatch as _tgd
                             if getattr(sess, "photo_file", False) or _tgd._asks_as_file(task.user_text or "", ctx=ctx):
-                                self._send_document(chat_id, out_img)   # full quality, no JPEG re-encode
+                                self._send_document(chat_id, out_img, feedback="")   # full quality, no JPEG re-encode
                             self._activity.log(chat_id, "system",
                                 f"[image delivery] sent {out_img}", uname)
                         else:

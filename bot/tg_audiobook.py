@@ -247,7 +247,8 @@ class AudiobookMixin:
                 parts = audiobook.split_long(wav)
                 for k, part in enumerate(parts, start=1):
                     cap = audiobook.caption(title, n, len(chapters), k, len(parts))
-                    if not self._send_voice_from_wav(chat_id, part, caption=cap):
+                    if not self._send_voice_from_wav(chat_id, part, caption=cap,
+                                                     feedback="audiobook" if part == parts[-1] else ""):
                         self._send_text(chat_id, tg_bot._t("book_chapter_fail", lang, n=n))
                         break
                 else:

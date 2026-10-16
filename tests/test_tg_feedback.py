@@ -103,6 +103,49 @@ def test_tab_renders_with_and_without_votes():
     assert app
 
 
+def test_a_delivered_result_gets_the_row_under_its_own_buttons():
+    """Only text answers could be rated: a voice reply, a picture, a clip or a song had
+    no 👍/👎 at all. A result Telegram accepted is filed under its kind, with what was
+    asked, and the row goes under the buttons the message already has."""
+    import json
+    import tg_transport
+    F.redirect_store(os.path.join(tempfile.mkdtemp(), "fb.db"))
+    posted = []
+    bot = types.SimpleNamespace(_api_post=lambda m, d: posted.append((m, d)),
+                                _get_session=lambda cid: types.SimpleNamespace(last_task_text="old"))
+    resp = types.SimpleNamespace(json=lambda: {"result": {"message_id": 42}})
+    own = {"inline_keyboard": [[{"text": "🔄", "callback_data": "again"}]]}
+    with tg_transport.replying_to(7, 0, asked="спой про кота"):
+        tg_transport.TransportMixin._attach_feedback(bot, 7, resp, "music", "song.mp3", own)
+    method, data = posted[-1]
+    rows = json.loads(data["reply_markup"])["inline_keyboard"]
+    assert method == "editMessageReplyMarkup" and data["message_id"] == 42
+    assert rows[0] == own["inline_keyboard"][0] and rows[1][0]["callback_data"].startswith("fb:")
+    kinds = {k["kind"]: k for k in F.store().by_kind()}
+    assert kinds["music"]["replies"] == 1
+    rid = rows[1][0]["callback_data"].split(":")[1]
+    F.store().vote(rid, 1, -1)
+    assert F.store().recent_down()[0]["user"] == "спой про кота", "what was asked, not the last task"
+    posted.clear()
+    tg_transport.TransportMixin._attach_feedback(bot, 7, resp, "", "x")
+    assert posted == [], "a send that opted out gets no row"
+
+
+def test_kinds_chart_names_every_kind():
+    from PyQt5.QtWidgets import QApplication
+    from gui_feedback_tab import FeedbackTab, kind_label
+    app = QApplication.instance() or QApplication([])
+    s = fresh()
+    for kind in ("chat", "voice", "video", "music", "research", "retell"):
+        s.vote(s.record_reply(1, "q", "a", kind=kind), 1, 1 if kind != "video" else -1)
+    tab = FeedbackTab(store=lambda: s)
+    tab.resize(800, 700)
+    tab.grab()
+    assert len(tab._kinds._kinds) == 6 and kind_label("video") == "🎬 Video"
+    assert "🎬" in tab._bad.toPlainText()
+    assert app
+
+
 if __name__ == "__main__":
     for n, f in list(globals().items()):
         if n.startswith("test_"):

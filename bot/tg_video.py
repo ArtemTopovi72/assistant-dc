@@ -534,7 +534,7 @@ class LongVideoMixin:
                 _save_material(work, material)
                 if seen.get("sheet") and not quiet and mode != "retell":
                     try:
-                        self._send_photo(chat_id, seen["sheet"])
+                        self._send_photo(chat_id, seen["sheet"], feedback="")
                     except Exception:
                         logger.debug("sheet send failed", exc_info=True)
                 done += 1

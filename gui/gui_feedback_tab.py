@@ -1,4 +1,5 @@
-"""Feedback tab: what people thought of the bot's answers (👍/👎 from Telegram).
+"""Feedback tab: what people thought of the bot's answers and results (👍/👎 from Telegram:
+text, voice, pictures, clips, songs, reports).
 
 Read-only view over bot/tg_feedback: totals, a daily bar chart (up green, down red)
 with the satisfaction line over it, a per-kind breakdown and the latest disliked
@@ -83,6 +84,65 @@ class _DailyChart(QWidget):
                        Qt.AlignLeft, days[i]["day"][5:])
 
 
+# What each kind of answer is called on the chart. A kind not listed shows its raw name.
+KIND_LABELS = {
+    "chat": ("💬", "Chat"), "search": ("🔎", "Web search"), "voice": ("🎙", "Voice reply"),
+    "image": ("🖼", "Images"), "video": ("🎬", "Video"), "music": ("🎵", "Music"),
+    "research": ("📚", "Deep Research"), "document": ("📄", "Files"),
+    "retell": ("📝", "Retellings"), "audiobook": ("📖", "Audiobooks"),
+}
+
+
+def kind_label(kind: str) -> str:
+    icon, name = KIND_LABELS.get(kind, ("•", kind or "?"))
+    return f"{icon} {name}"
+
+
+class _KindChart(QWidget):
+    """One row per kind of answer: a bar as long as its share of the answers, split
+    into 👍 (green), 👎 (red) and not rated (grey), with the votes and % satisfied."""
+
+    ROW = 26
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._kinds = []
+
+    def set_kinds(self, kinds):
+        self._kinds = list(kinds)
+        self.setMinimumHeight(px(self.ROW) * max(1, len(self._kinds)) + px(8))
+        self.update()
+
+    def paintEvent(self, _ev):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.fillRect(self.rect(), QColor(PANEL))
+        if not self._kinds:
+            p.setPen(QColor(MUTED))
+            p.drawText(self.rect(), Qt.AlignCenter, "No answers yet")
+            return
+        row, w = px(self.ROW), self.width()
+        name_w, stat_w = px(150), px(170)
+        bar_x, bar_w = name_w + px(8), max(px(40), w - name_w - stat_w - px(24))
+        peak = max(k["replies"] for k in self._kinds) or 1
+        for i, k in enumerate(self._kinds):
+            y = px(4) + i * row
+            p.setPen(QColor(TEXT))
+            p.drawText(QRectF(px(8), y, name_w, row), Qt.AlignVCenter | Qt.AlignLeft, kind_label(k["kind"]))
+            full = bar_w * k["replies"] / peak
+            up_w = full * k["up"] / max(k["replies"], 1)
+            dn_w = full * k["down"] / max(k["replies"], 1)
+            top, hgt = y + row * 0.25, row * 0.5
+            p.fillRect(QRectF(bar_x, top, full, hgt), QColor(BORDER))
+            p.fillRect(QRectF(bar_x, top, up_w, hgt), QColor(ACCENT2))
+            p.fillRect(QRectF(bar_x + up_w, top, dn_w, hgt), QColor(REC))
+            votes = k["up"] + k["down"]
+            rate = f"{round(100 * k['up'] / votes)}%" if votes else "–"
+            p.setPen(QColor(MUTED))
+            p.drawText(QRectF(w - stat_w - px(8), y, stat_w, row), Qt.AlignVCenter | Qt.AlignRight,
+                       f"👍 {k['up']}  👎 {k['down']}  · {k['replies']} · {rate}")
+
+
 def _card_label(title: str):
     box = QWidget()
     box.setStyleSheet(f"background:{PANEL};border-radius:{px(8)}px;")
@@ -142,10 +202,7 @@ class FeedbackTab(QWidget):
         root.addWidget(self._chart)
 
         root.addWidget(_section("By kind"))
-        self._kinds = QTextEdit()
-        self._kinds.setReadOnly(True)
-        self._kinds.setObjectName("terminal")
-        self._kinds.setMaximumHeight(px(110))
+        self._kinds = _KindChart()
         root.addWidget(self._kinds)
 
         root.addWidget(_section("Latest 👎"))
@@ -169,8 +226,7 @@ class FeedbackTab(QWidget):
         self._vals["down"].setText(str(s["down"]))
         self._vals["rate"].setText("–" if s["rate"] is None else f"{round(s['rate'] * 100)}%")
         self._chart.set_days(daily)
-        self._kinds.setPlainText("\n".join(
-            f"{k['kind']:<10} 👍 {k['up']:<4} 👎 {k['down']:<4} answers {k['replies']}" for k in kinds))
+        self._kinds.set_kinds(kinds)
         self._bad.setPlainText("\n\n".join(
-            f"{time.strftime('%m-%d %H:%M', time.localtime(b['ts']))}  [{b['kind']}]\n"
+            f"{time.strftime('%m-%d %H:%M', time.localtime(b['ts']))}  {kind_label(b['kind'])}\n"
             f"Q: {b['user']}\nA: {b['reply']}" for b in bad))

@@ -161,7 +161,7 @@ class VoiceCloneMixin:
         try:
             clean = self.voice_clone.polish(ctx, text)
             wav = self.voice_clone.speak(ctx, ref, ref_text, clean, self._clone_dir(chat_id))
-            if not wav or not self._send_voice_from_wav(chat_id, wav):
+            if not wav or not self._send_voice_from_wav(chat_id, wav, feedback="voice"):
                 self._send_text(chat_id, tg_bot._t("clone_fail_synth", lang))
         except Exception:
             tg_bot.logger.exception("[clone] synthesis failed for chat %s", chat_id)
