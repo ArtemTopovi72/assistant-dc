@@ -531,6 +531,27 @@ def test_selection_probes_use_near_formats_and_survive_the_planner():
           qs[0].startswith("4096x2160") and "8.3 MP global shutter camera" in qs, qs)
 
 
+def test_selection_followups_grid_the_components_the_pages_name():
+    """Asked for «component x interface», the model wrote datasheet queries and never
+    searched the 10GigE cameras on IMX255. The grid is built from the components it
+    judged qualifying — only ones a page actually names."""
+    import json
+    import dr_collect
+    from _dr_ctx import research_ctx
+    briefs = [{"title": "Atlas ATP089S-C", "brief": "- ATP089S-C: Sony IMX255, 4096x2160, 5GigE"}]
+    ctx = research_ctx(_think_call=lambda *a, **k: json.dumps(
+        {"components": ["IMX255 color", "IMX999 (remembered, on no page)"],
+         "queries": ["IMX255 datasheet"]}))
+    qs = dr_collect.selection_followups(
+        ctx, "camera 8.3 MP", briefs,
+        {"probe_core": "global shutter color camera", "forced_interfaces": ["5GigE", "10GigE"]}, set())
+    check("followups: component x each forced interface first",
+          qs[:2] == ["IMX255 global shutter color camera 5GigE",
+                     "IMX255 global shutter color camera 10GigE"], qs)
+    check("followups: a component no page names is not searched", not any("IMX999" in q for q in qs), qs)
+    check("followups: the model's own queries kept after the grid", "IMX255 datasheet" in qs, qs)
+
+
 def test_english_query_is_not_searched_as_russia():
     """ru-ru for an English camera query returned Russian resellers instead of the makers."""
     import types

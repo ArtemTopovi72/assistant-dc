@@ -92,7 +92,8 @@ def selection_queries(ctx, topic: str, n: int = 14, sink: Optional[dict] = None)
     analysis = safe_json_from_llm(think(ctx, SELECTION_ANALYSIS_PROMPT, f"Request: {topic}",
                                         max_tokens=S.DR_PLAN_TOKENS, temperature=0.2) or "") or {}
     if sink is not None:
-        sink["selection_analysis"] = {k: analysis.get(k) for k in ("hard", "derived", "ambiguous")}
+        sink["selection_analysis"] = {k: analysis.get(k) for k in (
+            "hard", "derived", "ambiguous", "probe_core", "forced_interfaces")}
     snippets = []
     probes = _format_probes(analysis) + [q for q in analysis.get("component_queries") or []
                                          if isinstance(q, str)][:6]
@@ -147,7 +148,16 @@ def selection_followups(ctx, topic: str, briefs: list, analysis: Optional[dict],
         max_tokens=S.DR_PLAN_TOKENS, temperature=0.3)
     data = safe_json_from_llm(out or "") or {}
     qs = [q.strip() for q in data.get("queries") or [] if isinstance(q, str) and q.strip()]
-    qs = [q for q in dict.fromkeys(qs) if q.lower() not in searched][:n]
+    # Asked for «component x interface» the model wrote «IMX267 machine vision camera
+    # datasheet» and left the 10GigE cameras unsearched; the grid is built here.
+    core = str((analysis or {}).get("probe_core") or "camera").strip()
+    ifaces = [i for i in (analysis or {}).get("forced_interfaces") or [] if isinstance(i, str)][-3:]
+    seen_parts = {p for p, _, _ in parts}
+    comps = list(dict.fromkeys(
+        m.group(0).upper() for c in data.get("components") or [] if isinstance(c, str)
+        for m in [_PART_NO.search(c)] if m and m.group(0).upper().replace("-", "") in seen_parts))
+    grid = [f"{c} {core} {i}" for c in comps[:3] for i in ifaces or [""]]
+    qs = [q for q in dict.fromkeys(grid + qs) if q.lower() not in searched][:n]
     logger.info("Selection follow-up: components %s | missing makers %s | %d queries — %s",
                 data.get("components"), data.get("missing_makers"), len(qs), " | ".join(qs)[:700])
     return qs
