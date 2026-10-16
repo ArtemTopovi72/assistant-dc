@@ -209,7 +209,7 @@ def _maker_name(s: str) -> str:
 
 
 def selection_followups(ctx, topic: str, briefs: list, analysis: Optional[dict],
-                        searched: set, n: int = 18) -> list:
+                        searched: set, n: int = 24) -> list:
     """Second-round queries for a spec selection, from what the first round READ. The
     sensor that decides the answer (IMX255) was never in a search snippet, only on the
     pages; the entity multi-hop searched «Teledyne» and «Ethernet» and added 0 briefs."""
@@ -254,8 +254,11 @@ def selection_followups(ctx, topic: str, briefs: list, analysis: Optional[dict],
     # ORX-10G-89S6C, makers the component grid alone never reached.
     makers = [_maker_name(m) for m in data.get("missing_makers") or [] if isinstance(m, str)]
     by_maker = [f"{m} {c} {noun}" for c in comps[:2] for m in dict.fromkeys(filter(None, makers))][:8]
-    prices = [f"{m} price" for m in _models_at_formats(lines, analysis)[:4]]
-    qs = [q for q in dict.fromkeys(grid[:8] + by_maker + prices + grid[8:] + qs)
+    # «IMX255/IMX267 price» and «AR0821 price» priced sensors: a component is not a model.
+    parts_up = {c.upper().replace("-", "") for c in comps}
+    prices = [f"{m} price" for m in _models_at_formats(lines, analysis)
+              if "/" not in m and m.upper().replace("-", "") not in parts_up][:4]
+    qs = [q for q in dict.fromkeys(grid[:12] + by_maker + prices + grid[12:] + qs)
           if q.lower() not in searched][:n]
     logger.info("Selection follow-up: components %s | missing makers %s | %d queries — %s",
                 data.get("components"), data.get("missing_makers"), len(qs), " | ".join(qs)[:700])
