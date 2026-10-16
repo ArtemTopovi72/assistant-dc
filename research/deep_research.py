@@ -163,7 +163,8 @@ _REEXPORTED_FROM_DR_SYNTHESIS = (synthesize_report, synthesize_survey,
                                  _normalize_outline, _postprocess_report)
 from dr_assemble import (
     _report_header, _sources_appendix, _contradiction_note, _append_once,
-    provenance_footer, audit_report_links, demote_failing_rows, strip_empty_fields,
+    provenance_footer, audit_report_links, demote_failing_rows, promote_passing_rows,
+    selection_form_missing, strip_empty_fields,
     _citation_section_from_brief, _parse_cite_entry, _deterministic_digest_report,
     _build_equations_section,
 )
@@ -918,8 +919,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
         try:
             evidence = _consolidate_evidence(ctx, topic, briefs, prog)
             sel_tokens = min(S.DR_SECTION_TOKEN_CEILING, caps.get("report_tokens") or 6000) * 2
-            report = dep(ctx, "_think_call", _think_call)(
-                ctx, SELECTION_REPORT_PROMPT + _lang_directive(out_lang),
+            sel_user = (
                 f"User request: {topic}\n\n"
                 # The arithmetic was done before the search; written from the briefs alone
                 # the section gave B = W x H x bits x FPS with no number in it.
@@ -929,12 +929,24 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
                    if profile.get("selection_analysis") else "")
                 # From 100 briefs the writer kept five rows and dropped the IMX255 cameras
                 # it had read; every model line is put in front of it, each with its page.
-                + "EVERY MODEL THE PAGES STATE (judge each one; a row for every model that "
-                  "meets the hard requirements or fails exactly one):\n"
+                + "EVERY MODEL THE PAGES STATE — judge each one and put it in the Candidates "
+                  "table (meets the hard requirements or fails exactly one) or the Ruled out "
+                  "list; keep the six sections exactly as instructed:\n"
                 + _model_catalog(briefs) + "\n\n"
-                + "Per-source briefs:\n" + evidence + _lang_directive(out_lang),
-                sel_tokens, temperature=0.2, retries=1)
-            report = (report or "").strip() or None
+                + "Per-source briefs:\n" + evidence + _lang_directive(out_lang))
+            think = dep(ctx, "_think_call", _think_call)
+            report = (think(ctx, SELECTION_REPORT_PROMPT + _lang_directive(out_lang), sel_user,
+                            sel_tokens, temperature=0.2, retries=1) or "").strip() or None
+            missing = selection_form_missing(report) if report else []
+            if missing:
+                logger.warning("selection draft lacks %s — rewriting once", missing)
+                again = (think(ctx, SELECTION_REPORT_PROMPT + _lang_directive(out_lang),
+                               sel_user + "\n\nYour previous answer dropped or renamed these "
+                               "required sections: " + "; ".join(missing) + ". Write all six "
+                               "sections with exactly the headings given, in that order.",
+                               sel_tokens, temperature=0.2, retries=1) or "").strip()
+                if again and len(selection_form_missing(again)) < len(missing):
+                    report = again
             if report:
                 prog.update("Building report", "checking every verdict against its source")
                 checked = (dep(ctx, "_think_call", _think_call)(
@@ -942,7 +954,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
                     f"User request: {topic}\n\nDRAFT:\n{report}\n\nPer-source briefs:\n{evidence}",
                     sel_tokens, temperature=0.1, retries=1) or "").strip()
                 # A rewrite that lost sections or half the text is a failed check, not a fix.
-                if (checked.count("\n## ") >= report.count("\n## ") - 1
+                if (len(selection_form_missing(checked)) <= len(selection_form_missing(report))
                         and len(checked) >= 0.6 * len(report)):
                     report = checked
                 else:
@@ -950,8 +962,10 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
                                    "keeping the draft", len(report), len(checked))
             if report:
                 report, _moved = demote_failing_rows(report)
-                if _moved:
-                    logger.info("selection matrix: %d rows failing 2+ requirements ruled out", _moved)
+                report, _back = promote_passing_rows(report)
+                if _moved or _back:
+                    logger.info("selection matrix: %d rows failing 2+ requirements ruled out, "
+                                "%d passing rows put back", _moved, _back)
                 report, _link_stats = audit_report_links(report, briefs, out_lang)
                 # Every page read used to be listed: USB night-vision webcams and a search
                 # ad under a camera matrix. The appendix is what the matrix rests on.

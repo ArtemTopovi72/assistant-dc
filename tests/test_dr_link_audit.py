@@ -291,5 +291,18 @@ check("a one-fail row stays a candidate", "TRI089S" in cand, out)
 check("the existing ruled-out lines and later sections survive",
       "MV-CH089" in out and "## Рекомендация" in out, out)
 
+from dr_assemble import promote_passing_rows, selection_form_missing  # noqa: E402
+_R = ("## Кандидаты\n\n| Модель | 8.3 Мп | fps |\n| :--- | :--- | :--- |\n| [A](https://a/1) | ✅ 8.9 | ✅ 58 |\n\n"
+      "## Отсеяно\n\n| Модель | 8.3 Мп | fps |\n| :--- | :--- | :--- |\n"
+      "| [TRT089S](https://a/2) | ✅ 8.9 | ✅ 31 |\n| [Phoenix](https://a/3) | ✅ 8.9 | ❌ 13 |\n\n## Уточнить\n\nx\n")
+out, n = promote_passing_rows(_R)
+check("a ruled-out row with no ❌ goes back to the candidates",
+      n == 1 and "TRT089S" in out.split("## Отсеяно")[0] and "Phoenix" in out.split("## Отсеяно")[1], out)
+check("a report with renamed sections is caught",
+      len(selection_form_missing("## Требования\n## Отчет по кандидатам\n## Резюме\n")) == 5)
+check("the six sections in either language pass",
+      selection_form_missing("## Требования / Requirements\n## What the numbers force\n## Кандидаты\n"
+                             "## Ruled out\n## Рекомендация\n## Уточнить\n") == [])
+
 print("%d passed, %d failed" % (OK, BAD))
 sys.exit(1 if BAD else 0)

@@ -331,6 +331,49 @@ def demote_failing_rows(report: str) -> tuple:
     return "\n".join(lines[:cand + 1] + keep + [lines[out_at], ""] + moved + tail), len(moved)
 
 
+def promote_passing_rows(report: str) -> tuple:
+    """Rows in a ruled-out TABLE with no ❌ go back to the candidates table: run 10 listed
+    TRT089S (every cell ✅ or ❓) among the rejects. Only when both tables have the same
+    columns. Returns (report, moved)."""
+    lines = report.split("\n")
+
+    def section(pat):
+        start = next((i for i, ln in enumerate(lines) if re.match(pat, ln.strip(), re.I)), None)
+        if start is None:
+            return None, None
+        end = next((j for j in range(start + 1, len(lines)) if lines[j].startswith("## ")),
+                   len(lines))
+        return start, end
+    cs, ce = section(r"##\s*(Кандидаты|Candidates)")
+    rs, re_ = section(r"##\s*(Отсеяно|Ruled out)")
+    if cs is None or rs is None or rs < cs:
+        return report, 0
+    ctab = [i for i in range(cs + 1, ce) if lines[i].lstrip().startswith("|")]
+    rtab = [i for i in range(rs + 1, re_) if lines[i].lstrip().startswith("|")]
+    if len(ctab) < 2 or len(rtab) < 3 or lines[ctab[0]].count("|") != lines[rtab[0]].count("|"):
+        return report, 0
+    up = [i for i in rtab[2:] if "❌" not in lines[i]]
+    if not up:
+        return report, 0
+    rows = [lines[i] for i in up]
+    out = [ln for i, ln in enumerate(lines) if i not in set(up)]
+    at = ctab[-1] + 1          # ruled-out comes after the candidates, so this index holds
+    return "\n".join(out[:at] + rows + out[at:]), len(rows)
+
+
+_SELECTION_SECTIONS = (("Требования", "Requirements"), ("Что из этого следует", "What the numbers force"),
+                       ("Кандидаты", "Candidates"), ("Отсеяно", "Ruled out"),
+                       ("Рекомендация", "Recommendation"), ("Уточнить", "To confirm"))
+
+
+def selection_form_missing(report: str) -> list:
+    """The required matrix sections a report lacks. Handed 150 model lines, the writer
+    renamed and dropped half of them («Отчет по кандидатам», «Резюме»)."""
+    heads = [ln.strip().lower() for ln in (report or "").splitlines() if ln.startswith("## ")]
+    return [f"{ru} / {en}" for ru, en in _SELECTION_SECTIONS
+            if not any(ru.lower() in h or en.lower() in h for h in heads)]
+
+
 def _sources_appendix(briefs: list, out_lang: str = "en") -> str:
     """Source appendix grouped by trust tier (most → least authoritative), then
     by domain, so the reader sees at a glance what the report actually rests on."""
