@@ -658,6 +658,19 @@ def this_thread_holds_card() -> bool:
                 or getattr(_gpu_slot._local, "depth", 0))
 
 
+def _park_voice_for_job(ctx=None) -> None:
+    """A shared-card job (SAM3 mask, Florence, ObjectClear) runs beside the chat
+    model; Whisper/F5 idle in RAM meanwhile give it ~2 GB of the card. Speech in
+    progress keeps them (no wait); they wake on their next use."""
+    try:
+        import models as _models
+        if _models.park_voice(getattr(ctx, "models", None) and ctx, wait_s=0):
+            from utils import safe_empty_cuda_cache
+            safe_empty_cuda_cache()
+    except Exception:
+        logger.exception("could not park the voice models for a render")
+
+
 class _gpu_slot:
     """Hold a render slot. Reentrant per thread: a pipeline that submits several
     graphs inside one logical edit must not deadlock against itself.
@@ -681,6 +694,8 @@ class _gpu_slot:
         self._claimed = self.exclusive and self._acquired
         if self._claimed:
             _claim_card(self.label, min_free_mb=self.min_free_mb, ctx=self.ctx)
+        elif self._acquired:
+            _park_voice_for_job(self.ctx)
         if self._acquired:
             _GPU_SEM.acquire()
         self._local.depth = depth + 1

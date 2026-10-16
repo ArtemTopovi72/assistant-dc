@@ -53,5 +53,20 @@ with ctx.tts_lock:
     M.park_voice(ctx, wait_s=0.1)
 check("speech in progress is never moved under it", next(tts.parameters()).device.type == "cuda")
 
+import time
+import comfy_client as CC
+M.wake_tts(ctx.models)
+wh.wake()
+with CC._gpu_slot(ctx=ctx):
+    check("a shared-card job (a SAM3 mask) parks idle voice beside the chat model",
+          not wh.model.model_is_loaded and next(tts.parameters()).device.type == "cpu")
+M.wake_tts(ctx.models)
+with ctx.tts_lock:
+    t0 = time.time()
+    with CC._gpu_slot(ctx=ctx):
+        pass
+    check("...and never waits for speech in progress",
+          time.time() - t0 < 1 and next(tts.parameters()).device.type == "cuda")
+
 print(f"\n{OK} passed, {BAD} failed")
 sys.exit(1 if BAD else 0)
