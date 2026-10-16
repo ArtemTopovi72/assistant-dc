@@ -919,6 +919,11 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
         try:
             evidence = _consolidate_evidence(ctx, topic, briefs, prog)
             sel_tokens = min(S.DR_SECTION_TOKEN_CEILING, caps.get("report_tokens") or 6000) * 2
+            # Prompt + answer must fit the loaded window: 150 model lines on top of the
+            # briefs made a 46k-token request for 40960 and the run fell back (run 11).
+            budget = max(8000, (_model_context(ctx) - sel_tokens - 1500) * 3)
+            catalog = _model_catalog(briefs)
+            evidence = evidence[:max(2000, budget - len(catalog) - 4000)]
             sel_user = (
                 f"User request: {topic}\n\n"
                 # The arithmetic was done before the search; written from the briefs alone
@@ -932,7 +937,7 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
                 + "EVERY MODEL THE PAGES STATE — judge each one and put it in the Candidates "
                   "table (meets the hard requirements or fails exactly one) or the Ruled out "
                   "list; keep the six sections exactly as instructed:\n"
-                + _model_catalog(briefs) + "\n\n"
+                + catalog + "\n\n"
                 + "Per-source briefs:\n" + evidence + _lang_directive(out_lang))
             think = dep(ctx, "_think_call", _think_call)
             report = (think(ctx, SELECTION_REPORT_PROMPT + _lang_directive(out_lang), sel_user,
@@ -951,7 +956,9 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
                 prog.update("Building report", "checking every verdict against its source")
                 checked = (dep(ctx, "_think_call", _think_call)(
                     ctx, SELECTION_VERIFY_PROMPT + _lang_directive(out_lang),
-                    f"User request: {topic}\n\nDRAFT:\n{report}\n\nPer-source briefs:\n{evidence}",
+                    f"User request: {topic}\n\nDRAFT:\n{report}\n\nEVERY MODEL THE PAGES STATE:\n"
+                    f"{catalog}\n\nPer-source briefs:\n"
+                    f"{evidence[:max(2000, budget - len(catalog) - len(report) - 4000)]}",
                     sel_tokens, temperature=0.1, retries=1) or "").strip()
                 # A rewrite that lost sections or half the text is a failed check, not a fix.
                 if (len(selection_form_missing(checked)) <= len(selection_form_missing(report))
