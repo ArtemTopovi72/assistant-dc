@@ -1895,7 +1895,8 @@ def mark_inserts(ctx, parts: list) -> list:
 _JUDGE = ("You are a strict editor of a video script split into numbered parts; each part is "
           "rendered as its own clip by a video model that draws exactly what is written. A part "
           "is BAD when: (a) it holds more than one distinct visible action or more than one "
-          "camera move; (b) nobody does anything visible (only effects, light, mood, camera); "
+          "camera move (small motions of one body flowing into each other -- stretches and "
+          "yawns, turns and smiles -- are ONE action); (b) nobody does anything visible (only effects, light, mood, camera); "
           "(c) it repeats what an earlier part already showed; (d) it asks for something the "
           "model draws badly or impossibly: a held object flying or floating by itself, extra "
           "limbs, many small items at once, text on screen, a person in two places; (e) it "
@@ -1936,7 +1937,11 @@ def validate_script(ctx, parts: list, rounds: int = 2) -> list:
                     "the people in it, concrete and physical, in English. Fix the problem named. "
                     "Keep every quoted spoken line character for character, in its language. Add no "
                     "sparks, glow, mood words or camera work. The part before and after it are given "
-                    "only for continuity: do not repeat them. Reply with the rewritten part only.",
+                    "only for continuity: do not repeat them. Never swap the part's action for one "
+                    "it does not ask for: when it repeats the part before, keep only what is new in "
+                    "it (a cat that stirred before now stretches and yawns -- not licks its paw), and "
+                    "never drop an action the part asks for. "
+                    "Reply with the rewritten part only.",
                     f"PROBLEM: {why}\nBEFORE: {parts[n - 2] if n > 1 else '-'}\nPART: {before}\n"
                     f"AFTER: {parts[n] if n < len(parts) else '-'}",
                     temperature=0.3, max_tokens=250) or "").split())
