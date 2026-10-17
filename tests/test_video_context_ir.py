@@ -84,6 +84,19 @@ out = V.to_context_ir(NS(text_model=lambda *a, **k: hello), 'The hiker says "Н�
                       mode="t2va", seconds=5)
 check("Hello" not in out and "Наконе́ц-то я здесь" in out and "a wordless call" in out,
       "a spoken line the request never quoted is made wordless; the quoted one stays")
+# «говорит несколько раз «Куришь?»» came back as one <d> line of three and was cut as made up
+thrice = ("integrated_multimodal_description: [Shot 1] Live-action, a man says "
+          "<d>[Russian] Ку́ришь? Ку́ришь? Ку́ришь?</d>\noverall_soundscape: room.\nnon_diegetic_music: N/A")
+out = V.to_context_ir(NS(text_model=lambda *a, **k: thrice), 'He says several times: "Куришь?"',
+                      mode="t2va", seconds=5)
+check("Ку́ришь? Ку́ришь? Ку́ришь?" in out and "wordless" not in out, "the request's line said several times stays")
+# «кряхтит» written as <d>Хррр-ммм!</d> was cut and the clip came back silent
+grunt = ("integrated_multimodal_description: [Shot 1] Live-action, a man grunts "
+         "<d>[Russian] Хррр-ммм!</d>\noverall_soundscape: room.\nnon_diegetic_music: N/A")
+out = V.to_context_ir(NS(text_model=lambda *a, **k: grunt,
+                         yes_no=lambda q, text, **k: "wordless vocal sound" in q and "grunts" in text),
+                      "A man grunts heavily", mode="t2va", seconds=5)
+check("Хррр-ммм" in out, "a grunt the request asks for keeps its voice")
 check(V.to_context_ir(NS(vision_model=lambda *a, **k: good), "x", mode="ref2va", seconds=5, images=["p.png"]) == "x",
       "a base-mode answer is not accepted for Ref2VA")
 

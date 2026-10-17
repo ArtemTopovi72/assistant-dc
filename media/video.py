@@ -1105,9 +1105,11 @@ _SPOKEN = re.compile(r"<d>(?:\s*\[[^\]]*\])?\s*(.*?)</d>", re.S)
 
 def _made_up_lines(description: str, prompt: str) -> list:
     """`prompt`'s spoken <d> lines that the request never quoted."""
-    have = " ".join(_flat_line(x) for x in quoted_lines(description))
+    # by words, not as one string: «Куришь? Куришь? Куришь?» for «говорит несколько раз
+    # «Куришь?»» is the request's own line and was cut as made up (live 2026-10-17)
+    have = set(" ".join(_flat_line(x) for x in quoted_lines(description)).split())
     return [m.group(0) for m in _SPOKEN.finditer(prompt or "")
-            if _flat_line(m.group(1)) and _flat_line(m.group(1)) not in have]
+            if _flat_line(m.group(1)) and not set(_flat_line(m.group(1)).split()) <= have]
 
 
 def _flat_line(t: str) -> str:
@@ -1370,7 +1372,14 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
             out = out + "\n" + said
     # Told rule (6), a part with no words still came back with «A distant man's voice calls:
     # <d>[English] Hello!</d>» (live 2026-10-15): a line nobody wrote is a wordless call.
-    made_up = _made_up_lines(description, out)
+    # ...but a grunt or a laugh the request asks for is written the same way, and cutting
+    # it left the voice track empty: «кряхтит» came back silent (live 2026-10-17)
+    from seams import yes_no
+    made_up = [x for x in _made_up_lines(description, out)
+               if not yes_no(ctx)("A video request: {text}\n\nThe video prompt has a character voice "
+                                  "this: " + x + "\nIs that a wordless vocal sound the request asks for "
+                                  "(a grunt, a groan, a laugh, a moan, a sigh, a scream), not words "
+                                  "the request never gives?", description)]
     if made_up:
         logger.info("Context-IR rewrite made up %d spoken line(s); made wordless", len(made_up))
         for x in made_up:
