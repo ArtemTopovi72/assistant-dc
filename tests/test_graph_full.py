@@ -738,6 +738,14 @@ def test_render_asked_with_no_tool_called_gets_a_corrective_round():
     tools2 = Tools()
     out = _run(_ctx(), llm2, tools2, {"messages": [], "user_input": "сними видео"}, read=wants)
     check("render_question_left_alone", not tools2.calls and len(llm2.calls) == 1, (tools2.calls, len(llm2.calls)))
+    # «скажи голосом: привет, я кот-космонавт» read as a video beside the cat picture: the
+    # round forced generate_video, which refused it -- «не получилось сделать видео» (2026-10-17)
+    llm3 = LLM([_asst("Привет, я кот-космонавт, и я только что вернулся с луны!")])
+    tools3 = Tools()
+    _run(_ctx(), llm3, tools3, {"messages": [], "user_input": "скажи голосом: привет, я кот-космонавт"},
+         read=wants)
+    check("render_not_forced_when_the_words_ask_no_video", not tools3.calls and len(llm3.calls) == 1,
+          (tools3.calls, len(llm3.calls)))
 
 
 if __name__ == "__main__":

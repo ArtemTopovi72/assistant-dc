@@ -1433,6 +1433,13 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             # это видео: кот спрыгивает…» was answered «План анимации ниже.» -- the
             # previous turn's line, imitated -- and nothing came below (2026-10-17).
             _render = [t for t in _own_read["wants"] if t in _RENDER_TOOLS]
+            if _render and _render[0] == "generate_video":
+                # «скажи голосом: привет, я кот-космонавт» with the cat picture in chat read
+                # as a video; the round forced generate_video, which refused it as no video
+                # request, and the reply became «не получилось сделать видео» (2026-10-17).
+                import tool_image_handlers as _tih
+                if not dep(ctx, "asks_for_video", _tih.asks_for_video)(ctx, state):
+                    _render = []
             if (corrective_count < _MAX_CORRECTIVE and not tools_ran_now and draft
                     and _render and _own_read.get("ok") and "?" not in draft):
                 corrective_count += 1
