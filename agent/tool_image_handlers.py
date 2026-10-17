@@ -1681,7 +1681,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 parts = video_mod.split_script(raw)
     if len(parts) > 1:
         parts = video_mod.dedupe_quotes(video_mod.strip_translations(
-            video_mod.validate_script(ctx, video_mod.mark_inserts(ctx, parts))))
+            video_mod.validate_script(ctx, video_mod.mark_inserts(ctx, parts),
+                                      max_parts=math.ceil(want / 5.2) if want else video_mod.AUTO_MAX_PARTS)))
     if len(parts) > 1 and raw in description:
         description = description.replace(raw, parts[0], 1)
         logger.info("generate_video: the script needs %d parts: %s", len(parts),

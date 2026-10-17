@@ -1910,12 +1910,13 @@ _JUDGE = ("You are a strict editor of a video script split into numbered parts; 
           "place, another outfit, an object that was put away and is in hand again). Spoken "
           "lines in quotes are fine and never a reason. \"drop\": true ONLY when the part has "
           "no visible action at all, or EVERY action in it is already shown by an earlier part "
-          "-- one new action (a yawn after the stretch) means false. "
-          'Reply as JSON only: {"bad": [{"part": 2, "why": "short reason", "drop": false}]} '
+          "-- one new action (a yawn after the stretch) means false. \"split\": true when the "
+          "part's only problem is (a) and each of its actions is a step of the story, not filler. "
+          'Reply as JSON only: {"bad": [{"part": 2, "why": "short reason", "drop": false, "split": false}]} '
           "-- an empty list when all are fine.")
 
 
-def validate_script(ctx, parts: list, rounds: int = 2) -> list:
+def validate_script(ctx, parts: list, rounds: int = 2, max_parts: int = 0) -> list:
     """`parts` judged by the model and the bad ones rewritten, up to `rounds` times. A
     script from the agent arrived with a part of pure sparks, a held rifle flying and two
     parts saying the same line (live 2026-10-15). Quoted lines are never touched: a rewrite
@@ -1944,6 +1945,31 @@ def validate_script(ctx, parts: list, rounds: int = 2) -> list:
             logger.info("validate_script: parts %s dropped (%s)", sorted(drop),
                         "; ".join(bad[n] for n in sorted(drop))[:200])
             parts = [p for i, p in enumerate(parts, 1) if i not in drop]
+            continue
+        # Two story steps in one part were rewritten down to one: «runs, launching the kite;
+        # the kite soars high» lost the soaring, the step the user asked for (2026-10-17).
+        # Room permitting, each step becomes a part of its own.
+        split = sorted((int(b["part"]) for b in got if b.get("split") is True
+                        and not parts[int(b["part"]) - 1].startswith((INSERT_HEAD, INSERT_BACK))), reverse=True)
+        grown = False
+        for n in split:
+            if max_parts and len(parts) >= max_parts:
+                break
+            try:
+                lines = [" ".join(x.split()) for x in (text_model(ctx)(
+                    ctx, "Rewrite this part of a video script as separate sentences, one visible "
+                    "action each, in the order they happen, one sentence per line. Keep every action "
+                    "and every quoted spoken line word for word; add nothing, no camera words. "
+                    "English.", parts[n - 1], temperature=0.2, max_tokens=250) or "").splitlines()]
+            except Exception as exc:
+                logger.warning("validate_script: splitting part %d failed: %s", n, exc)
+                continue
+            lines = [x for x in lines if len(x) >= 10][:max(2, (max_parts or 99) - len(parts) + 1)]
+            if len(lines) >= 2 and not _lost_lines(parts[n - 1], " ".join(lines)):
+                logger.info("validate_script: part %d split into %d", n, len(lines))
+                parts[n - 1:n] = lines
+                grown = True
+        if grown:
             continue
         for n, why in sorted(bad.items()):
             before = parts[n - 1]

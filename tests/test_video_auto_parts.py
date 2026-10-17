@@ -42,9 +42,9 @@ def _run(tmp_path, args, condensed=""):
         return {"path": str(out), "status": "success", "seconds": 5.2, "width": 768, "height": 1344}
 
     ctx = _Ctx(
-        video_engine=Over(V, generate_video=fake_gen, engine_available=lambda ctx: (True, ""),
+        video_engine=Over(V, AUTO_MAX_PARTS=2, generate_video=fake_gen, engine_available=lambda ctx: (True, ""),
                           herrgott_on=lambda: False, motion_context_on=lambda: False,
-                          mark_inserts=lambda ctx, ps: ps, validate_script=lambda ctx, ps: ps,
+                          mark_inserts=lambda ctx, ps: ps, validate_script=lambda ctx, ps, **k: ps,
                           condense_script=lambda *a, **k: condensed,
                           join_continuation=lambda a, b: str(tmp_path / "joined.mp4"),
                           _adopt_output=lambda p, *a: p, probe=lambda p: {"seconds": 10.4}),
@@ -57,7 +57,7 @@ def _run(tmp_path, args, condensed=""):
 
 def test_a_long_script_of_its_own_is_at_most_two_parts(tmp_path):
     assert len(V.split_script(LONG)) > 2
-    assert len(_run(tmp_path, {"description": LONG})) == V.AUTO_MAX_PARTS == 2
+    assert len(_run(tmp_path, {"description": LONG})) == 2
 
 
 def test_a_simple_action_is_one_part(tmp_path):

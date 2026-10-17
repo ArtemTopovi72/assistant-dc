@@ -289,6 +289,30 @@ def test_the_judge_rewrites_bad_parts_and_never_a_quoted_line():
     assert V.validate_script(ctx2, quoted) == quoted
 
 
+def test_two_story_steps_in_one_part_are_split_not_cut_to_one():
+    """«He runs, launching the kite; the kite soars high» was rewritten to the run alone,
+    and the soaring the user asked for was gone (2026-10-17)."""
+    parts = ["A boy stands in a field.", "He runs and launches the kite; the kite soars high.",
+             "The kite falls into the grass."]
+    rounds = []
+
+    def model(ctx, system, user, **k):
+        if system.startswith("You are a strict"):
+            rounds.append(1)
+            return ('{"bad": [{"part": 2, "why": "two actions", "split": true}]}' if len(rounds) == 1
+                    else '{"bad": []}')
+        if system.startswith("Rewrite this part"):
+            return "He runs and launches the kite.\nThe kite soars high into the sky."
+        return "He runs across the field."
+    out = V.validate_script(types.SimpleNamespace(text_model=model), parts, max_parts=5)
+    assert out == [parts[0], "He runs and launches the kite.", "The kite soars high into the sky.",
+                   parts[2]], out
+    # no room for another part: the old rewrite stands
+    rounds.clear()
+    out = V.validate_script(types.SimpleNamespace(text_model=model), parts, max_parts=3)
+    assert len(out) == 3 and out[1] == "He runs across the field.", out
+
+
 def test_a_chain_part_runs_taomates_frame_adapter_at_its_three_steps():
     """FL2V Turbo at 6 steps came back soapy, so the chain took TaoMate's 3 steps -- but its
     text-to-video adapter, fed frames, drew flowers, anime faces and captions over them
