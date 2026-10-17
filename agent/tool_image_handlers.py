@@ -562,6 +562,12 @@ def _handle_transfer_image(ctx, state, args: dict) -> str:
         return ("[TOOL ERROR] transfer_image needs 'instructions' describing what to "
                 "transfer, e.g. 'put the hat from the reference onto the person'.")
 
+    shown = list(dict.fromkeys(_key(p) for p in imgs))
+    if len(roles) == len(shown) == len(references) + 1 and _key(target) in shown:
+        # roles counted every photo of the album, the target too: «the man from the
+        # first photo» became identity_reference, and the armour photo's clothing_source
+        # role fell off the end -- the man's face was pasted instead of the armour.
+        roles = [r for i, r in enumerate(roles) if i != shown.index(_key(target))]
     refs = []
     for i, p in enumerate(references):
         role = None
