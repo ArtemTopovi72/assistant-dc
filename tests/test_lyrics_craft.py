@@ -127,6 +127,22 @@ def test_the_singer_gender_reaches_the_lyric_prompts(monkeypatch):
     assert any("The singer is a MAN" in s for s in seen)
 
 
+def test_the_theme_reaches_the_critic_and_the_rewrite(monkeypatch):
+    # a comic «два еврея и монета» came back a lament: the critic never saw what was asked
+    seen = {}
+
+    def llm(role, system, user):
+        seen.setdefault(role, []).append(system)
+        if role == "critic":
+            return '{"score": 4, "problems": ["line 2 is off the theme"]}'
+        return "" if role == "revise" else GOOD
+    _F["lyrics_llm"] = llm
+    _F["DRAFTS"] = 1
+    L.write(_C(), "два еврея и монета", "Russian")
+    assert all("два еврея и монета" in s for s in seen["critic"] + seen["revise"])
+    assert "TONE" in seen["plan"][0]
+
+
 # ── the bot ──────────────────────────────────────────────────────────────────
 def _bot():
     import tg_bot
@@ -191,6 +207,13 @@ def test_write_takes_a_theme(monkeypatch):
     bot._start_lyrics_flow(6, bot._get_session(6), "ru", "write")
     assert bot._lyrics_take_text(6, bot._get_session(6), "ru", "город ночью")
     assert bot.sent[-2][0].startswith("✍️ <b>Текст готов</b>") and bot.sent[-1][0] == GOOD.strip()
+    # «✨ Ещё улучшить» keeps the theme; a pass that changes nothing is not «улучшенный»
+    critic_seen = []
+    _F["lyrics_llm"] = lambda role, system, user: (
+        critic_seen.append(system) or '{"score": 9, "problems": []}') if role == "critic" else ""
+    bot._cb_lyrics(6, "lyr:again")
+    assert critic_seen and all("город ночью" in s for s in critic_seen)
+    assert bot.sent[-2][0].startswith("✨ <b>Текст</b>"), bot.sent[-2][0]
 
 
 def test_text_goes_to_the_lyrics_flow_through_the_resolver(monkeypatch):

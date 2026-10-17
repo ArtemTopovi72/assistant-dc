@@ -532,12 +532,22 @@ def _numbered(text: str) -> str:
     return "\n".join(f"{n}: {l}" for n, l in enumerate(text.splitlines(), 1))
 
 
-def critique(ctx, text: str) -> tuple:
+def _theme_rule(topic: str) -> str:
+    # «песня про двух евреев и монету» under klezmer came back a lament of dust and
+    # oblivion: neither the critic nor the rewrite ever saw what was asked for
+    return (" The lyric was asked for this theme: «" + topic.strip()[:600] + "». The worst "
+            "problem is drifting from it: other people, things or events than the theme "
+            "names, or the wrong tone (a joke or a comic story turned into a solemn lament). "
+            "Notes in the theme about the music or the arrangement are not lyric content."
+            ) if (topic or "").strip() else ""
+
+
+def critique(ctx, text: str, topic: str = "") -> tuple:
     """(score 0..10, [problems]) from the model, written in the lyric's own
     language (they are shown to the user); (7, []) when it cannot say."""
     from utils import safe_json_from_llm
     try:
-        system = _CRITIC + f" Write the problems in {_lang_name(text)}."
+        system = _CRITIC + _theme_rule(topic) + f" Write the problems in {_lang_name(text)}."
         raw = _call(ctx, "critic", system, _numbered(text), temperature=0.0, max_tokens=600,
                     schema=_CRITIC_SCHEMA)
         data = safe_json_from_llm(raw, ["score", "problems"]) or {}
@@ -574,13 +584,13 @@ def singer_rule(vocal: str) -> str:
     return ""
 
 
-def revise(ctx, text: str, problems: list, lang: str, singer: str = "") -> str:
+def revise(ctx, text: str, problems: list, lang: str, singer: str = "", topic: str = "") -> str:
     system = (
         f"You are a skilled {lang} lyricist and editor. Rewrite the song lyric to fix "
         "EVERY listed problem. Keep its theme, story, language and section tags ([verse], "
         "[chorus]...); a line no problem names stays word for word. When a rhyme pair "
         "is wrong, rewrite the weaker line of the pair, not both. Keep every repeated "
-        "chorus identical. " + _RULES + " " + singer_rule(singer) + " Output only the full lyric, "
+        "chorus identical. " + _RULES + " " + singer_rule(singer) + _theme_rule(topic) + " Output only the full lyric, "
         "no comments, no line numbers.")
     user = ("Lyric (lines numbered as the problems name them):\n" + _numbered(text)
             + "\n\nProblems to fix:\n" + "\n".join(f"- {p}" for p in problems))
@@ -592,7 +602,11 @@ DRAFTS = max(1, int(os.getenv("LYRICS_DRAFTS", "3") or 3))
 
 _PLAN = (
     "You plan a song before it is written (decompose first, then write). For the "
-    "theme below, in {lang}, give: the HOOK -- the title line, under 10 words, that "
+    "theme below, in {lang}, give first the TONE the theme asks for: a comic or everyday "
+    "theme (a joke, a funny pair of characters, a quarrel over money) is a light, "
+    "plain-spoken story song with wordplay and a punchline, never a solemn poem; a sad "
+    "theme is sad. The people, things and events are the ones the theme names; notes "
+    "about the music or the arrangement are not lyric content. Then give: the HOOK -- the title line, under 10 words, that "
     "sums up the song's feeling; the story: what verse 1 shows, what verse 2 adds "
     "(new detail, time moves on), what the bridge turns to (a new angle); 6-10 "
     "concrete sensory images (things one can see, hear, touch -- object writing) to "
@@ -617,6 +631,8 @@ def draft(ctx, topic: str, lang: str, the_plan: str = "", singer: str = "") -> s
         "same melody). Verses SHOW through concrete detail, the chorus states the feeling "
         "and holds the hook in its first or last line, every chorus is identical; a hook may "
         "come back with a small variation (repetition with variation makes it stick). "
+        "Keep the plan's TONE: a light theme is told in plain, lively words, funny, with a "
+        "punchline, not in lofty poetic images. "
         + _RULES + " " + singer_rule(singer) + " Output only the lyric with its section tags.")
     user = "Theme: " + topic + (("\n\nPlan:\n" + the_plan) if the_plan else "")
     return _clean(_call(ctx, "draft", system, user, temperature=0.9, max_tokens=1200))
@@ -634,7 +650,7 @@ def write(ctx, topic: str, lang: str, on_round=None, singer: str = "") -> dict:
         d = draft(ctx, topic, lang, the_plan, singer)
         if not d:
             continue
-        score = _total(analyse(d, ctx), critique(ctx, d)[0])
+        score = _total(analyse(d, ctx), critique(ctx, d, topic)[0])
         logger.info("lyrics draft scored %.2f", score)
         scored.append((score, d))
     if not scored:
@@ -643,7 +659,7 @@ def write(ctx, topic: str, lang: str, on_round=None, singer: str = "") -> dict:
     best = scored[0][1]
     if len(scored) > 1 and scored[0][0] - scored[1][0] < 1.5:
         best = compare(ctx, topic, scored[0][1], scored[1][1])
-    return polish(ctx, best, on_round=on_round, singer=singer)
+    return polish(ctx, best, on_round=on_round, singer=singer, topic=topic)
 
 
 _JUDGE = (
@@ -723,7 +739,8 @@ def _total(rule: dict, sense: int) -> float:
     return round(0.6 * rule["score"] + 0.4 * sense, 2)
 
 
-def polish(ctx, text: str, rounds: int = ROUNDS, on_round=None, singer: str = "") -> dict:
+def polish(ctx, text: str, rounds: int = ROUNDS, on_round=None, singer: str = "",
+           topic: str = "") -> dict:
     """The check -> revise loop. {"text", "score", "rounds", "left": [problems],
     "original"}; the best scoring version is kept, never a worse rewrite."""
     lang = _lang_name(text)
@@ -733,7 +750,7 @@ def polish(ctx, text: str, rounds: int = ROUNDS, on_round=None, singer: str = ""
         if ctx is not None and getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
             break
         rule = analyse(cur, ctx)
-        sense, probs = critique(ctx, cur)
+        sense, probs = critique(ctx, cur, topic)
         problems = [describe(i) for i in rule["issues"]] + probs
         total = _total(rule, sense)
         logger.info("lyrics round %d: rules %.1f sense %d -> %.2f, %d problems",
@@ -755,7 +772,7 @@ def polish(ctx, text: str, rounds: int = ROUNDS, on_round=None, singer: str = ""
             done += 1
             if not problems:
                 continue                            # scored on the next round
-        new = revise(ctx, cur, problems, lang, singer)
+        new = revise(ctx, cur, problems, lang, singer, topic)
         done += 1
         if not new or len(new) < len(cur) * 0.4:
             if mended:
