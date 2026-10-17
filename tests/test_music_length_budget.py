@@ -135,6 +135,9 @@ check("the prompt names the line count", str(t180) in seen.get("sys", ""),
       seen.get("sys", "")[-300:])
 check("the prompt no longer asks for 'roughly N seconds'",
       "roughly 180 seconds" not in seen.get("sys", ""))
+# «смех и радость в каждом колокольце»: the songwriter had the form rules only
+check("the songwriter is told the topic's tone and the craft rules",
+      "punchline" in seen.get("sys", "") and "real sound rhyme" in seen.get("sys", ""))
 check("a long enough lyric is accepted on the first attempt",
       seen.get("calls") == 1, seen.get("calls"))
 check("and it comes back whole", M.count_sung_lines(got["lyrics"]) >= lo180,

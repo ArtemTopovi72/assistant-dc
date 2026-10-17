@@ -1056,6 +1056,13 @@ def _own_form(topic: str, ctx=None) -> bool:
                           "song's exact structure -- how many verses or lines, or no chorus?", topic)
 
 
+def _lyric_rules() -> str:
+    # «смех и радость в каждом колокольце»: the songwriter had the form rules and
+    # none of the craft the ✍️ writer works by
+    import lyrics_craft
+    return lyrics_craft._RULES
+
+
 def build_structured_caption(ctx, topic: str, lang: str, *,
                              duration_s: Optional[int] = None,
                              prefs: Optional[dict] = None) -> dict:
@@ -1124,6 +1131,13 @@ def build_structured_caption(ctx, topic: str, lang: str, *,
         "  * ALWAYS finish with an [outro] section that resolves the song — a "
         "short closing line or a repeat of the hook that lands as an ending, "
         "not a fresh idea. Without one the music simply stops mid-phrase.\n"
+        "  * The words tell THIS topic: its people, things and events, in the "
+        "tone it asks for -- a comic or everyday topic is a light, plain-spoken "
+        "story with wordplay and a punchline, a sad one is sad. Verses move the "
+        "story on with concrete detail; the chorus holds a hook line that sticks. "
+        "Notes in the topic about the music or the arrangement go into `style`, "
+        "not into the words.\n"
+        "  * " + _lyric_rules() + "\n"
         f"  * Use at least two verses and a repeated chorus.{length_hint}\n\n"
         "`style` — the MUSIC description, never the words. Write it under "
         "exactly these three headings, in this order, 250-450 words total:\n\n"
