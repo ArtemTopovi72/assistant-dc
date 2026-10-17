@@ -58,7 +58,7 @@ from config import (
     VIDEO_JOB_TIMEOUT, OUTPUT_DIR_COMFY,
 )
 
-from seams import dep, text_model, vision_model
+from seams import dep, text_model, vision_model, yes_no
 
 logger = logging.getLogger("assistant.video")
 
@@ -1251,6 +1251,18 @@ def quoted_lines(text: str) -> list:
             if _flat_line(x) and not x.startswith("The camera cuts")]  # the chain prefix quotes its own cut cues
 
 
+def _shown_before(description: str) -> str:
+    """The scene-so-far note of a chain part as its own field after the request: inside
+    the request the writer took it for content, and every part of a 25 s clip replayed
+    the whole story -- sit, think, stand, walk -- before its own action."""
+    m = _SCENE_NOTE_RE.search(description or "")
+    if not m:
+        return ""
+    shown = m.group(0).strip()[len("(The scene so far, for reference only -- do not replay it: "):-1]
+    return ("\n\nALREADY SHOWN in the parts before this one -- only who and where they are; "
+            "none of these actions happens again, this shot is ONLY the request above: " + shown)
+
+
 def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
                   images: Sequence[str] = (), n_videos: int = 0, n_audios: int = 0) -> str:
     """Rewrite a free-text request into H3's own prompt structure.
@@ -1356,7 +1368,7 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
                "guess from the picture. The shot keeps <Picture 1>'s framing from start to "
                "end: no cut, no jump to a close-up.\n"
                if images else "") +
-            "\nRequest:\n" + description)
+            "\nRequest:\n" + _SCENE_NOTE_RE.sub("", description) + _shown_before(description))
     def ask(user):
         if images:
             # Every picture, in order: shown only <Picture 1>, the writer guessed the
@@ -1403,9 +1415,10 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
     from seams import yes_no
     made_up = [x for x in _made_up_lines(description, out)
                if not yes_no(ctx)("A video request: {text}\n\nThe video prompt has a character voice "
-                                  "this: " + x + "\nIs that a wordless vocal sound the request asks for "
-                                  "(a grunt, a groan, a laugh, a moan, a sigh, a scream), not words "
-                                  "the request never gives?", description)]
+                                  "this: " + x + "\nDoes the request ITSELF name this kind of sound "
+                                  "(it says someone grunts, groans, laughs, moans, sighs or screams)? "
+                                  "A call, a word or an exclamation the request does not name is no.",
+                                  _SCENE_NOTE_RE.sub("", description))]
     if made_up:
         logger.info("Context-IR rewrite made up %d spoken line(s); made wordless", len(made_up))
         for x in made_up:
@@ -1838,6 +1851,12 @@ def bridge_script(ctx, parts: list) -> list:
     out = [parts[0]]
     for part, b in zip(parts[1:], got + [""] * len(parts)):
         b = str(b or "").strip()
+        # «He pushes himself up and stands. Then he stands up from his seat»: told «never the
+        # action itself», the bridge still was the part's own first action (live 2026-10-17)
+        if b and yes_no(ctx)("A video script part: {text}\n\nIs this sentence the same movement as "
+                             "the part's own first action, not a different move before it? "
+                             "Sentence: " + b, part):
+            b = ""
         if b and len(b) <= 300 and not part.startswith((INSERT_HEAD, INSERT_BACK)):
             logger.info("bridge_script: %s", b)
             part = b[:1].upper() + b[1:].rstrip(".") + ". Then " + part[:1].lower() + part[1:]
@@ -2005,8 +2024,10 @@ def validate_script(ctx, parts: list, rounds: int = 2, max_parts: int = 0) -> li
                 lines = [" ".join(x.split()) for x in (text_model(ctx)(
                     ctx, "Rewrite this part of a video script as separate sentences, one visible "
                     "action each, in the order they happen, one sentence per line. Keep every action "
-                    "and every quoted spoken line word for word; add nothing, no camera words. "
-                    "English.", parts[n - 1], temperature=0.2, max_tokens=250) or "").splitlines()]
+                    "and every quoted spoken line word for word; add nothing, no camera words. A "
+                    "spoken line stays in the sentence of whoever says it (He turns and says «...»), "
+                    "never a line of its own; a note about sound or silence is not an action and is "
+                    "left out. English.", parts[n - 1], temperature=0.2, max_tokens=250) or "").splitlines()]
             except Exception as exc:
                 logger.warning("validate_script: splitting part %d failed: %s", n, exc)
                 continue

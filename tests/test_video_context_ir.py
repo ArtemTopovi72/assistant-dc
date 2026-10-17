@@ -94,7 +94,7 @@ check("Ку́ришь? Ку́ришь? Ку́ришь?" in out and "wordless" no
 grunt = ("integrated_multimodal_description: [Shot 1] Live-action, a man grunts "
          "<d>[Russian] Хррр-ммм!</d>\noverall_soundscape: room.\nnon_diegetic_music: N/A")
 out = V.to_context_ir(NS(text_model=lambda *a, **k: grunt,
-                         yes_no=lambda q, text, **k: "wordless vocal sound" in q and "grunts" in text),
+                         yes_no=lambda q, text, **k: "name this kind of sound" in q and "grunts" in text),
                       "A man grunts heavily", mode="t2va", seconds=5)
 check("Хррр-ммм" in out, "a grunt the request asks for keeps its voice")
 yawn = ("integrated_multimodal_description: [Shot 1] Live-action, he yawns <d>[English] ...</d> and stops."

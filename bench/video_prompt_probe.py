@@ -25,6 +25,7 @@ except Exception:
 
 import logging
 logging.basicConfig(level=logging.WARNING, format="%(message)s")
+logging.getLogger("assistant.video").setLevel(logging.INFO)   # «H3 ref2va: WxH, N frames», the plan, the checks
 
 import video as V
 import graph
@@ -51,7 +52,10 @@ def _record(ctx, wf, **kw):
     texts = [n["inputs"][k] for n in wf.values() for k in ("text", "prompt", "description")
              if isinstance(n, dict) and isinstance(n.get("inputs", {}).get(k), str)
              and len(n["inputs"][k]) > 80]
-    SENT.append({"label": kw.get("label", ""), "prompt": max(texts, key=len) if texts else ""})
+    frames = [n["inputs"][k] for n in wf.values() if isinstance(n, dict)
+              for k in ("length", "frames", "num_frames") if isinstance(n.get("inputs", {}).get(k), int)]
+    SENT.append({"label": f'{kw.get("label", "")}, {max(frames) if frames else "?"} frames',
+                 "prompt": max(texts, key=len) if texts else ""})
     return _stub_clip()
 
 
@@ -68,6 +72,11 @@ def _engine():
         **{k: getattr(V.comfy_client, k) for k in dir(V.comfy_client)
            if not k.startswith("__") and k not in ("_submit_and_poll", "last_failure")})
     eng.engine_available = lambda ctx, *a, **k: (True, "")
+
+    def prepare(ctx, description, **kw):
+        print(f"--- part handed to prepare_prompt ({kw.get('seconds', 0):.1f}s): {description}")
+        return V.prepare_prompt(ctx, description, **kw)
+    eng.prepare_prompt = prepare
     return eng
 
 
