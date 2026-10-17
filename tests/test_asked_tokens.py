@@ -32,3 +32,11 @@ assert F._followup_of_tool_turn({"messages": _h}, "а в Нью-Йорке?", _R
 assert not F._followup_of_tool_turn({"messages": _h}, "спасибо", _R)
 assert not F._followup_of_tool_turn({"messages": [_h[0], _h[3]]}, "а в Нью-Йорке?", _R)
 print("ok3")
+assert "asked and answered earlier" not in eff, eff
+
+# The same recap question again after more turns: the model repeated its first
+# answer verbatim, missing everything done in between.
+st["messages"][1:1] = [{"role": "user", "content": "what did i ask three messages ago?"},
+                       {"role": "assistant", "content": "capital of France"}]
+_, eff, _ = g._compose_user_message(ctx, st)
+assert "asked and answered earlier" in eff, eff

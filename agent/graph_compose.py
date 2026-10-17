@@ -428,6 +428,12 @@ def _compose_user_message(ctx: Context, state: AgentState) -> tuple:
                 + "\n".join(f"{i}. ({len(_asked) - i + 1} ago) {a}"
                             for i, a in enumerate(_asked, 1)) + "]\n\n"
                 + effective_input)
+            # «что мы сегодня делали?» asked again 8 turns later came back as the
+            # first answer verbatim, missing everything done in between.
+            if user_input.strip()[:200] in _asked:
+                effective_input += ("\n\n[This same question was asked and answered earlier; "
+                                    "the chat has moved on since. Answer from the whole chat "
+                                    "as it is now, not by repeating that earlier answer.]")
     parts.append(effective_input)
     if _cnt:
         parts.append(_cnt)
