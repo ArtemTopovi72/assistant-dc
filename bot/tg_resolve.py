@@ -81,12 +81,13 @@ class ResolveMixin:
         except Exception:
             return ""
 
-    def _read_links(self, ctx, sess, chat_id, user, text: str, scaffold: list) -> bool:
+    def _read_links(self, ctx, sess, chat_id, user, text: str, scaffold: list,
+                    announce: bool = True) -> bool:
         """Attach what a link in `text` holds: a video is downloaded and watched
         (ears + eyes), any other page is read (tg_links). True: a long video was
         offered as the portioned job, which answers the message."""
         _vu = _tg_links.video_url(text)
-        if _vu and ctx is not None and _vu not in _tg_links.WATCHED:
+        if announce and _vu and ctx is not None and _vu not in _tg_links.WATCHED:
             # download + ears + eyes run before the task and its status line: a forwarded
             # link sat 49 s with no word (live 2026-10-17)
             self._send_text(chat_id, tg_bot._t("fwd_video_work", self._lang(sess)))
@@ -344,6 +345,21 @@ class ResolveMixin:
                 _notes[0]["companion"] = " ".join(_words)
                 batch = _notes
         _has_fwd_voice = any(it.get("type") == "fwd_voice" for it in batch)
+        # Several forwarded TEXTS with none of the user's own words are someone else's
+        # conversation too: the same «what do I do with it?» (retell, ask...), not a comment
+        # as if the user had said it (a forwarded dialogue, live 2026-10-17). One forwarded
+        # text stays the quoted material of a turn (forwarded lyrics, a post for a waiting task).
+        _fwd_texts = [it for it in batch if it.get("type") == "text" and it.get("forwarded")]
+        _own_words = [it for it in batch if it.get("type") == "text" and not it.get("forwarded")
+                      and (it.get("text") or "").strip()]
+        if len(_fwd_texts) > 1 and not _has_fwd_voice and not _own_words:
+            _fwd_items = [it for it in batch if it.get("forwarded")
+                          and it.get("type") in ("text", "photo", "album")]
+            for _item in batch:
+                if _item not in _fwd_items:
+                    self._resolve_and_push(chat_id, [_item])
+            self._fwd_batch(chat_id, _fwd_items, ask=True)
+            return
         if len(_distinct_targets) > 1 or _image_bearing > 1 \
                 or (_has_fwd_voice and len(batch) > 1):
             for _item in batch:
@@ -1493,7 +1509,8 @@ class ResolveMixin:
             # (else «Речь про китайцев?» after forwards gets «Какую картинку? В этом чате их 12»).
             _fwd = getattr(sess, "fwd_text_ts", 0) or 0
             if (_fwd and time.time() - _fwd < 900
-                    and _fwd > max([e.get("ts") or 0 for e in live] or [0])):
+                    # the forward's own storyboard sheet is registered just after it
+                    and _fwd + 60 > max([e.get("ts") or 0 for e in live] or [0])):
                 live = []
             if len(live) > 1 and _in_play and live[-1].get("id") == _in_play:
                 # The newest picture is the one the previous turn was about

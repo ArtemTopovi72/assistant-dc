@@ -340,7 +340,9 @@ class TaskRunnerMixin:
             self._send_text(chat_id, tg_bot._t("not_ready", lang),
                             keyboard=self._main_menu_kb(sess, lang))
             return ""
-        _video = any(it.get("media") == "video" for it in items)
+        import tg_links as _tg_links
+        _video = any(it.get("media") == "video" or (it.get("type") == "text"
+                     and _tg_links.video_url(it.get("text") or "")) for it in items)
         self._send_text(chat_id, tg_bot._t("fwd_video_work" if _video else "fwd_voice_work", lang))
         self._api_post("sendChatAction", {"chat_id": chat_id, "action": "typing"})
         lines, boards, names, sheets = [], [], [], []
@@ -361,6 +363,11 @@ class TaskRunnerMixin:
                     body = tg_bot._unclaim(body)
                 if body:
                     lines.append(f"{who}: {body}" if who else body)
+                    # a forwarded link to a video is watched like a forwarded video
+                    if _tg_links.video_url(body):
+                        _watched: list = []
+                        if not self._read_links(ctx, sess, chat_id, None, body, _watched, announce=False):
+                            lines += _watched
                 continue
             if it.get("type") in ("photo", "album"):
                 import llm as _llm
@@ -420,6 +427,9 @@ class TaskRunnerMixin:
                 tg_bot.logger.exception("combining the batch's video sheets failed")
                 sheet = sheets[-1][1]
         sess.fwd_transcript = said
+        # a question right after it is about this conversation: «А её могут посадить за
+        # такое?» got «Какую картинку? их 12» (live 2026-10-17)
+        sess.fwd_text_ts = time.time()
         sess.fwd_transcript_id = uuid.uuid4().hex[:8]
         sess.remember_fwd(sess.fwd_transcript_id, said)
         sess.fwd_transcript_done = False

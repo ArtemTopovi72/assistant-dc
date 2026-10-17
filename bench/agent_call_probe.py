@@ -33,6 +33,10 @@ def run(request: str, picture: str = "") -> None:
 
     def record(ctx, state, name, args):
         calls.append((name, args))
+        if picture and name in ("inpaint_image", "redraw_image", "generate_image", "transfer_image",
+                                "fix_hands", "fix_artifact", "swap_person"):
+            state["image_path"], state["image_status"] = picture, "success"
+            return f"Image edited and saved: {picture}"   # the real handlers' success shape
         return f"[{name} done]"
 
     ctx = Context(models=None, transcription_cache={}, cache_file=None,

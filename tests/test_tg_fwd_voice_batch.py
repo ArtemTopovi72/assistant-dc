@@ -314,6 +314,8 @@ ok = settle(lambda: any("Forwarded conversation" in t for _, t in bot.sent))
 asks = [t for _, t in bot.sent if "Forwarded conversation" in t or "Forwarded voice" in t]
 check("a forwarded batch gets ONE ask", ok and len(asks) == 1, bot.sent)
 check("...naming both senders", ok and "Anna" in asks[0] and "Boris" in asks[0], asks)
+check("...and a question right after it is about the conversation, not «which picture?»",
+      getattr(bot._get_session(CID_FF), "fwd_text_ts", 0) > 0)
 held = bot._get_session(CID_FF).fwd_transcript
 _order = [held.find(x) for x in ("Anna [🎤 voice 1]: can you pick me up",
                                  "Boris [🎤 voice 2]: sure",
@@ -371,6 +373,22 @@ ok = settle(lambda: any("<b>Video</b>" in t for _, t in bot.sent))
 _ask = next((t for _, t in bot.sent if "<b>Video</b>" in t), "")
 check("the video ask does not dump the storyboard", ok and "cat on a sofa" not in _ask, _ask)
 stop_bot(bot)
+
+# ══════════════════════════════════════════════════════════════════════════
+section("forwarded TEXTS alone get the same ask, not a comment as if the user said them")
+# ══════════════════════════════════════════════════════════════════════════
+CID_T = 900306
+tbot = make_bot()
+approve(tbot, CID_T)
+tbot.sent.clear(); INVOKES.clear()
+tbot._dispatch(fwd_from(CID_T, "Vlad", text="смотри что нашёл"))
+tbot._dispatch(fwd_from(CID_T, "Vlad", text="это вообще законно?"))
+ok = settle(lambda: any("Forwarded conversation" in t for _, t in tbot.sent), timeout=25)   # a bare text forward waits _DEBOUNCE_FWD_S for the instruction
+check("forwarded texts get ONE «what do I do with it?»", ok and not INVOKES, (tbot.sent, INVOKES))
+check("...holding both lines under their author",
+      "Vlad: смотри что нашёл" in tbot._get_session(CID_T).fwd_transcript
+      and "Vlad: это вообще законно?" in tbot._get_session(CID_T).fwd_transcript)
+stop_bot(tbot)
 
 section("a forwarded POST (videos + pictures + its words) is ONE conversation and ONE ask")
 # 8 videos and 2 pictures of one post: the pictures must not be answered on

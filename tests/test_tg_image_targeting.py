@@ -587,6 +587,21 @@ check("a Create-picture description is not asked «which picture?»",
 check("...and goes on as a drawing request", len(bot.pushed) == 1
       and "generate an image of" in str(getattr(bot.pushed[0], "user_text", bot.pushed[0])), bot.pushed[:1])
 
+# A question right after a forwarded conversation (held by _fwd_batch) is about it:
+# «А её могут посадить за такое?» got «Какую картинку? их 12» (2026-10-17).
+_q = "can she go to jail for this?"
+bot.reads = types.SimpleNamespace(**reads(read=lambda t: {"about_picture": True, "is_question": True}
+                                             if t == _q else _READ(t)))
+seed_two_images(bot)
+bot.pushed.clear(); bot.sent.clear()
+s = bot._get_session(CID)
+s.fwd_text_ts = __import__("time").time() + 1          # _fwd_batch has just held a forward
+bot._store.put(s)
+bot._dispatch(msg(_q)); settle(bot)
+check("a question after a forwarded conversation is not asked «which picture?»",
+      "Which picture" not in " ".join(t for t, _ in bot.sent), bot.sent)
+s = bot._get_session(CID); s.fwd_text_ts = 0; bot._store.put(s)
+
 # The target is a gesture about ONE message, never a sticky mode.
 s = bot._get_session(CID)
 check("the target is stored per turn and persisted",
