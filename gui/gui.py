@@ -880,7 +880,10 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
         # only marker distinguishing "the window was closed" from "the process
         # died", and the teardown below joins worker threads, any of which can
         # hang or raise and swallow the evidence.
-        logger.info("LIFECYCLE: main window closeEvent — tearing down")
+        # spontaneous: from the window system (✕, Alt+F4, taskbar, logoff), not our own close()
+        # -- the bot went with two unexplained closes (2026-10-17 12:32, 19:44)
+        logger.info("LIFECYCLE: main window closeEvent — tearing down (spontaneous=%s)",
+                    event.spontaneous())
         # Remember the current layout so the next launch reopens exactly like this.
         self._persist_layout()
         self.cam_timer.stop()

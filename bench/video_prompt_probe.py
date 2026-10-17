@@ -1,6 +1,6 @@
 """What the video model is actually SENT for a request -- the real agent, the real
 plan/validate/prepare_prompt chain and real LM Studio, with ComfyUI replaced by a
-recorder: no render, no card. Each H3 job's prompt is printed as it would go out.
+recorder: no render, no card. Any other tool the agent calls is printed, not run. Each H3 job's prompt is printed as it would go out.
 
     venv/Scripts/python.exe bench/video_prompt_probe.py <picture> "<request>" ["<request>" ...]
 
@@ -87,6 +87,15 @@ def run(picture: str, request: str) -> None:
     ctx.tts_disabled = True
     ctx.gui_mode = True
     ctx.video_engine = _engine()
+    import tools
+
+    def only_video(ctx, state, name, args):
+        # a misrouted turn ran real FireRed redraws from the probe (2026-10-17)
+        if "video" in name:
+            return tools.execute_tool(ctx, state, name, args)
+        print(f"--- other tool called, not run: {name} {str(args)[:300]}")
+        return f"[{name} not run by the probe]"
+    ctx.run_tool = only_video
     ctx.last_image_path = picture
     state = make_base_state()
     state["user_input"] = request
