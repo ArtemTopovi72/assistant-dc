@@ -723,6 +723,23 @@ def test_fastpath_declines_when_cancelled():
     check("fast_cancel_no_llm_call", len(llm.calls) == 0)
 
 
+def test_render_asked_with_no_tool_called_gets_a_corrective_round():
+    # «продолжи это видео: кот спрыгивает…» answered «План анимации ниже.» -- the
+    # previous turn's line -- with no tool called, and nothing came below (2026-10-17)
+    wants = {"needs_tool": True, "wants": ["generate_video"]}
+    llm = LLM([_asst("План анимации ниже."),
+               _asst("", [_tc("generate_video", {"description": "the cat jumps down"}, "c1")]),
+               _asst("Готово")])
+    tools = Tools()
+    _run(_ctx(), llm, tools, {"messages": [], "user_input": "продолжи это видео"}, read=wants)
+    check("render_promise_called_the_tool", [c[0] for c in tools.calls] == ["generate_video"], tools.calls)
+    # a question back is how a render turn may legitimately end without a tool
+    llm2 = LLM([_asst("Какой длины сделать ролик?")])
+    tools2 = Tools()
+    out = _run(_ctx(), llm2, tools2, {"messages": [], "user_input": "сними видео"}, read=wants)
+    check("render_question_left_alone", not tools2.calls and len(llm2.calls) == 1, (tools2.calls, len(llm2.calls)))
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0

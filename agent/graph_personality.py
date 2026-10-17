@@ -271,6 +271,7 @@ _VERIFY_NEGATIVE_RE = re.compile(
 # все файлы» -> delete_path refused the root -> «Я удалил все файлы» over 17
 # surviving entries. A failed mutation followed by a success claim is the
 # same lie as an invented number.
+_RENDER_TOOLS = ("generate_video", "generate_image", "create_presentation")
 _FABRICATION_RISK = frozenset({"calculate", "delete_path", "write_file", "edit_file",
                                "run_code", "pack_archive", "unpack_archive",
                                "dedupe_photos", "install_packages"})
@@ -1417,6 +1418,23 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                     f"call {_which}, or answer honestly in Russian without "
                     "claiming any action was performed or promising one. If you "
                     "are unsure which tool to call, say so honestly."
+                ))
+                continue
+            # A render the user asked for, no tool called, no question back: «продолжи
+            # это видео: кот спрыгивает…» was answered «План анимации ниже.» -- the
+            # previous turn's line, imitated -- and nothing came below (2026-10-17).
+            _render = [t for t in _own_read["wants"] if t in _RENDER_TOOLS]
+            if (corrective_count < _MAX_CORRECTIVE and not tools_ran_now and draft
+                    and _render and _own_read.get("ok") and "?" not in draft):
+                corrective_count += 1
+                logger.warning("Answer to a %s request with no tool called — corrective "
+                               "round %d/%d", _render[0], corrective_count, _MAX_CORRECTIVE)
+                last_message = None
+                guard_popped = True
+                outbound_extra = _pop_fabrication_draft(messages, (
+                    f"STOP. The user asked for something {_render[0]} makes, and you "
+                    "called NO tool this turn: nothing was made and nothing is below. "
+                    f"Call {_render[0]} now, or ask the one question you need answered."
                 ))
                 continue
             # File sibling: «Сначала я распакую архив … Начинаю поиск.» with
