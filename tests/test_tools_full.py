@@ -387,8 +387,12 @@ def test_inpaint_image():
     check("inpaint_noregion", T._handle_inpaint_image(c, {}, {"instructions": "blue", "region": ""}).startswith("[TOOL ERROR]"))
     # specialized category -> inpaint_region path
     with mock_env(category="clothing_edit"):
-        r = T._handle_inpaint_image(c, {}, {"instructions": "red dress", "region": "dress"})
+        _src, _st = c.last_image_path, {}
+        r = T._handle_inpaint_image(c, _st, {"instructions": "red dress", "region": "dress"})
         check("inpaint_specialized", "Image edited" in r)
+        # the inspector judges AFTER beside BEFORE: alone, it answered «the rest as it
+        # was?» MISSING about a clean recolour and the edit ran twice
+        check("inpaint_keeps_the_picture_before", _st.get("edit_before") == _src, _st)
     # non-specialized -> route_edit path (background synth)
     with mock_env(category="background_replace"):
         r = T._handle_inpaint_image(c, {}, {"instructions": "a beach", "region": "background"})

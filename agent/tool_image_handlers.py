@@ -451,15 +451,16 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
             "Do NOT claim a new image was produced."
         )
 
-    ctx.last_image_path = new_path
+    # Through _set_current_image: set by hand here, the edit kept no BEFORE, and the
+    # inspector asked «is the rest as it was?» answered MISSING about a clean recolour
+    # («a single image, not a comparison») and the edit was run a second time.
+    _set_current_image(ctx, state, new_path)
     # Fold the edit into the running subject prompt so a later redraw_image (which
     # re-renders from ctx.last_image_prompt) keeps this change instead of reverting it.
     base_prompt = (getattr(ctx, "last_image_prompt", "") or "").strip()
     if base_prompt:
         ctx.last_image_prompt = (f"{base_prompt}, (no {region}, removed)" if removal
                                  else f"{base_prompt}, ({region}: {instructions})")
-    state["image_path"] = new_path
-    state["image_status"] = "ok"
     dep(ctx, "_remember", _remember)(ctx, state, "inpaint", f"Edited {region}: {instructions}", {"path": new_path})
     # Post-edit efficacy: if the removal pipeline's own "is it still there?" check
     # confirmed the target is STILL visible, hand the agent an HONEST failure signal
