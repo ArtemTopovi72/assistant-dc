@@ -177,8 +177,9 @@ check("...so prefs_of drops the field entirely",
 bot.sent.clear()
 bot._dispatch(cb(CID, "music:reset"))
 s = bot._get_session(CID)
-check("reset clears every field",
-      not any(getattr(s, "music_" + f) for f in TM.FIELDS),
+check("reset clears every field, the length back to the bot's pick",
+      not any(getattr(s, "music_" + f) for f in TM.FIELDS if f != "duration")
+      and TM.auto_fields(s)["duration"] and TM.resolve_duration(s) == 0,
       {f: getattr(s, "music_" + f) for f in TM.FIELDS})
 check("...and says so", any("Авто" in t or "Auto" in t for t in bot.sent), bot.sent)
 check("...leaving prefs_of empty", TM.prefs_of(s) == {}, TM.prefs_of(s))

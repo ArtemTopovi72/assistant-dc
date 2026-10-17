@@ -129,6 +129,9 @@ def reset_all(sess) -> None:
     typed phrase both go through."""
     for f in FIELDS:
         setattr(sess, "music_" + f, "")
+    # an empty length is the fixed MUSIC_DEFAULT_SECONDS, not Auto: after the
+    # reset every song came out at 60 s and the menu read «Длина: 60 с»
+    sess.music_duration = "auto"
     sess.music_steps = ""
 
 
