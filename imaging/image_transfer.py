@@ -749,6 +749,10 @@ def transfer_reference_contained(ctx, target_path, ref, instruction=None, *,
                        attempts)
         out = dep(ctx, "transfer_with_references", _image.transfer_with_references)(ctx, target_path, [ref], instruction,
                                        seed=seed, timeout=timeout)
+        # Unmasked, the engine may paste the reference's wearer in beside the target
+        # (the girl in red armour stood in front of the man to be dressed).
+        if out and not dep(ctx, "_no_new_faces", _image._no_new_faces)(target_path, out):
+            out = None
     try:
         metrics = {}
         if out:

@@ -45,3 +45,21 @@ def test_garment_details_empty_when_vision_fails(tmp_path):
     down = types.SimpleNamespace(vision_model=boom)
     assert T._garment_details(down, str(p)) == ""
     assert T._garment_details(down, str(tmp_path / "missing.jpg")) == ""
+
+
+def test_unmasked_fallback_that_adds_a_person_is_not_delivered(tmp_path):
+    """The garment's mask failed and the whole-frame pass stood the reference's wearer
+    (the girl in red armour) in front of the man it was to dress."""
+    target = tmp_path / "man.jpg"; target.write_bytes(b"P" * 50)
+    garment = tmp_path / "armor.jpg"; garment.write_bytes(b"A" * 50)
+    pasted = tmp_path / "out.png"; pasted.write_bytes(b"O" * 50)
+    T._GARMENT_CACHE.clear()
+    for adds, want in ((True, None), (False, str(pasted))):
+        ctx = types.SimpleNamespace(deps=types.SimpleNamespace(
+            _garment_details=lambda ctx, p: "",
+            edit_region_contained_via_firered=lambda *a, **k: None,
+            transfer_with_references=lambda *a, **k: str(pasted),
+            _no_new_faces=lambda src, out, _a=adds: not _a))
+        ref = T.ReferenceImage(str(garment), T.ROLE_CLOTHING)
+        ref.extracted_asset_path = str(garment)
+        assert T.transfer_reference_contained(ctx, str(target), ref, "dress him in it") == want
