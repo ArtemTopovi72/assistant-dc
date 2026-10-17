@@ -34,16 +34,20 @@ class LyricsMixin:
                               self._lyrics_run, chat_id, lang, mode, text, lang=lang)
         return True
 
-    def _lyrics_run(self, ctx, chat_id: int, lang: str, mode: str, text: str) -> None:
+    def _lyrics_run(self, ctx, chat_id: int, lang: str, mode: str, text: str, topic: str = "") -> None:
         import lyrics_craft as LC
-        singer = (tg_bot._music_prefs(self._get_session(chat_id)) or {}).get("vocal", "")
+        sess = self._get_session(chat_id)
+        singer = (tg_bot._music_prefs(sess) or {}).get("vocal", "")
+        # «✨ Ещё улучшить» after ✍️ polishes against the same theme; a pasted lyric has none
+        sess.lyrics_topic = text if mode == "write" else topic
+        self._store.put(sess)
         try:
             if mode == "write":
                 lyric_lang = "Russian" if lang == "ru" or LC._lang_name(text) == "Russian" else "English"
                 res = LC.write(ctx, text, lyric_lang, singer=singer)
                 notes = []
             else:
-                res = LC.polish(ctx, text, singer=singer)
+                res = LC.polish(ctx, text, singer=singer, topic=topic)
                 notes = LC.changes_note(ctx, res["original"], res["text"], lang)
         except Exception:
             if ctx.is_cancelled():
@@ -63,10 +67,13 @@ class LyricsMixin:
         sess = self._get_session(chat_id)
         sess.lyrics_last = res["text"][:6000]
         self._store.put(sess)
-        head = tg_bot._t("lyr_head_" + mode, lang, score=f"{res['score']:.1f}", rounds=res["rounds"])
+        same = mode == "improve" and res["text"] == res["original"]
+        # «Ваш улучшенный текст… Что поправил:» over «nothing came out better» read as a lie
+        head = tg_bot._t("lyr_head_same" if same else "lyr_head_" + mode, lang,
+                         score=f"{res['score']:.1f}", rounds=res["rounds"])
         body = []
         left = [LC.describe(i, lang) for i in res.get("left_rules", [])] + list(res.get("left_sense", []))
-        if mode == "improve" and res["text"] == res["original"]:
+        if same:
             # «Править нечего» above a list of what is left read as a lie
             body.append(tg_bot._t("lyr_not_better" if left else "lyr_already_good", lang))
         body += [html.escape(n) for n in notes]
@@ -114,7 +121,8 @@ class LyricsMixin:
             self._start_song_generation(chat_id, LYRICS_MARK + "\n" + last, lang)
         elif data == "lyr:again":
             self._run_cancellable(chat_id, tg_bot._t("lyr_working_improve", lang),
-                                  self._lyrics_run, chat_id, lang, "improve", last, lang=lang)
+                                  self._lyrics_run, chat_id, lang, "improve", last,
+                                  getattr(sess, "lyrics_topic", ""), lang=lang)
 
 
 import tg_bot  # noqa: E402  (cycle by design; attrs read at call time)

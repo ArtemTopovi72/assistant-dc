@@ -197,6 +197,7 @@ class _Session:
         # ✨/✍️ lyrics (tg_lyrics): "" | "improve" | "write", and the last result
         self.lyrics_state: str = d.get("lyrics_state", "")
         self.lyrics_last: str = d.get("lyrics_last", "")
+        self.lyrics_topic: str = d.get("lyrics_topic", "")   # the theme lyrics_last was written for
         self.anim_voices: list = list(d.get("anim_voices") or [])
         self.anim_voice_slot: int = int(d.get("anim_voice_slot") or 0)
         # a clip request waiting for «свои голоса / стандартные», and the answer
@@ -449,6 +450,7 @@ class _Session:
                 "song_draft":          self.song_draft,
                 "lyrics_state":        self.lyrics_state,
                 "lyrics_last":         self.lyrics_last,
+                "lyrics_topic":        self.lyrics_topic,
                 "anim_voices":         self.anim_voices,
                 "anim_voice_slot":     self.anim_voice_slot,
                 "voice_pending":       self.voice_pending,

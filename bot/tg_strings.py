@@ -1042,6 +1042,8 @@ _MSG: dict[str, dict[str, str]] = {
                             "ru": "✍️ Сочиняю: черновик, потом проверки и шлифовка…"},
     "lyr_head_improve": {"en": "✨ <b>Your improved lyric</b> — score {score}/10 after {rounds} pass(es). What changed:",
                          "ru": "✨ <b>Ваш улучшенный текст</b> — оценка {score}/10, проходов: {rounds}. Что поправил:"},
+    "lyr_head_same":    {"en": "✨ <b>The lyric</b> — score {score}/10 after {rounds} pass(es).",
+                         "ru": "✨ <b>Текст</b> — оценка {score}/10, проходов: {rounds}."},
     "lyr_head_write":   {"en": "✍️ <b>Lyric written</b> — score {score}/10 after {rounds} pass(es) of checks. The text is in the next message.",
                          "ru": "✍️ <b>Текст готов</b> — оценка {score}/10, проходов проверки: {rounds}. Сам текст — следующим сообщением."},
     "lyr_already_good": {"en": "Nothing to fix: rhymes, rhythm and sense hold up.",
