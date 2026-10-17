@@ -66,3 +66,12 @@ def test_a_simple_action_is_one_part(tmp_path):
 
 def test_a_named_length_is_followed(tmp_path):
     assert len(_run(tmp_path, {"description": LONG, "seconds": 30})) > 2
+
+
+def test_a_where_it_continues_from_line_is_not_a_part_of_its_own():
+    # «The video continues from the first frame…» was a part with no action, rewritten
+    # into a copy of the next part, which then shrank to «the cat walks» (2026-10-17).
+    d = ("The video continues from the first frame where the cat is on the chair. The cat "
+         "jumps down from the chair onto the floor, lands gracefully, and begins walking "
+         "towards the dumbbells. The camera follows the cat with a low tracking shot.")
+    assert V.split_script(d) == [d]

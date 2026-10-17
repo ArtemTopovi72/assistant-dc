@@ -144,7 +144,10 @@ _LOOK = re.compile(
     # «The background shows shelves with a bag…» became a 5-minute part of its own
     # (live 2026-10-12): scenery takes no screen time either.
     r"(?:in\s+)?the\s+background|background|setting|scenery|visible|in\s+view)\b"
-    r"|(?:the\s+)?(?:lighting|look|tone|mood|atmosphere|palette)\b.{0,40}\b(?:is|remains|stays)\b",
+    r"|(?:the\s+)?(?:lighting|look|tone|mood|atmosphere|palette)\b.{0,40}\b(?:is|remains|stays)\b"
+    # «The video continues from the first frame where the cat sits» became a part with
+    # no action, rewritten into a copy of the next part (live 2026-10-17).
+    r"|(?:the\s+)?(?:video|clip|scene|shot)\s+(?:continues|starts|begins|opens|picks\s+up)\b",
     re.I)
 _SENT = re.compile(r"(?<=[.!?;])\s+|(?<=,)\s+(?=(?:then|after that|afterwards|затем|потом|после этого)\b)", re.I)
 
@@ -1903,8 +1906,11 @@ _JUDGE = ("You are a strict editor of a video script split into numbered parts; 
           "uses filler (sparks, embers, glow, dust, particles, 'cinematic', 'graceful', "
           "'epic') that carries no action; (f) it contradicts the part before it (another "
           "place, another outfit, an object that was put away and is in hand again). Spoken "
-          "lines in quotes are fine and never a reason. Reply as JSON only: "
-          '{"bad": [{"part": 2, "why": "short reason"}]} -- an empty list when all are fine.')
+          "lines in quotes are fine and never a reason. \"drop\": true ONLY when the part has "
+          "no visible action at all, or EVERY action in it is already shown by an earlier part "
+          "-- one new action (a yawn after the stretch) means false. "
+          'Reply as JSON only: {"bad": [{"part": 2, "why": "short reason", "drop": false}]} '
+          "-- an empty list when all are fine.")
 
 
 def validate_script(ctx, parts: list, rounds: int = 2) -> list:
@@ -1919,13 +1925,24 @@ def validate_script(ctx, parts: list, rounds: int = 2) -> list:
         try:
             got = (safe_json_from_llm(text_model(ctx)(ctx, _JUDGE, listing, temperature=0.1,
                                                       max_tokens=500) or "", ["bad"]) or {}).get("bad") or []
-            bad = {int(b["part"]): str(b.get("why") or "") for b in got
-                   if str(b.get("part", "")).isdigit() and 1 <= int(b["part"]) <= len(parts)}
+            got = [b for b in got if isinstance(b, dict)
+                   and str(b.get("part", "")).isdigit() and 1 <= int(b["part"]) <= len(parts)]
+            bad = {int(b["part"]): str(b.get("why") or "") for b in got}
         except Exception as exc:
             logger.warning("validate_script: the judge failed: %s", exc)
             return parts
         if not bad:
             return parts
+        # A part with nothing of its own («the video continues from the frame where the
+        # cat sits», camera and sound only) was rewritten into a copy of the next part,
+        # and the next then cut down to «the cat walks» (live 2026-10-17): drop it.
+        drop = {int(b["part"]) for b in got if b.get("drop") is True
+                and not _QUOTED.search(parts[int(b["part"]) - 1])}
+        if drop and len(drop) < len(parts):
+            logger.info("validate_script: parts %s dropped (%s)", sorted(drop),
+                        "; ".join(bad[n] for n in sorted(drop))[:200])
+            parts = [p for i, p in enumerate(parts, 1) if i not in drop]
+            continue
         for n, why in sorted(bad.items()):
             before = parts[n - 1]
             if before.startswith((INSERT_HEAD, INSERT_BACK)):    # its camera cut is deliberate
