@@ -80,7 +80,6 @@ def _run(source, instructions, *, layout, layout_result="layout", firered_result
     ctx = Ctx(load_layout_for=(lambda p: {"layout": {"elements": []}}) if layout else (lambda p: None),
               edit_via_layout=_stub("layout", _out(layout_result)),
               restyle=_stub("firered", _out(firered_result)),
-              preserve_identity_face=lambda src, new, **kw: (CALLS.append("preserve_identity_face"), new)[1],
               log_edit_decision=lambda **kw: None)
     state = {"image_path": source}
     msg = T._handle_redraw_image(ctx, state, {"mode": "redraw", "instructions": instructions})
@@ -108,7 +107,6 @@ check("the FireRed result became the current image", os.path.basename(out or "")
 _src = _img("user2")
 _st = {"image_path": _src}
 T._handle_redraw_image(Ctx(load_layout_for=lambda p: None, restyle=_stub("firered", _out("firered")),
-                           preserve_identity_face=lambda src, new, **kw: new,
                            log_edit_decision=lambda **kw: None),
                        _st, {"mode": "redraw", "instructions": "make it sharper"})
 check("the redraw keeps the picture it replaced for inspection", _st.get("edit_before") == _src, _st)
@@ -121,7 +119,7 @@ print("=" * 70)
 # to come back, just by a lesser route.
 calls, out, _ = _run(_img("ideo2"), "make it winter", layout=True, layout_result=None)
 check("a failed layout edit falls through to FireRed",
-      calls == ["layout", "firered", "preserve_identity_face"], calls)
+      calls == ["layout", "firered"], calls)
 check("...and returns the FireRed result", os.path.basename(out or "") == "firered.png", out)
 
 # No layout AND FireRed fails too: there is no third engine left — the tool must
@@ -136,7 +134,7 @@ check("...and the tool reports failure", "[TOOL ERROR]" in (msg or ""), msg)
 # through FireRed — there is no separate 'enhance' engine.
 calls, out, _ = _run(_img("bare"), "", layout=False)
 check("a bare redraw with no instruction still goes through FireRed",
-      calls == ["firered", "preserve_identity_face"], calls)
+      calls == ["firered"], calls)
 
 print()
 print("=" * 70)
@@ -151,7 +149,6 @@ def _run_logging(source, instructions, *, layout):
     ctx = Ctx(load_layout_for=(lambda p: {"layout": {}}) if layout else (lambda p: None),
               edit_via_layout=_stub("layout", _out("layout")),
               restyle=_stub("firered", _out("firered")),
-              preserve_identity_face=lambda src, new, **kw: new,
               log_edit_decision=lambda **kw: _logged.append(kw))
     T._handle_redraw_image(ctx, {"image_path": source},
                            {"mode": "redraw", "instructions": instructions})
@@ -194,26 +191,6 @@ calls, out, msg = _run(_img("leak"), "make it winter", layout=False,
                        firered_result=_leak_path)
 check("the intermediate tile was rejected, not delivered", out != _leak_path, out)
 check("the tool reports failure, not success", "[TOOL ERROR]" in (msg or ""), msg)
-
-print()
-print("=" * 70)
-print("6. A style change is never re-fitted with the ORIGINAL face")
-print("=" * 70)
-# An anime restyle of a photo must not come back with an anime body and the
-# ORIGINAL photorealistic face pasted on top: preserve_identity_face's own
-# face-change detector only recognises an explicit attribute edit
-# ("sunglasses"), never "in anime style". Restyling a face IS the point of a
-# style request; face preservation must not run for it at all.
-calls, out, _ = _run(_img("anime"), "перерисуй в аниме стиле", layout=False)
-check("FireRed still runs the style edit", "firered" in calls, calls)
-check("preserve_identity_face is skipped for a style change",
-      "preserve_identity_face" not in calls, calls)
-check("the FireRed result is returned untouched", os.path.basename(out or "") == "firered.png", out)
-
-# An ordinary (non-style) redraw must keep the existing face-safety net.
-calls, out, _ = _run(_img("hat"), "add a red hat", layout=False)
-check("preserve_identity_face still runs for a non-style edit",
-      "preserve_identity_face" in calls, calls)
 
 print()
 print(f"{OK}/{OK + BAD} checks passed")

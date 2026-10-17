@@ -125,7 +125,7 @@ class _Ctx:
 
 ctx = _Ctx()
 ctx.deps = deps_ctx(exists=lambda p: True, assert_deliverable=lambda p, **kw: p, load_layout_for=lambda p: None,
-                    preserve_identity_face=lambda src, new, **kw: new, _render_budget_exhausted=lambda *a, **kw: None,
+                    _render_budget_exhausted=lambda *a, **kw: None,
                     image=Over(I, edit_image_with_firered=_fake_firered), **_DEPS).deps
 
 captured.clear()

@@ -174,23 +174,10 @@ def test_blend_region_determinism():
     _check("blend_region: deterministic (identical on repeat)", bool((a == b).all()))
 
 
-def test_face_guard_no_face_passthrough():
-    import tempfile
-    d = tempfile.mkdtemp()
-    bg = _gradient_bg()
-    op = os.path.join(d, "o.png"); Image.fromarray(bg).save(op)
-    up = os.path.join(d, "u.png"); Image.fromarray(bg).resize((W * 2, H * 2)).save(up)
-    import identity_metrics as idm
-    from seams import Over
-    out = IM._preserve_face_after_upscale(op, up, modules={"identity_metrics": Over(idm, face_boxes=lambda *a, **k: [])})  # force "no face"
-    _check("face_guard: no face -> returns ESRGAN result unchanged", out == up)
-
-
 def main():
     for fn in [test_band_masks, test_is_continuation, test_color_harmonize_shapes_and_interior,
                test_seamless_clone_guards_and_locality, test_laplacian_blend_alpha_extremes,
-               test_blend_region_routing_and_outside, test_blend_region_determinism,
-               test_face_guard_no_face_passthrough]:
+               test_blend_region_routing_and_outside, test_blend_region_determinism]:
         fn()
     passed = sum(1 for _, ok, _ in _RESULTS if ok)
     print(f"\n{passed}/{len(_RESULTS)} checks passed")

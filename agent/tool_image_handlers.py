@@ -1921,23 +1921,6 @@ def redraw_whole_image(ctx, source: str, instructions: str):
     new_path = dep(ctx, "assert_deliverable", _image(ctx).assert_deliverable)(
         new_path, where="tools._handle_redraw_image", source_path=source)
 
-    # Whole-frame re-renders (redraw/enhance) repaint the FACE too — at low res this
-    # makes the person unrecognizable ("enhancing changed the face"). Composite the
-    # ORIGINAL face back unless the user explicitly asked to change the face.
-    #
-    # A STYLE change (anime/cartoon/oil painting/…) is the one whole-frame redraw
-    # where this must NOT run at all. Sending the same photo
-    # for an anime restyle over and over kept coming back with an anime BODY and
-    # the original PHOTOREALISTIC face pasted on top — preserve_identity_face's
-    # own face-change detector only catches an explicit attribute edit
-    # ("sunglasses", "expression"), not "in anime style", so it took the literal
-    # pixel paste-back branch every time. Redrawing a face in the target style
-    # is the entire point of a style request, not an unwanted side effect to
-    # undo.
-    if (new_path and os.path.exists(new_path)
-            and _image(ctx).classify_edit_intent(instructions, ctx=ctx) != "style_transfer"):
-        new_path = dep(ctx, "preserve_identity_face", _image(ctx).preserve_identity_face)(
-            source, new_path, instructions=instructions, ctx=ctx)
     return new_path, engine
 
 

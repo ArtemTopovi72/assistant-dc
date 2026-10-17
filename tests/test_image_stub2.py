@@ -1,5 +1,5 @@
 """Boundary-stubbed coverage round 2: edit_region_contained_cropped,
-_preserve_face_after_upscale, _composite_reference_head. All pure PIL/numpy logic
+_composite_reference_head. All pure PIL/numpy logic
 gated by stubbed identity_metrics.face_box / _region_mask_file / _upload_image_to_comfy
 / _submit_and_poll / edit_image_with_firered -- no GPU needed.
 Run: venv/Scripts/python.exe tests/test_image_stub2.py
@@ -220,53 +220,6 @@ def test_cropped_composite_exception():
         # res_path returned but os.path.exists(res_path) False -> "produced no tile" branch
         out = I.edit_region_contained_cropped(ctx, img, "hat", "a red hat")
         check("cropped_result_missing_none", out is None)
-
-
-# ---------------- _preserve_face_after_upscale ----------------
-
-def test_preserve_face_no_face():
-    idm = _with_face_box(None)
-    img = _photo("pf1.png"); up = _photo("pf1_up.png", w=400, h=400)
-    out = I._preserve_face_after_upscale(img, up, modules=idm)
-    check("preserve_face_no_face_unchanged", out == up)
-
-def _faces_where(boxes):
-    """The detector answering each picture with its own face boxes (by file name):
-    the guard restores a face only where the re-render still has one."""
-    return {"identity_metrics": types.SimpleNamespace(
-        face_box=lambda path, pad=0.0: (boxes.get(Path(path).name) or [None])[0],
-        face_boxes=lambda path, pad=0.0, **kw: list(boxes.get(Path(path).name) or []))}
-
-def test_preserve_face_success():
-    idm = _faces_where({"pf2.png": [(40, 40, 120, 120)], "pf2_up.png": [(80, 80, 240, 240)]})
-    img = _photo("pf2.png", w=200, h=200); up = _photo("pf2_up.png", w=400, h=400)
-    out = I._preserve_face_after_upscale(img, up, modules=idm)
-    check("preserve_face_success", out != up and Path(out).exists())
-
-def test_preserve_face_blend_partial():
-    idm = _faces_where({"pf3.png": [(40, 40, 120, 120)], "pf3_up.png": [(80, 80, 240, 240)]})
-    img = _photo("pf3.png", w=200, h=200); up = _photo("pf3_up.png", w=400, h=400)
-    out = I._preserve_face_after_upscale(img, up, blend=0.5, modules=idm)
-    check("preserve_face_blend_partial", out != up and Path(out).exists())
-
-def test_preserve_face_skips_a_reframed_face():
-    # «сделай чётче» came back zoomed in: the man's old face pasted at its old place
-    # sat on his chest, and the police got two extra heads.
-    idm = _faces_where({"pf6.png": [(40, 40, 120, 120)], "pf6_up.png": [(200, 20, 360, 180)]})
-    img = _photo("pf6.png", w=200, h=200); up = _photo("pf6_up.png", w=400, h=400)
-    check("preserve_face_reframed_untouched", I._preserve_face_after_upscale(img, up, modules=idm) == up)
-
-def test_preserve_face_import_fails():
-    idm = {"identity_metrics": None}
-    img = _photo("pf4.png"); up = _photo("pf4_up.png")
-    out = I._preserve_face_after_upscale(img, up, modules=idm)
-    check("preserve_face_import_fail_unchanged", out == up)
-
-def test_preserve_face_bad_orig_path():
-    idm = _with_face_box((10, 10, 50, 50))
-    up = _photo("pf5_up.png")
-    out = I._preserve_face_after_upscale("Z:/no_such.png", up, modules=idm)
-    check("preserve_face_bad_orig_unchanged", out == up)
 
 
 # ---------------- _composite_reference_head ----------------

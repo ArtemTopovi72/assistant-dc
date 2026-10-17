@@ -18,7 +18,7 @@ from _patch_base import RebindPatches
 # Every module that may hold a binding of a patched image-pipeline name.
 _TARGET_MODULES = (
     "image", "image_sizing", "image_grounding", "image_masks", "image_maskqa",
-    "image_handfix", "image_identity", "image_transfer", "image_router",
+    "image_handfix", "image_transfer", "image_router",
     "image_contained", "image_contained_graphs", "image_contained_firered",
     "image_transforms", "image_objects", "image_generate",
     "comfy_client", "compositing",

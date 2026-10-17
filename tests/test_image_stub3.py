@@ -466,8 +466,7 @@ def test_inpaint_falls_back_to_whole_frame_firered():
                   edit_region_contained_via_firered=lambda *a, **k: None,
                   _english_instructions=lambda ctx, p: "make it red",
                   _contained_edit_validated=lambda *a, **k: None,
-                  edit_image_with_firered=lambda *a, **k: whole_out,
-                  preserve_identity_face=lambda *a, **k: whole_out):
+                  edit_image_with_firered=lambda *a, **k: whole_out):
         out = I.inpaint_region_with_comfy(ctx, img, "the hat", "make it red")
         check("inpaint_whole_frame_fallback_success", out == whole_out)
 
@@ -491,8 +490,7 @@ def test_inpaint_removal_skips_contained_path():
     whole_out = _photo("ip6_whole.png")
     with _Patches(_english_region=lambda ctx, r: "",
                   _firered_instruction=lambda ctx, r, p, removal=False: "remove it",
-                  edit_image_with_firered=lambda *a, **k: whole_out,
-                  preserve_identity_face=lambda *a, **k: whole_out):
+                  edit_image_with_firered=lambda *a, **k: whole_out):
         out = I.inpaint_region_with_comfy(ctx, img, "the hat", "remove it", removal=True)
         check("inpaint_removal_whole_frame", out == whole_out)
 
@@ -502,27 +500,9 @@ def test_inpaint_whole_region_skips_contained_path():
     whole_out = _photo("ip7_whole.png")
     with _Patches(_english_region=lambda ctx, r: "whole",
                   _firered_instruction=lambda ctx, r, p, removal=False: "enhance it",
-                  edit_image_with_firered=lambda *a, **k: whole_out,
-                  preserve_identity_face=lambda *a, **k: whole_out):
+                  edit_image_with_firered=lambda *a, **k: whole_out):
         out = I.inpaint_region_with_comfy(ctx, img, "the whole image", "enhance it")
         check("inpaint_whole_region_skip", out == whole_out)
-
-def test_inpaint_whole_frame_face_edit_skips_identity_preserve():
-    ctx = Ctx()
-    img = _photo("ip8.png")
-    whole_out = _photo("ip8_whole.png")
-    called = {"n": 0}
-    def fake_preserve(*a, **k):
-        called["n"] += 1
-        return whole_out
-    with _Patches(_english_region=lambda ctx, r: "",
-                  _firered_instruction=lambda ctx, r, p, removal=False: "change her face",
-                  edit_image_with_firered=lambda *a, **k: whole_out,
-                  preserve_identity_face=fake_preserve,
-                  _is_facial=lambda ctx, p: "face" in p):   # the read itself: bench/removal_intent_live.py
-        out = I.inpaint_region_with_comfy(ctx, img, "her face", "change her face", removal=True)
-        check("inpaint_face_edit_skips_identity_preserve", called["n"] == 0 and out == whole_out)
-
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

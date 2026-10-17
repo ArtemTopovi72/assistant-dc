@@ -8,7 +8,6 @@ for d in ("", "agent", "imaging", "research", "core", "bot", "media"):
     sys.path.insert(0, os.path.join(ROOT, d))
 from context_v2 import _is_preference
 from tools import _edits_deck
-from image_identity import _changes_face
 from dr_policy import _ask_kind
 from search import _is_news
 from image_transfer import _placement_region_from_instruction
@@ -26,12 +25,6 @@ CASES = [
     (_edits_deck, "убери третий слайд", True),
     (_edits_deck, "rename the deck to Q3 results", True),
     (_edits_deck, "презентация про историю Рима", False),
-    (_changes_face, "make her smile", True),
-    (_changes_face, "сделай его моложе", True),
-    (_changes_face, "add red lipstick", True),
-    (_changes_face, "change the jacket to red", False),
-    (_changes_face, "make the background a beach", False),
-    (_changes_face, "сделай фото чётче", False),
     (_ask_kind, "чем iPhone 16 отличается от iPhone 15", "compare"),
     (_ask_kind, "где купить билеты в Эрмитаж и сколько стоят", "practical"),
     (_ask_kind, "влияние микропластика на здоровье", "research"),

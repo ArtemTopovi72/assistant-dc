@@ -28,7 +28,7 @@ from comfy_client import _submit_and_poll
 from image_engines import FIRERED_MAX_MP
 # NOTE: every other cross-module helper (_upload_image_to_comfy, _source_dims,
 # _enforce_output_size, _english_instructions, _item_attributes, _strip_lead,
-# _region_mask_file, _mask_quality_ok, preserve_identity_face) is deliberately
+# _region_mask_file, _mask_quality_ok) is deliberately
 # NOT imported by value here.  Before the split these were plain globals inside
 # image.py, and the suites patch them as `image.<name>`; a by-value import would
 # make this module keep running the REAL helper while the test still printed
@@ -523,19 +523,6 @@ def transfer_with_references(ctx, target_path, references, instruction=None, *,
                                cos, refs[0].effective_role)
         except Exception as exc:
             logger.info("transfer: identity check skipped: %s", exc)
-
-    # The Qwen multi-image transfer re-renders the WHOLE frame, so it repaints the
-    # face — a clothing/object/scene transfer must NOT change the person's face.
-    # Composite the original face back unless the transfer DELIBERATELY targets the
-    # face/head (face/identity/hairstyle reference) or the instruction asks for it.
-    if refs[0].effective_role not in (ROLE_FACE, ROLE_IDENTITY, ROLE_HAIR):
-        out = _image.preserve_identity_face(target_path, out, instructions=instr, ctx=ctx)
-        if "identity_cosine" in metrics:
-            try:
-                import identity_metrics as idm
-                metrics["identity_cosine_after_guard"] = idm.identity_cosine(target_path, out)
-            except Exception as err:
-                logger.debug("identity cosine after the guard unavailable: %s", err)
 
     try:
         log_edit_decision(request=f"transfer instr={instr!r}",

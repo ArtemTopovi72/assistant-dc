@@ -129,8 +129,6 @@ rec("graph.flux_fill_crop", lambda: _graph(
     "_flux_fill_crop_graph", "u.png", "m.png", "a red hat", 1234, 1024, 1024))
 rec("graph.tile_detail", lambda: _graph("_tile_detail_graph", "u.png", 1234, 2.0))
 rec("graph.oldmodel_bg", lambda: _graph("_oldmodel_bg_subgraph", "u.png", "a beach", 1234))
-rec("graph.instantid_facelock", lambda: _graph(
-    "_instantid_facelock_graph", "u.png", "f.png", "a portrait", 1234))
 rec("graph.handfix_detect", lambda: _graph("_handfix_detect_graph", "u.png"))
 
 # ---------------------------------------------------------------- 4. masks/geom

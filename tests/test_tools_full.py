@@ -100,7 +100,6 @@ def mock_env(**over):
         "log_edit_decision": over.get("log_edit", lambda **k: None),
         "fix_hands": lambda ctx, s, engine="firered": over.get("fixhands_out", out_img),
         "edit_region_contained_via_firered": lambda ctx, s, r, i, protect_face=True, engine="firered": over.get("fixart_out", out_img),
-        "preserve_identity_face": lambda s, n, instructions="", ctx=None: n,
         "load_layout_for": lambda p: over.get("layout", None),
         "edit_via_layout": lambda ctx, s, i: over.get("layout_out", out_img),
         "edit_image_with_firered": lambda ctx, s, i: over.get("firered_out", out_img),

@@ -58,10 +58,6 @@ from image_engines import DEFAULT_EDIT_ENGINE, _edit_engine_workflow, FIRERED_MA
 # Hand/finger refiner, extracted to image_handfix.py. Re-exported so
 # image.fix_hands and the stubbed seams keep resolving.
 from image_handfix import _handfix_detect_graph, _handfix_region_fallback, fix_hands
-# Identity preservation / face gating, extracted to image_identity.py.
-from image_identity import (
-    _instantid_facelock_graph, _preserve_face_after_upscale, preserve_identity_face,
-)
 # Reference-driven transfer (roles, reference assets, edit plan, placement),
 # extracted to image_transfer.py. Re-exported so image.<name> keeps working.
 from image_transfer import (
@@ -181,7 +177,7 @@ def log_edit_decision(*, request: str, classifier: str, tool: str, workflow: str
 # _INTERMEDIATE_, but a couple of older names are listed for belt-and-suspenders.
 # Every one of these is a WORKING file written into OUTPUT_DIR beside the real
 # renders. Deliverable results live there too and must never be listed here --
-# handfix_, upscaled_faceguard_, contained-firered_ and contained-cropped_ are
+# handfix_, contained-firered_ and contained-cropped_ are
 # all named `final = ...` at their write sites, and adding one of those would
 # make a finished picture undeliverable.
 #   _srcregion_     image_masks.crop_to_mask -- the hand-drawn source region
@@ -755,24 +751,13 @@ def _inpaint_region_impl(
     if not out:
         _INPAINT_FAILURE["reason"] = "server_error"
     elif force_whole:
-        # User-selected whole-frame mode = COMPLETE freedom: no face paste-back, no
+        # User-selected whole-frame mode = COMPLETE freedom: no
         # new-faces gate, no identity guard. The user chose this mode knowing the
         # entire frame (face included) is the model's to re-render.
         logger.info("whole-frame mode: delivering the raw re-render (no identity guards)")
     else:
-        # This last-resort path re-renders the WHOLE frame, so FireRed repaints the
-        # face too and the person comes back unrecognizable ("inpaint changed the
-        # face"). Unless the edit deliberately targets the face, composite the
-        # ORIGINAL face back so a clothing/object/background edit keeps identity.
-        # A style change is the one whole-frame re-render where the face is SUPPOSED
-        # to come out redrawn in the target style -- pasting the original photoreal
-        # face back over it is exactly the "intermediate" look complained about
-        # (see the matching guard in tools._handle_redraw_image).
-        if (not (region and _is_facial(ctx, region))
-                and classify_edit_intent(prompt, ctx=ctx) != "style_transfer"):
-            out = preserve_identity_face(image_path, out, instructions=f"{region} {prompt}", ctx=ctx)
-        # The re-render may have RE-COMPOSED the person (moved/resized); pasting the
-        # original face back then yields two faces. Reject rather than deliver.
+        # The re-render may have RE-COMPOSED the person (moved/resized) into a second
+        # one. Reject rather than deliver.
         if out and not _no_new_faces(image_path, out):
             _INPAINT_FAILURE["reason"] = "server_error"
             return None
