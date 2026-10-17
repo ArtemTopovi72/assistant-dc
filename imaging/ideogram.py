@@ -352,6 +352,9 @@ Rules for the boxes:
 - Boxes may overlap when things really overlap (a hand on a table).
 - Respect any placement the user asked for ("on the left", "in the sky").
 - Describe each element on its own, as if the others did not exist.
+- What a subject wears or holds (a helmet on a cat, a hat, a guitar in hand) is part of that
+  subject's own element ("a ginger cat wearing a transparent space helmet"), never a box
+  of its own: a box of its own is drawn a second time, beside the one being worn.
 - Describe what IS there, never what is absent: "no whiskers" or "without a hat" names the
   thing and the model draws it. "кот без усов" is "a smooth-faced cat"; leave absent things out.
 - A surface the request puts things ON or IN ("a vase on the table", "books on a
