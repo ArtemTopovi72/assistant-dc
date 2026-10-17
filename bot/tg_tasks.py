@@ -726,6 +726,13 @@ class TaskRunnerMixin:
             tg_bot.logger.warning("session persist failed", exc_info=True)
 
     @staticmethod
+    def _asks_for_voice(text: str, ctx=None) -> bool:
+        """The user's own words ask for this reply spoken (the model's read)."""
+        from prompt_guard import user_words
+        t = user_words(text or "").strip()
+        return bool(t) and intent_read(ctx)(None, t)["speak_aloud"]
+
+    @staticmethod
     def _asked_a_question(text: str, ctx=None) -> bool:
         """The user's own words are a question (the model's read)."""
         from prompt_guard import user_words
@@ -1299,7 +1306,9 @@ class TaskRunnerMixin:
         # GPU time, and ctx.set_stage("Speaking") surfaced a "recording voice" indicator
         # for a voice note that was never going to be sent. Restored in the finally
         # below so the GUI's own mute setting is never clobbered.
-        ctx.tts_disabled = not (sess.voice_on and self._tts_enabled_fn())
+        # «скажи голосом …» with voice off: this one reply goes out as a voice note too.
+        voice_turn = self._tts_enabled_fn() and (sess.voice_on or self._asks_for_voice(task.user_text, ctx=ctx))
+        ctx.tts_disabled = not voice_turn
 
         # Same swap for the working image. ctx.last_image_prompt is the base prompt
         # redraw/edit build on, so sharing it globally let one chat's prompt (or a
@@ -1658,8 +1667,7 @@ class TaskRunnerMixin:
                 if reply and not reply_is_failure and not self._asked_a_question(task.user_text, ctx=ctx):
                     reply = reply.rstrip() + "\n\n" + tg_bot._t("img_offer", lang)
         try:
-            if sess.voice_on and self._tts_enabled_fn() \
-                    and reply and not empty_reply:
+            if voice_turn and reply and not empty_reply:
                 tts_wav = final.get("tts_path", "")
                 if tts_wav and os.path.exists(tts_wav):
                     # Voice only: the text (and its 👍/👎) is skipped, so the voice carries the row.

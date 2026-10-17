@@ -52,7 +52,7 @@ FIELDS = ("needs_tool", "wants", "must_call", "bare_ack", "presents_photo", "is_
           "about_picture", "names_picture", "reply_language", "language_mode", "translate",
           "redo", "asks_for_file", "doc_question",
           "song", "song_seconds", "song_uses_previous_text", "weather", "undo",
-          "complaint", "collage", "dedupe")
+          "complaint", "collage", "dedupe", "speak_aloud")
 
 SYSTEM = (
     "You route a chat message for an assistant that has these tools:\n{menu}\n\n"
@@ -138,6 +138,8 @@ SYSTEM = (
     "\"опять не так\", \"где файл?\", \"я же просил\", \"that's wrong\").\n"
     "collage: the user asks for a collage or grid of photos.\n"
     "dedupe: the user asks to drop duplicate or repeated photos (re-shots of one scene).\n"
+    "speak_aloud: the user asks for THIS reply as a voice message (\"скажи голосом\", "
+    "\"ответь голосовым\", \"say it out loud\"); a song is false.\n"
     "The previous assistant line, when given, is context for short follow-ups "
     "(\"а в евро?\" after a rate needs the same tool).\n"
     "Answer with ONE JSON object and nothing else: "
@@ -147,7 +149,7 @@ SYSTEM = (
     "\"en|ru|\", \"language_mode\": \"en|ru|\", \"translate\": bool, "
     "\"redo\": \"same|changed|\", \"asks_for_file\": bool, \"doc_question\": bool, "
     "\"song\": \"make|lyrics|sound|words|reset|\", \"song_seconds\": int, \"song_uses_previous_text\": bool, "
-    "\"undo\": bool, \"complaint\": bool, \"collage\": bool, \"dedupe\": bool, \"weather\": {{\"place_by_reference\": bool, \"city\": str, \"when\": str}} or null}}")
+    "\"undo\": bool, \"complaint\": bool, \"collage\": bool, \"dedupe\": bool, \"speak_aloud\": bool, \"weather\": {{\"place_by_reference\": bool, \"city\": str, \"when\": str}} or null}}")
 
 
 class Weather(BaseModel):
@@ -182,6 +184,7 @@ class Intent(BaseModel):
     complaint: bool = False
     collage: bool = False
     dedupe: bool = False
+    speak_aloud: bool = False
     weather: Optional[Weather] = None
 
 
@@ -204,7 +207,7 @@ FALLBACK = {"needs_tool": True, "wants": [], "must_call": "", "bare_ack": False,
             "reply_language": "", "language_mode": "", "translate": False,
             "redo": "", "asks_for_file": False, "doc_question": False,
             "song": "", "song_seconds": 0, "song_uses_previous_text": False, "weather": None, "undo": False,
-            "complaint": False, "collage": False, "dedupe": False, "ok": False}
+            "complaint": False, "collage": False, "dedupe": False, "speak_aloud": False, "ok": False}
 
 _YES_CACHE: "OrderedDict[tuple, bool]" = OrderedDict()
 
