@@ -134,12 +134,13 @@ def _handle_inspect_image(ctx, state, args: dict) -> str:
     _pair = ([("BEFORE the edit:", _before), ("AFTER the edit (judge this one):", source)]
              if _before and _before != source and os.path.exists(_before) else None)
     # ...and whether the people the edit was not about are still the same people: side
-    # by side a changed face shows, rated alone it passes as «a man».
+    # by side a changed face shows, rated alone it passes as «a man». No example object in
+    # the duplicate question: «a second helmet» in it made the checker report «the second
+    # helmet is MISSING» on a clean edit (2026-10-17).
     _ask = check + ("\n\nTwo pictures: BEFORE and AFTER the edit. Say first what changed "
                     "between them, then whether every person the edit was not about is "
                     "still the same person (face, features, count), then name anything AFTER "
-                    "has twice or newly that the edit did not ask for (a gold helmet edit drew a "
-                    "second helmet beside the cat and passed), then judge the check "
+                    "has twice or newly that the edit did not ask for, then judge the check "
                     "on AFTER." if _pair else "")
     result = ""
     for _ in range(2):
