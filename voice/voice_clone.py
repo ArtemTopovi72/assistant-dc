@@ -62,6 +62,23 @@ def _voice_spans(seg):
         return None
 
 
+def _word_gap(seg, lo: int, hi: int) -> Optional[int]:
+    """The middle of the last quiet dip between words in [lo, hi] ms, or None. A word list
+    read without a long pause (the DC sample) was cut at 11 s blind, inside «возможно»:
+    the transcript had the whole word, the audio «воз», and F5 said «можно» at the start
+    of every audiobook piece (2026-10-17)."""
+    from pydub import silence
+    win = seg[lo:hi]
+    thresh = max(win.dBFS - 14, -55) if win.dBFS != float("-inf") else -55
+    gaps = silence.detect_silence(win, min_silence_len=90, silence_thresh=thresh, seek_step=5)
+    if not gaps:
+        return None
+    # a dip inside «по-видимому» is shorter than the pause after a comma
+    longest = max(b - a for a, b in gaps)
+    a, b = [g for g in gaps if g[1] - g[0] >= 0.6 * longest][-1]
+    return lo + (a + b) // 2
+
+
 def pick_speech(seg, *, min_ms: int = TARGET_MIN_MS, max_ms: int = TARGET_MAX_MS, voice_spans=None):
     """The best 6-11 s of speech: consecutive non-silent chunks, densest first.
 
@@ -78,7 +95,7 @@ def pick_speech(seg, *, min_ms: int = TARGET_MIN_MS, max_ms: int = TARGET_MAX_MS
     spans = [(a, b) for a, b in spans if b - a >= 250]
     if not spans or sum(b - a for a, b in spans) < MIN_SPEECH_MS:
         raise CloneError("too_little_speech")
-    best, best_speech = None, -1
+    best, best_speech, gapped = None, -1, set()
     for i in range(len(spans)):
         speech, j = 0, i
         while j < len(spans) and spans[j][1] - spans[i][0] <= max_ms:
@@ -86,7 +103,10 @@ def pick_speech(seg, *, min_ms: int = TARGET_MIN_MS, max_ms: int = TARGET_MAX_MS
             j += 1
         if j == i:                                   # one chunk longer than the cap
             a = spans[i][0]
-            cand, speech = (a, a + max_ms), max_ms
+            b = _word_gap(seg, a + min_ms, a + max_ms)
+            cand, speech = (a, b or a + max_ms), (b or a + max_ms) - a
+            if b:
+                gapped.add(cand)
         else:
             cand = (spans[i][0], spans[j - 1][1])
         if speech > best_speech:
@@ -94,7 +114,9 @@ def pick_speech(seg, *, min_ms: int = TARGET_MIN_MS, max_ms: int = TARGET_MAX_MS
         if cand[1] - cand[0] >= min_ms and speech >= 0.85 * (cand[1] - cand[0]):
             break                                    # dense enough: stop at the first good one
     a, b = best
-    return seg[max(0, a - 150):min(len(seg), b + 250)]
+    # cut inside a pause between words: the usual 250 ms tail took the next word's start
+    tail = 0 if best in gapped else 250
+    return seg[max(0, a - 150):min(len(seg), b + tail)]
 
 
 def _transcribe(ctx, wav: str, lang: str) -> str:

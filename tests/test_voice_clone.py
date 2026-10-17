@@ -92,3 +92,19 @@ def test_padding_and_acronyms_come_from_the_shared_preprocessor():
     import audio
     out = audio.preprocess_text_for_synthesis(None, "Подключи USB", use_censoring=False, apply_stress=False)
     assert out.endswith("." * 15) and "USB" not in out
+
+
+def test_a_word_list_with_no_long_pause_is_cut_between_words():
+    """The DC sample, a list of words read with short pauses, was one voice span past the
+    cap and was cut blind inside «возможно»: the transcript had the whole word, the audio
+    «воз», and F5 said «можно» at the start of every audiobook piece (2026-10-17)."""
+    parts = []
+    for i in range(30):
+        parts += [("s", 400), ("q", 60), ("s", 310), ("q", 230)]   # a 60 ms dip inside each word
+    seg = _clip(parts)
+    cut = V.pick_speech(seg, voice_spans=lambda s: [(0, len(s))])
+    assert 6000 <= len(cut) <= 11500, len(cut)
+    assert cut[-60:].dBFS < -60, cut[-60:].dBFS                  # it ends in a pause
+    # and in a long one, not in a word's own short dip: the next 400 ms of the source is a word
+    end = len(cut)
+    assert seg[end:end + 400].dBFS > -30
