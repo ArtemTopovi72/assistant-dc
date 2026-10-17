@@ -187,6 +187,7 @@ Neither [`docs/injection_guard.md`](../injection_guard.md) nor [`docs/reasoning_
 - `tool_code_handlers._handle_pack_archive` can deliver only one file per turn: a second `pack_archive` call replaces the first as the surfaces' single deliverable.
 - Injection defense is two layers: `prompt_guard.py`'s cheap regex detector runs on anything that persists (facts, framed attachments/quotes), and `injection_scan.py`'s ML classifier (Horizon-Labs/prompt-injection-guard-base) scores untrusted external text such as search results and crawled pages; `tool_ozon_handlers.py` marks shop pages and reviews as that same kind of untrusted text.
 - `llm_gate` enforces one model-call queue across every process (desktop app, Telegram bot workers, benches) via OS file locks, with three priority tiers: 0 for a person waiting on an answer, 1 for background work, 2 for benches and test runs; `LLM_GATE=0` disables it.
+- An `inspect_image` verdict after an edit is three-valued: met, partial (the change is there, a detail is off), or failed (the change is absent, or something unasked was added). A failed verdict makes the next edit start from the picture before the rejected attempt (`tool_context._edit_source`, `state["retry_from"]`), not from the rejected result.
 - `lmstudio.MIN_CONTEXT_TOKENS` (40960 by default) exists because a model loaded at or below roughly 8192 tokens of context rejects every tool-bearing call outright: the system prompt plus tool schemas alone need more than that.
 
 ## Coupling

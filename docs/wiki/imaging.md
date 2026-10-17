@@ -202,7 +202,12 @@ importer is [`tests/test_edit_state.py`](../../tests/test_edit_state.py).
   `SFACE_SAME_PERSON_COSINE = 0.363` is the underlying "same person at all" floor.
   A mask that covers more than `65%` of the detected face box is rejected as having
   grabbed the whole person, not the named object, unless the named object is a worn
-  neck-to-feet garment (`_item_attributes` `whole_body`).
+  neck-to-feet garment (`_item_attributes` `whole_body`). The share is measured on the
+  segmenter's own mask, before the outward dilation added for blending.
+- **A pasted-back face must still be there.** `_preserve_face_after_upscale`
+  ([`imaging/image_identity.py`](../../imaging/image_identity.py)) restores an original face only where the re-render
+  still has a face (box IoU `>= 0.3`); a reframed re-render keeps its own faces. An
+  unmasked transfer fallback that adds a face (`_no_new_faces`) is not delivered.
 - **A layout caps at `MAX_ELEMENTS = 6` boxes and `MIN_AREA = 0.012` of the frame**
   ([`imaging/draw_geometry.py`](../../imaging/draw_geometry.py)); past the element cap the renderer stops honouring
   boxes, and below the area floor an element risks vanishing from the render.
