@@ -703,7 +703,11 @@ def edit_region_contained_via_firered(
                         f"Did the edit land correctly — aligned, fully inside that area, with no "
                         f"changes leaking outside it?")
         verdict = _image._vlm_qa_verdict(ctx, prev_png, question, ["GOOD", "PARTIAL", "WRONG"])
-        if verdict in ("WRONG", "PARTIAL") and whole_region:
+        # A worn thing recoloured in part (the navy plates of an armor turned red, the
+        # dark trim kept: 30% of the mask changed) takes the changed-pixel paste, still
+        # clipped to the mask; two clean results were rejected as leaks.
+        if verdict in ("WRONG", "PARTIAL") and (
+                whole_region or _image._item_attributes(ctx, region_phrase).get("worn") is True):
             # Advisory only for a whole-region swap (clothing/hair): the composite is
             # pasted THROUGH the mask, so nothing can leak outside it, and the VLM
             # rejected a clean dress swap three times running (red tint

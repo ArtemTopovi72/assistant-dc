@@ -270,6 +270,26 @@ def test_contained_firered_stage2_qa_wrong_rejects():
         out = I.edit_region_contained_via_firered(ctx, img, "hand", "fix it")
         check("cfirered_stage2_qa_wrong_none", out is None)
 
+def test_contained_firered_stage2_worn_partial_recolour_commits():
+    # Armor plates recoloured, dark trim kept: 30% of the mask changed, the changed-pixel
+    # paste (clipped to the mask) was used, and a WRONG "leak" verdict threw away a clean
+    # result twice. A worn thing's verdict is advisory, as a whole-region swap's is.
+    ctx = Ctx()
+    img = _photo("cf8.png", w=100, h=100)
+    orig = Image.open(img).convert("RGB")
+    mask = _square_mask()
+    tile = Image.open(_photo("cf8_tile.png", w=40, h=40)).convert("RGB")
+    tile.paste((220, 40, 40), (0, 0, 12, 40))
+    tile.save(_TMP / "cf8_tile.png")
+    for worn, want in ((True, True), (False, False)):
+        with _Patches(_contained_region_mask=lambda *a, **k: (orig, mask, (30, 30, 70, 70)),
+                      edit_image_with_firered=lambda *a, **k: str(_TMP / "cf8_tile.png"),
+                      _item_attributes=lambda c, p, _w=worn: {"worn": _w, "multi": False},
+                      MASK_QA_ENABLED=True,
+                      _vlm_qa_verdict=lambda *a, **k: "WRONG"):
+            out = I.edit_region_contained_via_firered(ctx, img, "armor", "make it red")
+        check(f"cfirered_stage2_partial_recolour_worn={worn}", (out is not None) == want, str(out))
+
 def test_contained_firered_stage2_qa_good_accepts():
     ctx = Ctx()
     img = _photo("cf7.png", w=100, h=100)
