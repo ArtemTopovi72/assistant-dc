@@ -199,12 +199,19 @@ def gather_facts(ctx, topic: str) -> tuple:
     topic = (topic or "").strip()
     if not topic:
         return "", []
+    # The agent hands the whole outline in («How to care for a cat (for children): 1.
+    # Introduction - meet…»); searched as is it came back as Pinterest, Chess.com,
+    # Duolingo and Google Keep, and those became a children's deck's sources slide.
+    query = re.split(r"[:;\n]", topic, maxsplit=1)[0].strip()[:120] or topic
     try:
         from search import raw_search_results
-        hits = raw_search_results(ctx, topic, max_results=_FACT_HITS) or []
+        hits = dep(ctx, "raw_search_results", raw_search_results)(ctx, query, max_results=_FACT_HITS) or []
     except Exception:
-        logger.warning("deck fact-gathering search failed for %r", topic, exc_info=True)
+        logger.warning("deck fact-gathering search failed for %r", query, exc_info=True)
         return "", []
+    stems = {w[:5] for w in re.findall(r"[a-zа-яё]{4,}", query.lower())}
+    hits = [h for h in hits if not stems or any(
+        s in f"{h.get('title', '')} {h.get('body', '')}".lower() for s in stems)]
     lines, sources = [], []
     for h in hits:
         body = (h.get("body") or "").strip()

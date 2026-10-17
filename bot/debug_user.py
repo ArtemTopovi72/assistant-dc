@@ -92,10 +92,12 @@ def record(url: str, kw: dict):
             saved.append(dst)
         except Exception:
             pass
-    for v in payload.values():         # file:// or a path the bot passes as a string
-        if isinstance(v, str) and os.path.isabs(v.replace("file:///", "")) and os.path.exists(v.replace("file:///", "")):
-            dst = os.path.join(ROOT, "out", f"{mid}_{os.path.basename(v)}")
-            shutil.copy(v.replace("file:///", ""), dst)
+    from urllib.parse import unquote
+    for v in payload.values():         # file:// (percent-encoded) or a path the bot passes as a string
+        p = unquote(v[8:]) if isinstance(v, str) and v.startswith("file:///") else v
+        if isinstance(p, str) and os.path.isabs(p) and os.path.exists(p):
+            dst = os.path.join(ROOT, "out", f"{mid}_{os.path.basename(p)}")
+            shutil.copy(p, dst)
             saved.append(dst)
     with _LOCK, open(os.path.join(ROOT, "outbox.jsonl"), "a", encoding="utf-8") as fh:
         fh.write(json.dumps({"t": time.time(), "chat_id": chat, "method": method, "message_id": mid,
