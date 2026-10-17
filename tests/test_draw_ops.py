@@ -135,6 +135,11 @@ check("a thing named only in the scene text is taken out of it",
       "Earth" not in out["background"] and "Earth" not in out["high_level_description"]
       and len(out["elements"]) == 1 and any("scene text" in n for n in notes), (out, notes))
 check("...and the original layout is untouched", "Earth" in _space["background"])
+_space2 = G.normalize_layout(dict(_space, elements=[dict(TREE), {"desc": "a large glowing planet Earth",
+                                                                 "x": .6, "y": .05, "w": .3, "h": .3}]))
+out, notes = D.apply_ops(_space2, [{"op": "delete", "target": "the Earth"}], ctx=_rw)
+check("deleting its element takes it out of the scene text too",
+      len(out["elements"]) == 1 and "Earth" not in out["background"], (out, notes))
 
 out, notes = D.apply_ops(lay, [{"op": "replace", "target": "the patrol car",
                                 "desc": "a dark blue estate car, seen from the side"}])

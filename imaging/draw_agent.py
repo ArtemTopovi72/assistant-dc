@@ -490,6 +490,8 @@ def apply_ops(layout: dict, ops: list, *, additive_only: bool = False,
                     continue
                 notes.append(f'deleted “{els[i].get("desc", "")}”')
                 els.pop(i)
+                if _drop_from_scene(layout, target, ctx):     # «…and a glowing Earth» in the background too
+                    notes.append(f"removed {target!r} from the scene text")
             elif op in ("replace", "swap", "change", "set_desc", "rename",
                         # Rewording a box's description is its own intent — the
                         # model names it a dozen ways and a miss costs the whole op.
