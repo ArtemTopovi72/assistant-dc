@@ -191,6 +191,14 @@ shape is repaired in code rather than left to the LLM's good behaviour.
 check("a tag sharing its line with words is split onto two lines",
       M.normalize_lyrics("[verse] Morning light") == "[verse]\nMorning light",
       repr(M.normalize_lyrics("[verse] Morning light")))
+# [intro] + [instrumental] before the first words: the voice came in at 35 s
+check("empty sections piled up before the first words collapse to the intro",
+      M.normalize_lyrics("[intro]\n[instrumental]\n[solo]\n[verse]\nРаз") == "[intro]\n[verse]\nРаз",
+      repr(M.normalize_lyrics("[intro]\n[instrumental]\n[solo]\n[verse]\nРаз")))
+check("...an intro straight into a verse is left as is",
+      M.normalize_lyrics("[intro]\n[verse]\nРаз") == "[intro]\n[verse]\nРаз")
+check("...and an instrumental (bare tags only) keeps every section",
+      M.normalize_lyrics("[intro]\n[verse]\n[chorus]\n[outro]") == "[intro]\n[verse]\n[chorus]\n[outro]")
 check("...and the words themselves survive the split",
       "Morning light" in M.normalize_lyrics("[verse] Morning light"))
 check("known tags are canonicalised to the documented lowercase form",

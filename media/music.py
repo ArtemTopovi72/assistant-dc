@@ -212,6 +212,14 @@ def normalize_lyrics(text: str) -> str:
             out.append(part)
     while out and not out[-1]:
         out.pop()
+    # «[intro]» then «[instrumental]» with no words: each empty section renders as its
+    # own instrumental stretch, and the voice came in at 35 s of a 140 s song
+    lead = 0
+    while lead < len(out) and (not out[lead] or _TAG_SPLIT_RE.fullmatch(out[lead])):
+        lead += 1
+    tags = [l for l in out[:lead] if l]
+    if len(tags) > 2 and lead < len(out):          # an instrumental is all bare tags: kept
+        out = [tags[0], tags[-1]] + out[lead:]
     if dropped:
         logger.info("lyrics: dropped %d stage direction(s) that would have been sung: %s",
                     len(dropped), " | ".join(d[:40] for d in dropped[:6]))
