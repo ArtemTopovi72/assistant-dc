@@ -16,7 +16,7 @@ that STATES the current value, redrawn in place on every tap.
 from __future__ import annotations
 
 import html as _html_mod
-from seams import module, text_model
+from seams import choice, module, text_model
 import json
 import re
 import logging
@@ -301,6 +301,24 @@ class LongVideoMixin:
                            "seconds": int(item.get("seconds") or 0),
                            "caption": item.get("caption") or ""}
         self._store.put(sess)
+        # «перескажи кратко это интервью, кто что говорит: <ссылка>» was answered «Что
+        # нужно?» with buttons, and the debug run sat 15 min on them (2026-10-17).
+        said = re.sub(r"https?://\S+", " ", sess.long_video["caption"]).strip()
+        want = choice(self.reads)(
+            "A long video was sent with the words {text}. What do they ask for? \"retell\" = "
+            "a retelling or summary of the whole video (who says what); \"each\" = every part "
+            "retold in turn; \"question\" = one specific question about it; \"none\" = no "
+            "request about the video.", said, ("retell", "each", "question", "none"),
+            default="none") if said else "none"
+        if want != "none":
+            pending = dict(sess.long_video)
+            if want == "question":
+                pending["question"] = said
+            else:
+                pending["out"] = "brief" if want == "retell" else (
+                    output_mode(sess) if output_mode(sess) != "brief" else "retell")
+            self._activity.log(chat_id, "system", f"[long video] {want} from the words, job {job_id}")
+            return self._long_video_start(chat_id, sess, lang, pending)
         mins = max(1, round(sess.long_video["seconds"] / 60))
         chunk = chunk_seconds(sess)
         self._send_text(chat_id, _t("lv_offer", lang, mins=mins, chunk=chunk // 60,

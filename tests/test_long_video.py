@@ -79,6 +79,28 @@ check("a stale ▶️ is refused", "не в работе" in bot.sent[-1][0], bo
 bot._cb_long_video(CID, f"lv:skip:{job_id}")
 check("✖ clears the pending video", bot._get_session(CID).long_video is None)
 
+# ── the words already say what is wanted: no menu ───────────────────────────
+# «перескажи кратко это интервью, кто что говорит: <ссылка>» got «Что нужно?» (2026-10-17)
+import types as _types
+for words, want in (("перескажи кратко это интервью, кто что говорит: https://youtu.be/x", "retell"),
+                    ("о чём он говорит на 10-й минуте? https://youtu.be/x", "question")):
+    bot = make_bot(); sess = bot._get_session(CID)
+    picked = []
+    bot.reads = _types.SimpleNamespace(choice=lambda q, t, opts, default="", _w=want: (
+        picked.append((q, t)), _w)[1] if "{text}" in q else default)
+    ran = []
+    bot._long_video_start = lambda cid, s, l, pending, _r=ran: _r.append(pending)
+    bot.sent.clear()
+    bot._long_video_offer(CID, sess, "ru", {"url": "https://youtu.be/x", "seconds": 1560, "caption": words})
+    check(f"«{want}» in the words starts the job without the menu",
+          ran and not bot.sent and "youtu" not in picked[0][1]
+          and (ran[0].get("out") == "brief" if want == "retell" else ran[0].get("question") == picked[0][1]),
+          (ran, bot.sent, picked))
+bot = make_bot(); sess = bot._get_session(CID)
+bot.reads = _types.SimpleNamespace(choice=lambda q, t, opts, default="": "none")
+bot._long_video_offer(CID, sess, "ru", {"url": "https://youtu.be/x", "seconds": 1560, "caption": "https://youtu.be/x"})
+check("a bare link still gets the menu", bot.sent and "lv:go:" in str(bot.sent[-1][1]), bot.sent[-1:])
+
 # ── the job, with stubs around the heavy parts ───────────────────────────────
 tmp = Path(tempfile.mkdtemp())
 clip = tmp / "long.mp4"
