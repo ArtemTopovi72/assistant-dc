@@ -281,3 +281,14 @@ def test_a_rejected_edit_is_retried_from_the_picture_before_it():
     _TGF._run(ctx, llm, run, {"user_input": "одень его в доспехи", "messages": [],
                               "image_path": "/tmp/orig.png"}, fastpath=False)
     assert sources == ["/tmp/orig.png", "/tmp/orig.png"], sources
+
+
+def test_a_partial_points_own_explanation_is_not_another_failure():
+    v = ("Inspection of the current image (BEFORE vs AFTER): the man's clothing was replaced "
+         "with red and black plate armor. | The man wearing red and black plate armor: PRESENT | "
+         "He is still holding his shovel: PARTIAL (the handle is visible but the blade is missing) | "
+         "He is standing by the car: PRESENT")
+    assert GP._inspection_contradicts_work(v, {"transfer_image"}) is False
+    assert GP._inspection_contradicts_work(v.replace("PARTIAL (the handle is visible but the blade is missing)",
+                                                     "PARTIAL — the blade is missing/cut off"),
+                                           {"transfer_image"}) is False

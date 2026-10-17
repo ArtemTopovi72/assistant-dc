@@ -231,6 +231,10 @@ def _inspection_contradicts_work(verdict: str, tools_called: set, removal: str =
         # «the girl on the left is unchanged» is the edit staying in its place: an
         # armor recolour with every label PRESENT was redone and called incomplete
         verdict = re.sub(r"\bunchanged\b|без\s+изменений", " ", verdict, flags=re.I)
+    # "Holding his shovel: PARTIAL (the blade is missing)" is one partial point; its
+    # "missing" counted as a second failure and a man plainly in the asked armour was
+    # answered «он остался прежним».
+    verdict = re.sub(r"(\bpartial\b)\s*(?:\([^)]*\)|[—–-][^|\n]*)", r"\1", verdict or "", flags=re.I)
     hits = {m.group(0).lower() for m in _VERIFY_NEGATIVE_RE.finditer(verdict or "")}
     if hits and hits <= {"partial", "частично"}:
         # Most points PRESENT and one nitpicked PARTIAL ("sharp edges, lacks
