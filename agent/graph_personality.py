@@ -197,7 +197,8 @@ def _inspection_contradicts_work(verdict: str, tools_called: set, removal: str =
         # description = still there; not named = gone.
         # the tool result reads "Inspection of the current image:\n<desc> | ..." or
         # with newlines between the lines (the split on "|" alone missed it)
-        body = re.sub(r"^\s*Inspection of the current image:\s*", "", v, flags=re.I).strip()
+        body = re.sub(r"^\s*Inspection of the current image(?: \(BEFORE vs AFTER\))?:\s*", "", v,
+                      flags=re.I).strip()
         parts = re.split(r"\s*(?:\||\n)\s*", body, maxsplit=1)
         desc = parts[0] if len(parts) > 1 else ""
         if re.search(r"present|missing|partial|absent|distorted", desc, re.I):
@@ -221,6 +222,10 @@ def _inspection_contradicts_work(verdict: str, tools_called: set, removal: str =
         r"[^|\n]*\b(?:distort\w*|artifact\w*|defect\w*|problem\w*|issue\w*|glitch\w*|"
         r"damage\w*|deform\w*|extra\s+\w+|blur\w*|искаж\w*|артефакт\w*|дефект\w*)"
         r"[^|\n]*?[?:]\s*(?:ABSENT|MISSING|NONE|NO)\b[^|\n]*", "", verdict or "", flags=re.I)
+    if (verdict or "").lstrip().startswith("Inspection of the current image (BEFORE vs AFTER)"):
+        # «the girl on the left is unchanged» is the edit staying in its place: an
+        # armor recolour with every label PRESENT was redone and called incomplete
+        verdict = re.sub(r"\bunchanged\b|без\s+изменений", " ", verdict, flags=re.I)
     hits = {m.group(0).lower() for m in _VERIFY_NEGATIVE_RE.finditer(verdict or "")}
     if hits and hits <= {"partial", "частично"}:
         # Most points PRESENT and one nitpicked PARTIAL ("sharp edges, lacks

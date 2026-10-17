@@ -85,6 +85,11 @@ def _note_source(state, source) -> None:
         state["image_derived_from"] = str(source)
 
 
+# Shown BEFORE and AFTER, the inspector says what stayed «unchanged» -- the people and
+# places the edit was not about; graph_personality reads the labels instead.
+PAIR_INSPECTION = "Inspection of the current image (BEFORE vs AFTER):"
+
+
 def _handle_inspect_image(ctx, state, args: dict) -> str:
     source = state.get("image_path") or getattr(ctx, "last_image_path", None)
     if not source or not os.path.exists(source):
@@ -197,7 +202,8 @@ def _handle_inspect_image(ctx, state, args: dict) -> str:
             "calls, no extra 'improvement' edits (they risk ruining a good result). "
             "Answer the user."
         )
-    return f"Inspection of the current image:\n{result}{footer}"
+    head = PAIR_INSPECTION if _pair else "Inspection of the current image:"
+    return f"{head}\n{result}{footer}"
 
 
 def _edit_checkpoint(ctx, args: dict) -> str:

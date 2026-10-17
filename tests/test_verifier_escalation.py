@@ -218,3 +218,18 @@ def test_one_missing_detail_among_presents_is_partial_not_unchanged():
         "Techwear clothes: PRESENT. | Chrome hardware: MISSING.", {"redraw_image"}) == "partial"
     assert GP._inspection_contradicts_work(
         "Cyberpunk: MISSING. | Neon city: MISSING. | Rain: PRESENT.", {"redraw_image"}) is True
+
+
+# Shown BEFORE and AFTER, the inspector says the rest «remained unchanged»: an armor
+# recolour with every label PRESENT was redone and answered «не полностью» (2026-10-17).
+def test_before_after_unchanged_rest_is_a_pass():
+    from tool_image_handlers import PAIR_INSPECTION
+    v = (PAIR_INSPECTION + "\nThe armor of the girl on the right changed from dark blue to red. "
+         "The girl on the left is unchanged.\n\nArmor of the girl on the right is red: PRESENT\n"
+         "Rest of image is unchanged: PRESENT")
+    assert GP._inspection_contradicts_work(v, {"inpaint_image"}) is False
+    failed = (PAIR_INSPECTION + "\nNothing changed between them.\n\nArmor is red: MISSING")
+    assert GP._inspection_contradicts_work(failed, {"inpaint_image"}) is True
+    # a single picture saying «unchanged» still means the edit did not take
+    assert GP._inspection_contradicts_work(
+        "Inspection of the current image:\nThe picture is unchanged.", {"inpaint_image"}) is True
