@@ -137,7 +137,9 @@ def _handle_inspect_image(ctx, state, args: dict) -> str:
     # by side a changed face shows, rated alone it passes as «a man».
     _ask = check + ("\n\nTwo pictures: BEFORE and AFTER the edit. Say first what changed "
                     "between them, then whether every person the edit was not about is "
-                    "still the same person (face, features, count), then judge the check "
+                    "still the same person (face, features, count), then name anything AFTER "
+                    "has twice or newly that the edit did not ask for (a gold helmet edit drew a "
+                    "second helmet beside the cat and passed), then judge the check "
                     "on AFTER." if _pair else "")
     result = ""
     for _ in range(2):
