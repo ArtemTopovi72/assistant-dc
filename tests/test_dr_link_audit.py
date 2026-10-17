@@ -345,5 +345,12 @@ check("«❓ не указано» stays unknown", mono_color_is_color("| ❓ н
 check("«✅ не указано» is unknown, not a pass", mono_color_is_color("| ✅ не указано | ✅ Global |")
       == "| ❓ не указано | ✅ Global |")
 
+# the writer glued an encoded title piece onto a good link; the cell showed it as text
+_cell = "| [IdeaPad Pro 5](https://x.ru/a)14%20Inch%20Laptop) | Lenovo |"
+out, _ = audit_report_links(_cell, BRIEFS, "ru")
+check("an encoded tail glued after a link is cut", out == "| [IdeaPad Pro 5](https://x.ru/a) | Lenovo |", out)
+out, _ = audit_report_links("[a](https://x.ru/a) 100%25 sure", BRIEFS, "ru")
+check("...but text after a space stays", out == "[a](https://x.ru/a) 100%25 sure", out)
+
 print("%d passed, %d failed" % (OK, BAD))
 sys.exit(1 if BAD else 0)

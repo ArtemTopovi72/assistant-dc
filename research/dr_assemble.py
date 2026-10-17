@@ -293,7 +293,13 @@ def audit_report_links(report: str, briefs: list, out_lang: str = "en") -> tuple
         return "%s (%s)" % (text, _LINK_UNVERIFIED[lang])
 
     report = _MD_LINK.sub(_fix, report)
-    return _MD_BROKEN_LINK.sub(_fix_broken, report), stats
+    report = _MD_BROKEN_LINK.sub(_fix_broken, report)
+    # «[IdeaPad Pro 5](https://…/gaming-laptop/)14%20Inch%20Laptop)»: the writer glued an
+    # encoded piece of a title onto the link, and the table cell showed it as text.
+    return _LINK_TAIL.sub(r"\1", report), stats
+
+
+_LINK_TAIL = re.compile(r"(\]\([^()\s]+\))[^\s|()]*%[0-9A-Fa-f]{2}[^\s|]*")
 
 
 _EMPTY_CELL = re.compile(r"^(?:—|-|–|n/?a|)$", re.I)
