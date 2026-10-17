@@ -216,8 +216,29 @@ def raw_search_results(ctx, query: str, max_results: Optional[int] = None, *,
         }
         if r.get("date"):   # news() supplies a publication date — keep it
             hit["date"] = r["date"]
+        if not news and _portal_noise(hit, query):
+            continue
         hits.append(hit)
     return hits
+
+
+_APP_PATH = re.compile(r"^/?(?:[a-z]{3,12}(?:/[a-z]{3,12})?)?/?$")
+
+
+def _portal_noise(hit: dict, query: str) -> bool:
+    """A site's front page or app section that shares no word with the query.
+
+    ddgs here has google and bing disabled upstream, so «auto» leans on Yandex's
+    site search, which answers a long English sentence with portals: Pinterest,
+    Tinkercad, Duolingo, youtube.com/feed/you -- they became the sources slide
+    of a children's cat-care deck. A front page about the query («Погода в
+    Москве» on gismeteo.ru) still names a query word and stays."""
+    from urllib.parse import urlsplit
+    if not _APP_PATH.match(urlsplit(hit["href"]).path.lower()):
+        return False
+    words = set(re.findall(r"[a-zа-яё0-9]{4,}", (query or "").lower()))
+    text = set(re.findall(r"[a-zа-яё0-9]{4,}", f"{hit['title']} {hit['body']}".lower()))
+    return bool(words) and not (words & text)
 
 
 def _read_page(url: str) -> str:
