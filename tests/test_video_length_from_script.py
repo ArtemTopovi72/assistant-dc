@@ -204,3 +204,27 @@ def test_a_named_length_condenses_a_script_that_runs_longer():
     H._handle_generate_video(ctx, st, {"description": long_, "seconds": 30, "use_current_images": False})
     assert asked == [30.0]
     assert not st.get("video_plan") or " ".join(p["text"] for p in st["video_plan"]) == short
+
+
+KITE = ("A boy runs across a field and launches a kite. The kite climbs high into the sky. "
+        "The wind dies and the kite falls into the grass. The boy runs to it and laughs.")
+
+
+def test_a_length_named_only_in_the_words_stretches_the_parts():
+    """«сделай видео на 30 секунд» came with no seconds from the agent: the plan was three
+    5.2 s parts, ≈16 s (2026-10-17)."""
+    import intent
+    said = "сделай видео на 30 секунд: мальчик запускает змея"
+    ctx = _Ctx(text_model=lambda *a, **k: "", vision_model=lambda *a, **k: "",
+               yes_no=lambda q, t, default=False, wait=True: default, video_plan_ask=True,
+               intent_read=lambda c, t, *a, **k: dict(intent.FALLBACK, song_seconds=30 if "30" in t else 0),
+               video_engine=Over(V, engine_available=lambda ctx: (True, ""), AUTO_MAX_PARTS=99))
+    st = {"user_input_original": said, "user_input": said}
+    out = H._handle_generate_video(ctx, st, {"description": KITE, "use_current_images": False})
+    assert out.startswith("[NOT MADE YET]"), out
+    total = sum(p["sec"] for p in st["video_plan"])
+    assert 27 <= total <= 31, st["video_plan"]
+    # the same script with no length named keeps the script's own length
+    st2 = {"user_input_original": "сделай видео: мальчик запускает змея", "user_input": "x"}
+    H._handle_generate_video(ctx, st2, {"description": KITE, "use_current_images": False})
+    assert sum(p["sec"] for p in st2["video_plan"]) < 20, st2["video_plan"]

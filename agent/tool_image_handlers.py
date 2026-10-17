@@ -26,6 +26,7 @@ model stack into every import of the tool table.
 import contextlib
 import functools
 import logging
+import math
 import os
 import re
 from typing import Optional
@@ -1577,12 +1578,24 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             logger.info("generate_video: script as action from the first frame: %s", acted[:300])
             description = description.replace(raw, acted, 1) if raw in description else acted
             raw = acted
+    if not args.get("seconds") and not continuing:
+        # «сделай видео на 30 секунд» came with no seconds from the agent and was planned
+        # as three 5.2 s parts, ≈16 s (2026-10-17): the length is read from the words.
+        try:
+            from prompt_guard import user_words
+            asked = float(intent_read(ctx)(None, user_words(_said).strip()).get("song_seconds") or 0)
+        except Exception:
+            asked = 0.0
+        if asked > 0:
+            logger.info("generate_video: %.0f s asked in the words, none in the call", asked)
+            args["seconds"] = asked
+    want = float(args.get("seconds") or 0)
     # Over one clip's 15 s the parts follow the script: «на 30 секунд» was capped to one
     # 15 s clip and delivered without a word (2026-10-13).
     if args.get("seconds") and float(args["seconds"]) <= 15.0:
         parts = [raw]
     else:
-        want = float(args.pop("seconds", 0) or 0)
+        args.pop("seconds", None)
         parts = video_mod.split_script(raw)
         have = sum(video_mod.estimate_seconds(p) for p in parts)
         if want and have > want * 1.3:
@@ -1593,6 +1606,12 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 description = description.replace(raw, tight, 1) if raw in description else description
                 raw = tight
                 parts = video_mod.split_script(raw)
+        cap = video_mod.frames_to_seconds(video_mod.VIDEO_MAX_FRAMES_AUTO)
+        if want > len(parts) * cap:
+            # 30 s asked of a 4-sentence script split in two: two parts at the cap are 20 s
+            finer = video_mod.split_script(raw, max_seconds=max(1.0, have / math.ceil(want / cap)))
+            if len(finer) > len(parts):
+                parts = finer
         if not want and len(parts) > video_mod.AUTO_MAX_PARTS:
             # A script the bot wrote itself ran 5-8 parts, ~25 min of render, and the
             # longer it ran the more nonsense it held (owner, 2026-10-15): one or two
@@ -1680,10 +1699,15 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         description = (description.replace(cur, approved[0], 1) if cur and cur in description
                        else approved[0])
         parts = approved
-    elif len(parts) > 1 and getattr(ctx, "video_plan_ask", False):
+    # An asked length the script falls short of: each part plays longer, up to one clip's cap.
+    secs = [video_mod.estimate_seconds(p) for p in parts]
+    if want > 15.0 and len(parts) > 1 and want > sum(secs) * 1.15:
+        per = min(video_mod.frames_to_seconds(video_mod.VIDEO_MAX_FRAMES_AUTO), want / len(parts))
+        secs = [max(x, round(per, 2)) for x in secs]
+    if len(parts) > 1 and not approved and getattr(ctx, "video_plan_ask", False):
         # Several minutes per part: the chat sees the parts, the clip length and the
         # render time first, and may drop or condense parts (user, 2026-10-10).
-        state["video_plan"] = [{"text": p, "sec": video_mod.estimate_seconds(p)} for p in parts]
+        state["video_plan"] = [{"text": p, "sec": x} for p, x in zip(parts, secs)]
         if continuing:      # nothing rendered: the clip and its new people wait for the ▶ rerun
             ctx.continue_tail, ctx.continue_src, ctx.continue_people = cont_tail, cont_src, people
         return ("[NOT MADE YET] The script needs several parts, and the user approves the "
@@ -1705,12 +1729,12 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     # renders below then run with the card held (and the model out) start to finish.
     prepped = []
     if chain_id and len(parts) > 1:
-        prepped = [video_mod.prepare_prompt(ctx, description, images=images)]
+        prepped = [video_mod.prepare_prompt(ctx, description, images=images, seconds=secs[0] if secs else 0.0)]
         voices = video_mod.voices_of(prepped[0][0])
         voices = f"Voices so far, the same if they speak again: {voices} " if voices else ""
         prepped += [video_mod.prepare_prompt(
-            ctx, video_mod.CONTINUE_CTX_PREFIX + video_mod.with_scene(p, voices + " ".join(parts[:i])))
-            for i, p in enumerate(parts[1:], start=1)]
+            ctx, video_mod.CONTINUE_CTX_PREFIX + video_mod.with_scene(p, voices + " ".join(parts[:i])),
+            seconds=secs[i] if i < len(secs) else 0.0) for i, p in enumerate(parts[1:], start=1)]
     mode = video_mod.pick_mode(images, videos, audios)
     tags = video_mod.reference_tags(len(images) if mode == "ref2va" else 0, len(videos), len(audios))
     logger.info("Tool: generate_video(mode=%s, %d image(s), %d video(s)) %s",

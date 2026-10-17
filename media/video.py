@@ -1899,7 +1899,9 @@ _JUDGE = ("You are a strict editor of a video script split into numbered parts; 
           "rendered as its own clip by a video model that draws exactly what is written. A part "
           "is BAD when: (a) it holds more than one distinct visible action or more than one "
           "camera move (small motions of one body flowing into each other -- stretches and "
-          "yawns, turns and smiles -- are ONE action); (b) nobody does anything visible (only effects, light, mood, camera); "
+          "yawns, turns and smiles -- are ONE action); (b) nothing in it moves or acts visibly (only effects, light, mood, camera) "
+          "-- a thing that moves as the story says (a kite climbing high, a ball rolling, a door slamming) IS "
+          "an action; "
           "(c) it repeats what an earlier part already showed; (d) it asks for something the "
           "model draws badly or impossibly: a held object flying or floating by itself, extra "
           "limbs, many small items at once, text on screen, a person in two places; (e) it "
@@ -1951,7 +1953,7 @@ def validate_script(ctx, parts: list, rounds: int = 2) -> list:
                 new = " ".join((text_model(ctx)(
                     ctx,
                     "Rewrite ONE part of a video script so it is a single clear visible action by "
-                    "the people in it, concrete and physical, in English. Fix the problem named. "
+                    "the people or things in it, concrete and physical, in English. Fix the problem named. "
                     "Keep every quoted spoken line character for character, in its language. Add no "
                     "sparks, glow, mood words or camera work. The part before and after it are given "
                     "only for continuity: do not repeat them. Never swap the part's action for one "
