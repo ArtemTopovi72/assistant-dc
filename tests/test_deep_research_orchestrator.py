@@ -197,8 +197,11 @@ def test_a_spec_selection_is_answered_as_a_candidate_matrix():
                   selection_queries=lambda c, t, n=14, sink=None: (sink or {}).update(selection_analysis={"derived": ["4096x2160 x 25 x 8 bit = 1.77 Gbit/s"]}) or ["Sony IMX255 5GigE camera"],
                   selection_followups=lambda c, t, b, a, searched: ["IMX255 color camera 10GigE"],
                   collect_sources=collect, _think_call=think,
-                  _expansion_pass=lambda *a, **k: seen["labels"].append(k.get("label")) or []):
+                  _expansion_pass=lambda *a, **k: seen["labels"].append(k.get("label")) or [],
+                  _filter_offtopic_briefs=lambda b, t: (seen.__setitem__("swept", True), (b, []))[1]):
         out = _run(ctx=ctx, topic="Подбери камеру: 8.3 Мп, 25 fps, Ethernet, глобальный затвор")
+    # the term sweep dropped 89 of a laptop pick's briefs, the Russian shops among them
+    check("selection: no off-topic term sweep over the candidates' pages", not seen.get("swept"))
     check("selection: requirement queries lead the plan", seen["queries"][:1] == ["Sony IMX255 5GigE camera"],
           seen["queries"])
     check("selection: no recency window", seen["timelimit"] is None, seen["timelimit"])

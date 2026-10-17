@@ -857,8 +857,12 @@ def run_deep_research(ctx, topic: str, *, depth: str = "standard",
     # "Mayor Adams" politics page on an "Adam optimizer" run). Drop briefs that name
     # NO topic entity term BEFORE they reach clustering, the contradiction note, the
     # source appendix or synthesis. Word-boundary matched; never empties the set.
-    if _terms and briefs:
-        briefs, _offtopic = _filter_offtopic_briefs(briefs, _terms)
+    # Not for a selection: none of those passes ran (see `not _select` above), and the
+    # sweep dropped 89 of a laptop pick's briefs -- the Russian shops among them, the
+    # only pages for «продаётся в России» and the price -- for saying «notebook» or
+    # «ноутбук» where the terms wanted «laptop» (2026-10-17).
+    if _terms and briefs and not _select:
+        briefs, _offtopic = dep(ctx, "_filter_offtopic_briefs", _filter_offtopic_briefs)(briefs, _terms)
         if _offtopic:
             logger.info("relevance sweep: dropped %d off-topic brief(s): %s",
                         len(_offtopic), ", ".join(b.get("domain", "?") for b in _offtopic))
