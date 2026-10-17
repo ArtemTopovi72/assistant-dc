@@ -203,14 +203,14 @@ def request_seconds(t: str, after_song: bool = False, ctx=None) -> int:
     return _read(t, after_song, ctx=ctx)["song_seconds"] if (t or "").strip() else 0
 
 
-def _polished(ctx, lyrics: str, has_stage: bool = True, singer: str = "") -> str:
+def _polished(ctx, lyrics: str, has_stage: bool = True, singer: str = "", topic: str = "") -> str:
     """The lyric after the lyrics_craft check/revise loop; the original when the
     loop fails or loses the section tags the music engine sings by."""
     try:
         import lyrics_craft
         if has_stage:
             ctx.set_stage("Polishing the lyrics")
-        out = (lyrics_craft.polish(ctx, lyrics, singer=singer) or {}).get("text") or ""
+        out = (lyrics_craft.polish(ctx, lyrics, singer=singer, topic=topic) or {}).get("text") or ""
     except Exception:
         tg_bot.logger.warning("[songs] polishing the lyrics failed; singing the draft", exc_info=True)
         return lyrics
@@ -376,7 +376,7 @@ class SongsMixin:
                 # words under them and the 🎹 Instrumental song would come back sung)
                 # Words the bot wrote itself go through the checks and revisions
                 # of ✨ Improve lyrics before they are sung.
-                _words = _polished(ctx, caption["lyrics"], _has_stage, prefs.get("vocal", ""))
+                _words = _polished(ctx, caption["lyrics"], _has_stage, prefs.get("vocal", ""), topic)
                 _cap = _music_mod.line_budget(duration)[2]       # polish rounds grow the lyric past the slot
                 caption = dict(caption, lyrics=_music_mod.trim_to_lines(_words, _cap) if _cap else _words)
             if cancelled():
