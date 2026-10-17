@@ -47,9 +47,9 @@ class CoverMixin:
             return False
         stars = dict(module(self, "rvc_voice").stars(lang))
         who = choice(self.reads)(
-            "Which singer's voice do these words ask the song to be sung in? \"none\" when "
+            "Which singer's voice do the words {text} ask the song to be sung in? \"none\" when "
             "they name none of these: " + ", ".join(f"{k} = {v}" for k, v in stars.items()),
-            cap, list(stars) + ["none"], default="none")
+            cap, (*stars, "none"), default="none")
         sess.cover_state, sess.cover_src = "want_audio", ""
         sess.cover_voice = who if who in stars else ""
         ext = {"video": ".mp4", "voice": ".ogg"}.get(item.get("media", ""), ".mp3")

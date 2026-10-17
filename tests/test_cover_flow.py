@@ -275,8 +275,10 @@ bot._edit_text = _real_edit
 import types as _types
 bot.modules["rvc_voice"] = Over(rvc_voice, stars=lambda lang="ru", trained=None: [("tsoi_hq", "Виктор Цой")])
 bot.reads = _types.SimpleNamespace(
-    yes_no=lambda q, t, default=False, wait=True: "кавер" in t,
-    choice=lambda q, t, options, default="": "tsoi_hq" if "Цо" in t else default)
+    # the real reads put the words where the question says {text}; without it the model
+    # never saw «голосом Цоя» and picked "none"
+    yes_no=lambda q, t, default=False, wait=True: "{text}" in q and "кавер" in t,
+    choice=lambda q, t, options, default="": "tsoi_hq" if "{text}" in q and "Цо" in t else default)
 for cap, want in (("сделай кавер этой песни голосом Цоя", True), ("что это за песня?", False)):
     s_ = bot._get_session(CID); s_.cover_state = ""; s_.cover_src = ""; s_.cover_voice = ""; bot._store.put(s_)
     n = len(bot.sent)
@@ -288,6 +290,15 @@ for cap, want in (("сделай кавер этой песни голосом �
     else:
         check("...a song asked about is not taken for a cover", not ok)
 bot.reads = None
+
+# a crash while a batch is read must reach the user, not leave the chat silent
+_orig_rp = bot._resolve_and_push
+bot._resolve_and_push = lambda cid, batch: 1 / 0
+n = len(bot.sent)
+bot._dispatch(m(text="привет"))
+check("a batch that crashes tells the user", wait(lambda: any("Ошибка" in t for _, t in bot.sent[n:]), 6),
+      bot.sent[n:])
+bot._resolve_and_push = _orig_rp
 
 bot._running = False; thr.join(timeout=8)
 print("\n%d/%d checks passed" % (OK, OK + BAD))

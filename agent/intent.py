@@ -219,6 +219,7 @@ def ask_choice(question: str, text: str, options: tuple, default: str = "") -> s
         return default
     if os.getenv("F5_TEST_RUN") and not os.getenv("INTENT_LIVE"):
         return default
+    options = tuple(options)              # the cache key; a caller's list raised TypeError
     key = (question, text[:1500], options)
     with _LOCK:
         if key in _YES_CACHE:

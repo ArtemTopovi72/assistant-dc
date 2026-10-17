@@ -477,7 +477,15 @@ class QueueMixin:
             try:
                 with chatlog.bind(chat_id):
                     self._resolve_and_push(chat_id, batch)
-            except Exception: tg_bot.logger.exception("debounce_loop error chat=%s", chat_id)
+            except Exception as exc:
+                tg_bot.logger.exception("debounce_loop error chat=%s", chat_id)
+                # A song with a caption crashed here and the user heard nothing at all.
+                try:
+                    _lang = self._lang(self._get_session(chat_id))
+                    self._send_text(chat_id, tg_bot._t("err_generic", _lang, err=type(exc).__name__),
+                                    parse_mode="HTML")
+                except Exception:
+                    tg_bot.logger.exception("could not report the batch error chat=%s", chat_id)
             finally:
                 self._debouncing.discard(chat_id)
                 turn_trace.finish(_trace, keep_idle=False)
