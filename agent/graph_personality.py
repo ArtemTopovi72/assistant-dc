@@ -32,7 +32,7 @@ patched on `graph`, only read directly (e.g. `graph._intent_tools(...)`,
 `graph._DECK_PREFIX`) or not touched by the suites at all. graph.py
 re-exports it all by name so those direct reads keep resolving.
 """
-from seams import chat_model, dep, run_tool, intent_read, yes_no
+from seams import chat_model, choice, dep, run_tool, intent_read, yes_no
 import json
 import logging
 import os
@@ -157,12 +157,17 @@ def _inspection_misses_request(request: str, verdict: str, tools_called: set, ct
         return False
     if not (request or "").strip() or not (verdict or "").strip():
         return False
-    return yes_no(ctx)(
+    # "partly" vs "not": a swapped-in girl in blue-and-red armour for «в красных
+    # доспехах» landed (answered «остался прежним»), a girl ADDED beside the man to be
+    # dressed did not (2026-10-17).
+    got = choice(ctx)(
         "A user asked for a picture change: «" + request.strip()[:400].replace("{", "(")
-        + "». A checker then described the result: {text} -- does that description show "
-        "that the request is NOT met (a wrong number of things, the wrong place or "
-        "position, a wrong colour, something asked for missing)?",
-        verdict.strip()[:1200], default=False)
+        + "». A checker then described the result: {text} -- \"met\" when the description "
+        "shows the request done; \"partly\" when the asked change is there but a detail is "
+        "off (a colour, a count, a position); \"not\" when the asked change is not there, or "
+        "something nobody asked for was added or replaced instead.",
+        verdict.strip()[:1200], ("met", "partly", "not"), default="met")
+    return {"partly": "partial", "not": True}.get(got, False)
 
 
 def _inspection_contradicts_work(verdict: str, tools_called: set, removal: str = "") -> bool:
@@ -2028,13 +2033,14 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             if tool_name == "inspect_image":
                 verification_negative = _inspection_contradicts_work(
                     tool_result, tools_called_this_turn, removal_turn)
-                if not verification_negative and _inspection_misses_request(
-                        original_input or user_input, tool_result, tools_called_this_turn, ctx=ctx):
-                    logger.info("inspection description contradicts the request")
-                    # Every label PRESENT and only the description off (blue-and-red
-                    # armour for «девушка в красных доспехах»): the change landed, so
-                    # «он остался прежним» under a visibly swapped person was a lie.
-                    verification_negative = "partial"
+                if not verification_negative:
+                    verification_negative = _inspection_misses_request(
+                        original_input or user_input, tool_result, tools_called_this_turn, ctx=ctx)
+                    if verification_negative:
+                        logger.info("inspection description contradicts the request (%s)",
+                                    verification_negative)
+                if verification_negative is True and state.get("last_edit_source"):
+                    state["retry_from"] = state["last_edit_source"]
             is_error = tool_result.lstrip().startswith(("[TOOL ERROR]", "Unknown tool"))
             if is_error:
                 consecutive_failures += 1

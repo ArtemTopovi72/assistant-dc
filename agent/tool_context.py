@@ -17,6 +17,16 @@ def _remember(ctx, state, kind: str, text: str, meta: Optional[dict] = None) -> 
     state["session_memory_text"] = ctx.memory_text()
 
 
+def _edit_source(ctx, state) -> Optional[str]:
+    """The picture an edit starts from, kept as state["last_edit_source"]. After a
+    failed inspection it is the picture before the rejected attempt (state["retry_from"]):
+    every retry of «одень его в доспехи» re-edited the result with the wrongly added
+    girl, and she stayed through three passes."""
+    src = state.pop("retry_from", None) or state.get("image_path") or getattr(ctx, "last_image_path", None)
+    state["last_edit_source"] = src
+    return src
+
+
 def _set_current_image(ctx, state, path: str, status: str = "ok") -> None:
     """Point ctx/state at the new current image after a successful edit — the
     three assignments every image handler below makes on success. The picture it

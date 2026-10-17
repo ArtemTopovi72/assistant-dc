@@ -48,9 +48,13 @@ def test_single_picture_question_reads_only_the_current_one(tmp_path, monkeypatc
 def test_inspection_description_that_misses_the_request_counts_as_negative():
     import types
     import graph_personality as gp
-    three = types.SimpleNamespace(yes_no=_yes(lambda q, t: "three" in t.lower()))
+    def pick(q, t, options, default=""):
+        assert "{text}" in q and set(options) == {"met", "partly", "not"}
+        return "not" if "woman" in t.lower() else "partly" if "three" in t.lower() else "met"
+    ctx = types.SimpleNamespace(choice=pick)
     edit = {"inpaint_image"}
-    assert gp._inspection_misses_request("пусть котов будет два", "Three grey cats sit. | Two cats: PRESENT", edit, ctx=three)
-    assert not gp._inspection_misses_request("пусть котов будет два", "Two cats sit.", edit, ctx=three)
+    assert gp._inspection_misses_request("пусть котов будет два", "Three grey cats sit. | Two cats: PRESENT", edit, ctx=ctx) == "partial"
+    assert gp._inspection_misses_request("одень его в доспехи", "A woman in armor was added. | Armor: PRESENT", edit, ctx=ctx) is True
+    assert gp._inspection_misses_request("пусть котов будет два", "Two cats sit.", edit, ctx=ctx) is False
     # nothing was made this turn -> no verdict about a requested change
-    assert not gp._inspection_misses_request("пусть котов будет два", "Three grey cats", set(), ctx=three)
+    assert not gp._inspection_misses_request("пусть котов будет два", "Three grey cats", set(), ctx=ctx)

@@ -250,8 +250,34 @@ def test_a_description_mismatch_is_partial_not_unchanged():
         "swap_person": "Swap complete and saved: /tmp/x.png",
         "inspect_image": "A woman in blue and red armor stands in front. | Girl in red armor: PRESENT",
     })
-    ctx = _TGF._ctx(**reads(yes=lambda q, t: "blue and red" in t))
+    ctx = _TGF._ctx(**reads(pick=lambda q, t: "partly" if "blue and red" in t else "met"))
     ctx.last_image_path = "/tmp/in.png"
     out = _TGF._run(ctx, llm, tools, {"user_input": "замени мужика на девушку в красных доспехах",
                                       "messages": [], "image_path": "/tmp/x.png"}, fastpath=False)
     assert out["final_answer"] != GF._VERIFY_NEGATIVE_ANSWER, out["final_answer"]
+
+
+# A girl ADDED beside the man to be dressed is not the change: each retry re-edited
+# that result and she stayed through three passes. The retry starts from the picture
+# before the rejected attempt (2026-10-17).
+def test_a_rejected_edit_is_retried_from_the_picture_before_it():
+    from fakes import reads
+    sources = []
+    llm = _TGF.LLM([
+        _TGF._asst("", [_TGF._tc("redraw_image", {"instructions": "armour"}, "e1")]),
+        _TGF._asst("", [_TGF._tc("inspect_image", {}, "v1")]),
+        _TGF._asst("", [_TGF._tc("redraw_image", {"instructions": "armour"}, "e2")]),
+        _TGF._asst("Не получилось."),
+    ])
+    def run(ctx, state, name, args):
+        if name == "redraw_image":
+            import tool_context
+            sources.append(tool_context._edit_source(ctx, state))
+            tool_context._set_current_image(ctx, state, f"/tmp/out{len(sources)}.png")
+            return "Image redrawn and saved"
+        return "A woman in armor was added in front. | Armor: PRESENT"
+    ctx = _TGF._ctx(**reads(pick=lambda q, t: "not" if "woman" in t else "met"))
+    ctx.last_image_path = "/tmp/orig.png"
+    _TGF._run(ctx, llm, run, {"user_input": "одень его в доспехи", "messages": [],
+                              "image_path": "/tmp/orig.png"}, fastpath=False)
+    assert sources == ["/tmp/orig.png", "/tmp/orig.png"], sources

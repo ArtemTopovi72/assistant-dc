@@ -34,7 +34,7 @@ import config
 
 import image as image_mod
 import tool_graph
-from tool_context import _remember, _set_current_image
+from tool_context import _edit_source, _remember, _set_current_image
 
 from seams import dep, module, intent_read, text_model, vision_model, yes_no
 
@@ -227,7 +227,7 @@ def _undo(ctx, state) -> str:
 
 
 def _handle_inpaint_image(ctx, state, args: dict) -> str:
-    source = state.get("image_path") or getattr(ctx, "last_image_path", None)
+    source = _edit_source(ctx, state)
     _note_source(state, source)
     _undone = _undo(ctx, state)
     if _undone:
@@ -508,7 +508,7 @@ def _handle_transfer_image(ctx, state, args: dict) -> str:
     imgs = [p for p in (getattr(ctx, "reference_images", None) or []) if p and os.path.exists(p)]
     # de-dupe preserving order
     seen = set(); imgs = [p for p in imgs if not (p in seen or seen.add(p))]
-    target = state.get("image_path") or getattr(ctx, "last_image_path", None)
+    target = _edit_source(ctx, state)
     if target and os.path.exists(target) and target not in imgs:
         imgs.append(target)
     if len(imgs) < 2:
@@ -660,7 +660,7 @@ def _handle_swap_person(ctx, state, args: dict) -> str:
 def _handle_fix_hands(ctx, state, args: dict) -> str:
     """Repair deformed hands/fingers in the current image via the MeshGraphormer
     Hand Refiner (geometry-guided depth-ControlNet inpaint of only the hand)."""
-    source = state.get("image_path") or getattr(ctx, "last_image_path", None)
+    source = _edit_source(ctx, state)
     _note_source(state, source)
     if not source or not os.path.exists(source):
         return ("[TOOL ERROR] No image to fix — generate or load an image first, then "
@@ -707,7 +707,7 @@ def _handle_fix_artifact(ctx, state, args: dict) -> str:
     FireRed engine to remove the flaw, and composite it back so everything else
     stays pixel-identical. The conversational counterpart of the GUI '🩹 Fix artifact'
     button (which uses a hand-drawn mask instead of a region phrase)."""
-    source = state.get("image_path") or getattr(ctx, "last_image_path", None)
+    source = _edit_source(ctx, state)
     _note_source(state, source)
     if not source or not os.path.exists(source):
         return ("[TOOL ERROR] No image to fix — generate or load an image first, then call "
@@ -1898,7 +1898,7 @@ def redraw_whole_image(ctx, source: str, instructions: str):
 def _handle_redraw_image(ctx, state, args: dict) -> str:
     import tools as _t   # the render seam is owned by tools; read it at CALL time
     exists = dep(ctx, "exists", os.path.exists)
-    source = state.get("image_path") or getattr(ctx, "last_image_path", None)
+    source = _edit_source(ctx, state)
     _note_source(state, source)
     if not source or not exists(source):
         return (
