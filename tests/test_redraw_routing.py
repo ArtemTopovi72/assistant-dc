@@ -103,6 +103,15 @@ calls, out, msg = _run(_img("user"), "make it winter", layout=False)
 check("FireRed was used", "firered" in calls, calls)
 check("the layout path was not attempted", "layout" not in calls, calls)
 check("the FireRed result became the current image", os.path.basename(out or "") == "firered.png", out)
+# inspect_image compares BEFORE and AFTER only if the redraw keeps BEFORE: judged
+# alone, «sharper than before?» came back MISSING and a good pass was redone.
+_src = _img("user2")
+_st = {"image_path": _src}
+T._handle_redraw_image(Ctx(load_layout_for=lambda p: None, restyle=_stub("firered", _out("firered")),
+                           preserve_identity_face=lambda src, new, **kw: new,
+                           log_edit_decision=lambda **kw: None),
+                       _st, {"mode": "redraw", "instructions": "make it sharper"})
+check("the redraw keeps the picture it replaced for inspection", _st.get("edit_before") == _src, _st)
 
 print()
 print("=" * 70)

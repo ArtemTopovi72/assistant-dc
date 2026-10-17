@@ -1994,8 +1994,9 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
         ctx.user_look = _prev_look
     verb = "redrawn"
     if new_path and exists(new_path):
-        ctx.last_image_path = new_path
-        state["image_path"] = new_path
+        # keeps BEFORE for inspect_image: judged alone, «is it sharper than before?»
+        # came back MISSING and a good quality pass was redone into a zoomed reframe
+        _set_current_image(ctx, state, new_path)
 
     try:
         dep(ctx, "log_edit_decision", _image(ctx).log_edit_decision)(
@@ -2012,11 +2013,8 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
             "do NOT claim a new image was produced."
         )
 
-    ctx.last_image_path = new_path
     # ctx.last_image_prompt is deliberately NOT overwritten with the bare
     # instructions: it describes the picture's subject, and a later redraw needs it.
-    state["image_path"] = new_path
-    state["image_status"] = "ok"
     dep(ctx, "_remember", _remember)(ctx, state, "redraw", f"Image {verb}" + (f": {instructions}" if instructions else ""),
               {"path": new_path})
     result = f"Image {verb} and saved: {new_path}"
