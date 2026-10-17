@@ -1,4 +1,4 @@
-"""Regression: lettering painted across a subject.
+r"""Regression: lettering painted across a subject.
 
 Found in a real render. outputs/ideogram_00008_.png came back with a
 "General Gingerbread" banner laid straight over the portrait's face, and
