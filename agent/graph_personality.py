@@ -1416,6 +1416,10 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                     _which = ("the file tools NOW (find_content to pick photos "
                               "by content, dedupe_photos to drop re-shots, "
                               "run_code to build; write nothing until they ran)")
+                elif "generate_video" in (_own_read.get("wants") or []):
+                    # told inpaint/redraw/generate_image, «оживи фото: история…» was
+                    # redrawn and answered «я работаю с изображениями, возьми Runway» (2026-10-17)
+                    _which = "generate_video NOW (the user asked for a video of this picture)"
                 else:
                     _which = ("the proper tool NOW (inpaint_image for a "
                               "localized change, redraw_image to re-render the "

@@ -149,6 +149,9 @@ _LOOK = re.compile(
     # no action, rewritten into a copy of the next part (live 2026-10-17).
     r"|(?:the\s+)?(?:video|clip|scene|shot)\s+(?:continues|starts|begins|opens|picks\s+up)\b",
     re.I)
+_ONCE = re.compile(r"(?:the\s+)?(?:video|clip|scene|shot)\s+(?:starts|begins|opens)\b"
+                   r"|(?:the\s+)?camera\s+(?:\w+ly\s+)?(?:pans|tilts|zooms|dollies|pulls|pushes|moves|"
+                   r"tracks|cranes|rises|lowers|orbits|swings|cuts)\b", re.I)
 _CAMERA_AS = re.compile(r"((?:the\s+)?camera\b[^.;]*?)\s+(?:as|while|when)\s+(?!it\b|they\b|he\b|she\b)(\w.+)", re.I)
 _SENT = re.compile(r"(?<=[.!?;])\s+|(?<=,)\s+(?=(?:then|after that|afterwards|затем|потом|после этого)\b)", re.I)
 
@@ -197,8 +200,20 @@ def split_script(description: str, max_seconds: float = 0.0) -> list:
     # Sound, light and look lines take no screen time and belong to every part: as a
     # part of their own they were "2. Soundscape: soft indoor ambience…" with no action
     # and their words had pushed a one-clip script into two.
-    look = " ".join(p.strip() for p in pieces if _LOOK.match(p.strip()))
-    pieces = [p for p in pieces if not _LOOK.match(p.strip())]
+    # ...but how the scene OPENS and a camera MOVE happen once: on every part, each part
+    # replayed «a close-up of the letter, the camera pans up to the man» (2026-10-17).
+    # They go with the action next to them.
+    once, glued = "", []
+    for p in pieces:
+        if _ONCE.match(p.strip()):
+            once = (once + " " + p.strip()).strip()
+        elif not _LOOK.match(p.strip()):
+            glued.append((once + " " + p.strip()).strip() if once else p)
+            once = ""
+    if once and glued:
+        glued[-1] = glued[-1].strip() + " " + once
+    look = " ".join(p.strip() for p in pieces if _LOOK.match(p.strip()) and not _ONCE.match(p.strip()))
+    pieces = glued if glued else [p for p in pieces if not _LOOK.match(p.strip())]
     if look:
         action = restore(" ".join(p.strip() for p in pieces))
         if not pieces or estimate_seconds(action, capped=False) <= top:
@@ -1408,30 +1423,11 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
             out = out[:end.start()] + " " + said + out[end.start():]
         else:
             out = out + "\n" + said
-    # Told rule (6), a part with no words still came back with «A distant man's voice calls:
-    # <d>[English] Hello!</d>» (live 2026-10-15): a line nobody wrote is a wordless call.
-    # ...but a grunt or a laugh the request asks for is written the same way, and cutting
-    # it left the voice track empty: «кряхтит» came back silent (live 2026-10-17)
-    from seams import yes_no
-    made_up = [x for x in _made_up_lines(description, out)
-               if not yes_no(ctx)("A video request: {text}\n\nThe video prompt has a character voice "
-                                  "this: " + x + "\nDoes the request ITSELF name this kind of sound "
-                                  "(it says someone grunts, groans, laughs, moans, sighs or screams)? "
-                                  "A call, a word or an exclamation the request does not name is no.",
-                                  _SCENE_NOTE_RE.sub("", description))]
-    if made_up:
-        logger.info("Context-IR rewrite made up %d spoken line(s); made wordless", len(made_up))
-        for x in made_up:
-            out = out.replace(x, "a wordless call, no words")
-    # «<d>[English] ...</d>» for a yawn: a voiced line with nothing to say in it
-    out = re.sub(r"\s*<d>(?:\s*\[[^\]]*\])?[^\w<]*</d>", "", out)
-    # The guide's cut time is "At 00:03.500"; the model also wrote "At 04.00".
-    out = re.sub(r"\bAt (\d{1,2})\.(\d{1,3})\b(?!:)",
-                 lambda m: f"At 00:{int(m.group(1)):02d}.{m.group(2).ljust(3, '0')}", out)
     if "The shot continues with no cut" in description:
         # Told in words (rules 7-8), the writer still opened part 2 with «a medium shot frames
         # a traveler»; the join crossfaded a far figure into his face (live 2026-10-15).
-        # Read back by the model, rewritten once when it breaks the continued shot.
+        # Read back by the model, rewritten once when it breaks the continued shot -- before
+        # the clean-up below: after it, the rewrite brought «<d>[English] ...</d>» back.
         from seams import yes_no
         try:
             broken = yes_no(ctx)(
@@ -1452,8 +1448,27 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
                               "in real time; nobody already in the scene enters again."))
             if again and all(f in again for f in need) and "non_diegetic_music" in again \
                     and not _lost_lines(description, again):
-                out = re.sub(r"\bAt (\d{1,2})\.(\d{1,3})\b(?!:)",
-                             lambda m: f"At 00:{int(m.group(1)):02d}.{m.group(2).ljust(3, '0')}", again)
+                out = again
+    # Told rule (6), a part with no words still came back with «A distant man's voice calls:
+    # <d>[English] Hello!</d>» (live 2026-10-15): a line nobody wrote is a wordless call.
+    # ...but a grunt or a laugh the request asks for is written the same way, and cutting
+    # it left the voice track empty: «кряхтит» came back silent (live 2026-10-17)
+    from seams import yes_no
+    made_up = [x for x in _made_up_lines(description, out)
+               if not yes_no(ctx)("A video request: {text}\n\nThe video prompt has a character voice "
+                                  "this: " + x + "\nDoes the request ITSELF name this kind of sound "
+                                  "(it says someone grunts, groans, laughs, moans, sighs or screams)? "
+                                  "A call, a word or an exclamation the request does not name is no.",
+                                  _SCENE_NOTE_RE.sub("", description))]
+    if made_up:
+        logger.info("Context-IR rewrite made up %d spoken line(s); made wordless", len(made_up))
+        for x in made_up:
+            out = out.replace(x, "a wordless call, no words")
+    # «<d>[English] ...</d>» for a yawn: a voiced line with nothing to say in it
+    out = re.sub(r"\s*<d>(?:\s*\[[^\]]*\])?[^\w<]*</d>", "", out)
+    # The guide's cut time is "At 00:03.500"; the model also wrote "At 04.00".
+    out = re.sub(r"\bAt (\d{1,2})\.(\d{1,3})\b(?!:)",
+                 lambda m: f"At 00:{int(m.group(1)):02d}.{m.group(2).ljust(3, '0')}", out)
     # The guide separates the fields with one blank line; the model often
     # writes them back to back.
     return re.sub(r"\n+(?=(?:overall_soundscape|non_diegetic_music|summary|retention_analysis|"
@@ -2013,7 +2028,8 @@ def validate_script(ctx, parts: list, rounds: int = 2, max_parts: int = 0) -> li
             continue
         # Two story steps in one part were rewritten down to one: «runs, launching the kite;
         # the kite soars high» lost the soaring, the step the user asked for (2026-10-17).
-        # Room permitting, each step becomes a part of its own.
+        # Room permitting, each step becomes a part of its own. A setting is not a step: «the
+        # letter rests on the fabric. The camera pans up» became two 5 s parts of nothing (2026-10-17).
         split = sorted((int(b["part"]) for b in got if b.get("split") is True
                         and not parts[int(b["part"]) - 1].startswith((INSERT_HEAD, INSERT_BACK))), reverse=True)
         grown = False
@@ -2027,7 +2043,9 @@ def validate_script(ctx, parts: list, rounds: int = 2, max_parts: int = 0) -> li
                     "and every quoted spoken line word for word; add nothing, no camera words. A "
                     "spoken line stays in the sentence of whoever says it (He turns and says «...»), "
                     "never a line of its own; a note about sound or silence is not an action and is "
-                    "left out. English.", parts[n - 1], temperature=0.2, max_tokens=250) or "").splitlines()]
+                    "left out. A sentence that only says how things are (a letter lies on the "
+                    "table) or only moves the camera is not an action either: it goes into the "
+                    "sentence of the action after it, never a line of its own. English.", parts[n - 1], temperature=0.2, max_tokens=250) or "").splitlines()]
             except Exception as exc:
                 logger.warning("validate_script: splitting part %d failed: %s", n, exc)
                 continue
@@ -2060,7 +2078,9 @@ def validate_script(ctx, parts: list, rounds: int = 2, max_parts: int = 0) -> li
             except Exception as exc:
                 logger.warning("validate_script: rewrite of part %d failed: %s", n, exc)
                 continue
-            if len(new) >= 15 and not _lost_lines(before, new):
+            # nor gains one: the next part's «Не может быть…» was pulled in, and then said in
+            # three parts running (2026-10-17)
+            if len(new) >= 15 and not _lost_lines(before, new) and not _lost_lines(new, before):
                 logger.info("validate_script: part %d (%s): %s -> %s", n, why, before[:80], new[:80])
                 parts[n - 1] = new
     return parts

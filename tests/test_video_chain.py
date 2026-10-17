@@ -287,6 +287,12 @@ def test_the_judge_rewrites_bad_parts_and_never_a_quoted_line():
     ctx2 = types.SimpleNamespace(text_model=lambda c, s, u, **k: (
         '{"bad": [{"part": 1, "why": "x"}]}' if s.startswith("You are a strict") else "He nods at the door."))
     assert V.validate_script(ctx2, quoted) == quoted
+    # ...and so is one that pulls in another part's line: it was then said three times
+    silent = ["He smiles.", 'He whispers «Не может быть…».']
+    ctx3 = types.SimpleNamespace(text_model=lambda c, s, u, **k: (
+        '{"bad": [{"part": 1, "why": "x"}]}' if s.startswith("You are a strict")
+        else "He smiles warmly and whispers «Не может быть…»."))
+    assert V.validate_script(ctx3, silent) == silent
 
 
 def test_two_story_steps_in_one_part_are_split_not_cut_to_one():
@@ -475,5 +481,20 @@ def test_an_action_inside_a_camera_line_stays_in_its_own_part():
          "falls into the grass. The boy runs to it and laughs. Sound: wind.")
     parts = V.split_script(s)
     assert sum("soars high" in p for p in parts) == 1, parts
-    assert all("camera pans up" in p for p in parts), parts
+    assert sum("camera pans up" in p for p in parts) == 1, parts   # a camera move happens once
     assert V.split_script("The camera follows the cat as it walks.") == ["The camera follows the cat as it walks."]
+
+
+def test_how_the_scene_opens_is_not_replayed_by_every_part():
+    """«The scene begins with a close-up of the letter. The camera pans up to reveal the man»
+    rode every part, and each part replayed the pan (2026-10-17); the lighting does belong
+    to every part."""
+    s = ("The scene begins with a close-up of an old letter on a table. The camera slowly pans up "
+         "to reveal an old man. He reaches for the letter, picks it up and begins to read it. "
+         "As he reads, his eyes widen and he whispers «Не может быть…» looking at the paper. "
+         "Finally he looks up from the letter with a gentle smile. The lighting is soft and warm.")
+    parts = V.split_script(s)
+    assert len(parts) > 1, parts
+    assert sum("pans up" in p for p in parts) == 1 and "pans up" in parts[0], parts
+    assert sum("scene begins" in p for p in parts) == 1, parts
+    assert all("lighting is soft" in p for p in parts), parts
