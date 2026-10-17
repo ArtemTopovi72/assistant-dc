@@ -86,6 +86,10 @@ class ResolveMixin:
         (ears + eyes), any other page is read (tg_links). True: a long video was
         offered as the portioned job, which answers the message."""
         _vu = _tg_links.video_url(text)
+        if _vu and ctx is not None and _vu not in _tg_links.WATCHED:
+            # download + ears + eyes run before the task and its status line: a forwarded
+            # link sat 49 s with no word (live 2026-10-17)
+            self._send_text(chat_id, tg_bot._t("fwd_video_work", self._lang(sess)))
         _vid = self.links.fetch_video(_vu) if _vu and ctx is not None else {}
         if _vid.get("data"):
             # A video link is watched like a sent video: ears + eyes.
@@ -1635,6 +1639,14 @@ class ResolveMixin:
 
         self._queue_note(chat_id, task, lang)
 
+    def _card_busy(self) -> str:
+        """What render holds the whole card, "" when it is shared."""
+        try:
+            import comfy_client
+            return comfy_client.card_is_exclusive()
+        except Exception:
+            return ""
+
     def _queue_note(self, chat_id: int, task, lang: str) -> None:
         """⏳ for a task that will not start at once: its place among the tasks
         AHEAD OF THIS USER under round-robin (not the global depth), or, with
@@ -1649,12 +1661,7 @@ class ResolveMixin:
                 tg_bot._t("queue_pos", lang, pos=len(ahead) + 1, eta=tg_bot._fmt_eta(ahead, lang)),
                 parse_mode="HTML")
             return
-        try:
-            import comfy_client as _cc
-            busy = _cc.card_is_exclusive()
-        except Exception:
-            busy = ""
-        if busy:
+        if self._card_busy():
             self._send_text(chat_id, tg_bot._t("card_busy", lang), parse_mode="HTML")
 
     def _register_animate_photo(self, chat_id: int, sess, lang: str, item: dict) -> None:

@@ -12,7 +12,6 @@ except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
 
 import tg_bot as T
-import comfy_client
 
 T.redirect_data_dir(tempfile.mkdtemp(prefix="tgtest_cardbusy_"))
 
@@ -28,12 +27,8 @@ def note(ahead, busy):
     sent = []
     bot._send_text = lambda cid, text, **k: sent.append(text)
     bot._backend = types.SimpleNamespace(tasks_ahead=lambda tid: list(ahead))
-    real = comfy_client.card_is_exclusive
-    comfy_client.card_is_exclusive = lambda: busy
-    try:
-        bot._queue_note(5, types.SimpleNamespace(task_id="t"), "ru")
-    finally:
-        comfy_client.card_is_exclusive = real
+    bot._card_busy = lambda: busy
+    bot._queue_note(5, types.SimpleNamespace(task_id="t"), "ru")
     return sent
 
 

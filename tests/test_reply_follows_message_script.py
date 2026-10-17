@@ -46,7 +46,7 @@ check("turn_lang persists", sess.to_dict().get("turn_lang") == "en")
 
 src = inspect.getsource(T.TaskRunnerMixin._execute_task)
 check("the task applies the per-turn override",
-      "ctx.reply_lang = _turn_lang" in src and "_message_script(task.user_text)" in src)
+      "ctx.reply_lang = _turn_lang" in src and "_message_script(_typed_part(task.user_text))" in src)
 
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)

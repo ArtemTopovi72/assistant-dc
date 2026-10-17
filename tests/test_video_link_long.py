@@ -39,3 +39,13 @@ scaffold = []
 assert not bot._read_links(object(), bot._get_session(CID), CID, None, "перескажи " + URL, scaffold)
 assert scaffold and "could not be downloaded" in scaffold[0] and "NOT watched" in scaffold[0], scaffold
 print("PASS refused download")
+
+# The download, ASR and look run before the task's status line: a forwarded link sat
+# 49 s with no word (2026-10-17). The user is told at once.
+sent.clear()
+order = []
+bot.links = Over(L, fetch_video=lambda u, max_seconds=L.VIDEO_MAX_SECONDS: order.append("fetch") or {})
+bot._send_text = lambda cid, text, **k: order.append(text) or 1
+bot._read_links(object(), bot._get_session(CID), CID, None, "смотри https://youtu.be/new", [])
+assert order and order[0] == T._t("fwd_video_work", "ru") and order[1] == "fetch", order
+print("PASS told before the download")
