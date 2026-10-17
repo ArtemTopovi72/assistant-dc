@@ -156,16 +156,16 @@ subtracts the detected face box for any non-facial region so identity is protect
 construction rather than by a post-hoc gate. STAGE-0 is deterministic mask geometry
 (`imaging/image_maskqa.py:_mask_quality_ok`): a scattered-speck mask, an inverted
 "selected everything" mask, or a mask that engulfed `> 65%` of the face box (the
-segmenter grabbed the whole person) all reject before any render. STAGE-1 shows the
+segmenter grabbed the whole person; not for a worn garment that covers the body from the neck down, such as full armor or a dress, whose collar reaches the face box) all reject before any render. STAGE-1 shows the
 cutout to a vision model and asks whether the selection is correct; either failure
 retries once at a different SAM3 threshold before giving up. The edit itself crops the
 mask's bounding box from the full-resolution original, lets FireRed instruction-edit
 only that tile, then composites the result back through a feathered alpha
 ([`imaging/compositing.py`](../../imaging/compositing.py)) so every pixel outside the mask stays byte-exact. STAGE-2
 re-checks the composited result (not the tile) with a tinted overlay; a `WRONG`/`PARTIAL`
-verdict rejects the edit unless it is a whole-region swap (clothing, hair), where the
-composite is pasted strictly through the mask and nothing can leak outside it, so the
-verdict is advisory there instead of a hard reject.
+verdict rejects the edit unless it is a whole-region swap (clothing, hair) or a worn item
+recoloured in part, where the composite is pasted strictly through the mask and nothing can
+leak outside it, so the verdict is advisory there instead of a hard reject.
 
 ## Where it lives
 
@@ -201,7 +201,8 @@ importer is [`tests/test_edit_state.py`](../../tests/test_edit_state.py).
   (`identity_metrics.identity_cosine`) drops below `0.90` after one tighter retry;
   `SFACE_SAME_PERSON_COSINE = 0.363` is the underlying "same person at all" floor.
   A mask that covers more than `65%` of the detected face box is rejected as having
-  grabbed the whole person, not the named object.
+  grabbed the whole person, not the named object, unless the named object is a worn
+  neck-to-feet garment (`_item_attributes` `whole_body`).
 - **A layout caps at `MAX_ELEMENTS = 6` boxes and `MIN_AREA = 0.012` of the frame**
   ([`imaging/draw_geometry.py`](../../imaging/draw_geometry.py)); past the element cap the renderer stops honouring
   boxes, and below the area floor an element risks vanishing from the render.
