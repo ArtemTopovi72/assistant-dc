@@ -70,6 +70,16 @@ def _is_button_payload(text: str) -> bool:
     return any(t.startswith(p) for p in tg_bot._PROMPT_KB.values())
 
 
+def _typed_part(text: str) -> str:
+    """The user's own words after a button's English prefix: «animate this photo:
+    Танцует» read as Latin and switched a Russian chat's replies to English."""
+    t = text or ""
+    for p in ("animate this photo: ", *tg_bot._PROMPT_KB.values()):
+        if t.startswith(p):
+            return t[len(p):]
+    return t
+
+
 def _message_script(text: str, ctx=None) -> str:
     """'en' for a message written wholly in Latin letters, 'ru' for one wholly
     in Cyrillic, '' when it is neither (mixed text, a button payload, an emoji,
@@ -595,7 +605,7 @@ class TaskRunnerMixin:
         # stale/newly-set turn_lang="en" leaks English into the interim note and
         # the final reply for a plain button press in a Russian session.
         is_internal = _is_button_payload(task.user_text)
-        _tl = "" if is_internal else _message_script(task.user_text)
+        _tl = "" if is_internal else _message_script(_typed_part(task.user_text))
         from graph_language import asks_for_english as _ask_en
         if _tl and not _ask_en(task.user_text, ctx=self.reads):
             sess.turn_lang = _tl          # an explicit "по-английски" is one turn, not a mode

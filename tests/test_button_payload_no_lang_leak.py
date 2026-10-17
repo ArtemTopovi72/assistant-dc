@@ -57,6 +57,15 @@ for verb in ("change_clothes", "regenerate"):
     check(f"{verb!r} payload reads as English by alphabet alone (the trap)",
           TT._message_script(payload) == "en", payload)
 
+# «animate this photo: Говорит несколько раз…» is mixed as a whole, so a stale «en»
+# from earlier was never reset and a Russian chat got «Done! The video…»
+check("Russian words after the ✨ animate prefix read as Russian",
+      TT._message_script(TT._typed_part("animate this photo: Говорит несколько раз «Куришь?» мужским голосом")) == "ru")
+check("...while the whole line, prefix included, says nothing",
+      TT._message_script("animate this photo: Говорит несколько раз «Куришь?» мужским голосом") == "")
+check("a typed English line after the prefix still reads English",
+      TT._message_script(TT._typed_part("animate this photo: he waves at the camera")) == "en")
+
 print()
 print(f"{OK}/{OK + BAD} checks passed")
 if BAD:
