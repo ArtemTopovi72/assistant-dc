@@ -179,6 +179,18 @@ def test_recall_unknown_id_is_a_tool_error():
     assert C.recall("a0000000").startswith("[TOOL ERROR]")
 
 
+def test_old_goal_becomes_history_after_many_unfolded_turns():
+    """Masking alone kept a laptop hunt as the goal through 70 turns of cat pictures."""
+    mem = C.render({**C.empty_state(), "goal": "подобрать ноутбук", "open": ["сравнить отчёт"]})
+    ctx = Ctx(); ctx.deps.COMPACT_AT = 9.0
+    few = C.manage(ctx, [SYS, {"role": "system", "content": mem}] + sum((turn(n) for n in range(1, 5)), []))
+    assert C.parse(few[1]["content"])["goal"] == "подобрать ноутбук"       # a few turns on: still the goal
+    many = C.manage(ctx, [SYS, {"role": "system", "content": mem}] + sum((turn(n) for n in range(1, 13)), []))
+    got = C.parse(many[1]["content"])
+    assert got["goal"] == "" and got["open"] == []
+    assert "Earlier goal: подобрать ноутбук" in got["decisions"]
+
+
 if __name__ == "__main__":
     n = 0
     for name, f in list(globals().items()):

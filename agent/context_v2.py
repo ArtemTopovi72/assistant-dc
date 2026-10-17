@@ -63,6 +63,7 @@ V1_SUMMARY_MARKER = "[Conversation summary so far]\n"
 MASK_AT = _cfg_env.env_float("CONTEXT_MASK_AT", 0.40)
 COMPACT_AT = _cfg_env.env_float("CONTEXT_COMPACT_AT", 0.65)
 KEEP_TURNS = _cfg_env.env_int("CONTEXT_KEEP_TURNS", 2)
+STALE_TURNS = 10              # unfolded user turns after which the goal is history
 MASK_MIN_CHARS = 400
 CARD_BUDGET = 2400            # chars of rendered memory before card selection kicks in
 SECTION_CAP = {"decisions": 14, "artifacts": 16, "open": 8, "prefs": 10, "folded": 12}
@@ -539,6 +540,12 @@ def manage(ctx, messages: List[dict], *, query: str = "", force: bool = False) -
 
         if not n_masked and not compacted:
             return messages
+        # Goal and open requests change only when a span is folded; masking alone
+        # kept «Find a laptop…» as the goal through 70 turns of cats and videos.
+        if not compacted and sum(1 for m in body if m.get("role") == "user") > STALE_TURNS:
+            _add(state, "decisions", ([f"Earlier goal: {state['goal']}"] if state["goal"] else [])
+                 + [f"Earlier request, may be done: {o}" for o in state["open"]])
+            state["goal"], state["open"] = "", []
         state = _scrub(state)
         shown = select_cards(state, query or next(
             (m.get("content") for m in reversed(body) if m.get("role") == "user"), "") or "", ctx=ctx)
