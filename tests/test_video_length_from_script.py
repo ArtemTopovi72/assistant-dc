@@ -109,7 +109,10 @@ def test_the_parts_are_rendered_as_continuations_and_joined(tmp_path, extra):
         joins.append((os.path.basename(a), os.path.basename(b)))
         return str(j)
     ctx = _Ctx(
-        video_engine=Over(V, generate_video=fake_gen, engine_available=lambda ctx: (True, ""),
+        # the 2-part cap for a script with no length has its own test; an env var read at
+        # import lost to whichever suite imported video first in one pytest run
+        video_engine=Over(V, AUTO_MAX_PARTS=99, generate_video=fake_gen,
+                          engine_available=lambda ctx: (True, ""),
                           herrgott_on=lambda: False, motion_context_on=lambda: False,
                           mark_inserts=lambda ctx, ps: ps, join_continuation=fake_join,
                           _adopt_output=lambda p, *a: p, probe=lambda p: {"seconds": 24.0}),
