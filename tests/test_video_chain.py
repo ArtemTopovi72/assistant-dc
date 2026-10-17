@@ -465,3 +465,15 @@ def test_light_drawings_over_a_photo_are_told_against_the_source(tmp_path):
     scores[:] = [0.95, 0.96, 0.95, 0.97, 0.94]        # real daisies all along
     assert V.drawn_over(clip, clip=fake) <= V.DRAWN_OVER_MAX
     assert V.drawn_over(str(tmp_path / "missing.mp4"), clip=fake) is None
+
+
+def test_an_action_inside_a_camera_line_stays_in_its_own_part():
+    """«…; the camera pans up as the kite catches a breeze and soars high» rode every part
+    as a camera line, and the judge cut the climb out of each (2026-10-17)."""
+    s = ("A boy stands in a field, holding a kite string. He runs forward, launching the kite; "
+         "the camera pans up as the kite catches a breeze and soars high. The kite flutters and "
+         "falls into the grass. The boy runs to it and laughs. Sound: wind.")
+    parts = V.split_script(s)
+    assert sum("soars high" in p for p in parts) == 1, parts
+    assert all("camera pans up" in p for p in parts), parts
+    assert V.split_script("The camera follows the cat as it walks.") == ["The camera follows the cat as it walks."]

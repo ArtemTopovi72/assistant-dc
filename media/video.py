@@ -149,6 +149,7 @@ _LOOK = re.compile(
     # no action, rewritten into a copy of the next part (live 2026-10-17).
     r"|(?:the\s+)?(?:video|clip|scene|shot)\s+(?:continues|starts|begins|opens|picks\s+up)\b",
     re.I)
+_CAMERA_AS = re.compile(r"((?:the\s+)?camera\b[^.;]*?)\s+(?:as|while|when)\s+(?!it\b|they\b|he\b|she\b)(\w.+)", re.I)
 _SENT = re.compile(r"(?<=[.!?;])\s+|(?<=,)\s+(?=(?:then|after that|afterwards|затем|потом|после этого)\b)", re.I)
 
 
@@ -186,7 +187,12 @@ def split_script(description: str, max_seconds: float = 0.0) -> list:
         quotes.append(m.group(0))
         return f"\x00{len(quotes) - 1}\x00"
     hidden = _QUOTED.sub(_hide, text)
-    pieces = [x for x in _SENT.split(hidden) if x and x.strip()]
+    pieces = []
+    for x in (x for x in _SENT.split(hidden) if x and x.strip()):
+        # «the camera pans up as the kite catches a breeze and soars high»: the kite's climb
+        # rode every part as a camera line and the judge cut it out of each (2026-10-17).
+        m = _CAMERA_AS.match(x.strip())
+        pieces += [m.group(1).rstrip(",;") + ".", m.group(2)[:1].upper() + m.group(2)[1:]] if m else [x]
     restore = lambda t: re.sub(r"\x00(\d+)\x00", lambda m: quotes[int(m.group(1))], t)
     # Sound, light and look lines take no screen time and belong to every part: as a
     # part of their own they were "2. Soundscape: soft indoor ambience…" with no action
