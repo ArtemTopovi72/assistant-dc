@@ -47,6 +47,7 @@ rendered = []
 _VID = Over(video, engine_available=lambda ctx: (True, ""), generate_video=lambda *a, **k: rendered.append(a) or {})
 _DEPS = SimpleNamespace(asks_for_video=lambda ctx, state: True, _render_budget_exhausted=lambda *a, **k: None)
 ctx = SimpleNamespace(deps=_DEPS, video_engine=_VID, video_plan_ask=True, video_plan_parts=[], set_stage=lambda s: None,
+                      text_model=lambda *a, **k: "",   # the script judge offline: it splits and drops on a live model
                       continue_tail="", anim_voices=[], voice_choice="default")
 state = {}
 out = H._handle_generate_video(ctx, state, {"description": SCRIPT, "use_current_images": False})
