@@ -233,3 +233,25 @@ def test_before_after_unchanged_rest_is_a_pass():
     # a single picture saying «unchanged» still means the edit did not take
     assert GP._inspection_contradicts_work(
         "Inspection of the current image:\nThe picture is unchanged.", {"inpaint_image"}) is True
+
+
+# Every label PRESENT, only the description off («blue and red armor» for «девушку в
+# красных доспехах»): the swap landed, yet the reply said «он остался прежним» (2026-10-17).
+def test_a_description_mismatch_is_partial_not_unchanged():
+    from fakes import reads
+    import graph_finalize as GF
+    llm = _TGF.LLM([
+        _TGF._asst("", [_TGF._tc("swap_person", {"person": 1}, "e1")]),
+        _TGF._asst("", [_TGF._tc("inspect_image", {}, "v1")]),
+        _TGF._asst("Готово! Заменил его на девушку в красных доспехах."),
+        _TGF._asst("Готово! Заменил его на девушку в красных доспехах."),
+    ])
+    tools = _TGF.Tools({
+        "swap_person": "Swap complete and saved: /tmp/x.png",
+        "inspect_image": "A woman in blue and red armor stands in front. | Girl in red armor: PRESENT",
+    })
+    ctx = _TGF._ctx(**reads(yes=lambda q, t: "blue and red" in t))
+    ctx.last_image_path = "/tmp/in.png"
+    out = _TGF._run(ctx, llm, tools, {"user_input": "замени мужика на девушку в красных доспехах",
+                                      "messages": [], "image_path": "/tmp/x.png"}, fastpath=False)
+    assert out["final_answer"] != GF._VERIFY_NEGATIVE_ANSWER, out["final_answer"]

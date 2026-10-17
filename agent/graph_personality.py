@@ -2031,7 +2031,10 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                 if not verification_negative and _inspection_misses_request(
                         original_input or user_input, tool_result, tools_called_this_turn, ctx=ctx):
                     logger.info("inspection description contradicts the request")
-                    verification_negative = True
+                    # Every label PRESENT and only the description off (blue-and-red
+                    # armour for «девушка в красных доспехах»): the change landed, so
+                    # «он остался прежним» under a visibly swapped person was a lie.
+                    verification_negative = "partial"
             is_error = tool_result.lstrip().startswith(("[TOOL ERROR]", "Unknown tool"))
             if is_error:
                 consecutive_failures += 1
