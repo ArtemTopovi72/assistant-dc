@@ -253,8 +253,10 @@ def split_chapters(text: str) -> list:
              and (i == 0 or not lines[i - 1].strip())]
     chapters = []
     if len(marks) >= 2:
-        if marks[0] > 0 and "\n".join(lines[:marks[0]]).strip():
-            chapters.append(("", "\n".join(lines[:marks[0]]).strip()))
+        lead = "\n".join(lines[:marks[0]]).strip() if marks[0] > 0 else ""
+        if len(lead) >= MIN_CHAPTER:
+            chapters.append(("", lead))
+            lead = ""
         for a, b in zip(marks, marks[1:] + [len(lines)]):
             title = lines[a].strip()
             body_start = a + 1
@@ -269,6 +271,9 @@ def split_chapters(text: str) -> list:
             if chapters and len(body) < MIN_CHAPTER and chapters[-1][0] and re.fullmatch(r"(?:\d{1,3}|[IVXLC]{1,7})[.)]?", title.strip()):   # a stray page number
                 chapters[-1] = (chapters[-1][0], chapters[-1][1] + "\n" + title + "\n" + body)
             else:
+                if lead:
+                    # the book's own title above «Глава 1» was a 3-second chapter of its own
+                    title, lead = " ".join(lead.split()).rstrip(".") + ". " + title, ""
                 chapters.append((title, body))
         return chapters
     paras = [p for p in re.split(r"\n\s*\n|\n", text) if p.strip()]
