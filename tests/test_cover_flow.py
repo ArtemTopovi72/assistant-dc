@@ -270,6 +270,25 @@ bot._cb_cover_voice(CID, {"message_id": 5}, "cvv:auto")
 check("auto clears the choice", bot._get_session(CID).cover_voice == "")
 bot._edit_text = _real_edit
 
+# «сделай кавер этой песни голосом Цоя» with the song attached and no button pressed:
+# the agent has no cover tool and answered «не могу голосом Цоя» (2026-10-17).
+import types as _types
+bot.modules["rvc_voice"] = Over(rvc_voice, stars=lambda lang="ru", trained=None: [("tsoi_hq", "Виктор Цой")])
+bot.reads = _types.SimpleNamespace(
+    yes_no=lambda q, t, default=False, wait=True: "кавер" in t,
+    choice=lambda q, t, options, default="": "tsoi_hq" if "Цо" in t else default)
+for cap, want in (("сделай кавер этой песни голосом Цоя", True), ("что это за песня?", False)):
+    s_ = bot._get_session(CID); s_.cover_state = ""; s_.cover_src = ""; s_.cover_voice = ""; bot._store.put(s_)
+    n = len(bot.sent)
+    bot._dispatch(m(audio=A, caption=cap))
+    ok = wait(lambda: bot._get_session(CID).cover_state == "want_text", 4)
+    if want:
+        check("a song sent with «кавер голосом Цоя» opens the cover with that voice ticked",
+              ok and bot._get_session(CID).cover_voice == "tsoi_hq", [t[:60] for _, t in bot.sent[n:]])
+    else:
+        check("...a song asked about is not taken for a cover", not ok)
+bot.reads = None
+
 bot._running = False; thr.join(timeout=8)
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)

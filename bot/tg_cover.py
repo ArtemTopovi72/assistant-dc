@@ -32,6 +32,30 @@ class CoverMixin:
         self._store.put(sess)
         self._send_text(chat_id, tg_bot._t("cover_ask_audio", lang), parse_mode="HTML")
 
+    def _cover_from_caption(self, chat_id: int, sess, lang: str, item: dict) -> bool:
+        """A song sent with «сделай кавер голосом Цоя» goes into the cover flow with
+        that voice ticked: the agent has no cover tool and answered «не могу голосом
+        Цоя» though the voice is trained here (2026-10-17). True when it was ours."""
+        from seams import choice, yes_no
+        cap = (item.get("caption") or "").strip()
+        if not cap or not module(self, "remix").available() or not yes_no(self.reads)(
+                "A song or clip was sent with the words {text}. Do they ask for a cover: "
+                "the song re-sung, by another singer's voice or with new words?", cap):
+            return False
+        data = self._dl_bytes(item["file_id"])
+        if not data:
+            return False
+        stars = dict(module(self, "rvc_voice").stars(lang))
+        who = choice(self.reads)(
+            "Which singer's voice do these words ask the song to be sung in? \"none\" when "
+            "they name none of these: " + ", ".join(f"{k} = {v}" for k, v in stars.items()),
+            cap, list(stars) + ["none"], default="none")
+        sess.cover_state, sess.cover_src = "want_audio", ""
+        sess.cover_voice = who if who in stars else ""
+        ext = {"video": ".mp4", "voice": ".ogg"}.get(item.get("media", ""), ".mp3")
+        self._cover_have_song(chat_id, sess, lang, data, ext)
+        return True
+
     def _cover_disarm(self, sess) -> None:
         if getattr(sess, "cover_state", ""):
             sess.cover_state = ""

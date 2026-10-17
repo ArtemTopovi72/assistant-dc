@@ -962,6 +962,8 @@ class ResolveMixin:
                 if ctx is None:
                     self._send_text(chat_id, tg_bot._t("not_ready", lang),
                                     keyboard=self._main_menu_kb(sess, lang)); return
+                if self._cover_from_caption(chat_id, sess, lang, item):
+                    return
                 self._api_post("sendChatAction", {"chat_id": chat_id, "action": "typing"})
                 _media = item.get("media", "voice")
                 if _media == "video":
