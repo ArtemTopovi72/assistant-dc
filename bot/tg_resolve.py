@@ -116,6 +116,15 @@ class ResolveMixin:
             self._long_video_offer(chat_id, sess, self._lang(sess),
                                    {"url": _vu, "seconds": _vid["seconds"], "caption": text})
             return True
+        elif _vu and ctx is not None:
+            # YouTube's «confirm you're not a bot» left the page shell («- YouTube») as the
+            # whole material, and the agent searched the web for «summary of video <id>» and
+            # retold junk (2026-10-17).
+            scaffold.append(f"[The video at {_vu} could not be downloaded (the site refused it "
+                            "or it is private): it was NOT watched or heard. Tell the user plainly "
+                            "and offer to try again later or to send the file; do not look up "
+                            "what it says elsewhere.]")
+            sess.last_link = _vu
         else:
             try:
                 _lc = _tg_links.link_context(text)

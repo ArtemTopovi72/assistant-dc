@@ -30,3 +30,12 @@ assert any(d.startswith("lv:go:") for d in datas) and any(d.startswith("lv:skip:
 lv = bot._get_session(CID).long_video
 assert lv and lv["url"] == URL, lv
 print("PASS")
+
+# The site refused the download («Sign in to confirm you're not a bot»): the page shell was
+# read instead and the agent retold web-search junk about «video <id>» (2026-10-17).
+bot.links = Over(L, fetch_video=lambda u, max_seconds=L.VIDEO_MAX_SECONDS: {},
+                 link_context=lambda t: (_ for _ in ()).throw(AssertionError("page read")))
+scaffold = []
+assert not bot._read_links(object(), bot._get_session(CID), CID, None, "перескажи " + URL, scaffold)
+assert scaffold and "could not be downloaded" in scaffold[0] and "NOT watched" in scaffold[0], scaffold
+print("PASS refused download")
