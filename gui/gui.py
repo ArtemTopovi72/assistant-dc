@@ -883,7 +883,7 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
         # spontaneous: from the window system (✕, Alt+F4, taskbar, logoff), not our own close()
         # -- the bot went with two unexplained closes (2026-10-17 12:32, 19:44)
         logger.info("LIFECYCLE: main window closeEvent — tearing down (spontaneous=%s)",
-                    event.spontaneous())
+                    getattr(event, "spontaneous", lambda: None)())
         # Remember the current layout so the next launch reopens exactly like this.
         self._persist_layout()
         self.cam_timer.stop()

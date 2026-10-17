@@ -310,12 +310,22 @@ def test_two_story_steps_in_one_part_are_split_not_cut_to_one():
         if system.startswith("Rewrite this part"):
             return "He runs and launches the kite.\nThe kite soars high into the sky."
         return "He runs across the field."
-    out = V.validate_script(types.SimpleNamespace(text_model=model), parts, max_parts=5)
+    moves = lambda q, text, **k: "stands" not in text and "sits" not in text
+    ns = types.SimpleNamespace(text_model=model, yes_no=moves)
+    out = V.validate_script(ns, parts, max_parts=5)
     assert out == [parts[0], "He runs and launches the kite.", "The kite soars high into the sky.",
                    parts[2]], out
+    # a split line where nothing moves is no part of its own: «The man sits at a wooden table.»
+    rounds.clear()
+    split = model
+    model = lambda c, s, u, **k: ("The boy sits in the grass.\nHe runs and launches the kite.\nThe kite soars."
+                                  if s.startswith("Rewrite this part") else split(c, s, u, **k))
+    out = V.validate_script(types.SimpleNamespace(text_model=model, yes_no=moves), parts, max_parts=5)
+    assert out[1] == "The boy sits in the grass. He runs and launches the kite." and len(out) == 4, out
+    model = split
     # no room for another part: the old rewrite stands
     rounds.clear()
-    out = V.validate_script(types.SimpleNamespace(text_model=model), parts, max_parts=3)
+    out = V.validate_script(ns, parts, max_parts=3)
     assert len(out) == 3 and out[1] == "He runs across the field.", out
 
 
@@ -498,3 +508,15 @@ def test_how_the_scene_opens_is_not_replayed_by_every_part():
     assert sum("pans up" in p for p in parts) == 1 and "pans up" in parts[0], parts
     assert sum("scene begins" in p for p in parts) == 1, parts
     assert all("lighting is soft" in p for p in parts), parts
+
+
+def test_a_line_inside_a_sound_line_is_said_once():
+    """«Sound: paper rustling, a whispered «Не может быть…»» rode every part as a look line,
+    and the line was said in three parts running (2026-10-17)."""
+    s = ("His trembling hands unfold the yellowed letter on the table. Sound: paper rustling, heavy "
+         "breathing, a whispered «Не может быть…». His eyes widen as he reads the letter slowly. "
+         "He leans back in his chair and stares at the wall for a while. Finally a slow warm smile "
+         "spreads across his face as he looks up.")
+    parts = V.split_script(s)
+    assert len(parts) > 1, parts
+    assert sum("Не может быть" in p for p in parts) == 1, parts

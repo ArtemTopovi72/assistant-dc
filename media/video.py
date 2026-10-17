@@ -203,16 +203,19 @@ def split_script(description: str, max_seconds: float = 0.0) -> list:
     # ...but how the scene OPENS and a camera MOVE happen once: on every part, each part
     # replayed «a close-up of the letter, the camera pans up to the man» (2026-10-17).
     # They go with the action next to them.
+    # A spoken line inside a sound line («Sound: breathing, a whispered «Не может быть…»») is
+    # said once too: on every part it was said three times.
+    def _once(p): return _ONCE.match(p.strip()) or (_LOOK.match(p.strip()) and "\x00" in p)
     once, glued = "", []
     for p in pieces:
-        if _ONCE.match(p.strip()):
+        if _once(p):
             once = (once + " " + p.strip()).strip()
         elif not _LOOK.match(p.strip()):
             glued.append((once + " " + p.strip()).strip() if once else p)
             once = ""
     if once and glued:
         glued[-1] = glued[-1].strip() + " " + once
-    look = " ".join(p.strip() for p in pieces if _LOOK.match(p.strip()) and not _ONCE.match(p.strip()))
+    look = " ".join(p.strip() for p in pieces if _LOOK.match(p.strip()) and not _once(p))
     pieces = glued if glued else [p for p in pieces if not _LOOK.match(p.strip())]
     if look:
         action = restore(" ".join(p.strip() for p in pieces))
@@ -1465,7 +1468,10 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
         for x in made_up:
             out = out.replace(x, "a wordless call, no words")
     # «<d>[English] ...</d>» for a yawn: a voiced line with nothing to say in it
-    out = re.sub(r"\s*<d>(?:\s*\[[^\]]*\])?[^\w<]*</d>", "", out)
+    # -- its whole sentence goes: cut alone, it left «the man (S1) whispers: while…» (2026-10-17)
+    _empty = r"<d>(?:\s*\[[^\]]*\])?[^\w<]*</d>"
+    out = re.sub(r"[^.!?\n:]*:\s*" + _empty + r"[^.!?\n]*[.!?]?", "", out)
+    out = re.sub(r"\s*" + _empty, "", out)
     # The guide's cut time is "At 00:03.500"; the model also wrote "At 04.00".
     out = re.sub(r"\bAt (\d{1,2})\.(\d{1,3})\b(?!:)",
                  lambda m: f"At 00:{int(m.group(1)):02d}.{m.group(2).ljust(3, '0')}", out)
@@ -1979,7 +1985,7 @@ _JUDGE = ("You are a strict editor of a video script split into numbered parts; 
           "yawns, turns and smiles -- are ONE action; talking is never a second action: a "
           "head tilt while saying a line is ONE); (b) nothing in it moves or acts visibly (only effects, light, mood, camera) "
           "-- a thing that moves as the story says (a kite climbing high, a ball rolling, a door slamming) IS "
-          "an action; "
+          "an action, and so is a face changing (a smile spreading, a frown, eyes widening); "
           "(c) it repeats what an earlier part already showed; (d) it asks for something the "
           "model draws badly or impossibly: a held object flying or floating by itself, extra "
           "limbs, many small items at once, text on screen, a person in two places; (e) it "
@@ -2049,7 +2055,16 @@ def validate_script(ctx, parts: list, rounds: int = 2, max_parts: int = 0) -> li
             except Exception as exc:
                 logger.warning("validate_script: splitting part %d failed: %s", n, exc)
                 continue
-            lines = [x for x in lines if len(x) >= 10][:max(2, (max_parts or 99) - len(parts) + 1)]
+            lines = [x for x in lines if len(x) >= 10]
+            # told so, the splitter still made «The man sits at a wooden table.» a part (2026-10-17)
+            from seams import yes_no
+            for i in range(len(lines) - 2, -1, -1):
+                if not _QUOTED.search(lines[i]) and not yes_no(ctx)(
+                        "A sentence of a video script: {text}\nDoes someone or something in it move "
+                        "or act (reach, walk, turn, smile, fall...), rather than only be somewhere "
+                        "or be seen by a camera?", lines[i]):
+                    lines[i:i + 2] = [lines[i] + " " + lines[i + 1]]
+            lines = lines[:max(2, (max_parts or 99) - len(parts) + 1)]
             if len(lines) >= 2 and not _lost_lines(parts[n - 1], " ".join(lines)):
                 logger.info("validate_script: part %d split into %d", n, len(lines))
                 parts[n - 1:n] = lines

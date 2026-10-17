@@ -101,6 +101,11 @@ yawn = ("integrated_multimodal_description: [Shot 1] Live-action, he yawns <d>[E
         "\noverall_soundscape: room.\nnon_diegetic_music: N/A")
 out = V.to_context_ir(NS(text_model=lambda *a, **k: yawn), "He yawns", mode="t2va", seconds=5)
 check("<d>" not in out and "he yawns and stops" in out, "a voiced line with nothing to say is dropped")
+said = ("integrated_multimodal_description: [Shot 1] Live-action, he reads. His eyes widen, and the man (S1) "
+        "whispers: <d>[English] ...</d> while frozen in shock. He smiles.\noverall_soundscape: room.\nnon_diegetic_music: N/A")
+out = V.to_context_ir(NS(text_model=lambda *a, **k: said), "He reads and smiles", mode="t2va", seconds=5)
+check("whispers" not in out and "he reads." in out and "He smiles." in out,
+      "...and «whispers: <empty>» goes with its sentence, not left as «whispers: while»")
 # the accentor also restores ё its own way: «тише, все спят» was spoken «всё спят»
 check(V._marks_only("тише, все спят", "ти́ше всё спят") == "ти́ше, все спят",
       "stress marks only: letters and punctuation stay as the user wrote them")
