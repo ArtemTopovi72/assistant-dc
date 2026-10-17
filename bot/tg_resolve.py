@@ -1633,8 +1633,13 @@ class ResolveMixin:
         tg_bot.logger.info("Enqueued task %s chat=%s kind=%s depth=%d",
                     task.task_id[:8], chat_id, kind, self._backend.depth())
 
-        # Queue position must count what is actually AHEAD OF THIS USER under
-        # round-robin, not the global depth.
+        self._queue_note(chat_id, task, lang)
+
+    def _queue_note(self, chat_id: int, task, lang: str) -> None:
+        """⏳ for a task that will not start at once: its place among the tasks
+        AHEAD OF THIS USER under round-robin (not the global depth), or, with
+        nobody ahead, a render holding the whole card -- a photo sent during
+        another chat's song sat 55 s with no word."""
         try:
             ahead = self._backend.tasks_ahead(task.task_id)
         except Exception:
@@ -1643,6 +1648,14 @@ class ResolveMixin:
             self._send_text(chat_id,
                 tg_bot._t("queue_pos", lang, pos=len(ahead) + 1, eta=tg_bot._fmt_eta(ahead, lang)),
                 parse_mode="HTML")
+            return
+        try:
+            import comfy_client as _cc
+            busy = _cc.card_is_exclusive()
+        except Exception:
+            busy = ""
+        if busy:
+            self._send_text(chat_id, tg_bot._t("card_busy", lang), parse_mode="HTML")
 
     def _register_animate_photo(self, chat_id: int, sess, lang: str, item: dict) -> None:
         """Consume the photo awaiting_animate_photo was waiting for, register
@@ -1822,14 +1835,7 @@ class ResolveMixin:
         self._write_inflight()
         tg_bot.logger.info("Enqueued task %s chat=%s kind=%s depth=%d",
                     task.task_id[:8], chat_id, "outfit" if outfit else "style", self._backend.depth())
-        try:
-            ahead = self._backend.tasks_ahead(task.task_id)
-        except Exception:
-            ahead = []
-        if ahead:
-            self._send_text(chat_id,
-                tg_bot._t("queue_pos", lang, pos=len(ahead) + 1, eta=tg_bot._fmt_eta(ahead, lang)),
-                parse_mode="HTML")
+        self._queue_note(chat_id, task, lang)
 
 
 def _outfit_text(wish: str) -> str:
