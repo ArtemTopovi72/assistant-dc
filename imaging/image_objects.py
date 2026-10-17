@@ -16,7 +16,7 @@ run while the suite still printed PASS. They are reached through `_image.`
 below, which defers to call time and resolves the CURRENT binding on image.py.
 """
 from config import scratch_path
-from seams import dep
+from seams import dep, yes_no
 import logging
 import os
 import time
@@ -119,7 +119,12 @@ def _remove_via_objectclear(ctx, image_path: str, target_phrase: str, *, seed: i
                 logger.warning("remove-object: mask covers %.0f%% of the picture (limit %.0f%%) "
                                "-- not filled", _cover * 100, max_cover * 100)
                 return None
-        mask = _with_contact_shadow(mask)
+        # a planet in the sky has no shadow under it: the smear ran down over the
+        # cat standing in front of it and ObjectClear erased the cat
+        if yes_no(ctx)("A thing to erase from a picture: {text}. Does it usually stand or lie "
+                       "on the ground, a floor or a table (yes), rather than hang, fly or sit "
+                       "far off in the sky (no)?", target_phrase, default=True):
+            mask = _with_contact_shadow(mask)
         mask_path = str(scratch_path(_image.OUTPUT_DIR, f"_INTERMEDIATE_remove_mask_{int(time.time() * 1000)}.png"))
         mask.save(mask_path)
         out = dep(ctx, "_fill_objectclear", _lr._fill_objectclear)(ctx, image_path, mask_path, 18)

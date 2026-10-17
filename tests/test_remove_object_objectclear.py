@@ -86,3 +86,18 @@ def test_mask_over_the_cap_is_not_filled(tmp_path):
     assert not filled
     ctx.deps._contained_region_mask = lambda *a, **k: (None, small, (0, 0, 16, 16))
     assert O._remove_via_objectclear(ctx, src, "logo", seed=1, timeout=5, max_cover=0.2) == "oc.png"
+
+
+def test_a_thing_in_the_sky_gets_no_shadow_below(tmp_path):
+    # the planet Earth's smear ran down over the cat in front of it and the cat was erased
+    from fakes import reads
+    tall = Image.new("L", (64, 64), 0)
+    tall.paste(255, (20, 0, 44, 30))
+    for target, rests in (("planet Earth", False), ("cat", True)):
+        got = []
+        ctx = _ctx(_fill_objectclear=lambda ctx, src, mp, g: got.append(Image.open(mp).getbbox()) or "oc.png",
+                   _contained_region_mask=lambda *a, **k: (None, tall, (20, 0, 44, 30)))
+        for k, v in reads(yes=lambda q, t: "ground" in q and t == "cat").items():
+            setattr(ctx, k, v)
+        O._remove_via_objectclear(ctx, _img(tmp_path), target, seed=1, timeout=5)
+        assert (got[0][3] > 30) is rests, (target, got)
