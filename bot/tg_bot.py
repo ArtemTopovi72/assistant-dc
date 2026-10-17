@@ -693,7 +693,8 @@ def _needs_image_choice(text: str, ctx=None) -> bool:
     if r["names_picture"]:
         return False
     from graph_fastpath import _IMAGE_ACTION_TOOLS
-    return bool(r["about_picture"] or set(r["wants"]) & _IMAGE_ACTION_TOOLS)
+    # «нарисуй рыжего кота в шлеме» is a new picture: it got «Какую картинку? их 12» (2026-10-17)
+    return bool(r["about_picture"] or set(r["wants"]) & (_IMAGE_ACTION_TOOLS - {"generate_image"}))
 
 
 # Scaffolding this strips off a stored label before showing it in the picker.

@@ -47,6 +47,13 @@ print("=" * 70)
 for t in ("Что там написано?", "what is written there?"):
     check(f"tg_bot asks which picture for: {t!r}", T._needs_image_choice(t, ctx=_R), t)
 
+# «нарисуй рыжего кота в шлеме» got «Какую картинку? В этом чате их 12» (2026-10-17)
+_DRAW = types.SimpleNamespace(**reads(read=lambda t: {"wants": ["generate_image"]} if "нарисуй" in t
+                                      else {"wants": ["inpaint_image"]}))
+check("a new picture asks no «which picture?»",
+      not T._needs_image_choice("нарисуй рыжего кота в космическом шлеме", ctx=_DRAW))
+check("...an edit still does", T._needs_image_choice("сделай шлем золотым", ctx=_DRAW))
+
 
 print()
 print("=" * 70)
