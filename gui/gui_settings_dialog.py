@@ -312,6 +312,8 @@ class SettingsDialog(QDialog):
             self._auto_timer.stop()
             self._auto_timer = None
             self._ok_btn.setText("Apply / Select model")
+            # a launch parked here for minutes left nothing in the log to say why (2026-10-17)
+            logger.info("LIFECYCLE: startup dialog countdown cancelled by input -- waiting for a choice")
 
     def _autostart_tick(self):
         self._auto_left -= 1
