@@ -97,6 +97,15 @@ out = V.to_context_ir(NS(text_model=lambda *a, **k: grunt,
                          yes_no=lambda q, text, **k: "wordless vocal sound" in q and "grunts" in text),
                       "A man grunts heavily", mode="t2va", seconds=5)
 check("Хррр-ммм" in out, "a grunt the request asks for keeps its voice")
+yawn = ("integrated_multimodal_description: [Shot 1] Live-action, he yawns <d>[English] ...</d> and stops."
+        "\noverall_soundscape: room.\nnon_diegetic_music: N/A")
+out = V.to_context_ir(NS(text_model=lambda *a, **k: yawn), "He yawns", mode="t2va", seconds=5)
+check("<d>" not in out and "he yawns and stops" in out, "a voiced line with nothing to say is dropped")
+# the accentor also restores ё its own way: «тише, все спят» was spoken «всё спят»
+check(V._marks_only("тише, все спят", "ти́ше всё спят") == "ти́ше, все спят",
+      "stress marks only: letters and punctuation stay as the user wrote them")
+check(V._marks_only("ну ты даёшь", "ну ты дае́шь") == "ну ты даёшь",
+      "an ё the user wrote stays")
 check(V.to_context_ir(NS(vision_model=lambda *a, **k: good), "x", mode="ref2va", seconds=5, images=["p.png"]) == "x",
       "a base-mode answer is not accepted for Ref2VA")
 

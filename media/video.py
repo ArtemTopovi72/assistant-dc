@@ -1087,8 +1087,32 @@ def mark_speech_stress(ctx, prompt: str) -> str:
         # a one-vowel word has nowhere else to put the stress: no mark, less noise
         out = re.sub("[а-яё́]+", lambda w: w.group(0) if len(re.findall("[аеиоуыэюяё]", w.group(0), re.I)) > 1
                      else w.group(0).replace("́", ""), out.replace("+", ""), flags=re.I)
-        return head + out + tail
+        return head + _marks_only(line, out) + tail
     return _RU_LINE.sub(one, prompt)
+
+
+def _marks_only(line: str, accented: str) -> str:
+    """`line` as written, with only the accentor's stress marks added: it also restores
+    ё and punctuation its own way, and «тише, все спят» was spoken «всё спят»."""
+    words = re.findall(r"[А-Яа-яЁё]+", line)
+    marked = re.findall("[А-Яа-яЁё́]+", accented)
+    if len(words) != len(marked):
+        return line
+    it = iter(marked)
+
+    def put(m):
+        w, a = m.group(0), next(it)
+        if a.replace("́", "").lower().replace("ё", "е") != w.lower().replace("ё", "е"):
+            return w
+        out, j = [], 0
+        for ch in a:
+            if ch == "́":
+                if out and out[-1] not in "ёЁ":       # ё is stressed already
+                    out.append(ch)
+            else:
+                out.append(w[j]); j += 1
+        return "".join(out)
+    return re.sub(r"[А-Яа-яЁё]+", put, line)
 
 
 def _lost_lines(description: str, prompt: str) -> list:
@@ -1303,7 +1327,9 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
             "room (footsteps, breath, fabric), never left silent. (6) Only the lines quoted in "
             "the request are spoken, word for word and in their own language; someone who "
             "shouts, calls or says something with no quoted words makes a wordless sound "
-            "(a shout, a gasp), never a line you make up. (7) When the request says the shot "
+            "(a shout, a gasp), never a line you make up; a laugh, grunt or moan voiced as a "
+            "line is written in the request's language and letters (Russian: «Ха-ха-ха!», "
+            "«Кхх…», tagged [Russian]). (7) When the request says the shot "
             "continues, write ONE shot: it opens on exactly the framing the clip ends on -- "
             "never a new framing such as 'a wide shot frames…' -- and any change of view is "
             "one continuous camera move in real time (it turns, pans or walks with them), "
@@ -1384,6 +1410,8 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
         logger.info("Context-IR rewrite made up %d spoken line(s); made wordless", len(made_up))
         for x in made_up:
             out = out.replace(x, "a wordless call, no words")
+    # «<d>[English] ...</d>» for a yawn: a voiced line with nothing to say in it
+    out = re.sub(r"\s*<d>(?:\s*\[[^\]]*\])?[^\w<]*</d>", "", out)
     # The guide's cut time is "At 00:03.500"; the model also wrote "At 04.00".
     out = re.sub(r"\bAt (\d{1,2})\.(\d{1,3})\b(?!:)",
                  lambda m: f"At 00:{int(m.group(1)):02d}.{m.group(2).ljust(3, '0')}", out)
