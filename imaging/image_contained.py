@@ -207,6 +207,7 @@ def edit_region_contained_cropped(
     # margin (before face protection) — a masked-fill engine repaints only inside
     # this mask, so the old object's edge must be inside it or it survives as a
     # coloured rim around the new content.
+    seg = mask.copy()   # person-grab gate reads this: dilated, a stooping man's jumpsuit (0.56 of the face box) read 0.85 = "whole person"
     try:
         mask = _image._dilate_mask_outward(mask)
     except Exception as exc:
@@ -223,7 +224,7 @@ def edit_region_contained_cropped(
             from PIL import ImageDraw
             fb = _idm.face_box(image_path, pad=0.12)
             if fb:
-                _face_frac = _image._mask_face_fraction(mask, fb)
+                _face_frac = _image._mask_face_fraction(seg, fb)
                 draw = ImageDraw.Draw(mask)
                 draw.rectangle(fb, fill=0)
                 logger.info("cropped-contained: protected face box %s from %r edit",

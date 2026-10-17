@@ -168,6 +168,7 @@ def _contained_region_mask(ctx, image_path: str, region_phrase: str, *,
         # silhouette by a region-proportional margin so a replace-edit repaints the
         # old object's own edge/shadow instead of leaving a coloured rim around the
         # new content. Runs BEFORE face protection so the face box stays subtracted.
+        seg = mask.copy()   # person-grab gate reads this: dilated, a stooping man's jumpsuit (0.56 of the face box) read 0.85 = "whole person"
         try:
             mask = _image._dilate_mask_outward(mask)
         except Exception as exc:
@@ -178,7 +179,7 @@ def _contained_region_mask(ctx, image_path: str, region_phrase: str, *,
                 _idm = module(ctx, "identity_metrics")
                 fb = _idm.face_box(image_path, pad=0.12)
                 if fb:
-                    _face_frac = _image._mask_face_fraction(mask, fb)
+                    _face_frac = _image._mask_face_fraction(seg, fb)
                     ImageDraw.Draw(mask).rectangle(fb, fill=0)
                     logger.info("contained-mask: protected face box %s from %r", fb, region_phrase)
             except Exception as exc:

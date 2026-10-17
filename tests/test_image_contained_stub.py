@@ -208,6 +208,24 @@ def test_whole_body_garment_reaching_the_face_is_kept():
         check(f"face-reaching mask for {phrase!r} {'kept' if want else 'rejected'}",
               (out is not None) == want, out)
 
+def test_person_grab_gate_reads_the_segmenter_mask_not_the_grown_one():
+    # A stooping man's jumpsuit reached half his face box; grown by our own outward
+    # margin it read 0.85, was rejected as "the whole person", and the whole-frame
+    # fallback pasted the reference girl into the scene. A mask over the face is still.
+    img = _photo("st.png")
+    fake_idm = types.SimpleNamespace(face_box=lambda path, pad=0.12: (110, 30, 150, 70))
+    for name, box, want in (("collar", (60, 46, 200, 250), True),
+                            ("person", (60, 20, 200, 250), False)):
+        body = _mask_file(f"st_{name}.png", box=box)
+        ctx = Ctx()
+        ctx.modules = {"identity_metrics": fake_idm}
+        with _Patches(_upload_image_to_comfy=lambda *a, **k: "u.png",
+                      _region_mask_file=lambda *a, _b=body, **k: _b,
+                      _item_attributes=lambda c, p: {**_ITEM_ATTRS_DEFAULT, "small": False, "worn": True},
+                      MASK_QA_ENABLED=False):
+            out = I._contained_region_mask(ctx, img, "clothing", grow=6, seed=1, timeout=60)
+        check(f"{name} mask {'kept' if want else 'rejected'}", (out is not None) == want, out)
+
 def test_text_seg_stage0_qa_fail_then_retry_then_reject():
     ctx = Ctx()
     img = _photo("ts2.png")
