@@ -121,6 +121,20 @@ check("delete removes exactly that element",
       [e["desc"] for e in out["elements"]] == [CAR["desc"], SIGN["desc"]])
 check("a delete that names nothing in the layout is reported, not guessed at",
       len(D.apply_ops(lay, [{"op": "delete", "target": "the helicopter"}])[0]["elements"]) == 3)
+# «убери Землю с фона»: the Earth lived only in "background", the delete found no element
+# and the same layout was drawn again, Earth and all (2026-10-17)
+_space = G.normalize_layout({"background": "dark space with a large glowing Earth in the distance",
+                             "high_level_description": "a cat on the moon with Earth behind it",
+                             "elements": [dict(TREE)]})
+_asked = []
+_rw = types.SimpleNamespace(text_model=lambda c, sysp, user, **k: (
+    _asked.append(sysp), user.replace(" with a large glowing Earth in the distance", "")
+    .replace(" with Earth behind it", ""))[1])
+out, notes = D.apply_ops(_space, [{"op": "delete", "target": "the Earth"}], ctx=_rw)
+check("a thing named only in the scene text is taken out of it",
+      "Earth" not in out["background"] and "Earth" not in out["high_level_description"]
+      and len(out["elements"]) == 1 and any("scene text" in n for n in notes), (out, notes))
+check("...and the original layout is untouched", "Earth" in _space["background"])
 
 out, notes = D.apply_ops(lay, [{"op": "replace", "target": "the patrol car",
                                 "desc": "a dark blue estate car, seen from the side"}])

@@ -292,6 +292,35 @@ def _swaps_outermost(instruction: str, ctx=None) -> bool:
                           "mean the two OUTERMOST ones (at both ends of the row)?", instruction)
 
 
+_SCENE_FIELDS = ("background", "high_level_description")
+
+
+def _drop_from_scene(layout: dict, target, ctx=None) -> bool:
+    """A thing named only in the scene text, not as an element: «убери Землю с фона» found
+    no element (the Earth lived in "background") and the same layout was drawn again,
+    the Earth in it (2026-10-17). Those fields are rewritten without it; True when any was."""
+    if not isinstance(target, str) or not target.strip():
+        return False
+    stems = {w[:5] for w in _content_words(target.lower()) if len(w) > 3}
+    hit = [k for k in _SCENE_FIELDS
+           if stems & {w[:5] for w in _content_words(str(layout.get(k) or "").lower()) if len(w) > 3}]
+    done = False
+    for k in hit:
+        try:
+            from seams import text_model
+            new = " ".join((text_model(ctx)(
+                ctx, "Rewrite this picture description without " + target.strip()
+                + ": leave it out entirely, keep everything else as it is. Reply with the "
+                  "description only.", str(layout[k]), temperature=0.0, max_tokens=200) or "").split())
+        except Exception:
+            logger.warning("dropping %r from the scene text failed", target, exc_info=True)
+            continue
+        if new and not stems & {w[:5] for w in _content_words(new.lower()) if len(w) > 3}:
+            layout[k] = new
+            done = True
+    return done
+
+
 def apply_ops(layout: dict, ops: list, *, additive_only: bool = False,
               instruction: str = "", ctx=None) -> tuple:
     """Apply edit operations to a layout. Returns (new_layout, notes).
@@ -431,6 +460,8 @@ def apply_ops(layout: dict, ops: list, *, additive_only: bool = False,
             elif op in ("delete", "remove", "drop"):
                 i = _resolve("delete")
                 if i < 0:
+                    if _drop_from_scene(layout, target, ctx):
+                        notes.append(f"removed {target!r} from the scene text")
                     continue
                 if id(els[i]) in touched | moved:
                     # «посади кота на подоконник»: replace + move + delete of the same cat.
