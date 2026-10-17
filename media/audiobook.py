@@ -367,7 +367,9 @@ def spoken_title(title: str, n: int) -> str:
 def caption(title: str, n: int, total: int, part: int = 1, parts: int = 1) -> str:
     """The text under a chapter's voice message: which chapter of how many, its name, and the part when it was cut."""
     name = spoken_title(title, n)[:200]
-    head = f"📖 {n}/{total} · {name}" if not name.lower().startswith(("глава", "chapter")) else f"📖 {name} · {n}/{total}"
+    # «Маяк на Северном мысе. Глава 1» (the book's title riding chapter 1) is a chapter heading too
+    named = re.search(r"(?i)\b(?:глава|chapter)\b", name)
+    head = f"📖 {name} · {n}/{total}" if named else f"📖 {n}/{total} · {name}"
     return head + (f" · часть {part}/{parts}" if parts > 1 else "")
 
 

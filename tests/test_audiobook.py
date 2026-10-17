@@ -183,6 +183,11 @@ check("the book's title above chapter 1 rides its title, not a chapter of its ow
 ch = A.split_chapters("Предисловие автора. " * 40 + NLc * 2 + "Глава 1" + NLc * 2 + body
                       + NLc * 2 + "Глава 2" + NLc * 2 + body)
 check("...a real preface stays a chapter", len(ch) == 3 and ch[0][0] == "", [t for t, _ in ch])
+check("every chapter heading is captioned the same way, the book's title riding chapter 1 too",
+      A.caption("Маяк на Северном мысе. Глава 1. Смотритель", 1, 2) == "📖 Маяк на Северном мысе. Глава 1. Смотритель · 1/2"
+      and A.caption("Глава 2. Лодка", 2, 2) == "📖 Глава 2. Лодка · 2/2"
+      and A.caption("", 3, 3).startswith("📖 Глава 3 · 3/3")
+      and A.caption("Пролог", 1, 3) == "📖 1/3 · Пролог")
 
 print(f"\n{OK}/{OK + BAD} checks passed")
 sys.exit(1 if BAD else 0)
