@@ -230,17 +230,31 @@ def test_preserve_face_no_face():
     out = I._preserve_face_after_upscale(img, up, modules=idm)
     check("preserve_face_no_face_unchanged", out == up)
 
+def _faces_where(boxes):
+    """The detector answering each picture with its own face boxes (by file name):
+    the guard restores a face only where the re-render still has one."""
+    return {"identity_metrics": types.SimpleNamespace(
+        face_box=lambda path, pad=0.0: (boxes.get(Path(path).name) or [None])[0],
+        face_boxes=lambda path, pad=0.0, **kw: list(boxes.get(Path(path).name) or []))}
+
 def test_preserve_face_success():
-    idm = _with_face_box((40, 40, 120, 120))
+    idm = _faces_where({"pf2.png": [(40, 40, 120, 120)], "pf2_up.png": [(80, 80, 240, 240)]})
     img = _photo("pf2.png", w=200, h=200); up = _photo("pf2_up.png", w=400, h=400)
     out = I._preserve_face_after_upscale(img, up, modules=idm)
     check("preserve_face_success", out != up and Path(out).exists())
 
 def test_preserve_face_blend_partial():
-    idm = _with_face_box((40, 40, 120, 120))
+    idm = _faces_where({"pf3.png": [(40, 40, 120, 120)], "pf3_up.png": [(80, 80, 240, 240)]})
     img = _photo("pf3.png", w=200, h=200); up = _photo("pf3_up.png", w=400, h=400)
     out = I._preserve_face_after_upscale(img, up, blend=0.5, modules=idm)
     check("preserve_face_blend_partial", out != up and Path(out).exists())
+
+def test_preserve_face_skips_a_reframed_face():
+    # «сделай чётче» came back zoomed in: the man's old face pasted at its old place
+    # sat on his chest, and the police got two extra heads.
+    idm = _faces_where({"pf6.png": [(40, 40, 120, 120)], "pf6_up.png": [(200, 20, 360, 180)]})
+    img = _photo("pf6.png", w=200, h=200); up = _photo("pf6_up.png", w=400, h=400)
+    check("preserve_face_reframed_untouched", I._preserve_face_after_upscale(img, up, modules=idm) == up)
 
 def test_preserve_face_import_fails():
     idm = {"identity_metrics": None}

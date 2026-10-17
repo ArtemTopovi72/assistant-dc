@@ -24,6 +24,14 @@ from image_masks import _seam_blend_tile
 logger = logging.getLogger("assistant.image")
 
 
+def _iou(a, b) -> float:
+    ix = max(0, min(a[2], b[2]) - max(a[0], b[0]))
+    iy = max(0, min(a[3], b[3]) - max(a[1], b[1]))
+    inter = ix * iy
+    union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
+    return inter / union if union > 0 else 0.0
+
+
 def _preserve_face_after_upscale(orig_path: str, upscaled_path: str, *,
                                  blend: float = 1.0, modules=None) -> str:
     """Protect the ORIGINAL face from the super-resolver.
@@ -63,10 +71,18 @@ def _preserve_face_after_upscale(orig_path: str, upscaled_path: str, *,
         face_src = orig_up if blend >= 0.999 else Image.blend(up, orig_up, blend)
         out = up.copy()
         done = []
+        # A re-render may reframe the shot (a «make it sharper» FireRed pass zoomed in):
+        # the old face pasted at its old place landed on the man's chest and gave the
+        # police two extra heads. Only a face the re-render still has there is restored.
+        now = _idm.face_boxes(upscaled_path, pad=0.30) or []
         for (x0, y0, x1, y1) in boxes:
             X0, Y0 = int(x0 * sx), int(y0 * sy)
             X1, Y1 = int(x1 * sx), int(y1 * sy)
             bw, bh = max(1, X1 - X0), max(1, Y1 - Y0)
+            if not any(_iou((X0, Y0, X1, Y1), b) >= 0.3 for b in now):
+                logger.warning("upscale: no face at %s in the re-render (reframed) -- not pasting",
+                               (X0, Y0, X1, Y1))
+                continue
             # Feathered ellipse over this face (region mask + paste alpha).
             mask = Image.new("L", (tw, th), 0)
             ImageDraw.Draw(mask).ellipse([X0, Y0, X1, Y1], fill=255)
@@ -91,6 +107,8 @@ def _preserve_face_after_upscale(orig_path: str, upscaled_path: str, *,
                 merged = crop_face
             out.paste(merged, (box[0], box[1]), mask_soft.crop(box))
             done.append((X0, Y0, X1, Y1))
+        if not done:
+            return upscaled_path
         final = OUTPUT_DIR / f"upscaled_faceguard_{int(time.time() * 1000)}.png"
         out.save(final)
         logger.info("upscale: preserved %d original face(s) %s over the re-render",
