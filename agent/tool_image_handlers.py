@@ -1147,6 +1147,20 @@ _ASKS_VIDEO = re.compile(
     r"\bгиф|\bgif|video|clip|animat|movie|footage|\breel|shorts|фильм", re.I)
 
 
+def _builds_on_chat_picture(ctx, state) -> bool:
+    """A clip asked for with no photo in this message animates an earlier picture only
+    when the words say so. A photo sent with the request, a ▶ plan or ▶️ Continue
+    always does."""
+    if state.get("image_data") or getattr(ctx, "video_plan_parts", None) or getattr(ctx, "continue_tail", ""):
+        return True
+    from prompt_guard import user_words
+    said = user_words(str(state.get("user_input_original") or state.get("user_input") or "")).strip()
+    return yes_no(ctx)(
+        "A user asked for a video clip with these words: {text}\n\nDo they ask to animate "
+        "or continue a picture already in the chat (this photo, the picture above, its "
+        "people or scene) -- not a new scene described from scratch?", said, default=True)
+
+
 def asks_for_video(ctx, state) -> bool:
     """The user's words this turn ask for a clip, or ask to redo the last one."""
     from prompt_guard import user_words
@@ -1399,6 +1413,13 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     images, videos = [], []
     if args.get("use_current_images", True):
         images = dep(ctx, "_current_image_paths", _current_image_paths)(ctx, state)
+    if images and "use_current_images" not in args and not _builds_on_chat_picture(ctx, state):
+        # «сделай видео: лиса бежит по лесу» opened on the man with the shovel from three
+        # turns back and morphed into the forest (2026-10-17): the default took every
+        # picture in the chat, whatever the words were about.
+        logger.info("generate_video: the words describe a new scene -- not animating %s",
+                    [os.path.basename(p) for p in images])
+        images = []
         # More than H3 can take: keep the most RECENT, which is what the user is
         # most likely talking about.
         if len(images) > video_mod.MAX_REF_IMAGES:

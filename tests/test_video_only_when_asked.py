@@ -73,3 +73,27 @@ def test_a_shot_script_without_the_word_video_is_asked_to_the_model():
     c = _Ctx(); c.yes_no = lambda q, t, default=False, wait=True: False
     assert not H.asks_for_video(c, _st(script))
 
+
+
+def test_a_new_scene_does_not_animate_an_earlier_picture(tmp_path):
+    """«сделай видео: лиса бежит по лесу» opened on the man with the shovel sent three
+    turns earlier and morphed into the forest: every chat picture was a reference."""
+    import types
+    import video as V
+    from tests.fakes import Over
+    old = tmp_path / "man.png"; old.write_bytes(b"MAN")
+    for words, animates in (("сделай видео: лиса бежит по заснеженному лесу", False),
+                            ("оживи фото: пусть он копает быстрее", True)):
+        seen = {}
+
+        def stop(ctx, description, **kw):
+            seen["images"] = kw.get("images")
+            raise V.VideoUnavailable("stop here")
+        ctx = types.SimpleNamespace(
+            last_image_path=str(old), last_video_path=None, reference_images=[], voice_choice=None,
+            continue_tail="", continue_src="", set_stage=lambda *a: None, is_cancelled=lambda: False,
+            text_model=lambda *a, **k: "", vision_model=lambda *a, **k: "",
+            yes_no=lambda q, t, default=False, wait=True: "оживи" in t if "from scratch" in q else True,
+            video_engine=Over(V, engine_available=lambda ctx: (True, ""), generate_video=stop))
+        H._handle_generate_video(ctx, _st(words), {"description": "a scene"})
+        assert bool(seen.get("images")) == animates, (words, seen)
