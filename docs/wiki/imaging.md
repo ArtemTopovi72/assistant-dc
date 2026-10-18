@@ -6,6 +6,8 @@ tags: [imaging, comfyui]
 
 # imaging
 
+> **Stale below (2026-10-18):** drawing and every edit now run on FLUX.3 Klein (`imaging/klein.py`, `imaging/klein_annotate.py`); Ideogram/FireRed weights are gone and their function names survive only as seams. Edits are composited back inside the annotated boxes (`compositing.lock_outside_boxes`). See `docs/design/klein_findings.md`; run `/refresh-wiki` to redraw this page.
+
 ## What it does
 
 [`imaging`](../../imaging) turns a text request, or an uploaded photo plus an edit instruction, into a
