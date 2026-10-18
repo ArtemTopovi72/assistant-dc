@@ -18,7 +18,7 @@ import logging
 import threading
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("assistant." + __name__)
 
 _VOWELS = "аеёиоуыэюяaeiouy"
 # A word token may already carry the accentor's '+'; capture it so we can replace

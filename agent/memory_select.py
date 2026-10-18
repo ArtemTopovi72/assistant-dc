@@ -16,7 +16,7 @@ import logging
 import os
 from typing import List, Sequence
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("assistant." + __name__)
 
 _EMBEDDER = None
 _CACHE: dict = {}          # fact text -> unit vector

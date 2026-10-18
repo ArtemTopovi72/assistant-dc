@@ -26,7 +26,7 @@ import subprocess
 import uuid
 from typing import Optional, Tuple
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("assistant." + __name__)
 
 MIN_SPEECH_MS = 3000       # less than this is not enough voice to clone
 TARGET_MIN_MS = 6000

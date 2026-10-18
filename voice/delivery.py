@@ -12,7 +12,7 @@ from seams import choice, dep
 import logging
 import os
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("assistant." + __name__)
 OPTIONS = ("neutral", "joy", "anger", "sad")
 MIN_CHARS = 12                       # "Да." / "Хорошо." carry no emotion worth a model call
 _asked = set()

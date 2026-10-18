@@ -18,7 +18,7 @@ from typing import Optional, Tuple
 
 import config
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("assistant." + __name__)
 ROOT = Path(__file__).resolve().parent.parent
 DONORS = ROOT / "models_ext" / "emodonors"
 MANIFEST = ROOT / "voice" / "emodonors.json"

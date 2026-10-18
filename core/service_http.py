@@ -14,7 +14,7 @@ import logging
 from http.server import BaseHTTPRequestHandler
 from typing import Any, Dict
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("assistant." + __name__)
 
 
 class JsonHandler(BaseHTTPRequestHandler):

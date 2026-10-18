@@ -23,7 +23,7 @@ try:
 except Exception:
     pass
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("assistant." + __name__)
 
 SERVER_EXE = os.getenv("LLAMA_SERVER_EXE", r"C:\llamacpp\build\llama-server.exe")
 CUDA_BIN = os.getenv("LLAMA_CUDA_BIN", r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.3\bin")

@@ -17,7 +17,7 @@ import subprocess
 import tempfile
 from typing import List, Optional
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("assistant." + __name__)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PY = os.getenv("DIAR_PYTHON", _cfg_env.venv_python(os.path.join(ROOT, "venv_diar")))

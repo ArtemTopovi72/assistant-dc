@@ -25,7 +25,7 @@ from typing import Optional
 
 import video as V
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("assistant." + __name__)
 
 CONTROL_PATCH = os.getenv("H3_CONTROL_PATCH", "minimax_h3_fun_controlnet_union_2.0_pruned_int8_convrot.safetensors")  # Comfy-Org, curve-adaln to match our pruned int8 base
 KINDS = ("canny", "raw")

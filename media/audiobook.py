@@ -156,7 +156,7 @@ def ocr_pdf(path: str, on_page=lambda i, total: None, cancelled=lambda: False) -
             return _ocr_pdf_paddle(py, path, on_page, cancelled)
         except Exception:
             import logging
-            logging.getLogger(__name__).warning("[audiobook] PaddleOCR failed; falling back to EasyOCR", exc_info=True)
+            logging.getLogger("assistant." + __name__).warning("[audiobook] PaddleOCR failed; falling back to EasyOCR", exc_info=True)
     return _ocr_pdf_easy(path, on_page, cancelled)
 
 

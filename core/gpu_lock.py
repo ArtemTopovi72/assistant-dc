@@ -22,7 +22,7 @@ from pathlib import Path
 
 from seams import module
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("assistant." + __name__)
 
 LOCK_PATH = Path(os.getenv("ASSISTANT_GPU_LOCK") or Path(__file__).resolve().parents[1] / "runtime" / "gpu.lock")
 PARTS = {}      # stand-in for `psutil` (a suite fills it)

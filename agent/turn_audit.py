@@ -24,7 +24,7 @@ import threading
 import time
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("assistant." + __name__)
 
 TRACE_DIR = Path(os.getenv("FAILED_TURNS_DIR",
                            Path(__file__).resolve().parents[1] / "runtime" / "failed_turns"))

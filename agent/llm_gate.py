@@ -31,7 +31,7 @@ import threading
 import time
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("assistant." + __name__)
 
 GATE_DIR = Path(os.getenv("LLM_GATE_DIR",
                           Path(__file__).resolve().parents[1] / "runtime" / "llm_gate"))

@@ -25,7 +25,7 @@ import time
 from seams import module
 from functools import lru_cache
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("assistant." + __name__)
 
 _CYR = re.compile(r"[А-Яа-яЁё]")
 _LAT = re.compile(r"[A-Za-z]")

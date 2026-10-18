@@ -15,7 +15,7 @@ import socket
 from typing import Optional
 from urllib.parse import parse_qs, urlparse
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("assistant." + __name__)
 
 
 # --------------------------------------------------------------------------- #

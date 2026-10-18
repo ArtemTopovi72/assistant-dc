@@ -9,7 +9,7 @@ import os
 import re
 import threading
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("assistant." + __name__)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODEL = os.getenv("INJECTION_GUARD_MODEL", os.path.join(ROOT, "models_ext", "prompt-guard"))

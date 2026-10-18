@@ -46,7 +46,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field, ValidationError
 from collections import OrderedDict
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("assistant." + __name__)
 
 FIELDS = ("needs_tool", "wants", "must_call", "bare_ack", "presents_photo", "is_question",
           "about_picture", "names_picture", "reply_language", "language_mode", "translate",
