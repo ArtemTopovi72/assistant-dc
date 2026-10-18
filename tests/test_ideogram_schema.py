@@ -131,8 +131,8 @@ print("=" * 70)
 
 # Comments mention the old spelling, so look at CODE only.
 src = "\n".join(line.split("#", 1)[0]
-                for line in inspect.getsource(I.generate).splitlines())
-_dump = [l for l in src.splitlines() if "json.dumps(caption" in l]
+                for line in inspect.getsource(__import__("klein").caption_to_prompt).splitlines())
+_dump = [l for l in src.splitlines() if "json.dumps(" in l]
 check("generate() serialises the caption exactly once", len(_dump) == 1, str(_dump))
 _dump = _dump[0] if _dump else ""
 check("the caption is serialised with compact separators",

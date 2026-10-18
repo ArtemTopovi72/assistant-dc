@@ -1,4 +1,4 @@
-"""FireRed's working resolution never drops below 1.0 MP.
+"""Klein's working resolution never drops below 1.0 MP.
 
 At 0.52 MP (a 960x544 source) the edit came back zoomed ~1.4x, legs and sand
 cropped; at 1.0 and 2.0 MP the framing was identical to the source.
@@ -17,7 +17,7 @@ def _run(tmp_path, size, **kw):
     p = tmp_path / "src.png"
     Image.new("RGB", size, "gray").save(p)
     ctx = deps_ctx(_upload_image_to_comfy=lambda *a, **k: "src.png",
-                   _submit_and_poll=lambda ctx, wf, **k: _seen.update(mp=wf["191"]["inputs"]["megapixels"]) or None)
+                   _submit_and_poll=lambda ctx, wf, **k: _seen.update(mp=wf["12"]["inputs"]["megapixels"]) or None)
     _image.edit_image_with_firered(ctx, str(p), "make it pink", seed=1, **kw)
     return _seen["mp"]
 

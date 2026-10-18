@@ -47,7 +47,7 @@ check("a normal picture is neither", not I.is_refusal_card(day) and not I.is_bla
 import comfy_client
 calls = []
 def fake_submit(ctx, workflow, **kw):
-    calls.append(workflow[I.NODE_NOISE]["inputs"]["noise_seed"])
+    calls.append(workflow["8"]["inputs"]["seed"])
     return black if len(calls) == 1 else day
 import types
 cap = {"high_level_description": "x", "style_description": "photo",
