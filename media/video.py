@@ -111,6 +111,45 @@ _HOLD = re.compile(r"\b(?:for (?:a few|several|some|\d+) seconds?|for a while|"
                    r"несколько секунд|какое-то время)\b", re.I)
 
 
+_TIME_TAG = re.compile(r"\[(\d+(?:\.\d+)?) s\]\s*")
+_NUMBERED = re.compile(r"^\s*\d+\s*[.)]\s*(?:(\d+(?:[.,]\d+)?)\s*(?:с|сек|секунды?|секунд|s|sec|seconds?)\.?\s*[—–:-]\s*)?(\S.*)$", re.I)
+
+
+def strip_timing(text: str) -> str:
+    """The «[3.2 s]» a numbered script line leaves on its part, off the words."""
+    return _TIME_TAG.sub("", text or "")
+
+
+def numbered_script(text: str):
+    """[(seconds or None, line)] when every line of the script is a «1. 3.2 с — action» item
+    (two or more of them), else None: the user cut it into parts and named the lengths."""
+    lines = [ln for ln in (text or "").splitlines() if ln.strip()]
+    items = [_NUMBERED.match(ln) for ln in lines]
+    if len(lines) < 2 or not all(items):
+        return None
+    return [(float(m.group(1).replace(",", ".")) if m.group(1) else None, m.group(2).strip()) for m in items]
+
+
+def _pack_numbered(items: list, top: float) -> list:
+    """Consecutive items share a clip while they fit it; a named length is kept, so
+    «3.2 с» and «2.2 с» are one 5.4 s clip, not two 5.2 s ones."""
+    parts, cur, tot, named = [], [], 0.0, False
+
+    def flush():
+        text = " ".join(t if t[-1] in ".!?…»\"" else t + "." for t in cur)
+        parts.append(f"[{tot:.1f} s] {text}" if named else text)
+    for sec, line in items:
+        s = sec if sec is not None else estimate_seconds(line, capped=False)
+        if cur and tot + s > top:
+            flush()
+            cur, tot, named = [], 0.0, False
+        cur.append(line)
+        tot += s
+        named = named or sec is not None
+    flush()
+    return parts
+
+
 def estimate_seconds(description: str, capped: bool = True) -> float:
     """How long the scripted clip needs to play out, when nobody said a length.
 
@@ -124,6 +163,10 @@ def estimate_seconds(description: str, capped: bool = True) -> float:
         if text.startswith(pre):
             text = text[len(pre):]
     text = _SCENE_NOTE_RE.sub("", text)                    # nor the scene-so-far note
+    tag = _TIME_TAG.search(text)                           # a length the user named wins
+    if tag:
+        cap = frames_to_seconds(VIDEO_MAX_FRAMES_AUTO) if capped else float("inf")
+        return round(min(cap, max(frames_to_seconds(VIDEO_DEFAULT_FRAMES), float(tag.group(1)))), 2)
     for rule in (CAUSE_RULE, RU_SPEECH):                    # nor the rules every clip carries
         text = text.replace(rule, "")
     # Sound/light/camera lines ride every part (split_script) and take no screen time;
@@ -182,6 +225,9 @@ def split_script(description: str, max_seconds: float = 0.0) -> list:
     sentences or before "then"; a quoted line is never split. One part = fits as is."""
     top = max_seconds or min(VIDEO_PART_MAX_S, frames_to_seconds(VIDEO_MAX_FRAMES_AUTO))
     text = (description or "").strip()
+    items = numbered_script(text)
+    if items:
+        return _pack_numbered(items, top)
     if estimate_seconds(text, capped=False) <= top:
         return [text]
     quotes = []
@@ -1565,7 +1611,7 @@ def prepare_prompt(ctx, description: str, *, images: Sequence[str] = (), videos:
     met an unloaded model and the parts went out unrewritten)."""
     eng = _eng(ctx)
     asked = description
-    description = _lock_framing_unless_requested(description, ctx)
+    description = _lock_framing_unless_requested(strip_timing(description), ctx)
     mode = pick_mode(images, videos, audios)
     if not seconds:
         seconds = estimate_seconds(asked)

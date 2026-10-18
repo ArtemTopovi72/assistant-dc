@@ -15,7 +15,8 @@ import re
 
 
 def _cut(text: str, n: int = 90) -> str:
-    t = " ".join((text or "").split())
+    import video
+    t = " ".join(video.strip_timing(text).split())
     return t if len(t) <= n else t[:n - 1].rstrip(",.;:— ") + "…"
 
 
@@ -29,6 +30,7 @@ def _summaries(texts: list, lang: str, owner=None) -> list:
     Any failure: the prompts, cut short."""
     if not texts or lang == "en":
         return [""] * len(texts)
+    import video
     from seams import text_model
     from utils import safe_json_from_llm
     name = {"ru": "Russian"}.get(lang, lang)
@@ -43,7 +45,7 @@ def _summaries(texts: list, lang: str, owner=None) -> list:
             "paraphrased or replaced by 'says something'. Leave out camera, sound, music, "
             "light and particle effects (sparks, smoke, embers) unless they are the action. "
             'Reply with JSON only: {"lines": ["...", "..."]}, one line per shot, same order.',
-            "\n".join(f"{i}. {t}" for i, t in enumerate(texts, 1)),
+            "\n".join(f"{i}. {video.strip_timing(t)}" for i, t in enumerate(texts, 1)),
             temperature=0.2, max_tokens=200 + 90 * len(texts)) or ""
         lines = (safe_json_from_llm(raw, ["lines"]) or {}).get("lines") or []
     except Exception:

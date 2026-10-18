@@ -228,3 +228,25 @@ def test_a_length_named_only_in_the_words_stretches_the_parts():
     st2 = {"user_input_original": "сделай видео: мальчик запускает змея", "user_input": "x"}
     H._handle_generate_video(ctx, st2, {"description": KITE, "use_current_images": False})
     assert sum(p["sec"] for p in st2["video_plan"]) < 20, st2["video_plan"]
+
+
+NUMBERED = ("1. 3.2 с — Молодой человек поворачивается к печи.\n"
+            "2. 2.2 с — Он сидит в печи.")
+
+
+def test_named_lengths_that_fit_one_clip_are_one_clip_of_their_sum():
+    # «3.2 с» + «2.2 с» was two 5.2 s parts (bot always 5.2, owner 2026-10-18)
+    parts = V.split_script(NUMBERED)
+    assert len(parts) == 1
+    assert V.estimate_seconds(parts[0]) == 5.4
+    assert V.strip_timing(parts[0]).startswith("Молодой человек") and "3.2" not in V.strip_timing(parts[0])
+
+
+def test_a_named_length_over_the_clip_rule_is_kept_per_part():
+    parts = V.split_script("1. 8 с — Человек идёт по улице.\n2. 7 s — Он садится на лавку.")
+    assert [V.estimate_seconds(p) for p in parts] == [8.0, 7.0]
+
+
+def test_a_plain_script_is_not_read_as_numbered():
+    assert V.numbered_script("Человек идёт. Потом садится.") is None
+    assert V.numbered_script("1. Идёт.") is None          # one line is no list
