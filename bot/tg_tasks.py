@@ -81,6 +81,13 @@ def _typed_part(text: str) -> str:
     return t
 
 
+def _target_id_of(task, sess) -> str:
+    """The picture this turn is about: the one carried on the task (button, reply), else the one
+    sent WITH the message, else the session's pointer slot. A slot left by a button pressed minutes
+    ago answered, and animated, a NEW upload as the old picture (01:12, «видео не на ту фотку»)."""
+    return getattr(task, "image_id", "") or ("" if getattr(task, "image_path", "") else getattr(sess, "target_image", ""))
+
+
 def _message_script(text: str, ctx=None) -> str:
     """'en' for a message written wholly in Latin letters, 'ru' for one wholly
     in Cyrillic, '' when it is neither (mixed text, a button payload, an emoji,
@@ -1350,7 +1357,7 @@ class TaskRunnerMixin:
         if _anim and (task.user_text or "").startswith("animate this photo") and not getattr(task, "image_id", ""):
             task.image_id = _anim
             sess.pending_animate_target = ""
-        _target_id = getattr(task, "image_id", "") or getattr(sess, "target_image", "")
+        _target_id = _target_id_of(task, sess)
         _target = tg_bot._image_by_id(sess, _target_id)
         if (task.user_text or "").startswith(tg_bot._TEXT_ONLY_MARK):
             # An internal instruction over a transcript (the 📋 button on a
