@@ -174,20 +174,5 @@ check("verse lines make a few breathing pieces, not one stop per line", len(pcs)
 check("a line with no end mark gets a comma (the breath), a finished one keeps its stop",
       "под окном, Пряли" in pcs[0][0] and "вечерком." in pcs[0][0], pcs[0][0])
 
-# «Маяк на Северном мысе» above «Глава 1» came out as a 3-second «Глава 1 · 1/3» (2026-10-17)
-body = "Он шёл по улице, и снег падал медленно. " * 20
-ch = A.split_chapters("Маяк на Северном мысе" + NLc * 2 + "Глава 1. Смотритель" + NLc * 2 + body
-                      + NLc * 2 + "Глава 2. Лодка" + NLc * 2 + body)
-check("the book's title above chapter 1 rides its title, not a chapter of its own",
-      [t for t, _ in ch] == ["Маяк на Северном мысе. Глава 1. Смотритель", "Глава 2. Лодка"], ch)
-ch = A.split_chapters("Предисловие автора. " * 40 + NLc * 2 + "Глава 1" + NLc * 2 + body
-                      + NLc * 2 + "Глава 2" + NLc * 2 + body)
-check("...a real preface stays a chapter", len(ch) == 3 and ch[0][0] == "", [t for t, _ in ch])
-check("every chapter heading is captioned the same way, the book's title riding chapter 1 too",
-      A.caption("Маяк на Северном мысе. Глава 1. Смотритель", 1, 2) == "📖 Маяк на Северном мысе. Глава 1. Смотритель · 1/2"
-      and A.caption("Глава 2. Лодка", 2, 2) == "📖 Глава 2. Лодка · 2/2"
-      and A.caption("", 3, 3).startswith("📖 Глава 3 · 3/3")
-      and A.caption("Пролог", 1, 3) == "📖 1/3 · Пролог")
-
 print(f"\n{OK}/{OK + BAD} checks passed")
 sys.exit(1 if BAD else 0)

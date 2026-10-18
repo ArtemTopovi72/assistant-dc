@@ -66,9 +66,6 @@ class VideoPlanMixin:
         clip = sum(float(p.get("sec") or 0) for p in plan)
         render = sum(video.render_eta_s(float(p.get("sec") or 0)) for p in plan)
         lines = [tg_bot._t("vp_title", lang, n=len(plan), clip=f"{clip:.0f}", mins=_mins(render))]
-        for i, p in enumerate(plan, 1):
-            lines.append(tg_bot._t("vp_part", lang, i=i, sec=f"{float(p.get('sec') or 0):.1f}",
-                                   text=html.escape(_cut(p.get("say") or p.get("text", "")))))
         lines.append(tg_bot._t("vp_hint", lang))
         rows = [[{"text": tg_bot._t("vp_go", lang, mins=_mins(render)), "callback_data": "vp:go"}]]
         edits = [{"text": f"✏️ {i}", "callback_data": f"vp:edit:{i - 1}"} for i in range(1, len(plan) + 1)]
@@ -81,14 +78,24 @@ class VideoPlanMixin:
         rows.append([{"text": tg_bot._t("vp_cancel", lang), "callback_data": "vp:x"}])
         return "\n".join(lines), {"inline_keyboard": rows}
 
+    def _video_plan_script(self, sess, lang: str) -> str:
+        return "\n".join(tg_bot._t("vp_part", lang, i=i, sec=f"{float(p.get('sec') or 0):.1f}",
+                                   text=html.escape(_cut(p.get("say") or p.get("text", ""))))
+                         for i, p in enumerate(sess.video_plan, 1))
+
+    def _send_video_plan(self, chat_id: int, sess, lang: str) -> None:
+        """Two messages: the script alone, so it copies clean, then the card with the buttons."""
+        self._send_text(chat_id, self._video_plan_script(sess, lang), parse_mode="HTML")
+        text, kb = self._video_plan_card(sess, lang)
+        self._send_text(chat_id, text, parse_mode="HTML", keyboard=kb)
+
     def _offer_video_plan(self, chat_id: int, sess, lang: str, request: str, plan: list) -> None:
         sess.video_plan = _with_summaries(
             [{"text": str(p.get("text", "")), "sec": float(p.get("sec") or 0)} for p in plan], lang, self)
         sess.video_plan_request, sess.video_plan_ok = request, []
         sess.video_plan_image = getattr(sess, "turn_image", "") or ""
         self._store.put(sess)
-        text, kb = self._video_plan_card(sess, lang)
-        self._send_text(chat_id, text, parse_mode="HTML", keyboard=kb)
+        self._send_video_plan(chat_id, sess, lang)
 
     def _squeeze_plan(self, chat_id: int, sess, lang: str) -> None:
         """The model rewrites the script tighter; the parts are re-cut from it."""
@@ -109,8 +116,7 @@ class VideoPlanMixin:
             return
         sess.video_plan = _with_summaries([{"text": p, "sec": video.estimate_seconds(p)} for p in parts], lang, self)
         self._store.put(sess)
-        text, kb = self._video_plan_card(sess, lang)
-        self._send_text(chat_id, text, parse_mode="HTML", keyboard=kb)
+        self._send_video_plan(chat_id, sess, lang)
 
     def _edit_plan_part(self, chat_id: int, sess, lang: str, state: str, text: str) -> None:
         """The message an armed «vp_edit:<i>» / «vp_add» was waiting for. The user writes in
@@ -155,8 +161,7 @@ class VideoPlanMixin:
         plan = sess.video_plan
         sess.video_plan = (plan[:i] + new + plan[i + 1:]) if 0 <= i < len(plan) else plan + new
         self._store.put(sess)
-        card, kb = self._video_plan_card(sess, lang)
-        self._send_text(chat_id, card, parse_mode="HTML", keyboard=kb)
+        self._send_video_plan(chat_id, sess, lang)
 
     def _cb_video_plan(self, chat_id: int, data: str) -> None:
         sess = self._get_session(chat_id)
@@ -208,8 +213,7 @@ class VideoPlanMixin:
             if 0 <= i < len(sess.video_plan) and len(sess.video_plan) > 1:
                 sess.video_plan = sess.video_plan[:i] + sess.video_plan[i + 1:]
                 self._store.put(sess)
-            text, kb = self._video_plan_card(sess, lang)
-            self._send_text(chat_id, text, parse_mode="HTML", keyboard=kb)
+            self._send_video_plan(chat_id, sess, lang)
 
 
 import tg_bot  # noqa: E402  (cycle by design; attrs read at call time)

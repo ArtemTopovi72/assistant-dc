@@ -74,6 +74,9 @@ text, kb = sent[-1]
 datas = [b["callback_data"] for row in kb["inline_keyboard"] for b in row]
 check("the card names the parts, the clip length and the render time",
       f"частей {len(plan)}" in text and "ролик ≈" in text and "рендер ≈" in text, text[:200])
+script_msg, script_kb = sent[-2]
+check("the script goes in its own message, bare, so it copies clean",
+      script_kb is None and "частей" not in script_msg and script_msg.count("\n") == len(plan) - 1, script_msg[:200])
 check("...with render, condense, drop-a-part and cancel buttons",
       {"vp:go", "vp:squeeze", "vp:x", "vp:del:0"} <= set(datas), datas)
 

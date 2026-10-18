@@ -22,12 +22,14 @@ def check(name, cond, extra=""):
     else:    BAD += 1; print(f"FAIL  {name}   {extra}")
 
 
-def note(ahead, busy):
+def note(ahead, busy, rendering=()):
     bot = T.TelegramBot("1:T", lambda: None, lambda: None, lambda: {}, silent_mode=True)
     sent = []
     bot._send_text = lambda cid, text, **k: sent.append(text)
     bot._backend = types.SimpleNamespace(tasks_ahead=lambda tid: list(ahead))
     bot._card_busy = lambda: busy
+    bot._running_task = {c: [types.SimpleNamespace(delivered=False)] for c in rendering}
+    bot._chat_interruptible = {c: True for c in rendering}
     bot._queue_note(5, types.SimpleNamespace(task_id="t"), "ru")
     return sent
 
@@ -39,6 +41,13 @@ check("nobody ahead and the card shared: no note", note([], "") == [])
 ahead = [T._Task(task_id="a", chat_id=1, user_text="x")]
 sent = note(ahead, "YuE2")
 check("a real queue still shows its place", len(sent) == 1 and "#2" in sent[0], sent)
+sent = note([], "", rendering=(9,))
+check("another chat is rendering, the card shared: #2 and why", sent and "#2" in sent[0] and "генерация" in sent[0], sent)
+sent = note([], "", rendering=(5,))
+check("only this chat's own render: no note", sent == [], sent)
+sent = note(ahead, "", rendering=(9, 8))
+check("queue plus two renders: place counts both", sent and "#4" in sent[0], sent)
+
 
 print(f"\n{OK} passed, {BAD} failed")
 sys.exit(1 if BAD else 0)

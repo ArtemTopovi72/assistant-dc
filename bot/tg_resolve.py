@@ -1673,10 +1673,18 @@ class ResolveMixin:
             ahead = self._backend.tasks_ahead(task.task_id)
         except Exception:
             ahead = []
+        with self._task_lock:
+            rendering = sum(1 for cid, ts in self._running_task.items()
+                            if cid != chat_id and self._chat_interruptible.get(cid, False)
+                            and any(not getattr(t, "delivered", False) for t in ts))
         if ahead:
             self._send_text(chat_id,
-                tg_bot._t("queue_pos", lang, pos=len(ahead) + 1, eta=tg_bot._fmt_eta(ahead, lang)),
+                tg_bot._t("queue_pos", lang, pos=len(ahead) + rendering + 1, eta=tg_bot._fmt_eta(ahead, lang)),
                 parse_mode="HTML")
+            return
+        if rendering:
+            self._send_text(chat_id, tg_bot._t("queue_run", lang, pos=rendering + 1, n=rendering),
+                            parse_mode="HTML")
             return
         if self._card_busy():
             self._send_text(chat_id, tg_bot._t("card_busy", lang), parse_mode="HTML")

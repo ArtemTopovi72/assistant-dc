@@ -322,6 +322,8 @@ _MSG: dict[str, dict[str, str]] = {
     "off":           {"en": "OFF ❌", "ru": "ВЫКЛ ❌"},
     "queue_pos":     {"en": "⏳ <b>You're #{pos} in queue</b> — about {eta} ahead of you.",
                       "ru": "⏳ <b>Ты #{pos} в очереди</b> — впереди примерно {eta}."},
+    "queue_run":     {"en": "⏳ <b>You're #{pos} in queue</b> — {n} render(s) from other chats run first; yours starts right after.",
+                      "ru": "⏳ <b>Ты #{pos} в очереди</b> — сейчас идёт генерация у других ({n}), твоя начнётся следом."},
     "card_busy":     {"en": "⏳ <b>The graphics card is busy with a render</b> — your request starts as soon as it is free.",
                       "ru": "⏳ <b>Видеокарта занята рендером</b> — твой запрос начнётся, как только она освободится."},
     "too_many":      {"en": "🚧 Requests already waiting: {n}. "
