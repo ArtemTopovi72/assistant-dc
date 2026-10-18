@@ -73,7 +73,8 @@ def _is_button_payload(text: str) -> bool:
 def _typed_part(text: str) -> str:
     """The user's own words after a button's English prefix: «animate this photo:
     Танцует» read as Latin and switched a Russian chat's replies to English."""
-    t = text or ""
+    from prompt_guard import OCR_NOTE_HEAD
+    t = (text or "").split("\n" + OCR_NOTE_HEAD)[0]    # the OCR of the photo is not the user's alphabet
     for p in ("animate this photo: ", *tg_bot._PROMPT_KB.values()):
         if t.startswith(p):
             return t[len(p):]

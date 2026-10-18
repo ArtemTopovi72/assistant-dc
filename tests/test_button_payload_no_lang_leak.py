@@ -66,6 +66,11 @@ check("...while the whole line, prefix included, says nothing",
 check("a typed English line after the prefix still reads English",
       TT._message_script(TT._typed_part("animate this photo: he waves at the camera")) == "en")
 
+ocr = ("image\n[Text written on picture 1 (OCR, exact letters; each «…» is a separate label): "
+       "«Ao Tian» «Made in China»]")
+check("the OCR note of a photo-only message is not the user's alphabet (01:51 answered in English)",
+      TT._message_script(TT._typed_part(ocr)) == "", TT._message_script(TT._typed_part(ocr)))
+
 print()
 print(f"{OK}/{OK + BAD} checks passed")
 if BAD:
