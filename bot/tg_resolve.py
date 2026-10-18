@@ -1675,20 +1675,33 @@ class ResolveMixin:
             ahead = self._backend.tasks_ahead(task.task_id)
         except Exception:
             ahead = []
+        self._busy_note(chat_id, lang, ahead)
+
+    def _busy_note(self, chat_id: int, lang: str, ahead=()) -> None:
+        """The one place that tells a user their request waits. Every entry that starts work
+        (a typed task, the plan's ▶ button, a character render) calls it the moment it is
+        taken, not after the debounce and the intent read: those wait on the same busy model,
+        and a ▶ that answers nothing for minutes reads as a dead button. One note per
+        chat per 45 s, so the early call and the queue's own call do not double."""
         with self._task_lock:
             rendering = sum(1 for cid, ts in self._running_task.items()
                             if cid != chat_id and self._chat_interruptible.get(cid, False)
                             and any(not getattr(t, "delivered", False) for t in ts))
+            last = self.__dict__.setdefault("_busy_noted", {})
+            if time.time() - last.get(chat_id, 0.0) < 45.0:
+                return
+            if ahead or rendering or self._card_busy():
+                last[chat_id] = time.time()
+            else:
+                return
         if ahead:
             self._send_text(chat_id,
                 tg_bot._t("queue_pos", lang, pos=len(ahead) + rendering + 1, eta=tg_bot._fmt_eta(ahead, lang)),
                 parse_mode="HTML")
-            return
-        if rendering:
+        elif rendering:
             self._send_text(chat_id, tg_bot._t("queue_run", lang, pos=rendering + 1, n=rendering),
                             parse_mode="HTML")
-            return
-        if self._card_busy():
+        else:
             self._send_text(chat_id, tg_bot._t("card_busy", lang), parse_mode="HTML")
 
     def _register_animate_photo(self, chat_id: int, sess, lang: str, item: dict) -> None:

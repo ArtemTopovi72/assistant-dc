@@ -49,5 +49,25 @@ sent = note(ahead, "", rendering=(9, 8))
 check("queue plus two renders: place counts both", sent and "#4" in sent[0], sent)
 
 
+def early(rendering=(9,)):
+    bot = T.TelegramBot("1:T", lambda: None, lambda: None, lambda: {}, silent_mode=True)
+    sent = []
+    bot._send_text = lambda cid, text, **k: sent.append(text)
+    bot._backend = types.SimpleNamespace(tasks_ahead=lambda tid: [])
+    bot._card_busy = lambda: ""
+    bot._running_task = {c: [types.SimpleNamespace(delivered=False)] for c in rendering}
+    bot._chat_interruptible = {c: True for c in rendering}
+    return bot, sent
+
+
+bot, sent = early()
+bot._busy_note(5, "ru")
+check("the plan's ▶ is answered at the click, before any task exists", sent and "#2" in sent[0], sent)
+bot._queue_note(5, types.SimpleNamespace(task_id="t"), "ru")
+check("the queue's own note right after does not double it", len(sent) == 1, sent)
+bot, sent = early(rendering=())
+bot._busy_note(5, "ru")
+check("nobody busy: ▶ stays quiet", sent == [], sent)
+
 print(f"\n{OK} passed, {BAD} failed")
 sys.exit(1 if BAD else 0)

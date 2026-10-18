@@ -183,6 +183,7 @@ class VideoPlanMixin:
             item = {"type": "text", "text": sess.video_plan_request}
             if getattr(sess, "video_plan_image", ""):
                 item["image_id"] = sess.video_plan_image
+            self._busy_note(chat_id, lang)
             self._enqueue_item(chat_id, item)
             return
         if data == "vp:squeeze":

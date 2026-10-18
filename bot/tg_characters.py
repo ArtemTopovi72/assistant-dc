@@ -176,6 +176,7 @@ class CharactersMixin:
         # Registered as a real in-flight task BEFORE the thread starts, so the
         # status message can carry the same ⛔ button every other render has
         # (otherwise the only way out is ⛔ Stop, which kills everything queued).
+        self._busy_note(chat_id, lang)     # another chat's render holds the card: say so now
         import uuid
         from tg_queue_backends import _Task
         task_id = "char_" + uuid.uuid4().hex[:12]
