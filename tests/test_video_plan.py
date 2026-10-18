@@ -114,7 +114,11 @@ def _fake_llm(ctx_, system, user, **k):
 
 bot.text_model = _fake_llm
 n0 = len(bot._get_session(CID).video_plan)
+_sent = []
+bot._send_text = lambda cid, text, **k: _sent.append(text)
 bot._cb_video_plan(CID, "vp:edit:1")
+check("✏️ sends the part alone in a <code> message, so one tap copies the bare script",
+      len(_sent) == 2 and _sent[1].startswith("<code>") and "Часть" not in _sent[1], _sent)
 check("✏️ arms the capture of the next message", bot._get_session(CID).reg_state == "vp_edit:1",
       bot._get_session(CID).reg_state)
 bot._edit_plan_part(CID, bot._get_session(CID), "ru", "vp_edit:1", 'пусть кивает и говорит "ну и тяжесть"')

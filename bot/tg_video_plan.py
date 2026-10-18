@@ -204,8 +204,9 @@ class VideoPlanMixin:
                 sess.reg_state = f"vp_edit:{i}"
                 self._store.put(sess)
                 p = sess.video_plan[i]
-                self._send_text(chat_id, tg_bot._t("vp_edit_ask", lang, i=i + 1,
-                                                   text=html.escape(_cut(p.get("say") or p["text"], 200))),
+                self._send_text(chat_id, tg_bot._t("vp_edit_ask", lang, i=i + 1))
+                # alone in its own message, as <code>: one tap copies exactly the script, no header to cut off
+                self._send_text(chat_id, "<code>" + html.escape(_cut(p.get("say") or p["text"], 200)) + "</code>",
                                 parse_mode="HTML")
             return
         if data.startswith("vp:del:"):

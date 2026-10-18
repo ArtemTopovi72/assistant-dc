@@ -1182,10 +1182,10 @@ _MSG: dict[str, dict[str, str]] = {
                          "words in quotes are spoken exactly as written.",
                    "ru": "➕ Пришли, что должно происходить в новой части (встанет в конец). Можно по-русски; "
                          "слова в кавычках прозвучат ровно как написаны."},
-    "vp_edit_ask": {"en": "✏️ Part {i}: {text}\nSend the new text for it, or what to change. Any language; "
-                          "words in quotes are spoken exactly as written.",
-                    "ru": "✏️ Часть {i}: {text}\nПришли новый текст для неё или что поправить. Можно по-русски; "
-                          "слова в кавычках прозвучат ровно как написаны."},
+    "vp_edit_ask": {"en": "✏️ Part {i}. Send the new text for it, or what to change. Any language; "
+                          "words in quotes are spoken exactly as written. The current text is in the next message: tap it to copy.",
+                    "ru": "✏️ Часть {i}. Пришли новый текст для неё или что поправить. Можно по-русски; "
+                          "слова в кавычках прозвучат ровно как написаны. Текущий текст — следующим сообщением, нажми на него, чтобы скопировать."},
     "vp_edit_fail": {"en": "Could not read that — the plan above stays.",
                      "ru": "Не получилось разобрать — план выше остаётся."},
     "vp_go":      {"en": "▶ Render (~{mins} min)", "ru": "▶ Рендерить (~{mins} мин)"},
