@@ -551,5 +551,13 @@ check("t2va at 4 steps keeps the 4-step FL2V LoRA",
       "fl2v_turbo_4step" in _wf4[V.N_LORA]["inputs"]["lora_name"], _wf4[V.N_LORA]["inputs"])
 
 print()
+w, h = V.fit_canvas(704, 1504)
+check("fit_canvas alone re-rounds a grid size (why a chain needs exact)", (w, h) != (704, 1504), (w, h))
+check("a chain part keeps its clip's 704x1504 exactly",
+      V.resolve_size("9:16", (704, 1504), exact=True) == (704, 1504), V.resolve_size("9:16", (704, 1504), exact=True))
+check("an off-grid clip still goes through the grid",
+      V.resolve_size("", (700, 1500), exact=True) == V.fit_canvas(700, 1500))
+
+
 print(f"{OK}/{OK + BAD} checks passed")
 sys.exit(1 if BAD else 0)

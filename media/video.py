@@ -325,9 +325,15 @@ ASPECTS = {
 }
 
 
-def resolve_size(aspect: str = "", source_size: Optional[tuple] = None) -> tuple[int, int]:
+def resolve_size(aspect: str = "", source_size: Optional[tuple] = None, exact: bool = False) -> tuple[int, int]:
     """Canvas for this clip: an explicit aspect wins, else the source image's own
-    shape, else 16:9. Always returned already fitted to the model's grid."""
+    shape, else 16:9. Always returned already fitted to the model's grid.
+    `exact`: the source is a chain's own clip, already on the grid -- kept as is, because
+    fit_canvas is not idempotent (704x1504 -> 704x1472) and a chain part must match the
+    saved latent or the node refuses ("Masked AV requires identical geometry")."""
+    m = VIDEO_CANVAS_MULTIPLE
+    if exact and source_size and source_size[0] % m == 0 and source_size[1] % m == 0:
+        return int(source_size[0]), int(source_size[1])
     key = (aspect or "").strip()
     if key in ASPECTS:
         return fit_canvas(*ASPECTS[key])
@@ -1690,10 +1696,11 @@ def generate_video(ctx, description: str, *,
         # the pinned head is rendered too, then trimmed: the clip grows by it
         frames = snap_frames(frames + MOTION_CONTEXT_FRAMES - 5)
     src_size = eng._image_size(images[0]) if images else None
-    if (context_video or size_from) and not src_size:   # a continuation keeps the clip's own shape
+    clip_size = None
+    if context_video or size_from:      # a continuation keeps the clip's own shape
         p = eng.probe(size_from or context_video)
-        src_size = (p["width"], p["height"]) if p.get("width") else None
-    width, height = resolve_size(aspect, src_size)
+        clip_size = (p["width"], p["height"]) if p.get("width") else None
+    width, height = resolve_size(aspect, src_size or clip_size, exact=bool(size_from))
     if seed is None or int(seed) < 1:
         seed = random.randint(1, 2**31 - 1)
 
