@@ -56,7 +56,13 @@ def _asks_as_file(text: str, ctx=None) -> bool:
 def _fwd_author_of(msg: dict) -> str:
     """The author label of a forwarded piece: the bot's own words get the one
     label the frames trust; anyone else's name is rewritten if it claims it."""
-    return tg_bot._OWN_AUTHOR if msg.get("_fwd_own") else tg_bot._fwd_author(msg)
+    if msg.get("_fwd_own"):
+        return tg_bot._OWN_AUTHOR
+    who = tg_bot._fwd_author(msg)
+    me = msg.get("from") or {}
+    mine = " ".join(x for x in (me.get("first_name"), me.get("last_name")) if x)
+    # the user forwarding lines they wrote themselves is notes to the bot, not a chat of third parties
+    return f"{who} (the user themself)" if who and mine and who == mine else who
 
 
 def _is_button(text: str) -> bool:
