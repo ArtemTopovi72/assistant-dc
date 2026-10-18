@@ -1572,6 +1572,17 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     # blocks"): the first part here, the rest after it below.
     raw = (args.get("description") or "").strip()
     _said = str((state or {}).get("user_input_original") or (state or {}).get("user_input") or "")
+    own_script = False
+    if not continuing:
+        # A script the user numbered and timed is theirs: the agent's retelling of it dropped
+        # the lengths and the actions («3.2 с — … 2.2 с — …» became a bee in a suit).
+        from prompt_guard import user_words
+        own = "\n".join(ln for ln in user_words(_said).splitlines() if ln.strip())
+        if video_mod.numbered_script(own):
+            logger.info("generate_video: the user's own numbered script is used as written")
+            description = description.replace(raw, own, 1) if raw and raw in description else own
+            raw = own
+            own_script = True       # written and cut by the user: there is no plan to approve
     if images and not continuing and not args.get("seconds") and not yes_no(ctx)(
             "The user asked to animate a picture: {text}. Do they say WHAT should happen in "
             "the clip (an action, a movement, a line), rather than leaving it to the bot "
@@ -1708,7 +1719,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     if want > 15.0 and len(parts) > 1 and want > sum(secs) * 1.15:
         per = min(video_mod.frames_to_seconds(video_mod.VIDEO_MAX_FRAMES_AUTO), want / len(parts))
         secs = [max(x, round(per, 2)) for x in secs]
-    if len(parts) > 1 and not approved and getattr(ctx, "video_plan_ask", False):
+    if len(parts) > 1 and not approved and not own_script and getattr(ctx, "video_plan_ask", False):
         # Several minutes per part: the chat sees the parts, the clip length and the
         # render time first, and may drop or condense parts (user, 2026-10-10).
         state["video_plan"] = [{"text": p, "sec": x} for p, x in zip(parts, secs)]
