@@ -1373,6 +1373,46 @@ def _check_joins(ctx, joins: list) -> str:
     return "" if not ans or ans.upper().startswith("NONE") else ans[:400]
 
 
+def _check_actions(ctx, path: str, parts: list) -> str:
+    """The script's actions against the finished clip, in ONE vision call on frames spread over it.
+    The reply said «Готово! швыряет шапку» over a clip where the hat stayed on (live 2026-10-18),
+    and the user's own words were «не вижу чтобы он срал»: the writer of the reply saw the script,
+    never the clip. Returns the actions the frames do not show, "" when all are there, nothing
+    was asked or no model answered. Skipped for what cannot be judged: no script, no frames."""
+    script = " ".join(str(p).strip() for p in parts if p)
+    for rule in (video_mod_rules(ctx)):
+        script = script.replace(rule, "")
+    script = " ".join(script.split())[:900]
+    if len(script) < 20:
+        return ""
+    import tempfile
+    from pathlib import Path
+    try:
+        look = module(ctx, "video_look")
+        frames = look.extract_frames(path, look.sample_times(look.duration_seconds(path), every=1.5, max_frames=10),
+                                     Path(tempfile.mkdtemp(prefix="actcheck_")))
+        if len(frames) < 2:
+            return ""
+        ans = " ".join((vision_model(ctx)(
+            ctx, temperature=0.0, max_tokens=200,
+            image_paths=[(f"{t:.1f}s:", str(f)) for t, f in frames],
+            user_text="These frames are in time order from ONE video. The script it was made from:\n"
+                      f"{script}\n"
+                      "List, in a few words each, the ACTIONS of the script that the frames do not show "
+                      "(an object that never moves or leaves, a person who never does it). Speech and "
+                      "sound cannot be seen: ignore them. Answer NONE when every action is visible.") or "").split())
+    except Exception:
+        logger.warning("video actions: the check failed", exc_info=True)
+        return ""
+    logger.info("video actions: checked against the script -> %s", ans[:200] or "no answer")
+    return "" if not ans or ans.upper().startswith("NONE") else ans[:400]
+
+
+def video_mod_rules(ctx) -> tuple:
+    v = _video(ctx)
+    return tuple(r for r in (getattr(v, "CAUSE_RULE", ""), getattr(v, "RU_SPEECH", "")) if r)
+
+
 def _handle_generate_video(ctx, state, args: dict) -> str:
     import tools as _t   # the render seam is owned by tools; read it at CALL time
     video_mod = _video(ctx)
@@ -1846,6 +1886,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         path = _render_remaining_parts(ctx, path, parts, args, people=people)
         result["seconds"] = video_mod.probe(path).get("seconds") or result.get("seconds")
 
+    ctx.video_action_note = "" if continuing else _check_actions(ctx, path, parts)
     state["video_path"] = path
     state["video_status"] = "success"
     state["video_seconds"] = result.get("seconds")
@@ -1866,6 +1907,9 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         + ("What the clip shows is ONLY these approved plan parts (anything else in the "
            "request, such as parts the user removed, was NOT made -- never describe it): "
            + " | ".join(approved) + "\n" if approved else "")
+        + ("The finished clip was checked against the script and these actions are NOT visible in it: "
+           + ctx.video_action_note + ". Tell the user plainly which action did not appear; do NOT say it "
+           "happened and do NOT call the clip done as asked.\n" if getattr(ctx, "video_action_note", "") else "")
         + ("The joins between the parts were checked: " + ctx.video_join_note + ". Tell the "
            "user plainly which join is rough; do NOT call the clip seamless.\n"
            if getattr(ctx, "video_join_note", "") else "") +
