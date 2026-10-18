@@ -473,129 +473,67 @@ def _edit_image_with_firered_once(ctx, image_path: str, instruction: str,
                             save_prefix: Optional[str] = None,
                             reference_paths: Optional[list] = None,
                             engine: str = DEFAULT_EDIT_ENGINE) -> Optional[str]:
-    """Instruction-edit an image with FireRed Image Edit 1.1 (Qwen-Image-Edit).
+    """Instruction-edit an image with FLUX.3 Klein (imaging/klein.py).
 
-    ``engine`` is kept for call-site compatibility; FireRed is the only engine
-    (the base Qwen-Image-Edit "qwenimage" alternative was removed).
+    The name and ``engine`` are kept for call-site compatibility; Klein is the only engine.
+    No mask/segmentation: the whole image is re-rendered to satisfy ``instruction`` while
+    the Consistency LoRA keeps it on the original frame. With reference images the LoRA is
+    off: it pins the edit to the source and would fight a transfer from the references.
+    Returns the saved image path or None.
 
-    No mask/segmentation: the whole image is re-rendered to satisfy ``instruction``
-    while preserving untouched content. Returns the saved image path or None.
-
-    ``work_megapixels`` overrides node 191's working resolution. When None it is
-    sized to the input (capped at ``FIRERED_MAX_MP``) so a large tile is no longer
-    crushed to the template's 1.0 MP default — the cause of the cartoon softness.
+    ``work_megapixels`` is the working resolution; None = the input's size, capped at
+    ``FIRERED_MAX_MP``, never below 1.0.
     """
+    import klein
     if not image_path or not dep(ctx, "exists", os.path.exists)(image_path):
-        logger.error("firered: source image not found: %s", image_path)
+        logger.error("klein: source image not found: %s", image_path)
         return None
     if not (instruction or "").strip():
-        logger.error("firered: empty instruction — refusing to submit")
+        logger.error("klein: empty instruction — refusing to submit")
         return None
     if seed is None or seed < 1:
         seed = random.randint(1, 999_999_999)
 
-    uploaded = dep(ctx, "_upload_image_to_comfy", _upload_image_to_comfy)(image_path, COMFY_URL)
+    up = dep(ctx, "_upload_image_to_comfy", _upload_image_to_comfy)
+    uploaded = up(image_path, COMFY_URL)
     if not uploaded:
-        logger.error("firered: image upload to ComfyUI failed")
+        logger.error("klein: image upload to ComfyUI failed")
         return None
-    engine, wf_path = _edit_engine_workflow(engine)
-    try:
-        with open(wf_path, "r", encoding="utf-8") as f:
-            workflow = json.load(f)
-    except Exception as exc:
-        logger.error("%s: failed to load workflow %s: %s", engine, wf_path, exc)
-        return None
+    refs = []
+    for i, rp in enumerate((reference_paths or [])[:3]):
+        up_ref = up(rp, COMFY_URL) if rp and dep(ctx, "exists", os.path.exists)(rp) else None
+        if up_ref:
+            refs.append(up_ref)
+        else:
+            logger.warning("klein: reference %d upload failed (%s) — skipped", i, rp)
 
-    # Patch by node id (we own the template): source image, the POSITIVE
-    # instruction encoder (187 — never the empty negative 188), and the seed.
-    try:
-        workflow["143"]["inputs"]["image"] = uploaded
-        workflow["187"]["inputs"]["prompt"] = instruction
-        workflow["189"]["inputs"]["seed"] = seed
-    except KeyError as exc:
-        logger.error("firered: workflow template missing node %s — aborting", exc)
-        return None
-
-    # Optional reference images -> Qwen image2/image3 (multi-image conditioning).
-    for i, rp in enumerate((reference_paths or [])[:2]):
-        up_ref = (dep(ctx, "_upload_image_to_comfy", _upload_image_to_comfy)(rp, COMFY_URL)
-                  if rp and dep(ctx, "exists", os.path.exists)(rp) else None)
-        if not up_ref:
-            logger.warning("firered: reference %d upload failed (%s) — skipped", i, rp)
-            continue
-        lid, sid, slot = f"ref_load_{i}", f"ref_scale_{i}", firered_ref_slot(workflow, i)
-        workflow[lid] = {"class_type": "LoadImage", "_meta": {"title": f"Reference {i + 1}"},
-                         "inputs": {"image": up_ref}}
-        workflow[sid] = {"class_type": "ImageScaleToTotalPixels",
-                         "_meta": {"title": f"Scale ref {i + 1}"},
-                         "inputs": {"image": [lid, 0], "upscale_method": "lanczos",
-                                    "megapixels": 1.0, "resolution_steps": 1}}
-        workflow["187"]["inputs"][slot] = [sid, 0]
-        workflow["188"]["inputs"][slot] = [sid, 0]
-
-    _sm = _SAMPLER.get()
-    if _sm:
-        workflow["189"]["inputs"]["steps"] = _sm["steps"]
-        workflow["189"]["inputs"]["cfg"] = _sm["cfg"]
-        workflow["188"]["inputs"]["prompt"] = _sm["negative"]
-        if not _sm["lightning"] and "183" in workflow:
-            workflow["183"]["inputs"]["strength_model"] = 0.0
-        logger.info("firered: sampler %d steps cfg %.1f lightning=%s", _sm["steps"], _sm["cfg"],
-                    _sm["lightning"])
-
-    # A task LoRA stacked on the Lightning one (removal: QIE-2511 remover
-    # adapters, which FireRed -- a Qwen-Image-Edit derivative -- can load).
-    _xl = _EXTRA_LORA.get()
-    if _xl and "183" in workflow and "172" in workflow:
-        workflow["183x"] = {"class_type": "LoraLoaderModelOnly",
-                            "inputs": {"model": ["183", 0], "lora_name": _xl[0],
-                                       "strength_model": _xl[1]}}
-        workflow["172"]["inputs"]["model"] = ["183x", 0]
-        logger.info("firered: extra LoRA %s @ %.2f", _xl[0], _xl[1])
-
-    # When called as the tile-editor inside a contained pipeline, name the output
-    # distinctly so a cropped INTERMEDIATE tile can never be mistaken for a final
-    # full-frame result (both used to land as "firered_edit_*").
-    if save_prefix:
-        for _n in workflow.values():
-            if _n.get("class_type") == "SaveImage":
-                _n.setdefault("inputs", {})["filename_prefix"] = save_prefix
-
-    # Working-resolution: size node 191 to the input (capped) instead of the flat
-    # 1.0 MP template default, so a large tile keeps detail (no cartoon crush).
     dims = dep(ctx, "_source_dims", _source_dims)(image_path)
     src_mp = (dims[0] * dims[1] / 1_000_000.0) if dims else None
     if work_megapixels is None:
         work_megapixels = min(src_mp, FIRERED_MAX_MP) if src_mp else 1.0
-    # Never below 1.0 MP. TextEncodeQwenImageEditPlus rescales its reference to
-    # ~1 MP on its own; a smaller working latent then disagrees with it and the
-    # edit comes back ZOOMED ~1.4x (960x544 elephant: legs and
-    # sand cropped at 0.52 MP, identical framing at 1.0 and at 2.0 MP). The
-    # contained path's small tiles went through the same trap before being
-    # composited back.
     work_megapixels = max(1.0, float(work_megapixels))
-    try:
-        prev_mp = workflow["191"]["inputs"].get("megapixels")
-        firered_work_mp(workflow, work_megapixels)
-    except KeyError:
-        prev_mp = None
-        logger.warning("firered: node 191 (ImageScaleToTotalPixels) missing — working MP not applied")
 
-    # Geometry guard: rescale the decoded result back to the source canvas so the
-    # saved dimensions match the input exactly (node 191 still downscaled internally).
+    _sm = _SAMPLER.get()
+    if _sm:
+        logger.info("klein: sampler override (steps %d cfg %.1f) ignored, the distilled model runs "
+                    "its own schedule", _sm["steps"], _sm["cfg"])
+    workflow = klein.edit_workflow(uploaded, instruction, seed, megapixels=work_megapixels,
+                                   refs=refs, extra_lora=_EXTRA_LORA.get(), consistency=not refs)
+    # A cropped INTERMEDIATE tile must never be mistaken for a final full-frame result.
+    workflow[klein.N_SAVE]["inputs"]["filename_prefix"] = save_prefix or "klein_edit"
+
     if dims:
         out_w, out_h = dims
         if _sm and _sm.get("upsize") and src_mp and src_mp < work_megapixels:
-            # A 736x495 picture restyled at 1 MP and shrunk back came out «мыльный кал».
             k = (work_megapixels / src_mp) ** 0.5
             out_w, out_h = int(out_w * k) // 8 * 8, int(out_h * k) // 8 * 8
         dep(ctx, "_enforce_output_size", _enforce_output_size)(workflow, out_w, out_h)
 
-    logger.info("%s edit [BUILD_ID=%s]: input=%s dims=%s (%.2f MP) -> work_MP %.2f (was %s) seed=%d instr=%r",
-                engine, IMAGE_BUILD_ID, os.path.basename(image_path), dims, (src_mp or 0.0),
-                work_megapixels, prev_mp, seed, instruction[:80])
+    logger.info("klein edit [BUILD_ID=%s]: input=%s dims=%s (%.2f MP) -> work_MP %.2f refs=%d seed=%d instr=%r",
+                IMAGE_BUILD_ID, os.path.basename(image_path), dims, (src_mp or 0.0),
+                work_megapixels, len(refs), seed, instruction[:80])
     return dep(ctx, "_submit_and_poll", _submit_and_poll)(ctx, workflow, timeout=timeout,
-                            label=f"{engine} edit seed={seed}", exclusive=True)
+                            label=f"klein edit seed={seed}", exclusive=True)
 
 
 # ---------------------------------------------------------------------------

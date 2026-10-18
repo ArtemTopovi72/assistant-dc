@@ -267,6 +267,20 @@ CACHE_FILE = BASE_DIR / "transcriptions.json"
 # ideogram.py plans the layout with the LLM before submitting.
 IMAGE_ENGINE = "ideogram4"
 
+# FLUX.3 Image Klein (imaging/klein.py) replaced Ideogram 4 and FireRed on 2026-10-18 after
+# bench/klein_vs_ideogram.py, klein_hard.py and klein_edit_vs_firered.py: same layout boxes,
+# exact Russian lettering, 6 s a picture and 12 s an edit against 7-25 s and 22-33 s.
+# The int8 "convrot" build runs on the 3090's integer tensor cores; 16 steps at cfg 1 is
+# the distilled model's setting.
+KLEIN_UNET = os.getenv("KLEIN_UNET", "flux3-image-klein-int8-convrot.safetensors")
+KLEIN_CLIP = os.getenv("KLEIN_CLIP", "qwen3vl_4b_int8_convrot.safetensors")
+KLEIN_VAE = os.getenv("KLEIN_VAE", "flux2-vae.safetensors")
+KLEIN_STEPS = _env_int("KLEIN_STEPS", 16)
+# ausboss Consistency LoRA: keeps an edit on the original's frame (a snow edit kept the pier
+# instead of swapping the scene for a forest). Distilled model, strength 1.0.
+KLEIN_EDIT_LORA = os.getenv("KLEIN_EDIT_LORA", "flux-3-image-klein-consistency.safetensors")
+KLEIN_EDIT_LORA_STRENGTH = _env_float("KLEIN_EDIT_LORA_STRENGTH", 1.0)
+
 # Refuse a ComfyUI job while a whole-card job (a LoRA training run) holds
 # runtime/gpu.lock. Training needs ~18 of this card's 24 GB; a diffusion model
 # loaded on top does not merely queue -- both processes thrash, the training

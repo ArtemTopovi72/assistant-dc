@@ -752,116 +752,45 @@ def generate(ctx, prompt: str, *, width: int = 1024, height: int = 1024,
              lora_name: Optional[str] = None, lora_strength: float = 1.0,
              trigger: Optional[str] = None,
              timeout: int = 1900, on_progress=None) -> Optional[str]:
-    """Draw `prompt` with Ideogram 4. Returns the saved image path, or None.
+    """Draw `prompt` with FLUX.3 Klein from a planned layout. Returns the saved image path, or None.
 
-    Pass `caption` to skip the planner and supply the layout yourself.
+    The layout planner still speaks the Ideogram caption (boxes on a 0-1000 grid), which
+    klein.caption_to_prompt turns into Klein's paragraph + element table. Pass `caption` to
+    skip the planner and supply the layout yourself. `cfg` is ignored: the distilled model
+    samples at cfg 1.
     """
+    import klein
     if not (prompt or "").strip() and not caption:
         logger.error("ideogram.generate: empty prompt — refusing to submit")
         return None
-    if not WORKFLOW_IDEOGRAM_PATH.exists():
-        logger.error("Ideogram workflow missing: %s", WORKFLOW_IDEOGRAM_PATH)
-        return None
-    try:
-        with open(WORKFLOW_IDEOGRAM_PATH, "r", encoding="utf-8") as fh:
-            workflow = json.load(fh)
-    except Exception as exc:
-        logger.error("Failed to load the Ideogram workflow: %s", exc)
-        return None
-
     caption = caption or plan_caption(ctx, prompt)
     caption = ensure_trigger(caption, trigger)
     global LAST_CAPTION, LAST_PROMPT, LAST_SERIAL, LAST_IMAGE
     LAST_CAPTION, LAST_PROMPT, LAST_SERIAL = caption, (prompt or "").strip(), LAST_SERIAL + 1
-    # Compact separators + ensure_ascii=False are what the published guide asks
-    # for: the training captions are serialised this way, and \uXXXX escapes are
-    # a documented verifier warning. indent=4 fed the encoder whitespace the
-    # model never saw in training.
-    caption_json = json.dumps(caption, separators=(",", ":"), ensure_ascii=False)
     n_elements = len(caption.get("compositional_deconstruction", {}).get("elements", []))
     _w, _h = ideogram_size(width, height)
-    logger.info("Ideogram caption: %d element(s), %dx%d", n_elements, _w, _h)
-    logger.debug("Ideogram caption JSON:\n%s", caption_json)
-
-    workflow[NODE_PROMPT]["inputs"]["text"] = caption_json
-    workflow[NODE_NOISE]["inputs"]["noise_seed"] = (
-        seed if seed and seed > 0 else random.randint(1, 999_999_999))
-    workflow[NODE_LATENT]["inputs"]["width"] = _w
-    workflow[NODE_LATENT]["inputs"]["height"] = _h
-    # An explicit steps/cfg means the caller wants the plain, non-distilled
-    # model at that exact setting -- ostris/ideogram_4_turbotime_lora is
-    # trained for ~2-4 step, near-CFG-free sampling, and only applies as the
-    # default when nobody asked for a specific step/cfg (35-40%
-    # faster across 3 varied scenes, no quality loss on lettering or a crowd
-    # scene; see IDEOGRAM_TURBO_LORA in config.py for the portrait-glitch fix).
-    cfg_turbo = dep(ctx, "IDEOGRAM_CFG_TURBO", IDEOGRAM_CFG_TURBO)
-    turbo = dep(ctx, "IDEOGRAM_TURBO", IDEOGRAM_TURBO) and steps is None and cfg is None
-    n_steps = IDEOGRAM_STEPS_TURBO if turbo else max(1, min(int(steps or IDEOGRAM_STEPS), 100))
-    workflow[NODE_SCHEDULER]["inputs"]["steps"] = n_steps
-    workflow[NODE_GUIDER]["inputs"]["cfg"] = (
-        cfg_turbo if turbo else max(0.0, min(float(cfg or IDEOGRAM_CFG), 30.0)))
-    workflow[NODE_SHIFT]["inputs"]["shift"] = float(IDEOGRAM_SHIFT)
-    if turbo:
-        attach_turbo_lora(workflow, IDEOGRAM_TURBO_LORA, 1.0)
-        if cfg_turbo == 1.0:
-            # cfg 1 needs no unconditional branch: one-model guider, and the
-            # 9 GB uncond model is never loaded. A/B (bench/
-            # ideogram_int8_ab.py app vs turbo4): same pictures, 4-9 s vs 7-13 s.
-            g = workflow[NODE_GUIDER]["inputs"]
-            model = g["model"]
-            if str(model[0]) == "184":      # CFGOverride: a late cfg bump, moot at cfg 1
-                model = workflow["184"]["inputs"]["model"]
-            workflow[NODE_GUIDER] = {"class_type": "CFGGuider", "inputs": {
-                "cfg": 1.0, "model": model, "positive": g["positive"], "negative": g["positive"]}}
-            for k in ("181", "184", "159"):
-                workflow.pop(k, None)
-        logger.info("Ideogram: turbo LoRA, %d steps @ cfg %.1f", n_steps, cfg_turbo)
-    if not lora_name and is_photo_caption(caption) and IDEOGRAM_PHOTO_LORA:
-        # Ideogram's known plastic skin: Lenovo UltraReal on photographs only
-        # (A/B runtime/ideogram_int8_ab/skin.jpg: pores and film light,
-        # same face, same lettering, same 40 s). A character LoRA keeps its own.
-        lora_name, lora_strength = IDEOGRAM_PHOTO_LORA, IDEOGRAM_PHOTO_LORA_STRENGTH
-    if lora_name:
-        attach_lora(workflow, lora_name, lora_strength)
-        logger.info("Ideogram LoRA attached to the conditional branch: %s @ %.2f",
-                    lora_name, lora_strength)
-    # The turbo LoRA is trained for one constant low/no-cfg pass -- bolting on
-    # the normal 2-step, cfg=3.0 polish tail fights that and is the traced
-    # cause of a colour-block glitch seen on a face-heavy render, so it is
-    # skipped whenever turbo is engaged.
-    if not turbo and add_polish_pass(workflow, n_steps, int(IDEOGRAM_POLISH_STEPS),
-                                     float(IDEOGRAM_POLISH_CFG)):
-        logger.info("Ideogram: %d steps @ cfg %.1f + %d polish @ cfg %.1f",
-                    n_steps - IDEOGRAM_POLISH_STEPS,
-                    float(cfg or IDEOGRAM_CFG), int(IDEOGRAM_POLISH_STEPS),
-                    float(IDEOGRAM_POLISH_CFG))
+    text = klein.caption_to_prompt(caption)
+    logger.info("Klein caption: %d element(s), %dx%d", n_elements, _w, _h)
+    logger.debug("Klein prompt:\n%s", text)
+    seed = seed if seed and seed > 0 else random.randint(1, 999_999_999)
+    lora = (lora_name, float(lora_strength)) if lora_name else None
+    workflow = klein.t2i_workflow(text, _w, _h, seed, steps=steps, lora=lora)
+    if lora:
+        logger.info("Klein LoRA: %s @ %.2f", lora_name, lora_strength)
 
     submit = dep(ctx, "_submit_and_poll", comfy_client._submit_and_poll)
     # Called through the module rather than bound with `from ... import` so there
     # is exactly ONE place to intercept the render: patching comfy_client is seen
-    # by every caller. A bound name would have to be patched per module.
-    # exclusive: the caption is already planned by the time we get here, so this
-    # job needs nothing but the GPU -- and Ideogram is the largest model set we
-    # load, the one that suffers most from sharing the card with the chat model.
-    result = submit(ctx, workflow, timeout=timeout,
-                                           label="ideogram4",
-                                           on_progress=on_progress,
-                                           exclusive=True)
+    # by every caller. exclusive: the layout is already planned, this job needs
+    # nothing but the GPU.
+    result = submit(ctx, workflow, timeout=timeout, label="klein",
+                    on_progress=on_progress, exclusive=True)
     if result and is_black_frame(result):
-        # One re-roll on a fresh seed. A second black frame is delivered as it
-        # is: the judge / the user can see it, and a loop here would just burn
-        # the card on a caption the model cannot draw.
-        workflow[NODE_NOISE]["inputs"]["noise_seed"] = random.randint(1, 999_999_999)
-        logger.warning("Ideogram: black frame — re-rolling once on seed %d",
-                       workflow[NODE_NOISE]["inputs"]["noise_seed"])
-        retry = submit(ctx, workflow, timeout=timeout,
-                                              label="ideogram4",
-                                              on_progress=on_progress,
-                                              exclusive=True)
-        result = retry or result
+        # One re-roll on a fresh seed; a second black frame is delivered as it is.
+        workflow[klein.N_SAMPLER]["inputs"]["seed"] = random.randint(1, 999_999_999)
+        logger.warning("Klein: black frame — re-rolling once on seed %d",
+                       workflow[klein.N_SAMPLER]["inputs"]["seed"])
+        result = submit(ctx, workflow, timeout=timeout, label="klein",
+                        on_progress=on_progress, exclusive=True) or result
     LAST_IMAGE = result
-    if result and is_refusal_card(result):
-        raise ContentRefused(
-            "Ideogram 4 declined this prompt and returned its safety card instead "
-            "of an image.")
     return result

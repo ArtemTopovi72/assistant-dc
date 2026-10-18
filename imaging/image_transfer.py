@@ -448,47 +448,15 @@ def transfer_with_references(ctx, target_path, references, instruction=None, *,
         logger.error("transfer: upload failed (target=%s refs=%s)", up_target, up_refs)
         return None
 
-    try:
-        with open(WORKFLOW_FIRERED_EDIT_PATH, "r", encoding="utf-8") as f:
-            wf = json.load(f)
-    except Exception as exc:
-        logger.error("transfer: cannot load workflow: %s", exc)
-        return None
-
-    # target -> node 143 (image1 source), instruction -> 187, seed -> 189
-    try:
-        wf["143"]["inputs"]["image"] = up_target
-        wf["187"]["inputs"]["prompt"] = instr
-        wf["189"]["inputs"]["seed"] = seed
-    except KeyError as exc:
-        logger.error("transfer: workflow missing node %s", exc)
-        return None
-
-    # Add a LoadImage + ImageScaleToTotalPixels per reference and wire them into
-    # image2 / image3 of BOTH the positive (187) and negative (188) encoders.
-    for i, up in enumerate(up_refs):
-        load_id = f"ref_load_{i}"
-        scale_id = f"ref_scale_{i}"
-        slot = _image.firered_ref_slot(wf, i)   # image2/3 or vl_resize_image2/3
-        wf[load_id] = {"class_type": "LoadImage", "_meta": {"title": f"Reference {i + 1}"},
-                       "inputs": {"image": up}}
-        wf[scale_id] = {"class_type": "ImageScaleToTotalPixels",
-                        "_meta": {"title": f"Scale ref {i + 1}"},
-                        "inputs": {"image": [load_id, 0], "upscale_method": "lanczos",
-                                   "megapixels": 1.0, "resolution_steps": 1}}
-        wf["187"]["inputs"][slot] = [scale_id, 0]
-        wf["188"]["inputs"][slot] = [scale_id, 0]
-
-    # Working MP sized to the target (capped), like the single-image path.
+    import klein
     dims = _image._source_dims(target_path)
     src_mp = (dims[0] * dims[1] / 1_000_000.0) if dims else None
     if work_megapixels is None:
         work_megapixels = min(src_mp, FIRERED_MAX_MP) if src_mp else 1.0
     work_megapixels = max(0.5, float(work_megapixels))
-    _image.firered_work_mp(wf, work_megapixels)
-    for _n in wf.values():
-        if _n.get("class_type") == "SaveImage":
-            _n.setdefault("inputs", {})["filename_prefix"] = "transfer"
+    wf = klein.edit_workflow(up_target, instr, seed, megapixels=work_megapixels, refs=up_refs,
+                             consistency=False)
+    wf[klein.N_SAVE]["inputs"]["filename_prefix"] = "transfer"
     if dims:
         _image._enforce_output_size(wf, dims[0], dims[1])
 
