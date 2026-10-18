@@ -274,7 +274,7 @@ class CharactersTab(QWidget):
         gen.addWidget(self.prompt, 1)
         gen.addWidget(QLabel('Strength:'))
         self.strength = QDoubleSpinBox()
-        self.strength.setRange(0.1, 1.5); self.strength.setSingleStep(0.05)
+        self.strength.setRange(0.1, 1.25); self.strength.setSingleStep(0.05)
         self.strength.setValue(0.9)
         gen.addWidget(self.strength)
         self.gen_btn = QPushButton('🎨  Draw')
@@ -596,7 +596,7 @@ class CharactersTab(QWidget):
         # marked seven of ten as "currently published". The source path is
         # recorded at publish time; for adapters published before that existed,
         # fall back to a content fingerprint.
-        published = LT.LORA_OUT_DIR / (slug + ".safetensors")
+        published = LT.published_path(slug)
         known = rec.get("lora_source") or ""
         live_fp = None if known else _fingerprint(published)
         labels, paths = [], []

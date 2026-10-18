@@ -52,9 +52,8 @@ TOOLKIT_DIR = Path(os.getenv("LORA_TOOLKIT_DIR", str(_ROOT / "tools" / "ai-toolk
 
 # The 24 GB profile: 1024 px, rank 16, batch 1, gradient checkpointing. The
 # model-specific keys (model_path, arch, sampling, prompts) come from
-# IDEOGRAM_PROFILE below -- Ideogram 4 is the only drawing engine, so it is the
-# only thing a character LoRA can be trained for. (the older drawing
-# model it replaced was removed from the product.)
+# KLEIN_PROFILE below -- Klein is the only drawing engine, so it is the
+# only thing a character LoRA can be trained for.
 # quantize/low_vram default ON, and they should STAY on even when the card is
 # exclusive. The reasoning that says otherwise -- fp8 has no tensor-core path
 # on Ampere, low_vram adds offload traffic an evicted card does not need -- is
@@ -65,103 +64,37 @@ TOOLKIT_DIR = Path(os.getenv("LORA_TOOLKIT_DIR", str(_ROOT / "tools" / "ai-toolk
 #   cost is far cheaper than the extra traffic.
 # grad_ckpt=False was tried separately and was worse again: 2:10 for the first
 # step alone and VRAM at 24147/24576, about to OOM.
-_BASE_DEFAULTS = {"steps": 2000, "rank": 16, "lr": 1e-4, "size": 1024, "save_every": 250,
+_BASE_DEFAULTS = {"steps": 2000, "rank": 32, "lr": 1e-4, "size": 1024, "save_every": 250,
                   "quantize": "true", "low_vram": "true", "grad_ckpt": "true"}
 
 
-def _json_sample_prompts(specs) -> str:
-    """Ideogram sample prompts as YAML list items, brace-escaped for .format().
-
-    Built with ideogram_layout.build_caption -- the project's own caption
-    builder, which already enforces key order, the photo/art_style exclusivity
-    and compact serialisation, and has a test suite behind it. Hand-writing the
-    JSON here would be a second, unverified implementation of the same schema.
-
-    Two traps stacked on top of each other.
-
-    First, the prompts must be STRUCTURED. Ideogram's documentation says a
-    plain-text prompt bypasses the schema and will likely trigger a safety
-    warning -- and it does. Inheriting the old model's flat prompts made every
-    training preview come back as the model's grey refusal card, at step 0 and
-    at every save. Training itself was unaffected, since that reads the
-    dataset's JSON captions; only the previews were destroyed, which is the one
-    thing they exist for.
-
-    Second, the config template is rendered with str.format, so every brace in
-    the JSON would be read as a substitution field. They are doubled here --
-    except {trigger}, which is the one field we DO want substituted.
-    """
-    import json
-
-    import ideogram_layout as IL
-
-    lines = []
-    for hl, lighting, background, desc in specs:
-        caption = IL.build_caption(
-            background, [IL.element(desc)],
-            high_level=hl,
-            aesthetics="photorealistic, natural skin texture",
-            lighting=lighting,
-            photo="digital photograph, portrait lens",
-            medium="photograph")
-        blob = json.dumps(caption, separators=(",", ":"), ensure_ascii=False)
-        if "'" in blob:
-            raise ValueError("a single quote would break the YAML scalar: " + blob)
-        blob = blob.replace("{", "{{").replace("}", "}}")
-        blob = blob.replace("{{trigger}}", "{trigger}")
-        lines.append("          - '%s'" % blob)
-    return "\n".join(lines)
+def _sample_prompts(specs) -> str:
+    """Klein previews as YAML list items, brace-escaped for .format(); {trigger} stays a field."""
+    return chr(10).join("          - '%s'" % t.replace("'", "").replace("{", "{{").replace("}", "}}")
+                     .replace("{{trigger}}", "{trigger}") for t in specs)
 
 
-def _qwen3_vl_local() -> str:
-    """The downloaded Qwen3-VL-8B-Instruct snapshot dir, or the hub id.
-
-    Falls back to the hub id rather than failing here: the trainer will then
-    try to download it, which is the right error to see and not a silent
-    misconfiguration.
-    """
-    root = Path("E:/hf-cache") / "models--Qwen--Qwen3-VL-8B-Instruct" / "snapshots"
-    if root.is_dir():
-        snaps = [p for p in root.iterdir() if (p / "config.json").is_file()]
-        if snaps:
-            return max(snaps, key=lambda p: p.stat().st_mtime).as_posix()
-    return "Qwen/Qwen3-VL-8B-Instruct"
-
-
-_QWEN3_VL_LOCAL = _qwen3_vl_local()
-
-
-# Ideogram 4. Its HF repo is GATED, so name_or_path points at the local dir
-# bench/build_ideogram4_local.py assembles from the ComfyUI weights.
-#
-# The text encoder is a SEPARATE download on purpose: ideogram4.py loads stock
-# bf16 Qwen3-VL-8B-Instruct rather than the fp8 copy shipped in the model repo
-# ("faster and higher precision than dequantizing"), and pointing it at a hub
-# id would send it to the default cache on C:, which has no room.
-#
-# Sampling follows Ideogram's own V4_DEFAULT_20 preset: 20 steps at guidance
-# weight 7.
-IDEOGRAM_PROFILE = {
-    "model_path": r"E:/ideogram4-local",
-    "arch": "ideogram4",
+# FLUX.3 Image Klein. A LoRA is trained on the BASE model (undistilled) and loads into the
+# distilled one the app draws with. KLEIN_TRAIN_MODELS is a ComfyUI-layout folder (diffusion_models/,
+# text_encoders/, vae/) the trainer reads in place: the base DiT file is named directly because the
+# mirror's file names differ from the trainer's; its text encoder (qwen3vl_4b_bf16) and VAE
+# (flux2-vae) are found by their layout paths.
+KLEIN_TRAIN_MODELS = os.getenv("KLEIN_TRAIN_MODELS", "E:/klein_dl")
+KLEIN_PROFILE = {
+    "model_path": KLEIN_TRAIN_MODELS + "/diffusion_models/flux3-image-klein-base-int8-convrot.safetensors",
+    "arch": "flux3",
     "assistant": "",
-    "model_kwargs": ("        model_kwargs:\n"
-                      "          text_encoder_path: %s\n"
-                      % _QWEN3_VL_LOCAL),
-    "prompts": _json_sample_prompts([
-        ("A photograph of {trigger}, a man, standing outdoors in daylight.",
-         "natural daylight", "an outdoor setting",
-         "{trigger}, a man, standing, waist up"),
-        ("A studio portrait of {trigger}, a man.",
-         "soft studio lighting", "a plain studio backdrop",
-         "{trigger}, a man, head and shoulders"),
+    "model_kwargs": "",
+    "prompts": _sample_prompts([
+        "A photograph of {trigger}, a man, standing outdoors in daylight, waist up.",
+        "A studio portrait of {trigger}, a man, head and shoulders, soft studio lighting.",
     ]),
-    "sample_steps": 20,
-    "guidance": 7.0,
+    "sample_steps": 50,
+    "guidance": 4.0,
 }
 
 
-DEFAULTS = {**_BASE_DEFAULTS, **IDEOGRAM_PROFILE}
+DEFAULTS = {**_BASE_DEFAULTS, **KLEIN_PROFILE}
 
 
 def toolkit_python():
@@ -365,6 +298,7 @@ config:
           shuffle_tokens: false
           cache_latents_to_disk: true
           cache_text_embeddings: true
+          caption_dropout_rate: 0.05
           resolution: [{size}]
       train:
         batch_size: 1
@@ -390,7 +324,7 @@ config:
         dtype: bf16
       model:
         name_or_path: {model_path}
-        # "ideogram4", not "ideogram_4": the arch key is <Model>.arch in the toolkit,
+        # "flux3": the arch key is <Model>.arch in the toolkit,
         # and a name that merely looks right fails at load time, after the
         # dataset has already been cached.
         arch: {arch}
@@ -408,6 +342,7 @@ config:
         # opposite -- it needs the long trajectory and real CFG.
         sample_steps: {sample_steps}
         guidance_scale: {guidance}
+        neg: ''
         prompts:
 {prompts}
 meta:
@@ -423,7 +358,7 @@ def build_config(slug: str, trigger: str, dataset_dir, **over) -> Path:
     # each value verbatim and never looks inside it, so a {trigger} sitting in
     # the prompts string would reach the config as the literal text
     # "{trigger}" and every preview would be of a word rather than a person.
-    # This is also why _json_sample_prompts doubles the braces of its JSON:
+    # This is also why _sample_prompts doubles the braces of its JSON:
     # they pass through this pass, not the template one.
     cfg["prompts"] = str(cfg["prompts"]).format(trigger=trigger)
     run_dir = TRAIN_ROOT / slug
@@ -703,11 +638,17 @@ def list_checkpoints(slug: str, limit: int = 10) -> list:
     return rows[:limit] if limit else rows
 
 
+def published_path(slug: str) -> Path:
+    """Where a character's adapter lives in ComfyUI's loras folder. "klein" is in the name so
+    `ideogram.generate` loads it and skips adapters trained for the retired engines."""
+    return LORA_OUT_DIR / (slug + ("" if "klein" in slug.lower() else "_klein") + ".safetensors")
+
+
 def publish(slug: str, adapter) -> Path:
     """Copy a trained adapter into ComfyUI's loras folder under a stable name."""
     import shutil
     LORA_OUT_DIR.mkdir(parents=True, exist_ok=True)
-    dest = LORA_OUT_DIR / (slug + ".safetensors")
+    dest = published_path(slug)
     shutil.copy2(str(adapter), str(dest))
     return dest
 
@@ -772,6 +713,7 @@ def spawn(cfg_path):
     # minutes with the GPU idle and never finalised out of .incomplete. The
     # classic HTTP downloader fetches the same file in seconds.
     env["HF_HUB_DISABLE_XET"] = "1"
+    env["MODELS_PATH"] = KLEIN_TRAIN_MODELS
     return subprocess.Popen(
         train_command(cfg_path), cwd=str(TOOLKIT_DIR), env=env,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,

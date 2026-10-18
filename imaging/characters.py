@@ -147,11 +147,9 @@ def upsert(slug: str, **fields) -> dict:
         rec.setdefault("trigger", slug)
         rec.setdefault("status", "dataset")
         rec.setdefault("tg_enabled", False)
-        # 1.5, not 0.9: this field is read ONLY by the Telegram render
-        # path (tg_characters._render_character), and the desktop tab has
-        # its own spin box. The bot asked for a firmer identity than the
-        # default gave.
-        rec.setdefault("strength", 1.5)
+        # Read ONLY by the Telegram render path (tg_characters._render_character); the desktop
+        # tab has its own spin box. 1.0: Klein LoRAs trained on Base load at 0.75-1.25.
+        rec.setdefault("strength", 1.0)
         rec.setdefault("created", int(__import__("time").time()))
         data[slug] = rec
         _write(data)

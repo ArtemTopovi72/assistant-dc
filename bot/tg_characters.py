@@ -252,7 +252,7 @@ class CharactersMixin:
                 path = (getattr(self, "render_image", None) or G.generate_image_with_comfy)(
                     ctx, prompt,
                     lora_name=os.path.basename(rec.get("lora_file") or ""),
-                    lora_strength=float(rec.get("strength") or 1.5),
+                    lora_strength=float(rec.get("strength") or 1.0),
                     trigger=rec.get("trigger") or rec["slug"])
             except Exception:
                 logger.exception("character render failed")
