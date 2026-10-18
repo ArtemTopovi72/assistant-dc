@@ -18,7 +18,7 @@ Steps:
    8. ffmpeg        on PATH (installed with winget on Windows)
    9. voice         vocoder + Russian F5-TTS weights (Misha24-10, v4 winter)
   10. lmstudio      LM Studio (winget / headless on Linux), server, chat + embedding models
-  10b. comfyui      ComfyUI v0.38.2, pinned custom nodes, the graphs' model files
+  10b. comfyui      ComfyUI v0.41.0, pinned custom nodes, the graphs' model files
   11. shortcut      desktop shortcut (Windows)
   12. health        scripts/healthcheck.py -- the verdict
   13. start         the app (unless --no-start)

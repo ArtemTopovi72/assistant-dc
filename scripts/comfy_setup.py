@@ -23,10 +23,10 @@ from pathlib import Path
 
 IS_WIN = os.name == "nt"
 COMFY_REPO = "https://github.com/comfyanonymous/ComfyUI.git"
-# Pinned: every node class the graphs in workflows/ use was checked against
+# Pinned (>= 0.41: the flux3 CLIP type Klein needs): every node class the graphs in workflows/ use was checked against
 # this release (MiniMax H3 + Music3, Flux2 latents, DualModelGuider, CFGNorm,
 # CFGOverride, CreateVideo/SaveVideo). Its requirements.txt pins its own deps.
-COMFY_TAG = "v0.38.2"
+COMFY_TAG = "v0.41.0"
 COMFY_VERSION = COMFY_TAG.lstrip("v")
 COMFY_TORCH = ("torch==2.8.0", "torchvision==0.23.0", "torchaudio==2.8.0")
 
@@ -42,25 +42,16 @@ NODES = [
 # (media, models/ subfolder, file name the graph uses, source repos in order,
 #  other names the file has in those repos, approx GB)
 MODELS = [
-    # drawing (Ideogram 4); the graph's int8 files are local quantizations,
-    # comfy_client.MODEL_FALLBACKS sends these official fp8 ones instead
-    ("image", "diffusion_models", "ideogram4_fp8_scaled.safetensors",
-     ["Comfy-Org/Ideogram-4"], [], 9.3),
-    ("image", "diffusion_models", "ideogram4_unconditional_fp8_scaled.safetensors",
-     ["Comfy-Org/Ideogram-4"], ["ideogram4_uncond_fp8_scaled.safetensors"], 9.3),
-    ("image", "text_encoders", "qwen3vl_8b_fp8_scaled.safetensors",
-     ["Comfy-Org/Ideogram-4", "Comfy-Org/Qwen3-VL"], [], 10.6),
+    # drawing and photo edits: FLUX.3 Image Klein (int8 convrot runs on cards without FP8),
+    # Qwen3-VL-4B text encoder, the Consistency LoRA that keeps an edit on the original frame
+    ("image", "diffusion_models", "flux3-image-klein-int8-convrot.safetensors",
+     ["ml-resources/flux-3-image-klein-comfy"], [], 5.7),
+    ("image", "text_encoders", "qwen3vl_4b_int8_convrot.safetensors",
+     ["ml-resources/flux-3-image-klein-comfy"], [], 4.5),
     ("image", "vae", "flux2-vae.safetensors",
      ["Comfy-Org/flux2-dev", "Comfy-Org/Lens", "Comfy-Org/flux2-klein-9B"], [], 0.3),
-    # photo edits (FireRed)
-    ("image", "diffusion_models", "FireRed-Image-Edit-1.1_fp8mixed_comfy.safetensors",
-     ["cocorang/FireRed-Image-Edit-1.1-FP8_And_BF16"], [], 21.4),
-    ("image", "loras", "FireRed-Image-Edit-1.1-Lightning-8steps-v1.2.safetensors",
-     ["FireRedTeam/FireRed-Image-Edit-1.1-ComfyUI"], [], 0.9),
-    ("image", "text_encoders", "qwen_2.5_vl_7b_fp8_scaled.safetensors",
-     ["Comfy-Org/Qwen-Image_ComfyUI"], [], 9.4),
-    ("image", "vae", "qwen_image_vae.safetensors",
-     ["Comfy-Org/Qwen-Image_ComfyUI"], [], 0.3),
+    ("image", "loras", "flux-3-image-klein-consistency.safetensors",
+     ["ml-resources/flux-3-image-klein-comfy"], [], 0.2),
     # songs (MiniMax Music 3)
     ("music", "diffusion_models", "minimax_music3_dit_fp32.safetensors",
      ["Comfy-Org/MiniMax-Music-3"], [], 9.8),
