@@ -199,13 +199,22 @@ def _salvage_unterminated(block: str) -> str:
     return best
 
 
+# The loop's own failure marker ("[TOOL ERROR] ...") is a note to the model; a model that
+# quotes it ("Видео не сгенерировалось (TOOL ERROR)") must not show it to the user (11:20).
+_HARNESS_MARKER_RE = re.compile(r"\s*[\[(]\s*TOOL ERROR\s*[\])]|TOOL ERROR:?")
+
+
 def strip_control_tokens(text: str) -> str:
     """Remove model channel/control-token grammar, keeping only the answer.
 
     Fails SAFE: if the rules would consume everything, fall back to deleting the
     tokens alone, so a real answer is never turned into an empty reply.
     """
-    if not text or "<|" not in text and "|>" not in text and "assistantfinal" not in text.lower():
+    if not text:
+        return text
+    if "TOOL ERROR" in text:
+        text = _HARNESS_MARKER_RE.sub("", text)
+    if "<|" not in text and "|>" not in text and "assistantfinal" not in text.lower():
         return text
     original = text
     # An unterminated block (one that runs to end-of-string) is the only case

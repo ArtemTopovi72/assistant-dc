@@ -186,6 +186,11 @@ check("prose with braces is untouched",
 check("an unterminated call is cut to the end, prose before it survives",
       U.strip_textual_tool_calls('Готово. {"action": "x", "action_input": "{oops') == "Готово.")
 
+check("the loop's own [TOOL ERROR] marker never reaches the user",
+      U.strip_think_tags("Видео не сгенерировалось (TOOL ERROR). Попробуй ещё.") == "Видео не сгенерировалось. Попробуй ещё."
+      and U.strip_think_tags("[TOOL ERROR] нет файла") == "нет файла",
+      U.strip_think_tags("Видео не сгенерировалось (TOOL ERROR). Попробуй ещё."))
+
 print()
 print(f"{OK} passed, {BAD} failed")
 sys.exit(1 if BAD else 0)
