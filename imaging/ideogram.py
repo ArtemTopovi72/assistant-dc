@@ -153,62 +153,6 @@ NODE_SAMPLER_SELECT = "163"  # KSamplerSelect
 NODE_DECODE = "162"          # VAEDecode <- reads the LAST sampler in the chain
 
 
-def attach_lora(workflow: dict, lora_name: str, strength: float = 1.0) -> None:
-    """Apply a character LoRA to the CONDITIONAL branch only.
-
-    The Ideogram graph carries TWO UNETLoaders: 166 holds the conditional model
-    and 181 the unconditional one, which DualModelGuider consumes as
-    `model_negative`. The generic image_lora.inject_lora attaches to every model
-    loader it finds, which here would put the character into the negative
-    prediction as well -- and under CFG that prediction is SUBTRACTED, so the
-    adapter would be working against itself. Hence a targeted injection rather
-    than the shared helper.
-    """
-    if not lora_name:
-        return
-    if NODE_UNET_COND not in workflow:
-        raise ValueError("Ideogram workflow has no conditional UNET loader")
-    new_id = "lora_" + NODE_UNET_COND
-    # Rewire the consumers BEFORE adding the node, so it does not point at itself.
-    for node in workflow.values():
-        for key, val in list((node.get("inputs") or {}).items()):
-            if isinstance(val, list) and len(val) == 2 and str(val[0]) == NODE_UNET_COND:
-                node["inputs"][key] = [new_id, 0]
-    workflow[new_id] = {
-        "class_type": "LoraLoaderModelOnly",
-        "inputs": {"lora_name": lora_name,
-                   "strength_model": float(strength),
-                   "model": [NODE_UNET_COND, 0]},
-    }
-
-
-def attach_turbo_lora(workflow: dict, lora_name: str, strength: float = 1.0) -> None:
-    """Apply the speed-turbo LoRA to the CONDITIONAL branch, same targeting as
-    attach_lora above (never the negative/unconditional branch).
-
-    Uses a DIFFERENT node id ("turbo_" + NODE_UNET_COND) so a character LoRA
-    from attach_lora can still be layered on top: call this one FIRST -- its
-    generic id-string rewire (matching on NODE_UNET_COND) means a later
-    attach_lora() call correctly re-splices itself between the base model and
-    this node, chain ending up base -> character LoRA -> turbo LoRA -> guider.
-    """
-    if not lora_name:
-        return
-    if NODE_UNET_COND not in workflow:
-        raise ValueError("Ideogram workflow has no conditional UNET loader")
-    new_id = "turbo_" + NODE_UNET_COND
-    for node in workflow.values():
-        for key, val in list((node.get("inputs") or {}).items()):
-            if isinstance(val, list) and len(val) == 2 and str(val[0]) == NODE_UNET_COND:
-                node["inputs"][key] = [new_id, 0]
-    workflow[new_id] = {
-        "class_type": "LoraLoaderModelOnly",
-        "inputs": {"lora_name": lora_name,
-                   "strength_model": float(strength),
-                   "model": [NODE_UNET_COND, 0]},
-    }
-
-
 def ensure_trigger(caption: dict, trigger: str) -> dict:
     """Guarantee the adapter's trigger word actually reaches the caption.
 
@@ -323,8 +267,6 @@ def add_polish_pass(workflow: dict, steps: int, polish: int, cfg: float) -> bool
     return True
 
 
-
-
 # ---------------------------------------------------------------------------
 # The drawing step: lay the scene out with the LLM
 # ---------------------------------------------------------------------------
@@ -391,6 +333,10 @@ Rules for the style — this decides what KIND of picture comes out:
 - Never leave every style field empty. An empty style is not neutral — the model
   falls back to its own stylised look, which is wrong for any realism request.
 - When the user says nothing about style, default to photography.
+- A photograph with a person in it names the skin in "photo": "visible pores, fine lines, natural
+  imperfections" -- without it the model smooths skin into plastic.
+- A small object still gets a generous box (at least 0.07 of the frame each way) and "small" in
+  its desc; a box thinner than that often draws nothing.
 - A logo, icon, emblem, sticker or badge is graphic design, not a photograph:
   medium="flat vector graphic design", "photo" empty.
 
@@ -703,6 +649,7 @@ def plan_caption(ctx, prompt: str) -> dict:
 # ---------------------------------------------------------------------------
 # Generation
 # ---------------------------------------------------------------------------
+KLEIN_LORA_MAX_STRENGTH = 1.25
 IDEOGRAM_MIN_SIDE = 256
 IDEOGRAM_MAX_SIDE = 2048
 IDEOGRAM_MAX_RATIO = 6.0
@@ -738,14 +685,6 @@ def ideogram_size(width: int, height: int) -> tuple:
     return w, h
 
 
-def is_photo_caption(caption: dict) -> bool:
-    """A photograph: the planner filled style.photo (art_style and photo are exclusive)."""
-    st = (caption or {}).get("style_description") or {}
-    if not isinstance(st, dict):         # a planner may hand back a plain string
-        return False
-    return bool(str(st.get("photo") or "").strip()) and not str(st.get("art_style") or "").strip()
-
-
 def generate(ctx, prompt: str, *, width: int = 1024, height: int = 1024,
              seed: Optional[int] = None, steps: Optional[int] = None,
              cfg: Optional[float] = None, caption: Optional[dict] = None,
@@ -771,9 +710,19 @@ def generate(ctx, prompt: str, *, width: int = 1024, height: int = 1024,
     _w, _h = ideogram_size(width, height)
     text = klein.caption_to_prompt(caption)
     logger.info("Klein caption: %d element(s), %dx%d", n_elements, _w, _h)
+    if len(text) > 1800:
+        logger.warning("Klein prompt is %d chars (~%d tokens): past ~512 tokens the text encoder degrades the layout",
+                       len(text), len(text) // 3)
     logger.debug("Klein prompt:\n%s", text)
     seed = seed if seed and seed > 0 else random.randint(1, 999_999_999)
-    lora = (lora_name, float(lora_strength)) if lora_name else None
+    # Character LoRAs trained on Ideogram 4 cannot load into a Klein graph; lora_training.published_path
+    # puts "klein" in the name of every adapter trained for it, so only those are loaded.
+    if lora_name and "klein" not in lora_name.lower():
+        logger.warning("Klein: LoRA %s was trained for another model — drawing without it", lora_name)
+        lora_name = None
+    # Klein LoRAs: BFL's range is 0.75-1.0, community goes to 1.25; the old Ideogram-era 1.5 burns the image.
+    lora_strength = min(float(lora_strength), KLEIN_LORA_MAX_STRENGTH)
+    lora = (lora_name, lora_strength) if lora_name else None
     workflow = klein.t2i_workflow(text, _w, _h, seed, steps=steps, lora=lora)
     if lora:
         logger.info("Klein LoRA: %s @ %.2f", lora_name, lora_strength)

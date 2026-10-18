@@ -473,3 +473,30 @@ def _blend_region(crop_bg, patch, mcrop, *, harmonize=True, poisson=True,
     logger.info("blend-region: %s (harmonize=%s poisson=%s multiband=%s)",
                 mode, harmonize, poisson, multiband)
     return Image.fromarray(final)
+
+
+def lock_outside_boxes(orig_path: str, result_path: str, boxes, *, pad: int = 30) -> bool:
+    """Keep the edit only inside its boxes: pixels outside (box + ``pad`` grid units) come from the original.
+
+    Klein re-renders the whole frame; on BFL's own samples only ~86% of the pixels outside the
+    edit boxes survive. ``boxes`` are [y_min, x_min, y_max, x_max] on the 0-1000 grid.
+    Rewrites ``result_path`` in place; False when there is nothing to lock.
+    """
+    from PIL import Image, ImageDraw
+    boxes = [b for b in (boxes or []) if isinstance(b, (list, tuple)) and len(b) == 4]
+    if not boxes:
+        return False
+    orig = Image.open(orig_path).convert("RGB")
+    res = Image.open(result_path).convert("RGB")
+    if res.size != orig.size:
+        res = res.resize(orig.size, Image.LANCZOS)
+    w, h = orig.size
+    m = Image.new("L", (w, h), 0)
+    d = ImageDraw.Draw(m)
+    for y0, x0, y1, x1 in boxes:
+        d.rectangle([max(0, (x0 - pad) * w // 1000), max(0, (y0 - pad) * h // 1000),
+                     min(w, (x1 + pad) * w // 1000), min(h, (y1 + pad) * h // 1000)], fill=255)
+    alpha = _feathered_alpha(m, w, h)
+    Image.composite(res, orig, alpha).save(result_path)
+    logger.info("lock_outside_boxes: %d box(es), pad %d", len(boxes), pad)
+    return True

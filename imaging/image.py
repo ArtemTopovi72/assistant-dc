@@ -411,26 +411,6 @@ if os.getenv("F5_TEST_RUN"):
     _LINEAGE_FILE = os.path.join(_tf.mkdtemp(prefix="firered_lin_"), "lineage.json")
 
 
-_ADV_SIZES = (512, 768, 1024, 1344, 1536, 2048)
-
-
-def firered_ref_slot(workflow: dict, i: int) -> str:
-    """Input name for reference image i (0-based) on the 187/188 encoders."""
-    adv = str(workflow.get("187", {}).get("class_type", "")).startswith("TextEncodeQwenImageEditPlusAdvance")
-    return ("vl_resize_image%d" if adv else "image%d") % (i + 2)
-
-
-def firered_work_mp(workflow: dict, mp: float) -> None:
-    """Working resolution: node 191 for the plain encoder, target_size (the
-    padded square side, ~mp megapixels) for the Advance one."""
-    if "191" in workflow:
-        workflow["191"]["inputs"]["megapixels"] = mp
-    side = min(_ADV_SIZES, key=lambda s: abs(s - (mp ** 0.5) * 1024))
-    for nid in ("187", "188"):
-        if "target_size" in workflow.get(nid, {}).get("inputs", {}):
-            workflow[nid]["inputs"]["target_size"] = side
-
-
 def _lineage() -> dict:
     try:
         with open(_LINEAGE_FILE, encoding="utf-8") as f:
@@ -472,6 +452,7 @@ def _edit_image_with_firered_once(ctx, image_path: str, instruction: str,
                             work_megapixels: Optional[float] = None,
                             save_prefix: Optional[str] = None,
                             reference_paths: Optional[list] = None,
+                            lock_boxes: Optional[list] = None,
                             engine: str = DEFAULT_EDIT_ENGINE) -> Optional[str]:
     """Instruction-edit an image with FLUX.3 Klein (imaging/klein.py).
 
@@ -483,6 +464,7 @@ def _edit_image_with_firered_once(ctx, image_path: str, instruction: str,
 
     ``work_megapixels`` is the working resolution; None = the input's size, capped at
     ``FIRERED_MAX_MP``, never below 1.0.
+    ``lock_boxes`` ([y0,x0,y1,x1] on 0-1000): everything outside them (+30 pad) is restored from the source.
     """
     import klein
     if not image_path or not dep(ctx, "exists", os.path.exists)(image_path):
@@ -517,8 +499,20 @@ def _edit_image_with_firered_once(ctx, image_path: str, instruction: str,
     if _sm:
         logger.info("klein: sampler override (steps %d cfg %.1f) ignored, the distilled model runs "
                     "its own schedule", _sm["steps"], _sm["cfg"])
-    workflow = klein.edit_workflow(uploaded, instruction, seed, megapixels=work_megapixels,
-                                   refs=refs, extra_lora=_EXTRA_LORA.get(), consistency=not refs)
+    xl = _EXTRA_LORA.get()
+    if xl and "klein" not in xl[0].lower():     # removal/photo LoRAs were trained on Qwen-Image-Edit
+        logger.warning("klein: extra LoRA %s belongs to another model — skipped", xl[0])
+        xl = None
+    prompt = klein.with_keep_clause(instruction)
+    if not refs and os.getenv("KLEIN_EDIT_ANNOTATE", "1") == "1":
+        import klein_annotate
+        rec = dep(ctx, "annotate_edit", klein_annotate.annotate_edit)(ctx, image_path, instruction)
+        if rec:
+            prompt = rec["prompt"]
+            if lock_boxes is None and os.getenv("KLEIN_EDIT_LOCK", "1") == "1":
+                lock_boxes = rec["boxes"]
+    workflow = klein.edit_workflow(uploaded, prompt, seed, megapixels=work_megapixels,
+                                   refs=refs, extra_lora=xl, consistency=not refs)
     # A cropped INTERMEDIATE tile must never be mistaken for a final full-frame result.
     workflow[klein.N_SAVE]["inputs"]["filename_prefix"] = save_prefix or "klein_edit"
 
@@ -532,8 +526,12 @@ def _edit_image_with_firered_once(ctx, image_path: str, instruction: str,
     logger.info("klein edit [BUILD_ID=%s]: input=%s dims=%s (%.2f MP) -> work_MP %.2f refs=%d seed=%d instr=%r",
                 IMAGE_BUILD_ID, os.path.basename(image_path), dims, (src_mp or 0.0),
                 work_megapixels, len(refs), seed, instruction[:80])
-    return dep(ctx, "_submit_and_poll", _submit_and_poll)(ctx, workflow, timeout=timeout,
+    out = dep(ctx, "_submit_and_poll", _submit_and_poll)(ctx, workflow, timeout=timeout,
                             label=f"klein edit seed={seed}", exclusive=True)
+    if out and lock_boxes:
+        from compositing import lock_outside_boxes
+        lock_outside_boxes(image_path, out, lock_boxes)
+    return out
 
 
 # ---------------------------------------------------------------------------

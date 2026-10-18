@@ -41,6 +41,27 @@ def _noun(desc: str) -> str:
     return (cand[-1] if cand else (words[0] if words else "")) or "object"
 
 
+_MIN_SPAN = 60       # a box thinner than this on the 0-1000 grid often draws nothing (BFL tests)
+_TEXT_PAD = 8        # BFL annotator: 5-15 units of margin around a text block
+
+
+def _fit_box(box, is_text: bool):
+    """Clamp to the grid, pad text boxes, widen tiny ones around their centre -> (box, widened)."""
+    y0, x0, y1, x1 = (max(0, min(1000, int(round(float(v))))) for v in box)
+    if is_text:
+        y0, x0, y1, x1 = max(0, y0 - _TEXT_PAD), max(0, x0 - _TEXT_PAD), min(1000, y1 + _TEXT_PAD), min(1000, x1 + _TEXT_PAD)
+    widened = False
+    if y1 - y0 < _MIN_SPAN:
+        c = (y0 + y1) // 2
+        y0, y1, widened = max(0, min(c - _MIN_SPAN // 2, 1000 - _MIN_SPAN)), 0, True
+        y1 = y0 + _MIN_SPAN
+    if x1 - x0 < _MIN_SPAN:
+        c = (x0 + x1) // 2
+        x0, x1, widened = max(0, min(c - _MIN_SPAN // 2, 1000 - _MIN_SPAN)), 0, True
+        x1 = x0 + _MIN_SPAN
+    return [y0, x0, y1, x1], widened
+
+
 def caption_to_prompt(caption: dict) -> str:
     """Planner caption (high_level / style / background + boxed elements) -> Klein prompt."""
     comp = (caption or {}).get("compositional_deconstruction") or {}
@@ -61,9 +82,11 @@ def caption_to_prompt(caption: dict) -> str:
             ident = f"{noun}_{count[noun]}"
         row = {"id": ident}
         box = el.get("bbox")
+        small = False
         if isinstance(box, (list, tuple)) and len(box) == 4:
-            row["bbox"] = [int(round(float(v))) for v in box]
-        row["desc"] = desc + (f'. Text: "{text}"' if text else "")
+            row["bbox"], small = _fit_box(box, bool(text))
+        caps = " in capital letters" if text.isupper() and "capital" not in desc.lower() else ""
+        row["desc"] = ("Small " if small and not text else "") + desc + caps + (f'. Text: "{text}"' if text else "")
         table.append(row)
         where = f"{_position(row['bbox'])}: " if "bbox" in row else ""
         cites.append(f"{where}{desc} <{ident}>")
@@ -84,6 +107,18 @@ def caption_to_prompt(caption: dict) -> str:
     if table:
         prompt += " " + json.dumps(table, ensure_ascii=False, separators=(",", ":"))
     return prompt
+
+
+_KEEP = "Everything else stays identical to the source image."
+_KEEP_WORDS = ("unchanged", "identical", "stays the same", "stay the same", "keep the rest", "preserve")
+
+
+def with_keep_clause(instruction: str) -> str:
+    """BFL editing format closes an instruction with one clause naming what stays; add it if missing."""
+    t = (instruction or "").strip()
+    if not t or any(w in t.lower() for w in _KEEP_WORDS):
+        return t
+    return t + (" " if t.endswith((".", "!", "?", '"')) else ". ") + _KEEP
 
 
 def _base(prompt: str, lora: Optional[tuple]) -> dict:

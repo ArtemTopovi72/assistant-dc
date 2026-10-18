@@ -346,6 +346,10 @@ Write two prompts for two different editors and return STRICT JSON only — no m
 Rules for "instruction":
 - Start with the right verb for the change: "Replace the X with Y" (swap/turn into), "Add Y to X" (something new), "Remove X" (deletion), "Change the colour of X to Y" (recolour), "Change X so that Y" (other).
 - Name the target region with its visible identifying attributes so the editor cannot pick the wrong object.
+- A deletion names what to rebuild: "Remove X and its shadow and reflection and rebuild the empty wall behind it".
+- Changed lettering gives the exact new text in quotes plus "in the same font, colour, size and position", one text change per instruction.
+- With a second picture, say which image is which: "Replace the clothes in Image 1 with the red jacket from Image 2".
+- Several changes to one picture go into ONE instruction (each extra pass drifts the frame); one text change per instruction is the exception.
 - One sentence for the change, then exactly: "Keep everything else in the image exactly the same, matching the original style and lighting."
 - No politeness, no explanations, no quality buzzwords.
 

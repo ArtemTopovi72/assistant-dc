@@ -517,7 +517,7 @@ def _firered_instruction(ctx, region: str, instructions: str, removal: bool) -> 
     keep = ("Keep everything else in the image exactly the same, "
             "matching the original style and lighting.")
     if removal:
-        return f"Remove the {region_en} and its shadow and reflection from the image completely. {keep}"
+        return f"Remove the {region_en} and its shadow and reflection from the image completely and rebuild the surface behind it. {keep}"
     instr_en = _english_instructions(ctx, instructions) or instructions
     return f"Change the {region_en} to: {instr_en}. {keep}"
 
