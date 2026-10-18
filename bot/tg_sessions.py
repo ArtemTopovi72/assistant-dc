@@ -79,6 +79,27 @@ class _Session:
     def target_image(self, v: str) -> None:
         self._target, self._target_ts = v or "", time.time()
 
+    # «The next photo is the reference» flows. A button never expires, so a 🎭/👗/🔁/🎞 pressed
+    # and forgotten swallowed a news screenshot sent an hour later as its "style" (live 2026-10-18).
+    PHOTO_WAITS = ("pending_style_target", "pending_outfit_target", "pending_swap_target",
+                   "awaiting_animate_photo", "awaiting_style_photo")
+    PHOTO_WAIT_TTL_S = 10 * 60
+
+    def __setattr__(self, name, value):
+        if value and name in self.PHOTO_WAITS:
+            self.__dict__.setdefault("_wait_ts", {})[name] = time.time()
+        object.__setattr__(self, name, value)
+
+    def expire_photo_waits(self) -> bool:
+        """Disarm the photo waits older than PHOTO_WAIT_TTL_S; True when one was dropped."""
+        ts, now, dropped = self.__dict__.get("_wait_ts", {}), time.time(), False
+        for name in self.PHOTO_WAITS:
+            cur = getattr(self, name, None)
+            if cur and now - ts.get(name, now) > self.PHOTO_WAIT_TTL_S:
+                setattr(self, name, False if isinstance(cur, bool) else "")
+                dropped = True
+        return dropped
+
     def __init__(self, chat_id: int, data: dict = None):
         d = data or {}
         self.chat_id        = chat_id

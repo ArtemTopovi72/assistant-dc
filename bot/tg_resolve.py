@@ -193,6 +193,8 @@ class ResolveMixin:
         _arrival_ts = min((it.get("_arrival_ts", time.time()) for it in batch),
                           default=time.time())
         sess = self._get_session(chat_id)
+        if sess.expire_photo_waits():
+            self._store.put(sess)
         user = self._user_store.get(chat_id)
         ctx  = self._get_ctx()
         lang = self._lang(sess)
