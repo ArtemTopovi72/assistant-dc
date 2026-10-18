@@ -36,6 +36,8 @@ def _reads_russian(run: str) -> bool:
     latin = [c for c in run if c.isalpha()]
     if len(latin) < 3:
         return False        # «48 h», «x2»: too short to judge
+    if " " not in run.strip() and re.search(r"[a-z][A-Z]|^[;'\[\]`{}:\"<>]*[A-Z]{2,}[a-z]", run):
+        return False        # «DCbot:», «iPhone», «YouTube»: a name, not a shifted word
     if " " not in run.strip() and run.isupper() and len(latin) <= 5:
         return False        # RTX, GPU, NASA: an acronym, not a word
     votes = _word_votes(run)
@@ -95,6 +97,7 @@ if __name__ == "__main__":
     assert fix("открой Photoshop и RTX 3090") == "открой Photoshop и RTX 3090"
     assert fix("привет") == "привет"
     assert fix("lol kek") == "lol kek"
+    assert fix("DCbot: привет") == "DCbot: привет" and fix("iPhone") == "iPhone"
     assert fix("🕓 24 h") == "🕓 24 h"
     assert fix("Songs") == "Songs" and fix("Depth") == "Depth"
     assert fix("Help me please") == "Help me please"
