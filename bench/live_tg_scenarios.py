@@ -774,6 +774,32 @@ def sc_overseer(bot, ctx):
     return u
 
 
+def sc_duo(bot, ctx):
+    """Two pictures in one album + «make a video with these two together»: both heroes must
+    reach the clip as references, each as itself (the brother's ask, 2026-10-19)."""
+    u = D.Chat(bot, 910032, "Brother")
+    a = str(Path(ROOT, "tmp", "overseer.jpg"))
+    b = str(Path(ROOT, "continue_video", "386455236", "person_76168aad.jpg"))
+    t0 = time.time()
+    u.album([a, b], caption="Сделай видео с этими двумя героями вместе: Смотритель смотрит на кота и говорит "
+                            "«Опять ты в коробке, пушистый?», а кот в коробке только шевелит ухом.")
+    evs = u.wait(until=lambda e: "anv:default" in json.dumps(e.get("payload") or e.get("keyboard") or ""),
+                 timeout=900, quiet=60)
+    if any("anv:default" in json.dumps(e.get("payload") or e.get("keyboard") or "") for e in evs):
+        u.press("anv:default")
+    plan = lambda e: "vp:go" in json.dumps(e.get("keyboard") or e.get("reply_markup") or e.get("payload") or "")
+    evs += u.wait(until=plan, timeout=900, quiet=120)
+    if any(plan(e) for e in evs):
+        u.press("vp:go")
+    evs += u.wait(until=lambda e: e["method"] in ("sendVideo", "sendAnimation", "sendDocument"),
+                  timeout=3 * 3600, quiet=1800)
+    timed("duo", "two heroes", t0, evs)
+    sanity("duo", evs)
+    for t in texts(evs):
+        print("     msg:", t[:300].replace(chr(10), " | "))
+    return u
+
+
 def sc_misc(bot, ctx):
     """Small everyday asks: translate, a joke, a list, a reply-to-picture edit."""
     u = D.Chat(bot, 910020, "Tanya")
@@ -1074,7 +1100,7 @@ SCENARIOS = {"continue_video": sc_continue_video, "song_male": sc_song_male, "au
              "style_menu": sc_style_menu_standalone,
              "video_direct": sc_video_direct,
              "bare_photo_buttons": sc_bare_photo_buttons,
-             "silent_video": sc_silent_video, "overseer": sc_overseer}
+             "silent_video": sc_silent_video, "overseer": sc_overseer, "duo": sc_duo}
 
 
 def main(names):

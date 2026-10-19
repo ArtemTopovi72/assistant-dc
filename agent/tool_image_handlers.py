@@ -1332,7 +1332,7 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
                                                  context_video=tail,
                                                  aspect=args.get("aspect") or "", seed=args.get("seed"))
                 else:
-                    look = "".join(f" The person of <Picture {k}> looks exactly as in that picture."
+                    look = "".join(f" The character of <Picture {k}> looks exactly as in that picture."
                                    for k in range(2, len(people) + 2))
                     # The voice rode part 1 only and each part copied the sound of the one before:
                     # by the end it was another man's voice (owner, 2026-10-19).
@@ -1923,8 +1923,10 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     if len(parts) > 1 and not chain_id:
         # With voices the first picture rides every part too: each part starts from the last
         # frame of the one before, and the face drifted a little further every time.
-        anchor = list(images[:1]) if audios and images and not people else []
-        head = bool(anchor and not videos and not continuing and video_mod.is_talking_head(ctx, raw))
+        # ...and so do all of them: with two heroes on two pictures, parts 2+ saw only the first
+        # one and the second (the cat) was redrawn from the clip's tail.
+        anchor = list(images[:3]) if images and not people and not continuing else []
+        head = bool(len(anchor) == 1 and not videos and not continuing and video_mod.is_talking_head(ctx, raw))
         if head:
             logger.info("generate_video: talking-head mode, every part starts from the still")
         path = _render_remaining_parts(ctx, path, parts, args, people=[*people, *anchor], voices=audios,
