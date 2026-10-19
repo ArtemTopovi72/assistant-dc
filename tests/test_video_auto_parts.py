@@ -75,3 +75,17 @@ def test_a_where_it_continues_from_line_is_not_a_part_of_its_own():
          "jumps down from the chair onto the floor, lands gracefully, and begins walking "
          "towards the dumbbells. The camera follows the cat with a low tracking shot.")
     assert V.split_script(d) == [d]
+
+
+def test_long_monologue_is_cut_into_parts_at_sentence_ends():
+    """85 words in one pair of quotes rode a single 10 s part: the clip said the first two
+    sentences and the rest of the user's speech was lost (live 2026-10-19)."""
+    speech = ("Ах, вот и ты. Хорошо. Ну, единственное хорошее — что ты здесь. У нас проблема. Большая. "
+              "Емкость для хранения заготовок переполнена. Нет места — нет хруща. Серьезно, это критично "
+              "для нашего выживания. Тебе нужно освободить нам место в холодильнике и забрать банки. "
+              "Нам нужен твой морозильник. Слушай, просто будь с рюкзачком, хорошо?")
+    parts = V.split_script(f'The caretaker speaks to the camera: "{speech}"')
+    assert len(parts) >= 4
+    said = " ".join(w for p in parts for q in V._QUOTED.finditer(p) for w in next(g for g in q.groups() if g).split())
+    assert said == speech.replace(" — ", " — ")
+    assert all(V.estimate_seconds(p, capped=False) <= 9.0 for p in parts)

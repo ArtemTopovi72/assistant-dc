@@ -219,6 +219,26 @@ CAUSE_RULE = (" Show every cause on screen: anything thrown is first held in a v
               "subtitles or other on-screen text unless the script asks for lettering.")
 
 
+def _cut_long_quote(m, top: float) -> str:
+    """One quote that alone outlasts a part, as consecutive quotes of about a part's
+    speech each, cut at sentence ends and each its own sentence of the script
+    («He says: "A." He goes on: "B."»), so the split can make a part of every one."""
+    inner = next(g for g in m.groups() if g is not None)
+    open_q, close_q = m.group(0)[0], m.group(0)[-1]
+    sents = [x.strip() for x in _SENT.split(inner) if x and x.strip()]
+    budget = int(top * 2.3)
+    if len(inner.split()) <= budget or len(sents) < 2:
+        return m.group(0)
+    chunks = []
+    for x in sents:
+        if chunks and len((chunks[-1] + " " + x).split()) <= budget:
+            chunks[-1] += " " + x
+        else:
+            chunks.append(x)
+    return " ".join(f"{open_q}{c}{close_q}." if i == 0 else f"He goes on: {open_q}{c}{close_q}."
+                    for i, c in enumerate(chunks))
+
+
 def split_script(description: str, max_seconds: float = 0.0) -> list:
     """A script too long for one clip, as consecutive parts that each fit one
     (`estimate_seconds` <= max_seconds, default the auto cap). Cuts only between
@@ -235,7 +255,9 @@ def split_script(description: str, max_seconds: float = 0.0) -> list:
     def _hide(m):
         quotes.append(m.group(0))
         return f"\x00{len(quotes) - 1}\x00"
-    hidden = _QUOTED.sub(_hide, text)
+    # A monologue longer than a part is cut at its own sentence ends: 85 words of speech
+    # rode one 10 s part, and the clip said the first two sentences (live 2026-10-19).
+    hidden = _QUOTED.sub(_hide, _QUOTED.sub(lambda m: _cut_long_quote(m, top), text))
     pieces = []
     for x in (x for x in _SENT.split(hidden) if x and x.strip()):
         # «the camera pans up as the kite catches a breeze and soars high»: the kite's climb
