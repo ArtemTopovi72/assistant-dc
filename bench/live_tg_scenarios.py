@@ -745,6 +745,27 @@ def sc_video_direct(bot, ctx):
     return u
 
 
+def sc_overseer(bot, ctx):
+    """The user's own journey: a head picture + 'animate it, voice from this YouTube link, he says <text>'
+    in ONE caption. Whatever the bot asks back (plan card, voice slot, preset) is answered like a user would."""
+    u = D.Chat(bot, 910031, "Artem")
+    script = Path(ROOT, "tmp", "overseer_text.txt").read_text(encoding="utf-8").strip()
+    link = "https://youtu.be/JCjqy3R4yQw?si=AWXo--bSfPQPcKmJ"
+    t0 = time.time()
+    u.photo(str(Path(ROOT, "tmp", "overseer.jpg")),
+            caption=f"Анимируй эту голову смотрителя. Голос возьми отсюда: {link}" + chr(10) + f"Пусть он скажет: {script}")
+    evs = u.wait(until=lambda e: e["method"] in ("sendVideo", "sendAnimation", "sendDocument"),
+                 timeout=3600, quiet=60)
+    timed("overseer", "animate+voice", t0, evs)
+    sanity("overseer", evs)
+    for t in texts(evs):
+        print("     msg:", t[:300].replace(chr(10), " | "))
+    for ev in evs:
+        if ev.get("keyboard") or ev.get("reply_markup"):
+            print("     keyboard:", json.dumps(ev.get("keyboard") or ev.get("reply_markup"), ensure_ascii=False)[:400])
+    return u
+
+
 def sc_misc(bot, ctx):
     """Small everyday asks: translate, a joke, a list, a reply-to-picture edit."""
     u = D.Chat(bot, 910020, "Tanya")
@@ -1045,7 +1066,7 @@ SCENARIOS = {"continue_video": sc_continue_video, "song_male": sc_song_male, "au
              "style_menu": sc_style_menu_standalone,
              "video_direct": sc_video_direct,
              "bare_photo_buttons": sc_bare_photo_buttons,
-             "silent_video": sc_silent_video}
+             "silent_video": sc_silent_video, "overseer": sc_overseer}
 
 
 def main(names):

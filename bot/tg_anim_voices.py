@@ -11,7 +11,7 @@ anim_voices [path | ""] by slot.
 """
 import html
 import os
-from seams import module
+from seams import module, yes_no
 
 
 MAX = 3
@@ -76,6 +76,10 @@ class AnimVoicesMixin:
         sess.voice_pending, sess.voice_choice = request, ""
         sess.anim_voices, sess.anim_voice_state = [], ""
         self._store.put(sess)
+        if not self._voice_from_request_link(chat_id, sess, lang, request):
+            self._offer_voice_card(chat_id, sess, lang, request, n)
+
+    def _offer_voice_card(self, chat_id: int, sess, lang: str, request: str, n: int) -> None:
         self._send_text(chat_id, tg_bot._t("anv_offer", lang, n=n), keyboard={"inline_keyboard": [[
             {"text": tg_bot._t("anv_own", lang), "callback_data": "anv:yes"},
             {"text": tg_bot._t("anv_default", lang), "callback_data": "anv:default"}]]})
@@ -163,7 +167,8 @@ class AnimVoicesMixin:
         self._run_busy(chat_id, job)
         return True
 
-    def _anim_voice_save(self, chat_id: int, sess, lang: str, data: bytes, ext: str) -> None:
+    def _anim_voice_store(self, chat_id: int, sess, data: bytes, ext: str) -> str:
+        """The sample into the armed slot and the library; its library id."""
         # A name of its own: voice1.wav was overwritten by the next clip's first
         # voice, so a voice saved in the library came back as someone else's.
         import uuid
@@ -177,8 +182,37 @@ class AnimVoicesMixin:
             pass                                 # the video model's loader still reads most containers
         self._put_slot(sess, path)
         from tg_voice_library import vl_add
-        v = vl_add(sess, path)                   # remembered: the last 5 come back as buttons
-        self._anim_voice_added(chat_id, sess, lang, new_id=v["id"])
+        return vl_add(sess, path)["id"]          # remembered: the last 5 come back as buttons
+
+    def _anim_voice_save(self, chat_id: int, sess, lang: str, data: bytes, ext: str) -> None:
+        self._anim_voice_added(chat_id, sess, lang, new_id=self._anim_voice_store(chat_id, sess, data, ext))
+
+    def _voice_from_request_link(self, chat_id: int, sess, lang: str, request: str) -> bool:
+        """The request itself names a video link as the speaker's voice («голос возьми отсюда: <link>»):
+        its sound is slot 1 and the clip reruns at once, without the voice card. True when taken."""
+        import tg_links
+        url = tg_links.video_url(request)
+        if not url or not yes_no(self.reads)(
+                "A user asked a bot to animate a picture so that a person in it speaks. Message: {text}. "
+                "Does the user give the link as the source of that person's VOICE (to copy the voice from), "
+                "not as something to watch, read or retell?", request):
+            return False
+        self._send_text(chat_id, tg_bot._t("clone_working", lang))
+
+        def job():
+            vid = self.links.fetch_video(url)
+            s2 = self._get_session(chat_id)
+            if not vid.get("data"):
+                self._send_text(chat_id, tg_bot._t("anv_fail", lang))
+                self._offer_voice_card(chat_id, s2, lang, request, 1)
+                return
+            s2.anim_voice_slot = 0
+            self._anim_voice_store(chat_id, s2, vid["data"], ".mp4")
+            s2.voice_pending, s2.voice_choice, s2.anim_voice_state = request, "own", ""
+            self._store.put(s2)
+            self._enqueue_item(chat_id, {"type": "text", "text": request})
+        self._run_busy(chat_id, job)
+        return True
 
     def _put_slot(self, sess, ref: str) -> None:
         slots = self._slots(sess)

@@ -126,3 +126,32 @@ def test_video_link_is_a_voice_sample():
     assert not bot._anim_voice_take_link(CID, s, "ru", "просто текст")       # plain text is not ours
     bot._cb_anim_voices(CID, "anv:done")
     assert not bot._anim_voice_take_link(CID, bot._get_session(CID), "ru", "https://youtu.be/x")   # not collecting
+
+
+def _link_bot(is_voice):
+    import tg_links
+    bot = _bot()
+    bot._run_busy = lambda chat_id, fn, *a, **k: fn(*a)
+    bot.links = Over(tg_links, fetch_video=lambda url, *a, **k: {"data": b"\x00" * 600})
+    bot.reads = types.SimpleNamespace(yes_no=lambda prompt, text: is_voice)
+    bot.queued = []
+    bot._enqueue_item = lambda cid, item: bot.queued.append(item)
+    return bot
+
+
+def test_link_named_as_voice_skips_the_card():
+    """«Голос возьми отсюда: <ссылка>» in the request itself: the link's sound is slot 1
+    and the clip reruns, no «send voices» card."""
+    req = "Анимируй. Голос возьми отсюда: https://youtu.be/JCjqy3R4yQw"
+    bot = _link_bot(True)
+    bot._offer_voices(CID, bot._get_session(CID), "ru", req, 1)
+    s = bot._get_session(CID)
+    assert s.anim_voices[0] and s.voice_choice == "own"
+    assert bot.queued == [{"type": "text", "text": req}]
+    assert not any("anv:yes" in _cbs(kb) for _, kb in bot.sent)
+
+
+def test_link_not_about_voice_still_asks():
+    bot = _link_bot(False)
+    bot._offer_voices(CID, bot._get_session(CID), "ru", "Анимируй, видео как здесь https://youtu.be/x", 1)
+    assert "anv:yes" in _cbs(bot.sent[-1][1]) and not bot.queued
