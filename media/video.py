@@ -1229,6 +1229,9 @@ def mark_speech_stress(ctx, prompt: str) -> str:
     return _RU_LINE.sub(one, prompt)
 
 
+# Words the clip spoke garbled once: the next take says them with no stress mark (the mark may
+# be what H3 chokes on: «систе́мы» came out «систешимы» on every seed, live 2026-10-19).
+UNSTRESSED: set = set()
 _YO_AMBIGUOUS = {"все", "нем", "осел", "небо", "мел", "пел", "вез", "перед", "совершенно", "все,"}
 
 
@@ -1243,6 +1246,8 @@ def _marks_only(line: str, accented: str) -> str:
 
     def put(m):
         w, a = m.group(0), next(it)
+        if w.lower() in UNSTRESSED:
+            return w
         if a.replace("́", "").lower().replace("ё", "е") != w.lower().replace("ё", "е"):
             return w
         out, j = [], 0
@@ -1341,7 +1346,9 @@ def heard_lines(expected: Sequence[str], heard: str) -> bool:
         words = _flat_line(line).split()
         if words and sum(w in got for w in words) < 0.6 * len(words):
             return False
-        if garbled_words(words, got):
+        bad = garbled_words(words, got)
+        if bad:
+            UNSTRESSED.update(bad)
             return False
     return True
 

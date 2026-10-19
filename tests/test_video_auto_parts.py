@@ -162,3 +162,13 @@ def test_garble_with_a_changed_first_vowel_is_caught_too():
     line = "для обходной системы."
     assert not V.heard_lines([line], "для обходной сестешимы.")
     assert V.heard_lines([line], "для обходной системы.")
+
+
+def test_a_word_heard_garbled_is_spoken_without_a_stress_mark_next_time():
+    V.UNSTRESSED.clear()
+    assert not V.heard_lines(["для обходной системы."], "для обходной систешимы.")
+    assert "системы" in V.UNSTRESSED
+    got = V._marks_only("для системы", "для систе́мы")
+    assert "́" not in got
+    V.UNSTRESSED.clear()
+    assert "́" in V._marks_only("для системы", "для систе́мы")
