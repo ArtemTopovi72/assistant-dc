@@ -231,7 +231,7 @@ and one set of per-chat locks.
 | Support | [`bot/tg_depth.py`](../../bot/tg_depth.py) | Per-kind quota accounting and deep-research depth/ETA |
 | Support | [`bot/tg_artifacts_store.py`](../../bot/tg_artifacts_store.py) | Durable, restart-safe registry of every delivered file |
 | Support | [`bot/tg_library.py`](../../bot/tg_library.py) | Per-chat document library, `/status`, report-file delivery |
-| Creativity flows | [`bot/tg_characters.py`](../../bot/tg_characters.py), `tg_lora_collect.py`, `tg_songs.py`, `tg_music.py`, `tg_cover.py`, `tg_lyrics.py`, `tg_video.py`, `tg_continue.py`, `tg_restyle.py`, `tg_audiobook.py`, `tg_anim_voices.py`, `tg_voice_clone.py`, `tg_voice_library.py`, `tg_weather.py` | One multi-turn button-armed flow each (session state + background render), sharing the preamble/cancel conventions above |
+| Creativity flows | [`bot/tg_characters.py`](../../bot/tg_characters.py), `tg_lora_collect.py`, `tg_songs.py`, `tg_music.py`, `tg_cover.py`, `tg_lyrics.py`, `tg_video.py`, `tg_continue.py`, `tg_restyle.py`, `tg_audiobook.py`, `tg_anim_voices.py`, `tg_cast.py` (👥 several characters: picture / action / voice slots), `tg_voice_clone.py`, `tg_voice_library.py`, `tg_weather.py` | One multi-turn button-armed flow each (session state + background render), sharing the preamble/cancel conventions above |
 
 ## Constraints
 
