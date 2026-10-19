@@ -203,3 +203,23 @@ def test_a_part_that_skipped_its_opening_lines_is_made_again(tmp_path, monkeypat
     monkeypatch.setattr(H, "_speech_ok", lambda c, p, lines: next(heard))
     H._render_remaining_parts(ctx, str(clip), ["p1", 'He says: "Привет, мир."'], {}, voices=["v.wav"])
     assert len(n) == 2
+
+
+def test_a_talking_head_part_starts_from_the_still_not_from_the_clip_so_far(tmp_path):
+    """Each continuation inherited the drift of the one before: the face was a horror mask by the
+    end (owner, 2026-10-19). With one still and a voice every part starts from the still."""
+    seen, clip = [], tmp_path / "c.mp4"
+    clip.write_bytes(b"x")
+
+    def gen(ctx, desc, **kw):
+        seen.append(kw)
+        return {"path": str(clip)}
+    eng = Over(V, generate_video=gen, motion_context_on=lambda: True,
+               join_continuation=lambda a, b, **k: str(clip), _adopt_output=lambda p, d: p, OUTPUT_DIR=str(tmp_path))
+    tools = types.SimpleNamespace(seed_frame=lambda a, b: True, cut_tail=lambda a, b: True,
+                                  first_frame=lambda a, b: True)
+    ctx = types.SimpleNamespace(video_engine=eng, clip_tools=tools, set_stage=lambda s: None,
+                                is_cancelled=lambda: False, vision_model=lambda *a, **k: "NONE")
+    H._render_remaining_parts(ctx, str(clip), ["p1", "p2", "p3"], {}, voices=["v.wav"], fresh_from="orig.jpg")
+    assert len(seen) == 2
+    assert all(k["images"] == ["orig.jpg"] and not k.get("videos") and k["audios"] == ["v.wav"] for k in seen)

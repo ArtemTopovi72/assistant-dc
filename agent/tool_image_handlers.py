@@ -1289,10 +1289,13 @@ def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str, st
     return last
 
 
-def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), voices=()) -> str:
+def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), voices=(), fresh_from="") -> str:
     """Parts 2..n of a long script, each continuing the clip so far from its real
     last frame (its tail as <Video 1>, that frame as <Picture 1>), joined on. A part
-    that fails or a cancel stops here: the clip made so far is still delivered."""
+    that fails or a cancel stops here: the clip made so far is still delivered.
+    `fresh_from`: a talking head on one still -- every part starts from that still instead of
+    the clip so far: each continuation inherited the drift of the one before and the face
+    turned into a horror mask by the end (owner, 2026-10-19). The parts are cut together."""
     import tempfile
     tg_continue = _clips(ctx)
     video_mod = _video(ctx)
@@ -1304,19 +1307,26 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
         ctx.set_stage(f"Generating a video ({i}/{len(parts)})")
         frame = os.path.join(work, f"seed_{i}.jpg")
         tail = os.path.join(work, f"tail_{i}.mp4")
-        if not (tg_continue.seed_frame(path, frame) and tg_continue.cut_tail(path, tail)):
+        if fresh_from:
+            tg_continue.seed_frame(path, frame)         # only for the join check below
+        elif not (tg_continue.seed_frame(path, frame) and tg_continue.cut_tail(path, tail)):
             logger.warning("video parts: could not take the end of part %d", i - 1)
             break
         # The new people of a continuation ride on EVERY part: given to part 1 only, the
         # guy from the user's кружок walked out in part 2 as a stranger (live 2026-10-12).
         # Pinned frames take no pictures, so with people the reference path is used.
-        pinned = video_mod.motion_context_on() and not people
+        pinned = video_mod.motion_context_on() and not people and not fresh_from
         if pinned:
             part = video_mod.bridge_part(ctx, frame, part)
         said = video_mod.quoted_lines(part)
         try:
             for attempt in (1, 2):
-                if pinned:
+                if fresh_from:
+                    r = video_mod.generate_video(ctx, part + (" The speaker's voice stays exactly the voice of <Audio 1>."
+                                                              if voices else ""),
+                                                 images=[fresh_from], audios=list(voices),
+                                                 aspect=args.get("aspect") or "", seed=args.get("seed"))
+                elif pinned:
                     r = video_mod.generate_video(ctx, video_mod.CONTINUE_CTX_PREFIX
                                                  + video_mod.with_scene(part, " ".join(parts[:i - 1])),
                                                  context_video=tail,
@@ -1344,10 +1354,11 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
             logger.warning("video parts: part %d produced no clip (%s)", i, r.get("reason"))
             break
         first = os.path.join(work, f"first_{i}.jpg")
-        if tg_continue.first_frame(new, first):
+        if tg_continue.first_frame(new, first) and not fresh_from:      # a cut back to the still is meant
             joins.append((frame, first))
         # pinned: the new part starts on the frame after the old one ends -- butt-join
         joined = (video_mod.join_pinned(path, new) if pinned
+                  else video_mod.join_continuation(path, new, fade=0.12, drop_frames=0) if fresh_from
                   else video_mod.join_continuation(path, new))
         if not joined:
             logger.warning("video parts: joining part %d failed", i)
@@ -1913,7 +1924,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         # With voices the first picture rides every part too: each part starts from the last
         # frame of the one before, and the face drifted a little further every time.
         anchor = list(images[:1]) if audios and images and not people else []
-        path = _render_remaining_parts(ctx, path, parts, args, people=[*people, *anchor], voices=audios)
+        path = _render_remaining_parts(ctx, path, parts, args, people=[*people, *anchor], voices=audios,
+                                       fresh_from=anchor[0] if anchor and not videos and not continuing else "")
         result["seconds"] = video_mod.probe(path).get("seconds") or result.get("seconds")
 
     ctx.video_action_note = "" if continuing else _check_actions(ctx, path, parts)
