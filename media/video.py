@@ -226,8 +226,10 @@ def _cut_long_quote(m, top: float) -> str:
     inner = next(g for g in m.groups() if g is not None)
     open_q, close_q = m.group(0)[0], m.group(0)[-1]
     sents = [x.strip() for x in _SENT.split(inner) if x and x.strip()]
-    budget = int(top * 2.3)
-    if len(inner.split()) <= budget or len(sents) < 2:
+    # A part is rendered at ~50 s per clip second: chunks fill the longest clip the
+    # model makes (85 words in 10 parts was a 66-minute plan, owner 2026-10-19).
+    budget = int(frames_to_seconds(VIDEO_MAX_FRAMES_AUTO) * 2.3 * 0.95)
+    if len(inner.split()) <= int(top * 2.3) or len(sents) < 2:
         return m.group(0)
     chunks = []
     for x in sents:
