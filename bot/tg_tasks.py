@@ -1401,6 +1401,14 @@ class TaskRunnerMixin:
         if _style_ref and os.path.exists(_style_ref) and ctx.last_image_path:
             ctx.reference_images = [ctx.last_image_path, _style_ref]
         _album = [p for p in (getattr(task, "album_paths", None) or []) if p and os.path.exists(p)]
+        _rerun_album = False
+        # The voice question and the plan card re-run the request as bare text: the album it came
+        # with rides on (duo 2026-10-19: the second hero was gone by the render).
+        if not _album and not getattr(task, "image_is_photo", False) and not task.user_text.startswith("[animate]") and (
+                ctx.voice_choice or getattr(sess, "video_plan_ok", None)):
+            _album = _rerun_album = [p for p in (sess.turn_album or []) if p and os.path.exists(p)]
+        else:
+            sess.turn_album = list(_album)
         # The album's first picture rides as task.image_path and becomes the working
         # image only later in this function; ctx.last_image_path is still empty here.
         _first = getattr(task, "image_path", "") or ctx.last_image_path
@@ -1449,7 +1457,7 @@ class TaskRunnerMixin:
         # the clip lost the user's voices. Several pictures of THIS turn still come
         # through state["image_paths"] (an album sent with the request).
         _one = _target["path"] if _target else ctx.last_image_path
-        ctx.recent_image_paths = [p for p in dict.fromkeys([_one or _first, *([] if _target else _album)]) if p and os.path.exists(p)]
+        ctx.recent_image_paths = [p for p in dict.fromkeys([_one or _first, *([] if _target and not _rerun_album else _album)]) if p and os.path.exists(p)]
 
         # The last clip delivered here, so "use that video" resolves.
         _lv = _last_video(self._chat_videos, chat_id)

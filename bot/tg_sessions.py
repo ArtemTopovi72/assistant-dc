@@ -155,6 +155,9 @@ class _Session:
         # just recoloured a dress is not a fresh choice between six pictures.
         # Cleared by a turn with no picture.
         self.turn_image: str = d.get("turn_image", "")
+        # the other pictures of the album the last request came with: the voice question and the plan
+        # card re-run that request as bare text, and the second hero was lost on the way
+        self.turn_album: list = list(d.get("turn_album") or [])
         # The alphabet of the user's last TYPED message ("en"/"ru"/""). The
         # reply follows it for the turn, and for the button presses, emoji and
         # links that come after it (an English question in a Russian-language
@@ -478,6 +481,7 @@ class _Session:
                 "lyrics_last":         self.lyrics_last,
                 "lyrics_topic":        self.lyrics_topic,
                 "anim_voices":         self.anim_voices,
+                "turn_album":          self.turn_album,
                 "cast_state":          self.cast_state,
                 "cast_pics":           self.cast_pics,
                 "cast_acts":           self.cast_acts,
