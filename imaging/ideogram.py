@@ -649,7 +649,7 @@ def plan_caption(ctx, prompt: str) -> dict:
 # ---------------------------------------------------------------------------
 # Generation
 # ---------------------------------------------------------------------------
-KLEIN_LORA_MAX_STRENGTH = 1.25
+KLEIN_LORA_MAX_STRENGTH = 1.0
 IDEOGRAM_MIN_SIDE = 256
 IDEOGRAM_MAX_SIDE = 2048
 IDEOGRAM_MAX_RATIO = 6.0
@@ -720,7 +720,7 @@ def generate(ctx, prompt: str, *, width: int = 1024, height: int = 1024,
     if lora_name and "klein" not in lora_name.lower():
         logger.warning("Klein: LoRA %s was trained for another model — drawing without it", lora_name)
         lora_name = None
-    # Klein LoRAs: BFL's range is 0.75-1.0, community goes to 1.25; the old Ideogram-era 1.5 burns the image.
+    # Klein LoRAs: BFL's range is 0.75-1.0, community goes to 1.25, but our rank-32 character LoRAs distort the face past 1.0 (bulging eyes, 2026-10-19 sheet); the old Ideogram-era 1.5 burns the image.
     lora_strength = min(float(lora_strength), KLEIN_LORA_MAX_STRENGTH)
     lora = (lora_name, lora_strength) if lora_name else None
     workflow = klein.t2i_workflow(text, _w, _h, seed, steps=steps, lora=lora)
