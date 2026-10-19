@@ -126,9 +126,8 @@ def patched(llm, tools, analyze=None, synth=None, play=None, downscale=None,
 def _run(ctx, llm, tools, state, read=None, **pk):
     """`read`: the model's read of the message (agent/intent.py) for this run, handed in
     on the context; None -> FALLBACK, the full loop."""
-    if read is not None:
-        from fakes import reads
-        ctx.intent_read = reads(read=lambda t: read)["intent_read"]
+    from fakes import reads     # unscripted, the seam would ask the live model and the suite would depend on LM Studio
+    ctx.intent_read = reads(read=lambda t: read)["intent_read"]
     with patched(llm, tools, ctx=ctx, **pk):
         g = G.build_graph(ctx)
         return g.invoke(state)
