@@ -106,9 +106,9 @@ for aspect in V.ASPECTS:
     check(f"{aspect} -> {w}x{h}: axes /32, under the pixel cap, 768 short edge",
           w % 32 == 0 and h % 32 == 0 and w * h <= C.VIDEO_MAX_PIXELS
           and min(w, h) <= C.VIDEO_SHORT_EDGE + 32, (w, h, w * h))
-check("16:9 is the documented 1344x768", V.resolve_size("16:9") == (1344, 768),
+check("16:9 is 1024x576 at the default short edge", V.resolve_size("16:9") == (1024, 576),
       V.resolve_size("16:9"))
-check("portrait 9:16 is its transpose", V.resolve_size("9:16") == (768, 1344),
+check("portrait 9:16 is its transpose", V.resolve_size("9:16") == (576, 1024),
       V.resolve_size("9:16"))
 w, h = V.fit_canvas(4000, 2000)
 check("an oversized source is scaled down, not passed through",
@@ -361,7 +361,7 @@ try:
     check("the reported duration matches the snapped frame count",
           out2["seconds"] == V.frames_to_seconds(124), out2)
     check("the reported size is the fitted canvas",
-          (out2["width"], out2["height"]) == (1344, 768), out2)
+          (out2["width"], out2["height"]) == (1024, 576), out2)
     check("mode was recorded", out2["mode"] == "t2va", out2)
 
     ctx = make_ctx()

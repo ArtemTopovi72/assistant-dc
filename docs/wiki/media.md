@@ -194,7 +194,7 @@ The clip's own speech is the reference F5 clones from, but a direct clone copied
 | Constraint | Detail |
 |---|---|
 | H3 frame grid | 24 fps; frame count must satisfy `n % 17 == 5` (`video.snap_frames`) |
-| H3 canvas | 768 short edge, `768*1344` area cap, every axis a multiple of 32 (`video.fit_canvas`) |
+| H3 canvas | 576 short edge by default (4:3 is 768x576; `VIDEO_SHORT_EDGE=768` for 1024x768), `768*1344` area cap, every axis a multiple of 32 (`video.fit_canvas`) |
 | H3 guidance | CFG-distilled weights: `cfg` stays `1.0`; a negative prompt is inert, not merely weak |
 | H3 reference numbering | wire slots are 0-based and dotted (`ref_images.ref_image_0`…); the prompt's own tags are 1-based per type (`<Picture 1>`, `<Video 1>`, `<Audio 1>`, from `video.reference_tags`), the two numberings are never the same, and a schema-accepted request can still fail at execution |
 | `SaveVideo.codec` | must be a bare string the live server actually lists; the structured combo form validates at submit time and fails only at execution, after the render is already paid for |

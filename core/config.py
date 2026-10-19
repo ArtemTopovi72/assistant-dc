@@ -406,7 +406,7 @@ VIDEO_MAX_FRAMES_AUTO = _env_int("VIDEO_MAX_FRAMES_AUTO", 243)
 # 768 short edge with a 768*1344 area cap, every axis a multiple of 32 — taken from
 # the node's own adapt_canvas(); going outside it is not a quality knob, it is a
 # shape the model was never trained on.
-VIDEO_SHORT_EDGE = _env_int("VIDEO_SHORT_EDGE", 768)
+VIDEO_SHORT_EDGE = _env_int("VIDEO_SHORT_EDGE", 576)   # 4:3 is 768x576: 1.7x faster than 1024x768 (owner, 2026-10-19)
 VIDEO_MAX_PIXELS = _env_int("VIDEO_MAX_PIXELS", 768 * 1344)
 VIDEO_CANVAS_MULTIPLE = 32
 # CFG-distilled weights: guidance is baked in, so cfg stays at 1.0 and a negative
