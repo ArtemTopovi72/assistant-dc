@@ -1449,7 +1449,7 @@ class TaskRunnerMixin:
         # the clip lost the user's voices. Several pictures of THIS turn still come
         # through state["image_paths"] (an album sent with the request).
         _one = _target["path"] if _target else ctx.last_image_path
-        ctx.recent_image_paths = [_one] if (_one and os.path.exists(_one)) else []
+        ctx.recent_image_paths = [p for p in dict.fromkeys([_one or _first, *([] if _target else _album)]) if p and os.path.exists(p)]
 
         # The last clip delivered here, so "use that video" resolves.
         _lv = _last_video(self._chat_videos, chat_id)
