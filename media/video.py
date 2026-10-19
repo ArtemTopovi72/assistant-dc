@@ -1357,8 +1357,8 @@ def garbled_words(words: Sequence[str], got: set) -> list:
         for h in got:
             pre = len(os.path.commonprefix([w, h]))
             suf = len(os.path.commonprefix([w[::-1], h[::-1]]))
-            if h != w and pre >= 3 and suf >= 2 and pre + suf < len(w) + 1 and abs(len(h) - len(w)) <= 4 \
-                    and difflib.SequenceMatcher(None, w, h).ratio() >= 0.6:
+            if h not in words and pre >= 1 and suf >= 2 and pre + suf < len(w) + 1 and abs(len(h) - len(w)) <= 4 \
+                    and difflib.SequenceMatcher(None, w, h).ratio() >= 0.7:
                 bad.append(w)
                 break
     return bad

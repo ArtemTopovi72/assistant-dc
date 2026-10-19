@@ -155,3 +155,10 @@ def test_continuation_prefix_does_not_count_as_a_camera_request():
     ctx = types.SimpleNamespace(yes_no=lambda *a, **k: seen.append(a[1]) or False)
     out = V._lock_framing_unless_requested(V.CONTINUE_PREFIX + 'He says: "Привет."', ctx)
     assert out.endswith(V._FRAMING_LOCK_SUFFIX) and seen == ['He says: "Привет."']
+
+
+def test_garble_with_a_changed_first_vowel_is_caught_too():
+    """Live 2026-10-19 second take: «системы» became «сестешимы»."""
+    line = "для обходной системы."
+    assert not V.heard_lines([line], "для обходной сестешимы.")
+    assert V.heard_lines([line], "для обходной системы.")

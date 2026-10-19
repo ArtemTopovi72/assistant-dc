@@ -751,6 +751,9 @@ def sc_overseer(bot, ctx):
     u = D.Chat(bot, 910031, "Artem")
     script = Path(ROOT, "tmp", "overseer_text.txt").read_text(encoding="utf-8").strip()
     link = "https://youtu.be/JCjqy3R4yQw?si=AWXo--bSfPQPcKmJ"
+    cut = int(os.environ.get("OVERSEER_WORDS", "0") or 0)     # only the opening: a re-check of the first parts
+    if cut:
+        script = " ".join(script.split()[:cut]).rsplit(".", 1)[0] + "."
     t0 = time.time()
     u.photo(str(Path(ROOT, "tmp", "overseer.jpg")),
             caption=f"Анимируй эту голову смотрителя. Голос возьми отсюда: {link}" + chr(10) + f"Пусть он скажет: {script}")
