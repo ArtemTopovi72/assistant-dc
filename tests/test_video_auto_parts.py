@@ -180,3 +180,10 @@ def test_talking_head_mode_needs_a_spoken_line_and_the_models_yes():
     said = 'He frowns and says: "Ах, вот и ты."'
     assert V.is_talking_head(yes, said) and not V.is_talking_head(no, said)
     assert not V.is_talking_head(yes, "He walks away down the corridor.")      # nothing spoken
+
+
+def test_the_talking_head_button_decides_without_asking_the_model():
+    boom = types.SimpleNamespace(yes_no=lambda *a, **k: (_ for _ in ()).throw(AssertionError("asked")))
+    assert V.is_talking_head(boom, "He waits.", "Talking head video: Ах, вот и ты")
+    assert not V.is_talking_head(types.SimpleNamespace(yes_no=lambda *a, **k: False), 'He says: "Ах."',
+                                 "video with several characters: they talk")

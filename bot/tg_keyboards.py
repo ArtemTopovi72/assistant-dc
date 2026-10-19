@@ -124,6 +124,7 @@ def _cr_video_kb(lang: str = _DEFAULT_LANG) -> dict:
                 [_b("restyle_btn", lang)],
                 [_b("continue_btn", lang)],
                 [_b("animate_btn", lang)],
+                [_b("talk_head", lang), _b("joint_video", lang)],
                 [_b("back", lang)]], lang)
 
 

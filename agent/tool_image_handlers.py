@@ -1926,7 +1926,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         # ...and so do all of them: with two heroes on two pictures, parts 2+ saw only the first
         # one and the second (the cat) was redrawn from the clip's tail.
         anchor = list(images[:3]) if images and not people and not continuing else []
-        head = bool(len(anchor) == 1 and not videos and not continuing and video_mod.is_talking_head(ctx, raw))
+        head = bool(len(anchor) == 1 and not videos and not continuing and video_mod.is_talking_head(ctx, raw, _said))
         if head:
             logger.info("generate_video: talking-head mode, every part starts from the still")
         path = _render_remaining_parts(ctx, path, parts, args, people=[*people, *anchor], voices=audios,

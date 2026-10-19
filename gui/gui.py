@@ -456,6 +456,17 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
             self.ctx.response_length = self._LEN_VALUES[idx]
             logger.info("Response length set to %r (main screen)", self.ctx.response_length)
 
+    def _start_video_mode(self, prefix):
+        """🗣 / 👥 pressed: the message begins with the mode's prefix; what the user types after it
+        is the script. Pressing the other mode swaps the prefix instead of stacking two."""
+        text = self.input.text()
+        for p in ("talking head video: ", "video with several characters: "):
+            if text.startswith(p):
+                text = text[len(p):]
+        self.input.setText(prefix + text)
+        self.input.setFocus()
+        self.input.setCursorPosition(len(self.input.text()))
+
     def _send_text(self):
         text = self.input.text().strip()
         if not text:

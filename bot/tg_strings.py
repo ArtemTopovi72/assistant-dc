@@ -103,6 +103,8 @@ _BTN: dict[str, dict[str, str]] = {
     "lyr_write_btn":   {"en": "✍️ Write lyrics",   "ru": "✍️ Сочинить текст"},
     "restyle_btn":    {"en": "🎨 Restyle video",  "ru": "🎨 Перерисовать видео"},
     "continue_btn":   {"en": "▶️ Continue video", "ru": "▶️ Продолжить видео"},
+    "talk_head":      {"en": "🗣 Talking head",   "ru": "🗣 Говорящая голова"},
+    "joint_video":    {"en": "👥 Several characters", "ru": "👥 Видео с несколькими героями"},
     "book_btn":       {"en": "📚 Audiobook",      "ru": "📚 Аудиокнига"},
     "style_menu_btn": {"en": "🎭 Change style",   "ru": "🎭 Сменить стиль"},
 }
@@ -370,6 +372,10 @@ _MSG: dict[str, dict[str, str]] = {
     "hint_deep":       {"en": "Research topic",    "ru": "Тема исследования"},
     "hint_remember":   {"en": "Fact to remember",  "ru": "Что запомнить"},
     "hint_deck":       {"en": "Presentation topic", "ru": "Тема презентации"},
+    "hint_talk_head":  {"en": "Photo of the speaker and what they say",
+                        "ru": "Фото говорящего и что он скажет"},
+    "hint_joint_video": {"en": "Photos of the characters and what happens",
+                         "ru": "Фото героев и что между ними происходит"},
     "ask_name":      {"en": "👋 <b>Welcome!</b> This is a private AI assistant.\n\n"
                             "To get started, please tell me your <b>name</b>:",
                       "ru": "👋 <b>Добро пожаловать!</b> Это частный ИИ-ассистент.\n\n"

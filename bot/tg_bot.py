@@ -818,6 +818,10 @@ _PROMPT_KB: dict[str, str] = {
     "deep":       "do a deep research on: ",
     "remember":   "remember this: ",
     "deck":       "create a presentation about: ",
+    # Video modes: the marker reaches generate_video through the user's own words
+    # (video.TALKING_HEAD_MARK), so the mode is a decision of the button, not a guess.
+    "talk_head":   "talking head video: ",
+    "joint_video": "video with several characters: ",
     # 🛒 Ozon. The prefix is what the agent reads, so it names the tool and
     # the sort; the retrieval cue "ozon" pins the ozon_* schemas.
     "ozon_find":    "find on ozon: ",
@@ -1643,6 +1647,8 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         "change the outfit to: ": "draw",
         "remove from the image: ": "draw",
         "animate this photo: ":   "creativity",
+        "talking head video: ":   "cr_video",
+        "video with several characters: ": "cr_video",
         "search the web for: ":   "search",
         "do a deep research on: ": "search",
         "find on ozon: ": "ozon",

@@ -1434,11 +1434,17 @@ def drawn_over(path: str, source: str = "", clip=None) -> Optional[float]:
     return sum(x - p[0] > 0.5 for x in p[1:]) / (len(p) - 1)
 
 
-def is_talking_head(ctx, description: str) -> bool:
+TALKING_HEAD_MARK = "talking head video:"      # the 🗣 button's prefix (bot/tg_bot._PROMPT_KB)
+
+
+def is_talking_head(ctx, description: str, said: str = "") -> bool:
     """One person on one still who mostly speaks to the camera: the talking-head mode. Its
     parts are not a continuation of one another but cuts between takes of the same still, so
     nothing can drift (the face turned into a horror mask by part 6, owner 2026-10-19).
-    A script that walks, travels or changes the scene is not one: it needs the continuation."""
+    A script that walks, travels or changes the scene is not one: it needs the continuation.
+    The button says so itself, and the model is not asked then."""
+    if TALKING_HEAD_MARK in (said or "").lower():
+        return True
     from seams import yes_no
     if not quoted_lines(description):
         return False
