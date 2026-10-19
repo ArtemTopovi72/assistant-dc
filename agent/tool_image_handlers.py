@@ -1577,7 +1577,6 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         # <ссылка>»: the same engine as the bot's voice cards (voice_clone.fetch_sample).
         import tempfile
         import voice_clone
-        from seams import yes_no
         link = voice_clone.voice_link_in(
             yes_no(ctx), str((state or {}).get("user_input_original") or (state or {}).get("user_input") or ""))
         if link:
