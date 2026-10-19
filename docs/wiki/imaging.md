@@ -1,27 +1,24 @@
 ---
 type: Domain
-description: ComfyUI-backed image generation (Ideogram 4) and editing (FireRed), gated by mask, identity and OCR checks before delivery
+description: ComfyUI-backed image generation and editing on one engine, FLUX.3 Klein, gated by mask, identity and OCR checks before delivery
 tags: [imaging, comfyui]
 ---
 
 # imaging
 
-> **Stale below (2026-10-18):** drawing and every edit now run on FLUX.3 Klein (`imaging/klein.py`, `imaging/klein_annotate.py`); Ideogram/FireRed weights are gone and their function names survive only as seams. Edits are composited back inside the annotated boxes (`compositing.lock_outside_boxes`). See `docs/design/klein_findings.md`; run `/refresh-wiki` to redraw this page.
+> **Naming (2026-10-19):** drawing and every edit run on FLUX.3 Klein ([`imaging/klein.py`](../../imaging/klein.py)). Ideogram and FireRed weights are gone; functions such as `ideogram.generate`, `edit_image_with_firered` and `edit_region_contained_via_firered` keep their old names as seams and now build Klein graphs. Design notes: [`docs/design/klein_findings.md`](../design/klein_findings.md).
 
 ## What it does
 
 [`imaging`](../../imaging) turns a text request, or an uploaded photo plus an edit instruction, into a
-picture. One request decides which of two ComfyUI-backed engines renders it: Ideogram 4
-composes a fresh scene from a layout of boxes, FireRed (Qwen-Image-Edit) carries out
-every edit on an existing image. Both come wrapped in checks that catch what the
+picture. One engine, FLUX.3 Klein, does both jobs through ComfyUI: a text-to-image graph that reads a caption paragraph plus a table of boxed elements, and an instruction-edit graph that takes the picture as a reference latent. Both come wrapped in checks that catch what the
 generative model gets wrong on its own: a layout the renderer ignored, a mask that
 grabbed the wrong region, lettering that misspells, a face a whole-frame redraw quietly
 swapped for someone else's.
 
 Those checks exist because the failure they catch has already shipped. A whole-frame
 instruction edit asked to change a hat regenerates the face underneath it (measured
-identity cosine collapsing to near zero); FireRed asked to spell a year wrong wrote
-"2025" for "2026" in `21` out of `21` renders on the night bench; a vision critic asked
+identity cosine collapsing to near zero); an edit model asked to spell a year wrote the wrong one in `21` out of `21` renders on the night bench; a vision critic asked
 to judge a well-lit photo calls it "almost entirely black" four verdicts running. None
 of those are rare, so the domain does not trust a single render or a single verdict:
 it plans before rendering, measures what it can measure (brightness, spelling, mask
@@ -54,7 +51,7 @@ flowchart TD
     B -->|"no"| F
     F --> G{"localized edit,<br/>not a resize?"}
     G -->|"yes"| H["_contained_edit_<br/>validated()<br/>(masked region)"]
-    G -->|"no"| I["edit_image_with_<br/>firered()<br/>(whole-frame)"]
+    G -->|"no"| I["edit_image_with_<br/>firered()<br/>(Klein, whole-frame)"]
     %% source: imaging/image_router.py (_route_edit_request, edit_via_layout,
     %% _contained_edit_validated), imaging/image.py (edit_image_with_firered)
 ```
@@ -73,14 +70,24 @@ correct lettering, so falling through would reproduce the earlier false success.
 Among the remaining pixel-path categories, `face_edit`/`clothing_edit`/`product_edit`/
 `subject_edit` first check whether the instruction resizes the subject (the contained
 path's QA rejects any outline change every time, so a proportion fix goes straight to
-whole-frame FireRed); otherwise the contained path runs and only a QA failure falls
+whole-frame Klein); otherwise the contained path runs and only a QA failure falls
 back to a whole-frame `edit_image_with_firered` call. `upscale`, `restore` and
 `outpaint` have no engine left at all (their ESRGAN/old-model backends were removed)
 and are refused with `reason="unsupported"`.
 
+### How Klein is driven
+
+[`imaging/klein.py`](../../imaging/klein.py) builds the ComfyUI graphs in code, not from JSON. The distilled model
+samples `KLEIN_STEPS = 16` at cfg 1 with euler/simple; a negative prompt does nothing at cfg 1.
+
+- **Drawing** (`t2i_workflow`): `caption_to_prompt` turns the planner's caption into one paragraph that cites element ids in angle brackets, followed by a JSON table `{id, bbox, desc}` with `[y_min, x_min, y_max, x_max]` boxes on a 0-1000 grid. Russian lettering is exact only with that table; a bare prose prompt writes gibberish. Boxes are hints, not masks: `_fit_box` pads text boxes and widens any box thinner than 60 units, which otherwise often draws nothing.
+- **Editing** (`edit_workflow`): the picture rides in as a reference latent and the Consistency LoRA (`KLEIN_EDIT_LORA`) keeps the result on the original frame. With reference images the LoRA is off, because it would pin the edit to the source against a transfer. `with_keep_clause` closes the instruction with "everything else stays identical".
+- **Annotated edits** ([`imaging/klein_annotate.py`](../../imaging/klein_annotate.py)): with no references, the vision model first writes the BFL-format record, an imperative paragraph plus a table of `{id, from, src_bbox, tgt_bbox, desc}` rows, from the picture and the instruction (`KLEIN_EDIT_ANNOTATE`, default on). The boxes the edit touches feed `compositing.lock_outside_boxes`, which restores every pixel outside them (+30 grid units of pad, feathered) from the source (`KLEIN_EDIT_LOCK`, default on). Klein re-renders the whole frame, so without the lock only about 86% of untouched pixels survive.
+- **Character LoRAs** load into the drawing graph only if "klein" is in the file name (`lora_training.published_path` guarantees it); adapters trained for the retired engines are skipped with a warning. Strength is capped by `KLEIN_LORA_MAX_STRENGTH = 1.0` in [`imaging/ideogram.py`](../../imaging/ideogram.py): past it the face distorts.
+
 ### Generation and self-repair loop
 
-Ideogram's layout is checked as a sketch before it costs a render, and every
+The planner's layout is checked as a sketch before it costs a render, and every
 subsequent round repairs the same seed's boxes rather than rolling a new picture.
 
 ```mermaid
@@ -98,9 +105,7 @@ flowchart TD
     %% imaging/draw_text.py (verify_text), imaging/ideogram.py (plan_layout)
 ```
 
-Ideogram 4 takes a structured JSON caption, not a prose prompt (a bare sentence draws
-its grey "safety filter" refusal card, `imaging/ideogram.py:is_refusal_card`), so
-`plan_layout` has an LLM lay the request out as a background plus a list of boxed
+Klein reads a structured caption, not a prose prompt, so `plan_layout` has an LLM lay the request out as a background plus a list of boxed
 elements. `draw_preview.preflight` shows that layout as a schematic to a vision model
 next to the original request before any render runs, because the planner is a text
 model and its mistakes are spatial (a cat beside the sofa instead of on it). The seed
@@ -161,8 +166,7 @@ construction rather than by a post-hoc gate. STAGE-0 is deterministic mask geome
 segmenter grabbed the whole person; not for a worn garment that covers the body from the neck down, such as full armor or a dress, whose collar reaches the face box) all reject before any render. STAGE-1 shows the
 cutout to a vision model and asks whether the selection is correct; either failure
 retries once at a different SAM3 threshold before giving up. The edit itself crops the
-mask's bounding box from the full-resolution original, lets FireRed instruction-edit
-only that tile, then composites the result back through a feathered alpha
+mask's bounding box from the full-resolution original, lets Klein instruction-edit only that tile, then composites the result back through a feathered alpha
 ([`imaging/compositing.py`](../../imaging/compositing.py)) so every pixel outside the mask stays byte-exact. STAGE-2
 re-checks the composited result (not the tile) with a tinted overlay; a `WRONG`/`PARTIAL`
 verdict rejects the edit unless it is a whole-region swap (clothing, hair) or a worn item
@@ -174,16 +178,17 @@ leak outside it, so the verdict is advisory there instead of a hard reject.
 | Area | Files | Role |
 |---|---|---|
 | Edit routing & orchestration | [`imaging/image_router.py`](../../imaging/image_router.py), [`imaging/image.py`](../../imaging/image.py) | 16-category intent router and dispatcher; FireRed edit call, layout sidecar (`load_layout_for`/`save_layout_for`), delivery guard (`assert_deliverable`), edit lineage/rebase after a chain of edits |
-| Generation (Ideogram 4) | [`imaging/ideogram.py`](../../imaging/ideogram.py), [`imaging/ideogram_layout.py`](../../imaging/ideogram_layout.py), [`imaging/draw_agent.py`](../../imaging/draw_agent.py), [`imaging/draw_preview.py`](../../imaging/draw_preview.py), [`imaging/draw_geometry.py`](../../imaging/draw_geometry.py), [`imaging/draw_text.py`](../../imaging/draw_text.py), [`imaging/text_layout.py`](../../imaging/text_layout.py) | structured-caption codec and refusal/black-frame detection; the stdlib-only layout/style/caption data model; the plan-draw-judge-repair loop and collage recovery; pre-render sketch check; layout geometry repair (overlap, min-area, element cap); lettering read-back/repair; text-box sizing arithmetic |
+| Generation (Klein drawing) | [`imaging/ideogram.py`](../../imaging/ideogram.py), [`imaging/ideogram_layout.py`](../../imaging/ideogram_layout.py), [`imaging/draw_agent.py`](../../imaging/draw_agent.py), [`imaging/draw_preview.py`](../../imaging/draw_preview.py), [`imaging/draw_geometry.py`](../../imaging/draw_geometry.py), [`imaging/draw_text.py`](../../imaging/draw_text.py), [`imaging/text_layout.py`](../../imaging/text_layout.py) | caption codec, refusal/black-frame detection and the Klein draw call (`ideogram.generate`); the stdlib-only layout/style/caption data model; the plan-draw-judge-repair loop and collage recovery; pre-render sketch check; layout geometry repair (overlap, min-area, element cap); lettering read-back/repair; text-box sizing arithmetic |
 | Contained / masked editing | [`imaging/image_contained.py`](../../imaging/image_contained.py), [`imaging/image_contained_firered.py`](../../imaging/image_contained_firered.py), [`imaging/image_contained_graphs.py`](../../imaging/image_contained_graphs.py), [`imaging/image_masks.py`](../../imaging/image_masks.py), [`imaging/image_maskqa.py`](../../imaging/image_maskqa.py) | crop-based localized edit (native-resolution tile, composited back); the FireRed contained edit and its region-mask builder; the shared `_image` proxy; mask construction/dilation/paired-region extension; STAGE-0/STAGE-1 mask quality gates |
 | Grounding & region language | [`imaging/image_grounding.py`](../../imaging/image_grounding.py) | turns a free-text edit request into a region + result phrase an LLM/VLM and a segmenter can act on |
 | Identity, hands & QA | [`imaging/identity_metrics.py`](../../imaging/identity_metrics.py), [`imaging/image_handfix.py`](../../imaging/image_handfix.py) | YuNet/SFace face detection and cosine similarity (model files in [`models/face/`](../../models/face)); the MeshGraphormer hand-fix ladder |
 | Lettering, OCR & removal | [`imaging/ocr_reader.py`](../../imaging/ocr_reader.py), [`imaging/ocr_worker.py`](../../imaging/ocr_worker.py), [`imaging/text_overlay.py`](../../imaging/text_overlay.py), [`imaging/image_lettering_remove.py`](../../imaging/image_lettering_remove.py) | EasyOCR (ru+en, CPU, its own process) as the deterministic lettering reader; exact PIL-drawn lettering fallback when a model cannot spell; OCR-driven removal mask for "all the lettering" |
-| ComfyUI transport & registries | [`imaging/comfy_client.py`](../../imaging/comfy_client.py), [`imaging/image_engines.py`](../../imaging/image_engines.py), [`imaging/image_sizing.py`](../../imaging/image_sizing.py), [`imaging/compositing.py`](../../imaging/compositing.py), [`imaging/exposure.py`](../../imaging/exposure.py) | submit/poll/GPU-exclusivity transport shared by every pipeline; the edit-engine name registry (FireRed is the only entry); size/orientation resolution; seam-suppression compositing (Poisson + Laplacian blend, routed by continuation-vs-distinct-content); measured brightness evidence for vision judges |
-| Whole-frame / object operations | [`imaging/image_objects.py`](../../imaging/image_objects.py), [`imaging/image_transforms.py`](../../imaging/image_transforms.py), [`imaging/image_generate.py`](../../imaging/image_generate.py) | background remove and FireRed-contained object remove; IC-Light relight; the Ideogram generate/evaluate/retry refinement loop |
+| Klein graphs & annotator | [`imaging/klein.py`](../../imaging/klein.py), [`imaging/klein_annotate.py`](../../imaging/klein_annotate.py), [`imaging/prompts/`](../../imaging/prompts) | graph builders for drawing and editing, caption-to-prompt conversion, the BFL-format edit annotator and its system prompt |
+| ComfyUI transport & registries | [`imaging/comfy_client.py`](../../imaging/comfy_client.py), [`imaging/image_engines.py`](../../imaging/image_engines.py), [`imaging/image_sizing.py`](../../imaging/image_sizing.py), [`imaging/compositing.py`](../../imaging/compositing.py), [`imaging/exposure.py`](../../imaging/exposure.py) | submit/poll/GPU-exclusivity transport shared by every pipeline; the edit-engine name registry (one entry, kept under its old "firered" name); size/orientation resolution; seam-suppression compositing (Poisson + Laplacian blend, routed by continuation-vs-distinct-content); measured brightness evidence for vision judges |
+| Whole-frame / object operations | [`imaging/image_objects.py`](../../imaging/image_objects.py), [`imaging/image_transforms.py`](../../imaging/image_transforms.py), [`imaging/image_generate.py`](../../imaging/image_generate.py) | background remove and contained object remove; IC-Light relight; the generate/evaluate/retry refinement loop |
 | Transfer & LoRA | [`imaging/image_transfer.py`](../../imaging/image_transfer.py), [`imaging/image_lora.py`](../../imaging/image_lora.py), [`imaging/characters.py`](../../imaging/characters.py), [`imaging/lora_training.py`](../../imaging/lora_training.py) | reference-driven role vocabulary (clothing/hair/face/style source → target) and its two execution paths; LoRA injection onto a ComfyUI graph's model loaders; the character registry ([`runtime/characters.json`](../../runtime/characters.json), gitignored); the trainer's own venv and GPU-exclusivity contract |
 | Lookup & vision helpers | [`imaging/photo_search.py`](../../imaging/photo_search.py), [`imaging/person_look.py`](../../imaging/person_look.py), [`imaging/vision_close.py`](../../imaging/vision_close.py), [`imaging/vision_selftest.py`](../../imaging/vision_selftest.py), [`imaging/animate_presets.py`](../../imaging/animate_presets.py), [`imaging/style_presets.py`](../../imaging/style_presets.py) | contact-sheet photo search; real-person appearance lookup for drawing requests; zoomed-tile vision reading for small detail; vision-projector health probe at startup; named motion/style presets for one-photo animation and single-image restyle |
-| Workflow graphs & model weights | [`workflows/image/workflow_firered_edit.json`](../../workflows/image/workflow_firered_edit.json), [`workflows/image/workflow_ideogram4.json`](../../workflows/image/workflow_ideogram4.json), [`workflows/image/workflow_ideogram4_ui.json`](../../workflows/image/workflow_ideogram4_ui.json), [`models/face/face_detection_yunet_2023mar.onnx`](../../models/face/face_detection_yunet_2023mar.onnx), [`models/face/face_recognition_sface_2021dec.onnx`](../../models/face/face_recognition_sface_2021dec.onnx), [`assets/vision_selftest.jpg`](../../assets/vision_selftest.jpg) | the ComfyUI node graphs the two engines submit; the YuNet/SFace ONNX weights `identity_metrics.py` loads; the known-answer probe image for `vision_selftest.py` |
+| Model weights & probes | [`models/face/face_detection_yunet_2023mar.onnx`](../../models/face/face_detection_yunet_2023mar.onnx), [`models/face/face_recognition_sface_2021dec.onnx`](../../models/face/face_recognition_sface_2021dec.onnx), [`assets/vision_selftest.jpg`](../../assets/vision_selftest.jpg) | the YuNet/SFace ONNX weights `identity_metrics.py` loads; the known-answer probe image for `vision_selftest.py` |
 
 [`imaging/edit_state.py`](../../imaging/edit_state.py) defines a stateful edit-graph model (`EditSession`,
 `LOCK_POLICY` per intent category) but nothing in the live router imports it; its only
@@ -191,9 +196,8 @@ importer is [`tests/test_edit_state.py`](../../tests/test_edit_state.py).
 
 ## Constraints
 
-- **FireRed is the only edit engine.** `image_engines.EDIT_ENGINE_WORKFLOWS` has one
-  entry (`"firered"`); `upscale`/`restore`/`outpaint` have no backend left and are
-  refused rather than silently redrawn.
+- **Klein is the only engine.** `image_engines.EDIT_ENGINE_WORKFLOWS` has one entry (`"firered"`, an old name), and `edit_image_with_firered` ignores the sampler override because the distilled model runs its own schedule. `upscale`/`restore`/`outpaint` have no backend and are refused rather than silently redrawn.
+- **Boxes are hints.** A thin or tiny box may draw nothing and an element can leave its box; keep a prompt under about 512 tokens (`ideogram.generate` warns past it), roughly 5% of the frame per element and at most about 10 rows per table.
 - **The GPU does not share.** `COMFY_MAX_CONCURRENT` is `1`; a render claims the card
   exclusively through `card_session`/`_gpu_slot(exclusive=True)`, unloading the
   resident LLM, and a foreign whole-card job holding `gpu_lock` makes `_submit_and_poll`
@@ -213,19 +217,16 @@ importer is [`tests/test_edit_state.py`](../../tests/test_edit_state.py).
   boxes, and below the area floor an element risks vanishing from the render.
 - **Lettering has its own geometry floor.** `MIN_TEXT_H = 0.08`, `MAX_TEXT_CHARS = 24`
   ([`imaging/text_layout.py`](../../imaging/text_layout.py)); a box smaller than that renders letter-shaped strokes
-  instead of letters. New lettering gets `TEXT_ADD_TRIES` (default `3`) FireRed
-  attempts with an OCR read-back before falling back to an exact PIL overlay.
+  instead of letters. New lettering gets `TEXT_ADD_TRIES` (default `3`) edit attempts with an OCR read-back before falling back to an exact PIL overlay.
   `TEXT_MATCH_OK = 0.8` is the similarity floor that counts as "it says the word."
   `text_edit` on an image with no stored layout refuses outright: no pixel engine can
   correct a sign's spelling.
-- **A chain of edits re-bases from the original.** `FIRERED_REBASE_AFTER = 3`: from the
-  4th FireRed edit in a row, the instruction history is replayed against the ORIGINAL
+- **A chain of edits re-bases from the original.** `FIRERED_REBASE_AFTER = 3`: from the 4th edit in a row, the instruction history is replayed against the ORIGINAL
   image instead of the latest result, because edit-on-edit drifts (colour noise, a
   drifting face) by then; `FIRERED_REBASE_MAX = 6` caps how long that chain is kept.
 - **`CONTAINED_FULLRES_MP = 4_000_000`** is the pixel-count switch between the
   full-frame in-graph contained path and the crop-based one; above it, the in-graph
-  VAE-encode risks OOM, so only the masked tile (capped by `FIRERED_MAX_MP = 2.0`) is
-  ever sent through FireRed.
+  VAE-encode risks OOM, so only the masked tile (capped by `FIRERED_MAX_MP = 2.0`) is ever sent through Klein.
 - **Every delivery is gated.** `assert_deliverable` ([`imaging/image.py`](../../imaging/image.py)) rejects any
   path containing an `_INTERMEDIATE_`-style scratch marker and any result smaller than
   its source canvas; nothing reaches the agent/UI boundary without passing it.
@@ -257,7 +258,7 @@ importer is [`tests/test_edit_state.py`](../../tests/test_edit_state.py).
   `utils.safe_json_from_llm` is what turns a model's free-text reply into the
   structured dict every pipeline here expects.
 - **characters.py / lora_training.py / image_lora.py back the character-LoRA feature**
-  that `ideogram.attach_lora`/`attach_turbo_lora` wire into the Ideogram graph; the
+  that `ideogram.generate` wires into the Klein drawing graph; the
   registry, training venv and dataset layout are that domain's contract, consumed here
   only as a `.safetensors` path and a trigger word.
 - **The desktop GUI and the Telegram bot are the two callers**, neither of which is
