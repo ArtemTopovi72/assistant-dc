@@ -2,6 +2,7 @@
 and the longer it ran the more nonsense it held (owner, 2026-10-15). A simple action stays
 one part; a length the user named is still followed."""
 import os
+import types
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -97,3 +98,13 @@ def test_users_dictated_speech_is_not_the_bots_script_to_condense():
     assert V.speech_is_users(mine, said)
     assert not V.speech_is_users('He says: "Привет, дружище, как дела?"', said)      # the bot's own line
     assert not V.speech_is_users("He waves.", said)
+
+
+def test_dictated_speech_is_copied_only_when_the_user_wrote_it():
+    said = "Анимируй голову. Пусть он скажет: Ах, вот и ты. Хорошо. Слушай, просто будь с рюкзачком, хорошо?"
+    ctx = types.SimpleNamespace(text_model=lambda *a, **k: "Ах, вот и ты. Хорошо. Слушай, просто будь с рюкзачком, хорошо?")
+    assert V.dictated_speech(said, "He talks in sync with the provided text.", ctx).startswith("Ах, вот и ты")
+    assert V.dictated_speech(said, 'He says "Ах, вот и ты. Хорошо. Слушай, просто будь с рюкзачком, хорошо?"', ctx) == ""
+    invented = types.SimpleNamespace(text_model=lambda *a, **k: "Привет, дружище, как твои дела сегодня?")
+    assert V.dictated_speech(said, "He talks.", invented) == ""            # not in the user's message
+    assert V.dictated_speech("Оживи", "He talks.", ctx) == ""

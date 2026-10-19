@@ -1614,6 +1614,13 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     _said = str((state or {}).get("user_input_original") or (state or {}).get("user_input") or "")
     own_script = False
     if not continuing:
+        words = video_mod.dictated_speech(_said, raw, ctx)
+        if words:
+            logger.info("generate_video: the user's own speech added to the script (%d words)", len(words.split()))
+            said_it = f'{raw} The person says, word for word: "{words}"'.strip()
+            description = description.replace(raw, said_it, 1) if raw and raw in description else said_it
+            raw = said_it
+    if not continuing:
         # A script the user numbered and timed is theirs: the agent's retelling of it dropped
         # the lengths and the actions («3.2 с — … 2.2 с — …» became a bee in a suit).
         from prompt_guard import user_words

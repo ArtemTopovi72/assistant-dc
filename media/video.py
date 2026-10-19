@@ -1343,6 +1343,31 @@ def quoted_lines(text: str) -> list:
             if _flat_line(x) and not x.startswith("The camera cuts")]  # the chain prefix quotes its own cut cues
 
 
+def dictated_speech(said: str, description: str, ctx=None) -> str:
+    """The words the user dictated for the person to say, when the agent's description
+    does not carry them («lips moving in sync with the provided text» for an 85-word
+    speech, live 2026-10-19). Copied by the model, kept only if they stand in the user's
+    message word for word. "" when there are none or the description has them."""
+    if len((said or "").split()) < 12:
+        return ""
+    try:
+        out = text_model(ctx)(
+            None,
+            "The user asks for a video in which a person speaks. Copy, character for character, "
+            "ONLY the words the person must say aloud, if the user wrote them out. Not the "
+            "instructions, not the link, not the description of the picture. Reply with the "
+            "spoken text alone, or NONE when the user gave no words to say.",
+            said, temperature=0.0, max_tokens=900) or ""
+    except Exception:
+        logger.exception("reading the dictated speech failed")
+        return ""
+    out = " ".join(out.replace("```", "").split()).strip().strip('"«»“”')
+    flat = _flat_line(out)
+    if len(flat.split()) < 3 or flat not in _flat_line(said) or flat in _flat_line(description):
+        return ""
+    return out
+
+
 def speech_is_users(description: str, said: str) -> bool:
     """Every spoken line of the script is the user's own words, verbatim: it is theirs to
     keep whole, not a script the bot wrote and may condense."""
