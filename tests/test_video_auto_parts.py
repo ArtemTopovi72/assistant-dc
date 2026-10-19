@@ -89,3 +89,11 @@ def test_long_monologue_is_cut_into_parts_at_sentence_ends():
     said = " ".join(w for p in parts for q in V._QUOTED.finditer(p) for w in next(g for g in q.groups() if g).split())
     assert said == speech.replace(" — ", " — ")
     assert all(V.estimate_seconds(p, capped=False) <= 9.0 for p in parts)
+
+
+def test_users_dictated_speech_is_not_the_bots_script_to_condense():
+    said = "Анимируй. Пусть он скажет: Ах, вот и ты. Хорошо! Слушай, просто будь с рюкзачком."
+    mine = 'He looks at the camera and says: "Ах, вот и ты. Хорошо! Слушай, просто будь с рюкзачком."'
+    assert V.speech_is_users(mine, said)
+    assert not V.speech_is_users('He says: "Привет, дружище, как дела?"', said)      # the bot's own line
+    assert not V.speech_is_users("He waves.", said)

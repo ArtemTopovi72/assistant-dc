@@ -1644,6 +1644,9 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             logger.info("generate_video: %.0f s asked in the words, none in the call", asked)
             args["seconds"] = asked
     want = float(args.get("seconds") or 0)
+    # The words the user dictated are never condensed or cut to the bot's own 2-part cap:
+    # an 85-word monologue came out as its first sentence (live 2026-10-19).
+    speech_theirs = video_mod.speech_is_users(raw, _said)
     # Over one clip's 15 s the parts follow the script: «на 30 секунд» was capped to one
     # 15 s clip and delivered without a word (2026-10-13).
     if args.get("seconds") and float(args["seconds"]) <= 15.0:
@@ -1666,7 +1669,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             finer = video_mod.split_script(raw, max_seconds=max(1.0, have / math.ceil(want / cap)))
             if len(finer) > len(parts):
                 parts = finer
-        if not want and len(parts) > video_mod.AUTO_MAX_PARTS:
+        if not want and len(parts) > video_mod.AUTO_MAX_PARTS and not speech_theirs:
             # A script the bot wrote itself ran 5-8 parts, ~25 min of render, and the
             # longer it ran the more nonsense it held (owner, 2026-10-15): one or two
             # episodes, the rest is the user's ▶️ Continue.
@@ -1736,7 +1739,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     if len(parts) > 1:
         parts = video_mod.dedupe_quotes(video_mod.strip_translations(
             video_mod.validate_script(ctx, video_mod.mark_inserts(ctx, parts),
-                                      max_parts=math.ceil(want / 5.2) if want else video_mod.AUTO_MAX_PARTS)))
+                                      max_parts=math.ceil(want / 5.2) if want else (len(parts) if speech_theirs else video_mod.AUTO_MAX_PARTS))))
     if len(parts) > 1 and raw in description:
         description = description.replace(raw, parts[0], 1)
         logger.info("generate_video: the script needs %d parts: %s", len(parts),

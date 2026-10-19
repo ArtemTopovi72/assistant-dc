@@ -1343,6 +1343,14 @@ def quoted_lines(text: str) -> list:
             if _flat_line(x) and not x.startswith("The camera cuts")]  # the chain prefix quotes its own cut cues
 
 
+def speech_is_users(description: str, said: str) -> bool:
+    """Every spoken line of the script is the user's own words, verbatim: it is theirs to
+    keep whole, not a script the bot wrote and may condense."""
+    lines = quoted_lines(description)
+    have = _flat_line(said or "")
+    return bool(lines) and all(_flat_line(x) in have for x in lines)
+
+
 def _shown_before(description: str) -> str:
     """The scene-so-far note of a chain part as its own field after the request: inside
     the request the writer took it for content, and every part of a 25 s clip replayed
