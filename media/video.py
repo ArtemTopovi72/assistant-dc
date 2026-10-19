@@ -31,6 +31,7 @@ inputs and the intended output, which is how H3 is meant to be driven.
 """
 from __future__ import annotations
 
+import difflib
 import json
 import logging
 import math
@@ -1122,9 +1123,15 @@ def _lock_framing_unless_requested(description: str, ctx=None) -> str:
     """
     d = (description or "").strip()
     from seams import yes_no
+    # The continuation template talks about the camera itself («keeps moving»): judged with it,
+    # every part counted as asking for a move, got no lock, and the camera drove down the
+    # corridor on a talking head (owner, 2026-10-19). Only the script's own words count.
+    own = d
+    for pre in (CONTINUE_PREFIX, CONTINUE_CTX_PREFIX):
+        own = own.removeprefix(pre)
     if not d or yes_no(ctx)("A video clip is described as: {text}\n\nDoes the description ask "
                             "for the camera to move (zoom, pan, dolly, orbit, tilt, tracking or "
-                            "handheld shot)?", d):
+                            "handheld shot)?", own):
         return d
     return d + _FRAMING_LOCK_SUFFIX
 
@@ -1222,6 +1229,9 @@ def mark_speech_stress(ctx, prompt: str) -> str:
     return _RU_LINE.sub(one, prompt)
 
 
+_YO_AMBIGUOUS = {"все", "нем", "осел", "небо", "мел", "пел", "вез", "перед", "совершенно", "все,"}
+
+
 def _marks_only(line: str, accented: str) -> str:
     """`line` as written, with only the accentor's stress marks added: it also restores
     ё and punctuation its own way, and «тише, все спят» was spoken «всё спят»."""
@@ -1241,7 +1251,9 @@ def _marks_only(line: str, accented: str) -> str:
                 if out and out[-1] not in "ёЁ":       # ё is stressed already
                     out.append(ch)
             else:
-                out.append(w[j]); j += 1
+                # «Емкость» typed with е was read as «е-мкость» (live 2026-10-19): the accentor's
+                # ё goes in unless the word is a real word with е too («все» is not «всё»)
+                out.append(("Ё" if w[j] == "Е" else "ё") if ch in "ёЁ" and w[j] in "еЕ" and w.lower() not in _YO_AMBIGUOUS else w[j]); j += 1
         return "".join(out)
     return re.sub(r"[А-Яа-яЁё]+", put, line)
 
@@ -1329,7 +1341,27 @@ def heard_lines(expected: Sequence[str], heard: str) -> bool:
         words = _flat_line(line).split()
         if words and sum(w in got for w in words) < 0.6 * len(words):
             return False
+        if garbled_words(words, got):
+            return False
     return True
+
+
+def garbled_words(words: Sequence[str], got: set) -> list:
+    """Words the clip says with the right start and end and a wrong middle («системы» spoken
+    «систешимы», live 2026-10-19): the 0.6 share above let a line with one such word pass.
+    A different ending is an inflection the ASR picked («хорошее» / «хорошо»), not a garble."""
+    bad = []
+    for w in words:
+        if len(w) < 5 or w in got:
+            continue
+        for h in got:
+            pre = len(os.path.commonprefix([w, h]))
+            suf = len(os.path.commonprefix([w[::-1], h[::-1]]))
+            if h != w and pre >= 3 and suf >= 2 and pre + suf < len(w) + 1 and abs(len(h) - len(w)) <= 4 \
+                    and difflib.SequenceMatcher(None, w, h).ratio() >= 0.6:
+                bad.append(w)
+                break
+    return bad
 
 
 OVERLAY_DRIFT_MAX = 35.0
@@ -1925,7 +1957,7 @@ CONTINUE_PREFIX = (
     "exactly where <Video 1> ends, on <Picture 1>, and keeps its motion going. The same people with "
     "the same faces, location and lighting, and everyone exactly as they are in <Picture 1> (its last "
     "frame): whatever changed during <Video 1> -- clothes taken off or put on, things moved, broken "
-    "or picked up -- stays changed. The camera keeps moving at the same speed. "
+    "or picked up -- stays changed. The camera does what it did in <Video 1>: a static shot stays static, a move goes on at the same speed. "
     "Their voices and the ambient sound of <Video 1> go on unchanged. What happens next: ")
 
 # With pinned frames the previous shot is not a reference at all, it IS the opening of

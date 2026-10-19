@@ -130,3 +130,28 @@ def test_a_part_never_carries_more_speech_than_one_clip_says():
     assert all(V._spoken_words(p) <= V.SPEECH_WORDS_PER_PART for p in out)
     assert a in out[0] and b in out[1]
     assert V.fit_speech(["He waves."]) == ["He waves."]
+
+
+def test_a_word_spoken_with_a_wrong_middle_fails_the_speech_check():
+    """«системы» came out «систешимы» and passed the 0.6 share check (live 2026-10-19)."""
+    line = "Мы не можем сделать новую, а процесс слишком сложен для обходной системы."
+    ok = "Мы не можем сделать новую, а процесс слишком сложен для обходной системы."
+    bad = "Мы не можем сделать новую, а процесс слишком сложен для обходной систешимы."
+    assert V.heard_lines([line], ok)
+    assert not V.heard_lines([line], bad)
+    assert V.heard_lines(["Это очень хорошее место."], "Это очень хорошо место.")     # another ending is not a garble
+
+
+def test_yo_is_restored_in_spoken_lines_but_not_where_the_word_is_real_with_e():
+    got = V._marks_only("Емкость переполнена, все спят", "ёмкость переполнена, всё спят")
+    assert got.startswith("Ёмкость")
+    assert "все спят" in got
+
+
+def test_continuation_prefix_does_not_count_as_a_camera_request():
+    """The template says the camera «keeps moving»; judged with it no part got the static lock
+    and the camera drove down the corridor (owner, 2026-10-19)."""
+    seen = []
+    ctx = types.SimpleNamespace(yes_no=lambda *a, **k: seen.append(a[1]) or False)
+    out = V._lock_framing_unless_requested(V.CONTINUE_PREFIX + 'He says: "Привет."', ctx)
+    assert out.endswith(V._FRAMING_LOCK_SUFFIX) and seen == ['He says: "Привет."']
