@@ -65,6 +65,12 @@ def fetch_video(url: str, max_seconds: int = VIDEO_MAX_SECONDS, modules=None) ->
 
 
 def _fetch_video(url: str, max_seconds: int, modules) -> dict:
+    """One retry: YouTube's signed stream URL sometimes answers 403 once and serves the next try
+    (a whole voice-from-link request died on it)."""
+    return _fetch_video_once(url, max_seconds, modules) or _fetch_video_once(url, max_seconds, modules)
+
+
+def _fetch_video_once(url: str, max_seconds: int, modules) -> dict:
     """{"data": mp4 bytes, "seconds", "title", "description"} for a public video up to
     `max_seconds`, {"too_long": True, "seconds", "title"} past it, {} when it
     cannot be downloaded. 720p is plenty for frames and speech."""
