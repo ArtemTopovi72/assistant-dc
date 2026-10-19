@@ -1233,6 +1233,15 @@ def _speech_ok(ctx, clip: str, lines: list) -> bool:
         return True
 
 
+def _voice_sim(clip: str, voices) -> Optional[float]:
+    """Similarity of the clip's voice to the reference it was given; None when there is no
+    reference or it cannot be told."""
+    if not voices:
+        return None
+    import voice_clone
+    return voice_clone.speaker_similarity(clip, voices[0])
+
+
 def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str, start: int = 1) -> int:
     """Parts 2..n of a long script as the next links of `chain` (each continues the
     previous part's saved latent). `parts` are ALL the parts as (prompt, seconds) from video.prepare_prompt,
@@ -1304,6 +1313,7 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
     for i, part in enumerate(parts[1:], start=2):
         if getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
             break
+        first_try = None
         ctx.set_stage(f"Generating a video ({i}/{len(parts)})")
         frame = os.path.join(work, f"seed_{i}.jpg")
         tail = os.path.join(work, f"tail_{i}.mp4")
@@ -1342,10 +1352,21 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
                                                  images=[frame, *people], videos=[tail], audios=list(voices),
                                                  aspect=args.get("aspect") or "", seed=args.get("seed"))
                 # no chain check here before: a part whose opening lines H3 skipped went into the clip
-                if attempt == 2 or not said or not r.get("path") or _speech_ok(ctx, r["path"], said):
+                if attempt == 2 or not r.get("path"):
                     break
-                logger.warning("video parts: part %d did not say %s; once more with a new seed", i, said)
+                said_ok = not said or _speech_ok(ctx, r["path"], said)
+                sim = _voice_sim(r["path"], voices)
+                if said_ok and (sim is None or sim >= video_mod.VOICE_MIN_SIM):
+                    break
+                logger.warning("video parts: part %d did not say %s or drifted off the voice (%s); "
+                               "once more with a new seed", i, said, sim)
+                first_try = (r, sim) if said_ok else None
                 args = {**args, "seed": None}
+            if first_try and r.get("path") and first_try[1] is not None:
+                again = _voice_sim(r["path"], voices)
+                if again is not None and again < first_try[1]:
+                    r = first_try[0]        # the second take is further from the voice than the first
+                    logger.info("video parts: part %d keeps its first take (voice %.2f > %.2f)", i, first_try[1], again)
         except Exception:
             logger.exception("video parts: part %d crashed", i)
             break

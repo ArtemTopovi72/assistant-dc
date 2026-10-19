@@ -170,6 +170,40 @@ def fetch_sample(url: str, out_dir: str, fetch=None, name: str = "sample") -> st
     return path
 
 
+_ENCODER = []
+
+
+def speaker_similarity(clip: str, ref: str, window: float = 3.0) -> Optional[float]:
+    """Mean cosine similarity of the clip's speech, in `window`-second pieces, to the voice of
+    `ref` (Resemblyzer on the CPU); None when it cannot be told. A render that drifted off the
+    reference voice shows in the mean (live 2026-10-20: 0.46..0.95 per part at the same reference).
+    A broken check returns None: it must never block a render."""
+    import tempfile
+    try:
+        import numpy as np
+        import soundfile as sf
+        from resemblyzer import VoiceEncoder, preprocess_wav
+        if not _ENCODER:
+            _ENCODER.append(VoiceEncoder("cpu"))
+        enc = _ENCODER[0]
+        wav = os.path.join(tempfile.mkdtemp(prefix="spksim_"), "a.wav")
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", clip, "-vn", "-ac", "1", "-ar", "16000", wav],
+                       capture_output=True, check=True, timeout=60)
+        y, sr = sf.read(wav)
+        want = enc.embed_utterance(preprocess_wav(ref))
+        sims = []
+        for s in np.arange(0, max(len(y) / sr - window, 0.1), window / 2):
+            seg = y[int(s * sr):int((s + window) * sr)]
+            if len(seg) < sr * 2 or np.abs(seg).mean() < 0.003:
+                continue
+            e = enc.embed_utterance(preprocess_wav(seg, source_sr=sr))
+            sims.append(float(np.dot(e, want) / (np.linalg.norm(e) * np.linalg.norm(want))))
+        return float(np.mean(sims)) if sims else None
+    except Exception:
+        logger.warning("speaker similarity check failed", exc_info=True)
+        return None
+
+
 def voice_link_in(ask, text: str) -> str:
     """The video link in a request that the user names as the source of a VOICE («голос возьми
     отсюда: <ссылка>»), not as something to watch or retell; "" otherwise. `ask` is a yes_no."""

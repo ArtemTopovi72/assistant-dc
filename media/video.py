@@ -72,6 +72,9 @@ N_LORA = "13"  # LightX2V turbo LoRA in both graphs (FL2V v1.2 / Ref2V v0.1)
 MAX_REF_IMAGES = 9
 MAX_REF_VIDEOS = 3
 MAX_REF_AUDIOS = 3
+# H3 invents the timbre of every part itself; per part the similarity to the reference ranged
+# 0.46..0.95 at one reference (night 2026-10-20), a good part sits at 0.85+
+VOICE_MIN_SIM = _cfg_env.env_float("VIDEO_VOICE_MIN_SIM", 0.8)
 
 # Why the last generation produced nothing, for an honest message to the user.
 # Mirrors image._GENERATE_FAILURE.

@@ -234,3 +234,44 @@ def test_every_front_end_takes_a_voice_link_through_one_engine(tmp_path):
     assert voice_clone.voice_link_in(lambda *a: True, "голос возьми отсюда: " + link) == link
     assert voice_clone.voice_link_in(lambda *a: False, "смотри " + link) == ""
     assert voice_clone.voice_link_in(lambda *a: True, "без ссылки") == ""
+
+
+def _voice_gate_run(tmp_path, monkeypatch, sims):
+    """One continuation part, its voice similarities handed out in order; returns (takes made, the clip joined)."""
+    takes, joined = [], []
+    clips = [tmp_path / f"t{k}.mp4" for k in range(3)]
+    for c in clips:
+        c.write_bytes(b"x")
+
+    def gen(ctx, desc, **kw):
+        takes.append(desc)
+        return {"path": str(clips[len(takes) - 1])}
+    eng = Over(V, generate_video=gen, motion_context_on=lambda: False,
+               join_continuation=lambda a, b, **k: joined.append(b) or str(clips[2]),
+               _adopt_output=lambda p, d: p, OUTPUT_DIR=str(tmp_path))
+    tools = types.SimpleNamespace(seed_frame=lambda a, b: True, cut_tail=lambda a, b: True,
+                                  first_frame=lambda a, b: True)
+    ctx = types.SimpleNamespace(video_engine=eng, clip_tools=tools, set_stage=lambda s: None,
+                                is_cancelled=lambda: False, vision_model=lambda *a, **k: "NONE")
+    it = iter(sims)
+    monkeypatch.setattr(H, "_voice_sim", lambda clip, voices: next(it))
+    monkeypatch.setattr(H, "_speech_ok", lambda c, p, lines: True)
+    H._render_remaining_parts(ctx, str(clips[2]), ["p1", 'He says: "Привет, мир."'], {}, voices=["v.wav"])
+    return takes, [os.path.basename(j) for j in joined]
+
+
+def test_a_part_whose_voice_drifted_is_made_again_and_the_closer_take_stays(tmp_path, monkeypatch):
+    """H3 invents the timbre of each part: 0.46..0.95 against the same reference (night 2026-10-20),
+    and the voice «degraded with the length» (owner). Below the bar the part is drawn again; the
+    take nearer to the voice goes into the clip."""
+    takes, joined = _voice_gate_run(tmp_path, monkeypatch, [0.5, 0.4])
+    assert len(takes) == 2 and joined == ["t0.mp4"]
+    takes, joined = _voice_gate_run(tmp_path, monkeypatch, [0.5, 0.9])
+    assert len(takes) == 2 and joined == ["t1.mp4"]
+
+
+def test_a_part_in_the_voice_is_made_once(tmp_path, monkeypatch):
+    takes, _ = _voice_gate_run(tmp_path, monkeypatch, [0.9])
+    assert len(takes) == 1
+    takes, _ = _voice_gate_run(tmp_path, monkeypatch, [None])     # a check that could not run never blocks
+    assert len(takes) == 1
