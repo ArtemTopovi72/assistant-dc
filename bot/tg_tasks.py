@@ -887,7 +887,11 @@ class TaskRunnerMixin:
         # 🎬 a multi-part clip shows its plan first; the approved parts ride the rerun only
         ctx.video_plan_ask = True
         ctx.video_plan_parts = []
-        if getattr(sess, "video_plan_ok", None) and task.user_text == getattr(sess, "video_plan_request", ""):
+        # A watched video link adds a summary that differs on every watch: the plan's request
+        # is the same one without it, or ▶ drew the plan again, round and round (live 2026-10-19).
+        import tg_links as _tg_links
+        if getattr(sess, "video_plan_ok", None) and _tg_links.without_link_notes(task.user_text) == \
+                _tg_links.without_link_notes(getattr(sess, "video_plan_request", "")):
             ctx.video_plan_parts = list(sess.video_plan_ok)
             sess.video_plan, sess.video_plan_request, sess.video_plan_ok = [], "", []
             self._store.put(sess)

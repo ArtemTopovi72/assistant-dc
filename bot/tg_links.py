@@ -39,7 +39,32 @@ def video_url(text: str) -> str:
     return next((u for u in urls_in(text) if _VIDEO_RE.match(u)), "")
 
 
+LINK_NOTE_HEADS = ("[The user's message links a ", "[The video at ")
+
+
+def without_link_notes(text: str) -> str:
+    """The message without the notes `_read_links` appends about a video link: a summary
+    is rewritten on every watch, so the same request never read the same twice."""
+    t = text or ""
+    cuts = [i for i in (t.find("\n" + h) for h in LINK_NOTE_HEADS) if i >= 0]
+    return t[:min(cuts)] if cuts else t
+
+
+_FETCHED: dict = {}      # url -> result, the last two: one animate request downloads its link three times
+
+
 def fetch_video(url: str, max_seconds: int = VIDEO_MAX_SECONDS, modules=None) -> dict:
+    if modules is None and (url, max_seconds) in _FETCHED:
+        return _FETCHED[(url, max_seconds)]
+    got = _fetch_video(url, max_seconds, modules)
+    if modules is None and got.get("data"):
+        while len(_FETCHED) >= 2:
+            _FETCHED.pop(next(iter(_FETCHED)))
+        _FETCHED[(url, max_seconds)] = got
+    return got
+
+
+def _fetch_video(url: str, max_seconds: int, modules) -> dict:
     """{"data": mp4 bytes, "seconds", "title", "description"} for a public video up to
     `max_seconds`, {"too_long": True, "seconds", "title"} past it, {} when it
     cannot be downloaded. 720p is plenty for frames and speech."""

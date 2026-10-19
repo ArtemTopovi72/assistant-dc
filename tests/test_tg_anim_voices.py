@@ -155,3 +155,13 @@ def test_link_not_about_voice_still_asks():
     bot = _link_bot(False)
     bot._offer_voices(CID, bot._get_session(CID), "ru", "Анимируй, видео как здесь https://youtu.be/x", 1)
     assert "anv:yes" in _cbs(bot.sent[-1][1]) and not bot.queued
+
+
+def test_plan_request_ignores_the_rewritten_link_notes():
+    """▶ on a plan compares the request with the rerun's text; the summary of a watched video
+    link is rewritten on every watch and made the rerun look like a new request."""
+    import tg_links
+    a = "Анимируй. Голос отсюда: https://youtu.be/x\n[The user's message links a 90-second video «V» (u). Speech in it: A.]"
+    b = "Анимируй. Голос отсюда: https://youtu.be/x\n[The user's message links a 90-second video «V» (u). Speech in it: B.]"
+    assert tg_links.without_link_notes(a) == tg_links.without_link_notes(b) == "Анимируй. Голос отсюда: https://youtu.be/x"
+    assert tg_links.without_link_notes("просто текст") == "просто текст"
