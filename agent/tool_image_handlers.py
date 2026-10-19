@@ -1753,6 +1753,10 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         parts = video_mod.dedupe_quotes(video_mod.strip_translations(
             video_mod.validate_script(ctx, video_mod.mark_inserts(ctx, parts),
                                       max_parts=math.ceil(want / 5.2) if want else (len(parts) if speech_theirs else video_mod.AUTO_MAX_PARTS))))
+    fitted = video_mod.fit_speech(parts)
+    if len(fitted) > len(parts):
+        logger.info("generate_video: parts with more speech than a clip says were cut: %d -> %d", len(parts), len(fitted))
+        parts = fitted
     if len(parts) > 1 and raw in description:
         description = description.replace(raw, parts[0], 1)
         logger.info("generate_video: the script needs %d parts: %s", len(parts),
@@ -1769,7 +1773,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         cur = parts[0]
         description = (description.replace(cur, approved[0], 1) if cur and cur in description
                        else approved[0])
-        parts = approved
+        parts = video_mod.fit_speech(approved)
     # An asked length the script falls short of: each part plays longer, up to one clip's cap.
     secs = [video_mod.estimate_seconds(p) for p in parts]
     if want > 15.0 and len(parts) > 1 and want > sum(secs) * 1.15:

@@ -118,3 +118,15 @@ def test_a_part_without_speech_joins_the_next_when_voices_are_given():
     assert out == ['He looks seriously at the camera. He says: "Ах, вот и ты."', 'He goes on: "Хорошо."']
     assert V.merge_silent_parts(['He says: "A."', "He nods."]) == ['He says: "A." He nods.']
     assert V.merge_silent_parts(["He waves.", "He sits."]) == ["He waves. He sits."]
+
+
+def test_a_part_never_carries_more_speech_than_one_clip_says():
+    """Two quotes of ~22 words rode one 10 s part and the voice began mid-speech (live 2026-10-19)."""
+    a = " ".join(f"слово{i}" for i in range(22))
+    b = " ".join(f"фраза{i}" for i in range(22))
+    part = f'He frowns and says: "{a}." He pauses, then goes on: "{b}."'
+    out = V.fit_speech([part, "He waves."])
+    assert len(out) == 3 and out[-1] == "He waves."
+    assert all(V._spoken_words(p) <= V.SPEECH_WORDS_PER_PART for p in out)
+    assert a in out[0] and b in out[1]
+    assert V.fit_speech(["He waves."]) == ["He waves."]

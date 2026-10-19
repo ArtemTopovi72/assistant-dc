@@ -219,6 +219,40 @@ CAUSE_RULE = (" Show every cause on screen: anything thrown is first held in a v
               "subtitles or other on-screen text unless the script asks for lettering.")
 
 
+def _spoken_words(text: str) -> int:
+    return sum(len(next(g for g in m.groups() if g is not None).split()) for m in _QUOTED.finditer(text))
+
+
+def fit_speech(parts: list) -> list:
+    """Every part carries the speech one clip can say. A part whose quotes outlast the
+    longest clip lost its opening lines (two quotes, ~44 words, rode one 10 s part and
+    the voice began mid-speech: live 2026-10-19), whoever made the part. Cut at sentence
+    ends; the part's own action stays with its first piece."""
+    out = []
+    for p in parts:
+        if _spoken_words(p) <= SPEECH_WORDS_PER_PART:
+            out.append(p)
+            continue
+        quotes = []
+
+        def _hide(m):
+            quotes.append(m.group(0))
+            return f"\x00{len(quotes) - 1}\x00"
+        text = _QUOTED.sub(_hide, _QUOTED.sub(lambda m: _cut_long_quote(m, SPEECH_WORDS_PER_PART / 2.3), p))
+        back = lambda t: re.sub(r"\x00(\d+)\x00", lambda m: quotes[int(m.group(1))], t)
+        cur = ""
+        for piece in (x for x in _SENT.split(text) if x and x.strip()):
+            cand = (cur + " " + piece).strip()
+            if cur and _spoken_words(back(cand)) > SPEECH_WORDS_PER_PART:
+                out.append(back(cur))
+                cur = piece.strip()
+            else:
+                cur = cand
+        if cur:
+            out.append(back(cur))
+    return out
+
+
 def _cut_long_quote(m, top: float) -> str:
     """One quote that alone outlasts a part, as consecutive quotes of about a part's
     speech each, cut at sentence ends and each its own sentence of the script
@@ -228,7 +262,7 @@ def _cut_long_quote(m, top: float) -> str:
     sents = [x.strip() for x in _SENT.split(inner) if x and x.strip()]
     # A part is rendered at ~50 s per clip second: chunks fill the longest clip the
     # model makes (85 words in 10 parts was a 66-minute plan, owner 2026-10-19).
-    budget = int(frames_to_seconds(VIDEO_MAX_FRAMES_AUTO) * 2.3 * 0.95)
+    budget = SPEECH_WORDS_PER_PART
     if len(inner.split()) <= int(top * 2.3) or len(sents) < 2:
         return m.group(0)
     chunks = []
@@ -318,6 +352,9 @@ def seconds_to_frames(seconds: float) -> int:
 
 def frames_to_seconds(frames: int) -> float:
     return round(int(frames) / float(VIDEO_FPS), 2)
+
+
+SPEECH_WORDS_PER_PART = int(frames_to_seconds(VIDEO_MAX_FRAMES_AUTO) * 2.3 * 0.95)    # words one longest clip says
 
 
 def fit_canvas(width: int, height: int) -> tuple[int, int]:
