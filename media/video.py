@@ -433,7 +433,7 @@ def reference_tags(n_images: int = 0, n_videos: int = 0, n_audios: int = 0) -> l
 
 
 def pick_mode(images: Sequence[str] = (), videos: Sequence[str] = (),
-              audios: Sequence[str] = ()) -> str:
+              audios: Sequence[str] = (), keyframe: bool = False) -> str:
     """Which H3 task this request is, from what was attached.
 
     In principle one/two images are keyframe work the FL2VA checkpoint does
@@ -453,6 +453,10 @@ def pick_mode(images: Sequence[str] = (), videos: Sequence[str] = (),
     frames. A silently-broken checkpoint is worse than a lower-fidelity one.
     """
     n_i, n_v, n_a = len(images or ()), len(videos or ()), len(audios or ())
+    # `keyframe`: the still IS frame 0 (FL2VA). Ref2VA with a voice recast the face and the eyes
+    # (HF MiniMax-H3 discussion 91: identity 0.09 vs 0.89; here white-of-eye 0.01-0.04 vs 0.00-0.003).
+    if keyframe and 1 <= n_i <= 2 and not n_v:
+        return "t2va"
     if n_v or n_a or n_i >= 1:
         return "ref2va"
     return "t2va"
@@ -629,6 +633,9 @@ LATENT_UPSCALER = os.getenv(
 # 45 s vs 93 s; the clip comes out 1008x576 instead of 1344x768.
 UPSCALE_FACTOR = _cfg_env.env_float("VIDEO_UPSCALE_FACTOR", 1.5)
 REFINE_STEPS = max(1, _cfg_env.env_int("VIDEO_REFINE_STEPS", 2))
+# where the refine's noise tail starts; the ComfyUI H3 guide keeps the refine at denoise 0.1-0.5
+# and an LTX guide sees faces drift above ~0.55, ours began at the LBH workflow's 0.6316
+REFINE_TOP = _cfg_env.env_float("VIDEO_REFINE_TOP", 0.6316)
 
 
 def _two_stage_on() -> bool:
@@ -662,7 +669,7 @@ def _add_latent_upscale(wf: dict, seed: int, factor: float = 0.0, steps: int = 0
     wf[n["cat"]] = {"class_type": "LTXVConcatAVLatent",
                     "inputs": {"video_latent": [n["ups"], 0], "audio_latent": [n["sep"], 1]}}
     # the refine walks the same tail (0.6316 -> 0) in VIDEO_REFINE_STEPS even steps
-    top, steps = 0.6316, steps or REFINE_STEPS
+    top, steps = REFINE_TOP, steps or REFINE_STEPS
     sig = ", ".join(f"{top * (1 - i / steps):.4f}" for i in range(steps)) + ", 0"
     wf[n["sig"]] = {"class_type": "ManualSigmas", "inputs": {"sigmas": sig}}
     wf[n["noise"]] = {"class_type": "RandomNoise", "inputs": {"noise_seed": int(seed) + 1}}
@@ -1527,7 +1534,7 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
                      encoding="utf-8").read()
     except OSError:
         return description
-    task = {"t2va": "T2VA", "i2va": "I2VA", "fl2va": "FL2VA", "ref2va": "Ref2VA"}.get(mode, "T2VA")
+    task = {"t2va": "FL2VA" if images else "T2VA", "i2va": "I2VA", "fl2va": "FL2VA", "ref2va": "Ref2VA"}.get(mode, "T2VA")
     user = (f"Mode: {task}. Target duration: {seconds:.2f} seconds. "
             f"Reference pictures attached in order: {len(images)}; reference videos: "
             f"{n_videos}; reference audios: {n_audios}.\n"
@@ -1789,7 +1796,8 @@ def fit_references(images: Sequence[str], videos: Sequence[str], audios: Sequenc
 
 
 def prepare_prompt(ctx, description: str, *, images: Sequence[str] = (), videos: Sequence[str] = (),
-                   audios: Sequence[str] = (), seconds: float = 0.0, head: bool = False) -> tuple:
+                   audios: Sequence[str] = (), seconds: float = 0.0, head: bool = False,
+                   keyframe: bool = False) -> tuple:
     """(prompt H3 gets, seconds): every model call a render needs before it is submitted --
     the length read from the script, the Context-IR rewrite, speech stress. Apart from
     generate_video so a chain can prepare all its parts while the chat model is loaded and
@@ -1798,7 +1806,7 @@ def prepare_prompt(ctx, description: str, *, images: Sequence[str] = (), videos:
     eng = _eng(ctx)
     asked = description
     description = _lock_framing_unless_requested(strip_timing(description), ctx)
-    mode = pick_mode(images, videos, audios)
+    mode = pick_mode(images, videos, audios, keyframe=keyframe)
     if not seconds:
         seconds = estimate_seconds(asked)
         logger.info("video length from the script: %.1fs", seconds)
@@ -1831,8 +1839,10 @@ def generate_video(ctx, description: str, *,
                    on_progress: Optional[Callable] = None,
                    context_video: str = "", context_latent: str = "",
                    save_latent: bool = False, chain: tuple = (), size_from: str = "",
-                   prepared: bool = False, reference: str = "") -> dict:
+                   prepared: bool = False, reference: str = "", keyframe: bool = False) -> dict:
     """Render one clip. `reference`: the hero's picture a chain part 2+ keeps in view.
+    `keyframe`: `images` are real frames (FL2VA), no voice sample goes in -- the model says the
+    line itself and `revoice` puts the user's voice on the finished clip.
     `chain` = (chain, idx): part idx of a Herrgott chain (see
     build_chain_part) -- 1 starts it from `images[0]` if given, 2+ continue it;
     `size_from`: a clip whose shape this one keeps; `prepared`: `description` and `seconds`
@@ -1859,9 +1869,11 @@ def generate_video(ctx, description: str, *,
     images = [p for p in (images or ()) if p and os.path.exists(p)]
     videos = [p for p in (videos or ()) if p and os.path.exists(p)]
     audios = [p for p in (audios or ()) if p and os.path.exists(p)]
+    if keyframe and images and not videos:
+        audios = []
     images, videos, audios = fit_references(images, videos, audios)
 
-    mode = pick_mode(images, videos, audios)
+    mode = pick_mode(images, videos, audios, keyframe=keyframe)
     # Ref2VA's workflow carries the LightX2V Turbo LoRA baked in (see
     # workflow_video_h3_ref.json) and is distilled for 4 steps, not the plain
     # model's 8 -- an explicit caller-supplied `steps` still wins.
@@ -1870,7 +1882,7 @@ def generate_video(ctx, description: str, *,
     if not prepared:
         description, seconds = eng.prepare_prompt(ctx, description, images=images, videos=videos,
                                               audios=audios, seconds=seconds,
-                                              head=bool(context_video or context_latent))
+                                              head=bool(context_video or context_latent), keyframe=keyframe)
     frames = seconds_to_frames(seconds)
     if context_video or context_latent:
         # the pinned head is rendered too, then trimmed: the clip grows by it
@@ -2382,6 +2394,28 @@ def join_pinned(src: str, new: str, head: int = MOTION_CONTEXT_FRAMES) -> Option
         _discard(fh.name)
         return None
     return fh.name
+
+
+def revoice(ctx, clip: str, voice: str) -> Optional[str]:
+    """`clip` with its speech converted onto the timbre of `voice` (Seed-VC keeps the pitch
+    contour, so the mouth still matches), or None. A keyframe talking head says its line in
+    whatever voice the model likes; Resemblyzer to the sample was 0.76 before, 0.94 after."""
+    ff = shutil.which("ffmpeg")
+    if not (ff and clip and voice and os.path.exists(clip) and os.path.exists(voice)):
+        return None
+    import remix
+    work = tempfile.mkdtemp(prefix="revoice_")
+    src, conv, out = (os.path.join(work, n) for n in ("src.wav", "conv.wav", "out.mp4"))
+    try:
+        subprocess.run([ff, "-y", "-v", "error", "-i", clip, "-vn", "-ac", "1", "-ar", "22050", src], check=True, timeout=120)
+        if not remix._seedvc(ctx, src, fit_audio_refs([voice])[0], conv):
+            return None
+        subprocess.run([ff, "-y", "-v", "error", "-i", clip, "-i", conv, "-map", "0:v", "-map", "1:a", "-c:v", "copy",
+                        "-c:a", "aac", "-b:a", "192k", "-shortest", out], check=True, timeout=300)
+    except Exception:
+        logger.warning("revoice failed", exc_info=True)
+        return None
+    return _adopt_output(out, OUTPUT_DIR)
 
 
 def join_continuation(src: str, new: str, fade: float = 0.25, drop_frames: int = 2) -> Optional[str]:

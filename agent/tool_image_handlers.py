@@ -1332,9 +1332,7 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
         try:
             for attempt in (1, 2):
                 if fresh_from:
-                    r = video_mod.generate_video(ctx, part + (" The speaker's voice stays exactly the voice of <Audio 1>."
-                                                              if voices else ""),
-                                                 images=[fresh_from], audios=list(voices),
+                    r = video_mod.generate_video(ctx, part, images=[fresh_from], keyframe=True,
                                                  aspect=args.get("aspect") or "", seed=args.get("seed"))
                 elif pinned:
                     r = video_mod.generate_video(ctx, video_mod.CONTINUE_CTX_PREFIX
@@ -1355,7 +1353,7 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
                 if attempt == 2 or not r.get("path"):
                     break
                 said_ok = not said or _speech_ok(ctx, r["path"], said)
-                sim = _voice_sim(r["path"], voices)
+                sim = None if fresh_from else _voice_sim(r["path"], voices)      # revoiced at the end
                 if said_ok and (sim is None or sim >= video_mod.VOICE_MIN_SIM):
                     break
                 logger.warning("video parts: part %d did not say %s or drifted off the voice (%s); "
@@ -1862,7 +1860,15 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         prepped += [video_mod.prepare_prompt(
             ctx, video_mod.CONTINUE_CTX_PREFIX + video_mod.with_scene(p, voices + " ".join(parts[:i])),
             seconds=secs[i] if i < len(secs) else 0.0) for i, p in enumerate(parts[1:], start=1)]
-    mode = video_mod.pick_mode(images, videos, audios)
+    # With voices the first picture rides every part too: each part starts from the last
+    # frame of the one before, and the face drifted a little further every time.
+    # ...and so do all of them: with two heroes on two pictures, parts 2+ saw only the first
+    # one and the second (the cat) was redrawn from the clip's tail.
+    anchor = list(images[:3]) if images and not people and not continuing else []
+    head = bool(not chain_id and len(anchor) == 1 and not videos and video_mod.is_talking_head(ctx, raw, _said))
+    if head:
+        logger.info("generate_video: talking-head mode, the still is frame 0 of every part, the voice comes after")
+    mode = video_mod.pick_mode(images, videos, audios, keyframe=head)
     tags = video_mod.reference_tags(len(images) if mode == "ref2va" else 0, len(videos), len(audios))
     logger.info("Tool: generate_video(mode=%s, %d image(s), %d video(s)) %s",
                 mode, len(images), len(videos), description[:80])
@@ -1894,6 +1900,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                     context_video=pinned_tail,
                     chain=(chain_id, chain_idx) if chain_id else (),
                     size_from=cont_src if chain_id and continuing else "",
+                    keyframe=head,
                 )
                 p = result.get("path")
                 look = watch and p and os.path.exists(p)
@@ -1955,18 +1962,17 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             logger.warning("continue video: the join failed, delivering the new part alone")
 
     if len(parts) > 1 and not chain_id:
-        # With voices the first picture rides every part too: each part starts from the last
-        # frame of the one before, and the face drifted a little further every time.
-        # ...and so do all of them: with two heroes on two pictures, parts 2+ saw only the first
-        # one and the second (the cat) was redrawn from the clip's tail.
-        anchor = list(images[:3]) if images and not people and not continuing else []
-        head = bool(len(anchor) == 1 and not videos and not continuing and video_mod.is_talking_head(ctx, raw, _said))
-        if head:
-            logger.info("generate_video: talking-head mode, every part starts from the still")
         path = _render_remaining_parts(ctx, path, parts, args, people=[*people, *anchor], voices=audios,
                                        fresh_from=anchor[0] if head else "")
         result["seconds"] = video_mod.probe(path).get("seconds") or result.get("seconds")
 
+    if head and audios and path:
+        ctx.set_stage("Putting the voice on")
+        said_in = video_mod.revoice(ctx, path, audios[0])
+        if said_in:
+            path = said_in
+        else:
+            logger.warning("generate_video: the voice could not be put on, delivering the model's own")
     ctx.video_action_note = "" if continuing else _check_actions(ctx, path, parts)
     state["video_path"] = path
     state["video_status"] = "success"

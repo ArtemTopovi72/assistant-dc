@@ -222,7 +222,16 @@ def test_a_talking_head_part_starts_from_the_still_not_from_the_clip_so_far(tmp_
                                 is_cancelled=lambda: False, vision_model=lambda *a, **k: "NONE")
     H._render_remaining_parts(ctx, str(clip), ["p1", "p2", "p3"], {}, voices=["v.wav"], fresh_from="orig.jpg")
     assert len(seen) == 2
-    assert all(k["images"] == ["orig.jpg"] and not k.get("videos") and k["audios"] == ["v.wav"] for k in seen)
+    # the still is frame 0 (FL2VA) and no voice sample rides: Ref2VA+voice recast the face and the
+    # eyes (white-of-eye 0.01-0.04 vs 0.00-0.003); the voice is put on the finished clip (revoice)
+    assert all(k["images"] == ["orig.jpg"] and not k.get("videos") and k["keyframe"] and not k.get("audios") for k in seen)
+
+
+def test_a_keyframe_clip_is_fl2va_a_voice_sample_alone_is_ref2va():
+    assert V.pick_mode(["a.jpg"], (), (), keyframe=True) == "t2va"
+    assert V.pick_mode(["a.jpg"], (), ["v.wav"]) == "ref2va"
+    assert V.pick_mode((), (), (), keyframe=True) == "t2va"
+    assert V.pick_mode(["a.jpg"], ["c.mp4"], (), keyframe=True) == "ref2va"
 
 
 def test_every_front_end_takes_a_voice_link_through_one_engine(tmp_path):

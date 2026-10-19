@@ -49,6 +49,33 @@ QUEUE = [
     ("r4_576_squint_s2", {"VIDEO_SHORT_EDGE": "576", "VIDEO_REFINE_STEPS": "4", "PROBE_SEED": "11"}),
     ("r4_768_cgi_squint", {"VIDEO_SHORT_EDGE": "768", "VIDEO_REFINE_STEPS": "4"}),
     ("r4_768_cgi_squint_s2", {"VIDEO_SHORT_EDGE": "768", "VIDEO_REFINE_STEPS": "4", "PROBE_SEED": "11"}),
+    ("fl2_576", {"VIDEO_SHORT_EDGE": "576"}),
+    ("fl2_768", {"VIDEO_SHORT_EDGE": "768"}),
+    ("fl2_576_s2", {"VIDEO_SHORT_EDGE": "576", "PROBE_SEED": "11"}),
+    ("fl2_768_s2", {"VIDEO_SHORT_EDGE": "768", "PROBE_SEED": "11"}),
+    ("fl2_768_cgi", {"VIDEO_SHORT_EDGE": "768"}),
+    ("fl3_576", {"VIDEO_SHORT_EDGE": "576"}),
+    ("fl3_768", {"VIDEO_SHORT_EDGE": "768"}),
+    ("fl3_576_s2", {"VIDEO_SHORT_EDGE": "576", "PROBE_SEED": "11"}),
+    ("fl3_768_s2", {"VIDEO_SHORT_EDGE": "768", "PROBE_SEED": "11"}),
+    ("fl4_576", {"VIDEO_SHORT_EDGE": "576"}),
+    ("fl4_576_s2", {"VIDEO_SHORT_EDGE": "576", "PROBE_SEED": "11"}),
+    ("fl4_576_s3", {"VIDEO_SHORT_EDGE": "576", "PROBE_SEED": "22"}),
+    ("fl4_768", {"VIDEO_SHORT_EDGE": "768"}),
+    ("top45", {"VIDEO_SHORT_EDGE": "576", "VIDEO_REFINE_STEPS": "4", "VIDEO_REFINE_TOP": "0.45"}),
+    ("top45_s2", {"VIDEO_SHORT_EDGE": "576", "VIDEO_REFINE_STEPS": "4", "VIDEO_REFINE_TOP": "0.45", "PROBE_SEED": "11"}),
+    ("top30", {"VIDEO_SHORT_EDGE": "576", "VIDEO_REFINE_STEPS": "4", "VIDEO_REFINE_TOP": "0.30"}),
+    ("top30_s2", {"VIDEO_SHORT_EDGE": "576", "VIDEO_REFINE_STEPS": "4", "VIDEO_REFINE_TOP": "0.30", "PROBE_SEED": "11"}),
+    ("st12", {"VIDEO_SHORT_EDGE": "576", "VIDEO_REFINE_STEPS": "4", "VIDEO_STEPS_REF2VA_VOICES": "12"}),
+    ("st12_s2", {"VIDEO_SHORT_EDGE": "576", "VIDEO_REFINE_STEPS": "4", "VIDEO_STEPS_REF2VA_VOICES": "12", "PROBE_SEED": "11"}),
+    ("st16", {"VIDEO_SHORT_EDGE": "576", "VIDEO_REFINE_STEPS": "4", "VIDEO_STEPS_REF2VA_VOICES": "16"}),
+    ("st16_s2", {"VIDEO_SHORT_EDGE": "576", "VIDEO_REFINE_STEPS": "4", "VIDEO_STEPS_REF2VA_VOICES": "16", "PROBE_SEED": "11"}),
+    ("st25", {"VIDEO_SHORT_EDGE": "576", "VIDEO_REFINE_STEPS": "4", "VIDEO_STEPS_REF2VA_VOICES": "25"}),
+    ("st25_s2", {"VIDEO_SHORT_EDGE": "576", "VIDEO_REFINE_STEPS": "4", "VIDEO_STEPS_REF2VA_VOICES": "25", "PROBE_SEED": "11"}),
+    ("se864", {"VIDEO_SHORT_EDGE": "864", "VIDEO_REFINE_STEPS": "4"}),
+    ("se864_s2", {"VIDEO_SHORT_EDGE": "864", "VIDEO_REFINE_STEPS": "4", "PROBE_SEED": "11"}),
+    ("sh6", {"VIDEO_SHORT_EDGE": "576", "VIDEO_REFINE_STEPS": "4", "VIDEO_SHIFT_VIDEO": "6"}),
+    ("sh6_s2", {"VIDEO_SHORT_EDGE": "576", "VIDEO_REFINE_STEPS": "4", "VIDEO_SHIFT_VIDEO": "6", "PROBE_SEED": "11"}),
 ]
 if len(sys.argv) > 1:
     QUEUE = [q for q in QUEUE if q[0] in sys.argv[1:]]
@@ -87,7 +114,8 @@ def summary(name):
     tail = [r for r in rows if float(r["sec"]) >= 1.0 and float(r["match"]) >= 0.65]
     sh = [float(r["sharp_vs_still"]) for r in tail] or [0]
     mt = [float(r["match"]) for r in tail] or [0]
-    return (f"sharp mean {sum(sh) / len(sh):.2f} min {min(sh):.2f} | match mean {sum(mt) / len(mt):.2f} "
+    extra = subprocess.run([PY, "tmp/clip_metrics.py", name], capture_output=True, text=True).stdout.strip().splitlines()
+    return (f"{extra[-1] if extra else ''} | sharp mean {sum(sh) / len(sh):.2f} min {min(sh):.2f} | match mean {sum(mt) / len(mt):.2f} "
             f"| tracked {len(tail)}/{len(rows)}")
 
 

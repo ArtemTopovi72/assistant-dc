@@ -38,10 +38,39 @@ def prompt(name: str) -> str:
         p = p.replace("[Shot 1] ", "[Shot 1] " + EYES, 1)
     if "squint" in name:
         p = p.replace("[Shot 1] ", "[Shot 1] " + SQUINT, 1)
+    if "fl3" in name:
+        # the words the soundtrack really says, so the mouth has something to follow
+        p = re.sub(r"<d>.*?</d>", lambda m: "<d>[Russian] " + open("tmp/night/p1_65.txt", encoding="utf8").read() + "</d>", p, flags=re.S)
+    if name.startswith(("fl2", "fl3", "fl4")):
+        # keyframe path: the still IS frame 0, no reference tags; the soundtrack is anchored by AddGuide
+        p = re.sub(r"<Audio 1> is the voice-timbre.*\n?", "", p)
+        p = (p.replace(", referencing the timbre of <Audio 1>", "").replace(" using the voice timbre from <Audio 1>", "")
+             .replace("<Picture 1>", "the first frame").replace("<Subject 1>", "the man"))
     return p
 
 
+def fl2va_audio():
+    """FL2VA instead of Ref2VA: the still as frame 0 (HF MiniMax-H3 discussion 91: Ref2VA+audio recast the
+    identity, FL2VA kept it) and the voice clip anchored as the soundtrack through MiniMaxH3AddGuide."""
+    real = video.build_workflow
+
+    def build(prompt, **kw):
+        wf = real(prompt, **kw)
+        up = video._eng(None)._upload(VOICE, "audio")
+        wf["90"] = {"class_type": "LoadAudio", "inputs": {"audio": up}}
+        wf["91"] = {"class_type": "MiniMaxH3AddGuide", "inputs": {
+            "positive": ["6", 0], "latent": ["6", 1], "audio_vae": ["5", 0], "audio": ["90", 0], "frame_idx": 0}}
+        wf["8"]["inputs"]["positive"] = ["91", 0]
+        return wf
+    video.build_workflow = build
+    video.pick_mode = lambda *a, **k: "t2va"
+
+
 name = sys.argv[1]
+if name.startswith(("fl2", "fl3")):
+    fl2va_audio()
+elif name.startswith("fl4"):
+    video.pick_mode = lambda *a, **k: "t2va"      # FL2VA, the model speaks the line itself (voice converted after)
 out = f"tmp/night/{name}.mp4"
 ctx = models.Context(models=None, transcription_cache={}, cache_file=None,
                      asr_lock=threading.Lock(), tts_lock=threading.Lock())
