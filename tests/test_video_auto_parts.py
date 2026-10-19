@@ -108,3 +108,13 @@ def test_dictated_speech_is_copied_only_when_the_user_wrote_it():
     invented = types.SimpleNamespace(text_model=lambda *a, **k: "Привет, дружище, как твои дела сегодня?")
     assert V.dictated_speech(said, "He talks.", invented) == ""            # not in the user's message
     assert V.dictated_speech("Оживи", "He talks.", ctx) == ""
+
+
+def test_a_part_without_speech_joins_the_next_when_voices_are_given():
+    """The first part «looks seriously at the camera» had the voice reference and no line: it
+    mumbled (live 2026-10-19)."""
+    parts = ["He looks seriously at the camera.", 'He says: "Ах, вот и ты."', 'He goes on: "Хорошо."']
+    out = V.merge_silent_parts(parts)
+    assert out == ['He looks seriously at the camera. He says: "Ах, вот и ты."', 'He goes on: "Хорошо."']
+    assert V.merge_silent_parts(['He says: "A."', "He nods."]) == ['He says: "A." He nods.']
+    assert V.merge_silent_parts(["He waves.", "He sits."]) == ["He waves. He sits."]

@@ -165,3 +165,23 @@ def test_plan_request_ignores_the_rewritten_link_notes():
     b = "Анимируй. Голос отсюда: https://youtu.be/x\n[The user's message links a 90-second video «V» (u). Speech in it: B.]"
     assert tg_links.without_link_notes(a) == tg_links.without_link_notes(b) == "Анимируй. Голос отсюда: https://youtu.be/x"
     assert tg_links.without_link_notes("просто текст") == "просто текст"
+
+
+def test_every_continuation_part_keeps_the_voice_and_the_first_picture(tmp_path):
+    """Parts 2+ copied the sound of the part before: the voice at the end was another man's
+    (live 2026-10-19). The voice sample and the original picture ride every part."""
+    seen = []
+    clip = tmp_path / "c.mp4"; clip.write_bytes(b"x")
+
+    def gen(ctx, desc, **kw):
+        seen.append(kw)
+        return {"path": str(clip)}
+    eng = Over(V, generate_video=gen, motion_context_on=lambda: False, join_continuation=lambda a, b: str(clip),
+               _adopt_output=lambda p, d: p, OUTPUT_DIR=str(tmp_path))
+    tools = types.SimpleNamespace(seed_frame=lambda a, b: True, cut_tail=lambda a, b: True,
+                                  first_frame=lambda a, b: True)
+    ctx = types.SimpleNamespace(video_engine=eng, clip_tools=tools, set_stage=lambda s: None,
+                                is_cancelled=lambda: False, vision_model=lambda *a, **k: "NONE")
+    H._render_remaining_parts(ctx, str(clip), ["p1", "p2", "p3"], {}, people=["orig.jpg"], voices=["v.wav"])
+    assert len(seen) == 2
+    assert all(k["audios"] == ["v.wav"] and k["images"][1:] == ["orig.jpg"] for k in seen)

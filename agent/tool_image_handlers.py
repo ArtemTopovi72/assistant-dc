@@ -1289,7 +1289,7 @@ def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str, st
     return last
 
 
-def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=()) -> str:
+def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), voices=()) -> str:
     """Parts 2..n of a long script, each continuing the clip so far from its real
     last frame (its tail as <Video 1>, that frame as <Picture 1>), joined on. A part
     that fails or a cancel stops here: the clip made so far is still delivered."""
@@ -1322,8 +1322,12 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=()) 
             else:
                 look = "".join(f" The person of <Picture {k}> looks exactly as in that picture."
                                for k in range(2, len(people) + 2))
+                # The voice rode part 1 only and each part copied the sound of the one before:
+                # by the end it was another man's voice (owner, 2026-10-19).
+                if voices:
+                    look += " The speaker's voice stays exactly the voice of <Audio 1>."
                 r = video_mod.generate_video(ctx, video_mod.CONTINUE_PREFIX + part + look,
-                                             images=[frame, *people], videos=[tail],
+                                             images=[frame, *people], videos=[tail], audios=list(voices),
                                              aspect=args.get("aspect") or "", seed=args.get("seed"))
         except Exception:
             logger.exception("video parts: part %d crashed", i)
@@ -1743,6 +1747,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 description = description.replace(raw, new_raw, 1) if raw in description else new_raw
                 raw = new_raw
                 parts = video_mod.split_script(raw)
+    if audios and len(parts) > 1:
+        parts = video_mod.merge_silent_parts(parts)
     if len(parts) > 1:
         parts = video_mod.dedupe_quotes(video_mod.strip_translations(
             video_mod.validate_script(ctx, video_mod.mark_inserts(ctx, parts),
@@ -1893,7 +1899,10 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             logger.warning("continue video: the join failed, delivering the new part alone")
 
     if len(parts) > 1 and not chain_id:
-        path = _render_remaining_parts(ctx, path, parts, args, people=people)
+        # With voices the first picture rides every part too: each part starts from the last
+        # frame of the one before, and the face drifted a little further every time.
+        anchor = list(images[:1]) if audios and images and not people else []
+        path = _render_remaining_parts(ctx, path, parts, args, people=[*people, *anchor], voices=audios)
         result["seconds"] = video_mod.probe(path).get("seconds") or result.get("seconds")
 
     ctx.video_action_note = "" if continuing else _check_actions(ctx, path, parts)

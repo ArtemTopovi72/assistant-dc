@@ -1246,6 +1246,25 @@ def strip_translations(parts: list) -> list:
     return [_TRANSLATION.sub(r"\1", p) for p in parts]
 
 
+def merge_silent_parts(parts: list) -> list:
+    """With a voice sample every part speaks: a part with no spoken line is joined to the
+    next one. A silent part with the voice reference mumbled (live 2026-10-19)."""
+    out, carry = [], ""
+    for p in parts:
+        p = (carry + " " + p).strip() if carry else p
+        carry = ""
+        if quoted_lines(p):
+            out.append(p)
+        else:
+            carry = p
+    if carry:                       # nothing spoken after it: it goes on the last part
+        if out:
+            out[-1] = (out[-1] + " " + carry).strip()
+        else:
+            out.append(carry)
+    return out
+
+
 def dedupe_quotes(parts: list) -> list:
     """A spoken line stays in the FIRST part that has it: the bridge and the split put the
     same «…» into parts 2 and 3 and the man said it twice (live 2026-10-15). The later
@@ -1415,7 +1434,10 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
             # no video at all: the task type names only what the references really do.
             + ("" if n_videos else "There is NO reference video: the summary's task type is "
                "never 'video continuation' or 'video editing' -- pictures are 'reference "
-               "generation', voice samples are 'audio reference'.\n") +
+               "generation', voice samples are 'audio reference'.\n")
+            + ("A person who speaks keeps a calm, natural face: small expressions, no wide or "
+               "bulging eyes, no grimaces, no exaggerated mouth or brow movement.\n"
+               if quoted_lines(description) else "") +
             "Rewrite the request below into the final prompt exactly as the guide's final "
             "prompt structure prescribes (instruction line first where the mode needs one, "
             "then the fields in order). Output ONLY the final prompt, no commentary.\n"
