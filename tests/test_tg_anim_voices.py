@@ -200,7 +200,7 @@ def test_a_part_that_skipped_its_opening_lines_is_made_again(tmp_path, monkeypat
     ctx = types.SimpleNamespace(video_engine=eng, clip_tools=tools, set_stage=lambda s: None,
                                 is_cancelled=lambda: False, vision_model=lambda *a, **k: "NONE")
     heard = iter([False, True])
-    monkeypatch.setattr(H, "_speech_ok", lambda c, p, lines: next(heard))
+    ctx.speech_ok = lambda c, p, lines: next(heard)
     H._render_remaining_parts(ctx, str(clip), ["p1", 'He says: "Привет, мир."'], {}, voices=["v.wav"])
     assert len(n) == 2
 
@@ -263,8 +263,8 @@ def _voice_gate_run(tmp_path, monkeypatch, sims):
     ctx = types.SimpleNamespace(video_engine=eng, clip_tools=tools, set_stage=lambda s: None,
                                 is_cancelled=lambda: False, vision_model=lambda *a, **k: "NONE")
     it = iter(sims)
-    monkeypatch.setattr(H, "_voice_sim", lambda clip, voices: next(it))
-    monkeypatch.setattr(H, "_speech_ok", lambda c, p, lines: True)
+    ctx.voice_sim = lambda clip, voices: next(it)
+    ctx.speech_ok = lambda c, p, lines: True
     H._render_remaining_parts(ctx, str(clips[2]), ["p1", 'He says: "Привет, мир."'], {}, voices=["v.wav"])
     return takes, [os.path.basename(j) for j in joined]
 

@@ -1308,6 +1308,8 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
     import tempfile
     tg_continue = _clips(ctx)
     video_mod = _video(ctx)
+    speech_ok = getattr(ctx, "speech_ok", None) or _speech_ok       # seams for the suites
+    voice_sim = getattr(ctx, "voice_sim", None) or _voice_sim
     work = tempfile.mkdtemp(prefix="vidparts_")
     joins = []                     # (last frame of the clip so far, first frame of the new part)
     for i, part in enumerate(parts[1:], start=2):
@@ -1352,8 +1354,8 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
                 # no chain check here before: a part whose opening lines H3 skipped went into the clip
                 if attempt == 2 or not r.get("path"):
                     break
-                said_ok = not said or _speech_ok(ctx, r["path"], said)
-                sim = None if fresh_from else _voice_sim(r["path"], voices)      # revoiced at the end
+                said_ok = not said or speech_ok(ctx, r["path"], said)
+                sim = None if fresh_from else voice_sim(r["path"], voices)      # revoiced at the end
                 if said_ok and (sim is None or sim >= video_mod.VOICE_MIN_SIM):
                     break
                 logger.warning("video parts: part %d did not say %s or drifted off the voice (%s); "
@@ -1361,7 +1363,7 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
                 first_try = (r, sim) if said_ok else None
                 args = {**args, "seed": None}
             if first_try and r.get("path") and first_try[1] is not None:
-                again = _voice_sim(r["path"], voices)
+                again = voice_sim(r["path"], voices)
                 if again is not None and again < first_try[1]:
                     r = first_try[0]        # the second take is further from the voice than the first
                     logger.info("video parts: part %d keeps its first take (voice %.2f > %.2f)", i, first_try[1], again)
