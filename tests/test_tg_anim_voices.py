@@ -223,3 +223,14 @@ def test_a_talking_head_part_starts_from_the_still_not_from_the_clip_so_far(tmp_
     H._render_remaining_parts(ctx, str(clip), ["p1", "p2", "p3"], {}, voices=["v.wav"], fresh_from="orig.jpg")
     assert len(seen) == 2
     assert all(k["images"] == ["orig.jpg"] and not k.get("videos") and k["audios"] == ["v.wav"] for k in seen)
+
+
+def test_every_front_end_takes_a_voice_link_through_one_engine(tmp_path):
+    import voice_clone
+    got = voice_clone.fetch_sample("u", str(tmp_path), lambda url: {"data": b"x" * 9})
+    assert got and os.path.getsize(got) == 9
+    assert voice_clone.fetch_sample("u", str(tmp_path), lambda url: {}) == ""
+    link = "https://youtu.be/JCjqy3R4yQw"
+    assert voice_clone.voice_link_in(lambda *a: True, "голос возьми отсюда: " + link) == link
+    assert voice_clone.voice_link_in(lambda *a: False, "смотри " + link) == ""
+    assert voice_clone.voice_link_in(lambda *a: True, "без ссылки") == ""

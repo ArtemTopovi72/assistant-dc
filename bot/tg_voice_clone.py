@@ -89,14 +89,11 @@ class VoiceCloneMixin:
         self._send_text(chat_id, tg_bot._t("clone_working", lang))
 
         def job():
-            vid = self.links.fetch_video(url)
-            if not vid.get("data"):
+            src = self.voice_clone.fetch_sample(url, self._clone_dir(chat_id), self.links.fetch_video,
+                                                "assistant_sample" if for_assistant else "sample")
+            if not src:
                 self._send_text(chat_id, tg_bot._t("clone_fail_no_audio", lang))
                 return
-            src = os.path.join(self._clone_dir(chat_id),
-                               ("assistant_sample" if for_assistant else "sample") + ".mp4")
-            with open(src, "wb") as fh:
-                fh.write(vid["data"])
             self._clone_prepare(chat_id, lang, src, for_assistant)
         self._run_busy(chat_id, job)
         return True

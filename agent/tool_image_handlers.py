@@ -1572,6 +1572,20 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     slots = ([] if continuing else
              [p if p and os.path.exists(p) else "" for p in (getattr(ctx, "anim_voices", None) or [])])
     slots = slots[:video_mod.MAX_REF_AUDIOS]
+    if not slots and not continuing and getattr(ctx, "voice_choice", None) is None:
+        # A front end without the voice question (the window) still takes «голос возьми отсюда:
+        # <ссылка>»: the same engine as the bot's voice cards (voice_clone.fetch_sample).
+        import tempfile
+        import voice_clone
+        from seams import yes_no
+        link = voice_clone.voice_link_in(
+            yes_no(ctx), str((state or {}).get("user_input_original") or (state or {}).get("user_input") or ""))
+        if link:
+            try:
+                src = voice_clone.fetch_sample(link, os.path.join(tempfile.gettempdir(), "voice_links"))
+                slots = [voice_clone.prepare_reference(ctx, src, os.path.dirname(src))[0]] if src else []
+            except Exception:
+                logger.warning("generate_video: the voice link could not be used", exc_info=True)
     anim = [p for p in slots if p]
     speakers = int(args.get("speakers") or 0)
     if not speakers:

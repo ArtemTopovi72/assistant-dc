@@ -158,12 +158,11 @@ class AnimVoicesMixin:
         self._send_text(chat_id, tg_bot._t("clone_working", lang))
 
         def job():
-            vid = self.links.fetch_video(url)
-            if not vid.get("data"):
+            src = self.voice_clone.fetch_sample(url, self._anim_voice_dir(chat_id), self.links.fetch_video)
+            if not src:
                 self._send_text(chat_id, tg_bot._t("anv_fail", lang))
                 return
-            s2 = self._get_session(chat_id)
-            self._anim_voice_save(chat_id, s2, lang, vid["data"], ".mp4")
+            self._anim_voice_save(chat_id, self._get_session(chat_id), lang, open(src, "rb").read(), ".mp4")
         self._run_busy(chat_id, job)
         return True
 
@@ -190,24 +189,20 @@ class AnimVoicesMixin:
     def _voice_from_request_link(self, chat_id: int, sess, lang: str, request: str) -> bool:
         """The request itself names a video link as the speaker's voice («голос возьми отсюда: <link>»):
         its sound is slot 1 and the clip reruns at once, without the voice card. True when taken."""
-        import tg_links
-        url = tg_links.video_url(request)
-        if not url or not yes_no(self.reads)(
-                "A user asked a bot to animate a picture so that a person in it speaks. Message: {text}. "
-                "Does the user give the link as the source of that person's VOICE (to copy the voice from), "
-                "not as something to watch, read or retell?", request):
+        url = self.voice_clone.voice_link_in(yes_no(self.reads), request)
+        if not url:
             return False
         self._send_text(chat_id, tg_bot._t("clone_working", lang))
 
         def job():
-            vid = self.links.fetch_video(url)
+            src = self.voice_clone.fetch_sample(url, self._anim_voice_dir(chat_id), self.links.fetch_video)
             s2 = self._get_session(chat_id)
-            if not vid.get("data"):
+            if not src:
                 self._send_text(chat_id, tg_bot._t("anv_fail", lang))
                 self._offer_voice_card(chat_id, s2, lang, request, 1)
                 return
             s2.anim_voice_slot = 0
-            self._anim_voice_store(chat_id, s2, vid["data"], ".mp4")
+            self._anim_voice_store(chat_id, s2, open(src, "rb").read(), ".mp4")
             s2.voice_pending, s2.voice_choice, s2.anim_voice_state = request, "own", ""
             self._store.put(s2)
             self._enqueue_item(chat_id, {"type": "text", "text": request})

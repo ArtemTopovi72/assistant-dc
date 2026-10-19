@@ -153,6 +153,36 @@ def prepare_reference(ctx, src: str, out_dir: str, lang: str = "ru") -> Tuple[st
     return ref, text
 
 
+def fetch_sample(url: str, out_dir: str, fetch=None, name: str = "sample") -> str:
+    """THE way a video link becomes a voice sample, for every front end (clone, audiobook,
+    animation voices, a link inside a request): the downloaded clip on disk, "" when it cannot
+    be had. What is cut out of it is prepare_reference's job. `fetch` is the front end's own
+    downloader (the bot injects its cached one); the default is the same one."""
+    if fetch is None:
+        from tg_links import fetch_video as fetch
+    vid = fetch(url)
+    if not vid.get("data"):
+        return ""
+    os.makedirs(out_dir, exist_ok=True)
+    path = os.path.join(out_dir, f"{name}_{uuid.uuid4().hex[:8]}.mp4")
+    with open(path, "wb") as fh:
+        fh.write(vid["data"])
+    return path
+
+
+def voice_link_in(ask, text: str) -> str:
+    """The video link in a request that the user names as the source of a VOICE («голос возьми
+    отсюда: <ссылка>»), not as something to watch or retell; "" otherwise. `ask` is a yes_no."""
+    from tg_links import video_url
+    url = video_url(text)
+    if not url or not ask(
+            "A user asked to animate a picture so that a person in it speaks. Message: {text}. "
+            "Does the user give the link as the source of that person's VOICE (to copy the voice "
+            "from), not as something to watch, read or retell?", text):
+        return ""
+    return url
+
+
 _WORDS = re.compile(r"[\wё]+", re.I)
 
 
