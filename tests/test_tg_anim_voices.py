@@ -185,3 +185,21 @@ def test_every_continuation_part_keeps_the_voice_and_the_first_picture(tmp_path)
     H._render_remaining_parts(ctx, str(clip), ["p1", "p2", "p3"], {}, people=["orig.jpg"], voices=["v.wav"])
     assert len(seen) == 2
     assert all(k["audios"] == ["v.wav"] and k["images"][1:] == ["orig.jpg"] for k in seen)
+
+
+def test_a_part_that_skipped_its_opening_lines_is_made_again(tmp_path, monkeypatch):
+    """The continuation path had no check that a part said its lines: H3 began mid-speech and
+    the clip went out that way (live 2026-10-19)."""
+    n, clip = [], tmp_path / "c.mp4"
+    clip.write_bytes(b"x")
+    eng = Over(V, generate_video=lambda ctx, d, **kw: n.append(d) or {"path": str(clip)},
+               motion_context_on=lambda: False, join_continuation=lambda a, b: str(clip),
+               _adopt_output=lambda p, d: p, OUTPUT_DIR=str(tmp_path))
+    tools = types.SimpleNamespace(seed_frame=lambda a, b: True, cut_tail=lambda a, b: True,
+                                  first_frame=lambda a, b: True)
+    ctx = types.SimpleNamespace(video_engine=eng, clip_tools=tools, set_stage=lambda s: None,
+                                is_cancelled=lambda: False, vision_model=lambda *a, **k: "NONE")
+    heard = iter([False, True])
+    monkeypatch.setattr(H, "_speech_ok", lambda c, p, lines: next(heard))
+    H._render_remaining_parts(ctx, str(clip), ["p1", 'He says: "Привет, мир."'], {}, voices=["v.wav"])
+    assert len(n) == 2

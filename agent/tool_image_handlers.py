@@ -1313,22 +1313,29 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
         pinned = video_mod.motion_context_on() and not people
         if pinned:
             part = video_mod.bridge_part(ctx, frame, part)
+        said = video_mod.quoted_lines(part)
         try:
-            if pinned:
-                r = video_mod.generate_video(ctx, video_mod.CONTINUE_CTX_PREFIX
-                                             + video_mod.with_scene(part, " ".join(parts[:i - 1])),
-                                             context_video=tail,
-                                             aspect=args.get("aspect") or "", seed=args.get("seed"))
-            else:
-                look = "".join(f" The person of <Picture {k}> looks exactly as in that picture."
-                               for k in range(2, len(people) + 2))
-                # The voice rode part 1 only and each part copied the sound of the one before:
-                # by the end it was another man's voice (owner, 2026-10-19).
-                if voices:
-                    look += " The speaker's voice stays exactly the voice of <Audio 1>."
-                r = video_mod.generate_video(ctx, video_mod.CONTINUE_PREFIX + part + look,
-                                             images=[frame, *people], videos=[tail], audios=list(voices),
-                                             aspect=args.get("aspect") or "", seed=args.get("seed"))
+            for attempt in (1, 2):
+                if pinned:
+                    r = video_mod.generate_video(ctx, video_mod.CONTINUE_CTX_PREFIX
+                                                 + video_mod.with_scene(part, " ".join(parts[:i - 1])),
+                                                 context_video=tail,
+                                                 aspect=args.get("aspect") or "", seed=args.get("seed"))
+                else:
+                    look = "".join(f" The person of <Picture {k}> looks exactly as in that picture."
+                                   for k in range(2, len(people) + 2))
+                    # The voice rode part 1 only and each part copied the sound of the one before:
+                    # by the end it was another man's voice (owner, 2026-10-19).
+                    if voices:
+                        look += " The speaker's voice stays exactly the voice of <Audio 1>."
+                    r = video_mod.generate_video(ctx, video_mod.CONTINUE_PREFIX + part + look,
+                                                 images=[frame, *people], videos=[tail], audios=list(voices),
+                                                 aspect=args.get("aspect") or "", seed=args.get("seed"))
+                # no chain check here before: a part whose opening lines H3 skipped went into the clip
+                if attempt == 2 or not said or not r.get("path") or _speech_ok(ctx, r["path"], said):
+                    break
+                logger.warning("video parts: part %d did not say %s; once more with a new seed", i, said)
+                args = {**args, "seed": None}
         except Exception:
             logger.exception("video parts: part %d crashed", i)
             break
