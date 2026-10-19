@@ -1924,8 +1924,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         # With voices the first picture rides every part too: each part starts from the last
         # frame of the one before, and the face drifted a little further every time.
         anchor = list(images[:1]) if audios and images and not people else []
+        head = bool(anchor and not videos and not continuing and video_mod.is_talking_head(ctx, raw))
+        if head:
+            logger.info("generate_video: talking-head mode, every part starts from the still")
         path = _render_remaining_parts(ctx, path, parts, args, people=[*people, *anchor], voices=audios,
-                                       fresh_from=anchor[0] if anchor and not videos and not continuing else "")
+                                       fresh_from=anchor[0] if head else "")
         result["seconds"] = video_mod.probe(path).get("seconds") or result.get("seconds")
 
     ctx.video_action_note = "" if continuing else _check_actions(ctx, path, parts)

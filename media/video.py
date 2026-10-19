@@ -1434,6 +1434,21 @@ def drawn_over(path: str, source: str = "", clip=None) -> Optional[float]:
     return sum(x - p[0] > 0.5 for x in p[1:]) / (len(p) - 1)
 
 
+def is_talking_head(ctx, description: str) -> bool:
+    """One person on one still who mostly speaks to the camera: the talking-head mode. Its
+    parts are not a continuation of one another but cuts between takes of the same still, so
+    nothing can drift (the face turned into a horror mask by part 6, owner 2026-10-19).
+    A script that walks, travels or changes the scene is not one: it needs the continuation."""
+    from seams import yes_no
+    if not quoted_lines(description):
+        return False
+    return bool(yes_no(ctx)(
+        "A video is described as: {text}\n\nIs it a TALKING HEAD: one person who stays in place "
+        "facing the camera, speaking (small gestures, expressions or showing something in hand are "
+        "fine), with a static camera and no change of place, no other people and no scene "
+        "action?", description, default=False))
+
+
 def quoted_lines(text: str) -> list:
     return [x for x in (next(g for g in m.groups() if g is not None).strip()
                         for m in _QUOTED.finditer(_SCENE_NOTE_RE.sub("", text or "")))

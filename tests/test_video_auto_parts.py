@@ -172,3 +172,11 @@ def test_a_word_heard_garbled_is_spoken_without_a_stress_mark_next_time():
     assert "́" not in got
     V.UNSTRESSED.clear()
     assert "́" in V._marks_only("для системы", "для систе́мы")
+
+
+def test_talking_head_mode_needs_a_spoken_line_and_the_models_yes():
+    yes = types.SimpleNamespace(yes_no=lambda *a, **k: True)
+    no = types.SimpleNamespace(yes_no=lambda *a, **k: False)
+    said = 'He frowns and says: "Ах, вот и ты."'
+    assert V.is_talking_head(yes, said) and not V.is_talking_head(no, said)
+    assert not V.is_talking_head(yes, "He walks away down the corridor.")      # nothing spoken
