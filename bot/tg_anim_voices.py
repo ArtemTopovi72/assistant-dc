@@ -222,6 +222,8 @@ class AnimVoicesMixin:
         sent: named, it stays in the library for the next clip."""
         sess.anim_voice_state = ""
         self._store.put(sess)
+        if sess.cast_state:
+            return self._cast_card(chat_id, sess, lang)         # 👥 the voice is a slot of the cast card
         self._voice_slots_card(chat_id, sess, lang, new_id=new_id)
 
 import tg_bot  # noqa: E402  (cycle by design; attrs read at call time)

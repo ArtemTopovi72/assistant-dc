@@ -1434,6 +1434,7 @@ def drawn_over(path: str, source: str = "", clip=None) -> Optional[float]:
     return sum(x - p[0] > 0.5 for x in p[1:]) / (len(p) - 1)
 
 
+JOINT_MARK = "video with several characters:"     # the 👥 card's request (bot/tg_cast)
 TALKING_HEAD_MARK = "talking head video:"      # the 🗣 button's prefix (bot/tg_bot._PROMPT_KB)
 
 

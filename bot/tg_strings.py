@@ -374,8 +374,16 @@ _MSG: dict[str, dict[str, str]] = {
     "hint_deck":       {"en": "Presentation topic", "ru": "Тема презентации"},
     "hint_talk_head":  {"en": "Photo of the speaker and what they say",
                         "ru": "Фото говорящего и что он скажет"},
-    "hint_joint_video": {"en": "Photos of the characters and what happens",
-                         "ru": "Фото героев и что между ними происходит"},
+    "cast_title": {"en": "👥 <b>Characters</b>: a picture, what each does or says, and a voice. 2 or 3.",
+                   "ru": "👥 <b>Герои</b>: картинка, что делает или говорит и голос. Нужно 2–3."},
+    "cast_no_act": {"en": "—", "ru": "—"},
+    "cast_go": {"en": "▶️ Make the video", "ru": "▶️ Сделать видео"},
+    "cast_ask_pic": {"en": "🖼 Send the picture of character {n} (an album fills the next slots).",
+                     "ru": "🖼 Пришли картинку героя {n} (альбомом заполнятся следующие слоты)."},
+    "cast_ask_act": {"en": "✏️ Write what character {n} does or says.",
+                     "ru": "✏️ Напиши, что делает или говорит герой {n}."},
+    "cast_need_two": {"en": "Send at least two pictures first.", "ru": "Сначала пришли хотя бы две картинки."},
+    "cast_pic_label": {"en": "character {n}", "ru": "герой {n}"},
     "ask_name":      {"en": "👋 <b>Welcome!</b> This is a private AI assistant.\n\n"
                             "To get started, please tell me your <b>name</b>:",
                       "ru": "👋 <b>Добро пожаловать!</b> Это частный ИИ-ассистент.\n\n"

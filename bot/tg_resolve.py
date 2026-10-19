@@ -239,6 +239,12 @@ class ResolveMixin:
         # registering the photo here and showing that keyboard, rather than
         # pushing a task immediately the way the style reference-photo flow
         # does. A batch with no image falls through unchanged.
+        if sess.cast_state.startswith("pic:"):
+            _cast_item = next((it for it in batch if it.get("type") in ("photo", "album")), None)
+            if _cast_item is not None:
+                self._cast_take_photos(chat_id, sess, lang, _cast_item)
+                return
+
         if sess.awaiting_animate_photo:
             _anim_item = next((it for it in batch if it.get("type") in ("photo", "album")), None)
             if _anim_item is not None:
@@ -517,6 +523,11 @@ class ResolveMixin:
                         and self._vl_take_name(chat_id, sess, lang, raw)):
                     continue
 
+                # 👥 a character's action is the next plain text
+                if (not key and not raw.startswith("/") and sess.cast_state.startswith("act:")
+                        and self._cast_take_text(chat_id, sess, lang, raw)):
+                    continue
+
                 # 🎬 Animate collects voices: a video link's sound is the next sample.
                 if (not key and getattr(sess, "anim_voice_state", "") == "collect"
                         and self._anim_voice_take_link(chat_id, sess, lang, raw)):
@@ -596,6 +607,9 @@ class ResolveMixin:
                     self._continue_disarm(sess)
                 if direct and direct != "__audiobook__":
                     self._book_disarm(sess)
+                if direct and direct != "__joint_video__" and sess.cast_state:
+                    sess.cast_state = ""            # a menu press leaves the 👥 card
+                    self._store.put(sess)
                 if direct and (getattr(sess, "anim_voice_state", "") or getattr(sess, "voice_naming", "")):
                     sess.anim_voice_state = ""      # a menu press ends 🎙 sample collection
                     sess.voice_naming = ""          # ... and an unanswered «как подписать»
@@ -668,6 +682,9 @@ class ResolveMixin:
                     self._goto_menu(sess, "creativity")
                     self._send_text(chat_id, tg_bot._t("menu_creativity_title", lang),
                                     parse_mode="HTML", keyboard=tg_bot._creativity_kb(lang)); continue
+                if direct == "__joint_video__":
+                    self._goto_menu(sess, "cr_video")
+                    self._cast_start(chat_id, sess, lang); continue
                 if direct == "__animate_photo__":
                     self._goto_menu(sess, "cr_video")
                     sess.awaiting_animate_photo = True

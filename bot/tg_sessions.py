@@ -220,6 +220,10 @@ class _Session:
         self.lyrics_last: str = d.get("lyrics_last", "")
         self.lyrics_topic: str = d.get("lyrics_topic", "")   # the theme lyrics_last was written for
         self.anim_voices: list = list(d.get("anim_voices") or [])
+        # 👥 video with several characters (tg_cast): "" | "card" | "pic:N" | "act:N", per-slot picture / action
+        self.cast_state: str = d.get("cast_state", "")
+        self.cast_pics: list = list(d.get("cast_pics") or [])
+        self.cast_acts: list = list(d.get("cast_acts") or [])
         self.anim_voice_slot: int = int(d.get("anim_voice_slot") or 0)
         # a clip request waiting for «свои голоса / стандартные», and the answer
         self.voice_pending: str = d.get("voice_pending", "")
@@ -398,6 +402,7 @@ class _Session:
             self.continue_people = []
             self.book_state = ""
             self.anim_voice_state = ""
+            self.cast_state, self.cast_pics, self.cast_acts = "", [], []
             self.anim_voices = []
             self.voice_pending = ""
             self.voice_choice = ""
@@ -473,6 +478,9 @@ class _Session:
                 "lyrics_last":         self.lyrics_last,
                 "lyrics_topic":        self.lyrics_topic,
                 "anim_voices":         self.anim_voices,
+                "cast_state":          self.cast_state,
+                "cast_pics":           self.cast_pics,
+                "cast_acts":           self.cast_acts,
                 "anim_voice_slot":     self.anim_voice_slot,
                 "voice_pending":       self.voice_pending,
                 "video_plan":          self.video_plan,

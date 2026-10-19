@@ -821,7 +821,6 @@ _PROMPT_KB: dict[str, str] = {
     # Video modes: the marker reaches generate_video through the user's own words
     # (video.TALKING_HEAD_MARK), so the mode is a decision of the button, not a guess.
     "talk_head":   "talking head video: ",
-    "joint_video": "video with several characters: ",
     # 🛒 Ozon. The prefix is what the agent reads, so it names the tool and
     # the sort; the retrieval cue "ozon" pins the ozon_* schemas.
     "ozon_find":    "find on ozon: ",
@@ -879,6 +878,7 @@ _DIRECT_KB: dict[str, str] = {
     "lyr_write_btn":   "__lyrics_write__",
     "restyle_btn": "__restyle__",
     "continue_btn": "__continue_video__",
+    "joint_video": "__joint_video__",
     "book_btn": "__audiobook__",
     "style_menu_btn": "__style_photo__",
     # documents
@@ -1274,13 +1274,14 @@ from tg_restyle import RestyleMixin  # noqa: E402
 from tg_continue import ContinueMixin  # noqa: E402
 from tg_audiobook import AudiobookMixin  # noqa: E402
 from tg_anim_voices import AnimVoicesMixin  # noqa: E402
+from tg_cast import CastMixin  # noqa: E402
 from tg_video_plan import VideoPlanMixin  # noqa: E402
 from tg_voice_library import VoiceLibraryMixin  # noqa: E402
 from tg_cover import CoverMixin  # noqa: E402
 from tg_lyrics import LyricsMixin  # noqa: E402
 
 
-class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimVoicesMixin, VideoPlanMixin, VoiceLibraryMixin, CoverMixin, LyricsMixin, VoiceCloneMixin, LongVideoMixin, AccountsMixin, CallbackMixin, CommandsMixin, DispatchMixin,
+class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimVoicesMixin, CastMixin, VideoPlanMixin, VoiceLibraryMixin, CoverMixin, LyricsMixin, VoiceCloneMixin, LongVideoMixin, AccountsMixin, CallbackMixin, CommandsMixin, DispatchMixin,
                   LibraryMixin, QueueMixin, RegistrationMixin, ResolveMixin,
                   SongsMixin, CharactersMixin, LoraCollectMixin, TaskRunnerMixin,
                   TransportMixin,
@@ -1648,7 +1649,6 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         "remove from the image: ": "draw",
         "animate this photo: ":   "creativity",
         "talking head video: ":   "cr_video",
-        "video with several characters: ": "cr_video",
         "search the web for: ":   "search",
         "do a deep research on: ": "search",
         "find on ozon: ": "ozon",
