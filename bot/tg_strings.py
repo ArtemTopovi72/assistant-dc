@@ -1182,6 +1182,7 @@ _MSG: dict[str, dict[str, str]] = {
                          "words in quotes are spoken exactly as written.",
                    "ru": "➕ Пришли, что должно происходить в новой части (встанет в конец). Можно по-русски; "
                          "слова в кавычках прозвучат ровно как написаны."},
+    "vp_code": {"en": "<code>{text}</code>", "ru": "<code>{text}</code>"},
     "vp_edit_ask": {"en": "✏️ Part {i}. Send the new text for it, or what to change. Any language; "
                           "words in quotes are spoken exactly as written. The current text is in the next message: tap it to copy.",
                     "ru": "✏️ Часть {i}. Пришли новый текст для неё или что поправить. Можно по-русски; "
