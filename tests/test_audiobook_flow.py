@@ -67,7 +67,8 @@ def fake_speak(ctx, ref, ref_text, text, out_dir):
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i",
                     f"sine=frequency=300:duration={max(0.5, len(text) * 0.06):.2f}", wav], check=True)
     return wav
-bot.voice_clone = types.SimpleNamespace(prepare_reference=fake_prepare, speak=fake_speak, CloneError=voice_clone.CloneError)
+bot.voice_clone = types.SimpleNamespace(prepare_reference=fake_prepare, speak=fake_speak, CloneError=voice_clone.CloneError,
+                                      fetch_sample=voice_clone.fetch_sample)
 
 CID = 9_300_099
 bot._user_store.put(T._User(chat_id=CID, name="Bk", status="approved", is_admin=False))
