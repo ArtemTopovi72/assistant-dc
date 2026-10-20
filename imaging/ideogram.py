@@ -602,10 +602,32 @@ def plan_layout(ctx, prompt: str) -> dict:
         # "three tall palm trees" in one box render as one merged mass, as in an edit.
         from draw_agent import split_counted_boxes, merge_text_column   # draw_agent imports this module
         layout, _ = split_counted_boxes(merge_text_column(layout), [])
-        return ensure_text_elements(enforce_user_look(apply_style_floor(layout, prompt, ctx=ctx), look), prompt, ctx=ctx)
+        layout = ensure_text_elements(enforce_user_look(apply_style_floor(layout, prompt, ctx=ctx), look), prompt, ctx=ctx)
+        return drop_invented_text(layout, prompt, ctx)
     except Exception:
         logger.exception("Ideogram planning failed — using the flat layout")
         return fallback()
+
+
+def drop_invented_text(layout: dict, prompt: str, ctx=None) -> dict:
+    """Lettering nobody asked for goes, with the board it was planned on. The planner's rule
+    «do not invent lettering» did not hold: «Дедушка какает в кулачок» got a sign «ОЙ-ОЙ!»,
+    drawn «ОМРОM!» and «OЙ-O!», and the picture went out with an apology (live 2026-10-21).
+    Asked once, and only when the plan carries a string the prompt does not."""
+    els = layout.get("elements") or []
+    flat = (prompt or "").lower()
+    made_up = [el for el in els if str(el.get("text") or "").strip()
+               and str(el["text"]).strip().lower() not in flat]
+    if not made_up or len(made_up) == len(els):
+        return layout
+    if yes_no(ctx)("A user asked for this picture: {text}. Does the user ask for written words "
+                   "(a sign, a label, a caption, an inscription, a speech bubble) to appear IN "
+                   "the picture?", prompt or ""):
+        return layout
+    logger.info("Ideogram: dropped lettering nobody asked for: %s",
+                [str(el.get("text")) for el in made_up])
+    layout["elements"] = [el for el in els if el not in made_up]
+    return layout
 
 
 def plan_caption(ctx, prompt: str) -> dict:
