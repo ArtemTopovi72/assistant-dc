@@ -1672,8 +1672,10 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     _said = str((state or {}).get("user_input_original") or (state or {}).get("user_input") or "")
     own_script = False
     dictated = False
+    speech = ""             # the words the user dictated, whole: what every part together must say
     if not continuing:
-        words = video_mod.dictated_speech(_said, raw, ctx)
+        speech = video_mod.dictated_speech(_said, "", ctx)
+        words = speech if speech and video_mod._flat_line(speech) not in video_mod._flat_line(raw) else ""
         if words:
             logger.info("generate_video: the user's own speech added to the script (%d words)", len(words.split()))
             # The agent's own quoting of that speech goes: it is the same speech retold (in
@@ -1808,14 +1810,27 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 parts = video_mod.split_script(raw)
     if audios and len(parts) > 1:
         parts = video_mod.merge_silent_parts(parts)
+    talking = None
     if len(parts) > 1:
-        parts = video_mod.dedupe_quotes(video_mod.strip_translations(
-            video_mod.validate_script(ctx, video_mod.mark_inserts(ctx, parts),
-                                      max_parts=math.ceil(want / 5.2) if want else (len(parts) if speech_theirs else video_mod.AUTO_MAX_PARTS))))
+        # A talking head's parts are takes of one still saying the next lines: the script
+        # editor gave them «points to a map», «gestures toward the refrigerator» for want of
+        # a visible action, and the head turned away from the camera (live 2026-10-20).
+        talking = bool(len(images) == 1 and not videos and not continuing
+                       and video_mod.is_talking_head(ctx, raw, _said))
+        if not talking:
+            parts = video_mod.validate_script(ctx, video_mod.mark_inserts(ctx, parts),
+                                              max_parts=math.ceil(want / 5.2) if want else (len(parts) if speech_theirs else video_mod.AUTO_MAX_PARTS))
+        parts = video_mod.dedupe_quotes(video_mod.strip_translations(parts))
     fitted = video_mod.fit_speech(parts)
     if len(fitted) > len(parts):
         logger.info("generate_video: parts with more speech than a clip says were cut: %d -> %d", len(parts), len(fitted))
         parts = fitted
+    gone = video_mod.lost_sentences(speech, parts) if speech and len(parts) > 1 else []
+    if gone:
+        # Two of the user's sentences never reached the plan (live 2026-10-20); which model
+        # step dropped them is not the point -- the user's words are all said, as written.
+        logger.warning("generate_video: the parts lost the user's words %s; re-cut from the script as written", gone)
+        parts = video_mod.fit_speech(video_mod.split_script(raw))
     if len(parts) > 1 and raw in description:
         description = description.replace(raw, parts[0], 1)
         logger.info("generate_video: the script needs %d parts: %s", len(parts),
@@ -1874,7 +1889,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     # ...and so do all of them: with two heroes on two pictures, parts 2+ saw only the first
     # one and the second (the cat) was redrawn from the clip's tail.
     anchor = list(images[:3]) if images and not people and not continuing else []
-    head = bool(not chain_id and len(anchor) == 1 and not videos and video_mod.is_talking_head(ctx, raw, _said))
+    head = bool(not chain_id and len(anchor) == 1 and not videos
+                and (talking if talking is not None else video_mod.is_talking_head(ctx, raw, _said)))
     if head:
         logger.info("generate_video: talking-head mode, the still is frame 0 of every part, the voice comes after")
     mode = video_mod.pick_mode(images, videos, audios, keyframe=head)

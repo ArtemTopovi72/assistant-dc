@@ -253,6 +253,25 @@ def test_a_talking_head_part_ends_on_its_still_as_well(tmp_path):
     V.generate_video(ctx, "He says hello.", images=[str(still)], seconds=6, prepared=True)
     assert got["images"] == [str(still)]
 
+
+def test_a_one_frame_join_keeps_every_part_when_the_sound_runs_past_the_picture(tmp_path):
+    """The sound ran 0.04 s past the last frame, the one-frame fade reached past the end of the
+    clip, and five 10 s parts came out as 20 s of picture under 45 s of sound (live 2026-10-20)."""
+    import shutil
+    import subprocess
+    if not shutil.which("ffmpeg"):
+        return
+    clips = []
+    for k in range(3):
+        c = tmp_path / f"p{k}.mp4"
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "testsrc=size=64x48:rate=24:duration=2",
+                        "-f", "lavfi", "-i", "sine=duration=2.05", "-c:v", "libx264", "-c:a", "aac", str(c)], check=True)
+        clips.append(str(c))
+    path = clips[0]
+    for c in clips[1:]:
+        path = V.join_continuation(path, c, fade=1 / 24, drop_frames=1)
+    assert V.probe(path)["video_seconds"] > 5.8
+
 def test_every_front_end_takes_a_voice_link_through_one_engine(tmp_path):
     import voice_clone
     got = voice_clone.fetch_sample("u", str(tmp_path), lambda url: {"data": b"x" * 9})

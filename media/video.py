@@ -1497,6 +1497,12 @@ def dictated_speech(said: str, description: str, ctx=None) -> str:
     return out
 
 
+def lost_sentences(speech: str, parts: Sequence[str]) -> list:
+    """The sentences of `speech` that no part says, word for word."""
+    have = _flat_line(" ".join(parts))
+    return [x for x in re.split(r"(?<=[.!?…])\s+", speech or "") if _flat_line(x) and _flat_line(x) not in have]
+
+
 def speech_is_users(description: str, said: str) -> bool:
     """Every spoken line of the script is the user's own words, verbatim: it is theirs to
     keep whole, not a script the bot wrote and may condense."""
@@ -1994,6 +2000,7 @@ def probe(path: str) -> dict:
             if s.get("codec_type") == "video" and not info["width"]:
                 info["width"] = int(s.get("width") or 0)
                 info["height"] = int(s.get("height") or 0)
+                info["video_seconds"] = float(s.get("duration") or 0)
             if s.get("codec_type") == "audio":
                 info["has_audio"] = True
         info["seconds"] = round(float(data.get("format", {}).get("duration") or 0), 2)
@@ -2455,7 +2462,11 @@ def join_continuation(src: str, new: str, fade: float = 0.25, drop_frames: int =
         return None
     w, h = b["width"], b["height"]
     skip = drop_frames / 24.0
-    off = max(0.0, a["seconds"] - fade)
+    # The picture's own length, not the container's: the sound ran 0.04 s past the last frame,
+    # a one-frame fade then reached past the end of `src`, xfade stopped there, and five
+    # 10 s parts came out as 20 s of picture under 45 s of sound (live 2026-10-20).
+    vlen = a.get("video_seconds") or a["seconds"]
+    off = max(0.0, vlen - fade)
     vnorm = f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=24,format=yuv420p"
     anorm = "aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo"
     cmd = [ff, "-y", "-v", "error", "-i", src, "-i", new]
@@ -2475,7 +2486,7 @@ def join_continuation(src: str, new: str, fade: float = 0.25, drop_frames: int =
             aidx[i] = i
     fc = (f"[0:v]{vnorm}[v0];[1:v]trim=start={skip:.4f},setpts=PTS-STARTPTS,{vnorm}[v1];"
           f"[v0][v1]xfade=transition=fade:duration={fade}:offset={off:.3f}[v];"
-          f"[{aidx[0]}:a]{anorm}[a0];[{aidx[1]}:a]atrim=start={skip:.4f},asetpts=PTS-STARTPTS,{anorm}[a1];"
+          f"[{aidx[0]}:a]atrim=end={vlen:.4f},{anorm}[a0];[{aidx[1]}:a]atrim=start={skip:.4f},asetpts=PTS-STARTPTS,{anorm}[a1];"
           f"[a0][a1]acrossfade=d={fade}:c1=tri:c2=tri[a]")
     fh = tempfile.NamedTemporaryFile(prefix="vidjoin_", suffix=".mp4", delete=False)
     fh.close()

@@ -33,7 +33,7 @@ class _Ctx:
     def memory_text(self): return ""
 
 
-def _run(tmp_path, args, condensed="", state=None, **eng):
+def _run(tmp_path, args, condensed="", state=None, ctx_kw=None, **eng):
     calls = []
 
     def fake_gen(ctx, description, **kw):
@@ -42,13 +42,14 @@ def _run(tmp_path, args, condensed="", state=None, **eng):
         calls.append(description)
         return {"path": str(out), "status": "success", "seconds": 5.2, "width": 768, "height": 1344}
 
-    ctx = _Ctx(
-        video_engine=Over(V, AUTO_MAX_PARTS=2, generate_video=fake_gen, engine_available=lambda ctx: (True, ""),
-                          herrgott_on=lambda: False, motion_context_on=lambda: False,
-                          mark_inserts=lambda ctx, ps: ps, validate_script=lambda ctx, ps, **k: ps,
-                          condense_script=lambda *a, **k: condensed,
-                          join_continuation=lambda a, b: str(tmp_path / "joined.mp4"),
-                          _adopt_output=lambda p, *a: p, probe=lambda p: {"seconds": 10.4}, **eng),
+    fakes = dict(AUTO_MAX_PARTS=2, generate_video=fake_gen, engine_available=lambda ctx: (True, ""),
+                 herrgott_on=lambda: False, motion_context_on=lambda: False,
+                 mark_inserts=lambda ctx, ps: ps, validate_script=lambda ctx, ps, **k: ps,
+                 condense_script=lambda *a, **k: condensed,
+                 join_continuation=lambda a, b, **k: str(tmp_path / "joined.mp4"),
+                 _adopt_output=lambda p, *a: p, probe=lambda p: {"seconds": 10.4})
+    ctx = _Ctx(**(ctx_kw or {}),
+        video_engine=Over(V, **{**fakes, **eng}),
         clip_tools=Over(tg_continue, seed_frame=lambda src, out: open(out, "wb").write(b"j") > 0,
                         cut_tail=lambda src, out: open(out, "wb").write(b"t") > 0,
                         first_frame=lambda src, out: False))
@@ -110,6 +111,31 @@ def test_a_dictated_monologue_stays_whole_when_the_agent_retold_it_in_english(tm
                  dictated_speech=lambda said, raw, ctx: speech)
     assert len(calls) > 2
     assert not any("Listen carefully" in c for c in calls)
+
+
+def test_no_sentence_of_a_dictated_monologue_is_lost_on_the_way_to_the_parts(tmp_path):
+    """Two of the user's sentences never reached the plan, whatever step dropped them (live 2026-10-20)."""
+    speech = " ".join(f"Слушай внимательно, это правило номер {i}, его нельзя забывать." for i in range(8))
+    desc = 'An old man says: "' + speech + '"'
+    eaten = lambda ctx, ps, **k: [ps[0]] + ps[2:]            # an editor that drops a part
+    calls = _run(tmp_path, {"description": desc}, state={"user_input_original": "Сделай видео, пусть он скажет: " + speech},
+                 dictated_speech=lambda said, raw, ctx: speech, validate_script=eaten)
+    assert not V.lost_sentences(speech, calls)
+
+
+def test_a_talking_heads_parts_get_no_invented_actions(tmp_path):
+    """«points to a map», «gestures toward the refrigerator»: the head turned from the camera (live 2026-10-20)."""
+    speech = " ".join(f"Слушай внимательно, это правило номер {i}, его нельзя забывать." for i in range(8))
+    still = tmp_path / "s.jpg"
+    from PIL import Image
+    Image.new("RGB", (64, 48)).save(still)
+    seen = []
+    calls = _run(tmp_path, {"description": 'An old man says: "' + speech + '"', "use_current_images": True},
+                 state={"user_input_original": "Сделай видео, пусть он скажет: " + speech},
+                 dictated_speech=lambda said, raw, ctx: speech, is_talking_head=lambda ctx, d, s="": True,
+                 validate_script=lambda ctx, ps, **k: seen.append(ps) or [p + " He points to a map." for p in ps],
+                 ctx_kw={"deps": types.SimpleNamespace(_current_image_paths=lambda ctx, st: [str(still)])})
+    assert not seen and not any("map" in c for c in calls)
 
 def test_dictated_speech_is_copied_only_when_the_user_wrote_it():
     said = "Анимируй голову. Пусть он скажет: Ах, вот и ты. Хорошо. Слушай, просто будь с рюкзачком, хорошо?"
