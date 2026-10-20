@@ -132,7 +132,7 @@ def test_a_talking_heads_parts_get_no_invented_actions(tmp_path):
     seen = []
     calls = _run(tmp_path, {"description": 'An old man says: "' + speech + '"', "use_current_images": True},
                  state={"user_input_original": "Сделай видео, пусть он скажет: " + speech},
-                 dictated_speech=lambda said, raw, ctx: speech, is_talking_head=lambda ctx, d, s="": True,
+                 dictated_speech=lambda said, raw, ctx: speech, is_talking_head=lambda ctx, d, s="", **k: True,
                  validate_script=lambda ctx, ps, **k: seen.append(ps) or [p + " He points to a map." for p in ps],
                  ctx_kw={"deps": types.SimpleNamespace(_current_image_paths=lambda ctx, st: [str(still)])})
     assert not seen and not any("map" in c for c in calls)
@@ -217,6 +217,9 @@ def test_talking_head_mode_needs_a_spoken_line_and_the_models_yes():
     said = 'He frowns and says: "Ах, вот и ты."'
     assert V.is_talking_head(yes, said) and not V.is_talking_head(no, said)
     assert not V.is_talking_head(yes, "He walks away down the corridor.")      # nothing spoken
+    # the user dictated the words: the agent's 'single quotes' on an approved plan's rerun
+    # found no quoted line, and six parts went on from each other instead of the still
+    assert V.is_talking_head(yes, "He looks at the camera and says: 'Ах, вот и ты.'", spoken=True)
 
 
 def test_the_talking_head_button_decides_without_asking_the_model():

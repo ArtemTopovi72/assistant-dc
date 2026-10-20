@@ -1470,16 +1470,18 @@ JOINT_MARK = "video with several characters:"     # the 👥 card's request (bot
 TALKING_HEAD_MARK = "talking head video:"      # the 🗣 button's prefix (bot/tg_bot._PROMPT_KB)
 
 
-def is_talking_head(ctx, description: str, said: str = "") -> bool:
+def is_talking_head(ctx, description: str, said: str = "", spoken: bool = False) -> bool:
     """One person on one still who mostly speaks to the camera: the talking-head mode. Its
     parts are not a continuation of one another but cuts between takes of the same still, so
     nothing can drift (the face turned into a horror mask by part 6, owner 2026-10-19).
     A script that walks, travels or changes the scene is not one: it needs the continuation.
-    The button says so itself, and the model is not asked then."""
+    The button says so itself, and the model is not asked then. `spoken`: the user dictated
+    the words -- the agent's rerun of an approved plan quoted them 'like this', no quoted line
+    was found, and six parts went on from each other instead (live 2026-10-20)."""
     if TALKING_HEAD_MARK in (said or "").lower():
         return True
     from seams import yes_no
-    if not quoted_lines(description):
+    if not spoken and not quoted_lines(description):
         return False
     return bool(yes_no(ctx)(
         "A video is described as: {text}\n\nIs it a TALKING HEAD: one person who stays in place "

@@ -1839,7 +1839,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         # editor gave them «points to a map», «gestures toward the refrigerator» for want of
         # a visible action, and the head turned away from the camera (live 2026-10-20).
         talking = bool(len(images) == 1 and not videos and not continuing
-                       and video_mod.is_talking_head(ctx, raw, _said))
+                       and video_mod.is_talking_head(ctx, raw, _said, spoken=bool(speech)))
         if not talking:
             parts = video_mod.validate_script(ctx, video_mod.mark_inserts(ctx, parts),
                                               max_parts=math.ceil(want / 5.2) if want else (len(parts) if speech_theirs else video_mod.AUTO_MAX_PARTS))
@@ -1913,7 +1913,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     # one and the second (the cat) was redrawn from the clip's tail.
     anchor = list(images[:3]) if images and not people and not continuing else []
     head = bool(not chain_id and len(anchor) == 1 and not videos
-                and (talking if talking is not None else video_mod.is_talking_head(ctx, raw, _said)))
+                and (talking if talking is not None else video_mod.is_talking_head(ctx, raw, _said, spoken=bool(speech))))
     if head:
         logger.info("generate_video: talking-head mode, the still is frame 0 of every part, the voice comes after")
     mode = video_mod.pick_mode(images, videos, audios, keyframe=head)
