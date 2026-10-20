@@ -97,6 +97,8 @@ class Wire:
                   "message_id": mid, "payload": payload, "file": path}
             with self.lock:
                 self.sent.append(ev)
+                # the status line's progress bar lives only in edits
+                self.log.write(json.dumps(ev, ensure_ascii=False) + "\n"); self.log.flush()
                 if mid in self.msgs and payload.get("text"):
                     self.msgs[mid]["text"] = payload["text"]
             return {"ok": True, "result": {"message_id": mid, "chat": {"id": chat_id}}}
