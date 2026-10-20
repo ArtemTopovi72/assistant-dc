@@ -459,7 +459,6 @@ class Context:
             logger.error("Failed to save session memory: %s", exc)
 
     def set_stage(self, stage: str) -> None:
-        self.last_stage = stage
         try:
             import turn_trace   # every front end's phases, one place
             turn_trace.stage(stage)

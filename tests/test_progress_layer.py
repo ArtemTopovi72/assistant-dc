@@ -139,11 +139,13 @@ def test_a_render_waiting_for_the_card_says_so():
 
 
 def test_a_part_of_a_long_video_keeps_its_number_on_the_status():
-    """generate_video set the bare «Generating a video» over the caller's «(2/4)»."""
+    """generate_video set the bare «Generating a video» over the caller's «(2/4)», also after
+    a «Preparing the references» in between (live 2026-10-20: «(6/6)» then the bare label)."""
     import video
-    ctx = types.SimpleNamespace(last_stage="Generating a video (2/4)")
+    ctx = types.SimpleNamespace(video_part="2/4")
+    ctx.set_stage = lambda s: None
     assert video._video_stage(ctx) == "Generating a video (2/4)"
-    ctx.last_stage = "Preparing the references"
+    ctx.video_part = ""
     assert video._video_stage(ctx) == "Generating a video"
     assert video._video_stage(None) == "Generating a video"
 

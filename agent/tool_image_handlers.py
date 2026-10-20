@@ -1257,6 +1257,7 @@ def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str, st
     for i, part in enumerate(parts[1:], start=2):
         if getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
             break
+        ctx.video_part = f"{i}/{len(parts)}"
         ctx.set_stage(f"Generating a video ({i}/{len(parts)})")
         said = video_mod.quoted_lines(part[0])
         r, crashed = {}, False
@@ -1316,6 +1317,7 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
         if getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
             break
         first_try, r = None, {}
+        ctx.video_part = f"{i}/{len(parts)}"
         ctx.set_stage(f"Generating a video ({i}/{len(parts)})")
         frame = os.path.join(work, f"seed_{i}.jpg")
         tail = os.path.join(work, f"tail_{i}.mp4")
@@ -1481,6 +1483,7 @@ def video_mod_rules(ctx) -> tuple:
 def _handle_generate_video(ctx, state, args: dict) -> str:
     import tools as _t   # the render seam is owned by tools; read it at CALL time
     video_mod = _video(ctx)
+    ctx.video_part = ""             # a render that failed mid-chain left its «(6/6)» behind
 
     description = (args.get("description") or "").strip()
     if not description:
@@ -1926,7 +1929,9 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         import comfy_client
         hold.enter_context(comfy_client.card_session("video chain"))
     with hold:
-        ctx.set_stage("Generating a video")
+        # what generate_video's own stages say too (video._video_stage)
+        ctx.video_part = f"1/{len(parts)}" if len(parts) > 1 else ""
+        ctx.set_stage(f"Generating a video ({ctx.video_part})" if ctx.video_part else "Generating a video")
         first_prompt = prepped[0][0] if prepped else description
         # A static shot opening a chain on a photo: H3 sometimes covers it with drawn flowers
         # or anime faces, and every later part inherits them from the latent. Caught here by
@@ -2019,6 +2024,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         path = _render_remaining_parts(ctx, path, parts, args, people=[*people, *anchor], voices=audios,
                                        fresh_from=anchor[0] if head else "")
         result["seconds"] = video_mod.probe(path).get("seconds") or result.get("seconds")
+    ctx.video_part = ""
 
     if head and audios and path:
         ctx.set_stage("Putting the voice on")

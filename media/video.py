@@ -1869,10 +1869,10 @@ def prepare_prompt(ctx, description: str, *, images: Sequence[str] = (), videos:
 
 
 def _video_stage(ctx) -> str:
-    """«Generating a video», or the caller's «Generating a video (2/4)» when a part of a long
-    script is on: the bare label wiped the part number off the user's status line."""
-    said = str(getattr(ctx, "last_stage", "") or "")
-    return said if said.startswith("Generating a video (") else "Generating a video"
+    """«Generating a video», or «Generating a video (2/4)» while the caller renders part 2 of 4
+    (`ctx.video_part`): the bare label wiped the part number off the user's status line."""
+    part = str(getattr(ctx, "video_part", "") or "")
+    return f"Generating a video ({part})" if part else "Generating a video"
 
 
 def generate_video(ctx, description: str, *,
