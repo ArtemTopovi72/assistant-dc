@@ -540,6 +540,24 @@ class TaskRunnerMixin:
         self._activity.log(chat_id, "assistant", out[:500])
         self._commit_media_turn(chat_id, said, out, is_video)
 
+    def _deliver_salvaged_video(self, ctx, chat_id, lang, uname, since: float = 0.0) -> bool:
+        """Send the clip a timed-out turn had joined (ctx.video_made), parts so far included.
+        True if sent. A clip older than the turn is someone else's: never sent."""
+        path = (getattr(ctx, "video_made", "") or "") if ctx else ""
+        try:
+            if not path or not os.path.exists(path) or os.path.getmtime(path) < since:
+                return False
+            self._api_post("sendChatAction", {"chat_id": chat_id, "action": "upload_video"})
+            if not self._send_video(chat_id, path, ctx=ctx):
+                return False
+            self._chat_videos[chat_id] = path
+            self._send_text(chat_id, tg_bot._t("salvaged_video", lang))
+            self._activity.log(chat_id, "system", f"[salvage] sent video {path}", uname)
+            return True
+        except Exception:
+            tg_bot.logger.exception("salvaged video delivery failed chat=%s", chat_id)
+            return False
+
     def _deliver_salvaged_render(self, ctx, chat_id, sess, task, lang, uname) -> bool:
         """Send a picture a timed-out turn had already finished. True if sent.
 
@@ -1550,6 +1568,7 @@ class TaskRunnerMixin:
             except Exception as exc:
                 _invoke_err.append(exc)
 
+        _turn_t0 = time.time()
         _invoke_thread = turn_trace.spawn(_run_invoke, name=f"tg-invoke-{task.task_id[:8]}")
         # A flat deadline on the whole turn cannot tell "this task is stuck"
         # apart from "this task has not been given the GPU yet": a Music3 track
@@ -1603,14 +1622,6 @@ class TaskRunnerMixin:
                     "background)", _invoke_timeout, chat_id, task.task_id[:8])
                 _clear_status()
                 self._remember_failed_task(sess, task)
-                # The deadline is not proof that nothing was made. A render that
-                # already finished is the answer the user asked for, and the
-                # inspection calls that ran the clock out do not unmake it --
-                # so hand it over before admitting the timeout.
-                # The task's SCOPED ctx, not self._ctx: the shared one belongs
-                # to the desktop app and every other chat.
-                salvaged = self._deliver_salvaged_render(
-                    ctx, chat_id, sess, task, lang, uname)
                 # Stop the abandoned graph: it keeps running in its thread and,
                 # left alone, goes on forcing renders nobody will receive while
                 # the user is already offered Retry -- which would run it all a
@@ -1621,6 +1632,18 @@ class TaskRunnerMixin:
                     ctx.cancel_event.set()
                 except Exception:
                     pass
+                # A cancelled video stops at its next part and joins the parts it has: a
+                # moment for that, or five of six parts made over an hour were thrown away
+                # with «try again» (live 2026-10-20).
+                _invoke_thread.join(timeout=max(0, tg_bot._cfg_int("TG_SALVAGE_GRACE_S", 120)))
+                # The deadline is not proof that nothing was made. A render that
+                # already finished is the answer the user asked for, and the
+                # inspection calls that ran the clock out do not unmake it --
+                # so hand it over before admitting the timeout.
+                # The task's SCOPED ctx, not self._ctx: the shared one belongs
+                # to the desktop app and every other chat.
+                salvaged = (self._deliver_salvaged_video(ctx, chat_id, lang, uname, since=_turn_t0)
+                            or self._deliver_salvaged_render(ctx, chat_id, sess, task, lang, uname))
                 if not salvaged:
                     self._send_text(chat_id, tg_bot._t("err_timeout", lang),
                         parse_mode="HTML",

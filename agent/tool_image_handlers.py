@@ -1493,6 +1493,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     import tools as _t   # the render seam is owned by tools; read it at CALL time
     video_mod = _video(ctx)
     ctx.video_part = ""             # a render that failed mid-chain left its «(6/6)» behind
+    ctx.video_made = ""             # the finished clip of this call, for a turn that runs out of time
 
     description = (args.get("description") or "").strip()
     if not description:
@@ -2047,6 +2048,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     state["video_status"] = "success"
     state["video_seconds"] = result.get("seconds")
     ctx.last_video_path = path
+    ctx.video_made = path           # last_video_path is each PART's clip while the parts render
     ctx.last_video_prompt = description
     dep(ctx, "_remember", _remember)(ctx, state, "video", f"Video for: {description}", {"path": path})
 

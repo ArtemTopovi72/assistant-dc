@@ -568,6 +568,8 @@ _MSG: dict[str, dict[str, str]] = {
     "no_transcribe": {"en": "🎙 Could not transcribe — try again.",
                       "ru": "🎙 Не удалось распознать — попробуй ещё раз."},
     "err_generic":   {"en": "❌ <b>Error:</b> {err}", "ru": "❌ <b>Ошибка:</b> {err}"},
+    "salvaged_video": {"en": "⏱ Time ran out before the whole clip was made — here is what was ready.",
+                       "ru": "⏱ Время вышло, ролик не доделан целиком — вот что успело получиться."},
     "err_timeout":   {"en": "⏱ This request took too long and was abandoned. "
                             "Please try again.",
                       "ru": "⏱ Запрос выполнялся слишком долго и был отменён. "

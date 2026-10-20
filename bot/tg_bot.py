@@ -1152,6 +1152,7 @@ def _scoped_ctx(base, cancel_event=None):
     c.image_pointed_at = False
     c.interim_callback = None
     c.progress_callback = None    # each task draws its own bar (tg_tasks._with_progress), not the desktop's
+    c.video_made = ""             # the clip THIS task finished (a timed-out turn hands it over)
     c.steer_inbox = None
     c.turn_sources = []      # the pages it read
     c.turn_products = []     # Ozon products seen this turn (tg_product_cards)
