@@ -1337,6 +1337,9 @@ def merge_silent_parts(parts: list) -> list:
     next one. A silent part with the voice reference mumbled (live 2026-10-19)."""
     out, carry = [], ""
     for p in parts:
+        # each part carries the scene's look and sound lines (split_script): merged as is, the
+        # first part of a monologue said «The camera is a close-up…» three times (2026-10-20)
+        carry = " ".join(x for x in _SENT.split(carry) if x.strip() and x.strip() not in p)
         p = (carry + " " + p).strip() if carry else p
         carry = ""
         if quoted_lines(p):

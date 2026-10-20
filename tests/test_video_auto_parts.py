@@ -155,6 +155,10 @@ def test_a_part_without_speech_joins_the_next_when_voices_are_given():
     assert out == ['He looks seriously at the camera. He says: "Ах, вот и ты."', 'He goes on: "Хорошо."']
     assert V.merge_silent_parts(['He says: "A."', "He nods."]) == ['He says: "A." He nods.']
     assert V.merge_silent_parts(["He waves.", "He sits."]) == ["He waves. He sits."]
+    # each part carries the scene's look line: merged, it was said three times (2026-10-20)
+    look = "The lighting remains dim."
+    out = V.merge_silent_parts([f"He looks up. {look}", f"He blinks. {look}", f'He says: "Ах." {look}'])
+    assert out == [f'He looks up. He blinks. He says: "Ах." {look}'], out
 
 
 def test_a_part_never_carries_more_speech_than_one_clip_says():
