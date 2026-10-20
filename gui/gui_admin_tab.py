@@ -12,7 +12,7 @@ import logging
 from PyQt5.QtCore import QThread, Qt, pyqtSignal
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import (QAbstractItemView, QComboBox, QGridLayout, QHBoxLayout, QHeaderView, QLabel,
-                             QLineEdit, QPushButton, QTableWidget, QTableWidgetItem,
+                             QLineEdit, QProgressBar, QPushButton, QTableWidget, QTableWidgetItem,
                              QVBoxLayout, QWidget, QCheckBox)
 
 from gui_common import ACCENT2, BORDER, MUTED, PANEL2, REC, TEXT, _card, _section
@@ -25,6 +25,7 @@ _STATUS_COLOR = {"approved": "#3ddc84", "pending": "#f0b429", "banned": REC}
 
 class _Poller(QThread):
     snap = pyqtSignal(object)
+    hw = pyqtSignal(object)
 
     def __init__(self, get_bot):
         super().__init__()
@@ -37,6 +38,11 @@ class _Poller(QThread):
                 self.snap.emit(bot.admin_snapshot() if bot else None)
             except Exception:
                 logger.debug("admin snapshot failed", exc_info=True)
+            try:                      # the machine's readings do not need the bot
+                import hw_sensors
+                self.hw.emit(hw_sensors.read())
+            except Exception:
+                logger.debug("hardware read failed", exc_info=True)
             self._stop.wait(2.0)
 
     def stop(self):
@@ -89,10 +95,80 @@ class AdminTab(QWidget):
         self._build()
         self._poller = _Poller(self._bot)
         self._poller.snap.connect(self._on_snap)
+        self._poller.hw.connect(self._on_hw)
         self._poller.start()
 
     def _bot(self):
         return getattr(getattr(self.host, "telegram_tab", None), "_bot", None)
+
+    def _build_hw(self) -> QWidget:
+        """GPU and CPU, a row each: the name, a load gauge, the readings with their heat colour."""
+        box = QWidget()
+        box.setObjectName("hwcard")
+        box.setStyleSheet(f"#hwcard{{background:{PANEL2};border:1px solid {BORDER};border-radius:10px;}}")
+        g = QGridLayout(box)
+        g.setContentsMargins(px(14), px(10), px(14), px(10))
+        g.setHorizontalSpacing(px(14)); g.setVerticalSpacing(px(6))
+        self._hw_rows = {}
+        for r, key in enumerate(("gpu", "cpu")):
+            name = QLabel("")
+            name.setStyleSheet(f"color:{TEXT};font-weight:700;")
+            bar = QProgressBar()
+            bar.setRange(0, 100); bar.setFixedWidth(px(170)); bar.setFixedHeight(px(16))
+            bar.setFormat("%p%")
+            bar.setStyleSheet(f"QProgressBar{{background:{BORDER};border:none;border-radius:{px(4)}px;"
+                              f"color:{TEXT};text-align:center;font-size:{px(11)}px;}}"
+                              f"QProgressBar::chunk{{background:{ACCENT2};border-radius:{px(4)}px;}}")
+            info = QLabel("")
+            info.setStyleSheet(f"color:{MUTED};")
+            info.setTextFormat(Qt.RichText)
+            g.addWidget(name, r, 0); g.addWidget(bar, r, 1); g.addWidget(info, r, 2)
+            self._hw_rows[key] = (name, bar, info)
+        g.setColumnStretch(2, 1)
+        box.hide()                            # until the first reading
+        self._hw_box = box
+        return box
+
+    def _on_hw(self, v):
+        try:
+            if not v:
+                return
+            import hw_sensors
+            from gui_i18n import tr
+
+            def temp(key, label=""):
+                x = v.get(key)
+                if x is None:
+                    return ""
+                warm, hot = hw_sensors._HEAT[key]
+                c = "#3ddc84" if x < warm else "#f0b429" if x < hot else REC
+                return f'{label}<span style="color:{c};font-weight:700;">{x:.0f}°</span>'
+
+            sep = f' <span style="color:{BORDER};">│</span> '
+            name, bar, info = self._hw_rows["gpu"]
+            gpu_name = (v.get("gpu_name") or "GPU").replace("NVIDIA GeForce ", "").replace("NVIDIA ", "")
+            name.setText(f"🎮 {gpu_name}")
+            bar.setValue(int(v.get("gpu_load") or 0))
+            bits = []
+            if v.get("vram_used_mb") is not None and v.get("vram_total_mb"):
+                bits.append(f"💾 {v['vram_used_mb'] / 1024:.1f} / {v['vram_total_mb'] / 1024:.1f} {tr('GB')}")
+            bits.append(" · ".join(x for x in (temp("gpu_temp", "🌡 "), temp("gpu_hotspot", tr("hot spot") + " "),
+                                               temp("gpu_mem_temp", tr("VRAM") + " ")) if x))
+            if v.get("gpu_power") is not None:
+                bits.append(f"⚡ {v['gpu_power']:.0f} {tr('W')}")
+            info.setText(sep.join(b for b in bits if b))
+            name, bar, info = self._hw_rows["cpu"]
+            cpu_name = (v.get("cpu_name") or "CPU").replace("Intel Core ", "").replace("AMD Ryzen ", "Ryzen ")
+            name.setText(f"🧠 {cpu_name}")
+            bar.setValue(int(v.get("cpu_load") or 0))
+            bits = [temp("cpu_temp", "🌡 ")]
+            if v.get("cpu_power") is not None:
+                bits.append(f"⚡ {v['cpu_power']:.0f} {tr('W')}")
+            info.setText(sep.join(b for b in bits if b)
+                         or tr("🌡 / ⚡ need the sensor service (scripts/install_sensors.ps1)"))
+            self._hw_box.show()
+        except Exception:
+            logger.debug("hardware card update failed", exc_info=True)
 
     # ── layout ───────────────────────────────────────────────────────────────
     def _build(self):
@@ -105,7 +181,8 @@ class AdminTab(QWidget):
         head.addWidget(title); head.addStretch(1); head.addWidget(self.meta)
         lay.addLayout(head)
 
-        self.gpu = QLabel("")
+        lay.addWidget(self._build_hw())
+        self.gpu = QLabel("")                 # the training line under the card
         self.gpu.setStyleSheet(f"color:{ACCENT2};font-weight:600;")
         self.gpu.setWordWrap(True)
         lay.addWidget(self.gpu)
@@ -154,7 +231,7 @@ class AdminTab(QWidget):
                 self.meta.setText('bot is not running')
                 return
             self.meta.setText(f"🔄 {s['ts']} · {s['backend']}")
-            self.gpu.setText("   ".join(x for x in (s["gpu"], _plain(s["training"])) if x))
+            self.gpu.setText(_plain(s["training"]))      # the hardware has its own card (_on_hw)
             self._fill(self.run_t, [(r["user"], r["stage"], _dur(r["elapsed"]), r["text"]) for r in s["running"]],
                        [r["task_id"] for r in s["running"]], [r["chat_id"] for r in s["running"]])
             self._fill(self.q_t, [(str(i), q["user"], _dur(q["waited"]), q["text"])

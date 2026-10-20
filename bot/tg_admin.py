@@ -53,6 +53,15 @@ def gpu_line() -> str:
     return v
 
 
+def _hw_values() -> dict:
+    """The readings themselves, for the desktop tab's own gauges (its font has no ▰▱)."""
+    try:
+        import hw_sensors
+        return hw_sensors.read()
+    except Exception:
+        return {}
+
+
 class AdminMixin:
     # ── the one snapshot ─────────────────────────────────────────────────────
     def admin_snapshot(self) -> dict:
@@ -95,7 +104,7 @@ class AdminMixin:
         except Exception:
             training = ""
         return {"running": running, "queued": queued, "users": users,
-                "backend": self._backend.name(), "gpu": gpu_line(), "training": training,
+                "backend": self._backend.name(), "gpu": gpu_line(), "hw": _hw_values(), "training": training,
                 "ts": time.strftime("%H:%M:%S")}
 
     # ── actions (TG panel and desktop tab share these) ───────────────────────
@@ -169,7 +178,10 @@ class AdminMixin:
         if view == "users":
             return self._admin_render_users(s, t)
         L = [t("adm_title").strip() + "   <i>🔄 %s</i>" % s["ts"]]
-        L += [x for x in (s["gpu"], s["training"]) if x]
+        if s["gpu"]:
+            L += ["", s["gpu"]]
+        if s["training"]:
+            L.append(s["training"])
         L.append("")
         kb = []
         L.append(t("ax_running", n=len(s["running"])))

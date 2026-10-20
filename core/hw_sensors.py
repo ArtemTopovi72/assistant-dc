@@ -122,36 +122,57 @@ def read() -> dict:
         return dict(v)
 
 
+# °C where a reading turns yellow, then red (RTX 3090 / Raptor Lake: core throttles ~83, hot spot
+# ~105, GDDR6X junction ~110, the CPU at 100)
+_HEAT = {"gpu_temp": (70, 83), "gpu_hotspot": (85, 100), "gpu_mem_temp": (90, 104), "cpu_temp": (80, 95)}
+_PAD = "      "
+
+
+def _deg(v: dict, key: str) -> str:
+    x = v.get(key)
+    warm, hot = _HEAT[key]
+    mark = "🟢" if x < warm else "🟡" if x < hot else "🔴"
+    return f"{mark} {x:.0f}°"
+
+
 def lines(v: dict = None) -> list:
-    """«🎮 RTX 3090 · 21.1/24.0 ГБ · 38% · 39° (хотспот 50°, память 50°) · 28 Вт» and the CPU's."""
+    """The admin panel's hardware block, HTML (<b>), a device per head line:
+        🎮 <b>RTX 3090</b>  ▰▰▰▰▱▱▱▱▱▱ 38%
+              💾 21.1 / 24.0 ГБ · ⚡ 28 Вт
+              🌡 🟢 39° · хотспот 🟢 50° · память 🟢 50°
+        🧠 <b>i7-14700KF</b>  ▰▱▱▱▱▱▱▱▱▱ 8%
+              🌡 🟢 62° · ⚡ 95 Вт"""
+    import progress
     v = read() if v is None else v
     out = []
-    deg = lambda x: f"{x:.0f}°" if x is not None else "?"
     if v.get("gpu_name") or v.get("vram_used_mb") is not None:
-        name = (v.get("gpu_name") or "GPU").replace("NVIDIA GeForce ", "")
-        bits = [f"🎮 {name}"]
-        if v.get("vram_used_mb") is not None and v.get("vram_total_mb"):
-            bits.append(f"{v['vram_used_mb'] / 1024:.1f}/{v['vram_total_mb'] / 1024:.1f} ГБ")
+        name = (v.get("gpu_name") or "GPU").replace("NVIDIA GeForce ", "").replace("NVIDIA ", "")
+        head = f"🎮 <b>{name}</b>"
         if v.get("gpu_load") is not None:
-            bits.append(f"{v['gpu_load']:.0f}%")
-        if v.get("gpu_temp") is not None:
-            extra = ", ".join(f"{k} {deg(v[f])}" for k, f in (("хотспот", "gpu_hotspot"), ("память", "gpu_mem_temp"))
-                              if v.get(f) is not None)
-            bits.append(deg(v["gpu_temp"]) + (f" ({extra})" if extra else ""))
+            head += "  " + progress.bar(round(v["gpu_load"]), 100)
+        out.append(head)
+        mid = []
+        if v.get("vram_used_mb") is not None and v.get("vram_total_mb"):
+            mid.append(f"💾 {v['vram_used_mb'] / 1024:.1f} / {v['vram_total_mb'] / 1024:.1f} ГБ")
         if v.get("gpu_power") is not None:
-            bits.append(f"{v['gpu_power']:.0f} Вт")
-        out.append(" · ".join(bits))
+            mid.append(f"⚡ {v['gpu_power']:.0f} Вт")
+        if mid:
+            out.append(_PAD + " · ".join(mid))
+        temps = [f"{label}{_deg(v, k)}" for label, k in (("", "gpu_temp"), ("хотспот ", "gpu_hotspot"),
+                                                            ("память ", "gpu_mem_temp")) if v.get(k) is not None]
+        if temps:
+            out.append(_PAD + "🌡 " + " · ".join(temps))
     if v.get("cpu_name") or v.get("cpu_load") is not None:
         name = (v.get("cpu_name") or "CPU").replace("Intel Core ", "").replace("AMD Ryzen ", "Ryzen ")
-        bits = [f"🧠 {name}"]
+        head = f"🧠 <b>{name}</b>"
         if v.get("cpu_load") is not None:
-            bits.append(f"{v['cpu_load']:.0f}%")
-        if v.get("cpu_temp") is not None or v.get("cpu_power") is not None:
-            if v.get("cpu_temp") is not None:
-                bits.append(deg(v["cpu_temp"]))
-            if v.get("cpu_power") is not None:
-                bits.append(f"{v['cpu_power']:.0f} Вт")
-        else:
-            bits.append("t° и Вт: нужен сервис датчиков (scripts/install_sensors.ps1)")
-        out.append(" · ".join(bits))
+            head += "  " + progress.bar(round(v["cpu_load"]), 100)
+        out.append(head)
+        bits = []
+        if v.get("cpu_temp") is not None:
+            bits.append("🌡 " + _deg(v, "cpu_temp"))
+        if v.get("cpu_power") is not None:
+            bits.append(f"⚡ {v['cpu_power']:.0f} Вт")
+        out.append(_PAD + (" · ".join(bits) if bits
+                           else "🌡 и ⚡ — нужен сервис датчиков (scripts/install_sensors.ps1)"))
     return out
