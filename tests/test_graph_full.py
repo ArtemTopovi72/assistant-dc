@@ -43,6 +43,7 @@ def _ctx(**kw):
     # deps stub below never reached them, and the suite talked to the live LM Studio --
     # passing alone, waiting out the shared model gate in a full run (2026-10-20)
     c.text_model = lambda *a, **k: None
+    c.yes_no = lambda *a, **k: False       # the edit guard's «does this reverse the request?»
     for k, v in kw.items():
         setattr(c, k, v)
     return c

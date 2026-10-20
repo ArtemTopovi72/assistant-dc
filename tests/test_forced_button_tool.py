@@ -93,3 +93,37 @@ def test_a_button_is_one_action_and_then_the_answer():
     assert not G._button_done("[style_preset] call redraw_image", set())
     # the draw menu carries the user's own words: it may ask for more than one thing
     assert not G._button_done("generate an image of: a cat, then animate it", {"generate_image"})
+
+
+def _edit_turn(text, script, calls, reverses=False):
+    llm = _TGF.LLM([_TGF._asst("", [_TGF._tc(name, args, f"c{i}")]) for i, (name, args) in enumerate(calls)]
+                   + [_TGF._asst("Не получилось.")])
+    tools = _TGF.Tools(script)
+    ctx = _TGF._ctx(yes_no=lambda *a, **k: reverses)
+    _TGF._run(ctx, llm, tools, {"user_input": text, "messages": []}, fastpath=False)
+    return [n for n, _a in tools.calls]
+
+
+FAIL = "[TOOL ERROR] Could not edit the image — the edit of 'chest' was rejected by the check."
+CHEST = {"region": "the chest area", "instructions": "a solid white bodysuit"}
+
+
+def test_an_identical_failed_edit_is_not_run_again():
+    """Three QA-rejected chest inpaints, two of them identical, a minute each (live 2026-10-21)."""
+    ran = _edit_turn("убери с неё пятно", {"inpaint_image": [FAIL, FAIL, FAIL]},
+                     [("inpaint_image", CHEST)] * 3)
+    assert ran == ["inpaint_image"], ran
+
+
+def test_two_failed_edits_end_the_editing():
+    other = {"region": "the chest", "instructions": "a white top"}
+    third = {"region": "the torso", "instructions": "white"}
+    ran = _edit_turn("убери с неё пятно", {"inpaint_image": [FAIL, FAIL, FAIL]},
+                     [("inpaint_image", CHEST), ("inpaint_image", other), ("inpaint_image", third)])
+    assert ran == ["inpaint_image", "inpaint_image"], ran
+
+
+def test_an_edit_that_reverses_the_request_is_not_run():
+    """«remove …» rewritten into «a bodysuit covering her chest completely» (live 2026-10-21)."""
+    ran = _edit_turn("remove from the image: the bodysuit", {}, [("inpaint_image", CHEST)], reverses=True)
+    assert ran == [], ran
