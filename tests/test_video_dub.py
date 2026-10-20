@@ -50,7 +50,7 @@ def test_the_reference_is_the_longest_run_that_fits_f5():
     """From the first word to the last a 55 s clip went in; F5 cut it to 12 s and kept the
     whole transcript, so voice and text no longer matched (2026-10-20)."""
     import video_dub
-    words = [(f"w{i}", float(i), float(i) + 0.8) for i in range(55)]
+    words = [("слово", float(i), float(i) + 0.8) for i in range(55)]
     i0, i1 = video_dub._ref_span(words)
     assert words[i1][2] - words[i0][1] <= video_dub.REF_MAX_S
     assert i1 - i0 >= 8
@@ -71,3 +71,22 @@ def test_the_old_voices_residue_is_ducked_under_its_words():
     g = video_dub._duck(video_dub.SR * 3, [("а", 1.0, 2.0)])
     assert abs(g[int(1.5 * video_dub.SR)] - video_dub.HUM_UNDER_WORDS) < 1e-3
     assert g[int(0.3 * video_dub.SR)] > 0.99 and g[int(2.7 * video_dub.SR)] > 0.99
+
+
+def test_a_piece_is_cloned_from_speech_that_does_not_say_its_words():
+    """A sample saying the very words carries H3's stress and F5 copies it: «рюкза́чком»
+    though the text said рюкзачк+ом; from a sample of other words the line came out right."""
+    import video_dub
+    words = [(w, i * 0.6, i * 0.6 + 0.5) for i, w in enumerate(
+        "нам нужен твой морозильник я отметил на карте улицу слушай будь с рюкзачком хорошо".split())]
+    i0, i1 = video_dub._ref_span(words, avoid=frozenset({"слушай", "будь", "с", "рюкзачком", "хорошо"}))
+    taken = {w for w, *_ in words[i0:i1 + 1]}
+    assert "рюкзачком" not in taken and len(taken) >= video_dub.REF_MIN_WORDS
+
+
+def test_a_sample_whose_words_were_heard_as_digits_is_not_taken():
+    """«четыре-пять» came back as «4 5»: that text does not match the voice F5 is given."""
+    import video_dub
+    words = [(w, i * 0.6, i * 0.6 + 0.5) for i, w in enumerate("у нас есть 4 5 недель прежде чем опять прилетят мухи".split())]
+    i0, i1 = video_dub._ref_span(words)
+    assert not any(c.isdigit() for w, *_ in words[i0:i1 + 1] for c in w)

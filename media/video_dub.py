@@ -138,11 +138,16 @@ def _duck(n: int, words: list, floor: float = HUM_UNDER_WORDS, fade: float = 0.0
     return np.convolve(g, np.ones(k, dtype=np.float32) / k, mode="same")
 
 
-def _ref_span(words: list, top: float = REF_MAX_S) -> tuple:
-    """(first, last) index of the longest run of `words` [(w, start, end)] lasting <= `top` s."""
+def _ref_span(words: list, top: float = REF_MAX_S, avoid=frozenset()) -> tuple:
+    """(first, last) index of the longest run of `words` [(w, start, end)] lasting <= `top` s
+    and saying none of `avoid` (normalized words)."""
     best, i = (0, 0), 0
     for j in range(len(words)):
-        while words[j][2] - words[i][1] > top:
+        # «четыре-пять» heard as «4 5»: a sample whose text F5 cannot read as said throws it off
+        if _norm(words[j][0]) in avoid or any(c.isdigit() for c in words[j][0]):
+            i = j + 1
+            continue
+        while i < j and words[j][2] - words[i][1] > top:
             i += 1
         if j - i > best[1] - best[0]:
             best = (i, j)
@@ -161,12 +166,42 @@ def _chunks(text: str, top: int = CHUNK_WORDS) -> list:
     return out + [cur] if cur else out
 
 
-def _speak_chunks(ctx, voice_clone, ref: str, ref_text: str, text: str, work: str) -> str:
+REF_MIN_WORDS = 5      # a shorter clean stretch gives F5 too little of the voice
+
+
+def _ref_for(ctx, voice_clone, voice: np.ndarray, old: list, part: str, work: str) -> tuple:
+    """(reference wav, its text) for saying `part`: the clip's own speech where it says none of
+    `part`'s words. A sample saying the very words carries H3's stress and F5 copies it
+    (live 10-06: «ва́ли»; 10-20: «рюкза́чком» though the text said рюкзачк+ом, while the same
+    line from a sample of other words came out right). Failing that, a neutral bridge
+    sentence said in that voice first."""
+    import soundfile as sf
+    said = frozenset(_norm(w) for w in _WORD.findall(part))
+    i0, i1 = _ref_span(old, avoid=said)
+    clean = i1 - i0 + 1 >= REF_MIN_WORDS and not said & {_norm(w) for w, *_ in old[i0:i1 + 1]}
+    if not clean:
+        i0, i1 = _ref_span(old)
+    os.makedirs(work, exist_ok=True)
+    a, b = max(0.0, old[i0][1] - 0.15), old[i1][2] + 0.25
+    ref = os.path.join(work, "ref.wav")
+    sf.write(ref, voice[int(a * SR):int(b * SR)], SR)
+    ref_text = " ".join(w for w, *_ in old[i0:i1 + 1])
+    if not clean:
+        bridge_text = _bridge_sentence(part)
+        bridge = voice_clone.speak(ctx, ref, ref_text, bridge_text, work)
+        if bridge:
+            return bridge, bridge_text
+    return ref, ref_text
+
+
+def _speak_chunks(ctx, voice_clone, voice: np.ndarray, old: list, text: str, work: str) -> str:
     """`text` said in the cloned voice a few sentences at a time, joined with a short gap."""
     import soundfile as sf
     pieces, sr = [], SR
     for k, part in enumerate(_chunks(text)):
-        w = voice_clone.speak(ctx, ref, ref_text, part, os.path.join(work, f"c{k}"))
+        here = os.path.join(work, f"c{k}")
+        ref, ref_text = _ref_for(ctx, voice_clone, voice, old, part, here)
+        w = voice_clone.speak(ctx, ref, ref_text, part, here)
         if not w:
             return ""
         y, sr = sf.read(w, dtype="float32")
@@ -216,23 +251,10 @@ def redub(ctx, video: str, lines: list, out_path: str = "") -> str:
         return ""
     if hum is not None:
         rest = rest[:len(hum)] + (hum * _duck(len(hum), old))[:len(rest)]
-    # The clip's own speech is the voice to clone: its longest run of words that fits F5's reference.
-    # From the first word to the last, a 55 s clip went in, F5 cut it to 12 s and kept the whole
-    # transcript: the voice and its text no longer matched and both takes were noise (2026-10-20).
-    i0, i1 = _ref_span(old)
-    a, b = max(0.0, old[i0][1] - 0.15), old[i1][2] + 0.25
-    ref = os.path.join(work, "ref.wav")
-    sf.write(ref, voice[int(a * SR):int(b * SR)], SR)
-    ref_text = " ".join(w for w, *_ in old[i0:i1 + 1])
-    # That sample says the very words being re-said, with H3's stress: F5 copied it
-    # (live 10-06: «ва́ли» survived the redub though the text said вал+и). So the
-    # clone first says a neutral sentence sharing no words with the line, and that
-    # take -- same timbre, no borrowed stress -- is the voice for the line.
-    bridge_text = _bridge_sentence(text)
-    bridge = voice_clone.speak(ctx, ref, ref_text, bridge_text, work)
-    if bridge:
-        ref, ref_text = bridge, bridge_text
-    new_wav = _speak_chunks(ctx, voice_clone, ref, ref_text, text, work)
+    # The clip's own speech is the voice to clone, at most REF_MAX_S of it: from the first word to
+    # the last, a 55 s clip went in, F5 cut it to 12 s and kept the whole transcript, and the voice
+    # and its text no longer matched (2026-10-20). Each piece gets its own sample (_ref_for).
+    new_wav = _speak_chunks(ctx, voice_clone, voice, old, text, work)
     if not new_wav:
         logger.warning("video dub: F5 produced nothing")
         return ""
