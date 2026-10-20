@@ -329,6 +329,24 @@ def test_two_story_steps_in_one_part_are_split_not_cut_to_one():
     assert len(out) == 3 and out[1] == "He runs across the field.", out
 
 
+def test_steps_past_the_part_limit_join_the_last_part_not_dropped():
+    """Three camera steps, room for two: the third, «stops on the departure board», was cut off
+    and the clip ended before the end the user asked for (2026-10-21)."""
+    script = ["The camera flies along the train, then rises above its roof and stops on the departure board."]
+
+    def model(ctx, system, user, **k):
+        if system.startswith("You are a strict"):
+            return '{"bad": [{"part": 1, "why": "three camera moves", "split": true}]}'
+        if system.startswith("Rewrite this part"):
+            return ("The camera flies along the train.\nThe camera rises above the roof of the train.\n"
+                    "The camera stops on the departure board.")
+        return "The camera flies along the train."
+    out = V.validate_script(types.SimpleNamespace(text_model=model, yes_no=lambda q, t, **k: True),
+                            script, rounds=1, max_parts=2)
+    assert out == ["The camera flies along the train.",
+                   "The camera rises above the roof of the train. The camera stops on the departure board."], out
+
+
 def test_a_chain_part_runs_taomates_frame_adapter_at_its_three_steps():
     """FL2V Turbo at 6 steps came back soapy, so the chain took TaoMate's 3 steps -- but its
     text-to-video adapter, fed frames, drew flowers, anime faces and captions over them

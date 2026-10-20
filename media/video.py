@@ -2335,7 +2335,10 @@ _JUDGE = ("You are a strict editor of a video script split into numbered parts; 
           "yawns, turns and smiles -- are ONE action; talking is never a second action: a "
           "head tilt while saying a line is ONE); (b) nothing in it moves or acts visibly (only effects, light, mood, camera) "
           "-- a thing that moves as the story says (a kite climbing high, a ball rolling, a door slamming) IS "
-          "an action, and so is a face changing (a smile spreading, a frown, eyes widening); "
+          "an action, and so is a face changing (a smile spreading, a frown, eyes widening), and so is a "
+          "camera move that brings a NEW view the script asks for (the orbit ends on a close-up of the "
+          "face, the camera rises and stops on the board): when the request is camera work, each such "
+          "move is a step of the story, and the next one is not a repeat of the one before; "
           "(c) it repeats what an earlier part already showed; (d) it asks for something the "
           "model draws badly or impossibly: a held object flying or floating by itself, extra "
           "limbs, many small items at once, text on screen, a person in two places; (e) it "
@@ -2400,8 +2403,10 @@ def validate_script(ctx, parts: list, rounds: int = 2, max_parts: int = 0) -> li
                     "spoken line stays in the sentence of whoever says it (He turns and says «...»), "
                     "never a line of its own; a note about sound or silence is not an action and is "
                     "left out. A sentence that only says how things are (a letter lies on the "
-                    "table) or only moves the camera is not an action either: it goes into the "
-                    "sentence of the action after it, never a line of its own. English.", parts[n - 1], temperature=0.2, max_tokens=250) or "").splitlines()]
+                    "table) or only drifts the camera over them is not an action either: it goes into the "
+                    "sentence of the action after it, never a line of its own. A camera move that "
+                    "brings a new view the part asks for (circles the clock, then zooms in on its "
+                    "face) IS a step: keep each such move on its own line. English.", parts[n - 1], temperature=0.2, max_tokens=250) or "").splitlines()]
             except Exception as exc:
                 logger.warning("validate_script: splitting part %d failed: %s", n, exc)
                 continue
@@ -2411,10 +2416,14 @@ def validate_script(ctx, parts: list, rounds: int = 2, max_parts: int = 0) -> li
             for i in range(len(lines) - 2, -1, -1):
                 if not _QUOTED.search(lines[i]) and not yes_no(ctx)(
                         "A sentence of a video script: {text}\nDoes someone or something in it move "
-                        "or act (reach, walk, turn, smile, fall...), rather than only be somewhere "
-                        "or be seen by a camera?", lines[i]):
+                        "or act (reach, walk, turn, smile, fall...), or does the camera make a move "
+                        "that ends on something new (circles the tower, rises above the train, zooms "
+                        "in on a face), rather than things only being somewhere?", lines[i]):
                     lines[i:i + 2] = [lines[i] + " " + lines[i + 1]]
-            lines = lines[:max(2, (max_parts or 99) - len(parts) + 1)]
+            # past the room the steps join the last part: cut off, «and stops on the
+            # departure board» was dropped and the clip ended before the asked end (2026-10-21)
+            room = max(2, (max_parts or 99) - len(parts) + 1)
+            lines = lines[:room - 1] + [" ".join(lines[room - 1:])] if len(lines) > room else lines
             if len(lines) >= 2 and not _lost_lines(parts[n - 1], " ".join(lines)):
                 logger.info("validate_script: part %d split into %d", n, len(lines))
                 parts[n - 1:n] = lines
@@ -2431,7 +2440,8 @@ def validate_script(ctx, parts: list, rounds: int = 2, max_parts: int = 0) -> li
                     "Rewrite ONE part of a video script so it is a single clear visible action by "
                     "the people or things in it, concrete and physical, in English. Fix the problem named. "
                     "Keep every quoted spoken line character for character, in its language. Add no "
-                    "sparks, glow, mood words or camera work. The part before and after it are given "
+                    "sparks, glow, mood words or camera work the part does not ask for; a camera move "
+                    "that is the part's own step stays. The part before and after it are given "
                     "only for continuity: do not repeat them. Never swap the part's action for one "
                     "it does not ask for: when it repeats the part before, keep only what is new in "
                     "it (a cat that stirred before now stretches and yawns -- not licks its paw), and "
