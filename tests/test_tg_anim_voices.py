@@ -234,6 +234,25 @@ def test_a_keyframe_clip_is_fl2va_a_voice_sample_alone_is_ref2va():
     assert V.pick_mode(["a.jpg"], ["c.mp4"], (), keyframe=True) == "ref2va"
 
 
+
+def test_a_talking_head_part_ends_on_its_still_as_well(tmp_path):
+    """Without an end frame the eyes and the head wandered off over a part (live 2026-10-20:
+    eye match 0.58, the head turned down); the still as the last frame brings the part back."""
+    from PIL import Image
+    still = tmp_path / "s.jpg"
+    Image.new("RGB", (64, 48)).save(still)
+    got = {}
+
+    def build(desc, **kw):
+        got.update(kw)
+        raise V.VideoUnavailable("stop here")
+    eng = Over(V, engine_available=lambda ctx: (True, ""), build_workflow=build)
+    ctx = types.SimpleNamespace(video_engine=eng, set_stage=lambda s: None)
+    V.generate_video(ctx, "He says hello.", images=[str(still)], keyframe=True, seconds=6, prepared=True)
+    assert got["images"] == [str(still), str(still)]
+    V.generate_video(ctx, "He says hello.", images=[str(still)], seconds=6, prepared=True)
+    assert got["images"] == [str(still)]
+
 def test_every_front_end_takes_a_voice_link_through_one_engine(tmp_path):
     import voice_clone
     got = voice_clone.fetch_sample("u", str(tmp_path), lambda url: {"data": b"x" * 9})

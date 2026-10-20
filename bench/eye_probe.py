@@ -41,7 +41,7 @@ def prompt(name: str) -> str:
     if "fl3" in name:
         # the words the soundtrack really says, so the mouth has something to follow
         p = re.sub(r"<d>.*?</d>", lambda m: "<d>[Russian] " + open("tmp/night/p1_65.txt", encoding="utf8").read() + "</d>", p, flags=re.S)
-    if name.startswith(("fl2", "fl3", "fl4")):
+    if name.startswith(("fl2", "fl3", "fl4", "fl5")):
         # keyframe path: the still IS frame 0, no reference tags; the soundtrack is anchored by AddGuide
         p = re.sub(r"<Audio 1> is the voice-timbre.*\n?", "", p)
         p = (p.replace(", referencing the timbre of <Audio 1>", "").replace(" using the voice timbre from <Audio 1>", "")
@@ -69,13 +69,16 @@ def fl2va_audio():
 name = sys.argv[1]
 if name.startswith(("fl2", "fl3")):
     fl2va_audio()
-elif name.startswith("fl4"):
+elif name.startswith(("fl4", "fl5")):
     video.pick_mode = lambda *a, **k: "t2va"      # FL2VA, the model speaks the line itself (voice converted after)
+# fl5: the still is the first AND the last frame -- the part has to come back to the original (KeyFace /
+# Lookahead Anchoring: an identity keyframe as the segment's end condition holds the face over the length)
+images = [STILL, STILL] if name.startswith("fl5") else [STILL]
 out = f"tmp/night/{name}.mp4"
 ctx = models.Context(models=None, transcription_cache={}, cache_file=None,
                      asr_lock=threading.Lock(), tts_lock=threading.Lock())
 t0 = time.time()
-r = video.generate_video(ctx, prompt(name), images=[STILL], audios=[VOICE], seconds=SECONDS,
+r = video.generate_video(ctx, prompt(name), images=images, audios=[VOICE], seconds=SECONDS,
                          seed=SEED, prepared=True)
 print("RESULT", name, r.get("status"), r.get("path"), f"{time.time() - t0:.0f}s",
       r.get("width"), r.get("height"), flush=True)

@@ -1377,9 +1377,11 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
         first = os.path.join(work, f"first_{i}.jpg")
         if tg_continue.first_frame(new, first) and not fresh_from:      # a cut back to the still is meant
             joins.append((frame, first))
-        # pinned: the new part starts on the frame after the old one ends -- butt-join
+        # pinned: the new part starts on the frame after the old one ends -- butt-join.
+        # fresh_from: both sides of the cut are the still (each part ends on it too), so the
+        # doubled frame goes and a one-frame blend is enough; a longer fade mixed two mouths.
         joined = (video_mod.join_pinned(path, new) if pinned
-                  else video_mod.join_continuation(path, new, fade=0.12, drop_frames=0) if fresh_from
+                  else video_mod.join_continuation(path, new, fade=1 / 24, drop_frames=1) if fresh_from
                   else video_mod.join_continuation(path, new))
         if not joined:
             logger.warning("video parts: joining part %d failed", i)

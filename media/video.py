@@ -1912,8 +1912,14 @@ def generate_video(ctx, description: str, *,
                                   first_frame=images[0] if images and int(chain[1]) <= 1 else "",
                                   reference=reference if os.path.exists(reference or "") else "", ctx=ctx)
         else:
+            # A talking head's still is its last frame too: the part has to come back to the
+            # original, so the eyes and the head cannot wander off over its length (KeyFace /
+            # Lookahead Anchoring; probe 2026-10-20: eye match 0.86..0.97 over the part, the
+            # live run without it fell to 0.58 with the head turned down). Graph only: the
+            # prompt still sees one picture.
+            keys = images * 2 if keyframe and mode == "t2va" and len(images) == 1 else images
             wf = eng.build_workflow(description, mode=mode, width=width, height=height,
-                                frames=frames, seed=seed, images=images, videos=videos,
+                                frames=frames, seed=seed, images=keys, videos=videos,
                                 audios=audios, steps=steps, ctx=ctx,
                                 context_video=context_video, context_latent=context_latent,
                                 save_latent=tag)
@@ -2411,7 +2417,7 @@ def revoice(ctx, clip: str, voice: str) -> Optional[str]:
         if not remix._seedvc(ctx, src, fit_audio_refs([voice])[0], conv):
             return None
         subprocess.run([ff, "-y", "-v", "error", "-i", clip, "-i", conv, "-map", "0:v", "-map", "1:a", "-c:v", "copy",
-                        "-c:a", "aac", "-b:a", "192k", "-shortest", out], check=True, timeout=300)
+                        "-af", "loudnorm=I=-16:TP=-1.5:LRA=11", "-c:a", "aac", "-b:a", "192k", "-shortest", out], check=True, timeout=300)
     except Exception:
         logger.warning("revoice failed", exc_info=True)
         return None
