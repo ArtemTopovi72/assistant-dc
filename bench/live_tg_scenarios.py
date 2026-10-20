@@ -757,7 +757,7 @@ def sc_overseer(bot, ctx):
     t0 = time.time()
     u.photo(str(Path(ROOT, "tmp", "overseer.jpg")),
             caption=f"Анимируй эту голову смотрителя. Голос возьми отсюда: {link}" + chr(10) + f"Пусть он скажет: {script}")
-    is_plan = lambda e: "vp:go" in json.dumps(e.get("keyboard") or e.get("reply_markup") or "")
+    is_plan = lambda e: "vp:go" in json.dumps((e.get("payload") or {}).get("reply_markup") or "")
     is_clip = lambda e: e["method"] in ("sendVideo", "sendAnimation", "sendDocument")
     evs = u.wait(until=lambda e: is_plan(e) or is_clip(e), timeout=4 * 3600, quiet=1800)
     for t in texts(evs):
