@@ -2402,6 +2402,21 @@ def join_pinned(src: str, new: str, head: int = MOTION_CONTEXT_FRAMES) -> Option
     return fh.name
 
 
+def _revoice_ref(voice: str, dst: str, ms: int = 20000) -> str:
+    """The densest `ms` of speech in `voice` as Seed-VC's reference -- not H3's 15 s cut: to a held-out
+    piece of the same voice a 10 s reference gave 0.89, 20 s 0.92-0.93 (2026-10-20; Seed-VC clips at 25 s)."""
+    from pydub import AudioSegment
+    import voice_clone
+    try:
+        seg = AudioSegment.from_file(voice)
+        if len(seg) > ms + 400:
+            voice_clone.pick_speech(seg, min_ms=min(6000, ms), max_ms=ms).export(dst, format="wav")
+            return dst
+    except Exception:
+        logger.warning("revoice: could not cut the reference, the sample goes whole", exc_info=True)
+    return voice
+
+
 def revoice(ctx, clip: str, voice: str) -> Optional[str]:
     """`clip` with its speech converted onto the timbre of `voice` (Seed-VC keeps the pitch
     contour, so the mouth still matches), or None. A keyframe talking head says its line in
@@ -2414,7 +2429,7 @@ def revoice(ctx, clip: str, voice: str) -> Optional[str]:
     src, conv, out = (os.path.join(work, n) for n in ("src.wav", "conv.wav", "out.mp4"))
     try:
         subprocess.run([ff, "-y", "-v", "error", "-i", clip, "-vn", "-ac", "1", "-ar", "22050", src], check=True, timeout=120)
-        if not remix._seedvc(ctx, src, fit_audio_refs([voice])[0], conv):
+        if not remix._seedvc(ctx, src, _revoice_ref(voice, os.path.join(work, "ref.wav")), conv):
             return None
         subprocess.run([ff, "-y", "-v", "error", "-i", clip, "-i", conv, "-map", "0:v", "-map", "1:a", "-c:v", "copy",
                         "-af", "loudnorm=I=-16:TP=-1.5:LRA=11", "-c:a", "aac", "-b:a", "192k", "-shortest", out], check=True, timeout=300)
