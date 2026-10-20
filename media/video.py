@@ -81,6 +81,9 @@ VOICE_MIN_SIM = _cfg_env.env_float("VIDEO_VOICE_MIN_SIM", 0.8)
 # matched 0.92 but at 1.27-1.85 of it
 EYE_MIN_MATCH = _cfg_env.env_float("VIDEO_EYE_MIN_MATCH", 0.86)
 EYE_MAX_BRIGHT = _cfg_env.env_float("VIDEO_EYE_MAX_BRIGHT", 0.12)
+# a 2 s window is noisier than the part's mean: kept parts peaked at up to 0.10 over the bars,
+# the worst kept-looking opened-eyes window at 0.13
+EYE_WINDOW_SLACK = _cfg_env.env_float("VIDEO_EYE_WINDOW_SLACK", 0.10)
 YUNET = _config.BASE_DIR / "models_ext" / "yunet" / "face_detection_yunet_2023mar.onnx"
 _YUNET_URL = ("https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/"
               "face_detection_yunet_2023mar.onnx")
@@ -1180,6 +1183,15 @@ def _asks_new_style(description: str, ctx=None) -> bool:
                           "anime, cartoon, painting, 3D, photoreal, another art style)?", description)
 
 
+# A talking head's face acts only with its mouth: the agent's «his eyes widen slightly to convey
+# gravity» opened the still's shadowed eyes wide and grey in all three takes of part 1, while
+# the parts that said «expressions remain calm» kept them (live 2026-10-20).
+_HEAD_LOCK_SUFFIX = (
+    " The face keeps the expression of <Picture 1>: only the mouth and jaw move with the words, "
+    "with slight natural head motion; the eyes, eyelids and brows stay exactly as in <Picture 1> "
+    "for the whole clip -- they never widen, open further, squint or change.")
+
+
 def _with_lock(description: str, lock: str) -> str:
     """`lock` restated verbatim at the end of the visual part: the context-IR
     rewrite paraphrases it away («the camera holds a static shot»)."""
@@ -1830,11 +1842,15 @@ def prepare_prompt(ctx, description: str, *, images: Sequence[str] = (), videos:
         frames = snap_frames(frames + MOTION_CONTEXT_FRAMES - 5)
     if eng._context_ir_on():
         locked = description.endswith(_FRAMING_LOCK_SUFFIX)
+        if keyframe and images:
+            description += _HEAD_LOCK_SUFFIX       # seen by the rewrite, restated after it
         description = eng.to_context_ir(ctx, description, mode=mode,
                                     seconds=frames_to_seconds(frames), images=images,
                                     n_videos=len(videos), n_audios=len(audios))
         if locked:
             description = _with_lock(description, _FRAMING_LOCK_SUFFIX)
+        if keyframe and images:
+            description = _with_lock(description, _HEAD_LOCK_SUFFIX)
     if 1 <= len(images) <= 2 and not videos:     # a photo to animate, not a set of references
         restyle = _asks_new_style(asked, ctx)
         description = _with_lock(description, _START_LOCK_SUFFIX)
@@ -2418,11 +2434,12 @@ def join_pinned(src: str, new: str, head: int = MOTION_CONTEXT_FRAMES) -> Option
     return fh.name
 
 
-def eye_drift(still: str, clip: str, every: float = 0.5) -> Optional[float]:
+def eye_drift(still: str, clip: str, every: float = 0.5, window: float = 2.0) -> Optional[float]:
     """How far `clip` drifted off the eyes of `still`: > 0 is a drift, larger is worse. The eye
     strip YuNet finds on the still is template-matched in a frame every `every` s; the mean
-    match and the brightness of the eyes (95th percentile, against the still's) are each held
-    to their bar. None when no face is found or anything fails -- a check, never a reason to
+    match and the eyes' brightness against the skin (to the still's) are each held to their bar
+    over every `window` s, and the worst window counts: three seconds of opened eyes at the start
+    of a part were lost in its mean (live 2026-10-20). None when no face is found or anything fails -- a check, never a reason to
     stop a render."""
     try:
         import cv2
@@ -2470,7 +2487,12 @@ def eye_drift(still: str, clip: str, every: float = 0.5) -> Optional[float]:
         cap.release()
         if not match:
             return None
-        return max(EYE_MIN_MATCH - float(np.mean(match)), abs(float(np.mean(light)) - 1.0) - EYE_MAX_BRIGHT)
+        def worst(m, li):
+            return max(np.max(EYE_MIN_MATCH - m), np.max(np.abs(li - 1.0) - EYE_MAX_BRIGHT))
+        n = max(1, min(len(match), int(round(window / every))))
+        ks = np.ones(n) / n
+        whole = worst(np.array([np.mean(match)]), np.array([np.mean(light)]))
+        return float(max(whole, worst(np.convolve(match, ks, "valid"), np.convolve(light, ks, "valid")) - EYE_WINDOW_SLACK))
     except Exception:
         logger.warning("eye_drift failed", exc_info=True)
         return None
