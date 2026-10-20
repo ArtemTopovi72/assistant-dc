@@ -34,6 +34,14 @@ def test_a_broken_reply_is_asked_again_before_the_prompts_show():
     assert len(asked) == 2
 
 
+def test_a_reply_that_corrects_itself_gives_its_whole_list():
+    """One line, then «Wait… let me do all of them» and the full list (live 2026-10-20)."""
+    owner, asked = _owner('{"lines": ["Мужчина: \\"Ах, вот и ты.\\""]}\nWait, both shots:\n'
+                          '```json\n{"lines": ["Мужчина: \\"Ах, вот и ты.\\"", "Он: \\"Нам нужен твой морозильник.\\""]}\n```')
+    assert P._summaries(PARTS, "ru", owner) == ['Мужчина: "Ах, вот и ты."', 'Он: "Нам нужен твой морозильник."']
+    assert len(asked) == 1
+
+
 def test_the_budget_grows_with_the_spoken_lines():
     long = ['He says: "' + "Слово " * 120 + '"'] * 6
     owner, asked = _owner('{"lines": ["x", "x", "x", "x", "x", "x"]}')

@@ -24,6 +24,23 @@ def _mins(seconds: float) -> int:
     return max(1, math.ceil(seconds / 60.0))
 
 
+def _lines_of(raw: str, n: int) -> list:
+    """The last {"lines": [...]} in the reply that has `n` lines. The model answered one line,
+    then «Wait… let me do all 6» and the whole list: the first JSON was taken and the plan
+    showed the English prompts (live 2026-10-20)."""
+    import json
+    dec, found = json.JSONDecoder(), []
+    for m in re.finditer(r'\{\s*"lines"', raw or ""):
+        try:
+            obj, _ = dec.raw_decode(raw, m.start())
+        except ValueError:
+            continue
+        got = obj.get("lines") if isinstance(obj, dict) else None
+        if isinstance(got, list) and len(got) == n:
+            found.append(got)
+    return found[-1] if found else []
+
+
 def _summaries(texts: list, lang: str, owner=None) -> list:
     """One short line per part in the chat's language: the parts themselves are the
     English prompts the video model reads, which the chat should not see as is.
@@ -50,9 +67,10 @@ def _summaries(texts: list, lang: str, owner=None) -> list:
                 "aloud: copy it into your line in quotes, character for character, never "
                 "paraphrased or replaced by 'says something'. Leave out camera, sound, music, "
                 "light and particle effects (sparks, smoke, embers) unless they are the action. "
-                'Reply with JSON only: {"lines": ["...", "..."]}, one line per shot, same order.',
+                f'Reply with JSON only: {{"lines": ["...", "..."]}}, exactly {len(texts)} lines, '
+                "one per shot, same order.",
                 listing, temperature=0.2, max_tokens=400 + 90 * len(texts) + len(listing) // 2) or ""
-            lines = (safe_json_from_llm(raw, ["lines"]) or {}).get("lines") or []
+            lines = _lines_of(raw, len(texts)) or (safe_json_from_llm(raw, ["lines"]) or {}).get("lines") or []
         except Exception:
             tg_bot.logger.exception("video plan: summaries failed")
             lines = []
