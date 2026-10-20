@@ -1437,7 +1437,7 @@ def _check_joins(ctx, joins: list) -> str:
         logger.warning("video joins: the check failed", exc_info=True)
         return ""
     logger.info("video joins: %d checked -> %s", len(joins), ans[:200] or "no answer")
-    return "" if not ans or ans.upper().startswith("NONE") else ans[:400]
+    return "" if _says_none(ans) else ans[:400]
 
 
 def _check_actions(ctx, path: str, parts: list) -> str:
@@ -1472,7 +1472,16 @@ def _check_actions(ctx, path: str, parts: list) -> str:
         logger.warning("video actions: the check failed", exc_info=True)
         return ""
     logger.info("video actions: checked against the script -> %s", ans[:200] or "no answer")
-    return "" if not ans or ans.upper().startswith("NONE") else ans[:400]
+    return "" if _says_none(ans) else ans[:400]
+
+
+def _says_none(ans: str) -> bool:
+    """A vision check's «nothing wrong»: NONE first or last, bare or **bold**. The model
+    reasoned first and ended on «**NONE**.», the reply was told an action was missing and
+    told the user to «pick a voice» (live 2026-10-20)."""
+    words = [w.strip("*_.,:;!()\"'`").upper() for w in (ans or "").split()]
+    words = [w for w in words if w]
+    return not words or words[0] == "NONE" or words[-1] == "NONE"
 
 
 def video_mod_rules(ctx) -> tuple:
