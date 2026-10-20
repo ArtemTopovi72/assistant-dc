@@ -87,8 +87,10 @@ def test_the_status_line_carries_the_bar_and_a_new_stage_drops_it():
     assert bot._active_progress[7] == "▰▱▱▱▱▱▱▱▱▱ 10% · step 2/20"      # the admin panel's line
     on_progress(3, 20, "Step")                  # a second later: not another edit
     assert len(shown) == 2
-    on_progress(20, 20, "Step")                 # the last step always shows
-    assert shown[-1].endswith("100% · шаг 20/20")
+    # a finished count takes its bar off: «100% · шаг 20/20» stood under the check that came after
+    # the render (live 2026-10-21)
+    on_progress(20, 20, "Step")
+    assert shown[-1] == "🎬 <b>Генерирую видео…</b>" and 7 not in bot._active_progress
     status("🔊 <b>Озвучиваю…</b>")
     assert shown[-1] == "🔊 <b>Озвучиваю…</b>" and 7 not in bot._active_progress
 
@@ -111,9 +113,9 @@ def test_a_button_job_draws_its_bar_under_its_own_note_not_the_desktops():
     bot._with_progress = types.MethodType(tg_tasks.TaskRunnerMixin._with_progress, bot)
 
     def job(ctx):
-        progress.report(ctx, 4, 4, "Piece")
+        progress.report(ctx, 3, 4, "Piece")
     tg_queue.QueueMixin._run_cancellable(bot, 7, "📖 Читаю книгу…", job, lang="ru")
-    assert edits == [(42, "📖 Читаю книгу…\n▰▰▰▰▰▰▰▰▰▰ 100% · фрагмент 4/4")]
+    assert edits == [(42, "📖 Читаю книгу…\n" + progress.bar(3, 4) + " · фрагмент 3/4")]
     assert not desktop
 
 
@@ -213,3 +215,26 @@ def test_the_queue_watchdog_spares_a_task_that_is_still_rendering():
     tg_queue.QueueMixin._cancel_runaways(bot, 3600)
     assert cancels[stuck.task_id].is_set()
     assert not cancels[rendering.task_id].is_set()
+
+
+def test_a_stage_with_no_count_shows_its_running_time():
+    """«Перерисовываю фото…» and «Проверяю компоновку по эскизу…» sat bare for a minute: a vision read
+    and the card being freed send no steps (live 2026-10-21)."""
+    import tg_tasks
+    bot = types.SimpleNamespace(_stages_lock=threading.Lock(), _active_progress={})
+    bot._with_progress = types.MethodType(tg_tasks.TaskRunnerMixin._with_progress, bot)
+    shown = []
+    status, on_progress = bot._with_progress(7, "ru", shown.append)
+    status("🎨 <b>Перерисовываю фото…</b>")
+    t0 = time.monotonic()
+    status.tick(t0 + 1)                                  # not yet
+    assert shown == ["🎨 <b>Перерисовываю фото…</b>"]
+    status.tick(t0 + 42)
+    assert shown[-1] == "🎨 <b>Перерисовываю фото…</b>\n⏳ 0:42"
+    on_progress(3, 8, "Step")                            # a count takes over from the clock
+    assert shown[-1].endswith("шаг 3/8")
+    status.tick(t0 + 50)
+    assert shown[-1].endswith("шаг 3/8")
+    on_progress(8, 8, "Step")                            # done: the clock comes back
+    status.tick(t0 + 75)
+    assert shown[-1].endswith("⏳ 1:15")

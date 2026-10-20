@@ -226,8 +226,10 @@ class CharactersMixin:
             except Exception:
                 pass
 
+        _done, _runner = [False], threading.current_thread()
         if ctx is not None:
-            _update_status, ctx.progress_callback = self._with_progress(chat_id, lang, _update_status)
+            _update_status, ctx.progress_callback = self._with_progress(
+                chat_id, lang, _update_status, alive=lambda: not _done[0] and _runner.is_alive())
             ctx.stage_callback = self._make_stage_callback(
                 chat_id, lang, str(chat_id), _update_status)
 
@@ -271,6 +273,7 @@ class CharactersMixin:
                         if not lst:
                             self._running_task.pop(chat_id, None)
                     self._task_cancels.pop(task.task_id, None)
+            _done[0] = True
             if status_id:
                 # The keyboard is cleared as well as the text: a live ⛔ button
                 # left under a finished render points at nothing.

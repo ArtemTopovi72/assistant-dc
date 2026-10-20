@@ -170,8 +170,10 @@ def _about_the_last_video(last_image_path: str, user_input: str, ctx=None) -> bo
 
 
 # Telegram slows a chat that edits one message faster than about once a second; the
-# progress bar under a status redraws at most this often (the last step always shows).
+# progress bar under a status redraws at most this often; a stage with no count ticks its time
+# at this pace.
 _PROGRESS_EDIT_S = 3.0
+_PROGRESS_TICK_S = 5.0
 
 # Stage label -> icon. Module level because both the queued-task path and the
 # character render read it through _make_stage_callback.
@@ -837,33 +839,75 @@ class TaskRunnerMixin:
         except Exception:
             return False
 
-    def _with_progress(self, chat_id: int, lang: str, update_status, shown: str = "") -> tuple:
+    def _with_progress(self, chat_id: int, lang: str, update_status, shown: str = "",
+                       alive=None) -> tuple:
         """(update_status that remembers its line, a ctx.progress_callback drawing the bar under
         that line). One wrapper for every status line -- the agent's turn, a song, a restyle,
         research, a character render, a ⛔ job -- so a render shows how far it is wherever it
-        runs. `shown`: the line already on screen, when there is one."""
+        runs. `shown`: the line already on screen, when there is one.
+
+        A stage with no step count -- the model checking a sketch, a vision read before an
+        edit, the card being freed -- shows its running time instead («⏳ 0:42»), ticked by a
+        thread while `alive()` holds: «Перерисовываю фото…» sat bare for a minute (2026-10-21)."""
         import progress as _progress
         line, last = [shown], [0.0, ""]
+        st = {"since": time.monotonic(), "bar": False, "phase": ""}
+        draw_lock = threading.Lock()
+
+        def draw(below: str) -> None:
+            if below == last[1]:
+                return
+            last[0], last[1] = time.monotonic(), below
+            update_status(line[0] + ("\n" + below if below else ""))
 
         def status(text: str) -> None:
-            line[0], last[1] = text, ""
-            with self._stages_lock:
-                self._active_progress.pop(chat_id, None)
-            update_status(text)
+            with draw_lock:
+                line[0], last[1] = text, ""
+                st.update(since=time.monotonic(), bar=False, phase="")
+                with self._stages_lock:
+                    self._active_progress.pop(chat_id, None)
+                update_status(text)
+
+        def tick(now: float = None) -> None:
+            now = time.monotonic() if now is None else now
+            with draw_lock:
+                if not line[0] or st["bar"] or now - st["since"] < _PROGRESS_TICK_S:
+                    return
+                s = int(now - st["since"])
+                clock = f"{s // 60}:{s % 60:02d}"
+                draw(f"{st['phase']} · {clock}" if st["phase"] else f"⏳ {clock}")
+
+        def ticker() -> None:
+            while alive():
+                time.sleep(_PROGRESS_TICK_S)
+                if alive():
+                    tick()
 
         def on_progress(done: int, total: int, what: str) -> None:
-            shown = _progress.line(done, total, what, lang)
+            # a finished count is no progress: «▰▰▰▰▰▰▰▰▰▰ 100% · шаг 20/20» stood under «Проверяю
+            # компоновку по эскизу…» for the whole check after the render (live 2026-10-21)
+            counting = 0 < done < total or (total > 0 and done == 0)
+            shown = _progress.line(done, total, what, lang) if (counting or total <= 0) else ""
             with self._stages_lock:
-                self._active_progress[chat_id] = _progress.line(done, total, what, "en")
+                if shown:
+                    self._active_progress[chat_id] = _progress.line(done, total, what, "en")
+                else:
+                    self._active_progress.pop(chat_id, None)
                 at = getattr(self, "_progress_at", None)
                 if at is not None:
                     at[chat_id] = time.monotonic()
-            now = time.monotonic()
-            # an edit every few seconds at most: Telegram throttles a chat that edits faster
-            if not line[0] or shown == last[1] or (now - last[0] < _PROGRESS_EDIT_S and 0 < done < total):
-                return
-            last[0], last[1] = now, shown
-            update_status(line[0] + "\n" + shown)
+            with draw_lock:
+                was_bar, st["bar"] = st["bar"], counting
+                st["phase"] = shown if total <= 0 else ""
+                now = time.monotonic()
+                # an edit every few seconds at most between two steps: Telegram throttles a chat
+                # that edits faster
+                if not line[0] or (counting and was_bar and now - last[0] < _PROGRESS_EDIT_S):
+                    return
+                draw(shown)
+        status.tick = tick
+        if alive is not None:
+            threading.Thread(target=ticker, daemon=True, name=f"tg-tick-{chat_id}").start()
         return status, on_progress
 
     def _make_stage_callback(self, chat_id: int, lang: str, uname: str,
@@ -1039,7 +1083,9 @@ class TaskRunnerMixin:
                     pass
                 status_id = None
 
-        _update_status, ctx.progress_callback = self._with_progress(chat_id, lang, _update_status)
+        _runner = threading.current_thread()          # an exit that skips _clear_status ends it too
+        _update_status, ctx.progress_callback = self._with_progress(
+            chat_id, lang, _update_status, alive=lambda: not status_done[0] and _runner.is_alive())
         _update_status(f"⚙️ <b>{_stages.translate('Starting', lang)}…</b>")
 
         # ── Deep research bypass ───────────────────────────────────────────────

@@ -76,7 +76,8 @@ class QueueMixin:
                 except Exception:
                     pass
         # the copy carried the desktop's own bar; this job draws its own under its note
-        _, ctx.progress_callback = self._with_progress(chat_id, lang, show, shown=note)
+        _, ctx.progress_callback = self._with_progress(chat_id, lang, show, shown=note,
+                                                       alive=lambda: jid in jobs)
 
         def work():
             try:
