@@ -377,6 +377,19 @@ _ITEM_ATTR_PROMPT = (
 _item_attr_cache: dict = {}
 
 
+def names_former_place(ctx, phrase: str) -> bool:
+    """`phrase` says its thing is already gone («the area where the vase was»). Its own
+    yes/no: as the former_place field of _item_attributes it was true for 9 of 9 places
+    where the thing still IS («the counter top where the grey cat sleeps»), and the removal
+    was refused as «already removed» (bench/removal_target_place_live.py). Model down -> False."""
+    from seams import yes_no
+    return bool(yes_no(ctx)(
+        "{text}\n\nThis names a region of a picture. Does it say the thing it mentions is "
+        "ALREADY GONE -- the place where something WAS or USED TO BE (\"the area where the vase "
+        "was\", \"место, где стояла ваза\")? A place where a thing still IS (\"the counter where "
+        "the cat sleeps\", \"the face where the glasses are\") is no.", phrase or ""))
+
+
 def _item_attributes(ctx, phrase: str) -> dict:
     """Physical attributes of an arbitrary object phrase, via one cached LLM call.
     Returns {"worn", "small", "large", "multi"} as bool|None and "part"

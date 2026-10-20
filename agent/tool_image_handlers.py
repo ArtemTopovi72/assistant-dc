@@ -266,7 +266,7 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
     # thing to remove: the thing is already gone. The
     # model re-ran a removal on that phrase after a good one; grounding
     # picked a patch of wall and the delivered picture got a pasted light square.
-    if removal and _image(ctx)._item_attributes(ctx, region).get("former_place") is True:
+    if removal and _image(ctx).names_former_place(ctx, region):
         return ("[TOOL ERROR] region names where something WAS, so it is already removed. "
                 "Do not remove again: look at the current picture (inspect_image) and "
                 "answer the user.")

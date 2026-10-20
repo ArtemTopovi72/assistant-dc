@@ -35,7 +35,7 @@ from image_grounding import (
     _INVENTORY_CACHE, _image_region_inventory, _region_phrase_variants, _ground_region_phrase,
     _extract_edit_target, _english_region, _english_instructions, _item_attributes,
     _is_removal_instruction, _is_facial, _is_removal_of, _region_present,
-    _firered_instruction, _refine_edit_prompts, _strip_lead,
+    _firered_instruction, _refine_edit_prompts, _strip_lead, names_former_place,
 )
 # Mask construction / geometry, extracted to image_masks.py. Re-exported so
 # image.<name> callers and monkeypatch seams keep working.

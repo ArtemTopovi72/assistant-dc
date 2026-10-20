@@ -74,7 +74,6 @@ for ph, facial, head in [("lips", True, True), ("губы", True, True), ("hair"
     check(f"face/head: {ph}", (a.get("facial"), a.get("head")) == (facial, head), a)
 for ph, want in [("the area where the blue vase and flowers were located", True),
                  ("место, где стояла ваза", True), ("the blue vase", False), ("wooden table", False)]:
-    check(f"former place: {ph}", G._item_attributes(None, ph).get("former_place") is want,
-          G._item_attributes(None, ph))
+    check(f"former place: {ph}", G.names_former_place(None, ph) is want)
 print("ALL OK" if not bad else f"{bad} failed")
 sys.exit(1 if bad else 0)
