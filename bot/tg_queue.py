@@ -139,9 +139,16 @@ class QueueMixin:
                     self._consumers[i] = nt
 
                 # 3) runaway task — cancel cooperatively so the queue drains
+                abs_max = max(task_max, tg_bot._cfg_int("TG_TASK_ABS_MAX_S", 4 * 3600))
                 with self._task_lock:
+                    chat_of = {t.task_id: cid for cid, lst in self._running_task.items() for t in lst}
                     stale = [(tid, started) for tid, started in self._task_started.items()
                              if time.monotonic() - started > task_max]
+                # a render still counting its steps is not a runaway (see _still_rendering):
+                # this cancelled part 6 of an approved six-part clip at the hour (2026-10-20)
+                stale = [(tid, started) for tid, started in stale
+                         if time.monotonic() - started > abs_max or tid not in chat_of
+                         or not self._still_rendering(chat_of[tid])]
                 for tid, started in stale:
                     tg_bot.logger.error("WATCHDOG: task %s running for %.0fs — cancelling",
                                  tid[:8], time.monotonic() - started)

@@ -177,3 +177,51 @@ def test_a_quiet_spell_on_the_socket_does_not_end_the_step_counter():
     comfy_client._ComfyProgress("cid", lambda k, n: got.append((k, n)), {"id": "p1"},
                                 modules={"websocket": stub})._run()
     assert got == [(3, 8)]
+
+
+def _runner(card_busy, last_step_ago):
+    import tg_tasks
+    comfy = types.SimpleNamespace(card_in_use=lambda: card_busy, server_busy=lambda: False)
+    bot = types.SimpleNamespace(modules={"comfy_client": comfy},
+                                _progress_at={} if last_step_ago is None else {7: time.monotonic() - last_step_ago})
+    bot._still_rendering = types.MethodType(tg_tasks.TaskRunnerMixin._still_rendering, bot)
+    return bot
+
+
+def test_a_render_still_counting_steps_outlives_the_task_ceiling():
+    """An approved six-part talking head with its retakes ran past the hour and the watchdog
+    cancelled part 6: a render that still reports steps is not a runaway."""
+    assert _runner(True, 30)._still_rendering(7)
+    assert not _runner(True, 3600)._still_rendering(7)        # the steps stopped: stuck
+    assert not _runner(False, 30)._still_rendering(7)         # the card is idle
+    assert not _runner(True, None)._still_rendering(7)        # never rendered at all
+
+
+def test_the_queue_watchdog_spares_a_task_that_is_still_rendering():
+    import tg_queue
+    import tg_tasks
+    now = time.monotonic()
+    rendering, stuck = types.SimpleNamespace(task_id="r" * 8), types.SimpleNamespace(task_id="s" * 8)
+    comfy = types.SimpleNamespace(card_in_use=lambda: True, server_busy=lambda: False)
+    cancels = {t.task_id: threading.Event() for t in (rendering, stuck)}
+    bot = types.SimpleNamespace(
+        modules={"comfy_client": comfy}, settings=None, _task_lock=threading.Lock(),
+        _running_task={1: [rendering], 2: [stuck]}, _progress_at={1: now - 20, 2: now - 2000},
+        _task_started={t.task_id: now - 4000 for t in (rendering, stuck)}, _cancelled=set(),
+        _task_cancels=cancels, _poll_thread=None, _consumers=[],
+        _activity=types.SimpleNamespace(log=lambda *a, **k: None), _poll_beat=now)
+    bot._still_rendering = types.MethodType(tg_tasks.TaskRunnerMixin._still_rendering, bot)
+    bot._poll_loop = lambda: None
+    ticks = iter([True, False])
+    bot.__dict__["_running"] = True
+    real_sleep = tg_queue.time.sleep
+
+    def sleep(_):
+        bot._running = next(ticks, False)
+    tg_queue.time.sleep = sleep
+    try:
+        tg_queue.QueueMixin._watchdog_loop(bot)
+    finally:
+        tg_queue.time.sleep = real_sleep
+    assert cancels[stuck.task_id].is_set()
+    assert not cancels[rendering.task_id].is_set()

@@ -808,6 +808,17 @@ class TaskRunnerMixin:
             except Exception:
                 tg_bot.logger.exception("steer: could not re-queue %r", text[:80])
 
+    def _still_rendering(self, chat_id: int) -> bool:
+        """The card is working for this chat and its steps came lately (core/progress.py)."""
+        at = (getattr(self, "_progress_at", None) or {}).get(chat_id)
+        if at is None or time.monotonic() - at > tg_bot._cfg_int("TG_PROGRESS_STALE_S", 600):
+            return False
+        try:
+            comfy = module(self, "comfy_client")
+            return bool(comfy.card_in_use() or comfy.server_busy())
+        except Exception:
+            return False
+
     def _with_progress(self, chat_id: int, lang: str, update_status, shown: str = "") -> tuple:
         """(update_status that remembers its line, a ctx.progress_callback drawing the bar under
         that line). One wrapper for every status line -- the agent's turn, a song, a restyle,
@@ -826,6 +837,9 @@ class TaskRunnerMixin:
             shown = _progress.line(done, total, what, lang)
             with self._stages_lock:
                 self._active_progress[chat_id] = _progress.line(done, total, what, "en")
+                at = getattr(self, "_progress_at", None)
+                if at is not None:
+                    at[chat_id] = time.monotonic()
             now = time.monotonic()
             # an edit every few seconds at most: Telegram throttles a chat that edits faster
             if not line[0] or shown == last[1] or (now - last[0] < _PROGRESS_EDIT_S and 0 < done < total):
@@ -1550,6 +1564,9 @@ class TaskRunnerMixin:
         _invoke_timeout = max(5, tg_bot._cfg_int("TG_INVOKE_TIMEOUT_S", 1800, getattr(self, "cfg", None)))
         _hard_ceiling = max(_invoke_timeout,
                             tg_bot._cfg_int("TG_TASK_MAX_S", 3600))
+        # Past the ceiling a render still counting its steps is not stuck: an approved six-part
+        # talking head with its retakes ran 1 h and part 6 was cancelled (live 2026-10-20).
+        _abs_ceiling = max(_hard_ceiling, tg_bot._cfg_int("TG_TASK_ABS_MAX_S", 4 * 3600))
         # Coarse in production (a 1800s base needs no finer grain); scales down
         # for small deadlines so tests do not have to wait a quarter minute.
         _STEP = min(15.0, max(0.05, _invoke_timeout / 4.0))
@@ -1560,7 +1577,7 @@ class TaskRunnerMixin:
             if not _invoke_thread.is_alive():
                 break
             _waited += _STEP
-            if _waited >= _hard_ceiling:
+            if _waited >= _hard_ceiling and (_waited >= _abs_ceiling or not self._still_rendering(chat_id)):
                 break
             if _waited >= _invoke_timeout:
                 try:

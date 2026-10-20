@@ -1334,6 +1334,7 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         self._start_time: float = 0.0   # set in start(); used to detect catch-up messages
         self._active_stages: dict[int, str] = {}   # chat_id → current stage
         self._active_progress: dict[int, str] = {}  # chat_id → its progress line (core/progress.py)
+        self._progress_at: dict[int, float] = {}    # chat_id → monotonic time of its last step
         self._stages_lock   = threading.Lock()
         # chat_id → time.time() of the last Stop request. A task whose enqueue_ts
         # predates this is dropped instead of run, which cancels QUEUED work without
