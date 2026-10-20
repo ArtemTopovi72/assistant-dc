@@ -11,7 +11,6 @@ Every action is logged to the activity log with the admin's name.
 from __future__ import annotations
 
 import html as _h
-import subprocess
 import threading
 import time
 from typing import Optional
@@ -40,17 +39,14 @@ def _dur(s: float) -> str:
 
 
 def gpu_line() -> str:
-    """«🎮 RTX 3090 · 19.2/24.0 ГБ · 87%», cached for a few seconds."""
+    """«🎮 RTX 3090 · 21.1/24.0 ГБ · 38% · 39° (хотспот 50°, память 50°) · 28 Вт» and, on a line
+    of its own, the CPU's load, temperature and power (core/hw_sensors.py)."""
     if time.time() - _gpu_cache["t"] < 5:
         return _gpu_cache["v"]
     v = ""
     try:
-        out = subprocess.run(
-            ["nvidia-smi", "--query-gpu=name,memory.used,memory.total,utilization.gpu",
-             "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=3,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout.strip().splitlines()[0]
-        name, used, total, util = [x.strip() for x in out.split(",")]
-        v = f"🎮 {name.replace('NVIDIA GeForce ', '')} · {float(used)/1024:.1f}/{float(total)/1024:.1f} ГБ · {util}%"
+        import hw_sensors
+        v = "\n".join(hw_sensors.lines())
     except Exception:
         pass
     _gpu_cache.update(t=time.time(), v=v)

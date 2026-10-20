@@ -37,6 +37,7 @@ sounddevice==0.5.5
 pydub==0.25.1
 demucs==4.1.0
 noisereduce==3.0.3
+HardwareMonitor==1.2.1       # admin panel: GPU hot spot / memory temps, CPU temp and power (core/hw_sensors.py)
 
 # Vision / images
 pillow==12.1.1
