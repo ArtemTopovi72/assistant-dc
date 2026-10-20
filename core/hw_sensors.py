@@ -143,7 +143,8 @@ def lines(v: dict = None) -> list:
               🌡 хотспот 🟢 50°
               🌡 память 🟢 50°
         🧠 <b>i7-14700KF</b>  ▰▱▱▱▱▱▱▱▱▱ 8%
-              🌡 🟢 62° · ⚡ 95 Вт"""
+              ⚡ 95 Вт
+              🌡 ядро 🟢 62°"""
     import progress
     v = read() if v is None else v
     out = []
@@ -169,10 +170,9 @@ def lines(v: dict = None) -> list:
             head += "  " + progress.bar(round(v["cpu_load"]), 100)
         out.append(head)
         bits = []
-        if v.get("cpu_temp") is not None:
-            bits.append("🌡 " + _deg(v, "cpu_temp"))
         if v.get("cpu_power") is not None:
             bits.append(f"⚡ {v['cpu_power']:.0f} Вт")
-        out.append(_PAD + (" · ".join(bits) if bits
-                           else "🌡 и ⚡ — нужен сервис датчиков (scripts/install_sensors.ps1)"))
+        if v.get("cpu_temp") is not None:
+            bits.append("🌡 ядро " + _deg(v, "cpu_temp"))
+        out += [_PAD + b for b in bits or ["🌡 и ⚡ — нужен сервис датчиков (scripts/install_sensors.ps1)"]]
     return out

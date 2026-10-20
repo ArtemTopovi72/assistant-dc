@@ -161,10 +161,9 @@ class AdminTab(QWidget):
             cpu_name = (v.get("cpu_name") or "CPU").replace("Intel Core ", "").replace("AMD Ryzen ", "Ryzen ")
             name.setText(f"🧠 {cpu_name}")
             bar.setValue(int(v.get("cpu_load") or 0))
-            bits = [temp("cpu_temp", "🌡 ")]
-            if v.get("cpu_power") is not None:
-                bits.append(f"⚡ {v['cpu_power']:.0f} {tr('W')}")
-            info.setText(sep.join(b for b in bits if b)
+            bits = [f"⚡ {v['cpu_power']:.0f} {tr('W')}" if v.get("cpu_power") is not None else "",
+                    temp("cpu_temp", f"🌡 {tr('core')} ")]
+            info.setText("<br>".join(b for b in bits if b)
                          or tr("🌡 / ⚡ need the sensor service (scripts/install_sensors.ps1)"))
             self._hw_box.show()
         except Exception:

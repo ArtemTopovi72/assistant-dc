@@ -27,7 +27,8 @@ def test_every_reading_reaches_the_panel():
                    "      🌡 хотспот 🟡 88°",
                    "      🌡 память 🔴 106°",
                    "🧠 <b>i7-14700KF</b>  ▰▱▱▱▱▱▱▱▱▱ 8%",
-                   "      🌡 🟢 62° · ⚡ 95 Вт"]
+                   "      ⚡ 95 Вт",
+                   "      🌡 ядро 🟢 62°"]
 
 
 def test_a_cpu_read_without_the_driver_says_what_is_missing():
