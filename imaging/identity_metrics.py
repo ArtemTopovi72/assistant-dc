@@ -114,6 +114,27 @@ def changed_fraction(path_a: str, path_b: str, *, mask: Optional[np.ndarray] = N
     return out
 
 
+def changed_box(path_a: str, path_b: str, *, thresh: int = 30) -> Optional[tuple]:
+    """(fraction changed, (x0, y0, x1, y1) of the changed area as fractions of the frame), or
+    None when nothing above specks changed or a file is unreadable. Specks (JPEG noise, a
+    re-encode) are opened away before the box is taken."""
+    a = cv2.imread(path_a)
+    b = cv2.imread(path_b)
+    if a is None or b is None:
+        return None
+    if b.shape[:2] != a.shape[:2]:
+        b = cv2.resize(b, (a.shape[1], a.shape[0]), interpolation=cv2.INTER_AREA)
+    changed = (cv2.absdiff(a, b).max(axis=2) > thresh).astype(np.uint8)
+    # 3x3, not 5x5: removed glasses are thin frames, and 5x5 opened them all away
+    changed = cv2.morphologyEx(changed, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    if changed.mean() < 0.0002:
+        return None
+    ys, xs = np.nonzero(changed)
+    h, w = changed.shape
+    return (float(changed.mean()),
+            (xs.min() / w, ys.min() / h, (xs.max() + 1) / w, (ys.max() + 1) / h))
+
+
 def face_region_change(path_a: str, path_b: str, *, thresh: int = 18, pad: float = 0.15):
     """Fraction of pixels changed inside A's (padded) face box. ~0 = face left
     untouched (containment success); high = the face was regenerated."""

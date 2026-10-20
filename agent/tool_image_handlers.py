@@ -91,6 +91,37 @@ def _note_source(state, source) -> None:
 PAIR_INSPECTION = "Inspection of the current image (BEFORE vs AFTER):"
 
 
+def _where(box) -> str:
+    x0, y0, x1, y1 = box
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    v = "top" if cy < 1 / 3 else "bottom" if cy > 2 / 3 else "middle"
+    h = "left" if cx < 1 / 3 else "right" if cx > 2 / 3 else "centre"
+    return "centre" if (v, h) == ("middle", "centre") else f"{v} {h}"
+
+
+def _change_evidence(before: str, after: str) -> str:
+    """The measured pixel change, as a note for the inspector. Shown the two whole frames, it
+    said «the two images are identical» about a round clock cleanly removed from a station
+    roof (bench/removal_verdict_live.py). Close-ups of the changed part on top made it worse
+    (4 pictures: it judged the BEFORE close-up and called removed things still there)."""
+    import identity_metrics
+    try:
+        got = identity_metrics.changed_box(before, after)
+    except Exception:
+        logger.debug("change measure failed", exc_info=True)
+        return ""
+    if not got:
+        # Opened away is not the same as unchanged: a 2 px outline goes too. Said unchanged
+        # only when the raw difference is nil as well; a JPEG re-encode (0.13% raw) and real
+        # removed glasses (0.15% raw) overlap, so between the two the note says nothing.
+        raw = identity_metrics.changed_fraction(before, after, thresh=30).get("overall", 1.0)
+        return ("\n\nMeasured: the two pictures are the same, pixel for pixel -- the edit "
+                "changed nothing visible." if raw < 0.0002 else "")
+    frac, box = got
+    return (f"\n\nMeasured: the edit changed {frac * 100:.1f}% of the picture, in the "
+            f"{_where(box)} part. The pictures are NOT identical there; look at that part.")
+
+
 def _handle_inspect_image(ctx, state, args: dict) -> str:
     source = state.get("image_path") or getattr(ctx, "last_image_path", None)
     if not source or not os.path.exists(source):
@@ -142,6 +173,8 @@ def _handle_inspect_image(ctx, state, args: dict) -> str:
                     "still the same person (face, features, count), then name anything AFTER "
                     "has twice or newly that the edit did not ask for, then judge the check "
                     "on AFTER." if _pair else "")
+    if _pair:
+        _ask += _change_evidence(_before, source)
     result = ""
     for _ in range(2):
         result = analyze_image_with_llm(
