@@ -249,7 +249,18 @@ class QueueMixin:
         last = {}
         for d in data or []:
             if d.get("_state") == "pending" and durable_backend:
-                continue        # still safely queued in the external backend
+                # Still queued there, or popped by a consumer and held in RAM until it started:
+                # the app was restarted in that gap and «бот меня заигнорил» -- the message was
+                # enqueued at 00:21:37 and the process killed at 00:21:44 (live 2026-10-21). A task
+                # that never started has done nothing yet, so it simply goes back first in line.
+                try:
+                    if not self._backend.position_of(str(d.get("task_id") or "")):     # 1-based, 0 = gone
+                        self._backend.requeue(tg_bot._Task.from_dict(d))
+                        tg_bot.logger.info("inflight: task %s was popped but never started -- requeued",
+                                           str(d.get("task_id"))[:8])
+                except Exception:
+                    tg_bot.logger.exception("inflight requeue failed for %s", d.get("task_id"))
+                continue
             last[d.get("chat_id")] = d
         for d in last.values():
             try:

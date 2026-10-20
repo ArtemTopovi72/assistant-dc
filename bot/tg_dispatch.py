@@ -72,11 +72,52 @@ def _is_button(text: str) -> bool:
     return any(t == v for forms in tg_strings._BTN.values() for v in forms.values())
 
 
+_POLL_LEASE_KEY = "tgbot:poller"
+
+
 class DispatchMixin:
+    def _poll_lease(self) -> bool:
+        """Whether this bot may poll: one poller per token, held as a Redis key it renews before
+        every long poll. A new instance started while the old one was still tearing down polled
+        beside it -- 409 on both, and a message went to the dying one and was never answered
+        (live 2026-10-21). Without Redis there is nothing to share, so it polls."""
+        r = getattr(getattr(self, "_backend", None), "_r", None)
+        if r is None:
+            return True
+        me = f"{os.getpid()}:{id(self)}".encode()
+        ttl = int(tg_bot._POLL_TIMEOUT) + 20
+        try:
+            if r.set(_POLL_LEASE_KEY, me, nx=True, ex=ttl):
+                return True
+            if r.get(_POLL_LEASE_KEY) == me:
+                r.expire(_POLL_LEASE_KEY, ttl)
+                return True
+            return False
+        except Exception:
+            return True
+
+    def _release_poll_lease(self) -> None:
+        r = getattr(getattr(self, "_backend", None), "_r", None)
+        try:
+            if r is not None and r.get(_POLL_LEASE_KEY) == f"{os.getpid()}:{id(self)}".encode():
+                r.delete(_POLL_LEASE_KEY)
+        except Exception:
+            pass
+
     def _poll_loop(self):
         first_poll = True
         backoff = 3.0
+        waiting = False
         while self._running:
+            if not self._poll_lease():
+                if not waiting:
+                    tg_bot.logger.warning("another bot instance holds the poll -- waiting for it to stop")
+                waiting = True
+                time.sleep(3.0)
+                continue
+            if waiting:
+                tg_bot.logger.info("the poll is ours now")
+                waiting = False
             try:
                 updates = self._fetch_updates()
                 self._poll_beat = time.monotonic()
@@ -119,6 +160,7 @@ class DispatchMixin:
             for upd in updates:
                 try: self._dispatch_logged(upd)
                 except Exception: tg_bot.logger.exception("dispatch error")
+        self._release_poll_lease()
 
     def _commit_offset(self, result: list) -> None:
         if result:
