@@ -76,10 +76,11 @@ MAX_REF_AUDIOS = 3
 # 0.46..0.95 at one reference (night 2026-10-20), a good part sits at 0.85+
 VOICE_MIN_SIM = _cfg_env.env_float("VIDEO_VOICE_MIN_SIM", 0.8)
 # The still's eyes across a talking-head part (eye_drift), live parts 2026-10-20: kept eyes
-# matched 0.92-0.98 at 0.96-1.04 of the still's brightness; a part without the end frame fell
-# to 0.82, and the part whose eyes went light and wide matched 0.92 but at 1.09 brightness
+# matched 0.92-0.98 and stayed within 0.93-1.06 of the still's eyes-to-skin brightness; a
+# part without the end frame fell to 0.82; parts whose shadowed eyes opened wide and grey
+# matched 0.92 but at 1.27-1.85 of it
 EYE_MIN_MATCH = _cfg_env.env_float("VIDEO_EYE_MIN_MATCH", 0.86)
-EYE_MAX_BRIGHT = _cfg_env.env_float("VIDEO_EYE_MAX_BRIGHT", 0.07)
+EYE_MAX_BRIGHT = _cfg_env.env_float("VIDEO_EYE_MAX_BRIGHT", 0.12)
 YUNET = _config.BASE_DIR / "models_ext" / "yunet" / "face_detection_yunet_2023mar.onnx"
 _YUNET_URL = ("https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/"
               "face_detection_yunet_2023mar.onnx")
@@ -2441,10 +2442,16 @@ def eye_drift(still: str, clip: str, every: float = 0.5) -> Optional[float]:
         y0, y1, x0, x1 = (max(0, int(cy - 0.3 * d)), min(h, int(cy + 0.3 * d)),
                           max(0, int(cx - d)), min(w, int(cx + d)))
         tpl = cv2.cvtColor(im[y0:y1, x0:x1], cv2.COLOR_BGR2GRAY)
-        third = tpl.shape[1] // 3
 
-        def bright(strip):          # the two eyes, not the nose between them
-            return float(np.percentile(np.concatenate([strip[:, :third].ravel(), strip[:, -third:].ravel()]), 95))
+        def bright(strip):
+            # the eyes themselves against the skin of the same frame (nose bridge, cheek line):
+            # the light of a part changes as a whole, the brows are white fur in both
+            eyes = np.concatenate([strip[max(0, int(ey - y0 - 0.10 * d)):int(ey - y0 + 0.14 * d),
+                                         max(0, int(ex - x0 - 0.28 * d)):int(ex - x0 + 0.28 * d)].ravel()
+                                   for ex, ey in ((rx, ry), (lx, ly))])
+            skin = np.concatenate([strip[:, int(cx - x0 - 0.05 * d):int(cx - x0 + 0.05 * d)].ravel(),
+                                   strip[int(0.85 * strip.shape[0]):, :].ravel()])
+            return float(np.mean(eyes)) / max(1.0, float(np.mean(skin)))
         base = bright(tpl) or 1.0
         cap = cv2.VideoCapture(clip)
         step = max(1, int((cap.get(cv2.CAP_PROP_FPS) or 24) * every))
