@@ -296,3 +296,11 @@ def test_a_light_under_the_retake_bar_is_still_pulled_back():
                                      LOOK_PULL_SHIFT=V.LOOK_PULL_SHIFT)
     assert H._pull_light(fake(-0.01), "s.jpg", "take.mp4", 2) == "pulled.mp4"
     assert H._pull_light(fake(-0.2), "s.jpg", "take.mp4", 2) == "take.mp4"
+
+
+def test_words_nobody_wrote_fail_the_speech_check():
+    """Run 19: «…и забрать банки. Васмуре басмутэс амут» -- H3 filled the rest of the part (2026-10-20)."""
+    line = "Тебе нужно освободить нам место в холодильнике и забрать банки."
+    assert not V.heard_lines([line], "Тебе нужно освободить нам место в холодильнике и забрать банки! Васмуре басмутэс амут")
+    assert V.heard_lines([line], "Тебе нужно освободить нам место в холодильнике и забрать банки!")
+    assert V.heard_lines(["У нас есть примерно четыре-пять недель."], "У нас есть примерно 4-5 недель.")

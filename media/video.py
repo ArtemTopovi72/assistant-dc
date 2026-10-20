@@ -1422,7 +1422,14 @@ def heard_lines(expected: Sequence[str], heard: str) -> bool:
         if bad:
             UNSTRESSED.update(bad)
             return False
-    return True
+    # nor words nobody wrote: a part longer than its line got «…забрать банки. Васмуре басмутэс
+    # амут» from H3 and passed (run 19, 2026-10-20)
+    said = {w for line in expected for w in _flat_line(line).split()}
+
+    def written(h):
+        return h in said or any(len(os.path.commonprefix([h, w])) >= max(3, min(len(h), len(w)) - 2) for w in said)
+    extra = [h for h in _flat_line(heard).split() if not written(h)]
+    return len(extra) <= max(2, len(said) // 6)
 
 
 def garbled_words(words: Sequence[str], got: set) -> list:
