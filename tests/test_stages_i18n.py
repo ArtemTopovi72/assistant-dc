@@ -309,11 +309,15 @@ for path in sorted(os.path.join(d, f) for d in source_dirs() for f in os.listdir
         f = n.func
         name = f.attr if isinstance(f, ast.Attribute) else \
                (f.id if isinstance(f, ast.Name) else "")
-        if name not in ("set_stage", "_set_stage") or not n.args:
+        # progress.report(ctx, done, total, "what") names its phase in the 4th argument
+        if name in ("set_stage", "_set_stage") and n.args:
+            said = n.args[0]
+        elif name == "report" and len(n.args) >= 4:
+            said = n.args[3]
+        else:
             continue
         # A plain literal, or either branch of "a if cond else b".
-        for arg in ([n.args[0]] if not isinstance(n.args[0], ast.IfExp)
-                    else [n.args[0].body, n.args[0].orelse]):
+        for arg in ([said] if not isinstance(said, ast.IfExp) else [said.body, said.orelse]):
             if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
                 emitted.add(arg.value)
 

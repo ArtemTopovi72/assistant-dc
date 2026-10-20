@@ -34,6 +34,13 @@ DEFAULT_LANG = "en"
 # these and you find both the emitter and this table.
 _STAGES: dict[str, dict[str, str]] = {
     # graph.py
+    # core/progress.py -- the line under a status, fed by comfy_client and music.run_gpu_worker
+    "Step": {"ru": "Шаг"},
+    "Loading the model": {"ru": "Загружаю модель"},
+    "Decoding the result": {"ru": "Собираю результат"},
+    "Piece": {"ru": "Фрагмент"},
+    "Waiting for the video card": {"ru": "Жду видеокарту"},
+    "Freeing the video card": {"ru": "Освобождаю видеокарту"},
     "Putting the voice on": {"ru": "Накладываю голос"},
     "Singing in the chosen voice": {"ru": "Пою выбранным голосом"},
     "Compacting the chat history": {"ru": "Сжимаю историю диалога"},

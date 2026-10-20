@@ -1151,6 +1151,7 @@ def _scoped_ctx(base, cancel_event=None):
     c.turn_queries = []      # what this turn searched for (tg_reply_shape)
     c.image_pointed_at = False
     c.interim_callback = None
+    c.progress_callback = None    # each task draws its own bar (tg_tasks._with_progress), not the desktop's
     c.steer_inbox = None
     c.turn_sources = []      # the pages it read
     c.turn_products = []     # Ozon products seen this turn (tg_product_cards)
@@ -1332,6 +1333,7 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         self._offset        = self._load_offset()
         self._start_time: float = 0.0   # set in start(); used to detect catch-up messages
         self._active_stages: dict[int, str] = {}   # chat_id → current stage
+        self._active_progress: dict[int, str] = {}  # chat_id → its progress line (core/progress.py)
         self._stages_lock   = threading.Lock()
         # chat_id → time.time() of the last Stop request. A task whose enqueue_ts
         # predates this is dropped instead of run, which cancels QUEUED work without

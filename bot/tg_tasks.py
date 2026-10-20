@@ -169,6 +169,10 @@ def _about_the_last_video(last_image_path: str, user_input: str, ctx=None) -> bo
     return bool(r["is_question"] or r["about_picture"])
 
 
+# Telegram slows a chat that edits one message faster than about once a second; the
+# progress bar under a status redraws at most this often (the last step always shows).
+_PROGRESS_EDIT_S = 3.0
+
 # Stage label -> icon. Module level because both the queued-task path and the
 # character render read it through _make_stage_callback.
 _STAGE_ICON = {
@@ -804,6 +808,32 @@ class TaskRunnerMixin:
             except Exception:
                 tg_bot.logger.exception("steer: could not re-queue %r", text[:80])
 
+    def _with_progress(self, chat_id: int, lang: str, update_status, shown: str = "") -> tuple:
+        """(update_status that remembers its line, a ctx.progress_callback drawing the bar under
+        that line). One wrapper for every status line -- the agent's turn, a song, a restyle,
+        research, a character render, a ⛔ job -- so a render shows how far it is wherever it
+        runs. `shown`: the line already on screen, when there is one."""
+        import progress as _progress
+        line, last = [shown], [0.0, ""]
+
+        def status(text: str) -> None:
+            line[0], last[1] = text, ""
+            with self._stages_lock:
+                self._active_progress.pop(chat_id, None)
+            update_status(text)
+
+        def on_progress(done: int, total: int, what: str) -> None:
+            shown = _progress.line(done, total, what, lang)
+            with self._stages_lock:
+                self._active_progress[chat_id] = _progress.line(done, total, what, "en")
+            now = time.monotonic()
+            # an edit every few seconds at most: Telegram throttles a chat that edits faster
+            if not line[0] or shown == last[1] or (now - last[0] < _PROGRESS_EDIT_S and 0 < done < total):
+                return
+            last[0], last[1] = now, shown
+            update_status(line[0] + "\n" + shown)
+        return status, on_progress
+
     def _make_stage_callback(self, chat_id: int, lang: str, uname: str,
                              update_status):
         """The one place a stage becomes a status line.
@@ -822,6 +852,7 @@ class TaskRunnerMixin:
             if not (stage or "").strip():
                 with self._stages_lock:
                     self._active_stages.pop(chat_id, None)
+                    self._active_progress.pop(chat_id, None)
                 return
             # The icon is chosen from the ENGLISH label, before translating: the
             # stage vocabulary belongs to the shared agent core (graph/tools/
@@ -976,6 +1007,7 @@ class TaskRunnerMixin:
                     pass
                 status_id = None
 
+        _update_status, ctx.progress_callback = self._with_progress(chat_id, lang, _update_status)
         _update_status(f"⚙️ <b>{_stages.translate('Starting', lang)}…</b>")
 
         # ── Deep research bypass ───────────────────────────────────────────────

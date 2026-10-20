@@ -263,6 +263,11 @@ Also reaches into `config.py` for env-driven tuning (`TG_WORKERS`, `TG_WATCHDOG_
 The desktop GUI shares the same `graph`/`ctx` callbacks and reads this domain's state back
 out: `admin_snapshot()` ([`bot/tg_admin.py`](../../bot/tg_admin.py)) feeds both the in-chat admin panel and the
 desktop "Админка" tab from one snapshot, and `get_queue_stats()` ([`bot/tg_queue.py`](../../bot/tg_queue.py)) is what
-the GUI's status display reads. Files this domain delivers are archived through
+the GUI's status display reads. How far a render is reaches every status line through one
+wrapper, `_with_progress` ([`bot/tg_tasks.py`](../../bot/tg_tasks.py)). It sets `ctx.progress_callback`,
+draws the bar from [`core/progress.py`](../../core/progress.py) under the current status (at most one
+edit every 3 s), and keeps the English line in `_active_progress` for the admin snapshot.
+ComfyUI renders and venv workers feed it from the imaging and media domains; no tool reports
+on its own. Files this domain delivers are archived through
 `nice_names`, a module owned elsewhere, so a Telegram-delivered file and a desktop-generated
 one land in the same naming scheme.

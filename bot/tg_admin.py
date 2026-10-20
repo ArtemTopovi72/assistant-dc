@@ -67,10 +67,12 @@ class AdminMixin:
             started = dict(self._task_started)
         with self._stages_lock:
             stages = dict(self._active_stages)
+            bars = dict(self._active_progress)
         names = {u.chat_id: u for u in self._user_store.all()}
         name = lambda cid: (names[cid].name if cid in names and names[cid].name else str(cid))
         running = [{"task_id": t.task_id, "chat_id": cid, "user": name(cid),
-                    "text": _short(t.user_text), "stage": stages.get(cid, "") or stages.get(str(cid), ""),
+                    "text": _short(t.user_text), "stage": " · ".join(x for x in (
+                        stages.get(cid, "") or stages.get(str(cid), ""), bars.get(cid, "")) if x),
                     "elapsed": now_m - started.get(t.task_id, now_m)} for cid, t in running_pairs]
         try:
             order = self._backend.service_order()

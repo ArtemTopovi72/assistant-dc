@@ -227,6 +227,7 @@ class CharactersMixin:
                 pass
 
         if ctx is not None:
+            _update_status, ctx.progress_callback = self._with_progress(chat_id, lang, _update_status)
             ctx.stage_callback = self._make_stage_callback(
                 chat_id, lang, str(chat_id), _update_status)
 

@@ -15,6 +15,7 @@ import shutil
 import uuid
 
 import audiobook
+import progress
 
 MIN_PASTED_BOOK = 1500                   # a shorter pasted text is not a book: the user is told to send the file
 SPEECH_CHARS_PER_SECOND = 14.0           # measured on the F5 Russian voice, for the «about N min» line
@@ -236,7 +237,8 @@ class AudiobookMixin:
                 if ctx.is_cancelled():
                     return
                 wav = os.path.join(work, f"ch{n}.wav")
-                if not audiobook.render_chapter(synth, title, body, n, wav, cancelled=ctx.is_cancelled, verify=verify):
+                if not audiobook.render_chapter(synth, title, body, n, wav, cancelled=ctx.is_cancelled, verify=verify,
+                                                on_piece=lambda i, total: progress.report(ctx, i, total, "Piece")):
                     if ctx.is_cancelled():
                         return
                     self._send_text(chat_id, tg_bot._t("book_chapter_fail", lang, n=n))

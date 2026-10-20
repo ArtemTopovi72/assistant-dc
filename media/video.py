@@ -1861,6 +1861,13 @@ def prepare_prompt(ctx, description: str, *, images: Sequence[str] = (), videos:
     return description, seconds
 
 
+def _video_stage(ctx) -> str:
+    """«Generating a video», or the caller's «Generating a video (2/4)» when a part of a long
+    script is on: the bare label wiped the part number off the user's status line."""
+    said = str(getattr(ctx, "last_stage", "") or "")
+    return said if said.startswith("Generating a video (") else "Generating a video"
+
+
 def generate_video(ctx, description: str, *,
                    images: Sequence[str] = (), videos: Sequence[str] = (),
                    audios: Sequence[str] = (),
@@ -1932,7 +1939,7 @@ def generate_video(ctx, description: str, *,
                 len(images), len(videos))
     logger.info("H3 prompt: %s", description[:4000])    # what the model actually got
     if ctx is not None and hasattr(ctx, "set_stage"):
-        ctx.set_stage("Generating a video")
+        ctx.set_stage(_video_stage(ctx))
 
     tag = f"c{seed}_{random.randint(0, 1 << 30)}" if save_latent else ""
     try:
@@ -1955,7 +1962,7 @@ def generate_video(ctx, description: str, *,
                                 context_video=context_video, context_latent=context_latent,
                                 save_latent=tag)
         if ctx is not None and hasattr(ctx, "set_stage"):
-            ctx.set_stage("Generating a video")
+            ctx.set_stage(_video_stage(ctx))
         wf = eng._normalize_save_node(wf)
     except VideoUnavailable as exc:
         _VIDEO_FAILURE.update({"reason": "unavailable", "detail": str(exc)})

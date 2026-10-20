@@ -154,6 +154,7 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
                       ResearchTabMixin, ImageFixMixin, MemoryProfileMixin, ChatViewMixin,
                       BusyStateMixin, DashboardMixin, QMainWindow):
     stage_changed = pyqtSignal(str)  # emitted (possibly from a worker thread) with the current stage
+    progress_changed = pyqtSignal(int, int, str)   # (done, total, what) of that stage, core/progress.py
     # Emitted by the VAD listener thread with a finished utterance (np.ndarray);
     # the queued connection hops it onto the Qt main thread.
     vad_utterance = pyqtSignal(object)
@@ -361,6 +362,7 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
             _step("apply response length",
                   lambda: self._on_length_changed(self.length_combo.currentIndex()))
         ctx.stage_callback = self.stage_changed.emit
+        ctx.progress_callback = self.progress_changed.emit
         _step("switch to dashboard", lambda: self.stack.setCurrentWidget(self.dashboard))
         _step("set_busy(False)", lambda: self._set_busy(False))
         _step("clear status", lambda: self._set_status(""))

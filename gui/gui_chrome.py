@@ -72,8 +72,15 @@ class StageIndicator(QWidget):
         self._i = (self._i + 1) % len(self._FRAMES)
         self.spinner.setText(self._FRAMES[self._i])
 
+    def set_progress(self, done: int, total: int, what: str):
+        """The bar of the running stage after its name (core/progress.py)."""
+        import progress
+        if self._timer.isActive() and getattr(self, "_stage_text", ""):
+            self.label.setText(f"{self._stage_text}   {progress.line(done, total, what)}")
+
     def set_stage(self, stage: str):
         s = (stage or "").strip()
+        self._stage_text = s
         if not s or s.lower() in ("ready", "idle"):
             self._timer.stop()
             self.spinner.setText("●")

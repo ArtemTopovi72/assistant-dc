@@ -297,10 +297,11 @@ class _ComfyProgress:
     render still runs and polls exactly as before — only the counter goes quiet.
     """
 
-    def __init__(self, client_id: str, callback, prompt_id_holder, modules=None):
+    def __init__(self, client_id: str, callback, prompt_id_holder, modules=None, on_node=None):
         self.modules = modules or {}
         self.client_id = client_id
         self.callback = callback
+        self.on_node = on_node              # (node id) when ComfyUI starts executing a node
         self.holder = prompt_id_holder      # {"id": ...}, filled in after /prompt
         self._stop = threading.Event()
         self._thread = None
@@ -383,6 +384,11 @@ class _ComfyProgress:
                             logger.exception("progress callback failed")
                 elif mtype == "executing" and data.get("node") is None:
                     return                              # this prompt is done
+                elif mtype == "executing" and self.on_node is not None:
+                    try:
+                        self.on_node(str(data.get("node")))
+                    except Exception:
+                        logger.exception("progress node callback failed")
         finally:
             try:
                 ws.close()
@@ -487,7 +493,7 @@ def wait_for_card(timeout: float = 600.0) -> bool:
     return _excl_free.wait(timeout)
 
 
-def _claim_card(label: str, min_free_mb: int = None, ctx=None) -> None:
+def _claim_card(label: str, min_free_mb: int = None, ctx=None, progress_ctx=None) -> None:
     global _excl_users, _excl_model, _excl_label
     with _EXCL_LOCK:
         _excl_users += 1
@@ -517,6 +523,8 @@ def _claim_card(label: str, min_free_mb: int = None, ctx=None) -> None:
             # render's card. New calls already wait on card_is_exclusive.
             _excl_free.clear()
             _excl_model = model             # from here on, new LLM calls wait
+            import progress as _progress    # up to LLM_INFLIGHT_WAIT_S of open streams, then the unload
+            _progress.report(progress_ctx, 0, 0, "Freeing the video card")
             try:
                 import llm as _llm
                 wait_s = dep(ctx, "LLM_INFLIGHT_WAIT_S", LLM_INFLIGHT_WAIT_S)
@@ -680,8 +688,12 @@ class _gpu_slot:
     """
     _local = threading.local()
 
-    def __init__(self, exclusive: bool = False, label: str = "", min_free_mb: int = None, ctx=None):
+    def __init__(self, exclusive: bool = False, label: str = "", min_free_mb: int = None, ctx=None,
+                 progress_ctx=None):
         self.ctx = ctx
+        # whose progress line hears the waits (core/progress.py) -- apart from `ctx`, which
+        # also decides what is parked and unloaded around the job
+        self.progress_ctx = progress_ctx
         self.exclusive = bool(exclusive)
         self.label = label
         self.min_free_mb = min_free_mb
@@ -693,10 +705,13 @@ class _gpu_slot:
         # claimed and the model is not reloaded in the gap between two renders.
         self._claimed = self.exclusive and self._acquired
         if self._claimed:
-            _claim_card(self.label, min_free_mb=self.min_free_mb, ctx=self.ctx)
+            _claim_card(self.label, min_free_mb=self.min_free_mb, ctx=self.ctx, progress_ctx=self.progress_ctx)
         elif self._acquired:
             _park_voice_for_job(self.ctx)
-        if self._acquired:
+        if self._acquired and not _GPU_SEM.acquire(blocking=False):
+            # another render has the card: minutes of «Generating…» that looked like a hang
+            import progress as _progress
+            _progress.report(self.progress_ctx, 0, 0, "Waiting for the video card")
             _GPU_SEM.acquire()
         self._local.depth = depth + 1
         return self
@@ -819,7 +834,8 @@ def _submit_and_poll(ctx, workflow: dict, timeout: int = 1900, label: str = "",
         LAST_GPU_REFUSAL.update({"label": busy, "at": dep(ctx, "time", time).time()})
         _fail(f"the GPU is busy with {busy}")
         return None
-    with dep(ctx, "_gpu_slot", _gpu_slot)(exclusive=exclusive, label=label, min_free_mb=min_free_mb):
+    with dep(ctx, "_gpu_slot", _gpu_slot)(exclusive=exclusive, label=label, min_free_mb=min_free_mb,
+                                          progress_ctx=ctx):
         return _submit_and_poll_locked(ctx, workflow, timeout, label, on_progress, validate)
 
 
@@ -867,10 +883,36 @@ def _apply_model_fallbacks(workflow: dict, available=None) -> dict:
     return workflow
 
 
+def _ctx_progress(ctx, workflow: dict, given=None) -> tuple:
+    """(on_progress, on_node) for one render: the caller's own step callback, and the context's
+    progress line too (core/progress.py) -- the step counter, and the model loading as a phase
+    of its own, since a loader node is minutes of nothing otherwise. (given, None) when the
+    context has no progress line."""
+    if getattr(ctx, "set_progress", None) is None:
+        return given, None
+    import progress as _progress
+    classes = {str(nid): str(node.get("class_type") or "").lower()
+               for nid, node in (workflow or {}).items() if isinstance(node, dict)}
+
+    def on_progress(k, n):
+        if given is not None:
+            given(k, n)
+        _progress.report(ctx, k, n, "Step")
+
+    def on_node(nid):
+        kind = classes.get(str(nid), "")
+        if "loader" in kind:
+            _progress.report(ctx, 0, 0, "Loading the model")
+        elif "decode" in kind:
+            _progress.report(ctx, 0, 0, "Decoding the result")
+    return on_progress, on_node
+
+
 def _submit_and_poll_locked(ctx, workflow: dict, timeout: int, label: str,
                             on_progress, validate=None) -> Optional[str]:
     if on_progress is None:
         on_progress = getattr(_PROGRESS_HOOK, "cb", None)  # ambient hook (see _progress_scope)
+    on_progress, on_node = _ctx_progress(ctx, workflow, on_progress)
     # Start the progress socket BEFORE submitting: subscribing with the same client_id
     # that /prompt is tagged with means we do not miss the first step. The prompt_id it
     # filters on is filled into `holder` the moment /prompt answers.
@@ -878,7 +920,7 @@ def _submit_and_poll_locked(ctx, workflow: dict, timeout: int, label: str,
     holder = {"id": None}
     progress = None
     if on_progress is not None:
-        progress = _ComfyProgress(client_id, on_progress, holder).start()
+        progress = _ComfyProgress(client_id, on_progress, holder, on_node=on_node).start()
     try:
         dep(ctx, "throttle_external_calls", throttle_external_calls)(ctx)
         dep(ctx, "_apply_model_fallbacks", _apply_model_fallbacks)(workflow)

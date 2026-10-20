@@ -316,6 +316,9 @@ class Context:
     # Optional UI hook: nodes/tools report the current pipeline stage (e.g.
     # "Searching the web", "Drawing a picture") so the GUI can animate it.
     stage_callback: Optional[Callable[[str], None]] = None
+    # How far the running stage is (core/progress.py): (done, total, what); total 0 = a
+    # phase with no count («Loading the model»). The bot draws it under the status line.
+    progress_callback: Optional[Callable[[int, int, str], None]] = None
     # A short note sent to the user BEFORE a long tool runs (interim.py); the
     # bot sets it per task, the desktop leaves it None.
     interim_callback: Optional[Callable[[str], None]] = None
@@ -456,6 +459,7 @@ class Context:
             logger.error("Failed to save session memory: %s", exc)
 
     def set_stage(self, stage: str) -> None:
+        self.last_stage = stage
         try:
             import turn_trace   # every front end's phases, one place
             turn_trace.stage(stage)
@@ -467,6 +471,14 @@ class Context:
                 cb(stage)
             except Exception:
                 logger.debug("stage_callback failed", exc_info=True)
+
+    def set_progress(self, done: int, total: int, what: str = "Step") -> None:
+        cb = self.progress_callback
+        if cb is not None:
+            try:
+                cb(done, total, what)
+            except Exception:
+                logger.debug("progress_callback failed", exc_info=True)
 
     def save_cache(self) -> None:
         try:

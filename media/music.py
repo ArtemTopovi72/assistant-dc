@@ -1433,6 +1433,9 @@ def yue2_available() -> bool:
             and _has_weights(os.path.join(root, "models_ext", "YuE2-Vae")))
 
 
+import progress  # noqa: E402  (the shared progress line, see core/progress.py)
+
+
 def run_gpu_worker(ctx, python: str, script: str, job: dict, label: str, timeout: int,
                    cmd=None, env=None, cwd=None) -> tuple:
     """Run one render script in its own venv with the card to itself.
@@ -1449,7 +1452,7 @@ def run_gpu_worker(ctx, python: str, script: str, job: dict, label: str, timeout
     log_path = f.name[:-5] + ".log"
     finished = False
     try:
-        with comfy_client._gpu_slot(exclusive=True, label=label), open(log_path, "wb") as log:
+        with comfy_client._gpu_slot(exclusive=True, label=label, progress_ctx=ctx), open(log_path, "wb") as log:
             argv = [a.replace("{job}", f.name) for a in cmd] if cmd else [python, os.path.join(root, "scripts", script), f.name]
             proc = dep(ctx, "Popen", subprocess.Popen)(argv, cwd=cwd or root, env=env, stdout=log, stderr=subprocess.STDOUT,
                                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
@@ -1457,7 +1460,19 @@ def run_gpu_worker(ctx, python: str, script: str, job: dict, label: str, timeout
             # first spent its whole timeout waiting for the card and was killed
             # 100 s into its own render.
             t0 = time.time()
+            seen = None
             while proc.poll() is None:
+                # The worker's own progress bar, read from its log: one place for every venv
+                # worker (YuE2, Seed-VC, SoulX...) instead of a parser per script.
+                try:
+                    with open(log_path, "rb") as fh:
+                        fh.seek(max(0, os.path.getsize(log_path) - 4096))
+                        now = progress.from_log(fh.read().decode("utf-8", "replace"))
+                    if now and now != seen:
+                        seen = now
+                        progress.report(ctx, now[0], now[1], "Step")
+                except OSError:
+                    pass
                 if ctx is not None and getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
                     proc.kill()
                     # reaped before the GPU slot is released: a worker still

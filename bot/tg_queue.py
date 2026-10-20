@@ -69,6 +69,15 @@ class QueueMixin:
                                     "callback_data": f"busy:cancel:{jid}"}]]}
         mid = self._send_get_id(chat_id, note, keyboard=kb)
 
+        def show(text: str) -> None:
+            if mid:
+                try:
+                    self._edit_text(chat_id, mid, text, keyboard=kb)
+                except Exception:
+                    pass
+        # the copy carried the desktop's own bar; this job draws its own under its note
+        _, ctx.progress_callback = self._with_progress(chat_id, lang, show, shown=note)
+
         def work():
             try:
                 fn(ctx, *args)

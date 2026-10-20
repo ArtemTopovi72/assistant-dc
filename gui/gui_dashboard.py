@@ -53,6 +53,7 @@ class DashboardMixin:
         self.model_chip = QLabel("loading…"); self.model_chip.setObjectName("chip")
         self.stage = StageIndicator()
         self.stage_changed.connect(self.stage.set_stage)
+        self.progress_changed.connect(self.stage.set_progress)
         self.layout_btn = QPushButton("⛶  Layout"); self.layout_btn.setObjectName("ghost")
         self.layout_btn.setToolTip("Show/hide panels, save and load layout presets, or reset "
                                    "to the default layout. Tabs can also be dragged to reorder "
