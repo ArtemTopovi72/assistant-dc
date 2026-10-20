@@ -1315,7 +1315,7 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
     for i, part in enumerate(parts[1:], start=2):
         if getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
             break
-        first_try = None
+        first_try = first_eyes = None
         ctx.set_stage(f"Generating a video ({i}/{len(parts)})")
         frame = os.path.join(work, f"seed_{i}.jpg")
         tail = os.path.join(work, f"tail_{i}.mp4")
@@ -1356,17 +1356,26 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
                     break
                 said_ok = not said or speech_ok(ctx, r["path"], said)
                 sim = None if fresh_from else voice_sim(r["path"], voices)      # revoiced at the end
-                if said_ok and (sim is None or sim >= video_mod.VOICE_MIN_SIM):
+                # even ending on the still, one part in six had its eyes go light and wide
+                # halfway through (live 2026-10-20)
+                eyes = video_mod.eye_drift(fresh_from, r["path"]) if fresh_from else None
+                if said_ok and (sim is None or sim >= video_mod.VOICE_MIN_SIM) and (eyes is None or eyes <= 0):
                     break
-                logger.warning("video parts: part %d did not say %s or drifted off the voice (%s); "
-                               "once more with a new seed", i, said, sim)
+                logger.warning("video parts: part %d did not say %s, drifted off the voice (%s) or off "
+                               "the eyes (%s); once more with a new seed", i, said, sim, eyes)
                 first_try = (r, sim) if said_ok else None
+                first_eyes = (r, eyes) if said_ok and eyes is not None and eyes > 0 else None
                 args = {**args, "seed": None}
             if first_try and r.get("path") and first_try[1] is not None:
                 again = voice_sim(r["path"], voices)
                 if again is not None and again < first_try[1]:
                     r = first_try[0]        # the second take is further from the voice than the first
                     logger.info("video parts: part %d keeps its first take (voice %.2f > %.2f)", i, first_try[1], again)
+            if first_eyes and r.get("path") and r is not first_eyes[0]:
+                again = video_mod.eye_drift(fresh_from, r["path"])
+                if again is not None and again > first_eyes[1]:
+                    r = first_eyes[0]       # the second take's eyes are further off the still
+                    logger.info("video parts: part %d keeps its first take (eye drift %.3f < %.3f)", i, first_eyes[1], again)
         except Exception:
             logger.exception("video parts: part %d crashed", i)
             break
@@ -1913,6 +1922,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         # the frame edges, redrawn with another seed.
         watch = bool(chain_id and images and not continuing
                      and video_mod._FRAMING_LOCK_SUFFIX in first_prompt)
+        best_eyes = None
         try:
             for attempt in (1, 2, 3):
                 result = video_mod.generate_video(
@@ -1933,11 +1943,19 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 # The edge drift also fires on a camera that pulls back (103, 81 with CLIP at 0.0,
                 # s91 2026-10-16): only a fallback when CLIP cannot read the clip.
                 drift = video_mod.overlay_drift(p) if look and drawn is None else None
+                eyes = video_mod.eye_drift(images[0], p) if head and p and os.path.exists(p) else None
+                if eyes is not None and (best_eyes is None or eyes < best_eyes[0]):
+                    best_eyes = (eyes, result)
+                if eyes is not None and eyes > 0 and attempt == 1:
+                    logger.warning("generate_video: part 1 drifted off the still's eyes (%.3f); once more", eyes)
+                    continue
                 if attempt == 3 or ((drift is None or drift <= video_mod.OVERLAY_DRIFT_MAX)
                                     and (drawn is None or drawn <= video_mod.DRAWN_OVER_MAX)):
                     break
                 logger.warning("video chain: part 1 is covered over (edge drift %s, drawn over %s); "
                                "once more with a new seed", drift, drawn)
+            if best_eyes:
+                result = best_eyes[1]       # of two takes, the one nearer the still's eyes
         except Exception as exc:
             logger.exception("generate_video crashed")
             return (f"[TOOL ERROR] Video generation failed: {exc}. Tell the user the "

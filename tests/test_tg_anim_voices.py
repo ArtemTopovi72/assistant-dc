@@ -227,6 +227,31 @@ def test_a_talking_head_part_starts_from_the_still_not_from_the_clip_so_far(tmp_
     assert all(k["images"] == ["orig.jpg"] and not k.get("videos") and k["keyframe"] and not k.get("audios") for k in seen)
 
 
+
+def test_a_talking_head_part_whose_eyes_drifted_is_made_again_and_the_nearer_take_stays(tmp_path):
+    """Even ending on the still, one part in six had its eyes go light and wide (live 2026-10-20)."""
+    clips = [tmp_path / f"t{k}.mp4" for k in range(4)]
+    for c in clips:
+        c.write_bytes(b"x")
+    made, joined = [], []
+
+    def run(drifts):
+        made.clear(), joined.clear()
+        it = iter(drifts)
+        eng = Over(V, generate_video=lambda ctx, d, **kw: made.append(d) or {"path": str(clips[len(made)])},
+                   motion_context_on=lambda: False, eye_drift=lambda still, clip: next(it),
+                   join_continuation=lambda a, b, **k: joined.append(b) or str(clips[0]),
+                   _adopt_output=lambda p, d: p, OUTPUT_DIR=str(tmp_path))
+        tools = types.SimpleNamespace(seed_frame=lambda a, b: True, cut_tail=lambda a, b: True,
+                                      first_frame=lambda a, b: True)
+        ctx = types.SimpleNamespace(video_engine=eng, clip_tools=tools, set_stage=lambda s: None,
+                                    is_cancelled=lambda: False, speech_ok=lambda c, p, lines: True)
+        H._render_remaining_parts(ctx, str(clips[0]), ["p1", "p2"], {}, voices=["v.wav"], fresh_from="orig.jpg")
+        return len(made), os.path.basename(joined[-1])
+    assert run([-0.03]) == (1, "t1.mp4")                 # kept the eyes: one take
+    assert run([0.02, -0.01]) == (2, "t2.mp4")           # drifted, the second take is good
+    assert run([0.05, 0.08]) == (2, "t1.mp4")            # both drifted: the nearer one stays
+
 def test_a_keyframe_clip_is_fl2va_a_voice_sample_alone_is_ref2va():
     assert V.pick_mode(["a.jpg"], (), (), keyframe=True) == "t2va"
     assert V.pick_mode(["a.jpg"], (), ["v.wav"]) == "ref2va"

@@ -75,6 +75,14 @@ MAX_REF_AUDIOS = 3
 # H3 invents the timbre of every part itself; per part the similarity to the reference ranged
 # 0.46..0.95 at one reference (night 2026-10-20), a good part sits at 0.85+
 VOICE_MIN_SIM = _cfg_env.env_float("VIDEO_VOICE_MIN_SIM", 0.8)
+# The still's eyes across a talking-head part (eye_drift), live parts 2026-10-20: kept eyes
+# matched 0.92-0.98 at 0.96-1.04 of the still's brightness; a part without the end frame fell
+# to 0.82, and the part whose eyes went light and wide matched 0.92 but at 1.09 brightness
+EYE_MIN_MATCH = _cfg_env.env_float("VIDEO_EYE_MIN_MATCH", 0.86)
+EYE_MAX_BRIGHT = _cfg_env.env_float("VIDEO_EYE_MAX_BRIGHT", 0.07)
+YUNET = _config.BASE_DIR / "models_ext" / "yunet" / "face_detection_yunet_2023mar.onnx"
+_YUNET_URL = ("https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/"
+              "face_detection_yunet_2023mar.onnx")
 
 # Why the last generation produced nothing, for an honest message to the user.
 # Mirrors image._GENERATE_FAILURE.
@@ -2407,6 +2415,58 @@ def join_pinned(src: str, new: str, head: int = MOTION_CONTEXT_FRAMES) -> Option
         _discard(fh.name)
         return None
     return fh.name
+
+
+def eye_drift(still: str, clip: str, every: float = 0.5) -> Optional[float]:
+    """How far `clip` drifted off the eyes of `still`: > 0 is a drift, larger is worse. The eye
+    strip YuNet finds on the still is template-matched in a frame every `every` s; the mean
+    match and the brightness of the eyes (95th percentile, against the still's) are each held
+    to their bar. None when no face is found or anything fails -- a check, never a reason to
+    stop a render."""
+    try:
+        import cv2
+        import numpy as np
+        if not YUNET.exists():
+            import urllib.request
+            YUNET.parent.mkdir(parents=True, exist_ok=True)
+            urllib.request.urlretrieve(_YUNET_URL, str(YUNET))
+        im = cv2.imread(still)
+        h, w = im.shape[:2]
+        _, faces = cv2.FaceDetectorYN.create(str(YUNET), "", (w, h), 0.6, 0.3, 5).detect(im)
+        if faces is None:
+            return None
+        (rx, ry), (lx, ly) = faces[0][4:6], faces[0][6:8]
+        d = math.hypot(lx - rx, ly - ry)
+        cx, cy = (rx + lx) / 2, (ry + ly) / 2
+        y0, y1, x0, x1 = (max(0, int(cy - 0.3 * d)), min(h, int(cy + 0.3 * d)),
+                          max(0, int(cx - d)), min(w, int(cx + d)))
+        tpl = cv2.cvtColor(im[y0:y1, x0:x1], cv2.COLOR_BGR2GRAY)
+        third = tpl.shape[1] // 3
+
+        def bright(strip):          # the two eyes, not the nose between them
+            return float(np.percentile(np.concatenate([strip[:, :third].ravel(), strip[:, -third:].ravel()]), 95))
+        base = bright(tpl) or 1.0
+        cap = cv2.VideoCapture(clip)
+        step = max(1, int((cap.get(cv2.CAP_PROP_FPS) or 24) * every))
+        match, light, i = [], [], 0
+        while True:
+            ok, frame = cap.read()
+            if not ok:
+                break
+            if i % step == 0:
+                g = cv2.cvtColor(cv2.resize(frame, (w, int(frame.shape[0] * w / frame.shape[1]))), cv2.COLOR_BGR2GRAY)
+                if tpl.shape[0] < g.shape[0] and tpl.shape[1] < g.shape[1]:
+                    _, mv, _, (bx, by) = cv2.minMaxLoc(cv2.matchTemplate(g, tpl, cv2.TM_CCOEFF_NORMED))
+                    match.append(mv)
+                    light.append(bright(g[by:by + tpl.shape[0], bx:bx + tpl.shape[1]]) / base)
+            i += 1
+        cap.release()
+        if not match:
+            return None
+        return max(EYE_MIN_MATCH - float(np.mean(match)), abs(float(np.mean(light)) - 1.0) - EYE_MAX_BRIGHT)
+    except Exception:
+        logger.warning("eye_drift failed", exc_info=True)
+        return None
 
 
 def _revoice_ref(voice: str, dst: str, ms: int = 20000) -> str:
