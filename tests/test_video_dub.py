@@ -44,3 +44,21 @@ def test_the_bridge_sentence_shares_no_words_with_the_line():
     b = VD._bridge_sentence(line)
     said = {w.lower() for w in VD._WORD.findall(line)}
     assert not said & {w.lower() for w in VD._WORD.findall(b)}, b
+
+
+def test_the_reference_is_the_longest_run_that_fits_f5():
+    """From the first word to the last a 55 s clip went in; F5 cut it to 12 s and kept the
+    whole transcript, so voice and text no longer matched (2026-10-20)."""
+    import video_dub
+    words = [(f"w{i}", float(i), float(i) + 0.8) for i in range(55)]
+    i0, i1 = video_dub._ref_span(words)
+    assert words[i1][2] - words[i0][1] <= video_dub.REF_MAX_S
+    assert i1 - i0 >= 8
+
+
+def test_a_monologue_is_said_a_few_whole_sentences_at_a_time():
+    import video_dub
+    text = " ".join(f"Это предложение номер {i} из нашего длинного монолога." for i in range(12))
+    parts = video_dub._chunks(text)
+    assert len(parts) > 1 and " ".join(parts) == text
+    assert all(len(p.split()) <= video_dub.CHUNK_WORDS for p in parts)

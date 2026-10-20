@@ -122,6 +122,50 @@ def _bridge_sentence(line: str) -> str:
     return min(_BRIDGES, key=lambda s: len(said & {_norm(w) for w in _WORD.findall(s)}))
 
 
+REF_MAX_S = 10.0       # F5 trims a longer reference itself, and then its text is wrong
+CHUNK_WORDS = 24       # one F5 call: a whole 104-word monologue at once came back as noise
+
+
+def _ref_span(words: list, top: float = REF_MAX_S) -> tuple:
+    """(first, last) index of the longest run of `words` [(w, start, end)] lasting <= `top` s."""
+    best, i = (0, 0), 0
+    for j in range(len(words)):
+        while words[j][2] - words[i][1] > top:
+            i += 1
+        if j - i > best[1] - best[0]:
+            best = (i, j)
+    return best
+
+
+def _chunks(text: str, top: int = CHUNK_WORDS) -> list:
+    """Whole sentences, packed up to `top` words a piece."""
+    out, cur = [], ""
+    for s in re.split(r"(?<=[.!?…])\s+", text.strip()):
+        if cur and len((cur + " " + s).split()) > top:
+            out.append(cur)
+            cur = s
+        else:
+            cur = (cur + " " + s).strip()
+    return out + [cur] if cur else out
+
+
+def _speak_chunks(ctx, voice_clone, ref: str, ref_text: str, text: str, work: str) -> str:
+    """`text` said in the cloned voice a few sentences at a time, joined with a short gap."""
+    import soundfile as sf
+    pieces, sr = [], SR
+    for k, part in enumerate(_chunks(text)):
+        w = voice_clone.speak(ctx, ref, ref_text, part, os.path.join(work, f"c{k}"))
+        if not w:
+            return ""
+        y, sr = sf.read(w, dtype="float32")
+        pieces += [y.mean(axis=1) if y.ndim > 1 else y, np.zeros(int(0.12 * sr), dtype="float32")]
+    if not pieces:
+        return ""
+    out = os.path.join(work, "said.wav")
+    sf.write(out, np.concatenate(pieces), sr)
+    return out
+
+
 def redub(ctx, video: str, lines: list, out_path: str = "") -> str:
     """`video` with its speech re-said by F5 (same voice, correct stress). "" on failure."""
     import soundfile as sf
@@ -141,17 +185,30 @@ def redub(ctx, video: str, lines: list, out_path: str = "") -> str:
     except Exception:
         logger.warning("video dub: separation failed", exc_info=True)
         return ""
+    # Demucs files H3's hum and score under "vocals" (tail of run 16: vocals 0.142 rms of a 0.145
+    # mix, the other stems 0.004): replaced whole, the clip lost its music. Only the speech in it
+    # is replaced; what the speech gate leaves goes back with the backing.
+    try:
+        import noisereduce
+        speech = noisereduce.reduce_noise(y=voice, sr=SR, stationary=False).astype(np.float32)
+        rest = rest[:len(voice)] + (voice - speech)[:len(rest)]
+        voice = speech
+    except Exception:
+        logger.warning("video dub: no speech gate, the vocal stem is replaced whole", exc_info=True)
     vwav = os.path.join(work, "voice.wav")
     sf.write(vwav, voice, SR)
     old = _words(ctx, vwav)
     if len(old) < 2:
         logger.info("video dub: no speech heard in the clip, kept as is")
         return ""
-    # The clip's own speech is the voice to clone: from the first word to the last.
-    a, b = max(0.0, old[0][1] - 0.15), old[-1][2] + 0.25
+    # The clip's own speech is the voice to clone: its longest run of words that fits F5's reference.
+    # From the first word to the last, a 55 s clip went in, F5 cut it to 12 s and kept the whole
+    # transcript: the voice and its text no longer matched and both takes were noise (2026-10-20).
+    i0, i1 = _ref_span(old)
+    a, b = max(0.0, old[i0][1] - 0.15), old[i1][2] + 0.25
     ref = os.path.join(work, "ref.wav")
     sf.write(ref, voice[int(a * SR):int(b * SR)], SR)
-    ref_text = " ".join(w for w, *_ in old)
+    ref_text = " ".join(w for w, *_ in old[i0:i1 + 1])
     # That sample says the very words being re-said, with H3's stress: F5 copied it
     # (live 10-06: «ва́ли» survived the redub though the text said вал+и). So the
     # clone first says a neutral sentence sharing no words with the line, and that
@@ -160,7 +217,7 @@ def redub(ctx, video: str, lines: list, out_path: str = "") -> str:
     bridge = voice_clone.speak(ctx, ref, ref_text, bridge_text, work)
     if bridge:
         ref, ref_text = bridge, bridge_text
-    new_wav = voice_clone.speak(ctx, ref, ref_text, text, work)
+    new_wav = _speak_chunks(ctx, voice_clone, ref, ref_text, text, work)
     if not new_wav:
         logger.warning("video dub: F5 produced nothing")
         return ""

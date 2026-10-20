@@ -36,6 +36,7 @@ soundfile==0.13.1
 sounddevice==0.5.5
 pydub==0.25.1
 demucs==4.1.0
+noisereduce==3.0.3
 
 # Vision / images
 pillow==12.1.1
