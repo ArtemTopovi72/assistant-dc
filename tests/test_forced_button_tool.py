@@ -80,6 +80,16 @@ def test_the_loop_forces_redraw_on_the_style_preset_button():
     assert rounds[0][0] == "auto" and rounds[0][1] == ["redraw_image"], rounds
 
 
-def test_the_loop_releases_after_the_tool_ran():
+def test_the_loop_answers_after_the_tool_ran():
+    # released, and with nothing else on offer: a button is one action (live 2026-10-21)
     rounds = _rounds_for("[style_preset] call redraw_image with mode=\"redraw\" instructions=\"anime\"")
-    assert len(rounds) > 1 and rounds[1][0] == "auto", rounds
+    assert len(rounds) > 1 and rounds[1] == ("none", []), rounds
+
+
+def test_a_button_is_one_action_and_then_the_answer():
+    """After the 🎨 «Реализм» redraw the model tried two hand inpaints of its own and answered «the
+    change is not there» under the finished photo (live 2026-10-21)."""
+    assert G._button_done("[style_preset] call redraw_image", {"redraw_image"})
+    assert not G._button_done("[style_preset] call redraw_image", set())
+    # the draw menu carries the user's own words: it may ask for more than one thing
+    assert not G._button_done("generate an image of: a cat, then animate it", {"generate_image"})

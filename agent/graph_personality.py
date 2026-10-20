@@ -410,6 +410,16 @@ _BUTTON_TOOL = (
 )
 
 
+def _button_done(text: str, already_called) -> bool:
+    """A picture button's payload («[style_preset] …», «regenerate the image…») whose tool has run
+    this turn. The free-text menus («generate an image of: …») carry the user's own words and
+    may ask for more, so they stay open."""
+    low = (text or "").lower().lstrip()
+    return any(low.startswith(prefix) and tool in (already_called or ())
+               for prefix, tool in _BUTTON_TOOL
+               if prefix.startswith("[") or prefix in ("regenerate the image", "remove all the lettering"))
+
+
 def _forced_button(text: str, turn_tools, already_called) -> str:
     """The tool a picture-button payload names, to force on the first round.
 
@@ -1237,6 +1247,12 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                 logger.info("Round %d: forcing %s", round_idx, _force)
             else:
                 logger.warning("Round %d: wanted to force %s but it is not offered", round_idx, _force)
+        elif _button_done(_own(original_input or user_input), tools_called_this_turn):
+            # A button is one action: after the 🎨 «Реализм» redraw the model looked at the
+            # result, found the joke's pose gone, tried two hand inpaints of its own (3 min) and
+            # answered «the change is not there» under the finished photo (live 2026-10-21).
+            turn_tools, _choice = [], "none"
+            logger.info("Round %d: the button's tool ran; answering", round_idx)
         elif _edit_mode_now:
             # Edit mode, not a forced call: no whole-file write offered, but the
             # model may still answer in text (a `required` here would keep it
