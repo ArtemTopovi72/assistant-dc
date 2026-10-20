@@ -205,23 +205,11 @@ def test_the_queue_watchdog_spares_a_task_that_is_still_rendering():
     comfy = types.SimpleNamespace(card_in_use=lambda: True, server_busy=lambda: False)
     cancels = {t.task_id: threading.Event() for t in (rendering, stuck)}
     bot = types.SimpleNamespace(
-        modules={"comfy_client": comfy}, settings=None, _task_lock=threading.Lock(),
+        modules={"comfy_client": comfy}, _task_lock=threading.Lock(),
         _running_task={1: [rendering], 2: [stuck]}, _progress_at={1: now - 20, 2: now - 2000},
         _task_started={t.task_id: now - 4000 for t in (rendering, stuck)}, _cancelled=set(),
-        _task_cancels=cancels, _poll_thread=None, _consumers=[],
-        _activity=types.SimpleNamespace(log=lambda *a, **k: None), _poll_beat=now)
+        _task_cancels=cancels, _activity=types.SimpleNamespace(log=lambda *a, **k: None))
     bot._still_rendering = types.MethodType(tg_tasks.TaskRunnerMixin._still_rendering, bot)
-    bot._poll_loop = lambda: None
-    ticks = iter([True, False])
-    bot.__dict__["_running"] = True
-    real_sleep = tg_queue.time.sleep
-
-    def sleep(_):
-        bot._running = next(ticks, False)
-    tg_queue.time.sleep = sleep
-    try:
-        tg_queue.QueueMixin._watchdog_loop(bot)
-    finally:
-        tg_queue.time.sleep = real_sleep
+    tg_queue.QueueMixin._cancel_runaways(bot, 3600)
     assert cancels[stuck.task_id].is_set()
     assert not cancels[rendering.task_id].is_set()

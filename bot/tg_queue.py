@@ -139,34 +139,37 @@ class QueueMixin:
                     self._consumers[i] = nt
 
                 # 3) runaway task — cancel cooperatively so the queue drains
-                abs_max = max(task_max, tg_bot._cfg_int("TG_TASK_ABS_MAX_S", 4 * 3600))
-                with self._task_lock:
-                    chat_of = {t.task_id: cid for cid, lst in self._running_task.items() for t in lst}
-                    stale = [(tid, started) for tid, started in self._task_started.items()
-                             if time.monotonic() - started > task_max]
-                # a render still counting its steps is not a runaway (see _still_rendering):
-                # this cancelled part 6 of an approved six-part clip at the hour (2026-10-20)
-                stale = [(tid, started) for tid, started in stale
-                         if time.monotonic() - started > abs_max or tid not in chat_of
-                         or not self._still_rendering(chat_of[tid])]
-                for tid, started in stale:
-                    tg_bot.logger.error("WATCHDOG: task %s running for %.0fs — cancelling",
-                                 tid[:8], time.monotonic() - started)
-                    self._activity.log(0, "error",
-                                       f"[watchdog] task {tid[:8]} exceeded {task_max}s")
-                    with self._task_lock:
-                        self._cancelled.add(tid)
-                        self._task_started.pop(tid, None)
-                        ev = self._task_cancels.get(tid)
-                    # The task runs on its OWN scoped context (_execute_task),
-                    # not the shared desktop ctx — setting the shared event here
-                    # would abort whatever the desktop assistant was doing
-                    # while leaving the actual runaway task running forever.
-                    if ev is not None:
-                        try: ev.set()
-                        except Exception: pass
+                self._cancel_runaways(task_max)
             except Exception:
                 tg_bot.logger.exception("watchdog iteration failed")
+
+    def _cancel_runaways(self, task_max: int) -> None:
+        abs_max = max(task_max, tg_bot._cfg_int("TG_TASK_ABS_MAX_S", 4 * 3600))
+        with self._task_lock:
+            chat_of = {t.task_id: cid for cid, lst in self._running_task.items() for t in lst}
+            stale = [(tid, started) for tid, started in self._task_started.items()
+                     if time.monotonic() - started > task_max]
+        # a render still counting its steps is not a runaway (see _still_rendering):
+        # this cancelled part 6 of an approved six-part clip at the hour (2026-10-20)
+        stale = [(tid, started) for tid, started in stale
+                 if time.monotonic() - started > abs_max or tid not in chat_of
+                 or not self._still_rendering(chat_of[tid])]
+        for tid, started in stale:
+            tg_bot.logger.error("WATCHDOG: task %s running for %.0fs — cancelling",
+                         tid[:8], time.monotonic() - started)
+            self._activity.log(0, "error",
+                               f"[watchdog] task {tid[:8]} exceeded {task_max}s")
+            with self._task_lock:
+                self._cancelled.add(tid)
+                self._task_started.pop(tid, None)
+                ev = self._task_cancels.get(tid)
+            # The task runs on its OWN scoped context (_execute_task),
+            # not the shared desktop ctx — setting the shared event here
+            # would abort whatever the desktop assistant was doing
+            # while leaving the actual runaway task running forever.
+            if ev is not None:
+                try: ev.set()
+                except Exception: pass
 
     def _inflight_path(self):
         return tg_bot._INFLIGHT_FILE
