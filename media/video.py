@@ -85,6 +85,20 @@ EYE_MAX_BRIGHT = _cfg_env.env_float("VIDEO_EYE_MAX_BRIGHT", 0.12)
 # the worst kept-looking opened-eyes window at 0.13
 EYE_WINDOW_SLACK = _cfg_env.env_float("VIDEO_EYE_WINDOW_SLACK", 0.10)
 YUNET = _config.BASE_DIR / "models_ext" / "yunet" / "face_detection_yunet_2023mar.onnx"
+# How shut the eyes are (MediaPipe's eyeBlink, 0 open .. 1 shut) against the still's, over the
+# worst window: the overseer's still reads 0.14; the first 3 s of run 16 shut the eyes at 0.57-0.63
+# and passed every other check; opened wide (whites showing) read 0.01-0.04
+EYE_MAX_SHUT = _cfg_env.env_float("VIDEO_EYE_MAX_SHUT", 0.20)
+EYE_MAX_WIDE = _cfg_env.env_float("VIDEO_EYE_MAX_WIDE", 0.10)
+# The scene's light across a talking-head part (look_drift): the walls either side of the face
+# against the still's. Run 16: kept parts 0.95-1.05 of it and frame to frame steady; parts drawn
+# under «flickering lights» from the rewrite sat at 1.3-1.6 (milky haze) or flashed 1.8-2.9,
+# jumping up to 0.9 of the still's level between two frames
+LOOK_MAX_SHIFT = _cfg_env.env_float("VIDEO_LOOK_MAX_SHIFT", 0.25)
+LOOK_MAX_FLICKER = _cfg_env.env_float("VIDEO_LOOK_MAX_FLICKER", 0.20)
+FACE_LANDMARKER = _config.BASE_DIR / "models_ext" / "mediapipe" / "face_landmarker.task"
+_FACE_LANDMARKER_URL = ("https://storage.googleapis.com/mediapipe-models/face_landmarker/"
+                        "face_landmarker/float16/1/face_landmarker.task")
 _YUNET_URL = ("https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/"
               "face_detection_yunet_2023mar.onnx")
 
@@ -1189,8 +1203,10 @@ def _asks_new_style(description: str, ctx=None) -> bool:
 _HEAD_LOCK_SUFFIX = (
     " The face keeps the expression of <Picture 1>: only the mouth and jaw move with the words, "
     "with slight natural head motion; the eyes, eyelids and brows stay exactly as in <Picture 1> "
-    "for the whole clip -- they never widen, open further, squint or change, whatever is said "
-    "above about the face or the mood.")
+    "for the whole clip -- open exactly as much as there, looking into the camera: never closed or "
+    "half-shut, never wider, never squinting, whatever is said above about the face or the mood. "
+    "The lighting stays exactly as in <Picture 1>: steady, no flicker, no flashes, no change of "
+    "brightness or colour.")
 
 
 def _with_lock(description: str, lock: str) -> str:
@@ -2453,6 +2469,68 @@ def join_pinned(src: str, new: str, head: int = MOTION_CONTEXT_FRAMES) -> Option
     return fh.name
 
 
+_LANDMARKER = []
+
+
+def look_drift(still: str, clip: str, window: float = 1.0) -> Optional[float]:
+    """How far the light of `clip` drifted off `still`'s: > 0 is a drift. The walls either side of
+    the face (the outer quarters of the frame) against the still's, over the worst `window` s, and
+    their jump between two frames. None when it cannot be read."""
+    try:
+        import cv2
+        import numpy as np
+        def walls(img):
+            g = cv2.cvtColor(cv2.resize(img, (160, int(160 * img.shape[0] / img.shape[1]))), cv2.COLOR_BGR2GRAY)
+            q = g.shape[1] // 4
+            return float(np.concatenate([g[:, :q].ravel(), g[:, -q:].ravel()]).mean())
+        base = max(1.0, walls(cv2.imread(still)))
+        cap = cv2.VideoCapture(clip)
+        fps = cap.get(cv2.CAP_PROP_FPS) or 24
+        lv = []
+        while True:
+            ok, frame = cap.read()
+            if not ok:
+                break
+            lv.append(walls(frame) / base)
+        cap.release()
+        if len(lv) < 2:
+            return None
+        lv = np.array(lv)
+        n = max(1, min(len(lv), int(round(window * fps))))
+        shift = float(np.max(np.abs(np.convolve(lv, np.ones(n) / n, "valid") - 1.0)))
+        flicker = float(np.percentile(np.abs(np.diff(lv)), 99))
+        return max(shift - LOOK_MAX_SHIFT, flicker - LOOK_MAX_FLICKER)
+    except Exception:
+        logger.warning("look_drift failed", exc_info=True)
+        return None
+
+
+def eye_shut(frame) -> Optional[float]:
+    """How shut the eyes of the face in a BGR `frame` are: MediaPipe's eyeBlink, both eyes'
+    mean, 0 open .. 1 shut. None without the landmarker or a face."""
+    try:
+        import cv2
+        import mediapipe as mp
+        from mediapipe.tasks.python import BaseOptions, vision
+        if not _LANDMARKER:
+            if not FACE_LANDMARKER.exists():
+                import urllib.request
+                FACE_LANDMARKER.parent.mkdir(parents=True, exist_ok=True)
+                urllib.request.urlretrieve(_FACE_LANDMARKER_URL, str(FACE_LANDMARKER))
+            _LANDMARKER.append(vision.FaceLandmarker.create_from_options(vision.FaceLandmarkerOptions(
+                base_options=BaseOptions(model_asset_path=str(FACE_LANDMARKER)),
+                output_face_blendshapes=True, num_faces=1)))
+        r = _LANDMARKER[0].detect(mp.Image(image_format=mp.ImageFormat.SRGB,
+                                           data=cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)))
+        if not r.face_blendshapes:
+            return None
+        s = {c.category_name: c.score for c in r.face_blendshapes[0]}
+        return (s["eyeBlinkLeft"] + s["eyeBlinkRight"]) / 2
+    except Exception:
+        logger.debug("eye_shut failed", exc_info=True)
+        return None
+
+
 def eye_drift(still: str, clip: str, every: float = 0.5, window: float = 2.0) -> Optional[float]:
     """How far `clip` drifted off the eyes of `still`: > 0 is a drift, larger is worse. The eye
     strip YuNet finds on the still is template-matched in a frame every `every` s; the mean
@@ -2489,9 +2567,12 @@ def eye_drift(still: str, clip: str, every: float = 0.5, window: float = 2.0) ->
                                    strip[int(0.85 * strip.shape[0]):, :].ravel()])
             return float(np.mean(eyes)) / max(1.0, float(np.mean(skin)))
         base = bright(tpl) or 1.0
+        # the template and the brightness both read shut lids as the still's shadowed eyes
+        # (run 16: 0.90 and 1.00-1.07 over 3 s of closed eyes); MediaPipe tells them apart
+        shut0 = eye_shut(im)
         cap = cv2.VideoCapture(clip)
         step = max(1, int((cap.get(cv2.CAP_PROP_FPS) or 24) * every))
-        match, light, i = [], [], 0
+        match, light, shut, i = [], [], [], 0
         while True:
             ok, frame = cap.read()
             if not ok:
@@ -2502,6 +2583,10 @@ def eye_drift(still: str, clip: str, every: float = 0.5, window: float = 2.0) ->
                     _, mv, _, (bx, by) = cv2.minMaxLoc(cv2.matchTemplate(g, tpl, cv2.TM_CCOEFF_NORMED))
                     match.append(mv)
                     light.append(bright(g[by:by + tpl.shape[0], bx:bx + tpl.shape[1]]) / base)
+                    if shut0 is not None:
+                        s = eye_shut(frame)
+                        if s is not None:
+                            shut.append(s - shut0)
             i += 1
         cap.release()
         if not match:
@@ -2511,7 +2596,14 @@ def eye_drift(still: str, clip: str, every: float = 0.5, window: float = 2.0) ->
         n = max(1, min(len(match), int(round(window / every))))
         ks = np.ones(n) / n
         whole = worst(np.array([np.mean(match)]), np.array([np.mean(light)]))
-        return float(max(whole, worst(np.convolve(match, ks, "valid"), np.convolve(light, ks, "valid")) - EYE_WINDOW_SLACK))
+        score = max(whole, worst(np.convolve(match, ks, "valid"), np.convolve(light, ks, "valid")) - EYE_WINDOW_SLACK)
+        if len(shut) >= n:
+            # a blink is a sample or two; a window shut (or wide open) for `window` s is the drift
+            sw = np.convolve(shut, ks, "valid")
+            score = max(score, float(np.max(sw)) - EYE_MAX_SHUT, float(-np.min(sw)) - EYE_MAX_WIDE)
+        # the take is redrawn the same way when its light went off the still's
+        light_off = look_drift(still, clip)
+        return float(score if light_off is None else max(score, light_off))
     except Exception:
         logger.warning("eye_drift failed", exc_info=True)
         return None

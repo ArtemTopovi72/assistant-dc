@@ -253,6 +253,9 @@ def s_packages(args):
     step("4. packages")
     reqs = ROOT / ("requirements-dev.txt" if args.dev else "requirements.txt")
     pip_install(["-r", str(reqs), "--override", str(ROOT / "overrides.txt")], retries=2)
+    # Without its dependencies: it asks for opencv-contrib-python, a second cv2 over the
+    # opencv-python already here. Only its face landmarker is used (video.eye_open).
+    pip_install(["--no-deps", "mediapipe==1.1.1", "absl-py~=2.3"], retries=2)
     record("packages", "ok", f"{reqs.name} satisfied")
 
 
