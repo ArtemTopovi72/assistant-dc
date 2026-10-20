@@ -1617,6 +1617,10 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
             "(3) overall_soundscape always names the scene's own continuous background "
             "sources even when the user said nothing -- wind in the grass, a crowd's murmur, "
             "rain on a roof, traffic, room tone -- because H3 fills silence with mumbling; "
+            # «the rhythmic buzz of flickering lights» for a dim corridor: H3 drew the flicker,
+            # part 5 of a talking head flashed for ten seconds (live 2026-10-20)
+            "a sound source is described by its sound only and never changes what is seen: "
+            "lamps hum steadily, they never flicker, flash or dim; "
             "end it with one mix sentence that follows the request: what is loud and up "
             "front, what sits under it. "
             "(4) non_diegetic_music is only a score nobody in the scene plays, given by "
@@ -1636,7 +1640,7 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
             # (9): a traveler seen from behind, «whispers in a low tone», spoke part 1 in a
             # woman's whisper (F0 ~220 Hz) and part 2 as a man (live 2026-10-15).
             "PLAIN RULES -- (1) Add no sparks, embers, dust, smoke, mist, particles, glow, "
-            "moonlight or mood words (cinematic, graceful, ballet, epic, dreamy, magical) that "
+            "moonlight, flickering, flashing or changing light, or mood words (cinematic, graceful, ballet, epic, dreamy, magical) that "
             "the request does not name. (2) One visible action per shot and at most ONE camera "
             "move, slow; otherwise a static camera. (3) A person has exactly two hands and "
             "holds one thing at a time; never describe a held object floating or flying "
