@@ -330,8 +330,13 @@ class _ComfyProgress:
             while not self._stop.is_set():
                 try:
                     raw = ws.recv()
-                except Exception:
-                    return                              # socket closed or timed out
+                except Exception as exc:
+                    # create_connection's timeout is the recv timeout too: a model loading or an
+                    # H3 step longer than it ended the counter for the whole render (live
+                    # 2026-10-20: 16 min of video with no step shown, Seed-VC's showed)
+                    if isinstance(exc, TimeoutError) or type(exc).__name__ == "WebSocketTimeoutException":
+                        continue
+                    return                              # socket closed
                 if not raw or isinstance(raw, (bytes, bytearray)):
                     continue                            # binary frames are previews
                 try:

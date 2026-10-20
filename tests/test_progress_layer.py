@@ -146,3 +146,32 @@ def test_a_part_of_a_long_video_keeps_its_number_on_the_status():
     ctx.last_stage = "Preparing the references"
     assert video._video_stage(ctx) == "Generating a video"
     assert video._video_stage(None) == "Generating a video"
+
+
+def test_a_quiet_spell_on_the_socket_does_not_end_the_step_counter():
+    """The connect timeout is the recv timeout too: a model loading longer than it ended the
+    counter for the whole render -- 16 minutes of video with no step shown."""
+    import json
+
+    class WebSocketTimeoutException(Exception):
+        pass
+    frames = [WebSocketTimeoutException(), TimeoutError(),
+              json.dumps({"type": "progress_state", "data": {"prompt_id": "p1", "nodes": {
+                  "8": {"value": 3, "max": 8, "state": "running"}}}})]
+
+    class Ws:
+        def recv(self):
+            if not frames:
+                raise ConnectionError("closed")
+            f = frames.pop(0)
+            if isinstance(f, Exception):
+                raise f
+            return f
+
+        def close(self):
+            pass
+    got = []
+    stub = types.SimpleNamespace(create_connection=lambda *a, **k: Ws())
+    comfy_client._ComfyProgress("cid", lambda k, n: got.append((k, n)), {"id": "p1"},
+                                modules={"websocket": stub})._run()
+    assert got == [(3, 8)]
