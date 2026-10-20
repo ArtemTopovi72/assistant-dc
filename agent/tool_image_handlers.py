@@ -2043,7 +2043,10 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             path = said_in
         else:
             logger.warning("generate_video: the voice could not be put on, delivering the model's own")
-    ctx.video_action_note = "" if continuing else _check_actions(ctx, path, parts)
+    # A talking head acts with its mouth only and its camera is locked: checked against the agent's
+    # «the camera zooms in», the note said an action was missing and the reply told the user to
+    # «pick a voice variant» (live 2026-10-20)
+    ctx.video_action_note = "" if continuing or head else _check_actions(ctx, path, parts)
     state["video_path"] = path
     state["video_status"] = "success"
     state["video_seconds"] = result.get("seconds")
