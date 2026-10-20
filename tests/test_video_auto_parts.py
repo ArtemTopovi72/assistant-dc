@@ -144,6 +144,26 @@ def test_a_talking_heads_parts_get_no_invented_actions(tmp_path):
     # missing, and the reply told the user to «pick a voice variant» (live 2026-10-20)
     assert not any("ACTIONS of the script" in t for t in looked)
 
+
+def test_a_talking_heads_part_whose_light_drifted_goes_in_pulled_back(tmp_path):
+    speech = " ".join(f"Слушай внимательно, это правило номер {i}, его нельзя забывать." for i in range(8))
+    still = tmp_path / "s.jpg"
+    from PIL import Image
+    Image.new("RGB", (64, 48)).save(still)
+    joined = []
+    pulled = str(tmp_path / "pulled.mp4")
+    open(pulled, "wb").write(b"p")
+    _run(tmp_path, {"description": 'An old man says: "' + speech + '"', "use_current_images": True},
+         state={"user_input_original": "Сделай видео, пусть он скажет: " + speech},
+         dictated_speech=lambda said, raw, ctx: speech, is_talking_head=lambda ctx, d, s="", **k: True,
+         eye_drift=lambda s, c: 0.0, look_drift=lambda s, c: -1.0 if c == pulled else 0.4,
+         match_look=lambda s, c: pulled,
+         join_continuation=lambda a, b, **k: joined.append(b) or str(tmp_path / "joined.mp4"),
+         _adopt_output=lambda p, *a: joined.append(p) or p,
+         ctx_kw={"deps": types.SimpleNamespace(_current_image_paths=lambda ctx, st: [str(still)]),
+                 "vision_model": lambda ctx, **kw: "NONE"})
+    assert pulled in joined, joined
+
 def test_dictated_speech_is_copied_only_when_the_user_wrote_it():
     said = "Анимируй голову. Пусть он скажет: Ах, вот и ты. Хорошо. Слушай, просто будь с рюкзачком, хорошо?"
     ctx = types.SimpleNamespace(text_model=lambda *a, **k: "Ах, вот и ты. Хорошо. Слушай, просто будь с рюкзачком, хорошо?")

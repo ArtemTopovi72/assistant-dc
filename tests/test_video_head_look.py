@@ -45,6 +45,17 @@ def test_steady_light_passes_and_a_flashing_or_hazy_part_does_not(tmp_path):
     assert video.look_drift(still, hazy) > 0
 
 
+def test_a_hazy_take_kept_as_the_best_is_pulled_back_to_the_stills_light(tmp_path):
+    """Run 17: the best of three hazy takes went in as it was (2026-10-20)."""
+    still = str(tmp_path / "still.png")
+    cv2.imwrite(still, _scene(42))
+    hazy = _clip(tmp_path / "haze.mp4", [42] * 6 + [42 + 28 * i / 24 for i in range(24)] + [70] * 42)
+    assert video.look_drift(still, hazy) > 0
+    pulled = video.match_look(still, hazy)
+    assert pulled and video.look_drift(still, pulled) <= 0
+    assert video.match_look(still, str(tmp_path / "none.mp4")) is None
+
+
 def test_a_broken_read_never_blocks_a_render(tmp_path):
     assert video.look_drift(str(tmp_path / "none.png"), str(tmp_path / "none.mp4")) is None
     assert video.eye_shut(np.zeros((10, 10, 3), np.uint8)) is None      # no face: no verdict

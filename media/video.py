@@ -2509,6 +2509,86 @@ def look_drift(still: str, clip: str, window: float = 1.0) -> Optional[float]:
         return None
 
 
+def match_look(still: str, clip: str, passes: int = 2) -> Optional[str]:
+    """`clip` with its light pulled back to `still`'s, region by region: LAB mean/std maps blurred
+    at ~1/6 of the frame, smoothed over ~1 s, so a haze over one wall goes without touching the
+    face. Run 17 (2026-10-20): all three takes of five parts out of six were hazy, and the best of
+    them went in -- walls at 1.6-2.5 of the still's, a jump at every join. Pulled, run 16 read 30/41
+    against the still's 29/42; run 17's part 1 read 41/48 after one pass (the blurred maps mix the
+    face into the walls), 33/44 after two. A new mp4 with `clip`'s sound, or None."""
+    out = clip
+    for _ in range(passes):
+        nxt = _pull_look(still, out)
+        if out != clip:
+            _discard(out)
+        if not nxt:
+            return None
+        out = nxt
+    return out if out != clip else None
+
+
+def _pull_look(still: str, clip: str) -> Optional[str]:
+    ff = shutil.which("ffmpeg")
+    try:
+        import cv2
+        import numpy as np
+        cap = cv2.VideoCapture(clip)
+        fps = cap.get(cv2.CAP_PROP_FPS) or 24
+        w, h = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        small = (max(1, w // 8), max(1, h // 8))
+        sig = max(small) / 6
+
+        def stats(img):
+            x = cv2.resize(cv2.cvtColor(img, cv2.COLOR_BGR2LAB).astype(np.float32), small,
+                           interpolation=cv2.INTER_AREA)
+            m = cv2.GaussianBlur(x, (0, 0), sig)
+            v = cv2.GaussianBlur(x * x, (0, 0), sig) - m * m
+            return m, np.sqrt(np.maximum(v, 1.0))
+        st = []         # a frame's maps are 1/64 of it: the frames are read twice, not held
+        while True:
+            ok, img = cap.read()
+            if not ok:
+                break
+            st.append(stats(img))
+        cap.release()
+        ref = cv2.imread(still)
+        if not ff or len(st) < 2 or ref is None:
+            return None
+        rm, rs = stats(cv2.resize(ref, (w, h)))
+        up = lambda a: cv2.resize(a, (w, h), interpolation=cv2.INTER_LINEAR)
+        k = max(1, int(fps))
+        fh = tempfile.NamedTemporaryFile(prefix="vidlook_", suffix=".mp4", delete=False)
+        fh.close()
+        cmd = [ff, "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{w}x{h}",
+               "-r", f"{fps}", "-i", "-", "-i", clip, "-map", "0:v", "-map", "1:a?",
+               "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
+               "-c:a", "copy", "-movflags", "+faststart", fh.name]
+        p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE,
+                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        cap = cv2.VideoCapture(clip)
+        for i in range(len(st)):
+            ok, img = cap.read()
+            if not ok:
+                break
+            win = st[max(0, i - k // 2):i + k // 2 + 1]
+            fm = np.mean([a for a, _ in win], 0)
+            fs = np.mean([b for _, b in win], 0)
+            x = cv2.cvtColor(img, cv2.COLOR_BGR2LAB).astype(np.float32)
+            y = (x - up(fm)) * up(np.clip(rs / fs, 0.5, 2.0)) + up(rm)
+            p.stdin.write(cv2.cvtColor(np.clip(y, 0, 255).astype(np.uint8), cv2.COLOR_LAB2BGR).tobytes())
+        cap.release()
+        p.stdin.close()
+        err = p.stderr.read()
+        if p.wait(timeout=600) != 0 or not os.path.getsize(fh.name):
+            logger.warning("match_look failed: %s", err[-400:])
+            _discard(fh.name)
+            return None
+        return fh.name
+    except Exception:
+        logger.warning("match_look failed", exc_info=True)
+        return None
+
+
 def eye_shut(frame) -> Optional[float]:
     """How shut the eyes of the face in a BGR `frame` are: MediaPipe's eyeBlink, both eyes'
     mean, 0 open .. 1 shut. None without the landmarker or a face."""

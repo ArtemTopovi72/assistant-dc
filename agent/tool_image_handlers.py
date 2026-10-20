@@ -1357,6 +1357,13 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
                     r = best[3]
                     if best[2] != takes[-1][2]:
                         logger.info("video parts: part %d keeps take %d of %d", i, best[2], len(takes))
+                    light = video_mod.look_drift(fresh_from, r["path"])
+                    if light is not None and light > 0:
+                        pulled = video_mod.match_look(fresh_from, r["path"])
+                        if pulled:
+                            logger.info("video parts: part %d light pulled back to the still (%.2f -> %s)",
+                                        i, light, video_mod.look_drift(fresh_from, pulled))
+                            r = {**r, "path": pulled}
             for attempt in (1, 2) if not fresh_from else ():
                 if pinned:
                     r = video_mod.generate_video(ctx, video_mod.CONTINUE_CTX_PREFIX
