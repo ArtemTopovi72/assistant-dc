@@ -64,3 +64,28 @@ def test_a_broken_read_never_blocks_a_render(tmp_path):
 def test_the_head_lock_asks_for_open_eyes_and_steady_light():
     lock = video._HEAD_LOCK_SUFFIX
     assert "never closed" in lock and "no flicker" in lock
+
+
+def test_a_push_in_to_the_face_is_not_the_stills_framing_whatever_its_light(tmp_path):
+    """Run 18: two parts of six pushed in until the face filled the frame (2026-10-20)."""
+    still_img = _scene(42)
+    still_img[95:110, 20:140] = 200                 # a shelf, so the frame has edges to match
+    still = str(tmp_path / "still.png")
+    cv2.imwrite(still, still_img)
+    vw = cv2.VideoWriter(str(tmp_path / "push.mp4"), cv2.VideoWriter_fourcc(*"mp4v"), 24, (160, 120))
+    for k in range(48):
+        z = 1 + min(1.0, k / 12)                    # zooms to 2x in half a second
+        vw.write(cv2.resize(still_img, None, fx=z, fy=z)[:120, :160] if z > 1 else still_img)
+    vw.release()
+    lit = cv2.VideoWriter(str(tmp_path / "lit.mp4"), cv2.VideoWriter_fourcc(*"mp4v"), 24, (160, 120))
+    for k in range(48):
+        lit.write(cv2.convertScaleAbs(still_img, alpha=1.4, beta=20))
+    lit.release()
+    assert video.framing_kept(still, str(tmp_path / "push.mp4")) is False
+    assert video.framing_kept(still, str(tmp_path / "lit.mp4")) is True
+
+
+def test_a_talking_heads_prompt_never_invites_a_camera_move():
+    """«any camera move or reframing happens only later» was in every head prompt of run 18."""
+    assert "only later" not in video._HEAD_START_LOCK_SUFFIX
+    assert "never a closer shot" in video._HEAD_LOCK_SUFFIX

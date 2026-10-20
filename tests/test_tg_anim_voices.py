@@ -239,7 +239,7 @@ def test_a_talking_head_part_whose_eyes_drifted_is_made_again_and_the_nearer_tak
         made.clear(), joined.clear()
         it = iter(drifts)
         eng = Over(V, generate_video=lambda ctx, d, **kw: made.append(d) or {"path": str(clips[len(made)])},
-                   motion_context_on=lambda: False, eye_drift=lambda still, clip: next(it),
+                   motion_context_on=lambda: False, eye_drift=lambda still, clip, **k: next(it),
                    join_continuation=lambda a, b, **k: joined.append(b) or str(clips[0]),
                    _adopt_output=lambda p, d: p, OUTPUT_DIR=str(tmp_path))
         tools = types.SimpleNamespace(seed_frame=lambda a, b: True, cut_tail=lambda a, b: True,

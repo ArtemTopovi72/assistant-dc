@@ -1346,7 +1346,7 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
                     if not r.get("path"):
                         break
                     said_ok = not said or speech_ok(ctx, r["path"], said)
-                    eyes = video_mod.eye_drift(fresh_from, r["path"])
+                    eyes = video_mod.eye_drift(fresh_from, r["path"], light=False)
                     takes.append((not said_ok, eyes if eyes is not None else 0.0, attempt, r))
                     if said_ok and (eyes is None or eyes <= 0):
                         break
@@ -1357,13 +1357,7 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
                     r = best[3]
                     if best[2] != takes[-1][2]:
                         logger.info("video parts: part %d keeps take %d of %d", i, best[2], len(takes))
-                    light = video_mod.look_drift(fresh_from, r["path"])
-                    if light is not None and light > 0:
-                        pulled = video_mod.match_look(fresh_from, r["path"])
-                        if pulled:
-                            logger.info("video parts: part %d light pulled back to the still (%.2f -> %s)",
-                                        i, light, video_mod.look_drift(fresh_from, pulled))
-                            r = {**r, "path": pulled}
+                    r = {**r, "path": _pull_light(video_mod, fresh_from, r["path"], i)}
             for attempt in (1, 2) if not fresh_from else ():
                 if pinned:
                     r = video_mod.generate_video(ctx, video_mod.CONTINUE_CTX_PREFIX
@@ -1419,6 +1413,23 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
         logger.info("video parts: %d/%d joined -> %s", i, len(parts), os.path.basename(path))
     ctx.video_join_note = _check_joins(ctx, joins)
     return path
+
+
+def _pull_light(video_mod, still: str, path: str, i: int) -> str:
+    """A talking-head part whose light drifted, pulled back to the still's -- on the still's framing
+    only: run 18's push-in to the face came out with a blue beard and orange lips (2026-10-20)."""
+    light = video_mod.look_drift(still, path)
+    if light is None or light <= 0:
+        return path
+    if not video_mod.framing_kept(still, path):
+        logger.warning("video parts: part %d light is off (%.2f) but its framing too; left as it is", i, light)
+        return path
+    pulled = video_mod.match_look(still, path)
+    if not pulled:
+        return path
+    logger.info("video parts: part %d light pulled back to the still (%.2f -> %s)",
+                i, light, video_mod.look_drift(still, pulled))
+    return pulled
 
 
 def _check_joins(ctx, joins: list) -> str:
@@ -1956,6 +1967,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         watch = bool(chain_id and images and not continuing
                      and video_mod._FRAMING_LOCK_SUFFIX in first_prompt)
         best_eyes = None
+        said_first = video_mod.quoted_lines(parts[0]) if head and parts else []
+        speech_ok = getattr(ctx, "speech_ok", None) or _speech_ok
         try:
             for attempt in (1, 2, 3):
                 result = video_mod.generate_video(
@@ -1976,11 +1989,16 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 # The edge drift also fires on a camera that pulls back (103, 81 with CLIP at 0.0,
                 # s91 2026-10-16): only a fallback when CLIP cannot read the clip.
                 drift = video_mod.overlay_drift(p) if look and drawn is None else None
-                eyes = video_mod.eye_drift(images[0], p) if head and p and os.path.exists(p) else None
-                if eyes is not None and (best_eyes is None or eyes < best_eyes[0]):
-                    best_eyes = (eyes, result)
-                if eyes is not None and eyes > 0 and attempt < 3:
-                    logger.warning("generate_video: part 1 drifted off the still's eyes (%.3f); once more", eyes)
+                eyes = video_mod.eye_drift(images[0], p, light=False) if head and p and os.path.exists(p) else None
+                # part 1 had no speech check: its last word, cut by the clip's end, went to the user
+                # in runs 17 and 18 (2026-10-20); a take that says it all ranks first
+                missed = bool(head and said_first and p and os.path.exists(p)
+                              and not speech_ok(ctx, p, said_first))
+                if eyes is not None and (best_eyes is None or (missed, eyes) < best_eyes[0]):
+                    best_eyes = ((missed, eyes), result)
+                if ((eyes is not None and eyes > 0) or missed) and attempt < 3:
+                    logger.warning("generate_video: part 1 drifted off the still's eyes (%s) or did not "
+                                   "say %s; once more", eyes, said_first if missed else "")
                     continue
                 if attempt == 3 or ((drift is None or drift <= video_mod.OVERLAY_DRIFT_MAX)
                                     and (drawn is None or drawn <= video_mod.DRAWN_OVER_MAX)):
@@ -1989,6 +2007,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                                "once more with a new seed", drift, drawn)
             if best_eyes:
                 result = best_eyes[1]       # of two takes, the one nearer the still's eyes
+            if head and result.get("path") and os.path.exists(result["path"]):
+                result = {**result, "path": _pull_light(video_mod, images[0], result["path"], 1)}
         except Exception as exc:
             logger.exception("generate_video crashed")
             return (f"[TOOL ERROR] Video generation failed: {exc}. Tell the user the "

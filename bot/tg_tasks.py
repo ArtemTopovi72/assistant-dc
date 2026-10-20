@@ -1634,8 +1634,10 @@ class TaskRunnerMixin:
                     pass
                 # A cancelled video stops at its next part and joins the parts it has: a
                 # moment for that, or five of six parts made over an hour were thrown away
-                # with «try again» (live 2026-10-20).
-                _invoke_thread.join(timeout=max(0, tg_bot._cfg_int("TG_SALVAGE_GRACE_S", 120)))
+                # with «try again» (live 2026-10-20). Only while parts are being made: a hung
+                # turn with no video waited out the grace too, the timeout told late.
+                if getattr(ctx, "video_part", ""):
+                    _invoke_thread.join(timeout=max(0, tg_bot._cfg_int("TG_SALVAGE_GRACE_S", 120)))
                 # The deadline is not proof that nothing was made. A render that
                 # already finished is the answer the user asked for, and the
                 # inspection calls that ran the clock out do not unmake it --

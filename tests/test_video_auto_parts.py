@@ -11,6 +11,7 @@ for d in ("", "core", "agent", "media"):
 os.environ.setdefault("F5_TEST_RUN", "1")
 os.environ.pop("VIDEO_AUTO_MAX_PARTS", None)
 
+import pytest  # noqa: E402
 import tg_continue  # noqa: E402
 import tool_image_handlers as H  # noqa: E402
 import video as V  # noqa: E402
@@ -145,7 +146,9 @@ def test_a_talking_heads_parts_get_no_invented_actions(tmp_path):
     assert not any("ACTIONS of the script" in t for t in looked)
 
 
-def test_a_talking_heads_part_whose_light_drifted_goes_in_pulled_back(tmp_path):
+@pytest.mark.parametrize("framed", [True, False])
+def test_a_talking_heads_part_whose_light_drifted_goes_in_pulled_back(tmp_path, framed):
+    """Pulled only on the still's framing: run 18's push-in came out with a blue beard (2026-10-20)."""
     speech = " ".join(f"Слушай внимательно, это правило номер {i}, его нельзя забывать." for i in range(8))
     still = tmp_path / "s.jpg"
     from PIL import Image
@@ -156,13 +159,38 @@ def test_a_talking_heads_part_whose_light_drifted_goes_in_pulled_back(tmp_path):
     _run(tmp_path, {"description": 'An old man says: "' + speech + '"', "use_current_images": True},
          state={"user_input_original": "Сделай видео, пусть он скажет: " + speech},
          dictated_speech=lambda said, raw, ctx: speech, is_talking_head=lambda ctx, d, s="", **k: True,
-         eye_drift=lambda s, c: 0.0, look_drift=lambda s, c: -1.0 if c == pulled else 0.4,
-         match_look=lambda s, c: pulled,
+         eye_drift=lambda s, c, **k: 0.0, look_drift=lambda s, c: -1.0 if c == pulled else 0.4,
+         match_look=lambda s, c: pulled, framing_kept=lambda s, c: framed,
          join_continuation=lambda a, b, **k: joined.append(b) or str(tmp_path / "joined.mp4"),
          _adopt_output=lambda p, *a: joined.append(p) or p,
          ctx_kw={"deps": types.SimpleNamespace(_current_image_paths=lambda ctx, st: [str(still)]),
                  "vision_model": lambda ctx, **kw: "NONE"})
-    assert pulled in joined, joined
+    assert (pulled in joined) == framed, joined
+
+def test_a_line_cut_off_by_the_clips_end_is_not_heard():
+    """Runs 17/18: «…заготовок переполнена» ended «перепол…» at the clip's end (2026-10-20)."""
+    line = "Ёмкость для хранения заготовок переполнена."
+    assert not V.heard_lines([line], "Ёмкость для хранения заготовок перепол.")
+    assert V.heard_lines([line], "Емкость для хранения заготовок переполнена.")
+    assert V.SPEECH_WORDS_PER_PART * 1 / 2.3 + 1.0 + 1.3 <= V.frames_to_seconds(V.VIDEO_MAX_FRAMES_AUTO)
+
+
+def test_a_talking_heads_part_one_that_did_not_say_its_lines_is_taken_again(tmp_path):
+    speech = " ".join(f"Слушай внимательно, это правило номер {i}, его нельзя забывать." for i in range(8))
+    still = tmp_path / "s.jpg"
+    from PIL import Image
+    Image.new("RGB", (64, 48)).save(still)
+    heard = iter([False, True] + [True] * 20)
+    calls = _run(tmp_path, {"description": 'An old man says: "' + speech + '"', "use_current_images": True},
+                 state={"user_input_original": "Сделай видео, пусть он скажет: " + speech},
+                 dictated_speech=lambda said, raw, ctx: speech, is_talking_head=lambda ctx, d, s="", **k: True,
+                 eye_drift=lambda s, c, **k: 0.0,
+                 ctx_kw={"deps": types.SimpleNamespace(_current_image_paths=lambda ctx, st: [str(still)]),
+                         "vision_model": lambda ctx, **kw: "NONE",
+                         "speech_ok": lambda ctx, clip, lines: next(heard)})
+    n_parts = len(V.fit_speech([f'An old man says: "{speech}"']))
+    assert len(calls) == n_parts + 1, (len(calls), n_parts)      # part 1 twice, the rest once
+
 
 def test_dictated_speech_is_copied_only_when_the_user_wrote_it():
     said = "Анимируй голову. Пусть он скажет: Ах, вот и ты. Хорошо. Слушай, просто будь с рюкзачком, хорошо?"
@@ -190,8 +218,8 @@ def test_a_part_without_speech_joins_the_next_when_voices_are_given():
 
 def test_a_part_never_carries_more_speech_than_one_clip_says():
     """Two quotes of ~22 words rode one 10 s part and the voice began mid-speech (live 2026-10-19)."""
-    a = " ".join(f"слово{i}" for i in range(22))
-    b = " ".join(f"фраза{i}" for i in range(22))
+    a = " ".join(f"слово{i}" for i in range(16))
+    b = " ".join(f"фраза{i}" for i in range(16))
     part = f'He frowns and says: "{a}." He pauses, then goes on: "{b}."'
     out = V.fit_speech([part, "He waves."])
     assert len(out) == 3 and out[-1] == "He waves."

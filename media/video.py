@@ -96,6 +96,7 @@ EYE_MAX_WIDE = _cfg_env.env_float("VIDEO_EYE_MAX_WIDE", 0.10)
 # jumping up to 0.9 of the still's level between two frames
 LOOK_MAX_SHIFT = _cfg_env.env_float("VIDEO_LOOK_MAX_SHIFT", 0.25)
 LOOK_MAX_FLICKER = _cfg_env.env_float("VIDEO_LOOK_MAX_FLICKER", 0.20)
+FRAMING_MIN_CORR = _cfg_env.env_float("VIDEO_FRAMING_MIN_CORR", 0.5)
 FACE_LANDMARKER = _config.BASE_DIR / "models_ext" / "mediapipe" / "face_landmarker.task"
 _FACE_LANDMARKER_URL = ("https://storage.googleapis.com/mediapipe-models/face_landmarker/"
                         "face_landmarker/float16/1/face_landmarker.task")
@@ -384,7 +385,10 @@ def frames_to_seconds(frames: int) -> float:
     return round(int(frames) / float(VIDEO_FPS), 2)
 
 
-SPEECH_WORDS_PER_PART = int(frames_to_seconds(VIDEO_MAX_FRAMES_AUTO) * 2.3 * 0.95)    # words one longest clip says
+# Words one longest clip says, by estimate_seconds' own sums (1 s + one beat + words / 2.3): at
+# 95 % of the clip, 22 words were asked for 11.9 s of a 10.1 s clip and run 17/18 cut
+# «переполнена» to «перепол…» at its end (2026-10-20).
+SPEECH_WORDS_PER_PART = int((frames_to_seconds(VIDEO_MAX_FRAMES_AUTO) - 1.0 - 1.3) * 2.3)
 
 
 def fit_canvas(width: int, height: int) -> tuple[int, int]:
@@ -1181,6 +1185,13 @@ _START_LOCK_SUFFIX = (
     " The reference image <Picture 1> is the exact first frame: the clip opens on it as it is -- same "
     "framing, crop, zoom and angle; any camera move or reframing happens only later in the "
     "clip and only when asked for above.")
+# A talking head ends on its still too: «any camera move happens only later» was the one opening
+# it got, and run 18 pushed in until the face filled the frame in two parts of six, every take of
+# part 1 too (2026-10-20).
+_HEAD_START_LOCK_SUFFIX = (
+    " The reference image <Picture 1> is the exact first frame and the exact last frame: same "
+    "framing, crop, zoom and angle for the whole clip; the camera never moves closer, the face never "
+    "fills more of the frame than in <Picture 1>.")
 _STYLE_LOCK_SUFFIX = (
     " Keep the reference's visual style unchanged from "
     "the first frame to the last: a photograph stays a photograph (hyper-realistic, "
@@ -1206,7 +1217,9 @@ _HEAD_LOCK_SUFFIX = (
     "for the whole clip -- open exactly as much as there, looking into the camera: never closed or "
     "half-shut, never wider, never squinting, whatever is said above about the face or the mood. "
     "The lighting stays exactly as in <Picture 1>: steady, no flicker, no flashes, no change of "
-    "brightness or colour.")
+    # run 18: the rewrite called the still's head and shoulders «a close-up shot», and H3 pushed in
+    "brightness or colour. The shot stays exactly as wide as <Picture 1>, the face as "
+    "large in the frame as there: never a closer shot.")
 
 
 def _with_lock(description: str, lock: str) -> str:
@@ -1396,6 +1409,11 @@ def heard_lines(expected: Sequence[str], heard: str) -> bool:
     for line in expected:
         words = _flat_line(line).split()
         if words and sum(w in got for w in words) < 0.6 * len(words):
+            return False
+        # a line cut off by the clip's end: «переполнена» heard as «перепол» passed the share
+        if words and len(words[-1]) >= 4 and not any(
+                len(os.path.commonprefix([words[-1], h])) >= len(words[-1]) - 2 and len(h) >= len(words[-1]) - 2
+                for h in got):
             return False
         bad = garbled_words(words, got)
         if bad:
@@ -1885,7 +1903,7 @@ def prepare_prompt(ctx, description: str, *, images: Sequence[str] = (), videos:
             description = _with_lock(description, _HEAD_LOCK_SUFFIX)
     if 1 <= len(images) <= 2 and not videos:     # a photo to animate, not a set of references
         restyle = _asks_new_style(asked, ctx)
-        description = _with_lock(description, _START_LOCK_SUFFIX)
+        description = _with_lock(description, _HEAD_START_LOCK_SUFFIX if keyframe else _START_LOCK_SUFFIX)
         if not restyle:
             description = _with_lock(description, _STYLE_LOCK_SUFFIX)
     if eng.VIDEO_SPEECH_STRESS:
@@ -2509,6 +2527,38 @@ def look_drift(still: str, clip: str, window: float = 1.0) -> Optional[float]:
         return None
 
 
+def framing_kept(still: str, clip: str, every: float = 0.5) -> Optional[bool]:
+    """Whether every frame of `clip` (one per `every` s) keeps `still`'s framing: their edge maps
+    correlate. Run 17/18 parts on the still's framing read 0.77-0.99 whatever their light; the
+    push-ins to the face 0.11-0.25 (2026-10-20). None when it cannot be read."""
+    try:
+        import cv2
+        import numpy as np
+        ref = cv2.imread(still)
+
+        def edges(img):
+            img = cv2.resize(img, (96, max(1, int(96 * ref.shape[0] / ref.shape[1]))))
+            g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).astype(np.float32)
+            m = cv2.magnitude(cv2.Sobel(g, cv2.CV_32F, 1, 0), cv2.Sobel(g, cv2.CV_32F, 0, 1))
+            return (m - m.mean()) / (m.std() + 1e-6)
+        e0 = edges(ref)
+        cap = cv2.VideoCapture(clip)
+        step = max(1, int((cap.get(cv2.CAP_PROP_FPS) or 24) * every))
+        corr, i = [], 0
+        while True:
+            ok, frame = cap.read()
+            if not ok:
+                break
+            if i % step == 0:
+                corr.append(float((edges(frame) * e0).mean()))
+            i += 1
+        cap.release()
+        return min(corr) >= FRAMING_MIN_CORR if corr else None
+    except Exception:
+        logger.warning("framing_kept failed", exc_info=True)
+        return None
+
+
 def match_look(still: str, clip: str, passes: int = 2) -> Optional[str]:
     """`clip` with its light pulled back to `still`'s, region by region: LAB mean/std maps blurred
     at ~1/6 of the frame, smoothed over ~1 s, so a haze over one wall goes without touching the
@@ -2615,7 +2665,8 @@ def eye_shut(frame) -> Optional[float]:
         return None
 
 
-def eye_drift(still: str, clip: str, every: float = 0.5, window: float = 2.0) -> Optional[float]:
+def eye_drift(still: str, clip: str, every: float = 0.5, window: float = 2.0,
+              light: bool = True) -> Optional[float]:
     """How far `clip` drifted off the eyes of `still`: > 0 is a drift, larger is worse. The eye
     strip YuNet finds on the still is template-matched in a frame every `every` s; the mean
     match and the eyes' brightness against the skin (to the still's) are each held to their bar
@@ -2685,9 +2736,13 @@ def eye_drift(still: str, clip: str, every: float = 0.5, window: float = 2.0) ->
             # a blink is a sample or two; a window shut (or wide open) for `window` s is the drift
             sw = np.convolve(shut, ks, "valid")
             score = max(score, float(np.max(sw)) - EYE_MAX_SHUT, float(-np.min(sw)) - EYE_MAX_WIDE)
-        # the take is redrawn the same way when its light went off the still's
-        light_off = look_drift(still, clip)
-        return float(score if light_off is None else max(score, light_off))
+        # the take is redrawn the same way when its light went off the still's -- unless the
+        # caller pulls the light back itself (`light=False`, see match_look)
+        light_off = look_drift(still, clip) if light else None
+        score = score if light_off is None else max(score, light_off)
+        if framing_kept(still, clip) is False:
+            score = max(score, 1.0)
+        return float(score)
     except Exception:
         logger.warning("eye_drift failed", exc_info=True)
         return None
