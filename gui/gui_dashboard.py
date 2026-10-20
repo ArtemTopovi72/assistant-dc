@@ -207,6 +207,21 @@ class DashboardMixin:
         new_prof_btn.setToolTip("Create a new memory profile")
         new_prof_btn.clicked.connect(self._new_memory_profile)
         mem_row.addWidget(new_prof_btn)
+        # The same two video modes as the Telegram buttons: they start the message with the
+        # prefix the bot's buttons use, so the agent reads the mode from the user's own words.
+        # Here with the picture commands, not beside the message box: there they crowded the
+        # main screen's input row (owner, 2026-10-21).
+        self.video_mode_btns = []
+        for _label, _prefix, _tip in (
+                ("🗣 Talking head", "talking head video: ",
+                 "One person on one picture speaks to the camera: every part starts from the picture, "
+                 "so the face does not drift. Paste the picture, then type what they say."),
+                ("👥 Several characters", "video with several characters: ",
+                 "A joint video of the characters on the pictures you paste (up to 3). "
+                 "Then describe what happens between them.")):
+            _b = QPushButton(_label); _b.setToolTip(_tip); _b.setObjectName("ghost")
+            _b.clicked.connect(lambda _=False, p=_prefix: self._start_video_mode(p))
+            self.video_mode_btns.append(_b)
         # The whole window is this page's, so the buttons stand in three columns
         # by what they act on instead of one long scrolling strip.
         groups = (
@@ -214,7 +229,8 @@ class DashboardMixin:
                                 self.voice_btn, self.cam_btn, self.capture_btn)),
             ("Images", (self.paste_img_btn, self.redraw_btn, self.style_preset_btn,
                         self.remove_obj_btn, self.outfit_btn, self.fixhands_btn,
-                        self.retryhands_btn, self.fixartifact_btn, self.whole_frame_btn)),
+                        self.retryhands_btn, self.fixartifact_btn, self.whole_frame_btn,
+                        *self.video_mode_btns)),
             ("Search & memory", (self.ultra_btn, self.usedb_btn, clear_btn, mem_row,
                                  self.save_mem_btn, self.compact_btn, self.clear_ctx_btn)),
         )
@@ -294,22 +310,7 @@ class DashboardMixin:
             "Send now when idle. While the assistant is busy, the message is added to the "
             "task queue instead of being dropped — queued tasks run one after another as "
             "the assistant frees up. Use the queue panel above to reorder, remove, or pause.")
-        # The same two video modes as the Telegram buttons: they start the message with the
-        # prefix the bot's buttons use, so the agent reads the mode from the user's own words.
-        self.video_mode_btns = []
-        for _label, _prefix, _tip in (
-                ("🗣 Talking head", "talking head video: ",
-                 "One person on one picture speaks to the camera: every part starts from the picture, "
-                 "so the face does not drift. Paste the picture, then type what they say."),
-                ("👥 Several characters", "video with several characters: ",
-                 "A joint video of the characters on the pictures you paste (up to 3). "
-                 "Then describe what happens between them.")):
-            _b = QPushButton(_label); _b.setToolTip(_tip)
-            _b.clicked.connect(lambda _=False, p=_prefix: self._start_video_mode(p))
-            self.video_mode_btns.append(_b)
         row.addWidget(self.input, 1)
-        for _b in self.video_mode_btns:
-            row.addWidget(_b)
         row.addWidget(self.length_combo)
         row.addWidget(self.stop_btn); row.addWidget(self.send_btn)
         chat_col = QWidget()
