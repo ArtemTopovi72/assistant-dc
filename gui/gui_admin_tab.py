@@ -152,11 +152,11 @@ class AdminTab(QWidget):
             bits = []
             if v.get("vram_used_mb") is not None and v.get("vram_total_mb"):
                 bits.append(f"💾 {v['vram_used_mb'] / 1024:.1f} / {v['vram_total_mb'] / 1024:.1f} {tr('GB')}")
-            bits.append(" · ".join(x for x in (temp("gpu_temp", "🌡 "), temp("gpu_hotspot", tr("hot spot") + " "),
-                                               temp("gpu_mem_temp", tr("VRAM") + " ")) if x))
             if v.get("gpu_power") is not None:
                 bits.append(f"⚡ {v['gpu_power']:.0f} {tr('W')}")
-            info.setText(sep.join(b for b in bits if b))
+            temps = [x for x in (temp("gpu_temp", f"🌡 {tr('core')} "), temp("gpu_hotspot", f"🌡 {tr('hot spot')} "),
+                                 temp("gpu_mem_temp", f"🌡 {tr('VRAM')} ")) if x]
+            info.setText("<br>".join([sep.join(b for b in bits if b)] + temps))
             name, bar, info = self._hw_rows["cpu"]
             cpu_name = (v.get("cpu_name") or "CPU").replace("Intel Core ", "").replace("AMD Ryzen ", "Ryzen ")
             name.setText(f"🧠 {cpu_name}")

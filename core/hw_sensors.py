@@ -139,7 +139,9 @@ def lines(v: dict = None) -> list:
     """The admin panel's hardware block, HTML (<b>), a device per head line:
         🎮 <b>RTX 3090</b>  ▰▰▰▰▱▱▱▱▱▱ 38%
               💾 21.1 / 24.0 ГБ · ⚡ 28 Вт
-              🌡 🟢 39° · хотспот 🟢 50° · память 🟢 50°
+              🌡 ядро 🟢 39°
+              🌡 хотспот 🟢 50°
+              🌡 память 🟢 50°
         🧠 <b>i7-14700KF</b>  ▰▱▱▱▱▱▱▱▱▱ 8%
               🌡 🟢 62° · ⚡ 95 Вт"""
     import progress
@@ -158,10 +160,8 @@ def lines(v: dict = None) -> list:
             mid.append(f"⚡ {v['gpu_power']:.0f} Вт")
         if mid:
             out.append(_PAD + " · ".join(mid))
-        temps = [f"{label}{_deg(v, k)}" for label, k in (("", "gpu_temp"), ("хотспот ", "gpu_hotspot"),
-                                                            ("память ", "gpu_mem_temp")) if v.get(k) is not None]
-        if temps:
-            out.append(_PAD + "🌡 " + " · ".join(temps))
+        out += [f"{_PAD}🌡 {label} {_deg(v, k)}" for label, k in (("ядро", "gpu_temp"), ("хотспот", "gpu_hotspot"),
+                                                                  ("память", "gpu_mem_temp")) if v.get(k) is not None]
     if v.get("cpu_name") or v.get("cpu_load") is not None:
         name = (v.get("cpu_name") or "CPU").replace("Intel Core ", "").replace("AMD Ryzen ", "Ryzen ")
         head = f"🧠 <b>{name}</b>"
