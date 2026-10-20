@@ -33,7 +33,7 @@ class _Ctx:
     def memory_text(self): return ""
 
 
-def _run(tmp_path, args, condensed=""):
+def _run(tmp_path, args, condensed="", state=None, **eng):
     calls = []
 
     def fake_gen(ctx, description, **kw):
@@ -48,11 +48,11 @@ def _run(tmp_path, args, condensed=""):
                           mark_inserts=lambda ctx, ps: ps, validate_script=lambda ctx, ps, **k: ps,
                           condense_script=lambda *a, **k: condensed,
                           join_continuation=lambda a, b: str(tmp_path / "joined.mp4"),
-                          _adopt_output=lambda p, *a: p, probe=lambda p: {"seconds": 10.4}),
+                          _adopt_output=lambda p, *a: p, probe=lambda p: {"seconds": 10.4}, **eng),
         clip_tools=Over(tg_continue, seed_frame=lambda src, out: open(out, "wb").write(b"j") > 0,
                         cut_tail=lambda src, out: open(out, "wb").write(b"t") > 0,
                         first_frame=lambda src, out: False))
-    H._handle_generate_video(ctx, {}, {"use_current_images": False, **args})
+    H._handle_generate_video(ctx, state or {}, {"use_current_images": False, **args})
     return calls
 
 
@@ -99,6 +99,17 @@ def test_users_dictated_speech_is_not_the_bots_script_to_condense():
     assert not V.speech_is_users('He says: "Привет, дружище, как дела?"', said)      # the bot's own line
     assert not V.speech_is_users("He waves.", said)
 
+
+
+def test_a_dictated_monologue_stays_whole_when_the_agent_retold_it_in_english(tmp_path):
+    """The agent quoted the speech in English and cut short; the user's 106 words were added
+    beside it, the script looked like the bot's own and went out as one 10 s part (live 2026-10-20)."""
+    speech = " ".join(f"Слушай внимательно, это правило номер {i}, его нельзя забывать." for i in range(12))
+    calls = _run(tmp_path, {"description": 'An old man says: "Listen carefully, rule number one."'},
+                 condensed="Он говорит: «Коротко.»", state={"user_input_original": "Сделай видео, пусть он скажет: " + speech},
+                 dictated_speech=lambda said, raw, ctx: speech)
+    assert len(calls) > 2
+    assert not any("Listen carefully" in c for c in calls)
 
 def test_dictated_speech_is_copied_only_when_the_user_wrote_it():
     said = "Анимируй голову. Пусть он скажет: Ах, вот и ты. Хорошо. Слушай, просто будь с рюкзачком, хорошо?"

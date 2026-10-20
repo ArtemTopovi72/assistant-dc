@@ -1671,11 +1671,16 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     raw = (args.get("description") or "").strip()
     _said = str((state or {}).get("user_input_original") or (state or {}).get("user_input") or "")
     own_script = False
+    dictated = False
     if not continuing:
         words = video_mod.dictated_speech(_said, raw, ctx)
         if words:
             logger.info("generate_video: the user's own speech added to the script (%d words)", len(words.split()))
-            said_it = f'{raw} The person says, word for word: "{words}"'.strip()
+            # The agent's own quoting of that speech goes: it is the same speech retold (in
+            # English, cut short), so it would be said twice -- and it made the script look
+            # like the bot's own, condensed to 2 parts and rendered as one (live 2026-10-20).
+            dictated = True
+            said_it = f'{video_mod._QUOTED.sub("", raw)} The person says, word for word: "{words}"'.strip()
             description = description.replace(raw, said_it, 1) if raw and raw in description else said_it
             raw = said_it
     if not continuing:
@@ -1711,7 +1716,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     want = float(args.get("seconds") or 0)
     # The words the user dictated are never condensed or cut to the bot's own 2-part cap:
     # an 85-word monologue came out as its first sentence (live 2026-10-19).
-    speech_theirs = video_mod.speech_is_users(raw, _said)
+    speech_theirs = dictated or video_mod.speech_is_users(raw, _said)
     # Over one clip's 15 s the parts follow the script: «на 30 секунд» was capped to one
     # 15 s clip and delivered without a word (2026-10-13).
     if args.get("seconds") and float(args["seconds"]) <= 15.0:
