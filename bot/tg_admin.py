@@ -181,7 +181,7 @@ class AdminMixin:
         if s["gpu"]:
             L += ["", s["gpu"]]
         if s["training"]:
-            L.append(s["training"])
+            L += ["", s["training"]]          # its 🧠 read as one more CPU line glued under the block
         L.append("")
         kb = []
         L.append(t("ax_running", n=len(s["running"])))
