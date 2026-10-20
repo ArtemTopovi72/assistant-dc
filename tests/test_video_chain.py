@@ -520,3 +520,18 @@ def test_a_line_inside_a_sound_line_is_said_once():
     parts = V.split_script(s)
     assert len(parts) > 1, parts
     assert sum("Не может быть" in p for p in parts) == 1, parts
+
+
+def test_a_talking_head_keeps_the_camera_still_whatever_the_agent_wrote():
+    """It opens and ends on the still, so no camera move fits: the agent's own «the camera
+    slowly zooms in» (the user asked for none) drifted all three takes off the still's eyes."""
+    asked = []
+    ctx = types.SimpleNamespace(
+        yes_no=lambda q, text, *a, **k: asked.append(q) or True,     # «yes, it asks for a move»
+        video_engine=Over(V, _context_ir_on=lambda: False, VIDEO_SPEECH_STRESS=False))
+    said = 'The camera slowly zooms in on his face as he says: "Ах, вот и ты."'
+    head, _ = V.prepare_prompt(ctx, said, images=["still.jpg"], seconds=5.0, head=True, keyframe=True)
+    assert V._FRAMING_LOCK_SUFFIX in head
+    assert not any("camera to move" in q for q in asked)
+    shot, _ = V.prepare_prompt(ctx, said, images=["still.jpg"], seconds=5.0)
+    assert V._FRAMING_LOCK_SUFFIX not in shot           # an animated photo still gets the zoom it asked for

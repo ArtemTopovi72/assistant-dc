@@ -1189,7 +1189,8 @@ def _asks_new_style(description: str, ctx=None) -> bool:
 _HEAD_LOCK_SUFFIX = (
     " The face keeps the expression of <Picture 1>: only the mouth and jaw move with the words, "
     "with slight natural head motion; the eyes, eyelids and brows stay exactly as in <Picture 1> "
-    "for the whole clip -- they never widen, open further, squint or change.")
+    "for the whole clip -- they never widen, open further, squint or change, whatever is said "
+    "above about the face or the mood.")
 
 
 def _with_lock(description: str, lock: str) -> str:
@@ -1832,7 +1833,13 @@ def prepare_prompt(ctx, description: str, *, images: Sequence[str] = (), videos:
     met an unloaded model and the parts went out unrewritten)."""
     eng = _eng(ctx)
     asked = description
-    description = _lock_framing_unless_requested(strip_timing(description), ctx)
+    if keyframe and images:
+        # A talking head opens AND ends on its still, so no camera move fits it; the agent's own
+        # «the camera slowly zooms in» (the user asked for none) had all three takes of part 1
+        # drift off the still's eyes, 0.39..0.40 (live 2026-10-20).
+        description = strip_timing(description).strip() + _FRAMING_LOCK_SUFFIX
+    else:
+        description = _lock_framing_unless_requested(strip_timing(description), ctx)
     mode = pick_mode(images, videos, audios, keyframe=keyframe)
     if not seconds:
         seconds = estimate_seconds(asked)
