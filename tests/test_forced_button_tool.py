@@ -95,11 +95,13 @@ def test_a_button_is_one_action_and_then_the_answer():
     assert not G._button_done("generate an image of: a cat, then animate it", {"generate_image"})
 
 
-def _edit_turn(text, script, calls, reverses=False):
+def _edit_turn(text, script, calls, reverses=False, gives_asked=None):
     llm = _TGF.LLM([_TGF._asst("", [_TGF._tc(name, args, f"c{i}")]) for i, (name, args) in enumerate(calls)]
                    + [_TGF._asst("Не получилось.")])
     tools = _TGF.Tools(script)
-    ctx = _TGF._ctx(yes_no=lambda *a, **k: reverses)
+    gives = (not reverses) if gives_asked is None else gives_asked
+    ctx = _TGF._ctx(yes_no=lambda q, *a, **k: reverses if "opposite" in q
+                    else gives if "give what the USER asked" in q else False)
     _TGF._run(ctx, llm, tools, {"user_input": text, "messages": []}, fastpath=False)
     return [n for n, _a in tools.calls]
 
@@ -123,7 +125,20 @@ def test_two_failed_edits_end_the_editing():
     assert ran == ["inpaint_image", "inpaint_image"], ran
 
 
+HAT_BACK = {"region": "his head", "instructions": "a thick wool hat covering his head"}
+CUP_GONE = {"region": "the cup on the table", "instructions": "empty wooden table surface, removing the cup"}
+
+
 def test_an_edit_that_reverses_the_request_is_not_run():
-    """«remove …» rewritten into «a bodysuit covering her chest completely» (live 2026-10-21)."""
-    ran = _edit_turn("remove from the image: the bodysuit", {}, [("inpaint_image", CHEST)], reverses=True)
+    """«remove …» rewritten into the thing put back on (live 2026-10-21)."""
+    ran = _edit_turn("remove from the image: убери с него шапку", {}, [("inpaint_image", HAT_BACK)],
+                     reverses=True)
     assert ran == [], ran
+
+
+def test_an_opposite_read_the_second_read_contradicts_lets_the_edit_run():
+    """«empty wooden table surface, removing the cup» for «убери чашку» read as the opposite on its
+    own (bench/reverses_request_live.py): blocking takes both reads."""
+    ran = _edit_turn("убери чашку со стола", {}, [("inpaint_image", CUP_GONE)],
+                     reverses=True, gives_asked=True)
+    assert ran == ["inpaint_image"], ran

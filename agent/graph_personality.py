@@ -422,11 +422,17 @@ def _reverses_request(ctx, request: str, args: dict) -> bool:
     edit = " ".join(str(args.get(k) or "") for k in ("region", "instructions", "target", "style")).strip()
     if not asked or not edit or asked.lower().startswith("[style_preset]"):
         return False
+    pair = f"USER: {asked[:600]}\nEDIT: {edit[:600]}"
+    # Two reads must agree: the opposite-read alone blocked «empty wooden table surface, removing
+    # the cup» for «убери чашку со стола», and an example for it moved the miss onto «his empty
+    # hands, the book removed» (bench/reverses_request_live.py).
     return bool(yes_no(ctx)(
         "{text}\n\nDoes the EDIT do the opposite of what the USER asked -- covers or adds what they asked "
         "to uncover or remove, removes what they asked to add, darkens what they asked to brighten? "
         "An edit that does what they asked in other words, or only part of it, is NOT the opposite.",
-        f"USER: {asked[:600]}\nEDIT: {edit[:600]}"))
+        pair)) and not yes_no(ctx)(
+        "{text}\n\nDoes the EDIT, carried out, give what the USER asked for (in any words: describing "
+        "the finished result counts, so does doing part of it)?", pair, True)
 
 
 def _button_done(text: str, already_called) -> bool:
