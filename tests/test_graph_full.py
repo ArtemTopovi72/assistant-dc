@@ -39,6 +39,10 @@ def _ctx(**kw):
     c.vision_model = lambda **k: "a photo of a cat"
     c.chat_model = lambda *a, **k: _CHAT[0](*a, **k)
     c.run_tool = lambda *a, **k: _EXEC[0](*a, **k)
+    # the translator and the other text reads ask the model through seams.text_model: the
+    # deps stub below never reached them, and the suite talked to the live LM Studio --
+    # passing alone, waiting out the shared model gate in a full run (2026-10-20)
+    c.text_model = lambda *a, **k: None
     for k, v in kw.items():
         setattr(c, k, v)
     return c

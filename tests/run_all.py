@@ -124,11 +124,17 @@ _FAIL_LINE = re.compile(r"\s*(\[?FAIL\b|FAILED\b|FAIL:|E   |\w*Error\b|Traceback
 
 def run_one(name, kind, timeout):
     path = os.path.join(HERE, name)
+    # A suite that hangs prints where, just before the kill: five suites sat at 600 s in
+    # every full run and passed alone in 10-114 s, with nothing but "TIMEOUT" to go on.
+    dump = max(5, timeout - 15)
     if kind == "script":
-        cmd = [sys.executable, path]
+        cmd = [sys.executable, "-c",
+               "import faulthandler, runpy, sys; faulthandler.dump_traceback_later(%d, exit=True); "
+               "sys.argv = [%r]; sys.path.insert(0, %r); runpy.run_path(%r, run_name='__main__')"
+               % (dump, path, HERE, path)]
     else:
         cmd = [sys.executable, "-m", "pytest", path, "-q",
-               "-p", "no:cacheprovider"]
+               "-p", "no:cacheprovider", "-o", "faulthandler_timeout=%d" % dump]
     # Marks every child as a test process. lmstudio._lms_unload_all refuses to
     # run under it: one suite exercised the context-overflow path, which answers
     # by shelling out to `lms unload --all`, and every full run silently
@@ -139,8 +145,11 @@ def run_one(name, kind, timeout):
     # Same idea for the network: an unstubbed LLM/ComfyUI call in a suite hit
     # the operator's live server (test_long_video made 48 real vision calls,
     # 2.5 min, in the middle of a night bench). Dead port unless asked.
+    # The model gate too: its slots are OS file locks in runtime/llm_gate, shared with the
+    # live app and every other suite, and a call to the dead port holds one through its
+    # retries -- 24 suites queued on one slot and five sat at 600 s in every full run.
     if not os.getenv("RUN_ALL_LIVE"):
-        env.update(LM_STUDIO_BASE="http://127.0.0.1:9", COMFY_URL="http://127.0.0.1:9")
+        env.update(LM_STUDIO_BASE="http://127.0.0.1:9", COMFY_URL="http://127.0.0.1:9", LLM_GATE="0")
     t0 = time.perf_counter()
     try:
         p = subprocess.run(cmd, cwd=ROOT, env=env, timeout=timeout,
