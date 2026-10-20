@@ -1419,7 +1419,7 @@ def _pull_light(video_mod, still: str, path: str, i: int) -> str:
     """A talking-head part whose light drifted, pulled back to the still's -- on the still's framing
     only: run 18's push-in to the face came out with a blue beard and orange lips (2026-10-20)."""
     light = video_mod.look_drift(still, path)
-    if light is None or light <= 0:
+    if light is None or light + video_mod.LOOK_MAX_SHIFT - video_mod.LOOK_PULL_SHIFT <= 0:
         return path
     if not video_mod.framing_kept(still, path):
         logger.warning("video parts: part %d light is off (%.2f) but its framing too; left as it is", i, light)

@@ -97,6 +97,9 @@ EYE_MAX_WIDE = _cfg_env.env_float("VIDEO_EYE_MAX_WIDE", 0.10)
 LOOK_MAX_SHIFT = _cfg_env.env_float("VIDEO_LOOK_MAX_SHIFT", 0.25)
 LOOK_MAX_FLICKER = _cfg_env.env_float("VIDEO_LOOK_MAX_FLICKER", 0.20)
 FRAMING_MIN_CORR = _cfg_env.env_float("VIDEO_FRAMING_MIN_CORR", 0.5)
+# Pulling the light back costs no render: run 19's part 2 sat at 40/50 of the still's 29/42,
+# under LOOK_MAX_SHIFT, and went in hazy (2026-10-20).
+LOOK_PULL_SHIFT = _cfg_env.env_float("VIDEO_LOOK_PULL_SHIFT", 0.10)
 FACE_LANDMARKER = _config.BASE_DIR / "models_ext" / "mediapipe" / "face_landmarker.task"
 _FACE_LANDMARKER_URL = ("https://storage.googleapis.com/mediapipe-models/face_landmarker/"
                         "face_landmarker/float16/1/face_landmarker.task")

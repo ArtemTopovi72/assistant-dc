@@ -286,3 +286,13 @@ def test_the_talking_head_button_decides_without_asking_the_model():
     assert V.is_talking_head(boom, "He waits.", "Talking head video: Ах, вот и ты")
     assert not V.is_talking_head(types.SimpleNamespace(yes_no=lambda *a, **k: False), 'He says: "Ах."',
                                  "video with several characters: they talk")
+
+
+def test_a_light_under_the_retake_bar_is_still_pulled_back():
+    """Run 19's part 2 sat at 40/50 of the still's 29/42, under the retake bar (2026-10-20)."""
+    def fake(light):
+        return types.SimpleNamespace(look_drift=lambda s, c: light, framing_kept=lambda s, c: True,
+                                     match_look=lambda s, c: "pulled.mp4", LOOK_MAX_SHIFT=V.LOOK_MAX_SHIFT,
+                                     LOOK_PULL_SHIFT=V.LOOK_PULL_SHIFT)
+    assert H._pull_light(fake(-0.01), "s.jpg", "take.mp4", 2) == "pulled.mp4"
+    assert H._pull_light(fake(-0.2), "s.jpg", "take.mp4", 2) == "take.mp4"
