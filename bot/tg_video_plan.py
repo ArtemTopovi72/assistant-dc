@@ -34,25 +34,34 @@ def _summaries(texts: list, lang: str, owner=None) -> list:
     from seams import text_model
     from utils import safe_json_from_llm
     name = {"ru": "Russian"}.get(lang, lang)
-    try:
-        # «говорит по-русски» stood where the user's own words belonged, and a sound
-        # line riding every part («пульс искр наполняет сцену») became a part of its own.
-        raw = text_model(owner)(
-            None,
-            f"Retell each numbered video shot description in {name} as ONE short line "
-            "(at most 14 words): who does what on screen. A line in double quotes is spoken "
-            "aloud: copy it into your line in quotes, character for character, never "
-            "paraphrased or replaced by 'says something'. Leave out camera, sound, music, "
-            "light and particle effects (sparks, smoke, embers) unless they are the action. "
-            'Reply with JSON only: {"lines": ["...", "..."]}, one line per shot, same order.',
-            "\n".join(f"{i}. {video.strip_timing(t)}" for i, t in enumerate(texts, 1)),
-            temperature=0.2, max_tokens=200 + 90 * len(texts)) or ""
-        lines = (safe_json_from_llm(raw, ["lines"]) or {}).get("lines") or []
-    except Exception:
-        tg_bot.logger.exception("video plan: summaries failed")
-        lines = []
-    lines = [re.sub(r"^\d+[.)]\s*", "", str(x).strip()) for x in lines]
-    return lines if len(lines) == len(texts) and all(lines) else [""] * len(texts)
+    listing = "\n".join(f"{i}. {video.strip_timing(t)}" for i, t in enumerate(texts, 1))
+    lines, raw = [], ""
+    # Two tries: a 6-part monologue came back unusable once and the chat saw the English
+    # prompts (live 2026-10-20). The budget follows the text: every spoken line is copied
+    # whole, and 90 tokens a part did not hold a Russian monologue.
+    for _ in range(2):
+        try:
+            # «говорит по-русски» stood where the user's own words belonged, and a sound
+            # line riding every part («пульс искр наполняет сцену») became a part of its own.
+            raw = text_model(owner)(
+                None,
+                f"Retell each numbered video shot description in {name} as ONE short line "
+                "(at most 14 words): who does what on screen. A line in double quotes is spoken "
+                "aloud: copy it into your line in quotes, character for character, never "
+                "paraphrased or replaced by 'says something'. Leave out camera, sound, music, "
+                "light and particle effects (sparks, smoke, embers) unless they are the action. "
+                'Reply with JSON only: {"lines": ["...", "..."]}, one line per shot, same order.',
+                listing, temperature=0.2, max_tokens=400 + 90 * len(texts) + len(listing) // 2) or ""
+            lines = (safe_json_from_llm(raw, ["lines"]) or {}).get("lines") or []
+        except Exception:
+            tg_bot.logger.exception("video plan: summaries failed")
+            lines = []
+        lines = [re.sub(r"^\d+[.)]\s*", "", str(x).strip()) for x in lines]
+        if len(lines) == len(texts) and all(lines):
+            return lines
+    tg_bot.logger.warning("video plan: no %s summaries for %d parts (got %d); the prompts are shown: %r",
+                          name, len(texts), len(lines), raw[-300:])
+    return [""] * len(texts)
 
 
 def _with_summaries(plan: list, lang: str, owner=None) -> list:
