@@ -1315,7 +1315,7 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
     for i, part in enumerate(parts[1:], start=2):
         if getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
             break
-        first_try = first_eyes = None
+        first_try, r = None, {}
         ctx.set_stage(f"Generating a video ({i}/{len(parts)})")
         frame = os.path.join(work, f"seed_{i}.jpg")
         tail = os.path.join(work, f"tail_{i}.mp4")
@@ -1332,11 +1332,31 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
             part = video_mod.bridge_part(ctx, frame, part)
         said = video_mod.quoted_lines(part)
         try:
-            for attempt in (1, 2):
-                if fresh_from:
+            if fresh_from:
+                # Takes of the still, each checked for its lines and the still's eyes; the best
+                # stays. Even ending on the still, one part in six had its eyes go light and wide,
+                # and its retake pushed in to an extreme close-up -- unchecked (live 2026-10-20).
+                takes = []
+                for attempt in (1, 2, 3):
                     r = video_mod.generate_video(ctx, part, images=[fresh_from], keyframe=True,
-                                                 aspect=args.get("aspect") or "", seed=args.get("seed"))
-                elif pinned:
+                                                 aspect=args.get("aspect") or "",
+                                                 seed=args.get("seed") if attempt == 1 else None)
+                    if not r.get("path"):
+                        break
+                    said_ok = not said or speech_ok(ctx, r["path"], said)
+                    eyes = video_mod.eye_drift(fresh_from, r["path"])
+                    takes.append((not said_ok, eyes if eyes is not None else 0.0, attempt, r))
+                    if said_ok and (eyes is None or eyes <= 0):
+                        break
+                    logger.warning("video parts: part %d take %d did not say %s or drifted off the "
+                                   "still's eyes (%s)", i, attempt, said, eyes)
+                if takes:
+                    best = min(takes, key=lambda t: t[:3])
+                    r = best[3]
+                    if best[2] != takes[-1][2]:
+                        logger.info("video parts: part %d keeps take %d of %d", i, best[2], len(takes))
+            for attempt in (1, 2) if not fresh_from else ():
+                if pinned:
                     r = video_mod.generate_video(ctx, video_mod.CONTINUE_CTX_PREFIX
                                                  + video_mod.with_scene(part, " ".join(parts[:i - 1])),
                                                  context_video=tail,
@@ -1355,27 +1375,18 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
                 if attempt == 2 or not r.get("path"):
                     break
                 said_ok = not said or speech_ok(ctx, r["path"], said)
-                sim = None if fresh_from else voice_sim(r["path"], voices)      # revoiced at the end
-                # even ending on the still, one part in six had its eyes go light and wide
-                # halfway through (live 2026-10-20)
-                eyes = video_mod.eye_drift(fresh_from, r["path"]) if fresh_from else None
-                if said_ok and (sim is None or sim >= video_mod.VOICE_MIN_SIM) and (eyes is None or eyes <= 0):
+                sim = voice_sim(r["path"], voices)
+                if said_ok and (sim is None or sim >= video_mod.VOICE_MIN_SIM):
                     break
-                logger.warning("video parts: part %d did not say %s, drifted off the voice (%s) or off "
-                               "the eyes (%s); once more with a new seed", i, said, sim, eyes)
+                logger.warning("video parts: part %d did not say %s or drifted off the voice (%s); "
+                               "once more with a new seed", i, said, sim)
                 first_try = (r, sim) if said_ok else None
-                first_eyes = (r, eyes) if said_ok and eyes is not None and eyes > 0 else None
                 args = {**args, "seed": None}
             if first_try and r.get("path") and first_try[1] is not None:
                 again = voice_sim(r["path"], voices)
                 if again is not None and again < first_try[1]:
                     r = first_try[0]        # the second take is further from the voice than the first
                     logger.info("video parts: part %d keeps its first take (voice %.2f > %.2f)", i, first_try[1], again)
-            if first_eyes and r.get("path") and r is not first_eyes[0]:
-                again = video_mod.eye_drift(fresh_from, r["path"])
-                if again is not None and again > first_eyes[1]:
-                    r = first_eyes[0]       # the second take's eyes are further off the still
-                    logger.info("video parts: part %d keeps its first take (eye drift %.3f < %.3f)", i, first_eyes[1], again)
         except Exception:
             logger.exception("video parts: part %d crashed", i)
             break
@@ -1946,7 +1957,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 eyes = video_mod.eye_drift(images[0], p) if head and p and os.path.exists(p) else None
                 if eyes is not None and (best_eyes is None or eyes < best_eyes[0]):
                     best_eyes = (eyes, result)
-                if eyes is not None and eyes > 0 and attempt == 1:
+                if eyes is not None and eyes > 0 and attempt < 3:
                     logger.warning("generate_video: part 1 drifted off the still's eyes (%.3f); once more", eyes)
                     continue
                 if attempt == 3 or ((drift is None or drift <= video_mod.OVERLAY_DRIFT_MAX)

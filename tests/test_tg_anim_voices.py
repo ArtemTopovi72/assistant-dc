@@ -250,7 +250,7 @@ def test_a_talking_head_part_whose_eyes_drifted_is_made_again_and_the_nearer_tak
         return len(made), os.path.basename(joined[-1])
     assert run([-0.03]) == (1, "t1.mp4")                 # kept the eyes: one take
     assert run([0.02, -0.01]) == (2, "t2.mp4")           # drifted, the second take is good
-    assert run([0.05, 0.08]) == (2, "t1.mp4")            # both drifted: the nearer one stays
+    assert run([0.05, 0.08, 0.06]) == (3, "t1.mp4")      # all drifted: the nearest one stays
 
 def test_a_keyframe_clip_is_fl2va_a_voice_sample_alone_is_ref2va():
     assert V.pick_mode(["a.jpg"], (), (), keyframe=True) == "t2va"
