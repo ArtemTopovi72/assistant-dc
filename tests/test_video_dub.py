@@ -62,3 +62,12 @@ def test_a_monologue_is_said_a_few_whole_sentences_at_a_time():
     parts = video_dub._chunks(text)
     assert len(parts) > 1 and " ".join(parts) == text
     assert all(len(p.split()) <= video_dub.CHUNK_WORDS for p in parts)
+
+
+def test_the_old_voices_residue_is_ducked_under_its_words():
+    """The speech gate's leftover still carries H3's own voice: kept at full level it was
+    heard as an echo of the new one (2026-10-20). Between the words the hum stays."""
+    import video_dub
+    g = video_dub._duck(video_dub.SR * 3, [("а", 1.0, 2.0)])
+    assert abs(g[int(1.5 * video_dub.SR)] - video_dub.HUM_UNDER_WORDS) < 1e-3
+    assert g[int(0.3 * video_dub.SR)] > 0.99 and g[int(2.7 * video_dub.SR)] > 0.99

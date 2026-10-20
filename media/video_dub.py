@@ -126,6 +126,18 @@ REF_MAX_S = 10.0       # F5 trims a longer reference itself, and then its text i
 CHUNK_WORDS = 24       # one F5 call: a whole 104-word monologue at once came back as noise
 
 
+HUM_UNDER_WORDS = 0.1   # what is left of the old voice's residue under its own words
+
+
+def _duck(n: int, words: list, floor: float = HUM_UNDER_WORDS, fade: float = 0.06) -> np.ndarray:
+    """A gain of `floor` over every word span [(w, start, end)], 1 between them, `fade` s ramps."""
+    g = np.ones(n, dtype=np.float32)
+    for _, a, b in words:
+        g[max(0, int(a * SR)):min(n, int(b * SR))] = floor
+    k = max(1, int(fade * SR))
+    return np.convolve(g, np.ones(k, dtype=np.float32) / k, mode="same")
+
+
 def _ref_span(words: list, top: float = REF_MAX_S) -> tuple:
     """(first, last) index of the longest run of `words` [(w, start, end)] lasting <= `top` s."""
     best, i = (0, 0), 0
@@ -187,12 +199,13 @@ def redub(ctx, video: str, lines: list, out_path: str = "") -> str:
         return ""
     # Demucs files H3's hum and score under "vocals" (tail of run 16: vocals 0.142 rms of a 0.145
     # mix, the other stems 0.004): replaced whole, the clip lost its music. Only the speech in it
-    # is replaced; what the speech gate leaves goes back with the backing.
+    # is replaced; what the speech gate leaves goes back with the backing -- ducked under the old
+    # words, where it still carries H3's own voice and was heard as an echo of the new one.
+    hum = None
     try:
         import noisereduce
         speech = noisereduce.reduce_noise(y=voice, sr=SR, stationary=False).astype(np.float32)
-        rest = rest[:len(voice)] + (voice - speech)[:len(rest)]
-        voice = speech
+        hum, voice = voice - speech, speech
     except Exception:
         logger.warning("video dub: no speech gate, the vocal stem is replaced whole", exc_info=True)
     vwav = os.path.join(work, "voice.wav")
@@ -201,6 +214,8 @@ def redub(ctx, video: str, lines: list, out_path: str = "") -> str:
     if len(old) < 2:
         logger.info("video dub: no speech heard in the clip, kept as is")
         return ""
+    if hum is not None:
+        rest = rest[:len(hum)] + (hum * _duck(len(hum), old))[:len(rest)]
     # The clip's own speech is the voice to clone: its longest run of words that fits F5's reference.
     # From the first word to the last, a 55 s clip went in, F5 cut it to 12 s and kept the whole
     # transcript: the voice and its text no longer matched and both takes were noise (2026-10-20).
