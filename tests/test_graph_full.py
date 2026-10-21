@@ -828,6 +828,27 @@ def test_a_judged_edit_is_not_inspected_again():
           str(tool_msgs)[:400])
 
 
+def test_a_judged_done_edit_is_reported_as_done():
+    """The judge said DONE on a red tie, yet the turn escalated to a forced inspection and the
+    user got «проверить результат я не смог» (live 2026-10-22): the verdict is the check."""
+    class EditTools(Tools):
+        def __call__(self, ctx, state, tool_name, tool_args):
+            r = super().__call__(ctx, state, tool_name, tool_args)
+            if tool_name == "inpaint_image":
+                state["edit_before"], state["image_path"] = "before.png", "after.png"
+                return "Image edited (tie -> a solid red tie) and saved: after.png"
+            return r
+    tools = EditTools()
+    llm = LLM([_asst("", [_tc("inpaint_image", {"region": "tie", "instructions": "a solid red tie"}, "c1")]),
+               _asst("Готово! Поменял галстук на красный.")] * 3)
+    out = _run(_ctx(), llm, tools, {"messages": [], "user_input": "поменяй галстук на красный"},
+               read={"needs_tool": True, "wants": ["inpaint_image"]},
+               edit_verdict=types.SimpleNamespace(judge=lambda *a: {"verdict": "done", "why": "a solid red tie"}))
+    check("judged_done_no_forced_inspection", [n for n, _ in tools.calls] == ["inpaint_image"], str(tools.calls))
+    check("judged_done_reported_as_done", "красный" in (out.get("final_answer") or "")
+          and "не смог" not in (out.get("final_answer") or ""), str(out.get("final_answer")))
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0

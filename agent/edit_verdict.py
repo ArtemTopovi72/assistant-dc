@@ -10,6 +10,7 @@ reported (2026-10-21).
 from __future__ import annotations
 
 import logging
+import os
 
 from seams import vision_model
 
@@ -47,20 +48,56 @@ def _unchanged(before: str, after: str) -> bool:
     return identity_metrics.changed_box(before, after) is None
 
 
+def _close_ups(before: str, after: str) -> list:
+    """BEFORE/AFTER crops of the changed area, padded to its own size. A bigger nose on a
+    whole 600x750 portrait read as «nothing» changed (2026-10-22); the crop shows it."""
+    import tempfile
+    import identity_metrics
+    from PIL import Image
+    box = identity_metrics.changed_box(before, after)
+    if not box or box[0] > 0.25:
+        return []
+    x0, y0, x1, y1 = box[1]
+    side = max(x1 - x0, y1 - y0, 0.12)
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    out = []
+    for label, p in (("BEFORE, close-up of the edited area:", before), ("AFTER, close-up of the same area:", after)):
+        im = Image.open(p).convert("RGB")
+        w, h = im.size
+        crop = im.crop((int(max(0, cx - side) * w), int(max(0, cy - side) * h),
+                        int(min(1, cx + side) * w), int(min(1, cy + side) * h)))
+        fd, path = tempfile.mkstemp(suffix=".png", prefix="verdict_crop_")
+        os.close(fd)
+        crop.save(path)
+        out.append((label, path))
+    return out
+
+
 def judge(ctx, before: str, after: str, request: str) -> dict:
     """{"verdict": "done"|"partial"|"not"|"", "why": str}; "" when the model gave no usable answer."""
     from utils import safe_json_from_llm
     if before and after and _unchanged(before, after):
         return {"verdict": "not", "why": "the picture did not change", "changed": "nothing"}
     text = f"The user's request: {(request or '').strip()[:600]}"
-    for _ in range(2):
-        resp = vision_model(ctx)(ctx=ctx, image_paths=[("BEFORE:", before), ("AFTER:", after)],
-                                 user_text=text, system_prompt=SYSTEM, temperature=0.0, max_tokens=400)
-        got = safe_json_from_llm(resp or "", ["asked_change_visible"]) or {}
-        if isinstance(got.get("asked_change_visible"), bool):
-            verdict = _verdict(got)
-            why = str(got.get("defect") or got.get("changed") or "").strip()
-            logger.info("edit verdict: %s -- %s", verdict, why[:200])
-            return {"verdict": verdict, "why": why, "changed": str(got.get("changed") or "")}
-    logger.warning("edit verdict: no usable answer (%r)", (resp or "")[:200])
-    return {"verdict": "", "why": ""}
+    try:
+        crops = _close_ups(before, after)
+    except Exception:
+        crops = []
+    try:
+        for _ in range(2):
+            resp = vision_model(ctx)(ctx=ctx, image_paths=[("BEFORE:", before), ("AFTER:", after)] + crops,
+                                     user_text=text, system_prompt=SYSTEM, temperature=0.0, max_tokens=400)
+            got = safe_json_from_llm(resp or "", ["asked_change_visible"]) or {}
+            if isinstance(got.get("asked_change_visible"), bool):
+                verdict = _verdict(got)
+                why = str(got.get("defect") or got.get("changed") or "").strip()
+                logger.info("edit verdict: %s -- %s", verdict, why[:200])
+                return {"verdict": verdict, "why": why, "changed": str(got.get("changed") or "")}
+        logger.warning("edit verdict: no usable answer (%r)", (resp or "")[:200])
+        return {"verdict": "", "why": ""}
+    finally:
+        for _, p in crops:
+            try:
+                os.remove(p)
+            except OSError:
+                pass

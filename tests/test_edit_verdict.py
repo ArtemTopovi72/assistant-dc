@@ -28,3 +28,19 @@ def test_a_small_local_edit_is_a_change_and_a_copy_is_not(tmp_path):
     assert E._unchanged(str(a), str(a)) is True
     assert E._unchanged(str(a), str(b)) is False
     assert E._unchanged(str(a), str(tmp_path / "missing.png")) is False
+
+
+def test_a_small_edit_is_shown_close_up_and_a_whole_new_picture_is_not(tmp_path):
+    """A bigger nose on a whole portrait read as «nothing» changed (live 2026-10-22): the judge
+    also gets BEFORE/AFTER crops of the changed area, where it is plain to see."""
+    a, b, c = tmp_path / "a.png", tmp_path / "b.png", tmp_path / "c.png"
+    im = Image.new("RGB", (1000, 1000), (120, 100, 90))
+    im.save(a)
+    ImageDraw.Draw(im).ellipse((470, 470, 530, 540), fill=(200, 150, 130))
+    im.save(b)
+    Image.new("RGB", (1000, 1000), (20, 200, 40)).save(c)
+    crops = E._close_ups(str(a), str(b))
+    assert [label.split(",")[0] for label, _ in crops] == ["BEFORE", "AFTER"]
+    w, h = Image.open(crops[1][1]).size
+    assert w < 500 and h < 500 and w > 60
+    assert E._close_ups(str(a), str(c)) == []
