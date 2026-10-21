@@ -1521,7 +1521,8 @@ class ResolveMixin:
         if (not img_bytes and not file_in_folder and not _new_picture
                 and not getattr(sess, "target_image", "")
                 and merged not in tg_bot._MACHINE_PAYLOADS
-                and tg_bot._needs_image_choice(own_words, ctx=self.reads)):
+                and tg_bot._needs_image_choice(own_words, ctx=self.reads,
+                                               previous=tg_bot._last_bot_line(sess))):
             live = tg_bot._live_images(sess)
             _in_play = getattr(sess, "turn_image", "")
             # A short question typed after a forwarded TEXT is about that text, not about one of the old pictures

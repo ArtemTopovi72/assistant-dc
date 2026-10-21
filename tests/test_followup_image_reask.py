@@ -54,6 +54,17 @@ check("a new picture asks no «which picture?»",
       not T._needs_image_choice("нарисуй рыжего кота в космическом шлеме", ctx=_DRAW))
 check("...an edit still does", T._needs_image_choice("сделай шлем золотым", ctx=_DRAW))
 
+# «Что думаешь?» after a text reply got «Какую картинку?» (owner, 2026-10-21): the read must see
+# the bot's last line (live: about_picture False after a text reply, True after a picture).
+_seen = []
+_PREV = types.SimpleNamespace(intent_read=lambda c, t, prev="", att="": _seen.append(prev) or dict(
+    names_picture=0, wants=[], about_picture=not prev.startswith("Если")))
+_sess = types.SimpleNamespace(history=[{"role": "assistant", "content": "Если коротко: курс держится за счёт ставок."},
+                                       {"role": "user", "content": "Что думаешь?"}])
+check("the bot's last line reaches the picture read",
+      not T._needs_image_choice("Что думаешь?", ctx=_PREV, previous=T._last_bot_line(_sess))
+      and _seen[-1].startswith("Если коротко"), _seen)
+
 
 print()
 print("=" * 70)

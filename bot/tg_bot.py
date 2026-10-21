@@ -659,12 +659,12 @@ from tg_keyboards import (
 # has to catch requests that will otherwise be silently answered about the wrong
 # picture. Anything it misses behaves exactly as before (newest image wins), so a
 # false negative costs nothing new — a false POSITIVE would nag, which is worse.
-def _picture_read(text: str, ctx=None) -> dict:
+def _picture_read(text: str, ctx=None, previous: str = "") -> dict:
     """The model's read of the user's words with several pictures in the chat
     (agent/intent.py). It replaced an edit/describe word list and an ordinal
     word list: «предыдущих инцидентах» in a storyboard read as «the previous
     picture», any «нов…» named the newest one."""
-    return intent_read(ctx)(None, text, "", "several pictures earlier in the chat")
+    return intent_read(ctx)(None, text, previous, "several pictures earlier in the chat")
 
 
 def _ordinal_target(text: str, live: list, ctx=None) -> str:
@@ -685,13 +685,23 @@ def _ordinal_target(text: str, live: list, ctx=None) -> str:
         return ""
 
 
-def _needs_image_choice(text: str, ctx=None) -> bool:
+def _last_bot_line(sess) -> str:
+    """The bot's last text reply in this chat's history, "" when none."""
+    for m in reversed(list(getattr(sess, "history", None) or [])):
+        if m.get("role") == "assistant" and isinstance(m.get("content"), str) and m["content"].strip():
+            return m["content"]
+    return ""
+
+
+def _needs_image_choice(text: str, ctx=None, previous: str = "") -> bool:
     """The words need one picture (a question about it or an edit of it) and
-    name none: with several in the chat the bot asks which."""
+    name none: with several in the chat the bot asks which. `previous`, the bot's
+    last line, keeps «Что думаешь?» after a talk about the talk: without it the
+    owner's question got «Какую картинку?» (2026-10-21)."""
     t = (text or "").strip()
     if not t:
         return False
-    r = _picture_read(t, ctx=ctx)
+    r = _picture_read(t, ctx=ctx, previous=previous)
     if r["names_picture"]:
         return False
     from graph_fastpath import _IMAGE_ACTION_TOOLS
