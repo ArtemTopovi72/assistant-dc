@@ -21,11 +21,11 @@ _TEXT_CUT = 70
 _gpu_cache = {"t": 0.0, "v": ""}
 
 
-def _short(text: str, n: int = _TEXT_CUT) -> str:
+def _short(text: str, n: int = _TEXT_CUT, lang: Optional[str] = None) -> str:
     import tg_bot
     t = " ".join((text or "").split())
     if not t.startswith("[song") and not t.lower().startswith("do a deep research on:"):
-        t = tg_bot._user_words(t)
+        t = tg_bot._user_words(t, lang)
     if t.startswith("[song"):
         t = "🎵 " + t.split("]", 1)[-1].strip()
     elif t.lower().startswith("do a deep research on:"):
@@ -64,7 +64,7 @@ def _hw_values() -> dict:
 
 class AdminMixin:
     # ── the one snapshot ─────────────────────────────────────────────────────
-    def admin_snapshot(self) -> dict:
+    def admin_snapshot(self, lang: Optional[str] = None) -> dict:
         now_m, now = time.monotonic(), time.time()
         with self._task_lock:
             running_pairs = [(cid, t) for cid, lst in self._running_task.items() for t in lst
@@ -76,7 +76,7 @@ class AdminMixin:
         names = {u.chat_id: u for u in self._user_store.all()}
         name = lambda cid: (names[cid].name if cid in names and names[cid].name else str(cid))
         running = [{"task_id": t.task_id, "chat_id": cid, "user": name(cid),
-                    "text": _short(t.user_text), "stage": " · ".join(x for x in (
+                    "text": _short(t.user_text, lang=lang), "raw": t.user_text, "stage": " · ".join(x for x in (
                         stages.get(cid, "") or stages.get(str(cid), ""), bars.get(cid, "")) if x),
                     "elapsed": now_m - started.get(t.task_id, now_m)} for cid, t in running_pairs]
         try:
@@ -84,7 +84,7 @@ class AdminMixin:
         except Exception:
             order = []
         queued = [{"task_id": t.task_id, "chat_id": t.chat_id, "user": name(t.chat_id),
-                   "text": _short(t.user_text), "waited": now - (t.enqueue_ts or now)} for t in order]
+                   "text": _short(t.user_text, lang=lang), "raw": t.user_text, "waited": now - (t.enqueue_ts or now)} for t in order]
         users = []
         for u in names.values():
             try:
@@ -124,8 +124,9 @@ class AdminMixin:
             return "gone"
         res = self._cancel_task(row["chat_id"], task_id)
         if res == "dropped":
-            self._send_text(row["chat_id"], tg_bot._t("ax_user_cancelled", self._lang_of(row["chat_id"]),
-                                                      text=row["text"]))
+            owner = self._lang_of(row["chat_id"])
+            self._send_text(row["chat_id"], tg_bot._t("ax_user_cancelled", owner,
+                                                      text=_short(row["raw"], lang=owner)))
         self._admin_log(admin, f"cancel {task_id[:8]} ({row['user']}: {row['text']}) -> {res or 'gone'}",
                         row["chat_id"])
         return res or "gone"
@@ -172,7 +173,7 @@ class AdminMixin:
     def _admin_render(self, view: str, lang: str = "ru") -> tuple:
         import tg_bot
         t = lambda k, **kw: tg_bot._t(k, lang, **kw)
-        s = self.admin_snapshot()
+        s = self.admin_snapshot(lang)
         if view.startswith("u:"):
             return self._admin_render_user(s, int(view[2:]), t)
         if view == "users":

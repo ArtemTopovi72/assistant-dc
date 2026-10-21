@@ -744,7 +744,7 @@ def _user_words(raw: str, lang: str | None = None) -> str:
     for prefix in sorted((v.strip() for v in _PROMPT_KB.values()), key=len, reverse=True):
         if prefix and low.startswith(prefix.lower()):
             return t[len(prefix):].strip()
-    return t
+    return _LABEL_PREFIX_RE.sub("", t)
 
 
 def _friendly_image_label(raw: str, lang: str | None = None) -> str:

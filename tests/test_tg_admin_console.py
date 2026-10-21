@@ -2,7 +2,7 @@
 
 Run: venv/Scripts/python.exe tests/test_tg_admin_console.py
 """
-import os, sys, tempfile, threading, time
+import os, re, sys, tempfile, threading, time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
@@ -42,9 +42,18 @@ check("snapshot: running with user, stage, elapsed",
 check("snapshot: queue in service order, song payload readable",
       [q["task_id"] for q in s["queued"]] == [q1.task_id, q2.task_id] and s["queued"][0]["text"].startswith("🎵 про кота"))
 
+# a button's English routing prefix showed in the Russian panel («change the outfit to: …»,
+# «remove all the lettering from the image»; live 2026-10-21)
+from tg_admin import _short
+check("panel: a button's routing prefix is not shown",
+      _short("change the outfit to: красный свитер") == "красный свитер"
+      and _short("animate this photo: машет рукой") == "машет рукой")
+check("panel: a whole button command shows its label in the viewer's language",
+      "lettering" not in _short(T._DIRECT_KB.get("remove_text") or T._CB_CMDS["remove_text"], lang="ru"))
+
 bot._send_admin_panel(ADM)
 text = bot.sent[-1][1]
-check("panel shows who runs what and the queue", "Влад" in text and "1:0" in text and "Stepan" in text, text)
+check("panel shows who runs what and the queue", "Влад" in text and re.search(r"\b1:\d\d\b", text) and "Stepan" in text, text)
 
 def press(data, who=ADM):
     bot._dispatch_callback({"id": "cb", "from": {"id": who},
