@@ -31,7 +31,12 @@ variants = {
     # the word, and H3 speaks quoted Russian. These name it without a speakable form.
     "cue_pos": base.replace("</d>", "</d> In his line the fifth word is stressed on its final "
                             "syllable, never on its second.", 1),
-    "cue_once": base.replace("</d>", "</d>" + cue + " He says the line once, exactly as written; "
+    # by position: no repeat, but the stress came back wrong on both takes (owner, 2026-10-21)
+    "cue_gloss": base.replace("</d>", "</d> In his line the word that means 'with the backpack' is "
+                              "stressed on its last syllable, never on its second.", 1),
+    "cue_latin": base.replace("</d>", "</d> In his line the word ryukzachkom is stressed on its last "
+                              "syllable: ryukzach-KOM, never ryuk-ZACH-kom.", 1),
+    "cue_once":base.replace("</d>", "</d>" + cue + " He says the line once, exactly as written; "
                              "this note about stress is never spoken.", 1),
 }
 ctx = models.Context(models=None, transcription_cache={}, cache_file=None,
