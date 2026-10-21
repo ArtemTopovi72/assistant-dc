@@ -132,3 +132,38 @@ def test_a_new_scene_is_not_a_style_of_the_old_picture():
     assert IS._expand(scene, "Lenin in a cybernetic suit fights demons in lava")[0] == "other"
     style = types.SimpleNamespace(text_model=reply, yes_no=lambda *a, **k: False)
     assert IS._expand(style, "make it a digital painting")[0] == "drawn"
+
+
+def _scene_run(keeps_pose: bool, faces: list):
+    """restyle on a non-style redraw: which render it reaches and with what."""
+    import types
+    from PIL import Image
+    import tempfile
+    src = os.path.join(tempfile.mkdtemp(), "src.png")
+    Image.new("RGB", (400, 600), (90, 90, 90)).save(src)
+    seen = {}
+    ctx = types.SimpleNamespace(
+        deps=types.SimpleNamespace(
+            image=Over(I, edit_image_with_firered=lambda c, p, instr, **kw: seen.update(plain=instr) or "plain.png"),
+            _edit_image_with_firered_once=lambda c, p, instr, **kw: seen.update(scene=instr, refs=kw.get("reference_paths")) or "scene.png",
+            face_boxes=lambda path, pad=0.2: faces,
+            _expand=lambda c, words: ("other", words)),
+        yes_no=lambda q, text, *a, **k: keeps_pose if "keep the pose" in q else False)
+    return IS.restyle(ctx, src, "Lenin in cybernetic armor fights demons in lava"), seen
+
+
+def test_a_new_scene_takes_the_faces_as_references_and_frees_the_pose():
+    """Kept as the source, the portrait pinned the pose: «cyber-Lenin punches a demon» came back in
+    his portrait pose with demons hanging on him. With the faces as references 4 of 4 takes fought
+    (owner's rule, 2026-10-21: a new body may even show the face from another angle)."""
+    out, seen = _scene_run(keeps_pose=False, faces=[(10, 10, 110, 140), (200, 20, 280, 120)])
+    assert out == "scene.png" and len(seen["refs"]) == 2 and "plain" not in seen
+    assert "picture 2, picture 3" in seen["scene"] and "whatever angle" in seen["scene"]
+
+
+def test_people_who_keep_their_pose_are_edited_on_the_picture_itself():
+    """«add Stalin beside him»: the pose stays, so the picture itself is edited (owner, 2026-10-21)."""
+    out, seen = _scene_run(keeps_pose=True, faces=[(10, 10, 110, 140)])
+    assert out == "plain.png" and "scene" not in seen
+    out, seen = _scene_run(keeps_pose=False, faces=[])           # no face found: nothing to carry over
+    assert out == "plain.png"

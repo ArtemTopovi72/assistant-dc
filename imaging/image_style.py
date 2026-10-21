@@ -209,6 +209,52 @@ def build(ctx, instructions: str, image_path: Optional[str] = None) -> tuple:
     return style + keep, target, 0.0
 
 
+def _new_scene(ctx, instructions: str) -> bool:
+    """The people are put into a new scene, pose or action, rather than kept as they stand while
+    something is changed or added. Kept, the source pins the pose: «cyber-Lenin punches a demon» came
+    back Lenin in his portrait pose with demons hanging on him (live 2026-10-21)."""
+    return not yes_no(ctx)(
+        "{text}\n\nThis asks to change a picture of people. Do the people ALREADY in the picture keep "
+        "the pose they have in it -- only something about them or around them changes (a hat, other "
+        "clothes, another background, night, another man added beside them, however he stands) -- "
+        "rather than being shown doing something new (fighting, dancing, surfing, riding)?",
+        instructions, True)
+
+
+def _heads(ctx, image_path: str) -> list:
+    """Each face of the picture cropped with its hair, largest first (up to three), as files."""
+    import tempfile
+    from PIL import Image
+    import identity_metrics
+    try:
+        boxes = dep(ctx, "face_boxes", identity_metrics.face_boxes)(image_path, pad=0.6)[:3]
+        if not boxes:
+            return []
+        im = Image.open(image_path).convert("RGB")
+        out = []
+        for i, box in enumerate(boxes):
+            p = os.path.join(tempfile.mkdtemp(prefix="scene_head_"), f"head{i}.png")
+            im.crop(tuple(int(v) for v in box)).save(p)
+            out.append(p)
+        return out
+    except Exception:
+        logger.warning("style: cropping the faces of %s failed", image_path, exc_info=True)
+        return []
+
+
+def _scene_from_faces(ctx, image_mod, image_path: str, instructions: str, heads: list, **kw):
+    """A new scene drawn with the faces as references: the picture no longer pins pose and frame
+    (with references Klein runs without the Consistency LoRA), and a face may turn to any angle.
+    4 of 4 takes fought where the plain edit kept the portrait pose (tmp face_ref_ab, 2026-10-21)."""
+    refs = ", ".join(f"picture {i}" for i in range(2, len(heads) + 2))
+    prompt = (f"Draw a completely new full picture, nothing of picture 1 kept but the people's faces: "
+              f"{instructions.strip()} The people keep the faces shown in {refs}, seen at whatever angle "
+              "and with whatever expression the scene needs.")
+    logger.info("style: new scene with %d face reference(s): %r", len(heads), prompt[:160])
+    once = dep(ctx, "_edit_image_with_firered_once", image_mod._edit_image_with_firered_once)
+    return once(ctx, image_path, prompt, reference_paths=heads, **kw)
+
+
 def restyle(ctx, image_path: str, instructions: str, *, seed=None, timeout=None):
     """Render the restyle; returns the saved path or None. A request that is not a
     style at all (target "other": relight, season, a filter) is edited as written."""
@@ -217,6 +263,9 @@ def restyle(ctx, image_path: str, instructions: str, *, seed=None, timeout=None)
     instr, target, strength = build(ctx, instructions, image_path)
     kw = {k: v for k, v in (("seed", seed), ("timeout", timeout)) if v is not None}
     if target == "other" and not style_presets.preset_for(instructions):
+        heads = _heads(ctx, image_path) if _new_scene(ctx, instructions) else []
+        if heads:
+            return _scene_from_faces(ctx, image_mod, image_path, instructions, heads, **kw)
         return image_mod.edit_image_with_firered(ctx, image_path, instructions, **kw)
     neg = {"drawn": NEG_DRAWN, "photo": NEG_PHOTO}.get(target, NEG_OTHER)
     logger.info("style: target=%s instr=%r", target, instr[:160])
