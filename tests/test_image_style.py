@@ -105,3 +105,16 @@ def test_realism_keeps_materials_props_and_the_background():
     assert "armor stays rigid armor" in p and "white photo-studio backdrop" in p
     for word in ("material", "footwear", "weapons", "background"):
         assert word in IS._WHO_PROMPT
+
+
+def test_realism_neither_undresses_nor_dresses_and_keeps_the_skin_clean(monkeypatch):
+    """Motoko's skin-coloured suit was described as «bare skin on the chest, abdomen» and came
+    back undressed; the next wording put two takes of three in black leather; «skin texture
+    with pores» over cel shadows read as dirt on the face (owner, 2026-10-21;
+    bench/photo_restyle_live.py: 4 of 4 suited, clean, the building kept)."""
+    assert "collar edge" in IS._WHO_PROMPT and "never as bare skin" in IS._WHO_PROMPT
+    assert "side locks" in IS._WHO_PROMPT                         # the sleek bob came back as clumps
+    instr = _run(monkeypatch, SP.preset_prompt("photo"))[1]["instr"]
+    assert "Nobody is undressed or dressed" in instr and "skin-tight suit" in instr
+    p = SP.preset_prompt("photo")
+    assert "pores" not in p and "no dirt" in p and "the same place" in p
