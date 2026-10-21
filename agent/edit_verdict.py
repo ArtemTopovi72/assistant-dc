@@ -81,7 +81,8 @@ def judge(ctx, before: str, after: str, request: str) -> dict:
     text = f"The user's request: {(request or '').strip()[:600]}"
     try:
         crops = _close_ups(before, after)
-    except Exception:
+    except Exception as exc:
+        logger.warning("edit verdict: no close-ups: %s", exc)
         crops = []
     try:
         for _ in range(2):
@@ -91,7 +92,7 @@ def judge(ctx, before: str, after: str, request: str) -> dict:
             if isinstance(got.get("asked_change_visible"), bool):
                 verdict = _verdict(got)
                 why = str(got.get("defect") or got.get("changed") or "").strip()
-                logger.info("edit verdict: %s -- %s", verdict, why[:200])
+                logger.info("edit verdict: %s (%d close-ups) -- %s", verdict, len(crops), why[:200])
                 return {"verdict": verdict, "why": why, "changed": str(got.get("changed") or "")}
         logger.warning("edit verdict: no usable answer (%r)", (resp or "")[:200])
         return {"verdict": "", "why": ""}
