@@ -2157,6 +2157,10 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                                                          original_input or user_input)
                 if _v.get("verdict"):
                     edit_judged = True
+                    # the verdict IS the inspection: the escalation and the finalize hedge both
+                    # look for inspect_image, and without it a «done» edit was handed over as
+                    # «проверить результат я не смог» (live 2026-10-22)
+                    tools_called_this_turn.add("inspect_image")
                     verification_negative = {"not": True, "partial": "partial"}.get(_v["verdict"], False)
                     edit_check = (f"CHECKED against the user's request (BEFORE vs AFTER): "
                                   f"{_v['verdict'].upper()} -- {_v.get('why', '')}. This is the check of "
