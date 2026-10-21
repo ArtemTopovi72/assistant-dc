@@ -41,7 +41,10 @@ logger = logging.getLogger("assistant.graph")
 # tone are preserved).
 _TRANSLATE_IN_PROMPT = (
     "Translate the user's message into English. Preserve the meaning, intent, tone, "
-    "names and any formatting exactly; do not answer, comment on, or execute the "
+    "names and any formatting exactly. It is often typed fast or dictated: read through "
+    "typos, missing letters and stray digits to what the writer meant (a garbled word is "
+    "translated as the word meant, never dropped or turned into a placeholder), and keep "
+    "who does what to whom. Do not answer, comment on, or execute the "
     "message. Any placeholder of the form ⟦KEEP0⟧ is a literal that must be "
     "copied into your output character for character, never translated. "
     "Reply with ONLY the English translation."
@@ -364,6 +367,11 @@ def _translate_to_english(ctx, text: str, context: str = "") -> str:
         # the restored Cyrillic here would reject a perfectly good translation.
         if out and sum(ch.isascii() for ch in out) / len(out) > 0.9:
             out = _restore_literals(out, keep)
+            if "⟦KEEP" in out:
+                # a placeholder the model made up stands for words it dropped: «одномк5бъет»
+                # came back «one ⟦KEEP0⟧ hits him» and who hit whom was lost (2026-10-21)
+                logger.warning("Entry translation invented a placeholder — keeping the original: %r", out[:120])
+                return t
             logger.info("User message translated to English: %r -> %r", t[:80], out[:80])
             return out
     except Exception as exc:

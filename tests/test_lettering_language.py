@@ -141,6 +141,16 @@ finally:
 check("an ASCII turn short-circuits with no LLM call", not _calls, _calls)
 check("...and is returned unchanged", same == 'draw a poster reading "Welcome"', same)
 
+# A placeholder the model made up stands for words it dropped: «одномк5бъет кулаком» came back
+# «one ⟦KEEP0⟧ hits him» and who hit whom was lost (2026-10-21) -- the Russian original is kept.
+_garbled = "Ленин в аду одномк5бъет кулаком по ему а второму ломает шею"
+_T[0] = lambda ctx, system, user, **kw: "Lenin in hell one ⟦KEEP0⟧ hits him with a fist and breaks the second's neck"
+try:
+    kept = G._translate_to_english(_Ctx(), _garbled)
+finally:
+    _T[0] = None
+check("an invented placeholder keeps the original text", kept == _garbled, kept)
+
 print()
 print("=" * 70)
 print("5. A preserved literal reaches the lettering extractor")
