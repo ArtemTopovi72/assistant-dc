@@ -563,15 +563,15 @@ def _route_edit_request(
         if out and category == "object_remove":
             still = _img._region_present(ctx, out, target)
             if still is True:
-                # Generative removal is STOCHASTIC: the same tile that fails with
-                # one seed (shoes rendered translucent instead of removed) succeeds
-                # with another (live A/B: seed 1234 failed, 777 clean). One retry
-                # with a fresh seed before conceding.
+                # ObjectClear fills a worn thing's mask with the thing again: a watch
+                # came back as a new watch on the wrist 4 takes of 4, where the
+                # instruction edit on the same mask left a bare wrist
+                # (bench/removal_engine_ab.py, 2026-10-21). The retry is that edit.
                 logger.warning("removal: %r still visible after generative removal — "
-                               "retrying once with a fresh seed", target[:60])
+                               "retrying once with the instruction edit", target[:60])
                 retry_seed = random.randint(1, 999_999_999)
                 out3 = _img.remove_object_with_comfy(ctx, image_path, target,
-                                                seed=retry_seed, timeout=timeout)
+                                                seed=retry_seed, timeout=timeout, engine="edit")
                 if out3 and _img._region_present(ctx, out3, target) is not True:
                     logger.info("removal: fresh-seed retry succeeded for %r", target[:60])
                     out = out3

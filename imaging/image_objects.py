@@ -142,7 +142,7 @@ def _remove_via_objectclear(ctx, image_path: str, target_phrase: str, *, seed: i
 def remove_object_with_comfy(
         ctx, image_path: str, target_phrase: str,
         *, seed: Optional[int] = None, fill_hint: str = "", timeout: int = 1900,
-        max_cover: float = 1.0) -> Optional[str]:
+        max_cover: float = 1.0, engine: str = "") -> Optional[str]:
     """Localized object / person removal — FireRed contained edit.
 
     Removes only what `target_phrase` names, leaving the rest of the image as the
@@ -173,7 +173,10 @@ def remove_object_with_comfy(
     # --- PRIMARY: ObjectClear on the SAM3 mask (user's pick on the vase/cat A/B:
     # faster, 58-89 s vs 90-97 s, and preferred by eye). A fill hint
     # ("put a lamp there") needs an instruction model, so that stays on FireRed.
-    if not (fill_hint or "").strip() and os.getenv("OBJECT_REMOVE_ENGINE", "objectclear") == "objectclear":
+    # engine="edit": the instruction edit even without a fill hint -- the retry after
+    # ObjectClear drew a new watch onto the bare wrist (bench/removal_engine_ab.py)
+    if (not (fill_hint or "").strip() and engine != "edit"
+            and os.getenv("OBJECT_REMOVE_ENGINE", "objectclear") == "objectclear"):
         out = dep(ctx, "_remove_via_objectclear", _remove_via_objectclear)(
             ctx, image_path, target_phrase, seed=seed, timeout=timeout, max_cover=max_cover)
         # no FireRed fallback: it re-lit the table and left a cat-shaped halo

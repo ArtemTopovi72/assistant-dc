@@ -101,3 +101,14 @@ def test_a_thing_in_the_sky_gets_no_shadow_below(tmp_path):
             setattr(ctx, k, v)
         O._remove_via_objectclear(ctx, _img(tmp_path), target, seed=1, timeout=5)
         assert (got[0][3] > 30) is rests, (target, got)
+
+
+def test_the_retry_after_a_failed_objectclear_is_the_instruction_edit(tmp_path):
+    """ObjectClear drew a new watch onto the bare wrist 4 takes of 4; the instruction edit on
+    the same mask left the wrist bare (bench/removal_engine_ab.py, 2026-10-21)."""
+    ctx = _ctx(_remove_via_objectclear=_boom("ObjectClear ran again"),
+               edit_region_contained_cropped=lambda *a, **k: "fr.png")
+    assert O.remove_object_with_comfy(ctx, _img(tmp_path), "watch", engine="edit") == "fr.png"
+    import inspect, image_router
+    src = inspect.getsource(image_router)
+    assert 'engine="edit"' in src.split("still visible after generative removal")[1][:600]
