@@ -25,7 +25,7 @@ def check(name, cond, extra=""):
 def note(ahead, busy, rendering=()):
     bot = T.TelegramBot("1:T", lambda: None, lambda: None, lambda: {}, silent_mode=True)
     sent = []
-    bot._send_text = lambda cid, text, **k: sent.append(text)
+    bot._send_get_id = lambda cid, text, **k: (sent.append(text), len(sent))[1]
     bot._backend = types.SimpleNamespace(tasks_ahead=lambda tid: list(ahead))
     bot._card_busy = lambda: busy
     bot._running_task = {c: [types.SimpleNamespace(delivered=False)] for c in rendering}
@@ -52,7 +52,7 @@ check("queue plus two renders: place counts both", sent and "#4" in sent[0], sen
 def early(rendering=(9,)):
     bot = T.TelegramBot("1:T", lambda: None, lambda: None, lambda: {}, silent_mode=True)
     sent = []
-    bot._send_text = lambda cid, text, **k: sent.append(text)
+    bot._send_get_id = lambda cid, text, **k: (sent.append(text), len(sent))[1]
     bot._backend = types.SimpleNamespace(tasks_ahead=lambda tid: [])
     bot._card_busy = lambda: ""
     bot._running_task = {c: [types.SimpleNamespace(delivered=False)] for c in rendering}

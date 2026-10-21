@@ -730,6 +730,7 @@ class TaskRunnerMixin:
             # crash that lands moments later.
             self._pending_journal.pop(task.task_id, None)
         self._write_inflight()
+        self._drop_busy_note(chat_id)
         import chatlog as _chatlog
         tg_bot.logger.info("Task %s START chat=%s text=%r", task.task_id[:8], chat_id,
                            (task.user_text or "")[:120])

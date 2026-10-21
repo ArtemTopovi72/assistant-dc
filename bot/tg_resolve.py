@@ -1677,28 +1677,43 @@ class ResolveMixin:
         """The one place that tells a user their request waits. Every entry that starts work
         (a typed task, the plan's ▶ button, a character render) calls it the moment it is
         taken, not after the debounce and the intent read: those wait on the same busy model,
-        and a ▶ that answers nothing for minutes reads as a dead button. One note per
-        chat per 45 s, so the early call and the queue's own call do not double."""
+        and a ▶ that answers nothing for minutes reads as a dead button. The chat keeps ONE
+        such note: a later call edits it in place and the task's START deletes it -- a second
+        «Ты #2 в очереди» under the first, both left hanging after the wait, read as noise
+        (owner, 2026-10-22)."""
         with self._task_lock:
             rendering = sum(1 for cid, ts in self._running_task.items()
                             if cid != chat_id and self._chat_interruptible.get(cid, False)
                             and any(not getattr(t, "delivered", False) for t in ts))
-            last = self.__dict__.setdefault("_busy_noted", {})
-            if time.time() - last.get(chat_id, 0.0) < 45.0:
-                return
-            if ahead or rendering or self._card_busy():
-                last[chat_id] = time.time()
-            else:
+            if not (ahead or rendering or self._card_busy()):
                 return
         if ahead:
-            self._send_text(chat_id,
-                tg_bot._t("queue_pos", lang, pos=len(ahead) + rendering + 1, eta=tg_bot._fmt_eta(ahead, lang)),
-                parse_mode="HTML")
+            text = tg_bot._t("queue_pos", lang, pos=len(ahead) + rendering + 1, eta=tg_bot._fmt_eta(ahead, lang))
         elif rendering:
-            self._send_text(chat_id, tg_bot._t("queue_run", lang, pos=rendering + 1, n=rendering),
-                            parse_mode="HTML")
+            text = tg_bot._t("queue_run", lang, pos=rendering + 1, n=rendering)
         else:
-            self._send_text(chat_id, tg_bot._t("card_busy", lang), parse_mode="HTML")
+            text = tg_bot._t("card_busy", lang)
+        notes = self.__dict__.setdefault("_busy_notes", {})
+        with self._task_lock:
+            msg_id, shown = notes.get(chat_id, (None, ""))
+        if msg_id and shown == text:
+            return
+        if msg_id:
+            self._edit_text(chat_id, msg_id, text, parse_mode="HTML")
+        else:
+            msg_id = self._send_get_id(chat_id, text, parse_mode="HTML")
+        with self._task_lock:
+            notes[chat_id] = (msg_id, text)
+
+    def _drop_busy_note(self, chat_id: int) -> None:
+        """The wait is over: its note leaves the chat."""
+        with self._task_lock:
+            msg_id, _ = self.__dict__.setdefault("_busy_notes", {}).pop(chat_id, (None, ""))
+        if msg_id:
+            try:
+                self._delete(chat_id, msg_id)
+            except Exception:
+                tg_bot.logger.debug("queue note delete failed", exc_info=True)
 
     def _register_animate_photo(self, chat_id: int, sess, lang: str, item: dict) -> None:
         """Consume the photo awaiting_animate_photo was waiting for, register
