@@ -292,3 +292,22 @@ def test_a_partial_points_own_explanation_is_not_another_failure():
     assert GP._inspection_contradicts_work(v.replace("PARTIAL (the handle is visible but the blade is missing)",
                                                      "PARTIAL — the blade is missing/cut off"),
                                            {"transfer_image"}) is False
+
+
+def test_a_change_note_naming_the_removed_thing_is_its_removal():
+    """The BEFORE/AFTER inspector writes «The edit removed the glasses…»: the glasses named in
+    the description were read as still there, and four clean removals (a watch twice, glasses,
+    a beard) were answered «нужного изменения нет» (debug chat 2026-10-21)."""
+    tc = {"inpaint_image"}
+    for removal, v in (
+            ("glasses", "Inspection of the current image (BEFORE vs AFTER):\nThe edit removed the glasses "
+                        "from the man's face. The person remains the same. |  | Are the glasses gone? PRESENT"),
+            ("the watch on his left wrist", "The edit removed the watch and its strap from the man's wrist, "
+                                            "replacing them with skin. | Watch: PRESENT — the watch is MISSING"),
+            ("beard", "The edit replaces the bottom half of the face (beard and mustache) with clean-shaven "
+                      "skin. | Beard removed: PRESENT")):
+        assert GP._inspection_contradicts_work(v, tc, removal=removal) is False, removal
+    still = "The edit blurred the frame of the glasses, which are still on his face. | Glasses gone? MISSING"
+    assert GP._inspection_contradicts_work(still, tc, removal="glasses") is True
+    assert GP._inspection_contradicts_work("The man wears glasses and a white shirt. | x: PRESENT",
+                                           tc, removal="glasses") is True

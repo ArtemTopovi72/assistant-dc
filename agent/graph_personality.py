@@ -209,7 +209,13 @@ def _inspection_contradicts_work(verdict: str, tools_called: set, removal: str =
         if re.search(r"present|missing|partial|absent|distorted", desc, re.I):
             desc = ""                      # a label, not the description
         if desc.strip() and heads:
-            return any(re.search(r"\b" + re.escape(h[:max(3, len(h) - 2)]), desc, re.I)
+            # The BEFORE/AFTER change note names the thing as it says it went: «The edit
+            # removed the glasses» read as glasses still there, four clean removals called
+            # «нужного изменения нет» (2026-10-21). A sentence that removes it is not it.
+            gone = re.compile(r"\b(?:remov|replac|eras|no\s+longer|without|gone|missing|clean-shaven)", re.I)
+            kept = " ".join(s for s in re.split(r"(?<=[.!?])\s+", desc)
+                            if not gone.search(s) or re.search(r"still\s+(?:on|in|there|visible)", s, re.I))
+            return any(re.search(r"\b" + re.escape(h[:max(3, len(h) - 2)]), kept, re.I)
                        for h in heads)
         for label, why in re.findall(r"([^|:\n]{1,80}):\s*(?<!not )present\b([^|\n]*)", v, re.I):
             # "Cat: PRESENT (The cat is not visible anywhere ... removed)" answers
