@@ -275,7 +275,8 @@ IMAGE_ENGINE = "ideogram4"
 KLEIN_UNET = os.getenv("KLEIN_UNET", "flux3-image-klein-int8-convrot.safetensors")
 KLEIN_CLIP = os.getenv("KLEIN_CLIP", "qwen3vl_4b_int8_convrot.safetensors")
 KLEIN_VAE = os.getenv("KLEIN_VAE", "flux2-vae.safetensors")
-KLEIN_STEPS = _env_int("KLEIN_STEPS", 16)
+# 40 steps on every draw and edit: the owner traded the 16-step speed for detail (2026-10-21).
+KLEIN_STEPS = _env_int("KLEIN_STEPS", 40)
 # ausboss Consistency LoRA: keeps an edit on the original's frame (a snow edit kept the pier
 # instead of swapping the scene for a forest). Distilled model, strength 1.0.
 KLEIN_EDIT_LORA = os.getenv("KLEIN_EDIT_LORA", "flux-3-image-klein-consistency.safetensors")
