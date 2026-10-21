@@ -125,6 +125,16 @@ def test_two_failed_edits_end_the_editing():
     assert ran == ["inpaint_image", "inpaint_image"], ran
 
 
+def test_two_failed_inpaints_still_let_the_whole_picture_be_redrawn():
+    """«Ленин в кибер-костюме бьётся с чертями в лаве»: two inpaints of «the entire scene» failed
+    their masks, and the redraw the scene needed was then barred too (live 2026-10-21)."""
+    scene = {"region": "the entire scene", "instructions": "Lenin fights demons in lava"}
+    ran = _edit_turn("Ленин бьётся с чертями в лаве", {"inpaint_image": [FAIL, FAIL], "redraw_image": ["ok.png"]},
+                     [("inpaint_image", scene), ("inpaint_image", {**scene, "region": "the action"}),
+                      ("redraw_image", {"mode": "redraw", "instructions": "Lenin fights demons in lava"})])
+    assert ran == ["inpaint_image", "inpaint_image", "redraw_image"], ran
+
+
 HAT_BACK = {"region": "his head", "instructions": "a thick wool hat covering his head"}
 CUP_GONE = {"region": "the cup on the table", "instructions": "empty wooden table surface, removing the cup"}
 

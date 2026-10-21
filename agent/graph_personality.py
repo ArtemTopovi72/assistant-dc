@@ -1053,7 +1053,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
     edit_pass_count = 0
     # FAILED edit passes count too: three QA-rejected chest inpaints, two of them identical, ran a
     # minute each before the re-plan nudge (live 2026-10-21).
-    failed_edit_count = 0
+    failed_edits: dict = {}     # per tool: two failed inpaints must not bar the redraw a new scene needs
     # Successful full generate_image passes this turn. Each one already runs its
     # OWN internal refine loop (MAX_IMAGE_REFINEMENT_ATTEMPTS); the agent
     # re-invoking generate_image from scratch on top of that just burns minutes and
@@ -1967,11 +1967,11 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                     "with DIFFERENT arguments (another region, query, or description), "
                     "or stop and tell the user plainly what could not be done."
                 )
-            elif tool_name in ("inpaint_image", "redraw_image") and failed_edit_count >= 2:
+            elif tool_name in ("inpaint_image", "redraw_image") and failed_edits.get(tool_name, 0) >= 2:
                 tool_result = (
-                    "[TOOL ERROR] Two edits of this picture already failed this turn. STOP "
-                    "editing: tell the user plainly which change could not be made; do not "
-                    "call an image-editing tool again this turn."
+                    f"[TOOL ERROR] Two {tool_name} edits of this picture already failed this turn. "
+                    f"Do not call {tool_name} again this turn: tell the user plainly which change "
+                    "could not be made."
                 )
             elif tool_name in _EDIT_TOOLS and _reverses_request(ctx, original_input or user_input, tool_args):
                 logger.warning("edit guard: %s(%s) does the opposite of the request — not run",
@@ -2037,7 +2037,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                 if _errored:
                     failed_call_counts[call_key] = failed_call_counts.get(call_key, 0) + 1
                     if tool_name in ("inpaint_image", "redraw_image"):
-                        failed_edit_count += 1
+                        failed_edits[tool_name] = failed_edits.get(tool_name, 0) + 1
                     # A refused whole-file rewrite is answered by the model with
                     # the same rewrite again (9 in a row on the sandbox bench).
                     # Words do not steer it; the offer does: next round it can

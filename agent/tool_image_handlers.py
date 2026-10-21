@@ -467,7 +467,9 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
                 f"'{region}' was detected but the segmentation mask covered too large an "
                 "area of the frame (would damage the rest of the picture). The segmenter "
                 "grabbed a large neighbouring object. Try a more specific region name that "
-                "isolates just the target object, or use a narrower spatial description."
+                "isolates just the target object, or use a narrower spatial description. If "
+                "the request is a whole new scene rather than one thing in this picture, call "
+                "redraw_image instead -- inpaint_image changes one area only."
             )
         elif failure == "noisy_mask":
             detail = (
