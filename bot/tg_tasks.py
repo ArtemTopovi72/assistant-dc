@@ -441,9 +441,6 @@ class TaskRunnerMixin:
                 tg_bot.logger.exception("combining the batch's video sheets failed")
                 sheet = sheets[-1][1]
         sess.fwd_transcript = said
-        # a question right after it is about this conversation: «А её могут посадить за
-        # такое?» got «Какую картинку? их 12» (live 2026-10-17)
-        sess.fwd_text_ts = time.time()
         sess.fwd_transcript_id = uuid.uuid4().hex[:8]
         sess.remember_fwd(sess.fwd_transcript_id, said)
         sess.fwd_transcript_done = False

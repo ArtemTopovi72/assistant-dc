@@ -467,7 +467,6 @@ class ResolveMixin:
                     continue
                 if item.get("forwarded"):
                     raw = tg_bot._unclaim(raw)
-                    sess.fwd_text_ts = time.time()   # in memory only: see the picture-choice gate
                     # Someone else's words: frame them so the model reads a
                     # forwarded post as a quotation and "о чём это?" / "ответь
                     # автору" afterwards refer to it. Not a button, not a
@@ -1382,9 +1381,6 @@ class ResolveMixin:
         # answer a file upload by generating a picture. A prompt prefix is an
         # instruction about the user's next words; with none to attach to it must
         # WAIT rather than seize our scaffolding.
-        # 🖼 Create picture asks for a NEW picture: the words describe it, they
-        # never point at an old one (else a scene description triggers «Какую картинку?»).
-        _new_picture = bool(merged) and sess.pending_prefix == tg_bot._PROMPT_KB["gen_image"]
         if merged and sess.pending_prefix:
             merged = sess.pending_prefix + merged
             sess.pending_prefix = ""
@@ -1518,31 +1514,13 @@ class ResolveMixin:
                 except Exception:
                     tg_bot.logger.warning("session persist failed", exc_info=True)
                 self._activity.log(chat_id, "system", f"[target] named picture {_named}", uname)
-        if (not img_bytes and not file_in_folder and not _new_picture
+        if (not img_bytes and not file_in_folder
                 and not getattr(sess, "target_image", "")
                 and merged not in tg_bot._MACHINE_PAYLOADS
-                and tg_bot._needs_image_choice(own_words, ctx=self.reads,
-                                               previous=tg_bot._last_bot_line(sess))):
+                and len(tg_bot._live_images(sess)) > 1
+                and tg_bot._needs_image_choice(own_words, chatlog.recent(chat_id), ctx=self.reads)):
             live = tg_bot._live_images(sess)
-            _in_play = getattr(sess, "turn_image", "")
-            # A short question typed after a forwarded TEXT is about that text, not about one of the old pictures
-            # (else «Речь про китайцев?» after forwards gets «Какую картинку? В этом чате их 12»).
-            _fwd = getattr(sess, "fwd_text_ts", 0) or 0
-            if (_fwd and time.time() - _fwd < 900
-                    # the forward's own storyboard sheet is registered just after it
-                    and _fwd + 60 > max([e.get("ts") or 0 for e in live] or [0])):
-                live = []
-            if len(live) > 1 and _in_play and live[-1].get("id") == _in_play:
-                # The newest picture is the one the previous turn was about
-                # (sent, pointed at, or just delivered): a follow-up continues
-                # on it. Older pictures are still one reply/button away.
-                sess.target_image = _in_play
-                try: self._store.put(sess)
-                except Exception:
-                    tg_bot.logger.warning("session persist failed", exc_info=True)
-                self._activity.log(chat_id, "system",
-                                   f"[target] picture in play {_in_play} of {len(live)}", uname)
-            elif len(live) > 1 and tg_bot._one_lineage(live):
+            if tg_bot._one_lineage(live):
                 # One picture in several states -- the latest is "the picture".
                 sess.target_image = live[-1]["id"]
                 try: self._store.put(sess)
@@ -1550,7 +1528,7 @@ class ResolveMixin:
                     tg_bot.logger.warning("session persist failed", exc_info=True)
                 self._activity.log(chat_id, "system",
                                    f"[target] one lineage of {len(live)} -> latest {live[-1]['id']}", uname)
-            elif len(live) > 1:
+            else:
                 sess.pending_instruction = merged
                 try: self._store.put(sess)
                 except Exception:
@@ -1918,6 +1896,7 @@ def _outfit_text(wish: str) -> str:
 
 
 import tg_bot  # noqa: E402  (cycle by design; attrs read at call time)
+import chatlog  # noqa: E402
 import tg_songs as _tg_songs  # noqa: E402
 import tg_weather as _tg_weather  # noqa: E402
 import tg_links as _tg_links  # noqa: E402

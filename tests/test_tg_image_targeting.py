@@ -43,7 +43,18 @@ _READ = {
     "restore quality": {"needs_tool": True, "wants": ["redraw_image"]},
     "hello, how are you": {"needs_tool": False},
 }.get
-_R = types.SimpleNamespace(**reads(read=_READ))
+
+
+def _subject(answers):
+    """The «which picture?» read (tg_bot._message_subject) as a suite scripts it: by message."""
+    def pick(question, blob):
+        msg = blob.split("\n", 1)[0].removeprefix("MESSAGE: ")
+        return answers.get(msg, "current")
+    return pick
+
+
+_ASKS = {"describe the image": "unclear", "restore quality": "unclear"}
+_R = types.SimpleNamespace(**reads(read=_READ, pick=_subject(_ASKS)))
 
 OK = BAD = 0
 
@@ -577,7 +588,7 @@ check("«последнюю картинку» targets the newest", bot3._get_se
 # (a scene with a broken window must not get «Какую картинку? их 12»).
 _scene = "cat sits on the table, the window glass is broken"
 bot.reads = types.SimpleNamespace(**reads(read=lambda t: {"about_picture": True, "wants": ["inpaint_image"]}
-                                             if t == _scene else _READ(t)))
+                                             if t == _scene else _READ(t), pick=_subject({_scene: "new"})))
 seed_two_images(bot)
 bot.pushed.clear(); bot.sent.clear()
 s = bot._get_session(CID); s.pending_prefix = T._PROMPT_KB["gen_image"]; bot._store.put(s)
@@ -586,21 +597,6 @@ check("a Create-picture description is not asked «which picture?»",
       "Which picture" not in " ".join(t for t, _ in bot.sent), bot.sent)
 check("...and goes on as a drawing request", len(bot.pushed) == 1
       and "generate an image of" in str(getattr(bot.pushed[0], "user_text", bot.pushed[0])), bot.pushed[:1])
-
-# A question right after a forwarded conversation (held by _fwd_batch) is about it:
-# «А её могут посадить за такое?» got «Какую картинку? их 12» (2026-10-17).
-_q = "can she go to jail for this?"
-bot.reads = types.SimpleNamespace(**reads(read=lambda t: {"about_picture": True, "is_question": True}
-                                             if t == _q else _READ(t)))
-seed_two_images(bot)
-bot.pushed.clear(); bot.sent.clear()
-s = bot._get_session(CID)
-s.fwd_text_ts = __import__("time").time() + 1          # _fwd_batch has just held a forward
-bot._store.put(s)
-bot._dispatch(msg(_q)); settle(bot)
-check("a question after a forwarded conversation is not asked «which picture?»",
-      "Which picture" not in " ".join(t for t, _ in bot.sent), bot.sent)
-s = bot._get_session(CID); s.fwd_text_ts = 0; bot._store.put(s)
 
 # The target is a gesture about ONE message, never a sticky mode.
 s = bot._get_session(CID)

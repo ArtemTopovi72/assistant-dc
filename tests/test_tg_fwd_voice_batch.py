@@ -314,8 +314,6 @@ ok = settle(lambda: any("Forwarded conversation" in t for _, t in bot.sent))
 asks = [t for _, t in bot.sent if "Forwarded conversation" in t or "Forwarded voice" in t]
 check("a forwarded batch gets ONE ask", ok and len(asks) == 1, bot.sent)
 check("...naming both senders", ok and "Anna" in asks[0] and "Boris" in asks[0], asks)
-check("...and a question right after it is about the conversation, not «which picture?»",
-      getattr(bot._get_session(CID_FF), "fwd_text_ts", 0) > 0)
 held = bot._get_session(CID_FF).fwd_transcript
 _order = [held.find(x) for x in ("Anna [🎤 voice 1]: can you pick me up",
                                  "Boris [🎤 voice 2]: sure",

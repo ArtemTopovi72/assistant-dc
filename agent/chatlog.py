@@ -83,3 +83,60 @@ def install() -> None:
         except Exception:
             pass
         logging.getLogger().addHandler(h)
+
+
+_PROGRESS_END = ("…", "...")
+
+
+def _line(entry) -> str:
+    """One transcript entry as the line a reader of the chat would see, "" for log lines,
+    progress stages and button chrome."""
+    import re
+    d = entry.get("data")
+    if not isinstance(d, dict) or entry.get("kind") not in ("in", "out"):
+        return ""
+    if entry["kind"] == "in":
+        tags = [t for k, t in (("photo", "a picture"), ("video", "a video"), ("video_note", "a video note"),
+                               ("voice", "a voice message"), ("audio", "an audio file"), ("document", "a file"))
+                if d.get(k)]
+        fwd = bool(d.get("forward_origin") or d.get("forward_date") or d.get("forward_from"))
+        words = (d.get("text") or d.get("caption") or "").strip()
+        head = ("forwards " if fwd else "sends ") + ", ".join(tags) if tags else ("forwards a message:" if fwd else "")
+        said = " ".join(p for p in (f"[{head}]" if head else "", words) if p)
+        return "user: " + said if said else ""
+    method = d.get("method") or ""
+    if method in ("sendPhoto", "sendMediaGroup"):
+        return "bot: [sends a picture]"
+    if method in ("sendVideo", "sendAnimation"):
+        return "bot: [sends a video]"
+    if method in ("sendVoice", "sendAudio"):
+        return "bot: [sends audio]"
+    import html
+    text = html.unescape(re.sub(r"<[^>]+>", "", d.get("text") or "")).strip()
+    if not text or text in ("✅", "👌") or (len(text) < 70 and text.endswith(_PROGRESS_END)):
+        return ""
+    return "bot: " + " ".join(text.split())[:300]
+
+
+def recent(chat_id, n: int = 8) -> list:
+    """The last `n` lines of this chat as its people saw them -- what was forwarded, what the
+    bot asked, which pictures went by -- for reads that need the talk, not one message."""
+    try:
+        with open(os.path.join(_dir(), f"{chat_id}.jsonl"), "rb") as fh:
+            fh.seek(0, 2)
+            fh.seek(max(0, fh.tell() - 400_000))
+            raw = fh.read().decode("utf-8", "replace").splitlines()[1:]
+    except OSError:
+        return []
+    entries = []
+    for r in raw:
+        try:
+            entries.append(json.loads(r))
+        except ValueError:
+            pass
+    return lines_of(entries, n)
+
+
+def lines_of(entries: list, n: int = 8) -> list:
+    out = [s for s in (_line(e) for e in entries) if s]
+    return out[-n:]

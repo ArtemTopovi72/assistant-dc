@@ -39,7 +39,7 @@ Extremism filter
   Any message matching a keyword is refused with a legal notice
 """
 from __future__ import annotations
-from seams import intent_read
+from seams import choice, intent_read
 
 import copy
 import html as _html_mod
@@ -659,12 +659,12 @@ from tg_keyboards import (
 # has to catch requests that will otherwise be silently answered about the wrong
 # picture. Anything it misses behaves exactly as before (newest image wins), so a
 # false negative costs nothing new — a false POSITIVE would nag, which is worse.
-def _picture_read(text: str, ctx=None, previous: str = "") -> dict:
+def _picture_read(text: str, ctx=None) -> dict:
     """The model's read of the user's words with several pictures in the chat
     (agent/intent.py). It replaced an edit/describe word list and an ordinal
     word list: «предыдущих инцидентах» in a storyboard read as «the previous
     picture», any «нов…» named the newest one."""
-    return intent_read(ctx)(None, text, previous, "several pictures earlier in the chat")
+    return intent_read(ctx)(None, text, "", "several pictures earlier in the chat")
 
 
 def _ordinal_target(text: str, live: list, ctx=None) -> str:
@@ -685,28 +685,35 @@ def _ordinal_target(text: str, live: list, ctx=None) -> str:
         return ""
 
 
-def _last_bot_line(sess) -> str:
-    """The bot's last text reply in this chat's history, "" when none."""
-    for m in reversed(list(getattr(sess, "history", None) or [])):
-        if m.get("role") == "assistant" and isinstance(m.get("content"), str) and m["content"].strip():
-            return m["content"]
-    return ""
+_SUBJECT_Q = (
+    "A user writes to an assistant bot in a chat that had several pictures earlier. The message "
+    "and the chat lines before it: {text}\nWhat is the message about? "
+    "unclear = it needs one particular picture (to edit, animate or ask about) and the chat leaves open "
+    "which: several pictures arrived or were shown together and none of them is the one being talked about; "
+    "current = the picture or video the chat is about right now (the last one sent, made or discussed), "
+    "or all of the pictures just sent together; "
+    "forwarded = something the user forwarded just before (a voice message, a conversation, a post); "
+    "talk = the conversation or a story itself, no picture needed; "
+    "new = a new request: draw, sing, write or find something new.")
+_SUBJECTS = ("unclear", "current", "forwarded", "talk", "new")
 
 
-def _needs_image_choice(text: str, ctx=None, previous: str = "") -> bool:
-    """The words need one picture (a question about it or an edit of it) and
-    name none: with several in the chat the bot asks which. `previous`, the bot's
-    last line, keeps «Что думаешь?» after a talk about the talk: without it the
-    owner's question got «Какую картинку?» (2026-10-21)."""
+def _message_subject(text: str, recent: list, ctx=None) -> str:
+    """What the user's message is about, read with the chat lines before it (chatlog.recent).
+    One read instead of a word gate plus exceptions for forwarded texts, new drawings, songs
+    and the bot's last line: each exception was a patch and the next case got
+    «Какую картинку?» anyway (a question after a forwarded voice, 2026-10-22).
+    Model down -> "current": not asking beats asking wrongly."""
+    lines = "\n".join(str(r)[:160] for r in (recent or [])[-8:])
+    blob = f"MESSAGE: {(text or '').strip()[:400]}\nCHAT BEFORE IT:\n{lines}"
+    return choice(ctx)(_SUBJECT_Q, blob, _SUBJECTS, "current")
+
+
+def _needs_image_choice(text: str, recent: list, ctx=None) -> bool:
+    """The words need one picture and the chat leaves open which: with several in the chat
+    the bot asks «Какую картинку?». Measured on bench/which_picture_eval.py."""
     t = (text or "").strip()
-    if not t:
-        return False
-    r = _picture_read(t, ctx=ctx, previous=previous)
-    if r["names_picture"]:
-        return False
-    from graph_fastpath import _IMAGE_ACTION_TOOLS
-    # «нарисуй рыжего кота в шлеме» is a new picture: it got «Какую картинку? их 12» (2026-10-17)
-    return bool(r["about_picture"] or set(r["wants"]) & (_IMAGE_ACTION_TOOLS - {"generate_image"}))
+    return bool(t) and _message_subject(t, recent, ctx=ctx) == "unclear"
 
 
 # Scaffolding this strips off a stored label before showing it in the picker.

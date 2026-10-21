@@ -41,29 +41,31 @@ _R = types.SimpleNamespace(**_READ)
 
 print()
 print("=" * 70)
-print("1. tg_bot's ambiguity-gate regex has the same 'written' coverage")
+print("1. «Which picture?» is asked only when the chat leaves it open")
 print("=" * 70)
 
-for t in ("Что там написано?", "what is written there?"):
-    check(f"tg_bot asks which picture for: {t!r}", T._needs_image_choice(t, ctx=_R), t)
-
-# «нарисуй рыжего кота в шлеме» got «Какую картинку? В этом чате их 12» (2026-10-17)
-_DRAW = types.SimpleNamespace(**reads(read=lambda t: {"wants": ["generate_image"]} if "нарисуй" in t
-                                      else {"wants": ["inpaint_image"]}))
-check("a new picture asks no «which picture?»",
-      not T._needs_image_choice("нарисуй рыжего кота в космическом шлеме", ctx=_DRAW))
-check("...an edit still does", T._needs_image_choice("сделай шлем золотым", ctx=_DRAW))
-
-# «Что думаешь?» after a text reply got «Какую картинку?» (owner, 2026-10-21): the read must see
-# the bot's last line (live: about_picture False after a text reply, True after a picture).
+# One read of the message WITH the chat lines before it (tg_bot._message_subject) replaced a
+# word gate and four exceptions: a forwarded text, a new drawing, the bot's last line, a
+# forwarded voice -- each exception was a patch and the next case asked anyway. Scored on
+# bench/which_picture_eval.py; here: the lines reach the read, and only "unclear" asks.
+import chatlog
 _seen = []
-_PREV = types.SimpleNamespace(intent_read=lambda c, t, prev="", att="": _seen.append(prev) or dict(
-    names_picture=0, wants=[], about_picture=not prev.startswith("Если")))
-_sess = types.SimpleNamespace(history=[{"role": "assistant", "content": "Если коротко: курс держится за счёт ставок."},
-                                       {"role": "user", "content": "Что думаешь?"}])
-check("the bot's last line reaches the picture read",
-      not T._needs_image_choice("Что думаешь?", ctx=_PREV, previous=T._last_bot_line(_sess))
-      and _seen[-1].startswith("Если коротко"), _seen)
+def _pick(answer):
+    return types.SimpleNamespace(choice=lambda q, text, options, default="": (_seen.append(text), answer)[1])
+_fwd = chatlog.lines_of([
+    {"kind": "in", "data": {"voice": {"file_id": "v"}, "forward_date": 1}},
+    {"kind": "out", "data": {"method": "sendMessage", "text": "🎧 <b>Пересланное голосовое</b> · 12 с\nЧто с ним сделать?"}},
+    {"kind": "out", "data": {"method": "sendMessage", "text": "⚙️ <b>Думаю…</b>"}},
+])
+check("the chat lines show the forward and the bot's question, not its progress lines",
+      _fwd == ["user: [forwards a voice message]", "bot: 🎧 Пересланное голосовое · 12 с Что с ним сделать?"], _fwd)
+check("«Что думаешь?» after a forwarded voice: no «which picture?»",
+      not T._needs_image_choice("Что думаешь?", _fwd, ctx=_pick("forwarded")))
+check("...and the read saw the message and the forward", "Что думаешь?" in _seen[-1]
+      and "[forwards a voice message]" in _seen[-1], _seen[-1:])
+_three = ["user: [sends a picture]", "user: [sends a picture]", "user: [sends a picture]"]
+check("three photos and «убери фон»: asks which", T._needs_image_choice("убери фон", _three, ctx=_pick("unclear")))
+check("an empty message never asks", not T._needs_image_choice("  ", _three, ctx=_pick("unclear")))
 
 
 print()
