@@ -227,9 +227,13 @@ def _heads(ctx, image_path: str) -> list:
     from PIL import Image
     import identity_metrics
     try:
-        boxes = dep(ctx, "face_boxes", identity_metrics.face_boxes)(image_path, pad=0.6)[:3]
+        boxes = dep(ctx, "face_boxes", identity_metrics.face_boxes)(image_path, pad=0.6)
         if not boxes:
             return []
+        # a face far smaller than the main one is background: the advert's woman on a screenshot
+        # of Lenin's page rode along as a second person
+        area = lambda b: (b[2] - b[0]) * (b[3] - b[1])
+        boxes = [b for b in boxes if area(b) >= 0.25 * area(boxes[0])][:3]
         im = Image.open(image_path).convert("RGB")
         out = []
         for i, box in enumerate(boxes):

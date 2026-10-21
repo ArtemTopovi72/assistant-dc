@@ -159,6 +159,9 @@ def test_a_new_scene_takes_the_faces_as_references_and_frees_the_pose():
     out, seen = _scene_run(keeps_pose=False, faces=[(10, 10, 110, 140), (200, 20, 280, 120)])
     assert out == "scene.png" and len(seen["refs"]) == 2 and "plain" not in seen
     assert "picture 2, picture 3" in seen["scene"] and "whatever angle" in seen["scene"]
+    # an advert's tiny face on a screenshot is not one of the people
+    _, seen = _scene_run(keeps_pose=False, faces=[(10, 10, 210, 300), (300, 500, 330, 540)])
+    assert len(seen["refs"]) == 1 and "picture 3" not in seen["scene"], seen
 
 
 def test_people_who_keep_their_pose_are_edited_on_the_picture_itself():
