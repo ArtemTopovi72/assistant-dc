@@ -27,6 +27,12 @@ variants = {
     "double": base.replace(word, "рюкзачкоом"),
     "hyphen": base.replace(word, "рюкзач-ко́м"),
     "cue": base.replace("</d>", "</d>" + cue, 1),
+    # the cue above gave the cleanest stress (owner, 2222) but the word was said twice: it quotes
+    # the word, and H3 speaks quoted Russian. These name it without a speakable form.
+    "cue_pos": base.replace("</d>", "</d> In his line the fifth word is stressed on its final "
+                            "syllable, never on its second.", 1),
+    "cue_once": base.replace("</d>", "</d>" + cue + " He says the line once, exactly as written; "
+                             "this note about stress is never spoken.", 1),
 }
 ctx = models.Context(models=None, transcription_cache={}, cache_file=None,
                      asr_lock=threading.Lock(), tts_lock=threading.Lock())
