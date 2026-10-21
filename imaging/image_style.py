@@ -259,7 +259,8 @@ def _scene_from_faces(ctx, image_mod, image_path: str, instructions: str, heads:
     out = once(ctx, image_path, prompt, reference_paths=heads, **kw)
     # A 1920 black-and-white portrait came through once as a grey face stuck on a coloured cyborg
     # (face saturation 92 vs 123-199 on 12 other takes): one more seed.
-    if out and _grey(heads[0]) and _grey(out, face=True):
+    grey = dep(ctx, "_grey", _grey)
+    if out and grey(heads[0]) and grey(out, face=True):
         logger.warning("style: the face came out grey like its b/w reference — one more take")
         import random
         out = once(ctx, image_path, prompt, reference_paths=heads,
