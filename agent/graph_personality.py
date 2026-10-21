@@ -147,7 +147,8 @@ _DELIVERY_CLAIM_RE = re.compile(
 )
 
 
-def _inspection_misses_request(request: str, verdict: str, tools_called: set, ctx=None) -> bool:
+def _inspection_misses_request(request: str, verdict: str, tools_called: set, ctx=None,
+                               removal: str = "") -> bool:
     """The inspector labels every point PRESENT yet its own description shows the
     request was not met: three cats for «пусть котов будет два», a rider behind
     the car for «рядом с машиной» -- both answered «готово».
@@ -165,7 +166,11 @@ def _inspection_misses_request(request: str, verdict: str, tools_called: set, ct
         + "». A checker then described the result: {text} -- \"met\" when the description "
         "shows the request done; \"partly\" when the asked change is there but a detail is "
         "off (a colour, a count, a position); \"not\" when the asked change is not there, or "
-        "something nobody asked for was added or replaced instead.",
+        "something nobody asked for was added or replaced instead."
+        # a clean bare wrist came back «изменение получилось не полностью» over an
+        # invented «smudging» note (debug chat 2026-10-21)
+        + (" The request is a removal: the thing being gone is \"met\"; a remark on "
+           "texture, smudging or blending is not a missing part of it." if removal else ""),
         verdict.strip()[:1200], ("met", "partly", "not"), default="met")
     return {"partly": "partial", "not": True}.get(got, False)
 
@@ -2134,7 +2139,8 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                     tool_result, tools_called_this_turn, removal_turn)
                 if not verification_negative:
                     verification_negative = _inspection_misses_request(
-                        original_input or user_input, tool_result, tools_called_this_turn, ctx=ctx)
+                        original_input or user_input, tool_result, tools_called_this_turn, ctx=ctx,
+                        removal=removal_turn)
                     if verification_negative:
                         logger.info("inspection description contradicts the request (%s)",
                                     verification_negative)

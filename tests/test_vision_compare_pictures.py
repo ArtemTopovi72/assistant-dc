@@ -58,3 +58,16 @@ def test_inspection_description_that_misses_the_request_counts_as_negative():
     assert gp._inspection_misses_request("пусть котов будет два", "Two cats sit.", edit, ctx=ctx) is False
     # nothing was made this turn -> no verdict about a requested change
     assert not gp._inspection_misses_request("пусть котов будет два", "Three grey cats", set(), ctx=ctx)
+
+
+def test_a_removal_with_the_thing_gone_is_met_whatever_the_texture_note():
+    """A bare wrist was answered «не полностью» over an invented smudge note (2026-10-21)."""
+    import types
+    import graph_personality as gp
+    asked = []
+    ctx = types.SimpleNamespace(choice=lambda q, t, options, default="": asked.append(q) or "met")
+    v = "The edit removed the watch. | Watch removed? PRESENT -- gone, but DISTORTED smudging on the skin"
+    assert gp._inspection_misses_request("убери часы", v, {"inpaint_image"}, ctx=ctx, removal="watch") is False
+    assert "removal" in asked[-1] and "smudging" in asked[-1]
+    gp._inspection_misses_request("сделай нос больше", v, {"inpaint_image"}, ctx=ctx)
+    assert "is a removal" not in asked[-1]
