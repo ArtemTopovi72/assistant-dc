@@ -13,7 +13,7 @@ both land here. Three things make a style land (bench/style_ab.py, 2026-10-11):
     picture: without the description an anime schoolgirl came back a young man and
     a Pixar baker lost his mustache; without the LoRA he stayed a 3D doll.
 """
-from seams import vision_model, text_model, dep
+from seams import vision_model, text_model, dep, yes_no
 import logging
 import os
 import re
@@ -53,7 +53,10 @@ _EXPAND_SYS = (
     "You turn a request to restyle a picture into an instruction for an image-editing model. "
     "Reply with JSON only: {\"target\": \"drawn\" | \"photo\" | \"other\", \"style\": \"...\"}. "
     "target: drawn = any drawn, painted, animated or rendered art style; photo = make it look "
-    "like a real photograph; other = a change that is neither (lighting, era, filter, season). "
+    "like a real photograph; other = a change that is neither (lighting, era, filter, season), "
+    "and any change of WHAT the picture shows -- a new place, an action, a fight, other clothes, "
+    "other people -- even when it also names a look («a cinematic, highly detailed scene of him "
+    "in armor fighting demons in lava» is other: a new scene, not a style of this one). "
     "style: ONE English paragraph starting with \"Turn picture 1 into\" that spells out what "
     "makes this exact style recognisable and different from its neighbours: the medium, the "
     "line work, the shading, how faces and eyes are drawn, the palette and the texture. "
@@ -115,6 +118,15 @@ def _expand(ctx, words: str) -> tuple:
         from image_router import classify_edit_intent
         target = "drawn" if classify_edit_intent(words, ctx=ctx) == "style_transfer" else "other"
     style = " ".join(str(d.get("style") or "").split())
+    # Its own question: inside the JSON, «an epic fantasy painting of the cat riding a dragon» stayed
+    # a style, got «keep the same composition», and the picture came back as itself repainted
+    # (bench/restyle_target_live.py).
+    if target in ("drawn", "photo") and yes_no(ctx)(
+            "{text}\n\nThis asks for a change to a picture. Does it change WHAT the picture shows -- "
+            "a new place, an action or fight, other clothes, other people or animals added -- and "
+            "not only HOW the same picture is drawn or photographed? A style name alone is HOW, "
+            "even one with its own look (cyberpunk neon, steampunk, noir, a painter's manner).", words):
+        target = "other"
     return target, (style or words)
 
 

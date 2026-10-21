@@ -120,3 +120,15 @@ def test_realism_neither_undresses_nor_dresses_and_keeps_the_skin_clean(monkeypa
     assert "not named above keeps exactly its colour" in instr
     p = SP.preset_prompt("photo")
     assert "pores" not in p and "no dirt" in p and "the same place" in p
+
+
+def test_a_new_scene_is_not_a_style_of_the_old_picture():
+    """«A cinematic, highly detailed scene of Lenin in a cybernetic suit fighting demons in lava»
+    read as a drawn style, got «keep the same composition», and the Wikipedia screenshot came back
+    as itself tinted with lava (live 2026-10-21). A change of what is shown is edited as written."""
+    import types
+    reply = lambda *a, **k: '{"target": "drawn", "style": "Turn picture 1 into a digital painting."}'
+    scene = types.SimpleNamespace(text_model=reply, yes_no=lambda q, t, *a, **k: "WHAT the picture shows" in q)
+    assert IS._expand(scene, "Lenin in a cybernetic suit fights demons in lava")[0] == "other"
+    style = types.SimpleNamespace(text_model=reply, yes_no=lambda *a, **k: False)
+    assert IS._expand(style, "make it a digital painting")[0] == "drawn"
