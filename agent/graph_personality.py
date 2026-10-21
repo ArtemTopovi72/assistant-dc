@@ -1126,6 +1126,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
     # the LAST verdict counts: an edit that failed and was then redone
     # successfully must not keep the turn muzzled.
     verification_negative = False
+    edit_judged = False             # edit_verdict judged this turn's edit: inspections are not re-read
     verify_corrective_sent = False
     # Tools that failed this turn and left nothing behind. Cleared per tool on a
     # later success, so a retry that works does not keep the turn muzzled.
@@ -2140,7 +2141,24 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             # ("mosque or minaret?") and got "MINARET: PRESENT | MOSQUE:
             # MISSING" -- a search answer, not an edit verdict -- and the
             # guard replaced a correct reply with "нужного изменения нет".
-            if tool_name == "inspect_image":
+            # One judge for an edit: BEFORE (the turn's original), AFTER and the user's words in one
+            # model read (agent/edit_verdict.py). The inspector's labels + two readers of its text
+            # scored 44% on bench/edit_judge_eval.py and called 11 of 25 clean edits failed; this
+            # scores 76% with 2 (2026-10-21).
+            if (tool_name in _EDIT_TOOLS and state.get("edit_before") and state.get("image_path")
+                    and not tool_result.lstrip().startswith(("[TOOL ERROR]", "Unknown tool"))):
+                import edit_verdict as _ev
+                _v = dep(ctx, "edit_verdict", _ev).judge(ctx, state["edit_before"], state["image_path"],
+                                                         original_input or user_input)
+                if _v.get("verdict"):
+                    edit_judged = True
+                    verification_negative = {"not": True, "partial": "partial"}.get(_v["verdict"], False)
+                    tool_result += (f"\n\nCHECKED against the user's request (BEFORE vs AFTER): "
+                                    f"{_v['verdict'].upper()} -- {_v.get('why', '')}. This is the check of "
+                                    "the edit; tell the user what it says.")
+                    if verification_negative is True and state.get("last_edit_source"):
+                        state["retry_from"] = state["last_edit_source"]
+            if tool_name == "inspect_image" and not edit_judged:
                 verification_negative = _inspection_contradicts_work(
                     tool_result, tools_called_this_turn, removal_turn)
                 if not verification_negative:

@@ -151,3 +151,6 @@ mantella/
 venv_qwen/
 tg_feedback.db
 tg_feedback.db-*
+
+# the edit-judge eval set images (local; cases.json is committed)
+bench/edit_judge_set/img/

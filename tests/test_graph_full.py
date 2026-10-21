@@ -774,6 +774,37 @@ def test_an_edit_answered_with_an_offer_gets_a_corrective_round():
     check("edit_question_left_alone", not tools2.calls and len(llm2.calls) == 1, (tools2.calls, len(llm2.calls)))
 
 
+def test_an_edit_is_judged_once_by_the_before_after_judge():
+    """The inspector's labels + two readers of its text called 11 of 25 clean edits failed
+    (bench/edit_judge_eval.py, 2026-10-21). After an edit the graph asks edit_verdict once:
+    BEFORE (the turn's original), AFTER and the user's own words; its verdict is the check."""
+    seen = []
+
+    class EditTools(Tools):
+        def __call__(self, ctx, state, tool_name, tool_args):
+            r = super().__call__(ctx, state, tool_name, tool_args)
+            if tool_name == "inpaint_image":
+                state["edit_before"], state["image_path"] = "before.png", "after.png"
+                return "Image edited (inpaint) and saved: after.png"
+            return r
+
+    def judge(ctx, before, after, request):
+        seen.append((before, after, request))
+        return {"verdict": "not", "why": "a new watch was drawn on the wrist"}
+
+    c = _ctx()
+    llm = LLM([_asst("", [_tc("inpaint_image", {"region": "watch", "instructions": "bare wrist"}, "c1")]),
+               _asst("Готово! Часы убраны.")] + [_asst("Не вышло: на руке нарисовались новые часы.")] * 4)
+    out = _run(c, llm, EditTools(), {"messages": [], "user_input": "убери часы"},
+               read={"needs_tool": True, "wants": ["inpaint_image"]},
+               edit_verdict=types.SimpleNamespace(judge=judge))
+    check("edit_judge_called_with_before_after_and_words", seen == [("before.png", "after.png", "убери часы")], str(seen))
+    tool_msgs = [m["content"] for m in out["messages"] if m.get("role") == "tool"]
+    check("edit_judge_verdict_in_the_tool_result", any("CHECKED" in t and "NOT" in t for t in tool_msgs), str(tool_msgs)[:600])
+    check("edit_judge_not_lets_no_success_claim_through", "Часы убраны" not in (out.get("final_answer") or ""),
+          str(out.get("final_answer")))
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0

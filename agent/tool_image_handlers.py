@@ -531,11 +531,7 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
             "it, tell the user plainly that the lettering came out wrong (say what is "
             "wrong) and offer to try again.")
     return (
-        f"Image edited ({verb}) and saved: {new_path}\n"
-        "Before answering, call inspect_image to verify THE REQUESTED CHANGE — check "
-        "only what the user asked for, not overall quality or pre-existing flaws (the "
-        "mask can occasionally land on the wrong object); if the requested change is "
-        "wrong, retry inpaint_image with a more specific region."
+        f"Image edited ({verb}) and saved: {new_path}"
     )
 
 
@@ -631,8 +627,6 @@ def _handle_transfer_image(ctx, state, args: dict) -> str:
     return (
         f"Transfer complete and saved: {new_path}\n"
         + (f"Compared with the reference, still missing or wrong: {missing}\n" if missing else "")
-        + "Call inspect_image to verify the transferred element is present and the person's "
-        "identity is preserved before telling the user it is done."
     )
 
 
@@ -2351,10 +2345,4 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
     dep(ctx, "_remember", _remember)(ctx, state, "redraw", f"Image {verb}" + (f": {instructions}" if instructions else ""),
               {"path": new_path})
     result = f"Image {verb} and saved: {new_path}"
-    if mode == "redraw" and instructions:
-        result += (
-            "\nNext step: call inspect_image to verify the requested change is actually "
-            "visible before telling the user it is done; a redraw can drift from the "
-            "instructions. If it did not come out, retry or say so honestly."
-        )
     return result

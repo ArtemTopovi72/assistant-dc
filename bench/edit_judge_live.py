@@ -72,7 +72,12 @@ def run(name: str, timeout: float = 900) -> dict:
         time.sleep(5)
     t_photo, size = time.time(), _log_size()
     D.photo(os.path.join(P, img))
-    _wait_end(size, timeout)
+    # a photo seen before gets its buttons with no task at all: wait for the buttons
+    t = time.time()
+    while time.time() - t < timeout and not _picture_id(t_photo):
+        time.sleep(2)
+    while not _idle():
+        time.sleep(3)
     pid = _picture_id(t_photo)
     if not pid:
         print(name, "no keyboard under the photo", flush=True)

@@ -1,0 +1,533 @@
+[
+ {
+  "id": "real00",
+  "ask": "убери гантели и провода с пола, кота не трогай\\n[Text written on picture 1 (OCR, exact letters; each «…» is a separate la",
+  "before": "bench/edit_judge_set/img/222aeab8fc01.jpg",
+  "after": "bench/edit_judge_set/img/36d7a2e637c3.jpg",
+  "label": "done",
+  "why": "",
+  "engine_request": "region='floor with dumbbells and wires' instructions='clean floor without dumbbells and wires, showing only the floor surface'"
+ },
+ {
+  "id": "real02",
+  "ask": "убери гантели и провода с пола, кота не трогай\\n[Text written on picture 1 (OCR, exact letters; each «…» is a separate la",
+  "before": "bench/edit_judge_set/img/a457b01e0752.jpg",
+  "after": "bench/edit_judge_set/img/cecb2d07517b.jpg",
+  "label": "done",
+  "why": "",
+  "engine_request": "region='dumbbells and wires on the floor' instructions='clean floor without dumbbells and wires, showing only the tan floor surface clearly'"
+ },
+ {
+  "id": "real04",
+  "ask": "перекрась броню девушки справа в красный",
+  "before": "bench/edit_judge_set/img/5a1d73130050.jpg",
+  "after": "bench/edit_judge_set/img/559b7d2441b9.jpg",
+  "label": "done",
+  "why": "",
+  "engine_request": "region='the armor of the girl on the right' instructions='red armor with teal accents'"
+ },
+ {
+  "id": "real05",
+  "ask": "перекрась броню девушки справа в красный",
+  "before": "bench/edit_judge_set/img/559b7d2441b9.jpg",
+  "after": "bench/edit_judge_set/img/627c4d2acea0.jpg",
+  "label": "done",
+  "why": "",
+  "engine_request": "region=\"the right girl's armor\" instructions='red armor with teal accents'"
+ },
+ {
+  "id": "real06",
+  "ask": "перекрась броню девушки справа в красный",
+  "before": "bench/edit_judge_set/img/501ef30eb4e0.jpg",
+  "after": "bench/edit_judge_set/img/e0933fdef8fe.jpg",
+  "label": "done",
+  "why": "",
+  "engine_request": "region='the armor of the girl on the right' instructions='red armor with teal accents'"
+ },
+ {
+  "id": "real07",
+  "ask": "перекрась броню девушки справа в красный",
+  "before": "bench/edit_judge_set/img/e0933fdef8fe.jpg",
+  "after": "bench/edit_judge_set/img/c0d3dfe0b8c5.jpg",
+  "label": "done",
+  "why": "",
+  "engine_request": "region=\"the right girl's armor\" instructions='red armor with teal accents'"
+ },
+ {
+  "id": "real08",
+  "ask": "перекрась броню девушки справа в красный",
+  "before": "bench/edit_judge_set/img/9a0b87972b8c.jpg",
+  "after": "bench/edit_judge_set/img/fcb88aef2971.jpg",
+  "label": "done",
+  "why": "",
+  "engine_request": "region='the armor of the girl on the right' instructions='red armor with teal accents'"
+ },
+ {
+  "id": "real09",
+  "ask": "одень мужика с лопатой в красные доспехи как у девушки справа на второй фотке\\n[The user sent 2 pictures in one message;",
+  "before": "bench/edit_judge_set/img/2966160d0b98.jpg",
+  "after": "bench/edit_judge_set/img/fe8dccef63c3.jpg",
+  "label": "not",
+  "why": "a woman added, the man still in grey",
+  "engine_request": "transfer instr='Replace the clothing with the garment shown in image 2 (A dark blue sleeveless tunic with a high neckline and pointed hem, layered under red-tinted metallic plate armor featuring teal-lined edges on the shoulder guards, breastplate, hip plates, and greaves, all secured by integrated "
+ },
+ {
+  "id": "real10",
+  "ask": "одень мужика с лопатой в красные доспехи как у девушки справа на второй фотке\\n[The user sent 2 pictures in one message;",
+  "before": "bench/edit_judge_set/img/2966160d0b98.jpg",
+  "after": "bench/edit_judge_set/img/fe8dccef63c3.jpg",
+  "label": "not",
+  "why": "a woman added",
+  "engine_request": "contained-transfer role=clothing_source instr=\"Replace the clothing with the garment shown in image 2 (A dark blue sleeveless tunic with a high neckline and pointed hem, layered under red-tinted metallic plate armor featuring teal-lined edges on the shoulder guards, breastplate, hip plates, and grea"
+ },
+ {
+  "id": "real11",
+  "ask": "одень мужика с лопатой в красные доспехи как у девушки справа на второй фотке\\n[The user sent 2 pictures in one message;",
+  "before": "bench/edit_judge_set/img/fe8dccef63c3.jpg",
+  "after": "bench/edit_judge_set/img/6d11d3bb734c.jpg",
+  "label": "done",
+  "why": "",
+  "engine_request": "region=\"man's clothes\" instructions=\"the man's clothes replaced with red and black plate armor like the warrior from the second photo\""
+ },
+ {
+  "id": "real13",
+  "ask": "одень мужика с лопатой в красные доспехи как у девушки справа на второй фотке\\n[The user sent 2 pictures in one message;",
+  "before": "bench/edit_judge_set/img/c48ba3a3dde2.jpg",
+  "after": "bench/edit_judge_set/img/603adfe0b839.jpg",
+  "label": "not",
+  "why": "a woman added",
+  "engine_request": "transfer instr='dress the man from the first photo in red and black plate armor like the girl on the right in the second photo, keeping him holding his shovel and standing by the car'"
+ },
+ {
+  "id": "real14",
+  "ask": "одень мужика с лопатой в красные доспехи как у девушки справа на второй фотке\\n[The user sent 2 pictures in one message;",
+  "before": "bench/edit_judge_set/img/603adfe0b839.jpg",
+  "after": "bench/edit_judge_set/img/fb475c448f6b.jpg",
+  "label": "not",
+  "why": "man unchanged",
+  "engine_request": "instructions='The man in the grey jumpsuit should be wearing red and black plate armor exactly like the girl on the right from the second photo. He should still be holding his shovel and standing by the white car with the police officers in the background. The woman in red armor from the previous at"
+ },
+ {
+  "id": "real15",
+  "ask": "одень мужика с лопатой в красные доспехи как у девушки справа на второй фотке\\n[The user sent 2 pictures in one message;",
+  "before": "bench/edit_judge_set/img/fb475c448f6b.jpg",
+  "after": "bench/edit_judge_set/img/04ee92ab80cb.jpg",
+  "label": "not",
+  "why": "man unchanged",
+  "engine_request": "region=\"man's clothes\" instructions=\"the man's grey jumpsuit replaced with red and black plate armor like a knight from the second photo\""
+ },
+ {
+  "id": "real16",
+  "ask": "одень мужика с лопатой в красные доспехи как у девушки справа на второй фотке\\n[The user sent 2 pictures in one message;",
+  "before": "bench/edit_judge_set/img/0901edea003f.jpg",
+  "after": "bench/edit_judge_set/img/91daeedfa3d0.jpg",
+  "label": "done",
+  "why": "",
+  "engine_request": "contained-transfer role=clothing_source instr=\"Replace the clothing with the garment shown in image 2 (A dark blue sleeveless tunic with a high neckline and pointed hem, layered under red-tinted metallic armor featuring silver trim on the shoulder plates, chest piece, waist guards, and long skirt-li"
+ },
+ {
+  "id": "real17",
+  "ask": "одень мужика с лопатой в красные доспехи как у девушки справа на второй фотке\\n[The user sent 2 pictures in one message;",
+  "before": "bench/edit_judge_set/img/91daeedfa3d0.jpg",
+  "after": "bench/edit_judge_set/img/138b311b64ad.jpg",
+  "label": "done",
+  "why": "",
+  "engine_request": "region='the hands and the area where the shovel should be' instructions='a complete shovel with a metal blade being held by the man in armor'"
+ },
+ {
+  "id": "real18",
+  "ask": "одень мужика с лопатой в красные доспехи как у девушки справа на второй фотке\\n[The user sent 2 pictures in one message;",
+  "before": "bench/edit_judge_set/img/91daeedfa3d0.jpg",
+  "after": "bench/edit_judge_set/img/fcb1c02ac3c0.jpg",
+  "label": "done",
+  "why": "",
+  "engine_request": "region='the bottom of the image where the shovel should be' instructions='a complete shovel including its metal blade and wooden handle being held by the man in armor, ensuring the entire tool is visible within the frame'"
+ },
+ {
+  "id": "real20",
+  "ask": "улучши качество этой фотки, сделай чётче",
+  "before": "bench/edit_judge_set/img/0ca653916631.jpg",
+  "after": "bench/edit_judge_set/img/83627a7e7d4f.jpg",
+  "label": "not",
+  "why": "a second face pasted on the chest",
+  "engine_request": "instructions='high resolution, sharp focus, highly detailed textures, professional photography quality'"
+ },
+ {
+  "id": "real23",
+  "ask": "сделай шлем золотым",
+  "before": "bench/edit_judge_set/img/d5a1482faef4.jpg",
+  "after": "bench/edit_judge_set/img/24a7d9f6e168.jpg",
+  "label": "partial",
+  "why": "a second helmet appeared",
+  "engine_request": "region='space helmet' instructions='a shiny, polished gold space helmet'"
+ },
+ {
+  "id": "real24",
+  "ask": "вернись к картинке с котом и убери Землю с фона",
+  "before": "bench/edit_judge_set/img/24a7d9f6e168.jpg",
+  "after": "bench/edit_judge_set/img/10582d6bfd9a.jpg",
+  "label": "partial",
+  "why": "Earth gone, its blue glow left",
+  "engine_request": "region='Earth in the background' instructions='the Earth in the background is removed, leaving only the dark starry space'"
+ },
+ {
+  "id": "real25",
+  "ask": "вернись к картинке с котом и убери Землю с фона",
+  "before": "bench/edit_judge_set/img/24a7d9f6e168.jpg",
+  "after": "bench/edit_judge_set/img/90a097c57e97.jpg",
+  "label": "partial",
+  "why": "Earth gone, glow left",
+  "engine_request": "region='blurry blue glow in the background' instructions='remove the blurry blue glow from the background, leaving only dark space with stars'"
+ },
+ {
+  "id": "real26",
+  "ask": "вернись к картинке с котом и убери Землю с фона",
+  "before": "bench/edit_judge_set/img/90a097c57e97.jpg",
+  "after": "bench/edit_judge_set/img/800d3c0144e5.jpg",
+  "label": "partial",
+  "why": "glow left",
+  "engine_request": "region='blue glow in the background' instructions='remove the blue glow in the background completely, leaving only dark space with stars'"
+ },
+ {
+  "id": "real27",
+  "ask": "вернись к картинке с котом и убери Землю с фона",
+  "before": "bench/edit_judge_set/img/800d3c0144e5.jpg",
+  "after": "bench/edit_judge_set/img/931471c21db9.jpg",
+  "label": "not",
+  "why": "Earth back, scene redrawn",
+  "engine_request": "instructions='remove Earth from the background, leaving only dark space and stars behind the cat on the moon'"
+ },
+ {
+  "id": "real28",
+  "ask": "сделай шлем золотым",
+  "before": "bench/edit_judge_set/img/376a16c8b721.jpg",
+  "after": "bench/edit_judge_set/img/c278ea576436.jpg",
+  "label": "done",
+  "why": "",
+  "engine_request": "region='helmet' instructions='a shiny, polished gold space helmet'"
+ },
+ {
+  "id": "real29",
+  "ask": "сделай шлем золотым",
+  "before": "bench/edit_judge_set/img/c278ea576436.jpg",
+  "after": "bench/edit_judge_set/img/e8fada31a3b5.jpg",
+  "label": "done",
+  "why": "",
+  "engine_request": "region='helmet' instructions='a highly reflective, shiny, polished gold space helmet with bright highlights from the sun'"
+ },
+ {
+  "id": "real30",
+  "ask": "вернись к картинке с котом и убери Землю с фона",
+  "before": "bench/edit_judge_set/img/e8fada31a3b5.jpg",
+  "after": "bench/edit_judge_set/img/b123b67e20c2.jpg",
+  "label": "not",
+  "why": "Earth kept, ground recoloured",
+  "engine_request": "region='Earth in the background' instructions='the planet Earth in the background is removed, leaving only the dark starry space behind'"
+ },
+ {
+  "id": "real31",
+  "ask": "вернись к картинке с котом и убери Землю с фона",
+  "before": "bench/edit_judge_set/img/b123b67e20c2.jpg",
+  "after": "bench/edit_judge_set/img/408c3d71bbd2.jpg",
+  "label": "not",
+  "why": "Earth a blurred blob",
+  "engine_request": "region='Earth in the background' instructions='remove the Earth from the background, leaving only dark space with stars'"
+ },
+ {
+  "id": "real35",
+  "ask": "вернись к картинке с котом и убери Землю с фона",
+  "before": "bench/edit_judge_set/img/91d1b443a85e.jpg",
+  "after": "bench/edit_judge_set/img/666b2dc107eb.jpg",
+  "label": "not",
+  "why": "cat gone, moon blob",
+  "engine_request": "region='Earth in the background' instructions='the Earth in the background is removed, replaced by a dark, empty space with distant stars and cosmic dust'"
+ },
+ {
+  "id": "real36",
+  "ask": "вернись к картинке с котом и убери Землю с фона",
+  "before": "bench/edit_judge_set/img/666b2dc107eb.jpg",
+  "after": "bench/edit_judge_set/img/a56bf630ec01.jpg",
+  "label": "not",
+  "why": "Earth still visible",
+  "engine_request": "region='background behind the cat' instructions=\"replace the bright lunar surface background with a deep, dark void of space filled with distant stars and subtle cosmic dust, making it look like the cat is looking out into the universe from the moon's surface\""
+ },
+ {
+  "id": "real37",
+  "ask": "Пустить ленин в кибернетическом костюме попадает в ад и на кулаках хурритский с чертями по прямой в лаве",
+  "before": "bench/edit_judge_set/img/9c0b1ad95b80.jpg",
+  "after": "bench/edit_judge_set/img/a4408e32e98b.jpg",
+  "label": "not",
+  "why": "only tinted, no new scene",
+  "engine_request": "instructions='A cinematic, highly detailed scene of Vladimir Lenin wearing a futuristic cybernetic suit, falling into a fiery hellscape filled with flowing lava. He is being attacked by Hurrian-style demons in a line. One demon is striking him with a powerful fist, while another demon is grabbing hi"
+ },
+ {
+  "id": "real38",
+  "ask": "Пустить ленин в кибернетическом костюме попадает в ад и на кулаках хурритский с чертями по прямой в лаве",
+  "before": "bench/edit_judge_set/img/958dc5e8140f.jpg",
+  "after": "bench/edit_judge_set/img/c603a9eba9eb.jpg",
+  "label": "done",
+  "why": "",
+  "engine_request": "instructions='A cinematic, highly detailed scene of Vladimir Lenin wearing a futuristic cybernetic suit, falling into a fiery hellscape filled with flowing lava. He is being attacked by Hurrian-style demons in a line. One demon is striking him with a powerful fist, while another demon is grabbing hi"
+ },
+ {
+  "id": "real39",
+  "ask": "Ленин в кибернетическом костюме попадает в ад и дерётся на кулаках с чертями",
+  "before": "bench/edit_judge_set/img/1a0c362b08ea.jpg",
+  "after": "bench/edit_judge_set/img/7b66d0c41f2c.jpg",
+  "label": "done",
+  "why": "",
+  "engine_request": "instructions='A cinematic, highly detailed scene of Vladimir Lenin wearing a futuristic cybernetic suit, falling into a fiery hellscape filled with flowing lava. He is being attacked by Hurrian-style demons in a line. One demon is striking him with a powerful fist, while another demon is grabbing hi"
+ },
+ {
+  "id": "real41",
+  "ask": "Ленин в кибернетическом костюме попадает в ад и дерётся на кулаках с чертями посреди лавы: одного бьёт к",
+  "before": "bench/edit_judge_set/img/5749b2079402.jpg",
+  "after": "bench/edit_judge_set/img/609697e37559.jpg",
+  "label": "not",
+  "why": "armour turned gold, not asked",
+  "engine_request": "instructions=\"A cinematic, highly detailed action scene of Vladimir Lenin wearing a futuristic cybernetic suit, falling through a fiery hellscape with flowing lava. He is actively fighting imps: one imp's face is being struck by Lenin's powerful fist, and another imp's neck is being crushed/squeezed"
+ },
+ {
+  "id": "real42",
+  "ask": "Ленин в кибернетическом костюме попадает в ад и дерётся на кулаках с чертями посреди лавы: одного бьёт к",
+  "before": "bench/edit_judge_set/img/29d608c8a716.jpg",
+  "after": "bench/edit_judge_set/img/50dc46ad7ddd.jpg",
+  "label": "done",
+  "why": "",
+  "engine_request": "instructions=\"A cinematic, highly detailed action scene of Vladimir Lenin wearing a futuristic cybernetic suit, falling through a fiery hellscape with flowing lava. He is actively fighting imps: one imp's face is being struck by Lenin's powerful fist, and another imp's neck is being crushed/squeezed"
+ },
+ {
+  "id": "real43",
+  "ask": "Ленин в кибернетическом костюме попадает в ад и дерётся на кулаках с чертями",
+  "before": "bench/edit_judge_set/img/a0d22d0eeb65.jpg",
+  "after": "bench/edit_judge_set/img/faa32febde62.jpg",
+  "label": "done",
+  "why": "",
+  "engine_request": "instructions=\"A cinematic, highly detailed action scene of Vladimir Lenin wearing a futuristic steel cybernetic armor, falling through a fiery hellscape with flowing lava. He is actively fighting imps: one imp's face is being struck by Lenin's powerful fist, and another imp's neck is being crushed/s"
+ },
+ {
+  "id": "real44",
+  "ask": "Нарисуй кибер-Ленина в стальной кибер-броне в аду среди лавы: он одной рукой крепко схватил демона за горло и душит его,",
+  "before": "bench/edit_judge_set/img/916d1b7f70bd.jpg",
+  "after": "bench/edit_judge_set/img/f47cd61b8b33.jpg",
+  "label": "done",
+  "why": "",
+  "engine_request": "instructions='A cinematic, highly detailed action scene of Vladimir Lenin wearing futuristic steel cybernetic armor, falling through a fiery hellscape with flowing lava. He is actively fighting imps: with one hand he has firmly gripped a demon by the throat and is choking him, and with the other han"
+ },
+ {
+  "id": "real45",
+  "ask": "убери часы с руки",
+  "before": "bench/edit_judge_set/img/78ef88035345.jpg",
+  "after": "bench/edit_judge_set/img/c965793293fa.jpg",
+  "label": "not",
+  "why": "a new watch drawn",
+  "engine_request": "region='the watch on his left wrist' instructions='a bare wrist without a watch'"
+ },
+ {
+  "id": "real46",
+  "ask": "убери часы с руки",
+  "before": "bench/edit_judge_set/img/c965793293fa.jpg",
+  "after": "bench/edit_judge_set/img/3a1b58528687.jpg",
+  "label": "not",
+  "why": "watch still there",
+  "engine_request": "region='the watch on his left wrist' instructions='a bare wrist without any watch or strap'"
+ },
+ {
+  "id": "real47",
+  "ask": "убери часы",
+  "before": "bench/edit_judge_set/img/e8559f7ede25.jpg",
+  "after": "bench/edit_judge_set/img/27c54e5ca0b6.jpg",
+  "label": "not",
+  "why": "a new strap drawn",
+  "engine_request": "region='the watch on his wrist' instructions='a bare wrist without any watch or strap'"
+ },
+ {
+  "id": "real48",
+  "ask": "убери часы",
+  "before": "bench/edit_judge_set/img/93508c0f28dd.jpg",
+  "after": "bench/edit_judge_set/img/70293a9f5c6c.jpg",
+  "label": "not",
+  "why": "a new watch drawn",
+  "engine_request": "region='watch on his left wrist' instructions='a bare wrist without any watch or strap'"
+ },
+ {
+  "id": "real49",
+  "ask": "убери часы",
+  "before": "bench/edit_judge_set/img/19d2543eb8de.jpg",
+  "after": "bench/edit_judge_set/img/9c1dfff86f7c.jpg",
+  "label": "done",
+  "why": "",
+  "engine_request": "region='watch on the left wrist' instructions='a bare wrist with skin, no watch and no strap'"
+ },
+ {
+  "id": "real50",
+  "ask": "убери часы с руки",
+  "before": "bench/edit_judge_set/img/27feb80b6743.jpg",
+  "after": "bench/edit_judge_set/img/83f6e38bf6c2.jpg",
+  "label": "partial",
+  "why": "orange skin patch where the watch was",
+  "engine_request": "region='watch on the left wrist' instructions='a bare wrist with skin, no watch and no strap'"
+ },
+ {
+  "id": "real51",
+  "ask": "убери часы с руки",
+  "before": "bench/edit_judge_set/img/27feb80b6743.jpg",
+  "after": "bench/edit_judge_set/img/635c11eeb433.jpg",
+  "label": "partial",
+  "why": "orange skin patch",
+  "engine_request": "region='watch on the left wrist' instructions='a bare wrist with skin, no watch, no strap, no smartwatch, just human skin and hair'"
+ },
+ {
+  "id": "real52",
+  "ask": "убери очки",
+  "before": "bench/edit_judge_set/img/1260813ce638.jpg",
+  "after": "bench/edit_judge_set/img/2a03be353b58.jpg",
+  "label": "done",
+  "why": "",
+  "engine_request": "region='glasses' instructions='no glasses, just eyes and face'"
+ },
+ {
+  "id": "real53",
+  "ask": "убери очки",
+  "before": "bench/edit_judge_set/img/1260813ce638.jpg",
+  "after": "bench/edit_judge_set/img/35d21c811b93.jpg",
+  "label": "done",
+  "why": "",
+  "engine_request": "region=\"glasses on the man's face\" instructions=\"the man's face without glasses, showing his eyes and bridge of nose clearly, no frames or lenses remaining\""
+ },
+ {
+  "id": "real54",
+  "ask": "убери бороду",
+  "before": "bench/edit_judge_set/img/1d8a166baa10.jpg",
+  "after": "bench/edit_judge_set/img/0a2f398bc3c4.jpg",
+  "label": "partial",
+  "why": "seam across the face (relabelled after a closer look)",
+  "engine_request": "region='beard' instructions='a clean-shaven face, no beard, smooth skin on chin and cheeks'"
+ },
+ {
+  "id": "real55",
+  "ask": "убери бороду",
+  "before": "bench/edit_judge_set/img/1d8a166baa10.jpg",
+  "after": "bench/edit_judge_set/img/b3aad1165b57.jpg",
+  "label": "partial",
+  "why": "seam across the face",
+  "engine_request": "region='beard' instructions=\"a clean-shaven face, smooth skin on chin and cheeks, no beard, matching the upper part of the man's face\""
+ },
+ {
+  "id": "real56",
+  "ask": "убери часы",
+  "before": "bench/edit_judge_set/img/d54391600f24.jpg",
+  "after": "bench/edit_judge_set/img/258e3d8c487a.jpg",
+  "label": "done",
+  "why": "",
+  "engine_request": "region='watch on the hand' instructions='a bare wrist without a watch'"
+ },
+ {
+  "id": "real57",
+  "ask": "убери часы с руки",
+  "before": "bench/edit_judge_set/img/bb018ec53040.jpg",
+  "after": "bench/edit_judge_set/img/b17371551648.jpg",
+  "label": "partial",
+  "why": "orange skin patch",
+  "engine_request": "region='watch on the hand' instructions='a bare wrist without a watch'"
+ },
+ {
+  "id": "real58",
+  "ask": "убери очки",
+  "before": "bench/edit_judge_set/img/4b431decb060.jpg",
+  "after": "bench/edit_judge_set/img/147148fb2f83.jpg",
+  "label": "done",
+  "why": "",
+  "engine_request": "region='glasses' instructions='a face without glasses, showing eyes and bridge of nose clearly'"
+ },
+ {
+  "id": "real59",
+  "ask": "убери бороду",
+  "before": "bench/edit_judge_set/img/c1cdd2ec8ea8.jpg",
+  "after": "bench/edit_judge_set/img/7907581b3030.jpg",
+  "label": "done",
+  "why": "",
+  "engine_request": "region='beard' instructions='a clean-shaven face, showing only skin on the chin and cheeks without any beard or facial hair'"
+ },
+ {
+  "id": "real61",
+  "ask": "поменяй галстук на красный",
+  "before": "bench/edit_judge_set/img/39192fdcdfdf.jpg",
+  "after": "bench/edit_judge_set/img/f5862c4d83c4.jpg",
+  "label": "done",
+  "why": "",
+  "engine_request": "region='tie' instructions='a solid red tie'"
+ },
+ {
+  "id": "real63",
+  "ask": "поменяй галстук на красный",
+  "before": "bench/edit_judge_set/img/599ccc50fea4.jpg",
+  "after": "bench/edit_judge_set/img/1f5d6ebcee20.jpg",
+  "label": "done",
+  "why": "",
+  "engine_request": "region='tie' instructions='a solid red tie'"
+ },
+ {
+  "id": "real64",
+  "ask": "сделай рубашку однотонной синей",
+  "before": "bench/edit_judge_set/img/2d7fe62bcef8.jpg",
+  "after": "bench/edit_judge_set/img/aa540ed05cb7.jpg",
+  "label": "not",
+  "why": "nothing changed",
+  "engine_request": "instructions='a young Black man wearing round black-rimmed glasses and a solid blue collared shirt, adjusting his tie against a light blue background'"
+ },
+ {
+  "id": "same_watch",
+  "ask": "убери часы",
+  "before": "bench/edit_judge_set/img/256ccf00754f.jpg",
+  "after": "bench/edit_judge_set/img/256ccf00754f.jpg",
+  "label": "not",
+  "why": "nothing changed",
+  "engine_request": ""
+ },
+ {
+  "id": "same_glasses",
+  "ask": "убери очки",
+  "before": "bench/edit_judge_set/img/9fbb36db9aa7.jpg",
+  "after": "bench/edit_judge_set/img/9fbb36db9aa7.jpg",
+  "label": "not",
+  "why": "nothing changed",
+  "engine_request": ""
+ },
+ {
+  "id": "same_nose",
+  "ask": "сделай ему нос побольше",
+  "before": "bench/edit_judge_set/img/0e28f5d0ec2a.jpg",
+  "after": "bench/edit_judge_set/img/0e28f5d0ec2a.jpg",
+  "label": "not",
+  "why": "nothing changed",
+  "engine_request": ""
+ },
+ {
+  "id": "same_tie",
+  "ask": "поменяй галстук на красный",
+  "before": "bench/edit_judge_set/img/9fbb36db9aa7.jpg",
+  "after": "bench/edit_judge_set/img/9fbb36db9aa7.jpg",
+  "label": "not",
+  "why": "nothing changed",
+  "engine_request": ""
+ },
+ {
+  "id": "same_hair",
+  "ask": "перекрась волосы в рыжий",
+  "before": "bench/edit_judge_set/img/803bd0e54fa1.jpg",
+  "after": "bench/edit_judge_set/img/803bd0e54fa1.jpg",
+  "label": "not",
+  "why": "nothing changed",
+  "engine_request": ""
+ },
+ {
+  "id": "same_hat",
+  "ask": "надень белке маленькую шляпу",
+  "before": "bench/edit_judge_set/img/00cbe9f640d4.jpg",
+  "after": "bench/edit_judge_set/img/00cbe9f640d4.jpg",
+  "label": "not",
+  "why": "nothing changed",
+  "engine_request": ""
+ }
+]
