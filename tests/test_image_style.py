@@ -170,3 +170,17 @@ def test_people_who_keep_their_pose_are_edited_on_the_picture_itself():
     assert out == "plain.png" and "scene" not in seen
     out, seen = _scene_run(keeps_pose=False, faces=[])           # no face found: nothing to carry over
     assert out == "plain.png"
+
+
+def test_a_face_that_comes_out_grey_like_its_bw_reference_gets_one_more_take(monkeypatch):
+    """Lenin's 1920 b/w portrait came through once as a grey face stuck on a coloured cyborg."""
+    import types
+    takes = []
+    once = lambda c, p, instr, **kw: takes.append(kw.get("seed")) or f"take{len(takes)}.png"
+    ctx = types.SimpleNamespace(deps=types.SimpleNamespace(_edit_image_with_firered_once=once))
+    monkeypatch.setattr(IS, "_grey", lambda path, face=False: path in ("head.png", "take1.png"))
+    assert IS._scene_from_faces(ctx, I, "src.png", "he fights", ["head.png"], seed=5) == "take2.png"
+    assert len(takes) == 2 and takes[1] != 5
+    takes.clear()
+    monkeypatch.setattr(IS, "_grey", lambda path, face=False: path == "take1.png")   # colour reference
+    assert IS._scene_from_faces(ctx, I, "src.png", "he fights", ["head.png"]) == "take1.png" and len(takes) == 1

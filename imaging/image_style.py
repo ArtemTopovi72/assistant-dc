@@ -256,7 +256,34 @@ def _scene_from_faces(ctx, image_mod, image_path: str, instructions: str, heads:
               "and with whatever expression the scene needs.")
     logger.info("style: new scene with %d face reference(s): %r", len(heads), prompt[:160])
     once = dep(ctx, "_edit_image_with_firered_once", image_mod._edit_image_with_firered_once)
-    return once(ctx, image_path, prompt, reference_paths=heads, **kw)
+    out = once(ctx, image_path, prompt, reference_paths=heads, **kw)
+    # A 1920 black-and-white portrait came through once as a grey face stuck on a coloured cyborg
+    # (face saturation 92 vs 123-199 on 12 other takes): one more seed.
+    if out and _grey(heads[0]) and _grey(out, face=True):
+        logger.warning("style: the face came out grey like its b/w reference — one more take")
+        import random
+        out = once(ctx, image_path, prompt, reference_paths=heads,
+                   **{**kw, "seed": random.randint(1, 999_999_999)}) or out
+    return out
+
+
+def _grey(path: str, face: bool = False) -> bool:
+    """The picture (or its largest face) has next to no colour: mean HSV saturation under 25 for a
+    b/w photo, under 110 for a rendered face in a lit scene. Unreadable -> False."""
+    try:
+        import cv2
+        import identity_metrics
+        im = cv2.imread(path)
+        if face:
+            b = identity_metrics.face_box(path, pad=0.1)
+            if not b:
+                return False
+            x0, y0, x1, y1 = (int(v) for v in b)
+            im = im[y0:y1, x0:x1]
+        sat = float(cv2.cvtColor(im, cv2.COLOR_BGR2HSV)[..., 1].mean())
+        return sat < (110 if face else 25)
+    except Exception:
+        return False
 
 
 def restyle(ctx, image_path: str, instructions: str, *, seed=None, timeout=None):
