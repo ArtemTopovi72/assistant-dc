@@ -29,7 +29,13 @@ def main():
     out_dir = Path("runtime/photo_restyle_live")
     out_dir.mkdir(parents=True, exist_ok=True)
     instr = style_presets.STYLE_PRESETS["photo"]["prompt"]
-    print("INSTR", S.build(ctx, instr, a.picture)[0], flush=True)
+    who = S._who
+
+    def logged(ctx, path):
+        got = who(ctx, path)
+        print("WHO", got[0], flush=True)
+        return got
+    S._who = logged
     for s in range(a.seeds):
         out = S.restyle(ctx, a.picture, instr, seed=1000 + s)
         if out:

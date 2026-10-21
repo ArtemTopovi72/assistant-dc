@@ -116,5 +116,7 @@ def test_realism_neither_undresses_nor_dresses_and_keeps_the_skin_clean(monkeypa
     assert "side locks" in IS._WHO_PROMPT                         # the sleek bob came back as clumps
     instr = _run(monkeypatch, SP.preset_prompt("photo"))[1]["instr"]
     assert "Nobody is undressed or dressed" in instr and "skin-tight suit" in instr
+    # a describer pass that left the glove's colour out let it come back black (1 take of 22)
+    assert "not named above keeps exactly its colour" in instr
     p = SP.preset_prompt("photo")
     assert "pores" not in p and "no dirt" in p and "the same place" in p
