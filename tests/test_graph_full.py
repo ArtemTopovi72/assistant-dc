@@ -752,6 +752,28 @@ def test_render_asked_with_no_tool_called_gets_a_corrective_round():
           (tools3.calls, len(llm3.calls)))
 
 
+def test_an_edit_answered_with_an_offer_gets_a_corrective_round():
+    # «Ленин в кибер-костюме в аду» from the ✏️ edit menu: «Хочешь, чтобы я попробовал нарисовать
+    # эту битву заново?» and nothing made -- the «?» let it through (live 2026-10-21)
+    wants = {"needs_tool": True, "wants": ["inpaint_image"]}
+    offer = "Для такой сцены inpaint слишком слаб. Хочешь, чтобы я нарисовал её заново?"
+    llm = LLM([_asst(offer),
+               _asst("", [_tc("redraw_image", {"mode": "redraw", "instructions": "Lenin in hell"}, "c1")]),
+               _asst("Готово")])
+    tools = Tools()
+    c = _ctx()
+    c.yes_no = lambda q, text, *a, **k: "offering to do it" in q
+    _run(c, llm, tools, {"messages": [], "user_input": "edit the image: Ленин в аду"}, read=wants)
+    check("edit_offer_called_the_tool", [x[0] for x in tools.calls] == ["redraw_image"], tools.calls)
+    # a real question about the edit still ends the turn
+    c2 = _ctx()
+    c2.yes_no = lambda *a, **k: False
+    llm2 = LLM([_asst("На фото три человека. Кого из них убрать?")])
+    tools2 = Tools()
+    _run(c2, llm2, tools2, {"messages": [], "user_input": "убери человека"}, read=wants)
+    check("edit_question_left_alone", not tools2.calls and len(llm2.calls) == 1, (tools2.calls, len(llm2.calls)))
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0

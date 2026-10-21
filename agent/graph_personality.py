@@ -435,6 +435,17 @@ def _reverses_request(ctx, request: str, args: dict) -> bool:
         "the finished result counts, so does doing part of it)?", pair, True)
 
 
+def _offers_instead(ctx, request: str, reply: str) -> bool:
+    """A reply that asks leave to do what was asked («Хочешь, чтобы я попробовал нарисовать эту
+    битву заново?») rather than for a detail the request lacks. A question mark alone let such a
+    reply end a picture turn with nothing made (live 2026-10-21)."""
+    return bool(yes_no(ctx)(
+        "{text}\n\nThe REPLY did not do what the USER asked. Does it end by offering to do it, or a "
+        "version of it, and asking whether to go ahead ('want me to…?', 'shall I try…?'), rather "
+        "than asking for a detail the user has not given and that is needed to do it?",
+        f"USER: {(request or '')[:600]}\nREPLY: {(reply or '')[-800:]}"))
+
+
 def _button_done(text: str, already_called) -> bool:
     """A picture button's payload («[style_preset] …», «regenerate the image…») whose tool has run
     this turn. The free-text menus («generate an image of: …») carry the user's own words and
@@ -1480,7 +1491,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             # A render the user asked for, no tool called, no question back: «продолжи
             # это видео: кот спрыгивает…» was answered «План анимации ниже.» -- the
             # previous turn's line, imitated -- and nothing came below (2026-10-17).
-            _render = [t for t in _own_read["wants"] if t in _RENDER_TOOLS]
+            _render = [t for t in _own_read["wants"] if t in _RENDER_TOOLS or t in _EDIT_TOOLS]
             if _render and _render[0] == "generate_video":
                 # «скажи голосом: привет, я кот-космонавт» with the cat picture in chat read
                 # as a video; the round forced generate_video, which refused it as no video
@@ -1489,16 +1500,21 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                 if not dep(ctx, "asks_for_video", _tih.asks_for_video)(ctx, state):
                     _render = []
             if (corrective_count < _MAX_CORRECTIVE and not tools_ran_now and draft
-                    and _render and _own_read.get("ok") and "?" not in draft):
+                    and _render and _own_read.get("ok")
+                    and ("?" not in draft or _offers_instead(ctx, user_input, draft))):
                 corrective_count += 1
                 logger.warning("Answer to a %s request with no tool called — corrective "
                                "round %d/%d", _render[0], corrective_count, _MAX_CORRECTIVE)
                 last_message = None
                 guard_popped = True
+                _call = (_render[0] if _render[0] not in _EDIT_TOOLS else
+                         "redraw_image (it re-renders the whole picture as the scene asked for, "
+                         "the people in it kept) or inpaint_image (one area)")
                 outbound_extra = _pop_fabrication_draft(messages, (
                     f"STOP. The user asked for something {_render[0]} makes, and you "
                     "called NO tool this turn: nothing was made and nothing is below. "
-                    f"Call {_render[0]} now, or ask the one question you need answered."
+                    f"Call {_call} now, or ask the one question you need answered -- "
+                    "never ask leave to do what they already asked for."
                 ))
                 continue
             # File sibling: «Сначала я распакую архив … Начинаю поиск.» with
