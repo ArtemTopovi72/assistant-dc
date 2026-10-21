@@ -186,11 +186,13 @@ def _qa_crop_box(bbox, size, ctx_pad: float = 0.15):
 
 
 def _mask_cutout_png(orig_rgb, mask_l, bbox):
-    """STAGE-1 visual: image x mask (selected pixels kept, rest black), cropped to the
-    region. Lets the VLM verify SAM3 isolated the RIGHT object."""
+    """STAGE-1 visual: the selected pixels kept, the rest dimmed, cropped to the region.
+    Lets the VLM verify SAM3 isolated the RIGHT object. On plain black a patterned tie held
+    by fingers lost every cue of being a tie and was judged WRONG twice running
+    (bench/stage2_qa_probe.py, 2026-10-21); the dimmed surroundings keep the shirt and hand."""
     from PIL import Image
-    black = Image.new("RGB", orig_rgb.size, (0, 0, 0))
-    cut = Image.composite(orig_rgb, black, mask_l)
+    dim = Image.blend(orig_rgb, Image.new("RGB", orig_rgb.size, (0, 0, 0)), 0.75)
+    cut = Image.composite(orig_rgb, dim, mask_l)
     box = _qa_crop_box(bbox, orig_rgb.size)
     return _save_qa_png(cut.crop(box), "_QA_cutout")
 
@@ -212,15 +214,16 @@ def qa_tint(orig_rgb, result_rgb, mask_l) -> str:
 
 
 def _overlay_preview_png(orig_rgb, result_rgb, mask_l, bbox, tint: str = "red"):
-    """STAGE-2 visual: the generated edit composited back over the original, with the
-    intended mask region tinted semi-transparent red so the VLM can judge whether the
-    edit is aligned, stays inside the region, and doesn't leak outside it."""
-    from PIL import Image
+    """STAGE-2 visual: the generated edit composited back over the original, the intended
+    region OUTLINED so the VLM can judge whether the edit is aligned and stays inside it.
+    A 35% tint over the region hid what was drawn there: a larger nose under cyan read as
+    a cyan blob and was rejected WRONG every take (bench/stage2_qa_probe.py, 2026-10-21)."""
+    from PIL import Image, ImageChops, ImageFilter
     base = result_rgb if result_rgb.size == orig_rgb.size else result_rgb.resize(orig_rgb.size)
-    tint = Image.new("RGB", base.size, _TINTS.get(tint, (255, 0, 0)))
-    # 35% red only where the mask is white -> a translucent highlight of the region.
-    faded = Image.blend(base, tint, 0.35)
-    preview = Image.composite(faded, base, mask_l)
+    width = max(3, min(base.size) // 200) | 1
+    m = mask_l.convert("L").point(lambda v: 255 if v > 127 else 0)
+    edge = ImageChops.subtract(m.filter(ImageFilter.MaxFilter(width)), m.filter(ImageFilter.MinFilter(width)))
+    preview = Image.composite(Image.new("RGB", base.size, _TINTS.get(tint, (255, 0, 0))), base, edge)
     box = _qa_crop_box(bbox, orig_rgb.size)
     return _save_qa_png(preview.crop(box), "_QA_overlay")
 

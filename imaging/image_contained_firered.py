@@ -257,8 +257,9 @@ def _contained_region_mask(ctx, image_path: str, region_phrase: str, *,
         cut_png = _image._mask_cutout_png(orig, mask, (x0, y0, x1, y1))
         verdict = _image._vlm_qa_verdict(
             ctx, cut_png,
-            f"The highlighted (non-black) pixels are what was selected to edit as "
-            f"the '{region_phrase}'. Is that selection correct and complete?",
+            f"The bright (not dimmed) pixels are what was selected to edit as "
+            f"the '{region_phrase}'. Is that selection the {region_phrase} -- thin edges of "
+            f"what touches or covers it (fingers, a collar) are fine -- and not some other thing?",
             ["CORRECT", "PARTIAL", "WRONG"])
         if verdict == "WRONG":
             if not _qa_retry:
@@ -695,26 +696,32 @@ def edit_region_contained_via_firered(
         # "the red area contains no text to be removed — WRONG" on a clean fill:
         # 18/18 TextEraseBench fills rejected. A removal is judged by what is
         # left there, not by what was asked about.
-        if instruction.lstrip().lower().startswith(("remove", "completely remove", "erase")):
-            question = (f"The {_tint}-tinted area is where the {region_phrase} was removed. "
+        removal = instruction.lstrip().lower().startswith(("remove", "completely remove", "erase"))
+        if removal:
+            question = (f"The area inside the {_tint} outline is where the {region_phrase} was removed. "
                         f"Is that area now clean — nothing of it left — and does it blend "
                         f"naturally with its surroundings?")
         else:
-            question = (f"The {_tint}-tinted area is where the '{region_phrase}' was meant to change. "
+            question = (f"The area inside the {_tint} outline is where the '{region_phrase}' was meant to change. "
                         f"Did the edit land correctly — aligned, fully inside that area, with no "
                         f"changes leaking outside it?")
         verdict = _image._vlm_qa_verdict(ctx, prev_png, question, ["GOOD", "PARTIAL", "WRONG"])
         # A worn thing recoloured in part (the navy plates of an armor turned red, the
         # dark trim kept: 30% of the mask changed) takes the changed-pixel paste, still
         # clipped to the mask; two clean results were rejected as leaks.
+        # A change (not a removal) is pasted through the mask too, so it cannot leak, and the
+        # verdict sees only the result: one clean larger nose was GOOD in one run and WRONG in
+        # the next, a red tie WRONG (bench/stage2_qa_probe.py, 2026-10-21). The agent's
+        # BEFORE/AFTER inspection judges the change itself.
         if verdict in ("WRONG", "PARTIAL") and (
-                whole_region or _image._item_attributes(ctx, region_phrase).get("worn") is True):
+                not removal or whole_region
+                or _image._item_attributes(ctx, region_phrase).get("worn") is True):
             # Advisory only for a whole-region swap (clothing/hair): the composite is
             # pasted THROUGH the mask, so nothing can leak outside it, and the VLM
             # rejected a clean dress swap three times running (red tint
             # on red, then a cyan tint over the uncovered floor it read as a leak).
-            logger.info("contained-firered STAGE-2 QA: %s for %r (advisory for a "
-                        "whole-region swap -- committing)", verdict, region_phrase)
+            logger.info("contained-firered STAGE-2 QA: %s for %r (advisory for a change "
+                        "pasted through the mask -- committing)", verdict, region_phrase)
         elif verdict in ("WRONG", "PARTIAL"):
             logger.warning("contained-firered STAGE-2 QA: edit %s for %r — rejecting "
                            "(not committing this result)", verdict, region_phrase)

@@ -281,7 +281,8 @@ def test_contained_firered_stage2_worn_partial_recolour_commits():
     tile = Image.open(_photo("cf8_tile.png", w=40, h=40)).convert("RGB")
     tile.paste((220, 40, 40), (0, 0, 12, 40))
     tile.save(_TMP / "cf8_tile.png")
-    for worn, want in ((True, True), (False, False)):
+    # since 2026-10-21 every change is advisory (pasted through the mask, judged BEFORE/AFTER)
+    for worn, want in ((True, True), (False, True)):
         with _Patches(_contained_region_mask=lambda *a, **k: (orig, mask, (30, 30, 70, 70)),
                       edit_image_with_firered=lambda *a, **k: str(_TMP / "cf8_tile.png"),
                       _item_attributes=lambda c, p, _w=worn: {"worn": _w, "multi": False},
@@ -322,7 +323,8 @@ def test_contained_firered_vlm_qa_off_skips_verdict():
 
 def test_contained_firered_qa_reject_sets_reason():
     # A STAGE-2 reject must name itself, or image.inpaint falls through to the
-    # whole-frame redraw that repaints the entire picture for a local edit.
+    # whole-frame redraw that repaints the entire picture for a local edit. Only a
+    # removal is rejected: a change's verdict flipped GOOD/WRONG on one clean nose.
     ctx = Ctx()
     img = _photo("cf9.png", w=100, h=100)
     orig = Image.open(img).convert("RGB")
@@ -334,9 +336,16 @@ def test_contained_firered_qa_reject_sets_reason():
                   MASK_QA_ENABLED=True,
                   _content_aware_alpha=lambda *a, **k: Image.new("L", (40, 40), 255),   # additive edit
                   _vlm_qa_verdict=lambda *a, **k: "WRONG"):
-        out = I.edit_region_contained_via_firered(ctx, img, "the vase", "Make it blue")
+        out = I.edit_region_contained_via_firered(ctx, img, "the vase", "Remove the vase")
         check("cfirered_qa_reject_none", out is None)
         check("cfirered_qa_reject_reason", I._INPAINT_FAILURE.get("reason") == "qa_rejected")
+    with _Patches(_contained_region_mask=lambda *a, **k: (orig, mask, (30, 30, 70, 70)),
+                  edit_image_with_firered=lambda *a, **k: tile_out,
+                  MASK_QA_ENABLED=True,
+                  _content_aware_alpha=lambda *a, **k: Image.new("L", (40, 40), 255),
+                  _vlm_qa_verdict=lambda *a, **k: "WRONG"):
+        out = I.edit_region_contained_via_firered(ctx, img, "the nose", "a larger nose")
+        check("cfirered_change_qa_advisory", out is not None)
     # A whole-region swap (clothing/hair) is pasted through the mask, so the VLM's
     # WRONG is advisory there -- it rejected a clean dress swap 3x live.
     with _Patches(_contained_region_mask=lambda *a, **k: (orig, mask, (30, 30, 70, 70)),
