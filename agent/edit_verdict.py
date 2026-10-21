@@ -34,14 +34,17 @@ def _verdict(facts: dict) -> str:
 
 
 def _unchanged(before: str, after: str) -> bool:
-    """The two pictures are the same pixels (a no-op edit). Measured, not asked: the model wrote
-    «nothing» changed and still answered the asked change visible (2026-10-21)."""
-    from PIL import Image, ImageChops, ImageStat
+    """No area of the picture changed (a no-op edit), measured, not asked: the model wrote
+    «nothing» changed and still answered the asked change visible (2026-10-21). A local
+    change is looked for, not a mean: a nose edit moved the whole-frame mean by 0.16."""
+    import identity_metrics
+    from PIL import Image
     try:
-        a, b = (Image.open(p).convert("RGB").resize((256, 256)) for p in (before, after))
-        return max(ImageStat.Stat(ImageChops.difference(a, b)).mean) < 1.0
+        for p in (before, after):
+            Image.open(p).verify()
     except Exception:
         return False
+    return identity_metrics.changed_box(before, after) is None
 
 
 def judge(ctx, before: str, after: str, request: str) -> dict:
