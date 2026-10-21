@@ -42,13 +42,12 @@ def _translate_line(line: str, lang: str) -> str:
     except Exception:
         return line
     m = re.match(r"^(\W*?)(<b>)?([A-Za-z][^<>]*?)(…|\.\.\.)?(</b>)?(…|\.\.\.)?\s*$", line)
-    if not m or _CYR.search(line):
-        return line
-    core = m.group(3).strip()
-    ru = stages.translate(core, lang)
-    if ru == core:
-        return line
-    return line.replace(core, ru, 1)
+    if m and not _CYR.search(line):
+        core = m.group(3).strip()
+        ru = stages.translate(core, lang)
+        if ru != core:
+            return line.replace(core, ru, 1)
+    return stages.translate_within(line, lang)
 
 
 def untranslated(text: str) -> list:

@@ -168,6 +168,23 @@ _OZON = [
 ]
 
 
+_WITHIN: dict = {}
+
+
+def translate_within(text: str, lang: str = DEFAULT_LANG) -> str:
+    """Known stages of two words or more translated wherever they stand in `text`: «⏳ Removing from
+    the picture · 0:35», a progress bar after the stage, the admin panel's task line -- the
+    whole-line translation let all of these through in English (live 2026-10-21). One-word stages
+    (Step, Piece) are left: as words they turn up in ordinary text."""
+    if not text or not lang or lang == DEFAULT_LANG:
+        return text
+    rx = _WITHIN.get(lang)
+    if rx is None:
+        keys = sorted((k for k, v in _STAGES.items() if lang in v and len(k.split()) >= 2), key=len, reverse=True)
+        rx = _WITHIN[lang] = re.compile(r"(?<![A-Za-z])(" + "|".join(map(re.escape, keys)) + r")(?![A-Za-z])") if keys else False
+    return rx.sub(lambda m: _STAGES[m.group(1)][lang], text) if rx else text
+
+
 def _pick(table: dict, key: str, lang: str) -> str | None:
     forms = table.get(key)
     if not forms:

@@ -348,6 +348,15 @@ untranslated = [k for table in (stages._STAGES, stages._PHASES)
 check("no entry was left as English in the Russian slot",
       not untranslated, "; ".join(untranslated))
 
+# A stage inside a status line («⏳ Removing from the picture · 0:35») reached a
+# Russian chat in English: only whole-line stages were translated (live 2026-10-21).
+import ui_lang_guard as G
+check("a stage inside a status line is translated",
+      G.guard_text("⏳ Removing from the picture · 0:35", "ru") == "⏳ Убираю с картинки · 0:35",
+      G.guard_text("⏳ Removing from the picture · 0:35", "ru"))
+check("a one-word stage is not swapped inside ordinary words",
+      stages.translate_within("Step 3/20", "ru") == "Step 3/20")
+
 print()
 print(f"{OK} passed, {BAD} failed")
 sys.exit(1 if BAD else 0)
