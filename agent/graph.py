@@ -214,6 +214,7 @@ def vision_agent_node(ctx: Context, state: AgentState) -> AgentState:
         # image generated in an EARLIER turn would otherwise shadow the photo the
         # user just sent and the edit would land on the wrong image.
         state["image_path"] = str(work_path)
+        state["sent_photo"] = str(work_path)
     except Exception as exc:
         logger.warning("Could not persist sent image as working image: %s", exc)
 

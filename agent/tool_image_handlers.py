@@ -934,6 +934,22 @@ def _user_look(ctx, state) -> str:
     return "none"
 
 
+def _draws_the_sent_photos_people(ctx, state, source) -> bool:
+    """A photo with a face came with this request, and the request draws that person."""
+    sent = state.get("sent_photo")
+    if not sent or sent != source or not dep(ctx, "exists", os.path.exists)(sent):
+        return False
+    import identity_metrics
+    if not dep(ctx, "face_boxes", identity_metrics.face_boxes)(sent):
+        return False
+    from prompt_guard import user_words
+    said = user_words(str(state.get("user_input_original") or state.get("user_input") or "")).strip()
+    return bool(said) and yes_no(ctx)(
+        "A user sent a photo of a person together with these words: {text}\n\nIs the picture "
+        "they ask for of the person in that photo (named, or him/her/me/us/them) -- not a "
+        "picture with nobody from the photo in it?", said, default=True)
+
+
 def _handle_generate_image(ctx, state, args: dict) -> str:
     import tools as _t   # the render seam is owned by tools; read it at CALL time
     description = (args.get("description") or "").strip()
@@ -962,6 +978,13 @@ def _handle_generate_image(ctx, state, args: dict) -> str:
             "if the WHOLE picture must be re-rendered). Do not call generate_image again "
             "for this turn."
         )
+
+    # «Нарисуй кибер-Ленина … душит демона» sent WITH Lenin's photo was drawn from scratch:
+    # a stranger's face and invented signs (live 2026-10-21). The people of a photo sent
+    # with the request are drawn from their faces -- redraw_image's new-scene path.
+    if _draws_the_sent_photos_people(ctx, state, source):
+        logger.info("generate_image -> redraw_image: the photo sent with the request shows who to draw")
+        return dep(ctx, "_handle_redraw_image", _handle_redraw_image)(ctx, state, {"instructions": description})
 
     _over = dep(ctx, "_render_budget_exhausted", _t._render_budget_exhausted)(state, "generate_image")
     if _over:

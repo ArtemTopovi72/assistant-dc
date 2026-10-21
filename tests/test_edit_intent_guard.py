@@ -110,5 +110,36 @@ msg = T._handle_generate_image(Ctx(os.path.join(TMP, "gone.png")), state,
 check("a stale path that no longer exists does not block drawing",
       len(_drawn) == 1, msg[:120])
 
+# ---- a photo of a person sent WITH «нарисуй …» ------------------------
+# «Нарисуй кибер-Ленина … душит демона» with Lenin's photo came back drawn from
+# scratch: a stranger's face and invented signs (live 2026-10-21).
+print("\nTHE PEOPLE OF A PHOTO SENT WITH THE REQUEST ARE DRAWN FROM IT")
+H_calls = []
+
+
+def _photo_ctx(faces, about_them):
+    c = Ctx(IMG)
+    c.deps.face_boxes = lambda path, **k: faces
+    c.deps._handle_redraw_image = lambda ctx, state, args: H_calls.append(args) or "redrawn"
+    c.yes_no = lambda q, text, **k: about_them
+    return c
+
+
+_drawn.clear()
+state = {"image_path": IMG, "sent_photo": IMG, "user_input": "нарисуй его в аду, душит демона"}
+msg = T._handle_generate_image(_photo_ctx([(1, 1, 50, 50)], True), state, {"description": "Lenin in hell"})
+check("a face in the sent photo, the request is about them -> redrawn from the photo",
+      msg == "redrawn" and not _drawn and H_calls[-1]["instructions"] == "Lenin in hell", (msg, _drawn))
+_drawn.clear()
+msg = T._handle_generate_image(_photo_ctx([(1, 1, 50, 50)], False), dict(state), {"description": "a cat"})
+check("a request with nobody from the photo is drawn new", len(_drawn) == 1, msg[:120])
+_drawn.clear()
+msg = T._handle_generate_image(_photo_ctx([], True), dict(state), {"description": "a ship"})
+check("a sent photo with no face is not a person to carry over", len(_drawn) == 1, msg[:120])
+_drawn.clear()
+msg = T._handle_generate_image(_photo_ctx([(1, 1, 50, 50)], True),
+                               {"image_path": IMG, "user_input": "нарисуй его"}, {"description": "x"})
+check("a picture from an earlier turn is not 'sent with the request'", len(_drawn) == 1, msg[:120])
+
 print(f"\n{_n - _bad}/{_n} checks passed")
 sys.exit(1 if _bad else 0)
