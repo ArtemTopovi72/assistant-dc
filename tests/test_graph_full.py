@@ -805,6 +805,29 @@ def test_an_edit_is_judged_once_by_the_before_after_judge():
           str(out.get("final_answer")))
 
 
+def test_a_judged_edit_is_not_inspected_again():
+    """After the judge said DONE the model still called inspect_image, and the second look added
+    «a small spot on the forehead» to a clean result (live 2026-10-22)."""
+    class EditTools(Tools):
+        def __call__(self, ctx, state, tool_name, tool_args):
+            r = super().__call__(ctx, state, tool_name, tool_args)
+            if tool_name == "inpaint_image":
+                state["edit_before"], state["image_path"] = "before.png", "after.png"
+                return "Image edited (inpaint) and saved: after.png"
+            return r
+    tools = EditTools()
+    llm = LLM([_asst("", [_tc("inpaint_image", {"region": "glasses", "instructions": "no glasses"}, "c1")]),
+               _asst("", [_tc("inspect_image", {"check": "are the glasses gone?"}, "c2")]),
+               _asst("Очки убрал!")])
+    out = _run(_ctx(), llm, tools, {"messages": [], "user_input": "убери очки"},
+               read={"needs_tool": True, "wants": ["inpaint_image"]},
+               edit_verdict=types.SimpleNamespace(judge=lambda *a: {"verdict": "done", "why": "the glasses are gone"}))
+    check("judged_edit_not_inspected_again", [n for n, _ in tools.calls] == ["inpaint_image"], str(tools.calls))
+    tool_msgs = [m["content"] for m in out["messages"] if m.get("role") == "tool"]
+    check("judged_edit_inspect_returns_the_verdict", len(tool_msgs) == 2 and tool_msgs[1].startswith("CHECKED"),
+          str(tool_msgs)[:400])
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0

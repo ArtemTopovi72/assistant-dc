@@ -1127,6 +1127,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
     # successfully must not keep the turn muzzled.
     verification_negative = False
     edit_judged = False             # edit_verdict judged this turn's edit: inspections are not re-read
+    edit_check = ""                 # that verdict, handed back if the model asks to inspect again
     verify_corrective_sent = False
     # Tools that failed this turn and left nothing behind. Cleared per tool on a
     # later success, so a retry that works does not keep the turn muzzled.
@@ -2037,6 +2038,10 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                     "what worked and what couldn't be removed/changed; do not call an "
                     "image-editing tool again this turn."
                 )
+            elif tool_name == "inspect_image" and edit_judged and not tool_args.get("earlier"):
+                # The edit is already judged against the request. A second look added «a small
+                # spot on the forehead», «a blurred patch» to clean results (live 2026-10-22).
+                tool_result = edit_check
             else:
                 tool_result = run_tool(ctx)(ctx, state, tool_name, tool_args)
                 # Defense-in-depth: execute_tool guarantees a str, but never let a
@@ -2153,9 +2158,10 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                 if _v.get("verdict"):
                     edit_judged = True
                     verification_negative = {"not": True, "partial": "partial"}.get(_v["verdict"], False)
-                    tool_result += (f"\n\nCHECKED against the user's request (BEFORE vs AFTER): "
-                                    f"{_v['verdict'].upper()} -- {_v.get('why', '')}. This is the check of "
-                                    "the edit; tell the user what it says.")
+                    edit_check = (f"CHECKED against the user's request (BEFORE vs AFTER): "
+                                  f"{_v['verdict'].upper()} -- {_v.get('why', '')}. This is the check of "
+                                  "the edit; tell the user what it says.")
+                    tool_result += "\n\n" + edit_check
                     if verification_negative is True and state.get("last_edit_source"):
                         state["retry_from"] = state["last_edit_source"]
             if tool_name == "inspect_image" and not edit_judged:
