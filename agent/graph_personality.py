@@ -418,6 +418,11 @@ _BUTTON_TOOL = (
     # directly must not ship the full tool list either. Same prefix
     # graph_fastpath._INTENT_TOOL_MAP already narrows to for this text.
     ("change the person's outfit to", "redraw_image"),
+    # 🎨 Правка / 🧽 Убрать: the model answered «Не удалось сделать нос больше — я пробовал…»
+    # from an earlier failure in the chat, with no tool call this turn, and two corrective
+    # rounds got none either (debug chat 2026-10-21). "a|b" = one of these.
+    ("edit the image:", "inpaint_image|redraw_image"),
+    ("remove from the image:", "inpaint_image"),
 )
 
 
@@ -477,10 +482,11 @@ def _forced_button(text: str, turn_tools, already_called) -> str:
     low = (text or "").lower().lstrip()
     for prefix, tool in _BUTTON_TOOL:
         if low.startswith(prefix):
-            if tool in (already_called or ()):
+            names = tool.split("|")
+            if set(names) & set(already_called or ()):
                 return ""
             offered = {t.get("function", {}).get("name") for t in (turn_tools or [])}
-            return tool if tool in offered else ""
+            return "|".join(n for n in names if n in offered)
     return ""
 
 
@@ -1187,7 +1193,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
         # A button payload names its tool: offered whatever the read says
         # (it was a cue word before; _forced_button can only force what is sent).
         _low = (user_input or "").lower().lstrip()
-        _button = {t for p, t in _BUTTON_TOOL if _low.startswith(p)}
+        _button = {n for p, t in _BUTTON_TOOL if _low.startswith(p) for n in t.split("|")}
         if _only is not None:
             # Apply mandatory drops (search-disabled) even inside the intent subset.
             turn_tools = [t for t in _g.TOOL_SCHEMAS

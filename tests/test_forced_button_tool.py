@@ -35,6 +35,15 @@ def test_regenerate_forces_generate():
     assert G._forced_button(T._CB_CMDS["regenerate"], IMG, set()) == "generate_image"
 
 
+def test_the_edit_and_remove_menus_force_an_edit_tool():
+    """«сделай ему нос побольше» after 🎨 was answered «не удалось… я пробовал» from an earlier
+    failure in the chat, with no tool call at all (debug chat 2026-10-21)."""
+    assert set(G._forced_button(T._PROMPT_KB["edit_image"] + "make his nose bigger", IMG, set()).split("|"))         == {"inpaint_image", "redraw_image"}
+    assert G._forced_button(T._PROMPT_KB["remove_obj"] + "the watch", IMG, set()) == "inpaint_image"
+    assert G._forced_button(T._PROMPT_KB["edit_image"] + "x", IMG, {"redraw_image"}) == ""
+    assert G._forced_button(T._PROMPT_KB["edit_image"] + "x", [{"function": {"name": "redraw_image"}}], set())         == "redraw_image"
+
+
 def test_released_once_the_tool_ran():
     assert G._forced_button("[style_preset] call redraw_image", IMG, {"redraw_image"}) == ""
 
