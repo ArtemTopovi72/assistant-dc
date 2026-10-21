@@ -887,6 +887,11 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
     # Memory profiles (list/switch/create/save/compact) live in
     # gui_memory_profile.MemoryProfileMixin.
 
+    def nativeEvent(self, event_type, message):
+        import close_trace
+        close_trace.note(message)
+        return super().nativeEvent(event_type, message)
+
     # ---- drag-drop ----
     def closeEvent(self, event):
         # Logged FIRST, before any teardown that could itself fail: this is the
@@ -897,6 +902,9 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
         # -- the bot went with two unexplained closes (2026-10-17 12:32, 19:44)
         logger.info("LIFECYCLE: main window closeEvent — tearing down (spontaneous=%s)",
                     getattr(event, "spontaneous", lambda: None)())
+        if getattr(event, "spontaneous", lambda: False)():
+            import close_trace
+            logger.info("LIFECYCLE: who closed it -- %s", close_trace.describe())
         # Remember the current layout so the next launch reopens exactly like this.
         self._persist_layout()
         self.cam_timer.stop()
