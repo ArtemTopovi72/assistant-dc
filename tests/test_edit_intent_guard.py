@@ -114,6 +114,9 @@ check("a stale path that no longer exists does not block drawing",
 # «Нарисуй кибер-Ленина … душит демона» with Lenin's photo came back drawn from
 # scratch: a stranger's face and invented signs (live 2026-10-21).
 print("\nTHE PEOPLE OF A PHOTO SENT WITH THE REQUEST ARE DRAWN FROM IT")
+from models import AgentState
+check("the sent photo survives the graph (an undeclared key is dropped by StateGraph)",
+      "sent_photo" in AgentState.__annotations__)
 H_calls = []
 
 

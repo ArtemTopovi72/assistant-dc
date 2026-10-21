@@ -582,6 +582,9 @@ class AgentState(TypedDict, total=False):
     # picture an edit started from, so delivery can register the result as a
     # version of it. Undeclared, StateGraph would drop it silently.
     image_derived_from: str
+    # set by the vision node (graph.py): the photo sent WITH this message, so
+    # generate_image draws its people from it instead of from scratch.
+    sent_photo: str
 
     # set by the deep_research tool handler (tools.py)
     research_report: str
