@@ -741,7 +741,8 @@ class TaskRunnerMixin:
         _trace = turn_trace.start(chat=chat_id, task=task.task_id[:8], user=uname,
                                   text=(task.user_text or "")[:1500])
         try:
-            with _chatlog.bind(chat_id), tg_transport.replying_to(chat_id, task.reply_to, asked=task.user_text):
+            import config as _cfg, debug_user as _dbg, klein as _klein
+            with _chatlog.bind(chat_id), tg_transport.replying_to(chat_id, task.reply_to, asked=task.user_text),                     _klein.steps_for_task(_cfg.KLEIN_DEBUG_STEPS if _dbg.is_debug(chat_id) else None):
                 self._run_task_inner(task, sess, user, uname, lang, ctx, graph)
             _outcome = "cancelled" if task.task_id in self._cancelled else "done"
         finally:

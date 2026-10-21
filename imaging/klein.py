@@ -9,6 +9,8 @@ only with that table; a bare prose prompt writes gibberish (bench/klein_vs_ideog
 Graphs are built here, not loaded from JSON: the distilled model samples 16 steps at
 cfg 1, and an edit adds a reference latent plus the Consistency LoRA.
 """
+import contextlib
+import contextvars
 import json
 import re
 from typing import Optional
@@ -141,6 +143,23 @@ def _base(prompt: str, lora: Optional[tuple]) -> dict:
     return wf
 
 
+_STEPS = contextvars.ContextVar("klein_steps", default=None)
+
+
+@contextlib.contextmanager
+def steps_for_task(n: Optional[int]):
+    """Every Klein render inside the block samples `n` steps (None: KLEIN_STEPS)."""
+    tok = _STEPS.set(n)
+    try:
+        yield
+    finally:
+        _STEPS.reset(tok)
+
+
+def _steps(steps: Optional[int]) -> int:
+    return steps or _STEPS.get() or KLEIN_STEPS
+
+
 def _sampler(positive, negative, latent, seed: int, steps: int) -> dict:
     return {"class_type": "KSampler", "inputs": {
         "model": [N_SHIFT, 0], "positive": positive, "negative": negative, "latent_image": latent,
@@ -154,7 +173,7 @@ def t2i_workflow(prompt: str, width: int, height: int, seed: int, *, steps: Opti
     wf[N_LATENT] = {"class_type": "EmptyFlux2LatentImage",
                     "inputs": {"width": int(width), "height": int(height), "batch_size": 1}}
     wf[N_SHIFT]["inputs"].update(width=int(width), height=int(height))
-    wf[N_SAMPLER] = _sampler([N_POS, 0], [N_NEG, 0], [N_LATENT, 0], seed, steps or KLEIN_STEPS)
+    wf[N_SAMPLER] = _sampler([N_POS, 0], [N_NEG, 0], [N_LATENT, 0], seed, _steps(steps))
     return wf
 
 
@@ -186,5 +205,5 @@ def edit_workflow(image_name: str, instruction: str, seed: int, *, megapixels: f
     wf[N_LATENT] = {"class_type": "EmptyFlux2LatentImage",
                     "inputs": {"width": [N_SIZE, 0], "height": [N_SIZE, 1], "batch_size": 1}}
     wf[N_SHIFT]["inputs"].update(width=[N_SIZE, 0], height=[N_SIZE, 1])
-    wf[N_SAMPLER] = _sampler([N_REF, 0], [N_REF, 1], [N_LATENT, 0], seed, steps or KLEIN_STEPS)
+    wf[N_SAMPLER] = _sampler([N_REF, 0], [N_REF, 1], [N_LATENT, 0], seed, _steps(steps))
     return wf

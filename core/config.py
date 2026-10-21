@@ -275,8 +275,10 @@ IMAGE_ENGINE = "ideogram4"
 KLEIN_UNET = os.getenv("KLEIN_UNET", "flux3-image-klein-int8-convrot.safetensors")
 KLEIN_CLIP = os.getenv("KLEIN_CLIP", "qwen3vl_4b_int8_convrot.safetensors")
 KLEIN_VAE = os.getenv("KLEIN_VAE", "flux2-vae.safetensors")
-# 40 steps on every draw and edit: the owner traded the 16-step speed for detail (2026-10-21).
-KLEIN_STEPS = _env_int("KLEIN_STEPS", 40)
+# Steps for every draw and edit: 32 for users, 16 in the debug chat where speed matters
+# more than detail (owner, 2026-10-21; the distilled model's own setting is 16).
+KLEIN_STEPS = _env_int("KLEIN_STEPS", 32)
+KLEIN_DEBUG_STEPS = _env_int("KLEIN_DEBUG_STEPS", 16)
 # ausboss Consistency LoRA: keeps an edit on the original's frame (a snow edit kept the pier
 # instead of swapping the scene for a forest). Distilled model, strength 1.0.
 KLEIN_EDIT_LORA = os.getenv("KLEIN_EDIT_LORA", "flux-3-image-klein-consistency.safetensors")
