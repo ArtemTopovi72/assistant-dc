@@ -19,9 +19,13 @@ import tg_bot as T
 T.redirect_data_dir(_DATA_DIR)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from fakes import reads   # the model's read of the words (agent/intent.py)
+# Whether the chat leaves the picture open is one read of the message with the chat lines
+# before it (tg_bot._message_subject, scored on bench/which_picture_eval.py); scripted here.
 _R = types.SimpleNamespace(**reads(read={"describe the image": {"is_question": True, "about_picture": True},
                                          "now remove all the lettering from the background":
-                                             {"needs_tool": True, "wants": ["inpaint_image"]}}.get))
+                                             {"needs_tool": True, "wants": ["inpaint_image"]}}.get,
+                                   pick=lambda q, blob: "unclear" if blob.startswith("MESSAGE: describe")
+                                   else "current"))
 # The dispatch harness from test_tg_image_targeting (that module exits at
 # import, so its helpers are re-bound here by source, not imported).
 _src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_tg_image_targeting.py"), encoding="utf-8").read()
@@ -53,10 +57,42 @@ bot._dispatch(H.msg("now remove all the lettering from the background"))
 H.settle(bot)
 check("no 'Which picture?' when the newest picture is in play", "Which picture" not in H.texts(bot), H.texts(bot)[:120])
 check("the instruction is pushed", len(bot.pushed) == 1, [p.user_text for p in bot.pushed])
-check("...targeting the picture in play (armed for the task like a button press)",
-      bot._get_session(H.CID).target_image == id_dress, bot._get_session(H.CID).target_image)
+# The chat leaves it open -> a real choice.
+s = bot._get_session(H.CID); s.turn_image = ""; s.target_image = ""; bot._store.put(s)
+bot.pushed.clear(); bot.sent.clear()
+bot._dispatch(H.msg("describe the image")); H.settle(bot)
+check("without a picture in play, several roots still ask", "Which picture" in H.texts(bot) and not bot.pushed)
 
-# The previous turn had no picture -> still a real choice.
+src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_tg_image_targeting.py"), encoding="utf-8").read()
+_helpers = _src.split("bot = make_bot()")[0].split("OK = BAD = 0")[1]
+H = types.ModuleType("H"); H.__dict__.update(dict(sys=sys, os=os, types=types, tempfile=tempfile, T=T, _R=_R))
+exec(_helpers, H.__dict__)
+
+OK = BAD = 0
+def check(name, cond, extra=""):
+    global OK, BAD
+    OK += bool(cond); BAD += (not cond)
+    print(("PASS  " if cond else "FAIL  ") + name, ("  " + str(extra)) if (extra and not cond) else "")
+
+print("\n" + "=" * 70); print("PICTURE IN PLAY"); print("=" * 70)
+bot = H.make_bot()
+bot.reads = _R
+s = bot._get_session(H.CID); s.clear_context()
+car, receipt, girl, dress = (H.make_png(n) for n in ("car.png", "receipt.png", "girl.png", "dress.png"))
+id_car = T._log_image(s, car, msg_id=1, label="draw a car", src="bot")
+T._log_image(s, receipt, msg_id=2, label="receipt", src="user")
+id_girl = T._log_image(s, girl, msg_id=3, label="photo", src="user")
+id_dress = T._log_image(s, dress, msg_id=4, label="black dress", src="bot", parent=id_girl)
+s.last_image_path = dress; s.lang = "en"
+s.turn_image = id_dress            # the previous turn delivered the dress edit
+bot._store.put(s)
+
+bot.pushed.clear(); bot.sent.clear()
+bot._dispatch(H.msg("now remove all the lettering from the background"))
+H.settle(bot)
+check("no 'Which picture?' when the newest picture is in play", "Which picture" not in H.texts(bot), H.texts(bot)[:120])
+check("the instruction is pushed", len(bot.pushed) == 1, [p.user_text for p in bot.pushed])
+# The chat leaves it open -> a real choice.
 s = bot._get_session(H.CID); s.turn_image = ""; s.target_image = ""; bot._store.put(s)
 bot.pushed.clear(); bot.sent.clear()
 bot._dispatch(H.msg("describe the image")); H.settle(bot)
