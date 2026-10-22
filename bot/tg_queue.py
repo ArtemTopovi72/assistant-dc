@@ -460,8 +460,9 @@ class QueueMixin:
 
     def _debounce_loop(self, chat_id: int):
         q = self._queues[chat_id]
+        carry = None
         while True:
-            try: first = q.get(timeout=self.settings.get("_WORKER_IDLE_S", tg_bot._WORKER_IDLE_S))
+            try: first, carry = (carry or q.get(timeout=self.settings.get("_WORKER_IDLE_S", tg_bot._WORKER_IDLE_S))), None
             except _pyqueue.Empty:
                 with self._mgmt_lock:
                     if not q.empty():
@@ -496,8 +497,15 @@ class QueueMixin:
             while True:
                 left = min(deadline, t_first + _cap() + extra) - time.monotonic()
                 if left <= 0: break
-                try: batch.append(q.get(timeout=left))
+                try: nxt = q.get(timeout=left)
                 except _pyqueue.Empty: break
+                # Sent further apart than any window waits: two turns that a downtime delivered together
+                # (a link at 14:33 and a screenshot at 14:57 got one reply about the screenshot, 2026-10-22).
+                s0, s1 = batch[-1].get("_sent_ts"), nxt.get("_sent_ts")
+                if s0 and s1 and abs(s1 - s0) > tg_bot._DEBOUNCE_FWD_MAX_S:
+                    carry = nxt
+                    break
+                batch.append(nxt)
                 extra = max(extra, _lag(batch[-1]))
                 deadline = time.monotonic() + _quiet() + _lag(batch[-1])
             # The batch is a turn of its own (a forwarded voice + кружки are
