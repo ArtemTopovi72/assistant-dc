@@ -393,6 +393,9 @@ class SongsMixin:
                     ctx, _steer.with_notes(topic, notes), song_lang(topic, lang, ctx=ctx), duration_s=duration, prefs=prefs)
             if given:                   # their own words stay; wishes steer the sound
                 caption = dict(caption, lyrics=structure_lyrics(ctx, given))
+                if auto.get("duration"):    # all of their words are sung (see the Auto note below)
+                    _n = sum(1 for ln in caption["lyrics"].splitlines() if ln.strip() and not ln.strip().startswith("["))
+                    duration = max(duration, min(240, int(15 + 5.2 * _n)))
             elif caption.get("lyrics") and not cancelled() and not prefs.get("instrumental"):
                 # (an instrumental's lyric is bare section tags: the polisher would write
                 # words under them and the 🎹 Instrumental song would come back sung)

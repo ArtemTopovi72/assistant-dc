@@ -964,16 +964,18 @@ class ResolveMixin:
                                        f"[songs] typed request -> song flow: {raw[:80]}",
                                        (user.name if user else str(chat_id)))
                     _topic = self._as_request(item, raw)    # «спой про это» keeps «это»
-                    if _last_song:
+                    if _tg_songs.looks_like_lyrics(raw.partition("\n")[2]):
+                        # the words typed under the request itself -- first: right after a
+                        # song they were taken for «rewrite the last one» and the bot sang
+                        # its own lyric, three verses short (2026-10-22)
+                        _head, _, _body = raw.partition("\n")
+                        _topic = _head + "\n" + _tg_songs.LYRICS_MARK + _body
+                    elif _last_song:
                         _topic = _tg_songs.followup_topic(raw, _last_song, ctx=self.reads)
                     elif _tg_songs.refers_to_previous_text(raw, ctx=self.reads):
                         _prev = self._last_bot_text(sess)
                         if _tg_songs.looks_like_lyrics(_prev):
                             _topic = _tg_songs.LYRICS_MARK + _prev
-                    elif _tg_songs.looks_like_lyrics(raw.partition("\n")[2]):
-                        # the words typed under the request itself
-                        _head, _, _body = raw.partition("\n")
-                        _topic = _head + "\n" + _tg_songs.LYRICS_MARK + _body
                     texts.append(_tg_songs.song_payload(
                         _topic, _tg_songs.snap_duration(_secs)))
                     continue
