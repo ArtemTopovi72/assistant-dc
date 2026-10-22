@@ -520,7 +520,9 @@ _CRITIC = (
     "of shown through concrete, sensory detail; verses that do not move the story or "
     "add new detail; a chorus that is not the emotional summary or has no memorable "
     "hook line; a bridge that brings no new angle; images that contradict each other. "
-    "Name the line number in each problem. Return JSON {\"score\": 0-10, "
+    "A fact the theme gives about the person that the lyric leaves out or turns into a "
+    "generic phrase is a problem too. "
+    "Name the line number in each problem and the replacement line. Return JSON {\"score\": 0-10, "
     "\"problems\": [\"...\"]}; an empty list when it is good.")
 
 _CRITIC_SCHEMA = {"type": "object", "properties": {
@@ -606,7 +608,7 @@ _PLAN = (
     "theme (a joke, a funny pair of characters, a quarrel over money) is a light, "
     "plain-spoken story song with wordplay and a punchline, never a solemn poem; a sad "
     "theme is sad. The people, things and events are the ones the theme names; notes "
-    "about the music or the arrangement are not lyric content. Then give: the HOOK -- the title line, under 10 words, that "
+    "about the music or the arrangement are not lyric content. A song for a named person: list every fact the theme gives about them (work, plans, family, habits, jokes) and give each its own concrete line in a verse -- the facts are the song, the name is in the chorus. Then give: the HOOK -- the title line, under 10 words, that "
     "sums up the song's feeling; the story: what verse 1 shows, what verse 2 adds "
     "(new detail, time moves on), what the bridge turns to (a new angle); 6-10 "
     "concrete sensory images (things one can see, hear, touch -- object writing) to "

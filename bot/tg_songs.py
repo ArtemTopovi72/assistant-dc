@@ -220,6 +220,21 @@ def _polished(ctx, lyrics: str, has_stage: bool = True, singer: str = "", topic:
     return out
 
 
+def _written(ctx, topic: str, lang: str, singer: str = "", has_stage: bool = True) -> str:
+    """The lyric lyrics_craft.write makes for a theme; '' when it fails (the caller polishes the
+    songwriter's draft instead)."""
+    try:
+        import lyrics_craft
+        if has_stage:
+            ctx.set_stage("Writing the lyrics")
+        name = "Russian" if lang == "ru" or lyrics_craft._lang_name(topic) == "Russian" else "English"
+        out = (lyrics_craft.write(ctx, topic, name, singer=singer) or {}).get("text") or ""
+    except Exception:
+        tg_bot.logger.warning("[songs] writing the lyrics failed; polishing the songwriter's draft", exc_info=True)
+        return ""
+    return out if _re.search(r"^\s*\[[^\]]+\]\s*$", out, _re.M) else ""
+
+
 def snap_duration(secs: int) -> int:
     """The nearest length the engine offers, or 0 when nothing was asked."""
     if not secs:
@@ -376,7 +391,17 @@ class SongsMixin:
                 # words under them and the 🎹 Instrumental song would come back sung)
                 # Words the bot wrote itself go through the checks and revisions
                 # of ✨ Improve lyrics before they are sung.
-                _words = _polished(ctx, caption["lyrics"], _has_stage, prefs.get("vocal", ""), topic)
+                # A song asked for in words gets ✍️'s plan + drafts + duel, not one songwriter
+                # draft polished: the birthday song for a nano-electronics friend came back
+                # «Ток через фильтр пролетит», sense 4/10 in every round (2026-10-22).
+                _words = _written(ctx, topic, song_lang(topic, lang, ctx=ctx), prefs.get("vocal", ""), _has_stage) \
+                    or _polished(ctx, caption["lyrics"], _has_stage, prefs.get("vocal", ""), topic)
+                if auto.get("duration") and _words != caption["lyrics"]:
+                    # On Auto the written song sets the length: cut to the picked 60 s, a
+                    # birthday song kept one verse and lost every fact (2026-10-22).
+                    # YuE2 sings ~15 s intro + ~5.2 s a line (bench/yue2_seconds_per_line.py).
+                    _n = sum(1 for ln in _words.splitlines() if ln.strip() and not ln.strip().startswith("["))
+                    duration = max(duration, min(240, int(15 + 5.2 * _n)))
                 _cap = _music_mod.line_budget(duration)[2]       # polish rounds grow the lyric past the slot
                 caption = dict(caption, lyrics=_music_mod.trim_to_lines(_words, _cap) if _cap else _words)
             if cancelled():
