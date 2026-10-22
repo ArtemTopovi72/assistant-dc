@@ -475,6 +475,39 @@ def _blend_region(crop_bg, patch, mcrop, *, harmonize=True, poisson=True,
     return Image.fromarray(final)
 
 
+def _grow_to_attached_change(orig, res, mask, *, thresh: int = 45, max_ratio: float = 1.5):
+    """``mask`` plus the strong changes that touch it: an added thing runs past its box.
+
+    The annotator's box held the lenses, and the lock cut the glasses' temple and
+    blurred a lens into a rectangle (2026-10-22). Drift outside the boxes is faint and
+    stays locked; a change strong enough to be drawn and joined to a box is the edit
+    itself. More attached change than ``max_ratio`` x the boxes is a re-render: no growth.
+    """
+    import numpy as np
+    import cv2
+    from PIL import Image
+    a = np.asarray(orig, dtype=np.int16)
+    b = np.asarray(res, dtype=np.int16)
+    box = np.asarray(mask) > 0
+    strong = (np.abs(a - b).max(axis=2) > thresh).astype(np.uint8)
+    # specks go by size, not by an opening: a temple is 2-3 px wide and an opening erased it
+    n, lbl, stats, _ = cv2.connectedComponentsWithStats(strong, connectivity=8)
+    touching = [i for i in np.unique(lbl[box & (lbl > 0)]) if stats[i, cv2.CC_STAT_AREA] >= 30]
+    grow = np.isin(lbl, touching) & ~box
+    if not grow.any() or grow.sum() > max_ratio * box.sum():
+        return mask
+    keep = cv2.morphologyEx(((box | grow) * 255).astype(np.uint8), cv2.MORPH_CLOSE, np.ones((15, 15), np.uint8))
+    holes = keep.copy()
+    cv2.floodFill(holes, np.zeros((holes.shape[0] + 2, holes.shape[1] + 2), np.uint8), (0, 0), 255)
+    # wider than the feather band: _feathered_alpha erodes by its radius and ate a thin temple
+    k = max(4, min(min(box.shape) // 40, 24)) + 7
+    grow = cv2.dilate(((keep > 0) | (holes == 0)).astype(np.uint8), np.ones((k, k), np.uint8)) > 0
+    grow &= ~box
+    logger.info("lock_outside_boxes: kept %.1f%% of the frame the edit drew past its boxes",
+                100.0 * grow.mean())
+    return Image.fromarray(((box | grow) * 255).astype(np.uint8), "L")
+
+
 def lock_outside_boxes(orig_path: str, result_path: str, boxes, *, pad: int = 30) -> bool:
     """Keep the edit only inside its boxes: pixels outside (box + ``pad`` grid units) come from the original.
 
@@ -496,6 +529,7 @@ def lock_outside_boxes(orig_path: str, result_path: str, boxes, *, pad: int = 30
     for y0, x0, y1, x1 in boxes:
         d.rectangle([max(0, (x0 - pad) * w // 1000), max(0, (y0 - pad) * h // 1000),
                      min(w, (x1 + pad) * w // 1000), min(h, (y1 + pad) * h // 1000)], fill=255)
+    m = _grow_to_attached_change(orig, res, m)
     alpha = _feathered_alpha(m, w, h)
     Image.composite(res, orig, alpha).save(result_path)
     logger.info("lock_outside_boxes: %d box(es), pad %d", len(boxes), pad)
