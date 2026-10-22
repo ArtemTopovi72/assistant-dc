@@ -1360,7 +1360,9 @@ def yue2_style(style: str, max_chars: int = 300) -> str:
     text = re.sub(r"(?i)\b(%s)\s*[:,]?" % "|".join(map(re.escape, CAPTION_HEADINGS)), ". ", style or "")
     # Any other "Label:" the songwriter invents (Basic Attributes:, Application
     # Scenarios & Imagery:) is a heading too, not a tag.
-    text = re.sub(r"(^|[.;,\n])\s*[A-Z][\w&/ -]{2,40}:", ". ", text)
+    # «**Basic Attributes**:», «- Global Emotional Progression:» reached YuE2 verbatim (2026-10-22)
+    text = re.sub(r"[*#_]+", " ", text)
+    text = re.sub(r"(^|[.;,\n])\s*-?\s*[A-Z][\w&/ -]{2,40}:", ". ", text)
     tags, seen = [], set()
     for frag in re.split(r"[.;,\n]+|\bwith\b|\band\b", text):
         frag = re.sub(r"^((the|a|an|it|%s)(\s+|$))+" % _CAPTION_VERBS, "", frag.strip(), flags=re.I).strip(" -")
@@ -1399,8 +1401,11 @@ def yue2_tags(ctx, style: str) -> str:
             ", ".join(tags), temperature=0.0, max_tokens=200)
         kept = [str(t).strip() for t in ((safe_json_from_llm(raw, ["tags"]) or {}).get("tags") or []) if str(t).strip()]
         must = [t for t in tags if re.search(r"(?i)\bbpm\b|\bkey\b|\bvocal\b|\bvoice\b", t)]
-        if 3 <= len(kept) <= 12 and all(m.lower() in (k.lower() for k in kept) for m in must):
-            return ", ".join(kept)
+        if len(kept) >= 3:
+            # a dropped BPM/vocal tag is put back rather than the whole cleanup thrown away:
+            # rejected, the emotional-arc prose went to YuE2 (2026-10-22)
+            low = [k.lower() for k in kept]
+            return ", ".join([m for m in must if m.lower() not in low] + kept[:12])
     except Exception:                                            # noqa: BLE001 -- the uncleaned list still works
         logger.warning("YuE2 style cleanup failed", exc_info=True)
     return style

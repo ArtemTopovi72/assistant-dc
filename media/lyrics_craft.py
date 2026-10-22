@@ -540,7 +540,9 @@ def _theme_rule(topic: str) -> str:
     return (" The lyric was asked for this theme: «" + topic.strip()[:600] + "». The worst "
             "problem is drifting from it: other people, things or events than the theme "
             "names, or the wrong tone (a joke or a comic story turned into a solemn lament). "
-            "Notes in the theme about the music or the arrangement are not lyric content."
+            "Notes in the theme about the music or the arrangement are not lyric content. "
+            "An occasion the theme names (a birthday, a wedding, an anniversary) is said in "
+            "plain words in the chorus -- «С днём рождения, Алексей!» -- not only hinted at."
             ) if (topic or "").strip() else ""
 
 
@@ -608,7 +610,7 @@ _PLAN = (
     "theme (a joke, a funny pair of characters, a quarrel over money) is a light, "
     "plain-spoken story song with wordplay and a punchline, never a solemn poem; a sad "
     "theme is sad. The people, things and events are the ones the theme names; notes "
-    "about the music or the arrangement are not lyric content. A song for a named person: list every fact the theme gives about them (work, plans, family, habits, jokes) and give each its own concrete line in a verse -- the facts are the song, the name is in the chorus. Then give: the HOOK -- the title line, under 10 words, that "
+    "about the music or the arrangement are not lyric content. A song for a named person: list every fact the theme gives about them (work, plans, family, habits, jokes) and give each its own concrete line in a verse -- the facts are the song, the name is in the chorus; an occasion it names (a birthday...) is greeted in plain words in the chorus. Then give: the HOOK -- the title line, under 10 words, that "
     "sums up the song's feeling; the story: what verse 1 shows, what verse 2 adds "
     "(new detail, time moves on), what the bridge turns to (a new angle); 6-10 "
     "concrete sensory images (things one can see, hear, touch -- object writing) to "
@@ -762,6 +764,10 @@ def polish(ctx, text: str, rounds: int = ROUNDS, on_round=None, singer: str = ""
             best = {"text": cur, "score": total, "left": problems,
                     "left_rules": rule["issues"], "left_sense": probs}
         if not problems or r == rounds:
+            break
+        if r and total <= best["score"]:
+            # a rewrite of a worse rewrite only drifts further: 6.1 -> 3.4 -> 3.8 -> 4.4 and
+            # three minutes gone on a birthday song (2026-10-22)
             break
         if on_round:
             on_round(r + 1)
