@@ -280,6 +280,18 @@ def _adds_object(ctx, region: str, instructions: str) -> bool:
         f"part: {region}\nwhat to do: {instructions}", ("added", "changed"), "changed") == "added"
 
 
+def _reshapes_face_feature(ctx, region: str, instructions: str) -> bool:
+    """The edit changes the shape or size of a feature of a face (nose, lips, eyes, ears, chin).
+    Those stay on the mask path: the crop zooms in on the feature and the face around it is
+    pasted back untouched; on the whole frame Klein barely grew a nose and aged the face."""
+    return choice(ctx)(
+        "An image edit names a part of the picture and what to do there:\n{text}\n\n"
+        "feature = it changes the shape or size of a feature of a face: nose, lips, mouth, eyes, "
+        "eyebrows, ears, chin, cheeks. other = anything else: hair, clothes, objects, hands, "
+        "colours, the background.",
+        f"part: {region}\nwhat to do: {instructions}", ("feature", "other"), "other") == "feature"
+
+
 def _handle_inpaint_image(ctx, state, args: dict) -> str:
     source = _edit_source(ctx, state)
     _note_source(state, source)
@@ -419,6 +431,14 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
             edit_path = "inpaint_region_with_comfy:style-whole-frame"
             new_path = _image(ctx).inpaint_region_with_comfy(ctx, source, "", instructions,
                                                  removal=removal, engine=engine)
+        elif (category in ("subject_edit", "face_edit", "clothing_edit", "product_edit", "multi_op")
+              and not removal and not _reshapes_face_feature(ctx, region, instructions)):
+            # Klein on the whole frame, the annotator's box lock around the change: the mask path
+            # pasted a halo round a blue shirt, a rectangle of brown hair at the face box and a
+            # floating fist (bench/edit_path_ab.py, 9 real edits: whole frame better 4, mask 1).
+            edit_path = "klein_whole_frame"
+            new_path = _image(ctx)._edit_image_with_firered_once(
+                ctx, source, f"change the {region} to {instructions}")
         elif category in ("subject_edit", "face_edit", "clothing_edit", "product_edit",
                           "multi_op"):
             edit_path = "inpaint_region_with_comfy"

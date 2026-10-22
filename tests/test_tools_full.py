@@ -89,6 +89,7 @@ def mock_env(**over):
         "redraw_image_with_comfy": lambda ctx, s, i: over.get("redraw_out", out_img),
         "generate_image_with_comfy": lambda ctx, **k: over.get("enhance_out", out_img),
         "inpaint_region_with_comfy": lambda ctx, s, r, i, removal=False, engine="firered": over.get("inpaint_out", out_img),
+        "_edit_image_with_firered_once": lambda ctx, s, instr, **k: over.get("inpaint_out", out_img),
         "route_edit_request": lambda ctx, s, syn: ("bg_replace", over.get("route_out", out_img)),
         "classify_edit_intent": lambda syn, ctx=None: over.get("category", "subject_edit"),
         "upscale_image_with_comfy": lambda ctx, s, scale="4x", protect_face=True: over.get("upscale_out", out_img),
@@ -378,6 +379,23 @@ def test_inspect_image_compares_earlier_pictures():
 
 
 # ------------------------------------------------------------------ inpaint_image
+
+def test_a_part_changed_goes_to_the_whole_frame_and_a_face_feature_to_the_mask():
+    """The mask path pasted a halo round a blue shirt and left a rectangle of brown hair at the
+    face box; Klein on the whole frame drew both clean, and only a bigger nose came out better
+    under the mask (bench/edit_path_ab.py, 2026-10-22)."""
+    paths = []
+    def edits(region, instr, feature):
+        c = _ctx(last_image_path=_img("wf.png"), last_image_prompt="",
+                 choice=lambda q, t, opts, d="": ("feature" if feature else "other") if "feature" in opts else d)
+        with mock_env(category="clothing_edit", log_edit=lambda **k: paths.append(k.get("tool", ""))):
+            T._handle_inpaint_image(c, {}, {"instructions": instr, "region": region})
+        return paths[-1]
+    check("a shirt recolour runs Klein on the whole frame",
+          edits("shirt", "a solid blue shirt", False).endswith("klein_whole_frame"), paths)
+    check("a bigger nose stays on the mask path",
+          edits("nose", "a larger nose", True).endswith("inpaint_region_with_comfy"), paths)
+
 
 def test_inpaint_image():
     c = _ctx(last_image_path=_img("inp.png"), last_image_prompt="a woman")
