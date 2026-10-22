@@ -164,8 +164,10 @@ def resolve_steps(sess) -> int:
 def resolve_duration(sess) -> int:
     """The render length in seconds: the chosen one, else the config default."""
     chosen = _resolve(sess, "duration")
-    if chosen == "auto":
-        return 0                    # the bot decides (music.choose_auto_params)
+    if chosen in ("auto", ""):
+        # the bot decides (music.choose_auto_params), and a written song sets it; unset
+        # was a fixed 60 s that cut a birthday song to one verse (2026-10-22)
+        return 0
     if chosen:
         return max(1, min(int(chosen), _config.MUSIC_MAX_SECONDS))
     return _config.MUSIC_DEFAULT_SECONDS
@@ -176,7 +178,7 @@ def auto_fields(sess) -> dict:
     return {"genre": not _resolve(sess, "genre"),
             "tempo": not _resolve(sess, "tempo"),
             "vocal": not _resolve(sess, "vocal"),
-            "duration": _resolve(sess, "duration") == "auto"}
+            "duration": _resolve(sess, "duration") in ("auto", "")}
 
 
 def prefs_of(sess) -> dict:
