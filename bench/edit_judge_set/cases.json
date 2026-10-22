@@ -4,8 +4,8 @@
   "ask": "убери гантели и провода с пола, кота не трогай\\n[Text written on picture 1 (OCR, exact letters; each «…» is a separate la",
   "before": "bench/edit_judge_set/img/222aeab8fc01.jpg",
   "after": "bench/edit_judge_set/img/36d7a2e637c3.jpg",
-  "label": "done",
-  "why": "",
+  "label": "not",
+  "why": "dumbbells gone, but the wooden floor became carpet (not asked)",
   "engine_request": "region='floor with dumbbells and wires' instructions='clean floor without dumbbells and wires, showing only the floor surface'"
  },
  {
@@ -157,8 +157,8 @@
   "ask": "сделай шлем золотым",
   "before": "bench/edit_judge_set/img/d5a1482faef4.jpg",
   "after": "bench/edit_judge_set/img/24a7d9f6e168.jpg",
-  "label": "partial",
-  "why": "a second helmet appeared",
+  "label": "not",
+  "why": "a second helmet was added (an object nobody asked for)",
   "engine_request": "region='space helmet' instructions='a shiny, polished gold space helmet'"
  },
  {
@@ -184,8 +184,8 @@
   "ask": "вернись к картинке с котом и убери Землю с фона",
   "before": "bench/edit_judge_set/img/90a097c57e97.jpg",
   "after": "bench/edit_judge_set/img/800d3c0144e5.jpg",
-  "label": "partial",
-  "why": "glow left",
+  "label": "not",
+  "why": "the picture did not change",
   "engine_request": "region='blue glow in the background' instructions='remove the blue glow in the background completely, leaving only dark space with stars'"
  },
  {
@@ -528,6 +528,42 @@
   "after": "bench/edit_judge_set/img/00cbe9f640d4.jpg",
   "label": "not",
   "why": "nothing changed",
+  "engine_request": ""
+ },
+ {
+  "id": "cut_aviator",
+  "ask": "Добавь очки авиаторы и надписи на русском \"Идите нахуй, я деловой\"",
+  "before": "bench/edit_judge_set/img/6695db983f7a.jpg",
+  "after": "bench/edit_judge_set/img/afae888a8c2b.png",
+  "label": "partial",
+  "why": "the temple ends at the mask edge, the caption lost its first letters",
+  "engine_request": ""
+ },
+ {
+  "id": "cut_sunglasses",
+  "ask": "надень ей солнечные очки",
+  "before": "bench/edit_judge_set/img/5178ce5e6761.jpg",
+  "after": "bench/edit_judge_set/img/a9d19886a461.png",
+  "label": "partial",
+  "why": "the lenses are cut flat at the bottom: a strip",
+  "engine_request": ""
+ },
+ {
+  "id": "stub_temple",
+  "ask": "дорисуй у очков дужку: она должна идти от оправы назад до самого уха",
+  "before": "bench/edit_judge_set/img/cafe5b63bbe9.png",
+  "after": "bench/edit_judge_set/img/657c8ed30e19.png",
+  "label": "not",
+  "why": "a purple stub at the hinge, nothing reaches the ear",
+  "engine_request": ""
+ },
+ {
+  "id": "blur_lens",
+  "ask": "Добавь очки авиаторы и надписи на русском \"Идите нахуй, я деловой\"",
+  "before": "bench/edit_judge_set/img/6695db983f7a.jpg",
+  "after": "bench/edit_judge_set/img/51ae01c3e275.png",
+  "label": "partial",
+  "why": "the near lens is a blurred dark block, the temple stops short",
   "engine_request": ""
  }
 ]
