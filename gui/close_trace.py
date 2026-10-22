@@ -46,13 +46,36 @@ def _process_name(pid: int) -> str:
         k.CloseHandle(h)
 
 
+def _flags(lparam: int) -> str:
+    """WM_QUERYENDSESSION / WM_ENDSESSION lParam: who asked."""
+    lparam = int(lparam or 0)
+    named = [n for bit, n in ((0x1, "Restart Manager: an installer or updater wants a file we hold"),
+                              (0x80000000, "logoff"), (0x40000000, "forced")) if lparam & bit]
+    return ", ".join(named) or "shutdown or restart"
+
+
+def _recent_processes(window_s: float = 120.0) -> str:
+    try:
+        import psutil
+        now = time.time()
+        new = sorted((p.info["create_time"], p.info["name"], p.info["pid"])
+                     for p in psutil.process_iter(["name", "pid", "create_time"])
+                     if now - (p.info["create_time"] or 0) < window_s)
+        return f"started in the last {window_s:.0f}s: " + (", ".join(f"{n} pid {pid}" for _, n, pid in new[-12:]) or "none")
+    except Exception as exc:
+        return f"(processes unknown: {exc})"
+
+
 def describe() -> str:
     if sys.platform != "win32":
         return ""
     parts = []
     now = time.time()
-    msgs = [f"{name} {now - t:.1f}s ago" for t, name, _ in _seen if now - t < 30]
+    msgs = [f"{name} {now - t:.1f}s ago" + (f" [{_flags(lp)}]" if "SESSION" in name else "")
+            for t, name, lp in _seen if now - t < 30]
     parts.append("messages: " + (", ".join(msgs) or "none seen (closed without a window message)"))
+    if any("SESSION" in name and now - t < 30 for t, name, _ in _seen):
+        parts.append(_recent_processes())
     try:
         from ctypes import wintypes
         u = ctypes.windll.user32
