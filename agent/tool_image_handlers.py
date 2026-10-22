@@ -1991,7 +1991,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     # the clip of Лёха flexing under the track had to repeat without a jump (2026-10-22).
     loop = bool(args.get("loop") and images and not videos and not continuing)
     if loop:
-        images, parts = [images[0], images[0]], [raw]
+        images, parts = [images[-1], images[-1]], [raw]    # newest last: [0] animated an older picture
         secs = [max(video_mod.estimate_seconds(raw), 5.2)]
     if len(parts) > 1 and not approved and not own_script and getattr(ctx, "video_plan_ask", False):
         # Several minutes per part: the chat sees the parts, the clip length and the
