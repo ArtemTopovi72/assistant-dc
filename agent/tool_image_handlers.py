@@ -1987,6 +1987,12 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     if want > 15.0 and len(parts) > 1 and want > sum(secs) * 1.15:
         per = min(video_mod.frames_to_seconds(video_mod.VIDEO_MAX_FRAMES_AUTO), want / len(parts))
         secs = [max(x, round(per, 2)) for x in secs]
+    # A loop: the picture is the first and the last frame (FL2VA keyframes), one part --
+    # the clip of Лёха flexing under the track had to repeat without a jump (2026-10-22).
+    loop = bool(args.get("loop") and images and not videos and not continuing)
+    if loop:
+        images, parts = [images[0], images[0]], [raw]
+        secs = [max(video_mod.estimate_seconds(raw), 5.2)]
     if len(parts) > 1 and not approved and not own_script and getattr(ctx, "video_plan_ask", False):
         # Several minutes per part: the chat sees the parts, the clip length and the
         # render time first, and may drop or condense parts (user, 2026-10-10).
@@ -2025,7 +2031,10 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     anchor = list(images[:3]) if images and not people and not continuing else []
     head = bool(not chain_id and len(anchor) == 1 and not videos
                 and (talking if talking is not None else video_mod.is_talking_head(ctx, raw, _said, spoken=bool(speech))))
-    if head:
+    head = head or loop
+    if loop:
+        logger.info("generate_video: loop, the picture is the first and the last frame")
+    elif head:
         logger.info("generate_video: talking-head mode, the still is frame 0 of every part, the voice comes after")
     mode = video_mod.pick_mode(images, videos, audios, keyframe=head)
     tags = video_mod.reference_tags(len(images) if mode == "ref2va" else 0, len(videos), len(audios))

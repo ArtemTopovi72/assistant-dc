@@ -163,6 +163,11 @@ class GenerateVideoArgs(_ToolArgs):
         "TRUE when the user wants the person in the clip to speak with THEIR OWN "
         "(cloned) voice — «моим голосом», «с моим голосом», «in my voice». The voice "
         "becomes <Audio 1>; write the spoken line in the description."))
+    loop: bool = Field(False, description=(
+        "TRUE when the user wants a clip that loops seamlessly («луп», «зацикленное», "
+        "«чтобы первый и последний кадр совпадали», a GIF on repeat): the picture is the "
+        "first AND the last frame, so the motion goes out and comes back. One part, "
+        "no talking."))
     seed: Optional[int] = Field(None, description=(
         "Optional random seed. Leave unset for a new clip each time."))
 
