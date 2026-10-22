@@ -1044,6 +1044,7 @@ class CallbackMixin:
             task_id=str(uuid.uuid4()),
             chat_id=chat_id,
             user_text=(f"[animate] call generate_video with description=\"{prompt}\" "
+                       + ("and loop=true " if key == "loop" else "") +
                        "using the current image."),
             image_path=target["path"],
             image_id=target_id,

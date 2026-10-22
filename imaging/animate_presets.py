@@ -44,9 +44,16 @@ ANIMATE_PRESETS: dict[str, dict] = {
                    "naturally, camera stays still, everything else stays exactly "
                    "as in the photo"),
     },
+    # The first frame is also the last (generate_video loop=True), so the clip repeats seamlessly.
+    "loop": {
+        "label_ru": "🔁 Луп-видео", "label_en": "🔁 Loop video",
+        "prompt": ("gentle natural motion of the subject that returns to the "
+                   "starting pose, camera stays still, everything else stays "
+                   "exactly as in the photo"),
+    },
 }
 
-ANIMATE_PRESET_ORDER = ("push_in", "wind", "smile_blink", "wave", "orbit", "walk")
+ANIMATE_PRESET_ORDER = ("push_in", "wind", "smile_blink", "wave", "orbit", "walk", "loop")
 
 
 def preset_prompt(key: str) -> str:
