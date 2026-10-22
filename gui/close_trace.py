@@ -94,3 +94,24 @@ def describe() -> str:
     except Exception as exc:
         parts.append(f"(foreground unknown: {exc})")
     return "; ".join(parts)
+
+
+def _windows_ending() -> bool:
+    return bool(ctypes.windll.user32.GetSystemMetrics(0x2000))     # SM_SHUTTINGDOWN
+
+
+def refuse_end_session(message, ending=None) -> bool:
+    """True: a WM_QUERYENDSESSION / WM_ENDSESSION while Windows is NOT ending -- answer it
+    "no" and keep the window. Something sent one straight to the window ~12 min after each
+    start (03:33, 13:52, 15:30 on 2026-10-22, no Restart Manager session, nothing in the
+    logs) and Qt closed the app, the bot with it. A real shutdown or logoff still closes."""
+    if sys.platform != "win32":
+        return False
+    try:
+        from ctypes import wintypes
+        msg = wintypes.MSG.from_address(int(message))
+        if msg.message not in (WM_QUERYENDSESSION, WM_ENDSESSION):
+            return False
+        return not (_windows_ending() if ending is None else ending())
+    except Exception:
+        return False

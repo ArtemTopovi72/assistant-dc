@@ -33,5 +33,22 @@ if sys.platform == "win32":
     check("the log line carries the flags", "Restart Manager" in d, d)
     check("an end-session close lists what started just before it", "started in the last" in d, d)
 
+if sys.platform == "win32":
+    # A stray end-session message closed the app (and the bot) while Windows went on running.
+    import ctypes
+    from ctypes import wintypes
+
+    def msg(code):
+        m = wintypes.MSG()
+        m.message = code
+        return m, ctypes.addressof(m)
+    _q, q = msg(C.WM_QUERYENDSESSION)
+    _e, e = msg(C.WM_ENDSESSION)
+    _c, c = msg(C.WM_CLOSE)
+    check("an end-session ask while Windows runs on is refused",
+          C.refuse_end_session(q, ending=lambda: False) and C.refuse_end_session(e, ending=lambda: False))
+    check("...a real shutdown still closes the window", not C.refuse_end_session(q, ending=lambda: True))
+    check("...and ✕ / WM_CLOSE are never touched", not C.refuse_end_session(c, ending=lambda: False))
+
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)

@@ -890,6 +890,10 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
     def nativeEvent(self, event_type, message):
         import close_trace
         close_trace.note(message)
+        if close_trace.refuse_end_session(message):
+            logger.warning("LIFECYCLE: end-session message while Windows is not ending -- refused, "
+                           "the window stays (%s)", close_trace.describe())
+            return True, 0
         return super().nativeEvent(event_type, message)
 
     # ---- drag-drop ----
