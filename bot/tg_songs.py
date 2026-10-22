@@ -192,7 +192,14 @@ def song_request(text: str, ctx=None) -> tuple:
     t = (text or "").strip()
     if t.startswith("[song"):
         return False, 0          # already a task payload
-    if not t or len(t) > 600:
+    if len(t) > 600:
+        # «Спой на мои слова:» over a whole lyric went to the agent, which made a video of
+        # it (2026-10-22): the request is the first line, the words are the rest
+        head, _, body = t.partition("\n")
+        if not (len(head) <= 600 and looks_like_lyrics(body)):
+            return False, 0
+        t = head
+    if not t:
         return False, 0
     r = _read(t, ctx=ctx)
     return (True, r["song_seconds"]) if r["song"] == "make" else (False, 0)
