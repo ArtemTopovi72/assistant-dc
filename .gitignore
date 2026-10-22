@@ -154,3 +154,4 @@ tg_feedback.db-*
 
 # the edit-judge eval set images (local; cases.json is committed)
 bench/edit_judge_set/img/
+bench/mask_qa_set/img/

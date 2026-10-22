@@ -102,11 +102,7 @@ def _remove_via_objectclear(ctx, image_path: str, target_phrase: str, *, seed: i
         import image_contained_firered as _cf
         import image_lettering_remove as _lr
         got = dep(ctx, "_contained_region_mask", _cf._contained_region_mask)(ctx, image_path, target_phrase, grow=18, seed=seed,
-                                         timeout=timeout, protect_face=False,
-                                         # the VLM cutout judge rejected a clean cat mask twice
-                                         # and the removal fell to FireRed, which
-                                         # left a halo
-                                         stage1_qa=False)
+                                         timeout=timeout, protect_face=False)
         if not got:
             return None
         _orig, mask, _box = got

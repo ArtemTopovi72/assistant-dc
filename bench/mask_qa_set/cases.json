@@ -1,0 +1,362 @@
+[
+ {
+  "id": "m00",
+  "region": "the patterned grey and brown tie being held by his hand",
+  "image": "bench/mask_qa_set/img/71233c931d0c.jpg",
+  "mask": "bench/mask_qa_set/img/8a4614589d87.png",
+  "good": true,
+  "stage1_said": "WRONG",
+  "why": ""
+ },
+ {
+  "id": "m01",
+  "region": "the black patterned shirt",
+  "image": "bench/mask_qa_set/img/e2254192276f.jpg",
+  "mask": "bench/mask_qa_set/img/a6a9a0382863.png",
+  "good": true,
+  "stage1_said": "WRONG",
+  "why": ""
+ },
+ {
+  "id": "m02",
+  "region": "shirt",
+  "image": "bench/mask_qa_set/img/e2254192276f.jpg",
+  "mask": "bench/mask_qa_set/img/8caf3cbb61b9.png",
+  "good": true,
+  "stage1_said": "WRONG",
+  "why": ""
+ },
+ {
+  "id": "m03",
+  "region": "hair",
+  "image": "bench/mask_qa_set/img/fb3c558c4d1e.jpg",
+  "mask": "bench/mask_qa_set/img/f216f13e9081.png",
+  "good": true,
+  "stage1_said": "WRONG",
+  "why": ""
+ },
+ {
+  "id": "m04",
+  "region": "eyes and bridge of the nose",
+  "image": "bench/mask_qa_set/img/5178ce5e6761.jpg",
+  "mask": "bench/mask_qa_set/img/4f10fbd7fa7b.png",
+  "good": false,
+  "stage1_said": "CORRECT",
+  "why": "one eye only, the request needs both"
+ },
+ {
+  "id": "m05",
+  "region": "tie",
+  "image": "bench/mask_qa_set/img/71233c931d0c.jpg",
+  "mask": "bench/mask_qa_set/img/c76c3ada2421.png",
+  "good": true,
+  "stage1_said": "WRONG",
+  "why": ""
+ },
+ {
+  "id": "m06",
+  "region": "tie",
+  "image": "bench/mask_qa_set/img/71233c931d0c.jpg",
+  "mask": "bench/mask_qa_set/img/99c3f55e267c.png",
+  "good": true,
+  "stage1_said": "CORRECT",
+  "why": ""
+ },
+ {
+  "id": "m07",
+  "region": "nose",
+  "image": "bench/mask_qa_set/img/ad8f90e6c361.jpg",
+  "mask": "bench/mask_qa_set/img/ff5144c01efa.png",
+  "good": true,
+  "stage1_said": "CORRECT",
+  "why": ""
+ },
+ {
+  "id": "m08",
+  "region": "tie",
+  "image": "bench/mask_qa_set/img/71233c931d0c.jpg",
+  "mask": "bench/mask_qa_set/img/a10ea59bef32.png",
+  "good": true,
+  "stage1_said": "WRONG",
+  "why": ""
+ },
+ {
+  "id": "m09",
+  "region": "tie",
+  "image": "bench/mask_qa_set/img/71233c931d0c.jpg",
+  "mask": "bench/mask_qa_set/img/fc44042fc9ca.png",
+  "good": true,
+  "stage1_said": "CORRECT",
+  "why": ""
+ },
+ {
+  "id": "m10",
+  "region": "shirt",
+  "image": "bench/mask_qa_set/img/e2254192276f.jpg",
+  "mask": "bench/mask_qa_set/img/fd667ee0cb8e.png",
+  "good": true,
+  "stage1_said": "WRONG",
+  "why": ""
+ },
+ {
+  "id": "m11",
+  "region": "shirt",
+  "image": "bench/mask_qa_set/img/e2254192276f.jpg",
+  "mask": "bench/mask_qa_set/img/5c321114b0e5.png",
+  "good": true,
+  "stage1_said": "WRONG",
+  "why": ""
+ },
+ {
+  "id": "m12",
+  "region": "hair",
+  "image": "bench/mask_qa_set/img/fb3c558c4d1e.jpg",
+  "mask": "bench/mask_qa_set/img/afd8653c7136.png",
+  "good": true,
+  "stage1_said": "WRONG",
+  "why": ""
+ },
+ {
+  "id": "m13",
+  "region": "eyes and bridge of nose",
+  "image": "bench/mask_qa_set/img/5178ce5e6761.jpg",
+  "mask": "bench/mask_qa_set/img/a479988bf3df.png",
+  "good": false,
+  "stage1_said": "WRONG",
+  "why": "one eye only, the request needs both"
+ },
+ {
+  "id": "m14",
+  "region": "eyes and bridge of nose",
+  "image": "bench/mask_qa_set/img/5178ce5e6761.jpg",
+  "mask": "bench/mask_qa_set/img/71816696f678.png",
+  "good": false,
+  "stage1_said": "CORRECT",
+  "why": "one eye only, the request needs both"
+ },
+ {
+  "id": "m15",
+  "region": "eyes and bridge of nose",
+  "image": "bench/mask_qa_set/img/a186739b63c0.png",
+  "mask": "bench/mask_qa_set/img/ee9d776b4a80.png",
+  "good": false,
+  "stage1_said": "CORRECT",
+  "why": "one eye only, the request needs both"
+ },
+ {
+  "id": "m16",
+  "region": "nose",
+  "image": "bench/mask_qa_set/img/ad8f90e6c361.jpg",
+  "mask": "bench/mask_qa_set/img/fc639739b0c1.png",
+  "good": true,
+  "stage1_said": "CORRECT",
+  "why": ""
+ },
+ {
+  "id": "m17",
+  "region": "nose",
+  "image": "bench/mask_qa_set/img/ad8f90e6c361.jpg",
+  "mask": "bench/mask_qa_set/img/fc639739b0c1.png",
+  "good": true,
+  "stage1_said": "CORRECT",
+  "why": ""
+ },
+ {
+  "id": "m18",
+  "region": "tie",
+  "image": "bench/mask_qa_set/img/71233c931d0c.jpg",
+  "mask": "bench/mask_qa_set/img/3435675e60f0.png",
+  "good": true,
+  "stage1_said": "WRONG",
+  "why": ""
+ },
+ {
+  "id": "m19",
+  "region": "tie",
+  "image": "bench/mask_qa_set/img/71233c931d0c.jpg",
+  "mask": "bench/mask_qa_set/img/4bd95338acf6.png",
+  "good": true,
+  "stage1_said": "CORRECT",
+  "why": ""
+ },
+ {
+  "id": "m20",
+  "region": "nose",
+  "image": "bench/mask_qa_set/img/ad8f90e6c361.jpg",
+  "mask": "bench/mask_qa_set/img/28622ac0a79a.png",
+  "good": true,
+  "stage1_said": "CORRECT",
+  "why": ""
+ },
+ {
+  "id": "m21",
+  "region": "tie",
+  "image": "bench/mask_qa_set/img/71233c931d0c.jpg",
+  "mask": "bench/mask_qa_set/img/f0edb8379dab.png",
+  "good": true,
+  "stage1_said": "WRONG",
+  "why": ""
+ },
+ {
+  "id": "m22",
+  "region": "tie",
+  "image": "bench/mask_qa_set/img/71233c931d0c.jpg",
+  "mask": "bench/mask_qa_set/img/a9c71d1c0fa3.png",
+  "good": true,
+  "stage1_said": "CORRECT",
+  "why": ""
+ },
+ {
+  "id": "m23",
+  "region": "nose",
+  "image": "bench/mask_qa_set/img/ad8f90e6c361.jpg",
+  "mask": "bench/mask_qa_set/img/531ffcafff63.png",
+  "good": true,
+  "stage1_said": "CORRECT",
+  "why": ""
+ },
+ {
+  "id": "m24",
+  "region": "nose",
+  "image": "bench/mask_qa_set/img/ad8f90e6c361.jpg",
+  "mask": "bench/mask_qa_set/img/531ffcafff63.png",
+  "good": true,
+  "stage1_said": "CORRECT",
+  "why": ""
+ },
+ {
+  "id": "m25",
+  "region": "tie",
+  "image": "bench/mask_qa_set/img/71233c931d0c.jpg",
+  "mask": "bench/mask_qa_set/img/b265c8f71a8f.png",
+  "good": true,
+  "stage1_said": "WRONG",
+  "why": ""
+ },
+ {
+  "id": "m26",
+  "region": "tie",
+  "image": "bench/mask_qa_set/img/71233c931d0c.jpg",
+  "mask": "bench/mask_qa_set/img/8283cb93c247.png",
+  "good": true,
+  "stage1_said": "CORRECT",
+  "why": ""
+ },
+ {
+  "id": "m27",
+  "region": "nose",
+  "image": "bench/mask_qa_set/img/ad8f90e6c361.jpg",
+  "mask": "bench/mask_qa_set/img/aec81ccd8ba5.png",
+  "good": true,
+  "stage1_said": "CORRECT",
+  "why": ""
+ },
+ {
+  "id": "m28",
+  "region": "nose",
+  "image": "bench/mask_qa_set/img/ad8f90e6c361.jpg",
+  "mask": "bench/mask_qa_set/img/aec81ccd8ba5.png",
+  "good": true,
+  "stage1_said": "CORRECT",
+  "why": ""
+ },
+ {
+  "id": "m29",
+  "region": "tie",
+  "image": "bench/mask_qa_set/img/71233c931d0c.jpg",
+  "mask": "bench/mask_qa_set/img/fafbcc2092cd.png",
+  "good": true,
+  "stage1_said": "WRONG",
+  "why": ""
+ },
+ {
+  "id": "m30",
+  "region": "tie",
+  "image": "bench/mask_qa_set/img/71233c931d0c.jpg",
+  "mask": "bench/mask_qa_set/img/e28b642a725d.png",
+  "good": true,
+  "stage1_said": "CORRECT",
+  "why": ""
+ },
+ {
+  "id": "m31",
+  "region": "nose",
+  "image": "bench/mask_qa_set/img/ad8f90e6c361.jpg",
+  "mask": "bench/mask_qa_set/img/2cf7d9d01935.png",
+  "good": true,
+  "stage1_said": "CORRECT",
+  "why": ""
+ },
+ {
+  "id": "m32",
+  "region": "white dress shirt",
+  "image": "bench/mask_qa_set/img/e2254192276f.jpg",
+  "mask": "bench/mask_qa_set/img/a35512977d2c.png",
+  "good": true,
+  "stage1_said": "WRONG",
+  "why": ""
+ },
+ {
+  "id": "m33",
+  "region": "shirt",
+  "image": "bench/mask_qa_set/img/e2254192276f.jpg",
+  "mask": "bench/mask_qa_set/img/a555c36048d8.png",
+  "good": true,
+  "stage1_said": "WRONG",
+  "why": ""
+ },
+ {
+  "id": "m34",
+  "region": "hair",
+  "image": "bench/mask_qa_set/img/fb3c558c4d1e.jpg",
+  "mask": "bench/mask_qa_set/img/dc24813d06bd.png",
+  "good": true,
+  "stage1_said": "WRONG",
+  "why": ""
+ },
+ {
+  "id": "m35",
+  "region": "long brown hair",
+  "image": "bench/mask_qa_set/img/fb3c558c4d1e.jpg",
+  "mask": "bench/mask_qa_set/img/5b1e23e9b61e.png",
+  "good": true,
+  "stage1_said": "WRONG",
+  "why": ""
+ },
+ {
+  "id": "m36",
+  "region": "eyes and bridge of the nose",
+  "image": "bench/mask_qa_set/img/5178ce5e6761.jpg",
+  "mask": "bench/mask_qa_set/img/26bd682a4245.png",
+  "good": false,
+  "stage1_said": "WRONG",
+  "why": "one eye only, the request needs both"
+ },
+ {
+  "id": "m37",
+  "region": "eyes and bridge of the nose",
+  "image": "bench/mask_qa_set/img/5178ce5e6761.jpg",
+  "mask": "bench/mask_qa_set/img/d3326833edfd.png",
+  "good": false,
+  "stage1_said": "CORRECT",
+  "why": "one eye only, the request needs both"
+ },
+ {
+  "id": "m38",
+  "region": "eyes and bridge of the nose",
+  "image": "bench/mask_qa_set/img/f239bec257cb.png",
+  "mask": "bench/mask_qa_set/img/dd521fbdbfeb.png",
+  "good": false,
+  "stage1_said": "WRONG",
+  "why": "one eye only, the request needs both"
+ },
+ {
+  "id": "m39",
+  "region": "eyes",
+  "image": "bench/mask_qa_set/img/f239bec257cb.png",
+  "mask": "bench/mask_qa_set/img/dd521fbdbfeb.png",
+  "good": false,
+  "stage1_said": "WRONG",
+  "why": "one eye only, the request needs both"
+ }
+]

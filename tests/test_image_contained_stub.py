@@ -240,7 +240,9 @@ def test_text_seg_stage0_qa_fail_then_retry_then_reject():
         out = I._contained_region_mask(ctx, img, "her hat", grow=6, seed=1, timeout=60)
         check("stage0_qa_fail_retried_then_rejected", out is None and calls["n"] == 2, calls["n"])
 
-def test_text_seg_stage1_qa_wrong_then_reject():
+def test_a_good_text_mask_is_never_rejected_by_a_cutout_verdict():
+    """The VLM cutout verdict rejected 17 of 32 good masks (tie, shirt, hair) on the labelled set
+    (2026-10-22): a text mask STAGE-0 accepts is used, whatever a vision read would say."""
     ctx = Ctx()
     img = _photo("ts3.png")
     maskfile = _mask_file("ts3_mask.png", box=(40, 40, 150, 150))
@@ -253,18 +255,7 @@ def test_text_seg_stage1_qa_wrong_then_reject():
                   MASK_QA_ENABLED=True,
                   _vlm_qa_verdict=lambda *a, **k: "WRONG"):
         out = I._contained_region_mask(ctx, img, "her hat", grow=6, seed=1, timeout=60)
-        check("stage1_qa_wrong_retried_then_rejected", out is None and calls["n"] == 2, calls["n"])
-
-def test_text_seg_stage1_qa_correct():
-    ctx = Ctx()
-    img = _photo("ts4.png")
-    maskfile = _mask_file("ts4_mask.png", box=(40, 40, 150, 150))
-    with _Patches(_upload_image_to_comfy=lambda *a, **k: "u.png",
-                  _region_mask_file=lambda *a, **k: maskfile,
-                  MASK_QA_ENABLED=True,
-                  _vlm_qa_verdict=lambda *a, **k: "CORRECT"):
-        out = I._contained_region_mask(ctx, img, "her hat", grow=6, seed=1, timeout=60)
-        check("stage1_qa_correct_accepts", out is not None)
+        check("good_text_mask_used_without_a_cutout_verdict", out is not None and calls["n"] == 1, calls["n"])
 
 def test_text_seg_upload_fails():
     ctx = Ctx()

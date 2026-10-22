@@ -40,7 +40,6 @@ def _contained_region_mask(ctx, image_path: str, region_phrase: str, *,
                            grow: int, seed: int, timeout: int, pad: float = 0.25,
                            mask_override: Optional[str] = None,
                            protect_face: bool = False,
-                           stage1_qa: bool = True,
                            _qa_threshold: float = 0.5, _qa_retry: bool = False):
     """Shared mask+crop-box computation for the contained editors.
 
@@ -250,31 +249,9 @@ def _contained_region_mask(ctx, image_path: str, region_phrase: str, *,
             return None
         logger.info("contained-mask STAGE-0 QA: ok for %r %s", region_phrase, qstats)
 
-    # ---- STAGE-1 QA: does the cutout isolate the RIGHT object? (text-seg only) ----
-    # Fail-open: a missing/unclear VLM verdict -> accept. WRONG -> retry SAM3 once with
-    # a more inclusive threshold; WRONG again -> reject so we never render a bad region.
-    if stage1_qa and seg_from_text and image_maskqa.MASK_QA_ENABLED:
-        cut_png = _image._mask_cutout_png(orig, mask, (x0, y0, x1, y1))
-        verdict = _image._vlm_qa_verdict(
-            ctx, cut_png,
-            f"The bright (not dimmed) pixels are what was selected to edit as "
-            f"the '{region_phrase}'. Is that selection the {region_phrase} -- thin edges of "
-            f"what touches or covers it (fingers, a collar) are fine -- and not some other thing?",
-            ["CORRECT", "PARTIAL", "WRONG"])
-        if verdict == "WRONG":
-            if not _qa_retry:
-                logger.info("contained-mask STAGE-1 QA: cutout WRONG for %r — retrying "
-                            "SAM3 with lower threshold", region_phrase)
-                return _contained_region_mask(
-                    ctx, image_path, region_phrase, grow=grow + 6, seed=seed,
-                    timeout=timeout, pad=pad, mask_override=mask_override,
-                    protect_face=protect_face, _qa_threshold=0.35, _qa_retry=True)
-            logger.warning("contained-mask STAGE-1 QA: cutout still WRONG after retry "
-                           "for %r — rejecting (no render)", region_phrase)
-            _image._INPAINT_FAILURE["reason"] = "bad_mask"   # never a whole-frame redraw after this
-            return None
-        if verdict:
-            logger.info("contained-mask STAGE-1 QA: %s for %r", verdict, region_phrase)
+    # No VLM verdict on the cutout: on 40 labelled masks it was right 19 times -- 17 good tie,
+    # shirt and hair masks rejected (no render at all), 4 one-eye masks for «eyes» passed.
+    # STAGE-0's geometry stays.
     return orig, mask, (x0, y0, x1, y1)
 
 
@@ -329,11 +306,8 @@ def _refill_uncovered_background(ctx, result_path: str, old_mask, region_phrase:
             # original skin (white V-neck -> navy quarter-zip).
             tile_path = str(scratch_path(OUTPUT_DIR, f"_INTERMEDIATE_tile_{int(time.time() * 1000)}.png"))
             tile.save(tile_path)
-            # No VLM cutout QA here: it is a union with the checked old region, and
-            # the QA's flaky WRONG dropped the collar again on the next run.
             tg = _contained_region_mask(ctx, tile_path, region_phrase, grow=0,
-                                        seed=seed or 1, timeout=timeout, protect_face=False,
-                                        stage1_qa=False)
+                                        seed=seed or 1, timeout=timeout, protect_face=False)
             if tg:
                 full = Image.new("L", old_mask.size, 0)
                 full.paste(tg[1].convert("L").resize(tile.size), tile_xy)

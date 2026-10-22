@@ -47,15 +47,6 @@ def test_fill_hint_goes_straight_to_firered(tmp_path):
     assert O.remove_object_with_comfy(ctx, _img(tmp_path), "vase", fill_hint="a lamp") == "fr.png"
 
 
-def test_objectclear_mask_skips_vlm_cutout_judge(tmp_path):
-    # the VLM cutout judge must not reject a clean mask (the removal would fall to
-    # FireRed and leave a halo); the ObjectClear fill is judged by the smear check
-    seen = {}
-    ctx = _ctx(_contained_region_mask=lambda *a, **k: seen.update(k) or None)
-    O._remove_via_objectclear(ctx, _img(tmp_path), "cat", seed=1, timeout=5)
-    assert seen.get("stage1_qa") is False
-
-
 def test_firered_instruction_has_one_article(tmp_path):
     seen = []
     ctx = _ctx(edit_region_contained_cropped=lambda ctx, p, phrase, instr, **k: seen.append(instr) or "fr.png")
