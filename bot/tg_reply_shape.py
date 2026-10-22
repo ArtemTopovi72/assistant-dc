@@ -49,10 +49,32 @@ def _dom_key(dom: str) -> str:
     return d[4:] if d.startswith("www.") else d
 
 
-def shape_search_reply(reply_html: str, queries: list, sources: list, lang: str = "ru") -> str:
+def _used_sources(ctx, answer: str, sources: list) -> list:
+    """The pages, by title, the answer took its facts from -- read by the model when the answer
+    cites none. Under a meme it listed «Human leg -- Wikipedia»; under lyrics the Genius page is
+    the source, though the answer never wrote «(source: genius.com)». Model down or no
+    context -> none."""
+    if not sources or ctx is None:
+        return []
+    from seams import text_model
+    pages = "\n".join(f"{i}. {s.get('title') or s.get('domain')} -- {s.get('domain', '')}"
+                       for i, s in enumerate(sources[:12], 1))
+    plain = _html.unescape(re.sub(r"<[^>]+>", "", answer or ""))[:1500]
+    try:
+        said = text_model(ctx)(ctx, "Answer with numbers separated by commas, or none.",
+                               f"An answer:\n{plain}\n\nWeb pages found while writing it:\n{pages}\n\n"
+                               "Which pages is the answer about or did it take facts from? A page on "
+                               "another subject is not one of them.", temperature=0.0, max_tokens=30) or ""
+    except Exception:
+        return []
+    picked = [int(n) for n in re.findall(r"\d+", said) if 1 <= int(n) <= len(sources[:12])]
+    return [sources[n - 1] for n in dict.fromkeys(picked)]
+
+
+def shape_search_reply(reply_html: str, queries: list, sources: list, lang: str = "ru", ctx=None) -> str:
     """Wrap an HTML reply: 🔎 the queries, the answer with [n] marks in place of
     "(source: domain)", and 🔗 a numbered source list with links. Sources the
-    answer cites come first; the rest fill up to MAX_SOURCES."""
+    answer cites, up to MAX_SOURCES; when it cites none, the pages the model reads it used."""
     if not (queries or sources):
         return reply_html
     searched, srcs_label, read_label = _LABELS.get(lang, _LABELS["ru"])
@@ -90,14 +112,10 @@ def shape_search_reply(reply_html: str, queries: list, sources: list, lang: str 
     body = _BARE_RE.sub(lambda m: _mark(m) or m.group(0), _CITE_RE.sub(_mark, reply_html))
     body = re.sub(r"[ \t]+([.,;:!?])", r"\1", body)       # "fact ." after a dropped mark
     body = re.sub(r"\s+(\[\d+\])", r" \1", body)          # "text [1]" not "text  [1]"
-    listed = list(cited)
-    # With citations in the text, the list is what was cited -- padding it
-    # with the other hits listed a Norfolk, Virginia museum under «Эрмитаж».
-    for s in ([] if cited else sources or []):
-        if len(listed) >= MAX_SOURCES:
-            break
-        if s not in listed:
-            listed.append(s)
+    # The list is what the answer rests on. Padded with the other hits it listed a Norfolk,
+    # Virginia museum under «Эрмитаж», and under a meme that cited nothing «Human leg --
+    # Wikipedia» and refugee statistics (2026-10-22).
+    listed = (cited or _used_sources(ctx, body, sources))[:MAX_SOURCES]
 
     head = ""
     for s in links:      # «📄 Прочитал: title — domain», one line per page read

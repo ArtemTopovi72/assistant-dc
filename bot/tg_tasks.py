@@ -1875,7 +1875,7 @@ class TaskRunnerMixin:
                                              or getattr(ctx, "turn_sources", None)):
                     import tg_reply_shape as _shape
                     reply_html = _shape.shape_search_reply(
-                        reply_html, list(ctx.turn_queries or []), list(ctx.turn_sources or []), lang)
+                        reply_html, list(ctx.turn_queries or []), list(ctx.turn_sources or []), lang, ctx=ctx)
                 else:
                     # Nothing was searched: a "(source: un.org)" here is the
                     # model imitating the citation format, not a source.

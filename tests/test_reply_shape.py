@@ -41,7 +41,22 @@ check("no search this turn → reply untouched", S.shape_search_reply("<b>hi</b>
 en = S.shape_search_reply("42 (source: cyclingcols.com)", ["q"], SRC, lang="en")
 check("English labels", "🔎 <b>Searched:</b>" in en and "🔗 <b>Sources:</b>" in en, en)
 many = [{"title": f"t{i}", "domain": f"d{i}.com", "url": f"https://d{i}.com"} for i in range(12)]
-check("the list is capped", S.shape_search_reply("x", ["q"], many).count("<a href") == S.MAX_SOURCES)
+check("the list is capped", S.shape_search_reply("x " + " ".join(f"(source: d{i}.com)" for i in range(12)),
+                                                 ["q"], many).count("<a href") == S.MAX_SOURCES)
+# A meme answered from the picture cited none of the hits, and «Human leg -- Wikipedia» was listed
+# under it as a source (2026-10-22). With no citation in the text, the list is the pages the model
+# reads the answer used -- none for the meme, the Genius page for the lyrics.
+import types
+def _reader(said):
+    return types.SimpleNamespace(text_model=lambda ctx, sys_, user, **k: said)
+unc = S.shape_search_reply("Это забавный мем.", ["meaning origin"], SRC, ctx=_reader("none"))
+check("an answer that rests on none of the pages gets no source list, the search line stays",
+      "Источники" not in unc and "<a href" not in unc and unc.startswith("🔎 <b>Искал:</b>"), unc)
+used = S.shape_search_reply("Текст песни такой: ...", ["lyrics"], SRC, ctx=_reader("2"))
+check("...and one that rests on a page it did not cite lists that page alone",
+      used.count("<a href") == 1 and "Alpine passes</a>" in used, used)
+check("model down: no list", "<a href" not in S.shape_search_reply("x", ["q"], SRC, ctx=types.SimpleNamespace(
+    text_model=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("down")))))
 
 note = ("[The user's message contains a link. Here is that page, read for you -- title: Омлет — Википедия "
         "(https://ru.wikipedia.org/wiki/Омлет). Answer from it; if the user only sent the link, tell them briefly "
