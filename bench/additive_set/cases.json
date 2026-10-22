@@ -1,0 +1,177 @@
+[
+ {
+  "region": "eyes and bridge of nose",
+  "instructions": "wearing stylish black sunglasses",
+  "add": true
+ },
+ {
+  "region": "eyes and bridge of nose",
+  "instructions": "wearing stylish black sunglasses that cover both eyes and sit on the bridge of his nose",
+  "add": true
+ },
+ {
+  "region": "eyes and bridge of the nose",
+  "instructions": "wearing stylish dark sunglasses",
+  "add": true
+ },
+ {
+  "region": "eyes and bridge of the nose",
+  "instructions": "wearing stylish dark sunglasses covering both eyes perfectly",
+  "add": true
+ },
+ {
+  "region": "eyes",
+  "instructions": "wearing dark sunglasses over her eyes",
+  "add": true
+ },
+ {
+  "region": "eyes",
+  "instructions": "wearing stylish black sunglasses covering her eyes",
+  "add": true
+ },
+ {
+  "region": "eyes and face area",
+  "instructions": "wearing stylish aviator sunglasses and with Russian text \"Идите нахуй, я деловой\" written on the image in a bold font",
+  "add": true
+ },
+ {
+  "region": "the side of the head where the glasses temple should be",
+  "instructions": "a thin dark metal temple of aviator glasses extending from the frame towards the ear",
+  "add": true
+ },
+ {
+  "region": "the hands and the area where the shovel should be",
+  "instructions": "a complete shovel with a metal blade being held by the man in armor",
+  "add": true
+ },
+ {
+  "region": "the bottom of the image where the shovel should be",
+  "instructions": "a complete shovel including its metal blade and wooden handle being held by the man in armor",
+  "add": true
+ },
+ {
+  "region": "head",
+  "instructions": "wearing a small top hat",
+  "add": true
+ },
+ {
+  "region": "ears",
+  "instructions": "wearing gold hoop earrings",
+  "add": true
+ },
+ {
+  "region": "the table",
+  "instructions": "a cup of coffee on the table",
+  "add": true
+ },
+ {
+  "region": "sky",
+  "instructions": "a red balloon flying in the sky",
+  "add": true
+ },
+ {
+  "region": "face",
+  "instructions": "a thick black moustache",
+  "add": true
+ },
+ {
+  "region": "shirt",
+  "instructions": "a solid blue shirt without patterns",
+  "add": false
+ },
+ {
+  "region": "hair",
+  "instructions": "ginger hair",
+  "add": false
+ },
+ {
+  "region": "long brown hair",
+  "instructions": "ginger hair",
+  "add": false
+ },
+ {
+  "region": "nose",
+  "instructions": "a larger, more prominent nose",
+  "add": false
+ },
+ {
+  "region": "nose",
+  "instructions": "a much larger, prominent nose",
+  "add": false
+ },
+ {
+  "region": "tie",
+  "instructions": "a solid red tie",
+  "add": false
+ },
+ {
+  "region": "white dress shirt",
+  "instructions": "a solid blue dress shirt",
+  "add": false
+ },
+ {
+  "region": "space helmet",
+  "instructions": "a shiny, polished gold space helmet",
+  "add": false
+ },
+ {
+  "region": "helmet",
+  "instructions": "a highly reflective, shiny, polished gold space helmet with bright highlights",
+  "add": false
+ },
+ {
+  "region": "the patterned grey and brown tie being held",
+  "instructions": "a solid red tie",
+  "add": false
+ },
+ {
+  "region": "the black patterned shirt",
+  "instructions": "a solid blue button-down shirt without patterns",
+  "add": false
+ },
+ {
+  "region": "beard area and lower face",
+  "instructions": "a clean-shaven face with smooth skin on the chin, cheeks, and jawline, no facial hair",
+  "add": false
+ },
+ {
+  "region": "the armor of the girl on the right",
+  "instructions": "red armor with teal accents",
+  "add": false
+ },
+ {
+  "region": "man with a shovel",
+  "instructions": "the man wearing red and black plate armor like the warrior from the second photo",
+  "add": false
+ },
+ {
+  "region": "clothing",
+  "instructions": "wearing a dress made entirely of scoops of vanilla and chocolate ice cream",
+  "add": false
+ },
+ {
+  "region": "the man on the far right",
+  "instructions": "an angry real sponge with realistic eyes wearing a Stalin-style military overcoat",
+  "add": false
+ },
+ {
+  "region": "the cartoon sponge on the right",
+  "instructions": "a realistic, 3D-looking angry sponge with real eyes, wearing a heavy Stalin-style overcoat",
+  "add": false
+ },
+ {
+  "region": "the left hand of Lenin",
+  "instructions": "a clean five-fingered hand punching a demon in the face",
+  "add": false
+ },
+ {
+  "region": "the right hand of the baker",
+  "instructions": "a clean five-fingered human hand holding bread correctly without any fusion",
+  "add": false
+ },
+ {
+  "region": "red circle",
+  "instructions": "a green circle",
+  "add": false
+ }
+]

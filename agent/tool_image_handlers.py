@@ -37,7 +37,7 @@ import image as image_mod
 import tool_graph
 from tool_context import _edit_source, _remember, _set_current_image
 
-from seams import dep, module, intent_read, text_model, vision_model, yes_no
+from seams import choice, dep, module, intent_read, text_model, vision_model, yes_no
 
 logger = logging.getLogger("assistant.tools")
 
@@ -263,6 +263,23 @@ def _undo(ctx, state) -> str:
             "nothing was redrawn. It is on screen. Briefly confirm, in the user's language.")
 
 
+def _adds_object(ctx, region: str, instructions: str) -> bool:
+    """The edit puts something NEW on the picture (glasses on a face, a caption, a hat) and
+    the named part stays. Such an edit goes to the whole-frame add path: through the
+    region's mask the added thing was cut at the mask's edge -- aviator glasses lost their
+    temple and a caption its first letters on a face mask (2026-10-22). Asked directly: a
+    keyword pre-gate read «wearing sunglasses» as a face edit and never asked.
+    Scored on bench/additive_route_eval.py."""
+    return choice(ctx)(
+        "An image edit names a part of the picture and what to do there:\n{text}\n\n"
+        "added = a new thing appears on, over or next to that part: glasses over the eyes, a "
+        "hat on a head, a moustache on a face, a cup on a table, a balloon in the sky, a "
+        "missing piece of an object, a caption. "
+        "changed = the part itself becomes different: another colour, size, shape or "
+        "material, other clothes, or something else in its place.",
+        f"part: {region}\nwhat to do: {instructions}", ("added", "changed"), "changed") == "added"
+
+
 def _handle_inpaint_image(ctx, state, args: dict) -> str:
     source = _edit_source(ctx, state)
     _note_source(state, source)
@@ -321,13 +338,7 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
     # The instructions alone read as an insert when they name the result:
     # «сделай красный круг зелёным» came as region='red circle', instructions='a green
     # circle' and a second, green circle was added next to the red one.
-    if (not removal and not manual_whole and region
-            and _image(ctx).classify_edit_intent(instructions, ctx=ctx) == "object_insert"
-            and yes_no(ctx)(
-                "An image edit names a part of the picture and what to do there:\n{text}\n\n"
-                "Does it ask to ADD a new object while that part stays as it is (not to "
-                "turn that part itself into something else, recolour or replace it)?",
-                f"part: {region}\nwhat to do: {instructions}", default=True)):
+    if not removal and not manual_whole and region and _adds_object(ctx, region, instructions):
         ctx.set_stage("Inserting object")
         logger.info("Tool: inpaint_image additive-shortcut -> route_edit_request "
                     "anchor=%r instructions=%r source=%s", region, instructions[:80], source)
