@@ -20,6 +20,7 @@ import re
 from typing import Optional
 
 import config as _cfg
+import fibo
 import style_presets
 
 logger = logging.getLogger("assistant.image")
@@ -255,7 +256,17 @@ def _scene_from_faces(ctx, image_mod, image_path: str, instructions: str, heads:
               f"{instructions.strip()} The people keep the faces shown in {refs}, seen at whatever angle "
               "and with whatever expression the scene needs.")
     logger.info("style: new scene with %d face reference(s): %r", len(heads), prompt[:160])
-    once = dep(ctx, "_edit_image_with_firered_once", image_mod._edit_image_with_firered_once)
+    klein_once = dep(ctx, "_edit_image_with_firered_once", image_mod._edit_image_with_firered_once)
+    # Fibo gets only the faces and the source's size: Klein's drivers came out generic faces
+    # behind the glass where Fibo's were recognisable (tmp/lyoha_car, 2026-10-24).
+    fibo_prompt = (f"Draw a completely new full picture: {instructions.strip()} The people have the faces "
+                   f"shown in {', '.join(f'<image_{i}>' for i in range(1, len(heads) + 1))}, seen at "
+                   "whatever angle and with whatever expression the scene needs.")
+
+    def once(ctx, image_path, prompt, *, reference_paths, **kw):
+        out = (dep(ctx, "fibo_edit", fibo.edit)(ctx, reference_paths, fibo_prompt, size_of=image_path, **kw)
+               if _cfg.FIBO_EDIT else None)
+        return out or klein_once(ctx, image_path, prompt, reference_paths=reference_paths, **kw)
     out = once(ctx, image_path, prompt, reference_paths=heads, **kw)
     # A 1920 black-and-white portrait came through once as a grey face stuck on a coloured cyborg
     # (face saturation 92 vs 123-199 on 12 other takes): one more seed.
@@ -301,6 +312,11 @@ def restyle(ctx, image_path: str, instructions: str, *, seed=None, timeout=None)
         return image_mod.edit_image_with_firered(ctx, image_path, instructions, **kw)
     neg = {"drawn": NEG_DRAWN, "photo": NEG_PHOTO}.get(target, NEG_OTHER)
     logger.info("style: target=%s instr=%r", target, instr[:160])
+    if target == "drawn" and _cfg.FIBO_EDIT:
+        # Klein turned anime/oil/3D into photo filters; Fibo draws the style (tmp/fibo/style, 2026-10-24)
+        out = dep(ctx, "fibo_edit", fibo.edit)(ctx, [image_path], instr.replace("picture 1", "<image_1>"), **kw)
+        if out:
+            return out
     with image_mod.firered_sampler(STYLE_STEPS, STYLE_CFG, lightning=False, negative=neg,
                                   upsize=True), \
             image_mod.firered_extra_lora(PHOTO_LORA if target == "photo" else None,

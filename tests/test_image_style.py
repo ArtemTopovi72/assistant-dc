@@ -184,3 +184,50 @@ def test_a_face_that_comes_out_grey_like_its_bw_reference_gets_one_more_take():
     takes.clear()
     ctx.deps._grey = lambda path, face=False: path == "take1.png"                    # colour reference
     assert IS._scene_from_faces(ctx, I, "src.png", "he fights", ["head.png"]) == "take1.png" and len(takes) == 1
+
+
+def test_fibo_draws_a_drawn_style_and_klein_takes_over_when_it_fails(monkeypatch):
+    """Klein turned anime, oil and a 3D cartoon into photo filters where Fibo drew the style
+    (tmp/fibo/style, 2026-10-24); a Fibo failure must still give the user a picture."""
+    import config
+    monkeypatch.setattr(config, "FIBO_EDIT", True)
+    sent = []
+    fibo_ok = lambda ctx, images, instr, **kw: sent.append((images, instr)) or "fibo.png"
+    ctx = deps_ctx(image=Over(I, edit_image_with_firered=lambda *a, **k: "klein.png"), fibo_edit=fibo_ok)
+    assert IS.restyle(ctx, "src.png", SP.preset_prompt("anime")) == "fibo.png"
+    assert sent[0][0] == ["src.png"] and "picture 1" not in sent[0][1]
+    ctx = deps_ctx(image=Over(I, edit_image_with_firered=lambda *a, **k: "klein.png"),
+                   fibo_edit=lambda *a, **k: None)
+    assert IS.restyle(ctx, "src.png", SP.preset_prompt("anime")) == "klein.png"
+    _, seen = _scene_run(keeps_pose=True, faces=[(10, 10, 110, 140)])       # not a style: Klein as before
+    assert "plain" in seen
+
+
+def test_fibo_draws_a_new_scene_from_the_face_crops_alone(monkeypatch):
+    """Lyokha at the wheel: Klein's driver was a generic face, Fibo's recognisable (tmp/lyoha_car).
+    Fibo gets only the faces, cited as <image_N>, at the source's size; Klein stays the fallback."""
+    import config
+    monkeypatch.setattr(config, "FIBO_EDIT", True)
+    seen = {}
+    fibo_ok = lambda c, images, instr, size_of=None, **kw: seen.update(images=images, instr=instr, size_of=size_of) or "fibo.png"
+    klein = lambda c, p, instr, **kw: seen.update(klein=instr) or "klein.png"
+    import types
+    ctx = types.SimpleNamespace(deps=types.SimpleNamespace(
+        _edit_image_with_firered_once=klein, fibo_edit=fibo_ok, _grey=lambda path, face=False: False))
+    assert IS._scene_from_faces(ctx, I, "src.png", "he drives a Zhiguli", ["h1.png", "h2.png"]) == "fibo.png"
+    assert seen["images"] == ["h1.png", "h2.png"] and seen["size_of"] == "src.png"
+    assert "<image_1>, <image_2>" in seen["instr"] and "klein" not in seen
+    ctx.deps.fibo_edit = lambda *a, **k: None
+    assert IS._scene_from_faces(ctx, I, "src.png", "he drives a Zhiguli", ["h1.png"]) == "klein.png"
+
+
+def test_the_fibo_graph_cites_each_image_and_runs_the_turbo_schedule():
+    import fibo
+    wf = fibo.edit_workflow(["a.png", "b.png"], "x", 7, 1024, 768)
+    enc = wf["5"]["inputs"]
+    assert enc["images.image_1"] == ["load_1", 0] and enc["images.image_2"] == ["load_2", 0]
+    assert (enc["width"], enc["height"]) == (1024, 768) and wf["2"]["inputs"]["type"] == "fibo2"
+    s = wf["6"]["inputs"]
+    assert s["steps"] == 4 and s["cfg"] == 1.0
+    w, h = fibo._size_for(1920, 1080)
+    assert w % 16 == 0 and h % 16 == 0 and abs(w / h - 16 / 9) < 0.02 and 0.9e6 < w * h < 1.1e6
