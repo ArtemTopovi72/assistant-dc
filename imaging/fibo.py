@@ -5,10 +5,10 @@ at cfg 1. Any failure returns None and the caller falls back to Klein.
 """
 import logging
 import math
-import os
 import random
 from typing import Optional
 
+import config
 from config import FIBO_STEPS, FIBO_UNET, KLEIN_CLIP, KLEIN_VAE
 
 logger = logging.getLogger("assistant.image")
@@ -49,7 +49,7 @@ def edit(ctx, images: list, instruction: str, *, size_of: Optional[str] = None,
     from seams import dep
     import image as image_mod
     from image_sizing import _enforce_output_size
-    if not images or not (instruction or "").strip():
+    if not config.FIBO_EDIT or not images or not (instruction or "").strip():
         return None
     try:
         up = dep(ctx, "_upload_image_to_comfy", image_mod._upload_image_to_comfy)

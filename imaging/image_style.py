@@ -42,12 +42,15 @@ NEG_OTHER = "blurry, low quality, watermark, signature"
 
 # The entire image, and everyone at the same size and the same position: a collage
 # restyle once came back cropped with a person cut out (test_style_transfer_whole_image).
+# Facial hair is named: Fibo's anime shaved off a moustache and goatee (2026-10-24).
 # The vision layout description that used to ride along is gone: it diluted the
 # style (an oil painting came back a photo with smeared dirt), and these words kept
 # the framing of every preset on their own (bench/style_ab.py).
 _KEEP = (" Restyle the entire image including the background. Keep the same composition, "
          "framing and crop, every person at the same size, the same position and the same "
-         "pose, {clothes}and the setting; do not crop, zoom or move anyone. Any signs, screens "
+         "pose, {clothes}and the setting; do not crop, zoom or move anyone. Every person keeps "
+         "their facial hair exactly as it is -- its shape and how thick it is, light stubble stays light, "
+         "a bare chin stays bare -- drawn in the new style, and their glasses and jewellery exactly as worn there, nothing added. Any signs, screens "
          "or lettering become abstract marks -- no new legible words.")
 
 _EXPAND_SYS = (
@@ -264,8 +267,7 @@ def _scene_from_faces(ctx, image_mod, image_path: str, instructions: str, heads:
                    "whatever angle and with whatever expression the scene needs.")
 
     def once(ctx, image_path, prompt, *, reference_paths, **kw):
-        out = (dep(ctx, "fibo_edit", fibo.edit)(ctx, reference_paths, fibo_prompt, size_of=image_path, **kw)
-               if _cfg.FIBO_EDIT else None)
+        out = dep(ctx, "fibo_edit", fibo.edit)(ctx, reference_paths, fibo_prompt, size_of=image_path, **kw)
         return out or klein_once(ctx, image_path, prompt, reference_paths=reference_paths, **kw)
     out = once(ctx, image_path, prompt, reference_paths=heads, **kw)
     # A 1920 black-and-white portrait came through once as a grey face stuck on a coloured cyborg
@@ -312,7 +314,7 @@ def restyle(ctx, image_path: str, instructions: str, *, seed=None, timeout=None)
         return image_mod.edit_image_with_firered(ctx, image_path, instructions, **kw)
     neg = {"drawn": NEG_DRAWN, "photo": NEG_PHOTO}.get(target, NEG_OTHER)
     logger.info("style: target=%s instr=%r", target, instr[:160])
-    if target == "drawn" and _cfg.FIBO_EDIT:
+    if target == "drawn":
         # Klein turned anime/oil/3D into photo filters; Fibo draws the style (tmp/fibo/style, 2026-10-24)
         out = dep(ctx, "fibo_edit", fibo.edit)(ctx, [image_path], instr.replace("picture 1", "<image_1>"), **kw)
         if out:

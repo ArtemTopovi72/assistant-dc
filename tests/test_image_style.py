@@ -189,8 +189,6 @@ def test_a_face_that_comes_out_grey_like_its_bw_reference_gets_one_more_take():
 def test_fibo_draws_a_drawn_style_and_klein_takes_over_when_it_fails(monkeypatch):
     """Klein turned anime, oil and a 3D cartoon into photo filters where Fibo drew the style
     (tmp/fibo/style, 2026-10-24); a Fibo failure must still give the user a picture."""
-    import config
-    monkeypatch.setattr(config, "FIBO_EDIT", True)
     sent = []
     fibo_ok = lambda ctx, images, instr, **kw: sent.append((images, instr)) or "fibo.png"
     ctx = deps_ctx(image=Over(I, edit_image_with_firered=lambda *a, **k: "klein.png"), fibo_edit=fibo_ok)
@@ -206,8 +204,6 @@ def test_fibo_draws_a_drawn_style_and_klein_takes_over_when_it_fails(monkeypatch
 def test_fibo_draws_a_new_scene_from_the_face_crops_alone(monkeypatch):
     """Lyokha at the wheel: Klein's driver was a generic face, Fibo's recognisable (tmp/lyoha_car).
     Fibo gets only the faces, cited as <image_N>, at the source's size; Klein stays the fallback."""
-    import config
-    monkeypatch.setattr(config, "FIBO_EDIT", True)
     seen = {}
     fibo_ok = lambda c, images, instr, size_of=None, **kw: seen.update(images=images, instr=instr, size_of=size_of) or "fibo.png"
     klein = lambda c, p, instr, **kw: seen.update(klein=instr) or "klein.png"
