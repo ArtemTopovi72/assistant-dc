@@ -97,3 +97,27 @@ def test_a_new_scene_does_not_animate_an_earlier_picture(tmp_path):
             video_engine=Over(V, engine_available=lambda ctx: (True, ""), generate_video=stop))
         H._handle_generate_video(ctx, _st(words), {"description": "a scene"})
         assert bool(seen.get("images")) == animates, (words, seen)
+
+
+def test_a_picture_asked_after_a_clip_is_not_a_redo_of_the_clip(tmp_path):
+    """«нарисуй его за рулём жигулей, едет, куры разбегаются» after a noodle clip: the read said
+    redo «changed» AND wants generate_image, the redo alone passed, and a 9-minute clip was made
+    instead of a picture (debug chat 2026-10-24)."""
+    clip = tmp_path / "v.mp4"
+    clip.write_bytes(b"x")
+    import intent
+    c = _Ctx(); c.last_video_path = str(clip)
+    c.intent_read = lambda ctx, t, *a, **k: dict(intent.FALLBACK, redo="changed", wants=["generate_image"])
+    c.yes_no = lambda q, t, default=False, wait=True: False
+    assert not H.asks_for_video(c, _st("нарисуй его за рулём фиолетовых жигулей, едет по деревенской дороге"))
+    c.intent_read = lambda ctx, t, *a, **k: dict(intent.FALLBACK, redo="changed", wants=["generate_video"])
+    assert H.asks_for_video(c, _st("то же, но пусть куры разбегаются"))
+
+
+def test_a_picture_the_router_heard_is_never_asked_to_the_model_as_a_clip():
+    """«едет…, куры разбегаются» unfolds over time to the yes/no too; «нарисуй» is a picture."""
+    import intent
+    c = _Ctx()
+    c.intent_read = lambda ctx, t, *a, **k: dict(intent.FALLBACK, wants=["redraw_image"])
+    c.yes_no = lambda q, t, default=False, wait=True: True
+    assert not H.asks_for_video(c, _st("нарисуй его за рулём, едет по дороге, куры разбегаются"))

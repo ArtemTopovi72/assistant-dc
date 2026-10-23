@@ -1259,13 +1259,19 @@ def asks_for_video(ctx, state) -> bool:
     # Live 2026-10-11 the ▶ rerun was re-asked here, the model said no, the turn failed.
     if getattr(ctx, "video_plan_parts", None) or getattr(ctx, "continue_tail", ""):
         return True
+    from graph_fastpath import _IMAGE_ACTION_TOOLS
+    try:
+        r = intent_read(ctx)(None, said)
+    except Exception:
+        r = {}
+    wants = set(r.get("wants") or ())
+    # The router heard a picture: «нарисуй его за рулём…, едет, куры разбегаются» after a noodle
+    # clip read as redo «changed», passed, and became a 9-minute clip (2026-10-24).
+    if wants & _IMAGE_ACTION_TOOLS and "generate_video" not in wants:
+        return False
     last = getattr(ctx, "last_video_path", None)
-    if last and os.path.exists(last):
-        try:
-            if intent_read(ctx)(None, said)["redo"] in ("same", "changed"):
-                return True
-        except Exception:
-            pass
+    if last and os.path.exists(last) and r.get("redo") in ("same", "changed"):
+        return True
     # A shot script with no word «видео» is still a clip. «Мужчина берёт
     # банку … говорит "Полная хуета" … бросает банку … опрокидывает стеллаж» was
     # refused here. The model reads it; a complaint about a picture stays a no.
