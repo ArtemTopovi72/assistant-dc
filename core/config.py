@@ -284,10 +284,9 @@ KLEIN_DEBUG_STEPS = _env_int("KLEIN_DEBUG_STEPS", 16)
 KLEIN_EDIT_LORA = os.getenv("KLEIN_EDIT_LORA", "flux-3-image-klein-consistency.safetensors")
 KLEIN_EDIT_LORA_STRENGTH = _env_float("KLEIN_EDIT_LORA_STRENGTH", 1.0)
 
-# Fibo 2.0 Edit Turbo (imaging/fibo.py) draws two things Klein does badly (bench/fibo_vs_klein.py,
-# 2026-10-24): a restyle (Klein gave photo filters, Fibo real anime/oil/pencil) and a new scene
-# from face crops (Klein's driver was a generic face behind the glass). Klein keeps every in-place
-# edit and all lettering: Fibo changed faces there and writes Russian wrong. Same text encoder and
+# Fibo 2.0 Edit Turbo (imaging/fibo.py) draws a restyle, which Klein turns into a photo filter
+# (bench/fibo_vs_klein.py, 2026-10-24: real anime/oil/pencil). Klein keeps every in-place edit, all
+# lettering (Fibo writes Russian wrong) and a new scene from face crops (Fibo drew a bobblehead). Same text encoder and
 # VAE as Klein; needs ComfyUI 0.42+. FIBO_EDIT=0 sends both back to Klein.
 FIBO_EDIT = os.getenv("FIBO_EDIT", "0" if os.getenv("F5_TEST_RUN") else "1").strip() not in ("0", "false", "no")
 FIBO_UNET = os.getenv("FIBO_UNET", "fibo2_edit_turbo_bf16.safetensors")

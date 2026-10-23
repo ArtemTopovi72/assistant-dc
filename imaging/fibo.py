@@ -1,10 +1,9 @@
-"""Fibo 2.0 Edit Turbo: the engine for a restyle and for a new scene drawn from face crops.
+"""Fibo 2.0 Edit Turbo: the engine for a restyle.
 
 Images go in as <image_1>, <image_2>, ... of the instruction; the distilled model samples 4 steps
 at cfg 1. Any failure returns None and the caller falls back to Klein.
 """
 import logging
-import math
 import random
 from typing import Optional
 
@@ -12,12 +11,6 @@ import config
 from config import FIBO_STEPS, FIBO_UNET, KLEIN_CLIP, KLEIN_VAE
 
 logger = logging.getLogger("assistant.image")
-
-
-def _size_for(w: int, h: int) -> tuple:
-    """About 1 MP at the source's aspect, multiples of 16: the area Fibo was trained at."""
-    k = math.sqrt(1024 * 1024 / float(w * h))
-    return max(16, round(w * k / 16) * 16), max(16, round(h * k / 16) * 16)
 
 
 def edit_workflow(images: list, instruction: str, seed: int, width: int = 0, height: int = 0) -> dict:
@@ -42,10 +35,10 @@ def edit_workflow(images: list, instruction: str, seed: int, width: int = 0, hei
     return wf
 
 
-def edit(ctx, images: list, instruction: str, *, size_of: Optional[str] = None,
-         seed: Optional[int] = None, timeout: int = 1900) -> Optional[str]:
+def edit(ctx, images: list, instruction: str, *, seed: Optional[int] = None,
+         timeout: int = 1900) -> Optional[str]:
     """Render `instruction` over local `images` (cited as <image_1>...); the result is sized like
-    `size_of` (default: the first image). Returns the saved path or None."""
+    the first image. Returns the saved path or None."""
     from seams import dep
     import image as image_mod
     from image_sizing import _enforce_output_size
@@ -57,10 +50,9 @@ def edit(ctx, images: list, instruction: str, *, size_of: Optional[str] = None,
         if not all(names):
             logger.warning("fibo: an image upload failed — falling back")
             return None
-        dims = image_mod._source_dims(size_of or images[0])
-        width, height = _size_for(*dims) if dims and size_of else (0, 0)
+        dims = image_mod._source_dims(images[0])
         seed = seed if seed and seed > 0 else random.randint(1, 999_999_999)
-        wf = edit_workflow(names, instruction, seed, width, height)
+        wf = edit_workflow(names, instruction, seed)
         if dims:
             _enforce_output_size(wf, *dims)
         logger.info("fibo edit: %d image(s) seed=%d instr=%r", len(images), seed, instruction[:160])
