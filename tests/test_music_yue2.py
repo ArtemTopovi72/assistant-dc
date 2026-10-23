@@ -50,10 +50,13 @@ def test_style_cleanup_drops_scenery_keeps_tempo_and_vocal():
     assert M.yue2_tags(ctx, _SCENIC) == "75 BPM, Lo-fi hip hop, male vocal, minor key, lonely"
 
 
-def test_style_cleanup_refuses_an_answer_that_lost_bpm_or_vocal():
+def test_style_cleanup_puts_back_a_lost_bpm_or_vocal_and_keeps_the_rest():
+    """Throwing the whole cleanup away for one lost tag sent the emotional-arc prose to YuE2
+    (2026-10-22): the BPM and vocal tags go back in front, the scenery stays out."""
     def said(answer):
         return types.SimpleNamespace(deps=types.SimpleNamespace(lyrics_llm=lambda r, s, u: answer))
-    assert M.yue2_tags(said('{"tags": ["Lo-fi hip hop", "lonely", "ambient"]}'), _SCENIC) == _SCENIC
+    got = M.yue2_tags(said('{"tags": ["Lo-fi hip hop", "lonely", "ambient"]}'), _SCENIC)
+    assert "75 BPM" in got and "male vocal" in got and "dimly lit" not in got, got
     assert M.yue2_tags(said("nonsense"), _SCENIC) == _SCENIC
 
 
