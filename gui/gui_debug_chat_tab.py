@@ -12,8 +12,8 @@ import time
 import urllib.request
 
 from PyQt5.QtCore import QThread, Qt, QTimer, QUrl, pyqtSignal
-from PyQt5.QtWidgets import (QTabWidget, QCheckBox, QComboBox, QFileDialog, QGridLayout, QHBoxLayout, QLabel,
-                             QLineEdit, QPushButton, QTextBrowser, QVBoxLayout, QWidget)
+from PyQt5.QtWidgets import (QTabWidget, QCheckBox, QComboBox, QFileDialog, QHBoxLayout, QLabel,
+                             QLineEdit, QPushButton, QScrollArea, QTextBrowser, QVBoxLayout, QWidget)
 
 from ui_scale import px
 from gui_common import open_in_os, ACCENT, BORDER, MUTED, PANEL, PANEL2, TEXT, _section
@@ -111,11 +111,20 @@ class DebugChatTab(QWidget):
                                 f"border-radius:{px(10)}px;padding:{px(8)}px;color:{TEXT};}}")
         lay.addWidget(self.view, 1)
 
+        # Telegram's keyboard: each row splits its own width; a grid gave a lone button a third of the
+        # width and six tall rows ate half the window, the picture above cut to a strip (owner, 10-24).
         self.buttons = QWidget()
-        self.btn_grid = QGridLayout(self.buttons)
-        self.btn_grid.setContentsMargins(0, 0, 0, 0)
-        self.btn_grid.setSpacing(px(6))
-        lay.addWidget(self.buttons)
+        self.btn_rows = QVBoxLayout(self.buttons)
+        self.btn_rows.setContentsMargins(0, 0, 0, 0)
+        self.btn_rows.setSpacing(px(4))
+        self.btn_scroll = QScrollArea()
+        self.btn_scroll.setWidget(self.buttons)
+        self.btn_scroll.setWidgetResizable(True)
+        self.btn_scroll.setFrameShape(QScrollArea.NoFrame)
+        self.btn_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.btn_scroll.setMaximumHeight(px(132))
+        self.btn_scroll.hide()
+        lay.addWidget(self.btn_scroll)
 
         row = QHBoxLayout()
         attach = QPushButton("📎")
@@ -292,10 +301,15 @@ class DebugChatTab(QWidget):
         self._render_buttons()
 
     def _render_buttons(self):
-        while self.btn_grid.count():
-            w = self.btn_grid.takeAt(0).widget()
-            if w:
-                w.deleteLater()
+        while self.btn_rows.count():
+            row_item = self.btn_rows.takeAt(0)
+            row_lay = row_item.layout()
+            while row_lay is not None and row_lay.count():
+                w = row_lay.takeAt(0).widget()
+                if w:
+                    w.deleteLater()
+            if row_lay is not None:
+                row_lay.deleteLater()
         last = next((m for m in reversed(self._msgs) if not m["me"] and m.get("markup")), None)
         mk = (last or {}).get("markup") or {}
         rows = mk.get("inline_keyboard") or []
@@ -303,13 +317,18 @@ class DebugChatTab(QWidget):
             self._reply_kb = mk["keyboard"]
         if not rows:
             rows = self._reply_kb
-        for r, row in enumerate(rows[:8]):
-            for c, b in enumerate(row[:4]):
+        self.btn_scroll.setVisible(bool(rows))
+        for row in rows[:8]:
+            line = QHBoxLayout()
+            line.setSpacing(px(4))
+            self.btn_rows.addLayout(line)
+            for b in row[:4]:
                 label = b.get("text", "") if isinstance(b, dict) else str(b)
                 btn = QPushButton(label)
                 btn.setStyleSheet(f"QPushButton{{background:{PANEL2};color:{TEXT};border:1px solid {BORDER};"
-                                  f"border-radius:{px(6)}px;padding:{px(5)}px;}}"
+                                  f"border-radius:{px(6)}px;padding:{px(2)}px {px(6)}px;}}"
                                   f"QPushButton:hover{{border-color:{ACCENT};}}")
+                btn.setFixedHeight(px(28))
                 if isinstance(b, dict) and b.get("callback_data"):
                     btn.clicked.connect(lambda _=False, d=b["callback_data"], t=label: self._press(d, t))
                 elif isinstance(b, dict) and b.get("url"):
@@ -317,7 +336,7 @@ class DebugChatTab(QWidget):
                     btn.setEnabled(False)
                 else:
                     btn.clicked.connect(lambda _=False, t=label: self._say_button(t))
-                self.btn_grid.addWidget(btn, r, c)
+                line.addWidget(btn, 1)
 
     def _open(self, url: QUrl):
         try:

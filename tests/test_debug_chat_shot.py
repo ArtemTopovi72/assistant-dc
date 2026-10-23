@@ -46,3 +46,27 @@ def test_a_shot_request_shows_the_tab_and_saves_the_window(tmp_path):
     assert os.path.getsize(SHOT) > 0 and not os.path.exists(SHOT + ".req")
     tab._shot_timer.stop()
     outer.close()
+
+
+def test_the_keyboard_keeps_the_chat_the_main_part_of_the_tab():
+    """A grid gave a lone button a third of the row and six tall rows took half the window, the
+    picture above cut to a strip (owner, 2026-10-24). Each row splits its own width now, and the
+    keyboard has a ceiling; the chat view keeps the rest."""
+    import gui_debug_chat_tab as G
+    app = QApplication.instance() or QApplication([])
+    tab = G.DebugChatTab(poller=_Quiet())
+    tab.resize(1000, 700)
+    tab.show()
+    rows = [[{"text": f"b{r}{c}", "callback_data": f"x{r}{c}"} for c in range(n)] for r, n in enumerate((3, 2, 1, 3, 2, 1))]
+    tab._add(1, False, "picture", [], markup={"inline_keyboard": rows})
+    app.processEvents()
+    lone = tab.btn_rows.itemAt(2).layout().itemAt(0).widget()
+    pair = tab.btn_rows.itemAt(1).layout().itemAt(0).widget()
+    assert lone.width() > 1.8 * pair.width(), (lone.width(), pair.width())
+    assert tab.btn_scroll.height() < tab.view.height(), (tab.btn_scroll.height(), tab.view.height())
+    tab._add(2, False, "no buttons", [])
+    tab._msgs[0]["markup"] = None
+    tab._render()
+    app.processEvents()
+    assert not tab.btn_scroll.isVisible()
+    tab.hide()
