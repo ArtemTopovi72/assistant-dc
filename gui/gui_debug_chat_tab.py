@@ -122,7 +122,8 @@ class DebugChatTab(QWidget):
         self.btn_scroll.setWidgetResizable(True)
         self.btn_scroll.setFrameShape(QScrollArea.NoFrame)
         self.btn_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.btn_scroll.setMaximumHeight(px(132))
+        self.btn_scroll.setMaximumHeight(px(92))
+        self.btn_scroll.setStyleSheet("QScrollArea, QScrollArea > QWidget > QWidget {background: transparent;}")
         self.btn_scroll.hide()
         lay.addWidget(self.btn_scroll)
 
@@ -328,7 +329,7 @@ class DebugChatTab(QWidget):
                 btn.setStyleSheet(f"QPushButton{{background:{PANEL2};color:{TEXT};border:1px solid {BORDER};"
                                   f"border-radius:{px(6)}px;padding:{px(2)}px {px(6)}px;}}"
                                   f"QPushButton:hover{{border-color:{ACCENT};}}")
-                btn.setFixedHeight(px(28))
+                btn.setFixedHeight(px(24))
                 if isinstance(b, dict) and b.get("callback_data"):
                     btn.clicked.connect(lambda _=False, d=b["callback_data"], t=label: self._press(d, t))
                 elif isinstance(b, dict) and b.get("url"):
