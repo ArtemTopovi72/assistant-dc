@@ -206,8 +206,9 @@ def photo(path: str, caption: str = "", group: str = "", user: int = 0) -> None:
     _put({"update_id": 0, "message": m})
 
 
-def media(kind: str, path: str, caption: str = "", user: int = 0) -> None:
-    """A voice note, audio, document, video or video note (кружок), as Telegram shapes it."""
+def media(kind: str, path: str, caption: str = "", user: int = 0, fwd: str = "") -> None:
+    """A voice note, audio, document, video or video note (кружок), as Telegram shapes it;
+    `fwd` names the person it is forwarded from."""
     import mimetypes
     import subprocess
     fid = _file(path)
@@ -234,6 +235,8 @@ def media(kind: str, path: str, caption: str = "", user: int = 0) -> None:
     m = _msg(user, **{kind: obj})
     if caption and kind != "video_note":
         m["caption"] = caption
+    if fwd:
+        m["forward_origin"] = {"type": "hidden_user", "sender_user_name": fwd, "date": int(time.time()) - 600}
     _put({"update_id": 0, "message": m})
 
 

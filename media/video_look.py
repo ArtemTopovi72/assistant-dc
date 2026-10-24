@@ -51,7 +51,25 @@ _SHEET_SYSTEM = (
     "one, say so in a few words. After the lines add ONE sentence starting with "
     "the overall label given below that says what the whole video is about -- what "
     "happens in it, and what is funny or striking when it is a moment. Name "
-    "things for what they are, not by shape or colour. Do not invent sound or speech -- you only see the picture.")
+    "things for what they are, not by shape or colour. Do not invent sound or speech -- you only see the picture.\n"
+    "When a frame shows a document with small print -- a receipt, a bill, a menu, a price list, a "
+    "screen, a letter -- add one last line «TEXT AT: 0:13, 0:14» with those timestamps; the "
+    "document is then read from sharper frames, so never guess its figures yourself.")
+
+# A receipt panned past a кружок's camera: the storyboard frame showed «RACUN - NARUDZBA» and
+# nothing else, the names on one frame, the prices on the next (live 2026-10-24, a guessed
+# «12 €» for tea that cost 6,50). The stretch is cut again at full size and READ_FRAMES sharp,
+# spread-out frames go to one call that merges them into one copy.
+_TEXT_AT = re.compile(r"^\W*TEXT AT:\s*(.*)$", re.I | re.M)
+READ_FPS, READ_FRAMES, READ_PAD = 6, 6, 2.0
+_READ_SYSTEM = (
+    "These frames show ONE document (a receipt, menu, screen, letter...) filmed by a moving "
+    "hand-held camera; each frame may show a different part of it. Transcribe its text exactly as "
+    "printed, line by line, merging what the frames show into one copy: every item line with its "
+    "quantity, unit price and total, names, dates, totals. Keep each figure in its own column: "
+    "an item's quantity times its unit price is its total, and a line where it is not is misread -- "
+    "look at it again (a tax-rate column of 15,00 was copied as a dessert's total). Write a line you cannot read as "
+    "[неразборчиво]; never guess a figure.")
 
 def duration_seconds(path: str) -> float:
     """Length of the clip via ffprobe; 0.0 when unknown."""
@@ -261,6 +279,49 @@ def make_sheet(frames: list[tuple[float, Path]], out_path: Path, offset: float =
     return out_path
 
 
+def _seconds(stamp: str) -> Optional[float]:
+    parts = [p for p in re.findall(r"\d+(?:\.\d+)?", stamp)]
+    if len(parts) < 2:
+        return None
+    *hm, s = parts
+    return sum(float(x) * 60 ** (len(hm) - i) for i, x in enumerate(hm)) + float(s)
+
+
+def read_document(path: str, stamps: list[float], work_dir: Path, vision: Callable,
+                  duration: float) -> str:
+    """The text of the document seen at `stamps`, from the sharpest frames around them."""
+    import numpy as np
+    from PIL import Image
+    lo = max(0.0, min(stamps) - READ_PAD)
+    hi = min(duration or max(stamps) + READ_PAD, max(stamps) + READ_PAD)
+    out = work_dir / "read"
+    out.mkdir(parents=True, exist_ok=True)
+    for f in out.glob("r_*.png"):
+        f.unlink()
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{lo:.2f}", "-t", f"{hi - lo:.2f}",
+                    "-i", path, "-vf", f"fps={READ_FPS}", str(out / "r_%04d.png")],
+                   capture_output=True, check=True, timeout=120)
+    scored = []
+    for i, f in enumerate(sorted(out.glob("r_*.png"))):
+        gray = Image.open(f).convert("L")
+        gray = gray.resize((256, max(1, round(256 * gray.height / gray.width))))
+        scored.append((_sharpness(np.asarray(gray, dtype=np.float32)), lo + i / READ_FPS, f))
+    # the sharpest frame of each equal slice: the four sharpest overall were all of the price
+    # column and the item names, shown half a second later, never reached the reader
+    k = min(READ_FRAMES, len(scored))
+    picks = [max(scored[len(scored) * j // k: len(scored) * (j + 1) // k]) for j in range(k)]
+    frames = []
+    for _, t, f in sorted(picks, key=lambda p: p[1]):
+        im = Image.open(f).convert("RGB")
+        if im.width < 768:            # a кружок is 384 px; the print is a few pixels tall
+            im = im.resize((im.width * 2, im.height * 2), Image.LANCZOS)
+            im.save(f)
+        frames.append((f"Frame {t:.2f} s:", str(f)))
+    if not frames:
+        return ""
+    return (vision(frames, "Transcribe the document.", _READ_SYSTEM) or "").strip()
+
+
 _LANG_LINE = {"ru": " Answer in Russian; the overall line starts with 'Итог:'.",
               "en": " Answer in English; the overall line starts with 'Overall:'."}
 
@@ -362,6 +423,19 @@ def look_at_video(ctx, path: str, *, every: float = EVERY_SECONDS,
     except Exception:
         logger.exception("video_look: vision failed")
         desc = ""
+    m = _TEXT_AT.search(desc)
+    if m:
+        desc = _TEXT_AT.sub("", desc).strip()
+        at = [s - offset for s in (_seconds(x) for x in m.group(1).split(",")) if s is not None]
+        try:
+            text = read_document(path, at, work_dir, vision, dur) if at else ""
+        except Exception:
+            logger.exception("video_look: reading the document failed")
+            text = ""
+        logger.info("video_look: document at %s read: %s", m.group(1).strip(), text[:160].replace("\n", " | "))
+        if text:
+            label = "Текст документа в видео ({}), дословно" if lang == "ru" else "Text of the document in the video ({}), verbatim"
+            desc += "\n\n" + label.format(m.group(1).strip()) + ":\n" + text
     logger.info("video_look: %s %.0fs -> %d frames (%s) at %s; %s", os.path.basename(path), dur,
                 len(frames), how, [_stamp(t) for t, _ in frames], desc[:120].replace("\n", " "))
     times = [t + offset for t, _ in frames]

@@ -49,6 +49,7 @@ if __name__ == "__main__":
                                        "voice", "audio", "document", "video", "video_note"])
     ap.add_argument("args", nargs="*")
     ap.add_argument("--caption", default="")
+    ap.add_argument("--fwd", default="", help="forwarded from this name")
     ap.add_argument("--until", default="")
     ap.add_argument("--timeout", type=float, default=600)
     ap.add_argument("--user", type=int, default=0, help="debug user 0..4 (several = parallel users)")
@@ -73,5 +74,5 @@ if __name__ == "__main__":
     elif a.cmd == "press":
         press(a.args[0], a.user)
     elif a.cmd in ("voice", "audio", "document", "video", "video_note"):
-        media(a.cmd, a.args[0], a.caption, a.user)
+        media(a.cmd, a.args[0], a.caption, a.user, a.fwd)
     wait(t0 if a.cmd != "wait" else time.time(), a.until, a.timeout)

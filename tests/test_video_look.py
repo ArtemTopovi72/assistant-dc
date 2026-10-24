@@ -48,6 +48,32 @@ def test_look_at_video_builds_a_sheet_and_asks_once(tmp_path):
     assert all(lbl.startswith("Frame ") and "frame_" in p for lbl, p in sent), sent
 
 
+def test_a_document_in_the_video_is_read_from_its_own_sharp_frames(tmp_path):
+    """A receipt panned past a round video's camera came back as «RACUN - NARUDZBA» only, and
+    «сколько стоит чай» was answered with a guessed 12 € (live 2026-10-24). The storyboard frame
+    is too small to read; several sharp full-size frames of that stretch read every line."""
+    clip = _clip(tmp_path)
+    calls = []
+    def vision(p, q, system):
+        calls.append((p, q, system))
+        if len(calls) == 1:
+            return "0:00 — чек на столе\n0:07 — синий фон\nИтог: чек.\nTEXT AT: 0:00, 0:03"
+        return "CAJ MINT 2,000 6,50 13,00"
+    r = V.look_at_video(None, str(clip), work_dir=tmp_path / "w", vision=vision)
+    assert len(calls) == 2, calls
+    frames, _, system = calls[1]
+    assert 2 <= len(frames) <= V.READ_FRAMES and all(0 <= float(l.split()[1]) <= 3 + V.READ_PAD for l, _ in frames), frames
+    assert "never guess" in system
+    assert "TEXT AT" not in r["description"] and "CAJ MINT 2,000 6,50 13,00" in r["description"], r
+    calls.clear()
+    def plain(p, q, system):
+        calls.append(1)
+        return "0:00 — красное\nИтог: цвета."
+    assert "TEXT AT" in V._SHEET_SYSTEM
+    V.look_at_video(None, str(clip), work_dir=tmp_path / "w2", vision=plain)
+    assert len(calls) == 1
+
+
 def test_a_short_clip_is_sampled_densely_and_labels_stay_distinct():
     """A 7 s кружок at 2 fps had two candidates a second, both smeared while the dog
     jumped; two picks inside one second were both labelled «0:02»."""
@@ -91,7 +117,8 @@ if __name__ == "__main__":
     import tempfile
     test_sample_times_every_5s_capped()
     test_look_at_video_builds_a_sheet_and_asks_once(Path(tempfile.mkdtemp()))
+    test_a_document_in_the_video_is_read_from_its_own_sharp_frames(Path(tempfile.mkdtemp()))
     test_a_short_clip_is_sampled_densely_and_labels_stay_distinct()
     test_portion_stamps_are_absolute_even_when_the_model_counts_from_zero()
     test_wired_into_the_video_paths()
-    print("5/5 passed")
+    print("6/6 passed")
