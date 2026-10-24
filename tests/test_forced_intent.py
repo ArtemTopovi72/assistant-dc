@@ -46,6 +46,17 @@ G._turn_intent(ctx, {"messages": csv}, "total profit?")
 assert "numbers" in got["att"], got
 print("ok the read is told about photos and data")
 
+# «Сколько стоит чай» under a forwarded кружок with a receipt went to ozon_search and the
+# answer guessed 12 €: the read saw the words and nothing of what they were about (2026-10-24).
+from prompt_guard import wrap_quoted
+board = ("Итог: чаепитие в кафе.\n" + "0:05 — кадр\n" * 40 +
+         "\nТекст документа в видео (0:13), дословно:\nCAJ MINT 2,000 6,50 13,00\nUKUPNO 21,00")
+got.clear()
+G._turn_intent(ctx, {"messages": []}, wrap_quoted("the user forwarded this", "Александр: " + board) + "\nСколько стоит чай")
+assert "forwarded" in got["att"] and "чаепитие" in got["att"] and "CAJ MINT 2,000 6,50" in got["att"], got
+assert len(got["att"]) < 900, len(got["att"])
+print("ok the read is told what the forwarded material holds")
+
 assert "or _forced_intent(" in inspect.getsource(G)
 print("ok the loop consults it")
 

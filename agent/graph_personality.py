@@ -514,6 +514,11 @@ def _turn_intent(ctx, state, text: str) -> dict:
     from graph import is_video_sheet
     if not state.get("image_data") and is_video_sheet(getattr(ctx, "last_image_path", None) or ""):
         att = att.replace("a photo", "a video")
+    from prompt_guard import quoted_gist
+    gist = quoted_gist(text or "")
+    if gist:
+        # bare «Сколько стоит чай» under a forwarded receipt read as shopping (2026-10-24)
+        att = ", ".join(filter(None, [att, f"forwarded material the message may be about: «{gist}»"]))
     return intent_read(ctx)(ctx, t, _previous_reply(state), att)
 
 

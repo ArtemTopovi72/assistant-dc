@@ -199,6 +199,21 @@ def has_quote(text: str) -> bool:
     return QUOTE_OPEN in (text or "")
 
 
+# media/video_look.py heads a document read out of a video with «…, дословно:» / «…, verbatim:»
+_VERBATIM = re.compile(r"(?:дословно|verbatim):", re.I)
+
+
+def quoted_gist(text: str, head: int = 300, doc: int = 300) -> str:
+    """What forwarded material in the turn holds, short: its opening and any document text
+    read out of it, for a reader that decides from the user's words (intent.read)."""
+    body = " ".join(" ".join(m.group(0).split(">>>", 1)[-1].replace(QUOTE_CLOSE, " ").split())
+                    for m in _QUOTE_BLOCK.finditer(text or ""))
+    if len(body) <= head + doc:
+        return body
+    m = _VERBATIM.search(body, head)
+    return body[:head] + " … " + (body[m.start():m.start() + doc] if m else "")
+
+
 def user_words(text: str) -> str:
     """What the USER wrote in this turn: attached files and quoted messages
     removed. Every decision about what the user asked for (which picture,

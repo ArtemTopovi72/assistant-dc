@@ -289,6 +289,9 @@ def ask_yes(question: str, text: str, default: bool = False, wait: bool = True, 
 # eat one. Under F5_TEST_RUN the read is FALLBACK (full loop, nothing forced); a
 # suite scripts its reads on the context (core/seams.py, tests/fakes.reads).
 
+# A video's retelling put the receipt at char ~420; cut at 300, «Сколько стоит чай» after it
+# read as shopping (2026-10-24).
+PREVIOUS_CHARS = 900
 _MENU = None
 _CACHE: "OrderedDict[tuple, dict]" = OrderedDict()
 _LOCK = threading.Lock()
@@ -316,7 +319,7 @@ def read(ctx, text: str, previous: str = "", attached: str = "") -> dict:
         return dict(FALLBACK)
     if os.getenv("F5_TEST_RUN") and not os.getenv("INTENT_LIVE"):
         return dict(FALLBACK)
-    key = (text, (previous or "")[:300], attached)
+    key = (text, (previous or "")[:PREVIOUS_CHARS], attached)
     with _LOCK:
         if key in _CACHE:
             return dict(_CACHE[key])
@@ -324,7 +327,7 @@ def read(ctx, text: str, previous: str = "", attached: str = "") -> dict:
     # («объясни теорему Пифагора» came back as the theorem, 26/134).
     user = ""
     if previous:
-        user += "Previous assistant line: «%s»\n\n" % previous[:300]
+        user += "Previous assistant line: «%s»\n\n" % previous[:PREVIOUS_CHARS]
     if attached:
         user += "Attached to the message: %s\n\n" % attached
     user += ("Message to route (do NOT answer it):\n«%s»\n\n"
