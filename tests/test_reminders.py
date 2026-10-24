@@ -28,12 +28,22 @@ assert [i["text"] for i in reminders.pending(7)] == ["выпить воды"]
 reminders.stop()
 print("ok2")
 
-# exchange_rate reads the CBR payload (cache pre-seeded: no network in tests)
 import time as _t
-tools._CBR_CACHE.update(t=_t.time(), data={"Date": "2026-09-26T11:30", "Valute": {
-    "USD": {"Value": 84.3414, "Nominal": 1}, "JPY": {"Value": 57.0, "Nominal": 100}}})
-r = tools._handle_exchange_rate(None, None, {"codes": "usd, JPY,XXX"})
-assert "1 USD = 84.3414 RUB" in r and "1 JPY = 0.5700 RUB" in r and "XXX: no CBR rate" in r, r
+# convert_currency: the tool computes the sum and names source and date; a failure says so
+_fx = SimpleNamespace(deps=SimpleNamespace(currency_convert=lambda a, f, t, d=None: {
+    "amount": a, "from": f.upper(), "to": t.upper(), "result": a * 90.2429, "rate": 90.2429,
+    "date": "2026-10-24", "source": "Central Bank of Russia"}))
+r = tools._handle_convert_currency(_fx, None, {"amount": 13, "from_currency": "eur"})
+assert "13 EUR = 1 173.16 RUB" in r and "Central Bank of Russia, rate of 2026-10-24" in r, r
+def _down(*a, **k):
+    raise OSError("all sources down")
+r = tools._handle_convert_currency(SimpleNamespace(deps=SimpleNamespace(currency_convert=_down)), None,
+                                  {"amount": 1, "from_currency": "EUR", "to_currency": "RSD"})
+assert r.startswith("[TOOL ERROR]") and "do not guess" in r, r
+# calendar: the user's today, quoted counts
+r = tools._handle_calendar(SimpleNamespace(user_tz="", deps=SimpleNamespace(
+    dates_answer=lambda today, **k: f"Today is {today}; until {k['until']}")), None, {"until": "Новый год"})
+assert "until Новый год" in r and "do not recount" in r, r
 print("ok3")
 
 # local_time: the zone comes from the geocoder, the clock from zoneinfo

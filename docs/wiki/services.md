@@ -8,7 +8,7 @@ tags: [services, agent-tools]
 
 ## What it does
 
-The assistant's agent loop reasons and calls tools; this domain is where those tools actually do their work against the outside world. Each service wraps one external source (a marketplace, a weather API, a VK/Telegram wall, a presentation file) and hands back either plain text the model can quote or a file the user can open. Two services carry their own LLM calls rather than being pure data fetchers: [`services/ozon_shopper.py`](../../services/ozon_shopper.py) plans, screens and decides a purchase, and [`services/slides.py`](../../services/slides.py) plans a deck and then checks its own planner's work against search notes before building the file. The rest -- [`services/weather.py`](../../services/weather.py), [`services/reminders.py`](../../services/reminders.py), [`services/social.py`](../../services/social.py), [`services/fact_check.py`](../../services/fact_check.py) -- are deterministic wrappers with no model in the loop, callable and unit-testable on their own.
+The assistant's agent loop reasons and calls tools; this domain is where those tools actually do their work against the outside world. Each service wraps one external source (a marketplace, a weather API, a VK/Telegram wall, a presentation file) and hands back either plain text the model can quote or a file the user can open. Two services carry their own LLM calls rather than being pure data fetchers: [`services/ozon_shopper.py`](../../services/ozon_shopper.py) plans, screens and decides a purchase, and [`services/slides.py`](../../services/slides.py) plans a deck and then checks its own planner's work against search notes before building the file. The rest -- [`services/weather.py`](../../services/weather.py), [`services/reminders.py`](../../services/reminders.py), [`services/currency.py`](../../services/currency.py), [`services/dates.py`](../../services/dates.py), [`services/social.py`](../../services/social.py), [`services/fact_check.py`](../../services/fact_check.py) -- are deterministic wrappers with no model in the loop, callable and unit-testable on their own.
 
 ## How it works
 
@@ -83,6 +83,8 @@ The Ozon tools and the Telegram card renderer sit downstream of `ozon_shopper`/`
 | Path | Responsibility |
 |---|---|
 | [`services/reminders.py`](../../services/reminders.py) | Timer-armed reminders backed by a JSON file: `register`, `add`, `pending`, `cancel`, `stop`, `_arm`/`_fire` |
+| [`services/currency.py`](../../services/currency.py) | `convert(amount, frm, to, day)` for the `convert_currency` tool: rubles by the Central Bank of Russia (latest or archive by date, stepping back over holidays), other pairs by open.er-api.com, then the fawazahmed0 currency-api mirrors; raises `RateError` rather than guess |
+| [`services/dates.py`](../../services/dates.py) | `answer(today, date, until, add_*, workdays)` for the `calendar` tool: weekdays, days and Russian working days until a date or holiday (isdayoff.ru production calendar, weekend-only fallback said aloud), date shifts, Orthodox Easter |
 
 ### Slides
 | Path | Responsibility |

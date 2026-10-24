@@ -183,10 +183,21 @@ _WEATHER_FORECAST_DESC = (
 )
 
 
-_EXCHANGE_RATE_DESC = (
-    "Official Central Bank of Russia rate of foreign currencies in rubles (today's). Call "
-    "it before converting rubles to/from dollars, euros, yuan etc. -- never use a "
-    "remembered rate."
+_CONVERT_CURRENCY_DESC = (
+    "Convert money at today's rate (or a past day's), any pair: 'сколько 13 евро в рублях', "
+    "'курс доллара', '5000 динар в евро'. Rubles go by the Central Bank of Russia, other pairs by "
+    "an exchange-rate service; the sum is computed by the tool -- quote it, never multiply "
+    "yourself, never use a remembered or searched rate. Money with no currency sign on a "
+    "receipt or price: name the currency from where it comes from before converting."
+)
+
+
+_CALENDAR_DESC = (
+    "Dates done right: today's date and weekday, the weekday of any date, how many days (and "
+    "Russian working days, by the official production calendar) until a date or a holiday "
+    "('сколько дней до Нового года', 'до 8 марта', 'до 15 декабря'), the date N days / weeks / "
+    "months / working days from a date ('через 45 дней', 'через 10 рабочих дней'), whether a "
+    "day is a day off. Never count days or weekdays yourself."
 )
 
 

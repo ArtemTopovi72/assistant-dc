@@ -493,35 +493,40 @@ def _handle_weather_forecast(ctx, state, args: dict) -> str:
         f"wind up to {b['wind_kmh']:.0f} km/h, rain hours: {b['wet_hours']}" for b in buckets)
 
 
-_CBR_URL = "https://www.cbr-xml-daily.ru/daily_json.js"
-_CBR_CACHE: dict = {}
-
-
-def _handle_exchange_rate(ctx, state, args: dict) -> str:
-    import json as _json
-    import time
-    import urllib.request as _rq
-    now = time.time()
-    if now - _CBR_CACHE.get("t", 0) > 3600:
+def _handle_convert_currency(ctx, state, args: dict) -> str:
+    import datetime as _dt
+    import currency
+    day = None
+    if args.get("date"):
         try:
-            with _rq.urlopen(_CBR_URL, timeout=10) as r:
-                _CBR_CACHE.update(data=_json.loads(r.read().decode("utf-8")), t=now)
-        except Exception as exc:
-            if "data" not in _CBR_CACHE:
-                return (f"[TOOL ERROR] The rate service is unreachable ({exc}). Tell the "
-                        "user you could not get today's rate -- do not guess one.")
-    data = _CBR_CACHE["data"]
-    val = data.get("Valute", {})
-    out = []
-    for code in re.split(r"[,\s]+", (args.get("codes") or "USD").upper()):
-        if not code or code == "RUB":
-            continue
-        v = val.get(code)
-        out.append(f"1 {code} = {v['Value'] / v['Nominal']:.4f} RUB" if v
-                   else f"{code}: no CBR rate")
-    logger.info("Tool: exchange_rate(%s)", args.get("codes"))
-    return (f"Central Bank of Russia rate for {str(data.get('Date', ''))[:10]}: "
-            + "; ".join(out) + ". Name the rate and its date when you use it.")
+            day = _dt.date.fromisoformat(str(args["date"])[:10])
+        except ValueError:
+            return "[TOOL ERROR] `date` must be YYYY-MM-DD."
+    try:
+        r = dep(ctx, "currency_convert", currency.convert)(
+            float(args.get("amount") or 1), args.get("from_currency") or "", args.get("to_currency") or "RUB", day)
+    except Exception as exc:
+        logger.warning("Tool: convert_currency failed: %s", exc)
+        return (f"[TOOL ERROR] No rate for {args.get('from_currency')}->{args.get('to_currency')} ({exc}). "
+                "Tell the user you could not get the rate -- do not guess one.")
+    logger.info("Tool: convert_currency(%s %s->%s) = %.4f via %s", r["amount"], r["from"], r["to"], r["result"], r["source"])
+    total = f"{r['result']:,.2f}".replace(",", " ")
+    return (f"{r['amount']:g} {r['from']} = {total} {r['to']} (1 {r['from']} = {r['rate']:.6g} {r['to']}; "
+            f"{r['source']}, rate of {r['date']}). Quote these figures and name the source and date.")
+
+
+def _handle_calendar(ctx, state, args: dict) -> str:
+    import dates
+    today = _user_now(getattr(ctx, "user_tz", "") or "").date()
+    try:
+        out = dep(ctx, "dates_answer", dates.answer)(
+            today, date=args.get("date") or "", until=args.get("until") or "",
+            add_days=int(args.get("add_days") or 0), add_weeks=int(args.get("add_weeks") or 0),
+            add_months_n=int(args.get("add_months") or 0), workdays=bool(args.get("workdays")))
+    except Exception as exc:
+        return f"[TOOL ERROR] {exc}"
+    logger.info("Tool: calendar(%s) -> %s", {k: v for k, v in args.items() if v}, out[:160])
+    return out + " Quote these dates and counts; do not recount them."
 
 
 from prompts import _user_now  # noqa: E402  (the user's wall clock)
@@ -729,7 +734,7 @@ def _handle_create_presentation(ctx, state, args: dict) -> str:
 from tool_descriptions import (
     _SEARCH_DESC, _DEEP_RESEARCH_DESC, _GENERATE_IMAGE_DESC, _GENERATE_VIDEO_DESC,
     _REDRAW_IMAGE_DESC, _INSPECT_IMAGE_DESC, _INPAINT_IMAGE_DESC, _TRANSFER_IMAGE_DESC, _SWAP_PERSON_DESC,
-    _CALCULATE_DESC, _READ_CLIPBOARD_DESC, _REMEMBER_FACT_DESC, _FORGET_FACTS_DESC, _SET_REMINDER_DESC, _EXCHANGE_RATE_DESC, _WEATHER_FORECAST_DESC, _LOCAL_TIME_DESC, _FIND_PHOTO_DESC,
+    _CALCULATE_DESC, _READ_CLIPBOARD_DESC, _REMEMBER_FACT_DESC, _FORGET_FACTS_DESC, _SET_REMINDER_DESC, _CONVERT_CURRENCY_DESC, _CALENDAR_DESC, _WEATHER_FORECAST_DESC, _LOCAL_TIME_DESC, _FIND_PHOTO_DESC,
     _RECALL_CONTEXT_DESC, _FOLD_CONTEXT_DESC,
     _FIX_HANDS_DESC, _FIX_ARTIFACT_DESC, _CREATE_PRESENTATION_DESC,
     _LIST_FILES_DESC, _READ_FILE_DESC, _OPEN_IMAGE_DESC, _WRITE_FILE_DESC,
@@ -748,7 +753,7 @@ from tool_descriptions import (
 from tool_args import (
     ListFilesArgs, ReadFileArgs, WriteFileArgs, EditFileArgs, SearchFilesArgs,
     UnpackArchiveArgs, PackArchiveArgs, RunCodeArgs, InstallPackagesArgs,
-    FindContentArgs, DeletePathArgs, DedupePhotosArgs, RagAddArgs, RagSearchArgs, SetReminderArgs, ExchangeRateArgs, WeatherForecastArgs, LocalTimeArgs,
+    FindContentArgs, DeletePathArgs, DedupePhotosArgs, RagAddArgs, RagSearchArgs, SetReminderArgs, ConvertCurrencyArgs, CalendarArgs, WeatherForecastArgs, LocalTimeArgs,
     CodeOutlineArgs, RunTestsArgs, UpdatePlanArgs, UndoEditArgs,
     OzonSearchArgs, OzonProductArgs, OzonReviewsArgs, OzonCartArgs, OzonSetLocationArgs,
     OzonShopArgs,
@@ -805,8 +810,10 @@ TOOLS = [
              _handle_remember_fact, RememberFactArgs),
     ToolSpec("set_reminder", _fn_schema("set_reminder", _SET_REMINDER_DESC, SetReminderArgs),
              _handle_set_reminder, SetReminderArgs),
-    ToolSpec("exchange_rate", _fn_schema("exchange_rate", _EXCHANGE_RATE_DESC, ExchangeRateArgs),
-             _handle_exchange_rate, ExchangeRateArgs),
+    ToolSpec("convert_currency", _fn_schema("convert_currency", _CONVERT_CURRENCY_DESC, ConvertCurrencyArgs),
+             _handle_convert_currency, ConvertCurrencyArgs),
+    ToolSpec("calendar", _fn_schema("calendar", _CALENDAR_DESC, CalendarArgs),
+             _handle_calendar, CalendarArgs),
     ToolSpec("weather_forecast", _fn_schema("weather_forecast", _WEATHER_FORECAST_DESC, WeatherForecastArgs),
              _handle_weather_forecast, WeatherForecastArgs),
     ToolSpec("local_time", _fn_schema("local_time", _LOCAL_TIME_DESC, LocalTimeArgs),

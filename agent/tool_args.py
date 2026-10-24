@@ -293,9 +293,24 @@ class WeatherForecastArgs(_ToolArgs):
     days: int = Field(1, ge=1, le=7, description="How many days from `date` (2 for a weekend).")
 
 
-class ExchangeRateArgs(_ToolArgs):
-    codes: str = Field("USD", description=(
-        "Currency codes, comma-separated, e.g. 'USD' or 'USD,EUR,CNY'."))
+class ConvertCurrencyArgs(_ToolArgs):
+    amount: float = Field(1, description="How much of `from_currency`; 1 for a bare rate.")
+    from_currency: str = Field(..., min_length=3, max_length=6, description=(
+        "ISO code of the money you have: 'EUR', 'USD', 'RSD', 'CNY'; crypto as 'BTC'."))
+    to_currency: str = Field("RUB", min_length=3, max_length=6, description="ISO code to convert into.")
+    date: Optional[str] = Field(None, description="'YYYY-MM-DD' for the rate on a past day; omit for today.")
+
+
+class CalendarArgs(_ToolArgs):
+    date: str = Field("", description=(
+        "The date to start from: 'YYYY-MM-DD', words ('15 марта', 'через две недели') or a "
+        "holiday ('Новый год', 'Пасха'); empty = today."))
+    until: str = Field("", description=(
+        "A second date or holiday: answers how many days and Russian working days from `date` to it."))
+    add_days: int = Field(0, description="Shift `date` by this many days (negative = back).")
+    add_weeks: int = Field(0, description="Shift `date` by this many weeks.")
+    add_months: int = Field(0, description="Shift `date` by this many months.")
+    workdays: bool = Field(False, description="`add_days` counts Russian working days, not calendar days.")
 
 
 class SetReminderArgs(_ToolArgs):
