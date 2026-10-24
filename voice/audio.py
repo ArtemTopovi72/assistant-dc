@@ -713,9 +713,11 @@ def _load_silero_vad_model(loader=None, store=None):
     store = _SILERO if store is None else store
     with _SILERO_LOCK:
         if "model" not in store:
-            if loader is None:
-                from silero_vad import load_silero_vad as loader
-            store["model"] = loader()
+            from utils import torch_threads_kept
+            with torch_threads_kept():
+                if loader is None:
+                    from silero_vad import load_silero_vad as loader
+                store["model"] = loader()
             logger.info("Silero VAD model loaded")
         return store["model"]
 

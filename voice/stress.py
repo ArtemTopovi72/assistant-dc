@@ -145,12 +145,14 @@ class BilingualAccentor:
         if self._ru is None:
             RUAccent = module(self.modules, "ruaccent.ruaccent").RUAccent
             import pathlib
-            ru = RUAccent()
+            from utils import torch_threads_kept
             wd = str(self.ru_workdir) if self.ru_workdir else None
             if wd:
                 pathlib.Path(wd).mkdir(parents=True, exist_ok=True)
-            ru.load(omograph_model_size=self.ru_model_size, use_dictionary=True,
-                    tiny_mode=False, workdir=wd, device=self.device)
+            with torch_threads_kept():      # ruaccent caps the whole process at 4 threads
+                ru = RUAccent()
+                ru.load(omograph_model_size=self.ru_model_size, use_dictionary=True,
+                        tiny_mode=False, workdir=wd, device=self.device)
             self._ru = ru
             logger.info("BilingualAccentor: RUAccent %s ready (device=%s)",
                         self.ru_model_size, self.device)
@@ -181,8 +183,10 @@ class BilingualAccentor:
                         and time.monotonic() - BilingualAccentor._silero_failed_at < LOAD_RETRY_S):
                     return out
                 try:
-                    from silero_stress import load_accentor
-                    BilingualAccentor._silero = load_accentor()
+                    from utils import torch_threads_kept
+                    with torch_threads_kept():
+                        from silero_stress import load_accentor
+                        BilingualAccentor._silero = load_accentor()
                 except Exception:
                     BilingualAccentor._silero_failed_at = time.monotonic()
                     raise

@@ -76,8 +76,14 @@ def scrub(text: str, source: str = "", scorer=None, chunk: int = None) -> str:
     if not text or len(text.strip()) < 20:
         return text
     try:
+        import time
+        t0 = time.time()
         ch = _chunks(text, chunk)
         sc = (scorer or scores)(ch)
+        if time.time() - t0 > 2:
+            import torch
+            logger.info("[injection_scan] %s: %d chunks in %.1fs (torch threads %d)", source or "text", len(ch),
+                        time.time() - t0, torch.get_num_threads())
         if not sc:
             return text
         bad = [i for i, s in enumerate(sc) if s >= THRESHOLD]

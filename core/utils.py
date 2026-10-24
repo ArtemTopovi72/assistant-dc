@@ -14,6 +14,22 @@ from typing import List, Optional, Sequence
 logger = logging.getLogger("assistant.utils")
 
 
+class torch_threads_kept:
+    """Restore torch's CPU thread count after the block. silero_vad and silero_stress call
+    torch.set_num_threads(1) at import, and every CPU model in the process then ran on one
+    thread (the injection guard: 13 s instead of 1.25 s, 2026-10-25)."""
+
+    def __enter__(self):
+        import torch
+        self.n = torch.get_num_threads()
+        return self
+
+    def __exit__(self, *exc):
+        import torch
+        torch.set_num_threads(self.n)
+        return False
+
+
 def free_process_memory(loaded=None) -> None:
     """Release process memory held by our own Python side. Used by clear-context so
     wiping the conversation actually returns RAM/VRAM instead of just dropping

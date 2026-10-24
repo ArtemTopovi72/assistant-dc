@@ -51,7 +51,9 @@ def _voice_spans(seg):
     sample had no words; a voice under music still counts."""
     try:
         import numpy as np, torch
-        from silero_vad import get_speech_timestamps
+        from utils import torch_threads_kept
+        with torch_threads_kept():
+            from silero_vad import get_speech_timestamps
         from audio import _load_silero_vad_model
         mono = seg.set_channels(1).set_frame_rate(16000).set_sample_width(2)
         w = torch.from_numpy(np.array(mono.get_array_of_samples(), dtype=np.float32) / 32768.0)
