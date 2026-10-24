@@ -424,7 +424,9 @@ def _unparrot(ctx, answer: str, original_input: str, history=()) -> str:
     return answer
 
 
-_THOUSANDS_RE = re.compile(r"(?<![\d.,])\d{1,3}(?:,\d{3})+(?![\d,]|\.\d)")
+# Two groups, or one group of 000: «100,571 рубля» is a Russian decimal (a CBR rate became
+# «100 571», 2026-10-25), «399,000 рублей» is not.
+_THOUSANDS_RE = re.compile(r"(?<![\d.,])\d{1,3}(?:(?:,\d{3}){2,}|,000)(?![\d,]|\.\d)")
 
 
 def _ru_thousands(answer: str) -> str:

@@ -42,6 +42,8 @@ print("PASS unparrot")
 assert gl._ru_thousands("17% от 2,345,678 рублей — 399,000 рублей") == "17% от 2 345 678 рублей — 399 000 рублей"
 assert gl._ru_thousands("It costs 2,345 dollars") == "It costs 2,345 dollars"
 assert gl._ru_thousands("Числа 1,5 и 3,14 и 1,234.5 остаются") == "Числа 1,5 и 3,14 и 1,234.5 остаются"
+# One comma group is a Russian decimal: a rate «100,571 рубля за 1 EUR» came out as «100 571» (2026-10-25)
+assert gl._ru_thousands("Курс евро составлял 100,571 рубля за 1 EUR") == "Курс евро составлял 100,571 рубля за 1 EUR"
 print("PASS ru thousands")
 assert gl._ru_thousands("составляет 398 765.26 рублей, курс 84.40 руб, Python 3.11") == "составляет 398 765,26 рублей, курс 84,40 руб, Python 3.11"
 print("PASS ru decimal")
