@@ -69,7 +69,10 @@ _READ_SYSTEM = (
     "quantity, unit price and total, names, dates, totals. Keep each figure in its own column: "
     "an item's quantity times its unit price is its total, and a line where it is not is misread -- "
     "look at it again (a tax-rate column of 15,00 was copied as a dessert's total). Write a line you cannot read as "
-    "[неразборчиво]; never guess a figure.")
+    "[неразборчиво]; never guess a figure.\n"
+    "Money with no currency sign: when the document shows where it comes from (a city, a country, a "
+    "country code in a tax number), end with one line «Currency: <ISO code> -- <the place and how the "
+    "document shows it>». A receipt from Cetinje answered «валюта не указана, я взял евро» (2026-10-24).")
 
 def duration_seconds(path: str) -> float:
     """Length of the clip via ffprobe; 0.0 when unknown."""
