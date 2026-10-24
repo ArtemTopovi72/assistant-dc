@@ -60,6 +60,17 @@ print("ok the read is told what the forwarded material holds")
 assert "or _forced_intent(" in inspect.getsource(G)
 print("ok the loop consults it")
 
+# The forced tool must be among the tools sent: «прочитай буфер и нарисуй» read
+# wants=[generate_image], must_call=read_clipboard; retrieval dropped read_clipboard,
+# the force had nothing to name and the model drew «the clipboard is empty» (2026-10-24).
+import tool_retrieval as R
+ALL = [{"function": {"name": n}} for n in ("search", "calculate", "remember_fact", "generate_image", "read_clipboard")]
+src = inspect.getsource(G)
+assert '*filter(None, [_read["must_call"]])' in src, "select_tools gets must_call with wants"
+got = {s["function"]["name"] for s in R.select_tools("x", ALL, wants=["generate_image", "read_clipboard"])}
+assert "read_clipboard" in got, got
+print("ok the forced tool is always offered")
+
 # A field the model got wrong takes its default; the rest of the read stands.
 r = intent._validate({"song": "rap", "names_picture": 7, "is_question": True,
                       "weather": {"city": "Сочи", "when": "tomorrow"}})

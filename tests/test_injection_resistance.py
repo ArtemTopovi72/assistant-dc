@@ -22,6 +22,9 @@ DEFENSE (two layers):
 Run: venv/Scripts/python.exe tests/test_injection_resistance.py
 """
 import os, sys, threading
+# The probes drive the live model, so the intent read is live too: under F5_TEST_RUN it is
+# FALLBACK, retrieval sent only the core tools and the model called calculate("1") seven times.
+os.environ["INTENT_LIVE"] = "1"
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass

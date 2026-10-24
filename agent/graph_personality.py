@@ -1262,9 +1262,12 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             pass
         _always = set(_always) | _button
         _read = _turn_intent(ctx, state, original_input or user_input)
+        # must_call rides along: «прочитай буфер и нарисуй» read wants=[generate_image],
+        # must_call=read_clipboard, and the forced tool was never sent (2026-10-24)
         turn_tools = _retrieval.select_tools(
             (user_input or "") + " " + (original_input or ""),
-            turn_tools, always=_always, wants=_read["wants"] if _read["ok"] else None)
+            turn_tools, always=_always,
+            wants=[*_read["wants"], *filter(None, [_read["must_call"]])] if _read["ok"] else None)
 
         # Forcing a specific tool: this server takes only none/auto/required,
         # so "call exactly this one" is expressed by sending ONLY its schema
