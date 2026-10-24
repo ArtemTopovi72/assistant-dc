@@ -2,7 +2,8 @@
 the same planner caption, Klein as the app renders it (caption_to_prompt, KLEIN_STEPS) and MOSS as its
 layout JSON (the ComfyUI MOSSImageLayoutPrompt conversion). 1024x1024, two seeds each.
 
-    venv/Scripts/python.exe bench/moss_vs_klein.py [scene ...]
+    venv/Scripts/python.exe bench/moss_vs_klein.py [--hard] [scene ...]
+--hard runs bench/moss_hard_scenes.py (three seeds) into tmp/moss_vs_klein_hard/.
 Scores each lettering element by OCR (exact after case/space folding) and times each render.
 Writes tmp/moss_vs_klein/<scene>_<engine>_<seed>.png, <scene>.jpg and results.json.
 """
@@ -113,6 +114,10 @@ def sheet(name, paths):
 
 
 if __name__ == "__main__":
+    if "--hard" in sys.argv:
+        import moss_hard_scenes
+        sys.argv.remove("--hard")
+        SCENES, OUT, SEEDS = moss_hard_scenes.SCENES, OUT + "_hard", (101, 202, 303)
     os.makedirs(OUT, exist_ok=True)
     rpath = os.path.join(OUT, "results.json")
     res = json.load(open(rpath, encoding="utf-8")) if os.path.exists(rpath) else {}
