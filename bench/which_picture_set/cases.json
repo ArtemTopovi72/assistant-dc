@@ -440,5 +440,30 @@
   "text": "спасибо, а что ещё посоветуешь?",
   "want": "talk",
   "source": "constructed"
+ },
+ {
+  "id": "fwd_receipt_video_question",
+  "recent": [
+   "bot: 🔎 Искал: «EUR to RUB» итоговая сумма 13,00 составит примерно 1171,64 рубля.",
+   "user: [forwards a video note]",
+   "bot: [sees in it: Итог: Видео показывает процесс приготовления чая и демонстрацию чека в кафе. Документ: FORZA KUK KUK BB, CETINJE RACUN - NARUDZBA Cijena Stopa % Ukupno CAJ MINT 2,000 6,50 13,00 TIRAMISU 1,000 8,00 8,00]",
+   "bot: 🎥 Видео · 23 с Что с ним сделать?"
+  ],
+  "text": "Сколько стоит чай",
+  "want": "forwarded",
+  "source": "debug chat 2026-10-24: asked «Какую картинку?» after a forwarded receipt video"
+ },
+ {
+  "id": "fwd_receipt_video_after_wrong_ask",
+  "recent": [
+   "user: Сколько стоит чай",
+   "bot: 🖼 Какую картинку? В этом чате их 12. Выбери нужную или ответь на неё.",
+   "user: [forwards a video note]",
+   "bot: [sees in it: Итог: Видео показывает процесс приготовления чая и демонстрацию чека в кафе. Документ: FORZA KUK KUK BB, CETINJE RACUN - NARUDZBA Cijena Stopa % Ukupno CAJ MINT 2,000 6,50 13,00 TIRAMISU 1,000 8,00 8,00]",
+   "bot: 🎥 Видео · 23 с Что с ним сделать?"
+  ],
+  "text": "Сколько стоит чай",
+  "want": "forwarded",
+  "source": "debug chat 2026-10-24: the earlier wrong ask in the history kept it «unclear»"
  }
 ]

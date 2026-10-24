@@ -65,6 +65,12 @@ def test_a_document_in_the_video_is_read_from_its_own_sharp_frames(tmp_path):
     assert 2 <= len(frames) <= V.READ_FRAMES and all(0 <= float(l.split()[1]) <= 3 + V.READ_PAD for l, _ in frames), frames
     assert "never guess" in system
     assert "TEXT AT" not in r["description"] and "CAJ MINT 2,000 6,50 13,00" in r["description"], r
+    # one chat line of it for later reads (chatlog «seen»): the overall line and the document
+    assert r["gist"].startswith("Итог: чек.") and "CAJ MINT" in r["gist"] and "0:07" not in r["gist"], r["gist"]
+    import chatlog
+    line = chatlog._line({"kind": "seen", "data": {"text": r["gist"]}})
+    assert line.startswith("bot: [sees in it: Итог: чек.") and "CAJ MINT" in line, line
+    assert chatlog._line({"kind": "out", "data": {"method": "sendMessage", "text": "⚙️ Пишу ответ… ⏳ 0:24"}}) == ""
     calls.clear()
     def plain(p, q, system):
         calls.append(1)

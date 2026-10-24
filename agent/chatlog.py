@@ -93,6 +93,8 @@ def _line(entry) -> str:
     progress stages and button chrome."""
     import re
     d = entry.get("data")
+    if entry.get("kind") == "seen" and isinstance(d, dict) and d.get("text"):
+        return "bot: [sees in it: " + " ".join(str(d["text"]).split())[:300] + "]"
     if not isinstance(d, dict) or entry.get("kind") not in ("in", "out"):
         return ""
     if entry["kind"] == "in":
@@ -113,9 +115,17 @@ def _line(entry) -> str:
         return "bot: [sends audio]"
     import html
     text = html.unescape(re.sub(r"<[^>]+>", "", d.get("text") or "")).strip()
-    if not text or text in ("✅", "👌") or (len(text) < 70 and text.endswith(_PROGRESS_END)):
+    # «⚙️ Пишу ответ… ⏳ 0:24» ticks took three of the eight lines a read gets
+    if not text or text in ("✅", "👌") or (len(text) < 70 and (text.endswith(_PROGRESS_END) or "⏳" in text)):
         return ""
     return "bot: " + " ".join(text.split())[:300]
+
+
+def seen(text: str) -> None:
+    """What the bot saw in a forwarded or sent video, as one chat line for later reads: a bare
+    «[forwards a video note]» left «Сколько стоит чай» under a receipt video «unclear»."""
+    if (text or "").strip():
+        write(_cur.get(), "seen", {"text": text.strip()})
 
 
 def recent(chat_id, n: int = 8) -> list:

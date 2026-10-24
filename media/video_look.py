@@ -439,5 +439,15 @@ def look_at_video(ctx, path: str, *, every: float = EVERY_SECONDS,
     logger.info("video_look: %s %.0fs -> %d frames (%s) at %s; %s", os.path.basename(path), dur,
                 len(frames), how, [_stamp(t) for t, _ in frames], desc[:120].replace("\n", " "))
     times = [t + offset for t, _ in frames]
-    return {"duration": dur, "times": times, "sheet": str(sheet),
-            "description": absolute_stamps(desc, times, offset)}
+    desc = absolute_stamps(desc, times, offset)
+    return {"duration": dur, "times": times, "sheet": str(sheet), "description": desc, "gist": gist(desc)}
+
+
+def gist(desc: str) -> str:
+    """The overall line and the start of a document read out of the clip: what one chat line
+    can say about the video."""
+    lines = [l.strip() for l in (desc or "").splitlines() if l.strip()]
+    overall = next((l for l in lines if re.match(r"(Итог|Overall)\s*:", l)), "")
+    parts = re.split(r"(?:дословно|verbatim):\n", desc or "", maxsplit=1)
+    doc = parts[1] if len(parts) == 2 else ""
+    return " ".join(filter(None, [overall, "Документ: " + " ".join(doc.split())[:200] if doc else ""]))

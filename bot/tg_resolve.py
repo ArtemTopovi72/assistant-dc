@@ -1516,9 +1516,13 @@ class ResolveMixin:
                 except Exception:
                     tg_bot.logger.warning("session persist failed", exc_info=True)
                 self._activity.log(chat_id, "system", f"[target] named picture {_named}", uname)
+        # Quoted material (✍️ after a forward, a reply to a message) is what the words are
+        # about: «Что думаешь?» under it got «Какую картинку?» (2026-10-22).
+        from prompt_guard import has_quote
         if (not img_bytes and not file_in_folder
                 and not getattr(sess, "target_image", "")
                 and merged not in tg_bot._MACHINE_PAYLOADS
+                and not has_quote(merged)
                 and len(tg_bot._live_images(sess)) > 1
                 and tg_bot._needs_image_choice(own_words, chatlog.recent(chat_id), ctx=self.reads)):
             live = tg_bot._live_images(sess)

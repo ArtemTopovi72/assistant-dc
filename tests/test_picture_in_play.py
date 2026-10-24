@@ -104,6 +104,16 @@ bot.pushed.clear(); bot.sent.clear()
 bot._dispatch(H.msg("describe the image")); H.settle(bot)
 check("a stale in-play id (not the newest) does not silently win", "Which picture" in H.texts(bot) and not bot.pushed)
 
+# ✍️ after a forward: the text rides with the forwarded material, which IS its subject.
+# «Что думаешь?» after «✍️ Напиши, что сделать с пересланным» got «Какую картинку?» (2026-10-22).
+s = bot._get_session(H.CID); s.pending_instruction = ""; s.target_image = ""; s.turn_image = ""
+s.fwd_own = "Alex: [video] a cafe receipt, CAJ MINT 6,50"; bot._store.put(s)
+bot.pushed.clear(); bot.sent.clear()
+bot._dispatch(H.msg("describe the image")); H.settle(bot)
+check("a question about forwarded material never asks which picture",
+      "Which picture" not in H.texts(bot) and len(bot.pushed) == 1 and "CAJ MINT" in bot.pushed[0].user_text,
+      (H.texts(bot)[:120], [p.user_text[:80] for p in bot.pushed]))
+
 src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(T.__file__))), "bot/tg_tasks.py"), encoding="utf-8").read()
 check("a delivered picture becomes the one in play", "sess.turn_image = img_id" in src)
 check("a turn without a picture clears it", 'sess.turn_image = (_target or {}).get("id", "") or (' in src)

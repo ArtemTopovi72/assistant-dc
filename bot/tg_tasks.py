@@ -2209,6 +2209,8 @@ class TaskRunnerMixin:
             if seen.get("sheet") and os.path.exists(seen["sheet"]):
                 import shutil
                 shutil.copyfile(src_file, os.path.join(os.path.dirname(seen["sheet"]), video_look.CONTINUE_CLIP))
+            import chatlog
+            chatlog.seen(seen.get("gist", ""))
             return seen
         except Exception:
             tg_bot.logger.exception("video look failed file_id=%s", file_id)

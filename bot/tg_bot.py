@@ -704,7 +704,12 @@ def _message_subject(text: str, recent: list, ctx=None) -> str:
     and the bot's last line: each exception was a patch and the next case got
     «Какую картинку?» anyway (a question after a forwarded voice, 2026-10-22).
     Model down -> "current": not asking beats asking wrongly."""
-    lines = "\n".join(str(r)[:160] for r in (recent or [])[-8:])
+    recent = list(recent or [])
+    # the message is logged before this read; echoed as the last line it turned «Сколько
+    # стоит чай» after a forwarded receipt into «unclear» 3/3 (2026-10-24)
+    if recent and " ".join(str(recent[-1]).split()) == "user: " + " ".join((text or "").split()):
+        recent.pop()
+    lines = "\n".join(str(r)[:160] for r in recent[-8:])
     blob = f"MESSAGE: {(text or '').strip()[:400]}\nCHAT BEFORE IT:\n{lines}"
     return choice(ctx)(_SUBJECT_Q, blob, _SUBJECTS, "current")
 
