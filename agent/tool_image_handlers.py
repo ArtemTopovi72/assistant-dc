@@ -1015,8 +1015,13 @@ def _handle_generate_image(ctx, state, args: dict) -> str:
         return _over
 
     description = _keep_quoted_names(description, state)
+    import object_refs
     import person_look
-    description = person_look.with_look(description, ctx=ctx)     # «Ленин» -> bald, goatee, ...
+    draw_refs = dep(ctx, "object_refs", object_refs.find)(ctx, description)
+    # A face photo says it better than words: the words for Lenin read «often wears glasses» off
+    # the web, and he was drawn in red sunglasses (debug chat 2026-10-26).
+    if not any(kind == "person" for _, _, kind in draw_refs):
+        description = person_look.with_look(description, ctx=ctx)     # «Ленин» -> bald, goatee, ...
     ctx.set_stage("Drawing a picture")
     steps, width, height, seed = args.get("steps"), args.get("width"), args.get("height"), args.get("seed")
     logger.info("Tool: generate_image(%s, steps=%s, %sx%s)", description, steps, width, height)
@@ -1055,8 +1060,7 @@ def _handle_generate_image(ctx, state, args: dict) -> str:
     # first, then the last two requests («ещё раз» after «в стиле аниме»).
     _prev_look = getattr(ctx, "user_look", "")
     ctx.user_look = _user_look(ctx, state)
-    import object_refs
-    ctx.draw_refs = dep(ctx, "object_refs", object_refs.find)(ctx, description)
+    ctx.draw_refs = draw_refs
     ctx.set_stage("Drawing a picture")
     try:
         result = dep(ctx, "generate_image_with_refinement", _t.generate_image_with_refinement)(

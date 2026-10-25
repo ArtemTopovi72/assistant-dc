@@ -24,7 +24,7 @@ The config defaults below are the exception: they are DEFAULT ARGUMENT values
 and must bind at def time, so they are imported from config -- their DEFINING
 module -- not from image.py.
 """
-from seams import complaint_kinds, dep, vision_model
+from seams import complaint_kinds, dep, text_model, vision_model
 import logging
 import random
 from typing import Optional
@@ -228,6 +228,48 @@ def generate_image_with_comfy(
     return None
 
 
+_ASKS_SYS = (
+    "A picture was drawn for the request below. List the things the request asks for that can be SEEN "
+    "and checked in the picture: who is where (waist-deep in, standing on, holding), what each hand does, "
+    "counts, a named colour or glow on a body part, a named expression. Not the style, the mood, the "
+    "lighting quality or the realism. Reply with JSON only: {\"checks\": [{\"ask\": \"<one concrete yes/no "
+    "question about the picture>\", \"draw\": \"<the same thing as a plain statement for the image model>\"}]}, "
+    "at most 6.")
+_ASKS: dict = {}
+
+
+def _missing_asks(ctx, img_path: str, goal: str) -> list:
+    """[(ask, draw)] the picture does not show, each asked of the vision model on its own.
+
+    The whole-picture judge gave Lenin-as-Doomguy 9/10 «perfectly captures» -- standing on the
+    lava, not waist-deep in it, no hand on a neck, red sunglasses for ruby eyes. Asked one at a
+    time, the same model said no to all three (bench 2026-10-26)."""
+    from utils import safe_json_from_llm
+    import os
+    if os.getenv("F5_TEST_RUN") and not dep(ctx, "live", False):     # suites judge offline
+        return []
+    if goal not in _ASKS:
+        try:
+            got = safe_json_from_llm(text_model(ctx)(ctx, _ASKS_SYS, goal, temperature=0.0, max_tokens=500)) or {}
+        except Exception:
+            logger.warning("image asks: the read failed", exc_info=True)
+            got = {}
+        _ASKS[goal] = [(str(c.get("ask")), str(c.get("draw") or c.get("ask"))) for c in (got.get("checks") or [])
+                       if isinstance(c, dict) and str(c.get("ask") or "").strip()][:6]
+        while len(_ASKS) > 64:
+            _ASKS.pop(next(iter(_ASKS)))
+    missing = []
+    for ask, draw in _ASKS[goal]:
+        try:
+            ans = vision_model(ctx)(ctx, image_paths=[("Picture:", img_path)], temperature=0.0, max_tokens=5,
+                                    user_text=ask + " Look closely. Answer yes or no.") or ""
+        except Exception:
+            continue
+        if ans.strip().lower().startswith("no"):
+            missing.append((ask, draw))
+    return missing
+
+
 def evaluate_image(ctx, img_path: str, goal: str, current_prompt: str,
                    negative_prompt: str, steps: int, cfg: float,
                    width: int, height: int) -> dict:
@@ -303,6 +345,13 @@ def evaluate_image(ctx, img_path: str, goal: str, current_prompt: str,
             "prompt_patch": "", "negative_prompt_patch": "",
             "steps": 0, "cfg": 0.0, "width": 0, "height": 0,
         }
+    missing = dep(ctx, "_missing_asks", _missing_asks)(ctx, img_path, goal)
+    data = dict(data, missing=len(missing))
+    if missing:
+        logger.info("Image eval: not in the picture: %s", "; ".join(a for a, _ in missing)[:300])
+        data.update(verdict="refine", score=min(int(data.get("score") or 0), 6),
+                    reason="not in the picture: " + "; ".join(a for a, _ in missing),
+                    prompt_patch=" ".join(d.rstrip(".") + "." for _, d in missing))
     return data
 
 
@@ -354,6 +403,9 @@ def generate_image_with_refinement(ctx, description: str, steps: Optional[int] =
     # composition that LACKS the subject — the patch text rarely materializes at
     # denoise 0.35–0.65 — so those retries must regenerate from fresh noise.
 
+    # The take with the fewest asked-for things missing: a retry for one missing hand can lose the
+    # lava the take before had.
+    best = None
     for attempt in range(1, MAX_IMAGE_REFINEMENT_ATTEMPTS + 1):
         logger.info("Image generation attempt %d/%d", attempt, MAX_IMAGE_REFINEMENT_ATTEMPTS)
         if ctx is not None and getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
@@ -416,6 +468,8 @@ def generate_image_with_refinement(ctx, description: str, steps: Optional[int] =
         reason = str(eval_data.get("reason", "")).strip()
 
         logger.info("Evaluation: verdict=%s score=%d/10 reason=%s", verdict, score, reason[:300])
+        if best is None or int(eval_data.get("missing") or 0) < best[0]:
+            best = (int(eval_data.get("missing") or 0), img_path, score, reason)
 
         if verdict == "success" or score >= 8:
             return {
@@ -495,6 +549,8 @@ def generate_image_with_refinement(ctx, description: str, steps: Optional[int] =
 
         final_seed = random.randint(1, 999_999_999)
 
+    if best:
+        _, img_path, score, reason = best
     return {
         "path": img_path, "score": score, "attempts": MAX_IMAGE_REFINEMENT_ATTEMPTS,
         "prompt": prompt, "status": "partial", "reason": reason,

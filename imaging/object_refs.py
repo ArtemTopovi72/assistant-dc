@@ -18,42 +18,66 @@ logger = logging.getLogger("assistant.object_refs")
 
 MAX_THINGS = 2
 _CANDIDATES = 8
+_MIN_FACE_PX = 160
 
 _FIND_SYS = (
-    "You read a request for a picture and list the SPECIFIC real-world things in it whose exact "
-    "look an image model is likely to get wrong: a named model or make of a car, motorcycle, truck, "
-    "tractor, train, aircraft, ship, gadget, instrument or appliance (\"ВАЗ 2107\", \"Урал с "
-    "коляской\", \"Gibson Les Paul\", \"Ту-154\"), or a lesser-known named building or monument. "
-    "Not: a generic thing (\"a car\", \"a motorcycle\", \"a guitar\"), a world-famous landmark "
-    "every image model knows (the Eiffel Tower, the Kremlin), a person or a character, an animal, "
-    "a food, clothing, a style. Reply with JSON only: {\"things\": [{\"thing\": \"<short English "
-    "name, e.g. a VAZ-2107 Lada sedan>\", \"query\": \"<image-search query for a photo of it, in "
-    "the language it is best known in>\"}]} -- at most " + str(MAX_THINGS) + "; [] when none.")
+    "You read a request for a picture and list the SPECIFIC things in it whose exact look an "
+    "image model is likely to get wrong, each with its kind:\n"
+    "- \"object\": a named model or make of a car, motorcycle, truck, tractor, train, aircraft, "
+    "ship, gadget, instrument or appliance (\"ВАЗ 2107\", \"Урал с коляской\", \"Ту-154\"), or a "
+    "lesser-known named building or monument;\n"
+    "- \"person\": a real, well-known person who must be recognisable (\"Ленин\", \"Гагарин\");\n"
+    "- \"character\": a fictional character, or the costume, armour or outfit of one that someone "
+    "else wears (\"Ленин в стиле Думгая\" -> the Doom Slayer's armour; \"кот в костюме Бэтмена\" "
+    "-> Batman's suit).\n"
+    # The long «Lenin reimagined as a Doomguy-style warrior» came back as the armour alone and
+    # Lenin was drawn as a stranger (bench 2026-10-26).
+    "A real person drawn in a character's costume or style is TWO entries: the person and the costume.\n"
+    "Not: a generic thing (\"a car\", \"a knight\", \"a demon\"), a world-famous landmark every "
+    "image model knows (the Eiffel Tower), an animal, a food, a style of art (anime, watercolour). "
+    "Reply with JSON only: {\"things\": [{\"kind\": \"object|person|character\", \"thing\": "
+    "\"<short English name, e.g. a VAZ-2107 Lada sedan, Vladimir Lenin, the Doom Slayer's armour>\", "
+    "\"query\": \"<image-search query for a picture of it, in the language it is best known in>\"}]} "
+    "-- at most " + str(MAX_THINGS) + "; [] when none.")
+
+_KINDS = ("object", "person", "character")
 
 
 def named_things(ctx, description: str) -> list:
-    """[{"thing", "query"}] the request names, read by the model; [] on any failure."""
+    """[{"kind", "thing", "query"}] the request names, read by the model; [] on any failure."""
     from utils import safe_json_from_llm
     try:
         got = safe_json_from_llm(text_model(ctx)(ctx, _FIND_SYS, description, temperature=0.0,
-                                                 max_tokens=200)) or {}
+                                                 max_tokens=300)) or {}
     except Exception:
         logger.warning("object refs: the read failed", exc_info=True)
         return []
-    things = [t for t in (got.get("things") or []) if isinstance(t, dict)
+    things = [dict(t, kind=t.get("kind") if t.get("kind") in _KINDS else "object")
+              for t in (got.get("things") or []) if isinstance(t, dict)
               and str(t.get("thing") or "").strip() and str(t.get("query") or "").strip()]
     return things[:MAX_THINGS]
 
 
-def _box(ctx, path: str, thing: str):
-    """(x0, y0, x1, y1) of `thing` in the photo on a 0-1000 grid, or None when it is not a
-    clear, whole photo of it."""
+_CHECK = {
+    "object": "Is this a real photograph showing {thing} whole and clearly as the main subject, with no "
+              "text or watermark over it? Reply JSON only: {{\"shows\": true/false, \"box\": [x0, y0, "
+              "x1, y1]}} -- the box around the whole thing on a 0-1000 grid.",
+    # The head only: the drawing dresses and poses the person itself.
+    "person": "Is this a sharp photograph of {thing}'s face, seen from the front or three-quarters, "
+              "the face large, uncovered and clearly visible? Reply JSON only: {{\"shows\": true/false, "
+              "\"box\": [x0, y0, x1, y1]}} -- the box around the head -- hair, face and the whole beard down to its tip -- on a 0-1000 grid.",
+    "character": "Is this a picture showing {thing} whole and clearly as the main subject, with no text "
+                 "or watermark over it? Reply JSON only: {{\"shows\": true/false, \"box\": [x0, y0, x1, "
+                 "y1]}} -- the box around the whole of it on a 0-1000 grid.",
+}
+
+
+def _box(ctx, path: str, thing: str, kind: str = "object"):
+    """(x0, y0, x1, y1) of `thing` in the photo on a 0-1000 grid, or None when the photo is not a
+    clear one of it."""
     from utils import safe_json_from_llm
-    ans = vision_model(ctx)(
-        ctx, image_paths=[("Photo:", path)], temperature=0.0, max_tokens=60,
-        user_text=f"Is this a real photograph showing {thing} whole and clearly as the main subject, "
-                  "with no text or watermark over it? Reply JSON only: {\"shows\": true/false, "
-                  "\"box\": [x0, y0, x1, y1]} -- the box around the whole thing on a 0-1000 grid.")
+    ans = vision_model(ctx)(ctx, image_paths=[("Photo:", path)], temperature=0.0, max_tokens=60,
+                            user_text=_CHECK[kind].format(thing=thing))
     got = safe_json_from_llm(ans or "") or {}
     box = got.get("box")
     if got.get("shows") is not True or not (isinstance(box, list) and len(box) == 4):
@@ -65,44 +89,76 @@ def _box(ctx, path: str, thing: str):
     return (x0, y0, x1, y1) if x1 - x0 > 50 and y1 - y0 > 50 else None
 
 
-def _crop(path: str, box) -> str:
+def _crop(path: str, box, margin: float = 0.06, below: float = None) -> str:
     """The photo cut to the thing (with a margin): the street, the people and the stray stick
-    around the «Урал» were copied into the drawing along with it."""
+    around the «Урал» were copied into the drawing along with it. `below`: the margin under it."""
     from PIL import Image
     im = Image.open(path).convert("RGB")
     w, h = im.size
     x0, y0, x1, y1 = box
-    mx, my = (x1 - x0) * 0.06, (y1 - y0) * 0.06
+    mx, my = (x1 - x0) * margin, (y1 - y0) * margin
+    my_below = (y1 - y0) * (margin if below is None else below)
     cut = im.crop((int(max(0, x0 - mx) * w / 1000), int(max(0, y0 - my) * h / 1000),
-                   int(min(1000, x1 + mx) * w / 1000), int(min(1000, y1 + my) * h / 1000)))
+                   int(min(1000, x1 + mx) * w / 1000), int(min(1000, y1 + my_below) * h / 1000)))
     out = path.rsplit(".", 1)[0] + "_thing.jpg"
     cut.save(out, quality=92)
     return out
 
 
-def photo_of(ctx, thing: str, query: str) -> str:
+def _head(path: str) -> str:
+    """The head cut around the detector's face box, or "" when no face is found. The vision
+    model's own head box ended at Lenin's moustache (goatee lost) on one portrait and took in
+    his collar and tie on another, which came through under the Doom armour (bench 2026-10-26)."""
+    from PIL import Image
+    try:
+        from identity_metrics import face_box
+        fb = face_box(path, pad=0.0)
+    except Exception:
+        logger.warning("object refs: no face detector", exc_info=True)
+        return ""
+    if not fb:
+        return ""
+    x0, y0, x1, y1 = fb
+    fw, fh = x1 - x0, y1 - y0
+    if fw < _MIN_FACE_PX:      # a blurred thumbnail of a painting drew a mushy Lenin
+        return ""
+    im = Image.open(path).convert("RGB")
+    # hair or a bald crown above the brow, ears at the sides, a beard under the chin -- not the collar
+    cut = im.crop((int(max(0, x0 - 0.35 * fw)), int(max(0, y0 - 0.6 * fh)),
+                   int(min(im.width, x1 + 0.35 * fw)), int(min(im.height, y1 + 0.3 * fh))))
+    out = path.rsplit(".", 1)[0] + "_head.jpg"
+    cut.save(out, quality=92)
+    return out
+
+
+def photo_of(ctx, thing: str, query: str, kind: str = "object") -> str:
     """A checked, cropped web photo of `thing`, or "" (refused search, nothing found)."""
     import search
-    urls = dep(ctx, "image_search_urls", search.image_search_urls)(ctx, query, prefer="landscape")
+    urls = dep(ctx, "image_search_urls", search.image_search_urls)(
+        ctx, query, prefer="portrait" if kind == "person" else "landscape")
     work = tempfile.mkdtemp(prefix="objref_")
     for n, url in enumerate(urls[:_CANDIDATES]):
         dest = os.path.join(work, f"c{n}.jpg")
         if not dep(ctx, "download_image", search.download_image)(ctx, url, dest):
             continue
         try:
-            box = _box(ctx, dest, thing)
+            box = _box(ctx, dest, thing, kind)
         except Exception:
             logger.warning("object refs: the photo check failed", exc_info=True)
             return ""
-        if box:
-            logger.info("object refs: %s <- %s", thing, url[:120])
-            return _crop(dest, box)
+        if not box:
+            continue
+        # no face the detector can find (Gagarin side-on in his helmet): the next photo
+        got = _crop(dest, box) if kind != "person" else _head(dest)
+        if got:
+            logger.info("object refs: %s (%s) <- %s", thing, kind, url[:120])
+            return got
     logger.info("object refs: no photo of %s (%d candidates)", thing, len(urls))
     return ""
 
 
-def find(ctx, description: str) -> List[Tuple[str, str]]:
-    """[(thing, photo path)] for the specific real things the request names."""
+def find(ctx, description: str) -> List[Tuple[str, str, str]]:
+    """[(thing, photo path, kind)] for the specific things the request names."""
     if not getattr(ctx, "web_search_enabled", True):
         return []
     if os.getenv("F5_TEST_RUN") and not dep(ctx, "live", False):     # suites draw offline
@@ -112,18 +168,28 @@ def find(ctx, description: str) -> List[Tuple[str, str]]:
     if things and getattr(ctx, "set_stage", None):
         ctx.set_stage("Finding a photo online")
     for t in things:
-        path = photo_of(ctx, t["thing"], t["query"])
+        path = photo_of(ctx, t["thing"], t["query"], t["kind"])
         if path:
-            out.append((t["thing"], path))
-    return out
+            out.append((t["thing"], path, t["kind"]))
+    # The face last: given first, Lenin's face drew the Doom armour grey instead of green.
+    return sorted(out, key=lambda t: t[2] == "person")
 
 
-def prompt_note(things: List[Tuple[str, str]]) -> str:
-    """The sentence that tells Klein what each reference image is for -- and what it is not."""
-    if not things:
-        return ""
-    each = "; ".join(f"{thing} looks exactly like the one in image {i}" for i, (thing, _) in enumerate(things, 1))
-    # «LADA 2107» on the reference's plate came back as «VAD 2107» on the drawing's (bench 2026-10-25).
-    return (f" {each[0].upper() + each[1:]}: its shape, proportions and every part. Only that object "
-            "is taken from the reference; its angle, colour, place and surroundings are this picture's own, "
-            "and no lettering, number plate or logo text is copied from it.")
+def prompt_note(things: list) -> str:
+    """The sentences that tell Klein what each reference image is for -- and what it is not."""
+    out = []
+    for i, (thing, _, kind) in enumerate(things, 1):
+        if kind == "person":
+            # Lenin's white collar and tie came through under the Doom armour (bench 2026-10-26).
+            out.append(f"{thing}'s face, head shape, hair and facial hair look exactly like the face in "
+                       f"image {i}; nothing below the chin of image {i} (collar, tie, clothes) is drawn -- "
+                       "their body, clothes, pose, expression and colours are this picture's own.")
+        else:
+            # «LADA 2107» on the reference's plate came back as «VAD 2107» on the drawing's (bench 2026-10-25).
+            # A character's look includes its colours (the Doom Slayer's green armour); a car's paint
+            # is the picture's own («красная 2107» came back red over a white reference).
+            own = "angle, pose, place and surroundings" if kind == "character" else "angle, colour, place and surroundings"
+            out.append(f"{thing[0].upper() + thing[1:]} looks exactly like the one in image {i}: its shape, "
+                       f"proportions and every part. Only that is taken from the reference; its {own} are "
+                       "this picture's own, and no lettering, number plate or logo text is copied from it.")
+    return "".join(" " + x for x in out)

@@ -54,10 +54,39 @@ check("no candidates -> no photo",
 
 # The note names what each reference is for, and that only the object is taken from it:
 # the angle, colour and place the request asks for are the picture's own.
-note = R.prompt_note([("a VAZ-2107 Lada sedan", "p.jpg")])
+note = R.prompt_note([("a VAZ-2107 Lada sedan", "p.jpg", "object")])
 check("the note points at image 1", "image 1" in note and "VAZ-2107" in note, note)
 check("only the object comes from the photo", "angle, colour, place" in note, note)
 check("no things -> no note", R.prompt_note([]) == "")
+# A person gives only the face: Lenin in Doom armour keeps his head, not his suit.
+face = R.prompt_note([("Vladimir Lenin", "l.jpg", "person"), ("the Doom Slayer's armour", "d.jpg", "character")])
+check("a person's photo gives the face, not the clothes or pose",
+      "face in image 1" in face and "clothes, pose" in face, face)
+check("the second reference is image 2", "image 2" in face, face)
+# A character's colours are part of its look; a car's paint is the picture's own.
+check("a character keeps its colours", "angle, pose, place" in face and "colour, place" not in face.split("image 2")[1], face)
+
+# A person found on a photo is not described in words too: the web words for Lenin said «often
+# wears glasses» and he was drawn in red sunglasses (debug chat 2026-10-26).
+import tool_image_handlers as H
+seen_desc = {}
+def fake_render(ctx=None, description="", **k):
+    seen_desc["d"] = description
+    return {"path": None, "status": "fail"}
+def run(refs):
+    seen_desc.clear()
+    c = NS(deps=NS(object_refs=lambda ctx, d: refs, generate_image_with_refinement=fake_render,
+                   _render_budget_exhausted=lambda *a: None,
+                   person_look=lambda text: ("Vladimir Lenin", "bald, small reddish beard, often wears glasses")),
+           set_stage=lambda *a: None)
+    try:
+        H._handle_generate_image(c, {"user_input": "нарисуй Ленина"}, {"description": "Lenin in hell"})
+    except Exception as exc:
+        seen_desc.setdefault("err", repr(exc))
+    return seen_desc.get("d", seen_desc.get("err", ""))
+check("no face photo -> the words describe him", "glasses" in run([]), run([]))
+check("a face photo -> no words about his look",
+      "glasses" not in run([("Vladimir Lenin", save("l.jpg"), "person")]))
 
 # The photos go into the Klein graph as reference latents and the prompt says what they are.
 seen = {}
@@ -65,7 +94,7 @@ def submit(ctx, wf, **kw):
     seen["wf"] = wf; return save("out.png")
 cap = {"high_level_description": "a car", "style_description": "photo",
        "compositional_deconstruction": {"background": "street", "elements": []}}
-draw = NS(draw_refs=[("a VAZ-2107 Lada sedan", save("ref.jpg"))],
+draw = NS(draw_refs=[("a VAZ-2107 Lada sedan", save("ref.jpg"), "object")],
           deps=NS(_submit_and_poll=submit, _upload_image_to_comfy=lambda p, url: "ref_up.jpg"))
 I.generate(draw, "ВАЗ 2107", caption=cap, seed=7)
 wf = seen.get("wf", {})

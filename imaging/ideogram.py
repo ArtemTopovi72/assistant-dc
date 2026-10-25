@@ -751,10 +751,10 @@ def generate(ctx, prompt: str, *, width: int = 1024, height: int = 1024,
     if things:
         import object_refs
         up = dep(ctx, "_upload_image_to_comfy", comfy_client._upload_image_to_comfy)
-        things = [(t, n) for t, n in ((t, up(p, comfy_client.COMFY_URL)) for t, p in things) if n]
-        refs = [n for _, n in things]
+        things = [(t, n, k) for t, n, k in ((t, up(p, comfy_client.COMFY_URL), k) for t, p, k in things) if n]
+        refs = [n for _, n, _ in things]
         text += object_refs.prompt_note(things)
-        logger.info("Klein: %d object reference(s): %s", len(refs), ", ".join(t for t, _ in things))
+        logger.info("Klein: %d reference(s): %s", len(refs), ", ".join(f"{t} ({k})" for t, _, k in things))
     workflow = klein.t2i_workflow(text, _w, _h, seed, steps=steps, lora=lora, refs=refs)
     if lora:
         logger.info("Klein LoRA: %s @ %.2f", lora_name, lora_strength)
