@@ -181,7 +181,10 @@ _pair = {"elements": [{"desc": "an angry dog looking towards the cat", "x": .1, 
                       {"desc": "a red car", "x": .0, "y": .8, "w": .3, "h": .2}], "background": "room"}
 _q, _ = D.apply_ops(G.normalize_layout(_pair), [{"op": "replace", "target": 2, "desc": "a colorful parrot facing the dog"},
                                                 {"op": "replace", "target": 4, "desc": "a blue car"}],
-                    instruction="замени кота на попугая, машину сделай синей", ctx=_R)
+                    instruction="замени кота на попугая, машину сделай синей",
+                    # the subject nouns are the model's read; scripted
+                    ctx=types.SimpleNamespace(**vars(_R), deps=types.SimpleNamespace(heads_read=lambda u: (
+                        {"before": "cat", "after": "parrot"} if "tabby cat" in u else {"before": "car", "after": "car"}))))
 assert _q["elements"][0]["desc"] == "an angry dog looking towards the parrot", _q
 assert _q["elements"][2]["desc"] == "a ball next to the red car", _q
 print("PASS other boxes follow a replaced subject's new name")
@@ -198,7 +201,8 @@ print("PASS swap_places exchanges centres and feet, keeps sizes and words")
 _wc = G.normalize_layout({"elements": [{"desc": "a girl", "x": .3, "y": .3, "w": .3, "h": .5}], "background": "Paris",
                           "aesthetics": "watercolor painting, soft edges, bleeding colors, moody", "medium": "watercolor"})
 _w2, _ = D.apply_ops(_wc, [{"op": "style", "medium": "photography", "lighting": "night"}], instruction="обратно как фото, ночью", ctx=_R)
-assert _w2["aesthetics"] == "soft edges, moody", _w2["aesthetics"]
+# the old look goes whole: which of its words were the medium's was a word list's guess
+assert _w2["aesthetics"] == "" and _w2["lighting"] == "night", _w2
 print("PASS a new medium drops the old medium's aesthetics")
 _man = {"elements": [{"desc": "a young man in a white t-shirt", "x": .2, "y": .15, "w": .6, "h": .85},
                      {"desc": "lettering on the t-shirt", "text": "КОД НЕ ТРОГАТЬ", "x": .3, "y": .4, "w": .4, "h": .12},

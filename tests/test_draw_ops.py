@@ -454,23 +454,43 @@ print("=" * 72)
 # "the elephant is orange/red instead of bright pink" must not go to the editor
 # as an instruction (the element would become "an orange-red elephant" and the
 # critic would score the orange render against the rewritten layout).
+import types as _mt
+# Which complaint names a wrong look is the model's read (bench/mismatch_read_eval.py);
+# scripted here, what is done with it is checked.
+_LOOKS = {"The elephant is orange/red instead of bright pink": (1, "bright pink", "orange/red"),
+          "The elephant is brown instead of bright pink": (1, "bright pink", "brown"),
+          "The elephant is grey instead of vibrant blue": (1, "vibrant blue", "grey")}
+
+
+def _mismatch_read(user):
+    said = user.split("COMPLAINTS:", 1)[1].strip().splitlines()
+    rows = []
+    for ln in said:
+        n, want, got = _LOOKS.get(ln.split(". ", 1)[1], (0, "", ""))
+        rows.append({"kind": "look" if n else "other", "element": n, "want": want, "got": got})
+    return {"complaints": rows}
+
+
+_MCTX = _mt.SimpleNamespace(deps=_mt.SimpleNamespace(mismatch_read=_mismatch_read))
+
+
 _lay = {"elements": [{"desc": "a large, vibrant bright pink elephant", "x": 0.1, "y": 0.2, "w": 0.4, "h": 0.5},
                      {"desc": "a tall palm tree", "x": 0.6, "y": 0.1, "w": 0.2, "h": 0.7}]}
 _l2, _notes, _left = D.insist_on_mismatch(_lay, ["The elephant is orange/red instead of bright pink",
-                                                 "The palm tree is cut off at the top"])
+                                                 "The palm tree is cut off at the top"], ctx=_MCTX)
 check("the element keeps its intended look and gains the insistence",
       _l2["elements"][0]["desc"] == "a large, vibrant bright pink elephant, bright pink -- all of it bright pink",
       _l2["elements"][0]["desc"])
 check("the note says what was insisted on", _notes and "bright pink" in _notes[0], _notes)
 check("the unrelated complaint is left for the editor", _left == ["The palm tree is cut off at the top"], _left)
-_l3, _n3, _left3 = D.insist_on_mismatch(_l2, ["The elephant is brown instead of bright pink"])
+_l3, _n3, _left3 = D.insist_on_mismatch(_l2, ["The elephant is brown instead of bright pink"], ctx=_MCTX)
 check("a second insistence is not doubled, and the wrong colours are never written in (a model draws what it reads)",
       _l3["elements"][0]["desc"].count("all of it bright pink") == 1 and _n3[0].startswith("insisted again")
       and "orange" not in _l3["elements"][0]["desc"] and "brown" not in _l3["elements"][0]["desc"], _l3)
-_l4, _n4, _left4 = D.insist_on_mismatch(_lay, ["The sky is grey instead of blue"])
+_l4, _n4, _left4 = D.insist_on_mismatch(_lay, ["The sky is grey instead of blue"], ctx=_MCTX)
 check("a complaint about nothing in the layout passes through", not _n4 and _left4 == ["The sky is grey instead of blue"])
 _src = open(D.__file__, encoding="utf-8").read()
-check("run() insists before it edits", _src.index("insist_on_mismatch(layout, unmet)") < _src.index("Change the layout so the NEXT render fixes them"))
+check("run() insists before it edits", _src.index("insist_on_mismatch(layout, unmet, ctx=ctx)") < _src.index("Change the layout so the NEXT render fixes them"))
 
 print()
 print("=" * 72)

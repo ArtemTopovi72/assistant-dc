@@ -1,0 +1,129 @@
+[
+ {
+  "desc": "two fluffy gray cats sitting together",
+  "count": 2,
+  "stacked": false
+ },
+ {
+  "desc": "three red apples on a plate",
+  "count": 3,
+  "stacked": false
+ },
+ {
+  "desc": "two tall birches",
+  "count": 2,
+  "stacked": false
+ },
+ {
+  "desc": "three books stacked on top of each other",
+  "count": 3,
+  "stacked": true
+ },
+ {
+  "desc": "a fluffy gray cat",
+  "count": 1
+ },
+ {
+  "desc": "the second cat on the sill",
+  "count": 1
+ },
+ {
+  "desc": "a pair of glasses on a nose",
+  "count": 1
+ },
+ {
+  "desc": "a two-storey wooden house",
+  "count": 1
+ },
+ {
+  "desc": "a woman with two-tone hair",
+  "count": 1
+ },
+ {
+  "desc": "a flock of seagulls over the sea",
+  "count": 1
+ },
+ {
+  "desc": "2 golden retrievers running on grass",
+  "count": 2,
+  "stacked": false
+ },
+ {
+  "desc": "four kittens huddled in a basket",
+  "count": 4,
+  "stacked": false
+ },
+ {
+  "desc": "a man holding two cups of coffee",
+  "count": 1
+ },
+ {
+  "desc": "a pile of three pancakes with syrup",
+  "count": 3,
+  "stacked": true
+ },
+ {
+  "desc": "twin girls in red dresses",
+  "count": 2,
+  "stacked": false
+ },
+ {
+  "desc": "a table with two chairs",
+  "count": 1
+ },
+ {
+  "desc": "several balloons",
+  "count": 1
+ },
+ {
+  "desc": "two penguins side by side on the ice",
+  "count": 2,
+  "stacked": false
+ },
+ {
+  "desc": "three glasses of wine",
+  "count": 3,
+  "stacked": false
+ },
+ {
+  "desc": "a cat with two kittens",
+  "count": 1
+ },
+ {
+  "desc": "three ducklings following each other in a line",
+  "count": 3,
+  "stacked": false
+ },
+ {
+  "desc": "a woman with two dogs on a leash",
+  "count": 1
+ },
+ {
+  "desc": "two old men playing chess",
+  "count": 2,
+  "stacked": false
+ },
+ {
+  "desc": "a tower of four macarons",
+  "count": 4,
+  "stacked": true
+ },
+ {
+  "desc": "a bicycle with two baskets",
+  "count": 1
+ },
+ {
+  "desc": "two identical blue vases",
+  "count": 2,
+  "stacked": false
+ },
+ {
+  "desc": "three stacked suitcases by the door",
+  "count": 3,
+  "stacked": true
+ },
+ {
+  "desc": "a bowl with three oranges",
+  "count": 1
+ }
+]

@@ -601,7 +601,7 @@ def plan_layout(ctx, prompt: str) -> dict:
             return fallback()
         # "three tall palm trees" in one box render as one merged mass, as in an edit.
         from draw_agent import split_counted_boxes, merge_text_column   # draw_agent imports this module
-        layout, _ = split_counted_boxes(merge_text_column(layout), [])
+        layout, _ = split_counted_boxes(merge_text_column(layout), [], ctx=ctx)
         layout = ensure_text_elements(enforce_user_look(apply_style_floor(layout, prompt, ctx=ctx), look), prompt, ctx=ctx)
         return drop_invented_text(layout, prompt, ctx)
     except Exception:

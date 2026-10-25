@@ -1,0 +1,16 @@
+[
+ {"els": ["a large, vibrant bright pink elephant", "a tall palm tree"], "p": "The elephant is orange/red instead of bright pink", "el": 1, "want": "bright pink"},
+ {"els": ["a large, vibrant bright pink elephant", "a tall palm tree"], "p": "The palm tree is cut off at the top", "el": 0},
+ {"els": ["a large, vibrant bright pink elephant", "a tall palm tree"], "p": "The sky is grey instead of blue", "el": 0},
+ {"els": ["a vibrant blue elephant sitting on the sand"], "p": "The elephant is grey instead of vibrant blue", "el": 1, "want": "vibrant blue"},
+ {"els": ["a girl in a red dress", "a wooden bench"], "p": "The dress came out green, it should be red", "el": 1, "want": "red"},
+ {"els": ["a black cat on a windowsill", "a pot of flowers"], "p": "The cat looks ginger, not black", "el": 1, "want": "black"},
+ {"els": ["a golden crown on a velvet cushion"], "p": "The crown appears silver rather than golden", "el": 1, "want": "golden"},
+ {"els": ["a black cat on a windowsill", "a pot of flowers"], "p": "The pot of flowers is missing", "el": 0},
+ {"els": ["a man in a white shirt", "a red car"], "p": "There is a second car on the left", "el": 0},
+ {"els": ["a wooden table", "a glass vase with tulips"], "p": "The vase is made of clay, but it should be glass", "el": 2, "want": "glass"},
+ {"els": ["a yellow taxi", "a street lamp"], "p": "The taxi is painted white", "el": 1, "want": "yellow"},
+ {"els": ["a yellow taxi", "a street lamp"], "p": "The street lamp is too small", "el": 0},
+ {"els": ["a green dragon breathing fire", "a castle"], "p": "Dragon is blue instead of green.", "el": 1, "want": "green"},
+ {"els": ["a green dragon breathing fire", "a castle"], "p": "The castle is merged with the dragon", "el": 0}
+]

@@ -21,6 +21,26 @@ def check(name, cond, extra=""):
     OK += bool(cond); BAD += (not cond)
     print(("PASS  " if cond else "FAIL  ") + name, ("  " + str(extra)) if (extra and not cond) else "")
 
+import types as _mt
+# Which complaint names a wrong look is the model's read (bench/mismatch_read_eval.py);
+# scripted here, what is done with it is checked.
+_LOOKS = {"The elephant is orange/red instead of bright pink": (1, "bright pink", "orange/red"),
+          "The elephant is brown instead of bright pink": (1, "bright pink", "brown"),
+          "The elephant is grey instead of vibrant blue": (1, "vibrant blue", "grey")}
+
+
+def _mismatch_read(user):
+    said = user.split("COMPLAINTS:", 1)[1].strip().splitlines()
+    rows = []
+    for ln in said:
+        n, want, got = _LOOKS.get(ln.split(". ", 1)[1], (0, "", ""))
+        rows.append({"kind": "look" if n else "other", "element": n, "want": want, "got": got})
+    return {"complaints": rows}
+
+
+_MCTX = _mt.SimpleNamespace(deps=_mt.SimpleNamespace(mismatch_read=_mismatch_read))
+
+
 def photo_layout():
     return {"medium": "photography", "aesthetics": "photorealistic, natural colour",
             "photo": "standard lens", "lighting": "natural light", "art_style": "",
@@ -28,13 +48,13 @@ def photo_layout():
 
 problems = ["The elephant is grey instead of vibrant blue"]
 
-lay, notes, left = D.insist_on_mismatch(photo_layout(), problems)
+lay, notes, left = D.insist_on_mismatch(photo_layout(), problems, ctx=_MCTX)
 check("first mismatch underlines the colour", any(n.startswith("insisted:") for n in notes), notes)
 check("...and is not yet 'again'", not any("again" in n for n in notes), notes)
 lay2, restyle = D.unphoto_on_repeat_mismatch(lay, notes, "draw a blue elephant on a beach", ctx=_look_stub.reads_ctx())
 check("first time: photography stays", lay2["medium"] == "photography" and not restyle, restyle)
 
-lay, notes2, _ = D.insist_on_mismatch(lay, problems)
+lay, notes2, _ = D.insist_on_mismatch(lay, problems, ctx=_MCTX)
 check("second mismatch is 'insisted again'", any(n.startswith("insisted again:") for n in notes2), notes2)
 check("the underline is not doubled and never names grey",
       lay["elements"][0]["desc"].lower().count("all of it vibrant blue") == 1

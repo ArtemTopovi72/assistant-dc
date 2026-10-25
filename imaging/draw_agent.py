@@ -29,6 +29,7 @@ import copy
 import difflib
 import json
 import logging
+import os
 import random
 import re
 from typing import Callable, Optional
@@ -508,7 +509,7 @@ def apply_ops(layout: dict, ops: list, *, additive_only: bool = False,
                     notes.append(f'replaced “{els[i].get("desc", "")}” with “{new}”')
                     # "a dog looking towards the cat" after the cat became a parrot:
                     # other boxes that name the old subject now name the new one.
-                    old_h, new_h = _head_noun(els[i].get("desc", "")), _head_noun(new)
+                    old_h, new_h = _head_nouns(ctx, els[i].get("desc", ""), new) if len(els) > 1 else ("", "")
                     if old_h and new_h and old_h.lower() != new_h.lower():
                         for o in els:
                             if o is not els[i]:
@@ -621,16 +622,13 @@ def apply_ops(layout: dict, ops: list, *, additive_only: bool = False,
                           "high_level_description"):
                     if raw.get(k):
                         layout[k] = str(raw[k]).strip()
-                if (not raw.get("photo") and raw.get("medium")
-                        and not re.search(r"photo", str(raw["medium"]), re.I)):
-                    # «в стиле аниме» kept "standard lens, wide aperture".
+                # A new medium makes the old one's camera and look stale: «в стиле аниме» kept
+                # "standard lens, wide aperture", «обратно как фото» kept "watercolor painting,
+                # bleeding colors". What the op does not restate goes with the old medium.
+                if raw.get("medium") and not raw.get("photo"):
                     layout.pop("photo", None)
                 if raw.get("medium") and not raw.get("aesthetics"):
-                    # «обратно как фото» kept "watercolor painting, bleeding colors".
-                    layout["aesthetics"] = ", ".join(
-                        p.strip() for p in str(layout.get("aesthetics") or "").split(",")
-                        if not re.search(r"watercolou?r|oil|paint|brush|sketch|pencil|ink|vector|anime|"
-                                         r"cartoon|comic|pixel|3d|render|photo|bleeding", p, re.I))
+                    layout["aesthetics"] = ""
                 notes.append("style changed")
             elif op in ("clear", "reset"):
                 els.clear()
@@ -690,11 +688,23 @@ def _carry(els, el, before, moved) -> None:
             _clamp_box(o)
 
 
-def _head_noun(desc: str) -> str:
-    """"a grumpy tabby cat with arched back facing the dog" -> "cat"."""
-    words = re.split(r"\s(?:with|on|in|at|facing|holding|sitting|standing|lying|wearing|"
-                     r"near|by|of|looking|that|which|who)\s", (desc or "").strip())[0].split()
-    return re.sub(r"\W", "", words[-1]) if words else ""
+_HEADS_SYS = (
+    "Two descriptions of one box of a picture, before and after an edit. Name the main "
+    "subject of each as the one noun other descriptions would use for it (\"a grumpy tabby "
+    "cat with arched back facing the dog\" -> \"cat\"; \"a pair of round glasses\" -> "
+    "\"glasses\").\n"
+    'Answer ONE JSON object and nothing else: {"before": "", "after": ""}.')
+
+
+def _head_nouns(ctx, before: str, after: str) -> tuple:
+    """(before, after) subject nouns, ("", "") unread. A split on «with|on|facing…» read
+    this before and took «a man in a red coat» for «man in a red coat»'s last word «coat»."""
+    got = _read_json(ctx, "heads_read", _HEADS_SYS, f"BEFORE: {before[:300]}\nAFTER: {after[:300]}",
+                     ("before", "after"), 40)
+    if not isinstance(got, dict):
+        return "", ""
+    clean = lambda w: " ".join(str(w or "").split()[:3])  # noqa: E731
+    return clean(got.get("before")), clean(got.get("after"))
 
 
 def _true_sides(els, notes) -> None:
@@ -789,13 +799,44 @@ parrot) get a "replace" in the same answer that names it correctly.
 - Write every description in English. Lettering ("text") is in the language of the instruction: copied exactly when the user dictates it, and when you make it up for them («подпиши банки»), written in their language — «Клубника», not «STRAWBERRY»."""
 
 
-_MISMATCH_RE = re.compile(
-    r"(?:^|\b)(?:the |a |an )?(?P<what>[\w][\w' -]{0,40}?)\s+(?:is|are|was|were|came out|appears?|looks?|rendered)\s+"
-    r"(?P<got>[\w][\w /-]{0,30}?)\s+(?:instead of|rather than|not)\s+(?P<want>[\w][\w /-]{0,40}?)(?:[.;,]|$)",
-    re.IGNORECASE)
+_MISMATCH_SYS = (
+    "A checker compared a rendered picture with its layout. Below are the layout's numbered "
+    "elements and the checker's numbered complaints. For each complaint, kind: \"look\" "
+    "ONLY when it says a thing came out with the wrong colour or material (\"the elephant "
+    "is brown instead of bright pink\", \"the taxi is painted white\"); \"other\" for "
+    "anything else: missing, extra, cut off, too small or big, misplaced, merged. For a "
+    "\"look\" complaint: element -- the number of the element it is about, want -- the "
+    "colour or material the layout asks for (\"bright pink\"), got -- what was drawn. For "
+    "\"other\": element 0.\n"
+    'Answer ONE JSON object and nothing else: {"complaints": [{"kind": "other", '
+    '"element": 0, "want": "", "got": ""}, ...]}, one per complaint, in order.')
 
 
-def insist_on_mismatch(layout: dict, problems: list) -> tuple:
+def _mismatches(ctx, els: list, problems: list) -> list:
+    """[(element index or -1, want, got)] per complaint (bench/mismatch_read_eval.py); a pattern
+    for «X is Y instead of Z» read this before and missed «the dress came out green, it should
+    be red»."""
+    plain = [(-1, "", "")] * len(problems)
+    if not problems or not els:
+        return plain
+    user = ("ELEMENTS:\n" + "\n".join(f"{i}. {str(e.get('desc') or '')[:200]}" for i, e in enumerate(els, 1))
+            + "\n\nCOMPLAINTS:\n" + "\n".join(f"{i}. {str(p)[:300]}" for i, p in enumerate(problems, 1)))
+    got = _read_json(ctx, "mismatch_read", _MISMATCH_SYS, user, ("complaints",), 60 + 50 * len(problems))
+    rows = (got or {}).get("complaints") if isinstance(got, dict) else None
+    if not isinstance(rows, list) or len(rows) != len(problems):
+        return plain
+    out = []
+    for r in rows:
+        r = r if isinstance(r, dict) else {}
+        n = r.get("element")
+        ok = (r.get("kind") == "look" and isinstance(n, int) and not isinstance(n, bool)
+              and 1 <= n <= len(els))
+        want = str(r.get("want") or "").strip().rstrip(".")
+        out.append((n - 1, want, str(r.get("got") or "").strip()) if ok and want else (-1, "", ""))
+    return out
+
+
+def insist_on_mismatch(layout: dict, problems: list, ctx=None) -> tuple:
     """Turn "the elephant is brown instead of bright pink" into an underlined
     description ("... elephant, bright pink -- all of it bright pink") on the element it
     names. Returns (layout, notes, problems left for the editor).
@@ -804,30 +845,18 @@ def insist_on_mismatch(layout: dict, problems: list) -> tuple:
     same rule as Ideogram's own «no whiskers» draws whiskers, and YuE2's «no female vocals»)."""
     notes, left = [], []
     els = layout.get("elements") or []
-    for p in problems or []:
-        m = _MISMATCH_RE.search(str(p or ""))
-        if not m:
+    problems = list(problems or [])
+    for p, (k, want, got) in zip(problems, _mismatches(ctx, els, problems)):
+        if k < 0:
             left.append(p); continue
-        what, got, want = (m.group("what").strip().lower(), m.group("got").strip(),
-                           m.group("want").strip().rstrip("."))
-        head = what.split()[-1] if what else ""
-        hit = None
-        for el in els:
-            d = str(el.get("desc") or "").lower()
-            if head and re.search(r"\b" + re.escape(head) + r"\b", d) and want.lower() in d:
-                hit = el; break
-        if hit is None:
-            for el in els:
-                if want.lower() in str(el.get("desc") or "").lower():
-                    hit = el; break
-        if hit is None:
-            left.append(p); continue
+        hit = els[k]
+        what = str(hit.get("desc") or "")[:40]
         tag = f"{want} -- all of it {want}"
         if tag.lower() not in str(hit.get("desc") or "").lower():
             hit["desc"] = str(hit.get("desc") or "").rstrip(". ") + f", {tag}"
-            notes.append(f"insisted: {head or what} must be {want}, not {got}")
+            notes.append(f"insisted: {what} must be {want}, not {got}")
         else:
-            notes.append(f"insisted again: {head or what} must be {want}, not {got}")
+            notes.append(f"insisted again: {what} must be {want}, not {got}")
     return layout, notes, left
 
 
@@ -899,45 +928,64 @@ def edit_layout(ctx, layout: dict, instruction: str) -> tuple:
         layout, notes = apply_ops(layout, ops,
                                   additive_only=_additive_only(instruction, ctx=ctx),
                                   instruction=instruction, ctx=ctx)
-        return split_counted_boxes(merge_text_column(layout), notes)
+        return split_counted_boxes(merge_text_column(layout), notes, ctx=ctx)
     except Exception as exc:
         logger.exception("layout edit failed")
         return layout, [f"edit failed: {exc}"]
 
 
+def _read_json(ctx, name: str, system: str, user: str, keys: tuple, max_tokens: int):
+    """One model read of layout words, as JSON; a suite scripts it as `ctx.deps.<name>(user)`.
+    Under the suites unscripted, or the model down: None, and the caller changes nothing."""
+    own = dep(ctx, name, None)
+    if own is not None:
+        return own(user)
+    if os.getenv("F5_TEST_RUN") and not os.getenv("INTENT_LIVE"):
+        return None
+    try:
+        from seams import text_model
+        raw = text_model(ctx)(ctx, system, user, temperature=0.0, max_tokens=max_tokens) or ""
+        return safe_json_from_llm(raw, keys)
+    except Exception:
+        logger.warning("draw_agent: %s read failed", name, exc_info=True)
+        return None
+
+
 # "let there be two cats" came back as ONE box described "two fluffy gray cats
 # sitting together" — and the renderer drew one merged mass with extra limbs.
-# A countable
-# subject gets its own box: the box is split side by side, one subject each.
-# Explicit numbers only: "a pair of glasses" is one object.
-_COUNT_WORDS = {"two": 2, "2": 2, "three": 3, "3": 3, "four": 4, "4": 4}
-_COUNTED_DESC_RE = re.compile(
-    r"^\s*(?P<n>two|three|four|[234])\s+(?P<rest>\S.*)$",
-    re.IGNORECASE)
-_TOGETHER_RE = re.compile(
-    r"\s*,?\s*\b(?:sitting|standing|lying|walking|huddled|cuddling|snuggling|"
-    r"playing|posing|sleeping)?\s*(?:together|side by side|next to each other|"
-    r"beside each other)\b", re.IGNORECASE)
+# A counted subject gets its own box: the box is split side by side, one subject each.
+# Which box counts what is read by the model (bench/layout_count_eval.py); a number
+# pattern and a hand-made singular («glasses» -> «glasse») read it before.
+_COUNT_SYS = (
+    "Each numbered line describes one box of a picture layout. For each box: count -- how "
+    "many separate subjects of one kind the box IS when its main subject is a counted group "
+    "(two cats, three palm trees, 4 apples, twins); 1 otherwise: one main thing that has "
+    "others with it (a table with two chairs, a cat with two kittens, a man holding two "
+    "cups), a pair of glasses, two-tone hair, a two-storey house, a crowd, several birds. "
+    "one -- the description of ONE of them in the singular, keeping every detail and "
+    "dropping «together / side by side». stacked -- true only when they are piled or stacked "
+    "on top of each other (huddled or together is not stacked).\n"
+    'Answer ONE JSON object and nothing else: {"boxes": [{"count": 1, "one": "", '
+    '"stacked": false}, ...]}, one per line, in order.')
 
 
-def _singular(phrase: str) -> str:
-    """'fluffy gray cats sitting on a sill' -> 'fluffy gray cat sitting on a sill'.
-
-    Only the FIRST plural-looking word is touched — the head noun of a counted
-    phrase comes before its participles and prepositions."""
-    words = phrase.split()
-    for i, w in enumerate(words):
-        lw = w.lower()
-        if lw in ("is", "was", "has", "as", "his", "its", "this", "glasses", "jeans",
-                  "trousers", "shorts", "pants", "scissors", "series", "species"):
-            continue
-        if lw.endswith("ies") and len(lw) > 4:
-            words[i] = w[:-3] + "y"; return " ".join(words)
-        if lw.endswith(("ches", "shes", "xes", "sses", "zes")):
-            words[i] = w[:-2]; return " ".join(words)
-        if lw.endswith("s") and not lw.endswith("ss") and len(lw) > 3:
-            words[i] = w[:-1]; return " ".join(words)
-    return phrase
+def _counted(ctx, descs: list) -> list:
+    """[(count, one, stacked)] per description; (1, "", False) when unread."""
+    plain = [(1, "", False)] * len(descs)
+    if not any(d.strip() for d in descs):
+        return plain
+    got = _read_json(ctx, "count_read", _COUNT_SYS,
+                     "\n".join(f"{i}. {d[:300]}" for i, d in enumerate(descs, 1)),
+                     ("boxes",), 60 + 60 * len(descs))
+    boxes = (got or {}).get("boxes") if isinstance(got, dict) else None
+    if not isinstance(boxes, list) or len(boxes) != len(descs):
+        return plain
+    out = []
+    for b in boxes:
+        b = b if isinstance(b, dict) else {}
+        n = b.get("count") if isinstance(b.get("count"), int) and not isinstance(b.get("count"), bool) else 1
+        out.append((n, str(b.get("one") or "").strip(), b.get("stacked") is True))
+    return out
 
 
 def merge_text_column(layout: dict) -> dict:
@@ -962,23 +1010,18 @@ def merge_text_column(layout: dict) -> dict:
     return dict(layout, elements=keep)
 
 
-def split_counted_boxes(layout: dict, notes: list) -> tuple:
+def split_counted_boxes(layout: dict, notes: list, ctx=None) -> tuple:
     """One box per counted subject, side by side; stacked only when the words say so."""
     els = list(layout.get("elements") or [])
+    reads = _counted(ctx, ["" if el.get("text") else str(el.get("desc") or "") for el in els])
     out, changed = [], False
-    for el in els:
+    for el, (n, single, stacked) in zip(els, reads):
         desc = str(el.get("desc") or "")
-        m = _COUNTED_DESC_RE.match(desc)
-        if not m or el.get("text"):
+        if el.get("text") or not 2 <= n <= 4 or not single:
             out.append(el); continue
-        n = _COUNT_WORDS.get(m.group("n").lower(), 0)
-        if n < 2:
-            out.append(el); continue
-        rest = _TOGETHER_RE.sub("", m.group("rest")).strip(" ,")
-        single = _singular(rest)
         x, y, w, h = float(el["x"]), float(el["y"]), float(el["w"]), float(el["h"])
         # "three palm trees" in a tall box were split into a totem, one on another's head.
-        horizontal = not re.search(r"\bstack|\bpile|on top of each other|\btower", desc, re.I)
+        horizontal = not stacked
         if horizontal and w / n < h * 0.25:     # slivers: widen about the centre instead
             cx, w = x + w / 2, min(1.0, n * h * 0.25)
             x = min(max(0.0, cx - w / 2), 1.0 - w)
@@ -1703,7 +1746,7 @@ def run(ctx, request: str = "", *, layout: Optional[dict] = None,
         # against the rewritten layout -- scored it 10 (the
         # same again with brown). A wrong-attribute complaint keeps the layout's
         # wording, underlines it, and re-rolls the seed instead.
-        layout, notes, unmet = insist_on_mismatch(layout, unmet)
+        layout, notes, unmet = insist_on_mismatch(layout, unmet, ctx=ctx)
         if notes:
             layout, _restyled = unphoto_on_repeat_mismatch(layout, notes, request, ctx=ctx)
             if _restyled:
