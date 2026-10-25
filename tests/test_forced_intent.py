@@ -57,6 +57,12 @@ assert "forwarded" in got["att"] and "чаепитие" in got["att"] and "CAJ M
 assert len(got["att"]) < 900, len(got["att"])
 print("ok the read is told what the forwarded material holds")
 
+# The FORCING read is the same read: the loop passed it the quote-stripped words, so «Сколько в
+# рублях стоил чай» under the receipt forced calculate with a rate from old chat lines, not
+# convert_currency (2026-10-25).
+src = inspect.getsource(G)
+assert "_forced_intent(ctx, state, original_input or user_input, _has_img" in src, "forcing reads the whole turn"
+
 assert "or _forced_intent(" in inspect.getsource(G)
 print("ok the loop consults it")
 

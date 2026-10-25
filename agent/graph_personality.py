@@ -1295,7 +1295,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
         _force = (force_next_tool
                   or _forced_button(_own(original_input or user_input), turn_tools,
                                     tools_called_this_turn)
-                  or _forced_intent(ctx, state, _own(original_input or user_input), _has_img,
+                  or _forced_intent(ctx, state, original_input or user_input, _has_img,
                                     turn_tools, tools_called_this_turn)
                   or _forced_look(_turn_text, turn_tools, tools_called_this_turn,
                                   getattr(ctx, "sandbox", None))

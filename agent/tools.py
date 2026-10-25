@@ -512,7 +512,8 @@ def _handle_convert_currency(ctx, state, args: dict) -> str:
     logger.info("Tool: convert_currency(%s %s->%s) = %.4f via %s", r["amount"], r["from"], r["to"], r["result"], r["source"])
     total = f"{r['result']:,.2f}".replace(",", " ")
     return (f"{r['amount']:g} {r['from']} = {total} {r['to']} (1 {r['from']} = {r['rate']:.6g} {r['to']}; "
-            f"{r['source']}, rate of {r['date']}). Quote these figures and name the source and date.")
+            f"{r['source']}, rate of {r['date']}). Quote these figures; name the source and the date in "
+            "the reply's own language (по данным ЦБ РФ на 24 октября), never as an English «source:» tag.")
 
 
 def _handle_calendar(ctx, state, args: dict) -> str:
