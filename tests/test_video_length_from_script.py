@@ -16,10 +16,14 @@ import types  # noqa: E402
 import tg_continue  # noqa: E402
 import tool_image_handlers as H  # noqa: E402
 import video as V  # noqa: E402
+import fakes as _fakes  # noqa: E402
+_split = lambda t, **k: V.split_script(t, reads=_fakes.script_model, **k)  # noqa: E731  the sentence read, scripted
+_est = lambda t, **k: V.estimate_seconds(t, reads=_fakes.script_model, **k)  # noqa: E731
 from tests.fakes import Over  # noqa: E402
 
 
 class _Ctx:
+    deps = types.SimpleNamespace(script_read=_fakes.script_model)
     reference_images = []
     voice_choice = None
     continue_tail = continue_src = ""
@@ -38,23 +42,23 @@ BROOM = ("The man puts on a formal suit, takes a broom, and begins sweeping the 
 
 
 def test_one_beat_stays_short():
-    assert V.estimate_seconds("A cat sleeps on a sofa.") == V.frames_to_seconds(V.VIDEO_DEFAULT_FRAMES)
+    assert _est("A cat sleeps on a sofa.") == V.frames_to_seconds(V.VIDEO_DEFAULT_FRAMES)
 
 
 def test_many_beats_get_longer_up_to_the_auto_cap():
-    s = V.estimate_seconds(BROOM)
+    s = _est(BROOM)
     assert s > 9.0, s
     assert s <= V.frames_to_seconds(V.VIDEO_MAX_FRAMES_AUTO)
 
 
 def test_spoken_lines_add_time():
-    short = V.estimate_seconds('He turns and says «Да».')
-    long_ = V.estimate_seconds('He turns and says «Да, я сегодня никуда не пойду, потому что идёт дождь и мне лень».')
+    short = _est('He turns and says «Да».')
+    long_ = _est('He turns and says «Да, я сегодня никуда не пойду, потому что идёт дождь и мне лень».')
     assert long_ > short
 
 
 def test_continue_template_does_not_count():
-    assert V.estimate_seconds(V.CONTINUE_PREFIX + "he waves.") == V.estimate_seconds("he waves.")
+    assert _est(V.CONTINUE_PREFIX + "he waves.") == _est("he waves.")
 
 
 def test_generate_video_uses_the_estimate():
@@ -64,6 +68,7 @@ def test_generate_video_uses_the_estimate():
         seen["frames"] = k.get("frames")
         raise V.VideoUnavailable("stop here")
     ctx = types.SimpleNamespace(
+        deps=types.SimpleNamespace(script_read=_fakes.script_model),
         text_model=lambda *a, **k: "", vision_model=lambda *a, **k: "",
         yes_no=lambda q, t, default=False, wait=True: default,
         video_engine=Over(V, engine_available=lambda ctx: (True, ""), _context_ir_on=lambda: False,
@@ -79,17 +84,17 @@ LONG = ("The man puts on a formal suit, takes a broom and begins sweeping the fl
 
 
 def test_a_long_script_is_split_into_parts_that_each_fit():
-    parts = V.split_script(LONG)
+    parts = _split(LONG)
     cap = V.frames_to_seconds(V.VIDEO_MAX_FRAMES_AUTO)
     assert len(parts) >= 2, parts
-    assert all(V.estimate_seconds(p, capped=False) <= cap for p in parts), parts
+    assert all(_est(p, capped=False) <= cap for p in parts), parts
     assert " ".join(parts).split() == LONG.split()          # nothing lost, nothing reordered
     assert all(p.count("«") == p.count("»") for p in parts)  # a spoken line is never cut
 
 
 def test_a_short_script_stays_one_part():
     short = "He picks up a mug, drinks and says «Хорошо»."
-    assert V.split_script(short) == [short]
+    assert _split(short) == [short]
 
 
 # «на 30 секунд» was capped to one 15 s clip and delivered without a word (2026-10-13).
@@ -121,7 +126,7 @@ def test_the_parts_are_rendered_as_continuations_and_joined(tmp_path, extra):
                         first_frame=lambda src, out: False))
     st = {}
     out = H._handle_generate_video(ctx, st, {"description": LONG, "use_current_images": False, **extra})
-    n = len(V.split_script(LONG))
+    n = len(_split(LONG))
     assert len(calls) == n, calls
     assert not calls[0][0].startswith(V.CONTINUE_PREFIX)
     assert all(c[0].startswith(V.CONTINUE_PREFIX) and c[2] and c[1] for c in calls[1:]), calls
@@ -141,9 +146,9 @@ def test_sound_and_light_lines_are_never_a_part_of_their_own():
          "Soundscape: soft indoor ambience, light scratching of paws on fabric, playful chirps, "
          "muffled puppy yaps, quiet breathing and the hum of a fridge in the next room; no music. "
          "The lighting is soft and warm, maintaining a high-quality, realistic look throughout the clip.")
-    assert V.split_script(s) == [s]
+    assert _split(s) == [s]
     long_action = " ".join(f"Then the cat does trick number {i} and the dog answers it." for i in range(12))
-    parts = V.split_script(long_action + " Soundscape: soft ambience; no music.")
+    parts = _split(long_action + " Soundscape: soft ambience; no music.")
     assert len(parts) > 1 and all("Soundscape" in p for p in parts)
     assert not any(p.lstrip().startswith("Soundscape") for p in parts)
 
@@ -151,7 +156,7 @@ def test_sound_and_light_lines_are_never_a_part_of_their_own():
 def test_scenery_lines_are_never_a_part_of_their_own():
     # Live 2026-10-12: «The background shows shelves with a bag…» was a 5-minute part.
     long_action = " ".join(f"Then the cat does trick number {i} and the dog answers it." for i in range(12))
-    parts = V.split_script(long_action + " The background shows the dark closet with shelves and a bag.")
+    parts = _split(long_action + " The background shows the dark closet with shelves and a bag.")
     assert len(parts) > 1 and all("shelves" in p for p in parts)
     assert not any(p.lstrip().startswith("The background") for p in parts)
 
@@ -160,14 +165,14 @@ def test_parts_are_about_six_seconds_one_beat_each():
     # Live 2026-10-11: two events in one 10 s clip lost their middle (stones fell from the sky).
     s = ("The imam grabs the dog and throws him out of the door. The dog lands on the street, "
          "shocked. Then people outside pick up snowballs and throw them at the dog, who runs away.")
-    parts = V.split_script(s)
+    parts = _split(s)
     assert len(parts) >= 2
-    assert all(V.estimate_seconds(p, capped=False) <= V.VIDEO_PART_MAX_S + 1.5 for p in parts)
+    assert all(_est(p, capped=False) <= V.VIDEO_PART_MAX_S + 1.5 for p in parts)
 
 
 def test_the_rules_every_clip_carries_add_no_screen_time():
     s = "A cat walks in and sniffs the dog."
-    assert V.estimate_seconds(s + V.RU_SPEECH + V.CAUSE_RULE) == V.estimate_seconds(s)
+    assert _est(s + V.RU_SPEECH + V.CAUSE_RULE) == _est(s)
 
 
 def test_look_lines_cost_no_part_time():
@@ -176,13 +181,13 @@ def test_look_lines_cost_no_part_time():
     look = (" The soundscape is screeching metal. The lighting is harsh daylight. The camera is "
             "handheld. The style is gritty. The atmosphere is tense.")
     base = "Two guys leap off the tracks. The train derails."
-    assert V.estimate_seconds(base + look) == V.estimate_seconds(base)
+    assert _est(base + look) == _est(base)
     script = ("A man stands by the rails. Two guys jump onto the tracks and shout. A train "
               "rushes past. The guys leap aside. The train derails. Crates burst open. "
               "A huge explosion throws debris." + look)
-    parts = V.split_script(script)
+    parts = _split(script)
     assert len(parts) > 1
-    assert all(V.estimate_seconds(p) <= V.VIDEO_PART_MAX_S for p in parts), parts
+    assert all(_est(p) <= V.VIDEO_PART_MAX_S for p in parts), parts
     assert all(not p.startswith("The soundscape") for p in parts), parts
 
 
@@ -236,15 +241,15 @@ NUMBERED = ("1. 3.2 с — Молодой человек поворачивае�
 
 def test_named_lengths_that_fit_one_clip_are_one_clip_of_their_sum():
     # «3.2 с» + «2.2 с» was two 5.2 s parts (bot always 5.2, owner 2026-10-18)
-    parts = V.split_script(NUMBERED)
+    parts = _split(NUMBERED)
     assert len(parts) == 1
-    assert V.estimate_seconds(parts[0]) == 5.4
+    assert _est(parts[0]) == 5.4
     assert V.strip_timing(parts[0]).startswith("Молодой человек") and "3.2" not in V.strip_timing(parts[0])
 
 
 def test_a_named_length_over_the_clip_rule_is_kept_per_part():
-    parts = V.split_script("1. 8 с — Человек идёт по улице.\n2. 7 s — Он садится на лавку.")
-    assert [V.estimate_seconds(p) for p in parts] == [8.0, 7.0]
+    parts = _split("1. 8 с — Человек идёт по улице.\n2. 7 s — Он садится на лавку.")
+    assert [_est(p) for p in parts] == [8.0, 7.0]
 
 
 def test_a_plain_script_is_not_read_as_numbered():

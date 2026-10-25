@@ -18,6 +18,9 @@ import comfy_client  # noqa: E402
 import tg_continue  # noqa: E402
 import tool_image_handlers as H  # noqa: E402
 import video as V  # noqa: E402
+import fakes as _fakes  # noqa: E402
+_split = lambda t, **k: V.split_script(t, reads=_fakes.script_model, **k)  # noqa: E731  the sentence read, scripted
+_est = lambda t, **k: V.estimate_seconds(t, reads=_fakes.script_model, **k)  # noqa: E731
 from tests.fakes import Over  # noqa: E402
 
 
@@ -80,6 +83,7 @@ def test_a_clip_is_found_again_by_its_bytes(tmp_path):
 
 
 class _Ctx:
+    deps = types.SimpleNamespace(script_read=_fakes.script_model)
     reference_images = []
     voice_choice = None
     continue_tail = continue_src = ""
@@ -161,7 +165,7 @@ def test_a_long_script_is_one_chain_stitched_once(tmp_path):
     st = {}
     H._handle_generate_video(rig.ctx(), st, {"description": LONG, "use_current_images": False})
     calls = rig.calls
-    n = len(V.split_script(LONG))
+    n = len(_split(LONG))
     preps = [kw for d, kw in calls if d == "PREP"]
     assert len(preps) == n and calls[:n] == [("PREP", {"card": False})] * n   # all prepared first, model loaded
     del calls[:n]
@@ -203,7 +207,7 @@ def test_the_joins_of_a_chain_are_looked_at_once_after_the_card_is_free(tmp_path
     ctx = rig.ctx(vision_model=lambda *a, **k: (
         seen.append((len(k["image_paths"]), comfy_client._excl_users)), "Join 2: the cat vanishes")[1])
     out = H._handle_generate_video(ctx, {}, {"description": LONG, "use_current_images": False})
-    n = len(V.split_script(LONG))
+    n = len(_split(LONG))
     assert seen == [(2 * (n - 1), 0)], seen     # one call, the chain's card session closed
     assert "Join 2: the cat vanishes" in out and "do NOT call the clip seamless" in out
 
@@ -214,7 +218,7 @@ def test_a_long_continuation_of_a_chain_clip_is_still_cut_into_parts(tmp_path):
     rig, ctx, _ = _continued(tmp_path)
     H._handle_generate_video(ctx, {}, {"description": LONG, "seconds": 30})
     renders = rig.renders()
-    n = len(V.split_script(LONG))
+    n = len(_split(LONG))
     assert n > 1 and len(renders) == n, renders
     assert renders[0][0].startswith(V.CONTINUE_CTX_PREFIX + "BRIDGE. ")
     # the new links follow the clip's own: restarting at 2 overwrote its links
@@ -369,7 +373,7 @@ def test_later_parts_know_the_scene_and_carry_no_example_action():
     part = "They walk on toward the water."
     d = V.CONTINUE_CTX_PREFIX + V.with_scene(part, "A paper bag of money at Lakhta; women walk in.")
     assert "bag of money at Lakhta" in d and d.startswith(V.CONTINUE_CTX_PREFIX + part)
-    assert V.estimate_seconds(d) == V.estimate_seconds(part)
+    assert _est(d) == _est(part)
     assert V.with_scene(part, "") == part
 
 
@@ -415,7 +419,8 @@ def test_a_picture_sent_after_the_clip_is_animated_not_the_clip_continued(tmp_pa
     os.utime(last, (1000, 1000))
     rig = _Rig(tmp_path, chains={str(last): ("h3_continuous/chZ", 4)})
     ctx = rig.ctx(last_video_path=str(last), yes_no=lambda q, t, default=False, wait=True: True,
-                  deps=types.SimpleNamespace(_current_image_paths=lambda c, s: [str(pic)]))
+                  deps=types.SimpleNamespace(_current_image_paths=lambda c, s: [str(pic)],
+                                             script_read=_fakes.script_model))
     H._handle_generate_video(ctx, {"user_input_original": "оживи на своё усмотрение"},
                              {"description": "The cats charge."})
     assert not rig.calls[0][1].get("chain") or rig.calls[0][1]["chain"][1] == 1
@@ -507,10 +512,10 @@ def test_an_action_inside_a_camera_line_stays_in_its_own_part():
     s = ("A boy stands in a field, holding a kite string. He runs forward, launching the kite; "
          "the camera pans up as the kite catches a breeze and soars high. The kite flutters and "
          "falls into the grass. The boy runs to it and laughs. Sound: wind.")
-    parts = V.split_script(s)
+    parts = _split(s)
     assert sum("soars high" in p for p in parts) == 1, parts
     assert sum("camera pans up" in p for p in parts) == 1, parts   # a camera move happens once
-    assert V.split_script("The camera follows the cat as it walks.") == ["The camera follows the cat as it walks."]
+    assert _split("The camera follows the cat as it walks.") == ["The camera follows the cat as it walks."]
 
 
 def test_how_the_scene_opens_is_not_replayed_by_every_part():
@@ -521,7 +526,7 @@ def test_how_the_scene_opens_is_not_replayed_by_every_part():
          "to reveal an old man. He reaches for the letter, picks it up and begins to read it. "
          "As he reads, his eyes widen and he whispers «Не может быть…» looking at the paper. "
          "Finally he looks up from the letter with a gentle smile. The lighting is soft and warm.")
-    parts = V.split_script(s)
+    parts = _split(s)
     assert len(parts) > 1, parts
     assert sum("pans up" in p for p in parts) == 1 and "pans up" in parts[0], parts
     assert sum("scene begins" in p for p in parts) == 1, parts
@@ -535,7 +540,7 @@ def test_a_line_inside_a_sound_line_is_said_once():
          "breathing, a whispered «Не может быть…». His eyes widen as he reads the letter slowly. "
          "He leans back in his chair and stares at the wall for a while. Finally a slow warm smile "
          "spreads across his face as he looks up.")
-    parts = V.split_script(s)
+    parts = _split(s)
     assert len(parts) > 1, parts
     assert sum("Не может быть" in p for p in parts) == 1, parts
 

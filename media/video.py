@@ -139,10 +139,79 @@ def snap_frames(length: int) -> int:
 
 
 _QUOTED = re.compile(r'«([^»]*)»|"([^"]*)"|“([^”]*)”')
-_BEAT = re.compile(r"[,.;:!?—]|\b(?:then|and then|after that|afterwards|while|before|until|"
-                   r"затем|потом|после этого|и снова|снова)\b", re.I)
-_HOLD = re.compile(r"\b(?:for (?:a few|several|some|\d+) seconds?|for a while|"
-                   r"несколько секунд|какое-то время)\b", re.I)
+
+# What each sentence of a shot script is, read by the model (bench/script_read_eval.py).
+# Word lists read this before: «camera» or «visible» anywhere made an action a look line
+# that rode every part, «for several seconds» was the only held action, and a comma was a beat.
+_SCRIPT_SYS = (
+    "Each numbered line is one sentence of a video shot script. For each sentence:\n"
+    "kind -- \"look\": it describes how the whole clip looks or sounds and no character "
+    "does anything: sound or music (\"Sound: wind.\", \"Soundscape: …\"), light, colour, "
+    "style, mood, quality (\"Quality: 4K\"), how the camera is held (\"The camera is "
+    "handheld\"), weather or scenery in the background (\"Rain falls outside the window\"). "
+    "\"once\": it only says how the clip opens or continues, or a camera move (pans, zooms, "
+    "follows the cat). \"action\": a character or a thing in the story does something: "
+    "moves, acts, speaks, breaks, explodes.\n"
+    "beats -- for an action, the number of separate actions one after another (\"he gets "
+    "up, laughs and says «…»\" is 3; \"затем он открывает дверь и выходит\" is 2).\n"
+    "hold -- true when an action lasts or repeats for a while (for several seconds, for some "
+    "time, какое-то время, keeps barking).\n"
+    "camera, rest -- ONLY when the sentence joins a camera move and a different subject's "
+    "action with as / while / when (\"the camera pans up as the kite soars high\"): the camera "
+    "move and that action as two sentences. A camera move alone, or a camera following its "
+    "subject (\"the camera follows the cat as it walks\"), is not split: both \"\".\n"
+    'Answer ONE JSON object and nothing else: {"sentences": [{"kind": "action", "beats": 1, '
+    '"hold": false, "camera": "", "rest": ""}, ...]}, one per line, in order.')
+_PLAIN_READ = {"kind": "action", "beats": 1, "hold": False, "camera": "", "rest": ""}
+_SCRIPT_READS: dict = {}
+
+
+def _script_model(sentences: list):
+    """The model's JSON for these sentences, or None. Suites replace this function."""
+    if os.getenv("F5_TEST_RUN") and not os.getenv("INTENT_LIVE"):
+        return None
+    try:
+        from seams import text_model
+        from utils import safe_json_from_llm
+        raw = text_model(None)(None, _SCRIPT_SYS,
+                               "\n".join(f"{i}. {s[:400]}" for i, s in enumerate(sentences, 1)),
+                               temperature=0.0, max_tokens=80 + 60 * len(sentences)) or ""
+        return safe_json_from_llm(raw, ("sentences",))
+    except Exception:
+        logger.warning("video: script read failed", exc_info=True)
+        return None
+
+
+def read_sentences(sentences: list, model=None) -> list:
+    """One read per sentence (cached); unread: a one-beat action. `model(sentences)` is a
+    suite's scripted answer, never cached for the next caller."""
+    if model is not None:
+        got = model(list(sentences))
+        rows = got.get("sentences") if isinstance(got, dict) else None
+        if not isinstance(rows, list) or len(rows) != len(sentences):
+            return [_PLAIN_READ] * len(sentences)
+        return [_clean_read(r) for r in rows]
+    todo = list(dict.fromkeys(s for s in sentences if s not in _SCRIPT_READS))
+    for i in range(0, len(todo), 20):
+        batch = todo[i:i + 20]
+        got = _script_model(batch)
+        rows = got.get("sentences") if isinstance(got, dict) else None
+        if not isinstance(rows, list) or len(rows) != len(batch):
+            continue
+        if len(_SCRIPT_READS) > 2000:
+            _SCRIPT_READS.clear()
+        for s, r in zip(batch, rows):
+            _SCRIPT_READS[s] = _clean_read(r)
+    return [_SCRIPT_READS.get(s, _PLAIN_READ) for s in sentences]
+
+
+def _clean_read(r) -> dict:
+    r = r if isinstance(r, dict) else {}
+    b = r.get("beats")
+    return {"kind": r.get("kind") if r.get("kind") in ("action", "look", "once") else "action",
+            "beats": max(1, min(12, b)) if isinstance(b, int) and not isinstance(b, bool) else 1,
+            "hold": r.get("hold") is True,
+            "camera": str(r.get("camera") or "").strip(), "rest": str(r.get("rest") or "").strip()}
 
 
 _TIME_TAG = re.compile(r"\[(\d+(?:\.\d+)?) s\]\s*")
@@ -164,7 +233,7 @@ def numbered_script(text: str):
     return [(float(m.group(1).replace(",", ".")) if m.group(1) else None, m.group(2).strip()) for m in items]
 
 
-def _pack_numbered(items: list, top: float) -> list:
+def _pack_numbered(items: list, top: float, reads=None) -> list:
     """Consecutive items share a clip while they fit it; a named length is kept, so
     «3.2 с» and «2.2 с» are one 5.4 s clip, not two 5.2 s ones."""
     parts, cur, tot, named = [], [], 0.0, False
@@ -173,7 +242,7 @@ def _pack_numbered(items: list, top: float) -> list:
         text = " ".join(t if t[-1] in ".!?…»\"" else t + "." for t in cur)
         parts.append(f"[{tot:.1f} s] {text}" if named else text)
     for sec, line in items:
-        s = sec if sec is not None else estimate_seconds(line, capped=False)
+        s = sec if sec is not None else estimate_seconds(line, capped=False, reads=reads)
         if cur and tot + s > top:
             flush()
             cur, tot, named = [], 0.0, False
@@ -184,7 +253,7 @@ def _pack_numbered(items: list, top: float) -> list:
     return parts
 
 
-def estimate_seconds(description: str, capped: bool = True) -> float:
+def estimate_seconds(description: str, capped: bool = True, reads=None) -> float:
     """How long the scripted clip needs to play out, when nobody said a length.
 
     A fixed 5.2 s cut every multi-action script short ("puts on a suit,
@@ -205,31 +274,17 @@ def estimate_seconds(description: str, capped: bool = True) -> float:
         text = text.replace(rule, "")
     # Sound/light/camera lines ride every part (split_script) and take no screen time;
     # counted as beats, five of them pushed every part of a 5-part plan to the 10.1 s cap.
-    text = " ".join(s for s in _SENT.split(text) if s and not _LOOK.match(s.strip()))
-    spoken = " ".join(next(g for g in m.groups() if g is not None) for m in _QUOTED.finditer(text))
-    rest = _QUOTED.sub(" ", text)
+    sents = [s.strip() for s in _SENT.split(text) if s and s.strip()]
+    acts = [(s, r) for s, r in zip(sents, read_sentences(sents, reads)) if r["kind"] == "action"]
+    spoken = " ".join(next(g for g in m.groups() if g is not None)
+                      for s, _ in acts for m in _QUOTED.finditer(s))
     words = len(spoken.split())
-    beats = max(1, len([b for b in _BEAT.split(rest) if b and any(c.isalpha() for c in b)]))
-    secs = 1.0 + words / 2.3 + beats * 1.3 + 2.0 * len(_HOLD.findall(rest))
+    beats = max(1, sum(r["beats"] for _, r in acts))
+    secs = 1.0 + words / 2.3 + beats * 1.3 + 2.0 * sum(r["hold"] for _, r in acts)
     top = frames_to_seconds(VIDEO_MAX_FRAMES_AUTO) if capped else float("inf")
     return round(min(top, max(frames_to_seconds(VIDEO_DEFAULT_FRAMES), secs)), 2)
 
 
-_LOOK = re.compile(
-    r"(?:the\s+)?(?:soundscape|sound(?:track)?|audio|music|ambien\w*|lighting|the lighting|light is|"
-    r"style|the style|look|overall|throughout|color|colour|quality|the camera|camera|"
-    # «The background shows shelves with a bag…» became a 5-minute part of its own
-    # (live 2026-10-12): scenery takes no screen time either.
-    r"(?:in\s+)?the\s+background|background|setting|scenery|visible|in\s+view)\b"
-    r"|(?:the\s+)?(?:lighting|look|tone|mood|atmosphere|palette)\b.{0,40}\b(?:is|remains|stays)\b"
-    # «The video continues from the first frame where the cat sits» became a part with
-    # no action, rewritten into a copy of the next part (live 2026-10-17).
-    r"|(?:the\s+)?(?:video|clip|scene|shot)\s+(?:continues|starts|begins|opens|picks\s+up)\b",
-    re.I)
-_ONCE = re.compile(r"(?:the\s+)?(?:video|clip|scene|shot)\s+(?:starts|begins|opens)\b"
-                   r"|(?:the\s+)?camera\s+(?:\w+ly\s+)?(?:pans|tilts|zooms|dollies|pulls|pushes|moves|"
-                   r"tracks|cranes|rises|lowers|orbits|swings|cuts)\b", re.I)
-_CAMERA_AS = re.compile(r"((?:the\s+)?camera\b[^.;]*?)\s+(?:as|while|when)\s+(?!it\b|they\b|he\b|she\b)(\w.+)", re.I)
 _SENT = re.compile(r"(?<=[.!?;])\s+|(?<=,)\s+(?=(?:then|after that|afterwards|затем|потом|после этого)\b)", re.I)
 
 
@@ -309,7 +364,7 @@ def _cut_long_quote(m, top: float) -> str:
                     for i, c in enumerate(chunks))
 
 
-def split_script(description: str, max_seconds: float = 0.0) -> list:
+def split_script(description: str, max_seconds: float = 0.0, reads=None) -> list:
     """A script too long for one clip, as consecutive parts that each fit one
     (`estimate_seconds` <= max_seconds, default the auto cap). Cuts only between
     sentences or before "then"; a quoted line is never split. One part = fits as is."""
@@ -317,8 +372,8 @@ def split_script(description: str, max_seconds: float = 0.0) -> list:
     text = (description or "").strip()
     items = numbered_script(text)
     if items:
-        return _pack_numbered(items, top)
-    if estimate_seconds(text, capped=False) <= top:
+        return _pack_numbered(items, top, reads)
+    if estimate_seconds(text, capped=False, reads=reads) <= top:
         return [text]
     quotes = []
 
@@ -328,13 +383,18 @@ def split_script(description: str, max_seconds: float = 0.0) -> list:
     # A monologue longer than a part is cut at its own sentence ends: 85 words of speech
     # rode one 10 s part, and the clip said the first two sentences (live 2026-10-19).
     hidden = _QUOTED.sub(_hide, _QUOTED.sub(lambda m: _cut_long_quote(m, top), text))
+    restore = lambda t: re.sub(r"\x00(\d+)\x00", lambda m: quotes[int(m.group(1))], t)
+    raw = [x for x in _SENT.split(hidden) if x and x.strip()]
     pieces = []
-    for x in (x for x in _SENT.split(hidden) if x and x.strip()):
+    for x, r in zip(raw, read_sentences([restore(x).strip() for x in raw], reads)):
         # «the camera pans up as the kite catches a breeze and soars high»: the kite's climb
         # rode every part as a camera line and the judge cut it out of each (2026-10-17).
-        m = _CAMERA_AS.match(x.strip())
-        pieces += [m.group(1).rstrip(",;") + ".", m.group(2)[:1].upper() + m.group(2)[1:]] if m else [x]
-    restore = lambda t: re.sub(r"\x00(\d+)\x00", lambda m: quotes[int(m.group(1))], t)
+        if r["camera"] and r["rest"] and "\x00" not in x:
+            pieces += [r["camera"].rstrip(",;. ") + ".", r["rest"][:1].upper() + r["rest"][1:]]
+        else:
+            pieces.append(x)
+    kind = dict(zip(pieces, (r["kind"] for r in read_sentences([restore(p).strip() for p in pieces], reads))))
+    _look = lambda p: kind[p] == "look"  # noqa: E731
     # Sound, light and look lines take no screen time and belong to every part: as a
     # part of their own they were "2. Soundscape: soft indoor ambience…" with no action
     # and their words had pushed a one-clip script into two.
@@ -343,26 +403,26 @@ def split_script(description: str, max_seconds: float = 0.0) -> list:
     # They go with the action next to them.
     # A spoken line inside a sound line («Sound: breathing, a whispered «Не может быть…»») is
     # said once too: on every part it was said three times.
-    def _once(p): return _ONCE.match(p.strip()) or (_LOOK.match(p.strip()) and "\x00" in p)
+    def _once(p): return kind[p] == "once" or (_look(p) and "\x00" in p)
     once, glued = "", []
     for p in pieces:
         if _once(p):
             once = (once + " " + p.strip()).strip()
-        elif not _LOOK.match(p.strip()):
+        elif not _look(p):
             glued.append((once + " " + p.strip()).strip() if once else p)
             once = ""
     if once and glued:
         glued[-1] = glued[-1].strip() + " " + once
-    look = " ".join(p.strip() for p in pieces if _LOOK.match(p.strip()) and not _once(p))
-    pieces = glued if glued else [p for p in pieces if not _LOOK.match(p.strip())]
+    look = " ".join(p.strip() for p in pieces if _look(p) and not _once(p))
+    pieces = glued if glued else [p for p in pieces if not _look(p)]
     if look:
         action = restore(" ".join(p.strip() for p in pieces))
-        if not pieces or estimate_seconds(action, capped=False) <= top:
+        if not pieces or estimate_seconds(action, capped=False, reads=reads) <= top:
             return [text]
     parts, cur = [], ""
     for piece in pieces:
         cand = (cur + " " + piece).strip()
-        if cur and estimate_seconds(restore(cand), capped=False) > top:
+        if cur and estimate_seconds(restore(cand), capped=False, reads=reads) > top:
             parts.append(restore(cur))
             cur = piece.strip()
         else:
@@ -1895,7 +1955,7 @@ def prepare_prompt(ctx, description: str, *, images: Sequence[str] = (), videos:
         description = _lock_framing_unless_requested(strip_timing(description), ctx)
     mode = pick_mode(images, videos, audios, keyframe=keyframe)
     if not seconds:
-        seconds = estimate_seconds(asked)
+        seconds = estimate_seconds(asked, reads=dep(ctx, "script_read", None))
         logger.info("video length from the script: %.1fs", seconds)
     frames = seconds_to_frames(seconds)
     if head:

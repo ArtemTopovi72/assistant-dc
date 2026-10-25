@@ -166,7 +166,7 @@ def test_a_plan_keeps_the_clip_and_the_new_person_for_the_approved_run(fakes, tm
         p.write_bytes(b"x")
     fakes[("video", "generate_video")] = lambda *a, **k: (_ for _ in ()).throw(AssertionError("rendered"))
     fakes[("video", "engine_available")] = lambda ctx: (True, "")
-    fakes[("video", "split_script")] = lambda text: ["part one " + text, "part two"]
+    fakes[("video", "split_script")] = lambda text, **k: ["part one " + text, "part two"]
     fakes[("handlers", "_current_image_paths")] = lambda ctx, state: [str(seed)]
 
     class Ctx:

@@ -1859,8 +1859,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         parts = [raw]
     else:
         args.pop("seconds", None)
-        parts = video_mod.split_script(raw)
-        have = sum(video_mod.estimate_seconds(p) for p in parts)
+        parts = video_mod.split_script(raw, reads=dep(ctx, "script_read", None))
+        have = sum(video_mod.estimate_seconds(p, reads=dep(ctx, "script_read", None)) for p in parts)
         if want and have > want * 1.3:
             # «на 30 секунд» came out as 11 parts, a minute (live 2026-10-13)
             tight = video_mod.condense_script(raw, have, want, ctx)
@@ -1868,11 +1868,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 logger.info("generate_video: script condensed from ~%.0f s to fit %.0f s", have, want)
                 description = description.replace(raw, tight, 1) if raw in description else description
                 raw = tight
-                parts = video_mod.split_script(raw)
+                parts = video_mod.split_script(raw, reads=dep(ctx, "script_read", None))
         cap = video_mod.frames_to_seconds(video_mod.VIDEO_MAX_FRAMES_AUTO)
         if want > len(parts) * cap:
             # 30 s asked of a 4-sentence script split in two: two parts at the cap are 20 s
-            finer = video_mod.split_script(raw, max_seconds=max(1.0, have / math.ceil(want / cap)))
+            finer = video_mod.split_script(raw, max_seconds=max(1.0, have / math.ceil(want / cap)), reads=dep(ctx, "script_read", None))
             if len(finer) > len(parts):
                 parts = finer
         if not want and len(parts) > video_mod.AUTO_MAX_PARTS and not speech_theirs:
@@ -1884,7 +1884,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             if tight:
                 description = description.replace(raw, tight, 1) if raw in description else description
                 raw = tight
-                parts = video_mod.split_script(raw)
+                parts = video_mod.split_script(raw, reads=dep(ctx, "script_read", None))
             if len(parts) > video_mod.AUTO_MAX_PARTS:
                 parts = parts[:video_mod.AUTO_MAX_PARTS]
                 cut = " ".join(parts)
@@ -1941,7 +1941,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 new_raw = " ".join(kept)
                 description = description.replace(raw, new_raw, 1) if raw in description else new_raw
                 raw = new_raw
-                parts = video_mod.split_script(raw)
+                parts = video_mod.split_script(raw, reads=dep(ctx, "script_read", None))
     if audios and len(parts) > 1:
         parts = video_mod.merge_silent_parts(parts)
     talking = None
@@ -1964,11 +1964,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         # Two of the user's sentences never reached the plan (live 2026-10-20); which model
         # step dropped them is not the point -- the user's words are all said, as written.
         logger.warning("generate_video: the parts lost the user's words %s; re-cut from the script as written", gone)
-        parts = video_mod.fit_speech(video_mod.split_script(raw))
+        parts = video_mod.fit_speech(video_mod.split_script(raw, reads=dep(ctx, "script_read", None)))
     if len(parts) > 1 and raw in description:
         description = description.replace(raw, parts[0], 1)
         logger.info("generate_video: the script needs %d parts: %s", len(parts),
-                    [round(video_mod.estimate_seconds(p), 1) for p in parts])
+                    [round(video_mod.estimate_seconds(p, reads=dep(ctx, "script_read", None)), 1) for p in parts])
     else:
         parts = [raw]
     # 🎬 The plan the user approved under the card (tg_video_plan): exactly those parts.
@@ -1983,7 +1983,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                        else approved[0])
         parts = video_mod.fit_speech(approved)
     # An asked length the script falls short of: each part plays longer, up to one clip's cap.
-    secs = [video_mod.estimate_seconds(p) for p in parts]
+    secs = [video_mod.estimate_seconds(p, reads=dep(ctx, "script_read", None)) for p in parts]
     if want > 15.0 and len(parts) > 1 and want > sum(secs) * 1.15:
         per = min(video_mod.frames_to_seconds(video_mod.VIDEO_MAX_FRAMES_AUTO), want / len(parts))
         secs = [max(x, round(per, 2)) for x in secs]
@@ -1992,7 +1992,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     loop = bool(args.get("loop") and images and not videos and not continuing)
     if loop:
         images, parts = [images[-1], images[-1]], [raw]    # newest last: [0] animated an older picture
-        secs = [max(video_mod.estimate_seconds(raw), 5.2)]
+        secs = [max(video_mod.estimate_seconds(raw, reads=dep(ctx, "script_read", None)), 5.2)]
     if len(parts) > 1 and not approved and not own_script and getattr(ctx, "video_plan_ask", False):
         # Several minutes per part: the chat sees the parts, the clip length and the
         # render time first, and may drop or condense parts (user, 2026-10-10).

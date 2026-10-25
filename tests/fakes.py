@@ -103,3 +103,38 @@ def reads(read=None, yes=None, pick=None, reply=None):
             return (pick(question, text) or default) if text else default
         out["choice"] = choice
     return out
+
+
+# What each sentence of a shot script is (media/video.read_sentences) is the model's read,
+# scored live in bench/script_read_eval.py. Suites that pin part lengths script it with
+# the word rules that read it before -- here only, as the scripted answer.
+import re as _re
+_SR_QUOTED = _re.compile(r'«([^»]*)»|"([^"]*)"|“([^”]*)”')
+_SR_BEAT = _re.compile(r"[,.;:!?—]|\b(?:then|and then|after that|afterwards|while|before|until|"
+                       r"затем|потом|после этого|и снова|снова)\b", _re.I)
+_SR_HOLD = _re.compile(r"\b(?:for (?:a few|several|some|\d+) seconds?|for a while|"
+                       r"несколько секунд|какое-то время)\b", _re.I)
+_SR_LOOK = _re.compile(
+    r"(?:the\s+)?(?:soundscape|sound(?:track)?|audio|music|ambien\w*|lighting|light is|style|look|"
+    r"overall|throughout|colou?r|quality|camera|(?:in\s+)?the\s+background|background|setting|"
+    r"scenery|visible|in\s+view)\b|(?:the\s+)?(?:lighting|look|tone|mood|atmosphere|palette)\b"
+    r".{0,40}\b(?:is|remains|stays)\b|(?:the\s+)?(?:video|clip|scene|shot)\s+"
+    r"(?:continues|starts|begins|opens|picks\s+up)\b", _re.I)
+_SR_ONCE = _re.compile(r"(?:the\s+)?(?:video|clip|scene|shot)\s+(?:starts|begins|opens)\b"
+                       r"|(?:the\s+)?camera\s+(?:\w+ly\s+)?(?:pans|tilts|zooms|dollies|pulls|"
+                       r"pushes|moves|tracks|cranes|rises|lowers|orbits|swings|cuts)\b", _re.I)
+_SR_CAMERA_AS = _re.compile(r"((?:the\s+)?camera\b[^.;]*?)\s+(?:as|while|when)\s+"
+                            r"(?!it\b|they\b|he\b|she\b)(\w.+)", _re.I)
+
+
+def script_model(sentences):
+    rows = []
+    for s in sentences:
+        m = _SR_CAMERA_AS.match(s.strip())
+        rest = _SR_QUOTED.sub(" ", s)
+        kind = "once" if _SR_ONCE.match(s.strip()) else "look" if _SR_LOOK.match(s.strip()) else "action"
+        rows.append({"kind": kind,
+                     "beats": len([b for b in _SR_BEAT.split(rest) if b and any(c.isalpha() for c in b)]) or 1,
+                     "hold": bool(_SR_HOLD.search(rest)),
+                     "camera": m.group(1) if m else "", "rest": m.group(2) if m else ""})
+    return {"sentences": rows}
