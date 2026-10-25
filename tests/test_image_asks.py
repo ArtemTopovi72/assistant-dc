@@ -47,7 +47,7 @@ check("nothing missing -> the judge's verdict stands", out["verdict"] == "succes
 # Of the takes, the one missing the fewest asked-for things goes out -- not simply the last one:
 # a retry for the missing hand can lose the lava the take before had.
 takes = iter([pic("t1.png"), pic("t2.png"), pic("t3.png")])
-missing = iter([1, 2, 1])
+missing = iter([1, 0, 2])
 prompts = []
 def draw(**k):
     prompts.append(k["prompt"]); return next(takes)
@@ -56,8 +56,12 @@ def judge(*a, **k):
     return {"verdict": "refine", "score": 6, "reason": f"{m} missing", "missing": m,
             "prompt_patch": "Both hands are on the demons."}
 got = G.generate_image_with_refinement(Ctx(generate_image_with_comfy=draw, evaluate_image=judge), "Lenin in lava")
-check("the take with the fewest missing goes out", got["path"].endswith("t1.png"), got)
+check("the take with the fewest missing goes out", got["path"].endswith("t2.png"), got)
 check("the retry carries what was missing", "Both hands are on the demons." in prompts[1], prompts)
+takes = iter([pic("u1.png"), pic("u2.png"), pic("u3.png")])
+missing = iter([1, 1, 2])
+got = G.generate_image_with_refinement(Ctx(generate_image_with_comfy=draw, evaluate_image=judge), "Lenin in lava")
+check("a tie goes to the later take, drawn with the misses spelled out", got["path"].endswith("u2.png"), got)
 
 print(f"\n{OK}/{OK + BAD} checks passed")
 sys.exit(1 if BAD else 0)

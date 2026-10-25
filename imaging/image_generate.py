@@ -404,7 +404,8 @@ def generate_image_with_refinement(ctx, description: str, steps: Optional[int] =
     # denoise 0.35–0.65 — so those retries must regenerate from fresh noise.
 
     # The take with the fewest asked-for things missing: a retry for one missing hand can lose the
-    # lava the take before had.
+    # lava the take before had. A tie goes to the later take, drawn with the misses spelled out:
+    # the first of two one-miss Lenins went out, grey armour and all (debug chat 2026-10-26).
     best = None
     for attempt in range(1, MAX_IMAGE_REFINEMENT_ATTEMPTS + 1):
         logger.info("Image generation attempt %d/%d", attempt, MAX_IMAGE_REFINEMENT_ATTEMPTS)
@@ -468,7 +469,7 @@ def generate_image_with_refinement(ctx, description: str, steps: Optional[int] =
         reason = str(eval_data.get("reason", "")).strip()
 
         logger.info("Evaluation: verdict=%s score=%d/10 reason=%s", verdict, score, reason[:300])
-        if best is None or int(eval_data.get("missing") or 0) < best[0]:
+        if best is None or int(eval_data.get("missing") or 0) <= best[0]:
             best = (int(eval_data.get("missing") or 0), img_path, score, reason)
 
         if verdict == "success" or score >= 8:
