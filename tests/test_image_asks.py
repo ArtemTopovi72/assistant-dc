@@ -46,22 +46,46 @@ check("nothing missing -> the judge's verdict stands", out["verdict"] == "succes
 
 # Of the takes, the one missing the fewest asked-for things goes out -- not simply the last one:
 # a retry for the missing hand can lose the lava the take before had.
-takes = iter([pic("t1.png"), pic("t2.png"), pic("t3.png")])
-missing = iter([1, 0, 2])
-prompts = []
-def draw(**k):
-    prompts.append(k["prompt"]); return next(takes)
-def judge(*a, **k):
-    m = next(missing)
-    return {"verdict": "refine", "score": 6, "reason": f"{m} missing", "missing": m,
-            "prompt_patch": "Both hands are on the demons."}
-got = G.generate_image_with_refinement(Ctx(generate_image_with_comfy=draw, evaluate_image=judge), "Lenin in lava")
-check("the take with the fewest missing goes out", got["path"].endswith("t2.png"), got)
-check("the retry carries what was missing", "Both hands are on the demons." in prompts[1], prompts)
-takes = iter([pic("u1.png"), pic("u2.png"), pic("u3.png")])
-missing = iter([1, 1, 2])
-got = G.generate_image_with_refinement(Ctx(generate_image_with_comfy=draw, evaluate_image=judge), "Lenin in lava")
-check("a tie goes to the later take, drawn with the misses spelled out", got["path"].endswith("u2.png"), got)
+def judge_seq(seq):
+    it = iter(seq)
+    def judge(*a, **k):
+        m = next(it)
+        return {"verdict": "refine", "score": 6, "reason": f"{m} missing", "missing": m,
+                "prompt_patch": "His left hand grips the second demon's neck."}
+    return judge
+def drawer(names, log):
+    it = iter(names)
+    def draw(**k):
+        log.append(("draw", k["prompt"])); return pic(next(it))
+    return draw
+def editor(log, name="e.png"):
+    def edit(ctx, path, instruction):
+        log.append(("edit", path, instruction)); return pic(name)
+    return edit
+
+# The second try edits what the best take lacks into it: redrawn whole, the hand never reached
+# the neck in three takes and each redraw lost something the take before had (2026-10-26).
+log = []
+got = G.generate_image_with_refinement(Ctx(generate_image_with_comfy=drawer(["t1.png", "t3.png"], log),
+                                           edit_image=editor(log), evaluate_image=judge_seq([1, 0, 2])),
+                                       "Lenin in lava")
+check("the second try edits the best take", log[1][0] == "edit" and log[1][1].endswith("t1.png"), log)
+check("...with what it lacks", "second demon's neck" in log[1][2], log)
+check("the take with the fewest missing goes out", got["path"].endswith("e.png"), got)
+check("the third try draws anew with what was missing", log[2][0] == "draw" and "second demon's neck" in log[2][1], log)
+
+log = []
+got = G.generate_image_with_refinement(Ctx(generate_image_with_comfy=drawer(["u1.png", "u3.png"], log),
+                                           edit_image=editor(log, "u2.png"), evaluate_image=judge_seq([1, 1, 2])),
+                                       "Lenin in lava")
+check("a tie goes to the later take, made with the misses spelled out", got["path"].endswith("u2.png"), got)
+
+# Nothing missing on the first take is not edited (a judge's low score alone redraws as before).
+log = []
+G.generate_image_with_refinement(Ctx(generate_image_with_comfy=drawer(["v1.png", "v2.png", "v3.png"], log),
+                                     edit_image=editor(log), evaluate_image=judge_seq([0, 0, 0])),
+                                 "Lenin in lava")
+check("no misses -> no edit", all(x[0] == "draw" for x in log), log)
 
 print(f"\n{OK}/{OK + BAD} checks passed")
 sys.exit(1 if BAD else 0)

@@ -231,10 +231,11 @@ def generate_image_with_comfy(
 _ASKS_SYS = (
     "A picture was drawn for the request below. List the things the request asks for that can be SEEN "
     "and checked in the picture: who is where (waist-deep in, standing on, holding), what each hand does, "
-    "counts, a named colour or glow on a body part, a named expression. Not the style, the mood, the "
+    "counts, a named colour or glow on a body part, a named expression. ONE thing per question -- each "
+    "hand its own question, never 'one hand ... and the other ...'. Not the style, the mood, the "
     "lighting quality or the realism. Reply with JSON only: {\"checks\": [{\"ask\": \"<one concrete yes/no "
     "question about the picture>\", \"draw\": \"<the same thing as a plain statement for the image model>\"}]}, "
-    "at most 6.")
+    "at most 8.")
 _ASKS: dict = {}
 
 
@@ -255,7 +256,7 @@ def _missing_asks(ctx, img_path: str, goal: str) -> list:
             logger.warning("image asks: the read failed", exc_info=True)
             got = {}
         _ASKS[goal] = [(str(c.get("ask")), str(c.get("draw") or c.get("ask"))) for c in (got.get("checks") or [])
-                       if isinstance(c, dict) and str(c.get("ask") or "").strip()][:6]
+                       if isinstance(c, dict) and str(c.get("ask") or "").strip()][:8]
         while len(_ASKS) > 64:
             _ASKS.pop(next(iter(_ASKS)))
     missing = []
@@ -415,7 +416,13 @@ def generate_image_with_refinement(ctx, description: str, steps: Optional[int] =
         # Every attempt re-draws through Ideogram with the judge's patched
         # prompt; there is no img2img "repaint the previous picture" engine any
         # more (it was the old model), and it lost the layout anyway.
-        img_path = dep(ctx, "generate_image_with_comfy", generate_image_with_comfy)(
+        img_path = None
+        if attempt == 2 and best and best[0]:
+            # What the best take still lacks, edited into it: redrawn whole, Lenin's hand never
+            # reached the second demon's neck in three takes, and each redraw lost something the
+            # take before had; an edit of the take put the gauntlet on its throat (2026-10-26).
+            img_path = dep(ctx, "edit_image", _image._edit_image_with_firered_once)(ctx, best[1], best[4])
+        img_path = img_path or dep(ctx, "generate_image_with_comfy", generate_image_with_comfy)(
             ctx=ctx,
             prompt=prompt,
             negative_prompt=negative_prompt,
@@ -470,7 +477,8 @@ def generate_image_with_refinement(ctx, description: str, steps: Optional[int] =
 
         logger.info("Evaluation: verdict=%s score=%d/10 reason=%s", verdict, score, reason[:300])
         if best is None or int(eval_data.get("missing") or 0) <= best[0]:
-            best = (int(eval_data.get("missing") or 0), img_path, score, reason)
+            best = (int(eval_data.get("missing") or 0), img_path, score, reason,
+                    str(eval_data.get("prompt_patch") or ""))
 
         if verdict == "success" or score >= 8:
             return {
@@ -551,7 +559,7 @@ def generate_image_with_refinement(ctx, description: str, steps: Optional[int] =
         final_seed = random.randint(1, 999_999_999)
 
     if best:
-        _, img_path, score, reason = best
+        _, img_path, score, reason, _ = best
     return {
         "path": img_path, "score": score, "attempts": MAX_IMAGE_REFINEMENT_ATTEMPTS,
         "prompt": prompt, "status": "partial", "reason": reason,

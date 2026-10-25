@@ -122,10 +122,20 @@ def _head(path: str) -> str:
     fw, fh = x1 - x0, y1 - y0
     if fw < _MIN_FACE_PX:      # a blurred thumbnail of a painting drew a mushy Lenin
         return ""
+    from PIL import ImageDraw
     im = Image.open(path).convert("RGB")
-    # hair or a bald crown above the brow, ears at the sides, a beard under the chin -- not the collar
-    cut = im.crop((int(max(0, x0 - 0.35 * fw)), int(max(0, y0 - 0.6 * fh)),
-                   int(min(im.width, x1 + 0.35 * fw)), int(min(im.height, y1 + 0.3 * fh))))
+    # hair or a bald crown above the brow, ears at the sides, a beard under the chin
+    ox, oy = int(max(0, x0 - 0.35 * fw)), int(max(0, y0 - 0.6 * fh))
+    cut = im.crop((ox, oy, int(min(im.width, x1 + 0.35 * fw)), int(min(im.height, y1 + 0.25 * fh))))
+    # ...and only the head: an oval around it, the rest the photo's own background. Cut square,
+    # Lenin's collar and tie sat beside his goatee and came through under the Doom armour, whatever
+    # the prompt said (debug chat 2026-10-26).
+    w, h = cut.size
+    bg = tuple(sum(v) // 2 for v in zip(cut.getpixel((2, 2)), cut.getpixel((w - 3, 2))))
+    cx = (x0 + x1) / 2 - ox
+    oval = Image.new("L", cut.size, 0)
+    ImageDraw.Draw(oval).ellipse([cx - 0.62 * fw, y0 - oy - 0.6 * fh, cx + 0.62 * fw, y1 - oy + 0.25 * fh], fill=255)
+    cut = Image.composite(cut, Image.new("RGB", cut.size, bg), oval)
     out = path.rsplit(".", 1)[0] + "_head.jpg"
     cut.save(out, quality=92)
     return out
