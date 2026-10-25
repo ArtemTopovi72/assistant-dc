@@ -237,6 +237,7 @@ _ASKS_SYS = (
     "question about the picture>\", \"draw\": \"<the same thing as a plain statement for the image model>\"}]}, "
     "at most 8.")
 _ASKS: dict = {}
+MAX_EDITED_MISSES = 2
 
 
 def _missing_asks(ctx, img_path: str, goal: str) -> list:
@@ -417,10 +418,11 @@ def generate_image_with_refinement(ctx, description: str, steps: Optional[int] =
         # prompt; there is no img2img "repaint the previous picture" engine any
         # more (it was the old model), and it lost the layout anyway.
         img_path = None
-        if attempt == 2 and best and best[0]:
+        if attempt == 2 and best and 0 < best[0] <= MAX_EDITED_MISSES:
             # What the best take still lacks, edited into it: redrawn whole, Lenin's hand never
             # reached the second demon's neck in three takes, and each redraw lost something the
             # take before had; an edit of the take put the gauntlet on its throat (2026-10-26).
+            # Not three at once: lava, eyes and a skull in one edit wiped both demons out.
             img_path = dep(ctx, "edit_image", _image._edit_image_with_firered_once)(ctx, best[1], best[4])
         img_path = img_path or dep(ctx, "generate_image_with_comfy", generate_image_with_comfy)(
             ctx=ctx,

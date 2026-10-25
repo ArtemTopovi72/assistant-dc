@@ -1018,9 +1018,13 @@ def _handle_generate_image(ctx, state, args: dict) -> str:
     import object_refs
     import person_look
     draw_refs = dep(ctx, "object_refs", object_refs.find)(ctx, description)
-    # A face photo says it better than words: the words for Lenin read «often wears glasses» off
-    # the web, and he was drawn in red sunglasses (debug chat 2026-10-26).
-    if not any(kind == "person" for _, _, kind in draw_refs):
+    # A face is read off its photo, not off web text: the words for Lenin from the web said «often
+    # wears glasses», and he was drawn in red sunglasses (debug chat 2026-10-26).
+    looks = [dep(ctx, "face_words", object_refs.face_words)(ctx, who, photo)
+             for who, photo, kind in draw_refs if kind == "person"]
+    if any(looks):
+        description += "".join("\n" + x for x in looks if x)
+    else:
         description = person_look.with_look(description, ctx=ctx)     # «Ленин» -> bald, goatee, ...
     ctx.set_stage("Drawing a picture")
     steps, width, height, seed = args.get("steps"), args.get("width"), args.get("height"), args.get("seed")

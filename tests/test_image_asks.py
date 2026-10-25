@@ -87,5 +87,12 @@ G.generate_image_with_refinement(Ctx(generate_image_with_comfy=drawer(["v1.png",
                                  "Lenin in lava")
 check("no misses -> no edit", all(x[0] == "draw" for x in log), log)
 
+# Three misses at once are redrawn, not edited: lava, eyes and a skull in one edit wiped both demons out.
+log = []
+G.generate_image_with_refinement(Ctx(generate_image_with_comfy=drawer(["w1.png", "w2.png", "w3.png"], log),
+                                     edit_image=editor(log), evaluate_image=judge_seq([3, 3, 3])),
+                                 "Lenin in lava")
+check("three misses -> a redraw, not an edit", all(x[0] == "draw" for x in log), log)
+
 print(f"\n{OK}/{OK + BAD} checks passed")
 sys.exit(1 if BAD else 0)

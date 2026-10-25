@@ -746,7 +746,8 @@ def generate(ctx, prompt: str, *, width: int = 1024, height: int = 1024,
     lora_strength = min(float(lora_strength), KLEIN_LORA_MAX_STRENGTH)
     lora = (lora_name, lora_strength) if lora_name else None
     # Photos of the named real things the request asks for (object_refs.find, set per turn).
-    things = list(getattr(ctx, "draw_refs", None) or [])
+    things = [t for t in getattr(ctx, "draw_refs", None) or [] if t[2] != "person"]
+    faces = [(t, p) for t, p, k in getattr(ctx, "draw_refs", None) or [] if k == "person"]
     refs = []
     if things:
         import object_refs
@@ -773,5 +774,8 @@ def generate(ctx, prompt: str, *, width: int = 1024, height: int = 1024,
                        workflow[klein.N_SAMPLER]["inputs"]["seed"])
         result = submit(ctx, workflow, timeout=timeout, label="klein",
                         on_progress=on_progress, exclusive=True) or result
+    if result and faces:
+        import object_refs
+        result = dep(ctx, "swap_faces", object_refs.swap_faces)(ctx, result, faces)
     LAST_IMAGE = result
     return result

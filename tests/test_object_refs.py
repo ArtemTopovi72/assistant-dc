@@ -59,15 +59,14 @@ check("the note points at image 1", "image 1" in note and "VAZ-2107" in note, no
 check("only the object comes from the photo", "angle, colour, place" in note, note)
 check("no things -> no note", R.prompt_note([]) == "")
 # A person gives only the face: Lenin in Doom armour keeps his head, not his suit.
-face = R.prompt_note([("Vladimir Lenin", "l.jpg", "person"), ("the Doom Slayer's armour", "d.jpg", "character")])
-check("a person's photo gives the face, not the clothes or pose",
-      "face in image 1" in face and "clothes, pose" in face, face)
-check("the second reference is image 2", "image 2" in face, face)
+note = R.prompt_note([("a VAZ-2107 Lada sedan", "v.jpg", "object"), ("the Doom Slayer's armour", "d.jpg", "character")])
+check("the second reference is image 2", "image 2" in note, note)
 # A character's colours are part of its look; a car's paint is the picture's own.
-check("a character keeps its colours", "angle, pose, place" in face and "colour, place" not in face.split("image 2")[1], face)
+check("a character keeps its colours", "angle, pose, place" in note.split("image 2")[1], note)
+check("a car's colour is the picture's", "angle, colour, place" in note.split("image 2")[0], note)
 
-# A person found on a photo is not described in words too: the web words for Lenin said «often
-# wears glasses» and he was drawn in red sunglasses (debug chat 2026-10-26).
+# A face is read off its photo, not off web text: the web words for Lenin said «often wears
+# glasses» and he was drawn in red sunglasses (debug chat 2026-10-26).
 import tool_image_handlers as H
 seen_desc = {}
 def fake_render(ctx=None, description="", **k):
@@ -77,6 +76,7 @@ def run(refs):
     seen_desc.clear()
     c = NS(deps=NS(object_refs=lambda ctx, d: refs, generate_image_with_refinement=fake_render,
                    _render_budget_exhausted=lambda *a: None,
+                   face_words=lambda ctx, who, p: f"{who} must be recognisable: bald, a short pointed goatee",
                    person_look=lambda text: ("Vladimir Lenin", "bald, small reddish beard, often wears glasses")),
            set_stage=lambda *a: None)
     try:
@@ -84,9 +84,32 @@ def run(refs):
     except Exception as exc:
         seen_desc.setdefault("err", repr(exc))
     return seen_desc.get("d", seen_desc.get("err", ""))
-check("no face photo -> the words describe him", "glasses" in run([]), run([]))
-check("a face photo -> no words about his look",
-      "glasses" not in run([("Vladimir Lenin", save("l.jpg"), "person")]))
+check("no face photo -> the web words describe him", "glasses" in run([]), run([]))
+d = run([("Vladimir Lenin", save("l.jpg"), "person")])
+check("a face photo -> his look read off it, not the web", "pointed goatee" in d and "glasses" not in d, d)
+
+# The face never goes into the scene render: as a latent it set the frame (Lenin staring into the
+# camera, the fight gone). The scene is drawn free, then the face is edited in.
+seen = {}
+swapped = []
+def submit(ctx, wf, **kw):
+    seen["wf"] = wf; return save("out.png")
+cap = {"high_level_description": "a man", "style_description": "photo",
+       "compositional_deconstruction": {"background": "hell", "elements": []}}
+lenin = save("lenin.jpg")
+out = I.generate(NS(draw_refs=[("Vladimir Lenin", lenin, "person")],
+                    deps=NS(_submit_and_poll=submit, _upload_image_to_comfy=lambda p, url: "up.jpg",
+                            swap_faces=lambda ctx, p, faces: swapped.append(faces) or save("swapped.png"))),
+                 "Ленин", caption=cap, seed=7)
+check("the face is not a reference latent of the scene", klein.N_REF not in seen.get("wf", {}))
+check("the face is edited into the drawn scene", swapped == [[("Vladimir Lenin", lenin)]], swapped)
+check("the edited picture goes out", out.endswith("swapped.png"), out)
+
+# Too small a face is left as drawn: no edit makes a rider's few-pixel face more anyone.
+edits = []
+small = R.swap_faces(NS(deps=NS(edit_image=lambda *a, **k: edits.append(a) or "e.png")), save("tiny.png"),
+                     [("Vladimir Lenin", lenin)])
+check("no face big enough -> no edit", not edits and small.endswith("tiny.png"), (edits, small))
 
 # The photos go into the Klein graph as reference latents and the prompt says what they are.
 seen = {}

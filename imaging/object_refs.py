@@ -63,8 +63,9 @@ _CHECK = {
               "text or watermark over it? Reply JSON only: {{\"shows\": true/false, \"box\": [x0, y0, "
               "x1, y1]}} -- the box around the whole thing on a 0-1000 grid.",
     # The head only: the drawing dresses and poses the person itself.
+    # Lenin in his cap and Gagarin in his helmet passed and drew strangers (bench 2026-10-26).
     "person": "Is this a sharp photograph of {thing}'s face, seen from the front or three-quarters, "
-              "the face large, uncovered and clearly visible? Reply JSON only: {{\"shows\": true/false, "
+              "the face large, uncovered and clearly visible, the head bare -- no hat, cap or helmet? Reply JSON only: {{\"shows\": true/false, "
               "\"box\": [x0, y0, x1, y1]}} -- the box around the head -- hair, face and the whole beard down to its tip -- on a 0-1000 grid.",
     "character": "Is this a picture showing {thing} whole and clearly as the main subject, with no text "
                  "or watermark over it? Reply JSON only: {{\"shows\": true/false, \"box\": [x0, y0, x1, "
@@ -185,21 +186,69 @@ def find(ctx, description: str) -> List[Tuple[str, str, str]]:
     return sorted(out, key=lambda t: t[2] == "person")
 
 
+_FACE_WORDS = ("This is a photo of {who}. Describe the FACE and HEAD for an artist who must draw {who} "
+               "recognisably from any angle, in any light, with any expression: head shape, hair or baldness "
+               "and hairline, facial hair (its exact shape, length and colour), brow, eyes, nose, cheekbones, "
+               "mouth, ears, apparent age. 50-80 words, visual facts only, no clothes, no pose, no background.")
+
+
+def face_words(ctx, who: str, path: str) -> str:
+    """The face on the found photo in words, for the scene render: the words the web gave for Lenin
+    said «often wears glasses»; read off his photo they are his own (bench 2026-10-26)."""
+    try:
+        words = " ".join((vision_model(ctx)(ctx, image_paths=[("Photo:", path)], temperature=0.1, max_tokens=220,
+                                            user_text=_FACE_WORDS.format(who=who)) or "").split())
+    except Exception:
+        logger.warning("object refs: no words for %s", who, exc_info=True)
+        return ""
+    return f"{who} must be recognisable as the real {who}: {words}" if len(words.split()) >= 8 else ""
+
+
+# A face given to the scene render as a reference latent set the frame: Lenin stared into the
+# camera in a centred portrait and the fist fight was gone; the owner: «башка должна смотреть куда
+# надо, цветокор по сюжету, фото брать для вдохновения» (2026-10-26). The scene is drawn free and
+# only then the face is edited in. The details the edit loses (a star on the brow, glowing eyes)
+# come back through image_generate._missing_asks.
+_SWAP = ("The face and head of {who} in this picture become the face of {who} from image 2 -- his "
+         "features, head shape, hairline and facial hair -- while his head angle, gaze, expression, "
+         "everything on his face this picture adds (glow, marks, paint) and this scene's light and colours "
+         "stay as they are.")
+# Below this the face is a few dozen pixels: no edit makes it more anyone (a rider on a galloping horse).
+MIN_SWAP_FACE_PX = 90
+
+
+def swap_faces(ctx, path: str, faces: list) -> str:
+    """`path` with each (who, photo) face edited in from its photo; `path` itself when the face in
+    the picture is too small or the edit fails."""
+    from identity_metrics import face_boxes
+    import image as image_mod
+    out = path
+    for who, photo in faces:
+        try:
+            boxes = face_boxes(out, pad=0.0)
+        except Exception:
+            boxes = []
+        if not boxes or max(b[2] - b[0] for b in boxes) < MIN_SWAP_FACE_PX:
+            logger.info("object refs: %s too small to edit the face in", who)
+            continue
+        got = dep(ctx, "edit_image", image_mod._edit_image_with_firered_once)(
+            ctx, out, _SWAP.format(who=who), reference_paths=[photo])
+        if got:
+            logger.info("object refs: %s's face edited in", who)
+            out = got
+    return out
+
+
 def prompt_note(things: list) -> str:
-    """The sentences that tell Klein what each reference image is for -- and what it is not."""
+    """The sentences that tell Klein what each reference image (a thing or a costume, never a
+    face: see swap_faces) is for -- and what it is not."""
     out = []
     for i, (thing, _, kind) in enumerate(things, 1):
-        if kind == "person":
-            # Lenin's white collar and tie came through under the Doom armour (bench 2026-10-26).
-            out.append(f"{thing}'s face, head shape, hair and facial hair look exactly like the face in "
-                       f"image {i}; nothing below the chin of image {i} (collar, tie, clothes) is drawn -- "
-                       "their body, clothes, pose, expression and colours are this picture's own.")
-        else:
-            # «LADA 2107» on the reference's plate came back as «VAD 2107» on the drawing's (bench 2026-10-25).
-            # A character's look includes its colours (the Doom Slayer's green armour); a car's paint
-            # is the picture's own («красная 2107» came back red over a white reference).
-            own = "angle, pose, place and surroundings" if kind == "character" else "angle, colour, place and surroundings"
-            out.append(f"{thing[0].upper() + thing[1:]} looks exactly like the one in image {i}: its shape, "
-                       f"proportions and every part. Only that is taken from the reference; its {own} are "
-                       "this picture's own, and no lettering, number plate or logo text is copied from it.")
+        # «LADA 2107» on the reference's plate came back as «VAD 2107» on the drawing's (bench 2026-10-25).
+        # A character's look includes its colours (the Doom Slayer's green armour); a car's paint
+        # is the picture's own («красная 2107» came back red over a white reference).
+        own = "angle, pose, place and surroundings" if kind == "character" else "angle, colour, place and surroundings"
+        out.append(f"{thing[0].upper() + thing[1:]} looks exactly like the one in image {i}: its shape, "
+                   f"proportions and every part. Only that is taken from the reference; its {own} are "
+                   "this picture's own, and no lettering, number plate or logo text is copied from it.")
     return "".join(" " + x for x in out)
