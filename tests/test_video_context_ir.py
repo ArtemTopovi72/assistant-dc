@@ -76,6 +76,25 @@ first = V.to_context_ir(NS(text_model=lambda *a, **k: reframed,
                            yes_no=lambda q, text, **k: asked.append(text) or True),
                         "He drinks.", mode="t2va", seconds=5)
 check("a medium shot frames" in first and not asked, "a first part keeps its framing, nothing is asked")
+# A script with no cut came back «[Shot 2] At 00:03.500, the camera cuts to a close-up of the
+# golden retriever's face»: the part jumped mid-clip (live 2026-10-25).
+cut = ("integrated_multimodal_description: [Shot 1] Live-action, the dog leaps into a wave. "
+       "[Shot 2] At 00:03.500, the camera cuts to a close-up of the dog's face.\n"
+       "overall_soundscape: waves.\nnon_diegetic_music: N/A")
+one = cut.split(" [Shot 2]")[0] + "\noverall_soundscape: waves.\nnon_diegetic_music: N/A"
+answers, asked = iter([cut, one]), []
+out = V.to_context_ir(NS(text_model=lambda *a, **k: next(answers),
+                         yes_no=lambda q, text, **k: asked.append(text) or "cut to" in text),
+                      V.CONTINUE_CTX_PREFIX + "The dog leaps into a wave.", mode="t2va", seconds=5)
+check("[Shot 2]" not in out, "a cut nobody asked for is rewritten as one shot")
+# The continuation template names cuts itself; judged with it, the part read as asking for one.
+check(asked and asked[0].startswith("The dog leaps") and "camera cut" not in asked[0],
+      "the cut is judged on the script's own words, not the template")
+answers = iter([cut, one])
+out = V.to_context_ir(NS(text_model=lambda *a, **k: next(answers),
+                         yes_no=lambda q, text, **k: "cut to" in text),
+                      "The dog leaps into a wave, then cut to a close-up of its face.", mode="t2va", seconds=5)
+check("[Shot 2]" in out, "a cut the script asks for stays")
 # A part with no words came back with «A distant man's voice calls: <d>[English] Hello!</d>».
 hello = ("integrated_multimodal_description: [Shot 1] Live-action, the hiker stands. He says "
          "<d>[Russian] Наконе́ц-то я здесь.</d> A distant man's voice calls: <d>[English] Hello!</d>\n"

@@ -1823,6 +1823,31 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
             out = out[:end.start()] + " " + said + out[end.start():]
         else:
             out = out + "\n" + said
+    if re.search(r"\[Shot [2-9]\]", out):
+        # A script with no cut came back «[Shot 2] At 00:03.500, the camera cuts to a close-up
+        # of the golden retriever's face» and the part jumped mid-clip (live 2026-10-25; the
+        # exact part, bench/video_cut_probe.py: 1 of 5 takes).
+        # Only the script's own words: the continuation template names cuts itself, and judged
+        # with it the same part read as asking for one.
+        own = description
+        for pre in (CONTINUE_PREFIX, CONTINUE_CTX_PREFIX):
+            own = own.removeprefix(pre)
+        from seams import yes_no
+        try:
+            asked = yes_no(ctx)("A video request:\n\n{text}\n\nDoes the request itself ask for a "
+                                "cut to a new shot partway through -- 'cut to', 'then a close-up "
+                                "of…', 'a new angle', 'the scene changes to'? A camera that follows, "
+                                "pans or moves is no.", _SCENE_NOTE_RE.sub("", own))
+        except Exception:
+            asked = True
+        if not asked:
+            logger.info("Context-IR: a cut nobody asked for; rewritten as one shot")
+            again = clean(ask(user + "\n\nYour last answer cut to a second [Shot]. The request asks "
+                              "for no cut: write ONE [Shot 1] only; any change of view is a camera "
+                              "move in real time."))
+            if again and all(f in again for f in need) and "non_diegetic_music" in again \
+                    and not _lost_lines(description, again) and not re.search(r"\[Shot [2-9]\]", again):
+                out = again
     if "The shot continues with no cut" in description:
         # Told in words (rules 7-8), the writer still opened part 2 with «a medium shot frames
         # a traveler»; the join crossfaded a far figure into his face (live 2026-10-15).
