@@ -1375,8 +1375,12 @@ def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str, st
         if not (new and os.path.exists(new)):
             logger.warning("video chain: part %d produced no clip (%s)", i, r.get("reason"))
             break
+        # A link opens on its protected head (a remake of the previous link up to the handover)
+        # and the stitch keeps it from the frame after. The raw last frame beside the raw first
+        # one is ~2 s apart, and every smooth join read as a jump (live 2026-10-25).
+        head = int(video_mod.HERRGOTT_CONTEXT)
         before, after = os.path.join(work, f"end_{i}.jpg"), os.path.join(work, f"start_{i}.jpg")
-        if tg_continue.seed_frame(prev, before) and tg_continue.first_frame(new, after):
+        if tg_continue.first_frame(new, before, head - 1) and tg_continue.first_frame(new, after, head):
             ctx.chain_joins.append((before, after))
         last, prev = start + i - 1, new
     return last

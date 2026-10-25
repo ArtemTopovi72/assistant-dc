@@ -134,7 +134,7 @@ class _Rig:
         self.clips = Over(tg_continue,
                           seed_frame=lambda src, out: open(out, "wb").write(b"j") > 0,
                           cut_tail=lambda src, out: open(out, "wb").write(b"t") > 0,
-                          first_frame=lambda src, out: False)
+                          first_frame=lambda src, out, skip=0: False)
 
     def ctx(self, **kw):
         c = _Ctx()
@@ -202,7 +202,7 @@ def test_continue_on_a_chain_clip_goes_on_from_its_latent(tmp_path):
 def test_the_joins_of_a_chain_are_looked_at_once_after_the_card_is_free(tmp_path):
     # The joins check lived only on the old join path; the live chain path never ran it.
     rig = _Rig(tmp_path)
-    rig.clips = Over(rig.clips, first_frame=lambda src, out: open(out, "wb").write(b"f") > 0)
+    rig.clips = Over(rig.clips, first_frame=lambda src, out, skip=0: open(out, "wb").write(b"f") > 0)
     seen = []
     ctx = rig.ctx(vision_model=lambda *a, **k: (
         seen.append((len(k["image_paths"]), comfy_client._excl_users)), "Join 2: the cat vanishes")[1])
@@ -210,6 +210,20 @@ def test_the_joins_of_a_chain_are_looked_at_once_after_the_card_is_free(tmp_path
     n = len(_split(LONG))
     assert seen == [(2 * (n - 1), 0)], seen     # one call, the chain's card session closed
     assert "Join 2: the cat vanishes" in out and "do NOT call the clip seamless" in out
+
+
+def test_a_chain_join_is_looked_at_where_the_stitch_cuts(tmp_path):
+    # The raw last frame of a link beside the raw first frame of the next is ~2 s apart (a
+    # trimmed tail, a protected head): every smooth join was reported as a jump (live 2026-10-25).
+    rig = _Rig(tmp_path)
+    taken = []
+    rig.clips = Over(rig.clips, first_frame=lambda src, out, skip=0: (
+        taken.append((src, skip)), open(out, "wb").write(b"f") > 0)[1])
+    ctx = rig.ctx(vision_model=lambda *a, **k: "no jumps")
+    H._handle_generate_video(ctx, {}, {"description": LONG, "use_current_images": False})
+    head = int(V.HERRGOTT_CONTEXT)
+    assert taken and all(skip in (head - 1, head) for _, skip in taken), taken
+    assert taken[0][0] == taken[1][0]                # both sides from the new link's own frames
 
 
 def test_a_long_continuation_of_a_chain_clip_is_still_cut_into_parts(tmp_path):

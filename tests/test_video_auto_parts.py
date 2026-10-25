@@ -56,7 +56,7 @@ def _run(tmp_path, args, condensed="", state=None, ctx_kw=None, **eng):
         video_engine=Over(V, **{**fakes, **eng}),
         clip_tools=Over(tg_continue, seed_frame=lambda src, out: open(out, "wb").write(b"j") > 0,
                         cut_tail=lambda src, out: open(out, "wb").write(b"t") > 0,
-                        first_frame=lambda src, out: False))
+                        first_frame=lambda src, out, skip=0: False))
     H._handle_generate_video(ctx, state or {}, {"use_current_images": False, **args})
     return calls
 

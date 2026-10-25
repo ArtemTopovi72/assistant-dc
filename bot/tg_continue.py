@@ -112,11 +112,12 @@ def face_frame(src: str, out_jpg: str, circle: bool = False) -> bool:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def first_frame(src: str, out_jpg: str) -> bool:
-    """The clip's first frame as a picture (the other side of a join from seed_frame)."""
+def first_frame(src: str, out_jpg: str, skip: int = 0) -> bool:
+    """The clip's first frame (after `skip` frames) as a picture (the other side of a join from seed_frame)."""
     try:
         import cv2
         cap = cv2.VideoCapture(src)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, skip)
         ok, img = cap.read()
         cap.release()
         return bool(ok) and bool(cv2.imwrite(out_jpg, img))
