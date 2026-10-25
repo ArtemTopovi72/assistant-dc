@@ -20,7 +20,8 @@ TRANSFORM = {"rotate the image 90 degrees": "rotate_right", "flip it horizontall
              "crop to the face": "crop", "flip it vertically": "flip"}
 PLACE = {"подпись снизу": "bottom", "в небо": "top", "по центру": "middle"}
 KIND = {"поменяй фон на картинке": "image"}
-ORIENT = {"a wide landscape banner": "landscape", "vertical portrait phone wallpaper": "portrait",
+ORIENT = {"a wide landscape banner": "format_wide", "a YouTube thumbnail about a bathroom": "format_wide",
+          "a vertical story poster": "format_tall", "a square post": "format_square", "vertical portrait phone wallpaper": "portrait",
           "a single person standing, headshot": "portrait", "a city street crowd panorama": "landscape",
           "abstract": "unknown", "single person headshot": "portrait", "city panorama": "landscape",
           "a wide city panorama": "landscape", "портрет девушки в полный рост": "portrait"}
@@ -32,6 +33,8 @@ def yes(q, t):
     if "Does the instruction remove it" in q:
         lettering = q.split("lettering «", 1)[1].split("»", 1)[0] if "lettering «" in q else ""
         return t in ALL_LETTERING or REMOVES.get((t, lettering), False)
+    if "NEW background" in q:
+        return "blurry" not in t
     if "picture on EVERY slide" in q:
         return "каждом слайде" in t or "every slide" in t
     if "as a FILE" in q:
@@ -50,8 +53,9 @@ def pick(q, t):
         return TRANSFORM.get(t, "rotate_right")
     if "put text on a picture" in q:
         return PLACE.get(t, "top")
-    if "Which frame fits it?" in q:
-        return ORIENT.get(t, "unknown")
+    if "NAME a format for the" in q:
+        got = ORIENT.get(t, "unknown")
+        return got if got.startswith("format_") or got == "unknown" else "scene_" + got
     if "What is it about?" in q:
         return KIND.get(t, "code" if "[code]" in t else "image" if "[image]" in t else "chat")
     return None

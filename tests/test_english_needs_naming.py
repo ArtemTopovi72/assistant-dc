@@ -16,14 +16,17 @@ import types  # noqa: E402
 import graph_language as G  # noqa: E402
 from fakes import reads  # noqa: E402
 
+# Whether a message names English is the model's second read (graph_language.names_english);
+# scripted here as the phrases it is asked about.
 _EN = types.SimpleNamespace(**reads(read=lambda t: {"reply_language": "en", "language_mode": "en"}))
+_EN.choice = lambda q, t, options, default=None, **k: "not stated" if "Ленин" in t else "english"
 
 LENIN = "Кибернетический Ленин дерётся на кулаках с чертями в аду, глаза сияют красным"
 
 
 def test_a_false_read_does_not_switch_to_english():
     assert not G.asks_for_english(LENIN, ctx=_EN)
-    assert not G.names_english(LENIN)
+    assert not G.names_english(LENIN, ctx=_EN)
 
 
 def test_a_real_request_still_does():
@@ -33,7 +36,7 @@ def test_a_real_request_still_does():
 
 def test_the_pin_needs_english_named_too():
     src = open(os.path.join(ROOT, "bot", "tg_tasks.py"), encoding="utf-8").read()
-    assert '_mode == "en" and _names_en(task.user_text)' in src
+    assert '_mode == "en" and _names_en(task.user_text, ctx=self.reads)' in src
 
 
 # ── the pin does not stick for good ──────────────────────────────────────────

@@ -17,7 +17,8 @@ import types
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from fakes import reads   # the model's read of the words (agent/intent.py); phrases: bench/intent_lang_live.py
 _R = types.SimpleNamespace(**reads(read={"и то же самое по-английски": {"reply_language": "en"},
-                                         "ответь на этот вопрос по-английски, пожалуйста": {"reply_language": "en"}}.get))
+                                         "ответь на этот вопрос по-английски, пожалуйста": {"reply_language": "en"}}.get,
+                                   pick=lambda q, t: "english"))
 
 OK = BAD = 0
 def check(name, cond, extra=""):

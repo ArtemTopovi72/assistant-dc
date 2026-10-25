@@ -140,12 +140,7 @@ def _mask_quality_ok(mask_l, *, region_phrase: str = "",
     # this — a near-full-mask cutout shows ~the entire valid image and reads as "correct".
     # Region-aware: genuine large-area edits (background/sky/wall) are allowed to be
     # big. The size hints come from the LLM classifier (_item_attributes) via the
-    # caller — this function stays deterministic. A minimal keyword fallback keeps
-    # the big-region allowance when no hint was supplied (LLM down / legacy caller).
-    if big_region is None:
-        big_region = bool(re.search(r"background|backdrop|\bsky\b|\bwall\b|\bscene\b|"
-                                    r"entire|whole|everything|\bфон\b", region_phrase or "",
-                                    re.IGNORECASE))
+    # caller — this function stays deterministic; no hint (model down) is the neutral cap.
     # SIZE PRIOR for small worn/held items: a mask for "shoes"/"watch"/"earring"
     # that covers a third of the frame is definitively the wrong object (Florence
     # grabbed the whole person) — the source of the "shoes edit re-rendered the

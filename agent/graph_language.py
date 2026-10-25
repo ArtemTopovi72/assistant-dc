@@ -9,7 +9,7 @@ The literal-protection dance is the load-bearing part: a lettering request
 ("draw a sign saying Открыто") must reach the image model with the string
 untranslated, or the picture comes out in the wrong language.
 """
-from seams import dep, intent_read, yes_no, text_model
+from seams import choice, dep, intent_read, yes_no, text_model
 import logging
 import re
 
@@ -157,20 +157,24 @@ def _read(text: str, ctx=None) -> dict:
     return intent_read(ctx)(None, text or "")
 
 
-# The model's read alone is not enough to switch a Russian chat to English: a
-# false "en" on «Кибернетический Ленин … бьёт кулаком» answered the whole
-# conversation in English. A request for English names English.
-_NAMES_ENGLISH = re.compile(r"англ|english|\beng\b|инглиш", re.I)
-
-
-def names_english(text: str) -> bool:
-    return bool(_NAMES_ENGLISH.search(text or ""))
+def names_english(text: str, ctx=None) -> bool:
+    """The intent read alone is not enough to switch a Russian chat to English: a false
+    "en" on «Кибернетический Ленин … бьёт кулаком» answered the whole conversation in
+    English. A second, narrow question: does the message itself ask for English."""
+    if not (text or "").strip():
+        return False
+    return choice(ctx)(
+        "A user wrote: {text} -- In which language do these words ask the assistant to "
+        "write its answer? \"english\" only when they say so (по-английски, на английском, "
+        "in English, translate into English); \"not stated\" when they do not -- a message "
+        "about English things (English breakfast, a brand name) or asking what one word is "
+        "in English does not.", text, ("english", "not stated"), "not stated") == "english"
 
 
 def asks_for_english(text: str, ctx=None) -> bool:
     """Did the user explicitly ask for this turn's reply in English?"""
-    return (bool((text or "").strip()) and names_english(text)
-            and _read(text, ctx=ctx)["reply_language"] == "en")
+    return (bool((text or "").strip()) and _read(text, ctx=ctx)["reply_language"] == "en"
+            and names_english(text, ctx=ctx))
 
 
 def _foreign_ratio(s: str) -> float:
@@ -240,7 +244,7 @@ def _match_reply_language(ctx, answer: str, original_input: str) -> str:
     # translate it back -- the model has obeyed the user and the pipeline
     # would undo it.
     _r = _read(original_input, ctx=ctx)
-    if (_r["reply_language"] == "en" and names_english(original_input)) or _r["translate"]:
+    if (_r["reply_language"] == "en" and names_english(original_input, ctx=ctx)) or _r["translate"]:
         return answer
     # «answer in English from now on», then a Russian line: the model follows
     # the question's script, not the directive.
@@ -249,7 +253,7 @@ def _match_reply_language(ctx, answer: str, original_input: str) -> str:
         return answer          # English as pinned -- not "drift" to translate back
     if (getattr(ctx, "reply_lang", "") == "en" and _foreign_ratio(answer) > 0.3
             and len(answer.strip()) >= 20 and _foreign_ratio(original_input) >= 0.3
-            and not re.search(r"russian|русск", original_input, re.I)):
+            and "ru" not in (_r["reply_language"], _r["language_mode"])):
         try:
             out = (text_model(ctx)(
                 ctx, "Translate the assistant's reply below into natural English. "

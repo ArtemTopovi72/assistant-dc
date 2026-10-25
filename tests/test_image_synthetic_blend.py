@@ -336,7 +336,7 @@ def test_mask_quality_over_coverage():
 def test_mask_quality_over_coverage_bigregion_allowed():
     # cov ~0.90: over the plain 0.85 cap but under the 0.97 "big region" cap
     m = _mask_img(64, 64, box=(0, 0, 62, 62))
-    ok, reason, stats = I._mask_quality_ok(m, region_phrase="the whole background")
+    ok, reason, stats = I._mask_quality_ok(m, region_phrase="the whole background", big_region=True)
     check("mq_bigregion_cap_relaxed", ok, (reason, stats))
 
 def test_mask_quality_good_solid_blob():

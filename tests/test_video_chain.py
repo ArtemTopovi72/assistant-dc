@@ -394,7 +394,7 @@ def test_continue_in_words_goes_on_from_the_chats_last_clip(tmp_path):
     last = tmp_path / "delivered.mp4"
     last.write_bytes(b"s")
     rig = _Rig(tmp_path, chains={str(last): ("h3_continuous/chZ", 4)})
-    ctx = rig.ctx(last_video_path=str(last), yes_no=lambda q, t, default=False, wait=True: "continue" in q)
+    ctx = rig.ctx(last_video_path=str(last), yes_no=lambda q, t, default=False, wait=True: "continue" in q or "MAKE a video clip" in q)
     H._handle_generate_video(ctx, {"user_input_original": "продолжи это видео: кот прыгает"},
                              {"description": "The cat jumps onto the table."})
     (d, kw), = rig.calls

@@ -23,6 +23,9 @@ LONG = " ".join(f"Then the cat does trick number {i} and the dog answers it with
 class _Ctx:
     reference_images = []
     voice_choice = None
+    # whether the words ask for a clip is the model's read (bench/asks_video_eval.py)
+    yes_no = staticmethod(lambda q, t, default=False, wait=True:
+                          "видео" in t.lower() if "MAKE a video clip" in q else default)
     continue_tail = continue_src = ""
 
     def __init__(self, **kw):

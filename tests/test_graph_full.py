@@ -737,7 +737,9 @@ def test_render_asked_with_no_tool_called_gets_a_corrective_round():
                _asst("", [_tc("generate_video", {"description": "the cat jumps down"}, "c1")]),
                _asst("Готово")])
     tools = Tools()
-    _run(_ctx(), llm, tools, {"messages": [], "user_input": "продолжи это видео"}, read=wants)
+    # whether the words ask for a clip is the model's read (bench/asks_video_eval.py)
+    _asks = lambda q, t, **k: "MAKE a video clip" in q and "видео" in t  # noqa: E731
+    _run(_ctx(yes_no=_asks), llm, tools, {"messages": [], "user_input": "продолжи это видео"}, read=wants)
     check("render_promise_called_the_tool", [c[0] for c in tools.calls] == ["generate_video"], tools.calls)
     # a question back is how a render turn may legitimately end without a tool
     llm2 = LLM([_asst("Какой длины сделать ролик?")])
@@ -748,7 +750,7 @@ def test_render_asked_with_no_tool_called_gets_a_corrective_round():
     # round forced generate_video, which refused it -- «не получилось сделать видео» (2026-10-17)
     llm3 = LLM([_asst("Привет, я кот-космонавт, и я только что вернулся с луны!")])
     tools3 = Tools()
-    _run(_ctx(), llm3, tools3, {"messages": [], "user_input": "скажи голосом: привет, я кот-космонавт"},
+    _run(_ctx(yes_no=_asks), llm3, tools3, {"messages": [], "user_input": "скажи голосом: привет, я кот-космонавт"},
          read=wants)
     check("render_not_forced_when_the_words_ask_no_video", not tools3.calls and len(llm3.calls) == 1,
           (tools3.calls, len(llm3.calls)))

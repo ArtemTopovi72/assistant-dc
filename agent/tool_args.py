@@ -97,24 +97,13 @@ class GenerateImageArgs(_ToolArgs):
         return _as_int(v)
 
     @model_validator(mode="after")
-    def _orientation_follows_description(self):
-        # "a wide landscape image for a YouTube banner" came with 1920x3508.
-        w, h, d = self.width, self.height, self.description or ""
-        # "квадратную" came as {"width": 1264} alone: the other side of the pair.
+    def _one_side_names_the_pair(self):
+        # "квадратную" came as {"width": 1264} alone: the other side of the pair. The format
+        # a description asks for is read in image_sizing.fix_image_params.
+        w, h = self.width, self.height
         pair = {1680: 944, 944: 1680, 1264: 1264}
-        wide = re.search(r"\b(?:horizontal|landscape (?:format|orientation|image|shot)|widescreen|"
-                         r"wide (?:format|image|banner|cover)|youtube|banner|16:9)\b", d, re.I)
-        tall = re.search(r"\b(?:vertical|stor(?:y|ies)|reels?|tiktok|9:16)\b", d, re.I)
-        # "a YouTube thumbnail ..." came with no size at all and rendered square.
-        if not w and not h and bool(wide) != bool(tall):
-            self.width, self.height = (1680, 944) if wide else (944, 1680)
-            return self
         if bool(w) != bool(h):
             self.width, self.height = w or pair.get(h, h), h or pair.get(w, w)
-            w, h = self.width, self.height
-        if w and h and w != h:
-            if (wide and not tall and h > w) or (tall and not wide and w > h):
-                self.width, self.height = h, w
         return self
 
 

@@ -14,12 +14,17 @@ assert r.startswith("[TOOL ERROR]") and "generate_image" in r, r
 
 print("ok")
 from tool_args import GenerateImageArgs as _G
-_a = _G(description="a wide landscape image for a YouTube banner with coffee", width=1920, height=3508)
-assert _a.width > _a.height, _a
-_b = _G(description="a vertical Instagram story, wide-angle lens", width=944, height=1680)
-assert (_b.width, _b.height) == (944, 1680), _b
+import image_sizing as _S, _sweep_stub
+_R = _sweep_stub.reads_ctx()
+# The format a description names is the model's read (bench/frame_read_eval.py); here, what is done with it.
+assert _S.fix_image_params("a wide landscape banner", "", 1920, 3508, given=True, ctx=_R) > (0, 0)
+_w, _h = _S.fix_image_params("a wide landscape banner", "", 1920, 3508, given=True, ctx=_R)
+assert _w > _h, (_w, _h)
+_w, _h = _S.fix_image_params("a single person standing, headshot", "", 1680, 944, given=True, ctx=_R)
+assert _w > _h, "a scene's lean does not turn a size the agent chose"
+assert _S.fix_image_params("a YouTube thumbnail about a bathroom", "", 1264, 1264, ctx=_R) == (1680, 944)
+assert _S.fix_image_params("a vertical story poster", "", 1264, 1264, ctx=_R) == (944, 1680)
+assert _S.fix_image_params("a square post", "", 1680, 944, given=True, ctx=_R)[0] ==     _S.fix_image_params("a square post", "", 1680, 944, given=True, ctx=_R)[1]
+print("ok a named format shapes the size")
 assert (_G(description="a square post", width=1264).height, _G(description="a YouTube cover", width=1680).height) == (1264, 944)
-print("ok orientation follows the description")
-assert (_G(description="a YouTube thumbnail about a bathroom").width, _G(description="a vertical story poster").height,
-        _G(description="a cat").width) == (1680, 1680, None)
-print("ok a size-less YouTube/story picture gets its format")
+print("ok one side names the pair")

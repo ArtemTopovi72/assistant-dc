@@ -653,7 +653,7 @@ class TaskRunnerMixin:
         if not is_internal and (task.user_text or "").strip():
             from graph_language import names_english as _names_en
             _mode = intent_read(ctx)(None, task.user_text)["language_mode"]
-            _lang_pin_after(sess, _mode, _mode == "en" and _names_en(task.user_text), _tl)
+            _lang_pin_after(sess, _mode, _mode == "en" and _names_en(task.user_text, ctx=self.reads), _tl)
         if is_internal:
             _turn_lang = lang
         else:

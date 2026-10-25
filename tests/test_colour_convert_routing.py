@@ -74,7 +74,9 @@ check("…that is actually grey (spread 0)", abs(spread(bw)) < 0.01, spread(bw))
 check("…at the ORIGINAL resolution",
       Image.open(bw).size == src.size, Image.open(bw).size)
 
-sep = I.convert_colour(src_path, "сделай в сепии")
+# grey or sepia is the model's read; scripted here
+sep = I.convert_colour(src_path, "сделай в сепии",
+                       ctx=type("C", (), {"choice": staticmethod(lambda *a, **k: "sepia")})())
 check("sepia produces a file", sep and os.path.exists(sep))
 check("…and is NOT plain grey", spread(sep) > 5, spread(sep))
 check("…and keeps the resolution", Image.open(sep).size == src.size)
@@ -98,7 +100,7 @@ import image_router as _R
 src_router = inspect.getsource(_R._route_edit_request)
 check("route_edit_request dispatches colour_convert",
       'if category == "colour_convert":' in src_router
-      and "convert_colour(image_path, text)" in src_router)
+      and "convert_colour(image_path, text, ctx=ctx)" in src_router)
 check("it is dispatched BEFORE the generative branches",
       src_router.index('category == "colour_convert"')
       < src_router.index('category == "background_replace"'))

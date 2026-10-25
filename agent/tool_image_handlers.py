@@ -394,7 +394,7 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
             # and nothing to re-imagine. Handled before every generative branch
             # below, including the layout one: re-rendering a picture to grey
             # returned a different subject, in colour.
-            new_path = _image(ctx).convert_colour(source, instructions or synth)
+            new_path = _image(ctx).convert_colour(source, instructions or synth, ctx=ctx)
             edit_path = "convert_colour"
         elif _image(ctx).classify_edit_intent(instructions or "", ctx=ctx) == "transform":
             import image_router
@@ -1224,15 +1224,6 @@ def _current_image_paths(ctx, state) -> list:
     return out
 
 
-# A clip is minutes of GPU and the whole turn: it is made only when the user's
-# own words ask for one. «Почему он у тебя не лысый … ты нарисовал
-# какого-то урода, а не Ленина» -- a complaint about a PICTURE -- started a
-# video («🎬 делаю видео»), then «лимит на генерацию видео исчерпан».
-_ASKS_VIDEO = re.compile(
-    r"видео|видос|ролик|клип|аними|анимац|ожив|кружок|кружоч|мультфильм|мультик\b|"
-    r"\bгиф|\bgif|video|clip|animat|movie|footage|\breel|shorts|фильм", re.I)
-
-
 def _builds_on_chat_picture(ctx, state) -> bool:
     """A clip asked for with no photo in this message animates an earlier picture only
     when the words say so. A photo sent with the request, a ▶ plan or ▶️ Continue
@@ -1248,11 +1239,13 @@ def _builds_on_chat_picture(ctx, state) -> bool:
 
 
 def asks_for_video(ctx, state) -> bool:
-    """The user's words this turn ask for a clip, or ask to redo the last one."""
+    """The user's words this turn ask for a clip, or ask to redo the last one. A clip is
+    minutes of GPU and the whole turn: «Почему он у тебя не лысый … ты нарисовал какого-то
+    урода, а не Ленина» -- a complaint about a PICTURE -- started one."""
     from prompt_guard import user_words
     said = user_words(str((state or {}).get("user_input_original") or "")
                       + " " + str((state or {}).get("user_input") or "")).strip()
-    if not said or _ASKS_VIDEO.search(said):     # no words to judge (a direct call): not ours to refuse
+    if not said:     # no words to judge (a direct call): not ours to refuse
         return True
     # A button already said "video": ▶ under the plan card, or ▶️ Continue with its clip.
     # Live 2026-10-11 the ▶ rerun was re-asked here, the model said no, the turn failed.
@@ -1271,14 +1264,16 @@ def asks_for_video(ctx, state) -> bool:
     last = getattr(ctx, "last_video_path", None)
     if last and os.path.exists(last) and r.get("redo") in ("same", "changed"):
         return True
-    # A shot script with no word «видео» is still a clip. «Мужчина берёт
-    # банку … говорит "Полная хуета" … бросает банку … опрокидывает стеллаж» was
-    # refused here. The model reads it; a complaint about a picture stays a no.
+    # A shot script with no word «видео» is still a clip («Мужчина берёт банку … бросает
+    # банку … опрокидывает стеллаж»); a complaint about a picture is not. The word list that
+    # answered yes before this read also said yes to «что в этом видео?» and «какие
+    # видеокарты лучше» (bench/asks_video_eval.py, 2026-10-25).
     return yes_no(ctx)(
-        "A user wrote: {text}\n\nIs this a request for a video clip: a scene that unfolds "
-        "over time (people act one after another, move, speak lines), not a single still "
-        "picture, a complaint about a picture, or a question?", said)
-
+        "A user wrote: {text}\n\nIs this a request to MAKE a video clip: animate a photo, a "
+        "clip, a gif, a video note, a cartoon, or a scene that unfolds over time (people act "
+        "one after another, move, speak lines)? Not a still picture, a complaint about a "
+        "picture, a question about a video or a film, or a request to find or download one.",
+        said, default=True)     # the agent already chose a clip: only a read «no» stops it
 
 
 def _video(ctx):

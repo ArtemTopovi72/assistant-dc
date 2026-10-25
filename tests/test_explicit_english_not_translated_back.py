@@ -17,7 +17,8 @@ from fakes import reads
 # the phrases run live in bench/intent_lang_live.py.
 EN = {"и то же самое по-английски", "переведи это на английский", "ответь на английском",
       "say it in English", "translate that into English"}
-_READ = reads(read=lambda t: {"reply_language": "en"} if t in EN else None)
+_READ = reads(read=lambda t: {"reply_language": "en"} if t in EN else None,
+              pick=lambda q, t: "english" if t in EN else "not stated")
 _R = types.SimpleNamespace(**_READ)
 
 OK = BAD = 0
@@ -37,6 +38,7 @@ _TXT[0] = lambda *a, **k: calls.append(1) or "Спасибо, передам с�
 class C:
     text_model = property(lambda self: _TXT[0])
     intent_read = staticmethod(_READ["intent_read"])
+    choice = staticmethod(_READ["choice"])
     def is_cancelled(self): return False
 ans = "Thank you for the information! Understood, I will pass it on to the neighbours."
 out = L._match_reply_language(C(), ans, "и то же самое по-английски")

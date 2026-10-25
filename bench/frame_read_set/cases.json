@@ -1,0 +1,202 @@
+[
+ {
+  "text": "a wide landscape image for a YouTube banner with coffee",
+  "ok": "wide"
+ },
+ {
+  "text": "a YouTube thumbnail about a bathroom renovation",
+  "ok": "wide"
+ },
+ {
+  "text": "a YouTube cover for a cooking channel, bright colours",
+  "ok": "wide"
+ },
+ {
+  "text": "a vertical Instagram story, wide-angle lens, a girl on a beach",
+  "ok": "tall"
+ },
+ {
+  "text": "a vertical story poster for a concert",
+  "ok": "tall"
+ },
+ {
+  "text": "a TikTok cover with a dancing cat",
+  "ok": "tall"
+ },
+ {
+  "text": "reels cover: a barista pouring latte art",
+  "ok": "tall"
+ },
+ {
+  "text": "a 16:9 desktop wallpaper of mountains at dawn",
+  "ok": "wide"
+ },
+ {
+  "text": "a 9:16 phone wallpaper with neon city lights",
+  "ok": "tall"
+ },
+ {
+  "text": "a phone wallpaper of a forest in fog",
+  "ok": "tall"
+ },
+ {
+  "text": "a horizontal photo of a red sports car",
+  "ok": "wide"
+ },
+ {
+  "text": "a widescreen cinematic shot of a desert caravan",
+  "ok": "wide"
+ },
+ {
+  "text": "a wide banner for a bakery website",
+  "ok": "wide"
+ },
+ {
+  "text": "a square Instagram post with a coffee cup",
+  "ok": "square"
+ },
+ {
+  "text": "a square avatar of a fox in a hoodie",
+  "ok": "square"
+ },
+ {
+  "text": "a profile picture of a smiling robot",
+  "ok": "square"
+ },
+ {
+  "text": "a landscape-format photo of a man reading",
+  "ok": "wide"
+ },
+ {
+  "text": "a portrait-orientation photo of a lighthouse",
+  "ok": "tall"
+ },
+ {
+  "text": "a panoramic view of Saint Petersburg embankment",
+  "ok": "wide"
+ },
+ {
+  "text": "a cover for a VK community header",
+  "ok": "wide"
+ },
+ {
+  "text": "an A4 poster for a school fair",
+  "ok": "tall"
+ },
+ {
+  "text": "a book cover for a fantasy novel",
+  "ok": "tall"
+ },
+ {
+  "text": "a postcard with snowy village",
+  "ok": "wide"
+ },
+ {
+  "text": "a Telegram channel avatar, a minimalist owl",
+  "ok": "square"
+ },
+ {
+  "text": "a cat sleeping on a sofa",
+  "ok": "none"
+ },
+ {
+  "text": "a knight standing in full armour",
+  "ok": "none"
+ },
+ {
+  "text": "a city street at night with rain",
+  "ok": "none"
+ },
+ {
+  "text": "a wide-angle close-up of a bee on a flower",
+  "ok": "none"
+ },
+ {
+  "text": "a man in a wide-brimmed hat at a market",
+  "ok": "none"
+ },
+ {
+  "text": "an elephant painted pink",
+  "ok": "none"
+ },
+ {
+  "text": "a tall tower in the clouds",
+  "ok": "none"
+ },
+ {
+  "text": "a landscape painting style meadow with cows",
+  "ok": "none"
+ },
+ {
+  "text": "a portrait of an old sailor",
+  "ok": "none"
+ },
+ {
+  "text": "a story about a dragon told in one picture: the dragon guards gold",
+  "ok": "none"
+ },
+ {
+  "text": "a banner hanging over a medieval street, saying WELCOME",
+  "ok": "none"
+ },
+ {
+  "text": "a logo for a coffee shop called Bean",
+  "ok": "none"
+ },
+ {
+  "text": "a sticker of a happy avocado",
+  "ok": "none"
+ },
+ {
+  "text": "two friends hugging in a park",
+  "ok": "none"
+ },
+ {
+  "text": "a group photo of a football team",
+  "ok": "none"
+ },
+ {
+  "text": "a desktop computer on a wooden desk",
+  "ok": "none"
+ },
+ {
+  "text": "a Twitter header image with a sunset",
+  "ok": "wide"
+ },
+ {
+  "text": "a smartphone lock screen with a koi pond",
+  "ok": "tall"
+ },
+ {
+  "text": "a Pinterest pin with a pancake recipe",
+  "ok": "tall"
+ },
+ {
+  "text": "a roll-up stand for an exhibition booth",
+  "ok": "tall"
+ },
+ {
+  "text": "a man in front of a huge panoramic window",
+  "ok": "none"
+ },
+ {
+  "text": "a vertical stripe pattern dress on a mannequin",
+  "ok": "none"
+ },
+ {
+  "text": "an icon for a mobile app, a blue whale",
+  "ok": "square"
+ },
+ {
+  "text": "a long horizontal line of ducks crossing a road",
+  "ok": "none"
+ },
+ {
+  "text": "a cinematic 21:9 shot of a spaceship",
+  "ok": "wide"
+ },
+ {
+  "text": "a YouTube channel logo, a tiny fox",
+  "ok": "square"
+ }
+]

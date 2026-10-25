@@ -17,7 +17,7 @@ The same applies to the grounding/sizing helpers (_item_attributes,
 _region_present, _extract_edit_target, _firered_instruction, _source_dims,
 _strip_lead, _REMOVAL_RE), which image.py re-exports and the suites patch there.
 """
-from seams import choice, dep, text_model
+from seams import choice, dep, text_model, yes_no
 import logging
 import os
 import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
@@ -322,7 +322,7 @@ def edit_via_layout(ctx, image_path: str, instruction: str,
     return out
 
 
-def convert_colour(image_path: str, instruction: str) -> Optional[str]:
+def convert_colour(image_path: str, instruction: str, ctx=None) -> Optional[str]:
     """Grayscale / sepia the WHOLE picture, deterministically.
 
     No model, no mask, no re-render: every pixel of this operation is defined, it
@@ -333,7 +333,10 @@ def convert_colour(image_path: str, instruction: str) -> Optional[str]:
         from PIL import Image as _PIL, ImageOps as _Ops
         src = _PIL.open(image_path).convert("RGB")
         grey = _Ops.grayscale(src)
-        if re.search(r"sepia|сепи\w*", instruction or "", re.IGNORECASE):
+        tone = choice(ctx)("A user asked to recolour a whole picture: {text}. Plain grey "
+                           "(black and white) or warm brown sepia?", instruction or "",
+                           ("grey", "sepia"), "grey")
+        if tone == "sepia":
             out = _Ops.colorize(grey, black=(28, 16, 8), white=(255, 240, 210))
         else:
             out = grey.convert("RGB")
@@ -525,7 +528,7 @@ def _route_edit_request(
         return category, None
 
     if category == "colour_convert":
-        return category, convert_colour(image_path, text)
+        return category, convert_colour(image_path, text, ctx=ctx)
     if category == "transform":
         return category, transform_image(image_path, text, ctx=ctx)
 
@@ -538,8 +541,10 @@ def _route_edit_request(
         instr = (f"Replace the background with {bg}. Keep every person and object in "
                  "the foreground exactly as they are: same face, pose, clothing, size "
                  "and position. Match the lighting of the new background.")
-        if not re.search(r"\b(?:replace|change|swap|switch|put)\b|\bbackground\s+(?:to|with|into)\b",
-                         text, re.I):
+        if not yes_no(ctx)("A user asked this of a picture's background: {text}\n\nDo they "
+                           "give a NEW background to put in place of the old one -- not a "
+                           "change to the one there (blur it, darken it, make it brighter)?",
+                           text, default=True):
             # "make the background blurry" read as "Replace the background with blurry."
             instr = (f"{text.rstrip('. ')}. Keep every person and object in the foreground "
                      "exactly as they are: same face, pose, clothing, size and position.")

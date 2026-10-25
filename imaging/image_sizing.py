@@ -153,20 +153,43 @@ def parse_generation_params(tag_content: str, *,
     return prompt, steps, cfg, seed, width, height
 
 
+FRAMES = ("wide", "tall", "square", "landscape", "portrait", "unknown")
+_ASKED = {"format_wide": "wide", "format_tall": "tall", "format_square": "square",
+          "scene_landscape": "landscape", "scene_portrait": "portrait"}
+
+
+def frame_read(text: str, ctx=None) -> str:
+    """One of FRAMES for a picture request, read by the model. wide / tall / square: a
+    format is asked for by name (a YouTube cover, a story, 16:9, a square avatar) and
+    sets the shape. landscape / portrait: only the scene leans that way (one person
+    standing, a street or a crowd), which may turn a size but not reshape it. The word
+    lists this replaced scored «пейзаж» and «man» in one pool, called a banner hanging
+    over a street a banner format and missed a book cover (bench/frame_read_eval.py)."""
+    got = choice(ctx)(
+        "A user asked for this picture: {text}. Does the request NAME a format for the "
+        "picture itself? format_wide: a YouTube banner, cover or thumbnail, horizontal, "
+        "widescreen, panoramic, 16:9, a postcard, a site or community header, \"landscape "
+        "photo/format\". format_tall: a story, reels, TikTok, a phone wallpaper, vertical, "
+        "9:16, a poster, a book cover. format_square: square, an avatar, a profile picture, "
+        "an Instagram post. A thing IN the picture is not its format: a banner hanging over "
+        "a street, a wide-brimmed hat, a wide-angle lens, a tall tower, a logo, a sticker, a "
+        "landscape painting style. No format named: scene_portrait for one person or a tall "
+        "subject, scene_landscape for a place or a group, unknown when nothing suggests either.",
+        text or "", tuple(_ASKED) + ("unknown",), "unknown")
+    return _ASKED.get(got, "unknown")
+
+
 def detect_orientation_from_text(text: str, ctx=None) -> str:
-    """landscape | portrait | unknown for a picture request. Read by the model:
-    an explicit ask wins ("landscape photo of a man" is landscape although a
-    man leans portrait), else the scene decides (one person standing ->
-    portrait, a street or a crowd -> landscape). The word lists this replaced
-    scored «пейзаж» and «man» in one pool and fell through to the default."""
-    return choice(ctx)(
-        "A user asked for this picture: {text}. Which frame fits it? An explicit ask "
-        "(landscape photo, horizontal, wide, panorama, 16:9 / portrait orientation, "
-        "vertical, phone wallpaper, 9:16) wins even over the subject -- \"landscape photo "
-        "of a man\" is landscape; "
-        "otherwise portrait for one person or a tall subject, landscape for a scene, a "
-        "place or a group; unknown when nothing suggests either.",
-        text or "", ("landscape", "portrait", "unknown"), "unknown")
+    """landscape | portrait | unknown for a picture request (frame_read, folded)."""
+    got = frame_read(text, ctx)
+    return {"wide": "landscape", "tall": "portrait"}.get(got, got if got != "square" else "unknown")
+
+
+def _reshape(width: int, height: int, frame: str) -> Tuple[int, int]:
+    """The asked format at the same pixel budget: a square 1264 becomes 1680x944."""
+    ratio = {"wide": 16 / 9, "tall": 9 / 16, "square": 1.0}[frame]
+    area = width * height
+    return int(round((area * ratio) ** 0.5)), int(round((area / ratio) ** 0.5))
 
 
 def normalize_resolution(width: int, height: int) -> Tuple[int, int]:
@@ -198,19 +221,25 @@ def normalize_resolution(width: int, height: int) -> Tuple[int, int]:
 
 
 def fix_image_params(goal: str, prompt: str, width: int, height: int, *,
-                     pinned: bool = False, ctx=None) -> Tuple[int, int]:
+                     pinned: bool = False, given: bool = False, ctx=None) -> Tuple[int, int]:
     """Orient a size from the request text, then put it on the rails.
 
     `pinned` means the user picked the aspect explicitly (Draw ▸ Size). Their
-    choice outranks the text heuristic: someone who selects 9:16 and then asks
-    for a "wide city panorama" gets a tall panorama, not a silent override.
+    choice outranks the text: someone who selects 9:16 and then asks for a
+    "wide city panorama" gets a tall panorama, not a silent override.
+    `given` means the agent chose the size: only a format named in the request
+    overrides it ("a wide YouTube banner" came with 1920x3508), not a scene's lean.
     """
     if pinned:
         return normalize_resolution(width, height)
-    orientation = detect_orientation_from_text(f"{goal} {prompt}", ctx=ctx)
-    if orientation == "portrait" and width > height:
+    frame = frame_read(f"{goal} {prompt}", ctx)
+    if frame in ("wide", "tall", "square"):
+        shape = (width > height) - (width < height)
+        if shape != {"wide": 1, "tall": -1, "square": 0}[frame]:
+            width, height = _reshape(width, height, frame)
+    elif not given and frame == "portrait" and width > height:
         width, height = height, width
-    elif orientation == "landscape" and height > width:
+    elif not given and frame == "landscape" and height > width:
         width, height = height, width
     return normalize_resolution(width, height)
 

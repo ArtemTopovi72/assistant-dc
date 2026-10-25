@@ -242,37 +242,44 @@ Use ONLY figures supported by the research notes you were given. No prose, no co
 fence, JSON only."""
 
 
-# «итоги года нашей кофейни: Q1 1,2 млн…» -- the user's own figures. A web search
-# on it filled the deck with other cafés' profits presented as theirs.
-_OWN_DATA_RE = re.compile(r"\b(?:наш\w*|мо[йяеи]\w*|свое\w*|our|my)\b", re.I)
+_EDIT_READ_SYS = (
+    "A user asks for a slide deck or a change to one. Read the request and answer with ONE "
+    'JSON object and nothing else: {"kind": "...", "drop": [...]}.\n'
+    "kind: \"own_figures\" when the request gives the user's OWN figures (their business, "
+    "their results, their plan) to show as they are; \"structural\" when it only reorders, "
+    "moves or deletes existing slides and adds no new content; \"content\" otherwise.\n"
+    "drop: when the request ONLY deletes slides by position, their numbers counted from 1, "
+    "-1 for the last; else [].")
+_NO_READ = {"kind": "content", "drop": []}
 
 
-def _own_data(topic: str) -> bool:
-    return bool(_OWN_DATA_RE.search(topic or "")) and len(re.findall(r"\d+(?:[.,]\d+)?", topic or "")) >= 3
+def _request_read(ctx, text: str) -> dict:
+    """What a deck request is: the user's own figures, a pure reorder/delete, or new content.
+    Word lists read this before: «наш/мой» plus three numbers, «удали|убери|move» -- «убери
+    воду, добавь цифры» skipped the research a content change needs (bench/deck_read_eval.py)."""
+    if os.getenv("F5_TEST_RUN") and not os.getenv("INTENT_LIVE"):
+        return dict(_NO_READ)
+    from utils import safe_json_from_llm
+    try:
+        raw = text_model(ctx)(ctx, _EDIT_READ_SYS, "REQUEST: " + (text or "")[:1500],
+                              temperature=0.0, max_tokens=80) or ""
+        got = safe_json_from_llm(raw, ("kind",)) or {}
+    except Exception:
+        logger.warning("slides: request read failed", exc_info=True)
+        return dict(_NO_READ)
+    kind = got.get("kind") if got.get("kind") in ("own_figures", "structural", "content") else "content"
+    drop = [d for d in (got.get("drop") or []) if isinstance(d, int) and not isinstance(d, bool)]
+    return {"kind": kind, "drop": drop}
 
 
-_STRUCTURAL_EDIT_RE = re.compile(
-    r"поменя\w* местами|переставь|перенеси|удали|убери|swap|reorder|move|delete|remove", re.I)
-
-
-_DROP_SLIDE_RE = re.compile(
-    r"^\W*(?:удали|убери|delete|remove)\s+(?:the\s+)?(последн\w*|перв\w*|last|first|(\d+))(?:-?\w{0,3})?\s+(?:слайд|slide)\w*\W*$"
-    r"|^\W*(?:удали|убери|delete|remove)\s+(?:слайд|slide)\s+(?:№\s*)?(\d+)\W*$", re.I)
-
-
-def _dropped_slide(previous: dict, change: str):
-    """«удали последний слайд» came back unchanged: the model keeps every
-    slide it can. A bare delete by position needs no model."""
-    m = _DROP_SLIDE_RE.match((change or "").strip())
+def _dropped_slide(previous: dict, read: dict):
+    """«удали последний слайд» came back unchanged: the model keeps every slide it can.
+    A delete by position is done here, on the positions the request was read to name."""
     sl = list(previous.get("slides") or [])
-    if not m or len(sl) < 2:
+    drop = {d - 1 if d > 0 else len(sl) + d for d in read.get("drop") or []}
+    if not drop or not all(0 <= k < len(sl) for k in drop) or len(drop) >= len(sl):
         return None
-    num = m.group(2) or m.group(3)
-    k = int(num) - 1 if num else (0 if m.group(1).lower().startswith(("перв", "first")) else -1)
-    if not -len(sl) <= k < len(sl):
-        return None
-    del sl[k]
-    return dict(previous, slides=sl, edited=True)
+    return dict(previous, slides=[x for k, x in enumerate(sl) if k not in drop], edited=True)
 
 
 def _edit_deck(ctx, previous: dict, change: str, out_lang: str) -> dict:
@@ -283,7 +290,8 @@ def _edit_deck(ctx, previous: dict, change: str, out_lang: str) -> dict:
     plan and the change; a plan it cannot produce leaves the previous deck untouched with
     `edit_failed` set so the caller can say so.
     """
-    dropped = _dropped_slide(previous, change)
+    read = dep(ctx, "deck_read", _request_read)(ctx, change)
+    dropped = _dropped_slide(previous, read)
     if dropped:
         return dropped
     import json as _json
@@ -294,7 +302,7 @@ def _edit_deck(ctx, previous: dict, change: str, out_lang: str) -> dict:
                                           "slides", "sources") if previous.get(k) is not None}
     # A reorder/delete needs no research: searching «поменяй местами 2 и 3
     # слайд» only brought junk sources, whose closing slide then ate a content one.
-    facts, web_sources = (("", []) if _STRUCTURAL_EDIT_RE.search(change or "")
+    facts, web_sources = (("", []) if read["kind"] != "content"
                           else dep(ctx, "gather_facts", gather_facts)(ctx, change))
     ask = "Current deck:\n" + _json.dumps(base, ensure_ascii=False)[:12000]
     ask += "\n\nChange request: " + (change or "").strip()
@@ -364,7 +372,7 @@ def plan_deck(ctx, topic: str, n_slides: int = 0, out_lang: str = "",
     if previous and previous.get("slides"):
         return _edit_deck(ctx, previous, topic, out_lang)
     ask = (topic or "").strip()
-    own = _own_data(topic)
+    own = dep(ctx, "deck_read", _request_read)(ctx, topic)["kind"] == "own_figures"
     facts, web_sources = ("", []) if own else dep(ctx, "gather_facts", gather_facts)(ctx, topic)
     if own:
         ask += ("\n\nThese are the user's own figures. Use exactly these numbers "

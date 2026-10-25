@@ -5,9 +5,16 @@ import types as _types
 _T = [None]   # the text model the context hands out
 _G = [lambda ctx, q: ("", [])]   # the web search it hands out
 _S = [None]
+# What a request is (own figures / reorder-delete / content) is the model's read, scored live
+# in bench/deck_read_eval.py; scripted here, the decisions made on it are checked.
+_READS = {"поменяй местами 2 и 3 слайд": {"kind": "structural", "drop": []},
+          "удали последний слайд": {"kind": "structural", "drop": [-1]},
+          "удали 2-й слайд": {"kind": "structural", "drop": [2]}}
 TXT = _types.SimpleNamespace(text_model=lambda *a, **k: _T[0](*a, **k),
                              deps=_types.SimpleNamespace(gather_facts=lambda *a, **k: _G[0](*a, **k),
-                                                         support=lambda *a, **k: _S[0](*a, **k)))
+                                                         support=lambda *a, **k: _S[0](*a, **k),
+                                                         deck_read=lambda ctx, t: _READS.get(
+                                                             t, {"kind": "content", "drop": []})))
 
 
 assert slides._clean_chart({"title": "Даты гибели князя", "unit": "год", "labels": ["a", "b"], "values": [972, 973]}) == {}
@@ -38,7 +45,7 @@ slides._drop_ungrounded_charts(_deck, "В 2025 году — 1 329 825 жител
 assert [bool(s["chart"]) for s in _deck["slides"]] == [False, False, True, False], _deck
 print("PASS charts without data behind them are dropped")
 _t = "итоги года нашей кофейни: выручка по кварталам Q1 1,2 млн, Q2 1,5 млн, Q3 0,9 млн, Q4 2,1 млн"
-assert slides._own_data(_t) and not slides._own_data("история Кремля с 1156 по 1495 год, 3 этапа")
+assert slides._dropped_slide(_prev, {"drop": [1, 2, 3, 4]}) is None, "a delete never empties the deck"
 _d = {"slides": [{"chart": {"labels": ["Q1", "Q2", "Q3", "Q4"], "values": [1.2, 1.5, 0.9, 2.1]}}]}
 slides._drop_ungrounded_charts(_d, "" + " " + _t)
 assert _d["slides"][0]["chart"], _d

@@ -338,10 +338,11 @@ def generate_image_with_refinement(ctx, description: str, steps: Optional[int] =
     # invented, exactly as it already outranks the model's prompt-text guess.
     if _image.session_size_pinned(ctx) and (width is not None or height is not None):
         final_width, final_height = _image.normalize_resolution(*_image.session_image_size(ctx))
-    elif width is None and height is None:
+    else:
         final_width, final_height = _image.fix_image_params(
             description, prompt, final_width, final_height,
-            pinned=_image.session_size_pinned(ctx), ctx=ctx)
+            pinned=_image.session_size_pinned(ctx),
+            given=width is not None or height is not None, ctx=ctx)
 
     negative_prompt = ""
     reason = ""
