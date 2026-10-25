@@ -108,7 +108,5 @@ _t.sleep(0.6)
 assert ("556" in str(got)) and any(t.startswith("⏰ Reminder: check the oven") for _, t in got), got
 print("ok9")
 
-import graph as _G, graph_fastpath as _F
-assert _F._FAST_PATH_ACTION_CLAIM_RE.search("Поставил таймер на 10 минут для пасты.")
-assert _F._FAST_PATH_ACTION_CLAIM_RE.search("Хорошо, я разбужу тебя завтра в 7 утра.")
-print("ok10")
+# «Поставил таймер», «разбужу тебя в 7» on the fast path: the model's reading of the draft
+# sends them to the tool loop (bench/reply_read_set).

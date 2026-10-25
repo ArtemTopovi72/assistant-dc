@@ -14,6 +14,7 @@ except Exception: pass
 import logging; logging.basicConfig(level=logging.CRITICAL)
 from pathlib import Path
 
+from fakes import claims
 import graph as G
 # Patch the LLM at its own module, not at whichever module calls it.
 import llm as _LLMMOD
@@ -44,6 +45,7 @@ def _ctx(**kw):
     # passing alone, waiting out the shared model gate in a full run (2026-10-20)
     c.text_model = lambda *a, **k: None
     c.yes_no = lambda *a, **k: False       # the edit guard's «does this reverse the request?»
+    c.reply_read = claims()                # what each scripted draft claims (fakes.CLAIMS)
     for k, v in kw.items():
         setattr(c, k, v)
     return c

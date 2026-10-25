@@ -24,8 +24,8 @@ from utils import downscale_image_bytes
 # four directly on `graph` — graph_personality reaches them back through
 # `import graph as _g` at call time rather than by value.  # noqa: F401
 from graph_personality import (
-    MAX_TOOL_CALLS_PER_ROUND, _FAST_PATH_CAPABILITY_DENIAL_RE, _INTENT_TOOL_MAP, _intent_tools,
-    _ACTION_CLAIM_RE, _DECK_PREFIX, _fast_path_allowed,
+    MAX_TOOL_CALLS_PER_ROUND, _INTENT_TOOL_MAP, _intent_tools,
+    _DECK_PREFIX, _fast_path_allowed,
     _fast_path_reply, _finalize_answer, personality_node,
 )
 

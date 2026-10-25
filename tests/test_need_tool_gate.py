@@ -60,56 +60,13 @@ check("an_unread_message_takes_the_full_loop",
       not F._fast_path_allowed(_fctx, {"messages": []}, "hi", "никем не прочитано"))
 
 
-# --- 2. the denial net must catch non-image denials too ---------------------
-DENIALS = [
-    ("video_live",     "Я текстовый помощник и не могу напрямую создать видеофайл, "
-                       "но вы можете использовать Runway или Pika для этой задачи."),
-    ("clipboard_live", "Чтобы я мог это сделать, пожалуйста, вставьте текст из буфера "
-                       "обмена в чат. Сейчас я не вижу содержимое вашего буфера."),
-    ("no_access",      "У меня нет доступа к вашим файлам."),
-    ("image_legacy",   "Извините, я не могу нарисовать это."),
-    ("english",        "I cannot access your clipboard."),
-]
-for name, text in DENIALS:
-    check(f"denial_catches_{name}",
-          bool(F._FAST_PATH_CAPABILITY_DENIAL_RE.search(text)), repr(text[:60]))
-
-NOT_DENIALS = [
-    ("physics", "Небо голубое из-за рэлеевского рассеяния света в атмосфере."),
-    ("deck",    "Вот план презентации из 8 слайдов: 1. Основание Рима и легенда."),
-    ("chat",    "Привет! У меня всё хорошо, чем могу помочь?"),
-    ("refusal_about_topic",
-                "Я не могу говорить об этом, давай сменим тему."),
-]
-for name, text in NOT_DENIALS:
-    check(f"denial_ignores_{name}",
-          not F._FAST_PATH_CAPABILITY_DENIAL_RE.search(text), repr(text[:60]))
-
-
+# --- 2. denials, delivery and action claims leave the fast path ------------------
+# Which drafts are which is the model's reading (agent/reply_read.py); the phrases that
+# used to sit here are scored live in bench/reply_read_set.
 import inspect
-# --- 2b. a tool-less DELIVERY CLAIM is thrown away too --------------------------
-# "а теперь просто картинку этого же кота" had no draw verb, took the fast
-# path, and came back as "Вот ваша картинка с рыжим котом" with nothing
-# attached.
-CLAIMS = [
-    ("ru_picture", "Вот ваша картинка с рыжим котом, бегущим по пляжу."),
-    ("ru_deck",    "Готово! Презентация сохранена и отправлена."),
-    ("en_picture", "Here is your picture of the cat on the beach."),
-    ("en_made",    "I've created the video you asked for."),
-    ("ru_looks",   "Вот так выглядит Эйфелева башня ночью."),
-]
-for name, text in CLAIMS:
-    check(f"claim_caught_{name}", bool(F._FAST_PATH_DELIVERY_CLAIM_RE.search(text)), repr(text[:60]))
-NOT_CLAIMS = [
-    ("fact",   "Столица Австралии — Канберра."),
-    ("code",   "Вот три теста на pytest для функции."),
-    ("plan",   "Вот план: сначала посчитаем, потом нарисуем."),
-    ("chat",   "Привет! Чем могу помочь?"),
-    ("described", "Вот как выглядит сибирский кот: крупный, пушистый. У него густая шерсть."),
-]
-for name, text in NOT_CLAIMS:
-    check(f"claim_ignores_{name}", not F._FAST_PATH_DELIVERY_CLAIM_RE.search(text), repr(text[:60]))
-check("claim_falls_through", "_FAST_PATH_DELIVERY_CLAIM_RE.search(fast_content)" in inspect.getsource(F))
+_fp = inspect.getsource(F._fast_path_reply)
+check("claim_falls_through", 'said.get("delivers")' in _fp and 'said.get("denies")' in _fp
+      and '("did", "promises", "tool_as_text", "does_tool_job")' in _fp)
 
 
 # --- 3. first-failure retry -------------------------------------------------
@@ -130,22 +87,16 @@ check("nudge_fires_before_giveup",
       src.index("FIRST failure of") < src.index("REPLAN_FAILURE_THRESHOLD):"),
       "the retry nudge must be reachable before the give-up nudge")
 
-check("ok_i_will_do_it_is_a_promise",
-      bool(F._FAST_PATH_ACTION_CLAIM_RE.search("Хорошо, я сделаю фон светлым и белым для всех слайдов."))
-      and not F._FAST_PATH_ACTION_CLAIM_RE.search("Я сделаю вывод: удалёнка подходит не всем."))
 _hist = {"messages": [{"role": "user", "content": "сделай видео с лисой"},
                      {"role": "assistant", "content": "", "tool_calls": [{"function": {"name": "generate_video"}}]},
                      {"role": "tool", "content": "[done]"}, {"role": "assistant", "content": "Вот видео"}]}
 _READ["а теперь то же самое, но ночью"] = {"needs_tool": True, "wants": ["generate_video"]}
 check("the_same_again_continues_a_tool_turn",
       F._followup_of_tool_turn(_hist, "а теперь то же самое, но ночью", _fctx))
-check("a_leading_sure_is_still_a_claim",
-      bool(F._FAST_PATH_DELIVERY_CLAIM_RE.search("Конечно! Вот то же самое видео с лисой")))
 _dctx = _NS(last_image_path=None, is_cancelled=lambda: False, sandbox=None, last_deck={"slides": [{}]})
 check("a_deck_keeps_the_fast_path_closed",
       not F._fast_path_allowed(_dctx, {"messages": []}, "make it shorter", "сделай её короче"))
 check("a_deck_pins_its_tool", "create_presentation" in P._kit_always(_dctx, set()))
-check("a_bare_past_tense_is_a_claim", bool(F._FAST_PATH_ACTION_CLAIM_RE.search("Сделал еще короче, теперь только главное.")))
 _vctx = _NS(last_image_path=None, is_cancelled=lambda: False, sandbox=None, last_video_path="v.mp4")
 check("a_video_keeps_the_fast_path_closed", not F._fast_path_allowed(_vctx, {"messages": []}, "make it longer", "сделай его подлиннее"))
 check("a_video_pins_its_tool", "generate_video" in P._kit_always(_vctx, set()))

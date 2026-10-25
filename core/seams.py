@@ -70,6 +70,15 @@ def intent_read(ctx):
     return intent.read
 
 
+def reply_read(ctx):
+    """`read(ctx, reply, user="") -> dict`: what a reply of the assistant claims."""
+    own = getattr(ctx, "reply_read", None)
+    if own is not None:
+        return own
+    import reply_read
+    return reply_read.read
+
+
 def choice(ctx):
     """`ask_choice(question, text, options, default) -> str`: one of `options`."""
     own = getattr(ctx, "choice", None)

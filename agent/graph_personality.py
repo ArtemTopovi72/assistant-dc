@@ -22,17 +22,18 @@ the three functions that read them (`_fast_path_allowed`, `_fast_path_reply`,
 `_finalize_answer`, `personality_node`) do `import graph as _g` at CALL time
 and go through `_g.<name>`. Not one test was repointed.
 
-Everything else this cluster reads (_ACTION_CLAIM_RE, _DECK_PREFIX,
+Everything else this cluster reads (_DECK_PREFIX,
 _UNTRUSTED_DATA_TOOLS,
 _IMAGE_ACTION_TOOLS, _IMAGE_INTENT_RE, _IMAGE_TOOL_NAMES,
-_USER_IMAGE_INTENT_RE, _FAST_PATH_CAPABILITY_DENIAL_RE,
+_USER_IMAGE_INTENT_RE,
 MAX_TOOL_CALLS_PER_ROUND, _intent_tools, _pop_fabrication_draft) moved here
 too -- an AST + grep sweep of every test file confirmed none of it is ever
 patched on `graph`, only read directly (e.g. `graph._intent_tools(...)`,
 `graph._DECK_PREFIX`) or not touched by the suites at all. graph.py
 re-exports it all by name so those direct reads keep resolving.
 """
-from seams import chat_model, choice, dep, run_tool, intent_read, yes_no
+from seams import chat_model, choice, dep, run_tool, intent_read, yes_no, reply_read
+from reply_read import claims_result
 import json
 import logging
 import os
@@ -57,11 +58,11 @@ logger = logging.getLogger("assistant.graph")
 # the suites read these directly (graph._intent_tools, graph._DECK_PREFIX, …).
 from graph_fastpath import (                   # noqa: F401  (re-export)
     _UNTRUSTED_DATA_TOOLS, _IMAGE_ACTION_TOOLS,
-    _FAST_PATH_CAPABILITY_DENIAL_RE, _INTENT_TOOL_MAP, _intent_tools,
+    _INTENT_TOOL_MAP, _intent_tools,
     _IMAGE_TOOL_NAMES, _fast_path_allowed, _fast_path_reply,
 )
 from graph_finalize import (                   # noqa: F401  (re-export)
-    _ACTION_CLAIM_RE, _FILE_PROMISE_RE, _ALREADY_DONE_RE, _is_redo_request, _user_read,
+    _is_redo_request, _user_read,
     _DECK_PREFIX,
     _fact_of_remember_request, _pop_fabrication_draft, _finalize_answer,
 )
@@ -105,46 +106,6 @@ _TOOL_ARTIFACT: dict = {
     "fix_hands": "image_path",
     "fix_artifact": "image_path",
 }
-
-
-# A picture from earlier turns stays in ctx.last_image_path forever, so an
-# action verb in a reply about something else ("запущу", "сделал" in an AnyDesk
-# chat) forced picture-tool rounds and invented actions. With
-# only a stale picture, the guard needs the draft to be about a picture.
-_PICTURE_WORD_RE = re.compile(
-    r"(?i)картин|фото|изображ|рисун|снимок|снимк|кадр|очк|фон|image|photo|picture|drawing")
-
-# A claim that a deliverable EXISTS, as opposed to handing it over or saying
-# you made it. The third phrasing of the same lie, and the one that hid the
-# longest: "Презентация про историю Рима на 8 слайдов готова" with no file
-# anywhere, and "Результат вычисления … равен 20 965 334.4" when the
-# calculator had returned nothing at all -- a fabricated number, different on
-# every run, presented as a computation. Neither matches a first-person verb
-# or a "вот …", so both walked past every guard.
-_PROMISE_CLAIM_RE = re.compile(
-    r"презентац\w*[^.!?]{0,80}готов|файл[^.!?]{0,40}готов"
-    r"|(?:отчёт|отчет|документ|видео|клип|картинк\w*)[^.!?]{0,40}готов"
-    r"|результат\s+вычислен|равен\s*[-+(]?\d"
-    r"|\b(?:is|are)\s+ready\b|\bthe\s+(?:file|deck|report)\s+is\s+ready\b",
-    re.IGNORECASE,
-)
-
-
-# Handing the user a result, as opposed to claiming to have made one.
-# _ACTION_CLAIM_RE only matches first-person verbs ("я нарисовал"), and the
-# false successes measured on the chaos bench were phrased the other way:
-# "Вот ваш рыжий кот в скафандре!", "Вот реальное фото Эйфелевой башни."
-# That is the same lie -- the user is handed something that does not exist --
-# but it slipped past every guard. Kept separate from _ACTION_CLAIM_RE rather
-# than folded into it: this phrasing is innocent in plenty of turns, so it is
-# only consulted where a verification has ALREADY come back negative.
-_DELIVERY_CLAIM_RE = re.compile(
-    r"\bвот\s+(?:тво[йяё]|ваш\w*|теб[ея]|готов\w+|обновл\w+|нов\w+)"
-    r"|\bвот\s+(?:\w+\s+){0,2}(?:фото|фотк\w*|картинк\w*|изображени\w*|видео|результат)"
-    r"|\bдержи\b|(?<!не )(?<!не  )\b(?:готово|получилось)\b"
-    r"|\bhere\s+(?:is|'s)\s+(?:your|the)\s+(?:image|picture|photo|video)",
-    re.IGNORECASE,
-)
 
 
 def _inspection_misses_request(request: str, verdict: str, tools_called: set, ctx=None,
@@ -356,7 +317,7 @@ def _is_calc_result(result: str) -> bool:
 
 
 def _answer_contradicts_reality(draft: str, verification_negative: bool,
-                               failed_promises, already_sent: bool) -> bool:
+                               failed_promises, already_sent: bool, ctx=None) -> bool:
     """Does this draft tell the user about a result that does not exist?
 
     Two ways to know, and the turn only has to fail one of them:
@@ -377,9 +338,8 @@ def _answer_contradicts_reality(draft: str, verification_negative: bool,
         return False
     if not verification_negative and not failed_promises:
         return False
-    return bool(_ACTION_CLAIM_RE.search(draft)
-                or _DELIVERY_CLAIM_RE.search(draft)
-                or _PROMISE_CLAIM_RE.search(draft))
+    said = reply_read(ctx)(ctx, draft)
+    return claims_result(said) or said["computed"]
 
 
 # The inline buttons under a picture carry a machine payload that names ONE
@@ -717,7 +677,7 @@ _EDIT_TOOLS = frozenset({"inpaint_image", "redraw_image", "transfer_image", "swa
 
 
 def _should_escalate_to_verifier(draft: str, tools_called, state,
-                                 already_escalated: bool) -> bool:
+                                 already_escalated: bool, ctx=None) -> bool:
     """Is this the moment to spend a vision call rather than guess?
 
     Test-time compute is only worth paying for where the answer is actually in
@@ -742,8 +702,8 @@ def _should_escalate_to_verifier(draft: str, tools_called, state,
         return False
     if not str(state.get("image_path") or "").strip():
         return False
-    return bool(_ACTION_CLAIM_RE.search(draft)
-                or _PROMISE_CLAIM_RE.search(draft))
+    said = reply_read(ctx)(ctx, draft)
+    return "draw" in said["did"] or said["promises"]
 
 
 def _detect_silent_failure(tool_name: str, result: str, state: AgentState) -> str:
@@ -802,11 +762,6 @@ def _detect_silent_failure(tool_name: str, result: str, state: AgentState) -> st
     return result
 
 
-_COLLAGE_DONE_RE = re.compile(
-    r"(?:коллаж\w*\s+(?:готов|собран|сделан|получил|прилага|отправл)|"
-    r"(?:собрал|сделал|составил|отправля\w*|прикрепля\w*|вот)\s+(?:\w+\s+){0,3}коллаж|"
-    r"collage\s+is\s+(?:ready|done|attached|built)|(?:built|made|assembled|here\s+is)\s+(?:\w+\s+){0,3}collage)",
-    re.IGNORECASE)
 _BUILDER_TOOLS = frozenset({"run_code", "write_file"})
 # A round that may write code needs room for the code: a 300-line matplotlib
 # flowchart is ~3500 tokens, and at the 1500-token loop ceiling the call was
@@ -1472,14 +1427,14 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             draft = strip_textual_tool_calls(
                 strip_reasoning_leak(response_message.get("content", "") or ""))
             tools_ran_now = any(m.get("role") == "tool" for m in messages)
+            said = reply_read(ctx)(ctx, draft, original_input or user_input) if draft else {}
             if (corrective_count < _MAX_CORRECTIVE and not tools_ran_now and draft
-                    and (state.get("image_data") or (getattr(ctx, "last_image_path", None)
-                                                     and _PICTURE_WORD_RE.search(draft)))
+                    and (state.get("image_data") or getattr(ctx, "last_image_path", None))
                     # only when the user's own words asked for a picture action (or the
                     # read failed): a photo of a circuit board plus advice — «добавим
                     # резистор», «уберите кнопку» — cost two rounds a reply (2026-10-09)
                     and (user_image_intent or not _own_read.get("ok"))
-                    and _ACTION_CLAIM_RE.search(draft)):
+                    and ({"draw", "video"} & set(said["did"]) or said["promises"])):
                 corrective_count += 1
                 logger.warning("Answer claims an action but no tool was called — "
                                "corrective round %d/%d", corrective_count, _MAX_CORRECTIVE)
@@ -1553,7 +1508,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             # excuse here.
             if (corrective_count < _MAX_CORRECTIVE and draft
                     and _sandbox_touched_recently(getattr(ctx, "sandbox", None))
-                    and _FILE_PROMISE_RE.search(draft)):
+                    and said["promises"]):
                 corrective_count += 1
                 logger.warning("Answer promises file work (tools ran: %s) — "
                                "corrective round %d/%d", tools_ran_now, corrective_count, _MAX_CORRECTIVE)
@@ -1623,7 +1578,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             # collage. A collage exists only if a script built it this turn.
             if (corrective_count < _MAX_CORRECTIVE and draft
                     and _user_read(original_input or user_input or "", ctx=ctx)["collage"]
-                    and _COLLAGE_DONE_RE.search(draft)
+                    and claims_result(said)
                     and not (tools_called_this_turn & _BUILDER_TOOLS)):
                 corrective_count += 1
                 logger.warning("Answer claims a collage but no script ran this turn — "
@@ -1646,7 +1601,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                     and (_sandbox_has_files(getattr(ctx, "sandbox", None))
                          or state.get("image_data")
                          or getattr(ctx, "last_image_path", None))
-                    and _ALREADY_DONE_RE.search(draft)
+                    and said["already"]
                     and _is_redo_request(user_input, messages, ctx=ctx)):
                 corrective_count += 1
                 logger.warning("Answer says 'already done' to a repeated request "
@@ -1679,7 +1634,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             # that would otherwise overclaim -- verifying after every edit buys
             # the same certainty and charges for it on every edit turn.
             if _should_escalate_to_verifier(draft, tools_called_this_turn,
-                                            state, verifier_escalated):
+                                            state, verifier_escalated, ctx):
                 verifier_escalated = True
                 logger.info("Answer asserts an edit landed with nothing "
                             "verifying it — escalating to one inspection")
@@ -1696,7 +1651,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                 continue
             if _answer_contradicts_reality(draft, verification_negative,
                                            failed_promises,
-                                           verify_corrective_sent):
+                                           verify_corrective_sent, ctx):
                 verify_corrective_sent = True
                 corrective_count += 1
                 logger.warning("Answer claims success while the last inspection "
@@ -2312,7 +2267,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
         import turn_audit as _ta
         final_answer, _unmet = _ta.correct_claims(
             final_answer, tools_called_this_turn,
-            getattr(ctx, "sandbox", None) is not None)
+            getattr(ctx, "sandbox", None) is not None, ctx, original_input or user_input)
         audit_reasons += [f"claim_{c}" for c in _unmet]
     except Exception:
         logger.debug("claim audit failed", exc_info=True)

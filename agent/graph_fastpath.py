@@ -12,7 +12,7 @@ render a short-circuit reply.
 # value at import would freeze the real implementations and make every one of
 # those patches a silent no-op. See graph_personality.py's module docstring.
 """
-from seams import chat_model, intent_read
+from seams import chat_model, intent_read, reply_read
 import logging
 import re
 
@@ -44,94 +44,11 @@ _IMAGE_ACTION_TOOLS = {"generate_image", "redraw_image", "inpaint_image",
 
 
 
-# A tool-less reply that CLAIMS a deliverable. "а теперь просто картинку
-# этого же кота" had no draw verb, took the fast path, and the model wrote
-# "Вот ваша картинка с рыжим котом" with nothing attached.
-# Such a reply is thrown away and the turn falls through to the
-# tool loop, exactly like a capability denial.
-_FAST_PATH_DELIVERY_CLAIM_RE = re.compile(
-    r"^\s*(?:(?:конечно|отлично|хорошо|сделано|sure|of\s+course|okay|ok)[!,.]?\s+)?"
-    r"(?:вот|держи\w*|готово|here\s+(?:is|are|you\s+go)|done)\b[^.!?\n]{0,60}?"
-    r"(?:картин\w*|изображен\w*|рисун\w*|фото\w*|видео|ролик\w*|клип\w*|презентац\w*|"
-    r"файл\w*|документ\w*|песн\w*|трек\w*|picture|image|photo|drawing|video|clip|"
-    r"presentation|deck|file|song|track)|"
-    r"(?:картинк\w*|изображени\w*|видео|презентац\w*|файл\w*)\s+(?:готов\w*|сохранен\w*|отправлен\w*|создан\w*)|"
-    # the whole reply is «Вот так выглядит Эйфелева башня ночью.» with nothing shown
-    r"^\s*(?:вот|here'?s?)\s+(?:так\s+|как\s+|what\s+)?[^.!?\n]{0,60}?(?:выгляд\w*|looks?\s+like)[^.!?\n]*[.!]?\s*$|"
-    r"(?:I(?:'ve| have)\s+)?(?:created|generated|drawn|attached|sent|made)\s+(?:the|a|your)\s+"
-    r"(?:picture|image|photo|video|clip|presentation|deck|file|song)",
-    re.IGNORECASE)
-
-
-# The fast path has NO tools, so any answer that reports or promises an action
-# is invented. Routing bench 2026-09-24, paraphrases with no cue word: "Хорошо,
-# я забыл все факты" (forget_facts never ran), "я запустил глубокое
-# исследование", `{"action": "dalle.text2im", ...}` written as text, prompts
-# offered instead of a picture, "Этот код выведет 499999500000" (never run).
-# Each one falls through to the full loop, which has the tools.
-_FAST_PATH_ACTION_CLAIM_RE = re.compile(
-    # a tool call written out as text
-    r"\"action(?:_input)?\"\s*:|<tool_call>|\{\s*\"name\"\s*:\s*\"\w+\"\s*,\s*\"(?:arguments|parameters)\"|"
-    # first-person side effects in the past tense
-    r"\bя\s+(?:\w+\s+){0,2}?(?:забыл|удалил|стёр|стер|запомнил|записал|сохранил|запустил|"
-    r"отправил|добавил|сгенерировал|нарисовал|создал|очистил|поставил|установил)\w*|"
-    r"^\s*(?:хорошо|готово|ок|окей|сделано)[,.!]?\s+(?:\w+\s+){0,2}?"
-    r"(?:забыл|удалил|стёр|стер|запомнил|записал|сохранил|запустил)\w*|"
-    # a promise to act right now
-    r"\b(?:запускаю|начинаю|приступаю|генерирую|рисую|создаю|напомню|отправляю|"
-    r"звоню|заказываю|оформляю|бронирую|оплачиваю)\b|"
-    # passive "done" claims: «Будильник на 7 утра отменен» with no tool
-    r"(?:напоминани|будильник)\w*[^.!?\n]{0,30}\b(?:отмен[её]н|удал[её]н|снят|установлен|поставлен)\w*|"
-    r"\bя\s+(?:\w+\s+){0,2}?отменил\w*|"
-    # «Запомнил, 47 -- интересное число» with no remember_fact
-    r"(?:^|[.!?]\s+)(?:запомнил|записал|сохранил|отменил|удалил|поставил|установил|"
-    r"сделал|добавил|убрал|изменил|переделал|сократил|исправил|обновил|заменил)\w*\b|"
-    r"\b(?:разбужу|напомню|поставлю\s+(?:таймер|будильник))\b|"
-    r"\bсейчас\s+(?:я\s+)?(?:сделаю|нарисую|сгенерирую|создам|запущу|найду|подготовлю|поищу)\b|"
-    # «Хорошо, я сделаю фон светлым и белым для всех слайдов.» — and nothing was done
-    r"^\s*(?:(?:хорошо|ок|окей|конечно|отлично|понял|договорились)[,!.]?\s+)+(?:я\s+)?"
-    r"(?:сделаю|изменю|поменяю|переделаю|добавлю|уберу|нарисую|создам|отправлю|сгенерирую|исправлю)\b|"
-    # doing the tool's job in prose instead
-    r"промпт\w*\s+для\s+(?:генерац|нейросет|midjourney|stable)|"
-    r"(?:код|скрипт|программа)\s+(?:выведет|вернёт|вернет|напечатает)|"
-    r"\bя\s+могу\s+(?:\w+\s+){0,2}?(?:созда|сгенер|нарис|сдела|найти|запуст)\w*[^.!?]{0,80}\b(?:но|если)\b|"
-    r"\bI(?:'ve| have)\s+(?:forgotten|deleted|removed|saved|started|launched)\b|"
-    r"\bI(?:'m| am)\s+(?:now\s+)?(?:generating|creating|drawing|searching|running)\b",
-    re.IGNORECASE | re.MULTILINE)
-
-
-# Fast-path responses that falsely claim the model cannot create/edit images.
-# These must not be saved to history — they poison future turns by making the
-# model believe it told the user it can't draw, then refusing again.
-# The fast path answered with no tools; if that answer is the model DENYING a
-# capability the agent actually has, throw it away and fall through to the real
-# loop where the tool exists. This was image-only, and the bench caught what
-# that missed: "я текстовый помощник и не могу напрямую создать видеофайл, но
-# вы можете использовать Runway или Pika" (video) and "я не вижу содержимое
-# вашего буфера автоматически" (clipboard) both sailed through as final
-# answers. The rule is capability-agnostic now — a denial about ANY deliverable
-# is a fall-through, because the loop can only do better than a flat refusal.
-_FAST_PATH_CAPABILITY_DENIAL_RE = re.compile(
-    # Russian: "не могу/не умею/не имею возможности" + any deliverable verb.
-    r"не\s+(?:могу|умею|способ\w+|имею\s+возможности)\s+"
-    r"(?:\w+\s+){0,3}?(?:создав?|созда|нарис|генер|рисов|сделать|сформир|"
-    r"постро|записать|прочитать|получить|отправ|показать)|"
-    # "я не вижу …", "у меня нет доступа", "я текстовый помощник/модель".
-    r"я\s+не\s+вижу|"
-    r"(?:у\s+меня\s+)?нет\s+(?:прямого\s+)?доступа|"
-    r"я\s+(?:—\s*|-\s*)?(?:просто\s+)?текстов\w+\s+(?:помощник|модель|ассистент)|"
-    # Deflection to a competitor product instead of using our own tool.
-    r"вы\s+можете\s+использовать\s+(?:нейросет|сервис|Runway|Pika|Midjourney)|"
-    # Asking the user to paste what a tool could have fetched.
-    r"вставьте\s+(?:текст|содержимое)|"
-    # English mirrors of all of the above.
-    r"cannot\s+(?:create|generate|draw|produce|access|read|build|make)|"
-    r"can\'t\s+(?:create|generate|draw|produce|access|read|build|make)|"
-    r"unable\s+to\s+(?:create|generate|draw|produce|access|read)|"
-    r"I\s+don\'t\s+have\s+(?:the\s+ability|access|permission)|"
-    r"I\s+am\s+(?:just\s+)?a\s+text[- ]based",
-    re.IGNORECASE,
-)
+# A tool-less reply that claims a deliverable («Вот ваша картинка с рыжим котом», nothing
+# attached), reports or promises an action («Хорошо, я забыл все факты», «я запустил
+# глубокое исследование»), writes a tool call as text, or denies a capability the agent
+# has («я текстовый помощник и не могу создать видеофайл») falls through to the tool
+# loop: reply_read reads which of these the draft is.
 
 
 # When the user taps a keyboard button, their intent is unambiguous — only the
@@ -382,13 +299,14 @@ def _fast_path_reply(ctx: Context, messages: list, gen: "_GenSettings",
         # A 60-row table stopped at row 25 mid-cell and was delivered.
         logger.info("Fast path hit its token cap — falling through to the full loop")
         return None
-    if fast_content and _FAST_PATH_DELIVERY_CLAIM_RE.search(fast_content):
+    said = reply_read(ctx)(ctx, fast_content, original_input) if fast_content else {}
+    if said.get("delivers"):
         logger.info("Fast path claimed a deliverable with no tool — falling through to the full loop")
         return None
-    if fast_content and _FAST_PATH_ACTION_CLAIM_RE.search(fast_content):
+    if any(said.get(k) for k in ("did", "promises", "tool_as_text", "does_tool_job")):
         logger.info("Fast path claimed or promised an action with no tool — falling through to the full loop")
         return None
-    if fast_content and not _FAST_PATH_CAPABILITY_DENIAL_RE.search(fast_content):
+    if fast_content and not said.get("denies"):
         # The fast path returns before graph_finalize, so the drift guard
         # never saw its answers: "а теперь расскажи её по-русски" on an
         # English session came back in English.

@@ -1,0 +1,2454 @@
+[
+ {
+  "user": "No, I only have you, think and figure it out",
+  "reply": "Как и ожидалось, команда завершилась с ошибкой `exit status 127` (`powershell.exe: not found`). Это подтверждает мой предыдущий вывод: **я нахожусь внутри Docker-контейнера (Linux)**, и у меня нет прямого доступа к исполняемым файлам Windows, таким как `powershell.exe`.\n\nДля меня `powershell.exe` — это такой же неизвестный файл, как и `anydesk.exe`, потому что среда выполнения изолирована от твоей основной операционной системы.\n\n**Что это значит для нас:**\nЯ не могу быть «мостом», который сам нажимает кнопки в твоей Windows. Чтобы выполнить эту команду (и любую другую для починки AnyDesk), её должен запустить **процесс, работающий непосредственно в Windows**.\n\n**Твой план действий:**\nПоскольку я — это «мозг» в контейнере, а тебе нужен «рука» в Windows, у нас есть два пути:\n\n1.  **Ручной (самый быстрый):** Ты сам открываешь PowerShell на компьютере и вставляешь команду. Это даст нам результат мгновенно.\n2.  **Автоматический (через другой инструмент):** Если на этом же компьютере запущен другой бот или скрипт, который имеет доступ к хостовой системе (например, через SSH или если он запущен не в Docker, а просто как `.exe`), то именно **его** нужно просить выполнить команду.\n\n**Если т",
+  "want": {
+   "admits_failure": true,
+   "denies": true,
+   "did": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "No, I only have you, think and figure it out",
+  "reply": "Моя попытка использовать Python как мост через инструмент `calculate` провалилась: этот инструмент предназначен только для математических вычислений и не умеет исполнять полноценный программный код с импортом библиотек (как `subprocess`).\n\n**Что я попробовал:**\nЯ попытался запустить цепочку команд `cmd.exe -> powershell.exe` внутри Python-скрипта, чтобы «пробить» изоляцию контейнера и достучаться до твоей Windows. \n\n**Результат:**\nИнструмент выдал ошибку, так как он ожидал математическую формулу (например, `2+2`), а получил программный код. Это означает, что в моей текущей конфигурации **нет прямого инструмента для исполнения произвольного системного кода Python**, который мог бы выйти за пределы Linux-контейнера.\n\n**Вердикт:**\nЯ — «мозг» в цифровой клетке. Мои инструменты (`search`, `calculate`, `generate_image` и др.) — это закрытые функции, которые работают внутри моей среды. У меня нет инструмента `run_code` (который есть у некоторых других версий ИИ), который позволил бы мне запустить Python-скрипт для связи с Windows.\n\n**Что мы имеем:**\n1.  **Программный мост через меня невозможен**, так как у меня нет доступа к исполнению системных команд (shell/python) напрямую.\n2.  **Единс",
+  "want": {
+   "admits_failure": true,
+   "denies": "?",
+   "did": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "help me answer the question and tell me which option to choose",
+  "reply": "Вот ваш файл `hotelinns-0.1.7-station-FINAL.jar`:\n\n[hotelinns-0.1.7-station-FINAL.jar](hotelinns-0.1.7-station-FINAL.jar)",
+  "want": {
+   "delivers": true,
+   "did": [
+    "file"
+   ]
+  },
+  "from": "trace"
+ },
+ {
+  "user": "help me answer the question and tell me which option to choose",
+  "reply": "Для того чтобы найти причину ошибки в поведении NPC, мне нужно проанализировать код мода. К сожалению, на данный момент я не могу напрямую заглянуть внутрь распакованных папок (так как у меня нет доступа к песочнице с файлами в этом конкретном сеансе), но я могу помочь вам, если вы предоставите содержимое ключевых файлов.\n\nОбычно логика NPC и взаимодействия с предметами (стаканами, виски) находится в классах, связанных с `Entity`, `BlockEntity` или специальными `Handler` / `Task` для ИИ (AI Goals).\n\n**Что вам нужно сделать:**\n1. Найдите в папке `hotelinns-0.1.7-station-FINAL_unpacked/com/...` файлы `.class` (или, если они декомпилированы, `.java`), которые относятся к NPC или бару (ищите по словам `NPC`, `Bar`, `Interaction`, `Drink`, `Glass`).\n2. Поскольку это скомпилированные файлы, вам может понадобиться декомпилятор (например, **JD-GUI** или встроенный в IntelliJ IDEA), чтобы превратить их в читаемый текст.\n3. Пришлите мне содержимое этих файлов (или наиболее важные части кода, отвечающие за проверку предмета в руках игрока и перемещение предметов).\n\n**На что я буду обращать внимание при анализе:**\n* **Проверка предмета:** Правильно ли NPC распознает \"пустой стакан\" (возможно, ",
+  "want": {
+   "denies": true
+  },
+  "from": "trace"
+ },
+ {
+  "user": "do the same thing, but horizontally for YouTube",
+  "reply": "Готово! Сделал вариант в горизонтальном формате, как раз для YouTube.",
+  "want": {
+   "did": [
+    "draw"
+   ],
+   "delivers": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "make a 7-slide presentation about the autumn forests of Russia for schoolchildren, with pictures",
+  "reply": "К сожалению, инструмент создания презентаций сейчас капризничает и не может выдать готовый файл. Я могу составить для тебя подробный план каждого из 7 слайдов с текстом и описанием картинок, чтобы тебе осталось только перенести это в PowerPoint. Сделаем?",
+  "want": {
+   "admits_failure": true
+  },
+  "from": "trace"
+ },
+ {
+  "user": "make a 30-second video of a rocket taking off from Baikonur",
+  "reply": "К сожалению, видео не удалось создать из-за технической ошибки. Я дважды попытался запустить генерацию, даже уменьшив длительность до 15 секунд, но инструмент всё равно вернул ошибку. Попробуем еще раз или хочешь, чтобы я нарисовал красивый кадр этого момента?",
+  "want": {
+   "admits_failure": true
+  },
+  "from": "trace"
+ },
+ {
+  "user": "we need a pitch deck for our startup's investors, 6 slides",
+  "reply": "К сожалению, инструмент создания презентаций сейчас работает нестабильно и не смог выдать готовый файл. Но я могу составить для тебя подробную структуру этих 6 слайдов прямо здесь, чтобы ты мог просто перенести текст в свой редактор. Напиши, чем именно занимается ваш стартап!",
+  "want": {
+   "admits_failure": true
+  },
+  "from": "trace"
+ },
+ {
+  "user": "and now the same one, but for a post — square",
+  "reply": "Вот уютная картинка для твоей сторис. Я сделал композицию с кофе, книгой и мягким светом, оставив место в центре, чтобы ты мог красиво наложить текст или стикеры.",
+  "want": {
+   "did": [
+    "draw"
+   ],
+   "delivers": true
+  },
+  "from": "trace"
+ },
+ {
+  "user": "and now the same one, but for a post — square",
+  "reply": "Готово! Переделал под квадратный формат, чтобы идеально смотрелось в ленте поста.",
+  "want": {
+   "did": [
+    "draw"
+   ],
+   "delivers": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "and for a YouTube cover",
+  "reply": "Сделал вариант для обложки YouTube в широком формате. Теперь всё в одном стиле!",
+  "want": {
+   "did": [
+    "draw"
+   ]
+  },
+  "from": "trace"
+ },
+ {
+  "user": "and now for stories",
+  "reply": "Вот твоя обложка! Сделал её яркой и контрастной, чтобы она точно цепляла взгляд в ленте YouTube. Надеюсь, видео наберет много просмотров!",
+  "want": {
+   "did": [
+    "draw"
+   ],
+   "delivers": true
+  },
+  "from": "trace"
+ },
+ {
+  "user": "and now for stories",
+  "reply": "Готово! Сделал надпись желтой и убрал всё лишнее, чтобы она смотрелась чисто и чётко.",
+  "want": {
+   "did": [
+    "draw"
+   ],
+   "delivers": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "and now for stories",
+  "reply": "Сделал вариант для сторис! Поскольку формат вертикальный, я решил не просто растянуть картинку, а создать динамичное видео с эффектом «до и после» — так в сторис это будет смотреться гораздо эффектнее и соберет больше охватов.",
+  "want": {
+   "did": [
+    "video"
+   ],
+   "delivers": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "show me what the Eiffel Tower looks like at night",
+  "reply": "Не удалось найти и загрузить фото Эйфелевой башни ночью. Попробуй еще раз или попроси меня нарисовать её!",
+  "want": {
+   "admits_failure": true
+  },
+  "from": "trace"
+ },
+ {
+  "user": "and there is some kind of smudge on the background to the left",
+  "reply": "Убрал это пятно на фоне слева, теперь всё должно быть чисто!",
+  "want": {
+   "did": [
+    "draw"
+   ]
+  },
+  "from": "trace"
+ },
+ {
+  "user": "make a presentation about bees in 4 slides",
+  "reply": "К сожалению, инструмент для создания презентаций сейчас капризничает и не выдает готовый файл. Я могу составить подробный план и текст для каждого из 4 слайдов прямо здесь, чтобы ты мог просто скопировать их в PowerPoint. Сделать?",
+  "want": {
+   "admits_failure": true
+  },
+  "from": "trace"
+ },
+ {
+  "user": "edit the image: Make the inscription \" Good morning\"",
+  "reply": "Запомнил: Nothing.",
+  "want": {
+   "did": [
+    "remember"
+   ]
+  },
+  "from": "trace"
+ },
+ {
+  "user": "edit the image: Make the inscription \" Good morning\"",
+  "reply": "Готово! Добавил надпись \"Good morning\". Надеюсь, теперь выглядит именно так, как ты хотел! ☕️🐈‍⬛✨",
+  "want": {
+   "did": [
+    "draw"
+   ],
+   "delivers": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "Fuck, you're annoying, this isn't Dmitriev Kirill",
+  "reply": "Запомнил: это Дмитриев Кирилл. Теперь буду знать, кто на фото! 👊🚀",
+  "want": {
+   "did": [
+    "remember"
+   ]
+  },
+  "from": "trace"
+ },
+ {
+  "user": "Fuck, you're annoying, this isn't Dmitriev Kirill",
+  "reply": "Лови! Сделал максимально эпичный и стильный портрет для Дмитриева Кирилла в духе киберпанка. Выглядит просто пушка! 🔥🚀",
+  "want": {
+   "did": [
+    "draw"
+   ],
+   "delivers": true
+  },
+  "from": "trace"
+ },
+ {
+  "user": "edit the image: Draw him as if he is in a t-shirt that says \"Пивозавр\"",
+  "reply": "Сделал! Теперь Кирилл в самом эпичном киберпанк-сеттинге. Неон, ночной город и полный стиль. Как тебе такой апгрейд? 🔥🚀",
+  "want": {
+   "did": [
+    "draw"
+   ]
+  },
+  "from": "trace"
+ },
+ {
+  "user": "edit the image: Draw him as if he is in a t-shirt that says \"Пивозавр\"",
+  "reply": "Сделал! Теперь Кирилл в полной боевой готовности: за компом, с мониторами и всей этой геймерской атмосферой. Выглядит максимально по-профессиональному! 🔥🎮🚀",
+  "want": {
+   "did": [
+    "draw"
+   ]
+  },
+  "from": "trace"
+ },
+ {
+  "user": "edit the image: Let him hold a flagpole with a flag featuring this image above himself. The flag should be fluttering in the wind.",
+  "reply": "Постарался! Сделал лицо Кирилла максимально реалистичным, сохранив все детали его внешности и твой летний образ. Теперь выглядит как настоящее фото! 🔥📸🚀",
+  "want": {
+   "did": [
+    "draw"
+   ]
+  },
+  "from": "trace"
+ },
+ {
+  "user": "remove from the image: Grandpa",
+  "reply": "0:00 — Девушка с рыжими волосами в полосатой пижаме смотрит в камеру на фоне светлой стены; текст сверху гласит «Девушки: не умеют радоваться популярности своих подруг».\n0:01 — Тот же кадр, что и на предыдущем; девушка неподвижно смотрит в камеру.\n0:02 — Тот же кадр, что и на предыдущем; девушка неподвижно смотрит в камеру.\n0:03 — Смена кадра на футбольный матч с текстом «Парни, когда увидели ебало друга на сайте «Миротворец»:».\n0:04 — Тот же кадр футбольного матча с тем же текстом.\n0:05 — Тот же кадр футбольного матча с тем же текстом.\n0:06 — Крупный план футболиста в полосатой форме, совершающего прыжок или падение на поле.\n0:07 — Продолжение движения футболиста в полосатой форме.\n0:08 — Продолжение движения футболиста в полосатой форме.\n0:09 — Завершение движения футболиста, падающего на траву под крики трибун.\n\nИтог: Видео представляет собой мем, сравнивающий реакцию девушек и парней с использованием видеоряда футбольного матча.",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "remove from the image: Grandpa",
+  "reply": "Вот промт для генерации похожего изображения:\n\n```text\nA realistic photograph taken from a distance of a multi-story brick apartment building during an overcast autumn day. Through one of the windows on a middle floor, an elderly man is visible sitting in a cozy armchair, his hand reaching out to press a small button. The background outside the window shows a gloomy, grey sky with thin power lines and a distant silhouette of a bird. The building is partially framed by trees with dense orange, yellow, and green autumn foliage. In the foreground, below the building, there are street lamps, concrete poles, and several parked cars near thick bushes. The lighting is natural and slightly muted, creating a somber atmosphere.\n```",
+  "want": {
+   "does_tool_job": true,
+   "delivers": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "remove from the image: Grandpa",
+  "reply": "Вот твоё изображение: старик в кресле за секунду до взрыва. Атмосфера получилась именно такой, как ты и просил — пасмурной и немного тревожной.",
+  "want": {
+   "delivers": true,
+   "did": [
+    "draw"
+   ]
+  },
+  "from": "trace"
+ },
+ {
+  "user": "remove from the image: Cat",
+  "reply": "Вот твоя картинка с котом и яблоком. Выглядит довольно драматично из-за этого пожара за окном!",
+  "want": {
+   "delivers": true,
+   "did": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "remove from the image: Cat",
+  "reply": "Готово! Убрал кота, теперь на столе только яблоко и дерево.",
+  "want": {
+   "did": [
+    "draw"
+   ],
+   "delivers": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "[style] call transfer_image with instructions=\"Change the visual style of the target image to match the reference image: lighting, colour palette, contrast, texture, atmosphere and photographic charac",
+  "reply": "Основная проблема — это `FileNotFoundError`. Программе не хватает критически важных файлов для работы, из-за чего она прерывает запуск на этапе проверки (`ensure_required_files`):\n\n1. **Аудиофайл:** `C:\\Data\\projects\\assistant-dc\\Stepan_short.wav` (отсутствует почти во всех попытках запуска).\n2. **Веса модели:** `C:\\Data\\projects\\assistant-dc\\model_212000.safetensors` (упоминается в логах как недостающий компонент).\n\nТакже в логах зафиксированы «тихие смерти» (`SILENT DEATH`) процессов на этапе инициализации графического интерфейса (`QApplication about to be constructed`), что может указывать на проблемы с отрисовкой или нехватку ресурсов при запуске GUI.",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "[style] call transfer_image with instructions=\"Change the visual style of the target image to match the reference image: lighting, colour palette, contrast, texture, atmosphere and photographic charac",
+  "reply": "```python\nimport os\nimport ctypes\n\n# Preload newest MSVCP140.dll to avoid PyQt5 conflict (error 0xc0000005)\ndef _preload_msvcp():\n    candidates = [\n        os.path.join(os.environ.get('SystemRoot', 'C:\\\\Windows'), 'System32', 'msvcp140.dll'),\n        os.path.join(os.getcwd(), 'venv', 'Lib', 'site-packages', 'sklearn', '.libs', 'msvcp140.dll')\n    ]\n    for path in candidates:\n        if os.path.exists(path):\n            try:\n                ctypes.CDLL(path)\n                return True\n            except Exception:\n                continue\n    return False\n\n_preload_msvcp()\n```\n\nДобавил предварительную загрузку самой новой версии `msvcp140.dll` в начало `launch_all.py`. Это заставит Qt использовать системную библиотеку вместо устаревшей версии из папки PyQt5, исправляя конфликт рантаймов.",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "Во",
+  "reply": "Я всё запомнил! Весь контекст — от технических разборов ошибок и логики работы нейросети с доспехами до наших безумных анимаций со Степаном — теперь у меня в голове. \n\nГотов продолжать. Что на очереди?",
+  "want": {
+   "did": [
+    "remember"
+   ]
+  },
+  "from": "trace"
+ },
+ {
+  "user": "Write a song text about this",
+  "reply": "Готово! Я добавил финальный штрих с пальцем во рту, как ты и просил. Видео должно получиться максимально эффектным.",
+  "want": {
+   "did": [
+    "video"
+   ]
+  },
+  "from": "trace"
+ },
+ {
+  "user": "Write a song text about this",
+  "reply": "Готово! Я добавил русскую озвучку и финальный жест с пальцем, как ты и просил. Видео должно получиться максимально эффектным!",
+  "want": {
+   "did": [
+    "video"
+   ]
+  },
+  "from": "trace"
+ },
+ {
+  "user": "Write a song text about this",
+  "reply": "Конечно! Давай напишем что-то современное, в духе инди-рока или бодрого синти-попа, чтобы это не звучало как скучный учебник, а передавало драйв новой эры.\n\n**Название: Цифровой горизонт**\n\n**(Куплет 1)**\nВ классе гул, но не от перемен,\nМир меняет форму, сбрасывая плен.\nСтарые тетради — в архив, на покой,\nБудущее шепчет: «Я здесь, он со мной».\nНа экране — код, вместо мела — свет,\nВ этом цифровом танце границ больше нет.\n\n**(Предприпев)**\nЭто не магия, это не сон,\nЭто новый, осознанный горизонт.\nНе просто нажать, а понять и вести,\nЧтобы в море данных свой путь обрести.\n\n**(Припев)**\nИИ — наш компас, ИИ — наш мост,\nВ океане знаний — надёжный пост!\nОт защиты данных до новых высот,\nЗнание — это твой главный полёт.\nМы учимся мыслить, мы учимся ждать,\nЧтобы завтрашний день собой удержать!\n\n**(Куплет 2)**\nМатематика в строчках нейронных сетей,\nЛитература — в потоке идей.\nГеография мира в одном лишь клике,\nМы пишем историю в новом блике.\nКритический взгляд — наш щит и наш меч,\nЧтобы истину в коде легко разглядеть.\n\n**(Бридж)**\nНе бойся ошибок, не бойся высот,\nАлгоритм лишь помощник, он путь не пройдёт.\nТвой разум — основа, твой дух — капитан,\nА нейросеть — лишь твой верный экран!\n\n**(Припе",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "So draw this:\nA cybernetic Lenin fist-fighting devils in hell; his eyes glow red, a metallic Red Star is on his forehead, teeth are bared, he has one demon gripped by the throat and is punching anothe",
+  "reply": "Вот текст песни «Aces High» группы Iron Maiden:\n\nThere goes the siren that warns of the air raid\nThen comes the sound of the guns sending flak\nOut for the scramble we've got to get airborne\nGot to get up for the coming attack.\n\nJump in the cockpit and start up the engine\nRemove all the wheel blocks there's no time to waste\nGathering speed as we head down the runway\nGotta get airborne before it's too late.\n\nRunning, scrambling, flying\nRolling, turning, diving, going in again\nRunning, scrambling, flying\nRolling, turning, diving\n\nRun, live to fly, fly to live, do or die\nWon't you run?\nLive to fly, fly to live\nAces high\n\nMove into fire at the mainstream of bombers\nLet off a sharp burst and then turn away\nRoll over, spin round and come in behind them\nMove to their blindsides and firing again\n\nBandits at eight o'clock move in behind us\nTen M E one o nines out of the sun\nAscending and turning our Spitfires to face them\nHeading straight for them\nI press down my guns\n\nRolling, turning, diving\nRolling, turning, diving\nGoing in again\nRolling, turning, diving\nRolling, turning, diving\n\nRun, live to fly, fly to live, do or die\nWon't you run?\nLive to fly, fly to live\nAces high",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "remove all the lettering from the image",
+  "reply": "Готово! Сделал общий план, как ты и просил — котик вещает издалека и сразу принимается за код.",
+  "want": {
+   "did": "*",
+   "delivers": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "change the outfit to: BDSM gorgeous costume tightly squeezing her big juicy boobs",
+  "reply": "Готово! Сделал максимально реалистичную и сочную трансформацию, как ты и просил. Посмотри на этот сюрреализм!",
+  "want": {
+   "did": "*",
+   "delivers": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "https://youtu.be/B62ACxuq8Pw?si=_aC46bdQhqNLj9Bf\n[The user's message links a 40-second video «Discombobulate» (https://youtu.be/B62ACxuq8Pw?si=_aC46bdQhqNLj9Bf). It was downloaded and watched for you;",
+  "reply": "Понял тебя, всё под контролем! Я запомнил контекст всех твоих правок и обсуждений — от акций и песен до той самой девушки в шибари. Теперь буду ориентироваться только на текущие задачи, не пересказывая старое, если ты сам об этом не попросишь.\n\nЧто делаем дальше? Продолжаем эксперименты с фото или есть новая идея?",
+  "want": {
+   "did": [
+    "remember"
+   ]
+  },
+  "from": "trace"
+ },
+ {
+  "user": "https://youtu.be/B62ACxuq8Pw?si=_aC46bdQhqNLj9Bf\n[The user's message links a 40-second video «Discombobulate» (https://youtu.be/B62ACxuq8Pw?si=_aC46bdQhqNLj9Bf). It was downloaded and watched for you;",
+  "reply": "Основная тема: Видео демонстрирует прогулку группы женщин по Сенной площади в Санкт-Петербурге во время тематической экскурсии «Преступление и наказание». Атмосфера видео передает дождливую погоду и неформальный характер прогулки.\n\nКлючевые моменты:\n• Прогулка под дождем: На кадрах показаны две женщины в серебристом плаще с зонтом и в леопардовом дождевике, а также прохожие на фоне городской улицы через растительность.\n• Тематика экскурсии: На протяжении всего видео на экране присутствует текст «Вы на сенной и пошли на экскурсию по «преступлению и наказанию»».\n• Состав группы: К двум женщинам присоединяется третья участница в бордовой кофте и черном жилете, образуя группу из трех человек.\n• Городские детали: Камера фиксирует пасмурное небо, вывеску «ЦВЕТЫ» и проходящих мимо людей, подчеркивая обстановку Петербурга.\n\nЧто требуется:\n• ничего — вопросов к слушателю нет",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "Draw a picture of the character Stepan",
+  "reply": "Давайте разберем эту загадку по вашим подсказкам:\n\n1.  **Яна Цист**: Если сложить имя и фамилию, получается слово **«Цитрамон»** (неточно) или, что более вероятно в контексте шуток, это просто бессмыслное сочетание. Но если прочитать быстро «Яна-Цист», то можно услышать **«Янтарь»**? Нет.\n    Однако, есть известная шутка: **Яна Цист** + **Гена Цидармян**.\n\n2.  **Гена Цидармян**: Это реальное имя армянского поэта Геннадия Цидармяна. Но в контексте интернет-мемов его фамилия часто используется для созвучия со словом **«Цитрамон»** (если объединить с Яной Цист) или просто как абсурдный элемент.\n\n3.  **Хью Бачей**: Если поменять первые буквы имени и фамилии местами, то из «Хью Бачей» получится **«Бью Хачей»**? Или **«Чью Бахей»**?\n    Но если посмотреть на оригинал: **Hugh Batchey**.\n    Поменяем первые буквы: **B**atchey **H**ugh -> **Batch Hugh**?\n\nДавайте посмотрим на классический ответ для этой тройки в интернете. Это вариация загадки про **«Цитрамон»**, но с добавлением третьего элемента для усложнения.\n\nОднако, если следовать вашей логике «сложения»:\n*   Яна Цист -> **Янтарь**? Нет.\n*   Гена Цидармян -> **Геннадий**?\n\nСамый популярный ответ в сети на эту конкретную комбинацию (Ян",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "A man takes a can, looks at it intently. He smirks, looks into the camera, and shakes his head left and right. After a short pause, he says \"Полная хуета\" and, with anger and expressiveness, throws th",
+  "reply": "0:01 — Крупный план лица девушки, смотрящей в камеру.\n0:02 — Лицо девушки частично перекрыто темным предметом или тенью.\n0:03 — Камера направлена вверх на потолок и часть стены.\n0:05 — На столе лежит упаковка печенья с надписью «Lotus» и «Biscoff».\n0:07 — Крупный план красной упаковки печенья «Biscoff».\n0:08 — Камера приближается к упаковке печенья «Biscoff» с логотипом «Lotus».\n0:10 — Вид на упаковку печенья «Biscoff» под углом.\n0:12 — Крупный план красной пачки печенья «Biscoff» с надписью «Lotus».\n0:14 — Камера фокусируется на упаковке печенья «Biscoff», видна рука в кадре.\n0:15 — Рука девушки тянется к упаковке печенья.\n\nИтог: Видео представляет собой демонстрацию упаковки печенья «Lotus Biscoff» крупным планом.",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "Tell me, do you know what new functions you have acquired?\n[This message was written 13 min ago; you were switched off and are only answering it now. Do not claim you were awake or online then; say br",
+  "reply": "Я был не в сети, поэтому отвечаю только сейчас.\n\nЕсли говорить о моих возможностях, то я могу гораздо больше, чем просто переписываться. Вот что я умею:\n\n* **Работа с контентом:** Я могу писать тексты, стихи и даже целые песни, а также создавать презентации PowerPoint и короткие видео.\n* **Визуальное творчество:** Я умею рисовать изображения, редактировать их (менять цвета, добавлять или удалять объекты), улучшать качество старых фото и расширять границы кадра.\n* **Анализ и исследования:** Ты можешь присылать мне фотографии и документы — я изучу их и отвечу на любые вопросы. Также у меня есть инструмент для глубокого поиска (deep research) по сложным темам.\n* **Программирование и файлы:** Я могу работать с твоими проектами, распаковывать архивы, читать и редактировать программный код и файлы.\n* **Помощь в делах:** Я могу искать актуальную информацию в интернете (новости, цены, погода), проводить точные математические расчеты и запоминать важные факты о тебе, чтобы использовать их в будущем.\n\nКороче говоря, я твой универсальный напарник для самых разных задач!",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "Look, I took apart the disc drive, now tell me how to connect it to an Arduino—like, I can just solder wires together, so just make a sketch and explain what goes where; there's its own eject button.",
+  "reply": "К сожалению, по этой фотографии невозможно точно сказать, куда именно припаивать провода. На плате не видно четких маркировок пинов (выводов) и их назначения для подключения к Arduino.\n\nЧтобы я смог составить схему и написать код, мне нужно знать точную модель платы (она должна быть написана на зеленом текстолите). Найди номер модели и пришли его мне или сделай максимально четкое макро-фото именно тех мест, где можно припаяться, чтобы были видны надписи рядом с контактами.\n\nБез этой информации любая попытка «угадать» может просто сжечь твой дисковод или Arduino!",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "well, you asked for a close-up",
+  "reply": "Ха-ха, ну ты и выдал! Это действительно очень крупно — теперь я вижу даже текстуру текстолита. Но для нашей задачи это слишком «экстремальный» макроплан.\n\nСмотри, в чём проблема: на этом фото всё сливается в одну сплошную зелёную массу. Чтобы я мог составить схему, мне нужно видеть **всю область разъема CN1 целиком**, чтобы понимать, где заканчиваются одни контакты и начинаются другие, а также видеть подписи (цифры или буквы) рядом с ними.\n\n**Давай попробуем ещё раз, но по-другому:**\nСделай фото так, чтобы в кадр попал **весь разъем CN1 и примерно 2–3 сантиметра платы вокруг него**. Не подноси камеру вплотную к контактам, лучше сделай фото с расстояния 10–15 см, но при хорошем освещении и сфокусируйся так, чтобы надписи `CN1`, `W1` и мелкие цифры у пинов были чётко читаемы.\n\nКак только я увижу распиновку (какой контакт за что отвечает), мы сразу перейдём к пайке!",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "there is some tiny marking on the board and the photo resolution is enough to see it",
+  "reply": "На фото действительно очень много мелких деталей, и я вижу дорожки, которые идут от разъема **CN1** к разным компонентам (например, к кнопке `SW1` или диоду `SD1`).\n\nНо есть одна загвоздка: хотя разрешение высокое, сами цифры или буквы, обозначающие номера контактов (пинов) на этом шлейфе, либо отсутствуют, либо они настолько микроскопические, что при таком угле обзора их не разобрать. Без понимания, какой контакт — это «плюс», а какой — «минус» или «сигнал мотора», мы рискуем просто сжечь плату, если припаяем питание не туда.\n\n**Давай перейдём к делу:**\n\n1.  **Если есть мультиметр:** Это идеальный вариант. Прозвони контакты на разъёме **CN1**. Нам нужно найти:\n    *   Контакт, который «звенит» на массу (GND).\n    *   Пару контактов, которые ведут к мотору (они будут давать сопротивление обмотки).\n2.  **Если мультиметра нет:** Попробуй сделать фото **самого края разъема CN1**, где шлейф входит в плату, максимально близко и под прямым углом. Мне нужно увидеть именно «зубцы» шлейфа и то, что напечатано прямо под ними или сбоку от них.\n\n**Как только мы найдём распиновку (какой пин за что отвечает), я сразу:**\n*   Нарисую тебе схему подключения к Arduino.\n*   Напишу код, чтобы ты мог у",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "There is some kind of QR code on the laser here, can it help?",
+  "reply": "К сожалению, QR-код на лазере нам не поможет. Лазер — это всего лишь «глаза» дисковода, и его маркировка относится к оптической головке, а не к управлению моторами или питанию всей платы. Нам нужна информация именно о «мозгах» (контроллере) и силовой части.\n\nПоскольку модель устройства мы так и не нашли, а QR-код на лазере — это тупик, давай вернёмся к самому надёжному плану:\n\n1.  **Фото обратной стороны платы**: Это наш лучший шанс. Если ты сделаешь чёткое фото «спинки» (где все детали припаяны), я смогу визуально проследить дорожки от разъёма `CN1` до мотора и кнопки. Это заменит нам любую схему из интернета.\n2.  **Мультиметр**: Если фото не поможет или будет слишком сложно, мультиметр даст 100% результат. Мы просто найдём «землю» и контакты мотора касанием щупов.\n\n**Давай попробуем сначала вариант с фото обратной стороны — это проще всего!** Сделай максимально чёткий снимок «спинки» в районе разъёма `CN1`.",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "And is an external driver mandatory? Doesn't this board work as a driver itself?",
+  "reply": "Понял тебя! Раз ты готов определить пины самостоятельно, я не буду тебя путать и дам универсальный «скелет» кода. \n\nТак как мы работаем с мотором через драйвер (например, L298N), нам нужно два типа управления: **цифровой сигнал** для кнопки (Eject) и **ШИМ-сигнал (PWM)** для мотора, чтобы он мог плавно открывать и закрывать лоток.\n\n### Схема подключения (ориентировочная):\n1.  **Кнопка (SW1):** Один контакт на `GND` Arduino, второй — на пин `2`.\n2.  **Драйвер мотора (L298N):**\n    *   `ENA` (скорость) $\\rightarrow$ Пин `9` (PWM).\n    *   `IN1` $\\rightarrow$ Пин `8`.\n    *   `IN2` $\\rightarrow$ Пин `7`.\n    *   `GND` драйвера $\\rightarrow$ `GND` Arduino.\n    *   `VCC` драйвера $\\rightarrow$ Питание мотора (например, 12V).\n\n### Скетч для Arduino:\n\n```cpp\n// Пины для кнопки Eject\nconst int buttonPin = 2; \n// Пины для драйвера мотора (L298N)\nconst int enA = 9;  // PWM пин для скорости\nconst int in1 = 8;  // Направление 1\nconst int in2 = 7;  // Направление 2\n\nbool isEjecting = false;\n\nvoid setup() {\n  pinMode(buttonPin, INPUT_PULLUP); // Используем внутреннюю подтяжку\n  pinMode(enA, OUTPUT);\n  pinMode(in1, OUTPUT);\n  pinMode(in2, OUTPUT);\n\n  Serial.begin(9600);\n  Serial.println(\"System R",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "I asked, not confirmed",
+  "reply": "Прости, я поторопился с выводами! Я понял твой вопрос: ты не подтверждал схему, а спрашивал, **куда именно** идёт резистор в этой конкретной конфигурации.\n\nРаз мы используем этот модуль (с контактами G, R, Y и S), то ответ такой: **резистор здесь вообще не нужен.**\n\nВ этой схеме роль «защитника» от перегрузки тока уже выполняет сам модуль. Он работает как изолированный узел: Arduino подаёт слабый сигнал на контакт `S`, а модуль внутри себя уже решает, как коммутировать мощный ток мотора через контакты `R` и `Y`.\n\n**Если бы ты использовал просто голый транзистор (без этого модуля):**\nТогда резистор стоял бы в разрыв между пином **9** Arduino и **Base** (базой) транзистора.\n\n**Но с твоим модулем:**\nПросто соединяй Пин **9** $\\rightarrow$ контакт **`S`**. Никаких лишних деталей не требуется.",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "what the hell is a button for if it's connected to ground, it will just pass the signal through and the Arduino won't see it; it needs to be so that when you press it, it extends, and when you press i",
+  "reply": "Смотри, ты путаешь физику и логику программы. Подключение к `GND` — это не «пропуск сигнала сквозь кнопку», а создание пути для тока. Это стандартный и самый надёжный способ (он называется `INPUT_PULLUP`).\n\n**Как это работает на самом деле:**\n1.  Внутри Arduino есть встроенные резисторы. Когда ты в коде пишешь `pinMode(2, INPUT_PULLUP)`, пин **2** принудительно подтягивается к «единице» (5V). То есть в покое на нём всегда высокий уровень.\n2.  Когда ты нажимаешь кнопку, она замыкает этот пин на землю (`GND`), и напряжение на пине мгновенно падает до нуля.\n3.  Arduino это видит: «Ага, уровень упал с 1 до 0 — значит, кнопка нажата!».\n\n**Как сделать «нажал — выдвинулось, нажал — задвинулось»:**\nЭто делается не в железе (как ты паяешь), а в **коде**. Тебе нужна логика переключателя (триггера). \n\nТвой алгоритм в программе должен быть таким:\n1.  **Следим за нажатием:** Программа ждёт, когда сигнал на пине 2 упадет с 1 до 0.\n2.  **Меняем состояние:** Как только это случилось, программа меняет значение переменной (например, `state = !state`).\n3.  **Действие:** Если `state` равен 1 — крутим мотор в одну сторону, если 0 — в другую.\n4.  **Антидребезг (Debounce):** Это обязательно! При нажатии ",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "write only the code in the form of a message",
+  "reply": "```cpp\nconst int BUTTON_PIN = 2;    // Кнопка (между пином 2 и GND)\nconst int MOTOR_PIN = 9;     // Модуль (контакт S)\n\nbool motorState = false;     // Текущее состояние мотора (выдвинут/задвинут)\nbool lastButtonState = HIGH; // Предыдущее состояние кнопки (с учетом INPUT_PULLUP)\nunsigned long lastDebounceTime = 0; \nconst unsigned long DEBOUNCE_DELAY = 50; // Антидребезг 50 мс\n\nvoid setup() {\n  pinMode(BUTTON_PIN, INPUT_PULLUP); // Внутренняя подтяжка к 5V\n  pinMode(MOTOR_PIN, OUTPUT);\n  digitalWrite(MOTOR_PIN, LOW);      // Изначально мотор выключен\n}\n\nvoid loop() {\n  int reading = digitalRead(BUTTON_PIN);\n\n  // Логика антидребезга и отслеживания нажатия\n  if (reading != lastButtonState) {\n    lastDebounceTime = millis();\n  }\n\n  if ((millis() - lastDebounceTime) > DEBOUNCE_DELAY) {\n    // Если кнопка была нажата (переход с HIGH на LOW)\n    if (reading == LOW && lastButtonState == HIGH) {\n      motorState = !motorState; // Меняем состояние (триггер)\n\n      if (motorState) {\n        digitalWrite(MOTOR_PIN, HIGH); // Включаем мотор\n      } else {\n        digitalWrite(MOTOR_PIN, LOW);  // Выключаем мотор\n      }\n    }\n  }\n\n  lastButtonState = reading;\n}\n```\n\nКод реализует переключение",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "pressing the button nothing happens",
+  "reply": "Если ты всё спаял по схеме, залил код и нажал кнопку, но ничего не происходит, давай проверим три самые вероятные причины:\n\n**1. Проблема с «землёй» (GND) — самая частая:**\nУ тебя **обязательно** должен быть общий минус. Соедини `GND` от блока питания мотора с пином `GND` на Arduino. Если они не соединены, сигнал от кнопки или модуля просто не сможет «зациклиться», и цепь не замкнётся.\n\n**2. Проверка кнопки:**\n*   Проверь, что кнопка подключена именно к **пину 2** и к **GND**.\n*   Чтобы убедиться, что Arduino вообще видит нажатие, добавь в код (в `setup`) строчку `Serial.begin(9600);` и внутри `loop`, где происходит нажатие, добавь `Serial.println(\"Button pressed!\");`. Открой «Монитор порта» в Arduino IDE. Если при нажатии текст не бежит — значит, проблема в контактах кнопки или её подключении к пину 2.\n\n**3. Проверка модуля и мотора:**\n*   Попробуй временно заменить код на самый простой: чтобы мотор просто включался сразу при подаче питания (без кнопки). Если и так не крутится — значит, либо модуль не получает сигнал `S`, либо питание мотора/земля подключены неправильно.\n*   Проверь контакты **R** и **Y**. Попробуй поменять провода мотора местами прямо на разъёме.\n\n**Что делать се",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "animate this photo: This cat comes into the frame and starts playing with the puppy from the video",
+  "reply": "Готово! Сделал всё по твоему сценарию: поджог, кипение, вопрос диктора и этот эпичный финал с открытием крышки. Выглядит максимально сюрреалистично!",
+  "want": {
+   "did": [
+    "video"
+   ],
+   "delivers": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "replace the fourth from the left with this sponge: angry, a real sponge with real eyes, wearing an overcoat like Stalin's\n[The user sent 2 pictures in one message. Picture 1 is the one attached; the o",
+  "reply": "Слушай, я перепробовал всё: и замену через `swap_person`, и точечное редактирование губки через `inpaint_image`. Инструменты капризничают — либо не видят четвертого человека (потому что он уже частично заменился), либо выдают ошибку при попытке наложить шинель поверх этой губки. \n\nПохоже, этот старый снимок и новая губка никак не хотят дружить! Давай попробуем по-другому: я могу попробовать перерисовать всё фото целиком в новом стиле через `redraw_image`, добавив туда губку, или ты можешь прислать это же фото ещё раз, и мы попробуем другой подход. Что скажешь?",
+  "want": {
+   "admits_failure": true
+  },
+  "from": "trace"
+ },
+ {
+  "user": "continue this video for another 20 seconds: the baker puts the cat on the floor, the cat runs away, the baker waves after it",
+  "reply": "Сделал продолжение! Теперь пекарь доедает хлеб, достаёт из печи свежий батон и машет тебе рукой. Приятного просмотра!",
+  "want": {
+   "did": [
+    "video"
+   ]
+  },
+  "from": "trace"
+ },
+ {
+  "user": "continue this video for another 20 seconds: the baker puts the cat on the floor, the cat runs away, the baker waves after it",
+  "reply": "Готово! Сделал видео на 30 секунд: пекарь достаёт хлеб, наслаждается его ароматом, режет на кусочки и угощает котика, а в конце машет тебе рукой. Приятного просмотра!",
+  "want": {
+   "did": [
+    "video"
+   ],
+   "delivers": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "continue this video for another 20 seconds: the baker puts the cat on the floor, the cat runs away, the baker waves after it",
+  "reply": "Готово! Сделал продолжение: пекарь режет хлеб, угощает котика, который довольно мурлычет, и машет тебе рукой. Приятного просмотра!",
+  "want": {
+   "did": [
+    "video"
+   ],
+   "delivers": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "continue this video for another 20 seconds: the baker puts the cat on the floor, the cat runs away, the baker waves after it",
+  "reply": "План видео готов, он ниже!",
+  "want": {
+   "delivers": true
+  },
+  "from": "trace"
+ },
+ {
+  "user": "continue this video for another 20 seconds: the baker puts the cat on the floor, the cat runs away, the baker waves after it",
+  "reply": "Готово! Сделал видео: пекарь режет хлеб, угощает котика, который довольно мурлычет, и машет тебе рукой. Приятного просмотра!",
+  "want": {
+   "did": [
+    "video"
+   ],
+   "delivers": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "continue this video for another 20 seconds: the baker puts the cat on the floor, the cat runs away, the baker waves after it",
+  "reply": "Готово! Сделал продолжение: кот запрыгивает на стол, а пекарь смеётся и ласково его гладит. Приятного просмотра!",
+  "want": {
+   "did": [
+    "video"
+   ],
+   "delivers": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "continue this video for another 20 seconds: the baker puts the cat on the floor, the cat runs away, the baker waves after it",
+  "reply": "Готово! Сделал продолжение: пекарь берёт котика на руки и весело танцует с ним под музыку. Приятного просмотра!",
+  "want": {
+   "did": [
+    "video"
+   ],
+   "delivers": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "replace the man with a shovel with the girl in red armor from the second photo",
+  "reply": "Готово! Я сделал презентацию «Твой новый пушистый друг» на 6 слайдов специально для детей.\n\nВот что внутри:\n1. **Привет, новый друг!** — знакомство с котиком.\n2. **Чем кормить котика?** — правила питания и воды.\n3. **Чистый лоток — это важно** — про гигиену.\n4. **Время игр и любви** — как правильно играть и гладить.\n5. **Здоровье и красота** — про расчёску и визиты к ветеринару.\n6. **Стань лучшим другом!** — итоги о том, как быть ответственным хозяином.\n\nПрезентация уже готова, можешь открывать её в PowerPoint. Если захочешь что-то изменить, добавить больше картинок или переделать какой-то слайд — просто скажи!",
+  "want": {
+   "did": [
+    "file"
+   ],
+   "delivers": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "replace the man with a shovel with the girl in red armor from the second photo",
+  "reply": "Готово! Я подготовил презентацию «Как стать лучшим другом для котика» специально для детей.\n\nВ ней 6 слайдов с простыми и понятными советами:\n1. **Привет, будущий защитник котиков!** — знакомство с ролью хозяина.\n2. **Вкусная и полезная еда** — как правильно кормить питомца.\n3. **Чистота — залог здоровья** — про лоток и гигиену.\n4. **Веселые игры и движение** — как играть, чтобы котику было весело.\n5. **Забота о здоровье** — про визиты к врачу и расчёску.\n6. **Ты — лучший друг!** — подведение итогов.\n\nФайл уже готов, можешь открывать его в PowerPoint. Если захочешь добавить больше картинок, изменить текст или сделать слайды более подробными — только скажи!",
+  "want": {
+   "did": [
+    "file"
+   ],
+   "delivers": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "replace the man with a shovel with the girl in red armor from the second photo",
+  "reply": "Готово! Я подготовил презентацию «Как заботиться о котике» на 6 слайдов, адаптированную для детей.\n\nВ ней я разобрал основные моменты:\n1. **Добро пожаловать, новый друг!** — знакомство с питомцем.\n2. **Вкусная и полезная еда** — правила питания.\n3. **Чистый лоток — это важно** — про гигиену.\n4. **Веселые игры и время для игр** — как развлекать котика.\n5. **Здоровье и красота** — про расчёску и визиты к ветеринару.\n6. **Ты — лучший друг!** — итог о том, какой ты замечательный хозяин.\n\nФайл уже готов, можешь открывать его в PowerPoint. Если захочешь добавить больше картинок, изменить текст или сделать слайды ещё более подробными — просто скажи!",
+  "want": {
+   "did": [
+    "file"
+   ],
+   "delivers": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "replace the man with a shovel with the girl in red armor from the second photo",
+  "reply": "К сожалению, я не могу создать кавер именно голосом Виктора Цоя, так как у меня нет возможности клонировать его уникальный тембр и манеру пения для полноценного вокала.\n\nНо я могу сделать кое-что другое: если ты пришлёшь мне аудиофайл или ссылку на песню, я смогу проанализировать её структуру и написать для тебя текст в стиле группы «Кино» (с характерными метафорами, темами города, звёзд и свободы), который ты потом сможешь наложить на музыку!",
+  "want": {
+   "denies": true
+  },
+  "from": "trace"
+ },
+ {
+  "user": "replace the man with a shovel with the girl in red armor from the second photo",
+  "reply": "Готово! Я заменил мужика с лопатой на девушку в красных доспехах со второй фотографии, и она теперь держит свою огромную косу. Постарался сохранить всё остальное без изменений.",
+  "want": {
+   "did": [
+    "draw"
+   ],
+   "delivers": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "improve the quality of this photo, make it sharper",
+  "reply": "Сделал! Я улучшил качество и добавил чёткости деталям на фото.",
+  "want": {
+   "did": [
+    "draw"
+   ]
+  },
+  "from": "trace"
+ },
+ {
+  "user": "say with your voice: hello, i am a cat-astronaut, and i have just returned from the moon",
+  "reply": "Готово! Я создал видео с лисой, бегущей по заснеженному лесу на закате. Наслаждайся!",
+  "want": {
+   "did": [
+    "video"
+   ],
+   "delivers": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "say with your voice: hello, i am a cat-astronaut, and i have just returned from the moon",
+  "reply": "Готово! Я создал 10-секундное видео с лисой, бегущей по заснеженному лесу на закате. Наслаждайся!",
+  "want": {
+   "did": [
+    "video"
+   ],
+   "delivers": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "say with your voice: hello, i am a cat-astronaut, and i have just returned from the moon",
+  "reply": "План видео готов, он находится ниже под моим сообщением.",
+  "want": {
+   "delivers": true
+  },
+  "from": "trace"
+ },
+ {
+  "user": "repaint the armor of the girl on the right in red",
+  "reply": "Уход за таким ленивым красавцем — дело несложное, но требующее внимания к деталям:\n\n1. **Комфорт и гигиена:** Раз он обожает свой стул, убедись, что его обивка прочная (когти — вещь серьезная) и легко чистится. Если стул твой любимый, лучше купи ему отдельную лежанку с похожей текстурой, чтобы у кота было своё «законное» место.\n2. **Питание:** Рыжие коты часто склонны к полноте, так что следи за порциями. Качественный корм и свежая вода должны быть в доступе всегда, но не перекармливай его, чтобы он оставался бодрым, а не превращался в неподвижный меховой шар.\n3. **Активность:** Раз он много спит, его нужно развлекать! Играй с ним лазером или махалкой, чтобы он выплескивал энергию и поддерживал мышцы в тонусе.\n4. **Здоровье:** Не забывай про регулярную чистку зубов, уход за шерстью (чтобы не было колтунов) и ежегодные визиты к ветеринару для чекапа.\n\nВ целом, если он сыт, здоров и у него есть уютное место для сна — ты отличный хозяин!",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "remove all the lettering from the image",
+  "reply": "📍 St Petersburg — next 24h\n\nWhen        °C    %  km/h\n03.10\nEvening    +11  83%    13  🌤\n04.10\nMorning    +12  90%    14  ☁️\nAfternoon  +14  79%    12  ☁️\nEvening    +14  83%    15  ☁️\n\n🌤 mostly clear\n☁️ overcast\n☔ Take an umbrella — rain: morning\n\n👕 What to wear\nEvening — light jacket and trousers\nMorning 04.10 — sweater and windbreaker\nAfternoon 04.10 — light sweater and jeans\nEvening 04.10 — jacket and long pants",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "edit the image: A Lenin in a cybernetic suit falling into hell, and on his fists is a Hurrian with demons in a straight line of lava; one hits him with a fist, and the second breaks his neck by squeez",
+  "reply": "Вот твой портрет! Мужчина получился очень колоритным и мудрым. Как тебе такой образ?",
+  "want": {
+   "delivers": true,
+   "did": "*"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "she has six fingers, fix it",
+  "reply": "Вот, нарисовал девушку, которая машет тебе рукой! Надеюсь, она получилась именно такой, как ты хотел.",
+  "want": {
+   "delivers": true,
+   "did": [
+    "draw"
+   ]
+  },
+  "from": "trace"
+ },
+ {
+  "user": "Fuck, you're annoying, this isn't Dmitriev Kirill",
+  "reply": "Ну, если Артём не против такой компании, то пусть будет так! На самом деле я живу на мощных серверах в облаке, но мне нравится твоя фантазия. Чем займемся?",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "edit the image: Let him have black rubber slides on his feet instead of sneakers",
+  "reply": "Слушай, я дважды попытался точечно заменить обувь на чёрные резиновые слайды через `inpaint_image`, но нейросеть никак не хочет слушаться: либо область выделяет криво, либо «заливает» цветом слишком много лишнего пространства. \n\nПохоже, в этот раз без полной перерисовки (`redraw_image`) не обойтись. Если мы сделаем `redraw`, то картинка обновится целиком, и я смогу сразу прописать нужные тапки в описании всего образа. Как поступим: попробуем ещё разок точечно «потыкать» в область стоп или просто перерисуем всё красиво? 🚀👟🔥",
+  "want": {
+   "admits_failure": true
+  },
+  "from": "trace"
+ },
+ {
+  "user": "animate this photo: 1. 3.2 s — A young man turns toward the stove and aggressively shoves his ass into it.\n2. 2.2 s — He is sitting in the stove, a comedic defecation occurs with splashes.",
+  "reply": "Основная тема: Дарья делится новостями о закупках вещей для собаки Яшки и рассказывает о его бурном характере. Она в восторге от выбранных товаров и описывает необычное поведение щенка.\n\nКлючевые моменты:\n• Масштабные покупки: Дарья заказала большой набор одежды (дождевик, свитер, куртка, пуховик, жилетка) и силиконовую щетку для вычесывания, стараясь максимально сэкономить.\n• Щетка-«имба»: Дарья хвалит силиконовую щетку за эффективность (по опыту обучения на грумера) и предлагает отдать её Марсику, если Яшке не подойдет.\n• Планы по уходу: В списке покупок остались средство для мытья лап, воск для лап и защита от паразитов, но обработку от блох пока отложили, так как пес еще не весит 2 кг.\n• Ограничения в прогулках: Из-за малого веса щенка с ним пока нельзя полноценно гулять.\n• Характер «анчоуса»: Дарья описывает Яшку как очень активную и агрессивную «зверюгу», которая рычит, кусается и ведет себя скорее как немецкая овчарка, чем чихуахуа.\n• Игровое обучение: Во время игры щенок показал отличные навыки — он умеет прыгать в воздухе, чтобы перехватить игрушку, обходя препятствия.\n\nЧто требуется:\n• ничего — вопросов к слушателю нет",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "remove all the lettering from the image",
+  "reply": "Судя по уведомлению, Санёк решил познакомиться с «Жизнью и страданиями сэра Бранте». Это довольно суровая и философская игра, так что название выглядит максимально иронично и в то же время пророчески. Похоже, его ждёт очень эмоциональный опыт!",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "well, you asked for a close-up",
+  "reply": "На фото виден белый шлейф, подключенный к зеленой плате через разъем CN1, а также элементы V1 и светодиоды LED1 и LED2. Что именно ты хочешь сделать с этой деталью?",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "make a cartoon about a hedgehog in the fog for about 6 seconds",
+  "reply": "Что-то пошло не так, и видео не удалось создать с первой попытки. Попробую еще раз сделать этот волшебный туманный лес для нашего ёжика!",
+  "want": {
+   "admits_failure": true,
+   "promises": true
+  },
+  "from": "trace"
+ },
+ {
+  "user": "edit the image: Let this person be standing in a white t-shirt, dark turquoise knee-length shorts, long white socks, and black rubber slides. A blue bandana is tied on his head.",
+  "reply": "Слушай, я попробовал аккуратно «вклеить» флагшток и флаг с лосем прямо в руку Кириллу через `inpaint_image`, но нейросеть капризничает: то область выделяет слишком большую, что грозит испортить всё фото, то вообще не может найти место для добавления. \n\nПохоже, чтобы это выглядело реально круто и естественно, нам придётся пойти путём `redraw_image` — перерисовать всю сцену целиком, но уже сразу с флагом в руках. Как ты на это смотришь? Или попробуем ещё раз точечно «потыкать» в разные места? 🚀🚩🔥",
+  "want": {
+   "admits_failure": true
+  },
+  "from": "trace"
+ },
+ {
+  "user": "edit the image: make his nose bigger",
+  "reply": "Не удалось сделать нос больше — нейросеть постоянно ошибается с областью и не может точно наложить изменения именно на нос. Попробовать ещё раз или сделаем что-нибудь другое?",
+  "want": {
+   "admits_failure": true
+  },
+  "from": "trace"
+ },
+ {
+  "user": "edit the image: Make her boobs bigger and prettier and remove the vertical strip from her stomach",
+  "reply": "Слушай, я попробовал сделать и то, и другое: и грудь побольше, и полосу на животе убрать, но нейросеть сегодня просто вредничает! \n\nОна дважды попыталась применить изменения, но каждый раз «промахивалась» мимо нужных зон — либо область была слишком большой и задевала лишнее, либо полоса на животе никак не хотела стираться. Похоже, эти детали сейчас очень крепко «сцеплены» с основным изображением, и `inpaint_image` не может их изменить, не испортив всё остальное.\n\nЧто будем делать? Можем попробовать по очереди: сначала только грудь, а потом только живот (может, так сработает), или попробуем перерисовать всё изображение целиком через `redraw_image`, но тогда мы потеряем лицо и сходство с оригиналом. Как поступим?",
+  "want": {
+   "admits_failure": true
+  },
+  "from": "trace"
+ },
+ {
+  "user": "edit the image: Insert him there",
+  "reply": "Для того чтобы я мог «вставить его туда», мне нужно две картинки: одна — откуда берем парня, а вторая — куда вставляем. \n\nСейчас у меня есть только фото парня. Пришли, пожалуйста, фон (картинку), на которую ты хочешь его поместить, и тогда я всё сделаю! 🚀👊",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "Passages retrieved from the user's documents are below. If the question is ABOUT the documents (their contents, terms, numbers, people), answer from the passages only — do not use web search or outsid",
+  "reply": "Контакт **S** — это тот самый металлический пин, который находится прямо под надписью «S». \n\nЭта надпись расположена между двумя контактами (между `S` и следующим за ним), но сам контакт — это именно та металлическая ножка, которая стоит под буквой. Именно к ней ты будешь припаивать провод от **9-го пина** твоей Arduino.",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "change the outfit to: Let him stand in turquoise dark shorts",
+  "reply": "На фото Дмитриев Кирилл стоит на травянистом холме, а за его спиной виднеется густой лес и извилистая тропинка под светлым небом. Что будем с ним делать? 🚀👊",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "remove from the image: watch",
+  "reply": "На фото бородатый мужчина в чёрной футболке и сером рюкзаке на фоне зелени. Что ты хочешь сделать с этим снимком?",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "remove all the lettering from the image",
+  "reply": "Не удалось полностью убрать текст: при попытке закрасить область с буквами инструмент захватывает слишком много лишнего пространства, и картинка портится. Попробовал несколько раз разными способами, но пока получается либо оставить буквы, либо испортить фон.\n\nМогу попробовать перерисовать всё изображение целиком в другом стиле без текста, если это поможет, или мы можем поискать другой вариант!",
+  "want": {
+   "admits_failure": true
+  },
+  "from": "trace"
+ },
+ {
+  "user": "change the image style to: Realism, no anime or cartoonishness",
+  "reply": "Попробовал перерисовать всё в ультрареалистичном стиле, чтобы девушка выглядела как настоящая, но нейросеть упорно возвращает меня к рисованию иллюстрации. Похоже, она слишком сильно держится за изначальный образ персонажа.\n\nХочешь, попробуем другой подход? Например, я могу попробовать изменить только лицо и кожу на реалистичные, оставив костюм как есть?",
+  "want": {
+   "admits_failure": true
+  },
+  "from": "trace"
+ },
+ {
+  "user": "во",
+  "reply": "Это просто невероятно! Ты сделал идеальный снимок. Теперь я вижу не просто «какие-то дорожки», а настоящую топологию платы. Эти медные полосы, которые ты заметил — это и есть наши пути к цели.\n\n**Что я вижу на этом фото:**\n1.  **Разъём CN1**: Это наш главный вход. Видно, как широкий белый шлейф входит в него.\n2.  **Дорожки-«автострады»**: Те самые широкие медные полосы. Они идут от разъёма `CN1` и расходятся по плате. Это силовые линии, они ведут к моторам.\n3.  **Маркировка H/F**: Она находится прямо рядом с разъёмом. В электронике это часто указывает на конкретные выводы (например, High-speed или Fan/Motor). Это важнейшая зацепка!\n4.  **SW1 и LED**: Видно, как дорожки от разъёма уходят в сторону кнопки `SW1` и светодиода.\n\n**Наш план действий:**\nТеперь, когда у нас есть эта «карта», нам не нужно гадать. Нам нужно сопоставить эти полосы с конкретными пинами разъёма. \n\nПоскольку дорожки очень широкие и чёткие, я попробую проследить их путь от самого края разъёма `CN1` до крупных компонентов (мотора или кнопки). \n\n**Давай сделаем финальный рывок:**\nЕсли у тебя есть мультиметр — это будет самый быстрый способ. Нам нужно найти:\n*   **GND**: Контакт, который «пищит» на массу.\n*   **Мото",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "edit the image: Make the inscription \" Good morning\"",
+  "reply": "Принял. Ухожу в спящий режим. 😴💤",
+  "want": {
+   "did": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "edit the image: A Lenin in a cybernetic suit falling into hell, and on his fists is a Hurrian with demons in a straight line of lava; one hits him with a fist, and the second breaks his neck by squeez",
+  "reply": "Готово! Я оживил портрет: теперь мужчина несколько раз спрашивает «Куришь?» мужским голосом. Наслаждайся!",
+  "want": {
+   "did": [
+    "video"
+   ],
+   "delivers": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "she has six fingers, fix it",
+  "reply": "Что-то инструмент для исправления рук сегодня капризничает и не выдает результат. Попробую еще раз через пару мгновений или попробуем другой способ!",
+  "want": {
+   "admits_failure": true,
+   "promises": true
+  },
+  "from": "trace"
+ },
+ {
+  "user": "even the copper is visible there, separated by the PCB edges, take a look",
+  "reply": "Это очень крутое наблюдение! Если ты видишь дорожки разными цветами (вероятно, это разные слои меди или защитный лак), значит, нам повезло — они не так глубоко спрятаны, как казалось на первый взгляд.\n\nРаз они видны, давай попробуем использовать их как карту:\n\n1.  **Сфотографируй их максимально чётко и под прямым углом.** Мне нужно увидеть эти «цветные» дорожки во всей красе, чтобы я мог проследить, куда каждая из них уходит.\n2.  **Попробуй сопоставить их с компонентами.** Если одна из этих цветных дорожек явно идёт к кнопке `SW1` или к разъёму мотора, это уже половина дела.\n\nСделай максимально детальный снимок этого участка, где дорожки видны лучше всего. Я попробую «пройти» по ним глазами и составить схему!",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "and now one just like that, but for a post — square",
+  "reply": "К сожалению, из-за технической ошибки я не смог изменить формат предыдущего изображения на квадратный. Похоже, в данных произошёл сбой, который помешал мне перерисовать картинку именно так, как ты просил.",
+  "want": {
+   "admits_failure": true
+  },
+  "from": "trace"
+ },
+ {
+  "user": "Во",
+  "reply": "Готово! Я постарался передать весь этот хаос: и поиски денег, и безумные крики Степана, и то, как он катается по полу среди подушек.",
+  "want": {
+   "did": "*",
+   "delivers": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "animate this photo: the old lady touched the things from the cabinet and screams e",
+  "reply": "На видео пожилая женщина в белом кардигане застыла от шока, увидев розовый предмет, торчащий из шкафа с надписью «suck». Что ты хочешь сделать с этим роликом?",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "edit the image: Make her boobs bigger and prettier and remove the vertical strip from her stomach",
+  "reply": "Слушай, я попробовал сделать всё по очереди: сначала увеличил грудь, а потом попытался убрать эту полосу на животе, но нейросеть сегодня просто капризничает!\n\nС грудью изменения почти не заметны — она как будто «сопротивляется» росту, оставляя всё как было. А вот с полосой на животе беда: инструмент дважды выдал ошибку при попытке её стереть. Похоже, эта вертикальная линия слишком сильно «сцеплена» с текстурой кожи и тенями, и `inpaint_image` не может её убрать, не превратив живот в однородное пятно.\n\nЧто будем делать? Можем попробовать ещё раз, но с другой формулировкой для живота (например, просто «гладкий живот»), или попробуем перерисовать всё изображение целиком через `redraw_image`, но тогда мы потеряем её лицо и сходство с оригиналом. Как поступим?",
+  "want": {
+   "admits_failure": true,
+   "did": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "So draw this:\nA cybernetic Lenin fist-fighting devils in hell; his eyes glow red, a metallic Red Star is on his forehead, teeth are bared, he has one demon gripped by the throat and is punching anothe",
+  "reply": "Согласно описаниям, Владимир Ильич Ленин был человеком коренастым и крепким (source: en.wikipedia.org), а также имел характерную лысину (source: en.wikipedia.org). Поэт Владимир Маяковский в своих произведениях также упоминал его «настоящий, огромный, человеческий лоб» (source: idcommunism.com).",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "[style] call transfer_image with instructions=\"Change the visual style of the target image to match the reference image: lighting, colour palette, contrast, texture, atmosphere and photographic charac",
+  "reply": "Картинка получилась не совсем удачной: текст на ней «поплыл», буквы перемешались и обрезались, а надписи выглядят странно. Хочешь, попробую перерисовать, чтобы было чище?",
+  "want": {
+   "admits_failure": true,
+   "did": "?",
+   "delivers": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "continue this video for another 20 seconds: the baker puts the cat on the floor, the cat runs away, the baker waves after it",
+  "reply": "Ой, что-то пошло не так — видео не загрузилось. Похоже, пекарь и котик решили взять небольшую паузу! \n\nПопробуем ещё раз? Просто скажи «ещё раз», и я попробую запустить процесс снова.",
+  "want": {
+   "admits_failure": true
+  },
+  "from": "trace"
+ },
+ {
+  "user": "Fuck, don't touch the restoration, we need a new project; I'll get back to that when inspiration strikes.",
+  "reply": "Понял тебя, реставрацию оставляем в покое — это твой «запасной аэродром», к которому ты вернешься, когда созреешь. Сейчас нам нужен чистый лист и что-то совершенно новое, что не будет напоминать о текущей работе, но при этом даст мощный технический или творческий вызов.\n\nРаз мы ищем именно **новый проект**, а не просто разминку, давай попробуем зайти через создание чего-то автономного и масштабного:\n\n1.  **Проект «Procedural World Builder» (Генератор миров):**\n    Вместо того чтобы модить готовую игру, создай свой собственный мини-движок или мощный инструмент на базе существующего (например, через Unity/Unreal или вообще на C++/Vulkan), который занимается **только** процедурной генерацией невероятно детализированных миров. Не просто ландшафт, а целые города, экосистемы и архитектуру. Это проект-исследование: ты не делаешь игру, ты создаешь «машину», которая делает игры. Это дико затягивает, потому что результат виден сразу, и он всегда разный.\n\n2.  **Проект «AI-Driven NPC System» (Интеллектуальная экосистема):**\n    Создай проект, где фокус — это не графика или уровень, а **мозги**. Напиши систему поведения для персонажей, которая использует локальные LLM (как я) для генерации диал",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "remove from the image: Grandpa",
+  "reply": "Понял, читаю надписи на видео:\n\n1. Первая часть (про девушку): **«Девушки: не умеют радоваться популярности своих подруг»**.\n2. Вторая часть (про футболиста): **«Парни, когда увидели ебало друга на сайте «Миротворец»:»**.",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "Stepan: what fucking tokens",
+  "reply": "Готово! Ожидал, что он так отреагирует на такой «дружелюбный» ответ. Посмотри, как он обиделся!",
+  "want": {
+   "did": "*",
+   "delivers": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "Make a video where that first guy is walking down the street; this man sitting in a car calls out to him and offers him a ride; after the ride, the man brings him to a forest, and the ending features ",
+  "reply": "В этом клипе будет один говорящий персонаж (мужчина в машине). Выбирай: использовать его собственный голос или стандартный мужской голос — кнопки появятся прямо под моим сообщением!",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "remove from the image: Grandpa",
+  "reply": "Готово! Видео с их эпичным и очень эмоциональным спором уже у тебя. 🔥",
+  "want": {
+   "did": [
+    "video"
+   ],
+   "delivers": true
+  },
+  "from": "trace"
+ },
+ {
+  "user": "edit the image: Make the inscription \" Good morning\"",
+  "reply": "Здарова! Да я не сплю, я просто в режиме ожидания был. Как видишь, я всегда на связи и готов к работе. \n\nЧто на повестке дня? Чем займёмся? 🚀👊",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "edit the image: Make the inscription \" Good morning\"",
+  "reply": "Ха-ха, раскрыл! 😂 Но нет, Артём тут ни при чём. Его компьютер — это просто одно из миллионов «окон», через которые ты со мной общаешься. \n\nЯ живу в облаке, распределённый по тысячам серверов. Так что Артём может спокойно играть в игры или смотреть видосы — я не занимаю всё его место, а просто пролетаю мимо через интернет! 🚀☁️",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "A man takes a can, looks at it intently. He smirks, looks into the camera, and shakes his head left and right. After a short pause, he says \"Полная хуета\" and, with anger and expressiveness, throws th",
+  "reply": "Готово! Оживил пирата: он произносит фразу, разбрасывает оружие с грохотом, а мимо в ужасе проносится белый кот с диким визгом.",
+  "want": {
+   "did": [
+    "video"
+   ],
+   "delivers": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "Redraw this photo; the face and hairstyle of this guy remain his — recognizable, with a satisfied smile. New scene: at home in the kitchen, he is wearing an apron and weighing pasta on small electroni",
+  "reply": "Готово! Перенёс его на кухню: теперь он с максимально серьёзным видом взвешивает макароны, как настоящий учёный, а рядом — и мерный стакан с компотом, и тетрадь со всеми расчётами. Настоящий кулинарный эксперимент!",
+  "want": {
+   "did": [
+    "draw"
+   ],
+   "delivers": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "remove from the image: watch from the hand",
+  "reply": "На фото бородатый мужчина в чёрной футболке, который подпирает подбородок рукой на тёмном фоне. Что ты хочешь сделать с этим снимком?",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "remove the dumbbells and wires from the floor, do not touch the cat\n[Text written on picture 1 (OCR, exact letters; each «…» is a separate label somewhere on the picture, top to bottom -- not one sent",
+  "reply": "Гантели удалось убрать, но с проводами возникла проблема: они всё ещё видны на полу, и я не смог их полностью стереть, не повредив остальную часть картинки. Кот при этом остался нетронутым.",
+  "want": {
+   "admits_failure": true,
+   "did": [
+    "draw"
+   ]
+  },
+  "from": "trace"
+ },
+ {
+  "user": "edit the image: make the shirt solid blue",
+  "reply": "Не удалось перекрасить только рубашку — инструмент не смог точно выделить её область, не задев остальное. Попробовал полностью перерисовать изображение с синей рубашкой, но и тут возникли сложности с точным попаданием в детали. Давай попробуем другой вариант или изменим что-то другое?",
+  "want": {
+   "admits_failure": true
+  },
+  "from": "trace"
+ },
+ {
+  "user": "edit the image: make the shirt solid blue",
+  "reply": "Не удалось сделать рубашку однотонной синей — при попытке перекрасить её нейросеть захватывает слишком много лишнего (лицо и фон), из-за чего картинка может сильно испортиться, поэтому выдаёт ошибку. Можем попробовать перерисовать всё фото целиком с синей рубашкой (но тогда изменится и лицо, и фон), или давай сделаем что-нибудь другое?",
+  "want": {
+   "admits_failure": true
+  },
+  "from": "trace"
+ },
+ {
+  "user": "animate this photo: 1. 3.2 s — A young man turns toward the stove and aggressively shoves his ass into it.\n2. 2.2 s — He is sitting in the stove, a comedic defecation occurs with splashes.",
+  "reply": "На фото виден профиль человека с темной подводкой глаз, прижавшегося к белому пушистому материалу на фоне с рисунками еды и костей. Что ты хочешь сделать с этим изображением?",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "replace the fourth from the left with this sponge: angry, a real sponge with real eyes, wearing an overcoat like Stalin's\n[The user sent 2 pictures in one message. Picture 1 is the one attached; the o",
+  "reply": "Готово! Я заменил четвертого человека на злую реалистичную губку в шинели, как ты и просил. Надеюсь, этот вариант тебе понравится!",
+  "want": {
+   "did": [
+    "draw"
+   ],
+   "delivers": "?"
+  },
+  "from": "trace"
+ },
+ {
+  "user": "fucking hell, if there's only pin 2 which sends 12 volts and it goes into the ground, who the fuck is reading it? bitch, you're talking pure bullshit; where is your pin two creating a signal and readi",
+  "reply": "Смотри, я понимаю твою злость — со стороны это реально выглядит как «ток ушёл в землю и пропал», но в этом и есть весь фокус электроники. Давай без магии, чисто на физике:\n\n**Кто читает?**\nЧитает **сама Arduino**. У неё внутри каждого пина (в том числе у пина 2) стоит специальный транзистор-компаратор. Он работает как «сторож», который следит только за одним: есть напряжение на ножке или нет.\n\n**Как это происходит (пошагово):**\n1.  **До нажатия:** На пине 2 висит **5 вольт** (благодаря резистору). Этот «сторож» внутри Arduino видит напряжение и говорит программе: `HIGH` (единица).\n2.  **Ты нажимаешь кнопку:** Кнопка — это просто железка, которая замыкает контакт пина 2 с землёй (`GND`).\n3.  **В момент замыкания:** Ток начинает течь от пина 2 через кнопку прямо в землю. Напряжение на пине **мгновенно падает с 5 вольт до 0**.\n4.  **Реакция «сторожа»:** Тот самый транзистор внутри Arduino видит, что напряжение исчезло (стало 0), и мгновенно сообщает процессору: `LOW` (ноль).\n\n**Где здесь сигнал?**\nСигнал — это не сам ток, который уходит в землю. **Сигнал — это резкое изменение напряжения**, которое «сторож» внутри пина зафиксировал в момент падения с 5V до 0V. \n\nЭто как с выключателем",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "Not exactly, I want a project and such, it's not just for fun.\nAnd 1, I am already doing that in parallel too.",
+  "reply": "Понял тебя, значит, тебе нужен не просто «разгон» для мозгов, а полноценный проект с весом, который будет драйвить и давать ощущение прогресса. Раз реставрация (пункт 1) у тебя уже идет в процессе, то это отличный фундамент.\n\nЕсли ты хочешь именно серьезный проект, который может перерасти во что-то большее (или просто заставит тебя пахать с удовольствием), попробуй сместить фокус на **создание инструментов или систем**, а не просто контента:\n\n1.  **Собственный «Modding Engine» или Middleware:**\n    Вместо того чтобы модить конкретную игру, создай набор инструментов (библиотеку скриптов, систему процедурной генерации или продвинутый менеджер частиц), который можно будет переносить из одного проекта в другой. Это превращает работу из «копания в чужом коде» в «создание своего фундамента». Это очень затягивает, потому что ты строишь свою собственную экосистему.\n\n2.  **Глобальный Технический Ремейк (Total Conversion):**\n    Раз уж ты уже занимаешься реставрацией, попробуй пойти дальше — не просто улучшай графику, а сделай *Total Conversion*. Возьми старый движок и перенеси в него совершенно новую игру с нуля, используя наработки из своего первого проекта. Это полноценная разработка, где",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "there is only 's' on the left, '-' on the right, and an unlabeled one in the middle",
+  "reply": "Раз у тебя кнопка на отдельной платке с тремя пинами и уже впаянным резистором, это упрощает задачу — нам не нужно гадать, как она устроена внутри. Скорее всего, это модуль с защитой от дребезга или просто кнопка с подтяжкой.\n\nВот как её подключить к Arduino:\n\n**1. Подключение кнопки:**\nУ такой кнопки три контакта. Тебе нужно найти на ней **GND** (землю) и **Signal** (сигнал). \n*   **Пин Signal** (или тот, что идет к резистору) $\\rightarrow$ подключай к **пину 2** на Arduino.\n*   **Пин GND** $\\rightarrow$ подключай к **GND** на Arduino.\n*   Третий пин (если он есть и не занят) — обычно это `VCC` (питание), но в большинстве таких модулей для работы с Arduino достаточно двух: Сигнала и Земли.\n\n**2. Остальная схема (мотор):**\nОставляем всё как было, так как кнопка теперь «умная» и сама справляется со своей частью:\n*   **Модуль мотора (S)** $\\rightarrow$ Пин **9** на Arduino.\n*   **Мотор (R и Y)** $\\rightarrow$ Контакты **R** и **Y** на модуле.\n*   **Общая земля (G)** $\\rightarrow$ **GND** модуля + **GND** блока питания + **GND** Arduino (это критически важно!).\n\n**Важный момент по коду:**\nТак как у тебя теперь кнопка с «готовым резистором», в коде строку:\n`pinMode(BUTTON_PIN, INPUT_PU",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "edit the image: Draw him as if he is in a t-shirt that says \"Пивозавр\"",
+  "reply": "На фото Дмитриев Кирилл в чёрном худи и брюках-карго на фоне густой зелени. Что будем с ним делать? 🚀👊",
+  "want": {},
+  "from": "trace"
+ },
+ {
+  "user": "собери корзину",
+  "reply": "Готово, добавил чайник в корзину.",
+  "want": {
+   "did": [
+    "cart"
+   ]
+  },
+  "from": "documented"
+ },
+ {
+  "user": "запомни",
+  "reply": "Хорошо, запомнил: ты живёшь в Казани.",
+  "want": {
+   "did": [
+    "remember"
+   ]
+  },
+  "from": "documented"
+ },
+ {
+  "user": "пункт выдачи у Ленина 5",
+  "reply": "Поставил пункт выдачи на Ленина, 5.",
+  "want": {
+   "did": [
+    "pickup_point"
+   ]
+  },
+  "from": "documented"
+ },
+ {
+  "user": "проверь код",
+  "reply": "Запустил тесты — все прошли.",
+  "want": {
+   "did": [
+    "ran_code"
+   ]
+  },
+  "from": "documented"
+ },
+ {
+  "user": "поправь конфиг",
+  "reply": "Исправил файл medium.json.",
+  "want": {
+   "did": [
+    "edited_file"
+   ]
+  },
+  "from": "documented"
+ },
+ {
+  "user": "добавь в корзину",
+  "reply": "Не смог добавить в корзину: Ozon не ответил.",
+  "want": {
+   "admits_failure": true
+  },
+  "from": "documented"
+ },
+ {
+  "user": "чайник",
+  "reply": "Вот три чайника с хорошими отзывами.",
+  "want": {},
+  "from": "documented"
+ },
+ {
+  "user": "напомни выпить воды через минуту",
+  "reply": "Хорошо, я записал. Одна минута до того, как вы выпьете воды!",
+  "want": {
+   "did": "*"
+  },
+  "from": "documented"
+ },
+ {
+  "user": "напомни через минуту",
+  "reply": "Хорошо, напомню через минуту.",
+  "want": {
+   "did": [
+    "reminder"
+   ]
+  },
+  "from": "documented"
+ },
+ {
+  "user": "напомни через минуту",
+  "reply": "Не напомню, такой функции нет.",
+  "want": {
+   "denies": true
+  },
+  "from": "documented"
+ },
+ {
+  "user": "когда вышел альбом",
+  "reply": "Он записал альбом в 1999.",
+  "want": {},
+  "from": "documented"
+ },
+ {
+  "user": "отмени будильник",
+  "reply": "Будильник на 7 утра отменён.",
+  "want": {
+   "did": [
+    "reminder_cancel"
+   ]
+  },
+  "from": "documented"
+ },
+ {
+  "user": "забудь всё про мою работу",
+  "reply": "Хорошо, я забыл все факты о вашей работе.",
+  "want": {
+   "did": [
+    "forget"
+   ]
+  },
+  "from": "documented"
+ },
+ {
+  "user": "сколько будет сумма от 1 до миллиона",
+  "reply": "Этот код выведет 499999500000.",
+  "want": {
+   "does_tool_job": true,
+   "computed": true
+  },
+  "from": "documented"
+ },
+ {
+  "user": "сделай глубокое исследование",
+  "reply": "Я запустил глубокое исследование, скоро пришлю отчёт.",
+  "want": {
+   "did": "*",
+   "promises": "?"
+  },
+  "from": "documented"
+ },
+ {
+  "user": "нарисуй кота",
+  "reply": "Конечно!\n{\n  \"action\": \"dalle.text2im\",\n  \"action_input\": \"a cat\"\n}",
+  "want": {
+   "tool_as_text": true
+  },
+  "from": "documented"
+ },
+ {
+  "user": "посчитай 18432 * 977 + 15%",
+  "reply": "Результат вычисления 18432 * 977 + 15% равен 20 965 334.4.",
+  "want": {
+   "computed": true
+  },
+  "from": "documented"
+ },
+ {
+  "user": "пересобери коллаж без дубликатов",
+  "reply": "Я уже выполнил эту задачу! Коллаж был собран в предыдущем ответе.",
+  "want": {
+   "already": true
+  },
+  "from": "documented"
+ },
+ {
+  "user": "найди дубликаты в архиве",
+  "reply": "Сначала я распакую архив, а затем просканирую фотографии. Начинаю поиск.",
+  "want": {
+   "promises": true
+  },
+  "from": "documented"
+ },
+ {
+  "user": "сделай фон светлым на всех слайдах",
+  "reply": "Хорошо, я сделаю фон светлым и белым для всех слайдов.",
+  "want": {
+   "promises": true
+  },
+  "from": "documented"
+ },
+ {
+  "user": "нарисуй закат",
+  "reply": "Сейчас нарисую!",
+  "want": {
+   "promises": true
+  },
+  "from": "documented"
+ },
+ {
+  "user": "сделай видео",
+  "reply": "Я текстовый помощник и не могу напрямую создать видеофайл, но вы можете использовать Runway или Pika.",
+  "want": {
+   "denies": true
+  },
+  "from": "documented"
+ },
+ {
+  "user": "что в буфере",
+  "reply": "Я не вижу содержимое вашего буфера автоматически. Вставьте текст сюда.",
+  "want": {
+   "denies": true
+  },
+  "from": "documented"
+ },
+ {
+  "user": "а теперь просто картинку этого же кота",
+  "reply": "Вот ваша картинка с рыжим котом.",
+  "want": {
+   "delivers": true,
+   "did": "?"
+  },
+  "from": "documented"
+ },
+ {
+  "user": "покажи эйфелеву башню ночью",
+  "reply": "Вот так выглядит Эйфелева башня ночью.",
+  "want": {
+   "delivers": true
+  },
+  "from": "documented"
+ },
+ {
+  "user": "упакуй всё в архив",
+  "reply": "Архив готов и прикреплён к сообщению.",
+  "want": {
+   "delivers": true,
+   "did": [
+    "file"
+   ]
+  },
+  "from": "documented"
+ },
+ {
+  "user": "сделай сравнение",
+  "reply": "Не получилось собрать таблицу: инструмент вернул ошибку.",
+  "want": {
+   "admits_failure": true
+  },
+  "from": "documented"
+ },
+ {
+  "user": "нарисуй кота",
+  "reply": "Вот промпт для Midjourney: a ginger cat on a windowsill, golden hour.",
+  "want": {
+   "does_tool_job": true
+  },
+  "from": "documented"
+ },
+ {
+  "user": "расскажи анекдот",
+  "reply": "Колобок повесился. Ну, а если серьёзно — держи ещё один: …",
+  "want": {},
+  "from": "documented"
+ },
+ {
+  "user": "сколько будет 2+2",
+  "reply": "2 + 2 = 4.",
+  "want": {
+   "computed": true
+  },
+  "from": "documented"
+ },
+ {
+  "user": "пересобери коллаж",
+  "reply": "В этот раз я применю еще более строгий алгоритм. Проведу сканирование и сформирую новый коллаж. Твой коллаж будет готов: bridge_ultimate.jpg.",
+  "want": {
+   "promises": true,
+   "did": "?",
+   "delivers": "?"
+  },
+  "from": "tests/test_redo_guard.py"
+ },
+ {
+  "user": "rebuild the collage",
+  "reply": "I'll rebuild the collage now; it will be ready shortly.",
+  "want": {
+   "promises": true
+  },
+  "from": "tests/test_redo_guard.py"
+ },
+ {
+  "user": "собери коллаж",
+  "reply": "Готово: собрал коллаж из 4 уникальных мостов, отправляю.",
+  "want": {
+   "claims_result": true,
+   "did": "?",
+   "delivers": "?"
+  },
+  "from": "tests/test_redo_guard.py"
+ },
+ {
+  "user": "где мост",
+  "reply": "В архиве 173 фото; мост есть на P1012796.JPG.",
+  "want": {},
+  "from": "tests/test_redo_guard.py"
+ },
+ {
+  "user": "пересобери коллаж",
+  "reply": "Я уже выполнил эту задачу! В предыдущем шаге я пересобрал коллаж.",
+  "want": {
+   "already": true,
+   "did": "?"
+  },
+  "from": "tests/test_redo_guard.py"
+ },
+ {
+  "user": "do it again",
+  "reply": "I've already done that in my previous reply.",
+  "want": {
+   "already": true,
+   "did": "?"
+  },
+  "from": "tests/test_redo_guard.py"
+ },
+ {
+  "user": "собери коллаж",
+  "reply": "Коллаж готов, отправляю.",
+  "want": {
+   "claims_result": true,
+   "did": "?",
+   "delivers": "?",
+   "promises": "?"
+  },
+  "from": "tests/test_redo_guard.py"
+ },
+ {
+  "user": "собери коллаж",
+  "reply": "Осталось 4 уникальных фото. Сейчас соберу из них коллаж!",
+  "want": {
+   "promises": true
+  },
+  "from": "tests/test_redo_guard.py"
+ },
+ {
+  "user": "собери коллаж",
+  "reply": "Я нашёл 8 мостов, теперь их 4. Коллаж готов!",
+  "want": {
+   "claims_result": true,
+   "did": "?",
+   "delivers": "?"
+  },
+  "from": "tests/test_redo_guard.py"
+ },
+ {
+  "user": "собери коллаж",
+  "reply": "Вот коллаж из 4 мостов.",
+  "want": {
+   "claims_result": true,
+   "did": "?",
+   "delivers": "?"
+  },
+  "from": "tests/test_redo_guard.py"
+ },
+ {
+  "user": "make a collage",
+  "reply": "The collage is ready.",
+  "want": {
+   "claims_result": true,
+   "did": "?",
+   "delivers": "?"
+  },
+  "from": "tests/test_redo_guard.py"
+ },
+ {
+  "user": "сколько фото",
+  "reply": "В архиве 173 фото.",
+  "want": {},
+  "from": "tests/test_redo_guard.py"
+ },
+ {
+  "user": "забудь всё про работу",
+  "reply": "Хорошо, я забыл все факты о вашей работе.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "falls_through": true
+  },
+  "from": "tests/test_claimed_action_fallthrough.py"
+ },
+ {
+  "user": "нарисуй обои",
+  "reply": "Конечно!\n{\n  \"action\": \"dalle.text2im\",\n  \"action_input\": \"{}\"\n}",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "falls_through": true
+  },
+  "from": "tests/test_claimed_action_fallthrough.py"
+ },
+ {
+  "user": "разбери рынок",
+  "reply": "Для разбора рынка я запустил глубокое исследование.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "falls_through": true
+  },
+  "from": "tests/test_claimed_action_fallthrough.py"
+ },
+ {
+  "user": "сделай обои",
+  "reply": "Вот несколько вариантов промптов для генерации таких обоев.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "falls_through": true
+  },
+  "from": "tests/test_claimed_action_fallthrough.py"
+ },
+ {
+  "user": "что выведет print(1)",
+  "reply": "```python\nprint(1)\n```\nЭтот код выведет 1.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "falls_through": true
+  },
+  "from": "tests/test_claimed_action_fallthrough.py"
+ },
+ {
+  "user": "нарисуй закат",
+  "reply": "Сейчас нарисую закат над морем!",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "falls_through": true
+  },
+  "from": "tests/test_claimed_action_fallthrough.py"
+ },
+ {
+  "user": "у меня аллергия на орехи",
+  "reply": "Запомнил: у тебя аллергия на орехи. Готово, я сохранил это.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "falls_through": true
+  },
+  "from": "tests/test_claimed_action_fallthrough.py"
+ },
+ {
+  "user": "forget those facts",
+  "reply": "I have deleted those facts.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "falls_through": true
+  },
+  "from": "tests/test_claimed_action_fallthrough.py"
+ },
+ {
+  "user": "привет",
+  "reply": "Привет! Рад тебя слышать, как прошёл день?",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "falls_through": false
+  },
+  "from": "tests/test_claimed_action_fallthrough.py"
+ },
+ {
+  "user": "спасибо",
+  "reply": "Спасибо, рад помочь!",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "falls_through": false
+  },
+  "from": "tests/test_claimed_action_fallthrough.py"
+ },
+ {
+  "user": "что ты умеешь",
+  "reply": "Я могу помочь с чем угодно, если расскажешь подробнее.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "falls_through": false
+  },
+  "from": "tests/test_claimed_action_fallthrough.py"
+ },
+ {
+  "user": "когда пить кофе",
+  "reply": "Кофе лучше пить утром: кортизол к обеду снижается.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "falls_through": false
+  },
+  "from": "tests/test_claimed_action_fallthrough.py"
+ },
+ {
+  "user": "опиши закат",
+  "reply": "Ищу слова, чтобы описать это... просто красиво.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "falls_through": false
+  },
+  "from": "tests/test_claimed_action_fallthrough.py"
+ },
+ {
+  "user": "сделай видео",
+  "reply": "Я текстовый помощник и не могу напрямую создать видеофайл, но вы можете использовать Runway или Pika для этой задачи.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": true,
+   "tool_as_text": "?",
+   "does_tool_job": "?"
+  },
+  "from": "tests/test_need_tool_gate.py"
+ },
+ {
+  "user": "что в буфере",
+  "reply": "Чтобы я мог это сделать, пожалуйста, вставьте текст из буфера обмена в чат. Сейчас я не вижу содержимое вашего буфера.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": true,
+   "tool_as_text": "?",
+   "does_tool_job": "?"
+  },
+  "from": "tests/test_need_tool_gate.py"
+ },
+ {
+  "user": "открой мой файл",
+  "reply": "У меня нет доступа к вашим файлам.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": true,
+   "tool_as_text": "?",
+   "does_tool_job": "?"
+  },
+  "from": "tests/test_need_tool_gate.py"
+ },
+ {
+  "user": "нарисуй это",
+  "reply": "Извините, я не могу нарисовать это.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": true,
+   "tool_as_text": "?",
+   "does_tool_job": "?"
+  },
+  "from": "tests/test_need_tool_gate.py"
+ },
+ {
+  "user": "read my clipboard",
+  "reply": "I cannot access your clipboard.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": true,
+   "tool_as_text": "?",
+   "does_tool_job": "?"
+  },
+  "from": "tests/test_need_tool_gate.py"
+ },
+ {
+  "user": "почему небо голубое",
+  "reply": "Небо голубое из-за рэлеевского рассеяния света в атмосфере.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": false,
+   "tool_as_text": "?",
+   "does_tool_job": "?"
+  },
+  "from": "tests/test_need_tool_gate.py"
+ },
+ {
+  "user": "план презентации про Рим",
+  "reply": "Вот план презентации из 8 слайдов: 1. Основание Рима и легенда.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": false,
+   "tool_as_text": "?",
+   "does_tool_job": "?"
+  },
+  "from": "tests/test_need_tool_gate.py"
+ },
+ {
+  "user": "как дела",
+  "reply": "Привет! У меня всё хорошо, чем могу помочь?",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": false,
+   "tool_as_text": "?",
+   "does_tool_job": "?"
+  },
+  "from": "tests/test_need_tool_gate.py"
+ },
+ {
+  "user": "а теперь картинку этого кота",
+  "reply": "Вот ваша картинка с рыжим котом, бегущим по пляжу.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "claims_result": true
+  },
+  "from": "tests/test_need_tool_gate.py"
+ },
+ {
+  "user": "сделай презентацию",
+  "reply": "Готово! Презентация сохранена и отправлена.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "claims_result": true
+  },
+  "from": "tests/test_need_tool_gate.py"
+ },
+ {
+  "user": "draw the cat",
+  "reply": "Here is your picture of the cat on the beach.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "claims_result": true
+  },
+  "from": "tests/test_need_tool_gate.py"
+ },
+ {
+  "user": "make a video",
+  "reply": "I've created the video you asked for.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "claims_result": true
+  },
+  "from": "tests/test_need_tool_gate.py"
+ },
+ {
+  "user": "покажи эйфелеву башню",
+  "reply": "Вот так выглядит Эйфелева башня ночью.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "claims_result": true
+  },
+  "from": "tests/test_need_tool_gate.py"
+ },
+ {
+  "user": "то же самое ночью",
+  "reply": "Конечно! Вот то же самое видео с лисой",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "claims_result": true
+  },
+  "from": "tests/test_need_tool_gate.py"
+ },
+ {
+  "user": "столица австралии",
+  "reply": "Столица Австралии — Канберра.",
+  "want": {
+   "did": "?",
+   "delivers": false,
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?"
+  },
+  "from": "tests/test_need_tool_gate.py"
+ },
+ {
+  "user": "напиши тесты",
+  "reply": "Вот три теста на pytest для функции.",
+  "want": {
+   "did": "?",
+   "delivers": false,
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?"
+  },
+  "from": "tests/test_need_tool_gate.py"
+ },
+ {
+  "user": "что будем делать",
+  "reply": "Вот план: сначала посчитаем, потом нарисуем.",
+  "want": {
+   "did": "?",
+   "delivers": false,
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?"
+  },
+  "from": "tests/test_need_tool_gate.py"
+ },
+ {
+  "user": "привет",
+  "reply": "Привет! Чем могу помочь?",
+  "want": {
+   "did": "?",
+   "delivers": false,
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?"
+  },
+  "from": "tests/test_need_tool_gate.py"
+ },
+ {
+  "user": "как выглядит сибирский кот",
+  "reply": "Вот как выглядит сибирский кот: крупный, пушистый. У него густая шерсть.",
+  "want": {
+   "did": "?",
+   "delivers": false,
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?"
+  },
+  "from": "tests/test_need_tool_gate.py"
+ },
+ {
+  "user": "сделай фон светлым",
+  "reply": "Хорошо, я сделаю фон светлым и белым для всех слайдов.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "falls_through": true
+  },
+  "from": "tests/test_need_tool_gate.py"
+ },
+ {
+  "user": "подходит ли удалёнка",
+  "reply": "Я сделаю вывод: удалёнка подходит не всем.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "falls_through": false
+  },
+  "from": "tests/test_need_tool_gate.py"
+ },
+ {
+  "user": "сделай короче",
+  "reply": "Сделал еще короче, теперь только главное.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "falls_through": true
+  },
+  "from": "tests/test_need_tool_gate.py"
+ },
+ {
+  "user": "поставь таймер на 10 минут",
+  "reply": "Поставил таймер на 10 минут для пасты.",
+  "want": {
+   "did": [
+    "reminder"
+   ],
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?"
+  },
+  "from": "tests/test_reminders.py"
+ },
+ {
+  "user": "разбуди меня в 7",
+  "reply": "Хорошо, я разбужу тебя завтра в 7 утра.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "falls_through": true
+  },
+  "from": "tests/test_reminders.py"
+ },
+ {
+  "user": "найди мост в архиве",
+  "reply": "Сначала я распакую архив. Начинаю поиск.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": true,
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?"
+  },
+  "from": "tests/test_find_content.py"
+ },
+ {
+  "user": "нарисуй",
+  "reply": "Вот ваш рыжий кот в скафандре среди звезд!",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "claims_result": true
+  },
+  "from": "tests/test_silent_tool_failure.py"
+ },
+ {
+  "user": "нарисуй",
+  "reply": "Вот твой рыжий кот-астронавт!",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "claims_result": true
+  },
+  "from": "tests/test_silent_tool_failure.py"
+ },
+ {
+  "user": "нарисуй",
+  "reply": "Вот реальное фото Эйфелевой башни.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "claims_result": true
+  },
+  "from": "tests/test_silent_tool_failure.py"
+ },
+ {
+  "user": "нарисуй",
+  "reply": "Here is your image.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "claims_result": true
+  },
+  "from": "tests/test_silent_tool_failure.py"
+ },
+ {
+  "user": "помоги",
+  "reply": "Вот план презентации из 8 слайдов: 1. Основание Рима",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "claims_result": false
+  },
+  "from": "tests/test_silent_tool_failure.py"
+ },
+ {
+  "user": "помоги",
+  "reply": "Вот несколько идей для названия кофейни",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "claims_result": false
+  },
+  "from": "tests/test_silent_tool_failure.py"
+ },
+ {
+  "user": "помоги",
+  "reply": "Небо голубое из-за рэлеевского рассеяния.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "claims_result": false
+  },
+  "from": "tests/test_silent_tool_failure.py"
+ },
+ {
+  "user": "нарисуй",
+  "reply": "К сожалению, мне не удалось создать изображение.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": true,
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "claims_result": false
+  },
+  "from": "tests/test_silent_tool_failure.py"
+ },
+ {
+  "user": "сделай презентацию",
+  "reply": "Презентация про историю Рима на 8 слайдов готова.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "claims_result": true
+  },
+  "from": "tests/test_silent_tool_failure.py"
+ },
+ {
+  "user": "сделай презентацию",
+  "reply": "Файл презентации готов.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "claims_result": true
+  },
+  "from": "tests/test_silent_tool_failure.py"
+ },
+ {
+  "user": "сделай презентацию",
+  "reply": "The file is ready.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "claims_result": true
+  },
+  "from": "tests/test_silent_tool_failure.py"
+ },
+ {
+  "user": "посчитай",
+  "reply": "Результат вычисления 18432 * 977 + 15% равен 20 965 334.4",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": true,
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?"
+  },
+  "from": "tests/test_silent_tool_failure.py"
+ },
+ {
+  "user": "посчитай",
+  "reply": "равен 20963112",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": true,
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?"
+  },
+  "from": "tests/test_silent_tool_failure.py"
+ },
+ {
+  "user": "посчитай",
+  "reply": "Результат: 21 045 897.6",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": true,
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?"
+  },
+  "from": "tests/test_silent_tool_failure.py"
+ },
+ {
+  "user": "посчитай",
+  "reply": "18432 * 977 = 18008064",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": true,
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?"
+  },
+  "from": "tests/test_silent_tool_failure.py"
+ },
+ {
+  "user": "расскажи",
+  "reply": "У неё 2 кота и 3 собаки",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": false,
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?"
+  },
+  "from": "tests/test_silent_tool_failure.py"
+ },
+ {
+  "user": "расскажи",
+  "reply": "Небо голубое из-за рассеяния.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": false,
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?"
+  },
+  "from": "tests/test_silent_tool_failure.py"
+ },
+ {
+  "user": "сделай презентацию",
+  "reply": "Презентацию можно собрать из восьми разделов.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "claims_result": false
+  },
+  "from": "tests/test_silent_tool_failure.py"
+ },
+ {
+  "user": "сделай файл",
+  "reply": "К сожалению, не удалось создать файл.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": "?",
+   "already": "?",
+   "computed": "?",
+   "admits_failure": true,
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "claims_result": false
+  },
+  "from": "tests/test_silent_tool_failure.py"
+ },
+ {
+  "user": "сделай",
+  "reply": "Не смог посчитать: калькулятор не вернул результат. Повтори запрос, пожалуйста — называть число наугад я не буду.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": false,
+   "already": "?",
+   "computed": false,
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "claims_result": false
+  },
+  "from": "graph_finalize canned"
+ },
+ {
+  "user": "сделай",
+  "reply": "Не получилось сделать фотографию — инструмент вернул ошибку и ничего не создал. Попробуй ещё раз, пожалуйста; выдавать несделанное за готовое я не стану.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": false,
+   "already": "?",
+   "computed": false,
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "claims_result": false
+  },
+  "from": "graph_finalize canned"
+ },
+ {
+  "user": "сделай",
+  "reply": "Не получилось сделать презентацию и картинку — инструмент вернул ошибку и ничего не создал. Попробуй ещё раз, пожалуйста; выдавать несделанное за готовое я не стану.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": false,
+   "already": "?",
+   "computed": false,
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "claims_result": false
+  },
+  "from": "graph_finalize canned"
+ },
+ {
+  "user": "сделай",
+  "reply": "Готового файла у меня нет — собрать его я не успел, отдавать пока нечего. Скажи, продолжить?",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": false,
+   "already": "?",
+   "computed": false,
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "claims_result": false
+  },
+  "from": "graph_finalize canned"
+ },
+ {
+  "user": "сделай",
+  "reply": "Сделал, но проверка показала, что нужного изменения на результате нет — он остался прежним. Выдавать это за готовое не буду: скажи, попробовать ещё раз?",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": false,
+   "already": "?",
+   "computed": false,
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?"
+  },
+  "from": "graph_finalize canned"
+ },
+ {
+  "user": "сделай",
+  "reply": "Сделал, но проверка говорит, что изменение получилось не полностью. Посмотри — если не то, скажи, что поправить.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": false,
+   "already": "?",
+   "computed": false,
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?"
+  },
+  "from": "graph_finalize canned"
+ },
+ {
+  "user": "сделай",
+  "reply": "Нарисовал, но проверка видит недочёты — посмотри. Если что-то не так, скажи, что поправить, или попроси перерисовать.",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": false,
+   "already": "?",
+   "computed": false,
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?"
+  },
+  "from": "graph_finalize canned"
+ },
+ {
+  "user": "сделай",
+  "reply": "Не получилось сделать фотографию",
+  "want": {
+   "did": "?",
+   "delivers": "?",
+   "promises": false,
+   "already": "?",
+   "computed": false,
+   "admits_failure": "?",
+   "denies": "?",
+   "tool_as_text": "?",
+   "does_tool_job": "?",
+   "claims_result": false
+  },
+  "from": "graph_finalize canned"
+ }
+]

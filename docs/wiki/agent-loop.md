@@ -46,7 +46,7 @@ flowchart TD
     FastReply --> Finalize["graph_finalize._finalize_answer"]
     Branch -- "round budget spent" --> Finalize
 ```
-*A round that calls no tool is never trusted silently, it must pass a correction ladder, or the loop ends and `_finalize_answer` resolves what is left, before an answer reaches the user.* `_finalize_answer`'s output then passes through `turn_audit.correct_claims`, which appends an honest correction line for any claim (added to cart, remembered, reminded, ran code, edited a file) that no successful tool call this turn backs.
+*A round that calls no tool is never trusted silently, it must pass a correction ladder, or the loop ends and `_finalize_answer` resolves what is left, before an answer reaches the user.* `_finalize_answer`'s output then passes through `turn_audit.correct_claims`, which appends an honest correction line for any claim (added to cart, remembered, reminded, ran code, edited a file) that no successful tool call this turn backs. What a reply claims (made, handed over, promised, already done, computed, admitted, denied) is read once per reply by the model in [`agent/reply_read.py`](../../agent/reply_read.py); every guard decides in code on that reading, scored in [`bench/reply_read_eval.py`](../../bench/reply_read_eval.py).
 
 ### Intent routing
 
@@ -172,6 +172,7 @@ Neither [`docs/injection_guard.md`](../injection_guard.md) nor [`docs/reasoning_
 
 | Path | Role |
 |---|---|
+| [`agent/reply_read.py`](../../agent/reply_read.py) | The model's reading of what a reply claims, with quoted words checked against the reply; the input of every anti-fabrication guard. |
 | [`agent/turn_audit.py`](../../agent/turn_audit.py) | Checks the final answer's claims against which tools actually succeeded; keeps a trace of a turn that visibly failed. |
 | [`agent/turn_trace.py`](../../agent/turn_trace.py) | A full trace of every turn (phases, model calls, log events, token totals) for debugging. |
 | [`agent/interim.py`](../../agent/interim.py) | Sends the model's own pre-tool-call sentence to the user before a long tool runs. |

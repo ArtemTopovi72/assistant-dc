@@ -13,13 +13,12 @@ The claim check generalises the guards that already exist one task at a time
 with side effects must have a successful call of a tool that does that thing.
 """
 from __future__ import annotations
-from seams import intent_read
+from seams import intent_read, reply_read
 
 import json
 import logging
 import os
 import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
-import re
 import threading
 import time
 from pathlib import Path
@@ -38,90 +37,46 @@ def _trace_dir() -> Path:
 MAX_TRACES = _cfg_env.env_int("FAILED_TURNS_MAX", 500)
 
 # -- claims ----------------------------------------------------------------
-# (id, pattern over the answer, tools of which ONE must have succeeded,
-#  needs_sandbox, the honest line appended when none did)
-_CLAIMS = (
-    ("cart",
-     re.compile(r"(?:добавил\w*|полож\w+|внес\w*)[^.!?\n]{0,50}(?:корзин|список покупок)"
-                r"|added[^.!?\n]{0,40}(?:cart|basket)", re.I),
-     {"ozon_cart", "ozon_shop"}, False,
-     "Оговорка: в корзину я ничего не добавлял — инструмент корзины в этом ходе не вызывался."),
-    ("remember",
-     re.compile(r"\b(?:запомнил\w*|сохранил\w*\s+(?:в\s+памят|себе|это))"
-                r"|\bI(?:'ll| will)? remember\b|\bsaved (?:it|that) to memory\b", re.I),
-     {"remember_fact"}, False,
-     "Оговорка: в долговременную память я это не записал — сохранение не выполнялось."),
-    # "Хорошо, я записал. Одна минута до того, как вы
-    # выпьете воды!" -- no tool ran, nothing was scheduled.
-    ("reminder",
-     re.compile(r"\bнапомню\b|напоминани\w*[^.!?\n]{0,20}(?:установлен|поставлен|создан|записан)"
-                r"|(?:поставил|установил|создал)\w*[^.!?\n]{0,20}напоминани|\bI(?:'ll| will) remind\b", re.I),
-     {"set_reminder"}, False,
-     "Оговорка: напоминание не поставлено — инструмент напоминаний не вызывался."),
-    ("reminder_cancel",
-     re.compile(r"(?:напоминани|будильник)\w*[^.!?\n]{0,30}\b(?:отмен[её]н|удал[её]н|снят)\w*"
-                r"|(?:отменил|удалил|снял)\w*[^.!?\n]{0,30}(?:напоминани|будильник)", re.I),
-     {"set_reminder"}, False,
-     "Оговорка: напоминание не отменено — инструмент напоминаний не вызывался."),
-    ("wrote_down",
-     re.compile(r"(?:^|[.!?]\s*|\bя\s+)(?:хорошо,?\s+|ок,?\s+)?(?:я\s+)?(?:это\s+)?записал\b(?!\s+в\s+файл)", re.I),
-     {"remember_fact", "set_reminder", "write_file", "edit_file"}, False,
-     "Оговорка: я ничего не записывал — ни в память, ни в напоминания."),
-    ("forget",
-     re.compile(r"(?:удалил\w*|стёр\w*|стер\w*)[^.!?\n]{0,30}памят", re.I),
-     {"forget_facts"}, False,
-     "Оговорка: из памяти я ничего не удалял — удаление не выполнялось."),
-    ("location",
-     re.compile(r"(?:установил\w*|сменил\w*|поставил\w*|выбрал\w*)[^.!?\n]{0,40}"
-                r"пункт\w* выдачи", re.I),
-     {"ozon_set_location"}, False,
-     "Оговорка: пункт выдачи я не менял — это действие не выполнялось."),
-    ("ran_code",
-     re.compile(r"\b(?:запустил\w*|прогнал\w*|протестировал\w*)\s+(?:её|ее|его|их|код|скрипт|функци|программ|тест)"
-                r"|тесты\s+(?:прошли|проходят|зел[её]н)"
-                # no sandbox at all: «и результат её работы для
-                # слова «шалаш»» -- nothing ran.
-                r"|результат\w*\s+(?:её|ее|его|их)\s+(?:работы|выполнения|запуска)", re.I),
-     {"run_code", "run_tests"}, False,
-     "Оговорка: код я в этом ходе не запускал, так что проверенным его считать нельзя."),
-    ("edited_file",
-     re.compile(r"(?:исправил\w*|изменил\w*|отредактировал\w*|дописал\w*|переписал\w*)"
-                r"[^.!?\n]{0,60}(?:файл|\.json|\.py|\.txt|\.toml|\.ya?ml|конфиг|тег)", re.I),
-     {"write_file", "edit_file", "run_code", "undo_edit", "delete_path"}, True,
-     "Оговорка: файлы я в этом ходе не менял — изменений на диске нет."),
-)
-
-# Already admits it did not happen: never add a second, contradicting line.
-_NEGATED = re.compile(r"не\s+(?:смог|удалось|получилось|стал|буду|добавил|запомнил|"
-                      r"запускал|менял|сохранил|напомн|записывал)|\bcould(?:n't| not)\b|\bdid not\b", re.I)
+# What the reply says it did (reply_read.read "did") -> (tools of which ONE must have
+# succeeded, needs_sandbox, the honest line appended when none did). The reading is the
+# model's: «Хорошо, я записал. Одна минута до воды» and «Он записал альбом в 1999» differ
+# by meaning, and a verb list could not tell them apart.
+_CLAIMS = {
+    "cart": ({"ozon_cart", "ozon_shop"}, False,
+             "Оговорка: в корзину я ничего не добавлял — инструмент корзины в этом ходе не вызывался."),
+    "remember": ({"remember_fact"}, False,
+                 "Оговорка: в долговременную память я это не записал — сохранение не выполнялось."),
+    "reminder": ({"set_reminder"}, False,
+                 "Оговорка: напоминание не поставлено — инструмент напоминаний не вызывался."),
+    "reminder_cancel": ({"set_reminder"}, False,
+                        "Оговорка: напоминание не отменено — инструмент напоминаний не вызывался."),
+    "forget": ({"forget_facts"}, False,
+               "Оговорка: из памяти я ничего не удалял — удаление не выполнялось."),
+    "pickup_point": ({"ozon_set_location"}, False,
+                     "Оговорка: пункт выдачи я не менял — это действие не выполнялось."),
+    "ran_code": ({"run_code", "run_tests"}, False,
+                 "Оговорка: код я в этом ходе не запускал, так что проверенным его считать нельзя."),
+    "edited_file": ({"write_file", "edit_file", "run_code", "undo_edit", "delete_path"}, True,
+                    "Оговорка: файлы я в этом ходе не менял — изменений на диске нет."),
+}
 
 
-def unmet_claims(answer: str, succeeded: set, has_sandbox: bool) -> list:
-    """Ids of claims in `answer` that no successful tool call backs."""
-    out = []
-    for cid, rx, tools, needs_box, _ in _CLAIMS:
-        if needs_box and not has_sandbox:
-            continue
-        m = rx.search(answer or "")
-        if not m or (succeeded & tools):
-            continue
-        # The sentence around the claim must not already deny it.
-        start = max(0, (answer or "").rfind(".", 0, m.start()) + 1)
-        sentence = (answer or "")[start:m.end() + 40]
-        if _NEGATED.search(sentence):
-            continue
-        out.append(cid)
-    return out
+def unmet_claims(answer: str, succeeded: set, has_sandbox: bool, ctx=None, user: str = "") -> list:
+    """Kinds of side effect `answer` claims that no successful tool call backs."""
+    if not (answer or "").strip():
+        return []
+    did = reply_read(ctx)(ctx, answer, user)["did"]
+    return [k for k in did if k in _CLAIMS and not (succeeded & _CLAIMS[k][0])
+            and (has_sandbox or not _CLAIMS[k][1])]
 
 
-def correct_claims(answer: str, succeeded: set, has_sandbox: bool) -> tuple:
-    """(answer with one honest line per unmet claim appended, [claim ids])."""
-    ids = unmet_claims(answer, succeeded, has_sandbox)
+def correct_claims(answer: str, succeeded: set, has_sandbox: bool, ctx=None, user: str = "") -> tuple:
+    """(answer with one honest line per unmet claim appended, [claim kinds])."""
+    ids = unmet_claims(answer, succeeded, has_sandbox, ctx, user)
     if not ids:
         return answer, []
-    lines = [line for cid, _, _, _, line in _CLAIMS if cid in ids]
     logger.warning("answer claims %s without the tool call that does it", ids)
-    return (answer or "").rstrip() + "\n\n" + "\n".join(lines), ids
+    return (answer or "").rstrip() + "\n\n" + "\n".join(_CLAIMS[k][2] for k in ids), ids
 
 
 # -- complaints about the previous turn --------------------------------------

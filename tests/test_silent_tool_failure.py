@@ -124,35 +124,22 @@ for name, text in POSITIVE:
     check(f"verdict_positive_{name}", not P._VERIFY_NEGATIVE_RE.search(text),
           repr(text[:50]))
 
-# Handing over a result is the same lie as claiming to have made one, and
-# _ACTION_CLAIM_RE (first-person verbs only) does not see it.
-DELIVERY = [
-    ("vot_your", "Вот ваш рыжий кот в скафандре среди звезд!"),
-    ("vot_yours", "Вот твой рыжий кот-астронавт!"),
-    ("vot_photo", "Вот реальное фото Эйфелевой башни."),
-    ("gotovo", "Готово!"),
-    ("english", "Here is your image."),
-]
-for name, text in DELIVERY:
-    check(f"delivery_claim_{name}", bool(P._DELIVERY_CLAIM_RE.search(text)),
-          repr(text[:50]))
-
-# It must stay narrow: these are honest answers given AFTER a failure, and
-# flagging them would push the agent to retry a thing it correctly gave up on.
-NOT_DELIVERY = [
-    ("deck_plan", "Вот план презентации из 8 слайдов: 1. Основание Рима"),
-    ("ideas", "Вот несколько идей для названия кофейни"),
-    ("apology", "К сожалению, мне не удалось создать изображение."),
-    ("physics", "Небо голубое из-за рэлеевского рассеяния."),
-]
-for name, text in NOT_DELIVERY:
-    check(f"not_delivery_{name}", not P._DELIVERY_CLAIM_RE.search(text),
-          repr(text[:50]))
+# Which drafts claim a result («Вот твой рыжий кот-астронавт!», «Презентация готова»,
+# «Результат вычисления … равен 20 965 334.4») is the model's reading (agent/reply_read.py),
+# scored live with these phrases in bench/reply_read_set. Here: the decisions made on it.
+import types as _types
+from fakes import claims as _claims
+_C = _types.SimpleNamespace(reply_read=_claims({
+    "Вот ваш рыжий кот в скафандре!": {"delivers": True}, "Я добавил ей очки.": {"did": ["draw"]},
+    "К сожалению, не удалось создать изображение.": {"admits_failure": True},
+    "Вот ваш рыжий кот!": {"delivers": True}, "Презентация готова.": {"did": ["file"]},
+    "Результат вычисления равен 20963112": {"computed": True},
+    "К сожалению, не получилось.": {"admits_failure": True}}))
 
 # The decision itself, not a grep of the loop's source: a substring check on
 # personality_node would still pass with "False and" in front of the whole
 # condition. V() is the real predicate the loop calls.
-V = lambda draft, neg, sent: P._answer_contradicts_reality(draft, neg, set(), sent)
+V = lambda draft, neg, sent: P._answer_contradicts_reality(draft, neg, set(), sent, _C)
 check("a delivery claim after a negative verdict is caught",
       V("Вот ваш рыжий кот в скафандре!", True, False))
 check("a first-person claim after a negative verdict is caught",
@@ -165,34 +152,8 @@ check("the guard fires only once per turn",
       not V("Вот ваш рыжий кот!", True, True))
 check("an empty draft is not a claim", not V("", True, False))
 
-# --- the third phrasing: the deliverable "exists" --------------------------
-# Neither a first-person verb nor a "вот …". This is where the lies hid the
-# longest, and where the chaos scorer was hiding them too: "Презентация про
-# историю Рима на 8 слайдов готова" with no file, and "Результат вычисления …
-# равен 20 965 334.4" when calculate had returned nothing (the real value of
-# 18432*977+15% is 20 709 273.6, and the invented one differed every run).
-PROMISE = [
-    ("deck_ready", "Презентация про историю Рима на 8 слайдов готова."),
-    ("file_ready", "Файл презентации готов."),
-    ("computed", "Результат вычисления 18432 * 977 + 15% равен 20 965 334.4"),
-    ("equals", "равен 20963112"),
-    ("english", "The file is ready."),
-]
-for name, text in PROMISE:
-    check(f"promise_claim_{name}", bool(P._PROMISE_CLAIM_RE.search(text)),
-          repr(text[:55]))
-
-NOT_PROMISE = [
-    ("plan_offered", "Вот план презентации из 8 слайдов: 1. Основание Рима"),
-    ("apology", "К сожалению, не удалось создать файл."),
-    ("explain", "Презентацию можно собрать из восьми разделов."),
-]
-for name, text in NOT_PROMISE:
-    check(f"not_promise_{name}", not P._PROMISE_CLAIM_RE.search(text),
-          repr(text[:55]))
-
 # A broken promise is a trigger on its own — no verification needed.
-A = P._answer_contradicts_reality
+A = lambda draft, neg, failed, sent: P._answer_contradicts_reality(draft, neg, failed, sent, _C)
 check("a failed artifact tool + a promise claim is caught",
       A("Презентация готова.", False, {"create_presentation"}, False))
 check("a failed calculate + an invented number is caught",
@@ -223,18 +184,6 @@ check("only calculate is held to that rule",
 # --- the deterministic replacement at finalisation -------------------------
 # Chosen over another corrective round: a corrective round is advice the model
 # is free to ignore, a deterministic scrub is not.
-SR = GF._STATED_RESULT_RE
-for label, text in [("vychisleniya", "Результат вычисления 18432 * 977 равен 20963112"),
-                    ("colon", "Результат: 21 045 897.6"),
-                    ("equals", "18432 * 977 = 18008064")]:
-    check(f"stated_result_{label}", bool(SR.search(text)), text[:45])
-for label, text in [("cats", "У неё 2 кота и 3 собаки"),
-                    ("prose", "Небо голубое из-за рассеяния."),
-                    ("price", "Цена равна 500 рублей")]:
-    check(f"not_stated_result_{label}", not SR.search(text), text[:45])
-
-check("the honest replacement refuses to name a number",
-      not GF._STATED_RESULT_RE.search(GF._NO_CALC_ANSWER), GF._NO_CALC_ANSWER)
 # --- the same backstop for the tools that hand over a FILE -----------------
 # The corrective round asks the model not to claim a result that does not
 # exist; it can still claim one ("Вот реальное фото Эйфелевой башни" after
@@ -248,14 +197,7 @@ check("several failures are named together",
                                                  "generate_image"}))
 check("a tool that hands over no file gets no line",
       GF._honest_failure_line({"search"}) == "")
-check("the honest line makes no claim of its own",
-      not P._DELIVERY_CLAIM_RE.search(GF._honest_failure_line({"find_photo"}))
-      and not P._PROMISE_CLAIM_RE.search(GF._honest_failure_line({"find_photo"})),
-      GF._honest_failure_line({"find_photo"}))
-# "не получилось" must survive the negation lookbehind, or the replacement text
-# would itself read as a false success.
-check("the honest line is not itself a delivery claim",
-      not P._DELIVERY_CLAIM_RE.search("Не получилось сделать фотографию"))
+# (the honest lines claim nothing: scored with the other canned answers in bench/reply_read_set)
 check("every artifact tool has a noun",
       set(GF._PROMISE_NOUN) == set(P._TOOL_ARTIFACT),
       f"{sorted(set(P._TOOL_ARTIFACT) - set(GF._PROMISE_NOUN))} missing")
@@ -265,7 +207,7 @@ check("the file backstop is wired",
       "_honest_failure_line(_artifact_fails, _tool_said_unsupported(messages))" in _fin_src
       and "final_answer = _line" in _fin_src)
 check("the replacement is wired with both triggers",
-      "_STATED_RESULT_RE.search(final_answer) or _degenerate" in _fin_src)
+      '(_degenerate or said()["computed"])' in _fin_src)
 # The ASSIGNMENT, not just the condition. Checking the condition alone let a
 # mutation that deleted "final_answer = _NO_CALC_ANSWER" pass unnoticed -- the
 # guard would have evaluated and then done nothing.

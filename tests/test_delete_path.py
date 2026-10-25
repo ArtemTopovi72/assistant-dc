@@ -138,7 +138,10 @@ def test_a_hash_with_no_dedupe_intent_is_not_flagged():
 def test_a_failed_delete_followed_by_a_success_claim_is_caught():
     import graph_personality as G
     assert "delete_path" in G._FABRICATION_RISK and "run_code" in G._FABRICATION_RISK
+    import types
+    from fakes import claims
+    c = types.SimpleNamespace(reply_read=claims())
     assert G._answer_contradicts_reality("Я удалил все файлы из рабочей директории.",
-                                         False, {"delete_path"}, False)
+                                         False, {"delete_path"}, False, c)
     assert not G._answer_contradicts_reality("Не получилось: инструмент отказал, папка не тронута.",
-                                             False, {"delete_path"}, False)
+                                             False, {"delete_path"}, False, c)

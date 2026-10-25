@@ -2,7 +2,7 @@
 
 Split out of graph_personality.py unchanged. _finalize_answer is the retry
 ladder plus the last-resort text; the module also owns the fabrication guard
-(_ACTION_CLAIM_RE / _pop_fabrication_draft) that stops a draft claiming an
+(_pop_fabrication_draft, fed by reply_read) that stops a draft claiming an
 action the agent never took from reaching the user.
 
 # NOTE the `import graph as _g` inside the functions below. It is load-bearing,
@@ -12,7 +12,8 @@ action the agent never took from reaching the user.
 # value at import would freeze the real implementations and make every one of
 # those patches a silent no-op. See graph_personality.py's module docstring.
 """
-from seams import chat_model, intent_read
+from seams import chat_model, intent_read, reply_read
+from reply_read import claims_result
 import logging
 import os
 import re
@@ -26,81 +27,6 @@ from utils import (strip_reasoning_leak, strip_textual_tool_calls,
 
 logger = logging.getLogger("assistant.graph")
 
-
-# Russian action verbs an answer uses when claiming an edit/creation either
-# happened ("я добавил очки", "я перерисовал сцену") OR is about to happen right
-# now ("сейчас перерисую", "запущу рисовку"). Used by the anti-fabrication guard:
-# such a claim with ZERO tool calls in the turn means nothing actually ran — and
-# the future-tense promise is the worse case, because the model keeps re-promising
-# ("рисуй" -> "сейчас перерисую" -> ...) without ever calling the tool.
-_ACTION_CLAIM_RE = re.compile(
-    r"\b(?:"
-    # past tense — claims a completed action
-    r"добавил|заменил|перерисовал|нарисовал|сгенерировал|изменил|изменена|"
-    r"перекрасил|убрал|удалил|исправил|отредактировал|поменял|сделал|"
-    # future/present 1st person — promises to act now without acting
-    r"перерисую|перерисуем|нарисую|нарисуем|рисую|рисуем|"
-    r"сгенерирую|сгенерируем|генерирую|генерируем|"
-    r"создам|создаю|создадим|изменю|изменим|перекрашу|перекрасим|"
-    r"добавлю|добавим|заменю|заменим|убер[уеё]\w*|удал[юи]\w*|"
-    r"исправлю|исправим|отредактирую|отредактируем|поменяю|поменяем|"
-    r"сделаю|сделаем|запущу|запускаю"
-    r")\w*\b"
-    # English equivalents — the guard was Russian-only, so an English-language
-    # session could fabricate "I've added the glasses" unchecked. Anchored to a
-    # first-person pronoun so a bare mention of the verb doesn't trip it.
-    r"|\bi\b[^.!?\n]{0,24}?\b(?:added|removed|replaced|changed|redrew|redrawn|"
-    r"drew|generated|created|edited|erased|repainted|recolou?red|inpainted|"
-    r"upscaled)\b"
-    r"|\bi(?:['’]ll|\s+will|['’]?m\s+going\s+to)\s+(?:now\s+)?"
-    r"(?:draw|redraw|generate|create|edit|add|remove|replace|fix|repaint|"
-    r"inpaint|upscale)\b",
-    re.IGNORECASE,
-)
-
-
-# The same promise, about FILES. Twice in a row on a 112 MB
-# archive: «Сначала я распакую архив ... Начинаю поиск.» / «сначала распакую
-# его, а затем просканирую ... Начинаю исследование.» — and the turn ended with
-# no tool call. A reply that announces file work with zero tool calls while
-# the working folder has something in it is a promise, not an answer.
-_FILE_PROMISE_RE = re.compile(
-    r"\b(?:"
-    r"распаку[юем]\w*|разархивиру[юем]\w*|извлеку|извлечём|извлечем|"
-    r"просканиру[юем]\w*|проверю|проверим|изучу|изучим|исследую|исследуем|"
-    r"открою|откроем|прочитаю|прочитаем|посмотрю|посмотрим|найду|найдём|найдем|"
-    r"начинаю|начну|приступаю|приступлю|"
-    # «заново» after a dedupe ask: «применю ... проведу ...
-    # сформирую ... коллаж будет готов» -- a plan in the future tense with
-    # zero tool calls slipped past the verbs above.
-    r"применю|применим|провед[уё]м?|сформиру[юе]м?|собер[уё]м?|пересобер[уё]м?|"
-    r"отбер[уё]м?|отфильтру[юе]м?|обработа[юе]м?|подготовл[юи]м?|напиш[уе]м?|"
-    r"сравн[юи]м?|сгруппиру[юе]м?"
-    r")\w*\b"
-    r"|\bбуд[еу]т\s+готов\w*"
-    r"|\bi(?:[\'’]ll|\s+will|[\'’]?m\s+going\s+to|[\'’]?m\s+starting\s+to)\s+(?:now\s+)?"
-    r"(?:unpack|unzip|extract|open|read|scan|inspect|examine|look|search|explore|start|"
-    r"rebuild|build|assemble|apply|run|write|filter|compare|group|prepare|process)\b"
-    r"|\bwill\s+be\s+ready\b"
-    r"|\b(?:starting|beginning)\s+(?:the\s+)?(?:search|scan|investigation|extraction|analysis)\b",
-    re.IGNORECASE,
-)
-
-
-# «Я уже выполнил эту задачу!» to a request the user has just REPEATED
-# (the same dedupe ask sent twice, then «заново»). A repeated
-# request means the last result did not satisfy them; an answer that points
-# at the previous turn, with no tool called now, is a refusal dressed as
-# diligence -- and after a restart the "previous turn" may be a lie the
-# history preserved.
-_ALREADY_DONE_RE = re.compile(
-    r"\bуже\s+(?:выполн|сдела|пересобра|собра|удали|отправ|присла|готов|обработа)\w*"
-    r"|\bв\s+(?:предыдущ|прошл)\w+\s+(?:шаге|ответе|сообщении|ходе|раз)"
-    r"|\b(?:i(?:[\'’]ve)?|it(?:[\'’]s)?|this\s+(?:was|is))\s+already\s+"
-    r"(?:did|done|completed|rebuilt|built|sent|removed|handled|finished)\b"
-    r"|\bin\s+(?:the|my)\s+(?:previous|last)\s+(?:step|reply|message|turn)\b",
-    re.IGNORECASE,
-)
 
 def _user_read(text: str, ctx=None) -> dict:
     """The model's read of the user's words (agent/intent.py)."""
@@ -209,13 +135,7 @@ def _strip_fabricated_images(text: str) -> str:
 # mechanisms measured very differently: the deterministic scrub of fabricated
 # image links left ZERO through in 140 runs, while a corrective round is
 # advice the model is free to ignore -- and did.
-_STATED_RESULT_RE = re.compile(
-    r"результат\s+вычислен|результат\s*:\s*[-+(]?\d"
-    r"|равен\s*[-+(]?\d|\bравно\s*[-+(]?\d"
-    r"|==\s*\d|(?<![<>=!])\s=\s*[-+(]?\d"
-    r"|\b(?:equals|is)\s+[-+(]?\d{3,}",
-    re.IGNORECASE,
-)
+# reply_read's `computed` reads it now.
 
 # What a failed tool was supposed to hand over, in the words the user will
 # understand. Used to write an honest sentence in place of a claim that the
@@ -272,14 +192,7 @@ def _honest_failure_line(failed_promises, unsupported: bool = False) -> str:
 # No existing guard could fire: nothing errored (so failed_promises is empty)
 # and no verifier spoke. The missing invariant is simpler than either -- if the
 # answer says a file is ready, a file has to exist.
-_FILE_READY_RE = re.compile(
-    r"(?:архив\w*|файл\w*|презентац\w*|документ\w*|отч[её]т\w*|zip|jar)"
-    r"[^.!?]{0,60}(?:готов|собран|запакован|прикреп|отправ|высла)"
-    r"|(?:запаковал|упаковал|собрал|сформировал|приложил)[^.!?]{0,40}"
-    r"(?:архив|файл|zip|jar|презентац|документ)"
-    r"|(?:packed|zipped|attached)[^.!?]{0,40}(?:archive|file|zip|jar)",
-    re.IGNORECASE,
-)
+# reply_read's `did` ("file") reads the claim now.
 
 _ARTIFACT_KEYS = ("document_path", "image_path", "video_path")
 
@@ -293,13 +206,8 @@ _NO_FILE_ANSWER = (
 # chaos bench: 12 of 140 runs where a tool had hard-failed and the answer
 # neither claimed success nor admitted the failure -- not a lie, but the user
 # walks away not knowing the thing they asked for was never made. An admission
-# already in the draft must not be doubled, hence the counter-regex.
-_ADMISSION_RE = re.compile(
-    r"не\s+(?:получилось|удалось|смог\w*|вышло)|не\s+сработал"
-    r"|ошибк\w*|сбой|не\s+сраб|техническ\w+\s+пробл"
-    r"|\bfailed\b|\bcould\s?n[o']t\b|\berror\b",
-    re.IGNORECASE,
-)
+# already in the draft must not be doubled.
+# reply_read's `admits_failure` reads the admission.
 
 # The verifier looked at the result and said the requested change is NOT there.
 # Different from a failed tool: a file DOES exist and IS delivered, so the
@@ -488,8 +396,9 @@ def _finalize_answer(ctx: Context, state: AgentState, messages: list,
         # emits the fragment instead of a sentence. That is worse for the user
         # than an honest failure, so it gets the same replacement.
         _degenerate = not any(ch.isalpha() for ch in final_answer)
+        said = lambda: reply_read(ctx)(ctx, final_answer, original_input or user_input)
         if ("calculate" in (failed_promises or ())
-                and (_STATED_RESULT_RE.search(final_answer) or _degenerate)):
+                and (_degenerate or said()["computed"])):
             logger.warning("Answer states a computed value (or collapsed to a "
                            "fragment) but calculate failed this turn — replacing")
             final_answer = _NO_CALC_ANSWER
@@ -506,23 +415,17 @@ def _finalize_answer(ctx: Context, state: AgentState, messages: list,
                                if t in _PROMISE_NOUN
                                and not str(state.get(
                                    _gp._TOOL_ARTIFACT.get(t, "")) or "").strip()}
-            _claims = (_gp._DELIVERY_CLAIM_RE.search(final_answer)
-                       or _gp._PROMISE_CLAIM_RE.search(final_answer)
-                       or _gp._ACTION_CLAIM_RE.search(final_answer))
+            # «План видео ниже!» after a failed render (it read the plan card in the
+            # history, live 2026-10-11) is a delivery like any other.
+            _claims = claims_result(said())
             _line = (_honest_failure_line(_artifact_fails, _tool_said_unsupported(messages))
                      if _artifact_fails else "")
-            # A failed render whose draft still announces a plan "below" (it
-            # read the plan card in the history): live 2026-10-11 the user got
-            # «Не получилось…» followed by «План видео ниже!» and an epic pitch.
-            if ("generate_video" in _artifact_fails
-                    and re.search(r"\bплан\w*|\bplan\b|сценари\w*", final_answer, re.I)):
-                _claims = _claims or True
             if _artifact_fails and _claims and _line:
                 logger.warning("Answer claims a deliverable from failed "
                                "tool(s) %s — replacing", sorted(_artifact_fails))
                 final_answer = _line
             elif (_artifact_fails and _line
-                  and not _ADMISSION_RE.search(final_answer)):
+                  and not said()["admits_failure"]):
                 # Says nothing either way. The draft may still be useful
                 # (a suggestion, a question), so the failure is PREPENDED
                 # rather than swallowing it.
@@ -532,11 +435,8 @@ def _finalize_answer(ctx: Context, state: AgentState, messages: list,
         # The verifier contradicting a tool that reported success. No tool
         # errored, so nothing above fires; the artifact exists and is still
         # delivered, only the claim about it is corrected.
-        elif verification_negative and not _ADMISSION_RE.search(final_answer):
-            import graph_personality as _gp
-            if (_gp._DELIVERY_CLAIM_RE.search(final_answer)
-                    or _gp._PROMISE_CLAIM_RE.search(final_answer)
-                    or _gp._ACTION_CLAIM_RE.search(final_answer)):
+        elif verification_negative and not said()["admits_failure"]:
+            if claims_result(said()):
                 logger.warning("Answer claims a result the verifier said is "
                                "not there — replacing")
                 _edits = {"inpaint_image", "redraw_image", "transfer_image", "swap_person", "edit_image"}
@@ -555,11 +455,10 @@ def _finalize_answer(ctx: Context, state: AgentState, messages: list,
         _asked = " ".join(str(state.get(k) or "") for k in ("user_input_original", "user_input"))
         from prompt_guard import has_quote, user_words
         _fwd_turn = has_quote(_asked)
-        if (_FILE_READY_RE.search(final_answer)
+        if (not any(str(state.get(k) or "").strip() for k in _ARTIFACT_KEYS)
+                and "file" in said()["did"]
                 and (not _fwd_turn or _user_read(user_words(_asked), ctx=ctx)["asks_for_file"])
-                and not any(str(state.get(k) or "").strip()
-                            for k in _ARTIFACT_KEYS)
-                and not _ADMISSION_RE.search(final_answer)):
+                and not said()["admits_failure"]):
             logger.warning("Answer says a file is ready but none exists — replacing")
             final_answer = _NO_FILE_ANSWER
 
@@ -570,18 +469,15 @@ def _finalize_answer(ctx: Context, state: AgentState, messages: list,
         # nothing because a file exists -- and then this never ran. Safe to
         # run unconditionally: every replacement the chain writes begins
         # with an admission, which the guard below already excludes.
-        # Only _ACTION_CLAIM_RE and
-        # _PROMISE_CLAIM_RE count here, never _DELIVERY_CLAIM_RE -- "вот твоя
+        # Only a claimed change counts here, never a bare handover -- "вот твоя
         # картинка" hands over a file that genuinely exists and is honest;
         # "я добавил ей очки" asserts a change nothing confirmed.
         if (not verification_negative
               and "inspect_image" not in (tools_called_this_turn or ())
               and (tools_called_this_turn or set()) & _gp_edit_tools()
               and str(state.get("image_path") or "").strip()
-              and not _ADMISSION_RE.search(final_answer)):
-            import graph_personality as _gp
-            if (_gp._ACTION_CLAIM_RE.search(final_answer)
-                    or _gp._PROMISE_CLAIM_RE.search(final_answer)):
+              and not said()["admits_failure"]):
+            if "draw" in said()["did"]:
                 logger.warning("Answer asserts an edit landed but nothing "
                                "verified it — replacing with a hedged handover")
                 final_answer = _UNVERIFIED_EDIT_ANSWER

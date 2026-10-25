@@ -18,9 +18,12 @@ CLAIM = "Готово! Я добавил ей очки."
 STATE = {"image_path": "/tmp/x.png"}
 
 
+_CTX = __import__("types").SimpleNamespace(reply_read=__import__("fakes").claims())
+
+
 def _esc(draft=CLAIM, called=("inpaint_image",), state=None, done=False):
     return GP._should_escalate_to_verifier(
-        draft, set(called), STATE if state is None else state, done)
+        draft, set(called), STATE if state is None else state, done, _CTX)
 
 
 # --- when it must fire ------------------------------------------------------

@@ -1,6 +1,7 @@
 """A repeated request answered with «уже выполнил» and no tool call is a
 refusal; a future-tense plan («применю … сформирую … будет готов») is a
-promise.
+promise. Whether a reply says either is the model's reading (agent/reply_read.py);
+the phrases are scored live in bench/reply_read_set. Here: the loop acts on it.
 """
 import os, sys, inspect
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -18,24 +19,6 @@ _H = [{"role": "user", "content": "Пересобери коллаж, удали
       {"role": "user", "content": "Пересобери коллаж, удалив дубликаты"}]
 
 
-def test_future_tense_plan_is_a_promise():
-    d = ("В этот раз я применю еще более строгий алгоритм. Проведу сканирование "
-         "и сформирую новый коллаж. Твой коллаж будет готов: bridge_ultimate.jpg.")
-    assert F._FILE_PROMISE_RE.search(d)
-    assert F._FILE_PROMISE_RE.search("I'll rebuild the collage now; it will be ready shortly.")
-
-
-def test_a_finished_answer_is_not_a_promise():
-    assert not F._FILE_PROMISE_RE.search("Готово: собрал коллаж из 4 уникальных мостов, отправляю.")
-    assert not F._FILE_PROMISE_RE.search("В архиве 173 фото; мост есть на P1012796.JPG.")
-
-
-def test_already_done_phrases():
-    assert F._ALREADY_DONE_RE.search("Я уже выполнил эту задачу! В предыдущем шаге я пересобрал коллаж.")
-    assert F._ALREADY_DONE_RE.search("I've already done that in my previous reply.")
-    assert not F._ALREADY_DONE_RE.search("Коллаж готов, отправляю.")
-
-
 def test_redo_detection():
     # the model's read (agent/intent.py)
     R = _reads({"заново": {"redo": "same"}, "сделай ещё раз": {"redo": "same"}}.get)
@@ -48,7 +31,7 @@ def test_redo_detection():
 
 def test_guard_is_wired_into_the_loop():
     src = inspect.getsource(G.personality_node)
-    assert "_ALREADY_DONE_RE.search(draft)" in src
+    assert 'said["already"]' in src
     assert "_is_redo_request(user_input, messages, ctx=ctx)" in src
     assert "dedupe_photos" in src
 
@@ -62,11 +45,10 @@ def test_promise_after_partial_work_is_still_caught():
     """find_content + dedupe_photos ran, then «Сейчас соберу из них коллаж!» ended
     the turn. The guard must not be disarmed by tools having run earlier in the
     turn."""
-    assert F._FILE_PROMISE_RE.search("Осталось 4 уникальных фото. Сейчас соберу из них коллаж!")
     src = inspect.getsource(G.personality_node)
-    i = src.index("_FILE_PROMISE_RE.search(draft)")
+    i = src.index('and said["promises"]):')
     cond = src[src.rfind("if (", 0, i):i]
-    assert "not tools_ran_now" not in cond, cond
+    assert "_sandbox_touched_recently" in cond and "not tools_ran_now" not in cond, cond
 
 
 def test_bare_redo_is_pinned_to_the_previous_request():
@@ -92,14 +74,10 @@ def test_bare_redo_is_pinned_to_the_previous_request():
 def test_collage_claim_needs_a_script_run():
     """«Коллаж готов!» after dedupe_photos with no run_code must not stand: the one
     found photo would go out as the collage."""
-    assert G._COLLAGE_DONE_RE.search("Я нашёл 8 мостов, теперь их 4. Коллаж готов!")
-    assert G._COLLAGE_DONE_RE.search("Вот коллаж из 4 мостов.")
-    assert G._COLLAGE_DONE_RE.search("The collage is ready.")
-    assert not G._COLLAGE_DONE_RE.search("Осталось 4 фото. Сейчас соберу из них коллаж!")
-    assert not G._COLLAGE_DONE_RE.search("В архиве 173 фото.")
     assert "[\"collage\"]" in inspect.getsource(G)   # the ask itself: bench/intent_rest_live.py
     src = inspect.getsource(G.personality_node)
-    assert "tools_called_this_turn & _BUILDER_TOOLS" in src
+    i = src.index("tools_called_this_turn & _BUILDER_TOOLS")
+    assert "claims_result(said)" in src[src.rfind("if (", 0, i):i]
 
 
 def test_run_code_is_forced_once_the_photos_are_picked():

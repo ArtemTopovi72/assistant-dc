@@ -52,9 +52,8 @@ check("text files are grepped too", "box.search(" in src)
 
 # the promise guard: a plan with no tool call is not an answer
 import graph_finalize as F, graph_personality as G
-check("«Начинаю поиск» with no tool call is a promise", F._FILE_PROMISE_RE.search("Сначала я распакую архив. Начинаю поиск."))
-check("an actual answer is not", not F._FILE_PROMISE_RE.search("В архиве 173 фото; мост есть на P1012796.JPG."))
-check("the guard is wired into the loop", "_FILE_PROMISE_RE.search(draft)" in inspect.getsource(G.personality_node))
+# (whether a draft is a promise is the model's reading: bench/reply_read_set)
+check("the guard is wired into the loop", 'and said["promises"]):' in inspect.getsource(G.personality_node))
 
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)

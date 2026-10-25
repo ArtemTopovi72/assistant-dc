@@ -31,27 +31,38 @@ def traces(tmp_path, request):
     return tmp_path
 
 
+# What the model reads each reply as claiming (agent/reply_read.py; the reading itself is
+# scored live by bench/reply_read_eval.py). Here: what the audit does with a reading.
+_DID = {"Готово, добавил чайник в корзину.": ["cart"], "Хорошо, запомнил: ты живёшь в Казани.": ["remember"],
+        "Хорошо, запомнил.": ["remember"], "Поставил пункт выдачи на Ленина, 5.": ["pickup_point"],
+        "Запустил тесты — все прошли.": ["ran_code"], "Исправил файл medium.json.": ["edited_file"],
+        "Добавил в корзину.": ["cart"], "Хорошо, напомню через минуту.": ["reminder"],
+        "Запомнил и напомню завтра.": ["remember", "reminder"]}
+_CTX = types.SimpleNamespace(**reads(reply=lambda t: {"did": _DID.get(t, [])}))
+
+
 @pytest.mark.parametrize("answer,tools,box,want", [
     ("Готово, добавил чайник в корзину.", set(), False, ["cart"]),
     ("Готово, добавил чайник в корзину.", {"ozon_cart"}, False, []),
     ("Хорошо, запомнил: ты живёшь в Казани.", set(), False, ["remember"]),
     ("Хорошо, запомнил.", {"remember_fact"}, False, []),
-    ("Поставил пункт выдачи на Ленина, 5.", set(), False, ["location"]),
+    ("Поставил пункт выдачи на Ленина, 5.", set(), False, ["pickup_point"]),
     ("Запустил тесты — все прошли.", {"edit_file"}, True, ["ran_code"]),
     ("Запустил тесты — все прошли.", set(), False, ["ran_code"]),  # no sandbox: nothing CAN have run
     ("Исправил файл medium.json.", set(), True, ["edited_file"]),
+    ("Исправил файл medium.json.", set(), False, []),               # no sandbox: no file to have changed
     ("Исправил файл medium.json.", {"edit_file"}, True, []),
     ("Не смог добавить в корзину: Ozon не ответил.", set(), False, []),
-    ("Вот три чайника с хорошими отзывами.", set(), False, []),
+    ("Запомнил и напомню завтра.", {"remember_fact"}, False, ["reminder"]),   # each claim on its own
 ])
 def test_claims(answer, tools, box, want):
-    assert TA.unmet_claims(answer, tools, box) == want
+    assert TA.unmet_claims(answer, tools, box, _CTX) == want
 
 
 def test_an_unmet_claim_gets_one_honest_line():
-    out, ids = TA.correct_claims("Добавил в корзину.", set(), False)
+    out, ids = TA.correct_claims("Добавил в корзину.", set(), False, _CTX)
     assert ids == ["cart"] and out.startswith("Добавил в корзину.")
-    assert "ничего не добавлял" in out
+    assert out.count("Оговорка") == 1 and "ничего не добавлял" in out
 
 
 def test_a_failed_turn_is_saved(traces):
@@ -115,12 +126,9 @@ def test_an_unknown_tool_names_the_close_ones():
     assert out.startswith("[TOOL ERROR]") and "search" in out
 
 
-def test_reminder_and_wrote_down_claims():
-    assert TA.unmet_claims("Хорошо, я записал. Одна минута до воды!", set(), False) == ["wrote_down"]
-    assert TA.unmet_claims("Хорошо, напомню через минуту.", set(), False) == ["reminder"]
-    assert TA.unmet_claims("Хорошо, напомню через минуту.", {"set_reminder"}, False) == []
-    assert TA.unmet_claims("Не напомню, такой функции нет.", set(), False) == []
-    assert TA.unmet_claims("Он записал альбом в 1999.", set(), False) == []
+def test_a_reminder_claim_needs_the_reminder_tool():
+    assert TA.unmet_claims("Хорошо, напомню через минуту.", set(), False, _CTX) == ["reminder"]
+    assert TA.unmet_claims("Хорошо, напомню через минуту.", {"set_reminder"}, False, _CTX) == []
 
 
 def test_calc_date_helpers_are_results():

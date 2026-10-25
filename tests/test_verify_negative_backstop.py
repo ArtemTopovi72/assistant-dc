@@ -18,9 +18,14 @@ grep has now twice passed against a mutation that broke the behaviour.
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import graph_finalize as GF
+from fakes import claims
 
 
 class _Ctx:
+    reply_read = staticmethod(claims({
+        "Борис говорит, что презентация готова; из этого можно взять структуру слайдов.": {},
+        "Вот твой логотип!": {"delivers": True}, "Презентация готова, 8 слайдов.": {"did": ["file"]}}))
+
     def is_cancelled(self): return False
     def set_stage(self, *a, **k): pass
 

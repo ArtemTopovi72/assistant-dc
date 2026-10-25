@@ -38,12 +38,55 @@ def deps_ctx(**deps):
     return types.SimpleNamespace(deps=types.SimpleNamespace(**deps))
 
 
-def reads(read=None, yes=None, pick=None):
+# How the model reads the drafts the suites script (agent/reply_read.py): what each one
+# claims. The readings themselves are scored live on bench/reply_read_set; a draft not
+# listed here claims nothing.
+CLAIMS = {
+    "Вот твоя картинка с очками!": {"delivers": True},
+    "Я добавил ей очки, готово.": {"did": ["draw"]},
+    "Не получилось добавить очки, правка не применилась.": {"admits_failure": True},
+    "Не удалось — инструмент вернул ошибку.": {"admits_failure": True},
+    "Вот твоя картинка!": {"delivers": True},
+    "Вот твоя картинка.": {"delivers": True},
+    "Вот твоя картинка с котом.": {"delivers": True},
+    "Готово! Я добавил ей очки.": {"did": ["draw"]},
+    "Готово! Я нарисовал рыжего кота.": {"did": ["draw"]},
+    "Готово! Я перерисовал изображение, добавив очки.": {"did": ["draw"]},
+    "Я запаковал всё обратно. Ваш обновленный архив готов.": {"did": ["file"]},
+    "Презентация про Рим готова, 8 слайдов.": {"did": ["file"]},
+    "Я поправил файл settings.json, теперь он парсится.": {"did": ["edited_file"]},
+    "Не получилось собрать архив — упаковка не сработала.": {"admits_failure": True},
+    "План видео ниже! Я прописал в сценарии максимально эпичный момент.": {"delivers": True},
+    "Я удалил все файлы из рабочей директории.": {"did": ["other"]},
+    "Не получилось: инструмент отказал, папка не тронута.": {"admits_failure": True},
+    "Я добавил очки на фото.": {"did": ["draw"]},
+    "Готово, очки добавлены.": {"did": ["draw"]},
+    "Готово! Часы убраны.": {"did": ["draw"]},
+    "Не вышло: на руке нарисовались новые часы.": {"admits_failure": True},
+    "Проверил: очки на месте.": {},
+}
+
+
+def claims(extra=None):
+    """A context's `reply_read` answering from CLAIMS (plus `extra`)."""
+    table = {**CLAIMS, **(extra or {})}
+    return reads(reply=lambda t: table.get(t))["reply_read"]
+
+
+def reads(read=None, yes=None, pick=None, reply=None):
     """The model's reads a suite scripts, as the seams core/seams.py looks up on a context:
     `read(text) -> dict | None` (merged over intent.FALLBACK), `yes(question, text) -> bool`,
-    `pick(question, text) -> option | None`. Unscripted: what the offline reads answer."""
+    `pick(question, text) -> option | None`, `reply(reply_text) -> dict | None` (what a reply
+    claims, merged over reply_read.NOTHING). Unscripted: what the offline reads answer."""
     import intent
     out = {}
+    if reply is not None:
+        import reply_read
+
+        def read_reply(ctx, text, user=""):
+            got = reply((text or "").strip()) if (text or "").strip() else None
+            return {**reply_read.NOTHING, **got, "ok": True} if got else dict(reply_read.NOTHING)
+        out["reply_read"] = read_reply
     if read is not None:
         def intent_read(ctx, text, previous="", attached=""):
             got = read((text or "").strip()) if (text or "").strip() else None
