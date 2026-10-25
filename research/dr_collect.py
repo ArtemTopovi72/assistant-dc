@@ -430,13 +430,9 @@ def plan_queries(ctx, topic: str, max_queries: int) -> tuple:
 
 
 def _topic_first_line(topic: str) -> str:
-    """Last-resort distillation when the LLM gives no core_topic: take the first
-    non-empty line, strip a leading imperative, and cap length so a runaway
-    instruction never becomes the search seed."""
+    """Last-resort seed when the LLM gives no core_topic: the first non-empty line,
+    capped so a runaway instruction never becomes the search seed."""
     first = next((ln.strip() for ln in (topic or "").splitlines() if ln.strip()), topic or "")
-    first = re.sub(r"^(perform|do|conduct|provide|investigate|research|find|explain|analy[sz]e|"
-                   r"сделай|напиши|нужн[оаы]|дай|расскажи|подготов[ьи])\b[ :,]*",
-                   "", first, flags=re.IGNORECASE)
     return first[:120].strip()
 
 
@@ -449,9 +445,6 @@ def _citation_query(topic: str, queries: list) -> str:
     if cands:
         return min(cands, key=len)
     first = next((ln.strip() for ln in (topic or "").splitlines() if ln.strip()), topic or "")
-    # Drop leading imperatives so the entity leads the query.
-    first = re.sub(r"^(perform|do|conduct|provide|investigate|research|find|explain|analy[sz]e)\b[ :]*",
-                   "", first.strip(), flags=re.IGNORECASE)
     return first[:90].strip(" .:-") or (topic or "")[:90]
 
 

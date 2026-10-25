@@ -82,7 +82,10 @@ def test_assess_payload_ok():
     check("assess_recent_year_not_stale", v2.status == "ok")
     old_no_marker = "This mentions the year 2010 but has no staleness marker words at all here really."
     v3 = PG.assess_payload("q", old_no_marker, now_year=2026)
-    check("assess_old_year_no_marker_not_flagged_stale", v3.status == "ok")
+    # an old year is stated as a fact, not called dated: whether the text claims to be
+    # current is the model's reading, no marker word list decides it
+    check("assess_old_year_is_a_fact_not_a_verdict", v3.usable is True
+          and "2010" in v3.reason and "may be out of date" in v3.reason)
 
 
 def test_block_message():

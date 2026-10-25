@@ -169,11 +169,11 @@ def test_resolve_caps():
 
 
 def test_topic_first_line_and_citation_query():
-    check("topic_first_line_strips_imperative", DR._topic_first_line("Explain: quantum tunneling\nmore stuff") == "quantum tunneling")
+    check("topic_first_line_is_the_first_line", DR._topic_first_line("Explain: quantum tunneling\nmore stuff") == "Explain: quantum tunneling")
     check("topic_first_line_empty", DR._topic_first_line("") == "")
     q = DR._citation_query("quantum tunneling in depth", ["quantum tunneling", "quantum tunneling in depth"])
     check("citation_query_prefers_short_candidate", q == "quantum tunneling")
-    check("citation_query_fallback_to_topic", DR._citation_query("perform: some research topic", []) == "some research topic")
+    check("citation_query_fallback_to_topic", DR._citation_query("some research topic\nmore", []) == "some research topic")
 
 
 def test_shingles_jaccard_similarity_dedupe():

@@ -101,12 +101,14 @@ def assess_payload(query: str, body: str, now_year: int | None = None) -> Verdic
         # a real summary essentially always ends on punctuation; mid-letter = cut off
         return Verdict(False, "truncated", "the result appears cut off mid-sentence (truncated)")
 
-    # 5) STALE — newest year mentioned is well in the past (flag, don't block)
+    # 5) STALE — newest year mentioned is well in the past (flag, don't block). Only the
+    # fact is stated; whether the result claims to be current is the model's to read
+    # (a word list of «по состоянию|актуальн|as of» decided it before).
     years = [int(y) for y in re.findall(r"\b(19\d{2}|20\d{2})\b", text)]
-    if years and max(years) <= now_year - 2 and re.search(
-            r"по состоянию|кэш|действующ|на момент|актуальн|сейчас|current|as of", text, re.I):
+    if years and max(years) <= now_year - 2:
         return Verdict(True, "stale",
-                       f"the data looks dated (newest year mentioned is {max(years)})")
+                       f"the newest year this result mentions is {max(years)}; if it is "
+                       f"presented as current, it may be out of date")
 
     return Verdict(True, "ok", "")
 
