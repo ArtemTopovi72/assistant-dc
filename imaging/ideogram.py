@@ -745,7 +745,17 @@ def generate(ctx, prompt: str, *, width: int = 1024, height: int = 1024,
     # Klein LoRAs: BFL's range is 0.75-1.0, community goes to 1.25, but our rank-32 character LoRAs distort the face past 1.0 (bulging eyes, 2026-10-19 sheet); the old Ideogram-era 1.5 burns the image.
     lora_strength = min(float(lora_strength), KLEIN_LORA_MAX_STRENGTH)
     lora = (lora_name, lora_strength) if lora_name else None
-    workflow = klein.t2i_workflow(text, _w, _h, seed, steps=steps, lora=lora)
+    # Photos of the named real things the request asks for (object_refs.find, set per turn).
+    things = list(getattr(ctx, "draw_refs", None) or [])
+    refs = []
+    if things:
+        import object_refs
+        up = dep(ctx, "_upload_image_to_comfy", comfy_client._upload_image_to_comfy)
+        things = [(t, n) for t, n in ((t, up(p, comfy_client.COMFY_URL)) for t, p in things) if n]
+        refs = [n for _, n in things]
+        text += object_refs.prompt_note(things)
+        logger.info("Klein: %d object reference(s): %s", len(refs), ", ".join(t for t, _ in things))
+    workflow = klein.t2i_workflow(text, _w, _h, seed, steps=steps, lora=lora, refs=refs)
     if lora:
         logger.info("Klein LoRA: %s @ %.2f", lora_name, lora_strength)
 

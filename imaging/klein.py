@@ -168,12 +168,23 @@ def _sampler(positive, negative, latent, seed: int, steps: int) -> dict:
 
 
 def t2i_workflow(prompt: str, width: int, height: int, seed: int, *, steps: Optional[int] = None,
-                 lora: Optional[tuple] = None) -> dict:
+                 lora: Optional[tuple] = None, refs: Optional[list] = None) -> dict:
+    """A new picture; `refs` (uploaded names) go in as reference latents only -- what a named
+    object really looks like -- the frame is the empty latent's, not theirs."""
     wf = _base(prompt, lora)
     wf[N_LATENT] = {"class_type": "EmptyFlux2LatentImage",
                     "inputs": {"width": int(width), "height": int(height), "batch_size": 1}}
     wf[N_SHIFT]["inputs"].update(width=int(width), height=int(height))
-    wf[N_SAMPLER] = _sampler([N_POS, 0], [N_NEG, 0], [N_LATENT, 0], seed, _steps(steps))
+    cond = [N_POS, 0], [N_NEG, 0]
+    if refs:
+        ref_in = {"positive": [N_POS, 0], "negative": [N_NEG, 0], "vae": [N_VAE, 0],
+                  "resolution": "resize", "resolution.megapixels": 1.0}
+        for i, name in enumerate(refs[:4]):
+            wf[f"ref_load_{i}"] = {"class_type": "LoadImage", "inputs": {"image": name}}
+            ref_in[f"images.image{i}"] = [f"ref_load_{i}", 0]
+        wf[N_REF] = {"class_type": "ReferenceMultiLatent", "inputs": ref_in}
+        cond = [N_REF, 0], [N_REF, 1]
+    wf[N_SAMPLER] = _sampler(cond[0], cond[1], [N_LATENT, 0], seed, _steps(steps))
     return wf
 
 

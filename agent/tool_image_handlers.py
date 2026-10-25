@@ -1055,12 +1055,16 @@ def _handle_generate_image(ctx, state, args: dict) -> str:
     # first, then the last two requests («ещё раз» after «в стиле аниме»).
     _prev_look = getattr(ctx, "user_look", "")
     ctx.user_look = _user_look(ctx, state)
+    import object_refs
+    ctx.draw_refs = dep(ctx, "object_refs", object_refs.find)(ctx, description)
+    ctx.set_stage("Drawing a picture")
     try:
         result = dep(ctx, "generate_image_with_refinement", _t.generate_image_with_refinement)(
             ctx=ctx, description=description, steps=steps, width=width, height=height, seed=seed,
         )
     finally:
         ctx.user_look = _prev_look
+        ctx.draw_refs = []
     img_path = result.get("path")
     # A returned path must actually EXIST on disk before we treat it as a result. A
     # stale/bogus path from the renderer, or a temp file deleted between render and
