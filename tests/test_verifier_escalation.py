@@ -129,113 +129,16 @@ def test_it_does_not_escalate_twice():
 
 
 # --- a negative inspection is a verdict only about work done this turn ------
-# find_content found the minaret photo, the model asked
-# inspect_image "mosque or minaret?" and "MOSQUE: MISSING" replaced a correct
-# answer with the edit-did-not-land text.
+# find_content found the minaret photo, inspect_image was asked «mosque or minaret?» and
+# «MOSQUE: MISSING» replaced a correct answer. The inspector's labels are no longer parsed
+# by word lists: the model reads its text (bench/edit_judge_eval.py, 2026-10-25).
 
-def test_missing_after_an_edit_is_a_negative_verdict():
-    assert GP._inspection_contradicts_work(
-        "GLASSES: MISSING.", {"inpaint_image", "inspect_image"}) is True
-
-def test_missing_after_a_render_is_a_negative_verdict():
-    assert GP._inspection_contradicts_work(
-        "CAT: MISSING.", {"generate_image", "inspect_image"}) is True
-
-def test_missing_in_a_search_answer_is_not_a_verdict():
-    assert GP._inspection_contradicts_work(
-        "MINARET: PRESENT. | MOSQUE: MISSING.",
-        {"unpack_archive", "find_content", "inspect_image"}) is False
-
-def test_a_positive_inspection_is_never_a_verdict():
-    assert GP._inspection_contradicts_work(
-        "GLASSES: PRESENT.", {"inpaint_image", "inspect_image"}) is False
-
-
-# A visibly black cat, inspect said "PARTIAL -- dark
-# grey/brown fur textures", and the reply became "the picture stayed as it was".
-def test_partial_is_its_own_verdict():
-    assert GP._inspection_contradicts_work(
-        "Cat is solid black: PARTIAL — tabby markings.", {"inpaint_image"}) == "partial"
-    assert GP._inspection_contradicts_work(
-        "CAT: PARTIAL. HAT: MISSING.", {"inpaint_image"}) is True
-
-
-def test_one_partial_among_presents_is_a_pass():
-    assert GP._inspection_contradicts_work(
-        "Watercolor: PARTIAL - sharp edges. | Paper texture: PRESENT. | Brushwork: PRESENT.",
-        {"redraw_image"}) is False
-
-
-def test_missing_is_success_for_a_removal():
-    tc = {"inpaint_image"}
-    r = "the dark bag hanging from the shoulder"
-    assert GP._inspection_contradicts_work("Bag: MISSING | Traces: MISSING", tc, removal=r) is False
-    assert GP._inspection_contradicts_work("Bag: NOT PRESENT", tc, removal=r) is False
-    assert GP._inspection_contradicts_work("Dark bag: PRESENT", tc, removal=r) is True
-    assert GP._inspection_contradicts_work(
-        "Dark bag: MISSING | Area replacement: PRESENT (coat)", tc, removal=r) is False
-
-
-def test_no_distortion_answer_is_a_pass():
-    tc = {"inpaint_image"}
-    v = ("Is the hat red? PRESENT | Is it still on the cat's head? PRESENT | "
-         "Are there any major distortions to the cat or the background? ABSENT")
-    assert not GP._inspection_contradicts_work(v, tc)
-    assert GP._inspection_contradicts_work("Is the hat red? MISSING | distortions? ABSENT", tc)
-
-
-def test_present_that_says_removed_is_a_clean_removal():
-    # «убери кота» -> a clean table, judged «нужного изменения нет»
-    v = ("A red apple floats above a wooden table. | Cat: PRESENT (The cat is not visible "
-         "anywhere in the frame, meaning it has been removed from the scene). | "
-         "Empty wooden table: PRESENT.")
-    assert GP._inspection_contradicts_work(v, {"inpaint_image"}, removal="cat") is False
-    assert GP._inspection_contradicts_work("Cat: PRESENT on the table", {"inpaint_image"},
-                                           removal="cat") is True
-
-
-def test_removal_is_judged_by_the_frame_description():
-    # «Is the tabby cat completely removed?: PRESENT» over a clean table
-    tc = {"inpaint_image"}
-    v = ("A wooden table occupies the foreground, and a broken window frame looks out onto "
-         "a dark scene. |  | Tabby cat: PRESENT | Empty wooden table: PRESENT")
-    assert GP._inspection_contradicts_work(v, tc, removal="the tabby cat sitting on the table") is False
-    v2 = "A tabby cat sits on a wooden table. | Cat: MISSING"
-    assert GP._inspection_contradicts_work(v2, tc, removal="the tabby cat") is True
-
-
-def test_removal_description_in_the_tool_result_format():
-    # what the graph actually receives (tool_image_handlers): a header and newlines
-    v = ("Inspection of the current image:\nA red apple floats above a large wooden table.\n\n"
-         "Is the cat completely removed from the table?: PRESENT\n"
-         "Is there only an empty wooden table?: PRESENT")
-    assert GP._inspection_contradicts_work(v, {"inpaint_image"}, removal="cat") is False
-
-
-# A plainly cyberpunk picture, checked point by point against the spelled-out
-# preset, had one detail MISSING and was answered «нужного изменения нет —
-# остался прежним» (2026-10-11).
-def test_one_missing_detail_among_presents_is_partial_not_unchanged():
-    assert GP._inspection_contradicts_work(
-        "Cyberpunk neon illustration: PRESENT. | Neon city at night: PRESENT. | "
-        "Techwear clothes: PRESENT. | Chrome hardware: MISSING.", {"redraw_image"}) == "partial"
-    assert GP._inspection_contradicts_work(
-        "Cyberpunk: MISSING. | Neon city: MISSING. | Rain: PRESENT.", {"redraw_image"}) is True
-
-
-# Shown BEFORE and AFTER, the inspector says the rest «remained unchanged»: an armor
-# recolour with every label PRESENT was redone and answered «не полностью» (2026-10-17).
-def test_before_after_unchanged_rest_is_a_pass():
-    from tool_image_handlers import PAIR_INSPECTION
-    v = (PAIR_INSPECTION + "\nThe armor of the girl on the right changed from dark blue to red. "
-         "The girl on the left is unchanged.\n\nArmor of the girl on the right is red: PRESENT\n"
-         "Rest of image is unchanged: PRESENT")
-    assert GP._inspection_contradicts_work(v, {"inpaint_image"}) is False
-    failed = (PAIR_INSPECTION + "\nNothing changed between them.\n\nArmor is red: MISSING")
-    assert GP._inspection_contradicts_work(failed, {"inpaint_image"}) is True
-    # a single picture saying «unchanged» still means the edit did not take
-    assert GP._inspection_contradicts_work(
-        "Inspection of the current image:\nThe picture is unchanged.", {"inpaint_image"}) is True
+def test_a_search_answer_is_not_a_verdict():
+    asked = []
+    ctx = __import__("types").SimpleNamespace(choice=lambda *a, **k: asked.append(a) or "not")
+    assert GP._inspection_misses_request("найди мечеть", "MINARET: PRESENT | MOSQUE: MISSING",
+                                         {"find_content", "inspect_image"}, ctx=ctx) is False
+    assert asked == [], "no edit or render this turn: nothing to read"
 
 
 # Every label PRESENT, only the description off («blue and red armor» for «девушку в
@@ -284,33 +187,3 @@ def test_a_rejected_edit_is_retried_from_the_picture_before_it():
     _TGF._run(ctx, llm, run, {"user_input": "одень его в доспехи", "messages": [],
                               "image_path": "/tmp/orig.png"}, fastpath=False)
     assert sources == ["/tmp/orig.png", "/tmp/orig.png"], sources
-
-
-def test_a_partial_points_own_explanation_is_not_another_failure():
-    v = ("Inspection of the current image (BEFORE vs AFTER): the man's clothing was replaced "
-         "with red and black plate armor. | The man wearing red and black plate armor: PRESENT | "
-         "He is still holding his shovel: PARTIAL (the handle is visible but the blade is missing) | "
-         "He is standing by the car: PRESENT")
-    assert GP._inspection_contradicts_work(v, {"transfer_image"}) is False
-    assert GP._inspection_contradicts_work(v.replace("PARTIAL (the handle is visible but the blade is missing)",
-                                                     "PARTIAL — the blade is missing/cut off"),
-                                           {"transfer_image"}) is False
-
-
-def test_a_change_note_naming_the_removed_thing_is_its_removal():
-    """The BEFORE/AFTER inspector writes «The edit removed the glasses…»: the glasses named in
-    the description were read as still there, and four clean removals (a watch twice, glasses,
-    a beard) were answered «нужного изменения нет» (debug chat 2026-10-21)."""
-    tc = {"inpaint_image"}
-    for removal, v in (
-            ("glasses", "Inspection of the current image (BEFORE vs AFTER):\nThe edit removed the glasses "
-                        "from the man's face. The person remains the same. |  | Are the glasses gone? PRESENT"),
-            ("the watch on his left wrist", "The edit removed the watch and its strap from the man's wrist, "
-                                            "replacing them with skin. | Watch: PRESENT — the watch is MISSING"),
-            ("beard", "The edit replaces the bottom half of the face (beard and mustache) with clean-shaven "
-                      "skin. | Beard removed: PRESENT")):
-        assert GP._inspection_contradicts_work(v, tc, removal=removal) is False, removal
-    still = "The edit blurred the frame of the glasses, which are still on his face. | Glasses gone? MISSING"
-    assert GP._inspection_contradicts_work(still, tc, removal="glasses") is True
-    assert GP._inspection_contradicts_work("The man wears glasses and a white shirt. | x: PRESENT",
-                                           tc, removal="glasses") is True

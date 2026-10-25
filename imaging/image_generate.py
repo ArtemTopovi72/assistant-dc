@@ -24,7 +24,7 @@ The config defaults below are the exception: they are DEFAULT ARGUMENT values
 and must bind at def time, so they are imported from config -- their DEFINING
 module -- not from image.py.
 """
-from seams import dep, vision_model
+from seams import complaint_kinds, dep, vision_model
 import logging
 import random
 from typing import Optional
@@ -278,7 +278,7 @@ def evaluate_image(ctx, img_path: str, goal: str, current_prompt: str,
     data = _image.safe_json_from_llm(response)
     if isinstance(data, dict) and _measured \
             and str(data.get("verdict", "")).lower() != "success" \
-            and _exposure.is_dark_complaint(data.get("reason", "")):
+            and complaint_kinds(ctx)(ctx, [str(data.get("reason", ""))])[0] in ("dark", "blind"):
         # "the cat is extremely dark, a black silhouette"
         # about a sunlit orange cat -- three renders in a row, then an
         # apology to the user for a shadow that was not there. The pixels

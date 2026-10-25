@@ -343,7 +343,9 @@ def test_inspect_image():
     from PIL import Image as _I
     lit = str(_TMP / "lit.png")
     _I.fromarray(_np.random.default_rng(1).integers(90, 230, (64, 96, 3), dtype=_np.uint8)).save(lit)
-    c2 = _ctx(last_image_path=lit)
+    # What the complaint is about is the model's read (complaint_read.py, bench/complaint_eval.py).
+    c2 = _ctx(last_image_path=lit, complaint_kinds=lambda ctx, t: [
+        "content" if "instead of" in t[0] else "blind"])
     seen = {}
     with mock_env(vision="The image is extremely dark and underexposed. Cat: MISSING. Sofa: MISSING."):
         _orig = _VIS["fn"]

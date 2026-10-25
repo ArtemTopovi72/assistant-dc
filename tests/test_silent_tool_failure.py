@@ -95,35 +95,6 @@ check("an existing [TOOL ERROR] is returned unchanged",
 check("...even when the artifact is missing too",
       D("create_presentation", _err, {}) == _err)
 
-# --- the verifier must be believed when it contradicts the tool ------------
-# Second false-success family from the chaos bench, and a nastier one: the tool
-# reports success, inspect_image looks at the picture and says the element is
-# NOT there, the agent retries, is told NO again -- and then writes "Вот твой
-# рыжий кот-астронавт!". It believes its verifier when deciding to retry and
-# forgets it when writing the answer.
-NEGATIVE = [
-    ("english", "Inspection: the requested element is NOT present in the image."),
-    ("unchanged", "The picture is unchanged from before the call."),
-    ("missing", "the hat is missing and the hands are distorted"),
-    ("no_effect", "the edit did not take effect"),
-    ("russian", "запрошенный объект отсутствует на изображении"),
-]
-for name, text in NEGATIVE:
-    check(f"verdict_negative_{name}", bool(P._VERIFY_NEGATIVE_RE.search(text)),
-          repr(text[:50]))
-
-POSITIVE = [
-    ("all_present", "Inspection: subject present; requested object PRESENT; "
-                    "hands look correct; no visible artifacts."),
-    ("ru_ok", "объект присутствует, всё на месте"),
-    # "dismissing" contains "missing"; word boundaries have to hold or every
-    # clean inspection that uses the word reads as a failure.
-    ("substring", "dismissing the earlier concern, the render is correct"),
-]
-for name, text in POSITIVE:
-    check(f"verdict_positive_{name}", not P._VERIFY_NEGATIVE_RE.search(text),
-          repr(text[:50]))
-
 # Which drafts claim a result («Вот твой рыжий кот-астронавт!», «Презентация готова»,
 # «Результат вычисления … равен 20 965 334.4») is the model's reading (agent/reply_read.py),
 # scored live with these phrases in bench/reply_read_set. Here: the decisions made on it.

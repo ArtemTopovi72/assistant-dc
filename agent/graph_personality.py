@@ -113,8 +113,7 @@ def _inspection_misses_request(request: str, verdict: str, tools_called: set, ct
     """The inspector labels every point PRESENT yet its own description shows the
     request was not met: three cats for «пусть котов будет два», a rider behind
     the car for «рядом с машиной» -- both answered «готово».
-    Labels are matched by _inspection_contradicts_work; counts and places live
-    in the description, which only a reading can judge."""
+    Counts and places live in the description, which only a reading can judge."""
     if not (set(tools_called or ()) & (_EDIT_TOOLS | {"generate_image"})):
         return False
     if not (request or "").strip() or not (verdict or "").strip():
@@ -134,114 +133,6 @@ def _inspection_misses_request(request: str, verdict: str, tools_called: set, ct
            "texture, smudging or blending is not a missing part of it." if removal else ""),
         verdict.strip()[:1200], ("met", "partly", "not"), default="met")
     return {"partly": "partial", "not": True}.get(got, False)
-
-
-def _inspection_contradicts_work(verdict: str, tools_called: set, removal: str = "") -> bool:
-    """A negative inspection is a verdict only about something this turn MADE.
-
-    find_content had already found the minaret
-    photo, the model double-checked it with inspect_image("mosque or
-    minaret?") and got "MINARET: PRESENT | MOSQUE: MISSING" -- a search
-    answer, not an edit verdict -- and the finaliser replaced a correct reply
-    with "нужного изменения на результате нет". Without an edit or a render
-    in the turn there is no "requested change" for the picture to lack.
-    """
-    if not (set(tools_called or ()) & (_EDIT_TOOLS | {"generate_image"})):
-        return False
-    if removal:
-        # For a removal "BAG: MISSING" IS the success; only something still
-        # there is a failure. A cleanly removed bag was reported as "nothing
-        # changed" and removed twice more. `removal` is the
-        # removed region; a PRESENT line counts only when it names that thing
-        # ("Area replacement: PRESENT" is the fill, not the bag).
-        v = verdict or ""
-        if re.search(r"still\s+(?:visible|there)|остал", v, re.I):
-            return True
-        heads = [w for w in re.findall(r"[a-zа-яё]{3,}", str(removal).lower())
-                 if w not in ("the", "and", "her", "his", "its", "from", "with", "side",
-                              "right", "left", "person", "shoulder", "hanging", "dark",
-                              "sitting", "standing", "lying", "table", "on", "tabby")]
-        # The inspector describes the whole frame FIRST (IMAGE_INSPECT_PROMPT) and that
-        # sentence is honest; the labels are not: the agent asks «is the cat removed?»
-        # and the model answers PRESENT for yes (a clean table, the cat
-        # «removed» three times, «кот всё ещё виден»). The removed thing named in the
-        # description = still there; not named = gone.
-        # the tool result reads "Inspection of the current image:\n<desc> | ..." or
-        # with newlines between the lines (the split on "|" alone missed it)
-        body = re.sub(r"^\s*Inspection of the current image(?: \(BEFORE vs AFTER\))?:\s*", "", v,
-                      flags=re.I).strip()
-        parts = re.split(r"\s*(?:\||\n)\s*", body, maxsplit=1)
-        desc = parts[0] if len(parts) > 1 else ""
-        if re.search(r"present|missing|partial|absent|distorted", desc, re.I):
-            desc = ""                      # a label, not the description
-        if desc.strip() and heads:
-            # The BEFORE/AFTER change note names the thing as it says it went: «The edit
-            # removed the glasses» read as glasses still there, four clean removals called
-            # «нужного изменения нет» (2026-10-21). A sentence that removes it is not it.
-            gone = re.compile(r"\b(?:remov|replac|eras|no\s+longer|without|gone|missing|clean-shaven)", re.I)
-            kept = " ".join(s for s in re.split(r"(?<=[.!?])\s+", desc)
-                            if not gone.search(s) or re.search(r"still\s+(?:on|in|there|visible)", s, re.I))
-            return any(re.search(r"\b" + re.escape(h[:max(3, len(h) - 2)]), kept, re.I)
-                       for h in heads)
-        for label, why in re.findall(r"([^|:\n]{1,80}):\s*(?<!not )present\b([^|\n]*)", v, re.I):
-            # "Cat: PRESENT (The cat is not visible anywhere ... removed)" answers
-            # «is the cat removed?» -- a clean removal redone as «нет изменения»
-            if re.search(r"not\s+(?:visible|present|there)|no\s+longer|removed|absent|gone|"
-                         r"не\s+видн|убран|удал|нет\b", why, re.I):
-                continue
-            if not heads or any(h[:max(3, len(h) - 2)] in label.lower() for h in heads):
-                return True
-        return False
-    # "Are there any major distortions? ABSENT" is a pass: the model asked
-    # about a defect and there is none. A clean red hat was reported as
-    # "nothing changed" and redrawn twice.
-    verdict = re.sub(
-        r"[^|\n]*\b(?:distort\w*|artifact\w*|defect\w*|problem\w*|issue\w*|glitch\w*|"
-        r"damage\w*|deform\w*|extra\s+\w+|blur\w*|искаж\w*|артефакт\w*|дефект\w*)"
-        r"[^|\n]*?[?:]\s*(?:ABSENT|MISSING|NONE|NO)\b[^|\n]*", "", verdict or "", flags=re.I)
-    if (verdict or "").lstrip().startswith("Inspection of the current image (BEFORE vs AFTER)"):
-        # «the girl on the left is unchanged» is the edit staying in its place: an
-        # armor recolour with every label PRESENT was redone and called incomplete
-        verdict = re.sub(r"\bunchanged\b|без\s+изменений", " ", verdict, flags=re.I)
-    # "Holding his shovel: PARTIAL (the blade is missing)" is one partial point; its
-    # "missing" counted as a second failure and a man plainly in the asked armour was
-    # answered «он остался прежним».
-    verdict = re.sub(r"(\bpartial\b)\s*(?:\([^)]*\)|[—–-][^|\n]*)", r"\1", verdict or "", flags=re.I)
-    hits = {m.group(0).lower() for m in _VERIFY_NEGATIVE_RE.finditer(verdict or "")}
-    if hits and hits <= {"partial", "частично"}:
-        # Most points PRESENT and one nitpicked PARTIAL ("sharp edges, lacks
-        # true watercolor translucency" on a plainly watercolour picture) is a
-        # pass, not a caveat.
-        v = verdict or ""
-        if len(re.findall(r"\bpresent\b", v, re.I)) > len(re.findall(r"\bpartial\b", v, re.I)):
-            return False
-        # "PARTIAL" means the change landed, just not fully (a black cat with
-        # dark-brown tabby hints). It was answered "the picture stayed as it
-        # was" over a visibly black cat. Truthy, but its own
-        # wording in graph_finalize.
-        return "partial"
-    if hits:
-        # A spelled-out style is checked point by point: "cyberpunk: PRESENT | neon
-        # city: PRESENT | ... | chrome hardware: MISSING" over a plainly cyberpunk
-        # picture was answered «нужного изменения нет — остался прежним». Most points
-        # there = the change landed, only not every detail of it.
-        v = verdict or ""
-        present = len(re.findall(r"(?<!not )\bpresent\b", v, re.I))
-        if present > len(_VERIFY_NEGATIVE_RE.findall(v)):
-            return "partial"
-    return bool(hits)
-
-
-# A verification result that says the picture is NOT right. inspect_image
-# reports per element whether it is present, partial, missing or distorted, so
-# a negative verdict is ordinary tool output, not an error -- which is exactly
-# why it needs its own detector: nothing else in the loop treats it as a signal.
-_VERIFY_NEGATIVE_RE = re.compile(
-    r"\bnot\s+present\b|\bmissing\b|\babsent\b|\bnot\s+visible\b|\bpartial\b"
-    r"|\bdid\s+not\s+(?:take\s+effect|appear|work)\b|\bunchanged\b"
-    r"|отсутству|не\s+присутству|не\s+видно|не\s+появил|без\s+изменений|частично",
-    re.IGNORECASE,
-)
 
 
 # Tools whose failure the model must not paper over with its own guess. An
@@ -265,22 +156,6 @@ _FABRICATION_RISK = frozenset({"calculate", "delete_path", "write_file", "edit_f
 _CALC_NON_NUMERIC = frozenset({"true", "false", "inf", "-inf", "nan", "-nan"})
 _WEEKDAYS = frozenset({"Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
                        "Saturday", "Sunday"})
-
-
-# A tool that hands over a file and reports, in words, that it found nothing
-# matching. Measured as `route_find_photo [wrong]`: the search said "No photo
-# matching the requested subject was found", loaded a photo of something else
-# anyway, and the agent answered "Вот реальное фото Эйфелевой башни". The
-# artifact check passes -- a file really is there -- so nothing downstream
-# noticed. The signal was in the result text all along and cost nothing to read.
-_FOUND_NOTHING_RE = re.compile(
-    r"\bno \w+(?: \w+)?? (?:matching|found|available)"
-    r"|\bnothing (?:matching|found|relevant)"
-    r"|\bno (?:match|results?|photos?|images?) (?:were |was )?found"
-    r"|ничего не (?:найдено|нашл)|не удалось найти|не найдено ни"
-    r"|подходящ\w* не (?:найдено|нашл)",
-    re.IGNORECASE,
-)
 
 
 _QUOTE_SPAN_RE = re.compile(r"«[^»]*»|“[^”]*”|\"[^\"]*\"|'[^']{12,}'")
@@ -738,13 +613,6 @@ def _detect_silent_failure(tool_name: str, result: str, state: AgentState) -> st
                 "calculation did NOT happen. Do not state a number: you have "
                 "none. Retry the call with a clean expression, or tell the user "
                 "the calculation failed.")
-    # Said in plain words that it found nothing -- while still setting an
-    # artifact, so every structural check downstream passes.
-    if tool_name in _TOOL_ARTIFACT and _FOUND_NOTHING_RE.search(result):
-        return (f"[TOOL ERROR] {tool_name} reports it found nothing matching "
-                f"the request. Whatever it loaded is NOT what was asked for — "
-                f"do not describe it as the requested subject. Say plainly "
-                f"that nothing matching was found.")
     # A multi-part video waits for the user's OK on the plan card: no clip yet is the
     # answer, not a failure. Read as a failure it was retried ~20 times
     # and the turn ended in "не получилось".
@@ -2131,16 +1999,17 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                     tool_result += "\n\n" + edit_check
                     if verification_negative is True and state.get("last_edit_source"):
                         state["retry_from"] = state["last_edit_source"]
+            # Without a BEFORE picture (a fresh render) the inspector's text is all there is: the
+            # model reads it against the request. Its labels used to be parsed by word lists
+            # first; on bench/edit_judge_eval.py that scored 28/63 against the reading's 26/63
+            # alone, and an edit with a BEFORE is judged by edit_verdict above (2026-10-25).
             if tool_name == "inspect_image" and not edit_judged:
-                verification_negative = _inspection_contradicts_work(
-                    tool_result, tools_called_this_turn, removal_turn)
-                if not verification_negative:
-                    verification_negative = _inspection_misses_request(
-                        original_input or user_input, tool_result, tools_called_this_turn, ctx=ctx,
-                        removal=removal_turn)
-                    if verification_negative:
-                        logger.info("inspection description contradicts the request (%s)",
-                                    verification_negative)
+                verification_negative = _inspection_misses_request(
+                    original_input or user_input, tool_result, tools_called_this_turn, ctx=ctx,
+                    removal=removal_turn)
+                if verification_negative:
+                    logger.info("inspection description contradicts the request (%s)",
+                                verification_negative)
                 if verification_negative is True and state.get("last_edit_source"):
                     state["retry_from"] = state["last_edit_source"]
             is_error = tool_result.lstrip().startswith(("[TOOL ERROR]", "Unknown tool"))

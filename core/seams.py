@@ -79,6 +79,15 @@ def reply_read(ctx):
     return reply_read.read
 
 
+def complaint_kinds(ctx):
+    """`kinds(ctx, texts) -> list`: what each picture-checker complaint is about."""
+    own = getattr(ctx, "complaint_kinds", None)
+    if own is not None:
+        return own
+    import complaint_read
+    return complaint_read.kinds
+
+
 def choice(ctx):
     """`ask_choice(question, text, options, default) -> str`: one of `options`."""
     own = getattr(ctx, "choice", None)

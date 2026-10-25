@@ -477,45 +477,6 @@ def test_something_genuinely_tiny_is_still_grown():
     assert coin["w"] * coin["h"] <= DG.MIN_AREA * 1.6, coin
 
 
-# ── 8. the critic may not condemn a picture for a darkness the pixels deny ────
-# Measured over fourteen bench renders: it called an ordinary lit kitchen
-# "extremely dark and incoherent, making most elements unidentifiable". The
-# verdict decides whether to redraw, so an imagined fault throws away a picture
-# that was already right.
-
-def _img(tmp_path, name, value):
-    from PIL import Image
-    p = str(tmp_path / name)
-    Image.new("L", (64, 64), value).convert("RGB").save(p)
-    return p
-
-
-def test_a_darkness_complaint_is_dropped_when_the_picture_is_lit(tmp_path):
-    bright = _img(tmp_path, "bright.png", 200)
-    kept = DA._drop_unfounded(
-        bright, ["The image is extremely dark and mostly black silhouettes.",
-                 "The cardboard box is missing."])
-    assert kept == ["The cardboard box is missing."], kept
-
-
-def test_a_genuinely_dark_picture_keeps_the_complaint(tmp_path):
-    dark = _img(tmp_path, "dark.png", 12)
-    probs = ["The image is extremely dark.", "The cat is missing."]
-    assert DA._drop_unfounded(dark, probs) == probs
-
-
-def test_nothing_else_the_critic_says_is_touched(tmp_path):
-    bright = _img(tmp_path, "bright2.png", 200)
-    probs = ["The mug is much larger than requested.",
-             "The cat is not on the sofa."]
-    assert DA._drop_unfounded(bright, probs) == probs
-
-
-def test_an_unreadable_file_leaves_the_verdict_alone(tmp_path):
-    probs = ["The image is extremely dark."]
-    assert DA._drop_unfounded(str(tmp_path / "nope.png"), probs) == probs
-
-
 # ── 9. a prop hanging just above a surface is rested on it ───────────────────
 # Measured: the planner gave the table y 0.45-0.75 and the mug
 # 0.28-0.42, so the mug's box ended three hundredths of a frame ABOVE the table

@@ -2,9 +2,10 @@
 not 24 / partial 8, labelled by eye 2026-10-21 from the debug chat's edits + 6 «nothing changed»).
 Run it before and after ANY change to how an edit is judged; report both scores.
 
-    venv/Scripts/python.exe bench/edit_judge_eval.py current      # inspect_image + the graph's readers
+    venv/Scripts/python.exe bench/edit_judge_eval.py reader       # inspect_image + the model's reading of it
     venv/Scripts/python.exe bench/edit_judge_eval.py judge        # edit_verdict.judge (one model read)
-Needs LM Studio up. Writes tmp/edit_judge_<mode>.jsonl.
+2026-10-25: the label word lists over inspect_image (gone) scored 28/63, the reading alone 26/63;
+an edit with a BEFORE is judged by edit_verdict. Needs LM Studio up. Writes tmp/edit_judge_<mode>.jsonl.
 """
 import json, os, sys, threading, time
 from collections import Counter
@@ -39,18 +40,23 @@ def _ctx():
     return c
 
 
-def current(c):
-    """What the live loop does after an edit: inspect_image with BEFORE/AFTER, then the two
-    readers in graph_personality. The agent writes its own check; this one asks the request."""
-    import tool_image_handlers as H, graph_personality as GP
-    ctx = _ctx()
+_SEEN: dict = {}       # case id -> the inspector's text, so both readers read the same words
+
+
+def _inspect(c):
+    import tool_image_handlers as H
+    if c["id"] not in _SEEN:
+        _SEEN[c["id"]] = H._handle_inspect_image(_ctx(), {"image_path": c["after"], "edit_before": c["before"]},
+                                                 {"check": f"Is this request done on the AFTER picture: {c['ask']}?"})
+    return _SEEN[c["id"]]
+
+
+def reader(c):
+    """The inspect_image path with the model's reading alone (no label regexes)."""
+    import graph_personality as GP
     removal = c["ask"].lower().startswith(("убери", "сбрей")) and c["ask"].split(" ", 1)[-1] or ""
-    res = H._handle_inspect_image(ctx, {"image_path": c["after"], "edit_before": c["before"]},
-                                  {"check": f"Is this request done on the AFTER picture: {c['ask']}?"})
-    tc = {"inpaint_image"}
-    neg = GP._inspection_contradicts_work(res, tc, removal=removal)
-    if not neg:
-        neg = GP._inspection_misses_request(c["ask"], res, tc, ctx=ctx, removal=removal)
+    res = _inspect(c)
+    neg = GP._inspection_misses_request(c["ask"], res, {"inpaint_image"}, ctx=_ctx(), removal=removal)
     return {True: "not", "partial": "partial"}.get(neg, "done"), res[:400]
 
 
@@ -61,30 +67,30 @@ def judge(c):
 
 
 if __name__ == "__main__":
-    mode = sys.argv[1] if len(sys.argv) > 1 else "current"
     only = set(sys.argv[2:])
-    fn = {"current": current, "judge": judge}[mode]
-    out = ROOT / "tmp" / f"edit_judge_{mode}.jsonl"
-    rows, conf = [], Counter()
-    with open(out, "w", encoding="utf-8") as fh:
-        for c in CASES:
-            if only and c["id"] not in only:
-                continue
-            _wait_for_free_card()
-            t = time.time()
-            try:
-                got, note = fn(c)
-            except Exception as exc:
-                got, note = "error", repr(exc)[:200]
-            ok = got == c["label"]
-            conf[(c["label"], got)] += 1
-            row = {"id": c["id"], "label": c["label"], "got": got, "ok": ok, "sec": round(time.time() - t), "note": note}
-            fh.write(json.dumps(row, ensure_ascii=False) + "\n"); fh.flush()
-            rows.append(row)
-            print(("OK  " if ok else "BAD ") + f"{c['id']:<13} want {c['label']:<8} got {got:<8} {note[:110]!r}", flush=True)
-    n = len(rows); good = sum(r["ok"] for r in rows)
-    # the costly mistakes: a done edit called failed (the owner's complaint) and a failed one called done
-    false_fail = sum(1 for r in rows if r["label"] == "done" and r["got"] in ("not", "partial"))
-    false_done = sum(1 for r in rows if r["label"] == "not" and r["got"] == "done")
-    print(f"\n{mode}: {good}/{n} exact  |  done called failed: {false_fail}  |  failed called done: {false_done}")
-    print("confusion (label -> got):", dict(conf))
+    for mode in (sys.argv[1] if len(sys.argv) > 1 else "judge").split(","):
+        fn = {"reader": reader, "judge": judge}[mode]
+        out = ROOT / "tmp" / f"edit_judge_{mode}.jsonl"
+        rows, conf = [], Counter()
+        with open(out, "w", encoding="utf-8") as fh:
+            for c in CASES:
+                if only and c["id"] not in only:
+                    continue
+                _wait_for_free_card()
+                t = time.time()
+                try:
+                    got, note = fn(c)
+                except Exception as exc:
+                    got, note = "error", repr(exc)[:200]
+                ok = got == c["label"]
+                conf[(c["label"], got)] += 1
+                row = {"id": c["id"], "label": c["label"], "got": got, "ok": ok, "sec": round(time.time() - t), "note": note}
+                fh.write(json.dumps(row, ensure_ascii=False) + "\n"); fh.flush()
+                rows.append(row)
+                print(("OK  " if ok else "BAD ") + f"{c['id']:<13} want {c['label']:<8} got {got:<8} {note[:110]!r}", flush=True)
+        n = len(rows); good = sum(r["ok"] for r in rows)
+        # the costly mistakes: a done edit called failed (the owner's complaint) and a failed one called done
+        false_fail = sum(1 for r in rows if r["label"] == "done" and r["got"] in ("not", "partial"))
+        false_done = sum(1 for r in rows if r["label"] == "not" and r["got"] == "done")
+        print(f"\n{mode}: {good}/{n} exact  |  done called failed: {false_fail}  |  failed called done: {false_done}")
+        print("confusion (label -> got):", dict(conf))

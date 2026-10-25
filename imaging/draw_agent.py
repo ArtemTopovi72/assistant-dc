@@ -23,6 +23,7 @@ Three things live here:
 `run()` ties them together into the loop, reporting every step through `on_event`.
 """
 from seams import yes_no
+from seams import complaint_kinds
 from seams import dep
 import copy
 import difflib
@@ -1125,7 +1126,7 @@ def _regions(layout: dict) -> str:
 
 # One measurement, shared with the outer judge in image_generate (exposure.py).
 import exposure as _exposure  # noqa: E402
-from exposure import DARK_RE as _TOO_DARK_RE, measure as _brightness  # noqa: E402
+from exposure import measure as _brightness  # noqa: E402
 
 
 # MEASURED, not chosen. bench/draw_seed_sweep.py rendered the one caption that
@@ -1372,58 +1373,6 @@ def render_without_collage(ctx, layout, *, width: int, height: int, seed: int,
     return image
 
 
-def _drop_unfounded(image_path: str, problems: list) -> list:
-    """Throw out darkness complaints the pixels contradict.
-
-    Measured over the fourteen bench renders: the critic called
-    move_cat "extremely dark and incoherent, making most elements
-    unidentifiable" and replace_mug "mostly black silhouettes". Both are
-    ordinary, clearly lit interiors -- mean luminance 73 and 109 of 255, 95th
-    percentile 162 and above. Asked to simply describe move_cat, the same model
-    named the room, the table and the cat correctly and then said "very dark
-    with high contrast". So it sees the picture and misjudges its exposure, in
-    one direction, consistently.
-
-    That matters because the verdict decides whether to redraw: a picture that
-    is already right gets thrown away and drawn again, which is what a redraw
-    request looks like from the outside. Brightness is one of the few things
-    here that can be MEASURED, so it is measured, and the complaint is dropped
-    when the pixels disagree. Everything else the critic says is left alone.
-    """
-    if not problems:
-        return problems
-    m = _brightness(image_path)
-    if not _exposure.normally_exposed(m):      # genuinely dark: let it stand
-        return problems
-    return [p for p in problems if not _TOO_DARK_RE.search(str(p))]
-
-
-# What a complaint has to mention to count as a layout problem rather than an
-# opinion. The critic's own checklist, in the words it uses.
-_LAYOUT_CONCERN_RE = re.compile(
-    r"missing|absent|not (?:there|present|visible|shown|rendered|appear)|invisible|"
-    r"no [a-z]+ (?:is|are|was) |instead of|wrong|incorrect|misspell|"
-    r"twice|duplicate|second (?:copy|one)|merged|fused|melted|smear|incoheren|"
-    r"unreadable|illegible|garbled|misplaced|out of (?:place|frame|position)|"
-    r"cut off|cropped|collage|panel|split|blank|empty|placeholder|"
-    r"does not match|doesn't match|looks like a|should read|but the picture shows|"
-    r"lacks|lacking|too dark|entirely black|underexpos|"   # real on a picture that measures dark
-    # Something EXTRA is as wrong as something missing: "a third cat visible
-    # on the left which was not in the layout" was dropped as taste and a
-    # two-cat request shipped with three.
-    r"\bextra\b|additional|\b(?:third|fourth|fifth)\b|more than (?:one|two|three|four)|"
-    r"not in the (?:layout|plan|request)|not (?:asked|requested)|wasn't (?:in|part of)|"
-    r"was not (?:in|part of|requested)|stray|unwanted|unrequested|"
-    # The COLOUR of a named thing is content, not taste: "The elephant is not
-    # pink as requested" was dropped as taste and a tan elephant shipped as a
-    # successful recolour, twice.
-    r"wrong colou?r|colou?r is (?:wrong|not|off)|"
-    r"\b(?:is|are|looks?|appears?|remains?|still)\s+not\s+(?:red|pink|blue|green|yellow|"
-    r"orange|purple|violet|black|white|brown|grey|gray|golden?|silver|turquoise|"
-    r"beige|teal|navy|cyan|magenta)\b",
-    re.IGNORECASE)
-
-
 def critique(ctx, image_path: str, layout: dict, evidence: Optional[list] = None) -> dict:
     """Look at the render and report what the layout failed to produce.
 
@@ -1447,7 +1396,7 @@ def critique(ctx, image_path: str, layout: dict, evidence: Optional[list] = None
         import llm
         # The measured exposure goes in as evidence too: told the numbers, the
         # critic invents fewer silhouettes; the ones it still invents are
-        # dropped by _drop_unfounded.
+        # dropped below.
         _evidence = list(evidence or [])
         _exp = _exposure.evidence(image_path)
         if _exp:
@@ -1483,31 +1432,31 @@ def critique(ctx, image_path: str, layout: dict, evidence: Optional[list] = None
             return {"ok": True, "score": 0, "problems": [], "ops": [],
                     "source": "unavailable"}
         problems = [str(p) for p in (data.get("problems") or []) if str(p).strip()]
-        if _exposure.judge_is_blind(problems, image_path):
-            # "The image is almost entirely black" about a twilight café that
-            # measures 100+/255 (four verdicts in a row).
-            # A critic that did not see the picture gets no vote on it -- not
-            # on the darkness, and not on the "missing" things it lists as a
-            # consequence of the darkness it imagined.
-            logger.warning("critique: the critic called a normally exposed picture "
-                           "black overall -- verdict discarded: %s", problems[:3])
-            return {"ok": True, "score": 0, "problems": [], "ops": [],
-                    "source": "blind"}
         _before = len(problems)
-        problems = _drop_unfounded(image_path, problems)
-        # Taste is not a problem. The prompt says so and the model ignores it:
-        # "the background of the sign is messy" scored a correct café 2/10.
-        # A complaint that names nothing on the checklist (missing, wrong,
-        # misspelled, doubled, merged, misplaced, incoherent) is dropped.
-        _kept = [p for p in problems if _LAYOUT_CONCERN_RE.search(p)]
-        if len(_kept) != len(problems):
-            logger.info("critique: dropped %d taste complaint(s): %s",
-                        len(problems) - len(_kept),
+        _kinds = complaint_kinds(ctx)(ctx, problems)
+        if _exposure.normally_exposed(_brightness(image_path)):
+            # The critic misjudges exposure one way, consistently: move_cat and replace_mug,
+            # clearly lit interiors measuring 73 and 109/255, were "extremely dark" and "mostly
+            # black silhouettes", and right pictures were redrawn.
+            if "blind" in _kinds:
+                # "The image is almost entirely black" about a twilight café that measures
+                # 100+/255 (four verdicts in a row): a critic that did not see the picture gets
+                # no vote -- not on the darkness, nor on what it calls missing because of it.
+                logger.warning("critique: the critic called a normally exposed picture "
+                               "black overall -- verdict discarded: %s", problems[:3])
+                return {"ok": True, "score": 0, "problems": [], "ops": [],
+                        "source": "blind"}
+            _drop = ("dark", "taste")
+        else:
+            _drop = ("taste",)
+        # Taste is not a problem. The prompt says so and the model ignores it: "the
+        # background of the sign is messy" scored a correct café 2/10.
+        _kept = [p for p, k in zip(problems, _kinds) if k not in _drop]
+        if len(_kept) != _before:
+            logger.info("critique: dropped %d complaint(s) (taste, or darkness the pixels "
+                        "contradict): %s", _before - len(_kept),
                         [p for p in problems if p not in _kept][:3])
             problems = _kept
-        if len(problems) != _before:
-            logger.info("critique: dropped %d darkness complaint(s) the pixels "
-                        "contradict", _before - len(problems))
         # A model writes "false" as often as false, and bool("false") is True — that
         # would turn every condemnation into an approval.
         ok = data.get("ok", None)
@@ -1515,7 +1464,7 @@ def critique(ctx, image_path: str, layout: dict, evidence: Optional[list] = None
             ok = ok.strip().lower() not in ("false", "no", "0", "none", "")
         ok = (not problems) if ok is None else bool(ok)
         if not ok and not problems and _before:
-            # Every complaint it made was one the pixels contradict.
+            # Every complaint it made was taste or a darkness the pixels contradict.
             ok = True
         score = _num(data.get("score"), 0.0)
         return {"ok": ok, "score": max(0, min(int(score), 10)), "problems": problems,

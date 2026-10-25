@@ -161,44 +161,6 @@ def test_a_negative_verdict_still_wins():
                  verify_neg=True) == GF._VERIFY_NEGATIVE_ANSWER
 
 
-# --- a tool that says, in words, that it found nothing ----------------------
-
-import graph_personality as GP
-
-
-def _detect(name, result, state=None):
-    return GP._detect_silent_failure(name, result, state or {"image_path": "/x.png"})
-
-
-def test_a_find_that_reports_no_match_is_a_failure():
-    out = _detect("find_photo",
-                  "Found a photo of the Golden Gate Bridge and loaded it as "
-                  "the current image. No photo matching the requested subject "
-                  "was found.")
-    assert out.startswith("[TOOL ERROR]"), out
-
-
-def test_the_russian_phrasing_too():
-    assert _detect("find_photo", "Ничего не найдено по запросу").startswith("[TOOL ERROR]")
-
-
-def test_a_real_find_is_left_alone():
-    ok = "Found a photo and loaded it as the current image."
-    assert _detect("find_photo", ok) == ok
-
-
-def test_a_count_of_results_is_not_a_failure():
-    ok = "Найдено 5 результатов, загружен первый."
-    assert _detect("find_photo", ok) == ok
-
-
-def test_only_file_producing_tools_are_checked():
-    """`search` legitimately reports that a query found nothing; that is a real
-    answer, not a broken tool."""
-    ok = "nothing found for that query"
-    assert _detect("search", ok) == ok
-
-
 # --- a file promised that does not exist ------------------------------------
 # Measured end to end on the sandbox bench: after editing a modpack the answer
 # was "запаковал всё обратно, ваш обновленный архив готов" while pack_archive

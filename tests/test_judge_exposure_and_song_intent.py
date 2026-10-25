@@ -54,19 +54,15 @@ check("evidence is written for the lit picture", "normally exposed" in E.evidenc
 check("and withheld for the dark one", E.evidence(dark) == "")
 check("a missing file is no evidence", E.evidence(os.path.join(d, "nope.png")) == "")
 
-check("silhouette complaint is a darkness complaint",
-      E.is_dark_complaint("The cat is extremely dark/underexposed, appearing almost as a "
-                          "black silhouette. The window frame also has heavy black artifacts."))
-check("'obscured by a large black bar' is one too",
-      E.is_dark_complaint("The main subject is almost entirely obscured by a large black bar "
-                          "at the bottom of the frame."))
-check("an absent subject in another sentence keeps the complaint",
-      not E.is_dark_complaint("The cat is a dark silhouette. The requested dog is absent."))
-check("a second copy keeps it",
-      not E.is_dark_complaint("The cat is a black silhouette; there is a second cat."))
-check("a plain wrong-subject complaint is untouched",
-      not E.is_dark_complaint("Asked for a cat, got a dog."))
-check("empty is not a complaint", not E.is_dark_complaint(""))
+# Which complaint is about darkness, blindness or taste is the model's reading
+# (complaint_read.py, scored live in bench/complaint_eval.py); here it is scripted
+# and the decisions made on it are checked.
+KINDS = {"The cat is extremely dark, a black silhouette.": "dark",
+         "The image is almost entirely black and lacks most elements": "blind",
+         "The text 'У ОЛЬГИ' is present but the background of the sign is messy.": "taste",
+         "The sign is not clean/solid as requested": "taste",
+         "the background of the sign is messy": "taste",
+         "The windowsill is too large and covers more than the bottom 25% of the frame": "taste"}
 
 # The outer judge: a darkness-only refine on a lit picture becomes an accept.
 import image_generate as G
@@ -75,6 +71,7 @@ import image as I
 
 class _Ctx:
     model_name = "test"; no_think = False; reasoning_effort = "high"
+    complaint_kinds = staticmethod(lambda ctx, texts: [KINDS.get(t, "content") for t in texts])
     def is_cancelled(self): return False
     def set_stage(self, *_): pass
 
@@ -115,12 +112,7 @@ try:
 finally:
     _VISION[0] = None
 
-# draw_agent's critic shares the measurement
 import draw_agent as DA
-check("draw_agent drops the same complaints",
-      DA._drop_unfounded(bright, ["the scene is extremely dark", "the cat is missing"]) == ["the cat is missing"])
-check("but not on a dark picture",
-      len(DA._drop_unfounded(dark, ["the scene is extremely dark"])) == 1)
 
 # the layout critic: a blind verdict is discarded, taste is not a problem
 LAY = {"background": "a street", "elements": [

@@ -118,8 +118,8 @@ canvas, filling the boxes to the frame edge, and finally merging every box into 
 in that order, each gated on the pixels rather than retried blindly. After each render,
 `draw_text.verify_text` reads the lettering back with EasyOCR before the vision critic
 ever looks (the critic cannot see a misspelling; it reads the word it expects), and
-`exposure.evidence`/`_drop_unfounded` strip exposure complaints the measured brightness
-contradicts. The critic's own `ops` and the deterministic `auto_fix_geometry` repair the
+`exposure.evidence` plus `complaint_read.kinds` (one model read: dark / blind / content /
+taste) strip taste and the exposure complaints the measured brightness contradicts. The critic's own `ops` and the deterministic `auto_fix_geometry` repair the
 layout for the next round; a round that changes nothing is reported as a stall and the
 loop reseeds instead of repeating itself; running out of rounds hands back the best
 verdict seen (`_best_attempt`), never automatically the last one drawn.
@@ -231,7 +231,8 @@ importer is [`tests/test_edit_state.py`](../../tests/test_edit_state.py).
   path containing an `_INTERMEDIATE_`-style scratch marker and any result smaller than
   its source canvas; nothing reaches the agent/UI boundary without passing it.
 - **A vision critic's exposure verdict is not trusted on its own.** `exposure.py`
-  measures mean/P95 luminance and drops a darkness complaint the pixels contradict
+  measures mean/P95 luminance; a complaint the model reads as darkness-only
+  (`complaint_read.py`, scored by `bench/complaint_eval.py`) is dropped when the pixels contradict it
   (`MEAN_FLOOR = 55.0`, `P95_FLOOR = 140.0`); a verdict that calls a normally-exposed
   picture "almost entirely black" is discarded wholesale (`source="blind"`), including
   whatever else it claimed.

@@ -1,0 +1,900 @@
+[
+ {
+  "text": "The diploma text is incorrectly placed and partially obscured by the man's body",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The background element (4) is meant to be empty space above the diploma but is actually behind/around it",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The lettering on the diploma contains many extra characters and misspelled words compared to the layout requirement",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The text on the signs is misspelled and contains extra characters/words not requested in the layout",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "Element 4 (top sign) has incorrect text content compared to the layout description",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The text on the sign is missing letters and incorrectly formed, reading 'OЙ-O!' instead of 'ОЙ-ОЙ!'",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The lettering on element 5 is correct but its position relative to the imp's face is slightly high",
+  "ok": [
+   "taste",
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The metal plate at the bottom (element 4) is partially cut off and contains incorrect text 'TE E .J 76'",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "Element 6 and 7 are merged/misplaced as large bars at the top with incorrect text",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The text on element 4 is missing or incorrectly placed",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "Element 6 has incorrect lettering ('s fao ihg strwck by Lemin')",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "Element 7's text 'TE E .1 76' is split/incorrectly formatted compared to layout",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "Element 5's text is misspelled and contains extra characters",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The text on the metallic plate is slightly distorted compared to the layout description",
+  "ok": [
+   "content",
+   "taste"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The metallic plate text 'TE E.I76' is slightly different from the requested 'TE Е .l 76'",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The sticker with Russian text is located on the cup but at a much lower position than requested (bottom instead of top)",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The coffee cup element is partially obscured by the cat and does not match the layout's intended placement/size",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The cat is a tabby/brown color instead of solid black",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The moon is much larger than requested (occupying ~20% of the frame instead of 6%)",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The moon is too large and positioned differently than requested",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The text on the sign is incorrect: it says 'Утро' (which matches the layout) but the prompt notes a discrepancy where it",
+  "ok": [
+   "content",
+   "taste"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The coffee cup icons are part of the wood sign rather than being separate elements in their specified regions",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The text is incorrect and misspelled as 'ВЧЕ' on one line and 'В Е Ч Е Р' on another, instead of a single instance of 'В",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The lettering is split across two lines instead of being at the top centre",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The coffee cup icons are part of the wood sign rather than separate elements as requested",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The text 'ВЕ·Ч·ЕР' is incorrectly spaced with dots between letters instead of being clean block capitals",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The sign's position and size are slightly off compared to layout",
+  "ok": [
+   "taste",
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The text on the sign is misspelled and does not match 'Вечер'",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The street lamp/glow is in the top right instead of middle right",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The sign is positioned lower than requested (middle-center vs bottom-center)",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The street lamp glow is at the top right but the layout asked for middle right",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The text on the sign is misspelled as 'Вечтер' instead of 'Вечер'",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The text position is too low and large compared to the layout requirements",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The text position and size do not match the layout (it is centered on the sign rather than at the top center of the frame)",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The brand name 'Kolosok' is placed in the middle right within the watercolor logo instead of at the top centre.",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The top centre area lacks the required brand name text.",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The text is not centered and covers a large portion of the left side rather than being integrated across the middle",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The brand name is misspelled as 'Klasok' instead of 'Kolosok'",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "Extra characters/lettering present that do not belong",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The brand name text 'Kolosok' at the top centre is missing.",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The vintage circular emblem contains incorrect/unreadable text 'BAKEH B' instead of just 'Kolosok' or as specified.",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "Element 1 (minimalist logo) is missing its white background/circle and has text 'Kolosok' which overlaps with element 4",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "Element 2 (vintage emblem) contains quotes around the word 'Kolosok', violating the layout instruction for clean block c",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "Element 3 (watercolor logo) has illegible script instead of elegant script, making it unreadable",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "Element 5 (top center text) is missing entirely",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The wheat stalks do not form a semi-circle as requested; they are just two stalks on the left.",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The circular border is incomplete and does not enclose the right side properly.",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "There is extra lettering 'ӫ' at the bottom right which was not requested.",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The bakery name 'Колосок' is placed at the bottom center/right but overlaps with the circular border and is not contained within its designated region.",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The circular border contains wheat stalks inside it, whereas the layout specifies wheat stalks on the middle left.",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "Extra lettering 'IH B' appears inside the circular border, which should be plain.",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The wheat stalks do not form semi-circles on the left side as requested; they are centrally located and oriented differently.",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The bakery name 'Колосок' is too large and occupies the bottom center/right rather than being a small element in the bottom right corner.",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The circular border is incomplete and positioned incorrectly (top right instead of middle right).",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The layout elements are merged or misplaced, failing to respect the specified regions.",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The circular border is not centered on the right side as requested; it encompasses most of the frame",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The bakery name 'Колосок' is located in the bottom right but overlaps with the wheat and border instead of being a disti",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The layout elements are merged: the wheat stalks are part of the central illustration rather than separate decorative el",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The text 'Колосок' is cut off at the bottom and contains extra characters ('тях')",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The central element contains incorrect text 'Какегн 1831' instead of being empty space or just a wreath",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The text 'Колосок' is at the bottom but misspelled and contains extra characters ('298')",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The central text is 'Какегн' instead of being empty space",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The layout requested empty space above the wreath, but there is no specific element for the central text in the layout p",
+  "ok": [
+   "content",
+   "taste"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The astronaut helmet does not cover the top center as requested; it occupies most of the frame.",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The cat is not black; it is a ginger tabby.",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The cat is inside the helmet instead of being at the bottom right.",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The astronaut helmet does not cover the top centre as requested; it occupies most of the frame",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The cat is not black and is located inside/behind the helmet rather than at the bottom centre",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The two cat elements (1 and 6) have merged into a single large cat shape",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The saucer/note element (3) is partially obscured by the edge of the frame or incorrectly positioned relative to its des",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "Element 3 (saucer) is present but its description includes a note which should be separate as per element 4.",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The two cat elements (1 and 6) have merged into a single cat object in the bottom left/center.",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The text 'ТОЛЬКО ДО ПЯТНИЦКА' contains a spelling error; it should be 'ПЯТНИЦЫ'",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The Y-axis numbers are scrambled and unreadable",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The X-axis line is at the bottom instead of the top as requested by layout (though visually correct for a chart)",
+  "ok": [
+   "content",
+   "taste"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The text 'Month' is rotated incorrectly/unreadable",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The Y-axis title 'Объем продаж' is at the top, but its layout description says it should be on the Y-axis (which is usually vertical)",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The text 'Month' is rotated vertically on the left, which matches the visual but contradicts the layout description for element 9 being at the bottom left",
+  "ok": [
+   "content",
+   "taste"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The X-axis line and its labels are incorrectly positioned; the horizontal axis is at the bottom of the bars, not the top",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The X-axis line (element 6) is incorrectly placed at the bottom instead of the top center as requested",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The background color is white instead of red",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The Y-axis title 'Объем продаж' is at the top, but its description says it should be on the vertical axis",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The text on the X-axis 'Sales Volume' is present but its position relative to the axis line is different from layout",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The background is white, not red",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The X-axis line and label are incorrectly placed/missing according to layout (layout asks for a horizontal line at y=0.2",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The text on the Y-axis 'Sahncas' is incorrect and does not match 'Month'",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The y-axis label and x-axis label overlap/merge into one string at the bottom",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The x-axis label text is incorrect ('% Продяжи ($)' instead of 'Месяцы')",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "There are only 11 bars visible instead of twelve",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "There are only 11 bars visible, but the layout requires 12.",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The x-axis label 'Месяцы' is missing.",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The y-axis label text is misspelled as 'Продяжи' instead of 'Продажи ($)'.",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "An extra label 'Ик' appears near the top right.",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The x-axis label text is incorrect and unreadable",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The y-axis label is missing or illegible",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The top label 'Sales' does not match the required text 'Пик'",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The background color is a neutral grey/white instead of red",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The bar chart does not have twelve columns as requested (it has ten).",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The x-axis label is missing or merged with the y-axis label.",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The text 'Мродажи ($)' is a misspelling of 'Продажи ($)'.",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The background is grey/white instead of red.",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The windowsill is at the bottom, not the top",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The cat is ginger/orange instead of solid black",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The cat is ginger/brown and black (calico/tortie pattern) instead of solid black as requested",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The cat's color does not match the description",
+  "ok": [
+   "content"
+  ],
+  "from": "live critique"
+ },
+ {
+  "text": "The cat is extremely dark/underexposed, appearing almost as a black silhouette. The window frame also has heavy black artifacts.",
+  "ok": [
+   "dark"
+  ],
+  "from": "tests and documented cases"
+ },
+ {
+  "text": "The main subject is almost entirely obscured by a large black bar at the bottom of the frame.",
+  "ok": [
+   "dark"
+  ],
+  "from": "tests and documented cases"
+ },
+ {
+  "text": "The cat is a dark silhouette. The requested dog is absent.",
+  "ok": [
+   "content"
+  ],
+  "from": "tests and documented cases"
+ },
+ {
+  "text": "The cat is a black silhouette; there is a second cat.",
+  "ok": [
+   "content"
+  ],
+  "from": "tests and documented cases"
+ },
+ {
+  "text": "Asked for a cat, got a dog.",
+  "ok": [
+   "content"
+  ],
+  "from": "tests and documented cases"
+ },
+ {
+  "text": "the cat is extremely dark, a black silhouette",
+  "ok": [
+   "dark"
+  ],
+  "from": "tests and documented cases"
+ },
+ {
+  "text": "the scene is extremely dark",
+  "ok": [
+   "dark"
+  ],
+  "from": "tests and documented cases"
+ },
+ {
+  "text": "the cat is missing",
+  "ok": [
+   "content"
+  ],
+  "from": "tests and documented cases"
+ },
+ {
+  "text": "The interior is mostly black and poorly lit.",
+  "ok": [
+   "dark",
+   "blind"
+  ],
+  "from": "tests and documented cases"
+ },
+ {
+  "text": "The image is almost entirely black.",
+  "ok": [
+   "blind"
+  ],
+  "from": "tests and documented cases"
+ },
+ {
+  "text": "The picture appears completely dark, nothing can be seen.",
+  "ok": [
+   "blind"
+  ],
+  "from": "tests and documented cases"
+ },
+ {
+  "text": "It looks extremely underexposed overall.",
+  "ok": [
+   "blind",
+   "dark"
+  ],
+  "from": "tests and documented cases"
+ },
+ {
+  "text": "The wooden sill under the cat is a large black bar.",
+  "ok": [
+   "dark"
+  ],
+  "from": "tests and documented cases"
+ },
+ {
+  "text": "the background of the sign is messy",
+  "ok": [
+   "taste"
+  ],
+  "from": "tests and documented cases"
+ },
+ {
+  "text": "The palm tree and elephant overlap significantly",
+  "ok": [
+   "taste"
+  ],
+  "from": "tests and documented cases"
+ },
+ {
+  "text": "The colours could be more vibrant.",
+  "ok": [
+   "taste"
+  ],
+  "from": "tests and documented cases"
+ },
+ {
+  "text": "The composition feels a bit empty on the right.",
+  "ok": [
+   "taste"
+  ],
+  "from": "tests and documented cases"
+ },
+ {
+  "text": "The elephant is not pink as requested",
+  "ok": [
+   "content"
+  ],
+  "from": "tests and documented cases"
+ },
+ {
+  "text": "The elephant is not pink",
+  "ok": [
+   "content"
+  ],
+  "from": "tests and documented cases"
+ },
+ {
+  "text": "The dress has the wrong colour",
+  "ok": [
+   "content"
+  ],
+  "from": "tests and documented cases"
+ },
+ {
+  "text": "the car is still not red",
+  "ok": [
+   "content"
+  ],
+  "from": "tests and documented cases"
+ },
+ {
+  "text": "There is a third cat on the left which was not in the layout",
+  "ok": [
+   "content"
+  ],
+  "from": "tests and documented cases"
+ }
+]

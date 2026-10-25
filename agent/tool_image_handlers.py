@@ -37,7 +37,7 @@ import image as image_mod
 import tool_graph
 from tool_context import _edit_source, _remember, _set_current_image
 
-from seams import choice, dep, module, intent_read, text_model, vision_model, yes_no
+from seams import choice, complaint_kinds, dep, module, intent_read, text_model, vision_model, yes_no
 
 logger = logging.getLogger("assistant.tools")
 
@@ -186,8 +186,7 @@ def _handle_inspect_image(ctx, state, args: dict) -> str:
             break
     logger.info("inspect_image result: %s", result.strip()[:400].replace("\n", " | "))
     if _measured and result.strip() and (
-            _exposure.is_dark_complaint(result)
-            or _exposure.judge_is_blind([result], source)):
+            complaint_kinds(ctx)(ctx, [result])[0] in ("dark", "blind")):
         logger.info("inspect_image: darkness complaint contradicted by the measured "
                     "exposure -- treated as a pass")
         result = ("The picture is normally exposed (measured). The inspector's only "

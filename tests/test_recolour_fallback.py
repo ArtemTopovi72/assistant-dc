@@ -2,7 +2,7 @@
 
 A layout re-render with the same seed can keep the old colours whatever the box
 says, so the critic's "The elephant is not pink as requested" must not be dropped
-as taste. The colour of a named thing counts as a content complaint, and a layout
+as taste (complaint_read.py; the phrase is in bench/complaint_set), and a layout
 edit whose re-render still carries problems hands the original to the pixel
 pipeline (FireRed contained), which paints the change in place.
 """
@@ -19,14 +19,6 @@ def check(name, cond, extra=""):
     global OK, BAD
     OK += bool(cond); BAD += (not cond)
     print(("PASS  " if cond else "FAIL  ") + name, ("  " + str(extra)) if (extra and not cond) else "")
-
-rx = D._LAYOUT_CONCERN_RE
-check("'not pink as requested' is content, not taste", rx.search("The elephant is not pink as requested"))
-check("'is not pink' is content", rx.search("The elephant is not pink"))
-check("'wrong colour' is content", rx.search("The dress has the wrong colour"))
-check("'still not red' is content", rx.search("the car is still not red"))
-check("a messy background is still taste", not rx.search("the background of the sign is messy"))
-check("an overlap remark is still taste", not rx.search("The palm tree and elephant overlap significantly"))
 
 # --- the fallback ---------------------------------------------------------------------
 import image as _IM
