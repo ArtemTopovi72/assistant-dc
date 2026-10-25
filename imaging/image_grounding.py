@@ -246,23 +246,6 @@ def _extract_edit_target(ctx, instruction: str, image_path: Optional[str] = None
         logger.warning("edit-target extraction failed: %s", exc)
         data = None
     if not isinstance(data, dict):
-        # Deterministic fallback: the LLM's JSON flaked (empty/garbled). Common
-        # edit phrasings are regular enough to parse directly — a parsed contained
-        # edit beats silently degrading to a whole-frame re-render.
-        m = re.match(
-            r"^\s*(?:please\s+)?(?:change|turn|convert)\s+(?:the\s+|his\s+|her\s+)?"
-            r"(?P<region>[\w\s-]{2,40}?)\s+(?:to|into)\s+(?P<result>.+)$",
-            instr, re.IGNORECASE) or re.match(
-            r"^\s*(?:please\s+)?make\s+(?:the\s+|his\s+|her\s+)?"
-            r"(?P<region>[\w\s-]{2,40}?)\s+(?P<result>[\w\s,-]+)$",
-            instr, re.IGNORECASE)
-        if m:
-            region = m.group("region").strip().lower()
-            result = m.group("result").strip()
-            if region and region not in ("whole", "image", "picture", "everything", "it"):
-                logger.info("edit-target: deterministic fallback parsed region=%r result=%r",
-                            region, result[:50])
-                return region, f"{result} {region}".strip(), 0.75
         return None, "", 0.75
     region = (data.get("region") or "").strip().lower()
     result = (data.get("result") or "").strip()

@@ -109,7 +109,7 @@ def test_transfer_worker_mask_and_identity_excepts():
         "_ROLE_TARGET_REGION": {"object_source": "torso"},
         "_upload_image_to_comfy": lambda t, u: (_ for _ in ()).throw(RuntimeError("upload boom")),
         "_region_mask_file": lambda *a, **k: None, "COMFY_URL": "http://c",
-        "build_edit_plan": lambda t, r, i: {"n_passes": 1, "steps": [
+        "build_edit_plan": lambda t, r, i, ctx=None: {"n_passes": 1, "steps": [
             {"roles": ["object_source"], "extract": False, "instruction": "s"}]},
         "assert_deliverable": lambda out, where=None, source_path=None: out,
     }

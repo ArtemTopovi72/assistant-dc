@@ -73,8 +73,12 @@ def test_each_role_distinct_instruction():
 
 
 def test_auto_infer_keywords():
-    """Item 2 — Auto-infer maps representative phrases to the correct role, and an
-    instruction with no role keyword falls back to ROLE_OBJECT."""
+    """Item 2 — the model's read of what a reference gives (scored live in
+    bench/transfer_role_eval.py, scripted here) becomes the role, and a read that names
+    nothing falls back to ROLE_OBJECT."""
+    import types
+    import image_transfer
+    names = {v[0]: k for k, v in image_transfer._ROLE_READS.items()}
     cases = [
         ("put the leather jacket from image 2 on him", im.ROLE_CLOTHING),
         ("give him the hairstyle from the reference", im.ROLE_HAIR),
@@ -88,14 +92,16 @@ def test_auto_infer_keywords():
     ]
     for text, expected in cases:
         ref = im.ReferenceImage(_img("ai.png"), role=None)
-        im.infer_reference_roles(text, [ref])
+        im.infer_reference_roles(text, [ref], ctx=types.SimpleNamespace(
+            choice=lambda q, t, o, d=None, **k: names[expected]))
         _check(ref.role == expected, f"{text!r} -> {ref.role}, expected {expected}")
     # no keyword -> object fallback (never None at execution)
     ref = im.ReferenceImage(_img("ai.png"), role=None)
-    im.infer_reference_roles("just do something with image 2", [ref])
+    im.infer_reference_roles("just do something with image 2", [ref],
+                             ctx=types.SimpleNamespace(choice=lambda q, t, o, d=None, **k: "?"))
     _check(ref.role == im.ROLE_OBJECT, f"no-keyword fallback wrong: {ref.role}")
     _check(ref.effective_role == im.ROLE_OBJECT, "effective_role should never be None")
-    print("PASS: auto-infer maps keywords to all roles + safe ROLE_OBJECT fallback")
+    print("PASS: the read maps to all roles + safe ROLE_OBJECT fallback")
     return True
 
 

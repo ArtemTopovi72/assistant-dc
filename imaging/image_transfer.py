@@ -233,22 +233,12 @@ _ALL_ROLES = {ROLE_TARGET, ROLE_OBJECT, ROLE_CLOTHING, ROLE_FACE, ROLE_HAIR,
 _EXTRACTABLE_ROLES = {ROLE_OBJECT, ROLE_CLOTHING, ROLE_HAIR}
 
 
-# Keyword -> (role, default segmentation phrase) for automatic inference.
-_ROLE_HINTS = [
-    (ROLE_CLOTHING, "clothing", re.compile(
-        r"\b(dress|shirt|jacket|coat|outfit|clothes|garment|suit|hoodie|sweater|"
-        r"uniform|costume|pants|skirt|jeans|blouse)\b", re.I)),
-    (ROLE_HAIR, "hair", re.compile(r"\b(hair|hairstyle|haircut|hairdo)\b", re.I)),
-    (ROLE_OBJECT, "object", re.compile(
-        r"\b(hat|cap|glasses|sunglasses|watch|bag|necklace|earrings?|product|bottle|"
-        r"logo|prop|accessory|scarf|tie|crown|helmet|mask|furniture|chair|sofa|lamp|table)\b", re.I)),
-    (ROLE_FACE, "face", re.compile(r"\b(face|facial features|likeness|look like (?:him|her|them))\b", re.I)),
-    (ROLE_POSE, "person", re.compile(r"\b(pose|posture|stance|position|gesture)\b", re.I)),
-    (ROLE_STYLE, "", re.compile(r"\b(style|material|texture|pattern|palette|colou?r scheme|aesthetic|vibe)\b", re.I)),
-    (ROLE_SCENE, "", re.compile(r"\b(scene|background|environment|setting|room|place (?:it|them) in)\b", re.I)),
-    (ROLE_LIGHTING, "", re.compile(r"\b(lighting|light|mood|shadows?|illumination)\b", re.I)),
-    (ROLE_IDENTITY, "person", re.compile(r"\b(identity|character|same person)\b", re.I)),
-]
+# What a reference contributes, as the model names it -> (role, default segmentation phrase).
+_ROLE_READS = {"clothing": (ROLE_CLOTHING, "clothing"), "hair": (ROLE_HAIR, "hair"),
+               "object": (ROLE_OBJECT, "object"), "face": (ROLE_FACE, "face"),
+               "pose": (ROLE_POSE, "person"), "style": (ROLE_STYLE, ""),
+               "scene": (ROLE_SCENE, ""), "lighting": (ROLE_LIGHTING, ""),
+               "identity": (ROLE_IDENTITY, "person")}
 
 
 class ReferenceImage:
@@ -295,16 +285,21 @@ class ReferenceImage:
         return f"ReferenceImage(role={self.role}, path={os.path.basename(str(self.path))}{a})"
 
 
-def infer_reference_roles(instruction, references):
+def infer_reference_roles(instruction, references, ctx=None):
     """Assign a role (and default SAM3 extract phrase) to each reference from the
-    instruction text. Heuristic auto-inference; the agent can override per-image.
-    Only fills in roles left at the ROLE_OBJECT default — explicit roles are kept."""
-    text = instruction or ""
+    instruction, read by the model (bench/transfer_role_eval.py); the agent can override
+    per-image. Only fills in roles left unset -- explicit roles are kept. A keyword list
+    read this before and took «make his facial features look like this person» for a pose."""
     chosen, phrase = None, ""
-    for role, ph, rx in _ROLE_HINTS:
-        if rx.search(text):
-            chosen, phrase = role, ph
-            break
+    if any(ref.role is None for ref in references) and (instruction or "").strip():
+        got = choice(ctx)(
+            "A user edits a picture using a reference image: {text}. What does the reference "
+            "give? clothing (a garment, outfit); hair (a hairstyle); object (a thing: a hat, "
+            "glasses, a bag, a product, furniture); face (facial features); pose (a posture, "
+            "gesture); style (art style, material, palette); scene (a background or place to "
+            "put the subject in); lighting (light, mood); identity (the same person or "
+            "character).", instruction, tuple(_ROLE_READS), "object")
+        chosen, phrase = _ROLE_READS.get(got, (None, ""))
     for ref in references:
         if ref.role is None:                 # only fill UNASSIGNED roles
             ref.role = chosen or ROLE_OBJECT
@@ -432,7 +427,7 @@ def transfer_with_references(ctx, target_path, references, instruction=None, *,
         instruction = _image._english_instructions(ctx, instruction) or instruction
 
     # Resolve any unassigned roles from the instruction before use.
-    _image.infer_reference_roles(instruction or "", refs)
+    _image.infer_reference_roles(instruction or "", refs, ctx=ctx)
 
     # PHASE 2: extract a clean asset for any extractable ref that lacks one, so the
     # model is conditioned on the cut-out thing, not the whole reference photo.
@@ -512,14 +507,14 @@ _ROLE_CHAIN_ORDER = {
 }
 
 
-def build_edit_plan(target_path, references, instruction=""):
+def build_edit_plan(target_path, references, instruction="", ctx=None):
     """PHASE 4 — produce an explicit, backend-agnostic edit plan.
 
     Returns a dict: {target, steps:[{role, ref, instruction, extract}], n_passes}.
     Each step is one reference applied to the (evolving) target; >2 references
     become multiple chained passes so the architecture scales to N images and
     chained edits (Phase 10) without redesign."""
-    refs = _image.infer_reference_roles(instruction, [r for r in references if r])
+    refs = _image.infer_reference_roles(instruction, [r for r in references if r], ctx=ctx)
     ordered = sorted(refs, key=lambda r: _ROLE_CHAIN_ORDER.get(r.role, 4))
     steps = []
     # Group up to 2 same-spirit refs per pass (the Qwen image2/image3 budget).
@@ -737,14 +732,14 @@ def plan_and_execute_transfer(ctx, target_path, references, instruction="", *,
     final image path or None. This is the entry point the tool/router should call
     for multi-image requests; `transfer_with_references` remains the single-pass
     primitive."""
-    # Everything downstream is English-only: role inference (_ROLE_HINTS), the
+    # Everything downstream is English-only: role inference, the
     # placement-region regex, and the FireRed/Qwen prompt itself. A raw Russian
     # instruction silently defaults every ref to ROLE_OBJECT and masks the generic
     # "head and upper body" anchor (the tattoo-on-chest bug). ASCII text passes
     # through untouched, so this is free for English instructions.
     if instruction and not instruction.isascii():
         instruction = _image._english_instructions(ctx, instruction) or instruction
-    plan = _image.build_edit_plan(target_path, references, instruction)
+    plan = _image.build_edit_plan(target_path, references, instruction, ctx=ctx)
     if not plan["steps"]:
         logger.error("plan_and_execute: no references to apply")
         return None

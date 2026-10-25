@@ -1,0 +1,22 @@
+[
+ {"text": "put the leather jacket from image 2 on him", "ok": "clothing"},
+ {"text": "give him the hairstyle from the reference", "ok": "hair"},
+ {"text": "add the sunglasses to his face", "ok": "object"},
+ {"text": "make his facial features look like this person", "ok": "face"},
+ {"text": "use this pose for the subject", "ok": "pose"},
+ {"text": "apply this art style and colour palette", "ok": "style"},
+ {"text": "place them in this scene/background", "ok": "scene"},
+ {"text": "match the lighting and mood", "ok": "lighting"},
+ {"text": "keep the same identity/character", "ok": "identity"},
+ {"text": "dress her in the gown from the second photo", "ok": "clothing"},
+ {"text": "put this cat on the sofa in my picture", "ok": "object"},
+ {"text": "give her the same braids as on the reference", "ok": "hair"},
+ {"text": "make him stand like the man in the reference, arms crossed", "ok": "pose"},
+ {"text": "move the couple to this beach", "ok": "scene"},
+ {"text": "repaint it in the style of this watercolour", "ok": "style"},
+ {"text": "put this logo on his t-shirt", "ok": "object"},
+ {"text": "make the light warm like at sunset on the reference", "ok": "lighting"},
+ {"text": "swap his face with the face from the reference", "ok": "face"},
+ {"text": "add the tattoo from the photo to her shoulder", "ok": "object"},
+ {"text": "put the sneakers from image 2 on her", "ok": "clothing"}
+]

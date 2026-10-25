@@ -5,7 +5,7 @@ monkeypatched; heavy image ops are faked in sys.modules.
 
 Run: QT_QPA_PLATFORM=offscreen venv/Scripts/python.exe tests/test_gui_tabs.py
 """
-import os, sys, types, tempfile, shutil, contextlib
+import os, sys, types, tempfile, shutil, contextlib
 from types import SimpleNamespace as _NS
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("USE_GUI", "0")
@@ -604,7 +604,7 @@ def _im_mod(**over):
         "_upload_image_to_comfy": lambda t, url: "uploaded",
         "_region_mask_file": lambda ctx, up, region, n, seed=1, timeout=600: "maskf.png",
         "COMFY_URL": "http://comfy",
-        "build_edit_plan": lambda t, refs, instr: {"n_passes": 1, "steps": [
+        "build_edit_plan": lambda t, refs, instr, ctx=None: {"n_passes": 1, "steps": [
             {"roles": ["object_source"], "extract": True, "instruction": "do it"}]},
         "transfer_with_references": lambda ctx, t, refs, instr: _png("whole_out.png"),
         "plan_and_execute_transfer": lambda ctx, t, refs, instr, mask_override=None, protect_face=True: _png("contained_out.png"),

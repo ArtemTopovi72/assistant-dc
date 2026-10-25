@@ -129,7 +129,7 @@ class TransferWorker(QThread):
                     self.preview.emit({"path": ref.path, "role": ref.effective_role,
                                        "asset": ref.extracted_asset_path,
                                        "mask": mask, "region": region})
-                plan = im.build_edit_plan(self.target, refs, self.instruction)
+                plan = im.build_edit_plan(self.target, refs, self.instruction, ctx=self.ctx)
                 lines = [f"Target : {os.path.basename(self.target)}",
                          f"Passes : {plan['n_passes']}", ""]
                 for n, step in enumerate(plan["steps"], 1):

@@ -73,7 +73,7 @@ def test_transfer_worker_plan_variations():
         "_upload_image_to_comfy": lambda t, url: None,
         "_region_mask_file": lambda *a, **k: None,
         "COMFY_URL": "http://c",
-        "build_edit_plan": lambda t, refs, instr: {"n_passes": 2, "steps": [
+        "build_edit_plan": lambda t, refs, instr, ctx=None: {"n_passes": 2, "steps": [
             {"roles": ["style_reference"], "extract": False, "instruction": "s1"},
             {"roles": ["style_reference"], "extract": False, "instruction": "s2"}]},
         "assert_deliverable": lambda out, where=None, source_path=None: out,
