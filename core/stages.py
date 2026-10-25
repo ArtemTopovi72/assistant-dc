@@ -165,6 +165,11 @@ _OZON = [
     (re.compile(r"^reading cards and reviews for (.*)$"), "читаю карточки и отзывы: {0}"),
     (re.compile(r"^looking at the photos of (.*)$"), "смотрю фото: {0}"),
     (re.compile(r"^checking what the web says about (.*)$"), "проверяю отзывы в интернете: {0}"),
+    (re.compile(r"^looking at your photo$"), "смотрю на твоё фото"),
+    (re.compile(r"^opening the card$"), "открываю карточку"),
+    (re.compile(r"^other sellers of this item$"), "другие продавцы этого товара"),
+    (re.compile(r"^photo search$"), "ищу по фото"),
+    (re.compile(r"^checking (\d+) cards$"), "сверяю характеристики, карточек: {0}"),
 ]
 
 

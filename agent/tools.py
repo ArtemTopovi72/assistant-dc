@@ -742,7 +742,7 @@ from tool_descriptions import (
     _EDIT_FILE_DESC,
     _CODE_OUTLINE_DESC, _RUN_TESTS_DESC, _UPDATE_PLAN_DESC, _UNDO_EDIT_DESC,
     _OZON_SEARCH_DESC, _OZON_PRODUCT_DESC, _OZON_REVIEWS_DESC, _OZON_CART_DESC,
-    _OZON_SET_LOCATION_DESC, _OZON_SHOP_DESC,
+    _OZON_SET_LOCATION_DESC, _OZON_SHOP_DESC, _OZON_SAME_DESC,
     _SEARCH_FILES_DESC, _FIND_CONTENT_DESC, _DELETE_PATH_DESC, _DEDUPE_PHOTOS_DESC, _UNPACK_ARCHIVE_DESC, _PACK_ARCHIVE_DESC,
     _RUN_CODE_DESC, _INSTALL_PACKAGES_DESC, _RAG_ADD_DESC, _RAG_SEARCH_DESC,
 )
@@ -757,7 +757,7 @@ from tool_args import (
     FindContentArgs, DeletePathArgs, DedupePhotosArgs, RagAddArgs, RagSearchArgs, SetReminderArgs, ConvertCurrencyArgs, CalendarArgs, WeatherForecastArgs, LocalTimeArgs,
     CodeOutlineArgs, RunTestsArgs, UpdatePlanArgs, UndoEditArgs,
     OzonSearchArgs, OzonProductArgs, OzonReviewsArgs, OzonCartArgs, OzonSetLocationArgs,
-    OzonShopArgs,
+    OzonShopArgs, OzonSameArgs,
 )
 from tool_code_handlers import (
     _handle_list_files, _handle_read_file, _handle_open_image,
@@ -769,7 +769,7 @@ from tool_code_handlers import (
 )
 from tool_ozon_handlers import (
     _handle_ozon_search, _handle_ozon_product, _handle_ozon_reviews, _handle_ozon_cart,
-    _handle_ozon_set_location, _handle_ozon_shop,
+    _handle_ozon_set_location, _handle_ozon_shop, _handle_ozon_same,
     OZON_TOOL_NAMES,   # noqa: F401
 )
 
@@ -865,6 +865,8 @@ TOOLS = [
              _handle_ozon_reviews, OzonReviewsArgs),
     ToolSpec("ozon_shop", _fn_schema("ozon_shop", _OZON_SHOP_DESC, OzonShopArgs),
              _handle_ozon_shop, OzonShopArgs),
+    ToolSpec("ozon_same", _fn_schema("ozon_same", _OZON_SAME_DESC, OzonSameArgs),
+             _handle_ozon_same, OzonSameArgs),
     ToolSpec("ozon_set_location", _fn_schema("ozon_set_location", _OZON_SET_LOCATION_DESC,
                                              OzonSetLocationArgs),
              _handle_ozon_set_location, OzonSetLocationArgs),

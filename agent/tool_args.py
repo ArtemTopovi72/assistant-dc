@@ -616,6 +616,15 @@ class OzonProductArgs(_ToolArgs):
         "What to check on the photos, e.g. 'is the kettle glass or plastic?'."))
 
 
+class OzonSameArgs(_ToolArgs):
+    product: str = Field(..., min_length=1, description=(
+        "The Ozon product link or SKU whose same item the user wants from another seller."))
+    priority: Literal["balanced", "cheap", "fast"] = Field("balanced", description=(
+        "What the user wants first: the cheapest, the soonest delivery, or the best of both."))
+    by_photo: bool = Field(True, description=(
+        "Also look for listings of the same item through Ozon's photo search."))
+
+
 class OzonShopArgs(_ToolArgs):
     request: str = Field(..., min_length=2, description=(
         "What the user wants, in their words with every detail: 'самый дешёвый нормальный "

@@ -200,7 +200,8 @@ def link_context(text: str, limit: int = LINK_TEXT_CHARS, url: str = "", modules
             said = ("The user asks about an Ozon product they linked earlier" if url not in (text or "")
                     else "The user's message contains an Ozon product link")
             return (f"[{said} ({url}). Read that card with ozon_product (and ozon_reviews if they ask "
-                    f"what buyers say). If the user only sent the link, tell them briefly what the "
+                    f"what buyers say; ozon_same if they want this same item cheaper, sooner or from "
+                    f"another seller). If the user only sent the link, tell them briefly what the "
                     f"product is, its price and what buyers say. This is a shopping question: do not "
                     f"make a video, a picture or a file.]")
         page = read_link(url, modules)

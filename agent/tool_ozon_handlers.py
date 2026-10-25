@@ -1,4 +1,4 @@
-"""The agent's Ozon tools: ozon_search, ozon_product, ozon_reviews.
+"""The agent's Ozon tools: ozon_search, ozon_product, ozon_reviews, ozon_same.
 
 Results go back as compact text the model can compare and quote, with the
 product link on every line so the answer can hand the user something to tap.
@@ -18,7 +18,7 @@ import ozon_client as _oz
 logger = logging.getLogger("assistant.tools.ozon")
 
 OZON_TOOL_NAMES = frozenset({"ozon_search", "ozon_product", "ozon_reviews", "ozon_cart",
-                             "ozon_set_location", "ozon_shop"})
+                             "ozon_set_location", "ozon_shop", "ozon_same"})
 
 
 def _rub(n) -> str:
@@ -384,6 +384,79 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
         _cart_save(ctx, items)
         basket = "\nAdded to the user's shopping list.\n" + _cart_text(items)
     return S.report(results, p["mode"], _oz.LAST_LOCATION.get("text") or "", basket)
+
+
+def _same_line(x: dict) -> str:
+    bits = [_rub(x.get("price")), x.get("delivery") or "date not shown"]
+    who = x.get("seller") or ""
+    if x.get("country"):
+        who += f" ({x['country']})"
+    if who:
+        bits.append("seller " + who)
+    if x.get("rating"):
+        bits.append(f"★{x['rating']}" + (f" ({x['reviews']} reviews)" if x.get("reviews") else ""))
+    flags = (x.get("check") or {}).get("flags") or []
+    return " — ".join(bits) + (f" [{'; '.join(flags)}]" if flags else "") + f"\n   sku {x['sku']} {x.get('url') or ''}"
+
+
+def same_report(r: dict, priority: str = "balanced") -> str:
+    import ozon_same as S
+    src, best = r["source"], r["best"]
+    n = len(r["same"]) + len(r["different"]) + len(r["unclear"])
+    out = [f"Same item as: {src.get('name') or '?'} — {_rub(src.get('price'))}"
+           + (f", {src['delivery']}" if src.get("delivery") else "")
+           + f", seller {src.get('seller') or '?'}\n   {src.get('url')}",
+           f"Checked {n} candidate cards ({'the sellers Ozon lists for this card and ' if r['glued'] else ''}"
+           "Ozon's photo search), each by its characteristics against the original's: "
+           + (", ".join(k for k in (src.get("characteristics") or {}) if not S.SKIP_KEY.search(k))
+              or "the card lists none") + "."]
+    names = {"cheap": "cheapest", "fast": "soonest delivery", "balanced": "best price-for-speed"}
+    if best:
+        out.append("Picks among the verified same item:")
+        for k in (priority, *[k for k in names if k != priority]):
+            x = best.get(k)
+            if x:
+                out.append(f"- {names[k]}: " + ("THIS VERY CARD (nothing better found) " if x.get("via") == "this card" else "")
+                           + _same_line(x))
+    else:
+        out.append("No other listing proved to be the same item.")
+    picked = {id(x) for x in best.values() if x}
+    rest = sorted((x for x in r["same"] if id(x) not in picked), key=lambda x: x["price"])
+    if rest:
+        out.append(f"Also the same item ({len(rest)}), by price:")
+        out += [f"- {_same_line(x)}" for x in rest[:6]]
+    if r["different"]:
+        out.append("NOT the same item (copies / other versions), with why:")
+        out += [f"- {_rub(x.get('price'))} sku {x['sku']} {x.get('url') or ''}: {'; '.join(x['check']['diff'])}"
+                for x in sorted(r["different"], key=lambda x: x["price"])[:6]]
+    if r["unclear"]:
+        out.append(f"{len(r['unclear'])} more found by photo could not be checked (their cards list "
+                   "nothing to compare): do not call them the same item.")
+    out.append(f"The user's priority: {priority}. Lead with that pick; give its price, date and link, "
+               "say in a few words why the others are or are not the same (name what differs), and "
+               "pass the flags on (abroad seller, no reviews, a copy's price). Lines marked [подозрительно "
+               "дёшево] are listed, never recommended. Dates are for "
+               + (_oz.LAST_LOCATION.get("text") or "the region Ozon guessed") + ".")
+    return "\n".join(out)
+
+
+@_owned
+def _handle_ozon_same(ctx, state, args: dict) -> str:
+    import ozon_same as S
+    p = (args.get("product") or "").strip()
+
+    def stage(text):
+        try:
+            ctx.set_stage(text)
+        except Exception:
+            logger.debug("set_stage failed", exc_info=True)
+    try:
+        r = S.find_same(ctx, p, args.get("by_photo", True), stage)
+    except Exception as exc:
+        logger.warning("ozon_same(%s) failed: %s", p, exc)
+        return _fail(exc)
+    _remember(ctx, [x for x in r["best"].values() if x])
+    return same_report(r, args.get("priority") or "balanced")
 
 
 @_owned

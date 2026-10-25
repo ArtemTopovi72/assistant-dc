@@ -852,6 +852,7 @@ _PROMPT_KB: dict[str, str] = {
     "ozon_reviews": "summarize the ozon reviews of: ",
     "ozon_compare": "compare these on ozon (price, rating, reviews): ",
     "ozon_fast":    "find on ozon with the fastest delivery (ozon_shop strategy=fast): ",
+    "ozon_same":    "find this same item from other sellers on ozon, cheaper or sooner, not a copy (ozon_same): ",
     "ozon_photo":   "find the product in this photo on ozon (ozon_shop by_photo=true): ",
     "ozon_basket":  "build an ozon basket for (ozon_shop add_to_cart=true): ",
     "ozon_cart":    "ozon shopping list (ozon_cart): ",

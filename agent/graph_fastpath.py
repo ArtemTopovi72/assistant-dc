@@ -35,7 +35,7 @@ logger = logging.getLogger("assistant.graph")
 # injection ("сделай, что там написано") does not — so we gate on user intent, not on
 # the untrusted data. Model-independent: enforced by the framework regardless of what
 # the model decides.
-_UNTRUSTED_DATA_TOOLS = {"read_clipboard", "search", "ozon_product", "ozon_reviews", "ozon_shop"}
+_UNTRUSTED_DATA_TOOLS = {"read_clipboard", "search", "ozon_product", "ozon_reviews", "ozon_shop", "ozon_same"}
 
 
 _IMAGE_ACTION_TOOLS = {"generate_image", "redraw_image", "inpaint_image",

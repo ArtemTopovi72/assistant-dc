@@ -372,6 +372,12 @@ _OZON_SHOP_DESC = (
     "their reviews, checks the photo, and returns the pick for each item with why, "
     "what buyers say (or that there are no reviews) and caveats. Takes minutes for "
     "a basket. Use ozon_search only for a quick raw listing.")
+_OZON_SAME_DESC = (
+    "The SAME item as a given Ozon card from other sellers: cheaper, delivered sooner, or "
+    "the best of both, with copies thrown out. Checks every candidate card's characteristics "
+    "(material, sizes, model, specs) against the original's, so «the same backpack» in eco "
+    "leather is rejected. Use when the user has a product link/SKU and asks for it cheaper, "
+    "faster, from another seller, or where else it is sold.")
 _OZON_SET_LOCATION_DESC = (
     "Set where Ozon delivers: picks the Ozon pickup point nearest to a city or "
     "address, so prices and delivery dates match the user. Call it when the "

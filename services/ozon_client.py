@@ -160,9 +160,9 @@ def delivery_days(text, today=None):
     t = str(text or "").strip().lower()
     today = today or _dt.date.today()
     for word, n in (("сегодня", 0), ("послезавтра", 2), ("завтра", 1)):
-        if t.startswith(word):
+        if re.match(r"(?:доставим\s+|привезём\s+|привезем\s+)?" + word, t):
             return n
-    m = re.match(r"(\d{1,2})\s+([а-я]+)", t)
+    m = re.search(r"(\d{1,2})\s+([а-я]+)", t)              # «Доставим 7 ноября», «1–3 ноября»
     if not m or m.group(2) not in _MONTHS:
         return None
     try:
@@ -328,6 +328,37 @@ def parse_details(base: dict, page2: dict | None = None) -> dict:
         "characteristics": chars,
         "description": parse_description(page2 or {})[:3000],
     }
+
+
+def offers_path(base: dict, sort: str = "price") -> str | None:
+    """The card's «Есть дешевле или быстрее» list of other sellers of the same item
+    (Ozon glues their listings to this card), sorted by price or by date."""
+    link = (_widget(base, "webBestSeller") or {}).get("modalLink") or ""
+    if "otherOffersFromSellers" not in link:
+        return None
+    return re.sub(r"([?&]sort=)[a-z_]+", r"\g<1>" + sort, link) if "sort=" in link         else link + ("&" if "?" in link else "?") + "sort=" + sort
+
+
+def parse_offers(page: dict) -> list:
+    out = []
+    for s in (_widget(page, "webSellerList") or {}).get("sellers") or []:
+        p = s.get("price") or {}
+        price = price_to_number((p.get("cardPrice") or {}).get("price")) or price_to_number(p.get("price"))
+        url = clean_url(s.get("productLink"))
+        sku = str(s.get("sku") or sku_from_url(url) or "")
+        if not sku or not price:
+            continue
+        cred = s.get("credentials") or []
+        country = next((c for c in cred if re.match(r"^[A-Z]{2}(,|$)", str(c))), "")
+        delivery = next((h.get("content") for a in s.get("advantages") or []
+                         if a.get("key") == "delivery"
+                         for h in (a.get("contentRs") or {}).get("headRs") or []), None)
+        r = s.get("rating") or {}
+        out.append({"sku": sku, "seller": s.get("name"), "country": country.split(",")[0],
+                    "price": price, "delivery": delivery, "url": url or f"https://www.ozon.ru/product/{sku}/",
+                    "image": s.get("coverImage"), "rating": r.get("totalScore"),
+                    "reviews": r.get("reviewsCount")})
+    return out
 
 
 def review_photo_urls(content: dict) -> list:
@@ -678,6 +709,12 @@ def _hide_from_taskbar() -> None:
         import ctypes
         from ctypes import wintypes
         u = ctypes.windll.user32
+        H = wintypes.HWND                          # untyped, a 64-bit handle overflows a C int
+        for fn, args in ((u.GetWindowRect, (H, ctypes.POINTER(wintypes.RECT))),
+                         (u.IsWindowVisible, (H,)), (u.GetClassNameW, (H, wintypes.LPWSTR, ctypes.c_int)),
+                         (u.GetWindowLongW, (H, ctypes.c_int)),
+                         (u.SetWindowLongW, (H, ctypes.c_int, wintypes.LONG)), (u.ShowWindow, (H, ctypes.c_int))):
+            fn.argtypes = args
         GWL_EXSTYLE, TOOL, APP = -20, 0x80, 0x40000
         found = []
 
