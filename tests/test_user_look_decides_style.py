@@ -13,6 +13,11 @@ sys.path.insert(0, ROOT)
 os.environ.setdefault("F5_TEST_RUN", "1")
 
 import ideogram_layout as IL  # noqa: E402
+import types  # noqa: E402
+
+# What the planner's style makes (photo / drawn / graphic) is the model's read; scripted.
+_R = types.SimpleNamespace(choice=lambda q, text, options, default=None: (
+    "graphic" if "vector" in text else "drawn" if "painting" in text else "photo"))
 
 
 def _painted():
@@ -21,7 +26,7 @@ def _painted():
 
 
 def test_no_named_look_turns_the_agents_painting_into_a_photo():
-    out = IL.enforce_user_look(_painted(), "none")
+    out = IL.enforce_user_look(_painted(), "none", ctx=_R)
     assert out["art_style"] == "" and out["medium"] == "photography" and out["photo"]
     assert "photorealistic" in out["aesthetics"]
 
@@ -32,7 +37,7 @@ def test_asked_for_a_photo_is_a_photo():
 
 def test_a_logo_stays_graphic_design():
     logo = {"art_style": "", "medium": "flat vector graphic design", "aesthetics": "minimal", "photo": ""}
-    assert IL.enforce_user_look(dict(logo), "none") == logo
+    assert IL.enforce_user_look(dict(logo), "none", ctx=_R) == logo
 
 
 def test_a_named_drawn_look_wins():

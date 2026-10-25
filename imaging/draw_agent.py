@@ -29,7 +29,6 @@ import copy
 import difflib
 import json
 import logging
-import os
 import random
 import re
 from typing import Callable, Optional
@@ -57,7 +56,7 @@ import draw_text as _draw_text
 from draw_geometry import (  # noqa: F401,E402
     MIN_AREA, MAX_ELEMENTS, MERGE_IOU, FULL_FRAME,
     _iou, _covered, geometry_report, _grow_to_min_area, _merge_groups, _spread,
-    auto_fix_geometry,
+    auto_fix_geometry, relations, _read_json,
 )
 
 _els        = _draw_text._els
@@ -934,23 +933,6 @@ def edit_layout(ctx, layout: dict, instruction: str) -> tuple:
         return layout, [f"edit failed: {exc}"]
 
 
-def _read_json(ctx, name: str, system: str, user: str, keys: tuple, max_tokens: int):
-    """One model read of layout words, as JSON; a suite scripts it as `ctx.deps.<name>(user)`.
-    Under the suites unscripted, or the model down: None, and the caller changes nothing."""
-    own = dep(ctx, name, None)
-    if own is not None:
-        return own(user)
-    if os.getenv("F5_TEST_RUN") and not os.getenv("INTENT_LIVE"):
-        return None
-    try:
-        from seams import text_model
-        raw = text_model(ctx)(ctx, system, user, temperature=0.0, max_tokens=max_tokens) or ""
-        return safe_json_from_llm(raw, keys)
-    except Exception:
-        logger.warning("draw_agent: %s read failed", name, exc_info=True)
-        return None
-
-
 # "let there be two cats" came back as ONE box described "two fluffy gray cats
 # sitting together" — and the renderer drew one merged mass with extra limbs.
 # A counted subject gets its own box: the box is split side by side, one subject each.
@@ -1599,9 +1581,10 @@ def run(ctx, request: str = "", *, layout: Optional[dict] = None,
             if notes:
                 emit("fixed", layout=layout, notes=notes,
                      problems=[p["why"] for p in tprobs])
-        problems = geometry_report(layout)
+        rel = relations(ctx, layout)
+        problems = geometry_report(layout, rel)
         if problems:
-            layout, notes = auto_fix_geometry(layout)
+            layout, notes = auto_fix_geometry(layout, rel=rel)
             emit("fixed", layout=layout, notes=notes,
                  problems=[p["why"] for p in problems])
 
@@ -1773,7 +1756,7 @@ def run(ctx, request: str = "", *, layout: Optional[dict] = None,
             for el in layout.get("elements") or []:
                 if _norm_text(el.get("text")) in garbled:
                     el["desc"] = spell_out(el)
-        fixed, notes = auto_fix_geometry(layout)
+        fixed, notes = auto_fix_geometry(layout, ctx=ctx)
         if notes:
             layout = fixed
             emit("fixed", layout=layout, notes=notes, problems=[])

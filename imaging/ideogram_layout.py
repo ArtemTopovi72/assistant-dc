@@ -393,13 +393,17 @@ def apply_style_floor(layout: dict, prompt: str, ctx=None) -> dict:
     return layout
 
 
-_GRAPHIC = re.compile(r"vector|graphic design|logo|icon|emblem|sticker|badge|infographic|"
-                      r"diagram|poster typography", re.I)
-_DRAWN = re.compile(r"illustrat|painting|drawn|drawing|cartoon|anime|comic|render|digital art|"
-                    r"concept art|sketch|watercolou?r|pixel|stylized|stylised|cel", re.I)
+def _planned_kind(style: str, ctx=None) -> str:
+    """photo | drawn | graphic: what the planner's style fields make, read by the model. Two
+    word lists read this before; «render» and «photo» sat in both a drawn and a photo look."""
+    from seams import choice
+    return choice(ctx)(
+        "The style fields of a planned picture: {text}. Will it come out a photograph, a "
+        "drawn, painted or 3D-rendered picture, or graphic design (a logo, icon, sticker, "
+        "badge, infographic, diagram)?", style, ("photo", "drawn", "graphic"), "photo")
 
 
-def enforce_user_look(layout: dict, look: str) -> dict:
+def enforce_user_look(layout: dict, look: str, ctx=None) -> dict:
     """The USER's words decide the kind of picture, not the agent's description.
 
     The description handed to the planner is the agent's English rewrite, and it
@@ -419,10 +423,12 @@ def enforce_user_look(layout: dict, look: str) -> dict:
             layout["medium"] = "illustration"
             layout["photo"] = ""
         return layout
-    if look == "none" and _GRAPHIC.search(style):
+    kind = _planned_kind(style, ctx) if look == "none" and style.strip() else ""
+    if kind == "graphic":
         return layout
-    if look == "photo" or str(layout.get("art_style") or "").strip() or _DRAWN.search(style):
-        if str(layout.get("art_style") or "").strip() or _DRAWN.search(style):
+    drawn = bool(str(layout.get("art_style") or "").strip()) or kind == "drawn"
+    if look == "photo" or drawn:
+        if drawn:
             logger.info("Ideogram: the user named no drawn look -- %r becomes a photograph", style[:80])
         layout.update(_DEFAULT_PHOTO_STYLE)
         layout["aesthetics"] = "photorealistic, true-to-life detail, cinematic"

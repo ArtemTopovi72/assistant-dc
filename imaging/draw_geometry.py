@@ -1,16 +1,20 @@
 """Layout geometry: overlap repair, min-area growth and spreading.
 
-Lifted out of draw_agent.py. Pure geometry -- boxes in, boxes out, no LLM call
-and no module state. auto_fix_geometry and geometry_report are the entry points;
-the rest are its helpers.
+Lifted out of draw_agent.py. Geometry -- boxes in, boxes out, no module state. The one
+model read is `relations` (which box is put on another, which hangs on purpose), made once
+per layout and handed to geometry_report / auto_fix_geometry as `rel`.
 
 The callers (run, edit_layout) stay in draw_agent, so any suite that patches
 draw_agent.auto_fix_geometry still reaches the code that runs.
 """
 import copy
+import logging
+import os
 import re
 import ideogram
 import text_layout as _text_layout
+
+logger = logging.getLogger("assistant." + __name__)
 import draw_text as _draw_text
 
 from draw_text import _clamp_box, _els
@@ -86,18 +90,65 @@ def _attached_to(text_el, other) -> bool:
                 & _attach_tokens(other.get("desc"), ""))
 
 
-# Words that say a box was PUT on/under/inside another one. Deliberately a
-# preposition list and not a noun matcher: the editor answers in English about a
-# layout written in Russian ("a ginger cat sleeping on the sofa" next to "синий
-# диван у стены"), so matching the two by their nouns cannot work, while the
-# preposition survives either language.
-_SUPPORT_RE = re.compile(
-    r"\b(?:on|onto|atop|upon|under|underneath|beneath|below|inside|within)\b"
-    r"|\bin\s+the\b|\bon\s+top\b"
-    r"|(?:^|\s)(?:на|над|под|внутри|в)\s", re.IGNORECASE)
+def _read_json(ctx, name: str, system: str, user: str, keys: tuple, max_tokens: int):
+    """One model read of layout words, as JSON; a suite scripts it as `ctx.deps.<name>(user)`.
+    Under the suites unscripted, or the model down: None, and the caller changes nothing."""
+    from seams import dep
+    own = dep(ctx, name, None)
+    if own is not None:
+        return own(user)
+    if os.getenv("F5_TEST_RUN") and not os.getenv("INTENT_LIVE"):
+        return None
+    try:
+        from seams import text_model
+        from utils import safe_json_from_llm
+        raw = text_model(ctx)(ctx, system, user, temperature=0.0, max_tokens=max_tokens) or ""
+        return safe_json_from_llm(raw, keys)
+    except Exception:
+        logger.warning("layout %s read failed", name, exc_info=True)
+        return None
 
 
-def _stacked_on(small, big) -> bool:
+_REL_SYS = (
+    "Each numbered line describes one box of a picture layout (English or Russian). For each "
+    "box: rests -- true when the words put it ON, UNDER or INSIDE another thing in the "
+    "picture (a cat sleeping on the sofa, a mug on the table, кот на диване, a fish in a "
+    "bowl); hangs -- true when it is meant to hang or fly with nothing under it (a ceiling "
+    "lamp, a picture or clock on the wall, a cloud, the moon, a bird in flight, a balloon, a "
+    "shop sign).\n"
+    'Answer ONE JSON object and nothing else: {"boxes": [{"rests": false, "hangs": false}, '
+    "...]}, one per line, in order.")
+
+
+def relations(ctx, layout: dict) -> dict:
+    """{desc: (rests, hangs)} for the layout's boxes, read by the model in one call
+    (bench/layout_relations_eval.py). A preposition list and a list of hanging things read
+    this before: «a man in a red coat» rested «in» something, a «sign» painted on a mug hung.
+    Unread: {} -- nothing counts as placed on purpose or hanging on purpose."""
+    descs = list(dict.fromkeys(str(e.get("desc") or "").strip()
+                               for e in (layout or {}).get("elements") or [] if not e.get("text")))
+    descs = [d for d in descs if d]
+    if not descs:
+        return {}
+    got = _read_json(ctx, "relations_read", _REL_SYS,
+                     "\n".join(f"{i}. {d[:300]}" for i, d in enumerate(descs, 1)), ("boxes",),
+                     60 + 30 * len(descs))
+    boxes = (got or {}).get("boxes") if isinstance(got, dict) else None
+    if not isinstance(boxes, list) or len(boxes) != len(descs):
+        return {}
+    return {d: (b.get("rests") is True, b.get("hangs") is True)
+            for d, b in zip(descs, (x if isinstance(x, dict) else {} for x in boxes))}
+
+
+def _rests(el, rel) -> bool:
+    return (rel or {}).get(str(el.get("desc") or "").strip(), (False, False))[0]
+
+
+def _hangs(el, rel) -> bool:
+    return (rel or {}).get(str(el.get("desc") or "").strip(), (False, False))[1]
+
+
+def _stacked_on(small, big, rel=None) -> bool:
     """`small` was deliberately placed ON (or under, or in) `big`.
 
     Two subjects on the same spot normally fuse into one thing, which is what
@@ -114,7 +165,7 @@ def _stacked_on(small, big) -> bool:
     """
     if small["w"] * small["h"] > big["w"] * big["h"] * 0.85:
         return False
-    if not _SUPPORT_RE.search(str(small.get("desc") or "")):
+    if not _rests(small, rel):
         return False
     return _covered(small, big) >= 0.6
 
@@ -157,18 +208,18 @@ def _nest_on(small, big):
     _clamp_box(small)
 
 
-def _deliberate_stack(a, b) -> bool:
+def _deliberate_stack(a, b, rel=None) -> bool:
     """Either box deliberately placed on the other."""
-    return _stacked_on(a, b) or _stacked_on(b, a)
+    return _stacked_on(a, b, rel) or _stacked_on(b, a, rel)
 
 
-def _nestable(a, b):
+def _nestable(a, b, rel=None):
     """(small, big) when one was PUT on the other but is not small enough to
     read as a separate object; None otherwise."""
-    if _deliberate_stack(a, b):
+    if _deliberate_stack(a, b, rel):
         return None                     # already nested, leave it alone
     for small, big in ((a, b), (b, a)):
-        if _SUPPORT_RE.search(str(small.get("desc") or "")) and big["w"] * big["h"] >= small["w"] * small["h"] * 0.9:
+        if _rests(small, rel) and big["w"] * big["h"] >= small["w"] * small["h"] * 0.9:
             return small, big
     return None
 
@@ -186,7 +237,7 @@ def _iou(a, b) -> float:
     return inter / union if union > 0 else 0.0
 
 
-def geometry_report(layout: dict) -> list:
+def geometry_report(layout: dict, rel=None) -> list:
     """Problems in the ARRANGEMENT itself, before anything is rendered.
 
     Each entry is {"kind", "why", "targets"} — the same vocabulary the fixer and the
@@ -207,15 +258,15 @@ def geometry_report(layout: dict) -> list:
     for i in range(len(els)):
         for j in range(i + 1, len(els)):
             iou = _iou(els[i], els[j])
-            if iou >= MERGE_IOU and _nestable(els[i], els[j]) is not None:
-                small, big = _nestable(els[i], els[j])
+            if iou >= MERGE_IOU and _nestable(els[i], els[j], rel) is not None:
+                small, big = _nestable(els[i], els[j], rel)
                 out.append({"kind": "coincident",
                             "targets": [els.index(small), els.index(big)],
                             "why": f'“{small["desc"][:28]}” is placed ON '
                                    f'“{big["desc"][:28]}” but covers the same box — '
                                    f"the renderer fuses them into one object"})
                 continue
-            if iou >= MERGE_IOU and not _deliberate_stack(els[i], els[j]):
+            if iou >= MERGE_IOU and not _deliberate_stack(els[i], els[j], rel):
                 out.append({"kind": "merged", "targets": [i, j],
                             "why": f'“{els[i]["desc"][:28]}” and “{els[j]["desc"][:28]}” '
                                    f"overlap by {iou * 100:.0f}% — the renderer fuses "
@@ -378,23 +429,13 @@ def _place_text_clear(els, i, text_ix) -> bool:
     return True
 
 
-# Things that are SUPPOSED to hang with nothing under them. Without this list a
-# ceiling lamp gets dropped onto the table below it.
-_AIRBORNE_RE = re.compile(
-    r"\b(?:lamp|chandelier|pendant|light|bulb|picture|painting|poster|photo|"
-    r"frame|clock|mirror|shelf|curtain|window|sky|cloud|sun|moon|star|bird|"
-    r"balloon|kite|smoke|steam|banner|sign)\b"
-    r"|люстр|лампа|светильник|картин|постер|плакат|фото|часы|зеркал|полк|"
-    r"штор|окн|небо|облак|солнц|лун|звезд|птиц|шарик|дым|пар|вывеск|таблич",
-    re.IGNORECASE)
-
 # How far a prop may hang above a surface and still count as "meant to be on
 # it". 0.42 vs a table top at 0.45 is a planner slip; 0.10 of the frame away is
 # a different composition and is left alone.
 _SETTLE_GAP = 0.10
 
 
-def _settle_onto_surfaces(els) -> list:
+def _settle_onto_surfaces(els, rel=None) -> list:
     """Drop a prop that hangs just above the surface it is standing on.
 
     Measured on the bench renders: the planner put the mug's box at
@@ -409,7 +450,7 @@ def _settle_onto_surfaces(els) -> list:
     """
     moved = []
     for el in els:
-        if _AIRBORNE_RE.search(str(el.get("desc") or "")):
+        if _hangs(el, rel):
             continue
         if str(el.get("text") or "").strip():
             continue                       # lettering is placed by its own repair
@@ -438,7 +479,7 @@ def _settle_onto_surfaces(els) -> list:
     return moved
 
 
-def auto_fix_geometry(layout: dict) -> tuple:
+def auto_fix_geometry(layout: dict, ctx=None, rel=None) -> tuple:
     """Repair the arrangement problems `geometry_report` found. Returns (layout, notes).
 
     Deliberately conservative: grow what is too small, spread merged boxes apart,
@@ -454,6 +495,7 @@ def auto_fix_geometry(layout: dict) -> tuple:
     as calling it once.
     """
     layout = ideogram.normalize_layout(copy.deepcopy(layout))
+    rel = relations(ctx, layout) if rel is None else rel
     els = _els(layout)
     notes, said = [], set()
 
@@ -467,7 +509,7 @@ def auto_fix_geometry(layout: dict) -> tuple:
                            round(el["w"], 6), round(el["h"], 6)) for el in els])
     best, best_n, seen = snapshot(), None, set()
     for _ in range(12):
-        probs = [p for p in geometry_report(layout) if p["kind"] != "crowded"]
+        probs = [p for p in geometry_report(layout, rel) if p["kind"] != "crowded"]
         if best_n is None or len(probs) < best_n:
             best, best_n = snapshot(), len(probs)
         if not probs or state() in seen:
@@ -514,11 +556,11 @@ def auto_fix_geometry(layout: dict) -> tuple:
         if snapshot() == before:
             break                       # nothing moved, so nothing will next pass
     if best_n is not None and \
-       len([p for p in geometry_report(layout) if p["kind"] != "crowded"]) > best_n:
+       len([p for p in geometry_report(layout, rel) if p["kind"] != "crowded"]) > best_n:
         els[:] = best                   # the passes went in a circle — keep the best
     # Last, once nothing else is going to move a box: rest the props on what
     # they are standing on.
-    for _el, _surface in _settle_onto_surfaces(els):
+    for _el, _surface in _settle_onto_surfaces(els, rel):
         note(f'rested “{_el["desc"][:24]}” on “{_surface["desc"][:24]}” instead '
              f"of leaving it hanging just above it")
 

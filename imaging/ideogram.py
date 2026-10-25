@@ -587,7 +587,7 @@ def plan_layout(ctx, prompt: str) -> dict:
     """
     look = getattr(ctx, "user_look", "") if ctx is not None else ""
     fallback = lambda: ensure_text_elements(
-        enforce_user_look(apply_style_floor(blank_layout(prompt), prompt, ctx=ctx), look), prompt, ctx=ctx)
+        enforce_user_look(apply_style_floor(blank_layout(prompt), prompt, ctx=ctx), look, ctx=ctx), prompt, ctx=ctx)
     if ctx is None:
         return fallback()
     try:
@@ -602,7 +602,7 @@ def plan_layout(ctx, prompt: str) -> dict:
         # "three tall palm trees" in one box render as one merged mass, as in an edit.
         from draw_agent import split_counted_boxes, merge_text_column   # draw_agent imports this module
         layout, _ = split_counted_boxes(merge_text_column(layout), [], ctx=ctx)
-        layout = ensure_text_elements(enforce_user_look(apply_style_floor(layout, prompt, ctx=ctx), look), prompt, ctx=ctx)
+        layout = ensure_text_elements(enforce_user_look(apply_style_floor(layout, prompt, ctx=ctx), look, ctx=ctx), prompt, ctx=ctx)
         return drop_invented_text(layout, prompt, ctx)
     except Exception:
         logger.exception("Ideogram planning failed — using the flat layout")
@@ -641,7 +641,7 @@ def plan_caption(ctx, prompt: str) -> dict:
     look = getattr(ctx, "user_look", "") if ctx is not None else ""
 
     def fallback():
-        return layout_to_caption(enforce_user_look(apply_style_floor(blank_layout(prompt), prompt, ctx=ctx), look), ctx=ctx)
+        return layout_to_caption(enforce_user_look(apply_style_floor(blank_layout(prompt), prompt, ctx=ctx), look, ctx=ctx), ctx=ctx)
     if ctx is None:
         return fallback()
     try:
@@ -661,7 +661,7 @@ def plan_caption(ctx, prompt: str) -> dict:
         if not layout["elements"]:
             logger.warning("Ideogram planner produced no usable elements — flat caption")
             return fallback()
-        layout = ensure_text_elements(enforce_user_look(apply_style_floor(layout, prompt, ctx=ctx), look), prompt, ctx=ctx)
+        layout = ensure_text_elements(enforce_user_look(apply_style_floor(layout, prompt, ctx=ctx), look, ctx=ctx), prompt, ctx=ctx)
         return layout_to_caption(layout, ctx=ctx)
     except Exception:
         logger.exception("Ideogram planning failed — using the flat caption")

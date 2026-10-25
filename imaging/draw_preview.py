@@ -277,7 +277,7 @@ def preflight(ctx, layout: dict, request: str, *, width: int = 1024, height: int
         # the geometry pass keeps the moved boxes inside the frame and apart
         # where they must be apart (lettering)
         try:
-            fixed, gnotes = draw_agent.auto_fix_geometry(fixed)
+            fixed, gnotes = draw_agent.auto_fix_geometry(fixed, ctx=ctx)
             notes = list(notes) + list(gnotes or [])
         except Exception:
             logger.exception("preflight: geometry pass failed")

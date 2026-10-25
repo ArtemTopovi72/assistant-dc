@@ -287,7 +287,7 @@ def edit_via_layout(ctx, image_path: str, instruction: str,
     if look and look != "none":
         before = {k: layout.get(k) for k in ("art_style", "medium", "photo", "aesthetics")}
         from ideogram_layout import enforce_user_look
-        layout = enforce_user_look(layout, look)
+        layout = enforce_user_look(layout, look, ctx=ctx)
         if look == "photo":
             layout["art_style"] = ""
         if {k: layout.get(k) for k in before} != before:

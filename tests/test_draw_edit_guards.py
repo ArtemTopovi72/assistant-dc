@@ -114,6 +114,11 @@ def _on_the_sofa():
         ]})
 
 
+# Which box is put on another, and which hangs on purpose, is the model's read
+# (draw_geometry.relations, bench/layout_relations_eval.py); scripted here.
+_REL = {"серый кот сидит на полу": (True, False), "люстра над столом": (False, True)}
+
+
 def _center(el):
     return (el["x"] + el["w"] / 2, el["y"] + el["h"] / 2)
 
@@ -126,7 +131,7 @@ def _sits_on(small, big):
 
 
 def test_a_cat_placed_on_a_sofa_is_still_on_it_after_the_repair():
-    fixed, notes = DA.auto_fix_geometry(_on_the_sofa())
+    fixed, notes = DA.auto_fix_geometry(_on_the_sofa(), rel=_REL)
     cat = [el for el in fixed["elements"] if "кот" in el["desc"]][0]
     sofa = [el for el in fixed["elements"] if "диван" in el["desc"]][0]
     assert _sits_on(cat, sofa), (cat, sofa, notes)
@@ -134,7 +139,7 @@ def test_a_cat_placed_on_a_sofa_is_still_on_it_after_the_repair():
 
 def test_the_two_boxes_stop_being_identical():
     """Identical boxes are what the renderer fuses; nesting is the repair."""
-    fixed, _ = DA.auto_fix_geometry(_on_the_sofa())
+    fixed, _ = DA.auto_fix_geometry(_on_the_sofa(), rel=_REL)
     cat = [el for el in fixed["elements"] if "кот" in el["desc"]][0]
     sofa = [el for el in fixed["elements"] if "диван" in el["desc"]][0]
     assert cat["w"] * cat["h"] < sofa["w"] * sofa["h"] * 0.9, (cat, sofa)
@@ -516,7 +521,7 @@ def test_something_far_above_is_a_different_composition_and_is_left_alone():
 
 def test_a_hanging_lamp_is_not_dropped_onto_the_table():
     """The one thing this repair must never do."""
-    fixed, notes = DA.auto_fix_geometry(_on_table(0.28, "люстра над столом"))
+    fixed, notes = DA.auto_fix_geometry(_on_table(0.28, "люстра над столом"), rel=_REL)
     lamp = [el for el in fixed["elements"] if "люстра" in el["desc"]][0]
     assert abs(lamp["y"] - 0.28) < 1e-6, (lamp, notes)
 
