@@ -12,7 +12,7 @@ The assistant's agent loop reasons and calls tools; this domain is where those t
 
 ## How it works
 
-[`services/ozon_shopper.py`](../../services/ozon_shopper.py) turns a shopping request into one chosen product per need by routing every candidate through four separate judges before a model picks: a relevance/price filter (`is_accessory`, `max_price`), an LLM screen (`screen`), a vision check on the photo (`look`), and a web-reputation search (`web_reputation`). An 18+ category short-circuits before any of them run, because Ozon hides the whole category from a search that has not confirmed an age.
+[`services/ozon_shopper.py`](../../services/ozon_shopper.py) turns a shopping request into one chosen product per need by routing every candidate through four separate judges before a model picks: a price cap (`max_price`), an LLM screen (`screen`) that also drops parts and accessories, a vision check on the photo (`look`), and a web-reputation search (`web_reputation`). An 18+ category short-circuits before any of them run, because Ozon hides the whole category from a search that has not confirmed an age.
 
 ```mermaid
 flowchart TD
@@ -70,8 +70,8 @@ The Ozon tools and the Telegram card renderer sit downstream of `ozon_shopper`/`
 | Path | Responsibility |
 |---|---|
 | [`services/ozon_client.py`](../../services/ozon_client.py) | Browser-driven Ozon API client: page fetch through the composer JSON endpoint, pure parsers (`parse_search`, `parse_details`, `parse_reviews`, `parse_filters`), age-gate detection (`_age_gated`, `OzonAgeGate`), pickup-point geocoding (`geocode`, `nearest_point`, `set_pickup_point`), and the browser pool (`_Browser`, `OZON_WORKERS` worker browsers, `MAX_CONTEXTS` per-user contexts each) |
-| [`services/ozon_shopper.py`](../../services/ozon_shopper.py) | LLM-driven shopping pipeline: `plan`, `gather`, `screen`, `inspect`, `web_reputation`, `look`, `decide`, `shop_item`, `shop`, `shop_photo`, `clarify`, `report` |
-| [`services/ozon_same.py`](../../services/ozon_same.py) | The same item from another seller (`find_same`): candidates from the card's seller list (`ozon_client.offers_path`, `parse_offers`) and Ozon's photo search, each card's characteristics checked in code (`compare`, `same_value`, red-flag words), then `rank` picks cheapest / soonest / compromise; a copy's price is listed, never picked |
+| [`services/ozon_shopper.py`](../../services/ozon_shopper.py) | LLM-driven shopping pipeline: `plan`, `the_product_only` (parts and accessories out of a cheapest-first listing), `gather`, `screen`, `inspect`, `web_reputation`, `look`, `decide`, `shop_item`, `shop`, `shop_photo`, `clarify`, `report` |
+| [`services/ozon_same.py`](../../services/ozon_same.py) | The same item from another seller (`find_same`): candidates from the card's seller list (`ozon_client.offers_path`, `parse_offers`) and Ozon's photo search, each card's name and characteristics read against the original's by the house LLM (`judge`), copy-priced offers flagged in code (`flags`), then `rank` picks cheapest / soonest / compromise; a copy's price is listed, never picked |
 | [`agent/tool_ozon_handlers.py`](../../agent/tool_ozon_handlers.py) | The agent-facing tools (`OZON_TOOL_NAMES`: `ozon_search`, `ozon_product`, `ozon_reviews`, `ozon_cart`, `ozon_set_location`, `ozon_shop`, `ozon_same`), per-user browser context via `_owned`/`_owner_of`, the shopping-cart file (`_cart_load`/`_cart_save`), and the seller-photo vision call (`_look_at_photos`) |
 | [`bot/tg_product_cards.py`](../../bot/tg_product_cards.py) | Renders the Ozon products a reply links to as Telegram photo cards: `pick`, `condense`, `caption`, `keyboard`, `send_cards` |
 

@@ -85,9 +85,14 @@ def _handle_ozon_search(ctx, state, args: dict) -> str:
     except Exception:
         logger.debug("set_stage failed", exc_info=True)
     try:
+        limit = int(args.get("limit") or 10)
+        cheapest = (args.get("sort") or "popular") == "price"
         items = _oz.call(ctx, "search", q, args.get("sort") or "popular", args.get("price_min"),
-                           args.get("price_max"), int(args.get("limit") or 10),
+                           args.get("price_max"), 60 if cheapest else limit,
                            args.get("max_delivery_days"))
+        if cheapest:                    # the cheapest lines are parts and covers «for» the product
+            import ozon_shopper
+            items = ozon_shopper.the_product_only(ctx, q, items)[:limit]
     except Exception as exc:
         logger.warning("ozon_search(%s) failed: %s", q, exc)
         return _fail(exc)
@@ -400,16 +405,13 @@ def _same_line(x: dict) -> str:
 
 
 def same_report(r: dict, priority: str = "balanced") -> str:
-    import ozon_same as S
     src, best = r["source"], r["best"]
     n = len(r["same"]) + len(r["different"]) + len(r["unclear"])
     out = [f"Same item as: {src.get('name') or '?'} — {_rub(src.get('price'))}"
            + (f", {src['delivery']}" if src.get("delivery") else "")
            + f", seller {src.get('seller') or '?'}\n   {src.get('url')}",
            f"Checked {n} candidate cards ({'the sellers Ozon lists for this card and ' if r['glued'] else ''}"
-           "Ozon's photo search), each by its characteristics against the original's: "
-           + (", ".join(k for k in (src.get("characteristics") or {}) if not S.SKIP_KEY.search(k))
-              or "the card lists none") + "."]
+           "Ozon's photo search), each card's name and characteristics read against the original's."]
     names = {"cheap": "cheapest", "fast": "soonest delivery", "balanced": "best price-for-speed"}
     if best:
         out.append("Picks among the verified same item:")
@@ -427,11 +429,11 @@ def same_report(r: dict, priority: str = "balanced") -> str:
         out += [f"- {_same_line(x)}" for x in rest[:6]]
     if r["different"]:
         out.append("NOT the same item (copies / other versions), with why:")
-        out += [f"- {_rub(x.get('price'))} sku {x['sku']} {x.get('url') or ''}: {'; '.join(x['check']['diff'])}"
+        out += [f"- {_rub(x.get('price'))} sku {x['sku']} {x.get('url') or ''}: {x['check']['why']}"
                 for x in sorted(r["different"], key=lambda x: x["price"])[:6]]
     if r["unclear"]:
-        out.append(f"{len(r['unclear'])} more found by photo could not be checked (their cards list "
-                   "nothing to compare): do not call them the same item.")
+        out.append(f"{len(r['unclear'])} more could not be checked (their cards say too little): "
+                   "do not call them the same item.")
     out.append(f"The user's priority: {priority}. Lead with that pick; give its price, date and link, "
                "say in a few words why the others are or are not the same (name what differs), and "
                "pass the flags on (abroad seller, no reviews, a copy's price). Lines marked [подозрительно "

@@ -767,28 +767,6 @@ def pmap(fn, items) -> list:
         return list(ex.map(run, items))
 
 
-_ACCESSORY_HEAD = re.compile(r"^\s*(комплектующ|запчаст|аксессуар|насадк|прокладк|уплотнит|"
-                             r"чехол|шланг|кран|термометр|фильтр|переходник|крышк)", re.I)
-
-
-def _stems(query: str) -> list:
-    return [w[:max(4, len(w) - 3)] for w in re.findall(r"[а-яёa-z0-9]+", query.lower()) if len(w) > 3]
-
-
-def is_accessory(name: str, query: str) -> bool:
-    """'Комплектующие для самогонного аппарата' / 'Термометр ... для самогонного
-    аппарата' is not a самогонный аппарат -- unless the user asked for the part."""
-    n = str(name or "").lower()
-    q = query.lower()
-    if _ACCESSORY_HEAD.match(n) and not _ACCESSORY_HEAD.match(q):
-        return True
-    stems = _stems(query)
-    m = re.search(r"\bдля\b(.*)", n)
-    head = n[:m.start()] if m else n
-    return bool(m and stems and any(s in m.group(1) for s in stems)
-                and not any(s in head for s in stems))
-
-
 LAST_LOCATION = {"text": ""}     # the header address seen on the last search
 
 
@@ -889,12 +867,11 @@ def search(query: str, sort: str = "popular", price_min=None, price_max=None,
     g = _me(gw)
     if sort == "price":
         # Ozon's own price sort floats every 98 ₽ spare part to the top. Take the
-        # relevance ranking instead, drop parts/accessories, then order by price.
+        # relevance ranking instead and order it by price; telling the parts from the
+        # product is the caller's (ozon_shopper.the_product_only).
         page = g._search_page(search_path(query, "popular", price_min, price_max, page), query, gw)
         LAST_LOCATION["text"] = g.parse_location(page)
-        items = g.parse_search(page, 60)
-        items = sorted((x for x in items if not g.is_accessory(x.get("name"), query)),
-                       key=lambda x: x["price"])
+        items = sorted(g.parse_search(page, 60), key=lambda x: x["price"])
     else:
         page = g._search_page(search_path(query, sort, price_min, price_max, page), query, gw)
         LAST_LOCATION["text"] = g.parse_location(page)

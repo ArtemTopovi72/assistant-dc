@@ -3,7 +3,8 @@
 The live case (2026-10-25): backpack 3835949144, natural patent leather 42x30 cm.
 Its eco «twin» 5013603389 (Полиуретан, 39x29, 2 500 ₽) came up by photo and must be
 rejected; 4144291497 from the card's seller list (same material and size, 4 421 ₽,
-4 ноября) is the one the user called good. Ozon is scripted with those cards.
+4 ноября) is the one the user called good. Ozon and the judging model are scripted;
+how well the real model judges is bench/ozon_same_eval.py's job.
 """
 import os, sys, json, types, threading
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -50,6 +51,23 @@ PHOTO = [{"sku": "3835949144", "price": 6450, "delivery": "12 ноября", "ur
          {"sku": "5630013752", "price": 855, "delivery": "Завтра", "url": "u2", "name": "Наклейка"}]
 
 
+JUDGED = []      # what the scripted judge was shown
+
+
+def judge_model(ctx, system, user, **k):
+    """Reads the listings like the real judge: a polyurethane card, a replica and a sticker are
+    other items. Listing 9 is never answered, as a model sometimes drops one."""
+    JUDGED.append(user)
+    rows = user.split("LISTINGS:\n")[1].splitlines()
+    out = []
+    for i, row in enumerate(rows, 1):
+        if i == 9:
+            continue
+        other = next((w for w in ("Полиуретан", "реплика", "Наклейка") if w in row), "")
+        out.append({"n": i, "verdict": "different" if other else "same", "why": other and f"{other}, не то"})
+    return json.dumps({"verdicts": out}, ensure_ascii=False)
+
+
 def ctx_for(seen):
     def fetch_page(path):
         seen.append(path)
@@ -70,7 +88,7 @@ def ctx_for(seen):
               pmap=lambda fn, xs: [fn(x) for x in xs])
     return types.SimpleNamespace(
         set_stage=lambda *a, **k: None, cancel_event=threading.Event(), ozon_owner="", turn_products=[],
-        deps=types.SimpleNamespace(ozon=oz, safe_get=lambda url, **k: types.SimpleNamespace(
+        text_model=judge_model, deps=types.SimpleNamespace(ozon=oz, safe_get=lambda url, **k: types.SimpleNamespace(
             content=b"jpg", raise_for_status=lambda: None)))
 
 
@@ -81,13 +99,16 @@ def test_the_eco_copy_is_rejected_and_the_real_twin_is_picked():
     verdict = {c["sku"]: c["check"]["verdict"] for v in ("same", "different", "unclear") for c in r[v]}
     assert verdict["5013603389"] == "different", verdict          # Полиуретан, 39 cm
     assert verdict["4144291497"] == "same"
-    assert verdict["4871854018"] == "same"                         # 29 vs 30 cm: within a centimetre
-    assert verdict["7000000001"] == "different"                    # «реплика» in the name
-    assert verdict["5630013752"] == "different"                    # a sticker the photo found
+    assert verdict["4871854018"] == "same"
+    assert verdict["7000000001"] == "different"
+    assert verdict["5630013752"] == "different"
     assert "3835949144" not in verdict                             # the card itself is no candidate
     assert r["source"]["delivery"] == "12 ноября"                  # ...but its tile gives its date
     eco = next(c for c in r["different"] if c["sku"] == "5013603389")
-    assert any("Полиуретан" in d for d in eco["check"]["diff"]), eco["check"]
+    assert "Полиуретан" in eco["check"]["why"], eco["check"]
+    shown = JUDGED[-1]
+    assert "Материал: Кожа натуральная лакированная" in shown.split("LISTINGS")[0]   # the original's card
+    assert "Высота, см: 39" in shown and "2500" not in shown and "₽" not in shown   # cards, never prices
     assert r["best"]["cheap"]["sku"] == "4871854018"
     assert r["best"]["fast"]["sku"] == "4144291497"
 
@@ -102,19 +123,20 @@ def test_the_tool_reports_picks_and_why_the_copy_is_not_one():
 
 
 def test_a_copy_priced_like_one_is_listed_never_picked():
-    same = {"verdict": "same", "flags": [], "diff": [], "matched": ["Материал"]}
-    cheap = dict(sku="1", price=700, delivery=when(2), check=dict(same, flags=["подозрительно дёшево: 700 ₽"]))
-    fair = dict(sku="2", price=1400, delivery=when(5), check=same)
+    src = {"price": 1514}
+    cheap = dict(sku="1", price=700, delivery=when(2), reviews=5)
+    fair = dict(sku="2", price=1400, delivery=when(5), reviews=5)
+    for x in (cheap, fair):
+        x["check"] = dict({"verdict": "same", "why": ""}, **S.flags(src, x))
+    assert cheap["check"]["copy_price"] and "подозрительно дёшево" in cheap["check"]["flags"][0]
     assert S.rank([cheap, fair]) == {"cheap": fair, "fast": fair, "balanced": fair}
 
 
-def test_values_compare_as_a_shopper_reads_them():
-    assert S.same_value("Высота, см", "42", "41")
-    assert not S.same_value("Высота, см", "42", "39")
-    assert S.same_value("Диагональ экрана", '15.6"', "15,6 \"")
-    assert not S.same_value("Процессор", "Intel Core i7-1165G7", "Intel Core i5-8265U")
-    assert S.same_value("Материал", "Кожа натуральная лакированная", "Натуральная кожа")
-    assert not S.same_value("Материал", "Кожа натуральная", "Искусственная кожа")
+def test_a_listing_the_judge_skipped_stays_unproven():
+    src = {"name": "Рюкзак", "characteristics": {"Материал": "Кожа"}}
+    cands = [{"name": f"Рюкзак {i}", "characteristics": {}} for i in range(12)]
+    got = S.judge(types.SimpleNamespace(text_model=judge_model), src, cands)
+    assert len(got) == 12 and got[8]["verdict"] == "unclear" and got[0]["verdict"] == "same", got
 
 
 def test_the_card_seller_list_is_parsed():

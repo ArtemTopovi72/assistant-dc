@@ -51,7 +51,7 @@ def world(tmp_path):
             calls["clarify_input"] = user
             return json.dumps({"questions": script.get("questions", [])}, ensure_ascii=False)
         if "pick finalists" in system:
-            n = [i + 1 for i, l in enumerate(user.split("LISTINGS")[1].strip().splitlines())
+            n = [i + 1 for i, l in enumerate(user.split("LISTINGS (sorted by price):\n")[1].strip().splitlines())
                  if "Держатель" not in l]
             return json.dumps({"finalists": n[:3], "note": ""})
         calls["decide_input"].append(user)

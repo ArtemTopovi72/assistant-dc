@@ -169,7 +169,8 @@ _OZON = [
     (re.compile(r"^opening the card$"), "открываю карточку"),
     (re.compile(r"^other sellers of this item$"), "другие продавцы этого товара"),
     (re.compile(r"^photo search$"), "ищу по фото"),
-    (re.compile(r"^checking (\d+) cards$"), "сверяю характеристики, карточек: {0}"),
+    (re.compile(r"^checking (\d+) cards$"), "открываю карточки: {0}"),
+    (re.compile(r"^comparing the cards$"), "сверяю, тот ли это товар"),
 ]
 
 
