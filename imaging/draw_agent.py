@@ -795,6 +795,9 @@ surface they stand on. "Swap them" is ONE swap_places op and nothing else: no mo
 - Other descriptions that name what you replaced or moved ("a dog looking towards \
 the cat" after the cat became a parrot, "a bubble above the dog" moved to the \
 parrot) get a "replace" in the same answer that names it correctly.
+- A "style" op that changes "medium" always gives "aesthetics" too: the new medium's look \
+plus the old mood words that still fit (moody, melancholic, warm) unless the user changes \
+the mood. The old medium's words (watercolor, brush, bleeding edges) do not carry over.
 - Write every description in English. Lettering ("text") is in the language of the instruction: copied exactly when the user dictates it, and when you make it up for them («подпиши банки»), written in their language — «Клубника», not «STRAWBERRY»."""
 
 

@@ -74,7 +74,8 @@ def _summaries(texts: list, lang: str, owner=None) -> list:
         except Exception:
             tg_bot.logger.exception("video plan: summaries failed")
             lines = []
-        lines = [re.sub(r"^\d+[.)]\s*", "", str(x).strip()) for x in lines]
+        # «…и лает ""»: told to copy spoken lines, the model left empty quotes where a dog barks.
+        lines = [re.sub(r'\s*(?:""|«»|“”)', "", re.sub(r"^\d+[.)]\s*", "", str(x).strip())) for x in lines]
         if len(lines) == len(texts) and all(lines):
             return lines
     tg_bot.logger.warning("video plan: no %s summaries for %d parts (got %d); the prompts are shown: %r",

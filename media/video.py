@@ -143,40 +143,57 @@ _QUOTED = re.compile(r'«([^»]*)»|"([^"]*)"|“([^”]*)”')
 # What each sentence of a shot script is, read by the model (bench/script_read_eval.py).
 # Word lists read this before: «camera» or «visible» anywhere made an action a look line
 # that rode every part, «for several seconds» was the only held action, and a comma was a beat.
-_SCRIPT_SYS = (
-    "Each numbered line is one sentence of a video shot script. For each sentence:\n"
-    "kind -- \"look\": it describes how the whole clip looks or sounds and no character "
-    "does anything: sound or music (\"Sound: wind.\", \"Soundscape: …\"), light, colour, "
-    "style, mood, quality (\"Quality: 4K\"), how the camera is held (\"The camera is "
-    "handheld\"), weather or scenery in the background (\"Rain falls outside the window\"). "
-    "\"once\": it only says how the clip opens or continues, or a camera move (pans, zooms, "
-    "follows the cat). \"action\": a character or a thing in the story does something: "
-    "moves, acts, speaks, breaks, explodes.\n"
-    "beats -- for an action, the number of separate actions one after another (\"he gets "
-    "up, laughs and says «…»\" is 3; \"затем он открывает дверь и выходит\" is 2).\n"
+# Two reads: one read of kind + beats + camera split took «The camera follows the dog» for
+# an action, a part of its own that was then cut (debug chat 2026-10-25).
+_KIND_SYS = (
+    "Each numbered line is one sentence of a video shot script. Sort each sentence:\n"
+    "\"look\" -- how the whole clip looks or sounds; nobody in the story does anything in "
+    "it: sound or music (\"Sound: wind.\", \"Soundscape: waves\"), light, colour, style, mood, "
+    "quality (\"Quality: 4K\"), \"The camera is handheld\", weather or scenery in the background "
+    "(\"Rain falls outside the window\").\n"
+    "\"camera\" -- only what the CAMERA does or how the clip opens: \"The camera pans up to "
+    "the man\", \"The camera follows the dog closely (tracking shot)\", \"The scene begins with "
+    "a close-up of a letter\", \"The video continues from the first frame\".\n"
+    "\"action\" -- someone or something in the story acts, moves, speaks, breaks.\n"
+    'Answer ONE JSON object and nothing else: {"kinds": ["action", ...]}, one per line, in order.')
+_BEAT_SYS = (
+    "Each numbered line is one action sentence of a video shot script. For each:\n"
+    "beats -- how many separate actions happen one after another (\"he gets up, laughs and "
+    "says «…»\" is 3; \"затем он открывает дверь и выходит\" is 2; one action is 1).\n"
     "hold -- true when an action lasts or repeats for a while (for several seconds, for some "
     "time, какое-то время, keeps barking).\n"
-    "camera, rest -- ONLY when the sentence joins a camera move and a different subject's "
+    "camera, rest -- only when the sentence joins a camera move to a different subject's "
     "action with as / while / when (\"the camera pans up as the kite soars high\"): the camera "
-    "move and that action as two sentences. A camera move alone, or a camera following its "
-    "subject (\"the camera follows the cat as it walks\"), is not split: both \"\".\n"
-    'Answer ONE JSON object and nothing else: {"sentences": [{"kind": "action", "beats": 1, '
-    '"hold": false, "camera": "", "rest": ""}, ...]}, one per line, in order.')
+    "move and the action as two sentences; otherwise both \"\".\n"
+    'Answer ONE JSON object and nothing else: {"sentences": [{"beats": 1, "hold": false, '
+    '"camera": "", "rest": ""}, ...]}, one per line, in order.')
 _PLAIN_READ = {"kind": "action", "beats": 1, "hold": False, "camera": "", "rest": ""}
 _SCRIPT_READS: dict = {}
 
 
+def _ask_json(system: str, sentences: list, keys: tuple, per: int):
+    from seams import text_model
+    from utils import safe_json_from_llm
+    raw = text_model(None)(None, system,
+                           "\n".join(f"{i}. {s[:400]}" for i, s in enumerate(sentences, 1)),
+                           temperature=0.0, max_tokens=60 + per * len(sentences)) or ""
+    return safe_json_from_llm(raw, keys)
+
+
 def _script_model(sentences: list):
-    """The model's JSON for these sentences, or None. Suites replace this function."""
+    """{"sentences": [...]} for these sentences, or None. Suites hand in their own."""
     if os.getenv("F5_TEST_RUN") and not os.getenv("INTENT_LIVE"):
         return None
     try:
-        from seams import text_model
-        from utils import safe_json_from_llm
-        raw = text_model(None)(None, _SCRIPT_SYS,
-                               "\n".join(f"{i}. {s[:400]}" for i, s in enumerate(sentences, 1)),
-                               temperature=0.0, max_tokens=80 + 60 * len(sentences)) or ""
-        return safe_json_from_llm(raw, ("sentences",))
+        kinds = (_ask_json(_KIND_SYS, sentences, ("kinds",), 8) or {}).get("kinds")
+        if not isinstance(kinds, list) or len(kinds) != len(sentences):
+            return None
+        kinds = ["once" if k == "camera" else k for k in kinds]
+        acts = [s for s, k in zip(sentences, kinds) if k == "action"]
+        rows = (_ask_json(_BEAT_SYS, acts, ("sentences",), 50) or {}).get("sentences") if acts else []
+        rows = iter(rows if isinstance(rows, list) and len(rows) == len(acts) else [{}] * len(acts))
+        return {"sentences": [dict(next(rows), kind=k) if k == "action" else {"kind": k}
+                              for k in kinds]}
     except Exception:
         logger.warning("video: script read failed", exc_info=True)
         return None
