@@ -94,10 +94,16 @@ def translate_node(ctx: Context, state: AgentState) -> AgentState:
     # and the answer lost the city.
     _prev = next((str(m.get("content") or "") for m in reversed(state.get("messages") or [])
                   if m.get("role") == "assistant" and m.get("content")), "")
+    from graph_personality import bind_turn_reads
+    import intent
+    bind_turn_reads(ctx, state, original)
     try:
         english = dep(ctx, "_translate_to_english", _translate_to_english)(ctx, original, context=_prev[-400:])
     except TypeError:                     # a stand-in translator without `context`
         english = dep(ctx, "_translate_to_english", _translate_to_english)(ctx, original)
+    intent.turn_alias(english)
+    from prompt_guard import user_words
+    intent.turn_alias(user_words(english or ""))
     # Set even when untranslated: an Italian line left as-is had no original,
     # and the reply-language guard skipped its English answer.
     state["user_input_original"] = original

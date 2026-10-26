@@ -314,12 +314,48 @@ def _menu():
     return _MENU
 
 
+# One read per message: about twenty places read the same words, each with its own
+# context -- none, the previous line, «a photo», the English translation, the two joined -- and
+# a message cost 4-7 model calls (~2 s each) before any work began (log 2026-10-26: 5 per task
+# was the mode, 10 the worst). The turn binds its words and its context once; a read of those
+# words, as written or translated, is that one read. A caller with a fact of its own («several
+# pictures earlier in the chat») still gets its own.
+_TURN = threading.local()
+
+
+def bind_turn(texts, previous: str = "", attached: str = "") -> None:
+    """This turn's own words (the first is the canonical form) and the context every read of them gets."""
+    texts = [str(t).strip() for t in texts if t and str(t).strip()]
+    _TURN.turn = {"texts": set(texts), "canon": texts[0], "previous": previous or "",
+                  "attached": attached or ""} if texts else None
+
+
+def turn_alias(text: str) -> None:
+    """Another form of this turn's words (the translation) that reads as the same message."""
+    turn = getattr(_TURN, "turn", None)
+    if turn and text and str(text).strip():
+        turn["texts"].add(str(text).strip())
+
+
+def _bound(text: str, previous: str, attached: str):
+    turn = getattr(_TURN, "turn", None)
+    if not turn:
+        return text, previous, attached
+    texts = turn["texts"]
+    # the original and its translation joined («нарисуй Пушкина… draw Pushkin…») is the same message
+    same = text in texts or any(text == f"{a} {b}" for a in texts for b in texts if a != b)
+    if not same or (attached and attached not in turn["attached"]):
+        return text, previous, attached
+    return turn["canon"], turn["previous"], turn["attached"]
+
+
 def read(ctx, text: str, previous: str = "", attached: str = "") -> dict:
     """`previous`: the last assistant line. `attached`: what came with the
     message ("a photo", "a CSV with numbers"), "" when nothing did."""
     text = (text or "").strip()
     if not text:
         return dict(FALLBACK)
+    text, previous, attached = _bound(text, previous, attached)
     if os.getenv("F5_TEST_RUN") and not os.getenv("INTENT_LIVE"):
         return dict(FALLBACK)
     key = (text, (previous or "")[:PREVIOUS_CHARS], attached)

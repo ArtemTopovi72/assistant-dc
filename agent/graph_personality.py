@@ -340,6 +340,19 @@ def _turn_intent(ctx, state, text: str) -> dict:
     """intent.read of the user's own words this turn (forwarded material and
     RAG passages are not theirs), with the same inputs everywhere in the loop
     so every reader shares ONE model call through intent's cache."""
+    return intent_read(ctx)(ctx, *_turn_inputs(ctx, state, text))
+
+
+def bind_turn_reads(ctx, state, text: str) -> None:
+    """Bind this turn's words and context in intent, so every read of them -- as written or
+    translated, with or without a context of its own -- is the one read (intent.bind_turn)."""
+    import intent
+    t, previous, attached = _turn_inputs(ctx, state, text)
+    intent.bind_turn([t, (text or "").strip()], previous, attached)
+
+
+def _turn_inputs(ctx, state, text: str) -> tuple:
+    """(the user's own words, the previous assistant line, what came with the message)."""
     from library import RAG_HEAD
     from prompt_guard import user_words
     from graph_fastpath import _previous_reply
@@ -354,7 +367,7 @@ def _turn_intent(ctx, state, text: str) -> dict:
     if gist:
         # bare «Сколько стоит чай» under a forwarded receipt read as shopping (2026-10-24)
         att = ", ".join(filter(None, [att, f"forwarded material the message may be about: «{gist}»"]))
-    return intent_read(ctx)(ctx, t, _previous_reply(state), att)
+    return t, _previous_reply(state), att
 
 
 def _forced_intent(ctx, state, text: str, has_image: bool, turn_tools, already_called) -> str:
