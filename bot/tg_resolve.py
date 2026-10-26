@@ -175,6 +175,21 @@ class ResolveMixin:
                            prev.task_id[:8], task.task_id[:8], chat_id)
         return True
 
+    def _bind_turn(self, sess, raw: str, batch: list) -> None:
+        """Bind the message's words in intent on arrival, with the context the graph would
+        give them, so the reads before the graph and the graph's own are one model call."""
+        try:
+            import types
+            import intent
+            from graph_personality import _turn_inputs
+            state = {"messages": sess.get_history(),
+                     "image_data": any(it.get("type") in ("photo", "album") for it in batch)}
+            own_ctx = types.SimpleNamespace(last_image_path=getattr(sess, "last_image_path", None))
+            words, previous, attached = _turn_inputs(own_ctx, state, raw)
+            intent.bind_turn([words or raw, raw], previous, attached, entry=True)
+        except Exception:
+            tg_bot.logger.debug("binding the turn's reads failed", exc_info=True)
+
     def _resolve_and_push(self, chat_id: int, batch: list):
         # Earliest arrival time across the batch, stamped at _enqueue_item —
         # BEFORE the debounce delay — so a Stop that landed while this batch
@@ -433,6 +448,8 @@ class ResolveMixin:
 
             if t == "text":
                 raw = item["text"]
+                if not item.get("forwarded") and not item.get("fwd_said") and not raw.startswith("/"):
+                    self._bind_turn(sess, raw, batch)
                 # 🎨 Restyle / 🎤 Cover waiting for words: this text is them, ahead
                 # of everything that reads text as something else -- a forwarded
                 # lyric went to the chat, an old forwarded voice note took it as

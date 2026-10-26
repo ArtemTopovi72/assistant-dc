@@ -42,6 +42,7 @@ import logging
 import os
 import re
 import threading
+import time
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, ValidationError
@@ -327,33 +328,96 @@ def _menu():
 # was the mode, 10 the worst). The turn binds its words and its context once; a read of those
 # words, as written or translated, is that one read. A caller with a fact of its own («several
 # pictures earlier in the chat») still gets its own.
+#
+# The Telegram side reads the message in three threads before the graph runs (the debounce
+# loop: song reset, forecast; the task: reply language, voice), each with the text in another
+# shape -- bare, with a link note under it, collapsed -- and a message cost six reads (trace
+# 2026-10-26). So a turn is also found by its words, from any thread: the bot binds it on
+# arrival (entry=True), and the graph's own bind joins that turn instead of opening another.
 _TURN = threading.local()
+_BY_WORDS: dict = {}          # normalized words -> turn
+TURN_TTL = 600
+_SCAFFOLD = re.compile(r"\[The (?:user|video|file|page)\b[^\]]*\]", re.S)
 
 
-def bind_turn(texts, previous: str = "", attached: str = "") -> None:
-    """This turn's own words (the first is the canonical form) and the context every read of them gets."""
+def _norm(text: str) -> str:
+    """The words with the bot's own notes ([The user's message contains ...]) taken out."""
+    return " ".join(_SCAFFOLD.sub(" ", str(text or "")).split())
+
+
+def bind_turn(texts, previous: str = "", attached: str = "", entry: bool = False) -> None:
+    """This turn's own words (the first is the canonical form) and the context every read of
+    them gets. `entry`: bound where the message arrives; a later bind of the same words joins it."""
     texts = [str(t).strip() for t in texts if t and str(t).strip()]
-    _TURN.turn = {"texts": set(texts), "canon": texts[0], "previous": previous or "",
-                  "attached": attached or ""} if texts else None
+    if not texts:
+        _TURN.turn = None
+        return
+    now = time.time()
+    with _LOCK:
+        for k in [k for k, v in _BY_WORDS.items() if now - v["t"] > TURN_TTL]:
+            del _BY_WORDS[k]
+        old = _BY_WORDS.get(_norm(texts[0]))
+        if not entry and old and old["entry"] and not old["claimed"]:
+            old["claimed"] = True
+            turn = old
+            turn["texts"].update(texts)
+            turn["contexts"].add(attached or "")     # the graph's own view of what came with it
+        else:
+            turn = {"texts": set(texts), "canon": _norm(texts[0]) if entry else texts[0],
+                    "previous": previous or "", "attached": attached or "",
+                    "entry": entry, "claimed": False, "t": now, "contexts": {attached or ""}}
+        turn["texts"].update(_norm(t) for t in texts)
+        for t in texts:
+            _BY_WORDS[_norm(t)] = turn
+    _TURN.turn = turn
 
 
 def turn_alias(text: str) -> None:
     """Another form of this turn's words (the translation) that reads as the same message."""
     turn = getattr(_TURN, "turn", None)
     if turn and text and str(text).strip():
-        turn["texts"].add(str(text).strip())
+        with _LOCK:
+            turn["texts"].update((str(text).strip(), _norm(text)))
+            _BY_WORDS[_norm(text)] = turn
 
 
 def _bound(text: str, previous: str, attached: str):
     turn = getattr(_TURN, "turn", None)
     if not turn:
+        with _LOCK:
+            turn = _BY_WORDS.get(_norm(text))
+        if turn and time.time() - turn["t"] > TURN_TTL:
+            turn = None
+    if not turn:
         return text, previous, attached
     texts = turn["texts"]
     # the original and its translation joined («нарисуй Пушкина… draw Pushkin…») is the same message
-    same = text in texts or any(text == f"{a} {b}" for a in texts for b in texts if a != b)
-    if not same or (attached and attached not in turn["attached"]):
+    same = (text in texts or _norm(text) in texts
+            or any(_norm(text) == f"{a} {b}" for a in texts for b in texts if a != b))
+    if not same or (attached and attached not in turn["attached"] and attached not in turn["contexts"]):
         return text, previous, attached
     return turn["canon"], turn["previous"], turn["attached"]
+
+
+_OZON_CARD = re.compile(r"ozon\.ru/(?:product|t)/", re.I)
+
+
+def _same_or_analogue(ctx, text: str, out: dict) -> None:
+    """THIS exact item from other sellers (ozon_same) or analogues (ozon_shop), for a message
+    with a card link. Three rewordings of the two tool descriptions only moved the error
+    from one to the other («найди аналоги подешевле», then «этот же, но быстрее»); one
+    narrow question decides it."""
+    pair = {"ozon_same", "ozon_shop"}
+    lead = out["must_call"] or (out["wants"] or [""])[0]
+    if lead not in pair or not _OZON_CARD.search(text or ""):
+        return
+    same = (getattr(ctx, "yes_no", None) or ask_yes)("A user wrote: {text}\n\nDo they want THIS EXACT product from the link (from "
+                   "another seller, cheaper or delivered sooner) -- not similar products, analogues "
+                   "or alternatives?", text, default=lead == "ozon_same", ctx=ctx)
+    pick = "ozon_same" if same else "ozon_shop"
+    if out["must_call"] in pair:
+        out["must_call"] = pick
+    out["wants"] = [pick] + [w for w in out["wants"] if w != pick]
 
 
 def read(ctx, text: str, previous: str = "", attached: str = "") -> dict:
@@ -391,6 +455,7 @@ def read(ctx, text: str, previous: str = "", attached: str = "") -> dict:
         # («что было с 2020 по 2024 год» was read as a report).
         out["must_call"] = (out["must_call"] if out["must_call"] in names
                             and out["must_call"] != "deep_research" else "")
+        _same_or_analogue(ctx, text, out)
         w = got.weather
         # other questions in the same message (other tools wanted) need the
         # full loop, not the forecast shortcut
