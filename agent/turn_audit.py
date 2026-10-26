@@ -81,7 +81,8 @@ def correct_claims(answer: str, succeeded: set, has_sandbox: bool, ctx=None, use
 
 # -- complaints about the previous turn --------------------------------------
 def is_complaint(text: str, ctx=None) -> bool:
-    return bool((text or "").strip()) and intent_read(ctx)(None, text[:300])["complaint"]
+    # the whole text: a cut one is not the turn's words and cost a read of its own
+    return bool((text or "").strip()) and intent_read(ctx)(None, text)["complaint"]
 
 
 # The previous turn of each conversation, so a complaint can file it.
