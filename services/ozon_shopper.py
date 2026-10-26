@@ -383,10 +383,15 @@ _DECIDE_SYS = (
     'only: {"choice": n, "why": str, "reviews": str, "concerns": str, "backup": n|null} '
     "-- reviews: 1-2 sentences of what buyers actually say about the CHOSEN one, or "
     "exactly 'Отзывов нет' when it has none; concerns: honest caveats or '' (name the "
-    "site when a caveat comes from the web). When finalists are marked USER'S PICK, add "
-    '"versus": {"n": str} for each of them that you did not choose -- one sentence: what its '
-    "own buyers report and why it lost, from its dossier only. Write why/reviews/concerns/"
-    "versus in Russian.")
+    "site when a caveat comes from the web). Add \"versus\": {\"n\": str} for EVERY finalist you "
+    "did not choose -- one sentence: what its own buyers report and why it lost, from its "
+    "dossier only. The user reads why/reviews/concerns/versus as they are: no 'MUST', no "
+    "finalist numbers like [2] -- name a product by its brand or kind. Write them in Russian.")
+
+
+def _for_user(text) -> str:
+    """The decider echoes its input's label («требованию MUST»); the user never saw it."""
+    return re.sub(r"\s*\bMUST\b", "", str(text or "")).strip()
 
 
 def decide(ctx, item: dict, finalists: list, strategy: str = "balanced") -> dict:
@@ -402,11 +407,11 @@ def decide(ctx, item: dict, finalists: list, strategy: str = "balanced") -> dict
     rv = finalists[n - 1].get("review_texts")
     versus = data.get("versus") if isinstance(data.get("versus"), dict) else {}
     for k, v in versus.items():
-        if str(k).isdigit() and 1 <= int(k) <= len(finalists) and finalists[int(k) - 1].get("pinned"):
-            finalists[int(k) - 1]["verdict"] = str(v)
-    return {"index": n - 1, "why": str(data.get("why") or ""),
-            "reviews": str(data.get("reviews") or ("Отзывов нет" if rv == [] else "")),
-            "concerns": str(data.get("concerns") or "")}
+        if str(k).isdigit() and 1 <= int(k) <= len(finalists):
+            finalists[int(k) - 1]["verdict"] = _for_user(v)
+    return {"index": n - 1, "why": _for_user(data.get("why")),
+            "reviews": _for_user(data.get("reviews") or ("Отзывов нет" if rv == [] else "")),
+            "concerns": _for_user(data.get("concerns"))}
 
 
 BUYER_PHOTOS = 2                       # per finalist, from its reviews
@@ -485,7 +490,7 @@ def shop_item(ctx, item: dict, label: str = "", strategy: str = "balanced", pinn
     finalists, note = screen(ctx, item, cands, strategy)
     res = {"item": item, "candidates": len(cands), "note": note, "choice": None,
            "others": [], "decision": None, "photo": None}
-    finalists = finalists + [{"sku": u, "url": u, "pinned": n}
+    finalists = finalists + [{"sku": u, "url": u, "link": u, "pinned": n}
                              for n, u in enumerate(list(pinned)[:MAX_PINNED], 1)]
     if not finalists:
         return res
@@ -533,6 +538,64 @@ def _card_line(d: dict) -> str:
     return ", ".join(bits) + f"\n   {d.get('url')}"
 
 
+def _short(name) -> str:
+    """«Рюкзак мужской из натуральной кожи BOPAI, городской для ноутбука, 15,6…» -> up to the first comma."""
+    return str(name or "товар").split(",")[0].strip()[:70]
+
+
+def _reviews_word(n) -> str:
+    n = int(n or 0)
+    if n % 10 == 1 and n % 100 != 11:
+        return "отзыв"
+    return "отзыва" if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14 else "отзывов"
+
+
+def _stats(d: dict, quiet: bool = False) -> str:
+    """Price · rating · delivery; `quiet` leaves an unknown delivery date out."""
+    bits = [_rub(d.get("price"))]
+    if d.get("rating"):
+        n = int(d.get("reviews") or 0)
+        bits.append(f"★{d['rating']}, {n} {_reviews_word(n)}")
+    if d.get("delivery"):
+        bits.append(f"🚚 {d['delivery']}")
+    elif not quiet:
+        bits.append("доставка не указана")
+    return " · ".join(bits)
+
+
+def digest(r: dict) -> str:
+    """The one-product answer, laid out for the chat. The model wrote it as one block of
+    «• Почему это крутой выбор: …» with the user's options in prose (2026-10-26); the facts
+    are all here, so the layout is the program's. The pick's own link line goes into its
+    photo card (tg_product_cards)."""
+    c, dec = r.get("choice"), r.get("decision") or {}
+    if not c:
+        return ""
+    out = [f"🏆 **Бери: {_short(c.get('name'))}**" + (" — твой вариант" if c.get("pinned") else ""),
+           _stats(c), f"[{_short(c.get('name'))}]({c.get('url')})"]
+    if dec.get("why"):
+        out.append(f"\n{dec['why']}")
+    if dec.get("reviews"):
+        out.append(f"👍 Отзывы: {dec['reviews']}")
+    if dec.get("concerns"):
+        out.append(f"⚠️ Минусы: {dec['concerns']}")
+    found = [o for o in r.get("others") or [] if not o.get("pinned")][:2]
+    if found:
+        out.append("\n💸 **Ещё нашёл**")
+        out += [f"• [{_short(o.get('name'))}]({o.get('url')}) — {_stats(o)}"
+                + (f"\n   {o['verdict']}" if o.get("verdict") else "") for o in found]
+    mine = [o for o in r.get("others") or [] if o.get("pinned")]
+    if mine:
+        out.append("\n🎒 **Твои варианты**")
+        for o in sorted(mine, key=lambda o: o["pinned"]):
+            line = f"{o['pinned']}. [{_short(o.get('name'))}]({o.get('link') or o.get('url')}) — {_stats(o, quiet=True)}"
+            if o.get("verdict"):
+                line += f"\n   {o['verdict']}"
+            out.append(line)
+    out.append("\n🛒 **Где купить:** на Озоне, карточка ниже. Перед оплатой проверь цену и дату доставки.")
+    return "\n".join(out)
+
+
 def report(results: list, mode: str, location: str = "", basket: str = "") -> str:
     out = [f"Ozon shopping result ({'basket' if mode == 'basket' else 'best pick'}"
            + (f", delivery to {location}" if location else "") + "):"]
@@ -575,6 +638,12 @@ def report(results: list, mode: str, location: str = "", basket: str = "") -> st
         out.append(f"\nTOTAL for the found items: {_rub(total)}.")
     if basket:
         out.append(basket)
+    ready = digest(results[0]) if mode != "basket" and len(results) == 1 else ""
+    if ready:
+        out.append("\nANSWER FOR THE USER -- send it as your reply exactly as written, every line, "
+                   "mark and link kept; you may put one short sentence of your own before it, "
+                   "nothing after:\n" + ready)
+        return "\n".join(out)
     out.append("\nPrices and stock change: tell the user to check the card before buying.")
     out.append("Tell the user the choices with prices, WHY, what buyers say (say plainly when "
                "there are no reviews), caveats, and the link for each. Compare with the user's "

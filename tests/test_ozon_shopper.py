@@ -237,12 +237,13 @@ def test_the_users_own_links_are_read_and_weighed(world):
     script["plan"] = {"mode": "one", "items": [{"need": "скатерть", "queries": ["скатерть"]}]}
     script["cards"] = {link: {"sku": "900", "name": "Скатерть пользователя", "price": 1500,
                               "url": "https://www.ozon.ru/product/x-900/", "rating": 4.2, "reviews": 7}}
-    script["decide_extra"] = {"versus": {"3": "покупатели пишут, что линяет"}}
+    script["decide_extra"] = {"versus": {"3": "покупатели пишут, что линяет, не по требованию MUST"}}
     out = T.execute_tool(_ctx(), {"user_input_original": f"найди аналоги подешевле {link}"},
                          "ozon_shop", {"request": "скатерть", "clarified": True})
     assert "USER’S PICK Скатерть пользователя" in calls["decide_input"][0]    # weighed with the finds
     line = next(l for l in out.splitlines() if "Скатерть пользователя" in l)
     assert "1 500 ₽" in line and "the user's link 1" in line and "линяет" in line, out
+    assert "MUST" not in line             # the decider's own label, never the user's word
 
 
 def test_a_winning_user_link_is_called_theirs(world):
@@ -257,3 +258,23 @@ def test_a_winning_user_link_is_called_theirs(world):
                          "ozon_shop", {"request": "скатерть", "clarified": True})
     assert "CHOICE: the user's link 1: Скатерть пользователя" in out, out
     assert "THE CHOICE IS THE USER'S OWN LINK 1" in out
+
+
+def test_the_answer_is_laid_out_by_the_program():
+    # the model wrote one block of «• Почему это крутой выбор: …» with the user's options in
+    # prose and no links to them; the layout is built from the shopper's own facts now
+    pick = {"sku": "5", "name": "Рюкзак BOPAI, 15,6 дюймов", "price": 7457, "rating": 4.9, "reviews": 248,
+            "delivery": "30 октября", "url": "https://www.ozon.ru/product/x-5/"}
+    mine = {"sku": "6", "pinned": 2, "link": "https://ozon.ru/t/LCabAMR", "name": "Carlo Gattini Рюкзак",
+            "price": 15475, "rating": 5.0, "reviews": 73, "verdict": "вдвое дороже"}
+    out = S.digest({"choice": pick, "others": [mine], "decision": {"why": "кожа", "concerns": "жёсткий"}})
+    assert out.startswith("🏆 **Бери: Рюкзак BOPAI**") and "★4.9, 248 отзывов · 🚚 30 октября" in out
+    assert "2. [Carlo Gattini Рюкзак](https://ozon.ru/t/LCabAMR) — 15 475 ₽ · ★5.0, 73 отзыва\n   вдвое дороже" in out
+    assert "доставка не указана" not in out          # unknown for every linked card: no noise
+    assert "⚠️ Минусы: жёсткий" in out
+    found = {"sku": "7", "name": "Рюкзак Х", "price": 2793, "url": "https://www.ozon.ru/product/x-7/",
+             "verdict": "экокожа"}
+    assert "\n   экокожа" in S.digest({"choice": pick, "others": [found], "decision": {}})   # why a find lost
+    rep = S.report([{"item": {"need": "рюкзак"}, "choice": pick, "others": [mine], "candidates": 9,
+                     "decision": {"why": "кожа"}}], "one")
+    assert "ANSWER FOR THE USER" in rep and rep.endswith(out.split("\n")[-1])
