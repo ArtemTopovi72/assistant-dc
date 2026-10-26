@@ -37,7 +37,9 @@ _FIND_SYS = (
     "image model knows (the Eiffel Tower), an animal, a food, a style of art (anime, watercolour). "
     "Reply with JSON only: {\"things\": [{\"kind\": \"object|person|character\", \"thing\": "
     "\"<short English name, e.g. a VAZ-2107 Lada sedan, Vladimir Lenin, the Doom Slayer's armour>\", "
-    "\"query\": \"<image-search query for a picture of it, in the language it is best known in>\"}]} "
+    "\"query\": \"<image-search query for a picture of it, in the language it is best known in, naming the "
+    "view or state the picture needs when the request gives one: in flight, from behind, at night, side "
+    "view>\"}]} "
     "-- at most " + str(MAX_THINGS) + "; [] when none.")
 
 _KINDS = ("object", "person", "character")
@@ -59,7 +61,9 @@ def named_things(ctx, description: str) -> list:
 
 
 _CHECK = {
-    "object": "Is this a real photograph showing {thing} whole and clearly as the main subject, with no "
+    # A custom two-wheel-drive «Урал» build passed and the drawing came out steampunk (2026-10-26).
+    "object": "Is this a real photograph showing {thing} whole and clearly as the main subject -- a standard "
+              "factory example, not a custom build, a toy, a model, a render or a drawing -- with no "
               "text or watermark over it? Reply JSON only: {{\"shows\": true/false, \"box\": [x0, y0, "
               "x1, y1]}} -- the box around the whole thing on a 0-1000 grid.",
     # The head only: the drawing dresses and poses the person itself.
@@ -103,6 +107,41 @@ def _crop(path: str, box, margin: float = 0.06, below: float = None) -> str:
                    int(min(1000, x1 + mx) * w / 1000), int(min(1000, y1 + my_below) * h / 1000)))
     out = path.rsplit(".", 1)[0] + "_thing.jpg"
     cut.save(out, quality=92)
+    return out
+
+
+def _erase_text(path: str) -> str:
+    """`path` with every piece of lettering OCR finds painted over in the colour around it: told in
+    words to copy none, Klein still put the photo's «RA-85572» on the Tu-154 and «LADA 2107» on the
+    VAZ's plate (bench 2026-10-26)."""
+    import ocr_reader
+    if os.getenv("F5_TEST_RUN"):
+        return path
+    reader = ocr_reader._get()
+    if reader is None:
+        return path
+    from PIL import Image, ImageDraw
+    import numpy as np
+    try:
+        found = reader.readtext(path, detail=1, paragraph=False)
+    except Exception:
+        logger.warning("object refs: OCR failed", exc_info=True)
+        return path
+    if not found:
+        return path
+    im = Image.open(path).convert("RGB")
+    px = np.asarray(im)
+    draw = ImageDraw.Draw(im)
+    for box, _text, _conf in found:
+        xs = [p[0] for p in box]; ys = [p[1] for p in box]
+        pad = 0.15 * (max(ys) - min(ys)) + 2
+        x0, y0 = int(max(0, min(xs) - pad)), int(max(0, min(ys) - pad))
+        x1, y1 = int(min(im.width - 1, max(xs) + pad)), int(min(im.height - 1, max(ys) + pad))
+        ring = np.concatenate([px[y0, x0:x1 + 1], px[y1, x0:x1 + 1], px[y0:y1 + 1, x0], px[y0:y1 + 1, x1]])
+        draw.rectangle([x0, y0, x1, y1], fill=tuple(int(v) for v in np.median(ring, axis=0)))
+    out = path.rsplit(".", 1)[0] + "_notext.jpg"
+    im.save(out, quality=92)
+    logger.info("object refs: %d piece(s) of lettering painted over", len(found))
     return out
 
 
@@ -160,7 +199,7 @@ def photo_of(ctx, thing: str, query: str, kind: str = "object") -> str:
         if not box:
             continue
         # no face the detector can find (Gagarin side-on in his helmet): the next photo
-        got = _crop(dest, box) if kind != "person" else _head(dest)
+        got = _erase_text(_crop(dest, box)) if kind != "person" else _head(dest)
         if got:
             logger.info("object refs: %s (%s) <- %s", thing, kind, url[:120])
             return got

@@ -1065,6 +1065,8 @@ def _handle_generate_image(ctx, state, args: dict) -> str:
     _prev_look = getattr(ctx, "user_look", "")
     ctx.user_look = _user_look(ctx, state)
     ctx.draw_refs = draw_refs
+    from prompt_guard import user_words
+    ctx.draw_request = user_words(str(state.get("user_input_original") or state.get("user_input") or "")).strip()
     ctx.set_stage("Drawing a picture")
     try:
         result = dep(ctx, "generate_image_with_refinement", _t.generate_image_with_refinement)(
@@ -1073,6 +1075,7 @@ def _handle_generate_image(ctx, state, args: dict) -> str:
     finally:
         ctx.user_look = _prev_look
         ctx.draw_refs = []
+        ctx.draw_request = ""
     img_path = result.get("path")
     # A returned path must actually EXIST on disk before we treat it as a result. A
     # stale/bogus path from the renderer, or a temp file deleted between render and

@@ -229,7 +229,9 @@ def generate_image_with_comfy(
 
 
 _ASKS_SYS = (
-    "A picture was drawn for the request below. List the things the request asks for that can be SEEN "
+    "A picture was drawn for the user's words below (the prompt drawn from them follows for context). "
+    "List the things the USER's words ask for that can be SEEN -- never what only the prompt added "
+    "(a motion blur, a mood, a camera angle the user did not name) -- "
     "and checked in the picture: who is where (waist-deep in, standing on, holding), what each hand does, "
     "counts, a named colour or glow on a body part, a named expression. ONE thing per question -- each "
     "hand its own question, never 'one hand ... and the other ...'. Not the style, the mood, the "
@@ -250,6 +252,10 @@ def _missing_asks(ctx, img_path: str, goal: str) -> list:
     import os
     if os.getenv("F5_TEST_RUN") and not dep(ctx, "live", False):     # suites judge offline
         return []
+    # The user's own words: from the agent's prose, three Skyline takes went to «motion blur to show
+    # speed» nobody asked for, and «просёлок» passed as the agent's «country road» on asphalt (2026-10-26).
+    said = str(getattr(ctx, "draw_request", "") or "").strip()
+    goal = f"User's words: {said}\nPrompt drawn: {goal}" if said else goal
     if goal not in _ASKS:
         try:
             got = safe_json_from_llm(text_model(ctx)(ctx, _ASKS_SYS, goal, temperature=0.0, max_tokens=500)) or {}

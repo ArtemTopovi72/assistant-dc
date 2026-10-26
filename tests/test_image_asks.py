@@ -94,5 +94,16 @@ G.generate_image_with_refinement(Ctx(generate_image_with_comfy=drawer(["w1.png",
                                  "Lenin in lava")
 check("three misses -> a redraw, not an edit", all(x[0] == "draw" for x in log), log)
 
+# The asks come from the user's own words: from the agent's prose three Skyline takes went to a
+# «motion blur» nobody asked for, and «просёлок» passed as «country road» on asphalt (2026-10-26).
+seen_goal = []
+c = Ctx(live=True)
+c.draw_request = "нарисуй Урал с коляской на просёлке"
+c.text_model = lambda ctx, system, user, **k: seen_goal.append(user) or '{"checks": [{"ask": "Is it a dirt road?", "draw": "a dirt road"}]}'
+c.vision_model = lambda *a, **k: "No"
+miss = G._missing_asks(c, pic("ural.png"), "A Ural sidecar on a country road, motion blur")
+check("the asks read the user's words", seen_goal and "просёлке" in seen_goal[0], seen_goal)
+check("...and what they ask is checked", miss == [("Is it a dirt road?", "a dirt road")], miss)
+
 print(f"\n{OK}/{OK + BAD} checks passed")
 sys.exit(1 if BAD else 0)
