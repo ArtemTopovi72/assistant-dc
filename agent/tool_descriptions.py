@@ -359,9 +359,10 @@ _UNDO_EDIT_DESC = (
     "previous content; a file you created is removed). Call again to step "
     "further back.")
 _OZON_SEARCH_DESC = (
-    "Search the Ozon marketplace (ozon.ru) for products: names, current prices "
-    "in rubles, discounts, ratings, links. Use it for any 'find/buy/pick on "
-    "Ozon' request instead of web search -- web pages have stale prices.")
+    "A quick raw listing of Ozon products for a query: names, current prices in rubles, "
+    "discounts, ratings, links -- when the user only wants to see what is on sale or what a "
+    "named product costs; picking what to buy is ozon_shop. Never web search for Ozon prices: "
+    "web pages have stale ones.")
 _OZON_PRODUCT_DESC = (
     "Read one Ozon product card: exact price, stock, seller, characteristics "
     "and description. Pass the link or SKU from ozon_search.")
