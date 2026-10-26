@@ -53,10 +53,38 @@ PHOTO = [{"sku": "3835949144", "price": 6450, "delivery": "12 ноября", "ur
 
 JUDGED = []      # what the scripted judge was shown
 
+# The web outside Ozon: the maker's own shop sells the same backpack for less, a marketplace
+# sells the eco copy, and one shop page never states the price the judge reads into it.
+HITS = [{"title": "Рюкзак лаковая кожа — магазин бренда", "href": "https://brand.example/bag",
+         "body": "", "domain": "brand.example"},
+        {"title": "Рюкзак экокожа", "href": "https://market.example/copy", "body": "", "domain": "market.example"},
+        {"title": "Рюкзак", "href": "https://shop.example/bag", "body": "", "domain": "shop.example"},
+        {"title": "Ozon", "href": "https://www.ozon.ru/product/ryukzak-3835949144/", "body": "",
+         "domain": "ozon.ru"}]
+PAGES = {"https://brand.example/bag": "Рюкзак, кожа натуральная лакированная, 42 x 30 см. Цена 5 990 ₽. В наличии",
+         "https://market.example/copy": "Рюкзак, полиуретан, 39 x 29 см. 1 990 ₽",
+         "https://shop.example/bag": "Рюкзак, кожа натуральная лакированная, 42 x 30 см. Звоните, цена по запросу"}
+SEARCHED = []
+
+
+def shops_model(user):
+    rows = user.split("PAGES:\n")[1].split("\n\n")
+    out = []
+    for i, row in enumerate(rows, 1):
+        if "полиуретан" in row:
+            out.append({"n": i, "verdict": "different", "price": 1990, "why": "полиуретан"})
+        elif "5 990" in row:
+            out.append({"n": i, "verdict": "same", "price": 5990, "why": ""})
+        else:                                   # reads a price the page never states
+            out.append({"n": i, "verdict": "same", "price": 4990, "why": ""})
+    return json.dumps({"pages": out}, ensure_ascii=False)
+
 
 def judge_model(ctx, system, user, **k):
     """Reads the listings like the real judge: a polyurethane card, a replica and a sticker are
     other items. Listing 9 is never answered, as a model sometimes drops one."""
+    if "PAGES:" in user:
+        return shops_model(user)
     JUDGED.append(user)
     rows = user.split("LISTINGS:\n")[1].splitlines()
     out = []
@@ -77,19 +105,43 @@ def ctx_for(seen):
         return page("webBestSeller", {"modalLink": f"/modal/otherOffersFromSellers?product_id={sku}&sort=price"}) \
             if sku == "3835949144" else {"sku": sku}
 
-    def parse_details(base):
+    def parse_details(base, page2=None):
         sku = base.get("sku") or "3835949144"           # the source page carries only the seller link
         return dict(CARDS[sku], sku=sku, url=f"https://www.ozon.ru/product/ryukzak-{sku}/",
                     images=[f"https://ir.ozone.ru/{sku}.jpg"])
 
-    oz = Over(O, fetch_page=fetch_page, parse_details=parse_details,
+    def search(ctx, query, n=None):
+        SEARCHED.append(query)
+        return [dict(h) for h in HITS]
+
+    oz = Over(O, fetch_page=fetch_page, parse_details=parse_details, page_two=lambda path: {},
               product_path=lambda p: f"/product/{p}/", image_search_path=lambda img: "/search-by-image?image_id=1",
               search_by_image=lambda path, limit=10: [dict(x) for x in PHOTO],
               pmap=lambda fn, xs: [fn(x) for x in xs])
     return types.SimpleNamespace(
         set_stage=lambda *a, **k: None, cancel_event=threading.Event(), ozon_owner="", turn_products=[],
         text_model=judge_model, deps=types.SimpleNamespace(ozon=oz, safe_get=lambda url, **k: types.SimpleNamespace(
-            content=b"jpg", raise_for_status=lambda: None)))
+            content=b"jpg", raise_for_status=lambda: None), raw_search_results=search,
+            read_pages=lambda urls: {u: PAGES[u] for u in urls if u in PAGES}))
+
+
+def test_shops_outside_ozon_are_checked_for_the_same_item():
+    r = S.find_same(ctx_for([]), "3835949144")
+    web = {x["domain"]: x for x in r["web"]}
+    assert "ozon.ru" not in web                                     # Ozon is the other half
+    assert web["brand.example"]["check"]["verdict"] == "same" and web["brand.example"]["price"] == 5990
+    assert web["market.example"]["check"]["verdict"] == "different"
+    # a price the page never states is the judge's invention: no price, never a pick
+    assert web["shop.example"]["price"] is None, web["shop.example"]
+    assert "Кожа натуральная лакированная" in SEARCHED[-1] or "Рюкзак" in SEARCHED[-1]
+
+
+def test_the_tool_names_the_cheaper_shop_outside_ozon():
+    out = T.execute_tool(ctx_for([]), {}, "ozon_same", {"product": "3835949144", "priority": "cheap"})
+    shops = out.split("Outside Ozon")[1]
+    assert "5 990" in shops and "https://brand.example/bag" in shops, out
+    assert "market.example" not in shops.split("NOT the same")[0], out
+    assert "4 990" not in out, out
 
 
 def test_the_eco_copy_is_rejected_and_the_real_twin_is_picked():

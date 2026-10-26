@@ -900,12 +900,14 @@ def search(query: str, sort: str = "popular", price_min=None, price_max=None,
 def details(product: str, gw=None) -> dict:
     g = _me(gw)
     path = g.product_path(product, gw)
-    base = g.fetch_page(path)
+    return g.parse_details(g.fetch_page(path), g.page_two(path, gw))
+
+
+def page_two(path: str, gw=None) -> dict:
     try:
-        page2 = g.fetch_page(_page_two("https://www.ozon.ru" + path))
+        return _me(gw).fetch_page(_page_two("https://www.ozon.ru" + path))
     except OzonError:
-        page2 = {}
-    return g.parse_details(base, page2)
+        return {}
 
 
 def _page_two(url):

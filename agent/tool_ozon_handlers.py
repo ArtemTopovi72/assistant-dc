@@ -436,6 +436,23 @@ def same_report(r: dict, priority: str = "balanced") -> str:
     if r["unclear"]:
         out.append(f"{len(r['unclear'])} more could not be checked (their cards say too little): "
                    "do not call them the same item.")
+    web = r.get("web") or []
+    sold = sorted((x for x in web if x["check"]["verdict"] == "same" and x["price"]), key=lambda x: x["price"])
+    if web:
+        out.append(f"Outside Ozon: {len(web)} shop pages from a web search, each read against the original.")
+        if sold:
+            out.append("The same item in other shops, by price (as their pages state it; delivery and "
+                       "stock not checked):")
+            out += [f"- {_rub(x['price'])} — {x['shop']} {x['href']}" for x in sold[:6]]
+        else:
+            out.append("No shop page outside Ozon proved to sell the same item at a stated price.")
+        other = [x for x in web if x["check"]["verdict"] == "different"]
+        if other:
+            out.append("NOT the same item outside Ozon: " + "; ".join(
+                f"{x['domain']} ({x['check']['why']})" for x in other[:4]))
+    else:
+        out.append("Outside Ozon: the web search found no shop pages.")
+    out.append("Say whether a shop outside Ozon is cheaper than the best Ozon pick, with its link.")
     out.append(f"The user's priority: {priority}. Lead with that pick; give its price, date and link, "
                "say in a few words why the others are or are not the same (name what differs), and "
                "pass the flags on (abroad seller, no reviews, a copy's price). Lines marked [подозрительно "

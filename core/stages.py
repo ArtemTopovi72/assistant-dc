@@ -171,6 +171,7 @@ _OZON = [
     (re.compile(r"^photo search$"), "ищу по фото"),
     (re.compile(r"^checking (\d+) cards$"), "открываю карточки: {0}"),
     (re.compile(r"^comparing the cards$"), "сверяю, тот ли это товар"),
+    (re.compile(r"^the same item in other shops$"), "ищу этот товар в других магазинах"),
 ]
 
 

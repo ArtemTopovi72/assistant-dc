@@ -380,7 +380,8 @@ _OZON_SAME_DESC = (
     "not analogues or similar items, with copies thrown out. Checks every candidate card's characteristics "
     "(material, sizes, model, specs) against the original's, so «the same backpack» in eco "
     "leather is rejected. Use when the user has a product link/SKU and asks for it cheaper, "
-    "faster, from another seller, or where else it is sold.")
+    "faster, from another seller, or where else it is sold. Also reads shops outside Ozon (the "
+    "maker's own site, other marketplaces) from a web search, so no separate web search is needed.")
 _OZON_SET_LOCATION_DESC = (
     "Set where Ozon delivers: picks the Ozon pickup point nearest to a city or "
     "address, so prices and delivery dates match the user. Call it when the "
