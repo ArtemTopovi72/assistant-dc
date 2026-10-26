@@ -317,6 +317,10 @@ class SetReminderArgs(_ToolArgs):
     repeat: Literal["none", "daily", "weekly"] = Field("none", description=(
         "'daily' for 'каждый день', 'weekly' for 'каждую неделю / по понедельникам'; "
         "'none' for a one-off."))
+    do: bool = Field(False, description=(
+        "true when the user wants you to DO something at that time ('каждое утро присылай "
+        "погоду', 'в 9 расскажи новости') -- `text` is then the request you will carry out; "
+        "false for a plain reminder note."))
 
 
 class RecallContextArgs(_ToolArgs):
@@ -612,6 +616,15 @@ class OzonSameArgs(_ToolArgs):
         "What the user wants first: the cheapest, the soonest delivery, or the best of both."))
     by_photo: bool = Field(True, description=(
         "Also look for listings of the same item through Ozon's photo search."))
+
+
+class OzonWatchPriceArgs(_ToolArgs):
+    product: str = Field(..., min_length=1, description="The Ozon product link or SKU to watch.")
+    every_hours: float = Field(6, ge=1, le=168, description="How often to check the price, in hours.")
+    target_price: Optional[int] = Field(None, description=(
+        "Tell the user only when the price is at or below this, in roubles ('сообщи, когда "
+        "будет дешевле 13 тысяч' -> 13000); empty: any drop."))
+    days: int = Field(30, ge=1, le=90, description="How many days to keep watching.")
 
 
 class OzonShopArgs(_ToolArgs):

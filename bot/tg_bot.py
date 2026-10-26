@@ -1477,8 +1477,10 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         self._register_commands()
         try:
             import reminders as _rem
+            import price_watch as _pw
             _rem.register(lambda cid, t: self._send_text(cid, t),
-                          Path(_SESSION_FILE).parent / "reminders.json")
+                          Path(_SESSION_FILE).parent / "reminders.json",
+                          runner=self._run_scheduled, price_check=_pw.check)
         except Exception as exc:
             logger.warning("reminders not started: %s", exc)
 

@@ -3,6 +3,11 @@
 Pending reminders live in a JSON file next to the bot's data, so a restart
 re-arms them (an overdue one fires at once, marked late); a threading.Timer
 per reminder does the sending through the sender the bot registers at start.
+
+kind "task" is a request the bot carries out at its time («каждое утро присылай
+погоду»): the runner the bot registers feeds it in as the user's message. kind
+"price" is an Ozon price watch (price_watch.py): checked at every slot, it speaks
+only of a drop, and ends at its "until".
 """
 from __future__ import annotations
 
@@ -19,6 +24,8 @@ logger = logging.getLogger("assistant.reminders")
 _LOCK = threading.Lock()
 _PATH: Path | None = None
 _SENDER = None                      # callable(chat_id: int, text: str) -> None
+_RUNNER = None                      # callable(chat_id: int, request: str) -> None
+_PRICE = None                       # callable(item) -> (message | None, fields to keep)
 _ITEMS: dict[str, dict] = {}        # id -> {"owner", "due", "text"}
 _TIMERS: dict[str, threading.Timer] = {}
 MAX_PER_OWNER = 20
@@ -50,8 +57,9 @@ def _fire(rid: str) -> None:
             return
         item = _ITEMS.pop(rid, None)
         _TIMERS.pop(rid, None)
+        ended = bool(item and item.get("until") and time.time() >= item["until"])
         # A repeating reminder re-arms for its next slot.
-        if item and item.get("every"):
+        if item and item.get("every") and not ended:
             nxt = dict(item)
             while nxt["due"] <= time.time():
                 nxt["due"] += nxt["every"]
@@ -60,11 +68,30 @@ def _fire(rid: str) -> None:
         _save()
     if not item or _SENDER is None:
         return
-    late = time.time() - item["due"] > 120
+    en = item.get("lang") == "en"
+    owner = int(item["owner"])
     try:
-        pre = (("⏰ Reminder (late): " if late else "⏰ Reminder: ") if item.get("lang") == "en"
+        if item.get("kind") == "price":
+            msg, keep = _PRICE(item) if _PRICE else (None, {})
+            if keep:
+                with _LOCK:
+                    if rid in _ITEMS:
+                        _ITEMS[rid].update(keep)
+                        _save()
+            if msg:
+                _SENDER(owner, msg)
+            if ended:
+                _SENDER(owner, (f"Price watch ended: {item.get('name') or item['text']}" if en
+                                else f"Слежение за ценой закончилось: {item.get('name') or item['text']}"))
+            return
+        if item.get("kind") == "task" and _RUNNER is not None:
+            _SENDER(owner, ("⏰ Scheduled: " if en else "⏰ По расписанию: ") + item["text"])
+            _RUNNER(owner, item["text"])
+            return
+        late = time.time() - item["due"] > 120
+        pre = (("⏰ Reminder (late): " if late else "⏰ Reminder: ") if en
                else ("⏰ Напоминание (с опозданием): " if late else "⏰ Напоминание: "))
-        _SENDER(int(item["owner"]), pre + item["text"])
+        _SENDER(owner, pre + item["text"])
     except Exception:
         logger.exception("reminder %s could not be sent", rid)
 
@@ -77,11 +104,12 @@ def _arm(rid: str) -> None:
     t.start()
 
 
-def register(sender, path, max_timer_s: float = 86400.0, timer=None) -> int:
+def register(sender, path, max_timer_s: float = 86400.0, timer=None, runner=None,
+             price_check=None) -> int:
     """Called once by the bot at start. Returns how many reminders were re-armed."""
-    global _SENDER, _PATH, _MAX_TIMER_S, _TIMER
+    global _SENDER, _PATH, _MAX_TIMER_S, _TIMER, _RUNNER, _PRICE
     with _LOCK:
-        _SENDER, _PATH = sender, Path(path)
+        _SENDER, _PATH, _RUNNER, _PRICE = sender, Path(path), runner, price_check
         _MAX_TIMER_S, _TIMER = max_timer_s, timer or threading.Timer
         try:
             loaded = json.loads(_PATH.read_text(encoding="utf-8")) if _PATH.exists() else {}
@@ -117,15 +145,20 @@ def _valid(item) -> bool:
     num = (int, float)
     try:
         every = item.get("every") or 0
+        kind = item.get("kind") or "text"
         return (str(item["owner"]).lstrip("-").isdigit()
                 and isinstance(item["due"], num) and item["due"] == item["due"]   # not NaN
                 and isinstance(item.get("text"), str)
-                and isinstance(every, num) and (every == 0 or every >= 60))
+                and isinstance(every, num) and (every == 0 or every >= 60)
+                and kind in ("text", "task", "price")
+                and (kind != "price" or (isinstance(item.get("product"), str)
+                                         and isinstance(item.get("price"), num))))
     except (AttributeError, KeyError, TypeError):
         return False
 
 
-def add(owner, delay_s: float, text: str, every_s: float = 0, lang: str = "ru") -> str:
+def add(owner, delay_s: float, text: str, every_s: float = 0, lang: str = "ru",
+        kind: str = "text", extra: dict | None = None) -> str:
     """Schedule `text` for `owner` in `delay_s` seconds. Raises ValueError."""
     if _SENDER is None:
         raise ValueError("reminders are not running here")
@@ -140,6 +173,11 @@ def add(owner, delay_s: float, text: str, every_s: float = 0, lang: str = "ru") 
             _ITEMS[rid]["every"] = float(every_s)
         if lang == "en":
             _ITEMS[rid]["lang"] = "en"
+        if kind != "text":
+            _ITEMS[rid].update(extra or {}, kind=kind)
+        if not _valid(_ITEMS[rid]):
+            _ITEMS.pop(rid)
+            raise ValueError(f"a {kind} needs its details")
         _save()
         _arm(rid)
     return rid

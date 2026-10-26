@@ -180,6 +180,17 @@ class DispatchMixin:
                                f"{str(body.get('description'))[:120]} body={str(body)[:160]}")
         return body.get("result", [])
 
+    def _run_scheduled(self, chat_id: int, request: str):
+        """A task the user scheduled (reminders kind "task") enters as their own message, so it
+        takes the same queue, session and tools; the note keeps the agent from scheduling it again."""
+        import time as _time
+        cid = int(chat_id)
+        self._dispatch_logged({"update_id": 0, "message": {
+            "message_id": int(_time.time() * 1000) % 2_000_000_000, "date": int(_time.time()),
+            "chat": {"id": cid, "type": "private"}, "from": {"id": cid, "is_bot": False},
+            "text": f"{request}\n[The user scheduled this request earlier and it is due now: carry it "
+                    "out now, do not set a reminder for it again.]"}})
+
     def _dispatch_logged(self, upd: dict):
         """_dispatch inside this chat's full transcript (chatlog.py)."""
         import chatlog

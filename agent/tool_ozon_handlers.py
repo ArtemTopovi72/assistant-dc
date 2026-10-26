@@ -11,6 +11,7 @@ from seams import dep, vision_model
 
 import logging
 import os
+import time
 
 import ozon_client as _oz
 
@@ -18,7 +19,7 @@ import ozon_client as _oz
 logger = logging.getLogger("assistant.tools.ozon")
 
 OZON_TOOL_NAMES = frozenset({"ozon_search", "ozon_product", "ozon_reviews", "ozon_cart",
-                             "ozon_set_location", "ozon_shop", "ozon_same"})
+                             "ozon_set_location", "ozon_shop", "ozon_same", "ozon_watch_price"})
 
 
 def _rub(n) -> str:
@@ -495,6 +496,41 @@ def _handle_ozon_same(ctx, state, args: dict) -> str:
         return _fail(exc)
     _remember(ctx, [x for x in r["best"].values() if x])
     return same_report(r, args.get("priority") or "balanced")
+
+
+@_owned
+def _handle_ozon_watch_price(ctx, state, args: dict) -> str:
+    import reminders
+    owner = getattr(ctx, "reminder_owner", None)
+    if not owner:
+        return ("[TOOL ERROR] Price watches work only in the Telegram bot. Tell the user plainly "
+                "that you cannot watch the price here -- do not promise it.")
+    p = (args.get("product") or "").strip()
+    try:
+        d = _oz.call(ctx, "details", p)
+    except Exception as exc:
+        logger.warning("ozon_watch_price(%s) failed: %s", p, exc)
+        return _fail(exc)
+    if not d.get("price"):
+        return "[TOOL ERROR] That card shows no price now, so there is nothing to watch. Tell the user."
+    hours = float(args.get("every_hours") or 6)
+    days = int(args.get("days") or 30)
+    target = args.get("target_price")
+    key, state_file = _owner_of(ctx)
+    name = (d.get("name") or "товар")[:80]
+    try:
+        reminders.add(owner, hours * 3600, f"следить за ценой: {name}", every_s=hours * 3600,
+                      lang=getattr(ctx, "reply_lang", "ru") or "ru", kind="price",
+                      extra={"product": d.get("url") or p, "name": name, "price": d["price"],
+                             "target": target, "key": key, "state": state_file,
+                             "until": time.time() + days * 86400})
+    except ValueError as exc:
+        return f"[TOOL ERROR] Watch not set: {exc}. Tell the user plainly."
+    logger.info("Tool: ozon_watch_price(%s) at %s every %.0fh for %s", name, d["price"], hours, owner)
+    return (f"Watching {name}: now {_rub(d['price'])}. Checked every {hours:g} h for {days} days; "
+            + (f"the user hears only when it is at or below {_rub(target)}. " if target
+               else "the user hears only when it drops below the lowest price seen. ")
+            + "Confirm in one or two short sentences with the current price and how often it is checked.")
 
 
 @_owned

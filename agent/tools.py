@@ -547,10 +547,15 @@ def _handle_set_reminder(ctx, state, args: dict) -> str:
         if not items:
             return ("There are NO pending reminders (0) -- whatever the message or the chat "
                     "says, none is set. Tell the user plainly that there are none.")
-        return "Pending reminders (local time):\n" + "\n".join(
-            f"- {_dt.datetime.fromtimestamp(i['due'], _user_now(getattr(ctx, 'user_tz', '') or '').tzinfo):%A %d %B %Y, %H:%M}: {i['text']}"
-            + {86400: " (every day)", 7 * 86400: " (every week)"}.get(i.get("every"), "")
-            for i in items)
+        def _line(i):
+            when = f"{_dt.datetime.fromtimestamp(i['due'], _user_now(getattr(ctx, 'user_tz', '') or '').tzinfo):%A %d %B %Y, %H:%M}"
+            if i.get("kind") == "price":
+                low = f"{int(i['price']):,} ₽".replace(",", " ")
+                return (f"- price watch: {i.get('name')}, lowest so far {low}, checked every "
+                        f"{i['every'] / 3600:g} h, next {when} {i['product']}")
+            return (f"- {when}: {i['text']}" + (" (a task you carry out)" if i.get("kind") == "task" else "")
+                    + {86400: " (every day)", 7 * 86400: " (every week)"}.get(i.get("every"), ""))
+        return "Pending reminders, tasks and price watches (local time):\n" + "\n".join(map(_line, items))
     if action == "cancel":
         gone = reminders.cancel(owner, text)
         if not gone:
@@ -585,15 +590,20 @@ def _handle_set_reminder(ctx, state, args: dict) -> str:
     try:
         every = {"daily": 86400, "weekly": 7 * 86400}.get(str(args.get("repeat") or "none"), 0)
         reminders.add(owner, delay, text, every_s=every,
-                      lang=getattr(ctx, "reply_lang", "ru") or "ru")
+                      lang=getattr(ctx, "reply_lang", "ru") or "ru",
+                      kind="task" if args.get("do") else "text")
     except ValueError as exc:
         return f"[TOOL ERROR] Reminder not set: {exc}. Tell the user plainly."
     due = _user_now(getattr(ctx, "user_tz", "") or "") + _dt.timedelta(seconds=delay)
-    logger.info("Tool: set_reminder(%s) in %.0fs for %s", text[:60], delay, owner)
+    logger.info("Tool: set_reminder(%s) in %.0fs for %s%s", text[:60], delay, owner,
+                " (task)" if args.get("do") else "")
     rep = {86400: " It REPEATS every day.", 7 * 86400: " It REPEATS every week."}.get(every,
            " It fires ONCE -- if the user asked for 'every day', say it is one-off.")
-    return (f"Reminder set for {due:%A %d %B %Y, %H:%M} (local time): \"{text}\".{rep} "
-            "Confirm it to the user in one short sentence with exactly this day and time.")
+    what = ("Task set: at that time you will carry it out" if args.get("do") else "Reminder set")
+    return (f"{what} for {due:%A %d %B %Y, %H:%M} (local time): \"{text}\".{rep} "
+            "Confirm it to the user in one short sentence with exactly this day and time"
+            + (" -- say what you will DO then ('пришлю погоду'), not that you will remind."
+               if args.get("do") else "."))
 
 
 def _handle_forget_facts(ctx, state, args: dict) -> str:
@@ -742,7 +752,7 @@ from tool_descriptions import (
     _EDIT_FILE_DESC,
     _CODE_OUTLINE_DESC, _RUN_TESTS_DESC, _UPDATE_PLAN_DESC, _UNDO_EDIT_DESC,
     _OZON_SEARCH_DESC, _OZON_PRODUCT_DESC, _OZON_REVIEWS_DESC, _OZON_CART_DESC,
-    _OZON_SET_LOCATION_DESC, _OZON_SHOP_DESC, _OZON_SAME_DESC,
+    _OZON_SET_LOCATION_DESC, _OZON_SHOP_DESC, _OZON_SAME_DESC, _OZON_WATCH_PRICE_DESC,
     _SEARCH_FILES_DESC, _FIND_CONTENT_DESC, _DELETE_PATH_DESC, _DEDUPE_PHOTOS_DESC, _UNPACK_ARCHIVE_DESC, _PACK_ARCHIVE_DESC,
     _RUN_CODE_DESC, _INSTALL_PACKAGES_DESC, _RAG_ADD_DESC, _RAG_SEARCH_DESC,
 )
@@ -757,7 +767,7 @@ from tool_args import (
     FindContentArgs, DeletePathArgs, DedupePhotosArgs, RagAddArgs, RagSearchArgs, SetReminderArgs, ConvertCurrencyArgs, CalendarArgs, WeatherForecastArgs, LocalTimeArgs,
     CodeOutlineArgs, RunTestsArgs, UpdatePlanArgs, UndoEditArgs,
     OzonSearchArgs, OzonProductArgs, OzonReviewsArgs, OzonCartArgs, OzonSetLocationArgs,
-    OzonShopArgs, OzonSameArgs,
+    OzonShopArgs, OzonSameArgs, OzonWatchPriceArgs,
 )
 from tool_code_handlers import (
     _handle_list_files, _handle_read_file, _handle_open_image,
@@ -769,7 +779,7 @@ from tool_code_handlers import (
 )
 from tool_ozon_handlers import (
     _handle_ozon_search, _handle_ozon_product, _handle_ozon_reviews, _handle_ozon_cart,
-    _handle_ozon_set_location, _handle_ozon_shop, _handle_ozon_same,
+    _handle_ozon_set_location, _handle_ozon_shop, _handle_ozon_same, _handle_ozon_watch_price,
     OZON_TOOL_NAMES,   # noqa: F401
 )
 
@@ -867,6 +877,8 @@ TOOLS = [
              _handle_ozon_shop, OzonShopArgs),
     ToolSpec("ozon_same", _fn_schema("ozon_same", _OZON_SAME_DESC, OzonSameArgs),
              _handle_ozon_same, OzonSameArgs),
+    ToolSpec("ozon_watch_price", _fn_schema("ozon_watch_price", _OZON_WATCH_PRICE_DESC, OzonWatchPriceArgs),
+             _handle_ozon_watch_price, OzonWatchPriceArgs),
     ToolSpec("ozon_set_location", _fn_schema("ozon_set_location", _OZON_SET_LOCATION_DESC,
                                              OzonSetLocationArgs),
              _handle_ozon_set_location, OzonSetLocationArgs),

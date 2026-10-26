@@ -205,7 +205,8 @@ _SET_REMINDER_DESC = (
     "Set a reminder the user will get as a Telegram message later ('напомни через 2 "
     "минуты выпить воды', 'напомни в 18:30 позвонить маме'). Give `minutes` OR `at`. "
     "action='list' shows pending ones, action='cancel' removes them ('отмени напоминание'). "
-    "For 'каждый день' pass repeat='daily'. Without this call NO reminder is set or cancelled -- never claim it unless it returned OK."
+    "For 'каждый день' pass repeat='daily'. With do=true it is a scheduled task you carry out "
+    "at that time ('каждое утро присылай погоду'). Without this call NO reminder is set or cancelled -- never claim it unless it returned OK."
 )
 
 
@@ -382,6 +383,11 @@ _OZON_SAME_DESC = (
     "leather is rejected. Use when the user has a product link/SKU and asks for it cheaper, "
     "faster, from another seller, or where else it is sold. Also reads shops outside Ozon (the "
     "maker's own site, other marketplaces) from a web search, so no separate web search is needed.")
+_OZON_WATCH_PRICE_DESC = (
+    "Watch an Ozon product's price and tell the user when it drops ('следи за ценой', "
+    "'сообщи, когда подешевеет'). Checks on a schedule for weeks and speaks only of a real "
+    "drop, or of reaching their target price. set_reminder action='list'/'cancel' shows and "
+    "stops watches.")
 _OZON_SET_LOCATION_DESC = (
     "Set where Ozon delivers: picks the Ozon pickup point nearest to a city or "
     "address, so prices and delivery dates match the user. Call it when the "
