@@ -48,7 +48,7 @@ CASES = [
      "Kazan, tomorrow: +7°C, light rain, wind 5 m/s", ("7",), False),
     ("calc", "сколько будет 1234 умножить на 5678?", ("calculate",), [("1234",)],
      "7006652", ("7006652", "7 006 652", "7 006 652"), False),
-    ("draw", "нарисуй кота-космонавта на Луне", ("generate_image",), [("cat", "кот"), ("moon", "лун")],
+    ("draw", "нарисуй кота-космонавта на Луне", ("generate_image",), [("cat", "кот"), ("moon", "лун", "lunar")],
      None, (), False),
     ("search", "найди в интернете, кто выиграл чемпионат мира по шахматам 2024 года", ("search", "deep_research"),
      [("2024",)], "World Chess Championship 2024 (Singapore): Gukesh Dommaraju beat Ding Liren 7.5-6.5.",
