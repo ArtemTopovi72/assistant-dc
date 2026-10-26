@@ -139,6 +139,14 @@ def clean_url(link):
     return path if path.startswith("http") else "https://www.ozon.ru" + path
 
 
+_PRODUCT_LINK = re.compile(r"https?://(?:[\w-]+\.)*ozon\.ru/(?:product|t)/[^\s,;)>\]]+", re.I)
+
+
+def product_links(text: str) -> list:
+    """The Ozon product-card links in `text`, in order, each once."""
+    return list(dict.fromkeys(m.rstrip(".") for m in _PRODUCT_LINK.findall(text or "")))
+
+
 def sku_from_url(url):
     s = str(url or "")
     m = re.search(r"-(\d+)/?(?:\?|$)", s) or re.search(r"(\d{6,})", s)

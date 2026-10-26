@@ -362,8 +362,10 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
                     "When they answer, call ozon_shop again with clarified=true and the answers "
                     "added to the request. If they say it does not matter, still clarified=true.\n"
                     + lines)
+    from prompt_guard import user_words
+    mine = _oz.product_links(user_words((state or {}).get("user_input_original") or ""))
     try:
-        p, results = S.shop(ctx, req, strategy)
+        p, results = S.shop(ctx, req, strategy, pinned=mine)
     except S.ShopCancelled:
         return "[TOOL ERROR] The user cancelled the Ozon search."
     except Exception as exc:

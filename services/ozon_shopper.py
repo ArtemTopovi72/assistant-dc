@@ -20,7 +20,7 @@ picks -- or, for "a picnic set", first turns the occasion into a list.
 Everything Ozon returns is third-party text: prompts treat it as data.
 """
 from __future__ import annotations
-from seams import dep, vision_model, text_model
+from seams import dep, vision_model, text_model, yes_no
 
 import logging
 import re
@@ -34,6 +34,7 @@ MAX_QUERIES = 5
 PER_QUERY = 60
 SEARCH_PAGES = 2
 FINALISTS = 5
+MAX_PINNED = 5             # the user's own links weighed with the finds
 REVIEWS_READ = 30          # 12 hid the complaints: a live snow-blower hunt needed ~30 to see the bad ones
 
 
@@ -254,6 +255,8 @@ def inspect(x: dict, ctx=None) -> dict:
         d.update({k: card.get(k) for k in ("price", "available", "seller", "characteristics",
                                             "description", "images", "rating", "reviews")
                   if card.get(k) not in (None, "", [], {})})
+        if d.get("pinned"):               # a user's link: its name and SKU come from the card
+            d.update({k: card[k] for k in ("name", "url", "sku") if card.get(k)})
     except _oz.OzonBlocked:
         raise
     except Exception as exc:
@@ -300,7 +303,7 @@ def review_signals(rv) -> str:
 
 
 def _dossier(i: int, d: dict) -> str:
-    out = [f"[{i}] {d.get('name')} — {_rub(d.get('price'))}; rating {d.get('rating') or '-'} "
+    out = [f"[{i}]{' USER’S PICK' if d.get('pinned') else ''} {d.get('name')} — {_rub(d.get('price'))}; rating {d.get('rating') or '-'} "
            f"from {d.get('reviews') or 0} reviews; in stock: {d.get('available')}; "
            f"delivery {d.get('delivery') or '?'}; seller {d.get('seller') or '?'}"]
     ch = d.get("characteristics") or {}
@@ -380,8 +383,10 @@ _DECIDE_SYS = (
     'only: {"choice": n, "why": str, "reviews": str, "concerns": str, "backup": n|null} '
     "-- reviews: 1-2 sentences of what buyers actually say about the CHOSEN one, or "
     "exactly 'Отзывов нет' when it has none; concerns: honest caveats or '' (name the "
-    "site when a caveat comes from the web).Write "
-    "why/reviews/concerns in Russian.")
+    "site when a caveat comes from the web). When finalists are marked USER'S PICK, add "
+    '"versus": {"n": str} for each of them that you did not choose -- one sentence: what its '
+    "own buyers report and why it lost, from its dossier only. Write why/reviews/concerns/"
+    "versus in Russian.")
 
 
 def decide(ctx, item: dict, finalists: list, strategy: str = "balanced") -> dict:
@@ -395,6 +400,10 @@ def decide(ctx, item: dict, finalists: list, strategy: str = "balanced") -> dict
         n = 1
     n = n if 1 <= n <= len(finalists) else 1
     rv = finalists[n - 1].get("review_texts")
+    versus = data.get("versus") if isinstance(data.get("versus"), dict) else {}
+    for k, v in versus.items():
+        if str(k).isdigit() and 1 <= int(k) <= len(finalists) and finalists[int(k) - 1].get("pinned"):
+            finalists[int(k) - 1]["verdict"] = str(v)
     return {"index": n - 1, "why": str(data.get("why") or ""),
             "reviews": str(data.get("reviews") or ("Отзывов нет" if rv == [] else "")),
             "concerns": str(data.get("concerns") or "")}
@@ -460,7 +469,10 @@ def look(ctx, d: dict, need: str) -> dict:
 
 # ── one item, end to end ────────────────────────────────────────────────────────
 
-def shop_item(ctx, item: dict, label: str = "", strategy: str = "balanced") -> dict:
+def shop_item(ctx, item: dict, label: str = "", strategy: str = "balanced", pinned=()) -> dict:
+    """`pinned`: links of cards the user named; they are read and weighed with the found
+    ones. Four backpacks the user had picked were never opened while the reply compared
+    a find against them, with a price it had made up (2026-10-26)."""
     _stage(ctx, f"Ozon: searching {label}{item['need']}")
     try:
         cands = gather(item, ctx)
@@ -473,17 +485,27 @@ def shop_item(ctx, item: dict, label: str = "", strategy: str = "balanced") -> d
     finalists, note = screen(ctx, item, cands, strategy)
     res = {"item": item, "candidates": len(cands), "note": note, "choice": None,
            "others": [], "decision": None, "photo": None}
+    finalists = finalists + [{"sku": u, "url": u, "pinned": n}
+                             for n, u in enumerate(list(pinned)[:MAX_PINNED], 1)]
     if not finalists:
         return res
     _stage(ctx, f"Ozon: reading cards and reviews for {item['need']}")
     finalists = _oz.pmap(lambda d: inspect(d, ctx), finalists)
+    by_sku = {}        # a user's link among the finds: keep the find (its tile has the delivery date)
+    for d in finalists:
+        k = str(d.get("sku"))
+        if k in by_sku:
+            by_sku[k]["pinned"] = by_sku[k].get("pinned") or d.get("pinned")
+        else:
+            by_sku[k] = d
+    finalists = list(by_sku.values())
     _stage(ctx, f"Ozon: checking what the web says about {item['need']}")
     for d in finalists:
         d["web"] = web_reputation(ctx, d)
     _stage(ctx, f"Ozon: looking at the photos of {item['need']}")
     finalists = [look(ctx, d, item["need"]) for d in finalists]
-    wrong = [d for d in finalists if d.get("photo_ok") is False]
-    finalists = [d for d in finalists if d.get("photo_ok") is not False]
+    wrong = [d for d in finalists if d.get("photo_ok") is False and not d.get("pinned")]
+    finalists = [d for d in finalists if d not in wrong]
     res["photo_rejected"] = [d.get("name") for d in wrong]
     if not finalists:
         res["note"] = "the finalists' photos show something else"
@@ -502,11 +524,12 @@ def shop_item(ctx, item: dict, label: str = "", strategy: str = "balanced") -> d
 # ── the report the agent relays ─────────────────────────────────────────────────
 
 def _card_line(d: dict) -> str:
-    bits = [f"{d.get('name')} — {_rub(d.get('price'))}"]
+    bits = [(f"the user's link {d['pinned']}: " if d.get("pinned") else "")
+            + f"{d.get('name')} — {_rub(d.get('price'))}"]
     if d.get("rating"):
         bits.append(f"★{d['rating']} ({d.get('reviews') or 0} reviews)")
-    if d.get("delivery"):
-        bits.append(f"delivery {d['delivery']}")
+    bits.append(f"delivery {d['delivery']}" if d.get("delivery")
+                else "delivery date not shown on the card")
     return ", ".join(bits) + f"\n   {d.get('url')}"
 
 
@@ -523,6 +546,11 @@ def report(results: list, mode: str, location: str = "", basket: str = "") -> st
             continue
         total += (c.get("price") or 0) * it.get("qty", 1)
         out.append(head + "\n   CHOICE: " + _card_line(c))
+        if c.get("pinned"):
+            # the user's own third backpack won and was sold back to them as «an alternative
+            # three times cheaper than yours», then faulted as «your third option» (2026-10-26)
+            out.append(f"   THE CHOICE IS THE USER'S OWN LINK {c['pinned']}: tell them their pick "
+                       "won against the finds; never call it an alternative or a find.")
         if dec.get("why"):
             out.append("   why: " + dec["why"])
         for name in r.get("photo_rejected") or []:
@@ -533,16 +561,25 @@ def report(results: list, mode: str, location: str = "", basket: str = "") -> st
         out.append("   buyers say: " + (dec.get("reviews") or ("Отзывов нет" if rv == [] else "reviews not read")))
         if dec.get("concerns"):
             out.append("   caveats: " + dec["concerns"])
-        if r["others"]:
+        mine = [o for o in r["others"] if o.get("pinned")]
+        for o in mine:
+            rv = o.get("review_texts")
+            out.append("   compared, " + _card_line(o).replace("\n", "")
+                       + (f"; {o['verdict']}" if o.get("verdict") else "")
+                       + ("; no reviews of its own" if rv == [] else ""))
+        found = [o for o in r["others"] if not o.get("pinned")][:2]
+        if found:
             out.append("   also considered: " + "; ".join(
-                f"{o.get('name')[:60]} {_rub(o.get('price'))} {o.get('url')}" for o in r["others"][:2]))
+                f"{str(o.get('name'))[:60]} {_rub(o.get('price'))} {o.get('url')}" for o in found))
     if mode == "basket":
         out.append(f"\nTOTAL for the found items: {_rub(total)}.")
     if basket:
         out.append(basket)
     out.append("\nPrices and stock change: tell the user to check the card before buying.")
     out.append("Tell the user the choices with prices, WHY, what buyers say (say plainly when "
-               "there are no reviews), caveats, and the link for each. Items marked NOT FOUND "
+               "there are no reviews), caveats, and the link for each. Compare with the user's "
+               "own links only through their 'compared' lines -- a price or a fact about them "
+               "that is not written here was not read. Items marked NOT FOUND "
                "must be reported as not found -- never substitute an invented product.")
     return "\n".join(out)
 
@@ -553,9 +590,12 @@ _CLARIFY_SYS = (
     "product is right (a seller would ask: self-propelled or not? electric starter? "
     "bucket width?) and that the request does NOT already answer, even in other words. "
     "You may add ONE question that is not a filter when any seller of this product "
-    "would ask it (a snow blower: electric starter?). Skip brand, model lists and anything cosmetic. If the request is already specific "
+    "would ask it (a snow blower: electric starter?). Skip brand, model lists and anything cosmetic. "
+    "When the filters give nothing to ask (only a brand), still ask the question any seller of "
+    "this product asks first and the request leaves open (headphones: wired or wireless? "
+    "in-ear or over-ear?), with options in words. If the request is already specific "
     "enough, return none. Reply JSON only: {\"questions\": [{\"filter\": str, "
-    "\"question\": str, \"options\": [str, ...]}]} -- question in Russian, short, "
+    "\"question\": str, \"options\": [str, ...]}]} -- question in Russian, short, informal (ты), "
     "options taken from the filter values (2-5), plus 'неважно' as the last option. "
     "Word each question for a non-expert and turn codes into words ('5+2' -> '5 передач "
     "вперёд и 2 назад'). For anything with an engine, how it starts (manual cord or "
@@ -576,6 +616,12 @@ def clarify(ctx, request: str) -> list:
     except Exception as exc:
         logger.warning("filters for '%s' failed: %s", request, exc)
         return []
+    return ask_from_filters(ctx, request, filters)
+
+
+def ask_from_filters(ctx, request: str, filters: list) -> list:
+    """The questions worth asking for `request`, given the category's Ozon filters
+    (bench/ozon_clarify_eval.py)."""
     if not filters:
         return []
     listing = "\n".join(f"- {f['title']}: {', '.join(f['values'])}" for f in filters[:25])
@@ -583,8 +629,18 @@ def clarify(ctx, request: str) -> list:
                      ["questions"], max_tokens=800) or {}
     out = []
     for q in (data.get("questions") or [])[:3]:
-        if isinstance(q, dict) and str(q.get("question") or "").strip():
-            out.append({"question": str(q["question"]).strip(),
+        if not (isinstance(q, dict) and str(q.get("question") or "").strip()):
+            continue
+        if q.get("filter") and q["filter"] in {o["filter"] for o in out}:
+            continue
+        # «рюкзак» six times in the request and still «Рюкзак / Сумка?» 5 of 5: told not to
+        # ask what is answered, the model asked anyway; asked to quote the answering words in
+        # the same call, it stopped asking vague requests too. One narrow read per question.
+        if yes_no(ctx)("A shopper wrote: {text}\n\nDoes this already answer the question "
+                       f"«{q['question']}» (options: {', '.join(map(str, q.get('options') or []))})?",
+                       request, ctx=ctx):
+            continue
+        out.append({"question": str(q["question"]).strip(), "filter": str(q.get("filter") or ""),
                         "options": [str(o) for o in (q.get("options") or [])][:6]})
     return out
 
@@ -609,12 +665,14 @@ def shop_photo(ctx, request: str, image_path: str, strategy: str = "balanced") -
         shop_item(ctx, item, "", strategy)]
 
 
-def shop(ctx, request: str, strategy: str = "balanced") -> tuple:
-    """(plan, results). Raises OzonBlocked / ShopCancelled."""
+def shop(ctx, request: str, strategy: str = "balanced", pinned=()) -> tuple:
+    """(plan, results). `pinned`: the user's own card links, weighed with the finds of a
+    one-product plan. Raises OzonBlocked / ShopCancelled."""
     _stage(ctx, "Ozon: planning the purchase")
     p = plan(ctx, request)
     results = []
     for i, item in enumerate(p["items"], 1):
         label = f"{i}/{len(p['items'])} " if p["mode"] == "basket" else ""
-        results.append(shop_item(ctx, item, label, strategy))
+        results.append(shop_item(ctx, item, label, strategy,
+                                 pinned=pinned if p["mode"] == "one" else ()))
     return p, results

@@ -37,7 +37,7 @@ def world(tmp_path):
 
     def details(sku):
         return {"sku": sku, "available": True, "seller": "S", "images": [f"https://ir.ozone.ru/{sku}.jpg"],
-                "characteristics": {"Размер": "150x150"}}
+                "characteristics": {"Размер": "150x150"}, **script.get("cards", {}).get(sku, {})}
 
     def reviews(sku, limit=10):
         return {"reviews": [] if sku == "3" else [{"score": 5, "comment": "Отличная", "date": "2026-09-01",
@@ -55,8 +55,8 @@ def world(tmp_path):
                  if "Держатель" not in l]
             return json.dumps({"finalists": n[:3], "note": ""})
         calls["decide_input"].append(user)
-        return json.dumps({"choice": 1, "why": "дешевле", "reviews": "хвалят", "concerns": ""},
-                          ensure_ascii=False)
+        return json.dumps({"choice": 1, "why": "дешевле", "reviews": "хвалят", "concerns": "",
+                           **script.get("decide_extra", {})}, ensure_ascii=False)
 
     def vision(**k):
         calls["vision"].append(k["user_text"][:40])
@@ -227,3 +227,33 @@ def test_buyer_photo_fetch_refuses_local_addresses():
     _VIS[0] = lambda **k: seen.append(k) or "seen"
     assert S._see(_ctx(), "http://127.0.0.1:8000/view?filename=x.png", "q") == ""
     assert seen == []
+
+
+def test_the_users_own_links_are_read_and_weighed(world):
+    # Four backpacks the user had picked were never opened, and the reply compared the
+    # find against them with a price it made up.
+    calls, script = world
+    link = "https://ozon.ru/t/dw4OyhY"
+    script["plan"] = {"mode": "one", "items": [{"need": "скатерть", "queries": ["скатерть"]}]}
+    script["cards"] = {link: {"sku": "900", "name": "Скатерть пользователя", "price": 1500,
+                              "url": "https://www.ozon.ru/product/x-900/", "rating": 4.2, "reviews": 7}}
+    script["decide_extra"] = {"versus": {"3": "покупатели пишут, что линяет"}}
+    out = T.execute_tool(_ctx(), {"user_input_original": f"найди аналоги подешевле {link}"},
+                         "ozon_shop", {"request": "скатерть", "clarified": True})
+    assert "USER’S PICK Скатерть пользователя" in calls["decide_input"][0]    # weighed with the finds
+    line = next(l for l in out.splitlines() if "Скатерть пользователя" in l)
+    assert "1 500 ₽" in line and "the user's link 1" in line and "линяет" in line, out
+
+
+def test_a_winning_user_link_is_called_theirs(world):
+    # the user's own backpack won and the reply sold it back as «an alternative»
+    _, script = world
+    link = "https://ozon.ru/t/j7uMuW7"
+    script["plan"] = {"mode": "one", "items": [{"need": "скатерть", "queries": ["скатерть"]}]}
+    script["cards"] = {link: {"sku": "901", "name": "Скатерть пользователя", "price": 500,
+                              "url": "https://www.ozon.ru/product/x-901/"}}
+    script["decide_extra"] = {"choice": 3}
+    out = T.execute_tool(_ctx(), {"user_input_original": f"найди аналоги {link}"},
+                         "ozon_shop", {"request": "скатерть", "clarified": True})
+    assert "CHOICE: the user's link 1: Скатерть пользователя" in out, out
+    assert "THE CHOICE IS THE USER'S OWN LINK 1" in out
