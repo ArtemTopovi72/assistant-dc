@@ -54,7 +54,7 @@ class AccountsMixin:
         if getattr(sess, "reg_state", "") in ("change_name", "change_password",
                                               "feedback", "wtw_city", "wtw_date",
                                               "set_badge", "song_topic",
-                                              "char_prompt"):
+                                              "char_prompt") or str(getattr(sess, "reg_state", "")).startswith("sch_"):
             sess.reg_state = ""
         self._store.put(sess)
         lang = self._lang(sess)

@@ -78,6 +78,7 @@ from tg_songs import SongsMixin
 from tg_tasks import TaskRunnerMixin
 from tg_transport import TransportMixin
 from tg_weather import WeatherMixin
+from tg_schedule import ScheduleMixin
 
 logger = logging.getLogger("assistant.tg_bot")
 
@@ -650,7 +651,7 @@ from tg_strings import (_LANGS, _DEFAULT_LANG, _BTN, _LABEL2KEY, _MSG,
 # T._main_kb / T._settings_kb / T._size_menu_kb through this module.  # noqa: F401
 from tg_keyboards import (
     _main_kb, _fwd_voice_kb, _draw_kb, _search_kb, _settings_kb, _reply_mode_kb, _library_kb,
-    _weather_kb, _creativity_kb, _cr_images_kb, _cr_music_kb, _cr_video_kb, _ozon_kb, _size_summary, _size_menu_kb, _size_menu_text,
+    _weather_kb, _creativity_kb, _cr_images_kb, _cr_music_kb, _cr_video_kb, _ozon_kb, _tasks_kb, _size_summary, _size_menu_kb, _size_menu_text,
 )
 
 
@@ -857,6 +858,11 @@ _PROMPT_KB: dict[str, str] = {
     "ozon_basket":  "build an ozon basket for (ozon_shop add_to_cart=true): ",
     "ozon_cart":    "ozon shopping list (ozon_cart): ",
     "ozon_city":    "set my ozon pickup point near (ozon_set_location): ",
+    # ⏰ Tasks: the agent reads «через 2 часа», «по пятницам в 18» and a pasted link
+    # better than any form; the tool names pin the right schema.
+    "sch_remind":   "set a reminder (set_reminder): ",
+    "sch_task":     "schedule a task you will carry out yourself at that time (set_reminder do=true): ",
+    "sch_price":    "watch this ozon price and tell me when it drops (ozon_watch_price): ",
 }
 _DIRECT_KB: dict[str, str] = {
     "regenerate": "regenerate the image",
@@ -894,6 +900,9 @@ _DIRECT_KB: dict[str, str] = {
     "cr_music":   "__menu_cr_music__",
     "cr_video":   "__menu_cr_video__",
     "ozon":       "__menu_ozon__",
+    "tasks":      "__menu_tasks__",
+    "sch_list":   "__sch_list__",
+    "sch_weather": "__sch_weather__",
     "animate_btn": "__animate_photo__",
     "clone_btn":   "__clone_voice__",
     "cover_btn":   "__cover__",
@@ -1310,7 +1319,7 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
                   LibraryMixin, QueueMixin, RegistrationMixin, ResolveMixin,
                   SongsMixin, CharactersMixin, LoraCollectMixin, TaskRunnerMixin,
                   TransportMixin,
-                  WeatherMixin):
+                  WeatherMixin, ScheduleMixin):
     def __init__(self, token: str, get_ctx, get_graph, get_base_state,
                  on_status=None, on_message=None, on_stage=None,
                  tts_enabled_fn=None,
@@ -1691,6 +1700,9 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         "build an ozon basket for (ozon_shop add_to_cart=true): ": "ozon",
         "ozon shopping list (ozon_cart): ": "ozon",
         "set my ozon pickup point near (ozon_set_location): ": "ozon",
+        "set a reminder (set_reminder): ": "tasks",
+        "schedule a task you will carry out yourself at that time (set_reminder do=true): ": "tasks",
+        "watch this ozon price and tell me when it drops (ozon_watch_price): ": "tasks",
     }
 
     def _state_kb(self, sess, lang: str = None) -> dict:
@@ -1713,6 +1725,8 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
             return _search_kb(lang)
         if menu == "ozon":
             return _ozon_kb(lang)
+        if menu == "tasks":
+            return _tasks_kb(lang)
         sub = {"creativity": _creativity_kb, "cr_images": _cr_images_kb,
                "cr_music": _cr_music_kb, "cr_video": _cr_video_kb}.get(menu)
         if sub:

@@ -189,6 +189,47 @@ def pending(owner) -> list[dict]:
                       key=lambda i: i["due"])
 
 
+def get(owner, rid: str) -> dict | None:
+    with _LOCK:
+        item = _ITEMS.get(rid)
+        return dict(item, id=rid) if item and str(item["owner"]) == str(owner) else None
+
+
+def remove(owner, rid: str) -> bool:
+    with _LOCK:
+        item = _ITEMS.get(rid)
+        if not item or str(item["owner"]) != str(owner):
+            return False
+        _ITEMS.pop(rid)
+        t = _TIMERS.pop(rid, None)
+        if t:
+            t.cancel()
+        _save()
+        return True
+
+
+def update(owner, rid: str, **fields) -> dict | None:
+    """Change one of the owner's items (the 📋 Tasks buttons); a new `due` re-arms it.
+    None when it is gone or not theirs; ValueError when the result would be malformed."""
+    with _LOCK:
+        item = _ITEMS.get(rid)
+        if not item or str(item["owner"]) != str(owner):
+            return None
+        new = dict(item, **fields)
+        for k in [k for k, v in fields.items() if v is None]:
+            new.pop(k, None)
+        if not _valid(new):
+            raise ValueError("that change would break the item")
+        _ITEMS[rid] = new
+        if new["due"] != item["due"]:
+            t = _TIMERS.pop(rid, None)
+            if t:
+                t.cancel()
+            _arm(rid)
+        _save()
+        return dict(new, id=rid)
+
+
 _ALL_WORDS = frozenset({"all", "every", "все", "всё"})
 _FILLER = frozenset({"про", "мне", "мои", "напоминание", "напоминания", "напоминалку",
                      "напоминалки", "reminder", "reminders", "my", "the", "about", "me"})

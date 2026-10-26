@@ -315,6 +315,14 @@ class RegistrationMixin:
             self._start_weather_lookup(chat_id, text.strip(), lang, remember_for=chat_id)
             return False
 
+        if user and user.status == "approved" and (sess.reg_state or "").startswith("sch_"):
+            done = self._capture_preamble(chat_id, sess, lang, text)
+            if done is not None:
+                return done
+            if text:
+                self._sch_capture(chat_id, sess, lang, text)
+            return False
+
         if user and user.status == "approved" and sess.reg_state == "wtw_date":
             done = self._capture_preamble(chat_id, sess, lang, text)
             if done is not None:

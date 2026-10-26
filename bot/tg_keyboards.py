@@ -25,7 +25,7 @@ def _main_kb(voice_on: bool, is_admin: bool = False, lang: str = _DEFAULT_LANG) 
         [_b("creativity", lang), _b("search", lang)],
         [_b("weather", lang),    _b("ozon", lang),    _b("account", lang)],
         [_b("feedback", lang),   _b("help", lang),    _b("stop", lang)],
-        [_b("settings", lang)],
+        [_b("tasks", lang),      _b("settings", lang)],
     ]
     return {
         "keyboard": rows,
@@ -148,6 +148,21 @@ def _ozon_kb(lang: str = _DEFAULT_LANG) -> dict:
         ],
         "resize_keyboard": True,
         "input_field_placeholder": _t("ph_ozon", lang),
+    }
+
+
+def _tasks_kb(lang: str = _DEFAULT_LANG) -> dict:
+    """⏰ Tasks. The add buttons arm a prefix for the agent, which reads times and
+    links far better than a form would; 📋 opens the inline list that edits them."""
+    return {
+        "keyboard": [
+            [_b("sch_list", lang)],
+            [_b("sch_remind", lang), _b("sch_task", lang)],
+            [_b("sch_price", lang),  _b("sch_weather", lang)],
+            [_b("back", lang)],
+        ],
+        "resize_keyboard": True,
+        "input_field_placeholder": _t("ph_main", lang),
     }
 
 

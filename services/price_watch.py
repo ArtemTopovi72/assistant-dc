@@ -14,7 +14,8 @@ def _rub(n) -> str:
     return f"{int(n):,} ₽".replace(",", " ")
 
 
-def _details(item: dict) -> dict:
+def read(item: dict) -> dict:
+    """The watched card now, in the owner's Ozon session."""
     import ozon_client
     if item.get("key"):
         with ozon_client.use_owner(item["key"], item.get("state") or ""):
@@ -22,7 +23,7 @@ def _details(item: dict) -> dict:
     return ozon_client.details(item["product"])
 
 
-def check(item: dict, details=_details) -> tuple:
+def check(item: dict, details=read) -> tuple:
     """(message or None, fields to store back on the watch)."""
     try:
         d = details(item)

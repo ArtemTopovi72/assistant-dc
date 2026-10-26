@@ -825,6 +825,16 @@ class ResolveMixin:
                     self._goto_menu(sess, "draw", "generate an image of: ")
                     self._send_text(chat_id, tg_bot._t("menu_draw_title", lang),
                                     parse_mode="HTML", keyboard=tg_bot._draw_kb(lang)); continue
+                if direct in ("__menu_tasks__", "__sch_list__", "__sch_weather__"):
+                    self._goto_menu(sess, "tasks")
+                    if direct == "__menu_tasks__":
+                        self._send_text(chat_id, tg_bot._t("menu_tasks_title", lang),
+                                        parse_mode="HTML", keyboard=tg_bot._tasks_kb(lang))
+                    if direct == "__sch_weather__":
+                        self._send_weather_times(chat_id, lang)
+                    else:
+                        self._send_tasks_list(chat_id, lang)
+                    continue
                 if direct == "__menu_ozon__":
                     # Free text typed in this menu is an Ozon product search.
                     self._goto_menu(sess, "ozon", "find on ozon: ")

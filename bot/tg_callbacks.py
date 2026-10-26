@@ -96,6 +96,7 @@ class CallbackMixin:
         if data == "wtw_default": return self._cb_weather_default(chat_id)
         if data == "wtw_range:48": return self._cb_weather_48h(chat_id)
         if data.startswith("wtwd:"): return self._cb_weather_day(chat_id, data)
+        if data.startswith("sch:"): return self._cb_schedule(chat_id, msg, data)
         if data == "wtw_pickdate": return self._cb_weather_pickdate(chat_id)
         if (data.startswith("admin_approve:") or data.startswith("admin_reject:")
                 or data.startswith("bcast:")):
@@ -172,7 +173,8 @@ class CallbackMixin:
         if _cb_sess0.reg_state in ("feedback", "change_name", "change_password",
                                    "set_badge", "wtw_city", "wtw_date", "song_topic",
                                    "char_prompt", "vp_add") or str(_cb_sess0.reg_state).startswith(
-                                       ("admin_say:", "music_custom:", "lv_question:", "lv_more:", "vp_edit:")):
+                                       ("admin_say:", "music_custom:", "lv_question:", "lv_more:", "vp_edit:",
+                                        "sch_")):
             _cb_sess0.reg_state = ""
             self._store.put(_cb_sess0)
 
