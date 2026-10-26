@@ -25,6 +25,8 @@ import time
 import price_watch
 import reminders
 
+from tg_strings import _nav_back_row
+
 _WEEKDAYS = {"ru": ("пн", "вт", "ср", "чт", "пт", "сб", "вс"),
              "en": ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")}
 _EVERY_HOURS = (1, 3, 6, 12, 24)
@@ -83,17 +85,22 @@ class ScheduleMixin:
         return item.get("name") if item.get("kind") == "price" else item["text"]
 
     def _sch_list_view(self, chat_id: int, lang: str) -> tuple:
+        """One row per task: the button IS the list (icon · name · when) -- a text
+        line repeating the name above the same words in a button read as noise."""
         items = reminders.pending(chat_id)
         if not items:
-            return tg_bot._t("sch_empty", lang), None
-        icon = {"price": "📉", "task": "🔁"}
-        rows = [[{"text": f"{icon.get(i.get('kind'), '🔔')} {self._sch_name(i)[:40]}",
-                  "callback_data": f"sch:o:{i['id']}"}] for i in items]
-        rows.append([{"text": tg_bot._t("sch_b_refresh", lang), "callback_data": "sch:l"}])
-        lines = [f"{n}. {icon.get(i.get('kind'), '🔔')} {_html.escape(self._sch_name(i)[:60])} — "
-                 + (_rub(i["price"]) if i.get("kind") == "price" else self._sch_fmt(i["due"], chat_id, lang))
-                 for n, i in enumerate(items, 1)]
-        return (tg_bot._t("sch_head", lang, n=len(items)) + "\n\n" + "\n".join(lines),
+            return tg_bot._t("sch_empty", lang), {"inline_keyboard": [_nav_back_row(lang)]}
+        rows = []
+        for i in items:
+            icon = {"price": "📉", "task": "🔁"}.get(i.get("kind"), "🔔")
+            tail = (_rub(i["price"]) if i.get("kind") == "price"
+                    else self._sch_fmt(i["due"], chat_id, lang))
+            name = self._sch_name(i)[:64 - len(tail) - 7]      # a button label is capped at 64
+            rows.append([{"text": f"{icon} {name} · {tail}",
+                          "callback_data": f"sch:o:{i['id']}"}])
+        rows.append([{"text": tg_bot._t("sch_b_refresh", lang), "callback_data": "sch:l"},
+                     *_nav_back_row(lang)])
+        return (tg_bot._t("sch_head", lang, n=len(items)),
                 {"inline_keyboard": rows})
 
     def _sch_card_view(self, chat_id: int, item: dict, lang: str) -> tuple:
@@ -136,7 +143,8 @@ class ScheduleMixin:
 
     def _send_weather_times(self, chat_id: int, lang: str) -> None:
         self._send_text(chat_id, tg_bot._t("sch_wx_pick", lang), keyboard={"inline_keyboard": [
-            [{"text": x, "callback_data": f"sch:wx:{x}"} for x in _WX_TIMES]]})
+            [{"text": x, "callback_data": f"sch:wx:{x}"} for x in _WX_TIMES],
+            _nav_back_row(lang)]})
 
     # ── buttons ──────────────────────────────────────────────────────────────
 
@@ -197,11 +205,14 @@ class ScheduleMixin:
                 sess.reg_state = f"sch_{field}:{rid}"
                 self._store.put(sess)
                 return self._send_text(chat_id, tg_bot._t({"t": "sch_ask_time", "x": "sch_ask_text",
-                                                           "tg": "sch_ask_target"}[op], lang), parse_mode="HTML")
+                                                           "tg": "sch_ask_target"}[op], lang),
+                                       parse_mode="HTML",
+                                       keyboard={"inline_keyboard": [_nav_back_row(lang)]})
             if op == "run":
                 if item.get("kind") == "task":
                     return self._run_scheduled(chat_id, item["text"])
-                return self._send_text(chat_id, tg_bot._t("sch_remind_now", lang, text=item["text"]))
+                return self._send_text(chat_id, tg_bot._t("sch_remind_now", lang, text=item["text"]),
+                                       keyboard={"inline_keyboard": [_nav_back_row(lang)]})
             if op == "chk":
                 threading.Thread(target=self._sch_check_now, args=(chat_id, item, lang), daemon=True,
                                  name="tasks-check").start()
@@ -215,9 +226,11 @@ class ScheduleMixin:
             tg_bot.logger.warning("tasks: check now %s failed: %s", item.get("product"), exc)
             d = {}
         if not d.get("price"):
-            return self._send_text(chat_id, tg_bot._t("sch_check_failed", lang))
+            return self._send_text(chat_id, tg_bot._t("sch_check_failed", lang),
+                                   keyboard={"inline_keyboard": [_nav_back_row(lang)]})
         self._send_text(chat_id, tg_bot._t("sch_now_price", lang, name=_html.escape(item.get("name") or ""),
-                                           price=_rub(d["price"]), low=_rub(item["price"])), parse_mode="HTML")
+                                           price=_rub(d["price"]), low=_rub(item["price"])),
+                        parse_mode="HTML", keyboard={"inline_keyboard": [_nav_back_row(lang)]})
         if d["price"] < item["price"]:
             reminders.update(chat_id, item["id"], price=d["price"])   # said now: not again at the next check
 
@@ -227,31 +240,35 @@ class ScheduleMixin:
             return
         reminders.add(chat_id, (when - self._sch_now(chat_id)).total_seconds(),
                       tg_bot._t("sch_wx_text", lang), every_s=86400, lang=lang, kind="task")
-        self._send_text(chat_id, tg_bot._t("sch_wx_done", lang, time=hhmm))
+        self._send_text(chat_id, tg_bot._t("sch_wx_done", lang, time=hhmm),
+                        keyboard={"inline_keyboard": [_nav_back_row(lang)]})
 
     # ── typed answers ────────────────────────────────────────────────────────
 
     def _sch_capture(self, chat_id: int, sess, lang: str, text: str) -> None:
+        _back = {"inline_keyboard": [_nav_back_row(lang)]}
         field, _, rid = sess.reg_state.partition(":")
         item = reminders.get(chat_id, rid)
         if not item:
             self._clear_capture(sess)
-            return self._send_text(chat_id, tg_bot._t("sch_gone", lang))
+            return self._send_text(chat_id, tg_bot._t("sch_gone", lang), keyboard=_back)
         text = (text or "").strip()
         try:
             if field == "sch_time":
                 when = parse_when(text, self._sch_now(chat_id))
                 if not when:
-                    return self._send_text(chat_id, tg_bot._t("sch_bad_time", lang), parse_mode="HTML")
+                    return self._send_text(chat_id, tg_bot._t("sch_bad_time", lang),
+                                           parse_mode="HTML", keyboard=_back)
                 item = reminders.update(chat_id, rid, due=when.timestamp())
             elif field == "sch_text":
                 if not text:
-                    return self._send_text(chat_id, tg_bot._t("sch_ask_text", lang))
+                    return self._send_text(chat_id, tg_bot._t("sch_ask_text", lang), keyboard=_back)
                 item = reminders.update(chat_id, rid, text=text[:500])
             elif field == "sch_target":
-                digits = re.sub(r"[\s ₽руб.]", "", text.lower())
+                digits = re.sub(r"[\s  ₽руб.]", "", text.lower())
                 if not digits.isdigit() or not int(digits):
-                    return self._send_text(chat_id, tg_bot._t("sch_bad_target", lang), parse_mode="HTML")
+                    return self._send_text(chat_id, tg_bot._t("sch_bad_target", lang),
+                                           parse_mode="HTML", keyboard=_back)
                 item = reminders.update(chat_id, rid, target=int(digits))
         except ValueError as exc:
             tg_bot.logger.warning("tasks capture %s: %s", sess.reg_state, exc)

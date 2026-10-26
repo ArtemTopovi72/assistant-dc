@@ -101,16 +101,19 @@ def test_opening_tasks_shows_its_keyboard_and_the_list():
     assert bot._get_session(CID).menu == "tasks"
     assert T._b("sch_price", "ru") in last_reply_kb(bot)["keyboard"][-3] + last_reply_kb(bot)["keyboard"][-2]
     text, kb = last_inline(bot)
-    assert "позвонить маме" in text and any(d.startswith("sch:o:") for d in datas(kb)), (text, kb)
+    labels = [(b.get("text") or "") for b in buttons(kb)]
+    assert any("позвонить маме" in l for l in labels), labels      # the button IS the list row
+    assert any(d.startswith("sch:o:") for d in datas(kb)), (text, kb)
     tap(bot, "back")
     assert bot._get_session(CID).menu == "" and T._b("tasks", "ru") in buttons(last_reply_kb(bot))
 
 
-def test_an_empty_list_says_how_to_add():
+def test_an_empty_list_says_how_to_add_and_has_a_way_back():
     bot = make_bot()
     tap(bot, "sch_list")
-    text, _ = last_inline(bot)
+    text, kb = last_inline(bot)
     assert "нет" in text.lower(), text
+    assert "nav:back" in datas(kb), datas(kb)
 
 
 def test_a_reminder_card_moves_repeats_retimes_and_deletes():
@@ -200,3 +203,26 @@ def test_add_buttons_arm_the_agent_and_keep_the_tasks_keyboard():
     s = bot._get_session(CID)
     assert "ozon_watch_price" in s.pending_prefix
     assert T._b("sch_list", "ru") in buttons(last_reply_kb(bot))
+
+
+def test_every_screen_has_a_way_back():
+    """No dead ends (2026-10-27): the picker, the confirmations and the capture
+    prompts each carry nav:back, the way the other menus' pickers do."""
+    bot = make_bot()
+    rid = reminders.add(CID, 3600, "позвонить маме")
+    tap(bot, "sch_list")
+    assert "nav:back" in datas(last_inline(bot)[1])                 # the list
+    press(bot, f"sch:o:{rid}")
+    press(bot, f"sch:t:{rid}")                                      # a capture prompt
+    assert "nav:back" in datas(bot.sent[-1][2]), bot.sent[-1]
+    press(bot, "nav:back")                                          # it leaves the capture...
+    assert not bot._get_session(CID).reg_state
+    assert T._b("sch_list", "ru") in buttons(last_reply_kb(bot))    # ...and re-sends the tasks keyboard
+    tap(bot, "sch_weather")
+    assert "nav:back" in datas(bot.sent[-1][2])                     # the weather picker
+    press(bot, "sch:wx:08:00")
+    assert "nav:back" in datas(bot.sent[-1][2])                     # ...and its confirmation
+    press(bot, f"sch:o:{rid}")
+    press(bot, f"sch:del:{rid}")
+    press(bot, f"sch:delok:{rid}")                                  # what remains after a delete
+    assert "nav:back" in datas(last_inline(bot)[1])
