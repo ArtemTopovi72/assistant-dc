@@ -366,15 +366,17 @@ _OZON_PRODUCT_DESC = (
     "Read one Ozon product card: exact price, stock, seller, characteristics "
     "and description. Pass the link or SKU from ozon_search.")
 _OZON_SHOP_DESC = (
-    "The DEFAULT tool for buying on Ozon. A shopper that thinks: turns the request "
+    "The DEFAULT tool for buying on Ozon: picks what to buy for a need, including ANALOGUES, "
+    "similar items or alternatives to a linked product, cheaper, better or delivered sooner. "
+    "A shopper that thinks: turns the request "
     "into a plan (one product, or every item for a set/occasion/list), searches "
     "several wordings, throws out parts and bait, opens the finalists' cards, reads "
     "their reviews, checks the photo, and returns the pick for each item with why, "
     "what buyers say (or that there are no reviews) and caveats. Takes minutes for "
     "a basket. Use ozon_search only for a quick raw listing.")
 _OZON_SAME_DESC = (
-    "The SAME item as a given Ozon card from other sellers: cheaper, delivered sooner, or "
-    "the best of both, with copies thrown out. Checks every candidate card's characteristics "
+    "THIS EXACT product of a linked Ozon card at other sellers, cheaper or delivered sooner -- "
+    "not analogues or similar items, with copies thrown out. Checks every candidate card's characteristics "
     "(material, sizes, model, specs) against the original's, so «the same backpack» in eco "
     "leather is rejected. Use when the user has a product link/SKU and asks for it cheaper, "
     "faster, from another seller, or where else it is sold.")
