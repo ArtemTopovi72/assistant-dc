@@ -68,7 +68,9 @@ _CHECK = {
               "x1, y1]}} -- the box around the whole thing on a 0-1000 grid.",
     # The head only: the drawing dresses and poses the person itself.
     # Lenin in his cap and Gagarin in his helmet passed and drew strangers (bench 2026-10-26).
-    "person": "Is this a sharp photograph of {thing}'s face, seen from the front or three-quarters, "
+    # A painted Gagarin passed and his face came out in brush strokes on a photo (2026-10-26).
+    "person": "Is this a sharp, real PHOTOGRAPH (not a painting, drawing, poster or render) of {thing}'s face, "
+              "seen from the front or three-quarters, "
               "the face large, uncovered and clearly visible, the head bare -- no hat, cap or helmet? Reply JSON only: {{\"shows\": true/false, "
               "\"box\": [x0, y0, x1, y1]}} -- the box around the head -- hair, face and the whole beard down to its tip -- on a 0-1000 grid.",
     "character": "Is this a picture showing {thing} whole and clearly as the main subject, with no text "
@@ -251,7 +253,8 @@ def face_words(ctx, who: str, path: str) -> str:
 _SWAP = ("The face and head of {who} in this picture become the face of {who} from image 2 -- his "
          "features, head shape, hairline and facial hair -- while his head angle, gaze, expression, "
          "everything on his face this picture adds (glow, marks, paint) and this scene's light and colours "
-         "stay as they are.")
+         "stay as they are. The new face is drawn in this picture's own style and detail, never with "
+         "image 2's grain, blur or brush strokes.")
 # Below this the face is a few dozen pixels: no edit makes it more anyone (a rider on a galloping horse).
 MIN_SWAP_FACE_PX = 90
 
