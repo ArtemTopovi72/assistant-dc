@@ -40,7 +40,10 @@ _READ = {
     "make the cat from the first picture black": {"needs_tool": True, "wants": ["inpaint_image"],
                                                   "names_picture": 1},
     "опиши последнюю картинку": {"about_picture": True, "names_picture": -1},
-    "restore quality": {"needs_tool": True, "wants": ["redraw_image"]},
+    # about_picture is what the live read says of a bare edit imperative over several
+    # pictures -- the ask gate reads it first (a game question with no picture words
+    # must never reach «Какую картинку?», 2026-10-27)
+    "restore quality": {"needs_tool": True, "wants": ["redraw_image"], "about_picture": True},
     "hello, how are you": {"needs_tool": False},
 }.get
 
@@ -569,6 +572,23 @@ for phrase in ("hello, how are you", "what is the capital of Australia",
     settle(bot)
     check(f"'{phrase[:34]}' is not treated as an image request",
           len(bot.pushed) == 1, texts(bot)[:100])
+
+# A game question in a chat FULL of pictures asked «Which picture?» six times
+# over (2026-10-27): the subject read alone could read «застрял на кухне» as
+# unclear, so words that are not about a picture must not reach the ask even
+# when that read tips the wrong way. The stub here scripts exactly that split.
+_R2 = types.SimpleNamespace(**reads(
+    read={"Я застрял на кухне. Куда вставить батарейку?":
+          {"is_question": True, "about_picture": False}}.get,
+    pick=_subject({"Я застрял на кухне. Куда вставить батарейку?": "unclear"})))
+bot.reads = _R2
+bot.pushed.clear(); bot.sent.clear()
+bot._dispatch(msg("Я застрял на кухне. Куда вставить батарейку?"))
+settle(bot)
+check("a not-about-a-picture question is never asked which picture",
+      len(bot.pushed) == 1 and "Which picture" not in texts(bot),
+      texts(bot)[:120])
+bot.reads = _R
 
 # «сделай кота из первой картинки чёрным» must not edit the photo sent LAST:
 # naming a picture by its place in the chat must pick it.

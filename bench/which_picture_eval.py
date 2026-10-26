@@ -41,8 +41,11 @@ def old(c):
 
 def new(c):
     import tg_bot
+    # the shipped gate: the words must be about a picture (intent read), then the subject
+    # read decides if the chat leaves open WHICH one (2026-10-27)
+    ask = tg_bot._needs_image_choice(c["text"], c["recent"], ctx=_ctx())
     s = tg_bot._message_subject(c["text"], c["recent"], ctx=_ctx())
-    return ("ask" if s == "unclear" else "no"), s
+    return ("ask" if ask else "no"), s
 
 
 if __name__ == "__main__":

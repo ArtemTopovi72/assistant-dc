@@ -695,7 +695,11 @@ _SUBJECT_Q = (
     "or all of the pictures just sent together; "
     "forwarded = something the user forwarded just before (a voice message, a conversation, a post); "
     "talk = the conversation or a story itself, no picture needed; "
-    "new = a new request: draw, sing, write or find something new.")
+    "new = a new request: draw, sing, write or find something new. "
+    "A message is unclear only when its own words point at a picture -- asking to change, redraw, "
+    "describe or identify something IN one of the pictures. Pictures existing in the chat is not "
+    "enough: a question about a game, a task, the news or the conversation is talk (or new), even "
+    "when the chat is full of pictures.")
 _SUBJECTS = ("unclear", "current", "forwarded", "talk", "new")
 
 
@@ -710,6 +714,10 @@ def _message_subject(text: str, recent: list, ctx=None) -> str:
     # стоит чай» after a forwarded receipt into «unclear» 3/3 (2026-10-24)
     if recent and " ".join(str(recent[-1]).split()) == "user: " + " ".join((text or "").split()):
         recent.pop()
+    # The bot's own picker echo («🖼 Which picture?…», «❌ Cancelled.») is UI, not talk. Left
+    # in, one wrong ask read the NEXT game question as unclear too and the ask fed itself
+    # six times in a row (2026-10-27).
+    recent = [r for r in recent if not str(r).startswith(("bot: 🖼", "bot: ❌"))]
     lines = "\n".join(str(r)[:160] for r in recent[-8:])
     blob = f"MESSAGE: {(text or '').strip()[:400]}\nCHAT BEFORE IT:\n{lines}"
     return choice(ctx)(_SUBJECT_Q, blob, _SUBJECTS, "current")
@@ -717,9 +725,14 @@ def _message_subject(text: str, recent: list, ctx=None) -> str:
 
 def _needs_image_choice(text: str, recent: list, ctx=None) -> bool:
     """The words need one picture and the chat leaves open which: with several in the chat
-    the bot asks «Какую картинку?». Measured on bench/which_picture_eval.py."""
+    the bot asks «Какую картинку?». Measured on bench/which_picture_eval.py.
+
+    The subject read alone called «Я застрял на кухне…» (a game question, chat full of
+    pictures) unclear six times over (2026-10-27) -- so first the words must BE about a
+    picture at all, the same intent read the rest of the flow trusts."""
     t = (text or "").strip()
-    return bool(t) and _message_subject(t, recent, ctx=ctx) == "unclear"
+    return bool(t) and _picture_read(t, ctx=ctx)["about_picture"] \
+        and _message_subject(t, recent, ctx=ctx) == "unclear"
 
 
 # Scaffolding this strips off a stored label before showing it in the picker.
