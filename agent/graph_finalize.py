@@ -127,15 +127,17 @@ def _strip_fabricated_images(text: str) -> str:
 _URL_RE = re.compile(r"https?://[^\s<>\"')\]]+")
 
 
-def _repair_links(text: str, messages) -> str:
+def _repair_links(text: str, messages, said: str = "") -> str:
     """A link the model retyped from memory -- the user's ozon.ru/t/LCabAMR came back as
-    LCabM_R (2026-10-26) -- is swapped for the near-identical link of the same site that
-    the chat or a tool result really holds. A link with no close match stays as written."""
+    LCabM_R (2026-10-26, every run: a tokenizer habit) -- is swapped for the near-identical
+    link of the same site that the user's words or a tool result really hold. Only those:
+    the model's drafts and the earlier replies folded into the user message carried the
+    broken link and vouched for it. A link with no close match stays as written."""
     from difflib import SequenceMatcher
-    known = set()
+    known = set(u.rstrip(".,;:") for u in _URL_RE.findall(said or ""))
     for m in messages or []:
         c = m.get("content") if isinstance(m, dict) else None
-        if isinstance(c, str):
+        if isinstance(c, str) and m.get("role") == "tool":
             known.update(u.rstrip(".,;:") for u in _URL_RE.findall(c))
 
     def fix(mt):
@@ -413,7 +415,8 @@ def _finalize_answer(ctx: Context, state: AgentState, messages: list,
         final_answer = collapse_verbatim_repetition(final_answer)
         # Drop any picture the model "attached" as a URL — it did not.
         final_answer = _strip_fabricated_images(final_answer)
-        final_answer = _repair_links(final_answer, messages)
+        final_answer = _repair_links(final_answer, messages,
+                                     f"{state.get('user_input_original') or ''}\n{state.get('user_input') or ''}")
         # A stated number, with the calculator broken, is an invented number.
         # There is no salvageable remainder in such an answer: the value IS the
         # answer, so it is replaced rather than edited.
