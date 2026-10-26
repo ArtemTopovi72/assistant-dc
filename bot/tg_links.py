@@ -195,15 +195,24 @@ _OZON_PRODUCT_RE = re.compile(r"^https?://(?:[\w-]+\.)*ozon\.ru/(?:product|t)/",
 def link_context(text: str, limit: int = LINK_TEXT_CHARS, url: str = "", modules=None) -> str:
     """Scaffolding for the model: the text of the first readable link in
     `text`, or "" when there is none / it cannot be read."""
+    # Four backpacks in one message were read as the first one alone: the other three got
+    # no price, and the reply invented one's material (2026-10-26).
+    cards = [u for u in urls_in(text) if _OZON_PRODUCT_RE.match(u)] if not url else []
+    if len(cards) > 1:
+        return (f"[The user's message contains {len(cards)} Ozon product links: {', '.join(cards)}. "
+                f"Read EVERY card with ozon_product before comparing them (ozon_reviews for what buyers "
+                f"say; ozon_same for one of these exact items cheaper or sooner; ozon_shop for "
+                f"analogues or alternatives). Say nothing about a card you did not read. This is a "
+                f"shopping question: do not make a video, a picture or a file.]")
     for url in ([url] if url else urls_in(text)[:2]):
         if _OZON_PRODUCT_RE.match(url):
             said = ("The user asks about an Ozon product they linked earlier" if url not in (text or "")
                     else "The user's message contains an Ozon product link")
             return (f"[{said} ({url}). Read that card with ozon_product (and ozon_reviews if they ask "
                     f"what buyers say; ozon_same if they want this same item cheaper, sooner or from "
-                    f"another seller). If the user only sent the link, tell them briefly what the "
-                    f"product is, its price and what buyers say. This is a shopping question: do not "
-                    f"make a video, a picture or a file.]")
+                    f"another seller; ozon_shop for analogues or alternatives). If the user only sent "
+                    f"the link, tell them briefly what the product is, its price and what buyers say. "
+                    f"This is a shopping question: do not make a video, a picture or a file.]")
         page = read_link(url, modules)
         if page:
             body = _fit(re.sub(r"\n{3,}", "\n\n", page["text"]).strip(), text, limit)

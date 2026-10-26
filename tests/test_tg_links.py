@@ -65,6 +65,14 @@ src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(L.__file
 check("the resolver attaches the page as scaffolding", "_tg_links.link_context(text)" in src and "self._read_links(" in src and "scaffold.append(_lc)" in src)
 check("and never under F5_TEST_RUN", 'not os.getenv("F5_TEST_RUN")' in src)
 _b = "Казань столица.\n" * 500 + "Население города 1 318 604 человека.\n" + "прочее\n" * 200
+# Four backpacks in one message were read as the first alone; the reply invented the
+# material of one it never opened.
+_four = "сравни https://ozon.ru/t/aaa1 и https://ozon.ru/t/bbb2, ещё https://www.ozon.ru/product/x-3/ https://ozon.ru/t/ddd4"
+_oz4 = L.link_context(_four, modules={"dr_crawl": fake3})
+check("several Ozon links: every one is named", all(u in _oz4 for u in (
+    "https://ozon.ru/t/aaa1", "https://ozon.ru/t/bbb2", "https://www.ozon.ru/product/x-3/", "https://ozon.ru/t/ddd4")), _oz4[:300])
+check("...and every card is to be read", "EVERY card" in _oz4)
+
 _o = L._fit(_b, "сколько жителей население Казани", 6000)
 check("a long page keeps the paragraph the question is about", "1 318 604" in _o and "Page cut" in _o)
 
