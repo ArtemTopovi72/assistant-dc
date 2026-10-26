@@ -48,6 +48,23 @@ check("the thing is named in the check", "Ural motorcycle" in looked[0])
 w, h = Image.open(got).size if got else (0, 0)
 check("the photo is cut to the thing, with a margin", 500 < w < 600 and 400 < h < 500, (w, h))
 
+# The preferred kind wins over an earlier one that only shows it: a photograph of a person over a
+# painting (a painted Gagarin gave brush strokes), the asked view of a thing over another view.
+def candidates(answers):
+    it = iter(answers)
+    photos = iter([save(f"p{i}.jpg") for i in range(len(answers))])
+    return NS(vision_model=lambda *a, **k: next(it),
+              deps=NS(image_search_urls=lambda ctx, q, prefer="": [f"u{i}" for i in range(len(answers))],
+                      download_image=lambda ctx, url, dest: Image.open(next(photos)).save(dest) or True))
+box = '"box": [200, 100, 700, 900]'
+got = R.photo_of(candidates(['{"shows": true, "preferred": false, ' + box + '}',
+                             '{"shows": true, "preferred": true, ' + box + '}']), "a K-700", "К-700 сзади", "object", "from behind")
+check("the asked view is taken over an earlier other view", got.endswith(("p1_thing.jpg", "c1_thing.jpg")), got)
+# Pushkin lived before photographs: with no photo among the candidates, the portrait there is is used.
+got = R.photo_of(candidates(['{"shows": true, "preferred": false, ' + box + '}', '{"shows": false}']),
+                 "a K-700", "К-700", "object", "from behind")
+check("no preferred one -> the first that shows it", got.endswith("c0_thing.jpg"), got)
+
 # Nothing found, or the search refused (weapons go nowhere): no photo, the words draw it.
 check("no candidates -> no photo",
       R.photo_of(NS(vision_model=look, deps=NS(image_search_urls=lambda *a, **k: [])), "x", "y") == "")

@@ -39,7 +39,8 @@ _FIND_SYS = (
     "\"<short English name, e.g. a VAZ-2107 Lada sedan, Vladimir Lenin, the Doom Slayer's armour>\", "
     "\"query\": \"<image-search query for a picture of it, in the language it is best known in, naming the "
     "view or state the picture needs when the request gives one: in flight, from behind, at night, side "
-    "view>\"}]} "
+    "view>\", \"view\": \"<that view in a few English words, e.g. 'from behind'; empty when the request "
+    "names none>\"}]} "
     "-- at most " + str(MAX_THINGS) + "; [] when none.")
 
 _KINDS = ("object", "person", "character")
@@ -62,29 +63,34 @@ def named_things(ctx, description: str) -> list:
 
 _CHECK = {
     # A custom two-wheel-drive «Урал» build passed and the drawing came out steampunk (2026-10-26).
+    # The view: «К-700 вид сзади» searched as such still came back front-on and was drawn front-on.
     "object": "Is this a real photograph showing {thing} whole and clearly as the main subject -- a standard "
               "factory example, not a custom build, a toy, a model, a render or a drawing -- with no "
-              "text or watermark over it? Reply JSON only: {{\"shows\": true/false, \"box\": [x0, y0, "
-              "x1, y1]}} -- the box around the whole thing on a 0-1000 grid.",
+              "text or watermark over it? Is it seen {view}? Reply JSON only: {{\"shows\": true/false, "
+              "\"preferred\": true/false (seen {view}), \"box\": [x0, y0, x1, y1]}} -- the box around the "
+              "whole thing on a 0-1000 grid.",
     # The head only: the drawing dresses and poses the person itself.
     # Lenin in his cap and Gagarin in his helmet passed and drew strangers (bench 2026-10-26).
-    # A painted Gagarin passed and his face came out in brush strokes on a photo (2026-10-26).
-    "person": "Is this a sharp, real PHOTOGRAPH (not a painting, drawing, poster or render) of {thing}'s face, "
-              "seen from the front or three-quarters, "
-              "the face large, uncovered and clearly visible, the head bare -- no hat, cap or helmet? Reply JSON only: {{\"shows\": true/false, "
-              "\"box\": [x0, y0, x1, y1]}} -- the box around the head -- hair, face and the whole beard down to its tip -- on a 0-1000 grid.",
+    # A painted Gagarin gave brush strokes on a photo, so a photograph is preferred; Pushkin lived
+    # before photographs, and with nothing but a photograph allowed he was drawn from web words.
+    "person": "Is this a clear portrait of {thing}'s face, seen from the front or three-quarters, the face "
+              "large, uncovered and clearly visible, the head bare -- no hat, cap or helmet? Is it a real "
+              "PHOTOGRAPH (not a painting, drawing, poster or render)? Reply JSON only: {{\"shows\": "
+              "true/false, \"preferred\": true/false (a photograph), \"box\": [x0, y0, x1, y1]}} -- the box "
+              "around the head -- hair, face and the whole beard down to its tip -- on a 0-1000 grid.",
     "character": "Is this a picture showing {thing} whole and clearly as the main subject, with no text "
-                 "or watermark over it? Reply JSON only: {{\"shows\": true/false, \"box\": [x0, y0, x1, "
-                 "y1]}} -- the box around the whole of it on a 0-1000 grid.",
+                 "or watermark over it? Is it seen {view}? Reply JSON only: {{\"shows\": true/false, "
+                 "\"preferred\": true/false (seen {view}), \"box\": [x0, y0, x1, y1]}} -- the box around "
+                 "the whole of it on a 0-1000 grid.",
 }
 
 
-def _box(ctx, path: str, thing: str, kind: str = "object"):
-    """(x0, y0, x1, y1) of `thing` in the photo on a 0-1000 grid, or None when the photo is not a
-    clear one of it."""
+def _box(ctx, path: str, thing: str, kind: str = "object", view: str = ""):
+    """((x0, y0, x1, y1) on a 0-1000 grid, preferred) for a photo that shows `thing` clearly, or
+    None. Preferred: a photograph of a person, the asked view of a thing."""
     from utils import safe_json_from_llm
-    ans = vision_model(ctx)(ctx, image_paths=[("Photo:", path)], temperature=0.0, max_tokens=60,
-                            user_text=_CHECK[kind].format(thing=thing))
+    ans = vision_model(ctx)(ctx, image_paths=[("Photo:", path)], temperature=0.0, max_tokens=80,
+                            user_text=_CHECK[kind].format(thing=thing, view=view or "from any side"))
     got = safe_json_from_llm(ans or "") or {}
     box = got.get("box")
     if got.get("shows") is not True or not (isinstance(box, list) and len(box) == 4):
@@ -93,7 +99,9 @@ def _box(ctx, path: str, thing: str, kind: str = "object"):
         x0, y0, x1, y1 = (max(0, min(1000, int(v))) for v in box)
     except (TypeError, ValueError):
         return None
-    return (x0, y0, x1, y1) if x1 - x0 > 50 and y1 - y0 > 50 else None
+    if x1 - x0 <= 50 or y1 - y0 <= 50:
+        return None
+    return (x0, y0, x1, y1), got.get("preferred") is not False
 
 
 def _crop(path: str, box, margin: float = 0.06, below: float = None) -> str:
@@ -183,28 +191,39 @@ def _head(path: str) -> str:
     return out
 
 
-def photo_of(ctx, thing: str, query: str, kind: str = "object") -> str:
-    """A checked, cropped web photo of `thing`, or "" (refused search, nothing found)."""
+def photo_of(ctx, thing: str, query: str, kind: str = "object", view: str = "") -> str:
+    """A checked, cropped web photo of `thing` -- the first preferred one, else the first that
+    shows it -- or "" (refused search, nothing found)."""
     import search
     urls = dep(ctx, "image_search_urls", search.image_search_urls)(
         ctx, query, prefer="portrait" if kind == "person" else "landscape")
     work = tempfile.mkdtemp(prefix="objref_")
+    fallback = ""
     for n, url in enumerate(urls[:_CANDIDATES]):
         dest = os.path.join(work, f"c{n}.jpg")
         if not dep(ctx, "download_image", search.download_image)(ctx, url, dest):
             continue
         try:
-            box = _box(ctx, dest, thing, kind)
+            seen = _box(ctx, dest, thing, kind, view)
         except Exception:
             logger.warning("object refs: the photo check failed", exc_info=True)
-            return ""
-        if not box:
+            break
+        if not seen:
+            continue
+        box, preferred = seen
+        if not preferred and fallback:
             continue
         # no face the detector can find (Gagarin side-on in his helmet): the next photo
         got = _erase_text(_crop(dest, box)) if kind != "person" else _head(dest)
-        if got:
+        if not got:
+            continue
+        if preferred:
             logger.info("object refs: %s (%s) <- %s", thing, kind, url[:120])
             return got
+        fallback = fallback or got
+    if fallback:
+        logger.info("object refs: %s (%s) from a photo that is not the preferred kind", thing, kind)
+        return fallback
     logger.info("object refs: no photo of %s (%d candidates)", thing, len(urls))
     return ""
 
@@ -220,7 +239,7 @@ def find(ctx, description: str) -> List[Tuple[str, str, str]]:
     if things and getattr(ctx, "set_stage", None):
         ctx.set_stage("Finding a photo online")
     for t in things:
-        path = photo_of(ctx, t["thing"], t["query"], t["kind"])
+        path = photo_of(ctx, t["thing"], t["query"], t["kind"], str(t.get("view") or ""))
         if path:
             out.append((t["thing"], path, t["kind"]))
     # The face last: given first, Lenin's face drew the Doom armour grey instead of green.
@@ -229,7 +248,8 @@ def find(ctx, description: str) -> List[Tuple[str, str, str]]:
 
 _FACE_WORDS = ("This is a photo of {who}. Describe the FACE and HEAD for an artist who must draw {who} "
                "recognisably from any angle, in any light, with any expression: head shape, hair or baldness "
-               "and hairline, facial hair (its exact shape, length and colour), brow, eyes, nose, cheekbones, "
+               "and hairline, facial hair (its exact shape, length and colour, and which of chin, cheeks and "
+               "upper lip are clean-shaven), brow, eyes, nose, cheekbones, "
                "mouth, ears, apparent age. 50-80 words, visual facts only, no clothes, no pose, no background.")
 
 
@@ -242,6 +262,7 @@ def face_words(ctx, who: str, path: str) -> str:
     except Exception:
         logger.warning("object refs: no words for %s", who, exc_info=True)
         return ""
+    logger.info("object refs: %s's face in words: %s", who, words[:300])
     return f"{who} must be recognisable as the real {who}: {words}" if len(words.split()) >= 8 else ""
 
 
