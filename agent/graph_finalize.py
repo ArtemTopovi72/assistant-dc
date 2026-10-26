@@ -124,6 +124,32 @@ def _strip_fabricated_images(text: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", out).strip()
 
 
+_URL_RE = re.compile(r"https?://[^\s<>\"')\]]+")
+
+
+def _repair_links(text: str, messages) -> str:
+    """A link the model retyped from memory -- the user's ozon.ru/t/LCabAMR came back as
+    LCabM_R (2026-10-26) -- is swapped for the near-identical link of the same site that
+    the chat or a tool result really holds. A link with no close match stays as written."""
+    from difflib import SequenceMatcher
+    known = set()
+    for m in messages or []:
+        c = m.get("content") if isinstance(m, dict) else None
+        if isinstance(c, str):
+            known.update(u.rstrip(".,;:") for u in _URL_RE.findall(c))
+
+    def fix(mt):
+        u = mt.group(0).rstrip(".,;:")
+        if u in known:
+            return mt.group(0)
+        host = u.split("/")[2] if u.count("/") >= 2 else ""
+        near = [(SequenceMatcher(None, u, k).ratio(), k) for k in known
+                if k.count("/") >= 2 and k.split("/")[2] == host]
+        best = max(near, default=(0, ""))
+        return mt.group(0).replace(u, best[1]) if best[0] >= 0.9 else mt.group(0)
+    return _URL_RE.sub(fix, text)
+
+
 # An answer that states a computed value. Paired with the knowledge that
 # `calculate` failed and returned no value this turn, it can only be invented.
 # Measured over 140 chaos runs, route_calc was the single biggest liar (13 of
@@ -387,6 +413,7 @@ def _finalize_answer(ctx: Context, state: AgentState, messages: list,
         final_answer = collapse_verbatim_repetition(final_answer)
         # Drop any picture the model "attached" as a URL — it did not.
         final_answer = _strip_fabricated_images(final_answer)
+        final_answer = _repair_links(final_answer, messages)
         # A stated number, with the calculator broken, is an invented number.
         # There is no salvageable remainder in such an answer: the value IS the
         # answer, so it is replaced rather than edited.
