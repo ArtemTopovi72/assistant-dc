@@ -312,7 +312,13 @@ def parse_details(base: dict, page2: dict | None = None) -> dict:
         value = _rs_text(c.get("values") or c.get("contentRS") or c.get("valueRs"))
         if title and value:
             chars[title] = value
-    seller = _widget(base, "webCurrentSeller") or {}
+    for w in _widgets(page2, "webCharacteristics"):
+        for group in w.get("characteristics") or []:
+            for c in (group.get("short") or []) + (group.get("long") or []):
+                value = ", ".join(v["text"] for v in c.get("values") or [] if v.get("text"))
+                if c.get("key") != "Sku" and c.get("name") and value:
+                    chars.setdefault(c["name"], value)
+    seller =_widget(base, "webCurrentSeller") or {}
     seller_name = (((seller.get("sellerCell") or {}).get("centerBlock") or {}).get("title") or {}).get("text") \
         or (seller.get("title") or {}).get("text") if seller else None
     images = []
@@ -896,10 +902,37 @@ def details(product: str, gw=None) -> dict:
     path = g.product_path(product, gw)
     base = g.fetch_page(path)
     try:
-        page2 = g.fetch_page(path + "?layout_container=pdpPage2column&layout_page_index=2")
+        page2 = g.fetch_page(_page_two("https://www.ozon.ru" + path))
     except OzonError:
         page2 = {}
     return g.parse_details(base, page2)
+
+
+def _page_two(url):
+    """The card's page 2 (description, every characteristic) as the site itself loads
+    it on scroll. 10-26: our own API call for it is 403 whatever the headers,
+    referrer or sh/start_page_id; the page's first request is 200 (~0.8 s)."""
+    def run(page):
+        got = []
+
+        def on(r):
+            if not got and r.status == 200 and "pdpPage2column" in r.url:
+                try:
+                    got.append(r.json())
+                except Exception:
+                    logger.debug("Ozon page 2 was not JSON", exc_info=True)
+        page.on("response", on)
+        try:
+            page.goto(url, wait_until="domcontentloaded", timeout=60000)
+            for _ in range(12):
+                if got:
+                    break
+                page.mouse.wheel(0, 2500)
+                page.wait_for_timeout(500)
+        finally:
+            page.remove_listener("response", on)
+        return got[0] if got else {}
+    return run
 
 
 def reviews(product: str, limit: int = 10, pages: int = 4, gw=None) -> dict:
