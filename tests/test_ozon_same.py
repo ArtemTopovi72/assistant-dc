@@ -60,7 +60,9 @@ HITS = [{"title": "Рюкзак лаковая кожа — магазин бр�
         {"title": "Рюкзак экокожа", "href": "https://market.example/copy", "body": "", "domain": "market.example"},
         {"title": "Рюкзак", "href": "https://shop.example/bag", "body": "", "domain": "shop.example"},
         {"title": "Ozon", "href": "https://www.ozon.ru/product/ryukzak-3835949144/", "body": "",
-         "domain": "ozon.ru"}]
+         "domain": "ozon.ru"},
+        {"title": "Рюкзак 3092-51 в Минске", "href": "https://shop.by/bag", "body": "Цена 444,30 руб.",
+         "domain": "shop.by"}]
 PAGES = {"https://brand.example/bag": "Рюкзак, кожа натуральная лакированная, 42 x 30 см. Цена 5 990 ₽. В наличии",
          "https://market.example/copy": "Рюкзак, полиуретан, 39 x 29 см. 1 990 ₽",
          "https://shop.example/bag": "Рюкзак, кожа натуральная лакированная, 42 x 30 см. Звоните, цена по запросу"}
@@ -122,7 +124,34 @@ def ctx_for(seen):
         set_stage=lambda *a, **k: None, cancel_event=threading.Event(), ozon_owner="", turn_products=[],
         text_model=judge_model, deps=types.SimpleNamespace(ozon=oz, safe_get=lambda url, **k: types.SimpleNamespace(
             content=b"jpg", raise_for_status=lambda: None), raw_search_results=search,
-            read_pages=lambda urls: {u: PAGES[u] for u in urls if u in PAGES}))
+            read_pages=lambda urls: {u: PAGES[u] for u in urls if u in PAGES}, wb_search=wb_search))
+
+
+WB = [dict(nm=11, name="Рюкзак", price=3990, seller="Brand",
+           characteristics=dict(LEATHER, **{"Артикул производителя": "3092/51"}),
+           url="https://www.wildberries.ru/catalog/11/detail.aspx"),
+      dict(nm=12, name="Рюкзак", price=1990, seller="Copy",
+           characteristics=dict(LEATHER, Материал="Полиуретан"), url="https://www.wildberries.ru/catalog/12/detail.aspx")]
+WB_ASKED = []
+
+
+def wb_search(query, cards=30):
+    WB_ASKED.append(query)
+    return [dict(x) for x in WB]
+
+
+def test_wildberries_cards_are_judged_like_ozon_cards():
+    r = S.find_same(ctx_for([]), "3835949144")
+    verdict = {x["nm"]: x["check"]["verdict"] for x in r["wb"]}
+    assert verdict == {11: "same", 12: "different"}, verdict
+    assert WB_ASKED[-1] == "Рюкзак"                     # the card's name, as Ozon gives it
+
+
+def test_the_tool_leads_with_a_cheaper_wildberries_twin():
+    out = T.execute_tool(ctx_for([]), {}, "ozon_same", {"product": "3835949144", "priority": "cheap"})
+    wb = out.split("Wildberries:", 1)[1]
+    assert "3 990" in wb and "catalog/11/" in wb, out
+    assert "catalog/12/" not in wb.split("NOT the same")[0], out
 
 
 def test_shops_outside_ozon_are_checked_for_the_same_item():
@@ -133,7 +162,15 @@ def test_shops_outside_ozon_are_checked_for_the_same_item():
     assert web["market.example"]["check"]["verdict"] == "different"
     # a price the page never states is the judge's invention: no price, never a pick
     assert web["shop.example"]["price"] is None, web["shop.example"]
-    assert "Кожа натуральная лакированная" in SEARCHED[-1] or "Рюкзак" in SEARCHED[-1]
+    assert "shop.by" not in web, "Belarusian roubles are not the user's price"
+
+
+def test_the_maker_article_of_a_wildberries_twin_is_searched_on_the_web():
+    # the Ozon card named no model; its WB twin carried 3092/51, and only that finds the
+    # brand's own page and the shops selling exactly it (Carlo Gattini Corruda, 10-26)
+    SEARCHED.clear()
+    S.find_same(ctx_for([]), "3835949144")
+    assert any("3092/51" in q for q in SEARCHED) and any("3092-51" in q for q in SEARCHED), SEARCHED
 
 
 def test_the_tool_names_the_cheaper_shop_outside_ozon():
