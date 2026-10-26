@@ -36,6 +36,7 @@ bench/intent_live.py checks it against the real model.
 """
 from __future__ import annotations
 from seams import dep, text_model
+import ask_read
 
 import logging
 import os
@@ -52,7 +53,7 @@ FIELDS = ("needs_tool", "wants", "must_call", "bare_ack", "presents_photo", "is_
           "about_picture", "names_picture", "reply_language", "language_mode", "translate",
           "redo", "asks_for_file", "doc_question",
           "song", "song_seconds", "song_uses_previous_text", "weather", "undo",
-          "complaint", "collage", "dedupe", "speak_aloud")
+          "complaint", "collage", "dedupe", "speak_aloud", "ask")
 
 SYSTEM = (
     "You route a chat message for an assistant that has these tools:\n{menu}\n\n"
@@ -143,6 +144,8 @@ SYSTEM = (
     "dedupe: the user asks to drop duplicate or repeated photos (re-shots of one scene).\n"
     "speak_aloud: the user asks for THIS reply as a voice message (\"скажи голосом\", "
     "\"ответь голосовым\", \"say it out loud\"); a song is false.\n"
+    "ask: what the message asks the PROGRAM to do exactly, an object --\n"
+    + ask_read.NOTES.replace("{", "{{").replace("}", "}}") + "\n"
     "The previous assistant line, when given, is context for short follow-ups "
     "(\"а в евро?\" after a rate needs the same tool).\n"
     "Answer with ONE JSON object and nothing else: "
@@ -152,7 +155,10 @@ SYSTEM = (
     "\"en|ru|\", \"language_mode\": \"en|ru|\", \"translate\": bool, "
     "\"redo\": \"same|changed|\", \"asks_for_file\": bool, \"doc_question\": bool, "
     "\"song\": \"make|lyrics|sound|words|reset|\", \"song_seconds\": int, \"song_uses_previous_text\": bool, "
-    "\"undo\": bool, \"complaint\": bool, \"collage\": bool, \"dedupe\": bool, \"speak_aloud\": bool, \"weather\": {{\"place_by_reference\": bool, \"city\": str, \"when\": str}} or null}}")
+    "\"undo\": bool, \"complaint\": bool, \"collage\": bool, \"dedupe\": bool, \"speak_aloud\": bool, \"weather\": {{\"place_by_reference\": bool, \"city\": str, \"when\": str}} or null, "
+    "\"ask\": {{\"op\": str, \"letter\": str, \"word\": str, \"target\": str, \"items\": [str], "
+    "\"percents\": [{{\"pct\": number, \"of\": number}}], \"words_asked\": int, \"detailed\": bool, "
+    "\"earlier_talk\": bool, \"dose\": bool, \"weight_kg\": number, \"code\": bool}}}}")
 
 
 class Weather(BaseModel):
@@ -189,6 +195,7 @@ class Intent(BaseModel):
     dedupe: bool = False
     speak_aloud: bool = False
     weather: Optional[Weather] = None
+    ask: Optional[dict] = None   # agent/ask_read.py validates and grounds it
 
 
 
@@ -376,7 +383,7 @@ def read(ctx, text: str, previous: str = "", attached: str = "") -> dict:
         from utils import safe_json_from_llm
         names, menu = _menu()
         raw = text_model(ctx)(ctx, SYSTEM.format(menu=menu), user,
-                                  temperature=0.0, max_tokens=300) or ""
+                                  temperature=0.0, max_tokens=500) or ""
         got = _validate(safe_json_from_llm(raw, FIELDS))
         out = got.model_dump()
         out["wants"] = [w for w in out["wants"] if w in names]

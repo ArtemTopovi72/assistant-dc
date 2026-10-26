@@ -48,9 +48,7 @@ class AskRead(BaseModel):
 FIELDS = list(AskRead.model_fields)
 FALLBACK = AskRead().model_dump()
 
-SYSTEM = """You read ONE user message and fill a JSON object. Do NOT answer the message.
-Fields:
-op: the exact text operation asked, if any --
+NOTES = """op: the exact text operation asked, if any --
   letter_count (how many times ONE NAMED letter is in a named word: «сколько букв о в
     слове ...», "how many r's in strawberry"; «сколько букв в алфавите» names no letter
     to count -> none),
@@ -70,8 +68,10 @@ earlier_talk: true ONLY when they ask about the earlier conversation itself (wha
 dose: true when they ask a medicine dose (paracetamol, ibuprofen and their brands).
 weight_kg: the body weight in kg named in the message, else 0.
 code: true when they ask to write, fix, test or explain program code.
-Copy letters, words, target and items EXACTLY from the message.
-Reply with the JSON object only."""
+Copy letters, words, target and items EXACTLY from the message."""
+
+SYSTEM = ("You read ONE user message and fill a JSON object. Do NOT answer the message.\nFields:\n"
+          + NOTES + "\nReply with the JSON object only.")
 
 _CACHE: "OrderedDict[str, dict]" = OrderedDict()
 _LOCK = threading.Lock()
@@ -139,9 +139,15 @@ def read(text: str, ctx=None) -> dict:
     try:
         import llm
         from utils import safe_json_from_llm
-        raw = text_model(ctx)(None, SYSTEM, "Message (do NOT answer it):\n«%s»" % text[:4000],
-                                  temperature=0.0, max_tokens=400) or ""
-        out = _grounded(_validate(safe_json_from_llm(raw, FIELDS)).model_dump(), text)
+        # the message's one read (agent/intent.py) carries these fields; a read
+        # of its own only when that one failed
+        import intent
+        got = intent.read(ctx, text).get("ask")
+        if not isinstance(got, dict):
+            raw = text_model(ctx)(None, SYSTEM, "Message (do NOT answer it):\n«%s»" % text[:4000],
+                                      temperature=0.0, max_tokens=400) or ""
+            got = safe_json_from_llm(raw, FIELDS)
+        out = _grounded(_validate(got).model_dump(), text)
         # the full read took the preposition in «сколько букв в алфавите» for the
         # letter; a narrow question confirms one is really named
         if out["op"] == "letter_count":

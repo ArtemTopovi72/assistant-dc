@@ -45,5 +45,22 @@ intent.bind_turn(["а теперь собаку"], "", "")
 intent.read(ctx, "нарисуй Пушкина при свече")
 check("the next turn unbinds the last one's words", len(calls) == 4 and "Вот кот." not in calls[3], calls[-1:])
 
+# What the message asks the program to do exactly (sort, count, a dose) rode a second
+# model call of its own, ~1.5 s per message; it is a field of the one read now.
+import ask_read
+def model_ask(ctx, system, user, **k):
+    calls.append(user)
+    return json.dumps({"needs_tool": False, "wants": [],
+                       "ask": {"op": "sort", "items": ["груша", "абрикос", "вишня"], "detailed": True}})
+calls.clear(); intent._CACHE.clear(); ask_read._CACHE.clear()
+ctx2 = types.SimpleNamespace(text_model=model_ask)
+said = "отсортируй по алфавиту: груша, абрикос, вишня"
+intent.bind_turn([said], "", "")
+intent.read(ctx2, said)
+got = ask_read.read(said, ctx=ctx2)
+check("the exact-operation read rides the message's one read", len(calls) == 1, calls)
+check("...and keeps its fields", got["op"] == "sort" and got["items"] == ["груша", "абрикос", "вишня"]
+      and got["detailed"], got)
+
 print(f"\n{OK}/{OK + BAD} checks passed")
 sys.exit(1 if BAD else 0)
