@@ -952,14 +952,18 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
         self.player.stop()
         # Signal any long crawl/poll loop to bail, then give background workers a
         # few seconds to finish cleanly (research can be mid-fetch).
-        if self.ctx is not None:
-            self.ctx.cancel_event.set()
+        # getattr, not `is not None`: the suites close windows whose ctx is a
+        # stub with two attributes -- 2254 AttributeError entries in crash.log
+        # said so. A ctx without a cancel event simply has nothing to signal.
+        _ev = getattr(self.ctx, "cancel_event", None)
+        if _ev is not None:
+            _ev.set()
         # Wait for EVERY live thread, not a hand-written subset. A worker that
         # outlives its widgets delivers its queued done/failed signal into
         # already-destroyed C++ objects; that only degrades to a logged
         # RuntimeError because crash_diag suppresses the PyQt abort.
         self._join_live_threads(5000)
-        if self.ctx is not None:
+        if callable(getattr(self.ctx, "save_memory", None)):
             self.ctx.save_memory(self.ctx.active_memory_dir)
         logging.getLogger("assistant").removeHandler(self.log_handler)
         event.accept()
