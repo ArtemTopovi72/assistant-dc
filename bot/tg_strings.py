@@ -1042,6 +1042,10 @@ _MSG: dict[str, dict[str, str]] = {
     "lv_stopped": {"en": "⛔ Stopped after {done}/{of} portions.", "ru": "⛔ Остановлено после {done}/{of} частей."},
     "lv_done": {"en": "✅ Done: parts {parts}, {total}.", "ru": "✅ Готово: {parts} ч., {total}."},
     "lv_failed": {"en": "⚠️ The long-video job failed — see the log.", "ru": "⚠️ Разбор видео сорвался — смотри лог."},
+    "lv_recovered": {"en": "📋 I was switched off right while composing this video's retell — sorry. "
+                           "Everything I watched survived; here is the whole retell:",
+                     "ru": "📋 Я выключился ровно на сборке пересказа этого видео — извини. "
+                           "Всё пересмотренное уцелело, вот полный пересказ:"},
     "ms_back":  {"en": "↩ Back",           "ru": "↩ Назад"},
     "ms_was_reset": {"en": "♻️ Song settings reset to Auto.",
                      "ru": "♻️ Настройки песни сброшены на «Авто»."},

@@ -42,7 +42,9 @@ NEG_OTHER = "blurry, low quality, watermark, signature"
 
 # The entire image, and everyone at the same size and the same position: a collage
 # restyle once came back cropped with a person cut out (test_style_transfer_whole_image).
-# Facial hair is named: Fibo's anime shaved off a moustache and goatee (2026-10-24).
+# Facial hair is named: Fibo's anime shaved off a moustache and goatee (2026-10-24) --
+# and later INVENTED stubble on bare faces, women included, while drifting the owner's
+# hairstyle and eye colour (2026-10-27): the same sentence now pins those too.
 # The vision layout description that used to ride along is gone: it diluted the
 # style (an oil painting came back a photo with smeared dirt), and these words kept
 # the framing of every preset on their own (bench/style_ab.py).
@@ -50,7 +52,9 @@ _KEEP = (" Restyle the entire image including the background. Keep the same comp
          "framing and crop, every person at the same size, the same position and the same "
          "pose, {clothes}and the setting; do not crop, zoom or move anyone. Every person keeps "
          "their facial hair exactly as it is -- its shape and how thick it is, light stubble stays light, "
-         "a bare chin stays bare -- drawn in the new style, and their glasses and jewellery exactly as worn there, nothing added. Any signs, screens "
+         "a bare chin stays bare, a woman's face stays clean with no stubble invented -- drawn in the "
+         "new style, and their hairstyle, hair colour and eye colour exactly as in the picture, and "
+         "their glasses and jewellery exactly as worn there, nothing added. Any signs, screens "
          "or lettering become abstract marks -- no new legible words.")
 
 _EXPAND_SYS = (

@@ -23,6 +23,7 @@ import logging
 import os
 import subprocess
 import threading
+import time
 import turn_trace
 import uuid
 from pathlib import Path
@@ -277,10 +278,15 @@ def drop_unsupported_lines(ctx, tale: str, said: str, board: str) -> str:
     return "\n".join(ln for i, ln in enumerate(lines) if i not in bad)
 
 
-def _save_material(work: Path, parts: list) -> None:
-    """After every portion, so a Stop or a crash keeps what was watched answerable."""
+def _save_material(work: Path, parts: list, meta: dict | None = None) -> None:
+    """After every portion, so a Stop or a crash keeps what was watched answerable.
+    `meta` (the chat, done/stopped) is what lets the next start find an interrupted
+    job and deliver its retell instead of leaving 40 minutes of watching unsent."""
     try:
-        (work / "material.json").write_text(json.dumps({"parts": parts}, ensure_ascii=False), encoding="utf-8")
+        payload = {"parts": parts}
+        if meta:
+            payload.update(meta)
+        (work / "material.json").write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     except OSError:
         logger.warning("long video: notes not saved", exc_info=True)
 
@@ -450,6 +456,58 @@ class LongVideoMixin:
         ev.set()
         return True
 
+    def _lv_chat_of(self, job: str) -> int:
+        """The chat a job id belonged to, read from the activity log: materials
+        written before `chat` joined material.json carry no owner of their own."""
+        import tg_bot
+        try:
+            path = Path(tg_bot._SESSION_FILE).parent / "tg_activity.jsonl"
+            with open(path, "rb") as fh:
+                fh.seek(0, 2)
+                fh.seek(max(0, fh.tell() - 2_000_000))
+                lines = fh.read().decode("utf-8", "replace").splitlines()
+        except OSError:
+            return 0
+        for line in reversed(lines):
+            if f"job {job}" in line:
+                try:
+                    return int(json.loads(line)["chat_id"])
+                except (ValueError, KeyError):
+                    return 0
+        return 0
+
+    def _recover_long_videos(self) -> None:
+        """Finish a long-video job the previous process died under (a restart while
+        the overview was composing, 2026-10-27): the notes are on disk, the retell
+        never arrived. Compose it from the notes and deliver it, with a sorry line --
+        the watching is done; only the telling was lost."""
+        import tg_bot
+        try:
+            for work in sorted(Path(tg_bot._IMAGE_DIR).glob("longvideo_*")):
+                mf = work / "material.json"
+                try:
+                    mat = json.loads(mf.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    continue
+                parts = mat.get("parts") or []
+                if (not parts or mat.get("done") or mat.get("stopped")
+                        or time.time() - mf.stat().st_mtime > 3 * 86400):
+                    continue
+                job = work.name.removeprefix("longvideo_")
+                chat = int(mat.get("chat") or 0) or self._lv_chat_of(job)
+                if not chat:
+                    continue
+                sess = self._get_session(chat)
+                lang = self._lang(sess)
+                self._send_text(chat, _t("lv_recovered", lang))
+                self._long_video_overview(chat, lang, job, parts)
+                mat["done"] = True
+                mf.write_text(json.dumps(mat, ensure_ascii=False), encoding="utf-8")
+                self._activity.log(chat, "system", f"[long video] recovered {job} "
+                                                   f"({len(parts)} parts) after a restart")
+        except Exception:
+            logger.warning("long video recovery failed", exc_info=True)
+
     def _long_video_job(self, chat_id: int, spec: dict, stop: threading.Event) -> None:
         import tg_bot
         video_look = module(self, "video_look")
@@ -461,6 +519,7 @@ class LongVideoMixin:
         question = (spec.get("question") or "").strip()
         quiet = bool(question) or mode == "brief"        # nothing per portion, one answer at the end
         material: list = []
+        mstate: dict = {"chat": chat_id}   # rides material.json so a restart can finish the job
         status_id = live_id = None
         work = Path(tg_bot._IMAGE_DIR) / f"longvideo_{spec['id']}"
         work.mkdir(parents=True, exist_ok=True)
@@ -549,7 +608,7 @@ class LongVideoMixin:
                             self._send_text(chat_id, chunk_txt, parse_mode="HTML")
                 material.append({"a": _stamp(t0), "b": _stamp(min(total, t0 + length)),
                                  "board": board, "said": said, "note": tale})
-                _save_material(work, material)
+                _save_material(work, material, mstate)
                 if seen.get("sheet") and not quiet and mode != "retell":
                     try:
                         self._send_photo(chat_id, seen["sheet"], feedback="")
@@ -571,6 +630,12 @@ class LongVideoMixin:
             elif not quiet:
                 self._send_text(chat_id, _t("lv_done", lang, parts=done, total=_stamp(total)),
                                 keyboard=_after_kb(lang, spec["id"]))
+            # a Stop keeps what was watched answerable but asks for no more output;
+            # anything else that reached here has delivered. Only a process death
+            # under the job leaves no flag -- that is what recovery picks up.
+            if material:
+                mstate["stopped" if stop.is_set() else "done"] = True
+                _save_material(work, material, mstate)
         except Exception:
             logger.exception("long video job failed chat=%s", chat_id)
             self._send_text(chat_id, _t("lv_failed", lang), keyboard=self._main_menu_kb(sess, lang))

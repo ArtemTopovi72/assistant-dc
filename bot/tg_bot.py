@@ -1538,6 +1538,11 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         # startup broadcast so the two notifications arrive in a sensible order.
         threading.Thread(target=self._recover_inflight, args=(inflight,), daemon=True).start()
 
+        # A long-video job the previous process died under still has its notes on
+        # disk; its retell composes from them and arrives now (2026-10-27).
+        threading.Thread(target=self._recover_long_videos, daemon=True,
+                         name="tg-lv-recover").start()
+
         # Send startup notifications to subscribed approved users
         if not self._silent_mode:
             threading.Thread(target=self._broadcast_startup, daemon=True).start()

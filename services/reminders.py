@@ -70,6 +70,9 @@ def _fire(rid: str) -> None:
         return
     en = item.get("lang") == "en"
     owner = int(item["owner"])
+    # An item due while the bot was off fires at once on the next start; the
+    # owner asked (2026-10-27) that it arrive with an apology, not in silence.
+    late = time.time() - item["due"] > 120
     try:
         if item.get("kind") == "price":
             msg, keep = _PRICE(item) if _PRICE else (None, {})
@@ -85,12 +88,16 @@ def _fire(rid: str) -> None:
                                 else f"Слежение за ценой закончилось: {item.get('name') or item['text']}"))
             return
         if item.get("kind") == "task" and _RUNNER is not None:
-            _SENDER(owner, ("⏰ Scheduled: " if en else "⏰ По расписанию: ") + item["text"])
+            head = (("⏰ Scheduled (late -- I was off, sorry): " if late else "⏰ Scheduled: ")
+                    if en else
+                    ("⏰ По расписанию (я был выключен — извини, вот что накопилось): " if late
+                     else "⏰ По расписанию: "))
+            _SENDER(owner, head + item["text"])
             _RUNNER(owner, item["text"])
             return
-        late = time.time() - item["due"] > 120
         pre = (("⏰ Reminder (late): " if late else "⏰ Reminder: ") if en
-               else ("⏰ Напоминание (с опозданием): " if late else "⏰ Напоминание: "))
+               else ("⏰ Напоминание (я был выключен — извини, вот что накопилось): " if late
+                     else "⏰ Напоминание: "))
         _SENDER(owner, pre + item["text"])
     except Exception:
         logger.exception("reminder %s could not be sent", rid)
