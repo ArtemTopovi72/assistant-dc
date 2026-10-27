@@ -275,6 +275,16 @@ def test_untagged_lyric_keeps_its_first_line_in_the_full_rewrite():
     assert '1: A fisherman named Stepan arrived.' in seen[0][1]
 
 
+def test_critic_leaves_model_specific_reasoning_control_to_the_backend(monkeypatch):
+    monkeypatch.delenv('F5_TEST_RUN', raising=False)
+    seen = []
+    _F['text_model'] = lambda ctx, system, user, **kw: seen.append(kw) or '{}'
+    L._call(_C(), 'critic', 'system', 'user', temperature=0, max_tokens=1800,
+            schema=L._CRITIC_SCHEMA)
+    assert 'prefill' not in seen[0]
+    assert seen[0]['json_schema'] == L._CRITIC_SCHEMA
+
+
 def test_stanza_repair_preserves_unflagged_cause_and_excludes_all_bad_lines():
     text = '[bridge]\nПервое желание — золото\nЛишняя бессмыслица\nТретье желание — скорость\nЕщё бессмыслица'
     seen = []

@@ -492,7 +492,7 @@ def _call(ctx, role: str, system: str, user: str, *, temperature: float, max_tok
         # (Nguyen et al. 2024, arxiv 2407.01082)
         kw["sampling"] = {"min_p": MIN_P}
     return text_model(ctx)(ctx, system, user, temperature=temperature, max_tokens=max_tokens,
-                           prefill="<think></think>", **kw) or ""
+                           **kw) or ""
 
 
 def _lang_name(text: str) -> str:
