@@ -149,6 +149,23 @@ class MusicWorker(QThread):
             # the presets do not share weight files.
             lyrics = (caption or {}).get("lyrics", "")
             style = (caption or {}).get("style", "")
+            if lyrics and not self.prefs.get("instrumental"):
+                try:
+                    from music import count_sung_lines, line_budget, trim_to_lines
+                    tuned = module(self, "lyrics_craft").write(
+                        self.ctx, self.topic, "Russian" if self.lang == "ru" else "English",
+                        singer=self.prefs.get("vocal", ""),
+                        max_lines=line_budget(duration)[2] if self.duration_s else 0)
+                    candidate = tuned.get("text") or lyrics
+                    if self.duration_s and count_sung_lines(candidate) > line_budget(duration)[2]:
+                        raise ValueError("the tuned lyric exceeds the selected song length")
+                    lyrics = candidate
+                    if not self.duration_s:
+                        lines = sum(bool(ln.strip()) and not ln.strip().startswith("[") for ln in lyrics.splitlines())
+                        duration = max(duration, min(240, int(15 + 5.2 * lines)))
+                    lyrics = trim_to_lines(lyrics, line_budget(duration)[2])
+                except Exception:
+                    logger.warning("Music lyric tuner failed; retaining the draft", exc_info=True)
             path = music.generate_music(self.ctx, lyrics, style,
                                         duration_s=duration,
                                         preset=self.preset or None,

@@ -227,7 +227,7 @@ def _polished(ctx, lyrics: str, has_stage: bool = True, singer: str = "", topic:
     return out
 
 
-def _written(ctx, topic: str, lang: str, singer: str = "", has_stage: bool = True) -> str:
+def _written(ctx, topic: str, lang: str, singer: str = "", has_stage: bool = True, max_lines: int = 0) -> str:
     """The lyric lyrics_craft.write makes for a theme; '' when it fails (the caller polishes the
     songwriter's draft instead)."""
     try:
@@ -235,7 +235,7 @@ def _written(ctx, topic: str, lang: str, singer: str = "", has_stage: bool = Tru
         if has_stage:
             ctx.set_stage("Writing the lyrics")
         name = "Russian" if lang == "ru" or lyrics_craft._lang_name(topic) == "Russian" else "English"
-        out = (lyrics_craft.write(ctx, topic, name, singer=singer) or {}).get("text") or ""
+        out = (lyrics_craft.write(ctx, topic, name, singer=singer, max_lines=max_lines) or {}).get("text") or ""
     except Exception:
         tg_bot.logger.warning("[songs] writing the lyrics failed; polishing the songwriter's draft", exc_info=True)
         return ""
@@ -404,7 +404,8 @@ class SongsMixin:
                 # A song asked for in words gets ✍️'s plan + drafts + duel, not one songwriter
                 # draft polished: the birthday song for a nano-electronics friend came back
                 # «Ток через фильтр пролетит», sense 4/10 in every round (2026-10-22).
-                _words = _written(ctx, topic, song_lang(topic, lang, ctx=ctx), prefs.get("vocal", ""), _has_stage) \
+                _words = _written(ctx, topic, song_lang(topic, lang, ctx=ctx), prefs.get("vocal", ""), _has_stage,
+                                  max_lines=_music_mod.line_budget(duration)[2] if not auto.get("duration") else 0) \
                     or _polished(ctx, caption["lyrics"], _has_stage, prefs.get("vocal", ""), topic)
                 if auto.get("duration") and _words != caption["lyrics"]:
                     # On Auto the written song sets the length: cut to the picked 60 s, a

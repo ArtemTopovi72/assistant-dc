@@ -500,6 +500,17 @@ def _lang_name(text: str) -> str:
 
 
 _RULES = (
+    "Meaning comes before rhyme: preserve the source's people, setting, causal sequence, "
+    "conditions, turning point and ending. Condense description, not the events that make "
+    "the ending make sense. Never invent an object or action just to finish a rhyme. "
+    "Use natural spoken syntax and specific verbs; read each line aloud as a sentence "
+    "before fitting it to metre. Each image must form a comprehensible scene; do not "
+    "combine impressive-sounding words with no physical or emotional connection. "
+    "If a rhyme forces nonsense, change the rhyme pair, not the story. "
+    "Choose meaningful end words from the scene BEFORE filling the lines; prefer "
+    "ordinary idiomatic Russian to pseudo-poetic inversions or abstract grandeur. "
+    "The verse advances events, the chorus captures their "
+    "central idea, and the final section lands the consequence or punchline. "
     "Rules of the craft: every rhyme is a real sound rhyme on the stressed vowel; no "
     "word rhymed with itself or with a word containing it (свет/рассвет, видеть/"
     "ненавидеть); no worn pairs (любовь/кровь, розы/морозы, ночь/прочь, мечты/цветы, "
@@ -512,8 +523,10 @@ _RULES = (
     "or replaced, not left in).")
 
 _CRITIC = (
-    "You are a demanding song editor (the Pattison / Berklee school). Read the lyric "
-    "(lines are numbered) and list only real problems of MEANING and SOUND: unclear or "
+    "You are a demanding song editor (the Pattison / Berklee school). Read the numbered lyric. "
+    "Do not report mechanical rhyme, metre or line-count faults: a separate checker "
+    "handles those. This pass judges meaning, idiomatic language and development. "
+    "List only real problems of MEANING and natural expression: unclear or "
     "illogical lines; filler or padding words put in for the rhyme or the count; "
     "clichés and stock images; forced word order; clumsy or hard-to-sing phrases "
     "(consonant pile-ups, a stressed syllable on a weak word); emotions NAMED instead "
@@ -522,11 +535,31 @@ _CRITIC = (
     "hook line; a bridge that brings no new angle; images that contradict each other. "
     "A fact the theme gives about the person that the lyric leaves out or turns into a "
     "generic phrase is a problem too. "
-    "Name the line number in each problem and the replacement line. Return JSON {\"score\": 0-10, "
-    "\"problems\": [\"...\"]}; an empty list when it is good.")
+    "Compare against the WHOLE source: who does what, why, the conditions, the order "
+    "of events and the ending. A fantastical or comic event explicitly in the source "
+    "is intentional, not a logical error to remove. Source-defining details (conditions, "
+    "wishes, promises, causes) are NOT padding and must not be removed for pace or rhyme. "
+    "A missing cause, changed fact or "
+    "lost ending caps the score at 4, however pretty the rhymes. Name up to FOUR most "
+    "important problems, meaning first, with line numbers (or the section where an "
+    "omitted event belongs) and a concrete repair. Keep each problem under 45 words. "
+    "Classify EACH problem: source = a changed/omitted fact, condition, event or ending; "
+    "meaning = nonsense, broken grammar or an unintelligible phrase inserted for rhyme; "
+    "style = coherent but generic or weak expression. Source and meaning errors take "
+    "precedence over style. For a missing event, use the header line of the section "
+    "where it belongs. Describe the intended meaning in prose, NOT a proposed rhyming line. "
+    "The score is semantic/natural-language quality, not a reward for rhyme or metre "
+    "(those are checked separately). FIRST list the problems, THEN score the lyric. "
+    "Return COMPLETE compact JSON {\"problems\": [{\"kind\": \"source|meaning|style\", "
+    "\"lines\": [1, 2], \"problem\": \"specific defect and intended meaning\"}], \"score\": 0-10}; "
+    "an empty list when it is good.")
 
 _CRITIC_SCHEMA = {"type": "object", "properties": {
-    "score": {"type": "integer"}, "problems": {"type": "array", "items": {"type": "string"}}},
+    "problems": {"type": "array", "items": {"type": "object", "properties": {
+        "kind": {"type": "string", "enum": ["source", "meaning", "style"]},
+        "lines": {"type": "array", "items": {"type": "integer"}},
+        "problem": {"type": "string"}}, "required": ["kind", "lines", "problem"],
+        "additionalProperties": False}}, "score": {"type": "integer"}},
     "required": ["score", "problems"], "additionalProperties": False}
 
 
@@ -537,7 +570,7 @@ def _numbered(text: str) -> str:
 def _theme_rule(topic: str) -> str:
     # «песня про двух евреев и монету» under klezmer came back a lament of dust and
     # oblivion: neither the critic nor the rewrite ever saw what was asked for
-    return (" The lyric was asked for this theme: «" + topic.strip()[:600] + "». The worst "
+    return (" The lyric was asked for this theme: «" + topic.strip() + "». The worst "
             "problem is drifting from it: other people, things or events than the theme "
             "names, or the wrong tone (a joke or a comic story turned into a solemn lament). "
             "Notes in the theme about the music or the arrangement are not lyric content. "
@@ -546,20 +579,43 @@ def _theme_rule(topic: str) -> str:
             ) if (topic or "").strip() else ""
 
 
-def critique(ctx, text: str, topic: str = "") -> tuple:
-    """(score 0..10, [problems]) from the model, written in the lyric's own
-    language (they are shown to the user); (7, []) when it cannot say."""
+def _review(ctx, text: str, topic: str = "") -> dict:
     from utils import safe_json_from_llm
-    try:
-        system = _CRITIC + _theme_rule(topic) + f" Write the problems in {_lang_name(text)}."
-        raw = _call(ctx, "critic", system, _numbered(text), temperature=0.0, max_tokens=600,
-                    schema=_CRITIC_SCHEMA)
-        data = safe_json_from_llm(raw, ["score", "problems"]) or {}
-        probs = [str(p).strip() for p in (data.get("problems") or []) if str(p).strip()][:8]
-        return max(0, min(10, int(data.get("score") or 0))), probs
-    except Exception:
-        logger.warning("lyrics critic failed", exc_info=True)
-        return 7, []
+    system = _CRITIC + _theme_rule(topic) + f" Write the problems in {_lang_name(text)}."
+    for budget in (1800, 3000):
+        if ctx is not None and getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
+            break
+        try:
+            raw = _call(ctx, "critic", system, _numbered(text), temperature=0.0, max_tokens=budget,
+                        schema=_CRITIC_SCHEMA)
+            data = safe_json_from_llm(raw, ["score", "problems"]) or {}
+            if not isinstance(data.get("score"), (int, float)) or not isinstance(data.get("problems"), list):
+                raise ValueError("lyric critic returned incomplete score/problems")
+            issues = data["problems"]
+            for issue in issues:
+                if (not isinstance(issue, dict) or issue.get("kind") not in ("source", "meaning", "style")
+                        or not isinstance(issue.get("lines"), list)
+                        or not all(isinstance(n, int) and 1 <= n <= len(text.splitlines()) for n in issue["lines"])
+                        or not isinstance(issue.get("problem"), str) or not issue["problem"].strip()):
+                    raise ValueError("lyric critic returned an unclassified problem")
+            issues.sort(key=lambda p: (p["kind"] == "style", p["kind"] == "meaning"))
+            critical = sum(p["kind"] != "style" for p in issues)
+            line_label = "Строки" if _lang_name(text) == "Russian" else "Lines"
+            probs = [(line_label + " " + ",".join(map(str, p["lines"])) + ": " if p["lines"] else "")
+                     + p["problem"].strip() for p in issues]
+            score = max(0, min(10, int(data["score"])))
+            return {"valid": True, "critical": critical, "score": min(score, 4) if critical else score,
+                    "problems": probs, "critical_problems": probs[:critical]}
+        except Exception:
+            logger.warning("lyrics critic failed (budget %d)", budget, exc_info=True)
+    warning = "Не удалось завершить проверку смысла текста." if _lang_name(text) == "Russian" else "The lyric's meaning could not be checked."
+    return {"valid": False, "critical": 0, "score": 0, "problems": [warning], "critical_problems": [warning]}
+
+
+def critique(ctx, text: str, topic: str = "") -> tuple:
+    """(score 0..10, [problems]); an explicit warning when the editor cannot say."""
+    report = _review(ctx, text, topic)
+    return report["score"], report["problems"]
 
 
 def _clean(raw: str) -> str:
@@ -588,23 +644,105 @@ def singer_rule(vocal: str) -> str:
     return ""
 
 
-def revise(ctx, text: str, problems: list, lang: str, singer: str = "", topic: str = "") -> str:
+def revise(ctx, text: str, problems: list, lang: str, singer: str = "", topic: str = "",
+           meaning_only: bool = False) -> str:
+    craft = ("MEANING REPAIR PASS: use clear, ordinary spoken sentences. Temporary "
+             "imperfect rhymes are allowed; rhyme and metre will be repaired AFTER "
+             "the story and grammar are correct. Never retain nonsense to match an "
+             "old end word. Keep phrases short and singable. " if meaning_only else _RULES)
     system = (
         f"You are a skilled {lang} lyricist and editor. Rewrite the song lyric to fix "
         "EVERY listed problem. Keep its theme, story, language and section tags ([verse], "
-        "[chorus]...); a line no problem names stays word for word. When a rhyme pair "
-        "is wrong, rewrite the weaker line of the pair, not both. Keep every repeated "
-        "chorus identical. " + _RULES + " " + singer_rule(singer) + _theme_rule(topic) + " Output only the full lyric, "
+        "[chorus]...). For EACH meaning problem, RECOMPOSE THE ENTIRE AFFECTED STANZA "
+        "using a DIFFERENT rhyme pair: first express what actually happens in plain "
+        "speech, then make it singable. Merely swapping the last word while retaining "
+        "a broken sentence is NOT a repair. Unaffected stanzas can stay. Restore missing "
+        "events in new verses if necessary; never discard a cause or ending to keep the "
+        "old line count. Keep every repeated "
+        "chorus identical. " + craft + " " + singer_rule(singer) + _theme_rule(topic) + " Output only the full lyric, "
         "no comments, no line numbers.")
+    if problems:
+        stanza_system = (
+            f"You are a precise {lang} text editor. Repair the meaning of ONLY the supplied "
+            "stanza. Return its section tag and replacement lines, nothing else: NOT the "
+            "whole song and no extra sections. Express what actually happens in clear, "
+            "idiomatic, complete sentences split into short singable phrases. You may "
+            "replace ALL lines of this stanza. Do NOT preserve its old end words or force "
+            "rhymes: this is a meaning pass, rhyme comes later. Preserve the source's "
+            "conditions, actors, sequence and ending; no invented images or events. "
+            "Example of this pass: source 'The guard admits Misha only with a pass; "
+            "money is not accepted' -> [verse]\nОхранник ждёт у двери.\nОн просит "
+            "показать пропуск.\nДеньгами дверь не открыть.\nБез пропуска он не впустит.\n"
+            + singer_rule(singer) + _theme_rule(topic))
+        if not meaning_only:
+            stanza_system = (
+                f"You are a skilled {lang} songwriter. Return ONLY one replacement stanza "
+                "with its original section tag, never a whole song. Keep the source facts "
+                "and use fresh, natural rhyming pairs rather than copying the old endings. "
+                + _RULES + " " + singer_rule(singer) + _theme_rule(topic))
+        lines, affected = text.splitlines(), {}
+        for problem in problems:
+            match = re.match(r"\s*(?:(?:lines?|строк[аеиу]?)\s*)?\[?(\d+(?:\s*(?:[-–,]|and|и)\s*\d+)*)", problem, re.I)
+            if not match:
+                break
+            refs = []
+            for group in re.split(r",|\band\b|\bи\b", match[1], flags=re.I):
+                bounds = [int(n) for n in re.split(r"[-–]", group)]
+                lo, hi = bounds[0], bounds[-1]
+                if not 1 <= lo <= hi <= len(lines):
+                    refs = []
+                    break
+                refs.extend(range(lo - 1, hi))
+            if not refs:
+                break
+            for n in refs:
+                start = n
+                while start > 0 and lines[start - 1].strip() and not _TAG.match(lines[start]):
+                    start -= 1
+                end = n + 1
+                while end < len(lines) and lines[end].strip() and not _TAG.match(lines[end]):
+                    end += 1
+                affected.setdefault((start, end), []).append((n, problem))
+        else:
+            # A small replacement avoids copying the same broken rhyme through a whole-song rewrite.
+            if any(not _TAG.match(lines[start]) for start, end in affected):
+                affected.clear()
+            replacements = {}
+            for (start, end), defects in affected.items():
+                block = "\n".join(lines[start:end])
+                if block in replacements:
+                    continue
+                bad_lines = {n for n, _ in defects}
+                anchors = "\n".join(lines[i] for i in range(start + 1, end) if i not in bad_lines)
+                form = "short plain-language" if meaning_only else "rhymed, singable"
+                user = (f"Rebuild ONLY section {lines[start]} from the SOURCE above, in "
+                        f"{end - start - 1} {form} lines. It occupied original "
+                        f"lines {start + 1}-{end}. Do not quote the defective phrases. "
+                        "The old verse is intentionally omitted so its bad rhymes cannot "
+                        "dictate the repair. Preserve the meaning of these other lines:\n" + anchors
+                        + "\nAddress these defects:\n" + "\n".join(dict.fromkeys(p for _, p in defects)))
+                new = _clean(_call(ctx, "revise", stanza_system, user, temperature=0.4,
+                                   max_tokens=max(600, len(block) * 2)))
+                if (new and len(new) >= len(block) * 0.4 and _TAG.match(new.splitlines()[0])
+                        and sum(bool(_TAG.match(line)) for line in new.splitlines()) == 1):
+                    replacements[block] = new
+            if replacements:
+                # Repeated choruses receive the same repair.
+                for old, new in replacements.items():
+                    text = text.replace(old, new)
+                return text
     user = ("Lyric (lines numbered as the problems name them):\n" + _numbered(text)
             + "\n\nProblems to fix:\n" + "\n".join(f"- {p}" for p in problems))
-    return _clean(_call(ctx, "revise", system, user, temperature=0.7,
+    return _clean(_call(ctx, "revise", system, user, temperature=0.4,
                         max_tokens=max(800, len(text) * 2)))
 
 
 DRAFTS = max(1, int(os.getenv("LYRICS_DRAFTS", "3") or 3))
 
 _PLAN = (
+    "Include a compact SOURCE CHECKLIST: essential facts, conditions, events in "
+    "order and the final consequence/punchline. Allocate EVERY item to a section. "
+    "Use 2-4 verses as needed: never drop a turning point to force two verses. "
     "You plan a song before it is written (decompose first, then write). For the "
     "theme below, in {lang}, give first the TONE the theme asks for: a comic or everyday "
     "theme (a joke, a funny pair of characters, a quarrel over money) is a light, "
@@ -612,8 +750,8 @@ _PLAN = (
     "theme is sad. The people, things and events are the ones the theme names; notes "
     "about the music or the arrangement are not lyric content. A song for a named person: list every fact the theme gives about them (work, plans, family, habits, jokes) and give each its own concrete line in a verse -- the facts are the song, the name is in the chorus; an occasion it names (a birthday...) is greeted in plain words in the chorus. Then give: the HOOK -- the title line, under 10 words, that "
     "sums up the song's feeling; the story: what verse 1 shows, what verse 2 adds "
-    "(new detail, time moves on), what the bridge turns to (a new angle); 6-10 "
-    "concrete sensory images (things one can see, hear, touch -- object writing) to "
+    "(new detail, time moves on), what the bridge turns to (a new angle); 4-6 "
+    "concrete sensory images ALREADY grounded in the source (things one can see, hear, touch) to "
     "SHOW the feeling instead of naming it; the metre (e.g. 4-foot trochee) and the "
     "rhyme scheme (ABAB or AABB). Plain text, short.")
 
@@ -621,7 +759,7 @@ _PLAN = (
 def plan(ctx, topic: str, lang: str) -> str:
     try:
         return _clean(_call(ctx, "plan", _PLAN.format(lang=lang), "Theme: " + topic,
-                            temperature=0.7, max_tokens=500))
+                            temperature=0.7, max_tokens=1000))
     except Exception:
         return ""
 
@@ -629,24 +767,39 @@ def plan(ctx, topic: str, lang: str) -> str:
 def draft(ctx, topic: str, lang: str, the_plan: str = "", singer: str = "") -> str:
     system = (
         f"You are a skilled songwriter. Write an original song lyric in {lang} on the "
-        "theme below: [verse 1] 4 lines, [chorus] 4 lines, [verse 2] 4 lines, [chorus], "
-        "[bridge] 2-4 lines, [chorus]. Pick one metre and keep it; rhyme ABAB or AABB in "
+        "theme below. Follow the plan's section map. The default is 2-4 verses of 4 lines, a repeated "
+        "4-line [chorus], a 2-4-line [bridge] and a short [outro] landing the ending. "
+        "An exact structure or production line budget takes precedence over that default: "
+        "use fewer, shorter sections and fewer chorus repeats for a short song. Every essential source "
+        "event must have its place; add a verse when needed instead of replacing events "
+        "with repeated hooks. Pick one metre and keep it; rhyme ABAB or AABB in "
         "every section; verse 2 has the same syllable shape as verse 1 (it is sung to the "
         "same melody). Verses SHOW through concrete detail, the chorus states the feeling "
-        "and holds the hook in its first or last line, every chorus is identical; a hook may "
-        "come back with a small variation (repetition with variation makes it stick). "
+        "and holds the hook in its first or last line, every chorus is identical. "
         "Keep the plan's TONE: a light theme is told in plain, lively words, funny, with a "
         "punchline, not in lofty poetic images. "
-        + _RULES + " " + singer_rule(singer) + " Output only the lyric with its section tags.")
+        + _RULES + " " + singer_rule(singer)
+        + " Example of plain, concrete rhymed writing for a DIFFERENT source (a neighbour "
+        "repairs a draughty door all night; we help fix its bolt):\n[verse]\n"
+        "Сосед возился с дверью до утра,\nА в щель тянуло холодом двора.\n"
+        "Мы починили старенький засов —\nИ стало тихо, нет сквозняков.\n"
+        "Use that clarity and causal connection, NOT its facts or wording. "
+        "Output only the lyric with its section tags.")
     user = "Theme: " + topic + (("\n\nPlan:\n" + the_plan) if the_plan else "")
-    return _clean(_call(ctx, "draft", system, user, temperature=0.9, max_tokens=1200))
+    return _clean(_call(ctx, "draft", system, user, temperature=0.75, max_tokens=1600))
 
 
-def write(ctx, topic: str, lang: str, on_round=None, singer: str = "") -> dict:
+def write(ctx, topic: str, lang: str, on_round=None, singer: str = "", max_lines: int = 0) -> dict:
     """✍️ A theme -> a lyric: plan, several drafts (over-generate and rank, as
     PoeLM), the two best by the checks meet head to head (a judge picking one of
     two is steadier than its 0-10 scores), then the polish loop."""
+    if max_lines:
+        topic += (f"\n\nProduction constraint: AT MOST {max_lines} sung lines in total, "
+                  "including ALL repeats. Use a compact form; remove repetition and scenery "
+                  "before essential causes or the ending. Section tags are not sung lines.")
     the_plan = plan(ctx, topic, lang)
+    review_topic = topic + ("\n\nPlanning checklist (verify against the full source above; "
+                            "the source takes precedence):\n" + the_plan if the_plan else "")
     scored = []
     for _ in range(dep(ctx, "DRAFTS", DRAFTS)):
         if ctx is not None and getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
@@ -654,22 +807,29 @@ def write(ctx, topic: str, lang: str, on_round=None, singer: str = "") -> dict:
         d = draft(ctx, topic, lang, the_plan, singer)
         if not d:
             continue
-        score = _total(analyse(d, ctx), critique(ctx, d, topic)[0])
+        assessment = _review(ctx, d, review_topic)
+        sense = assessment["score"]
+        score = _total(analyse(d, ctx), sense)
         logger.info("lyrics draft scored %.2f", score)
-        scored.append((score, d))
+        scored.append((_quality_key(assessment, score), d))
     if not scored:
         raise RuntimeError("no draft")
-    scored.sort(key=lambda x: -x[0])
+    scored.sort(key=lambda x: x[0], reverse=True)
     best = scored[0][1]
-    if len(scored) > 1 and scored[0][0] - scored[1][0] < 1.5:
-        best = compare(ctx, topic, scored[0][1], scored[1][1])
-    return polish(ctx, best, on_round=on_round, singer=singer, topic=topic)
+    if len(scored) > 1 and scored[0][0][:3] == scored[1][0][:3] and scored[0][0][-1] - scored[1][0][-1] < 1.5:
+        best = compare(ctx, review_topic, scored[0][1], scored[1][1])
+    result = polish(ctx, best, on_round=on_round, singer=singer, topic=review_topic)
+    if max_lines and sum(len(stanza) for stanza in _lines(result["text"])) > max_lines:
+        raise RuntimeError("the tuned lyric exceeds the song's line budget")
+    return result
 
 
 _JUDGE = (
     "You judge two song lyrics on the same theme as a hit songwriter would: which "
     "one is the better SONG -- a hook that sticks, images shown not told, clean "
-    "rhymes, a steady singable rhythm, a story that moves. Answer with one letter: "
+    "rhymes, a steady singable rhythm, a story that moves. Source facts and intelligible "
+    "language take precedence: reject nonsense and changed/missing causes or endings "
+    "even when the other version rhymes more smoothly. Answer with one letter: "
     "A or B.")
 
 
@@ -740,7 +900,12 @@ def fix_rhymes(ctx, text: str, rule: dict, lang: str, k: int = 3) -> str:
 
 
 def _total(rule: dict, sense: int) -> float:
-    return round(0.6 * rule["score"] + 0.4 * sense, 2)
+    weighted = 0.4 * rule["score"] + 0.6 * sense
+    return round(min(weighted, sense + 1) if sense < 5 else weighted, 2)
+
+
+def _quality_key(assessment, total):
+    return assessment["valid"], -assessment["critical"], assessment["score"], total
 
 
 def polish(ctx, text: str, rounds: int = ROUNDS, on_round=None, singer: str = "",
@@ -754,33 +919,42 @@ def polish(ctx, text: str, rounds: int = ROUNDS, on_round=None, singer: str = ""
         if ctx is not None and getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
             break
         rule = analyse(cur, ctx)
-        sense, probs = critique(ctx, cur, topic)
-        problems = [describe(i) for i in rule["issues"]] + probs
+        assessment = _review(ctx, cur, topic)
+        sense, probs = assessment["score"], assessment["problems"]
+        critical = not assessment["valid"] or assessment["critical"] > 0
+        problems = probs if critical else probs + [describe(i) for i in rule["issues"]][:6]
         total = _total(rule, sense)
         logger.info("lyrics round %d: rules %.1f sense %d -> %.2f, %d problems",
                     r, rule["score"], sense, total, len(problems))
-        if best is None or total > best["score"]:
+        quality = _quality_key(assessment, total)
+        improved = best is None or quality > best["quality"]
+        if improved:
             # the user reads what is left: rule findings in their language, by the caller
-            best = {"text": cur, "score": total, "left": problems,
+            best = {"text": cur, "score": total, "sense": sense, "quality": quality,
+                    "critical": critical, "critical_problems": assessment["critical_problems"], "left": problems,
                     "left_rules": rule["issues"], "left_sense": probs}
         if not problems or r == rounds:
             break
-        if r and total <= best["score"]:
-            # a rewrite of a worse rewrite only drifts further: 6.1 -> 3.4 -> 3.8 -> 4.4 and
-            # three minutes gone on a birthday song (2026-10-22)
-            break
+        if not improved:
+            # Try again from the best text, rather than polish a regression.
+            cur = best["text"]
+            rule = analyse(cur, ctx)
+            probs = best["left_sense"]
+            critical = best["critical"]
+            problems = probs if critical else probs + [describe(i) for i in rule["issues"]][:6]
         if on_round:
             on_round(r + 1)
-        fixed = fix_rhymes(ctx, cur, rule, lang)
+        # A rhyme patch must not change facts before the source editor repairs them.
+        fixed = cur if critical else fix_rhymes(ctx, cur, rule, lang)
         mended = fixed != cur
         if mended:                            # the rhymes mended line by line first
             rule = analyse(fixed, ctx)
-            problems = [describe(i) for i in rule["issues"]] + probs
+            problems = probs + [describe(i) for i in rule["issues"]]
             cur = fixed
             done += 1
             if not problems:
                 continue                            # scored on the next round
-        new = revise(ctx, cur, problems, lang, singer, topic)
+        new = revise(ctx, cur, problems, lang, singer, topic, meaning_only=critical)
         done += 1
         if not new or len(new) < len(cur) * 0.4:
             if mended:
@@ -788,7 +962,7 @@ def polish(ctx, text: str, rounds: int = ROUNDS, on_round=None, singer: str = ""
             break                                   # a broken rewrite: keep what we have
         cur = new
     if best is None:                                # ⛔ before the first check
-        best = {"text": text.strip(), "score": 0.0, "left": [], "left_rules": [], "left_sense": []}
+        best = {"text": text.strip(), "score": 0.0, "sense": 0, "left": [], "left_rules": [], "left_sense": []}
     best.update(rounds=done, original=text.strip())
     return best
 

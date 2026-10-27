@@ -997,10 +997,11 @@ MAX_SUNG_LINES = 80
 
 
 def trim_to_lines(lyrics: str, max_lines: int) -> str:
-    """Drop whole sections just before the LAST one (the outro) until at most `max_lines` are sung."""
+    """Drop repeats before unique sections, preserving the final section."""
     parts = [p for p in re.split(r"\n\s*\n", (lyrics or "").strip()) if p.strip()]
     while len(parts) > 3 and count_sung_lines("\n\n".join(parts)) > max_lines:
-        del parts[-2]
+        repeated = [i for i, part in enumerate(parts[:-1]) if part in parts[:i]]
+        del parts[repeated[-1] if repeated else -2]
     return "\n\n".join(parts)
 
 

@@ -94,10 +94,10 @@ def test_polish_revises_until_clean_and_keeps_the_best(monkeypatch):
     def llm(role, system, user):
         calls.append(role)
         if role == "critic":
-            return '{"score": 9, "problems": []}'
+            return '{"problems": [], "score": 9}'
         if role == "revise":
             if calls.count("revise") == 1:            # the first pass sees the lazy rhyme, numbered
-                assert "3: И ждал, когда придёт рассвет" in user and "one word inside the other" in user
+                assert "section [verse]" in user and "one word inside the other" in user
             return GOOD.replace("вновь", "снова").replace("любовь", "основу")  # still imperfect
         return ""
     _F["lyrics_llm"] = llm
@@ -110,11 +110,190 @@ def test_polish_revises_until_clean_and_keeps_the_best(monkeypatch):
 def test_a_worse_or_broken_rewrite_never_replaces_the_lyric(monkeypatch):
     def llm(role, system, user):
         if role == "critic":
-            return '{"score": 8, "problems": ["line 2 is vague"]}'
+            return '{"problems": [{"kind": "style", "lines": [], "problem": "line 2 is vague"}], "score": 8}'
         return "ок"                                   # a broken rewrite
     _F["lyrics_llm"] = llm
     res = L.polish(_C(), GOOD, rounds=3)
     assert res["text"] == GOOD.strip()
+
+
+def test_improving_polish_uses_all_requested_rounds():
+    scores = iter([3, 5, 7, 9])
+    edits = iter(['рекою', 'полем', 'домом'])
+    calls = []
+    def llm(role, system, user):
+        calls.append(role)
+        if role == 'critic':
+            return '{"problems": [{"kind": "style", "lines": [], "problem": "line 2: make the image concrete"}], "score": %d}' % next(scores)
+        if role == 'revise':
+            return GOOD.replace('городом', next(edits))
+        return ''
+    _F['lyrics_llm'] = llm
+    res = L.polish(_C(), GOOD, rounds=3)
+    assert calls.count('revise') == 3
+    assert 'домом' in res['text']
+
+
+def test_long_story_ending_reaches_editor_and_rewriter():
+    topic = 'Степан ловил рыбу. ' * 100 + 'Три желания касаются сапога; золотой вечный сапог уплывает, мудрец шутит.'
+    seen = []
+    def llm(role, system, user):
+        seen.append(system)
+        return '{"problems": [], "score": 5}' if role == 'critic' else GOOD
+    _F['lyrics_llm'] = llm
+    L.critique(_C(), GOOD, topic)
+    L.revise(_C(), GOOD, ['restore the ending'], 'Russian', topic=topic)
+    assert all(topic in prompt for prompt in seen)
+
+
+def test_pretty_rhymes_cannot_outscore_a_coherent_story():
+    assert L._total({'score': 10}, 2) < L._total({'score': 6}, 8)
+    assert L._total({'score': 10}, 2) <= 3
+
+
+def test_truncated_critic_is_retried_instead_of_silently_passing():
+    replies = iter(['{"faithful": true, "coherent": true, "score": 3, "problems": ["unfinished', '{"problems": [{"kind": "style", "lines": [], "problem": "restore the ending"}], "score": 4}'])
+    _F['lyrics_llm'] = lambda *args: next(replies)
+    assert L.critique(_C(), GOOD, 'полная история') == (4, ['restore the ending'])
+
+
+def test_unavailable_critic_never_reports_a_good_verified_score():
+    _F['lyrics_llm'] = lambda *args: ''
+    score, problems = L.critique(_C(), GOOD)
+    assert score == 0 and problems
+
+
+def test_unclassified_editor_problem_is_retried():
+    replies = iter(['{"problems": [{"kind": "unknown", "lines": [], "problem": "lost ending"}], "score": 9}', '{"problems": [{"kind": "source", "lines": [], "problem": "lost ending"}], "score": 4}'])
+    _F['lyrics_llm'] = lambda *args: next(replies)
+    assert L.critique(_C(), GOOD, 'полный сюжет') == (4, ['lost ending'])
+
+
+def test_fixed_song_length_is_in_the_tuner_brief():
+    seen = []
+    def llm(role, system, user):
+        seen.append(system + user)
+        if role == 'critic':
+            return '{"problems": [], "score": 8}'
+        return GOOD
+    _F['lyrics_llm'] = llm
+    _F['DRAFTS'] = 1
+    L.write(_C(), 'сюжет', 'Russian', max_lines=10)
+    assert any('AT MOST 10 sung lines' in text for text in seen)
+
+
+def test_source_fidelity_caps_score_even_when_model_praises_rhymes():
+    _F['lyrics_llm'] = lambda *args: '{"problems": [{"kind": "source", "lines": [], "problem": "restore the third wish"}], "score": 9}'
+    assert L.critique(_C(), GOOD, 'три желания') == (4, ['restore the third wish'])
+
+
+def test_nonsensical_rhyme_cannot_receive_a_good_semantic_score():
+    _F['lyrics_llm'] = lambda *args: '{"problems": [{"kind": "meaning", "lines": [], "problem": "nonsense for rhyme"}], "score": 9}'
+    assert L.critique(_C(), GOOD)[0] == 4
+
+
+def test_structured_editor_notes_keep_line_numbers_without_prescribing_a_bad_rhyme():
+    _F['lyrics_llm'] = lambda *args: '{"problems": [{"kind": "style", "lines": [2, 3], "problem": "forced rhyme"}], "score": 6}'
+    assert L.critique(_C(), GOOD)[1] == ['Строки 2,3: forced rhyme']
+
+
+def test_a_bad_middle_rewrite_is_retried_from_the_best_text():
+    scores = iter([5, 3, 9])
+    rewritten = []
+    first = GOOD.replace('городом', 'рекою')
+    second = GOOD.replace('городом', 'полем')
+    def llm(role, system, user):
+        if role == 'critic':
+            return '{"problems": [{"kind": "style", "lines": [], "problem": "make the scene clear"}], "score": %d}' % next(scores)
+        if role == 'revise':
+            rewritten.append(user)
+            return first if len(rewritten) == 1 else second
+        return ''
+    _F['lyrics_llm'] = llm
+    result = L.polish(_C(), GOOD, rounds=2)
+    assert len(rewritten) == 2 and 'городом' in rewritten[1] and 'рекою' not in rewritten[1]
+    assert 'полем' in result['text']
+
+
+def test_meaning_improvement_wins_even_before_its_rhythm_is_polished():
+    scores = iter([4, 8])
+    coherent = '[verse]\nТеперь здесь понятная история, даже если длиннее строка\nБез случайных образов и чужих событий'
+    def llm(role, system, user):
+        if role == 'critic':
+            return '{"problems": [{"kind": "style", "lines": [], "problem": "repair wording"}], "score": %d}' % next(scores)
+        return coherent if role == 'revise' else ''
+    _F['lyrics_llm'] = llm
+    res = L.polish(_C(), GOOD, rounds=1)
+    assert res['text'] == coherent and res['sense'] == 8
+
+
+def test_fewer_critical_defects_win_when_both_scores_are_capped():
+    import json
+    issues = iter([[{'kind': 'source', 'lines': [], 'problem': 'lost cause'},
+                    {'kind': 'meaning', 'lines': [], 'problem': 'unclear phrase'}],
+                   [{'kind': 'meaning', 'lines': [], 'problem': 'unclear phrase'}]])
+    better = '[verse]\nТеперь здесь восстановлено условие\nОстался только неровный размер и одна слабая фраза'
+    def llm(role, system, user):
+        if role == 'critic':
+            return json.dumps({'score': 9, 'problems': next(issues)})
+        return better if role == 'revise' else ''
+    _F['lyrics_llm'] = llm
+    result = L.polish(_C(), GOOD, rounds=1)
+    assert result['text'] == better
+
+
+def test_semantic_stanza_repair_works_without_blank_lines_and_keeps_other_verses():
+    text = '[verse 1]\nИстория началась\nГерой у воды\n[verse 2]\nБессмысленная строка\nЕщё одна\n[chorus]\nНаш припев\nОстаётся здесь'
+    seen = []
+    _F['lyrics_llm'] = lambda role, system, user: seen.append(user) or '[verse 2]\nЖеланья только для сапога\nНе для самого старика'
+    out = L.revise(_C(), text, ['Lines 5: restore the condition'], 'Russian', meaning_only=True)
+    assert 'Бессмысленная' not in out and 'Желанья только' in out
+    assert '[verse 1]\nИстория началась\nГерой у воды' in out
+    assert '[chorus]\nНаш припев\nОстаётся здесь' in out
+    assert len(seen) == 1 and 'История началась' not in seen[0]
+
+
+def test_numeric_critic_line_references_use_stanza_only_instructions():
+    text = '[verse]\nНачало\nСмысл\n\n[chorus]\nЛишние слова\nШум'
+    seen = []
+    def llm(role, system, user):
+        seen.append(system)
+        return '[chorus]\nЯсная мысль\nПонятный итог'
+    _F['lyrics_llm'] = llm
+    out = L.revise(_C(), text, ['6-7 (Chorus): replace nonsense'], 'Russian', meaning_only=True)
+    assert 'Лишние слова' not in out and 'Начало\nСмысл' in out
+    assert 'NOT the whole song' in seen[0]
+    assert 'Output only the full lyric' not in seen[0]
+
+
+def test_untagged_lyric_keeps_its_first_line_in_the_full_rewrite():
+    text = 'A fisherman named Stepan arrived.\nA broken phrase.\nHe cast a line.\nHe waited for a fish.'
+    seen = []
+    _F['lyrics_llm'] = lambda role, system, user: seen.append((system, user)) or text
+    L.revise(_C(), text, ['Lines 2: repair wording'], 'English', meaning_only=True)
+    assert 'Output only the full lyric' in seen[0][0]
+    assert '1: A fisherman named Stepan arrived.' in seen[0][1]
+
+
+def test_stanza_repair_preserves_unflagged_cause_and_excludes_all_bad_lines():
+    text = '[bridge]\nПервое желание — золото\nЛишняя бессмыслица\nТретье желание — скорость\nЕщё бессмыслица'
+    seen = []
+    _F['lyrics_llm'] = lambda role, system, user: seen.append(user) or '[bridge]\nЗолото и вечность\nЗатем скорость\nСапог умчался\nДед остался'
+    L.revise(_C(), text, ['Строки 3,5: restore the second wish and consequence'], 'Russian', meaning_only=True)
+    assert 'Первое желание — золото' in seen[0] and 'Третье желание — скорость' in seen[0]
+    assert 'Лишняя бессмыслица' not in seen[0] and 'Ещё бессмыслица' not in seen[0]
+
+
+def test_rhyme_repairs_resume_once_meaning_is_sound():
+    calls = []
+    def llm(role, system, user):
+        calls.append(role)
+        if role == 'critic':
+            return '{"problems": [{"kind": "style", "lines": [], "problem": "a minor style issue"}], "score": 8}'
+        return ''
+    _F['lyrics_llm'] = llm
+    L.polish(_C(), LAZY, rounds=1)
+    assert 'lines' in calls
 
 
 def test_the_singer_gender_reaches_the_lyric_prompts(monkeypatch):
@@ -134,7 +313,7 @@ def test_the_theme_reaches_the_critic_and_the_rewrite(monkeypatch):
     def llm(role, system, user):
         seen.setdefault(role, []).append(system)
         if role == "critic":
-            return '{"score": 4, "problems": ["line 2 is off the theme"]}'
+            return '{"problems": [{"kind": "style", "lines": [], "problem": "line 2 is off the theme"}], "score": 4}'
         return "" if role == "revise" else GOOD
     _F["lyrics_llm"] = llm
     _F["DRAFTS"] = 1
@@ -172,7 +351,7 @@ def test_the_music_menu_has_both_buttons_in_one_new_row():
 def test_improve_answers_in_two_messages_and_can_be_sung(monkeypatch):
     def llm(role, system, user):
         if role == "critic":
-            return '{"score": 9, "problems": []}'
+            return '{"problems": [], "score": 9}'
         if role == "revise":
             return GOOD
         if role == "notes":
@@ -200,7 +379,7 @@ def test_write_takes_a_theme(monkeypatch):
             assert "Theme: город ночью" in user and "Russian" in system
             return GOOD
         if role == "critic":
-            return '{"score": 9, "problems": []}'
+            return '{"problems": [], "score": 9}'
         return GOOD
     _F["lyrics_llm"] = llm
     bot = _bot()
@@ -210,7 +389,7 @@ def test_write_takes_a_theme(monkeypatch):
     # «✨ Ещё улучшить» keeps the theme; a pass that changes nothing is not «улучшенный»
     critic_seen = []
     _F["lyrics_llm"] = lambda role, system, user: (
-        critic_seen.append(system) or '{"score": 9, "problems": []}') if role == "critic" else ""
+        critic_seen.append(system) or '{"problems": [], "score": 9}') if role == "critic" else ""
     bot._cb_lyrics(6, "lyr:again")
     assert critic_seen and all("город ночью" in s for s in critic_seen)
     assert bot.sent[-2][0].startswith("✨ <b>Текст</b>"), bot.sent[-2][0]
@@ -233,7 +412,7 @@ def test_what_is_left_is_shown_in_the_users_language(monkeypatch):
     def llm(role, system, user):
         if role == "critic":
             assert "Write the problems in Russian" in system
-            return '{"score": 6, "problems": ["строка 2 непонятна"]}'
+            return '{"problems": [{"kind": "style", "lines": [], "problem": "строка 2 непонятна"}], "score": 6}'
         return "ок"                                    # no usable rewrite: the lazy rhyme stays
     _F["lyrics_llm"] = llm
     bot = _bot()
@@ -281,7 +460,7 @@ def test_write_plans_then_keeps_the_best_of_several_drafts(monkeypatch):
             assert "Plan:\nHOOK: огни над городом" in user
             return next(drafts)
         if role == "critic":
-            return '{"score": 8, "problems": []}'
+            return '{"problems": [], "score": 8}'
         return ""
     _F["lyrics_llm"] = llm
     _F["DRAFTS"] = 3
@@ -312,12 +491,12 @@ def test_song_words_the_bot_wrote_are_polished_before_singing(monkeypatch):
 
         def is_cancelled(self):
             return False
-    _F["lyrics_llm"] = (lambda role, s, u: '{"score": 9, "problems": []}' if role == "critic"
+    _F["lyrics_llm"] = (lambda role, s, u: '{"problems": [], "score": 9}' if role == "critic"
                         else "[verse]\n" + GOOD.split("\n", 1)[1])
     c = Ctx()
     out = tg_songs._polished(_C(c), LAZY)
     assert "закат" in out and "Polishing the lyrics" in c.stages
-    _F["lyrics_llm"] = (lambda role, s, u: '{"score": 9, "problems": []}' if role == "critic"
+    _F["lyrics_llm"] = (lambda role, s, u: '{"problems": [], "score": 9}' if role == "critic"
                         else "без тегов вообще\nи всё")
     assert tg_songs._polished(_C(c), LAZY) == LAZY            # lost its [tags]: the draft is sung
 
@@ -325,7 +504,7 @@ def test_song_words_the_bot_wrote_are_polished_before_singing(monkeypatch):
 def test_ready_words_polish_then_sing(monkeypatch):
     def llm(role, system, user):
         if role == "critic":
-            return '{"score": 9, "problems": []}'
+            return '{"problems": [], "score": 9}'
         if role == "notes":
             return "• строка 3: свет/рассвет → закат/горят"
         return GOOD
@@ -512,7 +691,7 @@ def test_long_lyrics_work_has_a_cancel_and_stops_on_it(monkeypatch):
     def llm(role, system, user):
         if role == "draft":
             seen["job"].set()                         # ⛔ pressed while drafting
-        return GOOD if role == "draft" else '{"score": 9, "problems": []}'
+        return GOOD if role == "draft" else '{"problems": [], "score": 9}'
     _F["lyrics_llm"] = llm
     _F["DRAFTS"] = 3
     real = bot._run_busy
