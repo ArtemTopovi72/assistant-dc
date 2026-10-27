@@ -1517,6 +1517,8 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         """
         if self._running:
             return True
+        from case_cooling import ensure_started
+        ensure_started()
         if not self._incoming.claim(self):
             self._on_status("⏳ Previous bot workers are still stopping; try Start again shortly.")
             return False

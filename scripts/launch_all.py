@@ -293,6 +293,9 @@ def main(assistant=None):
                     f"singleton lock{_lock_holder()} -- exiting without starting a duplicate.\n")
         return
 
+    from case_cooling import ensure_started
+    ensure_started()
+
     # 1) ComfyUI (serves on :8000) — only needed at image-generation time.
     #    Source build first (has Ideogram 4), Desktop app as the fallback.
     if not _up(COMFY_URL):
