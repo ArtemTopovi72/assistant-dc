@@ -164,8 +164,8 @@ def _norm_lang(code: str) -> str:
 # Message catalogue. Values are format strings; _t() applies **kw.
 _MSG: dict[str, dict[str, str]] = {
     "menu_randomizer_title": {"en": "🎲 Randomizer\nPick a draw. Three matching slot symbols win!", "ru": "🎲 Рандомайзер\nВыбери действие. Три одинаковых символа в автомате — выигрыш!"},
-    "rnd_range_prompt": {"en": "Send two integer bounds, for example: 1 100 or -10 10. Both bounds are included.", "ru": "Пришли две целые границы, например: 1 100 или -10 10. Обе границы включены."},
-    "rnd_order_error": {"en": "Lower bound must not exceed upper bound. Try, for example: -10 100.", "ru": "Нижняя граница не должна быть больше верхней. Например: -10 100."},
+    "rnd_range_prompt": {"en": "Send two integer bounds, for example:\n1 100 or -10 10\nBoth bounds are included.", "ru": "Пришли две целые границы, например:\n1 100 или -10 10\nОбе границы включены."},
+    "rnd_order_error": {"en": "Lower bound must not exceed upper bound. Try, for example:\n-10 100", "ru": "Нижняя граница не должна быть больше верхней. Например:\n-10 100"},
     "rnd_number_result": {"en": "🔢 {value}\nRange: {low} … {high}", "ru": "🔢 {value}\nДиапазон: {low} … {high}"},
     "rnd_win": {"en": "🎉 Jackpot! All three match.", "ru": "🎉 Выигрыш! Все три совпали."},
     "rnd_miss": {"en": "No match. Spin again!", "ru": "Не совпало. Можно крутить ещё!"},
