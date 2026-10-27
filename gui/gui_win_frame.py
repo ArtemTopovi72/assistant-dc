@@ -50,6 +50,28 @@ def available() -> bool:
     return _user32 is not None
 
 
+DWMWA_NCRENDERING_POLICY = 2
+DWMNCRP_DISABLED = 2
+
+
+def _hide_drew_frame(hwnd: int) -> None:
+    """Stop the DWM from PAINTING the non-client frame the styles imply.
+
+    With WS_CAPTION on the table the DWM draws a light 1-2 px caption edge
+    across the top of the dark window -- «выглядит всрато» (2026-10-27).
+    Windows 10 has no DWMWA_BORDER_COLOR to repaint it with, but it does have
+    the render policy: disabled, nothing non-client is painted (the snap, the
+    resize borders and the maximize are behavioural -- they stay). The window
+    keeps the square, shadowless frameless look it always had."""
+    try:
+        dwm = ctypes.windll.dwmapi
+        val = ctypes.c_int(DWMNCRP_DISABLED)
+        dwm.DwmSetWindowAttribute(hwnd, DWMWA_NCRENDERING_POLICY,
+                                  ctypes.byref(val), ctypes.sizeof(val))
+    except Exception:
+        pass            # pre-DWM or refused: at worst the thin edge stays
+
+
 def install(hwnd: int) -> bool:
     """Add the native frame styles a frameless Qt window lacks. True when they
     took. False on anything else (offscreen, a suite's stub HWND, a refusal):
@@ -66,7 +88,10 @@ def install(hwnd: int) -> bool:
         _user32.SetWindowPos(hwnd, 0, 0, 0, 0, 0,
                              SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER
                              | SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED)
-        return bool(_user32.GetWindowLongW(hwnd, GWL_STYLE) & WS_THICKFRAME)
+        if _user32.GetWindowLongW(hwnd, GWL_STYLE) & WS_THICKFRAME:
+            _hide_drew_frame(hwnd)
+            return True
+        return False
     except Exception:
         return False
 
@@ -86,19 +111,21 @@ class Msg:
                         ctypes.POINTER(wintypes.MSG)).contents.lParam)
 
 
-def remove_frame_area(msg: Msg) -> bool:
+def remove_frame_area(msg: Msg, *, user32=None) -> bool:
     """True for the WM_NCCALCSIZE that draws the native frame: the caller eats
     it and the client area covers the whole window."""
-    return _user32 is not None and msg.message == WM_NCCALCSIZE and msg.wParam
+    api = _user32 if user32 is None else user32
+    return api is not None and msg.message == WM_NCCALCSIZE and msg.wParam
 
 
-def hit(msg: Msg, caption) -> int:
+def hit(msg: Msg, caption, *, user32=None) -> int:
     """The HT* code for a WM_NCHITTEST, or 0 to let Qt decide.
 
     `caption(x, y)` gets the point in the window's LOCAL physical pixels and
     says whether OUR titlebar sits there (interactive children answered
     HTCLIENT before it is ever asked)."""
-    if _user32 is None or not hasattr(msg, "lParam"):
+    api = _user32 if user32 is None else user32
+    if api is None or not hasattr(msg, "lParam"):
         return 0
     x = msg.lParam & 0xFFFF
     y = (msg.lParam >> 16) & 0xFFFF
@@ -107,10 +134,10 @@ def hit(msg: Msg, caption) -> int:
     if y >= 0x8000:
         y -= 0x10000
     rect = wintypes.RECT()
-    if not _user32.GetWindowRect(msg.hwnd, ctypes.byref(rect)):
+    if not api.GetWindowRect(msg.hwnd, ctypes.byref(rect)):
         return 0
-    b = max(6, _user32.GetSystemMetrics(SM_CXSIZEFRAME)
-            + _user32.GetSystemMetrics(SM_CXPADDEDBORDER))
+    b = max(6, api.GetSystemMetrics(SM_CXSIZEFRAME)
+            + api.GetSystemMetrics(SM_CXPADDEDBORDER))
     l, t = x - rect.left, y - rect.top
     w, h = rect.right - rect.left, rect.bottom - rect.top
     if w <= 2 * b or h <= 2 * b:    # tiny window: only the caption, no border band
