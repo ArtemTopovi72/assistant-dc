@@ -692,14 +692,18 @@ _SUBJECT_Q = (
     "unclear = it needs one particular picture (to edit, animate or ask about) and the chat leaves open "
     "which: several pictures arrived or were shown together and none of them is the one being talked about; "
     "current = the picture or video the chat is about right now (the last one sent, made or discussed), "
-    "or all of the pictures just sent together; "
+    "or all of the pictures just sent together -- but only when the words FIT a picture: a message "
+    "that names its own subject (a game it is playing, a task, the news, the conversation) is talk, "
+    "not current, even right after a picture was discussed; "
     "forwarded = something the user forwarded just before (a voice message, a conversation, a post); "
     "talk = the conversation or a story itself, no picture needed; "
     "new = a new request: draw, sing, write or find something new. "
     "A message is unclear only when its own words point at a picture -- asking to change, redraw, "
     "describe or identify something IN one of the pictures. Pictures existing in the chat is not "
     "enough: a question about a game, a task, the news or the conversation is talk (or new), even "
-    "when the chat is full of pictures.")
+    "when the chat is full of pictures. Example: the bot has just described a photo and asked "
+    "«what to do with it?», and the user writes «я застрял на кухне в игре, куда вставить "
+    "батарейку?» -- that is talk (their game), not current, whatever photo came last.")
 _SUBJECTS = ("unclear", "current", "forwarded", "talk", "new")
 
 
