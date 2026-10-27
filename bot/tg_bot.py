@@ -651,7 +651,7 @@ from tg_strings import (_LANGS, _DEFAULT_LANG, _BTN, _LABEL2KEY, _MSG,
 # T._main_kb / T._settings_kb / T._size_menu_kb through this module.  # noqa: F401
 from tg_keyboards import (
     _main_kb, _fwd_voice_kb, _draw_kb, _search_kb, _settings_kb, _reply_mode_kb, _library_kb,
-    _weather_kb, _creativity_kb, _cr_images_kb, _cr_music_kb, _cr_video_kb, _ozon_kb, _tasks_kb, _size_summary, _size_menu_kb, _size_menu_text,
+    _weather_kb, _randomizer_kb, _creativity_kb, _cr_images_kb, _cr_music_kb, _cr_video_kb, _ozon_kb, _tasks_kb, _size_summary, _size_menu_kb, _size_menu_text,
 )
 
 
@@ -942,6 +942,16 @@ _DIRECT_KB: dict[str, str] = {
     "wtw_date_btn": "__wtw_pickdate__",
     "wtw_city_btn": "__wtw_setcity__",
     "weather":    "__menu_weather__",
+    "randomizer": "__randomizer_menu__",
+    "rnd_slots": "__randomizer_slots__",
+    "rnd_number": "__randomizer_number__",
+    "rnd_yesno": "__randomizer_yesno__",
+    "rnd_coin": "__randomizer_coin__",
+    "rnd_die": "__randomizer_die__",
+    "rnd_prediction": "__randomizer_prediction__",
+    "rnd_pred_day": "__randomizer_pred_day__",
+    "rnd_pred_week": "__randomizer_pred_week__",
+    "rnd_pred_month": "__randomizer_pred_month__",
     "creativity": "__menu_creativity__",
     "cr_images":  "__menu_cr_images__",
     "cr_music":   "__menu_cr_music__",
@@ -1813,6 +1823,8 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
             return _ozon_kb(lang)
         if menu == "tasks":
             return _tasks_kb(lang)
+        if menu in ("randomizer", "randomizer_range", "randomizer_prediction"):
+            return _randomizer_kb(lang, menu == "randomizer_range", menu == "randomizer_prediction")
         sub = {"creativity": _creativity_kb, "cr_images": _cr_images_kb,
                "cr_music": _cr_music_kb, "cr_video": _cr_video_kb}.get(menu)
         if sub:

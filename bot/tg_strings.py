@@ -28,6 +28,16 @@ if _DEFAULT_LANG not in _LANGS:
     _DEFAULT_LANG = "ru"
 
 _BTN: dict[str, dict[str, str]] = {
+    "randomizer": {"en": "🎲 Randomizer", "ru": "🎲 Рандомайзер"},
+    "rnd_slots": {"en": "🎰 Spin", "ru": "🎰 Крутить"},
+    "rnd_number": {"en": "🔢 Random number", "ru": "🔢 Случайное число"},
+    "rnd_yesno": {"en": "✅ Yes / No", "ru": "✅ Да / Нет"},
+    "rnd_coin": {"en": "🪙 Flip a coin", "ru": "🪙 Монетка"},
+    "rnd_die": {"en": "🎲 Roll a die", "ru": "🎲 Кубик"},
+    "rnd_prediction": {"en": "🔮 Mini prediction", "ru": "🔮 Мини-предсказание"},
+    "rnd_pred_day": {"en": "🔮 For a day", "ru": "🔮 На день"},
+    "rnd_pred_week": {"en": "🔮 For a week", "ru": "🔮 На неделю"},
+    "rnd_pred_month": {"en": "🔮 For a month", "ru": "🔮 На месяц"},
     "draw":       {"en": "🎨 Draw",           "ru": "🎨 Рисовать"},
     "search":     {"en": "🔎 Search",         "ru": "🔎 Поиск"},
     "settings":   {"en": "⚙️ Settings",       "ru": "⚙️ Настройки"},
@@ -153,6 +163,21 @@ def _norm_lang(code: str) -> str:
 
 # Message catalogue. Values are format strings; _t() applies **kw.
 _MSG: dict[str, dict[str, str]] = {
+    "menu_randomizer_title": {"en": "🎲 Randomizer\nPick a draw. Three matching slot symbols win!", "ru": "🎲 Рандомайзер\nВыбери действие. Три одинаковых символа в автомате — выигрыш!"},
+    "rnd_range_prompt": {"en": "Send two integer bounds, for example: 1 100 or -10 10. Both bounds are included.", "ru": "Пришли две целые границы, например: 1 100 или -10 10. Обе границы включены."},
+    "rnd_order_error": {"en": "Lower bound must not exceed upper bound. Try, for example: -10 100.", "ru": "Нижняя граница не должна быть больше верхней. Например: -10 100."},
+    "rnd_number_result": {"en": "🔢 {value}\nRange: {low} … {high}", "ru": "🔢 {value}\nДиапазон: {low} … {high}"},
+    "rnd_win": {"en": "🎉 Jackpot! All three match.", "ru": "🎉 Выигрыш! Все три совпали."},
+    "rnd_miss": {"en": "No match. Spin again!", "ru": "Не совпало. Можно крутить ещё!"},
+    "rnd_heads": {"en": "Heads", "ru": "Орёл"},
+    "rnd_tails": {"en": "Tails", "ru": "Решка"},
+    "rnd_yes": {"en": "✅ Yes", "ru": "✅ Да"},
+    "rnd_no": {"en": "❌ No", "ru": "❌ Нет"},
+    "rnd_placeholder": {"en": "Pick a draw…", "ru": "Выбери действие…"},
+    "rnd_range_placeholder": {"en": "Integer bounds, e.g. -10 100", "ru": "Две границы, например -10 100"},
+    "menu_randomizer_prediction_title": {"en": "🔮 Mini prediction\nPick a period: a day, a week or a month.", "ru": "🔮 Мини-предсказание\nВыбери срок: день, неделя или месяц."},
+    "rnd_pred_working": {"en": "🔮 Writing your mini prediction…", "ru": "🔮 Составляю мини-предсказание…"},
+    "rnd_pred_fail": {"en": "Couldn't generate a prediction. Try again.", "ru": "Не удалось составить предсказание. Попробуй ещё раз."},
     "welcome":       {"en": "👋 <b>Hi! I'm your AI assistant.</b>",
                       "ru": "👋 <b>Привет! Я твой ИИ-ассистент.</b>"},
     "main_menu":     {"en": "🏠 Main menu", "ru": "🏠 Главное меню"},

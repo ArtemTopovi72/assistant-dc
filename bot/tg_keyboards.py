@@ -26,6 +26,7 @@ def _main_kb(voice_on: bool, is_admin: bool = False, lang: str = _DEFAULT_LANG) 
         [_b("weather", lang),    _b("ozon", lang),    _b("account", lang)],
         [_b("feedback", lang),   _b("help", lang),    _b("stop", lang)],
         [_b("tasks", lang),      _b("settings", lang)],
+        [_b("randomizer", lang)],
     ]
     return {
         "keyboard": rows,
@@ -92,6 +93,21 @@ def _weather_kb(lang: str = _DEFAULT_LANG) -> dict:
         ],
         "resize_keyboard": True,
         "input_field_placeholder": _t("ph_weather", lang),
+    }
+
+
+def _randomizer_kb(lang: str = _DEFAULT_LANG, range_mode=False, prediction=False) -> dict:
+    if prediction:
+        return {"keyboard": [[_b("rnd_pred_day", lang), _b("rnd_pred_week", lang)],
+                             [_b("rnd_pred_month", lang)], [_b("back", lang)]],
+                "resize_keyboard": True,
+                "input_field_placeholder": _t("rnd_placeholder", lang)}
+    return {
+        "keyboard": [[_b("rnd_slots", lang), _b("rnd_number", lang)],
+                     [_b("rnd_yesno", lang), _b("rnd_coin", lang)],
+                     [_b("rnd_die", lang), _b("rnd_prediction", lang)], [_b("back", lang)]],
+        "resize_keyboard": True,
+        "input_field_placeholder": _t("rnd_range_placeholder" if range_mode else "rnd_placeholder", lang),
     }
 
 

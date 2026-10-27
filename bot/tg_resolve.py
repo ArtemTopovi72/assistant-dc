@@ -464,6 +464,11 @@ class ResolveMixin:
 
             if t == "text":
                 raw = item["text"]
+                if (sess.menu == "randomizer_range" and not raw.startswith("/")
+                        and not tg_bot._LABEL2KEY.get(raw.strip())):
+                    from tg_randomizer import range_text
+                    range_text(self, chat_id, sess, lang, raw)
+                    continue
                 if not item.get("forwarded") and not item.get("fwd_said") and not raw.startswith("/"):
                     self._bind_turn(sess, raw, batch)
                 # 🎨 Restyle / 🎤 Cover waiting for words: this text is them, ahead
@@ -646,6 +651,10 @@ class ResolveMixin:
                     sess.anim_voice_state = ""      # a menu press ends 🎙 sample collection
                     sess.voice_naming = ""          # ... and an unanswered «как подписать»
                     self._store.put(sess)
+                if direct.startswith("__randomizer_"):
+                    from tg_randomizer import action
+                    action(self, chat_id, sess, lang, key)
+                    continue
                 if direct == "__audiobook__":
                     self._goto_menu(sess, "cr_music")
                     self._start_book_flow(chat_id, sess, lang); continue
@@ -869,7 +878,9 @@ class ResolveMixin:
                 if direct == "__menu_back__":
                     # The creativity tiers (and Draw, opened from 🖼 Images) go up one level.
                     up = {"cr_images": "creativity", "cr_music": "creativity",
-                          "cr_video": "creativity", "draw": "cr_images"}.get(sess.menu)
+                          "cr_video": "creativity", "draw": "cr_images",
+                          "randomizer_range": "randomizer",
+                          "randomizer_prediction": "randomizer"}.get(sess.menu)
                     if up:
                         self._goto_menu(sess, up)
                         self._send_text(chat_id, tg_bot._t(

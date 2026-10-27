@@ -18,7 +18,7 @@ from gui_ru import RU
 GROUPS = (
     ("Creation", ("images", "storyboard", "transfer", "restyle", "music", "voice_clone", "characters")),
     ("Knowledge", ("search", "research", "database", "memory")),
-    ("Bot & services", ("telegram", "debug_chat", "admin", "weather", "madhouse")),
+    ("Bot & services", ("telegram", "debug_chat", "admin", "weather", "randomizer", "madhouse")),
     ("System", ("model", "status", "feedback", "log", "code", "stress")),
 )
 _KEY = Qt.UserRole
