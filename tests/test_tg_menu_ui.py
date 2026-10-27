@@ -525,6 +525,20 @@ check("a remix step waiting for a song carries Cancel",
 _s.drop_waiting(); bot._store.put(_s)
 check("Cancel ends the remix step", sess(bot).cover_state == "")
 
+# ── contentless input never reaches a tool ──────────────────────────────────
+# A lone «🎨» reached generate_image and burned a 147 s render (2026-10-28).
+# No letters/digits anywhere -> a bounce, not a task; a PHOTO alone is exempt.
+reset(bot)
+bot.pushed.clear()
+bot._resolve_and_push(CID, [{"type": "text", "text": "🎨"}])
+check("a bare emoji is bounced, not tasked",
+      not bot.pushed and any(("зацепиться" in t or "nothing for me" in t) for t, *_ in bot.kbs), [t for t, *_ in bot.kbs][:100])
+bot._resolve_and_push(CID, [{"type": "text", "text": "!!! … —"}])
+check("punctuation soup is bounced too", not bot.pushed)
+bot._resolve_and_push(CID, [{"type": "text", "text": "нарисуй кота"}])
+check("real words still become a task", len(bot.pushed) == 1,
+      [p.user_text for p in bot.pushed])
+
 print()
 print(f"{OK} passed, {BAD} failed")
 sys.exit(1 if BAD else 0)
@@ -558,3 +572,4 @@ check("a real query right after the greeting still searches",
       bot.pushed and bot.pushed[0].user_text.startswith("find on ozon:"),
       [p.user_text for p in bot.pushed])
 check("and consumes the prefix", sess(bot).pending_prefix == "", sess(bot).pending_prefix)
+

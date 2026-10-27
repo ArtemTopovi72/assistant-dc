@@ -810,6 +810,10 @@ _MSG: dict[str, dict[str, str]] = {
               "Добавь кнопками внизу или просто напиши: «каждый день в 9 присылай курс доллара»."},
     "sch_empty":    {"en": "📋 No tasks yet. Add one with the buttons below 👇",
                      "ru": "📋 Задач пока нет. Добавь кнопками внизу 👇"},
+    "contentless_input": {"en": "🤔 There is nothing for me to go on here — no words, just symbols. "
+                           "Say what you'd like: draw, find, remind…",
+                          "ru": "🤔 Тут не за что зацепиться — ни слова, только символы. "
+                          "Скажи, что сделать: нарисовать, найти, напомнить…"},
     "sch_head":     {"en": "📋 <b>Your tasks</b> ({n})\nTap one to change or delete it:",
                      "ru": "📋 <b>Твои задачи</b> ({n})\nНажми на задачу, чтобы изменить или удалить:"},
     "sch_kind_text":  {"en": "🔔 Reminder",         "ru": "🔔 Напоминание"},

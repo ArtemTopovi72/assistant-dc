@@ -1707,6 +1707,19 @@ class ResolveMixin:
                       + (_seen or "(could not be read)") + " Acknowledge every picture, not just "
                       "the first.]")
 
+        # A turn with no letters and no digits anywhere (a bare emoji, a wall of
+        # punctuation) carries nothing for any tool or the model to act on -- yet
+        # a lone «🎨» reached generate_image and burned a 147 s render on
+        # «волшебный лес» (2026-10-28). Ask back, exactly as the owner asked:
+        # nonsense never reaches generation, search or any other tool. A photo
+        # alone is exempt -- img_path/file_in_folder carry it.
+        if (merged and not img_path and not file_in_folder
+                and not re.search(r"[^\W_]", merged, re.UNICODE)):
+            self._activity.log(chat_id, "system", "[bounce] contentless input: " + merged[:40],
+                               uname)
+            self._send_text(chat_id, tg_bot._t("contentless_input", lang))
+            return
+
         task = tg_bot._Task(
             task_id=str(uuid.uuid4()),
             chat_id=chat_id,
