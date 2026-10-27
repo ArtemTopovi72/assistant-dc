@@ -155,11 +155,18 @@ def _clause(word: str, stress: int) -> str:
         stress = max(0, len(vpos) - 2) if len(vpos) > 1 else 0
     start = vpos[stress]
     tail = w[start:]
-    if start + 1 == len(w) and start > 0:          # open masculine: the consonant before counts
-        tail = w[start - 1:]
-    tail = tail.replace("ь", "").replace("ъ", "").replace("й", "и")
+    if start + 1 == len(w):
+        if w[start] in "еёюя" and (start == 0 or w[start - 1] in _VOWELS + "ьъ"):
+            tail = "й" + tail
+        elif start > 0:                         # open masculine: the consonant before counts
+            tail = w[start - 1:]
+    tail = tail.replace("ться", "ца").replace("тся", "ца")
+    tail = re.sub(r"([жшчщ])ь", r"\1", tail)
+    tail = tail.replace("ъ", "").replace("й", "и")
     tail = tail.translate(_VOWEL_MERGE)
-    if tail and tail[-1] in "бвгджз":
+    if len(tail) > 1 and tail.endswith("ь") and tail[-2] in "бвгджз":
+        tail = tail[:-2] + tail[-2].translate(_DEVOICE) + "ь"
+    elif tail and tail[-1] in "бвгджз":
         tail = tail[:-1] + tail[-1].translate(_DEVOICE)
     return tail
 
@@ -220,9 +227,10 @@ def _row(ctx, n: int, line: str):
     else:                                  # unknown stress: the last or the one before
         k = _syllables(last)
         idx = [i for i in (k - 1, k - 2) if i >= 0]
-    clauses = list(dict.fromkeys(_clause(last, i) for i in idx))
-    supports = list(dict.fromkeys(_support(last, i) for i in idx))
-    pres = list(dict.fromkeys(_pre_vowel(last, i) for i in idx))
+    sound_word = plast.replace("+", "") if stressed else last
+    clauses = list(dict.fromkeys(_clause(sound_word, i) for i in idx))
+    supports = list(dict.fromkeys(_support(sound_word, i) for i in idx))
+    pres = list(dict.fromkeys(_pre_vowel(sound_word, i) for i in idx))
     return {"n": n, "text": line, "syl": syl, "beats": beats, "last": last,
             "stressed": stressed, "clauses": clauses, "supports": supports, "pres": pres}
 
@@ -270,6 +278,8 @@ def _clauses_rhyme(ca: str, cb: str) -> bool:
         return False
     if ca == cb:
         return True
+    if any(c in _VOWELS_RU for c in ca + cb):
+        return False
     # A near rhyme: the same vowels and at most one consonant apart.
     va = [c for c in ca if c in _VOWELS]
     vb = [c for c in cb if c in _VOWELS]
@@ -374,6 +384,7 @@ def analyse(text: str, ctx=None) -> dict:
     f_issues, f_pen = _form_issues(sections, info)
     issues += f_issues
     penalty += f_pen
+    penalty /= max(1, sum(map(len, seen_stanzas)) / 4)
     # rich rhymes earn back a little: up to one point
     penalty -= min(1.0, 0.25 * rich)
     return {"issues": issues, "score": max(0.0, min(10.0, round(10 - penalty, 1))),
@@ -540,9 +551,12 @@ _CRITIC = (
     "is intentional, not a logical error to remove. Source-defining details (conditions, "
     "wishes, promises, causes) are NOT padding and must not be removed for pace or rhyme. "
     "A missing cause, changed fact or "
-    "lost ending caps the score at 4, however pretty the rhymes. Name up to FOUR most "
-    "important problems, meaning first, with line numbers (or the section where an "
-    "omitted event belongs) and a concrete repair. Keep each problem under 45 words. "
+    "lost ending caps the score at 4, however pretty the rhymes. List all source and "
+    "meaning errors, then at most TWO style issues, up to TWELVE problems total. "
+    "Give line numbers (or the section where an omitted event belongs) and a concrete "
+    "repair. Keep each problem under 30 words. Judge source fidelity across the WHOLE "
+    "lyric: a chorus need not retell every event or the ending. A stylistic preference "
+    "or an omitted incidental description is not a changed plot fact. "
     "Classify EACH problem: source = a changed/omitted fact, condition, event or ending; "
     "meaning = nonsense, broken grammar or an unintelligible phrase inserted for rhyme; "
     "style = coherent but generic or weak expression. Source and meaning errors take "
@@ -604,7 +618,8 @@ def _review(ctx, text: str, topic: str = "") -> dict:
             probs = [(line_label + " " + ",".join(map(str, p["lines"])) + ": " if p["lines"] else "")
                      + p["problem"].strip() for p in issues]
             score = max(0, min(10, int(data["score"])))
-            return {"valid": True, "critical": critical, "score": min(score, 4) if critical else score,
+            return {"valid": True, "source": sum(p["kind"] == "source" for p in issues),
+                    "critical": critical, "score": min(score, 4) if critical else score,
                     "problems": probs, "critical_problems": probs[:critical]}
         except Exception:
             logger.warning("lyrics critic failed (budget %d)", budget, exc_info=True)
@@ -809,9 +824,10 @@ def write(ctx, topic: str, lang: str, on_round=None, singer: str = "", max_lines
             continue
         assessment = _review(ctx, d, review_topic)
         sense = assessment["score"]
-        score = _total(analyse(d, ctx), sense)
+        rule = analyse(d, ctx)
+        score = _total(rule, sense)
         logger.info("lyrics draft scored %.2f", score)
-        scored.append((_quality_key(assessment, score), d))
+        scored.append((_quality_key(assessment, rule), d))
     if not scored:
         raise RuntimeError("no draft")
     scored.sort(key=lambda x: x[0], reverse=True)
@@ -904,8 +920,9 @@ def _total(rule: dict, sense: int) -> float:
     return round(min(weighted, sense + 1) if sense < 5 else weighted, 2)
 
 
-def _quality_key(assessment, total):
-    return assessment["valid"], -assessment["critical"], assessment["score"], total
+def _quality_key(assessment, rule):
+    weighted = 0.4 * rule["score"] + 0.6 * assessment["score"]
+    return assessment["valid"], -assessment.get("source", 0), -assessment["critical"], weighted
 
 
 def polish(ctx, text: str, rounds: int = ROUNDS, on_round=None, singer: str = "",
@@ -927,14 +944,14 @@ def polish(ctx, text: str, rounds: int = ROUNDS, on_round=None, singer: str = ""
         total = _total(rule, sense)
         logger.info("lyrics round %d: rules %.1f sense %d -> %.2f, %d problems",
                     r, rule["score"], sense, total, len(problems))
-        quality = _quality_key(assessment, total)
+        quality = _quality_key(assessment, rule)
         improved = best is None or quality > best["quality"]
         if improved:
             # the user reads what is left: rule findings in their language, by the caller
             best = {"text": cur, "score": total, "sense": sense, "quality": quality,
                     "critical": critical, "critical_problems": assessment["critical_problems"], "left": problems,
                     "left_rules": rule["issues"], "left_sense": probs}
-        if not problems or r == rounds:
+        if not assessment["valid"] or not problems or r == rounds:
             break
         if not improved:
             # Try again from the best text, rather than polish a regression.
@@ -953,9 +970,9 @@ def polish(ctx, text: str, rounds: int = ROUNDS, on_round=None, singer: str = ""
             problems = probs + [describe(i) for i in rule["issues"]]
             cur = fixed
             done += 1
-            if not problems:
-                continue                            # scored on the next round
-        new = revise(ctx, cur, problems, lang, singer, topic, meaning_only=critical)
+            continue                                # score this edit before changing anything else
+        repairs = best["critical_problems"][:1] if critical else problems
+        new = revise(ctx, cur, repairs, lang, singer, topic, meaning_only=critical)
         done += 1
         if not new or len(new) < len(cur) * 0.4:
             if mended:

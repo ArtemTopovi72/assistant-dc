@@ -72,6 +72,24 @@ def test_a_non_rhyme_is_named_and_a_true_one_is_not():
     assert [i["kind"] for i in issues] == ["no_rhyme"] and issues[0]["words"] == ("ИИ", "мои")
 
 
+def test_soft_and_hard_final_consonants_are_not_the_same_rhyme():
+    assert not L._clauses_rhyme(L._clause('загадать', 2), L._clause('салат', 1))
+    assert L._clause('мышь', 0) == L._clause('камыш', 1)
+    assert L._clause('превратится', 2) == L._clause('разбиться', 1)
+
+
+def test_unrelated_russian_consonants_are_not_a_valid_sound_rhyme():
+    assert not L._clauses_rhyme(L._clause('желаний', 1), L._clause('магии', 0))
+
+
+def test_restored_yo_and_iotation_reach_the_rhyme_checker():
+    _F['accent'] = lambda line: line.replace('свое', 'сво+ё').replace('копье', 'копь+ё')
+    first = L._row(_C(), 1, 'Это все свое')
+    second = L._row(_C(), 2, 'Это копье')
+    assert first['last'] == 'свое' and second['last'] == 'копье'
+    assert L._rhymes(first, second)
+
+
 def test_stress_decides_the_rhyme_and_the_rhythm(monkeypatch):
     """With stress marks (the voice's RUAccent + silero) «за́мок / зама́нок» is
     no rhyme, and a line whose stresses fall off the beat is named."""
@@ -149,6 +167,46 @@ def test_long_story_ending_reaches_editor_and_rewriter():
 def test_pretty_rhymes_cannot_outscore_a_coherent_story():
     assert L._total({'score': 10}, 2) < L._total({'score': 6}, 8)
     assert L._total({'score': 10}, 2) <= 3
+
+
+def test_one_repaired_rhyme_in_a_long_song_is_not_hidden_by_a_zero_floor():
+    stanza = 'В окне блестел вечерний снег\nВо двор вернулась тишина\nУ двери кто-то тихо ждал\nА за окном шумел прибой'
+    prefixes = ['Там', 'Давно', 'Потом', 'Опять', 'Теперь', 'Вдали', 'Ночью', 'Уже']
+    text = '\n\n'.join(f'[verse {i}]\n' + stanza.replace('В окне', prefix + ' в окне', 1)
+                       for i, prefix in enumerate(prefixes))
+    repaired = text.replace('Там в окне блестел вечерний снег', 'Там над крышей бледная луна', 1)
+    assert L.analyse(repaired, _C())['score'] > L.analyse(text, _C())['score']
+
+
+def test_selection_can_improve_rhyme_while_the_display_score_is_capped():
+    report = {'valid': True, 'source': 1, 'critical': 1, 'score': 4}
+    assert L._total({'score': 8}, 4) == L._total({'score': 10}, 4)
+    assert L._quality_key(report, {'score': 10}) > L._quality_key(report, {'score': 8})
+
+
+def test_plot_loss_cannot_be_traded_for_fewer_grammar_problems():
+    faithful = {'valid': True, 'source': 0, 'critical': 2, 'score': 4}
+    lost_condition = {'valid': True, 'source': 1, 'critical': 1, 'score': 4}
+    assert L._quality_key(faithful, {'score': 6}) > L._quality_key(lost_condition, {'score': 10})
+
+
+def test_clean_meaning_allows_a_real_tradeoff_between_style_and_rhyme():
+    plain = {'valid': True, 'source': 0, 'critical': 0, 'score': 9}
+    rhymed = dict(plain, score=8)
+    assert L._quality_key(rhymed, {'score': 9}) > L._quality_key(plain, {'score': 1})
+
+
+def test_a_line_rhyme_patch_is_checked_before_another_rewrite():
+    calls = []
+    def llm(role, system, user):
+        calls.append(role)
+        if role == 'critic':
+            return '{"problems":[],"score":8}'
+        return 'И ждал я в сумраке ответ' if role == 'lines' else ''
+    _F['lyrics_llm'] = llm
+    L.polish(_C(), LAZY, rounds=1)
+    assert 'lines' in calls and calls.count('critic') == 2
+    assert 'revise' not in calls
 
 
 def test_truncated_critic_is_retried_instead_of_silently_passing():
