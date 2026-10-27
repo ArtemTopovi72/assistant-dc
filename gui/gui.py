@@ -689,6 +689,8 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
             return  # already cancelling — repeated Stop clicks shouldn't spam the chat
         self.ctx.cancel_event.set()
         self._turn_cancelled = True
+        if self._lib_build_worker is not None:
+            self._lib_build_worker.cancel()
         if self._scan_worker is not None:    # the scan loop polls its own flag, not cancel_event
             self._scan_worker.cancel()
         # Tabs that run long jobs hold their own cancel token (see _ScopedCtx), so
@@ -894,6 +896,11 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
             logger.warning("LIFECYCLE: end-session message while Windows is not ending -- refused, "
                            "the window stays (%s)", close_trace.describe())
             return True, 0
+        # the native-styles frameless window eats WM_NCCALCSIZE and answers
+        # WM_NCHITTEST itself (snap, every-edge resize -- gui_win_frame)
+        got = self._win_frame_message(message)
+        if got is not None:
+            return True, got
         return super().nativeEvent(event_type, message)
 
     # ---- drag-drop ----

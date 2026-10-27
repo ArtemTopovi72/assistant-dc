@@ -29,11 +29,62 @@ logger = logging.getLogger("assistant")
 
 class LayoutMixin:
     native_frame = None      # a suite pins the OS frame on or off; None -> gui_common.NATIVE_FRAME
+    _win_native = False      # the win32 snap/every-edge-resize styles took (never under offscreen)
+    _pre_max_geo = None      # the user's own size, restored after a native maximize
 
     def _native_frame(self):
         return gui_common.NATIVE_FRAME if self.native_frame is None else self.native_frame
 
     """Titlebar, screen clamping, tab show/hide and layout presets."""
+
+    # ---- the native window behaviour a frameless build loses ----------------
+    def _install_native_frame(self):
+        """Give the frameless window its native behaviour back: resize from
+        every edge and corner, Aero Snap (Win+arrows, drag to an edge or a
+        corner, four windows on one screen) and a real maximize. How is in
+        gui_win_frame; skipped for the OS-frame build and under offscreen,
+        which keep the manual fallbacks."""
+        if self._native_frame() or self._win_native:
+            return
+        try:
+            if QApplication.platformName() in ("offscreen", "minimal"):
+                return
+            import gui_win_frame
+            self._win_native = gui_win_frame.install(int(self.winId()))
+            if self._win_native:
+                logger.info("window: native snap and every-edge resize enabled")
+        except Exception:
+            logger.debug("native window frame not installed", exc_info=True)
+
+    def _win_frame_message(self, message):
+        """WM_NCCALCSIZE / WM_NCHITTEST for the native-styles frameless window:
+        the HT* code to return, 0 to eat the message, None to let Qt decide."""
+        if not self._win_native:
+            return None
+        try:
+            import gui_win_frame
+            msg = gui_win_frame.Msg(int(message))
+            if gui_win_frame.remove_frame_area(msg):
+                return 0
+            if msg.message == gui_win_frame.WM_NCHITTEST:
+                dpr = self.devicePixelRatioF() or 1.0
+
+                def caption(x, y):
+                    # childAt skips mouse-transparent children, so the bar's own
+                    # labels answer "the bar" while its buttons answer themselves
+                    child = self.childAt(int(x / dpr), int(y / dpr))
+                    return child is self._title_bar
+                return gui_win_frame.hit(msg, caption)
+        except Exception:
+            logger.debug("win32 frame message failed", exc_info=True)
+        return None
+
+    def showEvent(self, e):
+        try:
+            self._install_native_frame()
+        except Exception:
+            pass
+        super().showEvent(e)
 
     def _build_titlebar(self):
         bar = QWidget()
@@ -149,18 +200,28 @@ class LayoutMixin:
 
     def _toggle_max(self):
         if self.isMaximized() or self._faux_max:
+            was_native = self.isMaximized() and self._win_native
             self._faux_max = False
             self.showNormal(); self._max_btn.setText("□")
-            w, h = self._default_window_size()
-            self.resize(w, h)
+            if was_native and getattr(self, "_pre_max_geo", None) is not None:
+                # a native maximize restores to whatever geometry it had; the
+                # user's own size, remembered below, beats the default
+                self.setGeometry(self._pre_max_geo)
+                self._pre_max_geo = None
+            else:
+                w, h = self._default_window_size()
+                self.resize(w, h)
             self._clamp_to_screen()
-        elif self._native_frame():
+        elif self._native_frame() or self._win_native:
+            # With the win32 styles (gui_win_frame) this is a REAL maximize --
+            # animated, taskbar-aware, drag-to-restore -- not the manual fill.
+            self._pre_max_geo = self.normalGeometry() if self._win_native else None
             self.showMaximized(); self._max_btn.setText("❐")
         else:
-            # Frameless: fill the WORK AREA by hand. showMaximized() on a frameless
-            # window overshoots every edge by the (invisible) resize border, so the
-            # titlebar buttons and the tab strip fall off the screen — exactly the
-            # "cropped on the TV" full-screen look.
+            # Frameless without the native styles (offscreen, a refusal): fill
+            # the WORK AREA by hand. showMaximized() on a plain frameless window
+            # overshoots every edge by the (invisible) resize border, so the
+            # titlebar buttons and the tab strip fall off the screen.
             self._faux_max = True
             self._clamp_to_screen()          # releases an oversized layout minimum first
             self.setGeometry(self._screen_area())
@@ -184,6 +245,33 @@ class LayoutMixin:
         except Exception:
             pass
         return w, h
+
+    # (label, x, y, w, h) as fractions of the current screen's work area
+    _SNAP_LAYOUTS = (
+        ("◧  Left half", 0.0, 0.0, 0.5, 1.0),
+        ("◨  Right half", 0.5, 0.0, 0.5, 1.0),
+        ("◰  Top-left quarter", 0.0, 0.0, 0.5, 0.5),
+        ("◱  Top-right quarter", 0.5, 0.0, 0.5, 0.5),
+        ("☓  Bottom-left quarter", 0.0, 0.5, 0.5, 0.5),
+        ("◶  Bottom-right quarter", 0.5, 0.5, 0.5, 0.5),
+        ("⛶  Fill the screen", 0.0, 0.0, 1.0, 1.0),
+    )
+
+    def _snap_window(self, fx: float, fy: float, fw: float, fh: float) -> None:
+        """Place the window on a fraction of its screen's work area -- one tap
+        of what drag-to-the-edge does, for the screens edges are hard to reach."""
+        try:
+            if self.isMaximized() or self._faux_max:
+                self._faux_max = False
+                self.showNormal(); self._max_btn.setText("□")
+            avail = self._screen_area()
+            self._pre_max_geo = None
+            self.setGeometry(avail.x() + int(avail.width() * fx),
+                             avail.y() + int(avail.height() * fy),
+                             int(avail.width() * fw), int(avail.height() * fh))
+            self._clamp_to_screen()
+        except Exception:
+            logger.exception("window snap failed")
 
     def _focus_tab(self, key):
         """Bring a tab to the front by its stable key.
@@ -390,6 +478,12 @@ class LayoutMixin:
             act.toggled.connect(lambda chk, k=key: self._show_tab(k, chk))
         panels.addSeparator()
         panels.addAction("Show all panels", self._show_all_tabs)
+
+        # Split-screen in one tap: the four-windows-on-one-screen arrangement
+        # (Aero Snap also works: Win+arrows, drag to an edge or a corner).
+        snap = menu.addMenu("Window placement")
+        for label, fx, fy, fw, fh in self._SNAP_LAYOUTS:
+            snap.addAction(label, lambda f=(fx, fy, fw, fh): self._snap_window(*f))
 
         menu.addSeparator()
         names = self._preset_names()
