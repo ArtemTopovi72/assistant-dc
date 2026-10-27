@@ -13,19 +13,19 @@ here to keep alive.
 """
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QLayout, QLineEdit, QPushButton, QScrollArea,
+    QComboBox, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QScrollArea,
     QSplitter, QTabWidget, QTextEdit, QVBoxLayout, QWidget,
 )
 
 from gui_audio_visualizer import AudioVisualizer
-from gui_chrome import StageIndicator
-from gui_common import BORDER, _card, _scroll_page, _section, _shadow
+from gui_chrome import ElidingLabel, StageIndicator
+from gui_common import BORDER, _FlowWidget, _card, _flow, _scroll_page, _section, _shadow
 from gui_images_panel import ImagesPanel
 from gui_madhouse_tab import MadhouseTab
 from gui_memory_tab import MemoryCenterTab
 from gui_model_config_tab import ModelConfigTab
 from gui_music_tab import MusicTab
-from gui_nav import NavTabs, WorkspaceNav
+from gui_nav import NavTabs, WorkspaceNav, search_matches
 from gui_weather_tab import WeatherTab
 from gui_storyboard_tab import StoryboardTab
 from gui_stress_tab import StressTab
@@ -44,24 +44,26 @@ class DashboardMixin:
     def _build_dashboard(self):
         root = QWidget()
         outer = QVBoxLayout(root)
-        outer.setContentsMargins(14, 14, 14, 14)
-        outer.setSpacing(12)
+        outer.setContentsMargins(px(12), px(8), px(12), px(12))
+        outer.setSpacing(px(8))
 
         # header
         header = QHBoxLayout()
-        title = QLabel("Assistant DC"); title.setObjectName("title")
-        self.model_chip = QLabel("loading…"); self.model_chip.setObjectName("chip")
+        self.model_chip = ElidingLabel("loading…", padding=18)
+        self.model_chip.setObjectName("modelChip")
         self.stage = StageIndicator()
         self.stage_changed.connect(self.stage.set_stage)
         self.progress_changed.connect(self.stage.set_progress)
         self.layout_btn = QPushButton("⛶  Layout"); self.layout_btn.setObjectName("ghost")
+        self.layout_btn.setProperty("chromeAction", True)
         self.layout_btn.setToolTip("Show/hide panels, save and load layout presets, or reset "
                                    "to the default layout. Tabs can also be dragged to reorder "
                                    "and closed with their ✕; drag the splitter bars to resize.")
         self.layout_btn.clicked.connect(self._open_layout_menu)
         gear = QPushButton("⚙  Settings"); gear.setObjectName("ghost"); gear.clicked.connect(self._open_settings)
-        header.addWidget(title); header.addSpacing(12); header.addWidget(self.model_chip)
-        header.addStretch(1); header.addWidget(self.stage); header.addStretch(1)
+        gear.setProperty("chromeAction", True)
+        header.addWidget(self.model_chip, 3)
+        header.addWidget(self.stage, 2)
         header.addWidget(self.layout_btn); header.addWidget(gear)
         outer.addLayout(header)
 
@@ -196,6 +198,8 @@ class DashboardMixin:
         mem_row = QHBoxLayout()
         mem_row.setSpacing(4)
         self.mem_combo = QComboBox()
+        self.mem_combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.mem_combo.setMinimumContentsLength(18)
         self.mem_combo.addItem("default")
         self.mem_combo.setToolTip("Active memory profile — select to switch (auto-saves current first)")
         self.mem_combo.currentTextChanged.connect(self._switch_memory_profile)
@@ -222,34 +226,52 @@ class DashboardMixin:
             _b = QPushButton(_label); _b.setToolTip(_tip); _b.setObjectName("ghost")
             _b.clicked.connect(lambda _=False, p=_prefix: self._start_video_mode(p))
             self.video_mode_btns.append(_b)
-        # The whole window is this page's, so the buttons stand in three columns
-        # by what they act on instead of one long scrolling strip.
+        self.commands_search = QLineEdit()
+        self.commands_search.setPlaceholderText("Search commands…")
+        self.commands_search.setClearButtonEnabled(True)
+        self.commands_search.setAccessibleName("Search commands")
+        self.commands_search.setToolTip("Search by name or description, in English or Russian")
+        llay.addWidget(self.commands_search)
+        self.commands_empty = QLabel("No commands found.")
+        self.commands_empty.setObjectName("searchEmpty")
+        self.commands_empty.hide()
+        llay.addWidget(self.commands_empty)
+        mem_controls = QWidget()
+        mem_controls.setLayout(mem_row)
+        mem_controls.setProperty("commandSearchText", "Memory profiles")
+        mem_controls.setToolTip(self.mem_combo.toolTip())
+        self.viz.setFixedHeight(px(32))
         groups = (
-            ("Voice & camera", (self.talk_btn, self.vad_btn, self.viz, self.pause_btn,
-                                self.voice_btn, self.cam_btn, self.capture_btn)),
+            ("Voice & camera", (self.talk_btn, self.vad_btn, self.voice_btn, self.pause_btn,
+                                self.cam_btn, self.capture_btn)),
             ("Images", (self.paste_img_btn, self.redraw_btn, self.style_preset_btn,
                         self.remove_obj_btn, self.outfit_btn, self.fixhands_btn,
-                        self.retryhands_btn, self.fixartifact_btn, self.whole_frame_btn,
-                        *self.video_mode_btns)),
-            ("Search & memory", (self.ultra_btn, self.usedb_btn, clear_btn, mem_row,
-                                 self.save_mem_btn, self.compact_btn, self.clear_ctx_btn)),
+                        self.retryhands_btn, self.fixartifact_btn, self.whole_frame_btn)),
+            ("Video", tuple(self.video_mode_btns)),
+            ("Search & memory", (self.ultra_btn, self.usedb_btn, self.save_mem_btn,
+                                 self.compact_btn, clear_btn, self.clear_ctx_btn, mem_controls)),
         )
-        grid = QGridLayout(); grid.setHorizontalSpacing(px(18))
-        for c, (title, items) in enumerate(groups):
-            col = QVBoxLayout(); col.setSpacing(px(10))
-            col.addWidget(_section(title))
+        self._command_groups = []
+        for title, items in groups:
+            group, group_layout = _card()
+            group.setObjectName("commandGroup")
+            group_layout.setContentsMargins(px(12), px(10), px(12), px(10))
+            group_layout.addWidget(_section(title))
+            flow = _flow(spacing=px(8))
             for it in items:
-                if isinstance(it, QLayout):
-                    col.addLayout(it)
-                    continue
-                col.addWidget(it)
+                flow.addWidget(it)
                 # A command answers in the chat: show it. Plain switches stay put.
-                if isinstance(it, QPushButton) and it not in (self.voice_btn, self.whole_frame_btn):
-                    it.clicked.connect(lambda *_: self.pages.setCurrentIndex(1))
-            col.addStretch(1)
-            grid.addLayout(col, 0, c)
-            grid.setColumnStretch(c, 1)
-        llay.addLayout(grid)
+                if isinstance(it, QPushButton):
+                    it.setProperty("commandAction", True)
+                    if it not in (self.voice_btn, self.whole_frame_btn):
+                        it.clicked.connect(lambda *_: self.pages.setCurrentIndex(1))
+            group_layout.addWidget(_FlowWidget(flow))
+            extras = (self.viz,) if title == "Voice & camera" else ()
+            for extra in extras:
+                group_layout.addWidget(extra)
+            llay.addWidget(group)
+            self._command_groups.append((title, group, items, extras))
+        self.commands_search.textChanged.connect(self._filter_commands)
         llay.addStretch(1)
         left_scroll = QScrollArea()
         left_scroll.setWidgetResizable(True)
@@ -395,10 +417,45 @@ class DashboardMixin:
         tabs.tabCloseRequested.connect(self._on_tab_close_requested)
         tabs.tabBar().hide()           # the grouped list on the left replaces the strip (gui_nav)
         self.workspace_nav = WorkspaceNav(tabs, self._tab_key_for_widget)
-        rlay.addWidget(self.workspace_nav)
+        sidebar = QWidget()
+        sidebar.setFixedWidth(px(210))
+        sidebar_layout = QVBoxLayout(sidebar)
+        sidebar_layout.setContentsMargins(0, 0, 0, 0)
+        sidebar_layout.setSpacing(px(8))
+        self.workspace_search = QLineEdit()
+        self.workspace_search.setPlaceholderText("Search sections…")
+        self.workspace_search.setAccessibleName("Search sections")
+        self.workspace_search.setClearButtonEnabled(True)
+        self.workspace_empty = QLabel("No sections found.")
+        self.workspace_empty.setObjectName("searchEmpty")
+        self.workspace_empty.setWordWrap(True)
+        self.workspace_empty.hide()
+        self.workspace_search.textChanged.connect(self.workspace_nav.filter)
+        self.workspace_search.returnPressed.connect(self.workspace_nav.activate_first)
+        self.workspace_nav.resultsChanged.connect(lambda count: self.workspace_empty.setVisible(count == 0))
+        sidebar_layout.addWidget(self.workspace_search)
+        sidebar_layout.addWidget(self.workspace_empty)
+        sidebar_layout.addWidget(self.workspace_nav, 1)
+        rlay.addWidget(sidebar)
         rlay.addWidget(tabs, 1)
         _shadow(right)
         self.pages.addTab(right, "Workspace")
         self.pages.setCurrentIndex(1)
         self.splitter.setSizes(self._default_splitter_sizes())
         return root
+
+    def _filter_commands(self, query):
+        total = 0
+        for title, group, items, extras in self._command_groups:
+            shown = 0
+            for item in items:
+                text = item.text() if isinstance(item, QPushButton) else item.property("commandSearchText")
+                match = search_matches(query, title, text, item.toolTip(),
+                    item.property("_i18n_setText"), item.property("_i18n_setToolTip"))
+                item.setVisible(match)
+                shown += int(match)
+            for extra in extras:
+                extra.setVisible(not query.strip())
+            group.setVisible(shown > 0)
+            total += shown
+        self.commands_empty.setVisible(total == 0)

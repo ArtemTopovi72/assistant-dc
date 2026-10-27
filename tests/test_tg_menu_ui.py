@@ -287,7 +287,11 @@ check("a caption wins over the armed instruction",
 
 # With an image already in hand the button must still work immediately.
 reset(bot)
-sess(bot).last_image_path = "C:/tmp/whatever.png"
+_current = os.path.join(_DATA_DIR, "current.png")
+with open(_current, "wb") as _image:
+    _image.write(b"\x89PNG\r\n\x1a\n" + b"0" * 64)
+sess(bot).last_image_path = _current
+sess(bot).target_image = T._log_image(sess(bot), _current, label="current", src="bot")
 bot._store.put(sess(bot))
 tap(bot, "analyze")
 check("analyze with an image in hand runs straight away", bool(bot.pushed),

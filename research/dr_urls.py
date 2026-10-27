@@ -23,7 +23,7 @@ logger = logging.getLogger("assistant." + __name__)
 # --------------------------------------------------------------------------- #
 def _domain(url: str) -> str:
     try:
-        net = urlparse(url).netloc.lower()
+        net = (urlparse(url).hostname or "").lower().rstrip(".")
         return net[4:] if net.startswith("www.") else net
     except Exception:
         return url
@@ -142,42 +142,41 @@ _BASE_AUTHORITY = (
 # prioritizes LinkedIn/careers pages, a health query prioritizes WHO/Mayo, etc.
 _CATEGORY_AUTHORITY = {
     "science": (
-        "arxiv.org", "doi.org", "ieee.org", "ieeexplore", "acm.org", "dl.acm.org",
-        "springer", "sciencedirect", "nature.com", "mdpi.com", "openreview.net",
-        "semanticscholar.org", "researchgate.net", "ncbi.nlm.nih.gov", "pubmed",
-        "scholar.google", "jmlr.org", "neurips.cc", "proceedings.mlr.press",
-        "mathworks.com", "wolfram",
+        "arxiv.org", "doi.org", "ieee.org", "acm.org", "dl.acm.org",
+        "springer.com", "springeropen.com", "sciencedirect.com", "nature.com", "mdpi.com", "openreview.net",
+        "semanticscholar.org", "researchgate.net", "ncbi.nlm.nih.gov",
+        "scholar.google.com", "jmlr.org", "neurips.cc", "proceedings.mlr.press",
+        "mathworks.com", "wolfram.com",
     ),
     "news": (
-        "reuters.com", "apnews.com", "bbc.co", "bbc.com", "npr.org",
+        "reuters.com", "apnews.com", "bbc.co.uk", "bbc.com", "npr.org",
         "nytimes.com", "washingtonpost.com", "theguardian.com", "wsj.com",
         "bloomberg.com", "ft.com", "economist.com", "axios.com", "politico.com",
         "aljazeera.com", "cnbc.com",
     ),
     "product": (
-        "github.com", "github.io", "readthedocs", "rtings.com", "notebookcheck",
+        "github.com", "github.io", "readthedocs.io", "readthedocs.org", "rtings.com", "notebookcheck.net", "notebookcheck.com",
         "tomshardware.com", "anandtech.com", "techradar.com", "theverge.com",
-        "wirecutter", "nytimes.com/wirecutter", "dpreview.com", "gsmarena.com",
+        "thewirecutter.com", "nytimes.com/wirecutter", "dpreview.com", "gsmarena.com",
     ),
     "company": (  # reputation / trust / "is X a good company"
-        "glassdoor.", "trustpilot.", "comparably.com", "bbb.org", "indeed.com/cmp",
+        "glassdoor.com", "glassdoor.co.uk", "trustpilot.com", "comparably.com", "bbb.org", "indeed.com/cmp",
         "linkedin.com/company", "crunchbase.com", "g2.com", "ambitionbox.com",
         "sec.gov", "reuters.com", "bloomberg.com",
     ),
     "jobs": (  # vacancies / hiring / "is this vacancy real"
-        "linkedin.com", "indeed.", "glassdoor.", "lever.co", "greenhouse.io",
-        "ashbyhq.com", "workday", "wellfound.com", "levels.fyi", "hh.ru",
-        "careers.", "jobs.",
+        "linkedin.com", "indeed.com", "indeed.co.uk", "glassdoor.com", "glassdoor.co.uk", "lever.co", "greenhouse.io",
+        "ashbyhq.com", "workday.com", "myworkdayjobs.com", "wellfound.com", "levels.fyi", "hh.ru",
     ),
     "finance": (
         "sec.gov", "bloomberg.com", "reuters.com", "ft.com", "wsj.com",
-        "morningstar.com", "marketwatch.com", "investor.", "nasdaq.com",
+        "morningstar.com", "marketwatch.com", "nasdaq.com",
     ),
     "people": (
         "linkedin.com", "imdb.com", "muckrack.com", "forbes.com/profile",
     ),
     "local": (  # venues, cultural centres, posters/afisha — often only on socials
-        "tripadvisor.", "yelp.", "openstreetmap.org", "google.com/maps",
+        "tripadvisor.com", "tripadvisor.co.uk", "tripadvisor.ru", "yelp.com", "yelp.co.uk", "openstreetmap.org", "google.com/maps",
         "vk.com", "t.me", "telegram.me", "afisha.ru", "timepad.ru", "kassir.ru",
         "2gis.ru", "yandex.ru/maps",
     ),
@@ -196,6 +195,9 @@ _CATEGORY_AUTHORITY = {
         "criterion.com", "afisha.ru", "mubi.com",
     ),
 }
+
+# Deliberate semantic hints: a company's own careers/investor subdomain.
+_CATEGORY_AUTHORITY_PREFIXES = {"jobs": ("careers.", "jobs."), "finance": ("investor.",)}
 
 
 _AD_CLICK = re.compile(r"^https?://(?:www\.)?(?:bing\.com/aclick|duckduckgo\.com/y\.js)", re.I)
@@ -260,9 +262,11 @@ def _authority_score(url: str, category: str = "general") -> float:
     host = _domain(url)
     if _is_junk_source(url):
         return _JUNK_SCORE
-    if any(s in host for s in _BASE_AUTHORITY):
+    if any(host.endswith(s) if s.startswith(".") else
+           host == s or host.endswith("." + s) for s in _BASE_AUTHORITY):
         return _AUTH_BASE_SCORE
-    if any(s in host for s in _CATEGORY_AUTHORITY.get(category, ())):
+    if (any(host == s or host.endswith("." + s) for s in _CATEGORY_AUTHORITY.get(category, ()))
+            or host.startswith(_CATEGORY_AUTHORITY_PREFIXES.get(category, ()))):
         return _AUTH_CATEGORY_SCORE
     if _is_community_host(url, category):
         return _COMMUNITY_SCORE

@@ -333,28 +333,30 @@ class KnowledgeBase:
         if row and row["hash"] == h:
             return row["id"], False     # unchanged — skip re-chunk/re-embed
 
-        if row:
-            doc_id = row["id"]
-            self._conn.execute("DELETE FROM chunks WHERE doc_id=?", (doc_id,))
-            self._conn.execute(
-                "UPDATE documents SET source_type=?,url=?,path=?,title=?,profile=?,"
-                "hash=?,updated=?,meta=? WHERE id=?",
-                (source_type, url, path, title, profile, h, now,
-                 json.dumps(meta or {}, ensure_ascii=False), doc_id))
-        else:
-            cur = self._conn.execute(
-                "INSERT INTO documents(source_type,source_id,url,path,title,profile,"
-                "hash,created,updated,meta) VALUES(?,?,?,?,?,?,?,?,?,?)",
-                (source_type, source_id, url, path, title, profile, h, now, now,
-                 json.dumps(meta or {}, ensure_ascii=False)))
-            doc_id = cur.lastrowid
+        # Roll back the deletion too if replacement/chunking fails; a later ingest
+        # must never commit a half-replaced document.
+        with self._conn:
+            if row:
+                doc_id = row["id"]
+                self._conn.execute("DELETE FROM chunks WHERE doc_id=?", (doc_id,))
+                self._conn.execute(
+                    "UPDATE documents SET source_type=?,url=?,path=?,title=?,profile=?,"
+                    "hash=?,updated=?,meta=? WHERE id=?",
+                    (source_type, url, path, title, profile, h, now,
+                     json.dumps(meta or {}, ensure_ascii=False), doc_id))
+            else:
+                cur = self._conn.execute(
+                    "INSERT INTO documents(source_type,source_id,url,path,title,profile,"
+                    "hash,created,updated,meta) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                    (source_type, source_id, url, path, title, profile, h, now, now,
+                     json.dumps(meta or {}, ensure_ascii=False)))
+                doc_id = cur.lastrowid
 
-        chunks = chunk_text(text)
-        for ordi, ch in enumerate(chunks):
-            self._conn.execute(
-                "INSERT INTO chunks(doc_id,ord,text,n_words) VALUES(?,?,?,?)",
-                (doc_id, ordi, ch, len(ch.split())))
-        self._conn.commit()
+            chunks = chunk_text(text)
+            for ordi, ch in enumerate(chunks):
+                self._conn.execute(
+                    "INSERT INTO chunks(doc_id,ord,text,n_words) VALUES(?,?,?,?)",
+                    (doc_id, ordi, ch, len(ch.split())))
         if embed:
             self.ensure_embeddings(doc_id=doc_id)
         return doc_id, True
@@ -471,17 +473,22 @@ class KnowledgeBase:
         for f in files:
             try:
                 rec = json.loads(f.read_text(encoding="utf-8"))
+                if not isinstance(rec, dict):
+                    raise ValueError("cache record must be an object")
+                url = rec.get("url") or f.stem
+                text = rec.get("text") or rec.get("content") or ""
+                title = rec.get("title") or url
+                if not all(isinstance(value, str) for value in (url, text, title)):
+                    raise ValueError("cache URL, text and title must be strings")
             except Exception:
                 errors += 1
                 continue
-            url = rec.get("url") or f.stem
-            text = rec.get("text") or rec.get("content") or ""
             if not text.strip():
                 skipped += 1
                 continue
             _, ch = self.add_document(
                 source_type="research", source_id=url, text=text,
-                title=rec.get("title") or url, url=url,
+                title=title, url=url,
                 meta={"content_hash": rec.get("content_hash"), "ts": rec.get("ts"),
                       "cache_file": f.name},
                 embed=False)              # embed in one batched pass below
@@ -550,13 +557,6 @@ class KnowledgeBase:
             "SELECT id, embedding FROM chunks "
             "WHERE embedding IS NOT NULL AND embed_model = ?",
             (self.embedder.model,)).fetchall()
-        if not rows:
-            # No vectors from this model yet (fresh switch, mid-reindex): fall back
-            # to whatever is stored, still length-filtered, so an index that was
-            # never migrated keeps working until it is.
-            rows = self._conn.execute(
-                "SELECT id, embedding FROM chunks WHERE embedding IS NOT NULL"
-            ).fetchall()
         if rows:
             want = dim * 4 if dim else None
             if want is None:

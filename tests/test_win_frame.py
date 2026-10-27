@@ -100,9 +100,11 @@ WIN = _Rect(100, 200, 1100, 800)      # 1000x600
 
 
 class _User32:
+    def __init__(self, rect=WIN):
+        self.rect = rect
     def GetWindowRect(self, hwnd, ref):
         r = ctypes.cast(ref, ctypes.POINTER(ctypes.wintypes.RECT)).contents
-        r.left, r.top, r.right, r.bottom = WIN.left, WIN.top, WIN.right, WIN.bottom
+        r.left, r.top, r.right, r.bottom = self.rect.left, self.rect.top, self.rect.right, self.rect.bottom
         return 1
     def GetSystemMetrics(self, m):
         return 4                          # a slim border band
@@ -114,33 +116,30 @@ class _Msg:
         self.wParam, self.lParam = 0, ((y & 0xFFFF) << 16) | (x & 0xFFFF)
 
 
-_real_user32 = WF._user32
-WF._user32 = _User32()
-try:
-    caption = lambda x, y: 40 <= y <= 80          # a titlebar band, local px
-    cases = [                                     # (x, y, expected)
-        (WIN.left + 2,     WIN.top + 300,  WF.HTLEFT),
-        (WIN.right - 3,    WIN.top + 300,  WF.HTRIGHT),
-        (WIN.left + 500,   WIN.top + 2,    WF.HTTOP),
-        (WIN.left + 500,   WIN.bottom - 2, WF.HTBOTTOM),
-        (WIN.left + 2,     WIN.top + 2,    WF.HTTOPLEFT),
-        (WIN.right - 2,    WIN.top + 2,    WF.HTTOPRIGHT),
-        (WIN.left + 2,     WIN.bottom - 2, WF.HTBOTTOMLEFT),
-        (WIN.right - 2,    WIN.bottom - 2, WF.HTBOTTOMRIGHT),
-        (WIN.left + 500,   WIN.top + 60,   WF.HTCAPTION),   # our titlebar
-        (WIN.left + 500,   WIN.top + 300,  0),              # plain content
-    ]
-    for x, y, want in cases:
-        check("hit %-22s -> %s" % ((x - WIN.left, y - WIN.top), want or "Qt"),
-              WF.hit(_Msg(x, y), caption) == want, WF.hit(_Msg(x, y), caption))
-    check("negative screen coords stay in the window",
-          WF.hit(_Msg(WIN.left - 0, WIN.top + 2, ), caption) != 0 or True)
-    nccalcs = types.SimpleNamespace(hwnd=7, message=WF.WM_NCCALCSIZE, wParam=1, lParam=0)
-    check("NCCALCSIZE with wParam eats the frame area", WF.remove_frame_area(nccalcs))
-    nccalcs0 = types.SimpleNamespace(hwnd=7, message=WF.WM_NCCALCSIZE, wParam=0, lParam=0)
-    check("NCCALCSIZE without wParam passes", not WF.remove_frame_area(nccalcs0))
-finally:
-    WF._user32 = _real_user32
+user32 = _User32()
+caption = lambda x, y: 40 <= y <= 80          # a titlebar band, local px
+cases = [                                     # (x, y, expected)
+    (WIN.left + 2,     WIN.top + 300,  WF.HTLEFT),
+    (WIN.right - 3,    WIN.top + 300,  WF.HTRIGHT),
+    (WIN.left + 500,   WIN.top + 2,    WF.HTTOP),
+    (WIN.left + 500,   WIN.bottom - 2, WF.HTBOTTOM),
+    (WIN.left + 2,     WIN.top + 2,    WF.HTTOPLEFT),
+    (WIN.right - 2,    WIN.top + 2,    WF.HTTOPRIGHT),
+    (WIN.left + 2,     WIN.bottom - 2, WF.HTBOTTOMLEFT),
+    (WIN.right - 2,    WIN.bottom - 2, WF.HTBOTTOMRIGHT),
+    (WIN.left + 500,   WIN.top + 60,   WF.HTCAPTION),   # our titlebar
+    (WIN.left + 500,   WIN.top + 300,  0),              # plain content
+]
+for x, y, want in cases:
+    check("hit %-22s -> %s" % ((x - WIN.left, y - WIN.top), want or "Qt"),
+          WF.hit(_Msg(x, y), caption, user32=user32) == want,
+          WF.hit(_Msg(x, y), caption, user32=user32))
+check("negative screen coords stay in the window",
+      WF.hit(_Msg(-1098, -500), caption, user32=_User32(_Rect(-1100, -800, -100, -200))) == WF.HTLEFT)
+nccalcs = types.SimpleNamespace(hwnd=7, message=WF.WM_NCCALCSIZE, wParam=1, lParam=0)
+check("NCCALCSIZE with wParam eats the frame area", WF.remove_frame_area(nccalcs, user32=user32))
+nccalcs0 = types.SimpleNamespace(hwnd=7, message=WF.WM_NCCALCSIZE, wParam=0, lParam=0)
+check("NCCALCSIZE without wParam passes", not WF.remove_frame_area(nccalcs0, user32=user32))
 
 w.close()
 print("\n%d/%d checks passed" % (OK, OK + BAD))

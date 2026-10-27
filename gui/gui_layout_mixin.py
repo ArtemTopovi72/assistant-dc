@@ -15,7 +15,7 @@ import logging
 
 from PyQt5.QtCore import QByteArray, QPoint, Qt
 from PyQt5.QtGui import QIcon
-from seams import widget_part
+from seams import module, widget_part
 from PyQt5.QtWidgets import (
     QApplication, QHBoxLayout, QInputDialog, QLabel, QMenu, QPushButton, QWidget,
 )
@@ -47,13 +47,16 @@ class LayoutMixin:
         if self._native_frame() or self._win_native:
             return
         try:
-            if QApplication.platformName() in ("offscreen", "minimal"):
+            if widget_part(self, "platformName", QApplication.platformName)() in ("offscreen", "minimal"):
                 return
-            import gui_win_frame
+            gui_win_frame = module(self, "gui_win_frame")
+            # SetWindowPos recalculates the frame synchronously inside install().
+            self._win_native = True
             self._win_native = gui_win_frame.install(int(self.winId()))
             if self._win_native:
                 logger.info("window: native snap and every-edge resize enabled")
         except Exception:
+            self._win_native = False
             logger.debug("native window frame not installed", exc_info=True)
 
     def _win_frame_message(self, message):
@@ -62,7 +65,7 @@ class LayoutMixin:
         if not self._win_native:
             return None
         try:
-            import gui_win_frame
+            gui_win_frame = module(self, "gui_win_frame")
             msg = gui_win_frame.Msg(int(message))
             if gui_win_frame.remove_frame_area(msg):
                 return 0
@@ -74,7 +77,11 @@ class LayoutMixin:
                     # labels answer "the bar" while its buttons answer themselves
                     child = self.childAt(int(x / dpr), int(y / dpr))
                     return child is self._title_bar
-                return gui_win_frame.hit(msg, caption)
+                def client(x, y):
+                    child = self.childAt(int(x / dpr), int(y / dpr))
+                    return child is not None and self._title_bar.isAncestorOf(child)
+                hit = gui_win_frame.hit(msg, caption, client=client)
+                return hit if hit else None
         except Exception:
             logger.debug("win32 frame message failed", exc_info=True)
         return None
@@ -89,12 +96,12 @@ class LayoutMixin:
     def _build_titlebar(self):
         bar = QWidget()
         bar.setObjectName("titlebar")
-        bar.setFixedHeight(px(42))
+        bar.setFixedHeight(px(36))
         h = QHBoxLayout(bar)
         h.setContentsMargins(px(12), 0, px(8), 0)
         h.setSpacing(px(10))
         ic = QLabel()
-        pm = QIcon(ICON_PATH).pixmap(px(22), px(22))
+        pm = QIcon(ICON_PATH).pixmap(px(20), px(20))
         if not pm.isNull():
             ic.setPixmap(pm)
         ttl = QLabel("Assistant DC")

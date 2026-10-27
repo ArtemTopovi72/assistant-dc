@@ -39,6 +39,24 @@ def test_redub_gives_up_without_speech_models():
     assert VD.redub(Ctx(), __file__, ["Привет."]) == ""
 
 
+def test_redub_cleans_workspace_when_audio_extraction_fails(tmp_path):
+    import shutil
+    import tempfile
+    import types
+    from pathlib import Path
+    import pytest
+
+    if not shutil.which("ffmpeg"):
+        pytest.skip("ffmpeg is required for the invalid-clip failure path")
+    source = tmp_path / "broken.mp4"
+    source.write_bytes(b"not a video")
+    before = set(Path(tempfile.gettempdir()).glob("vdub_*"))
+    ctx = types.SimpleNamespace(models=types.SimpleNamespace(whisper=object()))
+    assert VD.redub(ctx, str(source), ["Привет."]) == ""
+    assert set(Path(tempfile.gettempdir()).glob("vdub_*")) == before
+    assert source.read_bytes() == b"not a video"
+
+
 def test_the_bridge_sentence_shares_no_words_with_the_line():
     line = "Сегодня на улице тихо, вали в свой каменный замок."
     b = VD._bridge_sentence(line)

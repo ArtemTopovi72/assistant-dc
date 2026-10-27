@@ -20,6 +20,7 @@ import threading
 import time
 import uuid
 from typing import Optional
+from tg_incoming import UPDATE_ID
 
 
 
@@ -137,7 +138,6 @@ class DispatchMixin:
             # unconfirmed is what lets the next instance receive it.
             if not self._running:
                 break
-            self._commit_offset(updates)
 
             if first_poll and updates:
                 # Any updates present on the first poll were sent while the bot was offline
@@ -158,8 +158,13 @@ class DispatchMixin:
             first_poll = False
 
             for upd in updates:
-                try: self._dispatch_logged(upd)
-                except Exception: tg_bot.logger.exception("dispatch error")
+                try:
+                    self._dispatch_logged(upd)
+                except Exception:
+                    tg_bot.logger.exception("dispatch error; update remains unconfirmed")
+                    time.sleep(1)
+                    break
+                self._commit_offset([upd])
         self._release_poll_lease()
 
     def _commit_offset(self, result: list) -> None:
@@ -192,6 +197,18 @@ class DispatchMixin:
                     "out now, do not set a reminder for it again.]"}})
 
     def _dispatch_logged(self, upd: dict):
+        key = f"update:{upd['update_id']}" if upd.get("update_id", 0) > 0 else ""
+        if key and self._incoming.seen(key):
+            return
+        token = UPDATE_ID.set((key, threading.get_ident()))
+        try:
+            self._dispatch_traced(upd)
+            if key and not self._incoming.seen(key):
+                self._incoming.ack([key])
+        finally:
+            UPDATE_ID.reset(token)
+
+    def _dispatch_traced(self, upd: dict):
         """_dispatch inside this chat's full transcript (chatlog.py)."""
         import chatlog
         cb = upd.get("callback_query") or {}
@@ -599,17 +616,23 @@ class DispatchMixin:
             tg_bot.logger.exception("could not save an incoming photo")
             return ""
 
-    def _buffer_album(self, chat_id, group_id, file_id, caption, forwarded=False):
+    def _buffer_album(self, chat_id, group_id, file_id, caption, forwarded=False, saved=None):
         # A QUIET period, not a fixed window: a forwarded album of 10 pages arrives over several seconds, and a
         # timer started by the first page cut it into pieces answered one by one.
         with self._album_lock:
             e = self._albums.get(group_id)
             if e is None:
-                e = self._albums[group_id] = {"chat_id": chat_id, "photos": [], "timer": None, "t0": time.monotonic(),
-                                              "forwarded": forwarded}
+                e = self._albums[group_id] = {"chat_id": chat_id,
+                    "photos": list((saved or {}).get("photos", [])), "timer": None, "t0": time.monotonic(),
+                    "_inbox_id": (saved or {}).get("_inbox_id") or uuid.uuid4().hex,
+                    "forwarded": forwarded}
             elif e["timer"] is not None:
                 e["timer"].cancel()
-            e["photos"].append({"file_id": file_id, "caption": caption})
+            if not any(p["file_id"] == file_id for p in e["photos"]):
+                e["photos"].append({"file_id": file_id, "caption": caption})
+            key = e["_inbox_id"]
+            self._incoming.put(chat_id, {"type": "album_pending", "group_id": group_id,
+                "photos": e["photos"], "forwarded": forwarded, "_inbox_id": key}, key)
             wait = max(0.05, min(getattr(self, "album_collect_s", None) or tg_bot._ALBUM_COLLECT_S, e["t0"] + tg_bot._ALBUM_MAX_S - time.monotonic()))
             t = threading.Timer(wait, self._flush_album, (group_id,))
             t.daemon = True; t.start(); e["timer"] = t
@@ -620,6 +643,7 @@ class DispatchMixin:
         cap = next((p["caption"] for p in entry["photos"] if p["caption"]), "")
         self._enqueue_item(entry["chat_id"], {
             "type": "album", "forwarded": entry.get("forwarded", False),
+            "_inbox_id": entry["_inbox_id"],
             "file_ids": [p["file_id"] for p in entry["photos"]],
             "caption": cap})
 

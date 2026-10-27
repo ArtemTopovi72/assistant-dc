@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 import threading
 import time
@@ -28,6 +29,7 @@ _RUNNER = None                      # callable(chat_id: int, request: str) -> No
 _PRICE = None                       # callable(item) -> (message | None, fields to keep)
 _ITEMS: dict[str, dict] = {}        # id -> {"owner", "due", "text"}
 _TIMERS: dict[str, threading.Timer] = {}
+_FIRING: set[str] = set()
 MAX_PER_OWNER = 20
 # Longest single Timer sleep. A reminder further out than this wakes up early
 # and re-arms. On Windows a lock wait cannot exceed threading.TIMEOUT_MAX
@@ -37,74 +39,127 @@ _MAX_TIMER_S = 86400.0
 _TIMER = threading.Timer           # register(timer=...) swaps it for a suite
 
 
-def _save() -> None:
+def _save(items: dict) -> None:
     if _PATH is None:
         return
     try:
         _PATH.parent.mkdir(parents=True, exist_ok=True)
         tmp = _PATH.with_suffix(".tmp")
-        tmp.write_text(json.dumps(_ITEMS, ensure_ascii=False), encoding="utf-8")
+        tmp.write_text(json.dumps(items, ensure_ascii=False), encoding="utf-8")
         tmp.replace(_PATH)
-    except Exception:
+    except Exception as exc:
         logger.exception("could not save reminders")
+        raise ValueError("could not save reminders") from exc
+    _ITEMS.clear()
+    _ITEMS.update(items)
 
 
 def _fire(rid: str) -> None:
     with _LOCK:
-        cur = _ITEMS.get(rid)
-        if cur is not None and cur["due"] - time.time() > 1.0:
+        item = _ITEMS.get(rid)
+        if item is None:
+            _TIMERS.pop(rid, None)
+            return
+        if rid in _FIRING or _SENDER is None:
+            _arm(rid, min_wait=60)
+            return
+        if item["due"] - time.time() > 1.0:
             _arm(rid)                   # a capped wait ended early: sleep on
             return
-        item = _ITEMS.pop(rid, None)
-        _TIMERS.pop(rid, None)
-        ended = bool(item and item.get("until") and time.time() >= item["until"])
-        # A repeating reminder re-arms for its next slot.
-        if item and item.get("every") and not ended:
-            nxt = dict(item)
-            while nxt["due"] <= time.time():
-                nxt["due"] += nxt["every"]
-            _ITEMS[rid] = nxt
-            _arm(rid)
-        _save()
-    if not item or _SENDER is None:
-        return
-    en = item.get("lang") == "en"
-    owner = int(item["owner"])
-    # An item due while the bot was off fires at once on the next start; the
-    # owner asked (2026-10-27) that it arrive with an apology, not in silence.
-    late = time.time() - item["due"] > 120
+        _FIRING.add(rid)
     try:
-        if item.get("kind") == "price":
-            msg, keep = _PRICE(item) if _PRICE else (None, {})
-            if keep:
-                with _LOCK:
-                    if rid in _ITEMS:
-                        _ITEMS[rid].update(keep)
-                        _save()
-            if msg:
-                _SENDER(owner, msg)
-            if ended:
-                _SENDER(owner, (f"Price watch ended: {item.get('name') or item['text']}" if en
-                                else f"Слежение за ценой закончилось: {item.get('name') or item['text']}"))
+        delivery = item.get("_delivery")
+        if delivery is None:
+            delivery = _prepare_delivery(item)
+            with _LOCK:
+                if _ITEMS.get(rid) is not item:
+                    return
+                prepared = dict(item, _delivery=delivery)
+                items = dict(_ITEMS)
+                items[rid] = prepared
+                _save(items)             # no output before the pending delivery is durable
+                item = prepared
+
+        def checkpoint(**fields):
+            with _LOCK:
+                if _ITEMS.get(rid) is not item:
+                    return False
+                # Keep accepted progress in memory even if its disk checkpoint fails.
+                # shortcut: crash between remote acceptance and save can duplicate; transport idempotency closes this gap.
+                delivery.update(fields)
+                _save(dict(_ITEMS))
+                return True
+
+        if not checkpoint():
             return
-        if item.get("kind") == "task" and _RUNNER is not None:
-            head = (("⏰ Scheduled (late -- I was off, sorry): " if late else "⏰ Scheduled: ")
-                    if en else
-                    ("⏰ По расписанию (я был выключен — извини, вот что накопилось): " if late
-                     else "⏰ По расписанию: "))
-            _SENDER(owner, head + item["text"])
+        owner = int(item["owner"])
+        for index in range(delivery["sent"], len(delivery["messages"])):
+            _SENDER(owner, delivery["messages"][index])
+            if not checkpoint(sent=index + 1):
+                return
+        if delivery["task"] and not delivery["ran"]:
+            if _RUNNER is None:
+                raise RuntimeError("scheduled task runner is unavailable")
             _RUNNER(owner, item["text"])
-            return
+            if not checkpoint(ran=True):
+                return
+        with _LOCK:
+            if _ITEMS.get(rid) is not item:
+                return
+            items = dict(_ITEMS)
+            items.pop(rid)
+            if item.get("every") and not delivery["ended"]:
+                nxt = dict(item, **delivery["keep"])
+                nxt.pop("_delivery", None)
+                nxt["due"] += max(1, math.floor((time.time() - nxt["due"]) / nxt["every"]) + 1) * nxt["every"]
+                items[rid] = nxt
+            _save(items)
+            old_timer = _TIMERS.pop(rid, None)
+            if old_timer:
+                old_timer.cancel()
+            if rid in _ITEMS:
+                _arm(rid)
+    except Exception:
+        logger.exception("reminder %s could not be delivered; retaining it for retry", rid)
+        with _LOCK:
+            if _ITEMS.get(rid) is item:
+                _arm(rid, min_wait=60)
+    finally:
+        with _LOCK:
+            _FIRING.discard(rid)
+
+
+def _prepare_delivery(item: dict) -> dict:
+    en = item.get("lang") == "en"
+    late = time.time() - item["due"] > 120
+    ended = bool(item.get("until") and time.time() >= item["until"])
+    keep = {}
+    task = item.get("kind") == "task"
+    if item.get("kind") == "price":
+        if _PRICE is None:
+            raise RuntimeError("price checker is unavailable")
+        msg, keep = _PRICE(item)
+        messages = [msg] if msg else []
+        if ended:
+            messages.append(f"Price watch ended: {item.get('name') or item['text']}" if en
+                            else f"Слежение за ценой закончилось: {item.get('name') or item['text']}")
+    elif task:
+        head = (("⏰ Scheduled (late -- I was off, sorry): " if late else "⏰ Scheduled: ")
+                if en else
+                ("⏰ По расписанию (я был выключен — извини, вот что накопилось): " if late
+                 else "⏰ По расписанию: "))
+        messages = [head + item["text"]]
+    else:
         pre = (("⏰ Reminder (late): " if late else "⏰ Reminder: ") if en
                else ("⏰ Напоминание (я был выключен — извини, вот что накопилось): " if late
                      else "⏰ Напоминание: "))
-        _SENDER(owner, pre + item["text"])
-    except Exception:
-        logger.exception("reminder %s could not be sent", rid)
+        messages = [pre + item["text"]]
+    return {"messages": messages, "sent": 0, "task": task, "ran": False,
+            "keep": keep, "ended": ended}
 
 
-def _arm(rid: str) -> None:
-    wait = min(_MAX_TIMER_S, max(0.0, _ITEMS[rid]["due"] - time.time()))
+def _arm(rid: str, min_wait: float = 0.0) -> None:
+    wait = max(min_wait, min(_MAX_TIMER_S, max(0.0, _ITEMS[rid]["due"] - time.time())))
     t = _TIMER(wait, _fire, (rid,))
     t.daemon = True
     _TIMERS[rid] = t
@@ -152,15 +207,17 @@ def _valid(item) -> bool:
     num = (int, float)
     try:
         every = item.get("every") or 0
+        until = item.get("until") or 0
         kind = item.get("kind") or "text"
         return (str(item["owner"]).lstrip("-").isdigit()
-                and isinstance(item["due"], num) and item["due"] == item["due"]   # not NaN
+                and isinstance(item["due"], num) and math.isfinite(item["due"])
                 and isinstance(item.get("text"), str)
-                and isinstance(every, num) and (every == 0 or every >= 60)
+                and isinstance(every, num) and math.isfinite(every) and (every == 0 or every >= 60)
+                and isinstance(until, num) and math.isfinite(until)
                 and kind in ("text", "task", "price")
                 and (kind != "price" or (isinstance(item.get("product"), str)
                                          and isinstance(item.get("price"), num))))
-    except (AttributeError, KeyError, TypeError):
+    except (AttributeError, KeyError, TypeError, OverflowError):
         return False
 
 
@@ -175,17 +232,18 @@ def add(owner, delay_s: float, text: str, every_s: float = 0, lang: str = "ru",
         if sum(1 for i in _ITEMS.values() if str(i["owner"]) == str(owner)) >= MAX_PER_OWNER:
             raise ValueError(f"already {MAX_PER_OWNER} reminders pending")
         rid = uuid.uuid4().hex[:10]
-        _ITEMS[rid] = {"owner": str(owner), "due": time.time() + delay_s, "text": text.strip()[:500]}
+        item = {"owner": str(owner), "due": time.time() + delay_s, "text": text.strip()[:500]}
         if every_s:
-            _ITEMS[rid]["every"] = float(every_s)
+            item["every"] = float(every_s)
         if lang == "en":
-            _ITEMS[rid]["lang"] = "en"
+            item["lang"] = "en"
         if kind != "text":
-            _ITEMS[rid].update(extra or {}, kind=kind)
-        if not _valid(_ITEMS[rid]):
-            _ITEMS.pop(rid)
+            item.update(extra or {}, kind=kind)
+        if not _valid(item):
             raise ValueError(f"a {kind} needs its details")
-        _save()
+        items = dict(_ITEMS)
+        items[rid] = item
+        _save(items)
         _arm(rid)
     return rid
 
@@ -207,11 +265,12 @@ def remove(owner, rid: str) -> bool:
         item = _ITEMS.get(rid)
         if not item or str(item["owner"]) != str(owner):
             return False
-        _ITEMS.pop(rid)
+        items = dict(_ITEMS)
+        items.pop(rid)
+        _save(items)
         t = _TIMERS.pop(rid, None)
         if t:
             t.cancel()
-        _save()
         return True
 
 
@@ -227,13 +286,15 @@ def update(owner, rid: str, **fields) -> dict | None:
             new.pop(k, None)
         if not _valid(new):
             raise ValueError("that change would break the item")
-        _ITEMS[rid] = new
-        if new["due"] != item["due"]:
+        new.pop("_delivery", None)
+        items = dict(_ITEMS)
+        items[rid] = new
+        _save(items)
+        if new["due"] != item["due"] or rid in _FIRING:
             t = _TIMERS.pop(rid, None)
             if t:
                 t.cancel()
             _arm(rid)
-        _save()
         return dict(new, id=rid)
 
 
@@ -255,6 +316,7 @@ def cancel(owner, words: str) -> list[str]:
     short = [w for w in content if len(w) <= 2]
     gone = []
     with _LOCK:
+        removed = []
         for rid, item in list(_ITEMS.items()):
             if str(item["owner"]) != str(owner):
                 continue
@@ -262,13 +324,14 @@ def cancel(owner, words: str) -> list[str]:
             words_in = set(re.findall(r"\w+", low))
             if (everything or any(w[:max(3, len(w) - 2)] in low for w in ws)
                     or (not ws and any(w in words_in for w in short))):
-                _ITEMS.pop(rid)
+                removed.append(rid)
+                gone.append(item["text"])
+        if gone:
+            _save({rid: item for rid, item in _ITEMS.items() if rid not in removed})
+            for rid in removed:
                 t = _TIMERS.pop(rid, None)
                 if t:
                     t.cancel()
-                gone.append(item["text"])
-        if gone:
-            _save()
     return gone
 
 

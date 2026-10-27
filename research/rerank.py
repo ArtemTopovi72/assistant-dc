@@ -156,7 +156,8 @@ class Reranker:
             logger.info("loading cross-encoder %s on %s (first use may download ~2.3GB)…",
                         self.cross_model, _RERANK_DEVICE)
             t0 = time.time()
-            self._ce = CrossEncoder(self.cross_model, device=_RERANK_DEVICE)
+            self._ce = CrossEncoder(self.cross_model, device=_RERANK_DEVICE,
+                                    local_files_only=not self._allow_download)
             if str(_RERANK_DEVICE).startswith("cuda") and hasattr(getattr(self._ce, "model", None), "half"):
                 # fp32 held 2.3 GB beside a 26B LLM that was already spilling; BAAI ships
                 # bge-reranker-v2-m3 for fp16 use.
@@ -326,12 +327,12 @@ def release_gpu() -> None:
 
 
 def get_reranker(backend: str = "auto", *, embedder=None,
-                 cross_model: str = "BAAI/bge-reranker-v2-m3") -> Reranker:
+                 cross_model: str = "BAAI/bge-reranker-v2-m3", factory=Reranker) -> Reranker:
     global _DEFAULT
     if backend != "auto" or embedder is not None:
-        return Reranker(backend, embedder=embedder, cross_model=cross_model)
+        return factory(backend, embedder=embedder, cross_model=cross_model)
     if _DEFAULT is None:
-        _DEFAULT = Reranker("auto", cross_model=cross_model)
+        _DEFAULT = factory("auto", cross_model=cross_model)
     return _DEFAULT
 
 

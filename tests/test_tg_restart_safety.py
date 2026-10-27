@@ -7,6 +7,7 @@ queued»."""
 import os
 import sys
 import types
+import threading
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 for d in ("", "core", "bot"):
@@ -71,11 +72,13 @@ def test_a_task_popped_but_never_started_is_run_after_the_restart():
 
         def requeue(self, t):
             requeued.append(t.task_id)
-    bot = types.SimpleNamespace(_backend=RedisLike(set()), _send_text=lambda *a, **k: notified.append(a))
-    tg_queue.QueueMixin._recover_inflight(bot, [dict(task.to_dict(), _state="pending")])
+    bot = types.SimpleNamespace(_backend=RedisLike(set()), _send_text=lambda *a, **k: notified.append(a),
+                                _task_lock=threading.Lock(), _pending_journal={}, _write_inflight=lambda: None,
+                                _queued_work_allowed=lambda cid: True)
+    tg_queue.QueueMixin._restore_pending(bot, [dict(task.to_dict(), _state="pending")])
     assert requeued == ["e4782f4f00"] and not notified
     # still in Redis: the fresh consumers run it, nothing to do
     requeued.clear()
     bot._backend = RedisLike({"e4782f4f00"})
-    tg_queue.QueueMixin._recover_inflight(bot, [dict(task.to_dict(), _state="pending")])
+    tg_queue.QueueMixin._restore_pending(bot, [dict(task.to_dict(), _state="pending")])
     assert not requeued and not notified

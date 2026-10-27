@@ -146,7 +146,7 @@ print("=" * 70)
 
 good = make_bot(GOOD)
 good._register_commands = lambda: None
-good._recover_inflight = lambda: None
+good._recover_inflight = lambda data=None: None
 good._broadcast_startup = lambda: None
 started = good.start()
 try:

@@ -51,7 +51,9 @@ print("=" * 70)
 import chatlog
 _seen = []
 def _pick(answer):
-    return types.SimpleNamespace(choice=lambda q, text, options, default="": (_seen.append(text), answer)[1])
+    return types.SimpleNamespace(**reads(
+        read=lambda t: {"about_picture": True},
+        pick=lambda q, text: (_seen.append(text), answer)[1]))
 _fwd = chatlog.lines_of([
     {"kind": "in", "data": {"voice": {"file_id": "v"}, "forward_date": 1}},
     {"kind": "out", "data": {"method": "sendMessage", "text": "🎧 <b>Пересланное голосовое</b> · 12 с\nЧто с ним сделать?"}},

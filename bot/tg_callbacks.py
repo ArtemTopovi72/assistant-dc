@@ -985,10 +985,8 @@ class CallbackMixin:
         )
         if self._try_steer(chat_id, task):
             return
-        with self._task_lock:
-            self._pending_journal[task.task_id] = task
-        self._backend.push(task)
-        self._write_inflight()
+        if not self._persist_task(task):
+            return
         tg_bot.logger.info("Enqueued task %s chat=%s kind=style_preset:%s depth=%d",
                     task.task_id[:8], chat_id, key, self._backend.depth())
         self._queue_note(chat_id, task, lang)
@@ -1054,10 +1052,8 @@ class CallbackMixin:
         )
         if self._try_steer(chat_id, task):
             return
-        with self._task_lock:
-            self._pending_journal[task.task_id] = task
-        self._backend.push(task)
-        self._write_inflight()
+        if not self._persist_task(task):
+            return
         tg_bot.logger.info("Enqueued task %s chat=%s kind=animate_preset:%s depth=%d",
                     task.task_id[:8], chat_id, key, self._backend.depth())
         self._queue_note(chat_id, task, lang)

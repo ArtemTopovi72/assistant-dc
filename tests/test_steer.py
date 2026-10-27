@@ -115,11 +115,16 @@ import tg_tasks
 class _Bot:
     def __init__(self):
         self._task_lock = threading.Lock(); self._running_task = {}; self._steer_inboxes = {}
+        self._steer_incoming = {}
+        self._cancelled = set()
+        self._incoming = types.SimpleNamespace(ack=lambda ids: None)
         self._chat_interruptible = {}; self.sent = []; self.queued = []; self.logged = []
         self._store = types.SimpleNamespace(put=lambda s: None)
         self._activity = types.SimpleNamespace(log=lambda *a: self.logged.append(a))
         self._user_store = types.SimpleNamespace(get=lambda cid: None)
     reads = R
+    _is_cancelled = lambda self, tid: False
+    _stop_requested_after = lambda self, task: False
     def _get_session(self, cid): return types.SimpleNamespace(lang="ru")
     def _lang(self, sess): return "ru"
     def _send_text(self, cid, text, **k): self.sent.append(text)

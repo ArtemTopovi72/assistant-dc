@@ -452,7 +452,7 @@ check("interrupted user is notified", "restarted" in texts(bot).lower(), texts(b
 check("retry text is stored for the retry button",
       bot._get_session(CID).last_task_text == "find me a bus tour",
       bot._get_session(CID).last_task_text)
-check("inflight file is consumed", not T._INFLIGHT_FILE.exists())
+check("inflight journal retires the interrupted task", T._INFLIGHT_FILE.read_text(encoding="utf-8") == "[]")
 bot.sent.clear()
 bot._recover_inflight()
 check("recovery is idempotent when nothing was interrupted", not bot.sent)

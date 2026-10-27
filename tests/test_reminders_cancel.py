@@ -79,3 +79,15 @@ def test_a_malformed_entry_does_not_stop_the_others(tmp_path):
         assert reminders.cancel(7, "all") == ["купить хлеб"]
     finally:
         reminders.stop()
+
+
+@pytest.mark.parametrize("fields", [
+    {"due": float("-inf"), "every": 60},
+    {"due": float("inf")},
+    {"every": float("inf")},
+    {"until": "tomorrow"},
+    {"until": float("nan")},
+])
+def test_nonfinite_or_malformed_schedule_is_rejected(fields):
+    item = {"owner": "7", "due": 1_800_000_000, "text": "reminder", **fields}
+    assert not reminders._valid(item)

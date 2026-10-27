@@ -17,6 +17,7 @@ sheet, ~3 s per verification -- a 173-photo folder in under two minutes.
 """
 from __future__ import annotations
 from seams import vision_model
+from code_sandbox import walk_files
 
 import json
 import logging
@@ -44,8 +45,9 @@ _VERIFY_SYSTEM = (
 
 
 def list_photos(folder: Path) -> list[Path]:
+    folder = Path(folder).resolve()
     out = []
-    for p in sorted(folder.rglob("*")):
+    for p in sorted(walk_files(folder)):
         if not (p.is_file() and p.suffix.lower() in IMAGE_SUFFIXES):
             continue
         # Hidden folders hold our own contact sheets and the run_code

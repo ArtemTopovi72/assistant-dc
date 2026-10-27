@@ -1231,6 +1231,15 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                 max_tokens=_loop_tokens,
                 prefill=gen.prefill,
             )
+        if (_force == "run_code" and _choice == "required" and response_message
+                and not response_message.get("tool_calls")):
+            # Even `required` can return prose; a code block is not execution.
+            logger.warning("Required run_code never called after retries")
+            _ru = bool(re.search(r"[А-Яа-яЁё]", original_input or user_input or ""))
+            response_message = {"role": "assistant", "content": (
+                "Код не выполнен: не удалось запустить его в песочнице. Повтори запрос, пожалуйста."
+                if _ru else
+                "The code was not executed: I could not run it in the sandbox. Please try again.")}
         # One-shot: a forced follow-up applies to the call that was just made
         # and must not leak into the next round.
         force_next_tool = None

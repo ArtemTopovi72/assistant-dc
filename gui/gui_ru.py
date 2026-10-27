@@ -1379,4 +1379,12 @@ RU = {
     'Workspace': 'Рабочая область',
     'Voice & camera': 'Голос и камера',
     'Search & memory': 'Поиск и память',
+    'Search commands…': 'Поиск команд…',
+    'Search sections…': 'Поиск разделов…',
+    'Search commands': 'Поиск команд',
+    'Search sections': 'Поиск разделов',
+    'Search by name or description, in English or Russian': 'Поиск по названию или описанию на русском и английском',
+    'No commands found.': 'Команды не найдены.',
+    'No sections found.': 'Разделы не найдены.',
+    'Memory profiles': 'Профили памяти',
 }

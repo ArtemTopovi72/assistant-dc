@@ -85,6 +85,7 @@ class AccountsMixin:
             return "not_pending"
         user.status = "rejected"
         self._user_store.put(user)
+        self._request_stop(chat_id)
         lang = self._lang(self._get_session(chat_id))
         try:
             self._send_text(chat_id, tg_bot._t("acct_rejected", lang), parse_mode="HTML")
@@ -108,6 +109,7 @@ class AccountsMixin:
             return "not_banned_already"
         user.status = "banned"
         self._user_store.put(user)
+        self._request_stop(chat_id)
         lang = self._lang(self._get_session(chat_id))
         try:
             self._send_text(chat_id, tg_bot._t("acct_banned", lang))
@@ -262,6 +264,7 @@ class AccountsMixin:
         if not user:
             self._send_text(chat_id, tg_bot._t("acct_gone", self._lang(sess)))
             return
+        self._request_stop(chat_id)
         sess.clear_history()
         sess.set_tg_memory([])
         sess.pending_prefix = ""

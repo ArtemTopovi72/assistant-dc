@@ -160,19 +160,17 @@ print("=" * 66)
 print("ANALYZE SEES THE PICTURES ALREADY IN THE CHAT")
 print("=" * 66)
 
-src2 = inspect.getsource(T.TelegramBot._resolve_and_push)
-check("the analyze gate consults the image register",
-      "_live_images(sess)" in src2 and "_have_image" in src2)
-
 bot4 = make_bot([], Graph(FakeCtx()))
 sess4 = bot4._get_session(CID)
 sess4.last_image_path = ""
 png = os.path.join(_DATA, "pic.png")
 open(png, "wb").write(b"\x89PNG\r\n\x1a\n" + b"0" * 64)
-T._log_image(sess4, png, label="трактор", src="bot")
+registered_id = T._log_image(sess4, png, label="трактор", src="bot")
 bot4._store.put(sess4)
 bot4.sent.clear()
 bot4._resolve_and_push(CID, [{"type": "text", "text": T._b("analyze", "ru")}])
+check("analyze enqueues the registered picture even when the last-image slot is empty",
+      bool(bot4._backend.service_order()) and bot4._backend.service_order()[0].image_id == registered_id)
 check("with a picture in the register it does NOT ask for a photo",
       not any("Пришли фото" in s for s in bot4.sent), bot4.sent)
 

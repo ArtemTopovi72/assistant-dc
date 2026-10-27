@@ -19,7 +19,9 @@ import queue as _pyqueue
 import threading
 import turn_trace
 import time
+import uuid
 from pathlib import Path
+from tg_incoming import BATCH_IDS, BotStopping, current_update_id
 
 
 # [last snapshot taken, last snapshot written] and the lock that orders writes.
@@ -175,7 +177,7 @@ class QueueMixin:
     def _inflight_path(self):
         return tg_bot._INFLIGHT_FILE
 
-    def _write_inflight(self) -> None:
+    def _write_inflight(self) -> bool:
         """Persist the set of tasks currently executing OR merely queued.
 
         A "running" entry means a crash killed an active graph.invoke(). A
@@ -199,32 +201,100 @@ class QueueMixin:
             path = self._inflight_path()
             with _INFLIGHT_IO:
                 if seq < _INFLIGHT_SEQ[1]:
-                    return
+                    return True
                 tmp = path.with_name(f"{path.name}.{threading.get_ident()}.tmp")
-                tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+                with tmp.open("w", encoding="utf-8") as stream:
+                    json.dump(data, stream, ensure_ascii=False)
+                    stream.flush()
+                    os.fsync(stream.fileno())
                 os.replace(tmp, path)
                 _INFLIGHT_SEQ[1] = seq
+            return True
         except Exception as exc:
             tg_bot.logger.debug("inflight write failed: %s", exc)
+            return False
 
     def _take_inflight(self) -> list:
-        """Read and remove the previous process's in-flight journal.
+        """Read the previous process's journal without opening a loss window.
 
         start() calls this BEFORE the poll and consumer threads exist: the
         first message after a restart enqueues a task, which rewrites the
         journal, and a recovery reading it afterwards found only that new
-        task -- the users whose tasks died with the crash never heard."""
+        task -- the users whose tasks died with the crash never heard. Keep the
+        old file until its replacement snapshot has been written."""
         try:
             if not tg_bot._INFLIGHT_FILE.exists():
                 return []
             data = json.loads(tg_bot._INFLIGHT_FILE.read_text(encoding="utf-8") or "[]")
         except Exception:
             data = []
-        try:
-            tg_bot._INFLIGHT_FILE.unlink()
-        except Exception:
-            pass
         return data if isinstance(data, list) else []
+
+    def _queued_work_allowed(self, chat_id):
+        user = self._user_store.get(chat_id)
+        return (user is not None and user.status == "approved"
+                and self._get_session(chat_id).reg_state != "awaiting_login")
+
+    def _restore_pending(self, data: list) -> None:
+        """Restore never-started work before any consumer can claim it."""
+        missing = []
+        for d in data or []:
+            if not isinstance(d, dict) or d.get("_state") != "pending":
+                continue
+            try:
+                task = tg_bot._Task.from_dict(d)
+            except Exception:
+                tg_bot.logger.exception("inflight requeue failed for %s", d.get("task_id"))
+                continue
+            if not self._queued_work_allowed(task.chat_id):
+                self._backend.drop_task(task.task_id)
+                continue
+            if not self._backend.position_of(task.task_id):
+                missing.append(task)
+            with self._task_lock:
+                self._pending_journal[task.task_id] = task
+        for task in reversed(missing):
+            self._backend.requeue(task)
+        self._write_inflight()
+
+    def _restore_incoming(self, tasks):
+        self._incoming.ack([key for task in tasks if isinstance(task, dict)
+                            for key in task.get("incoming_ids", [])])
+        for entry in self._incoming.pending():
+            item = entry["item"]
+            chat_id = entry["chat_id"]
+            if not self._queued_work_allowed(chat_id):
+                self._incoming.ack([entry["id"]])
+                continue
+            if item.get("type") == "album_pending":
+                photo = item["photos"][0]
+                self._buffer_album(chat_id, item["group_id"], photo["file_id"],
+                    photo.get("caption", ""), item.get("forwarded", False), saved=item)
+            else:
+                self._enqueue_item(chat_id, dict(item, _inbox_id=entry["id"]))
+
+    def _persist_task(self, task, incoming_ids=None):
+        if getattr(self, "_stopping", False):
+            raise BotStopping("the bot stopped before this task was accepted")
+        if self._stop_requested_after(task):
+            return False
+        ids = list(incoming_ids if incoming_ids is not None else BATCH_IDS.get() or
+                   ([current_update_id()] if current_update_id() else []))
+        task.incoming_ids = list(dict.fromkeys(task.incoming_ids + ids))
+        with self._task_lock:
+            self._pending_journal[task.task_id] = task
+            if task.replaces_task_id:
+                self._pending_journal.pop(task.replaces_task_id, None)
+        if self._write_inflight() is False:
+            raise OSError("could not persist the accepted task")
+        incoming = getattr(self, "_incoming", None)
+        if incoming is not None:
+            incoming.ack(task.incoming_ids)
+        self._backend.push(task)
+        if self._stop_requested_after(task):
+            self._cancel_task(task.chat_id, task.task_id)
+            return False
+        return True
 
     def _recover_inflight(self, data: list | None = None) -> None:
         """Notify users whose task was killed by a restart, and offer a retry.
@@ -232,39 +302,28 @@ class QueueMixin:
         Otherwise the user is left staring at a "⚙️ Working…" status message
         that never changes.
 
-        A "pending" (queued-but-not-yet-popped) entry is only ever meaningful
-        here for a non-durable backend (InMemoryBackend): a Redis/Kafka-backed
-        queue keeps its own copy outside this process, so a task still sitting
-        there at restart will simply be popped and run normally by the fresh
-        consumer threads once they start, so reporting it "interrupted" would be
-        a lie. Only the in-memory backend loses a pending task across a
-        restart, so only its leftover "pending" entries get the same
-        interrupted/retry treatment as a genuinely running one.
+        Never-started tasks were restored before consumers started. Only work
+        that had already started needs an interrupted/retry notice.
         """
         if data is None:
             data = self._take_inflight()
-        durable_backend = not isinstance(self._backend, tg_bot.InMemoryBackend)
+            self._restore_pending(data)
+            self._restore_incoming(data)
         # One notice per chat, for its LAST task: two in-flight entries of one
         # chat sent the same "restarted" message twice.
         last = {}
         for d in data or []:
-            if d.get("_state") == "pending" and durable_backend:
-                # Still queued there, or popped by a consumer and held in RAM until it started:
-                # the app was restarted in that gap and «бот меня заигнорил» -- the message was
-                # enqueued at 00:21:37 and the process killed at 00:21:44 (live 2026-10-21). A task
-                # that never started has done nothing yet, so it simply goes back first in line.
-                try:
-                    if not self._backend.position_of(str(d.get("task_id") or "")):     # 1-based, 0 = gone
-                        self._backend.requeue(tg_bot._Task.from_dict(d))
-                        tg_bot.logger.info("inflight: task %s was popped but never started -- requeued",
-                                           str(d.get("task_id"))[:8])
-                except Exception:
-                    tg_bot.logger.exception("inflight requeue failed for %s", d.get("task_id"))
+            if not isinstance(d, dict):
+                continue
+            if d.get("_state") == "pending":
+                # Already reconciled by _restore_pending before the consumers started.
                 continue
             last[d.get("chat_id")] = d
         for d in last.values():
             try:
                 task = tg_bot._Task.from_dict(d)
+                if not self._queued_work_allowed(task.chat_id):
+                    continue
                 sess = self._get_session(task.chat_id)
                 lang = self._lang(sess)
                 sess.last_task_text = task.user_text
@@ -289,6 +348,16 @@ class QueueMixin:
         """
         with self._stop_lock:
             self._stop_requests[chat_id] = time.time()
+        incoming_ids = [entry["id"] for entry in self._incoming.pending() if entry["chat_id"] == chat_id]
+        self._incoming.stop_chat(chat_id, self._stop_requests[chat_id])
+        with self._mgmt_lock:
+            self._incoming_enqueued.difference_update(incoming_ids)
+        with self._album_lock:
+            for key, album in list(self._albums.items()):
+                if album["chat_id"] == chat_id:
+                    if album.get("timer"):
+                        album["timer"].cancel()
+                    del self._albums[key]
         # Only cancel the running task if it belongs to THIS chat. ctx is shared,
         # so an unconditional cancel_event would kill whoever happens to be running
         # — under round-robin that is regularly somebody else.
@@ -383,6 +452,20 @@ class QueueMixin:
                        "already finished" reply, not a repeated "cancelled".
         """
         with self._task_lock:
+            running_ids = {t.task_id for t in (self._running_task.get(chat_id) or [])}
+            pending = self._pending_journal.get(task_id)
+            owned = task_id in running_ids or (pending is not None and pending.chat_id == chat_id)
+        if not owned:
+            # A restored durable queue may have no entry in this process's journal yet.
+            try:
+                owned = any(t.task_id == task_id and t.chat_id == chat_id
+                            for t in self._backend.service_order())
+            except Exception as exc:
+                tg_bot.logger.warning("cancel ownership lookup failed: %s", exc)
+                return ""
+            if not owned:
+                return ""
+        with self._task_lock:
             if task_id in self._cancelled:
                 return ""
             # A task cancelled while queued is dropped and never reaches the
@@ -443,6 +526,10 @@ class QueueMixin:
         # When the USER sent it (Telegram's message date), not when we got it: a stalled poll delivers a burst late
         item.setdefault("_sent_ts", (getattr(self, "_msg_date", {}) or {}).get(chat_id))
         with self._mgmt_lock:
+            key = item.setdefault("_inbox_id", current_update_id() or uuid.uuid4().hex)
+            if key in self._incoming_enqueued or not self._incoming.put(chat_id, item, key):
+                return
+            self._incoming_enqueued.add(key)
             if chat_id not in self._queues:
                 self._queues[chat_id] = _pyqueue.Queue()
             q = self._queues[chat_id]
@@ -461,7 +548,7 @@ class QueueMixin:
     def _debounce_loop(self, chat_id: int):
         q = self._queues[chat_id]
         carry = None
-        while True:
+        while not getattr(self, "_stopping", False):
             try: first, carry = (carry or q.get(timeout=self.settings.get("_WORKER_IDLE_S", tg_bot._WORKER_IDLE_S))), None
             except _pyqueue.Empty:
                 with self._mgmt_lock:
@@ -469,6 +556,8 @@ class QueueMixin:
                         continue          # an item raced in — keep serving it
                     self._workers.pop(chat_id, None)
                     return
+            if first is None or getattr(self, "_stopping", False):
+                return
             batch = [first]
             # Stop during this window must know a batch is pending (see
             # _stop_and_report).
@@ -499,6 +588,9 @@ class QueueMixin:
                 if left <= 0: break
                 try: nxt = q.get(timeout=left)
                 except _pyqueue.Empty: break
+                if nxt is None or getattr(self, "_stopping", False):
+                    self._debouncing.discard(chat_id)
+                    return
                 # Sent further apart than any window waits: two turns that a downtime delivered together
                 # (a link at 14:33 and a screenshot at 14:57 got one reply about the screenshot, 2026-10-22).
                 s0, s1 = batch[-1].get("_sent_ts"), nxt.get("_sent_ts")
@@ -512,10 +604,15 @@ class QueueMixin:
             # transcribed and looked at right here): traced, and logged to
             # the chat's transcript, like an update in _dispatch_logged.
             import chatlog
+            if getattr(self, "_stopping", False):
+                self._debouncing.discard(chat_id)
+                return
             _trace = turn_trace.start(chat=chat_id, task="batch", text=f"{len(batch)} item(s)")
             try:
                 with chatlog.bind(chat_id):
                     self._resolve_and_push(chat_id, batch)
+            except BotStopping:
+                return
             except Exception as exc:
                 tg_bot.logger.exception("debounce_loop error chat=%s", chat_id)
                 # A song with a caption crashed here and the user heard nothing at all.
@@ -529,17 +626,19 @@ class QueueMixin:
                 self._debouncing.discard(chat_id)
                 turn_trace.finish(_trace, keep_idle=False)
 
-    def _consumer_loop(self):
-        while self._running:
-            try:
-                task = self._backend.pop(timeout=5.0)
-            except Exception:
-                # A backend hiccup (Redis reconnect, a parse error) must never end
-                # the only thread that runs work — back off briefly and keep going.
-                tg_bot.logger.exception("queue pop failed")
-                time.sleep(2.0)
-                continue
-            if task is None: continue
+    def _claim_task(self):
+        # Pop and admission must be ordered: two held candidates can reverse a chat's FIFO.
+        with self._queue_claim_lock:
+            if not self._running or self._stopping:
+                return None
+            task = self._backend.pop(timeout=5.0)
+            if task is None: return None
+            if not self._running or self._stopping:
+                self._backend.requeue(task)
+                return None
+            if not self._queued_work_allowed(task.chat_id):
+                self._request_stop(task.chat_id)
+                return None
             if self._is_cancelled(task.task_id) or self._stop_requested_after(task):
                 # Dropped here, never executed: its journal entry must go too, or
                 # the next restart reports it "interrupted" (cancel raced the pop).
@@ -552,13 +651,13 @@ class QueueMixin:
                             task.task_id[:8])
                 with self._task_lock:
                     self._cancelled.discard(task.task_id)
-                continue
+                return None
             if self._stop_requested_after(task):
                 tg_bot.logger.info("Dropping task %s chat=%s — Stop was pressed after it "
                             "was queued", task.task_id[:8], task.chat_id)
                 self._activity.log(task.chat_id, "system",
                                    "[stop] dropped queued task", str(task.chat_id))
-                continue
+                return None
             # ── AT MOST TWO TASKS PER CHAT, AND ONLY WHEN THE FIRST IS SLOW ──
             # With several consumers the round-robin backend would hand two
             # tasks from the SAME chat to two workers and the user would get the
@@ -585,6 +684,19 @@ class QueueMixin:
                 # Back to the HEAD of that chat's queue so the user's order is
                 # kept, then let another chat's work proceed.
                 self._backend.requeue(task)
+                return None
+            return task
+
+    def _consumer_loop(self):
+        while self._running:
+            try:
+                task = self._claim_task()
+            except Exception:
+                # Backend outages must not end the worker that drains the queue.
+                tg_bot.logger.exception("queue claim failed")
+                time.sleep(2.0)
+                continue
+            if task is None:
                 time.sleep(0.25)
                 continue
             try: self._execute_task(task)

@@ -14,6 +14,8 @@ tg_artifacts.db-*
 tg_sessions.json.bak-*
 tg_offset.json
 tg_inflight.json
+tg_incoming.json
+tg_incoming.json.tmp
 .assistant_singleton.lock
 tg_activity.jsonl
 tg_memory/

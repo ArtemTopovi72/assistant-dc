@@ -52,9 +52,10 @@ check("the note asks for a fix via edit_file and graphviz", "VISUAL CHECK" in n 
 
 # --- wired into run_code's delivery, once per turn -----------------------------------------
 import tool_code_handlers as H
+from code_sandbox import Sandbox
 from PIL import Image
 root = Path(tempfile.mkdtemp())
-box = types.SimpleNamespace(root=root)
+box = Sandbox(root)
 def _write(name):
     Image.new("RGB", (64, 64), (255, 255, 255)).save(root / name)
 _deps = types.SimpleNamespace(_record=lambda *a, **k: None,

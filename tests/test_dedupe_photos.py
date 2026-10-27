@@ -115,7 +115,7 @@ def test_working_folder_record_survives_for_the_next_turn(tmp_path):
     import inspect
     import types
     import graph_compose as C
-    box = types.SimpleNamespace(root=tmp_path)
+    box = Sandbox(tmp_path)
     assert H.read_record(box) == ""
     H._record(box, "find_content", "found 8 of 173 photos showing 'bridge': a.JPG, b.JPG")
     H._record(box, "dedupe_photos", "8 photos -> 4 kept")

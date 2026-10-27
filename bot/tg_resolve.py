@@ -163,8 +163,8 @@ class ResolveMixin:
             return False
         if not self._backend.drop_task(prev.task_id):
             return False            # a worker took it meanwhile
-        with self._task_lock:
-            self._pending_journal.pop(prev.task_id, None)
+        task.replaces_task_id = prev.task_id
+        task.incoming_ids.extend(prev.incoming_ids)
         task.user_text = prev.user_text + "\n\n" + task.user_text
         for f in ("image_path", "image_id", "image_is_photo"):
             if not getattr(task, f):
@@ -191,6 +191,22 @@ class ResolveMixin:
             tg_bot.logger.debug("binding the turn's reads failed", exc_info=True)
 
     def _resolve_and_push(self, chat_id: int, batch: list):
+        from tg_incoming import BATCH_IDS
+        ids = tuple(it["_inbox_id"] for it in batch if it.get("_inbox_id"))
+        token = BATCH_IDS.set(ids)
+        try:
+            result = self._resolve_items(chat_id, batch)
+            if not getattr(self, "_stopping", False):
+                with self._task_lock:
+                    held = {key for keys in self._steer_incoming.values() for key in keys}
+                self._incoming.ack(key for key in ids if key not in held)
+            return result
+        finally:
+            BATCH_IDS.reset(token)
+            with self._mgmt_lock:
+                self._incoming_enqueued.difference_update(ids)
+
+    def _resolve_items(self, chat_id: int, batch: list):
         # Earliest arrival time across the batch, stamped at _enqueue_item —
         # BEFORE the debounce delay — so a Stop that landed while this batch
         # was still debouncing is not blind to it (see _enqueue_item comment).
@@ -906,6 +922,22 @@ class ResolveMixin:
                     # only fires for plain text, never for the photo itself).
                     if key == "analyze" and _have_image and img_bytes is None:
                         sess.pending_photo = direct
+                        if not pressed_image_id:
+                            live = tg_bot._live_images(sess)
+                            target = (tg_bot._image_by_id(sess, sess.target_image or sess.turn_image)
+                                      or tg_bot._image_by_path(sess, sess.last_image_path))
+                            if target and not os.path.exists(target.get("path", "")):
+                                target = None
+                            if not target and len(live) == 1:
+                                target = live[0]
+                            if target:
+                                pressed_image_id = target["id"]
+                            elif live:
+                                sess.pending_instruction = direct
+                                self._store.put(sess)
+                                self._send_text(chat_id, tg_bot._t("img_which", lang, n=len(live)),
+                                    parse_mode="HTML", keyboard=tg_bot._image_choice_kb(sess, lang))
+                                return
                         self._store.put(sess)
                     # 🔄 Regenerate with nothing to regenerate would burn a full
                     # agent turn (and an image-quota unit): give the same honest
@@ -1679,10 +1711,8 @@ class ResolveMixin:
             self._user_store.bump_usage(chat_id, tg_bot.KIND_TASK)
             if kind != tg_bot.KIND_TASK:
                 self._user_store.bump_usage(chat_id, kind)
-        with self._task_lock:
-            self._pending_journal[task.task_id] = task
-        self._backend.push(task)
-        self._write_inflight()
+        if not self._persist_task(task):
+            return
         tg_bot.logger.info("Enqueued task %s chat=%s kind=%s depth=%d",
                     task.task_id[:8], chat_id, kind, self._backend.depth())
 
@@ -1921,10 +1951,8 @@ class ResolveMixin:
             return
         self._user_store.bump_usage(chat_id, tg_bot.KIND_TASK)
         self._user_store.bump_usage(chat_id, tg_bot.KIND_IMAGE)
-        with self._task_lock:
-            self._pending_journal[task.task_id] = task
-        self._backend.push(task)
-        self._write_inflight()
+        if not self._persist_task(task):
+            return
         tg_bot.logger.info("Enqueued task %s chat=%s kind=%s depth=%d",
                     task.task_id[:8], chat_id, "outfit" if outfit else "style", self._backend.depth())
         self._queue_note(chat_id, task, lang)

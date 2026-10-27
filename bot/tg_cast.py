@@ -120,10 +120,8 @@ class CastMixin:
             album_paths=[pics[i] for i in used[1:]], enqueue_ts=time.time())
         if self._try_steer(chat_id, task):
             return
-        with self._task_lock:
-            self._pending_journal[task.task_id] = task
-        self._backend.push(task)
-        self._write_inflight()
+        if not self._persist_task(task):
+            return
         tg_bot.logger.info("Enqueued task %s chat=%s kind=cast depth=%d",
                            task.task_id[:8], chat_id, self._backend.depth())
         self._queue_note(chat_id, task, lang)

@@ -200,6 +200,7 @@ def _wire_minimal_bot(status):
     bot._main_menu_kb = lambda *a, **k: None
     bot._activity = _types.SimpleNamespace(log=lambda *a, **k: None)
     bot._on_user_change = lambda *a, **k: None
+    bot._request_stop = lambda cid: 0
     return bot, u
 
 

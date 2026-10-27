@@ -61,6 +61,29 @@ class SandboxError(Exception):
     read BY the model and is surfaced as a tool error."""
 
 
+def walk_files(root: Path):
+    """Prune linked directories before descent, including Windows junctions."""
+    root = Path(root).resolve()
+    for directory, dirs, files in os.walk(root, followlinks=False):
+        parent = Path(directory)
+        safe_dirs = []
+        for name in dirs:
+            child = parent / name
+            try:
+                if child.resolve() == child:
+                    safe_dirs.append(name)
+            except (OSError, RuntimeError):
+                continue
+        dirs[:] = sorted(safe_dirs)
+        for name in sorted(files):
+            path = parent / name
+            try:
+                if path.resolve().is_relative_to(root) and path.is_file():
+                    yield path
+            except (OSError, RuntimeError):
+                continue
+
+
 class Sandbox:
     """A rooted view of the filesystem.
 
@@ -188,6 +211,8 @@ class Sandbox:
                 # showing it invites "what is .agent?" -- or worse, an edit.
                 if p.name == AGENT_DIR:
                     continue
+                if not self._contains(p):
+                    continue
                 if len(out) >= MAX_LIST_ENTRIES:
                     cut[0] = True
                     return
@@ -241,7 +266,8 @@ class Sandbox:
         # assistant_app.log as «not a text file» (live 10-03), and .out/.err/.nfo
         # are the same story. Extensionless files (LICENSE, Dockerfile) likewise.
         try:
-            return b"\0" not in full.read_bytes()[:2048]
+            with full.open("rb") as stream:
+                return b"\0" not in stream.read(2048)
         except OSError:
             return False
 
@@ -400,14 +426,14 @@ class Sandbox:
         if full.is_symlink() or full.is_file():
             full.unlink()
             return f"file {rel}"
-        n = sum(1 for _ in full.rglob("*") if _.is_file())
+        n = sum(1 for _ in walk_files(full))
         shutil.rmtree(full)
         return f"folder {rel} ({n} files)"
 
     def usage(self) -> tuple[int, int]:
         """(files, bytes) — what the owner is holding, for the UI and quotas."""
         files = total = 0
-        for p in self.root.rglob("*"):
+        for p in walk_files(self.root):
             if p.is_file() and not p.is_symlink():
                 files += 1
                 try:
@@ -470,7 +496,7 @@ class Sandbox:
         # pass can only ever spend it on whatever rglob happens to reach first.
         per_file: list[tuple[str, bool, list[tuple[int, str]]]] = []
         scanned = 0
-        for path in base.rglob("*"):
+        for path in walk_files(base):
             if path.is_symlink() or not path.is_file() or not self._contains(path):
                 continue
             scanned += 1
@@ -682,7 +708,7 @@ class Sandbox:
                     f"({str(exc).splitlines()[-1][:160] if str(exc).strip() else type(exc).__name__}). "
                     "It may be damaged or password-protected -- tell the user.")
             tmp_root = Path(tmp)
-            for f in tmp_root.rglob("*"):
+            for f in walk_files(tmp_root):
                 if f.is_symlink() or not f.is_file():
                     continue
                 rel = f.relative_to(tmp_root).as_posix()
@@ -716,7 +742,7 @@ class Sandbox:
         out.parent.mkdir(parents=True, exist_ok=True)
         count = 0
         with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
-            for p in sorted(base.rglob("*")):
+            for p in sorted(walk_files(base)):
                 if p.is_symlink() or not p.is_file() or p == out or not self._contains(p):
                     continue
                 rel = p.relative_to(base)

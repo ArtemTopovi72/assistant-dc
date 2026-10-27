@@ -33,18 +33,20 @@ def make_bot():
 
 
 def admit(bot, chat_id, candidate_text):
-    """Reproduce the EXACT admission expression from _consumer_loop (not a
-    reimplementation) by importing it out of the source, so this test breaks
-    if the real logic ever diverges from what it claims to check."""
-    import inspect
-    src = inspect.getsource(bot._consumer_loop)
-    assert "is_exact_repeat" in src, "admission gate logic moved — update this test"
-    with bot._task_lock:
-        n = bot._chat_busy.get(chat_id, 0)
-        interruptible = bot._chat_interruptible.get(chat_id, False)
-        running = bot._running_task.get(chat_id) or []
-        is_exact_repeat = any(r.user_text == candidate_text for r in running)
-        return (n == 0) or (n == 1 and interruptible and not is_exact_repeat)
+    """Exercise the real queue admission, then reset this probe's busy count."""
+    bot._user_store.put(T._User(chat_id=chat_id, name="User", status="approved"))
+    bot._running = True
+    before = bot._chat_busy.get(chat_id, 0)
+    candidate = T._Task(task_id="candidate", chat_id=chat_id, user_text=candidate_text)
+    bot._backend.push(candidate)
+    claimed = bot._claim_task()
+    if claimed is None:
+        assert bot._backend.pop(timeout=0) is candidate, "refused work was lost"
+    if before:
+        bot._chat_busy[chat_id] = before
+    else:
+        bot._chat_busy.pop(chat_id, None)
+    return claimed is candidate
 
 
 print("=" * 70)

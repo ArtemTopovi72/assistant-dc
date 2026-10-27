@@ -430,11 +430,13 @@ bot16 = make_bot(); approved(bot16)
 # repeating a false "cancelled") — "" is falsy for this harmless-unknown-id case.
 check("cancelling an unknown task id is harmless",
       bot16._cancel_task(CID, "no-such-task") in ("running", "dropped", ""))
-check("a cancelled id is remembered", bot16._is_cancelled("no-such-task"))
+check("an unknown id is not marked cancelled", not bot16._is_cancelled("no-such-task"))
 check("an unrelated id is not", not bot16._is_cancelled("other"))
 # The cancelled set must stay bounded or it grows for the life of the process.
 for i in range(600):
+    bot16._backend.push(T._Task(task_id=f"t{i}", chat_id=CID, user_text="test"))
     bot16._cancel_task(CID, f"t{i}")
+check("an owned cancelled id is remembered", bot16._is_cancelled("t599"))
 check("the cancelled set is bounded", len(bot16._cancelled) <= 512,
       str(len(bot16._cancelled)))
 
@@ -551,7 +553,7 @@ check("the user is told their task died with the process",
 check("and the text is stashed so Retry has something to run",
       bot19._get_session(CID).last_task_text == "my interrupted question",
       repr(bot19._get_session(CID).last_task_text))
-check("the inflight file is consumed", not T._INFLIGHT_FILE.exists())
+check("the interrupted entry is retired", json.loads(T._INFLIGHT_FILE.read_text(encoding="utf-8")) == [])
 
 bot20 = make_bot()
 bot20.sent.clear()
@@ -566,7 +568,7 @@ except Exception as exc:
     ok = False
 check("a corrupt inflight file does not break startup", ok)
 check("and it is cleared so it cannot wedge every restart",
-      not T._INFLIGHT_FILE.exists())
+      json.loads(T._INFLIGHT_FILE.read_text(encoding="utf-8")) == [])
 
 # A single unusable entry must not silence the rest of the recovery.
 bot22 = make_bot(); approved(bot22)
@@ -623,12 +625,11 @@ check("a merely-pushed (never popped) task is written to the inflight file",
 
 bot24 = make_bot(); approved(bot24, CID_Q)   # simulated restart: fresh instance
 bot24._recover_inflight()
-check("a queued-but-never-run task is reported the SAME way a mid-execution "
-      "crash is -- interrupted + a Retry button, not silence",
-      "⚠️" in texts(bot24), repr(texts(bot24)[:120]))
-check("Retry has something to retry", bot24._get_session(CID_Q).last_task_text ==
-      "queued when the process died", bot24._get_session(CID_Q).last_task_text)
-check("the inflight file is consumed once recovered", not T._INFLIGHT_FILE.exists())
+check("a never-started task is restored without requiring the user to retry",
+      [t.task_id for t in bot24._backend.service_order()] == ["q1"] and not texts(bot24))
+check("the restored task retains its request", bot24._backend.service_order()[0].user_text ==
+      "queued when the process died")
+check("the restored task stays journaled until execution", "q1" in T._INFLIGHT_FILE.read_text(encoding="utf-8"))
 
 # Durable backend: the SAME leftover "pending" entry must be left alone --
 # the external queue still has the real task, so notifying would be a lie.

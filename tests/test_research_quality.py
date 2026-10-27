@@ -92,7 +92,8 @@ def test_p10_reranker():
     class _P:
         def update(self, *a, **k): pass
     res = dr.rerank_for_briefing(query, [dict(p) for p in pages], {"category": "general"}, _P(),
-                                 ctx=research_ctx(DR_RERANK_ENABLED=True, DR_RERANK_TOP_K=2))
+                                 ctx=research_ctx(DR_RERANK_ENABLED=True, DR_RERANK_TOP_K=2,
+                                                  DR_RERANK_BACKEND="lexical"))
     _check(len(res) == 2, "stage did not truncate to top_k")
     _check(all("_rr_text" not in p for p in res), "scratch _rr_text leaked")
     res2 = dr.rerank_for_briefing(query, [dict(p) for p in pages], {"category": "general"}, _P(),

@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import QListWidget, QListWidgetItem, QMenu, QTabWidget
 
 from gui_i18n import tr
 from ui_scale import px
+from gui_ru import RU
 
 # (group label, stable tab keys) -- the keys of the dashboard's _tab_registry
 GROUPS = (
@@ -21,6 +22,16 @@ GROUPS = (
     ("System", ("model", "status", "feedback", "log", "code", "stress")),
 )
 _KEY = Qt.UserRole
+_GROUP = Qt.UserRole + 1
+_SOURCE = Qt.UserRole + 2
+
+
+def search_matches(query, *texts):
+    tokens = query.casefold().replace("ё", "е").split()
+    values = [str(text or "").strip() for text in texts]
+    values += [RU.get(text, "") for text in values]
+    haystack = " ".join(values).casefold().replace("ё", "е").replace("_", " ")
+    return all(token in haystack for token in tokens)
 
 
 class NavTabs(QTabWidget):
@@ -37,10 +48,13 @@ class NavTabs(QTabWidget):
 
 
 class WorkspaceNav(QListWidget):
+    resultsChanged = pyqtSignal(int)
+
     def __init__(self, tabs: NavTabs, key_of, parent=None):
         super().__init__(parent)
         self.setObjectName("workspaceNav")
         self._tabs, self._key_of = tabs, key_of
+        self._query = ""
         self.setFixedWidth(px(210))
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -76,9 +90,38 @@ class WorkspaceNav(QListWidget):
                 w = present[k]
                 it = QListWidgetItem("   " + tabs.tabText(tabs.indexOf(w)))
                 it.setData(_KEY, k)
+                it.setData(_GROUP, label)
+                it.setData(_SOURCE, w.property("_i18n_tab") or tabs.tabText(tabs.indexOf(w)))
                 self.addItem(it)
         self.blockSignals(False)
         self._sync()
+        self.filter(self._query)
+
+    def filter(self, query):
+        self._query = query
+        head, shown, total = None, 0, 0
+        for i in range(self.count()):
+            item = self.item(i)
+            if not item.data(_KEY):
+                if head is not None:
+                    head.setHidden(shown == 0)
+                head, shown = item, 0
+                continue
+            match = search_matches(query, item.text(), item.data(_KEY), item.data(_GROUP), item.data(_SOURCE))
+            item.setHidden(not match)
+            shown += int(match)
+            total += int(match)
+        if head is not None:
+            head.setHidden(shown == 0)
+        self.resultsChanged.emit(total)
+
+    def activate_first(self):
+        for i in range(self.count()):
+            item = self.item(i)
+            if item.data(_KEY) and not item.isHidden():
+                self.setCurrentItem(item)
+                self._picked(item)
+                return
 
     def _item_for(self, widget):
         key = self._key_of(widget)

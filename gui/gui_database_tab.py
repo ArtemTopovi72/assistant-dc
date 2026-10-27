@@ -161,6 +161,8 @@ class DatabaseTabMixin:
     def _db_build(self):
         if self._lib_build_worker is not None:
             return
+        if self._reject_if_busy("Database build"):
+            return
         paths = self._db_listed_paths()
         if not paths:
             self.db_status.setText("Add at least one document file first.")
@@ -183,6 +185,9 @@ class DatabaseTabMixin:
         w.failed.connect(self._on_db_failed)
         w.finished.connect(self._on_db_finished)
         self._lib_build_worker = w
+        if self.ctx is not None:
+            self.ctx.cancel_event.clear()
+        self._set_busy(True)
         w.start()
 
     def _on_db_progress(self, stage, done, total):
@@ -211,6 +216,8 @@ class DatabaseTabMixin:
 
     def _on_db_finished(self):
         self._lib_build_worker = None
+        if self.ctx is not None:
+            self.ctx.cancel_event.clear()
         self.db_build_btn.setEnabled(True)
         self.db_progress.hide()
         self._set_busy(False)  # unblocks the queue — messages typed during the build now drain

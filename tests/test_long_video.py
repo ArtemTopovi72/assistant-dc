@@ -35,7 +35,7 @@ def make_bot():
     bot.sent = []
     bot._send_text = lambda cid, t, **kw: bot.sent.append((t, kw.get("keyboard")))
     bot._edit_text = lambda cid, mid, t, **kw: bot.sent.append((t, kw.get("keyboard")))
-    bot._send_photo = lambda cid, path, **kw: bot.sent.append(("<photo>", None))
+    bot._send_photo = lambda cid, path, **kw: bot.sent.append(("<photo>", None)) or True
     bot._send_get_id = lambda cid, t, **kw: bot.sent.append((t, kw.get("keyboard"))) or 77
     bot._api_post = lambda *a, **k: {}
     bot._activity.log = lambda *a, **k: None
@@ -128,7 +128,7 @@ bot.modules = {"video_look": VLO, "audio": AU}
 _T[0] = lambda ctx, sysm, user, **kw: retell_calls.append(user) or "пересказ части"
 stop = threading.Event()
 bot._lv_jobs()[CID] = stop
-bot._long_video_job(CID, {"id": "j1", "file_id": "F1", "seconds": 150}, stop)
+bot._long_video_job(CID, {"id": "a1", "file_id": "F1", "seconds": 150}, stop)
 out = texts(bot)
 check("two portions were cut and transcribed", len(asr_calls) == 2, asr_calls)
 check("the second portion is looked at with an absolute offset", look_calls == [0, 120], look_calls)
@@ -150,7 +150,7 @@ check("render_retelling: bold title + bold labels + bullets, markdown stars gone
       and "<b>Что требуется:</b>" in html and "**" not in html, html)
 
 check("a detailed run still saves its notes, so ❓ works after it too",
-      (Path(T._IMAGE_DIR) / "longvideo_j1" / "material.json").exists())
+      (Path(T._IMAGE_DIR) / "longvideo_a1" / "material.json").exists())
 
 # ── brief (the default): nothing per portion, one retelling, then questions ──
 # 10-09: 11 portions x storyboard + retelling + sheet buried the chat
@@ -221,15 +221,15 @@ check("_stop_and_report reaches a running job",
 bot.sent.clear()
 stop = threading.Event(); bot._lv_jobs()[CID] = stop
 bot.modules = {"video_look": VLO, "audio": AU}; ASR[0] = lambda ctx, p, lang_hint="ru": "речь"
-bot._long_video_job(CID, {"id": "j3", "file_id": "F1", "seconds": 150}, stop)
+bot._long_video_job(CID, {"id": "a3", "file_id": "F1", "seconds": 150}, stop)
 btns = [b["callback_data"] for t, kb in bot.sent if kb for row in kb.get("inline_keyboard", []) for b in row]
-check("the running job shows a ⛔ button", "lv:stop:j3" in btns, btns)
+check("the running job shows a ⛔ button", "lv:stop:a3" in btns, btns)
 bot.sent.clear()
 ev = threading.Event(); bot._lv_jobs()[CID] = ev
-bot._cb_long_video(CID, "lv:stop:j3")
+bot._cb_long_video(CID, "lv:stop:a3")
 check("pressing ⛔ stops the running job and says so", ev.is_set() and "Останавливаю" in texts(bot), texts(bot))
 bot._lv_jobs().pop(CID, None); bot.sent.clear()
-bot._cb_long_video(CID, "lv:stop:j3")
+bot._cb_long_video(CID, "lv:stop:a3")
 check("⛔ with nothing running says so", "ничего не выполняется" in texts(bot), texts(bot))
 
 # ── the retelling check: a figure the portion does not support is dropped ──────

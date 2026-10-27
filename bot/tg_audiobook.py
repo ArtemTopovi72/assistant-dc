@@ -242,16 +242,15 @@ class AudiobookMixin:
                     if ctx.is_cancelled():
                         return
                     self._send_text(chat_id, tg_bot._t("book_chapter_fail", lang, n=n))
-                    continue
+                    return
                 parts = audiobook.split_long(wav)
                 for k, part in enumerate(parts, start=1):
                     cap = audiobook.caption(title, n, len(chapters), k, len(parts))
                     if not self._send_voice_from_wav(chat_id, part, caption=cap,
                                                      feedback="audiobook" if part == parts[-1] else ""):
                         self._send_text(chat_id, tg_bot._t("book_chapter_fail", lang, n=n))
-                        break
-                else:
-                    done += 1
+                        return
+                done += 1
                 self._job_save(chat_id, {"chapters": chapters, "ref": ref, "ref_text": ref_text, "next": n})
             self._job_drop(chat_id)
             self._send_text(chat_id, tg_bot._t("book_done", lang, n=done, total=len(chapters)))

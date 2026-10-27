@@ -403,14 +403,13 @@ def render_chapter(synth, title: str, body: str, n: int, out_wav: str, cancelled
                    on_piece=lambda i, total: None, verify=None) -> bool:
     """Speak one chapter into out_wav. `synth(text) -> wav path | None` is the cloned voice.
     `verify(text, wav) -> bool` (optional) is the ASR check: a piece that does not say its text is re-spoken once.
-    False when cancelled or nothing could be spoken."""
+    False when cancelled or any piece could not be spoken."""
     from pydub import AudioSegment
     pieces = chunk_text(body)
     head = spoken_title(title, n) + "."
     # the title rides WITH the first sentences: spoken alone (2-3 words) F5 bleeds the reference tail into it
     pieces = [(head + " " + pieces[0][0], pieces[0][1])] + pieces[1:] if pieces else [(head, True)]
     audio = AudioSegment.silent(duration=300)
-    bad = 0
     for i, (text, para_end) in enumerate(pieces):
         if cancelled():
             return False
@@ -435,11 +434,10 @@ def render_chapter(synth, title: str, body: str, n: int, out_wav: str, cancelled
                     break
                 seg = seg or cand                # keep the odd one if the retry is no better
         if seg is None:
-            bad += 1
-            continue
+            return False
         audio += seg + AudioSegment.silent(duration=800 if para_end else 300)
         on_piece(i + 1, len(pieces))
-    if bad > len(pieces) // 2 or len(audio) < 1500:
+    if len(audio) < 1500:
         return False
     audio.export(out_wav, format="wav")
     return True

@@ -278,7 +278,7 @@ def drop_unsupported_lines(ctx, tale: str, said: str, board: str) -> str:
     return "\n".join(ln for i, ln in enumerate(lines) if i not in bad)
 
 
-def _save_material(work: Path, parts: list, meta: dict | None = None) -> None:
+def _save_material(work: Path, parts: list, meta: dict | None = None) -> bool:
     """After every portion, so a Stop or a crash keeps what was watched answerable.
     `meta` (the chat, done/stopped) is what lets the next start find an interrupted
     job and deliver its retell instead of leaving 40 minutes of watching unsent."""
@@ -286,9 +286,13 @@ def _save_material(work: Path, parts: list, meta: dict | None = None) -> None:
         payload = {"parts": parts}
         if meta:
             payload.update(meta)
-        (work / "material.json").write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        tmp = work / "material.json.tmp"
+        tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, work / "material.json")
+        return True
     except OSError:
         logger.warning("long video: notes not saved", exc_info=True)
+        return False
 
 
 class LongVideoMixin:
@@ -388,7 +392,51 @@ class LongVideoMixin:
         (getattr(self, "spawn", None) or turn_trace.spawn)(self._long_video_answer, chat_id, lang, job_id, mat.get("parts") or [], text,
                          name=f"long-video-q-{chat_id}")
 
-    def _long_video_answer(self, chat_id: int, lang: str, job_id: str, parts: list, question: str) -> None:
+    def _deliver_long_video(self, chat_id: int, lang: str, job_id: str, messages: list, state=None) -> bool:
+        """Save the output before upload; recovery skips each message Telegram accepted."""
+        import tg_bot
+        pending = state if state is not None else {}
+        pending.setdefault("delivery", []).extend(messages)
+        pending.setdefault("delivered", 0)
+        remaining = []
+        for message in pending["delivery"][pending["delivered"]:]:
+            if "photo" in message:
+                remaining.append(message)
+                continue
+            pieces = tg_bot._split_html(message["text"])
+            remaining.extend({**message, "text": piece,
+                              "keyboard": message.get("keyboard") if i == len(pieces) - 1 else None}
+                             for i, piece in enumerate(pieces))
+        pending["delivery"][pending["delivered"]:] = remaining
+        work = _material_path(tg_bot._IMAGE_DIR, job_id).parent
+
+        def save():
+            return state is None or _save_material(work, pending["parts"], pending)
+
+        if not save():
+            self._send_text(chat_id, _t("lv_failed", lang))
+            return False
+        while pending["delivered"] < len(pending["delivery"]):
+            message = pending["delivery"][pending["delivered"]]
+            try:
+                if "photo" in message:
+                    accepted = self._send_photo(chat_id, message["photo"], feedback="")
+                else:
+                    body = message["text"]
+                    accepted = self._send_get_id(chat_id, body, parse_mode=message.get("parse_mode"),
+                                                 keyboard=message.get("keyboard"))
+            except Exception:
+                logger.warning("long video: delivery failed", exc_info=True)
+                accepted = False
+            if not accepted:
+                self._send_text(chat_id, _t("lv_failed", lang), keyboard=_after_kb(lang, job_id))
+                return False
+            pending["delivered"] += 1
+            if not save():
+                return False
+        return True
+
+    def _long_video_answer(self, chat_id: int, lang: str, job_id: str, parts: list, question: str, state=None) -> bool:
         import llm as _llm
         import tg_bot
         self._api_post("sendChatAction", {"chat_id": chat_id, "action": "typing"})
@@ -399,14 +447,14 @@ class LongVideoMixin:
         except Exception:
             logger.exception("long video: answer failed"); answer = ""
         if not answer:
-            self._send_text(chat_id, _t("lv_failed", lang), keyboard=_after_kb(lang, job_id)); return
+            self._send_text(chat_id, _t("lv_failed", lang), keyboard=_after_kb(lang, job_id)); return False
         pieces = tg_bot._split_html("❓ <b>" + _html_mod.escape(question[:200]) + "</b>\n\n"
                                     + _html_mod.escape(answer.replace("**", "")))
-        for i, piece in enumerate(pieces):
-            self._send_text(chat_id, piece, parse_mode="HTML",
-                            keyboard=_after_kb(lang, job_id) if i == len(pieces) - 1 else None)
+        return self._deliver_long_video(chat_id, lang, job_id, [
+            {"text": piece, "parse_mode": "HTML", "keyboard": _after_kb(lang, job_id) if i == len(pieces) - 1 else None}
+            for i, piece in enumerate(pieces)], state)
 
-    def _long_video_overview(self, chat_id: int, lang: str, job_id: str, parts: list) -> None:
+    def _long_video_overview(self, chat_id: int, lang: str, job_id: str, parts: list, state=None) -> bool:
         """«brief»: one retelling of the whole video from the portions' own retellings."""
         import llm as _llm
         import tg_bot
@@ -422,11 +470,11 @@ class LongVideoMixin:
         except Exception:
             logger.exception("long video: overview failed"); tale = ""
         if not tale:
-            self._send_text(chat_id, _t("lv_failed", lang), keyboard=_after_kb(lang, job_id)); return
+            self._send_text(chat_id, _t("lv_failed", lang), keyboard=_after_kb(lang, job_id)); return False
         pieces = tg_bot._split_html(render_retelling(tale, _t("lv_overview", lang)))
-        for i, piece in enumerate(pieces):
-            self._send_text(chat_id, piece, parse_mode="HTML",
-                            keyboard=_after_kb(lang, job_id) if i == len(pieces) - 1 else None)
+        return self._deliver_long_video(chat_id, lang, job_id, [
+            {"text": piece, "parse_mode": "HTML", "keyboard": _after_kb(lang, job_id) if i == len(pieces) - 1 else None}
+            for i, piece in enumerate(pieces)], state)
 
     def _long_video_after(self, chat_id: int, sess, lang: str, action: str, job_id: str) -> None:
         """❓ another question, or 📜 every portion's storyboard and retelling, on demand."""
@@ -500,9 +548,16 @@ class LongVideoMixin:
                 sess = self._get_session(chat)
                 lang = self._lang(sess)
                 self._send_text(chat, _t("lv_recovered", lang))
-                self._long_video_overview(chat, lang, job, parts)
+                if mat.get("delivery"):
+                    delivered = self._deliver_long_video(chat, lang, job, [], mat)
+                elif mat.get("question"):
+                    delivered = self._long_video_answer(chat, lang, job, parts, mat["question"], mat)
+                else:
+                    delivered = self._long_video_overview(chat, lang, job, parts, mat)
+                if not delivered:
+                    continue
                 mat["done"] = True
-                mf.write_text(json.dumps(mat, ensure_ascii=False), encoding="utf-8")
+                _save_material(work, parts, mat)
                 self._activity.log(chat, "system", f"[long video] recovered {job} "
                                                    f"({len(parts)} parts) after a restart")
         except Exception:
@@ -519,7 +574,8 @@ class LongVideoMixin:
         question = (spec.get("question") or "").strip()
         quiet = bool(question) or mode == "brief"        # nothing per portion, one answer at the end
         material: list = []
-        mstate: dict = {"chat": chat_id}   # rides material.json so a restart can finish the job
+        mstate: dict = {"chat": chat_id, "question": question, "parts": material}
+        delivery_ok = True
         status_id = live_id = None
         work = Path(tg_bot._IMAGE_DIR) / f"longvideo_{spec['id']}"
         work.mkdir(parents=True, exist_ok=True)
@@ -576,11 +632,12 @@ class LongVideoMixin:
                                                 work_dir=work / f"look_{k + 1:03d}",
                                                 lang=lang, transcript=said, offset=t0)
                 board = (seen.get("description") or "").strip()
+                outputs = []
                 head = _t("lv_part_head", lang, n=k + 1, of=n_parts,
                           a=_stamp(t0), b=_stamp(min(total, t0 + length)))
                 if not quiet and mode in ("both", "board") and board:
-                    self._send_text(chat_id, head + "\n👁 <b>" + _t("lv_board", lang) + "</b>\n"
-                                    + _html_mod.escape(board), parse_mode="HTML")
+                    outputs.append({"text": head + "\n👁 <b>" + _t("lv_board", lang) + "</b>\n"
+                                    + _html_mod.escape(board), "parse_mode": "HTML"})
                 tale = ""
                 if (quiet or mode in ("both", "retell")) and (said or board):
                     if stop.is_set():
@@ -605,15 +662,16 @@ class LongVideoMixin:
                     if tale and not quiet:
                         prefix = head + "\n" if mode == "retell" else ""
                         for chunk_txt in tg_bot._split_html(prefix + render_retelling(tale, _t("lv_retell", lang))):
-                            self._send_text(chat_id, chunk_txt, parse_mode="HTML")
+                            outputs.append({"text": chunk_txt, "parse_mode": "HTML"})
                 material.append({"a": _stamp(t0), "b": _stamp(min(total, t0 + length)),
                                  "board": board, "said": said, "note": tale})
-                _save_material(work, material, mstate)
                 if seen.get("sheet") and not quiet and mode != "retell":
-                    try:
-                        self._send_photo(chat_id, seen["sheet"], feedback="")
-                    except Exception:
-                        logger.debug("sheet send failed", exc_info=True)
+                    outputs.append({"photo": str(seen["sheet"])})
+                if delivery_ok:
+                    delivery_ok = self._deliver_long_video(chat_id, lang, spec["id"], outputs, mstate)
+                else:
+                    mstate["delivery"].extend(outputs)
+                _save_material(work, material, mstate)
                 done += 1
                 self._activity.log(chat_id, "system",
                                    f"[long video] part {k + 1}/{n_parts} {_stamp(t0)}: "
@@ -621,20 +679,19 @@ class LongVideoMixin:
             if status_id:
                 self._edit_text(chat_id, status_id, _t("lv_watched", lang, parts=done, total=_stamp(total)))
             if quiet and material and question:
-                self._long_video_answer(chat_id, lang, spec["id"], material, question)
+                delivery_ok = self._long_video_answer(chat_id, lang, spec["id"], material, question, mstate)
             elif quiet and material:
-                self._long_video_overview(chat_id, lang, spec["id"], material)
+                delivery_ok = self._long_video_overview(chat_id, lang, spec["id"], material, mstate)
             if stop.is_set():
                 self._send_text(chat_id, _t("lv_stopped", lang, done=done, of=n_parts),
                                 keyboard=_after_kb(lang, spec["id"]) if material else self._main_menu_kb(sess, lang))
-            elif not quiet:
+            elif not quiet and delivery_ok:
                 self._send_text(chat_id, _t("lv_done", lang, parts=done, total=_stamp(total)),
                                 keyboard=_after_kb(lang, spec["id"]))
-            # a Stop keeps what was watched answerable but asks for no more output;
-            # anything else that reached here has delivered. Only a process death
-            # under the job leaves no flag -- that is what recovery picks up.
+            # A Stop keeps the notes without more output; an upload failure leaves
+            # the undelivered messages available to recovery.
             if material:
-                mstate["stopped" if stop.is_set() else "done"] = True
+                mstate["stopped" if stop.is_set() else "done"] = stop.is_set() or delivery_ok
                 _save_material(work, material, mstate)
         except Exception:
             logger.exception("long video job failed chat=%s", chat_id)

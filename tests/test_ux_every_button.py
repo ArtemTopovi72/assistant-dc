@@ -10,7 +10,7 @@ synthetic chat at the end.
 
 Run: venv/Scripts/python.exe tests/test_ux_every_button.py
 """
-import os, sys, tempfile
+import os, sys, tempfile, itertools
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
@@ -46,8 +46,9 @@ def make_bot(lang):
     return bot
 
 
+_updates = itertools.count(1)
 def upd(text):
-    return {"update_id": 1, "message": {"message_id": 1, "chat": {"id": CID},
+    return {"update_id": next(_updates), "message": {"message_id": 1, "chat": {"id": CID},
                                         "from": {"id": CID}, "text": text}}
 
 

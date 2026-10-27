@@ -17,7 +17,7 @@ import logging
 from pathlib import Path
 import re
 
-from code_sandbox import SandboxError
+from code_sandbox import SandboxError, walk_files
 import code_runner as _runner
 from seams import dep
 import sandbox_access as _access
@@ -503,7 +503,7 @@ def _handle_find_content(ctx, state, args: dict) -> str:
                 except Exception:
                     logger.debug("set_stage failed", exc_info=True)
             res = _ps.find_in_photos(ctx, folder, query,
-                                     work_dir=box.root / ".contact_sheets")
+                                     work_dir=box.resolve(".contact_sheets"))
             matches = res["matches"]
             if matches:
                 first = matches[0]
@@ -577,7 +577,7 @@ def _handle_dedupe_photos(ctx, state, args: dict) -> str:
         # by find_content last turn is gone; the sandbox file is what lasts.
         found = [Path(p) for p in (getattr(ctx, "found_image_paths", None)
                                    or _recall_found(box))
-                 if Path(p).exists()]
+                 if Path(p).exists() and box._contains(Path(p))]
         if found and not args.get("whole_folder"):
             # With no `paths` the model de-duplicated the WHOLE
             # archive (173 photos) and then picked eight arbitrary "unique"
@@ -590,7 +590,9 @@ def _handle_dedupe_photos(ctx, state, args: dict) -> str:
             folder = box.resolve(rel_dir or ".")
             if not folder.is_dir():
                 raise SandboxError(f"'{args.get('path')}' is not a folder.")
-            paths = at.list_images(folder)
+            paths = [p for p in sorted(walk_files(folder))
+                     if p.suffix.lower() in at.IMAGE_SUFFIXES
+                     and not any(part.startswith(".") for part in p.relative_to(folder).parts)]
     if not paths:
         return "[TOOL ERROR] No pictures to compare."
     _stage = getattr(ctx, "set_stage", None)
@@ -612,7 +614,7 @@ def _handle_dedupe_photos(ctx, state, args: dict) -> str:
     if keep_dir:
         dest = box.resolve(keep_dir); dest.mkdir(parents=True, exist_ok=True)
         for p in kept:
-            shutil.copy2(p, dest / p.name)
+            shutil.copy2(p, box.resolve(box.relative(dest / p.name)))
         lines.append(f"copied the {len(kept)} kept photos into {keep_dir}/")
     head = (f"{len(paths)} photos -> {len(kept)} unique "
             f"({len(paths) - len(kept)} near-duplicates dropped, sharpest kept). "
@@ -633,7 +635,7 @@ def _record(box, tool: str, what: str) -> None:
     проводил поиск». The folder remembers what the chat forgot; the record
     is shown to the model every turn while the folder has files."""
     try:
-        f = box.root / _RECORD_FILE
+        f = box.resolve(_RECORD_FILE.as_posix())
         f.parent.mkdir(parents=True, exist_ok=True)
         with f.open("a", encoding="utf-8") as fh:
             fh.write(f"{tool}: {what[:600]}\n")
@@ -643,7 +645,7 @@ def _record(box, tool: str, what: str) -> None:
 
 def read_record(box, limit: int = 12) -> str:
     try:
-        lines = (box.root / _RECORD_FILE).read_text(encoding="utf-8").splitlines()
+        lines = box.resolve(_RECORD_FILE.as_posix()).read_text(encoding="utf-8").splitlines()
     except Exception:
         lines = []
     out = "\n".join(lines[-limit:])
@@ -658,7 +660,7 @@ def _remember_found(box, matches) -> None:
     dedupe_photos works on the same set (per user, survives a restart)."""
     try:
         import json
-        f = box.root / _FOUND_FILE
+        f = box.resolve(_FOUND_FILE.as_posix())
         f.parent.mkdir(parents=True, exist_ok=True)
         f.write_text(json.dumps([str(m) for m in matches]), encoding="utf-8")
     except Exception:
@@ -668,7 +670,7 @@ def _remember_found(box, matches) -> None:
 def _recall_found(box) -> list:
     try:
         import json
-        return list(json.loads((box.root / _FOUND_FILE).read_text(encoding="utf-8")))
+        return list(json.loads(box.resolve(_FOUND_FILE.as_posix()).read_text(encoding="utf-8")))
     except Exception:
         return []
 
@@ -811,10 +813,10 @@ def _pictures_in(box) -> dict:
     """{path: mtime} of every picture in the working folder, hidden dirs skipped."""
     out = {}
     try:
-        for p in box.root.rglob("*"):
+        for p in walk_files(box.root):
             if any(part.startswith(".") for part in p.relative_to(box.root).parts):
                 continue
-            if p.is_file() and p.suffix.lower() in IMAGE_SUFFIXES:
+            if p.is_file() and p.suffix.lower() in IMAGE_SUFFIXES and box._contains(p):
                 out[p] = p.stat().st_mtime
     except Exception:
         logger.debug("could not list pictures in the working folder", exc_info=True)
@@ -897,8 +899,17 @@ _JAVA_METHOD_RE = re.compile(
 
 
 def _undo_slot(box, rel: str) -> Path:
-    safe = re.sub(r"[^\w.-]+", "__", rel.replace("\\", "/"))
-    return box.root / _UNDO_DIR / safe
+    import hashlib
+    rel = box.relative(box.resolve(rel))
+    key = hashlib.sha256(rel.encode("utf-8")).hexdigest()
+    return box.resolve((_UNDO_DIR / "by_path" / key).as_posix())
+
+
+def _undo_versions(box, slot: Path) -> list[Path]:
+    if not slot.is_dir():
+        return []
+    return sorted(p for p in slot.iterdir()
+                  if p.suffix in (".bak", ".new") and p.is_file() and box._contains(p))
 
 
 def _before(box, rel: str):
@@ -924,7 +935,7 @@ def _snapshot(box, rel: str, prior) -> None:
             (slot / f"{stamp}.bak").write_bytes(prior)
         else:
             (slot / f"{stamp}.new").write_bytes(b"")
-        olds = sorted(slot.iterdir())
+        olds = _undo_versions(box, slot)
         for f in olds[:-_UNDO_KEEP]:
             f.unlink(missing_ok=True)
     except Exception:
@@ -938,7 +949,17 @@ def _handle_undo_edit(ctx, state, args: dict) -> str:
     full = box.resolve(rel)
     rel = box.relative(full)
     slot = _undo_slot(box, rel)
-    snaps = sorted(slot.iterdir()) if slot.is_dir() else []
+    snaps = _undo_versions(box, slot)
+    if not snaps:
+        safe = re.sub(r"[^\w.-]+", "__", rel.replace("\\", "/"))
+        legacy = box.resolve((_UNDO_DIR / safe).as_posix())
+        legacy_snaps = _undo_versions(box, legacy)
+        if legacy_snaps:
+            if safe != rel or "__" in safe:
+                raise SandboxError(f"Legacy undo history for '{rel}' is ambiguous: it may "
+                                   "belong to another path. The old snapshots are kept, "
+                                   "but cannot safely be restored automatically.")
+            snaps = legacy_snaps
     if not snaps:
         raise SandboxError(f"No earlier version of '{rel}' is kept -- only changes "
                            f"made with write_file/edit_file can be undone.")
@@ -1027,9 +1048,9 @@ def _handle_code_outline(ctx, state, args: dict) -> str:
     box = _box(ctx)
     start = box.resolve(args.get("path") or ".")
     files = [start] if start.is_file() else sorted(
-        p for p in start.rglob("*")
+        p for p in walk_files(start)
         if p.is_file() and p.suffix.lower() in _OUTLINE_SUFFIXES
-        and ".agent" not in p.parts and "__pycache__" not in p.parts)
+        and ".agent" not in p.parts and "__pycache__" not in p.parts and box._contains(p))
     if not files:
         return "No source files here (looked for " + ", ".join(sorted(_OUTLINE_SUFFIXES)) + ")."
     budget, parts, shown = 6000, [], 0
@@ -1114,7 +1135,7 @@ def _handle_run_tests(ctx, state, args: dict) -> str:
 def _load_plan(box) -> list:
     import json
     try:
-        data = json.loads((box.root / _PLAN_FILE).read_text(encoding="utf-8"))
+        data = json.loads(box.resolve(_PLAN_FILE.as_posix()).read_text(encoding="utf-8"))
         return [s for s in data if isinstance(s, dict) and s.get("step")]
     except Exception:
         return []
@@ -1148,7 +1169,7 @@ def _handle_update_plan(ctx, state, args: dict) -> str:
         if step:
             steps.append({"step": step[:200],
                           "status": status if status in _MARK else "todo"})
-    f = box.root / _PLAN_FILE
+    f = box.resolve(_PLAN_FILE.as_posix())
     f.parent.mkdir(parents=True, exist_ok=True)
     if not steps:
         f.unlink(missing_ok=True)

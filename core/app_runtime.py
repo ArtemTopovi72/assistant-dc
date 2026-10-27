@@ -51,10 +51,10 @@ def _migrate_memory_to_profiles(memory_dir) -> None:
     old_session = memory_dir / "session_memory.json"
     old_summary = memory_dir / "summary.json"
     default_dir = memory_dir / "default"
-    if (old_session.exists() or old_summary.exists()) and not default_dir.exists():
+    if old_session.exists() or old_summary.exists():
         default_dir.mkdir(parents=True, exist_ok=True)
         for f in (old_session, old_summary):
-            if f.exists():
+            if f.exists() and not (default_dir / f.name).exists():
                 shutil.move(str(f), str(default_dir / f.name))
         logger.info("Memory migrated to 'default' profile at %s", default_dir)
 

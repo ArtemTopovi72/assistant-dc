@@ -15,6 +15,7 @@ from http.server import BaseHTTPRequestHandler
 from typing import Any, Dict
 
 logger = logging.getLogger("assistant." + __name__)
+MAX_BODY_BYTES = 64 * 1024 * 1024
 
 
 class JsonHandler(BaseHTTPRequestHandler):
@@ -33,4 +34,12 @@ class JsonHandler(BaseHTTPRequestHandler):
 
     def _read_body(self) -> Dict[str, Any]:
         n = int(self.headers.get("Content-Length") or 0)
-        return json.loads(self.rfile.read(n) or b"{}")
+        if not 0 <= n <= MAX_BODY_BYTES:
+            raise ValueError(f"Content-Length must be between 0 and {MAX_BODY_BYTES}")
+        body = self.rfile.read(n)
+        if len(body) != n:
+            raise ValueError("incomplete request body")
+        payload = json.loads(body or b"{}")
+        if not isinstance(payload, dict):
+            raise ValueError("request body must be a JSON object")
+        return payload

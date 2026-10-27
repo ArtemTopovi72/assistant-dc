@@ -40,6 +40,8 @@ def make_bot(hold=0.35):
     bot = T.TelegramBot("123:TEST", lambda: object(), lambda: object(),
                         lambda: {}, silent_mode=True)
     bot._backend = T.InMemoryBackend()
+    for cid in (CID_A, CID_B):
+        bot._user_store.put(T._User(chat_id=cid, name="User", status="approved"))
     bot._api_post = lambda *a, **k: {}
     bot._activity.log = lambda *a, **k: None
     bot.live = {}            # chat_id -> tasks running right now

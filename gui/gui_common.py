@@ -202,6 +202,10 @@ QLabel#title {{ font-size: {fp(18)}px; font-weight: 700; }}
 QLabel#section {{ color: {MUTED}; font-size: {fp(11)}px; font-weight: 700; letter-spacing: {p(1)}px; }}
 QLabel#chip {{ background: {PANEL2}; color: {ACCENT2}; border: {p(1)}px solid {BORDER};
               border-radius: {p(11)}px; padding: {p(3)}px {p(12)}px; font-weight: 600; }}
+QLabel#modelChip {{ background: {PANEL2}; color: {TEXT}; border: {p(1)}px solid {BORDER};
+                   border-radius: {p(6)}px; padding: {p(4)}px {p(8)}px; font-size: {fp(13)}px; }}
+QLabel#searchEmpty {{ color: {MUTED}; padding: {p(8)}px; }}
+QWidget#commandGroup {{ background: {PANEL}; border: {p(1)}px solid {BORDER}; border-radius: {p(8)}px; }}
 QTextEdit, QLineEdit, QScrollArea {{ background: {BG}; border: {p(1)}px solid {BORDER};
               border-radius: {p(10)}px; padding: {p(8)}px; }}
 QTextEdit, QPlainTextEdit, QLineEdit {{ selection-background-color: #f4b740;
@@ -221,6 +225,8 @@ QPushButton:hover {{ background: #3b7bff; }}
 QPushButton:disabled {{ background: #34363f; color: {MUTED}; }}
 QPushButton#ghost {{ background: {PANEL2}; text-align: left; }}
 QPushButton#ghost:hover {{ background: #2d2f3a; }}
+QPushButton[commandAction="true"], QPushButton[chromeAction="true"] {{
+    font-size: {fp(13)}px; padding: {p(6)}px {p(10)}px; border-radius: {p(6)}px; }}
 QPushButton#rec {{ background: {REC}; }}
 QPushButton#scrollToBottom {{ background: {ACCENT}; color: #fff; border: none; border-radius: {p(6)}px; padding: 0; font-size: 14px; font-weight: bold; }}
 QPushButton#scrollToBottom:hover {{ background: {ACCENT2}; color: #000; }}
@@ -231,8 +237,8 @@ QTabBar::tab {{ background: {PANEL2}; padding: {p(6)}px {p(10)}px; border-top-le
 QTabBar::tab:selected {{ background: {ACCENT}; color: white; margin-bottom: -{p(1)}px;
                          padding-bottom: {p(7)}px; }}
 QTabBar::tab:hover:!selected {{ background: #2d2f3a; color: {TEXT}; }}
-QTabWidget#pages > QTabBar {{ font-size: {p(14)}px; font-weight: bold; }}
-QTabWidget#pages > QTabBar::tab {{ padding: {p(9)}px {p(22)}px; }}
+QTabWidget#pages > QTabBar {{ font-size: {fp(13)}px; font-weight: 600; }}
+QTabWidget#pages > QTabBar::tab {{ padding: {p(6)}px {p(16)}px; }}
 QComboBox::drop-down, QDateEdit::drop-down {{ border: none; width: {p(22)}px; }}
 QComboBox::down-arrow {{ image: none; width: 0; height: 0;
                          border-left: {p(5)}px solid transparent;
@@ -250,7 +256,7 @@ QSpinBox::down-arrow {{ image: none; width: 0; height: 0;
                         border-top: {p(5)}px solid {MUTED}; }}
 QStatusBar {{ background: {PANEL}; color: {MUTED}; }}
 QWidget#titlebar {{ background: {PANEL}; border-bottom: {p(1)}px solid {BORDER}; }}
-QLabel#titletext {{ font-weight: 700; font-size: {fp(14)}px; }}
+QLabel#titletext {{ font-weight: 600; font-size: {fp(13)}px; }}
 QPushButton#winbtn {{ background: transparent; border: none; border-radius: {p(5)}px;
                      color: {TEXT}; font-size: {fp(14)}px; font-weight: 400;
                      min-width: {p(40)}px; min-height: {p(28)}px; padding: 0px; }}

@@ -811,10 +811,17 @@ def test_the_reranker_leaves_the_card_before_the_report_is_written():
     """Kept resident through the writing, the reranker pushed 2.8 GB of the 26B LLM into
     shared memory; released, the next rerank builds a fresh one."""
     import rerank
-    first = rerank.get_reranker()
+    factory = lambda *a, **k: rerank.Reranker("lexical")
     rerank.release_gpu()
-    check("rerank: released, the next call loads anew", rerank.get_reranker() is not first)
-    rerank.release_gpu()
+    try:
+        first = rerank.get_reranker(factory=factory)
+        check("rerank: repeated call reuses the resident scorer",
+              rerank.get_reranker(factory=factory) is first)
+        rerank.release_gpu()
+        check("rerank: released, the next call loads anew",
+              rerank.get_reranker(factory=factory) is not first)
+    finally:
+        rerank.release_gpu()
 
 
 def test_english_query_is_not_searched_as_russia():

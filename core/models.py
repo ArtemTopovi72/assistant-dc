@@ -30,9 +30,9 @@ def _atomic_write_json(path: Path, data, ctx=None) -> None:
     to through an open handle). os.replace itself is retried briefly because a
     concurrent reader's open handle makes it fail with WinError 5/32."""
     tmp = path.with_name(f"{path.name}.{os.getpid()}_{threading.get_ident()}.tmp")
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
     try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
         for attempt in range(3):
             try:
                 dep(ctx, "replace", os.replace)(tmp, path)

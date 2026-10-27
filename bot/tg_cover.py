@@ -210,7 +210,8 @@ class CoverMixin:
                 # The first cover of an artist went out in a zero-shot timbre; their own RVC
                 # voice is trained now on the original's vocal and the cover sent again in it.
                 self._send_text(chat_id, tg_bot._t("cover_rvc_training", lang))
-                self._send_audio(chat_id, remix.resing_rvc(ctx, info), tg_bot._t("cover_rvc_done", lang))
+                if not self._send_audio(chat_id, remix.resing_rvc(ctx, info), tg_bot._t("cover_rvc_done", lang)):
+                    self._send_text(chat_id, tg_bot._t("cover_fail_render", lang))
         except cover.CoverFailed as exc:
             self._send_text(chat_id, tg_bot._t("cover_fail_" + str(exc), lang))
         except Exception:
@@ -238,7 +239,8 @@ class CoverMixin:
         """The classic mashup (song 1's vocal over song 2's backing, bar-aligned and in key)
         goes out first: it takes ~30 s, the voice swap after it several minutes."""
         try:
-            self._send_audio(chat_id, module(self, "mashup_auto").make(ctx, src, song2), tg_bot._t("mashup_done", lang))
+            if not self._send_audio(chat_id, module(self, "mashup_auto").make(ctx, src, song2), tg_bot._t("mashup_done", lang)):
+                self._send_text(chat_id, tg_bot._t("cover_fail_render", lang))
         except Exception:
             tg_bot.logger.exception("[mashup] failed for chat %s", chat_id)
 

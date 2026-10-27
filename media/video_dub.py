@@ -215,13 +215,17 @@ def _speak_chunks(ctx, voice_clone, voice: np.ndarray, old: list, text: str, wor
 
 def redub(ctx, video: str, lines: list, out_path: str = "") -> str:
     """`video` with its speech re-said by F5 (same voice, correct stress). "" on failure."""
-    import soundfile as sf
-    import mashup_stems
-    import voice_clone
     text = " ".join(l.strip() for l in lines if l and l.strip())
     if not text or not os.path.exists(video) or getattr(getattr(ctx, "models", None), "whisper", None) is None:
         return ""
-    work = tempfile.mkdtemp(prefix="vdub_")
+    with tempfile.TemporaryDirectory(prefix="vdub_") as work:
+        return _redub(ctx, video, text, out_path, work)
+
+
+def _redub(ctx, video: str, text: str, out_path: str, work: str) -> str:
+    import soundfile as sf
+    import mashup_stems
+    import voice_clone
     mix = os.path.join(work, "mix.wav")
     if not _run(["ffmpeg", "-y", "-loglevel", "error", "-i", video, "-vn", "-ac", "1", "-ar", str(SR), mix]):
         return ""

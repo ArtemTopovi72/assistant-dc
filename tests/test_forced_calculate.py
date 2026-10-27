@@ -88,3 +88,22 @@ def test_the_loop_releases_the_force_after_the_tool_ran():
 
 def test_the_loop_does_not_force_on_an_ordinary_message():
     assert _rounds_for("расскажи анекдот")[0][0] == "auto"
+
+
+def test_required_code_execution_cannot_finish_as_a_code_block(tmp_path):
+    from types import SimpleNamespace
+    from code_sandbox import Sandbox
+    draft = "```python\nprint('AUDIT_HOLD_DONE')\n```"
+    llm = _TGF.LLM([_TGF._asst(draft)] * 3)
+    tools = _TGF.Tools()
+    ctx = _TGF._ctx(sandbox=Sandbox(tmp_path),
+                    sandbox_user=SimpleNamespace(prefs={"sandbox": "code"}))
+    final = _TGF._run(ctx, llm, tools,
+                      {"user_input": "Выполни Python-код в песочнице: print('AUDIT_HOLD_DONE')",
+                       "messages": []},
+                      read={"needs_tool": True, "wants": ["run_code"], "must_call": "run_code"},
+                      fastpath=False)
+    assert not tools.calls
+    assert len(llm.calls) == 3
+    assert "```" not in final["final_answer"]
+    assert "не выполнен" in final["final_answer"].lower()

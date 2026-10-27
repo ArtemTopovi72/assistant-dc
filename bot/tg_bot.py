@@ -39,7 +39,7 @@ Extremism filter
   Any message matching a keyword is refused with a legal notice
 """
 from __future__ import annotations
-from seams import choice, intent_read
+from seams import choice, intent_read, module
 
 import copy
 import html as _html_mod
@@ -1410,6 +1410,7 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         self._albums:     dict[str, dict] = {}
         self._album_lock  = threading.Lock()
         self._running       = False
+        self._stopping      = False
         self._offset        = self._load_offset()
         self._start_time: float = 0.0   # set in start(); used to detect catch-up messages
         self._active_stages: dict[int, str] = {}   # chat_id → current stage
@@ -1437,6 +1438,8 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         # one chat pressing Stop would cancel whoever else happened to be running.
         self._task_cancels: dict[str, threading.Event] = {}
         self._steer_inboxes: dict = {}          # task_id -> steer.Inbox
+        self._steer_incoming: dict = {}         # inputs retained until the task finishes
+        self._queue_claim_lock = threading.Lock()
         # Chats with a task EXECUTING right now. Several consumers run at once,
         # so this is what stops the same chat being answered twice in parallel —
         # now a small counter (0/1/2) rather than a boolean, since a chat may
@@ -1493,6 +1496,10 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         # _INFLIGHT_FILE by _write_inflight) so _recover_inflight can offer the
         # same retry it already offers for a task that was actively running.
         self._pending_journal: dict[str, _Task] = {}
+        from tg_incoming import IncomingStore
+        self._incoming = IncomingStore(_SESSION_FILE.with_name("tg_incoming.json"))
+        self._incoming_enqueued = set()
+        self._stop_requests.update(self._incoming.stops())
         self._task_lock     = threading.Lock()
         # chat_id -> [fail_count, locked_until_ts] for the logged-out password gate
         self._login_fails: dict[int, list] = {}
@@ -1510,10 +1517,14 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         """
         if self._running:
             return True
+        if not self._incoming.claim(self):
+            self._on_status("⏳ Previous bot workers are still stopping; try Start again shortly.")
+            return False
+        self._stopping = False
         # Self-hosted Bot API: the server must be up and the token moved off
         # the cloud before getMe can succeed here (see tg_local_api).
         try:
-            import tg_local_api as _local
+            _local = module(self, "tg_local_api")
             if _local.enabled():
                 if _local.ensure_server():
                     _local.ensure_bot_logged_in(self.token)
@@ -1532,9 +1543,12 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         self._start_time = time.time()
         self._register_commands()
         try:
-            import reminders as _rem
+            _rem = module(self, "reminders")
             import price_watch as _pw
-            _rem.register(lambda cid, t: self._send_text(cid, t),
+            def deliver_reminder(cid, text):
+                if not self._send_get_id(cid, text):
+                    raise RuntimeError("reminder delivery was not accepted")
+            _rem.register(deliver_reminder,
                           Path(_SESSION_FILE).parent / "reminders.json",
                           runner=self._run_scheduled, price_check=_pw.check)
         except Exception as exc:
@@ -1542,25 +1556,36 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
 
         # Before any thread can enqueue (and so rewrite the journal).
         inflight = self._take_inflight()
+        # Resolve pending entries before consumers can claim their durable-queue copies.
+        try:
+            self._restore_pending(inflight)
+            self._restore_incoming(inflight)
+        except Exception:
+            logger.exception("could not restore the bot queue")
+            self._running = False
+            self._stopping = True
+            self._on_status("❌ Queue recovery failed; saved requests are retained. Retry Start.")
+            return False
 
+        _threads = module(self, "threading")
         for i in range(_MAX_CONSUMERS):
-            t = threading.Thread(target=self._consumer_loop,
+            t = _threads.Thread(target=self._consumer_loop,
                                  daemon=True, name=f"tg-consumer-{i}")
             t.start(); self._consumers.append(t)
 
         self._poll_beat = time.monotonic()
-        self._poll_thread = threading.Thread(target=self._poll_loop, daemon=True,
+        self._poll_thread = _threads.Thread(target=self._poll_loop, daemon=True,
                                              name="tg-poll")
         self._poll_thread.start()
         import debug_user
-        threading.Thread(target=debug_user.loop, args=(self,), daemon=True,
+        _threads.Thread(target=debug_user.loop, args=(self,), daemon=True,
                          name="tg-debug-user").start()
 
         # Supervisor: the bot must not go quiet because one thread died. Every
         # loop below already catches per-iteration exceptions, but a hard failure
         # (MemoryError, a C-extension crash inside a handler, an unhandled error
         # in the loop's own frame) still ends the thread — and nothing noticed.
-        self._watchdog = threading.Thread(target=self._watchdog_loop, daemon=True,
+        self._watchdog = _threads.Thread(target=self._watchdog_loop, daemon=True,
                                           name="tg-watchdog")
         self._watchdog.start()
 
@@ -1568,18 +1593,16 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         self._on_status(f"✅  @{username}  ·  queue: {backend_name}")
         self._activity.log(0, "system", f"Bot started as @{username}")
 
-        # Tell anyone whose task died with the previous process, before the
-        # startup broadcast so the two notifications arrive in a sensible order.
-        threading.Thread(target=self._recover_inflight, args=(inflight,), daemon=True).start()
+        _threads.Thread(target=self._recover_inflight, args=(inflight,), daemon=True).start()
 
         # A long-video job the previous process died under still has its notes on
         # disk; its retell composes from them and arrives now (2026-10-27).
-        threading.Thread(target=self._recover_long_videos, daemon=True,
+        _threads.Thread(target=self._recover_long_videos, daemon=True,
                          name="tg-lv-recover").start()
 
         # Send startup notifications to subscribed approved users
         if not self._silent_mode:
-            threading.Thread(target=self._broadcast_startup, daemon=True).start()
+            _threads.Thread(target=self._broadcast_startup, daemon=True).start()
         return True
 
     def stop(self):
@@ -1593,6 +1616,15 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         if not self._silent_mode:
             self._broadcast_shutdown()
         self._running = False
+        self._stopping = True
+        with self._mgmt_lock:
+            for pending in self._queues.values():
+                pending.put(None)
+        with self._album_lock:
+            for album in self._albums.values():
+                if album.get("timer"):
+                    album["timer"].cancel()
+            self._albums.clear()
         try:
             import reminders as _rem; _rem.stop()
         except Exception:

@@ -102,7 +102,7 @@ class Msg:
     def __init__(self, address: int):
         (self.hwnd, self.message, self.wParam, self.lParam) = (
             ctypes.cast(ctypes.c_void_p(address),
-                        ctypes.POINTER(wintypes.MSG)).contents.hwnd,
+                        ctypes.POINTER(wintypes.MSG)).contents.hWnd,
             ctypes.cast(ctypes.c_void_p(address),
                         ctypes.POINTER(wintypes.MSG)).contents.message,
             ctypes.cast(ctypes.c_void_p(address),
@@ -118,7 +118,7 @@ def remove_frame_area(msg: Msg, *, user32=None) -> bool:
     return api is not None and msg.message == WM_NCCALCSIZE and msg.wParam
 
 
-def hit(msg: Msg, caption, *, user32=None) -> int:
+def hit(msg: Msg, caption, *, user32=None, client=None) -> int:
     """The HT* code for a WM_NCHITTEST, or 0 to let Qt decide.
 
     `caption(x, y)` gets the point in the window's LOCAL physical pixels and
@@ -139,6 +139,8 @@ def hit(msg: Msg, caption, *, user32=None) -> int:
     b = max(6, api.GetSystemMetrics(SM_CXSIZEFRAME)
             + api.GetSystemMetrics(SM_CXPADDEDBORDER))
     l, t = x - rect.left, y - rect.top
+    if client is not None and client(l, t):
+        return HTCLIENT
     w, h = rect.right - rect.left, rect.bottom - rect.top
     if w <= 2 * b or h <= 2 * b:    # tiny window: only the caption, no border band
         return HTCAPTION if caption(l, t) else 0

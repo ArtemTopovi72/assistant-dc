@@ -15,14 +15,50 @@ both are consumed by the top level rather than by any tab:
 Neither is patched by any suite, and their consumers (run_gui, AssistantWindow)
 both stay in gui.py, so this move needed no test changes.
 """
-from PyQt5.QtCore import QEvent, QObject, QTimer
-from PyQt5.QtWidgets import QHBoxLayout, QLabel, QWidget
+from PyQt5.QtCore import QEvent, QObject, QTimer, Qt
+from PyQt5.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QWidget
 
 from ui_scale import scale_style as _ss
 from gui_common import ACCENT2, MUTED, TEXT, enable_dark_titlebar
+from ui_scale import px
+from gui_i18n import back, tr
 
 import logging
 logger = logging.getLogger("assistant.gui")
+
+
+class ElidingLabel(QLabel):
+    def __init__(self, text="", padding=0):
+        super().__init__()
+        self._full_text, self._padding = text, padding
+        self.setMinimumWidth(0)
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.setText(text)
+
+    def setText(self, text):
+        previous = getattr(self, "_source_text", None)
+        self._source_text = previous if previous is not None and text == tr(previous) else back(text)
+        self._full_text = tr(self._source_text)
+        self.setToolTip(self._source_text)
+        self.setAccessibleName(self._full_text)
+        self._elide()
+
+    def _elide(self):
+        width = max(0, self.contentsRect().width() - (px(self._padding) if self._padding else 0))
+        super().setText(self.fontMetrics().elidedText(self._full_text, Qt.ElideRight, width))
+        self.setProperty("_i18n_setText", self._source_text)
+
+    def text(self):
+        return self._full_text
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._elide()
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() in (QEvent.FontChange, QEvent.StyleChange) and hasattr(self, "_full_text"):
+            self._elide()
 
 
 class _DarkTitleBarFilter(QObject):
@@ -60,9 +96,10 @@ class StageIndicator(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(8)
         self.spinner = QLabel("●")
-        self.label = QLabel("Ready")
+        self.spinner.setFixedWidth(px(16))
+        self.label = ElidingLabel("Ready")
         lay.addWidget(self.spinner)
-        lay.addWidget(self.label)
+        lay.addWidget(self.label, 1)
         self._i = 0
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._spin)

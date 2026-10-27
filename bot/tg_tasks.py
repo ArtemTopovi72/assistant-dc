@@ -795,15 +795,19 @@ class TaskRunnerMixin:
         into that task's inbox instead of the queue (steer.py). True when
         it was taken."""
         import steer as _steer
+        from tg_incoming import BATCH_IDS
         with self._task_lock:
             running = [t for t in (self._running_task.get(chat_id) or [])
                        if not getattr(t, "delivered", False)
+                       and t.task_id not in self._cancelled
+                       and not self._stop_requested_after(t)
                        and t.task_id in self._steer_inboxes]
             interruptible = self._chat_interruptible.get(chat_id, False)
             if not running or not _steer.eligible(
                     task.user_text, bool(task.image_path) or bool(task.image_id), interruptible, ctx=self.reads):
                 return False
             target = running[-1]
+            self._steer_incoming.setdefault(target.task_id, []).extend(BATCH_IDS.get())
             self._steer_inboxes[target.task_id].put(task.user_text)
         sess = self._get_session(chat_id); lang = self._lang(sess)
         user = self._user_store.get(chat_id); uname = user.name if user else str(chat_id)
@@ -818,14 +822,31 @@ class TaskRunnerMixin:
         request, so nothing the user typed is lost."""
         with self._task_lock:
             inbox = self._steer_inboxes.pop(task.task_id, None)
+            incoming_ids = self._steer_incoming.get(task.task_id, [])
+        if getattr(self, "_stopping", False):
+            return
         unread = inbox.unread() if inbox is not None else []
+        if self._is_cancelled(task.task_id) or self._stop_requested_after(task):
+            unread = []
+        failed = False
+        # shortcut: a crash before retiring originals can replay a note; stable replacement IDs would prevent that.
         for text in unread:
             try:
                 self._enqueue_item(task.chat_id, {"type": "text", "text": text})
                 tg_bot.logger.info("steer: unread note re-queued for chat=%s: %r",
                                    task.chat_id, text[:80])
             except Exception:
+                failed = True
                 tg_bot.logger.exception("steer: could not re-queue %r", text[:80])
+        if not failed:
+            # Keep the originals until every unread note has a durable replacement.
+            try:
+                self._incoming.ack(incoming_ids)
+            except Exception:
+                tg_bot.logger.exception("steer: could not retire accepted notes")
+                return
+            with self._task_lock:
+                self._steer_incoming.pop(task.task_id, None)
 
     def _still_rendering(self, chat_id: int) -> bool:
         """The card is working for this chat and its steps came lately (core/progress.py)."""

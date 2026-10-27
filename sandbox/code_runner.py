@@ -295,10 +295,11 @@ def run_python(sandbox, code: str, timeout: int = DEFAULT_TIMEOUT,
     if not (code or "").strip():
         return RunResult(False, -1, "No code given.", 0.0)
     timeout = max(1, min(int(timeout or DEFAULT_TIMEOUT), MAX_TIMEOUT))
-    scripts = sandbox.root / AGENT_DIR
+    scripts = sandbox.resolve(AGENT_DIR)
     scripts.mkdir(parents=True, exist_ok=True)
     rel = f"{AGENT_DIR}/run_{int(time.time() * 1000)}.py"
-    (sandbox.root / rel).write_text(code, encoding="utf-8")
+    script = sandbox.resolve(rel)
+    script.write_text(code, encoding="utf-8")
 
     # The engine may still be booting (launch_all spawns Docker Desktop and
     # does not wait); a request that lands in that window waits here instead
@@ -311,14 +312,14 @@ def run_python(sandbox, code: str, timeout: int = DEFAULT_TIMEOUT,
         # system" before every single plot. Nothing breaks, but the model reads
         # that as an error and starts working around a problem it does not
         # have. Pointed at the sandbox, which is the one writable mount.
-        (sandbox.root / AGENT_DIR / "home").mkdir(parents=True, exist_ok=True)
+        sandbox.resolve(f"{AGENT_DIR}/home").mkdir(parents=True, exist_ok=True)
         res = _run_in_container(sandbox, ["python", "-u", rel], timeout,
                                 network=False, ctx=ctx,
                                 env={"HOME": f"/work/{AGENT_DIR}/home",
                                      "XDG_CACHE_HOME": f"/work/{AGENT_DIR}/home/.cache",
                                      "MPLCONFIGDIR": f"/work/{AGENT_DIR}/home/.mpl"})
     elif allow_host:
-        res = dep(ctx, "_spawn", _spawn)([sys.executable, "-u", str(sandbox.root / rel)],
+        res = dep(ctx, "_spawn", _spawn)([sys.executable, "-u", str(script)],
                      cwd=sandbox.root, timeout=timeout)
         res.backend = "host (UNISOLATED)"
     else:
@@ -389,7 +390,7 @@ def install(sandbox, packages, timeout: int = 300,
         #
         # Staged on the MOUNTED sandbox instead: real disk, no RAM cost, and it
         # is cleaned up with everything else. /tmp stays small for script runs.
-        (sandbox.root / AGENT_DIR / "tmp").mkdir(parents=True, exist_ok=True)
+        sandbox.resolve(f"{AGENT_DIR}/tmp").mkdir(parents=True, exist_ok=True)
         return _run_in_container(
             sandbox,
             ["python", "-m", "pip", "install", "--no-input",
@@ -400,7 +401,7 @@ def install(sandbox, packages, timeout: int = 300,
     if not allow_host:
         _, why = backend_status(ctx)
         return RunResult(False, -1, f"Installing is unavailable: {why}", 0.0)
-    target = sandbox.root / AGENT_DIR / "site-packages"
+    target = sandbox.resolve(f"{AGENT_DIR}/site-packages")
     target.mkdir(parents=True, exist_ok=True)
     res = dep(ctx, "_spawn", _spawn)([sys.executable, "-m", "pip", "install", "--no-input",
                   "--target", str(target), *names],

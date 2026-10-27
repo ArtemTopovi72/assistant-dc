@@ -49,6 +49,8 @@ class _Task:
     # sees, so a Stop pressed then must not claim to be "stopping" anything.
     delivered:   bool = False
     reply_to:    int = 0          # the user's message this task answers (threads the reply)
+    incoming_ids: list = field(default_factory=list)
+    replaces_task_id: str = ""
 
     def to_dict(self) -> dict:
         return self.__dict__.copy()
