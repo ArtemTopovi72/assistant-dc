@@ -912,6 +912,7 @@ def polish(ctx, text: str, rounds: int = ROUNDS, on_round=None, singer: str = ""
            topic: str = "") -> dict:
     """The check -> revise loop. {"text", "score", "rounds", "left": [problems],
     "original"}; the best scoring version is kept, never a worse rewrite."""
+    topic = topic or text
     lang = _lang_name(text)
     cur, best = text.strip(), None
     done = 0

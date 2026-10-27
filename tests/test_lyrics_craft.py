@@ -285,6 +285,18 @@ def test_critic_leaves_model_specific_reasoning_control_to_the_backend(monkeypat
     assert seen[0]['json_schema'] == L._CRITIC_SCHEMA
 
 
+def test_pasted_lyric_remains_the_source_through_every_polish_round():
+    seen = []
+    def llm(role, system, user):
+        if role == 'critic':
+            seen.append(system)
+            return '{"score":4,"problems":[{"kind":"meaning","lines":[],"problem":"Repair the unclear image"}]}'
+        return '[verse]\nA different scene\nWithout the original people\nAnd a different ending'
+    _F['lyrics_llm'] = llm
+    L.polish(_C(), GOOD, rounds=1)
+    assert len(seen) == 2 and all(GOOD.strip() in system for system in seen)
+
+
 def test_stanza_repair_preserves_unflagged_cause_and_excludes_all_bad_lines():
     text = '[bridge]\nПервое желание — золото\nЛишняя бессмыслица\nТретье желание — скорость\nЕщё бессмыслица'
     seen = []
