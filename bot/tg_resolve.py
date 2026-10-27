@@ -1443,12 +1443,23 @@ class ResolveMixin:
         # instruction about the user's next words; with none to attach to it must
         # WAIT rather than seize our scaffolding.
         if merged and sess.pending_prefix:
-            merged = sess.pending_prefix + merged
-            sess.pending_prefix = ""
-            sess.pending_outfit_target = ""   # 👗 answered in words, not a photo
-            try: self._store.put(sess)
+            # «привет» typed in the Озон menu searched shampoo (2026-10-27): an
+            # armed prefix may only seize a real request for its kind of work.
+            # Plain conversation -- the intent read says needs_tool False --
+            # answers as chat, and the prefix stays armed for the next real
+            # query («носки» right after that «привет» still searches Ozon).
+            from seams import intent_read
+            try:
+                chatty = intent_read(self.reads)(None, merged, "", "")["needs_tool"] is False
             except Exception:
-                tg_bot.logger.warning("session persist failed", exc_info=True)
+                chatty = False
+            if not chatty:
+                merged = sess.pending_prefix + merged
+                sess.pending_prefix = ""
+                sess.pending_outfit_target = ""   # 👗 answered in words, not a photo
+                try: self._store.put(sess)
+                except Exception:
+                    tg_bot.logger.warning("session persist failed", exc_info=True)
 
         _age = time.time() - (getattr(self, "_msg_date", {}).get(chat_id) or time.time())
         if _age > 600:

@@ -528,3 +528,33 @@ check("Cancel ends the remix step", sess(bot).cover_state == "")
 print()
 print(f"{OK} passed, {BAD} failed")
 sys.exit(1 if BAD else 0)
+
+# ── an armed prefix may only seize a real request ────────────────────────────
+# «привет» typed in the Озон menu searched shampoo (2026-10-27): the intent
+# read (an LLM read, no word lists) says needs_tool False for plain talk, and
+# that must answer as chat, the prefix staying armed for the next real query.
+from fakes import reads as _reads
+
+def _prefix_gate_read(t):
+    t = (t or "").strip().lower()
+    if t in ("привет", "hi", "спасибо"):
+        return {"needs_tool": False}
+    return {"needs_tool": True, "wants": ["ozon_search"]}
+
+reset(bot)
+bot.reads = types.SimpleNamespace(**_reads(read=_prefix_gate_read))
+_s = sess(bot); _s.menu = "ozon"; _s.pending_prefix = "find on ozon: "
+bot._store.put(_s)
+bot.pushed.clear()
+bot._resolve_and_push(CID, [{"type": "text", "text": "привет"}])
+check("a greeting is not seized by the armed prefix",
+      bot.pushed and bot.pushed[0].user_text == "привет",
+      [p.user_text for p in bot.pushed])
+check("and the prefix stays armed for the next real query",
+      sess(bot).pending_prefix == "find on ozon: ", sess(bot).pending_prefix)
+bot.pushed.clear()
+bot._resolve_and_push(CID, [{"type": "text", "text": "тёплые носки"}])
+check("a real query right after the greeting still searches",
+      bot.pushed and bot.pushed[0].user_text.startswith("find on ozon:"),
+      [p.user_text for p in bot.pushed])
+check("and consumes the prefix", sess(bot).pending_prefix == "", sess(bot).pending_prefix)
