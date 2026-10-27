@@ -156,6 +156,12 @@ _MSG: dict[str, dict[str, str]] = {
     "welcome":       {"en": "👋 <b>Hi! I'm your AI assistant.</b>",
                       "ru": "👋 <b>Привет! Я твой ИИ-ассистент.</b>"},
     "main_menu":     {"en": "🏠 Main menu", "ru": "🏠 Главное меню"},
+    "result_menu":   {"en": "Done ✅", "ru": "Готово ✅"},
+    "result_menu_music": {"en": "Here's your song 🎵", "ru": "Вот твоя песня 🎵"},
+    "result_menu_image": {"en": "Here's your picture 🖼", "ru": "Вот твоя картинка 🖼"},
+    "result_menu_video": {"en": "Here's your video 🎬", "ru": "Вот твоё видео 🎬"},
+    "result_menu_document": {"en": "Your file is ready 📎", "ru": "Файл готов 📎"},
+    "result_menu_voice": {"en": "Your voice message is ready 🎙", "ru": "Голосовое готово 🎙"},
     # clear_context() also wipes tg_facts (deliberate — see clear_context's
     # docstring), so the reply says so: no warning and no undo otherwise.
     "cleared":       {"en": "🗑 Conversation and saved facts cleared.",

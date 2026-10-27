@@ -112,7 +112,8 @@ def test_a_delivered_result_gets_the_row_under_its_own_buttons():
     F.redirect_store(os.path.join(tempfile.mkdtemp(), "fb.db"))
     posted = []
     bot = types.SimpleNamespace(_api_post=lambda m, d: posted.append((m, d)),
-                                _get_session=lambda cid: types.SimpleNamespace(last_task_text="old"))
+                                _get_session=lambda cid: types.SimpleNamespace(last_task_text="old"),
+                                _restore_result_menu=lambda *args: None)
     resp = types.SimpleNamespace(json=lambda: {"result": {"message_id": 42}})
     own = {"inline_keyboard": [[{"text": "🔄", "callback_data": "again"}]]}
     with tg_transport.replying_to(7, 0, asked="спой про кота"):

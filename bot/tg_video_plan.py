@@ -115,7 +115,8 @@ class VideoPlanMixin:
 
     def _send_video_plan(self, chat_id: int, sess, lang: str) -> None:
         """Two messages: the script alone, so it copies clean, then the card with the buttons."""
-        self._send_text(chat_id, self._video_plan_script(sess, lang), parse_mode="HTML")
+        self._send_text(chat_id, self._video_plan_script(sess, lang), parse_mode="HTML",
+                        keyboard=self._state_kb(sess, lang))
         text, kb = self._video_plan_card(sess, lang)
         self._send_text(chat_id, text, parse_mode="HTML", keyboard=kb)
 
@@ -203,7 +204,8 @@ class VideoPlanMixin:
             sess.video_plan, sess.video_plan_request, sess.video_plan_ok = [], "", []
             sess.voice_choice, sess.anim_voices = "", []
             self._store.put(sess)
-            self._send_text(chat_id, tg_bot._t("vp_cancelled", lang))
+            self._send_text(chat_id, tg_bot._t("vp_cancelled", lang),
+                            keyboard=self._state_kb(sess, lang))
             return
         if data == "vp:go":
             sess.video_plan_ok = [p["text"] for p in sess.video_plan]

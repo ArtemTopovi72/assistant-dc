@@ -740,7 +740,7 @@ class TaskRunnerMixin:
                                   text=(task.user_text or "")[:1500])
         try:
             import config as _cfg, debug_user as _dbg, klein as _klein
-            with _chatlog.bind(chat_id), tg_transport.replying_to(chat_id, task.reply_to, asked=task.user_text),                     _klein.steps_for_task(_cfg.KLEIN_DEBUG_STEPS if _dbg.is_debug(chat_id) else None):
+            with _chatlog.bind(chat_id), tg_transport.replying_to(chat_id, task.reply_to, asked=task.user_text), tg_transport.result_menu(self, chat_id),                     _klein.steps_for_task(_cfg.KLEIN_DEBUG_STEPS if _dbg.is_debug(chat_id) else None):
                 self._run_task_inner(task, sess, user, uname, lang, ctx, graph)
             _outcome = "cancelled" if task.task_id in self._cancelled else "done"
         finally:
@@ -2140,6 +2140,8 @@ class TaskRunnerMixin:
 
         self._on_stage(chat_id, "✅ Done", True)
         task.delivered = True
+
+        tg_transport.flush_result_menu(self, chat_id)
 
         # ── compact history AFTER delivering the reply ────────────────────────
         # Compaction requires an extra LLM call (summariser). Running it before

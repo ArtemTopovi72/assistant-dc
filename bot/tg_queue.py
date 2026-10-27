@@ -17,6 +17,7 @@ import json
 import os
 import queue as _pyqueue
 import threading
+import tg_transport
 import turn_trace
 import time
 import uuid
@@ -40,7 +41,8 @@ class QueueMixin:
 
         def run():
             try:
-                fn(*args)
+                with tg_transport.result_menu(self, chat_id):
+                    fn(*args)
             finally:
                 with self._task_lock:
                     n = self._chat_busy.get(chat_id, 1) - 1
