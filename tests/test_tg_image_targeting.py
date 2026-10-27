@@ -590,6 +590,38 @@ check("a not-about-a-picture question is never asked which picture",
       texts(bot)[:120])
 bot.reads = _R
 
+# An EDIT that reads as current asks anyway when several pictures are live
+# (the owner asked for the picker every time, 2026-10-27): after the bot's own
+# «что с ней сделать?» every edit reads current, and editing the wrong one of
+# several is a wasted render. But a picture sent in the message right before
+# is current enough to edit without asking.
+import chatlog
+cat, dog, id_cat, id_dog = seed_two_images(bot)
+_R3 = types.SimpleNamespace(**reads(
+    read={"сделай её брюнеткой": {"about_picture": True, "wants": ["inpaint_image"]}}.get,
+    pick=_subject({"сделай её брюнеткой": "current"})))
+bot.reads = _R3
+chatlog.write(CID, "out", {"method": "sendMessage",
+                           "text": "На картинке двое людей на дорожке. Сделать что-нибудь с картинкой?"})
+bot.pushed.clear(); bot.sent.clear()
+bot._dispatch(msg("сделай её брюнеткой"))
+settle(bot)
+check("an edit over the bot's standing question still asks which picture",
+      not bot.pushed and ("Какую картинку" in texts(bot) or "Which picture" in texts(bot)),
+      texts(bot)[:120])
+press(bot, "pick:" + id_dog)
+check("answering it re-pushes the edit on the picked picture",
+      len(bot.pushed) == 1 and bot.pushed[0].image_id == id_dog,
+      [(p.user_text, p.image_id) for p in bot.pushed])
+chatlog.write(CID, "in", {"photo": [{"file_id": "F40"}]})
+bot.pushed.clear(); bot.sent.clear()
+bot._dispatch(msg("сделай её брюнеткой"))
+settle(bot)
+check("an edit right after the user sent a picture edits it, no asking",
+      len(bot.pushed) == 1 and "Какую картинку" not in texts(bot) and "Which picture" not in texts(bot),
+      texts(bot)[:120])
+bot.reads = _R
+
 # «сделай кота из первой картинки чёрным» must not edit the photo sent LAST:
 # naming a picture by its place in the chat must pick it.
 bot3 = make_bot(); cat3, dog3, id_cat3, id_dog3 = seed_two_images(bot3)

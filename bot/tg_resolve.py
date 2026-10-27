@@ -1551,7 +1551,8 @@ class ResolveMixin:
                 and merged not in tg_bot._MACHINE_PAYLOADS
                 and not has_quote(merged)
                 and len(tg_bot._live_images(sess)) > 1
-                and tg_bot._needs_image_choice(own_words, chatlog.recent(chat_id), ctx=self.reads)):
+                and tg_bot._needs_image_choice(own_words, chatlog.recent(chat_id), ctx=self.reads,
+                                               in_play=getattr(sess, "turn_image", ""))):
             live = tg_bot._live_images(sess)
             if tg_bot._one_lineage(live):
                 # One picture in several states -- the latest is "the picture".

@@ -727,16 +727,40 @@ def _message_subject(text: str, recent: list, ctx=None) -> str:
     return choice(ctx)(_SUBJECT_Q, blob, _SUBJECTS, "current")
 
 
-def _needs_image_choice(text: str, recent: list, ctx=None) -> bool:
+_EDIT_TOOLS = frozenset(("inpaint_image", "redraw_image", "fix_hands", "fix_artifact"))
+
+
+def _needs_image_choice(text: str, recent: list, ctx=None, in_play: str = "") -> bool:
     """The words need one picture and the chat leaves open which: with several in the chat
     the bot asks «Какую картинку?». Measured on bench/which_picture_eval.py.
 
     The subject read alone called «Я застрял на кухне…» (a game question, chat full of
     pictures) unclear six times over (2026-10-27) -- so first the words must BE about a
-    picture at all, the same intent read the rest of the flow trusts."""
+    picture at all, the same intent read the rest of the flow trusts.
+
+    An EDIT the read calls current asks anyway (the owner asked for the picker every
+    time, 2026-10-27): after the bot's own «что с ней сделать?» every edit reads
+    current, and editing the wrong one of several live pictures is a wasted render.
+    `in_play` (sess.turn_image, the picture the previous turn delivered) and a picture
+    sent in the message right before are current enough to edit without asking."""
     t = (text or "").strip()
-    return bool(t) and _picture_read(t, ctx=ctx)["about_picture"] \
-        and _message_subject(t, recent, ctx=ctx) == "unclear"
+    if not t:
+        return False
+    read = _picture_read(t, ctx=ctx)
+    # «сделай ярче» reads about_picture False while wanting redraw_image: a bare
+    # edit imperative is picture work by its tool alone.
+    if not (read.get("about_picture") or set(read.get("wants") or []) & _EDIT_TOOLS):
+        return False
+    s = _message_subject(t, recent, ctx=ctx)
+    if s == "unclear":
+        return True
+    if s != "current" or in_play or not (set(read.get("wants") or []) & _EDIT_TOOLS):
+        return False
+    r = list(recent or [])
+    if r and " ".join(str(r[-1]).split()) == "user: " + " ".join(t.split()):
+        r.pop()
+    last = " ".join(str(r[-1]).split()) if r else ""
+    return not last.startswith("user: [sends a picture]")
 
 
 # Scaffolding this strips off a stored label before showing it in the picker.

@@ -284,8 +284,8 @@
    "bot: 📍 Казань — 18.10.2026 Когда °C % км/ч 18.10 вс Утро +12 64% 14 ☁️ День +13 58% 13 ⛅ Вечер +11 66% 7 ☁️ ☁️ пасмурно ⛅ переменная облачность 🌂 Зонт не нужен — дождя не ожидается 👕 Что надеть Утро — ветровка и легкий джемпер День — легкая куртка и брюки Вечер — теплая куртка и шарф"
   ],
   "text": "вернись к картинке с котом и убери Землю с фона",
-  "want": "current",
-  "source": "real"
+  "want": "unclear",
+  "source": "real; want flipped to unclear 2026-10-27: the owner wants the picker for every edit over several live pictures, even one that names its target by content"
  },
  {
   "id": "777000001_2026-10-17 11:54:55",
