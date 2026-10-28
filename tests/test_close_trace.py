@@ -38,9 +38,10 @@ if sys.platform == "win32":
     import ctypes
     from ctypes import wintypes
 
-    def msg(code):
+    def msg(code, flags=1, ending=1):
         m = wintypes.MSG()
         m.message = code
+        m.lParam, m.wParam = flags, ending
         return m, ctypes.addressof(m)
     _q, q = msg(C.WM_QUERYENDSESSION)
     _e, e = msg(C.WM_ENDSESSION)
@@ -49,6 +50,15 @@ if sys.platform == "win32":
           C.refuse_end_session(q, ending=lambda: False) and C.refuse_end_session(e, ending=lambda: False))
     check("...a real shutdown still closes the window", not C.refuse_end_session(q, ending=lambda: True))
     check("...and ✕ / WM_CLOSE are never touched", not C.refuse_end_session(c, ending=lambda: False))
+    _shutdown, shutdown = msg(C.WM_QUERYENDSESSION, flags=0)
+    _logoff, logoff = msg(C.WM_QUERYENDSESSION, flags=0x80000001)
+    _cancel, cancel = msg(C.WM_ENDSESSION, ending=0)
+    check("a real shutdown query is allowed before SM_SHUTTINGDOWN is set",
+          not C.refuse_end_session(shutdown, ending=lambda: False))
+    check("logoff is allowed, including combined Restart Manager flags",
+          not C.refuse_end_session(logoff, ending=lambda: False))
+    check("a cancelled session end reaches Qt to reset its session state",
+          not C.refuse_end_session(cancel, ending=lambda: False))
 
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)

@@ -101,10 +101,7 @@ def _windows_ending() -> bool:
 
 
 def refuse_end_session(message, ending=None) -> bool:
-    """True: a WM_QUERYENDSESSION / WM_ENDSESSION while Windows is NOT ending -- answer it
-    "no" and keep the window. Something sent one straight to the window ~12 min after each
-    start (03:33, 13:52, 15:30 on 2026-10-22, no Restart Manager session, nothing in the
-    logs) and Qt closed the app, the bot with it. A real shutdown or logoff still closes."""
+    """Refuse an app-only Restart Manager close, preserving shutdown/logoff and cancellation."""
     if sys.platform != "win32":
         return False
     try:
@@ -112,6 +109,32 @@ def refuse_end_session(message, ending=None) -> bool:
         msg = wintypes.MSG.from_address(int(message))
         if msg.message not in (WM_QUERYENDSESSION, WM_ENDSESSION):
             return False
+        if msg.message == WM_ENDSESSION and not msg.wParam:
+            return False
+        if not (msg.lParam & 0x1) or msg.lParam & 0x80000000:
+            return False
         return not (_windows_ending() if ending is None else ending())
     except Exception:
         return False
+
+
+def install_end_session_guard(app) -> None:
+    """Catch app-only session requests to ALL Qt windows, including internal ones."""
+    if sys.platform != 'win32' or getattr(app, '_end_session_guard', None) is not None:
+        return
+    import logging
+    from PyQt5.QtCore import QAbstractNativeEventFilter
+
+    class Guard(QAbstractNativeEventFilter):
+        def nativeEventFilter(self, event_type, message):
+            if refuse_end_session(message):
+                note(message)
+                logging.getLogger('assistant.gui').warning(
+                    'LIFECYCLE: app-only end-session request refused before Qt session management (%s)',
+                    describe())
+                return True, 0
+            return False, 0
+
+    # A per-widget nativeEvent cannot protect Qt's other/hidden top-level windows.
+    app._end_session_guard = Guard()
+    app.installNativeEventFilter(app._end_session_guard)

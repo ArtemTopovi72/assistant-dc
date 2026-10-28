@@ -73,6 +73,8 @@ def test_run_gui_rejected():
     class FS(_Dlg):
         def exec_(self): return QDialog.Rejected      # early return before AssistantWindow
     check("run_gui_rejected", gui.run_gui(_env(FS)) is None)
+    if sys.platform == 'win32':
+        check("session_guard_installed_before_the_startup_dialog", _app._end_session_guard is not None)
 
 
 def test_run_gui_accepted():

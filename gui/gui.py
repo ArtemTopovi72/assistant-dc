@@ -1017,6 +1017,8 @@ def run_gui(env=None) -> None:
         logger.debug("crash_diag setup failed", exc_info=True)
 
     app = Q(sys.argv)
+    import close_trace
+    close_trace.install_end_session_guard(app)
     app.setWindowIcon(QIcon(ICON_PATH))
     # Darken the native title bar of every dialog/message box the app shows.
     app._dark_titlebar_filter = _DarkTitleBarFilter()
