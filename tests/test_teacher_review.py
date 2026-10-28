@@ -14,6 +14,16 @@ import pytest
 bot = _fixture_bot
 
 
+@pytest.mark.parametrize('text, expected', [
+    ('本当？！そうです。', ['本当？！', 'そうです。']),
+    ('「元気ですか？」', ['「元気ですか？」']),
+    ('你好。。。再见！', ['你好。。。', '再见！']),
+])
+def test_voice_chunks_do_not_turn_cjk_closing_punctuation_into_speech_jobs(text, expected):
+    from test_translation_voice_batch import W
+    assert W.split_text(text) == expected
+
+
 def test_rule_explanation_mode_cannot_succeed_without_an_explanation():
     import language_teacher
     from test_language_teacher import context

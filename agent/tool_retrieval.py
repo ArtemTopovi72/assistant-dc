@@ -18,6 +18,7 @@ extra: a missing schema is a capability the model cannot use no matter how well
 it routes. So retrieval only ever NARROWS from a matched set, and when nothing
 matches it hands back the full list untouched.
 """
+import math
 import os
 import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 
@@ -68,12 +69,17 @@ def _embed_on():
     return not os.getenv("F5_TEST_RUN")
 
 
-_EMBED_CACHE = {}      # tuple of tool names -> (names, unit vectors)
+_EMBED_CACHE = {}      # endpoint, model, embedded descriptions -> unit vectors
 _EMBEDDER = None
 
 
 def _unit(v):
-    n = sum(x * x for x in v) ** 0.5 or 1.0
+    if (not isinstance(v, (list, tuple)) or not v
+            or any(type(x) not in (int, float) or not math.isfinite(x) for x in v)):
+        raise ValueError('Invalid embedding vector')
+    n = sum(x * x for x in v) ** 0.5
+    if not n or not math.isfinite(n):
+        raise ValueError('Invalid embedding norm')
     return [x / n for x in v]
 
 
@@ -91,19 +97,27 @@ def _embed_pick(text, schemas, k=None, floor=None):
             import knowledge
             _EMBEDDER = knowledge.Embedder(timeout=10.0)
         names = tuple(_name(s) for s in schemas)
-        if names not in _EMBED_CACHE:
-            docs = [f"{_name(s)}: {s.get('function', {}).get('description', '')[:600]}"
-                    for s in schemas]
-            vecs = _EMBEDDER.embed(docs)
-            if not vecs:
-                return set()
-            _EMBED_CACHE[names] = [_unit(v) for v in vecs]
+        docs = tuple(f"{_name(s)}: {s.get('function', {}).get('description', '')[:600]}"
+                     for s in schemas)
+        key = (_EMBEDDER.base_url, _EMBEDDER.model, docs)
         q = _EMBEDDER.embed([text])
-        if not q:
+        if not q or len(q) != 1 or not q[0]:
             return set()
         q = _unit(q[0])
+        vecs = _EMBED_CACHE.get(key)
+        try:
+            if vecs is None or len(vecs) != len(names) or any(len(v) != len(q) for v in vecs):
+                raise ValueError('Incompatible cached embeddings')
+            vecs = [_unit(v) for v in vecs]
+        except (TypeError, ValueError, OverflowError):
+            _EMBED_CACHE.pop(key, None)
+            vecs = _EMBEDDER.embed(docs)
+            if not vecs or len(vecs) != len(names) or any(len(v) != len(q) for v in vecs):
+                return set()
+            vecs = [_unit(v) for v in vecs]
+            _EMBED_CACHE[key] = vecs
         sims = sorted(((sum(a * b for a, b in zip(q, v)), n)
-                       for n, v in zip(names, _EMBED_CACHE[names])), reverse=True)
+                       for n, v in zip(names, vecs)), reverse=True)
         return {n for s, n in sims[:k] if s >= floor}
     except Exception:
         return set()
@@ -136,6 +150,7 @@ def _select_tools(text, schemas, *, always=(), limit=12, wants=None, send_all=No
     # None when that read failed -- then no evidence, the core set below.
     matched = set(wants or ())
     keep = set(always) | matched
+    emb_pick = set()
     if not matched:
         if text.strip() and _embed_on():
             # Paraphrase fallback (TOOLS_EMBED=1): no cue word, so add the
@@ -151,16 +166,18 @@ def _select_tools(text, schemas, *, always=(), limit=12, wants=None, send_all=No
         # restores the old send-everything fallback for A/B runs.
         if send_all:
             return list(schemas)
-        keep |= set(_CORE)
-        if keep & set(_CODE_KIT) - set(_LOOK_KIT):
-            keep.update(_CODE_KIT)
-        if emb_pick:
-            keep |= emb_pick
-        return [s for s in schemas if _name(s) in keep] or list(schemas)
+        if not emb_pick:
+            keep |= set(_CORE)
+            if keep & set(_CODE_KIT) - set(_LOOK_KIT):
+                keep.update(_CODE_KIT)
+            return [s for s in schemas if _name(s) in keep] or list(schemas)
+        keep |= emb_pick
+        matched = emb_pick
 
     if keep & _EDITORS:
         keep.add("inspect_image")
-    if (matched | (set(always) - set(_LOOK_KIT))) & (set(_CODE_KIT) | {"run_code", "run_tests"}):
+    kit_matches = matched - {'update_plan'} if emb_pick else matched
+    if (kit_matches | (set(always) - set(_LOOK_KIT))) & (set(_CODE_KIT) | {"run_code", "run_tests"}):
         keep.update(_CODE_KIT)
         keep.add("inspect_image")     # open_image only POINTS; this one looks
     # install_packages rides with run_code, for the same reason inspect_image

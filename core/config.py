@@ -1163,12 +1163,13 @@ TG_INVOKE_TIMEOUT_S = _env_int("TG_INVOKE_TIMEOUT_S", 1800)
 # longer matches, and searches ignore vectors from a different model, so a
 # half-migrated index degrades to FTS-only instead of returning nonsense.
 # Run  python reindex_embeddings.py  after switching.
-# BGE-M3 runs on the CPU-only llama-server (llama_backend.ensure_embedder starts it):
-# LM Studio's `--gpu off` still pinned ~0.9 GB of VRAM, and that is what pushed a
-# 16-18 GB chat model into shared memory beside F5. Same vectors (cos 0.9999),
-# 0.02 s per query; bulk indexing is ~30x slower (16 chunks 6.4 s).
+# BGE-M3 has its own llama-server, independent of chat-model reloads. Defaults
+# keep the CPU build; a CUDA executable and explicit GPU layers enable GPU use.
+# The legacy EMBED_CPU_SERVER name also accepts the CUDA executable.
 EMBED_BASE  = os.getenv("EMBED_BASE", "http://127.0.0.1:8096")
 EMBED_CPU_SERVER = os.getenv("EMBED_CPU_SERVER", r"C:\llamacpp\build\llama-server.exe")
+EMBED_GPU_LAYERS = os.getenv("EMBED_GPU_LAYERS", "0")
+EMBED_FLASH_ATTN = os.getenv("EMBED_FLASH_ATTN", "auto")
 EMBED_GGUF = os.getenv("EMBED_GGUF", os.path.expanduser(
     os.path.join("~", ".lmstudio", "models", "ggml-org", "bge-m3-Q8_0-GGUF", "bge-m3-q8_0.gguf")))
 EMBED_MODEL = os.getenv("EMBED_MODEL", "text-embedding-bge-m3")

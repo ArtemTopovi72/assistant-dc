@@ -177,6 +177,10 @@ class BilingualAccentor:
         wins. So RUAccent's line stands and only a word RUAccent itself lists as
         a homograph takes silero's stress, when silero picks one of its forms.
         Bench: 20/25 RUAccent, 21/25 silero, see the test."""
+        word = re.compile(r"[а-яё+]+", re.I)
+        a = word.findall(out)
+        if not any(getattr(ru, "omographs", {}).get(mine.replace("+", "").lower()) or () for mine in a):
+            return out
         try:
             if self.silero is None and BilingualAccentor._silero is None:
                 if (BilingualAccentor._silero_failed_at
@@ -194,8 +198,7 @@ class BilingualAccentor:
         except Exception as exc:
             logger.debug("silero-stress unavailable: %s", exc)
             return out
-        word = re.compile(r"[а-яё+]+", re.I)
-        a, b = word.findall(out), word.findall(sil)
+        b = word.findall(sil)
         if [w.replace("+", "") for w in a] != [w.replace("+", "") for w in b]:
             return out                      # tokenised differently: keep RUAccent
         it = iter(b)

@@ -165,8 +165,21 @@ def unload_lmstudio_chat() -> None:
 _EMBED_CHECKED = [0.0]
 
 
+def _embedder_command(cfg):
+    from urllib.parse import urlparse
+    args = [cfg.EMBED_CPU_SERVER, "-m", cfg.EMBED_GGUF, "--embedding",
+            "--pooling", "cls", "-c", "8192", "-b", "8192", "-ub", "8192",
+            "--alias", cfg.EMBED_MODEL, "--host", "127.0.0.1",
+            "--port", str(urlparse(cfg.EMBED_BASE).port or 8096), "-t", "8"]
+    layers = str(getattr(cfg, "EMBED_GPU_LAYERS", "0")).strip() or "0"
+    if layers != "0":
+        args += ["--gpu-layers", layers, "--fit", "off", "--flash-attn",
+                 str(getattr(cfg, "EMBED_FLASH_ATTN", "auto")).strip() or "auto", "--parallel", "1"]
+    return args
+
+
 def ensure_embedder(min_interval: float = 60.0) -> None:
-    """Keep the embedding server up: BGE-M3 on the CPU-only llama-server at
+    """Keep the embedding server up: BGE-M3 on the configured llama-server at
     config.EMBED_BASE. Without it the knowledge base silently falls back to
     keyword-only search. A non-local EMBED_BASE is left alone."""
     if _under_tests():
@@ -191,12 +204,9 @@ def ensure_embedder(min_interval: float = 60.0) -> None:
         if u.hostname not in ("127.0.0.1", "localhost") or not os.path.exists(config.EMBED_CPU_SERVER):
             return
         with open(os.path.join(os.path.dirname(config.EMBED_CPU_SERVER), "bge_cpu.log"), "ab") as log:
-            subprocess.Popen([config.EMBED_CPU_SERVER, "-m", config.EMBED_GGUF, "--embedding",
-                              "--pooling", "cls", "-c", "8192", "-b", "8192", "-ub", "8192",
-                              "--alias", config.EMBED_MODEL, "--host", "127.0.0.1",
-                              "--port", str(u.port or 8096), "-t", "8"],
+            subprocess.Popen(_embedder_command(config),
                              stdout=log, stderr=subprocess.STDOUT,
                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        logger.info("started CPU embedding server on %s", base)
+        logger.info("started embedding server on %s", base)
     except Exception as exc:
         logger.info("embedder start skipped: %s", exc)

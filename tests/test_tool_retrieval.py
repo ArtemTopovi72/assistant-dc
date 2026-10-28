@@ -9,12 +9,30 @@ The negatives matter more than the positives here. A missing schema is a
 capability the model cannot use however well it routes, so retrieval may only
 ever narrow from an evidenced match, and no evidence means send everything.
 """
-import sys, os, json
+import sys, os, json, importlib.util
+import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import tool_retrieval as T
+import tool_retrieval as retrieval_source
 import graph
 
 ALL = graph.TOOL_SCHEMAS
+
+
+def _fresh_retrieval():
+    spec=importlib.util.spec_from_file_location('isolated_tool_retrieval',retrieval_source.__file__)
+    retrieval=importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(retrieval)
+    retrieval._embed_on=lambda:False
+    return retrieval
+
+
+T=_fresh_retrieval()
+
+
+@pytest.fixture(autouse=True)
+def isolated_offline_retrieval():
+    global T
+    T=_fresh_retrieval()
 
 
 def _names(schemas):
@@ -145,3 +163,101 @@ def test_a_mixed_request_keeps_both():
 def test_a_tool_in_use_survives_the_contradiction_rule():
     got = _sel("посчитай 15% от 2480", always={"search"})
     assert "search" in got
+
+
+@pytest.mark.parametrize('tool,required', [
+    ('generate_image',{'inspect_image'}),
+    ('run_code',{'install_packages','run_tests','read_file'}),
+])
+def test_embedding_picks_keep_the_same_dependencies_as_intent_picks(tool,required):
+    T._embed_on=lambda:True
+    T._embed_pick=lambda *args,**kwargs:{tool}
+    got=set(_names(T.select_tools('paraphrase',ALL,wants=[])))
+    assert {tool,*required} <= got
+
+
+def test_weak_embedding_plan_hit_does_not_pull_in_the_file_kit():
+    T._embed_on=lambda:True
+    T._embed_pick=lambda *args,**kwargs:{'update_plan'}
+    got=set(_names(T.select_tools('paraphrase',ALL,wants=[])))
+    assert 'update_plan' in got and 'read_file' not in got and 'run_code' not in got
+
+
+class _FakeEmbedder:
+    base_url='http://offline'
+    model='model-a'
+
+    def __init__(self):
+        self.phase=0
+        self.dimension=2
+        self.document_batches=0
+
+    def embed(self,texts):
+        if texts==['question']:
+            return [[1.,0.] if self.dimension==2 else [1.,0.,100.]]
+        self.document_batches+=1
+        hit=[1.,0.] if self.dimension==2 else [1.,0.,100.]
+        miss=[0.,1.] if self.dimension==2 else [0.,1.,0.]
+        return [hit if text.startswith(('a:' if self.phase==0 else 'b:')) else miss for text in texts]
+
+
+def _embedding_catalog():
+    embedder=_FakeEmbedder()
+    T._EMBEDDER=embedder
+    catalog=[{'function':{'name':name,'description':'old'}} for name in ('a','b')]
+    return embedder,catalog
+
+
+@pytest.mark.parametrize('changed',['description','model','base_url'])
+def test_embedding_cache_does_not_reuse_another_catalog_or_model(changed):
+    embedder,catalog=_embedding_catalog()
+    assert T._embed_pick('question',catalog)=={'a'}
+    embedder.phase=1
+    if changed=='description':
+        catalog[0]['function']['description']='new'
+    else:
+        setattr(embedder,changed,'changed')
+    assert T._embed_pick('question',catalog)=={'b'}
+
+
+def test_changed_query_dimension_reembeds_cached_documents_once():
+    embedder,catalog=_embedding_catalog()
+    assert T._embed_pick('question',catalog)=={'a'}
+    embedder.dimension=3
+    assert T._embed_pick('question',catalog)=={'a'}
+    assert embedder.document_batches==2
+
+
+def test_incompatible_document_dimensions_fall_back_without_truncated_cosine():
+    embedder,catalog=_embedding_catalog()
+    original=embedder.embed
+    def mismatch(texts):
+        return [[1.,0.,100.]] if texts==['question'] else original(texts)
+    embedder.embed=mismatch
+    assert T._embed_pick('question',catalog,floor=0.001)==set()
+    assert embedder.document_batches==1
+
+
+@pytest.mark.parametrize('bad',[[float('nan'),0.],[float('inf'),0.],[0.,0.],[1e308,1e308],[None,0.],[True,0.],None])
+@pytest.mark.parametrize('source',['query','document','cache'])
+def test_invalid_embedding_vectors_do_not_poison_cache_and_healthy_turn_recovers(bad,source):
+    embedder,catalog=_embedding_catalog()
+    original=embedder.embed
+    if source=='cache':
+        assert T._embed_pick('question',catalog)=={'a'}
+        key=next(iter(T._EMBED_CACHE))
+        T._EMBED_CACHE[key][0]=bad
+        assert T._embed_pick('question',catalog)=={'a'}
+        assert embedder.document_batches==2
+    else:
+        def invalid(texts):
+            return [bad] if texts==['question'] else [bad,[0.,1.]]
+        def one_bad_source(texts):
+            is_query=texts==['question']
+            return invalid(texts) if is_query==(source=='query') else original(texts)
+        embedder.embed=one_bad_source
+        assert T._embed_pick('question',catalog)==set()
+        if source=='query':
+            assert embedder.document_batches==0
+        embedder.embed=original
+    assert T._embed_pick('question',catalog)=={'a'}

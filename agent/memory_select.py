@@ -13,13 +13,14 @@ Selection, no LLM on the path:
 Original order is kept, so "newest are last" in the prompt still holds.
 """
 import logging
+import math
 import os
 from typing import List, Sequence
 
 logger = logging.getLogger("assistant." + __name__)
 
 _EMBEDDER = None
-_CACHE: dict = {}          # fact text -> unit vector
+_CACHE: dict = {}          # embedding source identity, fact text -> unit vector
 
 
 def _cfg(name, default):
@@ -34,7 +35,12 @@ def enabled() -> bool:
 
 
 def _unit(v):
-    n = sum(x * x for x in v) ** 0.5 or 1.0
+    if (not isinstance(v, (list, tuple)) or not v
+            or any(type(x) not in (int, float) or not math.isfinite(x) for x in v)):
+        raise ValueError('Invalid embedding vector')
+    n = sum(x * x for x in v) ** 0.5
+    if not n or not math.isfinite(n):
+        raise ValueError('Invalid embedding norm')
     return [x / n for x in v]
 
 
@@ -43,8 +49,7 @@ def _embed(texts: Sequence[str]):
     if _EMBEDDER is None:
         import knowledge
         _EMBEDDER = knowledge.Embedder(timeout=10.0)
-    vecs = _EMBEDDER.embed(list(texts))
-    return [_unit(v) for v in vecs] if vecs else None
+    return _EMBEDDER.embed(list(texts))
 
 
 def select(facts: List[str], query: str, *, k: int = None, newest: int = None,
@@ -56,17 +61,44 @@ def select(facts: List[str], query: str, *, k: int = None, newest: int = None,
     if len(facts) <= keep_all_upto or not (query or "").strip():
         return list(facts)
     try:
-        missing = [f for f in dict.fromkeys(facts) if f not in _CACHE]
+        q = (embed or _embed)([query])
+        if not q:
+            return list(facts)
+        if len(q) != 1:
+            raise ValueError('Mismatched query embeddings')
+        q = _unit(q[0])
+        owner = getattr(embed, '__self__', embed) if embed is not None else _EMBEDDER
+        identity = (getattr(owner, 'base_url', None), getattr(owner, 'model', None))
+        if identity == (None, None):
+            identity = embed
+        keys = {f: (identity, f) for f in dict.fromkeys(facts)}
+        local = {}
+        absent = object()
+        try:
+            for fact, key in keys.items():
+                cached = _CACHE.get(key, absent)
+                if cached is not absent:
+                    vec = _unit(cached)
+                    if len(vec) != len(q):
+                        raise ValueError('Incompatible cached embeddings')
+                    local[fact] = vec
+        except (TypeError, ValueError, OverflowError):
+            for key in keys.values():
+                _CACHE.pop(key, None)
+            return list(facts)
+        missing = [f for f in keys if f not in local]
         if missing:
             vecs = (embed or _embed)(missing)
             if not vecs:
                 return list(facts)
-            _CACHE.update(zip(missing, vecs))
-        q = (embed or _embed)([query])
-        if not q:
-            return list(facts)
-        q = q[0]
-        sims = [(sum(a * b for a, b in zip(q, _CACHE[f])), i) for i, f in enumerate(facts)]
+            if len(vecs) != len(missing):
+                raise ValueError('Mismatched fact embeddings')
+            vecs = [_unit(v) for v in vecs]
+            if any(len(v) != len(q) for v in vecs):
+                raise ValueError('Incompatible fact embeddings')
+            local.update(zip(missing, vecs))
+            _CACHE.update((keys[f], v) for f, v in zip(missing, vecs))
+        sims = [(sum(a * b for a, b in zip(q, local[f])), i) for i, f in enumerate(facts)]
     except Exception:
         logger.warning("jit facts: embedding failed -- keeping every fact", exc_info=True)
         return list(facts)

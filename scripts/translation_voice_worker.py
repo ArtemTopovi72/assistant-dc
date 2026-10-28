@@ -1,14 +1,30 @@
 """Qwen3-TTS in its existing isolated environment; one bounded job per process."""
 import json
+import re
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 
+def split_text(text):
+    closing = r'''['"’”»」』】》〉）〕〗〙〛)\]}]*'''
+    boundary = r'[。！？][.!?。！？]*' + closing + r'\s*|[.!?]+' + closing + r'(?:\s+|$)'
+    pieces, start = [], 0
+    for match in re.finditer(boundary,text):
+        piece = text[start:match.end()].strip()
+        if piece:
+            pieces.append(piece)
+        start = match.end()
+    if text[start:].strip():
+        pieces.append(text[start:].strip())
+    return pieces
+
+
 def render(model, jobs, temp):
+    import numpy as np
     import soundfile as sf
-    prompts = {}
+    prompts, work = {}, []
     for i, job in enumerate(jobs):
         source = str(Path(job['source']).resolve())
         if source not in prompts:
@@ -19,12 +35,30 @@ def render(model, jobs, temp):
             if len(data) < sr * job.get('min_reference_seconds', 3):
                 raise ValueError('Too little reference speech.')
             prompts[source] = model.create_voice_clone_prompt(ref_audio=ref, x_vector_only_mode=True)
-        print(f'{i}/{len(jobs)} [synthesizing]', flush=True)
-        wavs, sr = model.generate_voice_clone(text=job['text'], language=job['language'],
-                voice_clone_prompt=prompts[source], max_new_tokens=2048,
+        pieces = split_text(job['text'])
+        if not pieces:
+            raise ValueError('No text to synthesize.')
+        work.extend((i,piece,job['language'],prompts[source][0]) for piece in pieces)
+    audio = [[] for _ in jobs]
+    rate = None
+    for at in range(0,len(work),4):
+        batch = work[at:at+4]
+        print(f'{at}/{len(work)} [synthesizing]', flush=True)
+        wavs, sr = model.generate_voice_clone(text=[item[1] for item in batch],
+                language=[item[2] for item in batch],voice_clone_prompt=[item[3] for item in batch],max_new_tokens=2048,
                 repetition_penalty=1.15)
-        sf.write(job['output'], wavs[0], sr)
-    print(f'{len(jobs)}/{len(jobs)} [complete]', flush=True)
+        if len(wavs)!=len(batch) or (rate is not None and sr!=rate):
+            raise ValueError('Invalid voice synthesis batch.')
+        rate = sr
+        for item,wav in zip(batch,wavs):
+            if not len(wav) or not np.isfinite(wav).all():
+                raise ValueError('Empty or invalid synthesized speech.')
+            audio[item[0]].append(wav)
+    for job,parts in zip(jobs,audio):
+        joined = [value for n,part in enumerate(parts)
+                  for value in ((np.zeros(round(rate*.08),dtype=np.float32),part) if n else (part,))]
+        sf.write(job['output'],np.concatenate(joined),rate)
+    print(f'{len(work)}/{len(work)} [complete]', flush=True)
 
 
 def main():
