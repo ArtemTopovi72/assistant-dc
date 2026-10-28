@@ -75,7 +75,7 @@ class RandomizerTab(QWidget):
 
         root.addWidget(_section('Quick draws'))
         buttons = QHBoxLayout()
-        for label, action in (('✅ Yes / No', 'yesno'), ('🪙 Flip a coin', 'coin'), ('🎲 Roll a die', 'die')):
+        for label, action in (('✅ Yes / No', 'yesno'), ('💰 Flip a coin', 'coin'), ('🎲 Roll a die', 'die')):
             button = QPushButton(label)
             button.clicked.connect(lambda _checked=False, a=action: self._quick(a))
             buttons.addWidget(button)
