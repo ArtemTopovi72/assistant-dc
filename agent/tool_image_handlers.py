@@ -1560,13 +1560,21 @@ def _check_joins(ctx, joins: list) -> str:
     return "" if _says_none(ans) else ans[:400]
 
 
+def _preserves_static_scene(ctx, request: str) -> bool:
+    try:
+        return not yes_no(ctx)("The user wrote: {text}. Do they request camera movement, a scene change, "
+                               "or objects or people entering, leaving, appearing, disappearing or transforming?",
+                               request, default=True)
+    except Exception:
+        return False
+
+
 def _check_static_background(ctx, video_mod, path: str, request: str) -> str:
     try:
         drift = video_mod.overlay_drift(path)
         if drift is None or drift <= video_mod.OVERLAY_DRIFT_MAX:
             return ''
-        if yes_no(ctx)("The user wrote: {text}. Did they request camera movement "
-                       "such as a pan, zoom, orbit or tracking shot?", request, default=False):
+        if not _preserves_static_scene(ctx, request):
             return ''
         return 'The background may have changed unexpectedly.'
     except Exception:
@@ -1589,8 +1597,22 @@ def _check_actions(ctx, path: str, parts: list, references=()) -> str:
     import tempfile
     from pathlib import Path
     try:
+        motion = None
+        try:
+            tracker = getattr(_video(ctx), 'track_simple_motion', None)
+            motion = tracker(path) if references and callable(tracker) else None
+            if motion and yes_no(ctx)("The user wrote: {text}. Did they request camera movement "
+                                      "or a subject or scene transformation?", script, default=True):
+                motion = None
+        except Exception:
+            logger.debug('motion tracking unavailable', exc_info=True)
+            motion = None
+        measured = ("A tracker measured the single foreground object's center in the frame: "
+                    + ", ".join(f"{t:.1f}s x={x:.0%} y={y:.0%}" for t, x, y in motion)
+                    + ". Positions are relative to the frame; compare them when judging movement. " if motion else "")
         look = module(ctx, "video_look")
-        frames = look.extract_frames(path, look.sample_times(look.duration_seconds(path), every=1.5, max_frames=10),
+        duration = look.duration_seconds(path)
+        frames = look.extract_frames(path, look.sample_times(duration, every=1.5, max_frames=10),
                                      Path(tempfile.mkdtemp(prefix="actcheck_")))
         if len(frames) < 2:
             return ""
@@ -1604,7 +1626,8 @@ def _check_actions(ctx, path: str, parts: list, references=()) -> str:
                       "Compare subject position and appearance between the timestamped video frames to judge movement. "
                       "The original reference images are still pictures, not frames of the video; do not judge "
                       "video motion from them. Any changes the user requests take precedence. "
-                      + ("Compare the reference with the video for major unrequested new subjects, effects or "
+                      + measured +
+                      ("Compare the reference with the video for major unrequested new subjects, effects or "
                          "background changes, while allowing the motion the user asked for. " if references else "") +
                       "Judge only this request, never requirements invented by a tool draft or earlier chat. "
                       "List, in a few words each, requested visible actions or appearance constraints the frames fail "
@@ -1614,6 +1637,27 @@ def _check_actions(ctx, path: str, parts: list, references=()) -> str:
         logger.warning("video actions: the check failed", exc_info=True)
         return ""
     logger.info("video actions: checked against the request -> %s", ans[:200] or "no answer")
+    matches_requested = False
+    if motion and duration and motion[-1][0] >= duration * 0.3:
+        right = bool(re.search(r'\b(?:right(?:wards)?|вправо|направо)\b', script, re.I))
+        left = bool(re.search(r'\b(?:left(?:wards)?|влево|налево)\b', script, re.I))
+        negated = re.search(r'\b(?:не|not|never|no)\b.{0,25}\b(?:right|left|вправо|влево|направо|налево)\b', script, re.I)
+        dx = motion[-1][1] - motion[0][1]
+        if not negated and right != left and ((right and dx < -0.05) or (left and dx > 0.05)):
+            return measured + 'The tracked object moved opposite to the requested horizontal direction in the measured frames.'
+        matches_requested = motion[-1][0] >= duration * 0.8 and not negated and right != left and ((right and dx > 0.05) or (left and dx < -0.05))
+    if matches_requested and re.search(r"\b(?:does\s+not|doesn't|did\s+not|never|fails?\s+to|not)\b.{0,45}\b(?:move|moving|drift|shift)\w*\b|\b(?:remains?|stays?)\b.{0,25}\b(?:centered|stationary|still|central)\b", ans, re.I):
+        try:
+            other = yes_no(ctx)("A video review says: {text}. Does it identify any problem other than the position or motion of the main object, such as added smoke, extra people, a changed background, or a missing separate action?", ans, default=True)
+        except Exception:
+            other = True
+        if not other:
+            return ''
+    if (motion and not _says_none(ans)
+            and (max(p[1] for p in motion) - min(p[1] for p in motion) > 0.05
+                 or max(p[2] for p in motion) - min(p[2] for p in motion) > 0.05)
+            and re.search(r'\b(?:mov\w*|motion|stationary|static|still|center\w*|centr\w*|right|left|движ\w*|двига\w*|неподвиж\w*|вправо|влево)\b', ans, re.I)):
+        return measured + 'The visual review suggests possible other differences; inspect the clip.'
     return "" if _says_none(ans) else ans[:400]
 
 
@@ -2107,7 +2151,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         # or anime faces, and every later part inherits them from the latent. Caught here by
         # the frame edges, redrawn with another seed.
         watch = bool(chain_id and images and not continuing
-                     and video_mod._FRAMING_LOCK_SUFFIX in first_prompt)
+                     and _preserves_static_scene(ctx, ctx.video_request or first_prompt))
         best_eyes = None
         said_first = video_mod.quoted_lines(parts[0]) if head and parts else []
         speech_ok = getattr(ctx, "speech_ok", None) or _speech_ok
@@ -2128,9 +2172,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 p = result.get("path")
                 look = watch and p and os.path.exists(p)
                 drawn = video_mod.drawn_over(p, images[0]) if look else None
-                # The edge drift also fires on a camera that pulls back (103, 81 with CLIP at 0.0,
-                # s91 2026-10-16): only a fallback when CLIP cannot read the clip.
-                drift = video_mod.overlay_drift(p) if look and drawn is None else None
+                drift = video_mod.overlay_drift(p) if look else None
                 eyes = video_mod.eye_drift(images[0], p, light=False) if head and p and os.path.exists(p) else None
                 # part 1 had no speech check: its last word, cut by the clip's end, went to the user
                 # in runs 17 and 18 (2026-10-20); a take that says it all ranks first
@@ -2142,6 +2184,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                     logger.warning("generate_video: part 1 drifted off the still's eyes (%s) or did not "
                                    "say %s; once more", eyes, said_first if missed else "")
                     continue
+                if (attempt == 3 and len(parts) > 1 and
+                        ((drift is not None and drift > video_mod.OVERLAY_DRIFT_MAX) or
+                         (drawn is not None and drawn > video_mod.DRAWN_OVER_MAX))):
+                    return ('[TOOL ERROR] The first video segment repeatedly changed the background or added objects. '
+                            'Tell the user the long video could not be completed; do not claim it was created.')
                 if attempt == 3 or ((drift is None or drift <= video_mod.OVERLAY_DRIFT_MAX)
                                     and (drawn is None or drawn <= video_mod.DRAWN_OVER_MAX)):
                     break
@@ -2217,8 +2264,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     # «the camera zooms in», the note said an action was missing and the reply told the user to
     # «pick a voice variant» (live 2026-10-20)
     ctx.video_action_note = "" if continuing or head else _check_actions(ctx, path, parts, references=images)
-    if not ctx.video_action_note and images and not continuing and not head:
-        ctx.video_action_note = _check_static_background(ctx, video_mod, path, ctx.video_request or description)
+    if images and not continuing and not head:
+        background_note = _check_static_background(ctx, video_mod, path, ctx.video_request or description)
+        objects_note = ('The video may contain added objects or effects.'
+                        if watch and drawn is not None and drawn > video_mod.DRAWN_OVER_MAX else '')
+        ctx.video_action_note = ' '.join(note for note in (ctx.video_action_note, background_note, objects_note) if note)
     state["video_path"] = path
     state["video_status"] = "success"
     state["video_seconds"] = result.get("seconds")

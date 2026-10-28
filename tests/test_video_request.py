@@ -95,11 +95,81 @@ def test_large_background_change_is_reported_when_vision_says_none(tmp_path):
                            extract_frames=lambda path, times, dest: [(t, Path(dest) / f'{t}.png') for t in times])
     rig = _Rig(tmp_path, overlay_drift=lambda path: 64, OVERLAY_DRIFT_MAX=35)
     ctx = rig.ctx(text_model=lambda *a, **kw: '', vision_model=lambda *a, **kw: 'NONE',
+                  yes_no=lambda *a, **kw: False,
                   modules={'video_look': look}, deps=SimpleNamespace(asks_for_video=lambda *a: True))
     result = handlers._handle_generate_video(ctx, {'image_path': str(still), 'user_input_original': REQUEST},
                                              {'description': DRAFT, 'seconds': 5.17, 'use_current_images': True})
     assert ctx.video_action_note == 'The background may have changed unexpectedly.'
     assert 'possible issues' in result
+
+
+def test_motion_and_background_problems_are_both_reported(tmp_path, monkeypatch):
+    still = tmp_path / 'source.png'
+    still.write_bytes(b'source')
+    rig = _Rig(tmp_path)
+    ctx = rig.ctx(text_model=lambda *a, **kw: '', vision_model=lambda *a, **kw: 'NONE',
+                  deps=SimpleNamespace(asks_for_video=lambda *a: True))
+    monkeypatch.setattr(handlers, '_check_actions', lambda *a, **kw: 'Wrong direction.')
+    monkeypatch.setattr(handlers, '_check_static_background', lambda *a, **kw: 'Background changed.')
+    handlers._handle_generate_video(ctx, {'image_path': str(still), 'user_input_original': REQUEST},
+                                     {'description': DRAFT, 'seconds': 5.17, 'use_current_images': True})
+    assert 'Wrong direction' in ctx.video_action_note and 'Background changed' in ctx.video_action_note
+
+
+def test_final_failed_object_check_is_not_lost(tmp_path, monkeypatch):
+    still = tmp_path / 'source.png'
+    still.write_bytes(b'source')
+    rig = _Rig(tmp_path, drawn_over=lambda *a: 0.9, DRAWN_OVER_MAX=0.5,
+               overlay_drift=lambda path: 5, OVERLAY_DRIFT_MAX=35)
+    ctx = rig.ctx(text_model=lambda *a, **kw: '', vision_model=lambda *a, **kw: 'NONE',
+                  yes_no=lambda *a, **kw: False, deps=SimpleNamespace(asks_for_video=lambda *a: True))
+    monkeypatch.setattr(handlers, '_check_actions', lambda *a, **kw: '')
+    monkeypatch.setattr(handlers, '_check_static_background', lambda *a, **kw: '')
+    result = handlers._handle_generate_video(ctx, {'image_path': str(still), 'user_input_original': 'Animate the balloon with a stationary camera.'},
+                                             {'description': 'The balloon moves.', 'seconds': 5, 'use_current_images': True})
+    assert 'possible issues' in result and 'objects' in result.lower()
+
+
+def test_static_single_image_retries_obvious_background_corruption(tmp_path):
+    still = tmp_path / 'source.png'
+    still.write_bytes(b'source')
+    scores = iter([64.0, 5.0])
+    rig = _Rig(tmp_path, drawn_over=lambda *a: 0.0,
+               overlay_drift=lambda path: next(scores), OVERLAY_DRIFT_MAX=35)
+    ctx = rig.ctx(text_model=lambda *a, **kw: '', vision_model=lambda *a, **kw: 'NONE',
+                  yes_no=lambda *a, **kw: False,
+                  deps=SimpleNamespace(asks_for_video=lambda *a: True))
+    handlers._handle_generate_video(ctx, {'image_path': str(still), 'user_input_original': 'Animate the balloon with a stationary camera.'},
+                                     {'description': 'The red balloon moves right; the camera is stationary.', 'seconds': 5.17, 'use_current_images': True})
+    assert len([call for call in rig.calls if call[0] != 'PREP']) == 2
+
+
+def test_camera_motion_does_not_trigger_background_retry(tmp_path):
+    still = tmp_path / 'source.png'
+    still.write_bytes(b'source')
+    rig = _Rig(tmp_path, drawn_over=lambda *a: 0.9,
+               overlay_drift=lambda path: 64, OVERLAY_DRIFT_MAX=35)
+    ctx = rig.ctx(text_model=lambda *a, **kw: '', vision_model=lambda *a, **kw: 'NONE',
+                  yes_no=lambda *a, **kw: True,
+                  deps=SimpleNamespace(asks_for_video=lambda *a: True))
+    handlers._handle_generate_video(ctx, {'image_path': str(still), 'user_input_original': 'Animate the balloon and pan the camera right.'},
+                                     {'description': 'Pan right past the balloon.', 'seconds': 5.17, 'use_current_images': True})
+    assert len([call for call in rig.calls if call[0] != 'PREP']) == 1
+
+
+def test_chain_does_not_continue_from_corrupted_first_part(tmp_path):
+    still = tmp_path / 'source.png'
+    still.write_bytes(b'source')
+    rig = _Rig(tmp_path, drawn_over=lambda *a: 0.0,
+               overlay_drift=lambda path: 64, OVERLAY_DRIFT_MAX=35)
+    ctx = rig.ctx(text_model=lambda *a, **kw: '', vision_model=lambda *a, **kw: 'NONE',
+                  yes_no=lambda *a, **kw: False, video_plan_parts=['The red balloon moves left.', 'The balloon moves back.'],
+                  deps=SimpleNamespace(asks_for_video=lambda *a: True))
+    result = handlers._handle_generate_video(ctx, {'image_path': str(still), 'user_input_original': 'Animate the balloon with a stationary camera.'},
+                                             {'description': 'The balloon moves left.', 'seconds': 12, 'use_current_images': True})
+    assert '[TOOL ERROR]' in result
+    assert len([call for call in rig.calls if call[0] != 'PREP']) == 3
+    assert not rig.stitched
 
 
 @pytest.mark.parametrize("spoken_output", ["", '<d>[English] Buy an Ozon cable now</d>'])

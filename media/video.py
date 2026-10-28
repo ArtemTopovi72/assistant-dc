@@ -1527,18 +1527,67 @@ def garbled_words(words: Sequence[str], got: set) -> list:
 OVERLAY_DRIFT_MAX = 35.0
 
 
+def track_simple_motion(path: str):
+    """Track one distinct foreground object on a nearly uniform background, or return None."""
+    import cv2
+    import numpy as np
+    cap = cv2.VideoCapture(path)
+    try:
+        count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = float(cap.get(cv2.CAP_PROP_FPS))
+        ok, first = cap.read()
+        if not ok or count < 3 or fps <= 0:
+            return None
+        first = cv2.resize(first, (320, 180))
+        lab = cv2.cvtColor(first, cv2.COLOR_BGR2LAB).astype('float32')
+        border = np.concatenate((lab[:5].reshape(-1, 3), lab[-5:].reshape(-1, 3),
+                                 lab[:, :5].reshape(-1, 3), lab[:, -5:].reshape(-1, 3)))
+        bg = np.median(border, axis=0)
+        if np.percentile(np.linalg.norm(border - bg, axis=1), 90) > 42:
+            return None
+        mask = (np.linalg.norm(lab - bg, axis=2) > 32).astype('uint8')
+        n, _, stats, _ = cv2.connectedComponentsWithStats(mask)
+        if n < 2:
+            return None
+        components = sorted(stats[1:], key=lambda s: s[4], reverse=True)
+        x, y, w, h, area = (int(v) for v in components[0])
+        if area < 576 or area > 34560 or w > 256 or h > 175:
+            return None
+        if len(components) > 1 and components[1][4] > area * 0.3:
+            return None
+        template = first[y:y+h, x:x+w]
+        if template.std() < 5:
+            return None
+        found = []
+        for i in sorted(set(int(round(v)) for v in np.linspace(0, count - 1, 5))):
+            cap.set(cv2.CAP_PROP_POS_FRAMES, i)
+            ok, frame = cap.read()
+            if not ok:
+                continue
+            frame = cv2.resize(frame, (320, 180))
+            _, confidence, _, loc = cv2.minMaxLoc(cv2.matchTemplate(frame, template, cv2.TM_CCOEFF_NORMED))
+            if confidence >= 0.6:
+                found.append((round(i / fps, 2), (loc[0] + w / 2) / 320, (loc[1] + h / 2) / 180))
+        return found if len(found) >= 3 else None
+    except Exception:
+        logger.debug('simple motion tracking failed', exc_info=True)
+        return None
+    finally:
+        cap.release()
+
+
 def overlay_drift(path: str) -> Optional[float]:
     """How far a static clip's frames stray from its first one outside the centre where the
-    person moves (mean grey-level difference, worst frame). H3 sometimes covers a photo it
+    person moves (mean colour difference, worst frame). H3 sometimes covers a photo it
     animates with drawn flowers, anime faces or drops; with the camera locked the edges of the
     frame then change wholesale. 10-15 measured: clean ~16, covered 49-94. None when unread."""
     import numpy as np
     w, h = 160, 90
     try:
         raw = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", path, "-vf", f"fps=2,scale={w}:{h}",
-                              "-f", "rawvideo", "-pix_fmt", "gray", "-"],
+                              "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
                              capture_output=True, check=True, timeout=120).stdout
-        f = np.frombuffer(raw, np.uint8).reshape(-1, h, w).astype(np.float32)
+        f = np.frombuffer(raw, np.uint8).reshape(-1, h, w, 3).astype(np.float32)
     except Exception:
         return None
     if len(f) < 2:
