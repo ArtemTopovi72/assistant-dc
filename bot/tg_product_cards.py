@@ -128,7 +128,8 @@ def keyboard(p: dict, lang: str = "ru") -> dict:
 
 
 def _upload(bot, chat_id, img: bytes, cap: str, kb_json: str) -> bool:
-    r = bot.http.post(f"{bot._api}/sendPhoto",
+    from tg_transport import _logged_post
+    r = _logged_post(f"{bot._api}/sendPhoto", http=bot.http,
                       data={"chat_id": chat_id, "caption": cap, "parse_mode": "HTML",
                             "reply_markup": kb_json},
                       files={"photo": ("card.jpg", img)}, timeout=60)

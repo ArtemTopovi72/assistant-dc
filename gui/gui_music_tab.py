@@ -163,9 +163,9 @@ class MusicWorker(QThread):
                     if not self.duration_s:
                         lines = sum(bool(ln.strip()) and not ln.strip().startswith("[") for ln in lyrics.splitlines())
                         duration = max(duration, min(240, int(15 + 5.2 * lines)))
-                    lyrics = trim_to_lines(lyrics, line_budget(duration)[2])
                 except Exception:
                     logger.warning("Music lyric tuner failed; retaining the draft", exc_info=True)
+                lyrics = trim_to_lines(lyrics, line_budget(duration)[2], ctx=self.ctx)
             path = music.generate_music(self.ctx, lyrics, style,
                                         duration_s=duration,
                                         preset=self.preset or None,

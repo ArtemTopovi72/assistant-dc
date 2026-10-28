@@ -1075,12 +1075,29 @@ class TaskRunnerMixin:
         # 🎙 samples (and «стандартные») ride the ONE clip request they were given
         # for: an animate preset, or the request rerun after the voice question.
         # "" = not asked yet: generate_video asks before rendering people talking.
-        ctx.voice_choice = getattr(sess, "voice_choice", "") or ""
+        import tg_links as _tg_links
+        request = _tg_links.without_link_notes(task.user_text)
+        voice_replay = bool(sess.voice_pending and sess.voice_choice and
+                            request == _tg_links.without_link_notes(sess.voice_pending))
+        plan_replay = bool(sess.video_plan_ok and
+                           request == _tg_links.without_link_notes(sess.video_plan_request))
+        replay_images = list(sess.voice_pending_images if voice_replay else
+                             sess.video_plan_images if plan_replay else [])
+        if (voice_replay or plan_replay) and not replay_images:
+            # Legacy cards kept only album extras. Recover their known primary only
+            # for the exact pending request, never for another message with a voice choice.
+            primary = tg_bot._image_by_id(sess, sess.video_plan_image if plan_replay else sess.turn_image)
+            replay_images = [((primary or {}).get('path') or ''), *(sess.turn_album or [])]
+        replay_images = [p for p in dict.fromkeys(replay_images) if p and os.path.exists(p)]
+        preset = task.user_text.startswith(("[animate]", "animate this photo"))
+        ctx.voice_choice = (getattr(sess, "voice_choice", "") or "") if voice_replay or plan_replay or preset else ""
         if ctx.voice_choice or (getattr(sess, "anim_voices", None) and
                                 task.user_text.startswith(("[animate]", "animate this photo"))):
             ctx.anim_voices = [p if p and os.path.exists(p) else "" for p in sess.anim_voices]
             ctx.voice_choice = ctx.voice_choice or "own"
-            sess.anim_voices, sess.voice_choice, sess.voice_pending = [], "", ""
+            sess.anim_voices, sess.voice_choice = [], ""
+            if voice_replay:
+                sess.voice_pending, sess.voice_pending_images = "", []
             self._store.put(sess)
         elif task.user_text.startswith(("[animate]", "animate this photo")):
             ctx.voice_choice = "default"     # the presets carry «🎙 Добавить свои голоса»
@@ -1092,11 +1109,10 @@ class TaskRunnerMixin:
         ctx.video_plan_parts = []
         # A watched video link adds a summary that differs on every watch: the plan's request
         # is the same one without it, or ▶ drew the plan again, round and round (live 2026-10-19).
-        import tg_links as _tg_links
-        if getattr(sess, "video_plan_ok", None) and _tg_links.without_link_notes(task.user_text) == \
-                _tg_links.without_link_notes(getattr(sess, "video_plan_request", "")):
+        if plan_replay:
             ctx.video_plan_parts = list(sess.video_plan_ok)
             sess.video_plan, sess.video_plan_request, sess.video_plan_ok = [], "", []
+            sess.video_plan_images = []
             self._store.put(sess)
         # ▶️ Continue video: the clip's tail (its motion + sound) rides this ONE request.
         ctx.continue_tail = ctx.continue_src = ""
@@ -1604,18 +1620,22 @@ class TaskRunnerMixin:
         _style_ref = getattr(task, "style_ref_path", "")
         if _style_ref and os.path.exists(_style_ref) and ctx.last_image_path:
             ctx.reference_images = [ctx.last_image_path, _style_ref]
+        _first = getattr(task, "image_path", "") or ctx.last_image_path
         _album = [p for p in (getattr(task, "album_paths", None) or []) if p and os.path.exists(p)]
         _rerun_album = False
         # The voice question and the plan card re-run the request as bare text: the album it came
-        # with rides on (duo 2026-10-19: the second hero was gone by the render).
-        if not _album and not getattr(task, "image_is_photo", False) and not task.user_text.startswith("[animate]") and (
-                ctx.voice_choice or getattr(sess, "video_plan_ok", None)):
-            _album = _rerun_album = [p for p in (sess.turn_album or []) if p and os.path.exists(p)]
-        else:
-            sess.update_turn_media(ctx._session_token, turn_album=list(_album))
-        # The album's first picture rides as task.image_path and becomes the working
-        # image only later in this function; ctx.last_image_path is still empty here.
-        _first = getattr(task, "image_path", "") or ctx.last_image_path
+        # with rides on, including its primary picture, independently of the live target slot.
+        if (not _album and not task.image_path and not getattr(task, "image_is_photo", False)
+                and not task.user_text.startswith("[animate]") and replay_images):
+            if (not _target or _target.get('path') in replay_images
+                    or task.image_selection == 'context'):
+                _first = (_target['path'] if _target and task.image_selection != 'context' else replay_images[0])
+                _target = tg_bot._image_by_path(sess, _first)
+                ctx.last_image_path = _first
+                _album = [p for p in replay_images if p != _first]
+                _rerun_album = True
+        full_album = list(dict.fromkeys([_first, *_album])) if _album or _rerun_album else []
+        sess.update_turn_media(ctx._session_token, turn_album=[p for p in full_album if p])
         if _album and _first:
             ctx.reference_images = [_first, *_album]
         # What THIS turn is about, for the next one's "the picture": a photo
@@ -1915,8 +1935,10 @@ class TaskRunnerMixin:
         # derived sheet never qualifies no matter what sess.turn_image holds.
         _turn_img_id = (_target or {}).get("id", "") if _target and _target.get('src') != 'video' else (
             ctx.current_image_id if getattr(task, "image_is_photo", False) else "")
-        if _turn_img_id and not any(final.get(k) for k in
-                                    ("image_status", "video_status", "document_status")):
+        if (_turn_img_id and (task.image_is_photo or ctx.image_pointed_at
+                             or intent_read(ctx)(None, task.user_text)["about_picture"])
+                and not any(final.get(k) for k in
+                                    ("image_status", "video_status", "document_status"))):
             _turn_img_entry = tg_bot._image_by_id(sess, _turn_img_id)
             if _turn_img_entry and os.path.exists(_turn_img_entry.get("path", "")):
                 main_kb = tg_bot._image_kb(lang, _turn_img_id)
@@ -2053,9 +2075,12 @@ class TaskRunnerMixin:
             tg_bot.logger.exception("doc-delivery correction failed chat=%s", chat_id)
 
         # ── the voice question generate_video asked ───────────────────────────
+        video_images = [p for p in dict.fromkeys([getattr(ctx, 'last_image_path', ''),
+                        *getattr(ctx, 'reference_images', []), *getattr(ctx, 'recent_image_paths', [])])
+                        if p and os.path.exists(p)]
         if final.get("ask_voices"):
             try:
-                self._offer_voices(chat_id, sess, lang, task.user_text, int(final["ask_voices"]))
+                self._offer_voices(chat_id, sess, lang, task.user_text, int(final["ask_voices"]), images=video_images)
             except Exception:
                 tg_bot.logger.exception("voice offer failed chat=%s", chat_id)
 
@@ -2073,7 +2098,7 @@ class TaskRunnerMixin:
                 sess.voice_choice, sess.anim_voices = choice, voices
                 self._store.put(sess)
             try:
-                self._offer_video_plan(chat_id, sess, lang, task.user_text, final["video_plan"])
+                self._offer_video_plan(chat_id, sess, lang, task.user_text, final["video_plan"], images=video_images)
             except Exception:
                 tg_bot.logger.exception("video plan offer failed chat=%s", chat_id)
 

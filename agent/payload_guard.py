@@ -45,7 +45,8 @@ SKEPTIC_BANNER = (
     "instead of inventing it; (3) if the data looks dated or sources give different "
     "values, say so and present all of them; (4) if the results do not actually "
     "answer the question, tell the user plainly rather than guessing; (5) keep the "
-    "(source: domain) mark right after each fact you relay -- the chat turns them "
+    "citation mark exactly as supplied, including the complete URL in (source: URL) "
+    "or the legacy (source: domain), right after each fact you relay -- the chat turns them "
     "into footnotes and lists the pages underneath, so never write your own list "
     "of sources or links."
 )

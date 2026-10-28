@@ -91,9 +91,11 @@ def _handle_ozon_search(ctx, state, args: dict) -> str:
         items = _oz.call(ctx, "search", q, args.get("sort") or "popular", args.get("price_min"),
                            args.get("price_max"), 60 if cheapest else limit,
                            args.get("max_delivery_days"))
+        import ozon_shopper
+        need = _with_user_words(state, q)
         if cheapest:                    # the cheapest lines are parts and covers «for» the product
-            import ozon_shopper
-            items = ozon_shopper.the_product_only(ctx, q, items)[:limit]
+            items = ozon_shopper.the_product_only(ctx, need, items)
+        items = ozon_shopper.verified_matches(ctx, need, items, limit)
     except Exception as exc:
         logger.warning("ozon_search(%s) failed: %s", q, exc)
         return _fail(exc)
@@ -101,7 +103,8 @@ def _handle_ozon_search(ctx, state, args: dict) -> str:
         if args.get("max_delivery_days") is not None:
             return (f"Ozon has nothing for '{q}' delivered within {args['max_delivery_days']} "
                     "days. Say so; offer to widen the delivery window.")
-        return f"Ozon found nothing for '{q}'. Try other words or a wider price range."
+        return (f"Ozon found no verified matches for '{q}'. Required specifications were missing or wrong; "
+                "say that the requirements could not be verified, do not substitute unverified products.")
     _remember(ctx, items)
     lines = [f"Ozon results for '{q}' (sort: {args.get('sort') or 'popular'}):"]
     for i, it in enumerate(items, 1):
@@ -117,7 +120,8 @@ def _handle_ozon_search(ctx, state, args: dict) -> str:
         lines.append(f"{i}. {it.get('name') or '?'} — {_rub(it['price'])}"
                      + (f" ({', '.join(extra)})" if extra else "")
                      + f"\n   sku {it['sku']} {it.get('url') or ''}")
-    lines.append("Quote prices exactly as listed and give the link for each product you recommend.")
+    lines.append(f"{len(items)} verified matches found. If fewer than requested, say so; do not substitute "
+                 "unverified products. Quote prices exactly as listed and give each product's link.")
     if any(it.get("delivery") for it in items):
         where = _oz.LAST_LOCATION.get("text") or ""
         if "Пункт" in where or "ул" in where:
@@ -321,7 +325,7 @@ def _with_user_words(state, req: str) -> str:
     """The agent's request is its retelling; the budget, quantities and wishes the
     user said can fall out of it («бюджет 30000» never reached the plan)."""
     from prompt_guard import user_words
-    said = user_words((state or {}).get("user_input_original") or "").strip()
+    said = user_words((state or {}).get("user_input_original") or (state or {}).get("user_input") or "").strip()
     if not said or said in req:
         return req
     return f"{req}\nThe user's own words (budget, quantities, wishes come from here): {said}"

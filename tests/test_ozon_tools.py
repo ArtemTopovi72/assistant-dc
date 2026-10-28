@@ -60,7 +60,7 @@ def test_search_lists_prices_and_links(pages):
 
     def judge(ctx, system, user, **k):      # the cheapest line is a case «for iPhone 15»
         shown.append(user)
-        return '{"other": [1]}'
+        return '{"other": [1]}' if 'PRODUCT ASKED FOR:' in user else '{"verified": [1, 2, 3]}'
     out = _call("ozon_search", ctx=_ctx(text_model=judge), query="iphone 15", sort="price",
                 price_max=60000, limit=3)
     assert "₽" in out and "https://www.ozon.ru/product/" in out, out
@@ -172,7 +172,7 @@ def test_set_location_reports_the_point():
 
 def test_search_names_the_delivery_location(pages):
     _WORLD["gw"] = Over(_WORLD["gw"], parse_location=lambda page: "Пункт Ozon • ул. Миславского, 9")
-    out = _call("ozon_search", query="iphone 15")
+    out = _call("ozon_search", ctx=_ctx(text_model=lambda *a, **k: '{"verified": [1, 2, 3]}'), query="iphone 15")
     assert "chosen pickup point: Пункт Ozon" in out, out
 
 

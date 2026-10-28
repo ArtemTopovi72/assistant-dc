@@ -57,6 +57,7 @@ def test_bare_redo_is_pinned_to_the_previous_request():
     # the model reads the bare redo (agent/intent.py)
     R = _reads({"заново": {"redo": "same"}, "again": {"redo": "same"}, "ещё раз": {"redo": "same"},
                 "пересобери коллаж без дубликатов": {"redo": "changed"}}.get)
+    R.yes_no = lambda question, text: text in ("заново", "again", "ещё раз")
     h = [{"role": "user", "content": "сделай кота чёрным"}, {"role": "assistant", "content": "не вышло"},
          {"role": "user", "content": "найди все мосты и собери коллаж"}, {"role": "assistant", "content": "вот"}]
     assert G._previous_request_for_redo("заново", h, ctx=R) == "найди все мосты и собери коллаж"

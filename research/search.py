@@ -398,12 +398,13 @@ def distill_search_results(ctx, query: str, raw_results: str) -> str:
     Uses a "<think></think>" prefill so reasoning-prone fine-tunes emit the answer
     directly instead of looping inside an unclosed think block.
     """
-    user_msg = f"User query: {query}\n\nSearch results:\n{raw_results}"
+    request = getattr(ctx, "search_request", "") or query
+    user_msg = f"User query: {request}\nRetrieval query: {query}\n\nSearch results:\n{raw_results}"
     # A request for N THINGS cannot be delivered inside a 400-token budget meant
     # for "1-4 sentences of distilled facts": five jokes came back as "there is
     # one about an aeroplane and one about a fence". The prompt allows a full
     # list, so the budget has to allow it too, or the answer stops at the token cap.
-    want = wanted_count(query, ctx=ctx)
+    want = wanted_count(request, ctx=ctx)
     budget = SEARCH_DISTILL_MAX_TOKENS
     if want:
         budget = min(4000, max(SEARCH_DISTILL_MAX_TOKENS, 220 * want + 300))
@@ -435,9 +436,10 @@ _FOLLOWUP_PROMPT = (
 
 def followup_query(ctx, query: str, found: str) -> str:
     """The one extra search the model asks for after reading the first round, or ''."""
+    request = getattr(ctx, "search_request", "") or query
     try:
         out = text_model(ctx)(ctx, _FOLLOWUP_PROMPT,
-                              f"Query: {query} | Findings: {found[:6000]}",
+                              f"Query: {request} | Retrieval query: {query} | Findings: {found[:6000]}",
                               temperature=0.1, max_tokens=60, prefill="<think></think>")
     except Exception:
         logger.exception("search follow-up check failed")

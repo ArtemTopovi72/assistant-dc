@@ -56,6 +56,17 @@ def test_photo_refused_falls_back_to_text():
     assert [m for m, _ in b.calls] == ["sendPhoto", "sendMessage"]
 
 
+def test_photo_upload_uses_the_shared_reply_and_debug_transport():
+    import tg_transport
+    calls = []
+    response = types.SimpleNamespace(status_code=200, json=lambda: {'ok': True})
+    bot = types.SimpleNamespace(_api='https://api.telegram.org/botTEST',
+        http=types.SimpleNamespace(post=lambda url, **kw: calls.append(kw) or response))
+    with tg_transport.replying_to(101, 42):
+        assert C._upload(bot, 101, b'jpeg', 'A cable', '{}')
+    assert json.loads(calls[0]['data']['reply_parameters'])['message_id'] == 42
+
+
 def test_search_tool_fills_turn_products():
     import tool_ozon_handlers as H
     ctx = types.SimpleNamespace(turn_products=[])

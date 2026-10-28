@@ -708,7 +708,11 @@ def _previous_request_for_redo(user_input: str, history, ctx=None) -> str:
         # redo. «пересобери коллаж без дубликатов» carries its own
         # instruction ("changed") and is left alone.
         t = (t or "").strip()
-        return bool(t) and _user_read(t, ctx=ctx)["redo"] == "same"
+        return (bool(t) and _user_read(t, ctx=ctx)["redo"] == "same"
+                and yes_no(ctx)(
+                    "Does {text} ONLY ask to repeat the previous task, without its own subject, "
+                    "scene, facts or requirements? A complete new request (even 'make a new video') "
+                    "is NO. A bare 'again' or 'заново' is YES.", t))
     if not _bare(user_input, ctx=ctx):
         return ""
     for m in reversed(history or []):

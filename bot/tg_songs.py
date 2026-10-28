@@ -345,8 +345,7 @@ class SongsMixin:
             # short call -- so the choice is explicit in the brief and can be
             # reported to the user when the song arrives.
             auto = _tg_music.auto_fields(sess)
-            if not duration:
-                auto["duration"] = True
+            auto["duration"] = not bool(duration)
             chosen = {}
             if any(auto.values()):
                 if _has_stage:
@@ -361,7 +360,7 @@ class SongsMixin:
                         tempo=f"bpm:{chosen['bpm']}" if chosen.get("bpm") else "",
                         vocal=chosen.get("vocal", ""))
                     prefs = dict(picked, **prefs)      # the user's own choices win
-                    if chosen.get("seconds"):
+                    if auto["duration"] and chosen.get("seconds"):
                         duration = int(chosen["seconds"])
             if not duration:
                 duration = _config.MUSIC_DEFAULT_SECONDS
@@ -414,7 +413,7 @@ class SongsMixin:
                     _n = sum(1 for ln in _words.splitlines() if ln.strip() and not ln.strip().startswith("["))
                     duration = max(duration, min(240, int(15 + 5.2 * _n)))
                 _cap = _music_mod.line_budget(duration)[2]       # polish rounds grow the lyric past the slot
-                caption = dict(caption, lyrics=_music_mod.trim_to_lines(_words, _cap) if _cap else _words)
+                caption = dict(caption, lyrics=_music_mod.trim_to_lines(_words, _cap, ctx=ctx) if _cap else _words)
             if cancelled():
                 return False
             wav_path = music.generate_music(

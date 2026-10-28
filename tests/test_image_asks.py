@@ -105,5 +105,40 @@ miss = G._missing_asks(c, pic("ural.png"), "A Ural sidecar on a country road, mo
 check("the asks read the user's words", seen_goal and "просёлке" in seen_goal[0], seen_goal)
 check("...and what they ask is checked", miss == [("Is it a dirt road?", "a dirt road")], miss)
 
+# A forbidden object's absence satisfies the request; its presence needs repair.
+# The planner keeps the positive presence question and says which answer is wanted.
+for answer, want_missing in [("No", []), ("Yes", [("Are there any people?", "No people")]),
+                             ("Unclear", [])]:
+    c = Ctx(live=True)
+    c.draw_request = f"A balloon without people, answer fixture {answer}"
+    c.text_model = lambda *a, **k: '{"checks": [{"ask": "Are there any people?", "draw": "No people", "expected": "no"}]}'
+    c.vision_model = lambda *a, _answer=answer, **k: _answer
+    miss = G._missing_asks(c, pic(f"no_people_{answer}.png"), "A red balloon")
+    check(f"forbidden people answered {answer}: only confirmed presence is a defect",
+          miss == want_missing, miss)
+
+# Explicit positive expectations still reject an absent required subject.
+c = Ctx(live=True)
+c.draw_request = "A balloon with a blue box, explicit positive fixture"
+c.text_model = lambda *a, **k: '{"checks": [{"ask": "Is there a blue box?", "draw": "A blue box", "expected": "yes"}]}'
+c.vision_model = lambda *a, **k: "No"
+miss = G._missing_asks(c, pic("blue_box.png"), "A red balloon with a blue box")
+check("an absent required object remains a defect", miss == [("Is there a blue box?", "A blue box")], miss)
+
+# The real evaluator must let a compliant first render finish successfully, so
+# negative constraints cannot cascade into edits, extra renders or partial status.
+log = []
+c = Ctx(live=True, generate_image_with_comfy=drawer(["balloon.png"], log), edit_image=editor(log))
+c.draw_request = "Red balloon tied to a blue box. No people or writing, pipeline fixture."
+c.text_model = lambda *a, **k: '{"checks": [{"ask": "Are there any people?", "draw": "No people", "expected": "no"}, {"ask": "Is there any writing?", "draw": "No writing", "expected": "no"}]}'
+def balloon_vision(*a, **k):
+    if k.get("image_paths"):
+        return "No"
+    return '{"verdict": "success", "score": 9, "reason": "Matches the request"}'
+c.vision_model = balloon_vision
+got = G.generate_image_with_refinement(c, c.draw_request)
+check("satisfied exclusions finish after one render with success",
+      got["status"] == "success" and got["attempts"] == 1 and len(log) == 1, (got, log))
+
 print(f"\n{OK}/{OK + BAD} checks passed")
 sys.exit(1 if BAD else 0)

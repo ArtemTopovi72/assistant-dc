@@ -69,11 +69,12 @@ class AnimVoicesMixin:
         self._store.put(sess)
         self._send_animate_presets(chat_id, lang, sess.pending_animate_target)
 
-    def _offer_voices(self, chat_id: int, sess, lang: str, request: str, n: int) -> None:
+    def _offer_voices(self, chat_id: int, sess, lang: str, request: str, n: int, images=None) -> None:
         """generate_video stopped before rendering people who talk: «🎙 Свои
         голоса» collects samples (voice notes or round videos, left to right),
         «▶️ Стандартные» goes on without them. Either way the same request runs again."""
         sess.voice_pending, sess.voice_choice = request, ""
+        sess.voice_pending_images = list(images or [])
         sess.anim_voices, sess.anim_voice_state = [], ""
         self._store.put(sess)
         if not self._voice_from_request_link(chat_id, sess, lang, request):
@@ -90,7 +91,12 @@ class AnimVoicesMixin:
         if sess.voice_pending:
             sess.voice_choice = "own" if any(self._slots(sess)) else "default"
             self._store.put(sess)
-            self._enqueue_item(chat_id, {"type": "text", "text": sess.voice_pending})
+            item = {"type": "text", "text": sess.voice_pending}
+            images = sess.voice_pending_images
+            primary = tg_bot._image_by_path(sess, images[0]) if images else None
+            if primary:
+                item['image_id'] = primary['id']
+            self._enqueue_item(chat_id, item)
             return
         self._store.put(sess)
         self._send_animate_presets(chat_id, lang, sess.pending_animate_target)
@@ -237,8 +243,7 @@ class AnimVoicesMixin:
             if not self._anim_voice_store(chat_id, s2, open(src, "rb").read(), ".mp4"):
                 return
             s2.voice_pending, s2.voice_choice, s2.anim_voice_state = request, "own", ""
-            self._store.put(s2)
-            self._enqueue_item(chat_id, {"type": "text", "text": request})
+            self._voices_go(chat_id, s2, lang)
         self._run_busy(chat_id, job)
         return True
 

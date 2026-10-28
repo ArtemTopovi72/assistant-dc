@@ -23,6 +23,7 @@ def test_cover_reports_a_rejected_optional_upload_and_keeps_the_render(tmp_path,
         def __init__(self):
             self.messages = []
             self.uploads = []
+            self.sess = tg_bot._Session(1)
             self.modules = {
                 "mashup_auto": types.SimpleNamespace(make=lambda *a: str(output)),
                 "mashup_stems": types.SimpleNamespace(release_separator=lambda: None),
@@ -46,7 +47,7 @@ def test_cover_reports_a_rejected_optional_upload_and_keeps_the_render(tmp_path,
             return None
 
         def _get_session(self, chat):
-            return types.SimpleNamespace(cover_voice="")
+            return self.sess
 
     bot = Bot()
     if kind == "mashup":

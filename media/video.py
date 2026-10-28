@@ -1246,7 +1246,7 @@ def _lock_framing_unless_requested(description: str, ctx=None) -> str:
     # The continuation template talks about the camera itself («keeps moving»): judged with it,
     # every part counted as asking for a move, got no lock, and the camera drove down the
     # corridor on a talking head (owner, 2026-10-19). Only the script's own words count.
-    own = d
+    own = getattr(ctx, "video_request", "") or d
     for pre in (CONTINUE_PREFIX, CONTINUE_CTX_PREFIX):
         own = own.removeprefix(pre)
     if not d or yes_no(ctx)("A video clip is described as: {text}\n\nDoes the description ask "
@@ -1683,6 +1683,12 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
     back without the required fields -- never a half-formed prompt.
     """
     ref = mode == "ref2va"
+    request = getattr(ctx, "video_request", "") or description
+    speech_source = description
+    if request != description:
+        spoken = " ".join(quoted_lines(request)) + " " + str(getattr(ctx, "video_speech", "") or "")
+        speech_source = " ".join(f'"{line}"' for line in quoted_lines(description)
+                                 if _flat_line(line) and _flat_line(line) in _flat_line(spoken))
     try:
         guide = open(os.path.join(_GUIDE_DIR, "ref-en.txt" if ref else "base-en.txt"),
                      encoding="utf-8").read()
@@ -1783,7 +1789,14 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
                "guess from the picture. The shot keeps <Picture 1>'s framing from start to "
                "end: no cut, no jump to a close-up.\n"
                if images else "") +
-            "\nRequest:\n" + _SCENE_NOTE_RE.sub("", description) + _shown_before(description))
+            ("\nAuthoritative current user request or approved plan:\n"
+             + str(getattr(ctx, "video_request", ""))
+             + "\nThe shot draft below is subordinate to this request. Correct any conflicting "
+               "appearance, action, camera or sound detail using this request and the attached source images. "
+               "For one part of a longer request, keep the draft's current-part scope: never import "
+               "actions or spoken lines assigned to other parts.\n"
+             if getattr(ctx, "video_request", "") else "") +
+            "\nRequest / shot draft:\n" + _SCENE_NOTE_RE.sub("", description) + _shown_before(description))
     def ask(user):
         if images:
             # Every picture, in order: shown only <Picture 1>, the writer guessed the
@@ -1801,7 +1814,7 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
         # The rewriter drops spoken lines it finds awkward: a man's «эта залупа слишком
         # тяжёлая» never reached H3, the clip was silent (live 2026-10-15). Once more
         # naming the lines; if still missing, they are put in below.
-        lost = _lost_lines(description, out)
+        lost = _lost_lines(speech_source, out)
         if lost and out:
             out = clean(ask(user + "\n\nYour last answer left out these spoken lines. Put each "
                             "into the shot where it is said, character for character, in "
@@ -1813,7 +1826,7 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
     if not out or not all(f in out for f in need) or "non_diegetic_music" not in out:
         logger.info("Context-IR rewrite rejected (missing fields); keeping the plain prompt")
         return description
-    lost = _lost_lines(description, out)
+    lost = _lost_lines(speech_source, out)
     if lost:
         logger.info("Context-IR rewrite lost %d spoken line(s); put back", len(lost))
         said = " ".join(f'He says: "{x}".' for x in lost)
@@ -1846,7 +1859,7 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
                               "for no cut: write ONE [Shot 1] only; any change of view is a camera "
                               "move in real time."))
             if again and all(f in again for f in need) and "non_diegetic_music" in again \
-                    and not _lost_lines(description, again) and not re.search(r"\[Shot [2-9]\]", again):
+                    and not _lost_lines(speech_source, again) and not re.search(r"\[Shot [2-9]\]", again):
                 out = again
     if "The shot continues with no cut" in description:
         # Told in words (rules 7-8), the writer still opened part 2 with «a medium shot frames
@@ -1872,19 +1885,19 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
                               "the framing the clip ends on; any change of view is a camera move "
                               "in real time; nobody already in the scene enters again."))
             if again and all(f in again for f in need) and "non_diegetic_music" in again \
-                    and not _lost_lines(description, again):
+                    and not _lost_lines(speech_source, again):
                 out = again
     # Told rule (6), a part with no words still came back with «A distant man's voice calls:
     # <d>[English] Hello!</d>» (live 2026-10-15): a line nobody wrote is a wordless call.
     # ...but a grunt or a laugh the request asks for is written the same way, and cutting
     # it left the voice track empty: «кряхтит» came back silent (live 2026-10-17)
     from seams import yes_no
-    made_up = [x for x in _made_up_lines(description, out)
+    made_up = [x for x in _made_up_lines(speech_source, out)
                if not yes_no(ctx)("A video request: {text}\n\nThe video prompt has a character voice "
                                   "this: " + x + "\nDoes the request ITSELF name this kind of sound "
                                   "(it says someone grunts, groans, laughs, moans, sighs or screams)? "
                                   "A call, a word or an exclamation the request does not name is no.",
-                                  _SCENE_NOTE_RE.sub("", description))]
+                                  _SCENE_NOTE_RE.sub("", request))]
     if made_up:
         logger.info("Context-IR rewrite made up %d spoken line(s); made wordless", len(made_up))
         for x in made_up:
@@ -1980,7 +1993,7 @@ def fit_references(images: Sequence[str], videos: Sequence[str], audios: Sequenc
 
 def prepare_prompt(ctx, description: str, *, images: Sequence[str] = (), videos: Sequence[str] = (),
                    audios: Sequence[str] = (), seconds: float = 0.0, head: bool = False,
-                   keyframe: bool = False) -> tuple:
+                   keyframe: bool = False, mode: str = "") -> tuple:
     """(prompt H3 gets, seconds): every model call a render needs before it is submitted --
     the length read from the script, the Context-IR rewrite, speech stress. Apart from
     generate_video so a chain can prepare all its parts while the chat model is loaded and
@@ -1995,7 +2008,7 @@ def prepare_prompt(ctx, description: str, *, images: Sequence[str] = (), videos:
         description = strip_timing(description).strip() + _FRAMING_LOCK_SUFFIX
     else:
         description = _lock_framing_unless_requested(strip_timing(description), ctx)
-    mode = pick_mode(images, videos, audios, keyframe=keyframe)
+    mode = mode or pick_mode(images, videos, audios, keyframe=keyframe)
     if not seconds:
         seconds = estimate_seconds(asked, reads=dep(ctx, "script_read", None))
         logger.info("video length from the script: %.1fs", seconds)
@@ -2014,7 +2027,7 @@ def prepare_prompt(ctx, description: str, *, images: Sequence[str] = (), videos:
         if keyframe and images:
             description = _with_lock(description, _HEAD_LOCK_SUFFIX)
     if 1 <= len(images) <= 2 and not videos:     # a photo to animate, not a set of references
-        restyle = _asks_new_style(asked, ctx)
+        restyle = _asks_new_style(getattr(ctx, "video_request", "") or asked, ctx)
         description = _with_lock(description, _HEAD_START_LOCK_SUFFIX if keyframe else _START_LOCK_SUFFIX)
         if not restyle:
             description = _with_lock(description, _STYLE_LOCK_SUFFIX)
@@ -2074,6 +2087,9 @@ def generate_video(ctx, description: str, *,
     images, videos, audios = fit_references(images, videos, audios)
 
     mode = pick_mode(images, videos, audios, keyframe=keyframe)
+    if chain:
+        # Chains use native keyframes, even when the attachment router chose Ref2VA.
+        mode = "i2va" if images and int(chain[1]) <= 1 else "t2va"
     # Ref2VA's workflow carries the LightX2V Turbo LoRA baked in (see
     # workflow_video_h3_ref.json) and is distilled for 4 steps, not the plain
     # model's 8 -- an explicit caller-supplied `steps` still wins.
@@ -2082,7 +2098,8 @@ def generate_video(ctx, description: str, *,
     if not prepared:
         description, seconds = eng.prepare_prompt(ctx, description, images=images, videos=videos,
                                               audios=audios, seconds=seconds,
-                                              head=bool(context_video or context_latent), keyframe=keyframe)
+                                              head=bool(context_video or context_latent), keyframe=keyframe,
+                                              mode=mode)
     frames = seconds_to_frames(seconds)
     if context_video or context_latent:
         # the pinned head is rendered too, then trimmed: the clip grows by it

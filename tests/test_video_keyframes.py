@@ -68,6 +68,16 @@ def test_handheld_noise_is_not_a_cut_every_frame():
     assert gaps.min() >= 1.0, ts                  # never two picks inside a second
 
 
+def test_a_brief_opening_scene_is_not_lost_to_a_sharper_later_subject():
+    rng = np.random.default_rng(7)
+    opening = np.full((54, 96), 100.0, dtype=np.float32)
+    later = rng.uniform(0, 255, opening.shape).astype(np.float32)
+    frames = [(i / 6, opening if i < 2 else later) for i in range(30)]
+    times = V.key_times(frames, max_frames=4)
+    assert times[0] == 0.0 and times[-1] == round(frames[-1][0], 2), times
+    assert any(t >= 1.0 for t in times) and len(times) <= 4, times
+
+
 if __name__ == "__main__":
     import tempfile
     t = Path(tempfile.mkdtemp())
@@ -75,6 +85,7 @@ if __name__ == "__main__":
         test_key_times_face_then_step(t)
         test_static_clip_gets_anchors_not_dozens()
         test_handheld_noise_is_not_a_cut_every_frame()
+        test_a_brief_opening_scene_is_not_lost_to_a_sharper_later_subject()
     finally:
         shutil.rmtree(t, ignore_errors=True)
-    print("3/3 passed")
+    print("4/4 passed")

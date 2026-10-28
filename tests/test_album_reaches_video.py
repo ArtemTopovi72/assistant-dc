@@ -5,6 +5,7 @@ import sys
 import tempfile
 import threading
 import time
+import pytest
 
 os.environ.setdefault("F5_TEST_RUN", "1")
 try:
@@ -51,7 +52,8 @@ class StubGraph:
 
     def invoke(self, base):
         SEEN.append((base.get("user_input", ""), getattr(self.ctx, "last_image_path", None),
-                     list(getattr(self.ctx, "recent_image_paths", None) or [])))
+                     list(getattr(self.ctx, "recent_image_paths", None) or []),
+                     list(getattr(self.ctx, "reference_images", None) or [])))
         return {"final_answer": "ok", "messages": base.get("messages", [])}
 
 
@@ -95,7 +97,9 @@ def test_every_picture_of_an_album_reaches_the_agent():
     assert SEEN[-1][2] == paths, SEEN[-1]
 
 
-def test_the_album_survives_the_voice_question_rerun():
+@pytest.mark.parametrize('rerun', ['voice', 'plan'])
+@pytest.mark.parametrize('legacy', [False, True])
+def test_the_album_survives_the_voice_question_rerun(rerun, legacy):
     """The request is re-run as bare text after «стандартные голоса»: both heroes still ride."""
     import uuid
     SEEN.clear()
@@ -124,21 +128,81 @@ def test_the_album_survives_the_voice_question_rerun():
     first_id = T._log_image(sess, paths[0], label="first", src="user")
     bot._store.put(sess)
 
-    def push(**kw):
-        t = T._Task(task_id=str(uuid.uuid4()), chat_id=cid, user_text="video of the two",
+    def push(text="video of the two", **kw):
+        t = T._Task(task_id=str(uuid.uuid4()), chat_id=cid, user_text=text,
                     enqueue_ts=time.time(), **kw)
         with bot._task_lock:
             bot._pending_journal[t.task_id] = t
+        n = len(SEEN)
         bot._backend.push(t)
         end = time.monotonic() + 15
-        n = len(SEEN)
         while time.monotonic() < end and len(SEEN) == n:
             time.sleep(0.1)
 
     push(image_path=paths[0], album_paths=paths[1:])
     time.sleep(1.5)                                                # the turn saves its session after the agent
     sess = bot._get_session(cid)
-    sess.voice_choice, sess.target_image = "default", first_id      # «стандартные» pressed
+    if rerun == 'voice':
+        sess.voice_pending = "video of the two"
+        sess.voice_pending_images = [] if legacy else list(paths)
+        sess.voice_choice = "default"                            # «стандартные» pressed
+    else:
+        sess.video_plan_request = "video of the two"
+        sess.video_plan_ok = [{'prompt': 'the two together'}]      # approved plan consumed before image setup
+        sess.video_plan_images = [] if legacy else list(paths)
+        sess.video_plan_image = first_id
+        sess.voice_choice = "default"
+    if legacy:
+        sess.turn_album = paths[1:]                               # older versions stored only the extra images
+    else:
+        # An unrelated message cannot spend the pending video identity or inherit its album.
+        push(text="What is 2 plus 2?")
+        assert SEEN[-1][1:4] == (None, [], []), SEEN[-1]
+    sess.target_image = first_id
     bot._store.put(sess)
     push()                                                         # the bare-text rerun
-    assert sorted(SEEN[-1][2]) == sorted(paths), SEEN[-1]
+    assert SEEN[-1][1] == paths[0] and SEEN[-1][2] == paths, SEEN[-1]
+    assert SEEN[-1][3] == paths
+    assert sess.turn_album == paths
+
+    # A fresh attachment has its own identity, even if a voice choice remains armed.
+    fresh = os.path.join(d, 'green.png')
+    Image.new('RGB', (64, 64), 'green').save(fresh)
+    sess.voice_choice = 'default'
+    push(image_path=fresh, image_is_photo=True)
+    assert SEEN[-1][1:4] == (fresh, [fresh], []), SEEN[-1]
+
+
+@pytest.mark.parametrize('offer', ['voice', 'plan'])
+def test_pending_video_offer_persists_its_own_images_and_enqueues_its_primary(tmp_path, offer):
+    from test_tg_incoming_durability import make_bot
+    bot = make_bot(tmp_path)
+    sess = bot._get_session(101)
+    paths = []
+    for color in ('red', 'blue'):
+        path = tmp_path / f'{color}.png'
+        Image.new('RGB', (64, 64), color).save(path)
+        paths.append(str(path))
+    first = T._log_image(sess, paths[0], src='user')
+    sess.turn_image = T._log_image(sess, paths[1], src='user')
+    queued = []
+    bot._enqueue_item = lambda cid, item: queued.append(item)
+    bot._busy_note = lambda *a: None
+    bot._voice_from_request_link = lambda *a: False
+    bot.text_model = lambda *a, **kw: '{"lines": ["The two together"]}'
+    if offer == 'voice':
+        bot._offer_voices(101, sess, 'ru', 'video of the two', 2, images=paths)
+    else:
+        bot._offer_video_plan(101, sess, 'ru', 'video of the two',
+                              [{'text': 'The two together', 'sec': 1}], images=paths)
+    paths.append('a later unrelated path')
+    restored = bot._store.get(101)
+    saved = restored.voice_pending_images if offer == 'voice' else restored.video_plan_images
+    assert saved == paths[:2]
+    if offer == 'voice':
+        bot._voices_go(101, sess, 'ru')
+    else:
+        bot._cb_video_plan(101, 'vp:go')
+    assert queued[0]['image_id'] == first
+    sess.clear_context()
+    assert sess.voice_pending_images == sess.video_plan_images == []

@@ -236,14 +236,16 @@ _ASKS_SYS = (
     "counts, a named colour or glow on a body part, a named expression. ONE thing per question -- each "
     "hand its own question, never 'one hand ... and the other ...'. Not the style, the mood, the "
     "lighting quality or the realism. Reply with JSON only: {\"checks\": [{\"ask\": \"<one concrete yes/no "
-    "question about the picture>\", \"draw\": \"<the same thing as a plain statement for the image model>\"}]}, "
-    "at most 8.")
+    "question about the picture>\", \"draw\": \"<the requested condition as a plain statement for the image model>\", "
+    "\"expected\": \"yes or no\"}]}. Include exclusions: for 'no people', ask 'Are there any "
+    "people?', draw 'No people', expected 'no'. For required things expected is 'yes'. "
+    "At most 8.")
 _ASKS: dict = {}
 MAX_EDITED_MISSES = 2
 
 
 def _missing_asks(ctx, img_path: str, goal: str) -> list:
-    """[(ask, draw)] the picture does not show, each asked of the vision model on its own.
+    """[(ask, draw)] requested conditions the picture violates, checked one at a time.
 
     The whole-picture judge gave Lenin-as-Doomguy 9/10 «perfectly captures» -- standing on the
     lava, not waist-deep in it, no hand on a neck, red sunglasses for ruby eyes. Asked one at a
@@ -262,18 +264,20 @@ def _missing_asks(ctx, img_path: str, goal: str) -> list:
         except Exception:
             logger.warning("image asks: the read failed", exc_info=True)
             got = {}
-        _ASKS[goal] = [(str(c.get("ask")), str(c.get("draw") or c.get("ask"))) for c in (got.get("checks") or [])
+        _ASKS[goal] = [(str(c.get("ask")), str(c.get("draw") or c.get("ask")),
+                        "no" if str(c.get("expected", "yes")).strip().lower() == "no" else "yes")
+                       for c in (got.get("checks") or [])
                        if isinstance(c, dict) and str(c.get("ask") or "").strip()][:8]
         while len(_ASKS) > 64:
             _ASKS.pop(next(iter(_ASKS)))
     missing = []
-    for ask, draw in _ASKS[goal]:
+    for ask, draw, expected in _ASKS[goal]:
         try:
             ans = vision_model(ctx)(ctx, image_paths=[("Picture:", img_path)], temperature=0.0, max_tokens=5,
                                     user_text=ask + " Look closely. Answer yes or no.") or ""
         except Exception:
             continue
-        if ans.strip().lower().startswith("no"):
+        if ans.strip().lower().startswith("yes" if expected == "no" else "no"):
             missing.append((ask, draw))
     return missing
 
@@ -356,9 +360,9 @@ def evaluate_image(ctx, img_path: str, goal: str, current_prompt: str,
     missing = dep(ctx, "_missing_asks", _missing_asks)(ctx, img_path, goal)
     data = dict(data, missing=len(missing))
     if missing:
-        logger.info("Image eval: not in the picture: %s", "; ".join(a for a, _ in missing)[:300])
+        logger.info("Image eval: unmet conditions: %s", "; ".join(a for a, _ in missing)[:300])
         data.update(verdict="refine", score=min(int(data.get("score") or 0), 6),
-                    reason="not in the picture: " + "; ".join(a for a, _ in missing),
+                    reason="unmet conditions: " + "; ".join(a for a, _ in missing),
                     prompt_patch=" ".join(d.rstrip(".") + "." for _, d in missing))
     return data
 

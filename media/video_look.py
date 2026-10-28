@@ -219,6 +219,9 @@ def key_times(frames: list, max_frames: int = MAX_FRAMES, change: float = SHOT_C
     if len(picks) == 1 and total >= 3 * EVERY_SECONDS:
         anchors = sample_times(total, max(EVERY_SECONDS, total / max(2, max_frames - 1)), max_frames)
         picks = sorted(set(picks) | set(anchors))[:max_frames]
+    if max_frames >= 2:
+        # Sharpness must not erase a brief opening or ending scene.
+        picks = sorted(set([frames[0][0], *picks[1:-1], total]))
     return sorted(round(t, 2) for t in picks)
 
 

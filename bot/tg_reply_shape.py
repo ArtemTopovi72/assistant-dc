@@ -30,7 +30,7 @@ def links_read(user_text: str) -> list:
 
 
 # "(source: example.com)", "(источник: example.com)", "(sources: a.com, b.org)"
-_CITE_RE = re.compile(r"\(\s*(?:source|sources|источник|источники)\s*:\s*([^)]+?)\s*\)", re.IGNORECASE)
+_CITE_RE = re.compile(r"\(\s*(?:source|sources|источник|источники)\s*:\s*(https?://\S+|[^)]+?)\s*\)", re.IGNORECASE)
 # ...and the bare form the model also writes: "2390 ₽ (hermitage-museum.ru)".
 _BARE_RE = re.compile(r"\(\s*((?:www\.)?(?:[\w-]+\.)+(?:[a-z]{2,}|xn--[a-z0-9-]+)(?:\s*[,;]\s*(?:www\.)?(?:[\w-]+\.)+(?:[a-z]{2,}|xn--[a-z0-9-]+))*)\s*\)", re.IGNORECASE)
 MAX_SOURCES = 6
@@ -81,21 +81,26 @@ def shape_search_reply(reply_html: str, queries: list, sources: list, lang: str 
     links = [s for s in sources or [] if s.get("kind") == "link"]
     sources = [s for s in sources or [] if s.get("kind") != "link"]
     by_dom: dict = {}
+    by_url = {s.get("url", ""): s for s in sources if s.get("url")}
     for s in sources:
-        by_dom.setdefault(_dom_key(s.get("domain", "")), s)
+        by_dom.setdefault(_dom_key(s.get("domain", "")), []).append(s)
 
     cited: list = []          # sources in the order the answer cites them
 
     def _mark(m: re.Match) -> str:
         marks = []
-        for dom in re.split(r"[,;]\s*", m.group(1)):
+        source = _html.unescape(m.group(1)).strip()
+        is_url = source.lower().startswith(("https://", "http://"))
+        for dom in ([source] if is_url else re.split(r"[,;]\s*", source)):
             k = _dom_key(dom)
-            s = by_dom.get(k)
-            if s is None:
+            s = by_url.get(dom) if is_url else None
+            if not is_url:
                 # "(source: wikipedia.org)" for a ru.wikipedia.org page would stay
                 # raw in the reply: match on the domain suffix.
-                s = next((v for d, v in by_dom.items()
-                          if k and (d.endswith("." + k) or k.endswith("." + d))), None)
+                matches = by_dom.get(k) or [v for d, pages in by_dom.items()
+                            if k and (d.endswith("." + k) or k.endswith("." + d)) for v in pages]
+                pages = {v.get("url", ""): v for v in matches}
+                s = next(iter(pages.values())) if len(pages) == 1 else None
             if s is None:
                 continue
             if s not in cited:
@@ -109,13 +114,14 @@ def shape_search_reply(reply_html: str, queries: list, sources: list, lang: str 
     # whatever source happened to be listed first: «cbr.ru [1]» over a list that
     # held only checko.ru.
     reply_html = re.sub(r"[ \t]*(?<!\w)\[\d{1,2}\]", "", reply_html or "")
+    has_citations = bool(_CITE_RE.search(reply_html) or _BARE_RE.search(reply_html))
     body = _BARE_RE.sub(lambda m: _mark(m) or m.group(0), _CITE_RE.sub(_mark, reply_html))
     body = re.sub(r"[ \t]+([.,;:!?])", r"\1", body)       # "fact ." after a dropped mark
     body = re.sub(r"\s+(\[\d+\])", r" \1", body)          # "text [1]" not "text  [1]"
     # The list is what the answer rests on. Padded with the other hits it listed a Norfolk,
     # Virginia museum under «Эрмитаж», and under a meme that cited nothing «Human leg --
     # Wikipedia» and refugee statistics (2026-10-22).
-    listed = (cited or _used_sources(ctx, body, sources))[:MAX_SOURCES]
+    listed = (cited or ([] if has_citations else _used_sources(ctx, body, sources)))[:MAX_SOURCES]
 
     head = ""
     for s in links:      # «📄 Прочитал: title — domain», one line per page read

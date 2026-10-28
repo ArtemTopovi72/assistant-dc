@@ -263,6 +263,58 @@ def test_a_prepared_part_calls_no_model():
     assert r["reason"] == "stop"
 
 
+def test_photo_chain_rewrites_for_first_frame_conditioning_and_keeps_camera_motion(tmp_path):
+    still = tmp_path / "balloon.png"
+    still.write_bytes(b"image")
+    rewritten = []
+
+    def rewrite(ctx, prompt, **kw):
+        rewritten.append((prompt, kw["mode"]))
+        return prompt
+
+    def stop(*a, **kw):
+        raise V.VideoUnavailable("stop before render")
+
+    ctx = types.SimpleNamespace(
+        yes_no=lambda *a, **kw: True,
+        video_engine=Over(V, engine_available=lambda ctx: (True, ""),
+                          _context_ir_on=lambda: True, VIDEO_SPEECH_STRESS=False,
+                          to_context_ir=rewrite, build_chain_part=stop))
+    result = V.generate_video(ctx, "A slow camera push-in on the balloon.",
+                              images=[str(still)], seconds=5.17, chain=("test", 1))
+    assert result["reason"] == "stop before render"
+    assert rewritten[0][1] == "i2va"
+    assert "camera push-in" in rewritten[0][0]
+    assert V._FRAMING_LOCK_SUFFIX not in rewritten[0][0]
+
+
+def test_nonchain_references_keep_full_reference_prompt_family():
+    modes = []
+    ctx = types.SimpleNamespace(
+        yes_no=lambda *a, **kw: True,
+        video_engine=Over(V, _context_ir_on=lambda: True, VIDEO_SPEECH_STRESS=False,
+                          to_context_ir=lambda ctx, d, **kw: modes.append(kw["mode"]) or d))
+    V.prepare_prompt(ctx, "A slow camera push-in.", images=["one.png"], seconds=5.17)
+    V.prepare_prompt(ctx, "Two people speak.", images=["one.png", "two.png"],
+                     audios=["voice.wav"], seconds=5.17)
+    assert modes == ["ref2va", "ref2va"]
+
+
+def test_multipart_chain_preparation_uses_the_native_conditioning_family(tmp_path):
+    prepared = []
+    rig = _Rig(tmp_path, prepare_prompt=lambda ctx, d, **kw: prepared.append(kw) or (d, 6.0),
+               drawn_over=lambda *a: False)
+    still = tmp_path / "balloon.png"
+    still.write_bytes(b"image")
+    result = H._handle_generate_video(rig.ctx(text_model=lambda *a, **kw: "", speech_ok=lambda *a: True),
+                                      {"image_path": str(still)},
+                                      {"description": LONG.replace("«", "").replace("»", ""), "use_current_images": True})
+    assert len(prepared) > 1
+    assert prepared[0].get("mode") == "i2va"
+    assert all(p.get("mode") == "t2va" for p in prepared[1:])
+    assert "Mode: image to video" in result
+
+
 def test_later_parts_see_the_hero_reference():
     """Parts 2-5 of the BAR clip ran with no picture and each had another man."""
     ctx = types.SimpleNamespace(video_engine=Over(V, _upload=lambda p, k="image": "hero.jpg"))

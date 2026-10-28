@@ -255,6 +255,7 @@ class _Session:
         self.anim_voice_slot: int = int(d.get("anim_voice_slot") or 0)
         # a clip request waiting for «свои голоса / стандартные», and the answer
         self.voice_pending: str = d.get("voice_pending", "")
+        self.voice_pending_images: list = list(d.get("voice_pending_images") or [])
         # 🎬 a multi-part clip waiting for the user's OK (tg_video_plan): its parts
         # [{text, sec}], the request to rerun, and the approved parts for that rerun
         self.video_plan: list = list(d.get("video_plan") or [])
@@ -262,6 +263,7 @@ class _Session:
         self.video_plan_ok: list = list(d.get("video_plan_ok") or [])
         # the picture the plan was made from: ▶ Render animates it, not whatever came later
         self.video_plan_image: str = d.get("video_plan_image", "")
+        self.video_plan_images: list = list(d.get("video_plan_images") or [])
         # 📚 the voice library (tg_voice_library) and the voice waiting for a name
         self.voices: list = list(d.get("voices") or [])
         self.voice_naming: str = d.get("voice_naming", "")
@@ -442,9 +444,11 @@ class _Session:
             self.cast_state, self.cast_pics, self.cast_acts = "", [], []
             self.anim_voices = []
             self.voice_pending = ""
+            self.voice_pending_images = []
             self.voice_choice = ""
             self.video_plan, self.video_plan_request, self.video_plan_ok = [], "", []
             self.video_plan_image = ""
+            self.video_plan_images = []
             self.voice_naming = ""
             self.lyrics_state = ""
             self.song_draft = ""
@@ -561,10 +565,12 @@ class _Session:
                 "cast_acts":           self.cast_acts,
                 "anim_voice_slot":     self.anim_voice_slot,
                 "voice_pending":       self.voice_pending,
+                "voice_pending_images": self.voice_pending_images,
                 "video_plan":          self.video_plan,
                 "video_plan_request":  self.video_plan_request,
                 "video_plan_ok":       self.video_plan_ok,
                 "video_plan_image":    self.video_plan_image,
+                "video_plan_images":   self.video_plan_images,
                 "voices":              self.voices,
                 "voice_naming":        self.voice_naming,
                 "voice_choice":        self.voice_choice,

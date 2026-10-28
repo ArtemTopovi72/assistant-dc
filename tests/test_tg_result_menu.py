@@ -186,3 +186,34 @@ def test_synthesized_voice_restores_menu(tmp_path):
         speakable=lambda *a: 'hello', post_process_answer=lambda text: text))
     assert bot._send_voice(ctx, 7, 'hello')
     assert bot.messages[-1][2] == bot._state_kb(bot.sess)
+
+
+@pytest.mark.parametrize('flush', [False, True])
+def test_completion_uses_this_results_delivered_limitations(tmp_path, flush):
+    bot = Bot(tmp_path)
+    bot.sess.last_task_text = 'Сними видео с плавным наездом камеры'
+    actual = 'Видео готово. Плавное приближение камеры не проявилось.'
+    stale = 'Предыдущий ролик: камера двигалась идеально.'
+    calls = []
+    def model(ctx, system, user, **kw):
+        data = json.loads(user)
+        calls.append(data)
+        if actual in data.get('response', ''):
+            return 'Вот ваше видео; приближение камеры не получилось.'
+        return 'Вот ваше видео с плавным наездом камеры.'
+    bot.text_model = model
+    # Prior turns and other chats must never become evidence for this result.
+    with tg_transport.result_menu(bot, 7):
+        TransportMixin._send_text(bot, 7, stale)
+    with tg_transport.result_menu(bot, 7):
+        TransportMixin._send_text(bot, 8, stale)
+        TransportMixin._send_text(bot, 7, actual)
+        bot._attach_feedback(7, accepted(), 'video', 'internal_render_123.mp4')
+        bot.sess.menu = 'draw'
+        if flush:
+            tg_transport.flush_result_menu(bot, 7)
+    assert bot.messages[-1][1] == 'Вот ваше видео; приближение камеры не получилось.'
+    assert bot.messages[-1][2] == bot._state_kb(bot.sess)
+    assert len(calls) == 1
+    assert stale not in calls[0].get('response', '')
+    assert 'internal_render_123' not in json.dumps(calls)

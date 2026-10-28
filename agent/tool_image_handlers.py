@@ -1560,13 +1560,13 @@ def _check_joins(ctx, joins: list) -> str:
     return "" if _says_none(ans) else ans[:400]
 
 
-def _check_actions(ctx, path: str, parts: list) -> str:
-    """The script's actions against the finished clip, in ONE vision call on frames spread over it.
+def _check_actions(ctx, path: str, parts: list, references=()) -> str:
+    """The current request against the finished clip, in ONE vision call on frames spread over it.
     The reply said «Готово! швыряет шапку» over a clip where the hat stayed on (live 2026-10-18),
     and the user's own words were «не вижу чтобы он срал»: the writer of the reply saw the script,
     never the clip. Returns the actions the frames do not show, "" when all are there, nothing
     was asked or no model answered. Skipped for what cannot be judged: no script, no frames."""
-    script = " ".join(str(p).strip() for p in parts if p)
+    script = getattr(ctx, "video_request", "") or " ".join(str(p).strip() for p in parts if p)
     for rule in (video_mod_rules(ctx)):
         script = script.replace(rule, "")
     script = " ".join(script.split())[:900]
@@ -1582,16 +1582,19 @@ def _check_actions(ctx, path: str, parts: list) -> str:
             return ""
         ans = " ".join((vision_model(ctx)(
             ctx, temperature=0.0, max_tokens=200,
-            image_paths=[(f"{t:.1f}s:", str(f)) for t, f in frames],
-            user_text="These frames are in time order from ONE video. The script it was made from:\n"
+            image_paths=[(f"Source image {i}:", p) for i, p in enumerate(references, 1)]
+                        + [(f"{t:.1f}s:", str(f)) for t, f in frames],
+            user_text="These frames are in time order from ONE video. The user's request or approved plan:\n"
                       f"{script}\n"
-                      "List, in a few words each, the ACTIONS of the script that the frames do not show "
+                      "Source images show the original appearance; any changes the user requests take precedence. "
+                      "Judge only this request, never requirements invented by a tool draft or earlier chat. "
+                      "List, in a few words each, requested visible actions or appearance constraints the frames fail "
                       "(an object that never moves or leaves, a person who never does it). Speech and "
                       "sound cannot be seen: ignore them. Answer NONE when every action is visible.") or "").split())
     except Exception:
         logger.warning("video actions: the check failed", exc_info=True)
         return ""
-    logger.info("video actions: checked against the script -> %s", ans[:200] or "no answer")
+    logger.info("video actions: checked against the request -> %s", ans[:200] or "no answer")
     return "" if _says_none(ans) else ans[:400]
 
 
@@ -1614,6 +1617,9 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     video_mod = _video(ctx)
     ctx.video_part = ""             # a render that failed mid-chain left its «(6/6)» behind
     ctx.video_made = ""             # the finished clip of this call, for a turn that runs out of time
+    from prompt_guard import user_words
+    ctx.video_request = user_words(str(state.get("user_input_original") or state.get("user_input") or "")).strip()
+    ctx.video_speech = ""
 
     description = (args.get("description") or "").strip()
     if not description:
@@ -1828,6 +1834,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     speech = ""             # the words the user dictated, whole: what every part together must say
     if not continuing:
         speech = video_mod.dictated_speech(_said, "", ctx)
+        ctx.video_speech = speech
         words = speech if speech and video_mod._flat_line(speech) not in video_mod._flat_line(raw) else ""
         if words:
             logger.info("generate_video: the user's own speech added to the script (%d words)", len(words.split()))
@@ -1994,6 +2001,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     approved = [p for p in (getattr(ctx, "video_plan_parts", None) or []) if p]
     ctx.video_plan_parts = []
     if approved:
+        ctx.video_request = "\n".join(str(p) for p in approved)
+        ctx.video_speech = ""
         # the first part stands in the description now, not the whole script: looking for
         # the script dropped the continuation prefix and the Russian-speech rule, and the
         # bridge then cut the prefix's length off the part itself (live 2026-10-13)
@@ -2037,12 +2046,13 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     # renders below then run with the card held (and the model out) start to finish.
     prepped = []
     if chain_id and len(parts) > 1:
-        prepped = [video_mod.prepare_prompt(ctx, description, images=images, seconds=secs[0] if secs else 0.0)]
+        prepped = [video_mod.prepare_prompt(ctx, description, images=images, seconds=secs[0] if secs else 0.0,
+                                           mode="i2va" if images and chain_idx <= 1 else "t2va")]
         voices = video_mod.voices_of(prepped[0][0])
         voices = f"Voices so far, the same if they speak again: {voices} " if voices else ""
         prepped += [video_mod.prepare_prompt(
             ctx, video_mod.CONTINUE_CTX_PREFIX + video_mod.with_scene(p, voices + " ".join(parts[:i])),
-            seconds=secs[i] if i < len(secs) else 0.0) for i, p in enumerate(parts[1:], start=1)]
+            seconds=secs[i] if i < len(secs) else 0.0, mode="t2va") for i, p in enumerate(parts[1:], start=1)]
     # With voices the first picture rides every part too: each part starts from the last
     # frame of the one before, and the face drifted a little further every time.
     # ...and so do all of them: with two heroes on two pictures, parts 2+ saw only the first
@@ -2056,6 +2066,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     elif head:
         logger.info("generate_video: talking-head mode, the still is frame 0 of every part, the voice comes after")
     mode = video_mod.pick_mode(images, videos, audios, keyframe=head)
+    if chain_id:
+        mode = "i2va" if images and chain_idx <= 1 else "t2va"
     tags = video_mod.reference_tags(len(images) if mode == "ref2va" else 0, len(videos), len(audios))
     logger.info("Tool: generate_video(mode=%s, %d image(s), %d video(s)) %s",
                 mode, len(images), len(videos), description[:80])
@@ -2184,14 +2196,14 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     # A talking head acts with its mouth only and its camera is locked: checked against the agent's
     # «the camera zooms in», the note said an action was missing and the reply told the user to
     # «pick a voice variant» (live 2026-10-20)
-    ctx.video_action_note = "" if continuing or head else _check_actions(ctx, path, parts)
+    ctx.video_action_note = "" if continuing or head else _check_actions(ctx, path, parts, references=images)
     state["video_path"] = path
     state["video_status"] = "success"
     state["video_seconds"] = result.get("seconds")
     ctx.last_video_path = path
     ctx.video_made = path           # last_video_path is each PART's clip while the parts render
-    ctx.last_video_prompt = description
-    dep(ctx, "_remember", _remember)(ctx, state, "video", f"Video for: {description}", {"path": path})
+    ctx.last_video_prompt = ctx.video_request or description
+    dep(ctx, "_remember", _remember)(ctx, state, "video", f"Video for: {ctx.last_video_prompt}", {"path": path})
 
     used = ""
     if tags:

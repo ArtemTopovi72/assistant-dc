@@ -9,7 +9,7 @@ values arrive typed ("8" -> 8), and malformed calls turn into a uniform
 and one `ToolSpec`; `TOOL_SCHEMAS` and `execute_tool` both derive from `TOOLS`.
 """
 from seams import choice, yes_no, text_model
-from seams import dep, module
+from seams import dep, module, Over
 import logging
 import os
 
@@ -127,7 +127,9 @@ def _handle_search(ctx, state, args: dict) -> str:
             query = f"{query} {_year}"
     ctx.set_stage("Searching the web")
     logger.info("Tool: search(%s)", query)
-    result = dep(ctx, "run_web_search", run_web_search)(ctx, query)
+    search_ctx = Over(ctx, search_request=(state or {}).get("user_input_original")
+                      or (state or {}).get("user_input") or query)
+    result = dep(ctx, "run_web_search", run_web_search)(search_ctx, query)
     ctx.remember("search", f"Query: {query}\n{result[:500]}", {"query": query})
     # Don't fence our own status sentinels (no-results / failed / insufficient) —
     # only real external page text should be framed as UNTRUSTED data.
