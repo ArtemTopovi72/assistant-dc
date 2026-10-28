@@ -10,11 +10,9 @@ Also read here: an explicit length («на 1200 слов», «подробно»
 about the earlier conversation, a child's medicine dose with the weight, and a
 coding ask.
 """
-from seams import dep, yes_no, text_model
+from seams import dep, yes_no, text_model, intent_read
 import logging
 import os
-import threading
-from collections import OrderedDict
 from typing import List, Literal
 
 from pydantic import BaseModel, Field, ValidationError
@@ -73,8 +71,6 @@ Copy letters, words, target and items EXACTLY from the message."""
 SYSTEM = ("You read ONE user message and fill a JSON object. Do NOT answer the message.\nFields:\n"
           + NOTES + "\nReply with the JSON object only.")
 
-_CACHE: "OrderedDict[str, dict]" = OrderedDict()
-_LOCK = threading.Lock()
 
 
 def _validate(data) -> AskRead:
@@ -126,23 +122,32 @@ def _grounded(out: dict, text: str) -> dict:
 
 
 def read(text: str, ctx=None) -> dict:
+    import intent
+    from copy import deepcopy
+    turn = intent.current_turn()
+    if turn is None:
+        return _read(text, ctx)
+    with turn.lock:
+        key = (text or "").strip()
+        if key not in turn["asks"]:
+            turn["asks"][key] = _read(text, ctx)
+        return deepcopy(turn["asks"][key])
+
+
+def _read(text: str, ctx=None) -> dict:
     text = (text or "").strip()
     if not text:
         return dict(FALLBACK)
-    if os.getenv("F5_TEST_RUN") and not os.getenv("INTENT_LIVE"):
+    if os.getenv("F5_TEST_RUN") and not (os.getenv("INTENT_LIVE") or dep(ctx, "live", False)):
         own = dep(ctx, "ask_read", None)   # suites: ask_read(text) -> partial dict
         got = own(text) if own else None
         return _grounded({**FALLBACK, **_validate(got).model_dump()}, text) if got else dict(FALLBACK)
-    with _LOCK:
-        if text in _CACHE:
-            return dict(_CACHE[text])
     try:
         import llm
         from utils import safe_json_from_llm
         # the message's one read (agent/intent.py) carries these fields; a read
         # of its own only when that one failed
-        import intent
-        got = intent.read(ctx, text).get("ask")
+        got = intent_read(ctx)(ctx, text).get("ask")
         if not isinstance(got, dict):
             raw = text_model(ctx)(None, SYSTEM, "Message (do NOT answer it):\n«%s»" % text[:4000],
                                       temperature=0.0, max_tokens=400) or ""
@@ -159,8 +164,4 @@ def read(text: str, ctx=None) -> dict:
         logger.warning("ask_read: model read failed", exc_info=True)
         return dict(FALLBACK)
     logger.info("ask_read: %r -> %s", text[:80], {k: v for k, v in out.items() if v not in ("", 0, 0.0, False, [], "none")})
-    with _LOCK:
-        _CACHE[text] = out
-        while len(_CACHE) > 256:
-            _CACHE.popitem(last=False)
     return out

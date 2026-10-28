@@ -97,17 +97,20 @@ check("the password message is deleted from the chat", 42 in bot.deleted,
       str(bot.deleted))
 check("registration state is cleared", bot._get_session(CID).reg_state == "")
 
-# «нарисуй кота» typed to «напиши своё имя» must not become the account's name.
+# Display names and nicknames are user-chosen; registration does not wait for a semantic classifier.
 import types as _types
 from fakes import reads
 CID_REQ = 999604
 bot._user_gate(CID_REQ, msg(CID_REQ, "hi"))
-bot.reads = _types.SimpleNamespace(**reads(yes=lambda q, t: t != "нарисуй кота"))
+bot.reads = _types.SimpleNamespace(**reads(yes=lambda q, t: False))
 try:
-    bot._user_gate(CID_REQ, msg(CID_REQ, "нарисуй кота"))
-    check("a request typed as the name is not taken as the name",
-          bot._get_session(CID_REQ).reg_state == "awaiting_name",
+    bot._user_gate(CID_REQ, msg(CID_REQ, "Мастер по котам"))
+    check("a multi-word nickname is accepted without a model decision",
+          bot._get_session(CID_REQ).reg_state == "awaiting_password"
+          and bot._get_session(CID_REQ).reg_name == "Мастер по котам",
           bot._get_session(CID_REQ).reg_state)
+    bot._user_gate(CID_REQ, msg(CID_REQ, "/cancel"))
+    bot._user_gate(CID_REQ, msg(CID_REQ, "hi"))
     bot._user_gate(CID_REQ, msg(CID_REQ, "Анна Мария"))
     check("a two-word real name still passes",
           bot._get_session(CID_REQ).reg_state == "awaiting_password",

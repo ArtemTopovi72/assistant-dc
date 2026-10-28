@@ -227,7 +227,7 @@ _R = None
 check("model down -> not weather (the full loop answers)", W.weather_request("какая погода в Казани завтра?", _today, ctx=_R) == {})
 _src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(W.__file__))), "bot/tg_resolve.py"), encoding="utf-8").read()
 check("the router tries the follow-up only inside the weather menu",
-      'sess.menu == "weather"' in _src and "_tg_weather.weather_followup(raw, ctx=self.reads)" in _src)
+      'input_menu == "weather"' in _src and "_tg_weather.weather_followup(raw, ctx=self.reads)" in _src)
 src = inspect.getsource(sys.modules["tg_resolve"])
 check("the resolver consults weather_request before the agent", "weather_request(raw, ctx=self.reads)" in src)
 

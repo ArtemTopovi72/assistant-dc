@@ -135,7 +135,7 @@ for name, kw in {"audio": dict(audio=A), "voice": dict(voice={"file_id": "V", "d
     arm(); GO.clear()
     bot._dispatch(m(**kw))
     ok = wait(lambda: GO, 6)
-    check(f"a second song as {name}: the voice remix starts", ok and GO and "song2" in GO[0][-1], GO)
+    check(f"a second song as {name}: the voice remix starts", ok and GO and "song2" in GO[0][4], GO)
     check(f"...and the first song is the voice ({name})", ok and GO and GO[0][2].endswith(".mp3"), GO)
 # A YouTube link is the song too, then the words as usual.
 import tg_links

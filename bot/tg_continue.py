@@ -17,6 +17,7 @@ How the continuation is built (see docs/video_continuation_sota_2026-10.md):
 import os
 import subprocess
 import uuid
+from seams import dep
 
 TAIL_SECONDS = 2.5          # the reference clip: its motion and its sound (longer = older states)
 FRAME_WINDOW = 3.0          # seconds looked at for the start frame
@@ -164,11 +165,19 @@ class ContinueMixin:
         fid = (ph or {}).get("file_id") or (doc.get("file_id") if (doc.get("mime_type") or "").startswith("image/") else None)
         if not fid:
             return False
+        generation = msg.get("_context_generation", getattr(sess, "context_generation", 0))
+        flow_revision = getattr(sess, "flow_revision", lambda _: 0)
+        revision = msg.get("_flow_revision", flow_revision("continue_state"))
+        source = getattr(sess, "continue_src", "")
         people = list(getattr(sess, "continue_people", None) or [])
         if len(people) >= MAX_PEOPLE:
             self._send_text(chat_id, tg_bot._t("continue_people_full", lang))
             return True
         data = self._dl_bytes(fid)
+        if (generation != getattr(sess, "context_generation", 0) or sess.continue_state != "want_text"
+                or revision != flow_revision("continue_state")
+                or source != getattr(sess, "continue_src", "")):
+            return True
         if not data:
             self._send_text(chat_id, tg_bot._t("continue_fail_dl", lang))
             return True
@@ -185,11 +194,19 @@ class ContinueMixin:
         return True
 
     def _continue_take_person_clip(self, chat_id: int, sess, lang: str, msg: dict, fid: str) -> bool:
+        generation = msg.get("_context_generation", getattr(sess, "context_generation", 0))
+        flow_revision = getattr(sess, "flow_revision", lambda _: 0)
+        revision = msg.get("_flow_revision", flow_revision("continue_state"))
+        source = getattr(sess, "continue_src", "")
         people = list(getattr(sess, "continue_people", None) or [])
         if len(people) >= MAX_PEOPLE:
             self._send_text(chat_id, tg_bot._t("continue_people_full", lang))
             return True
         data = self._dl_bytes(fid)
+        if (generation != getattr(sess, "context_generation", 0) or sess.continue_state != "want_text"
+                or revision != flow_revision("continue_state")
+                or source != getattr(sess, "continue_src", "")):
+            return True
         tag = uuid.uuid4().hex[:8]
         clip = os.path.join(self._continue_dir(chat_id), f"person_{tag}.mp4")
         path = clip[:-4] + ".jpg"
@@ -198,8 +215,13 @@ class ContinueMixin:
                 fh.write(data)
         # A кружок frame is a disc with a «TELEGRAM» mark on its rim: given whole, the video
         # model pasted that disc into the corner of every frame (live 2026-10-12).
-        if not (data and (face_frame(clip, path, circle=bool(msg.get("video_note")))
-                          or seed_frame(clip, path))):
+        ready = data and (dep(self, "face_frame", face_frame)(clip, path, circle=bool(msg.get("video_note")))
+                          or dep(self, "seed_frame", seed_frame)(clip, path))
+        if (generation != getattr(sess, "context_generation", 0) or sess.continue_state != "want_text"
+                or revision != flow_revision("continue_state")
+                or source != getattr(sess, "continue_src", "")):
+            return True
+        if not ready:
             self._send_text(chat_id, tg_bot._t("continue_fail_dl", lang))
             return True
         people.append(path)
@@ -212,7 +234,8 @@ class ContinueMixin:
         return True
 
     def _continue_take_media(self, chat_id: int, sess, lang: str, msg: dict) -> bool:
-        if getattr(sess, "continue_state", "") not in ("want_video", "want_text"):
+        state = getattr(sess, "continue_state", "")
+        if state not in ("want_video", "want_text"):
             return False
         fid = self._video_of(msg)
         if not fid:
@@ -222,7 +245,13 @@ class ContinueMixin:
             # picture. A кружок of «the guy with the glove» replaced the grandma's GIF and
             # the continuation went on from the guy, the grandma nowhere (live 2026-10-12).
             return self._continue_take_person_clip(chat_id, sess, lang, msg, fid)
+        generation = msg.get("_context_generation", getattr(sess, "context_generation", 0))
+        flow_revision = getattr(sess, "flow_revision", lambda _: 0)
+        revision = msg.get("_flow_revision", flow_revision("continue_state"))
         data = self._dl_bytes(fid)
+        if (generation != getattr(sess, "context_generation", 0) or sess.continue_state != state
+                or revision != flow_revision("continue_state")):
+            return True
         if not data:
             self._send_text(chat_id, tg_bot._t("continue_fail_dl", lang))
             return True
@@ -233,7 +262,11 @@ class ContinueMixin:
             fh.write(data)
         frame = os.path.join(d, f"seed_{tag}.jpg")
         tail = os.path.join(d, f"tail_{tag}.mp4")
-        if not (seed_frame(src, frame) and cut_tail(src, tail)):
+        ready = dep(self, "seed_frame", seed_frame)(src, frame) and dep(self, "cut_tail", cut_tail)(src, tail)
+        if (generation != getattr(sess, "context_generation", 0) or sess.continue_state != state
+                or revision != flow_revision("continue_state")):
+            return True
+        if not ready:
             self._send_text(chat_id, tg_bot._t("continue_fail_dl", lang))
             return True
         # the start frame is the picture the next shot starts from, like an uploaded photo
@@ -248,14 +281,21 @@ class ContinueMixin:
     def _continue_take_text(self, chat_id: int, sess, lang: str, text: str) -> bool:
         if getattr(sess, "continue_state", "") != "want_text" or not (text or "").strip():
             return False
+        generation = getattr(sess, "context_generation", 0)
         sess.continue_state = ""         # disarmed before the slow part
+        flow_revision = getattr(sess, "flow_revision", lambda _: 0)
+        revision = flow_revision("continue_state")
         # A submenu armed before the clip (🔎 Поиск) would turn this into "search the
         # web for: animate this photo: …" -- the bot would chat about the
         # search instead of rendering.
         sess.pending_prefix, sess.menu = "", ""
         self._store.put(sess)
+        if (generation != getattr(sess, "context_generation", 0) or sess.continue_state
+                or revision != flow_revision("continue_state")):
+            return True
         # the ordinary animate request; tg_tasks hands the clip's tail to generate_video
-        self._enqueue_item(chat_id, {"type": "text", "text": "animate this photo: " + text.strip()})
+        self._enqueue_item(chat_id, {"type": "text", "text": "animate this photo: " + text.strip(),
+                                    "_context_generation": generation})
         return True
 
 

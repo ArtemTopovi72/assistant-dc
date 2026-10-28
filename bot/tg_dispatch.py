@@ -345,28 +345,17 @@ class DispatchMixin:
             lang = self._lang(sess)
             self._stop_and_report(chat_id, sess, lang)
             return
-        # «пришли файлом» / "as a file": the model has no way to send one and
-        # answered with right-click advice.
-        # a keyboard label is never that request: «📚 Документы» was read as one and
-        # sent the last picture as a file instead of opening the menu
-        if len(text) <= 60 and not _is_button(text) and _asks_as_file(text, ctx=self.reads):
-            sess = self._get_session(chat_id)
-            rep = (msg.get("reply_to_message") or {}).get("message_id")
-            e = tg_bot._image_by_msg(sess, rep) if rep else None
-            if not e:                  # no reply: only a picture from the last hour
-                last = (getattr(sess, "image_log", None) or [None])[-1]
-                e = last if last and time.time() - float(last.get("ts") or 0) < 3600 else None
-            if e and os.path.exists(e.get("path", "")) and self._send_document(chat_id, e["path"], feedback=""):
-                return
-            # A reply to the user's OWN photo: it is not in image_log under that message id.
-            _ph = (msg.get("reply_to_message") or {}).get("photo") or []
-            _data = self._dl_bytes(_ph[-1]["file_id"]) if _ph else None
-            if _data:
-                tg_bot._IMAGE_DIR.mkdir(parents=True, exist_ok=True)
-                _p = tg_bot._IMAGE_DIR / f"tg_{int(time.time() * 1000)}.jpg"
-                _p.write_bytes(_data)
-                if self._send_document(chat_id, str(_p), feedback=""):
-                    return
+        if re.match(r"/[A-Za-z0-9_]{1,32}(?:@\w+)?(?:\s|$)", text):
+            self._handle_command(chat_id, text)
+            return
+        key = tg_bot._LABEL2KEY.get(text, '') if not _fwd else ''
+        direct = tg_bot._DIRECT_KB.get(key, '')
+        if (direct.startswith('__menu_') or direct in ('__clear__', '__randomizer_menu__')
+                or key in tg_bot._PROMPT_KB):
+            self._resolve_and_push(chat_id, [{'type': 'text', 'text': text,
+                '_message_id': msg.get('message_id', 0),
+                '_context_generation': sess0.context_generation}])
+            return
         # ── "this one" ────────────────────────────────────────────────────────
         # A Telegram REPLY is the user pointing at something. Nothing read it
         # before, so "describe this picture" sent as a reply to a specific image
@@ -377,15 +366,10 @@ class DispatchMixin:
         # The resolved id travels WITH the item (into task.image_id), not just
         # onto sess.target_image — see _resolve_reply_target's docstring for
         # why a lazy re-read at task-execution time is racy.
-        _reply_image_id = self._resolve_reply_target(chat_id, msg)
+        _reply_image_id = self._resolve_reply_target(chat_id, msg, download=False)
         if text:
             text = (msg.get("text") or "").strip()       # a forwarded reply gains «in reply to»
 
-        # Only a real command token: "/etc/nginx/nginx.conf почему не
-        # работает?" is a question, and was answered "unknown command".
-        if re.match(r"/[A-Za-z0-9_]{1,32}(?:@\w+)?(?:\s|$)", text):
-            self._handle_command(chat_id, text)
-            return
         if text:
             # A FORWARDED text is material the user wants something done with,
             # not the user talking to the bot: fed in bare, a forwarded channel
@@ -394,11 +378,28 @@ class DispatchMixin:
             self._enqueue_item(chat_id,
                                {"type": "text", "text": text, "image_id": _reply_image_id,
                                 "quote": msg.get("_quote", ""),
+                                'reply_photo': msg.get('_reply_photo'),
                                 "forwarded": tg_bot._is_forwarded(msg),
                                 "own": bool(msg.get("_fwd_own")),
                                 "author": _fwd_author_of(msg)})
             return
 
+        flow = next((name for name in sess0.FLOW_STATES if getattr(sess0, name, '')), '')
+        if flow and any(msg.get(k) for k in ('voice', 'audio', 'video', 'video_note', 'document')):
+            payload = dict(msg, _context_generation=sess0.context_generation,
+                           _flow_name=flow, _flow_revision=sess0.flow_revision(flow))
+            self._enqueue_item(chat_id, {'type': 'armed_media', 'message': payload,
+                                        'image_id': _reply_image_id})
+            return
+        self._dispatch_media(chat_id, msg, _reply_image_id)
+
+    def _dispatch_media(self, chat_id, msg, _reply_image_id='', *, emit=None, consume_armed=False):
+        sink = emit or (lambda item: self._enqueue_item(chat_id, item))
+        def emit(item):
+            item.setdefault('quote', msg.get('_quote', ''))
+            item.setdefault('reply_photo', msg.get('_reply_photo'))
+            item.setdefault('image_id', _reply_image_id)
+            sink(item)
         # ── armed audio flows take the next clip (remix, clone, book...) ──────────────────────────────
         # Checked BEFORE the normal audio routing, because every branch below
         # sends audio somewhere else: a voice note becomes speech to the bot, a
@@ -408,27 +409,27 @@ class DispatchMixin:
         # the menu buttons still work and the user is never trapped here.
         _msess = self._get_session(chat_id)
         # 🎙 Animate is collecting voice samples: a clip with sound is one more voice.
-        if getattr(_msess, "anim_voice_state", "") and self._anim_voice_take_media(
+        if consume_armed and getattr(_msess, "anim_voice_state", "") and self._anim_voice_take_media(
                 chat_id, _msess, self._lang(_msess), msg):
             return
         # 📚 Audiobook armed: the voice sample and then the book are ours (never the library / sandbox / agent).
-        if getattr(_msess, "book_state", "") and self._book_take_media(
+        if consume_armed and getattr(_msess, "book_state", "") and self._book_take_media(
                 chat_id, _msess, self._lang(_msess), msg):
             return
         # ▶️ Continue armed: a video is the clip to go on from.
-        if getattr(_msess, "continue_state", "") and self._continue_take_media(
+        if consume_armed and getattr(_msess, "continue_state", "") and self._continue_take_media(
                 chat_id, _msess, self._lang(_msess), msg):
             return
         # 🎨 Restyle armed: a video is the clip to redraw (before cover/clone: both eat videos).
-        if getattr(_msess, "restyle_state", "") and self._restyle_take_media(
+        if consume_armed and getattr(_msess, "restyle_state", "") and self._restyle_take_media(
                 chat_id, _msess, self._lang(_msess), msg):
             return
         # 🎤 Cover armed: any clip with sound is the song to re-sing.
-        if getattr(_msess, "cover_state", "") and self._cover_take_media(
+        if consume_armed and getattr(_msess, "cover_state", "") and self._cover_take_media(
                 chat_id, _msess, self._lang(_msess), msg):
             return
         # 🎙 Clone voice armed: any clip with sound is the voice sample.
-        if getattr(_msess, "clone_state", "") and self._clone_take_media(
+        if consume_armed and getattr(_msess, "clone_state", "") and self._clone_take_media(
                 chat_id, _msess, self._lang(_msess), msg):
             return
         voice = msg.get("voice") or msg.get("audio")
@@ -438,17 +439,17 @@ class DispatchMixin:
             # fed someone else's monologue in as an instruction. Transcribe it, then
             # ask what to do with it.
             if tg_bot._is_forwarded(msg, self_is_own=False):
-                self._enqueue_item(chat_id, {
+                emit({
                     "type": "fwd_voice",
                     "file_id": voice["file_id"],
                     "author": _fwd_author_of(msg), "own": bool(msg.get("_fwd_own")),
                     "seconds": int(voice.get("duration") or 0),
                     "caption": (msg.get("caption") or "").strip()})
                 return
-            self._enqueue_item(chat_id, {"type": "voice",
+            emit({"type": "voice",
                 "file_id": voice["file_id"],
                 "caption": (msg.get("caption") or "").strip(),
-                "image_id": _reply_image_id})
+                "image_id": _reply_image_id, 'reply_photo': msg.get('_reply_photo')})
             return
 
         # A round "video message" (Telegram's video_note) carries an audio
@@ -468,14 +469,14 @@ class DispatchMixin:
         _clip_as_material = (not msg.get("video_note") and not (msg.get("caption") or "").strip())
         if video_note:
             if _clip_as_material or tg_bot._is_forwarded(msg, self_is_own=False):
-                self._enqueue_item(chat_id, {
+                emit({
                     "type": "fwd_voice", "media": "video",
                     "file_id": video_note["file_id"],
                     "author": _fwd_author_of(msg), "own": bool(msg.get("_fwd_own")),
                     "seconds": int(video_note.get("duration") or 0),
                     "caption": (msg.get("caption") or "").strip()})
                 return
-            self._enqueue_item(chat_id, {"type": "voice", "media": "video",
+            emit({"type": "voice", "media": "video",
                 "file_id": video_note["file_id"],
                 "seconds": int(video_note.get("duration") or 0),
                 "caption": (msg.get("caption") or "").strip()})
@@ -486,7 +487,7 @@ class DispatchMixin:
             # A video sent as a file (the way a long recording usually arrives).
             # Duration is unknown on the wire: treat it as long -- the offer
             # shows what will happen and the user decides.
-            self._enqueue_item(chat_id, {"type": "fwd_voice" if (_clip_as_material or tg_bot._is_forwarded(msg, self_is_own=False)) else "voice",
+            emit({"type": "fwd_voice" if (_clip_as_material or tg_bot._is_forwarded(msg, self_is_own=False)) else "voice",
                 "media": "video", "file_id": _doc["file_id"],
                 # a GIF also arrives as a video/mp4 document, with its real length
                 # on `animation` (without it a 3 s GIF was offered as «16667 мин»)
@@ -507,13 +508,13 @@ class DispatchMixin:
             if group:
                 self._buffer_album(chat_id, group, largest["file_id"], caption, _fwd)
             else:
-                self._enqueue_item(chat_id, {"type": "photo", "forwarded": _fwd,
+                emit({"type": "photo", "forwarded": _fwd,
                     "file_id": largest["file_id"], "caption": caption})
             return
 
         doc = msg.get("document")
         if doc:
-            self._enqueue_item(chat_id, {"type": "document",
+            emit({"type": "document",
                 "file_id": doc["file_id"],
                 "filename": doc.get("file_name", "file"),
                 "file_size": int(doc.get("file_size") or 0),
@@ -522,10 +523,10 @@ class DispatchMixin:
 
         sticker = msg.get("sticker")
         if sticker and sticker.get("file_id"):
-            self._enqueue_item(chat_id, {"type": "photo",
+            emit({"type": "photo",
                 "file_id": sticker["file_id"], "caption": ""})
 
-    def _resolve_reply_target(self, chat_id: int, msg: dict) -> str:
+    def _resolve_reply_target(self, chat_id: int, msg: dict, *, download=True) -> str:
         """Turn a reply into an explicit target for the turn that follows.
 
         Three cases, in order of certainty:
@@ -563,7 +564,15 @@ class DispatchMixin:
                 largest = _largest_photo(photos)
                 if largest is None:
                     return ""
+                if not download:
+                    msg['_reply_photo'] = {'file_id': largest['file_id'],
+                        'message_id': int(reply.get('message_id') or 0),
+                        'caption': (reply.get('caption') or '')[:80]}
+                    return ''
+                generation = sess.context_generation
                 path = self._save_incoming_photo(largest["file_id"])
+                if generation != sess.context_generation:
+                    return ''
                 if path:
                     img_id = tg_bot._log_image(sess, path,
                                         msg_id=int(reply.get("message_id") or 0),
@@ -593,8 +602,7 @@ class DispatchMixin:
                 # «классная песня» was an order for a song.
                 msg["_quote"] = quoted[:1200]
             elif quoted and not tg_bot._is_forwarded(msg, self_is_own=False):
-                sess.quoted_text = quoted[:1200]
-                self._store.put(sess)
+                msg['_quote'] = quoted[:1200]
             return ""
         except Exception:
             tg_bot.logger.exception("resolving the reply target failed chat=%s", chat_id)
@@ -619,12 +627,18 @@ class DispatchMixin:
     def _buffer_album(self, chat_id, group_id, file_id, caption, forwarded=False, saved=None):
         # A QUIET period, not a fixed window: a forwarded album of 10 pages arrives over several seconds, and a
         # timer started by the first page cut it into pieces answered one by one.
+        sess = self._get_session(chat_id)
         with self._album_lock:
             e = self._albums.get(group_id)
             if e is None:
                 e = self._albums[group_id] = {"chat_id": chat_id,
                     "photos": list((saved or {}).get("photos", [])), "timer": None, "t0": time.monotonic(),
                     "_inbox_id": (saved or {}).get("_inbox_id") or uuid.uuid4().hex,
+                    '_arrival_ts': (saved or {}).get('_arrival_ts', time.time()),
+                    '_context_generation': (saved or {}).get('_context_generation', sess.context_generation),
+                    '_input_context': (saved or {}).get('_input_context') or {
+                        'prefix': sess.pending_prefix, 'menu': sess.menu,
+                        'revisions': {name: sess.flow_revision(name) for name in sess.INPUT_STATES}},
                     "forwarded": forwarded}
             elif e["timer"] is not None:
                 e["timer"].cancel()
@@ -634,7 +648,8 @@ class DispatchMixin:
                     '_sent_ts': (getattr(self, '_msg_date', {}) or {}).get(chat_id)})
             key = e["_inbox_id"]
             self._incoming.put(chat_id, {"type": "album_pending", "group_id": group_id,
-                "photos": e["photos"], "forwarded": forwarded, "_inbox_id": key}, key)
+                "photos": e["photos"], "forwarded": forwarded, "_inbox_id": key,
+                **{name: e[name] for name in ('_arrival_ts', '_context_generation', '_input_context')}}, key)
             wait = max(0.05, min(getattr(self, "album_collect_s", None) or tg_bot._ALBUM_COLLECT_S, e["t0"] + tg_bot._ALBUM_MAX_S - time.monotonic()))
             t = threading.Timer(wait, self._flush_album, (group_id,))
             t.daemon = True; t.start(); e["timer"] = t
@@ -647,6 +662,7 @@ class DispatchMixin:
         self._enqueue_item(entry["chat_id"], {
             "type": "album", "forwarded": entry.get("forwarded", False),
             "_inbox_id": entry["_inbox_id"],
+            **{name: entry[name] for name in ('_arrival_ts', '_context_generation', '_input_context')},
             '_message_id': source.get('_message_id', 0), '_sent_ts': source.get('_sent_ts'),
             "file_ids": [p["file_id"] for p in entry["photos"]],
             "caption": cap})

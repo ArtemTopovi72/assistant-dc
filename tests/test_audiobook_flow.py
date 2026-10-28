@@ -91,7 +91,8 @@ st = lambda: bot._get_session(CID).book_state
 # not armed: a document goes the ordinary way (the button does not eat it)
 seen_items = []
 orig_enqueue = bot._enqueue_item
-bot._enqueue_item = lambda cid, item: (seen_items.append(item), orig_enqueue(cid, item))[1]
+bot._enqueue_item = lambda cid, item: (seen_items.append(item) if item.get('type') != 'armed_media' else None,
+                                     orig_enqueue(cid, item))[1]
 bot._dispatch(m(document=doc("notes.txt")))
 check("NOT armed: a .txt document is an ordinary document item (library/sandbox path intact)",
       any(i.get("type") == "document" for i in seen_items) and not VOICES and not SPOKEN, seen_items[-1:])
@@ -102,8 +103,9 @@ INDEXED.clear()
 bot._dispatch(m(text="📚 Аудиокнига"))
 check("the button asks for the narrator's voice", wait(lambda: st() == "want_voice"), bot.sent[-2:])
 n_items = len(seen_items)
+before = len(bot.sent)
 bot._dispatch(m(document=doc("notes.txt")))
-wait(lambda: False, 1)
+wait(lambda: len(bot.sent) > before)
 check("armed for the VOICE: a book file is not read as a voice and does not reach the library either",
       st() == "want_voice" and not INDEXED and len(seen_items) == n_items, (st(), INDEXED))
 bot._dispatch(m(voice={"file_id": "VO1", "duration": 12, "mime_type": "audio/ogg"}))
@@ -118,7 +120,7 @@ bot._dispatch(m(document={"file_id": "PK1", "file_name": "photo.exe", "mime_type
 wait(lambda: False, 1)
 check("a non-book file is refused and the mode stays armed", st() == "want_book" and not INDEXED)
 bot._dispatch(m(document=dict(doc("huge.txt"), file_size=5 * 1024 ** 3)))
-wait(lambda: False, 1)
+wait(lambda: any("МБ" in t and "принимаю до" in t for _, t in bot.sent[-3:]))
 check("a file over the bot's receive limit is refused by name, the mode stays armed",
       st() == "want_book" and any("МБ" in t and "принимаю до" in t for _, t in bot.sent[-3:]), bot.sent[-2:])
 n_items = len(seen_items)
@@ -150,7 +152,7 @@ check("another button disarms the audiobook", wait(lambda: st() == ""), st())
 # resume after a restart: the job file says chapter 1 is done, the button offers to finish
 import json
 check("a finished book leaves no job file", not os.path.exists(os.path.join(_bd, "job.json")))
-nar = os.path.join(_bd, "narrator.wav")
+nar = SPOKEN[0][0]
 json.dump({"chapters": [["Глава 1", "Раз. " * 40], ["Глава 2", "Два. " * 40]], "ref": nar, "ref_text": "образец", "next": 1},
           open(os.path.join(_bd, "job.json"), "w", encoding="utf-8"), ensure_ascii=False)
 VOICES.clear(); CAPS.clear(); SPOKEN.clear()

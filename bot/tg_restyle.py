@@ -43,12 +43,19 @@ class RestyleMixin:
         return None
 
     def _restyle_take_media(self, chat_id: int, sess, lang: str, msg: dict) -> bool:
-        if getattr(sess, "restyle_state", "") not in ("want_video", "want_text"):
+        state = getattr(sess, "restyle_state", "")
+        if state not in ("want_video", "want_text"):
             return False
         fid = self._video_of(msg)
         if not fid:
             return False
+        generation = msg.get("_context_generation", getattr(sess, "context_generation", 0))
+        flow_revision = getattr(sess, "flow_revision", lambda _: 0)
+        revision = msg.get("_flow_revision", flow_revision("restyle_state"))
         data = self._dl_bytes(fid)
+        if (generation != getattr(sess, "context_generation", 0) or sess.restyle_state != state
+                or revision != flow_revision("restyle_state")):
+            return True
         if not data:
             self._send_text(chat_id, tg_bot._t("restyle_fail_dl", lang))
             return True
@@ -63,13 +70,20 @@ class RestyleMixin:
     def _restyle_take_text(self, chat_id: int, sess, lang: str, text: str) -> bool:
         if getattr(sess, "restyle_state", "") != "want_text" or not (text or "").strip():
             return False
+        generation = getattr(sess, "context_generation", 0)
         src = getattr(sess, "restyle_src", "")
         sess.restyle_state = ""          # disarmed before the slow part
+        flow_revision = getattr(sess, "flow_revision", lambda _: 0)
+        revision = flow_revision("restyle_state")
         self._store.put(sess)
+        if (generation != getattr(sess, "context_generation", 0) or sess.restyle_state
+                or revision != flow_revision("restyle_state")):
+            return True
         if not src or not os.path.exists(src):
             self._start_restyle_flow(chat_id, sess, lang)
             return True
-        self._enqueue_item(chat_id, {"type": "text", "text": PAYLOAD + text.strip()})
+        self._enqueue_item(chat_id, {"type": "text", "text": PAYLOAD + text.strip(),
+                                    "_context_generation": generation})
         return True
 
     def _run_restyle(self, chat_id: int, lang: str, prompt: str, ctx) -> bool:

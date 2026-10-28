@@ -23,7 +23,6 @@ otherwise became the answer. See _capture_preamble, which is the one copy of
 all three.
 """
 from __future__ import annotations
-from seams import yes_no
 
 import html as _html_mod
 import time
@@ -192,14 +191,6 @@ class RegistrationMixin:
                                     parse_mode="HTML")
                     return False
                 if not text or len(text.strip()) < 2:
-                    self._send_text(chat_id, tg_bot._t("name_again", lang), parse_mode="HTML")
-                    return False
-                # A request («нарисуй кота») is not a name; a single word is taken
-                # as is (nicknames), a phrase is asked of the model.
-                if len(text.split()) >= 2 and not yes_no(self.reads)(
-                        "A new user was asked to tell their name and wrote: {text}. Is that a "
-                        "person's name or nickname, rather than a request, a question or a "
-                        "sentence?", text.strip(), default=True):
                     self._send_text(chat_id, tg_bot._t("name_again", lang), parse_mode="HTML")
                     return False
                 sess.reg_name  = text.strip()[:50]

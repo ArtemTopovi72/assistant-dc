@@ -448,16 +448,31 @@ def build_graph(ctx: Context):
     Each node is bound to `ctx` here rather than captured, and looked up on this
     MODULE at call time; a suite's stand-in node rides on `ctx.deps`.
     """
+    import intent
+
+    def node(state, name, default):
+        # GUI callers reuse the last output state; only an external request scope can resume it.
+        turn = intent.current_turn() if name == "translate_node" else state.get("intent_turn")
+        with intent.turn_scope(turn) as owned:
+            state["intent_turn"] = owned
+            result = dep(ctx, name, default)(ctx, state)
+            result["intent_turn"] = owned
+            return result
+
+    def route(state):
+        with intent.turn_scope(state.get("intent_turn")):
+            return entry_router(state, ctx)
+
     workflow = StateGraph(AgentState)
-    workflow.add_node("translate", lambda s: dep(ctx, "translate_node", translate_node)(ctx, s))
-    workflow.add_node("vision_agent", lambda s: dep(ctx, "vision_agent_node", vision_agent_node)(ctx, s))
-    workflow.add_node("personality", lambda s: dep(ctx, "personality_node", personality_node)(ctx, s))
-    workflow.add_node("tts", lambda s: dep(ctx, "tts_node", tts_node)(ctx, s))
+    workflow.add_node("translate", lambda s: node(s, "translate_node", translate_node))
+    workflow.add_node("vision_agent", lambda s: node(s, "vision_agent_node", vision_agent_node))
+    workflow.add_node("personality", lambda s: node(s, "personality_node", personality_node))
+    workflow.add_node("tts", lambda s: node(s, "tts_node", tts_node))
 
     workflow.add_edge(START, "translate")
     workflow.add_conditional_edges(
         "translate",
-        lambda s: entry_router(s, ctx),
+        route,
         {"vision_agent": "vision_agent", "personality": "personality"},
     )
     workflow.add_edge("vision_agent", "personality")

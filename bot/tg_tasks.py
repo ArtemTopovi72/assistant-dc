@@ -620,6 +620,11 @@ class TaskRunnerMixin:
             return False
 
     def _execute_task(self, task: tg_bot._Task):  # noqa: C901
+        import intent
+        with intent.turn_scope(task.intent_snapshot):
+            return self._execute_scoped_task(task)
+
+    def _execute_scoped_task(self, task: tg_bot._Task):  # noqa: C901
         chat_id = task.chat_id
         sess    = self._get_session(chat_id)
         user    = self._user_store.get(chat_id)

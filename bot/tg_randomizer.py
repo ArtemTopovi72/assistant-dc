@@ -50,4 +50,4 @@ def range_text(bot, chat_id, sess, lang, text):
         answer = _t('rnd_number_result', lang, value=engine.number(low, high), low=low, high=high)
     except ValueError as exc:
         answer = _t('rnd_order_error' if str(exc).startswith('Lower bound') else 'rnd_range_prompt', lang)
-    bot._send_text(chat_id, answer, keyboard=_randomizer_kb(lang, True))
+    bot._send_text(chat_id, answer, keyboard=bot._state_kb(sess, lang))

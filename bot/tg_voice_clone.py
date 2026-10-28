@@ -10,6 +10,7 @@ States on the session (clone_state):
 The slow parts (ffmpeg + GigaAM, then F5) run off the poll thread.
 """
 import os
+import uuid
 
 import voice_clone
 
@@ -63,16 +64,26 @@ class VoiceCloneMixin:
         media = self._clone_media_of(msg)
         if not media:
             return False
+        generation = msg.get("_context_generation", getattr(sess, "context_generation", 0))
+        flow_revision = getattr(sess, "flow_revision", lambda _: 0)
+        revision = msg.get("_flow_revision", flow_revision("clone_state"))
         data = self._dl_bytes(media[0])
+        if (generation != getattr(sess, "context_generation", 0) or sess.clone_state != state
+                or revision != flow_revision("clone_state")):
+            return True
         if not data:
             self._send_text(chat_id, tg_bot._t("clone_fail_no_audio", lang))
             return True
         for_assistant = state == "want_assistant"
-        src = os.path.join(self._clone_dir(chat_id), ("assistant_sample" if for_assistant else "sample") + media[1])
+        name = "assistant_sample" if for_assistant else "sample"
+        src = os.path.join(self._clone_dir(chat_id), f"{name}_{uuid.uuid4().hex[:8]}{media[1]}")
         with open(src, "wb") as fh:
             fh.write(data)
         self._send_text(chat_id, tg_bot._t("clone_working", lang))
-        self._run_busy(chat_id, self._clone_prepare, chat_id, lang, src, for_assistant)
+        if msg.get("_worker_media"):
+            self._clone_prepare(chat_id, lang, src, for_assistant, (generation, state, revision))
+        else:
+            self._run_busy(chat_id, self._clone_prepare, chat_id, lang, src, for_assistant, (generation, state, revision))
         return True
 
     def _clone_take_link(self, chat_id: int, sess, lang: str, text: str) -> bool:
@@ -86,22 +97,36 @@ class VoiceCloneMixin:
         if not url:
             return False
         for_assistant = state == "want_assistant"
+        expected = (getattr(sess, "context_generation", 0), state,
+                    getattr(sess, "flow_revision", lambda _: 0)("clone_state"))
         self._send_text(chat_id, tg_bot._t("clone_working", lang))
 
         def job():
             src = self.voice_clone.fetch_sample(url, self._clone_dir(chat_id), self.links.fetch_video,
                                                 "assistant_sample" if for_assistant else "sample")
+            current = self._get_session(chat_id)
+            if expected != (getattr(current, "context_generation", 0), current.clone_state,
+                            getattr(current, "flow_revision", lambda _: 0)("clone_state")):
+                return
             if not src:
                 self._send_text(chat_id, tg_bot._t("clone_fail_no_audio", lang))
                 return
-            self._clone_prepare(chat_id, lang, src, for_assistant)
+            self._clone_prepare(chat_id, lang, src, for_assistant, expected)
         self._run_busy(chat_id, job)
         return True
 
-    def _clone_prepare(self, chat_id: int, lang: str, src: str, for_assistant: bool = False) -> None:
+    def _clone_prepare(self, chat_id: int, lang: str, src: str, for_assistant: bool = False, expected=None) -> None:
         """for_assistant: the sample is 🗣 the assistant's own voice (its own folder,
         so a later 🎙 clone never overwrites it), not a one-off 🎙 clone."""
         sess = self._get_session(chat_id)
+        expected = expected or (getattr(sess, "context_generation", 0), getattr(sess, "clone_state", ""),
+                                getattr(sess, "flow_revision", lambda _: 0)("clone_state"))
+        def active():
+            current = self._get_session(chat_id)
+            return expected == (getattr(current, "context_generation", 0), getattr(current, "clone_state", ""),
+                                getattr(current, "flow_revision", lambda _: 0)("clone_state"))
+        if not active():
+            return
         ctx = self._get_ctx()
         out_dir = self._clone_dir(chat_id)
         if for_assistant:
@@ -111,11 +136,15 @@ class VoiceCloneMixin:
             ref, text = self.voice_clone.prepare_reference(ctx, src, out_dir,
                                                       lang=(sess.lang or "ru"))
         except self.voice_clone.CloneError as exc:
-            self._send_text(chat_id, tg_bot._t("clone_fail_" + str(exc), lang))
+            if active():
+                self._send_text(chat_id, tg_bot._t("clone_fail_" + str(exc), lang))
             return
         except Exception:
             tg_bot.logger.exception("[clone] preparing the sample failed for chat %s", chat_id)
-            self._send_text(chat_id, tg_bot._t("clone_fail_no_audio", lang))
+            if active():
+                self._send_text(chat_id, tg_bot._t("clone_fail_no_audio", lang))
+            return
+        if not active():
             return
         sess = self._get_session(chat_id)
         from tg_voice_library import vl_add
@@ -148,21 +177,37 @@ class VoiceCloneMixin:
             self._send_text(chat_id, tg_bot._t("clone_ask_audio", lang), parse_mode="HTML")
             return True
         self._run_busy(chat_id, self._clone_speak,
-                       chat_id, lang, sess.clone_ref, sess.clone_ref_text, text)
+                       chat_id, lang, sess.clone_ref, sess.clone_ref_text, text,
+                       (getattr(sess, "context_generation", 0), sess.clone_state,
+                        getattr(sess, "flow_revision", lambda _: 0)("clone_state")))
         return True
 
-    def _clone_speak(self, chat_id: int, lang: str, ref: str, ref_text: str, text: str) -> None:
+    def _clone_speak(self, chat_id: int, lang: str, ref: str, ref_text: str, text: str, expected=None) -> None:
+        sess = self._get_session(chat_id)
+        expected = expected or (getattr(sess, "context_generation", 0), sess.clone_state,
+                                getattr(sess, "flow_revision", lambda _: 0)("clone_state"))
+        def active():
+            current = self._get_session(chat_id)
+            return expected == (getattr(current, "context_generation", 0), current.clone_state,
+                                getattr(current, "flow_revision", lambda _: 0)("clone_state"))
+        if not active():
+            return
         ctx = self._get_ctx()
         self._api_post("sendChatAction", {"chat_id": chat_id, "action": "record_voice"})
         wav = None
         try:
             clean = self.voice_clone.polish(ctx, text)
+            if not active():
+                return
             wav = self.voice_clone.speak(ctx, ref, ref_text, clean, self._clone_dir(chat_id))
+            if not active():
+                return
             if not wav or not self._send_voice_from_wav(chat_id, wav, feedback="voice"):
                 self._send_text(chat_id, tg_bot._t("clone_fail_synth", lang))
         except Exception:
             tg_bot.logger.exception("[clone] synthesis failed for chat %s", chat_id)
-            self._send_text(chat_id, tg_bot._t("clone_fail_synth", lang))
+            if active():
+                self._send_text(chat_id, tg_bot._t("clone_fail_synth", lang))
         finally:
             if wav and os.path.exists(wav):
                 try:

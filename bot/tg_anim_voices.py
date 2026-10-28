@@ -139,7 +139,15 @@ class AnimVoicesMixin:
         media = self._clone_media_of(msg)        # voice / audio / round video / video
         if not media:
             return False
+        generation = msg.get("_context_generation", getattr(sess, "context_generation", 0))
+        flow_revision = getattr(sess, "flow_revision", lambda _: 0)
+        revision = msg.get("_flow_revision", flow_revision("anim_voice_state"))
+        slot = getattr(sess, "anim_voice_slot", 0)
         data = self._dl_bytes(media[0])
+        if (generation != getattr(sess, "context_generation", 0)
+                or revision != flow_revision("anim_voice_state")
+                or sess.anim_voice_state != "collect" or slot != getattr(sess, "anim_voice_slot", 0)):
+            return True
         if not data:
             self._send_text(chat_id, tg_bot._t("anv_fail", lang))
             return True
@@ -155,10 +163,16 @@ class AnimVoicesMixin:
         url = tg_links.video_url(text)
         if not url:
             return False
+        expected = (getattr(sess, "context_generation", 0), sess.anim_voice_state, sess.anim_voice_slot,
+                    getattr(sess, "flow_revision", lambda _: 0)("anim_voice_state"))
         self._send_text(chat_id, tg_bot._t("clone_working", lang))
 
         def job():
             src = self.voice_clone.fetch_sample(url, self._anim_voice_dir(chat_id), self.links.fetch_video)
+            current = self._get_session(chat_id)
+            if expected != (getattr(current, "context_generation", 0), current.anim_voice_state, current.anim_voice_slot,
+                            getattr(current, "flow_revision", lambda _: 0)("anim_voice_state")):
+                return
             if not src:
                 self._send_text(chat_id, tg_bot._t("anv_fail", lang))
                 return
@@ -171,6 +185,9 @@ class AnimVoicesMixin:
         # A name of its own: voice1.wav was overwritten by the next clip's first
         # voice, so a voice saved in the library came back as someone else's.
         import uuid
+        flow_revision = getattr(sess, "flow_revision", lambda _: 0)
+        expected = (getattr(sess, "context_generation", 0), getattr(sess, "anim_voice_state", ""),
+                    getattr(sess, "anim_voice_slot", 0), flow_revision("anim_voice_state"))
         path = os.path.join(self._anim_voice_dir(chat_id), f"voice_{uuid.uuid4().hex[:10]}{ext}")
         with open(path, "wb") as fh:
             fh.write(data)
@@ -179,30 +196,46 @@ class AnimVoicesMixin:
             path = cover.to_wav(path, os.path.splitext(path)[0] + ".wav")
         except Exception:
             pass                                 # the video model's loader still reads most containers
+        if expected != (getattr(sess, "context_generation", 0), getattr(sess, "anim_voice_state", ""),
+                        getattr(sess, "anim_voice_slot", 0), flow_revision("anim_voice_state")):
+            return ""
         self._put_slot(sess, path)
         from tg_voice_library import vl_add
         return vl_add(sess, path)["id"]          # remembered: the last 5 come back as buttons
 
     def _anim_voice_save(self, chat_id: int, sess, lang: str, data: bytes, ext: str) -> None:
-        self._anim_voice_added(chat_id, sess, lang, new_id=self._anim_voice_store(chat_id, sess, data, ext))
+        new_id = self._anim_voice_store(chat_id, sess, data, ext)
+        if new_id:
+            self._anim_voice_added(chat_id, sess, lang, new_id=new_id)
 
     def _voice_from_request_link(self, chat_id: int, sess, lang: str, request: str) -> bool:
         """The request itself names a video link as the speaker's voice («голос возьми отсюда: <link>»):
         its sound is slot 1 and the clip reruns at once, without the voice card. True when taken."""
+        expected = (getattr(sess, "context_generation", 0), sess.anim_voice_state, sess.anim_voice_slot,
+                    getattr(sess, "flow_revision", lambda _: 0)("anim_voice_state"))
+        def active():
+            current = self._get_session(chat_id)
+            return expected == (getattr(current, "context_generation", 0), current.anim_voice_state, current.anim_voice_slot,
+                                getattr(current, "flow_revision", lambda _: 0)("anim_voice_state"))
         url = self.voice_clone.voice_link_in(yes_no(self.reads), request)
         if not url:
             return False
+        if not active():
+            return True
         self._send_text(chat_id, tg_bot._t("clone_working", lang))
 
         def job():
             src = self.voice_clone.fetch_sample(url, self._anim_voice_dir(chat_id), self.links.fetch_video)
             s2 = self._get_session(chat_id)
+            if not active():
+                return
             if not src:
                 self._send_text(chat_id, tg_bot._t("anv_fail", lang))
                 self._offer_voice_card(chat_id, s2, lang, request, 1)
                 return
             s2.anim_voice_slot = 0
-            self._anim_voice_store(chat_id, s2, open(src, "rb").read(), ".mp4")
+            if not self._anim_voice_store(chat_id, s2, open(src, "rb").read(), ".mp4"):
+                return
             s2.voice_pending, s2.voice_choice, s2.anim_voice_state = request, "own", ""
             self._store.put(s2)
             self._enqueue_item(chat_id, {"type": "text", "text": request})

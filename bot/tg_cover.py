@@ -63,7 +63,8 @@ class CoverMixin:
 
     def _cover_take_media(self, chat_id: int, sess, lang: str, msg: dict) -> bool:
         """Consume the song while the flow is armed. True when it was ours."""
-        if getattr(sess, "cover_state", "") not in ("want_audio", "want_text"):
+        state = getattr(sess, "cover_state", "")
+        if state not in ("want_audio", "want_text"):
             return False
         media = self._clone_media_of(msg)      # same "anything with sound" rule
         if not media:
@@ -78,7 +79,15 @@ class CoverMixin:
                                                mb=f"{size / (1024 * 1024):.0f}",
                                                limit=f"{_bot_file_limit() // (1024 * 1024)}"))
             return True
+        generation = msg.get("_context_generation", getattr(sess, "context_generation", 0))
+        flow_revision = getattr(sess, "flow_revision", lambda _: 0)
+        revision = msg.get("_flow_revision", flow_revision("cover_state"))
+        source = getattr(sess, "cover_src", "")
         data = self._dl_bytes(media[0])
+        if (generation != getattr(sess, "context_generation", 0) or sess.cover_state != state
+                or revision != flow_revision("cover_state")
+                or source != getattr(sess, "cover_src", "")):
+            return True
         if not data:
             self._send_text(chat_id, tg_bot._t("cover_fail_no_audio", lang))
             return True
@@ -96,10 +105,16 @@ class CoverMixin:
         url = tg_links.video_url(text)
         if not url or (state == "want_text" and text.strip() != url):
             return False
+        expected = (getattr(sess, "context_generation", 0), state,
+                    getattr(sess, "flow_revision", lambda _: 0)("cover_state"))
         self._send_text(chat_id, tg_bot._t("cover_link_fetch", lang))
 
         def job():
             vid = self.links.fetch_video(url)
+            current = self._get_session(chat_id)
+            if expected != (getattr(current, "context_generation", 0), current.cover_state,
+                            getattr(current, "flow_revision", lambda _: 0)("cover_state")):
+                return
             if vid.get("too_long"):
                 self._send_text(chat_id, tg_bot._t("cover_link_long", lang,
                                                    mins=max(1, int(vid.get("seconds", 0)) // 60),
@@ -153,7 +168,9 @@ class CoverMixin:
             sess.cover_state = ""
             self._store.put(sess)
             self._send_text(chat_id, tg_bot._t("cover_working", lang))
-            self._run_busy(chat_id, self._cover_star, chat_id, lang, src, sess.cover_voice)
+            expected = (getattr(sess, "context_generation", 0), sess.cover_state,
+                        getattr(sess, "flow_revision", lambda _: 0)("cover_state"))
+            self._run_busy(chat_id, self._cover_star, chat_id, lang, src, sess.cover_voice, expected)
             return
         if v == "auto":
             v = ""
@@ -183,63 +200,103 @@ class CoverMixin:
         sess.cover_state = ""
         self._store.put(sess)
         self._send_text(chat_id, tg_bot._t("cover_working", lang))
-        self._run_busy(chat_id, self._cover_render, chat_id, lang, src, lyrics, song2)
+        expected = (getattr(sess, "context_generation", 0), sess.cover_state,
+                    getattr(sess, "flow_revision", lambda _: 0)("cover_state"))
+        self._run_busy(chat_id, self._cover_render, chat_id, lang, src, lyrics, song2, expected)
         return True
 
-    def _cover_render(self, chat_id: int, lang: str, src: str, lyrics: str, song2: str) -> None:
+    def _cover_render(self, chat_id: int, lang: str, src: str, lyrics: str, song2: str, expected=None) -> None:
+        sess = self._get_session(chat_id)
+        expected = expected or (getattr(sess, "context_generation", 0), sess.cover_state,
+                                getattr(sess, "flow_revision", lambda _: 0)("cover_state"))
+        def active():
+            current = self._get_session(chat_id)
+            return expected == (getattr(current, "context_generation", 0), current.cover_state,
+                                getattr(current, "flow_revision", lambda _: 0)("cover_state"))
+        if not active():
+            return
         ctx = self._get_ctx()
         remix = module(self, "remix")
         try:
             if song2:
-                self._mashup_first(chat_id, lang, ctx, src, song2)
+                self._mashup_first(chat_id, lang, ctx, src, song2, active)
+                if not active():
+                    return
             info = {"voice": getattr(self._get_session(chat_id), "cover_voice", "") or ""}
             if song2 and remix.resing_available():
                 # Two songs: the second gives the words, the first sings them on its
                 # own melody in its own singer's voice.
                 self._send_text(chat_id, tg_bot._t("cover_two_songs_words", lang))
-                out = remix.resing(ctx, src, remix.lyrics_of(ctx, song2), info=info)
+                lyrics = remix.lyrics_of(ctx, song2)
+                if not active():
+                    return
+                out = remix.resing(ctx, src, lyrics, info=info)
             elif song2:
                 out = remix.remix_voice(ctx, src, song2)
             elif remix.resing_available():
                 out = remix.resing(ctx, src, lyrics, info=info)
             else:
                 out = remix.remix_words(ctx, src, lyrics)
+            if not active():
+                return
             if not self._send_audio(chat_id, out, tg_bot._t("cover_done", lang)):
                 self._send_text(chat_id, tg_bot._t("cover_fail_render", lang))
             elif info.get("rvc") and not info.get("trained") and not info.get("voice"):
                 # The first cover of an artist went out in a zero-shot timbre; their own RVC
                 # voice is trained now on the original's vocal and the cover sent again in it.
                 self._send_text(chat_id, tg_bot._t("cover_rvc_training", lang))
-                if not self._send_audio(chat_id, remix.resing_rvc(ctx, info), tg_bot._t("cover_rvc_done", lang)):
+                trained = remix.resing_rvc(ctx, info)
+                if not active():
+                    return
+                if not self._send_audio(chat_id, trained, tg_bot._t("cover_rvc_done", lang)):
                     self._send_text(chat_id, tg_bot._t("cover_fail_render", lang))
         except cover.CoverFailed as exc:
-            self._send_text(chat_id, tg_bot._t("cover_fail_" + str(exc), lang))
+            if active():
+                self._send_text(chat_id, tg_bot._t("cover_fail_" + str(exc), lang))
         except Exception:
             tg_bot.logger.exception("[remix] failed for chat %s", chat_id)
-            self._send_text(chat_id, tg_bot._t("cover_fail_render", lang))
+            if active():
+                self._send_text(chat_id, tg_bot._t("cover_fail_render", lang))
         finally:
             module(self, "mashup_stems").release_separator()      # Demucs holds VRAM the next render needs
 
 
-    def _cover_star(self, chat_id: int, lang: str, src: str, voice: str) -> None:
+    def _cover_star(self, chat_id: int, lang: str, src: str, voice: str, expected=None) -> None:
+        sess = self._get_session(chat_id)
+        expected = expected or (getattr(sess, "context_generation", 0), sess.cover_state,
+                                getattr(sess, "flow_revision", lambda _: 0)("cover_state"))
+        def active():
+            current = self._get_session(chat_id)
+            return expected == (getattr(current, "context_generation", 0), current.cover_state,
+                                getattr(current, "flow_revision", lambda _: 0)("cover_state"))
+        if not active():
+            return
         ctx = self._get_ctx()
         remix = module(self, "remix")
         try:
-            if not self._send_audio(chat_id, remix.sing_original_as(ctx, src, voice), tg_bot._t("cover_done", lang)):
+            out = remix.sing_original_as(ctx, src, voice)
+            if not active():
+                return
+            if not self._send_audio(chat_id, out, tg_bot._t("cover_done", lang)):
                 self._send_text(chat_id, tg_bot._t("cover_fail_render", lang))
         except cover.CoverFailed as exc:
-            self._send_text(chat_id, tg_bot._t("cover_fail_" + str(exc), lang))
+            if active():
+                self._send_text(chat_id, tg_bot._t("cover_fail_" + str(exc), lang))
         except Exception:
             tg_bot.logger.exception("[remix] star voice failed for chat %s", chat_id)
-            self._send_text(chat_id, tg_bot._t("cover_fail_render", lang))
+            if active():
+                self._send_text(chat_id, tg_bot._t("cover_fail_render", lang))
         finally:
             module(self, "mashup_stems").release_separator()
 
-    def _mashup_first(self, chat_id: int, lang: str, ctx, src: str, song2: str) -> None:
+    def _mashup_first(self, chat_id: int, lang: str, ctx, src: str, song2: str, active=lambda: True) -> None:
         """The classic mashup (song 1's vocal over song 2's backing, bar-aligned and in key)
         goes out first: it takes ~30 s, the voice swap after it several minutes."""
         try:
-            if not self._send_audio(chat_id, module(self, "mashup_auto").make(ctx, src, song2), tg_bot._t("mashup_done", lang)):
+            out = module(self, "mashup_auto").make(ctx, src, song2)
+            if not active():
+                return
+            if not self._send_audio(chat_id, out, tg_bot._t("mashup_done", lang)):
                 self._send_text(chat_id, tg_bot._t("cover_fail_render", lang))
         except Exception:
             tg_bot.logger.exception("[mashup] failed for chat %s", chat_id)

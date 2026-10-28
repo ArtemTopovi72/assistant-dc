@@ -25,7 +25,6 @@ def model(ctx, system, user, **k):
     return json.dumps({"needs_tool": True, "wants": ["generate_image"]})
 ctx = types.SimpleNamespace(text_model=model)
 
-intent._CACHE.clear()
 intent.bind_turn(["нарисуй Пушкина при свече", "  нарисуй Пушкина при свече  "], "Вот кот.", "a photo")
 intent.turn_alias("draw Pushkin by candlelight")
 intent.read(ctx, "нарисуй Пушкина при свече")
@@ -52,7 +51,7 @@ def model_ask(ctx, system, user, **k):
     calls.append(user)
     return json.dumps({"needs_tool": False, "wants": [],
                        "ask": {"op": "sort", "items": ["груша", "абрикос", "вишня"], "detailed": True}})
-calls.clear(); intent._CACHE.clear(); ask_read._CACHE.clear()
+calls.clear()
 ctx2 = types.SimpleNamespace(text_model=model_ask)
 said = "отсортируй по алфавиту: груша, абрикос, вишня"
 intent.bind_turn([said], "", "")
@@ -65,10 +64,15 @@ check("...and keeps its fields", got["op"] == "sort" and got["items"] == ["гр�
 # Telegram read one message six times: three threads before the graph, the text bare, with a
 # link note under it, collapsed -- each its own key (trace 2026-10-26).
 import threading
-calls.clear(); intent._CACHE.clear(); intent._BY_WORDS.clear()
+calls.clear()
 said = "сколько стоит этот рюкзак? https://ozon.ru/t/LCabAMR"
 note = "\n[The user's message contains an Ozon product link (https://ozon.ru/t/LCabAMR). Read that card.]"
-arrive = threading.Thread(target=intent.bind_turn, args=([said], "Вот рюкзаки.", ""), kwargs={"entry": True})
+handoff = {}
+def arrival():
+    with intent.turn_scope():
+        intent.bind_turn([said], "Вот рюкзаки.", "", entry=True)
+        handoff["turn"] = json.loads(json.dumps(intent.snapshot_turn()))
+arrive = threading.Thread(target=arrival)
 arrive.start(); arrive.join()
 def other_threads():
     intent.read(ctx, said)                                   # the debounce loop
@@ -76,7 +80,10 @@ def other_threads():
     intent.read(ctx, " ".join((said + note).split()))       # collapsed
     intent.bind_turn([said + note], "", "data with many numbers earlier in the chat")   # the graph
     intent.read(ctx, said + note, "", "data with many numbers earlier in the chat")
-t = threading.Thread(target=other_threads); t.start(); t.join()
+def consume():
+    with intent.turn_scope(handoff["turn"]):
+        other_threads()
+t = threading.Thread(target=consume); t.start(); t.join()
 check("a message read across threads and shapes is one read", len(calls) == 1, calls)
 check("...with the context it was bound with on arrival", calls and "Вот рюкзаки." in calls[0], calls)
 calls.clear()
@@ -91,7 +98,7 @@ def model_same(ctx, system, user, **k):
     return json.dumps({"needs_tool": True, "wants": ["ozon_shop", "ozon_reviews"], "must_call": "ozon_shop"})
 ctx3 = types.SimpleNamespace(text_model=model_same, yes_no=lambda q, text, default=False, wait=True, ctx=None:
                               asked.append(text) or "этот же" in text)
-intent._CACHE.clear(); intent._BY_WORDS.clear(); intent.bind_turn(["x"])
+intent.bind_turn(["x"])
 got = intent.read(ctx3, "этот же, но чтобы привезли быстрее https://ozon.ru/t/dw4OyhY")
 check("the exact item of a linked card goes to ozon_same",
       got["must_call"] == "ozon_same" and got["wants"][:2] == ["ozon_same", "ozon_shop"], got)

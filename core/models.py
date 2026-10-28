@@ -588,6 +588,7 @@ class AgentState(TypedDict, total=False):
     session_memory_text: str
     vision_summary: str
     picture_question: bool
+    intent_turn: Any
 
     # set by the generate_image tool handler (tools.py)
     image_path: str

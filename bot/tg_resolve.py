@@ -211,6 +211,21 @@ class ResolveMixin:
             tg_bot.logger.debug("binding the turn's reads failed", exc_info=True)
 
     def _resolve_and_push(self, chat_id: int, batch: list):
+        import intent
+        # A fast menu press can land between two debounced messages.
+        groups = []
+        for item in batch:
+            if not groups or item.get('_input_context') != groups[-1][0].get('_input_context'):
+                groups.append([])
+            groups[-1].append(item)
+        if len(groups) > 1:
+            for group in groups:
+                self._resolve_and_push(chat_id, group)
+            return
+        with intent.turn_scope():
+            return self._resolve_scoped(chat_id, batch)
+
+    def _resolve_scoped(self, chat_id: int, batch: list):
         from tg_incoming import BATCH_IDS
         ids = tuple(it["_inbox_id"] for it in batch if it.get("_inbox_id"))
         token = BATCH_IDS.set(ids)
@@ -237,10 +252,12 @@ class ResolveMixin:
             _stop_ts0 = self._stop_requests.get(chat_id, 0.0)
         if _stop_ts0:
             _fresh = [it for it in batch if it.get("_arrival_ts", time.time()) > _stop_ts0]
-            if _fresh and len(_fresh) < len(batch):
+            if len(_fresh) < len(batch):
                 tg_bot.logger.info("Dropping %d pre-Stop item(s) of a batch chat=%s",
                                    len(batch) - len(_fresh), chat_id)
                 batch = _fresh
+            if not batch:
+                return
         _arrival_ts = min((it.get("_arrival_ts", time.time()) for it in batch),
                           default=time.time())
         sess = self._get_session(chat_id)
@@ -250,6 +267,53 @@ class ResolveMixin:
             return
         _generation = sess.context_generation
         _reply_to = _batch_reply_id(batch)
+        input_context = batch[0].get('_input_context')
+        input_prefix = input_context['prefix'] if input_context else sess.pending_prefix
+        input_menu = input_context['menu'] if input_context else sess.menu
+
+        def owns_input(name):
+            return (not input_context or input_context['revisions'].get(name, 0)
+                    == sess.flow_revision(name))
+
+        def still_current():
+            with self._stop_lock:
+                return (_generation == sess.context_generation
+                        and _arrival_ts > self._stop_requests.get(chat_id, 0))
+
+        prepared = []
+        for item in batch:
+            if item.get('type') == 'armed_media':
+                message = dict(item['message'], _worker_media=True)
+                name = message.get('_flow_name', '')
+                if name and sess.flow_revision(name) != message.get('_flow_revision'):
+                    continue
+                emitted = []
+                self._dispatch_media(chat_id, message, item.get('image_id', ''),
+                                     emit=emitted.append, consume_armed=True)
+                if not still_current():
+                    return
+                for content in emitted:
+                    content.update({k: v for k, v in item.items() if k.startswith('_')})
+                prepared.extend(emitted)
+                continue
+            photo = item.get('reply_photo')
+            if photo:
+                entry = tg_bot._image_by_msg(sess, photo['message_id'])
+                path = entry.get('path', '') if entry else ''
+                if not path or not os.path.exists(path):
+                    path = self._save_incoming_photo(photo['file_id'])
+                if not still_current():
+                    return
+                if not path:
+                    self._send_text(chat_id, tg_bot._t('img_gone', self._lang(sess)))
+                    continue
+                item['image_id'] = tg_bot._log_image(sess, path, msg_id=photo['message_id'],
+                                                     label=photo.get('caption', ''), src='user')
+                self._store.put(sess)
+            prepared.append(item)
+        batch = prepared
+        if not batch:
+            return
         if sess.expire_photo_waits():
             self._store.put(sess)
         user = self._user_store.get(chat_id)
@@ -264,7 +328,7 @@ class ResolveMixin:
         # photo". A batch with no image in it (the user typed something else
         # instead) falls through and is handled normally, same as every other
         # "ask instead of guessing" flow in this file.
-        if sess.pending_style_target:
+        if owns_input('pending_style_target') and sess.pending_style_target:
             _ref_item = next((it for it in batch if it.get("type") in ("photo", "album")), None)
             if _ref_item is not None:
                 self._push_style_transfer_task(chat_id, sess, lang, _ref_item, _arrival_ts)
@@ -273,7 +337,7 @@ class ResolveMixin:
         # 👗 armed pending_outfit_target: a photo now is the CLOTHING reference
         # for the picture 👗 was pressed under, its caption (if any) the
         # wishes. Text alone goes on through pending_prefix as before.
-        if sess.pending_outfit_target:
+        if owns_input('pending_outfit_target') and sess.pending_outfit_target:
             _ref_item = next((it for it in batch if it.get("type") in ("photo", "album")), None)
             if _ref_item is not None:
                 _wish = " ".join((it.get("caption") or "").strip() for it in batch).strip()
@@ -282,7 +346,7 @@ class ResolveMixin:
                 return
 
         # 🔁 armed and a person picked: the photo is WHO goes in their place.
-        if sess.pending_swap_target and sess.swap_where:
+        if owns_input('pending_swap_target') and sess.pending_swap_target and sess.swap_where:
             _ref_item = next((it for it in batch if it.get("type") in ("photo", "album")), None)
             if _ref_item is not None:
                 _wish = " ".join((it.get("caption") or "").strip() for it in batch).strip()
@@ -296,13 +360,13 @@ class ResolveMixin:
         # registering the photo here and showing that keyboard, rather than
         # pushing a task immediately the way the style reference-photo flow
         # does. A batch with no image falls through unchanged.
-        if sess.cast_state.startswith("pic:"):
+        if owns_input('cast_state') and sess.cast_state.startswith("pic:"):
             _cast_item = next((it for it in batch if it.get("type") in ("photo", "album")), None)
             if _cast_item is not None:
                 self._cast_take_photos(chat_id, sess, lang, _cast_item)
                 return
 
-        if sess.awaiting_animate_photo:
+        if owns_input('awaiting_animate_photo') and sess.awaiting_animate_photo:
             _anim_item = next((it for it in batch if it.get("type") in ("photo", "album")), None)
             if _anim_item is not None:
                 self._register_animate_photo(chat_id, sess, lang, _anim_item)
@@ -313,7 +377,7 @@ class ResolveMixin:
         # then reuse the EXISTING style preset/custom keyboard and callbacks
         # (_cb_style_preset/_cb_style_custom) by arming pending_style_target
         # exactly as _cb_style_image does once a picture is already current.
-        if sess.awaiting_style_photo:
+        if owns_input('awaiting_style_photo') and sess.awaiting_style_photo:
             _style_item = next((it for it in batch if it.get("type") in ("photo", "album")), None)
             if _style_item is not None:
                 self._register_style_photo(chat_id, sess, lang, _style_item)
@@ -328,7 +392,7 @@ class ResolveMixin:
         # prompt would silently resurrect and run the forgotten instruction.
         # Cleared unconditionally here; the "ask instead of guessing" block
         # below re-arms it fresh if THIS batch also turns out to need asking.
-        if sess.pending_instruction:
+        if owns_input('pending_instruction') and sess.pending_instruction:
             sess.pending_instruction = ""
             try: self._store.put(sess)
             except Exception:
@@ -399,7 +463,7 @@ class ResolveMixin:
                         continue
                     self._resolve_and_push(chat_id, [_item])
                 _said = self._fwd_batch(chat_id, _fwd_items, ask=not _words)
-                if _generation != sess.context_generation:
+                if not still_current():
                     return
                 if not _said or not _words:
                     return
@@ -473,7 +537,7 @@ class ResolveMixin:
 
         fwd, fwd_at = [], None
         for item in batch:
-            if _generation != sess.context_generation:
+            if not still_current():
                 return
             t = item["type"]
             if item.get("image_id"):
@@ -483,7 +547,7 @@ class ResolveMixin:
             # never reaches the agent. Handled before everything else so a
             # photo dropped mid-collection can't also get merged into texts/
             # img_bytes below and pushed as an ordinary picture message.
-            if getattr(sess, "reg_state", "") == "lora_collect" and t in ("photo", "album"):
+            if owns_input('reg_state') and getattr(sess, "reg_state", "") == "lora_collect" and t in ("photo", "album"):
                 cap = (item.get("caption") or "").strip()
                 if t == "photo":
                     self._lora_collect_photo(chat_id, sess, lang, item["file_id"], cap)
@@ -494,7 +558,7 @@ class ResolveMixin:
 
             if t == "text":
                 raw = item["text"]
-                if (sess.menu == "randomizer_range" and not raw.startswith("/")
+                if (input_menu == "randomizer_range" and not raw.startswith("/")
                         and not tg_bot._LABEL2KEY.get(raw.strip())):
                     from tg_randomizer import range_text
                     range_text(self, chat_id, sess, lang, raw)
@@ -507,19 +571,19 @@ class ResolveMixin:
                 # its answer, a song topic left armed sang it.
                 if (not item.get("fwd_said") and not raw.startswith("/")
                         and not tg_bot._LABEL2KEY.get(raw.strip())):
-                    if (getattr(sess, "lyrics_state", "")
+                    if (owns_input('lyrics_state') and getattr(sess, "lyrics_state", "")
                             and self._lyrics_take_text(chat_id, sess, lang, raw)):
                         continue
-                    if (getattr(sess, "cover_state", "")
+                    if (owns_input('cover_state') and getattr(sess, "cover_state", "")
                             and self._cover_take_link(chat_id, sess, lang, raw)):
                         continue
-                    if (getattr(sess, "continue_state", "") == "want_text"
+                    if (owns_input('continue_state') and getattr(sess, "continue_state", "") == "want_text"
                             and self._continue_take_text(chat_id, sess, lang, raw)):
                         continue
-                    if (getattr(sess, "restyle_state", "") == "want_text"
+                    if (owns_input('restyle_state') and getattr(sess, "restyle_state", "") == "want_text"
                             and self._restyle_take_text(chat_id, sess, lang, raw)):
                         continue
-                    if (getattr(sess, "cover_state", "") == "want_text"
+                    if (owns_input('cover_state') and getattr(sess, "cover_state", "") == "want_text"
                             and self._cover_take_text(chat_id, sess, lang, raw)):
                         continue
                 if item.get("fwd_said"):
@@ -546,7 +610,7 @@ class ResolveMixin:
                         texts.append("")
                     texts[fwd_at] = tg_bot._FWD_TEXT_FRAME.format(text="\n".join(fwd))
                     # a forwarded link is material too (a forwarded Short must be watched, not refused)
-                    if ("://" in raw and not sess.reg_state and not sess.pending_prefix
+                    if ("://" in raw and not sess.reg_state and not input_prefix
                             and not os.getenv("F5_TEST_RUN")):
                         if self._read_links(ctx, sess, chat_id, user, raw, scaffold):
                             return   # a long video: the portioned-job offer is the answer
@@ -578,7 +642,7 @@ class ResolveMixin:
 
                 # ✍️ Свой вариант was pressed: this text is the request about
                 # the forwarded material, which rides along as a quotation.
-                if (not key and not raw.startswith("/") and getattr(sess, "fwd_own", "")):
+                if (owns_input('fwd_own') and not key and not raw.startswith("/") and getattr(sess, "fwd_own", "")):
                     texts.append(tg_bot._FWD_TEXT_FRAME.format(text=sess.fwd_own))
                     texts.append(self._as_request(item, raw))
                     sess.fwd_own = ""
@@ -586,39 +650,39 @@ class ResolveMixin:
                     continue
 
                 # 📚 a voice is waiting for its name: plain text is the name
-                if (not key and not raw.startswith("/") and getattr(sess, "voice_naming", "")
+                if (owns_input('voice_naming') and not key and not raw.startswith("/") and getattr(sess, "voice_naming", "")
                         and self._vl_take_name(chat_id, sess, lang, raw)):
                     continue
 
                 # 👥 a character's action is the next plain text
-                if (not key and not raw.startswith("/") and sess.cast_state.startswith("act:")
+                if (owns_input('cast_state') and not key and not raw.startswith("/") and sess.cast_state.startswith("act:")
                         and self._cast_take_text(chat_id, sess, lang, raw)):
                     continue
 
                 # 🎬 Animate collects voices: a video link's sound is the next sample.
-                if (not key and getattr(sess, "anim_voice_state", "") == "collect"
+                if (owns_input('anim_voice_state') and not key and getattr(sess, "anim_voice_state", "") == "collect"
                         and self._anim_voice_take_link(chat_id, sess, lang, raw)):
                     continue
 
                 # 📚 Audiobook waits for the narrator: a video link is the sample, not a video to retell.
-                if (not key and getattr(sess, "book_state", "") == "want_voice"
+                if (owns_input('book_state') and not key and getattr(sess, "book_state", "") == "want_voice"
                         and self._book_take_link(chat_id, sess, lang, raw)):
                     continue
 
                 # 📚 Audiobook waits for the book: a pasted text is the book, a short one only a hint.
-                if (not key and not raw.startswith("/") and getattr(sess, "book_state", "") == "want_book"
+                if (owns_input('book_state') and not key and not raw.startswith("/") and getattr(sess, "book_state", "") == "want_book"
                         and self._book_take_text(chat_id, sess, lang, raw)):
                     continue
 
                 # 🎙 Clone voice armed + a video link: the video's voice is the
                 # sample.
-                if (not key and getattr(sess, "clone_state", "")
+                if (owns_input('clone_state') and not key and getattr(sess, "clone_state", "")
                         and self._clone_take_link(chat_id, sess, lang, raw)):
                     continue
 
                 # 🎙 Clone voice has a voice: plain text (not a button, not a
                 # /command) is the next thing to say in it.
-                if (not key and not raw.startswith("/")
+                if (owns_input('clone_state') and not key and not raw.startswith("/")
                         and getattr(sess, "clone_state", "") == "want_text"
                         and self._clone_take_text(chat_id, sess, lang, raw)):
                     continue
@@ -660,24 +724,25 @@ class ResolveMixin:
                     continue
 
                 direct = tg_bot._DIRECT_KB.get(key, "")
-                if not direct and _tg_music.is_reset_phrase(raw, ctx=self.reads):
+                if not key and not direct and _tg_music.is_reset_phrase(raw, ctx=self.reads):
                     direct = "__song_reset__"
-                if direct and direct != "__clone_voice__":
+                leave_capture = bool(direct or key in tg_bot._PROMPT_KB)
+                if leave_capture and direct != "__clone_voice__":
                     self._clone_disarm(sess)
-                if direct and direct != "__cover__":
+                if leave_capture and direct != "__cover__":
                     self._cover_disarm(sess)
-                if direct and direct not in ("__lyrics_improve__", "__lyrics_write__"):
+                if leave_capture and direct not in ("__lyrics_improve__", "__lyrics_write__"):
                     self._lyrics_disarm(sess)
-                if direct and direct != "__restyle__":
+                if leave_capture and direct != "__restyle__":
                     self._restyle_disarm(sess)
-                if direct and direct != "__continue_video__":
+                if leave_capture and direct != "__continue_video__":
                     self._continue_disarm(sess)
-                if direct and direct != "__audiobook__":
+                if leave_capture and direct != "__audiobook__":
                     self._book_disarm(sess)
-                if direct and direct != "__joint_video__" and sess.cast_state:
+                if leave_capture and direct != "__joint_video__" and sess.cast_state:
                     sess.cast_state = ""            # a menu press leaves the 👥 card
                     self._store.put(sess)
-                if direct and (getattr(sess, "anim_voice_state", "") or getattr(sess, "voice_naming", "")):
+                if leave_capture and (getattr(sess, "anim_voice_state", "") or getattr(sess, "voice_naming", "")):
                     sess.anim_voice_state = ""      # a menu press ends 🎙 sample collection
                     sess.voice_naming = ""          # ... and an unanswered «как подписать»
                     self._store.put(sess)
@@ -1014,7 +1079,7 @@ class ResolveMixin:
                 # A genuine text turn — one that reaches here, i.e. is neither a
                 # recognised button nor a forwarded-voice answer — means the user
                 # has moved on; disarm it.
-                if sess.pending_photo:
+                if owns_input('pending_photo') and sess.pending_photo:
                     sess.pending_photo = ""
                     self._store.put(sess)
 
@@ -1024,9 +1089,9 @@ class ResolveMixin:
                 # Same for a forecast asked in plain words: the weather API
                 # answers it; web search does not.
                 _wx = _tg_weather.weather_request(raw, ctx=self.reads) \
-                    if not sess.reg_state and not sess.pending_prefix else {}
-                if (not _wx and sess.menu == "weather" and not sess.reg_state
-                        and not sess.pending_prefix):
+                    if not sess.reg_state and not input_prefix else {}
+                if (not _wx and input_menu == "weather" and not sess.reg_state
+                        and not input_prefix):
                     _wx = _tg_weather.weather_followup(raw, ctx=self.reads)   # "а в Сочи?"
                 if _wx:
                     # "а в Москве?" after "погода завтра в Париже" means
@@ -1039,7 +1104,8 @@ class ResolveMixin:
                     if _wx["date"] is not None and _wx["date"] < _dtm.date.today():
                         _wx = dict(_wx, date=None)   # a stale "tomorrow" from days ago
                     _when[chat_id] = (_wx["date"], _wx["hours"])
-                    self._goto_menu(sess, "weather")
+                    if owns_input('menu'):
+                        self._goto_menu(sess, "weather")
                     # An English question gets an English forecast, whatever the
                     # session language.
                     from tg_tasks import _message_script
@@ -1062,8 +1128,9 @@ class ResolveMixin:
                     _is_song, _secs = True, _tg_songs.request_seconds(raw, after_song=True, ctx=self.reads)
                 else:
                     _last_song = ""
-                if _is_song and not sess.reg_state and not sess.pending_prefix:
-                    self._goto_menu(sess, "creativity")
+                if _is_song and not sess.reg_state and not input_prefix:
+                    if owns_input('menu'):
+                        self._goto_menu(sess, "creativity")
                     self._activity.log(chat_id, "system",
                                        f"[songs] typed request -> song flow: {raw[:80]}",
                                        (user.name if user else str(chat_id)))
@@ -1095,12 +1162,12 @@ class ResolveMixin:
                 # suite may reach the network. Not inside an armed capture
                 # state (a password, a song topic) and not for machine text.
                 # (a link is MATERIAL: one in the replied-to message is read too)
-                if ("://" in _req and not sess.reg_state and not sess.pending_prefix
+                if ("://" in _req and not sess.reg_state and not input_prefix
                         and raw not in tg_bot._MACHINE_PAYLOADS
                         and not os.getenv("F5_TEST_RUN")):
                     if self._read_links(ctx, sess, chat_id, user, _req, scaffold):
                         return   # a long video: the portioned-job offer is the answer
-                elif (getattr(sess, "last_link", None) and "?" in raw and not sess.pending_prefix
+                elif (getattr(sess, "last_link", None) and "?" in raw and not input_prefix
                         and not os.getenv("F5_TEST_RUN")):
                     # «а когда основан?» after a link was answered from the cut
                     # fitted to the first question: refit the page to this one.
@@ -1132,12 +1199,12 @@ class ResolveMixin:
                 _seen = (self._look_video(ctx, item["file_id"], data=_data, lang=(sess.lang or "ru"),
                                           transcript=transcribed or "")
                          if _media == "video" else {})
-                if _generation != sess.context_generation:
+                if not still_current():
                     return
                 if not transcribed and not _seen.get("description"):
                     self._send_text(chat_id, tg_bot._t("no_transcribe", lang),
                                     keyboard=self._main_menu_kb(sess, lang)); return
-                texts.append(((item.get("caption") or "") + " " + (transcribed or "")).strip())
+                texts.append(self._as_request(item, ((item.get("caption") or "") + " " + (transcribed or "")).strip()))
                 if _seen.get("description"):
                     # The picture of the video, for the model: what the
                     # frames show, so «что это у меня?» is answered from the
@@ -1174,7 +1241,7 @@ class ResolveMixin:
                 _seen = (self._look_video(ctx, item["file_id"], data=_data, lang=(sess.lang or "ru"),
                                           transcript=said or "", caption=item.get("caption") or "")
                          if _media == "video" else {})
-                if _generation != sess.context_generation:
+                if not still_current():
                     return
                 if _seen.get("description"):
                     # A forwarded VIDEO is listened to AND looked at: the
@@ -1273,7 +1340,7 @@ class ResolveMixin:
                 # the model acknowledges receipt and waits for user instructions.
                 # Unless 📷 Analyze Photo was pressed first — that arms an
                 # instruction for exactly this photo. A caption wins over it.
-                elif sess.pending_photo:
+                elif owns_input('pending_photo') and sess.pending_photo:
                     texts.append(sess.pending_photo)
                     sess.pending_photo = ""
                     self._store.put(sess)
@@ -1289,7 +1356,7 @@ class ResolveMixin:
                         _album_extra_bytes.append(data)
                 cap = (item.get("caption") or "").strip()
                 if cap: texts.append(cap)
-                elif sess.pending_photo:
+                elif owns_input('pending_photo') and sess.pending_photo:
                     texts.append(sess.pending_photo)
                     sess.pending_photo = ""
                     self._store.put(sess)
@@ -1392,7 +1459,7 @@ class ResolveMixin:
                         # when there is no working folder for the file to live in.
                         # Otherwise it goes to the sandbox and the agent reads it
                         # there (indexing a crash log would stall on embeddings).
-                        _index = sess.menu == "library" or not _saved_as
+                        _index = input_menu == "library" or not _saved_as
                         if _index:
                             self._index_document(chat_id, sess, tmp, fname,
                                                  sandboxed=bool(_saved_as),
@@ -1491,7 +1558,7 @@ class ResolveMixin:
         # answer a file upload by generating a picture. A prompt prefix is an
         # instruction about the user's next words; with none to attach to it must
         # WAIT rather than seize our scaffolding.
-        if merged and sess.pending_prefix:
+        if merged and input_prefix:
             # «привет» typed in the Озон menu searched shampoo (2026-10-27): an
             # armed prefix may only seize a real request for its kind of work.
             # Plain conversation -- the intent read says needs_tool False --
@@ -1503,9 +1570,11 @@ class ResolveMixin:
             except Exception:
                 chatty = False
             if not chatty:
-                merged = sess.pending_prefix + merged
-                sess.pending_prefix = ""
-                sess.pending_outfit_target = ""   # 👗 answered in words, not a photo
+                merged = input_prefix + merged
+                if owns_input('pending_prefix') and sess.pending_prefix == input_prefix:
+                    sess.pending_prefix = ""
+                if owns_input('pending_outfit_target'):
+                    sess.pending_outfit_target = ""   # 👗 answered in words, not a photo
                 try: self._store.put(sess)
                 except Exception:
                     tg_bot.logger.warning("session persist failed", exc_info=True)
@@ -1676,7 +1745,7 @@ class ResolveMixin:
         # tempfile: tg_queue.py's post-task cleanup unlinks task.image_path, which
         # is the same string as the register path.
         img_path = ""
-        if _generation != sess.context_generation:
+        if not still_current():
             return
         if img_bytes:
             img_path = _save_image_bytes(img_bytes)
@@ -1765,6 +1834,22 @@ class ResolveMixin:
             return
 
         selection = 'upload' if img_path else 'explicit' if pressed_image_id else 'context'
+        file_entry = (tg_bot._image_by_path(sess, img_path) if img_path else
+                      tg_bot._image_by_id(sess, pressed_image_id))
+        if not file_entry:
+            last = (sess.image_log or [None])[-1]
+            file_entry = last if last and time.time() - float(last.get('ts') or 0) < 3600 else None
+        if (file_entry and own_words and len(own_words) <= 60
+                and not tg_bot._LABEL2KEY.get(own_words.strip())
+                and any(not it.get('forwarded') for it in batch)):
+            from tg_dispatch import _asks_as_file
+            if _asks_as_file(own_words, ctx=self.reads):
+                if not still_current():
+                    return
+                if self._send_document(chat_id, file_entry['path'], feedback=''):
+                    return
+        if not still_current():
+            return
         if not img_path:
             pressed_image_id = pressed_image_id or sess.turn_image
         if (not any('_target_captured' in it for it in batch)

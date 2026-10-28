@@ -39,10 +39,12 @@ from seams import dep, text_model
 import ask_read
 
 import logging
+import contextvars
+from contextlib import contextmanager
+from copy import deepcopy
 import os
 import re
 import threading
-import time
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, ValidationError
@@ -307,7 +309,6 @@ def ask_yes(question: str, text: str, default: bool = False, wait: bool = True, 
 # read as shopping (2026-10-24).
 PREVIOUS_CHARS = 900
 _MENU = None
-_CACHE: "OrderedDict[tuple, dict]" = OrderedDict()
 _LOCK = threading.Lock()
 
 
@@ -325,22 +326,47 @@ def _menu():
     return _MENU
 
 
-# One read per message: about twenty places read the same words, each with its own
-# context -- none, the previous line, «a photo», the English translation, the two joined -- and
-# a message cost 4-7 model calls (~2 s each) before any work began (log 2026-10-26: 5 per task
-# was the mode, 10 the worst). The turn binds its words and its context once; a read of those
-# words, as written or translated, is that one read. A caller with a fact of its own («several
-# pictures earlier in the chat») still gets its own.
-#
-# The Telegram side reads the message in three threads before the graph runs (the debounce
-# loop: song reset, forecast; the task: reply language, voice), each with the text in another
-# shape -- bare, with a link note under it, collapsed -- and a message cost six reads (trace
-# 2026-10-26). So a turn is also found by its words, from any thread: the bot binds it on
-# arrival (entry=True), and the graph's own bind joins that turn instead of opening another.
-_TURN = threading.local()
-_BY_WORDS: dict = {}          # normalized words -> turn
-TURN_TTL = 600
+_TURN = contextvars.ContextVar("intent_turn", default=None)
 _SCAFFOLD = re.compile(r"\[The (?:user|video|file|page)\b[^\]]*\]", re.S)
+
+
+class _Turn(dict):
+    def __init__(self, snapshot=None):
+        super().__init__(deepcopy(snapshot or {}))
+        self.lock = threading.RLock()
+        self["texts"] = set(self.get("texts", ()))
+        self["contexts"] = set(self.get("contexts", ()))
+        self["reads"] = {tuple(k): v for k, v in self.get("reads", ())}
+        self["asks"] = dict(self.get("asks", {}))
+
+
+def current_turn():
+    """The current request's runtime state, or None outside a request."""
+    return _TURN.get()
+
+
+@contextmanager
+def turn_scope(snapshot=None):
+    """Own a fresh/restored request, or share its runtime state across graph nodes."""
+    turn = snapshot if isinstance(snapshot, _Turn) else _Turn(snapshot)
+    token = _TURN.set(turn)
+    try:
+        yield turn
+    finally:
+        _TURN.reset(token)
+
+
+def snapshot_turn() -> dict:
+    """A detached JSON-compatible snapshot for the durable task queue."""
+    turn = current_turn()
+    if turn is None:
+        return {}
+    with turn.lock:
+        out = deepcopy(dict(turn))
+        out["texts"] = sorted(out["texts"])
+        out["contexts"] = sorted(out["contexts"])
+        out["reads"] = [[list(k), v] for k, v in out["reads"].items()]
+        return out
 
 
 def _norm(text: str) -> str:
@@ -349,49 +375,37 @@ def _norm(text: str) -> str:
 
 
 def bind_turn(texts, previous: str = "", attached: str = "", entry: bool = False) -> None:
-    """This turn's own words (the first is the canonical form) and the context every read of
-    them gets. `entry`: bound where the message arrives; a later bind of the same words joins it."""
+    """Bind words within this request. `entry` starts a new message, never a text lookup."""
     texts = [str(t).strip() for t in texts if t and str(t).strip()]
-    if not texts:
-        _TURN.turn = None
-        return
-    now = time.time()
-    with _LOCK:
-        for k in [k for k, v in _BY_WORDS.items() if now - v["t"] > TURN_TTL]:
-            del _BY_WORDS[k]
-        old = _BY_WORDS.get(_norm(texts[0]))
-        if not entry and old and old["entry"] and not old["claimed"]:
-            old["claimed"] = True
-            turn = old
-            turn["texts"].update(texts)
-            turn["contexts"].add(attached or "")     # the graph's own view of what came with it
-        else:
-            turn = {"texts": set(texts), "canon": _norm(texts[0]) if entry else texts[0],
-                    "previous": previous or "", "attached": attached or "",
-                    "entry": entry, "claimed": False, "t": now, "contexts": {attached or ""}}
+    turn = current_turn()
+    if turn is None:
+        turn = _Turn()
+        _TURN.set(turn)
+    with turn.lock:
+        if not texts:
+            turn.clear()
+            turn.update(texts=set(), contexts=set(), reads={}, asks={})
+            return
+        if entry or _norm(texts[0]) not in turn["texts"]:
+            turn.clear()
+            turn.update(texts=set(), contexts=set(), reads={}, asks={},
+                        canon=_norm(texts[0]), previous=previous or "", attached=attached or "")
+        turn["texts"].update(texts)
         turn["texts"].update(_norm(t) for t in texts)
-        for t in texts:
-            _BY_WORDS[_norm(t)] = turn
-    _TURN.turn = turn
+        turn["contexts"].add(attached or "")
 
 
 def turn_alias(text: str) -> None:
     """Another form of this turn's words (the translation) that reads as the same message."""
-    turn = getattr(_TURN, "turn", None)
+    turn = current_turn()
     if turn and text and str(text).strip():
-        with _LOCK:
+        with turn.lock:
             turn["texts"].update((str(text).strip(), _norm(text)))
-            _BY_WORDS[_norm(text)] = turn
 
 
 def _bound(text: str, previous: str, attached: str):
-    turn = getattr(_TURN, "turn", None)
-    if not turn:
-        with _LOCK:
-            turn = _BY_WORDS.get(_norm(text))
-        if turn and time.time() - turn["t"] > TURN_TTL:
-            turn = None
-    if not turn:
+    turn = current_turn()
+    if not turn or "canon" not in turn:
         return text, previous, attached
     texts = turn["texts"]
     # the original and its translation joined («нарисуй Пушкина… draw Pushkin…») is the same message
@@ -426,16 +440,23 @@ def _same_or_analogue(ctx, text: str, out: dict) -> None:
 def read(ctx, text: str, previous: str = "", attached: str = "") -> dict:
     """`previous`: the last assistant line. `attached`: what came with the
     message ("a photo", "a CSV with numbers"), "" when nothing did."""
+    turn = current_turn()
+    if turn is None:
+        return _read(ctx, text, previous, attached, {})
+    with turn.lock:
+        return _read(ctx, text, previous, attached, turn["reads"])
+
+
+def _read(ctx, text: str, previous: str, attached: str, cache: dict) -> dict:
     text = (text or "").strip()
     if not text:
         return dict(FALLBACK)
     text, previous, attached = _bound(text, previous, attached)
-    if os.getenv("F5_TEST_RUN") and not os.getenv("INTENT_LIVE"):
+    if os.getenv("F5_TEST_RUN") and not (os.getenv("INTENT_LIVE") or dep(ctx, "live", False)):
         return dict(FALLBACK)
     key = (text, (previous or "")[:PREVIOUS_CHARS], attached)
-    with _LOCK:
-        if key in _CACHE:
-            return dict(_CACHE[key])
+    if key in cache:
+        return deepcopy(cache[key])
     # The message is DATA to classify: bare, the model answered it instead
     # («объясни теорему Пифагора» came back as the theorem, 26/134).
     user = ""
@@ -467,12 +488,10 @@ def read(ctx, text: str, previous: str = "", attached: str = "") -> dict:
         out["ok"] = True
     except Exception:
         logger.warning("intent: model read failed, taking the full loop", exc_info=True)
+        cache[key] = dict(FALLBACK)
         return dict(FALLBACK)
     if os.getenv("INTENT_TRACE") and not attached:
         import traceback; logger.info("intent-trace %s", " | ".join("%s:%d" % (f.name, f.lineno) for f in traceback.extract_stack()[-7:-1]))
     logger.info("intent: %r%s -> %s", text[:80], (" [with: %s]" % attached) if attached else "", out)
-    with _LOCK:
-        _CACHE[key] = out
-        while len(_CACHE) > 256:
-            _CACHE.popitem(last=False)
-    return dict(out)
+    cache[key] = out
+    return deepcopy(out)

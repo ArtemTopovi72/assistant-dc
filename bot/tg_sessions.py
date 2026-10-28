@@ -98,11 +98,20 @@ class _Session:
     PHOTO_WAITS = ("pending_style_target", "pending_outfit_target", "pending_swap_target",
                    "awaiting_animate_photo", "awaiting_style_photo")
     PHOTO_WAIT_TTL_S = 10 * 60
+    FLOW_STATES = ('anim_voice_state', 'book_state', 'continue_state',
+                   'restyle_state', 'cover_state', 'clone_state')
+    INPUT_STATES = frozenset(_WAIT_STR + _WAIT_BOOL + ('menu', 'reg_state', 'cast_state'))
 
     def __setattr__(self, name, value):
+        if name in self.INPUT_STATES:
+            revisions = self.__dict__.setdefault('_flow_revisions', {})
+            revisions[name] = revisions.get(name, 0) + 1
         if value and name in self.PHOTO_WAITS:
             self.__dict__.setdefault("_wait_ts", {})[name] = time.time()
         object.__setattr__(self, name, value)
+
+    def flow_revision(self, name):
+        return self.__dict__.get('_flow_revisions', {}).get(name, 0)
 
     def expire_photo_waits(self) -> bool:
         """Disarm the photo waits older than PHOTO_WAIT_TTL_S; True when one was dropped."""
@@ -363,6 +372,11 @@ class _Session:
         # forecast can re-fetch WITHOUT re-typing (and re-geocoding, and possibly
         # re-running the LLM city-correction) the city all over again.
         self.wtw_loc: dict = d.get("wtw_loc", {}) or {}
+        stored_revisions = d.get('flow_revisions')
+        if isinstance(stored_revisions, dict):
+            self.__dict__['_flow_revisions'].update({
+                name: value for name, value in stored_revisions.items()
+                if name in self.INPUT_STATES and type(value) is int and value >= 0})
         self._lock           = threading.Lock()
 
     def get_history(self):
@@ -493,6 +507,7 @@ class _Session:
             return {
                 'context_generation': self.context_generation,
                 'context_revision': self.context_revision,
+                'flow_revisions': dict(self._flow_revisions),
                 "history":          self.history,
                 "reply_mode":       self.reply_mode,
                 "think":            self.think,

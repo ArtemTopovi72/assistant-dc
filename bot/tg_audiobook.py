@@ -16,6 +16,7 @@ import uuid
 
 import audiobook
 import progress
+from seams import module
 
 MIN_PASTED_BOOK = 1500                   # a shorter pasted text is not a book: the user is told to send the file
 SPEECH_CHARS_PER_SECOND = 14.0           # measured on the F5 Russian voice, for the «about N min» line
@@ -89,14 +90,20 @@ class AudiobookMixin:
         url = tg_links.video_url(text)
         if not url:
             return False
+        expected = (getattr(sess, "context_generation", 0), sess.book_state,
+                    getattr(sess, "flow_revision", lambda _: 0)("book_state"))
         self._send_text(chat_id, tg_bot._t("clone_working", lang))
 
         def job():
             src = self.voice_clone.fetch_sample(url, self._book_dir(chat_id), self.links.fetch_video)
+            current = self._get_session(chat_id)
+            if expected != (getattr(current, "context_generation", 0), current.book_state,
+                            getattr(current, "flow_revision", lambda _: 0)("book_state")):
+                return
             if not src:
                 self._send_text(chat_id, tg_bot._t("clone_fail_no_audio", lang))
                 return
-            self._book_prepare(chat_id, lang, src)
+            self._book_prepare(chat_id, lang, src, expected)
         self._run_busy(chat_id, job)
         return True
 
@@ -117,6 +124,9 @@ class AudiobookMixin:
     def _book_take_media(self, chat_id: int, sess, lang: str, msg: dict) -> bool:
         """Consume the sample / the book while armed. True when it was ours."""
         state = getattr(sess, "book_state", "")
+        generation = msg.get("_context_generation", getattr(sess, "context_generation", 0))
+        flow_revision = getattr(sess, "flow_revision", lambda _: 0)
+        revision = msg.get("_flow_revision", flow_revision("book_state"))
         if state == "want_voice":
             media = self._clone_media_of(msg)
             if not media:
@@ -125,14 +135,20 @@ class AudiobookMixin:
                     return True
                 return False
             data = self._dl_bytes(media[0])
+            if (generation != getattr(sess, "context_generation", 0) or sess.book_state != state
+                    or revision != flow_revision("book_state")):
+                return True
             if not data:
                 self._send_text(chat_id, tg_bot._t("clone_fail_no_audio", lang))
                 return True
-            src = os.path.join(self._book_dir(chat_id), "sample" + media[1])
+            src = os.path.join(self._book_dir(chat_id), f"sample_{uuid.uuid4().hex[:8]}{media[1]}")
             with open(src, "wb") as fh:
                 fh.write(data)
             self._send_text(chat_id, tg_bot._t("clone_working", lang))
-            self._run_busy(chat_id, self._book_prepare, chat_id, lang, src)
+            if msg.get("_worker_media"):
+                self._book_prepare(chat_id, lang, src, (generation, state, revision))
+            else:
+                self._run_busy(chat_id, self._book_prepare, chat_id, lang, src, (generation, state, revision))
             return True
         if state == "want_book":
             book = self._book_doc_of(msg)
@@ -148,28 +164,46 @@ class AudiobookMixin:
                                                    limit=f"{_bot_file_limit() // (1024 * 1024)}"))
                 return True
             data = self._dl_bytes(fid)
+            if (generation != getattr(sess, "context_generation", 0) or sess.book_state != state
+                    or revision != flow_revision("book_state")):
+                return True
             if not data:
                 self._send_text(chat_id, tg_bot._t("book_fail_read", lang))
                 return True
-            path = os.path.join(self._book_dir(chat_id), "book" + (".fb2.zip" if name.lower().endswith(".fb2.zip")
+            path = os.path.join(self._book_dir(chat_id), "book_" + uuid.uuid4().hex[:8] + (".fb2.zip" if name.lower().endswith(".fb2.zip")
                                                                   else os.path.splitext(name)[1].lower()))
             with open(path, "wb") as fh:
                 fh.write(data)
-            self._run_busy(chat_id, self._book_open, chat_id, lang, path)
+            if msg.get("_worker_media"):
+                self._book_open(chat_id, lang, path, (generation, state, revision))
+            else:
+                self._run_busy(chat_id, self._book_open, chat_id, lang, path, (generation, state, revision))
             return True
         return False
 
-    def _book_prepare(self, chat_id: int, lang: str, src: str) -> None:
+    def _book_prepare(self, chat_id: int, lang: str, src: str, expected=None) -> None:
         sess = self._get_session(chat_id)
+        expected = expected or (getattr(sess, "context_generation", 0), getattr(sess, "book_state", ""),
+                                getattr(sess, "flow_revision", lambda _: 0)("book_state"))
+        def active():
+            current = self._get_session(chat_id)
+            return expected == (getattr(current, "context_generation", 0), getattr(current, "book_state", ""),
+                                getattr(current, "flow_revision", lambda _: 0)("book_state"))
+        if not active():
+            return
         try:
             ref, text = self.voice_clone.prepare_reference(self._get_ctx(), src, self._book_dir(chat_id),
                                                       lang=(sess.lang or "ru"))
         except self.voice_clone.CloneError as exc:
-            self._send_text(chat_id, tg_bot._t("clone_fail_" + str(exc), lang))
+            if active():
+                self._send_text(chat_id, tg_bot._t("clone_fail_" + str(exc), lang))
             return
         except Exception:
             tg_bot.logger.exception("[audiobook] preparing the voice failed for chat %s", chat_id)
-            self._send_text(chat_id, tg_bot._t("clone_fail_no_audio", lang))
+            if active():
+                self._send_text(chat_id, tg_bot._t("clone_fail_no_audio", lang))
+            return
+        if not active():
             return
         sess = self._get_session(chat_id)
         sess.book_ref, sess.book_ref_text, sess.book_state = ref, text, "want_book"
@@ -183,14 +217,24 @@ class AudiobookMixin:
         if len(text) < MIN_PASTED_BOOK:
             self._send_text(chat_id, tg_bot._t("book_ask_book", lang), parse_mode="HTML")
             return True
-        path = os.path.join(self._book_dir(chat_id), "book.txt")
+        expected = (getattr(sess, "context_generation", 0), sess.book_state,
+                    getattr(sess, "flow_revision", lambda _: 0)("book_state"))
+        path = os.path.join(self._book_dir(chat_id), f"book_{uuid.uuid4().hex[:8]}.txt")
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(text)
-        self._run_busy(chat_id, self._book_open, chat_id, lang, path)
+        self._run_busy(chat_id, self._book_open, chat_id, lang, path, expected)
         return True
 
-    def _book_open(self, chat_id: int, lang: str, path: str) -> None:
+    def _book_open(self, chat_id: int, lang: str, path: str, expected=None) -> None:
         sess = self._get_session(chat_id)
+        expected = expected or (getattr(sess, "context_generation", 0), getattr(sess, "book_state", ""),
+                                getattr(sess, "flow_revision", lambda _: 0)("book_state"))
+        def active():
+            current = self._get_session(chat_id)
+            return expected == (getattr(current, "context_generation", 0), getattr(current, "book_state", ""),
+                                getattr(current, "flow_revision", lambda _: 0)("book_state"))
+        if not active():
+            return
         ref, ref_text = sess.book_ref, sess.book_ref_text
         if not ref or not os.path.exists(ref):
             sess.book_state = "want_voice"
@@ -198,29 +242,47 @@ class AudiobookMixin:
             self._send_text(chat_id, tg_bot._t("book_ask_voice", lang), parse_mode="HTML")
             return
         try:
-            chapters = audiobook.split_chapters(audiobook.read_book(
-                path, on_scanned=lambda pages: self._send_text(chat_id, tg_bot._t("book_ocr", lang, n=pages, m=max(1, pages * 5 // 60)))))
+            reader = module(self, "audiobook")
+            chapters = reader.split_chapters(reader.read_book(
+                path, on_scanned=lambda pages: active() and self._send_text(chat_id, tg_bot._t("book_ocr", lang, n=pages, m=max(1, pages * 5 // 60)))))
         except Exception:
             tg_bot.logger.exception("[audiobook] reading the book failed for chat %s", chat_id)
-            self._send_text(chat_id, tg_bot._t("book_fail_read", lang))
+            if active():
+                self._send_text(chat_id, tg_bot._t("book_fail_read", lang))
             return
         finally:
             if os.path.exists(path):
                 os.unlink(path)                  # the book is not kept (nor indexed anywhere)
+        if not active():
+            return
         if not chapters:
             self._send_text(chat_id, tg_bot._t("book_fail_read", lang))
             return
         sess.book_state = ""                     # disarmed before the slow part
+        expected = (getattr(sess, "context_generation", 0), sess.book_state,
+                    getattr(sess, "flow_revision", lambda _: 0)("book_state"))
         self._store.put(sess)
         minutes = max(1, int(sum(len(b) for _, b in chapters) / SPEECH_CHARS_PER_SECOND / 60))
-        keep = os.path.join(self._book_dir(chat_id), "narrator" + os.path.splitext(ref)[1])
+        keep = os.path.join(self._book_dir(chat_id), "narrator_" + uuid.uuid4().hex[:8] + os.path.splitext(ref)[1])
         if os.path.abspath(keep) != os.path.abspath(ref):
-            shutil.copyfile(ref, keep)           # the job outlives the sample's temp home
+            module(self, "shutil").copyfile(ref, keep)  # the job outlives the sample's temp home
+        if not active():
+            return
         self._job_save(chat_id, {"chapters": chapters, "ref": keep, "ref_text": ref_text, "next": 0})
         self._run_cancellable(chat_id, tg_bot._t("book_working", lang, n=len(chapters), m=minutes),
-                              self._book_run, chat_id, lang, chapters, keep, ref_text, 0, lang=lang)
+                              self._book_run, chat_id, lang, chapters, keep, ref_text, 0, expected, lang=lang)
 
-    def _book_run(self, ctx, chat_id: int, lang: str, chapters: list, ref: str, ref_text: str, start: int = 0) -> None:
+    def _book_run(self, ctx, chat_id: int, lang: str, chapters: list, ref: str, ref_text: str, start: int = 0, expected=None) -> None:
+        def cancelled():
+            if ctx.is_cancelled():
+                return True
+            if expected is None:
+                return False
+            current = self._get_session(chat_id)
+            return expected != (getattr(current, "context_generation", 0), current.book_state,
+                                getattr(current, "flow_revision", lambda _: 0)("book_state"))
+        if cancelled():
+            return
         work = os.path.join(self._book_dir(chat_id), "run_" + uuid.uuid4().hex[:8])   # one per job: two books never share files
         os.makedirs(work, exist_ok=True)
 
@@ -234,29 +296,36 @@ class AudiobookMixin:
             for n, (title, body) in enumerate(chapters, start=1):
                 if n <= start:
                     continue
-                if ctx.is_cancelled():
+                if cancelled():
                     return
                 wav = os.path.join(work, f"ch{n}.wav")
-                if not audiobook.render_chapter(synth, title, body, n, wav, cancelled=ctx.is_cancelled, verify=verify,
+                if not audiobook.render_chapter(synth, title, body, n, wav, cancelled=cancelled, verify=verify,
                                                 on_piece=lambda i, total: progress.report(ctx, i, total, "Piece")):
-                    if ctx.is_cancelled():
+                    if cancelled():
                         return
                     self._send_text(chat_id, tg_bot._t("book_chapter_fail", lang, n=n))
                     return
                 parts = audiobook.split_long(wav)
                 for k, part in enumerate(parts, start=1):
+                    if cancelled():
+                        return
                     cap = audiobook.caption(title, n, len(chapters), k, len(parts))
                     if not self._send_voice_from_wav(chat_id, part, caption=cap,
                                                      feedback="audiobook" if part == parts[-1] else ""):
                         self._send_text(chat_id, tg_bot._t("book_chapter_fail", lang, n=n))
                         return
                 done += 1
+                if cancelled():
+                    return
                 self._job_save(chat_id, {"chapters": chapters, "ref": ref, "ref_text": ref_text, "next": n})
+            if cancelled():
+                return
             self._job_drop(chat_id)
             self._send_text(chat_id, tg_bot._t("book_done", lang, n=done, total=len(chapters)))
         except Exception:
             tg_bot.logger.exception("[audiobook] failed for chat %s", chat_id)
-            self._send_text(chat_id, tg_bot._t("book_fail_run", lang))
+            if not cancelled():
+                self._send_text(chat_id, tg_bot._t("book_fail_run", lang))
         finally:
             shutil.rmtree(work, ignore_errors=True)
 

@@ -32,7 +32,7 @@ def test_button_video_text_queues_a_restyle_task():
     s = bot._get_session(CID)
     assert s.restyle_state == "want_text" and os.path.exists(s.restyle_src)
     bot._resolve_and_push(CID, [{"type": "text", "text": "аниме"}])
-    assert bot.queued == [{"type": "text", "text": "[restyle] аниме"}]
+    assert bot.queued == [{"type": "text", "text": "[restyle] аниме", "_context_generation": s.context_generation}]
     assert bot._get_session(CID).restyle_state == ""
 
 

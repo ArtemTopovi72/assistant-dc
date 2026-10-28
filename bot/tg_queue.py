@@ -58,13 +58,12 @@ class QueueMixin:
         cancel button wired by hand for every new flow. fn(ctx, *args) gets its own ctx copy: is_cancelled()
         turns true on ⛔, and the work stops at its next check. The note
         loses its button when the work ends."""
-        import copy
         import uuid
         base = self._get_ctx()
         if base is None:                       # no app context (suites): the flag alone
             ctx = type("JobCtx", (), {"is_cancelled": lambda s: s.cancel_event.is_set()})()
         else:
-            ctx = copy.copy(base)
+            ctx = tg_bot._scoped_ctx(base)
         ctx.cancel_event = threading.Event()
         jid = uuid.uuid4().hex[:8]
         jobs = self.__dict__.setdefault("_busy_jobs", {})
@@ -278,6 +277,9 @@ class QueueMixin:
                 self._enqueue_item(chat_id, dict(item, _inbox_id=entry["id"]))
 
     def _persist_task(self, task, incoming_ids=None):
+        import intent
+        if not task.intent_snapshot:
+            task.intent_snapshot = intent.snapshot_turn()
         if getattr(self, "_stopping", False):
             raise BotStopping("the bot stopped before this task was accepted")
         if self._stop_requested_after(task):
@@ -366,6 +368,15 @@ class QueueMixin:
         """
         with self._stop_lock:
             self._stop_requests[chat_id] = time.time()
+        sess = self._get_session(chat_id)
+        with sess._lock:
+            for name in sess.FLOW_STATES:
+                # Rendering may already have disarmed its prompt; retire its token too.
+                setattr(sess, name, getattr(sess, name))
+        self._store.put(sess)
+        for cid, event in list(self.__dict__.get('_busy_jobs', {}).values()):
+            if cid == chat_id:
+                event.set()
         incoming_ids = [entry["id"] for entry in self._incoming.pending() if entry["chat_id"] == chat_id]
         self._incoming.stop_chat(chat_id, self._stop_requests[chat_id])
         with self._mgmt_lock:
@@ -433,6 +444,9 @@ class QueueMixin:
             # arrived must not answer "Stopping…").
             was_running = any(not getattr(t, "delivered", False)
                               for t in (self._running_task.get(chat_id) or []))
+            was_running = was_running or bool(self._chat_busy.get(chat_id))
+        was_running = was_running or any(
+            cid == chat_id for cid, _ in list(self.__dict__.get('_busy_jobs', {}).values()))
         was_running = was_running or chat_id in self.__dict__.get("_debouncing", ())
         dropped = self._request_stop(chat_id)
         # A long-video job (tg_video) runs outside the task queue.
@@ -546,15 +560,18 @@ class QueueMixin:
         item.setdefault('_message_id', (getattr(self, '_msg_id', {}) or {}).get(chat_id, 0))
         sess = self._get_session(chat_id)
         item.setdefault('_context_generation', sess.context_generation)
+        item.setdefault('_input_context', {
+            'prefix': sess.pending_prefix, 'menu': sess.menu,
+            'revisions': {name: sess.flow_revision(name) for name in sess.INPUT_STATES}})
         target_to_consume = ''
         if '_target_captured' not in item:
             if item.get('type') in ('photo', 'album'):
                 target_to_consume = sess.target_image
-            if (item.get('type') in ('text', 'voice') and not item.get('forwarded')
+            if (item.get('type') in ('text', 'voice', 'armed_media') and not item.get('forwarded')
                     and not tg_bot._LABEL2KEY.get((item.get('text') or '').strip())):
-                if not item.get('image_id') and sess.target_image:
+                if not item.get('image_id') and not item.get('reply_photo') and sess.target_image:
                     item['image_id'] = sess.target_image
-                target_to_consume = item.get('image_id', '')
+                target_to_consume = sess.target_image if item.get('reply_photo') else item.get('image_id', '')
             item['_target_captured'] = True
         with self._mgmt_lock:
             key = item.setdefault("_inbox_id", current_update_id() or uuid.uuid4().hex)
