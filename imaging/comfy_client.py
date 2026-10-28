@@ -464,8 +464,11 @@ COMFY_EVICT_LLM = os.getenv("COMFY_EVICT_LLM", "1") not in ("0", "false", "False
 LLM_INFLIGHT_WAIT_S = _cfg_env.env_int("LLM_INFLIGHT_WAIT_S", 120)
 
 _EXCL_LOCK = threading.RLock()
+_LIFECYCLE_LOCK = threading.RLock()
 _excl_users = 0            # jobs holding OR queued for an exclusive slot
 _excl_model = ""           # the chat model we unloaded ("" = we unloaded nothing)
+_NO_CHAT_MODEL = object()
+_excl_lifecycle = None
 _excl_label = ""           # what the card is busy with, for the waiting message
 _excl_free = threading.Event()
 _excl_free.set()
@@ -490,7 +493,7 @@ def card_is_exclusive() -> str:
     20 GB reload that would fight the render it is waiting for.
     """
     with _EXCL_LOCK:
-        return _excl_label if _excl_model else ""
+        return _excl_label if (_excl_model or not _excl_free.is_set()) else ""
 
 
 def wait_for_card(timeout: float = 600.0) -> bool:
@@ -499,7 +502,12 @@ def wait_for_card(timeout: float = 600.0) -> bool:
 
 
 def _claim_card(label: str, min_free_mb: int = None, ctx=None, progress_ctx=None) -> None:
-    global _excl_users, _excl_model, _excl_label
+    with _LIFECYCLE_LOCK:
+        _claim_card_locked(label, min_free_mb, ctx, progress_ctx)
+
+
+def _claim_card_locked(label: str, min_free_mb: int = None, ctx=None, progress_ctx=None) -> None:
+    global _excl_users, _excl_model, _excl_label, _excl_lifecycle
     with _EXCL_LOCK:
         _excl_users += 1
         if _excl_users > 1:                 # a batch is already running
@@ -520,14 +528,12 @@ def _claim_card(label: str, min_free_mb: int = None, ctx=None, progress_ctx=None
                 import lora_training as _lt
             _LT = _lt
             model = _LT.loaded_llm_id()
-            if not model:
-                return
             # Let the streams that are open finish first (the second user's
             # planner, a chat reply mid-sentence): pulling the model out from
             # under them loses their turn and triggers a reload into the
             # render's card. New calls already wait on card_is_exclusive.
             _excl_free.clear()
-            _excl_model = model             # from here on, new LLM calls wait
+            _excl_model = model or _NO_CHAT_MODEL  # from here on, new LLM calls wait
             import progress as _progress    # up to LLM_INFLIGHT_WAIT_S of open streams, then the unload
             _progress.report(progress_ctx, 0, 0, "Freeing the video card")
             try:
@@ -539,12 +545,19 @@ def _claim_card(label: str, min_free_mb: int = None, ctx=None, progress_ctx=None
             except Exception:
                 logger.exception("could not wait for open LLM streams")
             _LT.free_gpu(log=logger.info, min_free_mb=min_free_mb)
-            _notice("card freed for %s (chat model %s unloaded)" % (label, model))
+            lifecycle = dep(ctx, 'gpu_models', None)
+            if lifecycle is None and dep(ctx, 'lora_training', None) is None and not os.getenv('F5_TEST_RUN'):
+                import gpu_models as lifecycle
+            _excl_lifecycle = lifecycle
+            if lifecycle is not None:
+                lifecycle.park()
+            _notice("card freed for %s (chat model %s)" % (label, model or "absent"))
         except Exception:
             # Never let VRAM housekeeping cost somebody their render.
             logger.exception("could not free the card - rendering anyway")
-            _excl_model = ""
-            _excl_free.set()
+            if _excl_lifecycle is None:
+                _excl_model = ""
+                _excl_free.set()
 
 
 def _free_comfy_models() -> None:
@@ -573,20 +586,28 @@ RELOAD_VRAM_EXTRA_WAIT_S = _cfg_env.env_float("RELOAD_VRAM_EXTRA_WAIT_S", 90)
 
 def reset_card_state() -> None:
     """No claim held, nothing unloaded, chat turns not waiting."""
-    global _excl_users, _excl_model, _excl_label
+    global _excl_users, _excl_model, _excl_label, _excl_lifecycle
     with _EXCL_LOCK:
         _excl_users, _excl_model, _excl_label = 0, "", ""
+        _excl_lifecycle = None
     _excl_free.set()
 
 
 def _release_card(ctx=None) -> None:
-    global _excl_users, _excl_model, _excl_label
+    with _LIFECYCLE_LOCK:
+        _release_card_locked(ctx)
+
+
+def _release_card_locked(ctx=None) -> None:
+    global _excl_users, _excl_model, _excl_label, _excl_lifecycle
     with _EXCL_LOCK:
         _excl_users = max(0, _excl_users - 1)
         if _excl_users:                     # more of the batch is still queued
             return
-        model, _excl_model, _excl_label = _excl_model, "", ""
+        model, _excl_model, _excl_label = _excl_model, "", "Restoring models"
+        lifecycle, _excl_lifecycle = _excl_lifecycle, None
     if not model:
+        _excl_label = ""
         _excl_free.set()
         _mark_released()
         return
@@ -594,7 +615,7 @@ def _release_card(ctx=None) -> None:
         _LT = dep(ctx, "lora_training", None)
         if _LT is None:
             import lora_training as _LT
-        _notice("render queue empty - bringing %s back" % model)
+        _notice("render queue empty - restoring models")
         # ComfyUI FIRST. It still holds the render's weights, and a chat model
         # loaded into what they leave behind comes up short of the headroom it
         # had before the render -- it loaded, then crashed on
@@ -620,13 +641,18 @@ def _release_card(ctx=None) -> None:
                 logger.warning("reloading %s with only %d MiB free (%d wanted): it may spill "
                                "into shared memory and load and answer slowly", model, free,
                                RELOAD_LLM_MIN_FREE_MB)
-        _LT.reload_llm(model, log=logger.info)
+        if model is not _NO_CHAT_MODEL:
+            _LT.reload_llm(model, log=logger.info)
     except Exception:
         logger.exception("could not bring the chat model back")
     finally:
-        # Whisper/F5 stay parked in RAM and wake on their next use: woken here,
-        # their ~3 GB beside the reloaded chat model left no room for a SAM3 mask
-        # job, the card paged, and SAM3 and the LLM both hung for 15 minutes.
+        # Restore auxiliary models only after ComfyUI has returned its VRAM.
+        if lifecycle is not None:
+            try:
+                lifecycle.restore()
+            except Exception:
+                logger.exception('could not restore auxiliary GPU models')
+        _excl_label = ""
         _excl_free.set()
         _mark_released()
 

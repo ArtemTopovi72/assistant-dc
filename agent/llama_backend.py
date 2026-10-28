@@ -13,6 +13,7 @@ import logging
 import os
 import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 import subprocess
+import threading
 import time
 from seams import dep
 import urllib.request
@@ -163,6 +164,45 @@ def unload_lmstudio_chat() -> None:
 
 
 _EMBED_CHECKED = [0.0]
+_EMBED_LOCK = threading.RLock()
+_EMBED_PAUSED = False
+_EMBED_PROCESS = None
+
+
+def park_embedder():
+    """Stop the local BGE server while an exclusive GPU job is active."""
+    global _EMBED_PAUSED, _EMBED_PROCESS
+    from urllib.parse import urlparse
+    import psutil
+    with _EMBED_LOCK:
+        _EMBED_PAUSED = True
+        if _under_tests():
+            return
+        if _EMBED_PROCESS is not None and _EMBED_PROCESS.poll() is None:
+            _EMBED_PROCESS.terminate()
+            _EMBED_PROCESS.wait(timeout=15)
+        _EMBED_PROCESS = None
+        url = urlparse(config.EMBED_BASE)
+        if url.hostname not in ('localhost', '127.0.0.1'):
+            return
+        port = url.port or 8096
+        for connection in psutil.net_connections(kind='tcp'):
+            if not connection.laddr or connection.laddr.port != port or connection.status != psutil.CONN_LISTEN or not connection.pid:
+                continue
+            process = psutil.Process(connection.pid)
+            args = process.cmdline()
+            if os.path.normcase(process.exe()) != os.path.normcase(os.path.abspath(config.EMBED_CPU_SERVER)) or config.EMBED_GGUF not in args:
+                raise RuntimeError('Embedding port is owned by an unexpected process')
+            process.terminate()
+            process.wait(timeout=15)
+
+
+def resume_embedder():
+    global _EMBED_PAUSED
+    with _EMBED_LOCK:
+        _EMBED_PAUSED = False
+        _EMBED_CHECKED[0] = 0.0
+        ensure_embedder(min_interval=0)
 
 
 def _embedder_command(cfg):
@@ -179,9 +219,16 @@ def _embedder_command(cfg):
 
 
 def ensure_embedder(min_interval: float = 60.0) -> None:
+    with _EMBED_LOCK:
+        if not _EMBED_PAUSED:
+            _ensure_embedder(min_interval)
+
+
+def _ensure_embedder(min_interval: float = 60.0) -> None:
     """Keep the embedding server up: BGE-M3 on the configured llama-server at
     config.EMBED_BASE. Without it the knowledge base silently falls back to
     keyword-only search. A non-local EMBED_BASE is left alone."""
+    global _EMBED_PROCESS
     if _under_tests():
         return
     import time as _t
@@ -204,7 +251,7 @@ def ensure_embedder(min_interval: float = 60.0) -> None:
         if u.hostname not in ("127.0.0.1", "localhost") or not os.path.exists(config.EMBED_CPU_SERVER):
             return
         with open(os.path.join(os.path.dirname(config.EMBED_CPU_SERVER), "bge_cpu.log"), "ab") as log:
-            subprocess.Popen(_embedder_command(config),
+            _EMBED_PROCESS = subprocess.Popen(_embedder_command(config),
                              stdout=log, stderr=subprocess.STDOUT,
                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         logger.info("started embedding server on %s", base)
