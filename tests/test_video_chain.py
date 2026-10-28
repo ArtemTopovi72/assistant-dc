@@ -19,6 +19,14 @@ import tg_continue  # noqa: E402
 import tool_image_handlers as H  # noqa: E402
 import video as V  # noqa: E402
 import fakes as _fakes  # noqa: E402
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _allow_long_chains(monkeypatch):
+    monkeypatch.setattr(V, 'AUTO_MAX_PARTS', 99)
+
+
 _split = lambda t, **k: V.split_script(t, reads=_fakes.script_model, **k)  # noqa: E731  the sentence read, scripted
 _est = lambda t, **k: V.estimate_seconds(t, reads=_fakes.script_model, **k)  # noqa: E731
 from tests.fakes import Over  # noqa: E402

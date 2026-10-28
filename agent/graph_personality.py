@@ -797,6 +797,17 @@ def _auto_pack_leftover(ctx, state, unpacked_all: dict, answer: str) -> str:
     return (answer or "").rstrip() + f"\n\n{_AUTO_PACK_MARK} {out_name} — отправляю файлом."
 
 
+def _video_review_notice(answer: str, note: str, user_input: str) -> str:
+    if not note:
+        return answer
+    message = ("⚠️ Проверка отдельных кадров заметила возможные отличия от запроса. "
+               "Посмотри видео: оценка движения может ошибаться."
+               if re.search(r'[А-Яа-яЁё]', user_input or '') else
+               "⚠️ A review of sampled frames found possible differences from the request. "
+               "Please check the video: motion assessment may be wrong.")
+    return (answer or '').rstrip() + '\n\n' + message
+
+
 def personality_node(ctx: Context, state: AgentState) -> AgentState:
     import graph as _g
     user_input = state.get("user_input", "")
@@ -2197,6 +2208,9 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
         audit_reasons.append("repeated_tool_errors")
     if not (final_answer or "").strip():
         audit_reasons.append("empty_answer")
+    if state.get('video_status') == 'success':
+        final_answer = _video_review_notice(final_answer, getattr(ctx, 'video_action_note', ''),
+                                            original_input or user_input)
     try:
         _ta.finish_turn(ctx, state, messages, user_input, final_answer,
                         audit_reasons, audit_calls)

@@ -161,6 +161,8 @@ st = {}
 H._handle_generate_video(TCtx(), st, {"description": "they leave"})
 check("the delivered clip is the joined one (longer than the new part)",
       st.get("video_path") and V.probe(st["video_path"])["seconds"] > 5.5, st)
+check("the delivered duration describes the joined clip",
+      abs(st.get("video_seconds", 0) - V.probe(st["video_path"])["seconds"]) < 0.1, st)
 
 # «…орёт э, это уже есть на видео, а потом…»: a plan part the user says is already in
 # the clip is not rendered again (owner, 2026-10-12: 6 minutes for a repeat).

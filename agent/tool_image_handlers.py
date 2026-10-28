@@ -1560,6 +1560,20 @@ def _check_joins(ctx, joins: list) -> str:
     return "" if _says_none(ans) else ans[:400]
 
 
+def _check_static_background(ctx, video_mod, path: str, request: str) -> str:
+    try:
+        drift = video_mod.overlay_drift(path)
+        if drift is None or drift <= video_mod.OVERLAY_DRIFT_MAX:
+            return ''
+        if yes_no(ctx)("The user wrote: {text}. Did they request camera movement "
+                       "such as a pan, zoom, orbit or tracking shot?", request, default=False):
+            return ''
+        return 'The background may have changed unexpectedly.'
+    except Exception:
+        logger.exception('video background check failed')
+        return ''
+
+
 def _check_actions(ctx, path: str, parts: list, references=()) -> str:
     """The current request against the finished clip, in ONE vision call on frames spread over it.
     The reply said «Готово! швыряет шапку» over a clip where the hat stayed on (live 2026-10-18),
@@ -1582,11 +1596,16 @@ def _check_actions(ctx, path: str, parts: list, references=()) -> str:
             return ""
         ans = " ".join((vision_model(ctx)(
             ctx, temperature=0.0, max_tokens=200,
-            image_paths=[(f"Source image {i}:", p) for i, p in enumerate(references, 1)]
-                        + [(f"{t:.1f}s:", str(f)) for t, f in frames],
+            image_paths=[(f"Video at {t:.1f}s:", str(f)) for t, f in frames]
+                        + [(f"Original reference image {i} (not a video frame):", p)
+                           for i, p in enumerate(references, 1)],
             user_text="These frames are in time order from ONE video. The user's request or approved plan:\n"
                       f"{script}\n"
-                      "Source images show the original appearance; any changes the user requests take precedence. "
+                      "Compare subject position and appearance between the timestamped video frames to judge movement. "
+                      "The original reference images are still pictures, not frames of the video; do not judge "
+                      "video motion from them. Any changes the user requests take precedence. "
+                      + ("Compare the reference with the video for major unrequested new subjects, effects or "
+                         "background changes, while allowing the motion the user asked for. " if references else "") +
                       "Judge only this request, never requirements invented by a tool draft or earlier chat. "
                       "List, in a few words each, requested visible actions or appearance constraints the frames fail "
                       "(an object that never moves or leaves, a person who never does it). Speech and "
@@ -2167,7 +2186,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 else:
                     logger.warning("video chain: the join failed, delivering the last part alone")
             video_mod.remember_chain(path, chain_id, chain_idx, ctx)
-            if len(parts) > 1:
+            if len(parts) > 1 or chain_idx > 1:
                 result["seconds"] = video_mod.probe(path).get("seconds") or result.get("seconds")
     ctx.video_join_note = ""
     if chain_id and len(parts) > 1:
@@ -2177,6 +2196,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                   else video_mod.join_continuation(cont_src, path))
         if joined:
             path = video_mod._adopt_output(joined, video_mod.OUTPUT_DIR)       # the whole thing: original + what comes next
+            result["seconds"] = video_mod.probe(path).get("seconds") or result.get("seconds")
         else:
             logger.warning("continue video: the join failed, delivering the new part alone")
 
@@ -2197,6 +2217,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     # «the camera zooms in», the note said an action was missing and the reply told the user to
     # «pick a voice variant» (live 2026-10-20)
     ctx.video_action_note = "" if continuing or head else _check_actions(ctx, path, parts, references=images)
+    if not ctx.video_action_note and images and not continuing and not head:
+        ctx.video_action_note = _check_static_background(ctx, video_mod, path, ctx.video_request or description)
     state["video_path"] = path
     state["video_status"] = "success"
     state["video_seconds"] = result.get("seconds")
@@ -2218,9 +2240,9 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         + ("What the clip shows is ONLY these approved plan parts (anything else in the "
            "request, such as parts the user removed, was NOT made -- never describe it): "
            + " | ".join(approved) + "\n" if approved else "")
-        + ("The finished clip was checked against the script and these actions are NOT visible in it: "
-           + ctx.video_action_note + ". Tell the user plainly which action did not appear; do NOT say it "
-           "happened and do NOT call the clip done as asked.\n" if getattr(ctx, "video_action_note", "") else "")
+        + ("A review of a few sampled frames suggests possible issues: " + ctx.video_action_note
+           + ". This review can misread motion between frames. Tell the user these are possible issues, "
+           "not confirmed failures, and let them judge the clip.\n" if getattr(ctx, "video_action_note", "") else "")
         + ("The joins between the parts were checked: " + ctx.video_join_note + ". Tell the "
            "user plainly which join is rough; do NOT call the clip seamless.\n"
            if getattr(ctx, "video_join_note", "") else "") +

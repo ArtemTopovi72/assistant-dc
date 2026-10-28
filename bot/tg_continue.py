@@ -5,12 +5,10 @@ States on the session (continue_state), same shape as 🎨 Restyle:
   "want_text"   the clip is saved; the next plain text is what should happen next.
 
 How the continuation is built (see docs/video_continuation_sota_2026-10.md):
-  * the last ~4 s of the clip ride as <Video 1>: its motion, camera speed, faces AND its own
+  * the last ~2.5 s of the clip ride as <Video 1>: its motion, camera speed, faces AND its own
     soundtrack (the voices) -- one still frame fixes the picture but not its direction, and the
     clip stalls at the join; a reference video carries its sound with it;
-  * one frame rides as <Picture 1>: the sharpest of the last 0.5 s. Not further back: the
-    "sharpest moving frame of the last 2 s" was 2 s before the end, so a coat taken off in
-    those 2 s was back on in the continuation;
+  * the final frame rides as <Picture 1>, preserving changes made at the end of the clip;
   * generate_video wraps the user's words in a «continue, no cut» template and, when the new
     part is done, joins original + continuation with a crossfade (media/video.join_continuation).
 """
@@ -20,41 +18,53 @@ import uuid
 from seams import dep
 
 TAIL_SECONDS = 2.5          # the reference clip: its motion and its sound (longer = older states)
+MIN_REFERENCE_SECONDS = 2.0  # MiniMax H3 reference clips must be at least two seconds
 FRAME_WINDOW = 3.0          # seconds looked at for the start frame
-FRAME_CANDIDATES = 5        # ... of which the last 0.5 s (at 10 fps) can be chosen
 MAX_PEOPLE = 2               # new people from photos (<Picture 2>, <Picture 3>) a continuation takes
 
 
+def _video_tail_seek(src: str, seconds: float):
+    from video import probe
+    duration = probe(src).get('video_seconds') or 0
+    if not duration:
+        try:
+            import json
+            result = subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'v:0',
+                                     '-show_entries', 'stream_tags=DURATION', '-of', 'json', src],
+                                    capture_output=True, text=True, check=True, timeout=60)
+            tag = json.loads(result.stdout)['streams'][0]['tags']['DURATION']
+            hours, minutes, secs = tag.split(':')
+            duration = int(hours) * 3600 + int(minutes) * 60 + float(secs)
+        except (OSError, ValueError, KeyError, IndexError, subprocess.SubprocessError):
+            pass
+    if duration > 0:
+        return ['-ss', str(max(0.0, duration - seconds))], min(duration, seconds)
+    return ['-sseof', f'-{seconds}'], None
+
+
 def seed_frame(src: str, out_jpg: str) -> bool:
-    """Save the start frame for the continuation as out_jpg: the sharpest of the last 0.5 s
-    (preferring frames still moving as fast as the clip was -- a blurred swing makes a bad
-    first frame). Never earlier: whatever happened in the clip must stay happened."""
-    import numpy as np
-    from PIL import Image
-    import video_look
-    tmp = out_jpg + ".tail"
-    os.makedirs(tmp, exist_ok=True)
+    """Save the clip's actual last video frame as the continuation's start frame."""
+    import tempfile
+    tmp = None
     try:
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-sseof", f"-{FRAME_WINDOW}", "-i", src,
-                        "-vf", "fps=10", "-q:v", "2", os.path.join(tmp, "f_%03d.jpg")],
+        fd, tmp = tempfile.mkstemp(suffix='.jpg', dir=os.path.dirname(os.path.abspath(out_jpg)))
+        os.close(fd)
+        seek, _ = _video_tail_seek(src, FRAME_WINDOW)
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *seek, "-i", src,
+                        "-an", "-fps_mode", "passthrough", "-q:v", "2", "-update", "1", tmp],
                        capture_output=True, check=True, timeout=60)
-        frames = sorted(os.path.join(tmp, f) for f in os.listdir(tmp) if f.endswith(".jpg"))
-        if not frames:
+        if not os.path.getsize(tmp):
             return False
-        gray = [np.asarray(Image.open(p).convert("L").resize((320, 320)), dtype=np.float32) for p in frames]
-        sharp = [video_look._sharpness(g) for g in gray]
-        motion = [0.0] + [float(np.abs(gray[i] - gray[i - 1]).mean()) for i in range(1, len(gray))]
-        typical = float(np.median(motion[1:])) if len(motion) > 1 else 0.0
-        pool = list(range(max(0, len(frames) - FRAME_CANDIDATES), len(frames)))
-        moving = [i for i in pool if motion[i] >= 0.6 * typical]      # a still clip: everything counts
-        best = max(moving or pool, key=lambda i: sharp[i])
-        Image.open(frames[best]).convert("RGB").save(out_jpg, quality=95)
+        os.replace(tmp, out_jpg)
         return True
     except Exception:
         return False
     finally:
-        import shutil
-        shutil.rmtree(tmp, ignore_errors=True)
+        if tmp:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
 
 
 def face_frame(src: str, out_jpg: str, circle: bool = False) -> bool:
@@ -129,11 +139,20 @@ def first_frame(src: str, out_jpg: str, skip: int = 0) -> bool:
 def cut_tail(src: str, out_mp4: str, seconds: float = TAIL_SECONDS) -> bool:
     """The last `seconds` of the clip, with its sound, as the reference video."""
     try:
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-sseof", f"-{seconds}", "-i", src,
+        from video import probe
+        seek, duration = _video_tail_seek(src, seconds)
+        padding = max(0.0, MIN_REFERENCE_SECONDS - duration) if duration is not None else 0.0
+        limit = ['-t', str(duration + padding)] if duration is not None else []
+        filters = []
+        if padding:
+            filters += ['-vf', f'tpad=stop_mode=clone:stop_duration={padding}']
+            if probe(src).get('has_audio'):
+                filters += ['-af', f'atrim=duration={duration},asetpts=PTS-STARTPTS,apad=pad_dur={padding}']
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *seek, "-i", src, *limit, *filters,
                         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
                         "-c:a", "aac", "-b:a", "160k", out_mp4],
                        capture_output=True, check=True, timeout=120)
-        return os.path.exists(out_mp4) and os.path.getsize(out_mp4) > 0
+        return os.path.exists(out_mp4) and os.path.getsize(out_mp4) > 0 and bool(probe(out_mp4).get('width'))
     except Exception:
         return False
 

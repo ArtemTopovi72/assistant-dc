@@ -72,6 +72,36 @@ def test_camera_instruction_comes_from_current_request_rather_than_old_draft():
     assert video._FRAMING_LOCK_SUFFIX in result
 
 
+def test_frame_review_is_reported_as_uncertain(tmp_path):
+    still = tmp_path / 'source.png'
+    still.write_bytes(b'source')
+    look = SimpleNamespace(duration_seconds=lambda path: 5.17,
+                           sample_times=lambda *a, **kw: [0.0, 3.0],
+                           extract_frames=lambda path, times, dest: [(t, Path(dest) / f'{t}.png') for t in times])
+    rig = _Rig(tmp_path)
+    ctx = rig.ctx(text_model=lambda *a, **kw: '', vision_model=lambda *a, **kw: 'ball did not move',
+                  modules={'video_look': look}, deps=SimpleNamespace(asks_for_video=lambda *a: True))
+    result = handlers._handle_generate_video(ctx, {'image_path': str(still), 'user_input_original': REQUEST},
+                                             {'description': DRAFT, 'seconds': 5.17, 'use_current_images': True})
+    assert 'possible issues' in result and 'can misread motion' in result
+    assert 'actions are NOT visible' not in result
+
+
+def test_large_background_change_is_reported_when_vision_says_none(tmp_path):
+    still = tmp_path / 'source.png'
+    still.write_bytes(b'source')
+    look = SimpleNamespace(duration_seconds=lambda path: 5.17,
+                           sample_times=lambda *a, **kw: [0.0, 3.0],
+                           extract_frames=lambda path, times, dest: [(t, Path(dest) / f'{t}.png') for t in times])
+    rig = _Rig(tmp_path, overlay_drift=lambda path: 64, OVERLAY_DRIFT_MAX=35)
+    ctx = rig.ctx(text_model=lambda *a, **kw: '', vision_model=lambda *a, **kw: 'NONE',
+                  modules={'video_look': look}, deps=SimpleNamespace(asks_for_video=lambda *a: True))
+    result = handlers._handle_generate_video(ctx, {'image_path': str(still), 'user_input_original': REQUEST},
+                                             {'description': DRAFT, 'seconds': 5.17, 'use_current_images': True})
+    assert ctx.video_action_note == 'The background may have changed unexpectedly.'
+    assert 'possible issues' in result
+
+
 @pytest.mark.parametrize("spoken_output", ["", '<d>[English] Buy an Ozon cable now</d>'])
 def test_silent_user_request_never_restores_old_draft_speech(spoken_output):
     calls = []

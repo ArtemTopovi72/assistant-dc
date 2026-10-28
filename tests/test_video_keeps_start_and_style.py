@@ -41,8 +41,8 @@ def _img():
 def test_a_photo_to_animate_opens_on_itself_in_its_own_style():
     p = _run([_img()])
     assert V._START_LOCK_SUFFIX in p and V._FRAMING_LOCK_SUFFIX in p and V._STYLE_LOCK_SUFFIX in p
-    assert "exact first frame" in p and "a photograph stays a photograph" in p
-    assert "a cartoon, anime" in p and "never switch between realistic and drawn" in p
+    assert "exact first frame" in p and "visual style unchanged" in p
+    assert "real skin" not in V._STYLE_LOCK_SUFFIX and "faces" not in V._STYLE_LOCK_SUFFIX
 
 
 def test_an_asked_camera_move_still_opens_on_the_photo():
