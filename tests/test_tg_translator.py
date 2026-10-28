@@ -41,7 +41,7 @@ def test_translation_uses_submitted_language_not_later_setting(bot):
     from tg_translator import execute
     execute(bot, SimpleNamespace(is_cancelled=lambda: False), bot.jobs[0])
     assert calls == [('Good morning', 'fr')]
-    assert any(text == 'Bonjour' for text, _ in bot.sent)
+    assert any(text == '<b>🌐 🇫🇷 Français</b>\nBonjour' for text, _ in bot.sent)
 
 
 def test_clear_prevents_a_late_translation_response(bot):

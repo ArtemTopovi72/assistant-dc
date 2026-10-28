@@ -1,12 +1,13 @@
 """A private language lesson, with cancellable speech and no shared chat history."""
 import copy
+import html
 import shutil
 import threading
 from pathlib import Path
 
 from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QLineEdit,
-    QPlainTextEdit, QPushButton, QVBoxLayout, QWidget)
+    QPlainTextEdit, QPushButton, QTextBrowser, QVBoxLayout, QWidget)
 
 import gui_i18n
 import translator
@@ -45,7 +46,7 @@ class TeacherWorker(QThread):
             if self.cancel_event.is_set(): return
             try:
                 speech = module(self.ctx, 'translator').lesson_speech(self.ctx, result['say'],
-                    self.target, result['translation'], self.native,
+                    self.target, result.get('native_speech', result['translation']), self.native,
                     str(Path(OUTPUT_DIR) / 'lessons' / 'desktop'), reference=self.voice_ref)
                 result.update(speech)
             except Exception as exc:
@@ -61,6 +62,7 @@ class TeacherTab(QWidget):
     def __init__(self, host=None):
         super().__init__()
         self.host, self.worker, self.player = host, None, None
+        self.lesson_status = 'active'
         self.profile = {'level': 'auto', 'auto_level': 'A1', 'topic': '', 'streak': 0}
         self.history, self.paths, self.combined_path = [], [], ''
         self.source = ''
@@ -74,7 +76,7 @@ class TeacherTab(QWidget):
         for widget, label in ((self.target, 'Learning language'), (self.native, 'Native language')):
             widget.setAccessibleName(label)
             for code, (english, native) in translator.LANGUAGES.items():
-                widget.addItem(f'{native} · {english}', code)
+                widget.addItem(f'{translator.LANGUAGE_FLAGS[code]} {native} · {english}', code)
             row.addWidget(QLabel(label)); row.addWidget(widget)
         self.target.setCurrentIndex(self.target.findData('de'))
         self.native.setCurrentIndex(self.native.findData('ru'))
@@ -103,13 +105,17 @@ class TeacherTab(QWidget):
         root.addLayout(row)
         row = QHBoxLayout()
         self.send_btn, self.stop_btn, self.clear_btn = (QPushButton('Send lesson message'),
-            QPushButton('Cancel'), QPushButton('Reset lesson'))
+            QPushButton('Cancel'), QPushButton('Clear lesson history'))
+        self.pause_btn, self.finish_btn = QPushButton('Pause lesson'), QPushButton('Finish lesson')
         self.send_btn.clicked.connect(self._send); self.stop_btn.clicked.connect(self._cancel)
         self.clear_btn.clicked.connect(self._clear)
-        for button in (self.send_btn, self.stop_btn, self.clear_btn): row.addWidget(button)
+        self.pause_btn.clicked.connect(self._pause_resume)
+        self.finish_btn.clicked.connect(self._finish_lesson)
+        for button in (self.send_btn, self.stop_btn, self.pause_btn, self.finish_btn, self.clear_btn):
+            row.addWidget(button)
         root.addLayout(row)
         self.status = QLabel(); self.status.setWordWrap(True); root.addWidget(self.status)
-        self.result = QPlainTextEdit(); self.result.setReadOnly(True)
+        self.result = QTextBrowser(); self.result.setReadOnly(True)
         self.result.setPlaceholderText('Lesson dialogue'); root.addWidget(self.result)
         row = QHBoxLayout()
         self.play_btn, self.save_btn = QPushButton('▶ Play voice'), QPushButton('Save result…')
@@ -132,21 +138,27 @@ class TeacherTab(QWidget):
     def _settings_changed(self, reset_level=False):
         # Qt sends index/text values; only the explicit target callback resets proficiency.
         if reset_level is True: self.profile['auto_level'] = 'A1'
-        self._clear(reset_level=False)
+        self._clear(reset_level=False, activate=False)
         self.profile['topic'] = self.topic.text()
 
     def _busy(self, busy):
+        active = self.lesson_status == 'active'
         for widget in (self.target, self.native, self.level, self.topic, self.voice_format,
-                       self.text_in, self.send_btn, self.clear_btn):
+                       self.clear_btn):
             widget.setEnabled(not busy)
-        self.text_in.setEnabled(not busy and not self.source)
-        self.audio_btn.setEnabled(not busy)
-        self.remove_audio_btn.setEnabled(not busy and bool(self.source))
+        self.text_in.setEnabled(not busy and active and not self.source)
+        self.send_btn.setEnabled(not busy and active)
+        self.audio_btn.setEnabled(not busy and active)
+        self.remove_audio_btn.setEnabled(not busy and active and bool(self.source))
         self.stop_btn.setEnabled(busy)
-        self.play_btn.setEnabled(not busy and bool(self.combined_path))
+        self.pause_btn.setText('Pause lesson' if active else 'Resume lesson')
+        self.pause_btn.setEnabled(True)
+        self.finish_btn.setEnabled(self.lesson_status != 'ended')
+        self.play_btn.setEnabled(not busy and active and bool(self.combined_path))
         self.save_btn.setEnabled(not busy and bool(self.result.toPlainText()))
 
     def _choose_audio(self):
+        if self.lesson_status != 'active' or (self.worker and self.worker.isRunning()): return
         path, _ = file_dialog(self).getOpenFileName(self, 'Choose lesson audio…', '',
             'Audio (*.wav *.mp3 *.ogg *.m4a *.flac *.opus)')
         if path:
@@ -160,6 +172,7 @@ class TeacherTab(QWidget):
         self._busy(False)
 
     def _send(self):
+        if self.lesson_status != 'active': return
         if self.worker and self.worker.isRunning(): return
         ctx = getattr(self.host, 'ctx', None)
         if ctx is None:
@@ -175,22 +188,38 @@ class TeacherTab(QWidget):
             self.status.setText(str(exc)); return
         self._busy(True); self.status.setText('Preparing lesson…')
         self.worker.done.connect(self._done)
-        self.worker.failed.connect(lambda error: self.status.setText(translator.error_text(error, gui_i18n.LANG)))
+        self.worker.failed.connect(self._failed)
         self.worker.progress.connect(self._progress)
         self.worker.finished.connect(self._finished)
         self.worker.start()
 
     def _progress(self, done, total, what):
+        if not self._accept_worker_signal(): return
         import progress
         self.status.setText(progress.line(done, total, what, gui_i18n.LANG))
 
+    def _accept_worker_signal(self):
+        sender = self.sender()
+        return (self.lesson_status == 'active'
+                and not (self.worker and self.worker.cancel_event.is_set())
+                and (not isinstance(sender, TeacherWorker) or sender is self.worker))
+
+    def _failed(self, error):
+        if self._accept_worker_signal():
+            self.status.setText(translator.error_text(error, gui_i18n.LANG))
+
     def _done(self, result):
-        if self.worker and self.worker.cancel_event.is_set(): return
+        if not self._accept_worker_signal(): return
         self.profile, self.history = result['profile'], result['history']
         self.paths, self.combined_path = result.get('paths', []), result.get('combined_path', '')
-        self.result.appendPlainText('\n'.join(part for part in (result['learner_text'], result['say'],
-            result['translation'], result.get('correction', ''), result.get('explanation', '')) if part))
-        self.result.appendPlainText('')
+        def language(code):
+            return translator.LANGUAGE_FLAGS[code] + ' ' + translator.LANGUAGES[code][1]
+        blocks = [('👤',result['learner_text']), (language(self.target.currentData()),result['say']),
+            (language(self.native.currentData()),result['translation']),
+            ('✍️ '+gui_i18n.tr('Correction'),result.get('correction','')),
+            ('💡 '+gui_i18n.tr('Explanation'),result.get('explanation',''))]
+        self.result.append(''.join('<p><b>'+html.escape(label)+'</b><br>'+
+            html.escape(text).replace('\n','<br>')+'</p>' for label,text in blocks if text))
         self.text_in.clear(); self._show_level()
         self.source = ''
         self.audio_label.setText(gui_i18n.tr('No file selected'))
@@ -198,6 +227,8 @@ class TeacherTab(QWidget):
             if result.get('warning') else gui_i18n.tr('Done.'))
 
     def _finished(self):
+        sender = self.sender()
+        if isinstance(sender, TeacherWorker) and sender is not self.worker: return
         self._busy(False)
 
     def _cancel(self):
@@ -205,7 +236,26 @@ class TeacherTab(QWidget):
         if self.player: self.player.stop()
         self.status.setText('Cancelled')
 
-    def _clear(self, checked=False, *, reset_level=True):
+    def _pause_resume(self):
+        if self.lesson_status == 'active':
+            self._cancel()
+            self.lesson_status = 'paused'
+            self.status.setText('Lesson paused. Press Resume lesson to continue.')
+        else:
+            self.lesson_status = 'active'
+            self.status.setText('Lesson resumed.')
+        self._busy(bool(self.worker and self.worker.isRunning()))
+
+    def _finish_lesson(self):
+        self._cancel()
+        self.lesson_status = 'ended'
+        self.status.setText('Lesson finished. History saved. Resume the lesson or clear its history to start again.')
+        self._busy(bool(self.worker and self.worker.isRunning()))
+        sections = getattr(getattr(self.host, 'translator_tab', None), 'sections', None)
+        if sections is not None:
+            sections.setCurrentIndex(0)
+
+    def _clear(self, checked=False, *, reset_level=True, activate=True):
         if self.worker and self.worker.isRunning(): return
         if self.player: self.player.stop()
         self.history, self.paths, self.combined_path = [], [], ''
@@ -213,6 +263,7 @@ class TeacherTab(QWidget):
         self.audio_label.setText(gui_i18n.tr('No file selected'))
         self.profile['streak'] = 0
         if reset_level: self.profile['auto_level'] = 'A1'
+        if activate: self.lesson_status = 'active'
         self.text_in.clear(); self.result.clear(); self.status.clear()
         self._show_level(); self._busy(False)
 

@@ -7,6 +7,7 @@ import uuid
 from seams import module
 from tg_strings import _LABEL2KEY, _b, _t
 from tg_teacher_strings import BTN, MSG
+from tg_translation_format import teacher_messages
 from translator import LANGUAGES, error_text, voice_reference
 
 
@@ -26,8 +27,13 @@ def keyboard(sess, lang):
     elif sess.menu == 'teacher_topic':
         keys = []
     else:
+        status = sess.teacher_status
         keys = ['teach_target','teach_native','teach_level','teach_topic',
-                'teach_combined','teach_separate','teach_reset']
+                'teach_combined','teach_separate',
+                'teach_pause' if status == 'active' else 'teach_resume']
+        if status != 'ended':
+            keys.append('teach_finish')
+        keys.append('teach_reset')
     rows = [[_button(k, lang) for k in keys[at:at+2]] for at in range(0,len(keys),2)]
     rows.append([_b('back',lang), _b('stop',lang)])
     return {'keyboard':rows,'resize_keyboard':True}
@@ -47,6 +53,8 @@ def _show(bot, cid, sess, lang):
             native=LANGUAGES[sess.teacher_native][1],level=level,
             topic=profile['topic'] or _text('teacher_any_topic',lang),
             format=_button('teach_' + sess.teacher_format,lang))
+        if sess.teacher_status != 'active':
+            text += '\n\n' + _text('teacher_' + sess.teacher_status,lang)
     bot._send_text(cid,text,keyboard=keyboard(sess,lang))
 
 
@@ -82,8 +90,19 @@ def action(bot, chat_id, sess, lang, key):
             changed = True
             sess.teacher_history = []
             sess.teacher_profile.update(auto_level='A1',streak=0)
+            sess.teacher_status = 'active'
+        elif key in ('teach_pause','teach_resume','teach_start','teach_finish'):
+            status = {'teach_pause':'paused','teach_finish':'ended'}.get(key,'active')
+            changed = sess.teacher_status != status
+            sess.teacher_status = status
         if changed:
             sess.teacher_epoch += 1
+    if key == 'teach_finish':
+        from tg_translator import action as translator_action
+        translator_action(bot,chat_id,sess,lang,'translator')
+        text = _text('teacher_ended',lang)
+        bot._send_text(chat_id,text,keyboard=bot._state_kb(sess,lang))
+        return
     bot._goto_menu(sess,menu)
     _show(bot,chat_id,sess,lang)
 
@@ -125,9 +144,15 @@ def route(bot, chat_id, sess, batch, input_menu):
         else:
             _show(bot,chat_id,sess,lang)
         return True
+    if sess.teacher_status != 'active':
+        text = _text('teacher_' + sess.teacher_status,lang)
+        bot._send_text(chat_id,text,keyboard=keyboard(sess,lang))
+        return True
     import tg_bot
     items = deepcopy(batch)
     with sess._lock:
+        if sess.teacher_status != 'active':
+            return True
         data = {'kind':'teacher','items':items,'target':sess.teacher_target,'native':sess.teacher_native,
                 'format':sess.teacher_format,'epoch':items[0].get('_teacher_epoch',sess.teacher_epoch)}
         generation = sess.context_generation
@@ -148,19 +173,23 @@ def execute(bot, ctx, task):
     lang = bot._lang(sess)
     cancelled = ctx.is_cancelled
     def active():
-        return not cancelled() and sess.teacher_epoch == data['epoch'] and sess.context_generation == task.context_generation
+        return not cancelled() and sess.teacher_status == 'active' and sess.teacher_epoch == data['epoch'] and sess.context_generation == task.context_generation
     task.delivered = False
     if not active():
         return
     ctx.is_cancelled = lambda: not active()
     text_sent=False
-    def send(text):
+    def send(text='', *, messages=None):
         from tg_transport import verbatim_text
-        for at in range(0,len(text),2000):
+        formatted = messages is not None
+        if messages is None:
+            messages = [text[at:at+2000] for at in range(0,len(text),2000)]
+        for message in messages:
             if not active():
                 return False
             with verbatim_text():
-                if not bot._send_get_id(cid,text[at:at+2000],keyboard=bot._state_kb(sess,lang)):
+                if not bot._send_get_id(cid,message,parse_mode='HTML' if formatted else None,
+                                        keyboard=bot._state_kb(sess,lang)):
                     return False
         return True
     cancel = {'inline_keyboard':[[{'text':_t('cancel_btn',lang),'callback_data':f'cancel:{task.task_id}'}]]}
@@ -199,7 +228,15 @@ def execute(bot, ctx, task):
                 return
             profile, history = deepcopy(sess.teacher_profile), deepcopy(sess.teacher_history)
         result = module(bot,'language_teacher').respond(ctx,profile,history,text,data['target'],data['native'])
-        text_sent=send('\n\n'.join(result.get(key,'') for key in ('say','translation','correction','explanation') if result.get(key)))
+        if not active():
+            return
+        try:
+            speech = engine.lesson_speech(ctx,result['say'],data['target'],result.get('native_speech',result['translation']),data['native'],str(out),reference=data.get('voice_ref'))
+        except Exception:
+            if not active():
+                return
+            speech = {}
+        text_sent=send(messages=teacher_messages(result,data['target'],data['native'],lang))
         if not text_sent:
             return
         with sess._lock:
@@ -210,7 +247,6 @@ def execute(bot, ctx, task):
         try:
             if not active():
                 return
-            speech = engine.lesson_speech(ctx,result['say'],data['target'],result['translation'],data['native'],str(out),reference=data.get('voice_ref'))
             paths = [speech.get('combined_path')] if data['format'] == 'combined' else speech.get('paths',[])
             failed = not paths or any(not path for path in paths)
             for path in paths:

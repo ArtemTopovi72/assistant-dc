@@ -11,7 +11,7 @@ def bot(tmp_path):
         if cid not in sessions:
             sessions[cid] = NS(teacher_target='de', teacher_native='ru', teacher_format='combined',
                 teacher_profile={'level':'auto','auto_level':'A1','topic':'','streak':0},
-                teacher_history=[],teacher_epoch=0,context_generation=0,menu='teacher',_lock=Lock(),drop_waiting=lambda:None,
+                teacher_history=[],teacher_epoch=0,teacher_status='active',context_generation=0,menu='teacher',_lock=Lock(),drop_waiting=lambda:None,
                 translation_target='en',translation_mode='text')
         return sessions[cid]
     b=NS(_get_session=session,_lang=lambda s:'en',_store=NS(put=lambda s:None), sent=[],jobs=[],voices=[],
@@ -105,6 +105,44 @@ def test_voice_failure_preserves_text_history_and_warns(bot):
     assert any('Could not deliver' in text for _,text in bot.sent)
 
 
+def test_lesson_text_waits_for_completed_speech(bot):
+    events=[]
+    def speech(ctx,*args,**kwargs):
+        assert not any('Hallo?' in text for _,text in bot.sent)
+        assert not bot._get_session(1).teacher_history
+        events.append('audio ready')
+        return dict(paths=['target.wav','native.wav'],combined_path='combined.wav')
+    bot.modules['translator'].lesson_speech=speech
+    original=bot._send_get_id
+    def send(cid,text,**kwargs):
+        if 'Hallo?' in text:events.append('text sent')
+        return original(cid,text,**kwargs)
+    bot._send_get_id=send
+    bot._send_voice_from_wav=lambda *a:events.append('voice sent') or True
+    run(bot,queue(bot))
+    assert events==['audio ready','text sent','voice sent']
+
+
+def test_synthesis_exception_still_delivers_text_and_warning(bot):
+    def failed(*args,**kwargs):raise ValueError('synthesis failed')
+    bot.modules['translator'].lesson_speech=failed
+    run(bot,queue(bot))
+    assert any('Hallo?' in text for _,text in bot.sent)
+    assert any('Could not deliver' in text for _,text in bot.sent)
+    assert bot._get_session(1).teacher_history and not bot.voices
+
+
+def test_rule_explanation_is_included_in_native_voice(bot):
+    original=bot.modules['language_teacher'].respond
+    def respond(*args):
+        return dict(original(*args),native_speech='Перевод. Здесь подробное правило.')
+    spoken=[]
+    bot.modules['language_teacher'].respond=respond
+    bot.modules['translator'].lesson_speech=lambda *args,**kwargs: spoken.append(args[3]) or dict(paths=[],combined_path='')
+    run(bot,queue(bot))
+    assert spoken==['Перевод. Здесь подробное правило.']
+
+
 def test_audio_is_transcribed_without_translation_and_video_rejected(bot):
     bot._dl_bytes=lambda fid:b'audio'
     bot.modules['translator'].transcribe=lambda ctx,path:'original student speech'
@@ -157,3 +195,67 @@ def test_real_session_persistence_and_clear_preserve_lesson_settings(tmp_path):
     assert restored.teacher_history==[] and restored.teacher_epoch==1
     assert restored.teacher_profile=={'level':'B1','topic':'Travel','auto_level':'A1','streak':0}
     assert (restored.teacher_target,restored.teacher_native,restored.teacher_format)==('fr','en','separate')
+
+
+def test_pause_resume_preserves_lesson_and_rejects_old_work(bot):
+    s=bot._get_session(1)
+    run(bot,queue(bot,text='one'))
+    history=list(s.teacher_history);profile=dict(s.teacher_profile)
+    old=queue(bot,text='old')
+    teacher.action(bot,1,s,'en','teach_pause')
+    assert s.teacher_status=='paused' and s.teacher_epoch==1
+    assert s.teacher_history==history and s.teacher_profile==profile
+    assert teacher.route(bot,1,s,[{'type':'text','text':'ignored'}],'teacher')
+    assert len(bot.jobs)==2 and any('Resume' in text for _,text in bot.sent)
+    teacher.action(bot,1,s,'en','teach_resume')
+    assert s.teacher_status=='active'
+    run(bot,old)
+    assert s.teacher_history==history
+    run(bot,queue(bot,text='two'))
+    assert [m['content'] for m in s.teacher_history]==['one','two']
+
+
+@pytest.mark.parametrize('control',['teach_pause','teach_finish'])
+def test_pause_or_finish_during_speech_cancels_only_own_turn(bot,control):
+    s=bot._get_session(1)
+    other=queue(bot,2,'other')
+    def speech(ctx,*args,**kwargs):
+        teacher.action(bot,1,s,'en',control)
+        assert ctx.is_cancelled()
+        return dict(paths=['target.wav','native.wav'],combined_path='combined.wav')
+    bot.modules['translator'].lesson_speech=speech
+    run(bot,queue(bot))
+    assert not s.teacher_history and not bot.voices
+    assert not any('Hallo?' in text for _,text in bot.sent)
+    bot.modules['translator'].lesson_speech=lambda *a,**kw:dict(combined_path='other.wav')
+    run(bot,other)
+    assert bot._get_session(2).teacher_history and bot.voices==[(2,'other.wav')]
+
+
+def test_finish_preserves_history_returns_to_translator_and_clear_reactivates(bot):
+    s=bot._get_session(1)
+    run(bot,queue(bot))
+    s.teacher_profile.update(level='B1',topic='Travel',auto_level='A2')
+    teacher.action(bot,1,s,'en','teach_finish')
+    assert s.teacher_status=='ended' and s.menu=='translator' and s.teacher_history
+    teacher.action(bot,1,s,'en','teacher')
+    assert s.teacher_status=='ended' and s.menu=='teacher'
+    assert teacher.BTN['teach_resume']['en'] in str(teacher.keyboard(s,'en'))
+    assert teacher.route(bot,1,s,[{'type':'text','text':'ignored'}],'teacher')
+    assert len(bot.jobs)==1
+    teacher.action(bot,1,s,'en','teach_reset')
+    assert s.teacher_status=='active' and s.teacher_history==[]
+    assert s.teacher_profile=={'level':'B1','topic':'Travel','auto_level':'A1','streak':0}
+
+
+def test_teacher_status_persists_and_clear_reactivates_legacy_session(tmp_path):
+    from tg_sessions import _Session, _Store
+    s=_Session(51)
+    assert s.teacher_status=='active'
+    s.teacher_status='paused'
+    store=_Store(tmp_path/'sessions.json')
+    store.put(s)
+    restored=_Store(tmp_path/'sessions.json').get(51)
+    assert restored.teacher_status=='paused'
+    restored.clear_context();store.put(restored)
+    assert _Store(tmp_path/'sessions.json').get(51).teacher_status=='active'

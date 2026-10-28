@@ -6,6 +6,7 @@ import uuid
 from seams import module
 from tg_keyboards import _translator_kb
 from tg_strings import _t, _LABEL2KEY
+from tg_translation_format import translation_messages
 from translator import LANGUAGES, error_text, voice_reference
 
 
@@ -66,12 +67,11 @@ def execute(bot, ctx, task):
             return not ctx.is_cancelled() and bot._get_session(chat_id).context_generation == generation
         def send(text):
             from tg_transport import verbatim_text
-            # 2000 code points also fit Telegram's limit when every character is an emoji.
-            for at in range(0, len(text), 2000):
+            for message in translation_messages(text,target):
                 if not active():
                     return
                 with verbatim_text():
-                    bot._send_text(chat_id, text[at:at+2000],
+                    bot._send_text(chat_id, message,parse_mode='HTML',
                                    keyboard=bot._state_kb(bot._get_session(chat_id), lang))
         if not active():
             return

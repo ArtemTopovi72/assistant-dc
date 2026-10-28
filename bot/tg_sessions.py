@@ -290,6 +290,9 @@ class _Session:
         self.teacher_profile=dict(d.get('teacher_profile') or {'level':'auto','auto_level':'A1','topic':'','streak':0})
         self.teacher_history=list(d.get('teacher_history') or [])
         self.teacher_epoch=int(d.get('teacher_epoch',0))
+        self.teacher_status=d.get('teacher_status','active')
+        if self.teacher_status not in ('active','paused','ended'):
+            self.teacher_status='active'
         self.lang_chosen: bool = bool(d.get("lang_chosen", False))  # by /lang or the 🌐 button
         self.use_docs: bool = d.get("use_docs", False)
         # Image output size, chosen in Draw ▸ 📐 Size. Empty means "not chosen" —
@@ -413,6 +416,7 @@ class _Session:
             self.history = []
             self.teacher_history=[]
             self.teacher_epoch+=1
+            self.teacher_status='active'
             self.teacher_profile.update(auto_level='A1',streak=0)
             self.tg_memory = []
             self.lang_pin = self.turn_lang = ""     # a fresh start speaks the chat's language
@@ -601,6 +605,7 @@ class _Session:
                 "teacher_profile":self.teacher_profile,
                 "teacher_history":self.teacher_history,
                 "teacher_epoch":self.teacher_epoch,
+                "teacher_status":self.teacher_status,
                 "lang_chosen":       self.lang_chosen,
                 "use_docs":          self.use_docs,
                 "image_aspect":      self.image_aspect,

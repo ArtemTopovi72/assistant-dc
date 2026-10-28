@@ -64,6 +64,21 @@ def test_worker_snapshots_state_and_settings_voice(app):
     assert spoken == ['first.wav'] and not ctx.cancel_event.is_set()
 
 
+def test_worker_speaks_native_rule_explanation_when_requested(app):
+    spoken=[]
+    def answer(ctx,profile,history,*args):
+        return {'say':'Wie geht es dir?','translation':'Как дела?',
+                'explanation':'Правило порядка слов.',
+                'native_speech':'Как дела? Правило порядка слов.',
+                'profile':profile,'history':history}
+    def speech(ctx,say,target,native_speech,native,out_dir,**kwargs):
+        spoken.append(native_speech)
+        return {'paths':[],'combined_path':''}
+    ctx,_=context(respond=answer,speech=speech)
+    TeacherWorker(ctx,{},[],'Объясни порядок слов','de','ru').run()
+    assert spoken==['Как дела? Правило порядка слов.']
+
+
 def test_cancel_disables_controls_and_never_commits_or_cancels_host(app):
     entered = threading.Event()
     def answer(ctx, *args):
@@ -190,3 +205,66 @@ def test_audio_input_uses_original_transcription_and_resets_after_reply(app, tmp
         assert not tab.source and tab.text_in.isEnabled()
     finally:
         tab.shutdown(); tab.worker.wait(1000); tab.close()
+
+
+@pytest.mark.parametrize('control,status',[('pause_btn','paused'),('finish_btn','ended')])
+def test_pause_or_finish_held_worker_suppresses_late_reply_then_resumes(app,control,status):
+    entered, release = threading.Event(), threading.Event()
+    def answer(ctx,*args):
+        entered.set(); release.wait(2)
+        return {'say':'late','translation':'late','profile':{},'history':['late']}
+    ctx,_ = context(respond=answer)
+    tab=TeacherTab(SimpleNamespace(ctx=ctx)); stopped=[]
+    tab.player=SimpleNamespace(stop=lambda:stopped.append(True))
+    tab.history=[{'role':'user','content':'earlier'}]
+    tab.result.setPlainText('earlier lesson')
+    try:
+        tab.text_in.setPlainText('Hello');tab.send_btn.click()
+        assert entered.wait(1) and tab.pause_btn.isEnabled() and tab.finish_btn.isEnabled()
+        getattr(tab,control).click()
+        assert tab.lesson_status==status and tab.worker.cancel_event.is_set()
+        assert stopped and not ctx.cancel_event.is_set()
+        release.set();wait(tab)
+        assert tab.lesson_status==status and ('paused' if status=='paused' else 'finished') in tab.status.text()
+        assert not tab.send_btn.isEnabled() and not tab.text_in.isEnabled() and not tab.audio_btn.isEnabled()
+        assert tab.history==[{'role':'user','content':'earlier'}] and tab.result.toPlainText()=='earlier lesson'
+        tab.pause_btn.click()
+        assert tab.lesson_status=='active' and tab.send_btn.isEnabled() and tab.audio_btn.isEnabled()
+        assert tab.history==[{'role':'user','content':'earlier'}]
+    finally:
+        release.set();tab.shutdown();tab.worker.wait(2000);tab.close()
+
+
+def test_finish_returns_to_translator_and_clear_starts_fresh_with_preferences(app):
+    from PyQt5.QtWidgets import QTabWidget, QWidget
+    sections=QTabWidget();sections.addTab(QWidget(),'Translator');sections.addTab(QWidget(),'Teacher')
+    sections.setCurrentIndex(1)
+    tab=TeacherTab(SimpleNamespace(translator_tab=SimpleNamespace(sections=sections)))
+    try:
+        tab.level.setCurrentIndex(tab.level.findData('B1'));tab.topic.setText('Travel')
+        tab.history=[{'role':'user','content':'earlier'}];tab.profile['auto_level']='B2'
+        tab.result.setPlainText('earlier lesson')
+        tab.finish_btn.click()
+        assert tab.lesson_status=='ended' and sections.currentIndex()==0
+        assert tab.history and tab.result.toPlainText()=='earlier lesson'
+        assert not tab.send_btn.isEnabled() and not tab.audio_btn.isEnabled()
+        tab.clear_btn.click()
+        assert tab.lesson_status=='active' and tab.send_btn.isEnabled() and not tab.history
+        assert tab.profile=={'level':'B1','auto_level':'A1','topic':'Travel','streak':0}
+        assert tab.target.currentData()=='de' and tab.native.currentData()=='ru'
+    finally:
+        tab.close();sections.close()
+
+
+def test_finish_standalone_and_late_progress_do_not_overwrite_status(app):
+    tab=TeacherTab()
+    try:
+        tab.finish_btn.click()
+        status=tab.status.text()
+        tab._progress(1,2,'late');tab._failed('late error');tab._finished()
+        tab._done({'profile':{},'history':['late']})
+        assert tab.lesson_status=='ended' and tab.status.text()==status and not tab.history
+        tab.pause_btn.click()
+        assert tab.lesson_status=='active' and tab.text_in.isEnabled()
+    finally:
+        tab.close()

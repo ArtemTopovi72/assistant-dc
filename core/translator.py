@@ -16,6 +16,7 @@ LANGUAGES = {'ru': ('Russian', 'Русский'), 'en': ('English', 'English'),
              'pt': ('Portuguese', 'Português'), 'zh': ('Chinese', '中文'),
              'ja': ('Japanese', '日本語'), 'ko': ('Korean', '한국어')}
 MAX_TEXT = 12000
+LANGUAGE_FLAGS = dict(zip(LANGUAGES,('🇷🇺','🇬🇧','🇩🇪','🇫🇷','🇪🇸','🇮🇹','🇵🇹','🇨🇳','🇯🇵','🇰🇷')))
 
 _ERRORS_RU = {
     'Choose a target language.': 'Выберите язык перевода.',

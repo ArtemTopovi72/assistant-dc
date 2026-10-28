@@ -69,8 +69,9 @@ def test_long_translation_survives_the_real_telegram_transport_without_truncatio
         return {'ok': True, 'result': {'message_id': len(sent) + 1}}
     bot._api_post = post
     bot._execute_task(enqueue(bot, 'Hello'))
-    parts = [p['text'] for p in sent if p['text'].startswith('\U0001f600')]
-    assert ''.join(parts) == translated
+    import html
+    parts = [p['text'] for p in sent if p.get('parse_mode') == 'HTML' and p['text'].startswith('<b>🌐 ')]
+    assert ''.join(html.unescape(p.split('\n',1)[1]) for p in parts) == translated
     assert all(len(p.encode('utf-16-le')) // 2 <= 4096 for p in parts)
 
 

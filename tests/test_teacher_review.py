@@ -9,8 +9,26 @@ import tg_teacher as teacher
 from tg_queue import QueueMixin
 from tg_transport import TransportMixin
 from test_tg_teacher import bot as _fixture_bot, queue
+import pytest
 
 bot = _fixture_bot
+
+
+def test_rule_explanation_mode_cannot_succeed_without_an_explanation():
+    import language_teacher
+    from test_language_teacher import context
+    ctx, _ = context(lesson_intent='explain', input_language='ru', explanation='')
+    with pytest.raises(ValueError, match='invalid lesson reply'):
+        language_teacher.respond(ctx, {}, [], 'Объясни английские артикли', 'en', 'ru')
+
+
+def test_third_language_reply_requires_the_requested_mismatch_feedback():
+    import language_teacher
+    from test_language_teacher import context
+    ctx, _ = context(say='Wie geht es dir?', input_language='en', used_target=False,
+                     correction='', explanation='')
+    with pytest.raises(ValueError, match='invalid lesson reply'):
+        language_teacher.respond(ctx, {}, [], 'I am tired today', 'de', 'ru')
 
 
 def test_teacher_never_gets_session_under_session_lock(bot):
@@ -57,6 +75,8 @@ def test_stop_cancels_teacher_while_lesson_audio_is_still_working(bot):
     assert cancelled_during_speech == [True]
     assert not bot.voices
     assert not task.delivered
+    assert not any('Hallo?' in text for _,text in bot.sent)
+    assert not sess.teacher_history
 
 
 def test_rejected_telegram_text_is_not_a_delivered_lesson(bot):

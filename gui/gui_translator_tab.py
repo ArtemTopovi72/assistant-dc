@@ -1,12 +1,13 @@
 """Translation utility with its own cancellable worker and explicit inputs."""
 import shutil
+import html
 import threading
 from pathlib import Path
 
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (QApplication, QComboBox, QHBoxLayout, QLabel,
-    QPlainTextEdit, QPushButton, QTabWidget, QVBoxLayout, QWidget)
+    QPlainTextEdit, QPushButton, QTextBrowser, QTabWidget, QVBoxLayout, QWidget)
 
 import gui_i18n
 import translator
@@ -79,7 +80,7 @@ class TranslatorTab(QWidget):
         self.target.setAccessibleName('Target language')
         self.mode.setAccessibleName('Translation mode')
         for code, (en, native) in translator.LANGUAGES.items():
-            self.target.addItem(f'{native} · {en}', code)
+            self.target.addItem(f'{translator.LANGUAGE_FLAGS[code]} {native} · {en}', code)
         self.target.setCurrentIndex(self.target.findData('en'))
         for label, mode in (('Text', 'text'), ('Picture lettering', 'image'), ('Voice → voice', 'voice'), ('Video / audio', 'dub'), ('Text → voice (settings voice)', 'tts')):
             self.mode.addItem(label, mode)
@@ -108,7 +109,7 @@ class TranslatorTab(QWidget):
         for b in (self.translate_btn, self.stop_btn, self.clear_btn): buttons.addWidget(b)
         root.addLayout(buttons)
         self.status = QLabel(''); self.status.setWordWrap(True); root.addWidget(self.status)
-        self.result = QPlainTextEdit(); self.result.setReadOnly(True)
+        self.result = QTextBrowser(); self.result.setReadOnly(True)
         self.result.setPlaceholderText('Translation'); root.addWidget(self.result)
         self.preview = QLabel(); self.preview.setAlignment(Qt.AlignCenter)
         self.preview.setMinimumHeight(0); self.preview.hide(); root.addWidget(self.preview)
@@ -176,7 +177,7 @@ class TranslatorTab(QWidget):
         self.status.setText(progress.line(done,total,what,gui_i18n.LANG))
 
     def _done(self, result):
-        self.result.setPlainText(result['text'])
+        self.result.setHtml('<p>'+html.escape(result['text']).replace('\n','<br>')+'</p>')
         self.output_path = result.get('path', '')
         self.audio_path = result.get('audio_path') or (self.output_path if Path(self.output_path).suffix == '.wav' else '')
         self.subtitle_path = result.get('subtitle_path', '')
