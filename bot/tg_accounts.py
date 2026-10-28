@@ -265,8 +265,7 @@ class AccountsMixin:
             self._send_text(chat_id, tg_bot._t("acct_gone", self._lang(sess)))
             return
         self._request_stop(chat_id)
-        sess.clear_history()
-        sess.set_tg_memory([])
+        sess.clear_context()
         sess.pending_prefix = ""
         sess.reg_state = "awaiting_login"
         sess.reg_name = ""

@@ -1,0 +1,169 @@
+{
+  "date": "2026-10-28",
+  "count": 52,
+  "queries": [
+    {
+      "q": "site:platform.openai.com docs conversation state compaction long running agents context management"
+    },
+    {
+      "q": "site:anthropic.com engineering effective context engineering AI agents"
+    },
+    {
+      "q": "site:docs.langchain.com short term memory thread state long term memory"
+    },
+    {
+      "q": "site:arxiv.org Lost in the Middle How Language Models Use Long Contexts"
+    },
+    {
+      "q": "site:arxiv.org LongMemEval benchmarking chat assistants long term interactive memory"
+    },
+    {
+      "q": "site:arxiv.org LoCoMo long term conversational memory 2024 2025"
+    },
+    {
+      "q": "site:arxiv.org MemGPT towards LLMs as operating systems"
+    },
+    {
+      "q": "site:arxiv.org Mem0 building production ready AI agents scalable long term memory"
+    },
+    {
+      "q": "site:docs.langchain.com oss python langgraph persistence threads checkpoints state"
+    },
+    {
+      "q": "site:docs.langchain.com oss python langgraph reducers add_messages state concurrent updates"
+    },
+    {
+      "q": "site:docs.langchain.com oss python short term memory trim summarize messages"
+    },
+    {
+      "q": "site:docs.langchain.com oss python long term memory namespaces semantic episodic procedural"
+    },
+    {
+      "q": "site:arxiv.org Zep temporal knowledge graph agent memory Graphiti"
+    },
+    {
+      "q": "site:docs.letta.com memory blocks archival recall conversations"
+    },
+    {
+      "q": "site:docs.mem0.ai memory update delete contradictions timestamp source"
+    },
+    {
+      "q": "site:arxiv.org memory consolidation conversational agents factual updates provenance"
+    },
+    {
+      "q": "site:anthropic.com engineering context compaction preserve unresolved tasks"
+    },
+    {
+      "q": "site:cookbook.openai.com session memory summarizing trimming conversations agents"
+    },
+    {
+      "q": "site:docs.langchain.com summarization middleware token budget retain recent messages"
+    },
+    {
+      "q": "site:arxiv.org A-MEM Agentic Memory LLM Agents contextual links"
+    },
+    {
+      "q": "site:ai.google.dev gemma multimodal image understanding chat template multiple images"
+    },
+    {
+      "q": "site:core.telegram.org bots api message caption reply_to_message media_group_id file_unique_id"
+    },
+    {
+      "q": "site:platform.openai.com docs guides images vision multiple image inputs conversation"
+    },
+    {
+      "q": "site:docs.anthropic.com vision multi image prompts image ordering context"
+    },
+    {
+      "q": "site:anthropic.com research prompt injection untrusted tool output context"
+    },
+    {
+      "q": "site:learn.microsoft.com prompt shields spotlighting delimiters untrusted content"
+    },
+    {
+      "q": "site:arxiv.org visual prompt injection multimodal agents images OCR"
+    },
+    {
+      "q": "site:modelcontextprotocol.io specification security best practices untrusted tool annotations"
+    },
+    {
+      "q": "site:anthropic.com engineering demystifying evals AI agents multi turn"
+    },
+    {
+      "q": "site:docs.smith.langchain.com evaluate multi turn conversations memory"
+    },
+    {
+      "q": "site:cookbook.openai.com examples evals multi turn conversations"
+    },
+    {
+      "q": "site:arxiv.org MultiChallenge realistic multi turn conversation evaluation instruction retention"
+    },
+    {
+      "q": "site:arxiv.org memory poisoning long term memory LLM agents"
+    },
+    {
+      "q": "site:docs.mem0.ai metadata filters user_id session_id timestamp"
+    },
+    {
+      "q": "site:docs.letta.com memory management forgetting explicit delete user facts"
+    },
+    {
+      "q": "site:arxiv.org personalization conversational memory user preferences temporal updates"
+    },
+    {
+      "q": "site:docs.langchain.com langgraph thread safety state updates same thread concurrency"
+    },
+    {
+      "q": "site:docs.python.org contextvars async thread request scoped state"
+    },
+    {
+      "q": "site:redis.io docs streams consumer groups pending acknowledgement"
+    },
+    {
+      "q": "site:sqlite.org isolation transactions WAL concurrent writers"
+    },
+    {
+      "q": "site:arxiv.org multimodal dialogue coreference resolution images conversation"
+    },
+    {
+      "q": "site:arxiv.org visually grounded dialogue multiple images reference resolution"
+    },
+    {
+      "q": "site:arxiv.org conversational query rewriting standalone question history retrieval"
+    },
+    {
+      "q": "site:ai.google.dev gemma docs core prompt structure multi turn conversations"
+    },
+    {
+      "q": "site:arxiv.org RULER long context evaluation multi needle retrieval"
+    },
+    {
+      "q": "site:arxiv.org memorybank enhancing large language models long term memory"
+    },
+    {
+      "q": "site:arxiv.org Generative Agents interactive simulacra human behavior memory stream recency importance"
+    },
+    {
+      "q": "site:arxiv.org retrieval augmented generation conversation memory hybrid BM25 embeddings"
+    },
+    {
+      "q": "site:core.telegram.org bots api getUpdates offset update_id ordering"
+    },
+    {
+      "q": "site:docs.langchain.com langgraph durable execution idempotency side effects"
+    },
+    {
+      "q": "site:arxiv.org evaluating faithfulness dialogue summarization factual consistency"
+    },
+    {
+      "q": "site:docs.litellm.ai trim_messages preserve system tool call response pairs"
+    }
+  ],
+  "applied": [
+    "Immutable message and attachment identities before debounce and queue execution",
+    "Conversation-scoped memory and archives, invalidated by clear generation",
+    "Merge turn deltas; preserve concurrent history and current-media ownership",
+    "Image observations carry attachment provenance; current evidence outranks historical descriptions",
+    "Test multi-turn recall, knowledge updates, abstention, replacement images and interruption"
+  ]
+}

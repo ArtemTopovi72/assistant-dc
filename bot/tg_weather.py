@@ -230,7 +230,8 @@ class WeatherMixin:
         the LLM city-correction) from scratch."""
         self._send_text(chat_id, tg_bot._t("wtw_checking", lang))
         self._run_busy(chat_id, self._send_weather,
-                       chat_id, city, lang, remember_for, hours, date, loc)
+                       chat_id, city, lang, remember_for, hours, date, loc,
+                       self._get_session(chat_id).context_generation)
 
     # Both hooks live in weather.py (shared with the desktop Weather tab); kept
     # as methods because this is where the flow reads, and one test drives them
@@ -243,7 +244,11 @@ class WeatherMixin:
 
     def _send_weather(self, chat_id: int, city: str, lang: str,
                       remember_for: int = 0, hours: int = None, date=None,
-                      loc: dict = None) -> None:
+                      loc: dict = None, generation=None) -> None:
+        sess = self._get_session(chat_id)
+        generation = sess.context_generation if generation is None else generation
+        if generation != sess.context_generation:
+            return
         try:
             ctx = self._get_ctx()
         except Exception:
@@ -278,6 +283,8 @@ class WeatherMixin:
         reply = (self.weather.what_to_wear_periods_for_loc(
                     loc, lang, hours=hours, date=date, advise_fn=advise_fn) if loc
                 else self.weather.not_found_message(city, lang))
+        if generation != sess.context_generation:
+            return
         # The follow-up buttons only make sense under an hours-based (rolling
         # window) forecast -- a date-based one is already a specific answer,
         # and "48 hours from THIS forecast" would be ambiguous once the user
@@ -309,11 +316,10 @@ class WeatherMixin:
                 # history so «а там есть метро?» after «погода в Казани» is
                 # answered about Kazan.
                 with self._history_lock(chat_id):
-                    hist = sess.get_history()
-                    hist += [{"role": "user", "content": f"[weather forecast asked for {loc['name']}]"},
+                    added = [{"role": "user", "content": f"[weather forecast asked for {loc['name']}]"},
                              {"role": "assistant",
                               "content": _re.sub(r"<[^>]+>", "", reply)[:700]}]
-                    sess.set_history(hist)
+                    sess.commit_history_turn((generation, 0), [], added)
                 self._store.put(sess)
             except Exception:
                 tg_bot.logger.debug("weather turn not recorded", exc_info=True)

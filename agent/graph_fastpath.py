@@ -162,7 +162,8 @@ def _is_photo_intake(ctx, state: AgentState, user_input: str, original_input: st
     if user_input.strip() == "image":
         return True
     got = _intent(ctx, state, user_input, original_input)
-    return got["presents_photo"] and not got["needs_tool"]
+    return (got["presents_photo"] and not got["needs_tool"]
+            and not got['is_question'] and not state.get('picture_question'))
 
 
 def _followup_of_tool_turn(state, text: str, ctx=None) -> bool:

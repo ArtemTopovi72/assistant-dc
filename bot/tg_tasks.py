@@ -82,10 +82,8 @@ def _typed_part(text: str) -> str:
 
 
 def _target_id_of(task, sess) -> str:
-    """The picture this turn is about: the one carried on the task (button, reply), else the one
-    sent WITH the message, else the session's pointer slot. A slot left by a button pressed minutes
-    ago answered, and animated, a NEW upload as the old picture (01:12, «видео не на ту фотку»)."""
-    return getattr(task, "image_id", "") or ("" if getattr(task, "image_path", "") else getattr(sess, "target_image", ""))
+    """The immutable picture selected before this task entered the queue."""
+    return getattr(task, 'image_id', '')
 
 
 def _message_script(text: str, ctx=None) -> str:
@@ -331,6 +329,7 @@ class TaskRunnerMixin:
             # «вы прислали тот же текст, хотите иначе?» -- so the repeat is
             # simply not visible to the model.
             turn_trace.spawn(self._retell_transcript, chat_id, said, lang, "👁 " in said,
+                             sess.context_generation,
                              name=f"fwd-retell-{chat_id}")
         elif what == "text":
             self._send_text(chat_id, tg_bot._t("main_menu", lang),
@@ -348,6 +347,10 @@ class TaskRunnerMixin:
         "what do I do with it?" goes out once. Returns the held text ('' when
         nothing could be read)."""
         sess = self._get_session(chat_id)
+        generation = next((it['_context_generation'] for it in items if '_context_generation' in it),
+                          sess.context_generation)
+        if generation != sess.context_generation:
+            return ''
         lang = self._lang(sess)
         ctx = self._get_ctx()
         if ctx is None:
@@ -440,6 +443,8 @@ class TaskRunnerMixin:
             except Exception:
                 tg_bot.logger.exception("combining the batch's video sheets failed")
                 sheet = sheets[-1][1]
+        if generation != sess.context_generation:
+            return ''
         sess.fwd_transcript = said
         sess.fwd_transcript_id = uuid.uuid4().hex[:8]
         sess.remember_fwd(sess.fwd_transcript_id, said)
@@ -457,7 +462,7 @@ class TaskRunnerMixin:
                            f"{len(boards)} storyboards", str(chat_id))
         if ask:
             self._commit_media_turn(chat_id, said, "(read and heard; asked what to do with it)",
-                                    bool(boards))
+                                    bool(boards), generation)
             parts = ", ".join(x for x in (
                 tg_bot._t("fwd_lbl_voice", lang, n=n["voice"]) if n["voice"] else "",
                 tg_bot._t("fwd_lbl_video", lang, n=n["video"]) if n["video"] else "",
@@ -474,7 +479,8 @@ class TaskRunnerMixin:
                                                           pick=len(media_list) > 1))
         return said
 
-    def _commit_media_turn(self, chat_id: int, said: str, reply: str, is_video: bool) -> None:
+    def _commit_media_turn(self, chat_id: int, said: str, reply: str, is_video: bool,
+                           generation=None) -> None:
         """Put a forwarded voice/video into the chat history the model sees.
 
         The retelling is deliberately a one-shot call outside the agent, and
@@ -501,18 +507,23 @@ class TaskRunnerMixin:
                 # repeated as a new user turn for every press.
                 already = any(m.get("role") == "user" and m.get("content") == user_msg
                               for m in hist[-6:])
-                if not already:
-                    hist.append({"role": "user", "content": user_msg})
-                hist.append({"role": "assistant", "content": (reply or "")[:6000]})
-                sess.set_history(hist)
+                added = [] if already else [{"role": "user", "content": user_msg}]
+                added.append({"role": "assistant", "content": (reply or "")[:6000]})
+                sess.commit_history_turn((sess.context_generation if generation is None else generation, 0),
+                                         hist, added)
                 self._store.put(sess)
         except Exception:
             tg_bot.logger.exception("fwd media history save failed chat=%s", chat_id)
 
-    def _retell_transcript(self, chat_id: int, said: str, lang: str, is_video: bool) -> None:
+    def _retell_transcript(self, chat_id: int, said: str, lang: str, is_video: bool,
+                           generation=None) -> None:
         """One-shot retelling of a forwarded voice/video transcript (see
         _do_fwd_voice). A video transcript carries the 👁 storyboard: speech
         and picture are retold as one whole, tied together."""
+        sess = self._get_session(chat_id)
+        generation = sess.context_generation if generation is None else generation
+        if generation != sess.context_generation:
+            return
         system = retell_system(lang, is_video)
         self._api_post("sendChatAction", {"chat_id": chat_id, "action": "typing"})
         out = ""
@@ -524,6 +535,8 @@ class TaskRunnerMixin:
             tg_bot.logger.exception("fwd retell failed chat=%s", chat_id)
         turn_trace.answer("final", out)
         sess = self._get_session(chat_id)
+        if generation != sess.context_generation:
+            return
         if not out:
             self._send_text(chat_id, tg_bot._t("fwd_voice_none", lang),
                             keyboard=self._main_menu_kb(sess, lang)); return
@@ -537,7 +550,7 @@ class TaskRunnerMixin:
                                        out, None, kind="retell")
             self._send_text(chat_id, chunk, parse_mode="HTML", keyboard=kb)
         self._activity.log(chat_id, "assistant", out[:500])
-        self._commit_media_turn(chat_id, said, out, is_video)
+        self._commit_media_turn(chat_id, said, out, is_video, generation)
 
     def _deliver_salvaged_video(self, ctx, chat_id, lang, uname, since: float = 0.0) -> bool:
         """Send the clip a timed-out turn had joined (ctx.video_made), parts so far included.
@@ -589,6 +602,7 @@ class TaskRunnerMixin:
                            {"chat_id": chat_id, "action": "upload_photo"})
             img_id = tg_bot._log_image(sess, path,
                                        label=(task.user_text or "")[:80], src="bot",
+                                       prompt=getattr(ctx, 'last_image_prompt', '') or '',
                                        parent=(getattr(ctx, "source_image_id", "") or "") if ctx else "")
             self._last_photo_msg_id = 0
             if not self._send_photo(chat_id, path,
@@ -619,11 +633,43 @@ class TaskRunnerMixin:
                             keyboard=self._main_menu_kb(sess, lang))
             return
 
+        token = ((task.context_generation, task.context_revision) if task.context_revision is not None
+                 else sess.begin_context_turn(task.context_generation))
+        if token is None or token[0] != sess.context_generation:
+            return
+        entry = tg_bot._image_by_id(sess, task.image_id) if task.image_id else None
+        if ((task.image_path and not os.path.exists(task.image_path))
+                or (task.image_id and (not entry or not os.path.exists(entry.get('path', ''))))):
+            with tg_transport.replying_to(chat_id, task.reply_to, asked=task.user_text):
+                self._send_text(chat_id, tg_bot._t('img_gone', lang))
+            return
+
         # THIS task's own view of the context: its own working image, memory,
         # facts, output size and cancel event, so two tasks running at once cannot
         # see each other's picture or cancel each other's request.
         _cancel = threading.Event()
         ctx = tg_bot._scoped_ctx(_shared, cancel_event=_cancel)
+        ctx._session_token = token
+        ctx._memory_before = _copy_mod.deepcopy(sess.get_tg_memory())
+        ctx._facts_before = _copy_mod.deepcopy(sess.get_tg_facts())
+        ctx.turn_id, ctx.turn_ts = task.task_id, task.enqueue_ts
+        save_memory = getattr(ctx, 'save_memory', None)
+        if save_memory:
+            disk_ctx = _copy_mod.copy(ctx)
+            def guarded_save(*args, **kwargs):
+                from tg_sessions import _merge_context_entries
+                with sess._lock:
+                    if token[0] == sess.context_generation:
+                        sess.tg_memory = _merge_context_entries(sess.tg_memory, ctx._memory_before,
+                                                               list(ctx.session_memory),
+                                                               getattr(ctx.session_memory, 'maxlen', None) or 40)
+                        sess.tg_facts = _merge_context_entries(sess.tg_facts, ctx._facts_before, ctx.pinned_facts)
+                        ctx._memory_before = _copy_mod.deepcopy(list(ctx.session_memory))
+                        ctx._facts_before = _copy_mod.deepcopy(ctx.pinned_facts)
+                        disk_ctx.session_memory = sess.tg_memory
+                        disk_ctx.pinned_facts = sess.tg_facts
+                        return disk_ctx.save_memory(*args, **kwargs)
+            ctx.save_memory = guarded_save
         # The reply language follows the USER's session language: an English
         # session must not get answers in Russian (the house default).
         ctx.reply_lang = lang
@@ -739,8 +785,12 @@ class TaskRunnerMixin:
         _trace = turn_trace.start(chat=chat_id, task=task.task_id[:8], user=uname,
                                   text=(task.user_text or "")[:1500])
         try:
-            import config as _cfg, debug_user as _dbg, klein as _klein
-            with _chatlog.bind(chat_id), tg_transport.replying_to(chat_id, task.reply_to, asked=task.user_text), tg_transport.result_menu(self, chat_id),                     _klein.steps_for_task(_cfg.KLEIN_DEBUG_STEPS if _dbg.is_debug(chat_id) else None):
+            import config as _cfg, debug_user as _dbg, klein as _klein, context_v2
+            with (_chatlog.bind(chat_id),
+                  context_v2.archive_scope(ctx.active_memory_dir / 'archive' / str(token[0])),
+                  tg_transport.replying_to(chat_id, task.reply_to, asked=task.user_text),
+                  tg_transport.result_menu(self, chat_id),
+                  _klein.steps_for_task(_cfg.KLEIN_DEBUG_STEPS if _dbg.is_debug(chat_id) else None)):
                 self._run_task_inner(task, sess, user, uname, lang, ctx, graph)
             _outcome = "cancelled" if task.task_id in self._cancelled else "done"
         finally:
@@ -975,6 +1025,12 @@ class TaskRunnerMixin:
     def _run_task_inner(self, task: tg_bot._Task, sess, user, uname: str, lang: str,
                         ctx, graph):  # noqa: C901
         chat_id = task.chat_id
+        if not getattr(ctx, '_session_token', None):
+            ctx._session_token = sess.begin_context_turn(task.context_generation)
+            ctx._memory_before = _copy_mod.deepcopy(sess.get_tg_memory())
+            ctx._facts_before = _copy_mod.deepcopy(sess.get_tg_facts())
+        if ctx._session_token is None:
+            return
         import nice_names                      # files sent by this task are named after it
         nice_names.TITLES[chat_id] = task.user_text or ""
         # What the user says while ANY task runs lands here (steer.py): the
@@ -1208,6 +1264,8 @@ class TaskRunnerMixin:
                     self._active_stages.pop(chat_id, None)
 
             _clear_status()
+            if ctx._session_token[0] != sess.context_generation:
+                return
             # A Stop/Cancel that landed before the run even started (button was
             # live the whole time above) must not still ship a "partial" report —
             # only `result["cancelled"]` was checked before, which is set by the
@@ -1277,12 +1335,10 @@ class TaskRunnerMixin:
             self._on_stage(chat_id, "✅ Done", True)
             try:
                 with self._history_lock(chat_id):
-                    hist = sess.get_history()
-                    hist.append({"role": "user", "content": task.user_text})
-                    hist.append({"role": "assistant",
+                    added = [{"role": "user", "content": task.user_text}, {"role": "assistant",
                                  "content": f"[deep research report on '{topic}']\n\n"
-                                            + (report or reply)[:6000]})
-                    sess.set_history(hist)
+                                            + (report or reply)[:6000]}]
+                    sess.commit_history_turn(ctx._session_token, [], added)
                     self._store.put(sess)
             except Exception:
                 tg_bot.logger.exception("deep research history save failed chat=%s", chat_id)
@@ -1402,9 +1458,9 @@ class TaskRunnerMixin:
         # one) is about that picture, not about the documents: «Что
         # нарисовано?» over a forwarded sketch was wrapped as a question to
         # the library and answered with an image edit.
-        _about_a_picture = bool(img_bytes or getattr(task, "image_id", "")
-                                or getattr(sess, "target_image", "")
-                                or _about_the_last_video(getattr(sess, "last_image_path", ""),
+        _about_a_picture = bool(img_bytes or (task.image_id and task.image_selection != 'context')
+                                or _about_the_last_video(task.image_path or
+                                                          (tg_bot._image_by_id(sess, task.image_id) or {}).get('path', ''),
                                                           user_input, ctx=ctx))
         if sess.use_docs and not _about_a_picture and not _plainly_not_a_doc_question(user_input, ctx=ctx):
             lib = None
@@ -1516,9 +1572,7 @@ class TaskRunnerMixin:
             # ever": «Что думаешь?» about a forwarded video
             # must not re-read a quote photo from an hour before. A picture further
             # back is one reply, button or «на первой картинке» away.
-            _in_play = tg_bot._image_by_id(sess, getattr(sess, "turn_image", "") or "")
-            ctx.last_image_path = (_in_play["path"] if _in_play and os.path.exists(_in_play.get("path", ""))
-                                   else None)
+            ctx.last_image_path = task.image_path or None
         # «верни как было» in a later message: this chat's own pictures, oldest first.
         ctx.image_undo = [e["path"] for e in (getattr(sess, "image_log", None) or [])
                           if e.get("path") and e["path"] != ctx.last_image_path][-10:]
@@ -1538,7 +1592,7 @@ class TaskRunnerMixin:
                 ctx.voice_choice or getattr(sess, "video_plan_ok", None)):
             _album = _rerun_album = [p for p in (sess.turn_album or []) if p and os.path.exists(p)]
         else:
-            sess.turn_album = list(_album)
+            sess.update_turn_media(ctx._session_token, turn_album=list(_album))
         # The album's first picture rides as task.image_path and becomes the working
         # image only later in this function; ctx.last_image_path is still empty here.
         _first = getattr(task, "image_path", "") or ctx.last_image_path
@@ -1547,10 +1601,16 @@ class TaskRunnerMixin:
         # What THIS turn is about, for the next one's "the picture": a photo
         # sent with the message, or the one pointed at; a delivered picture
         # overwrites it below, and a turn with none leaves it empty.
-        sess.turn_image = (_target or {}).get("id", "") or (
+        current_image_id = (_target or {}).get("id", "") or (
             (tg_bot._image_by_path(sess, task.image_path or "") or {}).get("id", "")
             if getattr(task, "image_path", "") else "") or (
             (tg_bot._image_by_path(sess, ctx.last_image_path or "") or {}).get("id", ""))
+        sess.update_turn_media(ctx._session_token, turn_image=current_image_id)
+        current_entry = tg_bot._image_by_id(sess, current_image_id) or {}
+        ctx.current_image_id = current_image_id
+        ctx.image_origin = 'user' if task.image_is_photo else current_entry.get('src', '')
+        ctx.image_pointed_at = bool(task.image_id and task.image_selection != 'context'
+                                    and not _is_button_payload(task.user_text))
         # Remember which register entry this task starts from, so the picture
         # it delivers can be recorded as a VERSION of it (see _one_lineage).
         _derives = bool(_target) or (task.user_text or "") in tg_bot._MACHINE_PAYLOADS or (task.user_text or "").startswith(tg_bot._PROMPT_KB.get("edit_image", "edit the image"))
@@ -1558,8 +1618,7 @@ class TaskRunnerMixin:
                                if _derives else "")
         # One turn only: a target is a gesture the user made about THIS message,
         # not a mode they switched on.
-        sess.target_image = ""
-        ctx.last_image_prompt = sess.last_image_prompt or ""
+        ctx.last_image_prompt = current_entry.get('prompt', '')
         ctx.last_deck = sess.last_deck or None
 
         # Every picture still on disk in this chat's register, oldest first. Video
@@ -1763,21 +1822,21 @@ class TaskRunnerMixin:
                         f"graph.invoke: returned {type(_raw).__name__}, not a dict",
                         uname)
         finally:
-            # Save this session's memory and restore the GUI's memory.
-            # Only PERSIST what this turn produced. The scoped ctx is discarded
-            # with the task, so there is no global state to hand back.
-            sess.set_tg_memory(list(ctx.session_memory))
-            sess.set_tg_facts(list(ctx.pinned_facts))
-            sess.last_image_path   = getattr(ctx, "last_image_path", "") or ""
-            sess.last_image_prompt = getattr(ctx, "last_image_prompt", "") or ""
-            sess.last_deck = getattr(ctx, "last_deck", None) or {}
+            # Merge this turn's changes without overwriting a newer request's state.
+            sess.commit_context_turn(ctx._session_token, ctx._memory_before, list(ctx.session_memory),
+                ctx._facts_before, list(ctx.pinned_facts), {
+                    'last_image_path': getattr(ctx, 'last_image_path', '') or '',
+                    'last_image_prompt': getattr(ctx, 'last_image_prompt', '') or '',
+                    'last_deck': getattr(ctx, 'last_deck', None) or {}},
+                memory_limit=getattr(ctx.session_memory, 'maxlen', None) or 40)
             with self._task_lock:
                 self._task_cancels.pop(task.task_id, None)
             keepalive.stop()
             with self._stages_lock:
                 self._active_stages.pop(chat_id, None)
 
-        if not invoke_ok: return
+        if not invoke_ok or ctx._session_token[0] != sess.context_generation:
+            return
 
         _clear_status()
 
@@ -1834,8 +1893,8 @@ class TaskRunnerMixin:
         # the picture-editing keyboard. task.image_is_photo is only ever True for an actual
         # photo/album upload (tg_resolve.py's "photo"/"album" branches), so a
         # derived sheet never qualifies no matter what sess.turn_image holds.
-        _turn_img_id = (_target or {}).get("id", "") if _target else (
-            sess.turn_image if getattr(task, "image_is_photo", False) else "")
+        _turn_img_id = (_target or {}).get("id", "") if _target and _target.get('src') != 'video' else (
+            ctx.current_image_id if getattr(task, "image_is_photo", False) else "")
         if _turn_img_id and not any(final.get(k) for k in
                                     ("image_status", "video_status", "document_status")):
             _turn_img_entry = tg_bot._image_by_id(sess, _turn_img_id)
@@ -2065,8 +2124,9 @@ class TaskRunnerMixin:
                                         or {}).get("id", ""))
                         img_id = tg_bot._log_image(sess, out_img,
                                             label=(task.user_text or "")[:80], src="bot",
+                                            prompt=getattr(ctx, 'last_image_prompt', '') or '',
                                             parent=_parent)
-                        sess.turn_image = img_id
+                        sess.update_turn_media(ctx._session_token, turn_image=img_id)
                         self._last_photo_msg_id = 0
                         ok = self._send_photo(chat_id, out_img,
                                               keyboard=tg_bot._image_kb(lang, img_id))
@@ -2148,6 +2208,8 @@ class TaskRunnerMixin:
         # delivery blocked the voice note — the user saw "Speaking…" vanish and
         # got silence. Now the reply lands first; compaction happens quietly after.
         _compacted = False
+        _added = _turn_messages(new_msgs, _hist_snapshot_len,
+                               (final.get("user_input") or "", base.get("user_input") or ""))
         try:
             from graph import compact_history_if_needed
             ctx.total_user_turns = sess.total_user_turns
@@ -2158,7 +2220,6 @@ class TaskRunnerMixin:
             # when it actually folds turns into a summary — so identity tells
             # us whether the tail below can still be rebased by simple slicing.
             _compacted = new_msgs is not _pre_compact
-            sess.total_user_turns = ctx.total_user_turns
         except Exception:
             pass
         finally:
@@ -2180,32 +2241,18 @@ class TaskRunnerMixin:
             tg_bot.logger.info("chat=%s turn produced no answer — not committed to history", chat_id)
         with self._history_lock(chat_id):
             if _failed_turn:
-                latest = sess.get_history()
-            elif _compacted:
-                # Compaction rewrote/shortened the whole list (old turns folded
-                # into one summary) — the slice-by-index rebase below no longer
-                # lines up, so there is no safe partial merge; use the compacted
-                # result as-is. This narrow double-edge case (an interject
-                # landing in the exact turn where compaction also fires) can
-                # lose that interject's own turn — logged, not silently eaten.
-                latest = new_msgs
-                tg_bot.logger.info("history compacted during a possibly-concurrent "
-                           "chat=%s turn — using compacted result wholesale",
-                           chat_id)
-            else:
-                _added = _turn_messages(new_msgs, _hist_snapshot_len,
-                                       (final.get("user_input") or "", base.get("user_input") or ""))
-                latest = sess.get_history()
-                latest.extend(_added)
+                return
             # The passages were for THIS turn: kept in history, 40k chars per
             # question, the next question was answered with the previous
             # answer («склад номер 100» -> the safe code).
             from library import RAG_HEAD, RAG_QUESTION_SEAM
-            latest = [dict(m, content="[asked about the user's documents] "
-                           + m["content"].rpartition(RAG_QUESTION_SEAM)[2])
-                      if m.get("role") == "user" and isinstance(m.get("content"), str)
-                      and m["content"].startswith(RAG_HEAD) else m for m in latest]
-            sess.set_history(latest)
+            def without_passages(messages):
+                return [dict(m, content="[asked about the user's documents] "
+                             + m["content"].rpartition(RAG_QUESTION_SEAM)[2])
+                        if m.get("role") == "user" and isinstance(m.get("content"), str)
+                        and m["content"].startswith(RAG_HEAD) else m for m in messages]
+            sess.commit_history_turn(ctx._session_token, history, without_passages(_added),
+                                     without_passages(new_msgs) if _compacted else None)
             try: self._store.put(sess)
             except Exception:
                 tg_bot.logger.warning("session persist failed", exc_info=True)

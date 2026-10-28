@@ -181,24 +181,12 @@ def redirect_data_dir(directory) -> None:
 
 
 def _delete_chat_facts_file(chat_id: int) -> None:
-    """Delete the on-disk shadow copy of a chat's pinned facts, if any.
-
-    remember_fact writes every pinned fact into
-    `tg_memory/chat_<id>/facts.json` via `ctx.save_memory(ctx.active_memory_dir)`
-    (tools.py) so a crash doesn't lose a fact before the normal on-close save.
-    Nothing ever reads that file back for a Telegram chat (the live read path is
-    the session store's `tg_facts`), so it is pure write-only shadow storage —
-    all of the privacy risk of a disk copy, none of the benefit. "Forget all",
-    "Clear chat" and logout all promise the facts are gone; without this they
-    stayed in cleartext on disk until the next save happened to overwrite them
-    (which may be never, if the user stops using the bot right after).
-    """
-    try:
-        f = _MEMORY_DIR / f"chat_{chat_id}" / "facts.json"
-        if f.exists():
-            f.unlink()
-    except Exception as exc:
-        logger.debug("facts.json cleanup failed chat=%s: %s", chat_id, exc)
+    """Remove every on-disk memory source that load_memory can restore."""
+    for name in ('facts.json', 'session_memory.json', 'summary.json'):
+        try:
+            (_MEMORY_DIR / f"chat_{chat_id}" / name).unlink(missing_ok=True)
+        except OSError as exc:
+            logger.warning("memory cleanup failed chat=%s file=%s: %s", chat_id, name, exc)
 
 
 # ── keyboards ─────────────────────────────────────────────────────────────────
@@ -466,7 +454,7 @@ def _new_image_id() -> str:
 
 
 def _log_image(sess, path: str, *, msg_id: int = 0, label: str = "",
-               src: str = "bot", parent: str = "") -> str:
+               src: str = "bot", parent: str = "", prompt: str = "") -> str:
     """Remember a picture so it can be named later. Returns its id.
 
     Re-registering the SAME path returns the existing id and refreshes its
@@ -489,12 +477,14 @@ def _log_image(sess, path: str, *, msg_id: int = 0, label: str = "",
                 e["label"] = label[:80]
             if parent and not e.get("parent"):
                 e["parent"] = parent
+            if prompt:
+                e['prompt'] = prompt
             e["ts"] = time.time()
             sess.image_log = log[-_IMAGE_LOG_MAX:]
             return e["id"]
     entry = {"id": _new_image_id(), "path": path, "msg_id": int(msg_id or 0),
              "label": (label or "")[:80], "src": src, "ts": time.time(),
-             "parent": parent or ""}
+             "parent": parent or "", 'prompt': prompt}
     log.append(entry)
     sess.image_log = log[-_IMAGE_LOG_MAX:]
     return entry["id"]
@@ -1239,6 +1229,11 @@ def _scoped_ctx(base, cancel_event=None):
     c.cancel_event = cancel_event if cancel_event is not None else threading.Event()
     c.turn_queries = []      # what this turn searched for (tg_reply_shape)
     c.image_pointed_at = False
+    c.reference_images = []
+    c.recent_image_paths = []
+    c.image_undo = []
+    c.current_image_id = ''
+    c.image_origin = ''
     c.interim_callback = None
     c.progress_callback = None    # each task draws its own bar (tg_tasks._with_progress), not the desktop's
     c.video_made = ""             # the clip THIS task finished (a timed-out turn hands it over)

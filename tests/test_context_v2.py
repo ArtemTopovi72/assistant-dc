@@ -176,7 +176,7 @@ def test_v1_summary_migrates():
 
 
 def test_recall_unknown_id_is_a_tool_error():
-    assert C.recall("a0000000").startswith("[TOOL ERROR]")
+    assert 'unavailable in this conversation' in C.recall("a0000000")
 
 
 def test_old_goal_becomes_history_after_many_unfolded_turns():

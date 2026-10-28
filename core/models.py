@@ -334,6 +334,8 @@ class Context:
     # Most recent generated/redrawn image — lets the redraw_image tool and the GUI
     # "Redraw" button operate on the last picture without re-specifying it.
     last_image_path: Optional[str] = None
+    current_image_id: str = ''
+    image_origin: str = ''
     last_image_prompt: str = ""
     # This turn's picture was POINTED AT by the user (a reply to it, a button
     # under it); graph.needs_relook then answers any question by looking.
@@ -487,11 +489,17 @@ class Context:
             logger.error("Failed to save transcription cache: %s", exc)
 
     def remember(self, kind: str, text: str, meta: Optional[dict] = None) -> None:
+        meta = dict(meta or {})
+        if kind == 'vision':
+            meta.setdefault('attachment_id', getattr(self, 'current_image_id', '') or self.last_image_path or '')
+            meta.setdefault('source_path', self.last_image_path or '')
+        if getattr(self, 'turn_id', ''):
+            meta.setdefault('turn_id', self.turn_id)
         item = {
             "ts": time.time(),
             "kind": kind,
             "text": text.strip(),
-            "meta": meta or {},
+            "meta": meta,
         }
         if not item["text"]:
             return
@@ -508,7 +516,14 @@ class Context:
                 continue  # defense-in-depth: never let a stray non-dict crash memory_text
             text = str(it.get("text", "")).strip()
             if text:
-                lines.append(f"{i}. [{it.get('kind', 'note')}] {text}")
+                kind = it.get('kind', 'note')
+                if kind == 'vision':
+                    meta = it.get('meta')
+                    attachment = meta.get('attachment_id', '') if isinstance(meta, dict) else ''
+                    current = getattr(self, 'current_image_id', '') or self.last_image_path or ''
+                    scope = 'current' if attachment and attachment == current else 'historical'
+                    kind = f'vision; {scope} attachment={attachment or "unknown"}; observed={it.get("ts", 0)}'
+                lines.append(f"{i}. [{kind}] {text}")
         return "\n".join(lines)
 
     def pin_fact(self, text: str) -> bool:
@@ -572,6 +587,7 @@ class AgentState(TypedDict, total=False):
 
     session_memory_text: str
     vision_summary: str
+    picture_question: bool
 
     # set by the generate_image tool handler (tools.py)
     image_path: str

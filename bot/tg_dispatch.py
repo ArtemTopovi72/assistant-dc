@@ -629,7 +629,9 @@ class DispatchMixin:
             elif e["timer"] is not None:
                 e["timer"].cancel()
             if not any(p["file_id"] == file_id for p in e["photos"]):
-                e["photos"].append({"file_id": file_id, "caption": caption})
+                e["photos"].append({'file_id': file_id, 'caption': caption,
+                    '_message_id': (getattr(self, '_msg_id', {}) or {}).get(chat_id, 0),
+                    '_sent_ts': (getattr(self, '_msg_date', {}) or {}).get(chat_id)})
             key = e["_inbox_id"]
             self._incoming.put(chat_id, {"type": "album_pending", "group_id": group_id,
                 "photos": e["photos"], "forwarded": forwarded, "_inbox_id": key}, key)
@@ -641,9 +643,11 @@ class DispatchMixin:
         with self._album_lock: entry = self._albums.pop(group_id, None)
         if not entry: return
         cap = next((p["caption"] for p in entry["photos"] if p["caption"]), "")
+        source = next((p for p in entry['photos'] if p['caption']), entry['photos'][-1])
         self._enqueue_item(entry["chat_id"], {
             "type": "album", "forwarded": entry.get("forwarded", False),
             "_inbox_id": entry["_inbox_id"],
+            '_message_id': source.get('_message_id', 0), '_sent_ts': source.get('_sent_ts'),
             "file_ids": [p["file_id"] for p in entry["photos"]],
             "caption": cap})
 

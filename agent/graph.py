@@ -414,8 +414,6 @@ def needs_relook(ctx: Optional[Context], state: AgentState) -> bool:
     # Someone else's forwarded words are not the user's question: «За кого
     # проходит?» in a forwarded chat re-read the last photo four tiles deep;
     # the read sees the user's own words only.
-    if _file_newer_than(ctx, last_path):
-        return False
     r = _picture_read(ctx, state)
     if _changes_picture(r):
         return False          # an order to change it: the editing path
@@ -423,9 +421,12 @@ def needs_relook(ctx: Optional[Context], state: AgentState) -> bool:
     # whatever they say is about it -- «обсудим цитату» is no question (16:57).
     if r["about_picture"] or getattr(ctx, "image_pointed_at", False):
         return True
+    if _file_newer_than(ctx, last_path):
+        return False
     # Any question about a photo the user sent or a video they sent: a receipt
     # read once, then "which item is the most expensive?".
-    return bool(r["is_question"]) and (is_video_sheet(last_path)
+    return bool(r["is_question"]) and (getattr(ctx, 'image_origin', '') == 'user'
+                                      or is_video_sheet(last_path)
                                       or Path(last_path).name.startswith(dep(ctx, "_USER_UPLOAD_STEM", _USER_UPLOAD_STEM)))
 
 

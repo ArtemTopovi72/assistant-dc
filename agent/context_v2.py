@@ -48,6 +48,8 @@ from __future__ import annotations
 from seams import chat_model, choice, dep, yes_no
 
 import hashlib
+import contextlib
+import contextvars
 import json
 import logging
 import os
@@ -117,8 +119,20 @@ def est_tokens(messages: List[dict]) -> int:
 
 # --------------------------------------------------------------- archive ----
 
-def _archive_dir() -> str:
-    d = os.getenv("CTX_ARCHIVE_DIR")
+_archive_root = contextvars.ContextVar('context_archive_root', default=None)
+
+
+@contextlib.contextmanager
+def archive_scope(directory):
+    token = _archive_root.set(os.fspath(directory))
+    try:
+        yield
+    finally:
+        _archive_root.reset(token)
+
+
+def _archive_dir(*, scoped=True) -> str:
+    d = (_archive_root.get() if scoped else None) or os.getenv("CTX_ARCHIVE_DIR")
     if not d:
         try:
             import config
@@ -130,8 +144,7 @@ def _archive_dir() -> str:
 
 
 def archive_put(text: str, *, kind: str = "chat", label: str = "") -> str:
-    """Content-addressed: the same span always gets the same id, across restarts
-    and chats, so a marker in a persisted Telegram history still resolves."""
+    """Content-addressed within the current conversation's archive namespace."""
     aid = "a" + hashlib.sha1(text.encode("utf-8", "replace")).hexdigest()[:7]
     p = os.path.join(_archive_dir(), aid + ".json")
     if not os.path.exists(p):
@@ -410,7 +423,7 @@ ids verbatim. Omit pleasantries, tool mechanics and superseded attempts."""
 
 def _guidelines() -> str:
     for p in (os.getenv("CONTEXT_GUIDELINES", ""),
-              os.path.join(_archive_dir(), "..", "context_guidelines.txt")):
+              os.path.join(_archive_dir(scoped=False), "..", "context_guidelines.txt")):
         if p and os.path.exists(p):
             try:
                 return open(p, encoding="utf-8").read().strip()
@@ -568,7 +581,8 @@ def manage(ctx, messages: List[dict], *, query: str = "", force: bool = False) -
 def recall(aid: str, limit: int = 6000) -> str:
     e = archive_get(aid)
     if not e:
-        return f"[TOOL ERROR] no archived item {aid!r}; ids look like 'a1b2c3d'."
+        return (f"Archived item {aid!r} is unavailable in this conversation. "
+                "Do not retry this id or invent its contents. Ask the user to resend the source if needed.")
     t = e.get("text") or ""
     if e.get("label") == "turns":
         try:

@@ -51,6 +51,9 @@ class _Task:
     reply_to:    int = 0          # the user's message this task answers (threads the reply)
     incoming_ids: list = field(default_factory=list)
     replaces_task_id: str = ""
+    context_generation: Optional[int] = None
+    context_revision: Optional[int] = None
+    image_selection: str = ''
 
     def to_dict(self) -> dict:
         return self.__dict__.copy()

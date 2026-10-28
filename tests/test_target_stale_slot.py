@@ -26,8 +26,8 @@ sess = types.SimpleNamespace(target_image="old")
 check("a fresh upload ignores the stale slot", TT._target_id_of(types.SimpleNamespace(image_id="", image_path="/new.jpg"), sess) == "")
 check("a button's carried id wins over everything",
       TT._target_id_of(types.SimpleNamespace(image_id="btn", image_path="/new.jpg"), sess) == "btn")
-check("words with no upload still use the pointer",
-      TT._target_id_of(types.SimpleNamespace(image_id="", image_path=""), sess) == "old")
+check("words cannot acquire a pointer changed after queueing",
+      TT._target_id_of(types.SimpleNamespace(image_id="", image_path=""), sess) == "")
 
 print(f"\n{OK} passed, {BAD} failed")
 sys.exit(1 if BAD else 0)

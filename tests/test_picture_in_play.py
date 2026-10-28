@@ -114,9 +114,12 @@ check("a question about forwarded material never asks which picture",
       "Which picture" not in H.texts(bot) and len(bot.pushed) == 1 and "CAJ MINT" in bot.pushed[0].user_text,
       (H.texts(bot)[:120], [p.user_text[:80] for p in bot.pushed]))
 
-src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(T.__file__))), "bot/tg_tasks.py"), encoding="utf-8").read()
-check("a delivered picture becomes the one in play", "sess.turn_image = img_id" in src)
-check("a turn without a picture clears it", 'sess.turn_image = (_target or {}).get("id", "") or (' in src)
+token = s.begin_context_turn()
+check("a delivered picture becomes the one in play",
+      s.update_turn_media(token, turn_image=id_dress) and s.turn_image == id_dress)
+new_token = s.begin_context_turn()
+check("an older delivery cannot replace the new turn's picture",
+      not s.update_turn_media(token, turn_image=id_car) and s.turn_image == id_dress)
 
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)

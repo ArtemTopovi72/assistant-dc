@@ -273,6 +273,8 @@ class QueueMixin:
                 self._buffer_album(chat_id, item["group_id"], photo["file_id"],
                     photo.get("caption", ""), item.get("forwarded", False), saved=item)
             else:
+                item.setdefault('_message_id', 0)
+                item.setdefault('_target_captured', True)
                 self._enqueue_item(chat_id, dict(item, _inbox_id=entry["id"]))
 
     def _persist_task(self, task, incoming_ids=None):
@@ -280,6 +282,20 @@ class QueueMixin:
             raise BotStopping("the bot stopped before this task was accepted")
         if self._stop_requested_after(task):
             return False
+        sess = self._get_session(task.chat_id)
+        if task.context_revision is None:
+            if not task.image_path and not task.image_id:
+                task.image_id = sess.turn_image
+                task.image_selection = 'context'
+            token = sess.begin_context_turn(task.context_generation)
+            if token is None:
+                return False
+            task.context_generation, task.context_revision = token
+            entry = (tg_bot._image_by_path(sess, task.image_path) if task.image_path
+                     else tg_bot._image_by_id(sess, task.image_id))
+            if entry:
+                sess.update_turn_media(token, turn_image=entry['id'])
+            self._store.put(sess)
         ids = list(incoming_ids if incoming_ids is not None else BATCH_IDS.get() or
                    ([current_update_id()] if current_update_id() else []))
         task.incoming_ids = list(dict.fromkeys(task.incoming_ids + ids))
@@ -527,11 +543,27 @@ class QueueMixin:
         item.setdefault("_arrival_ts", time.time())
         # When the USER sent it (Telegram's message date), not when we got it: a stalled poll delivers a burst late
         item.setdefault("_sent_ts", (getattr(self, "_msg_date", {}) or {}).get(chat_id))
+        item.setdefault('_message_id', (getattr(self, '_msg_id', {}) or {}).get(chat_id, 0))
+        sess = self._get_session(chat_id)
+        item.setdefault('_context_generation', sess.context_generation)
+        target_to_consume = ''
+        if '_target_captured' not in item:
+            if item.get('type') in ('photo', 'album'):
+                target_to_consume = sess.target_image
+            if (item.get('type') in ('text', 'voice') and not item.get('forwarded')
+                    and not tg_bot._LABEL2KEY.get((item.get('text') or '').strip())):
+                if not item.get('image_id') and sess.target_image:
+                    item['image_id'] = sess.target_image
+                target_to_consume = item.get('image_id', '')
+            item['_target_captured'] = True
         with self._mgmt_lock:
             key = item.setdefault("_inbox_id", current_update_id() or uuid.uuid4().hex)
             if key in self._incoming_enqueued or not self._incoming.put(chat_id, item, key):
                 return
             self._incoming_enqueued.add(key)
+            if target_to_consume and sess.target_image == target_to_consume:
+                sess.target_image = ''
+                self._store.put(sess)
             if chat_id not in self._queues:
                 self._queues[chat_id] = _pyqueue.Queue()
             q = self._queues[chat_id]

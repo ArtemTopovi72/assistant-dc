@@ -221,7 +221,7 @@ bot._dispatch(msg("describe this picture",
 settle(bot)
 s = bot._get_session(CID)
 check("the reply armed the older picture, not the newest",
-      s.target_image == id_cat, f"target={s.target_image!r} cat={id_cat}")
+      bot.pushed and bot.pushed[-1].image_id == id_cat, f"cat={id_cat}")
 check("and the instruction still went through", len(bot.pushed) == 1,
       [p.user_text for p in bot.pushed])
 
@@ -250,7 +250,7 @@ bot._dispatch(msg("what is in it?", reply_to={
               {"file_id": "F2", "width": 800, "height": 600}]}))
 settle(bot)
 s = bot._get_session(CID)
-tgt = T._image_by_id(s, s.target_image)
+tgt = T._image_by_id(s, bot.pushed[-1].image_id if bot.pushed else '')
 check("replying to a photo we never stored re-fetches it", tgt is not None,
       s.target_image)
 check("and the fetched file really exists on disk",
@@ -276,7 +276,7 @@ bot.pushed.clear(); bot.sent.clear()
 press(bot, "regenerate:" + id_cat)          # the OLDER picture
 s = bot._get_session(CID)
 check("pressing 🔄 under the older picture targets the older picture",
-      s.target_image == id_cat, f"{s.target_image!r} != {id_cat}")
+      bot.pushed and bot.pushed[-1].image_id == id_cat, f"cat={id_cat}")
 check("and the regenerate instruction was queued", len(bot.pushed) == 1,
       [p.user_text for p in bot.pushed])
 
@@ -301,8 +301,7 @@ bot._dispatch({"callback_query": {"id": "1", "data": "regenerate", "from": {"id"
                                               "message_id": 101}}})   # the CAT
 settle(bot)
 check("a bare verb pressed under the older picture still resolves to it",
-      bot._get_session(CID).target_image == id_cat,
-      f"{bot._get_session(CID).target_image!r} != {id_cat}")
+      bot.pushed and bot.pushed[-1].image_id == id_cat, f"cat={id_cat}")
 check("and it was queued, not turned into a question", len(bot.pushed) == 1,
       texts(bot)[:120])
 
@@ -460,8 +459,7 @@ bot._dispatch(msg("describe the image"))
 settle(bot)
 press(bot, "pick:latest")
 check("'the most recent one' resolves to the newest picture",
-      bot._get_session(CID).target_image == id_dog,
-      f"{bot._get_session(CID).target_image} != {id_dog}")
+      bot.pushed and bot.pushed[-1].image_id == id_dog, f"dog={id_dog}")
 
 # A stale "which picture?" prompt must not resurrect a forgotten instruction.
 # Telegram buttons never expire, so pending_instruction must not be cleared
@@ -518,8 +516,8 @@ check("task A carries the CAT's id at commit time, not a lazy live read",
 bot._dispatch(msg("what is this",
                   reply_to={"message_id": 202, "chat": {"id": CID}}))  # dog
 settle(bot)
-check("task B was queued too, and the shared slot now points at the dog",
-      len(bot.pushed) == 2 and bot._get_session(CID).target_image == id_dog,
+check("task B was queued too, and its gesture was consumed",
+      len(bot.pushed) == 2 and bot._get_session(CID).target_image == '',
       (len(bot.pushed), bot._get_session(CID).target_image))
 task_b = bot.pushed[-1]
 check("task B carries the DOG's id at commit time",
@@ -629,12 +627,12 @@ bot3.pushed.clear(); bot3.sent.clear()
 bot3._dispatch(msg("make the cat from the first picture black")); settle(bot3)
 s3 = bot3._get_session(CID)
 check("'the first picture' targets the OLDEST register entry, and asks nothing",
-      len(bot3.pushed) == 1 and s3.target_image == id_cat3 and "Which picture" not in texts(bot3),
-      (s3.target_image, id_cat3, texts(bot3)[:80]))
+      len(bot3.pushed) == 1 and bot3.pushed[0].image_id == id_cat3 and "Which picture" not in texts(bot3),
+      ([p.image_id for p in bot3.pushed], id_cat3, texts(bot3)[:80]))
 s3.target_image = ""; bot3._store.put(s3); bot3.pushed.clear()
 bot3._dispatch(msg("опиши последнюю картинку")); settle(bot3)
-check("«последнюю картинку» targets the newest", bot3._get_session(CID).target_image == id_dog3,
-      (bot3._get_session(CID).target_image, id_dog3))
+check("«последнюю картинку» targets the newest", len(bot3.pushed) == 1 and bot3.pushed[0].image_id == id_dog3,
+      ([p.image_id for p in bot3.pushed], id_dog3))
 
 # 🖼 Create picture: the description is a NEW picture, never «which one?»
 # (a scene with a broken window must not get «Какую картинку? их 12»).

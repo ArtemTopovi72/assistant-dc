@@ -912,9 +912,9 @@ class CallbackMixin:
                             parse_mode="HTML")
         elif data == "acct_newprofile_yes":
             name = user.name
+            self._request_stop(chat_id)
             self._user_store.delete(chat_id)
-            sess.clear_history()
-            sess.set_tg_memory([])
+            sess.clear_context()
             sess.pending_prefix = ""
             sess.reg_state = "awaiting_name"
             sess.reg_name = ""

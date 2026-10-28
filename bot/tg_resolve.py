@@ -39,6 +39,16 @@ def _save_image_bytes(data: bytes) -> str:
     return path
 
 
+def _batch_reply_id(batch) -> int:
+    """Reply to the user's request, not the last forward or a later navigation press."""
+    content = [it for it in batch if it.get('type') != 'text'
+               or (it.get('text', '').strip() and it.get('text', '').strip() not in tg_bot._LABEL2KEY)]
+    own = [it for it in content if not it.get('forwarded')
+           and (it.get('text', '').strip() or it.get('caption', '').strip())]
+    return next((int(it.get('_message_id') or 0) for it in reversed(own or content)
+                 if '_message_id' in it), 0)
+
+
 class ResolveMixin:
     @staticmethod
     def _last_bot_text(sess) -> str:
@@ -86,12 +96,15 @@ class ResolveMixin:
         """Attach what a link in `text` holds: a video is downloaded and watched
         (ears + eyes), any other page is read (tg_links). True: a long video was
         offered as the portioned job, which answers the message."""
+        generation = sess.context_generation
         _vu = _tg_links.video_url(text)
         if announce and _vu and ctx is not None and _vu not in _tg_links.WATCHED:
             # download + ears + eyes run before the task and its status line: a forwarded
             # link sat 49 s with no word (live 2026-10-17)
             self._send_text(chat_id, tg_bot._t("fwd_video_work", self._lang(sess)))
         _vid = self.links.fetch_video(_vu) if _vu and ctx is not None else {}
+        if generation != sess.context_generation:
+            return True
         if _vid.get("data"):
             # A video link is watched like a sent video: ears + eyes.
             self._api_post("sendChatAction", {"chat_id": chat_id, "action": "typing"})
@@ -99,6 +112,8 @@ class ResolveMixin:
                                       data=_vid["data"], speakers=True)   # who said what
             _seen = self._look_video(ctx, _vu, data=_vid["data"], lang=(sess.lang or "ru"),
                                      transcript=_heard or "")
+            if generation != sess.context_generation:
+                return True
             scaffold.append(f"[The user's message links a {_vid['seconds']}-second video "
                             f"«{_vid['title']}» ({_vu}). It was downloaded and watched "
                             f"for you; answer from it, never say you cannot watch links. "
@@ -133,6 +148,8 @@ class ResolveMixin:
         else:
             try:
                 _lc = _tg_links.link_context(text)
+                if generation != sess.context_generation:
+                    return True
                 sess.last_link = _tg_links.urls_in(text)[0] if _lc else None
             except Exception:
                 tg_bot.logger.exception("link reading failed")
@@ -166,7 +183,10 @@ class ResolveMixin:
         task.replaces_task_id = prev.task_id
         task.incoming_ids.extend(prev.incoming_ids)
         task.user_text = prev.user_text + "\n\n" + task.user_text
+        fresh_attachment = bool(task.image_path)
         for f in ("image_path", "image_id", "image_is_photo"):
+            if f == 'image_id' and fresh_attachment:
+                continue
             if not getattr(task, f):
                 setattr(task, f, getattr(prev, f))
         task.enqueue_ts = prev.enqueue_ts
@@ -224,6 +244,12 @@ class ResolveMixin:
         _arrival_ts = min((it.get("_arrival_ts", time.time()) for it in batch),
                           default=time.time())
         sess = self._get_session(chat_id)
+        batch = [it for it in batch if it.get('_context_generation', sess.context_generation)
+                 == sess.context_generation]
+        if not batch:
+            return
+        _generation = sess.context_generation
+        _reply_to = _batch_reply_id(batch)
         if sess.expire_photo_waits():
             self._store.put(sess)
         user = self._user_store.get(chat_id)
@@ -373,6 +399,8 @@ class ResolveMixin:
                         continue
                     self._resolve_and_push(chat_id, [_item])
                 _said = self._fwd_batch(chat_id, _fwd_items, ask=not _words)
+                if _generation != sess.context_generation:
+                    return
                 if not _said or not _words:
                     return
                 _asked = (getattr(self, "fwdv_intent", None) or tg_bot._fwdv_intent)(" ".join(_words))
@@ -445,6 +473,8 @@ class ResolveMixin:
 
         fwd, fwd_at = [], None
         for item in batch:
+            if _generation != sess.context_generation:
+                return
             t = item["type"]
             if item.get("image_id"):
                 pressed_image_id = item["image_id"]
@@ -676,6 +706,7 @@ class ResolveMixin:
                     self._goto_menu(sess, "cr_music")
                     self._start_clone_flow(chat_id, sess, lang); continue
                 if direct == "__clear__":
+                    self._request_stop(chat_id)
                     sess.clear_context(); self._store.put(sess)
                     tg_bot._delete_chat_facts_file(chat_id)
                     self._send_text(chat_id, tg_bot._t("cleared", lang),
@@ -1101,6 +1132,8 @@ class ResolveMixin:
                 _seen = (self._look_video(ctx, item["file_id"], data=_data, lang=(sess.lang or "ru"),
                                           transcript=transcribed or "")
                          if _media == "video" else {})
+                if _generation != sess.context_generation:
+                    return
                 if not transcribed and not _seen.get("description"):
                     self._send_text(chat_id, tg_bot._t("no_transcribe", lang),
                                     keyboard=self._main_menu_kb(sess, lang)); return
@@ -1141,6 +1174,8 @@ class ResolveMixin:
                 _seen = (self._look_video(ctx, item["file_id"], data=_data, lang=(sess.lang or "ru"),
                                           transcript=said or "", caption=item.get("caption") or "")
                          if _media == "video" else {})
+                if _generation != sess.context_generation:
+                    return
                 if _seen.get("description"):
                     # A forwarded VIDEO is listened to AND looked at: the
                     # transcript the buttons act on carries what was seen.
@@ -1194,7 +1229,7 @@ class ResolveMixin:
                 # typed instead of a button press ("а что за лампа?") must
                 # land on this video, not on whatever was discussed last week.
                 self._commit_media_turn(chat_id, said, _seen.get("description") or "(listened; asked what to do with it)",
-                                        bool(_seen.get("description")))
+                                        bool(_seen.get("description")), _generation)
                 # The keyframe sheet becomes the chat's current picture, so a
                 # follow-up ("дай экспертное мнение") looks at the FRAMES
                 # again (graph.needs_relook) instead of reasoning from the
@@ -1590,12 +1625,14 @@ class ResolveMixin:
         # it resolved to one above, or the picture is simply the current one.
         # A DOCUMENT in the same message is the thing the instruction is about
         # («убери дубликаты» + DCIM.zip must not get «Какую картинку?»).
+        if not any('_target_captured' in it for it in batch):
+            pressed_image_id = pressed_image_id or sess.target_image
         if (not img_bytes and not file_in_folder
-                and not getattr(sess, "target_image", "")
+                and not pressed_image_id
                 and merged not in tg_bot._MACHINE_PAYLOADS):
             _named = tg_bot._ordinal_target(own_words, tg_bot._live_images(sess), ctx=self.reads)
             if _named:
-                sess.target_image = _named
+                pressed_image_id = _named
                 try: self._store.put(sess)
                 except Exception:
                     tg_bot.logger.warning("session persist failed", exc_info=True)
@@ -1604,7 +1641,7 @@ class ResolveMixin:
         # about: «Что думаешь?» under it got «Какую картинку?» (2026-10-22).
         from prompt_guard import has_quote
         if (not img_bytes and not file_in_folder
-                and not getattr(sess, "target_image", "")
+                and not pressed_image_id
                 and merged not in tg_bot._MACHINE_PAYLOADS
                 and not has_quote(merged)
                 and len(tg_bot._live_images(sess)) > 1
@@ -1613,7 +1650,7 @@ class ResolveMixin:
             live = tg_bot._live_images(sess)
             if tg_bot._one_lineage(live):
                 # One picture in several states -- the latest is "the picture".
-                sess.target_image = live[-1]["id"]
+                pressed_image_id = live[-1]["id"]
                 try: self._store.put(sess)
                 except Exception:
                     tg_bot.logger.warning("session persist failed", exc_info=True)
@@ -1639,11 +1676,15 @@ class ResolveMixin:
         # tempfile: tg_queue.py's post-task cleanup unlinks task.image_path, which
         # is the same string as the register path.
         img_path = ""
+        if _generation != sess.context_generation:
+            return
         if img_bytes:
             img_path = _save_image_bytes(img_bytes)
             # A photo the user just sent goes into the register too, so a later
             # "the one I sent earlier" has something to resolve to.
-            tg_bot._log_image(sess, img_path, label=merged[:80], src="user")
+            photo_mid = next((int(it.get('_message_id') or 0) for it in batch
+                              if it.get('type') in ('photo', 'album')), 0)
+            tg_bot._log_image(sess, img_path, msg_id=photo_mid, label=merged[:80], src="user")
             try: self._store.put(sess)
             except Exception:
                 tg_bot.logger.warning("session persist failed", exc_info=True)
@@ -1723,16 +1764,24 @@ class ResolveMixin:
             self._send_text(chat_id, tg_bot._t("contentless_input", lang))
             return
 
+        selection = 'upload' if img_path else 'explicit' if pressed_image_id else 'context'
+        if not img_path:
+            pressed_image_id = pressed_image_id or sess.turn_image
+        if (not any('_target_captured' in it for it in batch)
+                and sess.target_image and (img_path or sess.target_image == pressed_image_id)):
+            sess.target_image = ''
         task = tg_bot._Task(
             task_id=str(uuid.uuid4()),
             chat_id=chat_id,
             user_text=merged,
             image_path=img_path,
-            image_id=pressed_image_id,
+            image_id='' if img_path else pressed_image_id,
             image_is_photo=_photo_upload,
             album_paths=_album_paths,
             enqueue_ts=_arrival_ts,
-            reply_to=getattr(self, "_msg_id", {}).get(chat_id, 0),
+            reply_to=_reply_to,
+            context_generation=_generation,
+            image_selection=selection,
         )
         # last_task_id/last_task_text are set at DELIVERY of a failure (in
         # tg_tasks.py _remember_failed_task), not here at push time.
@@ -1984,6 +2033,9 @@ class ResolveMixin:
             image_id=target_id,
             style_ref_path=ref_path,
             enqueue_ts=arrival_ts,
+            reply_to=int(item.get('_message_id') or 0),
+            context_generation=item.get('_context_generation', sess.context_generation),
+            image_selection='explicit',
         )
         if self._try_steer(chat_id, task):
             return

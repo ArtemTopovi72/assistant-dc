@@ -35,6 +35,7 @@ class CommandsMixin:
             return
 
         if cmd == "/clear":
+            self._request_stop(chat_id)
             sess.clear_context(); self._store.put(sess)
             tg_bot._delete_chat_facts_file(chat_id)
             self._send_text(chat_id, tg_bot._t("cleared", lang),

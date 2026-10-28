@@ -18,6 +18,20 @@ from pathlib import Path
 logger = logging.getLogger("assistant.tg_bot")
 
 
+def _merge_context_entries(current, before, after, limit=None):
+    def key(item):
+        return ('fact', item.get('text', '')) if 'kind' not in item else json.dumps(item, sort_keys=True)
+    before_keys, after_keys = {key(x) for x in before}, {key(x) for x in after}
+    removed = before_keys - after_keys if limit is None else set()
+    merged = {key(x): _copy_mod.deepcopy(x) for x in current if key(x) not in removed}
+    for item in after:
+        k = key(item)
+        if k not in before_keys:
+            merged[k] = _copy_mod.deepcopy(item)
+    result = sorted(merged.values(), key=lambda x: x.get('ts', 0))
+    return result[-limit:] if limit else result
+
+
 class _Session:
     # A picture pointed at by a button that led nowhere (Анимация/Стиль menu
     # left open) stayed "pointed at" until the next message, hours later: a
@@ -103,6 +117,8 @@ class _Session:
     def __init__(self, chat_id: int, data: dict = None):
         d = data or {}
         self.chat_id        = chat_id
+        self.context_generation = int(d.get('context_generation', 0))
+        self.context_revision = int(d.get('context_revision', 0))
         self.history: list  = d.get("history", [])
         # Text by default: a voice note repeating the text doubled every answer.
         self.reply_mode: str = d.get("reply_mode") if d.get("reply_mode") in self.REPLY_MODES else "text"
@@ -368,6 +384,8 @@ class _Session:
         instruction into the next turn is reset here.
         """
         with self._lock:
+            self.context_generation += 1
+            self.context_revision += 1
             self.history = []
             self.tg_memory = []
             self.lang_pin = self.turn_lang = ""     # a fresh start speaks the chat's language
@@ -391,6 +409,8 @@ class _Session:
             # old picture must not silently reach back into the cleared context.
             self.image_log = []
             self.target_image = ""
+            self.turn_image = ''
+            self.turn_album = []
             self.quoted_text = ""
             self.pending_instruction = ""
             self.fwd_transcript = ""
@@ -432,9 +452,47 @@ class _Session:
     def set_tg_facts(self, items):
         with self._lock: self.tg_facts = list(items)
 
+    def begin_context_turn(self, generation=None):
+        with self._lock:
+            if generation is not None and generation != self.context_generation:
+                return None
+            self.context_revision += 1
+            return self.context_generation, self.context_revision
+
+    def commit_history_turn(self, token, before, added, compacted=None):
+        with self._lock:
+            if token[0] != self.context_generation:
+                return False
+            self.history = (compacted if compacted is not None and self.history == before
+                            else self.history + added)
+            self.total_user_turns += 1
+            return True
+
+    def update_turn_media(self, token, **values):
+        with self._lock:
+            if token != (self.context_generation, self.context_revision):
+                return False
+            for name, value in values.items():
+                setattr(self, name, value)
+            return True
+
+    def commit_context_turn(self, token, memory_before, memory_after, facts_before, facts_after,
+                            media, memory_limit=40):
+        with self._lock:
+            if token[0] != self.context_generation:
+                return False
+            self.tg_memory = _merge_context_entries(self.tg_memory, memory_before, memory_after, memory_limit)
+            self.tg_facts = _merge_context_entries(self.tg_facts, facts_before, facts_after)
+            if token == (self.context_generation, self.context_revision):
+                for name, value in media.items():
+                    setattr(self, name, value)
+            return True
+
     def to_dict(self):
         with self._lock:
             return {
+                'context_generation': self.context_generation,
+                'context_revision': self.context_revision,
                 "history":          self.history,
                 "reply_mode":       self.reply_mode,
                 "think":            self.think,
@@ -447,6 +505,7 @@ class _Session:
                 "tg_memory":        self.tg_memory,
                 "last_image_path":   self.last_image_path,
                 "image_log":         self.image_log,
+                "turn_image":        self.turn_image,
                 "target_image":      self.target_image,
                 "target_image_ts":   self._target_ts,
                 "turn_lang":         self.turn_lang,
