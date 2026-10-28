@@ -29,6 +29,10 @@ The 52 distinct search queries and applied principles are recorded in [chat-cont
 
 Telegram archives now live under each chat's memory directory and clear generation. A late write from an older generation cannot be recalled by the new conversation. GUI archives retain their existing namespace. Legacy global archives have no reliable owner metadata and are not exposed to Telegram as a fallback; existing files are preserved on disk.
 
+Verified legacy records can be restored with `scripts/migrate_context_archives.py` and an explicitly reviewed private ownership manifest, while the bot is stopped. The tool previews by default, verifies IDs/content hashes and generation, refuses conflicting destinations, backs up sessions and preserves originals. Active records get a compact historical catalog in the existing working memory; records preceding a chat clear are kept only in that owner's inactive `legacy_archive` directory.
+
+The local migration verified nine records against unique chat ownership and at least two distinct full outgoing replies (or current generated memory references). Eight were restored to active namespaces, one predating a clear was preserved offline, and 24 files without sufficient ownership evidence remain untouched. All 33 original files and a session backup were retained. Private evidence/manifests/reports stay outside Git. Six migration regressions verify preview, ownership isolation, original/history preservation, idempotence, retired records, hash/conflict checks and stale-generation refusal.
+
 Image prompts belong to their register entries. A new user photo does not inherit a previous generated image's prompt. Current image identity is persisted with the session. Facts and recent dialogue remain available until explicitly cleared; clearing also invalidates queued work, ASR results, retellings, research and weather history commits from the previous generation.
 
 ## Live verification
