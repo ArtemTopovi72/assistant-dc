@@ -28,6 +28,7 @@ passes its own, because ComfyUI reports a saved mp4 under the same history
 """
 from seams import dep, module
 import json
+import contextlib
 import logging
 import os
 import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
@@ -465,6 +466,9 @@ LLM_INFLIGHT_WAIT_S = _cfg_env.env_int("LLM_INFLIGHT_WAIT_S", 120)
 
 _EXCL_LOCK = threading.RLock()
 _LIFECYCLE_LOCK = threading.RLock()
+_SPEECH_GATE = threading.RLock()
+_SPEECH_FREE = threading.Event()
+_SPEECH_FREE.set()
 _excl_users = 0            # jobs holding OR queued for an exclusive slot
 _excl_model = ""           # the chat model we unloaded ("" = we unloaded nothing)
 _NO_CHAT_MODEL = object()
@@ -501,9 +505,33 @@ def wait_for_card(timeout: float = 600.0) -> bool:
     return _excl_free.wait(timeout)
 
 
+@contextlib.contextmanager
+def speech_session(timeout=600, ctx=None):
+    deadline = time.monotonic() + timeout
+    while True:
+        remaining = deadline - time.monotonic()
+        if ctx is not None and getattr(ctx, 'is_cancelled', lambda: False)():
+            raise RuntimeError('Cancelled')
+        if remaining <= 0:
+            raise TimeoutError('The GPU is busy.')
+        if not _SPEECH_FREE.wait(min(1, remaining)):
+            continue
+        if not _SPEECH_GATE.acquire(timeout=min(1, remaining)):
+            continue
+        if _SPEECH_FREE.is_set():
+            break
+        _SPEECH_GATE.release()
+    try:
+        yield
+    finally:
+        _SPEECH_GATE.release()
+
+
 def _claim_card(label: str, min_free_mb: int = None, ctx=None, progress_ctx=None) -> None:
-    with _LIFECYCLE_LOCK:
-        _claim_card_locked(label, min_free_mb, ctx, progress_ctx)
+    with _SPEECH_GATE:
+        _SPEECH_FREE.clear()
+        with _LIFECYCLE_LOCK:
+            _claim_card_locked(label, min_free_mb, ctx, progress_ctx)
 
 
 def _claim_card_locked(label: str, min_free_mb: int = None, ctx=None, progress_ctx=None) -> None:
@@ -591,11 +619,15 @@ def reset_card_state() -> None:
         _excl_users, _excl_model, _excl_label = 0, "", ""
         _excl_lifecycle = None
     _excl_free.set()
+    _SPEECH_FREE.set()
 
 
 def _release_card(ctx=None) -> None:
-    with _LIFECYCLE_LOCK:
-        _release_card_locked(ctx)
+    with _SPEECH_GATE:
+        with _LIFECYCLE_LOCK:
+            _release_card_locked(ctx)
+            if not _excl_users:
+                _SPEECH_FREE.set()
 
 
 def _release_card_locked(ctx=None) -> None:
@@ -739,7 +771,8 @@ class _gpu_slot:
         if self._claimed:
             _claim_card(self.label, min_free_mb=self.min_free_mb, ctx=self.ctx, progress_ctx=self.progress_ctx)
         elif self._acquired and self.park_voice:
-            _park_voice_for_job(self.ctx)
+            with _SPEECH_GATE:
+                _park_voice_for_job(self.ctx)
         if self._acquired and not _GPU_SEM.acquire(blocking=False):
             # another render has the card: minutes of «Generating…» that looked like a hang
             import progress as _progress

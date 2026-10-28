@@ -382,7 +382,8 @@ def lesson_speech(ctx,say,target,translation,native,out_dir,reference=None):
             ok,_=dep(ctx,'run_gpu_worker',music.run_gpu_worker)(ctx,python,'translation_voice_worker.py',
                 {'model':str(model),'segments':foreign},'Language lesson',600,shared=True)
             return ok
-        with ThreadPoolExecutor(max_workers=2) as pool:
+        import comfy_client
+        with comfy_client.speech_session(ctx=ctx), ThreadPoolExecutor(max_workers=2) as pool:
             future = pool.submit(qwen)
             for i in russian:
                 if not f5(i):
