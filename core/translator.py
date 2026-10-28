@@ -65,6 +65,13 @@ def error_text(error, lang='ru'):
     return _ERRORS_RU.get(text, text) if lang == 'ru' else text
 
 
+def curated_error(error) -> str:
+    """The message when it is one of OURS, else ''. A raw engine string -- a
+    disk path, an English traceback line -- must never reach a user."""
+    text = str(error)
+    return text if text in _ERRORS_RU else ''
+
+
 def check(ctx):
     if getattr(ctx, 'is_cancelled', lambda: False)():
         raise InterruptedError('Cancelled')
@@ -252,6 +259,8 @@ def image(ctx, source, target, out_dir):
 def transcribe(ctx, source):
     import audio
     check(ctx)
+    if not Path(source).is_file():
+        raise ValueError('Could not process this media file.')
     if Path(source).stat().st_size > 20 * 1024 * 1024:
         raise ValueError('Send audio up to 60 seconds and 20 MB.')
     duration = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration',

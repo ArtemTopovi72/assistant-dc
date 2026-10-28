@@ -1,5 +1,6 @@
 """Timed speech translation: original speaker references, WAV/SRT and optional video mux."""
 import json
+import logging
 import math
 from pathlib import Path
 import subprocess
@@ -11,7 +12,7 @@ import soundfile as sf
 import progress
 
 from seams import dep, text_model
-from translator import LANGUAGES, check, review_translations
+from translator import LANGUAGES, check, curated_error, review_translations
 
 MAX_SECONDS = 600
 MAX_BYTES = 100 * 1024 * 1024
@@ -195,6 +196,7 @@ def dub(ctx, source, target, out_dir):
     import config, music
     check(ctx)
     if target not in LANGUAGES: raise ValueError('Choose a target language.')
+    if not Path(source).is_file(): raise ValueError('Could not process this media file.')
     if Path(source).stat().st_size>MAX_BYTES: raise ValueError('Media exceeds the 100 MB limit.')
     info=probe(source); check(ctx)
     if info['duration']>MAX_SECONDS: raise ValueError('Send media up to ten minutes long.')
@@ -281,6 +283,12 @@ def dub(ctx, source, target, out_dir):
         raise
     except Exception as exc:
         check(ctx)
-        result.update(path='',audio_path='',warning=str(exc))
+        # Only our own curated messages may reach the user; a raw engine
+        # string (a disk path, an English traceback line) reads as a bug.
+        message = curated_error(exc) or 'Could not process this media file.'
+        if not curated_error(exc):
+            logging.getLogger('assistant.translation_dub').warning(
+                'dub failed: %s: %s', type(exc).__name__, exc, exc_info=True)
+        result.update(path='', audio_path='', warning=message)
     check(ctx)
     return result
