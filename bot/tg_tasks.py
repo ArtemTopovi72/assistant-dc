@@ -695,21 +695,30 @@ class TaskRunnerMixin:
         # stale/newly-set turn_lang="en" leaks English into the interim note and
         # the final reply for a plain button press in a Russian session.
         is_internal = _is_button_payload(task.user_text)
-        _tl = "" if is_internal else _message_script(_typed_part(task.user_text))
+        _tl = "" if is_internal else _message_script(_typed_part(task.user_text), ctx=self.reads)
         from graph_language import asks_for_english as _ask_en
-        if _tl and not _ask_en(task.user_text, ctx=self.reads):
-            sess.turn_lang = _tl          # an explicit "по-английски" is one turn, not a mode
+        _asks_en = not is_internal and _ask_en(task.user_text, ctx=self.reads)
         # «can you answer in English from now on?» sets a pin that outlives the
         # turn (the model's read).
-        if not is_internal and (task.user_text or "").strip():
+        _read_language = not is_internal and bool((task.user_text or "").strip())
+        if _read_language:
             from graph_language import names_english as _names_en
             _mode = intent_read(ctx)(None, task.user_text)["language_mode"]
-            _lang_pin_after(sess, _mode, _mode == "en" and _names_en(task.user_text, ctx=self.reads), _tl)
-        if is_internal:
-            _turn_lang = lang
-        else:
-            _turn_lang = ("en" if _ask_en(task.user_text, ctx=self.reads)
-                          else getattr(sess, "lang_pin", "") or sess.turn_lang)
+            _named_en = _mode == "en" and _names_en(task.user_text, ctx=self.reads)
+        with sess._lock:
+            stale = token[0] != sess.context_generation
+            if not stale:
+                if _tl and not _asks_en:
+                    sess.turn_lang = _tl
+                if _read_language:
+                    _lang_pin_after(sess, _mode, _named_en, _tl)
+                _turn_lang = (lang if is_internal else
+                              "en" if _asks_en else getattr(sess, "lang_pin", "") or sess.turn_lang)
+        if stale:
+            with self._task_lock:
+                self._pending_journal.pop(task.task_id, None)
+            self._write_inflight()
+            return
         if _turn_lang and _turn_lang != lang:
             ctx.reply_lang = _turn_lang
             self._activity.log(chat_id, "system", f"[lang] reply in {_turn_lang} for this turn", uname)
@@ -796,6 +805,12 @@ class TaskRunnerMixin:
                   tg_transport.replying_to(chat_id, task.reply_to, asked=task.user_text),
                   tg_transport.result_menu(self, chat_id),
                   _klein.steps_for_task(_cfg.KLEIN_DEBUG_STEPS if _dbg.is_debug(chat_id) else None)):
+                if self._is_cancelled(task.task_id) or self._stop_requested_after(task):
+                    _outcome = "cancelled"
+                    self._send_text(chat_id, tg_bot._t("cancel_done", lang),
+                                    keyboard=self._main_menu_kb(sess, lang))
+                    self._on_stage(chat_id, "⛔ Cancelled", True)
+                    return
                 self._run_task_inner(task, sess, user, uname, lang, ctx, graph)
             _outcome = "cancelled" if task.task_id in self._cancelled else "done"
         finally:

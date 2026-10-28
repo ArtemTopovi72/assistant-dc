@@ -26,6 +26,10 @@ revision. Voice and book uploads use separate temporary source paths. Stop retir
 flow revisions and cancels chat-local jobs, so late work cannot reopen a prompt or
 publish a cancelled result. Resolver download and classification completions also
 check the Stop timestamp before publishing or enqueueing work.
+Task preflight rechecks cancellation before invoking the agent; a Stop received
+while a language read waits for the model cannot start expensive tools afterwards.
+Language reads finish before the session lock is taken; their settings are applied
+only if the conversation generation is still current after the read.
 
 Regression coverage includes request-scope isolation, durable recovery, fast prompt
 overtaking, album collection, per-voice reply quotes, stale media/link/text
