@@ -1792,6 +1792,7 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         "summarize the ozon reviews of: ": "ozon",
         "compare these on ozon (price, rating, reviews): ": "ozon",
         "find on ozon with the fastest delivery (ozon_shop strategy=fast): ": "ozon",
+        "find this same item from other sellers on ozon, cheaper or sooner, not a copy (ozon_same): ": "ozon",
         "find the product in this photo on ozon (ozon_shop by_photo=true): ": "ozon",
         "build an ozon basket for (ozon_shop add_to_cart=true): ": "ozon",
         "ozon shopping list (ozon_cart): ": "ozon",
@@ -1819,7 +1820,7 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
             return _draw_kb(lang)
         if menu == "search":
             return _search_kb(lang)
-        if menu == "ozon":
+        if menu in ("ozon", "ozon_prompt"):
             return _ozon_kb(lang)
         if menu == "tasks":
             return _tasks_kb(lang)

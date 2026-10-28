@@ -880,9 +880,9 @@ class ResolveMixin:
                     up = {"cr_images": "creativity", "cr_music": "creativity",
                           "cr_video": "creativity", "draw": "cr_images",
                           "randomizer_range": "randomizer",
-                          "randomizer_prediction": "randomizer"}.get(sess.menu)
+                          "randomizer_prediction": "randomizer", "ozon_prompt": "ozon"}.get(sess.menu)
                     if up:
-                        self._goto_menu(sess, up)
+                        self._goto_menu(sess, up, tg_bot._PROMPT_KB['ozon_find'] if up == 'ozon' else '')
                         self._send_text(chat_id, tg_bot._t(
                             "menu_%s_title" % up, lang), parse_mode="HTML",
                             keyboard=self._state_kb(sess, lang))
@@ -960,7 +960,10 @@ class ResolveMixin:
                     texts.append(direct); continue
 
                 if key in tg_bot._PROMPT_KB:
-                    sess.pending_prefix = tg_bot._PROMPT_KB[key]; self._store.put(sess)
+                    if key.startswith('ozon_'):
+                        self._goto_menu(sess, 'ozon_prompt', tg_bot._PROMPT_KB[key])
+                    else:
+                        sess.pending_prefix = tg_bot._PROMPT_KB[key]; self._store.put(sess)
                     hint = tg_bot._prompt_label(tg_bot._PROMPT_KB[key], lang)
                     # Stay in the submenu the button lives in (the MAIN keyboard
                     # would close the menu the user just opened). 📌 Remember

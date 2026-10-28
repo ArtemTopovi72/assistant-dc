@@ -80,7 +80,7 @@ class CallbackMixin:
         if data == "retry" or data.startswith("retry:"):
             return self._cb_retry(chat_id, data)
         if data.startswith("lang:"): return self._cb_set_language(chat_id, data)
-        if data == "nav:back": return self._cb_nav_back(chat_id)
+        if data == "nav:back": return self._cb_nav_back(chat_id, msg)
         if data.startswith("size:"): return self._cb_image_size(chat_id, msg, data)
         if data.startswith("reply:"): return self._cb_reply_mode(chat_id, msg, data)
         if data.startswith("music:"): return self._cb_song_settings(chat_id, msg, data)
@@ -414,10 +414,20 @@ class CallbackMixin:
             self._edit_text(chat_id, msg_id, tg_bot._t("reply_pick", lang),
                             keyboard=tg_bot._reply_mode_kb(mode, lang))
 
-    def _cb_nav_back(self, chat_id: int) -> None:
+    def _cb_nav_back(self, chat_id: int, msg: dict = None) -> None:
         """⬅ under an inline picker: the keyboard of the menu the user is in."""
         sess = self._get_session(chat_id)
         lang = self._lang(sess)
+        msg_id = (msg or {}).get('message_id')
+        if msg_id and sess.menu == 'cr_music':
+            callbacks = [b.get('callback_data', '')
+                         for row in (msg.get('reply_markup') or {}).get('inline_keyboard', []) for b in row]
+            if 'music:menu' in callbacks:
+                return self._cb_song_settings(chat_id, msg, 'music:menu')
+            if any(data.startswith('music:open:') for data in callbacks):
+                self._edit_text(chat_id, msg_id, tg_bot._t('menu_cr_music_title', lang),
+                                parse_mode='HTML', keyboard={'inline_keyboard': []})
+                return
         if getattr(sess, "menu", "") == "settings":
             kb = tg_bot._settings_kb(sess.reply_mode, sess.is_admin, lang)
         else:

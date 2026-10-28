@@ -64,11 +64,14 @@ def _pids() -> list:
     serves Mantella (Skyrim) on another port; that one is never touched."""
     try:
         out = subprocess.run(["netstat", "-ano", "-p", "TCP"], capture_output=True,
-                             text=True, timeout=15).stdout
+                             text=True, encoding="oem" if os.name == "nt" else "utf-8",
+                             errors="replace", timeout=15).stdout
         pids = {int(p[-1]) for p in (l.split() for l in out.splitlines())
                 if len(p) >= 5 and p[1].endswith(f":{PORT}") and p[3] == "LISTENING"}
         tl = subprocess.run(["tasklist", "/FI", "IMAGENAME eq llama-server.exe", "/FO", "CSV", "/NH"],
-                            capture_output=True, text=True, timeout=15).stdout
+                            capture_output=True, text=True,
+                            encoding="oem" if os.name == "nt" else "utf-8",
+                            errors="replace", timeout=15).stdout
         mine = {int(l.split('","')[1]) for l in tl.splitlines() if l.startswith('"llama-server')}
         return sorted(pids & mine)
     except Exception:

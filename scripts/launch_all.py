@@ -275,6 +275,7 @@ def _lock_holder() -> str:
         except ImportError:
             out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
                                  capture_output=True, text=True, timeout=10,
+                                 encoding="oem" if os.name == "nt" else "utf-8", errors="replace",
                                  creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout
             name = out.split(",")[0].strip('"') if out.startswith('"') else "not running"
         except Exception:
