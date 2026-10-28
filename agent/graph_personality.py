@@ -389,6 +389,13 @@ def _forced_intent(ctx, state, text: str, has_image: bool, turn_tools, already_c
     return tool if tool in offered else ""
 
 
+def _sandbox_execution_denied(ctx, read: dict) -> bool:
+    from tool_code_handlers import EXECUTING_TOOL_NAMES
+    return (read.get('ok') and read.get('must_call') in EXECUTING_TOOL_NAMES
+            and (getattr(ctx, 'sandbox', None) is None
+                 or not dep(ctx, 'may_run_code', _sandbox_access.may_run_code)(getattr(ctx, 'sandbox_user', None))))
+
+
 def _sandbox_has_files(sandbox) -> bool:
     """Is there anything in the working folder? Cheap and never raises."""
     if sandbox is None:
@@ -943,6 +950,16 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
     # What the user's OWN words ask for, read by the model (agent/intent.py),
     # not keyword lists: «нарисуй» inside a quoted or attached text is data.
     _own_read = _turn_intent(ctx, state, (_own_texts[-1] or _own_texts[0]) if _own_texts else "")
+    if _sandbox_execution_denied(ctx, _own_read):
+        answer = ("У меня нет доступа к выполнению кода в песочнице для этого чата. Попроси администратора включить доступ."
+                  if re.search(r'[А-Яа-яЁё]', original_input or user_input or '') else
+                  "Code execution in the sandbox is unavailable for this chat. Ask the administrator to enable access.")
+        user_msg['content'] = user_input
+        messages.append({'role': 'assistant', 'content': answer})
+        state['messages'], state['final_answer'] = messages, answer
+        ctx.remember('assistant', answer, {'user_input': user_input})
+        state['session_memory_text'] = ctx.memory_text()
+        return state
     user_image_intent = bool(set(_own_read["wants"]) & set(_IMAGE_ACTION_TOOLS)
                              | ({"generate_image"} & set(_own_read["wants"])))
     user_asked_remember = "remember_fact" in _own_read["wants"]

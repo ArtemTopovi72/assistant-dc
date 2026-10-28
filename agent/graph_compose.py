@@ -264,7 +264,10 @@ _PONYTAIL_RULES = (
     "security, or anything the user asked for. Non-trivial logic leaves ONE "
     "runnable check (an assert self-test or one small test file). Mark a "
     "deliberate shortcut with a `ponytail:` comment naming its limit. Reply: "
-    "code first, then at most three short lines -- what was skipped, when to add it.]")
+    "code first, then at most three short lines -- what was skipped, when to add it. "
+    "For a simple calculation requested in the sandbox, run the calculation and "
+    "answer from its output. Do not create a presentation, search for images, or "
+    "make charts unless the user asks for them.]")
 
 
 def _ponytail_block(ctx, text: str) -> str:
