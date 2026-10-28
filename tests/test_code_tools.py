@@ -65,6 +65,38 @@ def test_deliver_single_sandbox_file(ctx, box):
     assert '[TOOL ERROR]' in T.execute_tool(ctx, {}, 'pack_archive', {'path': '../outside.py'})
 
 
+def test_copy_of_named_file_is_not_a_test(box):
+    from tool_code_handlers import _copied_test_target
+    (box.root / 'report.py').write_text('def total(x):\n    return sum(x)\n', encoding='utf-8')
+    request = 'Проверь report.py на отрицательных числах'
+    assert _copied_test_target(box, request, 'def total(x):\n    return sum(x)\nprint(total([-1]))') == 'report.py'
+    assert _copied_test_target(box, request, "def total(x):\n    return sum(x)\nprint('report.py', total([-1]))") == 'report.py'
+    assert _copied_test_target(box, request, 'def copied(x):\n    return sum(x)\nprint(copied([-1]))') == 'report.py'
+    assert _copied_test_target(box, request, "print(open('report.py').read())\ndef total(x):\n return sum(x)") == 'report.py'
+    assert not _copied_test_target(box, request, 'from report import total\nassert total([-1]) == -1')
+    assert not _copied_test_target(box, request, "import subprocess\nsubprocess.run(['python', 'report.py'], check=True)")
+    assert not _copied_test_target(box, 'Создай новую функцию', 'def total(x):\n    return sum(x)')
+
+
+def test_run_code_refuses_copy_before_execution(ctx, box):
+    (box.root / 'report.py').write_text('def total(x):\n    return sum(x)\n', encoding='utf-8')
+    state = {'user_input_original': 'Проверь report.py'}
+    out = T.execute_tool(ctx, state, 'run_code', {'code': 'def total(x):\n    return sum(x)\nprint(total([-1]))'})
+    assert out.startswith('[TOOL ERROR]') and 'actual file' in out
+
+
+def test_check_does_not_overwrite_named_file(ctx, box):
+    from tool_code_handlers import _test_overwrite_target
+    original = 'def total(x):\n    return sum(x)\n'
+    path = box.root / 'report.py'
+    path.write_text(original, encoding='utf-8')
+    state = {'user_input_original': 'Проверь report.py'}
+    out = T.execute_tool(ctx, state, 'run_code', {'code': "open('report.py', 'w').write('pass')"})
+    assert out.startswith('[TOOL ERROR]') and 'overwrite' in out
+    assert path.read_text(encoding='utf-8') == original
+    assert not _test_overwrite_target(box, 'Исправь и проверь report.py', "open('report.py', 'w').write('pass')")
+
+
 # --- the scenario -----------------------------------------------------------
 
 def test_the_whole_modpack_flow(ctx, box):

@@ -264,6 +264,66 @@ def _rewrites_code_file(box, code: str) -> str:
     return ""
 
 
+def _copied_test_target(box, request: str, code: str) -> str:
+    """Catch tests that redefine functions from a named file instead of loading it."""
+    import ast
+    from prompt_guard import user_words
+    request = user_words(request or '')
+    if not re.search(r'\b(?:проверь\w*|провер\w*|тест\w*|запусти\w*|check\w*|test\w*|run\w*)\b', request, re.I):
+        return ''
+    try:
+        tree = ast.parse(code or '')
+    except SyntaxError:
+        return ''
+    functions = [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    defined = {n.name for n in functions}
+    if not defined:
+        return ''
+    for name in re.findall(r'(?<![\w./\\-])([\w./\\-]+\.py)\b', request, re.I):
+        try:
+            path = box.resolve(name)
+            if not path.is_file() or path.stat().st_size > 200_000:
+                continue
+            source = ast.parse(path.read_text(encoding='utf-8'))
+            originals = [n for n in ast.walk(source) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+            names = {n.name for n in originals}
+            bodies = {ast.dump(ast.Module(body=n.body, type_ignores=[])) for n in originals}
+            if not defined & names and not any(ast.dump(ast.Module(body=n.body, type_ignores=[])) in bodies for n in functions):
+                continue
+            imports = any((isinstance(n, ast.Import) and any(a.name.split('.')[-1] == path.stem for a in n.names))
+                          or (isinstance(n, ast.ImportFrom) and (n.module or '').split('.')[-1] == path.stem)
+                          for n in ast.walk(tree))
+            calls = (n for n in ast.walk(tree) if isinstance(n, ast.Call)
+                     and (getattr(n.func, 'id', '') or getattr(n.func, 'attr', ''))
+                     in {'exec', 'run', 'Popen', 'call', 'check_output', 'check_call', 'run_path', 'spec_from_file_location'})
+            mentions_path = any(isinstance(a, ast.Constant) and isinstance(a.value, str)
+                                and (a.value.replace('\\', '/').endswith('/' + path.name) or a.value == path.name)
+                                for call in calls for a in ast.walk(call))
+            if not imports and not mentions_path:
+                return name
+        except (OSError, UnicodeError, SyntaxError, SandboxError):
+            continue
+    return ''
+
+
+def _test_overwrite_target(box, request: str, code: str) -> str:
+    from prompt_guard import user_words
+    request = user_words(request or '')
+    if not re.search(r'\b(?:проверь\w*|провер\w*|тест\w*|check\w*|test\w*)\b', request, re.I):
+        return ''
+    if re.search(r'\b(?:исправ\w*|поправ\w*|измен\w*|редакт\w*|fix\w*|edit\w*|modify\w*|repair\w*|update\w*)\b', request, re.I):
+        return ''
+    for name in re.findall(r'(?<![\w./\\-])([\w./\\-]+\.py)\b', request, re.I):
+        try:
+            target = box.resolve(name)
+            if target.is_file() and any(box.resolve(m.group(1)) == target
+                                        for rx in (_OPEN_W_RE, _WRITE_TEXT_RE) for m in rx.finditer(code or '')):
+                return name
+        except (OSError, SandboxError):
+            continue
+    return ''
+
+
 @_guard
 def _handle_write_file(ctx, state, args: dict) -> str:
     box = _box(ctx)
@@ -759,7 +819,16 @@ def _handle_run_code(ctx, state, args: dict) -> str:
         return ("[TOOL ERROR] This account may keep and edit files but not run "
                 "code. Do the work with the file tools, or tell the user an "
                 "administrator has to raise their sandbox level.")
-    hijacked = _rewrites_code_file(box, args.get("code") or "")
+    code = args.get("code") or ""
+    request = state.get('user_input_original') or state.get('user_input') or ''
+    overwritten = _test_overwrite_target(box, request, code)
+    if overwritten:
+        return f"[TOOL ERROR] Refusing to overwrite {overwritten}: the user asked to test it, not replace it. Run the existing file."
+    copied = _copied_test_target(box, request, code)
+    if copied:
+        return (f"[TOOL ERROR] This script redefines functions from {copied} without loading the file. "
+                "It cannot verify the actual file; import or execute that file and assert its output.")
+    hijacked = _rewrites_code_file(box, code)
     if hijacked:
         # Sandbox bench 2026-09-24: refused a whole-file write_file, the model
         # said "let's use run_code to overwrite rx.py completely" and did --
