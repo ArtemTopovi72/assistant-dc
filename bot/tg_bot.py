@@ -934,9 +934,12 @@ _DIRECT_KB: dict[str, str] = {
     "weather":    "__menu_weather__",
     "randomizer": "__randomizer_menu__",
     "translator": "__menu_translator__",
+    "teacher": "__menu_teacher__",
     "tr_text": "__translator_text__",
     "tr_image": "__translator_image__",
     "tr_voice": "__translator_voice__",
+    "tr_dub": "__translator_dub__",
+    "tr_tts": "__translator_tts__",
     "tr_languages": "__translator_languages__",
     "rnd_slots": "__randomizer_slots__",
     "rnd_number": "__randomizer_number__",
@@ -1827,6 +1830,9 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         if menu in ('translator', 'translator_languages'):
             from tg_keyboards import _translator_kb
             return _translator_kb(lang, menu == 'translator_languages')
+        if menu.startswith('teacher'):
+            from tg_teacher import keyboard
+            return keyboard(sess,lang)
         if menu in ("randomizer", "randomizer_range", "randomizer_prediction"):
             return _randomizer_kb(lang, menu == "randomizer_range", menu == "randomizer_prediction")
         sub = {"creativity": _creativity_kb, "cr_images": _cr_images_kb,

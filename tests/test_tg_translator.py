@@ -69,3 +69,52 @@ def test_translation_enters_the_durable_task_queue(bot):
     restored = T._Task.from_dict(queued[0].to_dict())
     assert restored.translation['items'][0]['text'] == 'Hello'
     assert restored.task_id in bot._pending_journal
+
+
+@pytest.mark.parametrize('item', [
+    {'type':'fwd_voice','media':'video','seconds':10**6,'file_id':'clip'},
+    {'type':'document','filename':'clip.mp4','file_id':'clip'},
+    {'type':'document','filename':'speech.mp3','file_id':'clip'},
+])
+def test_media_mode_delivers_video_audio_and_subtitles(bot,tmp_path,item):
+    from tg_translator import execute
+    calls=[]; sent=[]
+    paths={k:str(tmp_path/n) for k,n in [('path','dub.mp4'),('audio_path','dub.wav'),('subtitle_path','dub.srt')]}
+    bot.modules={'translator':SimpleNamespace(dub=lambda ctx,src,target,out: calls.append(src) or
+                    {'text':'Translated dialogue',**paths})}
+    bot._dl_bytes=lambda fid:b'media'
+    bot._send_video=lambda cid,p,**kw: sent.append(p) or True
+    bot._send_document=lambda cid,p,**kw: sent.append(p) or True
+    press(bot,'translator');press(bot,'tr_dub')
+    bot._resolve_and_push(17,[item])
+    execute(bot,SimpleNamespace(is_cancelled=lambda:False),bot.jobs[-1])
+    assert calls and sent==list(paths.values())
+    assert bot._get_session(17).translation_mode=='dub'
+
+
+def test_translation_progress_is_visible_under_the_existing_status(bot):
+    from tg_translator import execute
+    edits=[]
+    bot._edit_text=lambda cid,mid,text,**kw:edits.append(text)
+    def translate(ctx,*args):
+        ctx.progress_callback(1,2,'Step')
+        return 'Bonjour'
+    bot.modules={'translator':SimpleNamespace(translate=translate)}
+    press(bot,'translator');bot._resolve_and_push(17,[{'type':'text','text':'Hello'}])
+    execute(bot,SimpleNamespace(is_cancelled=lambda:False),bot.jobs[-1])
+    assert any('50%' in text and 'Перевожу' in text for text in edits)
+
+
+def test_text_voice_captures_main_settings_voice_before_queued_work(bot,tmp_path):
+    from tg_translator import execute
+    selected=SimpleNamespace(custom_ref_wav=str(tmp_path/'chosen.wav'))
+    bot._get_ctx=lambda:selected
+    calls=[];voices=[]
+    bot.modules={'translator':SimpleNamespace(text_voice=lambda ctx,text,target,out,reference=None:
+        calls.append((text,reference)) or {'text':'Bonjour','path':'voice.wav'})}
+    bot._send_voice_from_wav=lambda cid,path,**kw:voices.append(path) or True
+    press(bot,'translator');press(bot,'tr_tts')
+    bot._resolve_and_push(17,[{'type':'text','text':'Hello'}])
+    selected.custom_ref_wav=str(tmp_path/'later.wav')
+    execute(bot,SimpleNamespace(is_cancelled=lambda:False),bot.jobs[-1])
+    assert calls==[('Hello',str(tmp_path/'chosen.wav'))] and voices==['voice.wav']

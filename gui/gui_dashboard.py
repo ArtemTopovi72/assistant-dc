@@ -369,6 +369,7 @@ class DashboardMixin:
         self.weather_tab = WeatherTab(self)
         self.randomizer_tab = RandomizerTab(self)
         self.translator_tab = TranslatorTab(self)
+        self.teacher_tab=self.translator_tab.teacher_tab
         from gui_voice_clone_tab import VoiceCloneTab
         self.voice_clone_tab = VoiceCloneTab(self)
         self.madhouse_tab = MadhouseTab(self)

@@ -812,7 +812,10 @@ class TaskRunnerMixin:
                     self._on_stage(chat_id, "⛔ Cancelled", True)
                     return
                 if task.translation:
-                    from tg_translator import execute
+                    if task.translation.get('kind')=='teacher':
+                        from tg_teacher import execute
+                    else:
+                        from tg_translator import execute
                     execute(self, ctx, task)
                 else:
                     self._run_task_inner(task, sess, user, uname, lang, ctx, graph)

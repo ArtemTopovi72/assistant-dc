@@ -280,6 +280,12 @@ class ResolveMixin:
                 return (_generation == sess.context_generation
                         and _arrival_ts > self._stop_requests.get(chat_id, 0))
 
+        if input_menu.startswith('teacher') or any(
+                (tg_bot._LABEL2KEY.get((it.get('text') or '').strip(),'') == 'teacher'
+                 or tg_bot._LABEL2KEY.get((it.get('text') or '').strip(),'').startswith('teach_')) for it in batch):
+            from tg_teacher import route as teacher_input
+            if still_current() and teacher_input(self,chat_id,sess,batch,input_menu):
+                return
         from tg_translator import route as translate_input
         if still_current() and translate_input(self, chat_id, sess, batch, input_menu):
             return
@@ -976,6 +982,10 @@ class ResolveMixin:
                         parse_mode="HTML",
                         keyboard=tg_bot._settings_kb(sess.reply_mode, sess.is_admin, lang)); continue
                 if direct == "__menu_back__":
+                    if sess.menu.startswith('teacher'):
+                        from tg_teacher import back
+                        back(self,chat_id,sess,lang)
+                        continue
                     # The creativity tiers (and Draw, opened from 🖼 Images) go up one level.
                     up = {"cr_images": "creativity", "cr_music": "creativity",
                           "cr_video": "creativity", "draw": "cr_images",

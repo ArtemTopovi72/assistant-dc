@@ -103,7 +103,8 @@ def _translator_kb(lang='ru', languages=False):
         rows = [[_b('tr_lang_' + code, lang) for code in keys[i:i+2]] for i in range(0, len(keys), 2)]
     else:
         rows = [[_b('tr_text', lang), _b('tr_image', lang)],
-                [_b('tr_voice', lang), _b('tr_languages', lang)]]
+                [_b('tr_voice', lang), _b('tr_dub', lang)], [_b('tr_tts',lang),_b('tr_languages', lang)],
+                [_b('teacher',lang)]]
     return {'keyboard': [*rows, [_b('back', lang)]], 'resize_keyboard': True,
             'input_field_placeholder': _t('tr_pick_language' if languages else 'tr_text_prompt', lang)}
 

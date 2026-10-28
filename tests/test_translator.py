@@ -9,9 +9,10 @@ import translator as T
 
 def context(replies):
     calls = []
+    last = replies[-1] if replies else ''
     def llm(ctx, system, user, **kw):
         calls.append((system, user))
-        return replies.pop(0)
+        return replies.pop(0) if replies else last
     return SimpleNamespace(text_model=llm, is_cancelled=lambda: False), calls
 
 
@@ -100,3 +101,60 @@ def test_metadata_key_is_not_sent_or_spoken_as_part_of_the_translation(reply):
 def test_the_word_text_in_the_actual_translation_is_kept():
     ctx, _ = context(['{"translation":"This text is important."}'])
     assert T.translate(ctx, 'Этот текст важен.', 'en') == 'This text is important.'
+
+
+def test_text_to_voice_uses_settings_reference_and_keeps_russian_f5_path(tmp_path):
+    ref=tmp_path/'selected.wav';ref.write_bytes(b'reference')
+    ctx,_=context(['{"translation":"Доброе утро."}'])
+    ctx.custom_ref_wav=str(ref);calls=[]
+    def speak(c,voice,transcript,text,out):
+        calls.append((voice,transcript,text))
+        path=tmp_path/'spoken.wav';path.write_bytes(b'audio');return str(path)
+    ctx.deps=SimpleNamespace(speak_settings_voice=speak)
+    result=T.text_voice(ctx,'Good morning.','ru',str(tmp_path))
+    assert calls==[(str(ref),'','Доброе утро.')]
+    assert result['path'].endswith('spoken.wav')
+
+
+def test_foreign_text_to_voice_uses_snapshot_not_a_later_selected_voice(tmp_path):
+    first=tmp_path/'first.wav';first.write_bytes(b'ref')
+    ctx,_=context(['{"translation":"Good morning."}'])
+    ctx.custom_ref_wav=str(tmp_path/'later.wav');calls=[]
+    python=tmp_path/'python.exe';python.write_bytes(b'fixture')
+    model=tmp_path/'models_ext'/'qwen3_tts_base';model.mkdir(parents=True)
+    (model/'model.safetensors').write_bytes(b'fixture')
+    ctx.modules={'config':SimpleNamespace(BASE_DIR=tmp_path,venv_python=lambda p:str(python))}
+    def synth(c,python,script,job,label,timeout):
+        calls.append(job)
+        from pathlib import Path
+        Path(job['output']).write_bytes(b'audio')
+        return True,''
+    ctx.deps=SimpleNamespace(run_gpu_worker=synth)
+    result=T.text_voice(ctx,'Доброе утро.','en',str(tmp_path),reference=str(first))
+    assert calls and calls[0]['source']==str(first) and calls[0]['text']=='Good morning.'
+    assert result['path']
+
+
+def test_translation_review_removes_meaning_added_by_the_first_draft():
+    ctx,calls=context(['{"translation":"明日、美術館で会いましょう。"}',
+                       '{"translation":"明日、博物館で会いましょう。"}'])
+    assert T.translate(ctx,'Завтра встретимся у музея.','ja')=='明日、博物館で会いましょう。'
+    assert len(calls)==2
+    review=json.loads(calls[1][1])
+    assert review['source']=='Завтра встретимся у музея.' and '美術館' in review['draft']
+
+
+def test_image_review_preserves_generic_museum_before_drawing(tmp_path):
+    src=tmp_path/'source.png';Image.new('RGB',(500,120),'white').save(src)
+    ctx,calls=context(['{"translations":["美術館へようこそ"]}',
+                       '{"translations":["博物館へようこそ"]}'])
+    ctx.deps=SimpleNamespace(ocr_regions=lambda p:[([[10,10],[450,10],[450,100],[10,100]],'Welcome to the museum',.99)])
+    assert T.image(ctx,str(src),'ja',str(tmp_path))['text']=='博物館へようこそ'
+    assert len(calls)==2
+
+
+def test_batch_review_rejects_merged_or_overlong_entries():
+    for draft in ('{"translations":[]}','{"translations":["too long"]}'):
+        ctx,_=context([draft])
+        with pytest.raises(ValueError,match='mismatched'):
+            T.review_translations(ctx,['source'],['draft'],'de',max_length=4)

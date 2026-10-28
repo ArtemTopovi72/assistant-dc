@@ -32,6 +32,8 @@ _BTN: dict[str, dict[str, str]] = {
     "tr_text": {"en": "📝 Translate text", "ru": "📝 Перевод текста"},
     "tr_image": {"en": "🖼 Translate lettering", "ru": "🖼 Надписи на картинке"},
     "tr_voice": {"en": "🎙 Voice → voice", "ru": "🎙 Голос → голос"},
+    "tr_dub": {"en": "🎬 Video / audio", "ru": "🎬 Видео / аудио"},
+    "tr_tts": {"en": "🗣 Text → voice", "ru": "🗣 Текст → голос"},
     "tr_languages": {"en": "🌍 Target language", "ru": "🌍 На какой язык"},
     "randomizer": {"en": "🎲 Randomizer", "ru": "🎲 Рандомайзер"},
     "rnd_slots": {"en": "🎰 Spin", "ru": "🎰 Крутить"},
@@ -133,6 +135,8 @@ _BTN: dict[str, dict[str, str]] = {
 from translator import LANGUAGES as _TRANSLATION_LANGUAGES
 _BTN.update({f'tr_lang_{code}': {'en': label, 'ru': label}
              for code, (_, label) in _TRANSLATION_LANGUAGES.items()})
+from tg_teacher_strings import BTN as _TEACHER_BTN, MSG as _TEACHER_MSG
+_BTN.update(_TEACHER_BTN)
 _LABEL2KEY: dict[str, str] = {
     label: key for key, forms in _BTN.items() for label in forms.values()
 }
@@ -176,9 +180,12 @@ _MSG: dict[str, dict[str, str]] = {
     "tr_text_prompt": {"en": "Send the text to translate. Voice messages will return text only.", "ru": "Пришли текст для перевода. Голосовые в этом режиме вернутся текстом."},
     "tr_image_prompt": {"en": "Send a clear picture with lettering. I will overlay its translation in the same regions and send the PNG file too.", "ru": "Пришли чёткую картинку с надписями. Наложу перевод на те же области и отправлю PNG файлом. Сложный фон под буквами закроется подложкой."},
     "tr_voice_prompt": {"en": "Send 3–60 seconds of clear speech. I will translate it and reply in the sample voice. No need to save a voice profile.", "ru": "Пришли 3–60 секунд чистой речи. Переведу и отвечу голосом из этой записи. Сохранять профиль голоса не нужно."},
+    "tr_dub_prompt": {"en": "Send video or audio up to 10 minutes / 20 MB. Speech is translated in the original speakers' voices and timing. You also get WAV and SRT. The sound track is replaced completely: original music and effects are not preserved. Lips are unchanged.", "ru": "Пришли видео или аудио до 10 минут / 20 МБ. Переведу речь голосами исходных говорящих с сохранением тайминга. Отдельно получишь WAV и SRT. Дорожка заменяется целиком: музыка и эффекты не сохраняются. Движения губ не меняются."},
+    "tr_tts_prompt": {"en": "Send text. I will translate and speak it using the voice selected in the main settings; no recording is needed.", "ru": "Пришли текст. Переведу и озвучу голосом, выбранным в основных настройках. Присылать образец голоса не нужно."},
+    "tr_delivery_failed": {"en": "Translation is ready, but a result file could not be delivered.", "ru": "Перевод готов, но один из файлов не удалось отправить."},
     "tr_working": {"en": "🌐 Translating…", "ru": "🌐 Перевожу…"},
     "tr_failed": {"en": "Translation failed: {detail}", "ru": "Не удалось перевести: {detail}"},
-    "tr_input_error": {"en": "Send text, a PNG/JPEG/WebP image or a voice/audio message up to 60 seconds (up to 20 MB).", "ru": "Пришли текст, PNG/JPEG/WebP или голосовое/аудио до 60 секунд (до 20 МБ)."},
+    "tr_input_error": {"en": "Send text, a PNG/JPEG/WebP picture or an audio/video file up to 20 MB. Choose Video / audio for recordings up to 10 minutes.", "ru": "Пришли текст, PNG/JPEG/WebP или аудио/видео до 20 МБ. Для записей до 10 минут выбери «Видео / аудио»."},
     "menu_randomizer_title": {"en": "🎲 Randomizer\nPick a draw. Three matching slot symbols win!", "ru": "🎲 Рандомайзер\nВыбери действие. Три одинаковых символа в автомате — выигрыш!"},
     "rnd_range_prompt": {"en": "Send two integer bounds, for example:\n1 100 or -10 10\nBoth bounds are included.", "ru": "Пришли две целые границы, например:\n1 100 или -10 10\nОбе границы включены."},
     "rnd_order_error": {"en": "Lower bound must not exceed upper bound. Try, for example:\n-10 100", "ru": "Нижняя граница не должна быть больше верхней. Например:\n-10 100"},
@@ -1620,6 +1627,9 @@ _MSG: dict[str, dict[str, str]] = {
     "on_mark":       {"en": "ON ✅",  "ru": "ВКЛ ✅"},
     "off_mark":      {"en": "OFF ❌", "ru": "ВЫКЛ ❌"},
 }
+
+
+_MSG.update(_TEACHER_MSG)
 
 
 def _t(key: str, lang: str = _DEFAULT_LANG, **kw) -> str:

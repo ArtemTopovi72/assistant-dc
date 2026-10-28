@@ -33,6 +33,17 @@ _REPLY: contextvars.ContextVar = contextvars.ContextVar("tg_reply_to", default=N
 # What the task was asked, for the feedback row a delivered result gets.
 _ASKED: contextvars.ContextVar = contextvars.ContextVar("tg_asked", default="")
 _RESULT_MENU: contextvars.ContextVar = contextvars.ContextVar("tg_result_menu", default=None)
+_VERBATIM: contextvars.ContextVar = contextvars.ContextVar("tg_verbatim_text", default=False)
+
+
+@contextlib.contextmanager
+def verbatim_text():
+    """Keep translated/lesson content intact while still localizing controls."""
+    token = _VERBATIM.set(True)
+    try:
+        yield
+    finally:
+        _VERBATIM.reset(token)
 
 
 @contextlib.contextmanager
@@ -332,7 +343,8 @@ class TransportMixin:
             _chat = p.get("chat_id")
             _lang = self._lang(self._get_session(_chat)) if _chat else ""
             if _lang == "ru":
-                p["text"] = _lg.guard_text(p.get("text", ""), _lang, _chat)
+                if not _VERBATIM.get():
+                    p["text"] = _lg.guard_text(p.get("text", ""), _lang, _chat)
                 keyboard = _lg.guard_keyboard(keyboard, _lang, _chat)
         except Exception:
             tg_bot.logger.warning("ui language guard failed, text sent unchecked", exc_info=True)

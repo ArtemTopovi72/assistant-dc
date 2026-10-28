@@ -33,6 +33,8 @@ DEFAULT_LANG = "en"
 # Keys are the exact English strings passed to ctx.set_stage(). Grep for one of
 # these and you find both the emitter and this table.
 _STAGES: dict[str, dict[str, str]] = {
+    'Identifying speakers': {'ru': 'Разделяю говорящих'},
+    'Fitting speech timing': {'ru': 'Укладываю реплики в тайминг'},
     # graph.py
     # core/progress.py -- the line under a status, fed by comfy_client and music.run_gpu_worker
     "Step": {"ru": "Шаг"},

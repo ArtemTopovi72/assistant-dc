@@ -562,6 +562,8 @@ class QueueMixin:
         item.setdefault('_context_generation', sess.context_generation)
         if sess.menu in ('translator', 'translator_languages'):
             item.setdefault('_translation', (sess.translation_target, sess.translation_mode))
+        if sess.menu.startswith('teacher'):
+            item.setdefault('_teacher_epoch',sess.teacher_epoch)
         item.setdefault('_input_context', {
             'prefix': sess.pending_prefix, 'menu': sess.menu,
             'revisions': {name: sess.flow_revision(name) for name in sess.INPUT_STATES}})

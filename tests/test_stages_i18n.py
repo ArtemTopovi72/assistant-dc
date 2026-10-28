@@ -170,7 +170,7 @@ def drive(lang, stage):
     class _Graph:
         def invoke(self, state, cfg=None):
             ctx.set_stage(stage)
-            return {"messages": [types.SimpleNamespace(content="done")]}
+            return {"messages": [{"role":"assistant","content":"done"}]}
     graph = _Graph()
 
     bot._user_store.put(T._User(chat_id=CID, name="U", status="approved"))

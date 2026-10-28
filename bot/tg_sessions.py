@@ -284,6 +284,12 @@ class _Session:
         self.lang: str = d.get("lang", "")          # ""=not chosen yet
         self.translation_target = d.get('translation_target', 'en')
         self.translation_mode = d.get('translation_mode', 'text')
+        self.teacher_target=d.get('teacher_target','de')
+        self.teacher_native=d.get('teacher_native','ru')
+        self.teacher_format=d.get('teacher_format','combined')
+        self.teacher_profile=dict(d.get('teacher_profile') or {'level':'auto','auto_level':'A1','topic':'','streak':0})
+        self.teacher_history=list(d.get('teacher_history') or [])
+        self.teacher_epoch=int(d.get('teacher_epoch',0))
         self.lang_chosen: bool = bool(d.get("lang_chosen", False))  # by /lang or the 🌐 button
         self.use_docs: bool = d.get("use_docs", False)
         # Image output size, chosen in Draw ▸ 📐 Size. Empty means "not chosen" —
@@ -405,6 +411,9 @@ class _Session:
             self.context_generation += 1
             self.context_revision += 1
             self.history = []
+            self.teacher_history=[]
+            self.teacher_epoch+=1
+            self.teacher_profile.update(auto_level='A1',streak=0)
             self.tg_memory = []
             self.lang_pin = self.turn_lang = ""     # a fresh start speaks the chat's language
             self.last_link = None
@@ -586,6 +595,12 @@ class _Session:
                 "lang":              self.lang,
                 "translation_target": self.translation_target,
                 "translation_mode": self.translation_mode,
+                "teacher_target":self.teacher_target,
+                "teacher_native":self.teacher_native,
+                "teacher_format":self.teacher_format,
+                "teacher_profile":self.teacher_profile,
+                "teacher_history":self.teacher_history,
+                "teacher_epoch":self.teacher_epoch,
                 "lang_chosen":       self.lang_chosen,
                 "use_docs":          self.use_docs,
                 "image_aspect":      self.image_aspect,
