@@ -153,14 +153,11 @@ TTS_TAIL_SILENCE_MS = _env_int("TTS_TAIL_SILENCE_MS", 250)
 # themselves are silent.
 #
 # This has been deleted or regex-swept several times across sessions, and every
-# time the endings started clipping again in all three surfaces at once. If you
-# are here to tidy trailing punctuation: the padding is appended EXACTLY ONCE, in
-# audio.preprocess_text_for_synthesis, which every synthesis path goes through
-# (the app via graph.py, Telegram via tg_transport.py, Skyrim via
-# mantella_f5_server.py). tests/test_tts_end_padding.py fails if it goes missing.
+# time the endings started clipping again in all three surfaces at once. The
+# shared F5 path also pads every intermediate batch after splitting.
 #
-# Do not append it anywhere else -- doubling it is path-dependent and audible as
-# a long pause. Do not strip trailing dots after it. Note f5_tts.chunk_text
+# Do not append it in callers: doubling it is audible as a long pause.
+# Note f5_tts.chunk_text
 # splits on punctuation followed by WHITESPACE, so an unspaced run stays welded
 # to the last chunk, which is exactly the chunk that clips.
 TTS_END_PADDING = os.getenv("TTS_END_PADDING", "." * 15)

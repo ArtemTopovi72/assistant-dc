@@ -586,11 +586,8 @@ def preprocess_text_for_synthesis(
     # === THE ENDING FIX -- DO NOT REMOVE (see config.TTS_END_PADDING) ==========
     # This fine-tune eats the end of the phrase; a run of trailing periods is
     # the one thing that stops it, because F5 sizes the output from gen_text's
-    # byte length. Appended here and ONLY here, so every surface -- the desktop
-    # app, Telegram and Skyrim -- gets it exactly once by going through this
-    # function. rstrip() first so re-synthesising already-padded text cannot
-    # stack two runs. Guarded by tests/test_tts_end_padding.py.
-    padding = TTS_END_PADDING or ("." * 15)
+    # byte length. The F5 call also pads intermediate batches after splitting.
+    padding = TTS_END_PADDING if len(TTS_END_PADDING) >= 12 and set(TTS_END_PADDING) == {'.'} else ("." * 15)
     text = text.rstrip(". \t\r\n") + padding
     return text
 
@@ -1301,6 +1298,25 @@ def trim_ref_to_cap(ref_wav: str) -> str:
         return ref_wav
 
 
+def _pad_f5_batch(text):
+    padding = TTS_END_PADDING if len(TTS_END_PADDING) >= 12 and set(TTS_END_PADDING) == {'.'} else '.' * 15
+    return text.rstrip('. \t\r\n') + padding
+
+
+def _infer_f5_padded(ref_audio, ref_text, gen_text, model, vocoder, **kwargs):
+    """Keep the ending padding on every batch that F5 synthesizes."""
+    import torchaudio
+    from f5_tts.infer import utils_infer as f5
+    audio, sr = torchaudio.load(ref_audio)
+    ref_seconds = audio.shape[-1] / sr
+    max_chars = int(len(ref_text.encode('utf-8')) / ref_seconds * (22 - ref_seconds) * kwargs.get('speed', 1))
+    padding_size = len(_pad_f5_batch(''))
+    batches = [_pad_f5_batch(part) for part in f5.chunk_text(gen_text, max_chars=max(1, max_chars - padding_size))]
+    if not batches:
+        return None, f5.target_sample_rate, None
+    return next(f5.infer_batch_process((audio, sr), ref_text, batches, model, vocoder, **kwargs))
+
+
 def synth_single_segment(
         ctx,
         idx: int,
@@ -1316,8 +1332,8 @@ def synth_single_segment(
     infer_process = dep(ctx, "infer_process", None)
     preprocess_ref_audio_text = dep(ctx, "preprocess_ref_audio_text", None)
     if infer_process is None or preprocess_ref_audio_text is None:
-        from f5_tts.infer.utils_infer import infer_process as _ip, preprocess_ref_audio_text as _pr
-        infer_process = infer_process or _ip
+        from f5_tts.infer.utils_infer import preprocess_ref_audio_text as _pr
+        infer_process = infer_process or _infer_f5_padded
         preprocess_ref_audio_text = preprocess_ref_audio_text or _pr
     try:
         processed_text = preprocess_text_for_synthesis(
