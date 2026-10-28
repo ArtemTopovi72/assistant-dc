@@ -507,16 +507,36 @@ def wait_for_card(timeout: float = 600.0) -> bool:
 
 @contextlib.contextmanager
 def speech_session(timeout=600, ctx=None):
+    import gpu_admission
+    with gpu_admission.admit(ctx=ctx, timeout=timeout):
+        with _speech_admitted(timeout, ctx):
+            yield
+
+
+@contextlib.contextmanager
+def _speech_admitted(timeout=600, ctx=None):
     deadline = time.monotonic() + timeout
+    notified = False
     while True:
         remaining = deadline - time.monotonic()
         if ctx is not None and getattr(ctx, 'is_cancelled', lambda: False)():
             raise RuntimeError('Cancelled')
         if remaining <= 0:
             raise TimeoutError('The GPU is busy.')
-        if not _SPEECH_FREE.wait(min(1, remaining)):
+        if not _SPEECH_FREE.is_set():
+            if not notified and ctx is not None:
+                import progress
+                progress.report(ctx, 0, 0, 'In the GPU queue (1 ahead)')
+                notified = True
+            _SPEECH_FREE.wait(min(1, remaining))
             continue
-        if not _SPEECH_GATE.acquire(timeout=min(1, remaining)):
+        if not _SPEECH_GATE.acquire(blocking=False):
+            if not notified and ctx is not None:
+                import progress
+                progress.report(ctx, 0, 0, 'In the GPU queue (1 ahead)')
+                notified = True
+            if _SPEECH_GATE.acquire(timeout=min(1, remaining)):
+                _SPEECH_GATE.release()
             continue
         if _SPEECH_FREE.is_set():
             break
@@ -528,10 +548,13 @@ def speech_session(timeout=600, ctx=None):
 
 
 def _claim_card(label: str, min_free_mb: int = None, ctx=None, progress_ctx=None) -> None:
-    with _SPEECH_GATE:
-        _SPEECH_FREE.clear()
-        with _LIFECYCLE_LOCK:
-            _claim_card_locked(label, min_free_mb, ctx, progress_ctx)
+    import gpu_admission
+    admission = contextlib.nullcontext() if this_thread_holds_card() else gpu_admission.admit(ctx=progress_ctx or ctx)
+    with admission:
+        with _SPEECH_GATE:
+            _SPEECH_FREE.clear()
+            with _LIFECYCLE_LOCK:
+                _claim_card_locked(label, min_free_mb, ctx, progress_ctx)
 
 
 def _claim_card_locked(label: str, min_free_mb: int = None, ctx=None, progress_ctx=None) -> None:
@@ -765,19 +788,34 @@ class _gpu_slot:
     def __enter__(self):
         depth = getattr(self._local, "depth", 0)
         self._acquired = (depth == 0)
+        self._shared_guard = None
         # Claimed BEFORE the semaphore, so a job waiting its turn keeps the card
         # claimed and the model is not reloaded in the gap between two renders.
         self._claimed = self.exclusive and self._acquired
         if self._claimed:
             _claim_card(self.label, min_free_mb=self.min_free_mb, ctx=self.ctx, progress_ctx=self.progress_ctx)
         elif self._acquired and self.park_voice:
-            with _SPEECH_GATE:
+            if not this_thread_holds_card():
+                self._shared_guard = speech_session(ctx=self.progress_ctx or self.ctx)
+                self._shared_guard.__enter__()
+            try:
                 _park_voice_for_job(self.ctx)
-        if self._acquired and not _GPU_SEM.acquire(blocking=False):
-            # another render has the card: minutes of «Generating…» that looked like a hang
-            import progress as _progress
-            _progress.report(self.progress_ctx, 0, 0, "Waiting for the video card")
-            _GPU_SEM.acquire()
+            except BaseException:
+                if self._shared_guard:
+                    self._shared_guard.__exit__(*__import__('sys').exc_info())
+                raise
+        try:
+            if self._acquired and not _GPU_SEM.acquire(blocking=False):
+                # another render has the card: minutes of «Generating…» that looked like a hang
+                import progress as _progress
+                _progress.report(self.progress_ctx, 0, 0, "Waiting for the video card")
+                _GPU_SEM.acquire()
+        except BaseException:
+            if self._claimed:
+                _release_card(self.ctx)
+            if self._shared_guard:
+                self._shared_guard.__exit__(*__import__('sys').exc_info())
+            raise
         self._local.depth = depth + 1
         return self
 
@@ -787,6 +825,8 @@ class _gpu_slot:
             _GPU_SEM.release()
         if self._claimed:
             _release_card(self.ctx)
+        if self._shared_guard:
+            self._shared_guard.__exit__(*exc)
         return False
 
 

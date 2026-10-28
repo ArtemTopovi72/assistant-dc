@@ -198,6 +198,10 @@ def execute(bot, ctx, task):
     _, ctx.progress_callback = bot._with_progress(cid,lang,
         lambda text:bot._edit_text(cid,mid,text,keyboard=cancel) if mid else None,
         shown=working)
+    def stage(stage_name):
+        if stage_name == 'Waiting for the graphics card':
+            ctx.progress_callback(0, 0, 'In the GPU queue (1 ahead)')
+    ctx.stage_callback = stage
     try:
         engine = module(bot,'translator')
         out = Path(bot._clone_dir(cid)).parent.parent / 'translations' / str(cid) / task.task_id

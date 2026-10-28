@@ -42,6 +42,7 @@ _STAGES: dict[str, dict[str, str]] = {
     "Decoding the result": {"ru": "Собираю результат"},
     "Piece": {"ru": "Фрагмент"},
     "Waiting for the video card": {"ru": "Жду видеокарту"},
+    "In the GPU queue": {"ru": "В очереди на видеокарту"},
     "Freeing the video card": {"ru": "Освобождаю видеокарту"},
     "Putting the voice on": {"ru": "Накладываю голос"},
     "Singing in the chosen voice": {"ru": "Пою выбранным голосом"},
@@ -54,7 +55,7 @@ _STAGES: dict[str, dict[str, str]] = {
     "Writing a response":          {"ru": "Пишу ответ"},
     "Speaking":                    {"ru": "Озвучиваю"},
     # llm.py -- the card was handed to a render; this turn is waiting it out
-    "Waiting for the graphics card": {"ru": "Жду видеокарту: идёт рендер"},
+    "Waiting for the graphics card": {"ru": "В очереди на видеокарту: идёт генерация"},
     "Starting the video engine": {"ru": "Запускаю видеодвижок"},
     "Restyling the video": {"ru": "Перерисовываю видео (~15 мин)"},
     "Translating":                 {"ru": "Перевожу"},
@@ -146,6 +147,7 @@ _RETRY = re.compile(r"^Retrying the model call \((?P<n>\d+)/(?P<of>\d+)\)$")
 
 # "Waiting for the model (2 ahead)"  (llm_gate.py)
 _QUEUE = re.compile(r"^Waiting for the model \((?P<n>\d+) ahead\)$")
+_GPU_QUEUE = re.compile(r"^In the GPU queue \((?P<n>\d+) ahead\)$")
 
 # "Ultra: <phase>"  (gui.py Ultra Search)
 _ULTRA = re.compile(r"^Ultra: (?P<phase>.+)$")
@@ -232,6 +234,10 @@ def translate(stage: str, lang: str = DEFAULT_LANG) -> str:
     m = _QUEUE.match(stage)
     if m and lang == "ru":
         return f"Жду своей очереди к модели (впереди: {m.group('n')})"
+
+    m = _GPU_QUEUE.match(stage)
+    if m and lang == "ru":
+        return f"В очереди на видеокарту (впереди не менее {m.group('n')})"
 
     m = _ULTRA.match(stage)
     if m:

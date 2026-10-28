@@ -137,7 +137,7 @@ def test_a_render_waiting_for_the_card_says_so():
         pass
     for t in hogs:
         t.join(10)
-    assert ctx.got == [(0, 0, "Waiting for the video card")]
+    assert ctx.got == [(0, 0, "In the GPU queue (1 ahead)")]
 
 
 def test_a_part_of_a_long_video_keeps_its_number_on_the_status():

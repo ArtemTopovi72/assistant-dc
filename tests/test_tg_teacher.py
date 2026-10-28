@@ -70,6 +70,18 @@ def test_voice_format_and_selected_reference(bot,fmt,expected):
     assert any('Hallo?' in text and 'Привет?' in text and 'Correction' in text for _,text in bot.sent)
 
 
+def test_teacher_shows_gpu_queue_while_waiting_for_model(bot):
+    events = []
+    bot._with_progress = lambda *a, **kw: (None, lambda *args: events.append(args))
+    respond = bot.modules['language_teacher'].respond
+    def waiting(ctx, *args):
+        ctx.stage_callback('Waiting for the graphics card')
+        return respond(ctx, *args)
+    bot.modules['language_teacher'].respond = waiting
+    run(bot, queue(bot))
+    assert (0, 0, 'In the GPU queue (1 ahead)') in events
+
+
 def test_settings_pickers_topic_and_back(bot):
     s=bot._get_session(1)
     teacher.action(bot,1,s,'en','teach_native');teacher.action(bot,1,s,'en','teach_lang_en')
