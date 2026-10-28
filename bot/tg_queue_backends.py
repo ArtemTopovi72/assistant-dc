@@ -55,6 +55,7 @@ class _Task:
     context_generation: Optional[int] = None
     context_revision: Optional[int] = None
     image_selection: str = ''
+    translation: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return self.__dict__.copy()

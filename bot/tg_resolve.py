@@ -280,6 +280,10 @@ class ResolveMixin:
                 return (_generation == sess.context_generation
                         and _arrival_ts > self._stop_requests.get(chat_id, 0))
 
+        from tg_translator import route as translate_input
+        if still_current() and translate_input(self, chat_id, sess, batch, input_menu):
+            return
+
         prepared = []
         for item in batch:
             if item.get('type') == 'armed_media':
@@ -976,9 +980,14 @@ class ResolveMixin:
                     up = {"cr_images": "creativity", "cr_music": "creativity",
                           "cr_video": "creativity", "draw": "cr_images",
                           "randomizer_range": "randomizer",
-                          "randomizer_prediction": "randomizer", "ozon_prompt": "ozon"}.get(sess.menu)
+                          "randomizer_prediction": "randomizer", "ozon_prompt": "ozon",
+                          "translator_languages": "translator"}.get(sess.menu)
                     if up:
                         self._goto_menu(sess, up, tg_bot._PROMPT_KB['ozon_find'] if up == 'ozon' else '')
+                        if up == 'translator':
+                            from tg_translator import action
+                            action(self, chat_id, sess, lang, 'translator')
+                            continue
                         self._send_text(chat_id, tg_bot._t(
                             "menu_%s_title" % up, lang), parse_mode="HTML",
                             keyboard=self._state_kb(sess, lang))

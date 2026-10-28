@@ -17,7 +17,7 @@ from gui_ru import RU
 # (group label, stable tab keys) -- the keys of the dashboard's _tab_registry
 GROUPS = (
     ("Creation", ("images", "storyboard", "transfer", "restyle", "music", "voice_clone", "characters")),
-    ("Knowledge", ("search", "research", "database", "memory")),
+    ("Knowledge", ("search", "translator", "research", "database", "memory")),
     ("Bot & services", ("telegram", "debug_chat", "admin", "weather", "randomizer", "madhouse")),
     ("System", ("model", "status", "feedback", "log", "code", "stress")),
 )

@@ -286,7 +286,7 @@ class QueueMixin:
             return False
         sess = self._get_session(task.chat_id)
         if task.context_revision is None:
-            if not task.image_path and not task.image_id:
+            if not task.translation and not task.image_path and not task.image_id:
                 task.image_id = sess.turn_image
                 task.image_selection = 'context'
             token = sess.begin_context_turn(task.context_generation)
@@ -560,6 +560,8 @@ class QueueMixin:
         item.setdefault('_message_id', (getattr(self, '_msg_id', {}) or {}).get(chat_id, 0))
         sess = self._get_session(chat_id)
         item.setdefault('_context_generation', sess.context_generation)
+        if sess.menu in ('translator', 'translator_languages'):
+            item.setdefault('_translation', (sess.translation_target, sess.translation_mode))
         item.setdefault('_input_context', {
             'prefix': sess.pending_prefix, 'menu': sess.menu,
             'revisions': {name: sess.flow_revision(name) for name in sess.INPUT_STATES}})

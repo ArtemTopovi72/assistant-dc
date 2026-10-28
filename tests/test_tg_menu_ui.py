@@ -437,7 +437,7 @@ _seen = {}
 _dupes = []
 for _key, _forms in T._BTN.items():
     for _lbl in _forms.values():
-        if _lbl in _seen:
+        if _lbl in _seen and _seen[_lbl] != _key:
             _dupes.append((_lbl, _seen[_lbl], _key))
         _seen[_lbl] = _key
 check("no two buttons share a label", not _dupes, str(_dupes))

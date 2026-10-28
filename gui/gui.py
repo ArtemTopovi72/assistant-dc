@@ -949,7 +949,7 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
                 getattr(self, _t).shutdown()
         if hasattr(self, "telegram_tab"):
             self.telegram_tab.shutdown()
-        for _name in ("storyboard_tab", "transfer_tab"):
+        for _name in ("storyboard_tab", "transfer_tab", "translator_tab"):
             _tab = getattr(self, _name, None)
             if _tab is not None and hasattr(_tab, "shutdown"):
                 try:

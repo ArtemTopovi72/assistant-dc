@@ -282,6 +282,8 @@ class _Session:
         # user's prompts. Swapped per session around graph.invoke().
         self.tg_facts: list = d.get("tg_facts", [])
         self.lang: str = d.get("lang", "")          # ""=not chosen yet
+        self.translation_target = d.get('translation_target', 'en')
+        self.translation_mode = d.get('translation_mode', 'text')
         self.lang_chosen: bool = bool(d.get("lang_chosen", False))  # by /lang or the 🌐 button
         self.use_docs: bool = d.get("use_docs", False)
         # Image output size, chosen in Draw ▸ 📐 Size. Empty means "not chosen" —
@@ -582,6 +584,8 @@ class _Session:
                 "last_deck":         self.last_deck,
                 "tg_facts":          self.tg_facts,
                 "lang":              self.lang,
+                "translation_target": self.translation_target,
+                "translation_mode": self.translation_mode,
                 "lang_chosen":       self.lang_chosen,
                 "use_docs":          self.use_docs,
                 "image_aspect":      self.image_aspect,

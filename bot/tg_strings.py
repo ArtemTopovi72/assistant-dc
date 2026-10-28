@@ -28,6 +28,11 @@ if _DEFAULT_LANG not in _LANGS:
     _DEFAULT_LANG = "ru"
 
 _BTN: dict[str, dict[str, str]] = {
+    "translator": {"en": "🌐 Translator", "ru": "🌐 Переводчик"},
+    "tr_text": {"en": "📝 Translate text", "ru": "📝 Перевод текста"},
+    "tr_image": {"en": "🖼 Translate lettering", "ru": "🖼 Надписи на картинке"},
+    "tr_voice": {"en": "🎙 Voice → voice", "ru": "🎙 Голос → голос"},
+    "tr_languages": {"en": "🌍 Target language", "ru": "🌍 На какой язык"},
     "randomizer": {"en": "🎲 Randomizer", "ru": "🎲 Рандомайзер"},
     "rnd_slots": {"en": "🎰 Spin", "ru": "🎰 Крутить"},
     "rnd_number": {"en": "🔢 Random number", "ru": "🔢 Случайное число"},
@@ -125,6 +130,9 @@ _BTN: dict[str, dict[str, str]] = {
     "book_btn":       {"en": "📚 Audiobook",      "ru": "📚 Аудиокнига"},
     "style_menu_btn": {"en": "🎭 Change style",   "ru": "🎭 Сменить стиль"},
 }
+from translator import LANGUAGES as _TRANSLATION_LANGUAGES
+_BTN.update({f'tr_lang_{code}': {'en': label, 'ru': label}
+             for code, (_, label) in _TRANSLATION_LANGUAGES.items()})
 _LABEL2KEY: dict[str, str] = {
     label: key for key, forms in _BTN.items() for label in forms.values()
 }
@@ -163,6 +171,14 @@ def _norm_lang(code: str) -> str:
 
 # Message catalogue. Values are format strings; _t() applies **kw.
 _MSG: dict[str, dict[str, str]] = {
+    "menu_translator_title": {"en": "🌐 Translator → {target}\nSend text, a picture with lettering or a voice message. Source language is detected automatically. Pictures are overlaid without image generation.", "ru": "🌐 Переводчик → {target}\nПришли текст, картинку с надписями или голосовое. Исходный язык определю автоматически. Надписи заменю наложением, без генерации картинки."},
+    "tr_pick_language": {"en": "Choose the target language:", "ru": "Выбери язык перевода:"},
+    "tr_text_prompt": {"en": "Send the text to translate. Voice messages will return text only.", "ru": "Пришли текст для перевода. Голосовые в этом режиме вернутся текстом."},
+    "tr_image_prompt": {"en": "Send a clear picture with lettering. I will overlay its translation in the same regions and send the PNG file too.", "ru": "Пришли чёткую картинку с надписями. Наложу перевод на те же области и отправлю PNG файлом. Сложный фон под буквами закроется подложкой."},
+    "tr_voice_prompt": {"en": "Send 3–60 seconds of clear speech. I will translate it and reply in the sample voice. No need to save a voice profile.", "ru": "Пришли 3–60 секунд чистой речи. Переведу и отвечу голосом из этой записи. Сохранять профиль голоса не нужно."},
+    "tr_working": {"en": "🌐 Translating…", "ru": "🌐 Перевожу…"},
+    "tr_failed": {"en": "Translation failed: {detail}", "ru": "Не удалось перевести: {detail}"},
+    "tr_input_error": {"en": "Send text, a PNG/JPEG/WebP image or a voice/audio message up to 60 seconds (up to 20 MB).", "ru": "Пришли текст, PNG/JPEG/WebP или голосовое/аудио до 60 секунд (до 20 МБ)."},
     "menu_randomizer_title": {"en": "🎲 Randomizer\nPick a draw. Three matching slot symbols win!", "ru": "🎲 Рандомайзер\nВыбери действие. Три одинаковых символа в автомате — выигрыш!"},
     "rnd_range_prompt": {"en": "Send two integer bounds, for example:\n1 100 or -10 10\nBoth bounds are included.", "ru": "Пришли две целые границы, например:\n1 100 или -10 10\nОбе границы включены."},
     "rnd_order_error": {"en": "Lower bound must not exceed upper bound. Try, for example:\n-10 100", "ru": "Нижняя граница не должна быть больше верхней. Например:\n-10 100"},

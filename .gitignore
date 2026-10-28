@@ -139,6 +139,7 @@ venv_soulx/
 .claude/
 .idea/
 voice_clone/
+translations/
 chat_logs/
 cover/
 tg_feedback.jsonl

@@ -26,7 +26,7 @@ def _main_kb(voice_on: bool, is_admin: bool = False, lang: str = _DEFAULT_LANG) 
         [_b("weather", lang),    _b("ozon", lang),    _b("account", lang)],
         [_b("feedback", lang),   _b("help", lang),    _b("stop", lang)],
         [_b("tasks", lang),      _b("settings", lang)],
-        [_b("randomizer", lang)],
+        [_b("randomizer", lang), _b("translator", lang)],
     ]
     return {
         "keyboard": rows,
@@ -94,6 +94,18 @@ def _weather_kb(lang: str = _DEFAULT_LANG) -> dict:
         "resize_keyboard": True,
         "input_field_placeholder": _t("ph_weather", lang),
     }
+
+
+def _translator_kb(lang='ru', languages=False):
+    if languages:
+        from translator import LANGUAGES
+        keys = list(LANGUAGES)
+        rows = [[_b('tr_lang_' + code, lang) for code in keys[i:i+2]] for i in range(0, len(keys), 2)]
+    else:
+        rows = [[_b('tr_text', lang), _b('tr_image', lang)],
+                [_b('tr_voice', lang), _b('tr_languages', lang)]]
+    return {'keyboard': [*rows, [_b('back', lang)]], 'resize_keyboard': True,
+            'input_field_placeholder': _t('tr_pick_language' if languages else 'tr_text_prompt', lang)}
 
 
 def _randomizer_kb(lang: str = _DEFAULT_LANG, range_mode=False, prediction=False) -> dict:

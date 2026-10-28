@@ -633,7 +633,7 @@ class TaskRunnerMixin:
         _shared = self._get_ctx()
         graph   = self._get_graph()
 
-        if _shared is None or graph is None:
+        if _shared is None or (graph is None and not task.translation):
             self._send_text(chat_id, tg_bot._t("not_ready", lang),
                             keyboard=self._main_menu_kb(sess, lang))
             return
@@ -643,7 +643,7 @@ class TaskRunnerMixin:
         if token is None or token[0] != sess.context_generation:
             return
         entry = tg_bot._image_by_id(sess, task.image_id) if task.image_id else None
-        if ((task.image_path and not os.path.exists(task.image_path))
+        if not task.translation and ((task.image_path and not os.path.exists(task.image_path))
                 or (task.image_id and (not entry or not os.path.exists(entry.get('path', ''))))):
             with tg_transport.replying_to(chat_id, task.reply_to, asked=task.user_text):
                 self._send_text(chat_id, tg_bot._t('img_gone', lang))
@@ -694,7 +694,7 @@ class TaskRunnerMixin:
         # signal, and it must not consult (or update) turn_lang: otherwise a
         # stale/newly-set turn_lang="en" leaks English into the interim note and
         # the final reply for a plain button press in a Russian session.
-        is_internal = _is_button_payload(task.user_text)
+        is_internal = bool(task.translation) or _is_button_payload(task.user_text)
         _tl = "" if is_internal else _message_script(_typed_part(task.user_text), ctx=self.reads)
         from graph_language import asks_for_english as _ask_en
         _asks_en = not is_internal and _ask_en(task.user_text, ctx=self.reads)
@@ -811,7 +811,11 @@ class TaskRunnerMixin:
                                     keyboard=self._main_menu_kb(sess, lang))
                     self._on_stage(chat_id, "⛔ Cancelled", True)
                     return
-                self._run_task_inner(task, sess, user, uname, lang, ctx, graph)
+                if task.translation:
+                    from tg_translator import execute
+                    execute(self, ctx, task)
+                else:
+                    self._run_task_inner(task, sess, user, uname, lang, ctx, graph)
             _outcome = "cancelled" if task.task_id in self._cancelled else "done"
         finally:
             # Every task leaves an END line with its time: a start with no end

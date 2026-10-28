@@ -933,6 +933,11 @@ _DIRECT_KB: dict[str, str] = {
     "wtw_city_btn": "__wtw_setcity__",
     "weather":    "__menu_weather__",
     "randomizer": "__randomizer_menu__",
+    "translator": "__menu_translator__",
+    "tr_text": "__translator_text__",
+    "tr_image": "__translator_image__",
+    "tr_voice": "__translator_voice__",
+    "tr_languages": "__translator_languages__",
     "rnd_slots": "__randomizer_slots__",
     "rnd_number": "__randomizer_number__",
     "rnd_yesno": "__randomizer_yesno__",
@@ -1819,6 +1824,9 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
             return _ozon_kb(lang)
         if menu == "tasks":
             return _tasks_kb(lang)
+        if menu in ('translator', 'translator_languages'):
+            from tg_keyboards import _translator_kb
+            return _translator_kb(lang, menu == 'translator_languages')
         if menu in ("randomizer", "randomizer_range", "randomizer_prediction"):
             return _randomizer_kb(lang, menu == "randomizer_range", menu == "randomizer_prediction")
         sub = {"creativity": _creativity_kb, "cr_images": _cr_images_kb,

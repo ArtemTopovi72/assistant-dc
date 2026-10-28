@@ -351,7 +351,7 @@ class DispatchMixin:
         key = tg_bot._LABEL2KEY.get(text, '') if not _fwd else ''
         direct = tg_bot._DIRECT_KB.get(key, '')
         if (direct.startswith('__menu_') or direct in ('__clear__', '__randomizer_menu__')
-                or key in tg_bot._PROMPT_KB):
+                or key.startswith('tr_') or key in tg_bot._PROMPT_KB):
             self._resolve_and_push(chat_id, [{'type': 'text', 'text': text,
                 '_message_id': msg.get('message_id', 0),
                 '_context_generation': sess0.context_generation}])
@@ -636,6 +636,9 @@ class DispatchMixin:
                     "_inbox_id": (saved or {}).get("_inbox_id") or uuid.uuid4().hex,
                     '_arrival_ts': (saved or {}).get('_arrival_ts', time.time()),
                     '_context_generation': (saved or {}).get('_context_generation', sess.context_generation),
+                    '_translation': (saved or {}).get('_translation') or (
+                        (sess.translation_target, sess.translation_mode)
+                        if sess.menu in ('translator', 'translator_languages') else None),
                     '_input_context': (saved or {}).get('_input_context') or {
                         'prefix': sess.pending_prefix, 'menu': sess.menu,
                         'revisions': {name: sess.flow_revision(name) for name in sess.INPUT_STATES}},
@@ -649,7 +652,7 @@ class DispatchMixin:
             key = e["_inbox_id"]
             self._incoming.put(chat_id, {"type": "album_pending", "group_id": group_id,
                 "photos": e["photos"], "forwarded": forwarded, "_inbox_id": key,
-                **{name: e[name] for name in ('_arrival_ts', '_context_generation', '_input_context')}}, key)
+                **{name: e[name] for name in ('_arrival_ts', '_context_generation', '_input_context', '_translation')}}, key)
             wait = max(0.05, min(getattr(self, "album_collect_s", None) or tg_bot._ALBUM_COLLECT_S, e["t0"] + tg_bot._ALBUM_MAX_S - time.monotonic()))
             t = threading.Timer(wait, self._flush_album, (group_id,))
             t.daemon = True; t.start(); e["timer"] = t
@@ -662,7 +665,7 @@ class DispatchMixin:
         self._enqueue_item(entry["chat_id"], {
             "type": "album", "forwarded": entry.get("forwarded", False),
             "_inbox_id": entry["_inbox_id"],
-            **{name: entry[name] for name in ('_arrival_ts', '_context_generation', '_input_context')},
+            **{name: entry[name] for name in ('_arrival_ts', '_context_generation', '_input_context', '_translation')},
             '_message_id': source.get('_message_id', 0), '_sent_ts': source.get('_sent_ts'),
             "file_ids": [p["file_id"] for p in entry["photos"]],
             "caption": cap})

@@ -26,6 +26,7 @@ from gui_memory_tab import MemoryCenterTab
 from gui_model_config_tab import ModelConfigTab
 from gui_music_tab import MusicTab
 from gui_randomizer_tab import RandomizerTab
+from gui_translator_tab import TranslatorTab
 from gui_nav import NavTabs, WorkspaceNav, search_matches
 from gui_weather_tab import WeatherTab
 from gui_storyboard_tab import StoryboardTab
@@ -367,6 +368,7 @@ class DashboardMixin:
         self.music_tab = MusicTab(self)
         self.weather_tab = WeatherTab(self)
         self.randomizer_tab = RandomizerTab(self)
+        self.translator_tab = TranslatorTab(self)
         from gui_voice_clone_tab import VoiceCloneTab
         self.voice_clone_tab = VoiceCloneTab(self)
         self.madhouse_tab = MadhouseTab(self)
@@ -396,6 +398,7 @@ class DashboardMixin:
             ("music",    _scroll_page(self.music_tab),         "Music"),
             ("weather",  _scroll_page(self.weather_tab),       "Weather"),
             ("randomizer", _scroll_page(self.randomizer_tab), "Randomizer"),
+            ("translator", _scroll_page(self.translator_tab), "Translator"),
             ("voice_clone", _scroll_page(self.voice_clone_tab), 'Voice Clone'),
             ("restyle",  _scroll_page(self.restyle_tab),       'Restyle Video'),
             ("madhouse", _scroll_page(self.madhouse_tab),      "Madhouse"),
