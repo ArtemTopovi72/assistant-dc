@@ -365,7 +365,7 @@ def lesson_speech(ctx,say,target,translation,native,out_dir,reference=None):
           for i,(text,lang) in enumerate(((say,target),(translation,native)))]
     try:
         ok,_=dep(ctx,'run_gpu_worker',music.run_gpu_worker)(ctx,python,'translation_voice_worker.py',
-            {'model':str(model),'segments':jobs},'Language lesson',600)
+            {'model':str(model),'segments':jobs},'Language lesson',600,shared=True)
         check(ctx)
         if not ok or not all(Path(j['output']).is_file() for j in jobs):
             raise ValueError('No lesson audio.')

@@ -26,6 +26,16 @@ class _Ctx:
         return self.cancel.is_set()
 
 
+def test_shared_worker_keeps_models_loaded(monkeypatch):
+    import comfy_client
+    calls = []
+    monkeypatch.setattr(comfy_client, '_park_voice_for_job', lambda *a: calls.append('park'))
+    monkeypatch.setattr(comfy_client, '_claim_card', lambda *a, **k: calls.append('claim'))
+    ok, _ = music.run_gpu_worker(None, sys.executable, '', {}, 'lesson', timeout=10,
+                                 cmd=[sys.executable, '-c', 'pass'], shared=True)
+    assert ok and calls == []
+
+
 def test_cancel_reaps_before_returning(monkeypatch):
     seen = {}
     import subprocess

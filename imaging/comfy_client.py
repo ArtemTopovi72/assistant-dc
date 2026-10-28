@@ -720,12 +720,13 @@ class _gpu_slot:
     _local = threading.local()
 
     def __init__(self, exclusive: bool = False, label: str = "", min_free_mb: int = None, ctx=None,
-                 progress_ctx=None):
+                 progress_ctx=None, park_voice=True):
         self.ctx = ctx
         # whose progress line hears the waits (core/progress.py) -- apart from `ctx`, which
         # also decides what is parked and unloaded around the job
         self.progress_ctx = progress_ctx
         self.exclusive = bool(exclusive)
+        self.park_voice = park_voice
         self.label = label
         self.min_free_mb = min_free_mb
 
@@ -737,7 +738,7 @@ class _gpu_slot:
         self._claimed = self.exclusive and self._acquired
         if self._claimed:
             _claim_card(self.label, min_free_mb=self.min_free_mb, ctx=self.ctx, progress_ctx=self.progress_ctx)
-        elif self._acquired:
+        elif self._acquired and self.park_voice:
             _park_voice_for_job(self.ctx)
         if self._acquired and not _GPU_SEM.acquire(blocking=False):
             # another render has the card: minutes of «Generating…» that looked like a hang

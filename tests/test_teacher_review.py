@@ -133,7 +133,8 @@ def test_core_lesson_speech_keeps_target_then_native_and_reference_snapshot(tmp_
     (model / 'model.safetensors').touch()
     jobs = []
 
-    def synth(ctx, python, script, job, label, timeout):
+    def synth(ctx, python, script, job, label, timeout, shared=False):
+        assert shared is True
         jobs.extend(job['segments'])
         for segment in jobs:
             with wave.open(segment['output'], 'wb') as output:

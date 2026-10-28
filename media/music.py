@@ -1470,7 +1470,7 @@ import progress  # noqa: E402  (the shared progress line, see core/progress.py)
 
 
 def run_gpu_worker(ctx, python: str, script: str, job: dict, label: str, timeout: int,
-                   cmd=None, env=None, cwd=None) -> tuple:
+                   cmd=None, env=None, cwd=None, shared=False) -> tuple:
     """Run one render script in its own venv with the card to itself.
 
     The job goes in as a JSON file; the worker's output goes to a temp LOG FILE,
@@ -1485,7 +1485,7 @@ def run_gpu_worker(ctx, python: str, script: str, job: dict, label: str, timeout
     log_path = f.name[:-5] + ".log"
     finished = False
     try:
-        with comfy_client._gpu_slot(exclusive=True, label=label, progress_ctx=ctx), open(log_path, "wb") as log:
+        with comfy_client._gpu_slot(exclusive=not shared, label=label, progress_ctx=ctx, park_voice=not shared), open(log_path, "wb") as log:
             argv = [a.replace("{job}", f.name) for a in cmd] if cmd else [python, os.path.join(root, "scripts", script), f.name]
             proc = dep(ctx, "Popen", subprocess.Popen)(argv, cwd=cwd or root, env=env, stdout=log, stderr=subprocess.STDOUT,
                                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
