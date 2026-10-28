@@ -154,3 +154,31 @@ def test_core_lesson_speech_keeps_target_then_native_and_reference_snapshot(tmp_
     assert len(result['paths']) == 2 and Path(result['combined_path']).is_file()
     with wave.open(result['combined_path'], 'rb') as combined:
         assert abs(combined.getnframes() / combined.getframerate() - 1.8) < .01
+
+
+def test_russian_lesson_voice_uses_f5_and_foreign_voice_uses_qwen(tmp_path):
+    import translator
+    reference = tmp_path / 'selected.wav'; reference.touch()
+    python = tmp_path / 'python.exe'; python.touch()
+    model = tmp_path / 'models_ext' / 'qwen3_tts_base'; model.mkdir(parents=True)
+    (model / 'model.safetensors').touch()
+    seen = []
+    def wav(path):
+        with wave.open(str(path), 'wb') as out:
+            out.setnchannels(1); out.setsampwidth(2); out.setframerate(24000); out.writeframes(b'\0\0' * 1000)
+        return str(path)
+    def qwen(ctx, python, script, job, label, timeout, shared=False):
+        assert shared
+        seen.extend(x['language'] for x in job['segments'])
+        for x in job['segments']: wav(x['output'])
+        return True, ''
+    def f5(ctx, i, actor, text, out_stem):
+        assert ctx.custom_ref_wav == str(reference) and text == 'Привет'
+        seen.append('F5 Russian')
+        return wav(out_stem)
+    ctx = NS(is_cancelled=lambda: False, modules={'config': NS(BASE_DIR=tmp_path, venv_python=lambda p: str(python))},
+             deps=NS(run_gpu_worker=qwen, synth_single_segment=f5))
+    result = translator.lesson_speech(ctx, 'Hallo', 'de', 'Привет', 'ru', str(tmp_path / 'out'), reference=str(reference))
+    assert sorted(seen) == ['F5 Russian', 'German']
+    assert len(result['paths']) == 2 and Path(result['combined_path']).is_file()
+    assert not hasattr(ctx, 'custom_ref_wav')

@@ -347,6 +347,7 @@ def _synthesize(ctx,text,target,source,out_dir):
 
 def lesson_speech(ctx,say,target,translation,native,out_dir,reference=None):
     import music
+    from concurrent.futures import ThreadPoolExecutor
     from pydub import AudioSegment
     config=module(ctx,'config')
     _language(target);_language(native);check(ctx)
@@ -364,8 +365,29 @@ def lesson_speech(ctx,say,target,translation,native,out_dir,reference=None):
            'output':str(Path(out_dir)/f'lesson_{tag}_{i}.wav')}
           for i,(text,lang) in enumerate(((say,target),(translation,native)))]
     try:
-        ok,_=dep(ctx,'run_gpu_worker',music.run_gpu_worker)(ctx,python,'translation_voice_worker.py',
-            {'model':str(model),'segments':jobs},'Language lesson',600,shared=True)
+        russian = [i for i, lang in enumerate((target, native)) if lang == 'ru']
+        foreign = [job for i, job in enumerate(jobs) if i not in russian]
+        def f5(i):
+            import audio
+            import comfy_client
+            from voice_clone import _CloneCtx
+            if not comfy_client.wait_for_card(timeout=600):
+                raise TimeoutError('The GPU is busy.')
+            local = _CloneCtx(ctx, ref, '')
+            return dep(ctx, 'synth_single_segment', audio.synth_single_segment)(
+                local, i, 'default', (say, translation)[i], out_stem=jobs[i]['output'])
+        def qwen():
+            if not foreign:
+                return True
+            ok,_=dep(ctx,'run_gpu_worker',music.run_gpu_worker)(ctx,python,'translation_voice_worker.py',
+                {'model':str(model),'segments':foreign},'Language lesson',600,shared=True)
+            return ok
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            future = pool.submit(qwen)
+            for i in russian:
+                if not f5(i):
+                    raise ValueError('No Russian lesson audio.')
+            ok = future.result()
         check(ctx)
         if not ok or not all(Path(j['output']).is_file() for j in jobs):
             raise ValueError('No lesson audio.')
