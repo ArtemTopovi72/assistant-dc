@@ -70,7 +70,7 @@ class ResolveMixin:
         return wrap_quoted("the user is replying to this message", q) + "\n" + text
 
     def _latest_sandbox_file(self, chat_id, sess, within: float = 3600) -> str:
-        """The newest file in this chat's working folder when it came after the
+        """The newest file in this chat's working folder when it changed after the
         last picture and within the hour; "" otherwise."""
         try:
             import sandbox_access as _sa
@@ -1555,12 +1555,10 @@ class ResolveMixin:
         if merged and img_bytes is None and not any(s.startswith("[The file '") for s in scaffold):
             _latest = self._latest_sandbox_file(chat_id, sess)
             if _latest:
-                # «В ЧЕМ ТАМ ОШИБКА?» after forwarded logs must not critique the last
-                # picture: the last thing sent was the file
-                scaffold.append(f"[The last thing the user sent was the file '{_latest}' "
-                                f"(in your working folder, after any picture). A question "
-                                f"about «it», «there» or «the error» means that file: "
-                                f"read_file it before answering.]")
+                # A vague follow-up may refer to a file rather than an older picture.
+                scaffold.append(f"[The most recently changed file in the working folder is '{_latest}'. "
+                                "It may have been created by the assistant. Use it only if the "
+                                "user refers to it; an explicitly named file takes precedence.]")
         # Which picture the user means is read from the USER's words only.
         from prompt_guard import user_words, wrap_quoted
         own_words = user_words(merged)

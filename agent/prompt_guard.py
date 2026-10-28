@@ -201,6 +201,7 @@ def has_quote(text: str) -> bool:
 
 # media/video_look.py heads a document read out of a video with «…, дословно:» / «…, verbatim:»
 _VERBATIM = re.compile(r"(?:дословно|verbatim):", re.I)
+_RECENT_SANDBOX_NOTE = re.compile(r"\[(?:The most recently changed file in the working folder|The last thing the user sent was the file)[^\]]*\]")
 
 
 def quoted_gist(text: str, head: int = 300, doc: int = 300) -> str:
@@ -219,4 +220,4 @@ def user_words(text: str) -> str:
     removed. Every decision about what the user asked for (which picture,
     which tool, whether a file was requested) reads this, never the
     assembled turn text."""
-    return " ".join(_OCR_NOTE.sub(" ", _QUOTE_BLOCK.sub(" ", strip_documents(text))).split())
+    return " ".join(_RECENT_SANDBOX_NOTE.sub(" ", _OCR_NOTE.sub(" ", _QUOTE_BLOCK.sub(" ", strip_documents(text)))).split())

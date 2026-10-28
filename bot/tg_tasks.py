@@ -125,7 +125,8 @@ def _plainly_not_a_doc_question(text: str, ctx=None) -> bool:
     t = (text or "").strip()
     # Files in the working folder carry their own material and are read whole:
     # three logs would be answered from old indexed fragments, none opened
-    if "[The file '" in t or "[The last thing the user sent was the file" in t:
+    if ("[The file '" in t or "[The last thing the user sent was the file" in t
+            or "[The most recently changed file in the working folder" in t):
         return True
     from prompt_guard import has_quote
     if has_quote(t) or "\n\n" in t or len(t.split()) > 60:

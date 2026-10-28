@@ -443,7 +443,9 @@ _UNPACK_ARCHIVE_DESC = (
 )
 
 _PACK_ARCHIVE_DESC = (
-    "Zip a folder back up and SEND IT TO THE USER. This is how finished work "
+    "Send a single file unchanged by passing its path, or zip a folder and "
+    "send the archive. When the user asks for one file, pass that file's path. "
+    "This is how finished work "
     "is delivered: edit the files, then pack the folder. Nothing you changed "
     "reaches the user until you do this. "
     # Measured (bench/sandbox_e2e.py, case deliver_fix): it edited Thief's tag,
@@ -462,7 +464,9 @@ _RUN_CODE_DESC = (
     "image, rewriting fifty files at once, checking that your change is valid "
     "JSON. print() what you want to see; the output is capped and the script "
     "is killed if it takes too long, so avoid endless loops and never wait for "
-    "input. READ THE OUTPUT before you answer: it is the only evidence of what "
+    "input. To test an existing file, import or run that actual file; do not "
+    "recreate its logic in the test. Assert expected results and check subprocess "
+    "exit codes. READ THE OUTPUT before you answer: it is the only evidence of what "
     "the script did. If it shows the script did not achieve what the user "
     "asked (e.g. 'Duplicates skipped: 0' when duplicates were to be removed, "
     "a count that did not change, an empty result), fix the script and run it "

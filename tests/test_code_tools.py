@@ -55,6 +55,16 @@ def _mod_jar(box, name="thief.jar"):
     return name
 
 
+def test_deliver_single_sandbox_file(ctx, box):
+    (box.root / 'answer.py').write_text('print(42)', encoding='utf-8')
+    state = {}
+    result = T.execute_tool(ctx, state, 'pack_archive', {'path': 'answer.py'})
+    assert state['document_path'] == str(box.root / 'answer.py')
+    assert state['document_status'] == 'success'
+    assert 'Selected answer.py for delivery' in result
+    assert '[TOOL ERROR]' in T.execute_tool(ctx, {}, 'pack_archive', {'path': '../outside.py'})
+
+
 # --- the scenario -----------------------------------------------------------
 
 def test_the_whole_modpack_flow(ctx, box):

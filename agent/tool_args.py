@@ -557,9 +557,9 @@ class UnpackArchiveArgs(_ToolArgs):
 
 class PackArchiveArgs(_ToolArgs):
     path: str = Field(..., min_length=1, description=(
-        "Folder to zip up, relative to the project root."))
+        "File to send unchanged, or folder to zip up, relative to the project root."))
     output: str = Field("result.zip", description=(
-        "Name of the archive to produce. This file is what the user receives."))
+        "Name of the archive to produce for a folder; ignored for a single file."))
 
 
 class CodeOutlineArgs(_ToolArgs):

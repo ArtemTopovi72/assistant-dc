@@ -700,6 +700,7 @@ def _handle_pack_archive(ctx, state, args: dict) -> str:
     right, since a zip nobody receives is not a result.
     """
     box = _box(ctx)
+    is_file = box.resolve(args.get("path") or "").is_file()
     # Bench deliver_symptom 2026-09-23 (thinking on): a correct fix inside
     # morevillagers-1.21.1_unpacked, then pack_archive(".") -- the whole work
     # folder, so every file sat under "<mod>_unpacked/..." and no game could
@@ -736,6 +737,9 @@ def _handle_pack_archive(ctx, state, args: dict) -> str:
     # user it had been. The bench could not see it either: its check read
     # document_path and never the status the reader actually requires.
     state["document_status"] = "success"
+    if is_file:
+        replaced = f" Replaced {Path(previous).name} as the deliverable." if previous and Path(previous).name != out.name else ""
+        return f"Selected {out.name} for delivery.{replaced}"
     if previous and Path(previous).name != out.name:
         return (f"Packed {args.get('path')} into {out.name}. WARNING: this "
                 f"REPLACED {Path(previous).name} as the one file the user will "
