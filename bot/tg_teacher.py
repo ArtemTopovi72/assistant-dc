@@ -256,7 +256,10 @@ def execute(bot, ctx, task):
             for path in paths:
                 if not active():
                     return
-                if path and not bot._send_voice_from_wav(cid,path):
+                keyboard = bot._state_kb(sess,lang)
+                if 'keyboard' in keyboard:
+                    keyboard = {**keyboard, 'is_persistent': True}
+                if path and not bot._send_voice_from_wav(cid,path,keyboard=keyboard):
                     failed = True
             if failed or speech.get('warning'):
                 send(_text('teacher_voice_warning',lang))
@@ -268,6 +271,6 @@ def execute(bot, ctx, task):
             send(_text('teacher_failed',lang,detail=error_text(exc,lang)[:300]))
     finally:
         task.delivered = text_sent and active()
-        if mid:
-            bot._edit_text(cid,mid,'✅' if task.delivered else '⛔',keyboard={'inline_keyboard':[]})
+        from tg_transport import clear_working_status
+        clear_working_status(bot, cid, mid, task.delivered)
         ctx.is_cancelled = cancelled

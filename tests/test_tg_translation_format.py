@@ -68,7 +68,7 @@ def queued_bot(tmp_path):
     bot.posts=[];bot.jobs=[]
     bot._backend=SimpleNamespace(push=bot.jobs.append,depth=lambda:1,position_of=lambda tid:1)
     bot._api_post=lambda method,p:bot.posts.append(dict(p)) or {'ok':True,'result':{'message_id':1}}
-    bot._send_voice_from_wav=lambda *a:True
+    bot._send_voice_from_wav=lambda *a,**kw:True
     bot._get_session(17).lang='ru'
     return bot
 
@@ -105,5 +105,38 @@ def test_translator_delivery_formats_result_but_leaves_warning_outside_translati
     tg_translator.execute(bot,SimpleNamespace(is_cancelled=lambda:False),bot.jobs[-1])
     result=[p for p in bot.posts if p.get('parse_mode')=='HTML' and '🌐' in p['text']]
     assert len(result)==1 and result[0]['text']=='<b>🌐 🇬🇧 English</b>\nHello &lt;world&gt; &amp; friend'
-    warning=[p for p in bot.posts if p['text']=='Voice unavailable']
+    warning=[p for p in bot.posts if p.get('text')=='Voice unavailable']
     assert len(warning)==1 and 'parse_mode' not in warning[0]
+
+
+@pytest.mark.parametrize('kind', ['tts', 'image', 'video'])
+def test_translator_removes_status_and_keeps_menu_without_extra_done(queued_bot, kind):
+    import tg_translator, tg_transport
+    bot = queued_bot
+    events = []
+    bot._api_post = lambda method, p: (events.append((method, dict(p))) or {'ok': True, 'result': {'message_id': 23}})
+    bot._dl_bytes = lambda _: b'file'
+    def attached(cid, *args, **kwargs):
+        bot._restore_result_menu(cid, kind='document')
+        return True
+    bot._send_voice_from_wav = attached
+    bot._send_photo = attached
+    bot._send_document = attached
+    bot._send_video = attached
+    bot.modules = {'translator': SimpleNamespace(
+        text_voice=lambda *a, **kw: {'text': 'Hello', 'path': 'voice.wav'},
+        image=lambda *a, **kw: {'text': 'Hello', 'path': 'image.png'},
+        dub=lambda *a, **kw: {'text': 'Hello', 'path': 'video.mp4'})}
+    sess = bot._get_session(17); sess.menu = 'translator'; sess.translation_target = 'en'
+    sess.translation_mode = 'tts' if kind == 'tts' else 'dub' if kind == 'video' else 'image'
+    item = {'type': 'text', 'text': 'Привет'} if kind == 'tts' else (
+        {'type': 'document', 'filename': 'video.mp4', 'file_id': 'v'} if kind == 'video'
+        else {'type': 'photo', 'file_id': 'p'})
+    tg_translator.route(bot, 17, sess, [item], 'translator')
+    with tg_transport.result_menu(bot, 17):
+        tg_translator.execute(bot, SimpleNamespace(is_cancelled=lambda: False), bot.jobs[-1])
+    assert any(method == 'deleteMessage' and data['message_id'] == 23 for method, data in events)
+    assert any(method == 'sendMessage' and '🌐' in data.get('text', '') and 'reply_markup' in data
+               for method, data in events)
+    assert any(method == 'editMessageText' and data.get('text') == '✅' for method, data in events)
+    assert not any(method == 'sendMessage' and data.get('text') == 'Готово ✅' for method, data in events)

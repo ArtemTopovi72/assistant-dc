@@ -74,6 +74,25 @@ def flush_result_menu(bot, chat_id):
         finally:
             _RESULT_MENU.reset(token)
 
+
+def result_menu_already_shown(bot, chat_id):
+    batch = _RESULT_MENU.get()
+    if batch and batch['owner'] == (bot, chat_id, threading.get_ident()):
+        batch['pending'] = None
+
+
+def clear_working_status(bot, chat_id, message_id, done):
+    if not message_id:
+        return
+    try:
+        bot._edit_text(chat_id, message_id, '✅' if done else '⛔', keyboard={'inline_keyboard': []})
+    except Exception:
+        pass
+    try:
+        bot._delete(chat_id, message_id)
+    except Exception:
+        pass
+
 _EXIT_WORDS = ("cancel", "back", "close", "menu", "stop", "abort", "no")
 _EXIT_MARKS = ("↩", "✖", "❌", "⛔", "🔙", "⬅")
 

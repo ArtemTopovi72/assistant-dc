@@ -61,18 +61,20 @@ def execute(bot, ctx, task):
     sess = bot._get_session(chat_id); lang = bot._lang(sess)
     items = task.translation['items']
     target, mode = task.translation['target'], task.translation['mode']
+    menu_shown = False
 
     def work(ctx):
         def active():
             return not ctx.is_cancelled() and bot._get_session(chat_id).context_generation == generation
         def send(text):
+            nonlocal menu_shown
             from tg_transport import verbatim_text
             for message in translation_messages(text,target):
                 if not active():
                     return
                 with verbatim_text():
-                    bot._send_text(chat_id, message,parse_mode='HTML',
-                                   keyboard=bot._state_kb(bot._get_session(chat_id), lang))
+                    menu_shown = bool(bot._send_get_id(chat_id, message,parse_mode='HTML',
+                                      keyboard=bot._state_kb(bot._get_session(chat_id), lang))) or menu_shown
         if not active():
             return
         engine = module(bot, 'translator')
@@ -166,5 +168,8 @@ def execute(bot, ctx, task):
         work(ctx)
         task.delivered = not ctx.is_cancelled()
     finally:
-        if mid:
-            bot._edit_text(chat_id, mid, '✅' if task.delivered else '⛔', keyboard={'inline_keyboard': []})
+        from tg_transport import clear_working_status
+        clear_working_status(bot, chat_id, mid, task.delivered)
+        if menu_shown:
+            from tg_transport import result_menu_already_shown
+            result_menu_already_shown(bot, chat_id)

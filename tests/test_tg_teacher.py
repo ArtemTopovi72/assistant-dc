@@ -25,7 +25,9 @@ def bot(tmp_path):
     b._send_get_id=lambda cid,text,**kw:b.sent.append((cid,text)) or 1
     b._with_progress=lambda *a,**kw:(None,lambda *a:None)
     b._edit_text=lambda *a,**kw:None
-    b._send_voice_from_wav=lambda cid,p:b.voices.append((cid,p)) or True
+    b.deleted=[]; b.voice_keyboards=[]
+    b._delete=lambda cid,mid:b.deleted.append((cid,mid))
+    b._send_voice_from_wav=lambda cid,p,**kw:(b.voice_keyboards.append(kw.get('keyboard')), b.voices.append((cid,p)), True)[-1]
     def respond(ctx,profile,history,text,target,native):
         return dict(say='Hallo?',translation='Привет?',correction='Correction',explanation='',
                     profile=dict(profile),history=history+[{'role':'user','content':text}])
@@ -68,6 +70,8 @@ def test_voice_format_and_selected_reference(bot,fmt,expected):
     run(bot,task)
     assert [p for _,p in bot.voices]==expected
     assert any('Hallo?' in text and 'Привет?' in text and 'Correction' in text for _,text in bot.sent)
+    assert bot.deleted == [(1, 1)]
+    assert all(k == {**teacher.keyboard(bot._get_session(1), 'en'), 'is_persistent': True} for k in bot.voice_keyboards)
 
 
 def test_teacher_shows_gpu_queue_while_waiting_for_model(bot):
@@ -111,7 +115,7 @@ def test_stale_work_is_suppressed_before_and_during_model(bot):
 
 
 def test_voice_failure_preserves_text_history_and_warns(bot):
-    bot._send_voice_from_wav=lambda *a:False
+    bot._send_voice_from_wav=lambda *a,**kw:False
     run(bot,queue(bot))
     assert bot._get_session(1).teacher_history
     assert any('Could not deliver' in text for _,text in bot.sent)
@@ -130,7 +134,7 @@ def test_lesson_text_waits_for_completed_speech(bot):
         if 'Hallo?' in text:events.append('text sent')
         return original(cid,text,**kwargs)
     bot._send_get_id=send
-    bot._send_voice_from_wav=lambda *a:events.append('voice sent') or True
+    bot._send_voice_from_wav=lambda *a,**kw:events.append('voice sent') or True
     run(bot,queue(bot))
     assert events==['audio ready','text sent','voice sent']
 
