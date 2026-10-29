@@ -26,7 +26,7 @@ def note(ahead, busy, rendering=()):
     bot = T.TelegramBot("1:T", lambda: None, lambda: None, lambda: {}, silent_mode=True)
     sent = []
     bot._send_get_id = lambda cid, text, **k: (sent.append(text), len(sent))[1]
-    bot._backend = types.SimpleNamespace(tasks_ahead=lambda tid: list(ahead))
+    bot._backend = types.SimpleNamespace(service_order=lambda: [*ahead, types.SimpleNamespace(task_id='t')])
     bot._card_busy = lambda: busy
     bot._running_task = {c: [types.SimpleNamespace(delivered=False)] for c in rendering}
     bot._chat_interruptible = {c: True for c in rendering}
@@ -37,14 +37,14 @@ def note(ahead, busy, rendering=()):
 sent = note([], "YuE2")
 check("nobody ahead but the card is rendering: the user is told", sent and "Видеокарта занята" in sent[0], sent)
 check("...without naming whose render it is", sent and "YuE2" not in sent[0], sent)
-check("nobody ahead and the card shared: no note", note([], "") == [])
+check("nobody ahead and the card shared: the user is next", "следующий" in note([], "")[0])
 ahead = [T._Task(task_id="a", chat_id=1, user_text="x")]
 sent = note(ahead, "YuE2")
 check("a real queue still shows its place", len(sent) == 1 and "#2" in sent[0], sent)
 sent = note([], "", rendering=(9,))
 check("another chat is rendering, the card shared: #2 and why", sent and "#2" in sent[0] and "генерация" in sent[0], sent)
 sent = note([], "", rendering=(5,))
-check("only this chat's own render: no note", sent == [], sent)
+check("only this chat's own render: the user is next", sent and "следующий" in sent[0], sent)
 sent = note(ahead, "", rendering=(9, 8))
 check("queue plus two renders: place counts both", sent and "#4" in sent[0], sent)
 
@@ -53,7 +53,7 @@ def early(rendering=(9,)):
     bot = T.TelegramBot("1:T", lambda: None, lambda: None, lambda: {}, silent_mode=True)
     sent = []
     bot._send_get_id = lambda cid, text, **k: (sent.append(text), len(sent))[1]
-    bot._backend = types.SimpleNamespace(tasks_ahead=lambda tid: [])
+    bot._backend = types.SimpleNamespace(service_order=lambda: [types.SimpleNamespace(task_id='t')])
     bot._card_busy = lambda: ""
     bot._running_task = {c: [types.SimpleNamespace(delivered=False)] for c in rendering}
     bot._chat_interruptible = {c: True for c in rendering}

@@ -1514,6 +1514,8 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         self._incoming_enqueued = set()
         self._stop_requests.update(self._incoming.stops())
         self._task_lock     = threading.Lock()
+        self._queue_note_locks = {}
+        self._queue_note_tasks = {}
         # chat_id -> [fail_count, locked_until_ts] for the logged-out password gate
         self._login_fails: dict[int, list] = {}
         self._pending_broadcast: dict[int, str] = {}   # admin chat_id -> draft
@@ -1592,6 +1594,8 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         self._poll_thread = _threads.Thread(target=self._poll_loop, daemon=True,
                                              name="tg-poll")
         self._poll_thread.start()
+        _threads.Thread(target=self._queue_notes_loop, daemon=True,
+                        name="tg-queue-status").start()
         import debug_user
         _threads.Thread(target=debug_user.loop, args=(self,), daemon=True,
                          name="tg-debug-user").start()

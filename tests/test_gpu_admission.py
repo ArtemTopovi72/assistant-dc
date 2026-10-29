@@ -74,6 +74,60 @@ def test_waiter_reports_queue_status(client):
         assert messages == ['In the GPU queue (1 ahead)']
     thread.join(3)
     assert not thread.is_alive()
+    assert ctx._gpu_queue_waited
+
+
+def test_speech_reports_work_only_after_gpu_is_acquired():
+    import comfy_client
+    stages = []
+    ctx = SimpleNamespace(_gpu_queue_waited=True, set_stage=stages.append)
+    with comfy_client._speech_admitted(timeout=2, ctx=ctx):
+        assert stages == ['Using the video card']
+        assert not ctx._gpu_queue_waited
+
+
+def test_status_callback_error_does_not_block_gpu():
+    import comfy_client
+    def fail(_):
+        raise RuntimeError('UI failed')
+    ctx = SimpleNamespace(_gpu_queue_waited=True, set_stage=fail)
+    with comfy_client._speech_admitted(timeout=2, ctx=ctx):
+        pass
+    assert not ctx._gpu_queue_waited
+
+
+def test_card_claim_survives_status_callback_error(monkeypatch):
+    import contextlib
+    import comfy_client
+    monkeypatch.setattr(queue, 'admit', lambda **kw: contextlib.nullcontext())
+    called = []
+    monkeypatch.setattr(comfy_client, '_claim_card_locked', lambda *a: called.append(True))
+    ctx = SimpleNamespace(_gpu_queue_waited=True,
+                          set_stage=lambda _: (_ for _ in ()).throw(RuntimeError('UI failed')))
+    try:
+        comfy_client._claim_card('drawing', ctx=ctx)
+        assert called == [True]
+    finally:
+        comfy_client._SPEECH_FREE.set()
+
+
+def test_read_only_context_does_not_break_redis_queue(client):
+    class Context:
+        __slots__ = ()
+        def set_progress(self, *args): pass
+    finished = threading.Event()
+    def wait():
+        with queue.admit(ctx=Context(), timeout=3, client=client):
+            finished.set()
+    with queue.admit(timeout=3, client=client):
+        thread = threading.Thread(target=wait)
+        thread.start()
+        deadline = time.monotonic() + 2
+        while client.llen(queue._QUEUE) < 2 and time.monotonic() < deadline:
+            time.sleep(.01)
+        time.sleep(.3)
+    thread.join(3)
+    assert finished.is_set()
 
 
 def test_position_counts_all_live_tickets_ahead(client):

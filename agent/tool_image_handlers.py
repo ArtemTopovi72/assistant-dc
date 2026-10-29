@@ -1199,6 +1199,13 @@ def _gpu_busy_error(what: str):
     )
 
 
+def _limit_video_images(description, images, limit):
+    anchors = {int(n) for n in re.findall(r'<Picture (\d+)>', description)}
+    if any(n < 1 or n > len(images) for n in anchors) or (anchors and len(images) > limit):
+        raise ValueError('Image references are missing or exceed the video engine limit')
+    return description, images[-limit:]
+
+
 def _current_image_paths(ctx, state) -> list:
     """Every picture this turn could reasonably animate, newest last.
 
@@ -1722,7 +1729,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         return _over
 
     images, videos = [], []
-    if args.get("use_current_images", True):
+    if args.get("use_current_images", True) or re.search(r"<Picture \d+>", description):
         images = dep(ctx, "_current_image_paths", _current_image_paths)(ctx, state)
     if images and "use_current_images" not in args and not _builds_on_chat_picture(ctx, state):
         # «сделай видео: лиса бежит по лесу» opened on the man with the shovel from three
@@ -1739,10 +1746,13 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             logger.info("generate_video: the words describe a new scene -- not animating %s",
                         [os.path.basename(p) for p in images])
             images = []
-        # More than H3 can take: keep the most RECENT, which is what the user is
-        # most likely talking about.
-        if len(images) > video_mod.MAX_REF_IMAGES:
-            images = images[-video_mod.MAX_REF_IMAGES:]
+    if re.search(r"<Picture \d+>", description):
+        try:
+            description, images = _limit_video_images(description, images, video_mod.MAX_REF_IMAGES)
+        except ValueError:
+            return "[TOOL ERROR] The referenced picture is unavailable or exceeds the video reference limit. Ask the user to resend it."
+    elif len(images) > video_mod.MAX_REF_IMAGES:
+        images = images[-video_mod.MAX_REF_IMAGES:]
     if args.get("use_current_video"):
         lv = getattr(ctx, "last_video_path", None)
         if lv and os.path.exists(lv):
@@ -2090,6 +2100,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     # the clip of Лёха flexing under the track had to repeat without a jump (2026-10-22).
     loop = bool(args.get("loop") and images and not videos and not continuing)
     if loop:
+        if re.search(r"<Picture \d+>", description):
+            return "[TOOL ERROR] A loop cannot safely use numbered picture references. Ask the user to select one image for the loop."
         images, parts = [images[-1], images[-1]], [raw]    # newest last: [0] animated an older picture
         secs = [max(video_mod.estimate_seconds(raw, reads=dep(ctx, "script_read", None)), 5.2)]
     if len(parts) > 1 and not approved and not own_script and getattr(ctx, "video_plan_ask", False):

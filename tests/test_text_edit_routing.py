@@ -108,20 +108,32 @@ fake_ideo = types.ModuleType("ideogram")
 fake_ideo.ContentRefused = type("ContentRefused", (Exception,), {})
 fake_ideo.plan_layout = lambda ctx, prompt: LAY
 fake_ideo.layout_to_caption = lambda lay: "caption"
-fake_ideo.generate = lambda *a, **k: drawn
+stages = []
+render_stages = []
+fake_ideo.generate = lambda *a, **k: (render_stages.extend(stages[-1:]), drawn)[1]
 _DRAW = deps_ctx(ideogram=fake_ideo, draw_agent=fake, IDEOGRAM_TEXT_ROUNDS=1)
+_DRAW.set_stage = stages.append
 # The plan is sketch-checked before the render (draw_preview.preflight) and
 # that needs the real ideogram module; here the plan passes through untouched.
 fake_pre = types.ModuleType("draw_preview")
-fake_pre.preflight = lambda ctx, layout, prompt, **kw: (layout, {})
+fake_pre.preflight = lambda ctx, layout, prompt, **kw: (ctx.set_stage('Checking the layout'), (layout, {}))[1]
 _DRAW.deps.draw_preview = fake_pre
-fake.run = lambda ctx, req, **kw: {"image": drawn, "layout": kw.get("layout")}
+fake.run = lambda ctx, req, **kw: (render_stages.extend(stages[-1:]), {
+    "image": drawn, "layout": kw.get("layout"), "stopped": "out of rounds",
+    "problems": ["first failure"], "history": [
+        {"image": drawn, "verdict": {"score": 9, "problems": ["first failure"]}},
+        {"image": drawn + ".second", "verdict": {"score": 4, "problems": ["second failure"]}},
+    ]})[1]
 try:
     os.remove(drawn + ".layout.json")
 except OSError:
     pass
 res = I._ideogram_draw(_DRAW, "a police car", width=1024, height=1024, seed=1, timeout=60)
 check("the render came back", res == drawn, res)
+check("the stage changes from layout checking to drawing before rendering",
+      render_stages == ['Drawing a picture'], render_stages)
+check("the delivered image retains its own score and problems",
+      I._ENGINE_JUDGED['score'] == 9 and I._ENGINE_JUDGED['problems'] == ['first failure'], I._ENGINE_JUDGED)
 rec2 = I.load_layout_for(drawn)
 check("and its layout was recorded, so lettering stays fixable",
       isinstance(rec2, dict) and rec2.get("layout") is not None, repr(rec2)[:120])

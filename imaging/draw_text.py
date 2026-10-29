@@ -663,7 +663,15 @@ def verify_text(ctx, image_path: str, layout: dict) -> dict:
                        "similarity": round(best_score, 2), "ok": ok, "reader": src})
         if not ok:
             failures.append(i)
-    if not saw_any:
+    edges = dep(ctx, 'ocr_edge_text', _ocr.edge_text)(image_path) or []
+    for check in checks:
+        expected = _norm_text(check['expected'])
+        if expected and any(len(_norm_text(s)) >= 3 and (_norm_text(s) in expected or expected in _norm_text(s)) for s in edges):
+            check['ok'] = False
+            check['clipped'] = True
+            if check['index'] not in failures:
+                failures.append(check['index'])
+    if not saw_any and not failures:
         return {"ok": True, "checks": [], "failures": [], "source": "unavailable"}
     stray = stray_text(ctx, image_path, layout, wanted)
     return {"ok": not failures and not stray, "checks": checks,
@@ -727,6 +735,9 @@ def text_problems(checks: list, stray: list = None) -> list:
         out.append(f'the picture carries lettering nobody asked for: “{s}”')
     for c in checks or []:
         if c.get("ok"):
+            continue
+        if c.get('clipped'):
+            out.append(f'the lettering “{c["expected"]}” touches the image edge and may be cut off')
             continue
         read = c.get("read") or ""
         out.append(f'the lettering should read “{c["expected"]}” but the picture '

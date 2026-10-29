@@ -103,6 +103,8 @@ def _ideogram_draw(ctx, prompt: str, *, width: int, height: int,
         draw_preview = dep(ctx, "draw_preview", draw_preview)
         layout, _pre = draw_preview.preflight(ctx, layout, prompt, width=width, height=height)
         _image._LAST_PREFLIGHT.clear(); _image._LAST_PREFLIGHT.update(_pre)
+        if callable(getattr(ctx, "set_stage", None)):
+            ctx.set_stage("Drawing a picture")
         if rounds and any(str(el.get("text") or "").strip()
                           for el in (layout.get("elements") or [])):
             import draw_agent
@@ -125,7 +127,8 @@ def _ideogram_draw(ctx, prompt: str, *, width: int, height: int,
                 # This picture has ALREADY been judged and repaired by the loop
                 # above — tell the outer refinement loop so it does not judge it
                 # again on a different rubric and re-draw the whole thing.
-                _verdict = ((res.get("history") or [{}])[-1].get("verdict") or {})
+                _verdict = next((item.get("verdict") or {} for item in res.get("history") or []
+                                 if item.get("image") == res["image"]), {})
                 _image._ENGINE_JUDGED.update({
                     "judged": True,
                     "score": int(_verdict.get("score", 0) or 0),

@@ -95,6 +95,17 @@ def test_the_status_line_carries_the_bar_and_a_new_stage_drops_it():
     assert shown[-1] == "🔊 <b>Озвучиваю…</b>" and 7 not in bot._active_progress
 
 
+def test_gpu_queue_progress_does_not_claim_the_previous_stage_is_still_running():
+    import tg_tasks
+    bot = types.SimpleNamespace(_stages_lock=threading.Lock(), _active_progress={})
+    shown = []
+    status, on_progress = tg_tasks.TaskRunnerMixin._with_progress(bot, 7, 'ru', shown.append)
+    status('⚙️ <b>Ищу фото в интернете…</b>')
+    on_progress(0, 0, 'In the GPU queue (2 ahead)')
+    assert 'Ищу фото' not in shown[-1]
+    assert 'впереди не менее 2' in shown[-1]
+
+
 def test_a_button_job_draws_its_bar_under_its_own_note_not_the_desktops():
     """A ⛔ job (an audiobook, lyrics) copied the app's context and with it the desktop's bar."""
     import tg_queue

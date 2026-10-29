@@ -80,6 +80,10 @@ def admit(ctx=None, timeout=600, client=None):
             ahead = position - 1 + int(not comfy_client._SPEECH_FREE.is_set())
             if ahead != last_ahead and ctx is not None:
                 import progress
+                try:
+                    ctx._gpu_queue_waited = True
+                except Exception:
+                    log.debug('GPU status update failed', exc_info=True)
                 progress.report(ctx, 0, 0, f'In the GPU queue ({ahead} ahead)')
                 last_ahead = ahead
             time.sleep(.2)

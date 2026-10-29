@@ -149,6 +149,27 @@ def read_pieces(image_path: str) -> Optional[list]:
     return None if got is None else got[1]
 
 
+def edge_text(image_path: str) -> Optional[list]:
+    """Recognized lettering touching the image boundary, or None if OCR is unavailable."""
+    if os.getenv('F5_TEST_RUN') or not image_path or not os.path.exists(image_path):
+        return None
+    reader = _get()
+    if reader is None:
+        return None
+    try:
+        from PIL import Image
+        with Image.open(image_path) as im:
+            width, height = im.size
+        found = reader.readtext(image_path, detail=1, paragraph=False)
+        return [str(text).strip() for box, text, confidence in found
+                if text and confidence >= .5 and box and
+                (min(p[0] for p in box) <= 1 or min(p[1] for p in box) <= 1
+                 or max(p[0] for p in box) >= width - 1 or max(p[1] for p in box) >= height - 1)]
+    except Exception:
+        logger.debug('OCR edge check failed', exc_info=True)
+        return None
+
+
 def _read(image_path: str):
     if os.getenv("F5_TEST_RUN") or not image_path or not os.path.exists(image_path):
         return None

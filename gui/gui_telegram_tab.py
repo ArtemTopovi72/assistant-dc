@@ -827,6 +827,7 @@ class TelegramTab(QWidget):
         if done:
             self._active_chats.pop(chat_id, None)
         else:
+            self._active_chats.pop(chat_id, None)
             self._active_chats[chat_id] = stage
         if self._active_chats:
             rows = [f"👤 <b>{_html.escape(str(c))}</b>  →  {_html.escape(str(s))}"
@@ -841,8 +842,8 @@ class TelegramTab(QWidget):
         # Mirror Telegram stage into the main header indicator so the user
         # can see what the bot is doing without opening the Telegram tab.
         main_stage = getattr(self.host, "stage", None)
-        if main_stage is not None:
-            main_stage.set_stage("Ready" if done else stage)
+        if main_stage is not None and getattr(self.host, 'worker', None) is None:
+            main_stage.set_stage(next(reversed(self._active_chats.values()), "Ready") if done else stage)
 
     def _on_message(self, chat_id: int, user_text: str, bot_reply: str):
         stamp = time.strftime("%H:%M:%S")

@@ -129,6 +129,18 @@ def test_long_video_recovery_retries_only_messages_not_already_accepted(video_di
     assert len(bot.accepted) == len(complete["delivery"])
 
 
+def test_recovery_does_not_claim_unwatched_parts_were_watched(video_directory):
+    work = video_directory / 'longvideo_cc33'
+    work.mkdir()
+    (work / 'material.json').write_text(json.dumps({
+        'chat': 1, 'parts': [{'a': '0:00', 'b': '2:00', 'note': 'First part'}]}), encoding='utf-8')
+    bot = VideoBot()
+    notices = []
+    bot._send_text = lambda chat, text, **kw: notices.append(text) or 1
+    bot._recover_long_videos()
+    assert notices and 'may be incomplete' in notices[0].lower()
+
+
 def test_long_video_recovery_keeps_notes_when_composing_the_answer_fails(video_directory):
     work = video_directory / "longvideo_bb22"
     work.mkdir()

@@ -1773,10 +1773,11 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
             # recipe for the model hedging into ambient smoke (its safety prior +
             # under-specified motion; MiniMax's own guide: anchor the image's style as
             # it IS, then one action arc -- onset, development, result).
-            "STYLE AND ACTION RULES -- (1) Name the visual style of <Picture 1> as it IS "
+            ("STYLE AND ACTION RULES -- Name the visual style of <Picture 1> as it IS "
             "(cartoon, anime, drawn, photoreal) and keep it through the clip: never write "
             "'Live-action', 'photorealistic' or 'real people' over a drawn or animated "
-            "frame, never morph the style mid-clip. (2) ONE action arc per shot: the "
+            "frame, never morph the style mid-clip.\n" if images else "") +
+            "ACTION RULES -- ONE action arc per shot: the "
             "subject starts one action, it develops, one result -- do not stack several "
             "independent actions (strains AND tenses AND furrows AND something lands AND "
             "a sigh); pick the single through-line of the request and let face, hands and "
@@ -1864,8 +1865,8 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
                "after <Picture 1> is ONLY what a person looks like: never pasted into the shot, "
                "never part of the composition, its frame, border or background never shown; "
                "who they are (a man, a guy, a woman) is what the request calls them, not a "
-               "guess from the picture. The shot keeps <Picture 1>'s framing from start to "
-               "end: no cut, no jump to a close-up.\n"
+               "guess from the picture. The shot begins with <Picture 1>'s framing; "
+               "any requested camera movement develops continuously, without a cut or jump.\n"
                if images else "") +
             ("\nAuthoritative current user request or approved plan:\n"
              + str(getattr(ctx, "video_request", ""))
@@ -2157,12 +2158,23 @@ def generate_video(ctx, description: str, *,
                                "detail": "no description was given"})
         return {"path": None, "status": "fail", "reason": "empty description"}
 
+    references = re.findall(r'<Picture (\d+)>', description + ' ' + str(getattr(ctx, 'video_request', '') or ''))
+    if references and (any(not p or not os.path.exists(p) for p in (images or ()))
+                       or any(int(n) < 1 or int(n) > len(images or ()) for n in references)):
+        reason = "A numbered picture reference is missing. Select the original image again."
+        _VIDEO_FAILURE.update({"reason": "references", "detail": reason})
+        return {"path": None, "status": "fail", "reason": reason}
     images = [p for p in (images or ()) if p and os.path.exists(p)]
     videos = [p for p in (videos or ()) if p and os.path.exists(p)]
     audios = [p for p in (audios or ()) if p and os.path.exists(p)]
     if keyframe and images and not videos:
         audios = []
+    original_images = images
     images, videos, audios = fit_references(images, videos, audios)
+    if images != original_images and references:
+        reason = "Numbered picture references exceed the video engine's media limit. Select fewer references."
+        _VIDEO_FAILURE.update({"reason": "references", "detail": reason})
+        return {"path": None, "status": "fail", "reason": reason}
 
     mode = pick_mode(images, videos, audios, keyframe=keyframe)
     if chain:

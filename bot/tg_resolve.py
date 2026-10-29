@@ -15,6 +15,7 @@ import html as _html_mod
 import os
 import re
 import tempfile
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -1926,13 +1927,40 @@ class ResolveMixin:
         AHEAD OF THIS USER under round-robin (not the global depth), or, with
         nobody ahead, a render holding the whole card -- a photo sent during
         another chat's song sat 55 s with no word."""
-        try:
-            ahead = self._backend.tasks_ahead(task.task_id)
-        except Exception:
-            ahead = []
-        self._busy_note(chat_id, lang, ahead)
+        lock = self.__dict__.setdefault('_queue_note_locks', {}).setdefault(chat_id, threading.RLock())
+        with lock:
+            try:
+                order = self._backend.service_order()
+                index = next(i for i, t in enumerate(order) if t.task_id == task.task_id)
+            except (StopIteration, AttributeError):
+                return
+            except Exception:
+                tg_bot.logger.exception('queue status unavailable')
+                return
+            self.__dict__.setdefault('_queue_note_tasks', {})[chat_id] = (task.task_id, lang)
+            self._busy_note(chat_id, lang, order[:index], queued=True)
 
-    def _busy_note(self, chat_id: int, lang: str, ahead=()) -> None:
+    def _refresh_queue_notes(self) -> None:
+        order = self._backend.service_order()
+        positions = {t.task_id: i for i, t in enumerate(order)}
+        for chat_id, (task_id, lang) in list(self.__dict__.setdefault('_queue_note_tasks', {}).items()):
+            lock = self.__dict__.setdefault('_queue_note_locks', {}).setdefault(chat_id, threading.RLock())
+            with lock:
+                if self._queue_note_tasks.get(chat_id) != (task_id, lang):
+                    continue
+                if task_id in positions:
+                    self._busy_note(chat_id, lang, order[:positions[task_id]], queued=True)
+
+    def _queue_notes_loop(self) -> None:
+        while self._running:
+            time.sleep(5)
+            if self._running:
+                try:
+                    self._refresh_queue_notes()
+                except Exception:
+                    tg_bot.logger.exception('queue status refresh failed')
+
+    def _busy_note(self, chat_id: int, lang: str, ahead=(), queued=False) -> None:
         """The one place that tells a user their request waits. Every entry that starts work
         (a typed task, the plan's ▶ button, a character render) calls it the moment it is
         taken, not after the debounce and the intent read: those wait on the same busy model,
@@ -1944,14 +1972,16 @@ class ResolveMixin:
             rendering = sum(1 for cid, ts in self._running_task.items()
                             if cid != chat_id and self._chat_interruptible.get(cid, False)
                             and any(not getattr(t, "delivered", False) for t in ts))
-            if not (ahead or rendering or self._card_busy()):
+            if not (queued or ahead or rendering or self._card_busy()):
                 return
         if ahead:
             text = tg_bot._t("queue_pos", lang, pos=len(ahead) + rendering + 1, eta=tg_bot._fmt_eta(ahead, lang))
         elif rendering:
             text = tg_bot._t("queue_run", lang, pos=rendering + 1, n=rendering)
-        else:
+        elif self._card_busy():
             text = tg_bot._t("card_busy", lang)
+        else:
+            text = tg_bot._t("queue_next", lang)
         notes = self.__dict__.setdefault("_busy_notes", {})
         with self._task_lock:
             msg_id, shown = notes.get(chat_id, (None, ""))
@@ -1964,15 +1994,21 @@ class ResolveMixin:
         with self._task_lock:
             notes[chat_id] = (msg_id, text)
 
-    def _drop_busy_note(self, chat_id: int) -> None:
+    def _drop_busy_note(self, chat_id: int, task_id: str = '') -> None:
         """The wait is over: its note leaves the chat."""
-        with self._task_lock:
-            msg_id, _ = self.__dict__.setdefault("_busy_notes", {}).pop(chat_id, (None, ""))
-        if msg_id:
-            try:
-                self._delete(chat_id, msg_id)
-            except Exception:
-                tg_bot.logger.debug("queue note delete failed", exc_info=True)
+        lock = self.__dict__.setdefault('_queue_note_locks', {}).setdefault(chat_id, threading.RLock())
+        with lock:
+            tracked = self.__dict__.setdefault('_queue_note_tasks', {})
+            if task_id and chat_id in tracked and tracked[chat_id][0] != task_id:
+                return
+            tracked.pop(chat_id, None)
+            with self._task_lock:
+                msg_id, _ = self.__dict__.setdefault("_busy_notes", {}).pop(chat_id, (None, ""))
+            if msg_id:
+                try:
+                    self._delete(chat_id, msg_id)
+                except Exception:
+                    tg_bot.logger.debug("queue note delete failed", exc_info=True)
 
     def _register_animate_photo(self, chat_id: int, sess, lang: str, item: dict) -> None:
         """Consume the photo awaiting_animate_photo was waiting for, register

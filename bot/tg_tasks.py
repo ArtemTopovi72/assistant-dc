@@ -791,7 +791,7 @@ class TaskRunnerMixin:
             # crash that lands moments later.
             self._pending_journal.pop(task.task_id, None)
         self._write_inflight()
-        self._drop_busy_note(chat_id)
+        self._drop_busy_note(chat_id, task.task_id)
         import chatlog as _chatlog
         tg_bot.logger.info("Task %s START chat=%s text=%r", task.task_id[:8], chat_id,
                            (task.user_text or "")[:120])
@@ -949,19 +949,19 @@ class TaskRunnerMixin:
         thread while `alive()` holds: «Перерисовываю фото…» sat bare for a minute (2026-10-21)."""
         import progress as _progress
         line, last = [shown], [0.0, ""]
-        st = {"since": time.monotonic(), "bar": False, "phase": ""}
+        st = {"since": time.monotonic(), "bar": False, "phase": "", "queue": False}
         draw_lock = threading.Lock()
 
         def draw(below: str) -> None:
             if below == last[1]:
                 return
             last[0], last[1] = time.monotonic(), below
-            update_status(line[0] + ("\n" + below if below else ""))
+            update_status(below if st["queue"] else line[0] + ("\n" + below if below else ""))
 
         def status(text: str) -> None:
             with draw_lock:
                 line[0], last[1] = text, ""
-                st.update(since=time.monotonic(), bar=False, phase="")
+                st.update(since=time.monotonic(), bar=False, phase="", queue=False)
                 with self._stages_lock:
                     self._active_progress.pop(chat_id, None)
                 update_status(text)
@@ -996,6 +996,7 @@ class TaskRunnerMixin:
                     at[chat_id] = time.monotonic()
             with draw_lock:
                 was_bar, st["bar"] = st["bar"], counting
+                st["queue"] = total <= 0 and what.startswith("In the GPU queue")
                 st["phase"] = shown if total <= 0 else ""
                 now = time.monotonic()
                 # an edit every few seconds at most between two steps: Telegram throttles a chat

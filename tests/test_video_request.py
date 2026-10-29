@@ -61,6 +61,19 @@ def test_context_ir_sees_authoritative_request_separately_from_tool_draft():
     assert DRAFT in seen["user_text"]
 
 
+def test_video_writer_does_not_invent_an_image_or_forbid_requested_camera_motion():
+    seen = {}
+    good = ("integrated_multimodal_description: [Shot 1] A balloon sways.\n\n"
+            "overall_soundscape: room tone.\n\nnon_diegetic_music: N/A")
+    ctx = SimpleNamespace(video_request=REQUEST,
+                          vision_model=lambda ctx, **kw: seen.update(kw) or good,
+                          text_model=lambda ctx, guide, user, **kw: seen.update(user_text=user) or good)
+    video.to_context_ir(ctx, DRAFT, mode="t2va", seconds=5.17)
+    assert 'Name the visual style of <Picture 1>' not in seen.get('user_text', '')
+    video.to_context_ir(ctx, DRAFT, mode="i2va", seconds=5.17, images=['source.png'])
+    assert "The shot keeps <Picture 1>'s framing from start to end" not in seen['user_text']
+
+
 def test_camera_instruction_comes_from_current_request_rather_than_old_draft():
     asked = []
     ctx = SimpleNamespace(
@@ -289,6 +302,17 @@ def test_description_referencing_picture1_keeps_the_chat_pictures():
             images = []
     assert images == ["chat.png"], "the anchor reference keeps the chat's pictures"
     assert "do not invent a look" in TD._GENERATE_VIDEO_DESC
+
+
+def test_video_reference_limit_does_not_silently_change_named_images():
+    pictures = [f'picture-{i}' for i in range(1, 12)]
+    with pytest.raises(ValueError):
+        handlers._limit_video_images('Use <Picture 1> and <Picture 10>', pictures, 3)
+
+
+def test_video_reference_limit_rejects_missing_reference():
+    with pytest.raises(ValueError):
+        handlers._limit_video_images('Use <Picture 5>', ['one'], 3)
 
 
 def test_start_lock_no_longer_contradicts_a_described_camera_move():

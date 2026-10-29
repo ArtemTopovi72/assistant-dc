@@ -1569,6 +1569,8 @@ def run(ctx, request: str = "", *, layout: Optional[dict] = None,
         import draw_preview
         layout, _pre = draw_preview.preflight(ctx, layout, request, width=width,
                                               height=height, emit=emit)
+        if callable(getattr(ctx, "set_stage", None)):
+            ctx.set_stage("Drawing a picture")
     layout = dep(ctx, "ideogram", ideogram).normalize_layout(layout, request)
     if instruction:
         emit("stage", text=f"editing: {instruction}")

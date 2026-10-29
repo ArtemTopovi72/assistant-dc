@@ -663,7 +663,8 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
         self.worker = None
         if self.ctx is not None:
             self.ctx.cancel_event.clear()
-        self.stage.set_stage("Ready")
+        active = getattr(getattr(self, 'telegram_tab', None), '_active_chats', {})
+        self.stage.set_stage(next(reversed(active.values()), 'Ready'))
         self._set_busy(False)
         self._set_status("")
         self._refresh_chip()

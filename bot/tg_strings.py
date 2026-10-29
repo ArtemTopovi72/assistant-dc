@@ -385,6 +385,8 @@ _MSG: dict[str, dict[str, str]] = {
     "off":           {"en": "OFF ❌", "ru": "ВЫКЛ ❌"},
     "queue_pos":     {"en": "⏳ <b>You're #{pos} in queue</b> — about {eta} ahead of you.",
                       "ru": "⏳ <b>Ты #{pos} в очереди</b> — впереди примерно {eta}."},
+    "queue_next":    {"en": "⏳ <b>Your request is next in the queue.</b>",
+                      "ru": "⏳ <b>Твой запрос следующий в очереди.</b>"},
     "queue_run":     {"en": "⏳ <b>You're #{pos} in queue</b> — {n} render(s) from other chats run first; yours starts right after.",
                       "ru": "⏳ <b>Ты #{pos} в очереди</b> — сейчас идёт генерация у других ({n}), твоя начнётся следом."},
     "card_busy":     {"en": "⏳ <b>The graphics card is busy with a render</b> — your request starts as soon as it is free.",
@@ -1100,10 +1102,10 @@ _MSG: dict[str, dict[str, str]] = {
     "lv_stopped": {"en": "⛔ Stopped after {done}/{of} portions.", "ru": "⛔ Остановлено после {done}/{of} частей."},
     "lv_done": {"en": "✅ Done: parts {parts}, {total}.", "ru": "✅ Готово: {parts} ч., {total}."},
     "lv_failed": {"en": "⚠️ The long-video job failed — see the log.", "ru": "⚠️ Разбор видео сорвался — смотри лог."},
-    "lv_recovered": {"en": "📋 I was switched off right while composing this video's retell — sorry. "
-                           "Everything I watched survived; here is the whole retell:",
-                     "ru": "📋 Я выключился ровно на сборке пересказа этого видео — извини. "
-                           "Всё пересмотренное уцелело, вот полный пересказ:"},
+    "lv_recovered": {"en": "📋 I was switched off while processing this video — sorry. "
+                           "Here is what I saved; it may be incomplete:",
+                     "ru": "📋 Я выключился во время разбора видео — извини. "
+                           "Вот что удалось сохранить; разбор может быть неполным:"},
     "ms_back":  {"en": "↩ Back",           "ru": "↩ Назад"},
     "ms_was_reset": {"en": "♻️ Song settings reset to Auto.",
                      "ru": "♻️ Настройки песни сброшены на «Авто»."},

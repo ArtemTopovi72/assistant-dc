@@ -368,6 +368,7 @@ class QueueMixin:
         """
         with self._stop_lock:
             self._stop_requests[chat_id] = time.time()
+        stopped_queue_note = self.__dict__.get('_queue_note_tasks', {}).get(chat_id)
         sess = self._get_session(chat_id)
         with sess._lock:
             for name in sess.FLOW_STATES:
@@ -415,6 +416,8 @@ class QueueMixin:
         # …and the already-resolved tasks waiting in the backend.
         try:
             dropped += self._backend.drop_chat(chat_id)
+            if stopped_queue_note:
+                threading.Thread(target=self._drop_busy_note, args=(chat_id, stopped_queue_note[0]), daemon=True).start()
         except Exception as exc:
             tg_bot.logger.warning("drop_chat(%s) failed: %s", chat_id, exc)
         # Purge this chat's entries from the pending journal too — otherwise a
@@ -518,6 +521,7 @@ class QueueMixin:
         except Exception as exc:
             tg_bot.logger.warning("drop_task(%s) failed: %s", task_id, exc)
         if dropped:
+            self._drop_busy_note(chat_id, task_id)
             with self._task_lock:
                 had = self._pending_journal.pop(task_id, None) is not None
             if had:
@@ -702,12 +706,14 @@ class QueueMixin:
                 if had:
                     self._write_inflight()
             if self._is_cancelled(task.task_id):
+                threading.Thread(target=self._drop_busy_note, args=(task.chat_id, task.task_id), daemon=True).start()
                 tg_bot.logger.info("Dropping task %s — cancelled before it started",
                             task.task_id[:8])
                 with self._task_lock:
                     self._cancelled.discard(task.task_id)
                 return None
             if self._stop_requested_after(task):
+                threading.Thread(target=self._drop_busy_note, args=(task.chat_id, task.task_id), daemon=True).start()
                 tg_bot.logger.info("Dropping task %s chat=%s — Stop was pressed after it "
                             "was queued", task.task_id[:8], task.chat_id)
                 self._activity.log(task.chat_id, "system",

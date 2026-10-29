@@ -65,6 +65,22 @@ def test_owner_can_cancel_a_task_popped_but_not_yet_started():
     assert bot._is_cancelled(task.task_id)
 
 
+def test_cancelled_after_pop_clears_its_queue_status():
+    bot = queue_bot()
+    task = T._Task(task_id='cancelled', chat_id=202, user_text='hello')
+    bot._backend.push(task)
+    bot._queue_claim_lock = threading.Lock()
+    bot._running, bot._stopping = True, False
+    bot._stop_requested_after = lambda task: False
+    bot._cancelled.add(task.task_id)
+    cleared = []
+    done = threading.Event()
+    bot._drop_busy_note = lambda chat, tid='': (cleared.append((chat, tid)), done.set())
+    assert bot._claim_task() is None
+    assert done.wait(1)
+    assert cleared == [(202, 'cancelled')]
+
+
 def test_restore_pending_skips_bad_entries_but_keeps_valid_work():
     bot = queue_bot(DurableQueue())
     task = T._Task(task_id="valid-after-bad", chat_id=303, user_text="hello")

@@ -42,6 +42,8 @@ _STAGES: dict[str, dict[str, str]] = {
     "Decoding the result": {"ru": "Собираю результат"},
     "Piece": {"ru": "Фрагмент"},
     "Waiting for the video card": {"ru": "Жду видеокарту"},
+    "Preparing the video card": {"ru": "Подготавливаю видеокарту"},
+    "Using the video card": {"ru": "Видеокарта занята обработкой"},
     "In the GPU queue": {"ru": "В очереди на видеокарту"},
     "Freeing the video card": {"ru": "Освобождаю видеокарту"},
     "Putting the voice on": {"ru": "Накладываю голос"},
@@ -71,6 +73,7 @@ _STAGES: dict[str, dict[str, str]] = {
     "Finding a reference photo":   {"ru": "Ищу референсное фото"},
     # tools.py — pictures
     "Drawing a picture":           {"ru": "Рисую картинку"},
+    "Preparing the picture":       {"ru": "Подготавливаю картинку"},
     # draw_preview.py -- the plan's boxes as a sketch, checked before the render
     "Checking the layout":         {"ru": "Проверяю компоновку по эскизу"},
     "Redrawing the picture":       {"ru": "Перерисовываю картинку"},

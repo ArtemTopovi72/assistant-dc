@@ -542,6 +542,13 @@ def _speech_admitted(timeout=600, ctx=None):
             break
         _SPEECH_GATE.release()
     try:
+        if ctx is not None and (notified or getattr(ctx, '_gpu_queue_waited', False)):
+            try:
+                ctx._gpu_queue_waited = False
+                if callable(getattr(ctx, 'set_stage', None)):
+                    ctx.set_stage('Using the video card')
+            except Exception:
+                logger.debug('GPU status update failed', exc_info=True)
         yield
     finally:
         _SPEECH_GATE.release()
@@ -553,6 +560,14 @@ def _claim_card(label: str, min_free_mb: int = None, ctx=None, progress_ctx=None
     with admission:
         with _SPEECH_GATE:
             _SPEECH_FREE.clear()
+            status_ctx = progress_ctx or ctx
+            if status_ctx is not None and getattr(status_ctx, '_gpu_queue_waited', False):
+                try:
+                    status_ctx._gpu_queue_waited = False
+                    if callable(getattr(status_ctx, 'set_stage', None)):
+                        status_ctx.set_stage('Preparing the video card')
+                except Exception:
+                    logger.debug('GPU status update failed', exc_info=True)
             with _LIFECYCLE_LOCK:
                 _claim_card_locked(label, min_free_mb, ctx, progress_ctx)
 

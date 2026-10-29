@@ -242,6 +242,8 @@ def find(ctx, description: str) -> List[Tuple[str, str, str]]:
         path = photo_of(ctx, t["thing"], t["query"], t["kind"], str(t.get("view") or ""))
         if path:
             out.append((t["thing"], path, t["kind"]))
+    if things and getattr(ctx, "set_stage", None):
+        ctx.set_stage("Preparing the picture")
     # The face last: given first, Lenin's face drew the Doom armour grey instead of green.
     return sorted(out, key=lambda t: t[2] == "person")
 
