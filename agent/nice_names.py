@@ -36,7 +36,15 @@ def category(path: str) -> str:
 
 
 def _clean(title: str) -> str:
-    t = re.sub(r"^(?:\[[^\]]*\]\s*)+", "", title or "")           # "[song:60] …", "[internal] …"
+    t = title or ""
+    # A button payload quotes its instructions ("[style_preset] call redraw_image
+    # with mode=\"redraw\" instructions=\"Turn picture 1 into …\""): the preset's
+    # own words are the human name -- the raw call was delivered as
+    # «Picture — call redraw_image with mode= redraw…» (2026-10-29).
+    m = re.search(r'\binstructions="([^"]+)"', t)
+    if m:
+        t = re.sub(r"^[^:]*?\binto\s+", "", m.group(1), count=1)
+    t = re.sub(r"^(?:\[[^\]]*\]\s*)+", "", t)           # "[song:60] …", "[internal] …"
     t = re.sub(r"^(?:[a-z ]+(?:\([^)]*\))?:\s*)", "", t)       # "find on ozon: …" menu prefixes
     t = re.sub(r"[<>:\"/\\|?*\n\r\t]+", " ", t)
     t = " ".join(t.split()[:8])
