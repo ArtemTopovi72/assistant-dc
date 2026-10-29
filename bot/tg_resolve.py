@@ -1581,9 +1581,15 @@ class ResolveMixin:
             # Plain conversation -- the intent read says needs_tool False --
             # answers as chat, and the prefix stays armed for the next real
             # query («носки» right after that «привет» still searches Ozon).
+            # The veto is for PURE TEXT only: a caption riding on an attached
+            # photo IS the words for the armed flow on that photo -- «дрон
+            # говорит: …» under the talking-head prefix read needs_tool False
+            # (a caption presents a photo), the prefix stayed armed, and the
+            # model painted a speech bubble instead of the video (2026-10-29).
             from seams import intent_read
             try:
-                chatty = intent_read(self.reads)(None, merged, "", "")["needs_tool"] is False
+                chatty = (img_bytes is None
+                          and intent_read(self.reads)(None, merged, "", "")["needs_tool"] is False)
             except Exception:
                 chatty = False
             if not chatty:
