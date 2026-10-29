@@ -86,6 +86,34 @@ def overlaps(a, b):
     return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
 
 
+def verified_source_mask(source, record, root):
+    import hashlib
+    from PIL import Image
+    try:
+        name = record.get('protected_mask') or ''
+        path = (Path(root) / name).resolve()
+        if not path.is_relative_to(Path(root).resolve()) or not path.is_file():
+            return None
+        if hashlib.sha256(Path(source).read_bytes()).hexdigest() != record.get('protected_mask_source_sha256'):
+            return None
+        if hashlib.sha256(path.read_bytes()).hexdigest() != record.get('protected_mask_sha256'):
+            return None
+        with Image.open(source) as im:
+            size = im.size
+        with Image.open(path) as im:
+            if im.size != size:
+                return None
+            mask = im.convert('L').point(lambda v: 255 if v > 127 else 0)
+        return mask if mask.getbbox() else None
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def verified_crossings(crossing, record, mask):
+    return bool(mask is not None and sorted(map(list, crossing)) == sorted(record.get('protected_mask_boxes') or [])
+                and all(mask.getpixel(((b[0] + b[2]) // 2, (b[1] + b[3]) // 2)) >= 128 for b in crossing))
+
+
 def restyle(ctx, source, layout_record):
     import image_lettering_remove as remove
     import ocr_reader
@@ -102,10 +130,12 @@ def restyle(ctx, source, layout_record):
         return None
     width, height = original.size
     protected = remove._faces(source) + protected_boxes(layout_record['layout'], width, height)
-    if any(overlaps(box, keep) for box in boxes for keep in protected):
-        return None
     root = Path(image.OUTPUT_DIR)
     root.mkdir(parents=True, exist_ok=True)
+    crossing = [keep for keep in protected if any(overlaps(box, keep) for box in boxes)]
+    verified = verified_source_mask(source, layout_record, root) if crossing else None
+    if crossing and not verified_crossings(crossing, layout_record, verified):
+        return None
     top_boxes = [b for b in boxes if (b[1] + b[3]) / 2 < height / 2]
     bottom_boxes = [b for b in boxes if (b[1] + b[3]) / 2 >= height / 2]
     result = original
@@ -119,10 +149,14 @@ def restyle(ctx, source, layout_record):
             md.rectangle((max(0, x0 - 3), max(0, y0 - 3), min(width - 1, x1 + 3), min(height - 1, y1 + 3)), fill=255)
         mask_path = str(root / f'_INTERMEDIATE_caption_mask_{time.time_ns()}.png')
         mask.save(mask_path)
-        safe_mask = mask.copy()
+        from PIL import ImageFilter, ImageChops
+        safe_mask = mask.filter(ImageFilter.GaussianBlur(4))
         safe_draw = ImageDraw.Draw(safe_mask)
         for face in protected:
-            safe_draw.rectangle(face, fill=0)
+            if face not in crossing:
+                safe_draw.rectangle(face, fill=0)
+        if verified is not None:
+            safe_mask = ImageChops.subtract(safe_mask, verified)
         clean = dep(ctx, 'fill_caption', remove._fill_objectclear)(ctx, current, mask_path, 10)
         if not clean or not os.path.exists(clean) or caption_left(
                 reader.readtext(clean, detail=1, paragraph=False), group_boxes, captions):

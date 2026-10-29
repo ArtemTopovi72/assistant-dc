@@ -54,6 +54,10 @@ def _typography_only(ctx, state):
 
 def _restyle_captions(ctx, state, source):
     if state.get('caption_restyle_attempted'):
+        if state.get('caption_restyle_result'):
+            return ("[done] All requested top and bottom captions were already restyled together "
+                    "and the finished picture is ready. Do not call another image tool; "
+                    "briefly confirm completion to the user.")
         return "[TOOL ERROR] Caption restyling was already attempted and did not succeed. Do not retry or redraw this image."
     state['caption_restyle_attempted'] = True
     rec = _image(ctx).load_layout_for(source)
@@ -67,7 +71,10 @@ def _restyle_captions(ctx, state, source):
                 "The image was not changed. Tell the user exactly this in their language; "
                 "do not say the entire picture was redrawn or retry the edit.")
     _set_current_image(ctx, state, out)
-    return f"Caption lettering restyled and saved: {out}. The rest of the image was preserved."
+    state['caption_restyle_result'] = out
+    return (f"[done] All requested top and bottom captions were restyled together and saved: {out}. "
+            "The protected parts of the picture were preserved. The complete picture is ready; "
+            "do not edit any caption again. Briefly confirm completion to the user.")
 
 
 def _image(ctx):

@@ -89,6 +89,34 @@ def test_caption_overlapping_protected_logo_is_refused(tmp_path, monkeypatch):
     assert text_restyle.restyle(ctx, str(source), rec) is None
 
 
+def test_explicit_mask_is_bound_to_the_exact_source(tmp_path):
+    import hashlib
+    from PIL import Image, ImageDraw
+    from text_restyle import verified_source_mask
+    source = tmp_path / 'original.png'
+    Image.new('RGB', (100, 100), 'white').save(source)
+    mask = Image.new('L', (100, 100), 0)
+    ImageDraw.Draw(mask).rectangle((20, 20, 80, 80), fill=255)
+    mask.save(tmp_path / 'protect.png')
+    metadata = {'protected_mask': 'protect.png',
+                'protected_mask_source_sha256': hashlib.sha256(source.read_bytes()).hexdigest(),
+                'protected_mask_sha256': hashlib.sha256((tmp_path / 'protect.png').read_bytes()).hexdigest()}
+    assert verified_source_mask(source, metadata, tmp_path) is not None
+    Image.new('RGB', (100, 100), 'black').save(source)
+    assert verified_source_mask(source, metadata, tmp_path) is None
+    metadata['protected_mask'] = '../outside.png'
+    assert verified_source_mask(source, metadata, tmp_path) is None
+
+
+def test_verified_mask_does_not_authorize_another_protected_box():
+    from PIL import Image
+    from text_restyle import verified_crossings
+    mask = Image.new('L', (100, 100), 255)
+    metadata = {'protected_mask_boxes': [[20, 20, 50, 50]]}
+    assert verified_crossings([(20, 20, 50, 50)], metadata, mask)
+    assert not verified_crossings([(10, 10, 60, 60)], metadata, mask)
+
+
 def test_full_frame_redraw_is_not_used_for_typography(tmp_path):
     from types import SimpleNamespace
     import tool_image_handlers as H
@@ -98,3 +126,55 @@ def test_full_frame_redraw_is_not_used_for_typography(tmp_path):
                           image_engine=SimpleNamespace(load_layout_for=lambda p: None))
     result = H._handle_redraw_image(ctx, {'user_input': 'Сделай красивые надписи'}, {'instructions': 'redraw'})
     assert result.startswith('[TOOL ERROR]') and 'layout' in result
+
+
+def test_repeat_after_success_does_not_claim_the_edit_failed(tmp_path):
+    from types import SimpleNamespace
+    import tool_image_handlers as H
+    source = tmp_path / 'before.png'
+    output = tmp_path / 'after.png'
+    source.write_bytes(b'original')
+    output.write_bytes(b'result')
+    ctx = SimpleNamespace(last_image_path=str(source), set_stage=lambda s: None,
+                          image_engine=SimpleNamespace(load_layout_for=lambda p: {'layout': {}}),
+                          deps=SimpleNamespace(restyle_captions=lambda *a: str(output)))
+    state = {}
+    assert 'saved' in H._restyle_captions(ctx, state, str(source))
+    second = H._restyle_captions(ctx, state, str(source))
+    assert 'already' in second.lower() and not second.startswith('[TOOL ERROR]')
+
+
+def test_old_layout_candidates_are_loaded_only_from_the_same_chat(tmp_path):
+    from types import SimpleNamespace
+    from tg_tasks import _layout_candidates
+    path = tmp_path / 'image.png'
+    path.write_bytes(b'image')
+    (tmp_path / 'image.png.layout.json').write_text('{}')
+    seen = []
+    def recent(chat, kind, limit):
+        seen.append((chat, kind, limit))
+        return [{'path': str(path)}] if chat == 12 else []
+    assert _layout_candidates(SimpleNamespace(image_log=[]), 12, recent) == [str(path)]
+    assert _layout_candidates(SimpleNamespace(image_log=[]), 13, recent) == []
+    assert seen == [(12, 'photo', 50), (13, 'photo', 50)]
+
+
+def test_archive_layout_candidates_prefer_newest(tmp_path):
+    from types import SimpleNamespace
+    from tg_tasks import _layout_candidates
+    old, new = tmp_path / 'old.png', tmp_path / 'new.png'
+    for path in (old, new):
+        path.write_bytes(b'same image')
+        (tmp_path / (path.name + '.layout.json')).write_text('{}')
+    candidates = _layout_candidates(SimpleNamespace(image_log=[]), 12,
+                                    lambda *_: [{'path': str(new)}, {'path': str(old)}])
+    assert list(reversed(candidates)) == [str(new), str(old)]
+
+
+def test_successful_restyle_replaces_fabricated_failure_reply():
+    from graph_personality import _caption_result_reply
+    state = {'caption_restyle_result': 'out.png', 'image_path': 'out.png'}
+    assert _caption_result_reply(state, 'Ошибка', 'Исправь надписи') == 'Готово: обновил надписи.'
+    assert _caption_result_reply(state, 'Failure', 'Fix the text').startswith('Done:')
+    state['image_path'] = 'another.png'
+    assert _caption_result_reply(state, 'Failure', 'Fix the text') == 'Failure'

@@ -53,6 +53,15 @@ import tool_retrieval as _retrieval
 logger = logging.getLogger("assistant.graph")
 
 
+def _caption_result_reply(state, answer, user_text):
+    """Do not let a model invent a failed edit after a completed restyle."""
+    if state.get('caption_restyle_result') and state.get('image_path') == state['caption_restyle_result']:
+        return ('Готово: обновил надписи.'
+                if re.search(r'[А-Яа-яЁё]', user_text or '')
+                else 'Done: updated the captions.')
+    return answer
+
+
 # The cluster is now three modules. Re-exported BY NAME so `graph_personality.X`
 # and, through graph.py's own re-export block, `graph.X` both keep resolving —
 # the suites read these directly (graph._intent_tools, graph._DECK_PREFIX, …).
@@ -2229,6 +2238,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
     if state.get('video_status') == 'success':
         final_answer = _video_review_notice(final_answer, getattr(ctx, 'video_action_note', ''),
                                             original_input or user_input)
+    final_answer = _caption_result_reply(state, final_answer, original_input or user_input)
     try:
         _ta.finish_turn(ctx, state, messages, user_input, final_answer,
                         audit_reasons, audit_calls)
