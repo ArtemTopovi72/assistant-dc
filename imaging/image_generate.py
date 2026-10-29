@@ -409,6 +409,7 @@ def generate_image_with_refinement(ctx, description: str, steps: Optional[int] =
     reason = ""
     img_path = None
     prev_img_path: Optional[str] = None
+    prev_reason = ""
     score = 0
     # Set when the judge said a requested SUBJECT is absent/wrong (prompt_patch +
     # low score). Low-denoise img2img through the flawed image preserves the very
@@ -499,6 +500,17 @@ def generate_image_with_refinement(ctx, description: str, steps: Optional[int] =
                 "reason": reason,
             }
 
+        # The same complaint twice in a row means the engine will not draw it
+        # (live 2026-10-29: "Is he pooping into his left fist?" three takes in
+        # a row -- six minutes of renders for a condition the model refuses).
+        # One retry already carried the patch; a third with the identical
+        # verdict is waste. Deliver the best take with the honest reason.
+        if reason and reason == prev_reason:
+            logger.info("Image eval: the same unmet condition repeated (%s) -- "
+                        "stopping refinement, delivering the best take", reason[:120])
+            break
+        prev_reason = reason
+
         if attempt >= MAX_IMAGE_REFINEMENT_ATTEMPTS:
             break
 
@@ -573,6 +585,7 @@ def generate_image_with_refinement(ctx, description: str, steps: Optional[int] =
     if best:
         _, img_path, score, reason, _ = best
     return {
-        "path": img_path, "score": score, "attempts": MAX_IMAGE_REFINEMENT_ATTEMPTS,
+        # the real count: an early stop (a repeated verdict) ran fewer takes
+        "path": img_path, "score": score, "attempts": min(attempt, MAX_IMAGE_REFINEMENT_ATTEMPTS),
         "prompt": prompt, "status": "partial", "reason": reason,
     }

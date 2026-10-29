@@ -2384,6 +2384,17 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
         return _over
 
     instructions = (args.get("instructions") or "").strip()
+    # A 🎭 style-preset button already decided WHAT to do: its payload quotes the
+    # exact instructions. Live 2026-10-29: the preset said "Change picture 1 into
+    # a real photograph taken with a full-frame DSLR…", the model relayed the
+    # image's own cartoon description instead -- the "style change" redrew the
+    # same cartoon. The payload's quoted instructions outrank the model's args.
+    _payload = (state.get("user_input") or "").lstrip()
+    if _payload.startswith("[style_preset]"):
+        import re as _re
+        _pinned = _re.search(r'instructions="([^"]+)"', _payload)
+        if _pinned and _pinned.group(1).strip():
+            instructions = _pinned.group(1).strip()
     # 'enhance'/'upscale'/'restore'/'outpaint' have no engine left to run on: the
     # old model checkpoint behind them was removed from the product (Ideogram +
     # FireRed only) and its files deleted from disk. Every redraw goes through the same
