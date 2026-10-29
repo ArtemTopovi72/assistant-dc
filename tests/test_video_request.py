@@ -289,3 +289,26 @@ def test_description_referencing_picture1_keeps_the_chat_pictures():
             images = []
     assert images == ["chat.png"], "the anchor reference keeps the chat's pictures"
     assert "do not invent a look" in TD._GENERATE_VIDEO_DESC
+
+
+def test_start_lock_no_longer_contradicts_a_described_camera_move():
+    """The grandpa-drone clip (2026-10-29 15:41): the plan wrote 'camera zooms in'
+    and the start lock answered 'same framing, crop, zoom and angle' -- H3 got a
+    contradiction, morphed the whole frame (edge drift 58 vs max 35) and the
+    chain honestly gave up. The lock now says the move develops from the exact
+    framing; and the rewrite ask bans camera moves invented over a static scene."""
+    assert "develops smoothly from that exact framing" in video._START_LOCK_SUFFIX
+    assert "same framing, crop, zoom and angle" not in video._START_LOCK_SUFFIX
+    ctx = SimpleNamespace(
+        video_request="Дедушка какает в свой кулачок левой руки",
+        vision_model=lambda ctx, **kw: (
+            "integrated_multimodal_description: [Shot 1] A red balloon sways.\n\n"
+            "overall_soundscape: room tone.\n\nnon_diegetic_music: N/A"),
+    )
+    seen = {}
+    ctx.vision_model = lambda ctx, **kw: seen.update(kw) or (
+        "integrated_multimodal_description: [Shot 1] A red balloon sways.\n\n"
+        "overall_soundscape: room tone.\n\nnon_diegetic_music: N/A")
+    result = video.to_context_ir(ctx, DRAFT, mode="i2va", seconds=5.17, images=["source.png"])
+    question = seen.get("user_text") or seen.get("question") or seen.get("system") or ""
+    assert "CAMERA:" in question and "holds still while the subject acts" in question, question[:300]

@@ -1271,9 +1271,11 @@ def _lock_framing_unless_requested(description: str, ctx=None) -> str:
 # ракурс»). Said for any picture, so no guess about its style is needed; a
 # camera move the user asks for still happens, but from that opening shot.
 _START_LOCK_SUFFIX = (
-    " The reference image <Picture 1> is the exact first frame: the clip opens on it as it is -- same "
-    "framing, crop, zoom and angle; any camera move or reframing happens only later in the "
-    "clip and only when asked for above.")
+    " The reference image <Picture 1> is the exact first frame: the clip opens on it as it is -- the "
+    "opening framing, crop, zoom and angle come from it. If a camera move is described above, it "
+    "develops smoothly from that exact framing -- a slow, small move, the scene and background "
+    "holding still around it; never a jump, never a style or scene morph. With no camera move "
+    "described, the camera holds the reference framing for the whole clip.")
 # A talking head ends on its still too: «any camera move happens only later» was the one opening
 # it got, and run 18 pushed in until the face filled the frame in two parts of six, every take of
 # part 1 too (2026-10-20).
@@ -1778,7 +1780,10 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
             "subject starts one action, it develops, one result -- do not stack several "
             "independent actions (strains AND tenses AND furrows AND something lands AND "
             "a sigh); pick the single through-line of the request and let face, hands and "
-            "sound serve it. "
+            "sound serve it. (3) CAMERA: describe only a move the request asks for; a "
+            "camera move you add on your own over a static-scene picture (a zoom, a pan) "
+            "makes the whole frame morph instead of animating the subject -- when in "
+            "doubt, write that the camera holds still while the subject acts. "
             "Rewrite the request below into the final prompt exactly as the guide's final "
             "prompt structure prescribes (instruction line first where the mode needs one, "
             "then the fields in order). Output ONLY the final prompt, no commentary.\n"
