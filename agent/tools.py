@@ -765,7 +765,7 @@ from tool_descriptions import (
 # otherwise ride along on every ordinary chat turn.
 from tool_args import (
     ListFilesArgs, ReadFileArgs, WriteFileArgs, EditFileArgs, SearchFilesArgs,
-    UnpackArchiveArgs, PackArchiveArgs, RunCodeArgs, InstallPackagesArgs,
+    UnpackArchiveArgs, PackArchiveArgs, TranscribeMediaArgs, RunCodeArgs, InstallPackagesArgs,
     FindContentArgs, DeletePathArgs, DedupePhotosArgs, RagAddArgs, RagSearchArgs, SetReminderArgs, ConvertCurrencyArgs, CalendarArgs, WeatherForecastArgs, LocalTimeArgs,
     CodeOutlineArgs, RunTestsArgs, UpdatePlanArgs, UndoEditArgs,
     OzonSearchArgs, OzonProductArgs, OzonReviewsArgs, OzonCartArgs, OzonSetLocationArgs,
@@ -775,7 +775,7 @@ from tool_code_handlers import (
     _handle_list_files, _handle_read_file, _handle_open_image,
     _handle_write_file, _handle_edit_file,
     _handle_search_files, _handle_find_content, _handle_delete_path, _handle_dedupe_photos, _handle_unpack_archive, _handle_pack_archive,
-    _handle_run_code, _handle_install_packages, _handle_rag_add, _handle_rag_search,
+    _handle_run_code, _handle_transcribe_media, _handle_install_packages, _handle_rag_add, _handle_rag_search,
     _handle_code_outline, _handle_run_tests, _handle_update_plan, _handle_undo_edit,
     CODE_TOOL_NAMES, EXECUTING_TOOL_NAMES,   # noqa: F401  (read by graph/tg)
 )
@@ -863,6 +863,8 @@ TOOLS = [
              _handle_pack_archive, PackArchiveArgs),
     ToolSpec("run_code", _fn_schema("run_code", _RUN_CODE_DESC, RunCodeArgs),
              _handle_run_code, RunCodeArgs),
+    ToolSpec("transcribe_media", _fn_schema("transcribe_media", "Transcribe the speech in a sandbox audio or video file into a timed SRT using the existing local Whisper. Use for automatic subtitles before caption.py; maximum ten minutes.", TranscribeMediaArgs),
+             _handle_transcribe_media, TranscribeMediaArgs),
     ToolSpec("install_packages", _fn_schema("install_packages", _INSTALL_PACKAGES_DESC, InstallPackagesArgs),
              _handle_install_packages, InstallPackagesArgs),
     ToolSpec("rag_add", _fn_schema("rag_add", _RAG_ADD_DESC, RagAddArgs),

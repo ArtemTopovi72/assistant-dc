@@ -824,6 +824,71 @@ def _handle_pack_archive(ctx, state, args: dict) -> str:
 
 # -- execution ---------------------------------------------------------------
 
+def _subtitle_cues(segments, cancelled=None):
+    import math
+    cues = []
+    for segment in segments:
+        if cancelled and cancelled():
+            raise RuntimeError('Transcription cancelled.')
+        words = getattr(segment, 'words', None) or [segment]
+        chunk, start, end = '', None, None
+        for word in words:
+            text = ' '.join(str(getattr(word, 'word', None) or getattr(word, 'text', '')).split())
+            a, b = float(word.start), float(word.end)
+            if not text or not all(map(math.isfinite, (a, b))) or a < 0 or b <= a:
+                continue
+            if chunk and (len(chunk) + len(text) + 1 > 48 or b - start > 4):
+                cues.append((start, end, chunk))
+                chunk, start = '', None
+            start = a if start is None else start
+            end = b
+            chunk = (chunk + ' ' + text).strip()
+        if chunk:
+            cues.append((start, end, chunk))
+    return cues
+
+
+@_guard
+def _handle_transcribe_media(ctx, state, args: dict) -> str:
+    import uuid
+    from translation_dub import _stamp
+    box = _box(ctx)
+    if not dep(ctx, "may_run_code", _access.may_run_code)(getattr(ctx, "sandbox_user", None)):
+        return "[TOOL ERROR] Speech transcription requires code access to the sandbox."
+    source = box.resolve(args.get("path") or "")
+    if not source.is_file():
+        return "[TOOL ERROR] Media file not found in the sandbox."
+    whisper = getattr(getattr(ctx, "models", None), "whisper", None)
+    if whisper is None:
+        return "[TOOL ERROR] Whisper is unavailable."
+    output = box.resolve(str(source.relative_to(box.root).with_suffix('')) + '_' + uuid.uuid4().hex + '.srt')
+    wav = f".agent/asr_{uuid.uuid4().hex}.wav"
+    rel = str(source.relative_to(box.root)).replace('\\', '/')
+    code = ("import subprocess, json\n"
+            f"p=subprocess.run(['ffprobe','-v','error','-show_entries','format=duration',"
+            f"'-of','json',{rel!r}],capture_output=True,text=True,check=True)\n"
+            "duration=float(json.loads(p.stdout)['format']['duration'])\n"
+            "assert 0 < duration <= 600, 'Media must be at most 10 minutes'\n"
+            f"subprocess.run(['ffmpeg','-v','error','-nostdin','-i',{rel!r},'-vn','-ac','1',"
+            f"'-ar','16000','-c:a','pcm_s16le',{wav!r}],check=True)\n")
+    try:
+        extracted = dep(ctx, 'run_python', _runner.run_python)(box, code, timeout=300, allow_host=False, ctx=ctx)
+        if not extracted.ok or extracted.backend != 'docker':
+            return '[TOOL ERROR] Could not extract audio in the isolated sandbox: ' + (extracted.output or '')[-500:]
+        with ctx.asr_lock:
+            segments, _ = whisper.transcribe(str(box.resolve(wav)), language=None, vad_filter=True,
+                                              word_timestamps=True, temperature=0., condition_on_previous_text=False)
+            cues = _subtitle_cues(segments, getattr(ctx, 'is_cancelled', None))
+        if not cues:
+            return '[TOOL ERROR] No speech was recognized in the media.'
+        with output.open('x', encoding='utf-8') as f:
+            f.write('\n\n'.join(f'{i}\n{_stamp(a)} --> {_stamp(b)}\n{text}'
+                                 for i, (a, b, text) in enumerate(cues, 1)) + '\n')
+    finally:
+        box.resolve(wav).unlink(missing_ok=True)
+    return (f"Transcribed speech to {output.relative_to(box.root).as_posix()}. "
+            "Use caption.py with --srt for burned subtitles, then verify and deliver the video.")
+
 @_guard
 def _handle_run_code(ctx, state, args: dict) -> str:
     box = _box(ctx)
@@ -1275,7 +1340,7 @@ def _handle_update_plan(ctx, state, args: dict) -> str:
 CODE_TOOL_NAMES = frozenset({
     "list_files", "read_file", "open_image", "write_file", "edit_file",
     "search_files", "find_content", "delete_path", "dedupe_photos",
-    "unpack_archive", "pack_archive", "run_code", "install_packages",
+    "unpack_archive", "pack_archive", "run_code", "transcribe_media", "install_packages",
     "rag_add", "rag_search",
     "code_outline", "run_tests", "update_plan", "undo_edit",
 })
@@ -1283,4 +1348,4 @@ CODE_TOOL_NAMES = frozenset({
 # The subset that needs more than `files`. Kept next to the handlers so a new
 # executing tool cannot be added without deciding which side of the line it is
 # on.
-EXECUTING_TOOL_NAMES = frozenset({"run_code", "install_packages", "run_tests"})
+EXECUTING_TOOL_NAMES = frozenset({"run_code", "transcribe_media", "install_packages", "run_tests"})

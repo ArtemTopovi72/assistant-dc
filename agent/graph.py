@@ -1,5 +1,6 @@
 from seams import dep, module, yes_no, vision_model, text_model
 import logging
+import os
 import re
 from typing import Optional
 import time
@@ -214,6 +215,18 @@ def vision_agent_node(ctx: Context, state: AgentState) -> AgentState:
         work_path = _out_dir / f"_working_input_{int(time.time() * 1000)}.{ext}"
         with open(work_path, "wb") as fh:
             fh.write(original_bytes)  # full-resolution original, byte-for-byte
+        import hashlib
+        for candidate in reversed(getattr(ctx, 'layout_candidates', None) or []):
+            try:
+                if os.path.getsize(candidate) != len(original_bytes):
+                    continue
+                if hashlib.sha256(Path(candidate).read_bytes()).digest() != hashlib.sha256(original_bytes).digest():
+                    continue
+                import shutil
+                shutil.copyfile(candidate + '.layout.json', str(work_path) + '.layout.json')
+                break
+            except OSError:
+                continue
         ctx.last_image_path = str(work_path)
         # Also override state["image_path"]: tool handlers resolve their source as
         # state.get("image_path") or ctx.last_image_path, so a stale path from an

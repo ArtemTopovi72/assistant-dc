@@ -562,6 +562,10 @@ class PackArchiveArgs(_ToolArgs):
         "Name of the archive to produce for a folder; ignored for a single file."))
 
 
+class TranscribeMediaArgs(_ToolArgs):
+    path: str = Field(..., min_length=1, description="Audio or video file in the sandbox, relative to its root.")
+
+
 class CodeOutlineArgs(_ToolArgs):
     path: str = Field(".", description="Folder or file to outline, relative to the root.")
 

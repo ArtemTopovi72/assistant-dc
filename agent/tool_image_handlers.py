@@ -42,6 +42,34 @@ from seams import choice, complaint_kinds, dep, module, intent_read, text_model,
 logger = logging.getLogger("assistant.tools")
 
 
+def _typography_only(ctx, state):
+    text = str(state.get('user_input_original') or state.get('user_input') or '')
+    if not (re.search(r'надпис|букв|шрифт|типограф|letter|text|font|typograph', text, re.I)
+            and re.search(r'красив|аккурат|оформ|шрифт|типограф|neat|font|typograph|style', text, re.I)):
+        return False
+    return yes_no(ctx)("Is the user asking ONLY to improve the appearance of existing captions "
+                       "while keeping their words and the scene? Mentioning things to preserve "
+                       "does not count as changing them. Request: {text}", text, default=True)
+
+
+def _restyle_captions(ctx, state, source):
+    if state.get('caption_restyle_attempted'):
+        return "[TOOL ERROR] Caption restyling was already attempted and did not succeed. Do not retry or redraw this image."
+    state['caption_restyle_attempted'] = True
+    rec = _image(ctx).load_layout_for(source)
+    if not rec:
+        return "[TOOL ERROR] The original caption layout is unavailable; cannot safely restyle the lettering while preserving everything else. Do not redraw the whole image or claim success."
+    import text_restyle
+    ctx.set_stage('Restyling the captions')
+    out = dep(ctx, 'restyle_captions', text_restyle.restyle)(ctx, source, rec)
+    if not out or not os.path.exists(out):
+        return ("[TOOL ERROR] Could not safely restyle the captions while preserving the picture. "
+                "The image was not changed. Tell the user exactly this in their language; "
+                "do not say the entire picture was redrawn or retry the edit.")
+    _set_current_image(ctx, state, out)
+    return f"Caption lettering restyled and saved: {out}. The rest of the image was preserved."
+
+
 def _image(ctx):
     """The image engine for this turn: `ctx.image_engine` when one was handed in (a suite's
     stand-in renderer), the `image` module otherwise."""
@@ -302,6 +330,8 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
             "[TOOL ERROR] No image to edit — generate an image first with generate_image, "
             "then call inpaint_image. Tell the user there is no picture to work on yet."
         )
+    if _typography_only(ctx, state):
+        return _restyle_captions(ctx, state, source)
 
     instructions = (args.get("instructions") or "").strip()
     region = (args.get("region") or "").strip()
@@ -2451,6 +2481,8 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
             "[TOOL ERROR] No image to redraw — generate an image first with generate_image, "
             "then call redraw_image. Tell the user there is no picture to work on yet."
         )
+    if _typography_only(ctx, state):
+        return _restyle_captions(ctx, state, source)
     _undone = _undo(ctx, state)
     if _undone:
         return _undone

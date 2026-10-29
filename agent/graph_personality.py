@@ -389,6 +389,15 @@ def _forced_intent(ctx, state, text: str, has_image: bool, turn_tools, already_c
     return tool if tool in offered else ""
 
 
+def _forced_subtitles(text, turn_tools, already_called):
+    if (re.search(r'субтитр|subtitle|caption', text or '', re.I)
+            and re.search(r'автомат|по речи|из речи|automatic|from (?:the )?speech', text or '', re.I)
+            and 'transcribe_media' not in already_called
+            and any(t.get('function', {}).get('name') == 'transcribe_media' for t in turn_tools)):
+        return 'transcribe_media'
+    return ''
+
+
 def _sandbox_execution_denied(ctx, read: dict) -> bool:
     from tool_code_handlers import EXECUTING_TOOL_NAMES
     return (read.get('ok') and read.get('must_call') in EXECUTING_TOOL_NAMES
@@ -457,6 +466,8 @@ def _kit_always(ctx, tools_called, has_image: bool = False, text: str = "") -> s
         always |= set(_retrieval._LOOK_KIT)
         if re.search(r"видео|ролик|клип|аудио|звук|субтитр|монтаж|video|clip|audio|subtitle|ffmpeg", text, re.I):
             always |= {"run_code", "pack_archive"}
+        if re.search(r"субтитр|caption|subtitle|транскри|transcrib", text, re.I):
+            always.add("transcribe_media")
         if always & set(_retrieval._CODE_KIT) - set(_retrieval._LOOK_KIT) or (
                 set(tools_called or ()) & set(_retrieval._CODE_KIT)):
             always |= set(_retrieval._CODE_KIT)
@@ -1067,6 +1078,9 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
         # the pending_prefix is prepended to user_input and makes the intent
         # unambiguous — send only the relevant schema(s) instead of the full list.
         _only = _intent_tools(original_input or user_input or "")
+        if _only is not None and getattr(ctx, 'sandbox', None) is not None and re.search(
+                r'субтитр|subtitle|caption', original_input or user_input or '', re.I):
+            _only = set(_only) | {'transcribe_media', 'run_code', 'pack_archive'}
         # A button payload names its tool: offered whatever the read says
         # (it was a cue word before; _forced_button can only force what is sent).
         _low = (user_input or "").lower().lstrip()
@@ -1164,6 +1178,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             _edit_mode_now = True
             edit_mode_rounds -= 1
         _force = (force_next_tool
+                  or _forced_subtitles(_turn_text, turn_tools, tools_called_this_turn)
                   or _forced_button(_own(original_input or user_input), turn_tools,
                                     tools_called_this_turn)
                   or _forced_intent(ctx, state, original_input or user_input, _has_img,

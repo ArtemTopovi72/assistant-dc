@@ -1696,6 +1696,8 @@ class TaskRunnerMixin:
         # through state["image_paths"] (an album sent with the request).
         _one = _target["path"] if _target else ctx.last_image_path
         ctx.recent_image_paths = [p for p in dict.fromkeys([_one or _first, *([] if _target and not _rerun_album else _album)]) if p and os.path.exists(p)]
+        ctx.layout_candidates = [e.get('path') for e in (getattr(sess, 'image_log', None) or [])
+                                 if e.get('path') and os.path.exists(e['path'] + '.layout.json')]
 
         # The last clip delivered here, so "use that video" resolves.
         _lv = _last_video(self._chat_videos, chat_id)

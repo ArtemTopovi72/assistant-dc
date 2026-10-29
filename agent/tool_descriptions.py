@@ -521,6 +521,7 @@ _RUN_CODE_DESC = (
     "For editing an existing video or audio in this working folder, use run_code "
     "and ffmpeg-skill, not generate_video. The Docker sandbox has ffmpeg-skill at "
     "/opt/ffmpeg-skill: use run_code to read its SKILL.md and run its scripts via Python. "
+    "For automatic subtitles call transcribe_media first; then pass its SRT to caption.py. "
     "Probe inputs, preserve originals, and verify the output before delivering it. "
     "Select the finished file with pack_archive(path=<output file>) so the user "
     "receives it. The tools work locally without network. "
