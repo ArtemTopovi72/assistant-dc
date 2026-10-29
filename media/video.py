@@ -1752,6 +1752,20 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
             + ("A person who speaks keeps a calm, natural face: small expressions, no wide or "
                "bulging eyes, no grimaces, no exaggerated mouth or brow movement.\n"
                if quoted_lines(description) else "") +
+            # «Дедушка какает в кулачок» over a cartoon first frame came back "Live-action,
+            # close-up…" and H3 rendered fog (2026-10-29 02:14): a style anchor that
+            # contradicts the image plus a pile of simultaneous actions is the known
+            # recipe for the model hedging into ambient smoke (its safety prior +
+            # under-specified motion; MiniMax's own guide: anchor the image's style as
+            # it IS, then one action arc -- onset, development, result).
+            "STYLE AND ACTION RULES -- (1) Name the visual style of <Picture 1> as it IS "
+            "(cartoon, anime, drawn, photoreal) and keep it through the clip: never write "
+            "'Live-action', 'photorealistic' or 'real people' over a drawn or animated "
+            "frame, never morph the style mid-clip. (2) ONE action arc per shot: the "
+            "subject starts one action, it develops, one result -- do not stack several "
+            "independent actions (strains AND tenses AND furrows AND something lands AND "
+            "a sigh); pick the single through-line of the request and let face, hands and "
+            "sound serve it. "
             "Rewrite the request below into the final prompt exactly as the guide's final "
             "prompt structure prescribes (instruction line first where the mode needs one, "
             "then the fields in order). Output ONLY the final prompt, no commentary.\n"

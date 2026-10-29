@@ -232,3 +232,20 @@ def test_approved_plan_cannot_reuse_speech_removed_from_original_request(tmp_pat
     ctx.text_model = lambda *a, **kw: prompt
     result = video.to_context_ir(ctx, draft, mode="t2va", seconds=5.17)
     assert line not in result
+
+
+def test_context_ir_ask_carries_the_style_anchor_and_one_action_arc():
+    """The grandpa clip (2026-10-29): the rewrite said «Live-action» over a cartoon
+    first frame and stacked five actions -- H3 hedged into ambient smoke. The ask
+    must carry the style-anchor and one-arc rules to the rewriter."""
+    seen = {}
+    good = ("integrated_multimodal_description: [Shot 1] A red balloon sways.\n\n"
+            "overall_soundscape: room tone.\n\nnon_diegetic_music: N/A")
+    ctx = SimpleNamespace(
+        video_request="Дедушка какает в свой кулачок левой руки",
+        vision_model=lambda ctx, **kw: seen.update(kw) or good,
+    )
+    assert video.to_context_ir(ctx, DRAFT, mode="i2va", seconds=5.17, images=["source.png"])
+    assert "STYLE AND ACTION RULES" in seen["user_text"]
+    assert "never write 'Live-action'" in seen["user_text"]
+    assert "ONE action arc" in seen["user_text"]
