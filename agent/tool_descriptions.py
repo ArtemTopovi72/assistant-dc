@@ -36,7 +36,16 @@ _DEEP_RESEARCH_DESC = (
 _GENERATE_IMAGE_DESC = (
     "Generate an image (Ideogram). Use when asked to create, "
     "draw, visualize, or make an image. Pass a clear English description; the "
-    "system expands it into a full prompt and picks good settings automatically."
+    "system expands it into a full prompt and picks good settings automatically. "
+    "Describe WHAT the user asked, in their own framing -- never invent a style "
+    "they did not name. Live 2026-10-29: «дедушка какает в кулачок» drew fine as "
+    "the user imagined, but the description said 'A funny and absurd cartoon "
+    "illustration' unasked, so the picture came out мультяшной and every later "
+    "style change fought that wording. No style named -> a plain realistic photo "
+    "render (these are photoreal engines); humor comes from the subject itself, "
+    "not from declaring it a 'funny cartoon'. Keep the user's exact scene: who "
+    "does what, with what, where -- do not soften or reinterpret absurd or crude "
+    "requests; draw them literally."
 )
 
 _GENERATE_VIDEO_DESC = (

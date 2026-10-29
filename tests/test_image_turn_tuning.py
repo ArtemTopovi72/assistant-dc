@@ -141,5 +141,15 @@ check("distinct reasons still refine to the cap",
       res2.get("attempts", 0) == IG.MAX_IMAGE_REFINEMENT_ATTEMPTS,
       (res2.get("attempts"), IG.MAX_IMAGE_REFINEMENT_ATTEMPTS))
 
+# ── the agent must not invent a style the user never named ──────────────────
+# «дедушка какает в кулачок» (no style named) got 'A funny and absurd cartoon
+# illustration' from the agent itself; the picture came out мультяшной.
+import tool_descriptions as TD
+desc = TD._GENERATE_IMAGE_DESC
+check("generate_image description bans invented styles",
+      "never invent a style" in desc and "photoreal" in desc, desc[:120])
+check("it keeps the user's scene literally",
+      "draw them literally" in desc)
+
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)
