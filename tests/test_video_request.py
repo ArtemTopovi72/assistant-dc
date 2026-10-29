@@ -249,3 +249,21 @@ def test_context_ir_ask_carries_the_style_anchor_and_one_action_arc():
     assert "STYLE AND ACTION RULES" in seen["user_text"]
     assert "never write 'Live-action'" in seen["user_text"]
     assert "ONE action arc" in seen["user_text"]
+
+
+def test_framing_lock_freezes_the_camera_not_the_scene():
+    """The grandpa clip (2026-10-29): static camera + «preserve composition exactly»
+    + «preserving their exact appearance» left diffusion nothing to move but smoke
+    (research: ALG CVPR 2026 -- a dominant start frame suppresses motion).
+    The camera stays locked; the scene inside the frame is told to live."""
+    assert "Only the camera is locked" in video._FRAMING_LOCK_SUFFIX
+    assert "the scene inside the frame LIVES" in video._FRAMING_LOCK_SUFFIX
+    assert "breathing" in video._FRAMING_LOCK_SUFFIX
+    assert "never to a frozen pose" in video._STYLE_LOCK_SUFFIX
+
+
+def test_lock_framing_keeps_scene_alive_in_output():
+    ctx = SimpleNamespace(video_request="Animate this photo with a static camera.",
+                          yes_no=lambda question, text, **kw: False)
+    out = video._lock_framing_unless_requested("The old man waves.", ctx)
+    assert "no camera movement" in out and "the scene inside the frame LIVES" in out

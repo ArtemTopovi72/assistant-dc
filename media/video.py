@@ -1225,7 +1225,16 @@ def _normalize_save_node(wf: dict) -> dict:
 # --------------------------------------------------------------------------- #
 _FRAMING_LOCK_SUFFIX = (
     " Camera: static, locked off, no camera movement, no zoom, no pan, no crop -- "
-    "preserve the original framing and composition of the reference exactly.")
+    "preserve the original framing and composition of the reference exactly."
+    # A fully frozen brief reads as "nothing may change", and the diffusion then
+    # fills its only freedom with ambient smoke (grandpa clip, 2026-10-29 01:41;
+    # research: ALG, CVPR 2026 -- the conditioning start frame dominates i2v and
+    # suppresses motion; over-constrained "keep the same" prompts freeze clips).
+    # Only the CAMERA is locked; the scene inside the frame performs.
+    " Only the camera is locked -- the scene inside the frame LIVES: the subject "
+    "carries out the described action with natural follow-through (breathing, "
+    "weight shifts, hands and face working), and the picture's own ambience "
+    "responds to it.")
 
 
 def _lock_framing_unless_requested(description: str, ctx=None) -> str:
@@ -1274,7 +1283,11 @@ _HEAD_START_LOCK_SUFFIX = (
     "fills more of the frame than in <Picture 1>.")
 _STYLE_LOCK_SUFFIX = (
     " Keep the reference's visual style unchanged from the first frame to the last. "
-    "Keep the same subjects, objects and background, except for the changes requested above.")
+    "Keep the same subjects, objects and background, except for the changes requested above. "
+    # Consistent identity is not a frozen pose: a clip that may change nothing
+    # renders ambient smoke instead of the action (grandpa clip, 2026-10-29).
+    " Consistency applies to WHO they are -- identity, clothing, colors, style -- "
+    "never to a frozen pose: the subjects move and act throughout the clip.")
 
 
 def _asks_new_style(description: str, ctx=None) -> bool:
