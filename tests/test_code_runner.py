@@ -40,6 +40,14 @@ def test_without_isolation_code_does_not_run(box, no_docker):
     assert "unavailable" in res.output.lower()
 
 
+def test_failed_image_build_does_not_run_outdated_container(box, monkeypatch):
+    monkeypatch.setattr(R, "ensure_image", lambda: False)
+    monkeypatch.setattr(R, "_run_in_container", lambda *a, **k: pytest.fail("started stale image"))
+    ctx = types.SimpleNamespace(deps=types.SimpleNamespace(docker_available=lambda: True))
+    result = R.run_python(box, "print('hi')", ctx=ctx)
+    assert not result.ok and "image" in result.output.lower()
+
+
 def test_the_refusal_does_not_execute_anything(box, no_docker):
     """The script is written down for inspection, but nothing spawns."""
     called = []

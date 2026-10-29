@@ -1450,7 +1450,9 @@ class ResolveMixin:
                     # The tool named has to MATCH the file: read_file refuses an
                     # image, so a .png needs open_image instead.
                     import tool_code_handlers as _tch
-                    _hint = ("open_image, then inspect_image"
+                    _hint = ("run_code with /opt/ffmpeg-skill/scripts/probe.py, then edit and select the output with pack_archive"
+                             if Path(_saved_as).suffix.lower() in (".mp4", ".m4v", ".mov", ".mkv", ".webm", ".avi")
+                             else "open_image, then inspect_image"
                              if Path(_saved_as).suffix.lower()
                              in _tch.IMAGE_SUFFIXES
                              else "list_files, unpack_archive, read_file")

@@ -47,30 +47,30 @@ def prediction(ctx, period, lang='ru', rng=None):
     # trend with a decision. One shared 4-point shape made all three periods
     # read as the same horoscope soup (2026-10-28).
     shapes = {
-        'day': ('ONE ordinary day, and it is small. 2-3 sentences, about 40 words: one little '
-                'thing that will go suspiciously well today (a find, a snack, green lights all '
-                'the way); one tiny trap (something forgotten, a stubborn zipper); one '
-                'micro-move that saves the evening. A friend winking, not a fortune teller.'),
-        'week': ('ONE week -- a small story arc. 3-4 sentences, about 60 words: the week\'s '
-                 'theme in three words; one meeting or message that bends the plan for the '
-                 'better; one thing to say "no" to so the weekend stays yours; end with a tiny '
-                 'challenge for the reader. Playful, slightly cheeky.'),
-        'month': ('A WHOLE month -- big strokes and decisions, not daily weather. 5-6 '
-                  'sentences, about 90 words: the month\'s trend as a headline; one door '
-                  'opening (a skill, a trip, an idea worth starting); one door closing that '
-                  'turns out fine; a decision the reader will be proud of by month\'s end; a '
-                  'bold, warm send-off. Epic but cosy.'),
+        'day': 'One ordinary day: a specific everyday moment. 2-3 sentences, about 40 words.',
+        'week': 'One week: a small story arc. 3-4 sentences, about 60 words.',
+        'month': 'One month: a larger trend and a choice. 5-6 sentences, about 90 words.',
     }
     banned = ('BANNED phrases, never use them or their calques: «вспышки вдохновения» / bursts '
               'of inspiration, «душевное равновесие» / inner peace, people who rush or '
               'interrupt, «пойдут как по маслу», any generic horoscope filler. ')
     system = (f'Write a playful mini prediction in {language}. Period and required shape: '
               f'{shapes[period]} {banned}'
-              'Describe people by behaviour only, never real names or claimed hidden '
+              'Address the reader directly as you. Write the prediction itself, never repeat '
+              'the instructions or the brief. Describe people by behaviour only, never real names or claimed hidden '
               'intentions. This is imaginative entertainment, not a factual forecast. No '
               'guarantees, no scary threats, no introduction, disclaimer, HTML or Markdown. '
               'Do not add lucky numbers; those are attached separately.')
-    user = f'Period: {period}. Variation token: {rng.randrange(1_000_000)} (do not print this token).'
+    theme = rng.choice(('a creative project', 'a forgotten hobby', 'a practical purchase',
+                        'a new skill', 'an unexpected invitation', 'a change of routine',
+                        'a small adventure', 'a long-postponed task', 'a conversation',
+                        'a surprising discovery', 'rest and energy', 'a playful challenge'))
+    twist = rng.choice(('an amusing misunderstanding', 'a useful coincidence',
+                        'a tempting distraction', 'an unexpected ally', 'a lucky mistake',
+                        'a choice between two good options', 'a change of plans',
+                        'a tiny act of courage'))
+    user = (f'Period: {period}. Build an original prediction around {theme}, with {twist}. '
+            f'Variation token: {rng.randrange(1_000_000)} (do not print this token).')
     body = text_model(ctx)(ctx, system, user, temperature=0.9, max_tokens=450)
     if not isinstance(body, str) or not body.strip():
         raise RuntimeError('Prediction could not be generated. Try again.')

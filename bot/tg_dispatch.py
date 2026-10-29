@@ -44,6 +44,19 @@ def _largest_photo(photos) -> Optional[dict]:
 _TYPED_STOP = {"stop", "стоп", "хватит", "отмена", "отмени", "cancel", "остановись"}
 
 
+def _video_edit_request(text):
+    return bool(re.search(r'обреж|выреж|нареж|склей|смонтир|монтаж|субтитр|ускор|замедл|'
+                          r'(?:удали|убери)\s+(?:тишин|звук)|вертикальн|'
+                          r'\b(?:trim|cut|splice|edit|subtitles?|captions?|reframe|speed)\b',
+                          text or '', re.I))
+
+
+def _video_upload_name(name):
+    from pathlib import Path
+    path = Path(name or 'video.mp4')
+    return f'{path.stem[:120]}_{uuid.uuid4().hex}{path.suffix[:16] or ".mp4"}'
+
+
 def _asks_as_file(text: str, ctx=None) -> bool:
     return yes_no(ctx)("A user wrote to a bot that sends pictures: {text}. Is this a "
                           "request for the BOT to send its picture as a FILE (a document, "
@@ -463,6 +476,16 @@ class DispatchMixin:
         # An ordinary video (not the round note) rides the same path: it is
         # looked at (frames every 5 s) and listened to.
         video_note = msg.get("video_note") or msg.get("video")
+        _doc = msg.get("document") or {}
+        _video_file = msg.get("video") or (_doc if str(_doc.get("mime_type") or "").startswith("video/") else None)
+        if _video_file and _video_edit_request(msg.get("caption")):
+            import sandbox_access as _sa
+            if _sa.may_use_files(self._user_store.get(chat_id)):
+                emit({"type": "document", "file_id": _video_file["file_id"],
+                      "filename": _video_upload_name(_video_file.get("file_name")),
+                      "file_size": int(_video_file.get("file_size") or 0),
+                      "caption": (msg.get("caption") or "").strip()})
+                return
         # A video or GIF sent with no words is material, like a forwarded one: the same
         # menu (transcript, summary, storyboard, ▶️ continue) instead of a one-off comment
         # (owner, 2026-10-12). A кружок is the user talking; words on a clip are the task.
@@ -482,7 +505,6 @@ class DispatchMixin:
                 "caption": (msg.get("caption") or "").strip()})
             return
 
-        _doc = msg.get("document") or {}
         if not video_note and str(_doc.get("mime_type") or "").startswith("video/"):
             # A video sent as a file (the way a long recording usually arrives).
             # Duration is unknown on the wire: treat it as long -- the offer

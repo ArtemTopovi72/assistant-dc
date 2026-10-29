@@ -761,6 +761,18 @@ def _handle_pack_archive(ctx, state, args: dict) -> str:
     """
     box = _box(ctx)
     is_file = box.resolve(args.get("path") or "").is_file()
+    candidate = box.resolve(args.get("path") or "")
+    request = state.get('user_input_original') or state.get('user_input') or ''
+    from tg_dispatch import _video_edit_request
+    if is_file and _video_edit_request(request) and candidate.suffix.lower() in {".mp4", ".m4v", ".mov", ".mkv", ".webm", ".avi"}:
+        rel = str(candidate.relative_to(box.root)).replace("\\", "/")
+        code = ("import subprocess\n"
+                f"p=subprocess.run(['ffprobe','-v','error','-select_streams','v:0','-show_entries',"
+                f"'stream=codec_type','-of','csv=p=0',{rel!r}],capture_output=True,text=True)\n"
+                "assert p.returncode == 0 and 'video' in p.stdout\n")
+        probe = dep(ctx, "run_python", _runner.run_python)(box, code, timeout=30, allow_host=False, ctx=ctx)
+        if not probe.ok or probe.backend != "docker":
+            return "[TOOL ERROR] Could not verify a readable video stream in the isolated sandbox. Do not deliver this file; check the sandbox or re-edit with ffmpeg-skill."
     # Bench deliver_symptom 2026-09-23 (thinking on): a correct fix inside
     # morevillagers-1.21.1_unpacked, then pack_archive(".") -- the whole work
     # folder, so every file sat under "<mod>_unpacked/..." and no game could
@@ -821,6 +833,11 @@ def _handle_run_code(ctx, state, args: dict) -> str:
                 "administrator has to raise their sandbox level.")
     code = args.get("code") or ""
     request = state.get('user_input_original') or state.get('user_input') or ''
+    if (re.search(r"видео|ролик|клип|video|clip", request, re.I)
+            and re.search(r"['\"](?:ffmpeg|ffmpeg\.exe)['\"]", code, re.I)):
+        return ("[TOOL ERROR] Use /opt/ffmpeg-skill/scripts/cut.py (or the appropriate skill script), "
+                "not raw ffmpeg: stream-copy cuts can produce audio without video. "
+                "Run the script with python, check its exit code and verified output, then select the result.")
     overwritten = _test_overwrite_target(box, request, code)
     if overwritten:
         return f"[TOOL ERROR] Refusing to overwrite {overwritten}: the user asked to test it, not replace it. Run the existing file."

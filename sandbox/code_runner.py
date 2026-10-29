@@ -214,6 +214,11 @@ def dockerfile_digest() -> str:
         if os.path.exists(p):
             with open(p, "rb") as fh:
                 h.update(fh.read())
+    from pathlib import Path
+    skill_dir = Path(SANDBOX_DOCKERFILE_DIR) / "ffmpeg-skill"
+    for p in sorted(p for p in skill_dir.rglob("*") if p.is_file()):
+        h.update(p.relative_to(skill_dir).as_posix().encode())
+        h.update(p.read_bytes())
     return h.hexdigest()[:12]
 
 
@@ -305,7 +310,8 @@ def run_python(sandbox, code: str, timeout: int = DEFAULT_TIMEOUT,
     # does not wait); a request that lands in that window waits here instead
     # of failing with "engine is not running" on the user's first script.
     if dep(ctx, "docker_available", docker_available)() or ensure_docker(wait_s=60, ctx=ctx):
-        ensure_image()
+        if not ensure_image():
+            return RunResult(False, -1, "Sandbox image could not be built or updated; code was not run.", 0.0, script=rel)
         # A HOME the script can write. The root filesystem is read-only, so any
         # library that keeps a dotfile fails on first use: matplotlib prints
         # "mkdir -p failed for path /root/.config/matplotlib ... Read-only file

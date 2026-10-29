@@ -131,7 +131,8 @@ class CodeTab(QWidget):
         hint = QLabel("A working folder the assistant can open files in: "
                       "archives, source, configs, photos. Drop something in, "
                       "say what to do with it in plain words, and it unpacks, "
-                      "reads, edits and packs the result back up. Code only "
+                      "reads, edits and packs the result back up. Video and audio "
+                      "can also be edited locally with FFmpeg. Code only "
                       "ever runs in a container; without one it refuses rather "
                       "than running on this machine.")
         hint.setWordWrap(True)

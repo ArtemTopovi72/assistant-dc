@@ -59,3 +59,12 @@ def test_invalid_prediction_period_does_not_call_the_model():
     ctx = SimpleNamespace(text_model=lambda *a, **kw: pytest.fail('invalid period reached model'))
     with pytest.raises(ValueError):
         R.prediction(ctx, 'year')
+
+
+def test_prediction_varies_the_creative_brief_not_just_a_number():
+    calls = []
+    ctx = SimpleNamespace(text_model=lambda c, s, u, **kw: calls.append((s, u)) or 'Ответ')
+    for seed in range(12):
+        R.prediction(ctx, 'week', 'ru', random.Random(seed))
+    assert len({user for _, user in calls}) == 12
+    assert len({user.split('Variation token:')[0] for _, user in calls}) > 4

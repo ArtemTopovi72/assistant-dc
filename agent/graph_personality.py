@@ -422,7 +422,7 @@ def _sandbox_touched_recently(sandbox, within_s: float = 1800.0) -> bool:
         return False
 
 
-def _kit_always(ctx, tools_called, has_image: bool = False) -> set:
+def _kit_always(ctx, tools_called, has_image: bool = False, text: str = "") -> set:
     """Which tools must survive retrieval this round, whatever the words were.
 
     Always: everything already called this turn, so a retry is never made
@@ -455,6 +455,8 @@ def _kit_always(ctx, tools_called, has_image: bool = False) -> set:
     if _sandbox_has_files(getattr(ctx, "sandbox", None)):
         # Enough to look on every turn; the whole kit once the folder is in use.
         always |= set(_retrieval._LOOK_KIT)
+        if re.search(r"видео|ролик|клип|аудио|звук|субтитр|монтаж|video|clip|audio|subtitle|ffmpeg", text, re.I):
+            always |= {"run_code", "pack_archive"}
         if always & set(_retrieval._CODE_KIT) - set(_retrieval._LOOK_KIT) or (
                 set(tools_called or ()) & set(_retrieval._CODE_KIT)):
             always |= set(_retrieval._CODE_KIT)
@@ -1096,7 +1098,8 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
         # exact complaint this whole feature was built to fix. A vocabulary can
         # always be missing a word; the folder either has files or it does not.
         _has_img = bool(state.get("image_data") or getattr(ctx, "last_image_path", None))
-        _always = _kit_always(ctx, tools_called_this_turn, has_image=_has_img)
+        _always = _kit_always(ctx, tools_called_this_turn, has_image=_has_img,
+                              text=original_input or user_input or "")
         # «удали его» after a reminder names no reminder: pending reminders are
         # STATE, so the reminder tool rides along while there are any.
         import reminders as _rem

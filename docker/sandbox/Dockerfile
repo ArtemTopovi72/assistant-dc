@@ -30,3 +30,6 @@ RUN pip install \
 
 # House helpers: `import assistant_tools` (dedupe, sharpness, make_collage, ...).
 COPY assistant_tools.py /usr/local/lib/python3.12/site-packages/assistant_tools.py
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+COPY ffmpeg-skill /opt/ffmpeg-skill

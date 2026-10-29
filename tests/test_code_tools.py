@@ -667,3 +667,30 @@ def test_a_full_folder_pins_only_the_look_kit_until_it_is_used(ctx, box):
     picked = {s["function"]["name"] for s in R.select_tools("какая погода", schemas,
                                                             always=set(R._LOOK_KIT))}
     assert "edit_file" not in picked and "list_files" in picked
+
+
+def test_media_in_sandbox_keeps_editor_tools_available(ctx, box):
+    import graph_personality as GP
+    import tool_retrieval as R
+    box.resolve("clips").mkdir()
+    box.resolve("clips/clip.m4v").write_bytes(b"video")
+    schemas = [{"function": {"name": n}} for n in R._CODE_KIT + ("run_code", "generate_video")]
+    picked = {s["function"]["name"] for s in R.select_tools(
+        "обрежь видео", schemas, always=GP._kit_always(ctx, set(), text="обрежь видео"), wants=["generate_video"])}
+    assert {"run_code", "pack_archive"} <= picked
+
+
+def test_video_edit_rejects_unverified_raw_ffmpeg_and_broken_output(ctx, box):
+    state = {"user_input": "Обрежь видео"}
+    result = T.execute_tool(ctx, state, "run_code", {"code": "import subprocess; subprocess.run(['ffmpeg', '-i', 'in.mp4'])"})
+    assert result.startswith("[TOOL ERROR]") and "ffmpeg-skill" in result
+    box.resolve("broken.mp4").write_bytes(b"not a video")
+    result = T.execute_tool(ctx, state, "pack_archive", {"path": "broken.mp4"})
+    assert result.startswith("[TOOL ERROR]") and not state.get("document_path")
+
+
+def test_user_can_retrieve_original_video_without_running_code(ctx, box):
+    box.resolve("clip.mp4").write_bytes(b"original")
+    state = {"user_input": "Пришли файл"}
+    result = T.execute_tool(ctx, state, "pack_archive", {"path": "clip.mp4"})
+    assert "Selected" in result and state["document_path"].endswith("clip.mp4")

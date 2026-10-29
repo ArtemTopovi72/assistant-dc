@@ -228,6 +228,11 @@ class DashboardMixin:
             _b = QPushButton(_label); _b.setToolTip(_tip); _b.setObjectName("ghost")
             _b.clicked.connect(lambda _=False, p=_prefix: self._start_video_mode(p))
             self.video_mode_btns.append(_b)
+        self.video_edit_btn = QPushButton("🎞 Edit video")
+        self.video_edit_btn.setToolTip("Edit local video in the code sandbox with FFmpeg")
+        self.video_edit_btn.setObjectName("ghost")
+        self.video_edit_btn.clicked.connect(self._open_video_editor)
+        self.video_mode_btns.append(self.video_edit_btn)
         self.commands_search = QLineEdit()
         self.commands_search.setPlaceholderText("Search commands…")
         self.commands_search.setClearButtonEnabled(True)
@@ -265,7 +270,7 @@ class DashboardMixin:
                 # A command answers in the chat: show it. Plain switches stay put.
                 if isinstance(it, QPushButton):
                     it.setProperty("commandAction", True)
-                    if it not in (self.voice_btn, self.whole_frame_btn):
+                    if it not in (self.voice_btn, self.whole_frame_btn, self.video_edit_btn):
                         it.clicked.connect(lambda *_: self.pages.setCurrentIndex(1))
             group_layout.addWidget(_FlowWidget(flow))
             extras = (self.viz,) if title == "Voice & camera" else ()
@@ -450,6 +455,12 @@ class DashboardMixin:
         self.pages.setCurrentIndex(1)
         self.splitter.setSizes(self._default_splitter_sizes())
         return root
+
+    def _open_video_editor(self):
+        self._focus_tab("code")
+        self.pages.setCurrentIndex(2)
+        self.code_tab.prompt.setPlaceholderText("Add a video and describe the edit, e.g. trim from 0:10 to 0:30")
+        self.code_tab.prompt.setFocus()
 
     def _filter_commands(self, query):
         total = 0
