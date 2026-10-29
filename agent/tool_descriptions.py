@@ -60,7 +60,11 @@ _GENERATE_VIDEO_DESC = (
     "in the prompt). Attaching the pictures already in this conversation is automatic "
     "— use use_current_images/use_current_video rather than trying to pass file paths. "
     "The clip comes back with its own generated audio. It is SLOW (many minutes), so "
-    "call it once and do not re-run it to make small wording changes."
+    "call it once and do not re-run it to make small wording changes. "
+    "When your description references <Picture 1>, the clip is anchored on the chat's "
+    "picture -- keep use_current_images on; do not invent a look the source does not "
+    "have (a chat photo animated without its picture yields an invented '3D CG "
+    "animation' -- мультяшно, live 2026-10-29)."
 )
 
 _REDRAW_IMAGE_DESC = (

@@ -1728,9 +1728,17 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         # «сделай видео: лиса бежит по лесу» opened on the man with the shovel from three
         # turns back and morphed into the forest (2026-10-17): the default took every
         # picture in the chat, whatever the words were about.
-        logger.info("generate_video: the words describe a new scene -- not animating %s",
-                    [os.path.basename(p) for p in images])
-        images = []
+        # But a description that itself anchors on <Picture N> counts the chat's
+        # picture in even when the yes/no read said "new scene": the model wrote
+        # "close-up of the old man from <Picture 1>" and the drop left the reference
+        # dangling -- H3 t2va invented its own cartoonish old man (2026-10-29 12:30).
+        if re.search(r"<Picture \d+>", description):
+            logger.info("generate_video: the description anchors on %s -- keeping the "
+                        "chat's pictures", re.findall(r"<Picture \d+>", description))
+        else:
+            logger.info("generate_video: the words describe a new scene -- not animating %s",
+                        [os.path.basename(p) for p in images])
+            images = []
         # More than H3 can take: keep the most RECENT, which is what the user is
         # most likely talking about.
         if len(images) > video_mod.MAX_REF_IMAGES:

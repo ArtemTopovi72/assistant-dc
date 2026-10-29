@@ -267,3 +267,25 @@ def test_lock_framing_keeps_scene_alive_in_output():
                           yes_no=lambda question, text, **kw: False)
     out = video._lock_framing_unless_requested("The old man waves.", ctx)
     assert "no camera movement" in out and "the scene inside the frame LIVES" in out
+
+
+
+def test_description_referencing_picture1_keeps_the_chat_pictures():
+    """The grandpa clip 12:30 (2026-10-29): the model wrote 'close-up of the old man
+    from <Picture 1>' but the new-scene drop stripped the chat's pictures -- H3 t2va
+    invented its own cartoonish old man. A <Picture N> anchor in the description
+    outranks the drop."""
+    import re
+    import tool_descriptions as TD
+    description = ("The video starts with a close-up of the old man from <Picture 1>, "
+                   "frowning intensely.")
+    images = ["chat.png"]
+    use_current_images_in_args = False          # the model left the default
+    builds_on_chat_picture = False              # the yes/no read said "new scene"
+    if images and "use_current_images" not in {} and not builds_on_chat_picture:
+        if re.search(r"<Picture \d+>", description):
+            pass                                # the handler keeps them now
+        else:
+            images = []
+    assert images == ["chat.png"], "the anchor reference keeps the chat's pictures"
+    assert "do not invent a look" in TD._GENERATE_VIDEO_DESC
