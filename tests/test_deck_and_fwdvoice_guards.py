@@ -125,6 +125,9 @@ for what, must in (("text", "выручка"), ("both", "выручка")):
     bot._do_fwd_voice(CID, what, SAID)
     joined = " ".join(t for t, _ in bot.sent)
     check(f"choice {what!r} delivers the note", must in joined, joined[:120])
+    if what == 'text':
+        check('transcript carries the menu without an extra message',
+              len(bot.sent) == 1 and 'Главное меню' not in joined, bot.sent)
     check(f"choice {what!r} keeps the transcript for the other buttons",
           bot._get_session(CID).fwd_transcript == SAID)
     check(f"choice {what!r} marks the forward as acted on",
@@ -137,7 +140,7 @@ bot._store.put(s)
 pushed = []
 bot._resolve_and_push = lambda cid, batch: pushed.append(batch)
 retold = []
-bot._retell_transcript = lambda cid, said, lang, is_video: retold.append((said, is_video))
+bot._retell_transcript = lambda cid, said, lang, is_video, generation: retold.append((said, is_video))
 bot._do_fwd_voice(CID, "sum", SAID)
 import time as _time
 for _ in range(50):

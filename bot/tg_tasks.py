@@ -34,6 +34,17 @@ _WORD_RE = _re.compile(r"[^\W\d_]+", _re.UNICODE)
 LANG_PIN_TTL = 6 * 3600     # «answer in English from now on» lasts until 6 h of quiet
 
 
+def _layout_candidates(sess, chat_id, recent):
+    """Recover layout metadata from this chat's recent image archive."""
+    entries = list(getattr(sess, 'image_log', None) or [])
+    try:
+        entries.extend(reversed(recent(chat_id, 'photo', 50)))
+    except Exception:
+        pass  # A temporarily unavailable archive must not block the chat.
+    paths = (entry.get('path') for entry in entries)
+    return list(dict.fromkeys(p for p in paths if p and os.path.exists(p + '.layout.json')))
+
+
 def _lang_pin_after(sess, mode: str, named_en: bool, script: str, now: float = None) -> None:
     """The «from now on in English» pin after one typed message: set when English
     is asked for by name, dropped on «по-русски», and over after hours of quiet
@@ -228,8 +239,9 @@ def retell_system(lang: str, is_video: bool) -> str:
                 "quoting the key phrase word for word. A video whose transcript is «(без слов)» / «(no speech)» is "
                 "retold from the storyboard alone: what is shown, in order. Never "
                 "ask for a transcript or say one is missing -- there is nothing more "
-                "to send. A line «Подпись отправителя» / «Sender's caption» is how the sender "
-                "framed the clip. A caption that does not match the picture means a joke or a "
+                "to send. "
+                "A line «Подпись отправителя» / «Sender's caption» is how the sender framed the clip. "
+                "A caption that does not match the picture means a joke or a "
                 "meme: say so, say in one sentence what is actually shown, and if you do not "
                 "recognise the reference say that plainly. Never retell a meme as a literal "
                 "documentary scene (a caption about AI over girls hauling sand is a joke, not a "
@@ -319,9 +331,11 @@ class TaskRunnerMixin:
             # paraphrase what someone actually said.
             # Words only: the storyboard has its own button.
             _speech = tg_bot._split_board(said)[0] or tg_bot._t("fwd_no_speech", lang)
-            for chunk in tg_bot._split_html(tg_bot._t("fwd_voice_head", lang) + "\n"
-                                     + _html_mod.escape(_speech)):
-                self._send_text(chat_id, chunk, parse_mode="HTML")
+            chunks = tg_bot._split_html(tg_bot._t("fwd_voice_head", lang) + "\n"
+                                        + _html_mod.escape(_speech))
+            for i, chunk in enumerate(chunks):
+                kb = self._main_menu_kb(sess, lang) if what == "text" and i == len(chunks) - 1 else None
+                self._send_text(chat_id, chunk, parse_mode="HTML", keyboard=kb)
         if what in ("sum", "both"):
             # A retelling is DATA in, text out: it runs as a one-shot model
             # call with no chat history. Through the agent it would inherit the
@@ -333,8 +347,6 @@ class TaskRunnerMixin:
                              sess.context_generation,
                              name=f"fwd-retell-{chat_id}")
         elif what == "text":
-            self._send_text(chat_id, tg_bot._t("main_menu", lang),
-                            keyboard=self._main_menu_kb(sess, lang))
             # No retelling to remember -- the transcript itself is the turn.
             self._commit_media_turn(chat_id, said, "(transcript delivered verbatim)", "👁 " in said)
         self._activity.log(chat_id, "system", f"[fwd voice] {what}")
@@ -1696,8 +1708,8 @@ class TaskRunnerMixin:
         # through state["image_paths"] (an album sent with the request).
         _one = _target["path"] if _target else ctx.last_image_path
         ctx.recent_image_paths = [p for p in dict.fromkeys([_one or _first, *([] if _target and not _rerun_album else _album)]) if p and os.path.exists(p)]
-        ctx.layout_candidates = [e.get('path') for e in (getattr(sess, 'image_log', None) or [])
-                                 if e.get('path') and os.path.exists(e['path'] + '.layout.json')]
+        import tg_artifacts_store
+        ctx.layout_candidates = _layout_candidates(sess, chat_id, tg_artifacts_store.recent_artifacts)
 
         # The last clip delivered here, so "use that video" resolves.
         _lv = _last_video(self._chat_videos, chat_id)

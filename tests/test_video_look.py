@@ -88,6 +88,45 @@ def test_a_short_clip_is_sampled_densely_and_labels_stay_distinct():
     assert V._stamp(65.3, True) == "1:05.3"
 
 
+def test_motion_details_compare_two_distinct_positions(tmp_path, monkeypatch):
+    import numpy as np
+    from PIL import Image
+    frames = []
+    for i in range(6):
+        a = np.zeros((60, 80), dtype=np.float32)
+        a[25:35, 10 + (i % 2) * 10:20 + (i % 2) * 10] = 255
+        frames.append((i / 6, a))
+    def extract(path, times, directory):
+        directory.mkdir(parents=True, exist_ok=True)
+        result = []
+        for i, t in enumerate(times):
+            frame = directory / f'{i}.jpg'
+            Image.new('RGB', (800, 600)).save(frame)
+            result.append((t, frame))
+        return result
+    monkeypatch.setattr(V, 'extract_frames', extract)
+    result = V.motion_details('clip.mp4', frames, tmp_path)
+    assert len(result) == 2 and result[0][0] != result[1][0]
+    assert all(Image.open(p).width < 800 for _, p in result)
+    assert V.motion_details('clip.mp4', [(i, frames[0][1]) for i in range(6)], tmp_path) == []
+
+
+def test_motion_comparison_requires_two_details(tmp_path, monkeypatch):
+    clip = _clip(tmp_path)
+    calls = []
+    def vision(p, q, system):
+        calls.append(q)
+        return 'Storyboard survives'
+    monkeypatch.setattr(V, 'motion_details', lambda *args: [(0.1, clip)])
+    result = V.look_at_video(None, str(clip), work_dir=tmp_path / 'one', vision=vision)
+    assert result['description'] == 'Storyboard survives' and len(calls) == 1
+    calls.clear()
+    monkeypatch.setattr(V, 'motion_details', lambda *args: [(0.1, clip), (0.2, clip)])
+    result = V.look_at_video(None, str(clip), work_dir=tmp_path / 'two', vision=vision)
+    assert result['description'] == 'Storyboard survives' and len(calls) == 1
+    assert 'last two pictures' in calls[0]
+
+
 def test_portion_stamps_are_absolute_even_when_the_model_counts_from_zero():
     times = [365.0, 373.0, 390.0]
     desc = "0:05 — a\n0:13 — b\n6:30 — c\nИтог: x"

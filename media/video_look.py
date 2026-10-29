@@ -164,6 +164,41 @@ def _sharpness(a) -> float:
     return float(np.var(lap))
 
 
+def motion_details(path: str, dense: list, work_dir: Path) -> list[tuple[float, Path]]:
+    """Show two distinct phases of localized motion at a readable size."""
+    import numpy as np
+    from PIL import Image
+    if len(dense) < 3:
+        return []
+    arrays = np.stack([a for _, a in dense])
+    variation = np.percentile(arrays, 90, axis=0) - np.percentile(arrays, 10, axis=0)
+    ys, xs = np.where(variation > 18)
+    if len(xs) < 12:
+        return []
+    h, w = variation.shape
+    x0, x1 = max(0, int(xs.min()) - w // 12), min(w, int(xs.max()) + w // 12 + 1)
+    y0, y1 = max(0, int(ys.min()) - h // 12), min(h, int(ys.max()) + h // 12 + 1)
+    if (x1 - x0) * (y1 - y0) > w * h * .7:
+        return []  # Camera movement or scene change, not a local action.
+    region = arrays[:, y0:y1, x0:x1]
+    # Choose the two most different positions, not just equally spaced snapshots.
+    flat = region.reshape(len(region), -1)
+    first = int(np.argmax(np.mean(np.abs(flat - np.median(flat, axis=0)), axis=1)))
+    second = int(np.argmax(np.mean(np.abs(flat - flat[first]), axis=1)))
+    if first == second:
+        return []
+    extracted = extract_frames(path, sorted([dense[first][0], dense[second][0]]), work_dir / 'motion_frames')
+    result = []
+    for t, frame in extracted:
+        with Image.open(frame) as im:
+            crop = im.crop((int(x0 * im.width / w), int(y0 * im.height / h),
+                            int(x1 * im.width / w), int(y1 * im.height / h)))
+            dst = work_dir / f'motion_{int(t * 100):07d}.jpg'
+            crop.save(dst, quality=95)
+            result.append((t, dst))
+    return result
+
+
 def key_times(frames: list, max_frames: int = MAX_FRAMES, change: float = SHOT_CHANGE,
               min_shot: float = MIN_SHOT_SECONDS) -> list[float]:
     """Timestamps of the sharpest frame of every shot, at most `max_frames`.
@@ -388,11 +423,13 @@ def look_at_video(ctx, path: str, *, every: float = EVERY_SECONDS,
     dur = duration_seconds(path)
     work_dir = Path(work_dir or tempfile.mkdtemp(prefix="video_look_"))
     try:
-        times = key_times(dense_pass(path, work_dir / "dense", fps=dense_fps(dur)), max_frames)
+        dense = dense_pass(path, work_dir / "dense", fps=dense_fps(dur))
+        times = key_times(dense, max_frames)
         how = "key moments"
     except Exception:
         logger.warning("video_look: dense pass failed, falling back to every %ss", every, exc_info=True)
         times = sample_times(dur, every, max_frames)
+        dense = []
         how = f"every {every:.0f} s"
     frames = extract_frames(path, times, work_dir / "frames")
     if not frames:
@@ -426,7 +463,23 @@ def look_at_video(ctx, path: str, *, every: float = EVERY_SECONDS,
               "setup of the joke when the picture does not match it: say what the frames show, "
               "quote any text on them, and do not describe the scene as if it were serious.")
     try:
-        desc = (vision([(f"Frame {_stamp(t + offset, tenths)}:", str(p)) for t, p in frames], q, _SHEET_SYSTEM + _LANG_LINE.get(lang, _LANG_LINE["en"])) or "").strip()
+        details = motion_details(path, dense, work_dir) if 0 < dur <= 20 else []
+    except Exception:
+        logger.warning("video_look: motion details failed", exc_info=True)
+        details = []
+    if len(details) != 2:
+        details = []
+    if details:
+        q += ("\n\nThe last two pictures are enlarged details of movement, from the same video. "
+              "Compare positions across both; identify the action and object only if visible. "
+              "Look for repeated changes across the full sequence. Before naming an object, "
+              "consider its structure and the small objects around it; distinguish it from "
+              "similar objects and say when its identity is unclear. Do not call the clip motionless merely "
+              "because the face or background stays still. These details are not extra timestamps.")
+    try:
+        visual = [(f"Frame {_stamp(t + offset, tenths)}:", str(p)) for t, p in frames]
+        visual += [(f"Motion detail {_stamp(t + offset, True)}:", str(p)) for t, p in details]
+        desc = (vision(visual, q, _SHEET_SYSTEM + _LANG_LINE.get(lang, _LANG_LINE["en"])) or "").strip()
     except Exception:
         logger.exception("video_look: vision failed")
         desc = ""
