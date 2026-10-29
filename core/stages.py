@@ -74,6 +74,7 @@ _STAGES: dict[str, dict[str, str]] = {
     # tools.py — pictures
     "Drawing a picture":           {"ru": "Рисую картинку"},
     "Preparing the picture":       {"ru": "Подготавливаю картинку"},
+    "Checking the picture":        {"ru": "Проверяю картинку"},
     # draw_preview.py -- the plan's boxes as a sketch, checked before the render
     "Checking the layout":         {"ru": "Проверяю компоновку по эскизу"},
     "Redrawing the picture":       {"ru": "Перерисовываю картинку"},

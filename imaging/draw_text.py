@@ -69,10 +69,33 @@ def _clamp_box(el):
     return el
 
 
+def _keep_text_inside_frame(el, host=None):
+    before = tuple(el[k] for k in ('x', 'y', 'w', 'h'))
+    if host is None:
+        el['w'], el['h'] = min(el['w'], .96), min(el['h'], .84)
+    for pos, size in (('x', 'w'), ('y', 'h')):
+        low, high = (.02, .98) if pos == 'x' else (.08, .92)
+        if host is not None:
+            low = max(low, host[pos])
+            high = min(high, host[pos] + host[size])
+        if high - low >= el[size]:
+            el[pos] = max(low, min(el[pos], high - el[size]))
+    return before != tuple(el[k] for k in ('x', 'y', 'w', 'h'))
+
+
 def _text_els(layout: dict) -> list:
     """(index, element) for every element that carries lettering."""
     return [(i, el) for i, el in enumerate(layout.get("elements") or [])
             if str(el.get("text") or "").strip()]
+
+
+def inset_text(layout: dict) -> tuple:
+    layout = ideogram.normalize_layout(copy.deepcopy(layout))
+    notes = []
+    for i, el in _text_els(layout):
+        if _keep_text_inside_frame(el, _host_of(layout, i)):
+            notes.append(f'moved “{str(el["text"])[:20]}” inside the frame')
+    return layout, notes
 
 
 def text_report(layout: dict) -> list:
@@ -85,6 +108,9 @@ def text_report(layout: dict) -> list:
     out = []
     for i, el in _text_els(layout):
         text = str(el["text"]).strip()
+        if el['x'] < .01 or el['y'] < .01 or el['x'] + el['w'] > .99 or el['y'] + el['h'] > .99:
+            out.append({'kind': 'text_at_edge', 'targets': [i],
+                        'why': f'the lettering “{text[:20]}” touches the frame edge'})
         # Per line: a wrapped label is judged by its longest line, since that
         # is what has to fit, and its box is as many line-heights tall.
         _lines = lines_of(text)
@@ -173,6 +199,8 @@ def auto_fix_text(layout: dict) -> tuple:
         if host is not None:
             _give_headroom(layout, host, notes)
         if abs(w - el["w"]) < 0.005 and abs(h - el["h"]) < 0.005:
+            if _keep_text_inside_frame(el, host):
+                notes.append(f'moved “{text[:20]}” inside the frame')
             continue
         el["w"], el["h"] = w, h
         el["x"], el["y"] = cx - w / 2, cy - h / 2
@@ -181,6 +209,7 @@ def auto_fix_text(layout: dict) -> tuple:
             el["x"] = max(host["x"], min(el["x"], host["x"] + host["w"] - w))
             el["y"] = max(host["y"], min(el["y"], host["y"] + host["h"] - h))
         _clamp_box(el)
+        _keep_text_inside_frame(el, host)
         n_lines = len(lines_of(text))
         notes.append(f'sized the box for “{text[:20]}” to {el["w"]:.2f}×{el["h"]:.2f}'
                      + (f" in {n_lines} lines" if n_lines > 1 else "")
@@ -374,6 +403,7 @@ def repair_text(layout: dict, failures: list, escalation: int = 0) -> tuple:
             el["x"] = max(host["x"], min(el["x"], host["x"] + host["w"] - w))
             el["y"] = max(host["y"], min(el["y"], host["y"] + host["h"] - h))
         _clamp_box(el)
+        _keep_text_inside_frame(el, host)
         el["desc"] = spell_out(el)
         notes.append(f'“{text}” came out garbled — box enlarged to '
                      f'{el["w"]:.2f}×{el["h"]:.2f} and the spelling stated letter '
@@ -566,6 +596,10 @@ def _similarity(a: str, b: str) -> float:
 import ocr_reader as _ocr  # noqa: E402
 
 
+def _visual_norm(text):
+    return _norm_text(text).translate(str.maketrans('aeopcxykhbtm', 'аеорсхукнвтм'))
+
+
 def _match_lines(want: str, read: list) -> tuple:
     """(best reading, similarity) for a string that may be several lines.
 
@@ -665,8 +699,8 @@ def verify_text(ctx, image_path: str, layout: dict) -> dict:
             failures.append(i)
     edges = dep(ctx, 'ocr_edge_text', _ocr.edge_text)(image_path) or []
     for check in checks:
-        expected = _norm_text(check['expected'])
-        if expected and any(len(_norm_text(s)) >= 3 and (_norm_text(s) in expected or expected in _norm_text(s)) for s in edges):
+        expected = _visual_norm(check['expected'])
+        if expected and any(len(_visual_norm(s)) >= 3 and (_visual_norm(s) in expected or expected in _visual_norm(s)) for s in edges):
             check['ok'] = False
             check['clipped'] = True
             if check['index'] not in failures:
@@ -722,6 +756,7 @@ def stray_text(ctx, image_path: str, layout: dict, wanted: list) -> list:
             if len(norm) < STRAY_MIN_CHARS or norm == "???":
                 continue
             if any(_similarity(norm, w) >= 0.6 or norm in w or w in norm
+                   or _visual_norm(norm) in _visual_norm(w) or _visual_norm(w) in _visual_norm(norm)
                    for w in wanted_lines):
                 continue
             stray.append(cand.strip())

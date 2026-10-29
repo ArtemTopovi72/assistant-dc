@@ -12,7 +12,7 @@ import os
 import tempfile
 from typing import List, Tuple
 
-from seams import dep, text_model, vision_model
+from seams import dep, text_model, vision_model, yes_no
 
 logger = logging.getLogger("assistant.object_refs")
 
@@ -27,15 +27,20 @@ _FIND_SYS = (
     "ship, gadget, instrument or appliance (\"ВАЗ 2107\", \"Урал с коляской\", \"Ту-154\"), or a "
     "lesser-known named building or monument;\n"
     "- \"person\": a real, well-known person who must be recognisable (\"Ленин\", \"Гагарин\");\n"
-    "- \"character\": a fictional character, or the costume, armour or outfit of one that someone "
+    "- \"logo\": a specific real brand logo or symbol explicitly requested in the picture "
+    "(for example the OpenAI or ChatGPT blossom logo), to reproduce its exact shape;\n"
+    "- \"character\": an established, independently recognizable fictional character explicitly named "
+    "by the request, or the costume, armour or outfit of one that someone "
     "else wears (\"Ленин в стиле Думгая\" -> the Doom Slayer's armour; \"кот в костюме Бэтмена\" "
     "-> Batman's suit).\n"
     # The long «Lenin reimagined as a Doomguy-style warrior» came back as the armour alone and
     # Lenin was drawn as a stranger (bench 2026-10-26).
     "A real person drawn in a character's costume or style is TWO entries: the person and the costume.\n"
+    "A newly invented mascot or a person representing a brand or model is not an established "
+    "character: never search for a random mascot just because it wears a named logo. "
     "Not: a generic thing (\"a car\", \"a knight\", \"a demon\"), a world-famous landmark every "
     "image model knows (the Eiffel Tower), an animal, a food, a style of art (anime, watercolour). "
-    "Reply with JSON only: {\"things\": [{\"kind\": \"object|person|character\", \"thing\": "
+    "Reply with JSON only: {\"things\": [{\"kind\": \"object|person|character|logo\", \"thing\": "
     "\"<short English name, e.g. a VAZ-2107 Lada sedan, Vladimir Lenin, the Doom Slayer's armour>\", "
     "\"query\": \"<image-search query for a picture of it, in the language it is best known in, naming the "
     "view or state the picture needs when the request gives one: in flight, from behind, at night, side "
@@ -43,7 +48,7 @@ _FIND_SYS = (
     "names none>\"}]} "
     "-- at most " + str(MAX_THINGS) + "; [] when none.")
 
-_KINDS = ("object", "person", "character")
+_KINDS = ("object", "person", "character", "logo")
 
 
 def named_things(ctx, description: str) -> list:
@@ -58,10 +63,46 @@ def named_things(ctx, description: str) -> list:
     things = [dict(t, kind=t.get("kind") if t.get("kind") in _KINDS else "object")
               for t in (got.get("things") or []) if isinstance(t, dict)
               and str(t.get("thing") or "").strip() and str(t.get("query") or "").strip()]
-    return things[:MAX_THINGS]
+    out = []
+    for t in things:
+        if t['kind'] == 'logo':
+            source = getattr(ctx, 'draw_request', None)
+            if source == '':
+                continue
+            try:
+                requested = yes_no(ctx)(
+                    "Does the user's request in {text} explicitly ask to show the named "
+                    "logo or symbol in the picture? Merely mentioning the company or model "
+                    "is not a request to show its logo. Answer yes or no.",
+                    f"Candidate: {t['thing']}\nRequest: {description if source is None else source}",
+                    default=False)
+            except Exception:
+                logger.debug('logo reference check failed', exc_info=True)
+                requested = False
+            if not requested:
+                continue
+        if t['kind'] == 'character':
+            question = ("Does the candidate in {text} name an established, specific fictional "
+                        "character explicitly requested, rather than a newly invented mascot or "
+                        "generic person merely representing a brand or model? Answer yes or no.")
+            try:
+                established = yes_no(ctx)(question, f"Candidate: {t['thing']}\nRequest: {description}", default=False)
+            except Exception:
+                logger.debug('character reference check failed', exc_info=True)
+                established = False
+            if not established:
+                continue
+        out.append(t)
+        if len(out) >= MAX_THINGS:
+            break
+    return out
 
 
 _CHECK = {
+    "logo": "Is this the real, recognizable {thing}, clearly visible and not a parody or a different "
+            "symbol? Is it a clean, undistorted logo on a plain background? Reply JSON only: "
+            "{{\"shows\": true/false, \"preferred\": true/false, \"box\": [x0, y0, x1, y1]}} "
+            "for the complete logo on a 0-1000 grid.",
     # A custom two-wheel-drive «Урал» build passed and the drawing came out steampunk (2026-10-26).
     # The view: «К-700 вид сзади» searched as such still came back front-on and was drawn front-on.
     "object": "Is this a real photograph showing {thing} whole and clearly as the main subject -- a standard "
@@ -211,10 +252,13 @@ def photo_of(ctx, thing: str, query: str, kind: str = "object", view: str = "") 
         if not seen:
             continue
         box, preferred = seen
+        if kind == 'logo' and not preferred:
+            continue
         if not preferred and fallback:
             continue
         # no face the detector can find (Gagarin side-on in his helmet): the next photo
-        got = _erase_text(_crop(dest, box)) if kind != "person" else _head(dest)
+        got = (_head(dest) if kind == "person" else dest if kind == "logo"
+               else _erase_text(_crop(dest, box)))
         if not got:
             continue
         if preferred:
@@ -309,6 +353,10 @@ def prompt_note(things: list) -> str:
     face: see swap_faces) is for -- and what it is not."""
     out = []
     for i, (thing, _, kind) in enumerate(things, 1):
+        if kind == 'logo':
+            out.append(f" Use the exact shape of the {thing} from image {i} wherever the request places "
+                       "that logo; take no background or unrelated objects from the reference.")
+            continue
         # «LADA 2107» on the reference's plate came back as «VAD 2107» on the drawing's (bench 2026-10-25).
         # A character's look includes its colours (the Doom Slayer's green armour); a car's paint
         # is the picture's own («красная 2107» came back red over a white reference).

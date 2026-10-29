@@ -930,6 +930,20 @@ def _keep_quoted_names(description: str, state) -> str:
     return description
 
 
+def _photographic_description(description: str) -> str:
+    parts = re.split(r'''("[^"]*"|“[^”]*”|«[^»]*»|(?<!\w)'[^']*'(?!\w))''', description)
+    for i in range(0, len(parts), 2):
+        parts[i] = re.sub(r'^(\s*(?:a|an)\s+(?:(?:funny|humorous|vibrant|dynamic|clean|detailed|high-quality|and)[,\s]+)*)(?:cartoon|anime|comic)[-\s]+style\s+(scene)\b',
+                          r'\1photorealistic \2', parts[i], flags=re.I)
+        first_sentence = re.split(r'[.!?]', parts[i], maxsplit=1)[0]
+        if not re.search(r'\b(?:hangs|hanging|hung|framed|on\s+(?:a|the)\s+wall)\b', first_sentence, re.I):
+            parts[i] = re.sub(r'^(\s*(?:a|an)\s+(?:(?:funny|humorous|vibrant|dynamic|clean|detailed|high-quality|and)[,\s]+)*)(?:cartoon|anime|comic|digital)\s+illustration\b(?=\s+(?:of|depicting|showing|featuring)\b)',
+                              r'\1photograph', parts[i], flags=re.I)
+        parts[i] = re.sub(r'(^|(?<=[.!?])\s+)((?:the\s+)?style\s+is\s+)(?:a\s+)?(?:clean,\s*)?(?:vibrant\s+)?(?:cartoon|anime|comic)\b',
+                          r'\1\2photorealistic', parts[i], flags=re.I)
+    return ''.join(parts)
+
+
 def _user_look(ctx, state) -> str:
     """The look THIS message asks for: a drawn look, "photo", "none", or "" when
     there are no user words to read (a direct call). Only this message: «нарисуй
@@ -937,12 +951,45 @@ def _user_look(ctx, state) -> str:
     (the style comes only from the current message). A redo («ещё раз») says
     no look of its own and repeats the request before it, look included."""
     from prompt_guard import user_words
-    from ideogram_layout import _look
+    from ideogram_layout import _look, _LOOKS
+    explicit_words = {
+        'anime': r'аниме|anime|гибли|ghibli',
+        'cartoon': r'мультяш|мультик|cartoon',
+        'caricature': r'карикатур|шарж|caricature',
+        'comic strip': r'комикс|comic',
+        'watercolour': r'акварел|watercolou?r',
+        'oil painting': r'маслян|масляной|маслом|oil painting',
+        'pixel art': r'пиксель|pixel',
+        '3d render': r'3d|3д|тр[её]хмер',
+        'sketch': r'скетч|наброс|эскиз|sketch',
+        'illustration': r'иллюстрац|illustration',
+        'painting': r'живопис|painting',
+    }
+    def requested(text):
+        for style, word in explicit_words.items():
+            match = re.search(r'(?:в\s+стил\w*\s+(?:' + word + r')|(?:' + word + r')\s+style\b)', text, re.I)
+            if match:
+                prefix = text[max(0, match.start() - 24):match.start()]
+                if not re.search(r'(?:не|без|not|no|without|тату\w*|фигурк\w*|плакат\w*|постер\w*|книг\w*)\s*$', prefix, re.I):
+                    return style
+        look = _look(text, ctx)
+        if look in _LOOKS:
+            try:
+                explicit = yes_no(ctx)(
+                    "Does the user explicitly request a drawn, cartoon, anime, painted or other "
+                    "non-photographic LOOK for the whole picture in {text}? A funny scene, "
+                    "'draw', 'picture' or a logo in the scene alone does not specify its style.",
+                    text, default=False)
+            except Exception:
+                explicit = False
+            if not explicit:
+                return 'none'
+        return look
     st = state or {}
     text = user_words(str(st.get("user_input_original") or st.get("user_input") or "")).strip()
     if not text:
         return ""
-    got = _look(text, ctx)
+    got = requested(text)
     if got != "none":
         return got
     try:
@@ -954,7 +1001,7 @@ def _user_look(ctx, state) -> str:
             if isinstance(m, dict) and m.get("role") == "user" and isinstance(m.get("content"), str):
                 t = user_words(m["content"]).strip()
                 if t and t != text:
-                    return _look(t, ctx)
+                    return requested(t)
     return "none"
 
 
@@ -1015,9 +1062,19 @@ def _handle_generate_image(ctx, state, args: dict) -> str:
         return _over
 
     description = _keep_quoted_names(description, state)
+    user_look = _user_look(ctx, state)
+    if user_look in ('none', 'photo'):
+        description = _photographic_description(description)
     import object_refs
     import person_look
-    draw_refs = dep(ctx, "object_refs", object_refs.find)(ctx, description)
+    from prompt_guard import user_words
+    original_request = user_words(str(state.get("user_input_original") or state.get("user_input") or "")).strip()
+    prior_request = getattr(ctx, 'draw_request', '')
+    ctx.draw_request = original_request
+    try:
+        draw_refs = dep(ctx, "object_refs", object_refs.find)(ctx, description)
+    finally:
+        ctx.draw_request = prior_request
     # A face is read off its photo, not off web text: the words for Lenin from the web said «often
     # wears glasses», and he was drawn in red sunglasses (debug chat 2026-10-26).
     looks = [dep(ctx, "face_words", object_refs.face_words)(ctx, who, photo)
@@ -1063,10 +1120,9 @@ def _handle_generate_image(ctx, state, args: dict) -> str:
     # ideogram_layout.enforce_user_look): read from their own words, this turn
     # first, then the last two requests («ещё раз» after «в стиле аниме»).
     _prev_look = getattr(ctx, "user_look", "")
-    ctx.user_look = _user_look(ctx, state)
+    ctx.user_look = user_look
     ctx.draw_refs = draw_refs
-    from prompt_guard import user_words
-    ctx.draw_request = user_words(str(state.get("user_input_original") or state.get("user_input") or "")).strip()
+    ctx.draw_request = original_request
     ctx.set_stage("Drawing a picture")
     try:
         result = dep(ctx, "generate_image_with_refinement", _t.generate_image_with_refinement)(

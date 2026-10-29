@@ -91,7 +91,7 @@ def caption_to_prompt(caption: dict) -> str:
         row["desc"] = ("Small " if small and not text else "") + desc + caps + (f'. Text: "{text}"' if text else "")
         table.append(row)
         where = f"{_position(row['bbox'])}: " if "bbox" in row else ""
-        cites.append(f"{where}{desc} <{ident}>")
+        cites.append(f"{where}<{ident}>")
     art = str(st.get("art_style") or "").strip()
     photo = str(st.get("photo") or "").strip()
     medium = str(st.get("medium") or "").strip()
@@ -103,6 +103,8 @@ def caption_to_prompt(caption: dict) -> str:
     mood = "; ".join(x for x in (st.get("lighting"), photo, st.get("aesthetics")) if x)
     if mood:
         parts.append(f"Lighting and look: {mood}.")
+    if texts:
+        parts.append("Place all lettering fully inside the frame, with clear margins.")
     if cites:
         parts.append(". ".join(c[0].upper() + c[1:] for c in cites) + ".")
     prompt = " ".join(p for p in parts if p)

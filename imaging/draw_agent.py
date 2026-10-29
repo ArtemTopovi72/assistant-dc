@@ -65,6 +65,7 @@ _clamp_box  = _draw_text._clamp_box
 _text_els   = _draw_text._text_els
 text_report = _draw_text.text_report
 auto_fix_text = _draw_text.auto_fix_text
+inset_text = _draw_text.inset_text
 spell_out   = _draw_text.spell_out
 repair_text = _draw_text.repair_text
 read_text   = _draw_text.read_text
@@ -1592,6 +1593,9 @@ def run(ctx, request: str = "", *, layout: Optional[dict] = None,
             layout, notes = auto_fix_geometry(layout, rel=rel)
             emit("fixed", layout=layout, notes=notes,
                  problems=[p["why"] for p in problems])
+        layout, notes = inset_text(layout)
+        if notes:
+            emit("fixed", layout=layout, notes=notes, problems=[])
 
     # ONE seed for the whole loop. This is what makes rearranging boxes meaningful:
     # with a fixed seed, moving/adding/removing a box changes only the part of the
@@ -1609,6 +1613,11 @@ def run(ctx, request: str = "", *, layout: Optional[dict] = None,
             return {"layout": layout, "image": image, "history": history,
                     "seed": seed, "problems": last_problems, "stopped": "cancelled"}
         emit("stage", text=f"drawing (attempt {attempt + 1})", layout=layout)
+        try:
+            if callable(getattr(ctx, "set_stage", None)):
+                ctx.set_stage("Drawing a picture")
+        except Exception:
+            logger.debug("could not set image drawing stage", exc_info=True)
         try:
             # The seed is held fixed across attempts ON PURPOSE (see above), so
             # that moving a box changes only that box. A COLLAGE is the one case
@@ -1640,6 +1649,11 @@ def run(ctx, request: str = "", *, layout: Optional[dict] = None,
         emit("drawn", image=image, layout=layout)
 
         emit("stage", text="looking at the result")
+        try:
+            if callable(getattr(ctx, "set_stage", None)):
+                ctx.set_stage("Checking the picture")
+        except Exception:
+            logger.debug("could not set image check stage", exc_info=True)
         # Read the lettering back BEFORE the critic looks, and hand it the finding.
         # This is a separate, deterministic judgement: the critic is asked whether
         # the picture matches the layout and will happily call a sign "present and

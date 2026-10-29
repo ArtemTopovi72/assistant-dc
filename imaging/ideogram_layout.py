@@ -424,9 +424,11 @@ def enforce_user_look(layout: dict, look: str, ctx=None) -> dict:
             layout["photo"] = ""
         return layout
     kind = _planned_kind(style, ctx) if look == "none" and style.strip() else ""
-    if kind == "graphic":
+    if (kind == "graphic" and not str(layout.get("art_style") or "").strip()
+            and "illustrat" not in str(layout.get("medium") or "").lower()):
         return layout
-    drawn = bool(str(layout.get("art_style") or "").strip()) or kind == "drawn"
+    drawn = (bool(str(layout.get("art_style") or "").strip()) or kind == "drawn"
+             or (kind == "graphic" and "illustrat" in str(layout.get("medium") or "").lower()))
     if look == "photo" or drawn:
         if drawn:
             logger.info("Ideogram: the user named no drawn look -- %r becomes a photograph", style[:80])
