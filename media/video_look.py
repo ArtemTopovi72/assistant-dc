@@ -165,6 +165,42 @@ def _sharpness(a) -> float:
     return float(np.var(lap))
 
 
+def return_motion_pair(dense: list) -> Optional[tuple[int, int]]:
+    """Pick the first clear outward-and-back change, ignoring one-off background changes."""
+    import numpy as np
+    if len(dense) < 4:
+        return None
+    arrays = np.stack([a for _, a in dense])
+    frequency = (np.abs(arrays[1:] - arrays[:-1]) > 12).sum(axis=0)
+    mask = frequency >= max(2, len(dense) // 10)
+    if mask.sum() < 12:
+        return None
+    signal = np.mean(np.abs(arrays - arrays[0])[:, mask], axis=1)
+    for i in range(1, len(signal) - 1):
+        if signal[i] < 5 or signal[i] < signal[i - 1] or signal[i] <= signal[i + 1]:
+            continue
+        for j in range(i + 1, len(signal)):
+            if signal[i] - signal[j] >= max(5, signal[i] * .2):
+                return i, j
+            if dense[j][0] - dense[i][0] > 2:
+                break
+    return None
+
+
+def extract_sampled_frames(path: str, fps: float, indices: tuple[int, int], out_dir: Path) -> list[Path]:
+    """Extract the same fps-filtered frames used by the motion detector."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for old in out_dir.glob('sample_*.jpg'):
+        old.unlink()
+    first, second = indices
+    select = f'fps={fps},select=eq(n\\,{first})+eq(n\\,{second})'
+    subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', path, '-vf', select,
+                    '-vsync', '0', '-q:v', '3', str(out_dir / 'sample_%02d.jpg')],
+                   capture_output=True, check=True, timeout=60)
+    files = sorted(out_dir.glob('sample_*.jpg'))
+    return files if len(files) == 2 else []
+
+
 def motion_details(path: str, dense: list, work_dir: Path) -> list[tuple[float, Path]]:
     """Show two distinct phases of localized motion at a readable size."""
     import numpy as np
@@ -188,7 +224,24 @@ def motion_details(path: str, dense: list, work_dir: Path) -> list[tuple[float, 
     second = int(np.argmax(np.mean(np.abs(flat - flat[first]), axis=1)))
     if first == second:
         return []
-    extracted = extract_frames(path, sorted([dense[first][0], dense[second][0]]), work_dir / 'motion_frames')
+    reference_time = max(dense[first][0], dense[second][0])
+    cycle = return_motion_pair(dense)
+    if cycle:
+        first, second = cycle
+        fps = 1 / (dense[1][0] - dense[0][0])
+        sample_dir = work_dir / 'motion_frames'
+        try:
+            files = extract_sampled_frames(path, fps, (first, second), sample_dir)
+            extracted = list(zip((dense[first][0], dense[second][0]), files)) if len(files) == 2 else []
+        except Exception:
+            logger.warning('video_look: exact motion frames failed', exc_info=True)
+            extracted = []
+    else:
+        extracted = []
+    if not extracted:
+        extracted = extract_frames(path, sorted([dense[first][0], dense[second][0]]), work_dir / 'motion_frames')
+    if cycle and len(extracted) == 2 and reference_time not in (dense[first][0], dense[second][0]):
+        extracted += extract_frames(path, [reference_time], work_dir / 'motion_reference')[:1]
     result = []
     for t, frame in extracted:
         with Image.open(frame) as im:
@@ -468,9 +521,10 @@ def look_at_video(ctx, path: str, *, every: float = EVERY_SECONDS,
     except Exception:
         logger.warning("video_look: motion details failed", exc_info=True)
         details = []
-    if len(details) != 2:
+    if len(details) not in (2, 3):
         details = []
     observation = ''
+    comparison = ''
     if details:
         try:
             observation = vision(
@@ -491,10 +545,11 @@ def look_at_video(ctx, path: str, *, every: float = EVERY_SECONDS,
                     pair.save(pair_path, quality=92)
                 comparison = vision(
                     [('Two phases:', str(pair_path))],
-                    'One earlier observation of panel B follows; it could be wrong: ' + observation[:1200]
+                    'An observation of a separate frame from this video follows; it could be wrong: ' + observation[:1200]
                     + '\nCompare panels A and B, focusing on any object being used, if present. '
                       'Compare its moving parts, if any, relative to any base or surrounding elements and describe any visible change. '
-                      'If no change is visible, say so.',
+                      'If no change is visible, say so. '
+                      + ('Answer in Russian.' if lang == 'ru' else 'Answer in English.'),
                     'Describe what is visibly depicted; do not guess.')
                 q += ('\n\nClose-up observations to check against the frames (they may be mistaken):\n'
                       + observation[:1200] + '\n' + (comparison or '')[:1200])
@@ -510,11 +565,15 @@ def look_at_video(ctx, path: str, *, every: float = EVERY_SECONDS,
               "These details are not extra timestamps.")
     try:
         visual = [(f"Frame {_stamp(t + offset, tenths)}:", str(p)) for t, p in frames]
-        visual += [(f"Motion detail {_stamp(t + offset, True)}:", str(p)) for t, p in details]
+        visual += [(f"Motion detail {_stamp(t + offset, True)}:", str(p)) for t, p in details[:2]]
         desc = (vision(visual, q, _SHEET_SYSTEM + _LANG_LINE.get(lang, _LANG_LINE["en"])) or "").strip()
     except Exception:
         logger.exception("video_look: vision failed")
         desc = ""
+    if desc and comparison:
+        label = ('Сравнение кадров (предположение, может быть неточным)' if lang == 'ru'
+                 else 'Frame comparison (tentative, may be inaccurate)')
+        desc += f'\n\n{label}: {comparison[:2000]}'
     m = _TEXT_AT.search(desc)
     if m:
         desc = _TEXT_AT.sub("", desc).strip()

@@ -111,6 +111,35 @@ def test_motion_details_compare_two_distinct_positions(tmp_path, monkeypatch):
     assert V.motion_details('clip.mp4', [(i, frames[0][1]) for i in range(6)], tmp_path) == []
 
 
+def test_motion_pair_captures_return_even_when_background_changes():
+    import numpy as np
+    samples = []
+    for i, state in enumerate([0, 40, 80, 40, 0, 40, 80, 40, 0]):
+        a = np.full((12, 12), i, dtype=np.float32)
+        a[3:9, 3:9] += state
+        samples.append((i / 6, a))
+    pair = V.return_motion_pair(samples)
+    assert pair is not None
+    first, second = pair
+    assert first < second and np.mean(samples[first][1][3:9, 3:9]) > np.mean(samples[second][1][3:9, 3:9])
+
+
+def test_selected_motion_frames_match_the_dense_samples(tmp_path):
+    import numpy as np
+    from PIL import Image
+    clip = tmp_path / 'clock.mkv'
+    subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-f', 'lavfi', '-i',
+                    'testsrc=size=96x78:rate=6:duration=2', '-c:v', 'ffv1', str(clip)],
+                   check=True, timeout=60)
+    dense = V.dense_pass(str(clip), tmp_path / 'dense', fps=6)
+    indices = (2, 5)
+    paths = V.extract_sampled_frames(str(clip), 6, indices, tmp_path / 'exact')
+    assert len(paths) == 2
+    for idx, path in zip(indices, paths):
+        actual = np.asarray(Image.open(path).convert('L'), dtype=np.float32)
+        assert np.mean(np.abs(actual - dense[idx][1])) < 4
+
+
 def test_motion_comparison_requires_two_details(tmp_path, monkeypatch):
     from PIL import Image
     clip = _clip(tmp_path)
@@ -126,7 +155,7 @@ def test_motion_comparison_requires_two_details(tmp_path, monkeypatch):
     calls.clear()
     monkeypatch.setattr(V, 'motion_details', lambda *args: [(0.1, frame), (0.2, frame)])
     result = V.look_at_video(None, str(clip), work_dir=tmp_path / 'two', vision=vision)
-    assert result['description'] == 'Storyboard survives' and len(calls) == 3
+    assert result['description'].startswith('Storyboard survives') and len(calls) == 3
     assert 'if identifiable' in calls[0] and 'last two pictures' in calls[2]
     assert all('hand' not in q.lower() and 'person' not in q.lower() for q in calls[:2])
     assert 'Storyboard survives' in calls[2]
@@ -152,6 +181,40 @@ def test_motion_comparison_requires_two_details(tmp_path, monkeypatch):
         return 'A hand is visible' if len(calls) == 1 else 'Storyboard survives'
     V.look_at_video(None, str(clip), work_dir=tmp_path / 'hand', vision=hand_seen)
     assert len(calls) == 3 and 'under the hand' not in calls[1]
+
+
+def test_reference_frame_is_not_mislabeled_as_a_motion_phase(tmp_path, monkeypatch):
+    from PIL import Image
+    clip = _clip(tmp_path)
+    frames = []
+    for i in range(3):
+        path = tmp_path / f'{i}.png'
+        Image.new('RGB', (100, 100), (i * 80, 0, 0)).save(path)
+        frames.append((i / 6, path))
+    monkeypatch.setattr(V, 'motion_details', lambda *args: frames)
+    calls = []
+    def vision(images, question, system):
+        calls.append((images, question))
+        return 'visible scene'
+    V.look_at_video(None, str(clip), work_dir=tmp_path / 'work', vision=vision)
+    assert calls[0][0][0][1] == str(frames[2][1])
+    assert 'separate frame' in calls[1][1] and 'observation of panel B' not in calls[1][1]
+
+
+def test_comparison_is_available_for_retelling_without_masking_a_failed_storyboard(tmp_path, monkeypatch):
+    from PIL import Image
+    clip = _clip(tmp_path)
+    frame = tmp_path / 'detail.png'
+    Image.new('RGB', (100, 100)).save(frame)
+    monkeypatch.setattr(V, 'motion_details', lambda *args: [(0.1, frame), (0.2, frame)])
+    calls = []
+    def vision(images, question, system):
+        calls.append(question)
+        return ['object', 'Рука опускает предмет', '0:00 — человек сидит'][len(calls) - 1]
+    got = V.look_at_video(None, str(clip), work_dir=tmp_path / 'work', vision=vision, lang='ru')
+    assert 'Рука опускает предмет' in got['description']
+    assert 'Сравнение кадров' in got['description']
+    assert 'может быть неточным' in got['description']
 
 
 def test_portion_stamps_are_absolute_even_when_the_model_counts_from_zero():
