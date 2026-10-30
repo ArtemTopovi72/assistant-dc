@@ -3037,12 +3037,11 @@ def revoice(ctx, clip: str, voice: str) -> Optional[str]:
         # Subtraction preserves stereo ambience and effects that the separator did not
         # classify as voice. Keep the converted line at its original time in the clip.
         result = sound - removed + replacement[:, None]
-        peak = float(np.max(np.abs(result)))
-        if peak > 0.98:
-            result *= 0.98 / peak
-        sf.write(mixed, result, sr)
+        # Keep the background at its native level. Scaling the whole clip for
+        # one transient peak makes engine/crowd ambience barely audible.
+        sf.write(mixed, result, sr, subtype="FLOAT")
         subprocess.run([ff, "-y", "-v", "error", "-i", clip, "-i", mixed, "-map", "0:v", "-map", "1:a", "-c:v", "copy",
-                        "-af", "apad", "-c:a", "aac", "-b:a", "192k", "-shortest", out], check=True, timeout=300)
+                        "-af", "alimiter=limit=0.9:level=0:latency=1,apad", "-c:a", "aac", "-b:a", "192k", "-shortest", out], check=True, timeout=300)
     except Exception:
         logger.warning("revoice failed", exc_info=True)
         return None
