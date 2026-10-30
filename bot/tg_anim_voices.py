@@ -35,7 +35,7 @@ class AnimVoicesMixin:
         self._send_text(chat_id, tg_bot._t("animate_ask_preset", lang), keyboard={"inline_keyboard": rows})
 
     def _slots(self, sess) -> list:
-        v = [p if p and os.path.exists(p) else "" for p in (sess.anim_voices or [])][:MAX]
+        v = list(sess.anim_voices or [])[:MAX]
         return v + [""] * (MAX - len(v))
 
     def _slot_label(self, sess, ref: str, lang: str) -> str:

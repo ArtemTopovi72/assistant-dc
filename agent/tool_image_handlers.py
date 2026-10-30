@@ -1925,9 +1925,12 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
 
     audios = []
     # by slot, left to right; "" = that person keeps the default voice
-    slots = ([] if continuing else
-             [p if p and os.path.exists(p) else "" for p in (getattr(ctx, "anim_voices", None) or [])])
+    slots = [] if continuing else list(getattr(ctx, "anim_voices", None) or [])
     slots = slots[:video_mod.MAX_REF_AUDIOS]
+    if any(p and not os.path.exists(p) for p in slots):
+        return "[TOOL ERROR] A selected voice sample is unavailable. Ask the user to select it again; no video was made."
+    if not continuing and getattr(ctx, "voice_choice", None) == "own" and not any(slots):
+        return "[TOOL ERROR] The selected voice did not reach video generation. Ask the user to select it again; no video was made."
     if not slots and not continuing and getattr(ctx, "voice_choice", None) is None:
         # A front end without the voice question (the window) still takes «голос возьми отсюда:
         # <ссылка>»: the same engine as the bot's voice cards (voice_clone.fetch_sample).
@@ -2372,7 +2375,9 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         if said_in:
             path = said_in
         else:
-            logger.warning("generate_video: the voice could not be put on, delivering the model's own")
+            logger.warning("generate_video: the selected voice could not be applied")
+            state["video_status"] = "error"
+            return "[TOOL ERROR] The selected voice could not be applied. No finished video was delivered; please retry."
     # A talking head acts with its mouth only and its camera is locked: checked against the agent's
     # «the camera zooms in», the note said an action was missing and the reply told the user to
     # «pick a voice variant» (live 2026-10-20)

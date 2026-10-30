@@ -88,6 +88,44 @@ def test_empty_slot_keeps_its_person_default(tmp_path):
     assert seen["audios"] == [str(b)] and "second from the left person speaks with the voice of <Audio 1>" in seen["desc"]
 
 
+def test_missing_selected_voice_never_silently_uses_a_default(tmp_path):
+    missing = str(tmp_path / 'missing.wav')
+    ctx = types.SimpleNamespace(anim_voices=[missing], voice_choice='own', voice_ref='', set_stage=lambda s: None)
+    seen = {}
+    ctx.video_engine = _engine(seen)
+    out = H._handle_generate_video(ctx, {}, {'description': 'person speaks', 'use_current_images': False})
+    assert out.startswith('[TOOL ERROR]') and not seen
+
+
+def test_other_slot_edits_do_not_erase_a_missing_selected_voice(tmp_path):
+    bot = _bot()
+    sess = bot._get_session(CID)
+    missing = str(tmp_path / 'missing.wav')
+    sess.anim_voices = [missing, '', '']
+    bot._store.put(sess)
+    bot._cb_anim_voices(CID, 'anv:clr:1')
+    assert bot._get_session(CID).anim_voices[0] == missing
+
+
+def test_failed_voice_conversion_does_not_deliver_default_voice(tmp_path, monkeypatch):
+    image = tmp_path / 'image.png'; image.write_bytes(b'x')
+    voice = tmp_path / 'voice.wav'; voice.write_bytes(b'x')
+    clip = tmp_path / 'clip.mp4'; clip.write_bytes(b'x')
+    engine = Over(V, engine_available=lambda ctx: (True, ''),
+                  is_talking_head=lambda *a, **k: True,
+                  generate_video=lambda *a, **k: {'path': str(clip), 'status': 'ok'},
+                  eye_drift=lambda *a, **k: None,
+                  revoice=lambda *a, **k: None)
+    monkeypatch.setattr(H, '_pull_light', lambda mod, image, path, n: path)
+    ctx = types.SimpleNamespace(anim_voices=[str(voice)], voice_choice='own',
+                                last_image_path=str(image), video_engine=engine,
+                                set_stage=lambda s: None, is_cancelled=lambda: False)
+    state = {}
+    out = H._handle_generate_video(ctx, state, {'description': 'person speaks', 'use_current_images': True})
+    assert out.startswith('[TOOL ERROR]')
+    assert state.get('video_status') == 'error' and not state.get('video_path')
+
+
 def test_my_voice_needs_a_clone(tmp_path):
     ctx = types.SimpleNamespace(anim_voices=[], voice_ref="", set_stage=lambda s: None)
     ctx.video_engine = _engine({})

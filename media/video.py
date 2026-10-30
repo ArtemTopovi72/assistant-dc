@@ -2993,21 +2993,56 @@ def _revoice_ref(voice: str, dst: str, ms: int = 20000) -> str:
 
 
 def revoice(ctx, clip: str, voice: str) -> Optional[str]:
-    """`clip` with its speech converted onto the timbre of `voice` (Seed-VC keeps the pitch
-    contour, so the mouth still matches), or None. A keyframe talking head says its line in
-    whatever voice the model likes; Resemblyzer to the sample was 0.76 before, 0.94 after."""
+    """Convert the dialogue while retaining the clip's original background sound."""
     ff = shutil.which("ffmpeg")
     if not (ff and clip and voice and os.path.exists(clip) and os.path.exists(voice)):
         return None
-    import remix
     work = tempfile.mkdtemp(prefix="revoice_")
-    src, conv, out = (os.path.join(work, n) for n in ("src.wav", "conv.wav", "out.mp4"))
+    original, src, conv, mixed, out = (os.path.join(work, n) for n in
+                                        ("original.wav", "src.wav", "conv.wav", "mixed.wav", "out.mp4"))
     try:
-        subprocess.run([ff, "-y", "-v", "error", "-i", clip, "-vn", "-ac", "1", "-ar", "22050", src], check=True, timeout=120)
+        import remix
+        from demucs.api import Separator
+        import numpy as np
+        import soundfile as sf
+        import librosa
+        subprocess.run([ff, "-y", "-v", "error", "-i", clip, "-vn", "-ar", "44100", original], check=True, timeout=120)
+        # An isolated CPU separator cannot borrow (or evict) the GPU separator
+        # shared by song jobs while video generation uses the same card.
+        separator = Separator(model="htdemucs", device="cpu")
+        _origin, stems = separator.separate_audio_file(original)
+        vocal = stems["vocals"].detach().cpu().numpy().T.astype(np.float32)
+        sf.write(src, librosa.resample(vocal.mean(axis=1), orig_sr=44100, target_sr=22050), 22050)
         if not remix._seedvc(ctx, src, _revoice_ref(voice, os.path.join(work, "ref.wav")), conv):
             return None
-        subprocess.run([ff, "-y", "-v", "error", "-i", clip, "-i", conv, "-map", "0:v", "-map", "1:a", "-c:v", "copy",
-                        "-af", "loudnorm=I=-16:TP=-1.5:LRA=11", "-c:a", "aac", "-b:a", "192k", "-shortest", out], check=True, timeout=300)
+        sound, sr = sf.read(original, dtype="float32", always_2d=True)
+        converted, conv_sr = sf.read(conv, dtype="float32")
+        if converted.ndim == 2:
+            converted = converted.mean(axis=1)
+        converted = librosa.resample(converted, orig_sr=conv_sr, target_sr=sr)
+        n = len(sound)
+        if abs(len(converted) - n) > sr * 0.1:
+            raise ValueError("converted speech duration differs from the source by over 100 ms")
+        replacement = np.zeros(n, dtype=np.float32)
+        replacement[:min(n, len(converted))] = converted[:n]
+        removed = np.zeros_like(sound)
+        removed[:min(n, len(vocal))] = vocal[:n, :sound.shape[1]]
+        # Seed-VC often returns a much quieter track than H3 (live: 0.01 vs
+        # 0.068 RMS). Match the dialogue level before mixing it under effects.
+        source_level = float(np.sqrt(np.mean(removed ** 2)))
+        voice_level = float(np.sqrt(np.mean(replacement ** 2)))
+        if not np.isfinite(source_level) or source_level < 1e-5 or not np.isfinite(voice_level) or voice_level < 1e-5:
+            raise ValueError("missing original or converted speech")
+        replacement *= min(8.0, source_level / voice_level)
+        # Subtraction preserves stereo ambience and effects that the separator did not
+        # classify as voice. Keep the converted line at its original time in the clip.
+        result = sound - removed + replacement[:, None]
+        peak = float(np.max(np.abs(result)))
+        if peak > 0.98:
+            result *= 0.98 / peak
+        sf.write(mixed, result, sr)
+        subprocess.run([ff, "-y", "-v", "error", "-i", clip, "-i", mixed, "-map", "0:v", "-map", "1:a", "-c:v", "copy",
+                        "-af", "apad", "-c:a", "aac", "-b:a", "192k", "-shortest", out], check=True, timeout=300)
     except Exception:
         logger.warning("revoice failed", exc_info=True)
         return None
