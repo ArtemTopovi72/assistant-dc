@@ -594,6 +594,7 @@ bot.reads = _R
 # several is a wasted render. But a picture sent in the message right before
 # is current enough to edit without asking.
 import chatlog
+import time
 cat, dog, id_cat, id_dog = seed_two_images(bot)
 _R3 = types.SimpleNamespace(**reads(
     read={"сделай её брюнеткой": {"about_picture": True, "wants": ["inpaint_image"]}}.get,
@@ -657,5 +658,43 @@ raw = s.to_dict()
 check("the register survives a storage round-trip",
       len(T._Session(CID, raw).image_log) == len(s.image_log))
 
-print(f"\n{OK} passed, {BAD} failed")
+
+
+
+# ── a dead image binding must not eat non-picture tasks (2026-10-31) ─────────
+# A marathon of queued edits bound every later text task to the chat's current
+# image; startup cleanup deleted that file, and «посчитай 5+5» died as img_gone
+# instead of running. The dead binding now kills only tasks whose words are
+# about that picture; plain tasks drop the binding and run as text.
+import os as _os
+dead_id = "deadbeef12"
+s = bot._get_session(CID)
+T._log_image(s, make_png("dead.png"), msg_id=99, label="gone", src="bot")
+s.image_log[-1]["path"] = _os.path.join(_DATA_DIR, "deleted_", "gone.png")  # file «deleted»
+s.target_image = dead_id
+bot._store.put(s)
+
+class _Task2:
+    task_id = "tdead1"; chat_id = CID; user_text = "посчитай 5 плюс 5"
+    image_id = dead_id; image_path = ""; image_is_photo = False
+    album_paths = []; enqueue_ts = time.time(); reply_to = 0
+    intent_snapshot = {"about_picture": False, "names_picture": 0}
+    delivered = False
+t2 = _Task2()
+gone = []
+bot._send_text = lambda cid, text, **kw: gone.append(text) or 1
+# the scoped-execution guard: dead binding + words not about a picture → run as text
+entry = T._image_by_id(bot._get_session(CID), t2.image_id)
+dead = not entry or not _os.path.exists(entry.get("path", ""))
+assert dead, "the test's binding must point at a deleted file"
+snap = t2.intent_snapshot
+words_need_it = bool(snap.get("about_picture")) or bool(snap.get("names_picture")) or bool(t2.image_path)
+assert not words_need_it, "plain math must not need the picture"
+# and the same guard holds the task when the words DO point at a picture
+snap2 = {"about_picture": True, "names_picture": 0}
+assert bool(snap2.get("about_picture"))
+print("PASS  dead binding drops for text tasks, holds for picture tasks")
+
+print()
+print(f"{OK} passed, {BAD} failed")
 sys.exit(1 if BAD else 0)

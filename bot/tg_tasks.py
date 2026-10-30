@@ -666,9 +666,24 @@ class TaskRunnerMixin:
         entry = tg_bot._image_by_id(sess, task.image_id) if task.image_id else None
         if not task.translation and ((task.image_path and not os.path.exists(task.image_path))
                 or (task.image_id and (not entry or not os.path.exists(entry.get('path', ''))))):
-            with tg_transport.replying_to(chat_id, task.reply_to, asked=task.user_text):
-                self._send_text(chat_id, tg_bot._t('img_gone', lang))
-            return
+            # The bound picture's file is gone (cleanup deleted it while the task
+            # sat queued — live 2026-10-31: a burst of queued edits turned every
+            # later «посчитай 5+5» into img_gone, silently eating the tasks).
+            # The dead binding kills the task only when the words are about THAT
+            # picture; otherwise it is dropped and the task runs as plain text.
+            snap = getattr(task, 'intent_snapshot', None) or {}
+            words_need_it = (bool(snap.get('about_picture')) or bool(snap.get('names_picture'))
+                             or bool(task.image_path))
+            if not words_need_it:
+                tg_bot.logger.info("task %s: dead image binding dropped — the words are not "
+                                   "about a picture, running as text", task.task_id[:8])
+                task.image_id = ''
+                task.image_path = ''
+                entry = None
+            else:
+                with tg_transport.replying_to(chat_id, task.reply_to, asked=task.user_text):
+                    self._send_text(chat_id, tg_bot._t('img_gone', lang))
+                return
 
         # THIS task's own view of the context: its own working image, memory,
         # facts, output size and cancel event, so two tasks running at once cannot
