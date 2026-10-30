@@ -240,6 +240,11 @@ def retell_system(lang: str, is_video: bool) -> str:
                 "retold from the storyboard alone: what is shown, in order. Never "
                 "ask for a transcript or say one is missing -- there is nothing more "
                 "to send. "
+                "Preserve the specific action and object described in the timestamp lines, "
+                "even if the overall sentence omits them. A still expression or background "
+                "does not mean the whole person or video is motionless. Do not invent an action "
+                "that the storyboard does not support. Do not infer anger, force, intent or "
+                "other emotions merely from a movement or expression. "
                 "A line «Подпись отправителя» / «Sender's caption» is how the sender framed the clip. "
                 "A caption that does not match the picture means a joke or a "
                 "meme: say so, say in one sentence what is actually shown, and if you do not "
@@ -542,7 +547,7 @@ class TaskRunnerMixin:
         out = ""
         try:
             import llm as _llm
-            out = (text_model(self._get_ctx())(self._get_ctx(), system, said, temperature=0.3,
+            out = (text_model(self._get_ctx())(self._get_ctx(), system, said, temperature=0.0 if is_video else 0.3,
                                         max_tokens=900, prefill="<think></think>") or "").strip()
         except Exception:
             tg_bot.logger.exception("fwd retell failed chat=%s", chat_id)

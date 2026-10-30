@@ -127,7 +127,7 @@ def test_motion_comparison_requires_two_details(tmp_path, monkeypatch):
     monkeypatch.setattr(V, 'motion_details', lambda *args: [(0.1, frame), (0.2, frame)])
     result = V.look_at_video(None, str(clip), work_dir=tmp_path / 'two', vision=vision)
     assert result['description'] == 'Storyboard survives' and len(calls) == 3
-    assert 'name and function' in calls[0] and 'If any' in calls[0] and 'last two pictures' in calls[2]
+    assert 'if identifiable' in calls[0] and 'last two pictures' in calls[2]
     assert all('hand' not in q.lower() and 'person' not in q.lower() for q in calls[:2])
     assert 'Storyboard survives' in calls[2]
     calls.clear()
@@ -151,7 +151,7 @@ def test_motion_comparison_requires_two_details(tmp_path, monkeypatch):
         calls.append(q)
         return 'A hand is visible' if len(calls) == 1 else 'Storyboard survives'
     V.look_at_video(None, str(clip), work_dir=tmp_path / 'hand', vision=hand_seen)
-    assert len(calls) == 4 and 'under the hand' in calls[1]
+    assert len(calls) == 3 and 'under the hand' not in calls[1]
 
 
 def test_portion_stamps_are_absolute_even_when_the_model_counts_from_zero():

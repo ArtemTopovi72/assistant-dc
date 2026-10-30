@@ -51,7 +51,8 @@ _SHEET_SYSTEM = (
     "one, say so in a few words. After the lines add ONE sentence starting with "
     "the overall label given below that says what the whole video is about -- what "
     "happens in it, and what is funny or striking when it is a moment. Name "
-    "things for what they are, not by shape or colour. Do not invent sound or speech -- you only see the picture.\n"
+    "things for what they are, not by shape or colour. Do not invent emotions, force or intent "
+    "from a movement or a still face. Do not invent sound or speech -- you only see the picture.\n"
     "When a frame shows a document with small print -- a receipt, a bill, a menu, a price list, a "
     "screen, a letter -- add one last line «TEXT AT: 0:13, 0:14» with those timestamps; the "
     "document is then read from sharper frames, so never guess its figures yourself.")
@@ -474,16 +475,9 @@ def look_at_video(ctx, path: str, *, every: float = EVERY_SECONDS,
         try:
             observation = vision(
                 [('Close-up:', str(details[-1][1]))],
-                'Describe the items and their positions in this close-up. If any object is being used, give its name and function. If uncertain, say so.',
+                'Describe any visible object involved in the action; if identifiable, list up to four possible names, one per line. If none is identifiable, respond UNCLEAR.',
                 'Describe what is visibly depicted; do not guess.')
             if observation:
-                if re.search(r'\bhands?\b', observation, re.I):
-                    focused = vision(
-                        [('Close-up:', str(details[-1][1]))],
-                        'Describe the items and their positions in this close-up. Give the name and function of the object under the hand, if any. If uncertain, say so.',
-                        'Describe what is visibly depicted; do not guess.')
-                    if focused:
-                        observation = focused
                 from PIL import Image, ImageDraw
                 with Image.open(details[0][1]) as a, Image.open(details[1][1]) as b:
                     width = 800
@@ -495,15 +489,12 @@ def look_at_video(ctx, path: str, *, every: float = EVERY_SECONDS,
                     draw.text((5, 5), 'A', fill='black'); draw.text((a.width + 5, 5), 'B', fill='black')
                     pair_path = work_dir / 'motion_pair.jpg'
                     pair.save(pair_path, quality=92)
-                focus = ('any object under a hand or otherwise being manipulated'
-                         if re.search(r'\bhands?\b', observation, re.I)
-                         else 'any object being used or manipulated, if present')
                 comparison = vision(
                     [('Two phases:', str(pair_path))],
                     'One earlier observation of panel B follows; it could be wrong: ' + observation[:1200]
-                    + '\nCompare panels A and B, focusing on ' + focus + '. '
-                      'Does its shape or position change relative to nearby objects? '
-                      'Describe visible motion; if uncertain, say so.',
+                    + '\nCompare panels A and B, focusing on any object being used, if present. '
+                      'Compare its moving parts, if any, relative to any base or surrounding elements and describe any visible change. '
+                      'If no change is visible, say so.',
                     'Describe what is visibly depicted; do not guess.')
                 q += ('\n\nClose-up observations to check against the frames (they may be mistaken):\n'
                       + observation[:1200] + '\n' + (comparison or '')[:1200])
@@ -514,7 +505,9 @@ def look_at_video(ctx, path: str, *, every: float = EVERY_SECONDS,
               "Look for repeated changes across the full sequence. Before naming an object, "
               "consider its structure and the small objects around it; distinguish it from "
               "similar objects and say when its identity is unclear. Do not call the clip motionless merely "
-              "because the face or background stays still. These details are not extra timestamps.")
+              "because the face or background stays still: no motion cannot be concluded from "
+              "sampled frames alone. Describe any visible action, or say it is unclear. "
+              "These details are not extra timestamps.")
     try:
         visual = [(f"Frame {_stamp(t + offset, tenths)}:", str(p)) for t, p in frames]
         visual += [(f"Motion detail {_stamp(t + offset, True)}:", str(p)) for t, p in details]
