@@ -290,6 +290,26 @@ def _working_folder_record(ctx) -> str:
         return ""
 
 
+def _tone_note(text: str, messages: list) -> str:
+    import re
+    current = text or ""
+    previous = next((str(m.get("content") or "") for m in reversed(messages or [])
+                     if m.get("role") == "assistant"), "")
+    tone = r"сарказ|ирони|пассивн.{0,15}агресс|\bтон\b|sarcas|ironi|\btone\b|passive.aggress"
+    mood_analysis = r"(?:анализ|считыва|како[её]|определи).{0,60}(?:настроени|разочарован)"
+    punctuation = r"точк|пунктуац|знак.{0,10}препинан|капс|punctuation|capitalization"
+    if not (re.search(tone, current, re.I) or re.search(mood_analysis, current, re.I) or
+            (re.search(punctuation, current, re.I) and re.search(tone, previous, re.I))):
+        return ""
+    return ("[Analyze the original wording and punctuation in the user's text or, for a follow-up, "
+            "the text being discussed in the conversation, not a translated paraphrase. "
+            "Separate observable words from interpretations: exaggerated praise and capital letters "
+            "may be sincere or ironic. Consider both plausible readings and explain what supports "
+            "each; if the context is missing, do not label either interpretation the default or more "
+            "likely, or claim that irony requires a serious failure. Periods are not proof of hostility. "
+            "Do not invent names, exclamation marks, or other details. Current message: " + current + "]")
+
+
 def _compose_user_message(ctx: Context, state: AgentState) -> tuple:
     """Assemble the user turn the model actually sees.
 
@@ -438,6 +458,9 @@ def _compose_user_message(ctx: Context, state: AgentState) -> tuple:
                                     "the chat has moved on since. Answer from the whole chat "
                                     "as it is now, not by repeating that earlier answer.]")
     parts.append(effective_input)
+    note = _tone_note(original_input or user_input, state.get("messages") or [])
+    if note:
+        parts.append(note)
     if _cnt:
         parts.append(_cnt)
     user_message_text = "\n\n".join(parts)

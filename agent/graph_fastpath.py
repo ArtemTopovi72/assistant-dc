@@ -17,7 +17,7 @@ import logging
 import re
 
 from graph_compose import (_GenSettings, FORGOTTEN_NOTE, _word_count_note, facts_parts, no_history_note,
-                           translate_previous_note)
+                           translate_previous_note, _tone_note)
 from models import AgentState, Context
 from prompts import build_system_prompt_lite
 from utils import strip_think_tags, strip_reasoning_leak
@@ -261,6 +261,9 @@ def _fast_path_reply(ctx: Context, messages: list, gen: "_GenSettings",
         if llm._is_gemma4(getattr(ctx, "model_name", "") or llm.MODEL_NAME):
             prefill = llm.GEMMA_NO_THINK_PREFILL
     lite_user_parts.append(effective_input)
+    note = _tone_note(original_input or user_input, messages[1:-1])
+    if note:
+        lite_user_parts.append(note)
     # After the question: placed before it, the model ignored it once history existed (4/4 wrong).
     lite_user_parts.extend(p for p in [_word_count_note(original_input or user_input, ctx=ctx)
                                        or no_history_note(original_input or user_input,

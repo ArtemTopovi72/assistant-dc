@@ -438,9 +438,9 @@ def needs_relook(ctx: Optional[Context], state: AgentState) -> bool:
         return False
     # Any question about a photo the user sent or a video they sent: a receipt
     # read once, then "which item is the most expensive?".
-    return bool(r["is_question"]) and (getattr(ctx, 'image_origin', '') == 'user'
-                                      or is_video_sheet(last_path)
-                                      or Path(last_path).name.startswith(dep(ctx, "_USER_UPLOAD_STEM", _USER_UPLOAD_STEM)))
+    return bool(r["is_question"]) and not is_video_sheet(last_path) and (
+        getattr(ctx, 'image_origin', '') == 'user'
+        or Path(last_path).name.startswith(dep(ctx, "_USER_UPLOAD_STEM", _USER_UPLOAD_STEM)))
 
 
 def entry_router(state: AgentState, ctx: Optional[Context] = None) -> str:
