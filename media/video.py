@@ -803,6 +803,18 @@ def _add_latent_upscale(wf: dict, seed: int, factor: float = 0.0, steps: int = 0
                 node["inputs"][k] = [n["cat2"], 0]
 
 
+def _add_audio_refine(wf: dict, seed: int, steps: int) -> None:
+    """Refine H3 audio against stage-1 video without resampling its pixels."""
+    refine = str(max(int(k) for k in wf) + 1)
+    smp = wf[N_SAMPLER]["inputs"]
+    wf[refine] = {"class_type": "H3AudioRefineSampler", "inputs": {
+        "model": smp["model"], "positive": smp["positive"], "negative": smp["negative"],
+        "latent": [N_SAMPLER, 0], "seed": int(seed) + 2, "steps": steps,
+        "cfg": float(smp["cfg"]), "sampler_name": "euler", "scheduler": "simple",
+        "audio_denoise": 0.5, "video_denoise": 0.0}}
+    wf["10"]["inputs"]["samples"] = [refine, 0]
+
+
 def build_workflow(prompt: str, *, mode: str, width: int, height: int,
                    frames: int, seed: int,
                    images: Sequence[str] = (), videos: Sequence[str] = (),
@@ -934,6 +946,12 @@ def build_workflow(prompt: str, *, mode: str, width: int, height: int,
     if save_latent:
         _add_latent_save(wf, save_latent)
     _apply_overrides(wf)
+    audio_steps = max(0, _cfg_env.env_int("VIDEO_AUDIO_REFINE_STEPS", 2))
+    if audio_steps and not (context_video or context_latent or save_latent):
+        if _server_has_node("H3AudioRefineSampler"):
+            _add_audio_refine(wf, seed, audio_steps)
+        else:
+            logger.warning("H3 audio refinement unavailable: ComfyUI has not loaded H3AudioRefineSampler")
     return wf
 
 
