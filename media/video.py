@@ -946,7 +946,7 @@ def build_workflow(prompt: str, *, mode: str, width: int, height: int,
     if save_latent:
         _add_latent_save(wf, save_latent)
     _apply_overrides(wf)
-    audio_steps = max(0, _cfg_env.env_int("VIDEO_AUDIO_REFINE_STEPS", 2))
+    audio_steps = max(0, _cfg_env.env_int("VIDEO_AUDIO_REFINE_STEPS", 0))
     if audio_steps and not (context_video or context_latent or save_latent):
         if _server_has_node("H3AudioRefineSampler"):
             _add_audio_refine(wf, seed, audio_steps)

@@ -447,7 +447,7 @@ VIDEO_FL2VA_LORA_3STEP = os.getenv("VIDEO_FL2VA_LORA_3STEP", "night\\taomate_h3_
 # (it is out of the LoRA's trained regime there), so that safeguard stays.
 # 10-02 night: the graph now carries the lightx2v Ref2V 8-step v1.0 LoRA (distilled
 # for 8 NFE, euler/beta, shift 12/3), so 8 is its own regime, not past it.
-VIDEO_STEPS_REF2VA = _env_int("VIDEO_STEPS_REF2VA", 8)
+VIDEO_STEPS_REF2VA = _env_int("VIDEO_STEPS_REF2VA", 12)
 # With voice samples the voices, the score and the hits converge last (H3 guide:
 # "speech and voice timbre converge last"); at 4 steps the accordion
 # was gone, at 8 it came through. +115 s on a 5 s clip (241 s -> 356 s).
@@ -458,7 +458,7 @@ VIDEO_SPEECH_STRESS = os.getenv("VIDEO_SPEECH_STRESS", "1") != "0"
 # 12 in two stages (user pick 10-02): 249 s warm vs 267 s at 8, 348 s single-stage 8.
 # 8 with the Ref2V 8-step LoRA (night A/B 10-02, user's call "8-step LoRA -> 8 steps"):
 # 237 s vs 273 s at 12+2, voice similarity in the same range.
-VIDEO_STEPS_REF2VA_VOICES = _env_int("VIDEO_STEPS_REF2VA_VOICES", 8)
+VIDEO_STEPS_REF2VA_VOICES = _env_int("VIDEO_STEPS_REF2VA_VOICES", 12)
 VIDEO_CFG = _env_float("VIDEO_CFG", 1.0)
 VIDEO_SHIFT_VIDEO = _env_float("VIDEO_SHIFT_VIDEO", 12.0)
 VIDEO_SHIFT_AUDIO = _env_float("VIDEO_SHIFT_AUDIO", 3.0)
