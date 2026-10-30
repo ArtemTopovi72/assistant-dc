@@ -112,19 +112,46 @@ def test_motion_details_compare_two_distinct_positions(tmp_path, monkeypatch):
 
 
 def test_motion_comparison_requires_two_details(tmp_path, monkeypatch):
+    from PIL import Image
     clip = _clip(tmp_path)
+    frame = tmp_path / 'detail.png'
+    Image.new('RGB', (100, 100)).save(frame)
     calls = []
     def vision(p, q, system):
         calls.append(q)
         return 'Storyboard survives'
-    monkeypatch.setattr(V, 'motion_details', lambda *args: [(0.1, clip)])
+    monkeypatch.setattr(V, 'motion_details', lambda *args: [(0.1, frame)])
     result = V.look_at_video(None, str(clip), work_dir=tmp_path / 'one', vision=vision)
     assert result['description'] == 'Storyboard survives' and len(calls) == 1
     calls.clear()
-    monkeypatch.setattr(V, 'motion_details', lambda *args: [(0.1, clip), (0.2, clip)])
+    monkeypatch.setattr(V, 'motion_details', lambda *args: [(0.1, frame), (0.2, frame)])
     result = V.look_at_video(None, str(clip), work_dir=tmp_path / 'two', vision=vision)
-    assert result['description'] == 'Storyboard survives' and len(calls) == 1
-    assert 'last two pictures' in calls[0]
+    assert result['description'] == 'Storyboard survives' and len(calls) == 3
+    assert 'name and function' in calls[0] and 'If any' in calls[0] and 'last two pictures' in calls[2]
+    assert all('hand' not in q.lower() and 'person' not in q.lower() for q in calls[:2])
+    assert 'Storyboard survives' in calls[2]
+    calls.clear()
+    def unavailable(p, q, system):
+        calls.append(q)
+        if len(calls) == 1:
+            raise RuntimeError('vision unavailable')
+        return 'Storyboard survives'
+    result = V.look_at_video(None, str(clip), work_dir=tmp_path / 'failed', vision=unavailable)
+    assert result['description'] == 'Storyboard survives' and len(calls) == 2
+    calls.clear()
+    def failed_storyboard(p, q, system):
+        calls.append(q)
+        if len(calls) == 3:
+            raise RuntimeError('vision unavailable')
+        return 'Unverified guess'
+    result = V.look_at_video(None, str(clip), work_dir=tmp_path / 'failed_storyboard', vision=failed_storyboard)
+    assert result['description'] == '' and 'Unverified guess' not in result['gist']
+    calls.clear()
+    def hand_seen(p, q, system):
+        calls.append(q)
+        return 'A hand is visible' if len(calls) == 1 else 'Storyboard survives'
+    V.look_at_video(None, str(clip), work_dir=tmp_path / 'hand', vision=hand_seen)
+    assert len(calls) == 4 and 'under the hand' in calls[1]
 
 
 def test_portion_stamps_are_absolute_even_when_the_model_counts_from_zero():

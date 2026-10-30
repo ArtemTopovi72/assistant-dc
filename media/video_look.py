@@ -469,7 +469,46 @@ def look_at_video(ctx, path: str, *, every: float = EVERY_SECONDS,
         details = []
     if len(details) != 2:
         details = []
+    observation = ''
     if details:
+        try:
+            observation = vision(
+                [('Close-up:', str(details[-1][1]))],
+                'Describe the items and their positions in this close-up. If any object is being used, give its name and function. If uncertain, say so.',
+                'Describe what is visibly depicted; do not guess.')
+            if observation:
+                if re.search(r'\bhands?\b', observation, re.I):
+                    focused = vision(
+                        [('Close-up:', str(details[-1][1]))],
+                        'Describe the items and their positions in this close-up. Give the name and function of the object under the hand, if any. If uncertain, say so.',
+                        'Describe what is visibly depicted; do not guess.')
+                    if focused:
+                        observation = focused
+                from PIL import Image, ImageDraw
+                with Image.open(details[0][1]) as a, Image.open(details[1][1]) as b:
+                    width = 800
+                    a = a.convert('RGB'); b = b.convert('RGB')
+                    a.thumbnail((width, width)); b.thumbnail((width, width))
+                    pair = Image.new('RGB', (a.width + b.width, max(a.height, b.height) + 30), 'white')
+                    pair.paste(a, (0, 30)); pair.paste(b, (a.width, 30))
+                    draw = ImageDraw.Draw(pair)
+                    draw.text((5, 5), 'A', fill='black'); draw.text((a.width + 5, 5), 'B', fill='black')
+                    pair_path = work_dir / 'motion_pair.jpg'
+                    pair.save(pair_path, quality=92)
+                focus = ('any object under a hand or otherwise being manipulated'
+                         if re.search(r'\bhands?\b', observation, re.I)
+                         else 'any object being used or manipulated, if present')
+                comparison = vision(
+                    [('Two phases:', str(pair_path))],
+                    'One earlier observation of panel B follows; it could be wrong: ' + observation[:1200]
+                    + '\nCompare panels A and B, focusing on ' + focus + '. '
+                      'Does its shape or position change relative to nearby objects? '
+                      'Describe visible motion; if uncertain, say so.',
+                    'Describe what is visibly depicted; do not guess.')
+                q += ('\n\nClose-up observations to check against the frames (they may be mistaken):\n'
+                      + observation[:1200] + '\n' + (comparison or '')[:1200])
+        except Exception:
+            logger.warning('video_look: close-up observation failed', exc_info=True)
         q += ("\n\nThe last two pictures are enlarged details of movement, from the same video. "
               "Compare positions across both; identify the action and object only if visible. "
               "Look for repeated changes across the full sequence. Before naming an object, "
