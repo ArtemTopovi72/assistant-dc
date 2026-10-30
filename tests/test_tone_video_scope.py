@@ -26,3 +26,11 @@ def test_tone_instruction_uses_original_and_allows_uncertainty():
     assert not _tone_note('Сегодня плохое настроение, посоветуй фильм', [])
     followup = _tone_note('А как же точки?', [{'role': 'assistant', 'content': 'Тон сообщения может быть ироничным.'}])
     assert 'text being discussed in the conversation' in followup
+
+
+def test_tone_guidance_distinguishes_punctuation_from_speculation():
+    from graph_compose import _tone_note
+    note = _tone_note('Есть ли сарказм в «Ну спасибо.»?', [])
+    assert 'ordinarily sentence separators' in note
+    assert 'do not assign' in note
+    assert 'when supported by the context' in note

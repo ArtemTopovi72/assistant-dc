@@ -304,9 +304,15 @@ def _tone_note(text: str, messages: list) -> str:
     return ("[Analyze the original wording and punctuation in the user's text or, for a follow-up, "
             "the text being discussed in the conversation, not a translated paraphrase. "
             "Separate observable words from interpretations: exaggerated praise and capital letters "
-            "may be sincere or ironic. Consider both plausible readings and explain what supports "
-            "each; if the context is missing, do not label either interpretation the default or more "
-            "likely, or claim that irony requires a serious failure. Periods are not proof of hostility. "
+            "may be sincere or ironic. Consider plausible readings when supported by the context; "
+            "do not force a false balance if the surrounding situation favors one. If context is "
+            "missing, say the intention is uncertain. Periods between sentences are ordinarily sentence separators: "
+            "do not assign emotional weight, theatrical pauses, sincerity or hostility without context. "
+            "A distinctive rhythm or final period can sometimes affect how a reader perceives the text, "
+            "but is not proof of intent. Describe such effects as possibilities, never as facts about the writer. "
+            "Earlier assistant replies may be wrong: do not repeat unsupported claims that ordinary "
+            "periods create weight, depth, sincerity, coldness or theatrical pauses. If the text only "
+            "uses periods to separate sentences, say that plainly rather than inventing a meaning. "
             "Do not invent names, exclamation marks, or other details. Current message: " + current + "]")
 
 
