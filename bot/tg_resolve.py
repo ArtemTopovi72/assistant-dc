@@ -1182,13 +1182,19 @@ class ResolveMixin:
                 # suite may reach the network. Not inside an armed capture
                 # state (a password, a song topic) and not for machine text.
                 # (a link is MATERIAL: one in the replied-to message is read too)
-                if ("://" in _req and not sess.reg_state and not input_prefix
+                _quoted_links = _tg_links.urls_in(item.get('quote') or '')
+                _own_links = _tg_links.urls_in(raw)
+                _quoted_link = (_quoted_links[0] if _quoted_links else '')
+                _link_check = lambda url: _tg_links.is_page_followup(
+                    raw, item.get('quote') or '', self._last_bot_text(sess), url, ctx=self.reads)
+                if ((_own_links or (_quoted_link and _link_check(_quoted_link)))
+                        and not sess.reg_state and not input_prefix
                         and raw not in tg_bot._MACHINE_PAYLOADS
                         and not os.getenv("F5_TEST_RUN")):
-                    if self._read_links(ctx, sess, chat_id, user, _req, scaffold):
+                    if self._read_links(ctx, sess, chat_id, user, raw if _own_links else _req, scaffold):
                         return   # a long video: the portioned-job offer is the answer
                 elif (getattr(sess, "last_link", None) and "?" in raw and not input_prefix
-                        and not os.getenv("F5_TEST_RUN")):
+                        and not os.getenv("F5_TEST_RUN") and _link_check(sess.last_link)):
                     # «а когда основан?» after a link was answered from the cut
                     # fitted to the first question: refit the page to this one.
                     # a watched video is answered from what was seen and heard,

@@ -21,6 +21,24 @@ def urls_in(text: str) -> list:
     return [u.rstrip(".,;:!?)»") for u in _URL_RE.findall(text or "")]
 
 
+def is_page_followup(question: str, quoted: str, previous: str, url: str, ctx=None) -> bool:
+    """Only recover an old page when this question actually refers to it."""
+    if not question or not url:
+        return False
+    from seams import yes_no
+    context = (f'Link: {url}\nPrevious answer: {(previous or "")[:700]}\n'
+               f'Replied-to text: {(quoted or "")[:700]}\nNew question: {question[:700]}')
+    try:
+        return yes_no(ctx)(
+            'Given the new question, the replied-to text and previous answer, is the user '
+            'specifically asking about the linked page or its subject, rather than the wording '
+            'of the reply or a different topic? Say yes only when the link is relevant: {text}',
+            context, default=False)
+    except Exception:
+        logger.warning('page follow-up check failed', exc_info=True)
+        return False
+
+
 # Hosts whose links are videos to watch, not pages to read (a
 # YouTube Shorts link got «я не умею смотреть видео по ссылкам»).
 _VIDEO_RE = re.compile(

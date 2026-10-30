@@ -129,13 +129,21 @@ def _handle_search(ctx, state, args: dict) -> str:
     logger.info("Tool: search(%s)", query)
     search_ctx = Over(ctx, search_request=(state or {}).get("user_input_original")
                       or (state or {}).get("user_input") or query)
-    result = dep(ctx, "run_web_search", run_web_search)(search_ctx, query)
-    ctx.remember("search", f"Query: {query}\n{result[:500]}", {"query": query})
+    sources = getattr(ctx, 'turn_sources', None)
+    before = len(sources) if isinstance(sources, list) else 0
+    try:
+        result = dep(ctx, "run_web_search", run_web_search)(search_ctx, query)
+    except Exception:
+        if isinstance(sources, list):
+            del sources[before:]
+        raise
     # Don't fence our own status sentinels (no-results / failed / insufficient) —
     # only real external page text should be framed as UNTRUSTED data.
     if (result.lstrip().startswith("[TOOL ERROR]")
             or result.strip() in (NO_RESULTS, SEARCH_FAILED)
             or result.strip().lower().startswith("insufficient")):
+        if isinstance(sources, list):
+            del sources[before:]
         return result
     # Silent-payload guard: block success-shaped-but-unusable results (empty,
     # garbled, truncated) so the model can't relay/complete junk, and append a
@@ -144,11 +152,14 @@ def _handle_search(ctx, state, args: dict) -> str:
     assess_payload, SKEPTIC_BANNER = _pg.assess_payload, _pg.SKEPTIC_BANNER
     v = assess_payload(query, result)
     if not v.usable:
+        if isinstance(sources, list):
+            del sources[before:]
         logger.info("Search payload guard blocked result (%s)", v.status)
         return (f"[TOOL ERROR] The search did not return a usable result — {v.reason}. "
                 "Do NOT present this as an answer and do NOT invent or complete the "
                 "missing content. Retry with a different query, try another approach, "
                 "or tell the user plainly that the information could not be retrieved.")
+    ctx.remember("search", f"Query: {query}\n{result[:500]}", {"query": query})
     prefix = f"[DATA-VALIDATION] Note: {v.reason}.\n" if v.status == "stale" else ""
     import datetime as _dtm
     # The model's memory ends before today: it read "Winner: Spain" for the

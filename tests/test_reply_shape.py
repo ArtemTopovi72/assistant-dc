@@ -53,8 +53,8 @@ unc = S.shape_search_reply("Это забавный мем.", ["meaning origin"]
 check("an answer that rests on none of the pages gets no source list, the search line stays",
       "Источники" not in unc and "<a href" not in unc and unc.startswith("🔎 <b>Искал:</b>"), unc)
 used = S.shape_search_reply("Текст песни такой: ...", ["lyrics"], SRC, ctx=_reader("2"))
-check("...and one that rests on a page it did not cite lists that page alone",
-      used.count("<a href") == 1 and "Alpine passes</a>" in used, used)
+check("an uncited answer does not guess a source from page titles",
+      "<a href" not in used, used)
 check("model down: no list", "<a href" not in S.shape_search_reply("x", ["q"], SRC, ctx=types.SimpleNamespace(
     text_model=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("down")))))
 
