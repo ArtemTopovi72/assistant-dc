@@ -916,13 +916,16 @@ class TaskRunnerMixin:
                        and not self._stop_requested_after(t)
                        and t.task_id in self._steer_inboxes]
             interruptible = self._chat_interruptible.get(chat_id, False)
-            # The task's snapshot is not filled yet at steer time; the cached
-            # intent read of these same words is (one read per turn).
-            try:
-                from intent import intent_read as _intent_read
-                _wants = list(_intent_read(self.reads)(None, task.user_text, "", "").get("wants") or [])
-            except Exception:
-                _wants = []
+            # The snapshot is normally filled by _persist_task — but the steer
+            # check runs before it, so fill it here (one snapshot, deterministic:
+            # the routing read's wants, not a fresh read that may disagree).
+            if not getattr(task, 'intent_snapshot', None):
+                import intent as _intent
+                task.intent_snapshot = _intent.snapshot_turn()
+            _wants = []
+            for _k, _rd in reversed(task.intent_snapshot.get("reads") or []):
+                if isinstance(_rd, dict) and _rd.get("wants"):
+                    _wants = list(_rd["wants"]); break
             if not running or not _steer.eligible(
                     task.user_text, bool(task.image_path) or bool(task.image_id), interruptible,
                     ctx=self.reads, wants=_wants):
