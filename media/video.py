@@ -794,16 +794,42 @@ def _add_latent_upscale(wf: dict, seed: int, factor: float = 0.0, steps: int = 0
                 node["inputs"][k] = [n["cat2"], 0]
 
 
+def _audio_cache_fits(wf: dict) -> bool:
+    """Keep a generous RAM reserve before the Windows-only cache allocation."""
+    try:
+        import psutil
+        from urllib.parse import urlparse
+        if urlparse(COMFY_URL).hostname not in {"localhost", "127.0.0.1", "::1"}:
+            return False
+        frames = int(wf[N_COND]["inputs"].get("length", 362))
+        # The node documents ~1 GiB/s at its largest canvas; double that estimate
+        # and retain 24 GiB for the app, ComfyUI activations and the OS.
+        need = (frames / 24 * 2 + 24) * (1 << 30)
+        return psutil.virtual_memory().available > need
+    except Exception:
+        return False
+
+
 def _add_audio_refine(wf: dict, seed: int, steps: int) -> None:
     """Refine H3 audio against stage-1 video without resampling its pixels."""
     # The node's reference workflow refines with undistilled H3, after a Turbo first pass.
     plain_model = str(max(int(k) for k in wf) + 1)
     wf[plain_model] = {"class_type": wf[N_SHIFT]["class_type"], "inputs": {
         **wf[N_SHIFT]["inputs"], "model": [N_UNET, 0]}}
-    refine = str(int(plain_model) + 1)
+    refine_model = [plain_model, 0]
+    if (_cfg_env.env_int("VIDEO_AUDIO_REFINE_CACHE", 1)
+            and _server_has_node("H3FrozenVideoCache") and _audio_cache_fits(wf)):
+        cache = str(int(plain_model) + 1)
+        wf[cache] = {"class_type": "H3FrozenVideoCache", "inputs": {
+            "model": refine_model, "enabled": True, "cache_contents": "hidden",
+            "backend": "ram", "precision": "int4", "refresh_interval": 0,
+            "verbose": False, "allow_disk": False, "vram_margin_gb": 1.0,
+            "free_after_pass": True}}
+        refine_model = [cache, 0]
+    refine = str(max(int(k) for k in wf) + 1)
     smp = wf[N_SAMPLER]["inputs"]
     wf[refine] = {"class_type": "H3AudioRefineSampler", "inputs": {
-        "model": [plain_model, 0], "positive": smp["positive"], "negative": smp["negative"],
+        "model": refine_model, "positive": smp["positive"], "negative": smp["negative"],
         "latent": [N_SAMPLER, 0], "seed": int(seed) + 2, "steps": steps,
         "cfg": float(smp["cfg"]), "sampler_name": "euler", "scheduler": "simple",
         "audio_denoise": 0.5, "video_denoise": 0.0}}
