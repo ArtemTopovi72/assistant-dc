@@ -806,6 +806,39 @@ def _add_audio_refine(wf: dict, seed: int, steps: int) -> None:
     wf["10"]["inputs"]["samples"] = [refine, 0]
 
 
+def _add_lowpass_guidance(wf: dict) -> None:
+    """Use a blurred first-frame condition for step 1, then the clean frame."""
+    cond = wf[N_COND]["inputs"]
+    source = cond["first_frame"]
+    steps = wf[N_SAMPLER]["inputs"]["steps"]
+    width, height = cond["width"], cond["height"]
+    base = max(int(k) for k in wf) + 1
+    small, restored, blur_cond, blur_neg, first = (str(base + i) for i in range(5))
+    wf[small] = {"class_type": "ImageScale", "inputs": {
+        "image": source, "upscale_method": "bilinear",
+        "width": max(1, round(width / 2.5)), "height": max(1, round(height / 2.5)),
+        "crop": "disabled"}}
+    wf[restored] = {"class_type": "ImageScale", "inputs": {
+        "image": [small, 0], "upscale_method": "bilinear",
+        "width": width, "height": height, "crop": "disabled"}}
+    wf[blur_cond] = {"class_type": "MiniMaxH3ImageToVideo", "inputs": {
+        **cond, "first_frame": [restored, 0]}}
+    wf[blur_neg] = {"class_type": "ConditioningZeroOut", "inputs": {
+        "conditioning": [blur_cond, 0]}}
+    smp = wf[N_SAMPLER]["inputs"]
+    common = {k: smp[k] for k in ("model", "steps", "cfg", "sampler_name", "scheduler")}
+    wf[first] = {"class_type": "KSamplerAdvanced", "inputs": {
+        **common, "positive": [blur_cond, 0], "negative": [blur_neg, 0],
+        "latent_image": [N_COND, 1], "noise_seed": smp["seed"],
+        "add_noise": "enable", "start_at_step": 0, "end_at_step": 1,
+        "return_with_leftover_noise": "enable"}}
+    wf[N_SAMPLER] = {"class_type": "KSamplerAdvanced", "inputs": {
+        **common, "positive": smp["positive"], "negative": smp["negative"],
+        "latent_image": [first, 0], "noise_seed": smp["seed"],
+        "add_noise": "disable", "start_at_step": 1, "end_at_step": steps,
+        "return_with_leftover_noise": "disable"}}
+
+
 def build_workflow(prompt: str, *, mode: str, width: int, height: int,
                    frames: int, seed: int,
                    images: Sequence[str] = (), videos: Sequence[str] = (),
@@ -937,6 +970,10 @@ def build_workflow(prompt: str, *, mode: str, width: int, height: int,
     if save_latent:
         _add_latent_save(wf, save_latent)
     _apply_overrides(wf)
+    if (_cfg_env.env_int("VIDEO_ALG", 0) and mode == "t2va" and len(images) == 1
+            and not (videos or audios or context_video or context_latent or save_latent)
+            and smp["steps"] >= 3):
+        _add_lowpass_guidance(wf)
     audio_steps = max(0, _cfg_env.env_int("VIDEO_AUDIO_REFINE_STEPS", 0))
     if audio_steps and not (context_video or context_latent or save_latent):
         if _server_has_node("H3AudioRefineSampler"):
