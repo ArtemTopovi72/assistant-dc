@@ -30,3 +30,22 @@ def test_video_step_routes(monkeypatch, tmp_path):
                                       seconds=5.9, **kwargs)
         assert result["status"] == "success"
         assert captured[-1]["steps"] == expected
+
+
+def test_five_step_photo_keeps_taomate(monkeypatch):
+    monkeypatch.setenv("VIDEO_ALG", "0")
+    monkeypatch.setattr(video, "_upload", lambda *args, **kwargs: "photo.png")
+    photo = video.build_workflow("A car drives", mode="t2va", width=576,
+                                 height=576, frames=124, seed=7,
+                                 images=["photo.png"], steps=5, two_stage=False)
+    text = video.build_workflow("A car drives", mode="t2va", width=576,
+                                height=576, frames=124, seed=7,
+                                steps=5, two_stage=False)
+    anchored = video.build_workflow("A person talks", mode="t2va", width=576,
+                                    height=576, frames=124, seed=7,
+                                    images=["photo.png", "photo.png"],
+                                    steps=5, two_stage=False)
+    assert photo[video.N_LORA]["inputs"]["lora_name"] == video.VIDEO_FL2VA_LORA_3STEP
+    assert photo[video.N_LORA]["inputs"]["strength_model"] == 1.0
+    assert text[video.N_LORA]["inputs"]["lora_name"] != video.VIDEO_FL2VA_LORA_3STEP
+    assert anchored[video.N_LORA]["inputs"]["lora_name"] != video.VIDEO_FL2VA_LORA_3STEP

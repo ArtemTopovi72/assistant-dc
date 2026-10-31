@@ -877,8 +877,9 @@ def build_workflow(prompt: str, *, mode: str, width: int, height: int,
     # polish pass). So whenever ref2va runs at any step count other than 4,
     # the LoRA is zeroed out here rather than left attached and wrong.
     # Both graphs now carry a 4-step turbo LoRA (t2va: FL2V v1.2, ref2va: Ref2V v0.1).
-    # t2va at 3 steps swaps in the TaoMate 3-step LoRA (distilled for 3 NFE).
-    if N_LORA in wf and mode == "t2va" and smp["steps"] == 3 and VIDEO_T2VA_LORA_3STEP:
+    # Keep the user's preferred TaoMate FL2VA adapter when trying 5 steps on one photo.
+    use_taomate = mode == "t2va" and (smp["steps"] == 3 or (smp["steps"] == 5 and len(images) == 1))
+    if N_LORA in wf and use_taomate and VIDEO_T2VA_LORA_3STEP:
         wf[N_LORA]["inputs"]["lora_name"] = ((VIDEO_FL2VA_LORA_3STEP or VIDEO_T2VA_LORA_3STEP)
                                              if images or videos else VIDEO_T2VA_LORA_3STEP)
     # A turbo LoRA stays on ABOVE 4 steps (community range 6-8 sharpens it);
