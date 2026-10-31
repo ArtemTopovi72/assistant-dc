@@ -161,4 +161,31 @@ S.fold_into(m3, ["фон красный"])
 check("the note tells the model to change what was already made", "ALREADY made" in m3[0]["content"] and "красный" in m3[0]["content"])
 
 print("\n%d/%d checks passed" % (OK, OK + BAD))
+
+
+# ── a NEW-deliverable request queues as a task, not a note (2026-10-31) ──────
+# Chained scenarios: «нарисуй думгая…» sent while a search ran was folded in
+# as «👌 Учту» and the chain lost its draw step. Words naming a tool that
+# CREATES a deliverable are a new task; refinements still steer.
+from steer import eligible as _elig
+assert not _elig("нарисуй думгая едущего на велосипеде", False, False,
+                 wants=["generate_image"]), "a new deliverable must queue as a task"
+assert _elig("сделай фон темнее", False, False, wants=["inpaint_image"]),     "a refinement of the current picture still steers"
+assert _elig("и добавь озеро", False, False), "plain notes still steer"
+assert _elig("а сколько это займёт?", False, True), "a question still side-answers"
+print("PASS  new-deliverable requests queue as tasks")
+
+
 sys.exit(1 if BAD else 0)
+
+
+def test_new_delivery_request_queues_instead_of_steering():
+    """Chained scenarios (2026-10-31): «нарисуй думгая…» sent while a search ran
+    was folded in as «👌 Учту» and the chain lost its draw step. Words naming a
+    NEW deliverable (generate_image / generate_video / create_presentation) are
+    a new task; refinements (inpaint) still steer."""
+    assert not eligible("нарисуй думгая едущего на велосипеде", False, False,
+                        wants=["generate_image"])
+    assert eligible("сделай фон темнее", False, False, wants=["inpaint_image"])
+    assert eligible("и добавь озеро", False, False)
+    assert eligible("а сколько это займёт?", False, True)   # question still side-answers

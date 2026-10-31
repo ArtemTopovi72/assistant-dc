@@ -916,8 +916,11 @@ class TaskRunnerMixin:
                        and not self._stop_requested_after(t)
                        and t.task_id in self._steer_inboxes]
             interruptible = self._chat_interruptible.get(chat_id, False)
+            snap = getattr(task, "intent_snapshot", None) or {}
+            _wants = [w for rd in (snap.get("reads") or []) for w in (rd[1] or {}).get("wants", [])]
             if not running or not _steer.eligible(
-                    task.user_text, bool(task.image_path) or bool(task.image_id), interruptible, ctx=self.reads):
+                    task.user_text, bool(task.image_path) or bool(task.image_id), interruptible,
+                    ctx=self.reads, wants=_wants):
                 return False
             target = running[-1]
             self._steer_incoming.setdefault(target.task_id, []).extend(BATCH_IDS.get())

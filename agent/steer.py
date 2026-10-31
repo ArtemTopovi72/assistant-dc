@@ -54,14 +54,27 @@ class Inbox:
 # minute research must not wait for the research. Everything else steers.
 
 
-def eligible(text: str, has_file: bool, interruptible: bool, ctx=None) -> bool:
-    """Should this arrival steer the running task instead of queueing?"""
+# Tools that produce a NEW deliverable from scratch: a request naming one is a
+# new task, never a note (chained scenarios 2026-10-31: «нарисуй думгая…» sent
+# while a search ran was folded in as «👌 Учту» and the chain lost its draw).
+_NEW_DELIVERY = frozenset({"generate_image", "generate_video", "create_presentation"})
+
+
+def eligible(text: str, has_file: bool, interruptible: bool, ctx=None,
+             wants: List[str] = ()) -> bool:
+    """Should this arrival steer the running task instead of queueing?
+
+    `wants` is the arrival's own intent read (the task's cached snapshot read):
+    words naming a NEW deliverable (draw a picture, make a video, a deck) queue
+    as a new task instead of steering the running one."""
     t = (text or "").strip()
     if not t or has_file or len(t) > MAX_NOTE:
         return False
     if t.startswith("/"):
         return False
     if interruptible and intent_read(ctx)(None, t)["is_question"]:
+        return False
+    if wants and any(w in _NEW_DELIVERY for w in wants):
         return False
     return True
 
