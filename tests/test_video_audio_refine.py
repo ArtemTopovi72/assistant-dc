@@ -2,6 +2,22 @@
 import video
 
 
+def test_audio_refine_defaults_to_five_steps_without_changing_video(monkeypatch):
+    monkeypatch.delenv("VIDEO_AUDIO_REFINE_STEPS", raising=False)
+    monkeypatch.setattr(video, "_server_has_node", lambda _: True)
+    wf = video.build_workflow("A motor running", mode="t2va", width=576,
+                              height=576, frames=124, seed=7, steps=5,
+                              two_stage=False)
+    refine = next(k for k, v in wf.items() if v["class_type"] == "H3AudioRefineSampler")
+    assert wf[refine]["inputs"]["steps"] == 5
+    assert wf[refine]["inputs"]["video_denoise"] == 0.0
+    plain_model = wf[refine]["inputs"]["model"][0]
+    assert plain_model != wf["8"]["inputs"]["model"][0]
+    assert wf[plain_model]["inputs"]["model"] == [video.N_UNET, 0]
+    assert wf["9"]["inputs"]["samples"] == ["8", 0]
+    assert wf["10"]["inputs"]["samples"] == [refine, 0]
+
+
 def test_audio_refine_freezes_video_and_keeps_first_pass_step_count(monkeypatch):
     monkeypatch.setenv("VIDEO_AUDIO_REFINE_STEPS", "2")
     monkeypatch.setattr(video, "_server_has_node", lambda _: True)
@@ -13,7 +29,8 @@ def test_audio_refine_freezes_video_and_keeps_first_pass_step_count(monkeypatch)
         assert wf["8"]["inputs"]["steps"] == 8
         assert wf[refine]["inputs"]["steps"] == 2
         assert wf[refine]["inputs"]["video_denoise"] == 0.0
-        assert wf[refine]["inputs"]["model"] == wf["8"]["inputs"]["model"]
+        plain_model = wf[refine]["inputs"]["model"][0]
+        assert wf[plain_model]["inputs"]["model"] == [video.N_UNET, 0]
         assert wf["9"]["inputs"]["samples"] == ["8", 0]
         assert wf["10"]["inputs"]["samples"] == [refine, 0]
 
@@ -35,6 +52,7 @@ def test_two_stage_refines_stage_one_audio_and_keeps_upscaled_video(monkeypatch)
                               two_stage=True)
     refine = next(k for k, v in wf.items() if v["class_type"] == "H3AudioRefineSampler")
     assert wf[refine]["inputs"]["latent"] == ["8", 0]
-    assert wf[refine]["inputs"]["model"] == wf["8"]["inputs"]["model"]
+    plain_model = wf[refine]["inputs"]["model"][0]
+    assert wf[plain_model]["inputs"]["model"] == [video.N_UNET, 0]
     assert wf["9"]["inputs"]["samples"] != ["8", 0]
     assert wf["10"]["inputs"]["samples"] == [refine, 0]

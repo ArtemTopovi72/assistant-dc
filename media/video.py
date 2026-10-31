@@ -796,10 +796,14 @@ def _add_latent_upscale(wf: dict, seed: int, factor: float = 0.0, steps: int = 0
 
 def _add_audio_refine(wf: dict, seed: int, steps: int) -> None:
     """Refine H3 audio against stage-1 video without resampling its pixels."""
-    refine = str(max(int(k) for k in wf) + 1)
+    # The node's reference workflow refines with undistilled H3, after a Turbo first pass.
+    plain_model = str(max(int(k) for k in wf) + 1)
+    wf[plain_model] = {"class_type": wf[N_SHIFT]["class_type"], "inputs": {
+        **wf[N_SHIFT]["inputs"], "model": [N_UNET, 0]}}
+    refine = str(int(plain_model) + 1)
     smp = wf[N_SAMPLER]["inputs"]
     wf[refine] = {"class_type": "H3AudioRefineSampler", "inputs": {
-        "model": smp["model"], "positive": smp["positive"], "negative": smp["negative"],
+        "model": [plain_model, 0], "positive": smp["positive"], "negative": smp["negative"],
         "latent": [N_SAMPLER, 0], "seed": int(seed) + 2, "steps": steps,
         "cfg": float(smp["cfg"]), "sampler_name": "euler", "scheduler": "simple",
         "audio_denoise": 0.5, "video_denoise": 0.0}}
@@ -975,7 +979,7 @@ def build_workflow(prompt: str, *, mode: str, width: int, height: int,
             and not (videos or audios or context_video or context_latent or save_latent)
             and smp["steps"] >= 3):
         _add_lowpass_guidance(wf)
-    audio_steps = max(0, _cfg_env.env_int("VIDEO_AUDIO_REFINE_STEPS", 0))
+    audio_steps = max(0, _cfg_env.env_int("VIDEO_AUDIO_REFINE_STEPS", 5))
     if audio_steps and not (context_video or context_latent or save_latent):
         if _server_has_node("H3AudioRefineSampler"):
             _add_audio_refine(wf, seed, audio_steps)

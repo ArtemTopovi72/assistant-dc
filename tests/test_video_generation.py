@@ -30,6 +30,7 @@ def _yes(q, t, default=False, wait=True):
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception: pass
 os.environ.setdefault("F5_TEST_RUN", "1")
+os.environ["VIDEO_AUDIO_REFINE_STEPS"] = "0"  # covered by test_video_audio_refine.py
 import logging; logging.basicConfig(level=logging.CRITICAL)
 
 import config as C
