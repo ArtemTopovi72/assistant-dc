@@ -142,6 +142,41 @@ def test_review_warning_signs():
     assert S.review_signals(honest) == ""
 
 
+def test_web_review_query_keeps_exact_model_not_capacity_or_form_factor():
+    assert S._model_name("ADATA 1 ТБ Внутренний SSD-диск LEGEND 960 MAX, M.2") == "ADATA LEGEND 960 MAX"
+    assert S._model_name("Kingston 1 ТБ Внутренний SSD-диск NV3 2230") == "Kingston NV3"
+    assert S._model_name("Снегоуборщик бензиновый CHAMPION ST661 (6,5 лс)") == "CHAMPION ST661"
+    assert S._model_name("Samsung 500 GB SSD 970 EVO Plus") == "Samsung 970 EVO Plus"
+    assert S._model_name("JBL Go 4") == "JBL Go 4"
+
+
+def test_shopper_does_not_publish_family_speed_or_invent_review_opinions():
+    assert S._without_unverified_performance(
+        "Подходит по цене. Скорость 7400/6800 МБ/с, хотя это цифра версии 2 ТБ. Есть гарантия."
+    ) == "Подходит по цене. Есть гарантия."
+    assert S._review_evidence([{"score": 5, "comment": "Работает нормально"}]) == \
+        "В прочитанных отзывах: «Работает нормально»"
+    assert S._review_evidence(None) == "Тексты отзывов не удалось прочитать."
+    assert S._review_evidence([{"score": 1}, {"score": 2},
+                               {"score": 5, "comment": "Хороший товар"}]) == \
+        "В прочитанных отзывах: «Хороший товар»"
+
+
+def test_decision_uses_card_reviews_even_when_model_invents_claims(world):
+    _, script = world
+    script["decide_extra"] = {
+        "why": "Лучший выбор. Пишет 6800 МБ/с для версии 1 ТБ.",
+        "reviews": "Покупатели хвалят охлаждение.",
+        "concerns": "Ресурс 320 TBW.",
+    }
+    chosen = item("nv3", "Kingston NV3 1 ТБ", 17000)
+    chosen["review_texts"] = [{"score": 5, "comment": "Установил, работает"}]
+    result = S.decide(_ctx(), {"need": "SSD 1 ТБ", "must": []}, [chosen])
+    assert result["why"] == "Лучший выбор."
+    assert result["reviews"] == "В прочитанных отзывах: «Установил, работает»"
+    assert result["concerns"] == ""
+
+
 def test_buttons_route_to_the_shopper():
     import tg_bot, tg_keyboards
     from tg_strings import _b

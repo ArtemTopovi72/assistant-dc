@@ -392,11 +392,15 @@ def _dossier(i: int, d: dict) -> str:
 
 
 def _model_name(name: str) -> str:
-    """'Снегоуборщик бензиновый самоходный CHAMPION ST661 (6,5 лс 61см)' -> the
-    brand+model part a forum would use: tokens with a Latin letter or a digit."""
+    """Use the brand and model, not capacity words, for external reviews."""
     head = str(name or "").split(",")[0].split("(")[0]
     toks = re.findall(r"[A-Za-zА-Яа-яЁё0-9][\w.\-/]*", head)
-    keep = [t for t in toks if re.search(r"[A-Za-z0-9]", t)]
+    units = {"tb", "gb", "тб", "гб"}
+    keep = [t for i, t in enumerate(toks) if
+            (re.search(r"[A-Za-z]", t) or t.isdigit()) and
+            not (t.isdigit() and i + 1 < len(toks) and toks[i + 1].lower() in units) and
+            not t.lower().startswith(("ssd", "nvme", "pcie")) and
+            t.lower() not in units | {"m2", "2230", "2242", "2260", "2280", "22110"}]
     return " ".join(keep[:4]) or " ".join(toks[:4])
 
 
@@ -434,13 +438,44 @@ _DECIDE_SYS = (
     "exactly 'Отзывов нет' when it has none; concerns: honest caveats or '' (name the "
     "site when a caveat comes from the web). Add \"versus\": {\"n\": str} for EVERY finalist you "
     "did not choose -- one sentence: what its own buyers report and why it lost, from its "
-    "dossier only. The user reads why/reviews/concerns/versus as they are: no 'MUST', no "
+    "dossier only. A family/spec sheet may describe several capacities: never attribute a "
+    "speed, endurance or other numeric specification to the chosen capacity unless the "
+    "dossier explicitly ties that number to that exact capacity. Do not infer buyer opinions "
+    "from a star count or web snippets; use only actual reviews of this item. Explain a "
+    "higher price against cheaper finalists when the buyer asks for value. The user reads "
+    "why/reviews/concerns/versus as they are: no 'MUST', no "
     "finalist numbers like [2] -- name a product by its brand or kind. Write them in Russian.")
 
 
 def _for_user(text) -> str:
     """The decider echoes its input's label («требованию MUST»); the user never saw it."""
     return re.sub(r"\s*\bMUST\b", "", str(text or "")).strip()
+
+
+_PERFORMANCE_NUMBER = re.compile(r"\d[\d\s.,/]*\s*(?:мб/с|гб/с|mb/s|gb/s|tbw)\b", re.I)
+
+
+def _without_unverified_performance(text) -> str:
+    """Family-wide speeds can be for another capacity; free-form prose is not evidence."""
+    return " ".join(sentence for sentence in re.split(r"(?<=[.!?])\s+", _for_user(text))
+                    if not _PERFORMANCE_NUMBER.search(sentence)).strip()
+
+
+def _review_evidence(reviews) -> str:
+    if reviews is None:
+        return "Тексты отзывов не удалось прочитать."
+    if not reviews:
+        return "Отзывов на эту карточку не найдено."
+    readable = [r for r in reviews if str(r.get("comment") or r.get("cons") or
+                                          r.get("pros") or "").strip()]
+    picked = sorted(readable, key=lambda r: r.get("score", 5) or 5)[:2]
+    excerpts = []
+    for review in picked:
+        words = re.sub(r"\s+", " ", str(review.get("comment") or review.get("cons") or
+                                     review.get("pros") or "")).strip()[:180]
+        if words:
+            excerpts.append("«" + words.replace("*", "").replace("`", "") + "»")
+    return "В прочитанных отзывах: " + "; ".join(excerpts) if excerpts else "Тексты отзывов пустые."
 
 
 def decide(ctx, item: dict, finalists: list, strategy: str = "balanced") -> dict:
@@ -457,10 +492,10 @@ def decide(ctx, item: dict, finalists: list, strategy: str = "balanced") -> dict
     versus = data.get("versus") if isinstance(data.get("versus"), dict) else {}
     for k, v in versus.items():
         if str(k).isdigit() and 1 <= int(k) <= len(finalists):
-            finalists[int(k) - 1]["verdict"] = _for_user(v)
-    return {"index": n - 1, "why": _for_user(data.get("why")),
-            "reviews": _for_user(data.get("reviews") or ("Отзывов нет" if rv == [] else "")),
-            "concerns": _for_user(data.get("concerns"))}
+            finalists[int(k) - 1]["verdict"] = _without_unverified_performance(v)
+    return {"index": n - 1, "why": _without_unverified_performance(data.get("why")),
+            "reviews": _review_evidence(rv),
+            "concerns": _without_unverified_performance(data.get("concerns"))}
 
 
 BUYER_PHOTOS = 2                       # per finalist, from its reviews
