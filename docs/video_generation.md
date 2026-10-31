@@ -40,7 +40,7 @@ Chosen automatically from what is attached — callers never pick a checkpoint.
 |---|---|---|
 | nothing | `t2va` | pure text→video |
 | 1 image | `i2va` | that image is **frame 0** |
-| 2 images | `flf2va` | first frame and last frame |
+| 2 images | `ref2va` | both are visual references; the last is not guaranteed as frame 0 or the final frame |
 | 3–9 images, or any video/audio | `ref2va` | references, not literal frames |
 
 The distinction matters: a keyframe *is* a frame of the output, a reference is

@@ -305,7 +305,7 @@ def test_nonchain_references_keep_full_reference_prompt_family():
     V.prepare_prompt(ctx, "A slow camera push-in.", images=["one.png"], seconds=5.17)
     V.prepare_prompt(ctx, "Two people speak.", images=["one.png", "two.png"],
                      audios=["voice.wav"], seconds=5.17)
-    assert modes == ["ref2va", "ref2va"]
+    assert modes == ["t2va", "ref2va"]
 
 
 def test_multipart_chain_preparation_uses_the_native_conditioning_family(tmp_path):

@@ -1605,6 +1605,8 @@ class ResolveMixin:
                 merged = input_prefix + merged
                 if owns_input('pending_prefix') and sess.pending_prefix == input_prefix:
                     sess.pending_prefix = ""
+                if input_prefix == 'animate this photo: ' and owns_input('pending_animate_target'):
+                    sess.pending_animate_target = ""
                 if owns_input('pending_outfit_target'):
                     sess.pending_outfit_target = ""   # 👗 answered in words, not a photo
                 try: self._store.put(sess)

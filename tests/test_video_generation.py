@@ -7,12 +7,9 @@ exercised is the part that decides what gets rendered and what gets delivered:
   * the model's hard grids — H3 only accepts frame counts where n % 17 == 5 and a
     768-short-edge / 1MP canvas in multiples of 32. Sending anything else either
     errors in the node or renders a shape the model never saw.
-  * mode routing — any image (or a reference video/audio) goes through the
-    omni-reference checkpoint (Ref2VA). The keyframe checkpoint (FL2VA, modes
-    i2va/flf2va) is disabled: every job through it on this
-    deployment hung in KSampler and needed a manual /interrupt after 45-50+
-    minutes, 3 times running, while Ref2VA reliably finished in 8-12 minutes.
-    See video.pick_mode's docstring.
+  * mode routing — a single image is a true FL2VA first frame; multiple images
+    or video/audio references use Ref2VA. The current fused int8 FL2VA graph
+    completed a live single-image render after the old GGUF graph had stalled.
   * the reference vocabulary — <Picture i>/<Video k>/<Audio j>, 1-based per type,
     which the prompt has to match or the model cannot tell the references apart.
   * refusing to promise a video when the engine is not actually available, and
@@ -122,14 +119,8 @@ print("3. Mode routing — keyframes vs omni-reference")
 print("=" * 70)
 
 check("no input at all -> t2va", V.pick_mode() == "t2va")
-# FL2VA-checkpoint modes (i2va/flf2va) are disabled: every
-# real job through that checkpoint on this deployment hung in KSampler and
-# never finished on its own (3/3 required a manual /interrupt after 45-50+
-# minutes), while ref2va reliably finishes in 8-12 minutes. See pick_mode's
-# docstring. Any image now routes through the checkpoint that actually works.
-check("one image -> ref2va (FL2VA checkpoint hangs on this deployment)",
-      V.pick_mode(["a"]) == "ref2va")
-check("two images -> ref2va (FL2VA checkpoint hangs on this deployment)",
+check("one image -> FL2VA first frame", V.pick_mode(["a"]) == "t2va")
+check("two images -> ref2va until FLF2VA is verified",
       V.pick_mode(["a", "b"]) == "ref2va")
 check("three images -> ref2va (too many to be keyframes anyway)",
       V.pick_mode(["a", "b", "c"]) == "ref2va")

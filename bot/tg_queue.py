@@ -577,8 +577,11 @@ class QueueMixin:
                 target_to_consume = sess.target_image
             if (item.get('type') in ('text', 'voice', 'armed_media') and not item.get('forwarded')
                     and not tg_bot._LABEL2KEY.get((item.get('text') or '').strip())):
-                if not item.get('image_id') and not item.get('reply_photo') and sess.target_image:
-                    item['image_id'] = sess.target_image
+                if not item.get('image_id') and not item.get('reply_photo'):
+                    if sess.pending_prefix == 'animate this photo: ' and sess.pending_animate_target:
+                        item['image_id'] = sess.pending_animate_target
+                    elif sess.target_image:
+                        item['image_id'] = sess.target_image
                 target_to_consume = sess.target_image if item.get('reply_photo') else item.get('image_id', '')
             item['_target_captured'] = True
         with self._mgmt_lock:

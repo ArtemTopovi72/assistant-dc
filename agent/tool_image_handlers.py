@@ -2247,9 +2247,10 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     mode = video_mod.pick_mode(images, videos, audios, keyframe=head)
     if chain_id:
         mode = "i2va" if images and chain_idx <= 1 else "t2va"
+    display_mode = "i2va" if mode == "t2va" and images else mode
     tags = video_mod.reference_tags(len(images) if mode == "ref2va" else 0, len(videos), len(audios))
     logger.info("Tool: generate_video(mode=%s, %d image(s), %d video(s)) %s",
-                mode, len(images), len(videos), description[:80])
+                display_mode, len(images), len(videos), description[:80])
 
     # The whole chain holds the card: no model call runs between its parts (the bridges
     # were written above), so the chat model stays out instead of being loaded back for
@@ -2400,7 +2401,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         used = f" References used: {', '.join(tags)}."
     return (
         f"Video generated and saved: {path}\n"
-        f"Mode: {video_mod.MODE_LABELS.get(mode, mode)}; "
+        f"Mode: {video_mod.MODE_LABELS.get(display_mode, display_mode)}; "
         f"{result.get('seconds')}s at {result.get('width')}x{result.get('height')}, "
         f"with generated audio.{used}\n"
         # The reply told of a grandma's scream from a part the user had dropped

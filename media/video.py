@@ -546,26 +546,17 @@ def pick_mode(images: Sequence[str] = (), videos: Sequence[str] = (),
               audios: Sequence[str] = (), keyframe: bool = False) -> str:
     """Which H3 task this request is, from what was attached.
 
-    In principle one/two images are keyframe work the FL2VA checkpoint does
-    better, since those images become actual frames rather than something the
-    model is merely reminded of, and 3+ images (or any video/audio reference)
-    need the omni-reference checkpoint. In practice every
-    i2va/flf2va job this deployment has ever submitted (3 for 3, across two
-    separate real animate requests plus this fix's own verification run) got
-    stuck in KSampler and never finished on its own -- each had to be killed
-    with /interrupt after 45-50+ minutes at 100% GPU. Ref2VA, run with the
-    exact same GPU/model stack, has reliably finished in 8-12 minutes every
-    time. The two checkpoints are ~19.8GB GGUF files of near-identical size
-    (not a corrupt/truncated download), so something about the FL2VA graph or
-    checkpoint itself hangs on this machine -- until that is root-caused, route
-    every image-driven request through the checkpoint that actually completes,
-    even at the cost of the images being loose references rather than exact
-    frames. A silently-broken checkpoint is worse than a lower-fidelity one.
+    A single still can now use FL2VA as the actual first frame. The old GGUF
+    graph stalled here, but the current fused int8 graph completed a live
+    single-image render. Video/audio and multiple-image inputs still need the
+    omni-reference checkpoint.
     """
     n_i, n_v, n_a = len(images or ()), len(videos or ()), len(audios or ())
     # `keyframe`: the still IS frame 0 (FL2VA). Ref2VA with a voice recast the face and the eyes
     # (HF MiniMax-H3 discussion 91: identity 0.09 vs 0.89; here white-of-eye 0.01-0.04 vs 0.00-0.003).
     if keyframe and 1 <= n_i <= 2 and not n_v:
+        return "t2va"
+    if n_i == 1 and not n_v and not n_a:
         return "t2va"
     if n_v or n_a or n_i >= 1:
         return "ref2va"

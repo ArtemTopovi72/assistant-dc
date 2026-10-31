@@ -57,7 +57,8 @@ class StubGraph:
         return {"final_answer": "ok", "messages": base.get("messages", [])}
 
 
-def test_custom_motion_uses_the_photo_chosen_under_animate():
+def _check_custom_motion_target(new_target_is_same=False):
+    SEEN.clear()
     bot = T.TelegramBot("123:TEST", lambda: FakeCtx(), lambda: object(), lambda: {"messages": []},
                         silent_mode=True)
     bot.graph_builder = lambda ctx: StubGraph(ctx)
@@ -70,9 +71,8 @@ def test_custom_motion_uses_the_photo_chosen_under_animate():
     bot._api_get = lambda *a, **k: {}
     bot._activity.log = lambda *a, **k: None
     bot._running = True
-    threading.Thread(target=bot._consumer_loop, daemon=True).start()
 
-    cid = 9_300_515
+    cid = 9_300_515 + int(new_target_is_same)
     bot._user_store.put(T._User(chat_id=cid, name="A", status="approved", is_admin=False))
     sess = bot._get_session(cid)
     sess.clear_context()
@@ -93,13 +93,30 @@ def test_custom_motion_uses_the_photo_chosen_under_animate():
         "message_id": 7, "chat": {"id": cid, "type": "private"}, "from": {"id": cid},
         "date": int(time.time()), "text": "поджигает, кипит, диктор открывает крышку"}})
     end = time.monotonic() + 15
+    while time.monotonic() < end and not bot._backend.depth():
+        time.sleep(0.1)
+    assert bot._backend.depth(), "the request never entered the queue"
+    sess = bot._get_session(cid)
+    next_target = pid if new_target_is_same else oid
+    sess.pending_animate_target = next_target  # a new selection while the old task waited
+    bot._store.put(sess)
+    threading.Thread(target=bot._consumer_loop, daemon=True).start()
+    end = time.monotonic() + 15
     while time.monotonic() < end and not SEEN:
         time.sleep(0.1)
     assert SEEN, "the request never reached the agent"
     text, last, recent = SEEN[-1]
     assert text.startswith("animate this photo:")
     assert last == photo and recent == [photo], (last, recent)
-    assert bot._get_session(cid).pending_animate_target == ""
+    assert bot._get_session(cid).pending_animate_target == next_target
+
+
+def test_custom_motion_uses_the_photo_chosen_under_animate():
+    _check_custom_motion_target()
+
+
+def test_reselecting_same_photo_does_not_lose_new_animation():
+    _check_custom_motion_target(new_target_is_same=True)
 
 
 if __name__ == "__main__":
