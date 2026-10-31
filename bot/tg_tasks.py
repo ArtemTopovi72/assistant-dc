@@ -916,8 +916,13 @@ class TaskRunnerMixin:
                        and not self._stop_requested_after(t)
                        and t.task_id in self._steer_inboxes]
             interruptible = self._chat_interruptible.get(chat_id, False)
-            snap = getattr(task, "intent_snapshot", None) or {}
-            _wants = [w for rd in (snap.get("reads") or []) for w in (rd[1] or {}).get("wants", [])]
+            # The task's snapshot is not filled yet at steer time; the cached
+            # intent read of these same words is (one read per turn).
+            try:
+                from intent import intent_read as _intent_read
+                _wants = list(_intent_read(self.reads)(None, task.user_text, "", "").get("wants") or [])
+            except Exception:
+                _wants = []
             if not running or not _steer.eligible(
                     task.user_text, bool(task.image_path) or bool(task.image_id), interruptible,
                     ctx=self.reads, wants=_wants):
