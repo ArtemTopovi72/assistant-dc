@@ -1522,6 +1522,8 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         self._poll_thread: Optional[threading.Thread] = None
         self._watchdog: Optional[threading.Thread] = None
         self._poll_beat: float = 0.0    # last successful getUpdates (monotonic)
+        self._next_gc: float = 0.0
+        self._gc_running = False
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
 
@@ -1591,6 +1593,7 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
             t.start(); self._consumers.append(t)
 
         self._poll_beat = time.monotonic()
+        self._next_gc = 0.0
         self._poll_thread = _threads.Thread(target=self._poll_loop, daemon=True,
                                              name="tg-poll")
         self._poll_thread.start()

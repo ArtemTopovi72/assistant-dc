@@ -36,7 +36,7 @@ class QueueMixin:
         returns. Work started outside the queue (weather lookup, voice-clone
         prep and synthesis) otherwise left the turn looking finished at its
         "Checking…" line."""
-        with self._task_lock:
+        with self._queue_claim_lock, self._task_lock:
             self._chat_busy[chat_id] = self._chat_busy.get(chat_id, 0) + 1
 
         def run():
@@ -144,8 +144,32 @@ class QueueMixin:
 
                 # 3) runaway task — cancel cooperatively so the queue drains
                 self._cancel_runaways(task_max)
+
+                if time.monotonic() >= self._next_gc and not self._gc_running:
+                    self._gc_running = True
+                    threading.Thread(target=self._collect_chat_garbage, daemon=True,
+                                     name="tg-gc").start()
             except Exception:
                 tg_bot.logger.exception("watchdog iteration failed")
+
+    def _collect_chat_garbage(self):
+        try:
+            # Keep old files available to any request already using them; new
+            # consumers cannot claim work while this short sweep holds the gate.
+            with self._queue_claim_lock:
+                with self._task_lock:
+                    busy = any(self._chat_busy.values())
+                if busy or self._backend.depth():
+                    self._next_gc = time.monotonic() + 3600
+                    return
+                import tg_gc
+                tg_gc.collect(tg_bot._SESSION_FILE.parent)
+            self._next_gc = time.monotonic() + 86400
+        except Exception:
+            self._next_gc = time.monotonic() + 3600
+            tg_bot.logger.exception("Telegram GC failed")
+        finally:
+            self._gc_running = False
 
     def _cancel_runaways(self, task_max: int) -> None:
         abs_max = max(task_max, tg_bot._cfg_int("TG_TASK_ABS_MAX_S", 4 * 3600))
