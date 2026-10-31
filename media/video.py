@@ -55,7 +55,7 @@ from config import (
     COMFY_URL, OUTPUT_DIR, WORKFLOW_VIDEO_PATH, WORKFLOW_VIDEO_REF_PATH,
     VIDEO_FPS, VIDEO_DEFAULT_FRAMES, VIDEO_MAX_FRAMES, VIDEO_MAX_FRAMES_AUTO,
     VIDEO_SHORT_EDGE, VIDEO_MAX_PIXELS, VIDEO_CANVAS_MULTIPLE,
-    VIDEO_STEPS, VIDEO_STEPS_REF2VA, VIDEO_STEPS_REF2VA_VOICES, VIDEO_SPEECH_STRESS, VIDEO_T2VA_LORA_3STEP, VIDEO_FL2VA_LORA_3STEP, VIDEO_CFG, VIDEO_SHIFT_VIDEO, VIDEO_SHIFT_AUDIO,
+    VIDEO_STEPS, VIDEO_STEPS_FL2VA, VIDEO_STEPS_REF2VA, VIDEO_STEPS_REF2VA_VOICES, VIDEO_SPEECH_STRESS, VIDEO_T2VA_LORA_3STEP, VIDEO_FL2VA_LORA_3STEP, VIDEO_CFG, VIDEO_SHIFT_VIDEO, VIDEO_SHIFT_AUDIO,
     VIDEO_JOB_TIMEOUT, OUTPUT_DIR_COMFY,
 )
 
@@ -2230,7 +2230,12 @@ def generate_video(ctx, description: str, *,
     # workflow_video_h3_ref.json) and is distilled for 4 steps, not the plain
     # model's 8 -- an explicit caller-supplied `steps` still wins.
     if steps is None:
-        steps = (VIDEO_STEPS_REF2VA_VOICES if audios else VIDEO_STEPS_REF2VA) if mode == "ref2va" else VIDEO_STEPS
+        if mode == "ref2va":
+            steps = VIDEO_STEPS_REF2VA_VOICES if audios else VIDEO_STEPS_REF2VA
+        elif mode == "t2va" and len(images) == 1 and not (videos or audios or chain or context_video or context_latent or keyframe):
+            steps = VIDEO_STEPS_FL2VA
+        else:
+            steps = VIDEO_STEPS
     if not prepared:
         description, seconds = eng.prepare_prompt(ctx, description, images=images, videos=videos,
                                               audios=audios, seconds=seconds,

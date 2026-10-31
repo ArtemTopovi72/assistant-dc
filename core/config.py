@@ -428,6 +428,8 @@ VIDEO_CANVAS_MULTIPLE = 32
 # any other count falls back to a uniform schedule the model was never tuned for.
 TTS_NFE_STEP = _env_int("TTS_NFE_STEP", 10)  # A/B 2026-09-24: 1.16s -> 0.81s, 0 real ASR errors
 VIDEO_STEPS = _env_int("VIDEO_STEPS", 3)
+# A single start frame uses FL2VA. Keep an explicit legacy VIDEO_STEPS override.
+VIDEO_STEPS_FL2VA = _env_int("VIDEO_STEPS_FL2VA", VIDEO_STEPS if "VIDEO_STEPS" in os.environ else 5)
 # T2VA runs the TaoMate-H3 3-step LoRA (bench 2026-09-25: same look as the 4-step
 # FL2V LoRA on t1/t2, 127-129 s vs 131-153 s). Ref2VA stays on its 4-step LoRA:
 # the one tao3 ref2va render burned a subtitle into the frame.
