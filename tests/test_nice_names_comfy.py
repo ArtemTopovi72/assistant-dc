@@ -6,7 +6,7 @@ import nice_names as N
 
 
 def test_comfy_counter_is_renamed():
-    assert N.display_name("x/ideogram_00115_.png", "нарисуй деда").startswith("Картинка")
+    assert N.display_name("x/ideogram_00115_.png", "нарисуй деда") == "деда.png"
     assert N.display_name("x/Мой кот.png", "нарисуй деда") == "Мой кот.png"
 
 

@@ -12,6 +12,7 @@ import re
 import shutil
 
 TITLES: dict = {}          # chat_id -> the request the current task is about
+_AI_TITLES: dict = {}      # chat_id -> (request, chosen title)
 
 # ComfyUI counters too: «ideogram_00115_.png» was delivered under its raw name
 _MACHINE = re.compile(r"\d{8,}|_\d{4,}_?$|[0-9a-f]{12,}|^(comfyui|song_|img_|image_|out|output|render|tmp|"
@@ -66,11 +67,65 @@ def display_name(path: str, title: str) -> str:
             else f"{kind} — {t}" if kind else t) + ext
 
 
+def _suggest_title(request: str, path: str) -> str:
+    """Ask the loaded chat model for a short file title; never reload it for naming."""
+    if os.environ.get("F5_TEST_RUN"):
+        return ""
+    try:
+        import comfy_client
+        import llm
+        import requests
+        if comfy_client.card_is_exclusive() or not llm._model_served(llm.MODEL_NAME):
+            return ""
+        kind = category(path)
+        response = requests.post(
+            llm.LM_STUDIO_URL,
+            json={
+                "model": llm.MODEL_NAME, "temperature": 0.2, "max_tokens": 40,
+                "stream": False,
+                "messages": [
+                    {"role": "system", "content":
+                     "Назови готовый файл по запросу пользователя. Ответь только коротким "
+                     "понятным названием на языке запроса: 2–5 слов, без кавычек, "
+                     "расширения и слов «картинка», «видео», «песня». Не повторяй команду "
+                     "и не придумывай детали, которых нет в запросе."},
+                    {"role": "user", "content": f"Тип результата: {kind}\nЗапрос: {request[:1200]}"},
+                    {"role": "assistant", "content": llm.GEMMA_NO_THINK_PREFILL},
+                ],
+            },
+            timeout=(2, 8),
+        )
+        response.raise_for_status()
+        answer = response.json()["choices"][0]["message"]["content"]
+        line = (answer or "").splitlines()[0].strip().strip('"«»`')
+        line = re.sub(r"^(?:название|title)\s*:\s*", "", line, flags=re.I)
+        title = _clean(line)
+        if not title or len(title.split()) > 6 or len(line) > 70 or title.upper() in {"CON", "PRN", "AUX", "NUL"}:
+            return ""
+        return title
+    except Exception:
+        return ""
+
+
 def named_path(chat_id, path: str, who: str = "") -> str:
     """A linked copy in runtime/generated/<who>/<category>/ under a human name;
     `path` itself if anything fails. Never overwrites: a clash gets " (2)"."""
     try:
-        name = display_name(path, TITLES.get(chat_id, ""))
+        title = TITLES.get(chat_id, "")
+        base, ext = os.path.splitext(os.path.basename(path))
+        if title and _MACHINE.search(base) and ext.lower() in {
+            ".png", ".jpg", ".jpeg", ".webp", ".mp4", ".webm", ".mov",
+            ".flac", ".mp3", ".wav", ".ogg", ".m4a",
+        }:
+            cached = _AI_TITLES.get(chat_id)
+            if cached and title in cached:
+                title = cached[1]
+            else:
+                chosen = _suggest_title(title, path) or _clean(title)
+                _AI_TITLES[chat_id] = (title, chosen)
+                title = chosen
+            TITLES[chat_id] = title
+        name = display_name(path, title)
         who = _clean(who) or str(chat_id)
         d = os.path.join(_ROOT, who, category(path))
         if os.path.abspath(os.path.dirname(path)) == os.path.abspath(d):
