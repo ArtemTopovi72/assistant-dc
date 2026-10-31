@@ -25,6 +25,7 @@ all three.
 from __future__ import annotations
 
 import html as _html_mod
+import re
 import time
 
 import weather as _weather_mod
@@ -350,6 +351,15 @@ class RegistrationMixin:
             sess.reg_state = ""
             self._store.put(sess)
             self._run_busy(chat_id, self._edit_plan_part, chat_id, sess, lang, state, text)
+            return False
+
+        # A user can revise the plan in ordinary words without first tapping ➕.
+        # Previously this fell into the graph as a fresh video request; its guard
+        # refused it and the bot reported a bogus render failure.
+        if (user and user.status == "approved" and getattr(sess, "video_plan", None)
+                and getattr(sess, "video_plan_request", "") and text
+                and re.search(r"\b(?:добавь|добавить|допиши|дополнить|add)\b.{0,50}\b(?:часть|сцену|part|scene)\b", text, re.I)):
+            self._run_busy(chat_id, self._edit_plan_part, chat_id, sess, lang, "vp_add", text)
             return False
 
         if (user and user.status == "approved"

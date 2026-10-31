@@ -46,6 +46,10 @@ def _clean(title: str) -> str:
         t = re.sub(r"^[^:]*?\binto\s+", "", m.group(1), count=1)
     t = re.sub(r"^(?:\[[^\]]*\]\s*)+", "", t)           # "[song:60] …", "[internal] …"
     t = re.sub(r"^(?:[a-z ]+(?:\([^)]*\))?:\s*)", "", t)       # "find on ozon: …" menu prefixes
+    # File names describe the result, not the command that requested it.
+    t = re.sub(r"^(?:(?:сделай|нарисуй|создай|сгенерируй|изобрази)\s+)+", "", t, flags=re.I)
+    t = re.sub(r"^(?:мне\s+)?(?:картинку|картину|изображение|фото|рисунок|видео|ролик|песню)\s+", "", t, flags=re.I)
+    t = re.sub(r"^(?:советский\s+)?норм(?:альный|альную|альное|альные)?\s+", lambda m: "советский " if m.group(0).lower().startswith("советский") else "", t, flags=re.I)
     t = re.sub(r"[<>:\"/\\|?*\n\r\t]+", " ", t)
     t = " ".join(t.split()[:8])
     return t[:60].strip(" .-—")
@@ -58,7 +62,8 @@ def display_name(path: str, title: str) -> str:
         return os.path.basename(path)
     lang = "ru" if re.search("[а-яё]", t, re.I) else "en"
     kind = next((k for exts, k in _KIND[lang] if ext.lower() in exts), "")
-    return (f"{kind} — {t}" if kind else t) + ext
+    return (t if ext.lower() in (".png", ".jpg", ".jpeg", ".webp")
+            else f"{kind} — {t}" if kind else t) + ext
 
 
 def named_path(chat_id, path: str, who: str = "") -> str:
@@ -90,7 +95,8 @@ if __name__ == "__main__":
     assert display_name("x/song_yue2_1790516190822.flac", "[song:60] день рождения для сестры") \
         == "Песня — день рождения для сестры.flac"
     assert display_name("x/My deck.pptx", "про котов") == "My deck.pptx"
-    assert display_name("x/ComfyUI_00012_.png", "draw a red fox in snow") == "Picture — draw a red fox in snow.png"
+    assert display_name("x/ComfyUI_00012_.png", "draw a red fox in snow") == "draw a red fox in snow.png"
+    assert display_name("x/klein_00001_.png", "Сделай советский норм трактор") == "советский трактор.png"
     assert display_name("x/song_1.flac", "") == "song_1.flac"
     assert display_name("x/song_yue2_1790516190822.flac", "[song] [lyrics] Кот на балконе")         == "Песня — Кот на балконе.flac"
     assert category("a/b.MP4") == "Видео" and category("x.pptx") == "Презентации" and category("r.pdf") == "Исследования"

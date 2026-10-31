@@ -236,11 +236,24 @@ def photo_of(ctx, thing: str, query: str, kind: str = "object", view: str = "") 
     """A checked, cropped web photo of `thing` -- the first preferred one, else the first that
     shows it -- or "" (refused search, nothing found)."""
     import search
-    urls = dep(ctx, "image_search_urls", search.image_search_urls)(
-        ctx, query, prefer="portrait" if kind == "person" else "landscape")
+    image_search = dep(ctx, "image_search_urls", search.image_search_urls)
+    urls = image_search(ctx, query, prefer="portrait" if kind == "person" else "landscape")
     work = tempfile.mkdtemp(prefix="objref_")
     fallback = ""
-    for n, url in enumerate(urls[:_CANDIDATES]):
+    tried = set()
+    def candidates():
+        for url in urls[:_CANDIDATES]:
+            tried.add(url)
+            yield url
+        # Generic image results for old machinery are often stock watermarks or
+        # broken proxy URLs. Search again with a reference-photo query before giving up.
+        if kind == "object":
+            fallback_query = f"{thing} Wikimedia Commons"
+            for url in image_search(ctx, fallback_query, prefer="landscape")[:_CANDIDATES]:
+                if url not in tried:
+                    yield url
+
+    for n, url in enumerate(candidates()):
         dest = os.path.join(work, f"c{n}.jpg")
         if not dep(ctx, "download_image", search.download_image)(ctx, url, dest):
             continue

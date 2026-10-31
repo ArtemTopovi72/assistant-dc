@@ -1443,9 +1443,13 @@ class ResolveMixin:
                 # A picture sent "as a file" (uncompressed) is still a picture
                 # (receipt.jpg must not get «текст не удалось извлечь»). Without a
                 # working folder it goes the photo way.
-                if (not _saved_as and img_bytes is None
-                        and Path(fname).suffix.lower() in (".jpg", ".jpeg", ".png", ".webp", ".bmp")):
-                    img_bytes = data; _photo_upload = True
+                if Path(fname).suffix.lower() in (".jpg", ".jpeg", ".png", ".webp", ".bmp"):
+                    # A picture uploaded as a document is still the current
+                    # picture, even when it was also saved to the sandbox.
+                    if img_bytes is None:
+                        img_bytes = data; _photo_upload = True
+                    else:
+                        _album_extra_bytes.append(data)
                     if cap: texts.append(cap)
                     continue
                 if _saved_as:
@@ -1564,10 +1568,23 @@ class ResolveMixin:
         if merged and img_bytes is None and not any(s.startswith("[The file '") for s in scaffold):
             _latest = self._latest_sandbox_file(chat_id, sess)
             if _latest:
-                # A vague follow-up may refer to a file rather than an older picture.
-                scaffold.append(f"[The most recently changed file in the working folder is '{_latest}'. "
-                                "It may have been created by the assistant. Use it only if the "
-                                "user refers to it; an explicitly named file takes precedence.]")
+                # "Скинул картинку, анимируй" refers to the recent sandboxed
+                # image. A filename hint alone cannot supply video <Picture 1>.
+                _named_image = re.search(r"[\w.-]+\.(?:jpg|jpeg|png|webp|bmp)\b", merged, re.I)
+                if (Path(_latest).suffix.lower() in (".jpg", ".jpeg", ".png", ".webp", ".bmp")
+                        and (not _named_image or Path(_named_image.group()).name.lower() == Path(_latest).name.lower())
+                        and re.search(r"картин|фото|изображен|анимируй|оживи|picture|photo|animate", merged, re.I)):
+                    try:
+                        import code_sandbox as _cs
+                        img_bytes = _cs.sandbox_for(chat_id).resolve(_latest).read_bytes()
+                        _photo_upload = True
+                    except Exception:
+                        tg_bot.logger.warning("could not attach recent sandbox image %s", _latest, exc_info=True)
+                        img_bytes = None
+                if img_bytes is None:
+                    scaffold.append(f"[The most recently changed file in the working folder is '{_latest}'. "
+                                    "It may have been created by the assistant. Use it only if the "
+                                    "user refers to it; an explicitly named file takes precedence.]")
         # Which picture the user means is read from the USER's words only.
         from prompt_guard import user_words, wrap_quoted
         own_words = user_words(merged)

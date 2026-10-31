@@ -176,6 +176,11 @@ def _logged_post(url, http=None, **kw):
     """`http.post` (requests unless the bot hands in another), with the message copied
     into the chat's full transcript."""
     payload = kw.get("json") if kw.get("json") is not None else kw.get("data")
+    if isinstance(payload, dict):
+        from tg_markup import _format_telegram_text
+        for field in ("text", "caption"):
+            if isinstance(payload.get(field), str):
+                payload[field] = _format_telegram_text(payload[field])
     if isinstance(payload, dict) and payload.get("reply_markup"):
         payload["reply_markup"] = _fit_markup(payload["reply_markup"])
     tgt = _REPLY.get()

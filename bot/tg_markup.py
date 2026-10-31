@@ -16,6 +16,25 @@ import re
 _MAX_TEXT = 4096
 
 
+def _format_telegram_text(text: str) -> str:
+    """Keep generated Telegram text tidy without rewrapping prose or code.
+
+    Telegram chooses its own line width. Hard wrapping arbitrary sentences makes
+    both phone and desktop worse; split only structured status fields.
+    """
+    if not isinstance(text, str) or not text:
+        return text
+    text = re.sub(
+        r"(?P<icon>[⚙️🔬🎨🎵]?\s*)<b>Жду своей очереди к модели \(впереди: (?P<n>\d+)\)…</b>",
+        lambda m: f"{m['icon']}<b>Очередь к модели</b>\n👥 Впереди: {m['n']}", text)
+    text = re.sub(
+        r"(?P<icon>[⚙️🔬🎨🎵]?\s*)<b>В очереди на видеокарту \(впереди не менее (?P<n>\d+)\)…</b>",
+        lambda m: f"{m['icon']}<b>Очередь на видеокарту</b>\n👥 Впереди: не менее {m['n']}", text)
+    if '<pre' not in text and '<code' not in text and '```' not in text:
+        text = re.sub(r"(?:[ \t]*\n){3,}", "\n\n", text)
+    return text
+
+
 # ── text helpers ──────────────────────────────────────────────────────────────
 
 _TABLE_SEP = re.compile(r"^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$")

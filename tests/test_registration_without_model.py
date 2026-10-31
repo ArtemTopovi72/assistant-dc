@@ -75,6 +75,14 @@ def main():
     gate = Gate("change_name", user)
     assert gate._user_gate(101, {"text": "Синий кот"}) is False
     assert user.name == "Синий кот" and gate.session.reg_state == ""
+    gate = Gate("", user)
+    gate.session.video_plan = [{"text": "tractor drives", "sec": 5}]
+    gate.session.video_plan_request = "Сделай видео с трактором"
+    calls = []
+    gate._run_busy = lambda *args: calls.append(args)
+    gate._edit_plan_part = lambda *args: None
+    assert gate._user_gate(101, {"text": "Напиши, что за рулём дед, и добавь часть с поворотом"}) is False
+    assert calls and calls[0][-2:] == ("vp_add", "Напиши, что за рулём дед, и добавь часть с поворотом")
     print("PASS registration accepts display names without a model and preserves controls")
     return 0
 
