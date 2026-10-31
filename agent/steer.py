@@ -100,7 +100,10 @@ def fold_into(messages: list, notes: List[str]) -> bool:
              "the rest of this task; if a picture, file or text was ALREADY made "
              "without it, change what was made so it includes the update, "
              "instead of only saying you noted it; if it is unrelated, answer it briefly in "
-             "your reply]:\n" + "\n".join(f"- {n}" for n in notes))
+             "your reply. An update that asks to CREATE something is made NOW with "
+             "the matching tool: a picture with generate_image (never generate_video "
+             "unless the words ask for a video), music with the song flow, a deck with "
+             "create_presentation]:\n" + "\n".join(f"- {n}" for n in notes))
     last = messages[-1]
     if last.get("role") in ("tool", "user"):
         last["content"] = (last.get("content") or "") + block
