@@ -630,7 +630,7 @@ def digest(r: dict) -> str:
     if dec.get("why"):
         out.append(f"\n{dec['why']}")
     if dec.get("reviews"):
-        out.append(f"👍 Отзывы: {dec['reviews']}")
+        out.append(f"👍 {dec['reviews']}")
     if dec.get("concerns"):
         out.append(f"⚠️ Минусы: {dec['concerns']}")
     found = [o for o in r.get("others") or [] if not o.get("pinned")][:2]
