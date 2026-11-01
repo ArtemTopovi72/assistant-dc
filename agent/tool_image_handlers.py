@@ -2512,10 +2512,16 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
     # same cartoon. The payload's quoted instructions outrank the model's args.
     _payload = (state.get("user_input") or "").lstrip()
     if _payload.startswith("[style_preset]"):
+        import json as _json
         import re as _re
-        _pinned = _re.search(r'instructions="([^"]+)"', _payload)
-        if _pinned and _pinned.group(1).strip():
-            instructions = _pinned.group(1).strip()
+        _pinned = _re.search(r'instructions=("(?:\\.|[^"\\])*")', _payload)
+        if _pinned:
+            try:
+                decoded = _json.loads(_pinned.group(1)).strip()
+            except ValueError:
+                decoded = ""
+            if decoded:
+                instructions = decoded
     # 'enhance'/'upscale'/'restore'/'outpaint' have no engine left to run on: the
     # old model checkpoint behind them was removed from the product (Ideogram +
     # FireRed only) and its files deleted from disk. Every redraw goes through the same

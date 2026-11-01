@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from seams import vision_model, module
 import html as _html_mod
+import json
 import os
 import re
 import tempfile
@@ -48,6 +49,14 @@ def _batch_reply_id(batch) -> int:
            and (it.get('text', '').strip() or it.get('caption', '').strip())]
     return next((int(it.get('_message_id') or 0) for it in reversed(own or content)
                  if '_message_id' in it), 0)
+
+
+def _wants_all_photos_restyled(words: str) -> bool:
+    if re.search(r"\bне\s+все\b|\b(?:только|лишь)\s+(?:одн|перв|втор|треть|четв|пят)", words, re.I):
+        return False
+    all_photos = re.search(r"\b(?:все|всех|кажд(?:ую|ое|ый|ой|ые)|оба|обе|весь альбом|all|each|both)\b", words, re.I)
+    style = re.search(r"в стиле|стилиз|рестайл|перерис|под стиль|\b(?:in|as)\b.{0,50}\bstyle\b|\brestyl", words, re.I)
+    return bool(all_photos and style)
 
 
 class ResolveMixin:
@@ -1671,6 +1680,31 @@ class ResolveMixin:
                             keyboard=self._main_menu_kb(sess, lang))
             return
 
+        # ── album + «все пять — в стиле киберпанк»: one restyle per photo ─────
+        # The triage of 2026-10-31: down the ordinary path that batch became ONE
+        # picture plus an OCR/album note glued to the words, and the model
+        # described picture 1 (twice, after two corrective rounds) instead of
+        # restyling anything. A style ask covering EVERY photo of the album is
+        # split here, while the batch is still ours: N dedicated restyle tasks,
+        # the album's order kept. A style ask about ONE photo («вторую в
+        # аниме») fails the all-gate and stays on the ordinary path; a single
+        # photo has nothing to split, so it never enters this branch either.
+        _album_item = next((it for it in batch if it.get("type") == "album"), None)
+        if (_album_item and _photo_upload and _album_extra_bytes
+                and own_words and not input_prefix
+                and getattr(sess, "reg_state", "") != "lora_collect"
+                and not getattr(sess, "restyle_state", "")
+                and not getattr(sess, "lyrics_state", "")
+                and not getattr(sess, "cover_state", "")
+                and not getattr(sess, "continue_state", "")
+                and _wants_all_photos_restyled(own_words)):
+            if not still_current():
+                return
+            self._push_album_restyle_tasks(chat_id, sess, lang, own_words,
+                                           img_bytes, list(_album_extra_bytes),
+                                           _arrival_ts, _reply_to, _generation)
+            return
+
         # ── the same job, twice ───────────────────────────────────────────────
         # A repeat tap OUTSIDE the debounce window becomes a second task, and an
         # image job costs a minute of the one GPU. The in-batch collapse above
@@ -2217,6 +2251,84 @@ class ResolveMixin:
         tg_bot.logger.info("Enqueued task %s chat=%s kind=%s depth=%d",
                     task.task_id[:8], chat_id, "outfit" if outfit else "style", self._backend.depth())
         self._queue_note(chat_id, task, lang)
+
+    def _push_album_restyle_tasks(self, chat_id: int, sess, lang: str, style_words: str,
+                                  img_bytes: bytes, extra_bytes: list,
+                                  arrival_ts: float, reply_to: int, generation: int) -> None:
+        """Queue one text-guided redraw for every downloaded album photo."""
+        user = self._user_store.get(chat_id)
+        is_admin = bool(user and user.is_admin)
+        photos = [data for data in [img_bytes, *extra_bytes] if data]
+        if not is_admin:
+            used = self._user_store.usage_today(chat_id)
+            for check in (tg_bot.KIND_IMAGE, tg_bot.KIND_TASK):
+                limit = tg_bot._quota_limit(check, self.settings)
+                if limit > 0 and used.get(check, 0) + len(photos) > limit:
+                    self._send_text(chat_id, tg_bot._t("quota_hit", lang,
+                                        kind=tg_bot._kind_label(check, lang),
+                                        used=used.get(check, 0), limit=limit),
+                                    parse_mode="HTML", keyboard=self._main_menu_kb(sess, lang))
+                    return
+        max_queued = max(1, tg_bot._cfg_int("TG_MAX_QUEUED_PER_USER", 3))
+        try:
+            mine = self._backend.chat_depth(chat_id)
+        except Exception:
+            mine = 0
+        # An album is one explicit request, but its photos become separate jobs.
+        # Admit it only when this chat has no older waiting jobs, so a large
+        # album cannot jump ahead of the user's existing queue.
+        if not is_admin and mine > 0 and mine + len(photos) > max_queued:
+            self._send_text(chat_id, tg_bot._t("too_many", lang, n=mine),
+                            keyboard=self._main_menu_kb(sess, lang))
+            return
+        instructions = ("Restyle the entire current photo. Preserve its subjects and composition. "
+                        "Style request: " + style_words)
+        payload = ('[style_preset] call redraw_image with mode="redraw" '
+                   f'instructions={json.dumps(instructions, ensure_ascii=False)} on '
+                   'the current image. Do not generate a new image.')
+        queued = 0
+        failed = 0
+        for data in photos:
+            path = _save_image_bytes(data)
+            image_id = tg_bot._log_image(sess, path,
+                                         label=style_words[:70] or "restyle", src="user")
+            task = tg_bot._Task(
+                task_id=str(uuid.uuid4()),
+                chat_id=chat_id,
+                user_text=payload,
+                image_path=path,
+                image_id=image_id,
+                image_is_photo=True,
+                enqueue_ts=arrival_ts,
+                reply_to=reply_to,
+                context_generation=generation,
+                image_selection='upload',
+            )
+            try:
+                accepted = self._persist_task(task)
+            except Exception:
+                tg_bot.logger.exception("album restyle push failed chat=%s", chat_id)
+                failed += 1
+                accepted = False
+            if not accepted:
+                continue
+            queued += 1
+            self._user_store.bump_usage(chat_id, tg_bot.KIND_TASK)
+            self._user_store.bump_usage(chat_id, tg_bot.KIND_IMAGE)
+            tg_bot.logger.info("Enqueued album restyle %s chat=%s photo=%d depth=%d",
+                        task.task_id[:8], chat_id, queued, self._backend.depth())
+            self._queue_note(chat_id, task, lang)
+        if queued:
+            said = tg_bot._t("album_restyle_queued", lang, n=queued)
+            if queued < len(photos):
+                said += " " + tg_bot._t("album_restyle_failed", lang,
+                                        m=len(photos) - queued)
+            self._send_text(chat_id, said, keyboard=self._state_kb(sess, lang))
+        elif failed:
+            self._send_text(chat_id, tg_bot._t("album_restyle_failed", lang, m=failed),
+                            keyboard=self._main_menu_kb(sess, lang))
+        # Every persist may also be refused by Stop or a stale generation;
+        # the ordinary path stays silent in that case.
 
 
 def _outfit_text(wish: str) -> str:

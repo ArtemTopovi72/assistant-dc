@@ -1477,6 +1477,10 @@ _MSG: dict[str, dict[str, str]] = {
                                 "polaroid photo\", \"stained glass\").",
                           "ru": "✍️ Опиши, какой стиль нужен (например «полароид "
                                 "80-х», «витраж»)."},
+    "album_restyle_queued": {"en": "🎨 Restyle of {n} photo(s) queued.",
+                              "ru": "🎨 Рестайл {n} фото поставлен в очередь."},
+    "album_restyle_failed": {"en": "Could not queue {m} photo(s).",
+                              "ru": "Не удалось поставить в очередь {m} фото."},
 
     # ── change style (Creativity ▸ 🎭 Change style) ────────────────────────────
     "style_menu_ask_photo": {"en": "📷 Send the photo whose style you want to "
