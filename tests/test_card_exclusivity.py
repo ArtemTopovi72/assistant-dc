@@ -419,6 +419,21 @@ check("every attempt of a call re-checks the card",
       "if attempt:\n                dep(ctx, \"_wait_for_free_card\", _wait_for_free_card)(ctx)" in read("agent/llm.py"))
 reset()
 
+import contextlib
+low_vram = types.SimpleNamespace(deps=types.SimpleNamespace(
+    server_healthy=lambda **kw: True, gpu_holder=lambda: None,
+    _gpu_slot=lambda **kw: contextlib.nullcontext(), gpu_free_mb=lambda: 18270))
+submitted = []
+original_submit = CC._submit_and_poll_locked
+CC._submit_and_poll_locked = lambda *a, **kw: submitted.append(True)
+try:
+    result = CC._submit_and_poll(low_vram, {}, label="H3 i2va",
+                                 exclusive=True, min_free_mb=20500)
+finally:
+    CC._submit_and_poll_locked = original_submit
+check("low VRAM refuses H3 before submit", result is None and not submitted)
+check("low VRAM explains the failure", "18270 MiB" in CC.last_failure(), CC.last_failure())
+
 
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)

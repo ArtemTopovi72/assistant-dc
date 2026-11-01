@@ -956,6 +956,14 @@ def _submit_and_poll(ctx, workflow: dict, timeout: int = 1900, label: str = "",
         return None
     with dep(ctx, "_gpu_slot", _gpu_slot)(exclusive=exclusive, label=label, min_free_mb=min_free_mb,
                                           progress_ctx=ctx):
+        if exclusive and min_free_mb:
+            import lora_training
+            free_mb = dep(ctx, "gpu_free_mb", lora_training.gpu_free_mb)()
+            if free_mb is not None and free_mb < min_free_mb:
+                reason = f"not enough free VRAM for {label or 'render'}: {free_mb} MiB, need {min_free_mb} MiB"
+                logger.error(reason)
+                _fail(reason)
+                return None
         return _submit_and_poll_locked(ctx, workflow, timeout, label, on_progress, validate)
 
 
