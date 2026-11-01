@@ -29,6 +29,8 @@ import logging
 import math
 import os
 import re
+import tempfile
+import time
 from typing import Optional
 
 import config
@@ -729,6 +731,19 @@ def _handle_swap_person(ctx, state, args: dict) -> str:
     refs = [p for p in (getattr(ctx, "reference_images", None) or [])
             if p and os.path.exists(p) and os.path.abspath(p) != os.path.abspath(target)
             and p != state.get("swap_done")]
+    if not refs and state.get("sent_photo"):
+        words = state.get("user_input_original") or state.get("user_input") or ""
+        if re.search(r"\bна\s+(?:лицо\s+)?эт(?:ого|ой|у)\b|\bwith\s+this\b", words, re.I):
+            received = next((p for p in (getattr(ctx, "recent_image_paths", None) or [])
+                             if p and os.path.exists(p)), None)
+            sent_at = os.path.getmtime(received) if received else time.time()
+            previous = next((p for p in reversed(getattr(ctx, "image_undo", None) or [])
+                             if p and os.path.exists(p)
+                             and 0 <= sent_at - os.path.getmtime(p) < 1800), None)
+            if previous:
+                ctx.reference_images = [previous, target]
+                refs = [target]
+                target = previous
     if not refs:
         return ("[TOOL ERROR] swap_person needs a second picture: who goes in. Ask the "
                 "user to send it.")
@@ -736,6 +751,25 @@ def _handle_swap_person(ctx, state, args: dict) -> str:
     n = int(args.get("person") or 0)
     if not boxes:
         return "[TOOL ERROR] No people were found on the photo; nothing to swap."
+    words = state.get("user_input_original") or ""
+    if len(boxes) > 1 and words and not re.search(r"\b(?:перв|втор|трет|треть|четв|пят|шест|седьм|восьм|девят|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth)\w*\b", words, re.I):
+        try:
+            with tempfile.TemporaryDirectory(prefix="swap_pick_") as folder:
+                sheet = person_swap.collage(target, boxes, os.path.join(folder, "people.jpg"))
+                picked = vision_model(ctx)(ctx, temperature=0.0, max_tokens=12,
+                    image_paths=[("Numbered people in the target photo:", sheet)],
+                    user_text=("Which numbered person does the user want REPLACED? "
+                               "Use the target description, not the replacement person. "
+                               f"User: {words[:300]}. Return only one digit 1-{len(boxes)}, "
+                               "or 0 if unclear."))
+            choices = re.findall(r"\b[0-9]\b", str(picked or ""))
+            n = int(choices[0]) if len(choices) == 1 else 0
+        except Exception:
+            logger.warning("Could not identify the person to replace", exc_info=True)
+            n = 0
+        if not 1 <= n <= len(boxes):
+            return (f"[TOOL ERROR] The photo has {len(boxes)} people and the target is unclear. "
+                    "Ask the user which one to replace, counted from the left.")
     if not 1 <= n <= len(boxes):
         return (f"[TOOL ERROR] The photo has {len(boxes)} people (counted from the left); "
                 f"person {n} does not exist. Ask the user which one.")

@@ -154,6 +154,32 @@ check("...and a second try swaps on the original photo, not on the first result"
       SW and SW[-1][0] == PIC and SW[-1][2] == SPONGE, SW)
 check("...and says so when that person does not exist",
       "does not exist" in H._handle_swap_person(Ctx(), st, {"person": 5}))
+one_new_photo = Ctx()
+one_new_photo.reference_images = []
+one_new_photo.image_undo = [PIC]
+single = {"image_path": SPONGE, "sent_photo": SPONGE,
+          "user_input_original": "замени лицо деда на лицо этого парня"}
+H_ps.collage = lambda path, boxes, out: PIC
+_VIS[0] = lambda ctx, **kw: "2"
+SW.clear()
+H._handle_swap_person(one_new_photo, single, {"person": 1})
+check("a newly attached face replaces the person on the preceding photo",
+      bool(SW) and SW[-1][0] == PIC and SW[-1][1] == (620, 110, 680, 180)
+      and SW[-1][2] == SPONGE, SW)
+uncertain = Ctx()
+_VIS[0] = lambda ctx, **kw: "0"
+check("an uncertain multi-person target is not replaced at random",
+      "target is unclear" in H._handle_swap_person(
+          uncertain, {"image_path": PIC,
+                      "user_input_original": "замени лицо деда на лицо этого парня"}, {"person": 1}))
+_VIS[0] = None
+ambiguous = Ctx()
+ambiguous.reference_images = []
+ambiguous.image_undo = [PIC]
+check("an ambiguous single photo does not silently pick an older target",
+      "needs a second picture" in H._handle_swap_person(
+          ambiguous, {"image_path": SPONGE, "sent_photo": SPONGE,
+                      "user_input_original": "замени лицо этого деда"}, {"person": 1}))
 check("...registered as an agent tool", any(t.name == "swap_person" for t in tools.TOOLS)
       if hasattr(tools, "TOOLS") else "swap_person" in str(vars(tools)))
 
