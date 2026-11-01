@@ -1520,7 +1520,8 @@ class ResolveMixin:
                                 # so say which document the words are about.
                                 scaffold.append(
                                     f"[The user attached the document '{fname}' "
-                                    f"({len(doc_text)} characters) to this message; "
+                                    f"({len(doc_text)} characters, {len(doc_text.splitlines())} lines) "
+                                    "to this message; "
                                     f"the caption is about that document. Its "
                                     f"passages are retrieved below when relevant"
                                     + (f"; the whole file is also in your working "
