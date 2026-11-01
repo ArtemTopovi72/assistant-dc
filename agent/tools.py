@@ -28,7 +28,7 @@ from pydantic import ValidationError
 # resolving here.
 from tool_args import (
     SearchArgs, DeepResearchArgs, GenerateImageArgs, GenerateVideoArgs, RedrawImageArgs,
-    InspectImageArgs, InpaintImageArgs, TransferImageArgs, SwapPersonArgs, CalculateArgs, ReadClipboardArgs,
+    InspectImageArgs, HighlightRegionArgs, InpaintImageArgs, TransferImageArgs, SwapPersonArgs, CalculateArgs, ReadClipboardArgs,
     RememberFactArgs, ForgetFactsArgs, FindPhotoArgs, RecallContextArgs, FoldContextArgs,
     CreatePresentationArgs, FixHandsArgs, FixArtifactArgs, _as_int, _clean_schema, _fn_schema,
 )
@@ -57,6 +57,7 @@ from tool_image_handlers import (
     _is_absence_check, _handle_inspect_image, _handle_inpaint_image, _handle_transfer_image, _handle_swap_person,
     _handle_fix_hands, _handle_fix_artifact, _handle_find_photo, _render_budget_exhausted,
     _handle_generate_image, _handle_generate_video, _handle_redraw_image,
+    _handle_highlight_region,
 )
 
 logger = logging.getLogger("assistant.tools")
@@ -757,7 +758,7 @@ def _handle_create_presentation(ctx, state, args: dict) -> str:
 # Tool descriptions (the prose the model routes on) live in tool_descriptions.
 from tool_descriptions import (
     _SEARCH_DESC, _DEEP_RESEARCH_DESC, _GENERATE_IMAGE_DESC, _GENERATE_VIDEO_DESC,
-    _REDRAW_IMAGE_DESC, _INSPECT_IMAGE_DESC, _INPAINT_IMAGE_DESC, _TRANSFER_IMAGE_DESC, _SWAP_PERSON_DESC,
+    _REDRAW_IMAGE_DESC, _INSPECT_IMAGE_DESC, _HIGHLIGHT_REGION_DESC, _INPAINT_IMAGE_DESC, _TRANSFER_IMAGE_DESC, _SWAP_PERSON_DESC,
     _CALCULATE_DESC, _READ_CLIPBOARD_DESC, _REMEMBER_FACT_DESC, _FORGET_FACTS_DESC, _SET_REMINDER_DESC, _CONVERT_CURRENCY_DESC, _CALENDAR_DESC, _WEATHER_FORECAST_DESC, _LOCAL_TIME_DESC, _FIND_PHOTO_DESC,
     _RECALL_CONTEXT_DESC, _FOLD_CONTEXT_DESC,
     _FIX_HANDS_DESC, _FIX_ARTIFACT_DESC, _CREATE_PRESENTATION_DESC,
@@ -814,6 +815,9 @@ TOOLS = [
              _handle_inpaint_image, InpaintImageArgs),
     ToolSpec("inspect_image", _fn_schema("inspect_image", _INSPECT_IMAGE_DESC, InspectImageArgs),
              _handle_inspect_image, InspectImageArgs),
+    ToolSpec("highlight_region",
+             _fn_schema("highlight_region", _HIGHLIGHT_REGION_DESC, HighlightRegionArgs),
+             _handle_highlight_region, HighlightRegionArgs),
     ToolSpec("transfer_image", _fn_schema("transfer_image", _TRANSFER_IMAGE_DESC, TransferImageArgs),
              _handle_transfer_image, TransferImageArgs),
     ToolSpec("swap_person", _fn_schema("swap_person", _SWAP_PERSON_DESC, SwapPersonArgs),

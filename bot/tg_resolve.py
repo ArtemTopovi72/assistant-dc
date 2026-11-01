@@ -1628,7 +1628,10 @@ class ResolveMixin:
                           and intent_read(self.reads)(None, merged, "", "")["needs_tool"] is False)
             except Exception:
                 chatty = False
-            if not chatty:
+            # A loupe reply is normally just a noun ("the squirrel"). The
+            # generic intent read calls that chat, but here the button has
+            # already supplied the missing action: find and highlight it.
+            if not chatty or input_prefix == 'find in the image: ':
                 merged = input_prefix + merged
                 if owns_input('pending_prefix') and sess.pending_prefix == input_prefix:
                     sess.pending_prefix = ""

@@ -107,6 +107,12 @@ class DashboardMixin:
             "Convert the last image to a named art style (anime, watercolor, …) "
             "or type your own — no second reference photo needed.")
         self.style_preset_btn.clicked.connect(self._style_preset_last_image)
+        self.find_btn = QPushButton('🔍  Find on image')
+        self.find_btn.setObjectName("ghost")
+        self.find_btn.setToolTip('Locate something on the last picture — an object, a person or '
+                                 'written text — and show it highlighted on a copy '
+                                 '(SAM3 segmentation / OCR / the vision model). The original is not altered.')
+        self.find_btn.clicked.connect(self._find_on_last_image)
         self.remove_obj_btn = QPushButton('🧽  Remove object')
         self.remove_obj_btn.setObjectName("ghost")
         self.remove_obj_btn.setToolTip('Remove an object, a person or lettering from the last picture (FireRed; the rest stays as it was).')
@@ -252,8 +258,9 @@ class DashboardMixin:
             ("Voice & camera", (self.talk_btn, self.vad_btn, self.voice_btn, self.pause_btn,
                                 self.cam_btn, self.capture_btn)),
             ("Images", (self.paste_img_btn, self.redraw_btn, self.style_preset_btn,
-                        self.remove_obj_btn, self.outfit_btn, self.fixhands_btn,
-                        self.retryhands_btn, self.fixartifact_btn, self.whole_frame_btn)),
+                        self.find_btn, self.remove_obj_btn, self.outfit_btn,
+                        self.fixhands_btn, self.retryhands_btn, self.fixartifact_btn,
+                        self.whole_frame_btn)),
             ("Video", tuple(self.video_mode_btns)),
             ("Search & memory", (self.ultra_btn, self.usedb_btn, self.save_mem_btn,
                                  self.compact_btn, clear_btn, self.clear_ctx_btn, mem_controls)),

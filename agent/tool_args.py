@@ -218,6 +218,13 @@ class InspectImageArgs(_ToolArgs):
         "the current picture). Use 1 to compare two photos, 2 for three."))
 
 
+class HighlightRegionArgs(_ToolArgs):
+    query: str = Field(..., min_length=1, description=(
+        "What to find, in the user's own words and language: an object "
+        "(\"белка\", \"the red car\"), a person (\"бабушка\", \"the man on the "
+        "left\"), or written text (\"где написано SALE\")."))
+
+
 class InpaintImageArgs(_ToolArgs):
     instructions: str = Field(..., min_length=1, description=(
         "What the edited region should look like, as a short English phrase "

@@ -91,6 +91,16 @@ _INSPECT_IMAGE_DESC = (
     "(\"what do these two have in common\") pass earlier=1 (or 2)."
 )
 
+_HIGHLIGHT_REGION_DESC = (
+    "The loupe (🔍): find WHERE something is on the current picture and show it "
+    "highlighted. Use when the user asks to locate, point at, circle or show "
+    "something in the photo — «где белка», \"where's the squirrel\", «где написано "
+    "привет\", \"show me grandma\". It returns a copy of the photo with the matching "
+    "region(s) outlined (every instance when there are several); the original is "
+    "not altered. It does not describe or verify the picture — for that use "
+    "inspect_image; for changing the picture use inpaint_image."
+)
+
 _INPAINT_IMAGE_DESC = (
     "Edit ONE part of the most recently generated image while keeping the rest "
     "exactly the same. Use this when the user wants to add, remove, fix, or change "

@@ -70,6 +70,9 @@ _INTENT_TOOL_MAP: list[tuple[str, frozenset]] = [
                                                    "inspect_image"})),
     # 🧽 Remove object (button under a picture / in the Draw menu).
     ("remove from the image:",         frozenset({"inpaint_image", "inspect_image"})),
+    # 🔍 The loupe (button under a picture / in the Draw menu): locate and
+    # highlight, never edit.
+    ("find in the image:",             frozenset({"highlight_region"})),
     # 🔤 Remove lettering: inpaint_image's OCR-mask removal path (is_lettering_removal).
     ("remove all the lettering",       frozenset({"inpaint_image", "inspect_image"})),
     # _CB_CMDS["change_clothes"]'s own fallback text/shape, kept narrowed too
@@ -109,7 +112,8 @@ def _intent_tools(user_input: str):
 # message has no image-creation/editing keywords. Saves ~2000 tokens per call.
 _IMAGE_TOOL_NAMES = frozenset({
     "generate_image", "redraw_image", "inpaint_image", "inspect_image",
-    "transfer_image", "swap_person", "fix_hands", "fix_artifact", "find_photo",
+    "highlight_region", "transfer_image", "swap_person", "fix_hands",
+    "fix_artifact", "find_photo",
 })
 
 

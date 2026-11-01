@@ -31,6 +31,7 @@ class ImageFixMixin:
     # (graph_fastpath._INTENT_TOOL_MAP), whichever surface pressed it.
     REMOVE_PREFIX = "remove from the image: "
     OUTFIT_PREFIX = "change the outfit to: "
+    FIND_PREFIX = "find in the image: "
 
     def _ask_and_send_image_edit(self, title: str, prompt: str, prefix: str):
         if self.ctx is None:
@@ -49,6 +50,16 @@ class ImageFixMixin:
         self._ask_and_send_image_edit(
             'Remove object', 'What to remove? (e.g. «the cup on the table», «all lettering»)',
             self.REMOVE_PREFIX)
+
+    def _find_on_last_image(self):
+        """🔍 Loupe: locate something on the last picture and show it
+        highlighted. Same prefix route as the Telegram 🔍 button — one route,
+        one narrowed tool list (highlight_region), whichever surface asked."""
+        self._ask_and_send_image_edit(
+            'Find on image',
+            'What to find and highlight? (e.g. «the squirrel», «the man on the left», '
+            '«where it says SALE»)',
+            self.FIND_PREFIX)
 
     def _change_outfit_last_image(self):
         self._ask_and_send_image_edit(

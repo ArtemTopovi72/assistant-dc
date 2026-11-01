@@ -18,8 +18,8 @@ from pathlib import Path
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor, QImage, QKeySequence, QPainter, QPixmap
 from PyQt5.QtWidgets import (QCheckBox, QDialog, QDialogButtonBox, QFileDialog,
-                             QHBoxLayout, QLabel, QPushButton, QScrollArea,
-                             QShortcut, QSlider, QVBoxLayout, QWidget)
+                             QHBoxLayout, QInputDialog, QLabel, QPushButton,
+                             QScrollArea, QShortcut, QSlider, QVBoxLayout, QWidget)
 
 from ui_scale import px
 from gui_common import BG, MUTED
@@ -68,6 +68,11 @@ class ImageViewerDialog(QDialog):
         self._next_btn.clicked.connect(self._next)
         self._info = QLabel()
         self._info.setStyleSheet(f"color:{MUTED};")
+        find_btn = QPushButton("🔍")
+        find_btn.setFixedWidth(px(42))
+        find_btn.setToolTip("Find on this image — locate something and show it "
+                            "highlighted on a copy")
+        find_btn.clicked.connect(self._find_on_current)
         save_btn = QPushButton("💾  Save copy")
         save_btn.clicked.connect(self._save_copy)
         close_btn = QPushButton("✕")
@@ -79,9 +84,12 @@ class ImageViewerDialog(QDialog):
         bar.addSpacing(8)
         bar.addWidget(self._info)
         bar.addStretch(1)
+        bar.addWidget(find_btn)
         bar.addWidget(save_btn)
         bar.addWidget(close_btn)
         lay.addLayout(bar)
+        self._find_btn = find_btn
+        self._find_worker = None
 
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(False)
@@ -167,6 +175,47 @@ class ImageViewerDialog(QDialog):
             self._next()
             return
         super().keyPressEvent(e)
+
+    # ---- the loupe (🔍) ----
+    def _find_on_current(self):
+        """Locate something on THIS picture (which may be any gallery entry,
+        not the chat's last) and show the highlighted copy beside it. The
+        locate-and-draw runs off the UI thread (HighlightWorker); the stage
+        shows in the info line."""
+        owner = self.parentWidget()
+        while owner is not None and not hasattr(owner, "ctx"):
+            owner = owner.parentWidget()
+        ctx = getattr(owner, "ctx", None)
+        if ctx is None:
+            self._info.setText("Find unavailable — no assistant session.")
+            return
+        text, ok = QInputDialog.getText(
+            self, "Find on image",
+            "What to find and highlight? (e.g. «the squirrel», «the man on the "
+            "left», «where it says SALE»)")
+        if not ok or not text.strip():
+            return
+        import gui_workers
+        self._find_btn.setEnabled(False)
+        self._info.setText(f"Looking for “{text.strip()}”…")
+        self._find_worker = gui_workers.HighlightWorker(ctx, self._path, text.strip())
+        self._find_worker.done.connect(self._on_find_done)
+        self._find_worker.failed.connect(self._on_find_failed)
+        self._find_worker.start()
+
+    def _on_find_done(self, path: str, count: int):
+        self._find_btn.setEnabled(True)
+        if path and os.path.exists(path):
+            # right after the original: ‹ steps back, › steps on
+            self._paths.insert(self._idx + 1, path)
+            self._step(1)
+            self._info.setText(f"Found — {count} region(s) highlighted.")
+        else:
+            self._info.setText("Nothing matching was found on this picture.")
+
+    def _on_find_failed(self, msg: str):
+        self._find_btn.setEnabled(True)
+        self._info.setText(f"Find failed: {msg[:80]}")
 
     def _save_copy(self):
         if not os.path.exists(self._path) and self._pix.isNull():

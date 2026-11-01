@@ -68,6 +68,9 @@ N_UNET, N_SHIFT, N_CLIP = "1", "2", "3"
 N_VAE_VIDEO, N_VAE_AUDIO = "4", "5"
 N_COND, N_SAMPLER, N_SAVE = "6", "8", "12"
 N_LORA = "13"  # LightX2V turbo LoRA in both graphs (FL2V v1.2 / Ref2V v0.1)
+VIDEO_TEXT_FL2VA_LORA = os.getenv(
+    "VIDEO_TEXT_FL2VA_LORA",
+    "minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors")
 
 MAX_REF_IMAGES = 9
 MAX_REF_VIDEOS = 3
@@ -916,6 +919,12 @@ def build_workflow(prompt: str, *, mode: str, width: int, height: int,
     # zeroed there, the bare model at cfg 1 turned a fist into mush.
     elif N_LORA in wf and smp["steps"] < 4:
         wf[N_LORA]["inputs"]["strength_model"] = 0.0
+    if mode == "t2va" and images and getattr(ctx, "video_text_source", False):
+        # Same-seed source-text comparison on this H3 installation: FL2V v1.2
+        # kept both shirt words readable at the middle frame; TaoMate's 5-step
+        # source route turned them out of view. Keep the distilled step count.
+        wf[N_LORA]["inputs"].update(lora_name=VIDEO_TEXT_FL2VA_LORA, strength_model=1.0)
+        smp["steps"] = 4
 
     sh = wf[N_SHIFT]["inputs"]
     sh["shift_video"] = float(VIDEO_SHIFT_VIDEO)
@@ -1160,6 +1169,9 @@ def build_chain_part(prompt: str, *, chain: str, idx: int, width: int, height: i
         N_SAVE: {"class_type": "SaveVideo", "inputs": {"video": ["mux", 0], "filename_prefix": "video/assistant_h3",
                                                        "format": "auto", "codec": "auto"}},
     })
+    if getattr(ctx, "video_text_source", False):
+        wf[N_LORA]["inputs"].update(lora_name=VIDEO_TEXT_FL2VA_LORA, strength_model=1.0)
+        wf[N_SAMPLER]["inputs"]["steps"] = 4
     if idx > 1:
         wf["keep"]["inputs"]["head_context_frames"] = ["cond", 2]
     _apply_overrides(wf)
@@ -2189,6 +2201,28 @@ def prepare_prompt(ctx, description: str, *, images: Sequence[str] = (), videos:
             description = _with_lock(description, _STYLE_LOCK_SUFFIX)
     if eng.VIDEO_SPEECH_STRESS:
         description = eng.mark_speech_stress(ctx, description)
+    # OCR on a tilted start frame can read SOL as S0Z, then the script writer
+    # repeats that error as an explicit instruction. The source pixels are the
+    # authority when the user did not specify the lettering themselves.
+    untrusted = getattr(ctx, "video_untrusted_ocr", ())
+    if untrusted:
+        for piece in sorted(set(untrusted), key=len, reverse=True):
+            if len(piece) >= 3:
+                # Match the OCR spelling exactly: case-insensitive replacement of
+                # e.g. THE would also destroy ordinary prompt prose ("the").
+                pattern = r"(?<!\w)" + re.escape(piece) + r"(?!\w)"
+                if piece.isupper() or any(ch.isdigit() for ch in piece):
+                    description = re.sub(pattern,
+                                         "the exact original lettering in the reference image",
+                                         description)
+        guard = ("Preserve any visible lettering by copying its exact shapes from "
+                 "the reference image; OCR transcriptions may be wrong. Do not invent "
+                 "or respell letters.")
+        if "\noverall_soundscape:" in description:
+            description = description.replace("\noverall_soundscape:",
+                "\n" + guard + "\n\noverall_soundscape:", 1)
+        else:
+            description += " " + guard
     return description, seconds
 
 

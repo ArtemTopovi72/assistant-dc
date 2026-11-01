@@ -113,6 +113,28 @@ class RedrawWorker(QThread):
             self.failed.emit(str(exc))
 
 
+class HighlightWorker(QThread):
+    """The loupe (🔍) on one specific picture: locate the target (SAM3 / OCR /
+    the vision model) and produce the highlighted copy, off the UI thread.
+    Used by the image viewer, which may be showing a picture the chat's
+    last_image_path has long moved past."""
+    done = pyqtSignal(str, int)     # highlighted path ("" = nothing found), region count
+    failed = pyqtSignal(str)
+
+    def __init__(self, ctx, source_path, query):
+        super().__init__()
+        self.ctx, self.source_path, self.query = ctx, source_path, query
+
+    def run(self):
+        try:
+            import image_highlight
+            res = image_highlight.highlight(self.ctx, self.source_path, self.query)
+            self.done.emit(res.get("path") or "", int(res.get("count") or 0))
+        except Exception as exc:
+            logger.exception("Loupe failed")
+            self.failed.emit(str(exc))
+
+
 class FixHandsWorker(QThread):
     """Repair deformed hands/fingers off the UI thread via image.fix_hands.
     A drawn mask (mask_override) makes it work even on hands no auto-detector

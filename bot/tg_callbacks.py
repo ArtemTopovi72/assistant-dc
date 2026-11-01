@@ -104,6 +104,7 @@ class CallbackMixin:
         if data.startswith("acct_"): return self._cb_account(chat_id, data)
         if data == "edit": return self._cb_edit_image(chat_id)
         if data == "ask": return self._cb_ask_image(chat_id)
+        if data == "find": return self._cb_find_image(chat_id)
         if data == "change_clothes": return self._cb_change_clothes(chat_id)
         if data == "remove_object": return self._cb_remove_object(chat_id)
         if data == "style": return self._cb_style_image(chat_id)
@@ -1177,6 +1178,18 @@ class CallbackMixin:
         (graph.needs_relook) -- no text prefix to parse back out."""
         sess = self._get_session(chat_id)
         self._send_text(chat_id, tg_bot._t("describe_ask", self._lang(sess)),
+                        keyboard=self._state_kb(sess))
+
+    def _cb_find_image(self, chat_id: int) -> None:
+        """🔍 under a picture: ask WHAT to find, same free-text capture as 🧽
+        and 👗. The "find in the image: " prefix narrows the tool list to the
+        loupe (graph_fastpath._INTENT_TOOL_MAP), which locates the target with
+        SAM3 / OCR / the vision model and returns the photo with the region
+        highlighted."""
+        sess = self._get_session(chat_id)
+        sess.pending_prefix = "find in the image: "
+        self._store.put(sess)
+        self._send_text(chat_id, tg_bot._t("describe_find", self._lang(sess)),
                         keyboard=self._state_kb(sess))
 
 

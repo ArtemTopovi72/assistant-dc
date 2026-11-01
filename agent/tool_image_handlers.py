@@ -279,6 +279,55 @@ def _handle_inspect_image(ctx, state, args: dict) -> str:
     return f"{head}\n{result}{footer}"
 
 
+def _handle_highlight_region(ctx, state, args: dict) -> str:
+    """🔍 the loupe: locate what the user asks about and deliver the photo with
+    it highlighted. Read-only with respect to the picture's content — the box is
+    drawn on a COPY, nothing is re-rendered — so it is not an edit of an accepted
+    render and not gated by _EDIT_TOOLS."""
+    source = _edit_source(ctx, state)
+    if not source or not os.path.exists(source):
+        return (
+            "[TOOL ERROR] No image to look at — generate one with generate_image or "
+            "load one first. Tell the user there is no picture to search yet."
+        )
+    query = (args.get("query") or "").strip()
+    if not query:
+        return "[TOOL ERROR] highlight_region needs the query — what to find."
+    ctx.set_stage("Looking for it on the picture")
+    logger.info("Tool: highlight_region(query=%r, source=%s)", query[:80], source)
+    import image_highlight
+    res = image_highlight.highlight(ctx, source, query)
+    if not res.get("path") or not os.path.exists(res["path"]):
+        return (
+            "[TOOL ERROR] Nothing matching that was found on the picture. Tell the "
+            "user plainly what was NOT found (in their language); do NOT invent a "
+            "location, do NOT guess, and do NOT edit the picture to add the thing. "
+            "Answer now — no further tool calls."
+        )
+    _note_source(state, source)
+    _set_current_image(ctx, state, res["path"])
+    _remember(ctx, state, "loupe",
+              f"highlighted {query!r} on {os.path.basename(source)} "
+              f"({res['count']} region(s) via {res['via']})")
+    # _where reads 0-1 fractions; the boxes are source pixels.
+    try:
+        from PIL import Image as _PILImage
+        with _PILImage.open(source) as _im:
+            _w, _h = _im.size
+        spots = ", ".join(dict.fromkeys(
+            _where((b[0] / _w, b[1] / _h, b[2] / _w, b[3] / _h))
+            for b in res["boxes"][:4]))
+    except Exception:
+        spots = "the highlighted part"
+    many = (f", {res['count']} regions — each is numbered on the copy"
+            if res["count"] > 1 else "")
+    return (
+        f"[done] Found it. The photo with the highlighted region is delivered"
+        f"{many}. Location: {spots}. The original is untouched; answer the user "
+        "briefly in their language and make NO more tool calls."
+    )
+
+
 def _edit_checkpoint(ctx, args: dict) -> str:
     """The model that renders an instruction edit. Always FireRed: the base
     Qwen-Image-Edit alternative (the GUI 🧬 toggle and the tools' 'engine'
@@ -1817,6 +1866,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     from prompt_guard import user_words
     ctx.video_request = user_words(str(state.get("user_input_original") or state.get("user_input") or "")).strip()
     ctx.video_speech = ""
+    ctx.video_text_required = ctx.video_text_source = False
+    ctx.video_untrusted_ocr = ()
 
     description = (args.get("description") or "").strip()
     if not description:
@@ -2255,6 +2306,32 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         chain_id, chain_idx = video_mod.new_chain(), 1
         if len(parts) > 1:
             parts = video_mod.bridge_script(ctx, parts)
+    # Read the user's request once, before the video prompt is rewritten.  OCR
+    # catches lettering already present on the start frame even when the user
+    # only says «оживи».  The video model's own generated prose must not turn
+    # an unrelated clip into a typography task.
+    text_asked = yes_no(ctx)(
+        "Does this VIDEO request require readable writing to appear in the final "
+        "video, or require existing writing/logos to stay legible and unchanged? "
+        "Answer no for spoken dialogue, subtitles to be added outside the video, "
+        "or a request that merely mentions a title: {text}",
+        ctx.video_request, default=False) if ctx.video_request else False
+    source_text = False
+    if images and not text_asked:
+        try:
+            import ocr_reader
+            pieces = [str(piece).strip()
+                for path in images[:3]
+                for _, piece, conf in (ocr_reader.read_boxes(path) or ())
+                if conf >= 0.6 and len(str(piece).strip()) >= 2]
+            source_text = bool(pieces)
+            ctx.video_untrusted_ocr = tuple(dict.fromkeys(pieces))
+        except Exception:
+            logger.warning("video source OCR unavailable", exc_info=True)
+    ctx.video_text_required = bool(text_asked or source_text)
+    ctx.video_text_source = bool(images and ctx.video_text_required)
+    if ctx.video_text_required:
+        logger.info("video typography route: request=%s, source=%s", text_asked, source_text)
     # Every model call of every part happens here, while the chat model is loaded; the
     # renders below then run with the card held (and the model out) start to finish.
     prepped = []

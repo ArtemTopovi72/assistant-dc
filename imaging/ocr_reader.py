@@ -149,6 +149,20 @@ def read_pieces(image_path: str) -> Optional[list]:
     return None if got is None else got[1]
 
 
+def read_boxes(image_path: str) -> Optional[list]:
+    """OCR detections with pixel coordinates, text and confidence."""
+    if os.getenv("F5_TEST_RUN") or not image_path or not os.path.exists(image_path):
+        return None
+    reader = _get()
+    if reader is None:
+        return None
+    try:
+        return reader.readtext(image_path, detail=1, paragraph=False)
+    except Exception:
+        logger.warning("OCR boxes failed on %s", image_path, exc_info=True)
+        return None
+
+
 def edge_text(image_path: str) -> Optional[list]:
     """Recognized lettering touching the image boundary, or None if OCR is unavailable."""
     if os.getenv('F5_TEST_RUN') or not image_path or not os.path.exists(image_path):

@@ -204,6 +204,7 @@ def _delete_chat_facts_file(chat_id: int) -> None:
 # be made fully generic, since each such flow's UX genuinely differs.
 _IMAGE_ACTIONS: tuple[tuple[str, str], ...] = (
     ("ask",            "img_ask"),
+    ("find",           "img_find"),
     ("change_clothes", "img_change_clothes"),
     ("remove_object",  "img_remove_object"),
     ("remove_text",    "img_remove_text"),
@@ -1796,6 +1797,7 @@ class TelegramBot(AdminMixin, RestyleMixin, ContinueMixin, AudiobookMixin, AnimV
         "change the image style to: ": "draw",
         "change the outfit to: ": "draw",
         "remove from the image: ": "draw",
+        "find in the image: ":    "draw",
         "animate this photo: ":   "creativity",
         "talking head video: ":   "cr_video",
         "search the web for: ":   "search",

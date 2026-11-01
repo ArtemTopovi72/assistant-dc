@@ -812,6 +812,10 @@ _MSG: dict[str, dict[str, str]] = {
                               "«человека слева» или «все надписи»:"},
     "describe_ask": {"en": "❓ What do you want to ask or discuss about this picture?",
                      "ru": "❓ Что спросить или обсудить по этой картинке?"},
+    "describe_find": {"en": "🔍 What should I find and highlight? E.g. \"the squirrel\", "
+                            "\"the man on the left\", \"where it says SALE\":",
+                      "ru": "🔍 Что найти и подсветить? Например: «белка», "
+                            "«человек слева», «где написано СКИДКА»:"},
     "describe_edit": {"en": "✏️ Describe what to change:",
                       "ru": "✏️ Опиши, что изменить:"},
     "describe_clothes": {"en": "👗 What should the outfit become? E.g. \"the hat "
@@ -1451,6 +1455,7 @@ _MSG: dict[str, dict[str, str]] = {
     "img_regen":     {"en": "🔄 Redraw",        "ru": "🔄 Ещё раз"},
     "img_edit":      {"en": "🎨 Edit",          "ru": "🎨 Правка"},
     "img_ask":       {"en": "❓ Ask",           "ru": "❓ Спросить"},
+    "img_find":      {"en": "🔍 Find",          "ru": "🔍 Лупа"},
     "img_style":     {"en": "🎭 Style",         "ru": "🎭 Стиль"},
     "img_animate":   {"en": "🎬 Animate",       "ru": "🎬 Анимация"},
     "img_swap_person": {"en": "🔁 Swap", "ru": "🔁 Замена"},

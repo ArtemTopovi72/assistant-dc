@@ -236,6 +236,7 @@ _BUTTON_TOOL = (
     # (Ideogram + FireRed are the only drawing/edit engines in the product).
     ("regenerate the image", "generate_image"),
     ("remove all the lettering", "inpaint_image"),   # 🔤 button -> ObjectClear via the lettering path
+    ("find in the image:", "highlight_region"),  # 🔍 loupe must mark the image, not just describe it
     # [style] (reference-photo transfer, tg_resolve._push_style_transfer_task)
     # and [style_preset] (tg_callbacks._cb_style_preset) had no entry here --
     # both relied purely on prose, the exact gap that let the [upscale]
