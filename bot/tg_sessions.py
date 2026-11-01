@@ -509,6 +509,14 @@ class _Session:
                 setattr(self, name, value)
             return True
 
+    def record_delivered_image(self, token, image_id):
+        """The newest picture actually sent wins, even if a later turn was queued."""
+        with self._lock:
+            if token[0] != self.context_generation:
+                return False
+            self.turn_image = image_id
+            return True
+
     def commit_context_turn(self, token, memory_before, memory_after, facts_before, facts_after,
                             media, memory_limit=40):
         with self._lock:

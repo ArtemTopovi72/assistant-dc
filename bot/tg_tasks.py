@@ -93,8 +93,9 @@ def _typed_part(text: str) -> str:
 
 
 def _target_id_of(task, sess) -> str:
-    """The immutable picture selected before this task entered the queue."""
-    return getattr(task, 'image_id', '')
+    """Explicit targets are frozen; implicit follow-ups use the latest delivery."""
+    return (getattr(task, 'image_id', '') or
+            (getattr(sess, 'turn_image', '') if task.image_selection == 'context' else ''))
 
 
 def _message_script(text: str, ctx=None) -> str:
@@ -663,6 +664,8 @@ class TaskRunnerMixin:
                  else sess.begin_context_turn(task.context_generation))
         if token is None or token[0] != sess.context_generation:
             return
+        if task.image_selection == 'context' and not task.image_path and not task.image_id:
+            task.image_id = _target_id_of(task, sess)
         entry = tg_bot._image_by_id(sess, task.image_id) if task.image_id else None
         if not task.translation and ((task.image_path and not os.path.exists(task.image_path))
                 or (task.image_id and (not entry or not os.path.exists(entry.get('path', ''))))):
@@ -672,8 +675,10 @@ class TaskRunnerMixin:
             # The dead binding kills the task only when the words are about THAT
             # picture; otherwise it is dropped and the task runs as plain text.
             snap = getattr(task, 'intent_snapshot', None) or {}
-            words_need_it = (bool(snap.get('about_picture')) or bool(snap.get('names_picture'))
-                             or bool(task.image_path))
+            from tg_queue import _needs_latest_image
+            words_need_it = (_needs_latest_image(task) or bool(snap.get('about_picture'))
+                             or bool(snap.get('names_picture')) or bool(task.image_path)
+                             or task.image_selection != 'context')
             if not words_need_it:
                 tg_bot.logger.info("task %s: dead image binding dropped — the words are not "
                                    "about a picture, running as text", task.task_id[:8])
@@ -922,6 +927,9 @@ class TaskRunnerMixin:
             if not getattr(task, 'intent_snapshot', None):
                 import intent as _intent
                 task.intent_snapshot = _intent.snapshot_turn()
+            from tg_queue import _needs_latest_image
+            if _needs_latest_image(task):
+                return False
             _wants = []
             for _k, _rd in reversed(task.intent_snapshot.get("reads") or []):
                 if isinstance(_rd, dict) and _rd.get("wants"):
@@ -2221,11 +2229,11 @@ class TaskRunnerMixin:
                                             label=(task.user_text or "")[:80], src="bot",
                                             prompt=getattr(ctx, 'last_image_prompt', '') or '',
                                             parent=_parent)
-                        sess.update_turn_media(ctx._session_token, turn_image=img_id)
                         self._last_photo_msg_id = 0
                         ok = self._send_photo(chat_id, out_img,
                                               keyboard=tg_bot._image_kb(lang, img_id))
                         if ok:
+                            sess.record_delivered_image(ctx._session_token, img_id)
                             tg_bot._log_image(sess, out_img,
                                        msg_id=getattr(self, "_last_photo_msg_id", 0),
                                        src="bot")

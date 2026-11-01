@@ -358,7 +358,7 @@ class DispatchMixin:
             lang = self._lang(sess)
             self._stop_and_report(chat_id, sess, lang)
             return
-        if re.match(r"/[A-Za-z0-9_]{1,32}(?:@\w+)?(?:\s|$)", text):
+        if re.match(r"/\w{1,32}(?:@\w+)?(?:\s|$)", text):
             self._handle_command(chat_id, text)
             return
         key = tg_bot._LABEL2KEY.get(text, '') if not _fwd else ''

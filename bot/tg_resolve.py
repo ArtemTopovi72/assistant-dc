@@ -1935,8 +1935,6 @@ class ResolveMixin:
                     return
         if not still_current():
             return
-        if not img_path:
-            pressed_image_id = pressed_image_id or sess.turn_image
         if (not any('_target_captured' in it for it in batch)
                 and sess.target_image and (img_path or sess.target_image == pressed_image_id)):
             sess.target_image = ''

@@ -30,6 +30,18 @@ _INFLIGHT_SEQ = [0, 0]
 _INFLIGHT_IO = threading.Lock()
 
 
+def _needs_latest_image(task) -> bool:
+    if task.image_selection != 'context' or task.image_path:
+        return False
+    image_tools = {'inspect_image', 'redraw_image', 'inpaint_image',
+                   'transfer_image', 'fix_hands', 'fix_artifact'}
+    for _, read in (task.intent_snapshot or {}).get('reads', []):
+        if isinstance(read, dict) and (read.get('about_picture')
+                                       or image_tools.intersection(read.get('wants') or [])):
+            return True
+    return False
+
+
 class QueueMixin:
     def _run_busy(self, chat_id: int, fn, *args) -> None:
         """Run fn(*args) on a daemon thread with the chat marked busy until it
@@ -311,7 +323,6 @@ class QueueMixin:
         sess = self._get_session(task.chat_id)
         if task.context_revision is None:
             if not task.translation and not task.image_path and not task.image_id:
-                task.image_id = sess.turn_image
                 task.image_selection = 'context'
             token = sess.begin_context_turn(task.context_generation)
             if token is None:
@@ -319,7 +330,7 @@ class QueueMixin:
             task.context_generation, task.context_revision = token
             entry = (tg_bot._image_by_path(sess, task.image_path) if task.image_path
                      else tg_bot._image_by_id(sess, task.image_id))
-            if entry:
+            if entry and task.image_selection != 'context':
                 sess.update_turn_media(token, turn_image=entry['id'])
             self._store.put(sess)
         ids = list(incoming_ids if incoming_ids is not None else BATCH_IDS.get() or
@@ -765,7 +776,8 @@ class QueueMixin:
                 # and produce two identical replies, so it still queues and waits.
                 running = self._running_task.get(task.chat_id) or []
                 is_exact_repeat = any(r.user_text == task.user_text for r in running)
-                admit = (n == 0) or (n == 1 and interruptible and not is_exact_repeat)
+                admit = (n == 0) or (n == 1 and interruptible and not is_exact_repeat
+                                    and not _needs_latest_image(task))
                 if admit:
                     self._chat_busy[task.chat_id] = n + 1
             if not admit:
