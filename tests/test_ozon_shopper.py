@@ -151,15 +151,12 @@ def test_web_review_query_keeps_exact_model_not_capacity_or_form_factor():
 
 
 def test_shopper_does_not_publish_family_speed_or_invent_review_opinions():
-    assert S._without_unverified_performance(
-        "Подходит по цене. Скорость 7400/6800 МБ/с, хотя это цифра версии 2 ТБ. Есть гарантия."
-    ) == "Подходит по цене. Есть гарантия."
     assert S._review_evidence([{"score": 5, "comment": "Работает нормально"}]) == \
-        "В прочитанных отзывах: «Работает нормально»"
+        "В отзывах карточки: «Работает нормально»"
     assert S._review_evidence(None) == "Тексты отзывов не удалось прочитать."
     assert S._review_evidence([{"score": 1}, {"score": 2},
                                {"score": 5, "comment": "Хороший товар"}]) == \
-        "В прочитанных отзывах: «Хороший товар»"
+        "В отзывах карточки: «Хороший товар»"
 
 
 def test_decision_uses_card_reviews_even_when_model_invents_claims(world):
@@ -172,8 +169,8 @@ def test_decision_uses_card_reviews_even_when_model_invents_claims(world):
     chosen = item("nv3", "Kingston NV3 1 ТБ", 17000)
     chosen["review_texts"] = [{"score": 5, "comment": "Установил, работает"}]
     result = S.decide(_ctx(), {"need": "SSD 1 ТБ", "must": []}, [chosen])
-    assert result["why"] == "Лучший выбор."
-    assert result["reviews"] == "В прочитанных отзывах: «Установил, работает»"
+    assert result["why"] == ""
+    assert result["reviews"] == "В отзывах карточки: «Установил, работает»"
     assert result["concerns"] == ""
 
 
@@ -277,8 +274,8 @@ def test_the_users_own_links_are_read_and_weighed(world):
                          "ozon_shop", {"request": "скатерть", "clarified": True})
     assert "USER’S PICK Скатерть пользователя" in calls["decide_input"][0]    # weighed with the finds
     line = next(l for l in out.splitlines() if "Скатерть пользователя" in l)
-    assert "1 500 ₽" in line and "the user's link 1" in line and "линяет" in line, out
-    assert "MUST" not in line             # the decider's own label, never the user's word
+    assert "1 500 ₽" in line and "the user's link 1" in line, out
+    assert "линяет" not in line and "MUST" not in line
 
 
 def test_a_winning_user_link_is_called_theirs(world):

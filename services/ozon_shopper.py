@@ -432,40 +432,16 @@ _DECIDE_SYS = (
     "with repeated breakdown or no-spare-parts complaints there loses to a known "
     "brand with a clean record even at a slightly higher price.When two finalists are the SAME "
     "model from different sellers, take the cheaper one unless its reviews or seller are "
-    "clearly worse, and say so in why. Reply JSON "
-    'only: {"choice": n, "why": str, "reviews": str, "concerns": str, "backup": n|null} '
-    "-- reviews: 1-2 sentences of what buyers actually say about the CHOSEN one, or "
-    "exactly 'Отзывов нет' when it has none; concerns: honest caveats or '' (name the "
-    "site when a caveat comes from the web). Add \"versus\": {\"n\": str} for EVERY finalist you "
-    "did not choose -- one sentence: what its own buyers report and why it lost, from its "
-    "dossier only. A family/spec sheet may describe several capacities: never attribute a "
-    "speed, endurance or other numeric specification to the chosen capacity unless the "
-    "dossier explicitly ties that number to that exact capacity. Do not infer buyer opinions "
-    "from a star count or web snippets; use only actual reviews of this item. Explain a "
-    "higher price against cheaper finalists when the buyer asks for value. The user reads "
-    "why/reviews/concerns/versus as they are: no 'MUST', no "
-    "finalist numbers like [2] -- name a product by its brand or kind. Write them in Russian.")
-
-
-def _for_user(text) -> str:
-    """The decider echoes its input's label («требованию MUST»); the user never saw it."""
-    return re.sub(r"\s*\bMUST\b", "", str(text or "")).strip()
-
-
-_PERFORMANCE_NUMBER = re.compile(r"\d[\d\s.,/]*\s*(?:мб/с|гб/с|mb/s|gb/s|tbw)\b", re.I)
-
-
-def _without_unverified_performance(text) -> str:
-    """Family-wide speeds can be for another capacity; free-form prose is not evidence."""
-    return " ".join(sentence for sentence in re.split(r"(?<=[.!?])\s+", _for_user(text))
-                    if not _PERFORMANCE_NUMBER.search(sentence)).strip()
+    "clearly worse. A family/spec sheet may describe several capacities: do not assign "
+    "its maximum speed or endurance to a specific capacity without explicit evidence. "
+    'Reply JSON only: {"choice": n}.')
 
 
 def _review_evidence(reviews) -> str:
     if reviews is None:
         return "Тексты отзывов не удалось прочитать."
     if not reviews:
-        return "Отзывов на эту карточку не найдено."
+        return "Отзывов нет."
     readable = [r for r in reviews if str(r.get("comment") or r.get("cons") or
                                           r.get("pros") or "").strip()]
     picked = sorted(readable, key=lambda r: r.get("score", 5) or 5)[:2]
@@ -475,27 +451,21 @@ def _review_evidence(reviews) -> str:
                                      review.get("pros") or "")).strip()[:180]
         if words:
             excerpts.append("«" + words.replace("*", "").replace("`", "") + "»")
-    return "В прочитанных отзывах: " + "; ".join(excerpts) if excerpts else "Тексты отзывов пустые."
+    return "В отзывах карточки: " + "; ".join(excerpts) if excerpts else "Тексты отзывов пустые."
 
 
 def decide(ctx, item: dict, finalists: list, strategy: str = "balanced") -> dict:
     user = (f"NEED: {item['need']}\nMUST: {', '.join(item['must']) or '-'}\n\n"
             + "\n\n".join(_dossier(i, d) for i, d in enumerate(finalists, 1)))
     data = _llm_json(ctx, _DECIDE_SYS + _prio(strategy), user, ["choice"],
-                     max_tokens=2000) or {}
+                     max_tokens=300) or {}
     try:
         n = int(data.get("choice"))
     except (TypeError, ValueError):
         n = 1
     n = n if 1 <= n <= len(finalists) else 1
     rv = finalists[n - 1].get("review_texts")
-    versus = data.get("versus") if isinstance(data.get("versus"), dict) else {}
-    for k, v in versus.items():
-        if str(k).isdigit() and 1 <= int(k) <= len(finalists):
-            finalists[int(k) - 1]["verdict"] = _without_unverified_performance(v)
-    return {"index": n - 1, "why": _without_unverified_performance(data.get("why")),
-            "reviews": _review_evidence(rv),
-            "concerns": _without_unverified_performance(data.get("concerns"))}
+    return {"index": n - 1, "why": "", "reviews": _review_evidence(rv), "concerns": ""}
 
 
 BUYER_PHOTOS = 2                       # per finalist, from its reviews
