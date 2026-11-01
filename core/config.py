@@ -477,7 +477,7 @@ VIDEO_JOB_TIMEOUT = _env_int("VIDEO_JOB_TIMEOUT", 5400)
 # everything resident. A render that started with 16-17 GB
 # free took 35-49 minutes instead of the usual 8-12 -- the two fast completions
 # in the same window both started at 17.5-20 GB free.
-VIDEO_MIN_FREE_MB = _env_int("VIDEO_MIN_FREE_MB", 20500)
+VIDEO_MIN_FREE_MB = _env_int("VIDEO_MIN_FREE_MB", 20000)
 # Telegram refuses uploads over 50MB from bots.
 VIDEO_TG_MAX_BYTES = _env_int("VIDEO_TG_MAX_BYTES", 50 * 1024 * 1024)
 

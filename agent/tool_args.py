@@ -347,7 +347,8 @@ class FindPhotoArgs(_ToolArgs):
     query: str = Field(..., min_length=1, max_length=200, description=(
         "Who or what to find a real photo of, e.g. 'Sydney Sweeney portrait', "
         "'Eiffel Tower at night'. For a person, name them and optionally add 'portrait' "
-        "or 'face'. English works best for image search."))
+        "or 'face'. Keep a person's name and affiliation in the user's original "
+        "script (e.g. Мончак ЛЭТИ), since transliteration can return a namesake."))
     require_face: bool = Field(True, description=(
         "Keep True (default) when finding a PERSON — only a photo containing a clear "
         "face is accepted. Set False only for non-person subjects (a building, a car)."))

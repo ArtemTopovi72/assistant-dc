@@ -235,7 +235,7 @@ _FIND_PHOTO_DESC = (
     "Use when the user asks you to find/look up/show a photo of a real person or thing "
     "so it can then be EDITED — e.g. 'find a photo of Sydney Sweeney', 'look one up and "
     "drop it here', 'show me a picture of X so I can edit it'. It searches, validates the "
-    "image (for a person, that it actually shows a face), and loads the best one as the "
+    "image (for a named person, that the source names them and it shows a face), and loads the best one as the "
     "current image. AFTER it succeeds, the user can ask for an edit and you use "
     "inpaint_image / redraw_image on THIS photo. Do NOT use it to draw something from "
     "imagination (use generate_image) or to answer a factual question (use search)."

@@ -49,5 +49,15 @@ check("free_gpu waits for the memory after evicting", calls and calls[0][0] == L
 check("and reports the free reading", any("VRAM" in m for m in said), said)
 check("the threshold is the chat model's size, not a token", LT.FREE_GPU_MIN_MB >= 12000)
 
+# A concurrent LM Studio request can reload the model just after the first
+# unload. A video render must retry the eviction before it is submitted.
+readings = [3000, 21000]
+unloads = []
+race = NS(deps=NS(wait_vram_free=lambda *a, **k: readings.pop(0),
+                  subprocess=NS(run=lambda *a, **k: unloads.append(a[0]) or None),
+                  urlopen=lambda *a, **k: (_ for _ in ()).throw(OSError("no comfy"))))
+LT.free_gpu(min_free_mb=20000, ctx=race)
+check("a reloaded chat model triggers a second unload", len(unloads) == 2, unloads)
+
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)

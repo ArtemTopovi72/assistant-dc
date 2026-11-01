@@ -182,6 +182,9 @@ def test_image_search_urls():
     check("image_search_urls_portrait_ranked_first", out[0] == "https://a.com/img2.jpg")
     check("image_search_urls_non_http_skipped", "ftp://bad.com/img.jpg" not in out)
     check("image_search_urls_url_key_accepted", "https://a.com/img3.jpg" in out)
+    detail = SE.image_search_urls(FakeCtx(DDGS=ddgs), "query", with_sources=True)
+    check("image_search_urls_keeps_source_for_identity_check",
+          detail[0]["image"] == out[0] and "title" in detail[0] and "url" in detail[0])
 
     ddgs = _fake_ddgs(raises=RuntimeError("boom"))
     check("image_search_urls_exception_twice_empty", SE.image_search_urls(FakeCtx(DDGS=ddgs), "q") == [])
@@ -259,6 +262,24 @@ def test_is_grayscale():
 
 
 def test_fetch_reference_photo():
+    wrong = {"image": "https://photos.example/wrong.jpg",
+             "title": "Portraits by Jaroslav Monchak", "url": "https://monchak.ch/about"}
+    ctx = FakeCtx(image_search_urls=lambda ctx, q, **k: [wrong],
+                  download_image=lambda *a, **k: True,
+                  _has_clear_face=lambda p: True, _is_grayscale=lambda p: False)
+    check("named_person_rejects_unrelated_affiliation",
+          SE.fetch_reference_photo(ctx, "Monchak Leti portrait", str(_TMP / "wrong.jpg")) is None)
+
+    right = {"image": "https://i.vuzopedia.ru/teacher.jpg",
+             "title": "Александр Мончак — преподаватель ЛЭТИ",
+             "url": "https://vuzopedia.ru/teacher/monchak-aleksandr-maratovich"}
+    ctx = FakeCtx(image_search_urls=lambda ctx, q, **k: [right],
+                  download_image=lambda *a, **k: True,
+                  _has_clear_face=lambda p: True, _is_grayscale=lambda p: False)
+    check("named_person_accepts_matching_source",
+          SE.fetch_reference_photo(ctx, "Мончак Александр ЛЭТИ преподаватель",
+                                   str(_TMP / "right.jpg")) == str(_TMP / "right.jpg"))
+
     ctx = FakeCtx(image_search_urls=lambda ctx, q, **k: [])
     check("fetch_ref_photo_no_urls_none", SE.fetch_reference_photo(ctx, "q", str(_TMP / "ref1.jpg")) is None)
 

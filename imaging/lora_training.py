@@ -195,6 +195,18 @@ def free_gpu(log=None, min_free_mb: int = None, ctx=None) -> None:
     # model and ran 296 s instead of 48 s (the
     # 6x tax of sharing the card). Wait for the free counter to say so.
     freed = dep(ctx, "wait_vram_free", wait_vram_free)(min_free_mb or FREE_GPU_MIN_MB, timeout=FREE_GPU_WAIT_S)
+    if min_free_mb and freed is not None and freed < min_free_mb:
+        # LM Studio may spawn a fresh llama-server just after the first unload
+        # when another request was already in flight. One more unload after the
+        # drain catches that race; the caller checks the final counter before submit.
+        say("VRAM занята после выгрузки — повторяю освобождение")
+        try:
+            dep(ctx, "subprocess", subprocess).run(
+                ["lms", "unload", "--all"], capture_output=True, text=True,
+                timeout=60, shell=(os.name == "nt"))
+        except Exception as exc:
+            say("Повторная выгрузка LM Studio не удалась (%s)" % exc)
+        freed = dep(ctx, "wait_vram_free", wait_vram_free)(min_free_mb, timeout=FREE_GPU_WAIT_S)
     if freed is not None:
         say("VRAM свободно: %d MiB" % freed)
 
@@ -217,7 +229,7 @@ def wait_vram_free(min_free_mb: int, timeout: float = 25.0, poll: float = 0.5, c
         last = free_mb()
     if last is not None and last < min_free_mb:
         logging.getLogger("assistant.lora").warning(
-            "VRAM still only %d MiB free after %.0fs — rendering anyway", last, timeout)
+            "VRAM still only %d MiB free after %.0fs (need %d)", last, timeout, min_free_mb)
     return last
 
 

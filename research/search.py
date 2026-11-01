@@ -552,13 +552,14 @@ def is_preferred_source(url: str) -> bool:
 
 
 def image_search_urls(ctx, query: str, *, max_results: int = 12,
-                      prefer: str = "portrait") -> list:
+                      prefer: str = "portrait", with_sources: bool = False) -> list:
     """Return a list of candidate image URLs (largest first) for ``query``.
 
     Uses the ddgs *images* vertical. ``prefer`` biases the ranking: "portrait"
     for a face reference (the original caller), "landscape" for slide artwork —
     a tall photo cropped into a wide panel loses most of its subject.
-    Returns [] on failure."""
+    With ``with_sources``, returns image URL plus source title/page for identity
+    checks. Returns [] on failure."""
     from ddgs import DDGS
     if outbound_blocked(query, ctx=ctx):
         return []
@@ -615,7 +616,8 @@ def image_search_urls(ctx, query: str, *, max_results: int = 12,
         if is_watermarked_source(u) or is_watermarked_source(r.get("url") or ""):
             skipped += 1
             continue
-        urls.append(u)
+        urls.append({"image": u, "title": r.get("title") or "", "url": r.get("url") or ""}
+                    if with_sources else u)
     if skipped:
         logger.info("image search %r: skipped %d watermarked stock result(s)",
                     query[:60], skipped)
@@ -782,7 +784,8 @@ def fetch_reference_photo(ctx, query: str, dest_path: str, *, tries: int = 10,
     if no colour candidate is found. Saves the winner to ``dest_path``; returns the
     path or None.
     """
-    urls = dep(ctx, "image_search_urls", image_search_urls)(ctx, query, prefer=prefer)
+    urls = dep(ctx, "image_search_urls", image_search_urls)(
+        ctx, query, prefer=prefer, with_sources=True)
     if not urls:
         logger.warning("fetch_reference_photo: no image results for %r", query)
         return None
@@ -790,7 +793,21 @@ def fetch_reference_photo(ctx, query: str, dest_path: str, *, tries: int = 10,
     gray_fallback = None                      # first valid-but-grayscale candidate
     good = []                                 # colour candidates that passed, for the pick
     import shutil
-    for u in urls[:tries]:
+    import re
+    # A vision model can see that a face is present, but cannot identify an
+    # unfamiliar person. Require the search hit's page/title to name the person
+    # and affiliation before treating its image as their portrait.
+    name_terms = ([w.casefold() for w in re.findall(r"\b[^\W\d_]{4,}\b", query)
+                   if w[0].isupper() and w.casefold() not in
+                   {"photo", "portrait", "image", "picture", "find", "real", "the"}]
+                  if require_face else [])
+    for hit in urls[:tries]:
+        u = hit.get("image", "") if isinstance(hit, dict) else hit
+        if isinstance(hit, dict) and name_terms:
+            source = (str(hit.get("title") or "") + " " + str(hit.get("url") or "")).casefold()
+            if not source or not all(term in source for term in name_terms):
+                logger.info("fetch_reference_photo: source does not verify %r: %r", query, source[:150])
+                continue
         if not dep(ctx, "download_image", download_image)(ctx, u, dest_path):
             continue
         checked += 1
