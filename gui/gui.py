@@ -10,6 +10,7 @@ QThreads so the window, camera preview and audio visualizer stay smooth.
 import logging
 import os
 import shutil
+import subprocess
 import sys
 
 # Before cv2/PyQt5: PyQt5 bundles MSVCP140 14.26 and whatever loads first wins;
@@ -903,6 +904,20 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
         if got is not None:
             return True, got
         return super().nativeEvent(event_type, message)
+
+    def _restart_app(self):
+        helper = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                              "scripts", "restart_assistant.py")
+        try:
+            subprocess.Popen([sys.executable, helper, str(os.getpid())],
+                             creationflags=getattr(subprocess, "DETACHED_PROCESS", 0),
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+        except OSError:
+            logger.exception("Could not start restart helper")
+            self._set_status("Restart failed — see app log")
+            return
+        self.close()
 
     # ---- drag-drop ----
     def closeEvent(self, event):
