@@ -105,6 +105,23 @@ def _target_id_of(task, sess) -> str:
                 os.path.basename(entry.get('path') or '').startswith('find_')):
             break
         image_id = entry['parent']
+    # H2b freshness guard, at the source: an IMPLICIT follow-up («проверь
+    # картинку», «а теперь без шляпы» — no press id, no ordinal, no reply)
+    # means the NEWEST delivered picture, not whatever stale slot a queue
+    # race left in sess.turn_image (live 2026-11-01: the wolf check answered
+    # about a deer delivered much earlier, 4/4 in the bug hunt). Explicit
+    # pointers are frozen by design and never rebound; a user-sent photo
+    # (src != 'bot') stays theirs.
+    if not (getattr(task, 'image_id', '') or '') and task.image_selection == 'context':
+        entry = tg_bot._image_by_id(sess, image_id)
+        if (entry or {}).get('src') == 'bot':
+            newest = next((e for e in reversed(getattr(sess, 'image_log', None) or [])
+                           if e.get('src') == 'bot'
+                           and os.path.exists(e.get('path') or '')), None)
+            if newest and newest.get('id') not in ('', image_id):
+                tg_bot.logger.info("implicit follow-up rebound to the newest delivered "
+                                   "picture %s (was %s)", newest['id'], image_id or 'none')
+                image_id = newest['id']
     return image_id
 
 
