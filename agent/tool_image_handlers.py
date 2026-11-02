@@ -306,6 +306,9 @@ def _handle_highlight_region(ctx, state, args: dict) -> str:
         )
     _note_source(state, source)
     _set_current_image(ctx, state, res["path"])
+    # Deliver the marked copy through state, but keep the clean pixels as the
+    # next edit's source in the desktop session.
+    ctx.last_image_path = source
     _remember(ctx, state, "loupe",
               f"highlighted {query!r} on {os.path.basename(source)} "
               f"({res['count']} region(s) via {res['via']})")

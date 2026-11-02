@@ -38,6 +38,14 @@ _MAX_BOX_FRAC = 0.98        # a box covering the whole frame located nothing
 _MAX_BOXES = 12             # «все белки» in a squirrel colony is still finite
 
 
+def _asks_multiple(query: str) -> bool:
+    """Only an explicit count justifies refusing one grounded instance."""
+    return bool(re.search(
+        r"\b(?:both|all|several|many|two|three|four|five|оба|обе|обоих|"
+        r"все|всех|несколько|два|две|двух|три|трех|трёх|четыре|пять|[2-9]\d*)\b",
+        query or "", re.I))
+
+
 # ── routing: lettering or thing? ─────────────────────────────────────────────
 def _wants_lettering(ctx, query: str) -> bool:
     """The query asks WHERE SOMETHING IS WRITTEN, not where a thing is. The
@@ -127,10 +135,13 @@ def _mask_boxes(mask_path: str) -> List[Box]:
             ys, xs = np.where(labels == i)
             if xs.size < min_area:
                 continue
-            out.append((float(xs.min()), float(ys.min()),
-                        float(xs.max()), float(ys.max())))
-        out.sort(key=lambda b: (b[1] - b[0]) * (b[3] - b[2]), reverse=True)
-        return out[:_MAX_BOXES]
+            out.append((int(xs.size), (float(xs.min()), float(ys.min()),
+                        float(xs.max()), float(ys.max()))))
+        out.sort(key=lambda item: item[0], reverse=True)
+        # SAM3 often leaves a disconnected hand or fabric patch beside the
+        # person. It is a fragment of the same find, not a second instance.
+        largest = out[0][0] if out else 0
+        return [box for area, box in out if area >= largest * 0.25][:_MAX_BOXES]
     except Exception:
         logger.debug("loupe mask->boxes failed", exc_info=True)
         return []
@@ -359,10 +370,7 @@ def highlight(ctx, image_path: str, query: str,
             # count. Keep the grounded mask when it found one, and decline an
             # explicit multi-instance request if the other instances cannot
             # be verified on pixels (e.g. differently coloured animals).
-            if len(boxes) == 1 and yes_no(ctx)(
-                    "Does this request explicitly ask to find MORE THAN ONE instance "
-                    "of the target (for example 'both', 'all three', or a plural "
-                    "quantity)?", query, default=False):
+            if len(boxes) == 1 and _asks_multiple(query):
                 return {"path": "", "boxes": [], "via": "", "count": 0}
         if not boxes and not via:
             boxes = _vlm_boxes(ctx, image_path, phrase_en or query)

@@ -68,6 +68,14 @@ if len(boxes) == 2:
           (boxes[1][2]-boxes[1][0])*(boxes[1][3]-boxes[1][1]), boxes)
     check("largest box hugs blob 2", abs(boxes[0][0]-600) < 3 and abs(boxes[0][3]-700) < 3, boxes[0])
     check("smaller box hugs blob 1", abs(boxes[1][0]-100) < 3 and abs(boxes[1][3]-260) < 3, boxes[1])
+_ID.Draw(im).rectangle((700, 100, 760, 140), fill=255)
+im.save(mask)
+check("small disconnected mask fragment is not a second person",
+      len(LH._mask_boxes(mask)) == 2, LH._mask_boxes(mask))
+check("a singular person request accepts one grounded mask",
+      not LH._asks_multiple("Grandpa") and not LH._asks_multiple("Дед"))
+check("explicit multiple instances still require multiple masks",
+      LH._asks_multiple("all three red circles") and LH._asks_multiple("оба деда"))
 flat = _png("flat.png", size=(600, 240), color=(255, 255, 255))
 with Image.open(flat) as _flat:
     _flat_draw = _ID.Draw(_flat)
@@ -217,8 +225,8 @@ ctx = _Ctx(); ctx.last_image_path = src_png
 state = {"image_path": src_png}
 r = TIH._handle_highlight_region(ctx, state, {"query": "squirrel"})
 check("found -> [done] summary", r.startswith("[done] Found it"), r[:80])
-check("the highlighted copy becomes the current image",
-      state.get("image_path") == HL_OUT and ctx.last_image_path == HL_OUT)
+check("the marked copy is delivered while edits keep the clean source",
+      state.get("image_path") == HL_OUT and ctx.last_image_path == src_png)
 check("registered as a version of the original",
       state.get("image_derived_from") == src_png, state.get("image_derived_from"))
 check("memory entry logged", any(k == "loupe" for k, _ in ctx.mem))
@@ -325,6 +333,18 @@ bot = make_bot()
 s = bot._get_session(CID); s.clear_context(); s.lang = "ru"
 a = make_png("target.png")
 id_a = T._log_image(s, a, msg_id=101, label="target", src="bot")
+marked = make_png("find_marked.png")
+id_marked = T._log_image(s, marked, msg_id=102, label="loupe",
+                         src="loupe", parent=id_a)
+from tg_tasks import _target_id_of
+check("a button on the loupe copy resolves to its clean parent",
+      _target_id_of(types.SimpleNamespace(image_id=id_marked,
+                    image_selection="explicit"), s) == id_a)
+s.turn_image = id_marked
+check("an implicit follow-up also resolves to the clean parent",
+      _target_id_of(types.SimpleNamespace(image_id="",
+                    image_selection="context"), s) == id_a)
+s.turn_image = id_a
 bot._store.put(s)
 
 press(bot, f"find:{id_a}")

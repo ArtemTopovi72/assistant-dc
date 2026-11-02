@@ -94,8 +94,18 @@ def _typed_part(text: str) -> str:
 
 def _target_id_of(task, sess) -> str:
     """Explicit targets are frozen; implicit follow-ups use the latest delivery."""
-    return (getattr(task, 'image_id', '') or
-            (getattr(sess, 'turn_image', '') if task.image_selection == 'context' else ''))
+    image_id = (getattr(task, 'image_id', '') or
+                (getattr(sess, 'turn_image', '') if task.image_selection == 'context' else ''))
+    # A loupe photo is a visual annotation. Buttons under it and later edits
+    # must use its clean parent, never feed the yellow overlay to a renderer.
+    for _ in range(4):
+        entry = tg_bot._image_by_id(sess, image_id)
+        if not entry or not entry.get('parent') or not (
+                entry.get('src') == 'loupe' or
+                os.path.basename(entry.get('path') or '').startswith('find_')):
+            break
+        image_id = entry['parent']
+    return image_id
 
 
 def _message_script(text: str, ctx=None) -> str:
@@ -1667,7 +1677,9 @@ class TaskRunnerMixin:
             ctx.last_image_path = task.image_path or None
         # «верни как было» in a later message: this chat's own pictures, oldest first.
         ctx.image_undo = [e["path"] for e in (getattr(sess, "image_log", None) or [])
-                          if e.get("path") and e["path"] != ctx.last_image_path][-10:]
+                          if e.get("path") and e["path"] != ctx.last_image_path
+                          and e.get("src") != "loupe"
+                          and not os.path.basename(e["path"]).startswith("find_")][-10:]
         # 🎭 Style: the only path in Telegram that hands the agent TWO images.
         # transfer_image (tool_image_handlers._handle_transfer_image) reads
         # ctx.reference_images and nothing else -- the desktop GUI's Transfer
@@ -2225,8 +2237,10 @@ class TaskRunnerMixin:
                             _parent = ((tg_bot._image_by_path(sess, _src)
                                         or tg_bot._image_by_content(sess, _src)
                                         or {}).get("id", ""))
+                        _src_kind = ("loupe" if os.path.basename(out_img).startswith("find_")
+                                     and final.get("image_derived_from") else "bot")
                         img_id = tg_bot._log_image(sess, out_img,
-                                            label=(task.user_text or "")[:80], src="bot",
+                                            label=(task.user_text or "")[:80], src=_src_kind,
                                             prompt=getattr(ctx, 'last_image_prompt', '') or '',
                                             parent=_parent)
                         self._last_photo_msg_id = 0
@@ -2236,7 +2250,7 @@ class TaskRunnerMixin:
                             sess.record_delivered_image(ctx._session_token, img_id)
                             tg_bot._log_image(sess, out_img,
                                        msg_id=getattr(self, "_last_photo_msg_id", 0),
-                                       src="bot")
+                                       src=_src_kind)
                             try: self._store.put(sess)
                             except Exception:
                                 tg_bot.logger.warning("session persist failed", exc_info=True)

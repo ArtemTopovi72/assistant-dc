@@ -90,6 +90,8 @@ class ImageViewerDialog(QDialog):
         lay.addLayout(bar)
         self._find_btn = find_btn
         self._find_worker = None
+        self._find_sources = {}
+        self._find_source = self._path
 
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(False)
@@ -198,7 +200,8 @@ class ImageViewerDialog(QDialog):
         import gui_workers
         self._find_btn.setEnabled(False)
         self._info.setText(f"Looking for “{text.strip()}”…")
-        self._find_worker = gui_workers.HighlightWorker(ctx, self._path, text.strip())
+        self._find_source = self._find_sources.get(self._path, self._path)
+        self._find_worker = gui_workers.HighlightWorker(ctx, self._find_source, text.strip())
         self._find_worker.done.connect(self._on_find_done)
         self._find_worker.failed.connect(self._on_find_failed)
         self._find_worker.start()
@@ -207,6 +210,7 @@ class ImageViewerDialog(QDialog):
         self._find_btn.setEnabled(True)
         if path and os.path.exists(path):
             # right after the original: ‹ steps back, › steps on
+            self._find_sources[path] = self._find_source
             self._paths.insert(self._idx + 1, path)
             self._step(1)
             self._info.setText(f"Found — {count} region(s) highlighted.")
