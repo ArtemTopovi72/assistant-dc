@@ -337,8 +337,8 @@ def _shop_shortlist(state) -> tuple[list[str], str]:
     current = user_words((state or {}).get("user_input_original") or "")
     links = _oz.product_links(current)
     if len(links) < 2 and not _re.search(
-            r"выбери|выбрать|сравни|сравнить|лучше|лучший|подешевле|дешевле|"
-            r"choose|compare|best|cheaper", current, _re.I):
+            r"выб|сравн|лучш|дешев|отбер|подбер|посовет|рекоменд|какой|взять|"
+            r"choose|compare|best|cheaper|recommend|pick", current, _re.I):
         return [], ""
     current = current.split("[The user's message contains", 1)[0].strip()
     captions = [current] if links else []

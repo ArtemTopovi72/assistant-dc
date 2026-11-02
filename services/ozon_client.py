@@ -47,6 +47,7 @@ CALL_TIMEOUT_S = 150
 # "http://user:pass@host:port" -- a Russian residential/mobile exit. Ozon
 # refuses datacenter and VPN addresses outright.
 OZON_PROXY = os.getenv("OZON_PROXY", "").strip()
+OZON_DIRECT_IFINDEX = os.getenv("OZON_DIRECT_IFINDEX", "").strip()
 # Our own Chromium copy under a unique exe name, so the VPN's split tunnel can
 # exclude exactly this browser (and nothing else) -- ozon.ru blocks the VPN exit.
 OZON_EXE = os.getenv("OZON_BROWSER_EXE", os.path.join(
@@ -658,6 +659,9 @@ class _Browser:
             kw["executable_path"] = OZON_EXE
         if OZON_PROXY:
             kw["proxy"] = {"server": OZON_PROXY}
+        elif OZON_DIRECT_IFINDEX and os.name == "nt":
+            from ozon_direct_proxy import start
+            kw["proxy"] = {"server": start(int(OZON_DIRECT_IFINDEX))}
         return pw.chromium.launch(**kw)
 
     @staticmethod

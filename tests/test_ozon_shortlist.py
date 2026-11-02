@@ -8,10 +8,19 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "services"))
 
 import ozon_same
 import ozon_shopper
+import intent
 import tool_ozon_handlers as handler
 
 
 URLS = [f"https://ozon.ru/t/card{i}" for i in range(7)]
+
+
+def test_intent_routes_many_links_to_shop_before_same_seller():
+    out = {"must_call": "ozon_same", "wants": ["ozon_same", "ozon_shop"]}
+    intent._same_or_analogue(SimpleNamespace(),
+                             f"Выбери лучший {URLS[0]} {URLS[1]} и найди дешевле", out)
+    assert out["must_call"] == "ozon_shop"
+    assert out["wants"][0] == "ozon_shop"
 
 
 def test_collects_seven_recent_user_links_only():
@@ -27,6 +36,8 @@ def test_collects_seven_recent_user_links_only():
     messages.insert(1, {"role": "user", "content": "Другая тема"})
     assert handler._shop_shortlist({"messages": messages,
                                     "user_input_original": "Выбери лучший"})[0] == URLS
+    assert handler._shop_shortlist({"messages": messages,
+                                    "user_input_original": "Подбери один по качеству"})[0] == URLS
 
 
 def test_chooses_one_verified_cheaper_seller(monkeypatch):

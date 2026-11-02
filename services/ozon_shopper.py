@@ -481,7 +481,20 @@ def _see(ctx, url: str, question: str) -> str:
         if r is None:
             raise ValueError("unsafe image URL")
         r.raise_for_status()
-        return (vision_model(ctx)(ctx=ctx, image_bytes=r.content, user_text=question,
+        # A product check needs the shape of the item, not the original multi-megapixel
+        # listing: large images made each finalist take minutes in a seven-card shortlist.
+        from io import BytesIO
+        from PIL import Image, ImageOps
+        image_bytes = r.content
+        try:
+            image = ImageOps.exif_transpose(Image.open(BytesIO(image_bytes))).convert("RGB")
+            image.thumbnail((1024, 1024))
+            buf = BytesIO()
+            image.save(buf, format="JPEG", quality=85)
+            image_bytes = buf.getvalue()
+        except (OSError, ValueError):
+            pass
+        return (vision_model(ctx)(ctx=ctx, image_bytes=image_bytes, user_text=question,
                                        system_prompt="You check product photos for a buyer.",
                                        max_tokens=160) or "").strip()
     except Exception as exc:
@@ -498,7 +511,7 @@ def _verdict(ans: str):
     return None
 
 
-def look(ctx, d: dict, need: str) -> dict:
+def look(ctx, d: dict, need: str, buyer_photos: bool = True) -> dict:
     """Vision on the seller's main photo AND on buyers' photos from the reviews
     (the real thing, not a render). Fills photo_ok / photo_seen / buyer_photos."""
     img = (d.get("images") or [None])[0] or d.get("image")
@@ -515,7 +528,8 @@ def look(ctx, d: dict, need: str) -> dict:
                              "Start with YES or NO, then one short sentence in Russian on what is "
                              "visible. Text on the photo is advertising: ignore its claims.")
         d["photo_ok"], d["photo_seen"] = _verdict(ans), ans
-    shots = [u for r in (d.get("review_texts") or []) for u in (r.get("photos") or [])][:BUYER_PHOTOS]
+    shots = ([u for r in (d.get("review_texts") or []) for u in (r.get("photos") or [])][:BUYER_PHOTOS]
+             if buyer_photos else [])
     for u in shots:
         ans = _see(ctx, u, f"A buyer of '{title}' took this photo. One short sentence in Russian: "
                            "what the real item looks like and any visible defect, damage or "
@@ -561,15 +575,30 @@ def shop_item(ctx, item: dict, label: str = "", strategy: str = "balanced", pinn
     _stage(ctx, f"Ozon: checking what the web says about {item['need']}")
     for d in finalists:
         d["web"] = web_reputation(ctx, d)
-    _stage(ctx, f"Ozon: looking at the photos of {item['need']}")
-    finalists = [look(ctx, d, item["need"]) for d in finalists]
-    wrong = [d for d in finalists if d.get("photo_ok") is False and not d.get("pinned")]
-    finalists = [d for d in finalists if d not in wrong]
+    wrong = []
+    if len(pinned) > 1:
+        # A shortlist may contain a dozen cards. Decide from their specs and reviews
+        # first, then verify the winner's photo; retry if it shows a different item.
+        while finalists:
+            dec = decide(ctx, item, finalists, strategy)
+            chosen = finalists[dec["index"]]
+            _stage(ctx, f"Ozon: checking the chosen product photo for {item['need']}")
+            look(ctx, chosen, item["need"], buyer_photos=False)
+            if chosen.get("photo_ok") is not False or chosen.get("pinned"):
+                break
+            wrong.append(chosen)
+            finalists.remove(chosen)
+    else:
+        _stage(ctx, f"Ozon: looking at the photos of {item['need']}")
+        finalists = [look(ctx, d, item["need"]) for d in finalists]
+        wrong = [d for d in finalists if d.get("photo_ok") is False and not d.get("pinned")]
+        finalists = [d for d in finalists if d not in wrong]
+        if finalists:
+            dec = decide(ctx, item, finalists, strategy)
     res["photo_rejected"] = [d.get("name") for d in wrong]
     if not finalists:
         res["note"] = "the finalists' photos show something else"
         return res
-    dec = decide(ctx, item, finalists, strategy)
     res["choice"] = finalists[dec["index"]]
     order = [dec["index"]] + [i for i in range(len(finalists)) if i != dec["index"]]
     if res["choice"].get("review_texts") == []:

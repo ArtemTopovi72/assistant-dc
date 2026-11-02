@@ -431,6 +431,13 @@ def _same_or_analogue(ctx, text: str, out: dict) -> None:
     lead = out["must_call"] or (out["wants"] or [""])[0]
     if lead not in pair or not _OZON_CARD.search(text or ""):
         return
+    from ozon_client import product_links
+    if len(product_links(text)) > 1:
+        # A shortlist asks for one winner; "find it cheaper" is a second step
+        # after that choice, not a request to compare one arbitrary card's sellers.
+        out["must_call"] = "ozon_shop"
+        out["wants"] = ["ozon_shop"] + [w for w in out["wants"] if w != "ozon_shop"]
+        return
     same = (getattr(ctx, "yes_no", None) or ask_yes)("A user wrote: {text}\n\nDo they want THIS EXACT product from the link (from "
                    "another seller, cheaper or delivered sooner) -- not similar products, analogues "
                    "or alternatives?", text, default=lead == "ozon_same", ctx=ctx)
