@@ -290,6 +290,10 @@ class ContinueMixin:
             return True
         # the start frame is the picture the next shot starts from, like an uploaded photo
         sess.target_image = tg_bot._log_image(sess, frame, label=tg_bot._t("to_animate_label", lang), src="user")
+        # Kept on its own slot: the user's raw text consumes sess.target_image at
+        # ITS enqueue (tg_queue) before this flow's prefixed item is built, and
+        # the task would re-resolve to whatever the chat delivered last.
+        sess.continue_seed_id = sess.target_image
         sess.continue_src, sess.continue_tail = src, tail
         sess.continue_people = []                 # a new clip starts a new cast
         sess.continue_state = "want_text"
@@ -301,7 +305,17 @@ class ContinueMixin:
         if getattr(sess, "continue_state", "") != "want_text" or not (text or "").strip():
             return False
         generation = getattr(sess, "context_generation", 0)
+        # The clip's start frame rides the task EXPLICITLY (sess.continue_seed_id,
+        # set when the clip was taken): the user's raw text consumes
+        # sess.target_image at ITS enqueue (tg_queue), so by the time this
+        # prefixed item is built that slot is empty and the task would
+        # re-resolve to sess.turn_image -- whatever picture the chat delivered
+        # last (live 2026-11-02: a stale render in the debug chat, a frame
+        # sheet in the owner's; the agent wrote the continuation about the
+        # WRONG scene).
+        seed_id = getattr(sess, "continue_seed_id", "") or sess.target_image or ""
         sess.continue_state = ""         # disarmed before the slow part
+        sess.continue_seed_id = ""
         flow_revision = getattr(sess, "flow_revision", lambda _: 0)
         revision = flow_revision("continue_state")
         # A submenu armed before the clip (🔎 Поиск) would turn this into "search the
@@ -318,6 +332,7 @@ class ContinueMixin:
         # animation about a video continuation and confused the owner).
         # tg_tasks hands the clip's tail to generate_video for this prefix.
         self._enqueue_item(chat_id, {"type": "text", "text": "continue this video: " + text.strip(),
+                                    "image_id": seed_id,
                                     "_context_generation": generation})
         return True
 

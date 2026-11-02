@@ -306,6 +306,10 @@ def _api_handler():
                     say(str(body["text"]), user)
                 elif path == "/photo":
                     photo(str(body["path"]), str(body.get("caption") or ""), "", user)
+                elif path == "/video":
+                    # ▶️ Continue video and every clip-driven flow need a real
+                    # video message; /photo alone cannot drive them.
+                    media("video", str(body["path"]), str(body.get("caption") or ""), user)
                 elif path == "/album":
                     album([str(p) for p in body["paths"]], str(body.get("caption") or ""), user)
                 elif path == "/press":

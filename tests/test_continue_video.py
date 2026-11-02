@@ -59,6 +59,7 @@ check("...the length is both parts minus the crossfade and the dropped frames",
 
 # ---- the flow ----
 INVOKES = []
+PUSHED = []
 class FakeCtx:
     def __init__(self):
         self.session_memory = []; self.pinned_facts = []
@@ -77,6 +78,11 @@ SHARED = FakeCtx()
 bot = T.TelegramBot("123:TEST", lambda: SHARED, lambda: object(), lambda: {"messages": []}, silent_mode=True)
 bot.graph_builder = lambda ctx: StubGraph(ctx)
 bot._backend = T.InMemoryBackend(); bot.sent = []
+_orig_push = bot._backend.push
+def _rec(t):
+    PUSHED.append(t)
+    return _orig_push(t)
+bot._backend.push = _rec
 bot._send_text = lambda cid, t, **kw: (bot.sent.append((cid, t)), 1)[1]
 bot._send_get_id = lambda cid, t, **kw: (bot.sent.append((cid, t)), len(bot.sent))[1]
 bot._edit_text = lambda *a, **kw: None; bot._delete = lambda *a, **kw: None
@@ -104,12 +110,22 @@ def wait(pred, t=10):
 bot._dispatch(m(text="▶️ Продолжить видео"))
 check("the button asks for a video",
       wait(lambda: bot._get_session(CID).continue_state == "want_video"), bot.sent[-2:])
+# A picture the chat delivered EARLIER must not become the continuation's
+# target: the raw text consumes sess.target_image at its enqueue and the task
+# re-resolved to sess.turn_image -- a stale render in the debug chat, a frame
+# sheet in the owner's, and the agent wrote the continuation about the wrong
+# scene (live 2026-11-02).
+_stale = os.path.join(_DATA, "stale.png")
+Image.new("RGB", (64, 64), (200, 30, 30)).save(_stale)
+_stale_id = T._log_image(bot._get_session(CID), _stale, msg_id=7, label="старая картинка", src="bot")
+sess = bot._get_session(CID); sess.turn_image = _stale_id; bot._store.put(sess)
 bot._dispatch(m(video={"file_id": "VD", "duration": 4, "mime_type": "video/mp4"}))
 check("the video is taken: now asks what happens next",
       wait(lambda: bot._get_session(CID).continue_state == "want_text"), bot.sent[-2:])
 s_ = bot._get_session(CID)
 check("its tail waits as the reference video", os.path.exists(s_.continue_tail) and os.path.exists(s_.continue_src))
 check("its start frame is the current image", bool(s_.target_image))
+_seed_id = s_.target_image
 # A second clip (a кружок of «the guy with the glove») is a new person, never a new
 # start: it replaced the grandma's GIF and the continuation lost her (live 2026-10-12).
 _src0 = s_.continue_src
@@ -124,6 +140,9 @@ bot._dispatch(m(text="они выходят из комнаты и смеютс�
 check("the text becomes the animate request",
       wait(lambda: any(t.startswith("continue this video: они выходят") for t in INVOKES), 15), INVOKES[-2:])
 check("the state is cleared", bot._get_session(CID).continue_state == "")
+check("the task carries the clip's start frame, not the chat's stale picture",
+      bool(PUSHED) and PUSHED[-1].image_id == _seed_id and PUSHED[-1].image_id != _stale_id,
+      [(t.image_id, _seed_id, _stale_id) for t in PUSHED])
 
 # ---- the tool: the tail becomes <Video 1>, the result is the joined clip ----
 import tool_image_handlers as H
