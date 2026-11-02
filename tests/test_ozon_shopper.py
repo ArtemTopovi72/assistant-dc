@@ -169,6 +169,7 @@ def test_shortlist_answer_shows_comparison_without_raw_review_slop():
         "others": [other], "shortlist": True})
     assert "дешевле 1 из 1" in answer
     assert "Bange рюкзак" in answer
+    assert "[Bange рюкзак](https://ozon.ru/t/other)" in answer
     assert "Фурнетура" not in answer
     assert "Предварительный выбор" in answer
 

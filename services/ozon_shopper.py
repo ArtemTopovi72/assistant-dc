@@ -690,7 +690,7 @@ def digest(r: dict) -> str:
                        "других проверенных карточек с указанной ценой.")
         if mine:
             out.append("\n**Остальные проверенные варианты:**")
-            out += [f"• {_short(o.get('name'))} — {_stats(o, quiet=True)}"
+            out += [f"• [{_short(o.get('name'))}]({o.get('link') or o.get('url')}) — {_stats(o, quiet=True)}"
                     for o in mine]
         out.append("\nРейтинг и число отзывов не доказывают долговечность. "
                    "Перед покупкой проверь цену и характеристики в карточке.")
