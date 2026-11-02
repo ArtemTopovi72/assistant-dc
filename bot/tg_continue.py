@@ -312,8 +312,12 @@ class ContinueMixin:
         if (generation != getattr(sess, "context_generation", 0) or sess.continue_state
                 or revision != flow_revision("continue_state")):
             return True
-        # the ordinary animate request; tg_tasks hands the clip's tail to generate_video
-        self._enqueue_item(chat_id, {"type": "text", "text": "animate this photo: " + text.strip(),
+        # the continuation rides the SAME generate_video route as an animation,
+        # but with its own prefix so the agent's reply says «продолжил видео»,
+        # not «оживив фото» (live 2026-11-02: the answer described a photo
+        # animation about a video continuation and confused the owner).
+        # tg_tasks hands the clip's tail to generate_video for this prefix.
+        self._enqueue_item(chat_id, {"type": "text", "text": "continue this video: " + text.strip(),
                                     "_context_generation": generation})
         return True
 

@@ -256,6 +256,9 @@ _BUTTON_TOOL = (
     # same gap as [style]/[style_preset] above, added up front this time.
     ("[animate]", "generate_video"),
     ("animate this photo:", "generate_video"),
+    # ▶️ Continue video (tg_continue._continue_take_text): same tool, its own
+    # prefix so the reply speaks of continuing the clip, not animating a photo.
+    ("continue this video:", "generate_video"),
     # _CB_CMDS["change_clothes"]'s bare fallback text (tg_bot.py) has no
     # [bracket] tag -- it's meant to stay unreachable now that
     # tg_callbacks._cb_change_clothes intercepts the button and asks what to

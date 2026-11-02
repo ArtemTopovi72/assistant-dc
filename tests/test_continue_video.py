@@ -122,7 +122,7 @@ check("...the first clip stays the one continued",
       and os.path.exists(s_.continue_people[0]), (s_.continue_src, s_.continue_people))
 bot._dispatch(m(text="они выходят из комнаты и смеются"))
 check("the text becomes the animate request",
-      wait(lambda: any(t.startswith("animate this photo: они выходят") for t in INVOKES), 15), INVOKES[-2:])
+      wait(lambda: any(t.startswith("continue this video: они выходят") for t in INVOKES), 15), INVOKES[-2:])
 check("the state is cleared", bot._get_session(CID).continue_state == "")
 
 # ---- the tool: the tail becomes <Video 1>, the result is the joined clip ----
@@ -209,6 +209,17 @@ check("pinned: the tail goes in as context_video", SEEN.get("context_video") == 
 check("pinned: no reference video or picture", not SEEN.get("videos") and not SEEN.get("images"), SEEN)
 check("pinned: the no-cut prompt without <Video 1>",
       SEEN["description"].startswith(V.CONTINUE_CTX_PREFIX) and "<Video 1>" not in SEEN["description"])
+
+# ── the flow's own prefix: the reply says «продолжил видео», not «оживив фото» ──
+import graph_personality as GP
+import tg_tasks as TK
+import inspect as _insp
+check("the continuation prefix routes to generate_video",
+      '("continue this video:", "generate_video")' in _insp.getsource(GP))
+check("the continuation tail attaches for the new prefix (and the legacy one)",
+      '("animate this photo", "continue this video")):' in _insp.getsource(TK))
+check("the user's own words are recovered from the new prefix",
+      '"continue this video: "' in _insp.getsource(TK))
 
 print(f"\n{OK}/{OK + BAD} checks passed")
 sys.exit(1 if BAD else 0)

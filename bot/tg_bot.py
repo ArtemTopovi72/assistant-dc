@@ -778,7 +778,7 @@ _LABEL_QUOTED_ARG_RE = re.compile(
     r"\b(?:instructions|description|prompt)\s*=\s*[\"']([^\"']{4,})[\"']", re.I)
 _LABEL_PREFIX_RE = re.compile(
     r"^\s*(?:change the outfit to|change the image style to|edit the image|"
-    r"animate this photo|search the web for|do a deep research on)\s*:\s*", re.I)
+    r"animate this photo|continue this video|search the web for|do a deep research on)\s*:\s*", re.I)
 _LABEL_BOILERPLATE_RE = re.compile(
     r"\s*(?:on the current image|using the current image)\.?\s*"
     r"(?:do not generate a new image\.?)?\s*$", re.I)

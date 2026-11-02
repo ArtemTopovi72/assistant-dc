@@ -86,7 +86,7 @@ def _typed_part(text: str) -> str:
     Танцует» read as Latin and switched a Russian chat's replies to English."""
     from prompt_guard import OCR_NOTE_HEAD
     t = (text or "").split("\n" + OCR_NOTE_HEAD)[0]    # the OCR of the photo is not the user's alphabet
-    for p in ("animate this photo: ", *tg_bot._PROMPT_KB.values()):
+    for p in ("animate this photo: ", "continue this video: ", *tg_bot._PROMPT_KB.values()):
         if t.startswith(p):
             return t[len(p):]
     return t
@@ -1191,7 +1191,10 @@ class TaskRunnerMixin:
         ctx.continue_tail = ctx.continue_src = ""
         ctx.continue_people = []
         _ct = getattr(sess, "continue_tail", "")
-        if _ct and os.path.exists(_ct) and task.user_text.startswith("animate this photo"):
+        # "continue this video" (the ▶️ flow's own prefix since 2026-11-02) and the
+        # legacy "animate this photo" texts keep their tail attached either way.
+        if _ct and os.path.exists(_ct) and task.user_text.startswith(
+                ("animate this photo", "continue this video")):
             ctx.continue_tail, ctx.continue_src = _ct, getattr(sess, "continue_src", "")
             ctx.voice_choice = "default"     # no «свои голоса» question: the tail brings the voices
             ctx.continue_people = [p for p in (getattr(sess, "continue_people", None) or []) if os.path.exists(p)]

@@ -88,7 +88,9 @@ def _suggest_title(request: str, path: str) -> str:
                      "Назови готовый файл по запросу пользователя. Ответь только коротким "
                      "понятным названием на языке запроса: 2–5 слов, без кавычек, "
                      "расширения и слов «картинка», «видео», «песня». Не повторяй команду "
-                     "и не придумывай детали, которых нет в запросе."},
+                     "и не придумывай детали, которых нет в запросе. Это ИМЯ ФАЙЛА, а не "
+                     "ответ пользователю: именная группа (о чём файл), без глаголов, без "
+                     "«Вот», «Ваше», «готово» и другой речи."},
                     {"role": "user", "content": f"Тип результата: {kind}\nЗапрос: {request[:1200]}"},
                     {"role": "assistant", "content": llm.GEMMA_NO_THINK_PREFILL},
                 ],
@@ -100,7 +102,12 @@ def _suggest_title(request: str, path: str) -> str:
         line = (answer or "").splitlines()[0].strip().strip('"«»`')
         line = re.sub(r"^(?:название|title)\s*:\s*", "", line, flags=re.I)
         title = _clean(line)
-        if not title or len(title.split()) > 6 or len(line) > 70 or title.upper() in {"CON", "PRN", "AUX", "NUL"}:
+        # A file name that reads as a spoken reply («Вот ваше анимированное видео…»,
+        # live 2026-11-02) looks like an extra bot message in a copied chat. Only
+        # noun phrases pass; a leading presentation word is the sure tell.
+        _SPOKEN = re.compile(r"(?i)^(?:вот|ваш[аеи]|тво[ейё]|держи|смотри|получай|готово|here(?:'s)?|your|this is|check out)\b")
+        if (not title or len(title.split()) > 6 or len(line) > 70
+                or _SPOKEN.search(title) or title.upper() in {"CON", "PRN", "AUX", "NUL"}):
             return ""
         return title
     except Exception:
