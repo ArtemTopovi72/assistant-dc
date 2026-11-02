@@ -1998,6 +1998,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         # identical frames and cannot drift into another shot. New people from
         # photos still need the reference path.
         _seed_img = next((p for p in (images or []) if p and os.path.exists(p)), "")
+        _static_voice = ""
         static_hold = bool(not prior and not people and _seed_img
                            and video_mod.static_continuation(ctx, description))
         if prior:
@@ -2008,10 +2009,20 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             bridge_first = True
             description = video_mod.CONTINUE_CTX_PREFIX + description
         elif static_hold:
-            videos, images = [], [_seed_img, _seed_img]
-            logger.info("generate_video: static-screen continuation, first = last = %s",
-                        os.path.basename(_seed_img))
-            description = video_mod.CONTINUE_PREFIX + description
+            # The picture is pinned by the seed as the ONLY reference and a
+            # camera lock in the text; the clip's VOICE rides as an audio
+            # reference cut from the tail -- FL2VA cannot take audio, so a
+            # static continuation goes through ref2va (owner, 2026-11-03:
+            # the first=last FL2VA take lost the tail and H3 invented a
+            # whispery wrong voice and doubled the line).
+            _static_voice = video_mod.tail_audio(cont_tail)
+            videos, images = [], [_seed_img]
+            logger.info("generate_video: static-screen continuation, %s as the only "
+                        "picture%s", os.path.basename(_seed_img),
+                        ", the tail's voice as an audio reference" if _static_voice else "")
+            description = (video_mod.CONTINUE_PREFIX + description
+                           + " The camera does not move and the framing stays "
+                             "exactly as <Picture 1> for the whole shot.")
         # Pinned frames (same as the parts of a long script): faster and seamless, but they
         # take no pictures -- new people from photos still need the reference path.
         elif not people and video_mod.motion_context_on():
@@ -2048,7 +2059,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             images = (images or [])[-1:] + people
             description += video_mod.new_people_clause(len(images) - len(people) + 1, len(people))
 
-    audios = []
+    audios = [_static_voice] if _static_voice else []
     # by slot, left to right; "" = that person keeps the default voice
     slots = [] if continuing else list(getattr(ctx, "anim_voices", None) or [])
     slots = slots[:video_mod.MAX_REF_AUDIOS]
@@ -2391,10 +2402,6 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     head = bool(not chain_id and len(anchor) == 1 and not videos
                 and (talking if talking is not None else video_mod.is_talking_head(ctx, raw, _said, spoken=bool(speech))))
     head = head or loop
-    if static_hold:
-        # the continuation's two identical keyframes (first = last = the clip's
-        # final frame) ride the talking-head machinery: FL2VA + framing locks.
-        head = True
     if loop:
         logger.info("generate_video: loop, the picture is the first and the last frame")
     elif head:

@@ -1767,6 +1767,30 @@ def is_talking_head(ctx, description: str, said: str = "", spoken: bool = False)
 _STATIC_CONT_CACHE: dict = {}
 
 
+def tail_audio(tail_path: str) -> str:
+    """The tail's sound track alone (an .m4a), for a continuation that pins the
+    picture but must keep the clip's own voices: FL2VA cannot take an audio
+    reference, so a static continuation rides ref2va with the tail as SOUND
+    and the seed as the only picture. "" when the tail has no audio."""
+    import subprocess as _sp
+    import tempfile as _tf
+    if not tail_path or not os.path.exists(tail_path):
+        return ""
+    if not probe(tail_path).get("has_audio"):
+        return ""
+    try:
+        fd, out = _tf.mkstemp(suffix=".m4a", prefix="tailaudio_")
+        os.close(fd)
+        r = _sp.run(["ffmpeg", "-y", "-loglevel", "error", "-i", tail_path,
+                     "-vn", "-c:a", "aac", "-b:a", "128k", out],
+                    capture_output=True, timeout=120)
+        if r.returncode == 0 and os.path.exists(out) and os.path.getsize(out):
+            return out
+    except Exception:
+        logger.debug("tail audio extract failed", exc_info=True)
+    return ""
+
+
 def static_continuation(ctx, description: str) -> bool:
     """A continuation that stays ON the clip's final frame: the person talks to
     camera, presents or reacts, and neither the camera nor anyone else moves

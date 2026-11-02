@@ -234,16 +234,22 @@ check("pinned: the no-cut prompt without <Video 1>",
 # reference tail, anchored through the talking-head machinery.
 _E["motion_context_on"] = lambda: False
 _E["static_continuation"] = lambda ctx, d: True
+_TAIL_AUDIO = os.path.join(_DATA, "tailaudio.m4a")
+open(_TAIL_AUDIO, "wb").write(b"fake-audio")
+_E["tail_audio"] = lambda tail: _TAIL_AUDIO
 SEEN.clear()
 H._handle_generate_video(TCtx(), {}, {"description": "he looks into the camera and says the line"})
-check("static: first = last = the clip's final frame",
-      SEEN.get("images") == [frame, frame], SEEN.get("images"))
-check("static: no reference tail rides", not SEEN.get("videos"), SEEN.get("videos"))
-check("static: the talking-head machinery anchors it (keyframe)",
-      SEEN.get("keyframe") is True, SEEN.get("keyframe"))
+check("static: the seed is the only reference picture",
+      SEEN.get("images") == [frame], SEEN.get("images"))
+check("static: no reference tail rides as a video", not SEEN.get("videos"), SEEN.get("videos"))
+check("static: the clip's own voice rides as an audio reference",
+      SEEN.get("audios") == [_TAIL_AUDIO], SEEN.get("audios"))
+check("static: the camera is told to hold the framing",
+      "framing stays" in SEEN.get("description", ""), SEEN.get("description", "")[:220])
 check("static: the continuation prompt keeps the user's words",
       "says the line" in SEEN.get("description", ""), SEEN.get("description"))
 _E["static_continuation"] = lambda ctx, d: False
+_E["tail_audio"] = lambda tail: ""
 
 # Several faces and a spoken line: the clip's OWN speaker says it (owner,
 # 2026-11-03: the silent big man got the line while the small upper man was
