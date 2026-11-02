@@ -159,6 +159,20 @@ def test_shopper_does_not_publish_family_speed_or_invent_review_opinions():
         "В отзывах карточки: «Хороший товар»"
 
 
+def test_shortlist_answer_shows_comparison_without_raw_review_slop():
+    choice = item("chosen", "TRIBE GATE Black", 5039)
+    choice.update(url="https://ozon.ru/t/chosen", rating=5.0, reviews=1072)
+    other = item("other", "Bange рюкзак", 6500)
+    other.update(url="https://ozon.ru/t/other", pinned=2, rating=4.8, reviews=400)
+    answer = S.digest({"choice": choice, "decision": {
+        "reviews": "В отзывах карточки: «Фурнетура хорошая но паралон с тарцов жоские»"},
+        "others": [other], "shortlist": True})
+    assert "дешевле 1 из 1" in answer
+    assert "Bange рюкзак" in answer
+    assert "Фурнетура" not in answer
+    assert "Предварительный выбор" in answer
+
+
 def test_decision_uses_card_reviews_even_when_model_invents_claims(world):
     _, script = world
     script["decide_extra"] = {
