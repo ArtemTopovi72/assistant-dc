@@ -134,10 +134,21 @@ def _handle_search(ctx, state, args: dict) -> str:
     before = len(sources) if isinstance(sources, list) else 0
     try:
         result = dep(ctx, "run_web_search", run_web_search)(search_ctx, query)
+        if result.strip() == NO_RESULTS and "озон" in _asked.lower() \
+                and re.search(r"\bbackpacks?\b", query, re.I):
+            shorter = re.sub(r"\b(?:best|durable|comfortable|reliable|high-end|premium|20\d\d)\b",
+                             "", query, flags=re.I)
+            shorter = " ".join(shorter.split())
+            if shorter and shorter != query:
+                result = dep(ctx, "run_web_search", run_web_search)(search_ctx, shorter)
     except Exception:
         if isinstance(sources, list):
             del sources[before:]
         raise
+    research_shop = bool(re.search(r"погугл[а-яё]*.*озон", _asked, re.I | re.S))
+    if research_shop:
+        state["research_shop_evidence"] = ""
+        state["research_shop_verified"] = False
     # Don't fence our own status sentinels (no-results / failed / insufficient) —
     # only real external page text should be framed as UNTRUSTED data.
     if (result.lstrip().startswith("[TOOL ERROR]")
@@ -160,6 +171,8 @@ def _handle_search(ctx, state, args: dict) -> str:
                 "Do NOT present this as an answer and do NOT invent or complete the "
                 "missing content. Retry with a different query, try another approach, "
                 "or tell the user plainly that the information could not be retrieved.")
+    if research_shop:
+        state["research_shop_evidence"] = result
     ctx.remember("search", f"Query: {query}\n{result[:500]}", {"query": query})
     prefix = f"[DATA-VALIDATION] Note: {v.reason}.\n" if v.status == "stale" else ""
     import datetime as _dtm

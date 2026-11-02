@@ -17,7 +17,7 @@ from config import (
 )
 from prompts import SEARCHER_PROMPT
 from dr_urls import _domain
-from utils import truncate_text, throttle_external_calls
+from utils import throttle_external_calls
 
 logger = logging.getLogger("assistant.search")
 
@@ -201,6 +201,9 @@ def raw_search_results(ctx, query: str, max_results: Optional[int] = None, *,
             ))
 
     results = _ddgs_retry(ctx, _do_query, "Search error")
+    if not results and not news and backend is None and SEARCH_BACKEND != "yahoo":
+        backend = "yahoo"
+        results = _ddgs_retry(ctx, _do_query, "Yahoo search fallback")
 
     hits = []
     for r in results:
@@ -363,11 +366,6 @@ def search_duckduckgo_and_fetch(ctx, query: str, max_results: Optional[int] = No
         if len(body) > cap:
             body = body[:cap].rstrip() + "…"
         parts.append(f"[{len(parts) + 1}] {title} ({dom})\n{body}\n{href}")
-        # The Telegram reply lists what was read (tg_reply_shape): a per-turn
-        # register on the scoped context, absent on the bare/legacy contexts.
-        _reg = getattr(ctx, "turn_sources", None)
-        if isinstance(_reg, list) and not any(x.get("url") == href for x in _reg):
-            _reg.append({"n": len(_reg) + 1, "title": title, "domain": dom, "url": href, "query": query})
 
     if not parts:
         return NO_RESULTS
@@ -376,7 +374,24 @@ def search_duckduckgo_and_fetch(ctx, query: str, max_results: Optional[int] = No
     total_cap = SEARCH_TOTAL_CHARS + SEARCH_PAGE_CHARS * len(pages)
     if wanted_count(query, ctx=ctx):
         total_cap = max(SEARCH_TOTAL_CHARS, 12000)
-    return truncate_text("\n\n".join(parts), total_cap)
+    # Keep complete source records. Cutting the joined text mid-body produces a
+    # "(truncated)" tail that the tool's payload guard correctly rejects.
+    kept_parts = []
+    used = 0
+    for part in parts:
+        cost = len(part) + (2 if kept_parts else 0)
+        if kept_parts and used + cost > total_cap:
+            break
+        kept_parts.append(part)
+        used += cost
+    # Register only sources actually delivered to the model.
+    _reg = getattr(ctx, "turn_sources", None)
+    if isinstance(_reg, list):
+        for r, href, dom in kept[:len(kept_parts)]:
+            if not any(x.get("url") == href for x in _reg):
+                _reg.append({"n": len(_reg) + 1, "title": (r.get("title") or "No title").strip(),
+                             "domain": dom, "url": href, "query": query})
+    return "\n\n".join(kept_parts)
 
 
 def wanted_count(query: str, ctx=None) -> int:

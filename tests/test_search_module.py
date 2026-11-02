@@ -74,6 +74,22 @@ def test_raw_search_results_success():
     check("raw_search_results_url_key_accepted", out[1]["href"] == "https://b.com/1")
 
 
+def test_long_empty_query_falls_back_to_yahoo(monkeypatch):
+    calls = []
+    class FakeDDGS:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def text(self, query, **kw):
+            calls.append(kw.get("backend"))
+            return ([{"title": "Backpack review", "href": "https://example.com/backpack-review-123", "body": "details"}]
+                    if kw.get("backend") == "yahoo" else [])
+    monkeypatch.setattr(SE, "_ddgs_retry", lambda ctx, fn, label: fn())
+    monkeypatch.setattr(SE, "outbound_blocked", lambda *a, **kw: False)
+    out = SE.raw_search_results(FakeCtx(DDGS=FakeDDGS),
+                                "best durable 16 inch laptop backpack reviews")
+    assert len(out) == 1 and calls == [SE.SEARCH_BACKEND, "yahoo"]
+
+
 def test_raw_search_results_news():
     ddgs = _fake_ddgs(news_results=[
         {"title": "News A", "url": "https://news.com/1", "body": "news text", "date": "2024-01-01"}])
@@ -332,6 +348,22 @@ def test_top_results_are_opened_and_read():
     check("opened in parallel", peak["max"] == 5, peak)
     check("page text replaces the snippet", out.count("FULLTEXT") == 5, out[:300])
     check("the rest keep their snippet", "teaser" in out)
+
+
+def test_search_cap_keeps_complete_sources(monkeypatch):
+    monkeypatch.setattr(SE, "SEARCH_TOTAL_CHARS", 650)
+    monkeypatch.setattr(SE, "SEARCH_READ_PAGES", 0)
+    monkeypatch.setattr(SE, "outbound_blocked", lambda *a, **kw: False)
+    ddgs = _fake_ddgs(text_results=[
+        {"title": f"Review {i}", "href": f"https://review{i}.example.com/article/123",
+         "body": "a useful review sentence. " * 12} for i in range(3)])
+    ctx = FakeCtx(DDGS=ddgs)
+    ctx.turn_sources = []
+    out = SE.search_duckduckgo_and_fetch(ctx, "query")
+    assert "(truncated)" not in out
+    assert ctx.turn_sources, out
+    assert out.endswith(ctx.turn_sources[-1]["url"])
+    assert len(ctx.turn_sources) == out.count("https://review")
 
 
 def test_refused_pages_are_backfilled_from_further_down():

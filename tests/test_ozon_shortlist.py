@@ -2,6 +2,7 @@
 import os
 import sys
 from types import SimpleNamespace
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "agent"))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "services"))
@@ -10,6 +11,7 @@ import ozon_same
 import ozon_shopper
 import intent
 import tool_ozon_handlers as handler
+import tools as agent_tools
 
 
 URLS = [f"https://ozon.ru/t/card{i}" for i in range(7)]
@@ -21,6 +23,78 @@ def test_intent_routes_many_links_to_shop_before_same_seller():
                              f"Выбери лучший {URLS[0]} {URLS[1]} и найди дешевле", out)
     assert out["must_call"] == "ozon_shop"
     assert out["wants"][0] == "ozon_shop"
+
+
+def test_explicit_web_then_ozon_request_searches_web_first(monkeypatch):
+    monkeypatch.setenv("INTENT_LIVE", "1")
+    ctx = SimpleNamespace(text_model=lambda *a, **kw: (
+        '{"needs_tool":true,"wants":["ozon_shop"],"must_call":""}'))
+    out = intent._read(ctx, "Погугли обзоры хороших рюкзаков, потом найди на Озоне", "", "", {})
+    assert out["must_call"] == "search"
+    assert out["wants"][:2] == ["search", "ozon_shop"]
+
+
+def test_empty_backpack_review_search_retries_with_shorter_query():
+    queries = []
+    def search(_ctx, query):
+        queries.append(query)
+        return "No results found for your query."
+    ctx = SimpleNamespace(deps=SimpleNamespace(run_web_search=search), set_stage=lambda *_: None,
+                          web_search_enabled=True)
+    state = {"user_input_original": "Погугли рюкзаки, потом Озон"}
+    agent_tools._handle_search(ctx, state,
+                               {"query": "best durable comfortable 16 inch laptop backpack reviews 2026"})
+    assert queries == ["best durable comfortable 16 inch laptop backpack reviews 2026",
+                       "16 inch laptop backpack reviews"]
+    assert state["research_shop_evidence"] == ""
+
+
+def test_research_then_shop_rejects_generic_ozon_request(monkeypatch):
+    monkeypatch.setattr(ozon_shopper, "shop", lambda *a, **kw: pytest.fail("generic search ran"))
+    state = {"user_input_original": "Погугли обзоры, потом найди на Озоне",
+             "research_shop_evidence": "Thule Subterra 2 has a padded laptop compartment"}
+    out = handler._handle_ozon_shop(SimpleNamespace(), state,
+                                    {"request": "рюкзак для ноутбука 16 дюймов"})
+    assert "specific model" in out
+    assert handler._NAMED_MODEL.search("Thule Subterra 2 27L")
+
+
+def test_research_then_shop_accepts_model_named_in_evidence(monkeypatch):
+    monkeypatch.setattr(ozon_shopper, "shop", lambda *a, **kw: (
+        {"mode": "one"}, [{"choice": {"sku": "42", "name": "Thule Subterra 2 27L",
+                                      "url": "https://ozon.ru/product/42/"},
+                          "item": {"need": "рюкзак"}, "decision": {}, "others": []}]))
+    monkeypatch.setattr(ozon_shopper, "report", lambda *a, **kw: "FOUND")
+    state = {"user_input_original": "Погугли обзоры, потом найди на Озоне",
+             "research_shop_evidence": "Thule Subterra 2 has a padded laptop compartment"}
+    out = handler._handle_ozon_shop(SimpleNamespace(turn_products=[]), state,
+                                    {"request": "Thule Subterra 2 27L рюкзак"})
+    assert out == "FOUND"
+    assert state["research_shop_verified"] is True
+
+
+def test_research_then_shop_rejects_different_listing(monkeypatch):
+    monkeypatch.setattr(ozon_shopper, "shop", lambda *a, **kw: (
+        {"mode": "one"}, [{"choice": {"sku": "42", "name": "Generic laptop backpack"},
+                          "item": {"need": "рюкзак"}, "decision": {}, "others": []}]))
+    state = {"user_input_original": "Погугли обзоры, потом найди на Озоне",
+             "research_shop_evidence": "Thule Subterra 2 has a padded laptop compartment"}
+    out = handler._handle_ozon_shop(SimpleNamespace(turn_products=[]), state,
+                                    {"request": "Thule Subterra 2 27L рюкзак"})
+    assert "No confirmed Ozon listing" in out
+    assert not state.get("research_shop_verified")
+
+
+def test_research_then_shop_does_not_substitute_model_variant(monkeypatch):
+    monkeypatch.setattr(ozon_shopper, "shop", lambda *a, **kw: (
+        {"mode": "one"}, [{"choice": {"sku": "42", "name": "Samsonite Paralux BT Everyday Backpack"},
+                          "item": {"need": "рюкзак"}, "decision": {}, "others": []}]))
+    state = {"user_input_original": "Погугли обзоры, потом найди на Озоне",
+             "research_shop_evidence": "Samsonite Paralux 2-in-1 Travel Backpack review"}
+    out = handler._handle_ozon_shop(SimpleNamespace(turn_products=[]), state,
+                                    {"request": "Samsonite Paralux 2-1 Travel Backpack"})
+    assert "No confirmed Ozon listing" in out
+    assert not state.get("research_shop_verified")
 
 
 def test_collects_seven_recent_user_links_only():

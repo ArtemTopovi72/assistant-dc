@@ -6,6 +6,21 @@ import pytest
 import tool_ozon_handlers as H
 
 
+def test_web_index_fallback_keeps_only_ozon_product_links(monkeypatch):
+    import search
+    monkeypatch.setattr(search, "raw_search_results", lambda *a, **kw: [
+        {"href": "https://www.bing.com/aclick?u=ozon.ru/product/fake"},
+        {"href": "https://www.ozon.ru/category/backpacks/"},
+        {"href": "https://www.ozon.ru/product/thule-subterra-2-123/"},
+        {"href": "https://www.ozon.ru/product/thule-subterra-2-123/"},
+    ])
+    out = H._indexed_ozon_links(None, "Thule Subterra 2")
+    assert out.count("https://www.ozon.ru/product/thule-subterra-2-123/") == 1
+    assert "bing.com" not in out and "/category/" not in out
+    assert "NOT live-verified" in out
+    assert H._indexed_ozon_links(None, "Thule Subterra 2\nThe user's own words") == out
+
+
 def listing(sku, name):
     return {'sku': str(sku), 'name': name, 'price': 200,
             'url': f'https://www.ozon.ru/product/{sku}/', 'image': f'https://images.invalid/{sku}.jpg'}
@@ -40,7 +55,8 @@ def test_search_checks_ambiguous_variants_against_original_request(sort, request
     assert '2 verified' in out and 'do not substitute' in out.lower()
 
 
-def test_unverified_requirements_are_not_recommended_when_card_is_incomplete():
+def test_unverified_requirements_are_not_recommended_when_card_is_incomplete(monkeypatch):
+    monkeypatch.setattr(H, "_indexed_ozon_links", lambda *a: "")
     prompts = []
     def model(ctx, system, user, **kw):
         prompts.append(user)
@@ -56,7 +72,8 @@ def test_unverified_requirements_are_not_recommended_when_card_is_incomplete():
     assert len(prompts) == 2
 
 
-def test_unavailable_verifier_does_not_claim_raw_results_match():
+def test_unavailable_verifier_does_not_claim_raw_results_match(monkeypatch):
+    monkeypatch.setattr(H, "_indexed_ozon_links", lambda *a: "")
     ctx = SimpleNamespace(text_model=lambda *a, **k: '', turn_products=[], deps=SimpleNamespace(
         ozon=SimpleNamespace(search=lambda *a, **k: [listing(1, 'USB Type C cable')],
                              details=lambda sku: pytest.fail('no candidate was selected'))))

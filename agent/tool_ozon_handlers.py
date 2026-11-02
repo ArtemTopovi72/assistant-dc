@@ -12,6 +12,7 @@ from seams import dep, vision_model
 import logging
 import os
 import time
+from urllib.parse import urlsplit
 
 import ozon_client as _oz
 
@@ -80,6 +81,40 @@ def _fail(exc: Exception) -> str:
             "when the Ozon search failed.")
 
 
+def _indexed_ozon_links(ctx, query: str) -> str:
+    """Find possible product pages when Ozon's live API cannot be read."""
+    query = query.splitlines()[0].strip()
+    try:
+        from search import raw_search_results
+        hits = raw_search_results(ctx, "site:ozon.ru/product/ " + query[:100], 8)
+    except Exception as exc:
+        logger.warning("Ozon web-index fallback failed: %s", exc)
+        return ""
+    links = []
+    for hit in hits:
+        url = str(hit.get("href") or "")
+        parts = urlsplit(url)
+        if parts.scheme != "https" or parts.hostname not in ("ozon.ru", "www.ozon.ru") \
+                or not parts.path.startswith("/product/") or url in links:
+            continue
+        links.append(url)
+        if len(links) == 4:
+            break
+    if not links:
+        return ("\nNo indexed Ozon product page was found for this query either. "
+                "If the user asked for an alternative, research another specific model "
+                "and search that model on Ozon; do not declare the current choice best.")
+    return ("\nPossible Ozon product pages found in the web index (NOT live-verified):\n"
+            + "\n".join(links) + "\nGive these links as leads only. Current price, stock, "
+            "seller and exact variant are unknown; do not call this a verified recommendation.")
+
+
+_NAMED_MODEL = _re.compile(r"\b[A-Z][A-Za-z]{1,}\s+[A-Z][A-Za-z0-9-]{2,}"
+                           r"(?:\s+(?:\d+(?:[-/]\d+)?|[A-Z]{1,5}-?\d+[A-Z0-9-]*))?\b|"
+                           r"\b(?=[A-Z0-9-]*[A-Z])(?=[A-Z0-9-]*\d)[A-Z0-9-]{4,}\b")
+_GENERIC_MODELS = {"laptop", "backpack", "premium", "urban", "travel", "waterproof", "best"}
+
+
 @_owned
 def _handle_ozon_search(ctx, state, args: dict) -> str:
     q = (args.get("query") or "").strip()
@@ -100,7 +135,7 @@ def _handle_ozon_search(ctx, state, args: dict) -> str:
         items = ozon_shopper.verified_matches(ctx, need, items, limit)
     except Exception as exc:
         logger.warning("ozon_search(%s) failed: %s", q, exc)
-        return _fail(exc)
+        return _fail(exc) + _indexed_ozon_links(ctx, q)
     if not items:
         if args.get("max_delivery_days") is not None:
             return (f"Ozon has nothing for '{q}' delivered within {args['max_delivery_days']} "
@@ -108,7 +143,8 @@ def _handle_ozon_search(ctx, state, args: dict) -> str:
         return (f"Ozon search produced no verified matching listing for '{q}'. "
                 "This does NOT establish that the product is absent from Ozon. "
                 "Say 'Не удалось подтвердить наличие через этот поиск'; "
-                "do not say 'нет в продаже' or recommend a previous product as the best.")
+                "do not say 'нет в продаже' or recommend a previous product as the best."
+                + _indexed_ozon_links(ctx, q))
     _remember(ctx, items)
     lines = [f"Ozon results for '{q}' (sort: {args.get('sort') or 'popular'}):"]
     for i, it in enumerate(items, 1):
@@ -388,6 +424,18 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
                 "then price. These are options to compare, not a basket:\n" + shortlist_words)
     else:
         req = _with_user_words(state, (args.get("request") or "").strip())
+    original = str((state or {}).get("user_input_original") or "")
+    if _re.search(r"погугл[а-яё]*.*озон", original, _re.I | _re.S):
+        if not (state or {}).get("research_shop_evidence"):
+            return ("[TOOL ERROR] The requested web research found no usable evidence. "
+                    "Try a shorter web search before shopping; do not choose from a generic Ozon listing.")
+        named = _NAMED_MODEL.search(str(args.get("request") or ""))
+        if (not named or named.group().split()[0].lower() in _GENERIC_MODELS
+                or named.group().casefold().replace("-in-", "-") not in
+                state["research_shop_evidence"].casefold().replace("-in-", "-")):
+            return ("[TOOL ERROR] This brand and model was not established by the web research. "
+                    "Choose a different specific model actually named in the search results, "
+                    "then check it on Ozon. Do not use an old Ozon card from chat history.")
     strategy = args.get("strategy") or "balanced"
     if args.get("by_photo"):
         img = getattr(ctx, "last_image_path", None)
@@ -403,7 +451,8 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
             return _fail(exc)
         _remember(ctx, [r["choice"] for r in results if r.get("choice")])
         return S.report(results, p["mode"], _oz.LAST_LOCATION.get("text") or "")
-    if not args.get("clarified") and not shortlist:
+    if not args.get("clarified") and not shortlist and not _re.search(
+            r"погугл|обзор|reviews?|research", req, _re.I):
         try:
             qs = S.clarify(ctx, req)
         except S.ShopCancelled:
@@ -426,7 +475,10 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
         return "[TOOL ERROR] The user cancelled the Ozon search."
     except Exception as exc:
         logger.warning("ozon_shop(%s) failed: %s", req, exc)
-        return _fail(exc)
+        leads = _indexed_ozon_links(ctx, req)
+        if leads and (state or {}).get("research_shop_evidence"):
+            state["research_shop_leads"] = leads
+        return _fail(exc) + leads
     if shortlist and p["mode"] == "one" and results and results[0].get("choice"):
         import ozon_same
         results[0]["shortlist"] = True
@@ -449,6 +501,17 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
             logger.warning("ozon_shop same-seller check failed: %s", exc)
             results[0]["same_offer_unchecked"] = True
     chosen = [r["choice"] for r in results if r.get("choice")]
+    if _re.search(r"погугл[а-яё]*.*озон", original, _re.I | _re.S):
+        model_words = named.group().casefold().replace("-in-", "-").split()
+        results = [row for row in results if row.get("choice") and all(
+            word in str(row["choice"].get("name") or "").casefold().replace("-in-", "-")
+            for word in model_words)]
+        chosen = [row["choice"] for row in results]
+        if not chosen:
+            return ("[TOOL ERROR] No confirmed Ozon listing for this exact researched model. "
+                    "Research or check the next specific model from the reviews; do not recommend "
+                    "a generic substitute or claim the model is absent from Ozon.")
+        state["research_shop_verified"] = True
     _remember(ctx, chosen)
     basket = ""
     if args.get("add_to_cart") and chosen:
