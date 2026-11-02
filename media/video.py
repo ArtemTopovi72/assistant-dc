@@ -2226,6 +2226,150 @@ def prepare_prompt(ctx, description: str, *, images: Sequence[str] = (), videos:
     return description, seconds
 
 
+# ── on-screen lettering: the model draws it, our OCR checks it ────────────────
+# A public "text LoRA" for H3 does not exist (the ecosystem is speed/style
+# adapters only, checked 2026-11-02), so the lettering path is: the SCRIPT's
+# own words, the model's native text rendering, and this gate. Whether the
+# clip needs visible written text is the LLM's read, not a word list — the
+# same seams.ask/no-regex rule the rest of the project runs on.
+_ONSCREEN_TEXT_PROMPT = (
+    "A video shot script follows. Does it ask for VISIBLE WRITTEN TEXT in the "
+    "frame — a sign, a banner, a neon board, lettering on a shirt or an "
+    "object, a poster, a caption shown on screen? Spoken dialogue and "
+    "subtitles the CAMERA does not see are no. Reply with ONLY JSON: "
+    '{"needs": true|false, "words": ["EXACT", "STRINGS"]}\n'
+    "words = the exact strings that must be readable on screen, quoted "
+    "verbatim from the script, uppercased as they should be written; empty "
+    'when needs is false. JSON only.'
+)
+_ONSCREEN_CACHE: dict = {}
+
+
+def _onscreen_text_words(ctx, description: str) -> list:
+    """The exact on-screen strings this script demands, [] when it demands none.
+    One cached LLM read per script; every failure fails open to [] (no gate,
+    the render is delivered as the model made it)."""
+    text = (description or "").strip()
+    if len(text) < 8:
+        return []
+    key = text[:400]
+    if key in _ONSCREEN_CACHE:
+        return list(_ONSCREEN_CACHE[key])
+    words: list = []
+    try:
+        from utils import safe_json_from_llm
+        raw = text_model(ctx)(ctx, _ONSCREEN_TEXT_PROMPT, text[:4000],
+                              temperature=0.0, max_tokens=120) or ""
+        data = safe_json_from_llm(raw) if raw else None
+        if isinstance(data, dict) and data.get("needs"):
+            # keep the script's exact spelling, minus combining marks: the read
+            # quotes «ПРИВЕ́Т» with a stress accent, and a burned-in sign must
+            # not carry one (live 2026-11-02, the overlay drew it).
+            import unicodedata
+            words = ["".join(ch for ch in str(w).strip()
+                             if not unicodedata.combining(ch))
+                     for w in (data.get("words") or [])]
+            words = [w for w in words if 1 <= len(w) <= 40][:6]
+    except Exception:
+        logger.debug("on-screen text read failed", exc_info=True)
+        words = []
+    _ONSCREEN_CACHE[key] = list(words)
+    if len(_ONSCREEN_CACHE) > 64:
+        _ONSCREEN_CACHE.pop(next(iter(_ONSCREEN_CACHE)))
+    if words:
+        logger.info("on-screen text requested: %r", words)
+    return words
+
+
+def _clip_reads_words(path: str, words: list) -> bool:
+    """Does our own OCR (PaddleOCR/EasyOCR) read every demanded word somewhere
+    in the clip? Three frames out of the middle; fuzzy containment — one
+    misread glyph must not cost a re-render."""
+    if not path or not os.path.exists(path) or not words:
+        return True
+    try:
+        import cv2
+        import ocr_reader
+        import difflib
+        cap = cv2.VideoCapture(path)
+        count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
+        picks = {max(0, min(count - 1, int(count * f)))
+                 for f in (0.35, 0.5, 0.65)}
+        texts = []
+        for idx in picks:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+            ok, frame = cap.read()
+            if ok and frame is not None:
+                tmp = os.path.join(os.path.dirname(path) or ".",
+                                   f"_ocr_{os.getpid()}_{idx}.jpg")
+                cv2.imwrite(tmp, frame)
+                pieces = ocr_reader.read_pieces(tmp) or []
+                texts.append(" ".join(str(p[-2]) for p in pieces).upper())
+                try: os.unlink(tmp)
+                except OSError: pass
+        cap.release()
+        blob = " ".join(texts)
+        if not blob:
+            return False        # OCR saw nothing at all: no text was drawn
+        for w in words:
+            wu = str(w).upper()
+            if wu in blob:
+                continue
+            if not any(difflib.SequenceMatcher(None, wu, part).ratio() >= 0.6
+                       for part in blob.split()):
+                return False
+        return True
+    except Exception:
+        # OCR unavailable: never block delivery on the checker itself.
+        logger.debug("on-screen OCR check failed", exc_info=True)
+        return True
+
+
+def _overlay_text(path: str, words: list) -> str:
+    """The deterministic guarantee: the exact text burned in as a clean title
+    band, one ffmpeg pass, audio stream copied. Only called when the model's
+    own lettering failed the OCR read."""
+    line = " ".join(str(w) for w in words)
+    font = r"C:\Windows\Fonts\arialbd.ttf"
+    if not os.path.exists(font):
+        return path
+    out = os.path.join(os.path.dirname(path) or ".",
+                       os.path.splitext(os.path.basename(path))[0] + "_text.mp4")
+    vf = ("drawtext=fontfile='" + font.replace("\\", "/").replace(":", r"\:")
+          + "':text='" + line.replace("\\", "").replace("'", "").replace(":", r"\:")
+          + "':fontcolor=white:borderw=4:bordercolor=black@0.85:"
+            "fontsize=h/12:x=(w-text_w)/2:y=h*0.82")
+    try:
+        import subprocess
+        r = subprocess.run(
+            ["ffmpeg", "-y", "-loglevel", "error", "-i", path, "-vf", vf,
+             "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+             "-c:a", "copy", out],
+            capture_output=True, timeout=180)
+        if r.returncode == 0 and os.path.exists(out) and os.path.getsize(out) > 0:
+            logger.info("on-screen text overlaid deterministically: %r", line)
+            return out
+        logger.warning("text overlay failed: %s", (r.stderr or b"")[-200:])
+    except Exception:
+        logger.warning("text overlay failed", exc_info=True)
+    return path
+
+
+def _ensure_onscreen_text(ctx, path: str, description: str) -> str:
+    """The lettering contract: if the script demanded readable on-screen text,
+    the delivered clip READS it — checked with our own OCR, fixed with a
+    deterministic overlay when the model garbled its lettering."""
+    if not path or not os.path.exists(path):
+        return path
+    words = _onscreen_text_words(ctx, description)
+    if not words:
+        return path
+    if _clip_reads_words(path, words):
+        logger.info("on-screen text verified by OCR: %r", words)
+        return path
+    return _overlay_text(path, words)
+
+
 def _video_stage(ctx) -> str:
     """«Generating a video», or «Generating a video (2/4)» while the caller renders part 2 of 4
     (`ctx.video_part`): the bare label wiped the part number off the user's status line."""
@@ -2380,6 +2524,9 @@ def generate_video(ctx, description: str, *,
     if ctx is not None:
         ctx.last_video_path = final
         ctx.last_video_prompt = description
+    final = _ensure_onscreen_text(ctx, final, description)
+    if ctx is not None:
+        ctx.last_video_path = final
     lat = latent_file(tag) if tag else ""
     return {"path": final, "latent": lat if lat and os.path.exists(lat) else "",
             "mode": mode, "seconds": frames_to_seconds(frames),
