@@ -331,12 +331,56 @@ def _with_user_words(state, req: str) -> str:
     return f"{req}\nThe user's own words (budget, quantities, wishes come from here): {said}"
 
 
+def _shop_shortlist(state) -> tuple[list[str], str]:
+    """Recent consecutive user link messages, ending at this shopping request."""
+    from prompt_guard import user_words
+    current = user_words((state or {}).get("user_input_original") or "")
+    links = _oz.product_links(current)
+    if len(links) < 2 and not _re.search(
+            r"выбери|выбрать|сравни|сравнить|лучше|лучший|подешевле|дешевле|"
+            r"choose|compare|best|cheaper", current, _re.I):
+        return [], ""
+    current = current.split("[The user's message contains", 1)[0].strip()
+    captions = [current] if links else []
+    for msg in reversed((state or {}).get("messages") or []):
+        if msg.get("role") != "user":
+            continue
+        words = user_words(str(msg.get("content") or ""))
+        found = _oz.product_links(words)
+        if not found:
+            break
+        links = found + links
+        captions.insert(0, words)
+        if len(links) >= 12:
+            break
+    links = list(dict.fromkeys(links))[:12]
+    for n, line in enumerate(captions):
+        for url in _oz.product_links(line):
+            line = line.replace(url, "")
+        captions[n] = line.strip()
+    return (links, "\n".join(captions)[:2000]) if len(links) >= 2 else ([], "")
+
+
 @_owned
 def _handle_ozon_shop(ctx, state, args: dict) -> str:
     """The shopper: plan -> search several wordings -> LLM screens -> cards and
     reviews -> LLM decides -> vision checks the photo -> optional basket."""
     import ozon_shopper as S
-    req = _with_user_words(state, (args.get("request") or "").strip())
+    shortlist, shortlist_words = _shop_shortlist(state)
+    if shortlist:
+        from prompt_guard import user_words
+        said = user_words((state or {}).get("user_input_original") or "")
+        said = said.split("[The user's message contains", 1)[0]
+        request = (args.get("request") or "").split("[The user's message contains", 1)[0].strip()
+        for url in shortlist:
+            request = request.replace(url, "")
+            said = said.replace(url, "")
+        req = _with_user_words({"user_input_original": said}, request)
+        req += ("\nChoose ONE product from this shortlist or a better searched alternative. "
+                "Prioritize the buyer's requirements, durability and credible reviews; "
+                "then price. These are options to compare, not a basket:\n" + shortlist_words)
+    else:
+        req = _with_user_words(state, (args.get("request") or "").strip())
     strategy = args.get("strategy") or "balanced"
     if args.get("by_photo"):
         img = getattr(ctx, "last_image_path", None)
@@ -352,7 +396,7 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
             return _fail(exc)
         _remember(ctx, [r["choice"] for r in results if r.get("choice")])
         return S.report(results, p["mode"], _oz.LAST_LOCATION.get("text") or "")
-    if not args.get("clarified"):
+    if not args.get("clarified") and not shortlist:
         try:
             qs = S.clarify(ctx, req)
         except S.ShopCancelled:
@@ -368,7 +412,7 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
                     "added to the request. If they say it does not matter, still clarified=true.\n"
                     + lines)
     from prompt_guard import user_words
-    mine = _oz.product_links(user_words((state or {}).get("user_input_original") or ""))
+    mine = shortlist or _oz.product_links(user_words((state or {}).get("user_input_original") or ""))
     try:
         p, results = S.shop(ctx, req, strategy, pinned=mine)
     except S.ShopCancelled:
@@ -376,6 +420,29 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
     except Exception as exc:
         logger.warning("ozon_shop(%s) failed: %s", req, exc)
         return _fail(exc)
+    if shortlist and p["mode"] == "one" and results and results[0].get("choice"):
+        import ozon_same
+        results[0]["shortlist"] = True
+        winner = results[0]["choice"]
+        try:
+            same = ozon_same.find_same(
+                ctx, winner.get("url") or winner["sku"], by_photo=False,
+                stage=lambda text: getattr(ctx, "set_stage", lambda _: None)(text))
+            cheaper = (same.get("best") or {}).get("cheap")
+            if (cheaper and cheaper.get("check", {}).get("verdict") == "same"
+                    and not cheaper.get("check", {}).get("copy_price")
+                    and str(cheaper.get("sku")) != str(winner.get("sku"))
+                    and cheaper.get("price") and winner.get("price")
+                    and cheaper["price"] < winner["price"] and cheaper.get("url")):
+                results[0]["choice"] = dict(winner, **{k: cheaper[k] for k in
+                    ("sku", "url", "price", "seller", "delivery", "rating", "reviews")
+                    if cheaper.get(k) is not None})
+                results[0]["same_offer_saving"] = winner["price"] - cheaper["price"]
+            else:
+                results[0]["same_offer_checked"] = True
+        except Exception as exc:
+            logger.warning("ozon_shop same-seller check failed: %s", exc)
+            results[0]["same_offer_unchecked"] = True
     chosen = [r["choice"] for r in results if r.get("choice")]
     _remember(ctx, chosen)
     basket = ""

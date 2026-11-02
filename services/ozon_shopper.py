@@ -34,7 +34,7 @@ MAX_QUERIES = 5
 PER_QUERY = 60
 SEARCH_PAGES = 2
 FINALISTS = 5
-MAX_PINNED = 5             # the user's own links weighed with the finds
+MAX_PINNED = 12            # a whole user shortlist, weighed with the finds
 REVIEWS_READ = 30          # 12 hid the complaints: a live snow-blower hunt needed ~30 to see the bad ones
 
 
@@ -83,8 +83,8 @@ _PLAN_SYS = (
     '{"mode": "one" | "basket", "budget_total": int|null, "items": [{"need": str, '
     '"queries": [str, ...], "must": [str, ...], "avoid": [str, ...], "max_price": int|null, '
     '"qty": int}]}\n'
-    "Rules: mode=one when the user wants ONE kind of product (pick the best/cheapest of "
-    "it); mode=basket when they want a set, a list, or an occasion (picnic, first-aid "
+    "Rules: mode=one when the user wants ONE kind of product, including choosing ONE "
+    "winner from a shortlist of many links; mode=basket when they want a set, a list, or an occasion (picnic, first-aid "
     "kit, school) -- then list every item a sensible person would buy, 3-10 items, no "
     "duplicates, skip what they said they already have. queries: 4-5 DIFFERENT Russian "
     "wordings a shopper would type on Ozon (synonyms, the common product name, a more "
@@ -633,6 +633,16 @@ def digest(r: dict) -> str:
         out.append(f"👍 {dec['reviews']}")
     if dec.get("concerns"):
         out.append(f"⚠️ Минусы: {dec['concerns']}")
+    if r.get("same_offer_saving"):
+        out.append(f"💸 Та же модель у другого продавца дешевле на {_rub(r['same_offer_saving'])}.")
+    elif r.get("same_offer_checked"):
+        out.append("Проверил ту же модель у других продавцов: подтверждённого предложения дешевле не нашёл.")
+    elif r.get("same_offer_unchecked"):
+        out.append("Цену той же модели у других продавцов проверить не удалось.")
+    if r.get("shortlist"):
+        out.append("\nСравнил твои варианты с найденными альтернативами и выбрал один.")
+        out.append("\nПеред покупкой проверь цену, продавца и характеристики в карточке.")
+        return "\n".join(out)
     found = [o for o in r.get("others") or [] if not o.get("pinned")][:2]
     if found:
         out.append("\n💸 **Ещё нашёл**")
@@ -793,6 +803,9 @@ def shop(ctx, request: str, strategy: str = "balanced", pinned=()) -> tuple:
     one-product plan. Raises OzonBlocked / ShopCancelled."""
     _stage(ctx, "Ozon: planning the purchase")
     p = plan(ctx, request)
+    if len(pinned) > 1:
+        p["mode"] = "one"
+        p["items"] = p["items"][:1]
     results = []
     for i, item in enumerate(p["items"], 1):
         label = f"{i}/{len(p['items'])} " if p["mode"] == "basket" else ""

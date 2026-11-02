@@ -391,8 +391,9 @@ _OZON_PRODUCT_DESC = (
     "Read one Ozon product card: exact price, stock, seller, characteristics "
     "and description. Pass the link or SKU from ozon_search.")
 _OZON_SHOP_DESC = (
-    "The DEFAULT tool for buying on Ozon: picks what to buy for a need, including ANALOGUES, "
+    "The DEFAULT tool for buying on Ozon: picks what to buy for a need, including analogues, "
     "similar items or alternatives to a linked product, cheaper, better or delivered sooner. "
+    "Choose ONE winner from multiple product links sent in this or recent messages. "
     "A shopper that thinks: turns the request "
     "into a plan (one product, or every item for a set/occasion/list), searches "
     "several wordings, throws out parts and bait, opens the finalists' cards, reads "

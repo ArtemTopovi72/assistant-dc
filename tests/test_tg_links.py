@@ -71,7 +71,7 @@ _four = "сравни https://ozon.ru/t/aaa1 и https://ozon.ru/t/bbb2, ещё h
 _oz4 = L.link_context(_four, modules={"dr_crawl": fake3})
 check("several Ozon links: every one is named", all(u in _oz4 for u in (
     "https://ozon.ru/t/aaa1", "https://ozon.ru/t/bbb2", "https://www.ozon.ru/product/x-3/", "https://ozon.ru/t/ddd4")), _oz4[:300])
-check("...and every card is to be read", "EVERY card" in _oz4)
+check("...and the whole shortlist goes to the shopper", "ozon_shop once" in _oz4)
 
 _o = L._fit(_b, "сколько жителей население Казани", 6000)
 check("a long page keeps the paragraph the question is about", "1 318 604" in _o and "Page cut" in _o)

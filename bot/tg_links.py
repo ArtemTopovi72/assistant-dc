@@ -218,9 +218,9 @@ def link_context(text: str, limit: int = LINK_TEXT_CHARS, url: str = "", modules
     cards = [u for u in urls_in(text) if _OZON_PRODUCT_RE.match(u)] if not url else []
     if len(cards) > 1:
         return (f"[The user's message contains {len(cards)} Ozon product links: {', '.join(cards)}. "
-                f"Read EVERY card with ozon_product before comparing them (ozon_reviews for what buyers "
-                f"say; ozon_same for one of these exact items cheaper or sooner; ozon_shop for "
-                f"analogues or alternatives). Say nothing about a card you did not read. This is a "
+                f"If they ask to choose the best, call ozon_shop once: it reads all linked cards, "
+                f"searches alternatives and checks the winner at other sellers. If they only "
+                f"sent links, ask what matters to them. Do not guess unread card details. This is a "
                 f"shopping question: do not make a video, a picture or a file.]")
     for url in ([url] if url else urls_in(text)[:2]):
         if _OZON_PRODUCT_RE.match(url):
