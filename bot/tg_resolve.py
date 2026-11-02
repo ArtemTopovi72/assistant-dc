@@ -169,6 +169,10 @@ class ResolveMixin:
                 self._activity.log(chat_id, "system",
                                    f"[link] read {sess.last_link[:80]}",
                                    (user.name if user else str(chat_id)))
+            elif _tg_links.urls_in(text):
+                scaffold.append("[The linked page could not be read. Do not summarize it "
+                                "from earlier chat media or guess its contents; tell the user "
+                                "the link is inaccessible and ask for its text or a screenshot.]")
 
     _FWD_JOIN_S = 120.0
 
@@ -649,7 +653,8 @@ class ResolveMixin:
                 # transcript.
                 if (getattr(sess, "fwd_transcript", "")
                         and not getattr(sess, "fwd_own", "")
-                        and not getattr(sess, "fwd_transcript_done", False)):
+                        and not getattr(sess, "fwd_transcript_done", False)
+                        and not _tg_links.urls_in(raw)):
                     _asked = (getattr(self, "fwdv_intent", None) or tg_bot._fwdv_intent)(raw)
                     if _asked:
                         self._do_fwd_voice(chat_id, _asked, sess.fwd_transcript)

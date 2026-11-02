@@ -212,6 +212,15 @@ check("an unrelated message is NOT swallowed by the pending note",
 check("and the note stays pending for the buttons",
       getattr(b._get_session(CID), "fwd_transcript", "") == SPEECH)
 
+b = make_bot()
+s = b._get_session(CID); s.fwd_transcript = SPEECH; s.fwd_transcript_done = False; b._store.put(s)
+link_request = "Перескажи коротко https://vk.ru/wall-180577228_351680"
+_REAL_PUSH(b, CID, [{"type": "text", "text": link_request}])
+check("a summary request with a link is not captured by an old voice note",
+      b.pushed and link_request in b.pushed[-1].user_text
+      and not getattr(b._get_session(CID), "fwd_transcript_done", False),
+      str(b.pushed[-1:])[:200])
+
 # ══════════════════════════════════════════════════════ E. clearing forgets it
 print("\n" + "=" * 70)
 print("E. CLEARING THE CHAT FORGETS A PENDING NOTE")
