@@ -1764,6 +1764,43 @@ def is_talking_head(ctx, description: str, said: str = "", spoken: bool = False)
         "action?", description, default=False))
 
 
+_STATIC_CONT_CACHE: dict = {}
+
+
+def static_continuation(ctx, description: str) -> bool:
+    """A continuation that stays ON the clip's final frame: the person talks to
+    camera, presents or reacts, and neither the camera nor anyone else moves
+    (owner, 2026-11-02: «он просто говорит» drifted into another shot). Such a
+    part renders in H3's first+last-frame mode with first = last = that frame,
+    so the model interpolates two identical frames and the composition cannot
+    drift. A script that keeps the world moving takes the reference tail as
+    before. The model's read, cached; unknown -> the tail path (fail-open)."""
+    text = (description or "").strip()
+    if len(text) < 8:
+        return False
+    key = text[:400]
+    if key in _STATIC_CONT_CACHE:
+        return _STATIC_CONT_CACHE[key]
+    out = False
+    try:
+        out = bool(yes_no(ctx)(
+            "A video continuation is described as: {text}\n\nThe new part must stay on "
+            "the SAME view as the clip's final frame -- static = the person stays in "
+            "place facing the camera, talking, presenting or reacting, the camera does "
+            "not move and the scene does not change. moving = the world or camera keeps "
+            "going: someone walks on, turns away and leaves, an object moves, the shot "
+            "or place changes. Is it static?", text[:2000], default=False))
+    except Exception:
+        logger.debug("static-continuation read failed", exc_info=True)
+        out = False
+    _STATIC_CONT_CACHE[key] = out
+    if len(_STATIC_CONT_CACHE) > 64:
+        _STATIC_CONT_CACHE.pop(next(iter(_STATIC_CONT_CACHE)))
+    if out:
+        logger.info("continuation is static: first = last = the clip's final frame")
+    return out
+
+
 def quoted_lines(text: str) -> list:
     return [x for x in (next(g for g in m.groups() if g is not None).strip()
                         for m in _QUOTED.finditer(_SCENE_NOTE_RE.sub("", text or "")))

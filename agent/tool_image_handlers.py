@@ -1992,6 +1992,14 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         # A clip this bot made as a Herrgott chain goes on from its own saved latent
         # (no reference, no re-encode); new people from photos still need the reference path.
         prior = video_mod.chain_of(cont_src, ctx) if (not people and video_mod.herrgott_on()) else ()
+        # Static-screen continuation (owner, 2026-11-02): «он просто говорит» must
+        # stay ON the clip's final frame. H3's first+last-frame mode with first =
+        # last = that frame pins the composition -- the model interpolates two
+        # identical frames and cannot drift into another shot. New people from
+        # photos still need the reference path.
+        _seed_img = next((p for p in (images or []) if p and os.path.exists(p)), "")
+        static_hold = bool(not prior and not people and _seed_img
+                           and video_mod.static_continuation(ctx, description))
         if prior:
             chain_id, chain_idx = prior[0], prior[1] + 1
             videos, images = [], []
@@ -1999,6 +2007,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             # no longer found in it and «на 30 секунд» went out as one 15 s part (2026-10-13)
             bridge_first = True
             description = video_mod.CONTINUE_CTX_PREFIX + description
+        elif static_hold:
+            videos, images = [], [_seed_img, _seed_img]
+            logger.info("generate_video: static-screen continuation, first = last = %s",
+                        os.path.basename(_seed_img))
+            description = video_mod.CONTINUE_PREFIX + description
         # Pinned frames (same as the parts of a long script): faster and seamless, but they
         # take no pictures -- new people from photos still need the reference path.
         elif not people and video_mod.motion_context_on():
@@ -2354,6 +2367,10 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     head = bool(not chain_id and len(anchor) == 1 and not videos
                 and (talking if talking is not None else video_mod.is_talking_head(ctx, raw, _said, spoken=bool(speech))))
     head = head or loop
+    if static_hold:
+        # the continuation's two identical keyframes (first = last = the clip's
+        # final frame) ride the talking-head machinery: FL2VA + framing locks.
+        head = True
     if loop:
         logger.info("generate_video: loop, the picture is the first and the last frame")
     elif head:

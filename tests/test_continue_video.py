@@ -229,6 +229,22 @@ check("pinned: no reference video or picture", not SEEN.get("videos") and not SE
 check("pinned: the no-cut prompt without <Video 1>",
       SEEN["description"].startswith(V.CONTINUE_CTX_PREFIX) and "<Video 1>" not in SEEN["description"])
 
+# Static-screen continuation (owner, 2026-11-02): «он говорит» stays ON the clip's
+# final frame — H3's first+last-frame mode with first = last = that frame, no
+# reference tail, anchored through the talking-head machinery.
+_E["motion_context_on"] = lambda: False
+_E["static_continuation"] = lambda ctx, d: True
+SEEN.clear()
+H._handle_generate_video(TCtx(), {}, {"description": "he looks into the camera and says the line"})
+check("static: first = last = the clip's final frame",
+      SEEN.get("images") == [frame, frame], SEEN.get("images"))
+check("static: no reference tail rides", not SEEN.get("videos"), SEEN.get("videos"))
+check("static: the talking-head machinery anchors it (keyframe)",
+      SEEN.get("keyframe") is True, SEEN.get("keyframe"))
+check("static: the continuation prompt keeps the user's words",
+      "says the line" in SEEN.get("description", ""), SEEN.get("description"))
+_E["static_continuation"] = lambda ctx, d: False
+
 # ── the flow's own prefix: the reply says «продолжил видео», not «оживив фото» ──
 import graph_personality as GP
 import tg_tasks as TK
