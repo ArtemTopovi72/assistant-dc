@@ -32,7 +32,17 @@ assert f("привет") == ""
 assert f("сделай презентацию", {"create_presentation"}) == ""          # already ran this turn
 assert f("найди фото") == ""                                            # not on offer: never force an absent schema
 assert f("") == ""
+assert G._forced_intent(ctx, {"messages": []}, "сделай презентацию", False, TOOLS, (),
+                        {("create_presentation", "{}"): 2}) == ""
 print("ok must_call is forced only when offered and not yet called")
+
+wrong = {"needs_tool": True, "wants": ["generate_image"], "must_call": ""}
+intent._deck_image_layout(NS(last_deck={"slides": [{}]}),
+                          "Просто на каждую поясняющую картинку отдельный слайд", wrong)
+assert wrong["must_call"] == "create_presentation" and wrong["wants"][0] == "create_presentation"
+plain = {"needs_tool": True, "wants": ["generate_image"], "must_call": ""}
+intent._deck_image_layout(NS(last_deck=None), "По картинке на каждом слайде", plain)
+assert plain["must_call"] == ""
 
 # The read gets what came with the message: a photo, a pasted table.
 got = {}

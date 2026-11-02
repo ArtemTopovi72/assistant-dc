@@ -380,7 +380,8 @@ def _turn_inputs(ctx, state, text: str) -> tuple:
     return t, _previous_reply(state), att
 
 
-def _forced_intent(ctx, state, text: str, has_image: bool, turn_tools, already_called) -> str:
+def _forced_intent(ctx, state, text: str, has_image: bool, turn_tools, already_called,
+                   failed_calls=None) -> str:
     """The tool the model's read of the message says must run first
     (intent.must_call): multi-digit arithmetic and sums over data -> calculate
     (669.00 for 669.20, 102 800 for 188 200), fresh facts and places ->
@@ -394,6 +395,10 @@ def _forced_intent(ctx, state, text: str, has_image: bool, turn_tools, already_c
         return ""
     tool = _turn_intent(ctx, state, text)["must_call"]
     if not tool or tool in (already_called or ()):
+        return ""
+    # A hard failure is not a successful tool call, but forcing it on every
+    # round prevents the model from explaining the outage or using another path.
+    if any(name == tool and count >= 2 for (name, _), count in (failed_calls or {}).items()):
         return ""
     offered = {t.get("function", {}).get("name") for t in (turn_tools or [])}
     return tool if tool in offered else ""
@@ -1192,7 +1197,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                   or _forced_button(_own(original_input or user_input), turn_tools,
                                     tools_called_this_turn)
                   or _forced_intent(ctx, state, original_input or user_input, _has_img,
-                                    turn_tools, tools_called_this_turn)
+                                    turn_tools, tools_called_this_turn, failed_call_counts)
                   or _forced_look(_turn_text, turn_tools, tools_called_this_turn,
                                   getattr(ctx, "sandbox", None))
                   or _forced_unpack(_turn_text, turn_tools, tools_called_this_turn,

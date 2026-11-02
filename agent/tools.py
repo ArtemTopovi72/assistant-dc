@@ -744,10 +744,10 @@ def _handle_create_presentation(ctx, state, args: dict) -> str:
               {"path": path})
     headings = [s.get("heading", "") for s in deck.get("slides", [])]
     logger.info("Tool: create_presentation(%r) -> %s (%d slides, %d pictures)",
-                topic[:60], os.path.basename(path), len(headings), len(fetched))
+                topic[:60], os.path.basename(path), len(headings), len(result.get("images") or {}))
     return (
         f"Built the presentation \"{deck.get('title', topic)}\" — {len(headings)} "
-        f"slides, {len(fetched)} illustrated. Saved as {path}\n"
+        f"slides, {len(result.get('images') or {})} illustrated. Saved as {path}\n"
         f"Slides: {'; '.join(h for h in headings if h)}\n"
         "The file has been delivered to the user. Tell them it is ready, list the "
         "sections briefly, and offer to change or extend any of them."

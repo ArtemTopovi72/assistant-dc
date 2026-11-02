@@ -457,6 +457,19 @@ def read(ctx, text: str, previous: str = "", attached: str = "") -> dict:
         return _read(ctx, text, previous, attached, turn["reads"])
 
 
+def _deck_image_layout(ctx, text: str, out: dict) -> None:
+    # A follow-up about arranging slides edits the deck just made. The model
+    # sometimes routes "one slide per picture" to generate_image instead.
+    if (getattr(ctx, "last_deck", None)
+            and re.search(r"(?:слайд|slide)", text, re.I)
+            and re.search(r"(?:картин|изображени|фото|picture|image|photo)", text, re.I)
+            and re.search(r"(?:кажд|отдельн|перестав|размест|each|separate|move|place)", text, re.I)):
+        out["needs_tool"] = True
+        out["must_call"] = "create_presentation"
+        out["wants"] = ["create_presentation"] + [w for w in out["wants"]
+                                                 if w != "create_presentation"]
+
+
 def _read(ctx, text: str, previous: str, attached: str, cache: dict) -> dict:
     text = (text or "").strip()
     if not text:
@@ -490,6 +503,11 @@ def _read(ctx, text: str, previous: str, attached: str, cache: dict) -> dict:
         out["must_call"] = (out["must_call"] if out["must_call"] in names
                             and out["must_call"] != "deep_research" else "")
         _same_or_analogue(ctx, text, out)
+        if out["must_call"] == "search" and "find_photo" in out["wants"]:
+            # "Explain with pictures" was classified as find_photo, then forced
+            # plain search and returned text without the requested image.
+            out["must_call"] = "find_photo"
+        _deck_image_layout(ctx, text, out)
         w = got.weather
         # other questions in the same message (other tools wanted) need the
         # full loop, not the forecast shortcut

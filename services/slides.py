@@ -1685,9 +1685,15 @@ def build_pptx(deck: dict, out_path: str,
         if has_img:
             panel_w = int(W * _PIC_FRAC)
             try:
-                pic = s.shapes.add_picture(str(img), W - panel_w, 0,
-                                           width=panel_w, height=H)
-                _aspect_fill(pic, panel_w, H, img)
+                # Explanatory diagrams must remain complete. Cropping a wide
+                # schematic into this portrait panel hides its labels/parts.
+                from PIL import Image
+                with Image.open(str(img)) as source:
+                    iw, ih = source.size
+                scale = min(panel_w / iw, H / ih)
+                pic_w, pic_h = int(iw * scale), int(ih * scale)
+                s.shapes.add_picture(str(img), W - panel_w + (panel_w - pic_w) // 2,
+                                     (H - pic_h) // 2, width=pic_w, height=pic_h)
             except Exception:
                 logger.warning("could not place the picture on slide %d", i + 1,
                                exc_info=True)
@@ -1896,7 +1902,16 @@ def make_presentation(ctx, topic: str, out_dir: str, *, n_slides: int = 0,
                 "error": "the deck planner returned no content (the model did "
                          "not answer) — no slides were written"}
     images: dict = {}
-    if image_fetcher is not None:
+    if image_fetcher is not None or (previous or {}).get("_image_assets"):
+        old_assets = (previous or {}).get("_image_assets") or []
+        def reuse(image: str, heading: str) -> Optional[str]:
+            for asset in old_assets:
+                path = asset.get("path") or ""
+                if (path and os.path.isfile(path) and
+                        (image and image == asset.get("image") or
+                         heading and heading == asset.get("heading"))):
+                    return path
+            return None
         # The COVER first, and out of its own budget: it is the full-bleed
         # background of the title slide and by far the most visible picture in
         # the deck, so it must not lose its slot to a mid-deck illustration.
@@ -1904,31 +1919,40 @@ def make_presentation(ctx, topic: str, out_dir: str, *, n_slides: int = 0,
                            deck.get("title") or topic) \
             or deck.get("title") or topic
         if _cq:
-            try:
-                got = image_fetcher(_cq)
-            except Exception:
-                logger.warning("cover image fetch failed for %r", _cq, exc_info=True)
-                got = None
+            got = reuse(deck.get("cover_image") or "", "__cover__")
+            if not got and image_fetcher is not None and not previous:
+                try:
+                    got = image_fetcher(_cq)
+                except Exception:
+                    logger.warning("cover image fetch failed for %r", _cq, exc_info=True)
+                    got = None
             if got and os.path.exists(str(got)) and _is_scene(got):
                 images["cover"] = got
         for i, sl in enumerate(deck["slides"]):
-            # the cover does not count against the per-slide budget
-            if len([k for k in images if k != "cover"]) >= max_images:
-                break
             q = sl.get("image") or ""
             if not q:
                 continue
             q = _image_query(q, deck.get("title") or topic)
             if ctx is not None and getattr(ctx, "is_cancelled", bool)():
                 break
-            try:
-                got = image_fetcher(q)
-            except Exception:
-                logger.warning("image fetch failed for %r", q, exc_info=True)
-                got = None
+            got = reuse(sl.get("image") or "", sl.get("heading") or "")
+            # Keep every illustration already in the deck. The budget only
+            # limits NEW searches, otherwise an edit silently drops old photos.
+            if (not got and image_fetcher is not None and
+                    len([k for k in images if k != "cover"]) < max_images):
+                try:
+                    got = image_fetcher(q)
+                except Exception:
+                    logger.warning("image fetch failed for %r", q, exc_info=True)
+                    got = None
             if got and os.path.exists(str(got)):
                 images[i] = got
         _drop_mismatched_images(ctx, deck, images)
+    deck["_image_assets"] = ([{"image": deck.get("cover_image") or "",
+                               "heading": "__cover__", "path": images["cover"]}]
+                             if images.get("cover") else []) + [
+        {"image": sl.get("image") or "", "heading": sl.get("heading") or "",
+         "path": images[i]} for i, sl in enumerate(deck["slides"]) if images.get(i)]
 
     stem = _safe_name(deck.get("title") or topic)
     path = os.path.join(out_dir, stem + ".pptx")
