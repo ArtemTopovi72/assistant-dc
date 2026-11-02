@@ -46,6 +46,14 @@ def test_collects_seven_recent_user_links_only():
     assert links == URLS[:2] and "The user's message contains" not in captions
 
 
+def test_forwarded_links_are_shortlist_data():
+    quoted = ("Какой и где лучше взять?\n<<<QUOTED MESSAGE -- forwarded from Darya>>>\n"
+              f"VIAGGIO {URLS[0]}\nBange {URLS[1]}\n<<<END OF QUOTED MESSAGE>>>")
+    links, words = handler._shop_shortlist({"user_input_original": quoted, "messages": []})
+    assert links == URLS[:2]
+    assert "QUOTED MESSAGE" not in words
+
+
 def test_chooses_one_verified_cheaper_seller(monkeypatch):
     seen = {}
     winner = {"sku": "1", "url": URLS[0], "name": "Рюкзак", "price": 3000}

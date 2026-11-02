@@ -334,8 +334,11 @@ def _with_user_words(state, req: str) -> str:
 def _shop_shortlist(state) -> tuple[list[str], str]:
     """Recent consecutive user link messages, ending at this shopping request."""
     from prompt_guard import user_words
-    current = user_words((state or {}).get("user_input_original") or "")
-    links = _oz.product_links(current)
+    raw = (state or {}).get("user_input_original") or ""
+    current = user_words(raw)
+    # Forwarded cards are quoted DATA, so user_words intentionally removes
+    # their text. Their URLs are still the products the user asked to compare.
+    links = _oz.product_links(raw)
     if len(links) < 2 and not _re.search(
             r"выб|сравн|лучш|дешев|отбер|подбер|посовет|рекоменд|какой|взять|"
             r"choose|compare|best|cheaper|recommend|pick", current, _re.I):
