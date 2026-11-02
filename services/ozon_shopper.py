@@ -477,7 +477,15 @@ def _see(ctx, url: str, question: str) -> str:
     try:
         # Scraped from the page, so not ours to trust: every hop is checked, as in
         # tool_ozon_handlers._look_at_photos (a redirect to 127.0.0.1 reached ComfyUI).
-        r = dep(ctx, "safe_get", safe_get)(url, timeout=20, headers={"User-Agent": "Mozilla/5.0"})
+        kw = {"timeout": 20, "headers": {"User-Agent": "Mozilla/5.0"}}
+        from urllib.parse import urlparse
+        host = (urlparse(str(url)).hostname or "").lower()
+        if host == "ozone.ru" or host.endswith(".ozone.ru"):
+            from ozon_client import direct_proxy_url
+            proxy = direct_proxy_url()
+            if proxy:
+                kw["proxies"] = {"http": proxy, "https": proxy}
+        r = dep(ctx, "safe_get", safe_get)(url, **kw)
         if r is None:
             raise ValueError("unsafe image URL")
         r.raise_for_status()

@@ -5,10 +5,15 @@ rejects. IP_UNICAST_IF selects the physical interface for this one browser witho
 changing system routes or disconnecting the VPN for other applications.
 """
 import select
+import os
+import logging
 import socket
 import socketserver
 import struct
+import subprocess
 import threading
+
+logger = logging.getLogger("assistant.ozon.direct_proxy")
 
 
 class _Server(socketserver.ThreadingTCPServer):
@@ -43,6 +48,8 @@ class _Connect(socketserver.BaseRequestHandler):
             remote.setsockopt(socket.IPPROTO_IP, 31, struct.pack("!I", self.server.ifindex))
             try:
                 remote.connect((host, 443))
+                logger.debug("Ozon direct tunnel connected to %s via interface %s", host,
+                             self.server.ifindex)
                 self.request.sendall(b"HTTP/1.1 200 Connection established\r\n\r\n")
                 remote.setblocking(False)
                 self.request.setblocking(False)
@@ -57,12 +64,23 @@ class _Connect(socketserver.BaseRequestHandler):
                         (remote if source is self.request else self.request).sendall(data)
             finally:
                 remote.close()
-        except (OSError, ValueError):
+        except (OSError, ValueError) as exc:
+            logger.warning("Ozon direct tunnel to %s failed: %s", fields[1] if len(fields) > 1 else "?", exc)
             return
 
 
 _server = None
 _lock = threading.Lock()
+
+
+def adapter_index(name: str) -> int:
+    """Resolve a stable Windows adapter name after VPN reconnects renumber it."""
+    env = dict(os.environ, OZON_DIRECT_ADAPTER_NAME=name)
+    value = subprocess.check_output(
+        ["powershell", "-NoProfile", "-NonInteractive", "-Command",
+         "(Get-NetAdapter -Name $env:OZON_DIRECT_ADAPTER_NAME -ErrorAction Stop).ifIndex"],
+        env=env, text=True, timeout=10).strip()
+    return int(value)
 
 
 def start(ifindex: int) -> str:
@@ -74,6 +92,6 @@ def start(ifindex: int) -> str:
             _server.ifindex = int(ifindex)
             threading.Thread(target=_server.serve_forever, name="ozon-direct-proxy",
                              daemon=True).start()
-        elif _server.ifindex != int(ifindex):
-            raise ValueError("Ozon direct interface changed while the browser is running")
+        else:
+            _server.ifindex = int(ifindex)
         return f"http://127.0.0.1:{_server.server_address[1]}"

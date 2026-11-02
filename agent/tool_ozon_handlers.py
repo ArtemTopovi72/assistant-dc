@@ -350,7 +350,7 @@ def _shop_shortlist(state) -> tuple[list[str], str]:
         if not found:
             break
         links = found + links
-        captions.insert(0, words)
+        captions.insert(0, words.split("[The user's message contains", 1)[0].strip())
         if len(links) >= 12:
             break
     links = list(dict.fromkeys(links))[:12]

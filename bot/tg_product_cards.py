@@ -73,7 +73,8 @@ def _photo_bytes(url: str) -> bytes | None:
     import requests
     try:
         import ozon_client
-        proxy = getattr(ozon_client, "OZON_PROXY", "") or None
+        proxy = (getattr(ozon_client, "OZON_PROXY", "") or
+                 ozon_client.direct_proxy_url() or None)
     except Exception:
         proxy = None
     for proxies in (({"https": proxy, "http": proxy} if proxy else None), None):

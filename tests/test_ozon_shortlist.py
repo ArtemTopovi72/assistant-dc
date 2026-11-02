@@ -38,6 +38,12 @@ def test_collects_seven_recent_user_links_only():
                                     "user_input_original": "Выбери лучший"})[0] == URLS
     assert handler._shop_shortlist({"messages": messages,
                                     "user_input_original": "Подбери один по качеству"})[0] == URLS
+    with_note = [{"role": "user", "content": URLS[0] +
+                  " [The user's message contains an Ozon product link (). Read that card]"},
+                 {"role": "user", "content": URLS[1]}]
+    links, captions = handler._shop_shortlist({"messages": with_note,
+                                                "user_input_original": "Какой лучше взять?"})
+    assert links == URLS[:2] and "The user's message contains" not in captions
 
 
 def test_chooses_one_verified_cheaper_seller(monkeypatch):

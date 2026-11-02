@@ -48,6 +48,16 @@ CALL_TIMEOUT_S = 150
 # refuses datacenter and VPN addresses outright.
 OZON_PROXY = os.getenv("OZON_PROXY", "").strip()
 OZON_DIRECT_IFINDEX = os.getenv("OZON_DIRECT_IFINDEX", "").strip()
+OZON_DIRECT_ADAPTER = os.getenv("OZON_DIRECT_ADAPTER", "").strip()
+
+
+def direct_proxy_url() -> str:
+    if os.name != "nt" or not (OZON_DIRECT_ADAPTER or OZON_DIRECT_IFINDEX):
+        return ""
+    from ozon_direct_proxy import adapter_index, start
+    index = (adapter_index(OZON_DIRECT_ADAPTER) if OZON_DIRECT_ADAPTER
+             else int(OZON_DIRECT_IFINDEX))
+    return start(index)
 # Our own Chromium copy under a unique exe name, so the VPN's split tunnel can
 # exclude exactly this browser (and nothing else) -- ozon.ru blocks the VPN exit.
 OZON_EXE = os.getenv("OZON_BROWSER_EXE", os.path.join(
@@ -624,6 +634,15 @@ class _Browser:
                         break
                     except Exception as exc:       # dead browser, navigation timeout
                         self._close(ctxs.pop(key, None))
+                        if "net::ERR_PROXY_CONNECTION_FAILED" in str(exc):
+                            if attempt == 0:
+                                logger.warning("Ozon browser could not reach its local proxy; retrying once")
+                                time.sleep(1)
+                                continue
+                            box["error"] = OzonError(
+                                "The local Ozon browser proxy failed twice. The product cards "
+                                "were not read; do not rank them or guess from brand names.")
+                            break
                         if "net::ERR_" in str(exc):
                             # The network itself cannot reach ozon.ru (the VPN exit
                             # drops it) -- a second 90 s attempt only doubles the wait.
@@ -659,9 +678,11 @@ class _Browser:
             kw["executable_path"] = OZON_EXE
         if OZON_PROXY:
             kw["proxy"] = {"server": OZON_PROXY}
-        elif OZON_DIRECT_IFINDEX and os.name == "nt":
-            from ozon_direct_proxy import start
-            kw["proxy"] = {"server": start(int(OZON_DIRECT_IFINDEX))}
+        else:
+            proxy = direct_proxy_url()
+            if proxy:
+                kw["proxy"] = {"server": proxy}
+                logger.info("Ozon browser direct proxy: %s", OZON_DIRECT_ADAPTER or OZON_DIRECT_IFINDEX)
         return pw.chromium.launch(**kw)
 
     @staticmethod
