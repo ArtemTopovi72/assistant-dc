@@ -64,7 +64,7 @@ def test_current_forwarded_shortlist_does_not_include_old_products():
     assert links == URLS[:2]
 
 
-def test_chooses_one_verified_cheaper_seller(monkeypatch):
+def test_keeps_chosen_card_when_cheaper_seller_is_found(monkeypatch):
     seen = {}
     winner = {"sku": "1", "url": URLS[0], "name": "Рюкзак", "price": 3000}
 
@@ -85,8 +85,13 @@ def test_chooses_one_verified_cheaper_seller(monkeypatch):
     result = handler._handle_ozon_shop(ctx, state, {"request": "рюкзак"})
     assert seen["pinned"] == URLS
     assert all(url not in seen["request"] for url in URLS)
-    assert result["choice"]["sku"] == "2" and result["same_offer_saving"] == 1000
-    assert [x["sku"] for x in ctx.turn_products] == ["2"]
+    assert result["choice"]["sku"] == "1"
+    assert result["same_offer_candidate"]["price"] == 2000
+    assert [x["sku"] for x in ctx.turn_products] == ["1"]
+    answer = ozon_shopper.digest(result)
+    assert "Похожее предложение за 2 000 ₽" in answer
+    assert "https://ozon.ru/product/same-2/" in answer
+    assert "качество не подтверждено" in answer
 
 
 def test_unverified_offer_cannot_replace_winner(monkeypatch):

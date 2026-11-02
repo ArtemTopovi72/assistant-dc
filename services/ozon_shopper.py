@@ -672,8 +672,10 @@ def digest(r: dict) -> str:
     # Their count is already in _stats; don't paste them as a quality verdict.
     if dec.get("concerns"):
         out.append(f"⚠️ Минусы: {dec['concerns']}")
-    if r.get("same_offer_saving"):
-        out.append(f"💸 Та же модель у другого продавца дешевле на {_rub(r['same_offer_saving'])}.")
+    if r.get("same_offer_candidate"):
+        offer = r["same_offer_candidate"]
+        out.append(f"💸 [Похожее предложение за {_rub(offer['price'])}]({offer['url']}). "
+                   "Проверь точную модель и продавца: это отдельная карточка, её качество не подтверждено.")
     elif r.get("same_offer_checked"):
         out.append("Проверил ту же модель у других продавцов: подтверждённого предложения дешевле не нашёл.")
     elif r.get("same_offer_unchecked"):

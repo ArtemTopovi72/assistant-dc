@@ -437,10 +437,8 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
                     and str(cheaper.get("sku")) != str(winner.get("sku"))
                     and cheaper.get("price") and winner.get("price")
                     and cheaper["price"] < winner["price"] and cheaper.get("url")):
-                results[0]["choice"] = dict(winner, **{k: cheaper[k] for k in
-                    ("sku", "url", "price", "seller", "delivery", "rating", "reviews")
-                    if cheaper.get(k) is not None})
-                results[0]["same_offer_saving"] = winner["price"] - cheaper["price"]
+                results[0]["same_offer_candidate"] = {
+                    "url": cheaper["url"], "price": cheaper["price"]}
             else:
                 results[0]["same_offer_checked"] = True
         except Exception as exc:
