@@ -1801,6 +1801,88 @@ def static_continuation(ctx, description: str) -> bool:
     return out
 
 
+def clip_speaker(ctx, src_path: str, tail_path: str = "") -> str:
+    """WHO does the talking in the clip, as a short positional descriptor.
+
+    A continuation's script names "the man" -- and with several faces in the
+    frame the model picked the biggest one, while the clip's own speaker was
+    the small man above (owner, 2026-11-03: the silent big man got the line).
+    One read over a strip of the clip's moments (a third in, two thirds in,
+    and the end) asks for the MAIN speaker -- who is talking in most of the
+    frames, not who happens to have a mouth open on the very last one (the
+    end alone read the big man yawning as the speaker). "" when there is
+    nothing to disambiguate or the read fails."""
+    import subprocess as _sp
+    import tempfile as _tf
+    from PIL import Image as _PIL
+    if not src_path or not os.path.exists(src_path):
+        return ""
+    d = None
+    try:
+        dur = probe(src_path).get("seconds") or 0.0
+        if dur <= 0:
+            return ""
+        d = _tf.mkdtemp(prefix="spk_")
+        picks = [max(0.0, dur * f) for f in (0.33, 0.66)]
+        if tail_path and os.path.exists(tail_path):
+            picks.append("TAIL")            # the end, from the ready tail
+        frames = []
+        for i, pos in enumerate(picks):
+            src = tail_path if pos == "TAIL" else src_path
+            at = 2.0 if pos == "TAIL" else pos
+            dst = os.path.join(d, f"f{i}.jpg")
+            r = _sp.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", str(at),
+                         "-i", src, "-frames:v", "1", "-q:v", "2", dst],
+                        capture_output=True, timeout=60)
+            if r.returncode == 0 and os.path.exists(dst) and os.path.getsize(dst):
+                frames.append(dst)
+        if not frames:
+            return ""
+        ims = [_PIL.open(f).convert("RGB") for f in frames]
+        # a phone-portrait clip is ~216 px wide and the small upper faces are
+        # ~13 px: at that size no vision model can read a mouth. Upscale the
+        # strip's frames so a mouth is dozens of pixels (owner, 2026-11-03:
+        # the read silently returned NONE at native size).
+        w = 640
+        ims = [i.resize((w, int(i.height * w / i.width)), _PIL.LANCZOS) for i in ims]
+        sheet = _PIL.new("RGB", (w, sum(i.height for i in ims) + 8 * (len(ims) - 1)), (8, 8, 8))
+        y = 0
+        for i in ims:
+            sheet.paste(i, (0, y)); y += i.height + 8
+        sheet_path = os.path.join(d, "sheet.jpg")
+        sheet.save(sheet_path, quality=92)
+        resp = vision_model(ctx)(
+            ctx=ctx, image_path=sheet_path,
+            user_text="This strip shows several moments of one video, top to "
+                      "bottom, in time order. Several people are in the frame. "
+                      "Who is the MAIN speaker -- the person whose mouth is OPEN "
+                      "mid-word while the others' mouths stay closed, across most "
+                      "of the moments? Reply with ONLY a short positional "
+                      "descriptor naming that speaker by size and place in the "
+                      "frame -- e.g. 'the smaller man at the upper left, not the "
+                      "large man in front' -- or the word NONE when no one is "
+                      "clearly speaking. No prose.",
+            system_prompt="You identify who speaks in video frames. Judge by "
+                          "open mouths across the moments; never confuse two "
+                          "people.",
+            max_tokens=60) or ""
+        import shutil as _sh
+        _sh.rmtree(d, ignore_errors=True)
+        d = None
+        line = resp.strip().splitlines()[0].strip() if resp.strip() else ""
+        if not line or line.upper().startswith("NONE") or line.startswith("<"):
+            return ""
+        return line[:160]
+    except Exception:
+        logger.debug("clip speaker read failed", exc_info=True)
+        return ""
+    finally:
+        if d:
+            import shutil as _sh
+            _sh.rmtree(d, ignore_errors=True)
+
+
+
 def quoted_lines(text: str) -> list:
     return [x for x in (next(g for g in m.groups() if g is not None).strip()
                         for m in _QUOTED.finditer(_SCENE_NOTE_RE.sub("", text or "")))

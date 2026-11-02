@@ -2019,6 +2019,30 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             description = video_mod.CONTINUE_CTX_PREFIX + description
         else:
             description = video_mod.CONTINUE_PREFIX + description
+        # Several faces and a spoken line: the clip's OWN speaker says it, not
+        # the biggest face in the frame (owner, 2026-11-03: the silent big man
+        # got the line while the small man above had been talking). One vision
+        # read of the clip's final moment names the speaker; empty changes
+        # nothing.
+        try:
+            import identity_metrics as _idm
+            _faces = _idm.face_boxes(_seed_img) if _seed_img else []
+        except Exception:
+            _faces = []
+        _said_now = str((state or {}).get("user_input_original")
+                        or (state or {}).get("user_input") or "")
+        if len(_faces) >= 2 and (video_mod.quoted_lines(description)
+                                 or video_mod.quoted_lines(_said_now)):
+            _speaker = video_mod.clip_speaker(ctx, cont_src, cont_tail)
+            if _speaker:
+                logger.info("generate_video: the clip's own speaker says the line: %s",
+                            _speaker[:80])
+                description += (f" The spoken line comes from {_speaker}, matching "
+                                "who was already talking in the clip; everyone "
+                                "else stays silent.")
+            else:
+                logger.info("generate_video: the clip's speaker could not be named "
+                            "(multi-face clip); the model picks freely")
         if people:
             # New people from photos sent after the clip: the start frame stays <Picture 1>.
             images = (images or [])[-1:] + people

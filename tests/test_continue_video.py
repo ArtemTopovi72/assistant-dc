@@ -245,6 +245,27 @@ check("static: the continuation prompt keeps the user's words",
       "says the line" in SEEN.get("description", ""), SEEN.get("description"))
 _E["static_continuation"] = lambda ctx, d: False
 
+# Several faces and a spoken line: the clip's OWN speaker says it (owner,
+# 2026-11-03: the silent big man got the line while the small upper man was
+# the one talking in the clip).
+import identity_metrics as _IDM
+_real_fb = _IDM.face_boxes
+_IDM.face_boxes = lambda path, pad=0.0, **k: [(10, 10, 60, 70), (100, 5, 120, 30)]
+_E["clip_speaker"] = lambda ctx, src, tail="": "the smaller man at the upper left, not the large man in front"
+SEEN.clear()
+H._handle_generate_video(TCtx(), {}, {"description": 'He says "не ходите в театр на пролетарской" to the camera'})
+check("multi-face + a spoken line: the clip's own speaker is named in the prompt",
+      "the smaller man at the upper left" in SEEN.get("description", ""), SEEN.get("description", "")[:200])
+check("...and the others are told to stay silent",
+      "stays silent" in SEEN.get("description", ""), SEEN.get("description", "")[:250])
+_IDM.face_boxes = lambda path, pad=0.0, **k: [(10, 10, 60, 70)]
+SEEN.clear()
+H._handle_generate_video(TCtx(), {}, {"description": 'He says "не ходите в театр" to the camera'})
+check("one face: no speaker clause",
+      "upper left" not in SEEN.get("description", ""), SEEN.get("description", "")[:150])
+_IDM.face_boxes = _real_fb
+_E["clip_speaker"] = lambda ctx, src, tail="": ""
+
 # ── the flow's own prefix: the reply says «продолжил видео», not «оживив фото» ──
 import graph_personality as GP
 import tg_tasks as TK
