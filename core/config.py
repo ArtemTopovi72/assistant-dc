@@ -768,7 +768,7 @@ SEARCH_MAX_RESULTS = _env_int("SEARCH_MAX_RESULTS", 10)   # candidates; the top 
 SEARCH_REGION = os.getenv("SEARCH_REGION", "wt-wt")        # wt-wt = worldwide; e.g. "us-en", "fr-fr"
 SEARCH_SAFESEARCH = os.getenv("SEARCH_SAFESEARCH", "moderate")  # off | moderate | strict
 SEARCH_TIMELIMIT = os.getenv("SEARCH_TIMELIMIT", "") or None    # None | d | w | m | y (recency)
-SEARCH_BACKEND = os.getenv("SEARCH_BACKEND", "auto")      # auto rotates engines
+SEARCH_BACKEND = os.getenv("SEARCH_BACKEND", "yahoo,wikipedia,brave,duckduckgo,mojeek")
 SEARCH_SNIPPET_CHARS = 500       # per-result snippet cap (keeps one result from hogging context)
 SEARCH_TOTAL_CHARS = 4000        # total raw-results cap handed to the model
 # Results kept per domain. Was effectively 1 (dedupe-by-domain), which meant a news
