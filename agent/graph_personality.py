@@ -393,7 +393,15 @@ def _forced_intent(ctx, state, text: str, has_image: bool, turn_tools, already_c
     absent schema loses the whole round)."""
     if not (text or "").strip():
         return ""
-    tool = _turn_intent(ctx, state, text)["must_call"]
+    # The early read of "which one is best?" can be cached as plain search
+    # before Telegram's forwarded Ozon links are folded into the turn. The
+    # links in this very message are stronger evidence than that stale read.
+    raw = str(text or "") + " " + str(state.get("user_input_original") or "")
+    if "ozon.ru/" in raw.lower():
+        from ozon_client import product_links
+        tool = "ozon_shop" if len(product_links(raw)) >= 2 else _turn_intent(ctx, state, text)["must_call"]
+    else:
+        tool = _turn_intent(ctx, state, text)["must_call"]
     if not tool or tool in (already_called or ()):
         return ""
     # A hard failure is not a successful tool call, but forcing it on every
