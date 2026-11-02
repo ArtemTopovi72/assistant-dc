@@ -393,6 +393,9 @@ _OZON_PRODUCT_DESC = (
 _OZON_SHOP_DESC = (
     "The DEFAULT tool for buying on Ozon: picks what to buy for a need, including analogues, "
     "similar items or alternatives to a linked product, cheaper, better or delivered sooner. "
+    "When the user asked to research reviews first and then find a product on Ozon, "
+    "use a SPECIFIC model named by the web evidence as the request, not a generic category; "
+    "if that model has no confirmed listing, try another reviewed model. "
     "Choose ONE winner from multiple product links sent in this or recent messages. "
     "A shopper that thinks: turns the request "
     "into a plan (one product, or every item for a set/occasion/list), searches "
