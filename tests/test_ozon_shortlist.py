@@ -54,6 +54,16 @@ def test_forwarded_links_are_shortlist_data():
     assert "QUOTED MESSAGE" not in words
 
 
+def test_current_forwarded_shortlist_does_not_include_old_products():
+    quoted = (f"Какой лучше?\n<<<QUOTED MESSAGE>>>\n{URLS[0]}\n{URLS[1]}"
+              "\n<<<END OF QUOTED MESSAGE>>>")
+    links, _ = handler._shop_shortlist({
+        "user_input_original": quoted,
+        "messages": [{"role": "user", "content": f"Старый выбор {URLS[2]}"}],
+    })
+    assert links == URLS[:2]
+
+
 def test_chooses_one_verified_cheaper_seller(monkeypatch):
     seen = {}
     winner = {"sku": "1", "url": URLS[0], "name": "Рюкзак", "price": 3000}

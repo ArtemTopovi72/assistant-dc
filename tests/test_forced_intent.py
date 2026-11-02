@@ -39,6 +39,7 @@ ctx.intent_read = reads(read=lambda _: {"must_call": "search"})["intent_read"]
 forwarded = ("Какой лучше?\n<<<QUOTED MESSAGE>>> "
              "https://ozon.ru/t/4KzhoQZ https://ozon.ru/t/r94EStj")
 assert G._forced_intent(ctx, {"messages": []}, forwarded, False, ozon_tools, ()) == "ozon_shop"
+assert "ozon_shop" in G._kit_always(ctx, set(), text=forwarded)
 ctx.intent_read = reads(read=stub)["intent_read"]
 print("ok must_call is forced only when offered and not yet called")
 

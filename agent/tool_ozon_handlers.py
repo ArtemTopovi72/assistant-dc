@@ -345,7 +345,7 @@ def _shop_shortlist(state) -> tuple[list[str], str]:
         return [], ""
     current = current.split("[The user's message contains", 1)[0].strip()
     captions = [current] if links else []
-    for msg in reversed((state or {}).get("messages") or []):
+    for msg in reversed((state or {}).get("messages") or []) if len(links) < 2 else []:
         if msg.get("role") != "user":
             continue
         words = user_words(str(msg.get("content") or ""))

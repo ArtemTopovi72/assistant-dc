@@ -473,6 +473,10 @@ def _kit_always(ctx, tools_called, has_image: bool = False, text: str = "") -> s
     tell this apart from retrieval's send-everything fallback.
     """
     always = set(tools_called or ())
+    if "ozon.ru/" in (text or "").lower():
+        from ozon_client import product_links
+        if len(product_links(text)) >= 2:
+            always.add("ozon_shop")
     # A picture in the conversation pins the picture tools, the same way a
     # full folder pins the file kit. tc_run A/B 2026-09-23: with the send-all
     # fallback gone, "увеличь"/"перекрась"/"восстанови" on an attached photo
