@@ -139,21 +139,25 @@ def gather(item: dict, ctx=None) -> list:
         q, sort, page = job
         try:
             if item.get("image"):
-                return _oz.call(ctx, "search_by_image", q, PER_QUERY, page=page)
-            return _oz.call(ctx, "search", q, sort, None, item.get("max_price"), PER_QUERY, page=page)
+                return _oz.call(ctx, "search_by_image", q, PER_QUERY, page=page), False
+            return _oz.call(ctx, "search", q, sort, None, item.get("max_price"), PER_QUERY, page=page), False
         except (_oz.OzonBlocked, _oz.OzonAgeGate):
             raise
         except Exception as exc:
             logger.warning("gather '%s' %s p%d failed: %s", q, sort, page, exc)
-            return []
+            return [], True
     seen, out = set(), []
-    for found in _oz.pmap(one, jobs):
+    failed = 0
+    for found, error in _oz.pmap(one, jobs):
+        failed += error
         for x in found:
             if x["sku"] in seen or (
                     item.get("max_price") and (x.get("price") or 0) > item["max_price"]):
                 continue
             seen.add(x["sku"])
             out.append(x)
+    if jobs and failed == len(jobs):
+        raise _oz.OzonError("все запросы к Озону завершились ошибкой; наличие товаров не проверено")
     return out
 
 

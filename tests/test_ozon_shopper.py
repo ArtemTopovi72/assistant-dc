@@ -10,6 +10,14 @@ import tools as T
 from seams import Over
 
 
+def test_failed_ozon_search_is_not_reported_as_empty_catalog(monkeypatch):
+    monkeypatch.setattr(S._oz, "call", lambda *a, **kw: (_ for _ in ()).throw(
+        S._oz.OzonError("Extra data")))
+    monkeypatch.setattr(S._oz, "pmap", lambda fn, jobs: [fn(job) for job in jobs])
+    with pytest.raises(S._oz.OzonError, match="наличие товаров не проверено"):
+        S.gather({"queries": ["рюкзак"]})
+
+
 def item(sku, name, price, rating=4.7, reviews=100):
     return {"sku": sku, "name": name, "price": price, "rating": rating, "reviews": reviews,
             "delivery": "Завтра", "url": f"https://www.ozon.ru/product/x-{sku}/",

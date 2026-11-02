@@ -75,7 +75,9 @@ def _fail(exc: Exception) -> str:
                 "Ozon blocks this server's VPN network, so retrying later will not help until "
                 "the admin sets OZON_PROXY or excludes ozon.ru from the VPN. Do not retry, do "
                 "not suggest trying again in a minute, do not invent products.")
-    return f"[TOOL ERROR] Ozon: {exc}. Do not invent products or prices."
+    return (f"[TOOL ERROR] Ozon: {exc}. Do not invent products or prices. "
+            "Do not claim a product is unavailable or a previous choice is the best "
+            "when the Ozon search failed.")
 
 
 @_owned
@@ -103,8 +105,10 @@ def _handle_ozon_search(ctx, state, args: dict) -> str:
         if args.get("max_delivery_days") is not None:
             return (f"Ozon has nothing for '{q}' delivered within {args['max_delivery_days']} "
                     "days. Say so; offer to widen the delivery window.")
-        return (f"Ozon found no verified matches for '{q}'. Required specifications were missing or wrong; "
-                "say that the requirements could not be verified, do not substitute unverified products.")
+        return (f"Ozon search produced no verified matching listing for '{q}'. "
+                "This does NOT establish that the product is absent from Ozon. "
+                "Say 'Не удалось подтвердить наличие через этот поиск'; "
+                "do not say 'нет в продаже' or recommend a previous product as the best.")
     _remember(ctx, items)
     lines = [f"Ozon results for '{q}' (sort: {args.get('sort') or 'popular'}):"]
     for i, it in enumerate(items, 1):

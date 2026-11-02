@@ -52,6 +52,7 @@ def test_unverified_requirements_are_not_recommended_when_card_is_incomplete():
                                {'query': 'USB cable', 'limit': 3})
     assert not ctx.turn_products
     assert 'sku 2 ' not in out and 'verified' in out.lower()
+    assert 'does NOT establish that the product is absent' in out
     assert len(prompts) == 2
 
 
