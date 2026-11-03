@@ -2020,9 +2020,17 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             logger.info("generate_video: static-screen continuation, %s as the only "
                         "picture%s", os.path.basename(_seed_img),
                         ", the tail's voice as an audio reference" if _static_voice else "")
-            description = (video_mod.CONTINUE_PREFIX + description
-                           + " The camera does not move and the framing stays "
-                             "exactly as <Picture 1> for the whole shot.")
+            # NOT CONTINUE_PREFIX: it speaks of a <Video 1> this shape does not
+            # attach, and H3 invented a whole new room to satisfy it (owner,
+            # 2026-11-03: a YouTube-player frame continued as a room). The
+            # view itself is the subject: same screen, same scene, no cut.
+            description = ("Static continuation of the view in <Picture 1>: the "
+                           "camera does not move and the framing, the view and "
+                           "everything in it stay EXACTLY as <Picture 1> for the "
+                           "whole shot -- the same screen or scene, no new angle, "
+                           "no cut, no added room. " + description.strip()
+                           + (" The line is spoken in the voice of <Audio 1>, the "
+                              "clip's own speaker." if _static_voice else ""))
         # Pinned frames (same as the parts of a long script): faster and seamless, but they
         # take no pictures -- new people from photos still need the reference path.
         elif not people and video_mod.motion_context_on():

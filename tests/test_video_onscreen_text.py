@@ -83,7 +83,7 @@ def _clip(name="c.mp4"):
 
 clip = _clip()
 _real_pieces = ocr_reader.read_pieces
-ocr_reader.read_pieces = lambda img: [([[0, 0]], "ПРИВЕТ МИР НА ВЫВЕСКЕ", 0.99)]
+ocr_reader.read_pieces = lambda img: ["ПРИВЕТ МИР НА ВЫВЕСКЕ"]
 check("all words read -> pass", video._clip_reads_words(clip, ["ПРИВЕТ", "МИР"]))
 check("one misread glyph still passes (fuzzy)",
       video._clip_reads_words(clip, ["ПРИВЕТ", "МНР"]))
@@ -130,7 +130,33 @@ ocr_reader.read_pieces = _real_pieces
 # ── the hook sits on every successful render ─────────────────────────────────
 gsrc = inspect.getsource(video.generate_video)
 check("generate_video runs the lettering gate before returning",
-      "_ensure_onscreen_text(ctx, final, description)" in gsrc)
+      "_ensure_onscreen_text(ctx, final, description," in gsrc)
+
+# ── text the SOURCE frame already shows is not burned in again ────────────────
+from PIL import Image as _PI, ImageDraw as _PD
+_srcpic = os.path.join(TMP, "ytseed.png")
+_im = _PI.new("RGB", (640, 360), (10, 10, 20))
+_dr = _PD.Draw(_im)
+_dr.text((40, 30), "GOOD TALKS GREAT PEOPLE", fill=(255, 255, 255))
+_im.save(_srcpic)
+import ocr_reader as _orc
+_real_read = _orc.read
+def _read_src(path):
+    return (["GOOD", "TALKS", "GREAT", "PEOPLE"]
+            if path == _srcpic else _real_read(path))
+_orc.read = _read_src
+_orc.read_pieces = _read_src          # the source guard reads pieces
+video._onscreen_text_words = lambda ctx, d: ["GOOD TALKS GREAT PEOPLE"]
+_c3 = _clip("c3.mp4")
+out3 = video._ensure_onscreen_text(None, _c3, "player screen", source=_srcpic)
+check("a player heading already on the source frame is NOT re-burned",
+      out3 == _c3, out3)
+video._onscreen_text_words = lambda ctx, d: ["ПРИВЕТ МИР"]
+out4 = video._ensure_onscreen_text(None, _c3, "player screen", source=_srcpic)
+check("genuinely NEW lettering still earns the overlay",
+      out4 != _c3 and out4.endswith("_text.mp4"), out4)
+_orc.read = _real_read
+video._onscreen_text_words = lambda ctx, d: []
 
 print(f"\n{OK}/{OK+BAD} checks passed")
 if __name__ == "__main__":

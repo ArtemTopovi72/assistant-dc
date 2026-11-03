@@ -245,7 +245,9 @@ check("static: no reference tail rides as a video", not SEEN.get("videos"), SEEN
 check("static: the clip's own voice rides as an audio reference",
       SEEN.get("audios") == [_TAIL_AUDIO], SEEN.get("audios"))
 check("static: the camera is told to hold the framing",
-      "framing stays" in SEEN.get("description", ""), SEEN.get("description", "")[:220])
+      "stay EXACTLY as <Picture 1>" in SEEN.get("description", "")
+      and "no new angle" in SEEN.get("description", ""),
+      SEEN.get("description", "")[:220])
 check("static: the continuation prompt keeps the user's words",
       "says the line" in SEEN.get("description", ""), SEEN.get("description"))
 _E["static_continuation"] = lambda ctx, d: False

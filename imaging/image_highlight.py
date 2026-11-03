@@ -100,6 +100,11 @@ def _ocr_boxes(ctx, image_path: str, terms: List[str], all_ok: bool) -> List[Box
         if pieces is None:
             return []
         boxes = []
+        # this build's read_pieces returns flat STRINGS (no boxes): the
+        # lettering path needs boxes it does not get, so it stays a no-op
+        # instead of raising (live 2026-11-03: the unpack crashed silently).
+        if pieces and not isinstance(pieces[0], (list, tuple)):
+            return []
         for box, text, conf in pieces:
             if conf < 0.4 or not _match_piece(str(text), terms, all_ok):
                 continue

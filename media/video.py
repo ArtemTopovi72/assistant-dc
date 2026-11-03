@@ -2379,7 +2379,10 @@ _ONSCREEN_TEXT_PROMPT = (
     "A video shot script follows. Does it ask for VISIBLE WRITTEN TEXT in the "
     "frame — a sign, a banner, a neon board, lettering on a shirt or an "
     "object, a poster, a caption shown on screen? Spoken dialogue and "
-    "subtitles the CAMERA does not see are no. Reply with ONLY JSON: "
+    "subtitles the CAMERA does not see are no. Text merely VISIBLE in a "
+    "reference picture — a player's title, a heading already on the screen "
+    "being continued — is the existing view to KEEP, not a request to render "
+    "new text. Reply with ONLY JSON: "
     '{"needs": true|false, "words": ["EXACT", "STRINGS"]}\n'
     "words = the exact strings that must be readable on screen, quoted "
     "verbatim from the script, uppercased as they should be written; empty "
@@ -2447,7 +2450,7 @@ def _clip_reads_words(path: str, words: list) -> bool:
                                    f"_ocr_{os.getpid()}_{idx}.jpg")
                 cv2.imwrite(tmp, frame)
                 pieces = ocr_reader.read_pieces(tmp) or []
-                texts.append(" ".join(str(p[-2]) for p in pieces).upper())
+                texts.append(" ".join(str(p) for p in pieces).upper())
                 try: os.unlink(tmp)
                 except OSError: pass
         cap.release()
@@ -2498,15 +2501,40 @@ def _overlay_text(path: str, words: list) -> str:
     return path
 
 
-def _ensure_onscreen_text(ctx, path: str, description: str) -> str:
+def _ensure_onscreen_text(ctx, path: str, description: str, source: str = "") -> str:
     """The lettering contract: if the script demanded readable on-screen text,
     the delivered clip READS it — checked with our own OCR, fixed with a
     deterministic overlay when the model garbled its lettering."""
     if not path or not os.path.exists(path):
         return path
-    words = _onscreen_text_words(ctx, description)
+    # The gate reads the USER'S OWN words, not the agent's script: the script
+    # describes what the camera sees (a player's heading) and that is not a
+    # request to render text (owner, 2026-11-03: the YouTube title got stamped
+    # under the clip). The script is the fallback for direct calls.
+    request = (getattr(ctx, "video_request", "") or "").strip()
+    words = _onscreen_text_words(ctx, request or description)
     if not words:
         return path
+    if words and source and os.path.exists(source):
+        # Text the SOURCE frame already shows is the view to KEEP, not a new
+        # caption to burn: the agent wrote the YouTube player's own heading
+        # into the script and the gate stamped it under the clip (owner,
+        # 2026-11-03, twice). Words readable in the source drop out; only
+        # genuinely NEW lettering earns the overlay.
+        try:
+            import ocr_reader
+            import difflib
+            have = " ".join(str(p) for p in (ocr_reader.read_pieces(source) or [])).upper()
+            if have:
+                words = [w for w in words if w.upper() not in have and not any(
+                    difflib.SequenceMatcher(None, w.upper(), part).ratio() >= 0.8
+                    for part in have.split())]
+                if not words:
+                    logger.info("on-screen text skipped: the source frame "
+                                "already shows it")
+                    return path
+        except Exception:
+            logger.debug("on-screen source OCR check failed", exc_info=True)
     if _clip_reads_words(path, words):
         logger.info("on-screen text verified by OCR: %r", words)
         return path
@@ -2667,7 +2695,8 @@ def generate_video(ctx, description: str, *,
     if ctx is not None:
         ctx.last_video_path = final
         ctx.last_video_prompt = description
-    final = _ensure_onscreen_text(ctx, final, description)
+    final = _ensure_onscreen_text(ctx, final, description,
+                                  source=getattr(ctx, "last_image_path", ""))
     if ctx is not None:
         ctx.last_video_path = final
     lat = latent_file(tag) if tag else ""
