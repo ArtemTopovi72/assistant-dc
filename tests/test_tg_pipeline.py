@@ -255,6 +255,13 @@ bot9.album_collect_s = None
 
 # …and the resolver has to understand what the buffer produced, or the whole
 # album path ends in a task nobody can run.
+bot9lang = make_bot(); approved(bot9lang, CID + 104)
+bot9lang._lang = lambda sess: "ru"
+bot9lang._resolve_and_push(CID + 104, [{"type": "album", "file_ids": ["a", "b"], "caption": ""}])
+check("caption-less album requests a Russian reply for a Russian user",
+      bool(bot9lang.pushed) and "Answer in Russian" in bot9lang.pushed[0].user_text,
+      repr(bot9lang.pushed[0].user_text if bot9lang.pushed else "no task"))
+
 bot9b = make_bot(); approved(bot9b, CID + 101)
 bot9b._resolve_and_push(CID + 101, [{"type": "album",
                                      "file_ids": ["a", "b", "c"],

@@ -1944,6 +1944,9 @@ class ResolveMixin:
                       "message; picture 1 is the one attached. All of them, seen together: "
                       + (_seen or "(could not be read)") + " Acknowledge every picture, not just "
                       "the first.]")
+            # The English scaffolding is not a language choice by the user.
+            if not own_words and merged.startswith("image\n") and lang == "ru":
+                merged += "\n[Answer in Russian.]"
 
         # A turn with no letters and no digits anywhere (a bare emoji, a wall of
         # punctuation) carries nothing for any tool or the model to act on -- yet
