@@ -274,6 +274,9 @@ if bot9b.pushed:
     check("with the album caption as the question, every picture counted",
           bot9b.pushed[0].user_text.startswith("rate these\n[The user sent 3 pictures"),
           repr(bot9b.pushed[0].user_text))
+    check("an album caption can choose its own reply language",
+          "Answer in Russian" not in bot9b.pushed[0].user_text,
+          repr(bot9b.pushed[0].user_text))
     check("and one image attached, not three",
           bool(bot9b.pushed[0].image_path),
           repr(bot9b.pushed[0].image_path))
