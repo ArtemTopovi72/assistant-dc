@@ -343,7 +343,7 @@ def test_a_spoken_line_stays_in_the_first_part_that_has_it():
 
 
 def test_the_speech_check_wants_the_lines_in_the_sound():
-    assert V.heard_lines(["эта штука слишком тяжёлая"], "ну эта штука слишком тяжелая блин")
+    assert not V.heard_lines(["эта штука слишком тяжёлая"], "ну эта штука слишком тяжелая блин")
     assert not V.heard_lines(["эта штука слишком тяжёлая"], "раз вас сына угут двойные")
     assert V.quoted_lines('He says «ладно, пойдёт» and nods.') == ["ладно, пойдёт"]
 

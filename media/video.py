@@ -1625,9 +1625,19 @@ def heard_lines(expected: Sequence[str], heard: str) -> bool:
     said = {w for line in expected for w in _flat_line(line).split()}
 
     def written(h):
+        numerals = {'0': ('ноль', 'zero'), '1': ('один', 'одна', 'one'),
+                    '2': ('два', 'две', 'two'), '3': ('три', 'three'),
+                    '4': ('четыре', 'four'), '5': ('пять', 'five'),
+                    '6': ('шесть', 'six'), '7': ('семь', 'seven'),
+                    '8': ('восемь', 'eight'), '9': ('девять', 'nine'),
+                    '10': ('десять', 'ten')}
+        if h in numerals and any(word in said for word in numerals[h]):
+            return True
         return h in said or any(len(os.path.commonprefix([h, w])) >= max(3, min(len(h), len(w)) - 2) for w in said)
     extra = [h for h in _flat_line(heard).split() if not written(h)]
-    return len(extra) <= max(2, len(said) // 6)
+    # Even a single extra word cannot verify an explicitly dictated line;
+    # two invented fragments previously slipped through as "exact speech".
+    return not extra
 
 
 def garbled_words(words: Sequence[str], got: set) -> list:

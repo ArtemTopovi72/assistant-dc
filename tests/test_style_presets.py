@@ -29,6 +29,13 @@ def test_unknown_preset_key_returns_empty():
     assert SP.preset_label("nonexistent", "ru") == "nonexistent"
 
 
+def test_anime_preset_preserves_the_original_background():
+    prompt = SP.preset_prompt('anime').lower()
+    assert 'existing background' in prompt
+    assert 'do not invent a rainbow' in prompt
+    assert 'vivid saturated colors' not in prompt
+
+
 def test_style_preset_button_forces_redraw_image():
     offered = [{"function": {"name": "redraw_image"}},
                {"function": {"name": "transfer_image"}}]
