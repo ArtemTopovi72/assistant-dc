@@ -1,10 +1,17 @@
 from types import SimpleNamespace
 
-from graph_personality import _sandbox_execution_denied
+from graph_personality import _sandbox_execution_denied, _existing_transcript_answer
 
 
 def test_execution_denial_requires_explicit_code_intent():
     no_access = SimpleNamespace(sandbox=None, sandbox_user=None)
+    assert _sandbox_execution_denied(no_access, {'ok': True, 'must_call': 'run_code'})
+    no_access.media_transcript = 'Распознанная речь'
+    assert _existing_transcript_answer(no_access, {'ok': True, 'must_call': 'transcribe_media'}, 'Расшифруй видео') == 'Распознанная речь'
+    assert not _existing_transcript_answer(no_access, {'ok': True, 'must_call': 'transcribe_media'}, 'Расшифруй и переведи видео')
+    assert not _existing_transcript_answer(no_access, {'ok': True, 'must_call': 'transcribe_media'}, 'Сохрани субтитры SRT')
+    assert not _sandbox_execution_denied(no_access, {'ok': True, 'must_call': 'transcribe_media'}, 'Расшифруй видео')
+    assert _sandbox_execution_denied(no_access, {'ok': True, 'must_call': 'transcribe_media'}, 'Сохрани субтитры в SRT')
     assert _sandbox_execution_denied(no_access, {'ok': True, 'must_call': 'run_code'})
     assert not _sandbox_execution_denied(no_access, {'ok': True, 'must_call': 'search'})
     assert not _sandbox_execution_denied(no_access, {'ok': False, 'must_call': 'run_code'})

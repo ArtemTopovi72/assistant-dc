@@ -409,6 +409,10 @@ def _forced_intent(ctx, state, text: str, has_image: bool, turn_tools, already_c
         tool = "ozon_shop" if len(product_links(raw)) >= 2 else _turn_intent(ctx, state, text)["must_call"]
     else:
         tool = _turn_intent(ctx, state, text)["must_call"]
+    if tool == "transcribe_media" and getattr(ctx, "media_transcript", ""):
+        from tool_code_handlers import _needs_transcript_file
+        if not _needs_transcript_file(raw):
+            return ""
     if not tool or tool in (already_called or ()):
         return ""
     # A hard failure is not a successful tool call, but forcing it on every
@@ -428,11 +432,25 @@ def _forced_subtitles(text, turn_tools, already_called):
     return ''
 
 
-def _sandbox_execution_denied(ctx, read: dict) -> bool:
+def _sandbox_execution_denied(ctx, read: dict, text: str = '') -> bool:
     from tool_code_handlers import EXECUTING_TOOL_NAMES
+    if read.get('must_call') == 'transcribe_media' and getattr(ctx, 'media_transcript', ''):
+        from tool_code_handlers import _needs_transcript_file
+        if not _needs_transcript_file(text):
+            return False
     return (read.get('ok') and read.get('must_call') in EXECUTING_TOOL_NAMES
             and (getattr(ctx, 'sandbox', None) is None
                  or not dep(ctx, 'may_run_code', _sandbox_access.may_run_code)(getattr(ctx, 'sandbox_user', None))))
+
+
+def _existing_transcript_answer(ctx, read: dict, text: str) -> str:
+    transcript = (getattr(ctx, 'media_transcript', '') or '').strip()
+    if not transcript or not read.get('ok') or read.get('must_call') != 'transcribe_media':
+        return ''
+    if re.search(r'перевед|перевод|объясн|объясни|перескаж|суммари|summari[sz]|translat', text or '', re.I):
+        return ''
+    from tool_code_handlers import _needs_transcript_file
+    return '' if _needs_transcript_file(text) else transcript
 
 
 def _sandbox_has_files(sandbox) -> bool:
@@ -1008,7 +1026,15 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
     # What the user's OWN words ask for, read by the model (agent/intent.py),
     # not keyword lists: «нарисуй» inside a quoted or attached text is data.
     _own_read = _turn_intent(ctx, state, (_own_texts[-1] or _own_texts[0]) if _own_texts else "")
-    if _sandbox_execution_denied(ctx, _own_read):
+    transcript_answer = _existing_transcript_answer(ctx, _own_read, original_input or user_input or '')
+    if transcript_answer:
+        user_msg['content'] = user_input
+        messages.append({'role': 'assistant', 'content': transcript_answer})
+        state['messages'], state['final_answer'] = messages, transcript_answer
+        ctx.remember('assistant', transcript_answer, {'user_input': user_input})
+        state['session_memory_text'] = ctx.memory_text()
+        return state
+    if _sandbox_execution_denied(ctx, _own_read, original_input or user_input or ''):
         answer = ("У меня нет доступа к выполнению кода в песочнице для этого чата. Попроси администратора включить доступ."
                   if re.search(r'[А-Яа-яЁё]', original_input or user_input or '') else
                   "Code execution in the sandbox is unavailable for this chat. Ask the administrator to enable access.")

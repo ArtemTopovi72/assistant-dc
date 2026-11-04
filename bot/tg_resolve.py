@@ -197,6 +197,8 @@ class ResolveMixin:
         task.replaces_task_id = prev.task_id
         task.incoming_ids.extend(prev.incoming_ids)
         task.user_text = prev.user_text + "\n\n" + task.user_text
+        task.media_transcript = "\n".join(filter(None, (getattr(prev, "media_transcript", ""),
+                                                        getattr(task, "media_transcript", ""))))
         fresh_attachment = bool(task.image_path)
         for f in ("image_path", "image_id", "image_is_photo"):
             if f == 'image_id' and fresh_attachment:
@@ -522,6 +524,7 @@ class ResolveMixin:
             return
 
         texts: list[str]   = []
+        media_transcripts: list[str] = []
         # Text WE wrote for the model, not words the user said. Kept apart so a
         # pending prompt prefix cannot attach itself to our own scaffolding --
         # see where the prefix is applied, below.
@@ -1248,6 +1251,8 @@ class ResolveMixin:
                 if not transcribed and not _seen.get("description"):
                     self._send_text(chat_id, tg_bot._t("no_transcribe", lang),
                                     keyboard=self._main_menu_kb(sess, lang)); return
+                if transcribed:
+                    media_transcripts.append(transcribed)
                 texts.append(self._as_request(item, ((item.get("caption") or "") + " " + (transcribed or "")).strip()))
                 if _seen.get("description"):
                     # The picture of the video, for the model: what the
@@ -1964,6 +1969,7 @@ class ResolveMixin:
             reply_to=_reply_to,
             context_generation=_generation,
             image_selection=selection,
+            media_transcript="\n".join(media_transcripts),
         )
         # last_task_id/last_task_text are set at DELIVERY of a failure (in
         # tg_tasks.py _remember_failed_task), not here at push time.

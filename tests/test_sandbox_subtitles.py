@@ -50,3 +50,29 @@ def test_subtitle_transcription_checks_cancellation_between_segments():
     segment = SimpleNamespace(start=0, end=1, text='hello', words=None)
     with pytest.raises(RuntimeError, match='cancelled'):
         _subtitle_cues([segment], lambda: True)
+
+
+def test_already_transcribed_attachment_does_not_force_sandbox_tool():
+    from graph_personality import _forced_intent
+    def read(ctx, text, previous="", attached=""):
+        return {"needs_tool": True, "must_call": "transcribe_media"}
+    ctx = SimpleNamespace(last_image_path=None, media_transcript="hello from the clip", intent_read=read)
+    tools = [{"function": {"name": "transcribe_media"}}]
+    assert _forced_intent(ctx, {"messages": []}, "What was said in the recording?", False, tools, ()) == ""
+    assert _forced_intent(ctx, {"messages": []}, "Create an SRT subtitle file", False, tools, ()) == "transcribe_media"
+    ctx.media_transcript = ""
+    assert _forced_intent(ctx, {"messages": []}, "What was said in the recording?", False, tools, ()) == "transcribe_media"
+
+
+def test_missing_sandbox_path_uses_current_attachment_transcript(tmp_path):
+    ctx = SimpleNamespace(sandbox=Sandbox(tmp_path), media_transcript="hello from the clip",
+                          sandbox_user=SimpleNamespace(prefs={"sandbox": sandbox_access.CODE}))
+    out = _handle_transcribe_media(ctx, {"user_input_original": "What was said?"}, {"path": "input_file_0.mp4"})
+    assert "hello from the clip" in out and "TOOL ERROR" not in out
+
+
+def test_transcript_is_preserved_in_the_durable_task():
+    from tg_queue_backends import _Task
+    task = _Task(task_id="1", chat_id=123, user_text="question", media_transcript="heard words")
+    assert _Task.from_dict(task.to_dict()).media_transcript == "heard words"
+    assert _Task.from_dict({"task_id": "2", "chat_id": 123, "user_text": "old"}).media_transcript == ""

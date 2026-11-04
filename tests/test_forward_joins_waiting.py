@@ -84,6 +84,13 @@ bot._resolve_and_push(CID, [{"type": "text", "text": "сам по себе"}])
 bot._resolve_and_push(CID, [{"type": "text", "text": "ещё вопрос"}])
 check("ordinary typed messages are not folded", len(waiting()) == 2, [t.user_text for t in waiting()])
 
+bot._backend.drop_chat(CID)
+previous = queue("first media")
+previous.media_transcript = "first words"
+new = T._Task(task_id="new-media", chat_id=CID, user_text="second media", media_transcript="second words")
+check("joined media preserves both current transcripts",
+      bot._join_waiting(CID, new) and new.media_transcript == "first words\nsecond words", new.media_transcript)
+
 print(f"\n{OK}/{OK + BAD} checks passed")
 if __name__ == "__main__":
     sys.exit(0 if BAD == 0 else 1)

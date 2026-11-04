@@ -848,6 +848,10 @@ def _subtitle_cues(segments, cancelled=None):
     return cues
 
 
+def _needs_transcript_file(text: str) -> bool:
+    return bool(re.search(r"субтитр|таймкод|файл|\b(?:subtitle|caption|timecode|srt|vtt|file|save|export)\b", text or "", re.I))
+
+
 @_guard
 def _handle_transcribe_media(ctx, state, args: dict) -> str:
     import uuid
@@ -857,6 +861,10 @@ def _handle_transcribe_media(ctx, state, args: dict) -> str:
         return "[TOOL ERROR] Speech transcription requires code access to the sandbox."
     source = box.resolve(args.get("path") or "")
     if not source.is_file():
+        transcript = getattr(ctx, "media_transcript", "")
+        request = str((state or {}).get("user_input_original") or (state or {}).get("user_input") or "")
+        if transcript and not _needs_transcript_file(request):
+            return "The current attachment has already been transcribed:\n" + transcript
         return "[TOOL ERROR] Media file not found in the sandbox."
     whisper = getattr(getattr(ctx, "models", None), "whisper", None)
     if whisper is None:

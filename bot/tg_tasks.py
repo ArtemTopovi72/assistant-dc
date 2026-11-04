@@ -722,6 +722,7 @@ class TaskRunnerMixin:
         # see each other's picture or cancel each other's request.
         _cancel = threading.Event()
         ctx = tg_bot._scoped_ctx(_shared, cancel_event=_cancel)
+        ctx.media_transcript = getattr(task, "media_transcript", "")
         ctx._session_token = token
         ctx._memory_before = _copy_mod.deepcopy(sess.get_tg_memory())
         ctx._facts_before = _copy_mod.deepcopy(sess.get_tg_facts())
