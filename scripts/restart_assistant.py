@@ -29,8 +29,11 @@ def main():
             time.sleep(1)
         else:
             return
-    launcher = os.path.join(os.path.dirname(__file__), "launch_all.py")
-    subprocess.Popen([sys.executable, launcher], cwd=os.path.dirname(os.path.dirname(__file__)),
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    launcher = os.path.join(root, "scripts", "launch_all.py")
+    venv_python = os.path.join(root, "venv", "Scripts", "pythonw.exe") if os.name == "nt" else os.path.join(root, "venv", "bin", "python")
+    python = venv_python if os.path.isfile(venv_python) else sys.executable
+    subprocess.Popen([python, launcher], cwd=root,
                      creationflags=getattr(subprocess, "DETACHED_PROCESS", 0),
                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                      stderr=subprocess.DEVNULL)

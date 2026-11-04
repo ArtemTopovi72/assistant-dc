@@ -40,8 +40,8 @@ def check(label, cond, detail=""):
 
 def make_bot():
     bot = T.TelegramBot("123:TEST", lambda: None, lambda: None, lambda: {}, silent_mode=True)
-    bot.sent, bot.edits, bot.audio_sent = [], [], []
-    bot._send_text = lambda cid, text, **kw: (bot.sent.append(text), 1)[-1]
+    bot.sent, bot.sent_kb, bot.edits, bot.audio_sent = [], [], [], []
+    bot._send_text = lambda cid, text, **kw: (bot.sent.append(text), bot.sent_kb.append(kw.get("keyboard")), 1)[-1]
     bot._edit_text = lambda cid, mid, text, **kw: (bot.edits.append((text, kw.get("keyboard"))), True)[-1]
     bot._send_audio = lambda cid, path, caption="": (bot.audio_sent.append(path), True)[-1]
     bot._api_post = lambda *a, **k: {}
@@ -182,6 +182,7 @@ check("every field is back on Auto, the ♻️ line is said and the menu redrawn
       sess.music_tempo == "" and sess.music_steps == "" and sess.music_genre == ""
       and any("сброшены на «Авто»" in t for t in bot.sent) and any("Настройки песни" in t for t in bot.sent[-1:])
       and bot._backend.depth() == 0, (sess.music_tempo, sess.music_steps, bot.sent[-2:], bot._backend.depth()))
+check("typed reset restores a reply keyboard", any((kb or {}).get("keyboard") for kb in bot.sent_kb))
 
 # ── the bot's own picks and the report ───────────────────────────────────────
 import llm as _llm

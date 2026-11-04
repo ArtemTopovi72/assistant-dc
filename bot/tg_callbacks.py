@@ -526,7 +526,8 @@ class CallbackMixin:
             self._store.put(sess)
             _redraw(tg_bot._music_menu_text(sess, lang),
                     tg_bot._music_menu_kb(sess, lang))
-            self._send_text(chat_id, tg_bot._t("ms_was_reset", lang))
+            self._send_text(chat_id, tg_bot._t("ms_was_reset", lang),
+                            keyboard=self._state_kb(sess, lang))
             self._activity.log(chat_id, "system", "[song settings] reset")
             return
         if action == "open" and len(parts) > 2 and parts[2] in tg_bot._MUSIC_FIELDS:

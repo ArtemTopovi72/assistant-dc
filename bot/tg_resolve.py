@@ -895,7 +895,8 @@ class ResolveMixin:
                     # the menu redrawn so the user SEES every line back on Auto.
                     _tg_music.reset_all(sess); self._store.put(sess)
                     self._goto_menu(sess, "creativity")
-                    self._send_text(chat_id, tg_bot._t("ms_was_reset", lang))
+                    self._send_text(chat_id, tg_bot._t("ms_was_reset", lang),
+                                    keyboard=self._state_kb(sess, lang))
                     self._send_text(chat_id, tg_bot._music_menu_text(sess, lang),
                                     parse_mode="HTML",
                                     keyboard=tg_bot._music_menu_kb(sess, lang))

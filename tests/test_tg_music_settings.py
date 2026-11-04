@@ -176,6 +176,7 @@ check("...so prefs_of drops the field entirely",
 
 bot.sent.clear()
 bot._dispatch(cb(CID, "music:reset"))
+check("reset restores the reply keyboard", bool((bot.sent_kb[-1] or {}).get("keyboard")))
 s = bot._get_session(CID)
 check("reset clears every field, the length back to the bot's pick",
       not any(getattr(s, "music_" + f) for f in TM.FIELDS if f != "duration")
