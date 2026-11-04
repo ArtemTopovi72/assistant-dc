@@ -29,7 +29,24 @@ def test_a_fresh_wait_stays_armed():
     assert s.pending_outfit_target == "img2"
 
 
-def test_a_restored_wait_counts_from_load():
-    s = S(1, {"pending_style_target": "img3"})
-    assert s.expire_photo_waits() is False
-    assert s.pending_style_target == "img3"
+def test_restored_wait_keeps_original_age():
+    s = S(1)
+    s.pending_style_target = 'img3'
+    s.__dict__['_wait_ts']['pending_style_target'] = time.time() - S.PHOTO_WAIT_TTL_S - 5
+    restored = S(1, s.to_dict())
+    assert restored.expire_photo_waits() is True
+    assert restored.pending_style_target == ''
+
+
+def test_recent_restored_wait_is_preserved():
+    s = S(1)
+    s.pending_swap_target = 'img4'
+    restored = S(1, s.to_dict())
+    assert restored.expire_photo_waits() is False
+    assert restored.pending_swap_target == 'img4'
+
+
+def test_legacy_wait_without_timestamp_is_not_revived():
+    s = S(1, {'pending_swap_target': 'old', 'swap_where': 'first'})
+    assert s.expire_photo_waits() is True
+    assert not s.pending_swap_target

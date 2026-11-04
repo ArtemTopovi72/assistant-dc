@@ -380,6 +380,15 @@ class _Session:
         # pending_style_target once it arrives, same as the existing
         # under-a-picture style flow from there on.
         self.awaiting_style_photo: bool = bool(d.get("awaiting_style_photo", False))
+        # A restart must not turn an old pending photo into a fresh ten-minute wait.
+        saved_waits = d.get("photo_wait_ts")
+        saved_waits = saved_waits if isinstance(saved_waits, dict) else {}
+        now = time.time()
+        waits = self.__dict__.setdefault("_wait_ts", {})
+        for name in self.PHOTO_WAITS:
+            if getattr(self, name, None):
+                stamp = saved_waits.get(name)
+                waits[name] = min(now, stamp) if type(stamp) in (int, float) and 0 < stamp < float('inf') else 0
         # The last weather location this chat actually resolved (lat/lon/name/
         # country), so the "48 hours" / "pick a date" follow-up buttons under a
         # forecast can re-fetch WITHOUT re-typing (and re-geocoding, and possibly
@@ -639,6 +648,7 @@ class _Session:
                 "pending_style_target": self.pending_style_target,
                 "pending_outfit_target": self.pending_outfit_target,
                 "pending_swap_target": self.pending_swap_target,
+                "photo_wait_ts": dict(self.__dict__.get("_wait_ts", {})),
                 "swap_boxes":        self.swap_boxes,
                 "swap_where":        self.swap_where,
                 "awaiting_animate_photo": self.awaiting_animate_photo,
