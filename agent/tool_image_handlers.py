@@ -1503,9 +1503,8 @@ def _bridged(ctx, clip: str, part: str) -> str:
     return video_mod.bridge_part(ctx, frame, part) if tg_continue.seed_frame(clip, frame) else part
 
 
-def _speech_ok(ctx, clip: str, lines: list) -> bool:
-    """Whisper hears `lines` in the clip's own sound. A broken check passes: it must never
-    block a render."""
+def _speech_ok(ctx, clip: str, lines: list) -> Optional[bool]:
+    """Whether Whisper confirms the line; None means the check itself failed."""
     import subprocess
     import tempfile
     try:
@@ -1518,7 +1517,7 @@ def _speech_ok(ctx, clip: str, lines: list) -> bool:
         return _video(ctx).heard_lines(lines, heard)
     except Exception:
         logger.warning("video chain: the speech check failed", exc_info=True)
-        return True
+        return None
 
 
 def _voice_sim(clip: str, voices) -> Optional[float]:
@@ -2502,10 +2501,12 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 eyes = video_mod.eye_drift(images[0], p, light=False) if head and p and os.path.exists(p) else None
                 # part 1 had no speech check: its last word, cut by the clip's end, went to the user
                 # in runs 17 and 18 (2026-10-20); a take that says it all ranks first
-                missed = bool(head and said_first and p and os.path.exists(p)
-                              and not speech_ok(ctx, p, said_first))
+                verdict = (speech_ok(ctx, p, said_first)
+                           if head and said_first and p and os.path.exists(p) else True)
+                missed = verdict is False
+                unverified = verdict is not True
                 if head and p and os.path.exists(p):
-                    rank = (missed, eyes is None, eyes or 0)
+                    rank = (unverified, eyes is None, eyes or 0)
                     if best_eyes is None or rank < best_eyes[0]:
                         best_eyes = (rank, result)
                 if ((eyes is not None and eyes > 0) or missed) and attempt < 3:
@@ -2527,7 +2528,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 speech_unverified = best_eyes[0][0]
                 framing_unverified = not best_eyes[0][1] and best_eyes[0][2] > 0
             else:
-                speech_unverified = missed
+                speech_unverified = unverified
             if head and result.get("path") and os.path.exists(result["path"]):
                 result = {**result, "path": _pull_light(video_mod, images[0], result["path"], 1)}
         except Exception as exc:
@@ -2548,7 +2549,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                     path = result["path"] = revoiced
                     if said_first:
                         try:
-                            speech_unverified = speech_unverified or not speech_ok(ctx, path, said_first)
+                            speech_unverified = speech_unverified or speech_ok(ctx, path, said_first) is not True
                         except Exception:
                             logger.warning("could not verify speech after voice conversion", exc_info=True)
                             speech_unverified = True

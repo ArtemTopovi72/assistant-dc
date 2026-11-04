@@ -267,6 +267,12 @@ class UnclearSpeechCtx(TCtx):
 
 _unclear_reply = H._handle_generate_video(UnclearSpeechCtx(), {}, {"description": 'he says "the line"'})
 check("unverified speech is disclosed", "could not confirm the requested line" in _unclear_reply, _unclear_reply)
+class UnavailableSpeechCheckCtx(TCtx):
+    speech_ok = staticmethod(lambda ctx, clip, lines: None)
+
+_unknown_reply = H._handle_generate_video(UnavailableSpeechCheckCtx(), {}, {"description": 'he says "the line"'})
+check("failed speech check is disclosed instead of claimed successful",
+      "could not confirm the requested line" in _unknown_reply, _unknown_reply)
 class RevoiceLostSpeechCtx(TCtx):
     def __init__(self):
         super().__init__(); self.checks = 0
