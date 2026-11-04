@@ -302,6 +302,8 @@ def estimate_seconds(description: str, capped: bool = True, reads=None) -> float
     beats = max(1, sum(r["beats"] for _, r in acts))
     secs = 1.0 + words / 2.3 + beats * 1.3 + 2.0 * sum(r["hold"] for _, r in acts)
     top = frames_to_seconds(VIDEO_MAX_FRAMES_AUTO) if capped else float("inf")
+    logger.info("video duration estimate: %d speech words, %d action beats, %d holds, %.1fs before limits",
+                words, beats, sum(r["hold"] for _, r in acts), secs)
     return round(min(top, max(frames_to_seconds(VIDEO_DEFAULT_FRAMES), secs)), 2)
 
 
