@@ -69,6 +69,31 @@ check("the people come back as one numbered collage", len(bot.photos) == 1
 cbs = [b["callback_data"] for row in (bot.photos[0][1] or {}).get("inline_keyboard", []) for b in row]
 check("...with a button per person, numbered left to right", cbs == ["swp:1", "swp:2", "swp:3", "swp:4"], cbs)
 
+# Face detection and the overview must also support more than a single row.
+import identity_metrics
+_old_face_boxes = identity_metrics.face_boxes
+identity_metrics.face_boxes = lambda path, **kw: [(i, 0, i + 1, 1) for i in range(12)][:kw.get("max_faces")]
+try:
+    many = person_swap.people(PIC)
+    check("face detection does not truncate the list", len(many) == 12, len(many))
+    overview = person_swap.collage(PIC, [(10 * i, 10, 10 * i + 8, 30) for i in range(12)], os.path.join(d, "many.jpg"))
+    with Image.open(overview) as overview_image:
+        check("large overview wraps into multiple rows", overview_image.height > 320, overview_image.size)
+finally:
+    identity_metrics.face_boxes = _old_face_boxes
+
+# Telegram allows at most eight inline buttons per row.
+bot.photos.clear()
+bot.modules["person_swap"].people = lambda path: [(10 * i, 10, 10 * i + 8, 30) for i in range(12)]
+bot._cb_swap_person(CID)
+rows = bot.photos[-1][1]["inline_keyboard"]
+check("more than eight people get selectable buttons in valid rows",
+      all(len(row) <= 8 for row in rows)
+      and [b["callback_data"] for row in rows for b in row] == [f"swp:{i}" for i in range(1, 13)], rows)
+bot.modules["person_swap"].people = lambda path: [(80, 100, 140, 170), (260, 90, 320, 160),
+                                                    (440, 95, 500, 165), (620, 110, 680, 180)]
+bot._cb_swap_person(CID)
+
 bot._cb_swap_pick(CID, "swp:4")
 s = bot._get_session(CID)
 check("a number picks that person and asks for who goes instead",

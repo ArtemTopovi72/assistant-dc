@@ -11,7 +11,6 @@ from typing import List, Tuple
 from PIL import Image, ImageDraw, ImageFont
 
 Box = Tuple[int, int, int, int]
-MAX_PEOPLE = 9                  # one row of digit buttons
 CANDIDATES = 2                  # takes per swap; the vision model picks the best
 
 
@@ -21,7 +20,7 @@ def people(path: str) -> List[Box]:
     import identity_metrics
     # 0.4, not the default 0.6: Molotov in profile under a hat was missed on the Stalin
     # photo; a stray extra tile in a picker costs nothing, a missing person does.
-    boxes = identity_metrics.face_boxes(path, pad=0.0, max_faces=MAX_PEOPLE, score_threshold=0.4)
+    boxes = identity_metrics.face_boxes(path, pad=0.0, max_faces=None, score_threshold=0.4)
     return sorted(boxes, key=lambda b: b[0])
 
 
@@ -52,9 +51,11 @@ def collage(path: str, boxes: List[Box], out: str, tile: int = 320) -> str:
         f = _font(int(r * 1.3))
         d.text((8 + r, 8 + r), str(n), fill="white", font=f, anchor="mm")
         tiles.append(t)
-    sheet = Image.new("RGB", (tile * len(tiles) + 8 * (len(tiles) - 1), tile), "white")
+    cols = min(6, len(tiles))
+    rows = (len(tiles) + cols - 1) // cols
+    sheet = Image.new("RGB", (tile * cols + 8 * (cols - 1), tile * rows + 8 * (rows - 1)), "white")
     for i, t in enumerate(tiles):
-        sheet.paste(t, (i * (tile + 8), 0))
+        sheet.paste(t, ((i % cols) * (tile + 8), (i // cols) * (tile + 8)))
     os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
     sheet.save(out, quality=92)
     return out

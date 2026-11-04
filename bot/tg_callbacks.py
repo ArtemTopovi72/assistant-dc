@@ -1104,8 +1104,10 @@ class CallbackMixin:
             return self._cb_swap_pick(chat_id, "swp:1")
         sheet = person_swap.collage(entry["path"], boxes, os.path.join(
             os.path.dirname(entry["path"]), f"swap_{target}.jpg"))
-        self._send_photo(chat_id, sheet, keyboard={"inline_keyboard": [[
-            {"text": str(n), "callback_data": f"swp:{n}"} for n in range(1, len(boxes) + 1)]]}, feedback="")
+        buttons = [{"text": str(n), "callback_data": f"swp:{n}"}
+                   for n in range(1, len(boxes) + 1)]
+        self._send_photo(chat_id, sheet, keyboard={"inline_keyboard": [
+            buttons[i:i + 8] for i in range(0, len(buttons), 8)]}, feedback="")
         self._send_text(chat_id, tg_bot._t("swap_pick", lang), keyboard=self._state_kb(sess))
 
     def _cb_swap_pick(self, chat_id: int, data: str) -> None:
