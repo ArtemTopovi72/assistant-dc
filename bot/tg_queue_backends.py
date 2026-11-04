@@ -57,6 +57,7 @@ class _Task:
     image_selection: str = ''
     translation: dict = field(default_factory=dict)
     media_transcript: str = ''
+    source_video_path: str = ''
 
     def to_dict(self) -> dict:
         return self.__dict__.copy()

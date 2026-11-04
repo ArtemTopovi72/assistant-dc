@@ -1983,10 +1983,13 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
 
     # «продолжи это видео» in words: made a new clip from nothing, another style even
     # (live 2026-10-13) -- only the ▶️ button set the clip up. The chat's last clip here.
+    attached_video = getattr(ctx, "attached_video_path", "")
+    if attached_video and not os.path.isfile(attached_video):
+        return "[TOOL ERROR] The attached video is no longer available. Ask the user to send it again; no video was made."
     lv = getattr(ctx, "last_video_path", None)
     # A picture sent after the clip is what «оживи» is about: a fresh meme was read as
     # «continue the old clip» and its plan went on from an unrelated video (live 2026-10-13).
-    newer_pic = lv and os.path.exists(lv) and any(
+    newer_pic = not getattr(ctx, "attached_video_path", "") and lv and os.path.exists(lv) and any(
         os.path.exists(p) and os.path.getmtime(p) > os.path.getmtime(lv) for p in (images or []))
     if not getattr(ctx, "continue_tail", "") and lv and os.path.exists(lv) and not newer_pic:
         said = str((state or {}).get("user_input_original") or (state or {}).get("user_input") or "")
@@ -2180,6 +2183,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     # blocks"): the first part here, the rest after it below.
     raw = (args.get("description") or "").strip()
     _said = str((state or {}).get("user_input_original") or (state or {}).get("user_input") or "")
+    if continuing and getattr(ctx, "attached_video_path", ""):
+        _said = user_words(_said)
     if continuing and re.search(r"говор|скаж|сказ|произнес|произнёс|озвуч|says?|speaks?", _said, re.I):
         original_lines = video_mod.quoted_lines(_said)
         draft_lines = video_mod.quoted_lines(raw)

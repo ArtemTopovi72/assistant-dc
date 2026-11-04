@@ -1782,7 +1782,9 @@ class TaskRunnerMixin:
         ctx.layout_candidates = _layout_candidates(sess, chat_id, tg_artifacts_store.recent_artifacts)
 
         # The last clip delivered here, so "use that video" resolves.
-        _lv = _last_video(self._chat_videos, chat_id)
+        _attached_video = getattr(task, 'source_video_path', '') if not task.image_is_photo else ''
+        ctx.attached_video_path = _attached_video
+        _lv = ctx.attached_video_path or _last_video(self._chat_videos, chat_id)
         ctx.last_video_path = _lv if (_lv and os.path.exists(_lv)) else None
 
         # Output size (Draw ▸ 📐 Size) — same swap, same reason: image.py reads it

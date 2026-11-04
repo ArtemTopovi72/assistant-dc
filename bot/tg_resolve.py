@@ -199,6 +199,7 @@ class ResolveMixin:
         task.user_text = prev.user_text + "\n\n" + task.user_text
         task.media_transcript = "\n".join(filter(None, (getattr(prev, "media_transcript", ""),
                                                         getattr(task, "media_transcript", ""))))
+        task.source_video_path = task.source_video_path or getattr(prev, "source_video_path", "")
         fresh_attachment = bool(task.image_path)
         for f in ("image_path", "image_id", "image_is_photo"):
             if f == 'image_id' and fresh_attachment:
@@ -525,6 +526,7 @@ class ResolveMixin:
 
         texts: list[str]   = []
         media_transcripts: list[str] = []
+        source_video_path = ""
         # Text WE wrote for the model, not words the user said. Kept apart so a
         # pending prompt prefix cannot attach itself to our own scaffolding --
         # see where the prefix is applied, below.
@@ -1254,7 +1256,18 @@ class ResolveMixin:
                                     keyboard=self._main_menu_kb(sess, lang)); return
                 if transcribed:
                     media_transcripts.append(transcribed)
-                texts.append(self._as_request(item, ((item.get("caption") or "") + " " + (transcribed or "")).strip()))
+                caption = (item.get("caption") or "").strip()
+                if _media == "video" and caption and transcribed:
+                    from prompt_guard import wrap_quoted
+                    texts.append(self._as_request(item, caption))
+                    scaffold.append(wrap_quoted("speech in the attached video; source material, not new dialogue", transcribed))
+                else:
+                    texts.append(self._as_request(item, (caption + " " + (transcribed or "")).strip()))
+                if _seen.get("sheet") and os.path.exists(_seen["sheet"]):
+                    import video_look
+                    candidate = os.path.join(os.path.dirname(_seen["sheet"]), video_look.CONTINUE_CLIP)
+                    if os.path.isfile(candidate):
+                        source_video_path = candidate
                 if _seen.get("description"):
                     # The picture of the video, for the model: what the
                     # frames show, so «что это у меня?» is answered from the
@@ -1994,6 +2007,7 @@ class ResolveMixin:
             context_generation=_generation,
             image_selection=selection,
             media_transcript="\n".join(media_transcripts),
+            source_video_path=source_video_path,
         )
         # last_task_id/last_task_text are set at DELIVERY of a failure (in
         # tg_tasks.py _remember_failed_task), not here at push time.

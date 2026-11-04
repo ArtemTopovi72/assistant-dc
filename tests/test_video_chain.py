@@ -484,6 +484,37 @@ def test_continue_in_words_goes_on_from_the_chats_last_clip(tmp_path):
     assert not rig.calls[0][1].get("chain") or rig.calls[0][1]["chain"][1] == 1   # a new clip stays new
 
 
+def test_attached_video_beats_its_newly_created_frame_sheet(tmp_path):
+    last = tmp_path / "attached.mp4"
+    last.write_bytes(b"source")
+    sheet = tmp_path / "sheet.jpg"
+    sheet.write_bytes(b"sheet")
+    os.utime(last, (1, 1))
+    rig = _Rig(tmp_path, chains={str(last): ("h3_continuous/chZ", 4)})
+    ctx = rig.ctx(last_video_path=str(last), attached_video_path=str(last), voice_choice="",
+                  yes_no=lambda q, t, default=False, wait=True: "continue" in q or "MAKE a video clip" in q,
+                  deps=types.SimpleNamespace(_current_image_paths=lambda c, s: [str(sheet)],
+                                             script_read=_fakes.script_model))
+    from prompt_guard import wrap_quoted
+    state = {"user_input_original": "продолжи это видео, он говорит «Привет»\n" +
+             wrap_quoted("original video transcript", 'The old video says "unwanted words".')}
+    H._handle_generate_video(ctx, state, {"description": "He says «Привет unwanted words».", "speakers": 1})
+    assert not state.get("ask_voices")
+    assert rig.calls[0][1]["chain"] == ("h3_continuous/chZ", 5)
+    assert 'unwanted words' not in rig.calls[0][0]
+
+
+def test_missing_attached_video_never_falls_back_to_an_old_clip(tmp_path):
+    old = tmp_path / "old.mp4"
+    old.write_bytes(b"old")
+    rig = _Rig(tmp_path)
+    ctx = rig.ctx(last_video_path=str(old), attached_video_path=str(tmp_path / "missing.mp4"))
+    result = H._handle_generate_video(ctx, {"user_input_original": "продолжи это видео"},
+                                      {"description": "Continue the video."})
+    assert "attached video is no longer available" in result
+    assert not rig.calls
+
+
 def test_a_picture_sent_after_the_clip_is_animated_not_the_clip_continued(tmp_path):
     # «оживи на своё усмотрение» under a fresh meme went on from an old clip (live 2026-10-13).
     last = tmp_path / "delivered.mp4"
