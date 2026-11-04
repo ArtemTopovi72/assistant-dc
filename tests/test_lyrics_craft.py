@@ -56,6 +56,18 @@ LAZY = """[verse]
 А я искал кусок огня"""
 
 
+def test_stanza_repair_sees_the_original_lines_and_register():
+    original = "[verse]\nЛетит говно и вопит\nМуравей на месте стоит\nПотом он бежит домой"
+    seen = []
+    def fake(role, system, user):
+        seen.append((system, user))
+        return original
+    _F["lyrics_llm"] = fake
+    L.revise(_C(), original, ["Строки 2: поправить смысл"], "Russian", topic=original)
+    assert seen and "Летит говно и вопит" in seen[0][0]
+    assert "profanity" in seen[0][0] and "unless asked" in seen[0][0]
+
+
 def _kinds(text, **kw):
     return [i["kind"] for i in L.analyse(text, _C())["issues"]]
 

@@ -35,9 +35,12 @@ import re
 import sys
 import threading
 import time
+import tempfile
 import urllib.parse
+import uuid
 
 logger = logging.getLogger("assistant.ozon")
+_SESSION_STATE_LOCK = threading.Lock()
 
 HOME = "https://www.ozon.ru/"
 API = "https://www.ozon.ru/api/composer-api.bx/page/json/v2?url="
@@ -688,8 +691,19 @@ class _Browser:
     @staticmethod
     def _context(browser, state_file: str) -> list:
         kw = dict(locale="ru-RU", viewport={"width": 1366, "height": 900})
-        if state_file and os.path.isfile(state_file):
-            kw["storage_state"] = state_file
+        with _SESSION_STATE_LOCK:
+            if state_file and os.path.isfile(state_file):
+                try:
+                    with open(state_file, encoding="utf-8") as fh:
+                        kw["storage_state"] = json.load(fh)
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    backup = state_file + ".invalid-" + uuid.uuid4().hex
+                    try:
+                        os.replace(state_file, backup)
+                        logger.warning("Invalid Ozon session preserved as %s; starting a fresh browser session", backup)
+                    except OSError:
+                        logger.exception("Could not preserve invalid Ozon session; leaving it untouched")
+                        state_file = ""
         ctx = browser.new_context(**kw)
         page = ctx.new_page()
         _hide_from_taskbar()
@@ -697,12 +711,24 @@ class _Browser:
 
     @staticmethod
     def _save(slot) -> None:
+        tmp = ""
         try:
             if slot and slot[3]:
                 os.makedirs(os.path.dirname(slot[3]), exist_ok=True)
-                slot[0].storage_state(path=slot[3])
+                with _SESSION_STATE_LOCK:
+                    fd, tmp = tempfile.mkstemp(prefix=".ozon-session-", suffix=".json", dir=os.path.dirname(slot[3]))
+                    os.close(fd)
+                    slot[0].storage_state(path=tmp)
+                    os.replace(tmp, slot[3])
+                    tmp = ""
         except Exception as exc:
             logger.warning("could not save the Ozon session to %s: %s", slot[3], exc)
+        finally:
+            if tmp and os.path.exists(tmp):
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    logger.warning("could not remove temporary Ozon session file %s", tmp)
 
     @staticmethod
     def _challenge(page):

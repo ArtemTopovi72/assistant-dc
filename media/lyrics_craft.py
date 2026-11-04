@@ -535,6 +535,8 @@ _RULES = (
 
 _CRITIC = (
     "You are a demanding song editor (the Pattison / Berklee school). Read the numbered lyric. "
+    "The author's deliberate profanity, slang and crude comic tone are artistic choices, "
+    "not defects to sanitize. Only flag them when the author asks for a cleaner version. "
     "Do not report mechanical rhyme, metre or line-count faults: a separate checker "
     "handles those. This pass judges meaning, idiomatic language and development. "
     "List only real problems of MEANING and natural expression: unclear or "
@@ -667,7 +669,8 @@ def revise(ctx, text: str, problems: list, lang: str, singer: str = "", topic: s
              "old end word. Keep phrases short and singable. " if meaning_only else _RULES)
     system = (
         f"You are a skilled {lang} lyricist and editor. Rewrite the song lyric to fix "
-        "EVERY listed problem. Keep its theme, story, language and section tags ([verse], "
+        "EVERY listed problem. Preserve the author's register, including deliberate profanity "
+        "and crude humor; do not sanitize it unless the author asks. Keep its theme, story, language and section tags ([verse], "
         "[chorus]...). For EACH meaning problem, RECOMPOSE THE ENTIRE AFFECTED STANZA "
         "using a DIFFERENT rhyme pair: first express what actually happens in plain "
         "speech, then make it singable. Merely swapping the last word while retaining "
@@ -679,7 +682,8 @@ def revise(ctx, text: str, problems: list, lang: str, singer: str = "", topic: s
     if problems:
         stanza_system = (
             f"You are a precise {lang} text editor. Repair the meaning of ONLY the supplied "
-            "stanza. Return its section tag and replacement lines, nothing else: NOT the "
+            "stanza. Preserve the author's deliberate profanity and crude comic register unless asked to change them. "
+            "Return its section tag and replacement lines, nothing else: NOT the "
             "whole song and no extra sections. Express what actually happens in clear, "
             "idiomatic, complete sentences split into short singable phrases. You may "
             "replace ALL lines of this stanza. Do NOT preserve its old end words or force "
@@ -692,7 +696,8 @@ def revise(ctx, text: str, problems: list, lang: str, singer: str = "", topic: s
         if not meaning_only:
             stanza_system = (
                 f"You are a skilled {lang} songwriter. Return ONLY one replacement stanza "
-                "with its original section tag, never a whole song. Keep the source facts "
+                "with its original section tag, never a whole song. Preserve the author's deliberate "
+                "profanity and crude comic register unless asked to change them. Keep the source facts "
                 "and use fresh, natural rhyming pairs rather than copying the old endings. "
                 + _RULES + " " + singer_rule(singer) + _theme_rule(topic))
         lines, affected = text.splitlines(), {}
@@ -871,7 +876,8 @@ def compare(ctx, topic: str, first: str, second: str) -> str:
 
 _LINES = (
     "You fix one line of a {lang} song. Give {k} different versions of the line "
-    "marked >>> so that it ends on a true rhyme with «{word}» (the stressed vowel and "
+    "marked >>>. Preserve its register and deliberate profanity unless asked to change them. "
+    "Each version must end on a true rhyme with «{word}» (the stressed vowel and "
     "what follows sound alike, not the same word or root, not a worn pair), keeps "
     "about {syl} syllables and the same meaning in context. One version per line, "
     "nothing else.")
