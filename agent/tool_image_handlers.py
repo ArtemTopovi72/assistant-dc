@@ -2494,7 +2494,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 result = video_mod.generate_video(
                     ctx, first_prompt,
                     images=images, videos=videos, audios=audios,
-                    seconds=prepped[0][1] if prepped else (args.get("seconds") or 0.0),
+                    seconds=(prepped[0][1] if prepped else
+                             (args.get("seconds") or (secs[0] if static_hold and secs else 0.0))),
                     prepared=bool(prepped),
                     aspect=args.get("aspect") or "",
                     seed=args.get("seed") if attempt == 1 else None,
@@ -2758,7 +2759,20 @@ def redraw_whole_image(ctx, source: str, instructions: str):
 def _handle_redraw_image(ctx, state, args: dict) -> str:
     import tools as _t   # the render seam is owned by tools; read it at CALL time
     exists = dep(ctx, "exists", os.path.exists)
-    source = _edit_source(ctx, state)
+    # A numbered picture in an album refers to the original turn's stable list,
+    # not the latest output of a previous edit in the same turn.
+    numbered = re.search(r'\b(?:picture|image)\s*([1-9]\d*)\b', str(args.get('instructions') or ''), re.I)
+    originals = list(getattr(ctx, 'recent_image_paths', None) or [])
+    if numbered and len(originals) > 1:
+        index = int(numbered.group(1)) - 1
+        if index >= len(originals) or not exists(originals[index]):
+            return '[TOOL ERROR] The numbered source picture is unavailable; do not edit a different image.'
+        source = originals[index]
+        state['image_path'] = ctx.last_image_path = source
+        state['edit_before'] = source
+        state['last_edit_source'] = source
+    else:
+        source = _edit_source(ctx, state)
     _note_source(state, source)
     if not source or not exists(source):
         return (

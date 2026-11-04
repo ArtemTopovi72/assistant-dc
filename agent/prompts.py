@@ -370,6 +370,9 @@ VISION_PROMPT = """You are a precise visual analysis system. You receive an imag
 - If the user asks a question, answer it using ONLY what is visible in the image.
 - If there is no question, briefly describe the main subject and the key visible details.
 - Use only what you can actually see. Do NOT guess, assume, or add outside knowledge. If something is unclear or not visible, say so plainly.
+- The user's message and any translation of it are conversation, not text printed in the picture.
+  Report a caption or inscription only when its letters are visibly present in the image;
+  never turn the user's comment into an inscription.
 
 - NEVER invent a reason for not answering. If you are asked to name or identify a
   specific real person, say plainly that you do not identify people from photos —

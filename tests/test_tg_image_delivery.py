@@ -60,13 +60,13 @@ class _Ctx:
         if self.stage_callback: self.stage_callback(s)
 
 
-def run_turn(final_state, user_text=OUTPAINT, photo_ok=True, lang="ru", reads=None):
+def run_turn(final_state, user_text=OUTPAINT, photo_ok=True, lang="ru", reads=None, check_menu=False):
     """Run one delivery cycle with a graph that returns `final_state`; `reads`: the
     model's reads (tests/fakes.reads) the turn's context carries."""
     ctx = _Ctx()
     for name, fn in (reads or {}).items():
         setattr(ctx, name, fn)
-    seen = {"text": [], "photo": []}
+    seen = {"text": [], "photo": [], "menus": []}
 
     class _Graph:
         def invoke(self, state, cfg=None):
@@ -75,12 +75,22 @@ def run_turn(final_state, user_text=OUTPAINT, photo_ok=True, lang="ru", reads=No
     bot = T.TelegramBot("1:T", lambda: ctx, lambda: _Graph(),
                         lambda: {"messages": []}, silent_mode=True)
     bot._send_text = lambda cid, text, **k: (seen["text"].append(text), 1)[1]
-    bot._send_get_id = lambda cid, text, **k: 11
+    def send_id(cid, text, **kw):
+        if check_menu and isinstance(kw.get('keyboard'), dict) and 'keyboard' in kw['keyboard']:
+            seen['text'].append(text)
+            seen['menus'].append(kw['keyboard'])
+        return 11
+    bot._send_get_id = send_id
     bot._edit_text = lambda *a, **k: None
     bot._api_post = lambda *a, **k: {}
     bot._api_get = lambda *a, **k: {}
     bot._activity.log = lambda *a, **k: None
-    bot._send_photo = lambda cid, path, **k: (seen["photo"].append(path), photo_ok)[1]
+    def send_photo(cid, path, **kw):
+        seen['photo'].append(path)
+        if check_menu and photo_ok:
+            bot._restore_result_menu(cid, kind='image')
+        return photo_ok
+    bot._send_photo = send_photo
     bot._send_voice_from_wav = lambda *a, **k: False
     bot._send_voice = lambda *a, **k: False
 
@@ -89,8 +99,14 @@ def run_turn(final_state, user_text=OUTPAINT, photo_ok=True, lang="ru", reads=No
     bot._store.put(sess)
 
     task = T._Task(task_id="t", chat_id=CID, user_text=user_text)
-    bot._run_task_inner(task, bot._get_session(CID), bot._user_store.get(CID),
-                        "U", lang, ctx, _Graph())
+    if check_menu:
+        import tg_transport
+        with tg_transport.result_menu(bot, CID):
+            bot._run_task_inner(task, bot._get_session(CID), bot._user_store.get(CID),
+                                "U", lang, ctx, _Graph())
+    else:
+        bot._run_task_inner(task, bot._get_session(CID), bot._user_store.get(CID),
+                            "U", lang, ctx, _Graph())
     return seen
 
 
@@ -114,6 +130,9 @@ open(good, "wb").write(b"\x89PNG\r\n\x1a\n" + b"0" * 64)
 seen = run_turn({"final_answer": NARRATION, "image_path": good, "image_status": "ok"})
 check("a delivered image is sent", seen["photo"] == [good], str(seen["photo"]))
 check("and nothing is retracted", not warned(seen), str(seen["text"]))
+seen = run_turn({"final_answer": NARRATION, "image_path": good, "image_status": "ok"}, check_menu=True)
+check("the explanation carries the menu without a second completion message",
+      len(seen['menus']) == 1 and len(seen['text']) == 1 and NARRATION in seen['text'][0], seen)
 
 # The screenshot's case: the tool errored, so the pipeline reports no image at
 # all, and the model claimed success anyway.

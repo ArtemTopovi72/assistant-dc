@@ -20,8 +20,10 @@ STYLE_PRESETS: dict[str, dict] = {
                    "gets an anime face: large expressive eyes with bright highlights, a tiny nose "
                    "and mouth, smooth simplified skin, hair drawn as clean pointed clumps with "
                    "sharp highlights. Flat cel shading with two or three tones and hard-edged "
-                   "shadow shapes, thin clean dark lineart around every form, a painted anime "
-                   "background with soft gradients and vivid saturated colors."),
+                   "shadow shapes and thin clean dark lineart around every form. Render the "
+                   "existing background in the same anime technique while preserving its objects, "
+                   "placement, lighting and overall colors; do not invent a rainbow, sunset or "
+                   "colorful sky unless present in the source or requested by the user."),
     },
     "watercolor": {
         "label_ru": "🎨 Акварель", "label_en": "🎨 Watercolor", "target": "drawn",

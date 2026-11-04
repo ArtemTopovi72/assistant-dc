@@ -2066,6 +2066,7 @@ class TaskRunnerMixin:
             tg_bot.logger.exception("voice delivery failed chat=%s", chat_id)
 
         # ── deliver text (skip when voice already sent the reply) ─────────────
+        _reply_menu_sent = False
         try:
             # Code cannot be listened to: a reply that carries a fenced block
             # is sent as text as well, even when the voice note went out.
@@ -2099,13 +2100,22 @@ class TaskRunnerMixin:
                     reply_html = _shape._CITE_RE.sub("", reply_html).replace(" .", ".")
                 reply_html = self._sandbox_linkify(chat_id, reply_html)
                 chunks = tg_bot._split_html(reply_html)
+                # A media result has its own feedback buttons. Put the persistent
+                # menu on the explanatory text so no second "Done" message is needed.
+                _media_result = any(final.get(k) in ('success', 'ok') for k in
+                                    ('image_status', 'video_status', 'document_status'))
                 for i, chunk in enumerate(chunks):
                     last = i == len(chunks) - 1
                     kb = main_kb if last else None
+                    if last and _media_result:
+                        kb = self._state_kb(sess, lang)
                     # Voice-only already carried the row on the voice note.
-                    if last and not reply_is_failure and not (voice_sent and sess.reply_mode == "voice"):
+                    if last and not _media_result and not reply_is_failure and not (voice_sent and sess.reply_mode == "voice"):
                         kb = self._feedback_kb(kb, chat_id, task.user_text, reply, ctx)
-                    self._send_text(chat_id, chunk, parse_mode="HTML", keyboard=kb)
+                    if last and _media_result:
+                        _reply_menu_sent = bool(self._send_get_id(chat_id, chunk, parse_mode="HTML", keyboard=kb))
+                    else:
+                        self._send_text(chat_id, chunk, parse_mode="HTML", keyboard=kb)
             self._on_message(chat_id, task.user_text, reply)
             self._activity.log(chat_id, "bot_reply", reply, uname)
         except Exception:
@@ -2341,6 +2351,8 @@ class TaskRunnerMixin:
         self._on_stage(chat_id, "✅ Done", True)
         task.delivered = True
 
+        if _reply_menu_sent:
+            tg_transport.result_menu_already_shown(self, chat_id)
         tg_transport.flush_result_menu(self, chat_id)
 
         # ── compact history AFTER delivering the reply ────────────────────────

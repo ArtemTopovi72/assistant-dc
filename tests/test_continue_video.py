@@ -247,6 +247,8 @@ check("static: no reference tail or audio rides",
       not SEEN.get("videos") and not SEEN.get("audios"), (SEEN.get("videos"), SEEN.get("audios")))
 check("static: the talking-head machinery anchors it (keyframe)",
       SEEN.get("keyframe") is True, SEEN.get("keyframe"))
+check("static: duration comes from the original script before camera instructions",
+      SEEN.get('seconds', 0) >= 5.0, SEEN.get('seconds'))
 check("static: the camera is told to hold the framing",
       "locked camera" in SEEN.get("description", "")
       and "no zoom" in SEEN.get("description", "")
@@ -257,6 +259,11 @@ check("static: the continuation prompt keeps the user's words",
 check("static: does not override the requested speech language", "said once, clearly, in Russian" not in SEEN.get("description", ""), SEEN.get("description", ""))
 check("static: the new part is revoiced with the clip's own speaker (the tail)",
       bool(REVOICED) and REVOICED[0][1] == tail, REVOICED)
+_E['estimate_seconds'] = lambda text, **kw: 10.0 if text.startswith(V.STATIC_CONTINUE_PREFIX) else 6.0
+SEEN.clear()
+H._handle_generate_video(TCtx(), {}, {"description": 'he says "the line"'})
+check("static: render receives the unadorned script duration", SEEN.get('seconds') == 6.0, SEEN)
+_E.pop('estimate_seconds')
 _flash_calls = []
 _E['generate_video'] = lambda ctx, description, **kw: (_flash_calls.append(1), fake_gen(ctx, description, **kw))[1]
 _E['new_bright_region'] = lambda *a: len(_flash_calls) == 1
