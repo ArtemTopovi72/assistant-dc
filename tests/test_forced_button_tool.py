@@ -81,6 +81,18 @@ def _rounds_for(text):
             for c in llm.calls]
 
 
+def test_continue_button_stops_forcing_after_video_failure():
+    llm = _TGF.LLM([
+        _TGF._asst('', [_TGF._tc('generate_video', {'description': 'continue'}, 'v1')]),
+        _TGF._asst('Недостаточно видеопамяти, видео не создано.'),
+    ])
+    tools = _TGF.Tools({'generate_video': '[TOOL ERROR] not enough free VRAM'})
+    _TGF._run(_TGF._ctx(), llm, tools,
+              {'user_input': 'continue this video: говорит дальше', 'messages': []}, fastpath=False)
+    assert len(llm.calls) >= 2
+    assert llm.calls[1]['kw'].get('tool_choice') != 'required'
+
+
 def test_the_loop_forces_redraw_on_the_style_preset_button():
     rounds = _rounds_for("[style_preset] call redraw_image with mode=\"redraw\" instructions=\"anime\"")
     assert rounds, "no LLM call"

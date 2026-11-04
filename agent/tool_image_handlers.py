@@ -1014,6 +1014,10 @@ def _render_budget_exhausted(state, what: str, cost: int = 1) -> Optional[str]:
     if used > cap:
         logger.warning("%s refused: this turn already spent %d/%d full renders "
                        "(this one costs %d)", what, prior, cap, cost)
+        if "video" in what and state.get("_video_failure_reason"):
+            return ("[TOOL ERROR] No video was produced. The previous attempt failed: "
+                    + str(state["_video_failure_reason"])[:500]
+                    + ". Do not retry this turn or claim a clip exists; explain the failure.")
         noun = "clip" if "video" in what else "picture"
         return (
             f"[TOOL ERROR] This turn has already spent its rendering budget "
@@ -2567,6 +2571,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             if gpu:
                 return gpu
             detail = result.get("reason") or "the render produced no file"
+            state["_video_failure_reason"] = detail
             return (f"[TOOL ERROR] Video generation failed — no clip was produced. "
                     f"Reason reported by the renderer: {detail}. "
                     "You MUST tell the user clearly that the video could not be generated and "

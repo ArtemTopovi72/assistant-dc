@@ -449,6 +449,8 @@ def _forced_intent(ctx, state, text: str, has_image: bool, turn_tools, already_c
             return ""
     if not tool or tool in (already_called or ()):
         return ""
+    if tool == "generate_video" and any(name == tool and count for (name, _), count in (failed_calls or {}).items()):
+        return ""
     # A hard failure is not a successful tool call, but forcing it on every
     # round prevents the model from explaining the outage or using another path.
     if any(name == tool and count >= 2 for (name, _), count in (failed_calls or {}).items()):
@@ -1282,6 +1284,11 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                   or _forced_unpack(_turn_text, turn_tools, tools_called_this_turn,
                                     getattr(ctx, "sandbox", None))
                   or _forced_collage(_turn_text, turn_tools, tools_called_this_turn, ctx=ctx))
+        # The continuation button also forces this tool; after an actual failure
+        # allow the model to report it rather than forcing the button forever.
+        if _force == 'generate_video' and any(name == 'generate_video' and count
+                                               for (name, _), count in failed_call_counts.items()):
+            _force = ''
         _choice = "auto"
         if _force:
             # A name, or a "a|b" set: "call one of these, nothing else".
