@@ -257,6 +257,19 @@ check("static: the continuation prompt keeps the user's words",
 check("static: does not override the requested speech language", "said once, clearly, in Russian" not in SEEN.get("description", ""), SEEN.get("description", ""))
 check("static: the new part is revoiced with the clip's own speaker (the tail)",
       bool(REVOICED) and REVOICED[0][1] == tail, REVOICED)
+_flash_calls = []
+_E['generate_video'] = lambda ctx, description, **kw: (_flash_calls.append(1), fake_gen(ctx, description, **kw))[1]
+_E['new_bright_region'] = lambda *a: len(_flash_calls) == 1
+_E['eye_drift'] = lambda *a, **k: 0.0
+class FlashCheckCtx(TCtx):
+    speech_ok = staticmethod(lambda ctx, clip, lines: True)
+_flash_reply = H._handle_generate_video(FlashCheckCtx(), {}, {"description": 'he says "the line"'})
+check("a possible flash is retried and a clean take is selected", len(_flash_calls) == 2, _flash_calls)
+_E['new_bright_region'] = lambda *a: True
+_flash_calls.clear()
+_flash_reply = H._handle_generate_video(FlashCheckCtx(), {}, {"description": 'he says "the line"'})
+check("persistent possible flashes are disclosed", len(_flash_calls) == 3 and 'possible visual artifact' in _flash_reply, _flash_reply)
+_E.pop('new_bright_region'); _E.pop('eye_drift'); _E['generate_video'] = fake_gen
 SEEN.clear()
 H._handle_generate_video(TCtx(), {"user_input_original": 'Мужчина говорит «то вам очко порвут»'},
                          {"description": 'The man says "то вам очко порют"'})

@@ -2480,6 +2480,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         best_eyes = None
         speech_unverified = False
         framing_unverified = False
+        possible_flash = False
         said_first = video_mod.quoted_lines(parts[0]) if head and parts else []
         speech_ok = getattr(ctx, "speech_ok", None) or _speech_ok
         try:
@@ -2510,13 +2511,15 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                            if head and said_first and p and os.path.exists(p) else True)
                 missed = verdict is False
                 unverified = verdict is not True
+                flash = bool(static_hold and p and os.path.exists(p) and images
+                             and video_mod.new_bright_region(p, images[0]) is True)
                 if head and p and os.path.exists(p):
-                    rank = (unverified, eyes is None, eyes or 0)
+                    rank = (unverified, flash, eyes is None, eyes or 0)
                     if best_eyes is None or rank < best_eyes[0]:
                         best_eyes = (rank, result)
-                if ((eyes is not None and eyes > 0) or missed) and attempt < 3:
-                    logger.warning("generate_video: part 1 drifted off the still's eyes (%s) or did not "
-                                   "say %s; once more", eyes, said_first if missed else "")
+                if ((eyes is not None and eyes > 0) or missed or flash) and attempt < 3:
+                    logger.warning("generate_video: part 1 eyes drift %s, speech missed %s, "
+                                   "possible flash %s; once more", eyes, missed, flash)
                     continue
                 if (attempt == 3 and len(parts) > 1 and
                         ((drift is not None and drift > video_mod.OVERLAY_DRIFT_MAX) or
@@ -2531,7 +2534,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             if best_eyes:
                 result = best_eyes[1]
                 speech_unverified = best_eyes[0][0]
-                framing_unverified = not best_eyes[0][1] and best_eyes[0][2] > 0
+                framing_unverified = not best_eyes[0][2] and best_eyes[0][3] > 0
             else:
                 speech_unverified = unverified
             if head and result.get("path") and os.path.exists(result["path"]):
@@ -2584,6 +2587,9 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                     "give them THIS reason in plain words; do NOT invent another cause, do NOT "
                     "blame the prompt unless the reason says so, and do NOT imply or claim that "
                     "a video was created.")
+
+        if static_hold and images:
+            possible_flash = video_mod.new_bright_region(path, images[0]) is True
 
         if chain_id:
             if len(parts) > 1:
@@ -2670,8 +2676,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         ("The reference-face check detected possible visual drift in every take; warn the user "
          "that the framing or appearance may have changed, and do not claim it matches exactly.\n"
          if framing_unverified else "") +
+        ("A new bright region appeared in the static continuation; it may be an unintended flash. "
+         "Warn the user this is a possible visual artifact, not a confirmed defect.\n"
+         if possible_flash else "") +
         "The clip is delivered to the user automatically. "
-        + ("Include the warnings above. " if speech_unverified or framing_unverified else "Say it is ready briefly. ")
+        + ("Include the warnings above. " if speech_unverified or framing_unverified or possible_flash else "Say it is ready briefly. ")
         + "Do NOT call generate_video again for this turn."
     )
 

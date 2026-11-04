@@ -1700,6 +1700,39 @@ def track_simple_motion(path: str):
         cap.release()
 
 
+def new_bright_region(path: str, reference: str) -> Optional[bool]:
+    """Flag a sustained bright area absent from a static reference, as a possible flash."""
+    import cv2
+    import numpy as np
+    try:
+        source = cv2.imread(str(reference))
+        if source is None:
+            return None
+        source = cv2.cvtColor(cv2.resize(source, (320, 144)), cv2.COLOR_BGR2GRAY)
+        cap = cv2.VideoCapture(str(path))
+        count, checked = 0, 0
+        try:
+            duration = cap.get(cv2.CAP_PROP_FRAME_COUNT) / (cap.get(cv2.CAP_PROP_FPS) or 24)
+            for sec in range(min(20, int(duration) + 1)):
+                cap.set(cv2.CAP_PROP_POS_MSEC, sec * 1000)
+                ok, frame = cap.read()
+                if not ok:
+                    break
+                checked += 1
+                gray = cv2.cvtColor(cv2.resize(frame, (320, 144)), cv2.COLOR_BGR2GRAY)
+                mask = ((gray > 185) & (source < 115)
+                        & (gray.astype(np.int16) - source.astype(np.int16) > 90)).astype(np.uint8)
+                _, _, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
+                if len(stats) > 1 and int(stats[1:, cv2.CC_STAT_AREA].max()) >= 140:
+                    count += 1
+        finally:
+            cap.release()
+        return count >= 2 if checked >= 2 else None
+    except Exception:
+        logger.warning("could not inspect a static continuation for bright artifacts", exc_info=True)
+        return None
+
+
 def overlay_drift(path: str) -> Optional[float]:
     """How far a static clip's frames stray from its first one outside the centre where the
     person moves (mean colour difference, worst frame). H3 sometimes covers a photo it
