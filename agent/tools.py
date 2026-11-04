@@ -147,8 +147,8 @@ def _handle_search(ctx, state, args: dict) -> str:
         raise
     research_shop = bool(re.search(r"погугл[а-яё]*.*озон", _asked, re.I | re.S))
     if research_shop:
-        state["research_shop_evidence"] = ""
-        state["research_shop_verified"] = False
+        state.setdefault("research_shop_evidence", "")
+        state.setdefault("research_shop_verified", False)
     # Don't fence our own status sentinels (no-results / failed / insufficient) —
     # only real external page text should be framed as UNTRUSTED data.
     if (result.lstrip().startswith("[TOOL ERROR]")
@@ -172,7 +172,8 @@ def _handle_search(ctx, state, args: dict) -> str:
                 "missing content. Retry with a different query, try another approach, "
                 "or tell the user plainly that the information could not be retrieved.")
     if research_shop:
-        state["research_shop_evidence"] = result
+        state["research_shop_evidence"] = "\n".join(filter(None, (state["research_shop_evidence"], result)))
+        state["research_shop_verified"] = False
     ctx.remember("search", f"Query: {query}\n{result[:500]}", {"query": query})
     prefix = f"[DATA-VALIDATION] Note: {v.reason}.\n" if v.status == "stale" else ""
     import datetime as _dtm

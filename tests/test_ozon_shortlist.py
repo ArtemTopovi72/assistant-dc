@@ -49,6 +49,30 @@ def test_empty_backpack_review_search_retries_with_shorter_query():
     assert state["research_shop_evidence"] == ""
 
 
+def test_failed_followup_does_not_discard_research_already_found():
+    ctx = SimpleNamespace(deps=SimpleNamespace(run_web_search=lambda *_: 'No results found for your query.'),
+                          set_stage=lambda *_: None, web_search_enabled=True)
+    state = {'user_input_original': 'Погугли рюкзаки, потом Озон',
+             'research_shop_evidence': 'Review: Thule Subterra 2',
+             'research_shop_verified': False}
+    agent_tools._handle_search(ctx, state, {'query': 'review other model'})
+    assert state['research_shop_evidence'] == 'Review: Thule Subterra 2'
+
+
+def test_next_web_search_keeps_both_models():
+    result = 'Review of Bellroy Transit Backpack. ' * 12
+    ctx = SimpleNamespace(deps=SimpleNamespace(run_web_search=lambda *_: result),
+                          set_stage=lambda *_: None, remember=lambda *_: None,
+                          web_search_enabled=True)
+    state = {'user_input_original': 'Погугли рюкзаки, потом Озон',
+             'research_shop_evidence': 'Review of Thule Subterra 2.',
+             'research_shop_verified': True}
+    agent_tools._handle_search(ctx, state, {'query': 'Bellroy Transit Backpack review'})
+    assert 'Thule Subterra 2' in state['research_shop_evidence']
+    assert 'Bellroy Transit Backpack' in state['research_shop_evidence']
+    assert not state['research_shop_verified']
+
+
 def test_research_then_shop_rejects_generic_ozon_request(monkeypatch):
     monkeypatch.setattr(ozon_shopper, "shop", lambda *a, **kw: pytest.fail("generic search ran"))
     state = {"user_input_original": "Погугли обзоры, потом найди на Озоне",
