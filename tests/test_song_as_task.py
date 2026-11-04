@@ -94,6 +94,26 @@ if True:
     bot._start_song_generation(5001, "про дождь", "ru", 30)
     check("the flow enqueues a [song] task", enq and enq[0]["text"] == "[song:30] про дождь", enq)
 
+    # A machine-made song payload has already been classified. It must not
+    # spend time asking the weather classifier before it reaches the queue.
+    import tg_weather
+    bot = make_bot()
+    pushed, weather_calls = [], []
+    bot._backend.push = lambda task: pushed.append(task)
+    bot._queue_note = lambda *a, **k: None
+    old_weather_request = tg_weather.weather_request
+    old_ordinal_target = T._ordinal_target
+    ordinal_calls = []
+    T._ordinal_target = lambda *a, **k: (ordinal_calls.append(a), "")[1]
+    tg_weather.weather_request = lambda *a, **k: (weather_calls.append(a), {})[1]
+    try:
+        bot._resolve_and_push(5001, [{"type": "text", "text": S.song_payload("[lyrics]\n[verse]\nHello world")}])
+    finally:
+        tg_weather.weather_request = old_weather_request
+        T._ordinal_target = old_ordinal_target
+    check("queued song payload skips weather classification", bool(pushed) and not weather_calls, weather_calls)
+    check("queued song payload skips picture selection", not ordinal_calls, ordinal_calls)
+
     # 2. the generation honours the task's stage callback and delivers
     bot = make_bot()
     ctx = Ctx(); stages = []

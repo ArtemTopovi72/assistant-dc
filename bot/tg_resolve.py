@@ -1123,6 +1123,9 @@ class ResolveMixin:
                 # the armed capture states -- those already own the text.
                 # Same for a forecast asked in plain words: the weather API
                 # answers it; web search does not.
+                if _tg_songs.parse_song_payload(raw)[0]:
+                    texts.append(raw)
+                    continue
                 _wx = _tg_weather.weather_request(raw, ctx=self.reads) \
                     if not sess.reg_state and not input_prefix else {}
                 if (not _wx and input_menu == "weather" and not sess.reg_state
@@ -1791,7 +1794,8 @@ class ResolveMixin:
         # («убери дубликаты» + DCIM.zip must not get «Какую картинку?»).
         if not any('_target_captured' in it for it in batch):
             pressed_image_id = pressed_image_id or sess.target_image
-        if (not img_bytes and not file_in_folder
+        _queued_song = bool(_tg_songs.parse_song_payload(merged)[0])
+        if (not _queued_song and not img_bytes and not file_in_folder
                 and not pressed_image_id
                 and merged not in tg_bot._MACHINE_PAYLOADS):
             _named = tg_bot._ordinal_target(own_words, tg_bot._live_images(sess), ctx=self.reads)
@@ -1804,7 +1808,7 @@ class ResolveMixin:
         # Quoted material (✍️ after a forward, a reply to a message) is what the words are
         # about: «Что думаешь?» under it got «Какую картинку?» (2026-10-22).
         from prompt_guard import has_quote
-        if (not img_bytes and not file_in_folder
+        if (not _queued_song and not img_bytes and not file_in_folder
                 and not pressed_image_id
                 and merged not in tg_bot._MACHINE_PAYLOADS
                 and not has_quote(merged)
