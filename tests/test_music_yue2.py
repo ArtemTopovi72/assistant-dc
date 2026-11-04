@@ -113,10 +113,32 @@ def test_yue2_plans_then_pins_before_synthesis(tmp_path):
             Path(cmd[cmd.index("--out") + 1]).write_text("X:1\nQ:1/4=104\nK:C\nC D |\n", encoding="utf8")
         return True, "ok"
     ctx = _deps(run_gpu_worker=worker, _gpu_slot=lambda **kw: contextlib.nullcontext())
-    M._render_yue2_once(ctx, True, {"out": str(tmp_path / "song.mp3"), "target_bpm": 140}, 7)
+    job = {"out": str(tmp_path / "song.mp3"), "target_bpm": 140}
+    M._render_yue2_once(ctx, True, job, 7)
     assert [x[0] for x in seen] == ["YuE2 plan", "YuE2"]
     assert "Q:1/4=140" in seen[1][1]["abc"]
     assert "target_bpm" not in seen[1][1]
+    assert job["target_bpm"] == 140  # a retry must use the same tempo
+
+
+def test_yue2_retry_preserves_chosen_tempo(tmp_path):
+    import contextlib
+    from pathlib import Path
+    calls = []
+    def worker(ctx, py, script, job, label, timeout, cmd=None, env=None):
+        if label == 'YuE2 plan':
+            Path(cmd[cmd.index('--out') + 1]).write_text('X:1\nQ:1/4=104\nK:C\nC D |\n', encoding='utf8')
+        else:
+            calls.append(job['abc'])
+            return True, '(truncated)' if len(calls) == 1 else 'ok'
+        return True, 'ok'
+    ctx = _deps(yue2_cpp_available=lambda: True, run_gpu_worker=worker,
+                _gpu_slot=lambda **kw: contextlib.nullcontext(),
+                _valid_audio_file=lambda _: True, _master=lambda _: None,
+                OUTPUT_DIR=tmp_path)
+    M._generate_yue2(ctx, '[verse]\nодин\n\n[chorus]\nдва\n\n[outro]\nтри', 'pop', 7,
+                     prefs={'tempo': 'exactly 140 BPM'})
+    assert len(calls) == 2 and all('Q:1/4=140' in score for score in calls)
 
 
 def test_yue2_invalid_plan_does_not_claim_controlled_tempo(tmp_path):

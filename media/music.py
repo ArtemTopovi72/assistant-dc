@@ -1720,6 +1720,7 @@ def _pin_yue2_abc_tempo(abc: str, bpm: int) -> str:
 
 
 def _render_yue2_once(ctx, cpp: bool, job: dict, seed: int) -> str:
+    job = dict(job)  # keep tempo and original request intact for a retry
     out = job["out"]
     if cpp:
         # 16 ODE steps, not the reference 32: NAR was 50 of 99 s on a 3.6-min
