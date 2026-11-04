@@ -2461,7 +2461,7 @@ def _onscreen_text_words(ctx, description: str) -> list:
     text = (description or "").strip()
     if len(text) < 8:
         return []
-    key = text[:400]
+    key = text[:4000]  # exactly the request the classifier receives
     if key in _ONSCREEN_CACHE:
         return list(_ONSCREEN_CACHE[key])
     words: list = []
@@ -2479,6 +2479,24 @@ def _onscreen_text_words(ctx, description: str) -> list:
                              if not unicodedata.combining(ch))
                      for w in (data.get("words") or [])]
             words = [w for w in words if 1 <= len(w) <= 40][:6]
+            # The model may invent a sign from a source-frame description.
+            # Its output must actually occur in the user's request before we
+            # can burn that lettering into the delivered video.
+            def normalized(value):
+                return " ".join("".join(c for c in unicodedata.normalize("NFD", value)
+                                        if not unicodedata.combining(c)).casefold().split())
+            source = normalized(text[:4000])
+            def in_source(word):
+                needle = normalized(word)
+                start = source.find(needle)
+                while start >= 0:
+                    end = start + len(needle)
+                    if ((not start or not source[start - 1].isalnum()) and
+                            (end == len(source) or not source[end].isalnum())):
+                        return True
+                    start = source.find(needle, start + 1)
+                return False
+            words = [word for word in words if in_source(word)]
     except Exception:
         logger.debug("on-screen text read failed", exc_info=True)
         words = []

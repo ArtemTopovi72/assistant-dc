@@ -49,6 +49,17 @@ check("words quoted verbatim from the script",
 check("second read of the same script is served from the cache",
       len(video._ONSCREEN_CACHE) == 1)
 
+video.text_model = _fake_tm('{"needs": true, "words": ["GOOD TALKS", "ПРИВЕТ"]}')
+check("a hallucinated sign absent from the user's request is not overlaid",
+      video._onscreen_text_words(None, "Покажи надпись ПРИВЕТ на футболке") == ["ПРИВЕТ"])
+
+_long_prefix = "описание кадра " * 30
+video.text_model = _fake_tm('{"needs": true, "words": ["ALPHA"]}')
+_first = video._onscreen_text_words(None, _long_prefix + " надпись ALPHA")
+video.text_model = _fake_tm('{"needs": true, "words": ["BETA"]}')
+_second = video._onscreen_text_words(None, _long_prefix + " надпись BETA")
+check("different long requests do not share cached lettering", _first == ["ALPHA"] and _second == ["BETA"])
+
 video.text_model = _fake_tm('{"needs": false, "words": []}')
 check("a script without lettering demands none",
       video._onscreen_text_words(None, "кот прыгает со шкафа на диван, мурлычет" + " " * 10) == [])
