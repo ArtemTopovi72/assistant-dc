@@ -435,6 +435,12 @@ def add_text_verified(ctx, image_path: str, instruction: str,
     # FireRed could not spell it (a year prior: "2026" -> "2025" in 21/21
     # renders on the bench). Lay the exact words onto the ORIGINAL --
     # the misspelt render is not a base to fix, its letters are already wrong.
+    if yes_no(ctx)(
+            "Does this request require the lettering to appear ON a specific object or "
+            "surface in the picture (such as a barrel, shirt, sign or vehicle), rather "
+            "than as a general caption across the image? {text}", instruction, default=True):
+        logger.info("text_add: no reliable object placement; not applying a whole-frame caption")
+        return None, best, " / ".join(wanted)
     try:
         import text_overlay
         out = text_overlay.overlay(image_path, wanted, where=text_overlay.placement(instruction, ctx=ctx),
