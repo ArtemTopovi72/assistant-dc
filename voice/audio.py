@@ -1096,6 +1096,13 @@ ASR_LANG_CONFIDENCE = _cfg_env.env_float("ASR_LANG_CONFIDENCE", 0.85)
 
 def _whisper_transcribe(ctx, audio_source, engine: str = "auto",
                         lang_hint: str = "") -> str:
+    import comfy_client
+    with comfy_client.speech_session(ctx=ctx):
+        return _whisper_transcribe_admitted(ctx, audio_source, engine, lang_hint)
+
+
+def _whisper_transcribe_admitted(ctx, audio_source, engine: str = "auto",
+                                 lang_hint: str = "") -> str:
     """Run faster-whisper on ``audio_source`` (an ndarray or a file path) under
     the shared ASR lock and join the segments into one string. Shared by the
     array and file entry points below so the transcribe call/args can't drift
@@ -1136,6 +1143,12 @@ def detect_media_language(ctx, path: str, min_prob: float = 0.5) -> str:
     language as the hint would re-read an English clip as Russian whenever Whisper
     is below ASR_LANG_CONFIDENCE. Detected ONCE over several windows of the whole
     file, so short diarized turns and video portions inherit a stable answer."""
+    import comfy_client
+    with comfy_client.speech_session(ctx=ctx):
+        return _detect_media_language_admitted(ctx, path, min_prob)
+
+
+def _detect_media_language_admitted(ctx, path: str, min_prob: float = 0.5) -> str:
     forced = dep(ctx, "WHISPER_LANGUAGE", WHISPER_LANGUAGE)
     if forced:
         return forced

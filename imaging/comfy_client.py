@@ -469,6 +469,7 @@ _LIFECYCLE_LOCK = threading.RLock()
 _SPEECH_GATE = threading.RLock()
 _SPEECH_FREE = threading.Event()
 _SPEECH_FREE.set()
+_SPEECH_LOCAL = threading.local()
 _excl_users = 0            # jobs holding OR queued for an exclusive slot
 _excl_model = ""           # the chat model we unloaded ("" = we unloaded nothing)
 _NO_CHAT_MODEL = object()
@@ -507,10 +508,19 @@ def wait_for_card(timeout: float = 600.0) -> bool:
 
 @contextlib.contextmanager
 def speech_session(timeout=600, ctx=None):
+    # TTS may transcribe its reference while already holding this admission.
+    # An exclusive render may also run its own speech check on the same thread.
+    if getattr(_SPEECH_LOCAL, 'held', False) or this_thread_holds_card():
+        yield
+        return
     import gpu_admission
     with gpu_admission.admit(ctx=ctx, timeout=timeout):
         with _speech_admitted(timeout, ctx):
-            yield
+            _SPEECH_LOCAL.held = True
+            try:
+                yield
+            finally:
+                _SPEECH_LOCAL.held = False
 
 
 @contextlib.contextmanager

@@ -55,3 +55,36 @@ def test_claim_without_unloading_blocks_speech_until_release():
         comfy_client._release_card(ctx)
     with comfy_client.speech_session(timeout=1):
         pass
+
+
+def test_whisper_paths_wait_for_exclusive_render(monkeypatch):
+    import audio
+    calls = []
+    monkeypatch.setattr(audio, '_whisper_transcribe_admitted', lambda *a: calls.append('asr') or 'ok')
+    monkeypatch.setattr(audio, '_detect_media_language_admitted', lambda *a: calls.append('lang') or 'ru')
+    comfy_client._SPEECH_FREE.clear()
+    try:
+        worker = threading.Thread(target=lambda: (audio._whisper_transcribe(None, 'file'),
+                                                   audio.detect_media_language(None, 'file')))
+        worker.start()
+        worker.join(.2)
+        assert calls == []
+    finally:
+        comfy_client._SPEECH_FREE.set()
+    worker.join(2)
+    assert calls == ['asr', 'lang']
+
+
+def test_nested_speech_admission_is_reentrant(monkeypatch):
+    import gpu_admission
+    import contextlib
+    entries = []
+    @contextlib.contextmanager
+    def admit(**kwargs):
+        entries.append(1)
+        yield
+    monkeypatch.setattr(gpu_admission, 'admit', admit)
+    with comfy_client.speech_session():
+        with comfy_client.speech_session():
+            pass
+    assert entries == [1]

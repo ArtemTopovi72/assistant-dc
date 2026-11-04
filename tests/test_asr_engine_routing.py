@@ -70,7 +70,7 @@ src = inspect.getsource(A.synth_single_segment)
 check("the reference transcript is taken with engine=\"whisper\"",
       'engine="whisper"' in src, src[src.find("ref_text ="):][:200])
 
-wsrc = inspect.getsource(A._whisper_transcribe)
+wsrc = inspect.getsource(A._whisper_transcribe_admitted)
 check("_whisper_transcribe honours a forced engine",
       'engine != "whisper"' in wsrc, wsrc[:300])
 

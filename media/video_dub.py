@@ -47,13 +47,15 @@ def _run(args: list) -> bool:
 
 def _words(ctx, wav: str) -> list:
     """[(normalized word, start, end)] -- one entry per spoken word."""
-    segs, _ = ctx.models.whisper.transcribe(wav, language="ru", word_timestamps=True)
-    out = []
-    for sg in segs:
-        for w in sg.words or ():
-            for tok in _WORD.findall(w.word):
-                out.append((_norm(tok), float(w.start), float(w.end)))
-    return out
+    import comfy_client
+    with comfy_client.speech_session(ctx=ctx):
+        segs, _ = ctx.models.whisper.transcribe(wav, language="ru", word_timestamps=True)
+        out = []
+        for sg in segs:
+            for w in sg.words or ():
+                for tok in _WORD.findall(w.word):
+                    out.append((_norm(tok), float(w.start), float(w.end)))
+        return out
 
 
 def anchors(old: list, new: list) -> list:

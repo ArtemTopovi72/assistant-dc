@@ -62,7 +62,8 @@ def _words(ctx, wav):
     if ctx.models.whisper is None:
         raise ValueError('Speech recognition is unavailable.')
     result = []
-    with ctx.asr_lock:
+    import comfy_client
+    with comfy_client.speech_session(ctx=ctx), ctx.asr_lock:
         check(ctx)
         segments, _ = ctx.models.whisper.transcribe(wav, language=None, vad_filter=True,
             word_timestamps=True, temperature=0., condition_on_previous_text=False)

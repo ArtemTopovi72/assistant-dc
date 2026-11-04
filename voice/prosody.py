@@ -33,8 +33,10 @@ def _phrases(times, gap=0.30):
 
 def word_times(ctx, wav: str):
     """[(word, start, end)] from faster-whisper word timestamps."""
-    segs, _ = ctx.models.whisper.transcribe(wav, language="ru", word_timestamps=True)
-    return [(w.word.strip(), w.start, w.end) for sg in segs for w in sg.words]
+    import comfy_client
+    with comfy_client.speech_session(ctx=ctx):
+        segs, _ = ctx.models.whisper.transcribe(wav, language="ru", word_timestamps=True)
+        return [(w.word.strip(), w.start, w.end) for sg in segs for w in sg.words]
 
 
 def centre_window(words, stressed_text: str, focus: int):
