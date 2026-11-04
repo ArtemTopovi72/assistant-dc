@@ -434,6 +434,9 @@ def needs_relook(ctx: Optional[Context], state: AgentState) -> bool:
     # whatever they say is about it -- «обсудим цитату» is no question (16:57).
     if r["about_picture"] or getattr(ctx, "image_pointed_at", False):
         return True
+    text = state.get("user_input_original") or state.get("user_input") or ""
+    if r.get("must_call") == "calculate" and re.search(r"\d\s*[+*/×÷−-]\s*\d", text):
+        return False
     if _file_newer_than(ctx, last_path):
         return False
     # Any question about a photo the user sent or a video they sent: a receipt
