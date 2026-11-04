@@ -17,3 +17,15 @@ def test_failed_video_is_not_forced_again(monkeypatch):
     tools = [{'function': {'name': 'generate_video'}}]
     assert graph._forced_intent(SimpleNamespace(), {}, 'continue the video', True, tools, (),
                                 {('generate_video', '{}'): 1}) == ''
+
+
+def test_unavailable_speech_check_marks_the_video_unverified(monkeypatch):
+    import subprocess
+    import tool_image_handlers as handlers
+    def fail(*args, **kwargs):
+        raise subprocess.TimeoutExpired('ffmpeg', 1)
+    monkeypatch.setattr(subprocess, 'run', fail)
+    ctx = SimpleNamespace(video_speech_unverified=False)
+    result = handlers._speech_ok(ctx, 'missing.mp4', ['hello'])
+    assert result is handlers._SPEECH_CHECK_UNAVAILABLE
+    assert ctx.video_speech_unverified

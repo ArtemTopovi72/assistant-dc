@@ -1520,6 +1520,7 @@ def _speech_ok(ctx, clip: str, lines: list):
         return _video(ctx).heard_lines(lines, heard)
     except Exception:
         logger.warning("video chain: the speech check failed", exc_info=True)
+        ctx.video_speech_unverified = True
         return _SPEECH_CHECK_UNAVAILABLE
 
 
@@ -1894,6 +1895,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     # QA re-render comes AFTER the static part consumed the tail, and the
     # delivered clip is that second call's -- it must still get the voice.
     ctx.video_speech = ""
+    ctx.video_speech_unverified = False
     ctx.video_text_required = ctx.video_text_source = False
     ctx.video_untrusted_ocr = ()
 
@@ -2645,6 +2647,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     used = ""
     if tags:
         used = f" References used: {', '.join(tags)}."
+    speech_unverified = speech_unverified or getattr(ctx, "video_speech_unverified", False)
     return (
         f"Video generated and saved: {path}\n"
         f"Mode: {video_mod.MODE_LABELS.get(display_mode, display_mode)}; "
