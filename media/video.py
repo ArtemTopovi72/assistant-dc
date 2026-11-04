@@ -3538,7 +3538,17 @@ def revoice(ctx, clip: str, voice: str) -> Optional[str]:
         _origin, stems = separator.separate_audio_file(original)
         vocal = stems["vocals"].detach().cpu().numpy().T.astype(np.float32)
         sf.write(src, librosa.resample(vocal.mean(axis=1), orig_sr=44100, target_sr=22050), 22050)
-        if not remix._seedvc(ctx, src, _revoice_ref(voice, os.path.join(work, "ref.wav")), conv):
+        ref = _revoice_ref(voice, os.path.join(work, "ref.wav"))
+        try:
+            _, ref_stems = separator.separate_audio_file(ref)
+            ref_vocal = ref_stems["vocals"].detach().cpu().numpy().T.astype(np.float32).mean(axis=1)
+            if len(ref_vocal) and np.isfinite(ref_vocal).all() and np.sqrt(np.mean(ref_vocal ** 2)) > 1e-5:
+                clean_ref = os.path.join(work, "ref_clean.wav")
+                sf.write(clean_ref, librosa.resample(ref_vocal, orig_sr=44100, target_sr=22050), 22050)
+                ref = clean_ref
+        except Exception:
+            logger.warning("revoice: reference separation failed; using the original sample", exc_info=True)
+        if not remix._seedvc(ctx, src, ref, conv):
             return None
         sound, sr = sf.read(original, dtype="float32", always_2d=True)
         converted, conv_sr = sf.read(conv, dtype="float32")
