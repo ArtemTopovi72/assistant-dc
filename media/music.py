@@ -1654,6 +1654,9 @@ def _generate_yue2(ctx, lyrics: str, style: str, seed: int, prefs: Optional[dict
     job = {"lyrics": yue2_lyrics(lyrics) if words else "[instrumental]",
            "style": yue2_pin(yue2_language(dep(ctx, "yue2_tags", yue2_tags)(ctx, yue2_style(style)), words), prefs),
            "seed": int(seed), "out": out}
+    tempo = re.fullmatch(r"\s*exactly\s+(\d+)\s+BPM\s*", str((prefs or {}).get("tempo") or ""), re.I)
+    if tempo and BPM_RANGE[0] <= int(tempo.group(1)) <= BPM_RANGE[1]:
+        job["target_bpm"] = int(tempo.group(1))
     logger.info("YuE2 (%s): seed %d, style: %s", "cpp bf16" if cpp else "torch", seed, job["style"])
     t0 = time.time()
     for attempt in (1, 2):
@@ -1706,6 +1709,16 @@ def _master(path: str) -> None:
             os.unlink(tmp)          # our own temp file
 
 
+def _pin_yue2_abc_tempo(abc: str, bpm: int) -> str:
+    """Pin the quarter-note tempo in a generated ABC score; reject incomplete scores."""
+    if not re.search(r"(?m)^X:\s*\d+", abc or "") or not re.search(r"(?m)^K:", abc or ""):
+        return ""
+    line = f"Q:1/4={int(bpm)}"
+    if re.search(r"(?m)^Q:.*$", abc):
+        return re.sub(r"(?m)^Q:.*$", line, abc)
+    return re.sub(r"(?m)^(X:\s*\d+.*)$", lambda m: m.group(1) + "\n" + line, abc, count=1)
+
+
 def _render_yue2_once(ctx, cpp: bool, job: dict, seed: int) -> str:
     out = job["out"]
     if cpp:
@@ -1715,9 +1728,32 @@ def _render_yue2_once(ctx, cpp: bool, job: dict, seed: int) -> str:
         env = dict(os.environ)
         env["PATH"] = os.pathsep.join([os.path.dirname(YUE2_CPP_EXE),
                                        os.path.join(os.environ.get("CUDA_PATH", ""), "bin"), env["PATH"]])
+        bpm = job.pop("target_bpm", 0)
         cmd = [YUE2_CPP_EXE, "--model", YUE2_CPP_MODEL, "--vae", YUE2_CPP_VAE,
                "--request", "{job}", "--out", out]
-        _, tail = dep(ctx, "run_gpu_worker", run_gpu_worker)(ctx, "", "", job, "YuE2", YUE2_TIMEOUT, cmd=cmd, env=env)
+        if bpm:
+            import tempfile
+            fd, score_path = tempfile.mkstemp(prefix="yue2_score_", suffix=".abc")
+            os.close(fd)
+            plan_exe = os.path.join(os.path.dirname(YUE2_CPP_EXE), "yue-plan.exe")
+            plan_cmd = [plan_exe, "--model", YUE2_CPP_MODEL, "--request", "{job}", "--out", score_path]
+            try:
+                with dep(ctx, "_gpu_slot", comfy_client._gpu_slot)(exclusive=True, label="YuE2", progress_ctx=ctx):
+                    ok, _ = dep(ctx, "run_gpu_worker", run_gpu_worker)(ctx, "", "", job, "YuE2 plan", YUE2_TIMEOUT, cmd=plan_cmd, env=env)
+                    score = Path(score_path).read_text(encoding="utf-8") if ok else ""
+                    pinned = _pin_yue2_abc_tempo(score, bpm)
+                    if not pinned:
+                        raise MusicUnavailable("YuE2 could not prepare a tempo-controlled score")
+                    job["abc"] = pinned
+                    logger.info("YuE2: score tempo pinned to %d BPM", bpm)
+                    _, tail = dep(ctx, "run_gpu_worker", run_gpu_worker)(ctx, "", "", job, "YuE2", YUE2_TIMEOUT, cmd=cmd, env=env)
+            finally:
+                try:
+                    os.unlink(score_path)
+                except OSError:
+                    pass
+        else:
+            _, tail = dep(ctx, "run_gpu_worker", run_gpu_worker)(ctx, "", "", job, "YuE2", YUE2_TIMEOUT, cmd=cmd, env=env)
     else:
         _, tail = dep(ctx, "run_gpu_worker", run_gpu_worker)(ctx, YUE2_PYTHON, "yue2_render.py", job, "YuE2", YUE2_TIMEOUT)
     return tail

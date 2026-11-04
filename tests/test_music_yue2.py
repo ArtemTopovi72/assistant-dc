@@ -93,3 +93,58 @@ def test_an_instrumental_keeps_its_pinned_genre():
     got = M.yue2_pin("Vocal jazz, piano, 70 BPM", p)
     assert got.startswith("instrumental, ") and "jazz ballad" in got and "vocal" not in got.lower()
     assert M.yue2_preview(M.prefs_from(genre="jazz", vocal="male")).startswith("male vocal, Vocal jazz")
+
+
+def test_pin_abc_tempo_changes_only_header():
+    abc = "X:1\nM:4/4\nQ:1/4=104\nK:C\nC D E F |\n"
+    out = M._pin_yue2_abc_tempo(abc, 140)
+    assert out == abc.replace("Q:1/4=104", "Q:1/4=140")
+    assert M._pin_yue2_abc_tempo(abc + "Q:1/4=90\n", 140).count("Q:1/4=140") == 2
+    assert M._pin_yue2_abc_tempo("not an ABC score", 140) == ""
+
+
+def test_yue2_plans_then_pins_before_synthesis(tmp_path):
+    import contextlib
+    seen = []
+    def worker(ctx, py, script, job, label, timeout, cmd=None, env=None):
+        seen.append((label, dict(job)))
+        if label == "YuE2 plan":
+            from pathlib import Path
+            Path(cmd[cmd.index("--out") + 1]).write_text("X:1\nQ:1/4=104\nK:C\nC D |\n", encoding="utf8")
+        return True, "ok"
+    ctx = _deps(run_gpu_worker=worker, _gpu_slot=lambda **kw: contextlib.nullcontext())
+    M._render_yue2_once(ctx, True, {"out": str(tmp_path / "song.mp3"), "target_bpm": 140}, 7)
+    assert [x[0] for x in seen] == ["YuE2 plan", "YuE2"]
+    assert "Q:1/4=140" in seen[1][1]["abc"]
+    assert "target_bpm" not in seen[1][1]
+
+
+def test_yue2_invalid_plan_does_not_claim_controlled_tempo(tmp_path):
+    import contextlib, pytest
+    seen = []
+    def worker(ctx, py, script, job, label, timeout, cmd=None, env=None):
+        seen.append(label)
+        return False, "plan failed"
+    ctx = _deps(run_gpu_worker=worker, _gpu_slot=lambda **kw: contextlib.nullcontext())
+    with pytest.raises(M.MusicUnavailable, match="tempo-controlled"):
+        M._render_yue2_once(ctx, True, {"out": str(tmp_path / "song.mp3"), "target_bpm": 140}, 7)
+    assert seen == ["YuE2 plan"]
+
+
+def test_yue2_cancel_during_plan_releases_gpu_slot(tmp_path):
+    import contextlib, pytest
+    phases = []
+    @contextlib.contextmanager
+    def slot(**kw):
+        phases.append("entered")
+        try:
+            yield
+        finally:
+            phases.append("released")
+    def worker(ctx, py, script, job, label, timeout, cmd=None, env=None):
+        phases.append(label)
+        raise M.MusicUnavailable("cancelled")
+    ctx = _deps(run_gpu_worker=worker, _gpu_slot=slot)
+    with pytest.raises(M.MusicUnavailable, match="cancelled"):
+        M._render_yue2_once(ctx, True, {"out": str(tmp_path / "song.mp3"), "target_bpm": 140}, 7)
+    assert phases == ["entered", "YuE2 plan", "released"]
