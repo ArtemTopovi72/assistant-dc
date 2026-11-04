@@ -2061,8 +2061,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             # timbre (ASR-verified); the ref2va audio reference leaked the
             # reference's own words into babble (same day). So: render FL2VA,
             # then revoice the new part with the clip's own speaker from the
-            # tail (demucs + Seed-VC, `revoice`) -- words AND the real voice.
-            _vs = video_mod.voice_sample(cont_tail) if os.path.exists(cont_tail) else ""
+            # Use the longer source as the speaker reference: the motion tail
+            # is only 2.5 seconds and often lacks enough clean speech.
+            _vs = video_mod.voice_sample(cont_src) if os.path.exists(cont_src) else ""
+            if not _vs and os.path.exists(cont_tail):
+                _vs = video_mod.voice_sample(cont_tail)
             ctx.continue_voice_sample = _vs
         # Pinned frames (same as the parts of a long script): faster and seamless, but they
         # take no pictures -- new people from photos still need the reference path.

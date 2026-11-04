@@ -257,8 +257,8 @@ check("static: the camera is told to hold the framing",
 check("static: the continuation prompt keeps the user's words",
       "says" in SEEN.get("description", ""), SEEN.get("description", "")[:200])
 check("static: does not override the requested speech language", "said once, clearly, in Russian" not in SEEN.get("description", ""), SEEN.get("description", ""))
-check("static: the new part is revoiced with the clip's own speaker (the tail)",
-      bool(REVOICED) and REVOICED[0][1] == tail, REVOICED)
+check("static: the new part uses the full clip for its speaker reference",
+      bool(REVOICED) and REVOICED[0][1] == CLIP, REVOICED)
 _E['estimate_seconds'] = lambda text, **kw: 10.0 if text.startswith(V.STATIC_CONTINUE_PREFIX) else 6.0
 SEEN.clear()
 H._handle_generate_video(TCtx(), {}, {"description": 'he says "the line"'})

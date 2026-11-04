@@ -1831,7 +1831,7 @@ _STATIC_CONT_CACHE: dict = {}
 
 
 def voice_sample(tail_path: str) -> str:
-    """The tail's speech as a mono 22.05 kHz WAV -- the revoice chain's
+    """Up to the final 25 seconds as a mono 22.05 kHz WAV -- the revoice chain's
     Seed-VC opens the reference with soundfile, which cannot read an mp4
     (live 2026-11-03: the worker died on the raw tail and revoice returned
     None in silence). "" when the tail has no audio."""
@@ -1839,12 +1839,15 @@ def voice_sample(tail_path: str) -> str:
     import tempfile as _tf
     if not tail_path or not os.path.exists(tail_path):
         return ""
-    if not probe(tail_path).get("has_audio"):
+    info = probe(tail_path)
+    if not info.get("has_audio"):
         return ""
     try:
         fd, out = _tf.mkstemp(suffix=".wav", prefix="tailvoice_")
         os.close(fd)
-        r = _sp.run(["ffmpeg", "-y", "-loglevel", "error", "-i", tail_path,
+        seconds = float(info.get("seconds") or 0)
+        seek = ["-ss", str(max(0.0, seconds - 25.0))] if seconds > 25.0 else []
+        r = _sp.run(["ffmpeg", "-y", "-loglevel", "error", *seek, "-i", tail_path,
                      "-vn", "-ac", "1", "-ar", "22050", out],
                     capture_output=True, timeout=120)
         if r.returncode == 0 and os.path.exists(out) and os.path.getsize(out):
