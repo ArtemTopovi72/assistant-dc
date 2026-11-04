@@ -1207,6 +1207,8 @@ class TaskRunnerMixin:
         # ▶️ Continue video: the clip's tail (its motion + sound) rides this ONE request.
         ctx.continue_tail = ctx.continue_src = ""
         ctx.continue_people = []
+        ctx.continue_voice_sample = ""      # the static continuation sets it; one task only
+        ctx.continue_voice_error = False
         _ct = getattr(sess, "continue_tail", "")
         # "continue this video" (the ▶️ flow's own prefix since 2026-11-02) and the
         # legacy "animate this photo" texts keep their tail attached either way.

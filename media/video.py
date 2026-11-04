@@ -1767,11 +1767,11 @@ def is_talking_head(ctx, description: str, said: str = "", spoken: bool = False)
 _STATIC_CONT_CACHE: dict = {}
 
 
-def tail_audio(tail_path: str) -> str:
-    """The tail's sound track alone (an .m4a), for a continuation that pins the
-    picture but must keep the clip's own voices: FL2VA cannot take an audio
-    reference, so a static continuation rides ref2va with the tail as SOUND
-    and the seed as the only picture. "" when the tail has no audio."""
+def voice_sample(tail_path: str) -> str:
+    """The tail's speech as a mono 22.05 kHz WAV -- the revoice chain's
+    Seed-VC opens the reference with soundfile, which cannot read an mp4
+    (live 2026-11-03: the worker died on the raw tail and revoice returned
+    None in silence). "" when the tail has no audio."""
     import subprocess as _sp
     import tempfile as _tf
     if not tail_path or not os.path.exists(tail_path):
@@ -1779,15 +1779,15 @@ def tail_audio(tail_path: str) -> str:
     if not probe(tail_path).get("has_audio"):
         return ""
     try:
-        fd, out = _tf.mkstemp(suffix=".m4a", prefix="tailaudio_")
+        fd, out = _tf.mkstemp(suffix=".wav", prefix="tailvoice_")
         os.close(fd)
         r = _sp.run(["ffmpeg", "-y", "-loglevel", "error", "-i", tail_path,
-                     "-vn", "-c:a", "aac", "-b:a", "128k", out],
+                     "-vn", "-ac", "1", "-ar", "22050", out],
                     capture_output=True, timeout=120)
         if r.returncode == 0 and os.path.exists(out) and os.path.getsize(out):
             return out
     except Exception:
-        logger.debug("tail audio extract failed", exc_info=True)
+        logger.debug("voice sample extract failed", exc_info=True)
     return ""
 
 

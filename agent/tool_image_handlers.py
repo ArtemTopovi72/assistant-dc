@@ -1685,6 +1685,22 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
         if not (new and os.path.exists(new)):
             logger.warning("video parts: part %d produced no clip (%s)", i, r.get("reason"))
             break
+        # Static continuation: FL2VA says the words in its own whispery
+        # timbre -- swap it for the clip's own speaker, straight from the tail.
+        if getattr(ctx, "continue_voice_sample", "") and os.path.exists(ctx.continue_voice_sample):
+            try:
+                revoiced = video_mod.revoice(ctx, new, ctx.continue_voice_sample)
+                if revoiced and os.path.exists(revoiced):
+                    logger.info("static continuation revoiced with the clip's "
+                                "own speaker")
+                    new = revoiced
+                else:
+                    ctx.continue_voice_error = True
+                    break
+            except Exception:
+                logger.warning("static continuation revoice failed", exc_info=True)
+                ctx.continue_voice_error = True
+                break
         first = os.path.join(work, f"first_{i}.jpg")
         if tg_continue.first_frame(new, first) and not fresh_from:      # a cut back to the still is meant
             joins.append((frame, first))
@@ -1868,6 +1884,9 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     ctx.video_made = ""             # the finished clip of this call, for a turn that runs out of time
     from prompt_guard import user_words
     ctx.video_request = user_words(str(state.get("user_input_original") or state.get("user_input") or "")).strip()
+    # ctx.continue_voice_sample persists across this turn's calls: the agent's
+    # QA re-render comes AFTER the static part consumed the tail, and the
+    # delivered clip is that second call's -- it must still get the voice.
     ctx.video_speech = ""
     ctx.video_text_required = ctx.video_text_source = False
     ctx.video_untrusted_ocr = ()
@@ -1981,6 +2000,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     pinned_tail = ""
     cont_src = getattr(ctx, "continue_src", "") or ""
     continuing = bool(cont_tail and os.path.exists(cont_tail))
+    static_hold = False
     chain_id, chain_idx = "", 0
     people: list = []
     bridge_first = False
@@ -1994,9 +2014,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         prior = video_mod.chain_of(cont_src, ctx) if (not people and video_mod.herrgott_on()) else ()
         # Static-screen continuation (owner, 2026-11-02): «он просто говорит» must
         # stay ON the clip's final frame. H3's first+last-frame mode with first =
-        # last = that frame pins the composition -- the model interpolates two
-        # identical frames and cannot drift into another shot. New people from
-        # photos still need the reference path.
+        # last = that frame anchors the composition. New people from photos
+        # still need the reference path.
         _seed_img = next((p for p in (images or []) if p and os.path.exists(p)), "")
         _static_voice = ""
         static_hold = bool(not prior and not people and _seed_img
@@ -2009,17 +2028,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             bridge_first = True
             description = video_mod.CONTINUE_CTX_PREFIX + description
         elif static_hold:
-            # The picture is pinned by the seed as the ONLY reference and a
-            # camera lock in the text; the clip's VOICE rides as an audio
-            # reference cut from the tail -- FL2VA cannot take audio, so a
-            # static continuation goes through ref2va (owner, 2026-11-03:
-            # the first=last FL2VA take lost the tail and H3 invented a
-            # whispery wrong voice and doubled the line).
-            _static_voice = video_mod.tail_audio(cont_tail)
-            videos, images = [], [_seed_img]
-            logger.info("generate_video: static-screen continuation, %s as the only "
-                        "picture%s", os.path.basename(_seed_img),
-                        ", the tail's voice as an audio reference" if _static_voice else "")
+            # FL2VA receives matching keyframes; the clip's voice is applied
+            # separately after generation because FL2VA has no audio reference.
+            videos, images = [], [_seed_img, _seed_img]
+            logger.info("generate_video: static-screen continuation, first = last = %s",
+                        os.path.basename(_seed_img))
             # NOT CONTINUE_PREFIX: it speaks of a <Video 1> this shape does not
             # attach, and H3 invented a whole new room to satisfy it (owner,
             # 2026-11-03: a YouTube-player frame continued as a room). The
@@ -2028,9 +2041,14 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                            "camera does not move and the framing, the view and "
                            "everything in it stay EXACTLY as <Picture 1> for the "
                            "whole shot -- the same screen or scene, no new angle, "
-                           "no cut, no added room. " + description.strip()
-                           + (" The line is spoken in the voice of <Audio 1>, the "
-                              "clip's own speaker." if _static_voice else ""))
+                           "no cut, no added room. " + description.strip())
+            # FL2VA speaks the WORDS intelligibly but in its own whispery
+            # timbre (ASR-verified); the ref2va audio reference leaked the
+            # reference's own words into babble (same day). So: render FL2VA,
+            # then revoice the new part with the clip's own speaker from the
+            # tail (demucs + Seed-VC, `revoice`) -- words AND the real voice.
+            _vs = video_mod.voice_sample(cont_tail) if os.path.exists(cont_tail) else ""
+            ctx.continue_voice_sample = _vs
         # Pinned frames (same as the parts of a long script): faster and seamless, but they
         # take no pictures -- new people from photos still need the reference path.
         elif not people and video_mod.motion_context_on():
@@ -2067,7 +2085,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             images = (images or [])[-1:] + people
             description += video_mod.new_people_clause(len(images) - len(people) + 1, len(people))
 
-    audios = [_static_voice] if _static_voice else []
+    audios = []
     # by slot, left to right; "" = that person keeps the default voice
     slots = [] if continuing else list(getattr(ctx, "anim_voices", None) or [])
     slots = slots[:video_mod.MAX_REF_AUDIOS]
@@ -2150,6 +2168,16 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     # blocks"): the first part here, the rest after it below.
     raw = (args.get("description") or "").strip()
     _said = str((state or {}).get("user_input_original") or (state or {}).get("user_input") or "")
+    if continuing and re.search(r"говор|скаж|сказ|произнес|произнёс|озвуч|says?|speaks?", _said, re.I):
+        original_lines = video_mod.quoted_lines(_said)
+        draft_lines = video_mod.quoted_lines(raw)
+        if len(original_lines) == 1 and len(draft_lines) <= 1:
+            line = original_lines[0]
+            if not draft_lines or video_mod._flat_line(draft_lines[0]) != video_mod._flat_line(line):
+                corrected = (video_mod._QUOTED.sub(lambda _: '"' + line + '"', raw, count=1)
+                             if draft_lines else raw + ' The speaker says: "' + line + '".')
+                description = description.replace(raw, corrected, 1) if raw in description else description + " " + corrected
+                raw = corrected
     own_script = False
     dictated = False
     speech = ""             # the words the user dictated, whole: what every part together must say
@@ -2410,6 +2438,10 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     head = bool(not chain_id and len(anchor) == 1 and not videos
                 and (talking if talking is not None else video_mod.is_talking_head(ctx, raw, _said, spoken=bool(speech))))
     head = head or loop
+    if static_hold:
+        # the continuation's two identical keyframes (first = last = the clip's
+        # final frame) ride the talking-head machinery: FL2VA + framing locks.
+        head = True
     if loop:
         logger.info("generate_video: loop, the picture is the first and the last frame")
     elif head:
@@ -2440,6 +2472,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         watch = bool(chain_id and images and not continuing
                      and _preserves_static_scene(ctx, ctx.video_request or first_prompt))
         best_eyes = None
+        speech_unverified = False
         said_first = video_mod.quoted_lines(parts[0]) if head and parts else []
         speech_ok = getattr(ctx, "speech_ok", None) or _speech_ok
         try:
@@ -2456,6 +2489,9 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                     size_from=cont_src if chain_id and continuing else "",
                     keyframe=head,
                 )
+                if result.get("status") == "cancelled" or (getattr(ctx, "is_cancelled", None) and ctx.is_cancelled()):
+                    state["video_status"] = "error"
+                    return "[TOOL ERROR] Video generation was cancelled; no clip was delivered."
                 p = result.get("path")
                 look = watch and p and os.path.exists(p)
                 drawn = video_mod.drawn_over(p, images[0]) if look else None
@@ -2465,8 +2501,10 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 # in runs 17 and 18 (2026-10-20); a take that says it all ranks first
                 missed = bool(head and said_first and p and os.path.exists(p)
                               and not speech_ok(ctx, p, said_first))
-                if eyes is not None and (best_eyes is None or (missed, eyes) < best_eyes[0]):
-                    best_eyes = ((missed, eyes), result)
+                if head and p and os.path.exists(p):
+                    rank = (missed, eyes is None, eyes or 0)
+                    if best_eyes is None or rank < best_eyes[0]:
+                        best_eyes = (rank, result)
                 if ((eyes is not None and eyes > 0) or missed) and attempt < 3:
                     logger.warning("generate_video: part 1 drifted off the still's eyes (%s) or did not "
                                    "say %s; once more", eyes, said_first if missed else "")
@@ -2482,7 +2520,10 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 logger.warning("video chain: part 1 is covered over (edge drift %s, drawn over %s); "
                                "once more with a new seed", drift, drawn)
             if best_eyes:
-                result = best_eyes[1]       # of two takes, the one nearer the still's eyes
+                result = best_eyes[1]
+                speech_unverified = best_eyes[0][0]
+            else:
+                speech_unverified = missed
             if head and result.get("path") and os.path.exists(result["path"]):
                 result = {**result, "path": _pull_light(video_mod, images[0], result["path"], 1)}
         except Exception as exc:
@@ -2491,6 +2532,23 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                     "clip could not be made; do NOT claim one was created.")
 
         path = result.get("path")
+        # Static continuation, single part: FL2VA said the words in its own
+        # timbre -- swap in the clip's own speaker from the tail.
+        if (path and os.path.exists(path)
+                and getattr(ctx, "continue_voice_sample", "")
+                and os.path.exists(ctx.continue_voice_sample)):
+            try:
+                revoiced = video_mod.revoice(ctx, path, ctx.continue_voice_sample)
+                if revoiced and os.path.exists(revoiced):
+                    logger.info("static continuation revoiced with the clip's own speaker")
+                    path = result["path"] = revoiced
+                else:
+                    state["video_status"] = "error"
+                    return "[TOOL ERROR] Could not apply the original speaker's voice to the continuation; no finished video was delivered."
+            except Exception:
+                logger.warning("static continuation revoice failed", exc_info=True)
+                state["video_status"] = "error"
+                return "[TOOL ERROR] Could not apply the original speaker's voice to the continuation; no finished video was delivered."
         if path and not os.path.exists(path):
             logger.error("generate_video returned a non-existent path %r", path)
             path = None
@@ -2537,6 +2595,9 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     if len(parts) > 1 and not chain_id:
         path = _render_remaining_parts(ctx, path, parts, args, people=[*people, *anchor], voices=audios,
                                        fresh_from=anchor[0] if head else "")
+        if getattr(ctx, "continue_voice_error", False):
+            state["video_status"] = "error"
+            return "[TOOL ERROR] Could not apply the original speaker's voice to every segment; no finished video was delivered."
         result["seconds"] = video_mod.probe(path).get("seconds") or result.get("seconds")
     ctx.video_part = ""
 
@@ -2585,8 +2646,12 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         + ("The joins between the parts were checked: " + ctx.video_join_note + ". Tell the "
            "user plainly which join is rough; do NOT call the clip seamless.\n"
            if getattr(ctx, "video_join_note", "") else "") +
-        "The clip is delivered to the user automatically — just tell them it is ready "
-        "in one short sentence. Do NOT call generate_video again for this turn."
+        ("Speech recognition could not confirm the requested line cleanly; warn the user that "
+         "words may be wrong or extra speech may be present, and do not claim exact speech.\n"
+         if speech_unverified else "") +
+        "The clip is delivered to the user automatically. "
+        + ("Include the speech warning above. " if speech_unverified else "Say it is ready briefly. ")
+        + "Do NOT call generate_video again for this turn."
     )
 
 

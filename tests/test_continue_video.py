@@ -232,26 +232,58 @@ check("pinned: the no-cut prompt without <Video 1>",
 # Static-screen continuation (owner, 2026-11-02): «он говорит» stays ON the clip's
 # final frame — H3's first+last-frame mode with first = last = that frame, no
 # reference tail, anchored through the talking-head machinery.
+_e_marker = None
 _E["motion_context_on"] = lambda: False
 _E["static_continuation"] = lambda ctx, d: True
-_TAIL_AUDIO = os.path.join(_DATA, "tailaudio.m4a")
-open(_TAIL_AUDIO, "wb").write(b"fake-audio")
-_E["tail_audio"] = lambda tail: _TAIL_AUDIO
+REVOICED = []
+_E["revoice"] = lambda ctx, clip, voice: (REVOICED.append((clip, voice)), clip)[1]
+_E["voice_sample"] = lambda tail: tail
 SEEN.clear()
-H._handle_generate_video(TCtx(), {}, {"description": "he looks into the camera and says the line"})
-check("static: the seed is the only reference picture",
-      SEEN.get("images") == [frame], SEEN.get("images"))
-check("static: no reference tail rides as a video", not SEEN.get("videos"), SEEN.get("videos"))
-check("static: the clip's own voice rides as an audio reference",
-      SEEN.get("audios") == [_TAIL_AUDIO], SEEN.get("audios"))
+TC = TCtx()
+H._handle_generate_video(TC, {}, {"description": 'he looks into the camera and says "the line"'})
+check("static: first = last = the clip's final frame (FL2VA)",
+      SEEN.get("images") == [frame, frame], SEEN.get("images"))
+check("static: no reference tail or audio rides",
+      not SEEN.get("videos") and not SEEN.get("audios"), (SEEN.get("videos"), SEEN.get("audios")))
+check("static: the talking-head machinery anchors it (keyframe)",
+      SEEN.get("keyframe") is True, SEEN.get("keyframe"))
 check("static: the camera is told to hold the framing",
       "stay EXACTLY as <Picture 1>" in SEEN.get("description", "")
       and "no new angle" in SEEN.get("description", ""),
       SEEN.get("description", "")[:220])
 check("static: the continuation prompt keeps the user's words",
-      "says the line" in SEEN.get("description", ""), SEEN.get("description"))
+      "says" in SEEN.get("description", ""), SEEN.get("description", "")[:200])
+check("static: does not override the requested speech language", "said once, clearly, in Russian" not in SEEN.get("description", ""), SEEN.get("description", ""))
+check("static: the new part is revoiced with the clip's own speaker (the tail)",
+      bool(REVOICED) and REVOICED[0][1] == tail, REVOICED)
+SEEN.clear()
+H._handle_generate_video(TCtx(), {"user_input_original": 'Мужчина говорит «то вам очко порвут»'},
+                         {"description": 'The man says "то вам очко порют"'})
+check("continuation restores the user's exact dictated line",
+      "то вам очко порвут" in SEEN.get("description", "") and "порют" not in SEEN.get("description", ""), SEEN)
+class UnclearSpeechCtx(TCtx):
+    speech_ok = staticmethod(lambda ctx, clip, lines: False)
+
+_unclear_reply = H._handle_generate_video(UnclearSpeechCtx(), {}, {"description": 'he says "the line"'})
+check("unverified speech is disclosed", "could not confirm the requested line" in _unclear_reply, _unclear_reply)
+_E["revoice"] = lambda ctx, clip, voice: None
+_failed_state = {}
+_failed_reply = H._handle_generate_video(TCtx(), _failed_state, {"description": 'he says "the line"'})
+check("static: failed voice conversion is not reported as a finished matched-voice clip",
+      "[TOOL ERROR]" in _failed_reply and not _failed_state.get("video_path"), _failed_reply)
+_E["revoice"] = lambda ctx, clip, voice: clip
+_attempts = []
+def _cancel_second(ctx, description, **kwargs):
+    _attempts.append(1)
+    return fake_gen(ctx, description, **kwargs) if len(_attempts) == 1 else {"status": "cancelled"}
+_E["generate_video"] = _cancel_second
+_cancel_state = {}
+_cancelled_reply = H._handle_generate_video(UnclearSpeechCtx(), _cancel_state, {"description": 'he says "the line"'})
+check("cancelling a retry never delivers the previous failed take",
+      "cancelled" in _cancelled_reply.lower() and not _cancel_state.get("video_path"), _cancelled_reply)
+_E["generate_video"] = fake_gen
 _E["static_continuation"] = lambda ctx, d: False
-_E["tail_audio"] = lambda tail: ""
+_E["revoice"] = lambda ctx, clip, voice: None
 
 # Several faces and a spoken line: the clip's OWN speaker says it (owner,
 # 2026-11-03: the silent big man got the line while the small upper man was
@@ -273,6 +305,21 @@ check("one face: no speaker clause",
       "upper left" not in SEEN.get("description", ""), SEEN.get("description", "")[:150])
 _IDM.face_boxes = _real_fb
 _E["clip_speaker"] = lambda ctx, src, tail="": ""
+
+class NewVideoCtx(TCtx):
+    def __init__(self):
+        super().__init__()
+        self.continue_tail = self.continue_src = ""
+
+_new_state = {}
+_new_reply = H._handle_generate_video(NewVideoCtx(), _new_state, {"description": "A cat walks across the room"})
+check("a new video without a continuation reaches generation", bool(_new_state.get("video_path")), _new_reply)
+
+_cancel_calls = []
+_E["generate_video"] = lambda *a, **kw: (_cancel_calls.append(1) or {"status": "cancelled"})
+_cancel_reply = H._handle_generate_video(NewVideoCtx(), {}, {"description": "A cat walks across the room"})
+check("a cancelled render is not started again", len(_cancel_calls) == 1 and "cancelled" in _cancel_reply.lower(), _cancel_calls)
+_E["generate_video"] = fake_gen
 
 # ── the flow's own prefix: the reply says «продолжил видео», not «оживив фото» ──
 import graph_personality as GP
