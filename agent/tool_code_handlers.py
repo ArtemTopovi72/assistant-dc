@@ -855,6 +855,7 @@ def _needs_transcript_file(text: str) -> bool:
 @_guard
 def _handle_transcribe_media(ctx, state, args: dict) -> str:
     import uuid
+    import comfy_client
     from translation_dub import _stamp
     box = _box(ctx)
     if not dep(ctx, "may_run_code", _access.may_run_code)(getattr(ctx, "sandbox_user", None)):
@@ -883,7 +884,7 @@ def _handle_transcribe_media(ctx, state, args: dict) -> str:
         extracted = dep(ctx, 'run_python', _runner.run_python)(box, code, timeout=300, allow_host=False, ctx=ctx)
         if not extracted.ok or extracted.backend != 'docker':
             return '[TOOL ERROR] Could not extract audio in the isolated sandbox: ' + (extracted.output or '')[-500:]
-        with ctx.asr_lock:
+        with comfy_client.speech_session(ctx=ctx), ctx.asr_lock:
             segments, _ = whisper.transcribe(str(box.resolve(wav)), language=None, vad_filter=True,
                                               word_timestamps=True, temperature=0., condition_on_previous_text=False)
             cues = _subtitle_cues(segments, getattr(ctx, 'is_cancelled', None))

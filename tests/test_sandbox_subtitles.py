@@ -7,12 +7,28 @@ from graph_personality import _forced_subtitles
 from tool_code_handlers import _subtitle_cues
 
 
-def test_subtitles_use_isolated_audio_and_existing_whisper(tmp_path):
+def test_subtitles_use_isolated_audio_and_existing_whisper(tmp_path, monkeypatch):
+    from contextlib import contextmanager
+    import comfy_client
+    in_gpu_session = False
+    @contextmanager
+    def speech_session(*, ctx):
+        nonlocal in_gpu_session
+        in_gpu_session = True
+        try:
+            yield
+        finally:
+            in_gpu_session = False
+    monkeypatch.setattr(comfy_client, 'speech_session', speech_session)
     box = Sandbox(tmp_path)
     box.resolve('clip.mp4').write_bytes(b'video')
     class Whisper:
         def transcribe(self, path, **kwargs):
-            return iter([SimpleNamespace(start=.5, end=1.8, text=' Привет, мир!')]), None
+            assert in_gpu_session
+            def segments():
+                assert in_gpu_session
+                yield SimpleNamespace(start=.5, end=1.8, text=' Привет, мир!')
+            return segments(), None
     import threading
     def run(box, code, **kwargs):
         assert kwargs['allow_host'] is False
