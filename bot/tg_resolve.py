@@ -2171,7 +2171,8 @@ class ResolveMixin:
             return
         ref = _save_image_bytes(data)
         self._send_text(chat_id, tg_bot._t("swap_working", lang))
-        ctx = self._get_ctx()
+        shared_ctx = self._get_ctx()
+        ctx = tg_bot._scoped_ctx(shared_ctx) if shared_ctx is not None else None
 
         def _go():
             try:

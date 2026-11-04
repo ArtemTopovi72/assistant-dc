@@ -115,9 +115,13 @@ check("a number picks that person and asks for who goes instead",
 # The swap runs itself, not through the agent: its transfer_image re-rendered and
 # coloured the whole photo, kept the man and answered «done» (live 2026-10-12).
 CALLS = []
+import types
+shared_ctx = types.SimpleNamespace()
+bot._get_ctx = lambda: shared_ctx
+swap_contexts = []
 OUT = os.path.join(d, "swapped.png")
 Image.new("RGB", (800, 500), "white").save(OUT)
-bot.modules["person_swap"].swap = lambda ctx, path, box, ref, wish="": (CALLS.append((path, box, ref, wish)), OUT)[1]
+bot.modules["person_swap"].swap = lambda ctx, path, box, ref, wish="": (swap_contexts.append(ctx), CALLS.append((path, box, ref, wish)), OUT)[2]
 bot.photos.clear()
 bot._resolve_and_push(CID, [{"type": "photo", "file_id": "sponge", "caption": "пусть курит"}])
 import time
@@ -126,6 +130,8 @@ for _ in range(50):
         break
     time.sleep(0.1)
 check("the next photo swaps directly, no agent task", not bot.pushed and len(CALLS) == 1, (bot.pushed, CALLS))
+check("swap gets a task-local context", swap_contexts and swap_contexts[0] is not shared_ctx)
+bot._get_ctx = lambda: None
 c = CALLS[0] if CALLS else None
 check("...the picked person of the picked picture, the photo as who goes in, the caption as wishes",
       c and c[0] == PIC and c[1] == (620, 110, 680, 180) and os.path.exists(c[2]) and c[3] == "пусть курит", c)

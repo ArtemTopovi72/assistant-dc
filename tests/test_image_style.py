@@ -96,6 +96,22 @@ def test_a_small_picture_is_restyled_at_working_size_not_shrunk_back(monkeypatch
     assert (seen["w"], seen["h"]) == (736, 495)          # a plain edit keeps the source size
 
 
+def test_klein_does_not_call_unloaded_annotator_inside_gpu_session(monkeypatch):
+    monkeypatch.setenv('KLEIN_EDIT_ANNOTATE', '1')
+    calls = []
+    ctx = deps_ctx(_upload_image_to_comfy=lambda p, u: 'x.png',
+                   _source_dims=lambda p: (736, 495), exists=lambda p: True,
+                   _submit_and_poll=lambda *a, **k: 'out.png',
+                   this_thread_holds_card=lambda: True,
+                   card_is_exclusive=lambda: 'person swap',
+                   annotate_edit=lambda *a: calls.append('annotate'))
+    assert I._edit_image_with_firered_once(ctx, 'src.png', 'x', seed=1) == 'out.png'
+    assert calls == []
+    ctx.deps.card_is_exclusive = lambda: ''
+    assert I._edit_image_with_firered_once(ctx, 'src.png', 'x', seed=1) == 'out.png'
+    assert calls == ['annotate']
+
+
 def test_realism_keeps_materials_props_and_the_background():
     """A white character sheet came back in a forest, her plate armour a cloth top,
     her scythes and boots gone (owner, 2026-10-12): the photo text must not invite

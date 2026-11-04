@@ -504,7 +504,10 @@ def _edit_image_with_firered_once(ctx, image_path: str, instruction: str,
         logger.warning("klein: extra LoRA %s belongs to another model — skipped", xl[0])
         xl = None
     prompt = klein.with_keep_clause(instruction)
-    if not refs and os.getenv("KLEIN_EDIT_ANNOTATE", "1") == "1":
+    import comfy_client
+    if (not refs and os.getenv("KLEIN_EDIT_ANNOTATE", "1") == "1"
+            and not (dep(ctx, "this_thread_holds_card", comfy_client.this_thread_holds_card)()
+                     and dep(ctx, "card_is_exclusive", comfy_client.card_is_exclusive)())):
         import klein_annotate
         rec = dep(ctx, "annotate_edit", klein_annotate.annotate_edit)(ctx, image_path, instruction)
         if rec:
