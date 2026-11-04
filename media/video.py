@@ -2763,6 +2763,12 @@ def probe(path: str) -> dict:
     return info
 
 
+STATIC_CONTINUE_PREFIX = (
+    "Continue the view in <Picture 1> with a locked camera: keep the same framing, "
+    "background, screen and scene, with no zoom, new angle or cut. The people and "
+    "objects can move naturally within that frame as the requested action requires; "
+    "a speaking person moves their mouth. What happens next: ")
+
 CONTINUE_PREFIX = (
     "Continue the shot of <Video 1> directly, with no cut and no reset: the new footage begins "
     "exactly where <Video 1> ends, on <Picture 1>, and keeps its motion going. The same people with "

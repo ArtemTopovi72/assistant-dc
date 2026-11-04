@@ -248,8 +248,9 @@ check("static: no reference tail or audio rides",
 check("static: the talking-head machinery anchors it (keyframe)",
       SEEN.get("keyframe") is True, SEEN.get("keyframe"))
 check("static: the camera is told to hold the framing",
-      "stay EXACTLY as <Picture 1>" in SEEN.get("description", "")
-      and "no new angle" in SEEN.get("description", ""),
+      "locked camera" in SEEN.get("description", "")
+      and "no zoom" in SEEN.get("description", "")
+      and "can move naturally" in SEEN.get("description", ""),
       SEEN.get("description", "")[:220])
 check("static: the continuation prompt keeps the user's words",
       "says" in SEEN.get("description", ""), SEEN.get("description", "")[:200])

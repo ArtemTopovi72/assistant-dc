@@ -2039,11 +2039,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             # attach, and H3 invented a whole new room to satisfy it (owner,
             # 2026-11-03: a YouTube-player frame continued as a room). The
             # view itself is the subject: same screen, same scene, no cut.
-            description = ("Static continuation of the view in <Picture 1>: the "
-                           "camera does not move and the framing, the view and "
-                           "everything in it stay EXACTLY as <Picture 1> for the "
-                           "whole shot -- the same screen or scene, no new angle, "
-                           "no cut, no added room. " + description.strip())
+            description = video_mod.STATIC_CONTINUE_PREFIX + description.strip()
             # FL2VA speaks the WORDS intelligibly but in its own whispery
             # timbre (ASR-verified); the ref2va audio reference leaked the
             # reference's own words into babble (same day). So: render FL2VA,
