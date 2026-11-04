@@ -114,6 +114,19 @@ if True:
     check("queued song payload skips weather classification", bool(pushed) and not weather_calls, weather_calls)
     check("queued song payload skips picture selection", not ordinal_calls, ordinal_calls)
 
+    bot = make_bot()
+    sess = bot._get_session(5001)
+    sess.fwd_transcript = "old forwarded video"
+    sess.fwd_transcript_done = False
+    bot._store.put(sess)
+    pushed, forwarded = [], []
+    bot._backend.push = lambda task: pushed.append(task)
+    bot._queue_note = lambda *a, **k: None
+    bot.fwdv_intent = lambda text: "text"
+    bot._do_fwd_voice = lambda *args: forwarded.append(args)
+    bot._resolve_and_push(5001, [{"type": "text", "text": S.song_payload("[lyrics]\n[verse]\nHello world")}])
+    check("queued song bypasses pending forwarded transcript", bool(pushed) and not forwarded, forwarded)
+
     # 2. the generation honours the task's stage callback and delivers
     bot = make_bot()
     ctx = Ctx(); stages = []

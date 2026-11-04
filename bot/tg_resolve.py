@@ -659,6 +659,7 @@ class ResolveMixin:
                 if (getattr(sess, "fwd_transcript", "")
                         and not getattr(sess, "fwd_own", "")
                         and not getattr(sess, "fwd_transcript_done", False)
+                        and not _tg_songs.parse_song_payload(raw)[0]
                         and not tg_bot._LABEL2KEY.get(raw.strip())
                         and not _tg_links.urls_in(raw)):
                     _asked = (getattr(self, "fwdv_intent", None) or tg_bot._fwdv_intent)(raw)
