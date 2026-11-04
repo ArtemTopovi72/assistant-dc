@@ -286,6 +286,15 @@ def _reverses_request(ctx, request: str, args: dict) -> bool:
     edit = " ".join(str(args.get(k) or "") for k in ("region", "instructions", "target", "style")).strip()
     if not asked or not edit or asked.lower().startswith("[style_preset]"):
         return False
+    # A requested quoted inscription is a valid partial edit, even if the
+    # opposite-direction classifier confuses it with the other inscription.
+    if (re.search(r'напиш|нанес|добав|\b(?:write|print|add)\b', asked, re.I)
+            and not re.search(r'\bне\b|\bбез\b|убер|удал|стер|\b(?:not|no|without|remove|erase|delete)\b', asked, re.I)
+            and re.search(r'напис|нанес|добав|\b(?:write|written|print|add)\b', edit, re.I)
+            and not re.search(r'\b(?:not|no|without|remove|erase|delete)\b|\bне\b|убер|удал', edit, re.I)):
+        inscriptions = [q[1:-1].strip().casefold() for q in _QUOTE_SPAN_RE.findall(asked)]
+        if any(len(q) >= 2 and q in edit.casefold() for q in inscriptions):
+            return False
     pair = f"USER: {asked[:600]}\nEDIT: {edit[:600]}"
     # Two reads must agree: the opposite-read alone blocked «empty wooden table surface, removing
     # the cup» for «убери чашку со стола», and an example for it moved the miss onto «his empty
@@ -381,6 +390,31 @@ def _turn_inputs(ctx, state, text: str) -> tuple:
         # bare «Сколько стоит чай» under a forwarded receipt read as shopping (2026-10-24)
         att = ", ".join(filter(None, [att, f"forwarded material the message may be about: «{gist}»"]))
     return t, _previous_reply(state), att
+
+
+def _unverified_research_answer(state, sources=()) -> str:
+    rows = state.get('research_shop_candidates') or []
+    answer = ('Не удалось проверить карточки на Озоне: цены, наличие и продавцы неизвестны. '
+              'В результатах веб-поиска упомянуты модели; ссылки ниже — только возможные совпадения из поискового индекса, '
+              'они не проверены на Озоне:')
+    for row in rows[:3]:
+        model = str(row.get('model') or '')
+        if not re.fullmatch(r'[\w .+\-/]{3,100}', model):
+            continue
+        url = str(row.get('url') or '')
+        if not re.fullmatch(r'https://(?:www\.)?ozon\.ru/product/[A-Za-z0-9%._~/\-]+', url):
+            url = ''
+        answer += '\n• ' + model + (': ' + url if url else ' — точную карточку в индексе не нашёл')
+    links = []
+    for source in sources or ():
+        url = str(source.get('url') or '') if isinstance(source, dict) else ''
+        if re.fullmatch(r'https://[A-Za-z0-9.\-]+(?::\d+)?/[A-Za-z0-9%._~/?=&+\-]*', url) and url not in links:
+            links.append(url)
+        if len(links) == 3:
+            break
+    if links:
+        answer += '\n\nИсточники поиска:\n' + '\n'.join(links)
+    return answer
 
 
 def _forced_intent(ctx, state, text: str, has_image: bool, turn_tools, already_called,
@@ -2254,14 +2288,17 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                                     verification_negative=verification_negative)
     if (re.search(r"погугл[а-яё]*.*озон", str(original_input or user_input), re.I | re.S)
             and not state.get("research_shop_verified")):
-        final_answer = ("Не удалось подтвердить на Озоне карточку конкретной модели из обзоров. "
+        if state.get('research_shop_candidates'):
+            final_answer = _unverified_research_answer(state, getattr(ctx, 'turn_sources', ()))
+        else:
+            final_answer = ("Не удалось подтвердить на Озоне карточку конкретной модели из обзоров. "
                         "Поэтому пока не буду советовать случайный товар или выдавать старую "
                         "цену за актуальную.")
-        leads = re.findall(r"https://(?:www\.)?ozon\.ru/product/[^\s]+",
-                           state.get("research_shop_leads") or "")
-        if leads:
-            final_answer += ("\n\nВ поисковом индексе есть возможная карточка: " + leads[0]
-                             + " — её цену и наличие я не смог проверить.")
+            leads = re.findall(r"https://(?:www\.)?ozon\.ru/product/[^\s]+",
+                               state.get("research_shop_leads") or "")
+            if leads:
+                final_answer += ("\n\nВ поисковом индексе есть возможная карточка: " + leads[0]
+                                 + " — её цену и наличие я не смог проверить.")
 
     # Last resort. Bench deliver_fix 2026-09-23 (no-think): the model spent
     # all 16 rounds -- one edit repeated three times, two indentation misses --

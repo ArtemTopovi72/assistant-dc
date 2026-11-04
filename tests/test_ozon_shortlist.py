@@ -75,12 +75,89 @@ def test_next_web_search_keeps_both_models():
 
 def test_research_then_shop_rejects_generic_ozon_request(monkeypatch):
     monkeypatch.setattr(ozon_shopper, "shop", lambda *a, **kw: pytest.fail("generic search ran"))
+    calls = []
+    monkeypatch.setattr(handler, '_research_shop_index_fallback', lambda *a: calls.append(True))
     state = {"user_input_original": "Погугли обзоры, потом найди на Озоне",
              "research_shop_evidence": "Thule Subterra 2 has a padded laptop compartment"}
     out = handler._handle_ozon_shop(SimpleNamespace(), state,
                                     {"request": "рюкзак для ноутбука 16 дюймов"})
     assert "specific model" in out
+    assert calls == [True]
     assert handler._NAMED_MODEL.search("Thule Subterra 2 27L")
+
+
+def test_unavailable_ozon_looks_up_several_researched_models(monkeypatch):
+    import search
+    monkeypatch.setattr(ozon_shopper, 'shop', lambda *a, **kw: (_ for _ in ()).throw(RuntimeError('blocked')))
+    monkeypatch.setattr(ozon_shopper, '_llm_json', lambda *a, **kw: {
+        'models': ['Thule Subterra 2', 'Bellroy Transit', 'Invented Model']})
+    queries = []
+    def search_index(ctx, query, max_results):
+        queries.append(query)
+        if 'Thule' in query:
+            return [{'title': 'Thule Subterra 2 backpack', 'href': 'https://ozon.ru/product/thule-subterra-2-123/'}]
+        return [{'title': 'Bellroy Transit backpack', 'href': 'https://ozon.ru/product/bellroy-transit-456/'}]
+    monkeypatch.setattr(search, 'raw_search_results', search_index)
+    state = {'user_input_original': 'Погугли обзоры, потом найди на Озоне',
+             'research_shop_evidence': 'Review: Thule Subterra 2 and Bellroy Transit.'}
+    handler._handle_ozon_shop(SimpleNamespace(), state, {'request': 'Thule Subterra 2'})
+    assert len(queries) == 2 and not any('Invented' in q for q in queries)
+    assert [row['model'] for row in state['research_shop_candidates']] == ['Thule Subterra 2', 'Bellroy Transit']
+    assert all(row['url'].startswith('https://ozon.ru/product/') for row in state['research_shop_candidates'])
+
+
+def test_unverified_index_results_are_labelled_not_recommended():
+    from graph_personality import _unverified_research_answer
+    answer = _unverified_research_answer({'research_shop_candidates': [
+        {'model': 'Thule Subterra 2', 'url': 'https://ozon.ru/product/thule-subterra-2-123/'},
+        {'model': 'Bellroy Transit', 'url': ''}]})
+    assert 'Thule Subterra 2' in answer and 'Bellroy Transit' in answer
+    assert 'https://ozon.ru/product/thule-subterra-2-123/' in answer
+    assert 'не провер' in answer.lower() and 'цен' in answer.lower()
+    assert 'купи' not in answer.lower()
+
+
+def test_fallback_researches_more_when_only_one_model_is_known(monkeypatch):
+    import search
+    calls = []
+    def more(ctx, state, args):
+        calls.append(args['query'])
+        state['research_shop_evidence'] += ' Review: Bellroy Transit.'
+        return 'ok'
+    monkeypatch.setattr(agent_tools, '_handle_search', more)
+    monkeypatch.setattr(ozon_shopper, '_llm_json', lambda ctx, system, evidence, *a, **kw: {
+        'models': ['Thule Subterra 2', 'Bellroy Transit'] if 'Bellroy' in evidence else ['Thule Subterra 2']})
+    monkeypatch.setattr(search, 'raw_search_results', lambda *a: [])
+    state = {'user_input_original': 'Погугли обзоры, потом найди на Озоне',
+             'research_shop_evidence': 'Review: Thule Subterra 2.'}
+    handler._research_shop_index_fallback(SimpleNamespace(), state, ozon_shopper)
+    assert len(calls) == 1 and 'Thule Subterra 2' in calls[0]
+    assert [row['model'] for row in state['research_shop_candidates']] == ['Thule Subterra 2', 'Bellroy Transit']
+
+
+def test_index_fallback_rejects_wrong_product_and_foreign_domain(monkeypatch):
+    import search
+    monkeypatch.setattr(ozon_shopper, '_llm_json', lambda *a, **kw: {
+        'models': ['Thule Subterra 2', 'Bellroy Transit']})
+    monkeypatch.setattr(search, 'raw_search_results', lambda *a: [
+        {'title': 'Thule Subterra 2', 'href': 'https://ozon.ru.attacker.example/product/thule/'},
+        {'title': 'Different backpack', 'href': 'https://ozon.ru/product/unrelated-123/'}])
+    state = {'research_shop_evidence': 'Thule Subterra 2 and Bellroy Transit'}
+    handler._research_shop_index_fallback(SimpleNamespace(), state, ozon_shopper)
+    assert len(state['research_shop_candidates']) == 2
+    assert all(not row['url'] for row in state['research_shop_candidates'])
+
+
+def test_index_fallback_accepts_inches_in_model_name(monkeypatch):
+    import search
+    monkeypatch.setattr(ozon_shopper, '_llm_json', lambda *a, **kw: {
+        'models': ['MATEIN 15.6″ Travel Backpack', 'Bellroy Transit']})
+    monkeypatch.setattr(search, 'raw_search_results', lambda *a: [{
+        'title': 'MATEIN 15.6 Travel Backpack',
+        'href': 'https://www.ozon.ru/product/matein-123/'}])
+    state = {'research_shop_evidence': 'MATEIN 15.6″ Travel Backpack and Bellroy Transit'}
+    handler._research_shop_index_fallback(SimpleNamespace(), state, ozon_shopper)
+    assert state['research_shop_candidates'][0]['url'] == 'https://www.ozon.ru/product/matein-123/'
 
 
 def test_research_then_shop_accepts_model_named_in_evidence(monkeypatch):
@@ -97,7 +174,33 @@ def test_research_then_shop_accepts_model_named_in_evidence(monkeypatch):
     assert state["research_shop_verified"] is True
 
 
+def test_researched_model_with_size_is_not_mistaken_for_generic(monkeypatch):
+    called = []
+    monkeypatch.setattr(ozon_shopper, 'shop', lambda *a, **kw: (
+        called.append(True) or {'mode': 'one'}, [{'choice': {'sku': '1',
+        'name': 'MATEIN 15.6 Travel Laptop Backpack', 'url': 'https://ozon.ru/product/matein-1/'}}]))
+    monkeypatch.setattr(ozon_shopper, 'report', lambda *a, **kw: 'FOUND')
+    state = {'user_input_original': 'Погугли обзоры, потом найди на Озоне',
+             'research_shop_evidence': 'MATEIN 15.6″ Travel Laptop Backpack is mentioned in a review.'}
+    out = handler._handle_ozon_shop(SimpleNamespace(turn_products=[]), state,
+                                    {'request': 'MATEIN 15.6″ Travel Laptop Backpack'})
+    assert called and out == 'FOUND' and state['research_shop_verified']
+
+
+def test_missing_exact_shop_listing_runs_index_fallback(monkeypatch):
+    monkeypatch.setattr(ozon_shopper, 'shop', lambda *a, **kw: (
+        {'mode': 'one'}, [{'choice': {'sku': '1', 'name': 'Unrelated model'}}]))
+    calls = []
+    monkeypatch.setattr(handler, '_research_shop_index_fallback', lambda ctx, state, shopper: calls.append(True))
+    state = {'user_input_original': 'Погугли обзоры, потом найди на Озоне',
+             'research_shop_evidence': 'Review: Thule Subterra 2'}
+    out = handler._handle_ozon_shop(SimpleNamespace(turn_products=[]), state,
+                                    {'request': 'Thule Subterra 2'})
+    assert 'No confirmed Ozon listing' in out and calls == [True]
+
+
 def test_research_then_shop_rejects_different_listing(monkeypatch):
+    monkeypatch.setattr(handler, '_research_shop_index_fallback', lambda *a: None)
     monkeypatch.setattr(ozon_shopper, "shop", lambda *a, **kw: (
         {"mode": "one"}, [{"choice": {"sku": "42", "name": "Generic laptop backpack"},
                           "item": {"need": "рюкзак"}, "decision": {}, "others": []}]))
@@ -110,6 +213,7 @@ def test_research_then_shop_rejects_different_listing(monkeypatch):
 
 
 def test_research_then_shop_does_not_substitute_model_variant(monkeypatch):
+    monkeypatch.setattr(handler, '_research_shop_index_fallback', lambda *a: None)
     monkeypatch.setattr(ozon_shopper, "shop", lambda *a, **kw: (
         {"mode": "one"}, [{"choice": {"sku": "42", "name": "Samsonite Paralux BT Everyday Backpack"},
                           "item": {"need": "рюкзак"}, "decision": {}, "others": []}]))
