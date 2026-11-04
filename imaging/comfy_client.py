@@ -579,7 +579,17 @@ def _claim_card(label: str, min_free_mb: int = None, ctx=None, progress_ctx=None
                 except Exception:
                     logger.debug('GPU status update failed', exc_info=True)
             with _LIFECYCLE_LOCK:
-                _claim_card_locked(label, min_free_mb, ctx, progress_ctx)
+                claims_before = _excl_users
+                try:
+                    _claim_card_locked(label, min_free_mb, ctx, progress_ctx)
+                except BaseException:
+                    try:
+                        if _excl_users > claims_before:
+                            _release_card_locked(ctx)
+                    finally:
+                        if not _excl_users:
+                            _SPEECH_FREE.set()
+                    raise
 
 
 def _claim_card_locked(label: str, min_free_mb: int = None, ctx=None, progress_ctx=None) -> None:
