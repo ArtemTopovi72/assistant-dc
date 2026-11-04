@@ -6,6 +6,8 @@ from types import SimpleNamespace
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import tg_bot as T
 import tg_resolve as R
+from fakes import reads
+from test_tg_incoming_durability import make_bot
 
 
 def test_all_photos_style_request_is_distinct_from_single_photo_and_description():
@@ -57,3 +59,19 @@ def test_album_restyle_does_not_exceed_daily_image_quota(monkeypatch):
                                               "все фото в стиле аниме", b"1", [b"2"],
                                               1.0, 123, 0)
     assert not queued and sent
+
+
+def test_followup_restyle_queues_each_previous_album_photo(tmp_path):
+    bot = make_bot(tmp_path)
+    sess = bot._get_session(101)
+    paths = [tmp_path / 'first.jpg', tmp_path / 'second.jpg']
+    for path, data in zip(paths, (b'first', b'second')):
+        path.write_bytes(data)
+    sess.turn_album = list(map(str, paths))
+    bot._get_ctx = lambda: SimpleNamespace()
+    bot.reads = SimpleNamespace(**reads())
+    called = []
+    bot._push_album_restyle_tasks = lambda *args: called.append(args)
+    bot._resolve_and_push(101, [{'type': 'text', 'text': 'Все их сделай в стиле аниме'}])
+    assert len(called) == 1
+    assert called[0][4:6] == (b'first', [b'second'])

@@ -1724,6 +1724,26 @@ class ResolveMixin:
                                            _arrival_ts, _reply_to, _generation)
             return
 
+        # The user can send the album first and ask to restyle all of it in
+        # the next message. The completed previous turn keeps its own ordered
+        # album; never replace missing entries with a different recent photo.
+        previous_album = list(getattr(sess, 'turn_album', None) or [])
+        if (not _album_item and not _photo_upload and not input_prefix and own_words
+                and len(previous_album) > 1 and _wants_all_photos_restyled(own_words)
+                and not any(getattr(sess, name, '') for name in
+                            ('reg_state', 'restyle_state', 'lyrics_state', 'cover_state', 'continue_state'))):
+            try:
+                photos = [Path(path).read_bytes() for path in previous_album]
+            except (OSError, ValueError):
+                self._send_text(chat_id, tg_bot._t('img_gone', lang),
+                                keyboard=self._state_kb(sess, lang))
+                return
+            if not still_current():
+                return
+            self._push_album_restyle_tasks(chat_id, sess, lang, own_words, photos[0], photos[1:],
+                                           _arrival_ts, _reply_to, _generation)
+            return
+
         # ── the same job, twice ───────────────────────────────────────────────
         # A repeat tap OUTSIDE the debounce window becomes a second task, and an
         # image job costs a minute of the one GPU. The in-batch collapse above
@@ -2301,7 +2321,9 @@ class ResolveMixin:
             self._send_text(chat_id, tg_bot._t("too_many", lang, n=mine),
                             keyboard=self._main_menu_kb(sess, lang))
             return
-        instructions = ("Restyle the entire current photo. Preserve its subjects and composition. "
+        instructions = ("Restyle the entire current photo. Preserve its subjects, composition, "
+                        "background, lighting and palette; do not invent colorful skies or gradients "
+                        "unless the user explicitly asks for them. "
                         "Style request: " + style_words)
         payload = ('[style_preset] call redraw_image with mode="redraw" '
                    f'instructions={json.dumps(instructions, ensure_ascii=False)} on '
