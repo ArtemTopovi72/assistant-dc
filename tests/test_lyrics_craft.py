@@ -798,3 +798,11 @@ def test_long_lyrics_work_has_a_cancel_and_stops_on_it(monkeypatch):
     assert "Сочиняю" in note and kb["inline_keyboard"][0][0]["callback_data"].startswith("busy:cancel:")
     assert len(bot.sent) == 1                         # cancelled: no lyric, no «failed»
     assert not bot._busy_jobs                         # the job is gone, its button removed
+
+
+def test_pasted_lyric_is_identified_as_source_for_the_critic():
+    source = "[verse]\nМедведь хотел песенку спеть.\nНад ним летела куча."
+    system = L._theme_rule(source)
+    assert "original lyric" in system.lower()
+    assert "actions" in system.lower()
+    assert source in system

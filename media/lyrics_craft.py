@@ -586,6 +586,12 @@ def _numbered(text: str) -> str:
 def _theme_rule(topic: str) -> str:
     # «песня про двух евреев и монету» under klezmer came back a lament of dust and
     # oblivion: neither the critic nor the rewrite ever saw what was asked for
+    if (topic or "").count("\n") >= 2:
+        return (" The following is the original lyric, not merely a theme: «" + topic.strip()
+                + "». Compare the revision against it line by line. Preserve the characters' "
+                "actions, intentions, events, causes and outcome; a changed action or intention "
+                "is a source error even if the replacement rhymes or is plausible. "
+                "The author's deliberate register and profanity are part of the source.")
     return (" The lyric was asked for this theme: «" + topic.strip() + "». The worst "
             "problem is drifting from it: other people, things or events than the theme "
             "names, or the wrong tone (a joke or a comic story turned into a solemn lament). "
