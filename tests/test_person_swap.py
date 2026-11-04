@@ -90,6 +90,19 @@ rows = bot.photos[-1][1]["inline_keyboard"]
 check("more than eight people get selectable buttons in valid rows",
       all(len(row) <= 8 for row in rows)
       and [b["callback_data"] for row in rows for b in row] == [f"swp:{i}" for i in range(1, 13)], rows)
+# A large group stays within Telegram's total keyboard limit and remains selectable.
+bot.photos.clear()
+bot.modules["person_swap"].people = lambda path: [(i, 10, i + 2, 30) for i in range(105)]
+bot._cb_swap_person(CID)
+first_rows = bot.photos[-1][1]["inline_keyboard"]
+check("large groups get a bounded first page with next",
+      sum(map(len, first_rows)) <= 100 and any(b.get("callback_data") == "swpp:1" for row in first_rows for b in row), first_rows)
+bot._cb_swap_page(CID, "swpp:2")
+last_rows = bot.photos[-1][1]["inline_keyboard"]
+check("last page offers the final person and previous page",
+      any(b.get("callback_data") == "swp:105" for row in last_rows for b in row)
+      and any(b.get("callback_data") == "swpp:1" for row in last_rows for b in row), last_rows)
+
 bot.modules["person_swap"].people = lambda path: [(80, 100, 140, 170), (260, 90, 320, 160),
                                                     (440, 95, 500, 165), (620, 110, 680, 180)]
 bot._cb_swap_person(CID)

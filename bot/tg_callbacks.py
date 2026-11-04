@@ -109,6 +109,7 @@ class CallbackMixin:
         if data == "remove_object": return self._cb_remove_object(chat_id)
         if data == "style": return self._cb_style_image(chat_id)
         if data == "swap_person": return self._cb_swap_person(chat_id)
+        if data.startswith("swpp:"): return self._cb_swap_page(chat_id, data)
         if data.startswith("swp:"): return self._cb_swap_pick(chat_id, data)
         if data.startswith("style_preset:"): return self._cb_style_preset(chat_id, data)
         if data == "style_custom": return self._cb_style_custom(chat_id)
@@ -1102,13 +1103,37 @@ class CallbackMixin:
         self._store.put(sess)
         if len(boxes) == 1:
             return self._cb_swap_pick(chat_id, "swp:1")
-        sheet = person_swap.collage(entry["path"], boxes, os.path.join(
-            os.path.dirname(entry["path"]), f"swap_{target}.jpg"))
-        buttons = [{"text": str(n), "callback_data": f"swp:{n}"}
-                   for n in range(1, len(boxes) + 1)]
-        self._send_photo(chat_id, sheet, keyboard={"inline_keyboard": [
-            buttons[i:i + 8] for i in range(0, len(buttons), 8)]}, feedback="")
+        self._cb_swap_page(chat_id, "swpp:0")
         self._send_text(chat_id, tg_bot._t("swap_pick", lang), keyboard=self._state_kb(sess))
+
+    def _cb_swap_page(self, chat_id: int, data: str) -> None:
+        person_swap = module(self, "person_swap")
+        sess = self._get_session(chat_id)
+        target = sess.pending_swap_target
+        entry = tg_bot._image_by_id(sess, target) if target else None
+        try:
+            page = int(data.split(":", 1)[1])
+        except (ValueError, IndexError):
+            return
+        boxes = sess.swap_boxes or []
+        page_size = 48
+        start = page * page_size
+        if page < 0 or start >= len(boxes) or not entry or not os.path.exists(entry.get("path", "")):
+            return
+        page_boxes = boxes[start:start + page_size]
+        sheet = person_swap.collage(entry["path"], page_boxes, os.path.join(
+            os.path.dirname(entry["path"]), f"swap_{target}_{page}.jpg"), start=start + 1)
+        buttons = [{"text": str(n), "callback_data": f"swp:{n}"}
+                   for n in range(start + 1, start + len(page_boxes) + 1)]
+        rows = [buttons[i:i + 8] for i in range(0, len(buttons), 8)]
+        nav = []
+        if page:
+            nav.append({"text": "◀", "callback_data": f"swpp:{page - 1}"})
+        if start + page_size < len(boxes):
+            nav.append({"text": "▶", "callback_data": f"swpp:{page + 1}"})
+        if nav:
+            rows.append(nav)
+        self._send_photo(chat_id, sheet, keyboard={"inline_keyboard": rows}, feedback="")
 
     def _cb_swap_pick(self, chat_id: int, data: str) -> None:
         person_swap = module(self, "person_swap")

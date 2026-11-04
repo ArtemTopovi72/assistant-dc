@@ -33,12 +33,12 @@ def _font(size: int):
     return ImageFont.load_default()
 
 
-def collage(path: str, boxes: List[Box], out: str, tile: int = 320) -> str:
+def collage(path: str, boxes: List[Box], out: str, tile: int = 320, start: int = 1) -> str:
     """Each person as a head-and-shoulders tile with its number in a corner badge."""
     im = Image.open(path).convert("RGB")
     W, H = im.size
     tiles = []
-    for n, (x0, y0, x1, y1) in enumerate(boxes, 1):
+    for n, (x0, y0, x1, y1) in enumerate(boxes, start):
         fw, fh = x1 - x0, y1 - y0
         cx = (x0 + x1) / 2
         side = max(fw, fh) * 2.4
@@ -48,7 +48,7 @@ def collage(path: str, boxes: List[Box], out: str, tile: int = 320) -> str:
         d = ImageDraw.Draw(t)
         r = tile // 6
         d.ellipse((8, 8, 8 + 2 * r, 8 + 2 * r), fill=(230, 40, 40), outline="white", width=4)
-        f = _font(int(r * 1.3))
+        f = _font(int(r * 1.3 * min(1, 2 / len(str(n)))))
         d.text((8 + r, 8 + r), str(n), fill="white", font=f, anchor="mm")
         tiles.append(t)
     cols = min(6, len(tiles))
