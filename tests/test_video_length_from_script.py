@@ -17,9 +17,14 @@ import tg_continue  # noqa: E402
 import tool_image_handlers as H  # noqa: E402
 import video as V  # noqa: E402
 import fakes as _fakes  # noqa: E402
+from tests.fakes import Over  # noqa: E402
 _split = lambda t, **k: V.split_script(t, reads=_fakes.script_model, **k)  # noqa: E731  the sentence read, scripted
 _est = lambda t, **k: V.estimate_seconds(t, reads=_fakes.script_model, **k)  # noqa: E731
-from tests.fakes import Over  # noqa: E402
+
+
+def test_static_camera_instructions_do_not_inflate_duration():
+    request = 'He says "This is the original line".'
+    assert _est(V.STATIC_CONTINUE_PREFIX + request) == _est(request)
 
 
 class _Ctx:

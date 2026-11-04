@@ -282,7 +282,7 @@ def estimate_seconds(description: str, capped: bool = True, reads=None) -> float
     beat ~1.3 s, a held action ("for several seconds") +2 s; 5.2 s at the least.
     """
     text = description or ""
-    for pre in (CONTINUE_PREFIX, CONTINUE_CTX_PREFIX):   # the template, not the script
+    for pre in (CONTINUE_PREFIX, CONTINUE_CTX_PREFIX, STATIC_CONTINUE_PREFIX):  # template, not script
         if text.startswith(pre):
             text = text[len(pre):]
     text = _SCENE_NOTE_RE.sub("", text)                    # nor the scene-so-far note

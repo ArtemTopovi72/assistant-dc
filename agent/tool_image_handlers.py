@@ -1503,8 +1503,11 @@ def _bridged(ctx, clip: str, part: str) -> str:
     return video_mod.bridge_part(ctx, frame, part) if tg_continue.seed_frame(clip, frame) else part
 
 
-def _speech_ok(ctx, clip: str, lines: list) -> Optional[bool]:
-    """Whether Whisper confirms the line; None means the check itself failed."""
+_SPEECH_CHECK_UNAVAILABLE = object()  # truthy for legacy chain callers; distinct from verified True
+
+
+def _speech_ok(ctx, clip: str, lines: list):
+    """Whether Whisper confirms the line; a sentinel means the check itself failed."""
     import subprocess
     import tempfile
     try:
@@ -1517,7 +1520,7 @@ def _speech_ok(ctx, clip: str, lines: list) -> Optional[bool]:
         return _video(ctx).heard_lines(lines, heard)
     except Exception:
         logger.warning("video chain: the speech check failed", exc_info=True)
-        return None
+        return _SPEECH_CHECK_UNAVAILABLE
 
 
 def _voice_sim(clip: str, voices) -> Optional[float]:
