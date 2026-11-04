@@ -263,12 +263,18 @@ _E['new_bright_region'] = lambda *a: len(_flash_calls) == 1
 _E['eye_drift'] = lambda *a, **k: 0.0
 class FlashCheckCtx(TCtx):
     speech_ok = staticmethod(lambda ctx, clip, lines: True)
+    yes_no = staticmethod(lambda *a, **k: False)
 _flash_reply = H._handle_generate_video(FlashCheckCtx(), {}, {"description": 'he says "the line"'})
 check("a possible flash is retried and a clean take is selected", len(_flash_calls) == 2, _flash_calls)
 _E['new_bright_region'] = lambda *a: True
 _flash_calls.clear()
 _flash_reply = H._handle_generate_video(FlashCheckCtx(), {}, {"description": 'he says "the line"'})
 check("persistent possible flashes are disclosed", len(_flash_calls) == 3 and 'possible visual artifact' in _flash_reply, _flash_reply)
+class RequestedFlashCtx(FlashCheckCtx):
+    yes_no = staticmethod(lambda *a, **k: True)
+_flash_calls.clear()
+_flash_reply = H._handle_generate_video(RequestedFlashCtx(), {}, {"description": 'he says "the line" under flashing lights'})
+check("requested bright effects are not treated as artifacts", len(_flash_calls) == 1 and 'possible visual artifact' not in _flash_reply, _flash_reply)
 _E.pop('new_bright_region'); _E.pop('eye_drift'); _E['generate_video'] = fake_gen
 SEEN.clear()
 H._handle_generate_video(TCtx(), {"user_input_original": 'Мужчина говорит «то вам очко порвут»'},

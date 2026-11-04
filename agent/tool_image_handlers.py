@@ -2009,6 +2009,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     cont_src = getattr(ctx, "continue_src", "") or ""
     continuing = bool(cont_tail and os.path.exists(cont_tail))
     static_hold = False
+    check_unexpected_flash = False
     chain_id, chain_idx = "", 0
     people: list = []
     bridge_first = False
@@ -2038,6 +2039,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         elif static_hold:
             import debug_user
             ctx.video_static_guides = debug_user.is_debug(getattr(ctx, "ozon_owner", ""))
+            request_for_flash = str((state or {}).get('user_input_original') or description)
+            check_unexpected_flash = not yes_no(ctx)(
+                "Does the user explicitly request flashing lights, a flare, a bright object, "
+                "an explosion, fire, or other new bright effects in this video? {text}",
+                request_for_flash, default=True)
             # FL2VA receives matching keyframes; the clip's voice is applied
             # separately after generation because FL2VA has no audio reference.
             videos, images = [], [_seed_img, _seed_img]
@@ -2511,7 +2517,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                            if head and said_first and p and os.path.exists(p) else True)
                 missed = verdict is False
                 unverified = verdict is not True
-                flash = bool(static_hold and p and os.path.exists(p) and images
+                flash = bool(check_unexpected_flash and p and os.path.exists(p) and images
                              and video_mod.new_bright_region(p, images[0]) is True)
                 if head and p and os.path.exists(p):
                     rank = (unverified, flash, eyes is None, eyes or 0)
@@ -2588,7 +2594,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                     "blame the prompt unless the reason says so, and do NOT imply or claim that "
                     "a video was created.")
 
-        if static_hold and images:
+        if check_unexpected_flash and images:
             possible_flash = video_mod.new_bright_region(path, images[0]) is True
 
         if chain_id:
