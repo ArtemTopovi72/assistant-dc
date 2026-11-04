@@ -2028,6 +2028,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             bridge_first = True
             description = video_mod.CONTINUE_CTX_PREFIX + description
         elif static_hold:
+            import debug_user
+            ctx.video_static_guides = debug_user.is_debug(getattr(ctx, "ozon_owner", ""))
             # FL2VA receives matching keyframes; the clip's voice is applied
             # separately after generation because FL2VA has no audio reference.
             videos, images = [], [_seed_img, _seed_img]
@@ -2473,6 +2475,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                      and _preserves_static_scene(ctx, ctx.video_request or first_prompt))
         best_eyes = None
         speech_unverified = False
+        framing_unverified = False
         said_first = video_mod.quoted_lines(parts[0]) if head and parts else []
         speech_ok = getattr(ctx, "speech_ok", None) or _speech_ok
         try:
@@ -2522,6 +2525,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             if best_eyes:
                 result = best_eyes[1]
                 speech_unverified = best_eyes[0][0]
+                framing_unverified = not best_eyes[0][1] and best_eyes[0][2] > 0
             else:
                 speech_unverified = missed
             if head and result.get("path") and os.path.exists(result["path"]):
@@ -2542,6 +2546,12 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 if revoiced and os.path.exists(revoiced):
                     logger.info("static continuation revoiced with the clip's own speaker")
                     path = result["path"] = revoiced
+                    if said_first:
+                        try:
+                            speech_unverified = speech_unverified or not speech_ok(ctx, path, said_first)
+                        except Exception:
+                            logger.warning("could not verify speech after voice conversion", exc_info=True)
+                            speech_unverified = True
                 else:
                     state["video_status"] = "error"
                     return "[TOOL ERROR] Could not apply the original speaker's voice to the continuation; no finished video was delivered."
@@ -2649,8 +2659,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         ("Speech recognition could not confirm the requested line cleanly; warn the user that "
          "words may be wrong or extra speech may be present, and do not claim exact speech.\n"
          if speech_unverified else "") +
+        ("The reference-face check detected possible visual drift in every take; warn the user "
+         "that the framing or appearance may have changed, and do not claim it matches exactly.\n"
+         if framing_unverified else "") +
         "The clip is delivered to the user automatically. "
-        + ("Include the speech warning above. " if speech_unverified else "Say it is ready briefly. ")
+        + ("Include the warnings above. " if speech_unverified or framing_unverified else "Say it is ready briefly. ")
         + "Do NOT call generate_video again for this turn."
     )
 

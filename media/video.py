@@ -1005,6 +1005,24 @@ def build_workflow(prompt: str, *, mode: str, width: int, height: int,
             wf[node_id] = {"class_type": "LoadImage", "inputs": {"image": name}}
             cond[slot] = [node_id, 0]
             node_id = str(int(node_id) + 1)
+        if len(images) >= 2 and images[0] == images[1]:
+            # H3 otherwise stretches the first frame but center-crops the last.
+            wf[node_id] = {"class_type": "ImageScale", "inputs": {
+                "image": cond["first_frame"], "upscale_method": "bilinear",
+                "width": width, "height": height, "crop": "disabled"}}
+            cond["first_frame"] = cond["last_frame"] = [node_id, 0]
+            if (getattr(ctx, "video_static_guides", False)
+                    and _cfg_env.env_int("VIDEO_STATIC_GUIDES", 0)
+                    and frames >= 22 and _server_has_node("MiniMaxH3AddGuide")):
+                positive = smp["positive"]
+                for at in (round((frames - 1) / 3), round(2 * (frames - 1) / 3)):
+                    node_id = str(int(node_id) + 1)
+                    wf[node_id] = {"class_type": "MiniMaxH3AddGuide", "inputs": {
+                        "positive": positive, "latent": [N_COND, 1],
+                        "vae": [N_VAE_VIDEO, 0], "image": cond["first_frame"],
+                        "frame_idx": at}}
+                    positive = [node_id, 0]
+                smp["positive"] = positive
     if context_video or context_latent:
         _add_motion_context(wf, context_video, context_latent, ctx)
     if save_latent:
@@ -2630,7 +2648,7 @@ def generate_video(ctx, description: str, *,
     if context_video or size_from:      # a continuation keeps the clip's own shape
         p = eng.probe(size_from or context_video)
         clip_size = (p["width"], p["height"]) if p.get("width") else None
-    width, height = resolve_size(aspect, src_size or clip_size, exact=bool(size_from))
+    width, height = resolve_size(aspect, clip_size or src_size, exact=bool(size_from))
     if seed is None or int(seed) < 1:
         seed = random.randint(1, 2**31 - 1)
 
