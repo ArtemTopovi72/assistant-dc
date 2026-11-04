@@ -1272,7 +1272,11 @@ class ResolveMixin:
                     # The picture of the video, for the model: what the
                     # frames show, so «что это у меня?» is answered from the
                     # eyes and the ears both.
-                    scaffold.append(tg_bot._video_seen_note(_seen))
+                    _seen_note = tg_bot._video_seen_note(_seen)
+                    if _media == "video" and caption:
+                        from prompt_guard import wrap_quoted
+                        _seen_note = wrap_quoted("visual description of the attached video, for context", _seen_note)
+                    scaffold.append(_seen_note)
                     if _seen.get("sheet"):
                         try:
                             img_bytes = Path(_seen["sheet"]).read_bytes()

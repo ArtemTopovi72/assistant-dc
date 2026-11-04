@@ -6,7 +6,7 @@ import pytest
 from prompt_guard import user_words
 
 
-@pytest.mark.parametrize('description', ['A speaker.', ''])
+@pytest.mark.parametrize('description', ['A speaker and a sign saying "wrong words".', ''])
 def test_captioned_video_keeps_source_and_soundtrack_separate(tmp_path, monkeypatch, description):
     T.redirect_data_dir(str(tmp_path / 'data'))
     bot = T.TelegramBot('123:TEST', lambda: SimpleNamespace(), lambda: None,
@@ -34,6 +34,5 @@ def test_captioned_video_keeps_source_and_soundtrack_separate(tmp_path, monkeypa
     assert task.user_text.startswith(caption)
     assert task.media_transcript == 'Чужая фраза из исходного видео.'
     assert task.source_video_path == str(clip)
-    assert user_words(task.user_text).startswith(caption)
-    assert 'Чужая фраза из исходного видео.' not in user_words(task.user_text)
+    assert user_words(task.user_text) == caption
     assert T._Task.from_dict(task.to_dict()).source_video_path == str(clip)
