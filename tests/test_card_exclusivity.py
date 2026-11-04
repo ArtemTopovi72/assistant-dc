@@ -112,20 +112,33 @@ check("waiters are released", CC.wait_for_card(1) is True)
 reset()
 started = threading.Barrier(3)
 done = []
+all_claimed = threading.Event()
+import contextlib
+import gpu_admission
+_real_admit = gpu_admission.admit
+gpu_admission.admit = lambda **kwargs: contextlib.nullcontext()
 
 
 def job(n):
     started.wait(5)
     with CC._gpu_slot(ctx=CTX, exclusive=True, label="pic %d" % n):
-        time.sleep(0.15)
+        # The first render must not finish before the other two have actually
+        # claimed their place. A start barrier alone does not guarantee that.
+        until = time.monotonic() + 5
+        while not all_claimed.is_set() and CC._excl_users < 3 and time.monotonic() < until:
+            time.sleep(0.01)
+        if CC._excl_users == 3:
+            all_claimed.set()
     done.append(n)
 
 
 threads = [threading.Thread(target=job, args=(i,)) for i in range(3)]
 for t in threads: t.start()
 for t in threads: t.join(20)
+gpu_admission.admit = _real_admit
 
 check("three queued renders evicted once", calls.count("free") == 1, calls)
+check("all three renders really claimed before the first finished", all_claimed.is_set())
 check("and reloaded once, after the last one", calls.count("reload:chat-model-26b") == 1, calls)
 check("the reload is the LAST thing that happens", calls[-1].startswith("reload:"), calls)
 check("all three renders ran", sorted(done) == [0, 1, 2], done)
