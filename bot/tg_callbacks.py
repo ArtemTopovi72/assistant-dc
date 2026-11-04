@@ -89,6 +89,13 @@ class CallbackMixin:
         if data.startswith("lv:"): return self._cb_long_video(chat_id, data)
         if data.startswith("depth:"): return self._cb_research_depth(chat_id, msg, data)
         if data.startswith("drfmt:"): return self._cb_research_format(chat_id, msg, data)
+        if data.startswith("charpage:"):
+            try:
+                page = int(data.split(":", 1)[1])
+            except ValueError:
+                return
+            return self._send_characters_menu(chat_id, self._lang(self._get_session(chat_id)),
+                                              page=page, message_id=msg.get("message_id"))
         if data.startswith("char:"): return self._cb_pick_character(chat_id, data)
         if data == "lora_collect:start": return self._cb_start_lora_collect(chat_id)
         if data in ("facts_clear", "facts_clear_confirm", "facts_clear_cancel"):

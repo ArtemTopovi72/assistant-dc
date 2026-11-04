@@ -359,6 +359,31 @@ def test_a_failed_send_is_reported_not_silent():
           bool(_texts(bot)), _texts(bot))
 
 
+def test_character_pages_reach_every_item():
+    bot = _bot()
+    import tg_characters as TC
+    old = TC._chars.telegram_characters
+    TC._chars.telegram_characters = lambda: [
+        {'slug': f'hero{i}', 'name': f'Герой {i}'} for i in range(27)]
+    edits = []
+    bot._edit_text = lambda cid, mid, text, **kw: edits.append(kw['keyboard'])
+    try:
+        bot._send_characters_menu(CID, 'ru')
+        first = bot.kbs[-1]['inline_keyboard']
+        bot._dispatch_callback({'id': '1', 'data': 'charpage:1',
+            'message': {'message_id': 123, 'chat': {'id': CID}}})
+        second = edits[-1]['inline_keyboard']
+        bot._dispatch_callback({'id': '2', 'data': 'charpage:2',
+            'message': {'message_id': 123, 'chat': {'id': CID}}})
+        third = edits[-1]['inline_keyboard']
+        names = [b['text'] for rows in (first, second, third) for row in rows for b in row
+                 if b['callback_data'].startswith('char:')]
+        check('all characters remain reachable across pages', len(names) == len(set(names)) == 27, names)
+        check('page navigation edits the existing message', len(edits) == 2, edits)
+    finally:
+        TC._chars.telegram_characters = old
+
+
 def _main():
     for fn in [v for k, v in sorted(globals().items()) if k.startswith("test_")]:
         try:

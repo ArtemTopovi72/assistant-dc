@@ -48,11 +48,22 @@ _REF_PROMPT = (
 
 class CharactersMixin:
 
-    def _send_characters_menu(self, chat_id: int, lang: str) -> None:
+    def _send_characters_menu(self, chat_id: int, lang: str, page: int = 0, message_id=None) -> None:
         available = _chars.telegram_characters()
+        page_size = 12
+        pages = max(1, (len(available) + page_size - 1) // page_size)
+        page = max(0, min(page, pages - 1))
         rows = [[{"text": rec.get("name") or rec["slug"],
                   "callback_data": "char:" + rec["slug"]}]
-                for rec in available]
+                for rec in available[page * page_size:(page + 1) * page_size]]
+        if pages > 1:
+            navigation = []
+            if page:
+                navigation.append({"text": "◀", "callback_data": f"charpage:{page - 1}"})
+            navigation.append({"text": f"{page + 1}/{pages}", "callback_data": f"charpage:{page}"})
+            if page + 1 < pages:
+                navigation.append({"text": "▶", "callback_data": f"charpage:{page + 1}"})
+            rows.append(navigation)
         sess = self._get_session(chat_id)
         if sess.is_admin:
             # An operator-only escape hatch, not a character to draw with --
@@ -62,9 +73,11 @@ class CharactersMixin:
         if not rows:
             self._send_text(chat_id, tg_bot._t("char_none", lang))
             return
-        self._send_text(chat_id, tg_bot._t("menu_characters_title", lang),
-                        parse_mode="HTML",
-                        keyboard={"inline_keyboard": rows})
+        args = dict(parse_mode="HTML", keyboard={"inline_keyboard": rows})
+        if message_id:
+            self._edit_text(chat_id, message_id, tg_bot._t("menu_characters_title", lang), **args)
+        else:
+            self._send_text(chat_id, tg_bot._t("menu_characters_title", lang), **args)
 
     def _pick_character(self, chat_id: int, sess, lang: str, slug: str) -> None:
         rec = _chars.get(slug)
