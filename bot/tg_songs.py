@@ -202,7 +202,8 @@ def song_request(text: str, ctx=None) -> tuple:
     if not t:
         return False, 0
     r = _read(t, ctx=ctx)
-    return (True, r["song_seconds"]) if r["song"] == "make" else (False, 0)
+    inline_lyrics = looks_like_lyrics((text or "").partition("\n")[2])
+    return (True, r["song_seconds"]) if r["song"] == "make" or (r["song"] == "sound" and inline_lyrics) else (False, 0)
 
 
 def request_seconds(t: str, after_song: bool = False, ctx=None) -> int:

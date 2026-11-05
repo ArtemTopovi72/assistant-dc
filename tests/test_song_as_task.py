@@ -174,6 +174,15 @@ check("'из него' / 'положи это на музыку' / 'можешь
       all(S.song_request(t, ctx=_R)[0] and S.refers_to_previous_text(t, ctx=_R) for t in
           ("а теперь сделай из него песню", "положи это на музыку", "а можешь это спеть?")))
 check("'как научиться петь' is not a song", not S.song_request("как научиться петь", ctx=_R)[0])
+_original_song_read = S._read
+try:
+    S._read = lambda *a, **k: {"song": "sound", "song_seconds": 0}
+    check("inline lyrics marked sound are routed to singing",
+          S.song_request("Спой как есть:\n[verse]\nРаз\nДва\nТри", ctx=_R)[0])
+    check("sound without inline lyrics stays a follow-up",
+          not S.song_request("измени звук", ctx=_R)[0])
+finally:
+    S._read = _original_song_read
 check("sung forms are songs: гимн, колыбельная, джингл, частушка",
       all(S.song_request(t, ctx=_R)[0] for t in ("сочини гимн нашего отдела", "сделай колыбельную для сына",
                                          "сделай джингл для кофейни", "напиши частушку про тёщу"))
