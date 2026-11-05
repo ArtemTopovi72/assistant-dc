@@ -8,7 +8,8 @@ def _misreading_model(question, text, *args, **kwargs):
 
 
 def test_requested_quoted_lettering_is_not_blocked_as_opposite():
-    ctx = SimpleNamespace(yes_no=_misreading_model)
+    ctx = SimpleNamespace(yes_no=_misreading_model,
+                          text_model=lambda *a, **k: 'VERDICT: OK')
     request = 'На фартуке напиши «GLM 5.3», а на бочке напиши «Кал всем и каждому».'
     edit = {'region': 'apron', 'instructions': 'the text "GLM 5.3" written on the apron'}
     assert not _reverses_request(ctx, request, edit)
@@ -38,3 +39,10 @@ def test_spatial_guard_does_not_block_uncertain_edits():
                           text_model=lambda *a, **k: 'VERDICT: OK')
     assert not _reverses_request(ctx, 'Положи книгу слева от чашки',
                                  {'instructions': 'book left of cup'})
+
+
+def test_quoted_lettering_does_not_hide_opposite_spatial_edit():
+    ctx = SimpleNamespace(yes_no=lambda *a, **k: False,
+                          text_model=lambda *a, **k: 'VERDICT: CONTRADICTION')
+    assert _reverses_request(ctx, 'Напиши «GLM 5.3» и поставь стрелку влево',
+                             {'instructions': 'write GLM 5.3, arrow points right'})

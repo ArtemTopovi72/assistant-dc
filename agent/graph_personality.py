@@ -277,37 +277,7 @@ _BUTTON_TOOL = (
 _EDIT_TOOLS = ("inpaint_image", "redraw_image", "transfer_image")
 
 
-def _reverses_request(ctx, request: str, args: dict) -> bool:
-    """Whether an edit about to run does the OPPOSITE of the user's request. «remove from the image:
-    …» was rewritten into «a solid white bodysuit covering her chest completely» and run three times
-    (live 2026-10-21): a model that will not make a change must say so, not make the reverse one."""
-    from prompt_guard import user_words
-    asked = user_words(request or "").strip()
-    edit = " ".join(str(args.get(k) or "") for k in ("region", "instructions", "target", "style")).strip()
-    if not asked or not edit or asked.lower().startswith("[style_preset]"):
-        return False
-    # A requested quoted inscription is a valid partial edit, even if the
-    # opposite-direction classifier confuses it with the other inscription.
-    if (re.search(r'напиш|нанес|добав|\b(?:write|print|add)\b', asked, re.I)
-            and not re.search(r'\bне\b|\bбез\b|убер|удал|стер|\b(?:not|no|without|remove|erase|delete)\b', asked, re.I)
-            and re.search(r'напис|нанес|добав|\b(?:write|written|print|add)\b', edit, re.I)
-            and not re.search(r'\b(?:not|no|without|remove|erase|delete)\b|\bне\b|убер|удал', edit, re.I)):
-        inscriptions = [q[1:-1].strip().casefold() for q in _QUOTE_SPAN_RE.findall(asked)]
-        if any(len(q) >= 2 and q in edit.casefold() for q in inscriptions):
-            return False
-    pair = f"USER: {asked[:600]}\nEDIT: {edit[:600]}"
-    # Two reads must agree: the opposite-read alone blocked «empty wooden table surface, removing
-    # the cup» for «убери чашку со стола», and an example for it moved the miss onto «his empty
-    # hands, the book removed» (bench/reverses_request_live.py).
-    opposite = bool(yes_no(ctx)(
-        "{text}\n\nDoes the EDIT do the opposite of what the USER asked -- covers or adds what they asked "
-        "to uncover or remove, removes what they asked to add, darkens what they asked to brighten? "
-        "An edit that does what they asked in other words, or only part of it, is NOT the opposite.",
-        pair)) and not yes_no(ctx)(
-        "{text}\n\nDoes the EDIT, carried out, give what the USER asked for (in any words: describing "
-        "the finished result counts, so does doing part of it)?", pair, True)
-    if opposite:
-        return True
+def _spatial_reverses(ctx, pair: str) -> bool:
     try:
         result = text_model(ctx)(ctx,
             "Analyze spatial relationships literally. First describe positions and direction of USER "
@@ -320,6 +290,40 @@ def _reverses_request(ctx, request: str, args: dict) -> bool:
         logger.warning("spatial edit guard unavailable", exc_info=True)
         return False
     return bool(re.search(r"(?im)^\s*VERDICT:\s*CONTRADICTION\s*$", result))
+
+
+def _reverses_request(ctx, request: str, args: dict) -> bool:
+    """Whether an edit about to run does the OPPOSITE of the user's request. «remove from the image:
+    …» was rewritten into «a solid white bodysuit covering her chest completely» and run three times
+    (live 2026-10-21): a model that will not make a change must say so, not make the reverse one."""
+    from prompt_guard import user_words
+    asked = user_words(request or "").strip()
+    edit = " ".join(str(args.get(k) or "") for k in ("region", "instructions", "target", "style")).strip()
+    if not asked or not edit or asked.lower().startswith("[style_preset]"):
+        return False
+    pair = f"USER: {asked[:600]}\nEDIT: {edit[:600]}"
+    # A requested quoted inscription is a valid partial edit, even if the
+    # opposite-direction classifier confuses it with the other inscription.
+    if (re.search(r'напиш|нанес|добав|\b(?:write|print|add)\b', asked, re.I)
+            and not re.search(r'\bне\b|\bбез\b|убер|удал|стер|\b(?:not|no|without|remove|erase|delete)\b', asked, re.I)
+            and re.search(r'напис|нанес|добав|\b(?:write|written|print|add)\b', edit, re.I)
+            and not re.search(r'\b(?:not|no|without|remove|erase|delete)\b|\bне\b|убер|удал', edit, re.I)):
+        inscriptions = [q[1:-1].strip().casefold() for q in _QUOTE_SPAN_RE.findall(asked)]
+        if any(len(q) >= 2 and q in edit.casefold() for q in inscriptions):
+            return _spatial_reverses(ctx, pair)
+    # Two reads must agree: the opposite-read alone blocked «empty wooden table surface, removing
+    # the cup» for «убери чашку со стола», and an example for it moved the miss onto «his empty
+    # hands, the book removed» (bench/reverses_request_live.py).
+    opposite = bool(yes_no(ctx)(
+        "{text}\n\nDoes the EDIT do the opposite of what the USER asked -- covers or adds what they asked "
+        "to uncover or remove, removes what they asked to add, darkens what they asked to brighten? "
+        "An edit that does what they asked in other words, or only part of it, is NOT the opposite.",
+        pair)) and not yes_no(ctx)(
+        "{text}\n\nDoes the EDIT, carried out, give what the USER asked for (in any words: describing "
+        "the finished result counts, so does doing part of it)?", pair, True)
+    if opposite:
+        return True
+    return _spatial_reverses(ctx, pair)
 
 
 def _offers_instead(ctx, request: str, reply: str) -> bool:
