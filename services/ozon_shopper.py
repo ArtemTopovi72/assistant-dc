@@ -440,7 +440,8 @@ _DECIDE_SYS = (
     "model from different sellers, take the cheaper one unless its reviews or seller are "
     "clearly worse. A family/spec sheet may describe several capacities: do not assign "
     "its maximum speed or endurance to a specific capacity without explicit evidence. "
-    'Reply JSON only: {"choice": n}.')
+    'For the chosen item, optionally name up to two relevant keys exactly as they appear in its specs. '
+    'Reply JSON only: {"choice": n, "reason_keys": ["exact spec key"]}.')
 
 
 def _review_evidence(reviews) -> str:
@@ -470,8 +471,26 @@ def decide(ctx, item: dict, finalists: list, strategy: str = "balanced") -> dict
     except (TypeError, ValueError):
         n = 1
     n = n if 1 <= n <= len(finalists) else 1
-    rv = finalists[n - 1].get("review_texts")
-    return {"index": n - 1, "why": "", "reviews": _review_evidence(rv), "concerns": ""}
+    chosen = finalists[n - 1]
+    rv = chosen.get("review_texts")
+    specs = chosen.get("characteristics") or {}
+    keys = data.get("reason_keys")
+    facts = []
+    if isinstance(specs, dict) and isinstance(keys, list):
+        clean = lambda s: re.sub(r"[\r\n`*\[\]]+", " ", str(s)).strip()
+        for key in keys:
+            if not isinstance(key, str) or key not in specs or key in [k for k, _ in facts]:
+                continue
+            value = specs[key]
+            if not isinstance(value, (str, int, float)) or isinstance(value, bool):
+                continue
+            name, value = clean(key), clean(value)
+            if name and value and len(name) <= 60 and len(value) <= 160:
+                facts.append((name, value))
+            if len(facts) == 2:
+                break
+    why = "По карточке: " + "; ".join(f"{k}: {v}" for k, v in facts) + "." if facts else ""
+    return {"index": n - 1, "why": why, "reviews": _review_evidence(rv), "concerns": ""}
 
 
 BUYER_PHOTOS = 2                       # per finalist, from its reviews

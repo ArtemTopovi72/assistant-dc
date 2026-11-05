@@ -197,6 +197,19 @@ def test_decision_uses_card_reviews_even_when_model_invents_claims(world):
     assert result["concerns"] == ""
 
 
+def test_decision_shows_only_requested_specs_from_the_chosen_card(world):
+    _, script = world
+    script["decide_extra"] = {"reason_keys": ["Размер ноутбука", "Ресурс записи", "Материал"]}
+    chosen = item("bag", "Рюкзак", 2000)
+    chosen["characteristics"] = {"Размер ноутбука": "15,6 дюйма", "Материал": "нейлон"}
+    other = item("other", "Другой рюкзак", 1000)
+    other["characteristics"] = {"Ресурс записи": "320 TBW"}
+    result = S.decide(_ctx(), {"need": "рюкзак", "must": []}, [chosen, other])
+    assert "Размер ноутбука: 15,6 дюйма" in result["why"]
+    assert "Материал: нейлон" in result["why"]
+    assert "320 TBW" not in result["why"] and "Ресурс записи" not in result["why"]
+
+
 def test_buttons_route_to_the_shopper():
     import tg_bot, tg_keyboards
     from tg_strings import _b
