@@ -479,7 +479,12 @@ def decide(ctx, item: dict, finalists: list, strategy: str = "balanced") -> dict
     if isinstance(specs, dict) and isinstance(keys, list):
         clean = lambda s: re.sub(r"[\r\n`*\[\]]+", " ", str(s)).strip()
         for key in keys:
-            if not isinstance(key, str) or key not in specs or key in [k for k, _ in facts]:
+            if not isinstance(key, str):
+                continue
+            if key not in specs:
+                key = next((k for k, v in specs.items()
+                            if isinstance(k, str) and key == f"{k}: {v}"), None)
+            if key is None or key in [k for k, _ in facts]:
                 continue
             value = specs[key]
             if not isinstance(value, (str, int, float)) or isinstance(value, bool):

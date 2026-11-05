@@ -210,6 +210,16 @@ def test_decision_shows_only_requested_specs_from_the_chosen_card(world):
     assert "320 TBW" not in result["why"] and "Ресурс записи" not in result["why"]
 
 
+def test_decision_accepts_exact_key_and_value_but_not_changed_value(world):
+    _, script = world
+    chosen = item("bag", "Рюкзак", 2000)
+    chosen["characteristics"] = {"Размер ноутбука": "15,6 дюйма", "Материал": "нейлон"}
+    script["decide_extra"] = {"reason_keys": ["Размер ноутбука: 15,6 дюйма", "Материал: кожа"]}
+    result = S.decide(_ctx(), {"need": "рюкзак", "must": []}, [chosen])
+    assert "Размер ноутбука: 15,6 дюйма" in result["why"]
+    assert "кожа" not in result["why"] and "Материал" not in result["why"]
+
+
 def test_buttons_route_to_the_shopper():
     import tg_bot, tg_keyboards
     from tg_strings import _b
