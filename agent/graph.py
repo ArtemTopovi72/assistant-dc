@@ -412,12 +412,8 @@ def needs_relook(ctx: Optional[Context], state: AgentState) -> bool:
 
     Two cases. The model reads the message as about the picture (intent
     about_picture), or the user pointed at it.
-    And ANY question when the working image is a photo the user sent: a
-    receipt was photographed and read, then "which item is the
-    most expensive?" was answered with "I need to see the receipt" -- the first
-    look had summarised the items and dropped the prices, and nothing routed
-    the follow-up back to the photo. One extra vision call is cheap; a wrong
-    answer about the user's own document is not.
+    Also inspect the user's photo for an implicit follow-up such as "which
+    item is most expensive?", unless the question stands alone without it.
     """
     if state.get("image_data"):
         return False
@@ -439,11 +435,21 @@ def needs_relook(ctx: Optional[Context], state: AgentState) -> bool:
         return False
     if _file_newer_than(ctx, last_path):
         return False
-    # Any question about a photo the user sent or a video they sent: a receipt
-    # read once, then "which item is the most expensive?".
-    return bool(r["is_question"]) and not is_video_sheet(last_path) and (
+    eligible = bool(r["is_question"]) and not is_video_sheet(last_path) and (
         getattr(ctx, 'image_origin', '') == 'user'
         or Path(last_path).name.startswith(dep(ctx, "_USER_UPLOAD_STEM", _USER_UPLOAD_STEM)))
+    if eligible:
+        try:
+            if yes_no(ctx)("The user asks: {text}. Is this a self-contained general question "
+                           "that can be answered without seeing the earlier photo? "
+                           "Questions like 'which item is more expensive?' need the photo.",
+                           text, default=False):
+                return False
+        except Exception:
+            logger.warning("picture relevance check failed; keeping the photo", exc_info=True)
+    # Any question about a photo the user sent or a video they sent: a receipt
+    # read once, then "which item is the most expensive?".
+    return eligible
 
 
 def entry_router(state: AgentState, ctx: Optional[Context] = None) -> str:

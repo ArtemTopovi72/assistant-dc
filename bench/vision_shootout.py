@@ -170,8 +170,9 @@ def score(kind, answer, got):
     if kind == "color":
         return 1.0 if any(a in g for a in COLOR_ALIASES[answer]) else 0.0
     if kind == "where":
+        directions = {"слева": r"\b(?:слева|left)\b", "справа": r"\b(?:справа|right)\b"}
         other = "справа" if answer == "слева" else "слева"
-        return 1.0 if answer in g and other not in g else 0.0
+        return 1.0 if re.search(directions[answer], g) and not re.search(directions[other], g) else 0.0
     # text: similarity, so a near miss on 18 px text shows as a near miss
     return round(SequenceMatcher(None, _norm(answer), g).ratio(), 3)
 

@@ -274,10 +274,12 @@ def _match_reply_language(ctx, answer: str, original_input: str) -> str:
     # A Russian chat with a Latin input is a button payload ("remove all the lettering
     # from the image"): typed English flips reply_lang in tg_tasks. Its English reply
     # went out as is.
+    mixed_english = (_foreign_ratio(answer) < 0.3 and _english_words(answer) >= 6
+                     and "```" not in answer and "<pre" not in answer)
     _ru_payload = getattr(ctx, "reply_lang", "") == "ru" and _foreign_ratio(original_input) < 0.3
     if _ru_payload:
         _latin_q = False
-        if _foreign_ratio(answer) > 0.1:
+        if _foreign_ratio(answer) > 0.1 and not mixed_english:
             return answer
     elif _latin_q:
         # «¿Cuántos habitantes tiene Madrid?» -> "Madrid has approximately…":
@@ -285,7 +287,7 @@ def _match_reply_language(ctx, answer: str, original_input: str) -> str:
         if _foreign_ratio(answer) < 0.3 and not (_english_words(answer) >= 1
                                                  and _english_words(original_input) == 0):
             return answer
-    elif _foreign_ratio(original_input) < 0.3 or _foreign_ratio(answer) > 0.1:
+    elif _foreign_ratio(original_input) < 0.3 or (_foreign_ratio(answer) > 0.1 and not mixed_english):
         return answer
     if len(answer.strip()) < 20:
         return answer
