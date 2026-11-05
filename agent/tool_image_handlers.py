@@ -1998,7 +1998,9 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     newer_pic = not getattr(ctx, "attached_video_path", "") and lv and os.path.exists(lv) and any(
         os.path.exists(p) and os.path.getmtime(p) > os.path.getmtime(lv) for p in (images or []))
     if not getattr(ctx, "continue_tail", "") and lv and os.path.exists(lv) and not newer_pic:
+        from prompt_guard import user_words
         said = str((state or {}).get("user_input_original") or (state or {}).get("user_input") or "")
+        said = user_words(said)
         if said and yes_no(ctx)(
                 "The user wrote: {text}. Do they ask to continue or extend the video already in "
                 "this chat -- what happens next in it -- rather than a new clip?", said, default=False):

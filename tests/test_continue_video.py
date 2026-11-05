@@ -361,6 +361,25 @@ class NewVideoCtx(TCtx):
         super().__init__()
         self.continue_tail = self.continue_src = ""
 
+from prompt_guard import wrap_quoted
+_continuation_reads = []
+class AttachedContinuationCtx(NewVideoCtx):
+    last_video_path = attached_video_path = CLIP
+    def yes_no(self, question, text, default=False, **kwargs):
+        if 'continue or extend the video' in question:
+            _continuation_reads.append(text)
+            return text == 'Продолжи это видео'
+        return default
+
+_own_request = 'Продолжи это видео'
+_with_source = _own_request + '\n' + wrap_quoted('speech in the attached video', 'source speech')
+SEEN.clear()
+H._handle_generate_video(AttachedContinuationCtx(), {'user_input_original': _with_source},
+                         {'description': 'The person keeps speaking'})
+check('continuation classifier sees the user request without quoted source material',
+      _continuation_reads == [_own_request], _continuation_reads)
+check('continuation from an attached clip uses its extracted tail', bool(SEEN.get('videos')), SEEN)
+
 _new_state = {}
 _new_reply = H._handle_generate_video(NewVideoCtx(), _new_state, {"description": "A cat walks across the room"})
 check("a new video without a continuation reaches generation", bool(_new_state.get("video_path")), _new_reply)
