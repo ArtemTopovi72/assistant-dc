@@ -2349,7 +2349,7 @@ class ResolveMixin:
                         "Style request: " + style_words)
         payload = ('[style_preset] call redraw_image with mode="redraw" '
                    f'instructions={json.dumps(instructions, ensure_ascii=False)} on '
-                   'the current image. Do not generate a new image.')
+                   'the current image. Do not generate a new image. [album_restyle_item]')
         queued = 0
         failed = 0
         for data in photos:

@@ -788,6 +788,14 @@ EDIT_MODE_ROUNDS = 3
 _EDIT_MODE_TOOLS = "read_file|edit_file|run_tests|code_outline|search_files"
 
 
+def _scope_album_outbound(messages: list, user_msg: dict) -> list:
+    """Keep this album item's tool results without feeding it a sibling's reply."""
+    index = next((i for i, message in enumerate(messages) if message is user_msg), None)
+    if index is None or not messages or messages[0].get("role") != "system":
+        return messages
+    return messages[:1] + messages[index:]
+
+
 def _stub_written_files(messages: list) -> list:
     """Outbound copy of `messages` with the bodies of past write_file calls
     replaced by a one-line stub. The persisted history is not touched.
@@ -974,7 +982,9 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
 
     # ── FAST PATH ─────────────────────────────────────────
     if _fast_path_allowed(ctx, state, user_input, original_input):
-        fast_msg = _fast_path_reply(ctx, messages, gen, user_input,
+        _fast_messages = (_scope_album_outbound(messages, user_msg)
+                          if "[album_restyle_item]" in (original_input or user_input) else messages)
+        fast_msg = _fast_path_reply(ctx, _fast_messages, gen, user_input,
                                     effective_input, original_input,
                                     vision_summary=(state.get("vision_summary") or ""
                                                     if state.get("image_data") else ""))
@@ -1358,6 +1368,8 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                     _outbound = [dict(messages[0], content=_scoped)] + messages[1:]
         except Exception:
             logger.debug("prompt scoping failed", exc_info=True)
+        if "[album_restyle_item]" in (original_input or user_input):
+            _outbound = _scope_album_outbound(_outbound, user_msg)
         _outbound = _stub_written_files(_outbound)
         # A forced call first goes out as "auto" with only that schema: "required"
         # is grammar-constrained, the grammar rejects the empty thought block, and

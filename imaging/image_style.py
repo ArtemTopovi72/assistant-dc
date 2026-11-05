@@ -53,8 +53,8 @@ _KEEP = (" Restyle the entire image including the background. Keep the same comp
          "{clothes}and the original setting, lighting and palette. Preserve any existing face and identity. "
          "Do not crop or zoom; do not add or remove people, animals or objects. Preserve existing facial hair, "
          "including its absence, and any hairstyles, eye colours, glasses and jewellery exactly "
-         "as they appear in the source. Any signs, screens "
-         "or lettering become abstract marks -- no new legible words.")
+         "as they appear in the source. Preserve any signs, screens and lettering already "
+         "in the source; do not invent new words.")
 
 _EXPAND_SYS = (
     "You turn a request to restyle a picture into an instruction for an image-editing model. "

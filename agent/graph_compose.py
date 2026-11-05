@@ -332,11 +332,12 @@ def _compose_user_message(ctx: Context, state: AgentState) -> tuple:
     """
     user_input = state.get("user_input", "")
     vision_summary = state.get("vision_summary", "").strip()
-    memory_text = (state.get("session_memory_text", "") or ctx.memory_text()).strip()
+    album_item = "[album_restyle_item]" in (state.get("user_input_original") or user_input)
+    memory_text = "" if album_item else (state.get("session_memory_text", "") or ctx.memory_text()).strip()
 
     # Build user message
     parts = []
-    _cnt = (_word_count_note(state.get("user_input_original") or user_input, ctx=ctx)
+    _cnt = "" if album_item else (_word_count_note(state.get("user_input_original") or user_input, ctx=ctx)
             or no_history_note(state.get("user_input_original") or user_input,
                                state.get("messages"), ctx=ctx)
             or translate_previous_note(state.get("user_input_original") or user_input,
@@ -401,10 +402,10 @@ def _compose_user_message(ctx: Context, state: AgentState) -> tuple:
     # What the file tools already did in this working folder (find_content,
     # dedupe_photos, scripts): kept on disk, so a compacted history cannot
     # turn «сколько мостов нашёл?» into «я не проводил поиск».
-    _pony = _ponytail_block(ctx, (state.get("user_input_original", "") or "") + " " + user_input)
+    _pony = "" if album_item else _ponytail_block(ctx, (state.get("user_input_original", "") or "") + " " + user_input)
     if _pony:
         parts.append(_pony)
-    _rec = _working_folder_record(ctx)
+    _rec = "" if album_item else _working_folder_record(ctx)
     if _rec:
         parts.append("[Working-folder record -- things YOU already did here with "
                      "the file tools; answer questions about them from this, and "
@@ -442,7 +443,7 @@ def _compose_user_message(ctx: Context, state: AgentState) -> tuple:
                            "it, using the image description above (one or two sentences, "
                            "the concrete subject/scene, not a generic \"a photo of a "
                            "person\"), then ask what they would like to do with it.]")
-    if _ask(original_input or user_input, ctx=ctx)["earlier_talk"]:
+    if not album_item and _ask(original_input or user_input, ctx=ctx)["earlier_talk"]:
         _asked = [str(m.get("content") or "").strip() for m in state.get("messages", [])
                   if m.get("role") == "user"]
         if _asked and _asked[-1] == user_input.strip():

@@ -59,6 +59,8 @@ def test_style_instructions_do_not_assume_people_in_the_source():
     assert "a woman's face" not in IS._KEEP
     assert 'do not add' in IS._KEEP.lower()
     assert 'facial hair' in IS._KEEP.lower()
+    assert 'abstract marks' not in IS._KEEP.lower()
+    assert 'lettering' in IS._KEEP.lower()
 
 
 def test_towards_a_photo_loads_the_realism_lora_and_names_who_is_there(monkeypatch):

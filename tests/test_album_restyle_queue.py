@@ -40,6 +40,7 @@ def test_five_album_photos_queue_five_ordered_redraws(monkeypatch):
     assert [t.image_path for t in queued] == [f"/{i}.jpg" for i in range(1, 6)]
     assert all(t.reply_to == 123 and t.image_is_photo for t in queued)
     assert all(t.user_text.startswith('[style_preset] call redraw_image') for t in queued)
+    assert all('[album_restyle_item]' in t.user_text for t in queued)
     assert all('все пять в стиле \\"киберпанк\\"' in t.user_text for t in queued)
     assert charged.count(T.KIND_IMAGE) == charged.count(T.KIND_TASK) == 5
     assert "5" in sent[-1] and "пропущ" not in sent[-1]
